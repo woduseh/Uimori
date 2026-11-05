@@ -134,6 +134,7 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       { text: 'the draft.', offset: 16 },
     ]);
     expect(onCommentary).toHaveBeenCalledExactlyOnceWith('Checking the draft.');
+    expect(result.usage.raw).not.toHaveProperty('nativeActivity');
     expect(records().filter((row) => row.method === 'thread/start')).toHaveLength(1);
     expect(records().find((row) => row.method === 'thread/start').params.config.web_search).toBe(
       'live'
@@ -626,55 +627,65 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
         .digest('hex')
     );
   });
-  it('retains reported total and last token details without inventing missing numbers', async () => {
-    const { runtime } = setup();
-    const onNotification = CodexProcess.prototype.onNotification;
-    const intercept = vi
-      .spyOn(CodexProcess.prototype, 'onNotification')
-      .mockImplementation(function (this: CodexProcess, listener) {
-        return onNotification.call(this, (method, params) => {
-          if (method !== 'thread/tokenUsage/updated') return listener(method, params);
-          const event = params as { threadId: string; turnId: string };
-          listener(method, {
-            ...event,
-            tokenUsage: {
-              total: {
-                totalTokens: 130,
-                inputTokens: 100,
-                cachedInputTokens: 40,
-                cacheWriteInputTokens: 6,
-                outputTokens: 30,
-                reasoningOutputTokens: 12,
+  it.each([false, true])(
+    'retains token details with the accounting basis for session=%s',
+    async (reusable) => {
+      const { runtime } = setup();
+      const session = reusable ? runtime.createSession(connection) : undefined;
+      const onNotification = CodexProcess.prototype.onNotification;
+      const intercept = vi
+        .spyOn(CodexProcess.prototype, 'onNotification')
+        .mockImplementation(function (this: CodexProcess, listener) {
+          return onNotification.call(this, (method, params) => {
+            if (method !== 'thread/tokenUsage/updated') return listener(method, params);
+            const event = params as { threadId: string; turnId: string };
+            listener(method, {
+              ...event,
+              tokenUsage: {
+                total: {
+                  totalTokens: 130,
+                  inputTokens: 100,
+                  cachedInputTokens: 40,
+                  cacheWriteInputTokens: 6,
+                  outputTokens: 30,
+                  reasoningOutputTokens: 12,
+                },
+                last: { inputTokens: 50, cachedInputTokens: 30, outputTokens: 10 },
               },
-              last: { inputTokens: 100, cachedInputTokens: 20, outputTokens: 30 },
-            },
+            });
           });
         });
-      });
-    try {
-      const result = await runtime.execute(connection, request(), {
-        signal: new AbortController().signal,
-      });
-      expect(result.usage).toMatchObject({ inputTokens: 100, outputTokens: 30 });
-      expect(result.usage.raw).toEqual({
-        kind: 'codex-agent-turn',
-        modelCalls: null,
-        tokenUsage: {
-          total: {
-            totalTokens: 130,
-            inputTokens: 100,
-            cachedInputTokens: 40,
-            cacheWriteInputTokens: 6,
-            outputTokens: 30,
-            reasoningOutputTokens: 12,
+      try {
+        const options = { signal: new AbortController().signal };
+        const result = session
+          ? await session.execute(request(), options)
+          : await runtime.execute(connection, request(), options);
+        expect(result.usage).toMatchObject({
+          inputTokens: reusable ? 50 : 100,
+          outputTokens: reusable ? 10 : 30,
+        });
+        expect(result.usage.raw).toEqual({
+          kind: 'codex-agent-turn',
+          modelCalls: null,
+          tokenUsageBasis: reusable ? 'last' : 'total',
+          tokenUsage: {
+            total: {
+              totalTokens: 130,
+              inputTokens: 100,
+              cachedInputTokens: 40,
+              cacheWriteInputTokens: 6,
+              outputTokens: 30,
+              reasoningOutputTokens: 12,
+            },
+            last: { inputTokens: 50, cachedInputTokens: 30, outputTokens: 10 },
           },
-          last: { inputTokens: 100, cachedInputTokens: 20, outputTokens: 30 },
-        },
-      });
-    } finally {
-      intercept.mockRestore();
+        });
+      } finally {
+        intercept.mockRestore();
+        await session?.close();
+      }
     }
-  });
+  );
   it('does not execute when durable attempt recording fails', async () => {
     const { runtime, records } = setup();
     const result = await runtime.execute(connection, request(), {
@@ -745,9 +756,94 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
         toolCalls: [],
       });
       expect(JSON.stringify(result)).not.toContain('INTERNAL_');
+      if (mode === 'native-tools') {
+        expect(result.usage.raw).toMatchObject({
+          nativeActivity: {
+            items: [
+              {
+                id: 'native-search',
+                type: 'webSearch',
+                status: 'completed',
+                elapsedMs: expect.any(Number),
+              },
+              { id: 'native-output', type: 'functionCallOutput', status: 'completed' },
+              { id: 'native-plan', type: 'plan', status: 'completed' },
+            ],
+            contextCompactions: [
+              { id: 'native-compaction', type: 'contextCompaction', status: 'completed' },
+            ],
+            omittedItems: 0,
+            omittedContextCompactions: 0,
+          },
+        });
+      }
       expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(1);
     }
   );
+  it('bounds native metadata, deduplicates completion and keeps private contents out of helper diagnostics', async () => {
+    const { runtime } = setup();
+    const onNotification = CodexProcess.prototype.onNotification;
+    const intercept = vi
+      .spyOn(CodexProcess.prototype, 'onNotification')
+      .mockImplementation(function (this: CodexProcess, listener) {
+        return onNotification.call(this, (method, params) => {
+          if (method === 'thread/tokenUsage/updated') {
+            const event = params as { threadId: string; turnId: string };
+            const emit = (item: Record<string, unknown>, phase = 'item/completed') =>
+              listener(phase, { threadId: event.threadId, turnId: event.turnId, item });
+            emit({ type: 'reasoning', id: 'private-thought', text: 'PRIVATE_REASONING' });
+            emit({ type: 'dynamicToolCall', id: 'host-tool', output: 'PRIVATE_HOST_OUTPUT' });
+            for (let index = 0; index < 70; index++) {
+              const item = {
+                type: 'webSearch',
+                id: `search-${index}`,
+                status: index === 0 ? 'failed' : 'completed',
+                ...(index === 1 ? { success: false } : {}),
+                query: 'PRIVATE_QUERY',
+                output: 'PRIVATE_RESULT',
+              };
+              if (index === 0) emit(item, 'item/started');
+              emit(item);
+              emit(item);
+            }
+            for (let index = 0; index < 20; index++)
+              emit({ type: 'contextCompaction', id: `compact-${index}`, text: 'PRIVATE_SUMMARY' });
+          }
+          listener(method, params);
+        });
+      });
+    try {
+      const result = await runtime.executeAgent(connection, agentRequest(), {
+        signal: new AbortController().signal,
+        onToolCall: async () => ({ success: true, text: 'unused host callback' }),
+      });
+      expect(result).toMatchObject({
+        status: 'completed',
+        text: output,
+        usage: { inputTokens: 100, outputTokens: 30 },
+      });
+      const raw = result.usage.raw as Record<string, any>;
+      expect(raw.tokenUsage).toEqual({ total: { inputTokens: 100, outputTokens: 30 } });
+      expect(raw.nativeActivity.items).toHaveLength(64);
+      expect(raw.nativeActivity.contextCompactions).toHaveLength(16);
+      expect(raw.nativeActivity.omittedItems).toBe(6);
+      expect(raw.nativeActivity.omittedContextCompactions).toBe(4);
+      expect(raw.nativeActivity.items[0]).toMatchObject({
+        id: 'search-0',
+        type: 'webSearch',
+        status: 'failed',
+        startedAt: expect.any(String),
+        finishedAt: expect.any(String),
+        elapsedMs: expect.any(Number),
+      });
+      expect(raw.nativeActivity.items[1]).toMatchObject({ id: 'search-1', status: 'failed' });
+      expect(JSON.stringify(result)).not.toContain('PRIVATE_');
+      expect(JSON.stringify(raw.nativeActivity)).not.toContain('host-tool');
+      expect(JSON.stringify(raw.nativeActivity)).not.toContain('private-thought');
+    } finally {
+      intercept.mockRestore();
+    }
+  });
   it('accepts completion before the turn-start acknowledgement without losing or duplicating the result', async () => {
     const { runtime } = setup('early-completion');
     expect(
@@ -755,6 +851,49 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
         signal: new AbortController().signal,
       })
     ).toMatchObject({ status: 'completed', text: 'A synthetic scene.' });
+  });
+  it('settles an unfinished native activity on cancellation without discarding reported usage', async () => {
+    const { runtime } = setup('native-tools');
+    const controller = new AbortController();
+    const onNotification = CodexProcess.prototype.onNotification;
+    const intercept = vi
+      .spyOn(CodexProcess.prototype, 'onNotification')
+      .mockImplementation(function (this: CodexProcess, listener) {
+        return onNotification.call(this, (method, params) => {
+          listener(method, params);
+          if (method !== 'thread/tokenUsage/updated') return;
+          const event = params as { threadId: string; turnId: string };
+          listener('item/started', {
+            threadId: event.threadId,
+            turnId: event.turnId,
+            item: { type: 'sleep', id: 'unfinished-sleep' },
+          });
+          controller.abort();
+        });
+      });
+    try {
+      const result = await runtime.execute(connection, request(), { signal: controller.signal });
+      expect(result).toMatchObject({
+        status: 'cancelled',
+        usage: { inputTokens: 100, outputTokens: 30 },
+      });
+      expect(result.usage.raw).toMatchObject({
+        nativeActivity: {
+          items: expect.arrayContaining([
+            {
+              id: 'unfinished-sleep',
+              type: 'sleep',
+              status: 'cancelled',
+              startedAt: expect.any(String),
+              finishedAt: expect.any(String),
+              elapsedMs: expect.any(Number),
+            },
+          ]),
+        },
+      });
+    } finally {
+      intercept.mockRestore();
+    }
   });
   it('cancels a waiting execution without an attempt and keeps independent turns isolated', async () => {
     const { runtime, records } = setup('turn-hang', {}, 1);

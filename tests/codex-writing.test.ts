@@ -149,6 +149,62 @@ const read = (offset = 0): Step => ({
 });
 const submit: Step = { name: 'story.submit', args: { content: 'The keeper walked north.' } };
 
+test.each(['writer', 'advisor'] as const)(
+  'a directly thrown %s provider result settles its started attempt with unknown usage',
+  async (role) => {
+    const f = await fixture({});
+    f.hooks.executeCodexAgent = async (_connection, _request, options) => {
+      await options.onWire?.({
+        connectionId: 'connection',
+        protocol: 'codex-app-server-v1',
+        role: 'main',
+        modelId: 'writer',
+        method: 'POST',
+        url: 'codex://local',
+        headers: {},
+        body: {},
+        bodySha256: 'wire',
+        stablePrefixSha256: 'prefix',
+      });
+      throw new Error('PRIVATE_PROVIDER_THROW');
+    };
+    let usage: {
+      modelCalls: number;
+      inputTokens: number | null;
+      outputTokens: number | null;
+      costUsd: number | null;
+    };
+    if (role === 'writer') {
+      const error = await runMain(compileSnapshotPrompt(f.work), f.hooks).catch(
+        (value: unknown) => value
+      );
+      expect(error).toMatchObject({ message: 'MODEL_EXECUTION_FAILED' });
+      usage = (error as { usage: typeof usage }).usage;
+    } else {
+      f.addAdvisor();
+      usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+      const advisor = createAgentCollaboration(compileSnapshotPrompt(f.work), f.hooks, usage)!;
+      await expect(
+        advisor.consult('advisor-call', { agentId: 'lore', question: 'Check source.' })
+      ).rejects.toThrow('PRIVATE_PROVIDER_THROW');
+    }
+    expect(f.attempts).toHaveLength(1);
+    expect(f.finished).toEqual([
+      expect.objectContaining({
+        status: 'error',
+        error: { code: 'PROVIDER_OUTCOME_UNCERTAIN' },
+        usage: expect.objectContaining({ inputTokens: null, outputTokens: null, costUsd: null }),
+      }),
+    ]);
+    expect(usage).toMatchObject({
+      modelCalls: 1,
+      inputTokens: null,
+      outputTokens: null,
+      costUsd: null,
+    });
+  }
+);
+
 test('native writer awaits the main Linux tool and receives its completed output', async () => {
   const f = await fixture({
     writer: [{ name: 'data.exec', args: { command: 'rg observatory current/' } }, submit],

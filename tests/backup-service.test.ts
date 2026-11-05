@@ -8,6 +8,7 @@ import { Store } from '../server/store.js';
 import { BackupService, nextBackupAt } from '../server/backup-service.js';
 import { createApp, type App } from '../server/app.js';
 import { chatWithSource } from './fixtures/illustration.js';
+import { recordToolDiagnostic } from '../server/execution-diagnostics.js';
 
 vi.mock('node:fs/promises', async (original) => {
   const actual = await original<typeof import('node:fs/promises')>();
@@ -39,6 +40,18 @@ afterEach(async () => {
 test('consistent snapshot restores saved prose, blobs and settings without starting any workers', async () => {
   const { store, service, directory } = fixture();
   const { chat, source } = chatWithSource(store);
+  recordToolDiagnostic(
+    store.db,
+    { kind: 'run', id: source.runId, origin: 'writer' },
+    {
+      callId: 'backup-read',
+      name: 'story.read',
+      args: { sceneNumber: 1 },
+      result: { text: 'PRIVATE_BACKUP_READ' },
+      denied: false,
+    },
+    { elapsedMs: 7 }
+  );
   const bytes = Buffer.from('synthetic-image-bytes');
   const hash = createHash('sha256').update(bytes).digest('hex');
   store.db
@@ -64,6 +77,15 @@ test('consistent snapshot restores saved prose, blobs and settings without start
   stores.push(restored);
   expect(restored.chat(chat.id).title).toBe(chat.title);
   expect(restored.source(source.id).text).toBe(store.source(source.id).text);
+  const diagnostic = restored.db
+    .prepare('SELECT data FROM execution_tool_diagnostics WHERE run_id=?')
+    .get(source.runId)!;
+  expect(JSON.parse(String(diagnostic.data))).toMatchObject({
+    name: 'story.read',
+    state: 'finished',
+    elapsedMs: 7,
+  });
+  expect(String(diagnostic.data)).not.toContain('PRIVATE_BACKUP_READ');
   expect(
     Buffer.from(
       restored.db.prepare('SELECT bytes FROM image_blobs WHERE hash=?').get(hash)!

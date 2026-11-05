@@ -1,5 +1,5 @@
 import { textTokenExcerpt } from '../core/text-tokens.js';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import {
   CODEX_CONTENT_WARNING_THRESHOLD,
@@ -21,6 +21,7 @@ import { promptWorkspace } from './prompt-workspace.js';
 
 const RECENT_CONTEXT_TOKENS = 8000;
 const PREFLIGHT_TIMEOUT_MS = 8_000;
+type PreflightOwner = { store: Store; chatId: string; runId?: string; jobId?: string };
 
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
@@ -74,8 +75,9 @@ async function judge(
   recentContext: string,
   credential: JevCredentialStore['resolve'],
   signal: AbortSignal,
-  conservative = false,
-  settings?: JevHooks['settings']
+  conservative: boolean,
+  settings: JevHooks['settings'] | undefined,
+  owner: PreflightOwner
 ): Promise<CodexContentPreflightResult> {
   try {
     if (!credential()) return { warning: conservative };
@@ -85,8 +87,16 @@ async function judge(
       signal: AbortSignal.any([signal, timeout]),
       credential,
       settings,
-      onAttemptStart: () => randomUUID(),
-      onAttemptFinish: () => {},
+      kind: 'codex-content-preflight',
+      onAttemptStart: (wire) =>
+        owner.store.product.startAttempt(
+          owner.chatId,
+          owner.runId ?? null,
+          owner.jobId ?? null,
+          { ...wire, role: role === 'selection-revision' ? 'helper' : role },
+          { kind: 'judgment', retainContent: false }
+        ),
+      onAttemptFinish: (id, result) => owner.store.product.finishAttempt(id, result),
     });
     return { warning: result.scores.explicitSexualContent! >= CODEX_CONTENT_WARNING_THRESHOLD };
   } catch {
@@ -101,10 +111,12 @@ export async function autoTranslationNeedsConfirmation(
   source: string,
   credential: JevCredentialStore['resolve'],
   signal: AbortSignal,
-  settings?: JevHooks['settings']
+  settings: JevHooks['settings'] | undefined,
+  owner: PreflightOwner
 ): Promise<boolean> {
   if (!isCodex(model)) return false;
-  return (await judge('translation', source, '', credential, signal, true, settings)).warning;
+  return (await judge('translation', source, '', credential, signal, true, settings, owner))
+    .warning;
 }
 
 function currentContext(store: Store, chatId: string): string {
@@ -183,7 +195,8 @@ export function codexContentWarningRoutes(
           credentials.resolve,
           signal,
           false,
-          jevSettings(store.db)
+          jevSettings(store.db),
+          { store, chatId: request.params.id }
         );
       }
       const target =
@@ -201,7 +214,8 @@ export function codexContentWarningRoutes(
         credentials.resolve,
         signal,
         false,
-        jevSettings(store.db)
+        jevSettings(store.db),
+        { store, chatId: request.params.id }
       );
     }
   );
@@ -222,7 +236,8 @@ export function codexContentWarningRoutes(
         credentials.resolve,
         signal,
         false,
-        jevSettings(store.db)
+        jevSettings(store.db),
+        { store, chatId: source.chatId }
       );
     }
   );

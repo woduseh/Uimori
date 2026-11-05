@@ -203,6 +203,8 @@ export type HelperTaskResultsView = {
   usage: {
     attempts: HelperTaskAttemptUsage[];
     toolExecutions: number;
+    /** Latest helper request's provider-reported input, never cumulative native-turn usage. */
+    latestInputTokens?: number | null;
     /** Last recorded local estimate, not the native agent's current context utilization. */
     latestInputEstimate: number | null;
     /** Known text/image allowance only when one or more file token costs are unmeasured. */

@@ -4,6 +4,7 @@ import type { IllustrationDiagnostic, IllustrationJobInput } from '../core/illus
 import type { HelperTask } from '../core/helper.js';
 import { HttpError, choice, fields, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
+import { providerCacheUsage } from '../core/provider-cache-usage.js';
 
 const id: Json = { type: 'string', minLength: 1, maxLength: 100 };
 const kind: Json = { type: 'string', enum: ['run', 'job', 'illustration', 'helper'] };
@@ -33,7 +34,7 @@ export const HELPER_TASK_TOOLS: ProviderTool[] = [
   {
     name: 'task.inspect',
     description:
-      'Inspect one known run, auxiliary job, illustration job or helper task by exact ID. Returns compact status, error, usage and available actions without manuscript or execution snapshots. Illustration inspection also reports the failed stage, target and available prompt status; includePrompt:true explicitly includes any stored prepared prompt (refusals may have none). For helpers, committedEffects lists durable receipt-backed effects (20 per page); pass nextOffset as effectsOffset. It confirms the recorded commit, not current resource state or task success. Missing tool/callId is unknown, and no receipt is not proof that an uncertain action had no effect. Inspection never retries a write.',
+      'Inspect one known run, auxiliary job, illustration job or helper task by exact ID. Returns compact status, error, usage and available actions without manuscript or execution snapshots. includeDiagnostics:true adds recorded, content-bounded provider and tool events (20 per page); use attemptsOffset and toolsOffset for later pages. Missing old records or timing are unknown, not evidence of no calls. Illustration inspection also reports the failed stage, target and available prompt status; includePrompt:true explicitly includes any stored prepared prompt (refusals may have none). For helpers, committedEffects lists durable receipt-backed effects (20 per page); pass nextOffset as effectsOffset. It confirms the recorded commit, not current resource state or task success. Missing tool/callId is unknown, and no receipt is not proof that an uncertain action had no effect. Inspection never retries a write.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -41,6 +42,9 @@ export const HELPER_TASK_TOOLS: ProviderTool[] = [
         id,
         effectsOffset: { type: 'integer', minimum: 0 },
         includePrompt: { type: 'boolean' },
+        includeDiagnostics: { type: 'boolean' },
+        attemptsOffset: { type: 'integer', minimum: 0 },
+        toolsOffset: { type: 'integer', minimum: 0 },
       },
       required: ['kind', 'id'],
       additionalProperties: false,
@@ -70,6 +74,12 @@ type ToolMetrics = {
   elapsedMs: number | null;
   queueMs: number | null;
 };
+type DiagnosticPage = {
+  total: number;
+  offset: number;
+  items: Record<string, unknown>[];
+  nextOffset: number | null;
+};
 type TaskView = {
   kind: Kind;
   id: string;
@@ -96,7 +106,7 @@ type TaskView = {
     preparedPrompt?: { prompt: string; caption: string; negativePrompt: string } | null;
   };
   diagnostics?: {
-    attemptsByPurpose: {
+    attemptsByPurpose?: {
       purpose: string;
       usage: NonNullable<TaskView['usage']>;
       unknownInputCalls: number;
@@ -106,9 +116,11 @@ type TaskView = {
       internalModelCalls: number | null;
       unknownInternalModelCallAttempts: number;
     }[];
-    toolResultSizes: ToolMetrics & {
+    toolResultSizes?: ToolMetrics & {
       byTool: (ToolMetrics & { name: string })[];
     };
+    attempts?: DiagnosticPage;
+    tools?: DiagnosticPage;
   };
   canCancel: boolean;
   canRetry: boolean;
@@ -227,6 +239,215 @@ function helperDiagnostics(store: Store, id: string): NonNullable<TaskView['diag
   };
 }
 
+const object = (value: unknown): Record<string, any> =>
+  value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, any>) : {};
+const tokenCount = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+
+/** Native items remain in raw usage; inspection returns only bounded counts by type and outcome. */
+function nativeActivitySummary(raw: Record<string, any>) {
+  if (
+    !raw.nativeActivity ||
+    typeof raw.nativeActivity !== 'object' ||
+    Array.isArray(raw.nativeActivity)
+  )
+    return null;
+  const activity = object(raw.nativeActivity);
+  const groups = new Map<string, Record<string, number>>();
+  for (const item of [
+    ...(Array.isArray(activity.items) ? activity.items : []),
+    ...(Array.isArray(activity.contextCompactions) ? activity.contextCompactions : []),
+  ]) {
+    const value = object(item);
+    if (
+      ![
+        'webSearch',
+        'functionCallOutput',
+        'imageGeneration',
+        'plan',
+        'sleep',
+        'contextCompaction',
+      ].includes(value.type)
+    )
+      continue;
+    const status = ['running', 'completed', 'failed', 'cancelled', 'interrupted'].includes(
+      value.status
+    )
+      ? value.status
+      : 'unknown';
+    const group = groups.get(value.type) ?? {};
+    group[status] = (group[status] ?? 0) + 1;
+    groups.set(value.type, group);
+  }
+  return {
+    byType: [...groups.entries()].map(([type, statuses]) => ({ type, statuses })),
+    omittedItems: tokenCount(activity.omittedItems),
+    omittedContextCompactions: tokenCount(activity.omittedContextCompactions),
+  };
+}
+
+/** Details are opt-in so they never enlarge routine model prompts. */
+function recordedDiagnostics(
+  store: Store,
+  kind: Kind,
+  id: string,
+  attemptsOffset: number,
+  toolsOffset: number
+) {
+  const attemptWhere = {
+    run: 'a.run_id=?',
+    job: 'a.job_id=?',
+    illustration:
+      "a.id IN (SELECT value FROM json_each((SELECT diagnostic FROM illustration_jobs WHERE id=?),'$.attempts'))",
+    helper: 'a.id IN (SELECT attempt_id FROM helper_task_attempts WHERE task_id=?)',
+  }[kind];
+  const attemptTotal = Number(
+    store.db.prepare(`SELECT COUNT(*) AS n FROM attempts a WHERE ${attemptWhere}`).get(id)?.n ?? 0
+  );
+  const attemptRows = store.db
+    .prepare(`SELECT a.id,a.role,a.usage_kind AS purpose,a.model_id AS modelId,
+    a.status,a.started_at AS startedAt,a.input_tokens AS inputTokens,a.output_tokens AS outputTokens,
+    a.cost_usd AS costUsd,a.error AS errorCode,a.raw_usage AS rawUsage,
+    json_extract(a.request,'$.protocol') AS protocol,
+    json_extract(a.response,'$.executionDiagnostic.purpose') AS detailPurpose,
+    json_extract(a.response,'$.executionDiagnostic.finishedAt') AS finishedAt,
+    json_extract(a.response,'$.executionDiagnostic.elapsedMs') AS elapsedMs
+    FROM attempts a WHERE ${attemptWhere} ORDER BY a.rowid LIMIT 20 OFFSET ?`)
+    .all(id, attemptsOffset) as Row[];
+  const attemptItems = attemptRows.map((item) => {
+    const { rawUsage, protocol, ...projection } = item;
+    const raw = rawUsage ? object(JSON.parse(String(rawUsage))) : {};
+    const nativeTokens = object(
+      raw.tokenUsageBasis === 'last' || raw.tokenUsageBasis === 'total'
+        ? object(raw.tokenUsage)[raw.tokenUsageBasis]
+        : undefined
+    );
+    return {
+      ...projection,
+      errorCode:
+        typeof item.errorCode === 'string' && /^[A-Z][A-Z0-9_]{1,95}$/u.test(item.errorCode)
+          ? item.errorCode
+          : null,
+      cachedInputTokens:
+        providerCacheUsage(protocol, raw)?.readTokens ?? tokenCount(nativeTokens.cachedInputTokens),
+      reasoningTokens: tokenCount(
+        object(raw.output_tokens_details).reasoning_tokens ??
+          object(raw.completion_tokens_details).reasoning_tokens ??
+          raw.thoughtsTokenCount ??
+          nativeTokens.reasoningOutputTokens
+      ),
+      nativeActivity: nativeActivitySummary(raw),
+    };
+  });
+  const attemptPage: DiagnosticPage = {
+    total: attemptTotal,
+    offset: attemptsOffset,
+    items: attemptItems,
+    nextOffset:
+      attemptsOffset + attemptItems.length < attemptTotal
+        ? attemptsOffset + attemptItems.length
+        : null,
+  };
+  let toolTotal: number;
+  let toolItems: Record<string, unknown>[];
+  if (kind === 'helper') {
+    // A start is not an outcome; a missing finish remains explicitly unknown. Older finished
+    // events without a corresponding start are still visible without fabricating arguments.
+    const pairs = `WITH pairs AS (
+      SELECT s.seq,s.data AS started,(SELECT f.seq FROM helper_events f
+        WHERE f.task_id=s.task_id AND f.kind='tool.finished' AND f.seq>s.seq
+          AND json_extract(f.data,'$.callId')=json_extract(s.data,'$.callId') ORDER BY f.seq LIMIT 1) AS finished_seq
+        FROM helper_events s WHERE s.task_id=? AND s.kind='tool.started'
+      UNION ALL
+      SELECT f.seq,NULL,f.seq FROM helper_events f WHERE f.task_id=? AND f.kind='tool.finished'
+        AND NOT EXISTS (SELECT 1 FROM helper_events s WHERE s.task_id=f.task_id AND s.kind='tool.started'
+          AND s.seq<f.seq AND json_extract(s.data,'$.callId')=json_extract(f.data,'$.callId'))
+    )`;
+    toolTotal = Number(
+      store.db.prepare(`${pairs} SELECT COUNT(*) AS n FROM pairs`).get(id, id)?.n ?? 0
+    );
+    const rows = store.db
+      .prepare(`${pairs}
+      SELECT p.seq,p.started,f.seq AS finishedSeq,
+        json_extract(f.data,'$.name') AS name,json_extract(f.data,'$.callId') AS callId,
+        json_extract(f.data,'$.status') AS status,json_extract(f.data,'$.denied') AS denied,
+        json_extract(f.data,'$.errorKind') AS errorKind,json_extract(f.data,'$.errorCode') AS errorCode,
+        json_extract(f.data,'$.originalResultChars') AS originalResultChars,
+        json_extract(f.data,'$.providedResultChars') AS providedResultChars,
+        json_extract(f.data,'$.elapsedMs') AS elapsedMs,json_extract(f.data,'$.queueMs') AS queueMs,
+        json_extract(f.data,'$.finishedAt') AS finishedAt,json_extract(f.data,'$.shell') AS shell
+      FROM pairs p LEFT JOIN helper_events f ON f.seq=p.finished_seq ORDER BY p.seq LIMIT 20 OFFSET ?`)
+      .all(id, id, toolsOffset) as Row[];
+    toolItems = rows.map((item) => {
+      const started = item.started
+        ? (JSON.parse(String(item.started)) as Record<string, unknown>)
+        : {};
+      const keys = [
+        'name',
+        'callId',
+        'startedAt',
+        'argsPreview',
+        'argsChars',
+        'argsSha256',
+        'argsTruncated',
+        'argsRedacted',
+      ];
+      const event = Object.fromEntries(
+        keys.filter((key) => key in started).map((key) => [key, started[key]])
+      );
+      const outcome =
+        item.finishedSeq === null
+          ? null
+          : {
+              status: item.status ?? null,
+              denied: item.denied === null ? null : !!item.denied,
+              errorKind: item.errorKind ?? null,
+              errorCode: item.errorCode ?? null,
+              originalResultChars: item.originalResultChars ?? null,
+              providedResultChars: item.providedResultChars ?? null,
+              elapsedMs: item.elapsedMs ?? null,
+              queueMs: item.queueMs ?? null,
+              finishedAt: item.finishedAt ?? null,
+              shell: item.shell ? JSON.parse(String(item.shell)) : null,
+            };
+      return {
+        seq: item.seq,
+        name: item.name ?? event.name ?? null,
+        callId: item.callId ?? event.callId ?? null,
+        ...event,
+        state: outcome ? 'finished' : 'started',
+        ...(outcome ? {} : { effect: 'unknown' }),
+        outcome,
+      };
+    });
+  } else {
+    const column = { run: 'run_id', job: 'job_id', illustration: 'illustration_job_id' }[kind];
+    toolTotal = Number(
+      store.db
+        .prepare(`SELECT COUNT(*) AS n FROM execution_tool_diagnostics WHERE ${column}=?`)
+        .get(id)?.n ?? 0
+    );
+    const rows = store.db
+      .prepare(
+        `SELECT seq,generation,origin,data FROM execution_tool_diagnostics WHERE ${column}=? ORDER BY seq LIMIT 20 OFFSET ?`
+      )
+      .all(id, toolsOffset) as Row[];
+    toolItems = rows.map((item) => ({
+      seq: item.seq,
+      generation: item.generation,
+      origin: item.origin,
+      ...JSON.parse(String(item.data)),
+    }));
+  }
+  const tools: DiagnosticPage = {
+    total: toolTotal,
+    offset: toolsOffset,
+    items: toolItems,
+    nextOffset: toolsOffset + toolItems.length < toolTotal ? toolsOffset + toolItems.length : null,
+  };
+  return { attempts: attemptPage, tools };
+}
+
 function listTasks(store: Store, current: HelperTask, args: Record<string, unknown>) {
   fields(record(args), ['chatId', 'kind', 'status', 'limit']);
   const status =
@@ -338,7 +559,10 @@ function inspect(
   target: Kind,
   id: string,
   effectsOffset = 0,
-  includePrompt = false
+  includePrompt = false,
+  includeDiagnostics = false,
+  attemptsOffset = 0,
+  toolsOffset = 0
 ): TaskView {
   if (target === 'helper') {
     const task = row(
@@ -366,7 +590,12 @@ function inspect(
       status: task.status,
       error: task.error,
       usage: JSON.parse(String(task.usage)),
-      diagnostics: helperDiagnostics(store, id),
+      diagnostics: {
+        ...helperDiagnostics(store, id),
+        ...(includeDiagnostics
+          ? recordedDiagnostics(store, target, id, attemptsOffset, toolsOffset)
+          : {}),
+      },
       committedEffects,
       canCancel: !self && ['queued', 'running'].includes(task.status),
       canRetry: !self && eligible && !committed && latest,
@@ -397,6 +626,9 @@ function inspect(
       status: run.status,
       error: run.error,
       usage,
+      ...(includeDiagnostics
+        ? { diagnostics: recordedDiagnostics(store, target, id, attemptsOffset, toolsOffset) }
+        : {}),
       canCancel: active,
       canRetry: !active && !authored,
       ...(authored ? { retryBlock: 'AUTHORED_START' } : {}),
@@ -420,6 +652,9 @@ function inspect(
       status: job.status,
       error: job.error,
       usage: attemptUsage(store, 'job_id', id),
+      ...(includeDiagnostics
+        ? { diagnostics: recordedDiagnostics(store, target, id, attemptsOffset, toolsOffset) }
+        : {}),
       canCancel: active,
       canRetry: eligible && job.kind !== 'status',
       ...(job.kind === 'status' ? { retryBlock: 'SCENE_COMMENTARY_RETIRED' } : {}),
@@ -463,6 +698,9 @@ function inspect(
         )
         .get(id) as Row
     ),
+    ...(includeDiagnostics
+      ? { diagnostics: recordedDiagnostics(store, target, id, attemptsOffset, toolsOffset) }
+      : {}),
     canCancel: active,
     canRetry: eligible,
     createdAt: illustration.created_at,
@@ -481,7 +719,17 @@ export function invokeTaskTool(
   if (name === 'task.list') return listTasks(store, current, args);
   fields(
     record(args),
-    name === 'task.inspect' ? ['kind', 'id', 'effectsOffset', 'includePrompt'] : ['kind', 'id']
+    name === 'task.inspect'
+      ? [
+          'kind',
+          'id',
+          'effectsOffset',
+          'includePrompt',
+          'includeDiagnostics',
+          'attemptsOffset',
+          'toolsOffset',
+        ]
+      : ['kind', 'id']
   );
   const target = choice(args.kind, ['run', 'job', 'illustration', 'helper'], 'task kind');
   const targetId = text(args.id, 'task ID', 100);
@@ -493,13 +741,26 @@ export function invokeTaskTool(
     typeof args.includePrompt !== 'boolean'
   )
     throw new HttpError(400, 'Invalid includePrompt');
+  if (
+    name === 'task.inspect' &&
+    args.includeDiagnostics !== undefined &&
+    typeof args.includeDiagnostics !== 'boolean'
+  )
+    throw new HttpError(400, 'Invalid includeDiagnostics');
+  const attemptsOffset =
+    name === 'task.inspect' ? number(args.attemptsOffset ?? 0, 'attempts offset', 0) : 0;
+  const toolsOffset =
+    name === 'task.inspect' ? number(args.toolsOffset ?? 0, 'tools offset', 0) : 0;
   const before = inspect(
     store,
     current.id,
     target,
     targetId,
     effectsOffset,
-    args.includePrompt === true
+    args.includePrompt === true,
+    args.includeDiagnostics === true,
+    attemptsOffset,
+    toolsOffset
   );
   if (name === 'task.inspect') return before;
   if (target === 'helper' && targetId === current.id)

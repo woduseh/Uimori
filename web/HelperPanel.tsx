@@ -8,6 +8,7 @@ import {
   message as uiMessage,
 } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
+import { usageCompact } from './usage-display.js';
 import { OUTLINE_REFRESH_EVENT, type OutlineHelperRequest } from './outline-helper.js';
 import type { OutlineTarget } from '../core/outline.js';
 import {
@@ -1107,14 +1108,10 @@ export function HelperPanel(props: Props) {
           <span>
             {t('helpers.m311', {
               calls: formatNumber(task.usage.modelCalls),
-              input:
-                task.usage.inputTokens == null
-                  ? t('helpers.m026')
-                  : formatNumber(task.usage.inputTokens),
               output:
                 task.usage.outputTokens == null
                   ? t('helpers.m026')
-                  : formatNumber(task.usage.outputTokens),
+                  : usageCompact(task.usage.outputTokens),
             })}
           </span>
         </div>

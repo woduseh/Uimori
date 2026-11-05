@@ -2,7 +2,7 @@ import { buildCodexNativeRequest } from '../core/codex-protocol.js';
 import { ProviderContractError, type ProviderToolCall } from '../core/transport.js';
 import type { CodexAgentExecutionOptions } from './codex-runtime.js';
 import { modelRequestFields } from '../core/model-request-fields.js';
-import { toolCorrectionOutcome } from '../core/tool-outcome.js';
+import { toolCorrectionOutcome, toolResultChars } from '../core/tool-outcome.js';
 import type {
   AgentDefinition,
   AgentConsultationContext,
@@ -29,6 +29,7 @@ import type { MainHooks } from './model-runner.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { agentSharedOptions } from './agent-shared-options.js';
 import { AgentContextError, resolveAgentContext, adviceOrigins } from './agent-context.js';
+import { uncertainAttemptResult } from './usage-accounting.js';
 
 const asJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 const emptyUsage = (): Usage => ({ modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
@@ -252,18 +253,30 @@ export function createAgentCollaboration(
       readSignal.throwIfAborted();
       if (results.some((event) => event.callId === call.id))
         throw new ProviderContractError('ADVISOR_DUPLICATE_TOOL_ID');
+      const started = performance.now();
+      await hooks.onToolStart?.({
+        callId: `${callId}:${call.id}`,
+        name: 'agents.read',
+        args: { agentId: agent.id, tool: call.name, arguments: call.arguments },
+      });
       const event = executeTool(
         snapshot,
         { callId: call.id, name: call.name, args: call.arguments },
         readSignal
       );
-      await hooks.onToolEvent({
-        callId: `${callId}:${call.id}`,
-        name: 'agents.read',
-        args: { agentId: agent.id, tool: call.name, arguments: event.args },
-        result: event.result,
-        denied: event.denied,
-      });
+      await hooks.onToolEvent(
+        {
+          callId: `${callId}:${call.id}`,
+          name: 'agents.read',
+          args: { agentId: agent.id, tool: call.name, arguments: event.args },
+          result: event.result,
+          denied: event.denied,
+        },
+        {
+          elapsedMs: performance.now() - started,
+          originalResultChars: toolResultChars(event.result),
+        }
+      );
       const outcome = toolCorrectionOutcome(event);
       if (outcome === 'denied') throw new ProviderContractError('ADVISOR_READ_DENIED');
       results.push(event);
@@ -391,12 +404,28 @@ export function createAgentCollaboration(
         );
         return pending;
       };
-      const result = native
-        ? await native(transportConnection(authorized), buildCodexNativeRequest(request), {
-            ...providerExecution,
-            onToolCall,
-          })
-        : await executeProvider(transportConnection(authorized), request, providerExecution);
+      let result: Awaited<ReturnType<typeof executeProvider>>;
+      try {
+        result = native
+          ? await native(transportConnection(authorized), buildCodexNativeRequest(request), {
+              ...providerExecution,
+              onToolCall,
+            })
+          : await executeProvider(transportConnection(authorized), request, providerExecution);
+      } catch (error) {
+        if (attempt !== undefined) {
+          for (const key of ['inputTokens', 'outputTokens', 'costUsd'] as const) {
+            usage[key] = null;
+            totalUsage[key] = null;
+          }
+          try {
+            await hooks.onAttemptFinish(attempt, uncertainAttemptResult(signal.aborted));
+          } catch {
+            // Preserve the original execution failure if diagnostic settlement also fails.
+          }
+        }
+        throw error;
+      }
       await pendingTools;
       if (attempt === undefined && result.error?.code === 'INPUT_CONTEXT_LIMIT_EXCEEDED')
         return invalid(
@@ -454,13 +483,16 @@ export function createAgentCollaboration(
           bootstrap.push(replay(saved));
           continue;
         }
-        const event = await consult(callId, {
+        const started = performance.now();
+        const args = {
           agentId: agent.id,
           question:
             'Advise the writer on the current request from your assigned perspective. Distinguish established facts from creative suggestions.',
-        });
+        };
+        await hooks.onToolStart?.({ callId, name: 'agents.consult', args });
+        const event = await consult(callId, args);
         bootstrap.push(event);
-        await hooks.onToolEvent(structuredClone(event));
+        await hooks.onToolEvent(structuredClone(event), { elapsedMs: performance.now() - started });
       }
     },
   };

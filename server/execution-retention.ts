@@ -18,6 +18,7 @@ function releaseAttemptBodies(db: DatabaseSync, scope: 'run' | 'job' | 'helper',
     response=CASE WHEN response IS NULL THEN NULL ELSE json_object(
       'status',status,'error',json_extract(response,'$.error'),
       'usage',json_extract(response,'$.usage'),'estimatedCost',json_extract(response,'$.estimatedCost'),
+      'executionDiagnostic',json_extract(response,'$.executionDiagnostic'),
       'detailsOmitted',json('true')) END
     WHERE ${predicate} AND status!='running'`).run(id);
 }

@@ -10,7 +10,7 @@ import { api } from './api.js';
 import { formatNumber, t, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { usageUsd } from './usage-display.js';
+import { usageCompact, usageUsd } from './usage-display.js';
 import './helper-task-results.css';
 import './scene-usage.css';
 import './run-task-details.css';
@@ -264,11 +264,12 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
   const totals = helperTaskUsageTotals(usage.attempts);
   const inputLimit = usage.latestInputLimit;
   const inputEstimate = usage.latestInputEstimate;
+  const lastInput = usage.latestInputTokens ?? null;
   const hasInputBudget = inputEstimate !== null && typeof inputLimit === 'number' && inputLimit > 0;
   const summaryAmount = (amount: RecordedAmount) =>
     amount.reported === 0 && amount.unknown > 0
       ? t('helperResults.unknown')
-      : formatNumber(amount.value);
+      : usageCompact(amount.value);
   const partial = [totals.inputTokens, totals.outputTokens].some(
     (amount) => amount.reported > 0 && amount.unknown > 0
   );
@@ -278,11 +279,16 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
         <summary>
           <span className="ui-meta-row">
             <span className="sr-only">{t('helperResults.usage')}</span>
-            <span>
-              {t('helperResults.inputSummary', {
-                count: summaryAmount(totals.inputTokens),
-              })}
-            </span>
+            {(lastInput !== null || inputEstimate !== null) && (
+              <span>
+                {t(
+                  lastInput !== null
+                    ? 'helperResults.inputSummary'
+                    : 'helperResults.inputEstimateSummary',
+                  { count: usageCompact(lastInput ?? inputEstimate!) }
+                )}
+              </span>
+            )}
             <span>
               {t('helperResults.outputSummary', { count: summaryAmount(totals.outputTokens) })}
             </span>
@@ -292,31 +298,34 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
               </span>
             )}
             {partial && <span>{t('helperResults.partialUsage')}</span>}
-            {hasInputBudget && (
-              <span className="helper-input-mini">
-                <span>{t('helperConversation.inputEstimate')}</span>
-                <meter
-                  className="helper-input-budget"
-                  min={0}
-                  max={inputLimit}
-                  value={Math.min(inputEstimate, inputLimit)}
-                  aria-label={t('helperResults.inputBudgetMeter')}
-                  aria-valuetext={t('helperResults.inputBudgetValue', {
-                    input: formatNumber(inputEstimate),
-                    limit: formatNumber(inputLimit),
-                  })}
-                />
-              </span>
-            )}
           </span>
         </summary>
         <dl className="scene-receipt">
+          {lastInput !== null && (
+            <>
+              <dt>{t('helperResults.latestInput')}</dt>
+              <dd>{formatNumber(lastInput)}</dd>
+            </>
+          )}
           {inputEstimate !== null && (
             <>
               <dt>{t('helperResults.latestEstimate')}</dt>
               <dd>
                 {formatNumber(inputEstimate)}
                 {hasInputBudget && ` / ${formatNumber(inputLimit)}`}
+                {hasInputBudget && (
+                  <meter
+                    className="helper-input-budget"
+                    min={0}
+                    max={inputLimit}
+                    value={Math.min(inputEstimate, inputLimit)}
+                    aria-label={t('helperResults.inputBudgetMeter')}
+                    aria-valuetext={t('helperResults.inputBudgetValue', {
+                      input: formatNumber(inputEstimate),
+                      limit: formatNumber(inputLimit),
+                    })}
+                  />
+                )}
               </dd>
             </>
           )}
@@ -380,6 +389,7 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
             <UsageAmount amount={totals.costUsd} cost />
           </dd>
         </dl>
+        <p className="helper-usage-note">{t('helperResults.cumulativeExplanation')}</p>
       </details>
     </div>
   );

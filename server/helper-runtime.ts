@@ -8,6 +8,7 @@ import { readHelperOutline } from './outline-read.js';
 import { OUTLINE_PLANNING_GUIDANCE, OUTLINE_REVIEW_GUIDANCE } from '../core/outline-guidance.js';
 import type { OutlineTarget } from '../core/outline.js';
 import { modelRequestFields } from '../core/model-request-fields.js';
+import { uncertainAttemptResult } from './usage-accounting.js';
 import { performance } from 'node:perf_hooks';
 import { availableParallelism } from 'node:os';
 import {
@@ -2060,26 +2061,37 @@ export class HelperRuntime {
     };
     const native = onToolCall && target.connection.protocol === 'codex-app-server-v1';
     if (native && !this.options.executeCodexAgent) throw new Error('CODEX_NATIVE_UNAVAILABLE');
-    const result = native
-      ? this.options.executeCodexAgent!(
-          transportConnection(target.connection),
-          nativeHelperRequest(request),
-          {
-            ...execution,
-            onToolCall,
-            onSteerReady,
-            onCommentary: (text) => {
-              hooks.signal.throwIfAborted();
-              this.workspace.assertRunning(task.id);
-              this.workspace.event(task.conversationId, task.id, 'progress', { text });
-            },
-          }
-        )
-      : executeProvider(transportConnection(target.connection), request, execution);
-    return await result.then(async (result) => {
-      if (attempt) await hooks.onAttemptFinish(attempt, result);
+    try {
+      const result = await (native
+        ? this.options.executeCodexAgent!(
+            transportConnection(target.connection),
+            nativeHelperRequest(request),
+            {
+              ...execution,
+              onToolCall,
+              onSteerReady,
+              onCommentary: (text) => {
+                hooks.signal.throwIfAborted();
+                this.workspace.assertRunning(task.id);
+                this.workspace.event(task.conversationId, task.id, 'progress', { text });
+              },
+            }
+          )
+        : executeProvider(transportConnection(target.connection), request, execution));
+      const completedAttempt = attempt;
+      attempt = undefined;
+      if (completedAttempt) await hooks.onAttemptFinish(completedAttempt, result);
       return result;
-    });
+    } catch (error) {
+      if (attempt) {
+        try {
+          await hooks.onAttemptFinish(attempt, uncertainAttemptResult(hooks.signal.aborted));
+        } catch {
+          // Preserve the original execution failure if diagnostic settlement also fails.
+        }
+      }
+      throw error;
+    }
   }
   private async summarize(
     task: HelperTask,

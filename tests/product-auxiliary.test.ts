@@ -25,6 +25,44 @@ function translationBody(wire: string) {
   return `합성 번역 ${translationFixtureSlot(JSON.parse(wire), 'source')}`;
 }
 
+test('a directly thrown translation provider settles the started attempt without inventing usage', async () => {
+  const seed = bundle();
+  selectProvider(seed, 'codex://local');
+  seed.snapshot.profile!.models.translation!.connection.protocol = 'codex-app-server-v1';
+  const observed = hooks('http://127.0.0.1:9');
+  observed.options.executeCodex = async (_connection, _request, options) => {
+    await options.onWire?.({
+      connectionId: 'connection-local',
+      protocol: 'codex-app-server-v1',
+      role: 'translation',
+      modelId: 'explicit-fixture-model',
+      method: 'POST',
+      url: 'codex://local',
+      headers: {},
+      body: {},
+      bodySha256: 'wire',
+      stablePrefixSha256: 'prefix',
+    });
+    throw new Error('PRIVATE_PROVIDER_THROW');
+  };
+  const outcome = await runAuxiliaryJob(
+    bridge(seed).store,
+    seed.job.id,
+    'worker',
+    observed.options
+  );
+  expect(outcome?.status).toBe('failed');
+  expect(observed.finishes).toEqual([
+    expect.objectContaining({
+      result: expect.objectContaining({
+        status: 'error',
+        error: { code: 'PROVIDER_OUTCOME_UNCERTAIN' },
+        usage: expect.objectContaining({ inputTokens: null, outputTokens: null, costUsd: null }),
+      }),
+    }),
+  ]);
+});
+
 test.each([272000, 8192])(
   'translation admits optional reads by model tokens and can finish after a read exceeds %i tokens',
   async (inputTokenLimit) => {
@@ -86,8 +124,18 @@ test.each([272000, 8192])(
     seed.snapshot.profile!.models.translation!.inputTokenLimit = inputTokenLimit;
     seed.snapshot.profile!.models.translation!.connection.protocol = 'openai-chat-v1';
     const observed = hooks(server.origin);
+    const started: { name: string; generation: number }[] = [];
+    const finished: { name: string; generation: number; elapsedMs: number | undefined }[] = [];
+    observed.options.onToolStart = (_job, event, generation) => {
+      started.push({ name: event.name, generation });
+    };
     observed.options.onToolEvent = (_job, event) => {
       events.push(event);
+    };
+    const capture = observed.options.onToolEvent;
+    observed.options.onToolEvent = (job, event, timing, generation) => {
+      capture(job, event, timing, generation);
+      finished.push({ name: event.name, generation, elapsedMs: timing?.elapsedMs });
     };
     const source = structuredClone(seed.source);
     const outcome = await runAuxiliaryJob(
@@ -103,6 +151,12 @@ test.each([272000, 8192])(
     expect(seed.source).toEqual(source);
     expect(server.requests).toHaveLength(2);
     expect(events).toHaveLength(16);
+    expect(started).toHaveLength(16);
+    expect(finished).toHaveLength(16);
+    expect(started.every((entry) => entry.generation === 1)).toBe(true);
+    expect(
+      finished.every((entry) => entry.generation === 1 && typeof entry.elapsedMs === 'number')
+    ).toBe(true);
     if (inputTokenLimit === 8192) {
       expect(events).toEqual(
         expect.arrayContaining([

@@ -145,6 +145,28 @@ test('before advisors run in order with scoped reads, selected models and explic
     'main',
   ]);
   expect(run.usage).toEqual({ modelCalls: 5, inputTokens: 35, outputTokens: 15, costUsd: null });
+  const diagnostics = state.app.store.db
+    .prepare('SELECT origin,data FROM execution_tool_diagnostics WHERE run_id=? ORDER BY seq')
+    .all(run.id)
+    .map((row) => ({ origin: row.origin, ...JSON.parse(String(row.data)) }));
+  expect(diagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        origin: 'advisor',
+        name: 'agents.read',
+        state: 'finished',
+        elapsedMs: expect.any(Number),
+      }),
+      expect.objectContaining({
+        origin: 'writer',
+        name: 'agents.consult',
+        state: 'finished',
+        elapsedMs: expect.any(Number),
+      }),
+    ])
+  );
+  expect(JSON.stringify(diagnostics)).not.toContain(state.lore.text);
+  expect(JSON.stringify(diagnostics)).not.toContain(longOpinion);
   expect(run.toolEvents.map((event) => event.name)).toEqual([
     'agents.read',
     'agents.consult',

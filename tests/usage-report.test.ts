@@ -203,6 +203,39 @@ test('ephemeral input translation and a late detached completion never persist d
   expect(helperUsageKind('helper', { role: 'helper' })).toBe('helper');
 });
 
+test('ephemeral attempts retain a safe failure code, but deletion prevents late error restoration', () => {
+  const store = fixture();
+  const chat = createFixtureChat(store, 'Ephemeral failure');
+  const failure = {
+    ...result(null),
+    status: 'error' as const,
+    text: 'PRIVATE_OUTPUT',
+    error: { code: 'HTTP_429' },
+  };
+  const live = store.product.startAttempt(chat.id, null, null, wire(), {
+    kind: 'input-translation',
+    retainContent: false,
+  });
+  store.product.finishAttempt(live, failure);
+  const row = store.db.prepare('SELECT * FROM attempts WHERE id=?').get(live)!;
+  expect(row).toMatchObject({ error: 'HTTP_429', request: '{}', raw_usage: null });
+  expect(JSON.parse(String(row.response))).toMatchObject({
+    error: { code: 'HTTP_429' },
+    executionDiagnostic: { elapsedMs: expect.any(Number) },
+  });
+  expect(JSON.stringify(row)).not.toContain('PRIVATE_OUTPUT');
+  expect(JSON.stringify(row)).not.toContain('PRIVATE_CANARY');
+  const late = store.product.startAttempt(chat.id, null, null, wire(), {
+    kind: 'input-translation',
+    retainContent: false,
+  });
+  detachAttemptUsage(store.db, [late]);
+  store.product.finishAttempt(late, failure);
+  const detached = store.db.prepare('SELECT * FROM attempts WHERE id=?').get(late)!;
+  expect(detached).toMatchObject({ chat_id: null, error: null, request: '{}' });
+  expect(JSON.parse(String(detached.response))).not.toHaveProperty('error');
+});
+
 test('CSV exports one grouping, includes coverage columns and neutralizes spreadsheet formulas in model IDs', () => {
   const store = fixture();
   add(store, null, wire({ modelId: '=HYPERLINK("https://example.invalid")' }), result(0));

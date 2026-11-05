@@ -1201,6 +1201,101 @@ export class CodexRuntime implements CodexRuntimeService {
     const messagePhases = new Map<string, unknown>();
     const completedItems = new Set<string>();
     const itemCounts: Record<string, number> = {};
+    // Runtime-owned activities are separate from the host's dynamic-tool receipts.
+    // Keep metadata only: reasoning, plans, search contents and tool output stay out.
+    type NativeActivity = {
+      id: string;
+      type: string;
+      startedAt?: string;
+      finishedAt?: string;
+      elapsedMs?: number;
+      status: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+    };
+    const nativeActivities: NativeActivity[] = [];
+    const nativeCompactions: NativeActivity[] = [];
+    const activityStarted = new Map<string, number>();
+    let omittedActivities = 0;
+    let omittedCompactions = 0;
+    const recordNativeActivity = (item: Record<string, unknown>, method: string) => {
+      const type = String(item.type);
+      if (
+        ![
+          'webSearch',
+          'functionCallOutput',
+          'imageGeneration',
+          'plan',
+          'sleep',
+          'contextCompaction',
+        ].includes(type) ||
+        !boundedString(item.id)
+      )
+        return;
+      const compaction = type === 'contextCompaction';
+      const activities = compaction ? nativeCompactions : nativeActivities;
+      let activity = activities.find((entry) => entry.id === item.id);
+      if (activity?.finishedAt || (method === 'item/completed' && completedItems.has(item.id)))
+        return;
+      if (!activity) {
+        if (activities.length >= (compaction ? 16 : 64)) {
+          if (method === 'item/completed') {
+            if (compaction) omittedCompactions++;
+            else omittedActivities++;
+          }
+          return;
+        }
+        activity = { id: item.id, type, status: 'running' };
+        activities.push(activity);
+      }
+      if (method === 'item/started') {
+        if (!activity.startedAt) {
+          activity.startedAt = new Date().toISOString();
+          activityStarted.set(item.id, performance.now());
+        }
+        return;
+      }
+      activity.finishedAt = new Date().toISOString();
+      const started = activityStarted.get(item.id);
+      if (started !== undefined) {
+        activity.elapsedMs = Math.max(0, Math.round(performance.now() - started));
+        activityStarted.delete(item.id);
+      }
+      activity.status =
+        item.success === false ||
+        item.error != null ||
+        item.failure != null ||
+        ['failed', 'error'].includes(String(item.status))
+          ? 'failed'
+          : ['cancelled', 'interrupted'].includes(String(item.status))
+            ? 'cancelled'
+            : 'completed';
+    };
+    const recordNativeDiagnostics = () => {
+      if (
+        !nativeActivities.length &&
+        !nativeCompactions.length &&
+        !omittedActivities &&
+        !omittedCompactions
+      )
+        return;
+      const finishedAt = new Date().toISOString();
+      for (const activity of [...nativeActivities, ...nativeCompactions]) {
+        if (activity.status !== 'running') continue;
+        activity.finishedAt = finishedAt;
+        activity.status = options.signal.aborted ? 'cancelled' : 'interrupted';
+        const started = activityStarted.get(activity.id);
+        if (started !== undefined)
+          activity.elapsedMs = Math.max(0, Math.round(performance.now() - started));
+      }
+      usage.raw = {
+        ...(object(usage.raw) ? (usage.raw as Record<string, Json>) : {}),
+        nativeActivity: {
+          items: nativeActivities,
+          omittedItems: omittedActivities,
+          contextCompactions: nativeCompactions,
+          omittedContextCompactions: omittedCompactions,
+        },
+      };
+    };
     let tokenUsageUpdates = 0;
     let reportedTokens: number | undefined;
     let hiddenContext = false;
@@ -1477,6 +1572,7 @@ export class CodexRuntime implements CodexRuntimeService {
             raw: {
               kind: 'codex-agent-turn',
               modelCalls: null,
+              tokenUsageBasis: session ? 'last' : 'total',
               ...(Object.keys(recorded).length ? { tokenUsage: recorded } : {}),
             },
           };
@@ -1490,6 +1586,7 @@ export class CodexRuntime implements CodexRuntimeService {
             rejectTurn(new ProviderContractError('CODEX_TOOL_NOT_ALLOWED'));
             return;
           }
+          recordNativeActivity(item, method);
           if (
             method === 'item/completed' &&
             boundedString(item.id) &&
@@ -1650,6 +1747,7 @@ export class CodexRuntime implements CodexRuntimeService {
         usage
       );
     } finally {
+      recordNativeDiagnostics();
       const interrupted = toolSignal.aborted;
       ended = true;
       toolAbort.abort();

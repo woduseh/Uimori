@@ -15,6 +15,7 @@ import { countTextTokens } from '../core/text-tokens.js';
 import type { ProviderTool } from '../core/transport.js';
 import type { Content } from '../core/product.js';
 import type { HelperTask } from '../core/helper.js';
+import * as transport from '../core/transport.js';
 
 // A two-CPU host leaves queued reads in these scenarios, independently of the CI machine.
 vi.mock('node:os', async (importOriginal) => ({
@@ -127,6 +128,40 @@ function answer(text: string, tools?: { id: string; name: string; args: unknown 
     { headers: { 'content-type': 'text/event-stream' } }
   );
 }
+
+test('a direct helper provider throw settles the existing attempt without storing the exception', async () => {
+  const f = fixture();
+  vi.spyOn(transport, 'executeProvider').mockImplementation(
+    async (connection, request, options) => {
+      await options.onWire?.({
+        connectionId: connection.id,
+        protocol: connection.protocol,
+        role: request.role,
+        modelId: request.modelId,
+        method: 'POST',
+        url: connection.endpoint,
+        headers: {},
+        body: {},
+        bodySha256: 'wire',
+        stablePrefixSha256: 'prefix',
+      });
+      throw new Error('PRIVATE_PROVIDER_EXCEPTION');
+    }
+  );
+  const task = await f.run('Inspect synthetic data');
+  expect(task.status).toBe('failed');
+  const row = f.store.db
+    .prepare(`SELECT a.status,a.error,a.input_tokens,a.output_tokens,a.response
+    FROM attempts a JOIN helper_task_attempts h ON h.attempt_id=a.id WHERE h.task_id=?`)
+    .get(task.id)!;
+  expect(row).toMatchObject({
+    status: 'error',
+    error: 'PROVIDER_OUTCOME_UNCERTAIN',
+    input_tokens: null,
+    output_tokens: null,
+  });
+  expect(JSON.stringify(row)).not.toContain('PRIVATE_PROVIDER_EXCEPTION');
+});
 function provider(action: (body: any, round: number) => Response) {
   const bodies: any[] = [];
   vi.stubGlobal(

@@ -830,12 +830,58 @@ test('task result usage preserves reported native token detail, unknown internal
       },
     ],
     toolExecutions: 1,
+    latestInputTokens: null,
     latestInputEstimate: 321,
     latestInputLimit: null,
   });
   expect(JSON.stringify(view)).not.toContain('PRIVATE_');
   expect(JSON.stringify(view)).not.toContain('private-endpoint');
 });
+
+test.each([
+  ['codex-app-server-v1', { tokenUsage: { last: { inputTokens: 90_040 } } }, 90_040],
+  ['codex-app-server-v1', { tokenUsage: { total: { inputTokens: 647_519 } } }, null],
+  ['fixture-sse-v1', null, 647_519],
+] as const)(
+  'latest input uses a helper request, never native cumulative usage: %s',
+  (protocol, raw, expected) => {
+    const f = fixture();
+    const task = f.workspace.enqueue(f.conversation.id, 'latest-input', '사용량 확인', snapshot(f));
+    f.workspace.start(task.id, 'owner');
+    const wire: transport.WireRecord = {
+      connectionId: f.model.connectionId,
+      protocol,
+      role: 'helper',
+      modelId: f.model.modelId,
+      method: 'POST',
+      url: 'https://example.invalid/',
+      headers: {},
+      body: {},
+      bodySha256: 'synthetic',
+      stablePrefixSha256: 'synthetic',
+    };
+    const helper = f.workspace.startAttempt(task.id, 'owner', 1, 'helper', 0, wire);
+    f.workspace.finishAttempt(task.id, helper, {
+      ...structuredClone(success),
+      usage: { ...success.usage, inputTokens: 647_519, raw: raw as transport.Json },
+    });
+    const context = f.workspace.startAttempt(task.id, 'owner', 1, 'context', 0, wire);
+    f.workspace.finishAttempt(task.id, context, {
+      ...structuredClone(success),
+      usage: { ...success.usage, inputTokens: 999_999 },
+    });
+    expect(readHelperTaskResults(f.store, task.id).usage.latestInputTokens).toBe(expected);
+    const unknown = f.workspace.startAttempt(task.id, 'owner', 1, 'helper', 1, wire);
+    f.workspace.finishAttempt(task.id, unknown, {
+      ...structuredClone(success),
+      usage: { ...success.usage, inputTokens: null, raw: null },
+    });
+    f.workspace.finish(task.id, 'owner', 1, 'completed', '완료', null);
+    const usage = readHelperTaskResults(f.store, task.id).usage;
+    expect(usage.latestInputTokens).toBeNull();
+    expect(usage.attempts[0].inputTokens).toBe(647_519);
+  }
+);
 
 test.each([
   [64_000, 64_000],

@@ -177,6 +177,28 @@ export function deleteScenes(
     const runIds = new Set(
       sources.filter((row) => ids.has(String(row.id))).map((row) => String(row.run_id))
     );
+    // Completed descendants no longer retain their old full snapshot. Their tool arguments
+    // may still mention the deleted scene, so discard only diagnostics that could depend on it.
+    const dependsOnDeleted = (revision: string | null) => {
+      while (revision) {
+        if (ids.has(revision)) return true;
+        revision = parents.get(revision) ?? null;
+      }
+      return false;
+    };
+    for (const source of sources) {
+      if (ids.has(String(source.id)) || !dependsOnDeleted(source.parent_revision as string | null))
+        continue;
+      store.db.prepare('DELETE FROM execution_tool_diagnostics WHERE run_id=?').run(source.run_id);
+      store.db
+        .prepare(`DELETE FROM execution_tool_diagnostics WHERE job_id IN
+        (SELECT id FROM jobs WHERE source_revision=?)`)
+        .run(source.id);
+      store.db
+        .prepare(`DELETE FROM execution_tool_diagnostics WHERE illustration_job_id IN
+        (SELECT id FROM illustration_jobs WHERE source_revision=?)`)
+        .run(source.id);
+    }
     const images = new Set<string>();
     const rememberImages = (value: unknown) => {
       for (const hash of imageDataHashes(value)) images.add(hash);
@@ -199,6 +221,7 @@ export function deleteScenes(
         continue;
       }
       if (!refersToDeleted(original, ids) && !ids.has(String(row.parent_revision))) continue;
+      store.db.prepare('DELETE FROM execution_tool_diagnostics WHERE run_id=?').run(id);
       let snapshot = original.settled ? { ...original } : settleSnapshot(original);
       snapshot.parentRevision = survivor(snapshot.parentRevision);
       if (snapshot.replacement && ids.has(snapshot.replacement.sourceRevision))

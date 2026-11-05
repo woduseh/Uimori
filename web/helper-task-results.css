@@ -85,6 +85,9 @@ button.helper-result-target:hover {
 .helper-result-usage dl {
   margin: 10px 14px 14px;
 }
+.helper-result-usage .helper-usage-note {
+  margin: 0 14px 14px;
+}
 .helper-result-usage dd {
   display: flex;
   flex-wrap: wrap;
@@ -100,17 +103,6 @@ button.helper-result-target:hover {
 .helper-result-usage .helper-input-budget {
   flex-basis: 100%;
   max-width: 24rem;
-}
-.helper-input-mini {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted);
-  font-size: var(--font-small);
-}
-.helper-input-mini > .helper-input-budget {
-  flex-basis: auto;
-  width: 72px;
 }
 @media (max-width: 760px) {
   button.helper-result-target,

@@ -22,11 +22,21 @@ test('current schema initializes and remains readable after an extra query index
   const path = file(),
     first = new Store(path);
   expect(databaseSchemaVersion(first.db)).toBe(DATABASE_SCHEMA_VERSION);
+  expect(
+    first.db.prepare("SELECT name FROM sqlite_schema WHERE name='execution_tool_diagnostics'").get()
+  ).toBeTruthy();
+  // Existing schema-15 files created before diagnostics acquire only the new additive table.
+  first.db.exec('DROP TABLE execution_tool_diagnostics');
   first.db.exec('CREATE INDEX optional_user_index ON sources(created_at)');
   first.close();
   const next = new Store(path);
   try {
     expect(databaseSchemaVersion(next.db)).toBe(DATABASE_SCHEMA_VERSION);
+    expect(
+      next.db
+        .prepare("SELECT name FROM sqlite_schema WHERE name='execution_tool_diagnostics'")
+        .get()
+    ).toBeTruthy();
     expect(
       next.db.prepare("SELECT name FROM sqlite_schema WHERE name='optional_user_index'").get()
     ).toBeTruthy();

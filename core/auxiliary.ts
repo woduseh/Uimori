@@ -11,8 +11,8 @@ import {
   type ToolAction,
 } from './provider.js';
 import type { TranslationContextMode } from './translation-settings.js';
-import { toolCorrectionOutcome } from './tool-outcome.js';
-import type { Resource, RunSnapshot, ToolEvent } from './types.js';
+import { toolCorrectionOutcome, toolResultChars } from './tool-outcome.js';
+import type { Resource, RunSnapshot, ToolEvent, ToolEventTiming } from './types.js';
 import { STORY_READ_NAMES } from './story-context.js';
 import { TRANSLATION_READ_NAMES, translationSnapshot } from './translation-context.js';
 import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
@@ -345,7 +345,8 @@ export async function executeAuxiliary(
     signal?: AbortSignal;
     maxCalls?: number;
     onInput?: (input: AuxiliaryInput) => void | Promise<void>;
-    onToolEvent?: (event: ToolEvent) => void | Promise<void>;
+    onToolStart?: (event: Pick<ToolEvent, 'callId' | 'name' | 'args'>) => void | Promise<void>;
+    onToolEvent?: (event: ToolEvent, timing?: ToolEventTiming) => void | Promise<void>;
     prepareToolEvent?: (
       event: ToolEvent,
       nextInput: AuxiliaryInput,
@@ -415,6 +416,8 @@ export async function executeAuxiliary(
         toolEvents.some((event) => event.callId === action.callId)
       )
         throw new Error('TOOL_CALL_INVALID');
+      const started = performance.now();
+      await hooks.onToolStart?.(action);
       let event: ToolEvent;
       if (!fixedInput.tools.includes(action.name))
         event = {
@@ -429,7 +432,11 @@ export async function executeAuxiliary(
         if ('terminalOutput' in local) {
           event = local.event;
           toolEvents.push(structuredClone(event));
-          await hooks.onToolEvent?.(structuredClone(event));
+          await hooks.onToolEvent?.(structuredClone(event), {
+            elapsedMs: performance.now() - started,
+            originalResultChars: toolResultChars(event.result),
+            diagnosticArgs: action.args,
+          });
           check();
           return { output: local.terminalOutput, modelCalls: inputs.length, inputs, toolEvents };
         }
@@ -437,6 +444,7 @@ export async function executeAuxiliary(
         if (event.callId !== action.callId || event.name !== action.name)
           throw new Error('TOOL_CALL_INVALID');
       } else event = executeTool(fixedScope, action, hooks.signal, 'translation');
+      const originalResultChars = toolResultChars(event.result);
       event =
         hooks.prepareToolEvent?.(
           event,
@@ -447,7 +455,11 @@ export async function executeAuxiliary(
           structuredClone(actions.slice(actionIndex + 1))
         ) ?? event;
       toolEvents.push(structuredClone(event));
-      await hooks.onToolEvent?.(structuredClone(event));
+      await hooks.onToolEvent?.(structuredClone(event), {
+        elapsedMs: performance.now() - started,
+        originalResultChars,
+        diagnosticArgs: action.args,
+      });
       check();
       const decision = toolCorrectionOutcome(event);
       if (decision === 'denied') throw new Error('Auxiliary read tool denied');

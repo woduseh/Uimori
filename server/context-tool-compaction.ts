@@ -16,6 +16,7 @@ import {
 import type { RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import { measureProviderRequest } from './main-request.js';
 import type { MainHooks } from './model-runner.js';
+import { uncertainAttemptResult } from './usage-accounting.js';
 
 /** Only completed reads may be replaced. Mutation receipts and advisor outputs stay exact. */
 const READ_TOOLS = new Set<string>([
@@ -198,23 +199,36 @@ export async function compactToolReads(
     };
     const authorized = await authorize();
     let attempt: string | undefined;
-    const result = await executeProvider(
-      transportConnection(authorized),
-      requestFor(remaining.slice(0, lo)),
-      {
-        signal: hooks.signal,
-        resolveCredential: hooks.resolveCredential,
-        executeCodex: hooks.executeCodex,
-        timeoutMs: hooks.timeoutMs ?? target.timeoutMs,
-        vertexRequestTier: hooks.vertexRequestTier,
-        onWire: async (wire) => {
-          await authorize();
-          attempt = await hooks.onAttemptStart(wire);
-          usage.modelCalls++;
-          await authorize();
-        },
+    let result: Awaited<ReturnType<typeof executeProvider>>;
+    try {
+      result = await executeProvider(
+        transportConnection(authorized),
+        requestFor(remaining.slice(0, lo)),
+        {
+          signal: hooks.signal,
+          resolveCredential: hooks.resolveCredential,
+          executeCodex: hooks.executeCodex,
+          timeoutMs: hooks.timeoutMs ?? target.timeoutMs,
+          vertexRequestTier: hooks.vertexRequestTier,
+          onWire: async (wire) => {
+            await authorize();
+            attempt = await hooks.onAttemptStart(wire);
+            usage.modelCalls++;
+            await authorize();
+          },
+        }
+      );
+    } catch (error) {
+      if (attempt !== undefined) {
+        usage.inputTokens = usage.outputTokens = usage.costUsd = null;
+        try {
+          await hooks.onAttemptFinish(attempt, uncertainAttemptResult(hooks.signal.aborted));
+        } catch {
+          // Preserve the original execution failure if diagnostic settlement also fails.
+        }
       }
-    );
+      throw error;
+    }
     if (attempt !== undefined) {
       for (const key of ['inputTokens', 'outputTokens', 'costUsd'] as const)
         usage[key] =

@@ -8,6 +8,7 @@ import { retainCompletedLore } from './lore-retention-state.js';
 import { verifiedRunLoreReads } from './lore-context.js';
 import { captureNativeMessageChanges } from './native-message-changes.js';
 import { releaseCompletedRunInputs, releaseCompletedJobInputs } from './execution-retention.js';
+import { recordToolDiagnostic } from './execution-diagnostics.js';
 import { retryRun as retryPersonalRun } from './run-retry.js';
 import { settleSnapshot } from './execution-snapshot.js';
 import { readRunSnapshot } from './run-projections.js';
@@ -73,6 +74,7 @@ import type {
   Usage,
   ModelInput,
   ToolEvent,
+  ToolEventTiming,
 } from '../core/types.js';
 
 export type Chat = BaseChat & { createdAt: string };
@@ -582,8 +584,20 @@ export class Store {
   input(id: string, input: ModelInput) {
     this.db.prepare('INSERT INTO model_inputs(run_id,input) VALUES(?,?)').run(id, json(input));
   }
-  tool(id: string, event: ToolEvent) {
-    this.db.prepare('INSERT INTO tool_events(run_id,event) VALUES(?,?)').run(id, json(event));
+  tool(id: string, event: ToolEvent, timing?: ToolEventTiming) {
+    this.transaction(() => {
+      this.db.prepare('INSERT INTO tool_events(run_id,event) VALUES(?,?)').run(id, json(event));
+      recordToolDiagnostic(
+        this.db,
+        {
+          kind: 'run',
+          id,
+          origin: event.name === 'agents.read' ? 'advisor' : 'writer',
+        },
+        event,
+        timing
+      );
+    });
   }
   stageRunOutput(id: string, output: string): Run {
     if (typeof output !== 'string') throw new HttpError(400, 'Invalid run output');
