@@ -22,6 +22,7 @@ export function readHelperActivity(store: Store, taskId: string): HelperActivity
         substr(COALESCE(
           CASE WHEN json_type(data,'$.result.error')='text' THEN json_extract(data,'$.result.error') END,
           json_extract(data,'$.result.error.code'),json_extract(data,'$.result.code'),
+          json_extract(data,'$.errorCode'),
           json_extract(data,'$.errorKind')
         ),1,500) AS error,
         substr(json_extract(data,'$.text'),1,1000) AS text,

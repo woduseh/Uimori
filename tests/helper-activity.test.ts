@@ -54,6 +54,7 @@ test('helper activity projects bounded diagnostics and keeps denied tools visibl
       name: 'resource.patch',
       denied: true,
       errorKind: 'recoverable',
+      errorCode: 'EDITOR_SAVE_REQUIRED',
       result: { code: 'EDITOR_SAVE_REQUIRED', model: 'PRIVATE_DRAFT' },
     });
     workspace.event(conversation.id, task.id, 'progress', { text: '가'.repeat(1005) });
@@ -83,7 +84,7 @@ test('helper activity projects bounded diagnostics and keeps denied tools visibl
     expect(retained.events.at(-2)).toMatchObject({
       name: 'resource.patch',
       denied: true,
-      error: 'recoverable',
+      error: 'EDITOR_SAVE_REQUIRED',
     });
     workspace.event(conversation.id, task.id, 'attempt.finished', {
       id: 'native',

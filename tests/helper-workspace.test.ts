@@ -1,6 +1,7 @@
 import { createApp, type App } from '../server/app.js';
 import { describe } from 'vitest';
 import { afterEach, expect, test, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
@@ -437,6 +438,137 @@ function snapshot(f: ReturnType<typeof fixture>): HelperTaskSnapshot {
     limits: { totalCalls: 24, helperCalls: 12 },
   };
 }
+
+test('completed helper retains bounded call arguments, shell outcome and attempt timing', async () => {
+  const f = fixture();
+  const args = { command: `echo diagnostic\n#${'가'.repeat(1600)}\necho DIAGNOSTIC_END` };
+  vi.spyOn(f.runtime.shell, 'exec').mockResolvedValue({
+    exitCode: 7,
+    signal: null,
+    timedOut: false,
+    outputBytes: 987654,
+    truncated: true,
+    output: 'PRIVATE_SHELL_OUTPUT',
+    applied: [],
+  });
+  mockSend((_request, _options, index) =>
+    index === 0
+      ? {
+          ...structuredClone(success),
+          status: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { id: 'invalid', name: 'data.exec', arguments: { command: 123 } },
+            { id: 'shell', name: 'data.exec', arguments: args },
+          ],
+        }
+      : structuredClone(success)
+  );
+  const task = f.runtime.enqueue(f.conversation.id, 'diagnostic-retention', 'Inspect locally.');
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id).status).toBe('completed');
+  const events = f.workspace.events(f.conversation.id);
+  const data = (kind: string, callId: string) =>
+    events.find(
+      (event) =>
+        event.kind === kind && (event.data as { callId?: string } | null)?.callId === callId
+    )?.data as Record<string, any>;
+  const started = data('tool.started', 'shell');
+  expect(started).toMatchObject({
+    name: 'data.exec',
+    argsChars: JSON.stringify(args).length,
+    argsSha256: createHash('sha256').update(JSON.stringify(args)).digest('hex'),
+    argsTruncated: true,
+    argsRedacted: false,
+    startedAt: expect.any(String),
+  });
+  expect(started.argsPreview.length).toBeLessThanOrEqual(1024);
+  expect(started.argsPreview).toContain('echo diagnostic');
+  expect(started.argsPreview).toContain('DIAGNOSTIC_END');
+  expect(started.argsPreview).toContain('[arguments truncated]');
+  expect(data('tool.finished', 'shell')).toMatchObject({
+    denied: false,
+    status: 'failed',
+    finishedAt: expect.any(String),
+    shell: { exitCode: 7, signal: null, timedOut: false, outputBytes: 987654, truncated: true },
+    detailsOmitted: true,
+  });
+  expect(data('tool.finished', 'invalid')).toMatchObject({
+    denied: true,
+    errorCode: 'INVALID_SHELL_ARGUMENTS',
+    detailsOmitted: true,
+  });
+  expect(JSON.stringify(events)).not.toContain('PRIVATE_SHELL_OUTPUT');
+  const attempts = events.filter((event) => event.kind === 'attempt.finished');
+  expect(attempts).toHaveLength(2);
+  for (const event of attempts)
+    expect(event.data).toMatchObject({
+      finishedAt: expect.any(String),
+      elapsedMs: expect.any(Number),
+    });
+});
+
+test('failed helper attempt still records its finish time', async () => {
+  const f = fixture();
+  mockSend(() => ({
+    ...structuredClone(success),
+    status: 'error',
+    text: '',
+    error: { code: 'PROVIDER_FAILED', message: 'synthetic error' },
+  }));
+  const task = f.runtime.enqueue(f.conversation.id, 'failed-attempt-timing', 'Inspect.');
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id).status).toBe('failed');
+  const events = f.workspace.events(f.conversation.id);
+  expect(events.find((event) => event.kind === 'attempt.started')?.data).toMatchObject({
+    startedAt: expect.any(String),
+  });
+  expect(events.find((event) => event.kind === 'attempt.finished')?.data).toMatchObject({
+    status: 'error',
+    finishedAt: expect.any(String),
+    elapsedMs: expect.any(Number),
+  });
+});
+
+test('oversized shell result retains original runner metrics after the model result is narrowed', async () => {
+  const f = fixture(16384);
+  vi.spyOn(f.runtime.shell, 'exec').mockResolvedValue({
+    exitCode: 0,
+    signal: null,
+    timedOut: false,
+    outputBytes: 1000000,
+    truncated: true,
+    output: '\0'.repeat(18000),
+    outputFile: 'scratch/exec-example.log',
+    applied: [],
+  });
+  mockSend((request, _options, index) => {
+    if (index !== 0) {
+      expect(request.input.results).toEqual([
+        expect.objectContaining({
+          result: expect.objectContaining({ error: 'HELPER_READ_TOO_LARGE' }),
+        }),
+      ]);
+      return structuredClone(success);
+    }
+    return {
+      ...structuredClone(success),
+      status: 'tool_calls',
+      text: '',
+      toolCalls: [{ id: 'large-shell', name: 'data.exec', arguments: { command: 'print output' } }],
+    };
+  });
+  const task = f.runtime.enqueue(f.conversation.id, 'narrow-diagnostic', 'Inspect output.');
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id).status).toBe('completed');
+  const event = f.workspace.events(f.conversation.id).find((item) => item.kind === 'tool.finished');
+  expect(event?.data).toMatchObject({
+    denied: true,
+    errorCode: 'HELPER_READ_TOO_LARGE',
+    shell: { exitCode: 0, timedOut: false, outputBytes: 1000000, truncated: true },
+    detailsOmitted: true,
+  });
+});
 
 test('app-wide helper history preserves original scopes, filters and deletion ownership', async () => {
   const f = fixture();
@@ -967,8 +1099,10 @@ test.each(['provider', 'native'] as const)(
       status: 'failed',
       error: 'HELPER_TOOL_CALL_BUDGET_EXHAUSTED',
     });
+    const firstPage = f.workspace.events(f.conversation.id);
+    const remaining = f.workspace.events(f.conversation.id, firstPage.at(-1)!.seq);
     expect(
-      f.workspace.events(f.conversation.id).filter((event) => event.kind === 'tool.finished')
+      [...firstPage, ...remaining].filter((event) => event.kind === 'tool.finished')
     ).toHaveLength(HELPER_TOOL_CALL_LIMIT);
     if (execution === 'native') expect(nativeSignal?.aborted).toBe(true);
   }

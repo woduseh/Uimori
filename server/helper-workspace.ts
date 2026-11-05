@@ -1004,7 +1004,15 @@ export class HelperWorkspace {
         .run(taskId, id, purpose, segment);
       usage.modelCalls++;
       this.store.db.prepare('UPDATE helper_tasks SET usage=? WHERE id=?').run(json(usage), taskId);
-      this.event(String(task.conversation_id), taskId, 'attempt.started', { id, purpose, segment });
+      const startedAt = this.store.db
+        .prepare('SELECT started_at FROM attempts WHERE id=?')
+        .get(id)?.started_at;
+      this.event(String(task.conversation_id), taskId, 'attempt.started', {
+        id,
+        purpose,
+        segment,
+        startedAt,
+      });
       return id;
     });
   }
@@ -1012,7 +1020,7 @@ export class HelperWorkspace {
     this.store.transaction(() => {
       const row = this.store.db
         .prepare(
-          'SELECT status FROM attempts WHERE id=? AND id IN (SELECT attempt_id FROM helper_task_attempts WHERE task_id=?)'
+          'SELECT status,started_at FROM attempts WHERE id=? AND id IN (SELECT attempt_id FROM helper_task_attempts WHERE task_id=?)'
         )
         .get(id, taskId) as Row | undefined;
       if (!row || row.status !== 'running') return;
@@ -1023,7 +1031,14 @@ export class HelperWorkspace {
         usage[key] =
           usage[key] === null || result.usage[key] === null ? null : usage[key] + result.usage[key];
       this.store.db.prepare('UPDATE helper_tasks SET usage=? WHERE id=?').run(json(usage), taskId);
-      this.event(task.conversationId, taskId, 'attempt.finished', { id, status: result.status });
+      const finishedAt = now();
+      const elapsedMs = Date.parse(finishedAt) - Date.parse(String(row.started_at));
+      this.event(task.conversationId, taskId, 'attempt.finished', {
+        id,
+        status: result.status,
+        finishedAt,
+        ...(Number.isFinite(elapsedMs) && elapsedMs >= 0 ? { elapsedMs } : {}),
+      });
     });
   }
   finish(

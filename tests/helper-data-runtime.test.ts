@@ -619,6 +619,20 @@ test('independent helper data reads refill a free slot while results, budgets an
         .filter((item) => item.kind === 'tool.finished')
         .map((item) => (item.data as { callId: string }).callId)
     ).toEqual(['first', 'second', 'third', 'write', 'after', 'failed-read']);
+    const diagnostics = f.runtime.workspace.events(f.conversation.id);
+    const timed = (kind: string, callId: string) =>
+      diagnostics.find(
+        (event) =>
+          event.kind === kind && (event.data as { callId?: string } | null)?.callId === callId
+      )?.data as { startedAt?: string; finishedAt?: string };
+    const firstStart = timed('tool.started', 'first').startedAt!;
+    const secondStart = timed('tool.started', 'second').startedAt!;
+    const firstEnd = timed('tool.finished', 'first').finishedAt!;
+    const secondEnd = timed('tool.finished', 'second').finishedAt!;
+    expect(Date.parse(firstStart)).toBeLessThanOrEqual(Date.parse(secondEnd));
+    expect(Date.parse(secondStart)).toBeLessThanOrEqual(Date.parse(firstEnd));
+    // Results are published in call order even though the second reader finished first.
+    expect(Date.parse(secondEnd)).toBeLessThanOrEqual(Date.parse(firstEnd));
     expect(f.store.libraryOrganization.snapshot().folders.map((folder) => folder.title)).toEqual([
       'After reads',
     ]);
@@ -686,6 +700,13 @@ test('cancelling helper reads drains active work without starting queued reads o
     await completion;
     expect(close).toHaveLength(2);
     expect(f.runtime.workspace.task(task.id).status).toBe('cancelled');
+    const events = f.runtime.workspace.events(f.conversation.id);
+    expect(
+      events
+        .filter((event) => event.kind === 'tool.started')
+        .map((event) => (event.data as { callId: string }).callId)
+    ).toEqual(['first', 'second']);
+    expect(events.filter((event) => event.kind === 'tool.finished')).toHaveLength(0);
     expect(bodies).toHaveLength(1);
     expect(f.store.db.prepare('SELECT count(*) AS n FROM helper_operations').get()?.n).toBe(0);
     expect(f.store.libraryOrganization.snapshot().folders).toHaveLength(0);

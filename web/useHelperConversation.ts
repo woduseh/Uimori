@@ -22,6 +22,7 @@ type View = {
 };
 const id = encodeURIComponent;
 const diagnosticEvent = (kind: string) =>
+  kind === 'tool.started' ||
   kind === 'tool.finished' ||
   kind === 'input.measured' ||
   kind === 'progress' ||
