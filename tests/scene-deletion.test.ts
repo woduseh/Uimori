@@ -12,6 +12,10 @@ import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { createTestDirectory } from './fixtures/test-directory.js';
 import { recordToolDiagnostic } from '../server/execution-diagnostics.js';
+import { helperArgumentDiagnostic } from '../server/helper-diagnostics.js';
+import { helperCallOperationId, HelperWorkspace } from '../server/helper-workspace.js';
+import { invokeTaskTool, type TaskControlActions } from '../server/helper-task-tools.js';
+import type { HelperConversation, HelperTask } from '../core/helper.js';
 
 const owned: { store: Store; remove: () => void }[] = [];
 afterEach(() => {
@@ -163,6 +167,94 @@ test('deleting only B preserves C identity, text and hash, reconnects it to A an
   expect(store.db.prepare('SELECT id FROM sources WHERE id=?').get(b.id)).toBeUndefined();
   expect(store.db.prepare('SELECT id FROM runs WHERE id=?').get(b.runId)).toBeUndefined();
   intact(store);
+});
+
+test('scene deletion removes retained helper previews without changing outcomes or other chats', () => {
+  const f = manuscript();
+  const workspace = new HelperWorkspace(f.store);
+  const conversation = workspace.open({ kind: 'chat', chatId: f.chatId });
+  const otherChat = createFixtureChat(f.store, 'Independent helper chat');
+  const otherConversation = workspace.open({ kind: 'chat', chatId: otherChat.id });
+  const createTask = (target: HelperConversation, key: string, status: 'completed' | 'failed') => {
+    const task = workspace.enqueue(target.id, key, 'Edit the scene', {
+      scope: target.scope,
+      model: {} as never,
+      history: [{ id: f.b.id, role: 'assistant', text: f.b.text }],
+      persona: '',
+      limits: { totalCalls: 3, helperCalls: 2 },
+    });
+    expect(workspace.start(task.id, 'owner')).toBe(true);
+    const callId = `call-${key}`;
+    const args = helperArgumentDiagnostic({
+      name: 'scene.patch',
+      arguments: { sourceId: f.b.id, target: 'original', text: f.b.text },
+    });
+    workspace.event(target.id, task.id, 'tool.started', {
+      name: 'scene.patch',
+      callId,
+      startedAt: '2026-01-01T00:00:00.000Z',
+      queueMs: 4,
+      ...args,
+    });
+    const receiptId = `${task.id}:${helperCallOperationId(task.id, callId)}`;
+    workspace.operation(task.id, receiptId, { name: 'scene.patch' }, () => ({ changed: true }));
+    workspace.event(target.id, task.id, 'tool.finished', {
+      name: 'scene.patch',
+      callId,
+      denied: false,
+      elapsedMs: 12,
+      queueMs: 4,
+      originalResultChars: 20,
+      providedResultChars: 20,
+      finishedAt: '2026-01-01T00:00:00.012Z',
+      result: { changed: true },
+    });
+    expect(workspace.finish(task.id, 'owner', 1, status, 'Finished', null)).toBe(true);
+    return task;
+  };
+  const completed = createTask(conversation, 'completed', 'completed');
+  const failed = createTask(conversation, 'failed', 'failed');
+  const other = createTask(otherConversation, 'other', 'completed');
+  expect(workspace.task(completed.id).snapshot.history).toEqual([]);
+  expect(workspace.task(failed.id).snapshot.history).toHaveLength(1);
+  const inspect = (id: string) => {
+    const result = invokeTaskTool(
+      f.store,
+      { id: 'inspector' } as HelperTask,
+      'task.inspect',
+      { kind: 'helper', id, includeDiagnostics: true },
+      randomUUID(),
+      {} as TaskControlActions
+    );
+    if (!('id' in result)) throw new Error('Expected one inspected helper task');
+    return result;
+  };
+  const before = [completed, failed, other].map((task) => inspect(task.id));
+  const messages = f.store.db.prepare('SELECT * FROM helper_messages ORDER BY rowid').all();
+  for (const view of before)
+    expect(view.diagnostics?.tools?.items[0]?.argsPreview).toContain(f.b.text);
+
+  deleteScenes(f.store, f.chatId, f.b.id, request(f));
+
+  const after = [completed, failed, other].map((task) => inspect(task.id));
+  for (let i = 0; i < 2; i++) {
+    expect(after[i].diagnostics?.tools?.items[0]).toEqual({
+      ...before[i].diagnostics?.tools?.items[0],
+      argsPreview: '[arguments removed after scene deletion]',
+      argsRedacted: true,
+    });
+    expect(after[i].status).toBe(before[i].status);
+    expect(after[i].usage).toEqual(before[i].usage);
+    expect(after[i].committedEffects).toEqual(before[i].committedEffects);
+    expect(after[i].diagnostics?.toolResultSizes).toEqual(before[i].diagnostics?.toolResultSizes);
+    expect(JSON.stringify(after[i].diagnostics?.tools)).not.toContain(f.b.text);
+  }
+  expect(after[2].diagnostics?.tools).toEqual(before[2].diagnostics?.tools);
+  expect(f.store.db.prepare('SELECT * FROM helper_messages ORDER BY rowid').all()).toEqual(
+    messages
+  );
+  expect(workspace.task(failed.id).snapshot.invalidatedBySceneDeletion).toBe(true);
+  intact(f.store);
 });
 
 test('deleting B and following scenes restores A checkpoint and preserves the removed note as invisible orphan memory', () => {

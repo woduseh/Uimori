@@ -242,6 +242,15 @@ export function deleteScenes(
           attemptIds.add(String(attempt.id));
       }
     }
+    // Completed helper snapshots no longer identify their source scenes. Tool arguments may
+    // still contain a deleted passage, so remove previews throughout this chat's tasks while
+    // retaining call identity, timing and outcome metadata.
+    store.db
+      .prepare(`UPDATE helper_events SET data=json_set(data,
+        '$.argsPreview','[arguments removed after scene deletion]','$.argsRedacted',json('true'))
+        WHERE kind='tool.started' AND json_type(data,'$.argsPreview')='text'
+        AND conversation_id IN (SELECT id FROM helper_conversations WHERE chat_id=?)`)
+      .run(chatId);
     for (const task of store.db
       .prepare(
         'SELECT t.id,t.snapshot FROM helper_tasks t JOIN helper_conversations c ON c.id=t.conversation_id WHERE c.chat_id=?'
