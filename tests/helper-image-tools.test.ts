@@ -136,7 +136,7 @@ test('discovery searches original asset names and gives bounded, complete pagina
   });
 });
 
-test('transmission limits high-entropy pixels to 2048px and 2MiB', async () => {
+test('explicit full transmission limits high-entropy pixels to 2048px and 2MiB', async () => {
   const store = fixture();
   const bytes = await sharp(randomBytes(2200 * 2100 * 4), {
     raw: { width: 2200, height: 2100, channels: 4 },
@@ -144,7 +144,11 @@ test('transmission limits high-entropy pixels to 2048px and 2MiB', async () => {
     .png()
     .toBuffer();
   const content = save(store, bytes);
-  const read = await readHelperImage(store, { contentId: content.id, imageId: 'image-0' });
+  const read = await readHelperImage(store, {
+    contentId: content.id,
+    imageId: 'image-0',
+    mode: 'full',
+  });
   expect(read.result.source).toMatchObject({ width: 2200, height: 2100 });
   expect(Math.max(read.image.width, read.image.height)).toBeLessThanOrEqual(2048);
   expect(Buffer.from(read.resolved.base64, 'base64').length).toBeLessThanOrEqual(2 * 1024 * 1024);

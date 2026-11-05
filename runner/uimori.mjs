@@ -3,26 +3,52 @@ import { readFileSync } from 'node:fs';
 import { request } from 'node:http';
 
 const usage = `Usage:
-  uimori tools [JSON | --input <file|->]
-  uimori call <operation> [JSON | --input <file|->]
+  uimori tools [operation | --query text | --names name1,name2 | JSON | --input <file|->]
+  uimori call <operation> [--key value ... | JSON | --input <file|->]
   uimori apply <relative-file-path>
   uimori refresh <relative-file-path>
-  uimori export [JSON | --input <file|->] (main writing workspace)
+  uimori export [JSON | --input <file|->]
 
-JSON arguments must be an object. --input - reads JSON from stdin.
-tools returns the app catalog or exact schemas (for example {"names":["resource.read"]}).
-call uses the same app operations, revision checks and receipts as app.call.
-refresh updates clean files in place; dirty files are preserved and latestPath is
-a separate editable latest copy. Reconcile into latestPath, then apply latestPath.
+Simple --kebab-case flags become camelCase JSON fields. Numeric and boolean fields
+are typed; arrays and nested objects use JSON or --input. JSON arguments must be
+an object; --input - reads stdin. Use uimori tools <operation> for its exact schema.
+Examples:
+  uimori tools --query appearance
+  uimori tools resource.patch
+  uimori call resource.read --kind content --id <content-id>
+  uimori call resource.patch --input patch.json
 `;
+const numbers = new Set(['offset', 'limit', 'textOffset', 'textLimit', 'expectedRevision', 'revision', 'depth', 'timeoutMs', 'maxOutputBytes']);
+const booleans = new Set(['includePreview', 'includeBodies', 'regex', 'includeDisabled']);
+
 function input(args) {
-  let text;
-  if (args.length === 0) return {};
-  if (args.length === 1) text = args[0];
-  else if (args.length === 2 && args[0] === '--input')
-    text = readFileSync(args[1] === '-' ? 0 : args[1], 'utf8');
-  else throw Error('Expected JSON or --input <file|->');
-  const parsed = JSON.parse(text);
+  if (!args.length) return {};
+  let parsed;
+  if (args.length === 2 && args[0] === '--input') {
+    parsed = JSON.parse(readFileSync(args[1] === '-' ? 0 : args[1], 'utf8'));
+  } else if (args.length === 1 && args[0].startsWith('{')) {
+    parsed = JSON.parse(args[0]);
+  } else {
+    parsed = {};
+    for (let i = 0; i < args.length; i += 2) {
+      const flag = args[i];
+      const value = args[i + 1];
+      if (!/^--[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u.test(flag ?? '') || value === undefined)
+        throw Error(`Expected --key value pairs, JSON or --input <file|->. See uimori --help.`);
+      const key = flag.slice(2).replace(/-([a-z0-9])/gu, (_, letter) => letter.toUpperCase());
+      if (Object.hasOwn(parsed, key)) throw Error(`Repeated option ${flag}`);
+      if (key === 'names') {
+        parsed[key] = value.split(',');
+      } else if (numbers.has(key)) {
+        if (!/^-?\d+$/u.test(value) || !Number.isSafeInteger(Number(value)))
+          throw Error(`Expected an integer for ${flag}`);
+        parsed[key] = Number(value);
+      } else if (booleans.has(key)) {
+        if (value !== 'true' && value !== 'false') throw Error(`Expected true or false for ${flag}`);
+        parsed[key] = value === 'true';
+      } else parsed[key] = value;
+    }
+  }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
     throw Error('JSON arguments must be an object');
   return parsed;
@@ -30,13 +56,16 @@ function input(args) {
 
 try {
   const [command, ...args] = process.argv.slice(2);
-  if (command === '--help' || command === 'help' || !command) {
+  if (!command || command === '--help' || command === 'help' || args.includes('--help')) {
     process.stdout.write(usage);
   } else {
     let payload;
     if ((command === 'apply' || command === 'refresh') && args.length === 1) {
       payload = { path: args[0] };
-    } else if (command === 'tools' || command === 'export') {
+    } else if (command === 'tools') {
+      payload = { arguments: args.length === 1 && !args[0].startsWith('-') && !args[0].startsWith('{')
+        ? { names: [args[0]] } : input(args) };
+    } else if (command === 'export') {
       payload = { arguments: input(args) };
     } else if (command === 'call' && args[0] && !args[0].startsWith('--')) {
       payload = { name: args[0], arguments: input(args.slice(1)) };

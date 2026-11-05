@@ -413,19 +413,22 @@ function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
     /^(EDITOR_SAVE_REQUIRED|CURRENT_HELPER_TASK|HELPER_EFFECTS_ALREADY_COMMITTED|TASK_NOT_|MODEL_CALL_BUDGET)/u.test(
       code
     );
+  const wrongProfileScope = code === 'ILLUSTRATION_PROFILE_CHAT_ONLY';
   const retryMode = stopped
     ? 'never'
-    : unknownSqlColumn || patch
-      ? 'correct_arguments'
-      : status === 409 || status === 404
-        ? 'refresh_then_retry'
-        : status === 400
-          ? 'correct_arguments'
-          : status === 413 || code === 'DATA_QUERY_TIMEOUT'
-            ? 'narrow_read'
-            : readOnly
-              ? 'never'
-              : 'inspect_outcome';
+    : wrongProfileScope
+      ? 'switch_tool'
+      : unknownSqlColumn || patch
+        ? 'correct_arguments'
+        : status === 409 || status === 404
+          ? 'refresh_then_retry'
+          : status === 400
+            ? 'correct_arguments'
+            : status === 413 || code === 'DATA_QUERY_TIMEOUT'
+              ? 'narrow_read'
+              : readOnly
+                ? 'never'
+                : 'inspect_outcome';
   return {
     error: message,
     code,
@@ -441,17 +444,23 @@ function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
           },
         }
       : {}),
-    nextAction: unknownSqlColumn
-      ? 'Call db.query without sql to inspect available columns, then correct the SQL query. Do not repeat the unchanged query.'
-      : retryMode === 'refresh_then_retry'
-        ? 'Read the affected source or task state again in the same scope before changing the request.'
-        : retryMode === 'correct_arguments'
-          ? 'Correct the arguments using the discovered tool schema; do not repeat the same request.'
-          : retryMode === 'narrow_read'
-            ? 'Read fewer items or a smaller range in the same scope.'
-            : retryMode === 'inspect_outcome'
-              ? 'Inspect the task and committed effects before another write. Do not automatically replay it.'
-              : 'Stop this operation and explain the condition; do not repeat it unchanged.',
+    nextAction: wrongProfileScope
+      ? {
+          tool: 'resource.read',
+          guidance:
+            'Find the shared bot/persona content ID, read its revision and source.appearanceProfilesPath, then use resource.patch with the full {id,name,appearance,referenceImageId?} array. Do not search for a chat.',
+        }
+      : unknownSqlColumn
+        ? 'Call db.query without sql to inspect available columns, then correct the SQL query. Do not repeat the unchanged query.'
+        : retryMode === 'refresh_then_retry'
+          ? 'Read the affected source or task state again in the same scope before changing the request.'
+          : retryMode === 'correct_arguments'
+            ? 'Correct the arguments using the discovered tool schema; do not repeat the same request.'
+            : retryMode === 'narrow_read'
+              ? 'Read fewer items or a smaller range in the same scope.'
+              : retryMode === 'inspect_outcome'
+                ? 'Inspect the task and committed effects before another write. Do not automatically replay it.'
+                : 'Stop this operation and explain the condition; do not repeat it unchanged.',
   };
 }
 
@@ -1201,7 +1210,8 @@ export class HelperRuntime {
     const callIds = new Set<string>(),
       readData = new Set<string>();
     let readRevision = 0,
-      lastCompactedReadRevision = -1;
+      lastCompactedReadRevision = -1,
+      lastDeliveredReadRevision = -1;
     let contextBase = task.snapshot.context ?? { activeRevision: 0, checkpoint: null };
     const selected = helperHistoryForContext(this.store, task.snapshot.history, contextBase);
     let history = selected.history;
@@ -1513,9 +1523,22 @@ export class HelperRuntime {
         // A new call ID or write receipt alone is not new reading material. After either
         // adoption or fallback, retry the soft trigger only for new data; a hard crossing
         // must be reconsidered because the original request can no longer be sent.
+        // The provider limit protects correctness; a separate early trigger avoids
+        // repeatedly resending expensive successful reads on large-context models.
+        // Codex owns its native tool replay. Let the helper inspect each new read
+        // at least once before cost-only compaction; the hard limit still wins.
+        const costlyReads =
+          target.connection.protocol !== 'codex-app-server-v1' &&
+          !!task.snapshot.contextModel &&
+          readRevision > 0 &&
+          lastDeliveredReadRevision === readRevision &&
+          inputLimit >= 128_000 &&
+          estimate > 48_000 &&
+          (pendingImageReads.length > 0 ||
+            estimateContextTokens(results.filter(helperRead), budget) > 12_000);
         const shouldCompact =
           !providerPaused &&
-          estimate > inputLimit * 0.85 &&
+          (estimate > inputLimit * 0.85 || costlyReads) &&
           (readRevision !== lastCompactedReadRevision || estimate > inputLimit);
         if (shouldCompact && (hasSummaryInput || estimate > inputLimit)) {
           const preserved = [
@@ -1755,6 +1778,8 @@ export class HelperRuntime {
         );
         await nativeState?.pending;
         signal.throwIfAborted();
+        // The just-completed provider turn received the current read evidence.
+        lastDeliveredReadRevision = readRevision;
         helperCalls++;
         if (
           target.connection.protocol === 'anthropic-messages-v1' &&
@@ -2275,7 +2300,11 @@ export class HelperRuntime {
   ): Promise<unknown> {
     this.workspace.assertRunning(task.id);
     if (name === 'app.tools')
-      return describeHelperTools(args, task.snapshot.outline?.target.purpose === 'review');
+      return describeHelperTools(
+        args,
+        task.snapshot.outline?.target.purpose === 'review',
+        task.snapshot.scope.kind
+      );
     if (name === 'image.list') return listHelperImages(this.store, args);
     const chatId = task.snapshot.scope.kind === 'chat' ? task.snapshot.scope.chatId : null;
     if (
@@ -2409,7 +2438,12 @@ export class HelperRuntime {
     const scope = task.snapshot.scope;
     if (name.startsWith('illustration.')) {
       if (scope.kind !== 'chat')
-        throw new HttpError(400, 'Use chat.list to find a chat and supply its chatId.');
+        throw new HttpError(
+          400,
+          name.startsWith('illustration.profiles.')
+            ? 'ILLUSTRATION_PROFILE_CHAT_ONLY: Shared bot/persona defaults use resource.read and resource.patch at source.appearanceProfilesPath; no chat is needed.'
+            : 'CHAT_SCOPE_REQUIRED: Supply chatId for this illustration operation.'
+        );
       switch (name) {
         case 'illustration.profiles.read':
           return readIllustrationProfiles(this.store, scope.chatId, args);

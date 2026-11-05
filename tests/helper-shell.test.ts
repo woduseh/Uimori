@@ -604,6 +604,44 @@ cat scratch/denied.json`,
 );
 
 linuxTest(
+  'CLI accepts standard flags and exact operation lookup without a schema round trip',
+  async () => {
+    const f = await fixture();
+    const cli = `node ${resolve('runner/uimori.mjs')}`;
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    const executed = await f.shell.exec(
+      f.task,
+      'cli-flags',
+      `set -e
+${cli} tools --query appearance --offset 3 > scratch/catalog.json
+${cli} tools resource.patch > scratch/schema.json
+${cli} call resource.read --kind content --id some-id --limit 2 --include-bodies false > scratch/read.json
+${cli} --help > scratch/help.txt
+cat scratch/read.json`,
+      5000,
+      undefined,
+      async (name, args) => {
+        calls.push({ name, args });
+        return { result: { name, args } };
+      }
+    );
+    expect(executed.exitCode).toBe(0);
+    expect(calls).toEqual([
+      { name: 'app.tools', args: { query: 'appearance', offset: 3 } },
+      { name: 'app.tools', args: { names: ['resource.patch'] } },
+      {
+        name: 'resource.read',
+        args: { kind: 'content', id: 'some-id', limit: 2, includeBodies: false },
+      },
+    ]);
+    expect(executed.outputBytes).toBeGreaterThan(0);
+    expect(executed.output).toContain('some-id');
+    const taskDir = join(f.root, 'tasks', f.task.id);
+    expect(readFileSync(join(taskDir, 'scratch/help.txt'), 'utf8')).toContain('uimori tools');
+  }
+);
+
+linuxTest(
   'unknown app outcome stops later bridge writes and survives redirected output',
   async () => {
     const f = await fixture();

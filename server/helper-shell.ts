@@ -358,7 +358,7 @@ export class HelperShell {
       '# Uimori workspace\n\n' +
         'Use rg, jq, grep, find, Python, or Bash freely.\n' +
         'GUIDE.md explains Uimori content concepts, source authority and how to choose a read path; read relevant sections when unfamiliar.\n' +
-        'Use `uimori tools` for app operations and `uimori call <name> --input <file|->` for JSON arguments. `uimori --help` shows syntax.\n' +
+        'Use `uimori tools --query <term>` to find operations, `uimori tools <operation>` for its schema, `uimori call <operation> --key value` for simple arguments and `--input <file|->` for nested JSON. `uimori --help` shows syntax.\n' +
         'library/index.jsonl lists saved resources; library/<id>/resource.json is editable.\n' +
         'library/<id>/lorebook.jsonl is a derived search index and cannot be applied.\n' +
         'chats/index.jsonl lists chats; chats/<id>/scenes.json has saved scene order, sizes, previews and enabled state; chats/<id>/scenes/*.txt are editable originals.\n' +

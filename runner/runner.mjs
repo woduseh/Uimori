@@ -33,7 +33,7 @@ function readOutput(path, max) {
     const first = read(0, Math.min(max, size));
     const whole = first.toString('utf8');
     if (size <= max && Buffer.byteLength(whole) <= max) {
-      return { output: whole, truncated: false };
+      return { output: whole, truncated: false, outputBytes: size };
     }
     const budget = Math.floor((max - Buffer.byteLength(marker)) / 2);
     const head = new StringDecoder('utf8').write(first.subarray(0, budget));
@@ -49,6 +49,7 @@ function readOutput(path, max) {
     return {
       output: boundedHead + marker + tail.subarray(start).toString('utf8'),
       truncated: true,
+      outputBytes: size,
     };
   } finally {
     closeSync(log);
