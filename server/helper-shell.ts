@@ -15,6 +15,7 @@ import { readResource } from './resource-service.js';
 import { applyHelperResourceMutation } from './helper-resource-undo.js';
 import { helperSceneSource } from './helper-scene-tools.js';
 import { HELPER_SHELL_GUIDE } from './helper-shell-guide.js';
+import { HELPER_APP_TOOLS, HELPER_GATEWAY_TOOLS } from './helper-app-tools.js';
 import { HttpError, record } from './request-validation.js';
 import type { Store } from './store.js';
 import type { HelperWorkspace } from './helper-workspace.js';
@@ -66,6 +67,43 @@ export type HelperShellAppResult = {
   fatalError?: unknown;
   applied?: unknown[];
 };
+/** CLI flags are typed from the canonical tool schema, not a second field-name registry. */
+function typedShellFlags(name: string, flags: unknown): Record<string, unknown> {
+  const definition = (name === 'app.tools' ? HELPER_GATEWAY_TOOLS : HELPER_APP_TOOLS).find(
+    (tool) => tool.name === name
+  );
+  if (!definition) throw new HttpError(400, `UNKNOWN_APP_TOOL:${name}`);
+  const properties = (definition.inputSchema as { properties: Record<string, { type?: string }> })
+    .properties;
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(record(flags))) {
+    const field = properties[key];
+    if (!field || typeof value !== 'string')
+      throw new HttpError(400, `SHELL_INVALID_OPTION:${key}`);
+    if (field.type === 'boolean') {
+      if (value !== 'true' && value !== 'false')
+        throw new HttpError(400, `SHELL_INVALID_BOOLEAN:${key}`);
+      result[key] = value === 'true';
+    } else if (field.type === 'integer' || field.type === 'number') {
+      const parsed = Number(value);
+      if (
+        !value.trim() ||
+        !Number.isFinite(parsed) ||
+        (field.type === 'integer' && !Number.isSafeInteger(parsed))
+      )
+        throw new HttpError(400, `SHELL_INVALID_NUMBER:${key}`);
+      result[key] = parsed;
+    } else if (key === 'names' && name === 'app.tools') {
+      result[key] = value.split(',');
+    } else if (field.type === 'string') {
+      result[key] = value;
+    } else {
+      throw new HttpError(400, `SHELL_USE_JSON_INPUT:${key}`);
+    }
+  }
+  return result;
+}
+
 type AppInvoker = (
   name: string,
   args: Record<string, unknown>,
@@ -394,17 +432,16 @@ export class HelperShell {
   ) {
     const execution = this.execution(taskId, toolId);
     if (!execution.invoke) throw new HttpError(400, 'SHELL_APP_UNAVAILABLE');
-    const args = record(input.arguments ?? {});
     if (route === '/call' && (typeof input.name !== 'string' || !input.name.trim()))
       throw new HttpError(400, 'APP_OPERATION_NAME_REQUIRED');
+    const name = route === '/tools' ? 'app.tools' : String(input.name);
+    const args =
+      input.flagArguments === undefined
+        ? record(input.arguments ?? {})
+        : typedShellFlags(name, input.flagArguments);
     // Leave room for helper:<task UUID>: in existing 120-character save keys.
     const operationId = `shell:${toolId.slice(0, 48)}:app:${++execution.sequence}`;
-    const pending = execution.invoke(
-      route === '/tools' ? 'app.tools' : String(input.name),
-      args,
-      operationId,
-      execution.controller.signal
-    );
+    const pending = execution.invoke(name, args, operationId, execution.controller.signal);
     execution.pending.add(pending);
     try {
       const response = await pending;

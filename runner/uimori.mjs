@@ -9,8 +9,8 @@ const usage = `Usage:
   uimori refresh <relative-file-path>
   uimori export [JSON | --input <file|->]
 
-Simple --kebab-case flags become camelCase JSON fields. Numeric and boolean fields
-are typed; arrays and nested objects use JSON or --input. JSON arguments must be
+Simple --kebab-case flags become camelCase fields and are typed against the
+operation's actual schema. Arrays and nested objects use JSON or --input. JSON arguments must be
 an object; --input - reads stdin. Use uimori tools <operation> for its exact schema.
 Examples:
   uimori tools --query appearance
@@ -18,8 +18,6 @@ Examples:
   uimori call resource.read --kind content --id <content-id>
   uimori call resource.patch --input patch.json
 `;
-const numbers = new Set(['offset', 'limit', 'textOffset', 'textLimit', 'expectedRevision', 'revision', 'depth', 'timeoutMs', 'maxOutputBytes']);
-const booleans = new Set(['includePreview', 'includeBodies', 'regex', 'includeDisabled']);
 
 function input(args) {
   if (!args.length) return {};
@@ -37,16 +35,7 @@ function input(args) {
         throw Error(`Expected --key value pairs, JSON or --input <file|->. See uimori --help.`);
       const key = flag.slice(2).replace(/-([a-z0-9])/gu, (_, letter) => letter.toUpperCase());
       if (Object.hasOwn(parsed, key)) throw Error(`Repeated option ${flag}`);
-      if (key === 'names') {
-        parsed[key] = value.split(',');
-      } else if (numbers.has(key)) {
-        if (!/^-?\d+$/u.test(value) || !Number.isSafeInteger(Number(value)))
-          throw Error(`Expected an integer for ${flag}`);
-        parsed[key] = Number(value);
-      } else if (booleans.has(key)) {
-        if (value !== 'true' && value !== 'false') throw Error(`Expected true or false for ${flag}`);
-        parsed[key] = value === 'true';
-      } else parsed[key] = value;
+      parsed[key] = value;
     }
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
@@ -63,12 +52,21 @@ try {
     if ((command === 'apply' || command === 'refresh') && args.length === 1) {
       payload = { path: args[0] };
     } else if (command === 'tools') {
-      payload = { arguments: args.length === 1 && !args[0].startsWith('-') && !args[0].startsWith('{')
-        ? { names: [args[0]] } : input(args) };
+      payload = args.length === 1 && !args[0].startsWith('-') && !args[0].startsWith('{')
+        ? { arguments: { names: [args[0]] } }
+        : args.length && args[0].startsWith('--') && args[0] !== '--input'
+          ? { flagArguments: input(args) }
+          : { arguments: input(args) };
     } else if (command === 'export') {
       payload = { arguments: input(args) };
     } else if (command === 'call' && args[0] && !args[0].startsWith('--')) {
-      payload = { name: args[0], arguments: input(args.slice(1)) };
+      const callArgs = args.slice(1);
+      payload = {
+        name: args[0],
+        ...(callArgs.length && callArgs[0].startsWith('--') && callArgs[0] !== '--input'
+          ? { flagArguments: input(callArgs) }
+          : { arguments: input(callArgs) }),
+      };
     } else throw Error(usage);
 
     if (!process.env.UIMORI_TASK_ID || !process.env.UIMORI_TOOL_ID || !process.env.UIMORI_BRIDGE_SOCKET)

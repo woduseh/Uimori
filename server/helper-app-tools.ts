@@ -51,14 +51,24 @@ const TOOLS: ProviderTool[] = [
   ...HELPER_ILLUSTRATION_TOOLS,
   {
     name: 'chat.list',
-    description: 'List available chats and their current heads.',
-    inputSchema: schema({}),
+    description:
+      'Find saved chats by title (query optional). Returns only ID, title, head and relevant revisions, in pages. Follow nextOffset, then pass the selected chatId to chat-only tools; full settings belong to settings.read.',
+    inputSchema: schema({
+      query: { type: 'string', maxLength: 200 },
+      offset: { type: 'integer', minimum: 0 },
+      limit: { type: 'integer', minimum: 1, maximum: 50 },
+    }),
   },
   {
     name: 'chat.read',
     description:
-      'Read a chat, its current head and scene IDs with visible scene numbers (including any introduction), original lengths and enabled state. includePreview:true adds up to 120 characters of live original per scene. Hidden scenes have sceneNumber:null; no inferred Greeting label. Set chatId to work with any chat, including from the library.',
-    inputSchema: schema({ chatId: itemId, includePreview: { type: 'boolean' } }),
+      'Read a chat, its current head and paged scene IDs with stable visible scene numbers (including any introduction), original lengths and enabled state. Follow nextOffset; includePreview:true adds up to 120 characters of original per scene. Hidden scenes have sceneNumber:null. Use chatId to target another chat.',
+    inputSchema: schema({
+      chatId: itemId,
+      includePreview: { type: 'boolean' },
+      offset: { type: 'integer', minimum: 0 },
+      limit: { type: 'integer', minimum: 1, maximum: 100 },
+    }),
   },
   ...helperOptionTools,
   {
@@ -445,7 +455,10 @@ const discoveryHints: Record<
 };
 
 type ToolCatalog = {
-  tools: Pick<ProviderTool, 'name' | 'description'>[];
+  tools: (Pick<ProviderTool, 'name' | 'description'> & {
+    required: string[];
+    effect: 'read' | 'write' | 'mixed';
+  })[];
   total: number;
   nextOffset: number | null;
 };
@@ -495,26 +508,43 @@ export function describeHelperTools(
   )
     throw new HttpError(400, 'INVALID_ARGUMENTS');
   const terms = query.toLowerCase().split(/\s+/u).filter(Boolean);
-  const found = allowed.filter((tool) => {
-    const searchable =
-      `${tool.name} ${tool.description} ${discoveryHints[tool.name]?.terms ?? ''}`.toLowerCase();
-    return terms.every((term) => searchable.includes(term));
-  });
-  // Preserve the existing catalog order when browsing without a query.
-  if (terms.length && scope)
+  const searchable = (tool: ProviderTool) =>
+    `${tool.name} ${tool.description} ${discoveryHints[tool.name]?.terms ?? ''} ${Object.keys(
+      (tool.inputSchema as { properties?: Record<string, unknown> }).properties ?? {}
+    ).join(' ')}`.toLowerCase();
+  const found = allowed.filter((tool) => terms.every((term) => searchable(tool).includes(term)));
+  // Rank name matches ahead of incidental description matches for every operation.
+  // The two appearance-profile ownerships are the only explicit scope overrides.
+  if (terms.length)
     found.sort((a, b) => {
-      const scopeRank = (tool: ProviderTool) =>
-        discoveryHints[tool.name]?.scope === scope ||
-        (!discoveryHints[tool.name] &&
-          (chatToolNames.has(tool.name) ? 'chat' : 'library') === scope)
-          ? 1
-          : 0;
-      return scopeRank(b) - scopeRank(a);
+      const relevance = (tool: ProviderTool) => {
+        const name = tool.name.toLowerCase();
+        const hint = discoveryHints[tool.name];
+        return (
+          (name === query.toLowerCase() ? 1000 : 0) +
+          (scope && hint ? (hint.scope === scope ? 100 : -100) : 0) +
+          terms.reduce(
+            (score, term) =>
+              score + (name.includes(term) ? 10 : hint?.terms.includes(term) ? 4 : 1),
+            0
+          )
+        );
+      };
+      return relevance(b) - relevance(a);
     });
   return {
     tools: found.slice(Number(offset), Number(offset) + 20).map((tool) => ({
       name: tool.name,
-      description: discoveryHints[tool.name]?.summary ?? tool.description.split('. ')[0],
+      description:
+        discoveryHints[tool.name]?.summary ??
+        (tool.description.length > 260 ? `${tool.description.slice(0, 257)}…` : tool.description),
+      required: (tool.inputSchema as { required?: string[] }).required ?? [],
+      effect:
+        tool.name === 'chat.lore' || tool.name === 'library.organize'
+          ? 'mixed'
+          : helperToolTraits(tool.name).readOnly
+            ? 'read'
+            : 'write',
     })),
     total: found.length,
     nextOffset: Number(offset) + 20 < found.length ? Number(offset) + 20 : null,
