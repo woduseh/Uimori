@@ -24,6 +24,7 @@ export type PlannedIllustration = {
   prompt?: IllustrationPrompt;
 };
 export type IllustrationStoryboard = {
+  visualCanon?: { name: string; appearance: string }[];
   heroIndex: number | null;
   targets: PlannedIllustration[];
   skipReason?: string;
@@ -117,6 +118,7 @@ function storyboardContract(mode: IllustrationPromptMode, selected: boolean): st
     mode === 'none'
       ? 'visualBrief gives the renderer a complete visual description of that instant.'
       : 'visualBrief records the subjects, action and defining visual facts that must survive a redraw. Put the full rendering description in prompt.',
+    'Include a shared top-level visualCanon array of {name, appearance} with source-backed stable visible traits of recurring characters. Apply it consistently across cuts.',
     ILLUSTRATION_VISUAL_DIRECTION,
     ...(mode === 'none'
       ? []
@@ -132,6 +134,7 @@ export function storyboardRequest(
   source: Source,
   options: {
     maxTargets: number;
+    minTargets?: number;
     existingTargets: IllustrationMoment[];
     selectedMoments?: SelectedIllustrationMoment[];
     generator: string;
@@ -166,6 +169,13 @@ export function storyboardRequest(
             }
           : {
               maxTargets: options.maxTargets,
+              ...(options.minTargets !== undefined
+                ? {
+                    minTargets: options.minTargets,
+                    countGuidance:
+                      'Choose between minTargets and maxTargets cuts based on meaningful visual content and narrative length. maxTargets is a cap. When allowSkip is true, minTargets is zero and no suitable moment remains, return zero cuts with skipReason.',
+                  }
+                : {}),
               existingTargets: options.existingTargets.map((target) => ({
                 ...target,
                 startAnchor: aliases.get(target.startAnchor) ?? target.startAnchor,
@@ -179,6 +189,7 @@ export function storyboardRequest(
         ...(scene.sceneAppearanceNotes?.length
           ? { sceneAppearanceNotes: scene.sceneAppearanceNotes }
           : {}),
+        ...(scene.visualCanon?.length ? { visualCanon: scene.visualCanon } : {}),
         ...(scene.direction ? { direction: scene.direction } : {}),
         ...(options.generator === 'comfyui' ? { negativeGuidance: scene.negativeGuidance } : {}),
         ...(options.promptMode === 'codex'
@@ -222,12 +233,14 @@ export function parseStoryboard(
   promptMode: IllustrationPromptMode,
   allowSkip: boolean,
   existing: IllustrationMoment[] = [],
-  selected?: SelectedIllustrationMoment[]
+  selected?: SelectedIllustrationMoment[],
+  minTargets = 0
 ): IllustrationStoryboard {
   const value = object(text);
   if (
     !Array.isArray(value.targets) ||
     value.targets.length > maxTargets ||
+    value.targets.length < minTargets ||
     (selected && value.targets.length !== selected.length)
   )
     throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID', true);
@@ -294,7 +307,22 @@ export function parseStoryboard(
       ...(prompt ? { prompt } : {}),
     };
   });
-  return { heroIndex: entries.indexOf(hero), targets };
+  let visualCanon: IllustrationStoryboard['visualCanon'];
+  if (value.visualCanon !== undefined) {
+    if (!Array.isArray(value.visualCanon))
+      throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID', true);
+    visualCanon = value.visualCanon.map((entry) => ({
+      name: required(entry?.name),
+      appearance: required(entry?.appearance),
+    }));
+    if (new Set(visualCanon.map((entry) => entry.name)).size !== visualCanon.length)
+      throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID', true);
+  }
+  return {
+    heroIndex: entries.indexOf(hero),
+    targets,
+    ...(visualCanon?.length ? { visualCanon } : {}),
+  };
 }
 
 /** Fixed moment, not the entire response. This prevents the renderer choosing the climax again. */

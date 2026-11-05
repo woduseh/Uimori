@@ -1,3 +1,8 @@
+import { IllustrationAppearanceEditor } from './IllustrationAppearanceEditor.js';
+import {
+  readIllustrationAppearanceProfiles,
+  withIllustrationAppearanceProfiles,
+} from '../core/illustration-profiles.js';
 import { useI18n, translateMessage } from './i18n.js';
 import { TranslationGuideEditor } from './TranslationGuideEditor.js';
 import { readTranslationGuide, withTranslationGuide } from '../core/translation-guide.js';
@@ -337,6 +342,17 @@ export function RisuNativeFields({
           />
         </div>
         <div {...panel('basic')} className="native-section-body">
+          <IllustrationAppearanceEditor
+            value={readIllustrationAppearanceProfiles(standalone ? native.module! : native.card)}
+            onChange={(profiles) =>
+              update({
+                ...native,
+                ...(standalone
+                  ? { module: withIllustrationAppearanceProfiles(native.module!, profiles) }
+                  : { card: withIllustrationAppearanceProfiles(native.card, profiles) }),
+              })
+            }
+          />
           <PackagePortraitEditor
             value={value}
             onChange={onChange}

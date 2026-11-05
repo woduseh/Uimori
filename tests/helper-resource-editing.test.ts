@@ -472,6 +472,7 @@ test('standalone module overview and patch use its authored lorebook', () => {
     path: '/package/nativeRisu/module',
     lorePath: '/package/nativeRisu/module/lorebook',
     translationGuidePath: '/package/nativeRisu/module/extensions/uimori/translationGuide',
+    appearanceProfilesPath: '/package/nativeRisu/module/extensions/uimori/illustrationProfiles',
   });
   const updated = call(store, 'resource.patch', {
     kind: 'content',

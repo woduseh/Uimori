@@ -14,6 +14,8 @@ import { comfyUIFixture, FIXTURE_WORKFLOW } from './fixtures/comfyui-server.js';
 import { PNG_BASE64 } from './fixtures/illustration.js';
 import * as illustrationRunner from '../server/illustration-runner.js';
 import { claimIllustration } from '../server/illustrations.js';
+import type { CodexRuntimeService, CodexImageResult } from '../server/codex-runtime.js';
+import type { ProviderResult } from '../core/transport.js';
 
 const owned: { directory: string; app?: App; close?: () => Promise<void> }[] = [];
 afterEach(async () => {
@@ -31,7 +33,7 @@ afterEach(async () => {
     await rm(target, { recursive: true, force: true });
   }
 });
-async function setup() {
+async function setup(codexRuntime?: CodexRuntimeService) {
   const directory = await mkdtemp(join(realpathSync(tmpdir()), 'uimori-illustration-api-'));
   const item: (typeof owned)[number] = { directory };
   owned.push(item);
@@ -39,6 +41,7 @@ async function setup() {
     dbPath: join(directory, 'test.sqlite'),
     buildId: 'illustration-api',
     testMode: true,
+    ...(codexRuntime ? { codexRuntime } : {}),
   });
   item.app = app;
   const api = async <T = any>(
@@ -549,4 +552,129 @@ test('illustration usage is scoped to actual attempts and the placement endpoint
   expect(placement.task).toBe('placement');
   await settleTask(placement.id);
   expect((await illustrations()).flatMap((item) => item.images)).toEqual(images);
+});
+
+test('consecutive storyboard cuts reuse a session, preserve successful cuts and retry only the failed cut', async () => {
+  const usage = { inputTokens: 10, outputTokens: 5, costUsd: null, raw: null, priceRevision: null };
+  const state: CodexRuntimeService['status'] = async () => ({
+    available: true,
+    authenticated: true,
+    authMode: 'chatgpt',
+    error: null,
+    login: null,
+    planType: null,
+    limits: [],
+  });
+  let calls = 0;
+  const imageTurns: { session: number; text: string }[] = [];
+  const closes = vi.fn(async () => {});
+  const image = async (
+    session: number,
+    request: import('../server/codex-runtime.js').CodexImageRequest
+  ): Promise<CodexImageResult> => {
+    imageTurns.push({ session, text: request.text });
+    calls++;
+    return {
+      status: calls === 2 ? 'error' : 'completed',
+      error: calls === 2 ? { code: 'CODEX_IMAGE_NOT_GENERATED' } : null,
+      images: calls === 2 ? [] : [{ mime: 'image/png', bytes: Buffer.from(PNG_BASE64, 'base64') }],
+      revisedPrompt: null,
+      text: '{"caption":"Synthetic cut"}',
+      usage,
+    };
+  };
+  let sessions = 0;
+  const runtime: CodexRuntimeService = {
+    status: state,
+    login: state,
+    cancelLogin: state,
+    logout: state,
+    catalog: async () => [],
+    execute: async (_connection, request): Promise<ProviderResult> => {
+      const blocks = (request.input.source as { blocks: [string, string][] }).blocks;
+      expect(blocks.length).toBeGreaterThanOrEqual(3);
+      return {
+        status: 'completed',
+        toolCalls: [],
+        refusal: null,
+        error: null,
+        opaqueState: null,
+        usage,
+        text: JSON.stringify({
+          heroIndex: 0,
+          targets: blocks.slice(0, 3).map(([anchor], index) => ({
+            startAnchor: anchor,
+            endAnchor: anchor,
+            focus: `moment ${index}`,
+            visualBrief: `distinct scene ${index}`,
+            prompt: { prompt: `Draw cut ${index}`, caption: `Cut ${index}` },
+          })),
+        }),
+      };
+    },
+    executeAgent: async () => {
+      throw new Error('Unexpected native agent');
+    },
+    generateImage: (_connection, request) => image(-1, request),
+    createSession: () => {
+      const id = ++sessions;
+      return {
+        execute: async () => {
+          throw new Error('Unexpected session text');
+        },
+        executeAgent: async () => {
+          throw new Error('Unexpected session agent');
+        },
+        generateImage: (request) => image(id, request),
+        close: closes,
+      };
+    },
+    close: async () => {},
+  };
+  const { app, api, respond, settings, illustrations, settleTask } = await setup(runtime);
+  const source = await respond();
+  const connection = app.store.product.connection({
+    title: 'Synthetic Codex',
+    protocol: 'codex-app-server-v1',
+    endpoint: 'codex://local',
+    enabled: true,
+  });
+  const model = app.store.product.model({
+    title: 'Synthetic image model',
+    connectionId: connection.id,
+    modelId: 'synthetic',
+    maxOutputTokens: 1024,
+    temperature: null,
+  });
+  await settings({
+    generator: 'codex',
+    maxPerSource: 3,
+    maxAutoRetries: 0,
+    codex: { model: { id: model.id }, promptModel: { id: model.id }, useReferences: false },
+  });
+  const plan = await api<Illustration>(`/api/sources/${source.id}/illustrations`, {
+    maxTargets: 3,
+  });
+  await settleTask(plan.id);
+  const cuts = await until(
+    illustrations,
+    (items) =>
+      items.filter((item) => item.task === 'render').length === 3 &&
+      items.every((item) => !['queued', 'running'].includes(item.status))
+  );
+  expect(cuts.filter((cut) => cut.task === 'render' && cut.status === 'completed')).toHaveLength(2);
+  const failed = cuts.find((cut) => cut.status === 'failed')!;
+  expect(failed).toBeDefined();
+  expect(imageTurns[0].session).toBe(imageTurns[1].session);
+  expect(imageTurns[2].session).not.toBe(imageTurns[1].session);
+  const successful = cuts
+    .filter((cut) => cut.task === 'render' && cut.status === 'completed')
+    .map((cut) => ({ id: cut.id, images: cut.images }));
+  await api(`/api/illustrations/${failed.id}/retry`, {});
+  expect((await settleTask(failed.id)).status).toBe('completed');
+  const after = await illustrations();
+  for (const cut of successful)
+    expect(after.find((item) => item.id === cut.id)?.images).toEqual(cut.images);
+  expect(imageTurns).toHaveLength(4);
+  expect(closes).toHaveBeenCalled();
 });

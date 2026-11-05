@@ -363,3 +363,28 @@ describe('Codex illustration turns through the synthetic app-server', () => {
     expect(result.error?.code).toBe('CODEX_IMAGE_NOT_GENERATED');
   });
 });
+
+it('keeps distinct cut turns on one thread with each image returned to its own caller', async () => {
+  const { runtime, records } = setup('image-native');
+  const session = runtime.createSession(connection);
+  const options = { signal: new AbortController().signal };
+  const first = await session.generateImage(
+    { ...request(), text: 'CUT river: lantern above the river' },
+    options
+  );
+  const second = await session.generateImage(
+    { ...request(), text: 'CUT bridge: rain on the bridge' },
+    options
+  );
+  expect(first.status).toBe('completed');
+  expect(second.status).toBe('completed');
+  expect(first.images).toHaveLength(1);
+  expect(second.images).toHaveLength(1);
+  const turns = records().filter((row) => row.method === 'turn/start');
+  expect(records().filter((row) => row.method === 'thread/start')).toHaveLength(1);
+  expect(turns).toHaveLength(2);
+  expect(turns[0].params.threadId).toBe(turns[1].params.threadId);
+  expect(turns[0].params.input[0].text).toContain('CUT river:');
+  expect(turns[1].params.input[0].text).toContain('CUT bridge:');
+  await session.close();
+});

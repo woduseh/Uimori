@@ -24,9 +24,10 @@ import {
 import type { Store } from '../server/store.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 import { comfyUIFixture, FIXTURE_WORKFLOW } from './fixtures/comfyui-server.js';
-import { fixtureBotInput } from './fixtures/chat.js';
+import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import {
   chatWithSource,
+  completedSource,
   fixtureSettings,
   illustrationDatabases,
   PNG_BASE64,
@@ -1484,3 +1485,144 @@ test('a safe Codex retry reuses only its identical successful JEV check', async 
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(renders).toBe(2);
 });
+
+test.each(['complete', 'context-limit'] as const)(
+  'illustration research uses frozen native sources over multiple read-only rounds: %s',
+  async (mode) => {
+    const store = databases.create();
+    const description =
+      'Unrelated archive material. '.repeat(12000) + '\nMira has emerald eyes and a silver braid.';
+    const bot = store.product.content(fixtureBotInput('Frozen Mira', description)) as Content;
+    const chat = createFixtureChat(store, 'Research scene', { botId: bot.id });
+    const source = completedSource(store, chat.id, 'Mira raises the lantern beside the river.');
+    let readPath = '';
+    let handlerError: unknown;
+    const provider = await loopbackProvider(async (captured, response) => {
+      try {
+        const body = JSON.parse(captured.body);
+        const results = body.input.results ?? [];
+        const round = results.length;
+        expect(body.stable.tools.map((tool: { name: string }) => tool.name)).toEqual([
+          'illustration.sources.search',
+          'illustration.sources.read',
+        ]);
+        expect(captured.body).not.toContain('LIVE REPLACEMENT');
+        // The initial request carries a short catalog, never the whole native lore.
+        if (!round) expect(captured.body.length).toBeLessThan(description.length / 2);
+        else {
+          expect(body.opaqueState).toBe(`research-${round - 1}`);
+          expect(results.at(-1).denied, JSON.stringify(results.at(-1))).toBe(false);
+        }
+        if (round === 1) {
+          const match = results[0].result.matches.find((item: { path: string }) =>
+            item.path.includes('description')
+          );
+          expect(match.excerpt).toContain('emerald eyes');
+          readPath = match.path;
+        }
+        if (mode === 'complete' && round === 13) {
+          expect(JSON.stringify(results)).toContain('emerald eyes');
+          const anchor = body.input.source.blocks[0][0];
+          await writeSse(response, [
+            {
+              type: 'text_delta',
+              delta: JSON.stringify({
+                heroIndex: 0,
+                targets: [
+                  {
+                    startAnchor: anchor,
+                    endAnchor: anchor,
+                    focus: 'Mira raises the lantern',
+                    visualBrief: 'Emerald eyes and a silver braid',
+                    prompt: {
+                      prompt: 'Mira with emerald eyes and a silver braid raises a lantern.',
+                      caption: 'Mira',
+                    },
+                  },
+                ],
+              }),
+            },
+            { type: 'done', reason: 'stop' },
+          ]);
+          return;
+        }
+        await writeSse(response, [
+          {
+            type: 'tool_delta',
+            index: 0,
+            id: `read-${round}`,
+            name: round ? 'illustration.sources.read' : 'illustration.sources.search',
+            argumentsDelta: JSON.stringify(
+              round
+                ? {
+                    id: 'resource:0',
+                    path: readPath,
+                    textOffset: mode === 'complete' ? description.length - 45 : 0,
+                    textLimit: mode === 'complete' ? 100 : 10000,
+                  }
+                : { query: 'emerald eyes' }
+            ),
+          },
+          { type: 'opaque_state', state: `research-${round}` },
+          { type: 'done', reason: 'tool_calls' },
+        ]);
+      } catch (error) {
+        handlerError = error;
+        throw error;
+      }
+    });
+    cleanups.push(provider.close);
+    const connection = store.product.connection({
+      title: 'Research fixture',
+      protocol: 'fixture-sse-v1',
+      endpoint: provider.endpoint,
+      enabled: true,
+    }) as Connection;
+    const model = store.product.model({
+      title: 'Research model',
+      connectionId: connection.id,
+      modelId: 'fixture-research',
+      maxOutputTokens: 512,
+      temperature: null,
+      inputTokenLimit: mode === 'complete' ? 32768 : 8192,
+    }) as ModelPreset;
+    const imageModel = codexModel(store);
+    const plan = reserveIllustrationPlan(store, source, 'manual', {
+      maxTargets: 1,
+      settings: fixtureSettings({
+        generator: 'codex',
+        maxAutoRetries: 0,
+        codex: { model: { id: imageModel.id }, promptModel: { id: model.id } },
+      }),
+    });
+    store.product.content(
+      {
+        ...fixtureBotInput(bot.title, 'LIVE REPLACEMENT: Mira has brown eyes.'),
+        expectedRevision: bot.revision,
+      },
+      bot.id
+    );
+    if (mode === 'complete') {
+      cancelIllustration(store, plan.id);
+      retryIllustration(store, plan.id);
+    }
+    const observed = hooks(store);
+    const result = await runIllustrationJob(store, plan.id, 'worker', observed.options);
+    if (handlerError) throw handlerError;
+    if (mode === 'complete') {
+      expect(result, JSON.stringify(observed.finishes)).toMatchObject({ status: 'completed' });
+      expect(provider.requests).toHaveLength(14);
+      expect(
+        illustrationJob(store, queuedIllustrations(store)[0]).input.target?.prompt?.prompt
+      ).toContain('emerald eyes');
+    } else {
+      expect(result).toMatchObject({
+        status: 'failed',
+        code: 'ILLUSTRATION_PROMPT_INPUT_CONTEXT_LIMIT_EXCEEDED',
+      });
+      expect(provider.requests.length).toBeGreaterThan(1);
+      expect(provider.requests.length).toBeLessThan(13);
+      expect(queuedIllustrations(store)).toEqual([]);
+    }
+  }
+);

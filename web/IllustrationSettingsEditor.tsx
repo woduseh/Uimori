@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshIcon } from './ui-icons.js';
 import type { Library, ModelRef } from '../core/product.js';
 import type { IllustrationSettings } from '../core/illustration.js';
+import { ILLUSTRATION_MAX_PER_SOURCE } from '../core/illustration-cuts.js';
 import { api, ApiError } from './api.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
@@ -181,10 +182,13 @@ function IllustrationEnvironmentEditor({
   const valid =
     Number.isInteger(draft.maxPerSource) &&
     draft.maxPerSource >= 1 &&
-    draft.maxPerSource <= 8 &&
+    draft.maxPerSource <= ILLUSTRATION_MAX_PER_SOURCE &&
     Number.isInteger(draft.automaticMaxTargets) &&
     draft.automaticMaxTargets >= 1 &&
-    draft.automaticMaxTargets <= 8 &&
+    draft.automaticMaxTargets <= ILLUSTRATION_MAX_PER_SOURCE &&
+    Number.isInteger(draft.automaticMinTargets ?? 0) &&
+    (draft.automaticMinTargets ?? 0) >= 0 &&
+    (draft.automaticMinTargets ?? 0) <= draft.automaticMaxTargets &&
     Number.isInteger(draft.maxAutoRetries) &&
     draft.maxAutoRetries >= 0 &&
     draft.maxAutoRetries <= 5 &&
@@ -318,26 +322,60 @@ function IllustrationEnvironmentEditor({
             t('visuals.m058'),
             draft.maxPerSource,
             1,
-            8,
+            ILLUSTRATION_MAX_PER_SOURCE,
             (value) =>
               change({
                 ...draft,
                 maxPerSource: value,
+                automaticMinTargets: Math.min(value, draft.automaticMinTargets ?? 0),
                 automaticMaxTargets:
-                  Number.isInteger(value) && value >= 1 && value <= 8
+                  Number.isInteger(value) && value >= 1 && value <= ILLUSTRATION_MAX_PER_SOURCE
                     ? Math.min(value, draft.automaticMaxTargets)
                     : draft.automaticMaxTargets,
               }),
             1
           )}
-          {draft.automatic &&
-            numberField(
-              t('visuals.m060'),
-              draft.automaticMaxTargets,
-              1,
-              draft.maxPerSource,
-              (value) => change({ ...draft, automaticMaxTargets: value })
-            )}
+          {draft.automatic && (
+            <>
+              <label className="settings-row">
+                <span className="settings-row-copy">{t('visuals.countMode')}</span>
+                <span className="settings-row-control">
+                  <select
+                    value={draft.automaticCountMode ?? 'fixed'}
+                    onChange={(event) =>
+                      change({
+                        ...draft,
+                        automaticCountMode: event.target.value as 'fixed' | 'auto',
+                      })
+                    }
+                  >
+                    <option value="fixed">{t('visuals.countFixed')}</option>
+                    <option value="auto">{t('visuals.countAuto')}</option>
+                  </select>
+                </span>
+              </label>
+              {draft.automaticCountMode === 'auto' &&
+                numberField(
+                  t('visuals.countMin'),
+                  draft.automaticMinTargets ?? 0,
+                  0,
+                  draft.automaticMaxTargets,
+                  (value) => change({ ...draft, automaticMinTargets: value })
+                )}
+              {numberField(
+                t('visuals.m060'),
+                draft.automaticMaxTargets,
+                1,
+                draft.maxPerSource,
+                (value) =>
+                  change({
+                    ...draft,
+                    automaticMaxTargets: value,
+                    automaticMinTargets: Math.min(value, draft.automaticMinTargets ?? 0),
+                  })
+              )}
+            </>
+          )}
           {numberField(
             t('visuals.m061'),
             draft.maxAutoRetries,
@@ -503,6 +541,14 @@ function IllustrationEnvironmentEditor({
           const value = await api<IllustrationSettings>('/illustration-settings');
           return () => [
             { label: t('visuals.m083'), value: String(value.maxPerSource) },
+            {
+              label: t('visuals.countMode'),
+              value:
+                value.automaticCountMode === 'auto'
+                  ? t('visuals.countAuto')
+                  : t('visuals.countFixed'),
+            },
+            { label: t('visuals.countMin'), value: String(value.automaticMinTargets ?? 0) },
             { label: t('visuals.m084'), value: String(value.automaticMaxTargets) },
             { label: t('visuals.m085'), value: String(value.maxAutoRetries) },
             { label: t('visuals.m070'), value: value.comfyui.baseUrl },

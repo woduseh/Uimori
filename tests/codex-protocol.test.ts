@@ -180,3 +180,47 @@ test('decodes only advertised Uimori tool requests and rejects mixed, foreign, d
   });
   expect(decodeCodexOutput(encode('final', ''), request()).error?.code).toBe('EMPTY_COMPLETION');
 });
+
+test('illustration planning advertises and decodes only supplied read-only tools, while tool-free turns stay tool-free', () => {
+  const r: ProviderRequest = {
+    ...request(),
+    role: 'illustration',
+    stable: {
+      contract: 'Plan illustrations from frozen sources.',
+      tools: [
+        {
+          name: 'illustration.sources.read',
+          description: 'Read a frozen source',
+          inputSchema: { type: 'object' },
+        },
+      ],
+    },
+  };
+  const built = buildCodexTurn(r);
+  expect(JSON.parse(built.inputText).allowedTools).toEqual(r.stable.tools);
+  expect(built.developerInstructions).toContain('kind=tools');
+  const call = {
+    id: 'source-1',
+    name: 'illustration.sources.read',
+    argumentsJson: '{"id":"resource:0","path":"/description"}',
+  };
+  expect(decodeCodexOutput(encode('tools', '', [call]), r)).toMatchObject({
+    status: 'tool_calls',
+    toolCalls: [
+      { id: call.id, name: call.name, arguments: { id: 'resource:0', path: '/description' } },
+    ],
+  });
+  const independent = { ...call, id: 'source-2', argumentsJson: '{"id":"resource:1"}' };
+  expect(decodeCodexOutput(encode('tools', '', [call, independent]), r).toolCalls).toEqual([
+    { id: call.id, name: call.name, arguments: { id: 'resource:0', path: '/description' } },
+    { id: independent.id, name: independent.name, arguments: { id: 'resource:1' } },
+  ]);
+  expect(
+    decodeCodexOutput(encode('tools', '', [{ ...call, name: 'resource.patch' }]), r).error?.code
+  ).toBe('CODEX_INVALID_TOOL_CALL');
+  r.stable.tools = [];
+  expect(JSON.parse(buildCodexTurn(r).inputText).allowedTools).toEqual([]);
+  expect(decodeCodexOutput(encode('tools', '', [call]), r).error?.code).toBe(
+    'CODEX_INVALID_TOOL_CALL'
+  );
+});

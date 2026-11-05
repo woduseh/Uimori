@@ -832,3 +832,96 @@ it('illustration text requests disable native search and code in both the descri
     'features.image_generation': false,
   });
 });
+
+describe('explicit reusable sessions', () => {
+  it('reuses one isolated thread for consecutive turns and closes explicitly', async () => {
+    const { runtime, records } = setup();
+    const session = runtime.createSession(connection);
+    const options = { signal: new AbortController().signal };
+    expect((await session.execute(request(), options)).status).toBe('completed');
+    expect((await session.execute(request(), options)).status).toBe('completed');
+    expect(records().filter((row) => row.method === 'thread/start')).toHaveLength(1);
+    expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(2);
+    await session.close();
+    expect((await session.execute(request(), options)).error?.code).toBe('CODEX_SESSION_CLOSED');
+    expect((await runtime.execute(connection, request(), options)).status).toBe('completed');
+    expect(records().filter((row) => row.method === 'thread/start')).toHaveLength(2);
+  });
+
+  it('pins model and instructions and never silently starts another thread', async () => {
+    const { runtime, records } = setup();
+    const session = runtime.createSession(connection);
+    const options = { signal: new AbortController().signal };
+    await session.execute(request(), options);
+    const changed = request();
+    changed.modelId = 'another-model';
+    expect((await session.execute(changed, options)).error?.code).toBe('CODEX_SESSION_MISMATCH');
+    expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(1);
+    await session.close();
+  });
+
+  it('rejects concurrent turns and invalidates a cancelled active conversation', async () => {
+    const { runtime, records } = setup('turn-hang');
+    const session = runtime.createSession(connection);
+    const controller = new AbortController();
+    const active = session.execute(request(), { signal: controller.signal });
+    for (
+      let tries = 0;
+      tries < 100 && !records().some((row) => row.method === 'turn/start');
+      tries++
+    )
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(
+      (await session.execute(request(), { signal: new AbortController().signal })).error?.code
+    ).toBe('CODEX_SESSION_BUSY');
+    controller.abort();
+    expect((await active).status).toBe('cancelled');
+    expect(
+      (await session.execute(request(), { signal: new AbortController().signal })).error?.code
+    ).toBe('CODEX_SESSION_CLOSED');
+  });
+
+  it('counts host tool responses when admitting another native turn', async () => {
+    const { runtime, records } = setup('agent-tools');
+    const session = runtime.createSession(connection);
+    const limited = {
+      ...agentRequest(),
+      contextBudget: { inputTokenLimit: 8192, estimator: 'o200k_base-v1' as const },
+    };
+    const options = {
+      signal: new AbortController().signal,
+      onToolCall: async () => ({ success: true, text: 'large tool response '.repeat(10000) }),
+    };
+    expect((await session.executeAgent(limited, options)).status).toBe('completed');
+    expect((await session.executeAgent(limited, options)).error?.code).toBe('CODEX_SESSION_FULL');
+    expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(1);
+    await session.close();
+  });
+
+  it('uses provider-reported context and refuses unmeasured native tool history', async () => {
+    for (const extra of [
+      { UIMORI_CODEX_FIXTURE_INPUT_TOKENS: '9000' },
+      { UIMORI_CODEX_FIXTURE_NO_USAGE: '1' },
+    ]) {
+      const { runtime, records } = setup('native-tools', extra);
+      const session = runtime.createSession(connection);
+      const limited = {
+        ...request(),
+        contextBudget: { inputTokenLimit: 8192, estimator: 'o200k_base-v1' as const },
+      };
+      const options = { signal: new AbortController().signal };
+      expect((await session.execute(limited, options)).status).toBe('completed');
+      expect((await session.execute(limited, options)).error?.code).toBe('CODEX_SESSION_FULL');
+      expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(1);
+      await session.close();
+    }
+  });
+
+  it('invalidates uncertain timed out sessions', async () => {
+    const { runtime } = setup('turn-hang');
+    const session = runtime.createSession(connection);
+    const options = { signal: new AbortController().signal, timeoutMs: 100 };
+    expect((await session.execute(request(), options)).error?.code).toBe('TIMEOUT');
+    expect((await session.execute(request(), options)).error?.code).toBe('CODEX_SESSION_CLOSED');
+  });
+});

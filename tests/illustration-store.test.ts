@@ -32,6 +32,7 @@ import {
   retryIllustration,
   updateIllustrationReferences,
   updateIllustrationSettings,
+  validateIllustrationSettings,
 } from '../server/illustrations.js';
 import type { Connection, Content, ModelPreset } from '../core/product.js';
 import {
@@ -810,4 +811,58 @@ describe('illustration storage on the current schema', () => {
       }).references
     ).toEqual([]);
   });
+});
+
+test('new automatic count defaults and legacy fixed settings preserve their respective policies', () => {
+  const store = databases.create();
+  expect(illustrationSettings(store)).toMatchObject({
+    automaticCountMode: 'auto',
+    automaticMinTargets: 0,
+    automaticMaxTargets: 10,
+    maxPerSource: 10,
+  });
+  const { source } = chatWithSource(store);
+  const current = illustrationSettings(store);
+  const automatic = reserveIllustrationPlan(store, source, 'automatic', {
+    settings: { ...current, generator: 'fixture' },
+    testMode: true,
+    maxTargets: 10,
+  });
+  expect(automatic.input.plan).toMatchObject({ minTargets: 0, maxTargets: 10 });
+  cancelIllustration(store, automatic.id);
+  const { automaticCountMode: _mode, automaticMinTargets: _minimum, ...legacy } = current;
+  store.db
+    .prepare('UPDATE illustration_settings SET body=? WHERE id=1')
+    .run(JSON.stringify({ ...legacy, automaticMaxTargets: 3, maxPerSource: 4 }));
+  expect(illustrationSettings(store)).toMatchObject({
+    automaticCountMode: 'fixed',
+    automaticMaxTargets: 3,
+    maxPerSource: 4,
+  });
+  const fixed = reserveIllustrationPlan(store, source, 'automatic', {
+    settings: { ...illustrationSettings(store), generator: 'fixture' },
+    testMode: true,
+    maxTargets: 3,
+  });
+  expect(fixed.input.plan?.minTargets).toBeUndefined();
+});
+
+test('automatic count settings validate mode and inclusive minimum/maximum bounds', () => {
+  const { revision, ...body } = fixtureSettings();
+  expect(
+    validateIllustrationSettings(
+      { ...body, automaticCountMode: 'auto', automaticMinTargets: 0, automaticMaxTargets: 10 },
+      { revision, testMode: true }
+    )
+  ).toMatchObject({ automaticMinTargets: 0, automaticMaxTargets: 10 });
+  for (const change of [
+    { automaticCountMode: 'random' },
+    { automaticMinTargets: -1 },
+    { automaticMinTargets: 11 },
+    { automaticMaxTargets: 11 },
+  ]) {
+    expect(() =>
+      validateIllustrationSettings({ ...body, ...change }, { revision, testMode: true })
+    ).toThrow();
+  }
 });

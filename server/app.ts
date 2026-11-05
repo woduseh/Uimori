@@ -118,7 +118,7 @@ import {
   type WireRecord,
 } from '../core/transport.js';
 import type { Connection } from '../core/product.js';
-import type { CodexImageRequest } from './codex-runtime.js';
+import type { CodexImageRequest, CodexImageResult, CodexSession } from './codex-runtime.js';
 
 import { PROVIDER_PROTOCOLS } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -222,6 +222,14 @@ export async function createApp(options: AppOptions): Promise<App> {
       },
     });
   };
+  // Only consecutive queued cuts from one frozen storyboard may share image history.
+  // Each cut still owns a separate turn, attempt and result; no positional image mapping.
+  let illustrationSession: { key: string; session: CodexSession } | undefined;
+  const closeIllustrationSession = async () => {
+    const current = illustrationSession;
+    illustrationSession = undefined;
+    await current?.session.close();
+  };
   /** Illustration turns share the Codex login and the same live-connection authorization. */
   const generateCodexImage = (
     connection: Connection,
@@ -230,29 +238,53 @@ export async function createApp(options: AppOptions): Promise<App> {
       signal: AbortSignal;
       timeoutMs?: number;
       onWire: (wire: WireRecord) => void | Promise<void>;
-    }
-  ) => {
+    },
+    sessionKey?: string
+  ): Promise<CodexImageResult> => {
     const authorize = () => authorizeCodex(connection);
     authorize();
-    return codex.generateImage(
-      {
-        id: connection.id,
-        protocol: connection.protocol,
-        endpoint: connection.endpoint,
-        ...(connection.credentialRef ? { credentialRef: connection.credentialRef } : {}),
-      },
-      request,
-      {
-        signal: execution.signal,
-        timeoutMs: execution.timeoutMs,
-        beforeTurn: authorize,
-        onWire: async (wire) => {
-          authorize();
-          await execution.onWire(wire);
-          authorize();
+    return (async () => {
+      if (illustrationSession?.key !== sessionKey) await closeIllustrationSession();
+      if (sessionKey && !illustrationSession && codex.createSession)
+        illustrationSession = { key: sessionKey, session: codex.createSession(connection) };
+      const session = illustrationSession?.session;
+      const generate = session
+        ? (
+            _connection: ProviderConnection,
+            imageRequest: CodexImageRequest,
+            executionOptions: ProviderExecutionOptions
+          ) => session.generateImage(imageRequest, executionOptions)
+        : codex.generateImage.bind(codex);
+      let result = await generate(
+        {
+          id: connection.id,
+          protocol: connection.protocol,
+          endpoint: connection.endpoint,
+          ...(connection.credentialRef ? { credentialRef: connection.credentialRef } : {}),
         },
+        request,
+        {
+          signal: execution.signal,
+          timeoutMs: execution.timeoutMs,
+          beforeTurn: authorize,
+          onWire: async (wire) => {
+            authorize();
+            await execution.onWire(wire);
+            authorize();
+          },
+        }
+      );
+      // These failures happen before a turn is sent: independent rendering is safe.
+      if (
+        session &&
+        ['CODEX_SESSION_MISMATCH', 'CODEX_SESSION_FULL'].includes(result.error?.code ?? '')
+      ) {
+        await closeIllustrationSession();
+        result = await generateCodexImage(connection, request, execution);
       }
-    );
+      if (result.status !== 'completed') await closeIllustrationSession();
+      return result;
+    })();
   };
   const resolveCredential: NonNullable<ProviderExecutionOptions['resolveCredential']> = async (
     reference,
@@ -695,7 +727,20 @@ export async function createApp(options: AppOptions): Promise<App> {
               resolveComfyCredential: (name) => process.env[name],
               cancelRemoteOnAbort: () => controller.signal.aborted && !stopping.signal.aborted,
               executeCodex,
-              generateCodexImage,
+              generateCodexImage: (connection, request, execution) =>
+                generateCodexImage(
+                  connection,
+                  request,
+                  execution,
+                  queued.input.target?.planId && !queued.input.redraw
+                    ? JSON.stringify([
+                        queued.chatId,
+                        queued.sourceHash,
+                        queued.input.target.planId,
+                        connection.id,
+                      ])
+                    : undefined
+                ),
               authorize: (connection) => store.product.authorize(connection),
               onAttemptStart: (wire) => store.product.startAttempt(chatId, null, null, wire),
               onAttemptFinish: (attemptId, result) =>
@@ -722,6 +767,24 @@ export async function createApp(options: AppOptions): Promise<App> {
               });
           } finally {
             illustrationControllers.delete(id);
+            if (kind === 'render' && illustrationSession) {
+              const key = illustrationSession.key;
+              const hasNext = queuedIllustrations(store).some((nextId) => {
+                const next = illustrationJob(store, nextId);
+                return (
+                  next.input.target?.planId &&
+                  !next.input.redraw &&
+                  next.input.codex &&
+                  JSON.stringify([
+                    next.chatId,
+                    next.sourceHash,
+                    next.input.target.planId,
+                    next.input.codex.model.connection.id,
+                  ]) === key
+                );
+              });
+              if (!hasNext) await closeIllustrationSession();
+            }
             if (chatId && !stopping.signal.aborted) {
               publish(chatId);
               if (queuedIllustrations(store).length) {
@@ -1456,6 +1519,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     await pushService?.close();
     await backups.close();
     await manuscriptSearch.close();
+    await closeIllustrationSession();
     await codex.close();
     for (const listeners of subscribers.values())
       for (const response of listeners.keys()) response.end();

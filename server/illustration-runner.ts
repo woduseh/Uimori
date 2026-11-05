@@ -1,3 +1,4 @@
+import { illustrationResearch, ILLUSTRATION_RESEARCH_TOOLS } from './illustration-research.js';
 import { checkCodexIllustrationContent } from './illustration-content-check.js';
 import type { JevHooks } from './jev-judgment.js';
 import { jevSettings } from './jev-settings.js';
@@ -15,7 +16,7 @@ import { completeIllustrationStoryboard, completeIllustrationPlacement } from '.
 import type { ProviderRequest } from '../core/transport.js';
 import { createHash } from 'node:crypto';
 import { processImage, resizeIllustrationReference } from './image-processing.js';
-import { readRunSnapshot } from './run-projections.js';
+import { readRunSnapshot, readStoredRunSnapshot } from './run-projections.js';
 import {
   executeProvider,
   type ProviderResult,
@@ -140,6 +141,7 @@ function scene(
     targeted: !!input.target,
     styleGuidance: input.styleGuidance,
     sceneAppearanceNotes: input.sceneAppearanceNotes,
+    ...(input.visualCanon?.length ? { visualCanon: input.visualCanon } : {}),
     characterProfiles: input.characterProfiles?.map(({ name, appearance }) => ({
       name,
       appearance,
@@ -216,7 +218,17 @@ export async function runIllustrationJob(
     prompt: job.diagnostic?.prompt,
     promptRequestHash: job.diagnostic?.promptRequestHash,
   };
-  const snapshot = readRunSnapshot(store, source.runId);
+  // New requests freeze their attached native sources at admission. Older jobs retain
+  // their original reconstruction behavior rather than reinterpreting saved inputs.
+  const snapshot = input.research?.packages
+    ? readStoredRunSnapshot(store, source.runId)
+    : readRunSnapshot(store, source.runId);
+  if (input.research?.packages)
+    snapshot.profile = {
+      ...snapshot.profile!,
+      packages: input.research.packages,
+      packageAttachments: input.research.attachments ?? [],
+    };
   const progress = async () => {
     updateIllustrationDiagnostic(store, jobId, generation, owner, diagnostic);
     await hooks.onProgress?.();
@@ -282,31 +294,87 @@ export async function runIllustrationJob(
     authorized?: Connection
   ) => {
     const connection = authorized ?? (await authorizedConnection(hooks, model));
-    const result = await attempt(
-      (onWire) =>
-        executeProvider(transportConnection(connection), request, {
-          signal: hooks.signal,
-          resolveCredential: hooks.resolveCredential,
-          executeCodex: hooks.executeCodex,
-          timeoutMs: model.timeoutMs,
-          onWire,
-        }),
-      (value) => structuredClone(value)
-    );
-    if (result.status !== 'completed') {
+    const research = illustrationResearch(snapshot, input);
+    const enabled =
+      request.input.controls.purpose !== 'illustration-placement' && research.catalog.length > 0;
+    const base = enabled
+      ? {
+          ...request,
+          stable: {
+            ...request.stable,
+            tools: ILLUSTRATION_RESEARCH_TOOLS,
+            contract: `${request.stable.contract}\nUse the supplied read-only tools to retrieve relevant frozen source passages when age, identity or other defining visual facts are missing. Request independent sources together when useful. Return the requested JSON.`,
+          },
+          input: { ...request.input, catalog: research.catalog },
+        }
+      : request;
+    // One normal model deadline covers the complete research loop, not a fresh timeout per read.
+    const timeoutMs =
+      model.timeoutMs ?? (connection.protocol === 'codex-app-server-v1' ? 300_000 : 30_000);
+    const signal = AbortSignal.any([hooks.signal, AbortSignal.timeout(timeoutMs)]);
+    const results: import('../core/transport.js').Json[] = [];
+    let opaqueState: ProviderRequest['opaqueState'];
+    while (true) {
+      signal.throwIfAborted();
+      const next = {
+        ...base,
+        ...(opaqueState !== undefined ? { opaqueState } : {}),
+        input: { ...base.input, ...(results.length ? { results } : {}) },
+      };
+      const result = await attempt(
+        (onWire) =>
+          executeProvider(transportConnection(connection), next, {
+            signal,
+            resolveCredential: hooks.resolveCredential,
+            executeCodex: hooks.executeCodex,
+            timeoutMs,
+            onWire,
+          }),
+        (value) => structuredClone(value)
+      );
+      if (result.status === 'completed') return result.text;
+      if (enabled && result.status === 'tool_calls' && result.toolCalls.length) {
+        opaqueState = result.opaqueState ?? undefined;
+        for (const call of result.toolCalls) {
+          signal.throwIfAborted();
+          let output: import('../core/transport.js').Json;
+          let denied = false;
+          try {
+            output = research.execute(call.name, call.arguments);
+          } catch (error) {
+            denied = true;
+            output = { error: error instanceof Error ? error.message : 'Invalid read' };
+          }
+          results.push({
+            callId: call.id,
+            name: call.name,
+            args: call.arguments,
+            result: output,
+            denied,
+          });
+        }
+        continue;
+      }
       const code = providerCode(result);
       throw new IllustrationError(code, isRetryableIllustrationCode(code));
     }
-    return result.text;
   };
   const preparePrompt = async (
     model: ModelSnapshot,
     context: IllustrationScene,
     connection?: Connection
   ): Promise<IllustrationPlan> => {
+    const withCanon = (prompt: import('../core/illustration.js').IllustrationPrompt) =>
+      input.visualCanon?.length
+        ? {
+            ...prompt,
+            prompt: `${prompt.prompt}\n\nShared character identity (current authored profiles take priority; scene-specific changes still apply): ${JSON.stringify(input.visualCanon)}`,
+          }
+        : prompt;
     if (input.target?.prompt) {
-      diagnostic.prompt = input.target.prompt;
-      return { kind: 'generate', prompt: input.target.prompt };
+      const prompt = withCanon(input.target.prompt);
+      diagnostic.prompt = prompt;
+      return { kind: 'generate', prompt };
     }
     const codex = input.generator === 'codex';
     const buildRequest = codex ? codexIllustrationPromptRequest : illustrationPromptRequest;
@@ -325,6 +393,7 @@ export async function runIllustrationJob(
       { preservePrompt: codex }
     );
     if (plan.kind === 'generate') {
+      plan.prompt = withCanon(plan.prompt);
       diagnostic.prompt = plan.prompt;
       diagnostic.promptRequestHash = requestHash;
     }
@@ -419,7 +488,8 @@ export async function runIllustrationJob(
           promptMode,
           context.allowSkip || input.plan.existingTargets.length > 0,
           input.plan.existingTargets,
-          input.plan.selectedMoments
+          input.plan.selectedMoments,
+          input.plan.minTargets
         );
       }
       hooks.signal.throwIfAborted();

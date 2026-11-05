@@ -404,10 +404,20 @@ input.on('line', (line) => {
           phase: 'commentary',
         });
       }
-      send({
-        method: 'thread/tokenUsage/updated',
-        params: { threadId, turnId, tokenUsage: { total: { inputTokens: 100, outputTokens: 30 } } },
-      });
+      if (!process.env.UIMORI_CODEX_FIXTURE_NO_USAGE)
+        send({
+          method: 'thread/tokenUsage/updated',
+          params: {
+            threadId,
+            turnId,
+            tokenUsage: {
+              total: {
+                inputTokens: Number(process.env.UIMORI_CODEX_FIXTURE_INPUT_TOKENS ?? 100),
+                outputTokens: 30,
+              },
+            },
+          },
+        });
       // Image generation modes emit the official imageGeneration item before the caption message.
       if (mode.startsWith('image')) {
         const png =

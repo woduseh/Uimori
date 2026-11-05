@@ -43,7 +43,7 @@ export function reserveIllustration(
       : settings,
     maxTargets: 1,
   });
-  const { task: _task, plan: _plan, ...input } = job.input;
+  const { task: _task, plan: _plan, research: _research, ...input } = job.input;
   // A legacy image turn predates the separate prompt-model snapshot.
   if (legacyCodex && input.codex) delete input.codex.promptModel;
   store.db

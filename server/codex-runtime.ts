@@ -34,7 +34,12 @@ import {
   CODEX_ENDPOINT,
   decodeCodexOutput,
 } from '../core/codex-protocol.js';
-import { assertContextBudget, type ContextBudget } from '../core/context-budget.js';
+import {
+  assertContextBudget,
+  estimateContextTokens,
+  DEFAULT_INPUT_TOKEN_LIMIT,
+  type ContextBudget,
+} from '../core/context-budget.js';
 import {
   materializeProviderImages,
   PROVIDER_REQUEST_MAX_BYTES,
@@ -163,7 +168,35 @@ export type CodexImageResult = {
   usage: ProviderUsage;
   error: { code: string; usageLimit?: { limitId: string; resetsAt: number | null } } | null;
 };
+/** Explicitly owned conversation. Never share a session between users or unrelated tasks.
+ * Model, instructions and tool capabilities are pinned by its first turn. Close in finally. */
+export interface CodexSession {
+  execute(request: ProviderRequest, options: CodexExecutionOptions): Promise<ProviderResult>;
+  executeAgent(
+    request: CodexAgentRequest,
+    options: CodexAgentExecutionOptions
+  ): Promise<ProviderResult>;
+  generateImage(
+    request: CodexImageRequest,
+    options: CodexExecutionOptions
+  ): Promise<CodexImageResult>;
+  close(): Promise<void>;
+}
+type SessionState = {
+  process?: CodexProcess;
+  threadId?: string;
+  signature?: string;
+  revision?: number;
+  slots?: Slots;
+  busy: boolean;
+  closed: boolean;
+  maxWriteBytes?: number;
+  history: Json[];
+  reportedTokens?: number;
+  unmeasuredContext?: boolean;
+};
 export interface CodexRuntimeService {
+  createSession?(connection: ProviderConnection): CodexSession;
   status(): Promise<CodexRuntimeStatus>;
   login(): Promise<CodexRuntimeStatus>;
   cancelLogin(): Promise<CodexRuntimeStatus>;
@@ -199,6 +232,7 @@ const CODEX_HOST_TOOL_NAMESPACE = 'uimori';
 
 type TurnPlan = {
   role: ProviderRole;
+  contextBudget?: ContextBudget;
   modelId: string;
   effort?: string;
   baseInstructions?: string;
@@ -457,6 +491,30 @@ export class CodexRuntime implements CodexRuntimeService {
     )
       error('CODEX_INVALID_CONCURRENCY');
     this.textSlots = new Slots(options.maxConcurrent ?? 2, 32);
+  }
+  createSession(connection: ProviderConnection): CodexSession {
+    assertCodexConnection(connection);
+    // Capture connection identity; mutable caller objects cannot retarget a conversation.
+    const pinned = { ...connection };
+    const session: SessionState = { busy: false, closed: false, history: [] };
+    return {
+      execute: (request, options) => this.execute(pinned, request, options, session),
+      executeAgent: (request, options) => this.executeAgent(pinned, request, options, session),
+      generateImage: (request, options) => this.generateImage(pinned, request, options, session),
+      close: () => this.closeSession(session),
+    };
+  }
+  private async closeSession(session: SessionState): Promise<void> {
+    session.closed = true;
+    if (session.process) {
+      await session.process.close();
+      this.active.delete(session.process);
+      session.process = undefined;
+    }
+    if (session.slots) {
+      session.slots.release();
+      session.slots = undefined;
+    }
   }
   private get occupied(): number {
     return this.textSlots.occupied + this.childTextSlots.occupied + this.imageSlots.occupied;
@@ -741,7 +799,8 @@ export class CodexRuntime implements CodexRuntimeService {
   async execute(
     connection: ProviderConnection,
     request: ProviderRequest,
-    options: CodexExecutionOptions
+    options: CodexExecutionOptions,
+    session?: SessionState
   ): Promise<ProviderResult> {
     if (options.signal.aborted) return failure('CANCELLED');
     if (this.authAction || this.loginValue) return failure('CODEX_BUSY');
@@ -754,6 +813,7 @@ export class CodexRuntime implements CodexRuntimeService {
       assertContextBudget(descriptor, request.contextBudget);
       plan = {
         role: request.role,
+        contextBudget: request.contextBudget,
         modelId: request.modelId,
         effort: request.generation?.reasoningEffort,
         baseInstructions: built.baseInstructions,
@@ -802,10 +862,12 @@ export class CodexRuntime implements CodexRuntimeService {
       return failure(options.signal.aborted ? 'CANCELLED' : safeError(caught));
     }
     const slots = this.hostToolContext.getStore()?.active ? this.childTextSlots : this.textSlots;
-    const outcome = await this.runTurn(connection, plan, options, slots);
+    const outcome = await this.runTurn(connection, plan, options, slots, session);
     if (!outcome.ok) return failure(outcome.code, outcome.usage);
+    const decoded = decodeCodexOutput(outcome.output, request);
+    if (session && decoded.status === 'error') await this.closeSession(session);
     return {
-      ...decodeCodexOutput(outcome.output, request),
+      ...decoded,
       usage: outcome.usage,
       ...(request.webSearch ? { webSearch: searched } : {}),
     };
@@ -814,7 +876,8 @@ export class CodexRuntime implements CodexRuntimeService {
   async executeAgent(
     connection: ProviderConnection,
     request: CodexAgentRequest,
-    options: CodexAgentExecutionOptions
+    options: CodexAgentExecutionOptions,
+    session?: SessionState
   ): Promise<ProviderResult> {
     if (options.signal.aborted) return failure('CANCELLED');
     if (this.authAction || this.loginValue) return failure('CODEX_BUSY');
@@ -826,6 +889,7 @@ export class CodexRuntime implements CodexRuntimeService {
       assertContextBudget(descriptor, request.contextBudget);
       plan = {
         role: request.role ?? 'helper',
+        contextBudget: request.contextBudget,
         modelId: request.modelId,
         effort: request.reasoningEffort,
         baseInstructions: request.baseInstructions,
@@ -856,9 +920,12 @@ export class CodexRuntime implements CodexRuntimeService {
       return failure(options.signal.aborted ? 'CANCELLED' : safeError(caught));
     }
     const slots = this.hostToolContext.getStore()?.active ? this.childTextSlots : this.textSlots;
-    const outcome = await this.runTurn(connection, plan, options, slots);
+    const outcome = await this.runTurn(connection, plan, options, slots, session);
     if (!outcome.ok) return failure(outcome.code, outcome.usage);
-    if (!outcome.output.trim()) return failure('CODEX_INVALID_OUTPUT', outcome.usage);
+    if (!outcome.output.trim()) {
+      if (session) await this.closeSession(session);
+      return failure('CODEX_INVALID_OUTPUT', outcome.usage);
+    }
     return {
       status: 'completed',
       text: outcome.output,
@@ -872,7 +939,8 @@ export class CodexRuntime implements CodexRuntimeService {
   async generateImage(
     connection: ProviderConnection,
     request: CodexImageRequest,
-    options: CodexExecutionOptions
+    options: CodexExecutionOptions,
+    session?: SessionState
   ): Promise<CodexImageResult> {
     const result = (
       status: CodexImageResult['status'],
@@ -909,6 +977,7 @@ export class CodexRuntime implements CodexRuntimeService {
       });
       plan = {
         role: 'illustration',
+        contextBudget: request.contextBudget,
         modelId: request.modelId,
         effort: request.reasoningEffort,
         baseInstructions: IMAGE_BASE_INSTRUCTIONS,
@@ -963,7 +1032,7 @@ export class CodexRuntime implements CodexRuntimeService {
         code: options.signal.aborted ? 'CANCELLED' : safeError(caught),
       });
     }
-    const outcome = await this.runTurn(connection, plan, options, this.imageSlots);
+    const outcome = await this.runTurn(connection, plan, options, this.imageSlots, session);
     if (!outcome.ok)
       return result(outcome.code === 'CANCELLED' ? 'cancelled' : 'error', outcome.usage, {
         code: outcome.code,
@@ -984,7 +1053,8 @@ export class CodexRuntime implements CodexRuntimeService {
       const decoded = this.decodeGeneratedImage(item);
       if (decoded) images.push(decoded);
     }
-    if (!images.length)
+    if (!images.length) {
+      if (session) await this.closeSession(session);
       return result(
         'error',
         outcome.usage,
@@ -994,6 +1064,7 @@ export class CodexRuntime implements CodexRuntimeService {
         },
         { revisedPrompt, text: outcome.output }
       );
+    }
     return result('completed', outcome.usage, null, {
       images,
       revisedPrompt,
@@ -1071,12 +1142,44 @@ export class CodexRuntime implements CodexRuntimeService {
     connection: ProviderConnection,
     plan: TurnPlan,
     options: CodexExecutionOptions,
-    slots: Slots
+    slots: Slots,
+    session?: SessionState
   ): Promise<TurnOutcome> {
     const fail = (code: string, usage: ProviderUsage): TurnOutcome => ({ ok: false, code, usage });
+    if (session?.closed) return fail('CODEX_SESSION_CLOSED', emptyUsage());
+    if (session?.busy) return fail('CODEX_SESSION_BUSY', emptyUsage());
+    const signature = JSON.stringify([
+      plan.modelId,
+      plan.baseInstructions,
+      plan.developerInstructions,
+      plan.dynamicTools,
+      plan.config,
+      plan.role,
+    ]);
+    if (
+      session?.signature &&
+      (session.signature !== signature || (plan.maxWriteBytes ?? 0) > (session.maxWriteBytes ?? 0))
+    )
+      return fail('CODEX_SESSION_MISMATCH', emptyUsage());
+    if (session?.unmeasuredContext) return fail('CODEX_SESSION_FULL', emptyUsage());
+    if (session?.history.length) {
+      try {
+        assertContextBudget([...session.history, plan.descriptor], plan.contextBudget);
+        if (
+          session.reportedTokens !== undefined &&
+          session.reportedTokens + estimateContextTokens(plan.descriptor, plan.contextBudget) >
+            (plan.contextBudget?.inputTokenLimit ?? DEFAULT_INPUT_TOKEN_LIMIT)
+        )
+          return fail('CODEX_SESSION_FULL', emptyUsage());
+      } catch {
+        return fail('CODEX_SESSION_FULL', emptyUsage());
+      }
+    }
     const duration = options.timeoutMs ?? 300_000;
     if (!Number.isSafeInteger(duration) || duration < 1 || duration > 1_800_000)
       return fail('INVALID_TIMEOUT', emptyUsage());
+    if (session) session.busy = true;
+    let reusable = false;
     const timeout = AbortSignal.timeout(duration),
       signal = AbortSignal.any([options.signal, timeout]);
     let process: CodexProcess | undefined,
@@ -1099,6 +1202,9 @@ export class CodexRuntime implements CodexRuntimeService {
     const completedItems = new Set<string>();
     const itemCounts: Record<string, number> = {};
     let tokenUsageUpdates = 0;
+    let reportedTokens: number | undefined;
+    let hiddenContext = false;
+    const toolHistory: Json[] = [];
     const recordImageDiagnostics = () => {
       if (plan.role === 'illustration')
         usage.raw = {
@@ -1131,10 +1237,29 @@ export class CodexRuntime implements CodexRuntimeService {
       options.signal.aborted ? 'CANCELLED' : timeout.aborted ? 'TIMEOUT' : 'CODEX_AUTH_CHANGED';
     try {
       const revision = this.revision;
-      await slots.acquire(signal, this.closed);
-      slot = true;
+      if (!session?.slots) {
+        await slots.acquire(signal, this.closed);
+        slot = true;
+        if (session) session.slots = slots;
+      }
+      if (session?.closed) error('CODEX_SESSION_CLOSED');
       if (revision !== this.revision) error('CODEX_AUTH_CHANGED');
-      process = await this.process(plan.config, plan.maxLineBytes, plan.maxWriteBytes);
+      if (session?.revision !== undefined && session.revision !== revision)
+        error('CODEX_AUTH_CHANGED');
+      // Reusable processes use the existing provider wire budget so ordinary later
+      // prompts need not be shorter than the first. Larger attachment envelopes
+      // retain their original measured budget.
+      const maxWriteBytes = session
+        ? Math.max(plan.maxWriteBytes ?? 0, PROVIDER_REQUEST_MAX_BYTES + 1024 * 1024)
+        : plan.maxWriteBytes;
+      process =
+        session?.process ?? (await this.process(plan.config, plan.maxLineBytes, maxWriteBytes));
+      if (session) {
+        session.process = process;
+        session.revision = revision;
+        session.signature = signature;
+        session.maxWriteBytes ??= maxWriteBytes;
+      }
       if (revision !== this.revision || this.authAction) return fail('CODEX_AUTH_CHANGED', usage);
       this.active.add(process);
       signal.addEventListener('abort', stopOnAbort, { once: true });
@@ -1160,25 +1285,27 @@ export class CodexRuntime implements CodexRuntimeService {
         stablePrefixSha256: hash(plan.stablePrefix),
       });
       if (signal.aborted || revision !== this.revision) return fail(abortCode(), usage);
-      const started = await process.request<unknown>(
-        'thread/start',
-        {
-          model: plan.modelId,
-          modelProvider: 'openai',
-          cwd: this.work,
-          ephemeral: true,
-          approvalPolicy: 'never',
-          approvalsReviewer: 'user',
-          sandbox: 'read-only',
-          environments: [],
-          selectedCapabilityRoots: [],
-          ...(plan.baseInstructions ? { baseInstructions: plan.baseInstructions } : {}),
-          developerInstructions: plan.developerInstructions,
-          ...(plan.dynamicTools ? { dynamicTools: plan.dynamicTools } : {}),
-          config: plan.config,
-        },
-        { signal }
-      );
+      const started = session?.threadId
+        ? { thread: { id: session.threadId }, model: plan.modelId }
+        : await process.request<unknown>(
+            'thread/start',
+            {
+              model: plan.modelId,
+              modelProvider: 'openai',
+              cwd: this.work,
+              ephemeral: true,
+              approvalPolicy: 'never',
+              approvalsReviewer: 'user',
+              sandbox: 'read-only',
+              environments: [],
+              selectedCapabilityRoots: [],
+              ...(plan.baseInstructions ? { baseInstructions: plan.baseInstructions } : {}),
+              developerInstructions: plan.developerInstructions,
+              ...(plan.dynamicTools ? { dynamicTools: plan.dynamicTools } : {}),
+              config: plan.config,
+            },
+            { signal }
+          );
       if (
         !object(started) ||
         !object(started.thread) ||
@@ -1187,6 +1314,7 @@ export class CodexRuntime implements CodexRuntimeService {
       )
         error('CODEX_INVALID_THREAD');
       threadId = (started as { thread: { id: string } }).thread.id;
+      if (session) session.threadId = threadId;
       let resolveTurn: () => void;
       let rejectCallbacks: (reason: unknown) => void = () => {};
       const stopped = new Promise<never>((_, reject) => {
@@ -1243,6 +1371,13 @@ export class CodexRuntime implements CodexRuntimeService {
                 )
               );
               if (ended || toolSignal.aborted) return error('CANCELLED');
+              if (session)
+                toolHistory.push({
+                  tool: call.tool,
+                  arguments: call.arguments as Json,
+                  result: result.text,
+                });
+              hiddenContext = true;
               if (result.complete) {
                 if (!result.text.trim() || result.text.length > 2_000_000)
                   return error('CODEX_INVALID_OUTPUT');
@@ -1326,14 +1461,19 @@ export class CodexRuntime implements CodexRuntimeService {
         ) {
           const total = tokenUsageBreakdown(params.tokenUsage.total);
           const last = tokenUsageBreakdown(params.tokenUsage.last);
+          if (total?.inputTokens !== undefined && total.outputTokens !== undefined)
+            reportedTokens = Math.max(
+              reportedTokens ?? 0,
+              total.totalTokens ?? total.inputTokens + total.outputTokens
+            );
           const recorded = {
             ...(total ? { total } : {}),
             ...(last ? { last } : {}),
           };
           usage = {
             ...emptyUsage(),
-            inputTokens: total?.inputTokens ?? null,
-            outputTokens: total?.outputTokens ?? null,
+            inputTokens: (session ? last : total)?.inputTokens ?? null,
+            outputTokens: (session ? last : total)?.outputTokens ?? null,
             raw: {
               kind: 'codex-agent-turn',
               modelCalls: null,
@@ -1345,6 +1485,7 @@ export class CodexRuntime implements CodexRuntimeService {
         }
         if ((method === 'item/started' || method === 'item/completed') && object(params.item)) {
           const item = params.item;
+          if (!['userMessage', 'agentMessage'].includes(String(item.type))) hiddenContext = true;
           if (!plan.allowedItems.includes(String(item.type))) {
             rejectTurn(new ProviderContractError('CODEX_TOOL_NOT_ALLOWED'));
             return;
@@ -1495,6 +1636,13 @@ export class CodexRuntime implements CodexRuntimeService {
           completion: 'host-submission',
           usageComplete: false,
         };
+      reusable = submitted === undefined && !session?.closed;
+      if (session && reusable) {
+        session.history.push(plan.descriptor, ...toolHistory, outputItem ? output : legacyOutput);
+        session.unmeasuredContext = hiddenContext && reportedTokens === undefined;
+        if (reportedTokens !== undefined)
+          session.reportedTokens = Math.max(session.reportedTokens ?? 0, reportedTokens);
+      }
       return { ok: true, output: submitted ?? (outputItem ? output : legacyOutput), usage };
     } catch (caught) {
       return fail(
@@ -1511,14 +1659,16 @@ export class CodexRuntime implements CodexRuntimeService {
       offExit();
       offTools();
       offSteering();
-      if (process) {
+      if (session) session.busy = false;
+      if (session && !reusable) await this.closeSession(session);
+      if (process && !session) {
         // Closing the isolated process prevents a late or uncertain turn being reused.
         // A request can already be executing upstream; it is never replayed here.
         if (interrupted) await stopProcess();
         else await process.close();
         this.active.delete(process);
       }
-      if (slot) slots.release();
+      if (slot && !session) slots.release();
     }
   }
   close(): Promise<void> {
