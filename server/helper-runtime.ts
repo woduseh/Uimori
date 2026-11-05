@@ -2549,8 +2549,12 @@ export class HelperRuntime {
       const offset = number(args.offset ?? 0, 'offset', 0);
       const limit = number(args.limit ?? 50, 'limit', 1, 100);
       const chat = this.store.chat(scope.chatId);
-      let sceneNumber = 0;
-      const messages = this.store.history(chat.headRevision).map((item) => {
+      const history = this.store.history(chat.headRevision);
+      // Keep visible numbering stable while avoiding preview work for unseen pages.
+      let sceneNumber = history
+        .slice(0, offset)
+        .filter((item) => item.sceneContext?.sceneEnabled !== false).length;
+      const messages = history.slice(offset, offset + limit).map((item) => {
         const sceneEnabled = item.sceneContext?.sceneEnabled !== false;
         if (sceneEnabled) sceneNumber++;
         return {
@@ -2564,9 +2568,9 @@ export class HelperRuntime {
       });
       return {
         chat,
-        messages: messages.slice(offset, offset + limit),
-        total: messages.length,
-        nextOffset: offset + limit < messages.length ? offset + limit : null,
+        messages,
+        total: history.length,
+        nextOffset: offset + limit < history.length ? offset + limit : null,
       };
     }
     if (name.startsWith('options.')) {
