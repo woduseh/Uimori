@@ -1,72 +1,132 @@
 # Uimori
 
-긴 원고를 읽고 다음 장면을 이어 쓰는 개인용 창작 웹앱이에요. 봇별로 채팅·폴더를 관리하고 Risu 원본 봇·페르소나·모듈을 사용할 수 있어요. 프롬프트와 모델은 따로 설정하며, 원문·번역을 직접 편집하거나 채팅을 독립 사본으로 복사할 수 있어요. 이야기 기억과 백업 기능도 제공해요.
+**English** · [한국어](README.ko.md)
 
-이 소스의 앱 버전은 **`v0.12.17`**이에요. 하네스 전반의 호출·도구 진단 기록을 보존하고, 도우미 사용량은 마지막 입력과 이번 작업 출력을 간결하게 표시해요. **DB 스키마는 15**로 유지해요. 자세한 변경은 [릴리스 노트](docs/releases/v0.12.17.md), 설치 절차는 [업데이트 안내](docs/UPDATES.md)를 참고해요.
+Uimori is a personal creative-writing web app for reading long manuscripts and continuing them scene by scene. Run it on your own PC, or host it on a personal server and use the same workspace from your PC and phone.
 
-개인 ChatGPT 구독으로 에이전트를 실행하려면 [Codex 연결 안내](docs/CODEX.md)를 따라 서버 실행기를 준비하고 **설정 → Codex 연결**에서 로그인해요.
+- Organize chats and folders per bot, and use original Risu bots, personas and modules.
+- Configure prompts and models separately.
+- Edit source text and translations directly, and copy a chat into an independent copy.
+- Keep story memory and backups.
 
-## Windows에서 실행
+> **Current version `v0.12.17` · DB schema 15**
+>
+> This release preserves call and tool diagnostics across the harness, and shows helper usage compactly as the latest input and this task's output. See the [release notes](docs/releases/v0.12.17.md) for details and the [update guide](docs/UPDATES.md) for updating an existing installation.
 
-Node **24.22.1 이상 24.x**, npm, Chrome 또는 Edge가 필요해요. SQLite는 Node에 포함된 기능을 사용해요.
+> [!NOTE]
+> The detailed guides under `docs/` are written in Korean. The app interface itself supports English.
 
-태그 기반 설치는 `v0.12.17`을 사용해요. 설치 전에 [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 해당 릴리스가 공개됐는지 확인해요.
+## Quick start (Windows)
 
-```powershell
-git clone --branch v0.12.17 --single-branch https://github.com/woduseh/Uimori.git
-cd Uimori
-npm ci
-npm run dev
-```
+**Requirements**: Node **24.22.1 or later 24.x**, npm, and Chrome or Edge. SQLite comes built into Node, so no separate install is needed.
 
-이미 소스를 받았다면 프로젝트 루트에서 `npm ci`부터 실행해요. 실행 후 [로컬 앱](http://127.0.0.1:4310)을 열어요. `dev`는 빌드 후 서버를 시작하며, 이미 빌드했다면 `npm start`로 실행할 수 있어요. 이전 서버를 사용 중이면 해당 터미널에서 Ctrl+C로 종료한 뒤 다시 시작해요.
+1. Check that the `v0.12.17` release is published on [GitHub Releases](https://github.com/woduseh/Uimori/releases).
+2. Get the source and start the app.
 
-1. **서재 → 봇**에서 자료를 만들거나 고른 뒤 **봇으로 새 채팅**, 또는 왼쪽 탐색에서 봇을 고르고 **새 채팅**을 눌러요. 봇은 필수이고, 만든 채팅의 소속 봇은 바꾸지 않아요. 페르소나·프롬프트·창작 프리셋은 선택할 수 있어요.
-2. **설정 → 프로바이더와 모델**에서 프로바이더와 모델을 등록하고 전역 역할별 모델로 선택해요. 모델 없이 채팅을 만들거나 작성된 시작문을 사용할 수 있지만, 본문 생성·번역 등 모델을 실행하는 역할에는 모델 선택이 필요해요. 프로바이더 추가에서 **TypeSafe AI**를 선택하면 **JEV**가 모델 목록에 등록돼요. 본문·번역 거절 판정과 로어 관련성은 JEV가 담당하고, 기존 이미지 배치는 작문 모델 또는 JEV를 선택해요. JEV를 사용하는 기능만 키 등록이 필요하며 본문 거절 감지는 기본으로 꺼져 있어요. API 키는 앱에서 바로 입력해요.
-3. 하단 입력창에 장면 요청을 보내요. 기본 전송 키는 Ctrl/Cmd+Enter예요.
-4. 원고의 **번역 생성**을 누르면 번역을 시작해요. 저장된 번역은 **번역 보기**로 열고, 실패한 번역은 **번역 다시 시도**로 요청해요. 저장된 번역의 보기 전환과 원문·번역 직접 저장은 모델을 호출하지 않아요.
+   ```powershell
+   git clone --branch v0.12.17 --single-branch https://github.com/woduseh/Uimori.git
+   cd Uimori
+   npm ci
+   npm run dev
+   ```
 
-## 개인 Linux 서버에서 사용
+3. Open the [local app](http://127.0.0.1:4310) in your browser.
 
-[Self-host 안내](docs/SELF-HOST.md)에 Docker Compose와 Nginx HTTPS 구성이 있어요. 도메인·인증서·접속 토큰을 설정하면 PC와 휴대폰에서 같은 작업실에 접속할 수 있어요. SQLite는 영구 volume에 저장해요. 지원하는 수동 업데이트 절차는 [업데이트 안내](docs/UPDATES.md)를 확인해요.
+Notes:
 
-## 버전 확인과 업데이트
+- If you already have the source, start with `npm ci` in the project root.
+- `npm run dev` builds and then starts the server. If it is already built, `npm start` starts it directly.
+- If a previous server is still running, stop it with Ctrl+C in its terminal before starting again.
 
-**설정 → 앱 정보**에서 현재 서버의 앱 버전과 빌드 식별자를 확인해요. 앱 버전은 릴리스 번호이며 DB 스키마 번호와 별개예요. 업데이트 알림·앱 내 설치·무인 자동 업데이트는 제공하지 않아요. 기존 설치는 [수동 업데이트](docs/UPDATES.md#manual-release-update)를 따르고, 운영 중인 Oracle 설치는 [전용 배포 안내](docs/ORACLE-RELEASE.md)를 사용해요. 태그나 GitHub Release를 만드는 것만으로 서버가 업데이트되지는 않아요.
+### First steps
 
-## 사용·설정 안내
+1. **Create a chat**: In **Library → Bot**, create or choose a bot and select **New chat as bot**. You can also pick a bot in the left navigation and select **New chat**.
+   - A bot is required, and a chat's bot cannot be changed after creation.
+   - Persona, prompt and creative preset are optional.
+2. **Add models**: In **Settings → Providers and models**, register a provider and models, then assign them to global roles. Enter API keys directly in the app.
+   - You can create chats or use a written opening without a model. Roles that run a model, such as text generation and translation, need one.
+3. **Request a scene**: Send a scene request from the input box at the bottom. The default send key is Ctrl/Cmd+Enter.
+4. **Translate**: Select **Generate translation** on a manuscript to start translating. Open saved translations with **View translation**, and request failed ones again with **Retry translation**.
+   - Switching views of a saved translation and saving source or translation edits do not call a model.
 
-**설정 → 일반 → 화면 언어**에서 한국어·영어·일본어·중국어(간체)를 선택해요. 선택은 브라우저에 유지되며 원고·저장 번역과 생성·번역 대상 언어는 그대로예요. [언어 설정과 적용 범위](docs/I18N.md)를 참고해요.
+> **JEV (optional)**: Choosing **TypeSafe AI** when adding a provider registers **JEV** in the model list. JEV handles refusal checks for text and translations and lore relevance; existing image placement uses either the writing model or JEV. Only features that use JEV need its key, and text refusal detection is off by default.
 
-| 문서 | 내용 |
+Choose the interface language in **Settings → General → Interface language**: Korean, English, Japanese or Simplified Chinese. The choice is stored in the browser and does not change manuscripts, saved translations, or the target language of generation and translation. See [language settings and scope](docs/I18N.md).
+
+### Run agents with a ChatGPT subscription (optional)
+
+To run agents with a personal ChatGPT subscription, prepare the server runner by following the [Codex connection guide](docs/CODEX.md), then sign in from **Settings → Codex connection**.
+
+## Personal Linux server
+
+The [self-hosting guide](docs/SELF-HOST.md) covers Docker Compose and an Nginx HTTPS setup. With a domain, certificate and access token configured, you can reach the same workspace from your PC and phone. The SQLite database is stored in a persistent volume.
+
+## Versions and updates
+
+- **Settings → About** shows the server's app version and build identifier. The app version is the release number and is separate from the DB schema number.
+- There are no update notifications, in-app installs or unattended automatic updates.
+- Update an existing installation with the [manual update](docs/UPDATES.md#manual-release-update) procedure. The running Oracle installation uses its [dedicated deployment guide](docs/ORACLE-RELEASE.md).
+- Creating a tag or GitHub Release does not update any server by itself.
+
+## Documentation (Korean)
+
+### Using the app
+
+| Guide | Covers |
 | --- | --- |
-| [사용 안내](docs/USAGE.md) | 봇별 채팅·폴더, 설정 검색, 프롬프트·창작 프리셋, 번역·독립 채팅 복사, 백업 |
-| [구성·집필 작업실](docs/OUTLINE.md) | 계층형 구성, 관련 계획 연결, 선택한 단위 집필과 원문 점검 |
-| [원작 참고](docs/STORY-GUIDE.md) | 선택형 집필 참고문, 도우미를 통한 원작 질문, 메모·정정 |
-| [도우미 도구](docs/HELPER-TOOLS.md) · [Codex 연결](docs/CODEX.md) | 부분 조회·편집, 설정·작업 제어와 네이티브 실행 |
-| [서재와 프롬프트](docs/LIBRARY.md) · [항목 삭제](docs/DELETION.md) | 자료 분류·폴더·대표 이미지, 삭제 위치와 참조 보호 |
-| [Risu 원본 가져오기](docs/RISU-IMPORT.md) | `.charx` 카드·모듈·`.risup` 프롬프트 원본, CBS·Lua·정규식·CSS 실행과 지원 범위 |
-| [Risu 자료 내보내기](docs/RISU-EXPORT.md) | 저장한 카드·모듈·프롬프트를 CHARX·RISUM·RISUP으로 내보내기 |
-| [앱 설치·완료 알림](docs/PWA.md) | PWA 설치, 원고 캐시 없는 서비스 워커, 명시적 기기별 Web Push |
-| [작업실 사용량](docs/USAGE-REPORT.md) | 일별·모델별·용도별 호출·토큰·보고/추정 비용 |
-| [읽기 위치·책갈피](docs/READING-STATE.md) | 기기별 이어 읽기, 책갈피와 개인 백업 |
-| [원고 검색](docs/MANUSCRIPT-SEARCH.md) | 원문·번역·요청의 본문 검색과 장면 이동 |
-| [자동 백업](docs/AUTOMATIC-BACKUPS.md) | 한국 시간 일일 스냅샷, 검증·보관·다운로드 |
-| [문제 확인과 실행 상세](docs/DIAGNOSTICS.md) | 작업 상태·오류·남아 있는 실행 입력과 복구 동작 확인 |
-| [장면 삽화](docs/ILLUSTRATIONS.md) | Codex 이미지 생성·원격 ComfyUI로 응답별 삽화 생성, 자동 생성·재요청·개수 한도 |
-| [프로바이더](docs/PROVIDERS.md) | Vertex·Google AI Studio Gemini, Responses·Chat 호환, Anthropic 실시간·Batch, Vercel, Codex 프로바이더와 선택형 평가 도구·합성 시험 |
-| [개발과 검증](docs/DEVELOPMENT.md) | 검사·정리 명령, 격리 실행, 코드 구조와 증거 보관 |
-| [개인 서버 배포](docs/SELF-HOST.md) | Docker Compose, HTTPS, 로그인, 영구 데이터, 모델 API 키와 업데이트 |
-| [Oracle 릴리스](docs/ORACLE-RELEASE.md) | 검증·배포 명령, 데이터 보존과 실패 복구 |
-| [코드 지도](docs/CODE-MAP.md) | 기능별 현행 문서와 구현 진입점 |
+| [Usage](docs/USAGE.md) | Per-bot chats and folders, settings search, prompts and creative presets, translation, independent chat copies, backups |
+| [Outline workspace](docs/OUTLINE.md) | Hierarchical outlines, linked plans, writing selected units and reviewing the manuscript |
+| [Story guide](docs/STORY-GUIDE.md) | Optional writing reference, asking the helper about the original work, notes and corrections |
+| [Library and prompts](docs/LIBRARY.md) · [Deleting items](docs/DELETION.md) | Organizing resources, folders and cover images; where deletion happens and reference protection |
+| [Risu import](docs/RISU-IMPORT.md) | Original `.charx` cards, modules and `.risup` prompts; CBS, Lua, regex and CSS execution and supported scope |
+| [Risu export](docs/RISU-EXPORT.md) | Exporting saved cards, modules and prompts as CHARX, RISUM and RISUP |
+| [Reading position and bookmarks](docs/READING-STATE.md) | Per-device resume reading, bookmarks and personal backups |
+| [Manuscript search](docs/MANUSCRIPT-SEARCH.md) | Searching source text, translations and requests, and jumping to scenes |
+| [Scene illustrations](docs/ILLUSTRATIONS.md) | Per-response illustrations via Codex image generation or remote ComfyUI; automatic generation, retries and count limits |
+| [Helper tools](docs/HELPER-TOOLS.md) · [Codex connection](docs/CODEX.md) | Partial reads and edits, settings and task control, native execution |
+| [Workspace usage](docs/USAGE-REPORT.md) | Calls, tokens and reported/estimated costs by day, model and purpose |
+| [App install and notifications](docs/PWA.md) | PWA install, a service worker without manuscript caching, explicit per-device Web Push |
 
-## 데이터와 접속
+### Setup and operations
 
-- 기본 DB는 `.local/uimori.sqlite`예요. 빈 DB와 [현재 데이터 형식](docs/DATA-MIGRATIONS.md#현재-버전)만 열며 구형 DB는 변경 없이 거절해요. 옛 백업은 당시 앱 버전과 함께 보관해요. 테스트용 개발 DB를 초기화하려면 서버 종료 후 `npm run reset:dev`를 실행해요.
-- **설정 → 데이터 관리 → 내보내기와 복원**에서 SQLite 백업을 저장해요. 개별 자료와 채팅은 새 사본으로 가져올 수 있어요. [백업·격리 DB 사용법](docs/USAGE.md)
-- 기본은 `127.0.0.1` 로컬 모드이며 `UIMORI_ACCESS_TOKEN` 인증을 선택할 수 있어요. 개인 서버 모드는 `UIMORI_PUBLIC_ORIGIN`에 HTTPS 주소 하나를 지정하고 32자 이상 접속 토큰을 필수로 사용해요. `UIMORI_HOST`로 수신 주소를 정하며 외부 수신은 개인 서버 모드에서만 허용해요. [접속 조건](docs/SELF-HOST.md#프록시와-접속-조건)
-- 프로바이더 API 키와 JEV 키는 앱에서 입력하고 DB에 저장해요. 전체 SQLite 백업에는 키와 이미지가 포함돼요. 사용자 DB와 실행 산출물은 Git에서 제외해요.
+| Guide | Covers |
+| --- | --- |
+| [Providers](docs/PROVIDERS.md) | Vertex and Google AI Studio Gemini, Responses/Chat-compatible APIs, Anthropic realtime and Batch, Vercel, Codex providers, optional evaluation tools and synthetic tests |
+| [Self-hosting](docs/SELF-HOST.md) | Docker Compose, HTTPS, sign-in, persistent data, model API keys and updates |
+| [Automatic backups](docs/AUTOMATIC-BACKUPS.md) | Daily snapshots on Korea time, verification, retention and download |
+| [Diagnostics and run details](docs/DIAGNOSTICS.md) | Checking task status, errors, retained run inputs and recovery behavior |
+| [Oracle release](docs/ORACLE-RELEASE.md) | Verification and deployment commands, data preservation and failure recovery |
 
-## 라이선스
+### Development
 
-Uimori 프로젝트 소스는 [AGPL-3.0-only](LICENSE)로 제공해요. RPack을 포함한 제3자 구성 요소의 원본 조건·저작권은 [제3자 고지](THIRD_PARTY_NOTICES.md)를 확인해요. 사용자 자료·채팅·생성 결과의 권리는 각자의 이용 조건에 따르며 앱 소스 라이선스가 자동 적용되지 않아요. 서버로 제공하거나 수정본을 배포할 때는 [실행 빌드에 맞는 대응 소스 제공 안내](docs/SELF-HOST.md#라이선스와-대응-소스)를 따라요.
+| Guide | Covers |
+| --- | --- |
+| [Development and verification](docs/DEVELOPMENT.md) | Check and cleanup commands, isolated runs, code structure and evidence retention |
+| [Code map](docs/CODE-MAP.md) | Current documents and implementation entry points by feature |
+
+## Data and access
+
+**Database and backups**
+
+- The default database is `.local/uimori.sqlite`.
+- Uimori opens only empty databases and databases in the [current data format](docs/DATA-MIGRATIONS.md#현재-버전); older databases are rejected without changes. Keep old backups together with the app version that created them.
+- Save a SQLite backup from **Settings → Data management → Backup and restore**. Individual resources and chats can be imported as new copies. [Backups and isolated databases](docs/USAGE.md)
+- To reset a disposable development database, stop the server and run `npm run reset:dev`.
+
+**Access**
+
+- The default is local mode on `127.0.0.1`; you can enable authentication with `UIMORI_ACCESS_TOKEN`.
+- Personal server mode requires a single HTTPS address in `UIMORI_PUBLIC_ORIGIN` and an access token of at least 32 characters.
+- `UIMORI_HOST` sets the listen address. External listening is allowed only in personal server mode. [Access requirements](docs/SELF-HOST.md#프록시와-접속-조건)
+
+**API keys**
+
+- Provider API keys and the JEV key are entered in the app and stored in the database.
+- A full SQLite backup includes keys and images. User databases and run artifacts are excluded from Git.
+
+## License
+
+- Uimori's project source is provided under [AGPL-3.0-only](LICENSE).
+- See the [third-party notices](THIRD_PARTY_NOTICES.md) for the original terms and copyrights of third-party components, including RPack.
+- Rights to your own resources, chats and generated output follow their respective terms; the app's source license does not apply to them automatically.
+- When serving the app to others or distributing a modified version, follow the [corresponding-source guide for the running build](docs/SELF-HOST.md#라이선스와-대응-소스).

@@ -1,6 +1,6 @@
 # 개인 서버에서 사용하기
 
-[시작하기](../README.md) · [프로바이더](PROVIDERS.md)
+[시작하기](../README.ko.md) · [프로바이더](PROVIDERS.md)
 
 > 현재 개발 버전의 Linux/Docker 실행 안내예요. 기존 설치의 수동 업데이트와 복구 절차는 [업데이트 안내](UPDATES.md)를 확인해요.
 

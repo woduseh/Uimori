@@ -15,6 +15,7 @@ test('nested guides and verification runners report missing targets without trea
     for (const child of ['docs/releases', 'scripts', 'tests'])
       mkdirSync(join(directory, child), { recursive: true });
     writeFileSync(join(directory, 'README.md'), '[guide](docs/releases/nested.md#usage)');
+    writeFileSync(join(directory, 'README.ko.md'), '[안내](docs/ko-missing.md)');
     writeFileSync(join(directory, 'AGENTS.md'), '[email](mailto:hello@example.invalid)');
     writeFileSync(
       join(directory, 'docs/releases/nested.md'),
@@ -25,10 +26,12 @@ test('nested guides and verification runners report missing targets without trea
       "const files = ['tests/missing.test.ts'];"
     );
     assert.deepEqual(documentationErrors(directory), [
+      `${join(directory, 'README.ko.md')}: docs/ko-missing.md`,
       `${join(directory, 'docs/releases/nested.md')}: ../missing.md`,
       'verify-example.mjs: tests/missing.test.ts',
     ]);
     writeFileSync(join(directory, 'docs/missing.md'), '[root](../README.md)');
+    writeFileSync(join(directory, 'docs/ko-missing.md'), '[root](../README.ko.md)');
     writeFileSync(join(directory, 'tests/missing.test.ts'), '');
     assert.deepEqual(documentationErrors(directory), []);
   } finally {
