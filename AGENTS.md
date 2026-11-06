@@ -22,7 +22,7 @@ Use [DEVELOPMENT](docs/DEVELOPMENT.md) for verification rather than duplicating 
 
 Read only the references needed for the task:
 
-- [README](README.md): product overview and usage.
+- [README](README.md) and [README.ko](README.ko.md): product overview and usage in English and Korean. When changing one, update the other to match.
 - [CODE-MAP](docs/CODE-MAP.md): feature contracts and entry points.
 - [UI-PRINCIPLES](docs/UI-PRINCIPLES.md): read before changing app-owned UI, layout, visible copy, or loading/error/empty states. Start with its working checklist.
 - [THEME-AUTHORING](docs/THEME-AUTHORING.md): read when creating or changing themes and their public styling contract.

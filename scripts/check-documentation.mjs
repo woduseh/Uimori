@@ -14,7 +14,7 @@ function markdownFiles(directory) {
 export function documentationErrors(directory = root) {
   const broken = [];
   const files = [
-    ...['README.md', 'AGENTS.md'].map((file) => resolve(directory, file)),
+    ...['README.md', 'README.ko.md', 'AGENTS.md'].map((file) => resolve(directory, file)),
     ...markdownFiles(resolve(directory, 'docs')),
   ];
   for (const file of files) {

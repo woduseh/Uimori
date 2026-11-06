@@ -5,7 +5,9 @@ import { pathToFileURL } from 'node:url';
 export function docsOnly(files) {
   return (
     files.length > 0 &&
-    files.every((file) => /^(?:docs\/[^\r\n]+\.md|README\.md|AGENTS\.md|LICENSE)$/.test(file))
+    files.every((file) =>
+      /^(?:docs\/[^\r\n]+\.md|README(?:\.ko)?\.md|AGENTS\.md|LICENSE)$/.test(file)
+    )
   );
 }
 
