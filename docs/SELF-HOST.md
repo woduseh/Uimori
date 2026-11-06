@@ -72,7 +72,7 @@ docker compose --env-file .env.self-host exec proxy nginx -t
 docker compose --env-file .env.self-host restart proxy
 ```
 
-데이터를 유지하려면 `down`에 `-v`를 붙이지 마세요. Compose 프로젝트 이름은 기본 `uimori`로 고정돼요. 이미지 태그와 호환되는 `UIMORI_DATA_VOLUME`을 함께 지정해요. 현재 앱은 **빈 DB와 스키마 15만 열며 구형 DB는 변경 없이 거절**해요. 이전 릴리스에서 업데이트하기 전 [데이터 형식](DATA-MIGRATIONS.md#현재-버전)을 확인해요. 스키마 15의 기존 자료는 같은 volume에서 유지하고, 의도적으로 처음부터 시작할 때만 별도의 빈 volume을 지정해요. 업데이트 전 백업과 실행 이미지 정보를 함께 보관해요. 앱 안의 Update 버튼과 무인 자동 업데이트는 제공하지 않아요. [수동 업데이트와 복구](UPDATES.md#manual-release-update)에서 앱과 DB를 함께 되돌리는 절차를 확인해요. Oracle 운영에는 [전용 배포 절차](ORACLE-RELEASE.md)를 사용해요.
+데이터를 유지하려면 `down`에 `-v`를 붙이지 마세요. Compose 프로젝트 이름은 기본 `uimori`로 고정돼요. 이미지 태그와 호환되는 `UIMORI_DATA_VOLUME`을 함께 지정해요. 현재 앱은 **빈 DB와 스키마 15만 열며 구형 DB는 변경 없이 거절**해요. 이전 릴리스에서 업데이트하기 전 [데이터 형식](DATA-MIGRATIONS.md#현재-버전)을 확인해요. 스키마 15의 기존 자료는 같은 volume에서 유지하고, 의도적으로 처음부터 시작할 때만 별도의 빈 volume을 지정해요. 업데이트 전 백업과 실행 이미지 정보를 함께 보관해요. 앱 안의 Update 버튼과 무인 자동 업데이트는 제공하지 않아요. [수동 업데이트와 복구](UPDATES.md#수동-릴리스-업데이트)에서 앱과 DB를 함께 되돌리는 절차를 확인해요. Oracle 운영에는 [전용 배포 절차](ORACLE-RELEASE.md)를 사용해요.
 
 프로그램과 Docker 서비스가 정상적으로 재시작되면 `restart: unless-stopped`가 앱·프록시·shell runner를 다시 시작해요. 서버 중지로 끊긴 모델 작업은 자동 재호출하지 않아요. 브라우저만 닫았다면 서버의 생성 작업은 계속 진행되고, 다시 로그인해 저장된 진행 상태와 결과를 볼 수 있어요.
 
@@ -92,7 +92,7 @@ curl -sS -X POST https://story.example.com/api/maintenance \
 
 `UIMORI_MAINTENANCE=1`로 시작하면 **후보 검증 부팅**이에요. 현재 DB 형식의 호환성을 검사하고 읽기를 제공하되 작업 복구·worker를 시작하지 않으며, 이 모드는 API로 열 수 없어요(`409 MAINTENANCE_BOOT`). 빈 DB 초기화 등은 가능하므로 읽기 전용 모드가 아니며, 반드시 복사한 data로 검사해요.
 
-앱의 **설정 → 데이터 관리**에서 SQLite 백업을 다운로드해 별도로 보관할 수 있어요. 복원할 백업의 형식이 사용할 앱에서 지원되는지 [데이터 형식](DATA-MIGRATIONS.md#현재-버전)을 확인해요. 구버전 앱으로 돌아갈 때는 갱신된 DB가 아니라 그 앱에 맞는 업데이트 전 백업을 사용해요. 백업·컨테이너 전환은 [수동 업데이트와 복구](UPDATES.md#manual-release-update)를 봐요. 실행 중 DB 파일 하나만 복사하면 WAL의 변경분을 놓칠 수 있어요.
+앱의 **설정 → 데이터 관리**에서 SQLite 백업을 다운로드해 별도로 보관할 수 있어요. 복원할 백업의 형식이 사용할 앱에서 지원되는지 [데이터 형식](DATA-MIGRATIONS.md#현재-버전)을 확인해요. 구버전 앱으로 돌아갈 때는 갱신된 DB가 아니라 그 앱에 맞는 업데이트 전 백업을 사용해요. 백업·컨테이너 전환은 [수동 업데이트와 복구](UPDATES.md#수동-릴리스-업데이트)를 봐요. 실행 중 DB 파일 하나만 복사하면 WAL의 변경분을 놓칠 수 있어요.
 
 ## 프록시와 접속 조건
 

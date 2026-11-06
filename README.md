@@ -65,7 +65,7 @@ The [self-hosting guide](docs/SELF-HOST.md) covers Docker Compose and an Nginx H
 
 - **Settings → About** shows the server's app version and build identifier. The app version is the release number and is separate from the DB schema number.
 - There are no update notifications, in-app installs or unattended automatic updates.
-- Update an existing installation with the [manual update](docs/UPDATES.md#manual-release-update) procedure. The running Oracle installation uses its [dedicated deployment guide](docs/ORACLE-RELEASE.md).
+- Update an existing installation with the [manual update](docs/UPDATES.md#수동-릴리스-업데이트) procedure. The running Oracle installation uses its [dedicated deployment guide](docs/ORACLE-RELEASE.md).
 - Creating a tag or GitHub Release does not update any server by itself.
 
 ## Documentation (Korean)

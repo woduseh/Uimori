@@ -62,7 +62,7 @@
 
 - **설정 → 앱 정보**에서 현재 서버의 앱 버전과 빌드 식별자를 확인해요. 앱 버전은 릴리스 번호이며 DB 스키마 번호와는 별개예요.
 - 업데이트 알림, 앱 내 설치, 무인 자동 업데이트는 제공하지 않아요.
-- 기존 설치는 [수동 업데이트](docs/UPDATES.md#manual-release-update) 절차를 따라요. 운영 중인 Oracle 설치는 [전용 배포 안내](docs/ORACLE-RELEASE.md)를 사용해요.
+- 기존 설치는 [수동 업데이트](docs/UPDATES.md#수동-릴리스-업데이트) 절차를 따라요. 운영 중인 Oracle 설치는 [전용 배포 안내](docs/ORACLE-RELEASE.md)를 사용해요.
 - 태그나 GitHub Release를 만드는 것만으로는 서버가 업데이트되지 않아요.
 
 ## 문서

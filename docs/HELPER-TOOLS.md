@@ -1,4 +1,44 @@
-# Helper data and app tools
+# 도우미 도구
+
+Uimori의 도우미는 대화와 서재에서 창작과 설정을 보조하는 에이전트예요. 사용자의 질문에 답하는 것에 그치지 않고, 내부 앱 도구와 격리된 데이터 작업 공간을 활용해 필요한 자료를 부분 조회·검색하고, 장면이나 설정을 안전하게 수정할 수 있어요.
+
+## 도우미가 할 수 있는 일
+
+- **원고와 서재 자료 부분 조회·검색**: 봇·페르소나·모듈·프롬프트 프리셋의 전체 본문을 무리하게 불러오지 않고 필요한 필드와 구간만 검색하고 읽어요(`data.search`, `data.read`). 개요 트리(`outline.read`)와 지식 베이스(`knowledge.search`)도 페이지 단위로 나누어 조회해요.
+- **읽기 전용 SQL 집계**: `db.query`로 봇 목록, 대화 기록, 장면 번호, 모델 사용량과 도우미 실행 통계를 직접 조회·집계할 수 있어요.
+- **저장된 장면 편집**: 현재 채팅의 저장된 장면에서 문구를 검색(`scene.search`)하고, 변경 전 텍스트와 일치 횟수를 검증해 단일 또는 여러 장면을 안전하게 수정해요(`scene.patch`, `scene.patchMany`). 원문과 번역문을 동시에 갱신하거나 이전 원문 버전으로 복원(`scene.restore`)할 수도 있어요.
+- **서재 자료 및 프리셋 관리**: 봇·페르소나·모듈의 속성이나 로어북, 프롬프트 템플릿 블록을 수정 번호 기반으로 변경하고(`resource.patch`), 새 사본을 복제(`resource.clone`)하거나 채팅 전용 로어 재정의(`chat.lore`)를 관리해요.
+- **설정·진단과 작업 제어**: 모델 역할, 채팅별 모델·프롬프트 고정이나 호출 한도를 확인·변경하고(`settings.read/update`), 테마 목록을 확인해요(`theme.list`). 실행 중이거나 완료된 작업의 상태를 진단하고(`task.inspect`), 취소(`task.cancel`)하거나 재시도(`task.retry`)하며, 날짜별 사용량을 집계해요(`usage.read`).
+- **실시간 웹 검색과 모델 단가 갱신**: 지원 프로바이더(Responses, Anthropic) 및 Codex 환경에서 실시간 웹 검색으로 최신 정보를 찾고 출처 링크를 제공해요. 공식 출처(HTTPS URL 및 확인일)가 확인된 모델의 토큰 단가도 안전하게 갱신해요(`model.pricing.update`).
+- **콘텐츠 이미지와 삽화 도구**: 서재에 저장된 콘텐츠 이미지와 CHARX 에셋을 조회하고(`image.read`), 외형 프로필(`illustration.profiles.*`)과 삽화 컷 생성·재렌더링·배치(`illustration.cut.*`, `illustration.generate`)를 제어해요.
+- **Linux 데이터 작업 공간 (`data.exec`)**: Linux runner가 켜져 있으면 격리된 컨테이너에서 bash, ripgrep, jq, Python을 사용해 대규모 검색과 가공을 수행하고 CLI(`uimori call`, `uimori apply`)로 앱 도구를 다뤄요.
+
+## 안전장치와 확인
+
+- **명시적 수정 요청 시에만 저장**: 사용자가 검토나 추천, 제안을 요청한 경우에는 저장하지 않고 검토 내용만 안내해요. 실제 수정을 명시적으로 요청했을 때만 저장 도구를 실행해요.
+- **수정 번호(Revision) 및 해시 기반 충돌 방지**: 자료나 장면을 수정할 때 항상 변경 전 수정 번호와 텍스트 해시를 검증해요. 다른 화면이나 외부에서 먼저 내용이 바뀌었다면 저장을 차단해 덮어쓰기 사고를 막아요.
+- **미저장 편집기 초안 보호**: 기기 편집기에 아직 저장되지 않은 초안(dirty draft)이 열려 있는 자료는 도우미가 수정할 수 없어요. 사용자가 편집기에서 먼저 저장해야 도우미를 통한 수정이 가능해요.
+- **읽기 전용 조회와 격리된 작업 공간**: SQL 조회와 정규식 검색은 읽기 전용 연결로, 짧은 시간 제한 안에서만 실행돼요. Linux runner에는 네트워크, 앱 데이터베이스, 앱 환경 변수, 자격 증명이 연결되지 않고 전용 작업 공간 볼륨만 공유해요.
+- **영수증 기반 추적과 불확실한 재실행 방지**: 도우미의 저장은 트랜잭션 내에서 고유 영수증(`receiptId`)을 남겨요. 응답이 중간에 끊겨도 완료된 저장은 기록에 남으며, 불확실한 외부 쓰기나 실패한 작업을 자동으로 재실행하지 않아요.
+- **작업 중 지침 추가와 직전 수정 되돌리기**: 작업 진행 중에는 **현재 작업에 추가**로 새 지침을 보낼 수 있고, 자료가 잘못 수정되었을 때는 **마지막 자료 수정 되돌리기**로 직전 저장본을 복원할 수 있어요.
+
+## 관련 문서
+
+- [전체 기능과 사용 안내](USAGE.md)
+- [자료 편집과 저장 동작](EDITING.md)
+- [서재 안내](LIBRARY.md)
+- [작업 진단과 실행 내역](DIAGNOSTICS.md)
+- [사용량 보고와 단가 안내](USAGE-REPORT.md)
+- [도우미 첨부 파일](HELPER-ATTACHMENTS.md)
+- [삽화와 외형 프로필](ILLUSTRATIONS.md)
+- [원작 참고와 메모](STORY-GUIDE.md)
+- [도구 상세 계약](TOOL-CONTRACTS.md)
+
+---
+
+## 기술 명세 (English)
+
+아래 내용은 에이전트와 기여자를 위한 도우미 도구의 상세 기술 명세 및 계약이에요.
 
 The helper exposes three Uimori tools when the Linux runner is configured: `data.exec`, `app.tools`, and `app.call`. `data.search`, `data.read`, and `db.query` are discoverable app operations rather than separate provider tools. They remain available through `app.call` and the `uimori call` CLI. The CLI supports `uimori tools --query appearance`, `uimori tools resource.patch`, and simple `uimori call resource.read --kind content --id <id>` flags; pass nested objects through JSON or `--input`. Tool search uses exact operation names or ranked English purpose queries, with scope as a weak relevance hint rather than an availability restriction. Setups without `UIMORI_SHELL_ROOT` and explicit outline reviews expose only the two gateways; review discovery and dispatch remain read-only. Use focused app operations for targeted tasks and `data.exec` when searching or combining workspace data is useful. Existing app operations include resource saves, chat options, lore overrides, notes, outlines, context summaries, and reading previously saved independent scenes. Codex uses the same compact native dynamic tools within one thread and turn per task; other providers retain their own tool transport.
 
