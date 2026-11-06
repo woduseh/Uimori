@@ -1,50 +1,79 @@
-# Linux/Docker updates
+# Linux/Docker 업데이트
 
-Source and Compose installations use manual updates. The existing Oracle installation uses its [dedicated deployment runner](ORACLE-RELEASE.md), which owns maintenance, backups, candidate verification and recovery. For installation, see [SELF-HOST](SELF-HOST.md).
+소스 설치와 Docker Compose 설치 환경의 수동 업데이트 안내예요. 기존 Oracle 설치 환경은 유지보수, 백업, 후보 검증, 복구를 전담하는 [전용 배포 실행기](ORACLE-RELEASE.md)를 사용해요. 새로 설치하는 방법은 [개인 서버 설치 안내](SELF-HOST.md)를 참고하세요.
 
-## Manual release update
+## 수동 릴리스 업데이트
 
-Use this path for source installations; see [SELF-HOST](SELF-HOST.md#저장과-운영) for manual Compose operations. Keep the existing Oracle installation on its [dedicated deployment runner](ORACLE-RELEASE.md).
+Compose의 구체적인 수동 운영 명령은 [저장과 운영](SELF-HOST.md#저장과-운영)을 참고하세요.
 
-Read the target release notes and [data compatibility](DATA-MIGRATIONS.md#현재-버전) before updating. Finish active generation and edits. Download the app's consistent SQLite snapshot, record the running app/image version, and preserve external Codex login files separately. Stop the server before switching code or restoring data. Do not use `reset:dev` or `docker compose down -v` to update an existing workspace.
+재현 가능한 소스 설치를 위해 공개된 릴리스 태그(예: `v0.12.17`)를 사용해요. 소스 코드를 업데이트하거나 GitHub 릴리스를 발행하는 것만으로는 이미 실행 중인 서버가 자동으로 업데이트되지 않아요.
 
-**v0.12.16 keeps SQLite schema 15**, used by releases since v0.4.0. A compatible schema-15 workspace can update in place after the normal backup. There is no direct conversion from older databases, including schema 12 from v0.3.1. Keep those files with their matching application version; do not edit the schema number or substitute an empty database to bypass a compatibility error.
+스키마 15를 쓰는 작업실은 백업 후 그대로 업데이트할 수 있어요. v0.4.0 이후 릴리스가 스키마 15를 사용해요(현재 v0.12.17도 스키마 15예요). v0.3.1의 스키마 12를 비롯한 이전 데이터베이스에서 직접 변환하는 경로는 없어요. 이전 DB 파일은 해당 버전의 애플리케이션과 함께 보관해야 하며, 호환성 오류를 우회하려고 스키마 번호를 임의로 수정하거나 빈 DB로 대체하면 안 돼요.
 
-This patch adds ranked helper discovery, on-demand shell exports, compact tool reports and deduplicated provider continuations. Existing shell scripts must export saved resource/chat bodies before reading them. Internal provider continuations now use v2; finish active generation and resumable Batch runs before updating because v1 continuation blobs are not accepted. Existing illustrations, conversations and stored resources remain intact; no data migration is required. See the [v0.12.16 notes](releases/v0.12.16.md). When updating from before v0.12.6, an already open page may need to be reloaded before selecting a Vertex credential file again; see the [v0.12.6 notes](releases/v0.12.6.md).
+1. **업데이트 전 준비**:
+   - 대상 릴리스의 릴리스 노트와 [데이터 호환성](DATA-MIGRATIONS.md#현재-버전)을 먼저 읽어요.
+   - 진행 중인 본문 생성과 편집 작업을 모두 마쳐요.
+   - 앱에서 일관된 SQLite 스냅샷(백업)을 다운로드해 안전하게 보관해요.
+   - 현재 실행 중인 앱 버전 또는 컨테이너 이미지 버전을 기록해 둬요.
+   - 외부 Codex 로그인 파일은 SQLite 백업에 포함되지 않으니 따로 보관해요. 위치는 `UIMORI_DB` 경로 뒤에 `.codex`를 붙인 디렉터리이고, Compose에서는 `/data/uimori.sqlite.codex`예요. 자세한 내용은 [Codex 연결 안내](CODEX.md)를 참고해요.
+   - 코드를 교체하거나 데이터를 복원하기 전에 기존 서버를 반드시 정지해요.
+   - 기존 작업실을 업데이트할 때는 `reset:dev`나 `docker compose down -v`를 실행하지 마세요. 기존 데이터가 지워질 수 있어요.
 
-When updating from before v0.11.1, startup preserves an independent old prompt body as a library preset before changing the current prompt to a preset reference. New requests use the selected source and explicit option overrides. Keep the pre-update backup for rollback, and review the [v0.11.1 notes](releases/v0.11.1.md) for retired APIs and evaluation settings. Existing helper conversation personas, manuscripts and historical execution records remain readable.
+2. **소스 설치**:
+   - 기존 서버를 정지한 상태에서, 깨끗한 소스 체크아웃 디렉터리에서 대상 태그로 전환하고 실행해요:
+     ```sh
+     git fetch origin --tags
+     git switch --detach <대상-태그>
+     npm ci
+     npm run dev
+     ```
+     (예: `<대상-태그>` 자리에 `v0.12.17` 입력)
+   - `npm start`만으로는 기존 설치를 다시 빌드하지 않아요. 업데이트 후에는 `npm run dev`로 빌드와 시작을 함께 해요.
+   - Git이 없는 소스 압축 파일(archive)인 경우, 별도 디렉터리에 압축을 풀고 이전 설치를 보존한 상태에서 이전 서버를 정지한 뒤 동일한 명시적 `UIMORI_DB` 경로로 새 버전을 시작해요. 기타 설치 환경변수와 외부 런타임 설정도 그대로 유지해요.
 
-Finish queued or running evaluation Batch work under its original runtime before updating. Both retained evaluation modes now require a valid final submission, and the retired `source-bound` mode is disabled for new execution. The new runtime does not emulate the previous evaluation protocol.
+3. **Docker Compose 설치**:
+   - 기존 환경 설정(`.env.self-host`)과 데이터·백업·도우미 작업 공간 named volume을 그대로 유지해요. 데이터 볼륨에는 앱의 외부 Codex 로그인 파일도 들어 있어요.
+   - 일관된 백업을 저장하고 진행 중인 작업을 마친 뒤, 이미지를 교체하기 전에 `app`과 `shell-runner` 서비스를 정지해요.
+   - 두 서비스를 동일한 새 이미지로 다시 생성하고 시작해요.
+   - 새 릴리스가 해당 데이터베이스 형식을 지원할 때만 기존 `data` 볼륨을 재사용해요.
+   - 수동 Compose 명령은 자동으로 백업을 만들거나 실패 시 롤백하지 않으므로 주의해요.
 
-Use the published `v0.12.16` tag for a reproducible source installation. Updating the source or publishing a GitHub release never updates an already running server.
+4. **업데이트 후 확인**:
+   - 앱의 헬스체크 상태가 정상인지 확인해요.
+   - **설정 → 앱 정보**에서 예상한 앱 버전이 맞게 표시되는지 확인해요.
+   - 기존 채팅을 하나 열고 저장한 뒤 다시 열기가 정상 작동하는지 확인해요.
+   - 이 확인 단계는 직접 생성을 요청하지 않는 한 모델을 호출하지 않아요.
 
-From a clean source checkout, with the existing server stopped:
+5. **복구 (롤백)**:
+   - 복구하려면 새 서버를 즉시 정지하고, 원인 조사를 위해 현재 데이터를 그대로 보관해요.
+   - 업데이트 직전의 **이전 애플리케이션/이미지와 사전 DB 스냅샷**을 함께 복원해요.
+   - 별도의 복원 DB 경로/볼륨에서 시작하거나, 정지된 DB와 부속 파일(`-wal`, `-shm`)을 다른 곳으로 치워둔 뒤 교체해야 해요. 스냅샷 파일과 무관한 WAL 파일을 섞어서 실행하면 안 돼요.
+   - DB 다운그레이드는 지원하지 않아요.
+   - 스냅샷 저장 이후에 저장된 작업 내용은 해당 복구 시점에 포함되지 않아요. 자세한 내용은 [백업 범위와 복구](DATA-MIGRATIONS.md#복구와-자료-교환)를 참고해요.
 
-```sh
-git fetch origin --tags
-git switch --detach v0.12.16
-npm ci
-npm run dev
-```
+### Oracle 배포 참고
 
-A source archive without Git can instead be extracted into a separate directory; keep the previous installation and start the new one with the same explicit `UIMORI_DB` path only after stopping the previous server. Preserve any other installation environment and external runtime configuration. `npm start` alone does not rebuild an old installation. Confirm **Settings → App information** shows the expected app version, then open an existing chat and verify saving and reopening it. These steps do not call a model unless you request generation.
+Oracle 배포 실행기의 `--source-ref`는 현재 릴리스 태그가 아니라 브랜치 이름을 받아요. 태그가 지정된 릴리스를 배포할 때는 계속 진행되는 `main` 브랜치가 태그와 여전히 일치한다고 가정하지 말고, 해당 태그의 커밋을 정확히 가리키는 검증된 릴리스 브랜치에서 배포하세요. 배포 전에 동일한 커밋의 소스 SHA와 GitHub Quality CI 통과 여부를 확인해요. 태그 이름을 브랜치 인자로 전달하면 안 돼요. 태그 생성이나 GitHub 릴리스 발행만으로는 실행 중인 서비스가 배포되지 않아요.
 
-For Compose, keep the existing environment settings and named data, backup and helper-workspace volumes. The data volume also contains the app's external Codex login files. After saving a consistent backup and finishing active work, stop the app and shell-runner services before replacing their image, then recreate both with the same image. Reuse the data volume only when the release supports that database format. Check the app health and the same save/reopen flow before continuing work. Manual Compose commands do not automatically create a backup or roll back a failed update.
+## 버전별 주의사항
 
-To recover, stop the new server, retain its data for inspection, and restore the **previous application/image together with its pre-update DB snapshot**. Start from a separate restored DB path/volume, or move the stopped DB and its `-wal`/`-shm` sidecars aside before replacing it; never combine a snapshot with unrelated WAL files. DB downgrade is not supported. Work saved after the snapshot is not included in that recovery point. See [backup scope](DATA-MIGRATIONS.md#복구와-자료-교환).
+- **v0.12.16 이전 버전에서 업데이트** ([v0.12.16 릴리스 노트](releases/v0.12.16.md)): 목적 중심의 도우미 도구 검색, 온디맨드 셸 본문 내보내기(`uimori export`), 간결한 도구 보고서, 프로바이더 이어가기 상태 중복 제거가 추가되었어요. 기존 셸 스크립트가 저장된 리소스/채팅 본문 파일을 직접 읽었다면 사전에 `uimori export`로 본문을 내보내야 해요. 내부 프로바이더 이어가기 형식은 v2로 변경되었으며 v1 이어가기 블롭은 지원하지 않으므로, 진행 중인 생성과 재개 대기 Batch 작업을 완료한 뒤 업데이트하세요. 기존 삽화, 대화, 저장 리소스는 유지되며 데이터 마이그레이션은 필요하지 않아요.
+- **v0.12.6 이전 버전에서 업데이트** ([v0.12.6 릴리스 노트](releases/v0.12.6.md)): Vertex 서비스 계정 키 파일을 다시 선택하기 전에 이미 열려 있는 브라우저 페이지를 새로고침해야 할 수 있어요.
+- **v0.11.1 이전 버전에서 업데이트** ([v0.11.1 릴리스 노트](releases/v0.11.1.md)): 서버 시작 시 기존의 독립 프롬프트 본문을 서재 프리셋으로 자동 보존한 뒤 현재 프롬프트를 프리셋 참조 방식으로 전환해요. 새로운 요청은 선택한 소스와 명시적 옵션 덮어쓰기를 사용해요. 롤백에 대비해 업데이트 전 백업을 보관하고, 폐지된 API와 평가 설정은 릴리스 노트를 확인하세요. 기존 도우미 대화 페르소나, 원고, 과거 실행 기록은 그대로 읽을 수 있어요.
+- **평가 Batch (v0.11.1)** ([v0.11.1 릴리스 노트](releases/v0.11.1.md)): 대기 중이거나 실행 중인 평가 Batch 작업은 업데이트 전에 원래 런타임에서 완료해야 해요. 유지된 두 가지 평가 모드는 모두 유효한 최종 제출 도구 호출이 있어야 하며, 폐지된 `source-bound` 모드는 새 실행에서 비활성화돼요. 새 런타임은 이전 평가 프로토콜을 에뮬레이트하지 않아요.
 
-The Oracle runner's `--source-ref` currently accepts a branch, not a release tag. For a tagged release, deploy from a verified release branch pointing at the tag's exact commit, rather than assuming the advancing `main` still matches the tag. Verify the source SHA and GitHub Quality CI for that same commit before deployment. Do not pass a tag as a branch. Tag creation and GitHub release publication never deploy the running service.
+## 운영자 참고
 
-## Maintenance mode
+### 유지보수 모드
 
-`GET /api/maintenance` returns the current status, epoch, and `activeWork`. `POST /api/maintenance` accepts `{status:"closed"|"open", reason?:string}`. The setting persists across restarts and is controlled by the operator API.
+`GET /api/maintenance`는 현재 상태(`status`), `epoch`, `activeWork`를 반환해요. `POST /api/maintenance`는 `{status:"closed"|"open", reason?:string}` 형식을 받아요. 이 설정은 서버를 재시작해도 유지되며 운영자 API로 제어해요.
 
-Closing maintenance blocks new writes and worker claims. In-progress work can finish and save its results; reads, login, diagnostics, cancellation, and skipping remain available. Rejected writes return `503 MAINTENANCE_CLOSED`, and the browser retains its drafts.
+유지보수 모드를 닫으면(`closed`) 새로운 쓰기와 worker의 작업 할당을 차단해요. 이미 진행 중인 작업은 계속 실행되어 결과를 저장할 수 있고, 읽기, 로그인, 진단, 취소, 건너뛰기는 계속 이용할 수 있어요. 거절된 쓰기 요청은 `503 MAINTENANCE_CLOSED`를 반환하며, 브라우저는 작성 중인 초안을 보존해요.
 
-Work queued while admission is closed resumes when it reopens. A recovered Anthropic Batch also waits for reopening before contacting its provider. Deferred automatic titles use the first eligible completed response; a title request already started is never automatically replayed. Other uncertain interrupted work keeps its existing explicit-retry rules.
+진입이 닫힌 동안 대기 큐에 들어간 작업은 유지보수 모드가 다시 열리면(`open`) 재개돼요. 복구된 Anthropic Batch도 프로바이더에 요청하기 전에 다시 열리기를 기다려요. 지연된 자동 제목 생성은 적격한 첫 번째 완료 응답을 사용하며, 이미 시작된 제목 생성 요청은 자동으로 재실행하지 않아요. 그 밖의 결과가 불명확한 중단 작업은 기존의 명시적 재시도 규칙을 유지해요.
 
-`activeWork` includes an already started scheduled or manual backup until it finishes, even after its HTTP request has returned. An operator can therefore wait for the snapshot before stopping the app.
+`activeWork`에는 HTTP 요청이 이미 반환된 후라도 완전히 끝날 때까지 실행 중인 예약 백업이나 수동 백업이 포함돼요. 따라서 운영자는 앱을 정지하기 전에 스냅샷 작업이 끝날 때까지 대기할 수 있어요.
 
-`UIMORI_MAINTENANCE=1` starts the app with DB admission and reads, but without task recovery or workers. It is not a read-only SQLite open; validate a copy, not the only original DB. This boot mode cannot be reopened through the API. The implementation is in [maintenance.ts](../server/maintenance.ts) and [app.ts](../server/app.ts).
+`UIMORI_MAINTENANCE=1`로 시작하면 DB 진입과 읽기만 허용하고 작업 복구나 worker는 시작하지 않아요. 이것은 읽기 전용 SQLite 열기가 아니므로 원본 DB 하나만으로 검증하지 말고 반드시 복사본으로 검증하세요. 이 부팅 모드는 API를 통해 열 수 없어요. 구현 코드는 [maintenance.ts](../server/maintenance.ts)와 [app.ts](../server/app.ts)에 있어요.
 
-The Oracle runner uses these admission and boot boundaries to wait for active work, verify a candidate database copy and reopen writes after deployment. [Maintenance tests](../tests/maintenance.test.ts) cover the app gate; the [Oracle release guide](ORACLE-RELEASE.md) describes the separate image, backup and recovery checks.
+Oracle 실행기는 이러한 진입 제어와 부팅 경계를 사용해 진행 중인 작업을 기다리고, 후보 데이터베이스 복사본을 검증한 뒤 배포 후 쓰기를 다시 열어요. 앱 진입 관리는 [유지보수 모드 테스트](../tests/maintenance.test.ts)에서 다루며, 별도의 이미지·백업·복구 점검은 [Oracle 배포 안내](ORACLE-RELEASE.md)에 설명되어 있어요.
