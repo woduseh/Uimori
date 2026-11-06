@@ -110,7 +110,7 @@ Gemini용 `vertex-gemini-v1` 연결은 Google Cloud의 기업용 엔드포인트
   - 기본 컨텍스트 한도는 요청 전체 64,000토큰, 질문별 32,000토큰이에요.
   - 이 설정을 켜면 둘 다 최대 262,000토큰까지 허용해요. 로어의 별도 입력 상한과 본문에 전달할 로어 예산은 유지돼요.
   - 이미지 토큰은 응답 사용량에 포함되지만 로컬 텍스트 추정에는 포함되지 않으므로 제공사의 입력 초과 응답이 최종 기준이에요. 긴 입력과 이미지는 토큰 사용량과 응답 지연을 증가시킬 수 있어요.
-- **참고 문서**: 지원 모델과 형식 제약은 [TypeSafe 모델 문서](https://docs.typesafe.ai/models)와 [TypeSafe 이미지 문서](https://docs.typesafe.ai/images)를 따릅니다. 환경변수 fallback이나 별도 `.jev-credentials` 파일은 일반 실행에서 사용하지 않아요.
+- **참고 문서**: 지원 모델과 형식 제약은 [TypeSafe 모델 문서](https://docs.typesafe.ai/models)와 [TypeSafe 이미지 문서](https://docs.typesafe.ai/images)를 따라요. 환경변수 fallback이나 별도 `.jev-credentials` 파일은 일반 실행에서 사용하지 않아요.
 
 ### Anthropic 실시간 및 Batch 실행
 
@@ -169,8 +169,8 @@ Google AI Studio 및 Google Cloud Vertex AI 직접 연결 모델은 **고급 →
 - **차단 수위 지정**: 높음만 차단, 중간 이상 차단, 낮음 이상 차단 중에서 선택해요.
 
 > [!NOTE]
-> 이 설정은 제공사의 조정 가능한 필터 매개변수를 제어하는 것이며, 모델 자체에 내장된 원천적인 보호 기능까지 해제하는 것은 아니에요. 상세 규격은 [Gemini generateContent REST](https://ai.google.dev/api/generate-content#SafetySetting) 및 [Google Cloud 안전 필터 가이드](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/configure-safety-filters)를 따릅니다.
-> 현재 연결은 generateContent 계열의 `safetySettings`, `category`, `threshold` 형식을 사용하며 Interactions 형식과 섞지 않아요. Jailbreak 차단 응답은 거절로 처리해요. 평가 방식 `method`는 생략해 기존 API 기본 동작을 유지하고, 폐기된 Civic integrity 범주는 추가하지 않아요.
+> 이 설정은 제공사의 조정 가능한 필터 매개변수를 제어하는 것이며, 모델 자체에 내장된 원천적인 보호 기능까지 해제하는 것은 아니에요. 상세 규격은 [Gemini generateContent REST](https://ai.google.dev/api/generate-content#SafetySetting) 및 [Google Cloud 안전 필터 가이드](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/configure-safety-filters)를 따라요.
+> 현재 연결은 generateContent 계열의 `safetySettings`, `category`, `threshold` 형식을 사용하며 Interactions 형식과 섞지 않아요. 탈옥 시도는 `HARM_CATEGORY_JAILBREAK`로 전달하고 Jailbreak 차단 응답은 거절로 처리해요. 모델 ID로 설정을 숨기거나 자동 치환하지 않으며 실제 사용 가능 여부는 제공사의 응답을 따라요. 평가 방식 `method`는 생략해 기존 API 기본 동작을 유지하고, 폐기된 Civic integrity 범주는 추가하지 않아요.
 
 ---
 
@@ -216,8 +216,8 @@ Google AI Studio 및 Google Cloud Vertex AI 직접 연결 모델은 **고급 →
 ### 캐시 기준점 진단과 도구 규약 (`cacheBoundaries`)
 - OpenAI Responses 및 Anthropic 실행 요청 기록에는 명시적 캐시 기준점 진단 정보인 `cacheBoundaries`가 포함돼요.
 - 각 항목은 기준점 위치, 직전 입력과 도구·생성 설정을 포함한 해시, 진단 JSON 바이트 수를 담아요. 로어 뒤 내용이 바뀌어도 앞 기준점 해시는 유지되지만 도구 schema·순서·기준점 앞 사전 도구 이력이 바뀌면 달라져요.
-- 기존 `stablePrefixSha256`은 공통 계약·도구만의 해시로 유지하며 전체 프롬프트의 캐시 재사용 근거로 쓰지 않아요. 이 진단은 실시간·Batch 모두 로컬 요청 기록에만 추가되고 프로바이더 본문에는 들어가지 않아요.
-- Anthropic Messages는 `anthropic-version: 2023-06-01` 헤더를 사용해요. Uimori 도구 이름은 프로바이더 호환용 별칭으로 전송되며, 저장된 도구 이름·인수·결과와 호출 ID는 유지해요. 현재 도구 목록에서 제외한 사전 평가 이력은 원래의 유효한 이름으로 남겨요. 도구 정의 규격은 [공식 도구 정의 계약](https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools)을 따릅니다.
+- 기존 `stablePrefixSha256`은 공통 계약·도구만의 해시로 유지하며 전체 프롬프트의 캐시 재사용 근거로 쓰지 않아요. 암묵적 캐시만 있는 요청에는 기준점을 추정해서 추가하지 않아요. 이 진단은 실시간·Batch 모두 로컬 요청 기록에만 추가되고 프로바이더 본문에는 들어가지 않아요.
+- Anthropic Messages는 `anthropic-version: 2023-06-01` 헤더를 사용해요. Uimori 도구 이름은 프로바이더 호환용 별칭으로 전송되며, 저장된 도구 이름·인수·결과와 호출 ID는 유지해요. 현재 도구 목록에서 제외한 사전 평가 이력은 원래의 유효한 이름으로 남겨요. 도구 정의 규격은 [공식 도구 정의 계약](https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools)을 따라요.
 
 ### 로어 포함 기록 메타데이터
 - 본문·번역 요청을 전송할 때 호스트가 기존 요청 JSON에 작은 메타데이터로 로어 포함 기록을 저장해요.
