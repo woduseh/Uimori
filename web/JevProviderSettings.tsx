@@ -450,7 +450,7 @@ export function JevProviderSettings({
                 disabled={!status.configured || busy || !!apiKey || conflict}
                 onClick={() => void startTest()}
               >
-                {operation || polling
+                {operation === 'test' || polling
                   ? t('providers.m373')
                   : unresolved || testError
                     ? t('providers.m374')

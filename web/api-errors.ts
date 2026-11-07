@@ -185,6 +185,12 @@ export function apiErrorDiagnostic(
   method: string
 ): ApiErrorDiagnostic {
   if (typeof error === 'string') {
+    if (
+      status === 409 &&
+      method === 'POST' &&
+      error === '도우미 대화가 변경됐어요. 최신 내용을 확인한 뒤 다시 복사해 주세요.'
+    )
+      return { code: 'HELPER_CONVERSATION_COPY_CHANGED', message: error };
     const missing =
       status === 409
         ? /^MANUSCRIPT_TRANSLATION_MISSING:((?:0|[1-9]\d{0,9})(?:,(?:0|[1-9]\d{0,9})){0,19}):([1-9]\d{0,9})$/u.exec(
@@ -272,6 +278,7 @@ export function apiErrorDisplay(error: unknown, status: number, method: string):
     registerMessage(diagnostic.message, key, values);
     return t(key, values);
   };
+  if (code === 'HELPER_CONVERSATION_COPY_CHANGED') return display('helperProjects.copyChanged');
   const limits: Record<string, number> = {
     INPUT_TRANSLATION_TOO_LONG: REQUEST_TEXT_MAX_CHARS,
     PACKAGE_START_TEXT_TOO_LONG: SOURCE_TEXT_MAX_CHARS,

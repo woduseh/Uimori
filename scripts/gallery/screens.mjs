@@ -142,8 +142,8 @@ export const screens = [
     ready: { testid: 'source-text' },
     steps: [
       { click: { testid: 'source-request' } },
-      { menu: '요청과 문맥 메뉴', which: 'first' },
-      { visible: { role: 'button', name: '문맥용 요청 수정', within: inMenu } },
+      { menu: '요청 및 컨텍스트 메뉴', which: 'first' },
+      { visible: { role: 'button', name: '컨텍스트용 요청 수정', within: inMenu } },
     ],
     viewports: ['mobile'],
   },
@@ -181,13 +181,13 @@ export const screens = [
   },
   {
     id: 'composer-compaction',
-    title: '수동 컨텍스트 압축',
+    title: '컨텍스트 압축',
     url: chat,
     enter: [
       { click: { label: '입력창 더보기' } },
-      { click: { role: 'button', name: '수동 컨텍스트 압축' } },
+      { click: { role: 'button', name: '컨텍스트 압축' } },
     ],
-    ready: { role: 'dialog', name: '수동 컨텍스트 압축' },
+    ready: { role: 'dialog', name: '컨텍스트 압축' },
   },
   {
     id: 'composer-request-preview-empty',
@@ -239,9 +239,9 @@ export const screens = [
   },
   {
     id: 'outline',
-    title: '계층형 구성',
+    title: '계층형 플롯',
     url: chat,
-    enter: [{ menu: 'chat' }, { click: { role: 'button', name: '계층형 구성', within: inMenu } }],
+    enter: [{ menu: 'chat' }, { click: { role: 'button', name: '계층형 플롯', within: inMenu } }],
     ready: { css: 'section.outline-panel' },
   },
   {

@@ -1005,6 +1005,10 @@ input[type="checkbox"] {
 .scene-header-lead {
   padding-right: 0;
 }
+.scene-header > .turn-activity > summary:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .scene-header-lead {
   flex: 1 1 160px;
   display: flex;
@@ -1158,6 +1162,10 @@ input[type="checkbox"] {
 }
 .translation-placeholder > p {
   margin-bottom: 12px;
+}
+.translation-placeholder > p:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .translation-placeholder.is-loading {
   padding: 0;
@@ -1321,7 +1329,7 @@ input[type="checkbox"] {
   border: 0;
   resize: none;
   min-height: var(--control-h);
-  max-height: 180px;
+  max-height: min(180px, 35dvh);
   border-radius: 0;
   background: transparent;
   font-size: var(--font-body);
@@ -1598,6 +1606,9 @@ input[type="checkbox"] {
   overflow-wrap: anywhere;
   margin: 0;
 }
+.dialog-header h2:lang(ko) {
+  word-break: keep-all;
+}
 .dialog-body {
   min-height: 0;
   overflow: auto;
@@ -1610,6 +1621,9 @@ input[type="checkbox"] {
 }
 .confirmation-dialog > .dialog-body > p {
   margin: 0 0 8px;
+}
+.confirmation-dialog > .dialog-body > p:lang(ko) {
+  word-break: keep-all;
 }
 .navigation-dialog {
   background: var(--nav);

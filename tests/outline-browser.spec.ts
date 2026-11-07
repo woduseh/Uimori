@@ -220,6 +220,44 @@ for (const width of WIDTHS) {
     ).toBe(true);
   });
 
+  test(`OUTUI07 ${width} saved outline conflict preserves the edit draft`, async ({
+    page,
+    request,
+  }) => {
+    const chat = await seed(request, width);
+    const panel = await open(page, chat.id, width);
+    await choose(page, '1화 · 열람권의 대가', width);
+    const initial: OutlineDetail = await (
+      await request.get(`/api/chats/${chat.id}/outline`)
+    ).json();
+    const episode = initial.nodes.find((node) => node.title === '1화 · 열람권의 대가')!;
+    await panel
+      .locator('.outline-intent-card')
+      .getByRole('button', { name: '편집', exact: true })
+      .click();
+    const input = panel.getByRole('textbox', { name: '이번 회차의 사건과 목적', exact: true });
+    await input.fill('이 창에서 작성한 플롯 초안');
+    const updated = await request.post(`/api/chats/${chat.id}/outline`, {
+      data: {
+        idempotencyKey: crypto.randomUUID(),
+        operations: [
+          {
+            op: 'update',
+            id: episode.id,
+            expectedRevision: episode.revision,
+            intent: '다른 창의 변경',
+          },
+        ],
+      },
+    });
+    expect(updated.ok(), await updated.text()).toBe(true);
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    const conflict = panel.locator('.outline-conflict');
+    await expect(conflict).toContainText('플롯이 바뀌었어요.');
+    await expect(input).toHaveValue('이 창에서 작성한 플롯 초안');
+    await expect(conflict.getByRole('button', { name: '최신 내용 불러오기' })).toBeVisible();
+  });
+
   if (width === 390)
     test(`OUTUI03 ${width} lost save acknowledgement replays once after reload and preserves unsaved content`, async ({
       page,

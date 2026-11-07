@@ -59,7 +59,7 @@ export const messages = {
   },
   'chatmanage.confirmDelete': {
     ko: '선택한 장면 {count}개 삭제',
-    en: 'Delete {count} selected scenes',
+    en: '{count, plural, one {Delete # selected scene} other {Delete # selected scenes}}',
     ja: '選択した{count}件のシーンを削除',
     zh: '删除所选的{count}个场景',
   },

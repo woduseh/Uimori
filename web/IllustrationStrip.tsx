@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as uiMessage, messageRef } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { readingScrollport } from './theme-body-scroll.js';
 import { cutsFor, type Cut } from './illustration-progress.js';
@@ -332,7 +332,7 @@ function IllustrationTask({ job, refresh, onError }: Actions & { job: Illustrati
       {!active && (
         <DeleteButton
           path={`/illustrations/${job.id}`}
-          title={t('visuals.m118')}
+          title={messageRef(uiMessage('visuals.m118'))}
           label={t('visuals.m119')}
           description={t('visuals.m120')}
           iconOnly
@@ -527,7 +527,11 @@ function IllustrationCard({
               <div className="action-menu-group">
                 <DeleteButton
                   path={`/illustrations/${job.id}`}
-                  title={job.target?.focus || picture?.images[0]?.caption || t('visuals.m131')}
+                  title={
+                    job.target?.focus ||
+                    picture?.images[0]?.caption ||
+                    messageRef(uiMessage('visuals.m131'))
+                  }
                   label={t('visuals.m132')}
                   description={t('visuals.m133')}
                   disabled={busy}

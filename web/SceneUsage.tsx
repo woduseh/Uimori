@@ -100,7 +100,7 @@ export function SceneUsage({
               {receipt.summary
                 ? receipt.summary.status === 'included'
                   ? t('reader.confirmedInclusionOfValueSummarizedScenes', {
-                      v0: formatNumber(receipt.summary.coveredSources),
+                      v0: receipt.summary.coveredSources,
                     })
                   : receipt.summary.status === 'absent'
                     ? t('reader.notUsed')
@@ -150,7 +150,7 @@ export function SceneUsage({
                   record: recordedDetail.lore
                     ? recordedDetail.lore.entries.length
                       ? t('reader.valueRecords', {
-                          v0: formatNumber(recordedDetail.lore.entries.length),
+                          v0: recordedDetail.lore.entries.length,
                         })
                       : t('reader.noRecordOfTextInclusion')
                     : t('reader.noRecord'),

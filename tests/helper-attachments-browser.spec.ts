@@ -308,3 +308,134 @@ test('HATT03 uncertain admission reuses exact uploads and preserves the newer te
   await expect(draftImages(page)).toHaveCount(1);
   await expect(draftFiles(page)).toContainText('처음 첨부.txt');
 });
+
+test('HATT04 long attachment errors keep their text scrollable and dismiss button clickable', async ({
+  page,
+  request,
+}) => {
+  const { chat } = await setup(request);
+  await page.setViewportSize({ width: 320, height: 568 });
+  const panel = await open(page, chat);
+  for (const height of [568, 915]) {
+    await page.setViewportSize({ width: 320, height });
+    const name = `${'긴첨부파일이름'.repeat(18)}${height}.unknown`;
+    await picker(page).setInputFiles({
+      name,
+      mimeType: 'application/x-unrecognized',
+      buffer: Buffer.from('test'),
+    });
+    const notice = panel.locator('.helper-notice');
+    await expect(notice).toContainText(name);
+    const scroll = await notice.locator('.notice-banner-message').evaluate((message) => {
+      message.scrollTop = message.scrollHeight;
+      const walker = document.createTreeWalker(message, NodeFilter.SHOW_TEXT);
+      let lastText: Text | null = null;
+      while (walker.nextNode()) {
+        if (walker.currentNode.textContent?.trim()) lastText = walker.currentNode as Text;
+      }
+      if (!lastText) throw new Error('Notice message has no text');
+      const range = document.createRange();
+      const end = lastText.data.trimEnd().length;
+      range.setStart(lastText, end - 1);
+      range.setEnd(lastText, end);
+      const text = range.getBoundingClientRect();
+      const area = message.getBoundingClientRect();
+      const hit = document.elementFromPoint(
+        (area.left + area.right) / 2,
+        (area.top + area.bottom) / 2
+      );
+      return {
+        offset: message.scrollTop,
+        endVisible: text.top >= area.top - 1 && text.bottom <= area.bottom + 1,
+        areaVisible: area.top >= 0 && area.bottom <= window.innerHeight,
+        areaHit: !!hit && (hit === message || message.contains(hit)),
+      };
+    });
+    expect(scroll.offset).toBeGreaterThan(0);
+    expect(scroll.endVisible && scroll.areaVisible && scroll.areaHit).toBe(true);
+    const close = notice.getByRole('button', { name: '닫기', exact: true });
+    const point = await close.evaluate((button) => {
+      const rect = button.getBoundingClientRect();
+      const container = button.closest('.helper-notice')!.getBoundingClientRect();
+      const x = (rect.left + rect.right) / 2;
+      const y = (rect.top + rect.bottom) / 2;
+      const hit = document.elementFromPoint(x, y);
+      return {
+        x,
+        y,
+        visible:
+          rect.top >= container.top &&
+          rect.bottom <= container.bottom &&
+          rect.bottom <= innerHeight,
+        hit: !!hit && (hit === button || button.contains(hit)),
+      };
+    });
+    expect(point.visible && point.hit).toBe(true);
+    await page.mouse.click(point.x, point.y);
+    await expect(notice).toHaveCount(0);
+  }
+});
+
+test('HATT05 oversized attachment explains the limit before a long filename', async ({
+  page,
+  request,
+}) => {
+  const { chat } = await setup(request);
+  const connection = await request.post('/api/connections', {
+    data: {
+      title: `첨부 크기 ${randomUUID()}`,
+      protocol: 'anthropic-messages-v1',
+      endpoint: 'http://127.0.0.1:9/v1/messages',
+      enabled: true,
+    },
+  });
+  expect(connection.ok(), await connection.text()).toBe(true);
+  const model = await request.post('/api/model-presets', {
+    data: {
+      title: `첨부 크기 모델 ${randomUUID()}`,
+      connectionId: (await connection.json()).id,
+      modelId: 'synthetic-size-model',
+      maxOutputTokens: 1000,
+      temperature: null,
+    },
+  });
+  expect(model.ok(), await model.text()).toBe(true);
+  await selectHelper(request, (await model.json()).id);
+  await page.setViewportSize({ width: 320, height: 568 });
+  const panel = await open(page, chat);
+  const name = `${'긴첨부파일이름'.repeat(14)}.txt`;
+  await panel.locator('.helper-request-composer').evaluate((composer, filename) => {
+    const data = new DataTransfer();
+    data.items.add(new File([new Uint8Array(32_000_001)], filename, { type: 'text/plain' }));
+    composer.dispatchEvent(
+      new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true })
+    );
+  }, name);
+  const notice = panel.locator('.helper-notice');
+  await expect(notice).toContainText(name);
+  const phrase = '파일 크기는 32MB 이하여야 해요.';
+  await expect(notice).toContainText(phrase);
+  const visible = await notice.locator('.notice-banner-message').evaluate(
+    (message, value) => {
+      const walker = document.createTreeWalker(message, NodeFilter.SHOW_TEXT);
+      const text = walker.nextNode() as Text | null;
+      if (!text || text.data.indexOf(value.phrase) !== 0) return null;
+      const filenameStart = text.data.indexOf(value.filename);
+      if (filenameStart < 0) return null;
+      const range = document.createRange();
+      const area = message.getBoundingClientRect();
+      const isVisible = (start: number, end: number) => {
+        range.setStart(text, start);
+        range.setEnd(text, end);
+        const rect = range.getBoundingClientRect();
+        return rect.top >= area.top - 1 && rect.bottom <= area.bottom + 1;
+      };
+      return {
+        reason: isVisible(0, value.phrase.length),
+        filename: isVisible(filenameStart, filenameStart + 1),
+      };
+    },
+    { phrase, filename: name }
+  );
+  expect(visible).toEqual({ reason: true, filename: true });
+});

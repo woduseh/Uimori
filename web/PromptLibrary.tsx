@@ -405,8 +405,11 @@ export function PromptLibrary({
             error:
               error instanceof ApiError
                 ? error.displayMessage
-                : messageRef((error as Error).message),
-          })
+                : (error as Error).message ===
+                    uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder')
+                  ? ''
+                  : messageRef((error as Error).message),
+          }).trimEnd()
         );
       }
       try {
@@ -455,8 +458,11 @@ export function PromptLibrary({
             error:
               error instanceof ApiError
                 ? error.displayMessage
-                : messageRef((error as Error).message),
-          });
+                : (error as Error).message ===
+                    uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder')
+                  ? ''
+                  : messageRef((error as Error).message),
+          }).trimEnd();
         const warning = renderWarning();
         registerMessage(warning, renderWarning);
         onError(warning);

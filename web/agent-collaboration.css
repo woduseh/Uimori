@@ -125,6 +125,10 @@
   padding: 8px 12px;
   background: var(--surface-raised);
 }
+.ac-validation:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .ac-agent {
   min-width: 0;
   border: 0;

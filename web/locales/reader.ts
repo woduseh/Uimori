@@ -601,7 +601,7 @@ export const messages = {
   },
   'reader.valueImagesDisplayed': {
     ko: '이미지 {v0}개 표시',
-    en: '{v0} images displayed',
+    en: '{v0, plural, one {# image displayed} other {# images displayed}}',
     ja: '{v0}枚の画像を表示',
     zh: '显示{v0}张图片',
   },
@@ -984,10 +984,10 @@ export const messages = {
     zh: '对话摘要',
   },
   'reader.confirmedInclusionOfValueSummarizedScenes': {
-    ko: '장면 {v0}개 요약 포함 확인',
-    en: 'Confirmed inclusion of {v0} summarized scenes',
-    ja: '{v0}シーンの要約を含むことを確認',
-    zh: '已确认包含{v0}个场景的摘要',
+    ko: '장면 {v0, number}개 요약 포함 확인',
+    en: '{v0, plural, one {Confirmed inclusion of # summarized scene} other {Confirmed inclusion of # summarized scenes}}',
+    ja: '{v0, number}シーンの要約を含むことを確認',
+    zh: '已确认包含{v0, number}个场景的摘要',
   },
   'reader.notUsed': {
     ko: '사용하지 않음',
@@ -1056,10 +1056,10 @@ export const messages = {
     zh: '包含的设定资料，',
   },
   'reader.valueRecords': {
-    ko: '기록 {v0}개',
-    en: '{v0} records',
-    ja: '{v0}件の記録',
-    zh: '{v0}条记录',
+    ko: '기록 {v0, number}개',
+    en: '{v0, plural, one {# record} other {# records}}',
+    ja: '{v0, number}件の記録',
+    zh: '{v0, number}条记录',
   },
   'reader.noRecordOfTextInclusion': {
     ko: '본문 포함 기록 없음',

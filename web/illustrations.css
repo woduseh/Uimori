@@ -339,6 +339,10 @@
   margin: 0;
   line-height: 1.6;
 }
+.illustration-state p:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .illustration-state .illustration-actions button,
 .illustration-task .illustration-actions button {
   min-height: 36px;
@@ -385,6 +389,11 @@
 .illustration-usage {
   margin: 6px 0;
   font-variant-numeric: tabular-nums;
+}
+.illustration-usage:lang(ko),
+.illustration-job .inspector > small:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .illustration-placement-note {
   margin: 0;

@@ -24,6 +24,9 @@
 .context-content > p {
   margin: 0;
 }
+.context-panel .loading-state-inline [role="status"] > p:lang(ko) {
+  word-break: keep-all;
+}
 .context-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -56,6 +59,11 @@
 }
 .context-conflict p {
   line-height: 1.6;
+}
+.context-conflict > p:lang(ko),
+.context-notes > [role="group"] > p:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .context-notes blockquote {
   white-space: pre-wrap;

@@ -623,6 +623,31 @@
     gap: 10px;
     padding-block: 16px;
   }
+  .nt-item:not(.is-divider) .nt-row-main {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr) 16px;
+    grid-template-rows: auto auto;
+    row-gap: 0;
+  }
+  .nt-item:not(.is-divider) .nt-type-icon,
+  .nt-item:not(.is-divider) .nt-chevron {
+    grid-row: 1 / 3;
+  }
+  .nt-item:not(.is-divider) .nt-item-copy {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .nt-item:not(.is-divider) .nt-kind {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .nt-item:not(.is-divider) .nt-chevron {
+    grid-column: 3;
+  }
   .nt-item-copy strong {
     font-size: var(--font-body);
   }

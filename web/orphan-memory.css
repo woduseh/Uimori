@@ -30,3 +30,6 @@
   border: var(--hairline) solid var(--border);
   border-radius: var(--radius-control);
 }
+.orphan-memory-review > p:lang(ko) {
+  word-break: keep-all;
+}

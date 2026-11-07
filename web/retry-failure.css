@@ -11,6 +11,9 @@
   overflow: visible;
   font-size: var(--font-body);
 }
+.turn-failure.chat-retry-failure > p:lang(ko) {
+  word-break: keep-all;
+}
 .chat-retry-failure .turn-failure-actions {
   align-items: center;
 }

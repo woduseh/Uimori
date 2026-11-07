@@ -171,6 +171,11 @@
 .asset-grid small {
   display: block;
 }
+.asset-grid figcaption > details > small:lang(ko),
+.package-presentation-issue:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .asset-grid small.ui-meta-row {
   display: flex;
 }
@@ -276,6 +281,10 @@
   font-size: var(--font-body);
   line-height: 1.8;
   margin-bottom: 8px;
+}
+.job > .error:lang(ko),
+.job-summary > .error:lang(ko) {
+  word-break: keep-all;
 }
 .job > small {
   display: block;

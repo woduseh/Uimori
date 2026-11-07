@@ -73,10 +73,10 @@ export const journeys = [
       },
       {
         id: 'fork',
-        title: '채팅 ⋯ → 채팅 포크',
+        title: '채팅 ⋯ → 여기까지 새 채팅으로 분기',
         actions: [
           { menu: 'chat' },
-          { click: { role: 'button', name: '채팅 포크', within: inMenu } },
+          { click: { role: 'button', name: '새 채팅으로 분기', within: inMenu } },
         ],
         ready: { testid: 'source-text', nth: 1 },
         urlParam: 'chat',

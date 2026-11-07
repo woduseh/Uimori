@@ -112,6 +112,35 @@ async function expectUnchanged(
   expect(after.attempts ?? []).toHaveLength(0);
 }
 
+test('CSUI mobile settings selector follows language and keyboard section changes', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await prepare(page, request, 'Synthetic settings selector');
+  await openSettings(page);
+  await selectChatSettingsSection(page, '작품 및 원작 참고');
+  const selector = page.locator('.settings-dialog > .dialog-header > .settings-section-select');
+  const label = selector.locator(':scope > button > span');
+  await expect(label).toHaveText('작품 및 원작 참고');
+  await page.evaluate(() => {
+    localStorage.setItem('uimori:ui-language', 'en');
+    window.dispatchEvent(
+      new StorageEvent('storage', { key: 'uimori:ui-language', newValue: 'en' })
+    );
+  });
+  await expect(selector).toHaveAccessibleName('Choose settings section');
+  await expect(label).toHaveText('Work & canon reference');
+  await expect(selector.locator('option:checked')).toHaveAccessibleName('Work & canon reference');
+  await selector.focus();
+  await page.keyboard.press('Space');
+  await expect.poll(() => selector.evaluate((element) => element.matches(':open'))).toBe(true);
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Enter');
+  await expect(selector).toHaveValue('prompts');
+  await expect(label).toHaveText('Generation settings');
+});
+
 test('SETTINGSLOCATION mobile opens the remembered available section and explicit destinations win', async ({
   page,
   request,

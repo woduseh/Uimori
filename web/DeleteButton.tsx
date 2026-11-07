@@ -1,4 +1,4 @@
-import { t, translateMessage, useI18n } from './i18n.js';
+import { t, translateMessage, useI18n, type MessageReference } from './i18n.js';
 import { useRef, useState } from 'react';
 import { CloseIcon, DeleteIcon } from './ui-icons.js';
 import { api } from './api.js';
@@ -9,7 +9,7 @@ import './deletion.css';
 type Props = {
   path: string;
   revision?: number;
-  title: string;
+  title: string | MessageReference;
   label?: string;
   description?: string;
   disabled?: boolean;
@@ -36,7 +36,7 @@ export function DeleteButton({
   useI18n();
   const [target, setTarget] = useState<{
     path: string;
-    title: string;
+    title: string | MessageReference;
     body: Record<string, unknown>;
   } | null>(null);
   const [busy, setBusy] = useState(false),

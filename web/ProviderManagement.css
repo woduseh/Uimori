@@ -129,9 +129,19 @@
 .provider-draft-note p {
   margin: 0;
 }
+p.provider-draft-note:lang(ko),
+.provider-draft-note button:lang(ko),
+.provider-stop-sequences-body > p.error:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .provider-definition {
   font-size: var(--font-small);
   line-height: 1.7;
+}
+.provider-definition li:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .provider-definition dl {
   display: grid;

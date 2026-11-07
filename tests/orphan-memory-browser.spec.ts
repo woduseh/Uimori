@@ -4,6 +4,7 @@ import { test, expect } from '@playwright/test';
 import type { AuthorNote } from '../core/notes.js';
 import type { OrphanMemoryDetail } from '../core/orphan-memory.js';
 import { postFixtureChat } from './fixtures/chat.js';
+import { createReadingChat } from './fixtures/personal-workspace.js';
 import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { openChatSettings, selectChatSettingsSection } from './ui-navigation.js';
 
@@ -108,6 +109,7 @@ test('ORPHAN manual memory review preserves source records and AI review only pr
   if (!(await disclosure.evaluate((element) => (element as HTMLDetailsElement).open)))
     await disclosure.locator(':scope > summary').click();
   await first.getByRole('button', { name: '현재 장면에 다시 연결', exact: true }).click();
+  await expect(first).toContainText('장면이 없어 채팅 전체에 연결해 다음 요청부터 사용해요.');
   await first.getByRole('button', { name: '취소', exact: true }).click();
   expect((await memory()).entries).toHaveLength(2);
   await first.getByRole('button', { name: '현재 장면에 다시 연결', exact: true }).click();
@@ -120,6 +122,7 @@ test('ORPHAN manual memory review preserves source records and AI review only pr
   ]);
   const other = panel.locator('li').filter({ hasText: second.text });
   await other.getByRole('button', { name: '사용 중지', exact: true }).click();
+  await expect(other).toContainText('사용을 중지하고 목록에서 제외해요.');
   await other.getByRole('button', { name: '사용 중지', exact: true }).click();
   await expect.poll(async () => (await memory()).entries.length).toBe(0);
   await expect(panel).toHaveCount(0);
@@ -142,4 +145,48 @@ test('ORPHAN manual memory review preserves source records and AI review only pr
   } finally {
     saved.close();
   }
+});
+
+test('ORPHAN02 reconnects a saved memory to the current scene', async ({ page, request }) => {
+  const { chat, detail } = await createReadingChat(request, 'ORPHAN 합성 현재 장면', 1);
+  const currentSource = detail.sources.at(-1);
+  expect(currentSource).toBeDefined();
+  const note: AuthorNote = {
+    id: randomUUID(),
+    chatId: chat.id,
+    atRevision: 'deleted-synthetic-source',
+    atHash: 'a'.repeat(64),
+    text: '다시 연결할 합성 메모',
+    declaration: { author: '합성 작성자', text: '다시 연결할 합성 메모' },
+    kind: 'author-note',
+  };
+  expect(process.env.UIMORI_DB).toBeTruthy();
+  const db = new DatabaseSync(process.env.UIMORI_DB!);
+  try {
+    db.prepare('INSERT INTO author_notes VALUES(?,?,?,NULL,NULL)').run(
+      note.id,
+      chat.id,
+      JSON.stringify(note)
+    );
+    db.prepare('INSERT OR REPLACE INTO author_note_heads VALUES(?,1)').run(chat.id);
+  } finally {
+    db.close();
+  }
+  await page.goto(`/?chat=${chat.id}`);
+  await openChatSettings(page);
+  await selectChatSettingsSection(page, '기억과 메모');
+  const panel = page.getByTestId('orphan-memory');
+  await panel.locator('.orphan-memory-disclosure > summary').click();
+  const memory = panel.locator('li').filter({ hasText: note.text });
+  await memory.getByRole('button', { name: '현재 장면에 다시 연결', exact: true }).click();
+  await expect(memory).toContainText('현재 장면에 연결해 다음 요청부터 사용해요.');
+  await memory.getByRole('button', { name: '현재 장면에 다시 연결', exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`/api/chats/${chat.id}/orphan-memory`)).json()).entries.length
+    )
+    .toBe(0);
+  const story = await (await request.get(`/api/chats/${chat.id}/story`)).json();
+  expect(story.notes).toMatchObject([{ text: note.text, atRevision: currentSource!.id }]);
 });

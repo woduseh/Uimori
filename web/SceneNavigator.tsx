@@ -332,72 +332,70 @@ export function SceneNavigator({
       )}
     </Dialog>
   );
-  if (compact)
-    return (
-      <>
-        {titleEditor}
-        {dialog}
-      </>
-    );
   return (
     <>
-      <nav className="scene-navigator" aria-label={t('reader.sceneNavigation')}>
-        <button
-          type="button"
-          ref={railListOpener}
-          className="scene-list-toggle"
-          aria-label={t('reader.openSceneList')}
-          title={t('reader.openSceneList')}
-          onClick={openList}
-        >
-          <ListIcon size={18} />
-          <span>
-            {active.opening
-              ? t('reader.openingMessage2')
-              : `${active.number} / ${entries.filter((entry) => !entry.opening).length}`}
-          </span>
-        </button>
-        <div
-          className="scene-marks"
-          aria-label={
-            entries.length > capacity
-              ? t('reader.partialSceneScaleSelectAnySceneFromTheList')
-              : t('reader.sceneScale')
-          }
-        >
-          {[...marks]
-            .sort((a, b) => a - b)
-            .map((i) => {
-              const entry = entries[i];
-              const label = entry.opening
-                ? entry.label
-                : t('reader.sceneValueValue', { v0: formatNumber(entry.number), v1: entry.label });
-              return (
-                <button
-                  type="button"
-                  key={entry.id}
-                  className="scene-mark"
-                  aria-label={label}
-                  aria-current={entry.id === active.id ? 'location' : undefined}
-                  onClick={() => select(entry.id)}
-                >
-                  <span className="scene-tick" />
-                  <span className="scene-preview" aria-hidden="true">
-                    {label}
-                  </span>
-                </button>
-              );
-            })}
-        </div>
-        <IconButton
-          className="scene-latest"
-          label={t('reader.goToTheBottomOfTheText')}
-          icon={DownIcon}
-          size={18}
-          disabled={!canGoLatest}
-          onClick={onLatest}
-        />
-      </nav>
+      {!compact && (
+        <nav className="scene-navigator" aria-label={t('reader.sceneNavigation')}>
+          <button
+            type="button"
+            ref={railListOpener}
+            className="scene-list-toggle"
+            aria-label={t('reader.openSceneList')}
+            title={t('reader.openSceneList')}
+            onClick={openList}
+          >
+            <ListIcon size={18} />
+            <span>
+              {active.opening
+                ? t('reader.openingMessage2')
+                : `${active.number} / ${entries.filter((entry) => !entry.opening).length}`}
+            </span>
+          </button>
+          <div
+            className="scene-marks"
+            aria-label={
+              entries.length > capacity
+                ? t('reader.partialSceneScaleSelectAnySceneFromTheList')
+                : t('reader.sceneScale')
+            }
+          >
+            {[...marks]
+              .sort((a, b) => a - b)
+              .map((i) => {
+                const entry = entries[i];
+                const label = entry.opening
+                  ? entry.label
+                  : t('reader.sceneValueValue', {
+                      v0: formatNumber(entry.number),
+                      v1: entry.label,
+                    });
+                return (
+                  <button
+                    type="button"
+                    key={entry.id}
+                    className="scene-mark"
+                    aria-label={label}
+                    aria-current={entry.id === active.id ? 'location' : undefined}
+                    onClick={() => select(entry.id)}
+                  >
+                    <span className="scene-tick" />
+                    <span className="scene-preview" aria-hidden="true">
+                      {label}
+                    </span>
+                  </button>
+                );
+              })}
+          </div>
+          <IconButton
+            className="scene-latest"
+            label={t('reader.goToTheBottomOfTheText')}
+            icon={DownIcon}
+            size={18}
+            disabled={!canGoLatest}
+            onClick={onLatest}
+          />
+        </nav>
+      )}
       {titleEditor}
       {dialog}
     </>

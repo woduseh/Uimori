@@ -80,6 +80,32 @@ function observe(page: Page) {
   return { errors, generations, legacyReads };
 }
 
+test('PMUI mobile settings selector follows language and keyboard section changes', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await settings(page);
+  const selector = page.locator('.settings-dialog > .dialog-header > .settings-section-select');
+  const label = selector.locator(':scope > button > span');
+  await expect(label).toHaveText('프로바이더와 모델');
+  await page.evaluate(() => {
+    localStorage.setItem('uimori:ui-language', 'en');
+    window.dispatchEvent(
+      new StorageEvent('storage', { key: 'uimori:ui-language', newValue: 'en' })
+    );
+  });
+  await expect(selector).toHaveAccessibleName('Choose settings section');
+  await expect(label).toHaveText('Providers and models');
+  await expect(selector.locator('option:checked')).toHaveAccessibleName('Providers and models');
+  await selector.focus();
+  await page.keyboard.press('Space');
+  await expect.poll(() => selector.evaluate((element) => element.matches(':open'))).toBe(true);
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Enter');
+  await expect(selector).toHaveValue('prompts');
+  await expect(label).toHaveText('Current prompt');
+});
+
 test('PMUI01 mobile template registration selects the connection, reports catalog failure honestly and saves manual options', async ({
   page,
   request,

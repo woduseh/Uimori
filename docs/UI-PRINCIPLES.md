@@ -75,7 +75,7 @@ Refreshing a loaded result keeps the matching result visible with a small progre
 
 Primary form saves show a short visible action (normally 저장), the full accessible action name, and a spinner with pending text inside the same button during that save. New-resource registration uses 등록. The accessible name includes the visible action in each UI language. Keep its size stable and prevent duplicate submission. Other operations such as reload, backup, or connection tests must not appear as saving. Existing narrow icon toolbars remain icon-only and use the same pending icon without adding a second action row.
 
-Non-modal notices follow their purpose. Save and other completed-action feedback uses the shared bottom notice for four seconds without moving content or taking focus; it can remain visible after its settings panel closes. Unsaved drafts, conflicts, uncertain admission and failures stay near their affected operation until resolved or explicitly dismissed. Persistent reading and maintenance banners share message and action spacing, while execution progress keeps its compact activity bar. Maintenance details are available through a disclosure.
+Non-modal notices follow their purpose. Save and other completed-action feedback uses the shared four-second notice above the composer or full-screen helper input, falling back to the viewport edge in dialogs and when space is limited, without moving content or taking focus; it can remain visible after its settings panel closes. Unsaved drafts, conflicts, uncertain admission and failures stay near their affected operation until resolved or explicitly dismissed. Persistent reading and maintenance banners share message and action spacing, while execution progress keeps its compact activity bar. Maintenance details are available through a disclosure.
 
 Settings failures and warnings use `NoticeBanner`, with retry or review actions kept beside the message. Library saves use the same completion notice as settings; classification or list-refresh failures after a successful save remain in a separate persistent banner. Changes that still need the parent resource to be saved remain near the edited field. Important change and deletion confirmations use the shared confirmation dialog and name the action on the confirm button.
 
@@ -118,6 +118,8 @@ Group mixed-purpose action menus by task, with common editing actions first, sup
 Use the same terms in visible copy, accessible names and user documentation.
 
 Write guidance in plain Korean 해요체 and use short action labels for controls. Name the affected object, observable result and next action; remove decorative encouragement and explanations that repeat a nearby label or button. Keep familiar domain terms such as 봇, 페르소나 and 로어, but explain internal execution terms in ordinary controls. Technical identifiers can remain in diagnostics where they help interpretation.
+
+Keep Korean app notices and confirmation text together by word where possible, while allowing long names and addresses to wrap. Authored text retains its own typography.
 
 Write for an experienced individual using a personal workspace: concise, neutral labels without chatter or invented terminology. Do not use middle dots as text separators. Arrange related metadata as separate aligned items, and use ordinary punctuation only where a single string is required. Familiar secondary actions may use Lucide icons with accessible names; keep primary actions and unfamiliar destinations named. Do not alter authored text or old saved names to enforce copy conventions.
 

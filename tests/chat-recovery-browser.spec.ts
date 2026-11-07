@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { Content } from '../core/product.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { openChatSettings, selectChatSettingsSection } from './ui-navigation.js';
+import { visualReview } from './fixtures/visual-review.js';
 import {
   DESKTOP_WIDTH,
   DESKTOP_HEIGHT,
@@ -152,6 +153,25 @@ for (const viewport of [
       const endpoint = `/api/chats/${chat.id}/variables`;
       let dialog = await open(page, chat.id);
       await selectChatSettingsSection(page, '카드 변수');
+      if (visualReview) {
+        await page.route(`**${endpoint}`, async (route) => {
+          const response = await route.fetch();
+          const body = await response.json();
+          await route.fulfill({ response, json: { ...body, pending: true } });
+        });
+        await dialog.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+        const pending = dialog
+          .getByRole('status')
+          .filter({ hasText: '다른 작업에서 변수를 사용 중이에요.' });
+        await expect(pending).toBeVisible();
+        await pending.scrollIntoViewIfNeeded();
+        await page.screenshot({
+          path: info.outputPath(`chat-variables-pending-${viewport.width}.png`),
+        });
+        await page.unroute(`**${endpoint}`);
+        await dialog.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+        await expect(pending).toHaveCount(0);
+      }
       const value = (key: string) => dialog.getByLabel(`${key} 문자열 값`, { exact: true });
       await expect(value('trust')).toHaveValue('40');
       await value('trust').fill('');
@@ -195,6 +215,12 @@ for (const viewport of [
       await expect(
         dialog.getByText('변수 저장본이나 현재 원문이 바뀌었어요.', { exact: true })
       ).toBeVisible();
+      if (visualReview) {
+        await dialog.getByText('변수 저장본이나 현재 원문이 바뀌었어요.').scrollIntoViewIfNeeded();
+        await page.screenshot({
+          path: info.outputPath(`chat-variables-conflict-${viewport.width}.png`),
+        });
+      }
       await expect(value('trust')).toHaveValue('');
       await dialog.getByRole('button', { name: '입력값 유지하고 계속 편집', exact: true }).click();
       const bodies: unknown[] = [];
@@ -224,10 +250,55 @@ for (const viewport of [
             json: { error: 'Synthetic lost response after commit' },
           });
         });
-        await dialog.getByRole('button', { name: '카드 변수 저장', exact: true }).click();
+        const save = dialog.getByRole('button', { name: '카드 변수 저장', exact: true });
+        const saveElement = await save.elementHandle();
+        expect(saveElement).not.toBeNull();
+        await save.click();
         const confirm = dialog.getByRole('button', { name: '저장 결과 확인', exact: true });
         await expect(confirm).toBeEnabled();
         await expect(value('trust')).toBeDisabled();
+        const settingsPage = dialog.locator('.settings-page:visible');
+        await settingsPage.evaluate((element) => {
+          element.scrollTop = 0;
+        });
+        await expect.poll(() => settingsPage.evaluate((element) => element.scrollTop)).toBe(0);
+        await expect(confirm).toBeInViewport({ ratio: 1 });
+        const pageBox = await settingsPage.boundingBox();
+        const confirmBox = await confirm.boundingBox();
+        expect(pageBox).not.toBeNull();
+        expect(confirmBox).not.toBeNull();
+        expect(confirmBox!.y).toBeGreaterThanOrEqual(pageBox!.y);
+        expect(confirmBox!.y + confirmBox!.height).toBeLessThanOrEqual(
+          pageBox!.y + pageBox!.height
+        );
+        expect(
+          await saveElement!.evaluate(
+            (element) =>
+              element.isConnected && element.getAttribute('aria-label') === '저장 결과 확인'
+          )
+        ).toBe(true);
+        await confirm.focus();
+        await expect(confirm).toBeFocused();
+        if (visualReview) {
+          const uncertain = dialog
+            .getByRole('status')
+            .filter({ hasText: '이전 저장 결과를 확인하지 못했어요.' });
+          await expect(uncertain).toBeVisible();
+          await uncertain.scrollIntoViewIfNeeded();
+          await page.screenshot({
+            path: info.outputPath(`chat-variables-uncertain-${viewport.width}.png`),
+          });
+        }
+        await settingsPage.evaluate((element) => {
+          element.scrollTop = element.scrollHeight;
+        });
+        const lastRow = dialog.locator('.chat-variable-row').last();
+        await expect(lastRow).toBeInViewport({ ratio: 1 });
+        const lastRowBox = await lastRow.boundingBox();
+        const recoveryBox = await dialog.locator('.chat-variable-recovery-actions').boundingBox();
+        expect(lastRowBox).not.toBeNull();
+        expect(recoveryBox).not.toBeNull();
+        expect(lastRowBox!.y + lastRowBox!.height).toBeLessThanOrEqual(recoveryBox!.y + 1);
         // The committed write emits a cursor refresh despite the lost PUT response.
         // Let that read reach the editor before gating the explicit refresh below.
         await expect(dialog.locator('.chat-variable-readbacks pre').first()).toContainText(

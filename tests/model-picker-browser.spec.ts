@@ -90,6 +90,9 @@ for (const width of [390, 1440]) {
     ).toBeLessThanOrEqual(1);
     await picker.getByRole('button', { name: `${models[1].title} MP01`, exact: false }).click();
     await expect(picker).toBeHidden();
+    await expect(page.locator('.transient-notice')).toContainText(
+      '다음 요청에 적용할 설정을 저장했어요.'
+    );
     await expect(trigger).toBeFocused();
     await expect(composer).toHaveValue('모델을 바꿔도 이 집필 요청은 그대로 남아요.');
     const selected = (await detail(request, chat.id)).profile!;
@@ -167,6 +170,36 @@ test('MP02 a rejected model save stays open without retrying and a lost response
   expect(after.authorNote).toBe(before.profile!.authorNote);
   await page.keyboard.press('Escape');
   await expect(composer).toHaveValue('모델을 바꿔도 이 집필 요청은 그대로 남아요.');
+});
+
+test('MP04 a saved model with a failed reader refresh shows only the specific failure', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  const { chat, models, picker } = await prepare(page, request, `MP04 ${Date.now()}`);
+  let saved = false;
+  let failed = false;
+  await page.route(`**/api/chats/${chat.id}/profile`, async (route) => {
+    if (route.request().method() !== 'PUT') return route.continue();
+    const response = await route.fetch();
+    expect(response.ok(), await response.text()).toBe(true);
+    saved = true;
+    await route.fulfill({ response });
+  });
+  await page.route(`**/api/chats/${chat.id}/reader?*`, (route) => {
+    if (!saved || failed) return route.continue();
+    failed = true;
+    return route.fulfill({ status: 503, json: { error: 'Synthetic refresh failure' } });
+  });
+  await picker.getByRole('button', { name: `${models[0].title} MP04` }).click();
+  await expect(picker).toBeHidden();
+  await expect(
+    page.getByRole('alert').filter({ hasText: '모델은 저장했지만 채팅을' })
+  ).toBeVisible();
+  await expect(page.locator('.transient-notice')).toHaveCount(0);
+  expect(failed).toBe(true);
+  expect((await detail(request, chat.id)).profile?.pinned?.mainModel?.id).toBe(models[0].id);
 });
 
 test('MP03 unavailable current models stay visible as a warning and search offers recovery and management', async ({

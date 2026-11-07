@@ -233,6 +233,22 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       expect(detailRequests).toHaveLength(0);
       await usage.locator(':scope > summary').click();
       await expect(usage).toContainText('포함된 로어: 기록 1개');
+      if (width === 360) {
+        await page.evaluate(() => {
+          localStorage.setItem('uimori:ui-language', 'en');
+          window.dispatchEvent(
+            new StorageEvent('storage', { key: 'uimori:ui-language', newValue: 'en' })
+          );
+        });
+        await expect(usage.getByText('Included lore: 1 record', { exact: true })).toBeVisible();
+        await page.evaluate(() => {
+          localStorage.setItem('uimori:ui-language', 'ko');
+          window.dispatchEvent(
+            new StorageEvent('storage', { key: 'uimori:ui-language', newValue: 'ko' })
+          );
+        });
+        await expect(usage).toContainText('포함된 로어: 기록 1개');
+      }
       await expect(usage).not.toContainText('자동 선별');
       expect(detailRequests).toHaveLength(1);
       await expect(usage).toContainText(/Scene diagnostics writer\s*scene-diagnostics-writer/);

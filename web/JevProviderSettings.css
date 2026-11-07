@@ -56,6 +56,12 @@
     gap: 5px;
   }
 }
+@media (max-width: 360px) {
+  .provider-workspace-navigation > button:not(.provider-refresh) {
+    padding-inline: 2px;
+    gap: 2px;
+  }
+}
 .jev-provider-settings .jev-provider-test {
   margin: 0;
   border-top: var(--hairline) solid var(--line);
@@ -63,6 +69,10 @@
 }
 .jev-provider-test h4 {
   font-size: var(--font-body);
+}
+.jev-test-result p:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .jev-provider-settings .jev-provider-details dd {
   font-size: var(--font-body);

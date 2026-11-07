@@ -171,6 +171,11 @@ type Outbox = Partial<FrozenHelperAttachments> & {
   outline?: OutlineTarget;
 };
 const active = (task: HelperTaskView) => task.status === 'queued' || task.status === 'running';
+function helperTaskError(error: string | null | undefined): string {
+  if (error === 'HELPER_CONTEXT_DEPENDENCY_CHANGED')
+    return t('errors.HELPER_CONTEXT_DEPENDENCY_CHANGED');
+  return requestFileError(error) ?? translateMessage(error ?? '');
+}
 // The reader treats an explicit cancellation as a settled turn; the helper reads the same way.
 const attention = (task: HelperTaskView) => ['failed', 'interrupted'].includes(task.status);
 const tone = (task: HelperTaskView): StatusTone =>
@@ -1115,9 +1120,7 @@ export function HelperPanel(props: Props) {
             })}
           </span>
         </div>
-        {task.error && (
-          <p className="error">{requestFileError(task.error) ?? translateMessage(task.error)}</p>
-        )}
+        {task.error && <p className="error">{helperTaskError(task.error)}</p>}
         {task.completedEffects && (
           <p>
             {t('helpers.m312', {
@@ -1178,7 +1181,7 @@ export function HelperPanel(props: Props) {
           )}
           <RetryFailure
             status={task.status}
-            error={requestFileError(task.error) ?? translateMessage(task.error ?? '')}
+            error={helperTaskError(task.error)}
             disabled={busy || Boolean(outbox)}
             onRetry={task.completedEffects ? undefined : () => void retry(task)}
             onSettings={props.onModelSettings}
@@ -1649,7 +1652,7 @@ export function HelperPanel(props: Props) {
           const saved = view?.messages.find((message) => message.id === editConflict.messageId);
           if (!view) throw new Error(t('shared.savedFailure'));
           if (!saved)
-            return {
+            return () => ({
               content: (
                 <>
                   <p>{t('helpers.messageMissing')}</p>
@@ -1659,9 +1662,9 @@ export function HelperPanel(props: Props) {
                   </label>
                 </>
               ),
-            };
+            });
           const revision = view.conversation.revision;
-          return {
+          return () => ({
             content: (
               <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{saved.text}</p>
             ),
@@ -1682,7 +1685,7 @@ export function HelperPanel(props: Props) {
                 </button>
               </>
             ),
-          };
+          });
         }}
       />
       <Dialog
@@ -1761,11 +1764,7 @@ export function HelperPanel(props: Props) {
                   {t('helpers.showInConversation')}
                 </button>
               )}
-              {task.error && (
-                <p className="error">
-                  {requestFileError(task.error) ?? translateMessage(task.error)}
-                </p>
-              )}
+              {task.error && <p className="error">{helperTaskError(task.error)}</p>}
               {task.completedEffects && (
                 <p>
                   {t('helpers.m315', {

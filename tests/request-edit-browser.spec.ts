@@ -87,6 +87,7 @@ for (const width of DEFAULT_WIDTHS) {
     if (width !== DESKTOP_WIDTH) await message.click();
     await source.getByLabel('요청 및 컨텍스트 메뉴', { exact: true }).click();
     await source.getByRole('button', { name: '컨텍스트용 요청 수정', exact: true }).click();
+    await expect(source.getByText('이후 생성 문맥에 반영해요.', { exact: true })).toBeVisible();
     await page.getByRole('textbox', { name: '요청 수정 내용' }).fill('저장된 수정 입력');
     await page.getByRole('button', { name: '입력 저장' }).click();
     await expect(message).toContainText('저장된 수정 입력');

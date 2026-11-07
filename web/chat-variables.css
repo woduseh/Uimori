@@ -94,7 +94,20 @@
   border-top: var(--hairline) solid var(--line);
   justify-content: flex-end;
 }
+.chat-variable-editor > .chat-variable-recovery-actions {
+  position: sticky;
+  bottom: -28px;
+  z-index: 1;
+  margin-inline: -32px;
+  padding-inline: 32px;
+  background: var(--panel);
+}
 @media (max-width: 760px) {
+  .chat-variable-editor > .chat-variable-recovery-actions {
+    bottom: -16px;
+    margin-inline: -18px;
+    padding-inline: 18px;
+  }
   .chat-variable-row {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) 44px;
     gap: 8px;

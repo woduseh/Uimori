@@ -61,10 +61,10 @@ export const messages = {
     zh: '不支持的文件格式：{name}',
   },
   'helperAttachments.tooLarge': {
-    ko: '‘{name}’ 파일은 {mb}MB 이하여야 해요.',
-    en: 'The file “{name}” must be {mb} MB or smaller.',
-    ja: 'ファイル「{name}」は{mb}MB以下である必要があります。',
-    zh: '文件“{name}”大小不能超过 {mb}MB。',
+    ko: '파일 크기는 {mb}MB 이하여야 해요. 파일: {name}',
+    en: 'File must be {mb} MB or smaller. File: {name}',
+    ja: 'ファイルサイズは{mb} MB以下にしてください。ファイル: {name}',
+    zh: '文件大小不能超过 {mb} MB。文件：{name}',
   },
   'helperAttachments.totalTooLarge': {
     ko: '첨부 파일 전체 크기를 {mb}MB 이내로 줄여 주세요.',

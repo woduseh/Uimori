@@ -1,3 +1,6 @@
+.prompt-controls-error:lang(ko) {
+  word-break: keep-all;
+}
 :root .prompt-option-field > .toggle-row {
   display: flex;
   flex-direction: row;

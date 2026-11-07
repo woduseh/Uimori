@@ -30,6 +30,69 @@ describe('UI locale presentation boundary', () => {
     expect(formatMessage('helperNavigation.activityCount', 'en', { count })).toBe(expected);
   });
 
+  describe.each([
+    ['chatmanage.confirmDelete', 'count', 'selected scene', 'selected scenes'],
+    ['reader.valueImagesDisplayed', 'v0', 'image', 'images'],
+    [
+      'reader.confirmedInclusionOfValueSummarizedScenes',
+      'v0',
+      'summarized scene',
+      'summarized scenes',
+    ],
+    ['reader.valueRecords', 'v0', 'record', 'records'],
+  ] as const)('English count in %s', (key, name, singular, plural) => {
+    test.each([0, 1, 2, 1234])('formats %i with the correct noun', async (count) => {
+      const { formatMessage } = await import('../web/i18n.js');
+      const result = formatMessage(key, 'en', { [name]: count });
+      const formatted = new Intl.NumberFormat('en-US').format(count);
+      expect(result).toMatch(new RegExp(`\\b${formatted} ${count === 1 ? singular : plural}\\b`));
+    });
+  });
+
+  describe.each([
+    'reader.confirmedInclusionOfValueSummarizedScenes',
+    'reader.valueRecords',
+  ] as const)('numeric formatting in %s', (key) => {
+    test.each([
+      ['ko', 'ko-KR'],
+      ['en', 'en-US'],
+      ['ja', 'ja-JP'],
+      ['zh', 'zh-CN'],
+    ] as const)('preserves grouping in %s', async (locale, intlLocale) => {
+      const { formatMessage } = await import('../web/i18n.js');
+      const result = formatMessage(key, locale, { v0: 1234 });
+      expect(result).toContain(new Intl.NumberFormat(intlLocale).format(1234));
+    });
+  });
+
+  test('renders a grouped summary count from the actual scene receipt in every language', async () => {
+    const { setLocale } = await import('../web/i18n.js');
+    const { SceneUsage } = await import('../web/SceneUsage.js');
+    const { createElement } = await import('react');
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    for (const locale of ['ko', 'en', 'ja', 'zh'] as const) {
+      setLocale(locale);
+      const html = renderToStaticMarkup(
+        createElement(SceneUsage, {
+          usage: {
+            inputTokens: null,
+            outputTokens: null,
+            context: null,
+            receipt: {
+              version: 1,
+              model: { modelId: 'model', title: 'model' },
+              prompt: null,
+              persona: null,
+              summary: { status: 'included', coveredSources: 1234 },
+            },
+          },
+        })
+      );
+      expect(html).toContain('1,234');
+      expect(html).not.toContain('NaN');
+    }
+  });
+
   test.each([
     [1, '‘제목’ 채팅과 본문 2개를 복원했어요.'],
     [2, '‘제목’ 채팅을 포함해 채팅 2개와 본문 2개를 복원했어요.'],

@@ -13,6 +13,11 @@
 .model-pricing-summary p {
   margin: 0;
 }
+.model-pricing-body :is(p, small):lang(ko),
+.model-pricing-notes > li:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .model-pricing-body label:not(.toggle-row) {
   display: grid;
   gap: 6px;

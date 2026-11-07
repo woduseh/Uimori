@@ -227,8 +227,11 @@ export function PromptEditor({
             error:
               caught instanceof ApiError
                 ? caught.displayMessage
-                : messageRef((caught as Error).message),
-          })
+                : (caught as Error).message ===
+                    uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder')
+                  ? ''
+                  : messageRef((caught as Error).message),
+          }).trimEnd()
         );
       }
       try {

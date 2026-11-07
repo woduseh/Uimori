@@ -131,6 +131,11 @@
 }
 .theme-card-actions button:first-child {
   margin-right: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.theme-card-actions button:not(:first-child) {
+  flex-shrink: 0;
 }
 .theme-card-menu {
   position: absolute;
@@ -173,7 +178,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
+}
+.theme-editor-heading > :lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .theme-editor fieldset {
   border: 0;
@@ -292,6 +302,10 @@
   gap: 6px;
   min-height: var(--control-h);
 }
+.theme-library-actions > button:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 @media (max-width: 600px) {
   .theme-control-bar > label,
   .theme-control-bar > label > select {
@@ -312,6 +326,11 @@
   }
   .theme-library-actions > button {
     flex: 1;
+  }
+}
+@container (max-width: 260px) {
+  .theme-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

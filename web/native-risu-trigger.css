@@ -4,6 +4,10 @@
   gap: 18px;
   min-width: 0;
 }
+.native-trigger-json > p.muted:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .native-trigger-heading {
   display: flex;
   align-items: center;

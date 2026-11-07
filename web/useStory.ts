@@ -1516,9 +1516,10 @@ export function useStory() {
         // Admission is known after the acknowledged write. A failed read must not invite
         // another write, and a response for an old chat must not close a new chat's picker.
         if (navigation.current.chat !== chatId || navigation.current.epoch !== epoch) return false;
-        setNotice('다음 요청에 적용할 설정을 저장했어요.');
         try {
-          await refresh(chatId);
+          const refreshed = await refresh(chatId);
+          if (refreshed && navigation.current.chat === chatId && navigation.current.epoch === epoch)
+            setNotice('다음 요청에 적용할 설정을 저장했어요.');
         } catch {
           if (navigation.current.chat === chatId && navigation.current.epoch === epoch)
             setError(uiMessage('main.modelPickerRefreshFailed'));

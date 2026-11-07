@@ -94,6 +94,9 @@
 .native-assets-detail p {
   overflow-wrap: anywhere;
 }
+.native-assets-detail > p.muted:lang(ko) {
+  word-break: keep-all;
+}
 .native-assets-preview {
   width: 100%;
   max-height: 260px;
