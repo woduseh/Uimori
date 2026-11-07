@@ -145,7 +145,7 @@ test('SCENEDEL01 cancel preserves all scenes and deleting only the middle keeps 
   await expect(page.getByTestId('source')).toHaveCount(3);
 
   dialog = await openDeletion(page, middle.id);
-  await dialog.getByRole('button', { name: '선택한 1개 장면 삭제', exact: true }).click();
+  await dialog.getByRole('button', { name: '선택한 장면 1개 삭제', exact: true }).click();
   await expect(scene(page, middle.id)).toHaveCount(0);
   await expect(page.getByTestId('source')).toHaveCount(2);
   await expect(scene(page, last.id)).toBeVisible();
@@ -169,7 +169,7 @@ test('SCENEDEL02 deleting from a middle scene removes its following range and re
   await page.goto(`/?chat=${before.chat.id}`);
   const dialog = await openDeletion(page, middle.id);
   await dialog.getByRole('radio', { name: '이 장면부터 이후까지 (2개)', exact: true }).check();
-  await dialog.getByRole('button', { name: '선택한 2개 장면 삭제', exact: true }).click();
+  await dialog.getByRole('button', { name: '선택한 장면 2개 삭제', exact: true }).click();
   await expect(page.getByTestId('source')).toHaveCount(1);
   await expect(scene(page, middle.id)).toHaveCount(0);
   await expect(scene(page, last.id)).toHaveCount(0);
@@ -209,7 +209,7 @@ test('SCENEDEL03 an accepted delete with a lost acknowledgement is checked again
   });
   await page.goto(`/?chat=${before.chat.id}`);
   const dialog = await openDeletion(page, middle.id);
-  await dialog.getByRole('button', { name: '선택한 1개 장면 삭제', exact: true }).click();
+  await dialog.getByRole('button', { name: '선택한 장면 1개 삭제', exact: true }).click();
   await expect(dialog.getByRole('alert')).toContainText('삭제 결과를 확인하지 못했어요.');
   await expect(dialog.getByRole('radio', { name: '이 장면만', exact: true })).toBeDisabled();
   await dialog.getByRole('button', { name: '삭제 결과 다시 확인', exact: true }).click();
@@ -252,7 +252,7 @@ test('SCENEDEL04 a deleted scene can be checked after closing and reloading', as
 
   await page.goto(`/?chat=${before.chat.id}`);
   let dialog = await openDeletion(page, middle.id);
-  await dialog.getByRole('button', { name: '선택한 1개 장면 삭제', exact: true }).click();
+  await dialog.getByRole('button', { name: '선택한 장면 1개 삭제', exact: true }).click();
   await expect(dialog.getByRole('alert')).toContainText('삭제 결과를 확인하지 못했어요.');
   await expect(scene(page, middle.id)).toHaveCount(0);
   await dialog.getByRole('button', { name: '취소', exact: true }).click();
@@ -310,7 +310,7 @@ test('SCENEDEL05 a late deletion acknowledgement does not override a newer reade
   try {
     await page.goto(`/?chat=${before.chat.id}`);
     const dialog = await openDeletion(page, middle.id);
-    await dialog.getByRole('button', { name: '선택한 1개 장면 삭제', exact: true }).click();
+    await dialog.getByRole('button', { name: '선택한 장면 1개 삭제', exact: true }).click();
     await expect.poll(() => sent).toBe(true);
     await expect(scene(page, middle.id)).toHaveCount(0);
     await page.evaluate((id) => {

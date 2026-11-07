@@ -137,9 +137,7 @@ if (process.env.UIMORI_SELF_HOST_BROWSER === '1')
         chatId
       );
       expect(observation).toEqual({ kind: 'snapshot', opened: true });
-      await expect(page.getByText('연결을 다시 확인하는 중이에요.', { exact: true })).toHaveCount(
-        0
-      );
+      await expect(page.getByText('연결을 다시 확인하고 있어요.', { exact: true })).toHaveCount(0);
     }
     async function selectSyntheticMainModel(page: Page) {
       const endpoint = process.env.UIMORI_PROVIDER_FIXTURE_URL;

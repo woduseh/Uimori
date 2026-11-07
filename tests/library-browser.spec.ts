@@ -586,7 +586,7 @@ test('SAVEACK prompt navigation preserves an accepted save when placement and su
   await guard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
   await expect(guard).toBeHidden();
   await expect(editor).toBeHidden();
-  const warning = page.getByRole('alert').filter({ hasText: '프롬프트는 저장됐어요.' });
+  const warning = page.getByRole('alert').filter({ hasText: '프롬프트는 저장됐지만' });
   await expect(warning).toContainText('폴더에 배치하지 못했어요.');
   await expect(warning).toContainText('목록을 다시 불러오지 못했어요.');
   const after = (await (await request.get('/api/library')).json()) as Library;
@@ -741,7 +741,7 @@ test('LIBCLONE03 accepted content clone opens its saved copy when placement and 
   const copy = (await response.json()).saved as Content;
   const editor = page.getByRole('region', { name: '자료 상세', exact: true });
   await expect(editor.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(`${title} 사본`);
-  const warning = page.getByRole('alert').filter({ hasText: '자료는 복제됐어요.' });
+  const warning = page.getByRole('alert').filter({ hasText: '자료는 복제됐지만' });
   await expect(warning).toContainText('폴더에 배치하지 못했어요.');
   await expect(warning).toContainText('목록을 다시 불러오지 못했어요.');
   const library = (await (await request.get('/api/library')).json()) as Library;
@@ -832,7 +832,7 @@ test('LIBUI05 accepted folder creation closes even when the summary refresh fail
   const title = `LIBUI05 ${Date.now()}`;
   await createFolder(page, panel, title);
   await expect(page.getByRole('dialog', { name: '새 폴더', exact: true })).toBeHidden();
-  await expect(page.getByText(/변경은 저장됐어요/)).toBeVisible();
+  await expect(page.getByText(/변경은 저장됐지만/)).toBeVisible();
   expect(writes).toBe(1);
   expect(
     (await organization(request)).folders.filter((folder) => folder.title === title)

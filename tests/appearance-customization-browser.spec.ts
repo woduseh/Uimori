@@ -136,7 +136,7 @@ test('APPEARANCE uploaded font loads, applies independently, persists, recovers 
   const unsaved = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
   await unsaved.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
   await expect(
-    unsaved.getByText('저장하지 못했어요. 계속 편집에서 오류나 미적용 입력을 확인해 주세요.')
+    unsaved.getByText('저장하지 못했어요. 오류나 미적용 입력을 확인해 주세요.')
   ).toBeVisible();
   await unsaved.getByRole('button', { name: '계속 편집', exact: true }).click();
   await expect(management).toHaveAttribute('open');

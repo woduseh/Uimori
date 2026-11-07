@@ -265,7 +265,7 @@ for (const viewport of [
     const removed = collaboration.locator('.ac-agent').nth(1);
     await removed.locator('summary').click();
     const removeButton = removed.getByRole('button', { name: '2번째 에이전트 삭제', exact: true });
-    const dialog = page.getByRole('alertdialog', { name: '에이전트 삭제 확인', exact: true });
+    const dialog = page.getByRole('alertdialog', { name: '에이전트 삭제', exact: true });
     await removeButton.click();
     await expect(dialog).toContainText('프롬프트를 저장하면 반영돼요.');
     await actionPair(dialog, '삭제', 'delete');

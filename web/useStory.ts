@@ -1283,7 +1283,7 @@ export function useStory() {
           uploadingImages
             ? cause instanceof Error
               ? cause.message
-              : '이미지 업로드에 실패했어요. 초안은 보존했어요.'
+              : uiMessage('main.story8')
             : '요청 복구 기록을 저장하지 못해 요청을 보내지 않았어요. 브라우저 저장 공간을 확인해 주세요.'
         );
       return false;
@@ -1334,7 +1334,7 @@ export function useStory() {
         setNotice(
           previous
             ? sessionStorage.getItem(sentKey)
-              ? '이전 요청이 접수된 것을 확인했어요. 새로 작성한 초안은 그대로 두었어요.'
+              ? uiMessage('main.story11')
               : '이전 요청이 접수된 것을 확인했어요.'
             : ''
         );

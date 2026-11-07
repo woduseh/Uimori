@@ -67,7 +67,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     limitations: [
       '서버의 공식 Codex 실행기에 직접 로그인해 사용해요. API 키를 저장하지 않아요.',
       '도구 실행은 Uimori가 관리해요. maxOutputTokens는 출력량을 조절하는 참고값이며, 실제 출력이 이 값을 넘을 수 있어요.',
-      '작업 횟수와 내부 모델 호출 수는 달라요. 실제 비용과 내부 호출 수는 미확인이에요.',
+      '작업 횟수와 내부 모델 호출 횟수는 별개예요.',
       'Risu 프롬프트는 메시지 역할과 순서를 담은 JSON으로 전달해요. Codex 자체 지침도 추가돼 API에 메시지를 직접 보낼 때와 역할 해석이 다를 수 있어요. 응답 시작 부분을 미리 채우는 prefill과 캐시 사용을 필수로 지정하는 옵션은 지원하지 않아요.',
     ],
   }),
@@ -107,7 +107,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     limitations: [
       'Gemini 모델 연결, Gemini Enterprise Agent Platform의 global 프로젝트 endpoint를 사용해요.',
       '등록한 Vertex 인증으로 Google Model Garden의 Gemini 목록을 조회할 수 있어요. 목록과 실제 모델 사용 권한은 Google Cloud 설정을 따라요.',
-      'ADC는 서버의 GOOGLE_APPLICATION_CREDENTIALS 파일을 사용해요. Flex는 모델의 Service Tier에서 선택해요. 실제 청구액은 미확인이에요.',
+      'ADC는 서버의 GOOGLE_APPLICATION_CREDENTIALS에 지정한 파일을 사용해요. Flex는 모델의 Service Tier에서 선택해요.',
     ],
   }),
   definition({
@@ -132,7 +132,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     limitations: [
       'Google AI Studio에서 발급한 Gemini API 키를 등록해요. Google Cloud 서비스 계정은 필요하지 않아요.',
       '공식 Gemini API에서 생성과 모델 목록 조회에 같은 API 키를 사용해요. 모델 사용 권한과 요청 한도는 Google 계정 설정을 따라요.',
-      '가격은 모델 프리셋에서 직접 설정하며 실제 청구액은 미확인이에요.',
+      '요금은 모델 프리셋에서 직접 설정해요.',
     ],
   }),
   definition({
@@ -181,7 +181,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
       '공식 API 기본 주소와 x-api-key 인증을 사용해요.',
       'Claude Opus 5의 Output Effort와 Thinking을 모델별 조합에 맞게 사용해요.',
       '번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 담는 JSON 형식을 요청해요. 형식은 output_config.format으로 지정하며, 기본값은 일반 텍스트예요.',
-      '모델 기본값은 해당 API 필드를 생략해요.',
+      '모델 기본값을 선택하면 해당 설정을 보내지 않아요.',
     ],
   }),
   definition({

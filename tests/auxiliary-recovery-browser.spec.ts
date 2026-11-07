@@ -75,7 +75,7 @@ test('translation failures show safe causes while retired status jobs stay hidde
     const promptFailure = activity.getByTestId('job-translation');
     await expect(promptFailure).toContainText('PROMPT_UNKNOWN_SLOT');
     await expect(promptFailure).toContainText('입력 슬롯');
-    await expect(promptFailure).toContainText('모델 전송 전');
+    await expect(promptFailure).toContainText('프롬프트를 확인해 주세요.');
     await expect(promptFailure).not.toContainText('인증');
     for (const [code, message] of [
       ['AUXILIARY_PROVIDER_PARTIAL', '모델 응답을 끝까지 받지 못했어요.'],

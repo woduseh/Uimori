@@ -30,10 +30,10 @@ export const messages = {
     zh: '此对话复制请求与之前的请求冲突。',
   },
   'helperProjects.copyChanged': {
-    ko: '도우미 대화가 변경됐어요. 최신 내용을 확인한 뒤 다시 복사해 주세요.',
-    en: 'The conversation changed. Review its latest content and copy it again.',
-    ja: '会話が変更されました。最新の内容を確認してから再度コピーしてください。',
-    zh: '对话已更改。请确认最新内容后重新复制。',
+    ko: '도우미 대화가 변경됐어요. 다시 복사해 주세요.',
+    en: 'The helper conversation changed. Please copy it again.',
+    ja: 'アシスタントの会話が変更されました。もう一度コピーしてください。',
+    zh: '助手对话已更改。请重新复制。',
   },
   'helperProjects.copyRunning': {
     ko: '진행 중인 작업이 끝난 뒤 복사해 주세요.',
@@ -43,7 +43,7 @@ export const messages = {
   },
   'workspace.chat': { ko: '채팅', en: 'Chat', ja: 'チャット', zh: '聊天' },
   'workspace.helperWidth': {
-    ko: '도우미 패널 폭',
+    ko: '도우미 패널 너비',
     en: 'Assistant panel width',
     ja: 'アシスタントパネルの幅',
     zh: '助手面板宽度',

@@ -60,10 +60,10 @@ export const messages = {
     zh: '查看全部任务',
   },
   'chatsettings.m4': {
-    ko: '연결을 다시 확인하는 중이에요. 원격 작업의 상태는 아직 확정할 수 없어요.',
-    en: 'Rechecking connection. Remote task status is unknown.',
-    ja: '接続を再確認中です。リモートタスクの状態は未確定です。',
-    zh: '正在重新检查连接，远程任务状态尚未确定。',
+    ko: '연결을 다시 확인하고 있어요.',
+    en: 'Rechecking connection.',
+    ja: '接続を再確認中です。',
+    zh: '正在重新检查连接。',
   },
   'chatsettings.m5': {
     ko: '작업 목록을 불러오는 중이에요…',
@@ -624,10 +624,10 @@ export const messages = {
     zh: '已取消下次生成的选项预约。',
   },
   'chatsettings.m109': {
-    ko: '반영 여부를 확인하지 못했어요. 같은 요청을 다시 확인하면 중복 적용하지 않아요.',
-    en: 'Could not confirm whether changes applied. Rechecking the same request will not apply twice.',
-    ja: '反映を確認できませんでした。同じリクエストを再確認しても二重適用されません。',
-    zh: '无法确认是否已应用。重新确认同一请求不会重复应用。',
+    ko: '반영 여부를 확인하지 못했어요. 같은 요청으로 다시 확인해 주세요.',
+    en: 'Could not confirm whether changes applied. Please recheck with the same request.',
+    ja: '反映を確認できませんでした。同じリクエストで再確認してください。',
+    zh: '无法确认是否已应用。请使用相同请求重新确认。',
   },
   'chatsettings.m110': {
     ko: '채팅 옵션을 불러오는 중이에요…',
@@ -762,10 +762,10 @@ export const messages = {
     zh: '取消预约',
   },
   'chatsettings.m132': {
-    ko: '옵션이 바뀌었어요. 저장하거나 예약할 때 변경 내용을 확인해 주세요.',
-    en: 'Options have changed. Review changes when saving or scheduling.',
-    ja: 'オプションが変更されました。保存または予約時に変更内容を確認してください。',
-    zh: '选项已更改。保存或预约时请确认更改内容。',
+    ko: '옵션이 바뀌었어요. 변경 내용을 확인해 주세요.',
+    en: 'Options have changed. Please review the changes.',
+    ja: 'オプションが変更されました。変更内容を確認してください。',
+    zh: '选项已更改。请确认更改内容。',
   },
   'chatsettings.m133': {
     ko: '불러오는 중…',
@@ -870,10 +870,10 @@ export const messages = {
     zh: '关',
   },
   'chatsettings.m150': {
-    ko: '옵션 표시 조건을 확인하지 못했어요. 프롬프트 정의를 확인해 주세요.',
-    en: 'Could not evaluate option visibility. Check the prompt definition.',
-    ja: 'オプションの表示条件を確認できませんでした。プロンプト定義を確認してください。',
-    zh: '无法检查选项显示条件。请检查提示词定义。',
+    ko: '옵션 표시 조건을 확인하지 못했어요.',
+    en: 'Could not evaluate option visibility.',
+    ja: 'オプションの表示条件を確認できませんでした。',
+    zh: '无法检查选项显示条件。',
   },
   'chatsettings.m151': {
     ko: '현재 프롬프트에 조정할 옵션이 없어요.',
@@ -930,10 +930,10 @@ export const messages = {
     zh: '请输入仅包含键和字符串值的 JSON 对象。',
   },
   'chatsettings.m161': {
-    ko: '저장 요청을 보관하지 못했어요. 브라우저 저장 공간을 확인해 주세요.',
-    en: 'Could not keep save request. Check browser storage.',
-    ja: '保存リクエストを保持できませんでした。ブラウザーの空き容量を確認してください。',
-    zh: '无法保留保存请求。请检查浏览器存储空间。',
+    ko: '저장 요청을 보관하지 못했어요.',
+    en: 'Could not retain the save request.',
+    ja: '保存リクエストを保持できませんでした。',
+    zh: '无法保留保存请求。',
   },
   'chatsettings.m162': {
     ko: '카드 변수를 저장했어요. 다음 생성부터 적용해요.',
@@ -972,10 +972,10 @@ export const messages = {
     zh: '正在加载卡片变量…',
   },
   'chatsettings.m171': {
-    ko: '생성이나 스크립트 작업에서 변수를 사용 중이에요. 작업이 끝나면 저장할 수 있어요.',
-    en: 'Generation or script tasks are using variables. You can save once the task completes.',
-    ja: '生成またはスクリプト処理で変数を使用中です。処理が完了すると保存できます。',
-    zh: '生成或脚本任务正在使用变量。任务完成后即可保存。',
+    ko: '다른 작업에서 변수를 사용 중이에요.',
+    en: 'Another task is using variables.',
+    ja: '他の処理で変数を使用中です。',
+    zh: '其他任务正在使用变量。',
   },
   'chatsettings.m173': {
     ko: '변수 저장본이나 현재 소스가 바뀌었어요.',
@@ -990,10 +990,10 @@ export const messages = {
     zh: '保留输入值并继续编辑',
   },
   'chatsettings.m175': {
-    ko: '이전 저장 결과를 확인하지 못했어요. 값을 유지한 채 다시 확인해 주세요.',
-    en: 'Previous save outcome is unconfirmed. Keep values unchanged to recheck.',
-    ja: '前の保存結果を確認できませんでした。値を変更せずに再確認してください。',
-    zh: '无法确认上次保存结果。请保持原值并重新确认。',
+    ko: '이전 저장 결과를 확인하지 못했어요.',
+    en: 'Could not confirm the previous save result.',
+    ja: '前の保存結果を確認できませんでした。',
+    zh: '无法确认上次保存结果。',
   },
   'chatsettings.m176': {
     ko: '변수 이름으로 찾기',

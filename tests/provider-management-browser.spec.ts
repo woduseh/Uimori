@@ -674,7 +674,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
     evaluationTools: original.evaluationTools,
   });
   await openProviderMenu(page, '모델', changed.title);
-  await page.getByRole('button', { name: changed.title + ' 모델 비활성', exact: true }).click();
+  await page.getByRole('button', { name: changed.title + ' 모델 비활성화', exact: true }).click();
   await expect(page.getByRole('region', { name: '비활성 영향 확인' })).toHaveCount(0);
   await expect
     .poll(
@@ -684,7 +684,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   await openProviderMenu(page, '프로바이더', title + ' 연결 최신판');
   await page
-    .getByRole('button', { name: title + ' 연결 최신판 프로바이더 비활성', exact: true })
+    .getByRole('button', { name: title + ' 연결 최신판 프로바이더 비활성화', exact: true })
     .click();
   await expect
     .poll(
@@ -784,7 +784,7 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
     await expect(form).not.toBeVisible();
     await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
     await page
-      .getByRole('button', { name: '프로바이더 편집 이어서: ' + title, exact: true })
+      .getByRole('button', { name: '프로바이더 편집 이어 하기: ' + title, exact: true })
       .click();
     await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title);
     await form.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
@@ -836,7 +836,7 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
     await expect(modelForm).not.toBeVisible();
     await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
     await page
-      .getByRole('button', { name: '모델 편집 이어서: ' + title + ' Beta', exact: true })
+      .getByRole('button', { name: '모델 편집 이어 하기: ' + title + ' Beta', exact: true })
       .click();
     await expect(modelForm.getByLabel('최대 출력 토큰')).toHaveValue('1024');
     await expect(modelForm.getByLabel('모델 ID', { exact: true })).toHaveValue(
@@ -2051,8 +2051,8 @@ test('PMUI model presets group by provider, start collapsed and persist manual o
   const secondGroup = list
     .locator('.provider-model-group')
     .filter({ hasText: secondConnection.title });
-  await expect(firstGroup.getByText('2개 모델', { exact: true })).toBeVisible();
-  await expect(secondGroup.getByText('1개 모델', { exact: true })).toBeVisible();
+  await expect(firstGroup.getByText('모델 2개', { exact: true })).toBeVisible();
+  await expect(secondGroup.getByText('모델 1개', { exact: true })).toBeVisible();
   await expect(
     firstGroup.getByRole('button', { name: `${beta.title} 모델 수정`, exact: true })
   ).toBeHidden();

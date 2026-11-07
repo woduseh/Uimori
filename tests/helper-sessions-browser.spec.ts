@@ -440,7 +440,7 @@ test('HSESSION07 unavailable creation storage explains the failure without sendi
   });
   await panel.getByRole('button', { name: '새 도우미 대화', exact: true }).click();
   await expect(panel.getByRole('alert').locator('.notice-banner-message')).toHaveText(
-    '브라우저에 대화 생성 요청을 보관하지 못했어요. 저장 공간이나 사이트 저장소 설정을 확인한 뒤 다시 시도해 주세요.'
+    '대화 생성 요청을 보관하지 못했어요.'
   );
   await expect(panel.getByRole('button', { name: '새 도우미 대화', exact: true })).toBeEnabled();
   expect(posts).toBe(0);

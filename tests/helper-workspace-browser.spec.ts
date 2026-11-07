@@ -243,7 +243,7 @@ test('HSPACE12 activity tabs keep unread counts until acknowledgement and includ
   await page.goto('/');
   await navigationAction(page, '도우미');
   const history = page.getByRole('navigation', { name: '도우미 대화', exact: true });
-  await history.getByRole('button', { name: '활동, 미확인 2개', exact: true }).click();
+  await history.getByRole('button', { name: '미확인 활동 2개', exact: true }).click();
   const unread = history.locator('[data-activity-section="unread"]');
   const active = history.locator('[data-activity-section="running"]');
   const recent = history.locator('[data-activity-section="recent"]');
@@ -255,21 +255,17 @@ test('HSPACE12 activity tabs keep unread counts until acknowledgement and includ
   for (const id of ids)
     await expect(recent.locator(`[data-conversation-id="${id}"]`)).toBeVisible();
   await history.getByRole('button', { name: '탐색', exact: true }).click();
-  await history.getByRole('button', { name: '활동, 미확인 2개', exact: true }).click();
+  await history.getByRole('button', { name: '미확인 활동 2개', exact: true }).click();
   await unread.getByRole('button', { name: `${failed.title} 활동 확인`, exact: true }).click();
-  await expect(
-    history.getByRole('button', { name: '활동, 미확인 1개', exact: true })
-  ).toBeVisible();
+  await expect(history.getByRole('button', { name: '미확인 활동 1개', exact: true })).toBeVisible();
   await page.reload();
   await navigationAction(page, '도우미');
   await expect(
-    history.getByRole('button', { name: '활동, 미확인 1개', exact: true })
+    history.getByRole('button', { name: '미확인 활동 1개', exact: true })
   ).toHaveAttribute('aria-pressed', 'true');
   await expect(unread.locator('[data-conversation-id]')).toHaveCount(1);
   await unread.getByRole('button', { name: `${completed.title} 활동 확인`, exact: true }).click();
-  await expect(
-    history.getByRole('button', { name: '활동, 미확인 0개', exact: true })
-  ).toBeVisible();
+  await expect(history.getByRole('button', { name: '미확인 활동 0개', exact: true })).toBeVisible();
   await expect(recent.locator('[data-conversation-id]')).toHaveCount(4);
   await page.screenshot({ path: info.outputPath('helper-activity-acknowledged.png') });
 });
@@ -614,7 +610,7 @@ test('HSPACE06 shared sidebar preserves drafts and project history across search
   const history = nav.getByRole('navigation', { name: '도우미 대화', exact: true });
   await expect(panel.getByRole('navigation', { name: '도우미 대화', exact: true })).toHaveCount(0);
   await expect(history).toBeVisible();
-  await history.getByRole('button', { name: /^활동, 미확인/u }).click();
+  await history.getByRole('button', { name: /^미확인 활동/u }).click();
   const recent = history.locator('[data-activity-section="recent"]');
   await expect(recent.locator('.activity-nav-link')).toHaveCount(5);
   const existingSessions = (await (

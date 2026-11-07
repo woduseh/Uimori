@@ -80,9 +80,7 @@ test('HELPREC01 failed draft reads preserve the old draft and selected source; f
   await openSourceActions(article);
   await article.getByRole('button', { name: '도우미에게 물어보기' }).click();
   await expect(panel).toBeVisible();
-  await expect(
-    panel.getByText('이 기기의 도우미 초안을 읽지 못했어요. 다시 불러와 주세요.')
-  ).toBeVisible();
+  await expect(panel.getByText('도우미 초안을 불러오지 못했어요.')).toBeVisible();
   await expect(input).toBeDisabled();
   if (visualReview)
     await page.screenshot({ path: info.outputPath('helper-draft-read-failed.png') });

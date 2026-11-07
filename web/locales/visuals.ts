@@ -48,10 +48,10 @@ export const messages = {
     zh: '正文外插图{count}幅{attention, select, true {，有待检查的任务} other {}}',
   },
   'visuals.precheck': {
-    ko: 'JEV 사전 판정, {status}{code}',
-    en: 'JEV precheck, {status}{code}',
-    ja: 'JEV事前判定、{status}{code}',
-    zh: 'JEV预先判定，{status}{code}',
+    ko: '사전 판단, {status}{code}',
+    en: 'Precheck, {status}{code}',
+    ja: '事前判定、{status}{code}',
+    zh: '预先判定，{status}{code}',
   },
   'visuals.m001': {
     ko: '배경 설정을 저장했어요.',
@@ -162,10 +162,10 @@ export const messages = {
     zh: '布局含不支持的HTML。请使用插槽和CSS，避免脚本、事件属性、iframe和form。',
   },
   'visuals.m022': {
-    ko: '레이아웃에 {slot}이 정확히 하나 필요해요.',
-    en: 'The layout requires exactly one {slot}.',
-    ja: 'レイアウトには{slot}がちょうど1つ必要です。',
-    zh: '布局中必须有且仅有一个{slot}。',
+    ko: '레이아웃에 {slot} 슬롯이 정확히 하나 필요해요.',
+    en: 'The layout requires exactly one {slot} slot.',
+    ja: 'レイアウトには{slot}スロットがちょうど1つ必要です。',
+    zh: '布局中必须有且仅有一个{slot}插槽。',
   },
   'visuals.m023': {
     ko: '알 수 없는 레이아웃 슬롯이 있어요.',
@@ -216,10 +216,10 @@ export const messages = {
     zh: '已保存插图参考，将用于下次插图请求。',
   },
   'visuals.m032': {
-    ko: 'Codex 삽화에 최대 8개를 참고해요. ComfyUI에는 적용되지 않아요.',
-    en: 'Use up to 8 references for Codex illustrations. Not used by ComfyUI.',
-    ja: 'Codexの挿絵に最大8枚を参照します。ComfyUIには適用されません。',
-    zh: 'Codex插图最多使用8张参考图片，不适用于ComfyUI。',
+    ko: 'Codex 삽화에는 참고 이미지 8장까지 사용할 수 있어요. ComfyUI에는 적용되지 않아요.',
+    en: 'You can use up to 8 reference images for Codex illustrations. This does not apply to ComfyUI.',
+    ja: 'Codexの挿絵には参照画像を8枚まで使用できます。ComfyUIには適用されません。',
+    zh: 'Codex插图最多可使用8张参考图片。不适用于ComfyUI。',
   },
   'visuals.m033': {
     ko: '다시 불러오기',
@@ -860,10 +860,10 @@ export const messages = {
     zh: '正在等待绘制。',
   },
   'visuals.m135': {
-    ko: 'JEV가 이미지 요청을 확인하고 있어요.',
-    en: 'JEV is reviewing the image request.',
-    ja: 'JEVが画像リクエストを確認しています。',
-    zh: 'JEV正在检查图片请求。',
+    ko: '이미지 요청을 확인하고 있어요.',
+    en: 'Reviewing image request.',
+    ja: '画像リクエストを確認しています。',
+    zh: '正在检查图片请求。',
   },
   'visuals.m136': {
     ko: '이 순간의 그림 설명을 준비하고 있어요.',
@@ -998,10 +998,10 @@ export const messages = {
     zh: '插图调用与词元',
   },
   'visuals.m175': {
-    ko: '이 원문의 삽화 작업에서 누적한 사용량이에요. 다시 그리기와 위치 재연결을 포함해요. JEV 사전 판정을 사용했다면 그 사용량도 포함해요. 요청 수는 Uimori가 집계하며 Codex 내부 모델 호출 수는 알 수 없어요. 프로바이더가 토큰 수를 보고하지 않으면 미확인으로 표시해요. ComfyUI의 그림 생성은 모델 토큰에 포함하지 않아요.',
-    en: 'Cumulative usage for this source, including redraws, placement retries and JEV prechecks when used. Uimori counts requests; Codex internal model calls are unknown. Tokens unreported by the provider are marked unknown. ComfyUI image rendering is excluded from model tokens.',
-    ja: 'この原文の挿絵作業の累積使用量です。描き直し、位置の再対応、使用したJEV事前判定を含みます。リクエスト数はUimori集計で、Codex内部のモデル呼び出し数は不明です。未報告トークンは未確認と表示します。ComfyUI画像生成はモデルのトークンに含みません。',
-    zh: '这是此原文插图任务的累计用量，包括重绘、位置重新匹配及使用时的JEV预先判定。请求数由Uimori统计，Codex内部模型调用数未知。提供商未报告的词元标为未知。ComfyUI图片生成不计入模型词元。',
+    ko: '삽화 작업의 누적 사용량이에요. 다시 그리기와 위치 재연결, 사전 판단도 포함해요. ComfyUI 그림 생성은 모델 토큰에 포함하지 않아요.',
+    en: 'Cumulative usage for illustrations, including redraws, repositioning, and prechecks. ComfyUI image generation is excluded from model tokens.',
+    ja: '挿絵作業の累積使用量です。描き直し、位置の再接続、事前判定も含みます。ComfyUIの画像生成はモデルトークンに含みません。',
+    zh: '插图任务的累计用量，包含重绘、位置重新关联及预先判定。ComfyUI 图片生成不计入模型 token。',
   },
   'visuals.m176': {
     ko: '설정 → 삽화에서 프리셋과 생성 환경을 확인해 주세요.',
@@ -1010,10 +1010,10 @@ export const messages = {
     zh: '请在设置 → 插图中检查预设和生成环境。',
   },
   'visuals.m177': {
-    ko: 'JEV가 노골적인 성적 묘사로 판단해 이 컷을 차단했어요.',
-    en: 'JEV blocked this cut as sexually explicit.',
-    ja: 'JEVが露骨な性的描写と判定し、このカットをブロックしました。',
-    zh: 'JEV 判定此画面含露骨性描写，已阻止生成。',
+    ko: '노골적인 성적 묘사로 판단해 이 컷을 차단했어요.',
+    en: 'Blocked this cut after classifying it as sexually explicit.',
+    ja: '露骨な性的描写と判定し、このカットをブロックしました。',
+    zh: '判定含露骨性描写，已阻止此画面。',
   },
   'visuals.m178': {
     ko: '이 컷은 생성 중이에요.',
@@ -1112,10 +1112,10 @@ export const messages = {
     zh: '原文区间标记无效，已停止生成插图。请检查原文。',
   },
   'visuals.m194': {
-    ko: '이미지 형식이나 크기가 맞지 않아요. PNG, JPEG, WebP 16MB 이하만 저장해요.',
-    en: 'Invalid image format or size. Only PNG, JPEG and WebP up to 16MB are saved.',
-    ja: '画像の形式やサイズが不正です。16MB以下のPNG、JPEG、WebPのみ保存します。',
-    zh: '图片格式或大小无效。仅保存不超过16MB的PNG、JPEG或WebP。',
+    ko: '이미지 형식이나 크기가 맞지 않아요. 16MB 이하의 PNG, JPEG, WebP만 저장할 수 있어요.',
+    en: 'Invalid image format or size. Only PNG, JPEG, and WebP up to 16MB can be saved.',
+    ja: '画像の形式やサイズが正しくありません。16MB以下のPNG、JPEG、WebPのみ保存できます。',
+    zh: '图片格式或大小不符。仅可保存不超过16MB的PNG、JPEG或WebP。',
   },
   'visuals.m195': {
     ko: '완료되거나 진행 중인 삽화는 다시 요청할 수 없어요.',
@@ -1208,15 +1208,15 @@ export const messages = {
     zh: '已达到Codex图片生成用量上限。',
   },
   'visuals.m210': {
-    ko: '참고 이미지를 Codex에 보낼 수 없는 형식이에요.',
+    ko: '참고 이미지가 Codex에 보낼 수 없는 형식이에요.',
     en: 'The reference image format cannot be sent to Codex.',
-    ja: '参照画像はCodexに送信できない形式です。',
+    ja: '参照画像がCodexに送信できない形式です。',
     zh: '参考图片格式无法发送至Codex。',
   },
   'visuals.m211': {
-    ko: '참고 이미지는 8개까지 보낼 수 있어요.',
-    en: 'Up to 8 reference images can be sent.',
-    ja: '参照画像は最大8枚送れます。',
+    ko: '참고 이미지는 8장까지 보낼 수 있어요.',
+    en: 'You can send up to 8 reference images.',
+    ja: '参照画像は8枚まで送信できます。',
     zh: '最多可发送8张参考图片。',
   },
   'visuals.m212': {
@@ -1388,10 +1388,10 @@ export const messages = {
     zh: 'ComfyUI已完成但未输出图片，请检查SaveImage节点。',
   },
   'visuals.m240': {
-    ko: 'ComfyUI가 보낸 이미지를 읽을 수 없어요. PNG, JPEG, WebP 16MB 이하만 저장해요.',
-    en: 'Could not read the ComfyUI image. Only PNG, JPEG and WebP up to 16MB are saved.',
-    ja: 'ComfyUIの画像を読み取れません。16MB以下のPNG、JPEG、WebPのみ保存します。',
-    zh: '无法读取ComfyUI返回图片。仅保存不超过16MB的PNG、JPEG或WebP。',
+    ko: 'ComfyUI가 보낸 이미지를 읽을 수 없어요. 16MB 이하의 PNG, JPEG, WebP만 저장할 수 있어요.',
+    en: 'Could not read the image sent by ComfyUI. Only PNG, JPEG, and WebP up to 16MB can be saved.',
+    ja: 'ComfyUIから送信された画像を読み取れません。16MB以下のPNG、JPEG、WebPのみ保存できます。',
+    zh: '无法读取ComfyUI发送的图片。仅可保存不超过16MB的PNG、JPEG或WebP。',
   },
   'visuals.m241': {
     ko: 'ComfyUI 응답 형식을 해석할 수 없어요.',
@@ -1406,10 +1406,10 @@ export const messages = {
     zh: 'ComfyUI服务器出错。',
   },
   'visuals.m243': {
-    ko: 'ComfyUI 요청이 거절됐어요. 주소와 인증 설정을 확인해 주세요.',
-    en: 'ComfyUI rejected the request. Check the URL and authentication.',
-    ja: 'ComfyUIがリクエストを拒否しました。アドレスと認証設定を確認してください。',
-    zh: 'ComfyUI拒绝请求，请检查地址和身份验证设置。',
+    ko: 'ComfyUI 요청이 거절됐어요.',
+    en: 'ComfyUI request was rejected.',
+    ja: 'ComfyUIのリクエストが拒否されました。',
+    zh: 'ComfyUI 请求被拒绝。',
   },
   'visuals.m244': {
     ko: '모의 실패예요.',
@@ -1418,10 +1418,10 @@ export const messages = {
     zh: '这是模拟失败。',
   },
   'visuals.m245': {
-    ko: '프롬프트 모델 호출을 완료하지 못했어요. 모델과 연결 상태를 확인해 주세요. 다시 요청하면 사용량이 추가될 수 있어요.',
-    en: 'Could not complete the prompt model call. Check the model and connection. Retrying may incur additional usage.',
-    ja: 'プロンプトモデル呼び出しを完了できませんでした。モデルと接続を確認してください。再試行で使用量が増える場合があります。',
-    zh: '无法完成提示词模型调用。请检查模型和连接，重试可能增加用量。',
+    ko: '프롬프트 모델 호출을 완료하지 못했어요.',
+    en: 'Could not complete the prompt model call.',
+    ja: 'プロンプトモデルの呼び出しを完了できませんでした。',
+    zh: '未能完成提示词模型调用。',
   },
   'visuals.m246': {
     ko: '모의 생성기',
@@ -1520,10 +1520,10 @@ export const messages = {
     zh: '已跳过设定筛选（{v0}）',
   },
   'visuals.m275': {
-    ko: '로어 선별, {v0}개 선택, 문자 {v1} / 예산 {v2}, 제외 {v3}',
-    en: 'Lore selection, {v0} selected, Characters {v1} / Budget {v2}, {v3} omitted',
-    ja: 'ロア選別、{v0}件選択、文字数{v1} / 予算{v2}、除外{v3}',
-    zh: '设定筛选，已选{v0}项，字符{v1} / 预算{v2}，排除{v3}项',
+    ko: '로어 {v0}개 선택, 문자 {v1} / 예산 {v2}, 제외 {v3}',
+    en: 'Lore {v0} selected, Characters {v1} / Budget {v2}, {v3} excluded',
+    ja: 'ロア{v0}件選択、文字数{v1} / 予算{v2}、除外{v3}',
+    zh: '已选设定 {v0} 项，字符 {v1} / 预算 {v2}，排除 {v3}',
   },
   'visuals.m276': {
     ko: '원문 {v0}',

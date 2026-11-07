@@ -46,14 +46,12 @@ for (const viewport of [
       await expect(dialog.getByLabel('이미지 배치 담당', { exact: true })).toBeHidden();
       await expect(dialog.getByRole('region', { name: '로어 컨텍스트 정책' })).toBeHidden();
       await selectChatSettingsSection(page, '기억과 메모');
-      await expect(dialog.getByLabel('Jev 관련성 기준', { exact: true })).toBeHidden();
+      await expect(dialog.getByLabel('관련성 기준', { exact: true })).toBeHidden();
       await dialog.getByText('선별 기준과 용량', { exact: true }).click();
-      await dialog.getByLabel('Jev 관련성 기준', { exact: true }).fill('0.7');
-      const thresholdBox = await dialog
-        .getByLabel('Jev 관련성 기준', { exact: true })
-        .boundingBox();
+      await dialog.getByLabel('관련성 기준', { exact: true }).fill('0.7');
+      const thresholdBox = await dialog.getByLabel('관련성 기준', { exact: true }).boundingBox();
       const budgetBox = await dialog
-        .getByLabel('JEV 선택 로어 토큰 한도', { exact: true })
+        .getByLabel('선택 로어 토큰 한도', { exact: true })
         .boundingBox();
       expect(thresholdBox).not.toBeNull();
       expect(budgetBox).not.toBeNull();
@@ -114,7 +112,7 @@ for (const viewport of [
       await expect(inherited.locator('dd')).toHaveText(workspace.translation.title);
       await selectChatSettingsSection(page, '기억과 메모');
       await expect(dialog.getByLabel('조회 로어 토큰 한도', { exact: true })).toHaveValue('');
-      await expect(dialog.getByLabel('Jev 관련성 기준', { exact: true })).toHaveValue('0.7');
+      await expect(dialog.getByLabel('관련성 기준', { exact: true })).toHaveValue('0.7');
       await dialog.getByLabel('조회 로어 토큰 한도', { exact: true }).fill('12000');
       await page.screenshot({ path: info.outputPath(`chat-memory-${viewport.width}.png`) });
       const saved = page.waitForResponse(

@@ -155,7 +155,7 @@ test('MP02 a rejected model save stays open without retrying and a lost response
     await route.abort('failed');
   });
   await picker.getByRole('button', { name: `${models[1].title} MP02` }).click();
-  await expect(picker.getByRole('alert')).toContainText('모델 저장 응답을 받지 못했어요.');
+  await expect(picker.getByRole('alert')).toContainText('모델 저장 결과를 확인하지 못했어요.');
   await expect(picker.getByRole('button', { name: `${models[1].title} MP02` })).toHaveAttribute(
     'aria-pressed',
     'true'

@@ -174,7 +174,7 @@ describe('helper navigation presentation', () => {
       expect(html.split(`data-conversation-id="${item.id}"`)).toHaveLength(2);
     expect(html).toContain('bot-tree-folder-contents helper-nav-project-contents');
     expect(html).toContain('첫 프로젝트 프로젝트 메뉴');
-    expect(html).toContain('aria-label="활동, 미확인 1개"');
+    expect(html).toContain('aria-label="미확인 활동 1개"');
     expect(html).toContain('위로 이동');
     expect(html).toContain('아래로 이동');
     expect(html.split('<span>첫 프로젝트</span>')).toHaveLength(2);

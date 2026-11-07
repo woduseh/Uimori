@@ -142,7 +142,7 @@ test('JEVUI01 saves and removes a server key without exposing it or changing wri
     .locator('.provider-model-group')
     .filter({ hasText: 'TypeSafe AI' });
   const modelRow = page.getByRole('article', { name: 'JEV 모델', exact: true });
-  await expect(typeSafeGroup.getByText('1개 모델', { exact: true })).toBeVisible();
+  await expect(typeSafeGroup.getByText('모델 1개', { exact: true })).toBeVisible();
   await expect(modelRow).toBeHidden();
   await typeSafeGroup.locator(':scope > summary').click();
   await expect(modelRow).toBeVisible();
@@ -314,17 +314,15 @@ test('JEVUI03 recovers a synthetic uncertain test and shows structured success a
   await openJev(page);
   const section = await openJevModel(page);
   await expect(
-    section.getByText('이 결과는 이전 연결 정보로 실행한 테스트예요.', { exact: true })
+    section.getByText('이전 연결 정보로 실행한 테스트 결과예요.', { exact: true })
   ).toBeVisible();
   await section.getByRole('button', { name: 'JEV 연결 테스트', exact: true }).click();
-  await expect(section.getByRole('alert')).toContainText('새 테스트는 보내지 않아요');
+  await expect(section.getByRole('alert')).toContainText('테스트 결과를 확인하지 못했어요');
   expect(submissions).toHaveLength(1);
   await section.getByRole('button', { name: 'JEV 테스트 상태 확인', exact: true }).click();
   await expect(section.getByLabel('JEV API 키', { exact: true })).toBeHidden();
-  await expect(
-    section.getByRole('button', { name: 'JEV 응답 확인 중…', exact: true })
-  ).toBeDisabled();
-  await expect(section.getByText('JEV 판단 응답을 확인했어요.', { exact: true })).toBeVisible();
+  await expect(section.getByRole('button', { name: '응답 확인 중…', exact: true })).toBeDisabled();
+  await expect(section.getByText('판단 응답을 확인했어요.', { exact: true })).toBeVisible();
   await expect(section.getByText('예제 관련성: 97.0%', { exact: true })).toBeVisible();
   await expect(section.getByText('0.32초', { exact: true })).toBeVisible();
   await expect(section.getByText('$0.000123', { exact: true })).toBeVisible();

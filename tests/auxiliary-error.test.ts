@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { auxiliaryErrorDiagnostic } from '../web/auxiliary-error.js';
+import { auxiliaryErrorDiagnostic, auxiliaryErrorMessage } from '../web/auxiliary-error.js';
 import { mainJudgmentError } from '../web/main-judgment-error.js';
 
 describe('safe auxiliary error diagnostics', () => {
-  it('explains missing evaluation submission in main and auxiliary tasks without suggesting an automatic resend', () => {
+  it('identifies missing evaluation submission in main and auxiliary tasks', () => {
     const diagnostic = auxiliaryErrorDiagnostic('EVALUATION_SUBMISSION_REQUIRED');
     expect(diagnostic.code).toBe('EVALUATION_SUBMISSION_REQUIRED');
-    expect(diagnostic.message).toContain('결과 제출 도구');
-    expect(diagnostic.action).toContain('자동으로 다시 요청하지 않았어요');
+    expect(diagnostic.message).toBe('모델이 결과를 제출하지 않았어요.');
+    expect(diagnostic.action).toBe('평가 도구 설정을 확인해 주세요.');
     expect(mainJudgmentError('EVALUATION_SUBMISSION_REQUIRED')).toContain(diagnostic.message);
     expect(mainJudgmentError('EVALUATION_SUBMISSION_REQUIRED private text')).toBeUndefined();
   });
@@ -29,7 +29,7 @@ describe('safe auxiliary error diagnostics', () => {
     const diagnostic = auxiliaryErrorDiagnostic('PROMPT_UNKNOWN_SLOT');
     expect(diagnostic.code).toBe('PROMPT_UNKNOWN_SLOT');
     expect(diagnostic.message).toContain('슬롯');
-    expect(diagnostic.action).toContain('모델 전송 전');
+    expect(diagnostic.action).toContain('프롬프트');
     expect(auxiliaryErrorDiagnostic('PROMPT_UNKNOWN_SLOT private text').code).toBeNull();
   });
   it('identifies exactly the missing model role', () => {
@@ -66,25 +66,30 @@ describe('safe auxiliary error diagnostics', () => {
 
   it('distinguishes a malformed JEV answer from a connection failure', () => {
     const diagnostic = auxiliaryErrorDiagnostic('JEV_RESPONSE_INVALID');
-    expect(diagnostic.message).toContain('응답했지만');
-    expect(diagnostic.action).toContain('연결은 완료');
+    expect(diagnostic.code).toBe('JEV_RESPONSE_INVALID');
+    expect(diagnostic.message).toContain('판단 결과 형식');
+    expect(diagnostic.action).toContain('다시 요청');
     expect(diagnostic.action).not.toContain('연결을 확인');
   });
 
-  it('distinguishes missing classifier, failed classification, uncertainty and retry limits without replay promises', () => {
-    expect(auxiliaryErrorDiagnostic('JEV_CREDENTIAL_REQUIRED').message).toContain('연결');
+  it('distinguishes missing classifier, failed classification, uncertainty and retry limits', () => {
+    const credential = auxiliaryErrorDiagnostic('JEV_CREDENTIAL_REQUIRED');
+    expect(credential.code).toBe('JEV_CREDENTIAL_REQUIRED');
+    expect(credential.message).toContain('연결');
+    expect(credential.action).toContain('API 키');
     const failed = auxiliaryErrorDiagnostic('TRANSLATION_REFUSAL_CHECK_FAILED');
     const uncertain = auxiliaryErrorDiagnostic('TRANSLATION_REFUSAL_UNCERTAIN');
-    expect(failed.message).not.toBe(uncertain.message);
-    for (const diagnostic of [failed, uncertain]) {
-      expect(diagnostic.action).toContain('보존');
-      expect(diagnostic.action).toContain('자동으로 다시 호출하지 않았어요');
-    }
-    expect(auxiliaryErrorDiagnostic('TRANSLATION_REFUSAL_RETRIES_EXHAUSTED').message).toContain(
-      '허용된 자동 재시도'
-    );
+    expect(failed.code).toBe('TRANSLATION_REFUSAL_CHECK_FAILED');
+    expect(uncertain.code).toBe('TRANSLATION_REFUSAL_UNCERTAIN');
+    expect(failed.message).toContain('번역 거절 여부');
+    expect(uncertain.message).toContain('번역 거절 여부');
+    expect(failed.action).toContain('연결');
+    expect(uncertain.action).toContain('응답');
+    const exhausted = auxiliaryErrorDiagnostic('TRANSLATION_REFUSAL_RETRIES_EXHAUSTED');
+    expect(exhausted.code).toBe('TRANSLATION_REFUSAL_RETRIES_EXHAUSTED');
+    expect(exhausted.message).toBe('번역이 거절됐어요.');
     expect(auxiliaryErrorDiagnostic('AUXILIARY_CALL_BUDGET_EXHAUSTED').action).toContain(
-      '거절 판정'
+      '호출 한도'
     );
     expect(auxiliaryErrorDiagnostic('TOOL_CORRECTION_EXHAUSTED').message).toContain('중단');
   });
@@ -109,11 +114,15 @@ describe('safe auxiliary error diagnostics', () => {
   });
 });
 
-it('explains the JEV input budget without connection or automatic retry advice', () => {
-  const diagnostic = auxiliaryErrorDiagnostic('JEV_INPUT_BUDGET');
-  expect(diagnostic.code).toBe('JEV_INPUT_BUDGET');
-  expect(diagnostic.message).toContain('토큰 한도');
-  expect(diagnostic.action).toContain('보존된 출력');
-  expect(diagnostic.action).toContain('자동 재호출하지 않았어요');
-  expect(diagnostic.action).not.toContain('연결');
+it.each([
+  [
+    'JEV_INPUT_BUDGET',
+    '판단 입력이 허용된 토큰 한도를 초과했어요.',
+    '출력 길이 설정을 확인해 주세요.',
+  ],
+  ['JEV_EXECUTION_FAILED', '판단을 완료하지 못했어요.', '작업 상세와 연결을 확인해 주세요.'],
+])('shows concise judgment details for %s', (code, message, action) => {
+  expect(auxiliaryErrorDiagnostic(code)).toEqual({ code, message, action });
+  expect(auxiliaryErrorMessage(code)).toBe(`${message} ${action}`);
+  expect(mainJudgmentError(code)).toBe(`${message} ${action}`);
 });
