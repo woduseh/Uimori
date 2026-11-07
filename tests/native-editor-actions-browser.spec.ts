@@ -117,7 +117,8 @@ for (const viewport of [
   }, info) => {
     await page.setViewportSize(viewport);
     const program = createDefaultRisuPrompt('Synthetic toggle action fixture.');
-    const original = '=기존 그룹=group\nkeep=보존할 입력=text\n==groupEnd';
+    const longLabel = '긴 이름과 설명을 충분히 읽을 수 있는 합성 설정';
+    const original = `=기존 그룹=group\nkeep=보존할 입력=text\nlong=${longLabel}=text\n==groupEnd`;
     program.nativeRisuPreset.preset.customPromptTemplateToggle = original;
     const preset = await post<PromptPreset>(request, '/api/prompt-presets', {
       title: `Toggle actions ${crypto.randomUUID()}`,
@@ -142,6 +143,42 @@ for (const viewport of [
           await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)
         ).toBeLessThanOrEqual(1);
       }
+      await page.setViewportSize({ width: 320, height: MOBILE_HEIGHT });
+      await page.evaluate(() => {
+        localStorage.setItem('uimori:ui-language', 'en');
+        window.dispatchEvent(
+          new StorageEvent('storage', { key: 'uimori:ui-language', newValue: 'en' })
+        );
+      });
+      await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+      const row = editor.locator('.native-toggle-editor .nt-item').filter({ hasText: longLabel });
+      const title = row.locator('.nt-item-copy strong');
+      const kind = row.locator('.nt-kind');
+      const main = row.locator('.nt-row-main');
+      const menu = row.locator('.nt-row > .action-menu');
+      await expect(title).toBeVisible();
+      await expect(kind).toHaveText('Single-line input');
+      expect((await title.boundingBox())!.width).toBeGreaterThanOrEqual(90);
+      expect(
+        await title.evaluate((node) => node.scrollWidth - node.clientWidth)
+      ).toBeLessThanOrEqual(1);
+      expect(
+        await kind.evaluate((node) => node.scrollWidth - node.clientWidth)
+      ).toBeLessThanOrEqual(1);
+      await main.click();
+      await expect(main).toHaveAttribute('aria-expanded', 'true');
+      await main.click();
+      await menu.locator('summary').click();
+      await expect(menu.locator('.action-menu-body button').first()).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(menu).not.toHaveAttribute('open', '');
+      await page.evaluate(() => {
+        localStorage.setItem('uimori:ui-language', 'ko');
+        window.dispatchEvent(
+          new StorageEvent('storage', { key: 'uimori:ui-language', newValue: 'ko' })
+        );
+      });
+      await expect(page.locator('html')).toHaveAttribute('lang', 'ko');
       await page.setViewportSize(viewport);
     }
     const add = definitions
@@ -315,12 +352,13 @@ for (const viewport of [
           'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNIK1/1HwAFVQKH+f6iOwAAAABJRU5ErkJggg==',
       }
     );
+    const removedTitle = `${'긴에셋이름'.repeat(10)} https://example.test/${'longsegment'.repeat(7)}`;
     const pkg = nativeContent(
       { name: `Asset actions ${crypto.randomUUID()}` },
       {
         images: ['keep', 'remove'].map((id) => ({
           id,
-          title: id === 'keep' ? '유지할 이미지' : '제거할 이미지',
+          title: id === 'keep' ? '유지할 이미지' : removedTitle,
           description: '',
           blobHash: image.hash,
           mime: image.mime,
@@ -353,7 +391,7 @@ for (const viewport of [
     const images = library.getByLabel('Risu 이미지 목록', { exact: true });
     await images.getByRole('button', { name: '유지할 이미지', exact: true }).click();
     await library.getByLabel('이미지 설명', { exact: true }).fill('취소와 제거 후에도 유지할 설명');
-    await images.getByRole('button', { name: '제거할 이미지', exact: true }).click();
+    await images.getByRole('button', { name: removedTitle, exact: true }).click();
     const removeButton = library.getByRole('button', { name: '선택한 에셋 삭제', exact: true });
     const dialog = page.getByRole('alertdialog', {
       name: '이 에셋을 자료에서 제거할까요?',
@@ -361,13 +399,18 @@ for (const viewport of [
     });
     await removeButton.click();
     await expect(dialog).toContainText('원본 파일은 삭제하지 않아요.');
+    const description = dialog.locator('.dialog-body > p').first();
+    await expect(description).toContainText(removedTitle);
+    expect(
+      await description.evaluate((node) => node.scrollWidth - node.clientWidth)
+    ).toBeLessThanOrEqual(1);
     await actionPair(dialog, '에셋 삭제', 'delete');
     await page.screenshot({ path: info.outputPath(`asset-remove-${viewport.name}.png`) });
     await dialog.getByRole('button', { name: '취소', exact: true }).click();
     await expect(dialog).toBeHidden();
     await expect(removeButton).toBeFocused();
     await expect(images.getByRole('button')).toHaveCount(2);
-    await expect(library.getByLabel('이미지 이름', { exact: true })).toHaveValue('제거할 이미지');
+    await expect(library.getByLabel('이미지 이름', { exact: true })).toHaveValue(removedTitle);
     await removeButton.click();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();

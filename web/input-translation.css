@@ -97,6 +97,9 @@
   gap: 5px;
   margin: 4px 0;
 }
+.input-translation-feedback > p.error:lang(ko) {
+  word-break: keep-all;
+}
 .input-translation-original {
   display: flex;
   align-items: flex-start;

@@ -82,6 +82,13 @@ test('HELPREC01 failed draft reads preserve the old draft and selected source; f
   await expect(panel).toBeVisible();
   await expect(panel.getByText('도우미 초안을 불러오지 못했어요.')).toBeVisible();
   await expect(input).toBeDisabled();
+  await page.setViewportSize({ width: 2560, height: 915 });
+  const noticeWidths = await panel.locator('.helper-notice').evaluate((notice) => ({
+    notice: notice.clientWidth,
+    message: notice.querySelector<HTMLElement>('.notice-banner-message')!.clientWidth,
+  }));
+  expect(noticeWidths.message).toBeGreaterThanOrEqual(noticeWidths.notice * 0.6);
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
   if (visualReview)
     await page.screenshot({ path: info.outputPath('helper-draft-read-failed.png') });
   await page.evaluate(() => localStorage.removeItem('test-helper-read-fails'));

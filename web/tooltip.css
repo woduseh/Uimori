@@ -22,3 +22,13 @@
   overflow-wrap: anywhere;
   cursor: default;
 }
+@position-try --dialog-tooltip-side {
+  position-area: inline-start;
+  justify-self: end;
+  align-self: start;
+  margin-block-start: 0;
+}
+.app-dialog > .dialog-header > .ui-icon-button:last-child > .ui-tooltip {
+  position-area: block-start;
+  position-try-fallbacks: --dialog-tooltip-side, flip-block, flip-inline;
+}

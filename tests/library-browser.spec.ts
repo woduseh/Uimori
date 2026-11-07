@@ -245,6 +245,7 @@ test('LIBUI02 mobile folder deletion refreshes another page and stale moves requ
   await panel.getByLabel(`${item.title} 메뉴`, { exact: true }).click();
   await panel.getByRole('button', { name: '분류와 폴더 이동', exact: true }).click();
   const move = page.getByRole('dialog', { name: '자료 이동', exact: true });
+  await expect(move).toContainText('자료 1개를 옮겨요.');
   await move.getByLabel('이동할 분류').selectOption('module');
   const before = await organization(request);
   expect(
@@ -589,6 +590,17 @@ test('SAVEACK prompt navigation preserves an accepted save when placement and su
   const warning = page.getByRole('alert').filter({ hasText: '프롬프트는 저장됐지만' });
   await expect(warning).toContainText('폴더에 배치하지 못했어요.');
   await expect(warning).toContainText('목록을 다시 불러오지 못했어요.');
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+  const breadcrumb = panel.getByRole('navigation', { name: '현재 폴더', exact: true });
+  const rootFolder = breadcrumb.getByRole('button', { name: '전체', exact: true });
+  await rootFolder.scrollIntoViewIfNeeded();
+  await expect(rootFolder).toBeInViewport({ ratio: 1 });
+  expect(
+    await rootFolder.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
+  ).toBe(true);
+  expect(
+    await breadcrumb.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
+  ).toBe(true);
   const after = (await (await request.get('/api/library')).json()) as Library;
   const saved = after.promptPresets?.filter((item) => item.title === title) ?? [];
   expect(saved).toHaveLength(1);

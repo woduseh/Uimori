@@ -288,3 +288,147 @@ test('BPTUI02 template retry, dialog focus and duplicate clicks preserve a singl
     await page.unrouteAll({ behavior: 'wait' });
   }
 });
+
+for (const action of ['save', 'clone', 'add'] as const) {
+  test(`BPTUI03 ${action} keeps the created prompt when folder placement fails`, async ({
+    page,
+    request,
+  }) => {
+    const title = `BPTUI03 ${action} ${crypto.randomUUID()}`;
+    const seedResponse = await request.post('/api/prompt-presets', {
+      data: {
+        title,
+        role: 'main',
+        program: nativePrompt('Synthetic placement failure.'),
+        values: {},
+      },
+    });
+    expect(seedResponse.ok(), await seedResponse.text()).toBe(true);
+    const seed = (await seedResponse.json()) as PromptPreset;
+    const initial = (await (
+      await request.get('/api/library/organization')
+    ).json()) as LibraryOrganization;
+    const folderTitle = `BPTUI03 folder ${crypto.randomUUID()}`;
+    const folderResponse = await request.post('/api/library/folders', {
+      data: { expectedRevision: initial.revision, category: 'prompts', title: folderTitle },
+    });
+    expect(folderResponse.ok(), await folderResponse.text()).toBe(true);
+    const organization = (await folderResponse.json()) as LibraryOrganization;
+    const folder = organization.folders.find((item) => item.title === folderTitle)!;
+    if (action === 'clone') {
+      const move = await request.post('/api/library/organization/move', {
+        data: {
+          expectedRevision: organization.revision,
+          category: 'prompts',
+          folderId: folder.id,
+          items: [{ kind: 'prompt-preset', id: seed.id }],
+        },
+      });
+      expect(move.ok(), await move.text()).toBe(true);
+    }
+    await page.goto('/');
+    await navigationAction(page, '프롬프트');
+    const panel = page.getByTestId('prompt-library');
+    await panel.getByRole('button', { name: `${folderTitle} 폴더 열기`, exact: true }).click();
+    if (action === 'save') {
+      await panel.getByRole('button', { name: '새 프롬프트', exact: true }).first().click();
+      const editor = page.getByTestId('prompt-editor');
+      await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+      await editor.getByLabel('프롬프트 이름', { exact: true }).fill(`${title} saved`);
+    } else if (action === 'add') {
+      await panel.getByRole('button', { name: '기본 프롬프트', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: '기본 프롬프트', exact: true })).toBeVisible();
+    }
+    await page.route('**/api/library/organization/move', (route) =>
+      route.fulfill({ status: 503, json: { error: 'synthetic placement failure' } })
+    );
+    const accepted = page.waitForResponse((response) => {
+      const path = new URL(response.url()).pathname;
+      return (
+        response.request().method() === 'POST' &&
+        path ===
+          (action === 'save'
+            ? '/api/resources/save'
+            : action === 'clone'
+              ? '/api/resources/clone'
+              : '/api/prompt-presets')
+      );
+    });
+    if (action === 'save') {
+      await page
+        .getByTestId('prompt-editor')
+        .getByRole('button', { name: '프롬프트 저장', exact: true })
+        .click();
+    } else if (action === 'clone') {
+      const row = panel.locator(`[data-library-item-id="${seed.id}"]`);
+      await row.getByLabel(`${title} 메뉴`, { exact: true }).click();
+      await row.getByRole('button', { name: '복제', exact: true }).click();
+    } else {
+      await page
+        .getByRole('dialog', { name: '기본 프롬프트', exact: true })
+        .getByRole('button', { name: 'Phēmē RP 추가', exact: true })
+        .click();
+    }
+    const response = await accepted;
+    expect(response.ok(), await response.text()).toBe(true);
+    const payload = await response.json();
+    const saved = (action === 'add' ? payload : payload.saved) as PromptPreset;
+    expect(saved.id).toBeTruthy();
+    expect(saved.id).not.toBe(seed.id);
+    const warning = page.locator('.destination-scroll > .dismissible-error p');
+    const verb = action === 'save' ? '저장' : action === 'clone' ? '복제' : '추가';
+    await expect(warning).toHaveText(`프롬프트는 ${verb}됐지만 폴더에 배치하지 못했어요.`);
+    const persisted = await request.get(`/api/prompt-presets/${saved.id}`);
+    expect(persisted.ok(), await persisted.text()).toBe(true);
+    expect(await persisted.json()).toMatchObject({ id: saved.id, title: saved.title });
+    const after = (await (
+      await request.get('/api/library/organization')
+    ).json()) as LibraryOrganization;
+    expect(
+      after.items.some(
+        (item) =>
+          item.kind === 'prompt-preset' && item.id === saved.id && item.folderId === folder.id
+      )
+    ).toBe(false);
+  });
+}
+
+test('BPTUI04 template placement keeps an independent organization lookup error', async ({
+  page,
+  request,
+}) => {
+  const initial = (await (
+    await request.get('/api/library/organization')
+  ).json()) as LibraryOrganization;
+  const folderTitle = `BPTUI04 folder ${crypto.randomUUID()}`;
+  const folderResponse = await request.post('/api/library/folders', {
+    data: { expectedRevision: initial.revision, category: 'prompts', title: folderTitle },
+  });
+  expect(folderResponse.ok(), await folderResponse.text()).toBe(true);
+  await page.goto('/');
+  await navigationAction(page, '프롬프트');
+  const panel = page.getByTestId('prompt-library');
+  await panel.getByRole('button', { name: `${folderTitle} 폴더 열기`, exact: true }).click();
+  await panel.getByRole('button', { name: '기본 프롬프트', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '기본 프롬프트', exact: true });
+  await expect(dialog.getByRole('button', { name: 'Phēmē RP 추가', exact: true })).toBeVisible();
+  await page.route('**/api/library/organization', (route) =>
+    route.fulfill({ status: 503, json: { error: 'synthetic organization lookup failure' } })
+  );
+  const accepted = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/prompt-presets' &&
+      response.request().method() === 'POST'
+  );
+  await dialog.getByRole('button', { name: 'Phēmē RP 추가', exact: true }).click();
+  const response = await accepted;
+  expect(response.ok(), await response.text()).toBe(true);
+  const saved = (await response.json()) as PromptPreset;
+  const warning = page.locator('.destination-scroll > .dismissible-error p');
+  await expect(warning).toHaveText(
+    '프롬프트는 추가됐지만 폴더에 배치하지 못했어요. 서버 작업을 완료하지 못했어요. (503)'
+  );
+  const persisted = await request.get(`/api/prompt-presets/${saved.id}`);
+  expect(persisted.ok(), await persisted.text()).toBe(true);
+  expect(await persisted.json()).toMatchObject({ id: saved.id, title: 'Phēmē RP' });
+});

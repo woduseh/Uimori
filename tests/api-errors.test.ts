@@ -2,6 +2,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { api, ApiError } from '../web/api.js';
 import { mainJudgmentError } from '../web/main-judgment-error.js';
 import { setLocale, translateMessage } from '../web/i18n.js';
+import { apiErrorDiagnostic } from '../web/api-errors.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -91,6 +92,37 @@ test('generic errors keep provider/internal text hidden and retain deletion conf
   });
   const deletion = '진행 중인 도우미 작업을 취소하거나 완료한 뒤 삭제해 주세요.';
   expect(await rejected(409, deletion, 'DELETE')).toMatchObject({ message: deletion });
+});
+
+test('only the exact helper copy conflict follows the UI language', async () => {
+  const wireMessage = '도우미 대화가 변경됐어요. 최신 내용을 확인한 뒤 다시 복사해 주세요.';
+  const result = await rejected(409, wireMessage);
+  expect(result).toMatchObject({
+    status: 409,
+    code: 'HELPER_CONVERSATION_COPY_CHANGED',
+    message: wireMessage,
+  });
+  for (const [locale, expected] of [
+    ['ko', '도우미 대화가 바뀌었어요. 다시 복사해 주세요.'],
+    ['en', 'The helper conversation changed. Please copy it again.'],
+    ['ja', 'アシスタントの会話が変更されました。もう一度コピーしてください。'],
+    ['zh', '助手对话已更改。请重新复制。'],
+  ] as const) {
+    setLocale(locale);
+    expect(result.displayMessage).toBe(expected);
+    expect(translateMessage(result.message)).toBe(expected);
+    expect(result.message).toBe(wireMessage);
+  }
+  for (const [status, error, method] of [
+    [400, wireMessage, 'POST'],
+    [409, wireMessage, 'PATCH'],
+    [409, `${wireMessage} external detail`, 'POST'],
+  ] as const) {
+    const other = apiErrorDiagnostic(error, status, method);
+    expect(other.code).toBeNull();
+    expect(other.message).not.toContain('external detail');
+    expect(other.message).not.toBe(wireMessage);
+  }
 });
 
 test.each(['FAILED', 'CANCELLED', 'INTERRUPTED', 'RUNNING'] as const)(

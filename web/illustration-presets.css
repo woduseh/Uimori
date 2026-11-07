@@ -177,6 +177,9 @@
   min-width: 0;
   border-top: var(--hairline) solid var(--line);
 }
+.illustration-preset-disclosure p:lang(ko) {
+  word-break: keep-all;
+}
 .illustration-preset-disclosure > summary {
   display: flex;
   align-items: center;

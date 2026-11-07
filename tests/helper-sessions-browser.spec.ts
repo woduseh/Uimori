@@ -92,7 +92,9 @@ test('AUDIT2 helper deletion clears a recovered read error and keeps a rejected 
       await page.screenshot({ path: info.outputPath('helper-deletion-read-failed-412.png') });
     releaseRecovery();
     await expect.poll(() => successfulReads).toBeGreaterThan(0);
-    await expect(dialog).toContainText('이미 저장한 본편');
+    await expect(dialog).toContainText(
+      '이 도우미 대화를 삭제해요. 진행 중인 작업은 먼저 중지해 주세요.'
+    );
     await expect(dialog.getByRole('alert')).toHaveCount(0);
     await expect(remove).toBeEnabled();
     expect(deleteRequests).toBe(0);
@@ -116,6 +118,63 @@ test('AUDIT2 helper deletion clears a recovered read error and keeps a rejected 
     releaseRecovery();
     await page.unrouteAll({ behavior: 'wait' });
   }
+});
+
+test('HSESSION09 copy conflict keeps the helper menu usable on a narrow screen', async ({
+  page,
+  request,
+}) => {
+  const created = await postFixtureChat(request, {
+    data: { title: `도우미 복사 충돌 ${randomUUID()}` },
+  });
+  expect(created.ok()).toBe(true);
+  const chat = (await created.json()) as Chat;
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  const panel = page.locator('#helper-panel');
+  const input = panel.getByLabel('도우미에게 요청', { exact: true });
+  await expect(input).toBeEnabled();
+  await input.fill('복사 충돌 중에도 남길 초안');
+  const picker = panel.getByLabel('도우미 대화 선택', { exact: true });
+  const session = await picker.inputValue();
+  await page.route(`**/api/helper/conversations/${session}/copy`, async (route) => {
+    const payload = route.request().postDataJSON();
+    const changed = await request.patch(`/api/helper/conversations/${session}`, {
+      data: { expectedRevision: payload.expectedRevision, title: '복사 전에 바뀐 대화' },
+    });
+    expect(changed.ok(), await changed.text()).toBe(true);
+    await route.continue();
+  });
+  const menu = panel.getByLabel('도우미 대화 관리', { exact: true });
+  await menu.click();
+  const response = page.waitForResponse((value) =>
+    value.url().endsWith(`/api/helper/conversations/${session}/copy`)
+  );
+  await panel.getByRole('button', { name: '대화 복사', exact: true }).click();
+  expect((await response).status()).toBe(409);
+  const notice = panel.getByRole('alert');
+  await expect(notice).toHaveText('도우미 대화가 바뀌었어요. 다시 복사해 주세요.');
+  await expect(input).toHaveValue('복사 충돌 중에도 남길 초안');
+  const close = panel.getByRole('button', { name: '도우미 닫기', exact: true });
+  const [noticeBox, menuBox, pickerBox, closeBox] = await Promise.all([
+    notice.boundingBox(),
+    menu.boundingBox(),
+    picker.boundingBox(),
+    close.boundingBox(),
+  ]);
+  expect(noticeBox).not.toBeNull();
+  for (const control of [menuBox, pickerBox, closeBox]) {
+    expect(control?.width).toBeGreaterThan(0);
+    expect(control!.x).toBeGreaterThanOrEqual(0);
+    expect(control!.x + control!.width).toBeLessThanOrEqual(321);
+    expect(noticeBox!.y).toBeGreaterThanOrEqual(control!.y + control!.height - 1);
+  }
+  await menu.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel.getByRole('button', { name: '대화 복사', exact: true })).toBeEnabled();
+  await page.keyboard.press('Escape');
+  await expect(input).toHaveValue('복사 충돌 중에도 남길 초안');
 });
 
 test('HSESSION01 sessions retain their own drafts after switching and reload, rename and delete only the selected session', async ({
@@ -182,7 +241,9 @@ test('HSESSION01 sessions retain their own drafts after switching and reload, re
     for (const dismissal of ['continue', 'Escape', 'backdrop'] as const) {
       await panel.getByLabel('도우미 대화 관리', { exact: true }).click();
       await panel.getByRole('button', { name: '대화 삭제', exact: true }).click();
-      await expect(deletion).toContainText('이미 저장한 본편');
+      await expect(deletion).toContainText(
+        '이 도우미 대화를 삭제해요. 진행 중인 작업은 먼저 중지해 주세요.'
+      );
       const cancel = deletion.getByRole('button', { name: '계속 사용', exact: true });
       const remove = deletion.getByRole('button', { name: '대화 영구 삭제', exact: true });
       await expect(remove).toBeEnabled();

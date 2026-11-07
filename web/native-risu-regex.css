@@ -82,6 +82,10 @@
 .native-regex-raw {
   margin-top: 24px;
 }
+.native-regex-raw > p.muted:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .native-regex-raw > label {
   display: grid;
   gap: 8px;

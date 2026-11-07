@@ -356,6 +356,9 @@ export function ChatSettingsPanel({
             value={active}
             onChange={(event) => select(event.target.value as Section)}
           >
+            <button type="button">
+              <span>{title}</span>
+            </button>
             {categories
               .filter((item) => item.id !== 'packages' || packageFeatures || active === 'packages')
               .map((item) => (

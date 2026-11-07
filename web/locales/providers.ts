@@ -2322,6 +2322,12 @@ export const messages = {
     ja: '料金情報がありません。手動で入力すると見積もり費用を確認できます。',
     zh: '暂无费率信息。手动输入即可查看预估费用。',
   },
+  'providers.manualPricingReference': {
+    ko: '사용자가 입력한 참고 단가예요. 실제 청구액과 다를 수 있어요.',
+    en: 'User-entered reference rates. Actual charges may differ.',
+    ja: 'ユーザー入力の参考単価です。実際の請求額と異なる場合があります。',
+    zh: '用户输入的参考单价，实际费用可能不同。',
+  },
   'providers.m475': {
     ko: '호출에 고정된 등급',
     en: 'Tier fixed for this call',

@@ -404,7 +404,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
           </label>
         </div>
         {draft && !parsed && <small className="error">{t('chatsettings.m187')}</small>}
-        <div className="form-actions">
+        <div className={`form-actions${hasUncertainSave ? ' chat-variable-recovery-actions' : ''}`}>
           <button
             type="button"
             className="secondary"

@@ -71,5 +71,7 @@ const estimateNotes: Record<string, string> = {
 };
 
 export function pricingNote(note: string): string {
+  if (note === '사용자가 입력한 참고 단가예요. 실제 청구액과 다를 수 있어요.')
+    return t('providers.manualPricingReference');
   return estimateNotes[note] ?? (/^[A-Z][A-Z0-9_]+$/.test(note) ? t('providers.m531') : note);
 }

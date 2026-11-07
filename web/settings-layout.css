@@ -111,13 +111,34 @@
     grid-row: 1;
     width: 100%;
     max-width: none;
-    padding-inline: 4px 24px;
+    padding-inline: 0;
+    gap: 0;
     border-color: transparent;
     background-color: transparent;
     font-size: var(--font-heading);
     font-weight: 600;
     white-space: nowrap;
+    overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .settings-dialog > .dialog-header > .settings-section-select > button {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+  }
+  .settings-dialog > .dialog-header > .settings-section-select > button > span {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    text-align: start;
   }
   .settings-dialog > .dialog-header:has(.settings-section-select) > h2 {
     position: absolute;

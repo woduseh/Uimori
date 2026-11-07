@@ -42,11 +42,12 @@ for (const viewport of [
     await expect(dialog.getByLabel('본문 JSON 파일')).toBeVisible();
     const openBackups = dialog.getByRole('button', { name: '채팅 백업 복원', exact: true });
     await expect(openBackups).toBeEnabled();
+    const longTitle = `${'긴채팅제목'.repeat(12)} https://example.test/${'longsegment'.repeat(8)}`;
     const transcript = {
       format: 'uimori-chat-transcript',
       version: 2,
       exportedAt: new Date().toISOString(),
-      title: '가져온 본문',
+      title: longTitle,
       packageAttachments: [{ id: original.bot.id, revision: original.bot.revision, role: 'bot' }],
       entries: [{ request: '첫 요청', text: '원본 장면', translation: '번역 장면' }],
       notes: [],
@@ -114,9 +115,18 @@ for (const viewport of [
     expect(requests[2]).toEqual(requests[0]);
     expect(result.created).toBe(false);
     expect(result.chat.botId).toBe(target.bot.id);
-    await expect(dialog.getByRole('status')).toContainText(
-      `‘${result.chat.title}’ 채팅을 만들고 대화를 가져왔어요.`
-    );
+    expect(result.chat.title).toBe(longTitle);
+    const notice = dialog.getByRole('status');
+    await expect(notice).toContainText(`‘${result.chat.title}’ 채팅을 만들고 대화를 가져왔어요.`);
+    for (const container of [notice, notice.locator('.notice-banner-message'), dialog])
+      expect(
+        await container.evaluate((node) => node.scrollWidth - node.clientWidth)
+      ).toBeLessThanOrEqual(1);
+    await openBackups.scrollIntoViewIfNeeded();
+    await expect(openBackups).toBeInViewport({ ratio: 1 });
+    await expect(dialog.getByRole('button', { name: '닫기', exact: true })).toBeInViewport({
+      ratio: 1,
+    });
     const imported = await (await request.get(`/api/chats/${result.chat.id}`)).json();
     expect(imported.sources.map((item: { text: string }) => item.text)).toEqual(['원본 장면']);
     // The shortcut opens the common backup screen after the selected transcript is resolved.

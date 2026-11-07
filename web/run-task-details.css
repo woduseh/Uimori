@@ -1,6 +1,9 @@
 .run-task-details {
   min-width: 0;
 }
+.run-task-details > p.error:lang(ko) {
+  word-break: keep-all;
+}
 .run-raw-record {
   margin-top: 12px;
   border-top: var(--hairline) solid var(--line);
@@ -46,6 +49,9 @@
 }
 .run-input-details > .inspector > :not(summary) {
   margin-inline: 14px;
+}
+.run-input-details > .inspector > p:lang(ko) {
+  word-break: keep-all;
 }
 @media (max-width: 600px) {
   .run-input-details > .scene-usage > summary,

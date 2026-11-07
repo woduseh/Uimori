@@ -567,6 +567,9 @@ export function AppSettingsPanel({
             value={active}
             onChange={(event) => select(event.target.value)}
           >
+            <button type="button">
+              <span>{title}</span>
+            </button>
             {settingsCategories.map((item) => (
               <option key={item.key} value={item.key}>
                 {item.label}

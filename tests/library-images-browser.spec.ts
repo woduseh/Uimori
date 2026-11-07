@@ -227,6 +227,16 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
   await library
     .getByLabel('Risu 이미지 목록', { exact: true })
     .getByRole('button')
+    .filter({ has: page.locator(`img[src="/api/package-image-blobs/${originalHash.hash}"]`) })
+    .click();
+  const portraitHint = library.getByText(
+    '이름과 설명은 이미지 선택에 사용해요. 본문용으로 지정하면 자동 배치 후보에 포함돼요. 현재 대표 이미지는 ‘본문 전용’으로 바꿀 수 없어요.',
+    { exact: true }
+  );
+  await expect(portraitHint).toBeVisible();
+  await library
+    .getByLabel('Risu 이미지 목록', { exact: true })
+    .getByRole('button')
     .filter({ has: page.locator(`img[src="/api/package-image-blobs/${profile.blobHash}"]`) })
     .click();
   await library.getByRole('button', { name: '선택한 에셋 삭제', exact: true }).click();
@@ -322,6 +332,7 @@ test('LIMG02 persona folder picker supports keyboard selection and nested Escape
   await expect(picker.getByText(persona.title, { exact: true })).toBeVisible();
   await expect(picker.getByText(bot.title, { exact: true })).toHaveCount(0);
   await expect(picker.getByText(module.title, { exact: true })).toHaveCount(0);
+  await expect(picker.locator('.content-picker-count')).toContainText('자료');
   await picker
     .getByRole('combobox', { name: '시작 페르소나 폴더', exact: true })
     .selectOption(folder.id);

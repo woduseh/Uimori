@@ -26,6 +26,7 @@
 }
 .helper-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   min-height: var(--header-h);
@@ -39,6 +40,7 @@
 }
 .helper-header > .notice-banner {
   flex-basis: 100%;
+  order: 1;
 }
 .helper-model-chip {
   max-width: 168px;
@@ -321,6 +323,21 @@ details.helper-context-chip[open] {
 .helper-composer [role="alert"] p {
   margin: 0 0 6px;
 }
+.helper-composer .helper-notice {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  max-height: none;
+  overflow: visible;
+}
+.helper-composer .helper-notice .notice-banner-message {
+  max-height: max(66px, calc(20dvh - 74px));
+  overflow: auto;
+}
+.helper-composer .helper-notice .notice-banner-actions {
+  grid-column: 2;
+  max-width: 100%;
+}
 .helper-settings-body {
   display: grid;
   align-content: start;
@@ -495,6 +512,13 @@ details.helper-context-chip[open] {
 .helper-task p {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+.helper-task > p[role="status"]:lang(ko) {
+  word-break: keep-all;
+}
+.helper-task p.error:lang(ko),
+.helper-task-history p.error:lang(ko) {
+  word-break: keep-all;
 }
 @media (max-width: 760px) {
   .app-shell.helper-open {

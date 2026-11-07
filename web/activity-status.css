@@ -78,6 +78,10 @@
   border-bottom: var(--hairline) solid var(--line);
   padding: 12px 0;
 }
+.activity-notification-items > li > small:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .activity-notification-heading {
   display: flex;
   align-items: center;

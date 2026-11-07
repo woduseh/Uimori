@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat } from '../core/types.js';
 import {
   DEFAULT_ILLUSTRATION_PRESET_ID,
@@ -13,6 +13,25 @@ import { navigationAction, selectSettingsSection } from './ui-navigation.js';
 import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 
 test.setTimeout(60000);
+async function assertTooltipOutsideCopy(tooltip: Locator, text: Locator, page: Page) {
+  await expect(tooltip).toBeVisible();
+  const [hint, copy] = await Promise.all([tooltip.boundingBox(), text.boundingBox()]);
+  expect(hint).not.toBeNull();
+  expect(copy).not.toBeNull();
+  const viewport = page.viewportSize()!;
+  expect(hint!.x).toBeGreaterThanOrEqual(0);
+  expect(hint!.y).toBeGreaterThanOrEqual(0);
+  expect(hint!.x + hint!.width).toBeLessThanOrEqual(viewport.width);
+  expect(hint!.y + hint!.height).toBeLessThanOrEqual(viewport.height);
+  const overlap =
+    hint!.x < copy!.x + copy!.width &&
+    hint!.x + hint!.width > copy!.x &&
+    hint!.y < copy!.y + copy!.height &&
+    hint!.y + hint!.height > copy!.y;
+  expect(overlap, 'The close tooltip must not cover the dialog content or close button').toBe(
+    false
+  );
+}
 const catalog = async (request: APIRequestContext): Promise<IllustrationPresetCatalog> => {
   const response = await request.get('/api/illustration-presets');
   expect(response.ok(), await response.text()).toBe(true);
@@ -147,7 +166,73 @@ test('IPUI01 named recipes save, apply by scope, duplicate and round-trip throug
     .click();
   await section.getByRole('button', { name: `${title} 삽화 프리셋 삭제`, exact: true }).click();
   const confirm = page.getByRole('alertdialog', { name: '삽화 프리셋 삭제', exact: true });
-  await expect(confirm).toContainText('기존 삽화는 유지');
+  await expect(confirm).toContainText(`‘${title}’ 프리셋을 삭제해요.`);
+  await expect(confirm).toContainText('상위 설정을 따르고');
+  const previousViewport = page.viewportSize()!;
+  const close = confirm.getByRole('button', { name: '삽화 프리셋 삭제 닫기', exact: true });
+  const tooltip = close.getByRole('tooltip');
+  const confirmationText = confirm.locator('.dialog-body > p').first();
+  const confirmationTitle = confirm.getByRole('heading', { name: '삽화 프리셋 삭제', exact: true });
+  for (const viewport of [
+    { width: 360, height: 900 },
+    { width: DESKTOP_WIDTH, height: 900 },
+    { width: 360, height: 240 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await close.hover();
+    await assertTooltipOutsideCopy(tooltip, confirmationText, page);
+    await assertTooltipOutsideCopy(tooltip, confirmationTitle, page);
+    await assertTooltipOutsideCopy(tooltip, close, page);
+    await page.mouse.move(1, 1);
+    await expect(tooltip).toBeHidden();
+    await confirm.getByRole('button', { name: '취소', exact: true }).focus();
+    await page.keyboard.press('Shift+Tab');
+    await expect(close).toBeFocused();
+    await assertTooltipOutsideCopy(tooltip, confirmationText, page);
+    await assertTooltipOutsideCopy(tooltip, confirmationTitle, page);
+    await assertTooltipOutsideCopy(tooltip, close, page);
+    await page.keyboard.press('Tab');
+  }
+  // English copy makes the confirmation scroll at this deliberately short viewport.
+  await page.setViewportSize({ width: 320, height: 240 });
+  await page.evaluate(() => {
+    localStorage.setItem('uimori:ui-language', 'en');
+    window.dispatchEvent(
+      new StorageEvent('storage', { key: 'uimori:ui-language', newValue: 'en' })
+    );
+  });
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  const localizedDialog = page.locator('dialog[role="alertdialog"][open]');
+  const body = localizedDialog.locator('.dialog-body');
+  await body.hover({ position: { x: 10, y: 10 } });
+  await page.mouse.wheel(0, 600);
+  await expect.poll(() => body.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  const bodyBox = await body.boundingBox();
+  const actions = body.locator('button');
+  await expect(actions).toHaveCount(2);
+  for (const action of await actions.all()) {
+    const actionBox = await action.boundingBox();
+    expect(bodyBox).not.toBeNull();
+    expect(actionBox).not.toBeNull();
+    expect(actionBox!.y).toBeGreaterThanOrEqual(bodyBox!.y);
+    expect(actionBox!.y + actionBox!.height).toBeLessThanOrEqual(bodyBox!.y + bodyBox!.height);
+  }
+  await actions.first().click();
+  await expect(localizedDialog).toBeHidden();
+  await page.evaluate(() => {
+    localStorage.setItem('uimori:ui-language', 'ko');
+    window.dispatchEvent(
+      new StorageEvent('storage', { key: 'uimori:ui-language', newValue: 'ko' })
+    );
+  });
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ko');
+  await section
+    .locator('summary')
+    .filter({ hasText: `${title} 프리셋 메뉴` })
+    .click();
+  await section.getByRole('button', { name: `${title} 삽화 프리셋 삭제`, exact: true }).click();
+  await expect(confirm).toBeVisible();
+  await page.setViewportSize(previousViewport);
   await confirm.getByRole('button', { name: '프리셋 삭제', exact: true }).click();
   await expect(confirm).toBeHidden();
   expect((await catalog(request)).preferences.botPresets[chat.botId!]).toBeUndefined();

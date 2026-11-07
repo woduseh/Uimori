@@ -96,6 +96,10 @@
   margin: 8px 0 0;
   padding-left: 22px;
 }
+.risu-import-findings li:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .risu-import-findings li + li {
   margin-top: 6px;
 }
@@ -103,6 +107,10 @@
   cursor: pointer;
   min-height: 44px;
   padding-block: 10px;
+}
+.risu-import-preview > summary:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .risu-import-preview > summary small {
   color: var(--muted);

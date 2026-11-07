@@ -15,6 +15,7 @@ import type { ResponseStreamPage } from '../core/response-stream.js';
 import type { HelperArtifactView } from '../web/HelperArtifactCard.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
 import type { ModelPreset, ModelWorkspace } from '../core/product.js';
+import { messages } from '../web/locales/index.js';
 import { postFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { navigationAction, openSourceActions, openChatMenu } from './ui-navigation.js';
 import { openHelper } from './ui-navigation.js';
@@ -533,6 +534,11 @@ async function open(page: Page) {
   return panel;
 }
 
+async function setLocaleFromOtherTab(page: Page, other: Page, locale: 'ko' | 'en') {
+  await other.evaluate((value) => localStorage.setItem('uimori:ui-language', value), locale);
+  await expect(page.locator('html')).toHaveAttribute('lang', locale);
+}
+
 async function toggleHelperTone(page: Page) {
   const settings = page.getByRole('dialog', { name: '도우미 설정', exact: true });
   if (await settings.isVisible()) {
@@ -637,6 +643,8 @@ test('HELPMESSAGE conflict review preserves request and response drafts in older
   await page.goto(`/?chat=${chat.id}`);
   const panel = await open(page),
     view = state.current();
+  const other = await page.context().newPage();
+  await other.goto('/');
   await panel.getByRole('button', { name: '이전 메시지 불러오기', exact: true }).click();
   for (const [index, role] of [
     [0, 'user'],
@@ -665,18 +673,81 @@ test('HELPMESSAGE conflict review preserves request and response drafts in older
       updatedMessage: { id: saved.id, text: saved.text },
     });
     await article.getByRole('button', { name: '입력 저장', exact: true }).click();
-    const dialog = page.getByRole('alertdialog', { name: '메시지가 변경됐어요' });
+    const dialog = page.locator('dialog[role="alertdialog"][open]');
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
     await expect(dialog.getByText(saved.text, { exact: true })).toBeVisible();
+    const reviewedRevision = view.conversation.revision;
+    const beforeLanguageChange = state.messageMutations.length;
+    await setLocaleFromOtherTab(page, other, 'en');
+    await expect(
+      dialog.getByRole('button', { name: 'Keep current input', exact: true })
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole('button', {
+        name: messages['helpers.continueMessageEdit'].en,
+        exact: true,
+      })
+    ).toBeVisible();
+    await expect(dialog.getByText(saved.text, { exact: true })).toBeVisible();
+    expect(state.messageMutations).toHaveLength(beforeLanguageChange);
+    expect(view.conversation.revision).toBe(reviewedRevision);
+    await setLocaleFromOtherTab(page, other, 'ko');
     await dialog.getByRole('button', { name: '입력 유지하고 계속 편집', exact: true }).click();
     await expect(input).toHaveValue(draft);
     expect(saved.text).not.toBe(draft);
     await article.getByRole('button', { name: '입력 저장', exact: true }).click();
     await expect(input).toHaveCount(0);
+    expect(state.messageMutations.at(-1)?.expectedRevision).toBe(reviewedRevision);
     expect(saved.text).toBe(draft);
   }
   expect(state.messageMutations).toHaveLength(4);
+  expect(state.posts).toHaveLength(0);
+});
+
+test('HELPMESSAGE missing saved message translates without changing the recovered draft', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page, 1);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page),
+    view = state.current(),
+    saved = view.messages[1],
+    answer = panel.locator(`[data-message-id="${saved.id}"]`),
+    draft = '보존할 응답 편집 초안';
+  await answer.getByLabel('메시지 메뉴', { exact: true }).click();
+  await page.getByRole('button', { name: '응답 수정', exact: true }).click();
+  await answer.getByLabel('응답 수정', { exact: true }).fill(draft);
+  view.messages = view.messages.filter((message) => message.id !== saved.id);
+  view.conversation.revision++;
+  const reviewedRevision = view.conversation.revision;
+  await answer.getByRole('button', { name: '입력 저장', exact: true }).click();
+  const dialog = page.locator('dialog[role="alertdialog"][open]');
+  await expect(dialog).toBeVisible();
+  view.conversation.historyRevision = state.emit('messages.changed', {
+    revision: reviewedRevision,
+    deletedMessageIds: [saved.id],
+  });
+  await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
+  await expect(
+    dialog.getByRole('textbox', { name: messages['helpers.messageDraft'].ko })
+  ).toHaveValue(draft);
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await setLocaleFromOtherTab(page, other, 'en');
+  await expect(dialog).toContainText(messages['helpers.messageMissing'].en);
+  await expect(
+    dialog.getByRole('textbox', { name: messages['helpers.messageDraft'].en })
+  ).toHaveValue(draft);
+  expect(view.conversation.revision).toBe(reviewedRevision);
+  expect(state.messageMutations).toHaveLength(1);
+  expect(state.messageMutations[0]).toMatchObject({
+    expectedRevision: reviewedRevision - 1,
+    text: draft,
+  });
+  expect(view.messages.some((message) => message.id === saved.id)).toBe(false);
   expect(state.posts).toHaveLength(0);
 });
 
@@ -711,8 +782,9 @@ test('HELPMESSAGE local edit does not skip an unseen older message change', asyn
   });
   await panel.getByRole('button', { name: '도우미 설정 저장', exact: true }).click();
   await expect(
-    panel.getByText('도우미 설정이 바뀌었어요. 입력한 내용은 유지했어요.')
+    panel.getByRole('alert').filter({ hasText: '도우미 설정이 바뀌었어요.' })
   ).toBeVisible();
+  await expect(panel.getByLabel('도우미 말투', { exact: true })).toHaveValue('새 말투 초안');
   await toggleHelperTone(page);
   await page
     .getByRole('alertdialog', { name: '도우미 설정', exact: true })
@@ -1666,6 +1738,7 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
   const postsBeforeConfirmation = state.posts.length;
   await panel.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
   const decision = page.getByRole('dialog', { name: '도우미 요청 확인', exact: true });
+  await expect(decision).toContainText('이전 요청의 접수 여부를 확인하지 못했어요.');
   await decision.getByRole('button', { name: '닫기', exact: true }).last().click();
   expect(state.posts).toHaveLength(postsBeforeConfirmation);
   await expect(input).toHaveValue('접수 확인 중에도 보존할 새 입력');
@@ -1970,6 +2043,48 @@ test('HELPUI04 selected source is frozen in the request and a terminal missing s
   expect(
     ((await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail).sources
   ).toEqual(selectedSources);
+});
+
+test('HELPERROR translates a known stored task error while preserving unknown diagnostics', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  await open(page);
+  const failed = state.addFailed(state.current());
+  const known = 'HELPER_CONTEXT_DEPENDENCY_CHANGED';
+  failed.error = known;
+  const language = (locale: string) =>
+    page.evaluate((value) => {
+      localStorage.setItem('uimori:ui-language', value);
+      window.dispatchEvent(
+        new StorageEvent('storage', { key: 'uimori:ui-language', newValue: value })
+      );
+    }, locale);
+  for (const error of [known, 'SYNTHETIC_UNMAPPED_ERROR']) {
+    failed.error = error;
+    await page.evaluate(() => localStorage.setItem('uimori:ui-language', 'ko'));
+    await page.reload();
+    const panel = await open(page);
+    const activity = panel.locator(
+      `[data-testid="helper-task-activity"][data-task-id="${failed.id}"]`
+    );
+    await activity.locator(':scope > summary').click();
+    await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
+    const history = panel.locator(
+      `.helper-task-history [data-testid="helper-task-record"][data-task-id="${failed.id}"]`
+    );
+    for (const locale of ['ko', 'en', 'ja', 'zh'] as const) {
+      await language(locale);
+      const expected =
+        error === known ? messages['errors.HELPER_CONTEXT_DEPENDENCY_CHANGED'][locale] : error;
+      await expect(activity.locator('p.error')).toHaveText(expected);
+      await expect(history.locator('p.error')).toHaveText(expected);
+    }
+    expect(failed.error).toBe(error);
+  }
 });
 
 test('HELPUI05 explicitly retries a saved edited request, preserves composer and hides historical failure after reload', async ({

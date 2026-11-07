@@ -26,6 +26,10 @@
 .request-preview-facts dt {
   color: var(--muted);
 }
+.request-preview-facts dt:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .request-preview-facts dd {
   margin: 0;
   overflow-wrap: anywhere;

@@ -949,6 +949,104 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
   await expect(section.getByLabel('장면당 최대 삽화 수')).toHaveValue('5');
 });
 
+test('ILUI delete confirmation translates only app-owned titles and preserves the reviewed target', async ({
+  page,
+  request,
+}) => {
+  const { chat, source } = await seed(request);
+  await settings(request, { generator: 'fixture', automatic: false, maxPerSource: 3 });
+  const requested = await request.post(`/api/sources/${source.id}/illustrations`, { data: {} });
+  expect(requested.ok(), await requested.text()).toBe(true);
+  let render: Illustration | undefined;
+  await expect
+    .poll(async () => {
+      render = (await illustrations(request, chat.id)).find(
+        (item) => item.task === 'render' && item.status === 'completed'
+      );
+      return !!render;
+    })
+    .toBe(true);
+  const renderId = render!.id;
+  let emptyTitle = false;
+  await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
+    const response = await route.fetch();
+    const reader = (await response.json()) as ReaderDetail;
+    const items = reader.illustrations ?? [];
+    const current = items.find((item) => item.id === renderId)!;
+    reader.illustrations = items.map((item) =>
+      item.id === renderId
+        ? {
+            ...item,
+            target: { ...item.target!, focus: emptyTitle ? '' : '저장' },
+            images: item.images.map((image) => ({
+              ...image,
+              caption: emptyTitle ? '' : image.caption,
+            })),
+          }
+        : item
+    );
+    reader.illustrations.push({
+      ...current,
+      id: 'synthetic-plan-failure',
+      task: 'plan',
+      status: 'failed',
+      error: 'FIXTURE_FAILURE',
+      target: undefined,
+      images: [],
+    });
+    await route.fulfill({ response, json: reader });
+  });
+  await page.route(`**/api/illustrations/${renderId}`, (route) =>
+    route.request().method() === 'DELETE'
+      ? route.fulfill({ status: 200, json: { ok: true } })
+      : route.continue()
+  );
+  const language = async (locale: 'ko' | 'en') => {
+    await page.evaluate((value) => {
+      localStorage.setItem('uimori:ui-language', value);
+      window.dispatchEvent(
+        new StorageEvent('storage', { key: 'uimori:ui-language', newValue: value })
+      );
+    }, locale);
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+  };
+  await page.goto(`/?chat=${chat.id}`);
+  await page
+    .getByTestId('illustration-task')
+    .getByRole('button', { name: /작업 기록 삭제/u })
+    .click();
+  const confirmation = page.locator('dialog[role="alertdialog"][open]');
+  await expect(confirmation).toContainText('이 삽화 작업 기록 항목을 삭제할까요?');
+  await language('en');
+  await expect(confirmation).toContainText('Delete This illustration job record?');
+  await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await language('ko');
+  const card = page.getByTestId('illustration').first();
+  const openDelete = async () => {
+    await card.getByLabel('삽화 작업 메뉴', { exact: true }).click();
+    await card.getByRole('button', { name: /삽화 삭제/u }).click();
+  };
+  await openDelete();
+  await expect(confirmation).toContainText('저장 항목을 삭제할까요?');
+  await language('en');
+  await expect(confirmation).toContainText('Delete 저장?');
+  await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await language('ko');
+  emptyTitle = true;
+  await page.reload();
+  await openDelete();
+  await expect(confirmation).toContainText('이 삽화 항목을 삭제할까요?');
+  await language('en');
+  await expect(confirmation).toContainText('Delete This illustration?');
+  const deleting = page.waitForRequest(
+    (entry) =>
+      entry.method() === 'DELETE' &&
+      new URL(entry.url()).pathname === `/api/illustrations/${renderId}`
+  );
+  await confirmation.getByRole('button', { name: 'Delete permanently', exact: true }).click();
+  expect((await deleting).postDataJSON()).toEqual({});
+});
+
 test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planning never blocks the next chat', async ({
   page,
   request,

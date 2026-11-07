@@ -234,6 +234,7 @@ for (const viewport of viewports) {
       await editor.getByRole('button', { name: '폴더 삭제', exact: true }).click();
       const dialog = page.getByRole('alertdialog', { name: '폴더 삭제', exact: true });
       await expect(dialog).toBeVisible();
+      await expect(dialog).toContainText('폴더만 삭제하고 내부 로어는 상위 폴더로 옮겨요.');
       await dialog.getByRole('button', { name: '폴더만 삭제', exact: true }).click();
       await selectLore(editor, '수문장');
       await expect(editor.getByLabel('로어 폴더', { exact: true })).toHaveValue('');

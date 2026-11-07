@@ -19,6 +19,10 @@
 .saved-review-content > p {
   margin: 0 0 8px;
 }
+.saved-version-review > p.muted:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .saved-review-dialog .form-actions {
   flex: none;
   padding-top: 12px;

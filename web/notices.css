@@ -18,6 +18,9 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.notice-banner-message:lang(ko) {
+  word-break: keep-all;
+}
 .notice-banner-message p {
   margin: 0;
 }
@@ -40,6 +43,7 @@
   color: var(--error);
 }
 .transient-notices {
+  --notice-bottom: calc(24px + env(safe-area-inset-bottom));
   position: fixed;
   inset: auto 16px calc(24px + env(safe-area-inset-bottom));
   margin: 0 auto;
@@ -54,6 +58,28 @@
   display: grid;
   gap: 8px;
 }
+/* Keep completion feedback out of the active input without changing its layout. */
+.composer-dock {
+  anchor-name: --notice-composer;
+}
+.helper-panel .helper-composer {
+  anchor-name: --notice-helper;
+}
+body:not(:has(dialog:modal)) .transient-notices:popover-open {
+  position-anchor: --notice-composer;
+  position-try-fallbacks: --notice-viewport-top;
+  bottom: calc(anchor(--notice-composer top, calc(var(--notice-bottom) - 8px)) + 8px);
+}
+body:has(.app-shell.helper-open:is(.panel-overlay, .helper-expanded)):not(:has(dialog:modal))
+  .transient-notices:popover-open {
+  position-anchor: --notice-helper;
+  position-try-fallbacks: --notice-viewport-top;
+  bottom: calc(anchor(--notice-helper top, calc(var(--notice-bottom) - 8px)) + 8px);
+}
+@position-try --notice-viewport-top {
+  top: max(8px, env(safe-area-inset-top));
+  bottom: auto;
+}
 .transient-notice {
   display: flex;
   align-items: center;
@@ -66,6 +92,9 @@
   border-radius: var(--radius-panel);
   box-shadow: 0 2px 8px var(--shade);
   overflow-wrap: anywhere;
+}
+.transient-notice:lang(ko) {
+  word-break: keep-all;
 }
 .transient-notice svg {
   flex: 0 0 auto;
@@ -83,6 +112,7 @@
     max-width: 100%;
   }
   .transient-notices {
+    --notice-bottom: calc(16px + env(safe-area-inset-bottom));
     bottom: calc(16px + env(safe-area-inset-bottom));
   }
 }

@@ -278,6 +278,9 @@
 .profile-editor {
   min-width: 0;
 }
+.profile-editor p.error[role="alert"]:lang(ko) {
+  word-break: keep-all;
+}
 .profile-intro {
   font-size: var(--font-body);
   margin-bottom: 16px;
@@ -415,6 +418,9 @@
 }
 .library-content-editor > .editor-grid {
   padding-top: 8px;
+}
+.library-content-editor > .editor-grid > p.error.full:lang(ko) {
+  word-break: keep-all;
 }
 @media (max-width: 760px) {
   .library-content-editor > .library-detail-heading {
@@ -1053,7 +1059,11 @@
   gap: 8px;
   min-width: 0;
 }
+.library-breadcrumb > button {
+  flex-shrink: 0;
+}
 .library-breadcrumb > span:last-child {
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 .library-page .library-bulk-toolbar {

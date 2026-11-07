@@ -1,6 +1,9 @@
 .source-text-editor {
   scroll-margin-block: 12px;
 }
+.source-text-editor > .error:lang(ko) {
+  word-break: keep-all;
+}
 .source-saved-review-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

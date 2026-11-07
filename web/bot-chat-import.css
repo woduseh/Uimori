@@ -25,6 +25,9 @@
   font-size: var(--font-small);
   overflow-wrap: anywhere;
 }
+.chat-import-review small:lang(ko) {
+  word-break: keep-all;
+}
 .chat-transcript-import {
   display: grid;
   gap: 20px;

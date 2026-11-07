@@ -126,7 +126,7 @@ export function PromptControlFields({
     );
   } catch {
     return (
-      <p role="alert" className="error">
+      <p role="alert" className="error prompt-controls-error">
         {t('prompts.uiUnableToCheckOptionConditionsCheckThePromptDefinition')}
       </p>
     );

@@ -151,7 +151,11 @@ export function PackagePresentationIssues({ data }: { data?: PackagePresentation
   return (
     <>
       {messages.map((message) => (
-        <p key={translateMessage(message)} role="status" className="muted">
+        <p
+          key={translateMessage(message)}
+          role="status"
+          className="muted package-presentation-issue"
+        >
           {translateMessage(message)}
         </p>
       ))}
