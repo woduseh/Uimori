@@ -30,7 +30,7 @@ export const messages = {
     zh: '此对话复制请求与之前的请求冲突。',
   },
   'helperProjects.copyChanged': {
-    ko: '도우미 대화가 변경됐어요. 다시 복사해 주세요.',
+    ko: '도우미 대화가 바뀌었어요. 다시 복사해 주세요.',
     en: 'The helper conversation changed. Please copy it again.',
     ja: 'アシスタントの会話が変更されました。もう一度コピーしてください。',
     zh: '助手对话已更改。请重新复制。',

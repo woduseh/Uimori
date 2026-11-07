@@ -21,6 +21,53 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('UI locale presentation boundary', () => {
+  test.each([
+    [0, '0 unread activities'],
+    [1, '1 unread activity'],
+    [2, '2 unread activities'],
+  ] as const)('formats %i unread activity count in English', async (count, expected) => {
+    const { formatMessage } = await import('../web/i18n.js');
+    expect(formatMessage('helperNavigation.activityCount', 'en', { count })).toBe(expected);
+  });
+
+  test.each([
+    [1, '‘제목’ 채팅과 본문 2개를 복원했어요.'],
+    [2, '‘제목’ 채팅을 포함해 채팅 2개와 본문 2개를 복원했어요.'],
+  ] as const)('describes restoring %i chat backups in Korean', async (count, expected) => {
+    const { formatMessage } = await import('../web/i18n.js');
+    expect(formatMessage('transfer.d007', 'ko', { v0: '제목', v1: count, v2: 2 })).toBe(expected);
+  });
+
+  test.each([
+    [1, 1, 'chat “A Story”', '1 text entry'],
+    [1, 2, 'chat “A Story”', '2 text entries'],
+    [2, 1, '2 chats', '1 text entry'],
+    [2, 2, '2 chats', '2 text entries'],
+  ] as const)(
+    'describes restoring %i chats and %i text entries in English',
+    async (chats, entries, chatDescription, entryDescription) => {
+      const { formatMessage } = await import('../web/i18n.js');
+      const result = formatMessage('transfer.d007', 'en', {
+        v0: 'A Story',
+        v1: chats,
+        v2: entries,
+      });
+      expect(result).toContain('“A Story”');
+      expect(result).toContain(chatDescription);
+      expect(result).toContain(entryDescription);
+    }
+  );
+
+  test.each([
+    ['reader.usingValueSceneSummaries', 'v0', '1,234'],
+    ['reader.usingValueSceneSummaries', 'v0', 'Unknown'],
+    ['helpers.m313', 'count', '1,234'],
+  ] as const)('keeps preformatted values in %s', async (key, name, value) => {
+    const { formatMessage } = await import('../web/i18n.js');
+    for (const locale of ['ko', 'en', 'ja', 'zh'] as const)
+      expect(formatMessage(key, locale, { [name]: value })).toContain(value);
+  });
+
   test('Korean remains the default and unsupported stored values fall back to Korean', async () => {
     vi.stubGlobal('navigator', { language: 'en-US', languages: ['en-US', 'ja'] });
     const initial = await import('../web/i18n.js');

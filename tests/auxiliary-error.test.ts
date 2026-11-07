@@ -87,7 +87,7 @@ describe('safe auxiliary error diagnostics', () => {
     expect(uncertain.action).toContain('응답');
     const exhausted = auxiliaryErrorDiagnostic('TRANSLATION_REFUSAL_RETRIES_EXHAUSTED');
     expect(exhausted.code).toBe('TRANSLATION_REFUSAL_RETRIES_EXHAUSTED');
-    expect(exhausted.message).toBe('번역이 거절됐어요.');
+    expect(exhausted.message).toBe('번역이 거절된 것으로 판단했어요.');
     expect(auxiliaryErrorDiagnostic('AUXILIARY_CALL_BUDGET_EXHAUSTED').action).toContain(
       '호출 한도'
     );

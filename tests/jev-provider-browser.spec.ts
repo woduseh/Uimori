@@ -319,7 +319,7 @@ test('JEVUI03 recovers a synthetic uncertain test and shows structured success a
   await section.getByRole('button', { name: 'JEV 연결 테스트', exact: true }).click();
   await expect(section.getByRole('alert')).toContainText('테스트 결과를 확인하지 못했어요');
   expect(submissions).toHaveLength(1);
-  await section.getByRole('button', { name: 'JEV 테스트 상태 확인', exact: true }).click();
+  await section.getByRole('button', { name: '테스트 상태 확인', exact: true }).click();
   await expect(section.getByLabel('JEV API 키', { exact: true })).toBeHidden();
   await expect(section.getByRole('button', { name: '응답 확인 중…', exact: true })).toBeDisabled();
   await expect(section.getByText('판단 응답을 확인했어요.', { exact: true })).toBeVisible();

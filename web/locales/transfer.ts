@@ -1957,10 +1957,10 @@ export const messages = {
     zh: '已添加 {v0, number} 项资料。',
   },
   'transfer.d007': {
-    ko: '새 채팅으로 가져왔어요: “{v0}”. 채팅 {v1, number}개, 본문 {v2, number}개를 복원했어요.',
-    en: 'Imported as a new chat: “{v0}”. Restored {v1, plural, one {# chat} other {# chats}} and {v2, plural, one {# text entry} other {# text entries}}.',
-    ja: '新しいチャットとして取り込みました: 「{v0}」。チャット{v1, number}件、本文{v2, number}件を復元しました。',
-    zh: '已导入为新聊天：“{v0}”。恢复了 {v1, number} 个聊天和 {v2, number} 条正文。',
+    ko: '{v1, plural, =1 {‘{v0}’ 채팅과 본문 {v2, number}개를 복원했어요.} other {‘{v0}’ 채팅을 포함해 채팅 #개와 본문 {v2, number}개를 복원했어요.}}',
+    en: '{v1, plural, =1 {Restored chat “{v0}” and {v2, plural, one {# text entry} other {# text entries}}.} other {Restored # chats including “{v0}” and {v2, plural, one {# text entry} other {# text entries}}.}}',
+    ja: '{v1, plural, =1 {チャット「{v0}」と本文{v2, number}件を復元しました。} other {チャット「{v0}」を含むチャット#件と本文{v2, number}件を復元しました。}}',
+    zh: '{v1, plural, =1 {恢复了“{v0}”聊天和 {v2, number} 条正文。} other {恢复了包含“{v0}”在内的 # 个聊天和 {v2, number} 条正文。}}',
   },
   'transfer.d008': {
     ko: '{v0}, 성공',
@@ -2143,10 +2143,10 @@ export const messages = {
     zh: '导出 {format}',
   },
   'transfer.transcriptImported': {
-    ko: '새 채팅으로 가져왔어요: “{title}”.{skipped, plural, =0 {} other { 찾을 수 없는 연결 자료 #개는 제외됐어요.}}',
-    en: 'Imported as a new chat: “{title}”.{skipped, plural, =0 {} one { # missing linked resource was excluded.} other { # missing linked resources were excluded.}}',
-    ja: '新しいチャットとして取り込みました: 「{title}」。{skipped, plural, =0 {} other {見つからない関連資料#件は除外しました。}}',
-    zh: '已导入为新聊天：“{title}”。{skipped, plural, =0 {} other {已排除 # 项找不到的关联资料。}}',
+    ko: '‘{title}’ 채팅을 만들고 대화를 가져왔어요.{skipped, plural, =0 {} other { 찾을 수 없는 연결 자료 #개는 제외됐어요.}}',
+    en: 'Created the chat “{title}” and imported the conversation.{skipped, plural, =0 {} one { # missing linked resource was excluded.} other { # missing linked resources were excluded.}}',
+    ja: '「{title}」チャットを作成し、会話を取り込みました。{skipped, plural, =0 {} other {見つからない関連資料#件は除外しました。}}',
+    zh: '已创建“{title}”聊天并导入了对话。{skipped, plural, =0 {} other {已排除 # 项找不到的关联资料。}}',
   },
   'transfer.transcriptSummary': {
     ko: '{name}, 본문 {entries, number}개, 메모 {notes, number}개',

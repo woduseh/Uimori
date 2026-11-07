@@ -511,7 +511,7 @@ test('UI12 lost response reconfirms the original command and preserves a newer d
   await page.getByRole('button', { name: '작업 상세 보기', exact: true }).click();
   const notification = page.getByRole('dialog', { name: '작업 알림', exact: true });
   await expect(notification.getByRole('button', { name: '접수 확인', exact: true })).toBeVisible();
-  await expect(notification).toContainText('접수 확인 시 미접수 요청이 실행될 수 있어요.');
+  await expect(notification).toContainText('다시 확인하면 접수되지 않은 요청이 실행될 수 있어요.');
   await expect(notification).toContainText('접수 여부를 확인하지 못했어요.');
   expect(commands).toHaveLength(1);
   await notification.getByRole('button', { name: '접수 확인', exact: true }).click();

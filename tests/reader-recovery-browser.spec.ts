@@ -636,11 +636,7 @@ test('READERREC failed command persistence prevents generation and preserves the
   const draft = page.getByRole('textbox', { name: '다음 장면 요청' });
   await draft.fill('저장 실패에도 남을 초안');
   await page.getByRole('button', { name: '원문 생성', exact: true }).click();
-  await expect(
-    page.getByText(
-      '요청 복구 기록을 저장하지 못해 요청을 보내지 않았어요. 브라우저 저장 공간을 확인해 주세요.'
-    )
-  ).toBeVisible();
+  await expect(page.getByText('요청 기록을 저장하지 못해 보내지 않았어요.')).toBeVisible();
   await expect(draft).toHaveValue('저장 실패에도 남을 초안');
   expect(submissions).toBe(0);
 });

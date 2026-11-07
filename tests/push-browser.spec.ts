@@ -278,7 +278,7 @@ test('PWUI06 push consent is explicit, preferences are acknowledged before chang
   expect(prepareCalls).toBe(1);
   expect(subscribeCalls).toBe(1);
   await panel.locator('summary').filter({ hasText: '알림 옵션' }).click();
-  await expect(panel.getByLabel('요청 완료 (자동 번역 완료 후)', { exact: true })).toBeChecked();
+  await expect(panel.getByLabel('요청 완료 (자동 번역 시 번역 후)', { exact: true })).toBeChecked();
   await expect(panel.getByLabel('개별 번역 결과', { exact: true })).not.toBeChecked();
   const title = panel.getByLabel('채팅 제목 표시 (잠금 화면에도 표시될 수 있어요)', {
     exact: true,

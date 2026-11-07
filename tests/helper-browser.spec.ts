@@ -1012,7 +1012,7 @@ test('HELPUI12 helper settings event refreshes an open model editor without repl
   expect(changed.ok()).toBe(true);
   state.emit('settings.updated');
 
-  await expect(editor.getByRole('alert')).toContainText('전역 설정이 변경됐어요.', {
+  await expect(editor.getByRole('alert')).toContainText('전역 설정이 바뀌었어요.', {
     timeout: 15000,
   });
   await expect(draft).toHaveValue('9');
@@ -2123,7 +2123,7 @@ test('HELPUI06 saved effects survive response failure and cannot be replayed fro
   await page.reload();
   const panel = await open(page);
   await expect(panel.getByTestId('helper-completed-effects')).toContainText(
-    '변경 1건을 저장했지만 응답을 완료하지 못했어요.'
+    '변경 사항 1건을 저장했지만 응답을 완료하지 못했어요.'
   );
   await expect(panel.getByRole('button', { name: '다시 시도', exact: true })).toHaveCount(0);
   await expect(panel.getByRole('button', { name: '요청 편집', exact: true })).toHaveCount(0);
@@ -2367,7 +2367,7 @@ test('DISPLAY helper incomplete saved answers stay collapsed and committed chang
   await page.reload();
   await open(page);
   await expect(panel.getByTestId('helper-completed-effects')).toContainText(
-    '변경 1건을 저장했지만'
+    '변경 사항 1건을 저장했지만'
   );
   const partial = panel.locator('.partial-response');
   await expect(partial).toBeVisible();

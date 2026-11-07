@@ -1470,10 +1470,10 @@ export const messages = {
     zh: '已确认',
   },
   'helpers.m293': {
-    ko: '접수 여부를 확인하지 못했어요. 접수 확인 시 미접수 요청이 실행될 수 있어요.',
-    en: 'Could not verify receipt status. Checking receipt may execute an unaccepted request.',
-    ja: '受付状況を確認できませんでした。受付確認時に未受付のリクエストが実行される場合があります。',
-    zh: '未能确认受理状态。确认受理时可能会执行未受理的请求。',
+    ko: '접수 여부를 확인하지 못했어요. 다시 확인하면 접수되지 않은 요청이 실행될 수 있어요.',
+    en: 'Could not confirm receipt. Checking again may execute the request if it was not received.',
+    ja: '受付状況を確認できませんでした。再確認すると、受け付けられていないリクエストが実行される可能性があります。',
+    zh: '无法确认是否已接收。再次确认可能会执行未接收的请求。',
   },
   'helpers.m294': {
     ko: '이 탭에 복구 가능한 요청 정보가 없어요.',
@@ -1578,9 +1578,9 @@ export const messages = {
     zh: '已保存的工作：{labels}',
   },
   'helpers.m313': {
-    ko: '변경 {count}건을 저장했지만 응답을 완료하지 못했어요.',
+    ko: '변경 사항 {count}건을 저장했지만 응답을 완료하지 못했어요.',
     en: 'Saved changes: {count}. Could not complete the response.',
-    ja: '変更{count}件を保存しましたが、応答を完了できませんでした。',
+    ja: '変更事項{count}件を保存しましたが、応答を完了できませんでした。',
     zh: '已保存{count}项更改，但未能完成回复。',
   },
   'helpers.m314': {

@@ -1284,7 +1284,7 @@ export function useStory() {
             ? cause instanceof Error
               ? cause.message
               : uiMessage('main.story8')
-            : '요청 복구 기록을 저장하지 못해 요청을 보내지 않았어요. 브라우저 저장 공간을 확인해 주세요.'
+            : uiMessage('main.story9')
         );
       return false;
     }

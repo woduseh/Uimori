@@ -1681,10 +1681,10 @@ export const messages = {
     zh: '无法开始测试请求。请检查 API 密钥和连接状态。',
   },
   'providers.m344': {
-    ko: '테스트 결과를 확인하지 못했어요. ‘JEV 테스트 상태 확인’을 눌러 주세요.',
-    en: 'Could not verify test results. Select “Check JEV test status”.',
-    ja: 'テスト結果を確認できませんでした。「JEVテスト状態を確認」を押してください。',
-    zh: '未能确认测试结果。请点击“检查 JEV 测试状态”。',
+    ko: '테스트 결과를 확인하지 못했어요. ‘테스트 상태 확인’을 눌러 주세요.',
+    en: 'Could not verify test results. Select “Check test status”.',
+    ja: 'テスト結果を確認できませんでした。「テスト状態を確認」を押してください。',
+    zh: '未能确认测试结果。请点击“检查测试状态”。',
   },
   'providers.m345': {
     ko: 'TypeSafe AI 프로바이더 설정',
@@ -1831,10 +1831,10 @@ export const messages = {
     zh: '正在检查响应…',
   },
   'providers.m374': {
-    ko: 'JEV 테스트 상태 확인',
-    en: 'Check JEV test status',
-    ja: 'JEVテスト状態を確認',
-    zh: '检查 JEV 测试状态',
+    ko: '테스트 상태 확인',
+    en: 'Check test status',
+    ja: 'テスト状態を確認',
+    zh: '检查测试状态',
   },
   'providers.m375': {
     ko: '짧은 예제의 관련성을 판단해요.',

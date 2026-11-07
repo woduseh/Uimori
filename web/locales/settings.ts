@@ -385,7 +385,7 @@ export const messages = {
     zh: '关',
   },
   'settings.m75': {
-    ko: '전역 설정이 변경됐어요.',
+    ko: '전역 설정이 바뀌었어요.',
     en: 'Global settings changed.',
     ja: '全体設定が変更されました。',
     zh: '全局设置已更改。',

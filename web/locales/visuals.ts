@@ -162,10 +162,10 @@ export const messages = {
     zh: '布局含不支持的HTML。请使用插槽和CSS，避免脚本、事件属性、iframe和form。',
   },
   'visuals.m022': {
-    ko: '레이아웃에 {slot} 슬롯이 정확히 하나 필요해요.',
-    en: 'The layout requires exactly one {slot} slot.',
-    ja: 'レイアウトには{slot}スロットがちょうど1つ必要です。',
-    zh: '布局中必须有且仅有一个{slot}插槽。',
+    ko: '레이아웃에 {slot} 요소가 정확히 하나 필요해요.',
+    en: 'The layout requires exactly one {slot} element.',
+    ja: 'レイアウトには{slot}要素がちょうど1つ必要です。',
+    zh: '布局中必须有且仅有一个{slot}元素。',
   },
   'visuals.m023': {
     ko: '알 수 없는 레이아웃 슬롯이 있어요.',
@@ -216,7 +216,7 @@ export const messages = {
     zh: '已保存插图参考，将用于下次插图请求。',
   },
   'visuals.m032': {
-    ko: 'Codex 삽화에는 참고 이미지 8장까지 사용할 수 있어요. ComfyUI에는 적용되지 않아요.',
+    ko: 'Codex 삽화에는 참고 이미지를 8장까지 사용할 수 있어요. ComfyUI에는 적용되지 않아요.',
     en: 'You can use up to 8 reference images for Codex illustrations. This does not apply to ComfyUI.',
     ja: 'Codexの挿絵には参照画像を8枚まで使用できます。ComfyUIには適用されません。',
     zh: 'Codex插图最多可使用8张参考图片。不适用于ComfyUI。',
@@ -1208,10 +1208,10 @@ export const messages = {
     zh: '已达到Codex图片生成用量上限。',
   },
   'visuals.m210': {
-    ko: '참고 이미지가 Codex에 보낼 수 없는 형식이에요.',
-    en: 'The reference image format cannot be sent to Codex.',
-    ja: '参照画像がCodexに送信できない形式です。',
-    zh: '参考图片格式无法发送至Codex。',
+    ko: '참고 이미지를 Codex에 보낼 수 없어요.',
+    en: 'The reference image cannot be sent to Codex.',
+    ja: '参照画像をCodexに送信できません。',
+    zh: '参考图片无法发送至Codex。',
   },
   'visuals.m211': {
     ko: '참고 이미지는 8장까지 보낼 수 있어요.',

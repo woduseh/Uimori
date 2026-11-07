@@ -100,7 +100,7 @@ export const messages = {
   'helperNavigation.explore': { ko: '탐색', en: 'Explore', ja: '探索', zh: '浏览' },
   'helperNavigation.activityCount': {
     ko: '미확인 활동 {count}개',
-    en: '{count} unread activities',
+    en: '{count, plural, one {# unread activity} other {# unread activities}}',
     ja: '未確認のアクティビティ {count}件',
     zh: '{count}条未读活动',
   },

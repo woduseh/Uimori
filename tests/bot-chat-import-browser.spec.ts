@@ -88,7 +88,9 @@ for (const viewport of [
       mimeType: 'application/json',
       buffer: Buffer.from(JSON.stringify(transcript)),
     });
-    await expect(dialog.getByText(`“${target.bot.title}”의 새 채팅으로 가져와요.`)).toBeVisible();
+    await expect(
+      dialog.getByText(`“${target.bot.title}” 봇의 새 채팅으로 가져와요.`)
+    ).toBeVisible();
     await expect(openBackups).toBeDisabled();
     expect(requests).toHaveLength(0);
     await dialog.getByRole('button', { name: '새 채팅으로 가져오기', exact: true }).click();
@@ -112,7 +114,9 @@ for (const viewport of [
     expect(requests[2]).toEqual(requests[0]);
     expect(result.created).toBe(false);
     expect(result.chat.botId).toBe(target.bot.id);
-    await expect(dialog.getByRole('status')).toContainText('새 채팅으로 가져왔어요');
+    await expect(dialog.getByRole('status')).toContainText(
+      `‘${result.chat.title}’ 채팅을 만들고 대화를 가져왔어요.`
+    );
     const imported = await (await request.get(`/api/chats/${result.chat.id}`)).json();
     expect(imported.sources.map((item: { text: string }) => item.text)).toEqual(['원본 장면']);
     // The shortcut opens the common backup screen after the selected transcript is resolved.
