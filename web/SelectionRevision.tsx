@@ -187,11 +187,7 @@ export function SelectionRevision(props: Props) {
               {t('reader.theDraftOrSelectionChangedYourInputIsPreserved')}
             </NoticeBanner>
           )}
-          {error && (
-            <NoticeBanner tone="error">
-              {t('reader.errorEditsPreserved', { error: translateMessage(error) })}
-            </NoticeBanner>
-          )}
+          {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
           {busy && (
             <LoadingState presentation="inline" label={t('reader.refiningTheSelectedPassage')} />
           )}

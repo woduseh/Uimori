@@ -2069,12 +2069,6 @@ export const messages = {
     ja: '{title}は保存済みですが、ライブラリ一覧を更新できませんでした。',
     zh: '{title}已保存，但无法刷新资料库列表。',
   },
-  'library.errorInputRetained': {
-    ko: '{error}',
-    en: '{error}',
-    ja: '{error}',
-    zh: '{error}',
-  },
   'library.detailAction': {
     ko: '{title} {action, select, select {선택} other {상세 보기}}',
     en: '{action, select, select {Select {title}} other {View {title} details}}',

@@ -1979,12 +1979,6 @@ export const messages = {
     ja: '{role, select, original {原文を編集} other {訳文を編集}}',
     zh: '{role, select, original {编辑原文} other {编辑译文}}',
   },
-  'reader.errorEditsPreserved': {
-    ko: '{error}',
-    en: '{error}',
-    ja: '{error}',
-    zh: '{error}',
-  },
   'reader.cancelJob': {
     ko: '{title} 취소',
     en: 'Cancel {title}',
@@ -1996,12 +1990,6 @@ export const messages = {
     en: '{mock, select, true {Mock {title}} other {{title}}}',
     ja: '{mock, select, true {模擬 {title}} other {{title}}}',
     zh: '{mock, select, true {模拟{title}} other {{title}}}',
-  },
-  'reader.errorOriginalPreserved': {
-    ko: '{error}',
-    en: '{error}',
-    ja: '{error}',
-    zh: '{error}',
   },
   'reader.diagnosticCode': {
     ko: '오류 코드: {code}',
