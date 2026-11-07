@@ -1188,10 +1188,10 @@ export const messages = {
     zh: '关闭预设编辑器',
   },
   'visualpanels.unsavedEditsWillBeLostTheSaved': {
-    ko: '저장하지 않은 편집 내용이 사라져요. 저장된 프리셋은 그대로 유지돼요.',
-    en: 'Unsaved edits will be lost. The saved preset is preserved.',
-    ja: '未保存の編集内容は失われます。保存済みのプリセットは保持されます。',
-    zh: '未保存的编辑将丢失，已保存的预设会保留。',
+    ko: '저장하지 않은 편집 내용이 사라져요.',
+    en: 'Unsaved edits will be lost.',
+    ja: '未保存の編集内容は失われます。',
+    zh: '未保存的编辑内容将会丢失。',
   },
   'visualpanels.discardChangesAndClose': {
     ko: '변경 버리고 닫기',
@@ -1206,16 +1206,10 @@ export const messages = {
     zh: '删除插图预设',
   },
   'visualpanels.deletePresetBotsAndChatsUsingIt': {
-    ko: '‘{v0}’ 프리셋을 삭제해요. 이 항목을 선택한 봇과 채팅은 상위 설정을 따르고, 작업실 기본이었다면 기본 프리셋으로 돌아가요. 진행 중인 작업과 기존 삽화는 유지돼요.',
-    en: 'Delete preset “{v0}”. Bots and chats using it will inherit parent settings; a workspace default reverts to the built-in preset. Ongoing work and existing illustrations are preserved.',
-    ja: '「{v0}」プリセットを削除します。選択中のボットとチャットは上位設定に従い、ワークスペースの既定だった場合は基本プリセットに戻ります。進行中の作業と既存の挿絵は保持されます。',
-    zh: '删除“{v0}”预设。使用它的机器人和聊天将继承上级设置，工作室默认设置将恢复内置预设。进行中的任务和现有插图会保留。',
-  },
-  'visualpanels.theNextGenerationUsesTheReplacementPreset': {
-    ko: '다음 생성은 대체 프리셋의 생성기를 사용해요. 해당 생성기의 연결과 모델을 확인해 주세요.',
-    en: 'The next generation uses the replacement preset’s generator. Check that generator’s connection and model.',
-    ja: '次の生成は代わりのプリセットの生成器を使います。その生成器の接続とモデルを確認してください。',
-    zh: '下次生成将使用替代预设的生成器，请检查对应的连接和模型。',
+    ko: '‘{v0}’ 프리셋을 삭제해요. 이 항목을 선택한 봇과 채팅은 상위 설정을 따르고, 작업실 기본이었다면 기본 프리셋으로 돌아가요.',
+    en: 'Delete preset ‘{v0}’. Bots and chats using it will follow higher-level settings, and if it was the workspace default, it will revert to the built-in preset.',
+    ja: 'プリセット「{v0}」を削除します。これを選択していたボットとチャットは上位設定に従い、ワークスペースの既定だった場合は組み込みプリセットに戻ります。',
+    zh: '删除预设“{v0}”。选择此预设的机器人与聊天将遵循上级设置；若此前为工作室默认项，则恢复为内置预设。',
   },
   'visualpanels.presetDeleted': {
     ko: '프리셋을 삭제했어요.',

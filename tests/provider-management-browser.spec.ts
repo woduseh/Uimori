@@ -553,7 +553,7 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
   );
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title + ' 내 초안');
-  await expect(form).toContainText('다른 곳에서 프로바이더가 변경됐어요');
+  await expect(form).toContainText('프로바이더가 변경됐어요.');
   const put = page.waitForRequest(
     (request) => request.method() === 'PUT' && request.url().endsWith(`/connections/${original.id}`)
   );
@@ -567,7 +567,7 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
   await expect(conflictDialog.getByLabel('현재 저장본')).toContainText(changed.title);
   await expect(conflictDialog.getByLabel('현재 저장본')).not.toContainText(title + ' 내 초안');
   await conflictDialog.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
-  await expect(form.getByRole('alert')).toContainText('초안은 유지했어요');
+  await expect(form.getByRole('alert')).toContainText('프로바이더가 변경됐어요.');
   await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title + ' 내 초안');
   expect((await library(request)).connections.find((item) => item.id === original.id)).toEqual(
     changed

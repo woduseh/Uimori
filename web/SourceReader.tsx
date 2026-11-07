@@ -1115,10 +1115,7 @@ function SourceReaderContent({
                     >
                       <span className="ui-meta-row">
                         <span>{jobTitle(job)}</span>
-                        <span>
-                          {labels[job.status]}
-                          {retryable(job.status) ? t('reader.originalPreserved') : ''}
-                        </span>
+                        <span>{labels[job.status]}</span>
                       </span>
                       {job.error && <AuxiliaryError error={job.error} />}
                       <JobActions job={job} refresh={refresh} onError={setActionError} compact />

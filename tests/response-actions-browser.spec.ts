@@ -703,7 +703,9 @@ test('RACOM06 earlier-scene translation generation stays explicit and pending or
       exact: true,
     });
     await expect(retry).toBeVisible();
-    await expect(scene.locator('.translation-placeholder')).toContainText('원문은 보존돼요.');
+    await expect(scene.locator('.translation-placeholder')).toContainText(
+      '한국어 번역을 완료하지 못했어요.'
+    );
     expect(submissions).toBe(1);
     await page.screenshot({ path: info.outputPath('past-scene-translation-failed.png') });
     admission = new Promise<void>((resolve) => {

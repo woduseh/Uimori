@@ -206,9 +206,7 @@ test('CTXUI03 manual no-op preserves a summary and exposes cancellable running-j
   await panel.getByRole('button', { name: '새로고침', exact: true }).click();
   await expect(panel.getByTestId('context-summary-text')).toHaveText('보존할 요약');
   await panel.getByRole('button', { name: '컨텍스트 압축', exact: true }).click();
-  await expect(
-    panel.getByText('압축할 구간이 없어 원문과 요약을 유지했어요.', { exact: true })
-  ).toBeVisible();
+  await expect(panel.getByText('압축할 구간이 없어요.', { exact: true })).toBeVisible();
   const actual = await read<Detail>(request, `/chats/${chat.id}/context`);
   expect(actual.jobs[0]).toMatchObject({ status: 'completed', noop: true });
   expect(actual.checkpoint?.plan.summary).toBe('보존할 요약');
@@ -240,9 +238,7 @@ test('CTXUI03 manual no-op preserves a summary and exposes cancellable running-j
   await expect.poll(() => contextReads).toBeGreaterThan(0);
   await expect(panel.getByRole('button', { name: '압축 취소', exact: true })).toBeEnabled();
   await panel.getByRole('button', { name: '압축 취소', exact: true }).click();
-  await expect(
-    panel.getByText('압축을 취소했어요. 마지막 유효한 요약을 유지해요.', { exact: true })
-  ).toBeVisible();
+  await expect(panel.getByText('압축을 취소했어요.', { exact: true })).toBeVisible();
   await expect(panel.getByTestId('context-summary-text')).toHaveText('보존할 요약');
   expect(cancellations).toBe(1);
   expect((await read<Detail>(request, `/chats/${chat.id}/context`)).jobs[0].status).toBe(
@@ -281,7 +277,7 @@ for (const width of [1440, 412]) {
     expect(response.request().postDataJSON().priorities).toBe(
       '미라가 아직 모르는 사실과 인물 호칭을 유지해요.'
     );
-    await expect(dialog).toContainText('압축할 구간이 없어 원문과 요약을 유지했어요.');
+    await expect(dialog).toContainText('압축할 구간이 없어요.');
     await expect(priorities).toHaveValue('');
     expect((await read<Detail>(request, `/chats/${chat.id}/context`)).jobs[0].priorities).toBe(
       '미라가 아직 모르는 사실과 인물 호칭을 유지해요.'

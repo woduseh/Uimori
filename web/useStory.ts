@@ -868,7 +868,7 @@ export function useStory() {
         currentDraftKey.current === scope.key &&
         navigation.current.epoch === scope.epoch
       )
-        setError('이미지를 열지 못했어요. 파일이 손상되지 않았는지 확인해 주세요.');
+        setError('이미지를 열지 못했어요.');
     } finally {
       if (decoding.current === operation) {
         decoding.current = null;

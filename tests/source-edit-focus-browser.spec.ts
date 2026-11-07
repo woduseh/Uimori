@@ -292,7 +292,7 @@ test('C04E failed source save keeps the draft available and a later save restore
   );
   await scene.getByRole('button', { name: '원문 저장', exact: true }).click();
   await expect(scene.locator('.source-text-editor').getByRole('alert')).toContainText(
-    '작성한 내용은 유지돼요.'
+    '서버 작업을 완료하지 못했어요. (503)'
   );
   await expect(field).toHaveValue(draft);
   await expect(field).toBeEnabled();

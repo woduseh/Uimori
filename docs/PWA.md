@@ -17,7 +17,7 @@ Uimori를 브라우저에서 PWA(Progressive Web App)로 설치하는 방법과 
 - **설치와 오프라인 편집의 분리**:
   - **Uimori의 서비스 워커는 원고나 API 응답을 로컬에 임의 캐시하지 않아요.**
   - 네트워크가 끊긴 상태에서 작성 요청을 백그라운드에 쌓아두거나 재연결 시 자동으로 재전송하지 않아요 (fetch 가로채기나 Background Sync를 등록하지 않음).
-  - 단, 현재 브라우저 탭에 입력 중인 작성 초안 보호와 서버에 저장된 작업 상태 복구는 기존 방식대로 안전하게 동작해요.
+  - 단, 현재 브라우저 탭에 입력 중인 작성 초안 보호와 서버에 저장된 작업 상태 복구는 기존 방식대로 동작해요.
 - **보안 컨텍스트 필수**: PWA 설치 및 푸시 기능을 사용하려면 HTTPS 또는 `localhost`와 같은 안전한 보안 컨텍스트 접속이 필요해요.
 
 ---
@@ -46,11 +46,11 @@ Uimori를 브라우저에서 PWA(Progressive Web App)로 설치하는 방법과 
 
 ### 빠른 채팅 복사
 - 봇 대화 목록이나 최근 채팅의 **… → 채팅 복사**를 누르면 현재 표시된 마지막 장면까지를 포함하는 독립 사본 채팅이 즉시 생성돼요.
-- 빈 채팅도 복사할 수 있으며, 원본 채팅에서 작성 중이던 입력 초안은 안전하게 보존돼요.
+- 빈 채팅도 복사할 수 있으며, 원본 채팅에서 작성 중이던 입력 초안은 보존돼요.
 
 ### 요청 불확실 상태 복구
 장면 작성 전송 중 네트워크 단절 등으로 접수 여부가 불확실해지면:
-- 현재 탭에 보관된 동일 요청 키로만 서버에 접수 여부를 안전하게 재확인해요 (이미 접수된 요청의 중복 생성을 방지).
+- 현재 탭에 보관된 동일 요청 키로만 서버에 접수 여부를 재확인해요 (이미 접수된 요청의 중복 생성을 방지).
 - 하단의 「나중에」 버튼을 누르면 해당 경고만 숨기며, 작성창의 「이전 요청 확인」 버튼과 미확인 요청 복구 정보는 그대로 유지돼요.
 
 ---
@@ -135,5 +135,4 @@ npm run verify:personal-features
 npm run verify:push
 ```
 
-- **검증 한계 안내**: 물리적인 휴대폰의 설치, 잠금 화면 수신, 절전/강제 종료 뒤 수신과 실제 Push 중계 전달은 배포 후 별도 기기 확인이 필요해요 (테스트 환경에서는 외부 모델이나 실제 Push 중계를 호출하지 않음).
 - **공식 참조 링크**: [MDN PWA 설치 조건](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable), [명시적 설치 UI 가이드](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/How_to/Trigger_install_prompt), [WebKit 홈 화면 Web Push 안내](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/), [Web Push 암호화 라이브러리](https://github.com/web-push-libs/web-push), [Mozilla Push 서비스 사양](https://mozilla-push-service.readthedocs.io/en/latest/http.html).

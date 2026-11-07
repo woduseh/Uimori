@@ -807,7 +807,6 @@ export function IllustrationPresetSettings({
         }}
       >
         <p>{t('visualpanels.deletePresetBotsAndChatsUsingIt', { v0: deleting?.title ?? '' })}</p>
-        <p>{t('visualpanels.theNextGenerationUsesTheReplacementPreset')}</p>
         {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
         <div className="form-actions">
           <button autoFocus disabled={busy} onClick={() => setDeleting(null)}>

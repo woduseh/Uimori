@@ -36,4 +36,4 @@ Phēmē의 캐시 지점 네 개는 Responses·Anthropic 연결의 **명시적 �
 
 ## 검증 범위
 
-`tests/builtin-prompts.test.ts`는 새 환경의 초기 선택, 기존 DB 재시작 시 저장본 보존, 목록 조회의 비변경성, 독립 사본, 고정 RP·소설 모드와 협업 설정을 확인해요. `tests/risu-native-prompt-composition.test.ts`는 두 프리셋의 CBS 조립을 검사해요. 기본 목록의 추가·편집 흐름은 `npm run verify:browser -- --grep BPTUI`로 확인해요. 실제 모델의 창작·번역 품질과 비용·지연은 별도 평가 대상이에요.
+`tests/builtin-prompts.test.ts`는 새 환경의 초기 선택, 기존 DB 재시작 시 저장본 보존, 목록 조회의 비변경성, 독립 사본, 고정 RP·소설 모드와 협업 설정을 확인해요. `tests/risu-native-prompt-composition.test.ts`는 두 프리셋의 CBS 조립을 검사해요. 기본 목록의 추가·편집 흐름은 `npm run verify:browser -- --grep BPTUI`로 확인해요.
