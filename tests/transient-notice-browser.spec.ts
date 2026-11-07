@@ -29,6 +29,8 @@ test('NOTICE01 feedback follows a growing draft and keeps focus until it expires
   page,
   request,
 }, info) => {
+  await page.clock.install();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 320, height: 900 });
   const item = await chat(request, '이전 요청 확인');
   let calls = 0;
@@ -45,6 +47,7 @@ test('NOTICE01 feedback follows a growing draft and keeps focus until it expires
   await expect(page.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
   await input.fill('남겨 둘 짧은 초안');
   await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
   await page
     .getByRole('dialog', { name: '이전 요청 접수 확인', exact: true })
     .getByRole('button', { name: '접수 확인', exact: true })
@@ -68,7 +71,8 @@ test('NOTICE01 feedback follows a growing draft and keeps focus until it expires
   await expect(input).toHaveValue(draft);
   await expect(input).toBeFocused();
   await page.screenshot({ path: info.outputPath('notice-short-viewport.png') });
-  await expect(notice).toHaveCount(0, { timeout: 6_000 });
+  await page.clock.fastForward(4100);
+  await expect(notice).toHaveCount(0);
   await expect(input).toBeFocused();
   expect(calls).toBe(2);
 });
@@ -77,6 +81,8 @@ test('NOTICE02 modal, mobile helper, and docked helper keep notices accessible',
   page,
   request,
 }, info) => {
+  await page.clock.install();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   for (const width of [320, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     const item = await chat(request, `도우미 알림 ${width}`);
@@ -87,6 +93,7 @@ test('NOTICE02 modal, mobile helper, and docked helper keep notices accessible',
     await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: '도우미 설정', exact: true });
     await dialog.getByLabel('도우미 말투', { exact: true }).fill('저장할 도우미 말투');
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
     await dialog.getByRole('button', { name: '도우미 설정 저장', exact: true }).click();
     const notice = page.locator('.transient-notice');
     await expect(notice).toContainText('도우미 말투를 저장했어요.');
@@ -119,6 +126,7 @@ test('NOTICE02 modal, mobile helper, and docked helper keep notices accessible',
       await expect(page.locator('.composer-dock')).toBeHidden();
       await expectBottom(page, notice, 16);
     }
+    await page.clock.resume();
   }
 });
 

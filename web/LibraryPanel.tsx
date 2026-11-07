@@ -1619,7 +1619,7 @@ function ContentEditor({
           </fieldset>
           {error && (
             <p className="error full" role="alert">
-              {t('library.errorInputRetained', { error: translateMessage(error) })}
+              {translateMessage(error)}
             </p>
           )}
           <div className="library-savebar form-actions full">

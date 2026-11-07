@@ -1950,7 +1950,7 @@ function TextEditor({
       />
       {error && (
         <p className="error" role="alert">
-          {t('reader.errorEditsPreserved', { error: translateMessage(error) })}
+          {translateMessage(error)}
         </p>
       )}
     </form>
@@ -2108,7 +2108,7 @@ function AuxiliaryError({ error }: { error: string }) {
   const diagnostic = auxiliaryErrorDiagnostic(error);
   return (
     <div className="error" role="alert">
-      <p>{t('reader.errorOriginalPreserved', { error: translateMessage(diagnostic.message) })}</p>
+      <p>{translateMessage(diagnostic.message)}</p>
       <p>{translateMessage(diagnostic.action)}</p>
       {diagnostic.code && <small>{t('reader.diagnosticCode', { code: diagnostic.code })}</small>}
     </div>

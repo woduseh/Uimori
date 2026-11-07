@@ -1740,12 +1740,6 @@ export const messages = {
     ja: '翻訳{v0}回、拒否検出{v1}/2',
     zh: '翻译{v0}次，拒绝检测{v1}/2',
   },
-  'settings.flow1': {
-    ko: '{v0}',
-    en: '{v0}',
-    ja: '{v0}',
-    zh: '{v0}',
-  },
   'settings.flow2': {
     ko: '현재 전체 기본값: {v0}',
     en: 'Current global default: {v0}',

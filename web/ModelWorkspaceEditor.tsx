@@ -557,11 +557,7 @@ export function ModelWorkspaceEditor({
         }}
       />
       {conflict && dirty && <NoticeBanner tone="error">{t('settings.m75')}</NoticeBanner>}
-      {saveError && (
-        <NoticeBanner tone="error">
-          {t('settings.flow1', { v0: translateMessage(saveError) })}
-        </NoticeBanner>
-      )}
+      {saveError && <NoticeBanner tone="error">{translateMessage(saveError)}</NoticeBanner>}
       <TransientNotice message={message} />
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
       {!confirmReload && reloadError && (

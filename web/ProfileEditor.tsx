@@ -464,7 +464,7 @@ export function ProfileEditor({
         )}
         {error && (
           <p className="error" role="alert">
-            {t('library.errorInputRetained', { error: translateMessage(error) })}
+            {translateMessage(error)}
           </p>
         )}
         <div
