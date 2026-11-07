@@ -652,10 +652,10 @@ test('LOADUI04 offline edits reappear on reconnect and connected SSE sends only 
   });
   await page.goto(`/?chat=${seeded.chat.id}`);
   await expect(articles(page)).toHaveCount(2);
-  await expect(page.getByText('연결을 다시 확인하는 중이에요.', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('연결을 다시 확인하고 있어요.', { exact: true })).toHaveCount(0);
   await context.setOffline(true);
   try {
-    await expect(page.getByText('연결을 다시 확인하는 중이에요.', { exact: true })).toBeVisible();
+    await expect(page.getByText('연결을 다시 확인하고 있어요.', { exact: true })).toBeVisible();
     const edit = await request.put(`/api/sources/${first.id}/text`, {
       data: { text: 'Source changed while browser was offline.', expectedRevision: 0 },
     });
@@ -685,7 +685,7 @@ test('LOADUI04 offline edits reappear on reconnect and connected SSE sends only 
   await expect(article(page, first.id).getByTestId('source-text')).toContainText(
     'Source changed while browser was offline.'
   );
-  await expect(page.getByText('연결을 다시 확인하는 중이에요.', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('연결을 다시 확인하고 있어요.', { exact: true })).toHaveCount(0);
   await expect(articles(page)).toHaveCount(2);
   const changedResponse = page.waitForResponse(async (response) => {
     if (
@@ -796,7 +796,7 @@ test('LOADUI05 context summary status fits mobile reader and run details without
   await page.reload();
   const activity = await openActivity(article(page, source.id));
   const ready = article(page, source.id).getByTestId('context-summary');
-  await expect(ready).toHaveText('앞선 12개 원문 요약, 입력 약 248,600 / 272,000 토큰, 요약 2회');
+  await expect(ready).toHaveText('앞선 원문 12개 요약, 입력 약 248,600 / 272,000 토큰, 요약 2회');
   await ready.scrollIntoViewIfNeeded();
   const bounds = await ready.boundingBox();
   expect(bounds).not.toBeNull();
@@ -808,7 +808,7 @@ test('LOADUI05 context summary status fits mobile reader and run details without
   expect(await ready.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   if (visualReview) await page.screenshot({ path: info.outputPath('context-summary-mobile.png') });
   await expect(activity.locator('.run-task-details').getByTestId('context-summary')).toHaveText(
-    '앞선 12개 원문 요약, 입력 약 248,600 / 272,000 토큰, 요약 2회'
+    '앞선 원문 12개 요약, 입력 약 248,600 / 272,000 토큰, 요약 2회'
   );
 
   stage = 'failed';

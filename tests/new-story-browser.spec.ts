@@ -730,14 +730,14 @@ test('NSQ profile recovery preserves another window’s attachments until the sa
   });
   expect(updated.ok(), await updated.text()).toBe(true);
   await dialog.getByRole('button', { name: '설정 저장 다시 시도', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toContainText('다른 곳에서 바뀌었어요');
+  await expect(dialog.getByRole('alert')).toContainText('시작 설정이 바뀌었어요.');
   expect(writes).toBe(1);
   await dialog.getByRole('button', { name: '채팅에서 설정 확인', exact: true }).click();
   await expect(dialog).toBeHidden();
   await page.getByRole('button', { name: '시작 설정 다시 저장', exact: true }).first().click();
   const decision = page.getByRole('dialog', { name: '시작 설정 저장', exact: true });
   await decision.getByRole('button', { name: '시작 설정 다시 저장', exact: true }).click();
-  await expect(decision).toContainText('선택한 시작은 적용하지 않아요');
+  await expect(decision).toContainText('시작 설정이 바뀌었어요.');
   await decision.getByRole('button', { name: '저장된 설정 사용', exact: true }).click();
   await expect(decision).toBeHidden();
   expect(

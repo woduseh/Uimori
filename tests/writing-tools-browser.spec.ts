@@ -38,7 +38,7 @@ for (const width of [1440, 412]) {
     await page.getByRole('button', { name: '마지막 장면의 로어', exact: true }).click();
     const lore = page.getByRole('dialog', { name: '마지막 장면의 로어', exact: true });
     await expect(lore).toBeVisible();
-    await expect(lore).toContainText('로어를 보내지 않았다는 뜻은 아니에요.');
+    await expect(lore).toContainText('이 요청에는 로어 포함 기록이 없어요.');
     await page.screenshot({ path: info.outputPath(`last-scene-lore-${width}.png`) });
     await lore.getByRole('button', { name: '마지막 장면의 로어 닫기', exact: true }).click();
     await expect(composer).toHaveValue('이 요청 초안은 그대로 남겨요.');

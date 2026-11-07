@@ -36,13 +36,13 @@ export const messages = {
     zh: '无法完成文件夹放置。',
   },
   'library.theResourceWasCopiedButCouldNot': {
-    ko: '자료는 복제됐어요. 폴더에 배치하지 못했어요. {v0}',
+    ko: '자료는 복제됐지만 폴더에 배치하지 못했어요. {v0}',
     en: 'The resource was copied, but could not be placed in the folder. {v0}',
     ja: '資料を複製しましたが、フォルダーに配置できませんでした。{v0}',
     zh: '资料已复制，但无法放入文件夹。{v0}',
   },
   'library.theResourceWasCopiedButTheList': {
-    ko: '자료는 복제됐어요. 목록을 다시 불러오지 못했어요. {v0}',
+    ko: '자료는 복제됐지만 목록을 다시 불러오지 못했어요. {v0}',
     en: 'The resource was copied, but the list could not be refreshed. {v0}',
     ja: '資料を複製しましたが、一覧を更新できませんでした。{v0}',
     zh: '资料已复制，但无法刷新列表。{v0}',
@@ -474,7 +474,7 @@ export const messages = {
     zh: '提示词',
   },
   'library.changesWereSavedButTheListCould': {
-    ko: '변경은 저장됐어요. 목록을 다시 불러오지 못했어요. {v0}',
+    ko: '변경은 저장됐지만 목록을 다시 불러오지 못했어요. {v0}',
     en: 'Changes were saved, but the list could not be refreshed. {v0}',
     ja: '変更は保存しましたが、一覧を更新できませんでした。{v0}',
     zh: '更改已保存，但无法刷新列表。{v0}',
@@ -1104,10 +1104,10 @@ export const messages = {
     zh: '正文',
   },
   'library.checkTheImageFileAndName': {
-    ko: '이미지 파일과 이미지 이름을 확인해 주세요.',
+    ko: '이미지 파일과 이름을 확인해 주세요.',
     en: 'Check the image file and name.',
     ja: '画像ファイルと名前を確認してください。',
-    zh: '请检查图片文件与名称。',
+    zh: '请检查图片文件和名称。',
   },
   'library.chooseAnImageUpTo64Mib': {
     ko: '64MiB 이하 이미지 파일을 선택해 주세요. 저장할 때 WebP로 변환해요.',
@@ -1236,9 +1236,9 @@ export const messages = {
     zh: '编辑名称与描述',
   },
   'library.uploadedImageName': {
-    ko: '업로드 이미지 이름',
+    ko: '업로드한 이미지 이름',
     en: 'Uploaded image name',
-    ja: 'アップロード画像名',
+    ja: 'アップロードした画像名',
     zh: '已上传图片名称',
   },
   'library.descriptionOptional': {
@@ -1248,9 +1248,9 @@ export const messages = {
     zh: '说明（可选）',
   },
   'library.uploadedImageDescription': {
-    ko: '업로드 이미지 설명',
+    ko: '업로드한 이미지 설명',
     en: 'Uploaded image description',
-    ja: 'アップロード画像の説明',
+    ja: 'アップロードした画像の説明',
     zh: '已上传图片描述',
   },
   'library.savedChangesApplyToTheNextAutomatic': {
@@ -1530,22 +1530,22 @@ export const messages = {
     zh: '无法应用显示转换，将显示已保存的正文。{v0}',
   },
   'library.someSelectedImagesWereOmittedBecauseImage': {
-    ko: '이미지 표시 규칙을 해석하지 못해 일부 선택 이미지를 생략했어요.',
-    en: 'Some selected images were omitted because image display rules could not be parsed.',
-    ja: '画像表示ルールを解釈できず、一部の選択画像を省略しました。',
-    zh: '无法解析图片显示规则，已省略部分所选图片。',
+    ko: '이미지 표시 규칙을 해석하지 못해 선택한 이미지 중 일부를 생략했어요.',
+    en: 'Some selected images were omitted because the image display rules could not be parsed.',
+    ja: '画像表示ルールを解釈できなかったため、選択した画像の一部を省略しました。',
+    zh: '未能解析图片显示规则，已省略部分所选图片。',
   },
   'library.someSelectedImagesWereOmittedBecauseThe': {
-    ko: '카드의 이미지 표시 규칙을 적용하지 못해 일부 선택 이미지를 생략했어요.',
-    en: "Some selected images were omitted because the card's image rules could not be applied.",
-    ja: 'カードの画像表示ルールを適用できず、一部の選択画像を省略しました。',
-    zh: '无法应用卡片图片显示规则，已省略部分所选图片。',
+    ko: '카드의 이미지 표시 규칙을 적용하지 못해 선택한 이미지 중 일부를 생략했어요.',
+    en: "Some selected images were omitted because the card's image display rules could not be applied.",
+    ja: 'カードの画像表示ルールを適用できなかったため、選択した画像の一部を省略しました。',
+    zh: '未能应用卡片的图片显示规则，已省略部分所选图片。',
   },
   'library.selectedImagesWereOmittedBecauseTheyCould': {
-    ko: '선택 이미지를 카드의 이미지 표시 규칙과 연결하지 못해 생략했어요.',
-    en: "Selected images were omitted because they could not be matched to the card's image rules.",
-    ja: '選択画像をカードの画像表示ルールに関連付けられず、省略しました。',
-    zh: '无法将所选图片与卡片显示规则匹配，已省略。',
+    ko: '선택한 이미지를 카드의 이미지 표시 규칙과 연결하지 못해 생략했어요.',
+    en: "Selected images were omitted because they could not be matched to the card's image display rules.",
+    ja: '選択した画像をカードの画像表示ルールに関連付けられなかったため、省略しました。',
+    zh: '未能将所选图片与卡片的图片显示规则关联，已省略。',
   },
   'library.couldNotConfirmTheResultCheckThe': {
     ko: '변경 결과를 확인하지 못했어요. 같은 선택의 결과를 다시 확인해 주세요.',
@@ -2094,7 +2094,7 @@ export const messages = {
     zh: '当前名称：{name}',
   },
   'library.moveCount': {
-    ko: '{count, number}개 자료를 옮겨요.',
+    ko: '자료 {count, number}개를 옮겨요.',
     en: '{count, plural, one {Move # resource.} other {Move # resources.}}',
     ja: '{count, number}件の資料を移動します。',
     zh: '移动 {count, number} 项资料。',
@@ -2106,7 +2106,7 @@ export const messages = {
     zh: '用作{role}',
   },
   'library.candidateCount': {
-    ko: '{count, number}개 자료',
+    ko: '자료 {count, number}개',
     en: '{count, plural, one {# resource} other {# resources}}',
     ja: '{count, number}件の資料',
     zh: '{count, number}项资料',
@@ -2148,10 +2148,10 @@ export const messages = {
     zh: '此聊天的图片，{count, number}张',
   },
   'library.imageMetadataHint': {
-    ko: '이름과 설명은 JEV가 이미지를 고를 때 참고해요. 본문용으로 지정하면 자동 배치 후보에 포함돼요.{portrait, select, yes { 현재 대표 이미지는 ‘본문 전용’으로 바꿀 수 없어요.} other {}}',
-    en: 'JEV uses names and descriptions to select images. Images allowed in the story are candidates for automatic placement.{portrait, select, yes { The current portrait cannot be set to story only.} other {}}',
-    ja: '名前と説明はJEVの画像選択に使います。本文で使える画像は自動配置の候補になります。{portrait, select, yes {現在の代表画像は「本文専用」に変更できません。} other {}}',
-    zh: 'JEV根据名称与描述选择图片，允许用于正文的图片会成为自动排布候选。{portrait, select, yes {当前封面无法改为“仅正文”。} other {}}',
+    ko: '이름과 설명은 이미지 선택에 사용해요. 본문용으로 지정하면 자동 배치 후보에 포함돼요.{portrait, select, yes { 현재 대표 이미지는 ‘본문 전용’으로 바꿀 수 없어요.} other {}}',
+    en: 'Names and descriptions are used to select images. Images allowed in the story are candidates for automatic placement.{portrait, select, yes { The current portrait cannot be set to story only.} other {}}',
+    ja: '名前と説明は画像選択に使います。本文用として指定すると自動配置の候補に含まれます。{portrait, select, yes {現在の代表画像は「本文専用」に変更できません。} other {}}',
+    zh: '名称和描述用于选择图片。指定用于正文时会作为自动排布候选。{portrait, select, yes {当前封面无法改为“仅正文”。} other {}}',
   },
   'library.moreImages': {
     ko: '이미지 더 보기 ({visible, number} / {total, number})',

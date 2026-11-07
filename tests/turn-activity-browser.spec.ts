@@ -334,7 +334,7 @@ for (const width of [MOBILE_WIDTH, 1440]) {
     await executionSummary.click();
     await expect(execution.locator('pre').last()).toContainText('snapshot');
     await expect(execution.getByTestId('context-summary')).toHaveText(
-      '앞선 3개 원문 요약, 입력 약 1,200 / 65,536 토큰, 요약 1회'
+      '앞선 원문 3개 요약, 입력 약 1,200 / 65,536 토큰, 요약 1회'
     );
     expect(state.runReads).toHaveLength(1);
     const executionBounds = await execution.boundingBox();

@@ -96,7 +96,7 @@ test('REQUESTPREVIEW current composer settings are estimated without generation 
     await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
     await page.getByRole('switch', { name: '다음 생성에서 조회 로어 제외', exact: true }).click();
     await expect(
-      page.getByRole('button', { name: '조회 로어 제외 해제', exact: true })
+      page.getByRole('button', { name: '조회 로어 다시 포함', exact: true })
     ).toBeVisible();
     await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
     await page.getByRole('button', { name: '다음 요청 미리보기', exact: true }).click();

@@ -73,7 +73,7 @@ test('IPUI01 named recipes save, apply by scope, duplicate and round-trip throug
   const original = (await catalog(request)).presets.find((item) => item.title === title)!;
   expect(original).toBeTruthy();
   expect((await catalog(request)).preferences).toEqual(previous);
-  await editor.getByRole('button', { name: '편집 닫기', exact: true }).click();
+  await editor.getByRole('button', { name: '편집기 닫기', exact: true }).click();
   await section.getByLabel('삽화 프리셋 적용 범위').selectOption('bot');
   await section.getByRole('button', { name: `${title} 삽화 프리셋 적용`, exact: true }).click();
   await expect(section.locator('.illustration-preset-current')).toContainText(title);
@@ -98,7 +98,7 @@ test('IPUI01 named recipes save, apply by scope, duplicate and round-trip throug
   await expect(editor.getByLabel('삽화 그림 지침')).toHaveValue(original.styleGuidance);
   await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
   await expect(editor.getByRole('button', { name: '프리셋 저장', exact: true })).toBeDisabled();
-  await editor.getByRole('button', { name: '편집 닫기', exact: true }).click();
+  await editor.getByRole('button', { name: '편집기 닫기', exact: true }).click();
   const downloadPromise = page.waitForEvent('download');
   await section
     .locator('summary')
@@ -130,7 +130,7 @@ test('IPUI01 named recipes save, apply by scope, duplicate and round-trip throug
     (item) => item.title === `${title} 가져옴`
   )!;
   expect(imported.id).not.toBe(original.id);
-  await editor.getByRole('button', { name: '편집 닫기', exact: true }).click();
+  await editor.getByRole('button', { name: '편집기 닫기', exact: true }).click();
   for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 1000 });
     await section
@@ -258,8 +258,8 @@ test('IPUI03 invalid recipes never save and the close guard preserves failed dra
   expect((await catalog(request)).presets).toHaveLength(count);
   await editor.getByLabel('ComfyUI 워크플로 JSON').fill('');
   await editor.getByLabel('삽화 그림 지침').fill('preserved user direction');
-  await editor.getByRole('button', { name: '편집 닫기', exact: true }).click();
-  const discard = page.getByRole('alertdialog', { name: '프리셋 편집 닫기', exact: true });
+  await editor.getByRole('button', { name: '편집기 닫기', exact: true }).click();
+  const discard = page.getByRole('alertdialog', { name: '프리셋 편집기 닫기', exact: true });
   await expect(discard.getByRole('button', { name: '계속 편집', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(editor.getByLabel('삽화 그림 지침')).toHaveValue('preserved user direction');

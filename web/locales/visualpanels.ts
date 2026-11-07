@@ -498,7 +498,7 @@ export const messages = {
     zh: '创建新主题',
   },
   'visualpanels.unsavedChanges': {
-    ko: '미저장 변경',
+    ko: '저장하지 않은 변경 사항',
     en: 'Unsaved changes',
     ja: '未保存の変更',
     zh: '未保存的更改',
@@ -972,9 +972,9 @@ export const messages = {
     zh: '此预设已在其他位置删除。',
   },
   'visualpanels.theSavedPresetChangedElsewhere': {
-    ko: '다른 곳에서 저장된 프리셋이 바뀌었어요.',
+    ko: '저장된 프리셋이 다른 곳에서 바뀌었어요.',
     en: 'The saved preset changed elsewhere.',
-    ja: '保存済みのプリセットが別の場所で変更されました。',
+    ja: '保存されたプリセットが別の場所で変更されました。',
     zh: '已保存的预设已在其他位置更改。',
   },
   'visualpanels.yourEditsArePreservedSaveACopy': {
@@ -1134,10 +1134,10 @@ export const messages = {
     zh: '工作流帮助',
   },
   'visualpanels.inStringInputsBecomesTheImageDescription': {
-    ko: '문자열 입력의 {v0}는 그림 설명, {v1}는 제외 지침, {v2}는 시드로 바뀌어요. 모델과 해상도는 워크플로에서 정해요.',
-    en: 'In string inputs, {v0} becomes the image description, {v1} the negative guidance, and {v2} the seed. Set models and resolution in the workflow.',
-    ja: '文字列入力の{v0}は絵の説明、{v1}は除外指示、{v2}はシードに置き換わります。モデルと解像度はワークフローで指定します。',
-    zh: '字符串输入中的{v0}将替换为绘图描述，{v1}为排除指引，{v2}为种子。模型与分辨率在工作流中设置。',
+    ko: '문자열 입력에서 {v0}, {v1}, {v2} 자리는 각각 그림 설명, 제외 지침, 시드로 바뀌어요. 모델과 해상도는 워크플로에서 정해요.',
+    en: 'In string inputs, {v0}, {v1}, and {v2} are replaced with the image description, negative guidance, and seed, respectively. Models and resolution are set in the workflow.',
+    ja: '文字列入力では{v0}、{v1}、{v2}の各プレースホルダーが絵の説明、除外指示、シードに置き換わります。モデルと解像度はワークフローで指定します。',
+    zh: '字符串输入中的 {v0}、{v1}、{v2} 将分别替换为绘图描述、排除指引和种子。模型与分辨率在工作流中设置。',
   },
   'visualpanels.theReceivingComfyuiNeedsTheSameModels': {
     ko: '상대 ComfyUI에도 같은 모델, LoRA, 커스텀 노드가 필요해요. 워크플로 내용은 그대로 내보내므로 직접 넣은 비밀값이나 개인 경로가 없는지 확인해 주세요.',
@@ -1170,9 +1170,9 @@ export const messages = {
     zh: '保存副本',
   },
   'visualpanels.closeEditor': {
-    ko: '편집 닫기',
+    ko: '편집기 닫기',
     en: 'Close editor',
-    ja: '編集を閉じる',
+    ja: 'エディターを閉じる',
     zh: '关闭编辑器',
   },
   'visualpanels.reviewSavedIllustrationPreset': {
@@ -1182,9 +1182,9 @@ export const messages = {
     zh: '检查已保存的插图预设',
   },
   'visualpanels.closePresetEditor': {
-    ko: '프리셋 편집 닫기',
+    ko: '프리셋 편집기 닫기',
     en: 'Close preset editor',
-    ja: 'プリセット編集を閉じる',
+    ja: 'プリセットエディターを閉じる',
     zh: '关闭预设编辑器',
   },
   'visualpanels.unsavedEditsWillBeLostTheSaved': {
@@ -1194,9 +1194,9 @@ export const messages = {
     zh: '未保存的编辑内容将会丢失。',
   },
   'visualpanels.discardChangesAndClose': {
-    ko: '변경 버리고 닫기',
+    ko: '변경 내용 버리고 닫기',
     en: 'Discard changes and close',
-    ja: '変更を破棄して閉じる',
+    ja: '変更内容を破棄して閉じる',
     zh: '放弃更改并关闭',
   },
   'visualpanels.deleteIllustrationPreset2': {
@@ -1284,16 +1284,16 @@ export const messages = {
     zh: '未知',
   },
   'visualpanels.vPluralOneOther': {
-    ko: '{v0, number}토큰',
+    ko: '{v0, number} 토큰',
     en: '{v0, plural, one {# token} other {# tokens}}',
     ja: '{v0, number}トークン',
     zh: '{v0, number} token',
   },
   'visualpanels.viewRawRequestAndResponse': {
-    ko: '원시 요청과 응답 보기',
+    ko: '요청과 응답 원문 보기',
     en: 'View raw request and response',
-    ja: '生のリクエスト、レスポンスを見る',
-    zh: '查看原始请求与响应',
+    ja: 'リクエストとレスポンスの原文を表示',
+    zh: '查看请求与响应原文',
   },
   'visualpanels.knownSubtotalIncludesUnknownItemsInCalls': {
     ko: '확인된 금액 합계 {v0}, 미확인 항목 {v1, number}회 포함',
@@ -1398,10 +1398,10 @@ export const messages = {
     zh: '估算费用',
   },
   'visualpanels.cacheReuseIsConfirmedByProviderReported': {
-    ko: '캐시를 재사용했는지는 프로바이더가 보고한 캐시 읽기 토큰으로 확인해요. 캐시 설정만으로 재사용 여부나 절감액을 추정하지 않아요.',
-    en: 'Cache reuse is confirmed by provider-reported cache read tokens. Cache settings alone do not prove reuse or savings.',
-    ja: 'キャッシュの再利用はプロバイダーが報告するキャッシュ読み取りトークンで確認します。キャッシュ設定だけで再利用や節約額は推定しません。',
-    zh: '通过提供商报告的缓存读取 token 确认是否复用缓存。不会仅根据缓存设置推断复用情况或节省金额。',
+    ko: '캐시 재사용은 프로바이더가 보고한 읽기 토큰으로 확인해요.',
+    en: 'Cache reuse is confirmed by provider-reported read tokens.',
+    ja: 'キャッシュの再利用はプロバイダーが報告する読み取りトークンで確認します。',
+    zh: '缓存复用由提供商报告的读取 token 确认。',
   },
   'visualpanels.pinnedMaterial': {
     ko: '고정 자료',
@@ -1458,10 +1458,10 @@ export const messages = {
     zh: '请求中包含的设定',
   },
   'visualpanels.thereIsNoLoreInclusionRecordFor': {
-    ko: '이 요청에는 로어 포함 기록이 없어요. 로어를 보내지 않았다는 뜻은 아니에요.',
-    en: 'There is no lore inclusion record for this request. That does not mean no lore was sent.',
-    ja: 'このリクエストにはロアの同梱記録がありません。ロアを送信しなかったという意味ではありません。',
-    zh: '此请求没有设定包含记录，这不意味着未发送设定。',
+    ko: '이 요청에는 로어 포함 기록이 없어요.',
+    en: 'There is no lore inclusion record for this request.',
+    ja: 'このリクエストにはロアの同梱記録がありません。',
+    zh: '此请求没有设定包含记录。',
   },
   'visualpanels.loreListVPluralOneOther': {
     ko: '로어 목록: {v0, number}건',
@@ -1884,10 +1884,10 @@ export const messages = {
     zh: '时间未知的{v0, number}次调用，{v1}已从期间合计中排除。',
   },
   'visualpanels.themeRecoveryHelp': {
-    ko: '꾸미다가 화면이 깨지면 {shortcut}로 이 탭의 테마를 끄세요. 주소에 {query}을 붙여 열어도 돼요.',
-    en: 'If customization breaks the display, press {shortcut} to disable the theme in this tab, or open the address with {query} added.',
-    ja: 'カスタマイズで画面が崩れた場合は{shortcut}でこのタブのテーマを無効にするか、URLに{query}を付けて開いてください。',
-    zh: '如果自定义导致显示异常，请按{shortcut}关闭此标签页的主题，或在地址后添加{query}打开。',
+    ko: '꾸미다가 화면이 깨지면 {shortcut} 키로 이 탭의 테마를 끄세요. 주소 뒤에 다음을 붙여도 돼요: {query}',
+    en: 'If customization breaks the display, press {shortcut} to disable the theme in this tab, or append to the address: {query}',
+    ja: 'カスタマイズで画面が崩れた場合は{shortcut}キーでこのタブのテーマを無効にしてください。アドレスの末尾に次を付けても構いません: {query}',
+    zh: '如果自定义导致画面异常，请按 {shortcut} 键关闭此标签页的主题。也可在地址后附加：{query}',
   },
   'visualpanels.preservedError': {
     ko: '{message} 편집 내용은 유지했어요.',

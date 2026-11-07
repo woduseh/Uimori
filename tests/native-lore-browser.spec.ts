@@ -166,7 +166,7 @@ for (const viewport of viewports) {
       let navigation = await loreNavigation(editor);
 
       await expect(navigation.getByLabel('로어 찾기', { exact: true })).toBeVisible();
-      await expect(navigation.getByText('로어북: 2', { exact: true })).toBeVisible();
+      await expect(navigation.getByText('로어북: 항목 2개', { exact: true })).toBeVisible();
       await expect(navigation.getByRole('button', { name: '세계관', exact: true })).toBeVisible();
       await expect(navigation.getByRole('button', { name: '도시', exact: true })).toBeVisible();
       await expect(
@@ -293,7 +293,7 @@ for (const viewport of viewports) {
         fullPage: true,
       });
       navigation = await loreNavigation(reloaded);
-      await expect(navigation.getByText('로어북: 3', { exact: true })).toBeVisible();
+      await expect(navigation.getByText('로어북: 항목 3개', { exact: true })).toBeVisible();
       await expect(navigation.getByRole('button', { name: '수문장', exact: true })).toBeVisible();
     });
   });

@@ -154,6 +154,24 @@ describe('UI locale presentation boundary', () => {
     );
   });
 
+  test('ungrouped toggle errors follow the current UI language', async () => {
+    const { renameToggleGroup } = await import('../web/native-toggle-document.js');
+    const { setLocale, translateMessage } = await import('../web/i18n.js');
+    setLocale('ko');
+    let error: unknown;
+    try {
+      renameToggleGroup('key=Value', -1, 'New name');
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(Error);
+    const message = (error as Error).message;
+    expect(translateMessage(message)).toBe('‘그룹 없음’에는 이 작업을 적용할 수 없어요.');
+    setLocale('en');
+    expect(translateMessage(message)).toBe('This action cannot be applied to “Ungrouped”.');
+    expect((error as Error).message).toBe('‘그룹 없음’에는 이 작업을 적용할 수 없어요.');
+  });
+
   test.each([
     '\u001fui:broken-json',
     '\u001fui:null',

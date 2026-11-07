@@ -108,10 +108,10 @@ export const messages = {
     zh: '继续编辑',
   },
   'shared.saveFailure': {
-    ko: '저장하지 못했어요. 계속 편집에서 오류나 미적용 입력을 확인해 주세요.',
-    en: 'Could not save. Choose Continue editing to check errors or unapplied input.',
-    ja: '保存できませんでした。「編集を続ける」からエラーや未適用の入力を確認してください。',
-    zh: '无法保存。请选择“继续编辑”，检查错误或未应用的输入。',
+    ko: '저장하지 못했어요. 오류나 미적용 입력을 확인해 주세요.',
+    en: 'Could not save. Check for errors or unapplied input.',
+    ja: '保存できませんでした。エラーや未適用の入力を確認してください。',
+    zh: '无法保存。请检查错误或未应用的输入。',
   },
   'shared.saving': {
     ko: '저장 중…',

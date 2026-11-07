@@ -347,7 +347,7 @@ test('SIDENAV06 helper history width persists independently of chat sidebar and 
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '일반');
   const chatWidth = page.getByRole('combobox', { name: '좌측 사이드바 폭', exact: true });
-  const helperWidth = page.getByRole('combobox', { name: '도우미 패널 폭', exact: true });
+  const helperWidth = page.getByRole('combobox', { name: '도우미 패널 너비', exact: true });
   const rightWidth = page.getByRole('combobox', { name: '우측 패널 폭', exact: true });
   await expect(helperWidth).toHaveValue('320');
   await chatWidth.selectOption('400');

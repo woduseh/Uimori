@@ -396,8 +396,8 @@ test('PERSONAL uploaded metadata locks pending fields and retains rejected input
     await page.screenshot({ path: info.outputPath(`asset-metadata-spacing-${width}.png`) });
   }
   await page.getByText('이름과 설명 편집', { exact: true }).click();
-  const title = page.getByLabel('업로드 이미지 이름', { exact: true });
-  const description = page.getByLabel('업로드 이미지 설명', { exact: true });
+  const title = page.getByLabel('업로드한 이미지 이름', { exact: true });
+  const description = page.getByLabel('업로드한 이미지 설명', { exact: true });
   const submit = page.getByRole('button', { name: '이미지 정보 저장', exact: true });
   await title.fill('Saved image');
   await description.fill('Saved description');
@@ -490,7 +490,7 @@ test('PERSONAL binary resource backup downloads and imports through the archive 
     buffer: await (await import('node:fs/promises')).readFile(path!),
   });
   await expect(
-    page.getByText('자료 백업, 1개 자료, 0개 프리셋, 0개 이미지', { exact: true })
+    page.getByText('자료 백업: 자료 1개, 프리셋 0개, 이미지 0개', { exact: true })
   ).toBeVisible();
   const applied = page.waitForResponse((response) =>
     response.url().endsWith('/api/native-transfers/apply-archive')
@@ -609,7 +609,7 @@ for (const width of [412, 1440]) {
       mimeType: 'application/zip',
       buffer: bytes,
     });
-    await expect(importer).toContainText('1개 자료, 0개 프리셋, 0개 이미지');
+    await expect(importer).toContainText('자료 1개, 프리셋 0개, 이미지 0개');
     await importer.getByRole('button', { name: '새 자료로 가져오기', exact: true }).click();
     await expect(importer.getByRole('alert')).toContainText('503');
     expect(receipt?.created).toBe(true);
@@ -632,7 +632,7 @@ for (const width of [412, 1440]) {
     expect(replay.items).toEqual(receipt!.items);
     expect(await importedTitleCount()).toBe(before + 1);
     await expect(file).toBeEnabled();
-    await expect(importer.getByRole('status')).toContainText('1개 자료를 추가했어요.');
+    await expect(importer.getByRole('status')).toContainText('자료 1개를 추가했어요.');
     await expect(importer.getByRole('alert')).toHaveCount(0);
     if (visualReview)
       await page.screenshot({

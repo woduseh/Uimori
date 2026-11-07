@@ -259,7 +259,7 @@ for (const width of [412, 1440]) {
     await page.getByText('이름과 설명 편집', { exact: true }).click();
     const metadataSave = page.getByRole('button', { name: '이미지 정보 저장', exact: true });
     await expectPrimary(metadataSave);
-    await page.getByLabel('업로드 이미지 이름', { exact: true }).fill('Saved metadata image');
+    await page.getByLabel('업로드한 이미지 이름', { exact: true }).fill('Saved metadata image');
     const metadataResponse = page.waitForResponse(
       (response) =>
         response.url().endsWith(`/api/chats/${chat.id}/assets/${asset.id}`) &&
@@ -306,7 +306,7 @@ for (const width of [412, 1440]) {
     await selectChatSettingsSection(page, '이미지');
     await page.locator('.chat-settings-image-management > summary').click();
     await page.getByText('이름과 설명 편집', { exact: true }).click();
-    await expect(page.getByLabel('업로드 이미지 이름', { exact: true })).toHaveValue(
+    await expect(page.getByLabel('업로드한 이미지 이름', { exact: true })).toHaveValue(
       'Saved metadata image'
     );
     await settings.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();

@@ -40,10 +40,10 @@ export const messages = {
     zh: '此场景及之后（{count}个）',
   },
   'chatmanage.deleteHelp': {
-    ko: '선택한 장면의 요청, 원문, 번역, 삽화를 영구 삭제해요. 복사해 둔 다른 채팅에는 영향을 주지 않아요.',
-    en: 'Permanently deletes the selected scenes, requests, translations, and illustrations. Other chat copies are unaffected.',
-    ja: '選択したシーンのリクエスト、原文、翻訳、挿絵を完全に削除します。他のチャットのコピーには影響しません。',
-    zh: '永久删除所选场景的请求、原文、翻译和插图。不影响其他聊天副本。',
+    ko: '선택한 장면을 영구 삭제해요.',
+    en: 'Permanently deletes the selected scenes.',
+    ja: '選択したシーンを完全に削除します。',
+    zh: '永久删除所选场景。',
   },
   'chatmanage.memoryHelp': {
     ko: '연결된 기억은 삭제하지 않고 다음 생성에서만 제외해요. 기억과 메모에서 정리할 수 있어요.',
@@ -58,7 +58,7 @@ export const messages = {
     zh: '仅删除中间场景时，保留后续场景和当前卡片变量。',
   },
   'chatmanage.confirmDelete': {
-    ko: '선택한 {count}개 장면 삭제',
+    ko: '선택한 장면 {count}개 삭제',
     en: 'Delete {count} selected scenes',
     ja: '選択した{count}件のシーンを削除',
     zh: '删除所选的{count}个场景',

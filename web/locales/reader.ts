@@ -564,10 +564,10 @@ export const messages = {
     zh: '无已保存译文',
   },
   'reader.copyYourEditsFirstCancelEditingReturnsToThe': {
-    ko: '작성한 내용을 먼저 복사해 두세요. ‘수정 취소’를 누르면 저장된 본문으로 돌아가요.',
-    en: 'Copy your edits first. Cancel editing returns to the saved text.',
-    ja: '編集内容を先にコピーしてください。「編集をキャンセル」で保存済みの本文に戻ります。',
-    zh: '请先复制编辑内容。点击“取消编辑”会返回已保存的正文。',
+    ko: '작성한 내용을 먼저 복사해 두세요. ‘편집 취소’를 누르면 저장된 본문으로 돌아가요.',
+    en: 'Copy your edits first. Pressing “Cancel Edit” returns to the saved text.',
+    ja: '作成した内容を先にコピーしてください。「編集の取り消し」を押すと保存済みの本文に戻ります。',
+    zh: '请先复制所写内容。点击“取消编辑”将返回已保存的正文。',
   },
   'reader.retryTranslationJudgmentOnly': {
     ko: '번역 판정만 다시 시도',
@@ -600,7 +600,7 @@ export const messages = {
     zh: '取消',
   },
   'reader.valueImagesDisplayed': {
-    ko: '{v0}개 이미지 표시',
+    ko: '이미지 {v0}개 표시',
     en: '{v0} images displayed',
     ja: '{v0}枚の画像を表示',
     zh: '显示{v0}张图片',
@@ -768,7 +768,7 @@ export const messages = {
     zh: '机器人',
   },
   'reader.myPersona': {
-    ko: '나의 페르소나',
+    ko: '내 페르소나',
     en: 'My persona',
     ja: '自分のペルソナ',
     zh: '我的角色',
@@ -864,10 +864,10 @@ export const messages = {
     zh: '打开场景列表',
   },
   'reader.partialSceneScaleSelectAnySceneFromTheList': {
-    ko: '일부 장면만 표시. 전체 장면은 목록에서 선택해 주세요.',
-    en: 'Some scenes shown. Select any scene from the list.',
-    ja: '一部の場面を表示。すべての場面は一覧で選択できます。',
-    zh: '显示部分场景，可从列表选择所有场景。',
+    ko: '일부 장면만 표시해요. 장면 목록에서 원하는 장면을 선택할 수 있어요.',
+    en: 'Only some scenes are shown. You can select any scene from the scene list.',
+    ja: '一部のシーンのみ表示しています。シーン一覧から希望のシーンを選択できます。',
+    zh: '仅显示部分场景。可以从场景列表中选择所需的场景。',
   },
   'reader.sceneScale': {
     ko: '장면 눈금',
@@ -882,7 +882,7 @@ export const messages = {
     zh: '转到正文底部',
   },
   'reader.unsavedSceneName': {
-    ko: '미저장 장면 이름',
+    ko: '저장하지 않은 장면 이름',
     en: 'Unsaved scene name',
     ja: '未保存のシーン名',
     zh: '未保存的场景名称',
@@ -984,15 +984,15 @@ export const messages = {
     zh: '对话摘要',
   },
   'reader.confirmedInclusionOfValueSummarizedScenes': {
-    ko: '{v0}개 장면 요약 포함 확인',
+    ko: '장면 {v0}개 요약 포함 확인',
     en: 'Confirmed inclusion of {v0} summarized scenes',
     ja: '{v0}シーンの要約を含むことを確認',
     zh: '已确认包含{v0}个场景的摘要',
   },
   'reader.notUsed': {
-    ko: '사용 없음',
+    ko: '사용하지 않음',
     en: 'Not used',
-    ja: '使用なし',
+    ja: '使用しない',
     zh: '未使用',
   },
   'reader.inclusionInTheRequestIsUnknown': {
@@ -1056,7 +1056,7 @@ export const messages = {
     zh: '包含的设定资料，',
   },
   'reader.valueRecords': {
-    ko: '{v0}개 기록',
+    ko: '기록 {v0}개',
     en: '{v0} records',
     ja: '{v0}件の記録',
     zh: '{v0}条记录',
@@ -1902,10 +1902,10 @@ export const messages = {
     zh: '上下文摘要',
   },
   'reader.usingValueSceneSummaries': {
-    ko: '{v0} 장면 요약 사용',
-    en: 'Using {v0} scene summaries',
-    ja: '{v0}シーンの要約を使用',
-    zh: '使用{v0}个场景的摘要',
+    ko: '장면 요약 사용: {v0}',
+    en: 'Using scene summaries: {v0}',
+    ja: 'シーン要約を使用: {v0}',
+    zh: '使用场景摘要：{v0}',
   },
   'reader.summaryNotUsed': {
     ko: '요약 사용 안 함',

@@ -232,7 +232,7 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       await expect(usage.locator(':scope > summary')).toContainText('컨텍스트 사용량 1.9%');
       expect(detailRequests).toHaveLength(0);
       await usage.locator(':scope > summary').click();
-      await expect(usage).toContainText('전송 로어: 1개 기록');
+      await expect(usage).toContainText('포함된 로어: 기록 1개');
       await expect(usage).not.toContainText('자동 선별');
       expect(detailRequests).toHaveLength(1);
       await expect(usage).toContainText(/Scene diagnostics writer\s*scene-diagnostics-writer/);

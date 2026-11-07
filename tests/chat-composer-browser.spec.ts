@@ -47,7 +47,7 @@ test('short mobile composer menu keeps context controls reachable', async ({ pag
   await loreReset.scrollIntoViewIfNeeded();
   await expect(loreReset).toBeInViewport();
   await loreReset.click();
-  await expect(page.getByRole('button', { name: '조회 로어 제외 해제' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '조회 로어 다시 포함' })).toBeVisible();
 });
 
 test('shared composer follows resized content viewport while preserving the draft', async ({

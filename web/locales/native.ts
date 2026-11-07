@@ -1,7 +1,7 @@
 // App-owned editor messages. Imported content and stored defaults remain unchanged.
 export const messages = {
   'native.searchResultCount': {
-    ko: '{count, number}개 항목',
+    ko: '항목 {count, number}개',
     en: '{count, plural, one {# item} other {# items}}',
     ja: '{count, number}件の項目',
     zh: '{count, number}个项目',
@@ -139,10 +139,10 @@ export const messages = {
     zh: '上传失败。',
   },
   'native.text_0efca75d2d': {
-    ko: '파일을 교체했어요. 원래 에셋 이름과 연결은 유지해요. 저장하면 적용돼요.',
-    en: 'File replaced. Names and references are preserved. Save to apply.',
-    ja: 'ファイルを置換しました。名前と参照は保持されます。保存すると適用されます。',
-    zh: '已替换文件。名称和引用保持不变，保存后生效。',
+    ko: '파일을 교체했어요. 원래 에셋 이름과 연결은 유지돼요. 저장하면 적용돼요.',
+    en: 'The file has been replaced. Original asset names and connections are preserved. Save to apply.',
+    ja: 'ファイルを置き換えました。元のアセット名と関連付けは維持されます。保存すると適用されます。',
+    zh: '已替换文件。原资产名称和关联保持不变。保存后生效。',
   },
   'native.text_6b1779397e': {
     ko: 'Risu 에셋 편집',
@@ -247,10 +247,10 @@ export const messages = {
     zh: '要从资料中移除此资源吗？',
   },
   'native.text_07afd47e83': {
-    ko: '본문, 로어, HTML, 스크립트에서 이 에셋을 부르는 이름은 그대로 남아요. 제거하면 해당 이미지가 표시되지 않을 수 있어요.',
-    en: 'References in text, lore, HTML and scripts remain. The image may stop appearing.',
-    ja: '本文、ロア、HTML、スクリプト内の参照名は残ります。画像が表示されなくなる場合があります。',
-    zh: '正文、设定、HTML和脚本中的引用名称会保留，图片可能无法显示。',
+    ko: '본문, 로어, HTML, 스크립트에서 이 에셋을 참조하는 이름은 그대로 남아요. 제거하면 해당 이미지가 표시되지 않을 수 있어요.',
+    en: 'Names referencing this asset in text, lore, HTML, and scripts remain. Removing it may prevent the image from displaying.',
+    ja: '本文、ロア、HTML、スクリプト内でこのアセットを参照する名前はそのまま残ります。削除すると該当の画像が表示されなくなる可能性があります。',
+    zh: '正文、设定、HTML和脚本中引用此资产的名称仍会保留。移除后相应图片可能无法显示。',
   },
   'native.text_19b2d19bc1': {
     ko: '취소',
@@ -559,10 +559,10 @@ export const messages = {
     zh: '删除设定',
   },
   'native.text_01d4ca79f9': {
-    ko: '폴더만 삭제하고 안의 로어는 상위 폴더로 옮겨요.',
-    en: 'Delete only the folder and move its lore to the parent.',
-    ja: 'フォルダーだけを削除し、中のロアは親フォルダーに移します。',
-    zh: '仅删除文件夹，其中的设定将移至上级文件夹。',
+    ko: '폴더만 삭제하고 내부 로어는 상위 폴더로 옮겨요.',
+    en: 'Delete only the folder and move its lore to the parent folder.',
+    ja: 'フォルダーのみを削除し、内部のロアは親フォルダーへ移動します。',
+    zh: '仅删除文件夹，内部设定将移至上级文件夹。',
   },
   'native.text_a6965f7538': {
     ko: '선택한 로어를 삭제할까요?',
@@ -619,10 +619,10 @@ export const messages = {
     zh: '缓存',
   },
   'native.text_f70715474c': {
-    ko: '프롬프트의 잘못된 입력을 확인해 주세요.',
-    en: 'Check invalid prompt inputs.',
-    ja: 'プロンプトの無効な入力を確認してください。',
-    zh: '请检查提示词中的无效输入。',
+    ko: '프롬프트에 잘못 입력된 내용을 확인해 주세요.',
+    en: 'Please check the incorrect input in the prompt.',
+    ja: 'プロンプトに誤って入力された内容を確認してください。',
+    zh: '请检查提示词中输入有误的内容。',
   },
   'native.text_a52034ad77': {
     ko: '프리셋 편집기에서 저장해 주세요.',
@@ -673,10 +673,10 @@ export const messages = {
     zh: '预设编辑区域',
   },
   'native.text_9cceef2250': {
-    ko: '직접 편집 중인 원문이 있어요. 저장할 때 함께 반영해요.',
-    en: 'You have source edits. Saving includes them.',
-    ja: '編集中のソースがあります。保存時に一緒に反映されます。',
-    zh: '有正在编辑的源码，保存时会一并应用。',
+    ko: '직접 편집 중인 원문이 있어요. 저장할 때 함께 반영돼요.',
+    en: 'There is source text being edited directly. It will be included when saving.',
+    ja: '直接編集中の原文があります。保存時に一緒に反映されます。',
+    zh: '有正在直接编辑的原文。保存时将一并反映。',
   },
   'native.text_944b1569af': {
     ko: '프롬프트 블록 목록',
@@ -1111,10 +1111,10 @@ export const messages = {
     zh: 'Risu正则表达式JSON',
   },
   'native.text_dd964b88ac': {
-    ko: '저장을 누르면 JSON도 함께 저장해요. 편집기를 계속 수정하려면 먼저 편집기에 적용해 주세요.',
-    en: 'Saving includes the JSON. Apply to the editor before further edits.',
-    ja: '保存時にJSONも保存されます。エディタの編集を続けるには先に反映してください。',
-    zh: '保存时会一并保存JSON，继续编辑前请先应用到编辑器。',
+    ko: '저장하면 JSON도 함께 저장돼요. 편집기에서 계속 수정하려면 JSON을 먼저 적용해 주세요.',
+    en: 'Saving will also save the JSON. Apply the JSON first to continue editing in the editor.',
+    ja: '保存するとJSONも一緒に保存されます。エディターで編集を続けるには、先にJSONを適用してください。',
+    zh: '保存时将一并保存 JSON。若要在编辑器中继续修改，请先应用 JSON。',
   },
   'native.text_5c02cb8d1c': {
     ko: '편집기에 적용',
@@ -1603,10 +1603,10 @@ export const messages = {
     zh: '触发器源码JSON',
   },
   'native.text_1109f0e44c': {
-    ko: '저장을 누르면 JSON도 함께 저장해요. 다른 항목을 편집하려면 먼저 편집기에 적용해 주세요.',
-    en: 'Saving includes JSON. Apply to the editor before editing other items.',
-    ja: '保存時にJSONも保存されます。他の項目の編集前にエディタへ反映してください。',
-    zh: '保存时会一并保存JSON，编辑其他项目前请先应用到编辑器。',
+    ko: '저장하면 JSON도 함께 저장돼요. 다른 항목을 편집하려면 먼저 편집기에 적용해 주세요.',
+    en: 'Saving will also save the JSON. Apply it to the editor first before editing other items.',
+    ja: '保存するとJSONも一緒に保存されます。他の項目を編集するには、先にエディターへ適用してください。',
+    zh: '保存时将一并保存 JSON。若要编辑其他项目，请先应用到编辑器。',
   },
   'native.text_782c2d04b2': {
     ko: '편집하던 항목을 찾을 수 없어요. 입력을 되돌린 뒤 다시 확인해 주세요.',
@@ -1771,10 +1771,10 @@ export const messages = {
     zh: '资料编辑区域',
   },
   'native.text_0b4d698c5c': {
-    ko: '미적용 원문이 있어요.',
+    ko: '적용하지 않은 원문이 있어요.',
     en: 'There are unapplied source edits.',
-    ja: '未反映のソースがあります。',
-    zh: '有未应用的源码编辑。',
+    ja: '未適用の原文があります。',
+    zh: '有未应用的原文。',
   },
   'native.text_609d8be788': {
     ko: '원문 확인',
@@ -1819,10 +1819,10 @@ export const messages = {
     zh: '设定选择方式',
   },
   'native.text_d8aac6a860': {
-    ko: 'JEV 관련성 판단',
-    en: 'JEV relevance assessment',
-    ja: 'JEVの関連性判断',
-    zh: 'JEV相关性判断',
+    ko: '관련성 판단',
+    en: 'Relevance assessment',
+    ja: '関連性判断',
+    zh: '相关性判断',
   },
   'native.text_f314bfcb7c': {
     ko: '필요할 때 모델이 읽기',
@@ -2077,7 +2077,7 @@ export const messages = {
     zh: '已将{title}移至第{position, number}项。',
   },
   'native.imagesAdded': {
-    ko: '{count, number}개 이미지를 추가했어요. 저장하면 적용돼요.',
+    ko: '이미지 {count, number}개를 추가했어요. 저장하면 적용돼요.',
     en: '{count, plural, one {Added # image. Save to apply.} other {Added # images. Save to apply.}}',
     ja: '画像を{count, number}枚追加しました。保存すると適用されます。',
     zh: '已添加{count, number}张图片，保存后生效。',
@@ -2089,7 +2089,7 @@ export const messages = {
     zh: '已保留{count, number}个无法作为图片读取的源码资源，无法在此编辑。缺少内嵌文件的资料可能无法完整导出CHARX。',
   },
   'native.imageCount': {
-    ko: '{count, number}개 이미지',
+    ko: '이미지 {count, number}개',
     en: '{count, plural, one {# image} other {# images}}',
     ja: '画像{count, number}枚',
     zh: '{count, number}张图片',
@@ -2101,10 +2101,10 @@ export const messages = {
     zh: '移除图片{name}及此资料中的资源引用，原文件不会删除。',
   },
   'native.loreMoved': {
-    ko: '{title} 항목을 {destination}(으)로 이동했어요.',
-    en: 'Moved {title} to {destination}.',
-    ja: '{title}を{destination}に移動しました。',
-    zh: '已将{title}移至{destination}。',
+    ko: '‘{title}’ 항목을 이동했어요. 위치: {destination}',
+    en: 'Moved ‘{title}’. Location: {destination}',
+    ja: '「{title}」項目を移動しました。位置: {destination}',
+    zh: '已移动“{title}”项目。位置：{destination}',
   },
   'native.folderDestination': {
     ko: '{name} 폴더',
@@ -2113,16 +2113,16 @@ export const messages = {
     zh: '文件夹{name}',
   },
   'native.loreCount': {
-    ko: '{count, number}개 로어',
+    ko: '로어 {count, number}개',
     en: '{count, plural, one {# lore entry} other {# lore entries}}',
     ja: 'ロア{count, number}件',
     zh: '{count, number}条设定',
   },
   'native.loreHeading': {
-    ko: '로어북: {count, number}',
-    en: 'Lorebook: {count, number}',
-    ja: 'ロアブック：{count, number}',
-    zh: '设定集：{count, number}',
+    ko: '로어북: 항목 {count, number}개',
+    en: 'Lorebook entries: {count, number}',
+    ja: 'ロアブック: {count, number}項目',
+    zh: '设定集：{count, number} 项',
   },
   'native.expandLore': {
     ko: '{title} 펼치기',
@@ -2185,10 +2185,10 @@ export const messages = {
     zh: '块类型，{type}',
   },
   'native.unsupportedType': {
-    ko: '{type}, 실행 미지원',
-    en: '{type}, unsupported',
-    ja: '{type}、実行未対応',
-    zh: '{type}，不支持执行',
+    ko: '실행 미지원: {type}',
+    en: 'Execution not supported: {type}',
+    ja: '実行未対応: {type}',
+    zh: '不支持执行：{type}',
   },
   'native.regexNumber': {
     ko: '정규식 {number, number}',
@@ -2269,7 +2269,7 @@ export const messages = {
     zh: '删除变量{key}',
   },
   'native.groupCounts': {
-    ko: '{settings, number}개 설정, {dividers, number}개 구분선',
+    ko: '설정 {settings, number}개, 구분선 {dividers, number}개',
     en: '{settings, plural, one {# setting} other {# settings}}, {dividers, plural, one {# divider} other {# dividers}}',
     ja: '設定{settings, number}件、区切り線{dividers, number}本',
     zh: '{settings, number}项设置，{dividers, number}条分隔线',
@@ -2281,7 +2281,7 @@ export const messages = {
     zh: '删除“{name}”分组及所有项目。如需保留项目，请取消分组。',
   },
   'native.toggleCounts': {
-    ko: '{groups, number}개 그룹, {settings, number}개 설정{unknown, plural, =0 {} other {, 원문 항목 #개 보존}}',
+    ko: '그룹 {groups, number}개, 설정 {settings, number}개{unknown, plural, =0 {} other {, 원문 항목 #개 보존}}',
     en: '{groups, plural, one {# group} other {# groups}}, {settings, plural, one {# setting} other {# settings}}{unknown, plural, =0 {} one {, # source item preserved} other {, # source items preserved}}',
     ja: 'グループ{groups, number}件、設定{settings, number}件{unknown, plural, =0 {} other {、ソース項目#件を保持}}',
     zh: '{groups, number}个分组，{settings, number}项设置{unknown, plural, =0 {} other {，已保留#个源码项目}}',
@@ -2311,7 +2311,7 @@ export const messages = {
     zh: '备选首条消息 {number, number}',
   },
   'native.handoffSummary': {
-    ko: '이미지 선택과 삽입을 Uimori에 맡기기 ({count, number}개 범위)',
+    ko: '이미지 선택과 삽입을 Uimori에 맡기기 (범위 {count, number}개)',
     en: 'Let Uimori select and insert images ({count, plural, one {# range} other {# ranges}})',
     ja: '画像の選択と挿入をUimoriに任せる（{count, number}範囲）',
     zh: '由Uimori选择和插入图片（{count, number}个区间）',
@@ -2389,16 +2389,16 @@ export const messages = {
     zh: '未找到项目。',
   },
   'native.rootGroupOperation': {
-    ko: '그룹 없음에는 이 작업을 적용할 수 없어요.',
-    en: 'This action cannot be applied to Ungrouped.',
-    ja: 'グループなしにはこの操作を適用できません。',
-    zh: '无法对未分组项执行此操作。',
+    ko: '‘그룹 없음’에는 이 작업을 적용할 수 없어요.',
+    en: 'This action cannot be applied to “Ungrouped”.',
+    ja: '「グループなし」にはこの操作を適用できません。',
+    zh: '无法对“未分组”应用此操作。',
   },
   'native.useAddGroup': {
-    ko: '그룹 추가를 사용해 주세요.',
-    en: 'Use Add group.',
-    ja: 'グループ追加を使用してください。',
-    zh: '请使用添加分组。',
+    ko: '‘그룹 추가’를 사용해 주세요.',
+    en: 'Please use “Add Group”.',
+    ja: '「グループ追加」を使用してください。',
+    zh: '请使用“添加分组”。',
   },
   'native.captionControlOnly': {
     ko: '설명은 입력 항목에만 연결할 수 있어요.',

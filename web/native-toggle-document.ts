@@ -1,4 +1,4 @@
-import { message as uiMessage } from './i18n.js';
+import { legacyMessage, message as uiMessage } from './i18n.js';
 import {
   type NativeToggleDefinition,
   type NativeToggleLine,
@@ -103,7 +103,7 @@ function itemOf(doc: ReturnType<typeof parseToggleDocument>, index: number) {
   return item;
 }
 function namedGroup(doc: ReturnType<typeof parseToggleDocument>, id: number) {
-  if (id === -1) throw new Error('그룹 없음에는 이 작업을 적용할 수 없어요.');
+  if (id === -1) throw new Error(legacyMessage('native.rootGroupOperation'));
   return groupOf(doc, id);
 }
 function swap(

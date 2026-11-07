@@ -716,7 +716,7 @@ test('HELPMESSAGE local edit does not skip an unseen older message change', asyn
   await toggleHelperTone(page);
   await page
     .getByRole('alertdialog', { name: '도우미 설정', exact: true })
-    .getByRole('button', { name: '변경 버리고 닫기', exact: true })
+    .getByRole('button', { name: '변경 내용 버리고 닫기', exact: true })
     .click();
   const article = panel.locator(`[data-message-id="${latest.id}"]`);
   await article.getByLabel('메시지 메뉴', { exact: true }).click();
@@ -1372,7 +1372,7 @@ test(`HELPUI01 helper panel preserves separate input, reading position and Back 
     await discard.getByRole('button', { name: '계속 편집', exact: true }).click();
     await expect(tone).toHaveValue('설정 화면에서 남긴 말투 초안');
     await toggleHelperTone(page);
-    await discard.getByRole('button', { name: '변경 버리고 닫기', exact: true }).click();
+    await discard.getByRole('button', { name: '변경 내용 버리고 닫기', exact: true }).click();
     await expect(settings).toBeHidden();
     await expect(input).toHaveValue('도우미 입력 초안');
     await expect.poll(() => list.evaluate((node) => node.scrollTop)).toBe(readingPosition);
@@ -1577,7 +1577,7 @@ test('HELPUI11 an IndexedDB write failure retains the exact request for explicit
   await input.fill('보내는 동안 남길 새 입력');
   await panel.getByRole('button', { name: '도우미 이전 요청 확인', exact: true }).click();
   const decision = page.getByRole('dialog', { name: '도우미 요청 보관', exact: true });
-  await expect(decision).toContainText('아직 보내지 않았어요');
+  await expect(decision).toContainText('보내지 않았어요');
   await decision.getByRole('button', { name: '닫기', exact: true }).last().click();
   expect(state.posts).toHaveLength(0);
   await expect(input).toHaveValue('보내는 동안 남길 새 입력');
@@ -2123,7 +2123,7 @@ test('HELPUI06 saved effects survive response failure and cannot be replayed fro
   await page.reload();
   const panel = await open(page);
   await expect(panel.getByTestId('helper-completed-effects')).toContainText(
-    '변경 1건은 저장됐지만 응답은 완료되지 않았어요.'
+    '변경 1건을 저장했지만 응답을 완료하지 못했어요.'
   );
   await expect(panel.getByRole('button', { name: '다시 시도', exact: true })).toHaveCount(0);
   await expect(panel.getByRole('button', { name: '요청 편집', exact: true })).toHaveCount(0);
@@ -2367,7 +2367,7 @@ test('DISPLAY helper incomplete saved answers stay collapsed and committed chang
   await page.reload();
   await open(page);
   await expect(panel.getByTestId('helper-completed-effects')).toContainText(
-    '변경 1건은 저장됐지만'
+    '변경 1건을 저장했지만'
   );
   const partial = panel.locator('.partial-response');
   await expect(partial).toBeVisible();

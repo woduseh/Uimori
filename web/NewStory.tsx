@@ -256,7 +256,7 @@ export function NewStory({
     if (selectedModules.some((item) => !item))
       throw new Error('선택한 모듈을 불러온 뒤 시작해 주세요.');
     if (!selectedBot || (persona && !selectedPersona))
-      throw new Error('채팅의 소속 봇을 선택해 주세요. 목록이 바뀌었다면 자료를 다시 골라 주세요.');
+      throw new Error(retainedMessage('transfer.m316'));
     if (
       [selectedBot, selectedPersona, ...selectedModules].some(
         (item) => item?.hasPackage && !item.package
@@ -270,7 +270,7 @@ export function NewStory({
     ];
     const opening =
       start && selectedBot.package ? resolvePackageStart(selectedBot.package, start) : null;
-    if (start && !opening) throw new Error('선택한 시작을 다시 확인해 주세요.');
+    if (start && !opening) throw new Error(retainedMessage('transfer.m318'));
     return structuredClone({
       title: title.trim() || t('transfer.defaultChatTitle', { bot: selectedBot.title }),
       autoTitle: !title.trim(),
