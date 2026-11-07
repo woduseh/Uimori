@@ -320,7 +320,7 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     const confirmation = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
     await opener.click();
     await centered(confirmation, width);
-    await expect(confirmation).toContainText('책갈피만 삭제해요. 원고는 유지돼요.');
+    await expect(confirmation).toContainText(`${bookmark.title} 책갈피 항목을 삭제할까요?`);
     await page.screenshot({ path: info.outputPath(`bookmark-delete-${width}.png`) });
     await confirmation.getByRole('button', { name: '취소', exact: true }).click();
     await expect(confirmation).not.toBeVisible();

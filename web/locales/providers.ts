@@ -697,10 +697,10 @@ export const messages = {
     zh: '保存的更改从下一次新生成开始生效。进行中和已完成运行的设置会保留。',
   },
   'providers.m135': {
-    ko: '다른 곳에서 프로바이더가 변경됐어요. 입력한 초안은 유지했어요.',
-    en: 'This provider changed elsewhere. Your input draft was retained.',
-    ja: '別の場所でプロバイダーが変更されました。入力した下書きは保持されています。',
-    zh: '提供商已在其他位置更改。已保留输入的草稿。',
+    ko: '프로바이더가 변경됐어요.',
+    en: 'The provider changed.',
+    ja: 'プロバイダーが変更されました。',
+    zh: '提供商已更改。',
   },
   'providers.m136': {
     ko: '최신 프로바이더 설정 불러오기',
@@ -715,10 +715,10 @@ export const messages = {
     zh: '将复制为新提供商。请检查地址和密钥后保存。',
   },
   'providers.m138': {
-    ko: '다른 곳에서 프로바이더가 변경됐어요. 초안은 유지했어요. 최신 설정을 불러와 주세요.',
-    en: 'This provider changed elsewhere. Your draft was retained. Load the latest settings.',
-    ja: '別の場所でプロバイダーが変更されました。下書きは保持されています。最新の設定を読み込んでください。',
-    zh: '提供商已在其他位置更改。草稿已保留，请加载最新设置。',
+    ko: '프로바이더가 변경됐어요. 최신 설정을 불러와 주세요.',
+    en: 'The provider changed. Please load the latest settings.',
+    ja: 'プロバイダーが変更されました。最新の設定を読み込んでください。',
+    zh: '提供商已更改。请载入最新设置。',
   },
   'providers.m139': {
     ko: '프로바이더 종류',
@@ -1339,10 +1339,10 @@ export const messages = {
     zh: '添加模型预设',
   },
   'providers.m279': {
-    ko: '다른 곳에서 모델이 변경됐어요. 입력한 초안은 유지했어요.',
-    en: 'This model changed elsewhere. Your input draft was retained.',
-    ja: '別の場所でモデルが変更されました。入力した下書きは保持されています。',
-    zh: '模型已在其他位置更改。已保留输入的草稿。',
+    ko: '모델이 변경됐어요.',
+    en: 'The model changed.',
+    ja: 'モデルが変更されました。',
+    zh: '模型已更改。',
   },
   'providers.m280': {
     ko: '최신 모델 설정 불러오기',
@@ -1351,10 +1351,10 @@ export const messages = {
     zh: '加载最新模型设置',
   },
   'providers.m282': {
-    ko: '다른 곳에서 모델이 변경됐어요. 초안은 유지했어요. 최신 설정을 불러와 주세요.',
-    en: 'This model changed elsewhere. Your draft was retained. Load the latest settings.',
-    ja: '別の場所でモデルが変更されました。下書きは保持されています。最新の設定を読み込んでください。',
-    zh: '模型已在其他位置更改。草稿已保留，请加载最新设置。',
+    ko: '모델이 변경됐어요. 최신 설정을 불러와 주세요.',
+    en: 'The model changed. Please load the latest settings.',
+    ja: 'モデルが変更されました。最新の設定を読み込んでください。',
+    zh: '模型已更改。请载入最新设置。',
   },
   'providers.m283': {
     ko: '모델 편집 항목',
@@ -3055,10 +3055,10 @@ export const messages = {
     zh: '此测试连接仅用于本机的 127.0.0.1 或 [::1] 地址。',
   },
   'providers.m610': {
-    ko: '모델 목록은 로컬 검사 서버에서 가져와요. 실제 프로바이더 호환성과 모델의 옵션 지원은 별도로 확인해야 해요.',
-    en: 'Models are loaded from the local test server. Real provider compatibility and model option support require separate verification.',
-    ja: 'モデル一覧はローカル検査サーバーから取得します。実際のプロバイダー互換性とモデルのオプション対応は別途確認が必要です。',
-    zh: '模型列表来自本地测试服务器。实际提供商兼容性及模型选项支持情况需要另行验证。',
+    ko: '모델 목록은 로컬 검사 서버에서 가져와요.',
+    en: 'The model list is retrieved from the local inspection server.',
+    ja: 'モデル一覧はローカル検査サーバーから取得します。',
+    zh: '模型列表从本地检查服务器获取。',
   },
   'providers.m611': {
     ko: '인증이 필요한 검사 서버에는 서버 환경변수 이름을 지정할 수 있어요.',
@@ -3109,10 +3109,10 @@ export const messages = {
     zh: '可使用服务器允许的 HTTPS 地址或本机的本地 HTTP 地址。',
   },
   'providers.m619': {
-    ko: 'Responses API 호환 여부와 개별 모델의 옵션과 도구 지원은 프로바이더에서 확인해야 해요. 실제 외부 호환성은 확인하지 않았어요.',
-    en: 'Verify Responses API compatibility and model options and tools with the provider. Real external compatibility has not been verified.',
-    ja: 'Responses API互換性と各モデルのオプションとツールへの対応はプロバイダーで確認してください。実際の外部互換性は未検証です。',
-    zh: 'Responses API 兼容性及各模型的选项和工具支持情况需向提供商确认，实际外部兼容性尚未验证。',
+    ko: '모델별 옵션과 도구 지원은 프로바이더에 따라 달라요.',
+    en: 'Model options and tool support vary by provider.',
+    ja: 'モデルごとのオプションとツール対応はプロバイダーによって異なります。',
+    zh: '各模型的选项和工具支持情况因提供商而异。',
   },
   'providers.m620': {
     ko: '번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 담는 JSON 형식을 요청해요. 형식은 Responses API의 text.format으로 지정하며, 기본값은 일반 텍스트예요.',
@@ -3139,10 +3139,10 @@ export const messages = {
     zh: '启用翻译结构化输出后，会请求包含原文标识信息和译文的 JSON。格式通过 output_config.format 指定，默认为纯文本。',
   },
   'providers.m624': {
-    ko: '모델 기본값은 해당 API 필드를 생략해요. 실제 외부 실행은 사용자가 확인해요.',
-    en: 'The model default omits the API field. Users verify real external execution.',
-    ja: 'モデルの既定値は該当APIフィールドを省略します。実際の外部実行は利用者が確認します。',
-    zh: '模型默认值会省略对应 API 字段。实际外部执行由用户验证。',
+    ko: '모델 기본값은 해당 API 필드를 생략해요.',
+    en: 'Model defaults omit the corresponding API field.',
+    ja: 'モデルの既定値では該当するAPIフィールドを省略します。',
+    zh: '模型默认值会省略对应的 API 字段。',
   },
   'providers.m625': {
     ko: 'Vercel의 공식 API 기본 주소에서 Chat Completions 형식을 사용해요.',
@@ -3151,10 +3151,10 @@ export const messages = {
     zh: '在 Vercel 官方 API 基础地址使用 Chat Completions 格式。',
   },
   'providers.m626': {
-    ko: '번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 담는 JSON 형식을 요청해요. 형식은 response_format으로 지정하며, 기본값은 일반 텍스트예요. 모델별 옵션과 도구 지원은 미확인이에요.',
-    en: 'Structured translation requests JSON containing source identifiers and translated text via response_format; the default is plain text. Model option and tool support is unknown.',
-    ja: '翻訳の構造化出力を有効にすると、原文の識別情報と翻訳文を含むJSONをresponse_formatで要求します。既定値はプレーンテキストです。各モデルのオプションとツールへの対応は不明です。',
-    zh: '启用翻译结构化输出后，通过 response_format 请求包含原文标识信息和译文的 JSON，默认为纯文本。各模型的选项和工具支持情况未知。',
+    ko: '번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 담는 JSON 형식을 요청해요. 형식은 response_format으로 지정하며, 기본값은 일반 텍스트예요.',
+    en: 'Enabling structured translation output requests a JSON format containing source identifiers and translation text. The format is specified via response_format, and the default is plain text.',
+    ja: '翻訳の構造化出力を有効にすると、原文の識別情報と翻訳文を含むJSON形式を要求します。形式は response_format で指定され、既定値はプレーンテキストです。',
+    zh: '开启翻译结构化输出后，将请求包含原文标识信息与译文的 JSON 格式。格式通过 response_format 指定，默认值为纯文本。',
   },
   'providers.m627': {
     ko: '모델 계열을 선택하면 OpenAI, Anthropic, Google, DeepSeek, xAI 계열의 생성 옵션을 같은 게이트웨이에서 사용할 수 있어요. providerOptions는 추가 라우팅이나 새 프로바이더 옵션용이에요.',
@@ -3181,10 +3181,10 @@ export const messages = {
     zh: '支持 V4 Pro 和 V4 Flash。Reasoning Effort 的 none 关闭思考，默认为 high。',
   },
   'providers.m631': {
-    ko: '사고를 켜면 temperature를 사용할 수 없어요. 실제 외부 실행은 사용자가 확인해요.',
-    en: 'temperature is unavailable when thinking is enabled. Users verify real external execution.',
-    ja: '思考を有効にするとtemperatureは使用できません。実際の外部実行は利用者が確認します。',
-    zh: '开启思考后无法使用 temperature。实际外部执行由用户验证。',
+    ko: '사고를 켜면 temperature를 사용할 수 없어요.',
+    en: 'Temperature cannot be used when thinking is enabled.',
+    ja: '思考を有効にすると temperature は使用できません。',
+    zh: '开启思考后无法使用 temperature。',
   },
   'providers.m632': {
     ko: 'OpenAI 호환, 별도 프로바이더',

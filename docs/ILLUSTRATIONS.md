@@ -9,7 +9,7 @@
 
 ## 시작하기와 생성 환경 설정
 
-**설정 → 삽화**의 **현재 삽화 설정** 카드에서 실효 프리셋, 생성기, 모델, 필수 설정 상태를 한눈에 확인할 수 있어요. (이 상태는 설정의 충족 여부를 뜻하며 실제 외부 서버 연결이나 로그인 성공을 보증하는 것은 아니에요.)
+**설정 → 삽화**의 **현재 삽화 설정** 카드에서 실효 프리셋, 생성기, 모델, 필수 설정 상태를 확인할 수 있어요.
 
 ### 1. Codex 생성 환경 설정
 
@@ -141,7 +141,7 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 
 - **작업 펌프 구조**: 하나의 삽화 펌프 안에서 텍스트 작업 1개와 렌더 작업 1개를 독립적으로 병행 실행해요. 같은 계획의 대표 컷부터 순서대로 렌더를 진행하며, 본문 작성 슬롯이나 사용자 입력 상태를 잠그지 않아요.
 - **중복 방지 잠금**: 한 응답 내에서 장면 전체의 컷을 고르는 계획 작업은 1개만 진행돼요 (`ILLUSTRATION_PLAN_ACTIVE`). 다른 컷의 렌더는 독립 예약할 수 있지만 동일한 컷의 중복 실행은 방지돼요 (`ILLUSTRATION_ACTIVE`).
-- **상태 머신**: `queued → running → completed | failed | cancelled | interrupted`. 사용자가 작업을 취소하면 `generation` 카운터를 증가시켜 지연 도착한 결과를 안전하게 폐기해요. 서버가 재시작되면 실행 중이던 작업은 `interrupted`로 변경되며 자동 재실행하지 않아요 (`queued` 작업은 재개).
+- **상태 머신**: `queued → running → completed | failed | cancelled | interrupted`. 사용자가 작업을 취소하면 `generation` 카운터를 증가시켜 지연 도착한 결과를 폐기해요. 서버가 재시작되면 실행 중이던 작업은 `interrupted`로 변경되며 자동 재실행하지 않아요 (`queued` 작업은 재개).
 - **작업 단위**: `illustration_jobs.input.task`는 `plan`, `render`, `placement`로 나뉘며, 이전 버전의 레거시 입력은 단일 `render`로 취급해요.
 
 ### 데이터베이스 스키마와 메타데이터
@@ -195,7 +195,7 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 - **실행 순서**: 계획 모델 호출 → 컷별 워크플로의 `{{prompt}}`, `{{negative}}`, `{{seed}}` 치환 → `POST /prompt` → `GET /history/{prompt_id}` 폴링 → `GET /view` 이미지 다운로드.
 - **워크플로 검증**: API 형식(`노드 ID → {class_type, inputs}`)만 지원하며 UI 형식(`nodes`/`links`)은 `COMFYUI_WORKFLOW_UI_FORMAT` 오류로 거절해요. 노드 구조는 변경하지 않고 `inputs` 문자열 내의 자리표시자만 1회 치환해요.
 - **네트워크와 프록시**: `http://`와 `https://`만 허용하며 주소에 인증 정보나 쿼리를 포함할 수 없어요. 프록시 인증이 필요한 경우 **인증 헤더 환경변수**에 지정된 환경변수 값을 읽어 `Authorization` 헤더로 전달해요. 브라우저는 원격 서버에 직접 접근하지 않아요.
-- **타임아웃과 결과 회수**: 요청 시간 초과(`COMFYUI_TIMEOUT`)가 발생해도 원격 서버의 렌더를 강제 중단하지 않아요. 작업은 `prompt_id`를 보존한 채 실패 상태로 남으며, 사용자가 **결과 확인**(`POST /api/illustrations/:id/reconcile`)을 누르면 원격 히스토리를 다시 조회해 완료된 이미지를 안전하게 가져와요.
+- **타임아웃과 결과 회수**: 요청 시간 초과(`COMFYUI_TIMEOUT`)가 발생해도 원격 서버의 렌더를 강제 중단하지 않아요. 작업은 `prompt_id`를 보존한 채 실패 상태로 남으며, 사용자가 **결과 확인**(`POST /api/illustrations/:id/reconcile`)을 누르면 원격 히스토리를 다시 조회해 완료된 이미지를 가져와요.
 - **취소**: 사용자의 명시적 취소 시에만 `POST /api/jobs/{prompt_id}/cancel`을 호출해요. 해당 API가 없으면 `POST /queue` `{delete: [id]}`로 대기열에서만 제거해요. (전역 `/interrupt`는 호출하지 않아요.)
 - **실패 진단 코드**: `COMFYUI_PROMPT_REJECTED` (노드 설정 오류), `COMFYUI_EXECUTION_FAILED` (실행 도중 오류), `COMFYUI_SUBMISSION_UNCERTAIN` (접수 불확실, 자동 재제출 금지), `COMFYUI_RESULT_UNAVAILABLE` (접수 후 조회 실패).
 

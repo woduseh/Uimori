@@ -85,10 +85,10 @@ export const messages = {
     zh: '最多可添加{images}张图片和{files}个文件。',
   },
   'helperAttachments.openFailed': {
-    ko: '파일을 열지 못했어요. 손상되지 않았는지 확인해 주세요.',
-    en: 'Could not open the file. Check that it is not damaged.',
-    ja: 'ファイルを開けませんでした。破損していないか確認してください。',
-    zh: '无法打开文件，请检查是否损坏。',
+    ko: '파일을 열지 못했어요.',
+    en: 'Could not open the file.',
+    ja: 'ファイルを開けませんでした。',
+    zh: '无法打开文件。',
   },
   'helperAttachments.notReady': {
     ko: '첨부 파일을 준비한 뒤 다시 보내 주세요.',

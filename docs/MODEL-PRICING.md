@@ -27,4 +27,4 @@ Vercel 목록은 단가·두 단계 컨텍스트 구간·명시된 서비스 등
 - 과거 도우미 가정 장면 생성의 사용량은 `helper-artifact`, 당시 컨텍스트 요약 호출은 `summary`로 보존해요. 가정 장면 생성 기능이 종료돼도 이 기록은 유지해요.
 - 전체 SQLite 백업은 저장된 가격 snapshot과 추정 결과를 보존해요. 개별 자료·채팅의 휴대용 백업은 프로바이더와 모델 설정과 호출 기록을 옮기지 않아요. 가격은 실행 허가나 누적 금액 차단 조건이 아니에요. 취소·중복·불확실 실행·원문 귀속 계약은 유지해요.
 
-검증은 `tests/model-pricing.test.ts`, `tests/pricing-estimate.test.ts`, `tests/pricing-store.test.ts`, `tests/pricing-transport.test.ts`, `tests/model-pricing-browser.spec.ts`에서 수행해요. 합성 검사는 실제 프로바이더 청구액 일치나 실제 휴대폰 검증을 의미하지 않아요.
+검증은 `tests/model-pricing.test.ts`, `tests/pricing-estimate.test.ts`, `tests/pricing-store.test.ts`, `tests/pricing-transport.test.ts`, `tests/model-pricing-browser.spec.ts`에서 수행해요.

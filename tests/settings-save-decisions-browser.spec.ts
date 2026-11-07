@@ -443,7 +443,7 @@ test('DECISION settings role model reload requires explicit discard and keeps th
   });
   await reload.click();
   await confirmation.getByRole('button', { name: '초안 버리고 불러오기', exact: true }).click();
-  await expect(confirmation.getByRole('alert')).toContainText('초안은 유지했어요');
+  await expect(confirmation.getByRole('alert')).toContainText('설정을 불러오지 못했어요.');
   await page.screenshot({ path: info.outputPath('model-settings-reload-failed-412.png') });
   await confirmation.getByRole('button', { name: '계속 편집', exact: true }).click();
   await expect(retries).toHaveValue(String(local));

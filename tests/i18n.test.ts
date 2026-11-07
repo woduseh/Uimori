@@ -107,13 +107,15 @@ describe('UI locale presentation boundary', () => {
     expect(translateMessage(details)).toBe('詳細');
     expect(t('providers.m285')).toBe('詳細');
     const literalTitle = message('shared.deleteQuestion', { title: '저장' });
-    const nestedError = message('chatsettings.draftError', {
+    const nestedError = message('helpers.modelRefreshFailed', {
       error: messageRef(message('shared.loadFailed')),
     });
     setLocale('en');
     expect(translateMessage(details)).toBe('Details');
     expect(translateMessage(literalTitle)).toBe('Delete 저장?');
-    expect(translateMessage(nestedError)).toBe('Could not load. Your draft is preserved.');
+    expect(translateMessage(nestedError)).toBe(
+      'The helper model changed, but settings could not be refreshed: Could not load.'
+    );
     expect(t('providers.m285')).toBe('Advanced');
   });
 
@@ -141,12 +143,14 @@ describe('UI locale presentation boundary', () => {
     const error = new Error(legacyMessage('shared.loadFailed'));
     expect(error.message).toBe('불러오지 못했어요.');
     expect(translateMessage(error.message)).toBe('Could not load.');
-    const notice = message('chatsettings.draftError', { error: messageRef(error.message) });
-    expect(translateMessage(notice)).toBe('Could not load. Your draft is preserved.');
+    const notice = message('helpers.modelRefreshFailed', { error: messageRef(error.message) });
+    expect(translateMessage(notice)).toBe(
+      'The helper model changed, but settings could not be refreshed: Could not load.'
+    );
     setLocale('ja');
     expect(error.message).toBe('불러오지 못했어요.');
     expect(translateMessage(notice)).toBe(
-      '読み込めませんでした。 入力した下書きは保持しています。'
+      'ヘルパーモデルは変更しましたが、設定を再読み込みできませんでした: 読み込めませんでした。'
     );
   });
 

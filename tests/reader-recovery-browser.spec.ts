@@ -1075,7 +1075,9 @@ test('NOTICELOAD translation admission and active jobs wait centrally while fail
     await expect(waiting).toHaveCount(0);
     const retry = scene.getByRole('button', { name: '번역 다시 시도', exact: true });
     await expect(retry).toBeVisible();
-    await expect(scene.locator('.translation-placeholder')).toContainText('원문은 보존돼요.');
+    await expect(scene.locator('.translation-placeholder')).toContainText(
+      '한국어 번역을 완료하지 못했어요.'
+    );
     await page.screenshot({ path: info.outputPath('reader-translation-failed.png') });
     await retry.click();
     await expect.poll(() => submissions).toBe(2);

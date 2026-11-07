@@ -764,10 +764,10 @@ export const messages = {
     zh: '删除任务记录',
   },
   'visuals.m120': {
-    ko: '이 작업 기록만 삭제해요. 완료된 그림과 본문은 유지돼요.',
-    en: 'Only this job record is deleted. Finished images and text are kept.',
-    ja: 'この作業記録だけ削除します。完成画像と本文は保持します。',
-    zh: '仅删除此任务记录，保留已完成图片和正文。',
+    ko: '이 작업 기록을 삭제해요.',
+    en: 'Delete this task history.',
+    ja: 'この作業記録を削除します。',
+    zh: '删除此任务记录。',
   },
   'visuals.m121': {
     ko: '삽화 크게 보기',
@@ -848,10 +848,10 @@ export const messages = {
     zh: '删除插图',
   },
   'visuals.m133': {
-    ko: '이 컷의 그림과 생성 기록을 삭제해요. 본문과 다른 컷은 유지돼요.',
-    en: 'Delete images and generation records for this cut. Text and other cuts are kept.',
-    ja: 'このカットの画像と生成記録を削除します。本文と他のカットは保持します。',
-    zh: '删除此画面的图片和生成记录，保留正文及其他画面。',
+    ko: '이 컷의 그림과 생성 기록을 삭제해요.',
+    en: 'Delete the image and generation history for this cut.',
+    ja: 'このカットの画像と生成記録を削除します。',
+    zh: '删除此镜头的图片与生成记录。',
   },
   'visuals.m134': {
     ko: '그릴 차례를 기다리고 있어요.',

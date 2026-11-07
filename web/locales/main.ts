@@ -263,12 +263,6 @@ export const messages = {
     ja: '選択した本文モデルは画像入力に対応していません。モデルを変更するか添付を削除してください。',
     zh: '所选正文模型不支持图片输入。请更换模型或移除附件。',
   },
-  'main.m024': {
-    ko: '선택한 모델의 이미지 지원 여부는 미확인이에요. 첨부한 상태로 전송할 수 있어요.',
-    en: 'Image support for this model is unknown. You can submit with attachments.',
-    ja: 'このモデルの画像対応は未確認です。添付したまま送信できます。',
-    zh: '尚未确认此模型是否支持图片。仍可携带附件提交。',
-  },
   'main.m025': {
     ko: '채팅 설정에 미저장 변경',
     en: 'Unsaved chat settings',
@@ -1122,10 +1116,10 @@ export const messages = {
     zh: '最多可附加8张参考图片。',
   },
   'main.story5': {
-    ko: '이미지를 열지 못했어요. 파일이 손상되지 않았는지 확인해 주세요.',
-    en: 'Could not open the image. Check whether the file is damaged.',
-    ja: '画像を開けませんでした。ファイルが破損していないか確認してください。',
-    zh: '无法打开图片。请检查文件是否损坏。',
+    ko: '이미지를 열지 못했어요.',
+    en: 'Could not open the image.',
+    ja: '画像を開けませんでした。',
+    zh: '无法打开图片。',
   },
   'main.story6': {
     ko: '본문이 바뀌어 해당 장면의 시작으로 이동했어요.',

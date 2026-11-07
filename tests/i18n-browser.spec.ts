@@ -21,6 +21,9 @@ test('I18N11 failed illustration-reference saves keep their error identity acros
         json: {
           revision: 1,
           references: [],
+          characterProfiles: [],
+          defaultCharacterProfiles: [],
+          chatCharacterProfiles: [],
           candidates: [
             {
               ref: 'fixture-reference',
@@ -43,7 +46,9 @@ test('I18N11 failed illustration-reference saves keep their error identity acros
   const role = references.getByRole('combobox');
   await role.selectOption('character');
   await switchFromAnotherTab(page, 'en');
-  await references.getByRole('button').click();
+  await references
+    .getByRole('button', { name: 'Save illustration references', exact: true })
+    .click();
   const error = page.locator('.chat-settings-dialog').getByRole('alert');
   await expect(error).toHaveText('The server could not complete the operation. (503)');
   await switchFromAnotherTab(page, 'ja');

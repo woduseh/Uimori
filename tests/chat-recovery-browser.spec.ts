@@ -195,10 +195,7 @@ for (const viewport of [
       // The refresh reports the conflict before a stale write is allowed; do not click a disabled save.
       await dialog.getByRole('button', { name: /다시 불러오기/, exact: false }).click();
       await expect(
-        dialog.getByText(
-          '변수 저장본이나 현재 소스가 바뀌었어요. 입력한 초안은 그대로 유지했어요.',
-          { exact: true }
-        )
+        dialog.getByText('변수 저장본이나 현재 소스가 바뀌었어요.', { exact: true })
       ).toBeVisible();
       await expect(value('trust')).toHaveValue('');
       await dialog.getByRole('button', { name: '입력값 유지하고 계속 편집', exact: true }).click();

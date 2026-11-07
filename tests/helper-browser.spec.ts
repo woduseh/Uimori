@@ -1012,7 +1012,9 @@ test('HELPUI12 helper settings event refreshes an open model editor without repl
   expect(changed.ok()).toBe(true);
   state.emit('settings.updated');
 
-  await expect(editor.getByRole('alert')).toContainText('초안은 유지했어요', { timeout: 15000 });
+  await expect(editor.getByRole('alert')).toContainText('전역 설정이 변경됐어요.', {
+    timeout: 15000,
+  });
   await expect(draft).toHaveValue('9');
   await editor.getByRole('button', { name: '역할별 모델 설정 저장' }).click();
   const conflict = page.getByRole('alertdialog', {

@@ -294,7 +294,7 @@ export function BookmarkList({
               path={`/bookmarks/${item.id}`}
               revision={item.revision}
               title={t('reader.valueBookmark', { v0: item.title })}
-              description={t('reader.onlyTheBookmarkIsDeletedTheManuscriptIsPreserved')}
+              description=""
               iconOnly
               onDeleted={() => setItems((old) => old.filter((value) => value.id !== item.id))}
               onError={() => setMutationFailed(true)}

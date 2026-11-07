@@ -1087,10 +1087,10 @@ export const messages = {
     zh: '正则标志源码',
   },
   'native.text_977c8a35ea': {
-    ko: '이 적용 단계는 Uimori에서 실행하지 않아요. 원문은 유지돼요.',
-    en: 'Uimori does not run this stage. Source is preserved.',
-    ja: 'この段階はUimoriで実行されません。ソースは保持されます。',
-    zh: 'Uimori不执行此阶段，源码保持不变。',
+    ko: '이 적용 단계는 Uimori에서 실행하지 않아요.',
+    en: 'Uimori does not run this application stage.',
+    ja: 'この適用段階はUimoriで実行しません。',
+    zh: 'Uimori不执行此应用阶段。',
   },
   'native.text_fe5438dade': {
     ko: '정규식 복제',
@@ -2203,10 +2203,10 @@ export const messages = {
     zh: '项目{number, number}',
   },
   'native.unsupportedFlags': {
-    ko: '실행 미지원 플래그: {flags}. 원문은 유지돼요.',
-    en: 'Unsupported flags: {flags}. Source is preserved.',
-    ja: '実行未対応のフラグ：{flags}。ソースは保持されます。',
-    zh: '不支持的标志：{flags}。源码保持不变。',
+    ko: '실행 미지원 플래그: {flags}',
+    en: 'Unsupported execution flags: {flags}',
+    ja: '実行未対応のフラグ: {flags}',
+    zh: '不支持执行的标志: {flags}',
   },
   'native.optionNumber': {
     ko: '선택지 {number, number}',

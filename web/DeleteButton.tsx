@@ -109,7 +109,7 @@ export function DeleteButton({
         }}
       >
         <p>{t('shared.deleteQuestion', { title: target?.title ?? '' })}</p>
-        <p className="muted">{translateMessage(description)}</p>
+        {description && <p className="muted">{translateMessage(description)}</p>}
         {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
         <div className="form-actions">
           <button

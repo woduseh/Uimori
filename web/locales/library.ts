@@ -1050,10 +1050,10 @@ export const messages = {
     zh: '全局提示词设置',
   },
   'library.chatSettingsChangedInAnotherRequestYour': {
-    ko: '다른 요청에서 채팅 설정이 바뀌었어요. 입력은 유지했어요. 최신 설정을 확인한 뒤 다시 저장해 주세요.',
-    en: 'Chat settings changed in another request. Your input is preserved. Review the latest settings and save again.',
-    ja: '別のリクエストでチャット設定が変わりました。入力は保持しています。最新の設定を確認して再度保存してください。',
-    zh: '其他请求已更改聊天设置，输入已保留。请检查最新设置后重新保存。',
+    ko: '채팅 설정이 바뀌었어요. 최신 설정을 확인한 뒤 다시 저장해 주세요.',
+    en: 'Chat settings changed. Check the latest settings and save again.',
+    ja: 'チャット設定が変更されました。最新の設定を確認して再度保存してください。',
+    zh: '聊天设置已更改。请确认最新设置后重新保存。',
   },
   'library.latestSettingsLoaded': {
     ko: '최신 설정을 불러왔어요.',
@@ -1758,10 +1758,10 @@ export const messages = {
     zh: '添加备注',
   },
   'library.theSavedNoteOrTargetSceneChanged': {
-    ko: '저장된 메모나 대상 장면이 바뀌었어요. 입력한 내용은 유지했어요. 위의 최신 메모를 확인해 주세요.',
-    en: 'The saved note or target scene changed. Your input is preserved. Review the latest notes above.',
-    ja: '保存済みメモや対象の場面が変わりました。入力は保持しています。上の最新メモを確認してください。',
-    zh: '已保存的备注或目标场景已更改，输入已保留。请检查上方最新备注。',
+    ko: '저장된 메모나 대상 장면이 바뀌었어요. 위의 최신 메모를 확인해 주세요.',
+    en: 'The saved note or target scene changed. Check the latest note above.',
+    ja: '保存されたメモまたは対象の場面が変更されました。上の最新メモを確認してください。',
+    zh: '保存的备注或目标场景已更改。请确认上方最新的备注。',
   },
   'library.reviewSaveConflict': {
     ko: '저장 충돌 확인',
@@ -1818,10 +1818,10 @@ export const messages = {
     zh: '确认停用备注',
   },
   'library.excludeThisNoteFromFutureRequestsFor': {
-    ko: '이 채팅의 이후 요청에서 이 메모를 제외해요. 이전 실행과 메모 이력은 보존해요.',
-    en: 'Exclude this note from future requests for this chat. Past runs and note history are preserved.',
-    ja: 'このチャットの今後のリクエストからメモを除外します。過去の実行とメモ履歴は保持します。',
-    zh: '从此聊天的后续请求中排除此备注，保留过去的运行与备注历史。',
+    ko: '이 채팅의 이후 요청에서 이 메모를 제외해요.',
+    en: 'Exclude this note from future requests in this chat.',
+    ja: 'このチャットの今後のリクエストからこのメモを除外します。',
+    zh: '从此聊天的后续请求中排除此备注。',
   },
   'library.confirmedRetire': {
     ko: '사용 중지',
@@ -2070,10 +2070,10 @@ export const messages = {
     zh: '{title}已保存，但无法刷新资料库列表。',
   },
   'library.errorInputRetained': {
-    ko: '{error} 입력한 내용은 유지했어요.',
-    en: '{error} Your input has been preserved.',
-    ja: '{error} 入力内容は保持しています。',
-    zh: '{error} 输入内容已保留。',
+    ko: '{error}',
+    en: '{error}',
+    ja: '{error}',
+    zh: '{error}',
   },
   'library.detailAction': {
     ko: '{title} {action, select, select {선택} other {상세 보기}}',
@@ -2094,10 +2094,10 @@ export const messages = {
     zh: '当前名称：{name}',
   },
   'library.moveCount': {
-    ko: '{count, number}개 자료를 옮겨요. 기존 채팅과 자료 내용은 유지돼요.',
-    en: '{count, plural, one {Move # resource.} other {Move # resources.}} Existing chats and resource content are preserved.',
-    ja: '{count, number}件の資料を移動します。既存のチャットと資料内容は保持します。',
-    zh: '将移动{count, number}项资料，现有聊天与资料内容会保留。',
+    ko: '{count, number}개 자료를 옮겨요.',
+    en: '{count, plural, one {Move # resource.} other {Move # resources.}}',
+    ja: '{count, number}件の資料を移動します。',
+    zh: '移动 {count, number} 项资料。',
   },
   'library.useAs': {
     ko: '{role}로 사용',

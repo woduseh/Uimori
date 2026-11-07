@@ -634,7 +634,6 @@ function App() {
     s.cancelling ? t('main.m021') : '',
     s.imagesDecoding ? t('main.m022') : '',
     s.draftImages.length && !testMode && imageSupport === false ? t('main.m023') : '',
-    s.draftImages.length && !testMode && imageSupport === null ? t('main.m024') : '',
     s.profileDirty ? t('main.m025') : '',
   ]
     .filter(Boolean)
