@@ -1,9 +1,9 @@
 export const messages = {
   'main.pendingProfileConflict': {
-    ko: '시작 설정이 바뀌었어요.',
-    en: 'Starting settings have changed.',
-    ja: '開始設定が変更されました。',
-    zh: '开始设置已更改。',
+    ko: '시작 설정이 바뀌었어요. 저장된 설정을 사용하면 선택한 내용은 적용되지 않아요.',
+    en: 'Starting settings have changed. If you use the saved settings, your selections will not be applied.',
+    ja: '開始設定が変更されました。保存された設定を使用すると、選択した内容は適用されません。',
+    zh: '开始设置已更改。如果使用已保存的设置，所选内容将不会应用。',
   },
   'main.pendingProfileChanged': {
     ko: '시작 설정 복구 기록이 바뀌었어요. 다시 확인해 주세요.',
@@ -1140,10 +1140,10 @@ export const messages = {
     zh: '图片上传失败。',
   },
   'main.story9': {
-    ko: '요청 복구 기록을 저장하지 못해 요청을 보내지 않았어요. 브라우저 저장 공간을 확인해 주세요.',
-    en: 'The recovery record could not be saved, so the request was not sent. Check browser storage.',
-    ja: '復旧記録を保存できなかったため、リクエストは送信していません。ブラウザーの保存領域を確認してください。',
-    zh: '无法保存请求恢复记录，因此未发送请求。请检查浏览器存储空间。',
+    ko: '요청 기록을 저장하지 못해 보내지 않았어요.',
+    en: 'The request record could not be saved, so the request was not sent.',
+    ja: 'リクエスト記録を保存できなかったため、送信していません。',
+    zh: '无法保存请求记录，因此未发送请求。',
   },
   'main.story10': {
     ko: '요청은 접수됐지만 기기의 초안을 비우지 못했어요. 다시 보내기 전에 확인해 주세요.',

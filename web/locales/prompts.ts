@@ -816,7 +816,7 @@ export const messages = {
     zh: '细化大纲时会要求助手保留此条件。',
   },
   'prompts.uiTheOutlineChangedElsewhereYourDraftIsPreserved': {
-    ko: '플롯이 변경됐어요.',
+    ko: '플롯이 바뀌었어요.',
     en: 'The outline has changed.',
     ja: '構成が変更されました。',
     zh: '大纲已更改。',

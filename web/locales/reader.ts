@@ -992,7 +992,7 @@ export const messages = {
   'reader.notUsed': {
     ko: '사용하지 않음',
     en: 'Not used',
-    ja: '使用しない',
+    ja: '未使用',
     zh: '未使用',
   },
   'reader.inclusionInTheRequestIsUnknown': {
@@ -1902,10 +1902,10 @@ export const messages = {
     zh: '上下文摘要',
   },
   'reader.usingValueSceneSummaries': {
-    ko: '장면 요약 사용: {v0}',
-    en: 'Using scene summaries: {v0}',
-    ja: 'シーン要約を使用: {v0}',
-    zh: '使用场景摘要：{v0}',
+    ko: '요약에 포함된 장면 수: {v0}',
+    en: 'Scenes included in summary: {v0}',
+    ja: '要約に含まれるシーン数: {v0}',
+    zh: '摘要中包含的场景数：{v0}',
   },
   'reader.summaryNotUsed': {
     ko: '요약 사용 안 함',

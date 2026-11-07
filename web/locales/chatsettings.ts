@@ -978,10 +978,10 @@ export const messages = {
     zh: '其他任务正在使用变量。',
   },
   'chatsettings.m173': {
-    ko: '변수 저장본이나 현재 소스가 바뀌었어요.',
-    en: 'The saved variables or the current source changed.',
-    ja: '保存された変数または現在のソースが変更されました。',
-    zh: '保存的变量或当前源码已更改。',
+    ko: '변수 저장본이나 현재 원문이 바뀌었어요.',
+    en: 'The saved variables or the current original text changed.',
+    ja: '保存済みの変数または現在の原文が変更されました。',
+    zh: '已保存的变量或当前原文已更改。',
   },
   'chatsettings.m174': {
     ko: '입력값 유지하고 계속 편집',

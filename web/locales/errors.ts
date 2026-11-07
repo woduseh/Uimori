@@ -9,7 +9,7 @@ export const messages = {
     ko: '이전에 만든 자료가 삭제됐어요. 새로 저장할 수 있어요.',
     en: 'The previously created resource was deleted. You can save it as new.',
     ja: '以前作成した資料は削除されました。新しく保存できます。',
-    zh: '之前创建的资料已被删除。可以重新保存。',
+    zh: '之前创建的资料已被删除。可以保存为新资料。',
   },
   'errors.REQUEST_FILE_FORMAT_INVALID': {
     ko: '파일 형식을 읽을 수 없어요. 파일을 확인해 주세요.',
@@ -312,10 +312,10 @@ export const messages = {
     zh: '角色卡文件不得超过{limit, number} MiB。',
   },
   'errors.RISU_IMPORT_IMAGES_TOO_LARGE': {
-    ko: '이미지 전체 크기가 {limit, number} MiB를 넘어요. 첨부 이미지를 줄여 주세요.',
-    en: 'Total image size exceeds {limit, number} MiB. Please reduce the attached images.',
-    ja: '画像の合計サイズが{limit, number} MiBを超えています。添付画像を減らしてください。',
-    zh: '图片总大小超过 {limit, number} MiB。请减少附带的图片。',
+    ko: '이미지 전체 크기가 {limit, number} MiB를 넘어요. 이미지를 줄인 파일을 선택해 주세요.',
+    en: 'Total image size exceeds {limit, number} MiB. Select a file with a smaller total image size.',
+    ja: '画像の合計サイズが{limit, number} MiBを超えています。画像の合計サイズを抑えたファイルを選んでください。',
+    zh: '图片总大小超过 {limit, number} MiB。请选择图片总大小更小的文件。',
   },
   'errors.PACKAGE_START_CONVERSATION_STARTED': {
     ko: '대화가 진행됐거나 원래 봇의 첫 메시지를 사용할 수 없어 바꾸지 못했어요. 선택 창을 닫고 현재 대화를 확인해 주세요.',
@@ -972,10 +972,10 @@ export const messages = {
     zh: '未能判定翻译是否被拒绝。请检查响应。',
   },
   'errors.auxiliary.TRANSLATION_REFUSAL_RETRIES_EXHAUSTED.details': {
-    ko: '번역이 거절됐어요. 모델과 프롬프트를 확인해 주세요.',
-    en: 'Translation was refused. Check the model and prompt.',
-    ja: '翻訳が拒否されました。モデルとプロンプトを確認してください。',
-    zh: '翻译被拒绝。请检查模型和提示词。',
+    ko: '번역이 거절된 것으로 판단했어요. 모델과 프롬프트를 확인해 주세요.',
+    en: 'Translation appears to have been refused. Check the model and prompt.',
+    ja: '翻訳が拒否されたと判断しました。モデルとプロンプトを確認してください。',
+    zh: '判定翻译被拒绝。请检查模型和提示词。',
   },
   'errors.auxiliary.AUXILIARY_PROVIDER_REFUSED.details': {
     ko: '모델이 요청을 거절했어요. 모델이나 프롬프트를 변경한 뒤 수동으로 다시 요청할 수 있어요.',
@@ -1218,10 +1218,10 @@ export const messages = {
     zh: '请检查响应。',
   },
   'errors.auxiliary.TRANSLATION_REFUSAL_RETRIES_EXHAUSTED.message': {
-    ko: '번역이 거절됐어요.',
-    en: 'Translation was refused.',
-    ja: '翻訳が拒否されました。',
-    zh: '翻译被拒绝。',
+    ko: '번역이 거절된 것으로 판단했어요.',
+    en: 'Translation appears to have been refused.',
+    ja: '翻訳が拒否されたと判断しました。',
+    zh: '判定翻译被拒绝。',
   },
   'errors.auxiliary.TRANSLATION_REFUSAL_RETRIES_EXHAUSTED.action': {
     ko: '모델과 프롬프트를 확인해 주세요.',

@@ -252,10 +252,10 @@ export const messages = {
     zh: '版权和第三方声明',
   },
   'outside.prefMain': {
-    ko: '요청 완료 (자동 번역 완료 후)',
-    en: 'Request completed (after auto-translation completes)',
-    ja: 'リクエスト完了（自動翻訳完了後）',
-    zh: '请求完成（自动翻译完成后）',
+    ko: '요청 완료 (자동 번역 시 번역 후)',
+    en: 'Request completed (after translation if auto-translating)',
+    ja: 'リクエスト完了（自動翻訳時は翻訳後）',
+    zh: '请求完成（自动翻译时在翻译后）',
   },
   'outside.prefFailure': {
     ko: '확인이 필요한 작업 실패',
