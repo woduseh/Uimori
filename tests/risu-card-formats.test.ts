@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { crc32, deflateRawSync } from 'node:zlib';
+import { crc32 } from 'node:zlib';
+import { zip } from './fixtures/zip.js';
 import { afterEach, expect, test } from 'vitest';
 import { cardZip, readCharacterCardPath } from '../server/character-card-file.js';
 import { encodeRPack } from '../server/compat/risu/rpack.js';
@@ -32,31 +33,6 @@ const card = (assets: unknown[] = []) => ({
     },
   },
 });
-function zipCard(bytes: Buffer) {
-  const name = Buffer.from('card.json'),
-    compressed = deflateRawSync(bytes),
-    local = Buffer.alloc(30),
-    central = Buffer.alloc(46),
-    end = Buffer.alloc(22);
-  local.writeUInt32LE(0x04034b50);
-  local.writeUInt16LE(8, 8);
-  local.writeUInt32LE(crc32(bytes), 14);
-  local.writeUInt32LE(compressed.length, 18);
-  local.writeUInt32LE(bytes.length, 22);
-  local.writeUInt16LE(name.length, 26);
-  central.writeUInt32LE(0x02014b50);
-  central.writeUInt16LE(8, 10);
-  central.writeUInt32LE(crc32(bytes), 16);
-  central.writeUInt32LE(compressed.length, 20);
-  central.writeUInt32LE(bytes.length, 24);
-  central.writeUInt16LE(name.length, 28);
-  end.writeUInt32LE(0x06054b50);
-  end.writeUInt16LE(1, 8);
-  end.writeUInt16LE(1, 10);
-  end.writeUInt32LE(central.length + name.length, 12);
-  end.writeUInt32LE(local.length + name.length + compressed.length, 16);
-  return Buffer.concat([local, name, compressed, central, name, end]);
-}
 function pngChunk(type: string, data: Buffer) {
   const header = Buffer.alloc(8),
     footer = Buffer.alloc(4);
@@ -69,7 +45,7 @@ const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const textChunk = (key: string, value: string) => pngChunk('tEXt', Buffer.from(`${key}\0${value}`));
 
 test('JPEG-prefixed CHARX preserves original identity and reads archive offsets relative to its start', async () => {
-  const archive = zipCard(Buffer.from(JSON.stringify(card()))),
+  const archive = zip([['card.json', Buffer.from(JSON.stringify(card()))]]),
     bytes = Buffer.concat([Buffer.from([255, 216, 255, 217]), archive]);
   expect(JSON.parse(cardZip(bytes).get('card.json')!().toString()).data.name).toBe(
     'Format fixture'

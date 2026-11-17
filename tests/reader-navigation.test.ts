@@ -2,7 +2,6 @@ import { expect, test } from 'vitest';
 import {
   transitionReaderNavigation as move,
   type ReaderNavigation,
-  type ReaderNavigationAction,
 } from '../web/reader-navigation.js';
 
 const original: ReaderNavigation = Object.freeze({
@@ -12,21 +11,30 @@ const original: ReaderNavigation = Object.freeze({
   epoch: 4,
 });
 
-test('changing chats atomically releases the previous source', () => {
-  expect(move(original, { kind: 'chat', chat: 'B' })).toEqual({
+test('changing chats releases the previous source and returning cannot revive its intent', () => {
+  const next = move(original, { kind: 'chat', chat: 'B' });
+  expect(next).toEqual({
     chat: 'B',
     source: '',
     destination: 'story',
     epoch: 5,
   });
-  expect(original.source).toBe('source-A');
+  expect(move(next, { kind: 'chat', chat: 'A' })).toEqual({
+    chat: 'A',
+    source: '',
+    destination: 'story',
+    epoch: 6,
+  });
 });
 
-test('visiting the library retains the reading address without retaining the old intent', () => {
-  expect(move(original, { kind: 'library' })).toEqual({
-    ...original,
+test('visiting the library retains the newly selected source and advances intent', () => {
+  const chat = move(original, { kind: 'chat', chat: 'B' });
+  const next = move(chat, { kind: 'source', source: 'B-source' });
+  expect(move(next, { kind: 'library' })).toEqual({
+    chat: 'B',
+    source: 'B-source',
     destination: 'library',
-    epoch: 5,
+    epoch: 7,
   });
 });
 
@@ -55,30 +63,8 @@ test('rebasing native authored output preserves the chat and reader intent', () 
   });
 });
 
-test('A to B to A cannot authorize an operation captured at the first A', () => {
-  const saved = original.epoch;
-  const next = move(move(original, { kind: 'chat', chat: 'B' }), { kind: 'chat', chat: 'A' });
-  expect(next.chat).toBe(original.chat);
-  expect(next.epoch).not.toBe(saved);
-});
-
 test('same-source clicks still supersede pending navigation', () => {
   const next = move(original, { kind: 'source', source: original.source });
   expect(next.source).toBe(original.source);
   expect(next.epoch).toBe(original.epoch + 1);
-});
-
-test('consecutive synchronous transitions consume the preceding complete state', () => {
-  const sequence: ReaderNavigationAction[] = [
-    { kind: 'chat', chat: 'B' },
-    { kind: 'source', source: 'B-source' },
-    { kind: 'library' },
-  ];
-  const next = sequence.reduce(move, original);
-  expect(next).toEqual({
-    chat: 'B',
-    source: 'B-source',
-    destination: 'library',
-    epoch: 7,
-  });
 });

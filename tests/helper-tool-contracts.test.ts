@@ -195,8 +195,8 @@ function definition(request: transport.ProviderRequest, name: string) {
 test.each(['resource.read', 'chat.lore'] as const)(
   '%s preserves requested pages when the selected model has room for the complete round',
   async (name) => {
-    // Dense multilingual pages exceed the former 32k round cap together.
-    const prose = '한글漢字 설정 記録 경계 '.repeat(6000);
+    // Seven 10,000-character reads cross the former 32k round cap; each also has a next page.
+    const prose = '한글漢字 설정 記録 경계 '.repeat(800);
     const f = await fixture('library', prose);
     const attachment = new ChatOverridesStore(f.store).get(f.chat.id).attachments[0];
     const selector = { ...attachment.scope, loreId: attachment.lore[0].id, field: 'text' };

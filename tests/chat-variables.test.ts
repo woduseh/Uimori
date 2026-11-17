@@ -97,12 +97,15 @@ test('explicit equal-value writes advance revision and stale ABA commands fail',
 
 test('a repeated command acknowledges current state without overwriting later variables', () => {
   const { store, chat } = fixture();
-  const input = command({ z: '2', a: '1' });
+  const largeValue = 'v'.repeat(32000);
+  const input = command({ z: largeValue, a: '1' });
   writeChatVariables(store, chat.id, input);
   writeChatVariables(store, chat.id, command({ a: 'other' }, 1));
   append(store, chat.id);
   reserve(store, chat.id);
-  expect(writeChatVariables(store, chat.id, { ...input, values: { a: '1', z: '2' } })).toEqual({
+  expect(
+    writeChatVariables(store, chat.id, { ...input, values: { a: '1', z: largeValue } })
+  ).toEqual({
     revision: 2,
     values: { a: 'other' },
   });
@@ -110,6 +113,8 @@ test('a repeated command acknowledges current state without overwriting later va
     'CHAT_VARIABLE_IDEMPOTENCY_CONFLICT'
   );
   expect(readChatVariables(store, chat.id).revision).toBe(2);
+  const receipts = store.db.prepare('SELECT * FROM chat_variable_journal').all();
+  expect(Buffer.byteLength(JSON.stringify(receipts))).toBeLessThan(1000);
 });
 
 test('CAS uses latest source edit hash and validates source chat ownership', () => {

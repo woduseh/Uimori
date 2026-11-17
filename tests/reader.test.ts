@@ -75,7 +75,7 @@ function source(store: Store, chatId: string, text = 'Synthetic paragraph.') {
     costUsd: null,
   });
 }
-function readerSourceBatch(store: Store, chatId: string, texts: string[]) {
+function readerSourceBatch(store: Store, chatId: string, count: number) {
   // This scale case checks persisted reader projection, not prompt compilation.
   // Seed typed run snapshots once per source, retaining their complete ancestry;
   // source hashing, chat head updates and auxiliary reservations still use the host.
@@ -85,7 +85,7 @@ function readerSourceBatch(store: Store, chatId: string, texts: string[]) {
     "INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at) VALUES(?,?,?,'running',?,?,?,?,?,?)"
   );
   return store.transaction(() =>
-    texts.map((text, index) => {
+    Array.from({ length: count }, (_, index) => {
       // Give this ordered fixture distinct timestamps; same-millisecond UUID ties are unordered.
       const runId = randomUUID(),
         time = new Date(Date.UTC(2020, 0, 1) + index).toISOString(),
@@ -116,13 +116,13 @@ function readerSourceBatch(store: Store, chatId: string, texts: string[]) {
       );
       store.event(chatId, 'run.queued', runId);
       store.event(chatId, 'run.running', runId);
-      const completed = store.completeRunInTransaction(runId, text, {
+      const completed = store.completeRunInTransaction(runId, `Synthetic source ${index}.`, {
         modelCalls: 0,
         inputTokens: null,
         outputTokens: null,
         costUsd: null,
       });
-      history.push({ revision: completed.id, text, contentHash: completed.hash });
+      history.push({ revision: completed.id, text: completed.text, contentHash: completed.hash });
       return completed;
     })
   );
@@ -167,11 +167,7 @@ test('100-source HTTP reader pages retain order while execution snapshot and ful
   const app = await setup(),
     store = app.store,
     chat = createFixtureChat(store, '100 synthetic sources');
-  const sources = readerSourceBatch(
-    store,
-    chat.id,
-    Array.from({ length: 100 }, (_, i) => `Synthetic source ${i}.`)
-  );
+  const sources = readerSourceBatch(store, chat.id, 100);
   const frozen = readRunSnapshot(store, sources[99].runId);
   const full = store.detail(chat.id);
   expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
@@ -453,7 +449,7 @@ test('activity remains page independent and retains active work beyond the termi
   const { store } = await setup(),
     chat = createFixtureChat(store, 'Activity');
   store.settings(chat.id, chat.settingsRevision, { ...chat.settings });
-  const items = Array.from({ length: 35 }, () => source(store, chat.id));
+  const items = readerSourceBatch(store, chat.id, 35);
   for (const item of items) store.requestTranslation(item.id);
   const first = readerDetail(store, chat.id, {});
   const activities = first.reader.activity;
@@ -514,7 +510,7 @@ test('response activity retains older page work without expanding global activit
   const { store } = await setup(),
     chat = createFixtureChat(store, 'Response activity');
   store.settings(chat.id, chat.settingsRevision, { ...chat.settings });
-  const items = Array.from({ length: 35 }, () => source(store, chat.id));
+  const items = readerSourceBatch(store, chat.id, 35);
   store.db
     .prepare("UPDATE jobs SET status='completed',updated_at='2000-01-01' WHERE chat_id=?")
     .run(chat.id);
@@ -574,7 +570,7 @@ test('response activity retains older page work without expanding global activit
 test('activity history pages past recent thirty and validates chat-scoped cursors', async () => {
   const app = await setup();
   const chat = createFixtureChat(app.store, 'Activity pagination');
-  for (let i = 0; i < 35; i++) source(app.store, chat.id);
+  readerSourceBatch(app.store, chat.id, 35);
   expect(readerDetail(app.store, chat.id, {}).reader.activity).toHaveLength(30);
   const first = readerActivities(app.store, chat.id, { limit: '20' });
   expect(first.items).toHaveLength(20);
@@ -624,7 +620,7 @@ test('translation resolution uses same source hash and revision beyond the recen
     readerDetail(store, chat.id, {}).reader.activity.find((a) => a.id === original.id)?.superseded
   ).toBe(false);
   insert.run(randomUUID(), chat.id, item.id, item.hash, 3);
-  for (let i = 0; i < 35; i++) source(store, chat.id);
+  readerSourceBatch(store, chat.id, 35);
   const activity = readerDetail(store, chat.id, {}).reader.activity;
   expect(activity.find((a) => a.id === original.id)).toMatchObject({
     superseded: true,

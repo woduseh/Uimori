@@ -8,7 +8,6 @@ import { readImage } from '../server/image-storage.js';
 import { readCharacterCard } from '../server/character-card-file.js';
 import { analyzeNativeRisuImport } from '../server/risu-native-import.js';
 import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
-import { decodeRPack } from '../server/compat/risu/rpack.js';
 import {
   nativeRisuLore,
   nativeRisuRegex,
@@ -21,7 +20,7 @@ import type { Content } from '../core/product.js';
 
 import { createNativeRisuCbs } from '../server/risu-native-cbs.js';
 import { supportedNativeRisuSnapshot } from '../server/risu-native-readonly.js';
-import { writeRisuZip } from '../server/risu-export-codec.js';
+import { writeEmbeddedRisuModule, writeRisuZip } from '../server/risu-export-codec.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 
 const stores: { store: Store; directory: string }[] = [];
@@ -355,7 +354,7 @@ test('persona import rejects standalone modules and malformed cards', () => {
   const document = { type: 'risuModule', module };
   const sources = [
     sourceOf(document),
-    { name: 'module.risum', base64: binaryModule(module, []).toString('base64') },
+    { name: 'module.risum', base64: writeEmbeddedRisuModule(module, []).toString('base64') },
     {
       name: 'project.zip',
       base64: writeRisuZip(
@@ -472,24 +471,6 @@ test('a card without first_mes keeps an empty chat even when alternate greetings
   ).toEqual(['start-1']);
 });
 
-const encodeMap = Buffer.alloc(256);
-for (const [encoded, plain] of decodeRPack(
-  Buffer.from(Array.from({ length: 256 }, (_, i) => i))
-).entries())
-  encodeMap[plain] = encoded;
-function binaryModule(module: Record<string, unknown>, assets: Buffer[]) {
-  const payload = (bytes: Buffer) => {
-    const size = Buffer.alloc(4);
-    size.writeUInt32LE(bytes.length);
-    return Buffer.concat([size, Buffer.from(bytes.map((value) => encodeMap[value]))]);
-  };
-  return Buffer.concat([
-    Buffer.from([111, 0]),
-    payload(Buffer.from(JSON.stringify({ type: 'risuModule', module }))),
-    ...assets.map((bytes) => Buffer.concat([Buffer.from([1]), payload(bytes)])),
-    Buffer.from([0]),
-  ]);
-}
 test('standalone risum retains source scripts and maps ordered embedded image bytes', () => {
   const png = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=',
@@ -501,7 +482,7 @@ test('standalone risum retains source scripts and maps ordered embedded image by
     assets: [['main', 'assets/old.png', 'png']],
     regex: [{ in: 'a', out: 'b', type: 'editdisplay' }],
   };
-  const bytes = binaryModule(module, [png]);
+  const bytes = writeEmbeddedRisuModule(module, [png]);
   const input = readCharacterCard({ name: 'native.risum', base64: bytes.toString('base64') });
   const { file, preview } = analyzeNativeRisuImport(input);
   expect(preview.format).toBe('risu-module-binary');
@@ -560,5 +541,3 @@ test('AVIF brand validation and GIF signatures cannot be confused with arbitrary
     'Invalid image bytes'
   );
 });
-
-// Opt-in local evidence only: no private card or machine path enters repository fixtures.

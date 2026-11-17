@@ -254,7 +254,6 @@ describe('hierarchical composition', () => {
     // Composition alone never counts as written and never commits story text.
     expect(detail.nodes.every((node) => node.progress.state === 'planned')).toBe(true);
     expect(store.chat(chat.id).headRevision).toBe(before);
-    expect(store.chat(chat.id).headRevision).toBe(before);
   });
 
   test('allows skipped levels and standalone units but rejects inversions and cross-chat parents', async () => {
@@ -964,13 +963,17 @@ describe('hierarchical composition', () => {
     // Only this unit is named; sibling episodes stay out of the frozen composition.
     expect(JSON.stringify(outline)).not.toContain('2화 장부의 첫 장');
 
-    const { request } = buildMainProviderRequest(
+    expect(outline.written).toEqual([]);
+    const { request, input } = buildMainProviderRequest(
       await prepareNativeRisuReadOnly(run.snapshot, 'context')
     );
     const sent = JSON.stringify(request);
     expect(sent).toContain('사서가 도서관 지하에서 자기 이름이 적힌 장부를 찾아요.');
     expect(sent).toContain('열쇠 없는 자물쇠');
     expect(request.stable.contract).toContain(OUTLINE_CONTRACT);
+    expect(input.contract).toContain(OUTLINE_CONTRACT);
+    expect(store.story.detail(chat.id).notes).toEqual([]);
+    expect(store.context.detail(chat.id).checkpoint).toBeNull();
 
     // One request writes exactly one source, and only its own unit becomes written.
     expect(store.chat(chat.id).headRevision).toBe(source.id);
@@ -982,23 +985,6 @@ describe('hierarchical composition', () => {
     expect(
       nodes.filter((node) => node.id !== episode.id).every((n) => n.progress.state === 'planned')
     ).toBe(true);
-  });
-
-  test('a later unit is never reported as written or leaked as past fact', async () => {
-    const store = await database();
-    const chat = chatWithMainModel(store, '미래 분리 검사');
-    compose(store, chat.id);
-    const episode = find(store, chat.id, '1화 잠긴 문');
-    const command = store.outline.sceneCommand(episode.id, { idempotencyKey: randomUUID() });
-    const { run } = write(store, chat.id, command.id, '문은 잠겨 있었다.');
-    expect(run.snapshot.outline?.written).toEqual([]);
-    // The arc names the ending; it arrives as author intent under the disclosure contract only.
-    const { input } = buildMainProviderRequest(
-      await prepareNativeRisuReadOnly(run.snapshot, 'context')
-    );
-    expect(input.contract).toContain(OUTLINE_CONTRACT);
-    expect(store.story.detail(chat.id).notes).toEqual([]);
-    expect(store.context.detail(chat.id).checkpoint).toBeNull();
   });
 
   test('an earlier written sibling enters the next unit as real, in-ancestry history', async () => {

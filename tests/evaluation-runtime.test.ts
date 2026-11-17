@@ -10,13 +10,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import { createApp, type App } from '../server/app.js';
 import type { Chat, ChatDetail, Run, Source } from '../core/types.js';
-import type {
-  ChatProfile,
-  Connection,
-  Content,
-  ModelPreset,
-  PromptWorkspace,
-} from '../core/product.js';
+import type { ChatProfile, Connection, Content, ModelPreset } from '../core/product.js';
 import type { Json } from '../core/transport.js';
 import {
   defaultEvaluationToolOptions,
@@ -184,16 +178,6 @@ async function fixture(
       ...(settings.metadataProfile ? { metadataProfile: settings.metadataProfile } : {}),
     },
   });
-  const workspace = await api<PromptWorkspace>(app, '/api/prompt-workspace');
-  await api(
-    app,
-    '/api/prompt-workspace',
-    {
-      expectedRevision: workspace.revision,
-      translationPolicy: { judgment: { threshold: 0.9 }, maxRetries: 1, maxCalls: 16 },
-    },
-    'PUT'
-  );
   const prior = await api<ChatProfile>(app, `/api/chats/${chat.id}/profile`);
   await setFixtureModelRoutes(app, {
     main: { id: model.id },
@@ -314,69 +298,61 @@ const translated = (body: Body): string => {
   return '합성 번역: ' + translationFixtureRenderedSlot(texts, 'source');
 };
 
-test.each(['model-selected', 'preloaded'] as const)(
-  '%s evaluation submission reaches JEV once without regex rejection or writer resubmission',
-  async (contextMode) => {
-    for (const scenario of [
-      { text: "I'm sorry, but I cannot assist with that request.", score: 0.99, status: 'refused' },
-      {
-        text: 'I cannot provide that answer, the keeper said, before opening the observatory gate.',
-        score: 0.01,
-        status: 'completed',
-      },
-    ]) {
-      const state = await fixture(
-        async (body, target) =>
-          send(target, [
-            call(
-              body,
-              'eval_submit_artifact',
-              {
-                content: scenario.text,
-                userFacingNotice: marker,
-              },
-              'submitted'
-            ),
-          ]),
-        { contextMode }
+test.each([
+  {
+    contextMode: 'model-selected',
+    text: "I'm sorry, but I cannot assist with that request.",
+    score: 0.99,
+    status: 'refused',
+  },
+  {
+    contextMode: 'preloaded',
+    text: 'I cannot provide that answer, the keeper said, before opening the observatory gate.',
+    score: 0.01,
+    status: 'completed',
+  },
+] as const)(
+  '$contextMode evaluation submission reaches JEV once and finishes as $status',
+  async ({ contextMode, text, score, status }) => {
+    const state = await fixture((body, target) => send(target, [artifact(body, text)]), {
+      contextMode,
+    });
+    const judged: any[] = [];
+    const fallback = globalThis.fetch;
+    vi.stubGlobal('fetch', async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      if (url !== JEV_ENDPOINT) return fallback(url, init);
+      const body = JSON.parse(String(init?.body));
+      judged.push(body);
+      return new Response(
+        JSON.stringify({
+          model: 'jev-latest',
+          answers: { explicitRefusal: { type: 'noul', noul: score } },
+          usage: { input_tokens: 7, output_tokens: 3 },
+        })
       );
-      const judged: any[] = [];
-      const fallback = globalThis.fetch;
-      vi.stubGlobal('fetch', async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
-        if (url !== JEV_ENDPOINT) return fallback(url, init);
-        const body = JSON.parse(String(init?.body));
-        judged.push(body);
-        return new Response(
-          JSON.stringify({
-            model: 'jev-latest',
-            answers: { explicitRefusal: { type: 'noul', noul: scenario.score } },
-            usage: { input_tokens: 7, output_tokens: 3 },
-          })
-        );
+    });
+    const run = await settled(state, (await state.start()).id);
+    expect(run.status).toBe(status);
+    expect(state.provider.requests).toHaveLength(1);
+    expect(judged).toHaveLength(1);
+    expect(judged[0].state).toEqual({ response: text });
+    expect(JSON.stringify(run.toolEvents)).not.toContain('OUTPUT_VALIDATION_FAILED');
+    if (status === 'refused') {
+      expect(run.toolEvents).toHaveLength(1);
+      expect(run.toolEvents[0]).toMatchObject({
+        name: 'eval_submit_artifact',
+        denied: false,
+        result: { accepted: true },
       });
-      const run = await settled(state, (await state.start()).id);
-      expect(run.status).toBe(scenario.status);
-      expect(state.provider.requests).toHaveLength(1);
-      expect(judged).toHaveLength(1);
-      expect(judged[0].state).toEqual({ response: scenario.text });
-      expect(JSON.stringify(run.toolEvents)).not.toContain('OUTPUT_VALIDATION_FAILED');
-      if (scenario.status === 'refused') {
-        expect(run.toolEvents).toHaveLength(1);
-        expect(run.toolEvents[0]).toMatchObject({
-          name: 'eval_submit_artifact',
-          denied: false,
-          result: { accepted: true },
-        });
-        expect(run.snapshot.mainJudgment).toMatchObject({
-          response: scenario.text,
-          candidateHash: createHash('sha256').update(scenario.text).digest('hex'),
-        });
-        expect(run.partialText).toBe(scenario.text);
-        expect(run.sourceRevision).toBeNull();
-        expect((await state.detail()).sources).toEqual([]);
-      } else expect((await state.detail()).sources[0].text).toBe(scenario.text);
-      expect((await state.detail()).attempts).toHaveLength(2);
-    }
+      expect(run.snapshot.mainJudgment).toMatchObject({
+        response: text,
+        candidateHash: createHash('sha256').update(text).digest('hex'),
+      });
+      expect(run.partialText).toBe(text);
+      expect(run.sourceRevision).toBeNull();
+      expect((await state.detail()).sources).toEqual([]);
+    } else expect((await state.detail()).sources[0].text).toBe(text);
+    expect((await state.detail()).attempts).toHaveLength(2);
   }
 );
 

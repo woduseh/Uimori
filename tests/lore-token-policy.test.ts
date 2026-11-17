@@ -137,30 +137,18 @@ describe('local-token lore policy', () => {
       ['scene2'],
       countTextTokens
     );
-    expect(empty.entries).toEqual([]);
-    expect(empty.retainedTokens).toBe(0);
+    expect(empty).toEqual({
+      entries: [],
+      appendedChars: recent.text.length,
+      droppedEntries: 1,
+      retainedChars: 0,
+      retainedTokens: 0,
+    });
   });
 
   it('requires the token counter for retention', () => {
     expect(() =>
       appendLoreReads([], [read('lore', 'abcd')], DEFAULT_LORE_CONTEXT, ['scene1'])
     ).toThrow('LORE_TOKEN_COUNTER_REQUIRED');
-  });
-
-  it('keeps character diagnostics alongside the token budget', () => {
-    const result = appendLoreReads(
-      [],
-      [read('lore', 'abcd')],
-      { ...DEFAULT_LORE_CONTEXT, maxRetainedTokens: 0 },
-      ['scene1'],
-      countTextTokens
-    );
-    expect(result).toEqual({
-      entries: [],
-      appendedChars: 4,
-      droppedEntries: 1,
-      retainedChars: 0,
-      retainedTokens: 0,
-    });
   });
 });

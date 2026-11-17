@@ -198,10 +198,61 @@ async function lorePressureBudget(store: Store, chatId: string) {
   expect(minimum, 'Fixture must leave room between retention and eviction costs').toBeLessThan(
     maximum
   );
-  return {
-    inputTokenLimit: Math.floor((minimum + maximum) / 2),
-    relaxedInputTokenLimit: Math.ceil(measure(references, true) / 0.75),
-  };
+  return Math.floor((minimum + maximum) / 2);
+}
+
+function createLoreChat(store: Store, labels: string[], repeats: number) {
+  let chat = createFixtureChat(store, '문맥 요약과 조회 자료 합성 검증');
+  chat = store.settings(chat.id, chat.settingsRevision, {
+    ...chat.settings,
+
+    maxCalls: 16,
+  });
+  const modules = labels.map(
+    (label) =>
+      store.product.content({
+        kind: 'module',
+        title: `Reference ${label}`,
+        description: '',
+        text: `LORE_${label}_RAW_BODY_ONLY\n${paragraph.repeat(repeats)}`,
+        loading: 'discoverable',
+        relatedIds: [],
+        package: {
+          ...nativeContent(
+            {
+              name: `Reference ${label}`,
+              character_book: {
+                entries: [
+                  {
+                    comment: `Reference ${label}`,
+                    keys: [label],
+                    content: `LORE_${label}_RAW_BODY_ONLY\n${paragraph.repeat(repeats)}`,
+                    enabled: true,
+                  },
+                ],
+              },
+            },
+            {},
+            'module'
+          ),
+          loreActivation: { mode: 'discoverable' },
+        },
+      }) as Content
+  );
+  const { chatId: _id, revision, ...profile } = store.product.profile(chat.id);
+  updateTestProfile(store.product, chat.id, {
+    ...profile,
+    expectedRevision: revision,
+    packageAttachments: [
+      ...profile.packageAttachments!,
+      ...modules.map(({ id, revision }) => ({ id, revision, role: 'module' })),
+    ],
+    loreContext: { ...DEFAULT_LORE_CONTEXT },
+  });
+  const lore = store.product
+    .resources(chat.id, store.product.snapshot(chat.id)!)
+    .filter((item) => item.sourceKind === 'lore');
+  return { chat, lore };
 }
 
 async function fixture(kind: 'lore-pressure' | 'history-pressure') {
@@ -221,56 +272,10 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
       values: {},
     },
   });
-  let chat = createFixtureChat(app.store, '문맥 요약과 조회 자료 합성 검증');
-  chat = app.store.settings(chat.id, chat.settingsRevision, {
-    ...chat.settings,
-
-    maxCalls: 16,
-  });
-  const modules = (kind === 'lore-pressure' ? ['A', 'B', 'C'] : ['A']).map(
-    (label) =>
-      app.store.product.content({
-        kind: 'module',
-        title: `Reference ${label}`,
-        description: '',
-        text: `LORE_${label}_RAW_BODY_ONLY\n${paragraph.repeat(kind === 'lore-pressure' ? 100 : 2)}`,
-        loading: 'discoverable',
-        relatedIds: [],
-        package: {
-          ...nativeContent(
-            {
-              name: `Reference ${label}`,
-              character_book: {
-                entries: [
-                  {
-                    comment: `Reference ${label}`,
-                    keys: [label],
-                    content: `LORE_${label}_RAW_BODY_ONLY\n${paragraph.repeat(kind === 'lore-pressure' ? 100 : 2)}`,
-                    enabled: true,
-                  },
-                ],
-              },
-            },
-            {},
-            'module'
-          ),
-          loreActivation: { mode: 'discoverable' },
-        },
-      }) as Content
-  );
-  const { chatId: _id, revision, ...profile } = app.store.product.profile(chat.id);
-  updateTestProfile(app.store.product, chat.id, {
-    ...profile,
-    expectedRevision: revision,
-    packageAttachments: [
-      ...profile.packageAttachments!,
-      ...modules.map(({ id, revision }) => ({ id, revision, role: 'module' })),
-    ],
-    loreContext: { ...DEFAULT_LORE_CONTEXT },
-  });
-  const lore = app.store.product
-    .resources(chat.id, app.store.product.snapshot(chat.id)!)
-    .filter((item) => item.sourceKind === 'lore');
+  const { chat, lore } =
+    kind === 'history-pressure'
+      ? createLoreChat(app.store, ['A'], 2)
+      : createLoreChat(app.store, ['A', 'B', 'C'], 100);
   const sources: Source[] = [];
   if (kind === 'lore-pressure') {
     sources.push(await seed(app.store, chat.id, '첫 번째 짧은 장면.', [lore[0]]));
@@ -321,17 +326,15 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
     translationPolicy: workspace.translationPolicy,
     contextModel: { id: model.id },
   });
-  let relaxedInputTokenLimit = model.inputTokenLimit!;
   if (kind === 'lore-pressure') {
-    const budget = await lorePressureBudget(app.store, chat.id);
-    relaxedInputTokenLimit = budget.relaxedInputTokenLimit;
+    const inputTokenLimit = await lorePressureBudget(app.store, chat.id);
     model = app.store.product.model(
       {
         title: model.title,
         connectionId: model.connectionId,
         modelId: model.modelId,
         maxOutputTokens: model.maxOutputTokens,
-        inputTokenLimit: budget.inputTokenLimit,
+        inputTokenLimit,
         temperature: model.temperature,
         expectedRevision: model.revision,
       },
@@ -349,7 +352,7 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
     );
     return complete(body.role === 'context' ? summaryText : finalText);
   });
-  return { app, chatId: chat.id, sources, lore, model, bodies, relaxedInputTokenLimit };
+  return { app, chatId: chat.id, sources, lore, bodies };
 }
 async function start(app: App, chatId: string) {
   const chat = app.store.chat(chatId);
@@ -458,11 +461,12 @@ describe('automatic summary and retained lore at the same input boundary', () =>
 test.each([undefined, 24000, { tokens: 16000, tokenizer: 'openai-o200k' as const }])(
   'completion retains exact lore from a receipt with read allowance %s',
   async (allowance) => {
-    const f = await fixture('lore-pressure');
-    const store = f.app.store;
-    const captured = snapshot(store, f.chatId);
+    const item = await directory();
+    const store = (item.store = new Store(join(item.directory, 'story.sqlite')));
+    const { chat, lore } = createLoreChat(store, ['A', 'B', 'C'], 100);
+    const captured = snapshot(store, chat.id);
     let run = store.createRun(
-      f.chatId,
+      chat.id,
       {
         request: captured.request,
         expectedRevision: captured.parentRevision,
@@ -484,7 +488,7 @@ test.each([undefined, 24000, { tokens: 16000, tokenizer: 'openai-o200k' as const
         name: 'knowledge.read',
         callId: 'retained-batch',
         args: {
-          ids: f.lore.map((entry) => entry.id),
+          ids: lore.map((entry) => entry.id),
           limit: 4096,
           ...(typeof allowance === 'object' ? { tokenLimit: 8000 } : {}),
         },
@@ -493,7 +497,7 @@ test.each([undefined, 24000, { tokens: 16000, tokenizer: 'openai-o200k' as const
       'main',
       allowance ?? 6000
     );
-    const count = allowance === undefined ? 1 : f.lore.length;
+    const count = allowance === undefined ? 1 : lore.length;
     expect((event.result as any).items).toHaveLength(count);
     if (allowance === undefined) expect(event).not.toHaveProperty('knowledgeReadChars');
     else if (typeof allowance === 'number')
@@ -506,9 +510,9 @@ test.each([undefined, 24000, { tokens: 16000, tokenizer: 'openai-o200k' as const
       outputTokens: 0,
       costUsd: 0,
     });
-    const retained = readLoreRetention(store, f.chatId, source.id)!;
+    const retained = readLoreRetention(store, chat.id, source.id)!;
     expect(retained.reads.map((entry) => ({ id: entry.id, text: entry.text }))).toEqual(
-      f.lore.slice(0, count).map((entry) => ({ id: entry.id, text: entry.text.slice(0, 4096) }))
+      lore.slice(0, count).map((entry) => ({ id: entry.id, text: entry.text.slice(0, 4096) }))
     );
     expect(retained.reads.every((entry) => entry.origin.callId === 'retained-batch')).toBe(true);
   }

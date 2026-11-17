@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'vitest';
+import Fastify from 'fastify';
+import { STORY_READ_TOOLS } from '../core/story-read-tools.js';
 import { executeStoryRead, STORY_RESULT_MAX_BYTES } from '../core/story-context.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import { readStorySource, searchStorySources, sourceHash } from '../core/source-history.js';
 import { modelAuthorNotes, validateAuthorNote, type AuthorNote } from '../core/notes.js';
 import type { RunSnapshot } from '../core/types.js';
 
-const sourceText = 'Exact source evidence. '.repeat(1000);
+const sourceText = 'Exact source evidence.';
 const snapshot = (text = sourceText): RunSnapshot => ({
   chatId: 'chat',
   parentRevision: 'source',
@@ -24,6 +26,41 @@ function read(fixed: RunSnapshot, name: string, args: Record<string, unknown>) {
   return event.result as any;
 }
 
+test('model-facing schemas accept browse, search and numbered reads and reject invalid selectors', async () => {
+  const app = Fastify({ ajv: { customOptions: { coerceTypes: false, removeAdditional: false } } });
+  try {
+    for (const tool of STORY_READ_TOOLS)
+      app.post(`/${tool.name}`, { schema: { body: tool.inputSchema } }, (_req, reply) =>
+        reply.code(204).send()
+      );
+    const status = async (tool: string, payload: object) =>
+      (await app.inject({ method: 'POST', url: `/${tool}`, payload })).statusCode;
+    for (const query of [undefined, '', 'harbor'])
+      expect(await status('story.search', { query, offset: 1, limit: 1 })).toBe(204);
+    expect(await status('story.read', { sceneNumber: 2 })).toBe(204);
+    for (const args of [
+      {},
+      { id: 'middle' },
+      { sceneNumber: 0 },
+      { sceneNumber: 1.5 },
+      { sceneNumber: '2' },
+      { sceneNumber: 2, id: 'middle' },
+      { sceneNumber: 2, limit: 16001 },
+    ])
+      expect(await status('story.read', args)).toBe(400);
+  } finally {
+    await app.close();
+  }
+});
+
+test('retired story and note read tools are denied', () => {
+  for (const name of ['story.list', 'notes.list', 'notes.read'])
+    expect(executeStoryRead(snapshot(), { callId: 'old', name, args: {} })).toMatchObject({
+      denied: true,
+      result: { code: 'TOOL_NOT_ALLOWED' },
+    });
+});
+
 describe('bounded story ancestry reads', () => {
   test('story.search provides both ordered browsing and case-insensitive multi-term search', () => {
     const texts = [
@@ -38,20 +75,6 @@ describe('bounded story ancestry reads', () => {
       contentHash: sourceHash(text),
     }));
     fixed.parentRevision = 'chapter-2';
-    fixed.contextPlan = {
-      version: 1,
-      status: 'ready',
-      budget: { inputTokenLimit: 8192, estimator: 'o200k_base-v1' },
-      dependencyKey: 'synthetic',
-      estimatedInputTokens: 10,
-      compacted: [{ revision: 'chapter-0', hash: sourceHash(texts[0]) }],
-      recentSourceRevisions: ['chapter-1', 'chapter-2'],
-      summary: 'derived',
-      summaryCalls: 0,
-      usage: { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
-      error: null,
-    };
-
     const listed = read(fixed, 'story.search', {});
     expect(listed.results.map((item: { revision: string }) => item.revision)).toEqual([
       'chapter-0',
@@ -61,9 +84,8 @@ describe('bounded story ancestry reads', () => {
     expect(listed.results[0]).toMatchObject({
       sceneNumber: 1,
       hash: sourceHash(texts[0]),
-      compacted: true,
     });
-    const page = read(fixed, 'story.search', { offset: 1, limit: 1 });
+    const page = read(fixed, 'story.search', { query: '', offset: 1, limit: 1 });
     expect(page.results).toMatchObject([{ sceneNumber: 2, revision: 'chapter-1' }]);
     expect(page.nextOffset).toBe(2);
 
@@ -163,10 +185,11 @@ test.each([
   '日本語の原文を読みます。',
   '🙂🌸🎉',
 ])('token reads preserve original ranges and legacy UTF-16 limits: %s', (phrase) => {
-  const text = phrase.repeat(2000);
+  const text = phrase.repeat(120);
   const fixed = snapshot(text);
   let offset = 0;
   let joined = '';
+  let pages = 0;
   while (offset < text.length) {
     const result = read(fixed, 'story.read', { sceneNumber: 1, offset, maxTokens: 256 });
     expect(countTextTokens(result.text)).toBeLessThanOrEqual(256);
@@ -176,7 +199,9 @@ test.each([
     expect(result.text.isWellFormed()).toBe(true);
     joined += result.text;
     offset = result.source.end;
+    pages++;
   }
+  expect(pages).toBeGreaterThan(1);
   expect(joined).toBe(text);
   expect(read(fixed, 'story.read', { sceneNumber: 1, offset: 2, limit: 17 }).text).toBe(
     text.slice(2, 19)

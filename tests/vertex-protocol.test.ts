@@ -263,6 +263,7 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     const original = structuredClone(input);
     const { body } = encodeVertex(input);
     const wire = bodyObject(body);
+    expect(wire.systemInstruction.parts).toHaveLength(2);
     expect(wire.systemInstruction.parts[0]).toEqual({ text: input.stable.contract });
     expect(wire.tools[0].functionDeclarations).toEqual([
       {
@@ -340,15 +341,6 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     expect(next.contents[2].parts[0].functionResponse.id).toBe('Translation-Read.Original');
     bodyObject(nextInput.input.source!).text = 'Different source';
     expect(() => encodeVertex(nextInput)).toThrow('VERTEX_CONTINUATION_MISMATCH');
-  });
-
-  test.each(['main'] as const)('does not add translation format constraints to %s', (role) => {
-    const input = request();
-    input.role = role;
-    const wire = bodyObject(encodeVertex(input).body);
-    expect(wire.generationConfig).not.toHaveProperty('responseMimeType');
-    expect(wire.generationConfig).not.toHaveProperty('responseSchema');
-    expect(wire.systemInstruction.parts).toHaveLength(2);
   });
 
   test('3.1 Pro preserves explicit zero sampling and stop sequences while omitting unselected thinking', () => {

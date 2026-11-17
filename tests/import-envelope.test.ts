@@ -30,13 +30,9 @@ test('the inline form returns the sent bytes, its name and their SHA-256', () =>
   expect(readImportEnvelope(source, options)).toEqual({
     name: 'sample.json',
     bytes: payload,
-    sha256: createHash('sha256').update(payload).digest('hex'),
+    sha256: '976cd2d13306ef7b411425368f511318aed70ea05278b4e7559099f7820eaf1b',
     source,
   });
-  // The digest names the file that arrived, not the decoded text or the reader's own reading.
-  expect(readImportEnvelope(source, options).sha256).toBe(
-    '976cd2d13306ef7b411425368f511318aed70ea05278b4e7559099f7820eaf1b'
-  );
 });
 
 test('only the exact field set of the offered form is read', () => {
@@ -110,8 +106,10 @@ test('an oversized body answers with the caller limit code, whether or not it de
   ).toHaveLength(options.maxBytes);
 });
 
-test('each reader keeps its own too-large and invalid-file codes', () => {
-  const oversized = Buffer.alloc(RISU_IMPORT_MAX_BYTES + 3, 0x61).toString('base64');
+test('card and preset readers reject oversized inline files with HTTP 413', () => {
+  // Encode exactly one byte above the limit without allocating the decoded file.
+  const size = RISU_IMPORT_MAX_BYTES + 1;
+  const oversized = 'AAAA'.repeat(Math.floor(size / 3)) + Buffer.alloc(size % 3).toString('base64');
   const tooLarge = (call: () => unknown, message: string) =>
     expect(call).toThrowError(expect.objectContaining({ statusCode: 413, message }));
   tooLarge(

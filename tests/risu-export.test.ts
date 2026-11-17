@@ -239,58 +239,53 @@ test.each([false, true])(
   }
 );
 
-test.each([false, true])(
-  'CHARX icon/main remains the representative image when other main assets precede it=%s',
-  async (othersFirst) => {
-    const { store } = fixture();
-    const image = await sharp({
-      create: { width: 2, height: 2, channels: 4, background: '#7788aa' },
-    })
-      .png()
-      .toBuffer();
-    const assets = ['icon', 'background', 'x-risu-asset'].map((type) => ({
-      type,
-      name: 'main',
-      ext: 'png',
-      uri: `embeded://assets/${type}.png`,
-    }));
-    if (othersFirst) assets.reverse();
-    const input = source(
-      writeRisuZip(
-        new Map([
-          [
-            'card.json',
-            exportJson({
-              spec: 'chara_card_v3',
-              spec_version: '3.0',
-              data: { name: 'Asset roles', description: 'Preserve roles', assets },
-            }),
-          ],
-          ...assets.map((asset) => [asset.uri.slice('embeded://'.length), image] as const),
-        ])
-      )
-    );
-    const preview = await prepareStoredRisuImport(store.path, { source: input });
-    const result = await applyRisuImport(store, {
-      source: input,
-      preparedId: preview.preparedId,
-      digest: preview.digest,
-      allowPartial: false,
-      createChat: false,
-      idempotencyKey: 'charx-icon-role',
-    });
-    const saved = store.product.get<Content>('content', result.receipt.items[0].id);
-    expect(
-      saved.package.nativeRisu.assets.find(
-        (asset) => asset.imageId === saved.package.portraitImageId
-      )?.uri
-    ).toBe('embeded://assets/icon.png');
-    const exported = JSON.parse(
-      cardZip(exportRisuContent(store.product, saved).bytes).get('card.json')!().toString()
-    ).data;
-    expect(exported.assets).toEqual(assets);
-  }
-);
+test('CHARX icon/main takes precedence over other main assets on either side', async () => {
+  const { store } = fixture();
+  const image = await sharp({
+    create: { width: 2, height: 2, channels: 4, background: '#7788aa' },
+  })
+    .png()
+    .toBuffer();
+  const assets = ['background', 'icon', 'x-risu-asset'].map((type) => ({
+    type,
+    name: 'main',
+    ext: 'png',
+    uri: `embeded://assets/${type}.png`,
+  }));
+  const input = source(
+    writeRisuZip(
+      new Map([
+        [
+          'card.json',
+          exportJson({
+            spec: 'chara_card_v3',
+            spec_version: '3.0',
+            data: { name: 'Asset roles', description: 'Preserve roles', assets },
+          }),
+        ],
+        ...assets.map((asset) => [asset.uri.slice('embeded://'.length), image] as const),
+      ])
+    )
+  );
+  const preview = await prepareStoredRisuImport(store.path, { source: input });
+  const result = await applyRisuImport(store, {
+    source: input,
+    preparedId: preview.preparedId,
+    digest: preview.digest,
+    allowPartial: false,
+    createChat: false,
+    idempotencyKey: 'charx-icon-role',
+  });
+  const saved = store.product.get<Content>('content', result.receipt.items[0].id);
+  expect(
+    saved.package.nativeRisu.assets.find((asset) => asset.imageId === saved.package.portraitImageId)
+      ?.uri
+  ).toBe('embeded://assets/icon.png');
+  const exported = JSON.parse(
+    cardZip(exportRisuContent(store.product, saved).bytes).get('card.json')!().toString()
+  ).data;
+  expect(exported.assets).toEqual(assets);
+});
 
 test('new saved image and changed representative image export with portable asset names', () => {
   const { store } = fixture(),

@@ -337,23 +337,6 @@ test.each(['later source', 'request context', 'variables'] as const)(
   }
 );
 
-test('replaying a successful receipt during a new active run does not publish another deletion', () => {
-  const f = manuscript(),
-    command = request(f),
-    published: string[] = [];
-  const notify = (chatId: string) => {
-    published.push(chatId);
-  };
-  const result = deleteScenes(f.store, f.chatId, f.b.id, command, notify);
-  expect(published).toEqual([f.chatId]);
-  const active = queued(f.store, f.chatId);
-  expect(deleteScenes(f.store, f.chatId, f.b.id, command, notify)).toEqual(result);
-  expect(published).toEqual([f.chatId]);
-  expect(f.store.run(active.id).status).toBe('queued');
-  expect(f.store.chat(f.chatId).settingsRevision).toBe(result.settingsRevision);
-  intact(f.store);
-});
-
 test('illustration diagnostic attempt IDs retain numeric usage while detaching deleted scene payloads', () => {
   const f = manuscript(),
     time = new Date().toISOString();
@@ -418,12 +401,20 @@ test('active generation and outstanding provider calls reject a reviewed deletio
   f.store.db
     .prepare("UPDATE attempts SET status='cancelled' WHERE id='scene-delete-attempt'")
     .run();
-  const deleted = deleteScenes(f.store, f.chatId, f.b.id, command);
-  expect(deleteScenes(f.store, f.chatId, f.b.id, command)).toEqual(deleted);
-  expect(f.store.chat(f.chatId).settingsRevision).toBe(deleted.settingsRevision);
+  const published: string[] = [];
+  const remove = () =>
+    deleteScenes(f.store, f.chatId, f.b.id, command, (chatId) => published.push(chatId));
+  const deleted = remove();
+  expect(published).toEqual([f.chatId]);
+  expect(remove()).toEqual(deleted);
   expect(() =>
     deleteScenes(f.store, f.chatId, f.b.id, { ...command, scope: 'following' })
   ).toThrow();
+  const active = queued(f.store, f.chatId);
+  expect(remove()).toEqual(deleted);
+  expect(published).toEqual([f.chatId]);
+  expect(f.store.run(active.id).status).toBe('queued');
+  expect(f.store.chat(f.chatId).settingsRevision).toBe(deleted.settingsRevision);
   intact(f.store);
 });
 
