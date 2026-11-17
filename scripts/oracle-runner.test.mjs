@@ -3,165 +3,28 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
-const runner = fileURLToPath(new URL('../deploy/oracle-update.py', import.meta.url));
-const prelude = `import importlib.util, pathlib, contextlib, tempfile
-spec=importlib.util.spec_from_file_location('oracle_runner', ${JSON.stringify(runner)})
-m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-`;
-function python(script) {
-  const result = spawnSync(
-    process.platform === 'win32' ? 'python' : 'python3',
-    ['-B', '-c', prelude + script],
-    { encoding: 'utf8', windowsHide: true }
-  );
-  assert.equal(result.error, undefined);
-  assert.equal(result.status, 0, result.stderr);
+for (const [file, contract] of [
+  [
+    'oracle-update-test.py',
+    'Oracle update validates inputs, switches safely and recovers from failures',
+  ],
+  [
+    'oracle-gc-test.py',
+    'Oracle retention preserves the recovery pair and never prunes unrelated services',
+  ],
+  [
+    'oracle-status-test.py',
+    'Oracle status preserves available recovery evidence when one lookup fails',
+  ],
+]) {
+  test(contract, () => {
+    const suite = fileURLToPath(new URL(`../deploy/${file}`, import.meta.url));
+    const result = spawnSync(process.platform === 'win32' ? 'python' : 'python3', ['-B', suite], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 20_000,
+    });
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+  });
 }
-
-test('candidate Compose validation resolves service env_file from production without copying secrets', () =>
-  python(`
-with tempfile.TemporaryDirectory() as temp:
-    base=pathlib.Path(temp).resolve(); app=base/'app'; app.mkdir(); candidate=base/'candidate'; candidate.mkdir()
-    original='UIMORI_ACCESS_TOKEN=private-value\\n'
-    (app/'.env.self-host').write_text(original)
-    (candidate/'compose.tailscale.yaml').write_text('services:\\n  app:\\n    env_file: .env.self-host\\n')
-    calls=[]
-    class Fake(m.Runner):
-        def docker(self,*args,**kwargs):
-            calls.append((args,kwargs))
-            compose_file=pathlib.Path(args[args.index('-f')+1])
-            project=pathlib.Path(args[args.index('--project-directory')+1]) if '--project-directory' in args else compose_file.parent
-            assert (project/'.env.self-host').read_text()==original
-            assert args[args.index('--env-file')+1]==str(app/'.env.self-host')
-            assert compose_file==candidate/'compose.tailscale.yaml'
-            assert args[-2:]==('config','--quiet')
-            assert original not in ' '.join(args)
-            return ''
-    r=object.__new__(Fake); r.app=app; r.env=app/'.env.self-host'
-    r.compose('config','--quiet',cwd=candidate)
-    assert len(calls)==1
-    assert (app/'.env.self-host').read_text()==original
-    assert sorted(p.name for p in candidate.iterdir())==['compose.tailscale.yaml']
-`));
-
-test('runner validates exact identities and explicit fresh/prebuilt/check-only options', () =>
-  python(`
-m.Path=pathlib.PurePosixPath
-base=['--commit','a'*40,'--build-id','b'*64,'--dist-hash','c'*64,'--release-dir','/opt/uimori/releases/test']
-a=m.arguments(base+['--fresh','--image','ghcr.io/team/app@sha256:'+'d'*64,'--check-only'])
-assert a.fresh and a.check_only and a.image.startswith('ghcr.io/')
-for extra in [['--commit','bad'],['--release-dir','/opt/uimori/releases/../app'],['--image','--bad']]:
-    try: m.arguments(base+extra)
-    except SystemExit as e: assert e.code==2
-    else: raise AssertionError('unsafe argument accepted')
-branch=m.arguments(base+['--source-ref','codex/beta-foundations'])
-assert branch.source_ref=='codex/beta-foundations'
-try: m.arguments(base+['--source-ref','../main'])
-except SystemExit as e: assert e.code==2
-else: raise AssertionError('unsafe source ref accepted')
-`));
-
-test('environment update preserves unrelated lines and full rollback restores original bytes', () =>
-  python(`
-text='# operator comment\\nUIMORI_ACCESS_TOKEN="secret keep"\\nUIMORI_PUBLIC_ORIGIN=https://example.test\\nUIMORI_IMAGE_TAG=old\\nUIMORI_DATA_VOLUME=old-volume\\n'
-changed=m.update_environment(text,'sha256:'+'a'*64,'new-volume')
-assert m.protected_environment(text)==m.protected_environment(changed)
-assert 'UIMORI_ACCESS_TOKEN="secret keep"' in changed
-assert 'UIMORI_IMAGE_TAG=' not in changed
-assert m.environment_values(text)['UIMORI_ACCESS_TOKEN']=='secret keep'
-`));
-
-test('host session cleanup warnings are persisted without replacing the confirmed control outcome', () =>
-  python(`
-class Fake(m.Runner):
-    def docker(self,*args,**kwargs):
-        return m.json.dumps({'status':'open','activeWork':0,'sessionCleanup':{'status':'WARN','error':'logout unavailable'}})
-    def persist(self): self.persisted=True
-r=object.__new__(Fake); r.scripts=pathlib.Path('/runner'); r.env=pathlib.Path('/private/env')
-r.owner='oracle:test'; r.old_image='sha256:old'; r.args=type('Args',(),{'build_id':'b'*64})(); r.summary={}; r.persisted=False
-result=r.control('open')
-assert result['status']=='open'
-assert r.summary['sessionCleanupWarnings']==[{'action':'open','error':'logout unavailable'}]
-assert r.persisted
-`));
-
-test('rollback stops candidate before restoring backup and uses immutable previous image override', () =>
-  python(`
-events=[]
-class Fake(m.Runner):
-    @contextlib.contextmanager
-    def stage(self,name): yield
-    def data(self,action,*args,**kwargs):
-        events.append(action)
-        return {'status':'closed','reason':'oracle:test'} if action=='maintenance' else {}
-    def control(self,action,*args): events.append('control-'+action); return {'status':'open'}
-    def compose(self,*args): events.append(args[0])
-    def run(self,*args,**kwargs): events.append(args[0])
-    def write_env(self,text): assert text=='original'; events.append('env')
-    def docker(self,*args): events.append('start')
-    def routing(self): return {}
-    def wait_healthy(self,image,volume): assert image=='sha256:old' and volume=='old'; events.append('healthy')
-with tempfile.TemporaryDirectory() as temp:
-    r=object.__new__(Fake); r.reopening=False; r.gate_owned=True; r.owner='oracle:test'; r.args=type('Args',(),{'fresh':False})(); r.stopped=True; r.candidate_started=True; r.backed_up=True; r.checked_out=True
-    r.summary={}; r.volume_name='new'; r.old_volume='old'; r.image='sha256:new'; r.old_image='sha256:old'; r.previous='previous'; r.old_env='original'; r.private=pathlib.Path(temp); r.app=r.private; r.env=r.private/'env'
-    r.env.write_text('original'); r.old_routing={}
-    r.rollback()
-    assert events==['maintenance','inspect','stop','stop','maintenance','inspect','restore','git','env','start','healthy','control-open'],events
-    assert r.summary['rollback']=='PASS'
-    assert 'sha256:old' in (r.private/'rollback.json').read_text()
-`));
-
-test('rollback refuses to stop or restore candidate when new user work is active', () =>
-  python(`
-class Fake(m.Runner):
-    @contextlib.contextmanager
-    def stage(self,name): yield
-    def data(self,*args,**kwargs): raise RuntimeError('Active work')
-    def compose(self,*args): raise AssertionError('must not stop active application')
-r=object.__new__(Fake); r.reopening=False; r.gate_owned=True; r.owner='oracle:test'; r.args=type('Args',(),{'fresh':False})(); r.stopped=True; r.candidate_started=True; r.summary={}; r.volume_name='new'; r.image='image'
-try: r.rollback()
-except RuntimeError as e: assert str(e)=='Active work'
-else: raise AssertionError('active work was accepted')
-`));
-
-test('same-version database missing a candidate column fails semantic compatibility; extra columns remain allowed', () =>
-  python(`
-shape={'type':'TEXT','notnull':0,'pk':0}
-expected={'helper_tasks':{'id':shape,'started_at':shape}}
-actual={'helper_tasks':{'id':shape}}
-try: m.validate_columns(expected,actual)
-except RuntimeError as e: assert 'helper_tasks.started_at' in str(e) and '--fresh' in str(e)
-else: raise AssertionError('missing current column accepted')
-actual['helper_tasks'].update(started_at=shape,retired_column=shape)
-assert m.validate_columns(expected,actual)['status']=='PASS'
-`));
-
-test('real Oracle state machine verifies switch, rollback, lost-reopen and fresh boundaries on disposable fixtures', () => {
-  const file = fileURLToPath(new URL('../deploy/oracle-update-test.py', import.meta.url));
-  const result = spawnSync(process.platform === 'win32' ? 'python' : 'python3', ['-B', file], {
-    encoding: 'utf8',
-    windowsHide: true,
-    timeout: 20_000,
-  });
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-});
-
-test('Oracle retention preserves the recovery pair and never prunes unrelated services', () => {
-  const file = fileURLToPath(new URL('../deploy/oracle-gc-test.py', import.meta.url));
-  const result = spawnSync(process.platform === 'win32' ? 'python' : 'python3', ['-B', file], {
-    encoding: 'utf8',
-    windowsHide: true,
-    timeout: 20_000,
-  });
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-});
-
-test('Oracle status preserves available recovery evidence when one lookup fails', () => {
-  const file = fileURLToPath(new URL('../deploy/oracle-status-test.py', import.meta.url));
-  const result = spawnSync(process.platform === 'win32' ? 'python' : 'python3', ['-B', file], {
-    encoding: 'utf8',
-    windowsHide: true,
-    timeout: 20_000,
-  });
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-});
