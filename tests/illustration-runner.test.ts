@@ -1517,8 +1517,9 @@ test.each(['complete', 'context-limit'] as const)(
   'illustration research uses frozen native sources over multiple read-only rounds: %s',
   async (mode) => {
     const store = databases.create();
+    // Exceed the 10,000-character read page and leave the identifying detail on its last page.
     const description =
-      'Unrelated archive material. '.repeat(12000) + '\nMira has emerald eyes and a silver braid.';
+      'Unrelated archive material. '.repeat(1200) + '\nMira has emerald eyes and a silver braid.';
     const bot = store.product.content(fixtureBotInput('Frozen Mira', description)) as Content;
     const chat = createFixtureChat(store, 'Research scene', { botId: bot.id });
     const source = completedSource(store, chat.id, 'Mira raises the lantern beside the river.');
