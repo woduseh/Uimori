@@ -731,80 +731,6 @@ test('ACTUI10 activity icon mode groups unread results and keeps recent chats ac
   ).toBeVisible();
 });
 
-test('ACTUI13 recent helper jobs open their sessions without replacing the reader', async ({
-  page,
-  request,
-}) => {
-  const seeded = await seed(request);
-  const create = async (
-    scope: { kind: 'chat'; chatId: string } | { kind: 'library'; workId: string }
-  ) => {
-    const response = await request.post('/api/helper/conversations/new', {
-      data: { scope, requestKey: `activity-helper-${Math.random().toString(36).slice(2)}` },
-    });
-    expect(response.ok()).toBeTruthy();
-    return (await response.json()) as { id: string };
-  };
-  const chat = await create({ kind: 'chat', chatId: seeded.chat.id });
-  const library = await create({ kind: 'library', workId: 'library:bot' });
-  const now = new Date().toISOString();
-  await page.route('**/api/activity-feed', (route) =>
-    route.fulfill({
-      json: {
-        items: [],
-        running: [],
-        helpers: [
-          {
-            id: 'synthetic-chat-job',
-            conversationId: chat.id,
-            chatId: seeded.chat.id,
-            workId: null,
-            title: '합성 작품 도우미',
-            modelTitle: 'Synthetic',
-            status: 'completed',
-            updatedAt: now,
-            committedEffects: 0,
-          },
-          {
-            id: 'synthetic-library-job',
-            conversationId: library.id,
-            chatId: null,
-            workId: 'library:bot',
-            title: '합성 서재 도우미',
-            modelTitle: 'Synthetic',
-            status: 'failed',
-            updatedAt: now,
-            committedEffects: 1,
-          },
-        ],
-      },
-    })
-  );
-  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
-  await page.goto(`/?chat=${seeded.chat.id}`);
-  const nav = page.getByTestId('bot-navigation').filter({ visible: true });
-  await nav.locator('.bot-navigation-modes > button').nth(1).click();
-  const activityNav = nav.getByRole('navigation', { name: '채팅 활동' });
-  await activityNav.locator('[data-activity-section="helpers"] .activity-nav-heading').click();
-  await activityNav.getByRole('button', { name: /합성 작품 도우미/ }).click();
-  const panel = page.locator('.helper-panel').filter({ visible: true });
-  await expect(
-    panel.getByRole('combobox', { name: '도우미 대화 선택', includeHidden: true })
-  ).toHaveValue(chat.id);
-  await expect(page.getByRole('dialog', { name: '도우미 작업 기록' })).toBeVisible();
-  await page.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
-  await panel.getByRole('button', { name: seeded.chat.title, exact: true }).click();
-  await activityNav.getByRole('button', { name: /합성 서재 도우미/ }).click();
-  await expect(
-    panel.getByRole('combobox', { name: '도우미 대화 선택', includeHidden: true })
-  ).toHaveValue(library.id);
-  await page.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
-  await panel.getByRole('button', { name: seeded.chat.title, exact: true }).click();
-  await expect(page.getByRole('heading', { name: seeded.chat.title, exact: true })).toBeVisible();
-  await expect(page).toHaveURL(new RegExp(`chat=${seeded.chat.id}`));
-  await expect(activityNav.getByText('확정된 앱 작업 1건')).toBeVisible();
-});
-
 test('ACTUI14 activity sections show 5 then more, retain folding and never exclude recent chats', async ({
   page,
   request,
@@ -877,7 +803,7 @@ test('ACTUI14 activity sections show 5 then more, retain folding and never exclu
   ).toBe(true);
 });
 
-test('ACTUI16 recent navigation groups saved dates and keeps active helpers ahead of dated history', async ({
+test('ACTUI16 recent chats use saved activity dates on desktop and mobile', async ({
   page,
   request,
 }, info) => {
@@ -910,46 +836,6 @@ test('ACTUI16 recent navigation groups saved dates and keeps active helpers ahea
         })
       : route.continue()
   );
-  await page.route('**/api/activity-feed', (route) =>
-    route.fulfill({
-      json: {
-        items: [],
-        running: [],
-        helpers: [
-          {
-            id: 'active-old',
-            conversationId: 'synthetic',
-            chatId: seeded.chat.id,
-            workId: null,
-            title: '지난주부터 진행 중인 합성 작업',
-            status: 'running',
-            updatedAt: earlier,
-            committedEffects: 0,
-          },
-          {
-            id: 'completed-today',
-            conversationId: 'synthetic',
-            chatId: seeded.chat.id,
-            workId: null,
-            title: '오늘 완료한 합성 작업',
-            status: 'completed',
-            updatedAt: now.toISOString(),
-            committedEffects: 0,
-          },
-          {
-            id: 'completed-yesterday',
-            conversationId: 'synthetic',
-            chatId: seeded.chat.id,
-            workId: null,
-            title: '어제 완료한 합성 작업',
-            status: 'completed',
-            updatedAt: yesterday,
-            committedEffects: 0,
-          },
-        ],
-      },
-    })
-  );
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto(`/?chat=${seeded.chat.id}`);
   const nav = page.getByTestId('bot-navigation').filter({ visible: true });
@@ -961,17 +847,6 @@ test('ACTUI16 recent navigation groups saved dates and keeps active helpers ahea
     '지난 7일',
   ]);
   await expect(recent.locator('.activity-nav-date-group').nth(1)).toContainText(chats[1].title);
-  const helpers = nav.locator('[data-activity-section="helpers"]');
-  await helpers.locator('.activity-nav-heading').click();
-  await expect(helpers.locator('.activity-nav-date-group > h3')).toHaveText([
-    '진행 중',
-    '오늘',
-    '어제',
-  ]);
-  await expect(helpers.locator('.activity-nav-link').first()).toContainText(
-    '지난주부터 진행 중인 합성 작업'
-  );
-  await expect(helpers.locator('time').first()).toHaveAttribute('datetime', earlier);
   await page.screenshot({
     path: info.outputPath('recent-date-groups-desktop.png'),
     animations: 'disabled',

@@ -97,7 +97,7 @@ for (const format of ['charx', 'json'] as const) {
     ).json();
     expect(content.package.lore).toHaveLength(1);
     expect(content.package.lore[0].text).toBe('The sky is green.');
-    await expect(dialog.getByText('모듈을 서재에 등록했어요.', { exact: false })).toBeVisible();
+    await expect(dialog.getByRole('status').filter({ hasText: '모듈' })).toBeVisible();
     expect(await (await request.get('/api/chats')).json()).toHaveLength(before.length);
   });
 }

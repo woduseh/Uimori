@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import type { Chat, ChatDetail } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -417,28 +417,44 @@ test('RIMAGE accepted request never reappears after IndexedDB cleanup fails', as
   expect((await detail(request, chat.id)).runs).toHaveLength(1);
 });
 
-test('RIMAGE expired unaccepted upload releases the pending command and an explicit send uploads again', async ({
+test('RIMAGE expired unaccepted upload keeps the pending command until the user clears it and sends again', async ({
   page,
   request,
 }) => {
   const chat = await createChat(request);
+  const attachment = await image();
+  // A valid receipt whose staged bytes are no longer present on the server.
+  await page.route(
+    '**/api/uploads',
+    (route) =>
+      route.fulfill({
+        json: {
+          uploadId: randomUUID().replaceAll('-', ''),
+          bytes: attachment.buffer.length,
+          sha256: createHash('sha256').update(attachment.buffer).digest('hex'),
+        },
+      }),
+    { times: 1 }
+  );
   const calls: { idempotencyKey: string; requestImages: { uploadId: string }[] }[] = [];
   await page.route(`**/api/chats/${chat.id}/runs`, async (route) => {
     calls.push(route.request().postDataJSON());
     if (calls.length === 1) await route.abort('failed');
-    else if (calls.length === 2)
-      await route.fulfill({ status: 404, json: { error: '첨부 업로드가 만료됐어요.' } });
     else await route.continue();
   });
   await open(page, chat);
-  await page.getByLabel('참고 이미지 파일', { exact: true }).setInputFiles(await image());
+  await page.getByLabel('참고 이미지 파일', { exact: true }).setInputFiles(attachment);
   await expect(thumbnails(page)).toHaveCount(1);
   await send(page).click();
   await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
-  await page
-    .getByRole('dialog', { name: '이전 요청 접수 확인', exact: true })
-    .getByRole('button', { name: '접수 확인', exact: true })
-    .click();
+  const confirmation = page.getByRole('dialog', { name: '이전 요청 접수 확인', exact: true });
+  const replay = page.waitForResponse(`**/api/chats/${chat.id}/runs`);
+  await confirmation.getByRole('button', { name: '접수 확인', exact: true }).click();
+  const rejected = await replay;
+  expect(rejected.status()).toBe(404);
+  expect(await rejected.json()).toMatchObject({ error: 'UPLOAD_NOT_FOUND' });
+  await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  await confirmation.getByRole('button', { name: '이전 요청 기록 지우기', exact: true }).click();
   await expect(send(page)).toBeEnabled();
   await expect(thumbnails(page)).toHaveCount(1);
   await send(page).click();
