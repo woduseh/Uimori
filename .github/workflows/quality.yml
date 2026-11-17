@@ -62,15 +62,16 @@ jobs:
         run: node scripts/check-documentation.mjs
 
   tests:
-    name: tests (${{ matrix.shard }}/6)
+    name: tests (${{ matrix.shard }}/4)
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
-    runs-on: windows-latest
+    # The deployment target is Linux. Windows-sensitive files also run in the tooling job.
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -82,7 +83,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       # Some Vitest files launch dist/server/index.js. Each isolated runner builds once.
       - run: npm run build
-      - run: node scripts/ci-vitest.mjs ${{ matrix.shard }}/6
+      - run: node scripts/ci-vitest.mjs ${{ matrix.shard }}/4
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -108,6 +109,8 @@ jobs:
       - run: npm ci --no-audit --no-fund
       # test:tooling owns its one build; do not build a second time here.
       - run: npm run test:tooling
+      # Files, backups, child processes and the compiled server on the Windows quick-start platform.
+      - run: npm run test:windows
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -132,10 +135,6 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run build
-      - name: Linux persistence, backup recovery, shell and process lifecycle
-        run: >-
-          npm test -- tests/server.test.ts tests/personal-workspace-flow.test.ts
-          tests/main-shell.test.ts tests/helper-shell.test.ts tests/helper-shell-runtime.test.ts tests/helper-runner.test.ts
       - name: Install managed Chromium
         run: |
           npx playwright install --with-deps --no-shell chromium

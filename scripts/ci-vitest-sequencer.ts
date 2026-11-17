@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { BaseSequencer, type TestSpecification } from 'vitest/node';
 
-// Historical Windows CI durations. Unknown/new files get a conservative default;
+// Historical Linux CI durations. Unknown/new files get a conservative default;
 // no CI API call, cache write, or time-dependent scheduling during a run.
 const timings = JSON.parse(
   readFileSync(new URL('./ci-vitest-timings.json', import.meta.url), 'utf8')

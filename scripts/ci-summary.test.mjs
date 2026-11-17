@@ -12,10 +12,10 @@ import {
 
 const sha = 'a'.repeat(40);
 function vitestFixture() {
-  const allFiles = ['a', 'b', 'c', 'd', 'e', 'f'].map((name) => `tests/${name}.test.ts`);
+  const allFiles = ['a', 'b', 'c', 'd'].map((name) => `tests/${name}.test.ts`);
   const inventories = allFiles.map((file, i) => ({
     commit: sha,
-    shard: `${i + 1}/6`,
+    shard: `${i + 1}/4`,
     allFiles,
     files: [file],
   }));
@@ -85,8 +85,8 @@ test('Vitest reports retain skips, timing and full file coverage', () => {
   reports[0].numPassedTests = 0;
   reports[0].numPendingTests = 1;
   const summary = summarizeVitest(inventories, reports, sha);
-  assert.equal(summary.files, 6);
-  assert.equal(summary.passed, 5);
+  assert.equal(summary.files, 4);
+  assert.equal(summary.passed, 3);
   assert.equal(summary.skipped, 1);
   assert.equal(summary.shards[0].elapsedMs, 100);
 });
@@ -97,7 +97,7 @@ test('stale or incomplete shard evidence is not accepted', () => {
       inventories[0].commit = 'b'.repeat(40);
     },
     ({ inventories }) => {
-      inventories[1].shard = '1/6';
+      inventories[1].shard = '1/4';
     },
     ({ reports }) => {
       reports[0].success = false;
