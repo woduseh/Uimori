@@ -678,7 +678,7 @@ test('SCUILEAVE global illustration settings retain failed drafts and save befor
 }) => {
   for (const width of [2560, 412]) {
     const original = await (await request.get('/api/illustration-settings')).json();
-    const nextCount = original.maxPerSource === 8 ? 7 : original.maxPerSource + 1;
+    const nextCount = original.maxPerSource === 2 ? 3 : 2;
     await page.setViewportSize({ width, height: 915 });
     await page.goto('/');
     await navigationAction(page, '설정');
@@ -689,6 +689,11 @@ test('SCUILEAVE global illustration settings retain failed drafts and save befor
       .click();
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
     const count = settings.getByLabel('장면당 최대 삽화 수', { exact: true });
+    await settings.getByLabel('응답 완료 후 자동 삽화 생성', { exact: true }).check();
+    await settings
+      .getByRole('combobox', { name: '자동 생성 컷 수', exact: true })
+      .selectOption('auto');
+    await settings.getByLabel('최소 컷 수', { exact: true }).fill('1');
     await count.fill('0');
     await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
     const confirm = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
@@ -701,6 +706,9 @@ test('SCUILEAVE global illustration settings retain failed drafts and save befor
     await expect(count).toHaveValue('0');
     await count.fill('');
     await count.fill(String(nextCount));
+    const automaticMax = settings.getByLabel('자동으로 고를 최대 컷 수', { exact: true });
+    await automaticMax.fill('');
+    await automaticMax.fill(String(nextCount));
     await expect(
       settings.getByRole('button', { name: '삽화 설정 저장', exact: true })
     ).toBeEnabled();
@@ -730,8 +738,12 @@ test('SCUILEAVE global illustration settings retain failed drafts and save befor
     await confirm.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
     await expect(settings).toBeHidden();
     const saved = await (await request.get('/api/illustration-settings')).json();
-    expect(saved.maxPerSource).toBe(nextCount);
-    expect(saved.revision).toBe(original.revision + 1);
+    expect(saved).toMatchObject({
+      maxPerSource: nextCount,
+      automaticMaxTargets: nextCount,
+      automaticMinTargets: 1,
+      revision: original.revision + 1,
+    });
     const { revision: _revision, ...body } = original;
     const restored = await request.put('/api/illustration-settings', {
       data: { ...body, expectedRevision: saved.revision },
