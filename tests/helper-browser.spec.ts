@@ -169,6 +169,12 @@ async function harness(page: Page, seedCount = 0) {
               queued: view.tasks.filter((task) => task.status === 'queued').length,
             },
             latestEventSeq: view.events.at(-1)?.seq ?? 0,
+            latestActivityEventSeq:
+              view.events.findLast((entry) =>
+                ['task.completed', 'task.failed', 'task.cancelled', 'task.interrupted'].includes(
+                  entry.kind
+                )
+              )?.seq ?? 0,
           }))
           .reverse(),
       });

@@ -6,6 +6,7 @@ import type { Chat } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
+import { visualReview } from './fixtures/visual-review.js';
 import {
   navigationAction,
   openChatSettings,
@@ -187,7 +188,7 @@ test('AUDIT2 acknowledged runtime save remains successful when the reader refres
   expect(writes).toHaveLength(1);
 });
 
-for (const width of [360, 412]) {
+for (const width of visualReview ? [360, 412] : [360]) {
   test(`AUDIT2 runtime cancellation keeps the draft until explicit discard at ${width}px`, async ({
     page,
     request,
@@ -258,6 +259,7 @@ for (const width of [360, 412]) {
     const backupGate = new Promise<void>((resolve) => {
       releaseBackup = resolve;
     });
+    await page.clock.install();
     await page.route('**/api/backups', async (route) => {
       if (route.request().method() === 'POST') {
         await backupGate;
@@ -318,13 +320,17 @@ for (const width of [360, 412]) {
     expect(saved.retain).toBe(6);
     expect(saved.revision).toBe(8);
     expect(writes).toHaveLength(1);
+    await page.clock.fastForward(4100);
     await expect(notice).toBeHidden();
     rejectSave = true;
     await retain.fill('9');
     await save.click();
     await expect(panel.getByRole('alert')).toContainText('서버 작업을 완료하지 못했어요.');
     await expect(panel.getByRole('alert')).toContainText('(503)');
-    await expect(panel.getByRole('alert')).toBeInViewport({ ratio: 1 });
+    for (const alertWidth of visualReview ? [width] : [412, width]) {
+      await page.setViewportSize({ width: alertWidth, height: 915 });
+      await expect(panel.getByRole('alert')).toBeInViewport({ ratio: 1 });
+    }
     await expect(retain).toHaveValue('9');
     await expect(save).toBeEnabled();
     await expect(notice).toBeHidden();

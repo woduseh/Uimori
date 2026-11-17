@@ -32,6 +32,11 @@ import './settings-layout.css';
 import './illustrations.css';
 
 type Draft = Omit<IllustrationSettings, 'revision'> & { revision: number };
+const validCutLimit = (value: number) =>
+  Number.isInteger(value) && value >= 1 && value <= ILLUSTRATION_MAX_PER_SOURCE;
+// An empty or invalid limit is an edit in progress. Preserve its dependent counts.
+const clampToCutLimit = (count: number, limit: number) =>
+  validCutLimit(limit) ? Math.min(count, limit) : count;
 type TestResult =
   | {
       ok: true;
@@ -180,12 +185,8 @@ function IllustrationEnvironmentEditor({
     </label>
   );
   const valid =
-    Number.isInteger(draft.maxPerSource) &&
-    draft.maxPerSource >= 1 &&
-    draft.maxPerSource <= ILLUSTRATION_MAX_PER_SOURCE &&
-    Number.isInteger(draft.automaticMaxTargets) &&
-    draft.automaticMaxTargets >= 1 &&
-    draft.automaticMaxTargets <= ILLUSTRATION_MAX_PER_SOURCE &&
+    validCutLimit(draft.maxPerSource) &&
+    validCutLimit(draft.automaticMaxTargets) &&
     Number.isInteger(draft.automaticMinTargets ?? 0) &&
     (draft.automaticMinTargets ?? 0) >= 0 &&
     (draft.automaticMinTargets ?? 0) <= draft.automaticMaxTargets &&
@@ -327,11 +328,8 @@ function IllustrationEnvironmentEditor({
               change({
                 ...draft,
                 maxPerSource: value,
-                automaticMinTargets: Math.min(value, draft.automaticMinTargets ?? 0),
-                automaticMaxTargets:
-                  Number.isInteger(value) && value >= 1 && value <= ILLUSTRATION_MAX_PER_SOURCE
-                    ? Math.min(value, draft.automaticMaxTargets)
-                    : draft.automaticMaxTargets,
+                automaticMinTargets: clampToCutLimit(draft.automaticMinTargets ?? 0, value),
+                automaticMaxTargets: clampToCutLimit(draft.automaticMaxTargets, value),
               }),
             1
           )}
@@ -371,7 +369,7 @@ function IllustrationEnvironmentEditor({
                   change({
                     ...draft,
                     automaticMaxTargets: value,
-                    automaticMinTargets: Math.min(value, draft.automaticMinTargets ?? 0),
+                    automaticMinTargets: clampToCutLimit(draft.automaticMinTargets ?? 0, value),
                   })
               )}
             </>

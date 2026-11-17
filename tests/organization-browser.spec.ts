@@ -61,9 +61,12 @@ test('ORG01 mobile navigation groups by owner and preserves chats when a folder 
   await expect(branchA.getByText('채팅이 없어요.', { exact: true })).toHaveCount(1);
   const folderResponse = await request.get(`/api/bots/${a.id}/folders`);
   const [folder] = await folderResponse.json();
-  await nav
-    .locator(`.bot-chat-item[data-chat-id="${first.id}"]`)
-    .dragTo(nav.getByRole('button', { name: `${folder.title} 폴더`, exact: true }));
+  const chatRow = branchA.locator(`.bot-chat-item[data-chat-id="${first.id}"]`);
+  const folderHeader = branchA.getByRole('button', { name: `${folder.title} 폴더`, exact: true });
+  await expect(chatRow).toHaveAttribute('draggable', 'true');
+  // Keep both ends of the gesture in view when many other bots fill the drawer.
+  await branchA.scrollIntoViewIfNeeded();
+  await chatRow.dragTo(folderHeader, { scroll: 'none', sourcePosition: { x: 20, y: 12 } });
   await expect
     .poll(async () => (await (await request.get(`/api/chats/${first.id}`)).json()).chat.folderId)
     .toBe(folder.id);
@@ -352,13 +355,19 @@ test('ORG02 desktop compact rows support drag ordering, folder drops, collapse a
   const { owner, chats, folder } = await navigationFixture(request);
   await page.goto(`/?chat=${chats[0].id}`);
   const nav = page.getByTestId('bot-navigation').filter({ visible: true });
-  await expect(rows(nav)).toHaveCount(3);
+  const branch = nav.locator(`[data-bot-id="${owner.id}"]`);
+  const folderHeader = branch.getByRole('button', { name: `${folder.title} 폴더`, exact: true });
+  // The first folder load briefly replaces the rows with a loading indicator.
+  await expect(folderHeader).toBeVisible();
   // Read the actual initial order so the gesture checks position independently of creation defaults.
-  const order = await rows(nav).evaluateAll((elements) =>
-    elements.map((element) => element.getAttribute('data-chat-id'))
-  );
-  const moving = nav.locator(`.bot-chat-item[data-chat-id="${order[2]}"]`);
-  const target = nav.locator(`.bot-chat-item[data-chat-id="${order[0]}"]`);
+  const readOrder = () =>
+    rows(branch).evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute('data-chat-id'))
+    );
+  const order = await readOrder();
+  expect(order.toSorted()).toEqual(chats.map((chat) => chat.id).toSorted());
+  const moving = branch.locator(`.bot-chat-item[data-chat-id="${order[2]}"]`);
+  const target = branch.locator(`.bot-chat-item[data-chat-id="${order[0]}"]`);
   await page.mouse.move(1400, 950);
   const menu = moving.locator('.bot-row-actions');
   await expect(menu).toHaveCSS('opacity', '0');
@@ -368,22 +377,10 @@ test('ORG02 desktop compact rows support drag ordering, folder drops, collapse a
   await moving.locator('.chat-link').focus();
   await expect(menu).toHaveCSS('opacity', '1');
   await moving.dragTo(target, { targetPosition: { x: 30, y: 2 } });
-  await expect
-    .poll(() =>
-      rows(nav).evaluateAll((elements) =>
-        elements.map((element) => element.getAttribute('data-chat-id'))
-      )
-    )
-    .toEqual([order[2], order[0], order[1]]);
+  await expect.poll(readOrder).toEqual([order[2], order[0], order[1]]);
   await page.reload();
-  await expect
-    .poll(() =>
-      rows(nav).evaluateAll((elements) =>
-        elements.map((element) => element.getAttribute('data-chat-id'))
-      )
-    )
-    .toEqual([order[2], order[0], order[1]]);
-  const folderHeader = nav.getByRole('button', { name: `${folder.title} 폴더`, exact: true });
+  await expect(folderHeader).toBeVisible();
+  await expect.poll(readOrder).toEqual([order[2], order[0], order[1]]);
   const organizationWrites: string[] = [];
   page.on('request', (request) => {
     if (request.method() === 'PATCH' && request.url().endsWith('/organization'))

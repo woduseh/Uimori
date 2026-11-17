@@ -652,40 +652,38 @@ test('LOADUI04 offline edits reappear on reconnect and connected SSE sends only 
   });
   await page.goto(`/?chat=${seeded.chat.id}`);
   await expect(articles(page)).toHaveCount(2);
-  await expect(page.getByText('연결을 다시 확인하고 있어요.', { exact: true })).toHaveCount(0);
+  const reconnecting = page.getByRole('status').filter({ hasText: /연결을 다시 확인/ });
+  await expect(reconnecting).toHaveCount(0);
   await context.setOffline(true);
-  try {
-    await expect(page.getByText('연결을 다시 확인하고 있어요.', { exact: true })).toBeVisible();
-    const edit = await request.put(`/api/sources/${first.id}/text`, {
-      data: { text: 'Source changed while browser was offline.', expectedRevision: 0 },
-    });
-    expect(edit.ok()).toBeTruthy();
-    await expect(article(page, first.id).getByTestId('source-text')).not.toContainText(
-      'Source changed while browser was offline.'
+  await expect(reconnecting).toBeVisible();
+  const edit = await request.put(`/api/sources/${first.id}/text`, {
+    data: { text: 'Source changed while browser was offline.', expectedRevision: 0 },
+  });
+  expect(edit.ok()).toBeTruthy();
+  await expect(article(page, first.id).getByTestId('source-text')).not.toContainText(
+    'Source changed while browser was offline.'
+  );
+  // onopen only means the transport is connected; wait for its full reader catch-up too.
+  const catchUpResponse = page.waitForResponse(async (response) => {
+    const url = new URL(response.url());
+    if (
+      !response.ok() ||
+      url.pathname !== `/api/chats/${seeded.chat.id}/reader` ||
+      url.searchParams.has('since')
+    )
+      return false;
+    const body = await response.json();
+    return body.sources.some(
+      (source: { id: string; text: string }) =>
+        source.id === first.id && source.text === 'Source changed while browser was offline.'
     );
-  } finally {
-    // onopen only means the transport is connected; wait for its full reader catch-up too.
-    const catchUpResponse = page.waitForResponse(async (response) => {
-      const url = new URL(response.url());
-      if (
-        !response.ok() ||
-        url.pathname !== `/api/chats/${seeded.chat.id}/reader` ||
-        url.searchParams.has('since')
-      )
-        return false;
-      const body = await response.json();
-      return body.sources.some(
-        (source: { id: string; text: string }) =>
-          source.id === first.id && source.text === 'Source changed while browser was offline.'
-      );
-    });
-    await context.setOffline(false);
-    await (await catchUpResponse).finished();
-  }
+  });
+  await context.setOffline(false);
+  await (await catchUpResponse).finished();
   await expect(article(page, first.id).getByTestId('source-text')).toContainText(
     'Source changed while browser was offline.'
   );
-  await expect(page.getByText('연결을 다시 확인하고 있어요.', { exact: true })).toHaveCount(0);
+  await expect(reconnecting).toHaveCount(0);
   await expect(articles(page)).toHaveCount(2);
   const changedResponse = page.waitForResponse(async (response) => {
     if (

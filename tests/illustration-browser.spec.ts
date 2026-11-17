@@ -13,6 +13,7 @@ import type {
   IllustrationSettings,
 } from '../core/illustration.js';
 import { fixtureBotInput, postFixtureChat } from './fixtures/chat.js';
+import { visualReview } from './fixtures/visual-review.js';
 import { nativeContent } from './fixtures/native-content.js';
 import {
   navigationAction,
@@ -83,7 +84,7 @@ async function illustrations(request: APIRequestContext, chatId: string) {
 }
 const byStatus = (status: string) => `[data-testid="illustration"][data-status="${status}"]`;
 
-for (const width of [360, 412]) {
+for (const width of visualReview ? [360, 412] : [360]) {
   test(`AUDIT2 illustration reference refresh failure keeps candidates, draft roles and revision before retry at ${width}px`, async ({
     page,
     request,

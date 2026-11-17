@@ -224,7 +224,9 @@ test('MP03 unavailable current models stay visible as a warning and search offer
   await page.goto(`/?chat=${chat.id}`);
   await expect(trigger).toBeVisible();
   await trigger.click();
-  await expect(picker.getByRole('status')).toContainText(`현재 모델 ${models[0].title}`);
+  await expect(picker.getByRole('status').filter({ hasText: models[0].title })).toContainText(
+    '사용할 수 없'
+  );
   await expect(picker.getByRole('button', { name: `${models[0].title} MP03` })).toHaveCount(0);
   await picker.getByRole('searchbox').fill('일치하지 않는 모델 검색 ㅁㄴㅇㄹ');
   await expect(picker.getByText('검색 결과가 없어요.', { exact: true })).toBeVisible();

@@ -421,9 +421,10 @@ test('PERSONAL uploaded metadata locks pending fields and retains rejected input
     await expect(description).toBeDisabled();
     await expect(submit).toBeDisabled();
     await expect(submit).toHaveAttribute('aria-busy', 'true');
-    await expect(submit).toContainText('저장 중');
+    const pendingText = submit.getByText('저장 중');
+    await expect(pendingText).toBeVisible();
     const indicator = (await submit.locator('svg').boundingBox())!;
-    const label = (await submit.locator('.settings-save-label > span').boundingBox())!;
+    const label = (await pendingText.boundingBox())!;
     expect(indicator.x + indicator.width).toBeLessThan(label.x);
     expect(Math.abs(indicator.y + indicator.height / 2 - label.y - label.height / 2)).toBeLessThan(
       2
