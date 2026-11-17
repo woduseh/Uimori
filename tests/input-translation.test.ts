@@ -212,22 +212,12 @@ test('a long draft and its translation keep their full text without extra model 
   expect(databaseState(f.app)).toEqual(before);
 });
 
-test('the request-sized HTTP body reaches model selection without starting a call', async () => {
+test('a maximum-size draft with no translation model returns the model requirement without dispatch', async () => {
   const f = await setup(false);
   const send = mockSend();
   // JSON escapes each null character to six bytes: the former 4 MiB body cap failed first.
   const response = await f.post({ ...payload, text: '\0'.repeat(REQUEST_TEXT_MAX_CHARS) });
   expect(response.statusCode, response.body).toBe(409);
-  expect(response.json()).toEqual({ error: 'MODEL_REQUIRED:translation' });
-  expect(send).not.toHaveBeenCalled();
-  expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(0);
-});
-
-test('no selected translation model gives actionable feedback and never falls back to another role', async () => {
-  const f = await setup(false);
-  const send = mockSend();
-  const response = await f.post(payload);
-  expect(response.statusCode).toBe(409);
   expect(response.json()).toEqual({ error: 'MODEL_REQUIRED:translation' });
   expect(send).not.toHaveBeenCalled();
   expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(0);

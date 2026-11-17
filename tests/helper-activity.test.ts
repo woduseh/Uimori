@@ -125,7 +125,7 @@ test.each([
   }
 });
 
-test('helper stages group observed reads and keep failed edits separate without inventing progress', () => {
+test('helper stages group reads, keep edits separate and report observed progress', () => {
   const activity: HelperActivity = {
     taskId: 'task',
     status: 'running',
@@ -135,13 +135,19 @@ test('helper stages group observed reads and keep failed edits separate without 
       { seq: 2, kind: 'attempt.finished', attemptId: 'first', status: 'tool_calls' },
       { seq: 3, kind: 'tool.finished', name: 'resource.read', denied: false },
       { seq: 4, kind: 'tool.finished', name: 'data.search', denied: false },
-      { seq: 5, kind: 'tool.finished', name: 'resource.patch', denied: true, error: 'CONFLICT' },
-      { seq: 6, kind: 'attempt.started', attemptId: 'context', purpose: 'context' },
+      { seq: 5, kind: 'tool.finished', name: 'resource.patch' },
+      { seq: 6, kind: 'tool.finished', name: 'resource.patch' },
+      { seq: 7, kind: 'tool.finished', name: 'resource.patch', denied: true, error: 'CONFLICT' },
+      { seq: 8, kind: 'attempt.started', attemptId: 'context', purpose: 'context' },
     ],
   };
-  expect(helperActivityStages(activity)).toMatchObject([
+  const stages = helperActivityStages(activity);
+  expect(stages.flatMap((stage) => stage.events)).toEqual(activity.events);
+  expect(stages).toMatchObject([
     { state: 'completed', events: [{ seq: 1 }, { seq: 2 }] },
     { state: 'completed', events: [{ seq: 3 }, { seq: 4 }] },
+    { state: 'completed', events: [{ seq: 5 }] },
+    { state: 'completed', events: [{ seq: 6 }] },
     { state: 'issue', events: [{ error: 'CONFLICT' }] },
     { state: 'running' },
   ]);

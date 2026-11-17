@@ -1079,6 +1079,8 @@ test.each(['provider', 'native'] as const)(
   'helper %s execution stops after 256 host tool callbacks',
   async (execution) => {
     const f = fixture();
+    // The limit is checked on a live connection. Sync its WAL at checkpoints instead of per event.
+    f.store.db.exec('PRAGMA synchronous=NORMAL');
     const calls = Array.from({ length: HELPER_TOOL_CALL_LIMIT }, (_, index) => ({
       id: `callback-${index}`,
       name: 'missing.tool',

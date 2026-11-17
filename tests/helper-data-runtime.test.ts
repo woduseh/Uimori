@@ -1035,7 +1035,11 @@ test('document discovery and an exact age excerpt patch a large bot without read
         wire
       );
     }
-    expect(toolResult(wire, 'edit')).toMatchObject({ id: original.id, revision: 2 });
+    expect(toolResult(wire, 'edit')).toMatchObject({
+      id: original.id,
+      revision: original.revision + 1,
+      changedPaths: ['/package/nativeRisu/card/description'],
+    });
     return answer('Changed only Age: 14 to Age: 15.');
   });
   const task = await f.run('Find Hinano and change only Age: 14 to Age: 15.');

@@ -421,28 +421,40 @@ async function api<T = unknown>(
   expect(response.status, JSON.stringify(value)).toBe(options.status ?? 200);
   return value as T;
 }
-async function terminal(url: string, id: string): Promise<Run> {
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline) {
-    const run = await api<Run>(url, `/api/runs/${id}`);
-    if (!['queued', 'running'].includes(run.status)) return run;
-    await new Promise((resolve) => setTimeout(resolve, 10));
+async function terminalState<T extends { status: string }>(
+  url: string,
+  chatId: string,
+  signal: AbortSignal,
+  read: () => Promise<T | undefined>
+): Promise<T> {
+  const events = await fetch(`${url}/api/chats/${chatId}/events`, { signal });
+  expect(events.status).toBe(200);
+  const reader = events.body!.getReader();
+  try {
+    // Subscribe first: the initial snapshot also wakes us if the work already finished.
+    while (!(await reader.read()).done) {
+      const state = await read();
+      if (state && !['queued', 'running'].includes(state.status)) return state;
+    }
+    throw new Error('Chat event stream closed before execution finished');
+  } finally {
+    await reader.cancel();
   }
-  throw new Error(`Run ${id} did not become terminal`);
 }
-async function terminalJob(url: string, chatId: string, id: string): Promise<Job> {
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline) {
+function terminalRun(url: string, run: Run, signal: AbortSignal) {
+  return terminalState(url, run.chatId, signal, () => api<Run>(url, `/api/runs/${run.id}`));
+}
+function terminalJob(url: string, chatId: string, id: string, signal: AbortSignal) {
+  return terminalState(url, chatId, signal, async () => {
     const detail = await api<ChatDetail>(url, `/api/chats/${chatId}`);
-    const job = detail.jobs.find((value) => value.id === id);
-    if (job && !['queued', 'running'].includes(job.status)) return job;
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  throw new Error(`Job ${id} did not become terminal`);
+    return detail.jobs.find((value) => value.id === id);
+  });
 }
 
 describe('M1 real HTTP application boundaries', () => {
-  test('P07 P08 P12 explicit retry translates the whole scene with the current model and reads current resources when auxiliary execution begins', async () => {
+  test('P07 P08 P12 explicit retry translates the whole scene with the current model and reads current resources when auxiliary execution begins', async ({
+    signal,
+  }) => {
     vi.stubEnv('TYPESAFE_API_KEY', 'synthetic-jev-key');
     const originalFetch = globalThis.fetch;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -590,7 +602,7 @@ describe('M1 real HTTP application boundaries', () => {
       expectedProfileRevision: configured.revision,
       idempotencyKey: randomUUID(),
     });
-    const done = await terminal(url, run.id);
+    const done = await terminalRun(url, run, signal);
     expect(done.status).toBe('completed');
     const source = app.store.source(done.sourceRevision!);
     expect(source.text).toBe(originalText);
@@ -606,7 +618,7 @@ describe('M1 real HTTP application boundaries', () => {
     const other = await api<Chat>(url, '/api/chats', { title: 'Another visible chat' });
     await api(url, `/api/chats/${other.id}`);
     await api(url, '/api/test/control', { action: 'release', barrier: 'translation' });
-    const partial = await terminalJob(url, chat.id, jobId);
+    const partial = await terminalJob(url, chat.id, jobId, signal);
     expect(partial.status).toBe('failed');
     expect(partial.result?.text ?? '').toBe('');
     expect(app.store.job(jobId).input).toMatchObject({
@@ -630,7 +642,7 @@ describe('M1 real HTTP application boundaries', () => {
     failTranslation = false;
     const retried = await api<Job>(url, `/api/jobs/${jobId}/retry`, {});
     expect(retried.id).not.toBe(jobId);
-    const completed = await terminalJob(url, chat.id, retried.id);
+    const completed = await terminalJob(url, chat.id, retried.id, signal);
     expect(completed.status, completed.error ?? JSON.stringify(completed)).toBe('completed');
     expect(app.store.job(retried.id).input).toMatchObject({
       translationModelSelection: { id: translation.id },
@@ -652,7 +664,9 @@ describe('M1 real HTTP application boundaries', () => {
     ).toHaveLength(1);
   });
 
-  test('invalid queued translation snapshot fails once before any provider request and leaves the HTTP server responsive', async () => {
+  test('invalid queued translation snapshot fails once before any provider request and leaves the HTTP server responsive', async ({
+    signal,
+  }) => {
     const fixtureItem = await directory();
     const provider = await loopbackProvider(async (_captured, response) => {
       await writeSse(response, [{ type: 'error', message: 'Unexpected provider dispatch' }]);
@@ -701,7 +715,7 @@ describe('M1 real HTTP application boundaries', () => {
     delete input.translationModelSnapshot;
     store.db.prepare('UPDATE jobs SET input=? WHERE id=?').run(JSON.stringify(input), job.id);
     const url = await app.listen({ port: 0, host: '127.0.0.1' });
-    const failed = await terminalJob(url, chat.id, job.id);
+    const failed = await terminalJob(url, chat.id, job.id, signal);
     expect(failed).toMatchObject({
       status: 'failed',
       generation: job.generation,
@@ -721,7 +735,9 @@ describe('M1 real HTTP application boundaries', () => {
     expect(store.run(source.runId).snapshot).toEqual(frozen);
   });
 
-  test('P05 P06 P09 routes selected main through fetch, preserves source on refusal/partial and creates a sibling over HTTP', async () => {
+  test('P05 P06 P09 routes selected main through fetch, preserves source on refusal/partial and creates a sibling over HTTP', async ({
+    signal,
+  }) => {
     const fixtureItem = await directory();
     const provider = await loopbackProvider(async (captured, response) => {
       const body = JSON.parse(captured.body);
@@ -777,7 +793,7 @@ describe('M1 real HTTP application boundaries', () => {
       });
     }
     const created = await create('success main');
-    const completed = await terminal(url, created.id);
+    const completed = await terminalRun(url, created, signal);
     expect(completed.status).toBe('completed');
     const success = await api<ChatDetail>(url, `/api/chats/${chat.id}`);
     expect(success.sources).toHaveLength(1);
@@ -795,7 +811,7 @@ describe('M1 real HTTP application boundaries', () => {
       ['partial main', 'partial'],
     ] as const) {
       const run = await create(request);
-      const done = await terminal(url, run.id);
+      const done = await terminalRun(url, run, signal);
       expect(done).toMatchObject({ status, sourceRevision: null });
     }
     const preserved = await api<ChatDetail>(url, `/api/chats/${chat.id}`);
@@ -809,7 +825,7 @@ describe('M1 real HTTP application boundaries', () => {
       idempotencyKey: key,
       title: 'HTTP sibling',
     });
-    expect((await terminal(url, sibling.id)).status).toBe('completed');
+    expect((await terminalRun(url, sibling, signal)).status).toBe('completed');
     const duplicate = await api<Run>(url, `/api/runs/${created.id}/candidate`, {
       idempotencyKey: key,
       title: 'HTTP sibling',

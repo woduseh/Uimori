@@ -335,62 +335,12 @@ describe('input context projection and durable summary calls', () => {
   });
 
   test.each([
-    {
-      consumerLimit: 65536,
-      summaryLimit: 8192,
-      output: 8192,
-      goal: 2048,
-    },
-    {
-      consumerLimit: 8192,
-      summaryLimit: 65536,
-      output: 8192,
-      goal: 1024,
-    },
-    {
-      consumerLimit: 16384,
-      summaryLimit: 8192,
-      output: 1500,
-      goal: 750,
-    },
-  ])(
-    'a $consumerLimit-token consumer and $summaryLimit-token summarizer send one consistent summary goal and output cap',
-    async ({ consumerLimit, summaryLimit, output, goal }) => {
-      const source = await snapshot([
-        'OLD_ACTOR → RECIPIENT: PROMISE',
-        'CURRENT_UNRESOLVED_REQUEST',
-        'RECENT_1',
-        'RECENT_2',
-      ]);
-      source.profile!.models.main = { ...model(), inputTokenLimit: consumerLimit };
-      source.profile!.contextModel = {
-        ...model('summary-model'),
-        inputTokenLimit: summaryLimit,
-        maxOutputTokens: output,
-      };
-      source.contextPlan!.budget.inputTokenLimit = consumerLimit;
-      const original = structuredClone(source),
-        log = observed({ reason: 'manual' });
-      vi.mocked(fetch).mockImplementation(async () => completed('SYNTHETIC_MERGED_SUMMARY'));
-      await prepareInputContext(source, log.hooks);
-      expect(log.wires).toHaveLength(1);
-      expect(log.wires[0].body).toMatchObject({
-        generation: { maxOutputTokens: Math.min(output, 4096) },
-        stable: { contract: expect.stringContaining(CONTEXT_SUMMARY_SEMANTICS) },
-        input: { controls: { targetSummaryTokens: goal } },
-      });
-      expect(goal).toBeLessThanOrEqual(Math.min(output, 4096));
-      expect(source).toEqual(original);
-    }
-  );
-
-  test.each([
-    { consumerLimit: 8192, outputLimit: 8192, target: 1024, hardCap: 4096 },
-    { consumerLimit: 65536, outputLimit: 8192, target: 2048, hardCap: 4096 },
-    { consumerLimit: 16384, outputLimit: 512, target: 256, hardCap: 512 },
+    { consumerLimit: 8192, summaryLimit: 65536, outputLimit: 8192, target: 1024, hardCap: 4096 },
+    { consumerLimit: 65536, summaryLimit: 8192, outputLimit: 8192, target: 2048, hardCap: 4096 },
+    { consumerLimit: 16384, summaryLimit: 8192, outputLimit: 512, target: 256, hardCap: 512 },
   ])(
     'manual compaction gives a $consumerLimit-token consumer a $target-token summary goal below its $hardCap hard output cap',
-    async ({ consumerLimit, outputLimit, target, hardCap }) => {
+    async ({ consumerLimit, summaryLimit, outputLimit, target, hardCap }) => {
       const source = await snapshot([
         '첫 약속.',
         '아직 풀리지 않은 의문.',
@@ -400,7 +350,7 @@ describe('input context projection and durable summary calls', () => {
       source.profile!.models.main = { ...model(), inputTokenLimit: consumerLimit };
       source.profile!.contextModel = {
         ...model('summary-model'),
-        inputTokenLimit: 32768,
+        inputTokenLimit: summaryLimit,
         maxOutputTokens: outputLimit,
       };
       source.contextPlan!.budget.inputTokenLimit = consumerLimit;
