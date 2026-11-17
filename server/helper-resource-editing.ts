@@ -583,6 +583,7 @@ function bindTarget(model: ResourceModel, kind: ResourceKind, change: Change): B
   const listKind = listPath(list);
   if (
     !listKind ||
+    kind === 'theme' ||
     (kind === 'prompt-preset' ? listKind !== 'prompt' : listKind === 'prompt') ||
     !/^(0|[1-9]\d*)$/u.test(segments.at(-1)!)
   )
@@ -633,8 +634,8 @@ export function patchHelperResource(
   revision: number,
   rawChanges: unknown
 ) {
-  if (kind !== 'content' && kind !== 'prompt-preset')
-    throw new HttpError(400, '부분 수정은 native 자료와 프리셋에만 지원해요.');
+  if (kind !== 'content' && kind !== 'prompt-preset' && kind !== 'theme')
+    throw new HttpError(400, '부분 수정은 native 자료, 프리셋과 이야기 UI 테마에 지원해요.');
   if (!Array.isArray(rawChanges) || !rawChanges.length)
     throw new HttpError(400, '변경 목록이 필요해요.');
   const current = readResource(store, kind, id);
@@ -695,11 +696,16 @@ export function patchHelperResource(
       const presetPath = pathPolicy.presetPaths.some((rule) =>
         rule.endsWith('/') ? change.path.startsWith(rule) : change.path === rule
       );
-      if (
-        (kind === 'content' ? !nativePath : !presetPath) ||
-        segments.some((part) => FORBIDDEN.has(part))
-      )
-        throw new HttpError(400, 'native 원문 필드만 수정할 수 있어요.');
+      const storyUiPath = ['/storyUi', '/storyUi/baseStyle', '/storyUi/css'].includes(change.path);
+      const allowedPath =
+        kind === 'content' ? nativePath : kind === 'prompt-preset' ? presetPath : storyUiPath;
+      if (!allowedPath || segments.some((part) => FORBIDDEN.has(part)))
+        throw new HttpError(
+          400,
+          kind === 'theme'
+            ? '이야기 UI 필드만 부분 수정할 수 있어요.'
+            : 'native 원문 필드만 수정할 수 있어요.'
+        );
       if (
         kind === 'content' &&
         segments[2] === 'module' &&
@@ -791,6 +797,14 @@ export function patchHelperResource(
         continue;
       }
       const target = locate(model, segments);
+      if (kind === 'theme' && change.path === '/storyUi' && change.op === 'set') {
+        if (!object(change.value)) throw new HttpError(400, '이야기 UI 스타일 객체가 필요해요.');
+        if (!isDeepStrictEqual(target.value, change.value)) {
+          (target.parent as JsonObject).storyUi = structuredClone(change.value);
+          changedPaths.push(change.path);
+        }
+        continue;
+      }
       if (!target.exists && Array.isArray(target.parent))
         throw new HttpError(400, '새 배열 항목은 만들 수 없어요.');
       if (change.op === 'set') {

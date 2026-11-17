@@ -1,4 +1,66 @@
 export const messages = {
+  'storyUi.newTheme': {
+    ko: '이야기 UI 테마 만들기',
+    en: 'Create Story UI theme',
+    ja: '物語 UI テーマを作成',
+    zh: '创建故事界面主题',
+  },
+  'storyUi.cssHelp': {
+    ko: '변수는 &에, 요소 스타일은 일반 선택자에 작성해요. !important는 필요하지 않아요.',
+    en: 'Set variables on & and use normal selectors for elements. !important is unnecessary.',
+    ja: '変数は & に、要素のスタイルは通常のセレクターに記述します。!important は不要です。',
+    zh: '在 & 上设置变量，并使用普通选择器设置元素样式。无需 !important。',
+  },
+  'storyUi.includeTheme': {
+    ko: '이야기 UI 테마 포함',
+    en: 'Include Story UI theme',
+    ja: '物語 UI テーマを含める',
+    zh: '包含故事界面主题',
+  },
+  'storyUi.baseStyle': { ko: '기본 스타일', en: 'Base style', ja: '基本スタイル', zh: '基础样式' },
+  'storyUi.customCss': {
+    ko: '이야기 UI CSS',
+    en: 'Story UI CSS',
+    ja: '物語 UI CSS',
+    zh: '故事界面 CSS',
+  },
+  'storyUi.preview': {
+    ko: '이야기 UI 미리보기',
+    en: 'Story UI preview',
+    ja: '物語 UI プレビュー',
+    zh: '故事界面预览',
+  },
+  'storyUi.botDefault': {
+    ko: '봇의 이야기 UI 기본값',
+    en: 'Bot Story UI default',
+    ja: 'ボットの物語 UI の既定値',
+    zh: '角色的故事界面默认值',
+  },
+  'storyUi.botDefaultHelp': {
+    ko: '채팅 스타일이 자동일 때 사용해요.',
+    en: 'Used when the chat style is automatic.',
+    ja: 'チャットのスタイルが自動の場合に使います。',
+    zh: '聊天样式设为自动时使用。',
+  },
+  'storyUi.modelStyle': {
+    ko: '모델 스타일 따르기',
+    en: 'Follow model style',
+    ja: 'モデルのスタイルに従う',
+    zh: '跟随模型样式',
+  },
+  'storyUi.botDefaultSaved': {
+    ko: '봇의 이야기 UI 기본값을 저장했어요.',
+    en: 'Saved the bot Story UI default.',
+    ja: 'ボットの物語 UI の既定値を保存しました。',
+    zh: '已保存角色的故事界面默认值。',
+  },
+  'storyUi.unavailableTheme': {
+    ko: '사용할 수 없는 테마',
+    en: 'Unavailable theme',
+    ja: '使用できないテーマ',
+    zh: '不可用的主题',
+  },
+
   'storyUi.style': {
     ko: '이야기 UI 스타일',
     en: 'Story UI style',
@@ -11,7 +73,12 @@ export const messages = {
     ja: '保存済みと生成中の画面に適用されます。',
     zh: '应用于已保存和正在生成的界面。',
   },
-  'storyUi.style.auto': { ko: '자동', en: 'Automatic', ja: '自動', zh: '自动' },
+  'storyUi.style.auto': {
+    ko: '봇 기본값 또는 자동',
+    en: 'Bot default / automatic',
+    ja: 'ボットの既定値または自動',
+    zh: '角色默认值 / 自动',
+  },
   'storyUi.style.blue-archive': {
     ko: '블루 아카이브',
     en: 'Blue Archive',

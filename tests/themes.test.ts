@@ -295,6 +295,114 @@ test('HTTP API saves, exports, selects, validates and deletes a theme', async ()
   );
 });
 
+test('portable story UI themes use their own bot selection and the shared revisions', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-story-ui-theme-api-'));
+  const app = await createApp({
+    dbPath: join(directory, 'app.sqlite'),
+    buildId: 'story-ui-theme-test',
+    testMode: true,
+    codex: { enabled: false },
+  });
+  owned.push({ directory, store: app.store, app });
+  const bot = app.store.product.content(fixtureBotInput('Story UI bot'));
+  const otherBot = app.store.product.content(fixtureBotInput('Other bot'));
+  const persona = app.store.product.content({
+    kind: 'persona',
+    title: 'Persona',
+    description: '',
+    text: 'Synthetic persona',
+    loading: 'pinned',
+    relatedIds: [],
+  });
+  const chat = app.store.createChat('Story UI chat', { botId: bot.id });
+  const model = {
+    title: 'Custom story UI',
+    storyUi: {
+      baseStyle: 'period',
+      css: '\n@media (width > 40rem) { :host { --accent: #d32; } }\n',
+    },
+  };
+  const save = (model: unknown, id?: string, expectedRevision?: number) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/resources/save',
+      payload: { kind: 'theme', model, id, expectedRevision },
+    });
+  const created = await save(model);
+  expect(created.statusCode, created.body).toBe(200);
+  const theme = created.json().saved;
+  expect(theme.storyUi).toEqual(model.storyUi);
+  const exported = await app.inject(`/api/themes/${theme.id}/export`);
+  const portable = parseThemeFile(exported.json());
+  expect(portable).toMatchObject(model);
+  const imported = (await save(portable)).json().saved;
+  expect(imported.id).not.toBe(theme.id);
+  expect(imported.storyUi).toEqual(model.storyUi);
+  expect(
+    (await save({ ...model, storyUi: { ...model.storyUi, baseStyle: 'auto' } })).statusCode
+  ).toBe(400);
+  const updated = await save({ ...portable, title: 'Edited' }, theme.id, theme.revision);
+  expect(updated.statusCode, updated.body).toBe(200);
+  expect(updated.json().saved.storyUi).toEqual(model.storyUi);
+  expect((await save(portable, theme.id, theme.revision)).statusCode).toBe(409);
+
+  selectTheme(app.store, {
+    scope: 'bot',
+    targetId: bot.id,
+    themeId: 'builtin:letter',
+    expectedRevision: 0,
+  });
+  selectTheme(app.store, {
+    scope: 'global',
+    dimension: 'palette',
+    paletteId: 'cream',
+    expectedRevision: 1,
+  });
+  const original = await app.inject('/api/themes');
+  const choose = (
+    themeId: string | null,
+    expectedRevision: number,
+    targetId = bot.id,
+    scope = 'bot'
+  ) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/themes/selection',
+      payload: { dimension: 'storyUi', scope, targetId, themeId, expectedRevision },
+    });
+  expect((await choose(theme.id, 2, bot.id, 'global')).statusCode).toBe(400);
+  expect((await choose(theme.id, 2, chat.id, 'chat')).statusCode).toBe(400);
+  expect((await choose(theme.id, 2, persona.id)).statusCode).toBe(400);
+  expect((await choose(DEFAULT_THEME_ID, 2)).statusCode).toBe(400);
+  const selected = await choose(theme.id, 2);
+  expect(selected.statusCode, selected.body).toBe(200);
+  expect(selected.json()).toMatchObject({
+    revision: 3,
+    botStoryUiThemes: { [bot.id]: theme.id },
+    botThemes: { [bot.id]: 'builtin:letter' },
+    defaultPaletteId: 'cream',
+  });
+  const changed = await app.inject({
+    url: '/api/themes',
+    headers: { 'if-none-match': String(original.headers.etag) },
+  });
+  expect(changed.statusCode).toBe(200);
+  expect(changed.json().preferences).toEqual(selected.json());
+  expect((await choose(null, 2)).statusCode).toBe(409);
+  expect((await choose(null, 3)).json().botStoryUiThemes).toEqual({});
+  expect((await choose(theme.id, 4)).statusCode).toBe(200);
+  expect((await choose(imported.id, 5, otherBot.id)).statusCode).toBe(200);
+  deleteTheme(app.store, theme.id, updated.json().saved.revision);
+  const preferences = themePreferences(app.store);
+  expect(preferences.botStoryUiThemes).toEqual({ [otherBot.id]: imported.id });
+  expect(preferences).toMatchObject({
+    botThemes: { [bot.id]: 'builtin:letter' },
+    defaultPaletteId: 'cream',
+  });
+  expect(app.store.chat(chat.id).settings).toEqual(chat.settings);
+  expect(app.store.chat(chat.id).settingsRevision).toBe(chat.settingsRevision);
+});
+
 describe('Theme catalog revalidation', () => {
   const owners: { directory: string; store: Store; app?: App }[] = [];
 

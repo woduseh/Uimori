@@ -41,6 +41,7 @@ import {
   updateIllustrationReferences,
 } from '../server/illustrations.js';
 import { remapIllustrationPackageReferences } from '../server/illustration-reference-copy.js';
+import { saveChatGenerationDefaults } from '../server/chat-generation-defaults.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -210,7 +211,12 @@ test('chat archive restores authored resources without execution and recovers re
     },
   ];
   const chat = importChatTranscript(source, { transcript, idempotencyKey: 'source-chat' }).chat;
-  source.settings(chat.id, chat.settingsRevision, { ...chat.settings, storyUi: true });
+  const originalSettings = {
+    maxCalls: 128,
+    storyUi: true,
+    storyUiStyle: 'theme:archive-theme',
+  } as const;
+  source.settings(chat.id, chat.settingsRevision, originalSettings);
   const image = readImage(source.db, original.package.images![0].blobHash);
   source.transaction(() =>
     restoreIllustrations(source, source.history(chat.headRevision), [
@@ -224,6 +230,12 @@ test('chat archive restores authored resources without execution and recovers re
   );
   const archive = await bytes(exportChatBackupArchive(source, chat.id)),
     target = database();
+  saveChatGenerationDefaults(target, {
+    expectedRevision: 0,
+    maxCalls: 1,
+    storyUi: false,
+    storyUiStyle: 'modern',
+  });
   const preview = await prepareNativeArchive(target, upload(target, archive), 'chat');
   expect(preview.backup?.title).toBe('Archive conversation');
   const command = {
@@ -234,7 +246,7 @@ test('chat archive restores authored resources without execution and recovers re
   const restored = importChatBackupArchiveRequest(target, command);
   expect(restored.chat.title).toBe(chat.title);
   expect(restored.chat.id).not.toBe(chat.id);
-  expect(restored.chat.settings.storyUi).toBe(true);
+  expect(restored.chat.settings).toEqual(originalSettings);
   expect(target.history(restored.chat.headRevision)[0].text).toBe(transcript.entries[0].text);
   expect(target.db.prepare('SELECT count(*) AS n FROM illustration_images').get()!.n).toBe(1);
   const illustration = target.db.prepare('SELECT hash,body FROM illustration_images').get()!;

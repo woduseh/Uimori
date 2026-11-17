@@ -272,6 +272,7 @@ function App() {
       event.currentTarget.closest('.chat-menu')?.querySelector<HTMLElement>('summary') ?? null;
   };
   const [settingsTab, setSettingsTab] = useState<string | undefined>();
+  const [storyUiThemeTarget, setStoryUiThemeTarget] = useState<{ botId: string; title: string }>();
   const [promptToEdit, setPromptToEdit] = useState<string | null>(null);
   const [helperResource, setHelperResource] = useState<HelperResourceRef | null>(null);
   const clearHelperResource = useCallback(() => setHelperResource(null), []);
@@ -355,6 +356,9 @@ function App() {
   const optionsButton = useRef<HTMLButtonElement>(null);
   const requestImageInput = useRef<HTMLInputElement>(null);
   const [panel, setPanel] = useState<Panel>('');
+  useEffect(() => {
+    if (panel !== 'settings') setStoryUiThemeTarget(undefined);
+  }, [panel]);
   const [searchingChats, setSearchingChats] = useState(false);
   const searchOpener = useRef<HTMLElement | null>(null);
   const openChatSearch = () => {
@@ -804,6 +808,13 @@ function App() {
         if (!chatId) throw new Error(uiMessage('helperResults.openFailed'));
         s.openTarget({ chatId, sourceId: target.id, representation: 'original' });
         setPanel('');
+      } else if (target.kind === 'settings' && target.setting?.startsWith('newChat.')) {
+        setSettingsTab('general');
+        setPanel('settings');
+      } else if (target.kind === 'settings' && target.setting === 'bot.storyUiTheme') {
+        setStoryUiThemeTarget({ botId: target.id, title: target.title });
+        setSettingsTab('themes');
+        setPanel('settings');
       } else if (target.kind === 'settings' && target.setting?.startsWith('chat.')) {
         if (s.selected !== target.id || s.destination !== 'story') s.select(target.id);
         setSettingsSection(
@@ -2856,6 +2867,7 @@ function App() {
             settingsReturnToNew.current = false;
           }}
           initialTab={settingsTab}
+          storyUiThemeTarget={storyUiThemeTarget}
           state={s}
           theme={theme}
           setTheme={setTheme}

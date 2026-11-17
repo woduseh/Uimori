@@ -2,6 +2,7 @@
 
 | Responsibility | Entry points | Current contract |
 | --- | --- | --- |
+| New-chat generation defaults and per-chat call limits | `core/chat-settings.ts`, `server/chat-generation-defaults.ts`, `server/store.ts`, `web/ChatGenerationDefaults.tsx`, `web/RuntimeSettings.tsx` | [Context limits](CONTEXT-LIMITS.md#새-채팅-생성-기본값) |
 | UI language, retained messages and localized display formats | `web/i18n.ts`, `web/LanguageSelect.tsx`, `web/locales/`, `web/api-errors.ts`, `web/pwa.ts`, `web/public/sw.js` | [UI language](I18N.md) |
 | Composition, writing briefs and source-linked review | `core/outline.ts`, `server/outline-read.ts`, `server/outline-store.ts`, `server/outline-routes.ts`, `web/OutlinePanel.tsx` | [Outline workspace](OUTLINE.md) |
 | Optional automatic original-work reference and helper Q&A context | `core/story-guide.ts`, `server/story-guide-store.ts`, `server/story-guide-runtime.ts`, `server/story-guide-routes.ts`, `server/helper-context.ts`, `web/StoryGuidePanel.tsx` | [Original-work reference](STORY-GUIDE.md) |

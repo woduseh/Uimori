@@ -2,6 +2,7 @@ import { illustrationPresetCatalog, deleteIllustrationPreset } from './illustrat
 import { emptyIllustrationPreset } from '../core/illustration-presets.js';
 import { themeCatalog, deleteTheme } from './themes.js';
 import { THEME_COLOR_KEYS, THEME_SLOTS, BUILTIN_THEMES, themeDefinition } from '../core/themes.js';
+import { storyUiStyles } from '../core/story-ui-style.js';
 import type { ProviderTool } from '../core/transport.js';
 import type { ResourceKind, ResourceModel } from '../core/resource-editing.js';
 import { editableResource } from '../core/resource-editing.js';
@@ -33,7 +34,7 @@ const readSelection = {
   includeBodies: { type: 'boolean' },
 };
 const patchProperties = {
-  kind: { type: 'string', enum: ['content', 'prompt-preset'] },
+  kind: { type: 'string', enum: ['content', 'prompt-preset', 'theme'] },
   id: string,
   expectedRevision: revision,
   changes: {
@@ -92,14 +93,14 @@ const resourceTools: ResourceToolDefinition[] = [
     name: 'theme.list',
     effect: 'read',
     description:
-      'List available themes and palettes with compact metadata, current selections and preference revision. Read theme styles/colors with resource.read kind=theme and palette colors with palette.list.',
+      'List themes and palettes with compact metadata, current selections (including botStoryUiThemes) and preference revision. Themes with storyUi.baseStyle can style Story UI. Read CSS or colors with resource.read kind=theme and palette colors with palette.list.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'theme.guide',
     effect: 'read',
     description:
-      'Read the theme authoring contract and example before editing. Save with resource.save kind=theme; selecting it is separate.',
+      'Read the Story UI theme and Reader theme authoring contracts and examples. To create a Story UI theme for a bot, read its authored content and save with resource.save kind=theme. Apply only when requested.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
@@ -167,7 +168,7 @@ const resourceTools: ResourceToolDefinition[] = [
     effect: 'mutation',
     target: resourceTarget,
     description:
-      'Edit native card/module or prompt-preset fields at expectedRevision. set changes simple typed fields; replaceText changes one unique exact excerpt, falling back only to CRLF/LF-equivalent matching when no exact match exists. It preserves text outside the matched span and reports normalization. /title and the native preset name are independent. insert/remove use indexed lore, translationGuide/terms or promptTemplate paths; move is only within promptTemplate, destination indexed AFTER removal. Ordinary paths run sequentially. For an existing item use its read target (original full item path) plus relative path, e.g. target=.../promptTemplate/2, path=/text. target remains attached across earlier moves/inserts/deletes; remove with target uses path="". Only set/replaceText/remove accept target; a removed target fails. Set source.translationGuidePath to a complete {instructions,terms} guide. For shared bot/persona appearance defaults, set source.appearanceProfilesPath to the full array of {id,name,appearance,referenceImageId?}; use resource.read on the explicit content target first. Toggle definition edits reconcile inherited invalid/retired values and report resetKeys/removedKeys; explicitly supplied invalid values still fail. All changes validate and save together with one undo; failure saves nothing and identifies the change. Projection/identity/asset fields remain read only.',
+      'Edit native card/module, prompt-preset or Story UI theme fields at expectedRevision. For kind=theme use set at /storyUi with the complete {baseStyle,css}, or set/replaceText on its existing /storyUi/baseStyle and /storyUi/css fields. set changes simple typed fields; replaceText changes one unique exact excerpt, falling back only to CRLF/LF-equivalent matching when no exact match exists. It preserves text outside the matched span and reports normalization. /title and the native preset name are independent. insert/remove use indexed lore, translationGuide/terms or promptTemplate paths; move is only within promptTemplate, destination indexed AFTER removal. Ordinary paths run sequentially. For an existing item use its read target (original full item path) plus relative path, e.g. target=.../promptTemplate/2, path=/text. target remains attached across earlier moves/inserts/deletes; remove with target uses path="". Only set/replaceText/remove accept target; a removed target fails. Set source.translationGuidePath to a complete {instructions,terms} guide. For shared bot/persona appearance defaults, set source.appearanceProfilesPath to the full array of {id,name,appearance,referenceImageId?}; use resource.read on the explicit content target first. Toggle definition edits reconcile inherited invalid/retired values and report resetKeys/removedKeys; explicitly supplied invalid values still fail. All changes validate and save together with one undo; failure saves nothing and identifies the change. Projection/identity/asset fields remain read only.',
     inputSchema: {
       type: 'object',
       properties: patchProperties,
@@ -235,7 +236,7 @@ const resourceTools: ResourceToolDefinition[] = [
     effect: 'mutation',
     target: resourceTarget,
     description:
-      'Create an application resource, or save a complete editable model for kinds without partial editing. Use resource.clone to copy saved content or a prompt preset. For existing native card/module or prompt-preset edits use resource.patch so unrelated fields stay intact. Use latest revision for existing IDs; omit id/revision to create. There is no server draft or separate apply step. A draft/proposal request does not authorize saving.',
+      'Create an application resource or save a complete editable model. For new Story UI themes use the storyUi example from theme.guide. Saving a theme and applying it with theme.select are separate. Use resource.clone to copy saved content or a prompt preset. For edits to native card/module, prompt-preset or an existing theme’s Story UI fields use resource.patch to preserve other fields. Use latest revision for existing IDs; omit id/revision to create. A draft/proposal request does not authorize saving.',
     inputSchema: {
       type: 'object',
       properties: { kind, id: string, expectedRevision: revision, model: { type: 'object' } },
@@ -361,11 +362,12 @@ export function invokeResourceTool(
   if (name === 'theme.list') {
     const catalog = themeCatalog(store);
     return {
-      themes: catalog.themes.map(({ id, revision, title, description }) => ({
+      themes: catalog.themes.map(({ id, revision, title, description, storyUi }) => ({
         id,
         revision,
         title,
         description,
+        ...(storyUi ? { storyUi: { baseStyle: storyUi.baseStyle } } : {}),
       })),
       palettes: catalog.palettes?.map((palette) => ({
         id: palette.id,
@@ -382,6 +384,20 @@ export function invokeResourceTool(
       slots: THEME_SLOTS,
       optionalSlots: ['portrait', 'request-persona'],
       example: themeDefinition(BUILTIN_THEMES[1]),
+      storyUi: {
+        baseStyles: storyUiStyles,
+        example: {
+          title: 'Moonlit archive',
+          description: 'Lavender paper and dark violet ink for an occult archive.',
+          storyUi: {
+            baseStyle: 'fantasy',
+            css: '& { --story-paper: #f1ebf3; --story-surface: #fffbff; --story-ink: #292132; --story-border: #927d9c; --story-accent: #583a6c; } .story-ui-tabs { border-bottom: 1px solid var(--story-border); }',
+          },
+        },
+        workflow:
+          'For the current chat, use the id of the role=bot item in writing.packages. In library scope, use the captured bot editor target or discover the requested bot with data.search scope=library and output=documents. Use resource.read kind=content with that ID, then follow source.path and read the authored description, personality, scenario or other relevant paths. Base the theme on those details and the user’s request. Save using resource.save kind=theme, with model shaped like the example. For existing themes, use current revision and resource.patch to preserve unrelated CSS and layout. When asked to apply for a bot, use theme.list preference revision and theme.select with dimension=storyUi, scope=bot, targetId=bot ID and themeId=saved theme ID. A bot default applies to its chats with auto style. For an explicit current-chat override, use settings.update for chat.storyUiStyle with theme:<theme ID>; auto follows the bot default or model choice. Previews and proposals do not authorize saving or selection.',
+        css: 'Use & for the Story UI panel and the .story-ui-tabs, .story-ui-field, .story-ui-table and .story-ui-chart hooks for its contents. On non-default base styles, --story-paper, --story-surface, --story-ink, --story-border, --story-accent, --story-radius and --story-font control the shared skin. SDK components also inherit --a2ui-color-background, --a2ui-color-on-background, --a2ui-color-surface, --a2ui-color-on-surface, --a2ui-color-border, --a2ui-color-primary, --a2ui-color-on-primary, --a2ui-color-input, --a2ui-color-on-input, --a2ui-border-radius and --a2ui-font-family-title. Use ordinary style rules and @media/@supports, with legible contrast, focus indicators and responsive sizing. Styles only affect the rendered Story UI panel. The renderer ignores global at-rules such as @import, @font-face and @property. Use registered font families and CSS only.',
+      },
       contract:
         'Save with resource.save kind=theme. title required. colors.light/dark map the documented names without -- to hex colors. appCss styles the app; messageCss is a low-priority layer in each Risu message ShadowRoot. templateHtml needs exactly one native slot for each name: request, heading, body, actions; templateCss styles that layout ShadowRoot. Optional single portrait and request-persona slots project app-owned portraits and zoom controls; request-persona belongs beside submitted user input. An optional data-uimori-body-scroll marker on the body slot opts into bounded inner scrolling with reading/navigation support. Do not hardcode character URLs. Empty HTML uses the default. No JavaScript or CBS in themes. Preserve reading preferences and bot HTML. Use responsive CSS. Stable data-uimori-part hooks: scene, scene-frame, request, heading, body, actions, composer-input, scene-portraits, portrait-group, bot-portrait, persona-portrait. Layout and palette selection are independent server preferences; saved theme colors remain portable. External images remain URL references; data URLs travel with JSON. Saving does not select. Use palette.list/save for independent color presets, font.list/register for named public HTTPS font files, and theme.select or font.select only when application is explicitly requested. A preview/proposal alone is not a save or apply request. Full guide: docs/THEME-AUTHORING.md.',
     };

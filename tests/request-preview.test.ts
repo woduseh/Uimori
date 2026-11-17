@@ -10,6 +10,7 @@ import * as transport from '../core/transport.js';
 import { createApp, type App } from '../server/app.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
 import { contextSourceRefs } from '../server/context-planning.js';
+import * as mainRequest from '../server/main-request.js';
 import {
   modelWorkspace,
   promptWorkspace,
@@ -19,6 +20,7 @@ import {
 import { freezeReservationSnapshot } from '../server/reservation-snapshot.js';
 import * as nativeRun from '../server/risu-native-run.js';
 import * as nativeRuntime from '../server/risu-native-runtime.js';
+import { saveTheme, selectTheme } from '../server/themes.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
 
@@ -133,6 +135,84 @@ async function fixture(withModel = true) {
   const changes = () => store.db.prepare('SELECT total_changes() AS count').get()!.count;
   return { app, store, chat, model, modelInput, connection, bot, post, preview, changes };
 }
+
+test('reservations and request previews present frozen story UI theme choices without CSS', async () => {
+  const f = await fixture();
+  const chat = f.store.settings(f.chat.id, f.chat.settingsRevision, {
+    ...f.chat.settings,
+    storyUi: true,
+  });
+  const theme = saveTheme(f.store, {
+    title: 'Harbor Gazette',
+    description: 'Paper notices from a coastal city',
+    appCss: '/* PRIVATE_APP_STYLE */',
+    storyUi: { baseStyle: 'period', css: '/* PRIVATE_STORY_UI_STYLE */' },
+  });
+  saveTheme(f.store, { title: 'App layout only' });
+  selectTheme(f.store, {
+    scope: 'bot',
+    targetId: f.bot.id,
+    dimension: 'storyUi',
+    themeId: theme.id,
+    expectedRevision: 0,
+  });
+  const { run } = f.store.createRun(
+    chat.id,
+    {
+      request: 'Visit the harbor.',
+      expectedRevision: chat.headRevision,
+      expectedSettingsRevision: chat.settingsRevision,
+      idempotencyKey: randomUUID(),
+    },
+    (current) => {
+      const profile = f.store.product.snapshot(current.id, 'main', current.headRevision);
+      return {
+        chatId: current.id,
+        parentRevision: current.headRevision,
+        settingsRevision: current.settingsRevision,
+        settings: current.settings,
+        request: 'Visit the harbor.',
+        history: f.store.history(current.headRevision),
+        resources: f.store.product.resources(current.id, profile),
+        profile,
+      };
+    }
+  );
+  const choices = {
+    themes: [
+      {
+        id: `theme:${theme.id}`,
+        title: theme.title,
+        description: theme.description,
+        baseStyle: 'period',
+      },
+    ],
+    botThemeId: `theme:${theme.id}`,
+  };
+  expect(run.snapshot.storyUiThemeChoices).toEqual(choices);
+  expect(JSON.stringify(run.snapshot)).not.toContain('PRIVATE_STORY_UI_STYLE');
+  const prepare = nativeRun.prepareNativeRisuRun;
+  vi.spyOn(nativeRun, 'prepareNativeRisuRun').mockImplementationOnce(async (...args) => {
+    const result = await prepare(...args);
+    saveTheme(f.store, { ...theme, title: 'New Gazette' }, theme.id, theme.revision);
+    return result;
+  });
+  const buildRequest = vi.spyOn(mainRequest, 'buildMainProviderRequest');
+  const preview = await f.preview();
+  expect(preview.error).toBeNull();
+  expect(preview.snapshot.stale).toBe(true);
+  expect(preview.caveats).toContain('SNAPSHOT_CHANGED');
+  const built = buildRequest.mock.results[0].value;
+  expect(built.snapshot.storyUiThemeChoices).toEqual(choices);
+  expect(built.request.input.source).toMatchObject({ storyUi: { themeChoices: choices } });
+  expect(built.request.stable.contract).toContain('storyUi.themeChoices');
+  expect(built.request.stable.contract).not.toContain(theme.title);
+  const wire = mainRequest.encodeMainPreview(built.request, built.snapshot.profile!.models.main!);
+  const serialized = JSON.stringify(wire.body);
+  expect(serialized).toContain(`theme:${theme.id}`);
+  expect(serialized).not.toMatch(/PRIVATE_(APP|STORY_UI)_STYLE/);
+  expect(f.store.run(run.id).snapshot.storyUiThemeChoices).toEqual(choices);
+});
 
 test('current preview is metadata only, with no writes, provider calls or native callbacks', async () => {
   const f = await fixture();

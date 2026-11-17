@@ -109,7 +109,7 @@ for (const width of [1440, 412]) {
     await page.getByRole('button', { name: '새 커스텀 테마', exact: true }).click();
     await page.getByLabel('테마 이름', { exact: true }).fill(name);
     await page.getByLabel('테마 설명', { exact: true }).fill('Synthetic portable theme');
-    await page.getByLabel('light accent 색상', { exact: true }).fill('#663399');
+    await page.getByLabel('밝은 색 강조 색상', { exact: true }).fill('#663399');
     await page.getByLabel('테마 이름', { exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: info.outputPath(`theme-custom-editor-${width}.png`) });
     await page.getByText('CSS와 HTML 직접 편집', { exact: true }).click();
@@ -434,7 +434,7 @@ for (const width of [1440, 412]) {
     await memo.evaluate((element) => element.setAttribute('data-stable-node', 'palette'));
     await page.getByRole('button', { name: '새 커스텀 테마', exact: true }).click();
     await page.getByLabel('테마 이름', { exact: true }).fill('Unchanged local palette draft');
-    await page.getByLabel('light accent 색상', { exact: true }).fill('#663399');
+    await page.getByLabel('밝은 색 강조 색상', { exact: true }).fill('#663399');
     for (const palette of BUILTIN_PALETTES) {
       const choice = page.getByRole('button', {
         name: `${palette.title} 팔레트 적용`,
@@ -450,7 +450,7 @@ for (const width of [1440, 412]) {
       await expect(page.getByLabel('테마 이름', { exact: true })).toHaveValue(
         'Unchanged local palette draft'
       );
-      await expect(page.getByLabel('light accent 색상', { exact: true })).toHaveValue('#663399');
+      await expect(page.getByLabel('밝은 색 강조 색상', { exact: true })).toHaveValue('#663399');
       expect(await page.evaluate(() => localStorage.getItem('uimori:theme'))).toBe('light');
     }
     await page.getByRole('button', { name: '차콜 팔레트 적용', exact: true }).click();

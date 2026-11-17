@@ -1,8 +1,13 @@
 import { HELPER_PRICING_TOOLS, invokeHelperPricingTool } from './helper-pricing-tools.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import type { Settings } from '../core/types.js';
-import { normalizeChatSettings } from '../core/chat-settings.js';
-import { storyUiStyles } from '../core/story-ui-style.js';
+import {
+  MAX_MAIN_MODEL_CALLS,
+  normalizeChatSettings,
+  type ChatGenerationDefaults,
+} from '../core/chat-settings.js';
+import { chatGenerationDefaults, saveChatGenerationDefaults } from './chat-generation-defaults.js';
+import { isStoryUiThemeSetting, storyUiStyles } from '../core/story-ui-style.js';
 import type { Connection, ModelPreset, WorkspaceModelRole } from '../core/product.js';
 import { workspaceModelRef } from '../core/product.js';
 import {
@@ -18,6 +23,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { HelperTask, HelperTaskResultTarget } from '../core/helper.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
+import { readTheme } from './themes.js';
 
 const schema = (properties: Record<string, Json>, required: string[] = []): Json => ({
   type: 'object',
@@ -33,6 +39,9 @@ const settings = [
   'chat.maxCalls',
   'chat.storyUi',
   'chat.storyUiStyle',
+  'newChat.maxCalls',
+  'newChat.storyUi',
+  'newChat.storyUiStyle',
 ] as const;
 
 export const HELPER_SETTINGS_TOOLS: ProviderTool[] = [
@@ -46,12 +55,12 @@ export const HELPER_SETTINGS_TOOLS: ProviderTool[] = [
   {
     name: 'settings.read',
     description:
-      'Read compact global and selected-chat model and prompt references, pinned versus effective selections, chat call limit, story UI enablement/style, and the revisions needed to update them. Prompt bodies and credentials are omitted.',
+      'Read compact global and selected-chat model and prompt references, pinned versus effective selections, chat call limit, story UI enablement/style, new-chat creation defaults and the revisions needed to update them. Prompt bodies and credentials are omitted.',
     inputSchema: schema({}),
   },
   {
     name: 'settings.update',
-    description: `Change one requested setting using the revision from settings.read. Global model targets accept a saved model ID or null; chat.mainModel and chat.mainPromptPreset accept an ID or null; chat.maxCalls accepts an integer from 1 to 32. chat.storyUi accepts a boolean; chat.storyUiStyle accepts auto (model chooses each screen) or ${storyUiStyles.join(', ')}. Use chat.settingsRevision for these chat generation settings. Global choices affect future requests across chats; reserved jobs keep their frozen models. Existing services preserve unrelated settings. The selected chat is required for chat targets.`,
+    description: `Change one requested setting using the revision from settings.read. Global model targets accept a saved model ID or null; chat.mainModel and chat.mainPromptPreset accept an ID or null; chat.maxCalls accepts an integer from 1 to ${MAX_MAIN_MODEL_CALLS}. chat.storyUi accepts a boolean; chat.storyUiStyle accepts auto (follow bot default or model choice), ${storyUiStyles.join(', ')}, or theme:<saved theme ID> from theme.list. Use theme.select for a bot-wide Story UI default. Use chat.settingsRevision for chat settings. newChat.maxCalls, newChat.storyUi and newChat.storyUiStyle use the same values with newChat.revision, require no selected chat, and only change defaults copied into newly created chats; existing chats, copies and imports retain their settings. Global model choices affect future requests across chats; reserved jobs keep their frozen models. Existing services preserve unrelated settings.`,
     inputSchema: schema(
       {
         setting: { type: 'string', enum: [...settings] },
@@ -81,6 +90,13 @@ function settingValue(
   setting: string,
   chatId?: string
 ): string | number | boolean | null {
+  if (setting.startsWith('newChat.')) {
+    const key = setting.slice('newChat.'.length) as Exclude<
+      keyof ChatGenerationDefaults,
+      'revision'
+    >;
+    return chatGenerationDefaults(store.db)[key];
+  }
   if ((settings as readonly string[]).includes(setting) && setting.startsWith('global.')) {
     const role = setting.slice('global.'.length, -'Model'.length) as WorkspaceModelRole;
     return workspaceModelRef(promptWorkspace(store), role)?.id ?? null;
@@ -96,9 +112,12 @@ function settingValue(
 }
 
 function selectionLabel(store: Store, setting: string, value: string | number | boolean | null) {
-  if (setting === 'chat.storyUiStyle') return undefined;
   if (typeof value !== 'string') return value === null ? null : undefined;
   try {
+    if (setting === 'chat.storyUiStyle' || setting === 'newChat.storyUiStyle')
+      return isStoryUiThemeSetting(value)
+        ? readTheme(store, value.slice('theme:'.length)).title
+        : undefined;
     return store.product.get<{ title: string }>(
       setting === 'chat.mainPromptPreset' ? 'prompt-preset' : 'model',
       value
@@ -156,8 +175,12 @@ export function applyHelperSettingsMutation(
       : [
           {
             kind: 'settings',
-            id: setting.startsWith('global.') ? 'global' : chatId!,
-            title: setting.startsWith('global.') ? '공통 설정' : store.chat(chatId!).title,
+            id:
+              setting.startsWith('global.') || setting.startsWith('newChat.') ? 'global' : chatId!,
+            title:
+              setting.startsWith('global.') || setting.startsWith('newChat.')
+                ? '공통 설정'
+                : store.chat(chatId!).title,
             revision: result.revision,
             setting,
             before,
@@ -218,6 +241,7 @@ export function invokeHelperSettingsTool(
       modelRoles.map((role) => [role, workspaceModelRef(global, role)])
     );
     const result = {
+      newChat: chatGenerationDefaults(store.db),
       global: {
         revision: global.revision,
         models,
@@ -272,6 +296,20 @@ export function invokeHelperSettingsTool(
   if (!(settings as readonly string[]).includes(setting))
     throw new HttpError(400, 'INVALID_SETTING');
   const expectedRevision = number(args.expectedRevision, 'settings revision', 0);
+  if (setting.startsWith('newChat.')) {
+    const key = setting.slice('newChat.'.length) as Exclude<
+      keyof ChatGenerationDefaults,
+      'revision'
+    >;
+    const current = chatGenerationDefaults(store.db);
+    const { revision: _revision, ...values } = current;
+    const updated = saveChatGenerationDefaults(store, {
+      ...values,
+      [key]: args.value,
+      expectedRevision,
+    });
+    return { setting, revision: updated.revision, value: updated[key] };
+  }
   if (setting.startsWith('global.')) {
     if (args.value !== null && typeof args.value !== 'string')
       throw new HttpError(400, 'INVALID_MODEL_ID');
@@ -324,7 +362,9 @@ export function invokeHelperSettingsTool(
   const chat = store.chat(chatId);
   if (
     setting === 'chat.maxCalls' &&
-    (!Number.isSafeInteger(args.value) || Number(args.value) < 1 || Number(args.value) > 32)
+    (!Number.isSafeInteger(args.value) ||
+      Number(args.value) < 1 ||
+      Number(args.value) > MAX_MAIN_MODEL_CALLS)
   )
     throw new HttpError(400, 'INVALID_MAX_CALLS');
   const key = setting.slice('chat.'.length) as keyof Settings;

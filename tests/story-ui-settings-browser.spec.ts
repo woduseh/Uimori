@@ -88,9 +88,12 @@ test('STORYUI generated source renders in the compiled app and submits a short c
   );
   await page.locator('.story-ui').getByRole('button', { name: '편지 답장', exact: true }).click();
   await expect(
-    page.locator('.story-ui').getByRole('radio', { name: '이 대화만 이어가기', exact: true })
+    page.locator('.story-ui-block').getByRole('radio', { name: '이 대화만 이어가기', exact: true })
   ).toBeChecked();
-  await page.locator('.story-ui').getByRole('button', { name: '보내기', exact: true }).click();
+  await page
+    .locator('.story-ui-block')
+    .getByRole('button', { name: '보내기', exact: true })
+    .click();
   await expect
     .poll(async () => (await read()).chat.headRevision)
     .not.toBe(before.chat.headRevision);

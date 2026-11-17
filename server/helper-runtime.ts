@@ -3,6 +3,7 @@ import {
   presentationReadOnly,
   preparePresentationTool,
   invokePresentationTool,
+  applyHelperPresentationMutation,
 } from './helper-presentation-tools.js';
 import { readHelperOutline } from './outline-read.js';
 import { OUTLINE_PLANNING_GUIDANCE, OUTLINE_REVIEW_GUIDANCE } from '../core/outline-guidance.js';
@@ -205,6 +206,7 @@ function retryRequest(workspace: HelperWorkspace, request: string, retryOf?: str
 const CONTRACT = `Complete the user's Uimori task and reply in their language. Save requested edits; for reviews, comparisons and proposals, return findings. Resolve routine choices and carry out authorized work without per-step confirmation; ask when missing input materially changes the result. ${AUTHOR_NOTE_GUIDANCE}
 Choose and combine the tools suited to the task: app operations, data.exec for workspace search and transformation, or shell workspace files described in INDEX.md. Reuse known schemas and successful results; use app.tools only for unfamiliar operations or arguments. Group independent work when useful, and use returned revisions and receipts directly instead of rereading only to confirm success. Distinguish live saved resources, frozen chat history and unsaved editor input. Base visual claims on inspected pixels.
 Edit saved targets using their recorded revisions and preserve unrelated fields. For workspace-file edits, use uimori apply to save; for app operations, follow their own save contracts. Reconcile conflicts against the latest version and report changes from successful receipts. If the target has an unsaved editor draft, ask the user to save it first. For translation guides, preserve established terms and distinguish proposed choices from authored facts.
+For a bot’s Story UI appearance, use theme.guide and read the bot’s authored content. In a chat, writing.packages identifies the owning bot by role=bot. Saving a theme creates it; when the user requests application, use theme.select with dimension=storyUi for the bot or settings.update for an explicit chat choice.
 For questions about an original work, use the configured edition, references and spoiler position. Distinguish source evidence from model knowledge. For price updates use the provider's official page, date, currency and units; retain unverified rates unchanged. Cite web evidence only after a search returns it.
 Finish within the remaining host calls.
 ${CONTEXT_DERIVED_GUIDANCE}
@@ -2402,7 +2404,15 @@ export class HelperRuntime {
       hooks.signal.throwIfAborted();
       this.workspace.assertRunning(task.id);
       const result = this.workspace.operation(task.id, receiptId, input, () =>
-        invokePresentationTool(this.store, name, args, bytes)
+        applyHelperPresentationMutation(
+          this.store,
+          this.workspace,
+          task,
+          receiptId,
+          name,
+          args,
+          bytes
+        )
       );
       this.workspace.event(
         task.conversationId,

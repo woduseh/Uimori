@@ -11,6 +11,7 @@ import { readHelperEditor } from '../server/helper-resource-editing.js';
 import { HelperResourcePatchError } from '../server/helper-resource-patch-error.js';
 import { invokeResourceTool } from '../server/helper-resource-tools.js';
 import { Store } from '../server/store.js';
+import { readTheme } from '../server/themes.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 
 const owned: { store: Store; path: string }[] = [];
@@ -77,6 +78,34 @@ function presetFixture(blocks: Record<string, unknown>[]) {
   }) as PromptPreset;
   return { store, preset, target: { kind: 'prompt-preset', id: preset.id } };
 }
+
+test('patching and undoing a Story UI style preserves the theme’s existing Reader CSS', () => {
+  const { store } = fixture();
+  const appCss = '.reader { padding-inline: 16px; }';
+  const { id, revision } = call(store, 'resource.save', {
+    kind: 'theme',
+    model: { title: 'Reader theme', appCss },
+  });
+  const css = '& { --story-paper: #f3ead5; }';
+  const added = call(store, 'resource.patch', {
+    kind: 'theme',
+    id,
+    expectedRevision: revision,
+    changes: [{ path: '/storyUi', op: 'set', value: { baseStyle: 'fantasy', css } }],
+  });
+  const updated = call(store, 'resource.patch', {
+    kind: 'theme',
+    id,
+    expectedRevision: added.revision,
+    changes: [{ path: '/storyUi/css', op: 'replaceText', oldText: '#f3ead5', newText: '#e9dec8' }],
+  });
+  expect(readTheme(store, id)).toMatchObject({
+    appCss,
+    storyUi: { baseStyle: 'fantasy', css: '& { --story-paper: #e9dec8; }' },
+  });
+  call(store, 'resource.undo', { kind: 'theme', id, expectedRevision: updated.revision });
+  expect(readTheme(store, id)).toMatchObject({ appCss, storyUi: { baseStyle: 'fantasy', css } });
+});
 
 test('captured unsaved editor uses bounded typed paths while preserving its original revision', () => {
   const { store, content } = fixture(true);

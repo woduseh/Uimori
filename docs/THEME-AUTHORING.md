@@ -47,6 +47,31 @@ Uimori 테마는 **화면 표현만 바꾸는 독립 자료**예요. 이야기 �
 
 ## 내장 레이아웃과 특징
 
+### 이야기 UI 테마
+
+테마 자료에는 앱 레이아웃과 별개인 `storyUi`를 추가할 수 있어요. 기존 테마 편집기의 **이야기 UI 테마 포함**을 켜고 기반 스타일과 CSS를 작성해요. 기반 스타일은 `default`, `east-asian`, `fantasy`, `modern`, `period`, `blue-archive` 중 하나예요.
+
+```json
+{
+  "title": "별빛 관측소",
+  "description": "은은한 보라색 기록판과 둥근 입력란",
+  "storyUi": {
+    "baseStyle": "modern",
+    "css": "& { --story-paper: #efe5fb; --story-ink: #35234b; --story-accent: #69418a; } .story-ui-field input { border-radius: 12px; }"
+  }
+}
+```
+
+위 내용은 테마 모델의 예시예요. 공유 파일은 기존 `{ "format": "uimori-theme", "version": 1, "theme": ... }` 형식을 사용하며, 앱 색상·CSS·레이아웃 필드가 있는 기존 테마에 이야기 UI 확장을 함께 보관할 수도 있어요.
+
+CSS는 패널 안에 중첩해서 적용돼요. **`&`는 패널 자체**, 일반 선택자는 패널 안의 요소를 뜻해요. `@media`와 `@supports`로 반응형 규칙을 만들 수 있어요. 전역 글꼴 선언이나 스크립트 대신 등록된 글꼴의 이름과 CSS를 사용해요. 앱의 전송 확인·취소 조작부에는 이 CSS를 적용하지 않아요.
+
+- 공통 변수: `--story-paper`, `--story-surface`, `--story-ink`, `--story-border`, `--story-accent`, `--story-font`, `--story-radius`
+- 요소 선택자: `.story-ui-tabs`, `.story-ui-field`, `.story-ui-table`, `.story-ui-chart`, `button`, `input`, `textarea`, `figure`, `figcaption`
+- SDK 내부 구성 요소: `--a2ui-color-*`, `--a2ui-border-radius`, `--a2ui-font-family-title`, `--a2ui-text-color-text` 등 상속되는 SDK CSS 변수를 사용해요. 외부 선택자는 SDK Shadow DOM 안으로 들어가지 않아요.
+
+저장과 적용은 별개예요. 봇 기본값은 해당 봇에만 적용되고, 채팅의 명시 스타일이 있으면 채팅 선택을 우선해요. **봇 기본값 또는 자동**에서는 봇 테마, 모델의 화면별 스타일, 기본 스타일 순으로 선택해요. 테마는 현재 저장본으로 표시되며 수정해도 원고 원문은 바뀌지 않아요. [사용 흐름](STORY-UI.md#봇을-위한-사용자-테마)
+
 내장 레이아웃은 긴 원고를 몰입감 있게 읽을 수 있도록 각기 다른 개성을 제공해요.
 
 - **기본**: 일반 페이지 스크롤 방식을 유지해요. 봇 이미지는 원형(데스크톱 72px, 모바일 60px)으로 표시되며 기존 공통 확대를 지원해요. 사용자 요청 오른쪽에는 페르소나 이미지를 읽기 좋은 크기로 보여줘요.

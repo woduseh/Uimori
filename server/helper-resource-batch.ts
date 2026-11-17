@@ -3,7 +3,7 @@ import { HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
 type PatchItem = {
-  kind: 'content' | 'prompt-preset';
+  kind: 'content' | 'prompt-preset' | 'theme';
   id: string;
   expectedRevision: number;
   changes: unknown[];
@@ -31,9 +31,10 @@ export function helperResourceBatchItems(rawItems: unknown): PatchItem[] {
     let id: string | undefined;
     try {
       const item = record(raw);
-      if (item.kind !== 'content' && item.kind !== 'prompt-preset')
-        throw new HttpError(400, '부분 수정은 native 자료와 프리셋에만 지원해요.');
-      kind = item.kind === 'content' ? 'content' : 'prompt-preset';
+      const inputKind: unknown = item.kind;
+      if (inputKind !== 'content' && inputKind !== 'prompt-preset' && inputKind !== 'theme')
+        throw new HttpError(400, '부분 수정은 native 자료, 프리셋과 이야기 UI 테마에 지원해요.');
+      kind = inputKind;
       id = text(item.id, 'id', 200);
       const expectedRevision = number(item.expectedRevision, 'revision');
       if (!Array.isArray(item.changes) || !item.changes.length)

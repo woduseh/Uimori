@@ -1,4 +1,5 @@
 import type { ThemeBackground } from './theme-background.js';
+import { isStoryUiStyle, type StoryUiStyle } from './story-ui-style.js';
 import {
   cinematicTheme,
   letterTheme,
@@ -14,7 +15,7 @@ import {
   type ThemePalette,
 } from './theme-palettes.js';
 
-/** Presentation resources only. Never include these in a model request or story snapshot. */
+/** Theme definitions stay in presentation storage. Story UI prompts use a separate summary. */
 export const THEME_COLOR_KEYS = [
   'bg',
   'nav',
@@ -65,6 +66,7 @@ export type ThemeDefinition = {
   messageCss: string;
   templateHtml: string;
   templateCss: string;
+  storyUi?: { baseStyle: StoryUiStyle; css: string };
 };
 export type Theme = ThemeDefinition & { id: string; revision: number };
 export type ThemePreferences = {
@@ -72,6 +74,7 @@ export type ThemePreferences = {
   defaultThemeId: string;
   botThemes: Record<string, string>;
   chatThemes: Record<string, string>;
+  botStoryUiThemes?: Record<string, string>;
   /** Missing scoped selections inherit; 'theme' explicitly uses the layout's saved colors. */
   defaultPaletteId?: string;
   botPalettes?: Record<string, string>;
@@ -209,6 +212,7 @@ export function normalizeThemePreferences(value: ThemePreferences): ThemePrefere
     chatThemes: { ...value.chatThemes },
     botPalettes: { ...value.botPalettes },
     chatPalettes: { ...value.chatPalettes },
+    ...(value.botStoryUiThemes && { botStoryUiThemes: { ...value.botStoryUiThemes } }),
   };
   const migrate = (id: string, paletteId: string | undefined): [string, string | undefined] => {
     if (id === 'builtin:liquid-gallery')
@@ -300,6 +304,16 @@ export function validateTheme(value: unknown): ThemeDefinition {
       colors[mode][key as ThemeColorKey] = color;
     }
   }
+  let storyUi: ThemeDefinition['storyUi'];
+  if (v.storyUi !== undefined) {
+    const definition = object(v.storyUi, '이야기 UI 테마');
+    if (!isStoryUiStyle(definition.baseStyle))
+      throw new Error('이야기 UI 테마의 기본 스타일을 선택해 주세요.');
+    storyUi = {
+      baseStyle: definition.baseStyle,
+      css: string(definition.css, '이야기 UI CSS', 1_000_000),
+    };
+  }
   return {
     title,
     description: string(v.description, '설명', 2000),
@@ -308,6 +322,7 @@ export function validateTheme(value: unknown): ThemeDefinition {
     messageCss: string(v.messageCss, '본문 CSS', 1_000_000),
     templateHtml: string(v.templateHtml, '레이아웃 HTML', 100_000),
     templateCss: string(v.templateCss, '레이아웃 CSS', 1_000_000),
+    ...(storyUi && { storyUi }),
   };
 }
 export function parseThemeFile(value: unknown): ThemeDefinition {

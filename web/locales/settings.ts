@@ -1,5 +1,53 @@
 /** Settings UI only. User data and model inputs are never translated here. */
 export const messages = {
+  'settings.newChatDefaultsInvalid': {
+    ko: '새 채팅 생성 기본값을 확인해 주세요.',
+    en: 'Check the new chat creation defaults.',
+    ja: '新しいチャットの作成時の既定値を確認してください。',
+    zh: '请检查新聊天的创建默认值。',
+  },
+  'settings.newChatDefaultsConflict': {
+    ko: '다른 창에서 새 채팅 생성 기본값이 변경됐어요. 다시 불러와 주세요.',
+    en: 'New chat defaults changed in another window. Reload them to continue.',
+    ja: '別のウィンドウで新しいチャットの既定値が変更されました。再読み込みしてください。',
+    zh: '新聊天默认值已在其他窗口更改，请重新加载。',
+  },
+  'settings.newChatDefaults': {
+    ko: '새 채팅 기본값',
+    en: 'New chat defaults',
+    ja: '新しいチャットの既定値',
+    zh: '新聊天默认值',
+  },
+  'settings.newChatDefaultsScope': {
+    ko: '새로 만드는 채팅에 복사해요. 기존 채팅에는 적용되지 않아요.',
+    en: 'Copied to newly created chats. Existing chats are unchanged.',
+    ja: '新しく作成するチャットにコピーします。既存のチャットには適用されません。',
+    zh: '复制到新建聊天，不会应用于现有聊天。',
+  },
+  'settings.newChatDefaultsLoading': {
+    ko: '새 채팅 기본값을 불러오는 중이에요…',
+    en: 'Loading new chat defaults…',
+    ja: '新しいチャットの既定値を読み込み中…',
+    zh: '正在加载新聊天默认值…',
+  },
+  'settings.newChatDefaultsLoadFailed': {
+    ko: '새 채팅 기본값을 불러오지 못했어요.',
+    en: 'Could not load new chat defaults.',
+    ja: '新しいチャットの既定値を読み込めませんでした。',
+    zh: '无法加载新聊天默认值。',
+  },
+  'settings.newChatDefaultsSave': {
+    ko: '새 채팅 기본값 저장',
+    en: 'Save new chat defaults',
+    ja: '新しいチャットの既定値を保存',
+    zh: '保存新聊天默认值',
+  },
+  'settings.newChatDefaultsSaved': {
+    ko: '새 채팅 기본값을 저장했어요.',
+    en: 'New chat defaults saved.',
+    ja: '新しいチャットの既定値を保存しました。',
+    zh: '新聊天默认值已保存。',
+  },
   'settings.judgmentProvider': {
     ko: '판단 프로바이더',
     en: 'Judgment provider',
@@ -469,10 +517,10 @@ export const messages = {
     zh: '管理模型预设和提供商',
   },
   'settings.m78': {
-    ko: '작업당 모델 호출 한도는 1~32 사이의 정수로 입력해 주세요.',
-    en: 'Enter an integer from 1 to 32 for model calls per task.',
-    ja: 'タスクごとのモデル呼び出し上限は1～32の整数で入力してください。',
-    zh: '每项任务的模型调用上限请输入1至32的整数。',
+    ko: '작업당 모델 호출 한도는 1~128 사이의 정수로 입력해 주세요.',
+    en: 'Enter an integer from 1 to 128 for model calls per task.',
+    ja: 'タスクごとのモデル呼び出し上限は1～128の整数で入力してください。',
+    zh: '每项任务的模型调用上限请输入1至128的整数。',
   },
   'settings.m79': {
     ko: '실행 설정을 저장했어요.',
@@ -547,10 +595,10 @@ export const messages = {
     zh: '每项任务模型调用上限',
   },
   'settings.m93': {
-    ko: '1~32회. 본문의 조회 후속 호출과 컨텍스트 요약을 함께 세어요. 번역과 도우미는 각 기능의 별도 호출 한도를 사용해요.',
-    en: '1–32 calls. Counts writing follow-ups and context summaries together. Translation and assistant use their own limits.',
-    ja: '1～32回。本文の参照後続呼び出しとコンテキスト要約を合算します。翻訳、アシスタントは個別の上限を使用します。',
-    zh: '1至32次。合计正文查询后续调用和上下文摘要。翻译和助手使用各自的调用上限。',
+    ko: '1~128회. 본문의 조회 후속 호출과 컨텍스트 요약을 함께 세어요. 번역과 도우미는 각 기능의 별도 호출 한도를 사용해요.',
+    en: '1–128 calls. Counts writing follow-ups and context summaries together. Translation and assistant use their own limits.',
+    ja: '1～128回。本文の参照後続呼び出しとコンテキスト要約を合算します。翻訳、アシスタントは個別の上限を使用します。',
+    zh: '1至128次。合计正文查询后续调用和上下文摘要。翻译和助手使用各自的调用上限。',
   },
   'settings.m94': {
     ko: '변경 취소',

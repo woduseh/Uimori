@@ -1,4 +1,11 @@
 .story-ui {
+  --story-paper: var(--panel);
+  --story-surface: var(--panel);
+  --story-ink: var(--text);
+  --story-border: var(--border);
+  --story-accent: var(--accent);
+  --story-radius: 10px;
+  --story-font: inherit;
   margin: 1em 0;
   padding: 1em;
   color: var(--text);
@@ -96,7 +103,7 @@
 }
 
 /* Presets affect only the generated surface, including the SDK's shadow DOM. */
-.story-ui[data-story-ui-style]:not([data-story-ui-style="default"]) {
+.story-ui:is([data-story-ui-custom], [data-story-ui-style]:not([data-story-ui-style="default"])) {
   color-scheme: light;
   color: var(--story-ink);
   background: var(--story-paper);

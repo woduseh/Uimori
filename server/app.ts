@@ -12,6 +12,7 @@ import { projectStoryUiText } from '../core/story-ui.js';
 import { storyUiRoutes } from './story-ui-routes.js';
 import { normalizeStoryUiOutput } from './story-ui.js';
 import { autoTranslationDefaultRoutes } from './auto-translation-defaults.js';
+import { chatGenerationDefaultRoutes } from './chat-generation-defaults.js';
 import { REQUEST_TEXT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { createRunExecutor } from './run-executor.js';
 import { imageInputSupported } from '../core/provider-images.js';
@@ -1190,6 +1191,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     async (request) => readerActivities(store, request.params.id, request.query)
   );
   autoTranslationDefaultRoutes(app, store);
+  chatGenerationDefaultRoutes(app, store);
   storyUiRoutes(app, store, { publish, execute, requireRequestModel });
   app.post('/api/story-ui/preview', { bodyLimit: 2 * 1024 * 1024 }, async (request) => {
     const body = record(request.body);

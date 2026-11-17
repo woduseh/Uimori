@@ -84,6 +84,16 @@ export type Usage = {
 export type RunSnapshot = {
   /** A host-validated interaction with a source-owned UI surface. */
   storyUiAction?: import('./story-ui.js').StoryUiAction;
+  /** Appearance labels and identifiers available to the model at reservation. */
+  storyUiThemeChoices?: {
+    themes: {
+      id: `theme:${string}`;
+      title: string;
+      description: string;
+      baseStyle: import('./story-ui-style.js').StoryUiStyle;
+    }[];
+    botThemeId?: `theme:${string}`;
+  };
   /** Existing image choices frozen with this writing request. */
   imageCatalog?: import('./auxiliary.js').AssetEntry[];
   /** Authored user attachments retained after execution inputs are settled. */

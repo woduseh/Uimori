@@ -35,6 +35,9 @@ export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderR
         ? {
             storyUi: {
               catalogId: STORY_UI_CATALOG_ID,
+              ...(snapshot.storyUiThemeChoices
+                ? { themeChoices: snapshot.storyUiThemeChoices }
+                : {}),
               ...(snapshot.storyUiAction
                 ? {
                     ...(selectedUi?.kind === 'ui'

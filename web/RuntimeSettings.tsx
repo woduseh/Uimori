@@ -9,10 +9,10 @@ import { SaveButton } from './SaveButton.js';
 import { Switch } from './BooleanControls.js';
 import './settings-actions.css';
 import { useEffect, useId, useRef, useState } from 'react';
-import { storyUiStyles, type StoryUiStyleSetting } from '../core/story-ui-style.js';
 import type { Chat, Settings } from '../core/types.js';
-import type { AutoTranslationDefaults } from '../core/chat-settings.js';
+import { MAX_MAIN_MODEL_CALLS, type AutoTranslationDefaults } from '../core/chat-settings.js';
 import { api } from './api.js';
+import { StoryUiStyleSelect } from './StoryUiStyleSelect.js';
 export function SettingsEditor({
   chat,
   onSaved,
@@ -78,7 +78,11 @@ export function SettingsEditor({
     if (saving) return false;
     if (!dirty) return true;
     if (!form.current?.reportValidity()) return false;
-    if (!Number.isInteger(value.maxCalls) || value.maxCalls < 1 || value.maxCalls > 32) {
+    if (
+      !Number.isInteger(value.maxCalls) ||
+      value.maxCalls < 1 ||
+      value.maxCalls > MAX_MAIN_MODEL_CALLS
+    ) {
       setLocalError(uiMessage('settings.m78'));
       return false;
     }
@@ -175,18 +179,10 @@ export function SettingsEditor({
                   <strong>{t('storyUi.style')}</strong>
                   <small>{t('storyUi.styleHelp')}</small>
                 </span>
-                <select
+                <StoryUiStyleSelect
                   value={value.storyUiStyle ?? 'auto'}
-                  onChange={(event) =>
-                    update('storyUiStyle', event.target.value as StoryUiStyleSetting)
-                  }
-                >
-                  {(['auto', ...storyUiStyles] as const).map((style) => (
-                    <option key={style} value={style}>
-                      {t(`storyUi.style.${style}`)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(style) => update('storyUiStyle', style)}
+                />
               </label>
             </div>
           </div>
@@ -202,7 +198,7 @@ export function SettingsEditor({
                   type="number"
                   aria-label={t('settings.m92')}
                   min={1}
-                  max={32}
+                  max={MAX_MAIN_MODEL_CALLS}
                   step={1}
                   required
                   value={Number.isFinite(value.maxCalls) ? value.maxCalls : ''}

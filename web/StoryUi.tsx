@@ -1,7 +1,10 @@
 import { A2uiSurface, MarkdownContext, type ReactCatalogComponent } from '@a2ui/react';
 import { MessageProcessor, type ActionPayload } from '@a2ui/web_core';
-import { useEffect, useRef, useState } from 'react';
-import { resolveStoryUiStyle } from '../core/story-ui-style.js';
+import { useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { resolveStoryUiPresentation } from '../core/story-ui-style.js';
+import type { ThemeDefinition } from '../core/themes.js';
+import { ThemeContext } from './ThemeContext.js';
+import { scopedStoryUiCss } from './story-ui-theme.js';
 import type { StoryUiSegment } from '../core/story-ui.js';
 import type { Run } from '../core/types.js';
 import { compileReadingMarkdown } from '../core/reading-markdown.js';
@@ -26,9 +29,11 @@ export function StoryUi({
   actionBlockId,
   beginAdmission,
   style,
+  customTheme,
 }: {
   segment: UiSegment;
   style?: import('../core/story-ui-style.js').StoryUiStyleSetting;
+  customTheme?: ThemeDefinition['storyUi'];
   chatId?: string;
   sourceId?: string;
   sourceHash?: string;
@@ -37,6 +42,16 @@ export function StoryUi({
   actionBlockId?: string;
   beginAdmission?: () => (run: Run) => void;
 }) {
+  const themeState = useContext(ThemeContext);
+  const themeId = useId();
+  const presentation = resolveStoryUiPresentation(
+    style,
+    segment.messages,
+    themeState?.disabled ? undefined : themeState?.catalog,
+    themeState?.scope.botId
+  );
+  const theme = customTheme ?? presentation.theme?.storyUi;
+  const css = useMemo(() => scopedStoryUiCss(theme?.css ?? '', themeId), [theme?.css, themeId]);
   const [action, setAction] = useState<ActionPayload>();
   const [mode, setMode] = useState<'short' | 'continue'>('short');
   const [pending, setPending] = useState(false);
@@ -139,18 +154,22 @@ export function StoryUi({
     }
   };
   return (
-    <section
-      className="story-ui"
-      data-story-ui-style={resolveStoryUiStyle(style, segment.messages)}
-    >
-      {surface && (
-        <div inert={!!action && !!chatId && (latest || uncertain)}>
-          <MarkdownContext.Provider value={renderMarkdown}>
-            <A2uiSurface surface={surface} />
-          </MarkdownContext.Provider>
-        </div>
-      )}
-      {!surface && <p role="status">{t('storyUi.invalid')}</p>}
+    <div className="story-ui-block">
+      <section
+        className="story-ui"
+        data-story-ui-style={theme?.baseStyle ?? presentation.style}
+        data-story-ui-custom={theme ? themeId : undefined}
+      >
+        {css && <style>{css}</style>}
+        {surface && (
+          <div inert={!!action && !!chatId && (latest || uncertain)}>
+            <MarkdownContext.Provider value={renderMarkdown}>
+              <A2uiSurface surface={surface} />
+            </MarkdownContext.Provider>
+          </div>
+        )}
+        {!surface && <p role="status">{t('storyUi.invalid')}</p>}
+      </section>
       {action &&
         ((latest || uncertain) && chatId ? (
           <div className="story-ui-action">
@@ -187,6 +206,6 @@ export function StoryUi({
         ) : (
           <p role="status">{t('storyUi.older')}</p>
         ))}
-    </section>
+    </div>
   );
 }

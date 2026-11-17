@@ -7,6 +7,7 @@ import { createFixtureChat } from './fixtures/chat.js';
 import { invokeHelperSettingsTool as call } from '../server/helper-settings-tools.js';
 import { modelWorkspace, promptWorkspace } from '../server/prompt-workspace.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
+import { saveTheme } from '../server/themes.js';
 
 const owned: { path: string; store: Store }[] = [];
 function database(): Store {
@@ -89,9 +90,47 @@ test('helper enables story UI and selects automatic or explicit styles without c
     maxCalls: chat.settings.maxCalls,
   });
   expect(() => update('chat.storyUiStyle', 'modern', previous)).toThrow();
+  const theme = saveTheme(store, {
+    title: 'Story interface',
+    storyUi: { baseStyle: 'modern', css: '' },
+  });
+  update('chat.storyUiStyle', `theme:${theme.id}`);
+  expect(read().chat.storyUiStyle).toBe(`theme:${theme.id}`);
   update('chat.storyUiStyle', 'auto');
   expect(read().chat.storyUiStyle).toBe('auto');
   expect(() => update('chat.storyUi', 'true')).toThrow();
+});
+
+test('new-chat defaults can be changed without a selected chat and preserve existing chats', () => {
+  const store = database();
+  const existing = createFixtureChat(store, 'Existing');
+  const read = () =>
+    call(store, 'settings.read', {}) as {
+      newChat: { revision: number; maxCalls: number; storyUi: boolean; storyUiStyle: string };
+    };
+  const update = (setting: string, value: unknown, expectedRevision = read().newChat.revision) =>
+    call(store, 'settings.update', { setting, value, expectedRevision });
+  expect(read().newChat).toMatchObject({ maxCalls: 8, storyUi: false, storyUiStyle: 'auto' });
+  update('newChat.maxCalls', 128);
+  update('newChat.storyUi', true);
+  update('newChat.storyUiStyle', 'blue-archive');
+  const next = createFixtureChat(store, 'New');
+  expect(next.settings).toMatchObject({
+    maxCalls: 128,
+    storyUi: true,
+    storyUiStyle: 'blue-archive',
+  });
+  expect(store.chat(existing.id).settings).toEqual(existing.settings);
+  const stale = read().newChat.revision;
+  update('newChat.maxCalls', 1);
+  expect(() => update('newChat.storyUi', false, stale)).toThrow();
+  expect(() => update('newChat.maxCalls', 129)).toThrow();
+  expect(store.chat(next.id).settings).toEqual(next.settings);
+  expect(read().newChat).toMatchObject({
+    maxCalls: 1,
+    storyUi: true,
+    storyUiStyle: 'blue-archive',
+  });
 });
 
 test('global model update preserves other selections and rejects stale or unknown IDs', () => {

@@ -439,3 +439,15 @@
 .theme-advanced > :not(summary) {
   margin-top: 16px;
 }
+
+.theme-code .theme-story-ui-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.theme-story-ui-preview {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}

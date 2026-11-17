@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { compileReadingMarkdown } from '../core/reading-markdown.js';
 import { parseStoryUi, projectStoryUiText, validateStoryUiAction } from '../core/story-ui.js';
-import { resolveStoryUiStyle } from '../core/story-ui-style.js';
+import { resolveStoryUiPresentation, resolveStoryUiStyle } from '../core/story-ui-style.js';
 import { prepareStoryUiTranslation } from '../core/story-ui-translation.js';
+import {
+  defaultThemePreferences,
+  emptyTheme,
+  type Theme,
+  type ThemeCatalog,
+} from '../core/themes.js';
 import { normalizeStoryUiOutput } from '../server/story-ui.js';
 
 describe('story UI', () => {
@@ -40,6 +46,56 @@ describe('story UI', () => {
     const fallback = parseStoryUi(unknown)[0];
     if (fallback.kind !== 'ui') throw new Error('UI missing');
     expect(resolveStoryUiStyle(undefined, fallback.messages)).toBe('default');
+  });
+  it('resolves story UI themes in chat, bot and model order', () => {
+    const botTheme: Theme = {
+      ...emptyTheme('Bot theme'),
+      id: 'bot-theme',
+      revision: 1,
+      storyUi: { baseStyle: 'fantasy', css: ':host { color: red; }' },
+    };
+    const chatTheme: Theme = {
+      ...emptyTheme('Chat theme'),
+      id: 'chat-theme',
+      revision: 2,
+      storyUi: { baseStyle: 'east-asian', css: ':host { color: blue; }' },
+    };
+    const catalog: ThemeCatalog = {
+      themes: [botTheme, chatTheme],
+      preferences: { ...defaultThemePreferences(), botStoryUiThemes: { bot: botTheme.id } },
+    };
+    const [segment] = parseStoryUi(
+      normalizeStoryUiOutput(
+        '<a2ui>\n$/_uimori/style = "theme:chat-theme"\nroot = Text("Hello")\n</a2ui>'
+      )
+    );
+    if (segment.kind !== 'ui') throw new Error('UI missing');
+    const { messages } = segment;
+    expect(resolveStoryUiPresentation('modern', messages, catalog, 'bot')).toEqual({
+      style: 'modern',
+    });
+    expect(resolveStoryUiPresentation('theme:chat-theme', [], catalog, 'bot')).toEqual({
+      style: 'east-asian',
+      theme: chatTheme,
+    });
+    for (const setting of ['auto', undefined] as const)
+      expect(resolveStoryUiPresentation(setting, messages, catalog, 'bot')).toEqual({
+        style: 'fantasy',
+        theme: botTheme,
+      });
+    expect(resolveStoryUiPresentation('auto', messages, catalog, 'another-bot')).toEqual({
+      style: 'east-asian',
+      theme: chatTheme,
+    });
+    expect(resolveStoryUiPresentation('theme:deleted', messages, catalog, 'bot')).toEqual({
+      style: 'east-asian',
+      theme: chatTheme,
+    });
+    expect(resolveStoryUiPresentation('auto', messages, { ...catalog, themes: [] }, 'bot')).toEqual(
+      {
+        style: 'default',
+      }
+    );
   });
   it('reads a long valid block after storing both expression and compiled content', () => {
     const expression = `<a2ui>root = Column([${Array.from({ length: 10 }, () => `Text("${'x'.repeat(6000)}")`).join(',')}])</a2ui>`;

@@ -48,6 +48,10 @@ import { SaveConflictDialog } from './SaveConflictDialog.js';
 import './themes.css';
 import './deletion.css';
 import { readingSample, readingSampleCredit } from './reading-sample.js';
+import { StoryUi } from './LazyStoryUi.js';
+import { Switch } from './BooleanControls.js';
+import { storyUiStyles, type StoryUiStyle } from '../core/story-ui-style.js';
+import { storyUiPreview } from './story-ui-preview.js';
 
 type Draft = { id: string | null; revision?: number; model: ThemeDefinition };
 const labels: Partial<Record<ThemeColorKey, string>> = {
@@ -79,16 +83,20 @@ export function ThemeSettings({
   onDirtyChange,
   onSaveHandlerChange,
   active = true,
+  storyUiThemeTarget,
 }: {
   onDirtyChange?: (value: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
   active?: boolean;
+  storyUiThemeTarget?: { botId: string; title: string };
 }) {
   useI18n();
   const id = useId();
   const [saveConflict, setSaveConflict] = useState(false);
   const state = useThemes();
+  const storyUiBotId = storyUiThemeTarget?.botId ?? state.scope.botId;
   const [draft, setDraft] = useState<Draft | null>(null);
+  const storyUiDraft = useRef<ThemeDefinition['storyUi']>(undefined);
   const [baseline, setBaseline] = useState('');
   const [mode, setMode] = useState<'light' | 'dark'>('light');
   const [scope, setScope] = useState<'global' | 'bot' | 'chat'>('global');
@@ -215,13 +223,15 @@ export function ThemeSettings({
       setOperation(null);
     }
   }
-  function edit(theme?: Theme, copy = false) {
+  function edit(theme?: Theme, copy = false, storyOnly = false) {
     if (dirty) {
       setError('현재 편집을 저장하거나 취소한 뒤 다른 테마를 열어 주세요.');
-      return;
+      return false;
     }
     if (management.current) management.current.open = true;
     const model = theme ? structuredClone(themeDefinition(theme)) : emptyTheme();
+    if (storyOnly) model.storyUi = { baseStyle: 'default', css: '' };
+    storyUiDraft.current = model.storyUi;
     const isCopy = copy || !!theme?.id.startsWith('builtin:');
     if (theme && isCopy) model.title += ' 사본';
     setDraft({
@@ -234,6 +244,7 @@ export function ThemeSettings({
     setNotice('');
     setImportNotice('');
     setPreview(null);
+    return true;
   }
   function patch(next: Partial<ThemeDefinition>) {
     setDraft((d) => (d ? { ...d, model: { ...d.model, ...next } } : d));
@@ -314,6 +325,19 @@ export function ThemeSettings({
       );
     });
   }
+  function chooseStoryUi(themeId: string | null) {
+    void action(async () => {
+      await api('/themes/selection', {
+        dimension: 'storyUi',
+        scope: 'bot',
+        targetId: storyUiBotId,
+        themeId,
+        expectedRevision: p.revision,
+      });
+      await state.refresh(true);
+      setNotice(uiMessage('storyUi.botDefaultSaved'));
+    });
+  }
   async function importFile(file: File) {
     if (dirty) {
       setError('편집 중인 테마를 저장하거나 취소한 뒤 가져와 주세요.');
@@ -324,6 +348,7 @@ export function ThemeSettings({
         throw new Error(uiMessage('visualpanels.importAThemeFileNoLargerThan'));
       const model = parseThemeFile(JSON.parse(await file.text()));
       themeTemplate(model.templateHtml);
+      storyUiDraft.current = model.storyUi;
       setDraft({ id: null, model });
       setBaseline('');
       setImportNotice(uiMessage('visualpanels.importedAsANewThemeReviewAnd'));
@@ -630,6 +655,52 @@ export function ThemeSettings({
           })}
         </div>
       </section>
+      {(scope === 'bot' || storyUiThemeTarget) && storyUiBotId && (
+        <section className="theme-dimension" aria-labelledby="story-ui-default-heading">
+          <div className="theme-dimension-heading">
+            <div>
+              <h3 id="story-ui-default-heading">{t('storyUi.botDefault')}</h3>
+              {storyUiThemeTarget && <p>{storyUiThemeTarget.title}</p>}
+              <small>{t('storyUi.botDefaultHelp')}</small>
+            </div>
+            <button
+              type="button"
+              disabled={busy || backgroundDirty || paletteDirty}
+              onClick={() => {
+                if (edit(undefined, false, true))
+                  requestAnimationFrame(() =>
+                    management.current?.scrollIntoView({ block: 'start' })
+                  );
+              }}
+            >
+              <AddIcon size={16} aria-hidden="true" /> {t('storyUi.newTheme')}
+            </button>
+            <select
+              aria-label={t('storyUi.botDefault')}
+              value={p.botStoryUiThemes?.[storyUiBotId] ?? ''}
+              disabled={busy || state.loading}
+              onChange={(event) => chooseStoryUi(event.target.value || null)}
+            >
+              <option value="">{t('storyUi.modelStyle')}</option>
+              {p.botStoryUiThemes?.[storyUiBotId] &&
+                !state.catalog.themes.some(
+                  (theme) => theme.id === p.botStoryUiThemes?.[storyUiBotId] && theme.storyUi
+                ) && (
+                  <option value={p.botStoryUiThemes[storyUiBotId]}>
+                    {t('storyUi.unavailableTheme')}
+                  </option>
+                )}
+              {state.catalog.themes
+                .filter((theme) => theme.storyUi)
+                .map((theme) => (
+                  <option key={theme.id} value={theme.id}>
+                    {theme.title}
+                  </option>
+                ))}
+            </select>
+          </div>
+        </section>
+      )}
       <FontSettings onDirtyChange={setFontDirty} onSaveHandlerChange={registerFontSave} />
       <ThemeBackgroundSettings
         key={`${scope}:${scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : ''}`}
@@ -705,6 +776,70 @@ export function ThemeSettings({
                   onChange={(e) => patch({ description: e.target.value })}
                 />
               </label>
+              <div className="theme-code">
+                <label className="theme-story-ui-toggle">
+                  <span>{t('storyUi.includeTheme')}</span>
+                  <Switch
+                    checked={!!draft.model.storyUi}
+                    onChange={(event) => {
+                      if (event.target.checked)
+                        patch({
+                          storyUi: storyUiDraft.current ?? { baseStyle: 'default', css: '' },
+                        });
+                      else {
+                        storyUiDraft.current = draft.model.storyUi;
+                        patch({ storyUi: undefined });
+                      }
+                    }}
+                  />
+                </label>
+                {draft.model.storyUi && (
+                  <>
+                    <label>
+                      {t('storyUi.baseStyle')}
+                      <select
+                        aria-label={t('storyUi.baseStyle')}
+                        value={draft.model.storyUi.baseStyle}
+                        onChange={(event) =>
+                          patch({
+                            storyUi: {
+                              ...draft.model.storyUi!,
+                              baseStyle: event.target.value as StoryUiStyle,
+                            },
+                          })
+                        }
+                      >
+                        {storyUiStyles.map((style) => (
+                          <option key={style} value={style}>
+                            {t(`storyUi.style.${style}`)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      {t('storyUi.customCss')}
+                      <small id={`${id}-story-css-help`}>{t('storyUi.cssHelp')}</small>
+                      <textarea
+                        aria-label={t('storyUi.customCss')}
+                        aria-describedby={`${id}-story-css-help`}
+                        rows={7}
+                        placeholder={
+                          '& { --story-paper: #f8f2e4; }\n.story-ui-tabs button { border-radius: 6px; }'
+                        }
+                        spellCheck={false}
+                        value={draft.model.storyUi.css}
+                        onChange={(event) =>
+                          patch({ storyUi: { ...draft.model.storyUi!, css: event.target.value } })
+                        }
+                      />
+                    </label>
+                    <div className="theme-story-ui-preview">
+                      <strong>{t('storyUi.preview')}</strong>
+                      <StoryUi segment={storyUiPreview} customTheme={draft.model.storyUi} />
+                    </div>
+                  </>
+                )}
+              </div>
               <label className="theme-color-mode">
                 {t('settings.editColors')}
                 <select

@@ -7,7 +7,7 @@ import type {
   HelperTaskResultsView,
 } from '../core/helper.js';
 import { api } from './api.js';
-import { isStoryUiStyleSetting } from '../core/story-ui-style.js';
+import { isStoryUiStyle } from '../core/story-ui-style.js';
 import { formatNumber, t, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -56,6 +56,10 @@ const settingsLabels: Record<string, string> = {
   'chat.maxCalls': 'helperResults.chatMaxCalls',
   'chat.storyUi': 'storyUi.enable',
   'chat.storyUiStyle': 'storyUi.style',
+  'newChat.maxCalls': 'settings.m92',
+  'newChat.storyUi': 'storyUi.enable',
+  'newChat.storyUiStyle': 'storyUi.style',
+  'bot.storyUiTheme': 'storyUi.botDefault',
   'chat.illustrationProfiles': 'visuals.characterProfiles',
   'chat.illustrationReferences': 'visuals.m028',
   'model.pricing': 'helperResults.modelPricing',
@@ -151,9 +155,12 @@ function settingValue(
   label?: string | null,
   setting?: string
 ) {
-  if (setting === 'chat.storyUiStyle' && isStoryUiStyleSetting(value))
-    return t(`storyUi.style.${value}`);
   if (label !== undefined && label !== null) return label;
+  if (
+    (setting === 'chat.storyUiStyle' || setting === 'newChat.storyUiStyle') &&
+    (value === 'auto' || isStoryUiStyle(value))
+  )
+    return t(`storyUi.style.${value}`);
   if (value === null) return t('helperResults.unset');
   if (typeof value === 'boolean') return t(`helperResults.${value ? 'enabled' : 'disabled'}`);
   return typeof value === 'number' ? formatNumber(value) : value;
@@ -190,7 +197,11 @@ function ResultTarget({
   const settingLabel = target.setting && settingsLabels[target.setting];
   const globalSetting = target.id === 'global' && target.kind === 'settings';
   const title = globalSetting ? t(settingLabel || 'helperResults.globalSettings') : target.title;
-  const subtitle = !globalSetting && settingLabel ? t(settingLabel) : undefined;
+  const subtitle = target.setting?.startsWith('newChat.')
+    ? t('settings.newChatDefaults')
+    : !globalSetting && settingLabel
+      ? t(settingLabel)
+      : undefined;
   const outcome = target.kind === 'illustration' ? illustrationOutcomes[operation] : undefined;
   const queued = operation === 'illustration.generate' || operation === 'illustration.cut.redraw';
   const content = (

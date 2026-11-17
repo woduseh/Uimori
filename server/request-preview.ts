@@ -23,6 +23,7 @@ import { freezeReservationSnapshot } from './reservation-snapshot.js';
 import { nativeRisuPending, prepareNativeRisuRun } from './risu-native-run.js';
 import { requestReceipt } from './request-receipt.js';
 import type { Store } from './store.js';
+import { storyUiThemeChoices } from './themes.js';
 
 /** Read current saved selections and estimate the existing encoder projection, without execution. */
 export async function previewNextRequest(
@@ -192,6 +193,10 @@ export async function previewNextRequest(
       store.context.prepareRun(snapshot).contextBase!.activeRevision !==
       result.snapshot.contextRevision;
   try {
+    if (!stale && chat.settings.storyUi)
+      stale =
+        JSON.stringify(snapshot.storyUiThemeChoices) !==
+        JSON.stringify(storyUiThemeChoices(store, current.botId));
     stale ||=
       JSON.stringify(
         contextSourceRefs({ ...snapshot, history: store.history(current.headRevision) })

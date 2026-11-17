@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { normalizeChatSettings } from '../core/chat-settings.js';
+import type { Chat } from '../core/types.js';
 import { createApp, type App } from '../server/app.js';
 import { createFixtureChat } from './fixtures/chat.js';
 const owned: { app: App; path: string }[] = [];
@@ -29,8 +30,111 @@ test('only active settings survive old DB and backup projections', () => {
     autoTranslate: true,
   });
   expect(() => normalizeChatSettings({ maxCalls: 8, autoTranslate: 'yes' })).toThrow();
-  for (const maxCalls of [0, 33, 2.5, '8', null])
+  expect(normalizeChatSettings({ maxCalls: 8, storyUiStyle: 'theme:custom-theme' })).toEqual({
+    maxCalls: 8,
+    storyUiStyle: 'theme:custom-theme',
+  });
+  for (const invalid of ['theme:', 'theme:with space', `theme:${'x'.repeat(101)}`])
+    expect(() => normalizeChatSettings({ maxCalls: 8, storyUiStyle: invalid })).toThrow(
+      'Invalid story UI style'
+    );
+  for (const maxCalls of [0, 129, 2.5, '8', null])
     expect(() => normalizeChatSettings({ status: false, maxCalls })).toThrow('Invalid settings');
+});
+
+test('generation defaults persist and apply only when creating a new chat', async () => {
+  const path = mkdtempSync(join(tmpdir(), 'uimori-chat-generation-defaults-'));
+  const options = {
+    dbPath: join(path, 'app.sqlite'),
+    buildId: 'chat-generation-defaults-test',
+    testMode: true,
+    codex: { enabled: false },
+  };
+  const app = await createApp(options);
+  owned.push({ app, path });
+  const url = '/api/chat-generation-defaults';
+  const initial = { maxCalls: 8, storyUi: false, storyUiStyle: 'auto' };
+  expect((await app.inject(url)).json()).toEqual({ revision: 0, ...initial });
+  const before = createFixtureChat(app.store, 'Chat before saving defaults');
+  expect(before.settings).toEqual(initial);
+  const chosen = { maxCalls: 128, storyUi: true, storyUiStyle: 'theme:custom-theme' };
+  const put = (expectedRevision: number, settings: typeof initial) =>
+    app.inject({ method: 'PUT', url, payload: { expectedRevision, ...settings } });
+  const saved = await put(0, chosen);
+  expect(saved.statusCode).toBe(200);
+  expect(saved.json()).toEqual({ revision: 1, ...chosen });
+  expect((await put(0, initial)).statusCode).toBe(409);
+  expect((await app.inject(url)).json()).toEqual({ revision: 1, ...chosen });
+  expect(app.store.chat(before.id).settings).toEqual(initial);
+  expect(app.store.chat(before.id).settingsRevision).toBe(before.settingsRevision);
+  expect((await app.inject('/api/auto-translation-defaults')).json()).toEqual({
+    revision: 0,
+    autoTranslate: false,
+  });
+
+  await app.close();
+  owned.pop();
+  const reopened = await createApp(options);
+  owned.push({ app: reopened, path });
+  expect((await reopened.inject(url)).json()).toEqual({ revision: 1, ...chosen });
+  const created = await reopened.inject({
+    method: 'POST',
+    url: '/api/chats',
+    payload: { title: 'Chat after saving defaults', botId: before.botId },
+  });
+  expect(created.statusCode).toBe(200);
+  expect(created.json<Chat>().settings).toEqual(chosen);
+  const forked = await reopened.inject({
+    method: 'POST',
+    url: `/api/chats/${before.id}/fork`,
+    payload: { fromRevision: null, idempotencyKey: 'fork-existing-chat' },
+  });
+  expect(forked.statusCode).toBe(200);
+  expect(forked.json<Chat>().settings).toEqual(initial);
+});
+
+test('generation defaults and per-chat settings enforce the same call limit', async () => {
+  const path = mkdtempSync(join(tmpdir(), 'uimori-chat-generation-limit-'));
+  const app = await createApp({
+    dbPath: join(path, 'app.sqlite'),
+    buildId: 'chat-generation-limit-test',
+    testMode: true,
+    codex: { enabled: false },
+  });
+  owned.push({ app, path });
+  const chat = createFixtureChat(app.store, 'Call limit');
+  const defaultsUrl = '/api/chat-generation-defaults';
+  const defaults = {
+    expectedRevision: 0,
+    maxCalls: 128,
+    storyUi: false,
+    storyUiStyle: 'fantasy',
+  };
+  for (const payload of [
+    { ...defaults, maxCalls: 0 },
+    { ...defaults, maxCalls: 129 },
+    { ...defaults, maxCalls: 1.5 },
+    { ...defaults, maxCalls: '128' },
+    { ...defaults, storyUi: 'true' },
+    { ...defaults, storyUi: undefined },
+    { ...defaults, storyUiStyle: 'theme:contains a space' },
+    { ...defaults, storyUiStyle: undefined },
+    { ...defaults, autoTranslate: true },
+  ]) {
+    expect((await app.inject({ method: 'PUT', url: defaultsUrl, payload })).statusCode).toBe(400);
+  }
+  expect((await app.inject(defaultsUrl)).json().revision).toBe(0);
+
+  const patch = (maxCalls: number) =>
+    app.inject({
+      method: 'PATCH',
+      url: `/api/chats/${chat.id}/settings`,
+      payload: { expectedSettingsRevision: chat.settingsRevision, maxCalls },
+    });
+  expect((await patch(129)).statusCode).toBe(400);
+  const saved = await patch(128);
+  expect(saved.statusCode).toBe(200);
+  expect(saved.json<Chat>().settings.maxCalls).toBe(128);
 });
 
 test('existing database settings are normalized on read/save and public settings never accept fixture controls', async () => {

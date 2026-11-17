@@ -1,11 +1,16 @@
 import type { Json, ProviderTool } from '../core/transport.js';
+import type { HelperTask } from '../core/helper.js';
+import type { Content } from '../core/product.js';
 import type { Store } from './store.js';
+import type { HelperWorkspace } from './helper-workspace.js';
+import { recordHelperTaskResult } from './helper-task-results.js';
 import { fields, record, text, number, HttpError } from './request-validation.js';
 import { fontCatalog, registerFont, selectFonts, deleteFont, downloadFont } from './fonts.js';
 import {
   paletteCatalog,
   savePalette,
   deletePalette,
+  readTheme,
   selectTheme,
   themePreferences,
 } from './themes.js';
@@ -66,11 +71,11 @@ export const HELPER_PRESENTATION_TOOLS: ProviderTool[] = [
   ),
   tool(
     'theme.select',
-    'Apply an explicitly requested theme or palette independently. Read theme.list/palette.list for preference revision. Null inherits for bot/chat or restores the global default. Creation alone does not select.',
+    'Apply an explicitly requested theme, palette or bot Story UI theme independently. For dimension=storyUi use scope=bot, targetId=bot ID and themeId=saved theme ID (must include storyUi), or null to clear the bot default. Read theme.list for preference revision. Null inherits for bot/chat or restores the global default. Creation alone does not select.',
     {
       scope: { type: 'string', enum: ['global', 'bot', 'chat'] },
       targetId: string,
-      dimension: { type: 'string', enum: ['theme', 'palette'] },
+      dimension: { type: 'string', enum: ['theme', 'palette', 'storyUi'] },
       themeId: nullable,
       paletteId: nullable,
       expectedRevision: revision,
@@ -80,6 +85,55 @@ export const HELPER_PRESENTATION_TOOLS: ProviderTool[] = [
 ];
 export const presentationReadOnly = (name: string) =>
   name === 'font.list' || name === 'palette.list';
+
+/** Called in the helper operation transaction to preserve the applied selection and its receipt. */
+export function applyHelperPresentationMutation(
+  store: Store,
+  workspace: HelperWorkspace,
+  task: Pick<HelperTask, 'id' | 'conversationId'>,
+  receiptId: string,
+  name: string,
+  args: Record<string, unknown>,
+  bytes?: Uint8Array
+): unknown {
+  if (name !== 'theme.select' || args.dimension !== 'storyUi')
+    return invokePresentationTool(store, name, args, bytes);
+
+  const botId = text(args.targetId, 'bot ID', 100);
+  const before = themePreferences(store).botStoryUiThemes?.[botId] ?? null;
+  const result = selectTheme(store, args);
+  const after = result.botStoryUiThemes?.[botId] ?? null;
+  let beforeLabel: string | null = null;
+  if (before) {
+    try {
+      beforeLabel = readTheme(store, before).title;
+    } catch (error) {
+      if (!(error instanceof HttpError) || error.statusCode !== 404) throw error;
+    }
+  }
+  recordHelperTaskResult(workspace, task, {
+    receiptId,
+    operation: name,
+    requestedTargets: 1,
+    targets:
+      before === after
+        ? []
+        : [
+            {
+              kind: 'settings',
+              id: botId,
+              title: store.product.get<Content>('content', botId).title,
+              revision: result.revision,
+              setting: 'bot.storyUiTheme',
+              before,
+              after,
+              beforeLabel,
+              afterLabel: after ? readTheme(store, after).title : null,
+            },
+          ],
+  });
+  return result;
+}
 
 /** Network preparation precedes the synchronous receipt transaction. */
 export async function preparePresentationTool(

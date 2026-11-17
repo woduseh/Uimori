@@ -207,6 +207,33 @@ test('HRESULT-STORYUI setting results identify changes and open generation setti
     await expect(dialog.getByLabel('이야기 UI 스타일')).toBeVisible();
   }
   await page.screenshot({ path: info.outputPath('story-ui-setting-destination.png') });
+  projection.results[0].targets = [
+    {
+      kind: 'settings',
+      id: chat.botId,
+      title: '관측소 봇',
+      revision: 1,
+      setting: 'bot.storyUiTheme',
+      before: null,
+      after: 'theme-id',
+      afterLabel: '별빛 테마',
+    },
+  ];
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  const botResult = page
+    .getByTestId('helper-task-results')
+    .getByRole('button')
+    .filter({
+      has: page.getByText('봇의 이야기 UI 기본값', { exact: true }),
+    });
+  await expect(botResult).toContainText('별빛 테마');
+  await botResult.click();
+  const settings = page.getByRole('dialog', { name: '설정', exact: true });
+  await expect(
+    settings.getByRole('combobox', { name: '봇의 이야기 UI 기본값', exact: true })
+  ).toBeVisible();
+  await expect(settings.getByText('관측소 봇', { exact: true })).toBeVisible();
 });
 
 for (const width of DEFAULT_WIDTHS) {

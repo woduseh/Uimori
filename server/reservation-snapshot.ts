@@ -12,6 +12,7 @@ import { nativeRisuPending } from './risu-native-run.js';
 import { nativeRisuPresetPending } from './risu-native-preset.js';
 import { readChatVariables } from './chat-variables.js';
 import { validateChatVariableState } from '../core/chat-variables.js';
+import { storyUiThemeChoices } from './themes.js';
 
 export type ReservationPurpose =
   | {
@@ -104,6 +105,10 @@ export function freezeReservationSnapshot(
   }
 
   let frozen = base;
+  if (base.settings.storyUi && (options.purpose === 'run' || options.purpose === 'preview-main')) {
+    const choices = storyUiThemeChoices(store, store.chat(base.chatId).botId);
+    if (choices) frozen = { ...frozen, storyUiThemeChoices: choices };
+  }
   if (options.purpose === 'run' && !frozen.executionPurpose) {
     const { revision, config } = store.storyGuide.get(base.chatId);
     frozen = { ...frozen, storyGuide: { revision, config } };

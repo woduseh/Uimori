@@ -6,6 +6,7 @@ import { LanguageSelect } from './LanguageSelect.js';
 import { t, useI18n, translateMessage } from './i18n.js';
 import { PushSettings } from './PushSettings.js';
 import { AutoTranslationDefaults } from './AutoTranslationDefaults.js';
+import { ChatGenerationDefaults } from './ChatGenerationDefaults.js';
 import { LoadingState } from './LoadingState.js';
 import { InstallApp } from './InstallApp.js';
 import { UsagePanel } from './UsagePanel.js';
@@ -249,6 +250,7 @@ export function TasksPanel({
 }
 
 const appSaveSections = [
+  'chatGeneration',
   'archive',
   'connection',
   'model',
@@ -281,7 +283,7 @@ function getSettingsCategories(): SettingsCategory[] {
         },
         {
           label: t('chatsettings.m18'),
-          terms: t('chatsettings.m19'),
+          terms: `${t('chatsettings.m19')} ${t('settings.newChatDefaults')} ${t('settings.m92')} ${t('storyUi.enable')} ${t('storyUi.style')}`,
           anchor: 'generation',
         },
         {
@@ -352,6 +354,7 @@ function getLibrarySettingsSubjects(): Record<string, string> {
 
 export function AppSettingsPanel({
   initialTab,
+  storyUiThemeTarget,
   state,
   theme,
   setTheme,
@@ -368,6 +371,7 @@ export function AppSettingsPanel({
   onEditPrompt,
 }: {
   initialTab?: string;
+  storyUiThemeTarget?: { botId: string; title: string };
   state: StoryState;
   theme: 'system' | 'dark' | 'light';
   setTheme: (theme: 'system' | 'dark' | 'light') => void;
@@ -408,12 +412,14 @@ export function AppSettingsPanel({
   const [themeDirty, setThemeDirty] = useState(false);
   const [illustrationDirty, setIllustrationDirty] = useState(false);
   const [loreDirty, setLoreDirty] = useState(false);
+  const [chatGenerationDirty, setChatGenerationDirty] = useState(false);
   const [discard, setDiscard] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [savingClose, setSavingClose] = useState(false);
   const saveGroup = useSettingsSaveGroup(appSaveSections);
   const [discardError, setDiscardError] = useState('');
   const dirty =
+    chatGenerationDirty ||
     connectionDirty ||
     archiveDirty ||
     modelDirty ||
@@ -688,6 +694,7 @@ export function AppSettingsPanel({
                   {!compact && <h3 className="settings-page-title">{label}</h3>}
                   {key === 'themes' && (
                     <ThemeSettings
+                      storyUiThemeTarget={storyUiThemeTarget}
                       active={active === 'themes' && showingDetail}
                       onDirtyChange={setThemeDirty}
                       onSaveHandlerChange={saveGroup.registrations.themes}
@@ -815,6 +822,10 @@ export function AppSettingsPanel({
                         <span className="scope-badge">{t('chatsettings.m75')}</span>
                       </h3>
                       <AutoTranslationDefaults />
+                      <ChatGenerationDefaults
+                        onDirtyChange={setChatGenerationDirty}
+                        onSaveHandlerChange={saveGroup.registrations.chatGeneration}
+                      />
                     </section>
                   )}
                   {key === 'general' && (
@@ -991,6 +1002,7 @@ export function AppSettingsPanel({
           onSave={async () => {
             if (
               !(await saveGroup.save({
+                chatGeneration: chatGenerationDirty,
                 archive: archiveDirty,
                 connection: connectionDirty,
                 model: modelDirty,

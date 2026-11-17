@@ -4,6 +4,7 @@ import {
   DEFAULT_ILLUSTRATION_PRESET_ID,
 } from '../core/illustration-presets.js';
 import { illustrationPresetCatalog } from '../server/illustration-presets.js';
+import { themePreferences, readTheme } from '../server/themes.js';
 import {
   illustrationJob,
   illustrationReferences,
@@ -1972,6 +1973,119 @@ test('presentation operations are discoverable and writes remain excluded from r
     expect(helperToolTraits(name).reviewAllowed).toBe(false);
     expect(helperToolTraits(name).direct).toBe(true);
   }
+});
+
+test('helper reads the selected bot, saves its Story UI theme, and applies it on request', async () => {
+  const f = await fixture();
+  const before = themePreferences(f.store);
+  const other = createFixtureChat(f.store, 'Unrelated chat');
+  const title = 'Harbor dossier';
+  const css = '& { --story-accent: #27617c; }';
+  let themeId = '';
+  const appCall = (id: string, name: string, args: Record<string, unknown> = {}) =>
+    call(id, 'app.call', { name, arguments: args });
+  mockSend((request, round) => {
+    if (round === 0) {
+      expect(request.input.source).toMatchObject({
+        writing: { packages: [expect.objectContaining({ role: 'bot', id: f.bot.id })] },
+      });
+      return calls(
+        appCall('guide', 'theme.guide'),
+        appCall('bot', 'resource.read', { kind: 'content', id: f.bot.id })
+      );
+    }
+    if (round === 1) {
+      const guide = result<{ storyUi: { example: { storyUi: { baseStyle: string } } } }>(
+        request,
+        'guide'
+      );
+      expect(guide.storyUi.example.storyUi).toMatchObject({ baseStyle: 'fantasy' });
+      const bot = result<{ source: { path: string } }>(request, 'bot');
+      return calls(
+        appCall('character', 'resource.read', {
+          kind: 'content',
+          id: f.bot.id,
+          path: `${bot.source.path}/description`,
+        })
+      );
+    }
+    if (round === 2) {
+      expect(result(request, 'character')).toMatchObject({ text: 'Unchanged shared body' });
+      return calls(
+        appCall('save', 'resource.save', {
+          kind: 'theme',
+          model: { title, storyUi: { baseStyle: 'modern', css } },
+        })
+      );
+    }
+    if (round === 3) {
+      themeId = result<{ id: string }>(request, 'save').id;
+      expect(themePreferences(f.store)).toEqual(before);
+      return calls(
+        appCall('list', 'theme.list'),
+        appCall('read-style', 'resource.read', {
+          kind: 'theme',
+          id: themeId,
+          path: '/storyUi/css',
+        })
+      );
+    }
+    if (round === 4) {
+      const list = result<{
+        themes: { id: string }[];
+        preferences: ReturnType<typeof themePreferences>;
+      }>(request, 'list');
+      expect(list.themes.find((theme) => theme.id === themeId)).toEqual({
+        id: themeId,
+        revision: 1,
+        title,
+        description: '',
+        storyUi: { baseStyle: 'modern' },
+      });
+      expect(result(request, 'read-style')).toMatchObject({ text: css });
+      return calls(
+        appCall('select', 'theme.select', {
+          dimension: 'storyUi',
+          scope: 'bot',
+          targetId: f.bot.id,
+          themeId,
+          expectedRevision: list.preferences.revision,
+        })
+      );
+    }
+    expect(result(request, 'select')).toMatchObject({ botStoryUiThemes: { [f.bot.id]: themeId } });
+    return success;
+  });
+  const task = await submit(f, 'Read this bot, create a Story UI theme for it, and apply it.');
+  expect(themePreferences(f.store)).toEqual({
+    ...before,
+    revision: before.revision + 1,
+    botStoryUiThemes: { [f.bot.id]: themeId },
+  });
+  expect(f.store.chat(f.chat.id).settings).toEqual(f.chat.settings);
+  expect(f.store.chat(other.id).settings).toEqual(other.settings);
+  expect(f.store.product.get<Content>('content', f.bot.id)).toEqual(f.bot);
+  expect(readTheme(f.store, themeId).storyUi).toEqual({ baseStyle: 'modern', css });
+  expect(readHelperTaskResults(f.store, task.id)).toMatchObject({
+    unrecordedOperations: 0,
+    results: [
+      { operation: 'resource.save', changedTargets: 1, targets: [{ kind: 'theme', id: themeId }] },
+      {
+        operation: 'theme.select',
+        changedTargets: 1,
+        targets: [
+          {
+            kind: 'settings',
+            id: f.bot.id,
+            setting: 'bot.storyUiTheme',
+            before: null,
+            after: themeId,
+            afterLabel: title,
+          },
+        ],
+      },
+    ],
+  });
 });
 
 test('helper registers a downloaded font before explicit selection and records both writes', async () => {

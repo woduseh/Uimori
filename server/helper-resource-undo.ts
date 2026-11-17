@@ -64,7 +64,9 @@ export function applyHelperResourceMutation(
       if (name === 'resource.patchMany' && error instanceof HttpError)
         throw new HelperResourceBatchError(
           itemIndex,
-          item.kind === 'content' || item.kind === 'prompt-preset' ? item.kind : undefined,
+          item.kind === 'content' || item.kind === 'prompt-preset' || item.kind === 'theme'
+            ? item.kind
+            : undefined,
           item.id,
           error
         );

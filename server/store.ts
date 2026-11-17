@@ -3,6 +3,7 @@ import { initializeActivityFeed } from './activity-feed.js';
 
 import { normalizeChatSettings } from '../core/chat-settings.js';
 import { autoTranslationDefaults } from './auto-translation-defaults.js';
+import { chatGenerationDefaults } from './chat-generation-defaults.js';
 import { pruneSourceEdits, pruneTranslationHistory } from './text-retention.js';
 import { retainCompletedLore } from './lore-retention-state.js';
 import { verifiedRunLoreReads } from './lore-context.js';
@@ -266,13 +267,11 @@ export class Store {
   ): Chat {
     const id = internalId === undefined ? randomUUID() : text(internalId, 'internal chat ID', 100);
     if (!IDENTITY_PATTERN.test(id)) throw new HttpError(400, 'Invalid internal chat ID');
-    const settings: Settings = {
-      maxCalls: 8,
-    };
     this.transaction(() => {
+      const { maxCalls, storyUi, storyUiStyle } = chatGenerationDefaults(this.db);
       this.db
         .prepare('INSERT INTO chats VALUES(?,?,NULL,1,?,?)')
-        .run(id, title, json(settings), now());
+        .run(id, title, json({ maxCalls, storyUi, storyUiStyle }), now());
       this.organization.create(id, organization);
     });
     return this.chat(id);

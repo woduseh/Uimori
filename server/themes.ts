@@ -1,6 +1,8 @@
 import { validatePalette, paletteFile } from '../core/palette-files.js';
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import { isStoryUiThemeSetting } from '../core/story-ui-style.js';
+import type { RunSnapshot } from '../core/types.js';
 import type { Store } from './store.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import {
@@ -40,6 +42,24 @@ export function themeCatalog(store: Store): ThemeCatalog {
     preferences: themePreferences(store),
   };
 }
+export function storyUiThemeChoices(
+  store: Store,
+  botId: string
+): RunSnapshot['storyUiThemeChoices'] {
+  const { themes, preferences } = themeCatalog(store);
+  const choices = themes.flatMap(({ id, title, description, storyUi }) => {
+    const reference = `theme:${id}`;
+    return storyUi && isStoryUiThemeSetting(reference)
+      ? [{ id: reference, title, description, baseStyle: storyUi.baseStyle }]
+      : [];
+  });
+  if (!choices.length) return;
+  const botSelection = preferences.botStoryUiThemes?.[botId];
+  const botThemeId = botSelection
+    ? choices.find(({ id }) => id === `theme:${botSelection}`)?.id
+    : undefined;
+  return { themes: choices, ...(botThemeId && { botThemeId }) };
+}
 export function saveTheme(
   store: Store,
   value: unknown,
@@ -68,18 +88,21 @@ export function selectTheme(store: Store, input: unknown): ThemePreferences {
   const b = record(input);
   fields(b, ['scope', 'targetId', 'dimension', 'themeId', 'paletteId', 'expectedRevision']);
   const dimension = b.dimension === undefined ? 'theme' : text(b.dimension, 'dimension', 10);
-  if (dimension !== 'theme' && dimension !== 'palette')
-    throw new HttpError(400, '테마 또는 팔레트 선택을 확인해 주세요.');
-  if (dimension === 'theme' ? 'paletteId' in b : 'themeId' in b)
+  if (dimension !== 'theme' && dimension !== 'palette' && dimension !== 'storyUi')
+    throw new HttpError(400, '테마, 팔레트 또는 이야기 UI 선택을 확인해 주세요.');
+  if (dimension === 'palette' ? 'themeId' in b : 'paletteId' in b)
     throw new HttpError(400, '테마와 팔레트는 각각 선택해 주세요.');
   const scope = text(b.scope, 'scope', 10);
   if (!['global', 'bot', 'chat'].includes(scope))
     throw new HttpError(400, '테마 적용 범위를 확인해 주세요.');
-  const rawId = dimension === 'theme' ? b.themeId : b.paletteId;
+  if (dimension === 'storyUi' && scope !== 'bot')
+    throw new HttpError(400, '봇에만 기본 이야기 UI 테마를 지정할 수 있어요.');
+  const rawId = dimension === 'palette' ? b.paletteId : b.themeId;
   const selectedId = rawId === null ? null : text(rawId, dimension + ' ID', 100);
   if (selectedId !== null) {
     if (dimension === 'theme') readTheme(store, selectedId);
     else if (
+      dimension === 'palette' &&
       !isPaletteId(selectedId) &&
       !paletteCatalog(store).some((palette) => palette.id === selectedId)
     )
@@ -104,7 +127,13 @@ export function selectTheme(store: Store, input: unknown): ThemePreferences {
     const p = themePreferences(store);
     if (p.revision !== expected)
       throw new HttpError(409, '다른 창에서 테마 선택을 바꿨어요. 다시 불러온 뒤 선택해 주세요.');
-    if (dimension === 'palette') {
+    if (dimension === 'storyUi') {
+      if (selectedId !== null && !readTheme(store, selectedId).storyUi)
+        throw new HttpError(400, '이야기 UI 스타일이 포함된 테마를 선택해 주세요.');
+      const map = (p.botStoryUiThemes ??= {});
+      if (selectedId !== null) map[targetId] = selectedId;
+      else delete map[targetId];
+    } else if (dimension === 'palette') {
       if (scope === 'global') p.defaultPaletteId = selectedId ?? THEME_PALETTE_ID;
       else {
         const map = scope === 'bot' ? (p.botPalettes ??= {}) : (p.chatPalettes ??= {});
@@ -165,8 +194,10 @@ export function deleteTheme(store: Store, id: string, expectedRevision: number) 
       throw new HttpError(409, '테마가 변경됐어요. 최신 저장본을 확인해 주세요.');
     const p = themePreferences(store);
     if (p.defaultThemeId === id) p.defaultThemeId = DEFAULT_THEME_ID;
-    for (const map of [p.botThemes, p.chatThemes])
+    for (const map of [p.botThemes, p.chatThemes, p.botStoryUiThemes]) {
+      if (!map) continue;
       for (const [key, value] of Object.entries(map)) if (value === id) delete map[key];
+    }
     writePreferences(store, p);
     store.db.prepare('DELETE FROM versions WHERE kind=? AND id=?').run('theme', id);
     store.db.prepare('DELETE FROM resource_undo WHERE kind=? AND id=?').run('theme', id);
