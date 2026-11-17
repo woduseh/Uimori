@@ -55,15 +55,6 @@ function git(repo, ...args) {
   }).trim();
 }
 
-function commit(repo, message, content) {
-  if (content !== undefined) {
-    writeFileSync(path.join(repo, sourceFile), content);
-    git(repo, 'add', '--', sourceFile);
-  }
-  git(repo, '-c', 'commit.gpgsign=false', 'commit', '--quiet', '--allow-empty', '-m', message);
-  return git(repo, 'rev-parse', 'HEAD');
-}
-
 function run(...args) {
   const result = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
   if (result.error) throw result.error;
@@ -78,17 +69,36 @@ test('compares committed Risu Lua source and fails closed on invalid inputs', as
   mkdirSync(path.join(repo, 'src', 'ts', 'process'), { recursive: true });
   try {
     git(repo, 'init', '--quiet');
-    const missing = commit(repo, 'missing file');
-    const base = commit(repo, 'base', source());
-    const malformed = commit(repo, 'malformed', 'export function broken( {');
-    const restructured = commit(repo, 'unrecognized contract', 'export const scripting = 1;');
-    const target = commit(repo, 'target', source(true));
-    const uncategorized = commit(
+    git(
       repo,
-      'outside tracked regions',
-      `${source(true)}\nexport const other = true;\n`
+      '-c',
+      'commit.gpgsign=false',
+      'commit',
+      '--quiet',
+      '--allow-empty',
+      '-m',
+      'missing file'
     );
-    const absentBlob = commit(repo, 'missing blob', `${source(true)}\n// unique missing blob\n`);
+    const file = path.join(repo, sourceFile);
+    writeFileSync(file, '');
+    git(repo, 'add', '--intent-to-add', '--', sourceFile);
+    for (const [message, content] of [
+      ['base', source()],
+      ['malformed', 'export function broken( {'],
+      ['unrecognized contract', 'export const scripting = 1;'],
+      ['target', source(true)],
+      ['outside tracked regions', `${source(true)}\nexport const other = true;\n`],
+      ['missing blob', `${source(true)}\n// unique missing blob\n`],
+    ]) {
+      writeFileSync(file, content);
+      git(repo, '-c', 'commit.gpgsign=false', 'commit', '--quiet', '--all', '-m', message);
+    }
+    const [missing, base, malformed, restructured, target, uncategorized, absentBlob] = git(
+      repo,
+      'rev-list',
+      '--reverse',
+      'HEAD'
+    ).split(/\r?\n/);
     const blob = git(repo, 'rev-parse', `${absentBlob}:${sourceFile}`);
     git(repo, 'worktree', 'add', '--quiet', '--detach', worktree, target);
     // A promisor remote would normally let cat-file fetch the deliberately missing blob.
@@ -219,8 +229,9 @@ test('compares committed Risu Lua source and fails closed on invalid inputs', as
     });
 
     await t.test('help succeeds and bad CLI arguments fail', () => {
-      assert.equal(run('--help').status, 0);
-      assert.match(run('--help').stdout, /Usage:/);
+      const help = run('--help');
+      assert.equal(help.status, 0);
+      assert.match(help.stdout, /Usage:/);
       for (const args of [[], ['--unknown'], ['--risu'], ['--risu', repo, '--json', '--json']]) {
         const result = run(...args);
         assert.equal(result.status, 2, result.stderr);

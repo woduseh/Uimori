@@ -2,7 +2,7 @@
 import contextlib
 import importlib.util
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -75,7 +75,10 @@ class Host(m.Runner):
                     "wrong" if self.fault == "labels" else self.args.commit,
                     "io.uimori.codex-version": self.codex_version}}}])
         if args[0] == "compose":
-            self.live_image = "sha256:old"; self.live_volume = "old"
+            compose_files = [Path(args[index + 1]) for index, arg in enumerate(args) if arg == "-f"]
+            override = json.loads(compose_files[-1].read_text())
+            self.live_image = override["services"]["app"]["image"]
+            self.live_volume = m.environment_values(self.env.read_text())["UIMORI_DATA_VOLUME"]
         return ""
 
     def new_volume(self, suffix, temporary=True): return "isolated-" + suffix
@@ -93,6 +96,7 @@ class Host(m.Runner):
             return {"integrity": "ok"}
         if action == "maintenance": return {"status": "closed" if self.closed else "open", "reason": self.reason}
         if action == "close-maintenance": self.closed = True; self.reason = self.owner
+        if action == "inspect" and self.fault == "active-work": raise RuntimeError("Active work")
         if action == "audit": return {"integrity": "ok"}
         return {}
 
@@ -133,6 +137,41 @@ class CodexVersionTests(unittest.TestCase):
             m.validate_codex_version(None)
 
 
+class RunnerInputs(unittest.TestCase):
+    @mock.patch.object(m, "Path", PurePosixPath)
+    def test_deployment_arguments(self):
+        base = ["--commit", "a" * 40, "--build-id", "b" * 64, "--dist-hash", "c" * 64,
+                "--release-dir", "/opt/uimori/releases/test"]
+        image = "ghcr.io/team/app@sha256:" + "d" * 64
+        args = m.arguments(base + ["--fresh", "--image", image, "--check-only", "--source-ref", "codex/beta"])
+        self.assertTrue(args.fresh and args.check_only)
+        self.assertEqual((args.image, args.source_ref), (image, "codex/beta"))
+        for extra in [["--commit", "bad"], ["--release-dir", "/opt/uimori/releases/../app"],
+                      ["--image=--bad"], ["--source-ref", "../main"]]:
+            with self.subTest(extra=extra):
+                with self.assertRaises(SystemExit) as error:
+                    m.arguments(base + extra)
+                self.assertEqual(error.exception.code, 2)
+
+    def test_update_preserves_operator_environment(self):
+        protected = '# operator comment\nUIMORI_ACCESS_TOKEN="secret keep"\nUIMORI_PUBLIC_ORIGIN=https://example.test\n'
+        original = protected + "UIMORI_IMAGE_TAG=old\nUIMORI_DATA_VOLUME=old-volume\n"
+        updated = m.update_environment(original, "sha256:new", "new-volume")
+        self.assertIn(protected, updated)
+        self.assertNotIn("UIMORI_IMAGE_TAG=", updated)
+        self.assertEqual(m.protected_environment(original), m.protected_environment(updated))
+        self.assertEqual(m.environment_values(updated)["UIMORI_ACCESS_TOKEN"], "secret keep")
+
+    def test_compatible_schema_allows_extra_columns_and_requires_every_candidate_column(self):
+        shape = {"type": "TEXT", "notnull": 0, "pk": 0}
+        expected = {"helper_tasks": {"id": shape, "started_at": shape}}
+        actual = {"helper_tasks": {"id": shape, "retired_column": shape}}
+        with self.assertRaisesRegex(RuntimeError, r"helper_tasks\.started_at.*--fresh"):
+            m.validate_columns(expected, actual)
+        actual["helper_tasks"]["started_at"] = shape
+        self.assertEqual(m.validate_columns(expected, actual)["status"], "PASS")
+
+
 class OracleTransitions(unittest.TestCase):
     @contextlib.contextmanager
     def host(self, **options):
@@ -142,6 +181,33 @@ class OracleTransitions(unittest.TestCase):
     def fail_and_rollback(self, host):
         with self.assertRaises(RuntimeError): host.execute()
         host.rollback()
+
+    def test_candidate_compose_uses_operator_env_without_copying_it(self):
+        with self.host() as host:
+            original = "UIMORI_ACCESS_TOKEN=private-value\n"
+            host.env.write_text(original)
+            host.candidate.mkdir()
+            compose = host.candidate / "compose.tailscale.yaml"
+            compose.write_text("services:\n  app:\n    env_file: .env.self-host\n")
+            with mock.patch.object(host, "docker") as docker:
+                m.Runner.compose(host, "config", "--quiet", cwd=host.candidate)
+            docker.assert_called_once()
+            args = docker.call_args.args
+            self.assertEqual(Path(args[args.index("--project-directory") + 1]) / ".env.self-host", host.env)
+            self.assertEqual(Path(args[args.index("--env-file") + 1]), host.env)
+            self.assertEqual(Path(args[args.index("-f") + 1]), compose)
+            self.assertEqual(args[-2:], ("config", "--quiet"))
+            self.assertNotIn("private-value", " ".join(args))
+            self.assertEqual(host.env.read_text(), original)
+            self.assertEqual(list(host.candidate.iterdir()), [compose])
+
+    def test_host_control_persists_cleanup_warning_after_confirmed_open(self):
+        with self.host() as host:
+            result = {"status": "open", "activeWork": 0, "sessionCleanup": {"status": "WARN", "error": "logout unavailable"}}
+            with mock.patch.object(host, "docker", return_value=json.dumps(result)):
+                self.assertEqual(m.Runner.control(host, "open", image="sha256:old")["status"], "open")
+            summary = json.loads((host.release / "oracle-summary.json").read_text())
+            self.assertEqual(summary["sessionCleanupWarnings"], [{"action": "open", "error": "logout unavailable"}])
 
     def test_update_orders_backup_closed_validation_and_reopen(self):
         with self.host() as host:
@@ -194,11 +260,32 @@ class OracleTransitions(unittest.TestCase):
     def test_switch_health_and_https_failure_restore_before_accepting_writes(self):
         for fault in ["switch", "health", "smoke"]:
             with self.subTest(fault=fault), self.host(fault=fault) as host:
-                self.fail_and_rollback(host)
+                environment, head = host.env.read_bytes(), host.head
+                with self.assertRaises(RuntimeError): host.execute()
+                host.events.clear()
+                host.rollback()
+                self.assertEqual(host.env.read_bytes(), environment)
+                self.assertEqual(host.head, head)
                 self.assertEqual(host.live_image, "sha256:old")
                 self.assertEqual(host.summary["rollback"], "PASS")
                 self.assertFalse(host.closed)
-                self.assertIn(("data", "restore"), host.events)
+                checks = [index for index, event in enumerate(host.events) if event == ("data", "inspect")]
+                stops = [index for index, event in enumerate(host.events) if event == ("compose", "stop")]
+                restore = host.events.index(("data", "restore"))
+                self.assertLess(checks[0], stops[0])
+                self.assertLess(stops[1], checks[1])
+                self.assertLess(checks[1], restore)
+                self.assertLess(restore, host.events.index(("healthy", "sha256:old")))
+                self.assertLess(host.events.index(("healthy", "sha256:old")), host.events.index(("control", "open")))
+
+    def test_active_candidate_prevents_stop_and_restore_during_rollback(self):
+        with self.host(fault="smoke") as host:
+            with self.assertRaises(RuntimeError): host.execute()
+            host.events.clear()
+            host.fault = "active-work"
+            with self.assertRaisesRegex(RuntimeError, "Active work"): host.rollback()
+            self.assertNotIn(("compose", "stop"), host.events)
+            self.assertNotIn(("data", "restore"), host.events)
 
     def test_unconfirmed_reopen_never_restores_database(self):
         with self.host(fault="reopen") as host:
