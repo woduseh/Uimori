@@ -5,12 +5,6 @@ export const messages = {
     ja: '物語 UI テーマを作成',
     zh: '创建故事界面主题',
   },
-  'storyUi.cssHelp': {
-    ko: '변수는 &에, 요소 스타일은 일반 선택자에 작성해요. !important는 필요하지 않아요.',
-    en: 'Set variables on & and use normal selectors for elements. !important is unnecessary.',
-    ja: '変数は & に、要素のスタイルは通常のセレクターに記述します。!important は不要です。',
-    zh: '在 & 上设置变量，并使用普通选择器设置元素样式。无需 !important。',
-  },
   'storyUi.includeTheme': {
     ko: '이야기 UI 테마 포함',
     en: 'Include Story UI theme',
@@ -25,22 +19,16 @@ export const messages = {
     zh: '故事界面 CSS',
   },
   'storyUi.preview': {
-    ko: '이야기 UI 미리보기',
-    en: 'Story UI preview',
-    ja: '物語 UI プレビュー',
-    zh: '故事界面预览',
+    ko: '미리보기',
+    en: 'Preview',
+    ja: 'プレビュー',
+    zh: '预览',
   },
   'storyUi.botDefault': {
     ko: '봇의 이야기 UI 기본값',
     en: 'Bot Story UI default',
     ja: 'ボットの物語 UI の既定値',
     zh: '角色的故事界面默认值',
-  },
-  'storyUi.botDefaultHelp': {
-    ko: '채팅 스타일이 자동일 때 사용해요.',
-    en: 'Used when the chat style is automatic.',
-    ja: 'チャットのスタイルが自動の場合に使います。',
-    zh: '聊天样式设为自动时使用。',
   },
   'storyUi.modelStyle': {
     ko: '모델 스타일 따르기',
@@ -67,17 +55,11 @@ export const messages = {
     ja: '物語 UI のスタイル',
     zh: '故事界面样式',
   },
-  'storyUi.styleHelp': {
-    ko: '저장된 화면과 생성 중인 화면에 적용돼요.',
-    en: 'Applies to saved and generating screens.',
-    ja: '保存済みと生成中の画面に適用されます。',
-    zh: '应用于已保存和正在生成的界面。',
-  },
   'storyUi.style.auto': {
-    ko: '봇 기본값 또는 자동',
-    en: 'Bot default / automatic',
-    ja: 'ボットの既定値または自動',
-    zh: '角色默认值 / 自动',
+    ko: '자동',
+    en: 'Automatic',
+    ja: '自動',
+    zh: '自动',
   },
   'storyUi.style.blue-archive': {
     ko: '블루 아카이브',
@@ -100,12 +82,6 @@ export const messages = {
     en: 'Story UI',
     ja: '物語 UI',
     zh: '故事界面',
-  },
-  'storyUi.enableHelp': {
-    ko: '저장하면 모델이 다음 생성부터 이야기 속 화면과 선택지를 만들 수 있어요.',
-    en: 'After saving, the model can create in-story screens and choices from the next generation.',
-    ja: '保存すると、次の生成からモデルが物語内の画面や選択肢を作れるようになります。',
-    zh: '保存后，模型从下次生成起可以创建故事中的界面和选项。',
   },
   'storyUi.actionModeShort': {
     ko: '이 대화만 이어가기',

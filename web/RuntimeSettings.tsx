@@ -8,7 +8,7 @@ import { UndoIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
 import { Switch } from './BooleanControls.js';
 import './settings-actions.css';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Chat, Settings } from '../core/types.js';
 import { MAX_MAIN_MODEL_CALLS, type AutoTranslationDefaults } from '../core/chat-settings.js';
 import { api } from './api.js';
@@ -35,7 +35,6 @@ export function SettingsEditor({
   disabled?: boolean;
 }) {
   useI18n();
-  const storyUiHelpId = useId();
   const form = useRef<HTMLFormElement>(null);
   const [value, setValue] = useState<Settings>(chat.settings);
   const [revision, setRevision] = useState(chat.settingsRevision);
@@ -163,12 +162,10 @@ export function SettingsEditor({
               <label className="settings-row settings-row-toggle">
                 <span className="settings-row-copy">
                   <strong>{t('storyUi.enable')}</strong>
-                  <small id={storyUiHelpId}>{t('storyUi.enableHelp')}</small>
                 </span>
                 <span className="settings-row-control">
                   <Switch
                     aria-label={t('storyUi.enable')}
-                    aria-describedby={storyUiHelpId}
                     checked={value.storyUi === true}
                     onChange={(event) => update('storyUi', event.target.checked)}
                   />
@@ -177,7 +174,6 @@ export function SettingsEditor({
               <label className="settings-row">
                 <span className="settings-row-copy">
                   <strong>{t('storyUi.style')}</strong>
-                  <small>{t('storyUi.styleHelp')}</small>
                 </span>
                 <StoryUiStyleSelect
                   value={value.storyUiStyle ?? 'auto'}

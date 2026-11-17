@@ -359,12 +359,10 @@ export function ModelWorkspaceEditor({
             <div className="settings-row">
               <div className="settings-row-copy">
                 <label htmlFor={`${id}-judgment-provider`}>{t('settings.judgmentProvider')}</label>
-                <small id={`${id}-judgment-scope`}>{t('settings.judgmentScope')}</small>
               </div>
               <div className="settings-row-control">
                 <select
                   id={`${id}-judgment-provider`}
-                  aria-describedby={`${id}-judgment-scope`}
                   value={compatible ? 'compatible' : judgment.provider}
                   onChange={(event) => {
                     const provider = event.target.value;
@@ -477,14 +475,10 @@ export function ModelWorkspaceEditor({
                 <div className="settings-row">
                   <div className="settings-row-copy">
                     <label htmlFor={`${id}-judgment-images`}>{t('settings.judgmentImages')}</label>
-                    <small id={`${id}-judgment-images-help`}>
-                      {t('settings.judgmentImagesHelp')}
-                    </small>
                   </div>
                   <div className="settings-row-control">
                     <Switch
                       id={`${id}-judgment-images`}
-                      aria-describedby={`${id}-judgment-images-help`}
                       checked={judgment.images}
                       onChange={(event) =>
                         changeJudgment({ ...judgment, images: event.target.checked })

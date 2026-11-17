@@ -111,7 +111,6 @@ export function ChatGenerationDefaults({
   return (
     <section className="settings-group" aria-label={t('settings.newChatDefaults')}>
       <h4>{t('settings.newChatDefaults')}</h4>
-      <p>{t('settings.newChatDefaultsScope')}</p>
       <LoadingState
         presentation="placeholder"
         loading={loading}

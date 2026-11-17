@@ -225,7 +225,7 @@ export function ThemeSettings({
   }
   function edit(theme?: Theme, copy = false, storyOnly = false) {
     if (dirty) {
-      setError('현재 편집을 저장하거나 취소한 뒤 다른 테마를 열어 주세요.');
+      setError(uiMessage('visualpanels.saveOrCancelYourCurrentEditsBefore'));
       return false;
     }
     if (management.current) management.current.open = true;
@@ -298,8 +298,8 @@ export function ThemeSettings({
         targetScope === 'global' &&
           ((state.scope.chatId && p.chatThemes[state.scope.chatId]) ||
             (state.scope.botId && p.botThemes[state.scope.botId]))
-          ? '기본 레이아웃을 바꿨어요. 현재 채팅은 별도로 지정한 레이아웃을 사용해요.'
-          : '레이아웃 선택을 저장했어요.'
+          ? uiMessage('visualpanels.defaultLayoutChangedThisChatUsesIts')
+          : uiMessage('visualpanels.layoutSelectionSaved')
       );
     });
   }
@@ -320,8 +320,8 @@ export function ThemeSettings({
         scope === 'global' &&
           ((state.scope.chatId && p.chatPalettes?.[state.scope.chatId]) ||
             (state.scope.botId && p.botPalettes?.[state.scope.botId]))
-          ? '기본 팔레트를 바꿨어요. 현재 채팅은 별도로 지정한 팔레트를 사용해요.'
-          : '팔레트 선택을 저장했어요.'
+          ? uiMessage('visualpanels.defaultPaletteChangedThisChatUsesIts')
+          : uiMessage('visualpanels.paletteSelectionSaved')
       );
     });
   }
@@ -340,7 +340,7 @@ export function ThemeSettings({
   }
   async function importFile(file: File) {
     if (dirty) {
-      setError('편집 중인 테마를 저장하거나 취소한 뒤 가져와 주세요.');
+      setError(uiMessage('visualpanels.saveOrCancelTheThemeYouAre'));
       return;
     }
     await action(async () => {
@@ -661,7 +661,6 @@ export function ThemeSettings({
             <div>
               <h3 id="story-ui-default-heading">{t('storyUi.botDefault')}</h3>
               {storyUiThemeTarget && <p>{storyUiThemeTarget.title}</p>}
-              <small>{t('storyUi.botDefaultHelp')}</small>
             </div>
             <button
               type="button"
@@ -818,10 +817,8 @@ export function ThemeSettings({
                     </label>
                     <label>
                       {t('storyUi.customCss')}
-                      <small id={`${id}-story-css-help`}>{t('storyUi.cssHelp')}</small>
                       <textarea
                         aria-label={t('storyUi.customCss')}
-                        aria-describedby={`${id}-story-css-help`}
                         rows={7}
                         placeholder={
                           '& { --story-paper: #f8f2e4; }\n.story-ui-tabs button { border-radius: 6px; }'

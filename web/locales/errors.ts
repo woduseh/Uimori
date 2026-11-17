@@ -894,10 +894,10 @@ export const messages = {
     zh: '判定连接不可用。请检查 API 密钥和连接设置。',
   },
   'errors.auxiliary.JUDGMENT_CONNECTION_UNAVAILABLE.details': {
-    ko: '저장한 판단 연결을 사용할 수 없어요. 역할별 모델에서 사용할 수 있는 판단 연결을 선택해 주세요.',
-    en: 'The saved judgment connection is unavailable. Select an available judgment connection in role model settings.',
-    ja: '保存した判定接続を使用できません。役割別モデル設定で利用可能な判定接続を選択してください。',
-    zh: '已保存的判断连接不可用。请在角色模型设置中选择可用的判断连接。',
+    ko: '저장한 판단 연결을 사용할 수 없어요. 역할별 모델에서 다른 연결을 선택해 주세요.',
+    en: 'The saved judgment connection is unavailable. Select another connection in role model settings.',
+    ja: '保存した判定接続を使用できません。役割別モデル設定で別の接続を選択してください。',
+    zh: '已保存的判断连接不可用。请在角色模型设置中选择其他连接。',
   },
   'errors.auxiliary.JEV_INPUT_BUDGET.details': {
     ko: '판단 입력이 허용된 토큰 한도를 초과했어요. 출력 길이 설정을 확인해 주세요.',
@@ -1074,10 +1074,10 @@ export const messages = {
     zh: '已保存的判断连接不可用。',
   },
   'errors.auxiliary.JUDGMENT_CONNECTION_UNAVAILABLE.action': {
-    ko: '역할별 모델에서 사용할 수 있는 판단 연결을 선택해 주세요.',
-    en: 'Select an available judgment connection in role model settings.',
-    ja: '役割別モデル設定で利用可能な判定接続を選択してください。',
-    zh: '请在角色模型设置中选择可用的判断连接。',
+    ko: '역할별 모델에서 다른 연결을 선택해 주세요.',
+    en: 'Select another connection in role model settings.',
+    ja: '役割別モデル設定で別の接続を選択してください。',
+    zh: '请在角色模型设置中选择其他连接。',
   },
   'errors.auxiliary.JEV_INPUT_BUDGET.message': {
     ko: '판단 입력이 허용된 토큰 한도를 초과했어요.',

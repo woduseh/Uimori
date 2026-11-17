@@ -124,7 +124,7 @@ it.each([
   [
     'JUDGMENT_CONNECTION_UNAVAILABLE',
     '저장한 판단 연결을 사용할 수 없어요.',
-    '역할별 모델에서 사용할 수 있는 판단 연결을 선택해 주세요.',
+    '역할별 모델에서 다른 연결을 선택해 주세요.',
   ],
   [
     'JUDGMENT_CREDENTIAL_REQUIRED',

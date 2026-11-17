@@ -888,9 +888,9 @@ test('JDGUI01 saves a compatible judgment connection and model through the role 
   await open();
   const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
   const provider = editor.getByLabel('판단 프로바이더', { exact: true });
-  const format = editor.getByLabel('판단 API 형식', { exact: true });
-  const model = editor.getByLabel('판단 모델 ID', { exact: true });
-  const images = editor.getByRole('switch', { name: '판단에 이미지 전송', exact: true });
+  const format = editor.getByLabel('API 형식', { exact: true });
+  const model = editor.getByLabel('모델 ID', { exact: true });
+  const images = editor.getByRole('switch', { name: '후보 이미지 전송', exact: true });
   const save = editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true });
 
   await provider.selectOption('openai');
@@ -898,7 +898,7 @@ test('JDGUI01 saves a compatible judgment connection and model through the role 
   await expect(model).toHaveAttribute('readonly', '');
   await provider.selectOption('compatible');
   await expect(save).toBeDisabled();
-  await editor.getByLabel('판단 API 연결', { exact: true }).selectOption(connection.id);
+  await editor.getByLabel('연결', { exact: true }).selectOption(connection.id);
   await format.selectOption('typesafe-compatible');
   await expect(images).not.toBeChecked();
   await model.fill('synthetic/decision');

@@ -162,10 +162,10 @@ export const messages = {
     zh: '请导入不超过4 MiB的主题文件。',
   },
   'visualpanels.importedAsANewThemeReviewAnd': {
-    ko: '새 테마로 가져왔어요. 기존 테마는 덮어쓰지 않아요.',
-    en: 'Imported as a new theme. Existing themes are preserved.',
-    ja: '新しいテーマとして読み込みました。既存のテーマは上書きしません。',
-    zh: '已作为新主题导入。不会覆盖现有主题。',
+    ko: '새 테마로 가져왔어요.',
+    en: 'Imported as a new theme.',
+    ja: '新しいテーマとして読み込みました。',
+    zh: '已作为新主题导入。',
   },
   'visualpanels.themesAndColors': {
     ko: '테마와 색상',

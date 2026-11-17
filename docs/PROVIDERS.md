@@ -98,7 +98,7 @@ Gemini용 `vertex-gemini-v1` 연결은 Google Cloud의 기업용 엔드포인트
 
 ### 판단 프로바이더
 
-**설정 → 역할별 모델 → 판단 프로바이더**에서 로어 선별, 거절 감지, 이미지 배치, 생성 전 검사에 공통으로 사용할 모델을 선택해요. 기본값은 TypeSafe AI / JEV예요. OpenAI, Gemini 및 호환 API는 등록한 일반 프로바이더 연결과 그 연결에 저장한 API 키를 사용해요. 전역 설정을 저장할 때 활성 연결과 주소를 검사해요. 계정과 모델의 접근 권한은 실제 요청 시 제공사가 확인해요.
+**설정 → 역할별 모델 → 판단 프로바이더**에서 로어 선별, 거절 감지, 이미지 배치, 생성 전 검사에 공통으로 사용할 모델을 선택해요. 기본값은 TypeSafe AI / JEV예요. OpenAI, Gemini 및 호환 API는 등록된 활성 프로바이더 연결과 저장한 API 키를 사용해요.
 
 | 선택 | 등록할 연결 | 실제 요청 주소와 모델 |
 | --- | --- | --- |
@@ -107,9 +107,9 @@ Gemini용 `vertex-gemini-v1` 연결은 Google Cloud의 기업용 엔드포인트
 | 호환 API · OpenAI Decisions 예시 | `https://ai-gateway.vercel.sh/v1`의 Vercel AI Gateway 연결 | `https://ai-gateway.vercel.sh/v1/decisions`, 예시 `openai/gpt-6-luna-decisions`. [Vercel AI Gateway 안내](https://vercel.com/changelog/openai-decisions-api-now-available-on-ai-gateway) |
 | 호환 API · TypeSafe System One 예시 | `https://openrouter.ai/api/v1`의 OpenAI 호환 연결 | `https://openrouter.ai/api/v1/systemone`, 예시 `jev-1.13`. [OpenRouter TypeSafe 호환 가이드](https://openrouter.ai/docs/guides/community/typesafe-sdk) |
 
-호환 API는 연결의 기본 주소에 선택한 형식에 따라 `/decisions` 또는 `/systemone`을 붙여요. 제공사가 해당 형식으로 받는 모델 ID를 입력해요. 지금 설정의 거절 감지 기준값은 그대로 적용돼요. 같은 점수의 의미와 판정 품질은 모델마다 달라질 수 있어요. 공개 문서와 합성 응답으로 형식을 검증했으며 실제 계정에서의 키·모델 가용성과 판정 품질은 확인하지 않았어요.
+호환 API는 연결 기본 주소 뒤에 형식에 따라 `/decisions` 또는 `/systemone`을 붙여 요청하므로 제공사가 받는 모델 ID를 입력해요.
 
-이미지 배치는 기본적으로 후보의 텍스트 정보를 사용해요. OpenAI, Gemini 및 호환 API에서 **판단에 이미지 전송**을 켜면 해당 모델에 실제 후보 이미지를 보내요. 사용하는 연결과 모델이 이미지 입력을 지원해야 해요. TypeSafe의 이미지 및 긴 컨텍스트 옵션은 기본 JEV에 적용돼요.
+이미지 배치는 기본적으로 후보 텍스트를 사용하며, OpenAI·Gemini·호환 API에서 **후보 이미지 전송**을 켜면 실제 이미지를 함께 보내요. TypeSafe의 이미지·긴 컨텍스트 옵션은 기본 JEV에만 적용돼요.
 
 | 판단 API | 요청당 최대 질문 수 | 요청 전체 / 질문별 텍스트 토큰 추정 상한 |
 | --- | ---: | ---: |
@@ -119,7 +119,7 @@ Gemini용 `vertex-gemini-v1` 연결은 Google Cloud의 기업용 엔드포인트
 | OpenAI Decisions 호환 | 128 | 64,000 / 32,000 |
 | TypeSafe System One 호환 | 2,000 | 64,000 / 32,000 |
 
-상한은 Uimori가 검사하는 값이에요. OpenAI Decisions 호환의 질문 수는 LiteLLM 게이트웨이와의 호환을 고려해 128개로 제한해요. 제공사나 모델의 한도가 더 낮으면 실제 요청에서 제한될 수 있어요. 판단 연결을 바꾸더라도 저장된 요청 영수증은 당시 프로바이더와 형식을 유지해요. 판단 요청의 전송 실패에 새 자동 재시도는 없어요.
+OpenAI Decisions 호환의 질문 상한(128개)은 LiteLLM 게이트웨이 호환을 기준으로 Uimori가 검사하는 값이에요. 저장된 요청 영수증은 당시 프로바이더와 형식을 유지하며, 전송 실패 시 자동 재시도는 하지 않아요.
 
 #### TypeSafe AI / JEV
 
