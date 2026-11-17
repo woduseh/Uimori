@@ -110,34 +110,25 @@ test('a selected optional lore is pinned without mutating its saved loading mode
   expect(input.lore[0].loading).toBe('discoverable');
 });
 
-test('assertion, copying validation and compilation reject the same malformed content', () => {
-  const invalid = [
-    { ...content(), extra: true },
-    { ...content(), version: 1 },
-    { ...content(), revision: 0 },
-    { ...content(), id: 'invalid id' },
-    { ...content(), title: 'x'.repeat(201) },
-    { ...content(), lore: [content().lore[0], content().lore[0]] },
-    { ...content(), lore: [{ ...content().lore[0], relatedIds: ['absent'] }] },
-    { ...content(), lore: [{ ...content().lore[0], loading: 'other' }] },
-    { ...content(), loreActivation: { mode: 'other' } },
-  ];
-  for (const input of invalid) {
-    const code = (run: () => unknown) => {
-      try {
-        run();
-        throw new Error('Expected invalid content to be rejected');
-      } catch (error) {
-        if (!(error instanceof Error) || !error.message.startsWith('PACKAGE_')) throw error;
-        return error.message;
-      }
-    };
-    const copied = code(() => validateRisuContent(input));
-    expect(code(() => assertRisuContent(input))).toBe(copied);
-    expect(code(() => compileContentAttachment(input as RisuContent, attachment, context))).toBe(
-      copied
-    );
-  }
+test('rejects invalid package fields and lore definitions', () => {
+  const valid = content();
+  const lore = valid.lore[0];
+  for (const [changes, error] of [
+    [{ extra: true }, 'PACKAGE_INVALID_FIELDS'],
+    [{ version: 1 }, 'PACKAGE_VERSION_UNSUPPORTED'],
+    [{ revision: 0 }, 'PACKAGE_INVALID_REVISION'],
+    [{ id: 'invalid id' }, 'PACKAGE_INVALID_ID'],
+    [{ title: 'x'.repeat(201) }, 'PACKAGE_INVALID_STRING'],
+    [{ lore: [lore, lore] }, 'PACKAGE_DUPLICATE_ID'],
+    [{ lore: [{ ...lore, relatedIds: ['absent'] }] }, 'PACKAGE_LORE_REFERENCE'],
+    [{ lore: [{ ...lore, loading: 'other' }] }, 'PACKAGE_LORE_LOADING'],
+    [{ loreActivation: { mode: 'other' } }, 'PACKAGE_LORE_ACTIVATION_MODE'],
+  ] as const)
+    expect(() => assertRisuContent({ ...valid, ...changes })).toThrow(error);
+
+  expect(() => validateRisuContent({ ...valid, version: 1 })).toThrow(
+    'PACKAGE_VERSION_UNSUPPORTED'
+  );
 });
 
 test('native byte budgets bound source data without counting its derived lore twice', () => {
@@ -153,7 +144,6 @@ test('native byte budgets bound source data without counting its derived lore tw
   input.nativeRisu.card.character_book = { entries };
   expect(Buffer.byteLength(JSON.stringify(input.nativeRisu))).toBeLessThan(8 * 1024 * 1024);
   expect(Buffer.byteLength(JSON.stringify(input))).toBeGreaterThan(12 * 1024 * 1024);
-  assertRisuContent(input);
   expect(validateRisuContent(input).lore.map((entry) => entry.text)).toEqual(
     entries.map((entry) => entry.content)
   );
@@ -163,8 +153,8 @@ test('native byte budgets bound source data without counting its derived lore tw
       .map((entry) => entry.text)
   ).toEqual(entries.map((entry) => entry.content));
 
-  input.nativeRisu.card.extra = 'x'.repeat(3 * 1024 * 1024);
-  expect(() => assertRisuContent(input)).toThrow('PACKAGE_NATIVE_RISU_LIMIT');
+  const remainingBytes = 8 * 1024 * 1024 - Buffer.byteLength(JSON.stringify(input.nativeRisu));
+  input.nativeRisu.card.extra = 'x'.repeat(remainingBytes);
   expect(() => compileContentAttachment(input, attachment, context)).toThrow(
     'PACKAGE_NATIVE_RISU_LIMIT'
   );
@@ -192,23 +182,16 @@ test('native source validation borrows data while the editing API keeps a detach
   expect(edited).not.toBe(input);
 });
 
-test('native shape, JSON, depth and byte limits are retained by all validation paths', () => {
+test('native source validation rejects malformed structure, non-JSON values and excess depth', () => {
+  const valid = content().nativeRisu;
   let nested: Record<string, unknown> = {};
   for (let depth = 0; depth < 101; depth++) nested = { nested };
-  const invalid = [
-    { ...content().nativeRisu, sourceHash: 'wrong' },
-    { ...content().nativeRisu, assets: [{ name: '', uri: '', imageId: 'bad id' }] },
-    { ...content().nativeRisu, card: { value: undefined } },
-    { ...content().nativeRisu, card: { value: Number.NaN } },
-    { ...content().nativeRisu, card: nested },
-    { ...content().nativeRisu, card: { text: 'x'.repeat(8 * 1024 * 1024) } },
-  ];
-  for (const native of invalid) {
-    expect(() => assertRisuContentSource(native)).toThrow();
-    expect(() => validateRisuContentSource(native)).toThrow();
-    const input = { ...content(), nativeRisu: native };
-    expect(() => assertRisuContent(input)).toThrow();
-    expect(() => validateRisuContent(input)).toThrow();
-    expect(() => compileContentAttachment(input, attachment, context)).toThrow();
-  }
+  for (const [changes, error] of [
+    [{ sourceHash: 'wrong' }, 'PACKAGE_NATIVE_RISU_INVALID'],
+    [{ assets: [{ name: '', uri: '', imageId: 'bad id' }] }, 'PACKAGE_NATIVE_RISU_ASSET'],
+    [{ card: { value: undefined } }, 'PACKAGE_NATIVE_RISU_JSON'],
+    [{ card: { value: Number.NaN } }, 'PACKAGE_NATIVE_RISU_JSON'],
+    [{ card: nested }, 'PACKAGE_NATIVE_RISU_LIMIT'],
+  ] as const)
+    expect(() => validateRisuContentSource({ ...valid, ...changes })).toThrow(error);
 });

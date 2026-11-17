@@ -77,17 +77,19 @@ test('source-only and irrelevant events need no task-table queries', () => {
   );
 });
 
-test('visible jobs match the original hash/kind/latest-translation filtering and ordering', () => {
+test('visible jobs filter by kind and hash and select the latest translation by revision, date and ID', () => {
   const state = fixture();
-  state.insert('old-translation', 'hash', 'translation', 1);
-  state.insert('new-translation', 'hash', 'translation', 2);
+  state.insert('older-revision', 'hash', 'translation', 1, 'source', 'chat', '2026-01-03');
+  state.insert('z-older-date', 'hash', 'translation', 2);
+  state.insert('a-tied', 'hash', 'translation', 2, 'source', 'chat', '2026-01-02');
+  state.insert('b-latest', 'hash', 'translation', 2, 'source', 'chat', '2026-01-02');
   state.insert('current-status', 'hash', 'status');
   state.insert('stale-status', 'stale', 'status');
   state.insert('stale-image', 'stale', 'image');
   state.insert('foreign-source', 'hash', 'translation', 3, 'other-source');
   assert.deepEqual(
     readerJobIds(state, 'source', 'hash').map((row) => row.id),
-    ['new-translation', 'stale-image']
+    ['stale-image', 'b-latest']
   );
 });
 
@@ -96,15 +98,4 @@ test('the latest translation uses all revisions before source-hash filtering, no
   state.insert('old-matching', 'hash', 'translation', 1);
   state.insert('latest-nonmatching', 'different', 'translation', 2);
   assert.deepEqual(readerJobIds(state, 'source', 'hash'), []);
-});
-
-test('translation ranking retains revision, creation-time and ID tie breaks', () => {
-  const state = fixture();
-  state.insert('a', 'hash', 'translation', 3, 'source', 'chat', '2026-01-01');
-  state.insert('b', 'hash', 'translation', 3, 'source', 'chat', '2026-01-02');
-  state.insert('c', 'hash', 'translation', 3, 'source', 'chat', '2026-01-02');
-  assert.deepEqual(
-    readerJobIds(state, 'source', 'hash').map((row) => row.id),
-    ['c']
-  );
 });

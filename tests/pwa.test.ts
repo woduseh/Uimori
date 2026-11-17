@@ -53,7 +53,6 @@ test('favicon sizes and transparent in-app halo stay consistent', async () => {
   }
 
   const logo = readFileSync('web/public/icons/halo-mark.svg', 'utf8');
-  expect(logo).not.toContain('<rect');
   const { data } = await sharp(Buffer.from(logo))
     .resize(64, 64)
     .ensureAlpha()

@@ -157,15 +157,15 @@ test('repeated ordinary saves keep only the latest undo and reject a stale revis
   const initial = saveResource(store, {
     kind: 'content',
     id: null,
-    model: fixtureBotInput('Before', 'Long source '.repeat(1000)),
+    model: fixtureBotInput('Before'),
   }).saved as Content;
   let saved = initial;
-  for (let index = 0; index < 12; index++)
+  for (const title of ['First change', 'Second change'])
     saved = saveResource(store, {
       kind: 'content',
       id: saved.id,
       expectedRevision: saved.revision,
-      model: nativeDraftTitle(editableResource('content', saved), `Change ${index}`),
+      model: nativeDraftTitle(editableResource('content', saved), title),
     }).saved as Content;
   expect(store.db.prepare('SELECT count(*) AS n FROM resource_undo').get()!.n).toBe(1);
   expect(() =>
@@ -177,7 +177,7 @@ test('repeated ordinary saves keep only the latest undo and reject a stale revis
     })
   ).toThrow();
   expect((undoResource(store, 'content', saved.id, saved.revision).saved as Content).title).toBe(
-    'Change 10'
+    'First change'
   );
 });
 

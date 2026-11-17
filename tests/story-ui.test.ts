@@ -35,13 +35,11 @@ describe('story UI', () => {
     expect(projectStoryUiText(stored)).not.toContain('blue-archive');
     const prepared = prepareStoryUiTranslation(stored);
     expect(prepared.text).not.toContain('blue-archive');
-    const translated = parseStoryUi(prepared.restore(prepared.text.replace('Hello', '안녕')))[0];
-    expect(translated.kind).toBe('ui');
+    const restored = prepared.restore(prepared.text.replace('Hello', '안녕'));
+    const translated = parseStoryUi(restored)[0];
     if (translated.kind !== 'ui') throw new Error('Translated UI missing');
     expect(resolveStoryUiStyle(undefined, translated.messages)).toBe('blue-archive');
-    expect(projectStoryUiText(prepared.restore(prepared.text.replace('Hello', '안녕')))).toContain(
-      '안녕'
-    );
+    expect(projectStoryUiText(restored)).toContain('안녕');
     const unknown = normalizeStoryUiOutput(expression.replace('blue-archive', 'unknown'));
     const fallback = parseStoryUi(unknown)[0];
     if (fallback.kind !== 'ui') throw new Error('UI missing');
@@ -139,23 +137,16 @@ describe('story UI', () => {
       expect(parseStoryUi(source).map((part) => part.kind)).toEqual(['prose']);
     }
   });
-  it('keeps initialized data and repeated list templates', () => {
+  it('keeps repeated list data and accepts bound images and icons', () => {
     const expression = `<a2ui>
-$/people = [{name: "Mira"}, {name: "Sol"}]
-item = Text($name)
+$/people = [{name: "Mira", portrait: "/api/assets/mira", icon: "person"}, {name: "Sol", portrait: "/api/assets/sol", icon: "person"}]
+item = Row([Image($portrait, description=$name), Icon($icon), Text($name)])
 root = List(_template($/people, item))
 </a2ui>`;
     const result = normalizeStoryUiOutput(expression);
     expect(parseStoryUi(result)[0].kind).toBe('ui');
     expect(projectStoryUiText(result)).toContain('"name":"Mira"');
-  });
-  it('accepts data-bound images and icons inside repeated lists', () => {
-    const expression = `<a2ui>
-$/people = [{name: "Mira", portrait: "/api/assets/mira", icon: "person"}]
-item = Row([Image($portrait, description=$name), Icon($icon), Text($name)])
-root = List(_template($/people, item))
-</a2ui>`;
-    expect(parseStoryUi(normalizeStoryUiOutput(expression))[0].kind).toBe('ui');
+    expect(projectStoryUiText(result)).toContain('"name":"Sol"');
   });
   it('leaves ordinary fenced code as prose', () => {
     const source = '```example\n<a2ui>root = Text("code")</a2ui>\n```';

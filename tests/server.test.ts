@@ -2,7 +2,7 @@ import packageJson from '../package.json' with { type: 'json' };
 import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
 import { injectWithFixtureBot, fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -133,14 +133,6 @@ describe('file SQLite HTTP runtime', () => {
     }
   });
 
-  it('reports the package version independently of the build fingerprint', async () => {
-    const { url } = await setup();
-    expect(await api(url, '/api/health')).toMatchObject({
-      ready: true,
-      version: packageJson.version,
-      buildId: 'unit-integration',
-    });
-  });
   it('F02 fixes snapshots, rejects stale revisions, and deduplicates a logical command', async () => {
     const { app, url, chat } = await setup();
     const other = await api<Chat>(url, '/api/chats', { title: '별도의 도시' });
@@ -442,10 +434,12 @@ describe('file SQLite HTTP runtime', () => {
 });
 
 async function startChild(directory: string) {
+  const build = JSON.parse(await readFile('dist/build-identity.json', 'utf8'));
   const child = spawn(process.execPath, [resolve('dist/server/index.js')], {
     cwd: process.cwd(),
     env: {
       ...process.env,
+      UIMORI_BUILD_ID: undefined,
       UIMORI_DB: join(directory, 'story.sqlite'),
       UIMORI_PORT: '0',
       UIMORI_INSTANCE: randomUUID(),
@@ -460,7 +454,7 @@ async function startChild(directory: string) {
   child.stderr!.on('data', (data) => {
     stderr += String(data);
   });
-  const ready = await new Promise<{ url: string }>((resolveReady, reject) => {
+  const ready = await new Promise<{ url: string; buildId: string }>((resolveReady, reject) => {
     let output = '';
     const timer = setTimeout(() => reject(new Error(`Child ready timeout: ${stderr}`)), 10000);
     child.stdout!.on('data', (data) => {
@@ -482,9 +476,11 @@ async function startChild(directory: string) {
       reject(new Error(`Child exited ${code}: ${stderr}`));
     });
   });
+  expect(ready.buildId).toBe(build.buildId);
   expect(await api(ready.url, '/api/health')).toMatchObject({
     ready: true,
     version: packageJson.version,
+    buildId: build.buildId,
   });
   return { child, url: ready.url, entry };
 }

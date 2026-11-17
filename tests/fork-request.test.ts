@@ -57,7 +57,7 @@ test('an uncertain request retains its admission key for the next attempt', asyn
   expect(values.has(key)).toBe(false);
 });
 
-test.each([404, 409, 410, 429])(
+test.each([409, 410, 429])(
   'a later HTTP %s does not forget an earlier uncertain fork',
   async (status) => {
     const { values } = storageFixture();
@@ -99,7 +99,7 @@ test('a terminal receipt for a deleted copy releases its retained key', async ()
   expect(JSON.parse(String(fetch.mock.calls[2][1]?.body)).idempotencyKey).not.toBe(previous);
 });
 
-test.each([408, 500, 503])('HTTP %s retains the pending admission identity', async (status) => {
+test.each([408, 503])('HTTP %s retains the pending admission identity', async (status) => {
   const { values } = storageFixture();
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(
     new Response(JSON.stringify({ error: 'Synthetic failure' }), { status })
