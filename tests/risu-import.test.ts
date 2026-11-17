@@ -4,7 +4,7 @@ import Fastify from 'fastify';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join, resolve, relative, isAbsolute, basename } from 'node:path';
 import { tmpdir } from 'node:os';
-import { crc32, deflateRawSync } from 'node:zlib';
+import { zip } from './fixtures/zip.js';
 import { Store } from '../server/store.js';
 import { applyRisuImport, prepareRisuImport, risuImportRoutes } from '../server/risu-import.js';
 
@@ -14,14 +14,13 @@ import { resolvePackageStart } from '../core/package-start.js';
 import { compileContentAttachment } from '../core/package-runtime.js';
 import { modelWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
-import { decodeRPack } from '../server/compat/risu/rpack.js';
+import { writeEmbeddedRisuModule } from '../server/risu-export-codec.js';
 import { convertCharbook } from '../server/compat/risu/lorebook.js';
 import { createHash } from 'node:crypto';
 import { cardZip } from '../server/character-card-file.js';
 import { uploadDirectory, uploadRoutes } from '../server/uploads.js';
 import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
-import { randomBytes } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { saveImportReceipt } from '../server/import-operations.js';
 
 const owned: { directory: string; store: Store }[] = [];
@@ -71,31 +70,18 @@ const sourceOf = (value: unknown) => ({
   base64: Buffer.from(JSON.stringify(value)).toString('base64'),
 });
 
-test('a completed inline bot import keeps its original chat after many other imports', async () => {
+test('bounded import history retains the latest 256 ordinary receipts, protected keys and the original bot chat', async () => {
   const store = database();
   const source = sourceOf(card());
   const preview = prepareRisuImport({ source });
   const body = { source, digest: preview.digest, allowPartial: false, idempotencyKey: 'old-risu' };
   const first = await applyRisuImport(store, body);
   expect(first.chat).not.toBeNull();
-  for (let index = 0; index < 260; index++)
-    saveImportReceipt(store, `other-import-${index}`, 'digest', { index });
-
-  const replay = await applyRisuImport(store, body);
-  expect(replay.receipt).toMatchObject({ id: first.receipt.id, created: false });
-  expect(replay.chat?.id).toBe(first.chat?.id);
-  expect(store.chats()).toHaveLength(1);
-  expect(store.product.all('content')).toHaveLength(1);
-});
-
-test('receipt cleanup retains protected prefixes and the newest 256 ordinary requests', () => {
-  const store = database();
   const protectedKeys = [
     'retry:protected',
     'transcript:protected',
     'resource:protected',
     'chat:protected',
-    'risu-result:protected',
     'CHAT:legacy-case',
   ];
   for (const key of protectedKeys) saveImportReceipt(store, key, 'digest', {});
@@ -106,9 +92,15 @@ test('receipt cleanup retains protected prefixes and the newest 256 ordinary req
     .all()
     .map((row) => row.key);
   expect(keys).toEqual([
+    'risu-result:old-risu',
     ...protectedKeys,
     ...Array.from({ length: 256 }, (_, index) => `ordinary-${index + 4}`),
   ]);
+  const replay = await applyRisuImport(store, body);
+  expect(replay.receipt).toMatchObject({ id: first.receipt.id, created: false });
+  expect(replay.chat?.id).toBe(first.chat?.id);
+  expect(store.chats()).toHaveLength(1);
+  expect(store.product.all('content')).toHaveLength(1);
 });
 
 test('a library-only bot import preserves its opening without creating a chat, including retries', async () => {
@@ -493,62 +485,6 @@ test('card imports preserve all lore and cannot move it into the first chat note
   }
 });
 
-// A compact standard ZIP fixture exercises the actual .charx reader, including deflate and CRC.
-function zip(files: [string, Buffer][]) {
-  const locals: Buffer[] = [],
-    central: Buffer[] = [];
-  let offset = 0;
-  for (const [name, bytes] of files) {
-    const path = Buffer.from(name),
-      compressed = deflateRawSync(bytes);
-    const header = Buffer.alloc(30);
-    header.writeUInt32LE(0x04034b50);
-    header.writeUInt16LE(20, 4);
-    header.writeUInt16LE(8, 8);
-    header.writeUInt32LE(crc32(bytes), 14);
-    header.writeUInt32LE(compressed.length, 18);
-    header.writeUInt32LE(bytes.length, 22);
-    header.writeUInt16LE(path.length, 26);
-    const directory = Buffer.alloc(46);
-    directory.writeUInt32LE(0x02014b50);
-    directory.writeUInt16LE(20, 4);
-    directory.writeUInt16LE(20, 6);
-    directory.writeUInt16LE(8, 10);
-    directory.writeUInt32LE(crc32(bytes), 16);
-    directory.writeUInt32LE(compressed.length, 20);
-    directory.writeUInt32LE(bytes.length, 24);
-    directory.writeUInt16LE(path.length, 28);
-    directory.writeUInt32LE(offset, 42);
-    locals.push(header, path, compressed);
-    central.push(directory, path);
-    offset += header.length + path.length + compressed.length;
-  }
-  const directory = Buffer.concat(central),
-    end = Buffer.alloc(22);
-  end.writeUInt32LE(0x06054b50);
-  end.writeUInt16LE(files.length, 8);
-  end.writeUInt16LE(files.length, 10);
-  end.writeUInt32LE(directory.length, 12);
-  end.writeUInt32LE(offset, 16);
-  return Buffer.concat([...locals, directory, end]);
-}
-
-function embeddedModule(module: Record<string, unknown>) {
-  const inverse = Buffer.alloc(256);
-  for (const [encoded, plain] of decodeRPack(
-    Buffer.from(Array.from({ length: 256 }, (_, i) => i))
-  ).entries())
-    inverse[plain] = encoded;
-  const bytes = Buffer.from(JSON.stringify({ type: 'risuModule', module }));
-  const header = Buffer.from([111, 0, 0, 0, 0, 0]);
-  header.writeUInt32LE(bytes.length, 2);
-  return Buffer.concat([
-    header,
-    Buffer.from(bytes.map((value) => inverse[value])),
-    Buffer.from([0]),
-  ]);
-}
-
 test.each([undefined, null, []])(
   'embedded lore fallback distinguishes missing/null from an empty list: %j',
   (lorebook) => {
@@ -565,7 +501,7 @@ test.each([undefined, null, []])(
       name: 'card.charx',
       base64: zip([
         ['card.json', Buffer.from(JSON.stringify(value))],
-        ['module.risum', embeddedModule({ lorebook })],
+        ['module.risum', writeEmbeddedRisuModule({ lorebook }, [])],
       ]).toString('base64'),
     };
     const preview = prepareRisuImport({ source });
@@ -584,16 +520,14 @@ test('module envelopes retain their explicit kind and malformed embedded section
   expect(() => prepareRisuImport({ source: sourceOf(card()), kind: 'unknown' })).toThrow(
     'RISU_IMPORT_KIND'
   );
-  const store = database(),
-    source = {
-      name: 'bad.charx',
-      base64: zip([
-        ['card.json', Buffer.from(JSON.stringify(card()))],
-        ['module.risum', Buffer.from([111, 0, 0, 0, 0, 0, 0])],
-      ]).toString('base64'),
-    };
+  const source = {
+    name: 'bad.charx',
+    base64: zip([
+      ['card.json', Buffer.from(JSON.stringify(card()))],
+      ['module.risum', Buffer.from([111, 0, 0, 0, 0, 0, 0])],
+    ]).toString('base64'),
+  };
   expect(() => prepareRisuImport({ source })).toThrow('RISU_IMPORT_INVALID_FILE');
-  expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
 });
 
 test('module project ZIP reads ordered asset files within one project folder without RPack', async () => {
@@ -700,7 +634,7 @@ test('charx keeps card-owned images while reading its embedded module; corrupt f
   const bytes = zip([
     ['card.json', Buffer.from(JSON.stringify(value))],
     ['assets/main.png', png],
-    ['module.risum', embeddedModule({ trigger: [{ type: 'unsupported-script' }] })],
+    ['module.risum', writeEmbeddedRisuModule({ trigger: [{ type: 'unsupported-script' }] }, [])],
   ]);
   const source = { name: 'synthetic.charx', base64: bytes.toString('base64') };
   const preview = prepareRisuImport({ source });
@@ -738,15 +672,12 @@ test('a container beyond the inline limit is staged on disk, imported, and never
   uploadRoutes(app, store.path);
   risuImportRoutes(app, store);
   try {
-    // Incompressible filler makes the staged container exceed the inline request limit, and its
-    // uncompressed contents pass the old fixed expansion cap only because the container is large.
-    const container = Buffer.from(
-      zip([
-        ['card.json', Buffer.from(JSON.stringify(card()))],
-        ['assets/first.bin', randomBytes(40 * 1024 * 1024)],
-        ['assets/second.bin', randomBytes(30 * 1024 * 1024)],
-      ])
-    );
+    // A stored member crosses the inline limit. Together the two members expand beyond 64 MiB.
+    const container = zip([
+      ['card.json', Buffer.from(JSON.stringify(card()))],
+      ['assets/first.bin', Buffer.alloc(25 * 1024 * 1024), 0],
+      ['assets/second.bin', Buffer.alloc(40 * 1024 * 1024)],
+    ]);
     expect(container.length).toBeGreaterThan(RISU_IMPORT_MAX_BYTES);
     const inline = await app.inject({
       method: 'POST',
@@ -766,7 +697,7 @@ test('a container beyond the inline limit is staged on disk, imported, and never
     const { uploadId, bytes, sha256 } = uploaded.json();
     expect(bytes).toBe(container.length);
     expect(sha256).toBe(createHash('sha256').update(container).digest('hex'));
-    expect(readFileSync(join(uploadDirectory(store.path), `${uploadId}.bin`)).length).toBe(bytes);
+    expect(statSync(join(uploadDirectory(store.path), `${uploadId}.bin`)).size).toBe(bytes);
 
     const source = { name: 'huge.charx', uploadId };
     const prepared = await app.inject({

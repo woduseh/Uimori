@@ -1,14 +1,8 @@
 import { expect, test } from 'vitest';
 import { HttpError } from '../server/request-validation.js';
 import { readEmbeddedRisuModule } from '../server/risu-module-file.js';
-import { decodeRPack } from '../server/compat/risu/rpack.js';
+import { decodeRPack, encodeRPack } from '../server/compat/risu/rpack.js';
 
-const encodeMap = Buffer.alloc(256);
-for (const [encoded, plain] of decodeRPack(
-  Buffer.from(Array.from({ length: 256 }, (_, i) => i))
-).entries())
-  encodeMap[plain] = encoded;
-const encode = (bytes: Buffer) => Buffer.from(bytes.map((value) => encodeMap[value]));
 const length = (value: number) => {
   const bytes = Buffer.alloc(4);
   bytes.writeUInt32LE(value);
@@ -18,17 +12,20 @@ const container = (main: Buffer, assets: Buffer[] = []) =>
   Buffer.concat([
     Buffer.from([111, 0]),
     length(main.length),
-    encode(main),
-    ...assets.flatMap((asset) => [Buffer.from([1]), length(asset.length), encode(asset)]),
+    encodeRPack(main),
+    ...assets.flatMap((asset) => [Buffer.from([1]), length(asset.length), encodeRPack(asset)]),
     Buffer.from([0]),
   ]);
 const file = (module: unknown, assets: Buffer[] = []) =>
   container(Buffer.from(JSON.stringify({ type: 'risuModule', module })), assets);
 const expectInvalid = (bytes: Buffer) => {
   expect(() => readEmbeddedRisuModule(bytes)).toThrowError(
-    expect.objectContaining({ statusCode: 400, message: 'RISU_IMPORT_INVALID_FILE' })
+    expect.objectContaining({
+      constructor: HttpError,
+      statusCode: 400,
+      message: 'RISU_IMPORT_INVALID_FILE',
+    })
   );
-  expect(() => readEmbeddedRisuModule(bytes)).toThrow(HttpError);
 };
 
 test('embedded module preserves arbitrary fields and binary asset order without modifying input', () => {
@@ -116,10 +113,12 @@ test('asset metadata and record counts must match exactly', () => {
 });
 
 test('asset count, JSON bytes and individual asset bytes stay bounded in larger containers', () => {
-  const metadata = Array.from({ length: 2000 }, (_, index) => [`asset ${index}`, '', 'png']);
-  const assets = Array.from({ length: 2000 }, () => Buffer.alloc(0));
-  expect(readEmbeddedRisuModule(file({ assets: metadata }, assets)).assets).toHaveLength(2000);
-  expectInvalid(file({ assets: [...metadata, ['excess', '', 'png']] }));
+  const metadata = Array.from({ length: 12_288 }, (_, index) => [`asset ${index}`, '', 'png']);
+  const assets = metadata.map(() => Buffer.alloc(0));
+  expect(readEmbeddedRisuModule(file({ assets: metadata }, assets)).assets).toHaveLength(12_288);
+  expectInvalid(
+    file({ assets: [...metadata, ['excess', '', 'png']] }, [...assets, Buffer.alloc(0)])
+  );
   // Valid JSON padding proves the byte limit itself rejects the file, not invalid JSON.
   const json = Buffer.from(JSON.stringify({ type: 'risuModule', module: {} }));
   const maximumJson = Buffer.alloc(8 * 1024 * 1024, 32);
@@ -130,7 +129,8 @@ test('asset count, JSON bytes and individual asset bytes stay bounded in larger 
   // One valid maximum-sized asset makes the whole container exceed the former 64 MiB cap.
   const prefix = file({ assets: [['large', '', 'bin']] }).subarray(0, -1);
   const assetBytes = 64 * 1024 * 1024;
-  const large = Buffer.alloc(prefix.length + 6 + assetBytes, encodeMap[0]);
+  const encodedZero = encodeRPack(Buffer.from([0]))[0];
+  const large = Buffer.alloc(prefix.length + 6 + assetBytes, encodedZero);
   prefix.copy(large);
   large[prefix.length] = 1;
   large.writeUInt32LE(assetBytes, prefix.length + 1);
@@ -138,10 +138,10 @@ test('asset count, JSON bytes and individual asset bytes stay bounded in larger 
   const decoded = readEmbeddedRisuModule(large);
   expect(decoded.assets).toHaveLength(1);
   expect(decoded.assets[0].length).toBe(assetBytes);
-  expect(decoded.assets[0].every((byte) => byte === 0)).toBe(true);
+  expect(decoded.assets[0].equals(Buffer.alloc(assetBytes))).toBe(true);
 
   // A valid extra payload byte crosses the retained per-asset boundary, not the file budget.
-  const oversized = Buffer.concat([large.subarray(0, -1), Buffer.from([encodeMap[0], 0])]);
+  const oversized = Buffer.concat([large.subarray(0, -1), Buffer.from([encodedZero, 0])]);
   oversized.writeUInt32LE(assetBytes + 1, prefix.length + 1);
   expectInvalid(oversized);
 });
