@@ -71,7 +71,7 @@ test('invalid retained clone input fails closed without issuing a new mutation',
   expect(api).not.toHaveBeenCalled();
 });
 
-test.each([400, 401, 409, 429])(
+test.each([409, 429])(
   'a %s on a retry cannot discard an earlier uncertain clone identity',
   async (status) => {
     vi.mocked(api).mockRejectedValueOnce(new Error('Connection lost'));

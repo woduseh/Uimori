@@ -1,9 +1,5 @@
-import { vi } from 'vitest';
-import { fixtureBotInput } from './fixtures/chat.js';
-import { importChatTranscript } from '../server/chat-transcript.js';
-import { describe } from 'vitest';
 import { nativePrompt } from './fixtures/native-prompt.js';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
@@ -23,6 +19,7 @@ import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 
 const owned: { store: Store; path: string }[] = [];
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const { store, path } of owned.splice(0)) {
     store.close();
     const inside = relative(tmpdir(), path);
@@ -38,7 +35,7 @@ function database() {
   owned.push({ store, path });
   return store;
 }
-function fixture() {
+function fixture(prompt = DEFAULT_MAIN_PROMPT) {
   const store = database();
   const prior = promptWorkspace(store);
   updatePromptWorkspace(store, {
@@ -46,7 +43,7 @@ function fixture() {
     main: {
       ...prior.main,
       values: { tone: 'calm', detail: '1' },
-      program: nativePrompt(DEFAULT_MAIN_PROMPT, {
+      program: nativePrompt(prompt, {
         customPromptTemplateToggle: 'tone=Tone=text\ndetail=Detail=text',
       }),
     },
@@ -208,121 +205,41 @@ test('the frozen profile owner and the live option binding come from one rule', 
   expect(optionBinding(applied.main).owner).toBe('preset:preset-1');
 });
 
-describe('Current oneoff values and compact receipts', () => {
-  const owned: { store: Store; path: string }[] = [];
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-    for (const item of owned.splice(0)) {
-      item.store.close();
-      rmSync(item.path, { recursive: true, force: true });
-    }
+test('oneoff settings survive source edits and consume once without reading manuscript history', () => {
+  const f = fixture();
+  const source = complete(f, run(f).run.id);
+  const history = vi.spyOn(f.store, 'history');
+  const requested = input(f, { tone: 'warm' });
+  f.service.stage(f.chat.id, requested, requestId);
+  expect(history).not.toHaveBeenCalled();
+  f.store.editSource(source.id, {
+    text: source.text + ' A correction.',
+    expectedRevision: source.editRevision ?? 0,
   });
+  expect(f.service.get(f.chat.id).conflicts).toEqual([]);
+  expect(run(f).run.snapshot.profile!.chatOptions!.values).toEqual({ tone: 'warm', detail: '1' });
+  expect(f.service.get(f.chat.id).pending).toEqual([]);
+  expect(f.service.stage(f.chat.id, requested, requestId).pending).toEqual([]);
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM chat_option_pending').get()?.n).toBe(0);
+});
 
-  function fixture() {
-    const path = mkdtempSync(join(tmpdir(), 'uimori-retention-'));
-    const owner = { store: new Store(join(path, 'app.sqlite')), path };
-    owned.push(owner);
-    const store = owner.store;
-    const bot = store.product.content(fixtureBotInput());
-    const chat = importChatTranscript(store, {
-      idempotencyKey: randomUUID(),
-      transcript: {
-        format: 'uimori-chat-transcript',
-        version: 2,
-        title: 'Audit fixture',
-        exportedAt: new Date().toISOString(),
-        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-        notes: [],
-        entries: [
-          { request: 'First', text: 'First scene.', translation: '첫 장면.' },
-          { request: 'Second', text: 'Second scene.', translation: '둘째 장면.' },
-        ],
-      },
-    }).chat;
-    const sources = store.history(chat.headRevision).map((item) => store.source(item.revision));
-    return { owner, store, chat, sources };
-  }
-
-  function optionsFor(store: Store, chatId: string) {
-    const prior = promptWorkspace(store);
-    updatePromptWorkspace(store, {
-      expectedRevision: prior.revision,
-      main: {
-        ...prior.main,
-        program: nativePrompt('Synthetic prompt. '.repeat(4096), {
-          customPromptTemplateToggle: 'tone=Tone=text',
-        }),
-        values: { tone: 'calm' },
-      },
-    });
-    const options = new ChatOptionsStore(store);
-    const body = (values: Record<string, string>) => {
-      const state = options.get(chatId);
-      return {
-        expectedRevision: state.revision,
-        binding: state.binding,
-        values,
-        operationId: randomUUID(),
-      };
-    };
-    return { options, body };
-  }
-
-  test('oneoff settings survive source edits and consume once without reading manuscript history', () => {
-    const { store, chat } = fixture();
-    const { options, body } = optionsFor(store, chat.id);
-    const history = vi.spyOn(store, 'history');
-    const requested = body({ tone: 'warm' });
-    options.stage(chat.id, requested, 'user');
-    expect(history).not.toHaveBeenCalled();
-    const source = store.source(chat.headRevision!);
-    store.editSource(source.id, {
-      text: source.text + ' A correction.',
-      expectedRevision: source.editRevision ?? 0,
-    });
-    expect(options.get(chat.id).conflicts).toEqual([]);
-    const command = {
-      request: 'Continue',
-      expectedRevision: chat.headRevision,
-      expectedSettingsRevision: chat.settingsRevision,
-      idempotencyKey: randomUUID(),
-    };
-    const run = store.createRun(chat.id, command, (c) => ({
-      chatId: c.id,
-      parentRevision: chat.headRevision,
-      request: command.request,
-      settingsRevision: c.settingsRevision,
-      settings: c.settings,
-      history: store.history(chat.headRevision),
-      resources: [],
-      profile: store.product.snapshot(c.id),
-    }));
-    expect(run.run.snapshot.profile!.chatOptions!.values).toEqual({ tone: 'warm' });
-    expect(options.get(chat.id).pending).toEqual([]);
-    expect(options.stage(chat.id, requested, 'user').pending).toEqual([]);
-    expect(store.db.prepare('SELECT count(*) AS n FROM chat_option_pending').get()?.n).toBe(0);
-  });
-
-  test('option receipts contain no prompt copies and only the current oneoff is stored', () => {
-    const { store, chat } = fixture();
-    const { options, body } = optionsFor(store, chat.id);
-    const first = body({ tone: 'warm' });
-    options.fixed(chat.id, first, 'user');
-    for (let i = 0; i < 20; i++) options.fixed(chat.id, body({ tone: String(i) }), 'user');
-    expect(options.fixed(chat.id, first, 'user').fixedValues).toEqual({ tone: '19' });
-    const receipts = store.db.prepare('SELECT * FROM chat_option_operations').all();
-    expect(Buffer.byteLength(JSON.stringify(receipts))).toBeLessThan(12000);
-    for (let i = 0; i < 20; i++) options.stage(chat.id, body({ tone: String(i) }), 'user');
-    const state = options.get(chat.id);
-    expect(state.pending).toHaveLength(1);
-    expect(store.db.prepare('SELECT count(*) AS n FROM chat_option_pending').get()?.n).toBe(1);
-    options.cancel(
-      chat.id,
-      state.pending[0]!.id,
-      { expectedRevision: state.revision, operationId: randomUUID() },
-      'user'
-    );
-    expect(store.db.prepare('SELECT count(*) AS n FROM chat_option_pending').get()?.n).toBe(0);
-  });
+test('compact receipts acknowledge current values and only the latest oneoff is stored', () => {
+  const f = fixture('Synthetic prompt. '.repeat(4096));
+  const first = input(f, { tone: 'warm' });
+  f.service.fixed(f.chat.id, first, requestId);
+  f.service.fixed(f.chat.id, input(f, { tone: 'revised' }), requestId);
+  expect(f.service.fixed(f.chat.id, first, requestId).fixedValues).toEqual({ tone: 'revised' });
+  const receipts = f.store.db.prepare('SELECT * FROM chat_option_operations').all();
+  expect(Buffer.byteLength(JSON.stringify(receipts))).toBeLessThan(1100);
+  stage(f, { tone: 'first' });
+  const state = stage(f, { tone: 'second' });
+  expect(state.pending.map((entry) => entry.values)).toEqual([{ tone: 'second' }]);
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM chat_option_pending').get()?.n).toBe(1);
+  f.service.cancel(
+    f.chat.id,
+    state.pending[0]!.id,
+    { expectedRevision: state.revision, operationId: randomUUID() },
+    requestId
+  );
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM chat_option_pending').get()?.n).toBe(0);
 });

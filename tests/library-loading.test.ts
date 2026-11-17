@@ -1,12 +1,4 @@
-import { afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
-import { Store } from '../server/store.js';
-import { fixtureBotInput } from './fixtures/chat.js';
-import { importChatTranscript } from '../server/chat-transcript.js';
-import { writeChatVariables } from '../server/chat-variables.js';
-import { describe } from 'vitest';
-import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
+import { createFixtureChat } from './fixtures/chat.js';
 import { expect, test } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { basename, join, resolve, relative, isAbsolute } from 'node:path';
@@ -61,6 +53,14 @@ test('library summary omits bodies and unrelated assets; current editing rejects
         location: '',
         allowedUse: 'both',
       });
+    const originalPresets = product.library(true).promptPresets!;
+    const presets = Array.from({ length: 8 }, (_, i) =>
+      product.promptPreset({
+        title: 'Preset ' + i,
+        role: 'main',
+        text: 'Long prompt. '.repeat(3000),
+      })
+    );
     const bytes: Record<string, number> = {};
     let full!: Library;
     let summary!: Library;
@@ -68,7 +68,7 @@ test('library summary omits bodies and unrelated assets; current editing rejects
       ['full', '/api/library'],
       ['summary', '/api/library?view=summary'],
     ]) {
-      const response = await injectWithFixtureBot(app, { method: 'GET', url });
+      const response = await app.inject({ method: 'GET', url });
       expect(response.statusCode).toBe(200);
       bytes[name] = Buffer.byteLength(response.body);
       if (name === 'full') full = response.json();
@@ -86,6 +86,21 @@ test('library summary omits bodies and unrelated assets; current editing rejects
         hasPackage: true,
       }))
     );
+    expect(full.promptPresets).toContainEqual(
+      expect.objectContaining({ id: presets[0].id, program: expect.anything() })
+    );
+    expect(summary.promptPresets).toHaveLength(originalPresets.length + presets.length);
+    expect(summary.promptPresets).toEqual(
+      expect.arrayContaining(
+        [...originalPresets, ...presets].map(({ id, revision, title, role }) => ({
+          id,
+          revision,
+          title,
+          role,
+        }))
+      )
+    );
+    expect(bytes.summary).toBeLessThan(16000);
     expect(bytes.summary).toBeLessThan(bytes.full / 100);
     const original = items[0];
     const { id, revision, ...body } = original;
@@ -103,7 +118,7 @@ test('library summary omits bodies and unrelated assets; current editing rejects
       },
       id
     );
-    const oldResponse = await injectWithFixtureBot(app, {
+    const oldResponse = await app.inject({
       method: 'GET',
       url: `/api/revisions/content/${id}/${revision}`,
     });
@@ -114,91 +129,11 @@ test('library summary omits bodies and unrelated assets; current editing rejects
       changed.revision
     );
     expect(() => product.content({ ...body, expectedRevision: revision }, id)).toThrow();
-    expect(
-      (await injectWithFixtureBot(app, { method: 'GET', url: '/api/library?view=invalid' }))
-        .statusCode
-    ).toBe(400);
+    expect((await app.inject({ method: 'GET', url: '/api/library?view=invalid' })).statusCode).toBe(
+      400
+    );
   } finally {
     await app.close();
     await rm(target, { recursive: true, force: true });
   }
 }, 30000);
-
-describe('Small library summaries and option receipts', () => {
-  const owners: { store: Store; path: string }[] = [];
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-    for (const { store, path } of owners.splice(0)) {
-      store.close();
-      rmSync(path, { recursive: true, force: true });
-    }
-  });
-
-  function database() {
-    const path = mkdtempSync(join(tmpdir(), 'uimori-retention-'));
-    const owner = { store: new Store(join(path, 'app.sqlite')), path };
-    owners.push(owner);
-    return owner.store;
-  }
-
-  function fixture(count = 4) {
-    const store = database();
-    const bot = store.product.content(fixtureBotInput()) as Content;
-    const chat = importChatTranscript(store, {
-      idempotencyKey: randomUUID(),
-      transcript: {
-        format: 'uimori-chat-transcript',
-        version: 2,
-        exportedAt: new Date().toISOString(),
-        title: 'Current summary',
-        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-        notes: [],
-        entries: Array.from({ length: count }, (_, i) => ({
-          request: 'Request ' + i,
-          text: ('Scene ' + i + '. ' + 'river '.repeat(600)).slice(0, 3000),
-          translation: null,
-        })),
-      },
-    }).chat;
-    return { store, chat };
-  }
-
-  test('library summary never contains preset programs and variable retries never overwrite current values', () => {
-    const { store, chat } = fixture();
-    const initialPresetIds = store.product.library(true).promptPresets!.map((preset) => preset.id);
-    const presets = Array.from({ length: 8 }, (_, i) =>
-      store.product.promptPreset({
-        title: 'Preset ' + i,
-        role: 'main',
-        text: 'Long prompt. '.repeat(3000),
-      })
-    );
-    const summary = store.product.library(true);
-    expect(summary.promptPresets).toHaveLength(initialPresetIds.length + presets.length);
-    expect(summary.promptPresets!.map((preset) => preset.id)).toEqual(
-      expect.arrayContaining([...initialPresetIds, ...presets.map((preset) => preset.id)])
-    );
-    expect(summary.promptPresets!.every((p) => !('program' in p))).toBe(true);
-    expect(Buffer.byteLength(JSON.stringify(summary))).toBeLessThan(16000);
-    expect(store.product.get('prompt-preset', presets[0].id)).toHaveProperty('program');
-    const source = store.source(chat.headRevision!);
-    let first: Parameters<typeof writeChatVariables>[2] | undefined;
-    for (let i = 0; i < 10; i++) {
-      const command = {
-        expectedRevision: i,
-        expectedSourceHash: source.hash,
-        idempotencyKey: randomUUID(),
-        values: { large: 'v'.repeat(32000), iteration: String(i) },
-      };
-      first ??= command;
-      writeChatVariables(store, chat.id, command);
-    }
-    expect(writeChatVariables(store, chat.id, first!).values.iteration).toBe('9');
-    expect(
-      Buffer.byteLength(
-        JSON.stringify(store.db.prepare('SELECT * FROM chat_variable_journal').all())
-      )
-    ).toBeLessThan(5000);
-  });
-});

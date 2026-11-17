@@ -360,16 +360,23 @@ describe('chat transcript export and import', () => {
     );
   });
 
-  test('transcripts admit long histories without an unrelated entry-count limit', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, 'Long history');
-    const transcript = exportChatTranscript(store, chat.id);
-    transcript.entries = Array.from({ length: 5001 }, (_, index) => ({
+  test('transcripts admit long histories without an unrelated entry-count limit', () => {
+    const entries = Array.from({ length: 5001 }, (_, index) => ({
       request: `Continue ${index}`,
       text: `Scene ${index}`,
       translation: null,
     }));
-    expect(validateChatTranscript(transcript).entries).toEqual(transcript.entries);
+    expect(
+      validateChatTranscript({
+        format: CHAT_TRANSCRIPT_FORMAT,
+        version: 2,
+        title: 'Long history',
+        exportedAt: '2026-01-01T00:00:00Z',
+        packageAttachments: [],
+        notes: [],
+        entries,
+      }).entries
+    ).toEqual(entries);
   });
 
   test('export keeps current edits and matching translations while respecting note and source scope', async () => {
