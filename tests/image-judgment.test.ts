@@ -571,21 +571,6 @@ describe('JEV-only existing image placement', () => {
       })
     );
   });
-  it('bounds large catalogs before dispatch and records evaluated coverage', () => {
-    const many = Array.from({ length: 2000 }, (_, i) => ({
-      ...assets[i % 2],
-      ref: `asset-${i}`,
-      caption: 'Detailed image metadata '.repeat(30),
-    }));
-    const request = imageJudgmentRequest(source, many)!;
-    expect(estimateContextTokens({ model: JEV_MODEL, ...request })).toBeLessThanOrEqual(
-      IMAGE_JUDGMENT_LIMITS.inputTokens
-    );
-    const state = request.state as { evaluatedAssets: number; totalAssets: number };
-    expect(state.evaluatedAssets).toBeGreaterThan(0);
-    expect(state.evaluatedAssets).toBeLessThan(2000);
-    expect(state.totalAssets).toBe(2000);
-  });
   it.each([
     ['image-selection-jev-v1', null],
     ['image-selection-jev-v3', '60902f75148370a9962cf1fe5030ede4ffcab900dbc2d9b268e624f10a699494'],
@@ -696,6 +681,7 @@ describe('JEV-only existing image placement', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(result.entries[0].assetRef).toBe('tail-pier');
     expect(sent.state.totalAssets).toBe(10000);
+    expect(sent.state.evaluatedAssets).toBeGreaterThan(0);
     expect(sent.state.evaluatedAssets).toBeLessThanOrEqual(32);
   });
   it('reserves a suitable affordable candidate for every paragraph before filling depth', async () => {

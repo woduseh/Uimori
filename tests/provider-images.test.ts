@@ -8,11 +8,7 @@ import { encodeResponses, ResponsesDecoder } from '../core/openai-protocol.js';
 import { encodeChat } from '../core/openai-chat-protocol.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
 import { encodeVertex } from '../core/vertex-protocol.js';
-import {
-  buildCodexDescriptor,
-  buildCodexNativeRequest,
-  prepareCodexNative,
-} from '../core/codex-protocol.js';
+import { buildCodexNativeRequest } from '../core/codex-protocol.js';
 import { estimateContextInput } from '../core/context-budget.js';
 import {
   materializeProviderImages,
@@ -314,28 +310,6 @@ describe('authored reference image transmission', () => {
     expect(imageInputSupported('vercel-chat-v1', 'custom/deepseek-future-vision')).toBeNull();
   });
 
-  test('Codex descriptor and native loop preserve each turn and image position', async () => {
-    const input = request();
-    for (const descriptor of [
-      buildCodexDescriptor(input),
-      prepareCodexNative(buildCodexNativeRequest(input)).descriptor,
-    ]) {
-      const wire = (await materializeProviderImages(
-        descriptor,
-        input,
-        { resolveImage: () => resolved },
-        signal()
-      )) as { input: Json[] };
-      const parts = wire.input as Record<string, any>[];
-      const index = parts.findIndex((part) => part.type === 'image');
-      expect(parts[index]).toEqual({ type: 'image', url: `data:image/webp;base64,${base64}` });
-      expect(parts[index - 1].text).toContain('Look at this reference.');
-      expect(parts[index + 1].text).toContain('Keep its colors.');
-      expect(JSON.stringify(parts.slice(index + 1))).toContain('Use the current reference.');
-      expect(JSON.stringify(descriptor)).not.toContain(base64);
-    }
-  });
-
   test('diagnostics withhold native data URLs and raw inline image payloads', () => {
     const body: Json = {
       content: [
@@ -397,6 +371,12 @@ describe('authored reference image transmission', () => {
         expect(parts[index]).toEqual({ type: 'image', url: `data:image/webp;base64,${base64}` });
         expect(parts[index - 1].text).toContain('Look at this reference.');
         expect(parts[index + 1].text).toContain('Keep its colors.');
+        expect(JSON.stringify(parts.slice(index + 1))).toContain('Use the current reference.');
+        const diagnostic = (wires[0].body as { input: Json[] }).input;
+        expect(diagnostic[index]).toEqual({ type: 'image', url: providerImageReference(image) });
+        expect(diagnostic[index - 1]).toMatchObject({ text: parts[index - 1].text });
+        expect(diagnostic[index + 1]).toMatchObject({ text: parts[index + 1].text });
+        expect(JSON.stringify(diagnostic.slice(index + 1))).toContain('Use the current reference.');
         expect(
           records.find((entry) => entry.method === 'thread/start').params.config[
             'features.image_generation'

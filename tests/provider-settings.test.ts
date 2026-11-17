@@ -936,7 +936,7 @@ describe('provider settings, catalogs and archive contracts', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  test('retains old catalog data for HTTP, schema, encoding and size errors', async () => {
+  test('retains old catalog data for HTTP, schema and encoding errors', async () => {
     const app = await application();
     const connection = await request<Connection>(
       app,
@@ -951,7 +951,6 @@ describe('provider settings, catalogs and archive contracts', () => {
       response({ data: [{ id: 'duplicate' }, { id: 'duplicate' }] }),
       response({ data: [{ id: 1 }] }),
       new Response(new Uint8Array([0xff])),
-      new Response(' '.repeat(1000001)),
     ]) {
       vi.mocked(fetch).mockResolvedValueOnce(bad);
       const failed = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});

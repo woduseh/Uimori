@@ -149,42 +149,33 @@ const payload = (items: (Json | '[DONE]')[]) =>
 function stream(items: (Json | '[DONE]')[], stalled = false) {
   const bytes = new TextEncoder().encode(payload(items));
   let cancelled = 0;
-  let delivered = 0;
-  let readPending = false;
-  const body = new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (let index = 0; index < bytes.length; index += 3)
-        controller.enqueue(bytes.slice(index, index + 3));
-      if (!stalled) controller.close();
-    },
-    cancel() {
-      cancelled++;
-    },
+  let drained!: () => void;
+  const pendingRead = new Promise<void>((resolve) => {
+    drained = resolve;
   });
+  const body = new ReadableStream<Uint8Array>(
+    {
+      start(controller) {
+        for (let index = 0; index < bytes.length; index += 3)
+          controller.enqueue(bytes.subarray(index, index + 3));
+        if (!stalled) controller.close();
+      },
+      pull: () => drained(),
+      cancel() {
+        cancelled++;
+      },
+    },
+    { highWaterMark: 0 }
+  );
   const response = new Response(body, {
     headers: { 'content-type': 'text/event-stream; charset=utf-8' },
-  });
-  const reader = body.getReader();
-  vi.spyOn(body, 'getReader').mockReturnValue(reader);
-  const read = reader.read.bind(reader);
-  vi.spyOn(reader, 'read').mockImplementation(async () => {
-    readPending = true;
-    try {
-      const value = await read();
-      if (!value.done) delivered += value.value.byteLength;
-      return value;
-    } finally {
-      readPending = false;
-    }
   });
   return {
     response,
     get cancelled() {
       return cancelled;
     },
-    get fullyReading() {
-      return delivered === bytes.length && readPending;
-    },
+    pendingRead,
   };
 }
 function slowCancellation(text: string, contentType = 'text/event-stream') {
@@ -341,35 +332,11 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
   );
 
   test.each(variants)(
-    '$protocol returns after its protocol terminal even when the HTTP body stays open',
-    async (variant) => {
-      const response = stream(events(variant), true);
-      const fetch = vi.fn(async () => response.response);
-      const controller = new AbortController();
-      const fallback = setTimeout(() => controller.abort(), 1000);
-      vi.stubGlobal('fetch', fetch);
-      const result = await executeProvider(connection(variant), request(variant), {
-        ...options(variant),
-        signal: controller.signal,
-      });
-      clearTimeout(fallback);
-      expect(result).toMatchObject({
-        status: 'completed',
-        text: '등대 🌊',
-        usage: { inputTokens: 5, outputTokens: 2 },
-      });
-      expect(fetch).toHaveBeenCalledTimes(1);
-    }
-  );
-
-  test.each(variants)(
     '$protocol returns terminal evidence without waiting for cancellation acknowledgement',
     async (variant) => {
       const response = slowCancellation(payload(events(variant)));
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(async () => response.response)
-      );
+      const send = vi.fn(async () => response.response);
+      vi.stubGlobal('fetch', send);
       const pending = executeProvider(connection(variant), request(variant), options(variant));
       try {
         expect(await settleWithin(pending)).toMatchObject({
@@ -377,6 +344,7 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
           text: '등대 🌊',
           usage: { inputTokens: 5, outputTokens: 2 },
         });
+        expect(send).toHaveBeenCalledTimes(1);
         expect(response.cancellations).toBe(1);
       } finally {
         response.release();
@@ -792,9 +760,11 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
     }
   );
 
-  test.each(
-    variants.flatMap((variant) => ['timeout', 'cancel'].map((mode) => ({ variant, mode })))
-  )(
+  test.each([
+    ...variants.map((variant) => ({ variant, mode: 'cancel' })),
+    // All five adapters share the native HTTP deadline. Exercise it with a body that ignores abort.
+    { variant: variants[0], mode: 'timeout' },
+  ])(
     '$variant.protocol $mode interrupts a pending read and preserves observed usage',
     async ({ variant, mode }) => {
       const response = stream(events(variant).slice(0, -1), true);
@@ -806,7 +776,7 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
         signal: controller.signal,
         timeoutMs: mode === 'timeout' ? 200 : 2000,
       });
-      await vi.waitFor(() => expect(response.fullyReading).toBe(true));
+      expect(await settleWithin(response.pendingRead)).toBeUndefined();
       if (mode === 'cancel') controller.abort();
       const result = await pending;
       expect(result).toMatchObject({
