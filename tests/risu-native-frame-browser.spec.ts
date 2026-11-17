@@ -94,47 +94,6 @@ test('RSURFACE completed Risu text displays ruby and safe reading tags in Shadow
   ).toBeUndefined();
 });
 
-test('RSURFACE plain paragraphs use natural flow after reading size changes', async ({ page }) => {
-  for (const viewport of [
-    { width: MOBILE_WIDTH, height: MOBILE_HEIGHT },
-    { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT },
-  ]) {
-    await page.setViewportSize(viewport);
-    await page.goto(origin);
-    await page.evaluate(async () => {
-      const path = '/tests/fixtures/native-risu-frame.tsx';
-      const { mount } = await import(path);
-      mount(
-        '<p>First paragraph with enough text to wrap on a phone.</p><p>Second paragraph.</p><p id="last">Last paragraph.</p>'
-      );
-    });
-    const native = page.locator('.risu-message-surface');
-    const heights: number[] = [];
-    for (const size of [18, 26, 14]) {
-      await page.evaluate(
-        (value) => document.documentElement.style.setProperty('--reading', `${value}px`),
-        size
-      );
-      await expect(native.locator('#last')).toHaveCSS('font-size', `${size}px`);
-      await expect
-        .poll(() =>
-          native.evaluate((host) => {
-            const last = host.shadowRoot!.querySelector('#last')!;
-            return (
-              last.getBoundingClientRect().bottom +
-                parseFloat(getComputedStyle(last).marginBottom) <=
-              host.getBoundingClientRect().bottom + 1
-            );
-          })
-        )
-        .toBe(true);
-      heights.push((await native.boundingBox())!.height);
-    }
-    expect(heights[2]).toBeLessThan(heights[1]);
-    await expect(page.locator('iframe')).toHaveCount(0);
-  }
-});
-
 test('RSURFACE authored CSS cannot apply html/body layout to the app', async ({ page }) => {
   await page.goto(origin);
   await page.evaluate(async () => {

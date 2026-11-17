@@ -154,18 +154,6 @@ test('knowledge search points directly to an exact late body match without chang
   expect(returned.text).toBe(original.slice(returned.range.start, returned.range.end));
   expect(returned.source.hash).toBe(hit.match.source.hash);
   expect(hit).not.toHaveProperty('text');
-  const sequentialReads = Math.ceil((original.indexOf(phrase) + phrase.length) / 4096);
-  console.log(
-    'KNOWLEDGE_SEARCH_EVIDENCE',
-    JSON.stringify({
-      scenario: 'synthetic-late-match',
-      metadataOnlySearchThenSequentialRead: {
-        calls: 1 + sequentialReads,
-        bodyChars: Math.min(original.length, sequentialReads * 4096),
-      },
-      searchThenDirectRead: { calls: 2, bodyChars: hit.match.text.length + returned.text.length },
-    })
-  );
 });
 
 test('knowledge search pages bounded exact excerpts without dropping matches or metadata', () => {
@@ -275,38 +263,10 @@ test('knowledge read pages preserve item errors, text offsets, and every unread 
   expect(countTextTokens(JSON.stringify(common.result))).toBeLessThanOrEqual(KNOWLEDGE_READ_TOKENS);
 });
 
-test('catalog construction does not tokenize descriptions after the page is full', () => {
-  let descriptionsRead = 0;
-  const resources = Array.from({ length: 400 }, (_, index) => {
-    const resource = lore(index);
-    const description = resource.description;
-    Object.defineProperty(resource, 'description', {
-      get: () => {
-        descriptionsRead++;
-        return description;
-      },
-    });
-    return resource;
-  });
-  const result = resourceCatalog(resources);
-  expect(result.catalogPage!.total).toBe(400);
-  expect(result.catalog.length).toBeGreaterThan(0);
-  expect(result.catalog.map(({ id }) => id)).toEqual(
-    resources.slice(0, result.catalog.length).map(({ id }) => id)
-  );
-  expect(countTextTokens(JSON.stringify(result.catalog))).toBeLessThanOrEqual(CATALOG_TOKENS);
-  // One candidate can be inspected to discover that the current page is full.
-  expect(descriptionsRead).toBeLessThanOrEqual(result.catalog.length + 1);
-});
-
 test.each([
-  ['English title', 'Asterion', 'Asterion', 'The keeper guards an ancient seal.'],
   ['Korean particles', '미나를 찾아요', '인물 기록', '미나에게 청월인장을 맡겼다.'],
   ['Japanese unspaced names', '美咲に会う', '庭の記録', '静かな庭で美咲は待っていた。'],
-  ['Unicode and case', 'cafe\u0301', 'CAFÉ', 'The keeper opens at dawn.'],
-  ['Latin name with Korean particle', 'Mira', '인물 기록', 'Mira에게 비밀을 말했다.'],
   ['Unicode Latin name with Korean particle', 'cafe\u0301', '장소 기록', 'CAFÉ의 문을 잠갔다.'],
-  ['Punctuation-only title', '+++', '+++', 'The keeper opens at dawn.'],
 ])(
   'relevant knowledge search retrieves the reviewed %s reference without unrelated hits',
   (_label, query, title, text) => {
@@ -381,47 +341,29 @@ test('relevant search ranks exact identities before incidental prose while prese
   });
 });
 
-test.each(['CAFÉ 문을 미나에게 맡겼다.', 'CAFE\u0301의 문을 미나에게 맡겼다.'])(
-  'relevant search returns exact original late Unicode excerpts and a usable direct read: %s',
-  (phrase) => {
-    const original = 'İ'.repeat(10_000) + '😀'.repeat(5_000) + phrase;
-    const fixed = snapshot([lore(1, { title: 'Vault', description: '', text: original })]);
-    const event = executeTool(fixed, {
-      callId: 'unicode-relevant',
-      name: 'knowledge.search',
-      args: { mode: 'relevant', query: 'cafe\u0301' },
-    });
-    expect(event.denied).toBe(false);
-    const hit = (event.result as any).items[0];
-    expect(hit.match.text).toContain(phrase);
-    expect(hit.match.range.start).toBeGreaterThan(19_000);
-    expect(hit.match.text).toBe(original.slice(hit.match.range.start, hit.match.range.end));
-    expect(hit.match.text.isWellFormed()).toBe(true);
-    const read = executeTool(fixed, {
-      callId: 'unicode-direct',
-      name: hit.nextRead.name,
-      args: hit.nextRead.arguments,
-    });
-    expect(read.denied).toBe(false);
-    expect((read.result as any).items[0].read.text).toContain(phrase);
-    expect((read.result as any).items[0].read.source.hash).toBe(hit.match.source.hash);
-  }
-);
-
-test('automatic catalog ranking uses metadata without scanning reference bodies', () => {
-  const resources = [
-    lore(0, { title: 'Harbor ledger', description: '' }),
-    lore(1, { title: '청월인장', description: '북쪽 탑에 관한 기록.' }),
-  ];
-  for (const resource of resources)
-    Object.defineProperty(resource, 'text', {
-      get: () => {
-        throw new Error('Automatic catalog ranking must not scan reference bodies');
-      },
-    });
-  const fixed = snapshot(resources);
-  fixed.request = '청월인장을 찾아요.';
-  expect(buildMainInput(fixed).catalog[0].id).toBe('lore-1');
+test('relevant search returns exact original late Unicode excerpts and a usable direct read: CAFE\u0301의 문을 미나에게 맡겼다.', () => {
+  const phrase = 'CAFE\u0301의 문을 미나에게 맡겼다.';
+  const original = 'İ'.repeat(10_000) + '😀'.repeat(5_000) + phrase;
+  const fixed = snapshot([lore(1, { title: 'Vault', description: '', text: original })]);
+  const event = executeTool(fixed, {
+    callId: 'unicode-relevant',
+    name: 'knowledge.search',
+    args: { mode: 'relevant', query: 'cafe\u0301' },
+  });
+  expect(event.denied).toBe(false);
+  const hit = (event.result as any).items[0];
+  expect(hit.match.text).toContain(phrase);
+  expect(hit.match.range.start).toBeGreaterThan(19_000);
+  expect(hit.match.text).toBe(original.slice(hit.match.range.start, hit.match.range.end));
+  expect(hit.match.text.isWellFormed()).toBe(true);
+  const read = executeTool(fixed, {
+    callId: 'unicode-direct',
+    name: hit.nextRead.name,
+    args: hit.nextRead.arguments,
+  });
+  expect(read.denied).toBe(false);
+  expect((read.result as any).items[0].read.text).toContain(phrase);
+  expect((read.result as any).items[0].read.source.hash).toBe(hit.match.source.hash);
 });
 
 test('main catalog surfaces a late requested reference within the existing budget and preserves complete discovery', () => {

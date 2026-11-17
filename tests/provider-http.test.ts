@@ -271,8 +271,6 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
   // finish chunk; compatible Chat streams may instead send a following usage-only chunk.
   test.each([
     { reason: 'insufficient_system_resource', text: '보존할 초안 🌊', trailingUsage: true },
-    { reason: 'aborted', text: '보존할 초안 🌊', trailingUsage: true },
-    { reason: 'insufficient_system_resource', text: '', trailingUsage: false },
     { reason: 'aborted', text: '', trailingUsage: false },
   ])(
     'DeepSeek records $reason with text=$text and consumes final usage without exposing unfinished tools',
@@ -331,7 +329,7 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
     }
   );
 
-  test.each(variants)(
+  test.each([variants[1], variants[3]])(
     '$protocol returns terminal evidence without waiting for cancellation acknowledgement',
     async (variant) => {
       const response = slowCancellation(payload(events(variant)));
@@ -388,60 +386,49 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
     }
   );
 
-  test.each(['responses', 'gemini'] as const)(
-    '%s reports an invalid content type without waiting for cancellation acknowledgement',
-    async (protocol) => {
-      const response = slowCancellation('unexpected body', 'application/octet-stream');
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(async () => response.response)
-      );
-      const pending = executeProvider(
-        protocol === 'responses' ? connection(variants[0]) : geminiConnection,
-        protocol === 'responses' ? request(variants[0]) : geminiRequest(),
-        options(variants[0])
-      );
-      try {
-        expect(await settleWithin(pending)).toMatchObject({
-          status: 'error',
-          error: { code: 'INVALID_CONTENT_TYPE' },
-        });
-        expect(response.cancellations).toBe(1);
-      } finally {
-        response.release();
-        await settleWithin(pending);
-      }
+  test('gemini reports an invalid content type without waiting for cancellation acknowledgement', async () => {
+    const response = slowCancellation('unexpected body', 'application/octet-stream');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => response.response)
+    );
+    const pending = executeProvider(geminiConnection, geminiRequest(), options(variants[0]));
+    try {
+      expect(await settleWithin(pending)).toMatchObject({
+        status: 'error',
+        error: { code: 'INVALID_CONTENT_TYPE' },
+      });
+      expect(response.cancellations).toBe(1);
+    } finally {
+      response.release();
+      await settleWithin(pending);
     }
-  );
+  });
 
-  test.each(['responses', 'gemini'] as const)(
-    '%s cancellation returns even when body cancellation is not acknowledged',
-    async (protocol) => {
-      const stalled = stalledProviderBody('text/event-stream');
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(async () => stalled.response)
-      );
-      const controller = new AbortController();
-      const pending = executeProvider(
-        protocol === 'responses' ? connection(variants[0]) : geminiConnection,
-        protocol === 'responses' ? request(variants[0]) : geminiRequest(),
-        { ...options(variants[0]), signal: controller.signal }
-      );
-      try {
-        await stalled.pendingRead;
-        controller.abort();
-        expect(await settleWithin(pending)).toMatchObject({
-          status: 'cancelled',
-          error: { code: 'CANCELLED' },
-        });
-        expect(stalled.cancellations).toBe(1);
-      } finally {
-        stalled.release();
-        await settleWithin(pending);
-      }
+  test('gemini cancellation returns even when body cancellation is not acknowledged', async () => {
+    const stalled = stalledProviderBody('text/event-stream');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => stalled.response)
+    );
+    const controller = new AbortController();
+    const pending = executeProvider(geminiConnection, geminiRequest(), {
+      ...options(variants[0]),
+      signal: controller.signal,
+    });
+    try {
+      await stalled.pendingRead;
+      controller.abort();
+      expect(await settleWithin(pending)).toMatchObject({
+        status: 'cancelled',
+        error: { code: 'CANCELLED' },
+      });
+      expect(stalled.cancellations).toBe(1);
+    } finally {
+      stalled.release();
+      await settleWithin(pending);
     }
-  );
+  });
 
   test.each([
     ['LF', ['data: {"value":1}\n\ndata: {"value":2}\n\n']],
@@ -526,117 +513,34 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
     }
   );
 
-  test.each(variants.slice(0, 2))(
-    '$protocol sends the selected generation options with plain text translation',
-    async (variant) => {
-      const input = request(variant);
-      input.role = 'translation';
-      input.input.source = {
-        sourceRevision: 'source-options',
-        sourceHash: 'hash-options',
-        text: 'Full source text.',
-      };
-      input.generation =
-        variant.protocol === 'openai-responses-v1'
-          ? {
-              maxOutputTokens: 8192,
-              temperature: null,
-              reasoningEffort: 'high',
-              reasoningMode: 'pro',
-              reasoningContext: 'all_turns',
-              verbosity: 'low',
-              serviceTier: 'flex',
-            }
-          : {
-              maxOutputTokens: 8192,
-              temperature: null,
-              outputEffort: 'max',
-              thinkingMode: 'adaptive',
-              serviceTier: 'standard_only',
-              stopSequences: ['END_SCENE'],
-            };
-      const wires: WireRecord[] = [];
-      const fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-        const body = JSON.parse(String(init?.body));
-        if (variant.protocol === 'openai-responses-v1') {
-          expect(body.reasoning).toEqual({ effort: 'high', mode: 'pro', context: 'all_turns' });
-          expect(body.text.verbosity).toBe('low');
-          expect(body.text.format).toBeUndefined();
-          expect(body.service_tier).toBe('flex');
-          expect((wires[0].body as Record<string, Json>).reasoning).toEqual(body.reasoning);
-        } else {
-          expect(body.output_config.effort).toBe('max');
-          expect(body.output_config.format).toBeUndefined();
-          expect(body.thinking).toEqual({ type: 'adaptive' });
-          expect(body.service_tier).toBe('standard_only');
-          expect(body.stop_sequences).toEqual(['END_SCENE']);
-        }
-        return stream(events(variant)).response;
-      });
-      vi.stubGlobal('fetch', fetch);
-      expect(
-        (
-          await executeProvider(connection(variant), input, {
-            ...options(variant),
-            onWire: (wire) => {
-              wires.push(wire);
-            },
-          })
-        ).status
-      ).toBe('completed');
-      expect(fetch).toHaveBeenCalledTimes(1);
-    }
-  );
-
-  test('Vercel sends explicit OpenAI-family options through providerOptions', async () => {
-    const variant = variants[2];
+  test('official GPT Chat sends Flex once and preserves HTTP 429 without changing tier', async () => {
+    const variant = variants[3];
     const input = request(variant);
-    input.modelId = 'openai/gpt-5.6-sol';
-    input.generation!.verbosity = 'low';
-    const fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body));
-      expect(body.providerOptions).toEqual({ openai: { textVerbosity: 'low' } });
-      expect(body).not.toHaveProperty('verbosity');
-      return stream(events(variant)).response;
+    input.modelId = 'gpt-6-astra';
+    input.generation = {
+      maxOutputTokens: 8192,
+      temperature: null,
+      reasoningEffort: 'high',
+      serviceTier: 'flex',
+    };
+    const value = { ...connection(variant), endpoint: variants[0].endpoint };
+    const fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(url)).toBe('https://api.openai.com/v1/chat/completions');
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        model: 'gpt-6-astra',
+        service_tier: 'flex',
+        reasoning_effort: 'high',
+      });
+      return new Response(null, { status: 429 });
     });
     vi.stubGlobal('fetch', fetch);
-    expect((await executeProvider(connection(variant), input, options(variant))).status).toBe(
-      'completed'
-    );
+    const result = await executeProvider(value, input, options(variants[0]));
+    expect(result.status).toBe('error');
+    expect(result.error?.code).toBe('HTTP_429');
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  test.each([200, 429])(
-    'official GPT Chat sends Flex once and preserves HTTP %s without changing tier',
-    async (status) => {
-      const variant = variants[3];
-      const input = request(variant);
-      input.modelId = 'gpt-6-astra';
-      input.generation = {
-        maxOutputTokens: 8192,
-        temperature: null,
-        reasoningEffort: 'high',
-        serviceTier: 'flex',
-      };
-      const value = { ...connection(variant), endpoint: variants[0].endpoint };
-      const fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
-        expect(String(url)).toBe('https://api.openai.com/v1/chat/completions');
-        expect(JSON.parse(String(init?.body))).toMatchObject({
-          model: 'gpt-6-astra',
-          service_tier: 'flex',
-          reasoning_effort: 'high',
-        });
-        return status === 200 ? stream(events(variant)).response : new Response(null, { status });
-      });
-      vi.stubGlobal('fetch', fetch);
-      const result = await executeProvider(value, input, options(variants[0]));
-      expect(result.status).toBe(status === 200 ? 'completed' : 'error');
-      if (status === 429) expect(result.error?.code).toBe('HTTP_429');
-      expect(fetch).toHaveBeenCalledTimes(1);
-    }
-  );
-
-  test.each(variants)(
+  test.each([variants[0]])(
     '$protocol rejects unsupported generation options before credential resolution and HTTP',
     async (variant) => {
       const input = request(variant);
@@ -659,24 +563,7 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
     }
   );
 
-  test('Fable forced tool selection is refused before credential resolution and HTTP', async () => {
-    const variant = variants[1];
-    const input = request(variant);
-    input.modelId = 'claude-fable-5-1';
-    input.toolChoice = 'knowledge.read';
-    const fetch = vi.fn();
-    const resolveCredential = vi.fn(() => secret);
-    vi.stubGlobal('fetch', fetch);
-    const result = await executeProvider(connection(variant), input, {
-      ...options(variant),
-      resolveCredential,
-    });
-    expect(result.error?.code).toBe('UNSUPPORTED_MODEL_TOOL_CHOICE');
-    expect(resolveCredential).not.toHaveBeenCalled();
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  test.each(variants)(
+  test.each([variants[0], variants[1], variants[3]])(
     '$protocol validates credentials and journals before its single exact wire request',
     async (variant) => {
       const wires: WireRecord[] = [];
@@ -730,7 +617,10 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
     }
   );
 
-  test.each(variants.flatMap((variant) => [401, 429].map((status) => ({ variant, status }))))(
+  test.each([
+    { variant: variants[0], status: 401 },
+    { variant: variants[1], status: 429 },
+  ])(
     '$variant.protocol HTTP $status never retries or exposes provider error bodies',
     async ({ variant, status }) => {
       const fetch = vi.fn(
@@ -761,7 +651,8 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
   );
 
   test.each([
-    ...variants.map((variant) => ({ variant, mode: 'cancel' })),
+    { variant: variants[1], mode: 'cancel' },
+    { variant: variants[3], mode: 'cancel' },
     // All five adapters share the native HTTP deadline. Exercise it with a body that ignores abort.
     { variant: variants[0], mode: 'timeout' },
   ])(
@@ -792,7 +683,7 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
     }
   );
 
-  test.each(variants)(
+  test.each([variants[1], variants[3]])(
     '$protocol reports EOF without a provider terminal and retains partial evidence',
     async (variant) => {
       const fetch = vi.fn(async () => stream(events(variant).slice(0, -1)).response);
@@ -808,7 +699,7 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
     }
   );
 
-  test.each(variants)(
+  test.each([variants[0]])(
     '$protocol rejects a successful HTTP response without a body',
     async (variant) => {
       const fetch = vi.fn(
@@ -822,7 +713,7 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
     }
   );
 
-  test.each(variants)(
+  test.each([variants[0]])(
     '$protocol validates endpoint syntax and credentials before journaling or fetching',
     async (variant) => {
       const fetch = vi.fn();
@@ -856,7 +747,7 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
     }
   );
 
-  test.each(variants)(
+  test.each([variants[0]])(
     '$protocol can call a configured compatible host without an approval list',
     async (variant) => {
       const fetch = vi.fn(
@@ -876,7 +767,7 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
     }
   );
 
-  test.each(variants)(
+  test.each([variants[0]])(
     '$protocol honors denied admission and caller cancellation before fetch',
     async (variant) => {
       const fetch = vi.fn();

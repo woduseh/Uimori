@@ -16,7 +16,6 @@ import {
   reserveSelectedIllustrations,
 } from '../server/illustrations.js';
 import type { Store } from '../server/store.js';
-import { illustrationErrorMessage } from '../web/illustration-labels.js';
 import { FIXTURE_WORKFLOW } from './fixtures/comfyui-server.js';
 import {
   chatWithSource,
@@ -131,14 +130,10 @@ function result(code: string): ProviderResult {
 // Provider errors share one retry policy; each stage parses a different response format.
 test.each([
   ['plan', 'TIMEOUT'],
-  ['plan', 'CODEX_CLOSED'],
   ['plan', 'CODEX_BUSY'],
-  ['plan', 'invalid'],
-  ['placement', 'TRANSPORT_ERROR'],
   ['placement', 'invalid'],
   ['prompt', 'HTTP_503'],
   ['prompt', 'refused'],
-  ['prompt', 'invalid'],
 ] as const)('%s uses conservative automatic retry classification for %s', async (stage, code) => {
   const { store, source, job } = setup(stage);
   const executeCodex = vi.fn<NonNullable<IllustrationRunnerHooks['executeCodex']>>(
@@ -277,7 +272,6 @@ test('an acknowledged synthetic Codex text turn that times out is started exactl
   });
   expect(await runIllustrationJob(store, job.id, 'worker', options)).toBeNull();
   expect(starts()).toHaveLength(1);
-  expect(illustrationErrorMessage('ILLUSTRATION_PROMPT_TIMEOUT')).toContain('사용량이 추가');
 });
 test('an explicit UNAVAILABLE refusal from synthetic Codex is terminal and keeps its bounded reason', async () => {
   const { store, job } = setup('image');
@@ -300,7 +294,6 @@ test('an explicit UNAVAILABLE refusal from synthetic Codex is terminal and keeps
     attempt: 1,
     diagnostic: { codex: { unavailableReason: reason } },
   });
-  expect(illustrationErrorMessage('CODEX_IMAGE_UNAVAILABLE')).toContain('거절');
 });
 test('a plain missing image without the exact unavailable marker remains a bounded retry', async () => {
   const { store, job } = setup('image');

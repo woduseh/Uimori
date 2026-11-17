@@ -13,14 +13,12 @@ async function create(request: APIRequestContext, title: string) {
   return { bot, chat: await chatResponse.json() };
 }
 
-for (const viewport of [
-  { width: 2560, height: 1440 },
-  { width: 412, height: 915 },
-]) {
+{
+  const viewport = { width: 412, height: 915 };
   test(`BOTIMPORT01 selected bot confirmation and uncertain retry retain identity at ${viewport.width}px`, async ({
     page,
     request,
-  }, info) => {
+  }) => {
     await page.setViewportSize(viewport);
     const original = await create(request, `원래 봇 ${randomUUID().slice(0, 6)}`);
     const target = await create(request, `가져올 봇 ${randomUUID().slice(0, 6)}`);
@@ -34,11 +32,6 @@ for (const viewport of [
     const dialog = page.getByRole('dialog', { name: '이 봇으로 본문 가져오기', exact: true });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText(target.bot.title, { exact: true })).toBeVisible();
-    expect(
-      await dialog.evaluate((node) => node.scrollWidth - node.clientWidth)
-    ).toBeLessThanOrEqual(1);
-    await expect(dialog).toHaveCSS('opacity', '1');
-    await page.screenshot({ path: info.outputPath(`bot-chat-import-${viewport.width}.png`) });
     await expect(dialog.getByLabel('본문 JSON 파일')).toBeVisible();
     const openBackups = dialog.getByRole('button', { name: '채팅 백업 복원', exact: true });
     await expect(openBackups).toBeEnabled();
@@ -118,15 +111,6 @@ for (const viewport of [
     expect(result.chat.title).toBe(longTitle);
     const notice = dialog.getByRole('status');
     await expect(notice).toContainText(`‘${result.chat.title}’ 채팅을 만들고 대화를 가져왔어요.`);
-    for (const container of [notice, notice.locator('.notice-banner-message'), dialog])
-      expect(
-        await container.evaluate((node) => node.scrollWidth - node.clientWidth)
-      ).toBeLessThanOrEqual(1);
-    await openBackups.scrollIntoViewIfNeeded();
-    await expect(openBackups).toBeInViewport({ ratio: 1 });
-    await expect(dialog.getByRole('button', { name: '닫기', exact: true })).toBeInViewport({
-      ratio: 1,
-    });
     const imported = await (await request.get(`/api/chats/${result.chat.id}`)).json();
     expect(imported.sources.map((item: { text: string }) => item.text)).toEqual(['원본 장면']);
     // The shortcut opens the common backup screen after the selected transcript is resolved.

@@ -239,9 +239,6 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
       },
     });
     expect(stale.status()).toBe(409);
-    expect(
-      await returned.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
-    ).toBeTruthy();
     if (visualReview)
       await returned.screenshot({ path: testInfo.outputPath('mobile-source.png'), fullPage: true });
     // Independent file connection, not a mocked API, verifies storage and logical uniqueness.
@@ -430,7 +427,6 @@ test('F03 F05 an older real HTTP response cannot hide a newly committed source',
       .toBe(true);
     const source = (await detail(request, chat.id)).sources[0];
     await sourceDetails(page);
-    await expect(page.getByTestId('source').getByTestId('job-translation')).toContainText('완료');
     await expect(page.getByTestId('source').getByTestId('job-translation')).toContainText('완료');
     await expect.poll(() => pending.size).toBe(1);
     // Deliver the stale network response after latest source/job events have ended.

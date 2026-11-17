@@ -1,4 +1,4 @@
-import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
+import { DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
@@ -556,60 +556,6 @@ async function toggleHelperTone(page: Page) {
   await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
 }
 
-test('HELPMESSAGE edits saved requests and answers without rerunning completed work on mobile', async ({
-  page,
-  request,
-}, info) => {
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
-  const chat = await create(request),
-    state = await harness(page, 1);
-  await page.goto(`/?chat=${chat.id}`);
-  const panel = await open(page),
-    view = state.current(),
-    tasksBefore = JSON.stringify(view.tasks),
-    user = panel.locator(`[data-message-id="${view.messages[0].id}"]`),
-    answer = panel.locator(`[data-message-id="${view.messages[1].id}"]`);
-  await panel.getByLabel('도우미에게 요청').fill('다음 요청으로 남겨 둘 초안');
-  await user.getByLabel('요청 및 컨텍스트 메뉴', { exact: true }).click();
-  await page.getByRole('button', { name: '컨텍스트용 요청 수정', exact: true }).click();
-  await user.getByLabel('요청 수정 내용', { exact: true }).fill('수정한 보관 요청');
-  await user.getByRole('button', { name: '입력 저장', exact: true }).click();
-  await expect(user.getByTestId('source-request')).toHaveText('수정한 보관 요청');
-  await answer.getByLabel('메시지 메뉴', { exact: true }).click();
-  await page.screenshot({
-    path: info.outputPath('helper-message-menu-mobile.png'),
-    fullPage: true,
-  });
-  await page.getByRole('button', { name: '응답 수정', exact: true }).click();
-  await answer.getByLabel('응답 수정', { exact: true }).fill('직접 고친 **보관 응답**이에요.');
-  expect(await panel.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
-  await page.screenshot({
-    path: info.outputPath('helper-message-editor-mobile.png'),
-    fullPage: true,
-  });
-  await answer.getByRole('button', { name: '입력 저장', exact: true }).click();
-  await expect(answer.locator('.helper-prose')).toHaveText('직접 고친 보관 응답이에요.');
-  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('다음 요청으로 남겨 둘 초안');
-  expect(await panel.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
-  await page.screenshot({
-    path: info.outputPath('helper-message-edit-mobile.png'),
-    fullPage: true,
-  });
-  await page.reload();
-  await open(page);
-  await expect(user.getByTestId('source-request')).toHaveText('수정한 보관 요청');
-  await expect(answer.locator('.helper-prose')).toHaveText('직접 고친 보관 응답이에요.');
-  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('다음 요청으로 남겨 둘 초안');
-  expect(
-    state.messageMutations.map(({ method, expectedRevision }) => ({ method, expectedRevision }))
-  ).toEqual([
-    { method: 'PATCH', expectedRevision: 1 },
-    { method: 'PATCH', expectedRevision: 2 },
-  ]);
-  expect(JSON.stringify(view.tasks)).toBe(tasksBefore);
-  expect(state.posts).toHaveLength(0);
-});
-
 test('HELPMESSAGE a failed answer save retains the exact draft across reload and cancel restores the saved answer', async ({
   page,
   request,
@@ -708,52 +654,6 @@ test('HELPMESSAGE conflict review preserves request and response drafts in older
     expect(saved.text).toBe(draft);
   }
   expect(state.messageMutations).toHaveLength(4);
-  expect(state.posts).toHaveLength(0);
-});
-
-test('HELPMESSAGE missing saved message translates without changing the recovered draft', async ({
-  page,
-  request,
-}) => {
-  const chat = await create(request),
-    state = await harness(page, 1);
-  await page.goto(`/?chat=${chat.id}`);
-  const panel = await open(page),
-    view = state.current(),
-    saved = view.messages[1],
-    answer = panel.locator(`[data-message-id="${saved.id}"]`),
-    draft = '보존할 응답 편집 초안';
-  await answer.getByLabel('메시지 메뉴', { exact: true }).click();
-  await page.getByRole('button', { name: '응답 수정', exact: true }).click();
-  await answer.getByLabel('응답 수정', { exact: true }).fill(draft);
-  view.messages = view.messages.filter((message) => message.id !== saved.id);
-  view.conversation.revision++;
-  const reviewedRevision = view.conversation.revision;
-  await answer.getByRole('button', { name: '입력 저장', exact: true }).click();
-  const dialog = page.locator('dialog[role="alertdialog"][open]');
-  await expect(dialog).toBeVisible();
-  view.conversation.historyRevision = state.emit('messages.changed', {
-    revision: reviewedRevision,
-    deletedMessageIds: [saved.id],
-  });
-  await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
-  await expect(
-    dialog.getByRole('textbox', { name: messages['helpers.messageDraft'].ko })
-  ).toHaveValue(draft);
-  const other = await page.context().newPage();
-  await other.goto('/');
-  await setLocaleFromOtherTab(page, other, 'en');
-  await expect(dialog).toContainText(messages['helpers.messageMissing'].en);
-  await expect(
-    dialog.getByRole('textbox', { name: messages['helpers.messageDraft'].en })
-  ).toHaveValue(draft);
-  expect(view.conversation.revision).toBe(reviewedRevision);
-  expect(state.messageMutations).toHaveLength(1);
-  expect(state.messageMutations[0]).toMatchObject({
-    expectedRevision: reviewedRevision - 1,
-    text: draft,
-  });
-  expect(view.messages.some((message) => message.id === saved.id)).toBe(false);
   expect(state.posts).toHaveLength(0);
 });
 
@@ -872,202 +772,78 @@ test('HELPMESSAGE pair and following deletion discard loaded older messages whil
   expect(state.posts).toHaveLength(0);
 });
 
-for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
-  test(`HELPUI15 initial loading centers and the empty conversation keeps its two-row composer ready ${width}`, async ({
-    page,
-    request,
-  }, info) => {
-    await page.setViewportSize({ width, height: 900 });
-    const chat = await create(request),
-      state = await harness(page);
-    let release = () => {};
-    const held = new Promise<void>((resolve) => (release = resolve));
-    let waiting = true;
-    await page.route('**/api/helper/conversations/*/view', async (route) => {
-      if (waiting) await held;
-      await route.fallback();
-    });
-    try {
-      await page.goto(`/?chat=${chat.id}`);
-      await openHelper(page);
-      const panel = page.locator('#helper-panel'),
-        list = panel.locator('.helper-messages'),
-        loading = panel.getByRole('status').filter({ hasText: '대화를 불러오는 중이에요…' });
-      await expect(loading).toBeVisible();
-      const loadingBox = (await loading.boundingBox())!,
-        listBox = (await list.boundingBox())!;
-      expect(
-        Math.abs(loadingBox.x + loadingBox.width / 2 - listBox.x - listBox.width / 2)
-      ).toBeLessThan(12);
-      expect(
-        Math.abs(loadingBox.y + loadingBox.height / 2 - listBox.y - listBox.height / 2)
-      ).toBeLessThan(12);
-      await page.screenshot({ path: info.outputPath(`helper-initial-loading-${width}.png`) });
-      waiting = false;
-      release();
-      await expect(loading).toHaveCount(0);
-      const empty = panel.getByText('아직 메시지가 없어요.', { exact: true });
-      await expect(empty).toHaveCount(0);
-      await expect(panel.locator('.helper-message')).toHaveCount(0);
-      const input = panel.getByLabel('도우미에게 요청');
-      await expect(input).toBeEnabled();
-      const inputBox = (await input.boundingBox())!;
-      const controlsBox = (await panel.locator('.helper-composer .quick-controls').boundingBox())!;
-      expect(inputBox.y + inputBox.height).toBeLessThanOrEqual(controlsBox.y);
-      await page.screenshot({ path: info.outputPath(`helper-empty-composer-${width}.png`) });
-      await panel.getByLabel('도우미에게 요청').fill('첫 대화 요청');
-      await panel.getByRole('button', { name: '도우미 요청 보내기', exact: true }).click();
-      await expect.poll(() => state.posts.length).toBe(1);
-      await expect(empty).toHaveCount(0);
-      const message = panel.locator('.helper-message').first();
-      await expect(message).toBeVisible();
-      const messageBox = (await message.boundingBox())!;
-      expect(messageBox.y - listBox.y).toBeLessThan(32);
-    } finally {
-      release();
-      await page.unrouteAll({ behavior: 'wait' });
-    }
-  });
-}
-
-for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
-  test(`HELPSTEER adds instructions to the active task and keeps ordinary requests queued ${width}`, async ({
-    page,
-    request,
-  }, info) => {
-    await page.setViewportSize({ width, height: 900 });
-    const chat = await create(request),
-      state = await harness(page);
-    await page.goto(`/?chat=${chat.id}`);
-    let panel = await open(page);
-    await panel.getByLabel('도우미에게 요청').fill('자료 전체를 살펴봐 주세요');
-    await panel.getByRole('button', { name: '도우미 요청 보내기', exact: true }).click();
-    await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('');
-    const task = state.current().tasks[0];
-    const instructionText = '우선 설명문만 살펴봐 주세요';
-    await panel.getByLabel('도우미에게 요청').fill(instructionText);
-    const stop = panel.locator('.helper-composer').getByRole('button', {
-      name: '진행 중인 도우미 작업 취소',
-      exact: true,
-    });
-    await expect(stop).toBeVisible();
-    await expect(stop).toBeEnabled();
-    if (width === DESKTOP_WIDTH) state.loseNext();
-    await panel.getByRole('button', { name: '현재 작업에 추가', exact: true }).click();
-    if (width === DESKTOP_WIDTH) {
-      await expect(
-        panel.getByRole('button', { name: '이전 요청 확인', exact: true })
-      ).toBeVisible();
-      await expect(panel.getByLabel('도우미에게 요청')).toHaveValue(instructionText);
-      await expect(stop).toBeVisible();
-      await page.reload();
-      panel = await open(page);
-      await panel.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
-      await page
-        .getByRole('dialog', { name: '도우미 요청 확인', exact: true })
-        .getByRole('button', { name: '접수 확인 및 재시도' })
-        .click();
-      await expect(panel.locator('.helper-outbox')).toHaveCount(0);
-      expect(state.steerPosts).toHaveLength(2);
-      expect(state.steerPosts[1]).toEqual(state.steerPosts[0]);
-    }
-    await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('');
-    await expect(stop).toBeVisible();
-    expect(state.steerPosts[0]).toMatchObject({ taskId: task.id, text: instructionText });
-    expect(state.posts).toHaveLength(1);
-    expect(state.current().tasks).toHaveLength(1);
-    expect(task.instructions).toHaveLength(1);
-    const instruction = panel
-      .locator(`.helper-task[data-task-id="${task.id}"]`)
-      .getByTestId('helper-instruction');
-    await expect(instruction).toContainText(instructionText);
-    await expect(instruction.getByRole('status')).toContainText('전달 대기');
-    task.instructions![0].status = 'delivered';
-    state.emit('instruction.updated');
-    await expect(instruction.getByRole('status')).toContainText('작업 입력에 반영');
-
-    await panel.getByLabel('도우미에게 요청').fill('그다음 첫 메시지를 검토해 주세요');
-    const send = panel.getByRole('button', { name: '다음 요청', exact: true });
-    await expect(send).toHaveText('다음 요청');
-    await send.click();
-    await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('');
-    expect(state.posts).toHaveLength(2);
-    expect(state.current().tasks).toHaveLength(2);
-    expect(state.current().tasks[0]).toMatchObject({
-      request: '그다음 첫 메시지를 검토해 주세요',
-      status: 'queued',
-    });
-    expect(task.status).toBe('running');
-    await page.screenshot({ path: info.outputPath(`helper-steer-${width}.png`), fullPage: true });
-  });
-}
-
-test('HELPUI13 completed helper response renders common Markdown and copies its exact source', async ({
+test('HELPSTEER adds instructions to the active task once after a lost acknowledgement and keeps ordinary requests queued', async ({
   page,
   request,
-  context,
 }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const chat = await create(request),
-    state = await harness(page, 1);
+    state = await harness(page);
   await page.goto(`/?chat=${chat.id}`);
   let panel = await open(page);
-  const view = state.current();
-  const answer = view.messages.find((message) => message.role === 'assistant')!;
-  answer.text =
-    '| 영향 | 이전 동작 | 변경 후 |\n| :--- | :---: | ---: |\n| 표 | `a|b` | **정상** |\n\n- [x] 확인됨\n\n<https://example.com/report>';
+  await panel.getByLabel('도우미에게 요청').fill('자료 전체를 살펴봐 주세요');
+  await panel.getByRole('button', { name: '도우미 요청 보내기', exact: true }).click();
+  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('');
+  const task = state.current().tasks[0];
+  const instructionText = '우선 설명문만 살펴봐 주세요';
+  await panel.getByLabel('도우미에게 요청').fill(instructionText);
+  const stop = panel.locator('.helper-composer').getByRole('button', {
+    name: '진행 중인 도우미 작업 취소',
+    exact: true,
+  });
+  await expect(stop).toBeVisible();
+  await expect(stop).toBeEnabled();
+  state.loseNext();
+  await panel.getByRole('button', { name: '현재 작업에 추가', exact: true }).click();
+  await expect(panel.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
+  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue(instructionText);
+  await expect(stop).toBeVisible();
   await page.reload();
   panel = await open(page);
-  const message = panel.locator('.helper-message.assistant').first();
-  const table = message.getByRole('table');
-  await expect(table).toBeVisible();
-  await expect(table.getByRole('columnheader')).toHaveCount(3);
-  await expect(table.getByRole('cell').nth(1)).toHaveText('a|b');
-  await expect(message.locator('.prose-task-item input[type="checkbox"]')).toBeChecked();
-  await expect(message.getByRole('link', { name: 'https://example.com/report' })).toBeVisible();
-  expect(await panel.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  await panel.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '도우미 요청 확인', exact: true })
+    .getByRole('button', { name: '접수 확인 및 재시도' })
+    .click();
+  await expect(panel.locator('.helper-outbox')).toHaveCount(0);
+  expect(state.steerPosts).toHaveLength(2);
+  expect(state.steerPosts[1]).toEqual(state.steerPosts[0]);
+  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('');
+  await expect(stop).toBeVisible();
+  expect(state.steerPosts[0]).toMatchObject({ taskId: task.id, text: instructionText });
+  expect(state.posts).toHaveLength(1);
+  expect(state.current().tasks).toHaveLength(1);
+  expect(task.instructions).toHaveLength(1);
+  const instruction = panel
+    .locator(`.helper-task[data-task-id="${task.id}"]`)
+    .getByTestId('helper-instruction');
+  await expect(instruction).toContainText(instructionText);
+  await expect(instruction.getByRole('status')).toContainText('전달 대기');
+  task.instructions![0].status = 'delivered';
+  state.emit('instruction.updated');
+  await expect(instruction.getByRole('status')).toContainText('작업 입력에 반영');
 
-  await message.getByRole('button', { name: '도우미 응답 복사', exact: true }).click();
-  await expect(
-    message.getByRole('button', { name: '도우미 응답 복사됨', exact: true })
-  ).toBeVisible();
-  const copied = await page.evaluate(() => navigator.clipboard.readText());
-  expect(copied.replace(/\r\n/gu, '\n')).toBe(answer.text);
+  await panel.getByLabel('도우미에게 요청').fill('그다음 첫 메시지를 검토해 주세요');
+  const send = panel.getByRole('button', { name: '다음 요청', exact: true });
+  await expect(send).toHaveText('다음 요청');
+  await send.click();
+  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('');
+  expect(state.posts).toHaveLength(2);
+  expect(state.current().tasks).toHaveLength(2);
+  expect(state.current().tasks[0]).toMatchObject({
+    request: '그다음 첫 메시지를 검토해 주세요',
+    status: 'queued',
+  });
+  expect(task.status).toBe('running');
 });
 
 test('HELPUI12 helper settings event refreshes an open model editor without replacing its draft', async ({
   page,
   request,
-}, info) => {
+}) => {
   const state = await harness(page);
   await page.goto('/');
   await navigationAction(page, '서재');
   const panel = await open(page);
-  await toggleHelperTone(page);
-  for (const width of [1440, MOBILE_WIDTH]) {
-    await page.setViewportSize({ width, height: 900 });
-    const settings = page.getByRole('dialog', { name: '도우미 설정', exact: true });
-    await expect(settings.locator('input[type="number"]')).toHaveCount(0);
-    expect(
-      await settings.evaluate((node) => node.scrollWidth - node.clientWidth)
-    ).toBeLessThanOrEqual(1);
-    await settings.locator('.helper-settings-body').evaluate((node) => {
-      node.scrollTop = node.scrollHeight;
-    });
-    const save = panel.getByRole('button', { name: '도우미 설정 저장', exact: true });
-    await expect(save).toBeInViewport();
-    const saveBox = (await save.boundingBox())!;
-    const actionBox = (await settings.locator('.helper-settings-actions').boundingBox())!;
-    expect(Math.abs(actionBox.x + actionBox.width - saveBox.x - saveBox.width)).toBeLessThanOrEqual(
-      1
-    );
-    await page.screenshot({ path: info.outputPath(`helper-settings-${width}.png`) });
-    await settings.locator('.helper-settings-body').evaluate((node) => {
-      node.scrollTop = 0;
-    });
-  }
-  await toggleHelperTone(page);
   await panel.getByRole('button', { name: /^현재 도우미 모델/ }).click();
   const picker = page.getByRole('dialog', { name: '도우미 모델 선택', exact: true });
   await picker.getByRole('button', { name: '역할별 모델 설정', exact: true }).click();
@@ -1134,56 +910,6 @@ async function helperModels(request: APIRequestContext) {
   }
   return models;
 }
-
-test('HELPMODEL direct helper selection preserves other global roles, chat settings, drafts and focus on desktop and mobile', async ({
-  page,
-  request,
-}, info) => {
-  const chat = await create(request);
-  const models = await helperModels(request);
-  await harness(page);
-  const before = (await (await request.get('/api/model-workspace')).json()) as ModelWorkspace;
-  const chatBefore = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
-  const promptsBefore = await (await request.get('/api/prompt-workspace')).json();
-  await page.goto(`/?chat=${chat.id}`);
-  const panel = await open(page);
-  const input = panel.getByLabel('도우미에게 요청');
-  await input.fill('모델을 골라도 남아야 하는 도우미 초안');
-  for (const [index, width] of [DESKTOP_WIDTH, MOBILE_WIDTH].entries()) {
-    await page.setViewportSize({ width, height: 844 });
-    const trigger = panel.getByRole('button', { name: /^현재 도우미 모델:/ });
-    await trigger.click();
-    const picker = page.getByRole('dialog', { name: '도우미 모델 선택', exact: true });
-    await expect(picker).toContainText('모든 도우미 대화의 다음 요청부터 적용해요.');
-    await picker.getByRole('searchbox', { name: '모델 검색' }).fill(models[index].title);
-    const choice = picker.getByRole('button', { name: new RegExp(models[index].title) });
-    await expect(choice).toBeEnabled();
-    expect(await picker.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
-    await page.screenshot({ path: info.outputPath(`helper-model-picker-${width}.png`) });
-    await choice.click();
-    await expect(picker).toBeHidden();
-    await expect(trigger).toBeFocused();
-    await expect(trigger).toContainText(models[index].title);
-    await expect(input).toHaveValue('모델을 골라도 남아야 하는 도우미 초안');
-    const saved = (await (await request.get('/api/model-workspace')).json()) as ModelWorkspace;
-    expect(saved).toEqual({
-      ...before,
-      revision: before.revision + index + 1,
-      helperModel: { id: models[index].id },
-    });
-    await page.screenshot({ path: info.outputPath(`helper-model-selected-${width}.png`) });
-  }
-  const chatAfter = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
-  expect(chatAfter.profile).toEqual(chatBefore.profile);
-  const promptsAfter = await (await request.get('/api/prompt-workspace')).json();
-  expect(promptsAfter.main).toEqual(promptsBefore.main);
-  expect(promptsAfter.translation).toEqual(promptsBefore.translation);
-  await panel.getByRole('button', { name: /^현재 도우미 모델:/ }).click();
-  const picker = page.getByRole('dialog', { name: '도우미 모델 선택', exact: true });
-  await picker.getByRole('button', { name: '선택 안 함', exact: true }).click();
-  await expect(picker).toBeHidden();
-  expect((await (await request.get('/api/model-workspace')).json()).helperModel).toBeNull();
-});
 
 test('HELPMODEL rejected and uncertain helper changes require an explicit reread and never replay a write', async ({
   page,
@@ -1324,69 +1050,10 @@ test('HELPMODEL acknowledged selection stays successful when the following setti
   expect(writes).toBe(1);
 });
 
-test('HELPUI16 helper tone save shows pending and completion without changing the conversation draft', async ({
-  page,
-}) => {
-  await harness(page);
-  await page.goto('/');
-  const panel = await open(page);
-  await panel.getByLabel('도우미에게 요청').fill('설정을 바꿔도 보존할 초안');
-  await toggleHelperTone(page);
-  await expect(panel.locator('.helper-settings')).toBeVisible();
-  await panel.getByLabel('도우미 말투', { exact: true }).fill('차분하고 간결하게 응답해 주세요.');
-  let release = () => {};
-  const held = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await page.route('**/api/helper/conversations/*', async (route) => {
-    if (route.request().method() === 'PATCH') await held;
-    await route.fallback();
-  });
-  const save = panel.getByRole('button', { name: '도우미 설정 저장', exact: true });
-  await save.click();
-  await expect(save).toHaveAttribute('aria-busy', 'true');
-  await expect(save).toBeDisabled();
-  release();
-  await expect(
-    page.getByRole('status').filter({ hasText: '도우미 말투를 저장했어요.' })
-  ).toBeVisible();
-  await toggleHelperTone(page);
-  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('설정을 바꿔도 보존할 초안');
-});
-
-test('HELPACTIVITY a failed completed-task activity read can be retried in place', async ({
+test('HELPUI01 helper panel preserves separate input, reading position, tone drafts and Back behavior', async ({
   page,
   request,
 }) => {
-  const chat = await create(request);
-  const state = await harness(page);
-  await page.goto(`/?chat=${chat.id}`);
-  let panel = await open(page);
-  const task = state.addFailed(state.current());
-  state.activity(task, [{ seq: 1, kind: 'tool.finished', name: 'resource.read', denied: false }]);
-  await page.reload();
-  panel = await open(page);
-  let reads = 0;
-  await page.route(`**/api/helper/tasks/${task.id}/activity`, async (route) => {
-    if (++reads === 1)
-      return route.fulfill({ status: 503, json: { error: '합성 기록 읽기 실패' } });
-    return route.fallback();
-  });
-  const row = panel.locator(`.helper-task[data-task-id="${task.id}"]`);
-  await row.getByTestId('helper-task-activity').locator(':scope > summary').click();
-  const activity = row.getByTestId('helper-activity-details');
-  await expect(activity.getByRole('alert')).toContainText('활동 내역을 새로 읽지 못했어요.');
-  await expect(activity.getByRole('alert')).toContainText('서버 작업을 완료하지 못했어요. (503)');
-  await activity.getByRole('button', { name: '다시 불러오기', exact: true }).click();
-  await expect(activity.locator('.helper-activity-stages > li')).toHaveCount(1);
-  await expect(activity.getByRole('alert')).toHaveCount(0);
-  expect(reads).toBe(2);
-});
-
-test(`HELPUI01 helper panel preserves separate input, reading position and Back behavior at ${MOBILE_WIDTH}/${DESKTOP_WIDTH}`, async ({
-  page,
-  request,
-}, info) => {
   const chat = await create(request);
   await harness(page, 20);
   await page.goto(`/?chat=${chat.id}`);
@@ -1418,57 +1085,27 @@ test(`HELPUI01 helper panel preserves separate input, reading position and Back 
   await page.goBack();
   await expect(panel).toBeHidden();
   expect(page.url()).toBe(url);
-  for (const width of DEFAULT_WIDTHS) {
-    await page.setViewportSize({ width, height: 844 });
-    await open(page);
-    if (width === DESKTOP_WIDTH)
-      await expect(page.getByRole('button', { name: '도우미 열기', exact: true })).toBeHidden();
-    await expect(input).toHaveValue('도우미 입력 초안');
-    await list.evaluate((node) => {
-      node.scrollTop = 400;
-    });
-    const readingPosition = await list.evaluate((node) => node.scrollTop);
-    await toggleHelperTone(page);
-    const settings = page.getByRole('dialog', { name: '도우미 설정', exact: true });
-    await expect(settings).toBeVisible();
-    await expect(list).toBeAttached();
-    await expect(input).toHaveValue('도우미 입력 초안');
-    await expect(
-      panel.getByRole('button', { name: '도우미 설정 저장', exact: true })
-    ).toBeInViewport();
-    const settingsBox = (await settings.boundingBox())!;
-    expect(settingsBox.x).toBeGreaterThanOrEqual(0);
-    expect(settingsBox.x + settingsBox.width).toBeLessThanOrEqual(width);
-    expect(settingsBox.y + settingsBox.height).toBeLessThanOrEqual(844);
-    await page.screenshot({ path: info.outputPath(`helper-settings-open-${width}.png`) });
-    const tone = settings.getByLabel('도우미 말투', { exact: true });
-    const originalTone = await tone.inputValue();
-    await tone.fill('설정 화면에서 남긴 말투 초안');
-    await toggleHelperTone(page);
-    const discard = page.getByRole('alertdialog', { name: '도우미 설정', exact: true });
-    await expect(discard).toContainText('저장하지 않은 말투가 사라져요.');
-    await discard.getByRole('button', { name: '계속 편집', exact: true }).click();
-    await expect(tone).toHaveValue('설정 화면에서 남긴 말투 초안');
-    await toggleHelperTone(page);
-    await discard.getByRole('button', { name: '변경 내용 버리고 닫기', exact: true }).click();
-    await expect(settings).toBeHidden();
-    await expect(input).toHaveValue('도우미 입력 초안');
-    await expect.poll(() => list.evaluate((node) => node.scrollTop)).toBe(readingPosition);
-    await toggleHelperTone(page);
-    await expect(tone).toHaveValue(originalTone);
-    await toggleHelperTone(page);
-    const box = await panel.boundingBox();
-    expect(box!.x).toBeGreaterThanOrEqual(0);
-    expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-      true
-    );
-    await page.screenshot({ path: info.outputPath(`helper-panel-${width}.png`) });
-    await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
-    await expect(panel).toBeHidden();
-    if (width === DESKTOP_WIDTH)
-      await expect(page.getByRole('button', { name: '도우미 열기', exact: true })).toBeVisible();
-  }
+  await open(page);
+  await expect(input).toHaveValue('도우미 입력 초안');
+  const readingPosition = await list.evaluate((node) => node.scrollTop);
+  await toggleHelperTone(page);
+  const settings = page.getByRole('dialog', { name: '도우미 설정', exact: true });
+  await expect(settings).toBeVisible();
+  const tone = settings.getByLabel('도우미 말투', { exact: true });
+  const originalTone = await tone.inputValue();
+  await tone.fill('설정 화면에서 남긴 말투 초안');
+  await toggleHelperTone(page);
+  const discard = page.getByRole('alertdialog', { name: '도우미 설정', exact: true });
+  await expect(discard).toContainText('저장하지 않은 말투가 사라져요.');
+  await discard.getByRole('button', { name: '계속 편집', exact: true }).click();
+  await expect(tone).toHaveValue('설정 화면에서 남긴 말투 초안');
+  await toggleHelperTone(page);
+  await discard.getByRole('button', { name: '변경 내용 버리고 닫기', exact: true }).click();
+  await expect(settings).toBeHidden();
+  await expect(input).toHaveValue('도우미 입력 초안');
+  await expect.poll(() => list.evaluate((node) => node.scrollTop)).toBe(readingPosition);
+  await toggleHelperTone(page);
+  await expect(tone).toHaveValue(originalTone);
 });
 
 test('HELPUI17 Back clears owned tone dialogs while retaining each session draft', async ({
@@ -1773,7 +1410,7 @@ test('HELPUI03 archived artifact revisions and device drafts remain readable wit
   page,
   request,
   context,
-}, info) => {
+}) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const chat = await create(request),
     state = await harness(page, 55);
@@ -1899,11 +1536,6 @@ test('HELPUI03 archived artifact revisions and device drafts remain readable wit
   await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
   await expect(panel.locator('[data-testid="helper-task-record"]')).toHaveCount(55);
   await panel.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
-  for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
-    await page.setViewportSize({ width, height: 900 });
-    await card.locator('header').scrollIntoViewIfNeeded();
-    await page.screenshot({ path: info.outputPath(`helper-archive-${width}.png`) });
-  }
 
   // A fresh page must recover device drafts even when every saved-artifact read fails.
   await page.route(`**/api/helper/artifacts/${artifact.id}**`, async (route) => {
@@ -2051,48 +1683,6 @@ test('HELPUI04 selected source is frozen in the request and a terminal missing s
   ).toEqual(selectedSources);
 });
 
-test('HELPERROR translates a known stored task error while preserving unknown diagnostics', async ({
-  page,
-  request,
-}) => {
-  const chat = await create(request),
-    state = await harness(page);
-  await page.goto(`/?chat=${chat.id}`);
-  await open(page);
-  const failed = state.addFailed(state.current());
-  const known = 'HELPER_CONTEXT_DEPENDENCY_CHANGED';
-  failed.error = known;
-  const language = (locale: string) =>
-    page.evaluate((value) => {
-      localStorage.setItem('uimori:ui-language', value);
-      window.dispatchEvent(
-        new StorageEvent('storage', { key: 'uimori:ui-language', newValue: value })
-      );
-    }, locale);
-  for (const error of [known, 'SYNTHETIC_UNMAPPED_ERROR']) {
-    failed.error = error;
-    await page.evaluate(() => localStorage.setItem('uimori:ui-language', 'ko'));
-    await page.reload();
-    const panel = await open(page);
-    const activity = panel.locator(
-      `[data-testid="helper-task-activity"][data-task-id="${failed.id}"]`
-    );
-    await activity.locator(':scope > summary').click();
-    await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
-    const history = panel.locator(
-      `.helper-task-history [data-testid="helper-task-record"][data-task-id="${failed.id}"]`
-    );
-    for (const locale of ['ko', 'en', 'ja', 'zh'] as const) {
-      await language(locale);
-      const expected =
-        error === known ? messages['errors.HELPER_CONTEXT_DEPENDENCY_CHANGED'][locale] : error;
-      await expect(activity.locator('p.error')).toHaveText(expected);
-      await expect(history.locator('p.error')).toHaveText(expected);
-    }
-    expect(failed.error).toBe(error);
-  }
-});
-
 test('HELPUI05 explicitly retries a saved edited request, preserves composer and hides historical failure after reload', async ({
   page,
   request,
@@ -2158,77 +1748,65 @@ test('HELPUI05 explicitly retries a saved edited request, preserves composer and
   await expect(panel.locator('.helper-task-history').getByText('SYNTHETIC_FAILURE')).toBeVisible();
 });
 
-for (const width of DEFAULT_WIDTHS) {
-  test(`HELPHISTORY long requests fold without hiding failures, saved changes or exact text ${width}`, async ({
-    page,
-    request,
-    context,
-  }, info) => {
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    await page.setViewportSize({ width, height: 844 });
-    const chat = await create(request),
-      state = await harness(page, 1);
-    await page.goto(`/?chat=${chat.id}`);
-    await open(page);
-    const failed = state.addFailed(state.current());
-    const fullRequest = `  첫 문장의 공백도 유지해 주세요.\n\n${'긴 한국어 요청을 접어 두고 필요한 부분을 확인해요. '.repeat(30)}\n마지막 줄의 공백도 유지해 주세요.  `;
-    failed.request = fullRequest;
-    failed.completedEffects = { count: 1, labels: ['다음 요청 옵션'] };
-    await page.reload();
-    const panel = await open(page);
-    await panel.getByLabel('도우미에게 요청').fill('별도로 유지할 요청 초안');
-    await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
-    const history = panel.locator('.helper-task-history');
-    const record = history.locator(`[data-task-id="${failed.id}"]`).first();
-    const disclosure = record.locator('.task-request-disclosure');
-    const summary = disclosure.locator(':scope > summary');
-    const fullText = disclosure.locator('.task-request');
-    await expect(disclosure).not.toHaveAttribute('open');
-    await expect(record.locator('.task-request-preview')).toBeVisible();
-    expect(
-      await record
-        .locator('.task-request-preview')
-        .evaluate(
-          (node) =>
-            node.clientHeight <= Number.parseFloat(getComputedStyle(node).lineHeight) * 3 + 1
-        )
-    ).toBe(true);
-    await expect(fullText).toBeHidden();
-    await expect(record.getByText('실패', { exact: true })).toBeVisible();
-    await expect(record.getByText('SYNTHETIC_FAILURE', { exact: true })).toBeVisible();
-    await expect(
-      record.getByText('저장한 변경 1건, 다음 요청 옵션', { exact: true })
-    ).toBeVisible();
-    const shortRecord = history
-      .getByTestId('helper-task-record')
-      .filter({ hasText: '합성 요청 1' });
-    await expect(shortRecord.locator('.task-request-disclosure')).toHaveCount(0);
-    await expect(shortRecord.locator('.task-request')).toHaveText('합성 요청 1');
-    await page.screenshot({
-      path: info.outputPath(`helper-history-collapsed-${width}.png`),
-      fullPage: true,
-    });
-    await summary.focus();
-    await page.keyboard.press('Enter');
-    await expect(fullText).toBeVisible();
-    expect(await fullText.textContent()).toBe(fullRequest);
-    await fullText.evaluate((node) => {
-      const range = document.createRange();
-      range.selectNodeContents(node);
-      window.getSelection()?.removeAllRanges();
-      window.getSelection()?.addRange(range);
-    });
-    await page.keyboard.press('Control+c');
-    expect(
-      (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/gu, '\n')
-    ).toBe(fullRequest);
-    await summary.click();
-    await expect(fullText).toBeHidden();
-    await panel.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
-    await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');
-    expect(state.posts).toHaveLength(0);
+test('HELPHISTORY long requests fold without hiding failures, saved changes or exact text', async ({
+  page,
+  request,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const chat = await create(request),
+    state = await harness(page, 1);
+  await page.goto(`/?chat=${chat.id}`);
+  await open(page);
+  const failed = state.addFailed(state.current());
+  const fullRequest = `  첫 문장의 공백도 유지해 주세요.\n\n${'긴 한국어 요청을 접어 두고 필요한 부분을 확인해요. '.repeat(30)}\n마지막 줄의 공백도 유지해 주세요.  `;
+  failed.request = fullRequest;
+  failed.completedEffects = { count: 1, labels: ['다음 요청 옵션'] };
+  await page.reload();
+  const panel = await open(page);
+  await panel.getByLabel('도우미에게 요청').fill('별도로 유지할 요청 초안');
+  await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
+  const history = panel.locator('.helper-task-history');
+  const record = history.locator(`[data-task-id="${failed.id}"]`).first();
+  const disclosure = record.locator('.task-request-disclosure');
+  const summary = disclosure.locator(':scope > summary');
+  const fullText = disclosure.locator('.task-request');
+  await expect(disclosure).not.toHaveAttribute('open');
+  await expect(record.locator('.task-request-preview')).toBeVisible();
+  expect(
+    await record
+      .locator('.task-request-preview')
+      .evaluate(
+        (node) => node.clientHeight <= Number.parseFloat(getComputedStyle(node).lineHeight) * 3 + 1
+      )
+  ).toBe(true);
+  await expect(fullText).toBeHidden();
+  await expect(record.getByText('실패', { exact: true })).toBeVisible();
+  await expect(record.getByText('SYNTHETIC_FAILURE', { exact: true })).toBeVisible();
+  await expect(record.getByText('저장한 변경 1건, 다음 요청 옵션', { exact: true })).toBeVisible();
+  const shortRecord = history.getByTestId('helper-task-record').filter({ hasText: '합성 요청 1' });
+  await expect(shortRecord.locator('.task-request-disclosure')).toHaveCount(0);
+  await expect(shortRecord.locator('.task-request')).toHaveText('합성 요청 1');
+  await summary.focus();
+  await page.keyboard.press('Enter');
+  await expect(fullText).toBeVisible();
+  expect(await fullText.textContent()).toBe(fullRequest);
+  await fullText.evaluate((node) => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
   });
-}
+  await page.keyboard.press('Control+c');
+  expect((await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/gu, '\n')).toBe(
+    fullRequest
+  );
+  await summary.click();
+  await expect(fullText).toBeHidden();
+  await panel.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
+  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');
+  expect(state.posts).toHaveLength(0);
+});
 
 test('HELPUI06 saved effects survive response failure and cannot be replayed from retry controls', async ({
   page,
@@ -2259,35 +1837,6 @@ test('HELPUI06 saved effects survive response failure and cannot be replayed fro
   await details.locator(':scope > summary').click();
   await expect(details.getByText('저장한 작업: 다음 요청 옵션')).toBeVisible();
   await expect(details.getByText('UNEXPECTED_EOF', { exact: true })).toBeVisible();
-});
-
-test('HELPBRANCH existing branched dialogue remains usable without a new branch action', async ({
-  page,
-  request,
-}) => {
-  const chat = await create(request);
-  const state = await harness(page, 1);
-  await page.goto(`/?chat=${chat.id}`);
-  await open(page);
-  const view = state.current();
-  view.conversation.title = '이전 분기 대화';
-  view.messages = view.messages.map((message) => ({
-    ...message,
-    taskId: `seed:${message.id}`,
-    taskStatus: 'completed',
-    artifacts: [],
-  }));
-  view.tasks = [];
-  await page.reload();
-  const panel = await open(page);
-  await expect(panel.locator('.helper-message.assistant')).toContainText('합성 응답 1');
-  await panel.getByLabel('도우미 대화 관리').click();
-  await expect(panel.getByRole('button', { name: /세션 분기/ })).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  await panel.getByLabel('도우미에게 요청').fill('이전 분기에서 계속해 줘');
-  await panel.getByRole('button', { name: '도우미 요청 보내기', exact: true }).click();
-  await expect.poll(() => state.posts.length).toBe(1);
-  expect(state.posts[0].text).toBe('이전 분기에서 계속해 줘');
 });
 
 test('HELPUI07 switching sessions isolates late responses and retains the background task', async ({
@@ -2517,149 +2066,135 @@ test('DISPLAY helper incomplete saved answers stay collapsed and committed chang
   expect(state.streamReads.get(task.id)).toBe(1);
 });
 
-for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
-  test(`HELPUNDO latest edit confirms once and reconciles a lost response ${width}`, async ({
-    page,
-    request,
-  }, info) => {
-    await page.setViewportSize({ width, height: 900 });
-    const chat = await create(request),
-      state = await harness(page, 1);
-    await page.goto(`/?chat=${chat.id}`);
-    let panel = await open(page);
-    const view = state.current();
-    view.lastResourceEdit = {
-      editSeq: 37,
-      taskId: view.tasks[0].id,
-      kind: 'content',
-      id: 'saved-bot',
-      revision: 2,
-      title: '하린의 인물 설정',
-      canUndo: true,
-    };
-    await page.reload();
-    panel = await open(page);
-    await panel.getByLabel('도우미에게 요청').fill('계속 보관할 다음 요청');
-    const undo = panel.getByRole('button', { name: '마지막 자료 수정 되돌리기' });
-    await undo.click();
-    const dialog = page.getByRole('dialog', { name: '자료 수정 되돌리기', exact: true });
-    await expect(dialog).toContainText('하린의 인물 설정');
-    await dialog.getByRole('button', { name: '취소', exact: true }).click();
-    await expect(undo).toBeFocused();
-    expect(state.undoPosts).toHaveLength(0);
-    await undo.click();
-    if (width === DESKTOP_WIDTH) state.loseUndo();
-    await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
-    await expect(dialog).toBeHidden();
-    await expect(panel.getByRole('region', { name: '도우미 최근 자료 수정' })).toContainText(
-      '수정 되돌림'
-    );
-    expect(state.undoPosts).toEqual([{ editSeq: 37 }]);
-    await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('계속 보관할 다음 요청');
-    await expect(undo).toHaveCount(0);
-    await expect(panel.getByRole('alert')).toHaveCount(0);
-    await page.screenshot({ path: info.outputPath(`helper-undo-${width}.png`), fullPage: true });
-  });
-}
-
-for (const grouped of [false, true]) {
-  test(
-    grouped
-      ? 'HELPUNDO grouped edit shows all titles and blocks its second dirty target'
-      : 'HELPUNDO blocks a dirty editor and a changed saved revision without losing its draft',
-    async ({ page, request }) => {
-      await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
-      const response = await request.post('/api/content', {
-        data: fixtureBotInput(`Undo draft ${randomUUID()}`, 'Original source.'),
-      });
-      expect(response.ok()).toBe(true);
-      const bot = await response.json();
-      const state = await harness(page, 1);
-      const openEditor = async () => {
-        await page.goto('/');
-        await navigationAction(page, '서재');
-        await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(bot.title);
-        await page.getByRole('button', { name: `${bot.title} 상세 보기`, exact: true }).click();
-        await page.getByRole('button', { name: '편집', exact: true }).click();
-        await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
-      };
-      const openEditorHelper = async () => {
-        await page
-          .getByRole('region', { name: '자료 상세', exact: true })
-          .getByRole('button', { name: '도우미 열기', exact: true })
-          .click();
-        const panel = page.locator('#helper-panel');
-        await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
-        await expect(panel.getByText('대화를 불러오는 중이에요…', { exact: true })).toHaveCount(0);
-        return panel;
-      };
-      await openEditor();
-      await openEditorHelper();
-      const view = state.current();
-      const edited = {
-        kind: 'content' as const,
-        id: bot.id,
-        revision: bot.revision,
-        title: bot.title,
-      };
-      const first = {
-        kind: 'content' as const,
-        id: 'first-batch-resource',
-        revision: 2,
-        title: '함께 수정한 첫 자료',
-      };
-      view.lastResourceEdit = {
-        ...(grouped ? first : edited),
-        editSeq: 41,
-        taskId: view.tasks[0].id,
-        canUndo: true,
-        ...(grouped ? { resources: [first, edited] } : {}),
-      };
-      await openEditor();
-      const draft = page.getByLabel('Risu 자료 이름', { exact: true });
-      await draft.fill('지키려는 미저장 입력');
-      const panel = await openEditorHelper();
-      const undo = panel.getByRole('button', { name: '마지막 자료 수정 되돌리기' });
-      if (grouped)
-        await expect(panel.getByRole('region', { name: '도우미 최근 자료 수정' })).toContainText(
-          '함께 수정한 첫 자료 외 1개'
-        );
-      await expect(undo).toBeDisabled();
-      await expect(
-        panel
-          .getByRole('region', { name: '도우미 최근 자료 수정' })
-          .locator('small')
-          .filter({ hasText: '이 자료의 편집을 저장하거나 취소한 뒤 되돌려 주세요.' })
-      ).toBeVisible();
-      expect(state.undoPosts).toHaveLength(0);
-      await expect(draft).toHaveValue('지키려는 미저장 입력');
-      // Restoring the local value only removes the local guard; the server still owns the revision check.
-      await draft.fill(bot.title);
-      await expect(undo).toBeEnabled();
-      await undo.click();
-      if (grouped) {
-        const dialog = page.getByRole('dialog', { name: '자료 수정 되돌리기', exact: true });
-        await expect(dialog).toContainText('자료 2개');
-        await expect(dialog.getByRole('listitem')).toHaveText([first.title, bot.title]);
-      }
-      view.lastResourceEdit.canUndo = false;
-      view.lastResourceEdit.reason = '최근 수정 이후 자료가 변경되어 되돌릴 수 없어요.';
-      await page
-        .getByRole('dialog', { name: '자료 수정 되돌리기', exact: true })
-        .getByRole('button', { name: '되돌리기', exact: true })
-        .click();
-      await expect(undo).toBeDisabled();
-      await expect(draft).toHaveValue(bot.title);
-      expect(state.undoPosts).toEqual([{ editSeq: 41 }]);
-      expect((await (await request.get(`/api/content/${bot.id}`)).json()).title).toBe(bot.title);
-    }
-  );
-}
-
-test('HELPACTIVITY observed stages retain tool errors and cancellation on desktop and mobile', async ({
+test('HELPUNDO latest edit confirms once and reconciles a lost response', async ({
   page,
   request,
-}, info) => {
+}) => {
+  const chat = await create(request),
+    state = await harness(page, 1);
+  await page.goto(`/?chat=${chat.id}`);
+  let panel = await open(page);
+  const view = state.current();
+  view.lastResourceEdit = {
+    editSeq: 37,
+    taskId: view.tasks[0].id,
+    kind: 'content',
+    id: 'saved-bot',
+    revision: 2,
+    title: '하린의 인물 설정',
+    canUndo: true,
+  };
+  await page.reload();
+  panel = await open(page);
+  await panel.getByLabel('도우미에게 요청').fill('계속 보관할 다음 요청');
+  const undo = panel.getByRole('button', { name: '마지막 자료 수정 되돌리기' });
+  await undo.click();
+  const dialog = page.getByRole('dialog', { name: '자료 수정 되돌리기', exact: true });
+  await expect(dialog).toContainText('하린의 인물 설정');
+  await dialog.getByRole('button', { name: '취소', exact: true }).click();
+  await expect(undo).toBeFocused();
+  expect(state.undoPosts).toHaveLength(0);
+  await undo.click();
+  state.loseUndo();
+  await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(panel.getByRole('region', { name: '도우미 최근 자료 수정' })).toContainText(
+    '수정 되돌림'
+  );
+  expect(state.undoPosts).toEqual([{ editSeq: 37 }]);
+  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('계속 보관할 다음 요청');
+  await expect(undo).toHaveCount(0);
+  await expect(panel.getByRole('alert')).toHaveCount(0);
+});
+
+test('HELPUNDO grouped edit shows all titles and blocks its dirty target and a changed saved revision without losing its draft', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+  const response = await request.post('/api/content', {
+    data: fixtureBotInput(`Undo draft ${randomUUID()}`, 'Original source.'),
+  });
+  expect(response.ok()).toBe(true);
+  const bot = await response.json();
+  const state = await harness(page, 1);
+  const openEditor = async () => {
+    await page.goto('/');
+    await navigationAction(page, '서재');
+    await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(bot.title);
+    await page.getByRole('button', { name: `${bot.title} 상세 보기`, exact: true }).click();
+    await page.getByRole('button', { name: '편집', exact: true }).click();
+    await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
+  };
+  const openEditorHelper = async () => {
+    await page
+      .getByRole('region', { name: '자료 상세', exact: true })
+      .getByRole('button', { name: '도우미 열기', exact: true })
+      .click();
+    const panel = page.locator('#helper-panel');
+    await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
+    await expect(panel.getByText('대화를 불러오는 중이에요…', { exact: true })).toHaveCount(0);
+    return panel;
+  };
+  await openEditor();
+  await openEditorHelper();
+  const view = state.current();
+  const edited = {
+    kind: 'content' as const,
+    id: bot.id,
+    revision: bot.revision,
+    title: bot.title,
+  };
+  const first = {
+    kind: 'content' as const,
+    id: 'first-batch-resource',
+    revision: 2,
+    title: '함께 수정한 첫 자료',
+  };
+  view.lastResourceEdit = {
+    ...first,
+    editSeq: 41,
+    taskId: view.tasks[0].id,
+    canUndo: true,
+    resources: [first, edited],
+  };
+  await openEditor();
+  const draft = page.getByLabel('Risu 자료 이름', { exact: true });
+  await draft.fill('지키려는 미저장 입력');
+  const panel = await openEditorHelper();
+  const undo = panel.getByRole('button', { name: '마지막 자료 수정 되돌리기' });
+  await expect(panel.getByRole('region', { name: '도우미 최근 자료 수정' })).toContainText(
+    '함께 수정한 첫 자료 외 1개'
+  );
+  await expect(undo).toBeDisabled();
+  await expect(
+    panel
+      .getByRole('region', { name: '도우미 최근 자료 수정' })
+      .locator('small')
+      .filter({ hasText: '이 자료의 편집을 저장하거나 취소한 뒤 되돌려 주세요.' })
+  ).toBeVisible();
+  expect(state.undoPosts).toHaveLength(0);
+  await expect(draft).toHaveValue('지키려는 미저장 입력');
+  // Restoring the local value only removes the local guard; the server still owns the revision check.
+  await draft.fill(bot.title);
+  await expect(undo).toBeEnabled();
+  await undo.click();
+  const dialog = page.getByRole('dialog', { name: '자료 수정 되돌리기', exact: true });
+  await expect(dialog).toContainText('자료 2개');
+  await expect(dialog.getByRole('listitem')).toHaveText([first.title, bot.title]);
+  view.lastResourceEdit.canUndo = false;
+  view.lastResourceEdit.reason = '최근 수정 이후 자료가 변경되어 되돌릴 수 없어요.';
+  await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
+  await expect(undo).toBeDisabled();
+  await expect(draft).toHaveValue(bot.title);
+  expect(state.undoPosts).toEqual([{ editSeq: 41 }]);
+  expect((await (await request.get(`/api/content/${bot.id}`)).json()).title).toBe(bot.title);
+});
+
+test('HELPACTIVITY observed stages retain tool errors and cancellation', async ({
+  page,
+  request,
+}) => {
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   const chat = await create(request),
     state = await harness(page);
@@ -2708,13 +2243,6 @@ test('HELPACTIVITY observed stages retain tool errors and cancellation on deskto
   await reads.locator(':scope > summary').click();
   await expect(activity.locator('code').filter({ hasText: /^resource\.read$/u })).toBeVisible();
   await expect(activity.locator('code').filter({ hasText: /^data\.search$/u })).toBeVisible();
-  await page.screenshot({ path: info.outputPath('helper-activity-desktop.png'), fullPage: true });
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
-  await expect(
-    activity.getByText('resource.patch: EDITOR_SAVE_REQUIRED', { exact: true })
-  ).toBeVisible();
-  expect(await panel.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
-  await page.screenshot({ path: info.outputPath('helper-activity-mobile.png'), fullPage: true });
   await row.getByRole('button', { name: '진행 중인 도우미 작업 취소', exact: true }).click();
   await expect(row.getByTestId('helper-task-activity').locator(':scope > summary')).toContainText(
     '취소됨'

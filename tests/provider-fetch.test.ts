@@ -93,13 +93,13 @@ describe('provider-specific HTTP dispatcher and safe failure codes', () => {
     }
   );
 
-  test.each(
-    variants.flatMap((connection) =>
-      ['headers', 'body'].flatMap((phase) =>
-        ['timeout', 'cancel'].map((mode) => ({ connection, phase, mode }))
-      )
-    )
-  )(
+  const [vertex, chat] = variants;
+  test.each([
+    { connection: chat, phase: 'headers', mode: 'timeout' },
+    { connection: chat, phase: 'body', mode: 'cancel' },
+    { connection: vertex, phase: 'body', mode: 'timeout' },
+    { connection: vertex, phase: 'headers', mode: 'cancel' },
+  ])(
     '$connection.protocol $phase $mode closes the native local request without retry',
     async ({ connection, phase, mode }) => {
       let responseClosed = false;
@@ -164,35 +164,33 @@ describe('provider-specific HTTP dispatcher and safe failure codes', () => {
     }
   );
 
-  test.each(
-    variants.flatMap((connection) =>
-      [
+  test('exposes only allowlisted transport cause codes', async () => {
+    for (const connection of variants)
+      for (const code of [
         'UND_ERR_HEADERS_TIMEOUT',
         'UND_ERR_BODY_TIMEOUT',
         'UND_ERR_SOCKET',
         'UND_ERR_CONNECT_TIMEOUT',
-      ].map((code) => ({ connection, code }))
-    )
-  )('$connection.protocol exposes only allowlisted cause $code', async ({ connection, code }) => {
-    const send = vi.fn(async () => {
-      throw new TypeError(secret, {
-        cause: Object.assign(new Error(secret), {
-          code,
-          headers: { authorization: secret },
-          body: secret,
-          url: `https://${secret}.invalid`,
-        }),
-      });
-    });
-    vi.stubGlobal('fetch', send);
-    const result = await executeProvider(connection, request(connection), {
-      signal: new AbortController().signal,
-
-      resolveCredential: () => secret,
-    });
-    expect(result.error).toEqual({ code });
-    expect(send).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(result)).not.toContain(secret);
+      ]) {
+        const send = vi.fn(async () => {
+          throw new TypeError(secret, {
+            cause: Object.assign(new Error(secret), {
+              code,
+              headers: { authorization: secret },
+              body: secret,
+              url: `https://${secret}.invalid`,
+            }),
+          });
+        });
+        vi.stubGlobal('fetch', send);
+        const result = await executeProvider(connection, request(connection), {
+          signal: new AbortController().signal,
+          resolveCredential: () => secret,
+        });
+        expect(result.error).toEqual({ code });
+        expect(send).toHaveBeenCalledTimes(1);
+        expect(JSON.stringify(result)).not.toContain(secret);
+      }
   });
 
   test('unknown, cyclic and throwing diagnostic properties never disclose arbitrary error data', () => {

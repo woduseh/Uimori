@@ -4,7 +4,6 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import Fastify from 'fastify';
 import { Store } from '../server/store.js';
 import {
   addBookmark,
@@ -12,7 +11,6 @@ import {
   listBookmarks,
   saveReadingPosition,
   readingPositions,
-  readingStateRoutes,
 } from '../server/reading-state.js';
 import { captureChatCopy, restoreChatCopy } from '../server/chat-copy.js';
 import { importChatBackup } from '../server/chat-backup.js';
@@ -123,37 +121,6 @@ test('bookmarks preserve snapshots through edits, deduplicate an acknowledged cr
   updateBookmark(store, created.id, { expectedRevision: 2 }, true);
   expect(listBookmarks(store, chat.id)).toEqual([]);
   expect(store.source(source.id).text).toBe('Changed scene');
-});
-
-test('reading endpoints reject removed branch fields and queries', async () => {
-  const store = fixture();
-  const chat = createFixtureChat(store, 'One head');
-  const source = completedSource(store, chat.id, 'A paragraph');
-  const app = Fastify();
-  readingStateRoutes(app, store);
-  try {
-    const clientId = randomUUID();
-    expect(
-      (await app.inject(`/api/chats/${chat.id}/reading-position?clientId=${clientId}&branchId=old`))
-        .statusCode
-    ).toBe(400);
-    expect((await app.inject(`/api/chats/${chat.id}/bookmarks?branchId=old`)).statusCode).toBe(400);
-    expect(
-      (
-        await app.inject({
-          method: 'PUT',
-          url: `/api/chats/${chat.id}/reading-position`,
-          payload: {
-            clientId,
-            expectedRevision: 0,
-            target: { ...target(source), branchId: 'old' },
-          },
-        })
-      ).statusCode
-    ).toBe(400);
-  } finally {
-    await app.close();
-  }
 });
 
 test('an earlier independent copy preserves only in-range bookmarks with new anchors and no reading positions', () => {

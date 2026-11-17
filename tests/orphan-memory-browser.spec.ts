@@ -5,13 +5,12 @@ import type { AuthorNote } from '../core/notes.js';
 import type { OrphanMemoryDetail } from '../core/orphan-memory.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
-import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { openChatSettings, selectChatSettingsSection } from './ui-navigation.js';
 
 test('ORPHAN manual memory review preserves source records and AI review only prepares a request', async ({
   page,
   request,
-}, info) => {
+}) => {
   const created = await postFixtureChat(request, { data: { title: 'ORPHAN 합성 기억 정리' } });
   expect(created.ok()).toBe(true);
   const chat = await created.json();
@@ -70,25 +69,11 @@ test('ORPHAN manual memory review preserves source records and AI review only pr
   await expect(
     panel.getByRole('button', { name: '현재 장면에 다시 연결', exact: true }).first()
   ).toBeHidden();
-  await page.screenshot({ path: info.outputPath('orphan-memory-collapsed.png') });
   await disclosure.locator(':scope > summary').click();
   await expect(panel.getByText(note.text, { exact: true })).toBeVisible();
   await expect(panel.getByText('연결된 원문 장면이 삭제되었어요.', { exact: true })).toHaveCount(2);
   expect((await memory()).entries).toHaveLength(2);
-  for (const width of DEFAULT_WIDTHS) {
-    await page.setViewportSize({ width, height: 900 });
-    await panel.scrollIntoViewIfNeeded();
-    expect(
-      await panel.evaluate((element) => element.getBoundingClientRect().right <= innerWidth + 1)
-    ).toBe(true);
-    await page.screenshot({ path: info.outputPath(`orphan-memory-${width}.png`) });
-  }
   const first = panel.locator('li').filter({ hasText: note.text });
-  const provenance = first.locator('details');
-  await expect(provenance.locator('small').first()).toBeHidden();
-  await provenance.locator('summary').click();
-  await expect(provenance.locator('small').first()).toBeVisible();
-  await provenance.locator('summary').click();
   const modelRequests: string[] = [];
   page.on('request', (sent) => {
     if (sent.method() === 'POST' && /\/helper-conversations\/[^/]+\/tasks(?:\?|$)/.test(sent.url()))

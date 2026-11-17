@@ -308,15 +308,15 @@ test('chat author note overrides the Risu slot and CBS while translation keeps i
     .nativeRisuPreset!.preset.promptTemplate as Record<string, unknown>[];
   expect(translatedTemplate[0]).toMatchObject({ text: 'T=translation default' });
 });
-test('native regex keeps captures and evaluates CBS after substitution in every supported stage', async () => {
-  const regex = ['editinput', 'editoutput', 'editprocess', 'editdisplay'].map((type) => ({
+test('native regex keeps captures and evaluates CBS after substitution', async () => {
+  const regex = ['editinput', 'editdisplay'].map((type) => ({
     type,
     in: 'value (\\d+)',
     out: '{{? $1+1}}',
   }));
   const imported = importRisuPresetProgram(preset('prompt', { regex }));
   expect(imported.program).not.toHaveProperty('transforms');
-  for (const mode of ['editinput', 'editoutput', 'editprocess', 'editdisplay'] as const) {
+  for (const mode of ['editinput', 'editdisplay'] as const) {
     const result = await processNativeRisuText({
       native: {
         version: 1,

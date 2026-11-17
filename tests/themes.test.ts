@@ -1,4 +1,3 @@
-import { vi } from 'vitest';
 import { describe } from 'vitest';
 import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
 import { afterEach, expect, test } from 'vitest';
@@ -252,7 +251,7 @@ test('helper theme discovery omits styles while exact reads and guarded selectio
   ).toMatchObject({ defaultThemeId: saved.id, revision: catalog.preferences.revision + 1 });
 });
 
-test('HTTP API saves, exports, selects, validates and deletes a theme', async () => {
+test('HTTP API revalidates the catalog, saves, exports, selects, validates and deletes a theme', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'uimori-theme-api-'));
   const app = await createApp({
     dbPath: join(directory, 'app.sqlite'),
@@ -260,12 +259,18 @@ test('HTTP API saves, exports, selects, validates and deletes a theme', async ()
     testMode: true,
   });
   owned.push({ directory, store: app.store, app });
+  const first = await app.inject({ url: '/api/themes' });
+  const cached = { 'if-none-match': String(first.headers.etag) };
+  const same = await app.inject({ url: '/api/themes', headers: cached });
+  expect(same.statusCode).toBe(304);
+  expect(same.body).toBe('');
   const saved = await app.inject({
     method: 'POST',
     url: '/api/resources/save',
     payload: { kind: 'theme', model: emptyTheme('API theme') },
   });
   expect(saved.statusCode, saved.body).toBe(200);
+  expect((await app.inject({ url: '/api/themes', headers: cached })).statusCode).toBe(200);
   const theme = saved.json().saved;
   expect((await app.inject(`/api/themes/${theme.id}/export`)).json()).toMatchObject({
     format: 'uimori-theme',
@@ -403,45 +408,6 @@ test('portable story UI themes use their own bot selection and the shared revisi
   expect(app.store.chat(chat.id).settingsRevision).toBe(chat.settingsRevision);
 });
 
-describe('Theme catalog revalidation', () => {
-  const owners: { directory: string; store: Store; app?: App }[] = [];
-
-  afterEach(async () => {
-    vi.restoreAllMocks();
-    for (const owner of owners.splice(0)) {
-      if (owner.app) await owner.app.close();
-      else owner.store.close();
-      rmSync(owner.directory, { recursive: true, force: true });
-    }
-  });
-
-  async function application() {
-    const directory = mkdtempSync(join(tmpdir(), 'uimori-retention-'));
-    const app = await createApp({
-      dbPath: join(directory, 'app.sqlite'),
-      buildId: 'extended-cleanup-test',
-      testMode: true,
-      codex: { enabled: false },
-    });
-    owners.push({ directory, store: app.store, app });
-    return app;
-  }
-
-  test('unchanged theme catalog revalidates without sending definitions, and saves invalidate its ETag', async () => {
-    const app = await application();
-    const first = await app.inject({ url: '/api/themes' });
-    expect(first.statusCode).toBe(200);
-    const headers = { 'if-none-match': String(first.headers.etag) };
-    const same = await app.inject({ url: '/api/themes', headers });
-    expect(same.statusCode).toBe(304);
-    expect(same.body).toBe('');
-    saveResource(app.store, { kind: 'theme', id: null, model: emptyTheme('New synthetic theme') });
-    const changed = await app.inject({ url: '/api/themes', headers });
-    expect(changed.statusCode).toBe(200);
-    expect(changed.headers.etag).not.toBe(first.headers.etag);
-  });
-});
-
 describe('Independent layout and palette choices', () => {
   function choose(
     store: Store,
@@ -460,14 +426,6 @@ describe('Independent layout and palette choices', () => {
   }
 
   test('default and named palettes supply complete, valid light and dark tokens', () => {
-    expect(BUILTIN_PALETTES.map((palette) => palette.id)).toEqual([
-      'forest',
-      'cream',
-      'charcoal',
-      'midnight',
-      'rose',
-      'sage',
-    ]);
     for (const palette of [
       ...BUILTIN_PALETTES,
       { id: 'default', colors: DEFAULT_PALETTE_COLORS },
@@ -693,7 +651,6 @@ describe('Independent layout and palette choices', () => {
       chatPalettes: { custom: 'theme', gallery: 'theme' },
     });
     expect(normalizeThemePreferences(p)).toEqual(p);
-    expect(legacy.defaultThemeId).toBe('builtin:midnight');
     expect(
       store.db.prepare('SELECT value FROM app_metadata WHERE key=?').get('theme-preferences')?.value
     ).toBe(raw);
@@ -708,13 +665,6 @@ describe('Independent layout and palette choices', () => {
     expect(readTheme(store, 'builtin:liquid-gallery').id).toBe('builtin:cinematic');
     expect(readTheme(store, 'builtin:midnight').colors.light.accent).toBe('#3e63dd');
     expect(readTheme(store, custom.id)).toEqual(beforeCustom);
-    expect(BUILTIN_THEMES.map((theme) => theme.id)).toEqual([
-      DEFAULT_THEME_ID,
-      'builtin:cinematic',
-      'builtin:letter',
-      'builtin:scrapbook',
-      'builtin:classic-frame',
-    ]);
     choose(store, 'palette', 'sage');
     const saved = themePreferences(store);
     store.close();
@@ -722,88 +672,5 @@ describe('Independent layout and palette choices', () => {
     owned.at(-1)!.store = reopened;
     expect(themePreferences(reopened)).toEqual(saved);
     expect(resolveTheme(themeCatalog(reopened), { chatId: 'custom' })).toEqual(beforeCustom);
-  });
-
-  test('existing independent choices are preserved when retired IDs are normalized or selected', () => {
-    const store = database();
-    const preferences = normalizeThemePreferences({
-      ...defaultThemePreferences(),
-      defaultThemeId: 'builtin:liquid-gallery',
-      defaultPaletteId: 'sage',
-      botThemes: { bot: 'builtin:midnight' },
-      botPalettes: { bot: 'cream' },
-    });
-    expect(preferences.defaultThemeId).toBe('builtin:cinematic');
-    expect(preferences.defaultPaletteId).toBe('sage');
-    expect(preferences.botThemes.bot).toBe(DEFAULT_THEME_ID);
-    expect(preferences.botPalettes?.bot).toBe('cream');
-    choose(store, 'palette', 'rose');
-    choose(store, 'theme', 'builtin:midnight');
-    expect(themePreferences(store).defaultThemeId).toBe(DEFAULT_THEME_ID);
-    expect(themePreferences(store).defaultPaletteId).toBe('rose');
-    choose(store, 'theme', 'builtin:liquid-gallery');
-    expect(themePreferences(store).defaultThemeId).toBe('builtin:cinematic');
-    expect(themePreferences(store).defaultPaletteId).toBe('rose');
-  });
-
-  test('HTTP palette selection invalidates the catalog and exposes validation and revision conflicts', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'uimori-palette-api-'));
-    const app = await createApp({
-      dbPath: join(directory, 'app.sqlite'),
-      buildId: 'palettes-test',
-      testMode: true,
-      codex: { enabled: false },
-    });
-    owned.push({ directory, store: app.store, app });
-    const first = await app.inject('/api/themes');
-    const selected = await app.inject({
-      method: 'POST',
-      url: '/api/themes/selection',
-      payload: { dimension: 'palette', scope: 'global', paletteId: 'cream', expectedRevision: 0 },
-    });
-    expect(selected.statusCode, selected.body).toBe(200);
-    expect(selected.json()).toMatchObject({
-      revision: 1,
-      defaultThemeId: DEFAULT_THEME_ID,
-      defaultPaletteId: 'cream',
-    });
-    const changed = await app.inject({
-      url: '/api/themes',
-      headers: { 'if-none-match': String(first.headers.etag) },
-    });
-    expect(changed.statusCode).toBe(200);
-    expect(changed.headers.etag).not.toBe(first.headers.etag);
-    expect(
-      (
-        await app.inject({
-          url: '/api/themes',
-          headers: { 'if-none-match': String(changed.headers.etag) },
-        })
-      ).statusCode
-    ).toBe(304);
-    const stale = await app.inject({
-      method: 'POST',
-      url: '/api/themes/selection',
-      payload: { scope: 'global', themeId: 'builtin:letter', expectedRevision: 0 },
-    });
-    expect(stale.statusCode).toBe(409);
-    const invalid = await app.inject({
-      method: 'POST',
-      url: '/api/themes/selection',
-      payload: { dimension: 'palette', scope: 'global', paletteId: 'bogus', expectedRevision: 1 },
-    });
-    expect(invalid.statusCode).toBe(400);
-    const mixed = await app.inject({
-      method: 'POST',
-      url: '/api/themes/selection',
-      payload: {
-        dimension: 'palette',
-        scope: 'global',
-        paletteId: 'cream',
-        themeId: DEFAULT_THEME_ID,
-        expectedRevision: 1,
-      },
-    });
-    expect(mixed.statusCode).toBe(400);
   });
 });

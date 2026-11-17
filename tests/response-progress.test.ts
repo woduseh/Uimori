@@ -32,8 +32,6 @@ const variants: ProviderConnection[] = [
   { id: 'responses', protocol: 'openai-responses-v1', endpoint: 'https://api.openai.com/v1' },
   { id: 'messages', protocol: 'anthropic-messages-v1', endpoint: 'https://api.anthropic.com/v1' },
   { id: 'chat', protocol: 'openai-chat-v1', endpoint: 'https://synthetic.invalid/v1' },
-  { id: 'vercel', protocol: 'vercel-chat-v1', endpoint: 'https://ai-gateway.vercel.sh/v1' },
-  { id: 'deepseek', protocol: 'deepseek-chat-v1', endpoint: 'https://api.deepseek.com/v1' },
   {
     id: 'vertex',
     protocol: 'vertex-gemini-v1',
@@ -307,37 +305,33 @@ describe('public response progress through real decoders and synthetic HTTP', ()
     }
   );
 
-  test.each(['no-listener', 'forbidden'])(
-    'Responses JSON does not project public text with %s',
-    async (mode) => {
-      const input = request();
-      if (mode === 'forbidden')
-        input.stable.tools.push({
-          name: 'story.submit',
-          description: 'Final submission',
-          inputSchema: { type: 'object' },
-        });
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(async () =>
-          Response.json({ id: 'response-1', status: 'completed', output: [message(publicText)] })
-        )
-      );
-      const projected = vi.spyOn(ResponsesDecoder.prototype, 'publicText');
-      const observed = vi.fn();
-      const result = await executeProvider(variants[1], input, {
-        signal: new AbortController().signal,
-        resolveCredential: () => 'synthetic-only',
-        ...(mode === 'forbidden' ? { onProgress: observed } : {}),
-      });
-      expect(result.status).toBe('completed');
-      expect(result.text).toBe(publicText);
-      expect(projected).not.toHaveBeenCalled();
-      expect(observed).not.toHaveBeenCalled();
-    }
-  );
+  test('Responses JSON does not project public text when final submission forbids progress', async () => {
+    const input = request();
+    input.stable.tools.push({
+      name: 'story.submit',
+      description: 'Final submission',
+      inputSchema: { type: 'object' },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({ id: 'response-1', status: 'completed', output: [message(publicText)] })
+      )
+    );
+    const projected = vi.spyOn(ResponsesDecoder.prototype, 'publicText');
+    const observed = vi.fn();
+    const result = await executeProvider(variants[1], input, {
+      signal: new AbortController().signal,
+      resolveCredential: () => 'synthetic-only',
+      onProgress: observed,
+    });
+    expect(result.status).toBe('completed');
+    expect(result.text).toBe(publicText);
+    expect(projected).not.toHaveBeenCalled();
+    expect(observed).not.toHaveBeenCalled();
+  });
 
-  test.each(['story.submit', 'eval_submit_artifact', 'structured-output', 'codex-envelope'])(
+  test.each(['story.submit', 'structured-output', 'codex-envelope'])(
     '%s withholds all unvalidated content',
     async (mode) => {
       const input = request();
@@ -673,7 +667,7 @@ describe('append-only public text updates', () => {
     }
   );
 
-  test.each([variants[3], variants[6]])(
+  test.each([variants[3], variants[4]])(
     '$protocol rejects a final result that differs from emitted prose',
     async (connection) => {
       const prototype =

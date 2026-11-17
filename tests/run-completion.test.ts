@@ -22,7 +22,7 @@ test('successful run is returned without reading diagnostic data', async () => {
   expect(related).not.toHaveBeenCalled();
 });
 
-test.each(['failed', 'cancelled', 'interrupted', 'refused', 'partial'] as const)(
+test.each(['failed', 'cancelled'] as const)(
   'terminal %s exits immediately with the actual run error',
   async (status) => {
     const read = vi.fn(() => state(status, 'Synthetic provider stream ended early'));

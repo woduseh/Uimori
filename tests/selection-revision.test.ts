@@ -199,31 +199,32 @@ test('changed stored source is rejected both before spending a call and after a 
   expect(send).toHaveBeenCalledTimes(1);
 });
 
-test.each([
-  ['refused', { status: 'refused', refusal: 'No' }],
-  ['partial', { status: 'partial', text: 'unfinished' }],
-  ['empty', { text: '' }],
-  ['tool call', { status: 'tool_calls', toolCalls: [{ id: '1', name: 'save', arguments: {} }] }],
-] as const)(
-  'a %s result cannot change the source and is never retried automatically',
-  async (_, delta) => {
-    const f = await setup();
-    const send = mockSend({ ...success, ...delta } as transport.ProviderResult);
-    const before = authoredState(f.app);
+test('refused, partial, empty, tool-call, or oversized results cannot change the source and are never retried', async () => {
+  const f = await setup();
+  const before = authoredState(f.app);
+  const cases: { delta: Partial<transport.ProviderResult>; status: number; error?: string }[] = [
+    { delta: { status: 'refused', refusal: 'No' }, status: 422 },
+    { delta: { status: 'partial', text: 'unfinished' }, status: 502 },
+    { delta: { text: '' }, status: 502 },
+    {
+      delta: { status: 'tool_calls', toolCalls: [{ id: '1', name: 'save', arguments: {} }] },
+      status: 502,
+    },
+    {
+      delta: { text: 'x'.repeat(SOURCE_TEXT_MAX_CHARS) },
+      status: 422,
+      error: 'SELECTION_REVISION_TOO_LONG',
+    },
+  ];
+  for (const { delta, status, error } of cases) {
+    vi.restoreAllMocks();
+    const send = mockSend({ ...success, ...delta });
     const response = await f.post();
-    expect(response.statusCode).toBe('status' in delta && delta.status === 'refused' ? 422 : 502);
+    expect(response.statusCode, JSON.stringify(delta).slice(0, 80)).toBe(status);
+    if (error) expect(response.json()).toEqual({ error });
     expect(send).toHaveBeenCalledTimes(1);
     expect(authoredState(f.app)).toEqual(before);
   }
-);
-
-test('output must fit the whole draft and cannot be silently truncated', async () => {
-  const f = await setup();
-  const send = mockSend({ ...success, text: 'x'.repeat(SOURCE_TEXT_MAX_CHARS) });
-  const response = await f.post();
-  expect(response.statusCode).toBe(422);
-  expect(response.json()).toEqual({ error: 'SELECTION_REVISION_TOO_LONG' });
-  expect(send).toHaveBeenCalledTimes(1);
   expect(f.store.source(f.source.id)).toEqual(f.source);
 });
 

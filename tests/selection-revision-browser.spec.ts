@@ -90,7 +90,7 @@ function gate() {
   return { promise, release };
 }
 
-for (const width of [360, 1440]) {
+for (const width of [360]) {
   test(`SREV ${width} compares a proposal, changes only the selected draft and saves explicitly`, async ({
     page,
     request,

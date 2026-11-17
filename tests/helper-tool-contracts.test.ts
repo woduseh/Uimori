@@ -192,56 +192,40 @@ function definition(request: transport.ProviderRequest, name: string) {
   return tool!.inputSchema;
 }
 
-test.each(['resource.read', 'chat.lore'] as const)(
-  '%s preserves requested pages when the selected model has room for the complete round',
-  async (name) => {
-    // Seven 10,000-character reads cross the former 32k round cap; each also has a next page.
-    const prose = '한글漢字 설정 記録 경계 '.repeat(800);
-    const f = await fixture('library', prose);
-    const attachment = new ChatOverridesStore(f.store).get(f.chat.id).attachments[0];
-    const selector = { ...attachment.scope, loreId: attachment.lore[0].id, field: 'text' };
-    const args =
-      name === 'resource.read'
-        ? {
-            kind: 'content',
-            id: f.bot.id,
-            path: '/package/nativeRisu/card/character_book/entries/0/content',
-            textOffset: 37,
-            textLimit: 10000,
-          }
-        : { chatId: f.chat.id, action: 'read', selector, textOffset: 37, textLimit: 10000 };
-    mockSend((request, round) => {
-      if (round === 0)
-        return calls(
-          ...Array.from({ length: 7 }, (_, index) =>
-            call(`page-${index}`, 'app.call', { name, arguments: args })
-          )
-        );
-      expect(round).toBe(1);
-      expect((request.input.results as unknown as ToolEvent[]).every((item) => !item.denied)).toBe(
-        true
+test('resource.read preserves requested pages when the selected model has room for the complete round', async () => {
+  // Seven 10,000-character reads cross the former 32k round cap; each also has a next page.
+  const prose = '한글漢字 설정 記録 경계 '.repeat(800);
+  const f = await fixture('library', prose);
+  const args = {
+    kind: 'content',
+    id: f.bot.id,
+    path: '/package/nativeRisu/card/character_book/entries/0/content',
+    textOffset: 37,
+    textLimit: 10000,
+  };
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        ...Array.from({ length: 7 }, (_, index) =>
+          call(`page-${index}`, 'app.call', { name: 'resource.read', arguments: args })
+        )
       );
-      expect(result(request, 'page-6')).toMatchObject(
-        name === 'resource.read'
-          ? {
-              id: f.bot.id,
-              revision: f.bot.revision,
-              path: args.path,
-              text: prose.slice(37, 10037),
-              textOffset: 37,
-              nextOffset: 10037,
-            }
-          : {
-              chatId: f.chat.id,
-              selector,
-              original: { text: prose.slice(37, 10037), offset: 37, nextOffset: 10037 },
-            }
-      );
-      return structuredClone(success);
+    expect(round).toBe(1);
+    expect((request.input.results as unknown as ToolEvent[]).every((item) => !item.denied)).toBe(
+      true
+    );
+    expect(result(request, 'page-6')).toMatchObject({
+      id: f.bot.id,
+      revision: f.bot.revision,
+      path: args.path,
+      text: prose.slice(37, 10037),
+      textOffset: 37,
+      nextOffset: 10037,
     });
-    await submit(f, '큰 자료에서 읽지 못한 범위를 이어서 확인해줘');
-  }
-);
+    return structuredClone(success);
+  });
+  await submit(f, '큰 자료에서 읽지 못한 범위를 이어서 확인해줘');
+});
 
 test('retired artifact writes are unavailable while historical revisions remain readable', async () => {
   const f = await fixture();
@@ -511,57 +495,6 @@ test('conditional reads remain distinct from writes and the narrower outline rev
   );
 });
 
-test('discovery keeps operations available across scopes for explicit targets', () => {
-  const library = describeHelperTools({ query: 'shared appearance', limit: 80 }, false, 'library');
-  const chat = describeHelperTools({ query: 'shared appearance', limit: 80 }, false, 'chat');
-  if (!('total' in library) || !('total' in chat)) throw new Error('Expected catalog');
-  for (const result of [library, chat])
-    expect(result.tools.map((tool) => tool.name)).toEqual(
-      expect.arrayContaining([
-        'resource.read',
-        'resource.patch',
-        'illustration.profiles.read',
-        'illustration.profiles.save',
-      ])
-    );
-  expect(
-    describeHelperTools({ names: ['illustration.profiles.read'] }, false, 'library').tools
-  ).toHaveLength(1);
-});
-
-test('discovery keeps shared and chat-local profiles searchable in English and Korean', () => {
-  for (const query of ['library profile', '기본 외형', '라이브러리 프로필']) {
-    const result = describeHelperTools({ query }, false, 'library');
-    expect(result.tools.map((tool) => tool.name)).toEqual(
-      expect.arrayContaining(['resource.read', 'resource.patch'])
-    );
-  }
-  expect(
-    describeHelperTools({ query: '채팅 프로필' }, false, 'chat').tools.map((tool) => tool.name)
-  ).toEqual(expect.arrayContaining(['illustration.profiles.read', 'illustration.profiles.save']));
-  expect(
-    describeHelperTools({ query: 'shared profiles' }, false, 'library').tools.some((tool) =>
-      ['resource.read', 'resource.patch'].includes(tool.name)
-    )
-  ).toBe(true);
-  expect(() => describeHelperTools({ names: ['프로필'] })).toThrow('UNKNOWN_APP_TOOL');
-});
-
-test('discovery batches exact schemas without duplicates and keeps catalogs compact', () => {
-  const names = [
-    'resource.read',
-    'resource.patch',
-    'settings.read',
-    'settings.update',
-    'scene.read',
-    'scene.patch',
-  ];
-  const exact = describeHelperTools({ names: [...names, names[0]!] });
-  expect(exact.tools.map((tool) => tool.name)).toEqual(names);
-  for (const tool of exact.tools) expect(tool).toHaveProperty('inputSchema');
-  for (const tool of describeHelperTools({}).tools) expect(tool).not.toHaveProperty('inputSchema');
-});
-
 test('the full helper catalog includes actionable metadata and ranks exact operations', () => {
   const seen = new Map<string, { required: string[]; effect: string; description: string }>();
   let offset = 0;
@@ -591,54 +524,25 @@ test('the full helper catalog includes actionable metadata and ranks exact opera
   expect(query.tools[0]?.name).toBe('illustration.generate');
 });
 
-test('chat discovery and scene indexes stay compact and follow nextOffset', async () => {
-  const f = await fixture('chat');
-  for (let index = 0; index < 3; index++)
-    createFixtureChat(f.store, `Paginated catalog ${index}`, { botId: f.bot.id });
-  for (let index = 0; index < 3; index++)
-    completedSource(f.store, f.chat.id, `An original scene ${index}`);
-  mockSend((request, round) => {
-    if (round === 0)
-      return calls(
-        call('first-chats', 'chat.list', { query: 'Paginated catalog', limit: 2 }),
-        call('scene-page', 'chat.read', { offset: 1, limit: 1, includePreview: true })
-      );
-    if (round === 1) {
-      const first = result<{
-        chats: { id: string; title: string; settings?: unknown }[];
-        total: number;
-        nextOffset: number;
-      }>(request, 'first-chats');
-      expect(first).toMatchObject({ total: 3, nextOffset: 2 });
-      expect(first.chats).toHaveLength(2);
-      expect(first.chats[0]).not.toHaveProperty('settings');
-      expect(result(request, 'scene-page')).toMatchObject({
-        total: 3,
-        nextOffset: 2,
-        messages: [expect.objectContaining({ sceneNumber: 2, preview: 'An original scene 1' })],
-      });
-      return calls(
-        call('last-chats', 'chat.list', {
-          query: 'Paginated catalog',
-          offset: first.nextOffset,
-          limit: 2,
-        })
-      );
-    }
-    expect(result(request, 'last-chats')).toMatchObject({ total: 3, nextOffset: null });
-    return success;
-  });
-  await submit(f, 'Inspect the second story scene and find paged chats.');
-});
-
 test('library chat-only tools explain how to select a chat instead of telling the model to stop', async () => {
   const f = await fixture('library');
   mockSend((request, round) => {
     if (round === 0)
       return calls(
         call('chat-read', 'chat.read', {}),
-        call('scene-read', 'scene.read', { sourceId: 'scene', target: 'original' })
+        call('scene-read', 'scene.read', { sourceId: 'scene', target: 'original' }),
+        call('wrong-scope', 'illustration.profiles.read', {})
       );
+    expect(event(request, 'wrong-scope')).toMatchObject({
+      denied: true,
+      errorKind: 'recoverable',
+      result: {
+        code: 'ILLUSTRATION_PROFILE_CHAT_ONLY',
+        retryMode: 'switch_tool',
+        outcome: 'unchanged',
+        nextAction: { tool: 'resource.read' },
+      },
+    });
     for (const id of ['chat-read', 'scene-read'])
       expect(event(request, id)).toMatchObject({
         denied: true,
@@ -653,25 +557,6 @@ test('library chat-only tools explain how to select a chat instead of telling th
     return success;
   });
   await submit(f, 'Inspect a chat from the library scope.');
-});
-
-test('library appearance profiles return a specific switch-tool recovery', async () => {
-  const f = await fixture('library');
-  mockSend((request, round) => {
-    if (round === 0) return calls(call('wrong-scope', 'illustration.profiles.read', {}));
-    expect(event(request, 'wrong-scope')).toMatchObject({
-      denied: true,
-      errorKind: 'recoverable',
-      result: {
-        code: 'ILLUSTRATION_PROFILE_CHAT_ONLY',
-        retryMode: 'switch_tool',
-        outcome: 'unchanged',
-        nextAction: { tool: 'resource.read' },
-      },
-    });
-    return success;
-  });
-  await submit(f, 'Inspect shared appearance without finding a chat.');
 });
 
 test('helper read events retain recoverable argument and missing-scene errors', async () => {
@@ -1015,129 +900,9 @@ test('helper discovers and retires an override after its shared lore was removed
   expect(f.store.product.get('content', f.bot.id)).toEqual(shared);
 });
 
-test('notes schema exposes CAS but keeps mutation identity host-owned', async () => {
-  const f = await fixture();
-  let expectedRevision = 0;
-  mockSend((request, round) => {
-    if (round === 0) {
-      const schema = definition(request, 'notes.write') as Record<string, any>;
-      expect(schema).toMatchObject({
-        required: ['body'],
-        properties: {
-          body: {
-            required: ['expectedRevision'],
-            additionalProperties: false,
-            properties: { expectedRevision: { minimum: 0 }, text: { maxLength: 32000 } },
-          },
-        },
-      });
-      expect(schema.properties).not.toHaveProperty('operationId');
-      return calls(call('notes-context', 'context.read', {}));
-    }
-    if (round === 1) {
-      expectedRevision = result<{ notesRevision: number }>(request, 'notes-context').notesRevision;
-      return calls(
-        call('note-create', 'notes.write', {
-          body: { expectedRevision, text: 'USER_CORRECTION: witness=Mira; code=Q7x-α9.' },
-        })
-      );
-    }
-    expect(result(request, 'note-create')).toMatchObject({
-      revision: expectedRevision + 1,
-      note: {
-        atRevision: null,
-        atHash: null,
-        declaration: { author: '사용자 도우미 요청' },
-      },
-    });
-    return structuredClone(success);
-  });
-  await submit(f, '메모를 저장해줘');
-  expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM author_notes').get()).toEqual({ n: 1 });
-});
-
-test('patch failures identify exact change and batch item without treating text mismatch as a stale revision', async () => {
+test('invalid native batch input rolls back with exact failure details and can be corrected in the same helper task', async () => {
   const f = await fixture('library');
   const other = f.store.product.content(fixtureBotInput('Other', 'same same')) as Content;
-  mockSend((request, round) => {
-    if (round === 0)
-      return calls(
-        call('missing-literal', 'app.call', {
-          name: 'resource.patch',
-          arguments: {
-            kind: 'content',
-            id: f.bot.id,
-            expectedRevision: f.bot.revision,
-            changes: [
-              { op: 'set', path: '/package/nativeRisu/card/name', value: 'Must roll back' },
-              {
-                op: 'replaceText',
-                path: '/package/nativeRisu/card/description',
-                oldText: 'Missing literal',
-                newText: 'replacement',
-              },
-            ],
-          },
-        }),
-        call('ambiguous-batch', 'app.call', {
-          name: 'resource.patchMany',
-          arguments: {
-            items: [
-              {
-                kind: 'content',
-                id: f.bot.id,
-                expectedRevision: f.bot.revision,
-                changes: [
-                  { op: 'set', path: '/package/nativeRisu/card/name', value: 'Also roll back' },
-                ],
-              },
-              {
-                kind: 'content',
-                id: other.id,
-                expectedRevision: other.revision,
-                changes: [
-                  {
-                    op: 'replaceText',
-                    path: '/package/nativeRisu/card/description',
-                    oldText: 'same',
-                    newText: 'one',
-                  },
-                ],
-              },
-            ],
-          },
-        })
-      );
-    expect(event(request, 'missing-literal')).toMatchObject({
-      denied: true,
-      errorKind: 'recoverable',
-      result: {
-        code: 'PATCH_TEXT_NOT_FOUND',
-        retryMode: 'correct_arguments',
-        outcome: 'unchanged',
-        details: { changeIndex: 1, path: '/package/nativeRisu/card/description', matchCount: 0 },
-      },
-    });
-    expect(event(request, 'ambiguous-batch')).toMatchObject({
-      denied: true,
-      result: {
-        code: 'PATCH_TEXT_AMBIGUOUS',
-        retryMode: 'correct_arguments',
-        outcome: 'unchanged',
-        details: { itemIndex: 1, id: other.id, changeIndex: 0, matchCount: 2 },
-      },
-    });
-    return structuredClone(success);
-  });
-  await submit(f, '자료의 문구를 수정해줘');
-  expect(f.store.product.get('content', f.bot.id)).toEqual(f.bot);
-  expect(f.store.product.get('content', other.id)).toEqual(other);
-  expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM resource_undo').get()).toEqual({ n: 0 });
-});
-
-test('invalid native batch input rolls back and can be corrected in the same helper task', async () => {
-  const f = await fixture('library');
-  const other = f.store.product.content(fixtureBotInput('Other')) as Content;
   const items = (target: string) => [
     {
       kind: 'content',
@@ -1164,9 +929,66 @@ test('invalid native batch input rolls back and can be corrected in the same hel
         call('invalid-guide', 'app.call', {
           name: 'resource.patchMany',
           arguments: { items: items('') },
+        }),
+        call('missing-literal', 'app.call', {
+          name: 'resource.patch',
+          arguments: {
+            kind: 'content',
+            id: f.bot.id,
+            expectedRevision: f.bot.revision,
+            changes: [
+              { op: 'set', path: '/package/nativeRisu/card/name', value: 'Must roll back' },
+              {
+                op: 'replaceText',
+                path: '/package/nativeRisu/card/description',
+                oldText: 'Missing literal',
+                newText: 'replacement',
+              },
+            ],
+          },
+        }),
+        call('ambiguous-batch', 'app.call', {
+          name: 'resource.patchMany',
+          arguments: {
+            items: [
+              items('로즈')[0],
+              {
+                kind: 'content',
+                id: other.id,
+                expectedRevision: other.revision,
+                changes: [
+                  {
+                    op: 'replaceText',
+                    path: '/package/nativeRisu/card/description',
+                    oldText: 'same',
+                    newText: 'one',
+                  },
+                ],
+              },
+            ],
+          },
         })
       );
     if (round === 1) {
+      expect(event(request, 'missing-literal')).toMatchObject({
+        denied: true,
+        errorKind: 'recoverable',
+        result: {
+          code: 'PATCH_TEXT_NOT_FOUND',
+          retryMode: 'correct_arguments',
+          outcome: 'unchanged',
+          details: { changeIndex: 1, path: '/package/nativeRisu/card/description', matchCount: 0 },
+        },
+      });
+      expect(event(request, 'ambiguous-batch')).toMatchObject({
+        denied: true,
+        result: {
+          code: 'PATCH_TEXT_AMBIGUOUS',
+          retryMode: 'correct_arguments',
+          outcome: 'unchanged',
+          details: { itemIndex: 1, id: other.id, changeIndex: 0, matchCount: 2 },
+        },
+      });
       expect(event(request, 'invalid-guide')).toMatchObject({
         denied: true,
         errorKind: 'recoverable',
@@ -1375,7 +1197,14 @@ test('app.call supplies distinct host identities without polluting model argumen
     arguments: { body: { expectedRevision: 0, text: 'First note.' } },
   };
   mockSend((request, round) => {
-    if (round === 0) return calls(call('note-first', 'app.call', firstArgs));
+    if (round === 0) {
+      const schema = definition(request, 'notes.write') as Record<string, any>;
+      expect(schema).toMatchObject({
+        properties: { body: { required: ['expectedRevision'], additionalProperties: false } },
+      });
+      expect(schema.properties).not.toHaveProperty('operationId');
+      return calls(call('note-first', 'app.call', firstArgs));
+    }
     const first = result<{ revision: number }>(request, 'note-first');
     expect(event(request, 'note-first').args).toEqual(firstArgs);
     if (round === 1)
@@ -1558,57 +1387,55 @@ test('helper proposals are read-only and mixed profile edits share one revision 
   ]);
 });
 
-test.each(['library', 'chat'] as const)(
-  'illustration profiles can target a chat from %s and default to its full cast',
-  async (scope) => {
-    const f = await fixture(scope);
-    const target = createFixtureChat(f.store, 'Target cast', { botId: f.bot.id });
-    const cast = Array.from({ length: 32 }, (_, i) => ({
-      id: String(i),
-      name: `Character ${i}`,
-      appearance: `Portrait ${i}`,
-    }));
-    const { revision } = updateIllustrationReferences(f.store, target.id, {
-      expectedRevision: 0,
-      references: [],
-      characterProfiles: cast,
-    });
-    mockSend((request, round) => {
-      if (!round)
-        return calls(
-          call('cast', 'app.call', {
-            name: 'illustration.profiles.read',
-            arguments: { chatId: target.id },
-          })
-        );
-      if (round === 1) {
-        expect(result(request, 'cast')).toMatchObject({
-          revision,
-          characterProfiles: cast,
-          nextOffset: null,
-        });
-        return calls(
-          call('save', 'app.call', {
-            name: 'illustration.profiles.save',
-            arguments: {
-              chatId: target.id,
-              expectedRevision: revision,
-              profiles: [{ profileId: cast[31].id, appearance: 'Red scarf' }],
-            },
-          })
-        );
-      }
-      expect(result(request, 'save')).toMatchObject({ chatId: target.id, changed: true });
-      return structuredClone(success);
-    });
-    const task = await submit(f, 'Update the last character in Target cast.');
-    expect(readHelperTaskResults(f.store, task.id).results[0].targets[0].id).toBe(target.id);
-    expect(illustrationReferences(f.store, target.id).characterProfiles[31].appearance).toBe(
-      'Red scarf'
-    );
-    expect(illustrationReferences(f.store, f.chat.id).revision).toBe(0);
-  }
-);
+test('illustration profiles can target a chat from library and default to its full cast', async () => {
+  const scope = 'library' as const;
+  const f = await fixture(scope);
+  const target = createFixtureChat(f.store, 'Target cast', { botId: f.bot.id });
+  const cast = Array.from({ length: 32 }, (_, i) => ({
+    id: String(i),
+    name: `Character ${i}`,
+    appearance: `Portrait ${i}`,
+  }));
+  const { revision } = updateIllustrationReferences(f.store, target.id, {
+    expectedRevision: 0,
+    references: [],
+    characterProfiles: cast,
+  });
+  mockSend((request, round) => {
+    if (!round)
+      return calls(
+        call('cast', 'app.call', {
+          name: 'illustration.profiles.read',
+          arguments: { chatId: target.id },
+        })
+      );
+    if (round === 1) {
+      expect(result(request, 'cast')).toMatchObject({
+        revision,
+        characterProfiles: cast,
+        nextOffset: null,
+      });
+      return calls(
+        call('save', 'app.call', {
+          name: 'illustration.profiles.save',
+          arguments: {
+            chatId: target.id,
+            expectedRevision: revision,
+            profiles: [{ profileId: cast[31].id, appearance: 'Red scarf' }],
+          },
+        })
+      );
+    }
+    expect(result(request, 'save')).toMatchObject({ chatId: target.id, changed: true });
+    return structuredClone(success);
+  });
+  const task = await submit(f, 'Update the last character in Target cast.');
+  expect(readHelperTaskResults(f.store, task.id).results[0].targets[0].id).toBe(target.id);
+  expect(illustrationReferences(f.store, target.id).characterProfiles[31].appearance).toBe(
+    'Red scarf'
+  );
+  expect(illustrationReferences(f.store, f.chat.id).revision).toBe(0);
+});
 
 test('helper app gateway discovers and authors illustration presets without selecting or generating them', async () => {
   const f = await fixture('library');
@@ -1885,76 +1712,6 @@ test('helper gateway follows browse results into an exact reference read without
   expect(
     f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
   ).toEqual({ n: 0 });
-});
-
-test('helper saves a palette without selecting it, applies explicitly and preserves receipt on stale selection', async () => {
-  const f = await fixture('library');
-  const { BUILTIN_PALETTES } = await import('../core/theme-palettes.js');
-  const { themePreferences, paletteCatalog } = await import('../server/themes.js');
-  const before = themePreferences(f.store);
-  let paletteId = '';
-  mockSend((request, round) => {
-    if (round === 0)
-      return calls(
-        call('create-palette', 'app.call', {
-          name: 'palette.save',
-          arguments: {
-            model: {
-              title: 'Helper test palette',
-              description: 'Explicit creation',
-              colors: BUILTIN_PALETTES[0].colors,
-            },
-          },
-        })
-      );
-    if (round === 1) {
-      const saved = result<{ id: string; revision: number }>(request, 'create-palette');
-      paletteId = saved.id;
-      expect(themePreferences(f.store)).toEqual(before);
-      return calls(
-        call('apply-palette', 'app.call', {
-          name: 'theme.select',
-          arguments: {
-            scope: 'global',
-            dimension: 'palette',
-            paletteId,
-            expectedRevision: before.revision,
-          },
-        })
-      );
-    }
-    if (round === 2) {
-      expect(result<{ defaultPaletteId: string }>(request, 'apply-palette').defaultPaletteId).toBe(
-        paletteId
-      );
-      return calls(
-        call('stale-apply', 'app.call', {
-          name: 'theme.select',
-          arguments: {
-            scope: 'global',
-            dimension: 'palette',
-            paletteId: 'forest',
-            expectedRevision: before.revision,
-          },
-        })
-      );
-    }
-    expect(event(request, 'stale-apply').denied).toBe(true);
-    return success;
-  });
-  const task = await submit(f, 'Create and apply a palette');
-  expect(themePreferences(f.store).defaultPaletteId).toBe(paletteId);
-  expect(paletteCatalog(f.store).some((palette) => palette.id === paletteId)).toBe(true);
-  expect(
-    Number(
-      f.store.db
-        .prepare('SELECT count(*) AS count FROM helper_operations WHERE task_id=?')
-        .get(task.id)?.count
-    )
-  ).toBe(2);
-  expect(
-    f.workspace.events(f.conversation.id, 0).some((item) => item.kind === 'theme.updated')
-  ).toBe(true);
 });
 
 test('presentation operations are discoverable and writes remain excluded from read-only review', () => {

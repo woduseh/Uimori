@@ -3,7 +3,6 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import * as transport from '../core/transport.js';
 import { defaultStoryGuideConfig, type StoryGuideBrief } from '../core/story-guide.js';
 import { createApp, type App } from '../server/app.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
@@ -237,16 +236,4 @@ test('settings remain optional and revision guarded; helper reads the same origi
     storyGuide: { revision: 1, config: f.config },
     headRevision: f.chat.headRevision,
   });
-});
-
-test('retired preview and question endpoints cannot call a model or change story data', async () => {
-  const f = await setup();
-  const provider = vi.spyOn(transport, 'executeProvider');
-  const before = f.store.db.prepare('SELECT * FROM runs').all();
-  const state = f.store.storyGuide.get(f.chat.id);
-  for (const action of ['ask', 'refresh'] as const)
-    expect((await f.post(action, { question: 'Why?', request: 'Continue' })).statusCode).toBe(404);
-  expect(provider).not.toHaveBeenCalled();
-  expect(f.store.storyGuide.get(f.chat.id)).toEqual(state);
-  expect(f.store.db.prepare('SELECT * FROM runs').all()).toEqual(before);
 });

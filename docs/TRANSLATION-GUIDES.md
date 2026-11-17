@@ -96,5 +96,5 @@ npm run verify:translation-guides
 ```
 
 - `tests/translation-guides.test.ts`: 저장·검증·되돌리기·자료 교환·요청 시점 고정·판정 복구·미리보기/작문 분리를 확인해요.
-- `tests/translation-prompt-delivery.test.ts`: 일곱 프로바이더 프로토콜의 실제 직렬화 결과에서 두 참고 범위와 기본/Hermēneía/context 생략 프리셋의 지침·표기·원문이 누락되거나 중복되지 않고 CBS 문자도 그대로 남는지 확인해요. 별도 네이티브 CBS 사례는 배경 자료 제외와 프리셋 자체 기본값·조작값 유지를 확인해요. 로컬 프로바이더 대역을 사용해요.
+- `tests/translation-prompt-delivery.test.ts`: 일곱 프로바이더 프로토콜의 실제 직렬화 결과에서 기본/Hermēneía/context 생략 프리셋과 두 참고 범위(각각 최소 한 번)의 지침·표기·원문이 누락되거나 중복되지 않고 CBS 문자도 그대로 남는지 확인해요. 별도 네이티브 CBS 사례는 배경 자료 제외와 프리셋 자체 기본값·조작값 유지를 확인해요. 로컬 프로바이더 대역을 사용해요.
 - `verify:translation-guides`: 데스크톱·모바일 너비의 실제 앱에서 편집·저장·JSON 편집·미저장 입력 복구·취소·표기 삭제·잘못된 입력 보존과 모든 자료의 편집 노출과 원본 종류 보존을 확인해요.

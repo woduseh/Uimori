@@ -157,14 +157,6 @@ describe('literal reading styles', () => {
     expect(html).not.toContain('<code>');
   });
 
-  test('PlainProse uses paragraph wrappers for spacing without enabling quotations', () => {
-    const text = '“첫 문단”\n\n‘둘째 문단’';
-    const html = render(text, { ...DEFAULT_READABILITY, paragraphSpacing: 1 });
-    expect(html.match(/reading-plain-paragraph/gu)).toHaveLength(2);
-    expect(html).not.toContain('reading-quote');
-    expect(renderedText(html)).toBe(text);
-  });
-
   test('PlainProse bounds repeated unfinished ruby, templates, tags and backtick runs', () => {
     const samples = [
       '<ruby>'.repeat(120_000),

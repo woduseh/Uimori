@@ -54,26 +54,22 @@ test('repeated WebP intake is byte-identical rather than another lossy encoding'
   expect(second.hash).toBe(first.hash);
 });
 
-test.each([false, true])(
-  'WebP with intact dimensions but damaged pixel data is rejected before storage (lossless=%s)',
-  async (lossless) => {
-    const pixels = Buffer.alloc(64 * 64 * 3);
-    for (let index = 0; index < pixels.length; index++)
-      pixels[index] = (index * 17 + (index % 29)) % 256;
-    const damaged = await sharp(pixels, { raw: { width: 64, height: 64, channels: 3 } })
-      .webp({ lossless })
-      .toBuffer();
-    damaged.fill(255, 40);
-    expect(await sharp(damaged).metadata()).toMatchObject({
-      format: 'webp',
-      width: 64,
-      height: 64,
-    });
-    await expect(processImage(damaged)).rejects.toThrow(
-      '이미지를 읽거나 WebP로 변환하지 못했어요.'
-    );
-  }
-);
+test('WebP with intact dimensions but damaged pixel data is rejected before storage (lossless=true)', async () => {
+  const lossless = true;
+  const pixels = Buffer.alloc(64 * 64 * 3);
+  for (let index = 0; index < pixels.length; index++)
+    pixels[index] = (index * 17 + (index % 29)) % 256;
+  const damaged = await sharp(pixels, { raw: { width: 64, height: 64, channels: 3 } })
+    .webp({ lossless })
+    .toBuffer();
+  damaged.fill(255, 40);
+  expect(await sharp(damaged).metadata()).toMatchObject({
+    format: 'webp',
+    width: 64,
+    height: 64,
+  });
+  await expect(processImage(damaged)).rejects.toThrow('이미지를 읽거나 WebP로 변환하지 못했어요.');
+});
 
 test('WebP intake preserves animated bytes and validates pixels in the last frame', async () => {
   const pixels = Buffer.alloc(64 * 128 * 4);

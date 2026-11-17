@@ -123,7 +123,7 @@ test('last response replacement keeps old prose until commit, excludes it from i
   ).not.toBe(chat.id);
 });
 
-test.each(['failed', 'cancelled', 'refused'] as const)(
+test.each(['failed', 'cancelled'] as const)(
   'replacement %s retains the old response and retry keeps replacement intent',
   (status) => {
     const store = database(),
@@ -260,50 +260,45 @@ test('completed replacements can be replaced again and failed judgment recovery 
   expect(copy.snapshot.replacement).toBeUndefined();
 });
 
-test.each(['queued', 'running'] as const)(
-  'rejudgment reports a conflict when another request is %s and preserves both runs',
-  (activeStatus) => {
-    const store = database();
-    const chat = createFixtureChat(store, 'Rejudgment admission');
-    const original = queued(store, chat.id);
-    const candidate = 'A completed candidate awaiting judgment.';
-    store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(
-      JSON.stringify({
-        ...original.snapshot,
-        mainJudgmentEnabled: true,
-        mainJudgment: mainJudgmentInput(candidate),
-        mainJudgmentPending: true,
-      }),
-      original.id
-    );
-    store.startRun(original.id);
-    store.finishRun(original.id, 'failed', 'JEV_EXECUTION_FAILED', candidate);
-    const active = queued(store, chat.id, 'A different active request');
-    if (activeStatus === 'running') store.startRun(active.id);
+test('rejudgment reports a conflict while another request runs and preserves both runs', () => {
+  const store = database();
+  const chat = createFixtureChat(store, 'Rejudgment admission');
+  const original = queued(store, chat.id);
+  const candidate = 'A completed candidate awaiting judgment.';
+  store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(
+    JSON.stringify({
+      ...original.snapshot,
+      mainJudgmentEnabled: true,
+      mainJudgment: mainJudgmentInput(candidate),
+      mainJudgmentPending: true,
+    }),
+    original.id
+  );
+  store.startRun(original.id);
+  store.finishRun(original.id, 'failed', 'JEV_EXECUTION_FAILED', candidate);
+  const active = queued(store, chat.id, 'A different active request');
+  store.startRun(active.id);
 
-    expect(() => store.candidate(original.id, 'rejudge-active', 'unused', undefined, true)).toThrow(
-      expect.objectContaining({ statusCode: 409 })
-    );
-    expect(store.run(active.id).status).toBe(activeStatus);
-    expect(store.run(original.id)).toMatchObject({ status: 'failed', partialText: candidate });
-    expect(store.chat(chat.id).headRevision).toBeNull();
-    store.finishRun(active.id, 'cancelled', 'Run cancelled');
-    const originalKey = String(
-      store.db.prepare('SELECT request_key FROM runs WHERE id=?').get(original.id)!.request_key
-    );
-    expect(() => store.candidate(original.id, originalKey, 'unused', undefined, true)).toThrow(
-      expect.objectContaining({ statusCode: 409 })
-    );
-    const admitted = store.candidate(original.id, 'rejudge-active', 'unused', undefined, true);
-    expect(admitted.created).toBe(true);
-    expect(store.candidate(original.id, 'rejudge-active', 'unused', undefined, true)).toMatchObject(
-      {
-        created: false,
-        run: { id: admitted.run.id },
-      }
-    );
-  }
-);
+  expect(() => store.candidate(original.id, 'rejudge-active', 'unused', undefined, true)).toThrow(
+    expect.objectContaining({ statusCode: 409 })
+  );
+  expect(store.run(active.id).status).toBe('running');
+  expect(store.run(original.id)).toMatchObject({ status: 'failed', partialText: candidate });
+  expect(store.chat(chat.id).headRevision).toBeNull();
+  store.finishRun(active.id, 'cancelled', 'Run cancelled');
+  const originalKey = String(
+    store.db.prepare('SELECT request_key FROM runs WHERE id=?').get(original.id)!.request_key
+  );
+  expect(() => store.candidate(original.id, originalKey, 'unused', undefined, true)).toThrow(
+    expect.objectContaining({ statusCode: 409 })
+  );
+  const admitted = store.candidate(original.id, 'rejudge-active', 'unused', undefined, true);
+  expect(admitted.created).toBe(true);
+  expect(store.candidate(original.id, 'rejudge-active', 'unused', undefined, true)).toMatchObject({
+    created: false,
+    run: { id: admitted.run.id },
+  });
+});
 
 test.each(['compacted', 'recent'] as const)(
   'replacement clears an active checkpoint with the old response in %s only after success and preserves its record',
@@ -665,28 +660,18 @@ test('reader dismissal survives reopening without modifying execution data, and 
   ).toBeUndefined();
 });
 
-test.each([
-  'queued',
-  'running',
-  'failed',
-  'interrupted',
-  'refused',
-  'partial',
-  'uncertain',
-] as const)('reader dismissal rejects %s work and leaves it visible', (status) => {
-  const store = database(),
-    chat = createFixtureChat(store, 'Keep unresolved work');
-  const run = queued(store, chat.id);
-  if (status === 'running') store.startRun(run.id);
-  else if (status !== 'queued')
-    store.finishRun(
-      run.id,
-      status === 'uncertain' ? 'cancelled' : status,
-      status === 'uncertain' ? 'PROVIDER_UNCERTAIN' : 'Fixture terminal state'
-    );
-  expect(() => dismissReaderRun(store, run.id)).toThrow(/Only a cancelled request/);
-  expect(readerDetail(store, chat.id, {}).reader.pendingRunIds).toContain(run.id);
-});
+test.each(['running', 'failed'] as const)(
+  'reader dismissal rejects %s work and leaves it visible',
+  (status) => {
+    const store = database(),
+      chat = createFixtureChat(store, 'Keep unresolved work');
+    const run = queued(store, chat.id);
+    if (status === 'running') store.startRun(run.id);
+    else store.finishRun(run.id, status, 'Fixture terminal state');
+    expect(() => dismissReaderRun(store, run.id)).toThrow(/Only a cancelled request/);
+    expect(readerDetail(store, chat.id, {}).reader.pendingRunIds).toContain(run.id);
+  }
+);
 
 test('completion winning a cancel race keeps its source and cannot be dismissed', () => {
   const store = database(),

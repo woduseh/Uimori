@@ -130,26 +130,11 @@ test('deleting only B preserves C identity, text and hash, reconnects it to A an
     orphanNoteCount: { only: 1, following: 1 },
   });
   const result = deleteScenes(store, chatId, b.id, request(f));
-  expect(
+  const diagnostics = (runId: string) =>
     store.db
       .prepare('SELECT COUNT(*) AS n FROM execution_tool_diagnostics WHERE run_id=?')
-      .get(a.runId)!.n
-  ).toBe(1);
-  expect(
-    store.db
-      .prepare('SELECT COUNT(*) AS n FROM execution_tool_diagnostics WHERE run_id=?')
-      .get(b.runId)!.n
-  ).toBe(0);
-  expect(
-    store.db
-      .prepare('SELECT COUNT(*) AS n FROM execution_tool_diagnostics WHERE run_id=?')
-      .get(c.runId)!.n
-  ).toBe(0);
-  expect(
-    store.db
-      .prepare('SELECT COUNT(*) AS n FROM execution_tool_diagnostics WHERE run_id=?')
-      .get(copiedRunId)!.n
-  ).toBe(1);
+      .get(runId)!.n;
+  expect([a.runId, b.runId, c.runId, copiedRunId].map(diagnostics)).toEqual([1, 0, 0, 1]);
   expect(result).toMatchObject({ deleted: true, sourceIds: [b.id], headRevision: c.id });
   expect(store.history(store.chat(chatId).headRevision).map((source) => source.revision)).toEqual([
     a.id,
@@ -298,44 +283,46 @@ test('deleting B and following scenes restores A checkpoint and preserves the re
   intact(store);
 });
 
-test.each(['head', 'settings', 'hash'] as const)(
-  'a stale %s review rejects deletion without changing the manuscript',
-  (boundary) => {
-    const f = manuscript(),
-      command = request(f);
-    if (boundary === 'head') command.expectedHeadRevision = f.a.id;
-    if (boundary === 'settings') command.expectedSettingsRevision += 1;
-    if (boundary === 'hash') command.expectedSourceHash = '0'.repeat(64);
-    expect(() => deleteScenes(f.store, f.chatId, f.b.id, command)).toThrow('채팅이 변경');
-    expect(
-      f.store.history(f.store.chat(f.chatId).headRevision).map((source) => source.revision)
-    ).toEqual([f.a.id, f.b.id, f.c.id]);
-    intact(f.store);
-  }
-);
+test('a stale head, settings, or hash review rejects deletion without changing the manuscript', () => {
+  const f = manuscript();
+  const stale = [
+    { expectedHeadRevision: f.a.id },
+    { expectedSettingsRevision: request(f).expectedSettingsRevision + 1 },
+    { expectedSourceHash: '0'.repeat(64) },
+  ];
+  for (const change of stale)
+    expect(() => deleteScenes(f.store, f.chatId, f.b.id, { ...request(f), ...change })).toThrow(
+      '채팅이 변경'
+    );
+  expect(
+    f.store.history(f.store.chat(f.chatId).headRevision).map((source) => source.revision)
+  ).toEqual([f.a.id, f.b.id, f.c.id]);
+  intact(f.store);
+});
 
-test.each(['later source', 'request context', 'variables'] as const)(
-  'a %s change after reviewing a following deletion requires a fresh review',
-  (boundary) => {
-    const f = manuscript(),
-      command = request(f, 'following');
-    if (boundary === 'later source')
-      f.store.editSource(f.c.id, { expectedRevision: 0, text: 'Revised conclusion after review.' });
-    if (boundary === 'request context')
+test('a later source, request context, or variables change after reviewing a following deletion requires a fresh review', () => {
+  const f = manuscript();
+  const changes = [
+    () => f.store.editSource(f.c.id, { expectedRevision: 0, text: 'Revised conclusion.' }),
+    () =>
       updateSceneContext(f.store, f.b.id, {
         expectedRevision: 0,
         requestText: 'Revised bridge request.',
-      });
-    if (boundary === 'variables') variable(f.store, f.chatId, 'Revised after review');
+      }),
+    () => variable(f.store, f.chatId, 'Revised after review'),
+  ];
+  for (const change of changes) {
+    const command = request(f, 'following');
+    change();
     const variables = readChatVariables(f.store, f.chatId);
     expect(() => deleteScenes(f.store, f.chatId, f.b.id, command)).toThrow('채팅이 변경');
     expect(
       f.store.history(f.store.chat(f.chatId).headRevision).map((source) => source.revision)
     ).toEqual([f.a.id, f.b.id, f.c.id]);
     expect(readChatVariables(f.store, f.chatId)).toEqual(variables);
-    intact(f.store);
   }
-);
+  intact(f.store);
+});
 
 test('illustration diagnostic attempt IDs retain numeric usage while detaching deleted scene payloads', () => {
   const f = manuscript(),

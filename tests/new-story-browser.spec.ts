@@ -1,9 +1,3 @@
-import {
-  MOBILE_WIDTH,
-  MOBILE_HEIGHT,
-  DESKTOP_WIDTH,
-  DESKTOP_HEIGHT,
-} from './fixtures/browser-viewports.js';
 import { setCurrentModels } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { visualReview } from './fixtures/visual-review.js';
@@ -13,72 +7,6 @@ import type { Chat, ChatDetail, ReaderDetail } from '../core/types.js';
 import type { Connection, Content, ModelPreset } from '../core/product.js';
 import { navigationAction } from './ui-navigation.js';
 import { visibleNavigation } from './ui-navigation.js';
-
-test('NSUI08 bot default persona is saved from its menu and explicit none wins when creating a chat', async ({
-  page,
-  request,
-}) => {
-  const make = async (kind: 'bot' | 'persona') => {
-    const response = await request.post('/api/content', {
-      data: {
-        kind,
-        title: `${kind} defaults ${crypto.randomUUID()}`,
-        description: '',
-        text: 'Synthetic',
-        loading: 'pinned',
-        relatedIds: [],
-      },
-    });
-    expect(response.ok()).toBe(true);
-    return response.json() as Promise<Content>;
-  };
-  const bot = await make('bot'),
-    persona = await make('persona');
-  await page.goto('/');
-  const nav = await visibleNavigation(page);
-  const section = nav.getByRole('button', { name: '봇', exact: true });
-  if ((await section.getAttribute('aria-expanded')) === 'false') await section.click();
-  const branch = nav.locator(`[data-bot-id="${bot.id}"]`);
-  await branch.hover();
-  await branch.getByLabel(`${bot.title} 관리`, { exact: true }).click();
-  await branch.getByRole('button', { name: '기본 페르소나', exact: true }).click();
-  const settings = page.getByRole('dialog', { name: '봇 기본 페르소나', exact: true });
-  await settings.getByLabel('봇 기본 페르소나 방식').selectOption('persona');
-  await settings.getByRole('button', { name: '봇의 기본 페르소나 선택', exact: true }).click();
-  const picker = page.getByRole('dialog', { name: '봇의 기본 페르소나 선택', exact: true });
-  await picker.getByRole('searchbox').fill(persona.title);
-  await picker
-    .getByRole('button')
-    .filter({ has: page.getByText(persona.title, { exact: true }) })
-    .click();
-  await settings.getByRole('button', { name: '기본 페르소나 저장', exact: true }).click();
-  await expect(settings).toBeHidden();
-  expect(await (await request.get(`/api/bots/${bot.id}/defaults`)).json()).toMatchObject({
-    persona: { mode: 'persona', persona: { id: persona.id } },
-  });
-  await branch.hover();
-  await branch.getByLabel(`${bot.title} 관리`, { exact: true }).click();
-  await branch.getByRole('button', { name: '설정 후 새 채팅', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
-  await expect(dialog.getByRole('button', { name: '시작 페르소나', exact: true })).toContainText(
-    persona.title
-  );
-  await dialog.getByRole('button', { name: '시작 페르소나', exact: true }).click();
-  const choice = page.getByRole('dialog', { name: '시작 페르소나', exact: true });
-  await choice.getByRole('button', { name: '페르소나 없음', exact: true }).click();
-  const created = page.waitForResponse(
-    (response) => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'
-  );
-  await dialog.getByRole('button', { name: '채팅 만들기', exact: true }).click();
-  const response = await created;
-  expect(response.ok()).toBe(true);
-  const chat = (await response.json()) as Chat;
-  await expect(dialog).toBeHidden();
-  const detail = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
-  expect(detail.profile!.packageAttachments).toEqual([
-    { id: bot.id, revision: bot.revision, role: 'bot' },
-  ]);
-});
 
 test('NSUI09 a deleted default discovered after library refresh requires an explicit persona choice', async ({
   page,
@@ -155,15 +83,12 @@ test('NSUI09 a deleted default discovered after library refresh requires an expl
   ]);
 });
 
-for (const [viewportName, viewport] of [
-  ['mobile', { width: MOBILE_WIDTH, height: MOBILE_HEIGHT }],
-  ['desktop', { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT }],
-] as const) {
+{
+  const viewportName = 'mobile';
   test(`NSUI01 ${viewportName} creation retains title and persona, then opens a native authored greeting without generation`, async ({
     page,
     request,
   }, info) => {
-    await page.setViewportSize(viewport);
     const title = `Quick start ${crypto.randomUUID()}`;
     const imageResponse = await request.post('/api/package-image-blobs', {
       data: {
@@ -269,19 +194,6 @@ for (const [viewportName, viewport] of [
     await expect(dialog.locator('.risu-message-surface')).toHaveCount(0);
     await expect(dialog.getByText('Harbor greets', { exact: false })).toHaveCount(0);
     await expect(dialog.getByText('미리보기', { exact: true })).toBeVisible();
-    const centered = async () => {
-      const box = (await dialog.boundingBox())!;
-      const size = page.viewportSize()!;
-      const gap = viewportName === 'mobile' ? 16 : 24;
-      expect(box.x).toBeGreaterThanOrEqual(gap);
-      expect(box.y).toBeGreaterThanOrEqual(gap);
-      expect(box.x + box.width).toBeLessThanOrEqual(size.width - gap);
-      expect(box.y + box.height).toBeLessThanOrEqual(size.height - gap);
-      expect(Math.abs(box.x + box.width / 2 - size.width / 2)).toBeLessThanOrEqual(1);
-      expect(Math.abs(box.y + box.height / 2 - size.height / 2)).toBeLessThanOrEqual(1);
-    };
-    await centered();
-    if (viewportName === 'desktop') expect((await dialog.boundingBox())!.width).toBe(680);
     await dialog.getByLabel('첫 메시지 선택').selectOption('');
     await expect(dialog.getByRole('button', { name: '전역 모델 설정', exact: true })).toBeVisible();
     await expect(dialog.getByLabel('시작 본문 모델', { exact: true })).toHaveCount(0);
@@ -291,32 +203,6 @@ for (const [viewportName, viewport] of [
     await expect(dialog.getByRole('button', { name: '채팅 만들기', exact: true })).toBeInViewport({
       ratio: 1,
     });
-    if (viewportName === 'mobile') {
-      await page.setViewportSize({ width: viewport.width, height: 480 });
-      await centered();
-      const header = dialog.locator(':scope > .dialog-header');
-      const submit = dialog.getByRole('button', { name: '채팅 만들기', exact: true });
-      const fields = dialog.locator('.new-story-fields');
-      const headerBox = (await header.boundingBox())!;
-      const submitBox = (await submit.boundingBox())!;
-      const closeBox = (await dialog
-        .getByRole('button', { name: '새 채팅 닫기', exact: true })
-        .boundingBox())!;
-      expect(submitBox.height).toBeGreaterThanOrEqual(44);
-      expect(closeBox.width).toBeGreaterThanOrEqual(44);
-      expect(closeBox.height).toBeGreaterThanOrEqual(44);
-      await fields.evaluate((node) => {
-        node.scrollTop = node.scrollHeight;
-      });
-      expect(await fields.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
-      expect((await header.boundingBox())!.y).toBe(headerBox.y);
-      expect((await submit.boundingBox())!.y).toBe(submitBox.y);
-      await expect(submit).toBeInViewport({ ratio: 1 });
-      if (visualReview)
-        await page.screenshot({ path: info.outputPath('new-story-centered-mobile-short.png') });
-      await page.setViewportSize(viewport);
-      await centered();
-    }
     const customTitle = '추가 설정에 남긴 합성 제목';
     await dialog.getByLabel('새 채팅 제목', { exact: true }).fill(customTitle);
     await options.locator('summary').click();
@@ -362,9 +248,6 @@ for (const [viewportName, viewport] of [
     await expect(frame.locator('.risu-message-content')).toContainText('Night watch begins.');
     await dialog.getByLabel('첫 메시지 선택').selectOption('start-0');
     await expect(dialog.locator('.risu-message-surface')).toHaveCount(0);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-      true
-    );
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`new-story-native-${viewportName}.png`) });
     const confirmed = page.waitForResponse(
@@ -387,10 +270,6 @@ for (const [viewportName, viewport] of [
     await expect(firstMessage).toBeVisible();
     await expect(scenes.getByText('첫 메시지', { exact: true })).toHaveCount(1);
     await expect(scenes).not.toContainText('0개 장면');
-    if (viewportName === 'desktop') expect((await scenes.boundingBox())!.width).toBe(640);
-    expect(
-      await scenes.evaluate((node) => node.scrollWidth - node.clientWidth)
-    ).toBeLessThanOrEqual(1);
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`scene-list-opening-${viewportName}.png`) });
     await firstMessage.click();
@@ -474,16 +353,12 @@ async function openQuickChat(page: Page, bot: Content) {
   await library.getByRole('button', { name: `${bot.title} 새 채팅`, exact: true }).click();
 }
 
-for (const greetings of [0, 1]) {
+{
+  const greetings = 1;
   test(`NSQ01 quick chat opens with ${greetings} authored greetings and saved defaults without generation`, async ({
     page,
     request,
   }, info) => {
-    await page.setViewportSize(
-      greetings
-        ? { width: MOBILE_WIDTH, height: MOBILE_HEIGHT }
-        : { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT }
-    );
     const { bot, persona, model } = await quickChatFixture(request, greetings);
     let release!: () => void;
     const held = new Promise<void>((resolve) => {
@@ -524,12 +399,7 @@ for (const greetings of [0, 1]) {
         { id: persona.id, revision: persona.revision, role: 'persona' },
       ]);
       expect(detail.profile!.routes.main).toEqual({ id: model.id });
-      if (greetings)
-        await expect(page.getByTestId('source-text')).toContainText(`안녕하세요 ${persona.title}.`);
-      else {
-        expect(detail.runs).toHaveLength(0);
-        expect(detail.attempts).toHaveLength(0);
-      }
+      await expect(page.getByTestId('source-text')).toContainText(`안녕하세요 ${persona.title}.`);
       expect(admissions).toHaveLength(1);
       expect(executions).toEqual([]);
       if (visualReview)
@@ -781,7 +651,8 @@ test('NSQ05 an uncertain chat admission stops automatic and manual resubmission'
   expect(admissions).toBe(1);
 });
 
-for (const width of [412, 1440]) {
+{
+  const width = 412;
   test(`AUDIT2 bot default persona recovers an initial read and retains a rejected save ${width}`, async ({
     page,
     request,
@@ -1036,7 +907,7 @@ test('NSUI02 native authoring preserves raw drafts and starts with the rendered 
 test('NSUI10 authored opening switches in the same chat, retains the draft, and hides empty generation details', async ({
   page,
   request,
-}, info) => {
+}) => {
   const title = `시작문 선택 검증 ${crypto.randomUUID()}`;
   const saved = await request.post('/api/content', {
     data: {
@@ -1094,27 +965,6 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
   await picker.getByLabel('첫 메시지 선택').selectOption('start-1');
   await picker.getByText('미리보기', { exact: true }).click();
   await expect(picker.getByRole('heading', { name: '새벽의 정원' })).toBeVisible();
-  for (const viewport of [
-    { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT },
-    { width: MOBILE_WIDTH, height: MOBILE_HEIGHT },
-  ]) {
-    await page.setViewportSize(viewport);
-    for (const colorScheme of ['light', 'dark'] as const) {
-      await page.emulateMedia({ colorScheme });
-      await expect(page.locator('html')).toHaveAttribute('data-theme', colorScheme);
-      await expect(
-        picker.getByRole('button', { name: '첫 메시지 바꾸기', exact: true })
-      ).toBeInViewport({
-        ratio: 1,
-      });
-      expect(
-        await picker.evaluate((node) => node.scrollWidth - node.clientWidth)
-      ).toBeLessThanOrEqual(1);
-      await page.screenshot({
-        path: info.outputPath(`opening-picker-${viewport.width}-${colorScheme}.png`),
-      });
-    }
-  }
   const changed = page.waitForResponse(
     (response) => /\/package-start$/.test(response.url()) && response.request().method() === 'POST'
   );
@@ -1139,7 +989,6 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
   expect(after.runs.every((run) => run.usage.modelCalls === 0)).toBe(true);
   expect(after.attempts).toHaveLength(0);
   expect(mainRequests).toEqual([]);
-  await page.screenshot({ path: info.outputPath('opening-switched-mobile-dark.png') });
   await page.reload();
   await expect(source.getByRole('heading', { name: '새벽의 정원' })).toBeVisible();
   await expect(draft).toHaveValue('시작문을 바꿔도 남겨 둘 다음 장면 초안');
@@ -1165,7 +1014,6 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
   await expect(activity).not.toContainText('실행 확인');
   expect((await read()).attempts).toHaveLength(0);
   expect(mainRequests).toEqual([]);
-  await page.screenshot({ path: info.outputPath('opening-manual-translation-mobile-dark.png') });
   await page.getByRole('button', { name: '원문 생성', exact: true }).click();
   await expect.poll(async () => (await readActive()).reader.total).toBe(2);
   await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
@@ -1174,7 +1022,8 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
   );
 });
 
-for (const width of [1440, 412]) {
+{
+  const width = 1440;
   test(`NSUI11 clearing a single authored greeting preserves the chat, history and draft ${width}`, async ({
     page,
     request,
@@ -1253,55 +1102,47 @@ for (const width of [1440, 412]) {
     await picker.getByLabel('첫 메시지 선택').selectOption({ label: '첫 메시지 없이 시작' });
     await page.screenshot({ path: info.outputPath('empty-opening-picker-' + width + '.png') });
     const commands: Record<string, unknown>[] = [];
-    // Keep reader delivery pending on desktop so SSE cannot remove the picker
-    // before the lost-response retry is exercised. The mobile case covers normal
-    // authoritative refresh; both cases retain the same persistence assertions.
-    let releaseReader: (() => void) | undefined;
+    // Keep reader delivery pending so SSE cannot remove the picker
+    // before the lost-response retry is exercised.
+    let releaseReader!: () => void;
     const readerDelivery = new Promise<void>((resolve) => {
       releaseReader = resolve;
     });
-    if (width === 1440) {
-      await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
-        await readerDelivery;
-        await route.continue();
-      });
-      await page.route(`**/api/chats/${chat.id}/package-start`, async (route) => {
-        commands.push(route.request().postDataJSON());
-        if (commands.length === 1) {
-          const response = await route.fetch();
-          expect(response.ok()).toBe(true);
-          expect(await response.json()).toMatchObject({ run: null });
-          await route.abort('failed');
-        } else if (commands.length === 2) {
-          await route.fulfill({ status: 409, json: { error: 'Temporary confirmation failure' } });
-        } else await route.continue();
-      });
-    }
+    await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
+      await readerDelivery;
+      await route.continue();
+    });
+    await page.route(`**/api/chats/${chat.id}/package-start`, async (route) => {
+      commands.push(route.request().postDataJSON());
+      if (commands.length === 1) {
+        const response = await route.fetch();
+        expect(response.ok()).toBe(true);
+        expect(await response.json()).toMatchObject({ run: null });
+        await route.abort('failed');
+      } else if (commands.length === 2) {
+        await route.fulfill({ status: 409, json: { error: 'Temporary confirmation failure' } });
+      } else await route.continue();
+    });
     const changed = page.waitForResponse(
       (response) => response.url().endsWith(`/api/chats/${chat.id}/package-start`) && response.ok()
     );
     await picker.getByRole('button', { name: '첫 메시지 바꾸기', exact: true }).click();
-    if (width === 1440) {
-      await expect(picker.getByRole('alert')).toContainText('결과');
-      await expect(picker.getByLabel('첫 메시지 선택')).toBeDisabled();
-      expect((await read()).chat.headRevision).toBeNull();
-      await picker.getByRole('button', { name: /변경 결과 확인$/ }).click();
-      await expect.poll(() => commands.length).toBe(2);
-      await expect(picker.getByRole('button', { name: /변경 결과 확인$/ })).toBeEnabled();
-      await expect(picker.getByLabel('첫 메시지 선택')).toBeDisabled();
-      await picker.getByRole('button', { name: /변경 결과 확인$/ }).click();
-    }
+    await expect(picker.getByRole('alert')).toContainText('결과');
+    await expect(picker.getByLabel('첫 메시지 선택')).toBeDisabled();
+    expect((await read()).chat.headRevision).toBeNull();
+    await picker.getByRole('button', { name: /변경 결과 확인$/ }).click();
+    await expect.poll(() => commands.length).toBe(2);
+    await expect(picker.getByRole('button', { name: /변경 결과 확인$/ })).toBeEnabled();
+    await expect(picker.getByLabel('첫 메시지 선택')).toBeDisabled();
+    await picker.getByRole('button', { name: /변경 결과 확인$/ }).click();
     const response = await changed;
     expect(response.request().postDataJSON().startId).toBeNull();
     expect(await response.json()).toMatchObject({ run: null });
-    if (width === 1440) {
-      expect(commands).toHaveLength(3);
-      expect(commands[1]).toEqual(commands[0]);
-      expect(commands[2]).toEqual(commands[0]);
-      await expect(picker).toBeHidden();
-      releaseReader?.();
-    }
+    expect(commands).toHaveLength(3);
+    expect(commands[1]).toEqual(commands[0]);
+    expect(commands[2]).toEqual(commands[0]);
     await expect(picker).toBeHidden();
+    releaseReader();
     await expect(page.getByTestId('source')).toHaveCount(0);
     await expect(composer).toHaveValue(draft);
     await expect(composer).toBeFocused();

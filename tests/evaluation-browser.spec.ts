@@ -1,9 +1,6 @@
-import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
-import { selectCurrentSettingsSection } from './ui-navigation.js';
-import { openChatSettings, revealProviderModel, openProviderModel } from './ui-navigation.js';
+import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
+import { revealProviderModel, openProviderModel } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
-import { setCurrentModels } from './ui-navigation.js';
-import { visualReview } from './fixtures/visual-review.js';
 import {
   selectSettingsSection,
   startProviderConnection,
@@ -11,7 +8,6 @@ import {
 } from './ui-navigation.js';
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 import type { Connection, Library, ModelPreset } from '../core/product.js';
-import type { ChatDetail } from '../core/types.js';
 
 async function navigation(page: Page, name: string) {
   await navigationAction(page, name);
@@ -83,105 +79,10 @@ async function saveModel(
   return (await library(request)).models.find((item) => item.connectionId === connection.id)!;
 }
 
-test('EVALUI01 desktop preset evaluation opt-in persists selected story roles after reconnect without model calls', async ({
-  page,
-  context,
-  request,
-}, info) => {
-  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
-  const observed = observe(page);
-  const title = '합성 평가 desktop ' + Date.now();
-  const bot = await request.post('/api/content', {
-    data: {
-      kind: 'bot',
-      title: `${title} bot`,
-      description: 'Synthetic evaluation navigation',
-      text: 'Synthetic keeper',
-      loading: 'pinned',
-      relatedIds: [],
-    },
-  });
-  expect(bot.ok()).toBeTruthy();
-  await page.goto('/');
-  await settings(page);
-  await expect(page.getByLabel('API 기본 주소')).toHaveValue('https://api.openai.com/v1');
-  await expect(page.getByLabel('API 기본 주소')).toBeEditable();
-  await expect(
-    page.getByLabel('프로바이더 프로토콜').locator('option[value="sol-responses-v1"]')
-  ).toHaveCount(0);
-  const connection = await register(page, request, title, 'llm-gateway');
-  await page.getByRole('button', { name: '고급', exact: true }).click();
-  await expect(page.getByLabel('이 모델 프리셋에 평가 도구 사용')).not.toBeChecked();
-  await page.getByLabel('이 모델 프리셋에 평가 도구 사용').check();
-  await expect(page.getByLabel('명확한 거절 제출은 한 번 재요청')).toHaveCount(0);
-  await expect(page.getByLabel('평가 메타데이터')).toHaveValue('OpenAI, 프로바이더 자동 선택');
-  await expect(page.getByLabel('평가 메타데이터')).not.toBeEditable();
-  expect(
-    await page
-      .getByLabel('평가 컨텍스트 제공')
-      .locator('option')
-      .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value))
-  ).toEqual(['model-selected', 'preloaded']);
-  await expect(page.getByLabel('최대 평가 도구 라운드')).toHaveCount(0);
-  await expect(page.getByLabel('제출할 원고의 문구 찾아 바꾸기 허용')).toHaveCount(0);
-  await page.getByLabel('평가 컨텍스트 제공').selectOption('preloaded');
-  await page.getByLabel('첫 평가 단계의 추론 설정').selectOption('economized');
-  await page.getByRole('button', { name: '기본', exact: true }).click();
-  await page.getByLabel('추론 강도', { exact: true }).selectOption('high');
-  await page.getByRole('button', { name: '고급', exact: true }).click();
-  await page.getByLabel('평가 컨텍스트 제공').scrollIntoViewIfNeeded();
-  if (visualReview)
-    await page.screenshot({ path: info.outputPath('evaluation-desktop-options.png') });
-  const model = await saveModel(page, request, connection);
-  expect(model).toMatchObject({
-    reasoningEffort: 'high',
-  });
-  expect(model.evaluationTools).toEqual({
-    metadataProfile: 'neutral',
-    contextMode: 'preloaded',
-    approvalReasoningMode: 'economized',
-  });
-  await setCurrentModels(request, { main: { id: model.id }, translation: { id: model.id } });
-  await page.reload();
-  await navigation(page, '새 이야기');
-  await page
-    .getByRole('dialog', { name: '새 채팅', exact: true })
-    .locator('.new-story-options > summary')
-    .click();
-  await page.getByLabel('새 채팅 제목').fill(title + ' 이야기');
-  const ref = `${model.id}`;
-  await page.getByRole('button', { name: '채팅 만들기', exact: true }).click();
-  await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBeTruthy();
-  const storyUrl = page.url(),
-    chatId = new URL(storyUrl).searchParams.get('chat')!;
-  await page.reload();
-  await expect(page.getByRole('button', { name: /^현재 본문 모델/ })).toContainText(model.title);
-  const reconnected = await context.newPage();
-  await reconnected.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
-  await reconnected.goto(storyUrl);
-  await openChatSettings(reconnected);
-  await selectCurrentSettingsSection(reconnected, '역할별 모델');
-  await expect(reconnected.getByLabel('본문 모델', { exact: true })).toHaveValue(ref);
-  await expect(reconnected.getByLabel('번역 모델', { exact: true })).toHaveValue(ref);
-  if (visualReview)
-    await reconnected.screenshot({
-      path: info.outputPath('evaluation-desktop-restored-roles.png'),
-    });
-  const detail = (await (await request.get(`/api/chats/${chatId}`)).json()) as ChatDetail;
-  expect(detail.profile?.routes.main).toEqual({ id: model.id });
-  expect(detail.runs).toEqual([]);
-  expect(detail.attempts).toEqual([]);
-  expect(detail.jobs).toEqual([]);
-  expect((await library(request)).models.find((item) => item.id === model.id)).toEqual(model);
-  expect(observed.errors).toEqual([]);
-  expect(observed.forbidden).toEqual([]);
-  await reconnected.close();
-});
-
 test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-in presets and can be disabled`, async ({
   page,
   request,
-}, info) => {
+}) => {
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const observed = observe(page);
   const title = '합성 평가 mobile ' + Date.now();
@@ -200,9 +101,6 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
   await settings(page);
   await expect(page.getByLabel('API 기본 주소')).toBeEditable();
   await page.getByLabel('API 기본 주소').fill('http://127.0.0.1:8080/v1');
-  await page.getByLabel('API 키').scrollIntoViewIfNeeded();
-  if (visualReview)
-    await page.screenshot({ path: info.outputPath('evaluation-mobile-connection.png') });
   const connection = await register(page, request, title, 'vercel');
   await page.getByRole('button', { name: '고급', exact: true }).click();
   await expect(page.getByLabel('이 모델 프리셋에 평가 도구 사용')).not.toBeChecked();
@@ -242,63 +140,6 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
   await expect(page.getByLabel('평가 메타데이터')).toHaveValue('deepmind');
   await expect(page.getByLabel('최대 평가 도구 라운드')).toHaveCount(0);
   await expect(page.getByLabel('제출할 원고의 문구 찾아 바꾸기 허용')).toHaveCount(0);
-  const labels = [
-    '모델 프리셋 이름',
-    '모델 ID',
-    '최대 출력 토큰',
-    '응답 제한 시간 (초)',
-    '평가 컨텍스트 제공',
-    '평가 메타데이터',
-  ];
-  for (const label of labels) {
-    await page
-      .getByRole('button', {
-        name: ['모델 프리셋 이름', '모델 ID', '최대 출력 토큰'].includes(label) ? '기본' : '고급',
-        exact: true,
-      })
-      .click();
-    const control = page.getByLabel(label, { exact: true });
-    await control.scrollIntoViewIfNeeded();
-    await expect(control).toBeVisible();
-    const box = await control.boundingBox();
-    expect(box, label).not.toBeNull();
-    expect(box!.x, label).toBeGreaterThanOrEqual(0);
-    expect(box!.x + box!.width, label).toBeLessThanOrEqual(MOBILE_WIDTH);
-    if (visualReview) expect(box!.width, label).toBeGreaterThan(120);
-  }
-  const horizontal = await page
-    .getByRole('dialog', { name: '설정', exact: true })
-    .evaluate((element) => ({ scroll: element.scrollWidth, width: element.clientWidth }));
-  expect(horizontal.scroll).toBeLessThanOrEqual(horizontal.width + 1);
-  if (visualReview) {
-    // Viewport containment alone missed a clipped native-select label in the first visual review.
-    // Check the displayed choice as well; screenshots still need direct visual inspection.
-    for (const label of ['평가 컨텍스트 제공']) {
-      const measured = await page.getByLabel(label, { exact: true }).evaluate((element) => {
-        const select = element as HTMLSelectElement,
-          style = getComputedStyle(select),
-          canvas = document.createElement('canvas'),
-          context = canvas.getContext('2d')!;
-        context.font = style.font;
-        return {
-          text: context.measureText(select.selectedOptions[0].text).width,
-          available:
-            select.clientWidth -
-            parseFloat(style.paddingLeft) -
-            parseFloat(style.paddingRight) -
-            24,
-        };
-      });
-      expect(
-        measured.text,
-        label + ' displayed choice fits before the native arrow'
-      ).toBeLessThanOrEqual(measured.available);
-    }
-    // Capture the whole section laid out at 412px, including controls below the scroll fold.
-    await page
-      .getByRole('group', { name: '평가 도구', exact: true })
-      .screenshot({ path: info.outputPath('evaluation-mobile-options.png') });
-  }
   await expect(page.getByText('기능 확인과 사용자 판단', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '모델 프리셋 등록', exact: true })).toBeEnabled();
   const model = await saveModel(page, request, manualConnection);

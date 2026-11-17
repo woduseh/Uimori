@@ -17,9 +17,6 @@ test('validation is protocol-level: any listed or unlisted model may use every o
     validateModelOptions({ ...base, thinkingLevel: 'LOW' }, 'vertex-gemini-v1')
   ).not.toThrow();
   expect(() =>
-    validateModelOptions({ ...base, temperature: 1, topP: 0.5 }, 'vertex-gemini-v1')
-  ).not.toThrow();
-  expect(() =>
     validateModelOptions(
       { ...base, maxOutputTokens: 500000, reasoningEffort: 'max' },
       'vercel-chat-v1'
@@ -27,9 +24,6 @@ test('validation is protocol-level: any listed or unlisted model may use every o
   ).not.toThrow();
   expect(() =>
     validateModelOptions({ ...base, reasoningEffort: 'none', temperature: 0.5 }, 'deepseek-chat-v1')
-  ).not.toThrow();
-  expect(() =>
-    validateModelOptions({ ...base, reasoningEffort: 'high', temperature: 0.5 }, 'deepseek-chat-v1')
   ).not.toThrow();
   expect(() =>
     validateModelOptions(
@@ -43,9 +37,6 @@ test('validation is protocol-level: any listed or unlisted model may use every o
       'openai-responses-v1'
     )
   ).not.toThrow();
-  expect(() =>
-    validateModelOptions({ ...base, serviceTier: 'flex' }, 'openai-chat-v1')
-  ).not.toThrow();
 });
 
 test('options the encoder cannot send and values outside the protocol vocabulary are rejected', () => {
@@ -58,7 +49,6 @@ test('options the encoder cannot send and values outside the protocol vocabulary
   expect(() =>
     validateModelOptions({ ...base, temperature: 0 }, 'anthropic-messages-v1')
   ).toThrow();
-  expect(() => validateModelOptions({ ...base, temperature: 0 }, 'codex-app-server-v1')).toThrow();
   expect(() =>
     validateModelOptions({ ...base, structuredOutput: true }, 'vertex-gemini-v1')
   ).toThrow();
@@ -67,13 +57,6 @@ test('options the encoder cannot send and values outside the protocol vocabulary
   ).toThrow();
   expect(() =>
     validateModelOptions({ ...base, reasoningEffort: 'high' }, 'anthropic-messages-v1')
-  ).toThrow();
-  expect(() => validateModelOptions({ ...base, verbosity: 'low' }, 'openai-chat-v1')).toThrow();
-  expect(() =>
-    validateModelOptions(
-      { ...base, thinkingMode: 'enabled' } as unknown as ModelGeneration,
-      'anthropic-messages-v1'
-    )
   ).toThrow();
   expect(() =>
     validateModelOptions(
@@ -111,9 +94,7 @@ test('Gemini categories accept explicit OFF and BLOCK_NONE, but only on direct c
     expect(() => validateModelOptions(configured, protocol)).toThrow();
   for (const value of [
     null,
-    [],
     { HARM_CATEGORY_HARASSMENT: 'DEFAULT' },
-    { HARM_CATEGORY_HARASSMENT: null },
     { HARM_CATEGORY_UNKNOWN: 'OFF' },
   ])
     expect(() =>

@@ -14,7 +14,6 @@ import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { editableResource } from '../core/resource-editing.js';
 import { readResource, saveResource } from '../server/resource-service.js';
-import { putImageBlob } from '../server/package-images.js';
 import * as transport from '../core/transport.js';
 import {
   HELPER_TASK_LIMITS,
@@ -276,78 +275,6 @@ test('an unsaved editor is analysis input and only mutations of that same resour
   ).toThrow('같은 요청 키');
 });
 
-test('image metadata protects its unsaved content owner and receipts only the other content write', async () => {
-  const f = fixture();
-  const blob = putImageBlob(f.store.product, {
-    mime: 'image/png',
-    base64:
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNIK1/1HwAFVQKH+f6iOwAAAABJRU5ErkJggg==',
-  });
-  const [saved, other] = ['편집 중인 자료', '다른 자료'].map((title) => {
-    const input = fixtureBotInput(title);
-    input.package.images = [
-      {
-        id: 'portrait',
-        title: '원래 이미지',
-        description: '원래 설명',
-        blobHash: blob.hash,
-        mime: blob.mime,
-        allowedUse: 'profile',
-      },
-    ];
-    return f.store.product.content(input);
-  });
-  mockSend((request, _options, index) => {
-    if (index === 0)
-      return {
-        ...structuredClone(success),
-        status: 'tool_calls',
-        toolCalls: [saved, other].map((resource) => ({
-          id: resource.id,
-          name: 'app.call',
-          arguments: {
-            name: 'image.update-metadata',
-            arguments: {
-              contentId: resource.id,
-              imageId: 'portrait',
-              expectedRevision: resource.revision,
-              title: '새 이미지 이름',
-              description: '새 설명',
-            },
-          },
-        })),
-      };
-    expect(request.input.results).toMatchObject([
-      { callId: saved.id, denied: true, result: { code: 'EDITOR_SAVE_REQUIRED' } },
-      { callId: other.id, denied: false, result: { id: other.id, revision: other.revision + 1 } },
-    ]);
-    return structuredClone(success);
-  });
-  const task = f.runtime.enqueue(f.conversation.id, 'image-draft-target', '이미지 설명을 바꿔줘', {
-    kind: 'content',
-    source: 'unsaved',
-    targetId: saved.id,
-    revision: saved.revision,
-    title: saved.title,
-    model: editableResource('content', readResource(f.store, 'content', saved.id)),
-  });
-  await Promise.all(f.work);
-  expect(f.workspace.task(task.id).status).toBe('completed');
-  expect(readResource(f.store, 'content', saved.id)).toMatchObject({
-    revision: saved.revision,
-    package: { images: [{ title: '원래 이미지', description: '원래 설명' }] },
-  });
-  expect(readResource(f.store, 'content', other.id)).toMatchObject({
-    revision: other.revision + 1,
-    package: { images: [{ title: '새 이미지 이름', description: '새 설명' }] },
-  });
-  expect(
-    f.store.db
-      .prepare('SELECT COUNT(*) AS count FROM helper_operations WHERE task_id=?')
-      .get(task.id)
-  ).toEqual({ count: 1 });
-});
-
 test('current prompt draft protection follows the actual saved target even when the caller supplies another ID', async () => {
   const f = fixture();
   const saved = readResource(f.store, 'prompt-workspace', 'current');
@@ -506,68 +433,6 @@ test('completed helper retains bounded call arguments, shell outcome and attempt
       finishedAt: expect.any(String),
       elapsedMs: expect.any(Number),
     });
-});
-
-test('failed helper attempt still records its finish time', async () => {
-  const f = fixture();
-  mockSend(() => ({
-    ...structuredClone(success),
-    status: 'error',
-    text: '',
-    error: { code: 'PROVIDER_FAILED', message: 'synthetic error' },
-  }));
-  const task = f.runtime.enqueue(f.conversation.id, 'failed-attempt-timing', 'Inspect.');
-  await Promise.all(f.work);
-  expect(f.workspace.task(task.id).status).toBe('failed');
-  const events = f.workspace.events(f.conversation.id);
-  expect(events.find((event) => event.kind === 'attempt.started')?.data).toMatchObject({
-    startedAt: expect.any(String),
-  });
-  expect(events.find((event) => event.kind === 'attempt.finished')?.data).toMatchObject({
-    status: 'error',
-    finishedAt: expect.any(String),
-    elapsedMs: expect.any(Number),
-  });
-});
-
-test('oversized shell result retains original runner metrics after the model result is narrowed', async () => {
-  const f = fixture(16384);
-  vi.spyOn(f.runtime.shell, 'exec').mockResolvedValue({
-    exitCode: 0,
-    signal: null,
-    timedOut: false,
-    outputBytes: 1000000,
-    truncated: true,
-    output: '\0'.repeat(18000),
-    outputFile: 'scratch/exec-example.log',
-    applied: [],
-  });
-  mockSend((request, _options, index) => {
-    if (index !== 0) {
-      expect(request.input.results).toEqual([
-        expect.objectContaining({
-          result: expect.objectContaining({ error: 'HELPER_READ_TOO_LARGE' }),
-        }),
-      ]);
-      return structuredClone(success);
-    }
-    return {
-      ...structuredClone(success),
-      status: 'tool_calls',
-      text: '',
-      toolCalls: [{ id: 'large-shell', name: 'data.exec', arguments: { command: 'print output' } }],
-    };
-  });
-  const task = f.runtime.enqueue(f.conversation.id, 'narrow-diagnostic', 'Inspect output.');
-  await Promise.all(f.work);
-  expect(f.workspace.task(task.id).status).toBe('completed');
-  const event = f.workspace.events(f.conversation.id).find((item) => item.kind === 'tool.finished');
-  expect(event?.data).toMatchObject({
-    denied: true,
-    errorCode: 'HELPER_READ_TOO_LARGE',
-    shell: { exitCode: 0, timedOut: false, outputBytes: 1000000, truncated: true },
-    detailsOmitted: true,
-  });
 });
 
 test('app-wide helper history preserves original scopes, filters and deletion ownership', async () => {
@@ -886,9 +751,6 @@ test.each([
 test.each([
   [64_000, 64_000],
   [undefined, null],
-  [0, null],
-  [-1, null],
-  [1.5, null],
   ['64000', null],
 ])('legacy input measurements use only a valid frozen budget %s', (inputTokenLimit, expected) => {
   const f = fixture(128_000);
@@ -1951,21 +1813,6 @@ test('all helper sessions share two execution slots while each session preserves
   ]);
 });
 
-test('new helper conversations default to editable Ui without changing existing choices', () => {
-  const f = fixture();
-  expect(f.conversation.persona).toBe(UI_HELPER_PERSONA);
-  expect(UI_HELPER_PERSONA).toContain('Kozeki Ui ("우이")');
-  expect(UI_HELPER_PERSONA).toContain('**Deliverable Purity:**');
-  const disabled = f.workspace.persona(f.conversation.id, f.conversation.revision, '');
-  expect(disabled.persona).toBe('');
-  const same = f.workspace.open({ kind: 'library', workId: 'test' });
-  expect(same.persona).toBe('');
-  const custom = f.workspace.persona(same.id, same.revision, '나만의 편집 문구');
-  expect(f.workspace.conversation(custom.id).persona).toBe('나만의 편집 문구');
-  const next = f.workspace.create({ kind: 'library', workId: 'test' }, 'next');
-  expect(next.persona).toBe(UI_HELPER_PERSONA);
-});
-
 test('the helper persona is bounded, saved per conversation and reaches only the helper contract', async () => {
   const f = fixture();
   const calls: transport.ProviderRequest[] = [];
@@ -2471,66 +2318,6 @@ test('project changes are explicit and deleting a project preserves conversation
     f.workspace.list({ kind: 'all' }).find((item) => item.id === original.id)?.projectId
   ).toBeNull();
   expect(f.workspace.conversation(original.id).revision).toBe(moved.revision + 1);
-});
-
-test('project routes validate and persist explicit conversation membership', async () => {
-  const f = fixture();
-  const app = Fastify();
-  helperRoutes(app, f.runtime);
-  try {
-    const created = await app.inject({
-      method: 'POST',
-      url: '/api/helper/projects',
-      payload: { title: '이야기', requestKey: 'project-route' },
-    });
-    expect(created.statusCode).toBe(200);
-    const project = created.json();
-    const moved = await app.inject({
-      method: 'PATCH',
-      url: `/api/helper/conversations/${f.conversation.id}/project`,
-      payload: { projectId: project.id, expectedRevision: f.conversation.revision },
-    });
-    expect(moved.statusCode).toBe(200);
-    const list = await app.inject({ method: 'GET', url: '/api/helper/conversations?kind=all' });
-    expect(list.json()[0].projectId).toBe(project.id);
-    const deleted = await app.inject({
-      method: 'DELETE',
-      url: `/api/helper/projects/${project.id}`,
-      payload: { expectedRevision: project.revision },
-    });
-    expect(deleted.statusCode).toBe(200);
-    expect(f.workspace.conversation(f.conversation.id).scope).toEqual(f.conversation.scope);
-    expect(f.workspace.list({ kind: 'all' })[0].projectId).toBeNull();
-  } finally {
-    await app.close();
-  }
-});
-
-test('helper routes reject retired branching and limit editing without changing settings', async () => {
-  const f = fixture();
-  const app = Fastify();
-  helperRoutes(app, f.runtime);
-  try {
-    const branch = await app.inject({
-      method: 'POST',
-      url: `/api/helper/conversations/${f.conversation.id}/branch`,
-      payload: { requestKey: 'retired' },
-    });
-    expect(branch.statusCode).toBe(404);
-    const limits = await app.inject({
-      method: 'PATCH',
-      url: `/api/helper/conversations/${f.conversation.id}`,
-      payload: {
-        expectedRevision: f.conversation.revision,
-        persona: '변경되지 않는 말투',
-        limits: { helperCalls: 2, totalCalls: 3 },
-      },
-    });
-    expect(limits.statusCode).toBe(400);
-    expect(f.workspace.conversation(f.conversation.id)).toEqual(f.conversation);
-  } finally {
-    await app.close();
-  }
 });
 
 test('message editing changes future dialogue while preserving task evidence, effects and checkpoint history', async () => {

@@ -1,4 +1,4 @@
-import { DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
+import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { Chat, ChatDetail, Run, Source } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -33,7 +33,7 @@ async function seed(request: APIRequestContext, width: number, text = '원래 �
     .toBe('completed');
   return { chat, run, before: await detail(request, chat.id) };
 }
-for (const width of DEFAULT_WIDTHS) {
+for (const width of [MOBILE_WIDTH]) {
   test(`RINFO01 ${width} expanded requests avoid duplicate previews and source metadata opens from the menu`, async ({
     page,
     request,

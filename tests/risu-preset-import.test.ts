@@ -61,28 +61,7 @@ const sourceOf = (value: unknown) => ({
   base64: Buffer.from(JSON.stringify(value)).toString('base64'),
 });
 
-test('native variable writes and output regex import without conversion or loss', () => {
-  const { store } = fixture();
-  const source = sourceOf({
-    ...document(),
-    promptTemplate: [{ type: 'plain', role: 'system', text: '{{setvar::x::1}}' }],
-    regex: [{ type: 'editoutput', in: 'x', out: 'y' }],
-  });
-  const preview = prepareRisuPresetImport({ source });
-  const command = {
-    source,
-    digest: preview.digest,
-    allowPartial: false,
-    idempotencyKey: 'partial',
-  };
-  const result = applyRisuPresetImport(store, command);
-  expect(result.preset.program).not.toHaveProperty('blocks');
-  expect(result.preset.program.nativeRisuPreset?.preset.regex).toEqual([
-    { type: 'editoutput', in: 'x', out: 'y' },
-  ]);
-});
-
-test('supported preset text stages import without partial consent and preserve original bytes', () => {
+test('supported preset text stages and regex import without partial consent and preserve original bytes', () => {
   const { store } = fixture();
   const source = sourceOf({
     ...document(),

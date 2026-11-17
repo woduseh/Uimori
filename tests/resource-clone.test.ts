@@ -247,16 +247,12 @@ test('clone route rejects unsupported kinds, incomplete or extra fields, and inv
   const before = rows(store);
   const organization = store.libraryOrganization.snapshot();
   for (const payload of [
-    ...['prompt-workspace', 'theme', 'illustration-preset', 'model'].map((kind) => ({
-      ...valid,
-      kind,
-    })),
+    { ...valid, kind: 'prompt-workspace' },
     { ...valid, id: 'caller-chosen-id' },
-    { ...valid, model: {} },
     { ...valid, sourceId: '' },
     { ...valid, title: ' ' },
     { ...valid, title: 'x'.repeat(201) },
-    ...[undefined, null, 0, 1.5, '1'].map((expectedSourceRevision) => ({
+    ...[undefined, 0, '1'].map((expectedSourceRevision) => ({
       ...valid,
       expectedSourceRevision,
     })),

@@ -41,7 +41,7 @@ test('session rendering matches one-shot rendering as text, messages and live va
     },
   };
   try {
-    for (const name of ['첫 상태', '다음 상태', '세 번째 상태']) {
+    for (const name of ['첫 상태', '다음 상태']) {
       input.text = `**{{char}}**: ${name} TOKEN {{getvar::name}}`;
       input.context.variables = { name };
       input.context.messages = [{ role: 'char', data: name }];

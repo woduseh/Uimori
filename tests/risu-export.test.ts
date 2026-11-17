@@ -267,10 +267,9 @@ test('CHARX icon/main takes precedence over other main assets on either side', a
       ])
     )
   );
-  const preview = await prepareStoredRisuImport(store.path, { source: input });
+  const preview = prepareRisuImport({ source: input });
   const result = await applyRisuImport(store, {
     source: input,
-    preparedId: preview.preparedId,
     digest: preview.digest,
     allowPartial: false,
     createChat: false,

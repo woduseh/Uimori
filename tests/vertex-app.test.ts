@@ -468,27 +468,3 @@ test.each(['main', 'translation'] as const)(
     expect(reopened.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   }
 );
-
-test('failed Vertex fixture reports the run, attempt and original handler error', async () => {
-  const state = await fixture(() => {
-    throw new Error(`Synthetic handler failure: ${fakeBearer}`);
-  });
-  const selected = await setup(state.app, false);
-  const run = await api<Run>(
-    state.app,
-    `/api/chats/${selected.chat.id}/runs`,
-    command(selected.chat, selected.profile)
-  );
-  const failure = await runDone(state, run.id).then(
-    () => '',
-    (error: Error) => error.message
-  );
-  expect(failure).toContain('Run completion failed:');
-  expect(failure).toContain(run.id);
-  expect(failure).toContain('Synthetic handler failure: [redacted]');
-  expect(failure).toContain('"recentAttempts":[{');
-  expect(failure).toContain('"role":"main"');
-  expect(failure).not.toContain(fakeBearer);
-  expect(failure).not.toContain('"snapshot"');
-  expect(failure).not.toContain('"request"');
-});

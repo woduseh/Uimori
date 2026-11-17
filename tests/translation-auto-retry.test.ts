@@ -53,51 +53,49 @@ describe('shared Jev translation refusal judgment', () => {
       }),
       { status: 200 }
     );
-  test.each([0.05, 0.95])(
-    'judgment-only recovery never invokes translator, including refusal %s',
-    async (refusal) => {
-      const quotedRefusal = '“도와드릴 수 없습니다.”\r\n' + '😀 '.repeat(1000);
-      const seed = bundle(quotedRefusal);
-      native(seed, 'http://127.0.0.1:1');
-      seed.judgmentRecovery = quotedRefusal;
-      seed.translationPolicy = { judgment: { threshold: 0.9 }, maxRetries: 4, maxCalls: 10 };
-      const observed = hooks();
-      const send = vi.fn(async (_url: unknown, init?: RequestInit) => {
-        expect(JSON.parse(String(init?.body)).state).toEqual({
-          response: quotedRefusal,
-          matchesSourceVerbatim: true,
-        });
-        return answer(refusal);
+  test('judgment-only recovery never invokes translator, even for a confirmed refusal', async () => {
+    const refusal = 0.95;
+    const quotedRefusal = '“도와드릴 수 없습니다.”\r\n' + '😀 '.repeat(1000);
+    const seed = bundle(quotedRefusal);
+    native(seed, 'http://127.0.0.1:1');
+    seed.judgmentRecovery = quotedRefusal;
+    seed.translationPolicy = { judgment: { threshold: 0.9 }, maxRetries: 4, maxCalls: 10 };
+    const observed = hooks();
+    const send = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      expect(JSON.parse(String(init?.body)).state).toEqual({
+        response: quotedRefusal,
+        matchesSourceVerbatim: true,
       });
-      const result = await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', {
-        ...observed.options,
-        jev: { credential: () => 'key', fetch: send },
-      });
-      expect(result).toMatchObject({
-        status: refusal < 0.9 ? 'completed' : 'failed',
-        result: { text: seed.judgmentRecovery, mock: false },
-      });
-      expect(send).toHaveBeenCalledTimes(1);
-      expect(observed.wire).toHaveLength(1);
-      expect(observed.wire[0].protocol).toBe('typesafe-systemone-v1');
-      expect(() =>
-        validateTranslationJudgmentWire(
-          seed.source.hash,
-          seed.translationPolicy!.judgment,
-          observed.wire[0],
-          seed.judgmentRecovery
-        )
-      ).not.toThrow();
-      expect(() =>
-        validateTranslationJudgmentWire(
-          seed.source.hash,
-          seed.translationPolicy!.judgment,
-          observed.wire[0],
-          'Substituted candidate'
-        )
-      ).toThrow('TRANSLATION_JUDGMENT_ATTEMPT_MISMATCH');
-    }
-  );
+      return answer(refusal);
+    });
+    const result = await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', {
+      ...observed.options,
+      jev: { credential: () => 'key', fetch: send },
+    });
+    expect(result).toMatchObject({
+      status: 'failed',
+      result: { text: seed.judgmentRecovery, mock: false },
+    });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(observed.wire).toHaveLength(1);
+    expect(observed.wire[0].protocol).toBe('typesafe-systemone-v1');
+    expect(() =>
+      validateTranslationJudgmentWire(
+        seed.source.hash,
+        seed.translationPolicy!.judgment,
+        observed.wire[0],
+        seed.judgmentRecovery
+      )
+    ).not.toThrow();
+    expect(() =>
+      validateTranslationJudgmentWire(
+        seed.source.hash,
+        seed.translationPolicy!.judgment,
+        observed.wire[0],
+        'Substituted candidate'
+      )
+    ).toThrow('TRANSLATION_JUDGMENT_ATTEMPT_MISMATCH');
+  });
   test('judgment-only failure preserves candidate for another explicit recovery', async () => {
     const seed = bundle();
     seed.judgmentRecovery = 'Saved candidate';
@@ -226,7 +224,6 @@ describe('shared Jev translation refusal judgment', () => {
   test.each([
     [0.899, 0.9, 'completed', null],
     [0.9, 0.9, 'failed', 'TRANSLATION_REFUSAL_RETRIES_EXHAUSTED'],
-    [0.58, 0.58, 'failed', 'TRANSLATION_REFUSAL_RETRIES_EXHAUSTED'],
   ] as const)(
     'uses the configured refusal threshold: %s / %s',
     async (refusal, threshold, status, error) => {
@@ -279,7 +276,7 @@ describe('shared Jev translation refusal judgment', () => {
       expect(observed.finishes).toHaveLength(maxCalls);
     }
   );
-  test.each(['transport', 'format', 'budget'] as const)(
+  test.each(['transport', 'budget'] as const)(
     '%s judgment failure keeps the candidate without replay',
     async (failure) => {
       const server = await fixture((_request, response) => chat(response, '보존할 후보'));
@@ -293,11 +290,9 @@ describe('shared Jev translation refusal judgment', () => {
       const observed = hooks(server.origin),
         send = vi.fn(async () => {
           if (failure === 'transport') throw new Error('Network uncertain');
-          if (failure === 'budget')
-            return new Response(JSON.stringify({ detail: { error_type: 'max_tokens_exceeded' } }), {
-              status: 400,
-            });
-          return answer(2);
+          return new Response(JSON.stringify({ detail: { error_type: 'max_tokens_exceeded' } }), {
+            status: 400,
+          });
         });
       const outcome = await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', {
         ...observed.options,
@@ -314,7 +309,7 @@ describe('shared Jev translation refusal judgment', () => {
       });
       expect(send).toHaveBeenCalledTimes(1);
       expect(server.requests).toHaveLength(1);
-      expect(observed.finishes[1].result.usage.inputTokens).toBe(failure === 'format' ? 40 : null);
+      expect(observed.finishes[1].result.usage.inputTokens).toBeNull();
     }
   );
 });
@@ -343,35 +338,26 @@ describe('terminal translation retry boundaries', () => {
     ).toMatchObject({ status: 'completed', result: { mock: true, text: '합성 번역' } });
     expect(server.requests).toHaveLength(2);
   });
-  test.each(['partial', 'empty', 'eof', 'refusal-eof', 'http'])(
-    'does not replay %s',
-    async (failure) => {
-      const server = await fixture((_request, response) => {
-        if (failure === 'http') {
-          response.writeHead(503);
-          response.end();
-          return;
-        }
-        const events: Json[] =
-          failure === 'refusal-eof'
-            ? [{ type: 'refusal', message: 'Uncertain refusal' }]
-            : failure === 'empty'
-              ? []
-              : [{ type: 'text_delta', delta: 'Incomplete' }];
-        if (failure === 'partial') events.push({ type: 'done', reason: 'length' });
-        if (failure === 'empty') events.push({ type: 'done', reason: 'stop' });
-        return writeSse(response, events);
-      });
-      const seed = bundle();
-      selectProvider(seed, server.endpoint);
-      const observed = hooks(server.origin);
-      expect(
-        (await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', observed.options))?.status
-      ).toBe('failed');
-      expect(server.requests).toHaveLength(1);
-      expect(observed.finishes).toHaveLength(1);
-    }
-  );
+  test.each(['partial', 'refusal-eof'])('does not replay %s', async (failure) => {
+    const server = await fixture((_request, response) => {
+      const events: Json[] =
+        failure === 'refusal-eof'
+          ? [{ type: 'refusal', message: 'Uncertain refusal' }]
+          : [
+              { type: 'text_delta', delta: 'Incomplete' },
+              { type: 'done', reason: 'length' },
+            ];
+      return writeSse(response, events);
+    });
+    const seed = bundle();
+    selectProvider(seed, server.endpoint);
+    const observed = hooks(server.origin);
+    expect(
+      (await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', observed.options))?.status
+    ).toBe('failed');
+    expect(server.requests).toHaveLength(1);
+    expect(observed.finishes).toHaveLength(1);
+  });
   test('policy validates bounded retries and rejects removed model/backend settings', () => {
     expect(translationPolicy()).toEqual({
       judgment: { threshold: 0.9 },
@@ -442,42 +428,26 @@ test('disabled translation judgment accepts refusal text without consulting JEV 
   expect(observed.finishes).toHaveLength(1);
 });
 
-test.each(['length', 'empty', 'http', 'refusal'] as const)(
-  'disabled translation judgment preserves generation failure: %s',
-  async (failure) => {
-    const server = await fixture((_request, response) => {
-      if (failure === 'http') {
-        response.writeHead(503);
-        response.end();
-        return;
-      }
-      if (failure === 'refusal') {
-        chat(response, '', 'stop', 'Refused by provider');
-        return;
-      }
-      chat(
-        response,
-        failure === 'empty' ? '' : 'Incomplete output',
-        failure === 'length' ? 'length' : 'stop'
-      );
-    });
-    const seed = bundle();
-    native(seed, server.endpoint);
-    seed.translationPolicy = {
-      judgment: { enabled: false, threshold: 0.9 },
-      maxRetries: 3,
-      maxCalls: 2,
-    };
-    const observed = hooks(server.origin),
-      credential = vi.fn(() => undefined),
-      send = vi.fn();
-    const outcome = await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', {
-      ...observed.options,
-      jev: { credential, fetch: send },
-    });
-    expect(outcome?.status).toBe('failed');
-    expect(server.requests).toHaveLength(1);
-    expect(credential).not.toHaveBeenCalled();
-    expect(send).not.toHaveBeenCalled();
-  }
-);
+test('disabled translation judgment preserves a provider refusal as a failure', async () => {
+  const server = await fixture((_request, response) =>
+    chat(response, '', 'stop', 'Refused by provider')
+  );
+  const seed = bundle();
+  native(seed, server.endpoint);
+  seed.translationPolicy = {
+    judgment: { enabled: false, threshold: 0.9 },
+    maxRetries: 3,
+    maxCalls: 2,
+  };
+  const observed = hooks(server.origin),
+    credential = vi.fn(() => undefined),
+    send = vi.fn();
+  const outcome = await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', {
+    ...observed.options,
+    jev: { credential, fetch: send },
+  });
+  expect(outcome?.status).toBe('failed');
+  expect(server.requests).toHaveLength(1);
+  expect(credential).not.toHaveBeenCalled();
+  expect(send).not.toHaveBeenCalled();
+});

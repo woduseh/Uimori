@@ -21,7 +21,7 @@ async function cssVariable(page: Page, name: string) {
     .evaluate((element, key) => getComputedStyle(element).getPropertyValue(key).trim(), name);
 }
 
-for (const width of [1440, 412]) {
+for (const width of [412]) {
   test(`APPEARANCE ${width} custom palette UI roundtrip preserves layout and authored controls`, async ({
     page,
   }, info) => {

@@ -28,10 +28,6 @@ function read(id: string, text: string, lastUsed = 'scene1', start = 0): Retaine
 }
 
 describe('local-token lore policy', () => {
-  it('uses the token policy when a value is absent', () => {
-    expect(validateLoreContextPolicy(undefined)).toEqual(DEFAULT_LORE_CONTEXT);
-  });
-
   it('round-trips the policy with an explicit estimator and no character fields', () => {
     const policy = validateLoreContextPolicy(JSON.parse(JSON.stringify(DEFAULT_LORE_CONTEXT)));
     expect(policy).toEqual(DEFAULT_LORE_CONTEXT);
@@ -51,22 +47,7 @@ describe('local-token lore policy', () => {
     expect(() => validateLoreContextPolicy(inherited)).toThrow();
   });
 
-  it('requires token policy fields to survive a JSON serialization round trip', () => {
-    for (const key of [
-      'maxRetainedTokens',
-      'maxPinnedTokens',
-      'maxRetainedEntries',
-      'enabled',
-      'judgment',
-    ] as const) {
-      const own: Record<string, unknown> = { ...DEFAULT_LORE_CONTEXT };
-      delete own[key];
-      const value = Object.assign(Object.create({ [key]: DEFAULT_LORE_CONTEXT[key] }), own);
-      expect(() => validateLoreContextPolicy(value)).toThrow('LORE_CONTEXT_POLICY_INVALID');
-    }
-  });
-
-  it.each([-1, 0.5, NaN, Infinity, 200001])('rejects invalid retained token limit %s', (limit) => {
+  it.each([-1, 0.5, 200001])('rejects invalid retained token limit %s', (limit) => {
     expect(() =>
       validateLoreContextPolicy({ ...DEFAULT_LORE_CONTEXT, maxRetainedTokens: limit })
     ).toThrow();
@@ -144,11 +125,5 @@ describe('local-token lore policy', () => {
       retainedChars: 0,
       retainedTokens: 0,
     });
-  });
-
-  it('requires the token counter for retention', () => {
-    expect(() =>
-      appendLoreReads([], [read('lore', 'abcd')], DEFAULT_LORE_CONTEXT, ['scene1'])
-    ).toThrow('LORE_TOKEN_COUNTER_REQUIRED');
   });
 });

@@ -48,7 +48,7 @@ async function setup() {
   return { app, bot, create, rename };
 }
 
-test('manual title API rejects stale revisions including A to B to A and records same-title intent', async () => {
+test('manual title API validates input and rejects stale revisions including A to B to A', async () => {
   const { app, create, rename } = await setup();
   const chat = await create();
   expect(chat.titleRevision).toBe(0);
@@ -62,28 +62,18 @@ test('manual title API rejects stale revisions including A to B to A and records
   expect(a.statusCode).toBe(200);
   expect(a.json<Chat>().titleRevision).toBeGreaterThan(b.json<Chat>().titleRevision!);
   expect((await rename(chat, 'Stale', 0)).statusCode).toBe(409);
-  expect(app.store.chat(chat.id).title).toBe('A');
+  const current = app.store.chat(chat.id);
+  expect(current.title).toBe('A');
   expect(
     app.store.db
       .prepare("SELECT COUNT(*) AS n FROM events WHERE chat_id=? AND kind='chat.title.manual'")
       .get(chat.id)
   ).toEqual({ n: 3 });
-});
-
-test('manual title API validates text and revision without mutating state', async () => {
-  const { app, create, rename } = await setup();
-  const chat = await create();
-  for (const title of ['', '   ']) expect((await rename(chat, title)).statusCode).toBe(400);
-  for (const expectedTitleRevision of [-1, 0.5, '0', null]) {
-    const response = await app.inject({
-      method: 'PATCH',
-      url: `/api/chats/${chat.id}/title`,
-      payload: { title: 'Changed', expectedTitleRevision },
-    });
-    expect(response.statusCode).toBe(400);
-  }
-  expect(app.store.chat(chat.id)).toEqual(chat);
-  const accepted = await rename(chat, 'x'.repeat(240));
+  expect((await rename(current, '   ')).statusCode).toBe(400);
+  expect((await rename(current, 'Changed', -1)).statusCode).toBe(400);
+  expect((await rename(current, 'Changed', '0' as never)).statusCode).toBe(400);
+  expect(app.store.chat(chat.id)).toEqual(current);
+  const accepted = await rename(current, 'x'.repeat(240));
   expect(accepted.statusCode).toBe(200);
   expect(accepted.json<Chat>().title).toHaveLength(240);
 });

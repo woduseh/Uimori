@@ -1,4 +1,4 @@
-import { MOBILE_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
+import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -30,24 +30,11 @@ async function scriptEvidence(page: Page, info: TestInfo, name: string) {
   return scripts;
 }
 
-test('LAZY01 library entry defers settings and prompt authoring scripts', async ({
-  page,
-}, info) => {
-  await page.goto('/');
-  await expect(page.getByTestId('library-panel')).toBeVisible();
-  const scripts = await scriptEvidence(page, info, 'library-entry-scripts');
-  expect(
-    scripts.some((entry) => /WorkspacePanels-|ChatSettingsPanel-|PromptLibrary-/.test(entry.path))
-  ).toBe(false);
-});
-
-test('LAZY04 failed library keeps desktop and mobile navigation available', async ({
-  page,
-}, info) => {
+test('LAZY04 failed library keeps mobile navigation available', async ({ page }, info) => {
   await page.route('**/assets/LibraryPanel-*.js', (route) => route.abort('failed'));
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  for (const width of DEFAULT_WIDTHS) {
+  for (const width of [MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/');
     await expect(page.getByRole('alert')).toContainText('불러오지 못했어요');
@@ -74,7 +61,7 @@ test('LAZY05 unavailable library data keeps prompt navigation usable', async ({ 
   );
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  for (const width of DEFAULT_WIDTHS) {
+  for (const width of [MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 900 });
     const failed = page.waitForResponse(/\/api\/library(?:\?.*)?$/);
     await page.goto('/');

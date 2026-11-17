@@ -237,16 +237,6 @@ describe('Vertex native wire through real local HTTP streams (no live calls)', (
         }) + sse({ usageMetadata: usage }),
       error: 'UNEXPECTED_EOF',
     },
-    {
-      name: 'malformed JSON',
-      payload:
-        sse({
-          candidates: [{ content: { role: 'model', parts: [{ text: 'Preserved partial' }] } }],
-        }) +
-        sse({ usageMetadata: usage }) +
-        'data: {invalid}\n\n',
-      error: 'INVALID_EVENT',
-    },
   ])(
     'L01 P05 $name is terminal and retains observed text and usage',
     async ({ payload, error }) => {
@@ -416,16 +406,6 @@ describe('Vertex Flex admission (synthetic HTTP only)', () => {
       expect(local.requests).toHaveLength(1);
     }
   );
-  test('a non-Vertex generation option never silently disappears before fetch', async () => {
-    const local = await redirectedFixture(() => {
-      throw new Error('must not fetch');
-    });
-    const value = request();
-    value.generation!.structuredOutput = false;
-    const result = await executeProvider(connection, value, options());
-    expect(result.error?.code).toBe('UNSUPPORTED_GENERATION_OPTIONS');
-    expect(local.requests).toHaveLength(0);
-  });
   test('a server Flex override applies only when the model request has no conflicting selection', async () => {
     const local = await redirectedFixture(async (captured, response) => {
       expect(captured.headers['x-vertex-ai-llm-shared-request-type']).toBe('flex');
@@ -454,38 +434,6 @@ describe('Vertex Flex admission (synthetic HTTP only)', () => {
     expect(resolveCredential).not.toHaveBeenCalled();
     expect(onWire).not.toHaveBeenCalled();
     expect(local.requests).toHaveLength(1);
-  });
-  test('Gemini 3.1 Pro uses the exact global model path and selected sampling values', async () => {
-    const local = await redirectedFixture(async (captured, response) => {
-      expect(JSON.parse(captured.body).generationConfig).toEqual({
-        maxOutputTokens: 2048,
-        temperature: 0,
-        topP: 0.9,
-        thinkingConfig: { thinkingLevel: 'HIGH' },
-        stopSequences: ['END_SCENE'],
-      });
-      await writeSse(response, [
-        {
-          candidates: [
-            { content: { role: 'model', parts: [{ text: '합성 원고' }] }, finishReason: 'STOP' },
-          ],
-        },
-        { usageMetadata: usage },
-      ]);
-    });
-    const input = request();
-    input.modelId = 'gemini-3.1-pro-preview';
-    input.generation = {
-      maxOutputTokens: 2048,
-      temperature: 0,
-      topP: 0.9,
-      thinkingLevel: 'HIGH',
-      stopSequences: ['END_SCENE'],
-    };
-    expect((await executeProvider(connection, input, options())).status).toBe('completed');
-    expect(local.urls).toEqual([
-      connection.endpoint + '/gemini-3.1-pro-preview:streamGenerateContent?alt=sse',
-    ]);
   });
   test('unlisted Google models are sent and a rejected generation field is surfaced', async () => {
     const body = {

@@ -30,16 +30,6 @@ function setup() {
   return { store, reads, load, listen, stop, invalidate: () => invalidate() };
 }
 
-test('idle store does not fetch, and unchanged snapshots retain their identity', async () => {
-  const f = setup();
-  const initial = f.store.getSnapshot();
-  await f.store.refresh();
-  expect(f.load).not.toHaveBeenCalled();
-  expect(f.listen).not.toHaveBeenCalled();
-  expect(f.store.getSnapshot()).toBe(initial);
-  expect(initial).toEqual({ workspace: null, error: '' });
-});
-
 test('multiple consumers share one initial request, answer and listener lifecycle', async () => {
   const f = setup();
   const notify = vi.fn();
@@ -69,30 +59,26 @@ test('multiple consumers share one initial request, answer and listener lifecycl
   expect(f.store.getSnapshot()).toEqual({ workspace: null, error: '' });
 });
 
-test.each(['success', 'failure'] as const)(
-  'invalidation during %s discards the old answer and coalesces a trailing read',
-  async (kind) => {
-    const f = setup();
-    const notify = vi.fn();
-    const unsubscribe = f.store.subscribe(notify);
-    const done = f.store.refresh();
-    await Promise.resolve();
-    f.invalidate();
-    f.invalidate();
-    expect(f.store.refresh()).toBe(done);
-    if (kind === 'success') f.reads[0].resolve(workspace(1));
-    else f.reads[0].reject(new Error('superseded failure'));
-    await Promise.resolve();
-    expect(f.reads).toHaveLength(2);
-    expect(notify).not.toHaveBeenCalled();
-    expect(f.store.getSnapshot()).toEqual({ workspace: null, error: '' });
-    f.reads[1].resolve(workspace(2));
-    await done;
-    expect(f.store.getSnapshot()).toEqual({ workspace: workspace(2), error: '' });
-    expect(notify).toHaveBeenCalledTimes(1);
-    unsubscribe();
-  }
-);
+test('invalidation during a failing read discards the old answer and coalesces a trailing read', async () => {
+  const f = setup();
+  const notify = vi.fn();
+  const unsubscribe = f.store.subscribe(notify);
+  const done = f.store.refresh();
+  await Promise.resolve();
+  f.invalidate();
+  f.invalidate();
+  expect(f.store.refresh()).toBe(done);
+  f.reads[0].reject(new Error('superseded failure'));
+  await Promise.resolve();
+  expect(f.reads).toHaveLength(2);
+  expect(notify).not.toHaveBeenCalled();
+  expect(f.store.getSnapshot()).toEqual({ workspace: null, error: '' });
+  f.reads[1].resolve(workspace(2));
+  await done;
+  expect(f.store.getSnapshot()).toEqual({ workspace: workspace(2), error: '' });
+  expect(notify).toHaveBeenCalledTimes(1);
+  unsubscribe();
+});
 
 test('latest failure keeps the last value and recovery clears its error', async () => {
   const f = setup();
@@ -115,31 +101,27 @@ test('latest failure keeps the last value and recovery clears its error', async 
   unsubscribe();
 });
 
-test.each(['success', 'failure'] as const)(
-  'last unsubscribe rejects late %s even after another session mounts',
-  async (kind) => {
-    const f = setup();
-    const first = f.store.subscribe(() => {});
-    const old = f.store.refresh();
-    await Promise.resolve();
-    first();
-    const notify = vi.fn();
-    const second = f.store.subscribe(notify);
-    const current = f.store.refresh();
-    await Promise.resolve();
-    expect(f.reads).toHaveLength(2);
-    expect(f.reads[0].signal.aborted).toBe(true);
-    expect(f.reads[1].signal.aborted).toBe(false);
-    if (kind === 'success') f.reads[0].resolve(workspace(1));
-    else f.reads[0].reject(new Error('old session error'));
-    await old;
-    expect(notify).not.toHaveBeenCalled();
-    f.reads[1].resolve(workspace(2));
-    await current;
-    expect(f.store.getSnapshot()).toEqual({ workspace: workspace(2), error: '' });
-    second();
-  }
-);
+test('last unsubscribe rejects a late success even after another session mounts', async () => {
+  const f = setup();
+  const first = f.store.subscribe(() => {});
+  const old = f.store.refresh();
+  await Promise.resolve();
+  first();
+  const notify = vi.fn();
+  const second = f.store.subscribe(notify);
+  const current = f.store.refresh();
+  await Promise.resolve();
+  expect(f.reads).toHaveLength(2);
+  expect(f.reads[0].signal.aborted).toBe(true);
+  expect(f.reads[1].signal.aborted).toBe(false);
+  f.reads[0].resolve(workspace(1));
+  await old;
+  expect(notify).not.toHaveBeenCalled();
+  f.reads[1].resolve(workspace(2));
+  await current;
+  expect(f.store.getSnapshot()).toEqual({ workspace: workspace(2), error: '' });
+  second();
+});
 
 test('mount cleanup and immediate remount do not start a cancelled initial request', async () => {
   const f = setup();

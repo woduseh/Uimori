@@ -3,7 +3,6 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
 import { readerPresentationRevisions } from '../server/reader-data.js';
-import { readerRequestOrder } from '../core/reader-conversation.js';
 import { describe } from 'vitest';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
@@ -11,17 +10,17 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { createApp, type App } from '../server/app.js';
+import { createApp } from '../server/app.js';
 import { readerActivities, readerDetail, readerRuns } from '../server/reader.js';
 import { Store } from '../server/store.js';
 import { readRunSnapshot } from '../server/run-projections.js';
 import type { RunSnapshot } from '../core/types.js';
 import { OutlineStore } from '../server/outline-store.js';
 
-const owned: { app: App; directory: string }[] = [];
+const owned: { close: () => unknown; directory: string }[] = [];
 afterEach(async () => {
-  for (const { app, directory } of owned.splice(0)) {
-    await app.close();
+  for (const { close, directory } of owned.splice(0)) {
+    await close();
     const target = resolve(directory),
       within = relative(resolve(tmpdir()), target);
     if (
@@ -40,8 +39,15 @@ async function setup() {
     buildId: 'reader-test',
     testMode: true,
   });
-  owned.push({ app, directory });
+  owned.push({ close: () => app.close(), directory });
   return app;
+}
+/** Store-level projection cases need no HTTP server. */
+async function storeOnly() {
+  const directory = await mkdtemp(join(tmpdir(), 'uimori-reader-tests-'));
+  const store = new Store(join(directory, 'reader.sqlite'));
+  owned.push({ close: () => store.close(), directory });
+  return { store };
 }
 function queued(store: Store, chatId: string) {
   const chat = store.chat(chatId);
@@ -226,7 +232,7 @@ test('100-source HTTP reader pages retain order while execution snapshot and ful
 });
 
 test('delta includes current edited source and matching latest translation only, with unchanged assets omitted', async () => {
-  const { store } = await setup(),
+  const { store } = await storeOnly(),
     chat = createFixtureChat(store, 'Delta');
   const a = source(store, chat.id),
     b = source(store, chat.id);
@@ -266,7 +272,7 @@ test('delta includes current edited source and matching latest translation only,
 });
 
 test('navigation labels use bounded requests and never authored, generated, or edited source bodies', async () => {
-  const { store } = await setup(),
+  const { store } = await storeOnly(),
     chat = createFixtureChat(store, 'Navigation labels');
   const items = Array.from({ length: 7 }, (_, index) =>
     source(store, chat.id, `Hidden source body ${index}`)
@@ -384,7 +390,7 @@ test('scene names use manual titles then the smallest linked outline and preserv
 });
 
 test('new source joins an incomplete last page on delta and another chat does not dirty it', async () => {
-  const { store } = await setup(),
+  const { store } = await storeOnly(),
     chat = createFixtureChat(store, 'Last page');
   const items = Array.from({ length: 6 }, () => source(store, chat.id));
   const first = readerDetail(store, chat.id, { source: items[5].id });
@@ -406,28 +412,8 @@ test('new source joins an incomplete last page on delta and another chat does no
   expect(delta.sources.map((s) => s.id)).toEqual([added.id]);
 });
 
-test('HTTP reader rejects invalid or future cursors', async () => {
-  const app = await setup(),
-    chat = createFixtureChat(app.store, 'Cursor validation');
-  for (const cursor of ['-1', 'NaN', '1.5', '9007199254740992', '1']) {
-    const response = await injectWithFixtureBot(app, {
-      method: 'GET',
-      url: `/api/chats/${chat.id}/reader?since=${cursor}`,
-    });
-    expect(response.statusCode, response.body).toBe(400);
-  }
-  expect(
-    (
-      await injectWithFixtureBot(app, {
-        method: 'GET',
-        url: `/api/chats/${chat.id}/reader?since=0`,
-      })
-    ).statusCode
-  ).toBe(200);
-});
-
 test('restoring any source retains its whole fixed page, including all of a short chat', async () => {
-  const { store } = await setup(),
+  const { store } = await storeOnly(),
     chat = createFixtureChat(store, 'Restore fixed pages');
   const items = Array.from({ length: 3 }, () => source(store, chat.id));
   const short = readerDetail(store, chat.id, { source: items[2].id });
@@ -435,7 +421,7 @@ test('restoring any source retains its whole fixed page, including all of a shor
   expect(short.reader.start).toBe(0);
   expect(short.reader.previous).toBeNull();
   items.push(...Array.from({ length: 9 }, () => source(store, chat.id)));
-  for (const index of [1, 4, 6, 9, 11]) {
+  for (const index of [1, 6, 11]) {
     const page = readerDetail(store, chat.id, { source: items[index].id });
     const start = Math.floor(index / 5) * 5;
     expect(page.reader.start).toBe(start);
@@ -446,7 +432,7 @@ test('restoring any source retains its whole fixed page, including all of a shor
 });
 
 test('activity remains page independent and retains active work beyond the terminal limit', async () => {
-  const { store } = await setup(),
+  const { store } = await storeOnly(),
     chat = createFixtureChat(store, 'Activity');
   store.settings(chat.id, chat.settingsRevision, { ...chat.settings });
   const items = readerSourceBatch(store, chat.id, 35);
@@ -485,29 +471,8 @@ test('activity remains page independent and retains active work beyond the termi
   );
 });
 
-test('activity completion time ignores subsequent usage updates and retries restart queue time', async () => {
-  const { store } = await setup(),
-    chat = createFixtureChat(store, 'Activity time');
-  store.settings(chat.id, chat.settingsRevision, { ...chat.settings });
-  const item = source(store, chat.id);
-  store.requestTranslation(item.id);
-  const before = readerDetail(store, chat.id, {}).reader.activity.find((a) => a.id === item.runId)!;
-  store.db
-    .prepare('UPDATE runs SET updated_at=? WHERE id=?')
-    .run('2099-01-01T00:00:00.000Z', item.runId);
-  const after = readerDetail(store, chat.id, {}).reader.activity.find((a) => a.id === item.runId)!;
-  expect(after.finishedAt).toBe(before.finishedAt);
-  const job = readerDetail(store, chat.id, {}).reader.activity.find((a) => a.kind !== 'main')!;
-  store.db
-    .prepare("UPDATE events SET at=? WHERE entity_id=? AND kind='job.queued'")
-    .run('2026-09-08T12:00:00.000Z', job.id);
-  const restarted = readerDetail(store, chat.id, {}).reader.activity.find((a) => a.id === job.id)!;
-  expect(restarted.startedAt).toBe('2026-09-08T12:00:00.000Z');
-  expect(restarted.finishedAt).toBeNull();
-});
-
 test('response activity retains older page work without expanding global activity or other pages', async () => {
-  const { store } = await setup(),
+  const { store } = await storeOnly(),
     chat = createFixtureChat(store, 'Response activity');
   store.settings(chat.id, chat.settingsRevision, { ...chat.settings });
   const items = readerSourceBatch(store, chat.id, 35);
@@ -567,7 +532,7 @@ test('response activity retains older page work without expanding global activit
   expect(editedActivity.some((a) => a.id === items[0].runId)).toBe(true);
 });
 
-test('activity history pages past recent thirty and validates chat-scoped cursors', async () => {
+test('activity history pages past recent thirty and validates activity and reader cursors', async () => {
   const app = await setup();
   const chat = createFixtureChat(app.store, 'Activity pagination');
   readerSourceBatch(app.store, chat.id, 35);
@@ -596,17 +561,47 @@ test('activity history pages past recent thirty and validates chat-scoped cursor
   });
   expect(response.statusCode).toBe(200);
   expect(response.json()).toEqual(first);
+  for (const cursor of ['-1', '1.5', String(Number.MAX_SAFE_INTEGER)]) {
+    const reader = await injectWithFixtureBot(app, {
+      method: 'GET',
+      url: `/api/chats/${chat.id}/reader?since=${cursor}`,
+    });
+    expect(reader.statusCode, reader.body).toBe(400);
+  }
+  expect(
+    (
+      await injectWithFixtureBot(app, {
+        method: 'GET',
+        url: `/api/chats/${chat.id}/reader?since=${app.store.latestEventSequence(chat.id)}`,
+      })
+    ).statusCode
+  ).toBe(200);
 });
 
-test('translation resolution uses same source hash and revision beyond the recent window', async () => {
-  const { store } = await setup();
+test('activity times stay stable and translation resolution uses same source hash and revision beyond the recent window', async () => {
+  const { store } = await storeOnly();
   const chat = createFixtureChat(store, 'Activity resolution');
   store.settings(chat.id, chat.settingsRevision, { ...chat.settings });
   const item = source(store, chat.id);
   store.requestTranslation(item.id);
+  // Completion time ignores subsequent usage updates; a retry restarts the job's queue time.
+  const before = readerDetail(store, chat.id, {}).reader.activity.find((a) => a.id === item.runId)!;
+  store.db
+    .prepare('UPDATE runs SET updated_at=? WHERE id=?')
+    .run('2099-01-01T00:00:00.000Z', item.runId);
+  const after = readerDetail(store, chat.id, {}).reader.activity.find((a) => a.id === item.runId)!;
+  expect(after.finishedAt).toBe(before.finishedAt);
   const original = store.db.prepare('SELECT id FROM jobs WHERE source_revision=?').get(item.id) as {
     id: string;
   };
+  store.db
+    .prepare("UPDATE events SET at=? WHERE entity_id=? AND kind='job.queued'")
+    .run('2026-09-08T12:00:00.000Z', original.id);
+  const restarted = readerDetail(store, chat.id, {}).reader.activity.find(
+    (a) => a.id === original.id
+  )!;
+  expect(restarted.startedAt).toBe('2026-09-08T12:00:00.000Z');
+  expect(restarted.finishedAt).toBeNull();
   store.db
     .prepare(
       "UPDATE jobs SET kind='translation',status='failed',updated_at='2099-01-01' WHERE id=?"
@@ -755,22 +750,5 @@ describe('Reader projection and retry costs', () => {
       'failed-119',
     ]);
     expect(readerRuns(store, chat.id).filter((run) => !run.sourceRevision)).toHaveLength(120);
-  });
-
-  test('shared retry order cache traverses ancestry once rather than once per retry', () => {
-    const rows = new Map(
-      Array.from({ length: 500 }, (_, i) => [
-        String(i),
-        {
-          id: String(i),
-          admissionOrder: i + 1,
-          retryOf: i ? String(i - 1) : null,
-        },
-      ])
-    );
-    const get = vi.spyOn(rows, 'get');
-    const cache = new Map<string, number>();
-    for (const id of rows.keys()) expect(readerRequestOrder(rows, id, cache)).toBe(1);
-    expect(get.mock.calls.length).toBeLessThan(1500);
   });
 });

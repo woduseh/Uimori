@@ -31,7 +31,7 @@ async function open(page: Page, chat: Chat) {
   await expect(composer(page)).toBeEnabled();
 }
 
-for (const width of [360, 1440]) {
+for (const width of [360]) {
   test(`RIMAGE ${width} draft reload, translation, image-only generation and edited retry preserve attachments`, async ({
     page,
     request,

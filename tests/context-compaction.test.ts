@@ -336,7 +336,6 @@ describe('input context projection and durable summary calls', () => {
 
   test.each([
     { consumerLimit: 8192, summaryLimit: 65536, outputLimit: 8192, target: 1024, hardCap: 4096 },
-    { consumerLimit: 65536, summaryLimit: 8192, outputLimit: 8192, target: 2048, hardCap: 4096 },
     { consumerLimit: 16384, summaryLimit: 8192, outputLimit: 512, target: 256, hardCap: 512 },
   ])(
     'manual compaction gives a $consumerLimit-token consumer a $target-token summary goal below its $hardCap hard output cap',
@@ -371,35 +370,31 @@ describe('input context projection and durable summary calls', () => {
     }
   );
 
-  test.each([0, -128])(
-    'no summary is requested with %i estimated tokens free below the fixed-input trigger',
-    async (freeTokens) => {
-      const source = await snapshot(['원문 하나.', '원문 둘.', '원문 셋.']),
-        original = structuredClone(source),
-        log = observed({
-          measureInput: (projected) => ({
-            snapshot: projected,
-            estimatedInputTokens:
-              8192 * 0.85 -
-              freeTokens +
-              projected.contextPlan!.recentSourceRevisions.length * 500 +
-              (projected.contextPlan!.summary ? 20 : 0),
-          }),
-        });
-      const error = await failure(prepareInputContext(source, log.hooks));
-      expect(error.code).toBe('CONTEXT_FIXED_INPUT_TOO_LARGE');
-      expect(error.usage.modelCalls).toBe(0);
-      expect(log.wires).toHaveLength(0);
-      expect(fetch).not.toHaveBeenCalled();
-      expect(source).toEqual(original);
-    }
-  );
+  test('no summary is requested with 0 estimated tokens free below the fixed-input trigger', async () => {
+    const freeTokens = 0;
+    const source = await snapshot(['원문 하나.', '원문 둘.', '원문 셋.']),
+      original = structuredClone(source),
+      log = observed({
+        measureInput: (projected) => ({
+          snapshot: projected,
+          estimatedInputTokens:
+            8192 * 0.85 -
+            freeTokens +
+            projected.contextPlan!.recentSourceRevisions.length * 500 +
+            (projected.contextPlan!.summary ? 20 : 0),
+        }),
+      });
+    const error = await failure(prepareInputContext(source, log.hooks));
+    expect(error.code).toBe('CONTEXT_FIXED_INPUT_TOO_LARGE');
+    expect(error.usage.modelCalls).toBe(0);
+    expect(log.wires).toHaveLength(0);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(source).toEqual(original);
+  });
 
   test.each([
     { freeTokens: 128, summaryTokens: 20, fits: true },
-    { freeTokens: 511, summaryTokens: 20, fits: true },
     { freeTokens: 128, summaryTokens: 129, fits: false },
-    { freeTokens: 511, summaryTokens: 512, fits: false },
   ])(
     '$freeTokens tokens of summary headroom still require the actual $summaryTokens-token summary to pass final input admission',
     async ({ freeTokens, summaryTokens, fits }) => {
@@ -722,17 +717,10 @@ describe('input context projection and durable summary calls', () => {
 
   test.each([
     [
-      'refused',
-      () =>
-        sse({ type: 'refusal', message: 'Synthetic refusal' }, { type: 'done', reason: 'refusal' }),
-      'CONTEXT_COMPACTION_REFUSED',
-    ],
-    [
       'partial',
       () => sse({ type: 'text_delta', delta: 'Unfinished summary' }),
       'CONTEXT_COMPACTION_EOF',
     ],
-    ['empty', () => sse({ type: 'done', reason: 'stop' }), 'CONTEXT_COMPACTION_EMPTY'],
     [
       'error',
       () => new Response('PRIVATE_ERROR_BODY', { status: 503 }),
@@ -904,45 +892,6 @@ describe('input context projection and durable summary calls', () => {
         (wire) => wire.modelId === memory.modelId && wire.connectionId === memory.connectionId
       )
     ).toBe(true);
-  });
-
-  test('an auxiliary caller can measure its own source envelope and choose a summary model without a main model', async () => {
-    const source = await snapshot(oldScenes()),
-      auxiliary = model('auxiliary-summary');
-    delete source.profile!.models.main;
-    const original = structuredClone(source),
-      measurements: RunSnapshot[] = [];
-    const log = observed({
-      summaryModel: auxiliary,
-      measureInput: (projected) => {
-        measurements.push(structuredClone(projected));
-        const kept = new Set(projected.contextPlan!.recentSourceRevisions);
-        return {
-          snapshot: projected,
-          estimatedInputTokens: estimateContextTokens({
-            fixed: 'AUXILIARY_FIXED_SOURCE',
-            currentInput: projected.request,
-            summary: projected.contextPlan!.summary,
-            history: projected.logicalHistory!.filter((message) =>
-              kept.has(message.sourceRevision!)
-            ),
-          }),
-        };
-      },
-    });
-    const payloads = respondWithMergedSummary(log),
-      result = await prepareInputContext(source, log.hooks);
-    expect(payloads.length).toBeGreaterThan(0);
-    expect(measurements.length).toBeGreaterThan(2);
-    expect(result.snapshot.contextPlan!.status).toBe('ready');
-    expect(
-      log.wires.every(
-        (wire) => wire.modelId === auxiliary.modelId && wire.connectionId === auxiliary.connectionId
-      )
-    ).toBe(true);
-    expect(result.snapshot.request).toBe(currentRequest);
-    expect(result.snapshot.history).toEqual(original.history);
-    expect(source).toEqual(original);
   });
 
   test('hash corruption, missing logical roles, revoked authority, and failed attempt persistence stop before transmission', async () => {

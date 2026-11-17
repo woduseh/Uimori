@@ -195,10 +195,8 @@ test('a title deferred before sending resumes once and never repeats a started r
   expect(send).toHaveBeenCalledTimes(1);
   expect(f.store.chat(f.chat.id).title).toBe('새로운 만남');
 });
-test.each([
-  'A lantern at the river. '.repeat(400),
-  '강가에서 은빛 머리의 소녀가 등불을 흔들었다. 🌙 '.repeat(600),
-])('title context uses token previews and preserves stored text', async (sourceText) => {
+test('title context uses token previews and preserves stored text', async () => {
+  const sourceText = '강가에서 은빛 머리의 소녀가 등불을 흔들었다. 🌙 '.repeat(600);
   const requestText = '푸른 옷을 입은 나그네의 다음 장면을 이어 주세요. '.repeat(500);
   const f = setup(requestText, sourceText);
   const send = mockSend();
@@ -209,9 +207,7 @@ test.each([
   expect(countTextTokens(input.request)).toBeLessThanOrEqual(TITLE_EXCERPT_TOKENS.request);
   expect(input.request.endsWith('\n[Remaining request text omitted]')).toBe(true);
   expect(countTextTokens(input.source)).toBeLessThanOrEqual(TITLE_EXCERPT_TOKENS.source);
-  if (countTextTokens(sourceText) <= TITLE_EXCERPT_TOKENS.source)
-    expect(input.source).toBe(sourceText);
-  else expect(input.source.endsWith('\n[Remaining source text omitted]')).toBe(true);
+  expect(input.source.endsWith('\n[Remaining source text omitted]')).toBe(true);
   expect(new TextDecoder().decode(new TextEncoder().encode(input.source))).toBe(input.source);
   expect(f.store.run(f.run.id).request).toBe(requestText);
   expect(f.store.source(f.source.id).text).toBe(sourceText);

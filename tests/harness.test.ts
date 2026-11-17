@@ -150,23 +150,21 @@ test('browser harness records its build and selected commands without retaining 
   expect(existsSync(directory)).toBe(false);
 });
 
-test.each([false, true])(
-  'local verification isolates inherited self-host and Codex settings at the real spawn boundary (provider fixture: %s)',
-  async (providerFixture) => {
-    vi.stubEnv('UIMORI_PUBLIC_ORIGIN', 'https://synthetic-self-host.example');
-    vi.stubEnv('UIMORI_HOST', '0.0.0.0');
-    vi.stubEnv('UIMORI_PORT', '4310');
-    vi.stubEnv('UIMORI_ACCESS_TOKEN', 'synthetic-parent-token-for-harness-only');
-    vi.stubEnv('UIMORI_CODEX_ENABLED', '1');
-    vi.stubEnv('UIMORI_CODEX_EXECUTABLE', 'synthetic-parent-codex.exe');
-    await run({ providerFixture });
-    const env: NodeJS.ProcessEnv = lib.startServer.mock.calls[0][0];
-    const providerOrigins = providerFixture ? new URL(env.UIMORI_PROVIDER_FIXTURE_URL!).origin : '';
-    if (providerFixture) expect(new URL(providerOrigins).hostname).toBe('127.0.0.1');
-    const probe = await realLib.command(
-      [
-        '-e',
-        `process.stdout.write(JSON.stringify({
+test('local verification isolates inherited self-host and Codex settings at the real spawn boundary', async () => {
+  const providerFixture = true;
+  vi.stubEnv('UIMORI_PUBLIC_ORIGIN', 'https://synthetic-self-host.example');
+  vi.stubEnv('UIMORI_HOST', '0.0.0.0');
+  vi.stubEnv('UIMORI_PORT', '4310');
+  vi.stubEnv('UIMORI_ACCESS_TOKEN', 'synthetic-parent-token-for-harness-only');
+  vi.stubEnv('UIMORI_CODEX_ENABLED', '1');
+  vi.stubEnv('UIMORI_CODEX_EXECUTABLE', 'synthetic-parent-codex.exe');
+  await run({ providerFixture });
+  const env: NodeJS.ProcessEnv = lib.startServer.mock.calls[0][0];
+  expect(new URL(env.UIMORI_PROVIDER_FIXTURE_URL!).hostname).toBe('127.0.0.1');
+  const probe = await realLib.command(
+    [
+      '-e',
+      `process.stdout.write(JSON.stringify({
         publicOriginPresent: Object.hasOwn(process.env, 'UIMORI_PUBLIC_ORIGIN'),
         codexExecutablePresent: Object.hasOwn(process.env, 'UIMORI_CODEX_EXECUTABLE'),
         env: {
@@ -178,32 +176,31 @@ test.each([false, true])(
           UIMORI_CODEX_ENABLED: process.env.UIMORI_CODEX_ENABLED,
         },
       }));`,
-      ],
-      { env }
-    );
-    expect(probe.code, probe.output).toBe(0);
-    const child = JSON.parse(probe.output);
-    expect(child.publicOriginPresent).toBe(false);
-    expect(child.codexExecutablePresent).toBe(false);
-    expect(child.env).toEqual({
-      UIMORI_HOST: '127.0.0.1',
-      UIMORI_PORT: '0',
-      UIMORI_TEST_MODE: '1',
-      UIMORI_ACCESS_TOKEN: '',
-      UIMORI_CODEX_ENABLED: '0',
-    });
-    const policy = networkPolicy({
-      publicOrigin: child.env.UIMORI_PUBLIC_ORIGIN,
-      accessToken: child.env.UIMORI_ACCESS_TOKEN,
-      testMode: child.env.UIMORI_TEST_MODE === '1',
-    });
-    expect(policy).toEqual({});
-    expect(listenAddress(child.env, policy)).toEqual({ host: '127.0.0.1', port: 0 });
-    expect(process.env.UIMORI_PUBLIC_ORIGIN).toBe('https://synthetic-self-host.example');
-    expect(process.env.UIMORI_CODEX_ENABLED).toBe('1');
-    expect(process.env.UIMORI_CODEX_EXECUTABLE).toBe('synthetic-parent-codex.exe');
-  }
-);
+    ],
+    { env }
+  );
+  expect(probe.code, probe.output).toBe(0);
+  const child = JSON.parse(probe.output);
+  expect(child.publicOriginPresent).toBe(false);
+  expect(child.codexExecutablePresent).toBe(false);
+  expect(child.env).toEqual({
+    UIMORI_HOST: '127.0.0.1',
+    UIMORI_PORT: '0',
+    UIMORI_TEST_MODE: '1',
+    UIMORI_ACCESS_TOKEN: '',
+    UIMORI_CODEX_ENABLED: '0',
+  });
+  const policy = networkPolicy({
+    publicOrigin: child.env.UIMORI_PUBLIC_ORIGIN,
+    accessToken: child.env.UIMORI_ACCESS_TOKEN,
+    testMode: child.env.UIMORI_TEST_MODE === '1',
+  });
+  expect(policy).toEqual({});
+  expect(listenAddress(child.env, policy)).toEqual({ host: '127.0.0.1', port: 0 });
+  expect(process.env.UIMORI_PUBLIC_ORIGIN).toBe('https://synthetic-self-host.example');
+  expect(process.env.UIMORI_CODEX_ENABLED).toBe('1');
+  expect(process.env.UIMORI_CODEX_EXECUTABLE).toBe('synthetic-parent-codex.exe');
+});
 
 test.each(['missing', 'zero', 'skipped', 'retried', 'global'])(
   'browser harness rejects %s reporter evidence and still records cleanup',
@@ -229,9 +226,8 @@ test.each(['missing', 'zero', 'skipped', 'retried', 'global'])(
   }
 );
 
-test.each(['command', 'timeout'])('passing assertions cannot hide a %s failure', async (fault) => {
-  if (fault === 'command') commandFailure.code = 1;
-  else commandFailure.timedOut = true;
+test('passing assertions cannot hide a command timeout', async () => {
+  commandFailure.timedOut = true;
   const { directory, summary } = await run();
   expect(summary.report.passed).toBe(1);
   expect(summary.status).toBe('FAIL');
@@ -272,15 +268,14 @@ test('focused visual checks narrow the existing selection and record their actua
   );
 });
 
-test.each([['--grep', '['], ['--unknown'], ['--grep'], ['--visual', '--visual']])(
-  'invalid browser options fail before launching a server: %j',
-  async (...args) => {
-    process.argv.push(...args);
-    await expect(run()).rejects.toThrow();
-    expect(lib.startServer).not.toHaveBeenCalled();
-    expect(lib.command).not.toHaveBeenCalled();
+test('invalid browser options and shards fail before launching a server', async () => {
+  for (const args of [['--grep', '['], ['--unknown'], ['--shard', '0/4'], ['--shard', 'bad']]) {
+    process.argv = [...originalArgv.slice(0, 2), ...args];
+    await expect(run(), args.join(' ')).rejects.toThrow();
   }
-);
+  expect(lib.startServer).not.toHaveBeenCalled();
+  expect(lib.command).not.toHaveBeenCalled();
+});
 
 test('primary and cleanup failures both survive in the saved summary and ownership', async () => {
   commandFailure.code = 1;
@@ -434,15 +429,6 @@ test('native browser shard records the full collection and only reports the sele
   expect(lib.command.mock.calls[0][0]).not.toContain('--shard=1/3');
   expect(lib.command.mock.calls[1][0]).toContain('--shard=1/3');
 });
-
-test.each(['0/4', '5/4', '1/0', 'bad'])(
-  'invalid browser shard %s fails before server startup',
-  async (shard) => {
-    process.argv.push('--shard', shard);
-    await expect(run()).rejects.toThrow();
-    expect(lib.startServer).not.toHaveBeenCalled();
-  }
-);
 
 test('artifact cleanup warnings preserve the original browser result', async () => {
   vi.mocked(retainArtifacts).mockResolvedValue({

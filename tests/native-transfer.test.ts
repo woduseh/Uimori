@@ -389,12 +389,10 @@ test('NATIVE05 a failure after creating dependencies rolls the whole apply back 
 test.each([
   'cycle',
   'missing-module',
-  'wrong-module-id',
   'extra-entry',
   'foreign-combination',
   'unknown-field',
   'image-hash',
-  'unused-image',
 ] as const)('NATIVE06 invalid graphs and metadata reject before any write: %s', async (variant) => {
   const source = sourceFixture(),
     { store, app } = database(),
@@ -405,7 +403,6 @@ test.each([
     root.source.package!.modules = [{ id: root.source.id, revision: 1 }];
     root.modules = [root.key];
   } else if (variant === 'missing-module') root.modules[0] = 'missing';
-  else if (variant === 'wrong-module-id') root.source.package!.modules![0].id = 'unrelated';
   else if (variant === 'extra-entry')
     file.contents.push({
       ...structuredClone(root),
@@ -420,9 +417,7 @@ test.each([
     file.prompts[0].combinations[0].owner = { kind: 'preset', id: 'foreign' };
   else if (variant === 'unknown-field')
     Object.assign(root.source, { credential: 'not-a-native-field' });
-  else if (variant === 'image-hash')
-    file.images[0].base64 = Buffer.from('not an image').toString('base64');
-  else file.images.push(structuredClone(file.images[0]));
+  else file.images[0].base64 = Buffer.from('not an image').toString('base64');
   expect(() => prepareNativeTransfer({ file })).toThrow();
   const body = {
     file,

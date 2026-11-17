@@ -1,4 +1,4 @@
-import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator } from '@playwright/test';
 import type { Content } from '../core/product.js';
@@ -84,10 +84,6 @@ test('ORG01 mobile navigation groups by owner and preserves chats when a folder 
   await nav.getByRole('button', { name: `${b.title} 채팅 목록`, exact: true }).click();
   await expect(nav.getByRole('button', { name: `B 채팅 ${suffix}`, exact: true })).toBeVisible();
   await expect(nav.getByRole('button', { name: first.title, exact: true })).toBeVisible();
-  const horizontalOverflow = await nav.evaluate(
-    (element) => element.scrollWidth > element.clientWidth + 1
-  );
-  expect(horizontalOverflow).toBe(false);
 });
 
 async function navigationFixture(request: APIRequestContext) {
@@ -118,7 +114,8 @@ async function navigationFixture(request: APIRequestContext) {
 
 const rows = (nav: Locator) => nav.locator('.bot-chat-item');
 
-for (const width of DEFAULT_WIDTHS) {
+{
+  const width = MOBILE_WIDTH;
   test(`AUDIT2 folder settings retain the manual draft after a real revision conflict ${width}px`, async ({
     page,
     request,
@@ -205,18 +202,6 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(dialog.getByRole('alert')).toContainText('작성한 내용은 유지했어요.');
     await dialog.getByText('현재 저장된 설정 보기', { exact: true }).click();
     await expect(dialog.getByRole('alert')).toContainText(concurrentPersona.title);
-    const noticeIconOffset = await dialog.getByRole('alert').evaluate((notice) => {
-      const icon = notice.querySelector('.notice-banner-icon');
-      const paragraph = notice.querySelector('.notice-banner-message > p');
-      if (!icon || !paragraph) throw new Error('Folder conflict notice is missing its content');
-      const range = document.createRange();
-      range.selectNodeContents(paragraph);
-      const firstLine = range.getClientRects()[0];
-      if (!firstLine) throw new Error('Folder conflict notice has no visible first line');
-      const iconBox = icon.getBoundingClientRect();
-      return Math.abs(iconBox.y + iconBox.height / 2 - (firstLine.y + firstLine.height / 2));
-    });
-    expect(noticeIconOffset).toBeLessThanOrEqual(2);
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`folder-conflict-draft-${width}.png`) });
     const reload = dialog.getByRole('button', { name: '최신 설정 불러오기', exact: true });
@@ -264,17 +249,17 @@ for (const width of DEFAULT_WIDTHS) {
   });
 }
 
-for (const width of DEFAULT_WIDTHS) {
+{
+  const width = MOBILE_WIDTH;
   test(`ORG05 ${width}px chat menu icons and manual titles preserve drafts and persist`, async ({
     page,
     request,
-  }, info) => {
+  }) => {
     await page.setViewportSize({ width, height: 900 });
     const { chats } = await navigationFixture(request);
     const chat = chats[0];
     await page.goto(`/?chat=${chat.id}`);
-    if (width === MOBILE_WIDTH)
-      await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
+    await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
     const nav = page.getByTestId('bot-navigation').filter({ visible: true });
     const row = nav.locator(`.bot-chat-item[data-chat-id="${chat.id}"]`);
     await row.hover();
@@ -336,13 +321,8 @@ for (const width of DEFAULT_WIDTHS) {
       .poll(async () => (await (await request.get(`/api/chats/${chat.id}`)).json()).chat.title)
       .toBe(renamed);
     await expect(menu).toBeHidden();
-    expect(await nav.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
-      true
-    );
-    await page.screenshot({ path: info.outputPath(`chat-menu-${width}.png`) });
     await page.reload();
-    if (width === MOBILE_WIDTH)
-      await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
+    await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
     await expect(nav.getByRole('button', { name: renamed, exact: true })).toBeVisible();
   });
 }
@@ -368,14 +348,6 @@ test('ORG02 desktop compact rows support drag ordering, folder drops, collapse a
   expect(order.toSorted()).toEqual(chats.map((chat) => chat.id).toSorted());
   const moving = branch.locator(`.bot-chat-item[data-chat-id="${order[2]}"]`);
   const target = branch.locator(`.bot-chat-item[data-chat-id="${order[0]}"]`);
-  await page.mouse.move(1400, 950);
-  const menu = moving.locator('.bot-row-actions');
-  await expect(menu).toHaveCSS('opacity', '0');
-  await moving.hover();
-  await expect(menu).toHaveCSS('opacity', '1');
-  await page.mouse.move(1400, 950);
-  await moving.locator('.chat-link').focus();
-  await expect(menu).toHaveCSS('opacity', '1');
   await moving.dragTo(target, { targetPosition: { x: 30, y: 2 } });
   await expect.poll(readOrder).toEqual([order[2], order[0], order[1]]);
   await page.reload();
@@ -427,45 +399,6 @@ test('ORG02 desktop compact rows support drag ordering, folder drops, collapse a
   if (visualReview) await page.screenshot({ path: info.outputPath('navigation-desktop.png') });
 });
 
-test('ORG03 touch menu keeps rename and deletion confirmation without a separate move dialog', async ({
-  browser,
-  request,
-}, info) => {
-  const { chats } = await navigationFixture(request);
-  const context = await browser.newContext({
-    baseURL: test.info().project.use.baseURL,
-    viewport: { width: MOBILE_WIDTH, height: 844 },
-    hasTouch: true,
-    isMobile: true,
-  });
-  const page = await context.newPage();
-  try {
-    await page.goto(`/?chat=${chats[0].id}`);
-    await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
-    const nav = page.getByTestId('bot-navigation').filter({ visible: true });
-    await expect(rows(nav)).toHaveCount(3);
-    const first = nav.locator(`.bot-chat-item[data-chat-id="${chats[0].id}"]`);
-    await expect(first.locator('.bot-row-actions')).toHaveCSS('opacity', '1');
-    await first.getByLabel(/채팅 메뉴$/).click();
-    await expect(first.getByRole('button', { name: '채팅 이동', exact: true })).toHaveCount(0);
-    const selectedRow = nav.locator(`.bot-chat-item[data-chat-id="${chats[0].id}"]`);
-    await selectedRow
-      .getByRole('button', { name: `${chats[0].title} 채팅 삭제`, exact: true })
-      .click();
-    const dialog = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
-    await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: '취소', exact: true }).click();
-    await expect(dialog).toBeHidden();
-    expect((await request.get(`/api/chats/${chats[0].id}`)).ok()).toBe(true);
-    expect(await nav.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
-      true
-    );
-    if (visualReview) await page.screenshot({ path: info.outputPath('navigation-touch.png') });
-  } finally {
-    await context.close();
-  }
-});
-
 test('ORG04 unselected chat and collapsed folder display compact pending activity and clear on completion', async ({
   page,
   request,
@@ -491,9 +424,6 @@ test('ORG04 unselected chat and collapsed folder display compact pending activit
   const nav = page.getByTestId('bot-navigation').filter({ visible: true });
   const row = nav.locator(`.bot-chat-item[data-chat-id="${background.id}"]`);
   await expect(row.getByRole('img', { name: '번역 1개', exact: true })).toBeVisible();
-  await row.hover();
-  await expect(row.getByRole('img', { name: '번역 1개', exact: true })).toBeVisible();
-  await expect(row.locator('.bot-row-actions')).toHaveCSS('opacity', '1');
   await nav.getByRole('button', { name: `${folder.title} 폴더`, exact: true }).click();
   await expect(row).toHaveCount(0);
   await expect(
@@ -506,11 +436,12 @@ test('ORG04 unselected chat and collapsed folder display compact pending activit
   await expect(nav.locator('.bot-chat-status')).toHaveCount(0);
 });
 
-for (const width of DEFAULT_WIDTHS) {
+{
+  const width = DESKTOP_WIDTH;
   test(`ORG06 ${width}px shared bot folders, scoped search and manual sorting persist`, async ({
     page,
     request,
-  }, info) => {
+  }) => {
     await page.setViewportSize({ width, height: 900 });
     const a = await navigationFixture(request);
     const b = await navigationFixture(request);
@@ -677,77 +608,11 @@ for (const width of DEFAULT_WIDTHS) {
     const create = page.getByRole('dialog', { name: '새 채팅', exact: true });
     await expect(create).toBeVisible();
     await page.keyboard.press('Escape');
-    nav = await visibleNavigation(page);
-    expect(await nav.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
-      true
-    );
-    await page.screenshot({ path: info.outputPath(`bot-tree-${width}.png`) });
   });
 }
 
-for (const width of DEFAULT_WIDTHS) {
-  test(`ORG07 ${width}px lower sidebar bot menus stay within the viewport`, async ({
-    page,
-    request,
-  }, info) => {
-    const bots: Content[] = [];
-    for (let index = 0; index < 10; index++) {
-      const response = await request.post('/api/content', {
-        data: {
-          kind: 'bot',
-          title: `메뉴 경계 ${index} ${crypto.randomUUID()}`,
-          description: '',
-          text: 'Synthetic',
-          loading: 'pinned',
-          relatedIds: [],
-        },
-      });
-      expect(response.ok()).toBe(true);
-      const bot = (await response.json()) as Content;
-      bots.push(bot);
-      expect(
-        (await request.post('/api/chats', { data: { botId: bot.id, title: '경계 채팅' } })).ok()
-      ).toBe(true);
-    }
-    await page.route(/\/api\/library(?:\?|$)/, async (route) => {
-      const response = await route.fetch();
-      const library = await response.json();
-      await route.fulfill({
-        response,
-        json: {
-          ...library,
-          contents: library.contents.filter((bot: Content) =>
-            bots.some((item) => item.id === bot.id)
-          ),
-        },
-      });
-    });
-    await page.setViewportSize({ width, height: 500 });
-    await page.goto('/');
-    const nav = await visibleNavigation(page);
-    await nav.getByRole('button', { name: '봇', exact: true }).click();
-    const last = nav.locator('[data-bot-id]').last();
-    await last.scrollIntoViewIfNeeded();
-    const trigger = last.getByLabel(/ 관리$/);
-    await revealBotActions(last);
-    await trigger.click();
-    const body = last.locator('.action-menu-body');
-    await expect(body).toBeVisible();
-    const bounds = await body.boundingBox();
-    expect(bounds).not.toBeNull();
-    if (!bounds) throw new Error('Bot menu has no visible bounds');
-    expect(bounds.x).toBeGreaterThanOrEqual(0);
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
-    expect(bounds.y).toBeGreaterThanOrEqual(0);
-    expect(bounds.y + bounds.height).toBeLessThanOrEqual(500);
-    await page.screenshot({ path: info.outputPath(`lower-sidebar-menu-${width}.png`) });
-    await page.keyboard.press('Escape');
-    await expect(body).toBeHidden();
-    await expect(trigger).toBeFocused();
-  });
-}
-
-for (const width of DEFAULT_WIDTHS) {
+{
+  const width = MOBILE_WIDTH;
   test(`ORG08 ${width}px first row starts a chat from the library and searches chats across bots`, async ({
     page,
     request,

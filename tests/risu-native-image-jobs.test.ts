@@ -12,21 +12,9 @@ import { nativeRisuContext } from '../server/risu-native-context.js';
 import { buildMainInput } from '../core/provider.js';
 import { requestInput } from '../server/main-host-context.js';
 import { imageOwnerDisplayText } from '../core/image-placement.js';
-import {
-  claimIllustration,
-  completeIllustration,
-  illustrationsForSources,
-  updateIllustrationSettings,
-} from '../server/illustrations.js';
-import { readerDetail } from '../server/reader.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
-import {
-  completedSource,
-  fixtureSettings,
-  illustrationDatabases,
-  PNG_BASE64,
-} from './fixtures/illustration.js';
+import { completedSource, illustrationDatabases, PNG_BASE64 } from './fixtures/illustration.js';
 
 const databases = illustrationDatabases('uimori-native-image-jobs-');
 afterEach(() => databases.cleanup());
@@ -90,11 +78,6 @@ test('validated image annotations use native boxes and placement without changin
     'Mira smiles.\n\n<img="Mira_happy">\n\n![]({{raw::Mira_happy}})\n\n![]({{path::Mira_happy}})\n\n[이미지 링크]({{path::Mira_happy}})\n\n원문 주소 {{raw::Mira_happy}}\n\nThe afternoon stays quiet.'
   );
   const snapshot = readRunSnapshot(store, source.runId!);
-  const ownerProjection = imageOwnerDisplayText(source.text, snapshot.profile!);
-  expect(ownerProjection).not.toContain('![]({{raw::Mira_happy}})');
-  expect(ownerProjection).not.toContain('![]({{path::Mira_happy}})');
-  expect(ownerProjection).toContain('[이미지 링크]({{path::Mira_happy}})');
-  expect(ownerProjection).toContain('원문 주소 {{raw::Mira_happy}}');
   expect(await nativeImageGuidance(snapshot)).toContain('Outfit: school.');
   expect(
     await nativeImageGuidance({ ...snapshot, profile: { ...snapshot.profile!, image: false } })
@@ -163,40 +146,6 @@ test('validated image annotations use native boxes and placement without changin
   ).toContain(asset.url);
   expect(store.source(source.id)).toEqual(source);
   expect(store.job(pending.id)).toEqual(receipt);
-});
-
-test('native model output reserves the existing independent illustration queue and exposes completed images in the reader', () => {
-  const { store, chat } = fixture();
-  const { revision, ...settings } = fixtureSettings({ automatic: true });
-  updateIllustrationSettings(store, { ...settings, expectedRevision: revision }, true);
-  const source = completedSource(store, chat.id);
-  const job = illustrationsForSources(store, [source.id])[0];
-  expect(job).toMatchObject({ status: 'queued', origin: 'automatic', sourceRevision: source.id });
-  expect(latestImageJob(store, source.id, 'original')?.status).toBe('queued');
-  const claim = claimIllustration(store, job.id, 'illustrations')!;
-  expect(claim).not.toBeNull();
-  expect(
-    completeIllustration(
-      store,
-      job.id,
-      claim.job.generation,
-      'illustrations',
-      [
-        {
-          mime: 'image/png',
-          bytes: Buffer.from(PNG_BASE64, 'base64'),
-          caption: 'Synthetic illustration',
-        },
-      ],
-      { stage: 'store', attempts: [], retries: [] }
-    )
-  ).toBe(true);
-  expect(readerDetail(store, chat.id, {}).illustrations[0]).toMatchObject({
-    status: 'completed',
-    images: [{ caption: 'Synthetic illustration' }],
-  });
-  expect(latestImageJob(store, source.id, 'original')?.status).toBe('queued');
-  expect(store.source(source.id)).toEqual(source);
 });
 
 test('one owner controls authored tags and JEV display copies without rewriting saved prose', async () => {

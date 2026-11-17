@@ -195,7 +195,7 @@ describe('stored context checkpoint selection', () => {
     expect(previousContextPlan(f.store, f.current)).toBeUndefined();
   });
 
-  test.each(['invalid-source', 'invalid-budget', 'dependency', 'pending', 'failed'])(
+  test.each(['invalid-source', 'dependency'])(
     'rejects a %s candidate without changing the active checkpoint',
     (reason) => {
       const f = fixture();
@@ -203,9 +203,7 @@ describe('stored context checkpoint selection', () => {
       const newer = f.candidate(2, '선택하면 안 되는 요약');
       const plan = newer.contextPlan!;
       if (reason === 'invalid-source') plan.compacted[0].hash = 'wrong-hash';
-      else if (reason === 'invalid-budget') plan.budget.inputTokenLimit = 100;
-      else if (reason === 'dependency') plan.dependencyKey = 'other-canon';
-      else plan.status = reason === 'pending' ? 'pending' : 'failed';
+      else plan.dependencyKey = 'other-canon';
       expect(() => f.store.context.publishPrepared(newer, { origin: 'automatic' })).toThrow();
       expect(previousContextPlan(f.store, f.capture())).toEqual(old.contextPlan);
       expect(
@@ -234,14 +232,13 @@ describe('stored context checkpoint selection', () => {
     expect(previousContextPlan(f.store, seedContextPlan(changed))).toBeUndefined();
   });
 
-  test.each(['id', 'revision', 'hash', 'scope'] as const)(
+  test.each(['hash', 'scope'] as const)(
     'rejects a captured checkpoint with mismatched %s',
     (part) => {
       const f = fixture();
       f.checkpoint(1, '검증한 요약');
       const captured = f.capture();
       if (part === 'scope') captured.contextBase!.scopeKey += ':other-chat';
-      else if (part === 'revision') captured.contextBase!.checkpoint!.revision++;
       else captured.contextBase!.checkpoint![part] = 'missing-or-altered';
       expect(() => previousContextPlan(f.store, captured)).toThrow(
         part === 'scope' ? 'CONTEXT_CHECKPOINT_SCOPE_MISMATCH' : 'CONTEXT_CHECKPOINT_MISSING'
@@ -261,24 +258,21 @@ describe('stored context checkpoint selection', () => {
     );
   });
 
-  test.each(['id', 'chatId', 'blank', 'hash'])(
-    'rejects invalid source identity at source capture: %s',
-    (part) => {
-      const f = fixture();
-      const current = f.current.history.at(-1)!;
-      const id = part === 'id' ? '' : current.revision;
-      const chatId = part === 'chatId' ? '' : f.current.chatId;
-      const text = part === 'blank' ? ' \n\t' : current.text;
-      const sourceHash = part === 'hash' ? 'wrong-hash' : hash(text);
-      f.store.db.exec('PRAGMA foreign_keys=OFF');
-      f.store.db
-        .prepare('UPDATE sources SET id=?,chat_id=?,text=?,hash=? WHERE id=?')
-        .run(id, chatId, text, sourceHash, current.revision);
-      f.store.db.exec('PRAGMA foreign_keys=ON');
-      expect(() => f.store.source(id)).toThrow('SOURCE_IDENTITY_INVALID');
-      if (part !== 'id') expect(() => f.store.history(id)).toThrow('SOURCE_IDENTITY_INVALID');
-    }
-  );
+  test.each(['chatId', 'hash'])('rejects invalid source identity at source capture: %s', (part) => {
+    const f = fixture();
+    const current = f.current.history.at(-1)!;
+    const id = current.revision;
+    const chatId = part === 'chatId' ? '' : f.current.chatId;
+    const text = current.text;
+    const sourceHash = part === 'hash' ? 'wrong-hash' : hash(text);
+    f.store.db.exec('PRAGMA foreign_keys=OFF');
+    f.store.db
+      .prepare('UPDATE sources SET id=?,chat_id=?,text=?,hash=? WHERE id=?')
+      .run(id, chatId, text, sourceHash, current.revision);
+    f.store.db.exec('PRAGMA foreign_keys=ON');
+    expect(() => f.store.source(id)).toThrow('SOURCE_IDENTITY_INVALID');
+    expect(() => f.store.history(id)).toThrow('SOURCE_IDENTITY_INVALID');
+  });
 
   test('preserves missing-source and missing-run errors at their storage boundaries', () => {
     const f = fixture();

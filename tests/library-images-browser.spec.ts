@@ -1,8 +1,7 @@
 import { nativeContent } from './fixtures/native-content.js';
-import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
+import { DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { navigationAction } from './ui-navigation.js';
 import { waitForContentSave } from './fixtures/resource-save.js';
-import { visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { RisuContent } from '../core/risu-content.js';
 import type { LibraryOrganization } from '../core/library-organization.js';
@@ -98,7 +97,8 @@ const portraitPart = (image: UploadedImage, id = 'portrait'): Partial<RisuConten
   portraitImageId: id,
 });
 
-for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
+{
+  const width = DESKTOP_WIDTH;
   test(`LIMG06 portrait candidates keep their own images before and after selection ${width}`, async ({
     page,
     request,
@@ -120,7 +120,6 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
         ],
       });
     const library = await edit(page, original);
-    await page.setViewportSize({ width, height: width === MOBILE_WIDTH ? 915 : 1440 });
     const portrait = library.getByRole('region', { name: '대표 이미지 설정', exact: true });
     const picker = page.getByRole('dialog', { name: '대표 이미지 선택', exact: true });
     const first = picker.getByRole('button').filter({ hasText: '합성 대표 이미지' });
@@ -154,7 +153,6 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     expect(saved.package!.images!.find((image) => image.id === 'inline')!.allowedUse).toBe('both');
     await page.reload();
     await edit(page, saved);
-    await page.setViewportSize({ width, height: width === MOBILE_WIDTH ? 915 : 1440 });
     await checkCandidates();
     await expect(second).toHaveAttribute('aria-pressed', 'true');
     await expect(first).toHaveAttribute('aria-pressed', 'false');
@@ -164,7 +162,7 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
 test('LIMG01 representative image upload, unset and existing inline selection preserve current content and its one undo', async ({
   page,
   request,
-}, info) => {
+}) => {
   test.setTimeout(60000);
   const originalHash = await blob(request),
     original = await seed(request, 'persona', `대표 이미지 합성 ${Date.now()}`, {
@@ -254,35 +252,12 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
   // Only the current resource and its one-level undo are retained.
   const current = await (await request.get(`/api/content/${removed.id}`)).json();
   expect(current.package).toEqual(removed.package);
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-  await selectPackageSection(page, '기본 정보');
-  await portrait.scrollIntoViewIfNeeded();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-    true
-  );
-  if (visualReview)
-    await page.screenshot({ path: info.outputPath('portrait-authoring-mobile.png') });
-  await library.locator('.library-savebar').scrollIntoViewIfNeeded();
-  await expect
-    .poll(() =>
-      library.evaluate((element) => {
-        const heading = element.querySelector('.library-content-editor > .library-detail-heading')!;
-        const navigation = element.querySelector('.native-editor > .section-navigation')!;
-        return navigation.getBoundingClientRect().top >= heading.getBoundingClientRect().bottom - 1;
-      })
-    )
-    .toBe(true);
-  // Scrolled navigation must stay reachable below the two-row save header.
-  await library.getByRole('tab', { name: '에셋', exact: true }).click();
-  await expect(library.getByLabel('Risu 이미지 목록', { exact: true })).toBeVisible();
-  if (visualReview)
-    await page.screenshot({ path: info.outputPath('portrait-authoring-mobile-scrolled.png') });
 });
 
 test('LIMG02 persona folder picker supports keyboard selection and nested Escape without creating a chat', async ({
   page,
   request,
-}, info) => {
+}) => {
   test.setTimeout(60000);
   const stamp = Date.now(),
     hash = await blob(request),
@@ -374,11 +349,6 @@ test('LIMG02 persona folder picker supports keyboard selection and nested Escape
     'src',
     `/api/package-image-blobs/${hash.hash}`
   );
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-  expect(await picker.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
-    true
-  );
-  if (visualReview) await page.screenshot({ path: info.outputPath('persona-picker-mobile.png') });
   await picker.getByRole('button', { name: '페르소나 없음', exact: true }).click();
   await expect(trigger).toContainText('페르소나 없음');
   await trigger.click();

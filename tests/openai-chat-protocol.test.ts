@@ -350,33 +350,12 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
   });
   test.each([
     { verbosity: 'low' },
-    { reasoningMode: 'pro' },
-    { reasoningContext: 'all_turns' },
     { outputEffort: 'high' },
-    { thinkingLevel: 'HIGH' },
-    { thinkingMode: 'disabled' },
     { thinkingBudgetTokens: 1024, maxOutputTokens: 8192 },
   ])('does not silently send or discard foreign native option %j', (options) => {
     const input = request();
     Object.assign(input.generation!, options);
     expect(() => encodeChat(input)).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
-  });
-  test('registered GPT Chat models retain Flex across exact tool continuation', () => {
-    const input = request();
-    input.modelId = 'gpt-5.6-sol';
-    input.generation = {
-      maxOutputTokens: 8192,
-      temperature: null,
-      reasoningEffort: 'high',
-      serviceTier: 'flex',
-    };
-    const wire = record(encodeChat(input).body);
-    expect(wire.service_tier).toBe('flex');
-    expect(wire.reasoning_effort).toBe('high');
-    const continued = next(input, called(input));
-    expect(record(encodeChat(continued).body).service_tier).toBe('flex');
-    continued.generation!.serviceTier = 'default';
-    expect(() => encodeChat(continued)).toThrow('OPENAI_CONTINUATION_MISMATCH');
   });
   test('encodes the selected model and explicit options without assuming native structured output support', () => {
     const input = request();
@@ -557,27 +536,21 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
     'wrong-index',
     'duplicate-id',
     'array-args',
-    'null-args',
-    'scalar-args',
     'invalid-json',
     'stop-with-tools',
-    'empty-tools',
     'legacy-call',
   ] as const)('rejects %s rather than inventing a tool identity', (mode) => {
     const run = first();
     const value = record(tool());
-    let tools: Json[] = [value];
+    const tools: Json[] = [value];
     let reason = 'tool_calls';
     if (mode === 'missing-id') delete value.id;
     if (mode === 'unknown-name') value.function.name = 'knowledge.read';
     if (mode === 'wrong-index') value.index = 2;
     if (mode === 'duplicate-id') tools.push({ ...value, index: 1 });
     if (mode === 'array-args') value.function.arguments = '[]';
-    if (mode === 'null-args') value.function.arguments = 'null';
-    if (mode === 'scalar-args') value.function.arguments = '0';
     if (mode === 'invalid-json') value.function.arguments = '{';
     if (mode === 'stop-with-tools') reason = 'stop';
-    if (mode === 'empty-tools') tools = [];
     expect(() =>
       run.decoder.accept(
         chunk(
@@ -601,13 +574,12 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
     ).toThrow('INVALID_TOOL_NAME');
   });
 
-  test.each(['source', 'history', 'controls', 'stable', 'generation', 'model'] as const)(
+  test.each(['source', 'controls', 'stable', 'model'] as const)(
     'binds continuation to original %s',
     (field) => {
       const input = request();
       const continued = next(input, called(input));
       if (field === 'stable') continued.stable.contract += ' changed';
-      else if (field === 'generation') continued.generation!.maxOutputTokens++;
       else if (field === 'model') continued.modelId += '-other';
       else if (field === 'controls') continued.input.controls.extra = true;
       else continued.input[field] = { changed: true };

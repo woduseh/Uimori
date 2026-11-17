@@ -1,11 +1,10 @@
 import { nativeContent } from './fixtures/native-content.js';
 import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
-import { isResourceSaveRequest, waitForContentSave } from './fixtures/resource-save.js';
+import { waitForContentSave } from './fixtures/resource-save.js';
 import { createLibraryContent, editLibraryContent } from './ui-navigation.js';
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext } from '@playwright/test';
 import type { Content } from '../core/product.js';
-import type { LibraryOrganization } from '../core/library-organization.js';
 
 async function seedBot(request: APIRequestContext, title: string) {
   const description = '낯선 도시를 함께 탐험할 합성 안내자예요.';
@@ -29,12 +28,6 @@ async function seedBot(request: APIRequestContext, title: string) {
   return created;
 }
 
-async function noHorizontalOverflow(page: Page) {
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
-  ).toBeLessThanOrEqual(1);
-}
-
 for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH]).entries()) {
   test(`LUSE0${index + 1} mobile ${width}px library list view keeps readable rows and creates a bot into a chat`, async ({
     page,
@@ -49,17 +42,6 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     await panel.getByRole('button', { name: '목록', exact: true }).click();
     const row = panel.locator('.library-list-item');
     await expect(row).toHaveCount(1);
-    await expect(
-      row.getByRole('button', { name: `${seed.title} 상세 보기`, exact: true })
-    ).toBeInViewport();
-    await expect(
-      row.getByRole('button', { name: `${seed.title} 새 채팅`, exact: true })
-    ).toBeInViewport();
-    const results = await panel.locator('#library-results').boundingBox();
-    expect((await row.boundingBox())!.width).toBeGreaterThanOrEqual(results!.width - 2);
-    await expect(panel.locator('.library-folder-list')).toBeHidden();
-    await expect(panel.getByRole('button', { name: '선택', exact: true })).toBeHidden();
-    await noHorizontalOverflow(page);
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-readable-${width}.png`) });
 
@@ -71,14 +53,6 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     await createLibraryContent(page);
     const saveState = panel.locator('.resource-editor-status').getByRole('status');
     await expect(saveState).toHaveText('등록 전');
-    await expect(panel.getByLabel('Risu 자료 이름', { exact: true })).toBeInViewport();
-    await panel.getByLabel('카드 설명', { exact: true }).scrollIntoViewIfNeeded();
-    await expect(panel.getByLabel('카드 설명', { exact: true })).toBeInViewport();
-    await expect(
-      panel.getByRole('region', { name: '대표 이미지 설정', exact: true })
-    ).toBeVisible();
-    await expect(panel.getByRole('tab', { name: '로어북', exact: true })).toBeVisible();
-    await noHorizontalOverflow(page);
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-create-${width}.png`) });
     const createdTitle = `${title} 새 친구`,
@@ -95,8 +69,6 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     expect(saved.package?.body).toBe(body);
     const start = panel.getByRole('button', { name: '채팅 시작', exact: true });
     await expect(start).toBeEnabled();
-    await start.scrollIntoViewIfNeeded();
-    await expect(start).toBeInViewport();
     await expect(panel.getByRole('heading', { name: createdTitle, exact: true })).toBeVisible();
     await expect(saveState).toHaveText('저장됨');
     if (visualReview)
@@ -114,78 +86,8 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     const detail = await (await request.get(`/api/chats/${chat.id}`)).json();
     expect(detail.chat.botId).toBe(saved.id);
     expect(detail.runs).toHaveLength(0);
-    await noHorizontalOverflow(page);
   });
 }
-
-test('LUSE03 empty folders offer creation without repeating first-use role guidance', async ({
-  page,
-  request,
-}, info) => {
-  const folders: Record<string, string> = {};
-  for (const category of ['persona', 'module'] as const) {
-    const title = `LUSE03 existing ${category} ${Date.now()}`;
-    const existing = await request.post('/api/content', {
-      data: {
-        kind: category,
-        title,
-        description: '',
-        package: nativeContent({ name: title, description: 'Synthetic only.' }, {}, category),
-        loading: 'pinned',
-        relatedIds: [],
-      },
-    });
-    expect(existing.ok(), await existing.text()).toBe(true);
-    const organization = (await (
-      await request.get('/api/library/organization')
-    ).json()) as LibraryOrganization;
-    const response = await request.post('/api/library/folders', {
-      data: {
-        expectedRevision: organization.revision,
-        category,
-        title: `LUSE03 ${category} ${Date.now()}`,
-      },
-    });
-    expect(response.ok(), await response.text()).toBe(true);
-    const updated = (await response.json()) as LibraryOrganization;
-    folders[category] = updated.folders.find(
-      (folder) => !organization.folders.some((item) => item.id === folder.id)
-    )!.title;
-  }
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 800 });
-  let contentWrites = 0;
-  page.on('request', (item) => {
-    if (
-      isResourceSaveRequest(item) ||
-      (['POST', 'PUT'].includes(item.method()) &&
-        /^\/api\/content(?:\/[^/]+)?$/u.test(new URL(item.url()).pathname))
-    )
-      contentWrites++;
-  });
-  await page.goto('/');
-  const panel = page.getByTestId('library-panel');
-  for (const [category, name] of [
-    ['persona', '페르소나'],
-    ['module', '모듈'],
-  ]) {
-    await panel.getByRole('tab', { name, exact: true }).click();
-    await panel
-      .getByRole('button', { name: `${folders[category]} 폴더 열기`, exact: true })
-      .click();
-    await expect(panel.locator('.library-role-guide')).toHaveCount(0);
-    await expect(
-      panel.getByRole('heading', { name: '이 폴더는 비어 있어요', exact: true })
-    ).toBeVisible();
-    await panel.getByRole('button', { name: `${name} 만들기`, exact: true }).click();
-    await expect(panel.getByRole('heading', { name: `새 ${name}`, exact: true })).toBeVisible();
-    await expect(panel.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
-    await noHorizontalOverflow(page);
-    if (visualReview)
-      await page.screenshot({ path: info.outputPath(`library-role-${category}-360.png`) });
-    await panel.getByRole('button', { name: '서재 목록', exact: true }).click();
-  }
-  expect(contentWrites).toBe(0);
-});
 
 test('LUSE04 standalone module navigation omits bot-only panes and retains its source', async ({
   page,

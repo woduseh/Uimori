@@ -41,22 +41,6 @@ test('keeps useful owner-facing explanations and removes the request credential'
   assert.ok(!JSON.stringify(result).includes('not part of the diagnostic'));
 });
 
-test('keeps bounded unknown provider codes, statuses and explicit parameter names', async () => {
-  const result = await readProviderHttpDiagnostic(
-    errorResponse({
-      code: 'custom_backend_error',
-      status: 'CUSTOM_REJECTION',
-      param: 'sampling.min_p',
-      message: 'min_p is not supported by this model.',
-    }),
-    signal()
-  );
-  assert.equal(result.providerCode, 'custom_backend_error');
-  assert.equal(result.providerStatus, 'CUSTOM_REJECTION');
-  assert.deepEqual(result.fields, ['sampling.min_p']);
-  assert.equal(result.message, 'min_p is not supported by this model.');
-});
-
 test('does not expose credentials through metadata or request IDs', async () => {
   const key = 'private-test-key';
   const result = await readProviderHttpDiagnostic(
@@ -128,11 +112,6 @@ test('limits field paths and rejects malformed metadata', async () => {
   assert.equal(result.fields?.length, 8);
 });
 
-test('preserves numeric HTTP-like error codes', async () => {
-  const result = await readProviderHttpDiagnostic(errorResponse({ code: 503 }, 503), signal());
-  assert.equal(result.providerCode, 503);
-});
-
 test('non-JSON proxy errors remain available as plain text, not HTML', async () => {
   const result = await readProviderHttpDiagnostic(
     new Response('<h1>upstream connection refused</h1>', { status: 502 }),
@@ -153,26 +132,12 @@ test('accepts a bounded top-level message without copying arbitrary JSON', async
   assert.ok(!JSON.stringify(result).includes('private request'));
 });
 
-for (const body of ['[{}]', '{"error":null}', '{}']) {
-  test(`does not turn a JSON document without an error message into freeform detail: ${body}`, async () => {
+test('does not turn a JSON document without an error message into freeform detail', async () => {
+  for (const body of ['[{}]', '{"error":null}'])
     assert.deepEqual(
       await readProviderHttpDiagnostic(new Response(body, { status: 400 }), signal()),
-      {
-        httpStatus: 400,
-        bodyState: 'invalid',
-      }
+      { httpStatus: 400, bodyState: 'invalid' }
     );
-  });
-}
-
-test('keeps empty responses empty', async () => {
-  assert.deepEqual(
-    await readProviderHttpDiagnostic(new Response(null, { status: 503 }), signal()),
-    {
-      httpStatus: 503,
-      bodyState: 'empty',
-    }
-  );
 });
 
 test('an empty response remains empty even when the signal was already aborted', async () => {

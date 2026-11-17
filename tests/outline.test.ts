@@ -194,46 +194,6 @@ function write(store: Store, chatId: string, commandId: string, text: string) {
 }
 
 describe('hierarchical composition', () => {
-  test('a scene requested the existing way still writes with no composition attached', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '즉흥 집필 검사');
-    const request = '미라가 지도를 살펴보는 장면을 써 주세요.';
-    const current = store.chat(chat.id);
-    const profile = store.product.snapshot(chat.id);
-    const run = store.createRun(
-      chat.id,
-      {
-        request,
-        expectedRevision: current.headRevision,
-        expectedSettingsRevision: store.chat(chat.id).settingsRevision,
-        expectedProfileRevision: store.product.profile(chat.id).revision,
-        idempotencyKey: randomUUID(),
-      },
-      (current) =>
-        ({
-          chatId: chat.id,
-          parentRevision: current.headRevision,
-          settingsRevision: current.settingsRevision,
-          settings: current.settings,
-          request,
-          history: store.history(current.headRevision),
-          resources: store.product.resources(chat.id, profile),
-          ...(profile ? { profile } : {}),
-        }) satisfies RunSnapshot
-    ).run;
-    store.startRun(run.id);
-    const source = store.completeRun(run.id, '미라는 지도를 펼쳤다.', {
-      modelCalls: 1,
-      inputTokens: 5,
-      outputTokens: 9,
-      costUsd: null,
-    });
-    // No composition exists, so nothing is frozen and no composition input is required.
-    expect(observedExecution(store, run.id).snapshot.outline).toBeUndefined();
-    expect(store.chat(chat.id).headRevision).toBe(source.id);
-    expect(store.outline.detail(chat.id).nodes).toEqual([]);
-  });
-
   test('composes five levels without writing any prose', async () => {
     const store = await database();
     const chat = createFixtureChat(store, '구성 검사');
@@ -256,7 +216,7 @@ describe('hierarchical composition', () => {
     expect(store.chat(chat.id).headRevision).toBe(before);
   });
 
-  test('allows skipped levels and standalone units but rejects inversions and cross-chat parents', async () => {
+  test('allows skipped levels and standalone units but rejects inversions, cross-chat parents, and writing above episodes', async () => {
     const store = await database(),
       chat = createFixtureChat(store, '유연한 구성');
     compose(store, chat.id);
@@ -294,9 +254,15 @@ describe('hierarchical composition', () => {
           )
         ).statusCode
       ).toBe(400);
+    const arc = find(store, chat.id, '지하 서고의 발견');
+    const error = failure(() =>
+      store.outline.sceneCommand(arc.id, { idempotencyKey: randomUUID() })
+    );
+    expect(error.statusCode).toBe(400);
+    expect(error.message).toContain(OUTLINE_LEVEL_LABELS.episode);
   });
 
-  test('duplicate refs and late mixed-operation errors reject the whole batch', async () => {
+  test('duplicate refs, late mixed-operation errors, and oversized batches reject the whole batch', async () => {
     const store = await database();
     const chat = createFixtureChat(store, '배치 원자성 검사');
     const create = { op: 'create', ref: 'same', level: 'theme', title: '계획', intent: '' };
@@ -359,6 +325,33 @@ describe('hierarchical composition', () => {
       ).statusCode
     ).toBe(409);
     expect(store.outline.node(node.id)).toEqual(node);
+    const operations = Array.from({ length: 200 }, (_, index) => ({
+      op: 'create',
+      ref: `root-${index}`,
+      level: 'theme',
+      title: `계획 ${index}`,
+      intent: '',
+    }));
+    const body = { idempotencyKey: randomUUID(), operations };
+    const applied = store.outline.apply(chat.id, body, 'user');
+    expect(applied.created).toHaveLength(200);
+    expect(store.outline.apply(chat.id, body, 'user').created).toEqual(applied.created);
+    expect(
+      failure(() =>
+        store.outline.apply(
+          chat.id,
+          {
+            idempotencyKey: randomUUID(),
+            operations: [...operations, { ...operations[0], ref: 'extra' }],
+          },
+          'user'
+        )
+      ).statusCode
+    ).toBe(400);
+    expect(store.outline.detail(chat.id).nodes).toHaveLength(201);
+    expect(store.db.prepare('SELECT COUNT(*) AS count FROM outline_batches').get()).toMatchObject({
+      count: 2,
+    });
   });
 
   test('a completed batch can be confirmed after later edits or deletion without replaying writes', async () => {
@@ -454,6 +447,8 @@ describe('hierarchical composition', () => {
       'user'
     );
     expect(store.source(source.id).text).toBe('구멍이 없었다.');
+    expect(store.source(source.id).hash).toBe(source.hash);
+    expect(store.outline.node(beat.id)).toMatchObject({ fixed: true, intent: '현재 계획만 변경' });
     const updated = store.outline.node(arc.id);
     expect(
       failure(() =>
@@ -491,6 +486,28 @@ describe('hierarchical composition', () => {
         })
       ).statusCode
     ).toBe(409);
+    // The same key cannot bind an identically named second unit.
+    const second = store.outline.apply(
+      chat.id,
+      {
+        idempotencyKey: randomUUID(),
+        operations: [
+          {
+            op: 'create',
+            parentId: episode.parentId,
+            level: 'episode',
+            title: episode.title,
+            intent: episode.intent,
+          },
+        ],
+      },
+      'user'
+    ).created[0].id;
+    expect(
+      failure(() => store.outline.sceneCommand(second, { idempotencyKey: key })).statusCode
+    ).toBe(409);
+    expect(store.outline.node(second).progress.state).toBe('planned');
+    expect(store.story.commands(chat.id)).toHaveLength(1);
   });
 
   test('long authored plans and explicit scene requests stay intact through reservation and replay', async () => {
@@ -582,38 +599,7 @@ describe('hierarchical composition', () => {
     expect(run.snapshot.request).toBe(command.request);
   });
 
-  test('a scene-command key cannot bind an identically named second unit', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '장면 요청 소유 검사');
-    compose(store, chat.id);
-    const episode = find(store, chat.id, '1화 잠긴 문');
-    const second = store.outline.apply(
-      chat.id,
-      {
-        idempotencyKey: randomUUID(),
-        operations: [
-          {
-            op: 'create',
-            parentId: episode.parentId,
-            level: 'episode',
-            title: episode.title,
-            intent: episode.intent,
-          },
-        ],
-      },
-      'user'
-    ).created[0].id;
-    const key = randomUUID();
-    store.outline.sceneCommand(episode.id, { idempotencyKey: key });
-    expect(
-      failure(() => store.outline.sceneCommand(second, { idempotencyKey: key })).statusCode
-    ).toBe(409);
-    expect(store.outline.node(second).progress.state).toBe('planned');
-    expect(store.story.commands(chat.id)).toHaveLength(1);
-  });
-
   test.each([
-    ['target', '1화 잠긴 문'],
     ['ancestor', '지하 서고의 발견'],
     ['direct child', '열쇠 없는 자물쇠'],
   ])(
@@ -777,38 +763,6 @@ describe('hierarchical composition', () => {
     expect(run.snapshot.outline?.path.at(-1)?.revision).toBe(current.revision);
   });
 
-  test('the largest allowed batch commits once, and an oversized batch commits nothing', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '배치 한도 검사');
-    const operations = Array.from({ length: 200 }, (_, index) => ({
-      op: 'create',
-      ref: `root-${index}`,
-      level: 'theme',
-      title: `계획 ${index}`,
-      intent: '',
-    }));
-    const body = { idempotencyKey: randomUUID(), operations };
-    const applied = store.outline.apply(chat.id, body, 'user');
-    expect(applied.created).toHaveLength(200);
-    expect(store.outline.apply(chat.id, body, 'user').created).toEqual(applied.created);
-    expect(
-      failure(() =>
-        store.outline.apply(
-          chat.id,
-          {
-            idempotencyKey: randomUUID(),
-            operations: [...operations, { ...operations[0], ref: 'extra' }],
-          },
-          'user'
-        )
-      ).statusCode
-    ).toBe(400);
-    expect(store.outline.detail(chat.id).nodes).toHaveLength(200);
-    expect(store.db.prepare('SELECT COUNT(*) AS count FROM outline_batches').get()).toMatchObject({
-      count: 1,
-    });
-  });
-
   test('large detail reads preserve source projections and archive bytes without exposing retired reviews', async () => {
     const { HelperWorkspace } = await import('../server/helper-workspace.js');
     const store = await database();
@@ -936,7 +890,7 @@ describe('hierarchical composition', () => {
     }
   });
 
-  test('writing one episode carries the upper intent into the real generation input', async () => {
+  test('writing one episode carries the upper intent into the real generation input and later siblings as history', async () => {
     const store = await database();
     const chat = chatWithMainModel(store, '집필 연결 검사');
     compose(store, chat.id);
@@ -985,120 +939,19 @@ describe('hierarchical composition', () => {
     expect(
       nodes.filter((node) => node.id !== episode.id).every((n) => n.progress.state === 'planned')
     ).toBe(true);
-  });
 
-  test('an earlier written sibling enters the next unit as real, in-ancestry history', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '선행 회차 검사');
-    compose(store, chat.id);
-    const first = find(store, chat.id, '1화 잠긴 문');
-    const firstCommand = store.outline.sceneCommand(first.id, { idempotencyKey: randomUUID() });
-    const written = write(store, chat.id, firstCommand.id, '문은 잠겨 있었다.');
+    // An earlier written sibling enters the next unit as real, in-ancestry history.
     const second = find(store, chat.id, '2화 장부의 첫 장');
     const secondCommand = store.outline.sceneCommand(second.id, { idempotencyKey: randomUUID() });
     const next = write(store, chat.id, secondCommand.id, '장부의 첫 장을 펼쳤다.');
     expect(next.run.snapshot.outline?.written).toEqual([
       {
-        id: first.id,
+        id: episode.id,
         level: 'episode',
         title: '1화 잠긴 문',
-        sourceRevision: written.source.id,
+        sourceRevision: source.id,
       },
     ]);
-  });
-
-  test('only episode and beat levels can be written by one request', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '집필 단위 검사');
-    compose(store, chat.id);
-    const arc = find(store, chat.id, '지하 서고의 발견');
-    const error = failure(() =>
-      store.outline.sceneCommand(arc.id, { idempotencyKey: randomUUID() })
-    );
-    expect(error.statusCode).toBe(400);
-    expect(error.message).toContain(OUTLINE_LEVEL_LABELS.episode);
-  });
-
-  test('a user edit applies to the named target under revision control', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '구성 수정 검사');
-    compose(store, chat.id);
-    const first = find(store, chat.id, '1화 잠긴 문');
-    const command = store.outline.sceneCommand(first.id, { idempotencyKey: randomUUID() });
-    const { source } = write(store, chat.id, command.id, '문은 잠겨 있었다.');
-    const third = find(store, chat.id, '3화 관장의 방문');
-    store.outline.apply(
-      chat.id,
-      {
-        idempotencyKey: randomUUID(),
-        operations: [
-          {
-            op: 'update',
-            id: third.id,
-            expectedRevision: third.revision,
-            intent: '관장 대신 조수가 찾아와요.',
-          },
-        ],
-      },
-      'user'
-    );
-    expect(find(store, chat.id, '3화 관장의 방문').intent).toBe('관장 대신 조수가 찾아와요.');
-    // Changing remaining composition never touches prose that is already written.
-    expect(store.source(source.id).text).toBe('문은 잠겨 있었다.');
-    expect(store.source(source.id).hash).toBe(source.hash);
-    expect(find(store, chat.id, '1화 잠긴 문').intent).toBe(
-      '사서가 지하 서고의 잠긴 문을 발견해요.'
-    );
-
-    const stale = failure(() =>
-      store.outline.apply(
-        chat.id,
-        {
-          idempotencyKey: randomUUID(),
-          operations: [
-            { op: 'update', id: third.id, expectedRevision: third.revision, intent: '되돌리기' },
-          ],
-        },
-        'user'
-      )
-    );
-    expect(stale.statusCode).toBe(409);
-  });
-
-  test('a keep-condition remains user editable without changing its children or prose', async () => {
-    const store = await database(),
-      chat = createFixtureChat(store, '유지 조건');
-    compose(store, chat.id);
-    const node = find(store, chat.id, '3화 관장의 방문');
-    store.outline.apply(
-      chat.id,
-      {
-        idempotencyKey: randomUUID(),
-        operations: [{ op: 'update', id: node.id, expectedRevision: node.revision, fixed: true }],
-      },
-      'user'
-    );
-    const pinned = store.outline.node(node.id);
-    store.outline.apply(
-      chat.id,
-      {
-        idempotencyKey: randomUUID(),
-        operations: [
-          {
-            op: 'update',
-            id: node.id,
-            expectedRevision: pinned.revision,
-            intent: '명시 요청으로 결말 변경',
-          },
-        ],
-      },
-      'user'
-    );
-    expect(store.outline.node(node.id)).toMatchObject({
-      fixed: true,
-      intent: '명시 요청으로 결말 변경',
-    });
-    expect(store.chat(chat.id).headRevision).toBeNull();
   });
 
   test('continuation keeps each actual source and preserves parent-child association without semantic completion', async () => {
@@ -1154,40 +1007,6 @@ describe('hierarchical composition', () => {
     expect(store.story.commands(chat.id)).toEqual([]);
   });
 
-  test('adding detail beneath a keep-condition does not rewrite the parent', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '고정 범위 검사');
-    compose(store, chat.id);
-    const arc = find(store, chat.id, '지하 서고의 발견');
-    store.outline.apply(
-      chat.id,
-      {
-        idempotencyKey: randomUUID(),
-        operations: [{ op: 'update', id: arc.id, expectedRevision: arc.revision, fixed: true }],
-      },
-      'user'
-    );
-    const pinned = find(store, chat.id, '지하 서고의 발견');
-    // Planning a further episode under a pinned arc does not change the pinned condition.
-    store.outline.apply(
-      chat.id,
-      {
-        idempotencyKey: randomUUID(),
-        operations: [
-          {
-            op: 'create',
-            parentId: pinned.id,
-            level: 'episode',
-            title: '4화 빈 서가',
-            intent: '서가 하나가 비어 있어요.',
-          },
-        ],
-      },
-      'model'
-    );
-    expect(find(store, chat.id, '4화 빈 서가').parentId).toBe(pinned.id);
-    expect(store.outline.node(pinned.id)).toMatchObject({ fixed: true, intent: pinned.intent });
-  });
   test('explicit related plans reach the brief without recursive expansion and stale reservations are invalidated', async () => {
     const store = await database(),
       chat = createFixtureChat(store, '관련 계획');

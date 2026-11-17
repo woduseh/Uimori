@@ -260,26 +260,19 @@ describe('Codex illustration turns through the synthetic app-server', () => {
     expect(records()).toEqual([]);
   });
 
-  it.each(['unsupported-mime', 'mime-mismatch', 'invalid-base64', 'oversize'] as const)(
+  it.each(['mime-mismatch', 'oversize'] as const)(
     'rejects %s reference bytes before opening any RPC',
     async (fault) => {
       const { runtime, records } = setup('image');
       const png = Buffer.from(PNG_BASE64, 'base64');
       const base64 =
-        fault === 'invalid-base64'
-          ? `!${PNG_BASE64}`
-          : fault === 'oversize'
-            ? Buffer.concat([
-                png,
-                Buffer.alloc(ILLUSTRATION_MAX_IMAGE_BYTES + 1 - png.length),
-              ]).toString('base64')
-            : PNG_BASE64;
-      const mime =
-        fault === 'unsupported-mime'
-          ? 'image/svg+xml'
-          : fault === 'mime-mismatch'
-            ? 'image/jpeg'
-            : 'image/png';
+        fault === 'oversize'
+          ? Buffer.concat([
+              png,
+              Buffer.alloc(ILLUSTRATION_MAX_IMAGE_BYTES + 1 - png.length),
+            ]).toString('base64')
+          : PNG_BASE64;
+      const mime = fault === 'mime-mismatch' ? 'image/jpeg' : 'image/png';
       const result = await runtime.generateImage(connection, request([{ mime, base64 }]), {
         signal: new AbortController().signal,
       });

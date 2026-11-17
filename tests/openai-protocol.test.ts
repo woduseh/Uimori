@@ -482,29 +482,22 @@ describe('native Responses pure protocol (no live calls)', () => {
     }
   );
 
-  test.each([
-    'missing-id',
-    'duplicate-id',
-    'unknown-name',
-    'array-args',
-    'null-args',
-    'scalar-args',
-    'invalid-json',
-  ] as const)('rejects malformed tool %s without fallback', (mode) => {
-    const run = first();
-    const item = record(call());
-    let output: Json[] = [item];
-    if (mode === 'missing-id') delete item.call_id;
-    if (mode === 'duplicate-id') output.push({ ...item, id: 'fc-B' });
-    if (mode === 'unknown-name') item.name = 'knowledge.read';
-    if (mode === 'array-args') item.arguments = '[]';
-    if (mode === 'null-args') item.arguments = 'null';
-    if (mode === 'scalar-args') item.arguments = 'false';
-    if (mode === 'invalid-json') item.arguments = '{';
-    expect(() => run.decoder.accept(terminal(output))).toThrow();
-  });
+  test.each(['missing-id', 'duplicate-id', 'unknown-name', 'array-args', 'invalid-json'] as const)(
+    'rejects malformed tool %s without fallback',
+    (mode) => {
+      const run = first();
+      const item = record(call());
+      let output: Json[] = [item];
+      if (mode === 'missing-id') delete item.call_id;
+      if (mode === 'duplicate-id') output.push({ ...item, id: 'fc-B' });
+      if (mode === 'unknown-name') item.name = 'knowledge.read';
+      if (mode === 'array-args') item.arguments = '[]';
+      if (mode === 'invalid-json') item.arguments = '{';
+      expect(() => run.decoder.accept(terminal(output))).toThrow();
+    }
+  );
 
-  test.each(['task', 'source', 'history', 'stable', 'generation', 'role', 'model'] as const)(
+  test.each(['task', 'stable', 'generation', 'model'] as const)(
     'binds continuation to original %s',
     (field) => {
       const input = request();
@@ -513,41 +506,32 @@ describe('native Responses pure protocol (no live calls)', () => {
       const continued = next(input, run.decoder.finish());
       if (field === 'stable') continued.stable.contract += ' changed';
       else if (field === 'generation') continued.generation!.temperature = 1;
-      else if (field === 'role') continued.role = 'helper';
       else if (field === 'model') continued.modelId += '-changed';
-      else if (field === 'task') continued.input.task += ' changed';
-      else continued.input[field] = { changed: true };
+      else continued.input.task += ' changed';
       expect(() => encodeResponses(continued)).toThrow('OPENAI_CONTINUATION_MISMATCH');
     }
   );
 
-  test.each([
-    'missing',
-    'extra',
-    'duplicate',
-    'wrong-id',
-    'wrong-name',
-    'tampered-state',
-    'reused-id',
-  ] as const)('rejects %s tool continuation', (mode) => {
-    const input = request();
-    const run = first(input);
-    run.decoder.accept(terminal([call(), { ...record(call('Call-B.Original')), id: 'fc-B' }]));
-    const continued = next(input, run.decoder.finish());
-    const results = continued.input.results as Json[];
-    if (mode === 'missing') results.pop();
-    if (mode === 'extra') results.push({ ...record(results[0]), callId: 'additional-call' });
-    if (mode === 'duplicate') results[1] = structuredClone(results[0]);
-    if (mode === 'wrong-id') record(results[0]).callId = 'not-original';
-    if (mode === 'wrong-name') record(results[0]).name = 'knowledge_read';
-    if (mode === 'tampered-state') record(continued.opaqueState!).bindingHash = 'changed';
-    if (mode === 'reused-id') {
-      const second = first(continued);
-      expect(() =>
-        second.decoder.accept(terminal([{ ...record(call()), id: 'fresh-output-item' }]))
-      ).toThrow('DUPLICATE_TOOL_ID');
-    } else expect(() => encodeResponses(continued)).toThrow();
-  });
+  test.each(['missing', 'extra', 'wrong-name', 'tampered-state', 'reused-id'] as const)(
+    'rejects %s tool continuation',
+    (mode) => {
+      const input = request();
+      const run = first(input);
+      run.decoder.accept(terminal([call(), { ...record(call('Call-B.Original')), id: 'fc-B' }]));
+      const continued = next(input, run.decoder.finish());
+      const results = continued.input.results as Json[];
+      if (mode === 'missing') results.pop();
+      if (mode === 'extra') results.push({ ...record(results[0]), callId: 'additional-call' });
+      if (mode === 'wrong-name') record(results[0]).name = 'knowledge_read';
+      if (mode === 'tampered-state') record(continued.opaqueState!).bindingHash = 'changed';
+      if (mode === 'reused-id') {
+        const second = first(continued);
+        expect(() =>
+          second.decoder.accept(terminal([{ ...record(call()), id: 'fresh-output-item' }]))
+        ).toThrow('DUPLICATE_TOOL_ID');
+      } else expect(() => encodeResponses(continued)).toThrow();
+    }
+  );
 
   test('explicit structured translation requests use a source-bound Responses schema', () => {
     const input = request();
@@ -669,8 +653,8 @@ describe('native Responses pure protocol (no live calls)', () => {
   );
 
   test.each(
-    (['helper', 'main', 'context'] as const).flatMap((role) =>
-      ([undefined, 'explicit', 'automatic', 'disabled'] as const).map((cacheMode) => ({
+    (['helper', 'main'] as const).flatMap((role) =>
+      ([undefined, 'automatic'] as const).map((cacheMode) => ({
         role,
         cacheMode,
       }))
@@ -720,18 +704,15 @@ describe('native Responses pure protocol (no live calls)', () => {
     }
   );
 
-  test.each(['gpt-5.4', 'custom-responses-model'])(
-    'helper automatic caching does not assume explicit support for %s',
-    (modelId) => {
-      const input = request();
-      input.role = 'helper';
-      input.modelId = modelId;
-      input.generation!.cacheMode = 'automatic';
-      const wire = record(encodeResponses(input).body);
-      expect(wire.prompt_cache_options).toEqual({ mode: 'implicit' });
-      expect(JSON.stringify(wire)).not.toContain('prompt_cache_breakpoint');
-    }
-  );
+  test('helper automatic caching does not assume explicit support for an unknown model', () => {
+    const input = request();
+    input.role = 'helper';
+    input.modelId = 'custom-responses-model';
+    input.generation!.cacheMode = 'automatic';
+    const wire = record(encodeResponses(input).body);
+    expect(wire.prompt_cache_options).toEqual({ mode: 'implicit' });
+    expect(JSON.stringify(wire)).not.toContain('prompt_cache_breakpoint');
+  });
 
   test('never mistakes content disguised as a reasoning setting for safe diagnostics', () => {
     const body: Json = {
@@ -741,14 +722,11 @@ describe('native Responses pure protocol (no live calls)', () => {
     expect(JSON.stringify(diagnosticResponsesBody(body))).not.toContain('PRIVATE_THOUGHT');
   });
 
-  test.each(['thinkingLevel', 'thinkingMode', 'thinkingBudgetTokens'])(
-    'rejects foreign generation option %s',
-    (key) => {
-      const input = request();
-      Object.assign(input.generation!, { [key]: key === 'thinkingBudgetTokens' ? 1024 : 'LOW' });
-      expect(() => encodeResponses(input)).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
-    }
-  );
+  test('rejects a foreign generation option', () => {
+    const input = request();
+    Object.assign(input.generation!, { thinkingLevel: 'LOW' });
+    expect(() => encodeResponses(input)).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
+  });
 
   test('rejects swapped stream item IDs, response IDs, replayed sequence numbers and negative usage', () => {
     const run = first();

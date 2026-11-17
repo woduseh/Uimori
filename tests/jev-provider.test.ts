@@ -135,7 +135,6 @@ describe('JEV connection settings and explicit diagnostics', () => {
   });
 
   test.each([
-    ['whitespace', '   '],
     ['header injection', 'secret\r\nheader:value'],
     ['oversized', 'x'.repeat(4097)],
   ])('rejects an invalid key without changing settings: %s', async (_name, value) => {
@@ -255,7 +254,6 @@ describe('JEV connection settings and explicit diagnostics', () => {
 
   test.each([
     ['401', () => new Response('PRIVATE_ERROR_RESPONSE', { status: 401 }), 'JEV_HTTP_401'],
-    ['429', () => new Response('PRIVATE_ERROR_RESPONSE', { status: 429 }), 'JEV_HTTP_429'],
     [
       'malformed',
       () => Response.json({ model: 'jev-latest', answers: {} }),

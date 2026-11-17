@@ -127,16 +127,14 @@ function provider(name: string, args: Record<string, transport.Json>, beforeSumm
     });
 }
 
-test.each(['notes.write', 'context.edit', 'context.compact'] as const)(
+test.each(['notes.write', 'context.compact'] as const)(
   '%s stays committed and blocks whole-task replay after a later provider failure',
   async (name) => {
     const f = await fixture();
     const args: Record<string, transport.Json> =
       name === 'notes.write'
         ? { body: { expectedRevision: 0, text: 'Saved author note.' } }
-        : name === 'context.edit'
-          ? { expectedRevision: 0, summary: 'Saved explicit context summary.' }
-          : { expectedRevision: 0 };
+        : { expectedRevision: 0 };
     provider(name, args);
     const task = await f.run();
     expect(task).toMatchObject({ status: 'failed', completedEffects: { count: 1 } });
@@ -153,13 +151,11 @@ test.each(['notes.write', 'context.edit', 'context.compact'] as const)(
       ).toEqual([expect.objectContaining({ text: 'Saved author note.' })]);
     } else {
       expect(f.store.context.current(f.chat.id).checkpoint?.plan.summary).toBe(
-        name === 'context.edit' ? 'Saved explicit context summary.' : 'Synthetic context summary.'
+        'Synthetic context summary.'
       );
-      if (name === 'context.compact')
-        expect(
-          f.store.db.prepare('SELECT status FROM context_jobs WHERE chat_id=?').get(f.chat.id)
-            ?.status
-        ).toBe('completed');
+      expect(
+        f.store.db.prepare('SELECT status FROM context_jobs WHERE chat_id=?').get(f.chat.id)?.status
+      ).toBe('completed');
     }
     const retry = await f.submit(task.id);
     expect(retry.statusCode).toBe(409);

@@ -87,36 +87,35 @@ function fixture(
 const chat = { type: 'chat', rangeStart: 0, rangeEnd: 'end' };
 const plain = (text: string) => ({ type: 'plain', role: 'system', text });
 
-test.each([
-  {},
-  { jailbreakToggle: false, chainOfThought: false },
-  { jailbreakToggle: true, chainOfThought: true },
-])('disabled blocks and unused field forms cannot mutate native variables (%j)', async (flags) => {
-  const input = fixture(
-    [
-      { type: 'jailbreak', text: '{{setvar::x::bad}}' },
-      { type: 'cot', text: '{{setvar::x::bad}}' },
-      { type: 'memory', innerFormat: '{{setvar::x::bad}}' },
-      { type: 'persona', innerFormat: '{{setvar::x::bad}}' },
-      {
-        ...plain('{{setvar::x::good}}'),
-        innerFormat: '{{setvar::x::bad}}',
-        defaultText: '{{setvar::x::bad}}',
-      },
-      plain('{{getvar::x}}'),
-      chat,
-    ],
-    {},
-    flags
-  );
-  const prepared = await prepareNativeRisuPreset(input);
-  expect(prepared.nativeRisuPresetProgram?.variables.x).toBe('good');
-  expect(Object.keys(prepared.nativeRisuPresetProgram!.fields)).toEqual([
-    'block:4:text',
-    'block:5:text',
-  ]);
-  expect(await prepareNativeRisuPreset(prepared)).toBe(prepared);
-});
+test.each([{}, { jailbreakToggle: true, chainOfThought: true }])(
+  'disabled blocks and unused field forms cannot mutate native variables (%j)',
+  async (flags) => {
+    const input = fixture(
+      [
+        { type: 'jailbreak', text: '{{setvar::x::bad}}' },
+        { type: 'cot', text: '{{setvar::x::bad}}' },
+        { type: 'memory', innerFormat: '{{setvar::x::bad}}' },
+        { type: 'persona', innerFormat: '{{setvar::x::bad}}' },
+        {
+          ...plain('{{setvar::x::good}}'),
+          innerFormat: '{{setvar::x::bad}}',
+          defaultText: '{{setvar::x::bad}}',
+        },
+        plain('{{getvar::x}}'),
+        chat,
+      ],
+      {},
+      flags
+    );
+    const prepared = await prepareNativeRisuPreset(input);
+    expect(prepared.nativeRisuPresetProgram?.variables.x).toBe('good');
+    expect(Object.keys(prepared.nativeRisuPresetProgram!.fields)).toEqual([
+      'block:4:text',
+      'block:5:text',
+    ]);
+    expect(await prepareNativeRisuPreset(prepared)).toBe(prepared);
+  }
+);
 
 test('only native formatted slots evaluate wrappers and hidden ChatML thoughts do not run CBS', async () => {
   const input = fixture([
@@ -150,45 +149,6 @@ test('only native formatted slots evaluate wrappers and hidden ChatML thoughts d
     ['system', 'Post'],
     ['system', 'null'],
   ]);
-});
-
-test('retired post-end and prefill fields never evaluate CBS or append messages', async () => {
-  const input = fixture(
-    [plain('{{setvar::x::first}}'), { type: 'postEverything' }, plain('{{getvar::x}}'), chat],
-    {},
-    {
-      promptSettings: {
-        postEndInnerFormat: '{{setvar::x::post}}End',
-        assistantPrefill: '{{setvar::x::prefill}}Prefix',
-      },
-    }
-  );
-  const prepared = await prepareNativeRisuPreset(input);
-  const program = projectNativeRisuPresetProgram(
-    prepared,
-    prepared.profile!.promptPresets!.main!.program
-  );
-  const result = compileRisuPrompt(program, {
-    slots: { postEverything: '' },
-    history: [{ id: 'current', role: 'user', text: 'Current', current: true }],
-  });
-  expect(prepared.nativeRisuPresetProgram!.variables.x).toBe('first');
-  expect(Object.keys(prepared.nativeRisuPresetProgram!.fields)).toEqual([
-    'block:0:text',
-    'block:2:text',
-  ]);
-  expect(
-    result.messages.map((message) => message.content.filter((part) => part.type === 'text')[0].text)
-  ).toEqual(['first', 'Current']);
-  expect(result.messages.every((message) => message.completion === 'complete')).toBe(true);
-});
-
-test('jbtoggled remains false without diagnostics even for an enabled historical preset', async () => {
-  const prepared = await prepareNativeRisuPreset(
-    fixture([plain('{{jbtoggled}}'), chat], {}, { jailbreakToggle: true })
-  );
-  expect(prepared.nativeRisuPresetProgram!.fields['block:0:text']).toBe('0');
-  expect(prepared.nativeRisuPresetProgram!.issues).toEqual([]);
 });
 
 test('card global note replaces its native block with original insertion before CBS', async () => {
@@ -271,45 +231,41 @@ test('native ChatML and history preserve roles and text despite retired settings
   ]);
 });
 
-test.each(['risu-native-prompt-2'] as const)(
-  '%s suppresses retired blocks and settings in historical presets',
-  (compilerVersion) => {
-    const input = fixture(
-      [
-        { type: 'jailbreak', text: 'Old default enabled' },
-        { type: 'cot', text: 'Old thought' },
-        { ...plain('{{slot}}'), type2: 'globalNote' },
-        { type: 'postEverything' },
-        chat,
-      ],
-      {},
-      {
-        jailbreakToggle: true,
-        chainOfThought: true,
-        promptSettings: {
-          postEndInnerFormat: '<{{slot}}>',
-          assistantPrefill: 'Old prefix',
-          sendName: true,
-          sendChatAsSystem: true,
-        },
-      }
-    );
-    const result = compileRisuPrompt(input.profile!.promptPresets!.main!.program, {
-      compilerVersion,
-      slots: { globalNote: 'Saved note', postEverything: 'Saved post' },
-      history: [{ id: 'request', role: 'user', text: 'Go', current: true }],
-    });
-    expect(result.compilerVersion).toBe(compilerVersion);
-    expect(
-      result.messages.map(
-        (message) => message.content.filter((part) => part.type === 'text')[0].text
-      )
-    ).toEqual(['{{slot}}', 'Saved post', 'Go']);
-    expect(result.messages.at(-1)?.role).toBe('user');
-    expect(result.messages.every((message) => message.completion === 'complete')).toBe(true);
-    expect(result.warnings).toEqual([]);
-  }
-);
+test('risu-native-prompt-2 suppresses retired blocks and settings in historical presets', () => {
+  const compilerVersion = 'risu-native-prompt-2' as const;
+  const input = fixture(
+    [
+      { type: 'jailbreak', text: 'Old default enabled' },
+      { type: 'cot', text: 'Old thought' },
+      { ...plain('{{slot}}'), type2: 'globalNote' },
+      { type: 'postEverything' },
+      chat,
+    ],
+    {},
+    {
+      jailbreakToggle: true,
+      chainOfThought: true,
+      promptSettings: {
+        postEndInnerFormat: '<{{slot}}>',
+        assistantPrefill: 'Old prefix',
+        sendName: true,
+        sendChatAsSystem: true,
+      },
+    }
+  );
+  const result = compileRisuPrompt(input.profile!.promptPresets!.main!.program, {
+    compilerVersion,
+    slots: { globalNote: 'Saved note', postEverything: 'Saved post' },
+    history: [{ id: 'request', role: 'user', text: 'Go', current: true }],
+  });
+  expect(result.compilerVersion).toBe(compilerVersion);
+  expect(
+    result.messages.map((message) => message.content.filter((part) => part.type === 'text')[0].text)
+  ).toEqual(['{{slot}}', 'Saved post', 'Go']);
+  expect(result.messages.at(-1)?.role).toBe('user');
+  expect(result.messages.every((message) => message.completion === 'complete')).toBe(true);
+  expect(result.warnings).toEqual([]);
+});
 
 test('a preset receipt binds authored evaluation inputs without binding remappable host catalog IDs', async () => {
   const input = fixture([{ ...plain('Original'), type2: 'globalNote' }, chat], {

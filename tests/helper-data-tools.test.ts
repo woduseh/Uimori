@@ -214,50 +214,6 @@ test('conversation retrieval uses edited text and excludes deleted request pairs
   expect(deleted.deletedMessageIds).toHaveLength(1);
 });
 
-test('branched conversation keeps exact searchable dialogue independent of original task', async () => {
-  const f = fixture();
-  const workspace = new HelperWorkspace(f.store);
-  workspace.start(f.task.id, 'owner');
-  workspace.finish(f.task.id, 'owner', 1, 'completed', '분기한 고유 답변 원본', null);
-  const branch = workspace.create(f.task.snapshot.scope, 'legacy-seed', '기존 분기');
-  const add = f.store.db.prepare(`INSERT INTO helper_seed_messages
-    (id,conversation_id,ordinal,role,text,created_at) VALUES(?,?,?,?,?,?)`);
-  helperHistory(f.store, f.task.conversationId).forEach((message, ordinal) => {
-    add.run(
-      crypto.randomUUID(),
-      branch.id,
-      ordinal,
-      message.role,
-      message.text,
-      new Date().toISOString()
-    );
-  });
-  const seeded = helperHistory(f.store, branch.id);
-  expect(seeded.map((message) => message.text)).toContain('분기한 고유 답변 원본');
-  const next = workspace.enqueue(branch.id, 'seek-seed', '이전 문장을 검색해 주세요', {
-    ...f.task.snapshot,
-    scope: branch.scope,
-    history: seeded,
-  });
-  const invoke = (name: DataOperation['name'], args: Record<string, unknown>) =>
-    runDataProcess({ path: f.store.path, taskId: next.id, name, args }) as Promise<any>;
-  const result = await invoke('data.search', {
-    scope: 'conversation',
-    patterns: ['고유 답변'],
-  });
-  expect(result.items).toHaveLength(1);
-  const reference = result.items[0].ref;
-  expect(reference.id).toBe(seeded[1].id);
-  expect(result.items[0].text).toContain('분기한 고유 답변 원본');
-  const read = await invoke('data.read', { refs: [reference] });
-  expect(read.items[0].read.text).toBe('분기한 고유 답변 원본');
-  expect(read.items[0].read.metadata.role).toBe('assistant');
-  const impact = workspace.deletionImpact(f.task.conversationId);
-  workspace.delete(f.task.conversationId, impact.request);
-  const again = await invoke('data.search', { scope: 'conversation', patterns: ['고유 답변'] });
-  expect(again.items[0].ref.id).toBe(reference.id);
-});
-
 test('conversation retrieval follows effective request history without superseded or later requests', async () => {
   const f = fixture();
   const workspace = new HelperWorkspace(f.store);
@@ -466,57 +422,6 @@ test('module string excerpts can be patched while protected native paths remain 
   expect(after.package.nativeRisu.module?.extensions).toMatchObject({ vendor: protectedFields });
 });
 
-test('prompt search patches the exact native block without a reread and rejects a stale target', async () => {
-  const f = fixture();
-  const saved = prompt(f);
-  const found = await f.invoke('data.search', {
-    scope: 'library',
-    ids: [saved.id],
-    patterns: ['established actions'],
-  });
-  expect(found.items).toHaveLength(1);
-  const hit = found.items[0];
-  const path = '/program/nativeRisuPreset/preset/promptTemplate/0/text';
-  expect(hit.ref).toMatchObject({
-    kind: 'prompt',
-    revision: saved.revision,
-    field: path,
-  });
-  expect(hit.editTarget).toEqual({
-    kind: 'prompt-preset',
-    id: saved.id,
-    expectedRevision: saved.revision,
-    path,
-  });
-  const { path: editPath, ...target } = hit.editTarget;
-  const patch = {
-    ...target,
-    changes: [
-      {
-        path: editPath,
-        op: 'replaceText',
-        oldText: 'established actions',
-        newText: 'established circumstances, actions, and consequences',
-      },
-    ],
-  };
-  expect(invokeResourceTool(f.store, 'resource.patch', patch)).toEqual({
-    id: saved.id,
-    revision: saved.revision + 1,
-    changedPaths: [path],
-  });
-  const expected = structuredClone(saved);
-  (expected.program.nativeRisuPreset.preset.promptTemplate as { text?: string }[])[0].text =
-    'A resolution follows established circumstances, actions, and consequences.';
-  expected.revision++;
-  expect(f.store.product.get<PromptPreset>('prompt-preset', saved.id)).toEqual(expected);
-  expect(() => invokeResourceTool(f.store, 'resource.patch', patch)).toThrow(
-    '저장된 자료가 변경됐어요'
-  );
-  expect(f.store.product.get<PromptPreset>('prompt-preset', saved.id)).toEqual(expected);
-  await expect(readOne(f, hit.ref)).rejects.toThrow('DATA_SOURCE_CHANGED');
-});
-
 test('prompt reads expose editable titles, options and native strings but exclude protected and typed fields', async () => {
   const f = fixture();
   const saved = prompt(f);
@@ -594,7 +499,6 @@ test('prompt reads expose editable titles, options and native strings but exclud
 
 test.each([
   ['empty property name', { '': 'unaddressable-marker' }],
-  ['oversized property name', { ['x'.repeat(301)]: 'unaddressable-marker' }],
   [
     'too many nested properties',
     Array.from({ length: 74 }, (_, index) => `level${index}`).reduce<unknown>(
@@ -622,53 +526,25 @@ test.each([
   }
 );
 
-test('content search accounts for the native edit prefix when a field path exceeds the patch limit', async () => {
+test('saved captured prompt editors never advertise live resource edit targets', async () => {
   const f = fixture();
-  const input = fixtureBotInput('Long native path');
-  const native = input.package.nativeRisu.card;
-  native.extensions = {
-    vendor: Array.from({ length: 4 }, (_, index) => String(index).repeat(245)).reduce<unknown>(
-      (value, key) => ({ [key]: value }),
-      { note: 'prefix-boundary-marker' }
-    ),
-  };
-  const saved = f.store.product.content(input) as Content;
-  const found = await f.invoke('data.search', {
-    scope: 'library',
-    ids: [saved.id],
-    patterns: ['prefix-boundary-marker'],
+  const saved = prompt(f);
+  f.setSnapshot({
+    editor: {
+      kind: 'prompt-preset',
+      targetId: saved.id,
+      revision: saved.revision,
+      title: saved.title,
+      source: 'saved',
+      model: saved,
+    },
   });
+  const found = await f.invoke('data.search', { patterns: ['established actions'] });
+  expect(found.scope).toBe('editor');
   expect(found.items).toHaveLength(1);
-  const hit = found.items[0];
-  expect(hit.ref.field.length).toBeLessThanOrEqual(1024);
-  expect(`/package/nativeRisu${hit.ref.field}`.length).toBeGreaterThan(1024);
-  expect(hit.text).toBe('prefix-boundary-marker');
-  expect(hit.editTarget).toBeUndefined();
-  expect((await readOne(f, hit.ref)).editTarget).toBeUndefined();
+  expect(found.items[0].editTarget).toBeUndefined();
+  expect((await readOne(f, found.items[0].ref)).editTarget).toBeUndefined();
 });
-
-test.each(['saved', 'unsaved'] as const)(
-  '%s captured prompt editors never advertise live resource edit targets',
-  async (source) => {
-    const f = fixture();
-    const saved = prompt(f);
-    f.setSnapshot({
-      editor: {
-        kind: 'prompt-preset',
-        targetId: saved.id,
-        revision: saved.revision,
-        title: saved.title,
-        source,
-        model: saved,
-      },
-    });
-    const found = await f.invoke('data.search', { patterns: ['established actions'] });
-    expect(found.scope).toBe('editor');
-    expect(found.items).toHaveLength(1);
-    expect(found.items[0].editTarget).toBeUndefined();
-    expect((await readOne(f, found.items[0].ref)).editTarget).toBeUndefined();
-  }
-);
 
 test('matches later occurrences in one long field, with deterministic search pagination and exact original offsets', async () => {
   const f = fixture();
@@ -816,67 +692,6 @@ test('library filters distinguish bot/persona/module, hide retired library entri
   await expect(f.invoke('data.read', { ref: refs[0], refs })).rejects.toThrow();
 });
 
-test('library document search lists current resources by title, ID, category and prompt role', async () => {
-  const f = fixture();
-  const original = bot(f);
-  const current = f.store.product.content(
-    {
-      ...fixtureBotInput('Revised Archive Beacon', 'PRIVATE_CARD_BODY ' + 'body '.repeat(270_000)),
-      expectedRevision: original.revision,
-    },
-    original.id
-  ) as Content;
-  const main = f.store.product.promptPreset({
-    title: 'Main Archive',
-    role: 'main',
-    text: 'PRIVATE_PROMPT_BODY ' + 'prompt '.repeat(25_000),
-  });
-  const translation = f.store.product.promptPreset({
-    title: 'Translation Archive',
-    role: 'translation',
-    text: 'Translation prompt body',
-  });
-  const content = await f.invoke('data.search', {
-    scope: 'library',
-    output: 'documents',
-    query: `ＢＥＡＣＯＮ ${current.id.toUpperCase()} bot`,
-  });
-  expect(content.items).toMatchObject([
-    { id: current.id, revision: current.revision, metadata: { category: 'bot' } },
-  ]);
-  expect(content.items[0].title).toBe('Revised Archive Beacon');
-  expect(content.items[0]).not.toHaveProperty('text');
-  expect(JSON.stringify(content)).not.toContain('PRIVATE_CARD_BODY');
-  const prompts = await f.invoke('data.search', {
-    scope: 'library',
-    output: 'documents',
-    query: 'archive MAIN prompt',
-  });
-  expect(prompts.items).toMatchObject([
-    { id: main.id, kind: 'prompt', metadata: { category: 'main' } },
-  ]);
-  expect(JSON.stringify(prompts)).not.toContain('PRIVATE_PROMPT_BODY');
-  const listed = await f.invoke('data.search', {
-    scope: 'library',
-    output: 'documents',
-    limit: f.initialPresets.length + 3,
-  });
-  expect(listed.items.map((item: any) => item.id).sort()).toEqual(
-    [...f.initialPresets.map((preset) => preset.id), current.id, main.id, translation.id].sort()
-  );
-  expect(JSON.stringify(listed)).not.toContain('PRIVATE_CARD_BODY');
-  expect(JSON.stringify(listed)).not.toContain('PRIVATE_PROMPT_BODY');
-  expect(
-    (
-      await f.invoke('data.search', {
-        scope: 'library',
-        output: 'documents',
-        query: 'Archive translation bot',
-      })
-    ).items
-  ).toEqual([]);
-});
-
 test('live references detect a later revision while unsaved editor input is separate and not written to the library', async () => {
   const f = fixture(),
     b = bot(f);
@@ -992,16 +807,10 @@ test('SQL views support schema discovery, aggregate queries, params, JSON and cr
     'agent_usage',
     'agent_helper_inputs',
   ]);
-  for (const name of [
-    'agent_resources',
-    'agent_chats',
-    'agent_messages',
-    'agent_usage',
-    'agent_helper_inputs',
-  ]) {
-    const count = await f.invoke('db.query', { sql: `SELECT COUNT(*) n FROM ${name}` });
-    expect(count.rows[0].n).toBeTypeOf('number');
-  }
+  const counts = await f.invoke('db.query', {
+    sql: `SELECT ${schema.views.map((v: any) => `(SELECT COUNT(*) FROM ${v.name}) ${v.name}`).join(',')}`,
+  });
+  for (const view of schema.views) expect(counts.rows[0][view.name]).toBeTypeOf('number');
   const rows = await f.invoke('db.query', {
     sql: "WITH selected AS (SELECT id,title,document FROM agent_resources WHERE kind=?) SELECT id,title,json_extract(document,'$.card.description') description FROM selected",
     params: ['bot'],

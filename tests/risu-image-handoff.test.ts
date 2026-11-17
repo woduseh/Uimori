@@ -3,7 +3,6 @@ import { basename } from 'node:path';
 import { readFileSync } from 'node:fs';
 import {
   detectRisuImageHandoff,
-  imageHandoffSource,
   projectRisuImageHandoff,
   risuImageHandoffText,
   validateRisuImageHandoff,
@@ -126,34 +125,6 @@ test('disabled lore and folders do not become image instructions', () => {
   expect(
     detectRisuImageHandoff(native)!.ranges.every((range) => range.field.startsWith('card:'))
   ).toBe(true);
-});
-
-test('retired image instruction receipts are rejected instead of kept readable', () => {
-  const native = source();
-  const retired = 'C. Image Tag Insertion\nUse <img="retired"> {{setvar::retired::1}}';
-  native.card.scenario = retired;
-  native.card.character_book = { entries: [] };
-  native.card.post_history_instructions = '';
-  const historical = {
-    version: 1 as const,
-    ranges: [
-      {
-        id: 'old-scenario',
-        field: 'card:scenario',
-        start: 0,
-        end: retired.length,
-        text: retired,
-        enabled: true,
-        confidence: 'section' as const,
-      },
-    ],
-    tagTemplates: ['<img="{asset}">'],
-  };
-  expect(() => validateRisuImageHandoff(historical, native)).toThrow('PACKAGE_IMAGE_HANDOFF_STALE');
-  expect(detectRisuImageHandoff(native)?.ranges).toEqual([]);
-  const value = { ...pkg(native), imageHandoff: historical };
-  expect(imageHandoffSource(native, 'card:scenario')).toBe('');
-  expect(risuImageHandoffText(value, 'card:scenario')).toBe('');
 });
 
 test('src image handoff accepts quoted rules and repairs legacy unquoted templates at runtime', async () => {

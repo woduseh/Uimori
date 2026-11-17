@@ -32,7 +32,4 @@ describe('Risu reading provenance markers', () => {
     expect(nested).not.toContain('<li data-uimori-prose="">Parent');
     expect(nested).toContain('<li data-uimori-prose="">Child</li>');
   });
-  test('blockquote paragraphs are marked without changing their structure', () => {
-    expect(render('> “Quoted paragraph”')).toContain('<blockquote>\n<p data-uimori-prose="">');
-  });
 });

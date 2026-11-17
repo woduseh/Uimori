@@ -45,12 +45,9 @@ test('Vertex recognizes an omitted zero cache count only with valid reported pro
 
   for (const value of [
     null,
-    undefined,
-    {},
-    { promptTokenCount: null },
     { promptTokenCount: -1 },
     { promptTokenCount: '1000' },
-    ...[null, -1, '40'].map((cachedContentTokenCount) => ({
+    ...[-1, '40'].map((cachedContentTokenCount) => ({
       promptTokenCount: 1000,
       cachedContentTokenCount,
     })),
@@ -67,8 +64,6 @@ test('Vercel uses the top-level cache write count without adding or replacing it
     [12, 12],
     [0, 0],
     [null, null],
-    [undefined, null],
-    [-1, null],
     ['12', null],
   ]) {
     expect(

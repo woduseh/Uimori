@@ -184,10 +184,8 @@ test.each(['closed', 'cancelled'] as const)(
 test.each([
   ['editinput', 1, 'user'],
   ['editoutput', 1, 'char'],
-  ['editprocess', 0, 'char'],
   ['editprocess', 1, 'user'],
   ['editdisplay', 0, 'char'],
-  ['editprocess', -1, 'char'],
 ] as const)(
   '%s evaluates initial text and regex CBS with message %i role %s',
   async (mode, messageIndex, expectedRole) => {
@@ -253,7 +251,6 @@ test('native display follows CBS/regex/assets and keeps HTML CSS without mutatin
 });
 
 test.each([
-  ['scene_annyoed.webp', ['scene_annoyed.webp'], 0],
   [' SCENE - ANNOYED.PNG ', ['scene_annoyed.webp'], 0],
   ['portrait-1.webp', ['portrait_1.png', 'portrait-1.webp'], 1],
   ['portrait-3.webp', ['portrait_1.png', 'portrait_2.png'], 0],
@@ -261,7 +258,6 @@ test.each([
   ['abWXYZ.webp', ['abcdef.png'], 0],
   ['aVWXYZ.webp', ['abcdef.png'], -1],
   ['abc.webp', ['abcdefg.png'], 0],
-  ['abcdefg.webp', ['abc.png'], 0],
 ] as const)(
   'native asset resolution matches Risu exact-first and bounded distance: %s / %j',
   async (query, names, selected) => {

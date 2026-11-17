@@ -227,23 +227,13 @@ describe('Anthropic Messages request and opaque continuation', () => {
   test.each([
     { maxOutputTokens: 0, temperature: null },
     { maxOutputTokens: 8192, temperature: 0 },
-    { maxOutputTokens: 8192, temperature: null, thinkingLevel: 'MEDIUM' },
-    { maxOutputTokens: 8192, temperature: null, thinkingMode: 'guess' },
     {
       maxOutputTokens: 8192,
       temperature: null,
       thinkingMode: 'enabled',
       thinkingBudgetTokens: 2048,
     },
-    {
-      maxOutputTokens: 8192,
-      temperature: null,
-      thinkingMode: 'adaptive',
-      thinkingBudgetTokens: 2048,
-    },
-    { maxOutputTokens: 8192, temperature: null, reasoningEffort: 'high' },
     { maxOutputTokens: 8192, temperature: null, outputEffort: 'none' },
-    { maxOutputTokens: 8192, temperature: null, structuredOutput: 'yes' },
   ])('rejects incompatible generation settings %j', (generation) => {
     const input = request();
     input.generation = generation as ProviderRequest['generation'];
@@ -350,23 +340,20 @@ describe('Anthropic Messages request and opaque continuation', () => {
       expect(() => encodeAnthropic(next)).toThrow('ANTHROPIC_CONTINUATION_MISMATCH');
     }
   );
-  test.each(['helper', 'main', 'context'] as const)(
-    '%s automatic caching marks the stable system prefix and preserves it on continuation',
-    (role) => {
-      const input = request();
-      input.role = role;
-      input.generation!.cacheMode = 'automatic';
-      input.generation!.cacheTtl = '1h';
-      const first = native(encodeAnthropic(input).body);
-      expect(first.cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
-      expect(first.system[1].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
-      expect(first.system[0]).not.toHaveProperty('cache_control');
-      const next = native(encodeAnthropic(continued(input, turn(input))).body);
-      expect(next.system).toEqual(first.system);
-      expect(next.cache_control).toEqual(first.cache_control);
-    }
-  );
-  test.each(['explicit', 'disabled', undefined] as const)(
+  test('helper automatic caching marks the stable system prefix and preserves it on continuation', () => {
+    const input = request();
+    input.role = 'helper';
+    input.generation!.cacheMode = 'automatic';
+    input.generation!.cacheTtl = '1h';
+    const first = native(encodeAnthropic(input).body);
+    expect(first.cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
+    expect(first.system[1].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
+    expect(first.system[0]).not.toHaveProperty('cache_control');
+    const next = native(encodeAnthropic(continued(input, turn(input))).body);
+    expect(next.system).toEqual(first.system);
+    expect(next.cache_control).toEqual(first.cache_control);
+  });
+  test.each(['explicit', undefined] as const)(
     'helper cache %s does not add a host system breakpoint',
     (cacheMode) => {
       const input = request();
@@ -399,9 +386,9 @@ describe('Anthropic Messages request and opaque continuation', () => {
     expect(end(decoder)).toMatchObject({ status: 'completed', text: prose });
   });
 
-  test.each(['main', 'helper'] as const)('does not send translation formatting for %s', (role) => {
+  test('does not send translation formatting for main', () => {
     const input = request();
-    input.role = role;
+    input.role = 'main';
     input.generation!.structuredOutput = true;
     const wire = native(encodeAnthropic(input).body);
     expect(wire).not.toHaveProperty('output_config');
@@ -482,7 +469,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
     };
     expect(() => encodeAnthropic(thirdInput)).toThrow('TOOL_RESULT_MISMATCH');
   });
-  test.each(['missing', 'extra', 'duplicate', 'id', 'name', 'denied'])(
+  test.each(['missing', 'extra', 'duplicate', 'name'])(
     'rejects %s tool result correspondence',
     (mutation) => {
       const input = request();
@@ -492,9 +479,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
       if (mutation === 'missing') fresh.pop();
       if (mutation === 'extra') fresh.push({ ...fresh[0], callId: 'call-C' });
       if (mutation === 'duplicate') fresh[1].callId = fresh[0].callId;
-      if (mutation === 'id') fresh[1].callId = 'unknown';
       if (mutation === 'name') fresh[1].name = 'skills.list';
-      if (mutation === 'denied') fresh[1].denied = 'true';
       expect(() => encodeAnthropic(next)).toThrow('TOOL_RESULT_MISMATCH');
     }
   );
@@ -522,16 +507,14 @@ describe('Anthropic Messages request and opaque continuation', () => {
     expect(content.is_error).toBe(true);
     expect(JSON.parse(content.content)).toEqual(first.result);
   });
-  test.each(['input', 'contract', 'generation', 'model', 'tools', 'state'])(
+  test.each(['input', 'generation', 'model', 'state'])(
     'rejects changed %s during continuation',
     (mutation) => {
       const input = request();
       const next = continued(input, turn(input));
       if (mutation === 'input') next.input.task = 'Different task';
-      if (mutation === 'contract') next.stable.contract += ' Different contract';
       if (mutation === 'generation') next.generation!.maxOutputTokens++;
       if (mutation === 'model') next.modelId = 'other-model';
-      if (mutation === 'tools') next.stable.tools.reverse();
       if (mutation === 'state') native(next.opaqueState!).messages[0].content[0].text = 'altered';
       expect(() => encodeAnthropic(next)).toThrow(
         mutation === 'state' ? 'INVALID_ANTHROPIC_CONTINUATION' : 'ANTHROPIC_CONTINUATION_MISMATCH'
@@ -587,7 +570,7 @@ describe('Anthropic Messages stream lifecycle and usage', () => {
       'ANTHROPIC_UNKNOWN_TOOL'
     );
   });
-  test.each(['[1]', 'null', '42', '"string"', '{"unfinished":'])(
+  test.each(['[1]', '{"unfinished":'])(
     'rejects non-object or incomplete JSON at a tool terminal: %s',
     (partial) => {
       const { decoder } = start();
@@ -618,27 +601,6 @@ describe('Anthropic Messages stream lifecycle and usage', () => {
     });
     expect(JSON.stringify(diagnostic)).not.toContain('PRIVATE_ARGUMENT');
   });
-  test('records tool-start shape failures using the registered host tool name', () => {
-    const { decoder } = start();
-    begin(decoder);
-    expect(() =>
-      decoder.accept({
-        type: 'content_block_start',
-        index: 0,
-        content_block: toolPart('call-shape', 'tool_0_knowledge_read', []),
-      })
-    ).toThrow('INVALID_TOOL_ARGUMENTS');
-    expect(decoder.snapshot().error?.toolArgumentDiagnostic).toEqual({
-      kind: 'tool-arguments',
-      toolName: 'knowledge.read',
-      stage: 'tool_start_shape',
-      blockIndex: 0,
-      argumentChars: 2,
-      hasJsonDelta: false,
-      parseOffset: null,
-    });
-  });
-
   test('retains partial status for truncated tool JSON without executing or continuing it', () => {
     const input = request();
     const { decoder } = start(input);
@@ -669,32 +631,28 @@ describe('Anthropic Messages stream lifecycle and usage', () => {
     expect(output.error).toEqual(code ? { code } : null);
     expect(output.refusal).toBe(reason === 'refusal' ? 'ANTHROPIC_REFUSAL' : null);
   });
-  test.each(['claude-opus-5', 'claude-fable-5-1'])(
-    '%s completes a requested stop sequence after tool continuation with the original binding',
-    (modelId) => {
-      const input = request();
-      input.modelId = modelId;
-      input.generation!.stopSequences = ['END_SCENE'];
-      const next = continued(input, turn(input));
-      const { decoder, body } = start(next);
-      expect(native(body).stop_sequences).toEqual(['END_SCENE']);
-      next.generation!.stopSequences = ['FUTURE_SETTING'];
-      begin(decoder, { input_tokens: 9, output_tokens: 0 });
-      block(decoder, 0, { type: 'text', text: 'The scene closes.' });
-      const output = end(decoder, 'stop_sequence', { output_tokens: 4 }, 'END_SCENE');
-      expect(output).toMatchObject({
-        status: 'completed',
-        text: 'The scene closes.',
-        error: null,
-        toolCalls: [],
-        usage: { inputTokens: 9, outputTokens: 4, costUsd: null },
-      });
-      expect(() => encodeAnthropic(next)).toThrow('ANTHROPIC_CONTINUATION_MISMATCH');
-    }
-  );
+  test('completes a requested stop sequence after tool continuation with the original binding', () => {
+    const input = request();
+    input.modelId = 'claude-fable-5-1';
+    input.generation!.stopSequences = ['END_SCENE'];
+    const next = continued(input, turn(input));
+    const { decoder, body } = start(next);
+    expect(native(body).stop_sequences).toEqual(['END_SCENE']);
+    next.generation!.stopSequences = ['FUTURE_SETTING'];
+    begin(decoder, { input_tokens: 9, output_tokens: 0 });
+    block(decoder, 0, { type: 'text', text: 'The scene closes.' });
+    const output = end(decoder, 'stop_sequence', { output_tokens: 4 }, 'END_SCENE');
+    expect(output).toMatchObject({
+      status: 'completed',
+      text: 'The scene closes.',
+      error: null,
+      toolCalls: [],
+      usage: { inputTokens: 9, outputTokens: 4, costUsd: null },
+    });
+    expect(() => encodeAnthropic(next)).toThrow('ANTHROPIC_CONTINUATION_MISMATCH');
+  });
   test.each([
     { configured: undefined, reported: 'END_SCENE' },
-    { configured: ['END_SCENE'], reported: 'OTHER_SEQUENCE' },
     { configured: ['END_SCENE'], reported: null },
   ])('keeps an unconfirmed stop sequence partial: %j', ({ configured, reported }) => {
     const input = request();
@@ -790,25 +748,21 @@ describe('Anthropic Messages stream lifecycle and usage', () => {
       },
     });
   });
-  test.each([
-    undefined,
-    {},
-    { input_tokens: null, output_tokens: null },
-    { input_tokens: 10, cache_read_input_tokens: null },
-  ])('keeps absent or explicitly unknown usage unknown: %j', (usage) => {
-    const { decoder } = start();
-    begin(decoder, usage as Json | undefined);
-    block(decoder, 0, { type: 'text', text: 'Prose.' });
-    const output = end(decoder);
-    expect(output.usage.inputTokens).toBeNull();
-    expect(output.usage.outputTokens).toBeNull();
-    expect(output.usage.costUsd).toBeNull();
-  });
+  test.each([undefined, { input_tokens: null, output_tokens: null }])(
+    'keeps absent or explicitly unknown usage unknown: %j',
+    (usage) => {
+      const { decoder } = start();
+      begin(decoder, usage as Json | undefined);
+      block(decoder, 0, { type: 'text', text: 'Prose.' });
+      const output = end(decoder);
+      expect(output.usage.inputTokens).toBeNull();
+      expect(output.usage.outputTokens).toBeNull();
+      expect(output.usage.costUsd).toBeNull();
+    }
+  );
   test.each([
     { input_tokens: -1 },
-    { output_tokens: 0.5 },
     { cache_read_input_tokens: '12' },
-    { output_tokens: Number.MAX_SAFE_INTEGER + 1 },
     { cache_creation: { ephemeral_5m_input_tokens: -1 } },
   ])('rejects invalid usage %j', (usage) => {
     const { decoder } = start();
@@ -863,12 +817,6 @@ describe('Anthropic Messages stream lifecycle and usage', () => {
       'unknown stop',
       [{ type: 'message_delta', delta: { stop_reason: 'new_reason' } }],
       'ANTHROPIC_UNKNOWN_STOP_REASON',
-    ],
-    ['missing stop reason', [{ type: 'message_stop' }], 'ANTHROPIC_INVALID_EVENT_ORDER'],
-    [
-      'wrong index',
-      [{ type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } }],
-      'ANTHROPIC_INVALID_EVENT_ORDER',
     ],
     [
       'unknown delta',

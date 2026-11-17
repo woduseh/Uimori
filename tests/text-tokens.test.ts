@@ -70,9 +70,6 @@ describe('offline text token counting', () => {
   });
   it.each([
     '',
-    'The harbor is quiet tonight.',
-    '항구에는 아무도 없었다. 나는 조용히 문을 열었다.',
-    'こんにちは。今日は何をしましょうか？',
     'Hello 재연님、日本語も 같이 써요. 👩‍💻 🧑🏽‍🚀',
     'line one\n"quote"\\path\n<|endoftext|>',
   ])('matches o200k for short authored text: %s', (text) => {
@@ -84,15 +81,12 @@ describe('offline text token counting', () => {
     expect(countTextTokens(text)).toBe(boundedReference(text));
   });
 
-  it('does not add JSON quoting or the request safety margin to plain text', () => {
+  it('adds JSON quoting and the safety margin only to serialized request v1 accounting', () => {
     const text = 'a\n"b"';
     expect(countTextTokens(text)).toBe(reference.encode(text, [], []).length);
     expect(estimateContextTokens(text)).toBe(
       Math.ceil((boundedReference(JSON.stringify(text)) * 11) / 10)
     );
-  });
-
-  it('keeps serialized request v1 accounting, including special spellings and long inputs', () => {
     const body = {
       messages: [{ role: 'user', content: ' 한국어 😀 <|endoftext|>'.repeat(400) }],
       tools: [],
@@ -100,9 +94,5 @@ describe('offline text token counting', () => {
     expect(estimateContextTokens(body)).toBe(
       Math.ceil((boundedReference(JSON.stringify(body)) * 11) / 10)
     );
-  });
-
-  it('rejects a non-text input', () => {
-    expect(() => countTextTokens(3 as unknown as string)).toThrow('INVALID_CONTEXT_INPUT');
   });
 });

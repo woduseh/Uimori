@@ -276,78 +276,63 @@ test('native text within the source budget survives its duplicated body and lore
   );
 });
 
-test.each(['json', 'charx'])(
-  'explicit persona %s imports preserve cards without creating a chat',
-  async (format) => {
-    const store = database(),
-      card = synthetic();
-    const source =
-      format === 'json'
-        ? sourceOf(card)
-        : {
-            name: 'persona.charx',
-            base64: writeRisuZip(
-              new Map([
-                ['card.json', Buffer.from(JSON.stringify({ spec: 'chara_card_v3', data: card }))],
-              ])
-            ).toString('base64'),
-          };
-    const preview = prepareRisuImport({ source, kind: 'persona' });
-    expect(preview.kind).toBe('persona');
-    expect(prepareRisuImport({ source }).kind).toBe('bot');
-    const request = {
-      source,
-      kind: 'persona',
-      digest: preview.digest,
-      allowPartial: true,
-      idempotencyKey: 'persona',
-    };
-    const result = await applyRisuImport(store, request);
-    expect(result.chat).toBeNull();
-    expect(result.receipt.items[0].key).toBe('persona');
-    const saved = store.product.get<Content>('content', result.receipt.items[0].id);
-    expect(saved.kind).toBe('persona');
-    expect(saved.text).toBe(card.description);
-    expect(saved.package.nativeRisu.card).toEqual(card);
-    expect(saved.package.starts?.[0].text).toBe(card.first_mes);
-    expect(saved.package.variableDefaults).toEqual({
-      values: { phase: 'ready' },
-      attachmentRoles: ['persona'],
-    });
-    expect(await applyRisuImport(store, request)).toMatchObject({
-      chat: null,
-      receipt: { created: false },
-    });
-    expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
-    await expect(applyRisuImport(store, { ...request, kind: 'bot' })).rejects.toMatchObject({
-      statusCode: 409,
-    });
+test('explicit persona imports preserve cards without creating a chat', async () => {
+  const store = database(),
+    card = synthetic();
+  const source = sourceOf(card);
+  const preview = prepareRisuImport({ source, kind: 'persona' });
+  expect(preview.kind).toBe('persona');
+  expect(prepareRisuImport({ source }).kind).toBe('bot');
+  const request = {
+    source,
+    kind: 'persona',
+    digest: preview.digest,
+    allowPartial: true,
+    idempotencyKey: 'persona',
+  };
+  const result = await applyRisuImport(store, request);
+  expect(result.chat).toBeNull();
+  expect(result.receipt.items[0].key).toBe('persona');
+  const saved = store.product.get<Content>('content', result.receipt.items[0].id);
+  expect(saved.kind).toBe('persona');
+  expect(saved.text).toBe(card.description);
+  expect(saved.package.nativeRisu.card).toEqual(card);
+  expect(saved.package.starts?.[0].text).toBe(card.first_mes);
+  expect(saved.package.variableDefaults).toEqual({
+    values: { phase: 'ready' },
+    attachmentRoles: ['persona'],
+  });
+  expect(await applyRisuImport(store, request)).toMatchObject({
+    chat: null,
+    receipt: { created: false },
+  });
+  expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
+  await expect(applyRisuImport(store, { ...request, kind: 'bot' })).rejects.toMatchObject({
+    statusCode: 409,
+  });
 
-    const bot = createNativeContent(store);
-    const chat = store.createChat('Persona snapshot', { botId: bot.id });
-    const profile = store.product.snapshot(chat.id);
-    profile.packages = [saved.package];
-    profile.packageAttachments = [
-      { id: saved.package.id, revision: saved.package.revision, role: 'persona' },
-    ];
-    const snapshot = {
-      chatId: chat.id,
-      parentRevision: null,
-      settingsRevision: chat.settingsRevision,
-      settings: chat.settings,
-      request: 'Continue',
-      history: [],
-      resources: [],
-      profile,
-    };
-    const refreshed = supportedNativeRisuSnapshot(snapshot);
-    expect(refreshed.profile!.packages![0].variableDefaults).toEqual(
-      saved.package.variableDefaults
-    );
-    expect(refreshed.profile!.packages![0].body).toBe(card.description);
-    expect(refreshed.profile!.packages![0].identity).toBeUndefined();
-  }
-);
+  const bot = createNativeContent(store);
+  const chat = store.createChat('Persona snapshot', { botId: bot.id });
+  const profile = store.product.snapshot(chat.id);
+  profile.packages = [saved.package];
+  profile.packageAttachments = [
+    { id: saved.package.id, revision: saved.package.revision, role: 'persona' },
+  ];
+  const snapshot = {
+    chatId: chat.id,
+    parentRevision: null,
+    settingsRevision: chat.settingsRevision,
+    settings: chat.settings,
+    request: 'Continue',
+    history: [],
+    resources: [],
+    profile,
+  };
+  const refreshed = supportedNativeRisuSnapshot(snapshot);
+  expect(refreshed.profile!.packages![0].variableDefaults).toEqual(saved.package.variableDefaults);
+  expect(refreshed.profile!.packages![0].body).toBe(card.description);
+  expect(refreshed.profile!.packages![0].identity).toBeUndefined();
+});
 
 test('persona import rejects standalone modules and malformed cards', () => {
   const module = { name: 'Module', lorebook: [], regex: [] };

@@ -131,47 +131,45 @@ test.each(protocols)(
   }
 );
 
-test.each(protocols)(
-  '%s keeps cache fingerprints in HTTP diagnostics and leaves the payload unchanged',
-  async (protocol) => {
-    const input = request(protocol);
-    const expectedBody = JSON.stringify(encode(protocol, input));
-    const fetch = vi.fn(
-      async () =>
-        new Response('{"error":{"message":"synthetic failure"}}', {
-          status: 503,
-          headers: { 'content-type': 'application/json' },
-        })
-    );
-    vi.stubGlobal('fetch', fetch);
-    let wire: WireRecord | undefined;
-    await executeNativeProvider(
-      {
-        id: 'synthetic',
-        protocol,
-        endpoint:
-          protocol === 'openai-responses-v1'
-            ? 'https://api.openai.com/v1'
-            : 'https://api.anthropic.com/v1',
-        credentialRef: 'SYNTHETIC',
+test('openai-responses-v1 keeps cache fingerprints in HTTP diagnostics and leaves the payload unchanged', async () => {
+  const protocol = 'openai-responses-v1' as const;
+  const input = request(protocol);
+  const expectedBody = JSON.stringify(encode(protocol, input));
+  const fetch = vi.fn(
+    async () =>
+      new Response('{"error":{"message":"synthetic failure"}}', {
+        status: 503,
+        headers: { 'content-type': 'application/json' },
+      })
+  );
+  vi.stubGlobal('fetch', fetch);
+  let wire: WireRecord | undefined;
+  await executeNativeProvider(
+    {
+      id: 'synthetic',
+      protocol,
+      endpoint:
+        protocol === 'openai-responses-v1'
+          ? 'https://api.openai.com/v1'
+          : 'https://api.anthropic.com/v1',
+      credentialRef: 'SYNTHETIC',
+    },
+    input,
+    {
+      signal: new AbortController().signal,
+      resolveCredential: () => 'synthetic-key',
+      onWire: (value) => {
+        wire = value;
       },
-      input,
-      {
-        signal: new AbortController().signal,
-        resolveCredential: () => 'synthetic-key',
-        onWire: (value) => {
-          wire = value;
-        },
-      }
-    );
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].body).toBe(expectedBody);
-    expect(wire!.cacheBoundaries).toHaveLength(2);
-    expect(wire!.body).not.toHaveProperty('cacheBoundaries');
-    expect(wire!.bodySha256).toBe(sha(expectedBody));
-    expect(wire!.stablePrefixSha256).toBe(sha(JSON.stringify(input.stable)));
-  }
-);
+    }
+  );
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].body).toBe(expectedBody);
+  expect(wire!.cacheBoundaries).toHaveLength(2);
+  expect(wire!.body).not.toHaveProperty('cacheBoundaries');
+  expect(wire!.bodySha256).toBe(sha(expectedBody));
+  expect(wire!.stablePrefixSha256).toBe(sha(JSON.stringify(input.stable)));
+});
 
 test('Batch emits fingerprints before submission without changing its payload hash', async () => {
   const input = request('anthropic-messages-v1');

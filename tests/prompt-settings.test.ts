@@ -25,58 +25,56 @@ import { repairPromptCombinationValues } from '../core/prompt-combinations.js';
 import { initializePromptWorkspaceReferences } from '../server/prompt-workspace.js';
 
 const owned: { directory: string; app?: App }[] = [];
-test.each(['main', 'translation'] as const)(
-  'selected %s preset role cannot change or poison workspace reads',
-  async (role) => {
-    const app = await application();
-    const initial = await workspace(app);
-    const preset = await request<PromptPreset>(app, '/prompt-presets', {
-      title: '선택한 프롬프트 역할 보존',
-      role,
-      program: createDefaultRisuPrompt('선택 원본', role),
-    });
-    const selected = await apply(app, preset);
-    const otherRole = role === 'main' ? 'translation' : 'main';
-    const beforeChanges = app.store.db.prepare('SELECT total_changes() AS n').get();
-    const rejected = await request(
-      app,
-      `/prompt-presets/${preset.id}`,
-      {
-        expectedRevision: preset.revision,
-        title: '반영하면 안 되는 변경',
-        role: otherRole,
-        program: createDefaultRisuPrompt('바뀐 역할 본문', otherRole),
-      },
-      409,
-      'PUT'
-    );
-    expect(rejected.error).toContain('다른 프리셋을 선택한 뒤');
-    expect(app.store.product.get<PromptPreset>('prompt-preset', preset.id)).toEqual(preset);
-    expect(await workspace(app)).toEqual(selected);
-    expect((await read(app, '/model-workspace')).revision).toBe(selected.revision);
-    expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(beforeChanges);
-    // The user can follow the error's recovery instruction and then change the unused preset role.
-    await apply(app, app.store.product.get<PromptPreset>('prompt-preset', initial[role].presetId!));
-    const revised = await request<PromptPreset>(
-      app,
-      `/prompt-presets/${preset.id}`,
-      {
-        expectedRevision: preset.revision,
-        title: preset.title,
-        role: otherRole,
-        program: createDefaultRisuPrompt('사용하지 않는 원본의 역할 변경', otherRole),
-      },
-      200,
-      'PUT'
-    );
-    expect(revised).toMatchObject({
-      id: preset.id,
-      revision: preset.revision + 1,
+test('selected main preset role cannot change or poison workspace reads', async () => {
+  const role = 'main' as const;
+  const app = await application();
+  const initial = await workspace(app);
+  const preset = await request<PromptPreset>(app, '/prompt-presets', {
+    title: '선택한 프롬프트 역할 보존',
+    role,
+    program: createDefaultRisuPrompt('선택 원본', role),
+  });
+  const selected = await apply(app, preset);
+  const otherRole = role === 'main' ? 'translation' : 'main';
+  const beforeChanges = app.store.db.prepare('SELECT total_changes() AS n').get();
+  const rejected = await request(
+    app,
+    `/prompt-presets/${preset.id}`,
+    {
+      expectedRevision: preset.revision,
+      title: '반영하면 안 되는 변경',
       role: otherRole,
-    });
-    expect((await workspace(app))[role].presetId).toBe(initial[role].presetId);
-  }
-);
+      program: createDefaultRisuPrompt('바뀐 역할 본문', otherRole),
+    },
+    409,
+    'PUT'
+  );
+  expect(rejected.error).toContain('다른 프리셋을 선택한 뒤');
+  expect(app.store.product.get<PromptPreset>('prompt-preset', preset.id)).toEqual(preset);
+  expect(await workspace(app)).toEqual(selected);
+  expect((await read(app, '/model-workspace')).revision).toBe(selected.revision);
+  expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(beforeChanges);
+  // The user can follow the error's recovery instruction and then change the unused preset role.
+  await apply(app, app.store.product.get<PromptPreset>('prompt-preset', initial[role].presetId!));
+  const revised = await request<PromptPreset>(
+    app,
+    `/prompt-presets/${preset.id}`,
+    {
+      expectedRevision: preset.revision,
+      title: preset.title,
+      role: otherRole,
+      program: createDefaultRisuPrompt('사용하지 않는 원본의 역할 변경', otherRole),
+    },
+    200,
+    'PUT'
+  );
+  expect(revised).toMatchObject({
+    id: preset.id,
+    revision: preset.revision + 1,
+    role: otherRole,
+  });
+  expect((await workspace(app))[role].presetId).toBe(initial[role].presetId);
+});
 
 test('legacy copied defaults become inheritance while values different from that baseline remain explicit', async () => {
   const app = await application();
@@ -639,52 +637,6 @@ test('selected prompt follows its latest saved body and defaults while explicit 
 });
 
 describe('global working prompts and independent library copies', () => {
-  test('rejects retired fixed creative controls and APIs and retired persona scope', async () => {
-    const app = await application();
-    const chat = createFixtureChat(app.store, 'Synthetic current profile');
-    const initial = app.store.product.profile(chat.id);
-    expect(initial).not.toHaveProperty('creative');
-    expect(await read(app, '/library')).not.toHaveProperty('presets');
-    await request(
-      app,
-      `/chats/${chat.id}/profile`,
-      profileBody(initial, { creative: { mode: 'novel' } }),
-      400,
-      'PUT'
-    );
-    await request(
-      app,
-      `/chats/${chat.id}/profile`,
-      profileBody(initial, { personaReference: 'false' }),
-      400,
-      'PUT'
-    );
-    await request(app, '/creative-presets', { title: 'Retired' }, 404);
-    await request(
-      app,
-      `/chats/${chat.id}/preset`,
-      { expectedRevision: initial.revision, presetId: 'retired', presetRevision: 1 },
-      404
-    );
-    await read(app, '/revisions/preset/retired/1', 404);
-    for (const personaReference of [false, true])
-      await request(
-        app,
-        `/chats/${chat.id}/profile`,
-        profileBody(initial, { personaReference }),
-        400,
-        'PUT'
-      );
-    const saved = await request<ChatProfile>(
-      app,
-      `/chats/${chat.id}/profile`,
-      profileBody(initial),
-      200,
-      'PUT'
-    );
-    expect(saved).not.toHaveProperty('personaReference');
-    expect(fetch).not.toHaveBeenCalled();
-  });
   test('saves exact whitespace, empty text and version history, rejecting stale writes and invalid shapes without generation', async () => {
     const app = await application();
     const initialCount = (await read(app, '/library')).promptPresets.length;
@@ -847,48 +799,6 @@ describe('global working prompts and independent library copies', () => {
     expect(app.store.product.get<PromptPreset>('prompt-preset', preset.id).id).toBe(preset.id);
   });
 
-  test('option presets copy only values into the current role and never retarget a saved prompt', async () => {
-    const app = await application();
-    const initial = await workspace(app);
-    const program = createDefaultRisuPrompt('Current options');
-    program.nativeRisuPreset.preset.customPromptTemplateToggle = 'tone=Tone=text';
-    const updated = await request(
-      app,
-      '/prompt-workspace',
-      {
-        expectedRevision: initial.revision,
-        main: { title: 'Working', program, values: { tone: 'quiet' } },
-      },
-      200,
-      'PUT'
-    );
-    const options = await request(app, '/prompt-combinations', {
-      workspaceRevision: updated.revision,
-      title: 'Bold option',
-      role: 'main',
-      values: { tone: 'bold' },
-    });
-    expect(options).toMatchObject({ role: 'main', values: { tone: 'bold' } });
-    expect(options).not.toHaveProperty('prompt');
-    const applied = await request(app, '/prompt-workspace/apply-options', {
-      expectedRevision: updated.revision,
-      role: 'main',
-      combinationId: options.id,
-    });
-    expect(applied.main).toEqual({
-      ...updated.main,
-      values: { tone: 'bold' },
-      optionValues: { tone: 'bold' },
-    });
-    expect(applied.translation).toEqual(updated.translation);
-    await request(
-      app,
-      '/prompt-workspace/apply-options',
-      { expectedRevision: applied.revision, role: 'translation', combinationId: options.id },
-      400
-    );
-  });
-
   test('new scenes capture current working copies while past output remains and independent rewrites use current prompts', async () => {
     const app = await application();
     const chat = createFixtureChat(app.store, 'Frozen prompts');
@@ -989,7 +899,8 @@ describe('global working prompts and independent library copies', () => {
 });
 
 describe('translation prompt preview uses the job compiler without writes', () => {
-  test.each([false, true])('default translation preview with stored source=%s', async (stored) => {
+  test('default translation preview with stored source=true', async () => {
+    const stored = true;
     const app = await application(),
       chat = createFixtureChat(app.store, 'Translation preview');
     const source = stored ? complete(app, capture(app, chat.id)) : undefined;

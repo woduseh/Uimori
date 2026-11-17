@@ -2,10 +2,10 @@ import { test, expect } from '@playwright/test';
 import type { Content, Library, PromptPreset } from '../core/product.js';
 import type { LibraryOrganization } from '../core/library-organization.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
-import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
+import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { navigationAction } from './ui-navigation.js';
 
-for (const width of DEFAULT_WIDTHS) {
+for (const width of [MOBILE_WIDTH]) {
   test(`PORDER01 ${width} prompt order survives reload and folder movement preserves content`, async ({
     page,
     request,

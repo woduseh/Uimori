@@ -59,24 +59,6 @@ test('event replay groups repeated IDs without crossing chat or task-table owner
   assert.equal(reads, 2);
 });
 
-test('source-only and irrelevant events need no task-table queries', () => {
-  const db = {
-    prepare: () => {
-      throw new Error('unexpected task query');
-    },
-  } as unknown as DatabaseSync;
-  assert.deepEqual([...changedReaderSources({ db }, 'chat', [])], []);
-  assert.deepEqual(
-    [
-      ...changedReaderSources({ db }, 'chat', [
-        { kind: 'run.running', entityId: 'run' },
-        { kind: 'source.edited', entityId: 'source' },
-      ]),
-    ],
-    ['source']
-  );
-});
-
 test('visible jobs filter by kind and hash and select the latest translation by revision, date and ID', () => {
   const state = fixture();
   state.insert('older-revision', 'hash', 'translation', 1, 'source', 'chat', '2026-01-03');

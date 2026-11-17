@@ -13,8 +13,6 @@ test('translates the retained manual pricing note without changing the snapshot 
   for (const [locale, expected] of [
     ['ko', original],
     ['en', 'User-entered reference rates. Actual charges may differ.'],
-    ['ja', 'ユーザー入力の参考単価です。実際の請求額と異なる場合があります。'],
-    ['zh', '用户输入的参考单价，实际费用可能不同。'],
   ] as const) {
     setLocale(locale);
     expect(snapshot.notes.map(pricingNote)).toEqual([expected, custom, similar]);

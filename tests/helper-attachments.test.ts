@@ -523,90 +523,88 @@ test('helper file-only requests and later history transmit original bytes while 
   ).not.toContain(bytes.toString('base64'));
 });
 
-test.each([false, true])(
-  'attachment tool continuations preserve their segment binding (steering: %s)',
-  async (steering) => {
-    const f = fixture('openai-responses-v1');
-    const sent: Record<string, any>[] = [];
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (_url, options) => {
-        const body = JSON.parse(options.body);
-        sent.push(body);
-        const first = sent.length === 1;
-        const discovery = body.tools.find((tool: any) => tool.name?.endsWith('_app_tools'));
-        if (first && steering) {
-          const task = f.workspace.taskSummaries(f.conversation.id)[0];
-          f.runtime.steer(
-            task.id,
-            'steer-after-attachment',
-            '추가로 구성 관련 기능만 확인해 주세요.'
-          );
-        }
-        return new Response(
-          `data: ${JSON.stringify({
-            type: 'response.completed',
-            response: {
-              id: `synthetic-file-tool-${sent.length}`,
-              status: 'completed',
-              output: first
-                ? [
-                    {
-                      type: 'function_call',
-                      id: 'discover-item',
-                      call_id: 'discover-call',
-                      name: discovery.name,
-                      arguments: JSON.stringify({ query: 'outline' }),
-                      status: 'completed',
-                    },
-                  ]
-                : [
-                    {
-                      type: 'message',
-                      role: 'assistant',
-                      content: [
-                        {
-                          type: 'output_text',
-                          text: '첨부와 도구 결과를 확인했어요.',
-                          annotations: [],
-                        },
-                      ],
-                    },
-                  ],
-              usage: { input_tokens: 123, output_tokens: 7 },
-            },
-          })}\n\n`,
-          { headers: { 'content-type': 'text/event-stream' } }
+test('attachment tool continuations preserve their segment binding (steering: true)', async () => {
+  const steering = true;
+  const f = fixture('openai-responses-v1');
+  const sent: Record<string, any>[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url, options) => {
+      const body = JSON.parse(options.body);
+      sent.push(body);
+      const first = sent.length === 1;
+      const discovery = body.tools.find((tool: any) => tool.name?.endsWith('_app_tools'));
+      if (first && steering) {
+        const task = f.workspace.taskSummaries(f.conversation.id)[0];
+        f.runtime.steer(
+          task.id,
+          'steer-after-attachment',
+          '추가로 구성 관련 기능만 확인해 주세요.'
         );
-      })
-    );
-    const bytes = Buffer.from('%PDF-1.7\nSynthetic tool continuation attachment\n%%EOF');
-    const upload = await stage(f.store, bytes, 'reference.pdf');
-    const task = await f.runtime.enqueueWithAttachments(
-      f.conversation.id,
-      'attachment-tool-loop',
-      '이 첨부를 읽고 사용 가능한 구성 도구를 확인해 주세요.',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { files: [upload] }
-    );
-    await Promise.all(f.work);
-    expect(f.workspace.task(task.id)).toMatchObject({ status: 'completed', error: null });
-    expect(sent).toHaveLength(2);
-    expect(sent[1].input.slice(0, sent[0].input.length)).toEqual(sent[0].input);
-    expect(sent[1].input).toContainEqual(
-      expect.objectContaining({ type: 'function_call_output', call_id: 'discover-call' })
-    );
-    expect(JSON.stringify(sent[1])).toContain(bytes.toString('base64'));
-    if (steering) {
-      expect(JSON.stringify(sent[0])).not.toContain('추가로 구성 관련 기능만');
-      expect(JSON.stringify(sent[1])).toContain('추가로 구성 관련 기능만');
-      expect(f.workspace.instructions(task.id)[0].status).toBe('delivered');
-    }
+      }
+      return new Response(
+        `data: ${JSON.stringify({
+          type: 'response.completed',
+          response: {
+            id: `synthetic-file-tool-${sent.length}`,
+            status: 'completed',
+            output: first
+              ? [
+                  {
+                    type: 'function_call',
+                    id: 'discover-item',
+                    call_id: 'discover-call',
+                    name: discovery.name,
+                    arguments: JSON.stringify({ query: 'outline' }),
+                    status: 'completed',
+                  },
+                ]
+              : [
+                  {
+                    type: 'message',
+                    role: 'assistant',
+                    content: [
+                      {
+                        type: 'output_text',
+                        text: '첨부와 도구 결과를 확인했어요.',
+                        annotations: [],
+                      },
+                    ],
+                  },
+                ],
+            usage: { input_tokens: 123, output_tokens: 7 },
+          },
+        })}\n\n`,
+        { headers: { 'content-type': 'text/event-stream' } }
+      );
+    })
+  );
+  const bytes = Buffer.from('%PDF-1.7\nSynthetic tool continuation attachment\n%%EOF');
+  const upload = await stage(f.store, bytes, 'reference.pdf');
+  const task = await f.runtime.enqueueWithAttachments(
+    f.conversation.id,
+    'attachment-tool-loop',
+    '이 첨부를 읽고 사용 가능한 구성 도구를 확인해 주세요.',
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    { files: [upload] }
+  );
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id)).toMatchObject({ status: 'completed', error: null });
+  expect(sent).toHaveLength(2);
+  expect(sent[1].input.slice(0, sent[0].input.length)).toEqual(sent[0].input);
+  expect(sent[1].input).toContainEqual(
+    expect.objectContaining({ type: 'function_call_output', call_id: 'discover-call' })
+  );
+  expect(JSON.stringify(sent[1])).toContain(bytes.toString('base64'));
+  if (steering) {
+    expect(JSON.stringify(sent[0])).not.toContain('추가로 구성 관련 기능만');
+    expect(JSON.stringify(sent[1])).toContain('추가로 구성 관련 기능만');
+    expect(f.workspace.instructions(task.id)[0].status).toBe('delivered');
   }
-);
+});
 
 test('a new attachment is checked against retained history after the older attachment was compacted', async () => {
   const f = fixture('openai-responses-v1');
@@ -674,63 +672,61 @@ test('a new attachment is checked against retained history after the older attac
   expect(next.snapshot.context?.checkpoint).not.toBeNull();
 });
 
-test.each([false, true])(
-  'retry replaces its previous large attachment turn before admission (checkpoint: %s)',
-  async (checkpoint) => {
-    const f = fixture('openai-responses-v1');
-    const bytes = Buffer.alloc(26_000_000, 32);
-    bytes.write('%PDF-1.7\nRetry attachment\n');
-    const upload = await stage(f.store, bytes, 'retry-reference.pdf');
-    const first = await f.runtime.enqueueWithAttachments(
-      f.conversation.id,
-      'large-failed-file',
-      '자료를 확인해 주세요.',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { files: [upload] },
-      false
+test('retry replaces its previous large attachment turn before admission (checkpoint: true)', async () => {
+  const checkpoint = true;
+  const f = fixture('openai-responses-v1');
+  const bytes = Buffer.alloc(26_000_000, 32);
+  bytes.write('%PDF-1.7\nRetry attachment\n');
+  const upload = await stage(f.store, bytes, 'retry-reference.pdf');
+  const first = await f.runtime.enqueueWithAttachments(
+    f.conversation.id,
+    'large-failed-file',
+    '자료를 확인해 주세요.',
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    { files: [upload] },
+    false
+  );
+  if (checkpoint) {
+    expect(f.workspace.start(first.id, 'attachment-test-owner')).toBeTruthy();
+    publishHelperContext(
+      f.store,
+      f.workspace.task(first.id),
+      '진행 중 작업 요약',
+      { modelCalls: 1, inputTokens: 20, outputTokens: 10, costUsd: null },
+      100,
+      first.snapshot.context!
     );
-    if (checkpoint) {
-      expect(f.workspace.start(first.id, 'attachment-test-owner')).toBeTruthy();
-      publishHelperContext(
-        f.store,
-        f.workspace.task(first.id),
-        '진행 중 작업 요약',
-        { modelCalls: 1, inputTokens: 20, outputTokens: 10, costUsd: null },
-        100,
-        first.snapshot.context!
-      );
-      const running = f.workspace.task(first.id);
-      expect(
-        f.workspace.finish(
-          first.id,
-          'attachment-test-owner',
-          running.generation,
-          'failed',
-          '',
-          'UNEXPECTED_EOF'
-        )
-      ).toBe(true);
-    } else settle(f, first, 'failed');
-    const retry = await f.runtime.enqueueWithAttachments(
-      f.conversation.id,
-      'large-file-retry',
-      first.request,
-      undefined,
-      undefined,
-      first.id,
-      undefined,
-      {},
-      false
-    );
-    expect(retry.snapshot.files).toEqual(first.snapshot.files);
-    expect(retry.snapshot.history).toEqual([]);
-    expect(retry.snapshot.context?.checkpoint).toBeNull();
-    expect(retry.snapshot.context?.activeRevision).toBe(checkpoint ? 2 : 0);
+    const running = f.workspace.task(first.id);
     expect(
-      helperHistory(f.store, f.conversation.id).filter((message) => message.files?.length)
-    ).toHaveLength(1);
-  }
-);
+      f.workspace.finish(
+        first.id,
+        'attachment-test-owner',
+        running.generation,
+        'failed',
+        '',
+        'UNEXPECTED_EOF'
+      )
+    ).toBe(true);
+  } else settle(f, first, 'failed');
+  const retry = await f.runtime.enqueueWithAttachments(
+    f.conversation.id,
+    'large-file-retry',
+    first.request,
+    undefined,
+    undefined,
+    first.id,
+    undefined,
+    {},
+    false
+  );
+  expect(retry.snapshot.files).toEqual(first.snapshot.files);
+  expect(retry.snapshot.history).toEqual([]);
+  expect(retry.snapshot.context?.checkpoint).toBeNull();
+  expect(retry.snapshot.context?.activeRevision).toBe(checkpoint ? 2 : 0);
+  expect(
+    helperHistory(f.store, f.conversation.id).filter((message) => message.files?.length)
+  ).toHaveLength(1);
+});

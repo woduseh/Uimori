@@ -10,38 +10,35 @@ import { saveResource } from '../server/resource-service.js';
 import { editableResource } from '../core/resource-editing.js';
 import { forkChat } from '../server/chat-fork.js';
 import { type Content } from '../core/product.js';
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
-import { type App } from '../server/app.js';
 import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
 import { flushPendingImageCleanup, pruneUnusedData } from '../server/unused-data.js';
 import { pruneSourceEdits, pruneTranslationHistory } from '../server/text-retention.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { describe } from 'vitest';
 
-describe('Saved text and dependent image retention', () => {
-  const owners: { directory: string; store: Store; app?: App }[] = [];
+const owners: { directory: string; store: Store }[] = [];
 
-  afterEach(async () => {
-    vi.restoreAllMocks();
-    for (const owner of owners.splice(0)) {
-      if (owner.app) await owner.app.close();
-      else owner.store.close();
-      rmSync(owner.directory, { recursive: true, force: true });
-    }
-  });
-
-  function database() {
-    const directory = mkdtempSync(join(tmpdir(), 'uimori-retention-'));
-    const owner = { directory, store: new Store(join(directory, 'app.sqlite')) };
-    owners.push(owner);
-    return owner;
+afterEach(() => {
+  for (const owner of owners.splice(0)) {
+    owner.store.close();
+    rmSync(owner.directory, { recursive: true, force: true });
   }
+});
 
+function database() {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-retention-'));
+  const owner = { directory, store: new Store(join(directory, 'app.sqlite')) };
+  owners.push(owner);
+  return owner;
+}
+
+describe('Saved text and dependent image retention', () => {
   async function manuscript(store: Store) {
     const card = {
       spec: 'chara_card_v3',
@@ -66,15 +63,6 @@ describe('Saved text and dependent image retention', () => {
     const row = store.db.prepare('SELECT id FROM sources WHERE chat_id=?').get(result.chat!.id)!;
     return { chat: result.chat!, source: store.source(String(row.id)) };
   }
-
-  test('empty cleanup does not scan manuscript or execution tables', () => {
-    const { store } = database();
-    const prepare = vi.spyOn(store.db, 'prepare');
-    pruneUnusedData(store.db);
-    expect(prepare.mock.calls.map(([sql]) => sql).join('\n')).not.toMatch(
-      /FROM (sources|source_edits|runs|helper_messages|job_results)\b/u
-    );
-  });
 
   test('busy image cleanup survives a database restart and is drained without resupplying candidates', async () => {
     const owner = database();
@@ -212,25 +200,8 @@ describe('Saved text and dependent image retention', () => {
 });
 
 describe('Image references across copies and editing', () => {
-  const owners: { store: Store; path: string }[] = [];
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-    for (const { store, path } of owners.splice(0)) {
-      store.close();
-      rmSync(path, { recursive: true, force: true });
-    }
-  });
-
-  function database() {
-    const path = mkdtempSync(join(tmpdir(), 'uimori-retention-'));
-    const owner = { store: new Store(join(path, 'app.sqlite')), path };
-    owners.push(owner);
-    return owner.store;
-  }
-
-  test('diagnostic events do not invalidate deletion; unreferenced images and hidden resources are reclaimed', async () => {
-    const store = database(),
+  test('diagnostic events do not invalidate deletion; unreferenced images and hidden resources are reclaimed, unrelated staged images survive', async () => {
+    const { store } = database(),
       bot = store.product.content(fixtureBotInput()) as Content;
     const chat = store.createChat('Disposable', { botId: bot.id });
     const image = await processImage(
@@ -248,19 +219,32 @@ describe('Image references across copies and editing', () => {
       mime: image.mime,
       base64: image.bytes.toString('base64'),
     });
+    // An unrelated image still being attached in another editor is not collected.
+    const staged = await processImage(
+      await sharp({ create: { width: 10, height: 10, channels: 3, background: '#105070' } })
+        .png()
+        .toBuffer()
+    );
+    putValidatedImageBlob(store.product, {
+      id: staged.hash,
+      hash: staged.hash,
+      revision: 1,
+      mime: staged.mime,
+      base64: staged.bytes.toString('base64'),
+    });
     deleteLibraryItem(store, 'content', bot.id, { expectedRevision: bot.revision });
     expect(store.product.get('content', bot.id)).toBeTruthy();
     const confirmation = chatDeletionImpact(store, chat.id);
     store.event(chat.id, 'run.usage', 'diagnostic-only');
     deleteChat(store, chat.id, confirmation.request);
     expect(store.db.prepare('SELECT * FROM assets').all()).toEqual([]);
-    expect(store.db.prepare('SELECT hash FROM image_blobs').all()).toEqual([]);
+    expect(store.db.prepare('SELECT hash FROM image_blobs').all()).toEqual([{ hash: staged.hash }]);
     expect(store.db.prepare('SELECT id FROM versions WHERE id=?').all(bot.id)).toEqual([]);
     expect(store.db.prepare('SELECT * FROM library_hidden').all()).toEqual([]);
   });
 
   test('images referenced only by edited helper text survive cleanup until their chat is deleted', () => {
-    const store = database();
+    const { store } = database();
     const bot = store.product.content(fixtureBotInput()) as Content;
     const chat = store.createChat('Edited helper image', { botId: bot.id });
     const workspace = new HelperWorkspace(store);
@@ -292,7 +276,7 @@ describe('Image references across copies and editing', () => {
   });
 
   test('saved independent copies and one-level undo retain referenced image bytes, then release them', async () => {
-    const store = database();
+    const { store } = database();
     const image = await processImage(
       await sharp({ create: { width: 12, height: 8, channels: 3, background: '#124c66' } })
         .png()
@@ -360,42 +344,6 @@ describe('Image references across copies and editing', () => {
     deleteChat(store, copy.id, {});
     expect(
       store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(image.hash)
-    ).toBeUndefined();
-  });
-
-  test('deleting one resource never collects an unrelated image still being attached in another editor', async () => {
-    const store = database(),
-      bot = store.product.content(fixtureBotInput()) as Content;
-    const chat = store.createChat('Remove this chat', { botId: bot.id });
-    const make = (background: string) =>
-      sharp({ create: { width: 10, height: 10, channels: 3, background } })
-        .png()
-        .toBuffer();
-    const staged = await processImage(await make('#105070'));
-    putValidatedImageBlob(store.product, {
-      id: staged.hash,
-      hash: staged.hash,
-      revision: 1,
-      mime: staged.mime,
-      base64: staged.bytes.toString('base64'),
-    });
-    const removed = await processImage(await make('#b08070'));
-    store.product.createAsset(chat.id, {
-      title: 'Owned image',
-      description: '',
-      actor: '',
-      outfit: '',
-      location: '',
-      allowedUse: 'both',
-      mime: removed.mime,
-      base64: removed.bytes.toString('base64'),
-    });
-    deleteChat(store, chat.id, {});
-    expect(
-      store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(staged.hash)
-    ).toBeTruthy();
-    expect(
-      store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(removed.hash)
     ).toBeUndefined();
   });
 });

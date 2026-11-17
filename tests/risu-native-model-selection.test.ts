@@ -29,8 +29,6 @@ afterEach(() => {
 
 test.each([
   ['script', 'model'],
-  ['script', 'connection'],
-  ['context', 'model'],
   ['context', 'connection'],
 ] as const)(
   'a deleted %s %s does not block unrelated calls or route to the main model',

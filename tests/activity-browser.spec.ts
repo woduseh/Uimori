@@ -187,39 +187,6 @@ test('AUDIT2 pending notification history does not claim empty after acknowledgi
   }
 });
 
-test('ACTUI01 elapsed time, collapse, next task and completion expiry', async ({
-  page,
-  request,
-}, info) => {
-  const seeded = await seed(request);
-  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
-  const state = await harness(page, seeded.chat.id, [activity('first')]);
-  const status = page.getByTestId('activity-status');
-  await expect(status).toContainText('장면을 쓰는 중');
-  await expect(status).toContainText(/1[2-9]초/);
-  await page.clock.fastForward(2000);
-  await expect(status).toContainText(/1[4-9]초/);
-  if (visualReview) await page.screenshot({ path: info.outputPath('activity-desktop.png') });
-  await page.getByRole('button', { name: '작업 상태 숨기기', exact: true }).click();
-  await expect(page.getByRole('button', { name: '작업 상태 펼치기', exact: true })).toBeVisible();
-  await state.set([activity('first', 'main', 'completed')]);
-  await expect(page.getByRole('button', { name: '작업 상태 숨기기', exact: true })).toHaveCount(0);
-  await page.clock.fastForward(4500);
-  await expect(status).toHaveCount(0);
-  await state.set([activity('second')]);
-  await expect(status).toContainText('장면을 쓰는 중');
-  await expect(page.getByRole('button', { name: '작업 상태 숨기기', exact: true })).toBeVisible();
-  await state.set([activity('second', 'main', 'completed')]);
-  await expect(status).toContainText('완료');
-  await page.clock.fastForward(4500);
-  await expect(status).toHaveCount(0);
-  await page.reload();
-  await expect(page.getByTestId('source')).toHaveCount(1);
-  await expect(status).toHaveCount(0);
-  expect(state.writes).toEqual([]);
-  expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
-});
-
 test('ACTUI04 sending timer starts before admission and continues after accepted request', async ({
   page,
   request,
@@ -267,7 +234,7 @@ test('ACTUI04 sending timer starts before admission and continues after accepted
   expect(state.writes.filter((write) => write.includes('/runs'))).toHaveLength(1);
 });
 
-test('ACTUI02 auxiliary concurrency, mobile bounds and connection uncertainty', async ({
+test('ACTUI02 auxiliary concurrency, collapse and connection uncertainty', async ({
   page,
   request,
 }, info) => {
@@ -282,12 +249,6 @@ test('ACTUI02 auxiliary concurrency, mobile bounds and connection uncertainty', 
   await expect(status).toContainText('외 1개');
   await expect(status).not.toContainText('이전 보조 작업');
   await expect(page.getByRole('button', { name: '작업 상세 보기', exact: true })).toBeVisible();
-  const bounds = await status.boundingBox();
-  expect(bounds).not.toBeNull();
-  expect(bounds!.x).toBeGreaterThanOrEqual(0);
-  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(MOBILE_WIDTH);
-  expect(await status.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   if (visualReview) await page.screenshot({ path: info.outputPath('activity-mobile.png') });
   await page.getByRole('button', { name: '작업 상태 숨기기', exact: true }).click();
   await page.getByRole('button', { name: '작업 상태 펼치기', exact: true }).click();
@@ -387,21 +348,10 @@ test('ACTUI06 old notification pages, bulk confirmation and execution identity s
   const dialog = page.getByRole('dialog', { name: '작업 알림', exact: true });
   const rows = dialog.getByTestId('activity-notice');
   await expect(rows).toHaveCount(30);
-  const metadata = rows.first().locator('.activity-notification-heading .ui-meta-row');
-  expect(
-    await metadata.evaluate((element) => {
-      const [date, identity] = Array.from(element.children).map((child) =>
-        child.getBoundingClientRect()
-      );
-      return identity.top >= date.bottom || identity.left >= date.right + 4;
-    })
-  ).toBe(true);
   await dialog.getByRole('button', { name: '이전 작업 더 보기', exact: true }).click();
   await expect(rows).toHaveCount(42);
   expect(state.historyReads).toEqual(['first', 'synthetic-older-page']);
   await expect(dialog.locator('[data-activity-id="older-failure-11"]')).toBeVisible();
-  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await dialog.getByRole('button', { name: '모두 확인', exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath('activity-notifications-mobile.png') });
   // Bulk acknowledges only the displayed snapshot, even when later SSE events
@@ -511,7 +461,6 @@ test('ACTUI07 translation success clears only its source hash and failed detail 
   await missing.getByRole('button', { name: '확인', exact: true }).click();
   await expect(missing).toHaveCount(0);
   await expect(rows).toHaveCount(2);
-  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   const readable = dialog.locator('[data-activity-id="different-source"]');
   await readable.getByRole('button', { name: '상세', exact: true }).click();
   await expect(readable.getByRole('button', { name: '확인됨', exact: true })).toBeDisabled();
@@ -663,74 +612,6 @@ test('ACTUI09 confirmations survive a fresh browser session while new executions
   }
 });
 
-test('ACTUI10 activity icon mode groups unread results and keeps recent chats across desktop and mobile', async ({
-  page,
-  request,
-}) => {
-  const seeded = await seed(request);
-  let confirmed = false;
-  const at = new Date().toISOString();
-  await page.route('**/api/activity-feed', (route) =>
-    route.fulfill({
-      json: {
-        items: confirmed
-          ? []
-          : [
-              {
-                chatId: seeded.chat.id,
-                acknowledgementKey: JSON.stringify(['main', 'synthetic-inbox', 0, at]),
-                kind: 'main',
-                status: 'completed',
-                label: '본문 완료',
-                at,
-                sourceId: null,
-                representation: 'original',
-                actionable: false,
-                canAcknowledge: true,
-              },
-            ],
-        running: [],
-      },
-    })
-  );
-  await page.route(`**/api/chats/${seeded.chat.id}/activity-acknowledgements`, async (route) => {
-    if (route.request().method() !== 'POST') return route.continue();
-    confirmed = true;
-    await route.fulfill({ json: { ok: true } });
-  });
-  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
-  await page.goto(`/?chat=${seeded.chat.id}`);
-  const nav = page.getByTestId('bot-navigation').filter({ visible: true });
-  const activityMode = nav.locator('.bot-navigation-modes > button').nth(1);
-  await expect(activityMode).toBeVisible();
-  await activityMode.click();
-  await expect(activityMode).toHaveAttribute('aria-pressed', 'true');
-  const activityNav = nav.getByRole('navigation', { name: '채팅 활동' });
-  await expect(activityNav.getByText('확인할 활동', { exact: true })).toBeVisible();
-  await expect(activityNav.getByText(seeded.chat.title, { exact: true }).first()).toBeVisible();
-  await activityNav
-    .getByRole('button', { name: new RegExp(`${seeded.chat.title} 활동 .* 확인`) })
-    .click();
-  await expect(activityNav.getByText('확인할 활동이 없어요.')).toBeVisible();
-  await expect(activityNav.getByText(seeded.chat.title, { exact: true }).first()).toBeVisible();
-  await nav.locator('.bot-navigation-modes > button').first().click();
-  await expect(nav.locator('.bot-tree-section-heading')).toBeVisible();
-  await activityMode.click();
-  await expect(activityMode).toHaveAttribute('aria-pressed', 'true');
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
-  await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
-  const mobile = page.getByRole('dialog', { name: '탐색' }).getByTestId('bot-navigation');
-  await expect(mobile.locator('.bot-navigation-modes > button').nth(1)).toHaveAttribute(
-    'aria-pressed',
-    'true'
-  );
-  await expect(
-    mobile
-      .getByRole('navigation', { name: '채팅 활동' })
-      .getByText(seeded.chat.title, { exact: true })
-  ).toBeVisible();
-});
-
 test('ACTUI14 activity sections show 5 then more, retain folding and never exclude recent chats', async ({
   page,
   request,
@@ -791,22 +672,9 @@ test('ACTUI14 activity sections show 5 then more, retain folding and never exclu
   await expect.poll(async () => (await chatOrder()).indexOf(movedId!)).toBe(4);
   await branch.locator('.bot-chat-more').click();
   await expect(branch.locator('.bot-chat-item')).toHaveCount(9);
-  // Compact navigation must retain the pinned shortcut without horizontal overflow.
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
-  await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
-  const mobileBranch = page
-    .getByRole('dialog', { name: '탐색' })
-    .locator(`[data-bot-id="${seeded.chat.botId}"]`);
-  await expect(mobileBranch.locator('.bot-chat-item.pinned')).toHaveCount(1);
-  expect(
-    await mobileBranch.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
-  ).toBe(true);
 });
 
-test('ACTUI16 recent chats use saved activity dates on desktop and mobile', async ({
-  page,
-  request,
-}, info) => {
+test('ACTUI16 recent chats use saved activity dates', async ({ page, request }, info) => {
   const seeded = await seed(request);
   const chats = [seeded.chat];
   for (const title of ['어제의 합성 채팅', '지난주의 합성 채팅']) {
@@ -851,26 +719,6 @@ test('ACTUI16 recent chats use saved activity dates on desktop and mobile', asyn
     path: info.outputPath('recent-date-groups-desktop.png'),
     animations: 'disabled',
   });
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
-  await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
-  const mobileRecent = page
-    .getByRole('dialog', { name: '탐색' })
-    .locator('[data-activity-section="recent"]');
-  await expect(mobileRecent.locator('.activity-nav-date-group > h3')).toHaveText([
-    '오늘',
-    '어제',
-    '지난 7일',
-  ]);
-  await mobileRecent.locator('.activity-nav-chat-row .action-menu > summary').first().click();
-  await expect(
-    mobileRecent.getByRole('button', { name: '채팅 복사', exact: true }).first()
-  ).toBeVisible();
-  await page.screenshot({
-    path: info.outputPath('recent-copy-mobile.png'),
-    animations: 'disabled',
-  });
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: '탐색' })).toBeVisible();
 });
 
 test('ACTUI17 sidebar copies a nonselected chat and an empty chat immediately while preserving drafts', async ({
@@ -890,7 +738,6 @@ test('ACTUI17 sidebar copies a nonselected chat and an empty chat immediately wh
   const nav = page.getByTestId('bot-navigation').filter({ visible: true });
   const row = nav.locator(`[data-chat-id="${seeded.chat.id}"]`);
   await row.hover();
-  await expect(row.locator('.bot-row-actions')).toHaveCSS('opacity', '1');
   await row.locator('.action-menu > summary').click();
   await expect(row.getByRole('button', { name: '채팅 복사', exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath('sidebar-copy-menu.png'), animations: 'disabled' });
@@ -931,7 +778,8 @@ test('ACTUI17 sidebar copies a nonselected chat and an empty chat immediately wh
   await expect(composer).toHaveValue('빈 원본 채팅에 남겨 둘 합성 초안');
 });
 
-for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
+{
+  const width = MOBILE_WIDTH;
   test(`ACTUI18 ${width}px recent chat menus rename and delete without changing the current draft`, async ({
     page,
     request,

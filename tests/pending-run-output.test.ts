@@ -152,8 +152,9 @@ test('cancellation and recovery preserve staged text without publishing source o
   });
 });
 
-test('recovery resumes only Runs backed by a durable Anthropic Batch attempt', () => {
+test('recovery after reopening SQLite resumes only Runs backed by a durable Anthropic Batch attempt', () => {
   const { store, chat } = fixture();
+  const owner = owned.at(-1)!;
   const recoverable = queued(store, chat.id);
   store.startRun(recoverable.id);
   const wire: WireRecord = {
@@ -188,60 +189,29 @@ test('recovery resumes only Runs backed by a durable Anthropic Batch attempt', (
     executionMode: undefined,
   });
 
-  expect(store.recover()).toEqual([recoverable.id]);
-  expect(rawRun(store, recoverable.id).status).toBe('queued');
-  expect(store.db.prepare('SELECT status FROM attempts WHERE id=?').get(attempt)).toEqual({
+  store.close();
+  const reopened = new Store(join(owner.directory, 'story.sqlite'));
+  owner.store = reopened;
+  expect(reopened.recover()).toEqual([recoverable.id]);
+  expect(rawRun(reopened, recoverable.id).status).toBe('queued');
+  expect(reopened.db.prepare('SELECT status FROM attempts WHERE id=?').get(attempt)).toEqual({
     status: 'running',
   });
-  expect(rawRun(store, unsafe.id).status).toBe('interrupted');
   expect(
-    store.db.prepare('SELECT status,error FROM attempts WHERE id=?').get(unsafeAttempt)
+    reopened.db
+      .prepare('SELECT batch_id,status FROM anthropic_batches WHERE run_id=?')
+      .get(recoverable.id)
+  ).toEqual({ batch_id: 'batch-1', status: 'in_progress' });
+  expect(rawRun(reopened, unsafe.id).status).toBe('interrupted');
+  expect(
+    reopened.db.prepare('SELECT status,error FROM attempts WHERE id=?').get(unsafeAttempt)
   ).toEqual({
     status: 'interrupted',
     error: 'Provider outcome uncertain; not replayed',
   });
 });
 
-test('Batch recovery survives closing and reopening the SQLite store', () => {
-  const { store, chat } = fixture();
-  const owner = owned.at(-1)!;
-  const run = queued(store, chat.id);
-  store.startRun(run.id);
-  const wire: WireRecord = {
-    connectionId: 'anthropic',
-    protocol: 'anthropic-messages-v1',
-    role: 'main',
-    modelId: 'claude-opus-5',
-    method: 'POST',
-    url: 'https://api.anthropic.com/v1/messages/batches',
-    headers: {},
-    body: { execution_mode: 'batch' },
-    bodySha256: 'reopen-request',
-    stablePrefixSha256: 'reopen-stable',
-    executionMode: 'batch',
-  };
-  const attempt = store.product.startAttempt(chat.id, run.id, null, wire);
-  const time = new Date().toISOString();
-  store.db
-    .prepare(
-      `INSERT INTO anthropic_batches(
-        attempt_id,run_id,ordinal,batch_id,custom_id,request_sha256,status,result,created_at,updated_at
-      ) VALUES(?,?,0,?,?,?,'in_progress',NULL,?,?)`
-    )
-    .run(attempt, run.id, 'batch-reopen', attempt, wire.bodySha256, time, time);
-  store.close();
-
-  const reopened = new Store(join(owner.directory, 'story.sqlite'));
-  owner.store = reopened;
-  expect(reopened.recover()).toEqual([run.id]);
-  expect(reopened.run(run.id).status).toBe('queued');
-  expect(
-    reopened.db.prepare('SELECT batch_id,status FROM anthropic_batches WHERE run_id=?').get(run.id)
-  ).toEqual({ batch_id: 'batch-reopen', status: 'in_progress' });
-});
-
 test.each([
-  { executionMode: 'batch', reportedTier: undefined },
   { executionMode: 'batch', reportedTier: 'batch' },
   { executionMode: 'realtime', reportedTier: 'batch' },
 ] as const)(

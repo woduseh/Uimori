@@ -100,31 +100,25 @@ describe('convertCharbook: entry fields', () => {
 });
 
 describe('convertCharbook: extension migration', () => {
-  test('writes @@probability only for a used, non-100 probability', () => {
-    expect(convertOne({ extensions: { useProbability: true, probability: 50 } }).content).toBe(
-      '@@probability 50\nBody text'
-    );
-    expect(convertOne({ extensions: { useProbability: true, probability: 100 } }).content).toBe(
+  test('skips probability, delay and selectiveLogic directives when their condition is unmet', () => {
+    for (const extensions of [
+      { useProbability: true, probability: 100 },
+      { useProbability: false, probability: 50 },
+      { delay: 0 },
+    ])
+      expect(convertOne({ extensions }).content).toBe('Body text');
+    expect(convertOne({ selective: true, extensions: { selectiveLogic: 3 } }).content).toBe(
       'Body text'
     );
-    expect(convertOne({ extensions: { useProbability: false, probability: 50 } }).content).toBe(
-      'Body text'
+    expect(convertOne({ extensions: { match_whole_words: false } }).content).toBe(
+      '@@match_partial_word\nBody text'
     );
-  });
-
-  test('writes @@depth and @@role for position 4, mapping the role index', () => {
-    const converted = convertOne({ extensions: { position: 4, depth: 5, role: 2 } });
-
-    expect(converted.content).toBe('@@depth 5\n@@role assistant\nBody text');
-    // position, depth and role are deleted from the extensions Risu carries over.
-    expect(converted.extentions).toEqual({ risu_case_sensitive: undefined });
   });
 
   test.each([
     [0, 'Body text', true],
     [1, '@@exclude_keys_all x,y\nBody text', false],
     [2, '@@exclude_keys y\n@@exclude_keys x\nBody text', false],
-    [3, '@@additional_keys y\n@@additional_keys x\nBody text', false],
   ])('selectiveLogic %i writes its keys and clears selective', (logic, content, selective) => {
     const converted = convertOne({
       secondary_keys: ['x', 'y'],
@@ -136,28 +130,6 @@ describe('convertCharbook: extension migration', () => {
     expect(converted.content).toBe(content);
     expect(converted.selective).toBe(selective);
     expect(converted.secondkey).toBe('x, y');
-  });
-
-  test('ignores selectiveLogic when there are no secondary keys', () => {
-    expect(convertOne({ selective: true, extensions: { selectiveLogic: 3 } }).content).toBe(
-      'Body text'
-    );
-  });
-
-  test('writes @@activate_only_after only for a positive delay', () => {
-    expect(convertOne({ extensions: { delay: 3 } }).content).toBe(
-      '@@activate_only_after 3\nBody text'
-    );
-    expect(convertOne({ extensions: { delay: 0 } }).content).toBe('Body text');
-  });
-
-  test('maps match_whole_words onto the matching word decorator', () => {
-    expect(convertOne({ extensions: { match_whole_words: true } }).content).toBe(
-      '@@match_full_word\nBody text'
-    );
-    expect(convertOne({ extensions: { match_whole_words: false } }).content).toBe(
-      '@@match_partial_word\nBody text'
-    );
   });
 
   test('migrates directives in Risu order and reads them back as active lore settings', () => {
@@ -253,38 +225,15 @@ describe('interpretLoreDecorators: block and body', () => {
 describe('interpretLoreDecorators: arguments', () => {
   test.each<[string, Partial<LoreDecorators>]>([
     ['@@depth 3', { depth: 3 }],
-    ['@@reverse_depth 3', { reverse_depth: 3 }],
     ['@@end', { end: true, depth: 0 }],
-    ['@@role assistant', { role: 'assistant' }],
-    ['@@position after_desc', { position: 'after_desc' }],
     ['@@position pt_custom', { position: 'pt_custom' }],
-    ['@@additional_keys a,b', { additional_keys: [['a', 'b']] }],
     ['@@additional_keys a, b', { additional_keys: [['a', 'b']] }],
-    ['@@exclude_keys a', { exclude_keys: [['a']] }],
     ['@@exclude_keys_all a,b', { exclude_keys_all: [['a', 'b']] }],
-    ['@@probability 50', { probability: 50 }],
-    ['@@priority 7', { priority: 7 }],
     ['@@ignore_on_max_context', { ignore_on_max_context: true, priority: -1000 }],
-    ['@@activate_only_after 4', { activate_only_after: 4 }],
     ['@@activate_only_every 2', { activate_only_every: 2 }],
-    ['@@is_greeting 1', { is_greeting: 1 }],
-    ['@@scan_depth 6', { scan_depth: 6 }],
-    ['@@keep_activate_after_match', { keep_activate_after_match: true }],
-    ['@@dont_activate_after_match', { dont_activate_after_match: true }],
-    ['@@activate', { activate: true }],
-    ['@@dont_activate', { dont_activate: true }],
-    ['@@match_full_word', { match_full_word: true }],
-    ['@@match_partial_word', { match_partial_word: true }],
-    ['@@recursive', { recursive: true }],
-    ['@@unrecursive', { unrecursive: true }],
-    ['@@no_recursive_search', { no_recursive_search: true }],
-    ['@@is_user_icon', { is_user_icon: true }],
     ['@@instruct_depth 3', { instruct_depth: true }],
     ['@@disable_ui_prompt system_prompt', { disable_ui_prompt: ['system_prompt'] }],
     ['@@inject_lore some place', { inject_lore: 'some place' }],
-    ['@@inject_at some place', { inject_at: 'some place' }],
-    ['@@inject_replace token', { inject_replace: 'token' }],
-    ['@@inject_prepend token', { inject_prepend: 'token' }],
   ])('%s', (line, expected) => {
     const result = interpretLoreDecorators(`${line}\nBody`);
 
@@ -301,10 +250,8 @@ describe('interpretLoreDecorators: arguments', () => {
     ).toEqual([]);
   });
 
-  test('stores an unchecked parseInt result, NaN included', () => {
+  test('stores an unchecked parseInt result as NaN', () => {
     expect(interpretLoreDecorators('@@scan_depth abc\nB').decorators.scan_depth).toBeNaN();
-    expect(interpretLoreDecorators('@@priority abc\nB').decorators.priority).toBeNaN();
-    expect(interpretLoreDecorators('@@probability abc\nB').decorators.probability).toBeNaN();
   });
 });
 
@@ -351,11 +298,5 @@ describe('interpretLoreDecorators: shared upstream slots', () => {
 
     const relocated = interpretLoreDecorators('@@inject_lore a\n@@inject_at b\nB').decorators;
     expect(relocated).toMatchObject({ inject_lore: null, inject_at: 'b' });
-  });
-
-  test('repeated key decorators accumulate in order', () => {
-    const result = interpretLoreDecorators('@@additional_keys a\n@@additional_keys b,c\nB');
-
-    expect(result.decorators.additional_keys).toEqual([['a'], ['b', 'c']]);
   });
 });

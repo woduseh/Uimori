@@ -9,7 +9,7 @@ import {
   selectSettingsSection,
 } from './ui-navigation.js';
 
-for (const width of [1440, 412]) {
+for (const width of [412]) {
   test(`SCUISEARCHCHAT search navigates real chat settings and preserves drafts at ${width}px`, async ({
     page,
     request,

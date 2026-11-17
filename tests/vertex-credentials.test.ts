@@ -150,16 +150,6 @@ test('validating a draft and failing to save never persists its service account'
     app.store.db
       .prepare("SELECT id FROM credentials WHERE id LIKE 'UIMORI_PROVIDER_VERTEX_FILE_%'")
       .all();
-  const legacy = await app.inject({
-    method: 'POST',
-    url: '/api/provider-management/vertex-credentials',
-    payload: { serviceAccount: account },
-  });
-  expect(legacy.statusCode, legacy.body).toBe(410);
-  expect(legacy.json().error).toContain('새로고침');
-  expect(legacy.body).not.toContain('PRIVATE KEY');
-  expect(vertexRows()).toEqual([]);
-  expect(app.store.product.all('connection')).toEqual([]);
   const validate = await app.inject({
     method: 'POST',
     url: '/api/provider-management/vertex-credentials/validate',

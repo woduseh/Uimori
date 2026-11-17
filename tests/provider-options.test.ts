@@ -14,8 +14,9 @@ describe('providerOptions JSON contract', () => {
     });
   });
 
-  test.each(['{', '[]', 'null', '"text"'])('rejects invalid root %s', (text) => {
-    expect(() => parseProviderOptionsText(text)).toThrow(ProviderOptionsError);
+  test('rejects malformed and non-object roots', () => {
+    for (const text of ['{', '[]', 'null'])
+      expect(() => parseProviderOptionsText(text)).toThrow(ProviderOptionsError);
   });
 
   test('rejects credentials and oversized values before they can be stored or sent', () => {

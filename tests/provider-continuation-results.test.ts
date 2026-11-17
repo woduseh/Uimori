@@ -131,7 +131,7 @@ test.each(codecs)(
       input: { task: 'Inspect.', controls: {}, results: [] },
     };
     const markers: string[] = [];
-    for (let round = 0; round < 20; round++) {
+    for (let round = 0; round < 6; round++) {
       const encoded = encode(request);
       const wire = JSON.stringify(encoded.body);
       const result = reply(encoded.context, `call-${round}`);

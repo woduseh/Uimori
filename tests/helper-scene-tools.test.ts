@@ -88,6 +88,7 @@ test('literal scene changes save once and fail atomically for ambiguous, overlap
       { oldText: 'apple', newText: 'y' },
     ],
     [{ oldText: 'e', newText: 'x' }],
+    [{ oldText: '', newText: 'unexpected' }],
   ])
     expect(() => call('scene.patch', { ...editTarget, changes })).toThrow();
   expect(store.source(source.id).text).toBe('One apple. Two pear.');
@@ -139,24 +140,6 @@ test('exact-count replacements are atomic and reject overlap, mismatch and stale
   });
   expect(store.source(source.id).text).toBe('Chihiro-san, Producer! Chihiro-san, Producer!');
   expect(() => call('scene.patch', { ...editTarget, changes })).toThrow(/changed/);
-});
-
-test('overlapping literal occurrences remain ambiguous even for expectedCount', () => {
-  const { store, source, call, read } = fixture('aaaaa');
-  const original = read().editTarget;
-  expect(
-    call('scene.search', { sourceId: source.id, target: 'original', patterns: ['aaa'] }).counts[0]
-      .count
-  ).toBe(3);
-  for (const count of [1, 2, 3])
-    expect(() =>
-      call('scene.patch', {
-        ...original,
-        changes: [{ oldText: 'aaa', newText: 'x', expectedCount: count }],
-      })
-    ).toThrow();
-  expect(store.source(source.id).text).toBe('aaaaa');
-  expect(store.source(source.id).editRevision).toBe(0);
 });
 
 test('live literal search pages matches, preserves counts and provides patch guards', () => {
@@ -260,21 +243,6 @@ test('bounded reads require stable snapshots and reject sources outside the live
   ).toThrow(/ancestry/);
   store.db.prepare('UPDATE chats SET head_revision=NULL WHERE id=?').run(chatId);
   expect(() => call('scene.read', { sourceId: source.id, target: 'original' })).toThrow(/ancestry/);
-});
-
-test('literal replacements can normalize whitespace without accepting an empty match', () => {
-  const { store, source, call, read } = fixture('First paragraph.\n\n\nLast paragraph.');
-  const editTarget = read().editTarget;
-  expect(() =>
-    call('scene.patch', { ...editTarget, changes: [{ oldText: '', newText: 'unexpected' }] })
-  ).toThrow(/old text/);
-  expect(
-    call('scene.patch', {
-      ...editTarget,
-      changes: [{ oldText: '\n\n\n', newText: '\n\n' }],
-    })
-  ).toMatchObject({ changed: true, revision: 1 });
-  expect(store.source(source.id).text).toBe('First paragraph.\n\nLast paragraph.');
 });
 
 test('scene and retained-version reads reject offsets past the text instead of reporting completion', () => {
@@ -492,6 +460,9 @@ test('chat-wide scene search pages editable matches and invalidates a changed co
     nextOffset: null,
   });
   expect(() => call('scene.search', { ...query, offset: 2 })).toThrow(/GUARDS_REQUIRED/);
+  expect(() =>
+    call('scene.search', { ...first.nextSearch.arguments.arguments, patterns: ['other'] })
+  ).toThrow(/changed/);
   store.editSource(later.id, { text: 'updated', expectedRevision: 0 });
   expect(() => call('scene.search', first.nextSearch)).toThrow(/changed/);
 });
@@ -690,15 +661,6 @@ test('isolated regex bounds matched text and rejects unsafe regex without touchi
   expect(store.source(source.id).editRevision).toBe(0);
 });
 
-test('chat-wide literal continuation rejects a changed pattern instead of skipping matches', () => {
-  const { chatId, store, call } = fixture('alpha alpha beta');
-  appendScene(store, chatId, 'alpha beta');
-  const first = call('scene.search', { target: 'original', patterns: ['alpha'], limit: 1 });
-  expect(first).toMatchObject({ totalMatches: 3, nextOffset: 1 });
-  const altered = { ...first.nextSearch.arguments.arguments, patterns: ['beta'] };
-  expect(() => call('scene.search', altered)).toThrow(/changed/);
-});
-
 test('isolated regex continuation rejects a changed pattern and previews complete unicode characters', async () => {
   const { store, chatId } = fixture('alpha alpha beta');
   const first = (await invokeSceneRegexSearch(store, chatId, {
@@ -739,23 +701,6 @@ test('isolated regex honors single-scene read guards and preserves unicode conte
       patterns: ['Y'],
     })
   ).rejects.toThrow(/changed/);
-});
-
-test('many-scene literal search returns bounded matches without rereading ancestry per scene', () => {
-  const { store, chatId, call } = fixture('test word 0');
-  for (let index = 1; index < 50; index++) appendScene(store, chatId, `test word ${index}`);
-  const history = vi.spyOn(store, 'history');
-  const first = call('scene.search', { target: 'original', patterns: ['test word'], limit: 10 });
-  expect(first).toMatchObject({
-    scannedScenes: 50,
-    matchedScenes: 50,
-    totalMatches: 50,
-    nextOffset: 10,
-  });
-  expect(first.matches).toHaveLength(10);
-  expect(JSON.stringify(first).length).toBeLessThan(15000);
-  expect(history).toHaveBeenCalledTimes(1);
-  expect(call('scene.search', first.nextSearch)).toMatchObject({ offset: 10, nextOffset: 20 });
 });
 
 test('default scene pages budget tokens while continuations retain UTF-16 guards', () => {

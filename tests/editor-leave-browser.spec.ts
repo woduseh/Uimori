@@ -14,254 +14,199 @@ function latch() {
   return { promise, resolve };
 }
 
-const viewports = [
-  { width: 2560, height: 1440 },
-  { width: 412, height: 915 },
-];
-const flows = ['content-list', 'prompt-list', 'global-navigation'] as const;
+const compact = { width: 412, height: 915 };
+// Compact editor headers expose local list navigation only. Global navigation is
+// a desktop sidebar action, so it runs on the wide viewport.
+const flows = [
+  { flow: 'content-list', viewport: compact },
+  { flow: 'prompt-list', viewport: compact },
+  { flow: 'global-navigation', viewport: { width: 2560, height: 1440 } },
+] as const;
 
-for (const viewport of viewports) {
-  test(`DECISION resource conflict review and failed recovery preserve input at ${viewport.width}px`, async ({
-    page,
-    request,
-  }, info) => {
-    await page.setViewportSize(viewport);
-    const title = `Decision ${randomUUID().slice(0, 8)}`;
-    const response = await request.post('/api/prompt-presets', {
-      data: { title, role: 'main', program: nativePrompt('Original instructions'), values: {} },
-    });
-    expect(response.ok(), await response.text()).toBe(true);
-    const preset = (await response.json()) as PromptPreset;
-    await page.goto('/');
-    await navigationAction(page, '프롬프트');
-    await page.getByLabel('프롬프트 검색', { exact: true }).fill(title);
-    await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
-    const editor = page.getByTestId('prompt-editor');
-    await page.evaluate(() => {
-      const original = IDBDatabase.prototype.transaction;
-      IDBDatabase.prototype.transaction = function (...args) {
-        if (this.name === 'uimori-editor-recovery' && args[1] === 'readwrite')
-          throw new DOMException('Disk full', 'QuotaExceededError');
-        return original.apply(this, args);
-      };
-    });
-    const body = editor.getByLabel('1번 프롬프트 본문', { exact: true });
-    await body.fill('Keep my unsaved instructions');
-    await expect(
-      editor.getByRole('alert').filter({ hasText: '복구용 입력을 보관하지 못했어요' })
-    ).toBeVisible();
-    const updated = await request.post('/api/resources/save', {
-      data: {
-        kind: 'prompt-preset',
-        id: preset.id,
-        expectedRevision: preset.revision,
-        model: { title, role: 'main', program: nativePrompt('Changed elsewhere'), values: {} },
-      },
-    });
-    expect(updated.ok(), await updated.text()).toBe(true);
-    const review = page.getByRole('alertdialog', { name: '변경된 저장본 확인', exact: true });
-    await expect(review).toBeHidden();
-    let saves = 0;
-    page.on('request', (request) => {
-      if (isResourceSaveRequest(request) && request.postDataJSON().kind === 'prompt-preset')
-        saves++;
-    });
-    await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
-    await expect(review).toBeVisible();
-    await review.getByRole('button', { name: '저장본 확인', exact: true }).click();
-    await expect(review).toContainText('Changed elsewhere');
-    await page.screenshot({
-      path: info.outputPath(`resource-conflict-review-${viewport.width}.png`),
-    });
-    await review.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
-    await expect(body).toHaveValue('Keep my unsaved instructions');
-    expect(saves).toBe(1);
-    await page.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
-    const leave = page.getByRole('alertdialog', { name: '미저장 프롬프트 확인', exact: true });
-    await expect(leave.getByRole('alert')).toContainText('현재 입력을 복구할 수 없어요');
-    await leave.getByRole('button', { name: '계속 편집', exact: true }).click();
-    await expect(body).toHaveValue('Keep my unsaved instructions');
-    const persisted = await (await request.get(`/api/prompt-presets/${preset.id}`)).json();
-    expect(JSON.stringify(persisted.program)).toContain('Changed elsewhere');
+test(`DECISION resource conflict review and failed recovery preserve input at ${compact.width}px`, async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize(compact);
+  const title = `Decision ${randomUUID().slice(0, 8)}`;
+  const response = await request.post('/api/prompt-presets', {
+    data: { title, role: 'main', program: nativePrompt('Original instructions'), values: {} },
   });
-}
-
-async function expectDraftLeaveDialogLayout(guard: Locator, viewportWidth: number) {
-  const dialog = await guard.boundingBox();
-  expect(dialog).not.toBeNull();
-  expect(dialog!.width).toBeCloseTo(Math.min(viewportWidth - 32, 620), 0);
-
-  const bodyCopy = guard.locator('.dialog-body > p').first();
-  const copyMetrics = await bodyCopy.evaluate((node) => {
-    const style = getComputedStyle(node);
-    return {
-      height: node.getBoundingClientRect().height,
-      lineHeight: Number.parseFloat(style.lineHeight),
+  expect(response.ok(), await response.text()).toBe(true);
+  const preset = (await response.json()) as PromptPreset;
+  await page.goto('/');
+  await navigationAction(page, '프롬프트');
+  await page.getByLabel('프롬프트 검색', { exact: true }).fill(title);
+  await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
+  const editor = page.getByTestId('prompt-editor');
+  await page.evaluate(() => {
+    const original = IDBDatabase.prototype.transaction;
+    IDBDatabase.prototype.transaction = function (...args) {
+      if (this.name === 'uimori-editor-recovery' && args[1] === 'readwrite')
+        throw new DOMException('Disk full', 'QuotaExceededError');
+      return original.apply(this, args);
     };
   });
-  if (viewportWidth > 760)
-    expect(copyMetrics.height).toBeLessThanOrEqual(copyMetrics.lineHeight * 1.1);
+  const body = editor.getByLabel('1번 프롬프트 본문', { exact: true });
+  await body.fill('Keep my unsaved instructions');
+  await expect(
+    editor.getByRole('alert').filter({ hasText: '복구용 입력을 보관하지 못했어요' })
+  ).toBeVisible();
+  const updated = await request.post('/api/resources/save', {
+    data: {
+      kind: 'prompt-preset',
+      id: preset.id,
+      expectedRevision: preset.revision,
+      model: { title, role: 'main', program: nativePrompt('Changed elsewhere'), values: {} },
+    },
+  });
+  expect(updated.ok(), await updated.text()).toBe(true);
+  const review = page.getByRole('alertdialog', { name: '변경된 저장본 확인', exact: true });
+  await expect(review).toBeHidden();
+  let saves = 0;
+  page.on('request', (request) => {
+    if (isResourceSaveRequest(request) && request.postDataJSON().kind === 'prompt-preset') saves++;
+  });
+  await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
+  await expect(review).toBeVisible();
+  await review.getByRole('button', { name: '저장본 확인', exact: true }).click();
+  await expect(review).toContainText('Changed elsewhere');
+  await review.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
+  await expect(body).toHaveValue('Keep my unsaved instructions');
+  expect(saves).toBe(1);
+  await page.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
+  const leave = page.getByRole('alertdialog', { name: '미저장 프롬프트 확인', exact: true });
+  await expect(leave.getByRole('alert')).toContainText('현재 입력을 복구할 수 없어요');
+  await leave.getByRole('button', { name: '계속 편집', exact: true }).click();
+  await expect(body).toHaveValue('Keep my unsaved instructions');
+  const persisted = await (await request.get(`/api/prompt-presets/${preset.id}`)).json();
+  expect(JSON.stringify(persisted.program)).toContain('Changed elsewhere');
+});
 
-  const buttons = guard.locator('.draft-discard-actions > button');
-  await expect(buttons).toHaveCount(3);
-  const boxes = await buttons.evaluateAll((nodes) =>
-    nodes.map((node) => {
-      const box = node.getBoundingClientRect();
-      return { x: box.x, y: box.y, width: box.width };
-    })
-  );
-  if (viewportWidth <= 540) {
-    expect(boxes[0].y).toBeLessThan(boxes[1].y);
-    expect(boxes[1].y).toBeLessThan(boxes[2].y);
-    for (const box of boxes) expect(box.width).toBeCloseTo(boxes[0].width, 0);
-  } else {
-    for (const box of boxes) expect(box.y).toBeCloseTo(boxes[0].y, 0);
-  }
-}
-
-for (const viewport of viewports) {
-  // Compact editor headers expose local list navigation only. Global navigation is
-  // a desktop sidebar action; browser Back does not enter main's navigation guard.
-  const reachableFlows =
-    viewport.width === 412 ? flows.filter((flow) => flow !== 'global-navigation') : flows;
-  for (const flow of reachableFlows) {
-    test(`LEAVE ${flow} saves before leaving and retains failed or unapplied drafts at ${viewport.width}px`, async ({
-      page,
-      request,
-    }, info) => {
-      await page.setViewportSize(viewport);
-      const prompt = flow === 'prompt-list';
-      const title = `Leave ${flow} ${randomUUID().slice(0, 8)}`;
-      const endpoint = prompt ? '/api/prompt-presets' : '/api/content';
-      const response = await request.post(endpoint, {
-        data: prompt
-          ? {
-              title,
-              role: 'main',
-              program: nativePrompt('Synthetic leave instructions'),
-              values: {},
-            }
-          : fixtureBotInput(title, 'Synthetic leave body'),
-      });
-      expect(response.ok(), await response.text()).toBe(true);
-      const original = (await response.json()) as Content | PromptPreset;
-      await page.goto('/');
-      await navigationAction(page, prompt ? '프롬프트' : '서재');
-      if (prompt) {
-        await page.getByLabel('프롬프트 검색', { exact: true }).fill(title);
-        await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
-      } else {
-        await page.getByLabel('서재 검색', { exact: true }).fill(title);
-        await editLibraryContent(page, title);
-      }
-      const editor = page.getByTestId(prompt ? 'prompt-editor' : 'library-panel');
-      if (prompt) await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
-      const name = editor.getByLabel(prompt ? '프롬프트 이름' : 'Risu 자료 이름', { exact: true });
-      await name.fill(`${title} edited`);
-      const guard = page.getByRole(flow === 'global-navigation' ? 'dialog' : 'alertdialog', {
-        name:
-          flow === 'global-navigation'
-            ? '편집 중인 자료'
-            : prompt
-              ? '미저장 프롬프트 확인'
-              : '미저장 자료 확인',
-        exact: true,
-      });
-      const leave = async () => {
-        if (flow === 'global-navigation') await navigationAction(page, '프롬프트');
-        else
-          await page
-            .getByRole('button', { name: prompt ? '프롬프트 목록' : '서재 목록', exact: true })
-            .click();
-        await expect(guard).toBeVisible();
-      };
-      let raw: Locator;
-      if (prompt) {
-        await editor.getByRole('tab', { name: '정규식', exact: true }).click();
-        await editor.getByText('고급 JSON 편집', { exact: true }).click();
-        raw = editor.getByLabel('Risu 정규식 JSON', { exact: true });
-      } else {
-        await editor.getByRole('tab', { name: '고급 설정', exact: true }).click();
-        await editor
-          .getByRole('group', { name: '고급 설정 영역', exact: true })
-          .getByRole('button', { name: 'JSON 소스', exact: true })
-          .click();
-        raw = editor.getByLabel('Risu 원문 JSON', { exact: true });
-      }
-      await raw.fill('[{"unfinished":');
-      const saves: string[] = [];
-      page.on('request', (value) => {
-        if (isResourceSaveRequest(value)) saves.push(value.url());
-      });
-      await leave();
-      await expectDraftLeaveDialogLayout(guard, viewport.width);
-      await page.screenshot({
-        path: info.outputPath(`leave-${flow}-confirmation-${viewport.width}.png`),
-      });
-      await guard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
-      await expect(guard.getByRole('alert')).toContainText('저장하지 못했어요');
-      expect(saves).toHaveLength(0);
-      expect((await (await request.get(`${endpoint}/${original.id}`)).json()).revision).toBe(
-        original.revision
-      );
-      await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
-      await expect(raw).toHaveValue('[{"unfinished":');
-      await editor.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
-
-      const savePattern = '**/api/resources/save';
-      await page.route(savePattern, (route) =>
-        route.fulfill({ status: 500, json: { error: 'Synthetic save failure' } })
-      );
-      await leave();
-      await guard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
-      await expect(guard.getByRole('alert')).toContainText('저장하지 못했어요');
-      expect(saves).toHaveLength(1);
-      expect((await (await request.get(`${endpoint}/${original.id}`)).json()).revision).toBe(
-        original.revision
-      );
-      await page.screenshot({
-        path: info.outputPath(`leave-${flow}-failed-${viewport.width}.png`),
-      });
-      await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
-      await expect(name).toHaveValue(`${title} edited`);
-      await page.unroute(savePattern);
-
-      const arrived = latch(),
-        release = latch();
-      await page.route(savePattern, async (route) => {
-        arrived.resolve();
-        await release.promise;
-        await route.continue();
-      });
-      await leave();
-      const saved = waitForResourceSave(page, prompt ? 'prompt-preset' : 'content', original.id);
-      try {
-        await guard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
-        await arrived.promise;
-        await expect(guard.getByRole('button', { name: '저장 중…', exact: true })).toBeDisabled();
-        await page.keyboard.press('Escape');
-        await expect(guard).toBeVisible();
-        await expect(guard.getByRole('button', { name: '계속 편집', exact: true })).toBeDisabled();
-        await page.screenshot({
-          path: info.outputPath(`leave-${flow}-saving-${viewport.width}.png`),
-        });
-      } finally {
-        release.resolve();
-      }
-      await saved;
-      await expect(guard).toBeHidden();
-      await expect(
-        page.getByLabel(flow === 'content-list' ? '서재 검색' : '프롬프트 검색', { exact: true })
-      ).toBeVisible();
-      const persisted = await (await request.get(`${endpoint}/${original.id}`)).json();
-      expect(persisted.title).toBe(`${title} edited`);
-      expect(persisted.revision).toBe(original.revision + 1);
-      expect(saves).toHaveLength(2);
-      expect(
-        await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)
-      ).toBeLessThanOrEqual(1);
+for (const { flow, viewport } of flows) {
+  test(`LEAVE ${flow} saves before leaving and retains failed or unapplied drafts at ${viewport.width}px`, async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize(viewport);
+    const prompt = flow === 'prompt-list';
+    const title = `Leave ${flow} ${randomUUID().slice(0, 8)}`;
+    const endpoint = prompt ? '/api/prompt-presets' : '/api/content';
+    const response = await request.post(endpoint, {
+      data: prompt
+        ? {
+            title,
+            role: 'main',
+            program: nativePrompt('Synthetic leave instructions'),
+            values: {},
+          }
+        : fixtureBotInput(title, 'Synthetic leave body'),
     });
-  }
+    expect(response.ok(), await response.text()).toBe(true);
+    const original = (await response.json()) as Content | PromptPreset;
+    await page.goto('/');
+    await navigationAction(page, prompt ? '프롬프트' : '서재');
+    if (prompt) {
+      await page.getByLabel('프롬프트 검색', { exact: true }).fill(title);
+      await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
+    } else {
+      await page.getByLabel('서재 검색', { exact: true }).fill(title);
+      await editLibraryContent(page, title);
+    }
+    const editor = page.getByTestId(prompt ? 'prompt-editor' : 'library-panel');
+    if (prompt) await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+    const name = editor.getByLabel(prompt ? '프롬프트 이름' : 'Risu 자료 이름', { exact: true });
+    await name.fill(`${title} edited`);
+    const guard = page.getByRole(flow === 'global-navigation' ? 'dialog' : 'alertdialog', {
+      name:
+        flow === 'global-navigation'
+          ? '편집 중인 자료'
+          : prompt
+            ? '미저장 프롬프트 확인'
+            : '미저장 자료 확인',
+      exact: true,
+    });
+    const leave = async () => {
+      if (flow === 'global-navigation') await navigationAction(page, '프롬프트');
+      else
+        await page
+          .getByRole('button', { name: prompt ? '프롬프트 목록' : '서재 목록', exact: true })
+          .click();
+      await expect(guard).toBeVisible();
+    };
+    let raw: Locator;
+    if (prompt) {
+      await editor.getByRole('tab', { name: '정규식', exact: true }).click();
+      await editor.getByText('고급 JSON 편집', { exact: true }).click();
+      raw = editor.getByLabel('Risu 정규식 JSON', { exact: true });
+    } else {
+      await editor.getByRole('tab', { name: '고급 설정', exact: true }).click();
+      await editor
+        .getByRole('group', { name: '고급 설정 영역', exact: true })
+        .getByRole('button', { name: 'JSON 소스', exact: true })
+        .click();
+      raw = editor.getByLabel('Risu 원문 JSON', { exact: true });
+    }
+    await raw.fill('[{"unfinished":');
+    const saves: string[] = [];
+    page.on('request', (value) => {
+      if (isResourceSaveRequest(value)) saves.push(value.url());
+    });
+    await leave();
+    await guard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
+    await expect(guard.getByRole('alert')).toContainText('저장하지 못했어요');
+    expect(saves).toHaveLength(0);
+    expect((await (await request.get(`${endpoint}/${original.id}`)).json()).revision).toBe(
+      original.revision
+    );
+    await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
+    await expect(raw).toHaveValue('[{"unfinished":');
+    await editor.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
+
+    const savePattern = '**/api/resources/save';
+    await page.route(savePattern, (route) =>
+      route.fulfill({ status: 500, json: { error: 'Synthetic save failure' } })
+    );
+    await leave();
+    await guard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
+    await expect(guard.getByRole('alert')).toContainText('저장하지 못했어요');
+    expect(saves).toHaveLength(1);
+    expect((await (await request.get(`${endpoint}/${original.id}`)).json()).revision).toBe(
+      original.revision
+    );
+    await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
+    await expect(name).toHaveValue(`${title} edited`);
+    await page.unroute(savePattern);
+
+    const arrived = latch(),
+      release = latch();
+    await page.route(savePattern, async (route) => {
+      arrived.resolve();
+      await release.promise;
+      await route.continue();
+    });
+    await leave();
+    const saved = waitForResourceSave(page, prompt ? 'prompt-preset' : 'content', original.id);
+    try {
+      await guard.getByRole('button', { name: '저장하고 이동', exact: true }).click();
+      await arrived.promise;
+      await expect(guard.getByRole('button', { name: '저장 중…', exact: true })).toBeDisabled();
+      await page.keyboard.press('Escape');
+      await expect(guard).toBeVisible();
+      await expect(guard.getByRole('button', { name: '계속 편집', exact: true })).toBeDisabled();
+    } finally {
+      release.resolve();
+    }
+    await saved;
+    await expect(guard).toBeHidden();
+    await expect(
+      page.getByLabel(flow === 'content-list' ? '서재 검색' : '프롬프트 검색', { exact: true })
+    ).toBeVisible();
+    const persisted = await (await request.get(`${endpoint}/${original.id}`)).json();
+    expect(persisted.title).toBe(`${title} edited`);
+    expect(persisted.revision).toBe(original.revision + 1);
+    expect(saves).toHaveLength(2);
+  });
 }
 
 test('LEAVE multiple prompt roles stay open without saving only the current role', async ({

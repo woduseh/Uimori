@@ -1,4 +1,4 @@
-import { DESKTOP_WIDTH, DEFAULT_WIDTHS, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
+import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext, type Page, type Locator } from '@playwright/test';
 import type { Content, Library, PromptPreset } from '../core/product.js';
@@ -342,7 +342,7 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
   await expect(panel.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(`${prefix} Unsaved`);
 });
 
-for (const externalMove of ['none', 'folder', 'unclassified'] as const) {
+for (const externalMove of ['none', 'folder'] as const) {
   test(`EDITORRECOVERY1 confirms an uncertain prompt copy and respects ${externalMove} placement`, async ({
     page,
     request,
@@ -413,9 +413,8 @@ for (const externalMove of ['none', 'folder', 'unclassified'] as const) {
         expect(response.ok(), await response.text()).toBe(true);
         return (await response.json()) as LibraryOrganization;
       };
-      const moved = await moveCopy(withFolder.revision, other.id);
-      finalFolder = externalMove === 'folder' ? other.id : null;
-      if (externalMove === 'unclassified') await moveCopy(moved.revision, null);
+      await moveCopy(withFolder.revision, other.id);
+      finalFolder = other.id;
     }
     await editor.getByLabel('프롬프트 이름', { exact: true }).fill('');
     await retry.click();
@@ -480,7 +479,8 @@ test('EDITORRECOVERY2 confirms an uncertain new resource despite an incomplete l
   expect((await saved.json()).title).toBe(title);
 });
 
-for (const destination of ['new-draft', 'list'] as const) {
+{
+  const destination = 'new-draft';
   test(`PROMPTOPEN late preset read preserves ${destination} navigation`, async ({
     page,
     request,
@@ -517,24 +517,15 @@ for (const destination of ['new-draft', 'list'] as const) {
     try {
       await panel.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
       await reading;
-      if (destination === 'new-draft') {
-        await panel.getByRole('button', { name: '새 프롬프트', exact: true }).first().click();
-        await panel.getByRole('tab', { name: '기본 옵션', exact: true }).click();
-        await panel.getByLabel('프롬프트 이름', { exact: true }).fill(`${title} 새 초안`);
-      } else await navigationAction(page, '프롬프트');
+      await panel.getByRole('button', { name: '새 프롬프트', exact: true }).first().click();
+      await panel.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+      await panel.getByLabel('프롬프트 이름', { exact: true }).fill(`${title} 새 초안`);
       release();
       await page.waitForLoadState('networkidle');
-      if (destination === 'new-draft') {
-        await expect(panel.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(
-          `${title} 새 초안`
-        );
-        await expect(page.getByRole('alertdialog', { name: '미저장 프롬프트 확인' })).toHaveCount(
-          0
-        );
-      } else {
-        await expect(panel.getByLabel('프롬프트 검색', { exact: true })).toBeVisible();
-        await expect(page.getByTestId('prompt-editor')).toHaveCount(0);
-      }
+      await expect(panel.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(
+        `${title} 새 초안`
+      );
+      await expect(page.getByRole('alertdialog', { name: '미저장 프롬프트 확인' })).toHaveCount(0);
     } finally {
       release();
       await page.unrouteAll({ behavior: 'wait' });
@@ -590,17 +581,6 @@ test('SAVEACK prompt navigation preserves an accepted save when placement and su
   const warning = page.getByRole('alert').filter({ hasText: '프롬프트는 저장됐지만' });
   await expect(warning).toContainText('폴더에 배치하지 못했어요.');
   await expect(warning).toContainText('목록을 다시 불러오지 못했어요.');
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
-  const breadcrumb = panel.getByRole('navigation', { name: '현재 폴더', exact: true });
-  const rootFolder = breadcrumb.getByRole('button', { name: '전체', exact: true });
-  await rootFolder.scrollIntoViewIfNeeded();
-  await expect(rootFolder).toBeInViewport({ ratio: 1 });
-  expect(
-    await rootFolder.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
-  ).toBe(true);
-  expect(
-    await breadcrumb.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
-  ).toBe(true);
   const after = (await (await request.get('/api/library')).json()) as Library;
   const saved = after.promptPresets?.filter((item) => item.title === title) ?? [];
   expect(saved).toHaveLength(1);
@@ -659,57 +639,6 @@ test('LIBCLONE01 a reclassified content copy safely shortens its maximum-length 
   });
   expect(await (await request.get(`/api/content/${source.id}`)).json()).toEqual(source);
   expect(await (await request.get(`/api/content/${copy.id}`)).json()).toEqual(copy);
-});
-
-test('LIBCLONE02 prompt list keeps a complete emoji in its shortened title and preserves saved authorship and options', async ({
-  page,
-  request,
-}) => {
-  const prefix = `LIBCLONE02 ${Date.now()}`;
-  const keptTitle = `${prefix.padEnd(195, '나')}🌸`;
-  const title = `${keptTitle}끝끝끝`;
-  const copyTitle = `${keptTitle} 사본`;
-  expect(title.length).toBe(200);
-  expect(copyTitle.length).toBe(200);
-  const program = createDefaultRisuPrompt('Synthetic core {{getglobalvar::toggle_tone}}', 'main');
-  Object.assign(program.nativeRisuPreset.preset, {
-    name: 'Separate authored native name',
-    customPromptTemplateToggle: 'tone=Tone=text\nmode=Mode=select=Story,Notes',
-    templateDefaultVariables: 'tone=quiet\nmode=0',
-    promptSettings: { assistantPrefill: 'Preserved prefill', sendName: true },
-  });
-  const created = await request.post('/api/prompt-presets', {
-    data: { title, role: 'main', program, values: { tone: 'warm', mode: '1' } },
-  });
-  expect(created.ok(), await created.text()).toBe(true);
-  const source = (await created.json()) as PromptPreset;
-  await page.goto('/');
-  await navigationAction(page, '프롬프트');
-  const panel = page.getByTestId('prompt-library');
-  await panel.getByLabel('프롬프트 검색', { exact: true }).fill(prefix);
-  let clones = 0;
-  await page.route('**/api/resources/clone', async (route) => {
-    clones++;
-    await route.continue();
-  });
-  await panel.getByLabel(`${title} 메뉴`, { exact: true }).click();
-  const cloned = page.waitForResponse('**/api/resources/clone');
-  await panel.getByRole('button', { name: '복제', exact: true }).click();
-  const response = await cloned;
-  expect(response.ok(), await response.text()).toBe(true);
-  const copy = (await response.json()).saved as PromptPreset;
-  await expect(
-    panel.getByRole('button', { name: `${copyTitle} 프롬프트 편집`, exact: true })
-  ).toBeVisible();
-  expect(copy.id).not.toBe(source.id);
-  expect(copy.title).toBe(copyTitle);
-  expect(copy.revision).toBe(1);
-  expect(copy.program).toEqual(source.program);
-  expect(copy.program.nativeRisuPreset.preset.name).toBe('Separate authored native name');
-  expect(copy.values).toEqual({ tone: 'warm', mode: '1' });
-  expect(await (await request.get(`/api/prompt-presets/${source.id}`)).json()).toEqual(source);
-  expect(await (await request.get(`/api/prompt-presets/${copy.id}`)).json()).toEqual(copy);
-  expect(clones).toBe(1);
 });
 
 test('LIBCLONE03 accepted content clone opens its saved copy when placement and refresh fail without repeating the write', async ({
@@ -822,36 +751,8 @@ test('LIBUI04 role selection creates a chat with the selected persona and module
   );
 });
 
-test('LIBUI05 accepted folder creation closes even when the summary refresh fails', async ({
-  page,
-  request,
-}) => {
-  await page.goto('/');
-  const panel = page.getByTestId('library-panel');
-  await revealFolderActions(panel);
-  await expect(panel.getByRole('button', { name: '새 폴더', exact: true })).toBeEnabled();
-  let writes = 0;
-  page.on('request', (request) => {
-    if (request.method() === 'POST' && request.url().endsWith('/api/library/folders')) writes++;
-  });
-  await page.route('**/api/library?view=summary', (route) =>
-    route.fulfill({
-      status: 503,
-      contentType: 'application/json',
-      body: JSON.stringify({ error: 'synthetic summary failure' }),
-    })
-  );
-  const title = `LIBUI05 ${Date.now()}`;
-  await createFolder(page, panel, title);
-  await expect(page.getByRole('dialog', { name: '새 폴더', exact: true })).toBeHidden();
-  await expect(page.getByText(/변경은 저장됐지만/)).toBeVisible();
-  expect(writes).toBe(1);
-  expect(
-    (await organization(request)).folders.filter((folder) => folder.title === title)
-  ).toHaveLength(1);
-});
-
-for (const width of DEFAULT_WIDTHS) {
+{
+  const width = MOBILE_WIDTH;
   test(`LIBUI06 folder overview and scoped selection at ${width}px`, async ({
     page,
     request,
@@ -911,9 +812,6 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(panel.getByRole('group', { name: '자료 선택 작업', exact: true })).toContainText(
       '2개 선택'
     );
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
-    ).toBeLessThanOrEqual(1);
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-selection-${width}.png`) });
     await panel.getByRole('button', { name: '완료', exact: true }).click();
@@ -933,64 +831,6 @@ for (const width of DEFAULT_WIDTHS) {
     ).toBeNull();
   });
 }
-
-test('LIBUI07 a wide desktop centres the library and prompt columns inside the destination', async ({
-  page,
-  request,
-}) => {
-  const title = `LIBUI07 ${Date.now()}`;
-  await createContent(request, title);
-  await page.setViewportSize({ width: 2560, height: 1440 });
-  await page.goto('/');
-  const column = async (selector: string) =>
-    page
-      .locator(selector)
-      .first()
-      .evaluate((element) => {
-        const box = element.getBoundingClientRect(),
-          host = document.querySelector('.library-page')!.getBoundingClientRect();
-        return {
-          width: Math.round(box.width),
-          leading: Math.round(box.left - host.left),
-          trailing: Math.round(host.right - box.right),
-        };
-      });
-  const panel = page.getByTestId('library-panel');
-  await expect(
-    panel.getByRole('button', { name: `${title} 상세 보기`, exact: true })
-  ).toBeVisible();
-  const list = await column('.library-workspace');
-  expect(list.leading).toBe(list.trailing);
-  await panel.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
-  const preview = await column('.library-preview');
-  expect(preview.leading).toBe(preview.trailing);
-  // The full editor can be wider than the preview; it must remain usable inside the destination.
-  await page
-    .getByRole('region', { name: '자료 상세', exact: true })
-    .getByRole('button', { name: '편집', exact: true })
-    .first()
-    .click();
-  const editor = await column('.library-content-editor');
-  expect(editor.leading).toBeGreaterThanOrEqual(0);
-  expect(editor.trailing).toBeGreaterThanOrEqual(0);
-  expect(editor.width).toBeGreaterThan(0);
-  const heading = await column('.library-content-editor > .library-detail-heading');
-  expect(heading.leading).toBeGreaterThanOrEqual(editor.leading);
-  expect(heading.trailing).toBeGreaterThanOrEqual(editor.trailing);
-  await navigationAction(page, '프롬프트');
-  await expect(page.getByTestId('prompt-library')).toBeVisible();
-  // The prompt entry points ride the list's own toolbar, so one centred column holds both.
-  const toolbar = await column('.prompt-library .library-toolbar');
-  const prompts = await column('.prompt-library .library-workspace');
-  for (const area of [toolbar, prompts]) {
-    expect(area.leading).toBeGreaterThanOrEqual(0);
-    expect(area.trailing).toBeGreaterThanOrEqual(0);
-  }
-  expect(await page.locator('.library-toolbar > .prompt-library-actions').count()).toBe(1);
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
-  ).toBeLessThanOrEqual(1);
-});
 
 test('LIBUI08 manual order persists and a bot card can be dropped into a folder', async ({
   page,

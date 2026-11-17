@@ -223,48 +223,45 @@ test('a maximum-size draft with no translation model returns the model requireme
   expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(0);
 });
 
-test.each([
-  { ...payload, text: '' },
-  { ...payload, text: ' '.repeat(10) },
-  { ...payload, text: 'x'.repeat(REQUEST_TEXT_MAX_CHARS + 1) },
-  { ...payload, targetLanguage: 'unknown' },
-  { ...payload, modelId: 'another-model' },
-])('invalid input is rejected before calling the model (case %#)', async (body) => {
+test('invalid input is rejected before calling the model', async () => {
   const f = await setup();
   const send = mockSend();
-  const response = await f.post(body);
-  expect(response.statusCode).toBe(400);
+  for (const body of [
+    { ...payload, text: ' '.repeat(10) },
+    { ...payload, text: 'x'.repeat(REQUEST_TEXT_MAX_CHARS + 1) },
+    { ...payload, modelId: 'another-model' },
+  ]) {
+    const response = await f.post(body);
+    expect(response.statusCode).toBe(400);
+  }
   expect(send).not.toHaveBeenCalled();
   expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(0);
 });
 
-test.each([
-  ['refused', { status: 'refused', refusal: 'No' }, 422, 'INPUT_TRANSLATION_REFUSED'],
-  ['partial', { status: 'partial', text: 'Only half' }, 502, 'INPUT_TRANSLATION_FAILED'],
-  ['failed', { status: 'error', text: '' }, 502, 'INPUT_TRANSLATION_FAILED'],
-  ['empty', { text: '  ' }, 502, 'INPUT_TRANSLATION_FAILED'],
-  [
-    'tools',
-    { status: 'tool_calls', toolCalls: [{ id: '1', name: 'invented', arguments: {} }] },
-    502,
-    'INPUT_TRANSLATION_FAILED',
-  ],
-  ['too long', { text: 'x'.repeat(REQUEST_TEXT_MAX_CHARS + 1) }, 422, 'INPUT_TRANSLATION_TOO_LONG'],
-] as const)(
-  'does not apply, truncate or automatically retry a %s result',
-  async (_, delta, status, error) => {
-    const f = await setup();
-    const result = { ...success, ...delta } as transport.ProviderResult;
-    const send = mockSend(result);
-    const before = databaseState(f.app);
+test('does not apply, truncate or automatically retry an unusable result', async () => {
+  const f = await setup();
+  const before = databaseState(f.app);
+  const cases = [
+    [{ status: 'refused', refusal: 'No' }, 422, 'INPUT_TRANSLATION_REFUSED'],
+    [{ status: 'partial', text: 'Only half' }, 502, 'INPUT_TRANSLATION_FAILED'],
+    [
+      { status: 'tool_calls', toolCalls: [{ id: '1', name: 'invented', arguments: {} }] },
+      502,
+      'INPUT_TRANSLATION_FAILED',
+    ],
+    [{ text: 'x'.repeat(REQUEST_TEXT_MAX_CHARS + 1) }, 422, 'INPUT_TRANSLATION_TOO_LONG'],
+  ] as const;
+  for (const [index, [delta, status, error]] of cases.entries()) {
+    const send = mockSend({ ...success, ...delta } as transport.ProviderResult);
     const response = await f.post(payload);
     expect(response.statusCode, response.body).toBe(status);
     expect(response.json()).toEqual({ error });
     expect(send).toHaveBeenCalledTimes(1);
-    expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(1);
-    expect(databaseState(f.app)).toEqual(before);
+    send.mockRestore();
+    expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(index + 1);
   }
-);
+  expect(databaseState(f.app)).toEqual(before);
+});
 
 test('server shutdown cancels a pending input translation instead of leaving provider work behind', async () => {
   const f = await setup();

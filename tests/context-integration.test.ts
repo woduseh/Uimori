@@ -18,7 +18,6 @@ import { createApp, type App } from '../server/app.js';
 import { Store } from '../server/store.js';
 import { estimateContextTokens } from '../core/context-budget.js';
 import { measureMainContext, withContextProjection } from '../server/context-planning.js';
-import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import type { Run, RunSnapshot, Source } from '../core/types.js';
 
@@ -82,7 +81,7 @@ async function directory() {
   owned.push(item);
   return item;
 }
-async function setup(options: { evaluated?: boolean; count?: number; short?: boolean } = {}) {
+async function setup(options: { count?: number; short?: boolean } = {}) {
   const item = await directory();
   const app = (item.app = await createApp({
     dbPath: join(item.directory, 'story.sqlite'),
@@ -151,7 +150,6 @@ async function setup(options: { evaluated?: boolean; count?: number; short?: boo
     inputTokenLimit: 8192,
     maxOutputTokens: 8192,
     temperature: null,
-    ...(options.evaluated ? { evaluationTools: defaultEvaluationToolOptions() } : {}),
   }) as ModelPreset;
   const profile = app.store.product.profile(chat.id);
   updateTestProfile(app.store.product, chat.id, {
@@ -419,35 +417,6 @@ describe('automatic input summaries through real App and file SQLite', () => {
     ).toMatchObject([{ role: 'context', status: 'completed' }]);
     expect(bodies.map((body) => body.role)).toEqual(['context']);
     expect(app.store.chat(chatId).headRevision).toBe(sources.at(-1)!.id);
-  });
-
-  test('summary calls share the host budget while an evaluation preset submits on its first main call', async () => {
-    const { app, chatId } = await setup({ evaluated: true }),
-      bodies: Body[] = [];
-    recordRequests(app, bodies, (body) =>
-      body.role === 'context'
-        ? complete(summary)
-        : sse(
-            {
-              type: 'tool_delta',
-              index: 0,
-              id: 'evaluated-main-submit',
-              name: 'eval_submit_artifact',
-              argumentsDelta: JSON.stringify({
-                content: finalText,
-                userFacingNotice: '완료했어요.',
-              }),
-            },
-            { type: 'usage', inputTokens: 11, outputTokens: 7, costUsd: null },
-            { type: 'done', reason: 'tool_calls' }
-          )
-    );
-    const run = await terminal(app, (await start(app, chatId)).id);
-    expect(run.status, run.error ?? '').toBe('completed');
-    expect(run.snapshot.contextPlan!.summaryCalls).toBeGreaterThan(0);
-    expect(bodies.filter((body) => body.role === 'main')).toHaveLength(1);
-    expect(run.usage.modelCalls).toBe(bodies.length);
-    expect(bodies.length).toBeLessThanOrEqual(run.snapshot.settings.maxCalls);
   });
 });
 

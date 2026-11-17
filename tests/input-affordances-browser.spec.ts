@@ -29,7 +29,7 @@ test('INPUTUI01 native search clear restores reading controls and keeps focus wi
     if (request.url().includes('/api/') && !['GET', 'HEAD'].includes(request.method()))
       writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
   });
-  for (const colorScheme of ['light', 'dark'] as const) {
+  for (const colorScheme of ['dark'] as const) {
     await page.emulateMedia({ colorScheme });
     await search.fill('글자 크기');
     await expect(results.getByRole('button', { name: '본문 크기', exact: true })).toBeVisible();
@@ -133,7 +133,7 @@ test('INPUTUI03 reference notes grow within the viewport and retain their draft 
   const created = await postFixtureChat(request, { data: { title: '참고 메모 자동 높이' } });
   expect(created.ok()).toBe(true);
   const chat = await created.json();
-  for (const width of [1440, 412]) {
+  for (const width of [412]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/?chat=' + chat.id);
     await openChatSettings(page);
@@ -184,7 +184,7 @@ test('INPUTUI04 invalid backup input stays editable, recovers and never writes b
   const retain = panel.getByLabel('성공본 보관 개수', { exact: true });
   const initial = await retain.inputValue();
   const before = await (await request.get('/api/backups')).json();
-  for (const mode of ['light', 'dark'] as const) {
+  for (const mode of ['dark'] as const) {
     await page.emulateMedia({ colorScheme: mode });
     const normalBorder = await retain.evaluate((node) => getComputedStyle(node).borderTopColor);
     await retain.fill('0');

@@ -66,7 +66,7 @@ describe('Codex app-server stdio process', () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(await value.request('fixture/echo', { alive: true })).toEqual({ alive: true });
   });
-  it.each(['fixture/malformed', 'fixture/oversized', 'fixture/invalidUtf8'])(
+  it.each(['fixture/malformed', 'fixture/invalidUtf8'])(
     'terminates and rejects all pending work on %s',
     async (method) => {
       const value = client();

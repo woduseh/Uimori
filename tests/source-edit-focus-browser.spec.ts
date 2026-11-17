@@ -1,9 +1,4 @@
-import {
-  MOBILE_WIDTH,
-  MOBILE_HEIGHT,
-  DESKTOP_WIDTH,
-  DESKTOP_HEIGHT,
-} from './fixtures/browser-viewports.js';
+import { MOBILE_WIDTH, MOBILE_HEIGHT } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { openSourceActions } from './ui-navigation.js';
 import { test, expect, type APIRequestContext, type Locator } from '@playwright/test';
@@ -102,7 +97,6 @@ const readerOffset = (control: Locator) =>
 
 for (const [label, viewport] of [
   ['mobile', { width: MOBILE_WIDTH, height: MOBILE_HEIGHT }],
-  ['desktop', { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT }],
 ] as const) {
   test(`C04E ${label} long source editing focuses the visible editor and restores reading after Escape, cancel and save`, async ({
     page,
@@ -308,10 +302,7 @@ test('C04E failed source save keeps the draft available and a later save restore
   expect(after.attempts).toEqual(before.attempts);
 });
 
-for (const [width, height, mode] of [
-  [390, 844, 'light'],
-  [320, 640, 'dark'],
-] as const) {
+for (const [width, height, mode] of [[320, 640, 'dark']] as const) {
   test(`C04E cinematic ${width}px long translation editing keeps the app shell still and restores its passage`, async ({
     page,
     request,

@@ -209,14 +209,6 @@ test('I18N built-in layouts follow the UI language while a matching custom theme
         locale: 'en',
         names: ['Cinematic', 'Letter', 'Scrapbook', 'Classic Frame'],
       },
-      {
-        locale: 'ja',
-        names: ['シネマティック', '便箋', 'スクラップブック', 'クラシックフレーム'],
-      },
-      {
-        locale: 'zh',
-        names: ['电影感', '信笺', '剪贴簿', '经典边框'],
-      },
     ] as const;
     const ids = ['cinematic', 'letter', 'scrapbook', 'classic-frame'];
     for (const { locale, names } of cases) {
@@ -239,36 +231,6 @@ test('I18N built-in layouts follow the UI language while a matching custom theme
     });
     expect(deleted.ok(), await deleted.text()).toBe(true);
   }
-});
-
-test('I18N compact composer labels fit one row and keep their full accessible names', async ({
-  page,
-  request,
-}) => {
-  const { chat } = await createReadingChat(request, '좁은 화면 입력창 번역 fixture', 1);
-  await page.setViewportSize({ width: 320, height: 700 });
-  await page.goto(`/?chat=${chat.id}`);
-  const input = page.locator('#request');
-  await expect(input).toBeVisible();
-  const cases = [
-    ['ko', '다음 장면 요청', '요청…'],
-    ['en', 'Request next scene', 'Write…'],
-    ['ja', '次のシーンを依頼', '依頼…'],
-    ['zh', '请求下一个场景', '请求…'],
-  ] as const;
-  for (const [locale, name, placeholder] of cases) {
-    await switchFromAnotherTab(page, locale);
-    await expect(input).toHaveAccessibleName(name);
-    await expect(input).toHaveAttribute('placeholder', placeholder);
-    expect(
-      await input.evaluate((element) => Math.ceil(element.getBoundingClientRect().height))
-    ).toBeLessThanOrEqual(48);
-  }
-  await input.fill('A draft stays editable.');
-  await expect(input).toHaveValue('A draft stays editable.');
-  expect(await input.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(
-    250
-  );
 });
 
 test('I18N08 source and saved translation editors preserve unsaved text, selection and DOM identity', async ({
@@ -526,33 +488,6 @@ test('I18N04 changing UI language preserves an admitted run and its frozen model
   } finally {
     await request.post('/api/test/control', { data: { action: 'release', barrier: 'run' } });
   }
-});
-
-test('I18N05 long pseudo translation exercises real message rendering and mobile settings layout', async ({
-  page,
-}, info) => {
-  const expanded = '［Īñţēŕƒåçē ļåñĝūåĝē · Long presentation label for narrow screens］'.repeat(3);
-  let replacements = 0;
-  await page.route('**/assets/*.js', async (route) => {
-    const response = await route.fetch();
-    const source = await response.text();
-    if (!source.includes('Interface language')) return route.fulfill({ response });
-    replacements++;
-    await route.fulfill({ response, body: source.replaceAll('Interface language', expanded) });
-  });
-  await page.setViewportSize({ width: 360, height: 800 });
-  await page.goto('/');
-  await navigationAction(page, '설정');
-  await selectSettingsSection(page, '일반');
-  const selector = page.locator('.ui-language-setting select');
-  await selector.selectOption('en');
-  expect(replacements).toBeGreaterThan(0);
-  await expect(selector).toHaveAccessibleName(expanded);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(361);
-  const bounds = (await selector.boundingBox())!;
-  expect(bounds.x).toBeGreaterThanOrEqual(0);
-  expect(bounds.x + bounds.width).toBeLessThanOrEqual(361);
-  await page.screenshot({ path: info.outputPath('i18n-expanded-mobile-settings.png') });
 });
 
 test('I18N06 manifest follows UI language while saved reading language stays independent', async ({

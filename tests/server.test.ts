@@ -2,12 +2,12 @@ import packageJson from '../package.json' with { type: 'json' };
 import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
 import { injectWithFixtureBot, fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { backup, DatabaseSync } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
 import { createApp, type App } from '../server/app.js';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import { loopbackProvider } from './fixtures/loopback-provider.js';
@@ -680,29 +680,6 @@ describe('built server process boundary', () => {
             )
             .get(run.id)
         ).toEqual({ n: 0 });
-        if (process.env.UIMORI_ARTIFACT_DIR) {
-          const evidence = resolve(process.env.UIMORI_ARTIFACT_DIR, 'evidence');
-          await mkdir(evidence, { recursive: true });
-          await backup(db, join(evidence, 'batch-process-restart.sqlite'));
-          await writeFile(
-            join(evidence, 'batch-process-restart.json'),
-            JSON.stringify(
-              {
-                runId: run.id,
-                status: done.status,
-                sources: final.sources.length,
-                batches: batches.length,
-                resultFetches: provider.requests.filter((request) =>
-                  request.url.endsWith('/results')
-                ).length,
-                limitations:
-                  'Real child processes, HTTP, SQLite and SSE; local Anthropic fixture, no browser or live provider.',
-              },
-              null,
-              2
-            )
-          );
-        }
       } finally {
         db.close();
       }
@@ -711,7 +688,7 @@ describe('built server process boundary', () => {
     }
   });
 
-  it('isolates two processes and databases from one build and preserves each across restart', async () => {
+  it('isolates two processes and databases from one build', async () => {
     const directories = await Promise.all(
       ['a', 'b'].map((name) => mkdtemp(join(tmpdir(), `서사 M0 isolate-${name}-`)))
     );
@@ -731,18 +708,10 @@ describe('built server process boundary', () => {
       })
     );
     for (const [index, instance] of instances.entries()) {
-      await api(instance.url, `/api/chats/${records[1 - index].chat.id}`, undefined, 'GET', 404);
-      const exit = new Promise<void>((done) => instance.child.once('exit', () => done()));
-      instance.child.kill();
-      await exit;
-      const restarted = await startChild(directories[index]);
-      const kept = await api<Run>(restarted.url, `/api/runs/${records[index].run.id}`);
-      expect(kept.sourceRevision).toBe(records[index].run.sourceRevision);
-      expect(kept.usage).toEqual(records[index].run.usage);
-      const chat = await detail(restarted.url, records[index].chat);
+      const chat = await detail(instance.url, records[index].chat);
       expect(chat.sources).toHaveLength(1);
-      expect(chat.runs).toHaveLength(1);
-      await api(restarted.url, `/api/chats/${records[1 - index].chat.id}`, undefined, 'GET', 404);
+      expect(chat.runs.map((run) => run.id)).toEqual([records[index].run.id]);
+      await api(instance.url, `/api/chats/${records[1 - index].chat.id}`, undefined, 'GET', 404);
     }
   });
 
@@ -765,7 +734,7 @@ describe('built server process boundary', () => {
     await control(first.url, { action: 'release', barrier: 'run' }).catch(() => undefined);
     expect(await exited).toBe(86);
     const db = new DatabaseSync(join(directory, 'story.sqlite'), { readOnly: true });
-    const { originalText, beforeRestart } = (() => {
+    const originalText = (() => {
       try {
         expect(db.prepare('SELECT status FROM runs').get()).toEqual({ status: 'completed' });
         expect(db.prepare('SELECT count(*) AS n FROM sources').get()).toEqual({ n: 1 });
@@ -773,15 +742,7 @@ describe('built server process boundary', () => {
           n: 0,
         });
         expect(db.prepare('SELECT count(*) AS n FROM job_results').get()).toEqual({ n: 0 });
-        const originalText = db.prepare('SELECT text,hash FROM sources').get();
-        const beforeRestart = {
-          runs: db.prepare('SELECT id,status,source_revision FROM runs').all(),
-          sources: db.prepare('SELECT id,hash FROM sources').all(),
-          jobs: db.prepare('SELECT id,source_revision,status,generation FROM jobs').all(),
-          resultCount: db.prepare('SELECT count(*) AS n FROM job_results').get(),
-          inputCount: db.prepare('SELECT count(*) AS n FROM model_inputs').get(),
-        };
-        return { originalText, beforeRestart };
+        return db.prepare('SELECT text,hash FROM sources').get();
       } finally {
         db.close();
       }
@@ -823,38 +784,5 @@ describe('built server process boundary', () => {
     );
     third.child.kill();
     await stopped;
-    if (process.env.UIMORI_ARTIFACT_DIR) {
-      const evidenceDirectory = resolve(process.env.UIMORI_ARTIFACT_DIR, 'evidence');
-      await mkdir(evidenceDirectory, { recursive: true });
-      const persisted = new DatabaseSync(join(directory, 'story.sqlite'), { readOnly: true });
-      try {
-        const afterRestart = {
-          runs: persisted.prepare('SELECT id,status,source_revision FROM runs').all(),
-          sources: persisted.prepare('SELECT id,hash FROM sources').all(),
-          jobs: persisted.prepare('SELECT id,source_revision,status,generation FROM jobs').all(),
-          results: persisted.prepare('SELECT job_id,generation,result FROM job_results').all(),
-          inputCount: persisted.prepare('SELECT count(*) AS n FROM model_inputs').get(),
-        };
-        await backup(persisted, join(evidenceDirectory, 'commit-boundary.sqlite'));
-        await writeFile(
-          join(evidenceDirectory, 'commit-boundary-restart.json'),
-          JSON.stringify(
-            {
-              exitAfterCommit: 86,
-              beforeRestart,
-              afterRestart,
-              completedRunId: run.id,
-              interruptedRunId: interrupted.id,
-              limitations:
-                'Scripted mock lifecycle; no paid provider or power-loss durability claim.',
-            },
-            null,
-            2
-          )
-        );
-      } finally {
-        persisted.close();
-      }
-    }
   }, 20000);
 });

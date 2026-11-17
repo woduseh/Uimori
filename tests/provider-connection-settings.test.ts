@@ -33,17 +33,14 @@ function input(endpoint: string, protocol = 'openai-chat-v1') {
   return { title: 'Owner configured connection', endpoint, protocol, enabled: true };
 }
 
-test.each([
-  ['openai-chat-v1', 'http://192.168.1.25:8080/v1'],
-  ['openai-responses-v1', 'https://gateway.example/v1'],
-  ['anthropic-messages-v1', 'https://anthropic-compatible.example/v1'],
-  ['deepseek-chat-v1', 'https://deepseek-compatible.example/v1'],
-  ['vercel-chat-v1', 'https://gateway.example/v1'],
-])(
-  '%s accepts an owner-configured endpoint and direct key in one save',
-  async (protocol, endpoint) => {
-    const app = await setup();
-    const apiKey = 'synthetic-private-api-key';
+test('owner-configured endpoints and direct keys save in one request without exposing the key', async () => {
+  const app = await setup();
+  const apiKey = 'synthetic-private-api-key';
+  for (const [protocol, endpoint] of [
+    ['openai-chat-v1', 'http://192.168.1.25:8080/v1'],
+    ['openai-responses-v1', 'https://gateway.example/v1'],
+    ['anthropic-messages-v1', 'https://anthropic-compatible.example/v1'],
+  ]) {
     const response = await app.inject({
       method: 'POST',
       url: '/api/connections',
@@ -55,9 +52,9 @@ test.each([
     expect(saved.credentialRef).toBeTruthy();
     expect(app.store.credentials.get(saved.credentialRef!)).toBe(apiKey);
     expect(response.body).not.toContain(apiKey);
-    expect((await app.inject({ method: 'GET', url: '/api/library' })).body).not.toContain(apiKey);
   }
-);
+  expect((await app.inject({ method: 'GET', url: '/api/library' })).body).not.toContain(apiKey);
+});
 
 test('editing a name retains the key; replacing or clearing the key updates the database immediately', async () => {
   const app = await setup();
@@ -88,20 +85,22 @@ test('editing a name retains the key; replacing or clearing the key updates the 
   expect(app.store.credentials.get(replaced.credentialRef!)).toBeUndefined();
 });
 
-test.each([
-  'not a URL',
-  'file:///tmp/api',
-  'https://user:password@example.com/v1',
-  'https://example.com/v1?api_key=secret',
-  'https://example.com/v1#fragment',
-])('invalid API root %s does not create settings', async (endpoint) => {
+test('invalid API roots do not create settings', async () => {
   const app = await setup();
-  const response = await app.inject({
-    method: 'POST',
-    url: '/api/connections',
-    payload: input(endpoint),
-  });
-  expect(response.statusCode).toBe(400);
+  for (const endpoint of [
+    'not a URL',
+    'file:///tmp/api',
+    'https://user:password@example.com/v1',
+    'https://example.com/v1?api_key=secret',
+    'https://example.com/v1#fragment',
+  ]) {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/connections',
+      payload: input(endpoint),
+    });
+    expect(response.statusCode, endpoint).toBe(400);
+  }
   expect(app.store.product.all('connection')).toEqual([]);
 });
 

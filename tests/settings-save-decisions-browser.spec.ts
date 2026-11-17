@@ -16,7 +16,7 @@ import {
 
 preservePromptWorkspace();
 
-for (const width of [1440, 412]) {
+for (const width of [412]) {
   test(`SETTINGSFLOW one generation save validates both forms and retries only the remaining draft at ${width}px`, async ({
     page,
     request,

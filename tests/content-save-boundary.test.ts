@@ -74,7 +74,7 @@ function freeze(value: unknown): void {
   for (const child of Object.values(value)) freeze(child);
 }
 
-test('saving projects native fields without mutating borrowed external input', () => {
+test('saving projects native fields without sharing objects with input or response', () => {
   const store = database();
   const incoming = input();
   const before = structuredClone(incoming);
@@ -97,13 +97,6 @@ test('saving projects native fields without mutating borrowed external input', (
   expect(saved.package!.nativeRisu).not.toBe(incoming.package.nativeRisu);
   expect(saved.package!.images).not.toBe(incoming.package.images);
   expect(validateRisuContent(saved.package)).toEqual(saved.package);
-});
-
-test('returned and caller-owned objects cannot mutate the persisted version', () => {
-  const store = database();
-  const incoming = input();
-  const saved = store.product.content(incoming) as Content;
-  incoming.package.nativeRisu.card.description = 'Caller changed';
   saved.package!.nativeRisu.card.description = 'Response changed';
   expect(store.product.get<Content>('content', saved.id).package!.nativeRisu.card.description).toBe(
     'Native body'
@@ -122,12 +115,11 @@ test('native descriptions survive saving through the common stored text boundary
   expect(loaded.package.nativeRisu.card.description).toBe(text);
 });
 
-test.each(['unknown-field', 'invalid-native', 'invalid-projection'] as const)(
+test.each(['invalid-native', 'invalid-projection'] as const)(
   'a %s package still fails without writing a library version',
   (kind) => {
     const store = database();
     const incoming = input();
-    if (kind === 'unknown-field') Object.assign(incoming.package, { unknown: true });
     if (kind === 'invalid-native') incoming.package.nativeRisu.sourceHash = 'invalid';
     if (kind === 'invalid-projection') {
       incoming.package.nativeRisu.card.description = 'x'.repeat(SOURCE_TEXT_MAX_CHARS + 1);

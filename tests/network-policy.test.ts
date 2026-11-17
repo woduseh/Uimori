@@ -55,22 +55,23 @@ describe('self-host network policy', () => {
     for (const host of ['', 'story.example.test', '0.0.0.0:4310'])
       expect(() => listenAddress({ UIMORI_HOST: host }, policy)).toThrow('UIMORI_HOST');
   });
-  it.each([
-    '',
-    'http://story.example.test',
-    'https://user:password@story.example.test',
-    'https://story.example.test/chat',
-    'https://story.example.test/path/..',
-    'https://story.example.test?',
-    'https://story.example.test#',
-    'https://story.example.test:0',
-    'https://story.example.test,https://other.test',
-    ' https://story.example.test',
-    'https://story.example.test\\',
-  ])('rejects malformed public origin %s', (value) => {
-    expect(() => networkPolicy({ publicOrigin: value, accessToken })).toThrow(
-      'UIMORI_PUBLIC_ORIGIN'
-    );
+  it('rejects malformed public origins', () => {
+    for (const value of [
+      '',
+      'http://story.example.test',
+      'https://user:password@story.example.test',
+      'https://story.example.test/chat',
+      'https://story.example.test/path/..',
+      'https://story.example.test?',
+      'https://story.example.test#',
+      'https://story.example.test:0',
+      'https://story.example.test,https://other.test',
+      ' https://story.example.test',
+      'https://story.example.test\\',
+    ])
+      expect(() => networkPolicy({ publicOrigin: value, accessToken }), value).toThrow(
+        'UIMORI_PUBLIC_ORIGIN'
+      );
   });
   it('requires a usable token and denies test routes before creating a database', async () => {
     for (const token of [undefined, '', 'short', ' '.repeat(40), 'a'.repeat(1001)])

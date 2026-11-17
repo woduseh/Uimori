@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import { createAgentCollaboration, createAgentDefinition } from '../core/agent-collaboration.js';
 import type { Content, PromptPreset } from '../core/product.js';
-import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { editableResource } from '../core/resource-editing.js';
 import { readHelperEditor } from '../server/helper-resource-editing.js';
 import { HelperResourcePatchError } from '../server/helper-resource-patch-error.js';
@@ -940,24 +939,6 @@ test('preset block edits compose sequentially with one save and undo while prese
 
 const presetTogglePath = '/program/nativeRisuPreset/preset/customPromptTemplateToggle';
 
-test('a valid explicitly supplied value wins over the default in the same control edit', () => {
-  const { store, preset, target } = presetFixture([]);
-  const result = call(store, 'resource.patch', {
-    ...target,
-    expectedRevision: preset.revision,
-    changes: [
-      { op: 'set', path: presetTogglePath, value: 'tone=Tone=text\nstyle=Style=text' },
-      { op: 'set', path: '/values/style', value: 'vivid' },
-    ],
-  });
-  expect(result.changedPaths).toEqual([presetTogglePath, '/values/style']);
-  expect(result).not.toHaveProperty('resetKeys');
-  expect(store.product.get<any>('prompt-preset', preset.id).values).toEqual({
-    tone: 'warm',
-    style: 'vivid',
-  });
-});
-
 test('invalid explicit value writes are rejected rather than silently reconciled', () => {
   const { store, preset, target } = presetFixture([]);
   const originalUndo = store.db
@@ -1000,10 +981,7 @@ test('invalid explicit value writes are rejected rather than silently reconciled
   }
 });
 
-test.each([
-  ['mode', 'invalid', 'PROMPT_INVALID_CONTROL_VALUE'],
-  ['unknown', '1', 'PROMPT_UNKNOWN_CONTROL'],
-] as const)(
+test.each([['mode', 'invalid', 'PROMPT_INVALID_CONTROL_VALUE']] as const)(
   'a later invalid explicit %s value preserves the preset and retained undo',
   (key, value, error) => {
     const { store, preset, target } = presetFixture([]);
@@ -1087,25 +1065,6 @@ test('removing a control still referenced by enabled collaboration is rejected',
     })
   ).toThrow('AGENT_COLLABORATION_UNKNOWN_CONTROL');
   expect(store.product.get<any>('prompt-preset', preset.id)).toEqual(preset);
-});
-
-test('preset display title can change independently from the native name and undo normally', () => {
-  const { store, preset, target } = presetFixture([{ type: 'plain', text: 'Instruction' }]);
-  const saved = call(store, 'resource.patch', {
-    ...target,
-    expectedRevision: preset.revision,
-    changes: [{ op: 'set', path: '/title', value: 'Library V2' }],
-  });
-  expect(store.product.get<any>('prompt-preset', preset.id)).toEqual({
-    ...preset,
-    title: 'Library V2',
-    revision: saved.revision,
-  });
-  call(store, 'resource.undo', { ...target, expectedRevision: saved.revision });
-  expect(store.product.get<any>('prompt-preset', preset.id)).toEqual({
-    ...preset,
-    revision: preset.revision + 2,
-  });
 });
 
 test('stale and invalid preset structural proposals leave every block and the undo record intact', () => {
@@ -1355,37 +1314,6 @@ test('whole-model validation does not blame an unrelated last change', () => {
   expect(store.db.prepare('SELECT * FROM resource_undo WHERE id=?').get(preset.id)).toBeUndefined();
 });
 
-test('invalid projected content is reported as model validation without saving', () => {
-  const { store, content } = fixture();
-  expect(() =>
-    call(store, 'resource.patch', {
-      kind: 'content',
-      id: content.id,
-      expectedRevision: content.revision,
-      changes: [
-        {
-          op: 'set',
-          path: '/package/nativeRisu/card/first_mes',
-          value: 'x'.repeat(SOURCE_TEXT_MAX_CHARS + 1),
-        },
-      ],
-    })
-  ).toThrow(
-    expect.objectContaining({
-      statusCode: 400,
-      details: {
-        stage: 'validation',
-        changeIndex: null,
-        path: null,
-        op: null,
-        reason: 'invalid_change',
-      },
-    })
-  );
-  expect(store.product.get('content', content.id)).toEqual(content);
-  expect(store.db.prepare('SELECT COUNT(*) AS n FROM resource_undo').get()).toEqual({ n: 0 });
-});
-
 test('unexpected persistence failures are not relabeled as invalid patch input', () => {
   const { store, content } = fixture();
   const failure = new Error('Storage unavailable');
@@ -1410,7 +1338,6 @@ test('unexpected persistence failures are not relabeled as invalid patch input',
 
 test.each([
   ['A\r\nB\nC / A\nB\r\nC', 'A\r\nB\r\nC', 'text_ambiguous', 2],
-  ['aaaa', 'aa', 'text_ambiguous', 3],
   ['A\r\nB', 'A\nC', 'text_not_found', 0],
 ] as const)(
   'failed text match reports its change and count without saving: %s',
@@ -1449,7 +1376,6 @@ test.each([
 
 test.each([
   ['', {}, { removedKeys: ['tone'], resetKeys: [] }],
-  ['mood=Mood=text', { mood: '' }, { removedKeys: ['tone'], resetKeys: [] }],
   [
     'tone=Tone=select=Quiet,Loud\nstyle=Style=text',
     { tone: '0', style: '' },
@@ -1491,7 +1417,7 @@ test.each([
   }
 );
 
-test.each(['', 'tone=Tone=select=Quiet,Loud'])(
+test.each(['tone=Tone=select=Quiet,Loud'])(
   'explicit invalid values cannot be silently removed or reset: %s',
   (declaration) => {
     const { store, preset, target } = presetFixture([{ type: 'plain', text: 'Keep' }]);

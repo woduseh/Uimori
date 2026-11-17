@@ -78,6 +78,6 @@ Run의 `agents.consult` tool event에 의견·상태·호출량·질문·출처�
 
 ## 검증 범위
 
-설정·보관 검사는 `tests/agent-collaboration-config.test.ts`, `tests/agent-collaboration-store.test.ts`예요. `tests/agent-collaboration-runtime.test.ts`는 실제 loopback Responses 서버와 새 SQLite DB로 순서·추가 조회·권한·호출량·중복·취소·설정 변경을 검사해요. `tests/agent-collaboration-context.test.ts`는 선택 컨텍스트·초안·구성·컨텍스트별 캐시와 호출 예산, 새 컨텍스트 창 뒤 참조, 수정 가능한 오류를 확인하고 실행 입력은 테스트에서 실행 시점에 관찰하며, 실제 DB의 완료 후 정리도 별도로 검사해요. 브라우저는 `tests/agent-collaboration-browser.spec.ts`의 AGENTUI01/02에서 모바일·데스크톱 편집과 실제 저장/미리보기 API를 확인해요.
+설정·보관 검사는 `tests/agent-collaboration-config.test.ts`, `tests/agent-collaboration-store.test.ts`예요. `tests/agent-collaboration-runtime.test.ts`는 실제 loopback Responses 서버와 새 SQLite DB로 순서·추가 조회·권한·호출량·중복·취소·설정 변경을 검사해요. `tests/agent-collaboration-context.test.ts`는 선택 컨텍스트·초안·구성·컨텍스트별 캐시와 호출 예산, 새 컨텍스트 창 뒤 참조, 수정 가능한 오류를 확인하고 실행 입력은 테스트에서 실행 시점에 관찰하며, 실제 DB의 완료 후 정리도 별도로 검사해요. 브라우저는 `tests/agent-collaboration-browser.spec.ts`의 AGENTUI02에서 데스크톱 편집과 실제 저장/미리보기 API를 확인해요.
 
 합성 검사로 구현 계약을 확인해요.

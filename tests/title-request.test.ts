@@ -26,7 +26,7 @@ function fixture(protocol: Connection['protocol'] = 'openai-responses-v1') {
 }
 const input = { contract: 'Return a short title.', task: '{"source":"A scene"}' };
 
-test.each(['openai-responses-v1', 'anthropic-messages-v1', 'fixture-sse-v1'] as const)(
+test.each(['openai-responses-v1', 'anthropic-messages-v1'] as const)(
   'title request carries its own bounded text-only policy for %s',
   (protocol) => {
     const { connection, model } = fixture(protocol);

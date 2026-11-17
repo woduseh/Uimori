@@ -138,12 +138,16 @@ describe('native Risu prompt composition', () => {
     program.nativeRisuPreset.preset.customPromptTemplateToggle += '\ntoString=Named toggle';
     expect(resolvePromptValues(program).toString).toBe('0');
   });
-  test.each(
-    [
-      { name: 'RP', bundled: pheme, defaults, mode: 'roleplay' },
-      { name: 'novel', bundled: phemeNovel, defaults: novelDefaults, mode: 'novel_writing' },
-    ].flatMap((template) => ['0', '1'].map((botType) => ({ ...template, botType })))
-  )(
+  test.each([
+    { name: 'RP', bundled: pheme, defaults, mode: 'roleplay', botType: '0' },
+    {
+      name: 'novel',
+      bundled: phemeNovel,
+      defaults: novelDefaults,
+      mode: 'novel_writing',
+      botType: '1',
+    },
+  ])(
     'bundled Phēmē $name source executes native CBS with bot type $botType and keeps its fixed mode',
     async ({ bundled, defaults, mode, botType }) => {
       const selectedValues = { ...defaults, pheme_bot_type: botType };

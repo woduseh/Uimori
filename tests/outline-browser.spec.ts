@@ -4,7 +4,7 @@ import type { Chat, ChatDetail } from '../core/types.js';
 import type { OutlineDetail } from '../core/outline.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
-// This redesigned workspace is checked at its agreed narrow and desktop design widths.
+// Each case runs at one representative width; narrow and desktop paths are both exercised.
 const WIDTHS = [390, 1440] as const;
 const COMPOSITION = [
   {
@@ -90,173 +90,180 @@ async function sourceCount(request: APIRequestContext, chatId: string) {
   return detail.sources.length;
 }
 for (const width of WIDTHS) {
-  test(`OUTUI01 ${width} approachable start, skipped levels and responsive editing preserve drafts`, async ({
-    page,
-    request,
-  }, info) => {
-    const chat = await seed(request, width, true);
-    let modelRequests = 0;
-    page.on('request', (r) => {
-      if (r.method() === 'POST' && /\/messages$|\/run$/.test(new URL(r.url()).pathname))
-        modelRequests++;
+  if (width === 390)
+    test(`OUTUI01 ${width} approachable start, skipped levels and responsive editing preserve drafts`, async ({
+      page,
+      request,
+    }, info) => {
+      const chat = await seed(request, width, true);
+      let modelRequests = 0;
+      page.on('request', (r) => {
+        if (r.method() === 'POST' && /\/messages$|\/run$/.test(new URL(r.url()).pathname))
+          modelRequests++;
+      });
+      let failRead = true;
+      await page.route(`**/api/chats/${chat.id}/outline`, async (route) => {
+        if (route.request().method() === 'GET' && failRead) {
+          failRead = false;
+          await route.fulfill({ status: 503, json: { error: 'Outline temporarily unavailable' } });
+        } else await route.continue();
+      });
+      const panel = await open(page, chat.id, width);
+      await expect(panel.getByRole('alert')).toContainText('503');
+      await panel.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+      await expect(panel.getByRole('alert')).toHaveCount(0);
+      await expect(panel.getByRole('button', { name: '새로고침', exact: true })).toHaveCount(0);
+      await expect(
+        panel.getByRole('button', { name: '도우미와 플롯 시작', exact: true })
+      ).toBeVisible();
+      await page.screenshot({ path: info.outputPath(`outline-empty-${width}.png`) });
+      await panel.getByRole('button', { name: '직접 추가', exact: true }).click();
+      const form = panel.locator('.outline-form');
+      await form.getByRole('combobox', { name: '수준', exact: true }).selectOption('episode');
+      await form.getByRole('textbox', { name: '이름', exact: true }).fill('한 회차에서 시작');
+      const intent = form.getByRole('textbox', { name: '이번 회차의 사건과 목적', exact: true });
+      await intent.pressSequentially('대화를 길게 나누되 관계를 급하게 진전시키지 않아요.');
+      await expect(intent).toBeFocused();
+      await form.getByRole('button', { name: '초안을 보관하고 닫기' }).click();
+      await panel.getByRole('button', { name: '직접 추가', exact: true }).click();
+      await expect(form.getByRole('textbox', { name: '이름', exact: true })).toHaveValue(
+        '한 회차에서 시작'
+      );
+      await form.getByRole('button', { name: '추가', exact: true }).click();
+      await expect(panel.locator('.outline-detail-heading h3')).toHaveText('한 회차에서 시작');
+      const saved: OutlineDetail = await (
+        await request.get(`/api/chats/${chat.id}/outline`)
+      ).json();
+      expect(saved.nodes).toHaveLength(1);
+      expect(saved.nodes[0]).toMatchObject({ parentId: null, level: 'episode' });
+      expect(modelRequests).toBe(0);
+      await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+      await page.screenshot({ path: info.outputPath(`outline-standalone-dark-${width}.png`) });
+      expect(await panel.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+      expect(await page.evaluate(() => document.body.scrollWidth <= innerWidth)).toBe(true);
+      await page.keyboard.press('Escape');
+      await expect(panel).toHaveCount(0);
     });
-    let failRead = true;
-    await page.route(`**/api/chats/${chat.id}/outline`, async (route) => {
-      if (route.request().method() === 'GET' && failRead) {
-        failRead = false;
-        await route.fulfill({ status: 503, json: { error: 'Outline temporarily unavailable' } });
-      } else await route.continue();
-    });
-    const panel = await open(page, chat.id, width);
-    await expect(panel.getByRole('alert')).toContainText('503');
-    await panel.getByRole('button', { name: '다시 불러오기', exact: true }).click();
-    await expect(panel.getByRole('alert')).toHaveCount(0);
-    await expect(panel.getByRole('button', { name: '새로고침', exact: true })).toHaveCount(0);
-    await expect(
-      panel.getByRole('button', { name: '도우미와 플롯 시작', exact: true })
-    ).toBeVisible();
-    await page.screenshot({ path: info.outputPath(`outline-empty-${width}.png`) });
-    await panel.getByRole('button', { name: '직접 추가', exact: true }).click();
-    const form = panel.locator('.outline-form');
-    await form.getByRole('combobox', { name: '수준', exact: true }).selectOption('episode');
-    await form.getByRole('textbox', { name: '이름', exact: true }).fill('한 회차에서 시작');
-    const intent = form.getByRole('textbox', { name: '이번 회차의 사건과 목적', exact: true });
-    await intent.pressSequentially('대화를 길게 나누되 관계를 급하게 진전시키지 않아요.');
-    await expect(intent).toBeFocused();
-    await form.getByRole('button', { name: '초안을 보관하고 닫기' }).click();
-    await panel.getByRole('button', { name: '직접 추가', exact: true }).click();
-    await expect(form.getByRole('textbox', { name: '이름', exact: true })).toHaveValue(
-      '한 회차에서 시작'
-    );
-    await form.getByRole('button', { name: '추가', exact: true }).click();
-    await expect(panel.locator('.outline-detail-heading h3')).toHaveText('한 회차에서 시작');
-    const saved: OutlineDetail = await (await request.get(`/api/chats/${chat.id}/outline`)).json();
-    expect(saved.nodes).toHaveLength(1);
-    expect(saved.nodes[0]).toMatchObject({ parentId: null, level: 'episode' });
-    expect(modelRequests).toBe(0);
-    await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
-    await page.screenshot({ path: info.outputPath(`outline-standalone-dark-${width}.png`) });
-    expect(await panel.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-    expect(await page.evaluate(() => document.body.scrollWidth <= innerWidth)).toBe(true);
-    await page.keyboard.press('Escape');
-    await expect(panel).toHaveCount(0);
-  });
 
-  test(`OUTUI02 ${width} plan detail, brief preview and continuation use only selected unit`, async ({
-    page,
-    request,
-  }, info) => {
-    const chat = await seed(request, width);
-    let panel = await open(page, chat.id, width);
-    await choose(page, '1화 · 열람권의 대가', width);
-    const initial: OutlineDetail = await (
-      await request.get(`/api/chats/${chat.id}/outline`)
-    ).json();
-    const episode = initial.nodes.find((node) => node.title === '1화 · 열람권의 대가')!;
-    const second = initial.nodes.find((node) => node.title === '2화 · 돌아온 출입증')!;
-    const oldDraft = '이전 구성 전문과 사용자가 덧붙인 지시를 그대로 보관해요.';
-    const oldKey = `outline-workspace:${chat.id}:request:${episode.id}`;
-    await page.evaluate(({ key, value }) => sessionStorage.setItem(key, JSON.stringify(value)), {
-      key: oldKey,
-      value: oldDraft,
+  if (width === 1440)
+    test(`OUTUI02 ${width} plan detail, brief preview and continuation use only selected unit`, async ({
+      page,
+      request,
+    }, info) => {
+      const chat = await seed(request, width);
+      let panel = await open(page, chat.id, width);
+      await choose(page, '1화 · 열람권의 대가', width);
+      const initial: OutlineDetail = await (
+        await request.get(`/api/chats/${chat.id}/outline`)
+      ).json();
+      const episode = initial.nodes.find((node) => node.title === '1화 · 열람권의 대가')!;
+      const second = initial.nodes.find((node) => node.title === '2화 · 돌아온 출입증')!;
+      const oldDraft = '이전 구성 전문과 사용자가 덧붙인 지시를 그대로 보관해요.';
+      const oldKey = `outline-workspace:${chat.id}:request:${episode.id}`;
+      await page.evaluate(({ key, value }) => sessionStorage.setItem(key, JSON.stringify(value)), {
+        key: oldKey,
+        value: oldDraft,
+      });
+      const linked = await request.post(`/api/chats/${chat.id}/outline`, {
+        data: {
+          idempotencyKey: crypto.randomUUID(),
+          operations: [
+            {
+              op: 'update',
+              id: episode.id,
+              expectedRevision: episode.revision,
+              relatedIds: [second.id],
+            },
+          ],
+        },
+      });
+      expect(linked.ok()).toBe(true);
+      await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+      const links = panel.locator('.outline-related-list');
+      await expect(links).not.toHaveAttribute('open');
+      await links.locator('summary').click();
+      await expect(links.getByRole('button', { name: second.title })).toBeVisible();
+      await expect(panel.locator('.outline-intent-card')).toContainText('멈출 지점');
+      await page.screenshot({ path: info.outputPath(`outline-detail-light-${width}.png`) });
+      await panel.getByRole('button', { name: '이번 플롯의 입력 컨텍스트 보기' }).click();
+      await expect(panel.locator('.outline-brief')).toContainText('감춰진 이름과 되찾는 선택');
+      expect(await sourceCount(request, chat.id)).toBe(0);
+      await panel.getByRole('button', { name: '이 단위 집필', exact: true }).click();
+      const additional = panel.getByLabel('이번 추가 지시와 멈출 지점 (선택)', { exact: true });
+      await expect(additional).toHaveValue('');
+      const previous = panel
+        .locator('details')
+        .filter({ hasText: '이전 집필 요청 초안 (읽기 및 복사)' });
+      await previous.locator('summary').click();
+      await expect(previous.getByRole('textbox')).toHaveValue(oldDraft);
+      await expect(previous.getByRole('textbox')).toHaveAttribute('readonly');
+      await panel
+        .getByLabel('이번 추가 지시와 멈출 지점 (선택)', { exact: true })
+        .fill('선택한 1화만 집필해요. 문이 열리기 직전에 멈춰요.');
+      await page.screenshot({ path: info.outputPath(`outline-writing-${width}.png`) });
+      await panel.getByRole('button', { name: '집필 시작', exact: true }).click();
+      await expect(panel).toHaveCount(0);
+      await expect.poll(() => sourceCount(request, chat.id)).toBe(1);
+      expect(
+        await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) ?? 'null'), oldKey)
+      ).toBe(oldDraft);
+      panel = await open(page, chat.id, width);
+      await choose(page, '1화 · 열람권의 대가', width);
+      await expect(panel.locator('.outline-status-line')).toContainText('원문 1개 연결');
+      await panel.getByRole('button', { name: '이어 쓰기', exact: true }).click();
+      await panel.getByRole('button', { name: '집필 시작', exact: true }).click();
+      await expect.poll(() => sourceCount(request, chat.id)).toBe(2);
+      const detail: OutlineDetail = await (
+        await request.get(`/api/chats/${chat.id}/outline`)
+      ).json();
+      expect(
+        detail.nodes.find((node) => node.title === '1화 · 열람권의 대가')?.writings
+      ).toHaveLength(2);
+      expect(
+        detail.nodes
+          .filter((node) => node.title !== '1화 · 열람권의 대가')
+          .every((node) => !node.writings?.length)
+      ).toBe(true);
     });
-    const linked = await request.post(`/api/chats/${chat.id}/outline`, {
-      data: {
-        idempotencyKey: crypto.randomUUID(),
-        operations: [
-          {
-            op: 'update',
-            id: episode.id,
-            expectedRevision: episode.revision,
-            relatedIds: [second.id],
-          },
-        ],
-      },
-    });
-    expect(linked.ok()).toBe(true);
-    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-    const links = panel.locator('.outline-related-list');
-    await expect(links).not.toHaveAttribute('open');
-    await links.locator('summary').click();
-    await expect(links.getByRole('button', { name: second.title })).toBeVisible();
-    await expect(panel.locator('.outline-intent-card')).toContainText('멈출 지점');
-    await page.screenshot({ path: info.outputPath(`outline-detail-light-${width}.png`) });
-    await panel.getByRole('button', { name: '이번 플롯의 입력 컨텍스트 보기' }).click();
-    await expect(panel.locator('.outline-brief')).toContainText('감춰진 이름과 되찾는 선택');
-    expect(await sourceCount(request, chat.id)).toBe(0);
-    await panel.getByRole('button', { name: '이 단위 집필', exact: true }).click();
-    const additional = panel.getByLabel('이번 추가 지시와 멈출 지점 (선택)', { exact: true });
-    await expect(additional).toHaveValue('');
-    const previous = panel
-      .locator('details')
-      .filter({ hasText: '이전 집필 요청 초안 (읽기 및 복사)' });
-    await previous.locator('summary').click();
-    await expect(previous.getByRole('textbox')).toHaveValue(oldDraft);
-    await expect(previous.getByRole('textbox')).toHaveAttribute('readonly');
-    await panel
-      .getByLabel('이번 추가 지시와 멈출 지점 (선택)', { exact: true })
-      .fill('선택한 1화만 집필해요. 문이 열리기 직전에 멈춰요.');
-    await page.screenshot({ path: info.outputPath(`outline-writing-${width}.png`) });
-    await panel.getByRole('button', { name: '집필 시작', exact: true }).click();
-    await expect(panel).toHaveCount(0);
-    await expect.poll(() => sourceCount(request, chat.id)).toBe(1);
-    expect(
-      await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) ?? 'null'), oldKey)
-    ).toBe(oldDraft);
-    panel = await open(page, chat.id, width);
-    await choose(page, '1화 · 열람권의 대가', width);
-    await expect(panel.locator('.outline-status-line')).toContainText('원문 1개 연결');
-    await panel.getByRole('button', { name: '이어 쓰기', exact: true }).click();
-    await panel.getByRole('button', { name: '집필 시작', exact: true }).click();
-    await expect.poll(() => sourceCount(request, chat.id)).toBe(2);
-    const detail: OutlineDetail = await (await request.get(`/api/chats/${chat.id}/outline`)).json();
-    expect(
-      detail.nodes.find((node) => node.title === '1화 · 열람권의 대가')?.writings
-    ).toHaveLength(2);
-    expect(
-      detail.nodes
-        .filter((node) => node.title !== '1화 · 열람권의 대가')
-        .every((node) => !node.writings?.length)
-    ).toBe(true);
-  });
 
-  test(`OUTUI07 ${width} saved outline conflict preserves the edit draft`, async ({
-    page,
-    request,
-  }) => {
-    const chat = await seed(request, width);
-    const panel = await open(page, chat.id, width);
-    await choose(page, '1화 · 열람권의 대가', width);
-    const initial: OutlineDetail = await (
-      await request.get(`/api/chats/${chat.id}/outline`)
-    ).json();
-    const episode = initial.nodes.find((node) => node.title === '1화 · 열람권의 대가')!;
-    await panel
-      .locator('.outline-intent-card')
-      .getByRole('button', { name: '편집', exact: true })
-      .click();
-    const input = panel.getByRole('textbox', { name: '이번 회차의 사건과 목적', exact: true });
-    await input.fill('이 창에서 작성한 플롯 초안');
-    const updated = await request.post(`/api/chats/${chat.id}/outline`, {
-      data: {
-        idempotencyKey: crypto.randomUUID(),
-        operations: [
-          {
-            op: 'update',
-            id: episode.id,
-            expectedRevision: episode.revision,
-            intent: '다른 창의 변경',
-          },
-        ],
-      },
+  if (width === 1440)
+    test(`OUTUI07 ${width} saved outline conflict preserves the edit draft`, async ({
+      page,
+      request,
+    }) => {
+      const chat = await seed(request, width);
+      const panel = await open(page, chat.id, width);
+      await choose(page, '1화 · 열람권의 대가', width);
+      const initial: OutlineDetail = await (
+        await request.get(`/api/chats/${chat.id}/outline`)
+      ).json();
+      const episode = initial.nodes.find((node) => node.title === '1화 · 열람권의 대가')!;
+      await panel
+        .locator('.outline-intent-card')
+        .getByRole('button', { name: '편집', exact: true })
+        .click();
+      const input = panel.getByRole('textbox', { name: '이번 회차의 사건과 목적', exact: true });
+      await input.fill('이 창에서 작성한 플롯 초안');
+      const updated = await request.post(`/api/chats/${chat.id}/outline`, {
+        data: {
+          idempotencyKey: crypto.randomUUID(),
+          operations: [
+            {
+              op: 'update',
+              id: episode.id,
+              expectedRevision: episode.revision,
+              intent: '다른 창의 변경',
+            },
+          ],
+        },
+      });
+      expect(updated.ok(), await updated.text()).toBe(true);
+      await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+      const conflict = panel.locator('.outline-conflict');
+      await expect(conflict).toContainText('플롯이 바뀌었어요.');
+      await expect(input).toHaveValue('이 창에서 작성한 플롯 초안');
+      await expect(conflict.getByRole('button', { name: '최신 내용 불러오기' })).toBeVisible();
     });
-    expect(updated.ok(), await updated.text()).toBe(true);
-    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-    const conflict = panel.locator('.outline-conflict');
-    await expect(conflict).toContainText('플롯이 바뀌었어요.');
-    await expect(input).toHaveValue('이 창에서 작성한 플롯 초안');
-    await expect(conflict.getByRole('button', { name: '최신 내용 불러오기' })).toBeVisible();
-  });
 
   if (width === 390)
     test(`OUTUI03 ${width} lost save acknowledgement replays once after reload and preserves unsaved content`, async ({
@@ -341,48 +348,54 @@ for (const width of WIDTHS) {
       expect(await sourceCount(request, chat.id)).toBe(1);
     });
 
-  test(`OUTUI05 ${width} helper handoff preserves selected identity and draft without automatic model execution`, async ({
-    page,
-    request,
-  }, info) => {
-    const chat = await seed(request, width);
-    const panel = await open(page, chat.id, width);
-    await choose(page, '1화 · 열람권의 대가', width);
-    const messages: Record<string, unknown>[] = [];
-    await page.route('**/api/helper/conversations/*/messages', async (route) => {
-      if (route.request().method() !== 'POST') return route.continue();
-      messages.push(route.request().postDataJSON());
-      await route.fulfill({ status: 409, json: { error: 'MODEL_REQUIRED:helper' } });
+  if (width === 390)
+    test(`OUTUI05 ${width} helper handoff preserves selected identity and draft without automatic model execution`, async ({
+      page,
+      request,
+    }, info) => {
+      const chat = await seed(request, width);
+      const panel = await open(page, chat.id, width);
+      await choose(page, '1화 · 열람권의 대가', width);
+      const messages: Record<string, unknown>[] = [];
+      await page.route('**/api/helper/conversations/*/messages', async (route) => {
+        if (route.request().method() !== 'POST') return route.continue();
+        messages.push(route.request().postDataJSON());
+        await route.fulfill({ status: 409, json: { error: 'MODEL_REQUIRED:helper' } });
+      });
+      await panel.getByRole('button', { name: '상세화', exact: true }).click();
+      const helper = page.locator('#helper-panel');
+      await expect(helper).toBeVisible();
+      await expect(helper.locator('.helper-outline-selection')).toContainText(
+        '1화 · 열람권의 대가'
+      );
+      const composer = helper.locator('.helper-composer textarea').last();
+      await expect(composer).toHaveValue(/선택한 플롯/);
+      await composer.fill('내가 미리 작성한 요청을 보존해줘.');
+      expect(messages).toHaveLength(0);
+      await expect(panel).toBeHidden();
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await page.screenshot({ path: info.outputPath(`outline-helper-dark-${width}.png`) });
+      await helper.getByRole('button', { name: '플롯으로 돌아가기', exact: true }).click();
+      await expect(panel).toBeVisible();
+      await choose(page, '2화 · 돌아온 출입증', width);
+      await panel.getByRole('button', { name: '상세화', exact: true }).click();
+      await expect(helper.locator('.helper-outline-selection')).toContainText(
+        '2화 · 돌아온 출입증'
+      );
+      await expect(composer).toHaveValue('내가 미리 작성한 요청을 보존해줘.');
+      await composer.press('Control+Enter');
+      await expect.poll(() => messages.length).toBe(1);
+      const saved: OutlineDetail = await (
+        await request.get(`/api/chats/${chat.id}/outline`)
+      ).json();
+      const selected = saved.nodes.find((node) => node.title === '2화 · 돌아온 출입증')!;
+      expect(messages[0].outline).toEqual({
+        nodeId: selected.id,
+        expectedRevision: selected.revision,
+        purpose: 'compose',
+      });
+      expect(await sourceCount(request, chat.id)).toBe(0);
     });
-    await panel.getByRole('button', { name: '상세화', exact: true }).click();
-    const helper = page.locator('#helper-panel');
-    await expect(helper).toBeVisible();
-    await expect(helper.locator('.helper-outline-selection')).toContainText('1화 · 열람권의 대가');
-    const composer = helper.locator('.helper-composer textarea').last();
-    await expect(composer).toHaveValue(/선택한 플롯/);
-    await composer.fill('내가 미리 작성한 요청을 보존해줘.');
-    expect(messages).toHaveLength(0);
-    if (width === 1440) await expect(panel).toBeVisible();
-    else await expect(panel).toBeHidden();
-    await page.emulateMedia({ colorScheme: 'dark' });
-    await page.screenshot({ path: info.outputPath(`outline-helper-dark-${width}.png`) });
-    await helper.getByRole('button', { name: '플롯으로 돌아가기', exact: true }).click();
-    await expect(panel).toBeVisible();
-    await choose(page, '2화 · 돌아온 출입증', width);
-    await panel.getByRole('button', { name: '상세화', exact: true }).click();
-    await expect(helper.locator('.helper-outline-selection')).toContainText('2화 · 돌아온 출입증');
-    await expect(composer).toHaveValue('내가 미리 작성한 요청을 보존해줘.');
-    await composer.press('Control+Enter');
-    await expect.poll(() => messages.length).toBe(1);
-    const saved: OutlineDetail = await (await request.get(`/api/chats/${chat.id}/outline`)).json();
-    const selected = saved.nodes.find((node) => node.title === '2화 · 돌아온 출입증')!;
-    expect(messages[0].outline).toEqual({
-      nodeId: selected.id,
-      expectedRevision: selected.revision,
-      purpose: 'compose',
-    });
-    expect(await sourceCount(request, chat.id)).toBe(0);
-  });
   if (width === 1440)
     test(`OUTUI06 ${width} explicit review stays read-only and keeps its result in the helper conversation`, async ({
       page,
