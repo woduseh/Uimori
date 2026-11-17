@@ -1,7 +1,5 @@
 import { countTextTokens } from '../core/text-tokens.js';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { isAbsolute, join, relative } from 'node:path';
+import { join } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import { createAgentCollaboration, createAgentDefinition } from '../core/agent-collaboration.js';
 import type { Content, PromptPreset } from '../core/product.js';
@@ -13,26 +11,24 @@ import { invokeResourceTool } from '../server/helper-resource-tools.js';
 import { Store } from '../server/store.js';
 import { readTheme } from '../server/themes.js';
 import { fixtureBotInput } from './fixtures/chat.js';
+import { createTestDirectory } from './fixtures/test-directory.js';
 
-const owned: { store: Store; path: string }[] = [];
+const stores: { store: Store; directory: ReturnType<typeof createTestDirectory> }[] = [];
 afterEach(() => {
   vi.restoreAllMocks();
-  for (const { store, path } of owned.splice(0)) {
+  for (const { store, directory } of stores.splice(0)) {
     store.close();
-    const inside = relative(tmpdir(), path);
-    if (
-      isAbsolute(inside) ||
-      inside.startsWith('..') ||
-      !inside.startsWith('uimori-resource-edit-')
-    )
-      throw new Error('Unsafe cleanup');
-    rmSync(path, { recursive: true, force: true });
+    directory.remove();
   }
 });
+function createStore() {
+  const directory = createTestDirectory('uimori-resource-edit-');
+  const store = new Store(join(directory.directory, 'test.sqlite'));
+  stores.push({ store, directory });
+  return store;
+}
 function fixture(large = false) {
-  const path = mkdtempSync(join(tmpdir(), 'uimori-resource-edit-'));
-  const store = new Store(join(path, 'test.sqlite'));
-  owned.push({ store, path });
+  const store = createStore();
   const input = fixtureBotInput('Native owner', large ? 'Body '.repeat(272_000) : 'Body');
   input.package.nativeRisu.card.character_book = {
     entries: [
@@ -58,7 +54,7 @@ const call = (store: Store, name: string, args: Record<string, unknown>) =>
   invokeResourceTool(store, name, args) as Record<string, any>;
 const presetBlocksPath = '/program/nativeRisuPreset/preset/promptTemplate';
 function presetFixture(blocks: Record<string, unknown>[]) {
-  const { store } = fixture();
+  const store = createStore();
   const preset = store.product.promptPreset({
     title: 'Library V1',
     role: 'main',
@@ -80,7 +76,7 @@ function presetFixture(blocks: Record<string, unknown>[]) {
 }
 
 test('patching and undoing a Story UI style preserves the theme’s existing Reader CSS', () => {
-  const { store } = fixture();
+  const store = createStore();
   const appCss = '.reader { padding-inline: 16px; }';
   const { id, revision } = call(store, 'resource.save', {
     kind: 'theme',
@@ -373,7 +369,7 @@ test('field and item pages expose typed values, optional paths and exact UTF-16 
 });
 
 test('overview tolerates a card without a character book', () => {
-  const { store } = fixture();
+  const store = createStore();
   const input = fixtureBotInput('No lore');
   input.package.nativeRisu.card.character_book = null;
   const content = store.product.content(input) as Content;
@@ -484,9 +480,7 @@ test('batched resource reads keep the complete envelope bounded with separate pa
 });
 
 test('standalone module overview and patch use its authored lorebook', () => {
-  const path = mkdtempSync(join(tmpdir(), 'uimori-resource-edit-'));
-  const store = new Store(join(path, 'module.sqlite'));
-  owned.push({ store, path });
+  const store = createStore();
   const input = fixtureBotInput('Fixture module');
   input.package.nativeRisu.card = {};
   input.package.nativeRisu.module = {
@@ -641,9 +635,7 @@ test('inserting and removing lore preserves authored neighbors and refreshes the
 });
 
 test('preset native text and option declarations patch through normal preset validation', () => {
-  const path = mkdtempSync(join(tmpdir(), 'uimori-resource-edit-'));
-  const store = new Store(join(path, 'preset.sqlite'));
-  owned.push({ store, path });
+  const store = createStore();
   const preset = store.product.promptPreset({
     title: 'Draft',
     role: 'main',
@@ -948,73 +940,6 @@ test('preset block edits compose sequentially with one save and undo while prese
 
 const presetTogglePath = '/program/nativeRisuPreset/preset/customPromptTemplateToggle';
 
-test('changing prompt control IDs reconciles saved values atomically and undo restores both', () => {
-  const { store, preset, target } = presetFixture([{ type: 'plain', text: 'Keep this block' }]);
-  const result = call(store, 'resource.patch', {
-    ...target,
-    expectedRevision: preset.revision,
-    changes: [{ op: 'set', path: presetTogglePath, value: 'style=Style=text' }],
-  });
-  expect(result).toEqual({
-    id: preset.id,
-    revision: preset.revision + 1,
-    changedPaths: [presetTogglePath, '/values'],
-    resetKeys: ['tone'],
-    reconciledValues: { removedKeys: ['tone'], resetKeys: [] },
-  });
-  const saved = store.product.get<any>('prompt-preset', preset.id);
-  expect(saved.values).toEqual({ style: '' });
-  expect(saved.program.nativeRisuPreset.preset.promptTemplate).toEqual([
-    { type: 'plain', text: 'Keep this block' },
-  ]);
-  call(store, 'resource.undo', { ...target, expectedRevision: result.revision });
-  expect(store.product.get<any>('prompt-preset', preset.id)).toEqual({
-    ...preset,
-    revision: preset.revision + 2,
-  });
-});
-
-test('new controls take defaults while compatible saved values survive', () => {
-  const { store, preset, target } = presetFixture([]);
-  const result = call(store, 'resource.patch', {
-    ...target,
-    expectedRevision: preset.revision,
-    changes: [
-      {
-        op: 'set',
-        path: presetTogglePath,
-        value: 'tone=Tone=text\nstyle=Style=text',
-      },
-    ],
-  });
-  expect(result.changedPaths).toEqual([presetTogglePath, '/values']);
-  expect(result).not.toHaveProperty('resetKeys');
-  expect(store.product.get<any>('prompt-preset', preset.id).values).toEqual({
-    tone: 'warm',
-    style: '',
-  });
-});
-
-test('changing control options resets only values that are no longer valid', () => {
-  const { store, preset, target } = presetFixture([]);
-  const result = call(store, 'resource.patch', {
-    ...target,
-    expectedRevision: preset.revision,
-    changes: [
-      {
-        op: 'set',
-        path: presetTogglePath,
-        value: 'tone=Tone=select=soft,firm\nstyle=Style=text',
-      },
-    ],
-  });
-  expect(result.resetKeys).toEqual(['tone']);
-  expect(store.product.get<any>('prompt-preset', preset.id).values).toEqual({
-    tone: '0',
-    style: '',
-  });
-});
-
 test('a valid explicitly supplied value wins over the default in the same control edit', () => {
   const { store, preset, target } = presetFixture([]);
   const result = call(store, 'resource.patch', {
@@ -1234,7 +1159,7 @@ test('stale and invalid preset structural proposals leave every block and the un
 });
 
 test('first lore insertion creates the missing card book without replacing native source', () => {
-  const { store } = fixture();
+  const store = createStore();
   const input = fixtureBotInput('New lore owner');
   input.package.nativeRisu.card.character_book = null;
   input.package.nativeRisu.card.extensions = { vendor: { keep: true } };
@@ -1525,7 +1450,11 @@ test.each([
 test.each([
   ['', {}, { removedKeys: ['tone'], resetKeys: [] }],
   ['mood=Mood=text', { mood: '' }, { removedKeys: ['tone'], resetKeys: [] }],
-  ['tone=Tone=select=Quiet,Loud', { tone: '0' }, { removedKeys: [], resetKeys: ['tone'] }],
+  [
+    'tone=Tone=select=Quiet,Loud\nstyle=Style=text',
+    { tone: '0', style: '' },
+    { removedKeys: [], resetKeys: ['tone'] },
+  ],
   ['tone=Renamed label=text\nmode=Mode', { tone: 'warm', mode: '0' }, undefined],
 ] as const)(
   'toggle changes reconcile only inherited values: %s',
@@ -1537,7 +1466,7 @@ test.each([
       changes: [
         {
           op: 'set',
-          path: '/program/nativeRisuPreset/preset/customPromptTemplateToggle',
+          path: presetTogglePath,
           value: declaration,
         },
       ],
@@ -1547,8 +1476,13 @@ test.each([
     expect(saved.program.nativeRisuPreset.preset.promptTemplate).toEqual(
       preset.program.nativeRisuPreset.preset.promptTemplate
     );
-    expect(result.reconciledValues).toEqual(metadata);
-    expect(saved.revision).toBe(preset.revision + 1);
+    expect(result).toEqual({
+      id: preset.id,
+      revision: preset.revision + 1,
+      changedPaths: [presetTogglePath, '/values'],
+      ...(metadata ? { resetKeys: ['tone'], reconciledValues: metadata } : {}),
+    });
+    expect(saved.revision).toBe(result.revision);
     call(store, 'resource.undo', { ...target, expectedRevision: saved.revision });
     expect(store.product.get<any>('prompt-preset', preset.id)).toEqual({
       ...preset,

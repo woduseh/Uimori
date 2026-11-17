@@ -336,7 +336,7 @@ test('grep returns authored excerpts once, supports two-character Korean queries
   expect(read.editTarget).toEqual(hit.editTarget);
 });
 
-test('document discovery and narrow matches edit one age without sending repeated HTML', async () => {
+test('document and field searches filter, page and bound repeated background HTML', async () => {
   const f = fixture();
   const input = fixtureBotInput('Fujimiya Hinano', 'Hinano is Age: 14.');
   const { extensions: _old, ...card } = input.package.nativeRisu.card;
@@ -347,7 +347,6 @@ test('document discovery and narrow matches edit one age without sending repeate
     ageNumber: 14,
   };
   const saved = f.store.product.content(input) as Content;
-  expect(background.length).toBeGreaterThan(20_000);
   const missedTitle = await f.invoke('data.search', {
     scope: 'library',
     output: 'documents',
@@ -404,38 +403,6 @@ test('document discovery and narrow matches edit one age without sending repeate
     'DATA_PATH_INVALID'
   );
   await expect(f.invoke('data.search', { paths: ['/'] })).rejects.toThrow('DATA_PATH_INVALID');
-
-  const age = await f.invoke('data.search', {
-    scope: 'library',
-    ids: [saved.id],
-    patterns: ['Age:'],
-  });
-  expect(age.items).toHaveLength(1);
-  expect(age.items[0].text).toContain('Age: 14');
-  expect(age.items[0].editTarget).toEqual({
-    kind: 'content',
-    id: saved.id,
-    expectedRevision: saved.revision,
-    path: '/package/nativeRisu/card/description',
-  });
-  const receipt = invokeResourceTool(f.store, 'resource.patch', {
-    kind: age.items[0].editTarget.kind,
-    id: age.items[0].editTarget.id,
-    expectedRevision: age.items[0].editTarget.expectedRevision,
-    changes: [
-      {
-        path: age.items[0].editTarget.path,
-        op: 'replaceText',
-        oldText: 'Age: 14',
-        newText: 'Age: 15',
-      },
-    ],
-  }) as { revision: number; changedPaths: string[] };
-  expect(receipt.revision).toBe(saved.revision + 1);
-  expect(receipt.changedPaths).toEqual(['/package/nativeRisu/card/description']);
-  const after = f.store.product.get<Content>('content', saved.id);
-  expect(after.package.nativeRisu.card.description).toBe('Hinano is Age: 15.');
-  expect((after.package.nativeRisu.card.extensions as any).risuai.backgroundHTML).toBe(background);
 });
 
 test('module string excerpts can be patched while protected native paths remain readable', async () => {

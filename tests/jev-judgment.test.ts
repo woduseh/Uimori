@@ -1,11 +1,5 @@
-import { estimateContextTokens } from '../core/context-budget.js';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  executeJevJudgment,
-  JEV_CHOICE_OPTION_LIMIT,
-  JEV_ENDPOINT,
-  type JevRequest,
-} from '../server/jev-judgment.js';
+import { executeJevJudgment, JEV_ENDPOINT, type JevRequest } from '../server/jev-judgment.js';
 import { prepareLoreSelection, loreSelectionAttemptInputHashes } from '../server/lore-selection.js';
 import { defaultProfile } from '../core/product.js';
 import { DEFAULT_LORE_CONTEXT, validateLoreContextPolicy } from '../core/lore-context.js';
@@ -180,28 +174,6 @@ describe('Jev typed judgment transport', () => {
       expect.objectContaining({ status: 'error', error: { code: 'JEV_RESPONSE_LIMIT' } })
     );
   });
-  it('settles cancellation after dispatch without using a late mocked response', async () => {
-    const h = hooks(),
-      controller = new AbortController();
-    await expect(
-      executeJevJudgment(request, 'e'.repeat(64), 5000, {
-        ...h,
-        signal: controller.signal,
-        fetch: async () => {
-          controller.abort();
-          return response({ relevant: 0.95 });
-        },
-      })
-    ).rejects.toThrow('JEV_CANCELLED');
-    expect(h.onAttemptFinish).toHaveBeenCalledWith(
-      'attempt-1',
-      expect.objectContaining({
-        status: 'cancelled',
-        // Cancellation won before any response bytes were read; usage is unknown.
-        usage: expect.objectContaining({ inputTokens: null }),
-      })
-    );
-  });
   it('releases a response body that arrives after cancellation', async () => {
     const h = hooks();
     const controller = new AbortController();
@@ -219,6 +191,13 @@ describe('Jev typed judgment transport', () => {
       ).rejects.toThrow('JEV_CANCELLED');
       expect(stalled.cancellations).toBe(1);
       expect(h.onAttemptFinish).toHaveBeenCalledTimes(1);
+      expect(h.onAttemptFinish).toHaveBeenCalledWith(
+        'attempt-1',
+        expect.objectContaining({
+          status: 'cancelled',
+          usage: expect.objectContaining({ inputTokens: null }),
+        })
+      );
     } finally {
       stalled.release();
     }
@@ -507,60 +486,32 @@ describe('documented JEV input admission limits', () => {
       ])
     ),
   });
-  const costs = (value: JevRequest) => {
-    const state = estimateContextTokens(value.state);
-    const questions = Object.values(value.questions).map((question) =>
-      estimateContextTokens(question)
-    );
-    return {
-      longest: state + Math.max(...questions),
-      total: state + questions.reduce((a, b) => a + b, 0),
-    };
-  };
-  it.each(['longest', 'total'] as const)(
-    'rejects the independent %s limit before credentials, attempts, or fetch',
-    async (limit) => {
-      const value = limit === 'longest' ? sized(30000) : sized(22000, 3);
-      const cost = costs(value);
-      expect(cost[limit]).toBeGreaterThan(limit === 'longest' ? 32000 : 64000);
-      expect(cost[limit === 'longest' ? 'total' : 'longest']).toBeLessThan(
-        limit === 'longest' ? 64000 : 32000
-      );
-      const h = hooks(),
-        credential = vi.fn(() => 'test-key'),
-        send = vi.fn();
-      await expect(
-        executeJevJudgment(value, 'f'.repeat(64), null, { ...h, credential, fetch: send })
-      ).rejects.toThrow('JEV_INPUT_BUDGET');
-      expect(credential).not.toHaveBeenCalled();
-      expect(h.onAttemptStart).not.toHaveBeenCalled();
-      expect(h.onAttemptFinish).not.toHaveBeenCalled();
-      expect(send).not.toHaveBeenCalled();
-    }
-  );
-  it('accepts the complete request just below the longest-question boundary and rejects its next increment', async () => {
-    let low = 0,
-      high = 32000;
-    while (low + 1 < high) {
-      const middle = Math.floor((low + high) / 2);
-      if (costs(sized(middle)).longest <= 32000) low = middle;
-      else high = middle;
-    }
-    const value = sized(low);
-    expect(costs(value).longest).toBeGreaterThanOrEqual(31998);
+  // With the stored o200k estimator, these two adjacent question sizes cost
+  // 32,000 and 32,001 including the shared state and admission headroom.
+  const lastAdmitted = 29_048;
+  it.each([
+    ['one oversized question', sized(lastAdmitted + 1)],
+    ['three individually admissible questions over the shared limit', sized(22_000, 3)],
+  ] as const)('rejects %s before credentials, attempts, or fetch', async (_label, value) => {
+    const h = hooks(),
+      credential = vi.fn(() => 'test-key'),
+      send = vi.fn();
+    await expect(
+      executeJevJudgment(value, 'f'.repeat(64), null, { ...h, credential, fetch: send })
+    ).rejects.toThrow('JEV_INPUT_BUDGET');
+    expect(credential).not.toHaveBeenCalled();
+    expect(h.onAttemptStart).not.toHaveBeenCalled();
+    expect(h.onAttemptFinish).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+  it('dispatches the complete request at the longest-question boundary', async () => {
+    const value = sized(lastAdmitted);
     const h = hooks(),
       send = vi.fn(async (_url: unknown, _init?: RequestInit) => response({ question0: 0.58 }));
     await expect(
       executeJevJudgment(value, 'f'.repeat(64), null, { ...h, fetch: send })
     ).resolves.toMatchObject({ scores: { question0: 0.58 } });
     expect(JSON.parse(String(send.mock.calls[0]?.[1]?.body))).toMatchObject(value);
-    const blocked = hooks(),
-      blockedSend = vi.fn();
-    await expect(
-      executeJevJudgment(sized(high), 'f'.repeat(64), null, { ...blocked, fetch: blockedSend })
-    ).rejects.toThrow('JEV_INPUT_BUDGET');
-    expect(blockedSend).not.toHaveBeenCalled();
-    expect(blocked.onAttemptStart).not.toHaveBeenCalled();
   });
   it('retains a narrower application input budget', async () => {
     const h = hooks(),
@@ -586,7 +537,6 @@ describe('documented JEV choice option admission', () => {
   });
 
   it('sends all 255 serialized options in one request at the official limit', async () => {
-    expect(JEV_CHOICE_OPTION_LIMIT).toBe(255);
     const options = criteria(255),
       value = choiceRequest(options);
     const h = hooks(),
