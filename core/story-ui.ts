@@ -30,8 +30,15 @@ const MAX_BLOCK = 400_000;
 const record = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
-// Persisted wire messages are untrusted input too. Only the small, static surface
-// produced by Express is accepted; functions and image sources are restricted.
+export function isStoryUiImageUrl(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    /^\/api\/(?:assets|package-image-blobs|illustration-images)\/[A-Za-z0-9_-]+$/.test(value)
+  );
+}
+
+// Validate the source-owned surface shape. The SDK catalog owns callable functions;
+// resolved image sources are checked by the renderer.
 export function validateStoryUiMessages(value: unknown): value is StoryUiMessage[] {
   if (!Array.isArray(value) || value.length !== 1 || !record(value[0])) return false;
   const message = value[0];
@@ -70,13 +77,10 @@ export function validateStoryUiMessages(value: unknown): value is StoryUiMessage
     if (!api.schema.safeParse(properties).success) return false;
     if (
       component.component === 'Image' &&
-      (typeof component.url !== 'string' ||
-        !/^\/api\/(?:assets|package-image-blobs|illustration-images)\/[A-Za-z0-9_-]+$/.test(
-          component.url
-        ))
+      typeof component.url === 'string' &&
+      !isStoryUiImageUrl(component.url)
     )
       return false;
-    if (component.component === 'Icon' && typeof component.name !== 'string') return false;
     components.set(component.id, component);
   }
   if (!components.has('root')) return false;
@@ -84,33 +88,16 @@ export function validateStoryUiMessages(value: unknown): value is StoryUiMessage
     if (depth > 30) return false;
     if (Array.isArray(value))
       return value.length <= 200 && value.every((item) => safe(item, depth + 1));
-    if (!record(value)) return typeof value !== 'string' || value.length <= 10_000;
-    const call = value['@call'] ?? value.call;
-    if (
-      call !== undefined &&
-      (typeof call !== 'string' ||
-        !storyUiCatalog.functions.has(call) ||
-        value.catalogId !== undefined)
-    )
-      return false;
-    if ('functionCall' in value) return false;
-    return Object.values(value).every((item) => safe(item, depth + 1));
-  }
-  function safeData(value: unknown, depth: number): boolean {
-    if (depth > 30) return false;
-    if (Array.isArray(value))
-      return value.length <= 200 && value.every((item) => safeData(item, depth + 1));
     if (record(value))
       return (
         Object.keys(value).length <= 200 &&
-        Object.values(value).every((item) => safeData(item, depth + 1))
+        Object.values(value).every((item) => safe(item, depth + 1))
       );
     return typeof value !== 'string' || value.length <= 10_000;
   }
   if (
     !safe(surface.components, 0) ||
-    (surface.dataModel !== undefined &&
-      (!record(surface.dataModel) || !safeData(surface.dataModel, 0)))
+    (surface.dataModel !== undefined && (!record(surface.dataModel) || !safe(surface.dataModel, 0)))
   )
     return false;
   const visited = new Set<string>();
@@ -287,7 +274,14 @@ export function projectStoryUiText(text: string): string {
       const components = message.createSurface.components;
       const values: string[] = [];
       const dataModel = (message.createSurface as { dataModel?: unknown }).dataModel;
-      if (dataModel !== undefined) values.push(JSON.stringify(dataModel));
+      if (dataModel !== undefined) {
+        if (record(dataModel) && record(dataModel._uimori) && 'style' in dataModel._uimori) {
+          const { style: _style, ...metadata } = dataModel._uimori;
+          const { _uimori: _original, ...rest } = dataModel;
+          if (Object.keys(metadata).length) rest._uimori = metadata;
+          if (Object.keys(rest).length) values.push(JSON.stringify(rest));
+        } else values.push(JSON.stringify(dataModel));
+      }
       const append = (value: unknown) => {
         if (typeof value === 'string' || typeof value === 'number') values.push(String(value));
         else if (Array.isArray(value)) value.forEach(append);

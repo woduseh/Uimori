@@ -7,6 +7,7 @@ import type {
   HelperTaskResultsView,
 } from '../core/helper.js';
 import { api } from './api.js';
+import { isStoryUiStyleSetting } from '../core/story-ui-style.js';
 import { formatNumber, t, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -53,6 +54,8 @@ const settingsLabels: Record<string, string> = {
   'chat.mainModel': 'helperResults.chatMainModel',
   'chat.mainPromptPreset': 'helperResults.chatMainPromptPreset',
   'chat.maxCalls': 'helperResults.chatMaxCalls',
+  'chat.storyUi': 'storyUi.enable',
+  'chat.storyUiStyle': 'storyUi.style',
   'chat.illustrationProfiles': 'visuals.characterProfiles',
   'chat.illustrationReferences': 'visuals.m028',
   'model.pricing': 'helperResults.modelPricing',
@@ -143,7 +146,13 @@ function useTaskResults(taskId: string, status: HelperStatus, visible: boolean) 
   };
 }
 
-function settingValue(value: HelperTaskResultTarget['before'], label?: string | null) {
+function settingValue(
+  value: HelperTaskResultTarget['before'],
+  label?: string | null,
+  setting?: string
+) {
+  if (setting === 'chat.storyUiStyle' && isStoryUiStyleSetting(value))
+    return t(`storyUi.style.${value}`);
   if (label !== undefined && label !== null) return label;
   if (value === null) return t('helperResults.unset');
   if (typeof value === 'boolean') return t(`helperResults.${value ? 'enabled' : 'disabled'}`);
@@ -193,10 +202,10 @@ function ResultTarget({
       </span>
       {!deleted && target.before !== undefined && target.after !== undefined ? (
         <span className="helper-result-values">
-          <span>{settingValue(target.before, target.beforeLabel)}</span>
+          <span>{settingValue(target.before, target.beforeLabel, target.setting)}</span>
           <span aria-hidden="true">→</span>
           <span className="sr-only">{t('helperResults.changedTo')}</span>
-          <span>{settingValue(target.after, target.afterLabel)}</span>
+          <span>{settingValue(target.after, target.afterLabel, target.setting)}</span>
         </span>
       ) : (
         <span className="helper-result-saved">

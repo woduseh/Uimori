@@ -810,7 +810,9 @@ function App() {
           target.setting === 'chat.illustrationProfiles' ||
             target.setting === 'chat.illustrationReferences'
             ? 'images'
-            : target.setting === 'chat.maxCalls'
+            : target.setting === 'chat.maxCalls' ||
+                target.setting === 'chat.storyUi' ||
+                target.setting === 'chat.storyUiStyle'
               ? 'runtime'
               : 'prompts'
         );

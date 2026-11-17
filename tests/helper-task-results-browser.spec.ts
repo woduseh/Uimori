@@ -142,6 +142,73 @@ async function seed(request: APIRequestContext, profiles?: { name: string; appea
 const usageValue = (results: Locator, label: string) =>
   results.getByText(label, { exact: true }).locator('xpath=following-sibling::dd[1]');
 
+test('HRESULT-STORYUI setting results identify changes and open generation settings', async ({
+  page,
+  request,
+}, info) => {
+  const { chat, task } = await seed(request);
+  const projection: HelperTaskResultsView = {
+    taskId: task.id,
+    status: 'completed',
+    results: [
+      {
+        eventSeq: 1,
+        receiptId: 'story-ui-settings',
+        operation: 'settings.update',
+        requestedTargets: 2,
+        changedTargets: 2,
+        targets: [
+          {
+            kind: 'settings',
+            id: chat.id,
+            title: chat.title,
+            revision: 1,
+            setting: 'chat.storyUi',
+            before: false,
+            after: true,
+          },
+          {
+            kind: 'settings',
+            id: chat.id,
+            title: chat.title,
+            revision: 2,
+            setting: 'chat.storyUiStyle',
+            before: 'auto',
+            after: 'blue-archive',
+          },
+        ],
+      },
+    ],
+    unrecordedOperations: 0,
+    usage: { toolExecutions: 2, attempts: [], latestInputEstimate: null },
+  };
+  await page.route(`**/api/helper/tasks/${task.id}/results`, (route) =>
+    route.fulfill({ json: projection })
+  );
+  for (const label of ['이야기 UI', '이야기 UI 스타일']) {
+    await page.goto(`/?chat=${chat.id}`);
+    await openHelper(page);
+    const results = page
+      .locator(`.helper-message.assistant[data-task-id="${task.id}"]`)
+      .getByTestId('helper-task-results');
+    const target = results.getByRole('button').filter({
+      has: page.getByText(label, { exact: true }),
+    });
+    await expect(target).toBeVisible();
+    if (label === '이야기 UI 스타일') {
+      await expect(target).toContainText('자동');
+      await expect(target).toContainText('블루 아카이브');
+      await expect(target).not.toContainText('blue-archive');
+      await page.screenshot({ path: info.outputPath('story-ui-setting-results.png') });
+    }
+    await target.click();
+    const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+    await expect(dialog.getByRole('switch', { name: '이야기 UI', exact: true })).toBeVisible();
+    await expect(dialog.getByLabel('이야기 UI 스타일')).toBeVisible();
+  }
+  await page.screenshot({ path: info.outputPath('story-ui-setting-destination.png') });
+});
+
 for (const width of DEFAULT_WIDTHS) {
   test(`HRESULT-ILLUSTRATION queued and placed results open their scene and references without losing a draft at ${width}px`, async ({
     page,

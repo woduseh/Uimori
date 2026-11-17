@@ -9,7 +9,7 @@ import { SaveButton } from './SaveButton.js';
 import { Switch } from './BooleanControls.js';
 import './settings-actions.css';
 import { useEffect, useId, useRef, useState } from 'react';
-import { storyUiStyles, type StoryUiStyle } from '../core/story-ui-style.js';
+import { storyUiStyles, type StoryUiStyleSetting } from '../core/story-ui-style.js';
 import type { Chat, Settings } from '../core/types.js';
 import type { AutoTranslationDefaults } from '../core/chat-settings.js';
 import { api } from './api.js';
@@ -176,10 +176,12 @@ export function SettingsEditor({
                   <small>{t('storyUi.styleHelp')}</small>
                 </span>
                 <select
-                  value={value.storyUiStyle ?? 'default'}
-                  onChange={(event) => update('storyUiStyle', event.target.value as StoryUiStyle)}
+                  value={value.storyUiStyle ?? 'auto'}
+                  onChange={(event) =>
+                    update('storyUiStyle', event.target.value as StoryUiStyleSetting)
+                  }
                 >
-                  {storyUiStyles.map((style) => (
+                  {(['auto', ...storyUiStyles] as const).map((style) => (
                     <option key={style} value={style}>
                       {t(`storyUi.style.${style}`)}
                     </option>

@@ -1,11 +1,70 @@
 import { createComponentImplementation } from '@a2ui/react';
 import { Catalog } from '@a2ui/web_core';
 import { basicCatalog } from '@a2ui/web_core/catalogs/basic/v1';
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { storyUiCatalog, storyUiExtensions } from '../core/story-ui-catalog.js';
+import { isStoryUiImageUrl } from '../core/story-ui.js';
+import { storyUiIcons } from './story-ui-icons.js';
 import { t } from './i18n.js';
 
 const api = (name: string) => storyUiCatalog.components.get(name)!;
+const Icon = createComponentImplementation(api('Icon'), ({ props, context }) => {
+  // The SDK's generic binder leaves Icon's enum/SVG/binding union unresolved.
+  const [name, setName] = useState<unknown>(() =>
+    context.dataContext.resolveDynamicValue(props.name)
+  );
+  useEffect(() => {
+    const subscription = context.dataContext.subscribeDynamicValue(props.name, setName);
+    setName(subscription.value);
+    return () => subscription.unsubscribe();
+  }, [context.dataContext, props.name]);
+  const style = {
+    display: 'block',
+    width: 'var(--a2ui-icon-size, 24px)',
+    height: 'var(--a2ui-icon-size, 24px)',
+    color: 'var(--a2ui-icon-color, currentColor)',
+  };
+  if (typeof name === 'string') {
+    const Glyph = Object.hasOwn(storyUiIcons, name) ? storyUiIcons[name] : undefined;
+    return Glyph ? (
+      <Glyph aria-hidden="true" focusable="false" strokeWidth={1.5} style={style} />
+    ) : null;
+  }
+  return name &&
+    typeof name === 'object' &&
+    'svgPath' in name &&
+    typeof name.svgPath === 'string' ? (
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="currentColor" style={style}>
+      <path d={name.svgPath} />
+    </svg>
+  ) : null;
+});
+const Image = createComponentImplementation(api('Image'), ({ props }) => {
+  const variant = props.variant;
+  const size =
+    variant === 'icon'
+      ? 'var(--a2ui-image-icon-size, 24px)'
+      : variant === 'avatar'
+        ? 'var(--a2ui-image-avatar-size, 40px)'
+        : undefined;
+  return (
+    <img
+      src={isStoryUiImageUrl(props.url) ? props.url : undefined}
+      alt={props.description || ''}
+      style={{
+        display: 'block',
+        maxWidth:
+          variant === 'smallFeature' ? 'var(--a2ui-image-small-feature-size, 100px)' : '100%',
+        width: size,
+        height: size ?? (variant === 'header' ? 'var(--a2ui-image-header-size, 200px)' : 'auto'),
+        maxHeight:
+          variant === 'largeFeature' ? 'var(--a2ui-image-large-feature-size, 400px)' : undefined,
+        borderRadius: variant === 'avatar' ? '50%' : 'var(--a2ui-image-border-radius, 0)',
+        objectFit: props.fit === 'scaleDown' ? 'scale-down' : (props.fit ?? 'cover'),
+      }}
+    />
+  );
+});
 const Button = createComponentImplementation(api('Button'), ({ props, buildChild }) => (
   <button type="button" disabled={props.isValid === false} onClick={() => props.action?.()}>
     {props.child && buildChild(props.child)}
@@ -211,7 +270,7 @@ const extensions = storyUiExtensions.map((entry) =>
   })
 );
 const overrides = new Map(
-  [Button, TextField, Tabs, ...extensions].map((entry) => [entry.name, entry])
+  [Icon, Image, Button, TextField, Tabs, ...extensions].map((entry) => [entry.name, entry])
 );
 export const storyUiRenderCatalog = new Catalog(
   storyUiCatalog.id,

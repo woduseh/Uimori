@@ -1,4 +1,4 @@
-import { isStoryUiStyle } from './story-ui-style.js';
+import { isStoryUiStyleSetting } from './story-ui-style.js';
 import type { Settings } from './types.js';
 
 export type AutoTranslationDefaults = { revision: number; autoTranslate: boolean };
@@ -17,7 +17,7 @@ export function normalizeChatSettings(value: unknown): Settings {
     throw Object.assign(new Error('Invalid automatic translation setting'), { statusCode: 400 });
   if (input.storyUi !== undefined && typeof input.storyUi !== 'boolean')
     throw Object.assign(new Error('Invalid story UI setting'), { statusCode: 400 });
-  if (input.storyUiStyle !== undefined && !isStoryUiStyle(input.storyUiStyle))
+  if (input.storyUiStyle !== undefined && !isStoryUiStyleSetting(input.storyUiStyle))
     throw Object.assign(new Error('Invalid story UI style'), { statusCode: 400 });
   return {
     maxCalls: input.maxCalls!,

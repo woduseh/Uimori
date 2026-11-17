@@ -1,9 +1,46 @@
 import { describe, expect, it } from 'vitest';
 import { compileReadingMarkdown } from '../core/reading-markdown.js';
 import { parseStoryUi, projectStoryUiText, validateStoryUiAction } from '../core/story-ui.js';
+import { resolveStoryUiStyle } from '../core/story-ui-style.js';
+import { prepareStoryUiTranslation } from '../core/story-ui-translation.js';
 import { normalizeStoryUiOutput } from '../server/story-ui.js';
 
 describe('story UI', () => {
+  it('accepts ordinary event data whose field names resemble function metadata', () => {
+    const source = normalizeStoryUiOutput(
+      '<a2ui>root = Button(Text("Call"), action=Event("contact", {call: "Mira", functionCall: "phone"}))</a2ui>'
+    );
+    const segment = parseStoryUi(source)[0];
+    expect(segment.kind).toBe('ui');
+    expect(
+      validateStoryUiAction(source, segment.id, 'contact', { call: 'Mira', functionCall: 'phone' })
+    ).not.toBeNull();
+  });
+  it('persists a model-selected style through translation and honors the chat override', () => {
+    const expression = '<a2ui>\n$/_uimori/style = "blue-archive"\nroot = Text("Hello")\n</a2ui>';
+    const stored = normalizeStoryUiOutput(expression);
+    const segment = parseStoryUi(stored)[0];
+    expect(segment.kind).toBe('ui');
+    if (segment.kind !== 'ui') throw new Error('UI missing');
+    expect(resolveStoryUiStyle(undefined, segment.messages)).toBe('blue-archive');
+    expect(resolveStoryUiStyle('auto', segment.messages)).toBe('blue-archive');
+    expect(resolveStoryUiStyle('default', segment.messages)).toBe('default');
+    expect(resolveStoryUiStyle('modern', segment.messages)).toBe('modern');
+    expect(projectStoryUiText(stored)).not.toContain('blue-archive');
+    const prepared = prepareStoryUiTranslation(stored);
+    expect(prepared.text).not.toContain('blue-archive');
+    const translated = parseStoryUi(prepared.restore(prepared.text.replace('Hello', '안녕')))[0];
+    expect(translated.kind).toBe('ui');
+    if (translated.kind !== 'ui') throw new Error('Translated UI missing');
+    expect(resolveStoryUiStyle(undefined, translated.messages)).toBe('blue-archive');
+    expect(projectStoryUiText(prepared.restore(prepared.text.replace('Hello', '안녕')))).toContain(
+      '안녕'
+    );
+    const unknown = normalizeStoryUiOutput(expression.replace('blue-archive', 'unknown'));
+    const fallback = parseStoryUi(unknown)[0];
+    if (fallback.kind !== 'ui') throw new Error('UI missing');
+    expect(resolveStoryUiStyle(undefined, fallback.messages)).toBe('default');
+  });
   it('reads a long valid block after storing both expression and compiled content', () => {
     const expression = `<a2ui>root = Column([${Array.from({ length: 10 }, () => `Text("${'x'.repeat(6000)}")`).join(',')}])</a2ui>`;
     const normalized = normalizeStoryUiOutput(expression);
@@ -55,6 +92,14 @@ root = List(_template($/people, item))
     const result = normalizeStoryUiOutput(expression);
     expect(parseStoryUi(result)[0].kind).toBe('ui');
     expect(projectStoryUiText(result)).toContain('"name":"Mira"');
+  });
+  it('accepts data-bound images and icons inside repeated lists', () => {
+    const expression = `<a2ui>
+$/people = [{name: "Mira", portrait: "/api/assets/mira", icon: "person"}]
+item = Row([Image($portrait, description=$name), Icon($icon), Text($name)])
+root = List(_template($/people, item))
+</a2ui>`;
+    expect(parseStoryUi(normalizeStoryUiOutput(expression))[0].kind).toBe('ui');
   });
   it('leaves ordinary fenced code as prose', () => {
     const source = '```example\n<a2ui>root = Text("code")</a2ui>\n```';

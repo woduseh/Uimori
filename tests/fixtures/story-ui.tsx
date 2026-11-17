@@ -31,7 +31,12 @@ export function mountStoryUi(
             },
             { id: 'one', component: 'Text', text: '첫 화면' },
             { id: 'two', component: 'Text', text: '다음 화면' },
-            { id: 'field', component: 'TextField', label: '이름', value: { '@path': '/name' } },
+            {
+              id: 'field',
+              component: 'TextField',
+              label: '이름',
+              value: { '@path': '/name' },
+            },
           ],
         },
       },
@@ -115,5 +120,84 @@ export function mountCharts(element: HTMLElement) {
   } as StoryUiSegment;
   createRoot(element).render(
     <StoryUi segment={segment as Extract<StoryUiSegment, { kind: 'ui' }>} />
+  );
+}
+
+export function mountPreset(
+  element: HTMLElement,
+  style: import('../../core/story-ui-style.js').StoryUiStyle
+) {
+  const titles = {
+    default: '현장 기록',
+    'east-asian': '운림서원 순찰록',
+    fantasy: '왕립 길드의 의뢰',
+    modern: '팀 업무 현황',
+    period: '경성 조사 일지',
+    'blue-archive': '샬레 업무 보고',
+  };
+  const segment = {
+    kind: 'ui',
+    id: 'blue',
+    start: 0,
+    end: 1,
+    expression: '<a2ui></a2ui>',
+    surfaceId: 'main',
+    messages: [
+      {
+        version: '1.0',
+        createSurface: {
+          surfaceId: 'main',
+          catalogId: 'urn:uimori:story-ui:1',
+          components: [
+            {
+              id: 'root',
+              component: 'Column',
+              children: ['title', 'tabs', 'field', 'table', 'button'],
+            },
+            { id: 'title', component: 'Text', text: titles[style] },
+            {
+              id: 'tabs',
+              component: 'Tabs',
+              tabs: [
+                { title: '임무 정보', child: 'one' },
+                { title: '활동 기록', child: 'two' },
+              ],
+            },
+            {
+              id: 'one',
+              component: 'Text',
+              text: '오늘의 순찰 구역을 확인해 주세요.',
+            },
+            { id: 'two', component: 'Text', text: '오늘의 활동 기록이에요.' },
+            {
+              id: 'field',
+              component: 'TextField',
+              label: '조사 메모',
+              value: { '@path': '/note' },
+            },
+            {
+              id: 'table',
+              component: 'DataTable',
+              title: '임무 현황',
+              columns: ['구역', '상태'],
+              rows: [
+                ['중앙 광장', '확인 완료'],
+                ['도서관', '순찰 중'],
+              ],
+            },
+            {
+              id: 'button',
+              component: 'Button',
+              child: 'buttonText',
+              action: { event: { name: 'confirm' } },
+            },
+            { id: 'buttonText', component: 'Text', text: '확인' },
+          ],
+        },
+      },
+    ],
+  } as StoryUiSegment;
+  createRoot(element).render(
+    <StoryUi segment={segment as Extract<StoryUiSegment, { kind: 'ui' }>} style={style} />
   );
 }

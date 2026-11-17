@@ -147,7 +147,7 @@ type ReaderProps = {
   presentationRefreshKey?: string | number;
   nativeInteractionRevision?: number;
   beginStoryUiAdmission?: () => (run: Run) => void;
-  storyUiStyle?: import('../core/story-ui-style.js').StoryUiStyle;
+  storyUiStyle?: import('../core/story-ui-style.js').StoryUiStyleSetting;
 };
 type AnchorPosition = { anchors: string[]; top: number; scrollport: HTMLElement };
 type EditorOrigin = {

@@ -67,6 +67,33 @@ test('settings read shows selected references without prompt bodies or provider 
   expect(JSON.stringify(result)).not.toContain('127.0.0.1');
 });
 
+test('helper enables story UI and selects automatic or explicit styles without changing other settings', () => {
+  const store = database();
+  const chat = createFixtureChat(store, 'Story interfaces');
+  const read = () =>
+    call(store, 'settings.read', {}, chat.id) as {
+      chat: { settingsRevision: number; storyUi: boolean; storyUiStyle: string; maxCalls: number };
+    };
+  expect(read().chat).toMatchObject({ storyUi: false, storyUiStyle: 'auto' });
+  const update = (
+    setting: string,
+    value: unknown,
+    expectedRevision = read().chat.settingsRevision
+  ) => call(store, 'settings.update', { setting, value, expectedRevision }, chat.id);
+  update('chat.storyUi', true);
+  const previous = read().chat.settingsRevision;
+  update('chat.storyUiStyle', 'blue-archive');
+  expect(read().chat).toMatchObject({
+    storyUi: true,
+    storyUiStyle: 'blue-archive',
+    maxCalls: chat.settings.maxCalls,
+  });
+  expect(() => update('chat.storyUiStyle', 'modern', previous)).toThrow();
+  update('chat.storyUiStyle', 'auto');
+  expect(read().chat.storyUiStyle).toBe('auto');
+  expect(() => update('chat.storyUi', 'true')).toThrow();
+});
+
 test('global model update preserves other selections and rejects stale or unknown IDs', () => {
   const store = database(),
     a = model(store, 'A'),

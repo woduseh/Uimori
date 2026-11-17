@@ -18,6 +18,7 @@ test('STORYUI settings persist independently through the real chat settings dial
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   const toggle = dialog.getByRole('switch', { name: '이야기 UI', exact: true });
   await expect(toggle).not.toBeChecked();
+  await expect(dialog.getByLabel('이야기 UI 스타일')).toHaveValue('auto');
   await toggle.check();
   await dialog.getByLabel('이야기 UI 스타일').selectOption('east-asian');
   await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
@@ -44,7 +45,6 @@ test('STORYUI generated source renders in the compiled app and submits a short c
       ...chat.settings,
       expectedSettingsRevision: chat.settingsRevision,
       storyUi: true,
-      storyUiStyle: 'east-asian',
       autoTranslate: false,
     },
   });
@@ -53,7 +53,7 @@ test('STORYUI generated source renders in the compiled app and submits a short c
   const started = await request.post(`/api/chats/${chat.id}/runs`, {
     data: {
       request:
-        '<a2ui>root = Column([Text("항구의 소식"), TextField("답장", $/reply), Button(Text("편지 답장"), action=Event("reply", {text: $/reply}))])</a2ui>',
+        '<a2ui>\n$/_uimori/style = "blue-archive"\nroot = Column([Text("항구의 소식"), TextField("답장", $/reply), Button(Text("편지 답장"), action=Event("reply", {text: $/reply}))])</a2ui>',
       expectedRevision: null,
       expectedSettingsRevision: configured.settingsRevision,
       idempotencyKey: `story-ui-${chat.id}`,
@@ -70,9 +70,22 @@ test('STORYUI generated source renders in the compiled app and submits a short c
   await page.addInitScript(() => localStorage.setItem('uimori:reading-language', 'original'));
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.locator('.story-ui').getByText('항구의 소식', { exact: true })).toBeVisible();
+  await expect(page.locator('.story-ui')).toHaveAttribute('data-story-ui-style', 'blue-archive');
+  await page.locator('.story-ui').getByLabel('답장', { exact: true }).fill('조금 뒤에 도착할게요.');
+  const override = await request.patch(`/api/chats/${chat.id}/settings`, {
+    data: {
+      ...before.chat.settings,
+      expectedSettingsRevision: before.chat.settingsRevision,
+      storyUiStyle: 'east-asian',
+    },
+  });
+  expect(override.ok(), await override.text()).toBe(true);
+  await page.reload();
   await expect(page.locator('.story-ui')).toHaveAttribute('data-story-ui-style', 'east-asian');
   await expect(page.locator('.story-ui')).toHaveCSS('background-color', 'rgb(244, 239, 226)');
-  await page.locator('.story-ui').getByLabel('답장', { exact: true }).fill('조금 뒤에 도착할게요.');
+  await expect(page.locator('.story-ui').getByLabel('답장', { exact: true })).toHaveValue(
+    '조금 뒤에 도착할게요.'
+  );
   await page.locator('.story-ui').getByRole('button', { name: '편지 답장', exact: true }).click();
   await expect(
     page.locator('.story-ui').getByRole('radio', { name: '이 대화만 이어가기', exact: true })

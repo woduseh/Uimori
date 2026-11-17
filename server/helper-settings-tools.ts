@@ -1,6 +1,8 @@
 import { HELPER_PRICING_TOOLS, invokeHelperPricingTool } from './helper-pricing-tools.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import type { Settings } from '../core/types.js';
+import { normalizeChatSettings } from '../core/chat-settings.js';
+import { storyUiStyles } from '../core/story-ui-style.js';
 import type { Connection, ModelPreset, WorkspaceModelRole } from '../core/product.js';
 import { workspaceModelRef } from '../core/product.js';
 import {
@@ -29,6 +31,8 @@ const settings = [
   'chat.mainModel',
   'chat.mainPromptPreset',
   'chat.maxCalls',
+  'chat.storyUi',
+  'chat.storyUiStyle',
 ] as const;
 
 export const HELPER_SETTINGS_TOOLS: ProviderTool[] = [
@@ -42,13 +46,12 @@ export const HELPER_SETTINGS_TOOLS: ProviderTool[] = [
   {
     name: 'settings.read',
     description:
-      'Read compact global and selected-chat model and prompt references, pinned versus effective selections, chat call limit, and the revisions needed to update them. Prompt bodies and credentials are omitted.',
+      'Read compact global and selected-chat model and prompt references, pinned versus effective selections, chat call limit, story UI enablement/style, and the revisions needed to update them. Prompt bodies and credentials are omitted.',
     inputSchema: schema({}),
   },
   {
     name: 'settings.update',
-    description:
-      'Change one requested setting using the revision from settings.read. Global model targets accept a saved model ID or null; chat.mainModel and chat.mainPromptPreset accept an ID or null; chat.maxCalls accepts an integer from 1 to 32. Global choices affect future requests across chats; reserved jobs keep their frozen models. Existing services preserve unrelated settings. The selected chat is required for chat targets.',
+    description: `Change one requested setting using the revision from settings.read. Global model targets accept a saved model ID or null; chat.mainModel and chat.mainPromptPreset accept an ID or null; chat.maxCalls accepts an integer from 1 to 32. chat.storyUi accepts a boolean; chat.storyUiStyle accepts auto (model chooses each screen) or ${storyUiStyles.join(', ')}. Use chat.settingsRevision for these chat generation settings. Global choices affect future requests across chats; reserved jobs keep their frozen models. Existing services preserve unrelated settings. The selected chat is required for chat targets.`,
     inputSchema: schema(
       {
         setting: { type: 'string', enum: [...settings] },
@@ -73,20 +76,27 @@ export const HELPER_SETTINGS_TOOLS: ProviderTool[] = [
   },
 ];
 
-function settingValue(store: Store, setting: string, chatId?: string): string | number | null {
+function settingValue(
+  store: Store,
+  setting: string,
+  chatId?: string
+): string | number | boolean | null {
   if ((settings as readonly string[]).includes(setting) && setting.startsWith('global.')) {
     const role = setting.slice('global.'.length, -'Model'.length) as WorkspaceModelRole;
     return workspaceModelRef(promptWorkspace(store), role)?.id ?? null;
   }
   if (!chatId) return null;
   if (setting === 'chat.maxCalls') return store.chat(chatId).settings.maxCalls;
+  if (setting === 'chat.storyUi') return store.chat(chatId).settings.storyUi ?? false;
+  if (setting === 'chat.storyUiStyle') return store.chat(chatId).settings.storyUiStyle ?? 'auto';
   const profile = store.product.profile(chatId);
   return setting === 'chat.mainModel'
     ? (profile.pinned?.mainModel?.id ?? null)
     : (profile.pinned?.mainPromptPresetId ?? null);
 }
 
-function selectionLabel(store: Store, setting: string, value: string | number | null) {
+function selectionLabel(store: Store, setting: string, value: string | number | boolean | null) {
+  if (setting === 'chat.storyUiStyle') return undefined;
   if (typeof value !== 'string') return value === null ? null : undefined;
   try {
     return store.product.get<{ title: string }>(
@@ -251,6 +261,8 @@ export function invokeHelperSettingsTool(
           },
         },
         maxCalls: chat.settings.maxCalls,
+        storyUi: chat.settings.storyUi ?? false,
+        storyUiStyle: chat.settings.storyUiStyle ?? 'auto',
       },
     };
   }
@@ -310,13 +322,17 @@ export function invokeHelperSettingsTool(
     };
   }
   const chat = store.chat(chatId);
-  if (!Number.isSafeInteger(args.value) || Number(args.value) < 1 || Number(args.value) > 32)
+  if (
+    setting === 'chat.maxCalls' &&
+    (!Number.isSafeInteger(args.value) || Number(args.value) < 1 || Number(args.value) > 32)
+  )
     throw new HttpError(400, 'INVALID_MAX_CALLS');
-  const next: Settings = { ...chat.settings, maxCalls: Number(args.value) };
+  const key = setting.slice('chat.'.length) as keyof Settings;
+  const next = normalizeChatSettings({ ...chat.settings, [key]: args.value });
   const updated = store.settings(chatId, expectedRevision, next);
   return {
     setting,
     revision: updated.settingsRevision,
-    value: updated.settings.maxCalls,
+    value: updated.settings[key],
   };
 }

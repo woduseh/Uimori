@@ -62,7 +62,29 @@ test('story UI is off by default and only booleans can change a chat’s saved s
   expect(styled.statusCode).toBe(200);
   expect(app.store.chat(first.id).settings.storyUiStyle).toBe('east-asian');
   expect(app.store.chat(other.id).settings.storyUiStyle).toBeUndefined();
-  const styledRevision = styled.json<Chat>().settingsRevision;
+  const auto = await app.inject({
+    method: 'PATCH',
+    url: `/api/chats/${first.id}/settings`,
+    payload: {
+      ...styled.json<Chat>().settings,
+      expectedSettingsRevision: styled.json<Chat>().settingsRevision,
+      storyUiStyle: 'auto',
+    },
+  });
+  expect(auto.statusCode).toBe(200);
+  expect(app.store.chat(first.id).settings.storyUiStyle).toBe('auto');
+  const blue = await app.inject({
+    method: 'PATCH',
+    url: `/api/chats/${first.id}/settings`,
+    payload: {
+      ...auto.json<Chat>().settings,
+      expectedSettingsRevision: auto.json<Chat>().settingsRevision,
+      storyUiStyle: 'blue-archive',
+    },
+  });
+  expect(blue.statusCode).toBe(200);
+  expect(app.store.chat(first.id).settings.storyUiStyle).toBe('blue-archive');
+  const styledRevision = blue.json<Chat>().settingsRevision;
   const invalidStyle = await app.inject({
     method: 'PATCH',
     url: `/api/chats/${first.id}/settings`,

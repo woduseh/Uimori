@@ -8,6 +8,7 @@ type Slot = {
   format?: boolean;
 };
 const expressionParser = new ExpressionParser();
+const visibleFields = ['text', 'label', 'title', 'unit', 'placeholder', 'description'];
 const dynamicExpressions = (text: string) =>
   expressionParser
     .parse(text)
@@ -36,7 +37,7 @@ function textSlots(messages: unknown): Slot[] {
   if (!Array.isArray(components)) return result;
   for (const component of components) {
     if (!record(component)) continue;
-    for (const key of ['text', 'label', 'title', 'unit']) add(component, key);
+    for (const key of visibleFields) add(component, key);
     for (const collection of ['tabs', 'options', 'items']) {
       const items = component[collection];
       if (Array.isArray(items))
@@ -60,6 +61,7 @@ function textSlots(messages: unknown): Slot[] {
   // feeds an action or editable input must retain its original data value.
   const visiblePaths = new Map<string, string[]>();
   const protectedPaths = new Map<string, string[]>();
+  protectedPaths.set(JSON.stringify(['_uimori', 'style']), ['_uimori', 'style']);
   const formatted = new Set<Record<string, unknown>>();
   const dataModel = messages[0].createSurface.dataModel;
   const resolve = (path: string, scope: string[]) => {
@@ -130,7 +132,7 @@ function textSlots(messages: unknown): Slot[] {
       return;
     }
     for (const [key, item] of Object.entries(value))
-      bindings(item, ['text', 'label', 'title', 'unit'].includes(key), scope);
+      bindings(item, visibleFields.includes(key), scope);
   };
   const byId = new Map(components.filter(record).map((component) => [component.id, component]));
   const visited = new Set<string>();
@@ -141,8 +143,7 @@ function textSlots(messages: unknown): Slot[] {
     const component = byId.get(id);
     if (!component) return;
     for (const [key, value] of Object.entries(component)) {
-      if (key !== 'children')
-        bindings(value, ['text', 'label', 'title', 'unit'].includes(key), scope);
+      if (key !== 'children') bindings(value, visibleFields.includes(key), scope);
     }
     const refs: string[] = [];
     for (const key of ['child', 'trigger', 'content'])

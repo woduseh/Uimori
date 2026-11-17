@@ -11,6 +11,13 @@ export const messages = {
     ja: '保存済みと生成中の画面に適用されます。',
     zh: '应用于已保存和正在生成的界面。',
   },
+  'storyUi.style.auto': { ko: '자동', en: 'Automatic', ja: '自動', zh: '自动' },
+  'storyUi.style.blue-archive': {
+    ko: '블루 아카이브',
+    en: 'Blue Archive',
+    ja: 'ブルーアーカイブ',
+    zh: '蔚蓝档案',
+  },
   'storyUi.style.default': { ko: '기본', en: 'Default', ja: '標準', zh: '默认' },
   'storyUi.style.east-asian': { ko: '동양풍', en: 'East Asian', ja: '東洋風', zh: '东方风格' },
   'storyUi.style.fantasy': {

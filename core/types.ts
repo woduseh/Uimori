@@ -3,7 +3,7 @@ export type Settings = {
   /** Start a translation after a successful model-authored source commit. */
   autoTranslate?: boolean;
   storyUi?: boolean;
-  storyUiStyle?: import('./story-ui-style.js').StoryUiStyle;
+  storyUiStyle?: import('./story-ui-style.js').StoryUiStyleSetting;
 };
 export type Chat = {
   id: string;

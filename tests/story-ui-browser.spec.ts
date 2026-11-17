@@ -59,6 +59,57 @@ test('renders tabs and labelled input with keyboard navigation', async ({ page }
   await page.screenshot({ path: 'output/story-ui-browser.png' });
 });
 
+test('renders bound image lists and icons without fetching edited external URLs', async ({
+  page,
+}) => {
+  const { normalizeStoryUiOutput } = await import('../server/story-ui.js');
+  const source = normalizeStoryUiOutput(`<a2ui>
+$/people = [{name: "미라", portrait: "/api/assets/mira", icon: "person"}, {name: "솔", portrait: "/api/assets/sol", icon: "home"}]
+$/portrait = "/api/assets/selected"
+item = Row([Image($portrait, description=$name, variant="avatar"), Icon($icon), Text($name)])
+root = Column([List(_template($/people, item)), TextField("첫 아이콘", $/people/0/icon), TextField("초상화 경로", $/portrait), Image($/portrait, description="선택한 초상화", fit="scaleDown")])
+</a2ui>`);
+  const remoteRequests: string[] = [];
+  await page.route('**/api/{assets,package-image-blobs}/*', (route) =>
+    route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="#507ba8"/></svg>',
+    })
+  );
+  await page.route('https://outside.invalid/**', (route) => {
+    remoteRequests.push(route.request().url());
+    return route.abort();
+  });
+  await page.goto(origin);
+  await page.evaluate(async (text) => {
+    const path = '/tests/fixtures/story-ui-images.tsx';
+    (await import(path)).mountImages(document.getElementById('mount'), text);
+  }, source);
+  await expect(page.getByRole('img', { name: '미라', exact: true })).toHaveAttribute(
+    'src',
+    '/api/assets/mira'
+  );
+  await expect(page.getByRole('img', { name: '솔', exact: true })).toHaveAttribute(
+    'src',
+    '/api/assets/sol'
+  );
+  await expect(page.locator('svg.lucide')).toHaveCount(2);
+  await expect(page.locator('svg.lucide-user-round')).toBeVisible();
+  await expect(page.locator('svg.lucide-house')).toBeVisible();
+  await expect(page.getByText('person', { exact: true })).toHaveCount(0);
+  await page.getByLabel('첫 아이콘').fill('warning');
+  await expect(page.locator('svg.lucide-triangle-alert')).toBeVisible();
+  await expect(page.locator('svg.lucide-user-round')).toHaveCount(0);
+  const selected = page.getByRole('img', { name: '선택한 초상화', exact: true });
+  await expect(selected).toHaveCSS('object-fit', 'scale-down');
+  await page.getByLabel('초상화 경로').fill('https://outside.invalid/portrait.png');
+  await expect(selected).not.toHaveAttribute('src');
+  await page.getByLabel('초상화 경로').fill('/api/package-image-blobs/changed');
+  await expect(selected).toHaveAttribute('src', '/api/package-image-blobs/changed');
+  expect(remoteRequests).toEqual([]);
+  await page.screenshot({ path: 'output/story-ui-bound-images.png' });
+});
+
 test('reader submits its authored event through the real action route', async ({ page }) => {
   const { createApp } = await import('../server/app.js');
   const { importChatTranscript } = await import('../server/chat-transcript.js');
@@ -268,5 +319,43 @@ test('presets reach SDK components and streaming surfaces at desktop and mobile 
     const sdkText = surface.getByText('첫 화면');
     await expect(sdkText).toHaveCSS('color', 'rgb(56, 43, 32)');
     await page.screenshot({ path: `output/story-ui-preset-${width}.png` });
+  }
+});
+
+test('story UI presets keep their controls usable at desktop and mobile widths', async ({
+  page,
+}) => {
+  for (const width of [1100, 390]) {
+    for (const style of ['default', 'east-asian', 'fantasy', 'modern', 'period', 'blue-archive']) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(origin);
+      await page.addStyleTag({
+        content:
+          ':root{--text:#263445;--panel:#fff;--border:#ccd3da;--accent:#2864a0;--accent-ink:#fff;--input-bg:#fff}body{margin:0;background:#e5ebef;font-family:system-ui,sans-serif}main{max-width:720px;margin:20px auto;padding:0 12px}',
+      });
+      await page.evaluate(async (selected) => {
+        const path = '/tests/fixtures/story-ui.tsx';
+        (await import(path)).mountPreset(document.getElementById('mount'), selected);
+      }, style);
+      const surface = page.locator('.story-ui');
+      await expect(surface).toHaveAttribute('data-story-ui-style', style);
+      if (style === 'modern')
+        await expect(
+          surface
+            .getByRole('button', { name: '확인', exact: true })
+            .getByText('확인', { exact: true })
+        ).toHaveCSS('color', 'rgb(255, 255, 255)');
+      await expect(surface.getByText('오늘의 순찰 구역을 확인해 주세요.')).toBeVisible();
+      await surface.getByRole('tab', { name: '임무 정보' }).focus();
+      await page.keyboard.press('ArrowRight');
+      await expect(surface.getByText('오늘의 활동 기록이에요.')).toBeVisible();
+      await surface.getByLabel('조사 메모').fill('오후에 다시 확인');
+      await expect(surface.getByLabel('조사 메모')).toHaveValue('오후에 다시 확인');
+      expect(await surface.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+      await page.screenshot({
+        path: `output/story-ui-${style}-${width}.png`,
+        fullPage: true,
+      });
+    }
   }
 });

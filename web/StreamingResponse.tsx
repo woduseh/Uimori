@@ -12,7 +12,7 @@ import { LoadingState } from './LoadingState.js';
 import { parseStoryUi } from '../core/story-ui.js';
 import { StoryUi } from './LazyStoryUi.js';
 
-type StoryStyle = import('../core/story-ui-style.js').StoryUiStyle;
+type StoryStyle = import('../core/story-ui-style.js').StoryUiStyleSetting;
 
 function StreamingStoryBlock({ text, style }: { text: string; style?: StoryStyle }) {
   const [preview, setPreview] = useState('');

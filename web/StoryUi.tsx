@@ -1,6 +1,7 @@
 import { A2uiSurface, MarkdownContext, type ReactCatalogComponent } from '@a2ui/react';
 import { MessageProcessor, type ActionPayload } from '@a2ui/web_core';
 import { useEffect, useRef, useState } from 'react';
+import { resolveStoryUiStyle } from '../core/story-ui-style.js';
 import type { StoryUiSegment } from '../core/story-ui.js';
 import type { Run } from '../core/types.js';
 import { compileReadingMarkdown } from '../core/reading-markdown.js';
@@ -24,10 +25,10 @@ export function StoryUi({
   refresh,
   actionBlockId,
   beginAdmission,
-  style = 'default',
+  style,
 }: {
   segment: UiSegment;
-  style?: import('../core/story-ui-style.js').StoryUiStyle;
+  style?: import('../core/story-ui-style.js').StoryUiStyleSetting;
   chatId?: string;
   sourceId?: string;
   sourceHash?: string;
@@ -138,7 +139,10 @@ export function StoryUi({
     }
   };
   return (
-    <section className="story-ui" data-story-ui-style={style}>
+    <section
+      className="story-ui"
+      data-story-ui-style={resolveStoryUiStyle(style, segment.messages)}
+    >
       {surface && (
         <div inert={!!action && !!chatId && (latest || uncertain)}>
           <MarkdownContext.Provider value={renderMarkdown}>

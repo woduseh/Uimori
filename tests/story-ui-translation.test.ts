@@ -3,6 +3,49 @@ import { expect, test } from 'vitest';
 import { encodeStoryUi, parseStoryUi, type StoryUiMessage } from '../core/story-ui.js';
 import { prepareStoryUiTranslation } from '../core/story-ui-translation.js';
 
+test('translates input hints and image descriptions while preserving their values and URLs', () => {
+  const original = [
+    {
+      version: '1.0',
+      createSurface: {
+        surfaceId: 'main',
+        catalogId: 'urn:uimori:story-ui:1',
+        components: [
+          { id: 'root', component: 'Column', children: ['input', 'image'] },
+          {
+            id: 'input',
+            component: 'TextField',
+            label: 'Reply',
+            placeholder: 'Write a message',
+            value: { '@path': '/reply' },
+          },
+          {
+            id: 'image',
+            component: 'Image',
+            url: '/api/assets/portrait',
+            description: 'Student portrait',
+          },
+        ],
+        dataModel: { reply: 'Meet at noon' },
+      },
+    },
+  ] as StoryUiMessage[];
+  const prepared = prepareStoryUiTranslation(
+    encodeStoryUi('<a2ui>root = Column([])</a2ui>', original)
+  );
+  expect(prepared.text).toContain('Write a message');
+  expect(prepared.text).toContain('Student portrait');
+  const restored = prepared.restore(
+    prepared.text
+      .replace('Write a message', '메시지를 입력하세요')
+      .replace('Student portrait', '학생 사진')
+  );
+  expect(restored).toContain('메시지를 입력하세요');
+  expect(restored).toContain('학생 사진');
+  expect(restored).toContain('/api/assets/portrait');
+  expect(restored).toContain('Meet at noon');
+});
+
 const messages = [
   {
     version: '1.0',

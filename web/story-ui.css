@@ -177,3 +177,378 @@
 .story-ui[data-story-ui-style]:not([data-story-ui-style="default"]) th {
   border-color: var(--story-border);
 }
+
+/* Blue Archive's pale geometric panels, cyan controls and navy type. */
+.story-ui[data-story-ui-style="blue-archive"] {
+  --story-paper: #f5f7f8;
+  --story-surface: #fff;
+  --story-ink: #294464;
+  --story-border: #b8d4e4;
+  --story-accent: #1888b7;
+  --story-radius: 7px;
+  --story-font: "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  position: relative;
+  padding: clamp(1rem, 3vw, 1.5rem);
+  border: 2px solid #fff;
+  box-shadow:
+    0 3px 0 #9db2c3,
+    0 5px 12px #14283c33;
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-tabs {
+  gap: 2px;
+  padding: 5px 5px 0;
+  background: #c9e9f9;
+  border: 1px solid #b2d6e9;
+  border-radius: 5px 5px 0 0;
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-tabs button {
+  flex: 1 1 auto;
+  min-height: 42px;
+  padding: 0.45em 1em;
+  border: 0;
+  border-radius: 4px 4px 0 0;
+  color: #16668a;
+  background: transparent;
+  font-weight: 700;
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-tabs button[aria-selected="true"] {
+  color: #294464;
+  background: #fff;
+  box-shadow: inset 0 -3px #ffeb64;
+}
+.story-ui[data-story-ui-style="blue-archive"] [role="tabpanel"] {
+  padding: 1em;
+  background: #fff;
+  border: 1px solid #d6e4eb;
+  border-top: 0;
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-field {
+  margin-top: 0.8em;
+  padding: 0.8em;
+  background: #fff;
+  border: 4px solid #e9eef1;
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-field label {
+  padding-left: 0.45em;
+  border-left: 3px solid #61c9f2;
+  font-weight: 700;
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-field input,
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-field textarea {
+  min-height: 40px;
+  padding: 0.45em 0.65em;
+  border: 1px solid #b8d4e4;
+  border-radius: 3px;
+}
+.story-ui[data-story-ui-style="blue-archive"] button:not([role="tab"]) {
+  min-height: 40px;
+  padding: 0.45em 1.3em;
+  border: 1px solid #69bee0;
+  border-radius: 5px 12px 5px 12px;
+  color: #123d5a;
+  background: linear-gradient(125deg, #61c9f0 20%, #82dcf8 20% 80%, #60c5ec 80%);
+  box-shadow: 0 2px 1px #8da8b5;
+  font-weight: 700;
+}
+.story-ui[data-story-ui-style="blue-archive"] button:disabled {
+  opacity: 0.55;
+  box-shadow: none;
+}
+.story-ui[data-story-ui-style="blue-archive"] input[type="radio"],
+.story-ui[data-story-ui-style="blue-archive"] input[type="checkbox"] {
+  accent-color: #55c4ee;
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-bar {
+  background: #55c4ee;
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-line {
+  color: #1888b7;
+}
+.story-ui[data-story-ui-style="blue-archive"] table {
+  background: #fff;
+}
+.story-ui[data-story-ui-style="blue-archive"] th {
+  background: #d8effa;
+}
+.story-ui[data-story-ui-style="blue-archive"]:not([data-story-ui-style="default"]) {
+  border: 2px solid #fff;
+  background-image:
+    linear-gradient(125deg, #c5e5f6a6 12%, transparent 12% 83%, #d8edf8aa 83%),
+    linear-gradient(55deg, #e2f2fa 8%, transparent 8% 90%, #c3e3f4 90%);
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-field input,
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-field textarea {
+  box-sizing: border-box;
+}
+.story-ui[data-story-ui-style="blue-archive"] figure {
+  margin: 0.9em 0;
+  padding: 0.8em;
+  background: #fff;
+  border: 4px solid #e9eef1;
+}
+.story-ui[data-story-ui-style="blue-archive"] figcaption {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto 0.65em;
+  padding: 0 0.5em 0.15em;
+  border: 0;
+  border-bottom: 4px solid #ffeb64;
+  color: #294464;
+  font-size: 1.1em;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Each preset gives the same semantic controls a distinct material and hierarchy. */
+.story-ui:is(
+  [data-story-ui-style="east-asian"],
+  [data-story-ui-style="fantasy"],
+  [data-story-ui-style="modern"],
+  [data-story-ui-style="period"]
+) {
+  padding: clamp(1rem, 3vw, 1.5rem);
+}
+.story-ui:is(
+    [data-story-ui-style="east-asian"],
+    [data-story-ui-style="fantasy"],
+    [data-story-ui-style="modern"],
+    [data-story-ui-style="period"]
+  )
+  .story-ui-tabs
+  button {
+  min-height: 40px;
+  padding: 0.45em 0.9em;
+  font-weight: 700;
+}
+.story-ui:is(
+    [data-story-ui-style="east-asian"],
+    [data-story-ui-style="fantasy"],
+    [data-story-ui-style="modern"],
+    [data-story-ui-style="period"]
+  )
+  .story-ui-field
+  input,
+.story-ui:is(
+    [data-story-ui-style="east-asian"],
+    [data-story-ui-style="fantasy"],
+    [data-story-ui-style="modern"],
+    [data-story-ui-style="period"]
+  )
+  .story-ui-field
+  textarea {
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 0.5em 0.65em;
+  border: 1px solid var(--story-border);
+  border-radius: var(--story-radius);
+}
+.story-ui:is(
+    [data-story-ui-style="east-asian"],
+    [data-story-ui-style="fantasy"],
+    [data-story-ui-style="modern"],
+    [data-story-ui-style="period"]
+  )
+  button:not([role="tab"]) {
+  min-height: 40px;
+  padding: 0.45em 1em;
+  border: 1px solid var(--story-border);
+  border-radius: var(--story-radius);
+  font-weight: 700;
+}
+.story-ui:is(
+    [data-story-ui-style="east-asian"],
+    [data-story-ui-style="fantasy"],
+    [data-story-ui-style="modern"],
+    [data-story-ui-style="period"]
+  )
+  input:is([type="radio"], [type="checkbox"]) {
+  accent-color: var(--story-accent);
+}
+.story-ui:is(
+    [data-story-ui-style="east-asian"],
+    [data-story-ui-style="fantasy"],
+    [data-story-ui-style="modern"],
+    [data-story-ui-style="period"]
+  )
+  figure {
+  margin: 1em 0;
+  padding: 0.8em 1em;
+}
+.story-ui:is(
+    [data-story-ui-style="east-asian"],
+    [data-story-ui-style="fantasy"],
+    [data-story-ui-style="modern"],
+    [data-story-ui-style="period"]
+  )
+  figcaption {
+  margin-bottom: 0.65em;
+  font-weight: 700;
+}
+.story-ui:is(
+    [data-story-ui-style="east-asian"],
+    [data-story-ui-style="fantasy"],
+    [data-story-ui-style="modern"],
+    [data-story-ui-style="period"]
+  )
+  button:disabled {
+  opacity: 0.55;
+}
+
+/* Washi, ink rules, and a small vermilion seal-like selected tab. */
+.story-ui[data-story-ui-style="east-asian"] {
+  background-image: linear-gradient(100deg, #d8ceb522, transparent 32%, #fff9ea66 70%, transparent);
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-tabs {
+  gap: 0.4em;
+  padding-bottom: 0.5em;
+  border-bottom: 1px solid var(--story-border);
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-tabs button {
+  border: 1px solid transparent;
+  background: transparent;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-tabs button[aria-selected="true"] {
+  color: var(--story-accent);
+  border: 1px solid var(--story-accent);
+  background: #fffaf0;
+}
+.story-ui[data-story-ui-style="east-asian"] [role="tabpanel"] {
+  padding: 1em 0 0;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-field label,
+.story-ui[data-story-ui-style="east-asian"] figcaption {
+  padding-left: 0.6em;
+  border-left: 3px solid var(--story-accent);
+  font-weight: 700;
+}
+.story-ui[data-story-ui-style="east-asian"] figure {
+  border-top: 1px solid var(--story-border);
+  border-bottom: 1px solid var(--story-border);
+  background: #fffaf080;
+}
+.story-ui[data-story-ui-style="east-asian"] button:not([role="tab"]) {
+  border-color: var(--story-accent);
+  color: var(--story-accent);
+}
+
+/* Parchment panels and inset gold rules suggest a carved frame. */
+.story-ui[data-story-ui-style="fantasy"] {
+  background-image: linear-gradient(135deg, #fff8e477, transparent 50%, #ab8e5b22);
+  box-shadow:
+    inset 0 0 0 3px #faf2df,
+    inset 0 0 0 4px #b99e6d;
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-tabs {
+  gap: 0.3em;
+  border-bottom: 2px solid #a48b62;
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-tabs button {
+  border: 1px solid #a48b62;
+  border-bottom: 0;
+  border-radius: 7px 7px 0 0;
+  background: #e6d6b5;
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-tabs button[aria-selected="true"] {
+  color: #382b20;
+  border-bottom: 0;
+  background: #faf2df;
+  box-shadow: inset 0 3px #98743c;
+}
+.story-ui[data-story-ui-style="fantasy"] [role="tabpanel"] {
+  padding: 1em;
+  border: 1px solid #a48b62;
+  border-top: 0;
+  background: #faf2df99;
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-field label,
+.story-ui[data-story-ui-style="fantasy"] figcaption {
+  color: #694c29;
+  font-weight: 700;
+}
+.story-ui[data-story-ui-style="fantasy"] figure {
+  border: 3px double #a48b62;
+  background: #faf2df;
+}
+.story-ui[data-story-ui-style="fantasy"] button:not([role="tab"]) {
+  border: 3px double #98743c;
+  background: #f7e9ca;
+}
+
+/* A quiet dashboard with clear, contained controls. */
+.story-ui[data-story-ui-style="modern"] {
+  background-image: linear-gradient(145deg, #fff8, transparent 55%);
+}
+.story-ui[data-story-ui-style="modern"] .story-ui-tabs {
+  gap: 0.2em;
+  padding: 0.3em;
+  border-radius: 8px;
+  background: #dfe9f0;
+}
+.story-ui[data-story-ui-style="modern"] .story-ui-tabs button {
+  flex: 1 1 auto;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+}
+.story-ui[data-story-ui-style="modern"] .story-ui-tabs button[aria-selected="true"] {
+  color: #245b80;
+  border: 0;
+  background: #fff;
+  box-shadow: 0 1px 3px #1d2b3726;
+}
+.story-ui[data-story-ui-style="modern"] [role="tabpanel"] {
+  padding: 1em 0 0;
+}
+.story-ui[data-story-ui-style="modern"] .story-ui-field label {
+  font-weight: 700;
+}
+.story-ui[data-story-ui-style="modern"] figure {
+  border: 1px solid #d1dfe8;
+  border-radius: 8px;
+  background: #fff;
+}
+.story-ui[data-story-ui-style="modern"] button:not([role="tab"]) {
+  --a2ui-text-color-text: #fff;
+  color: #fff;
+  border-color: #245b80;
+  background: #245b80;
+}
+
+/* Archival stationery uses fine rules and letterpress-like headings. */
+.story-ui[data-story-ui-style="period"] {
+  background-image: linear-gradient(90deg, #d5c9b633, transparent 18%);
+}
+.story-ui[data-story-ui-style="period"] .story-ui-tabs {
+  gap: 0;
+  border-top: 1px solid var(--story-border);
+  border-bottom: 3px double var(--story-border);
+}
+.story-ui[data-story-ui-style="period"] .story-ui-tabs button {
+  border: 0;
+  border-right: 1px solid var(--story-border);
+  background: transparent;
+  font-family: var(--story-font);
+}
+.story-ui[data-story-ui-style="period"] .story-ui-tabs button[aria-selected="true"] {
+  color: var(--story-accent);
+  border-bottom: 0;
+  background: #fbf8f2;
+  box-shadow: inset 0 -3px var(--story-accent);
+}
+.story-ui[data-story-ui-style="period"] [role="tabpanel"] {
+  padding: 1em 0 0;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-field label,
+.story-ui[data-story-ui-style="period"] figcaption {
+  font-family: var(--story-font);
+  font-weight: 700;
+}
+.story-ui[data-story-ui-style="period"] figure {
+  border-top: 3px double var(--story-border);
+  border-bottom: 1px solid var(--story-border);
+  background: #fbf8f280;
+}
+.story-ui[data-story-ui-style="period"] button:not([role="tab"]) {
+  border: 3px double var(--story-border);
+  font-family: var(--story-font);
+}
