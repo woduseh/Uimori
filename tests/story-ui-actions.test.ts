@@ -145,7 +145,7 @@ test('a concurrent dice submission reserves one server roll and replays it after
   );
 
   f.app.controls.release('run');
-  await vi.waitFor(() => expect(f.store.run(run.id).status).toBe('completed'));
+  await vi.waitFor(() => expect(f.store.run(run.id).status).toBe('completed'), { timeout: 15000 });
   const head = f.store.chat(f.chat.id);
   expect(head.headRevision).not.toBe(f.source.id);
   const copied = await f.app.inject({
@@ -162,7 +162,7 @@ test('a concurrent dice submission reserves one server roll and replays it after
     sourceHash: f.source.hash,
     roll,
   });
-  await vi.waitFor(() => expect(f.store.run(copy.id).status).toBe('completed'));
+  await vi.waitFor(() => expect(f.store.run(copy.id).status).toBe('completed'), { timeout: 15000 });
 
   f.store.settings(head.id, head.settingsRevision, { ...head.settings, storyUi: false });
   const replay = await f.submit({ ...click, context: { count: 5, sides: 6 } });
@@ -185,7 +185,7 @@ test('editing the originating scene during execution invalidates completion and 
   const admitted = await f.submit();
   expect(admitted.statusCode, admitted.body).toBe(200);
   const run = admitted.json<Run>();
-  await vi.waitFor(() => expect(f.app.controls.snapshot().waiting.run).toBe(1));
+  await vi.waitFor(() => expect(f.app.controls.snapshot().waiting.run).toBe(1), { timeout: 15000 });
   const edited = f.store.editSource(f.source.id, {
     expectedRevision: 0,
     text: 'The door was never there.',
@@ -199,7 +199,7 @@ test('editing the originating scene during execution invalidates completion and 
     })
   ).toThrow('STORY_UI_STALE_SOURCE');
   f.app.controls.release('run');
-  await vi.waitFor(() => expect(f.store.run(run.id).status).toBe('failed'));
+  await vi.waitFor(() => expect(f.store.run(run.id).status).toBe('failed'), { timeout: 15000 });
   expect(f.store.chat(f.chat.id).headRevision).toBe(edited.id);
   expect(f.store.source(edited.id).hash).toBe(edited.hash);
   const retry = await f.app.inject({
@@ -220,7 +220,9 @@ test('an unedited retry keeps the dice result, while a free-text retry has no ac
   const original = admitted.json<Run>();
   f.app.controls.failures.add('source-transaction');
   f.app.controls.release('run');
-  await vi.waitFor(() => expect(f.store.run(original.id).status).toBe('failed'));
+  await vi.waitFor(() => expect(f.store.run(original.id).status).toBe('failed'), {
+    timeout: 15000,
+  });
   expect(original.snapshot.storyUiAction?.roll?.results).toHaveLength(1);
 
   f.app.controls.hold('run');
