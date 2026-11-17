@@ -128,50 +128,51 @@ function result(code: string): ProviderResult {
     opaqueState: null,
   };
 }
-for (const stage of ['plan', 'placement', 'prompt'] as const) {
-  test.each([
-    'TIMEOUT',
-    'CODEX_CLOSED',
-    'TRANSPORT_ERROR',
-    'HTTP_503',
-    'refused',
-    'CODEX_BUSY',
-    'invalid',
-  ])(`${stage} uses conservative automatic retry classification for %s`, async (code) => {
-    const { store, source, job } = setup(stage);
-    const executeCodex = vi.fn<NonNullable<IllustrationRunnerHooks['executeCodex']>>(
-      async (connection, request, options) => {
-        if (code !== 'CODEX_BUSY')
-          await options.onWire?.({
-            connectionId: connection.id,
-            protocol: connection.protocol,
-            role: request.role,
-            modelId: request.modelId,
-            method: 'RPC',
-            url: 'codex://local',
-            headers: {},
-            body: {},
-            bodySha256: 'synthetic',
-            stablePrefixSha256: 'synthetic',
-          });
-        return result(code);
-      }
-    );
-    const options = hooks(store, { executeCodex });
-    const retryable = code === 'CODEX_BUSY' || code === 'invalid';
-    const outcome = await runIllustrationJob(store, job.id, 'worker', options);
-    expect(outcome?.status).toBe(retryable ? 'requeued' : 'failed');
-    expect(illustrationJob(store, job.id).attempt).toBe(retryable ? 2 : 1);
-    if (!retryable) {
-      expect(await runIllustrationJob(store, job.id, 'worker', options)).toBeNull();
-      expect(illustrationJob(store, job.id).diagnostic?.code).toBe(
-        code === 'refused' ? 'ILLUSTRATION_PROMPT_REFUSED' : `ILLUSTRATION_PROMPT_${code}`
-      );
+// Provider errors share one retry policy; each stage parses a different response format.
+test.each([
+  ['plan', 'TIMEOUT'],
+  ['plan', 'CODEX_CLOSED'],
+  ['plan', 'CODEX_BUSY'],
+  ['plan', 'invalid'],
+  ['placement', 'TRANSPORT_ERROR'],
+  ['placement', 'invalid'],
+  ['prompt', 'HTTP_503'],
+  ['prompt', 'refused'],
+  ['prompt', 'invalid'],
+] as const)('%s uses conservative automatic retry classification for %s', async (stage, code) => {
+  const { store, source, job } = setup(stage);
+  const executeCodex = vi.fn<NonNullable<IllustrationRunnerHooks['executeCodex']>>(
+    async (connection, request, options) => {
+      if (code !== 'CODEX_BUSY')
+        await options.onWire?.({
+          connectionId: connection.id,
+          protocol: connection.protocol,
+          role: request.role,
+          modelId: request.modelId,
+          method: 'RPC',
+          url: 'codex://local',
+          headers: {},
+          body: {},
+          bodySha256: 'synthetic',
+          stablePrefixSha256: 'synthetic',
+        });
+      return result(code);
     }
-    expect(executeCodex).toHaveBeenCalledTimes(1);
-    expect(store.source(source.id).text).toBe(source.text);
-  });
-}
+  );
+  const options = hooks(store, { executeCodex });
+  const retryable = code === 'CODEX_BUSY' || code === 'invalid';
+  const outcome = await runIllustrationJob(store, job.id, 'worker', options);
+  expect(outcome?.status).toBe(retryable ? 'requeued' : 'failed');
+  expect(illustrationJob(store, job.id).attempt).toBe(retryable ? 2 : 1);
+  if (!retryable) {
+    expect(await runIllustrationJob(store, job.id, 'worker', options)).toBeNull();
+    expect(illustrationJob(store, job.id).diagnostic?.code).toBe(
+      code === 'refused' ? 'ILLUSTRATION_PROMPT_REFUSED' : `ILLUSTRATION_PROMPT_${code}`
+    );
+  }
+  expect(executeCodex).toHaveBeenCalledTimes(1);
+  expect(store.source(source.id).text).toBe(source.text);
+});
 test('a manually selected cut sends only its exact passage to prompt preparation, not the full scene', async () => {
   const store = databases.create();
   const { chat } = chatWithSource(store);

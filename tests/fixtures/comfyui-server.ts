@@ -6,14 +6,7 @@ export const FIXTURE_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNIK1/1HwAFVQKH+f6iOwAAAABJRU5ErkJggg==',
   'base64'
 );
-export type ComfyBehavior =
-  | 'success'
-  | 'reject'
-  | 'error'
-  | 'no-image'
-  | 'hang'
-  | 'server-error'
-  | 'redirect';
+export type ComfyBehavior = 'success' | 'reject' | 'error' | 'no-image' | 'hang' | 'redirect';
 export type ComfyCapturedRequest = {
   method: string;
   url: string;
@@ -89,7 +82,6 @@ export async function comfyUIFixture(
         devices: [{ name: 'cuda:0 Fixture GPU', type: 'cuda', vram_total: 12_000_000_000 }],
       });
     if (url.pathname === '/prompt' && request.method === 'POST') {
-      if (behavior === 'server-error') return json(500, { error: 'boom' });
       let parsed: { prompt?: Record<string, unknown>; client_id?: string };
       try {
         parsed = JSON.parse(body);

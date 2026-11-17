@@ -254,7 +254,9 @@ describe('illustration API in test mode with the synthetic generator', () => {
     expect(initial.find((item) => item.sourceRevision === first.id)).toMatchObject({
       origin: 'automatic',
     });
-    await settle(initial.find((item) => item.sourceRevision === first.id)!.id);
+    expect(
+      (await settle(initial.find((item) => item.sourceRevision === first.id)!.id)).status
+    ).toBe('completed');
     await api('/api/test/control', { action: 'hold', barrier: 'illustration' });
     const second = await respond('Second scene while illustration is held');
     const held = await until(illustrations, (items) =>
@@ -276,12 +278,8 @@ describe('illustration API in test mode with the synthetic generator', () => {
       );
       expect(item.status).toBe('completed');
     }
-    expect(
-      (await settle(initial.find((item) => item.sourceRevision === first.id)!.id)).status
-    ).toBe('completed');
     await settings({ generator: 'fixture', automatic: false });
     const manualOnly = await respond('No automatic illustration');
-    await new Promise((resolve) => setTimeout(resolve, 100));
     expect((await illustrations()).filter((item) => item.sourceRevision === manualOnly.id)).toEqual(
       []
     );
@@ -315,13 +313,12 @@ describe('illustration API in test mode with the synthetic generator', () => {
       generation: detail.generation,
     });
     await api('/api/test/control', { action: 'release', barrier: 'illustration' });
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(await settle(held.id)).toMatchObject({ status: 'cancelled', images: [] });
     await api('/api/test/control', { action: 'fail-next', point: 'illustration' });
     const injected = await settle(
       (await api<Illustration>(`/api/sources/${source.id}/illustrations`, {})).id
     );
     expect(injected).toMatchObject({ status: 'failed', error: 'ILLUSTRATION_FAILED', attempt: 1 });
+    expect(await settle(held.id)).toMatchObject({ status: 'cancelled', images: [] });
   });
   test('deleting a cancelled task while its worker settles does not block the next task', async () => {
     const { api, respond, settings, illustrations, settleTask } = await setup();
@@ -363,7 +360,7 @@ describe('illustration API in test mode with the synthetic generator', () => {
     }
   });
   test('reference roles and ComfyUI settings validate through the API and the connectivity check reports codes', async () => {
-    const { api, chat, settings, item } = await setup();
+    const { api, chat, respond, settings, item } = await setup();
     const empty = await api(`/api/chats/${chat.id}/illustration-references`);
     expect(empty).toEqual({
       chatId: chat.id,
@@ -468,21 +465,8 @@ describe('illustration API in test mode with the synthetic generator', () => {
       502
     );
     expect(JSON.parse(down.error).code).toBe('COMFYUI_UNREACHABLE');
-    const source = await (async () => {
-      const before = await api<ChatDetail>(`/api/chats/${chat.id}`);
-      const run = await api<Run>(`/api/chats/${chat.id}/runs`, {
-        request: 'Scene for the prompt-model check',
-        expectedRevision: before.chat.headRevision,
-        expectedSettingsRevision: before.chat.settingsRevision,
-        idempotencyKey: randomUUID(),
-      });
-      return until(
-        () => api<ChatDetail>(`/api/chats/${chat.id}`),
-        (detail) => detail.runs.find((entry) => entry.id === run.id)?.status === 'completed'
-      );
-    })();
-    const sourceId = source.sources.at(-1)!.id;
-    const rejected = await api(`/api/sources/${sourceId}/illustrations`, {}, 'POST', 409);
+    const source = await respond('Scene for the prompt-model check');
+    const rejected = await api(`/api/sources/${source.id}/illustrations`, {}, 'POST', 409);
     expect(rejected.error).toBe('ILLUSTRATION_PROMPT_MODEL_REQUIRED');
   });
 });

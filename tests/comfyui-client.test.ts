@@ -89,27 +89,6 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
       }
     }
   );
-  test('submitted workflow preserves marker-like text inside generated prompts', async () => {
-    const server = await fixture();
-    const template = parseComfyWorkflow(FIXTURE_WORKFLOW);
-    const original = JSON.stringify(template);
-    const prompt = 'engraved {{negative}}, {{seed}}, {{prompt}} and $&\n은빛 등불';
-    const negativePrompt = 'written {{seed}} and {{prompt}}';
-    await generateWithComfyUI(
-      { baseUrl: server.origin, authorizationEnv: '' },
-      fillComfyWorkflow(template, { prompt, negativePrompt, seed: 7 }),
-      { signal: signal(), timeoutMs: 1000, pollIntervalMs: 10 }
-    );
-    const submitted = JSON.parse(
-      server.requests.find((request) => request.url === '/prompt')!.body
-    );
-    expect(submitted.prompt['6'].inputs.text).toBe(prompt);
-    expect(submitted.prompt['7'].inputs.text).toBe(`blurry, ${negativePrompt}`);
-    expect(submitted.prompt['3'].inputs.seed).toBe(7);
-    expect(JSON.stringify(template)).toBe(original);
-    expect(server.prompts).toHaveLength(1);
-  });
-
   test('a valid PNG above 16 MB is retrieved intact and converted by the shared image intake', async () => {
     const png = await sharp({
       create: { width: 2400, height: 2400, channels: 3, background: '#aaccdd' },
@@ -224,16 +203,19 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
   test.each(['headers', 'disconnect', 'http-error'] as const)(
     'a %s failure after submission never authorizes automatic resubmission',
     async (kind) => {
-      const server = await fixture({ fault: { path: 'prompt', kind } });
+      const server = await fixture({ fault: { path: 'prompt', kind, httpStatus: 500 } });
       const error = await failure(
         generateWithComfyUI({ baseUrl: server.origin, authorizationEnv: '' }, workflow(), {
-          signal: AbortSignal.timeout(600),
-          timeoutMs: 60,
+          signal: signal(),
+          timeoutMs: kind === 'headers' ? 60 : 5000,
           pollIntervalMs: 10,
         })
       );
-      expect(error.retryable).toBe(false);
-      expect(error.diagnostic.comfyui?.submission).toBe('uncertain');
+      expect(error).toMatchObject({
+        code: kind === 'headers' ? 'COMFYUI_TIMEOUT' : 'COMFYUI_SUBMISSION_UNCERTAIN',
+        retryable: false,
+        diagnostic: { comfyui: { submission: 'uncertain' } },
+      });
       expect(server.prompts).toHaveLength(1);
     }
   );
@@ -365,9 +347,11 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
   test('submits /prompt, polls /history until the entry appears and downloads /view images', async () => {
     const server = await fixture({ delayPolls: 2 });
     const submitted: string[] = [];
+    const prompt = 'engraved {{negative}}, {{seed}}, {{prompt}} and $&\n은빛 등불';
+    const negativePrompt = 'written {{seed}} and {{prompt}}';
     const result = await generateWithComfyUI(
       { baseUrl: server.origin, authorizationEnv: '' },
-      workflow(),
+      fillComfyWorkflow(parseComfyWorkflow(FIXTURE_WORKFLOW), { prompt, negativePrompt, seed: 7 }),
       {
         signal: signal(),
         timeoutMs: 5000,
@@ -381,8 +365,11 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
     expect(result.images).toHaveLength(1);
     expect(result.images[0]).toMatchObject({ mime: 'image/png', filename: 'ComfyUI_00001_.png' });
     expect(result.images[0].bytes.equals(FIXTURE_PNG)).toBe(true);
-    expect(server.prompts[0].workflow['6']).toMatchObject({
-      inputs: { text: 'lantern over a river' },
+    expect(server.prompts).toHaveLength(1);
+    expect(server.prompts[0].workflow).toMatchObject({
+      '3': { inputs: { seed: 7 } },
+      '6': { inputs: { text: prompt } },
+      '7': { inputs: { text: `blurry, ${negativePrompt}` } },
     });
     expect(server.prompts[0].clientId).toMatch(/^[0-9a-f-]{36}$/u);
     const paths = server.requests.map((request) => request.url.split('?')[0]);
@@ -390,7 +377,7 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
     expect(paths.at(-1)).toBe('/view');
     expect(server.requests.at(-1)?.url).toContain('filename=ComfyUI_00001_.png');
   });
-  test('surfaces rejected node errors and treats a submission 5xx as uncertain', async () => {
+  test('surfaces rejected node errors without retrying', async () => {
     const rejected = await fixture({ behavior: 'reject' });
     const error = await failure(
       generateWithComfyUI({ baseUrl: rejected.origin, authorizationEnv: '' }, workflow(), {
@@ -406,15 +393,6 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
       nodeErrors: [{ nodeId: '4', classType: 'CheckpointLoaderSimple' }],
     });
     expect(error.diagnostic.comfyui?.nodeErrors?.[0].messages[0]).toContain('Value not in list');
-    const broken = await fixture({ behavior: 'server-error' });
-    const serverError = await failure(
-      generateWithComfyUI({ baseUrl: broken.origin, authorizationEnv: '' }, workflow(), {
-        signal: signal(),
-        timeoutMs: 1000,
-        pollIntervalMs: 10,
-      })
-    );
-    expect(serverError).toMatchObject({ code: 'COMFYUI_SUBMISSION_UNCERTAIN', retryable: false });
   });
   test('reports execution errors, missing outputs, timeouts with cancellation and unreachable hosts', async () => {
     const errored = await fixture({ behavior: 'error' });
