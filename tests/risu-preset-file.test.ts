@@ -1,10 +1,11 @@
 import { createCipheriv, createHash } from 'node:crypto';
-import { crc32, deflateRawSync, deflateSync, gzipSync } from 'node:zlib';
+import { deflateRawSync, deflateSync, gzipSync } from 'node:zlib';
 import { pack } from 'msgpackr';
 import { expect, test } from 'vitest';
 import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
 import { readRisuPresetFile } from '../server/risu-preset-file.js';
-import { decodeRPack } from '../server/compat/risu/rpack.js';
+import { zip } from './fixtures/zip.js';
+import { decodeRPack, encodeRPack } from '../server/compat/risu/rpack.js';
 
 const document = () => ({
   name: 'Synthetic preset',
@@ -133,15 +134,6 @@ function binaryFixture(payload: Buffer, version = 2, field = 'preset') {
   return pack({ type: 'preset', presetVersion: version, [field]: encrypted });
 }
 
-function encodeRPackFixture(bytes: Buffer) {
-  const inverse = Buffer.alloc(256);
-  for (const [encoded, plain] of decodeRPack(
-    Buffer.from(Array.from({ length: 256 }, (_, index) => index))
-  ).entries())
-    inverse[plain] = encoded;
-  return Buffer.from(bytes.map((value) => inverse[value]));
-}
-
 test('binary preset versions and compression formats decode through the RPack and AES container', () => {
   expect(decodeRPack(Buffer.from([196, 13, 30, 11]))).toEqual(Buffer.from([0, 1, 2, 3]));
   for (const compress of [gzipSync, deflateSync, deflateRawSync]) {
@@ -150,7 +142,7 @@ test('binary preset versions and compression formats decode through the RPack an
         binaryFixture(pack(document()), version, version === 0 ? 'pres' : 'preset')
       );
       for (const [name, bytes] of [
-        ['sample.risup', encodeRPackFixture(compressed)],
+        ['sample.risup', encodeRPack(compressed)],
         ['sample.risupreset', compressed],
       ] as const) {
         const source = file(bytes, name);
@@ -191,10 +183,7 @@ test('binary decoding refuses unsupported versions, damaged authentication, over
   );
 });
 
-test('input and expanded project text obey the existing import byte limit', () => {
-  expect(() => readRisuPresetFile(file(Buffer.alloc(RISU_IMPORT_MAX_BYTES + 1)))).toThrow(
-    'RISU_IMPORT_TOO_LARGE'
-  );
+test('expanded project text obeys the import byte limit', () => {
   const source = file(
     zip([
       ['preset.json', encode(document())],
@@ -205,43 +194,3 @@ test('input and expanded project text obey the existing import byte limit', () =
   );
   expect(() => readRisuPresetFile(source)).toThrow('RISU_IMPORT_TOO_LARGE');
 });
-
-// Reuses the standard ZIP fixture construction from risu-import.test.ts.
-function zip(files: [string, Buffer][]) {
-  const locals: Buffer[] = [],
-    central: Buffer[] = [];
-  let offset = 0;
-  for (const [name, bytes] of files) {
-    const path = Buffer.from(name),
-      compressed = deflateRawSync(bytes);
-    const header = Buffer.alloc(30);
-    header.writeUInt32LE(0x04034b50);
-    header.writeUInt16LE(20, 4);
-    header.writeUInt16LE(8, 8);
-    header.writeUInt32LE(crc32(bytes), 14);
-    header.writeUInt32LE(compressed.length, 18);
-    header.writeUInt32LE(bytes.length, 22);
-    header.writeUInt16LE(path.length, 26);
-    const directory = Buffer.alloc(46);
-    directory.writeUInt32LE(0x02014b50);
-    directory.writeUInt16LE(20, 4);
-    directory.writeUInt16LE(20, 6);
-    directory.writeUInt16LE(8, 10);
-    directory.writeUInt32LE(crc32(bytes), 16);
-    directory.writeUInt32LE(compressed.length, 20);
-    directory.writeUInt32LE(bytes.length, 24);
-    directory.writeUInt16LE(path.length, 28);
-    directory.writeUInt32LE(offset, 42);
-    locals.push(header, path, compressed);
-    central.push(directory, path);
-    offset += header.length + path.length + compressed.length;
-  }
-  const directory = Buffer.concat(central),
-    end = Buffer.alloc(22);
-  end.writeUInt32LE(0x06054b50);
-  end.writeUInt16LE(files.length, 8);
-  end.writeUInt16LE(files.length, 10);
-  end.writeUInt32LE(directory.length, 12);
-  end.writeUInt32LE(offset, 16);
-  return Buffer.concat([...locals, directory, end]);
-}

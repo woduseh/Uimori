@@ -9,7 +9,6 @@ import sharp from 'sharp';
 import Fastify from 'fastify';
 import { Store } from '../server/store.js';
 import { prepareRisuImport, applyRisuImport } from '../server/risu-import.js';
-import { createPackageStart } from '../server/package-start.js';
 import { applyNativeRisuAction, nativeSourceSnapshot } from '../server/risu-native-actions.js';
 import { forkChat } from '../server/chat-fork.js';
 import { importChatBackup } from '../server/chat-backup.js';
@@ -122,18 +121,7 @@ ${actionCode}
     allowPartial: false,
     idempotencyKey: 'import',
   });
-  const chatId = saved.chat!.id;
-  const bot = store.product.profile(chatId).packageAttachments![0];
-  if (!store.chat(chatId).headRevision)
-    createPackageStart(store, chatId, {
-      packageId: bot.id,
-      packageRevision: bot.revision,
-      startId: 'start-0',
-      expectedSettingsRevision: store.chat(chatId).settingsRevision,
-      expectedProfileRevision: store.product.profile(chatId).revision,
-      idempotencyKey: 'opening',
-    });
-  return { store, chatId };
+  return { store, chatId: saved.chat!.id };
 }
 function actionBody(store: Store, chatId: string, name: string, key: string) {
   const head = store.source(store.chat(chatId).headRevision!);

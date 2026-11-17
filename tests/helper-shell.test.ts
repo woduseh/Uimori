@@ -108,14 +108,14 @@ function exportData(shell: HelperShell, taskId: string, scope: 'library' | 'chat
   ).exportData(taskId, { scope, ...(id ? { id } : { all: true }) });
 }
 
-async function prepareFiles(
-  f: Awaited<ReturnType<typeof fixture>>,
+function prepareFiles(
+  f: ReturnType<typeof workspaceFixture>,
   scope: 'library' | 'chats',
   id: string
 ) {
-  const command = `node ${resolve('runner/uimori.mjs')} export '${JSON.stringify({ scope, id })}'`;
-  const result = await f.shell.exec(f.task, `prepare-${scope}`, command, 5000);
-  expect(result.exitCode).toBe(0);
+  // These cases exercise the subsequent shell command. The runtime suite covers CLI export.
+  (f.shell as unknown as { exportTask(task: typeof f.task): void }).exportTask(f.task);
+  exportData(f.shell, f.task.id, scope, id);
 }
 
 test('an unavailable runner still exports current saved scene revisions and the frozen snapshot', async () => {
@@ -305,11 +305,10 @@ test('batch scene projection refresh preserves drafts and writes each affected i
   }
 });
 
-test('portable apply retains its content-bound receipt and does not save twice', async () => {
+test('portable apply retains its content-bound receipt and does not save twice', () => {
   const f = workspaceFixture();
   try {
-    await expect(f.shell.exec(f.task, 'export', 'true', 1000)).rejects.toThrow();
-    exportData(f.shell, f.task.id, 'library', f.resource.id);
+    prepareFiles(f, 'library', f.resource.id);
     const relative = `library/${f.resource.id}/resource.json`;
     const filename = join(f.root, 'tasks', f.task.id, relative);
     const model = JSON.parse(readFileSync(filename, 'utf8')) as ContentEditModel;
@@ -571,7 +570,7 @@ linuxTest(
   async () => {
     const f = await fixture();
     const file = `library/${f.resource.id}/resource.json`;
-    await prepareFiles(f, 'library', f.resource.id);
+    prepareFiles(f, 'library', f.resource.id);
     const read = await f.shell.exec(
       f.task,
       'read',
@@ -619,7 +618,7 @@ node ${resolve('runner/uimori.mjs')} apply ${file}`;
 linuxTest('external revision change rejects stale shell edits instead of overwriting', async () => {
   const f = await fixture();
   const file = `library/${f.resource.id}/resource.json`;
-  await prepareFiles(f, 'library', f.resource.id);
+  prepareFiles(f, 'library', f.resource.id);
   const latest = readResource(f.store, 'content', f.resource.id) as Content;
   const model = editableResource('content', latest) as ContentEditModel;
   model.package.nativeRisu.card.creator_notes = 'External change';
@@ -731,7 +730,7 @@ linuxTest('native Linux text edits apply to saved scenes and retain edit revisio
   const chat = createFixtureChat(f.store, 'Shell scene');
   const source = completedSource(f.store, chat.id, 'Initial scene narrative');
   const file = `chats/${chat.id}/scenes/${source.id}.txt`;
-  await prepareFiles(f, 'chats', chat.id);
+  prepareFiles(f, 'chats', chat.id);
   const command = `printf '%s' 'Edited scene narrative' > ${file}; node ${resolve('runner/uimori.mjs')} apply ${file}`;
   const result = await f.shell.exec(f.task, 'scene', command, 5000);
   expect(result.exitCode).toBe(0);
@@ -785,7 +784,7 @@ linuxTest(
   'JSON formatting is a no-op and derived-only edits preserve DB, undo and local input',
   async () => {
     const f = await fixture();
-    await prepareFiles(f, 'library', f.resource.id);
+    prepareFiles(f, 'library', f.resource.id);
     const { filename, model } = fileModel(f);
     const command = `node ${resolve('runner/uimori.mjs')} apply library/${f.resource.id}/resource.json`;
     writeFileSync(filename, JSON.stringify(model));
@@ -814,7 +813,7 @@ linuxTest(
   'native apply uses existing helper undo and a repeated apply does not save twice',
   async () => {
     const f = await fixture();
-    await prepareFiles(f, 'library', f.resource.id);
+    prepareFiles(f, 'library', f.resource.id);
     const { filename, model } = fileModel(f);
     model.package.nativeRisu.card.creator_notes = 'Undo this native change';
     writeFileSync(filename, JSON.stringify(model));
@@ -838,7 +837,7 @@ linuxTest(
   'app mutations refresh clean files and catalog clones without overwriting dirty files',
   async () => {
     const f = await fixture();
-    await prepareFiles(f, 'library', f.resource.id);
+    prepareFiles(f, 'library', f.resource.id);
     const patch = (value: string) =>
       appMutation(
         f,
@@ -872,7 +871,7 @@ linuxTest(
     const relative = `library/${clone.id}/resource.json`;
     const clonedFile = join(f.root, 'tasks', f.task.id, relative);
     expect(existsSync(clonedFile)).toBe(false);
-    await prepareFiles(f, 'library', clone.id);
+    prepareFiles(f, 'library', clone.id);
     const clonedModel = JSON.parse(readFileSync(clonedFile, 'utf8'));
     clonedModel.package.nativeRisu.card.creator_notes = 'Edited clone';
     writeFileSync(clonedFile, JSON.stringify(clonedModel));
@@ -901,7 +900,7 @@ linuxTest(
   'committed apply remains successful when metadata refresh fails and retry is a no-op',
   async () => {
     const f = await fixture();
-    await prepareFiles(f, 'library', f.resource.id);
+    prepareFiles(f, 'library', f.resource.id);
     const { filename, model } = fileModel(f);
     model.package.nativeRisu.card.creator_notes = 'Saved despite refresh failure';
     writeFileSync(filename, JSON.stringify(model));
@@ -937,7 +936,7 @@ linuxTest('task cancellation aborts the runner before delayed file edits and app
   const f = await fixture();
   const controller = new AbortController();
   const file = `library/${f.resource.id}/resource.json`;
-  await prepareFiles(f, 'library', f.resource.id);
+  prepareFiles(f, 'library', f.resource.id);
   const pending = f.shell.exec(
     f.task,
     'cancel',
@@ -1090,7 +1089,7 @@ linuxTest(
     const f = await fixture();
     const cli = `node ${resolve('runner/uimori.mjs')}`;
     const applied = { operationId: 'shell:unknown:app:1', outcome: 'succeeded' };
-    await prepareFiles(f, 'library', f.resource.id);
+    prepareFiles(f, 'library', f.resource.id);
     const invoke = vi.fn(async () => ({
       result: { error: 'STORAGE_RESPONSE_LOST', outcome: 'unknown' },
       fatalError: new Error('STORAGE_RESPONSE_LOST'),
@@ -1160,7 +1159,7 @@ linuxTest(
     const f = await fixture();
     const file = `library/${f.resource.id}/resource.json`;
     const cli = `node ${resolve('runner/uimori.mjs')}`;
-    await prepareFiles(f, 'library', f.resource.id);
+    prepareFiles(f, 'library', f.resource.id);
     const saveExternal = (name: string) => {
       const saved = readResource(f.store, 'content', f.resource.id);
       const model = editableResource('content', saved) as ContentEditModel;
@@ -1240,7 +1239,7 @@ linuxTest(
     const source = completedSource(f.store, chat.id, 'Original scene');
     const file = `chats/${chat.id}/scenes/${source.id}.txt`;
     const cli = `node ${resolve('runner/uimori.mjs')}`;
-    await prepareFiles(f, 'chats', chat.id);
+    prepareFiles(f, 'chats', chat.id);
     const filename = join(f.root, 'tasks', f.task.id, file);
     const sceneIndex = () =>
       JSON.parse(
@@ -1326,7 +1325,7 @@ linuxTest(
     const source = completedSource(f.store, chat.id, 'Historical original');
     const file = `chats/${chat.id}/scenes/${source.id}.txt`;
     const cli = `node ${resolve('runner/uimori.mjs')}`;
-    await prepareFiles(f, 'chats', chat.id);
+    prepareFiles(f, 'chats', chat.id);
     const taskDir = join(f.root, 'tasks', f.task.id);
     writeFileSync(join(taskDir, file), 'Preserved local draft');
     const refreshed = await f.shell.exec(f.task, 'refresh', `${cli} refresh ${file}`, 5000);

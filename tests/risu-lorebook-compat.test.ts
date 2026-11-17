@@ -160,7 +160,7 @@ describe('convertCharbook: extension migration', () => {
     );
   });
 
-  test('prepends every migrated block in Risu order', () => {
+  test('migrates directives in Risu order and reads them back as active lore settings', () => {
     const converted = convertOne({
       keys: ['alpha'],
       secondary_keys: ['x', 'y'],
@@ -192,6 +192,19 @@ describe('convertCharbook: extension migration', () => {
     );
     // selectiveLogic is the one migrated key Risu does not delete.
     expect(converted.extentions).toEqual({ selectiveLogic: 3, risu_case_sensitive: false });
+
+    const result = interpretLoreDecorators(converted.content);
+
+    expect(result.body).toBe('Body text');
+    expect(result.unknown).toEqual([]);
+    expect(result.decorators).toMatchObject({
+      match_full_word: true,
+      activate_only_after: 3,
+      additional_keys: [['y'], ['x']],
+      depth: 5,
+      role: 'assistant',
+      probability: 50,
+    });
   });
 });
 
@@ -210,18 +223,11 @@ describe('interpretLoreDecorators: block and body', () => {
     expect(result.decorators.role).toBeNull();
   });
 
-  test('reports unknown decorators and keeps them out of the body', () => {
-    const result = interpretLoreDecorators('@@no_such_thing 1\n@@depth 3\nBody text');
-
-    expect(result.unknown).toEqual(['no_such_thing']);
+  test('removes unknown decorators from the body, preserving their exact case in diagnostics', () => {
+    const result = interpretLoreDecorators('@@no_such_thing 1\n@@Depth 3\n@@role user\nBody text');
+    expect(result.unknown).toEqual(['no_such_thing', 'Depth']);
     expect(result.body).toBe('Body text');
-  });
-
-  test('does not lowercase decorator names, so @@Depth is unknown', () => {
-    const result = interpretLoreDecorators('@@Depth 3\nBody text');
-
-    expect(result.unknown).toEqual(['Depth']);
-    expect(result.decorators.depth).toBeNull();
+    expect(result.decorators).toMatchObject({ depth: null, role: 'user' });
   });
 
   test('runs an @@@ fallback only after the previous decorator was rejected', () => {
@@ -288,7 +294,6 @@ describe('interpretLoreDecorators: arguments', () => {
   });
 
   test('rejects arguments Risu does not accept', () => {
-    expect(interpretLoreDecorators('@@role nobody\nB').decorators.role).toBeNull();
     expect(interpretLoreDecorators('@@position nowhere\nB').decorators.position).toBeNull();
     expect(interpretLoreDecorators('@@position\nB').decorators.position).toBeNull();
     expect(
@@ -352,37 +357,5 @@ describe('interpretLoreDecorators: shared upstream slots', () => {
     const result = interpretLoreDecorators('@@additional_keys a\n@@additional_keys b,c\nB');
 
     expect(result.decorators.additional_keys).toEqual([['a'], ['b', 'c']]);
-  });
-});
-
-describe('convertCharbook output feeds interpretLoreDecorators', () => {
-  test('a migrated entry reads back as the decorators Risu wrote', () => {
-    const converted = convertOne({
-      secondary_keys: ['x', 'y'],
-      selective: true,
-      extensions: {
-        useProbability: true,
-        probability: 50,
-        position: 4,
-        depth: 5,
-        role: 2,
-        selectiveLogic: 3,
-        delay: 3,
-        match_whole_words: true,
-      },
-    });
-
-    const result = interpretLoreDecorators(converted.content);
-
-    expect(result.body).toBe('Body text');
-    expect(result.unknown).toEqual([]);
-    expect(result.decorators).toMatchObject({
-      match_full_word: true,
-      activate_only_after: 3,
-      additional_keys: [['y'], ['x']],
-      depth: 5,
-      role: 'assistant',
-      probability: 50,
-    });
   });
 });

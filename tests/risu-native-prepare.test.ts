@@ -1,7 +1,5 @@
 import { expect, test } from 'vitest';
 import { prepareNativeRisuText } from '../server/risu-native-prepare.js';
-import { processNativeRisuText } from '../server/risu-native-render.js';
-import { evaluateNativeRisuFields } from '../server/risu-native-cbs.js';
 import { nativeContent } from './fixtures/native-content.js';
 
 test('batched preparation preserves field, greeting and message variable order and full-history reads', async () => {
@@ -13,37 +11,17 @@ test('batched preparation preserves field, greeting and message variable order a
     context: {
       variables: {},
       messages: [
-        { role: 'char' as const, data: '{{getvar::x}}{{setvar::x::first}}' },
-        { role: 'user' as const, data: '{{getvar::x}}|{{lastmessage}}' },
+        { role: 'char' as const, data: '{{getvar::x}}{{setvar::x::first}}|{{lastmessage}}' },
+        { role: 'user' as const, data: '{{getvar::x}}' },
       ],
     },
   };
-  const evaluated = await evaluateNativeRisuFields({
-    native,
-    fields: input.fields[0].fields,
-    context: input.context,
-  });
-  let variables = evaluated.variables;
-  const texts: string[] = [];
-  for (const [index, text] of [
-    input.greeting,
-    ...input.context.messages.map((message) => message.data),
-  ].entries()) {
-    const result = await processNativeRisuText({
-      native,
-      text,
-      mode: 'editprocess',
-      context: { ...input.context, variables, messageIndex: index - 1 },
-    });
-    variables = result.variables;
-    texts.push(result.text);
-  }
   const result = await prepareNativeRisuText(input);
   expect(result).toEqual({
-    fields: { bot: evaluated.fields },
-    greeting: texts[0],
-    texts: texts.slice(1),
-    variables,
+    fields: { bot: { body: '' } },
+    greeting: 'field',
+    texts: ['greeting|{{getvar::x}}', 'first'],
+    variables: { x: 'first' },
     issues: [],
   });
   expect(input.context.variables).toEqual({});
