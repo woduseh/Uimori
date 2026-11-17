@@ -1267,9 +1267,19 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
     const { model } = await promptModel(store, () =>
       JSON.stringify({ prompt: 'slow lantern', caption: '늦게 도착한 등불' })
     );
-    const comfy = await comfyUIFixture({ delayPolls: 3 });
+    const comfy = await comfyUIFixture({ delayPolls: 1 });
     cleanups.push(comfy.close);
     fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
+    const timeoutMs = 5000;
+    const deadline = new AbortController();
+    const realTimeout = AbortSignal.timeout.bind(AbortSignal);
+    // Expire only this deadline after the accepted remote ID is persisted. HTTP
+    // scheduling must not decide whether this tests acceptance or submission loss.
+    const timeout = vi
+      .spyOn(AbortSignal, 'timeout')
+      .mockImplementation((milliseconds) =>
+        milliseconds === timeoutMs ? deadline.signal : realTimeout(milliseconds)
+      );
     const job = reserveIllustration(store, source, 'manual', {
       settings: fixtureSettings({
         generator: 'comfyui',
@@ -1278,28 +1288,45 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
           baseUrl: comfy.origin,
 
           promptModel: { id: model.id },
-          timeoutMs: 40,
+          timeoutMs,
           pollIntervalMs: 20,
         },
       }),
     });
-    const observed = hooks(store, {});
-    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
-      status: 'failed',
-      code: 'COMFYUI_TIMEOUT',
-      images: 0,
+    const observed = hooks(store, {
+      onProgress: () => {
+        if (illustrationJob(store, job.id).diagnostic?.comfyui?.submission === 'accepted')
+          deadline.abort(new DOMException('Synthetic deadline expired', 'TimeoutError'));
+      },
     });
+    try {
+      expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
+        status: 'failed',
+        code: 'COMFYUI_TIMEOUT',
+        images: 0,
+      });
+    } finally {
+      timeout.mockRestore();
+    }
     const failed = illustrationJob(store, job.id);
-    expect(failed.diagnostic?.comfyui?.promptId).toBe(comfy.prompts[0].id);
     expect(comfy.prompts).toHaveLength(1);
+    expect(failed.diagnostic?.comfyui).toMatchObject({
+      promptId: comfy.prompts[0].id,
+      submission: 'accepted',
+    });
     expect(comfy.requests.some((request) => request.url === '/interrupt')).toBe(false);
     const reconcileHooks = { signal: new AbortController().signal };
-    let result = await reconcileIllustrationJob(store, job.id, 'worker', reconcileHooks);
-    for (let round = 0; round < 5 && result.status !== 'completed'; round++)
-      result = await reconcileIllustrationJob(store, job.id, 'worker', reconcileHooks);
+    expect(await reconcileIllustrationJob(store, job.id, 'worker', reconcileHooks)).toMatchObject({
+      status: 'failed',
+      error: 'COMFYUI_TIMEOUT',
+    });
+    const result = await reconcileIllustrationJob(store, job.id, 'worker', reconcileHooks);
     expect(result.status).toBe('completed');
     expect(result.images[0]).toMatchObject({ caption: '늦게 도착한 등불', prompt: 'slow lantern' });
     expect(comfy.prompts).toHaveLength(1);
+    expect(
+      comfy.requests.filter((request) => request.url.startsWith('/history/')).map(({ url }) => url)
+    ).toEqual([`/history/${comfy.prompts[0].id}`, `/history/${comfy.prompts[0].id}`]);
     expect(illustrationJob(store, job.id).diagnostic?.stage).toBe('store');
     await expect(reconcileIllustrationJob(store, job.id, 'worker', reconcileHooks)).rejects.toThrow(
       'ILLUSTRATION_NOT_RECONCILABLE'
