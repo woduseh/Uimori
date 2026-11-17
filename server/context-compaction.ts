@@ -27,6 +27,7 @@ import { measureProviderRequest } from './main-request.js';
 import type { MainHooks } from './model-runner.js';
 import { modelAuthorNotes } from '../core/notes.js';
 import { resetCompactedLore } from '../core/lore-context.js';
+import { projectStoryUiText } from '../core/story-ui.js';
 
 export type ContextCompactionHooks = MainHooks & {
   onProgress: (plan: ContextPlan) => void | Promise<void>;
@@ -310,7 +311,7 @@ export async function prepareInputContext(
     };
     const logical = structuredClone(
       fixed.nativeRisuExecution?.history ?? fixed.logicalHistory ?? []
-    );
+    ).map((message) => ({ ...message, text: projectStoryUiText(message.text) }));
     const messagesBySource = new Map<string, PromptHistoryMessage[]>();
     for (const message of logical) {
       if (message.current || !message.sourceRevision) continue;

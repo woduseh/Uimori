@@ -99,6 +99,31 @@ async function snapshot(
     profile,
   });
 }
+test('Story UI guidance is an opted-in execution contract, not reference-data instructions', async () => {
+  const off = await snapshot();
+  expect(buildMainProviderRequest(off).request.stable.contract).not.toContain(
+    'Compose narrative interfaces'
+  );
+  const enabled = await snapshot();
+  enabled.settings.storyUi = true;
+  delete enabled.promptCompilation;
+  enabled.storyUiAction = {
+    sourceRevision: 'source',
+    sourceHash: 'a'.repeat(64),
+    blockId: 'story-ui-0',
+    surfaceId: 'main',
+    name: 'reply',
+    context: { text: 'See you soon' },
+    mode: 'short',
+  };
+  const { request } = buildMainProviderRequest(enabled);
+  expect(request.stable.contract).toContain('Compose narrative interfaces');
+  expect(request.stable.contract).toContain('The user chose a short interaction');
+  expect(JSON.stringify(request.input.source)).not.toContain('Compose narrative interfaces');
+  const wire = encodeMainPreview(request, enabled.profile!.models.main!);
+  expect(JSON.stringify(wire.body)).toContain('User-enabled story interface capability');
+});
+
 function hooks(_origin: string) {
   const events: ToolEvent[] = [],
     attempts: WireRecord[] = [],

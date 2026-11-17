@@ -2,6 +2,8 @@ export type Settings = {
   maxCalls: number;
   /** Start a translation after a successful model-authored source commit. */
   autoTranslate?: boolean;
+  storyUi?: boolean;
+  storyUiStyle?: import('./story-ui-style.js').StoryUiStyle;
 };
 export type Chat = {
   id: string;
@@ -80,6 +82,8 @@ export type Usage = {
   costUsd: number | null;
 };
 export type RunSnapshot = {
+  /** A host-validated interaction with a source-owned UI surface. */
+  storyUiAction?: import('./story-ui.js').StoryUiAction;
   /** Existing image choices frozen with this writing request. */
   imageCatalog?: import('./auxiliary.js').AssetEntry[];
   /** Authored user attachments retained after execution inputs are settled. */

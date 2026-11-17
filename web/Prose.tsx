@@ -26,6 +26,8 @@ export const Prose = memo(function Prose({
   sourceId,
   compiled,
   afterBlock,
+  storySlots,
+  renderStorySlot,
 }: {
   text: string;
   reading?: ReadabilitySettings;
@@ -34,18 +36,21 @@ export const Prose = memo(function Prose({
   sourceId?: string;
   compiled?: ReturnType<typeof compileReadingMarkdown>;
   afterBlock?: (anchor: string) => ReactNode;
+  storySlots?: readonly { id: string; start: number }[];
+  renderStorySlot?: (id: string) => ReactNode;
 }) {
   const inherited = useContext(ReadingPreferencesContext);
   const settings = reading ?? inherited;
   const document = useMemo(
-    () => compiled ?? compileReadingMarkdown(text, blocks, allowedImageUrls),
-    [text, blocks, allowedImageUrls, compiled]
+    () => compiled ?? compileReadingMarkdown(text, blocks, allowedImageUrls, storySlots),
+    [text, blocks, allowedImageUrls, compiled, storySlots]
   );
   const innerHtml = useMemo(() => ({ __html: document.html }), [document.html]);
   const host = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const mounted = useRef<ReturnType<typeof createReadingDecorator> | null>(null);
   const [slots, setSlots] = useState<{ anchor: string; element: HTMLElement }[]>([]);
+  const [uiSlots, setUiSlots] = useState<{ id: string; element: HTMLElement }[]>([]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Content replacement and reading decoration change the DOM owned by this effect.
   useLayoutEffect(() => {
     if (!content.current) return;
@@ -53,6 +58,12 @@ export const Prose = memo(function Prose({
     setSlots(
       [...content.current.querySelectorAll<HTMLElement>('[data-prose-slot]')].map((element) => ({
         anchor: element.dataset.proseSlot!,
+        element,
+      }))
+    );
+    setUiSlots(
+      [...content.current.querySelectorAll<HTMLElement>('[data-story-ui-slot]')].map((element) => ({
+        id: element.dataset.storyUiSlot!,
         element,
       }))
     );
@@ -146,6 +157,8 @@ export const Prose = memo(function Prose({
       />
       {afterBlock &&
         slots.map(({ anchor, element }) => createPortal(afterBlock(anchor), element, anchor))}
+      {renderStorySlot &&
+        uiSlots.map(({ id, element }) => createPortal(renderStorySlot(id), element, id))}
     </div>
   );
 });

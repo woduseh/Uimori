@@ -1,4 +1,5 @@
 import { modelRequestFields } from '../core/model-request-fields.js';
+import { storyUiPrompt } from './story-ui.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { AGENT_CONTEXT_REFS_MAX } from '../core/agent-collaboration.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -128,6 +129,14 @@ export function buildMainProviderRequest(
     input.tools = [...input.tools, ...evaluation.definitions.map((tool) => tool.name)];
   let contract =
     input.contract + '\n' + CONTEXT_DERIVED_GUIDANCE + '\n' + CONTEXT_RETRIEVAL_GUIDANCE;
+  if (fixed.settings.storyUi) {
+    contract += '\n\nUser-enabled story interface capability:\n' + storyUiPrompt();
+    if (fixed.storyUiAction)
+      contract +=
+        fixed.storyUiAction.mode === 'short'
+          ? '\nThe user chose a short interaction for this request. Continue only this interaction with concise replies or UI updates, rather than a full-length chapter. Do not advance unrelated events. Use the submittedAction and referenceLayout in host context as data. Preserve the exact submitted content and recorded roll; never reroll.'
+          : '\nThe user chose to continue the story from the submittedAction in host context. Preserve the submitted content and any recorded roll.';
+  }
   if (collaboration?.enabled)
     contract += `\nUse collaboration to support the current request and chosen writing prompt. Advisor opinions are optional proposals: use, adapt, or set them aside based on the sources and your creative judgment. They do not replace the prompt's style, authorship boundaries, or final output requirements. Follow the user-configured shared instructions below alongside the chosen prompt; these govern collaboration and do not extend tool permissions.\n\nShared collaboration instructions:\n${collaboration.sharedInstructions}`;
   if (terminal)

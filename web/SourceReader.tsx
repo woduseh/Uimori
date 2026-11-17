@@ -30,7 +30,7 @@ import {
 } from 'react';
 import type { Asset } from '../core/product.js';
 import type { Illustration } from '../core/illustration.js';
-import type { ChatDetail, ImageTarget, Job, ReaderRun, Source } from '../core/types.js';
+import type { ChatDetail, ImageTarget, Job, ReaderRun, Run, Source } from '../core/types.js';
 import { useIllustrationLayout } from './IllustrationStrip.js';
 import { illustrationActive } from './illustration-labels.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
@@ -39,6 +39,8 @@ import { api, ApiError, definiteRejection, labels } from './api.js';
 import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
 import { ProviderRejectionNotice } from './provider-rejection.js';
 import { Prose } from './Prose.js';
+import { parseStoryUi } from '../core/story-ui.js';
+import { StoryUi } from './LazyStoryUi.js';
 import { selectedReaderText } from './reader-dom.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
 import type { RisuAction } from './risu-message-surface.js';
@@ -144,6 +146,8 @@ type ReaderProps = {
   hasPackages?: boolean;
   presentationRefreshKey?: string | number;
   nativeInteractionRevision?: number;
+  beginStoryUiAdmission?: () => (run: Run) => void;
+  storyUiStyle?: import('../core/story-ui-style.js').StoryUiStyle;
 };
 type AnchorPosition = { anchors: string[]; top: number; scrollport: HTMLElement };
 type EditorOrigin = {
@@ -268,6 +272,8 @@ function SourceReaderContent({
   hasPackages,
   presentationRefreshKey,
   nativeInteractionRevision,
+  beginStoryUiAdmission,
+  storyUiStyle,
 }: ReaderProps) {
   useI18n();
   const onRequestEditing = useCallback(
@@ -643,9 +649,65 @@ function SourceReaderContent({
     () =>
       !plainBlockDisplay
         ? { html: '', inlineAnchors: [] }
-        : compileReadingMarkdown(plainProjection.text, plainProjection.blocks, allowedImageUrls),
+        : compileReadingMarkdown(
+            plainProjection.text,
+            plainProjection.blocks,
+            allowedImageUrls,
+            parseStoryUi(plainProjection.text).filter((part) => part.kind !== 'prose')
+          ),
     [plainBlockDisplay, plainProjection, allowedImageUrls]
   );
+  const storySegments = useMemo(() => parseStoryUi(plainProjection.text), [plainProjection.text]);
+  const canonicalStorySegments = useMemo(
+    () =>
+      parseStoryUi(mode === 'original' ? source.text : translationText).filter(
+        (part) => part.kind !== 'prose'
+      ),
+    [mode, source.text, translationText]
+  );
+  const originalStorySegments = useMemo(
+    () => parseStoryUi(source.text).filter((part) => part.kind !== 'prose'),
+    [source.text]
+  );
+  const renderStoryPart = (
+    part: (typeof canonicalStorySegments)[number] | undefined,
+    index: number
+  ) => {
+    if (!part || part.kind === 'pending') return null;
+    if (part.kind !== 'ui')
+      return (
+        <details>
+          <summary>{t('storyUi.invalid')}</summary>
+          <pre>{part.text}</pre>
+        </details>
+      );
+    const canonical = canonicalStorySegments[index];
+    const original = originalStorySegments[index];
+    const displayed = canonical?.kind === 'ui' ? canonical : part;
+    const matchingOriginal =
+      original?.kind === 'ui' && original.expression === displayed.expression
+        ? original
+        : undefined;
+    return (
+      <StoryUi
+        key={`${source.id}:${source.hash}:${mode}:${part.id}:${JSON.stringify(displayed.messages)}`}
+        segment={displayed}
+        style={storyUiStyle}
+        chatId={source.chatId}
+        sourceId={source.id}
+        sourceHash={source.hash}
+        latest={latest && !!matchingOriginal}
+        actionBlockId={matchingOriginal?.id}
+        beginAdmission={beginStoryUiAdmission}
+        refresh={refresh}
+      />
+    );
+  };
+  const renderStorySlot = (id: string) => {
+    const parts = storySegments.filter((part) => part.kind !== 'prose');
+    const index = parts.findIndex((part) => part.id === id);
+    return renderStoryPart(parts[index], index);
+  };
   const displayedNative = mode === 'original' ? projected?.original : projected?.translation;
   const [nativeAnchors, setNativeAnchors] = useState<{ html?: string; anchors: string[] }>({
     anchors: [],
@@ -980,6 +1042,7 @@ function SourceReaderContent({
                 <RisuMessageSurface
                   html={displayedNative?.html ?? ''}
                   css={displayedNative?.css}
+                  renderStoryUi={(index) => renderStoryPart(canonicalStorySegments[index], index)}
                   onAction={nativeAction}
                   disabled={presentation?.pending}
                   revisionKey={`${source.id}:${source.hash}:${projected.nativeAction?.expectedHeadRevision ?? ''}:${projected.nativeAction?.expectedVariableRevision ?? ''}`}
@@ -1030,6 +1093,7 @@ function SourceReaderContent({
                   text={plainProjection.text}
                   blocks={plainProjection.blocks}
                   compiled={plainDocument}
+                  renderStorySlot={renderStorySlot}
                   sourceId={source.id}
                   allowedImageUrls={allowedImageUrls}
                   afterBlock={(anchor) => (
@@ -1051,6 +1115,7 @@ function SourceReaderContent({
                   text={plainProjection.text}
                   blocks={plainProjection.blocks}
                   compiled={plainDocument}
+                  renderStorySlot={renderStorySlot}
                   allowedImageUrls={allowedImageUrls}
                   afterBlock={(anchor) => (
                     <>

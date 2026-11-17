@@ -22,6 +22,18 @@ const native = (extra: Partial<RisuContentSource> = {}): RisuContentSource => ({
   ...extra,
 });
 
+test('native Markdown preserves a story UI slot beside authored HTML and styles', async () => {
+  const result = await renderNativeRisuMessage({
+    native: native(),
+    text: '<style>.panel{color:red}</style>\n<div class="panel">상태</div>\n\n<div data-uimori-story-ui="0"></div>\n\n이야기',
+    context: { variables: {} },
+  });
+  expect(result.html).toContain('<style>.panel{color:red}</style>');
+  expect(result.html).toContain('<div class="panel">상태</div>');
+  expect(result.html).toContain('<div data-uimori-story-ui="0"></div>');
+  expect(result.html).toContain('이야기');
+});
+
 test('literal fields before and after CBS preserve limits, aliases, roles and shared writes', () => {
   const input = native();
   const before = structuredClone(input);

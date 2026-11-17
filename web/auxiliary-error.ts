@@ -19,22 +19,34 @@ define(
 );
 
 define(
-  ['JEV_CREDENTIAL_REQUIRED', 'JEV_HTTP_401', 'JEV_HTTP_403'],
+  [
+    'JEV_CREDENTIAL_REQUIRED',
+    'JEV_HTTP_401',
+    'JEV_HTTP_403',
+    'JUDGMENT_CREDENTIAL_REQUIRED',
+    'JUDGMENT_HTTP_401',
+    'JUDGMENT_HTTP_403',
+  ],
   'errors.auxiliary.JEV_CREDENTIAL_REQUIRED.message',
   'errors.auxiliary.JEV_CREDENTIAL_REQUIRED.action'
 );
 define(
-  ['JEV_INPUT_BUDGET'],
+  ['JUDGMENT_CONNECTION_UNAVAILABLE', 'JUDGMENT_CONNECTION_INVALID'],
+  'errors.auxiliary.JUDGMENT_CONNECTION_UNAVAILABLE.message',
+  'errors.auxiliary.JUDGMENT_CONNECTION_UNAVAILABLE.action'
+);
+define(
+  ['JEV_INPUT_BUDGET', 'JUDGMENT_INPUT_BUDGET'],
   'errors.auxiliary.JEV_INPUT_BUDGET.message',
   'errors.auxiliary.JEV_INPUT_BUDGET.action'
 );
 define(
-  ['JEV_RESPONSE_INVALID'],
+  ['JEV_RESPONSE_INVALID', 'JUDGMENT_RESPONSE_INVALID', 'JUDGMENT_RESPONSE_LIMIT'],
   'errors.auxiliary.JEV_RESPONSE_INVALID.message',
   'errors.auxiliary.JEV_RESPONSE_INVALID.action'
 );
 define(
-  ['JEV_EXECUTION_FAILED', 'JEV_TIMEOUT', 'JEV_HTTP_429'],
+  ['JEV_EXECUTION_FAILED', 'JEV_TIMEOUT', 'JEV_HTTP_429', 'JUDGMENT_EXECUTION_FAILED'],
   'errors.auxiliary.JEV_EXECUTION_FAILED.message',
   'errors.auxiliary.JEV_EXECUTION_FAILED.action'
 );
@@ -50,12 +62,19 @@ define(
   'errors.auxiliary.AUXILIARY_PROVIDER_HTTP_401.action'
 );
 define(
-  ['AUXILIARY_PROVIDER_HTTP_400', 'AUXILIARY_PROVIDER_HTTP_404', 'AUXILIARY_PROVIDER_HTTP_422'],
+  [
+    'AUXILIARY_PROVIDER_HTTP_400',
+    'AUXILIARY_PROVIDER_HTTP_404',
+    'AUXILIARY_PROVIDER_HTTP_422',
+    'JUDGMENT_HTTP_400',
+    'JUDGMENT_HTTP_404',
+    'JUDGMENT_HTTP_422',
+  ],
   'errors.auxiliary.AUXILIARY_PROVIDER_HTTP_400.message',
   'errors.auxiliary.AUXILIARY_PROVIDER_HTTP_400.action'
 );
 define(
-  ['AUXILIARY_PROVIDER_HTTP_429'],
+  ['AUXILIARY_PROVIDER_HTTP_429', 'JUDGMENT_HTTP_429'],
   'errors.auxiliary.AUXILIARY_PROVIDER_HTTP_429.message',
   'errors.auxiliary.AUXILIARY_PROVIDER_HTTP_429.action'
 );
@@ -65,6 +84,10 @@ define(
     'AUXILIARY_PROVIDER_HTTP_502',
     'AUXILIARY_PROVIDER_HTTP_503',
     'AUXILIARY_PROVIDER_HTTP_504',
+    'JUDGMENT_HTTP_500',
+    'JUDGMENT_HTTP_502',
+    'JUDGMENT_HTTP_503',
+    'JUDGMENT_HTTP_504',
   ],
   'errors.auxiliary.AUXILIARY_PROVIDER_HTTP_500.message',
   'errors.auxiliary.AUXILIARY_PROVIDER_HTTP_500.action'
@@ -75,6 +98,7 @@ define(
     'AUXILIARY_PROVIDER_UND_ERR_HEADERS_TIMEOUT',
     'AUXILIARY_PROVIDER_UND_ERR_BODY_TIMEOUT',
     'AUXILIARY_PROVIDER_UND_ERR_CONNECT_TIMEOUT',
+    'JUDGMENT_TIMEOUT',
   ],
   'errors.auxiliary.AUXILIARY_PROVIDER_TIMEOUT.message',
   'errors.auxiliary.AUXILIARY_PROVIDER_TIMEOUT.action'
@@ -133,6 +157,11 @@ define(
   'errors.auxiliary.OUTPUT_SCHEMA_INVALID.action'
 );
 define(
+  ['OUTPUT_STORY_UI_INVALID'],
+  'storyUi.errorTranslation.message',
+  'storyUi.errorTranslation.action'
+);
+define(
   ['EVALUATION_SUBMISSION_REQUIRED'],
   'errors.auxiliary.EVALUATION_SUBMISSION_REQUIRED.message',
   'errors.auxiliary.EVALUATION_SUBMISSION_REQUIRED.action'
@@ -158,7 +187,7 @@ define(
   'errors.auxiliary.TOOL_CORRECTION_EXHAUSTED.action'
 );
 define(
-  ['AUXILIARY_CANCELLED'],
+  ['AUXILIARY_CANCELLED', 'JUDGMENT_CANCELLED'],
   'errors.auxiliary.AUXILIARY_CANCELLED.message',
   'errors.auxiliary.AUXILIARY_CANCELLED.action'
 );

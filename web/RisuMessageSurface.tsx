@@ -18,6 +18,7 @@ export function RisuMessageSurface({
   reading,
   illustrations = [],
   onIllustrationAnchors,
+  renderStoryUi,
 }: {
   html: string;
   css?: string;
@@ -27,6 +28,7 @@ export function RisuMessageSurface({
   reading?: ReadabilitySettings;
   illustrations?: { anchor: string; content: ReactNode }[];
   onIllustrationAnchors?: (anchors: string[]) => void;
+  renderStoryUi?: (index: number) => ReactNode;
 }) {
   useI18n();
   const inheritedReading = useContext(ReadingPreferencesContext);
@@ -77,6 +79,12 @@ export function RisuMessageSurface({
     <div className="risu-message" aria-busy={state.busy}>
       {state.issue && <p role="alert">{translateMessage(state.issue)}</p>}
       <div ref={host} className="risu-message-surface">
+        {renderStoryUi &&
+          prepared.storyUiSlots.map((index) => (
+            <div key={`story-ui-${index}`} slot={`story-ui-${index}`}>
+              {renderStoryUi(index)}
+            </div>
+          ))}
         {illustrations.map(({ anchor, content }) => (
           <div key={anchor} slot={`illustration-${anchor}`} className="illustration-slot">
             {content}

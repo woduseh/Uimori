@@ -5,7 +5,7 @@
 ## 사용 흐름
 
 1. 설정의 프로바이더와 모델 등록에서 프로바이더와 모델 프리셋을 등록해요. 등록은 역할 선택과 별개예요.
-2. 설정 → 역할별 모델에서 본문·번역과 선택 기능인 도우미·컨텍스트 정리·제목·카드 스크립트 보조 모델을 지정해요. 모델이 하나여도 자동 선택하지 않아요. 카드 스크립트 보조 모델의 기본값은 없음이에요. 로어 선별·본문과 번역 거절 판정·이미지 배치는 등록한 TypeSafe AI의 JEV를 사용해요.
+2. 설정 → 역할별 모델에서 본문·번역과 선택 기능인 도우미·컨텍스트 정리·제목·카드 스크립트 보조 모델을 지정해요. 모델이 하나여도 자동 선택하지 않아요. 카드 스크립트 보조 모델의 기본값은 없음이에요. **판단 프로바이더**는 로어 선별, 본문과 번역 거절 판정, 이미지 배치와 생성 전 검사에 공통으로 적용돼요. 기본은 TypeSafe AI / JEV예요. 연결별 설정은 [판단 프로바이더](PROVIDERS.md#판단-프로바이더)를 참고해요.
 3. 같은 화면의 **작업 동작**에서 번역 작업 호출 한도와 본문·번역 거절 감지 정책을 설정해요.
 4. 설정 → 현재 프롬프트에서 작문·번역 프리셋을 선택하고 전역 기본 옵션을 조정해요. 본문·토글 선언·협업 구성은 선택한 프리셋의 편집기에서 저장해요.
 5. 봇을 선택해 새 채팅을 만들거나 기존 채팅을 열어 대화해요. 채팅 설정의 프롬프트·모델 선택은 기본적으로 **전역 따르기**예요. 프리셋을 고르면 이 채팅에 고정하고, 전역 따르기로 바꿔 저장하면 고정을 해제해요. 헤더의 모델 칩과 채팅 설정은 모델·프롬프트의 고정 여부를 표시해요.
@@ -16,7 +16,7 @@
 
 ## 저장과 실행 경계
 
-`GET /api/model-workspace`는 `{revision, routes, translationPolicy, summaryLength, mainJudgmentEnabled, mainJudgmentThreshold, titleModel, helperModel, contextModel, scriptModel}`을 반환하고, `PUT`은 `expectedRevision`으로 동시 편집을 보호해요. 선택 기능 모델과 `scriptModel`은 `{id}` 참조 또는 `null`이며 PUT에서 생략하면 기존 값을 유지해요. `summaryLength`는 본문·도우미의 [요약 길이](CONTEXT-LIMITS.md#공통-요약-지침과-출력-여유)를 정해요. 프롬프트 선택과 같은 `prompt_workspace` JSON 행에 저장하므로 모델·프롬프트의 동시 저장 충돌도 CAS로 처리해요. 작문·번역 프롬프트는 프리셋 ID와 명시적인 전역 옵션만 저장하고, 본문과 기본 옵션은 원본의 최신 저장본에서 읽어요. 과거 실행은 접수 당시 스냅샷을 유지해요.
+`GET /api/model-workspace`는 `{revision, routes, translationPolicy, summaryLength, mainJudgmentEnabled, mainJudgmentThreshold, judgment, titleModel, helperModel, contextModel, scriptModel}`을 반환하고, `PUT`은 `expectedRevision`으로 동시 편집을 보호해요. 선택 기능 모델과 `scriptModel`은 `{id}` 참조 또는 `null`이며 PUT에서 생략하면 기존 값을 유지해요. `judgment`는 `{provider:'typesafe'}` 또는 `{provider, connectionId, modelId, images}`예요. 이전 DB는 JEV 기본값으로 읽으며, PUT에서 생략하면 저장된 판단 프로바이더를 유지해요. `summaryLength`는 본문·도우미의 [요약 길이](CONTEXT-LIMITS.md#공통-요약-지침과-출력-여유)를 정해요. 프롬프트 선택과 같은 `prompt_workspace` JSON 행에 저장하므로 모델·프롬프트의 동시 저장 충돌도 CAS로 처리해요. 작문·번역 프롬프트는 프리셋 ID와 명시적인 전역 옵션만 저장하고, 본문과 기본 옵션은 원본의 최신 저장본에서 읽어요. 과거 실행은 접수 당시 스냅샷을 유지해요.
 
 DB·archive의 버전과 지원 이관은 [migration](DATA-MIGRATIONS.md)을 봐요. 새 DB의 역할 모델은 미지정으로 시작하고 채팅 body의 모델 값을 전역 기본값으로 채택하지 않아요. API의 채팅 `profile.routes`는 고정 본문 모델을 포함한 현재 적용 설정의 읽기 전용 projection이에요. 채팅별 선택은 `profile.pinned.mainPromptPresetId`와 `profile.pinned.mainModel`에 ID로 저장해요. 프로필 수정에서 `pinned` 생략은 유지, `{}`는 전체 고정 해제이며 `expectedRevision`으로 충돌을 보호해요. 보관된 Run의 `snapshot.profile.routes/models`는 과거 실행의 고정 정보예요. 지원하지 않는 과거 DB/archive를 임의로 변환하지 않아요.
 
@@ -25,7 +25,7 @@ DB·archive의 버전과 지원 이관은 [migration](DATA-MIGRATIONS.md)을 봐
 | 작업 | 모델·프롬프트를 읽는 시점 |
 | --- | --- |
 | 새 본문 실행 | 예약 시 채팅의 고정 프리셋·본문 모델 최신 저장본, 또는 전역 기본값을 Run에 고정 |
-| 새 번역·수동 재번역 | 예약 시 현재 번역 모델·프롬프트·JEV 판정 정책을 job에 고정 |
+| 새 번역·수동 재번역 | 예약 시 현재 번역 모델·프롬프트·거절 판정 정책을 job에 고정 |
 | 새 도우미 작업 | 작업 예약 시 현재 `helperModel`과 컨텍스트 모델을 고정 |
 | 자동·수동 컨텍스트 정리 | 상위 Run 또는 독립 context job 예약 시 `contextModel`을 고정 |
 | 진행 중 작업 | 예약 때 고정한 값 유지. 설정 변경으로 교체하지 않음 |
@@ -35,7 +35,7 @@ DB·archive의 버전과 지원 이관은 [migration](DATA-MIGRATIONS.md)을 봐
 | 카드 Lua의 모델 호출 | 원본 `LLM`·`simpleLLM`은 고정 본문 모델. `axLLM`의 `otherAx`는 고정 `scriptModel` 또는 본문 모델, `memory`는 컨텍스트 정리 모델, `translate`는 번역 모델을 사용. Run 전체 `maxCalls`를 공유하고 본문 호출에 필요한 예산을 남김 |
 | 독립 채팅 복사 | 선택 지점까지의 원문·메모·변수·채팅 고정 선택을 새 ID로 연결. 전체 실행 입력·호출 영수증은 복사하지 않으며 이후 새 작업은 현재 고정 선택 또는 전역 기본값 사용 |
 
-source/hash·revision/CAS·idempotency·worker 소유권·취소·중복 방지 계약은 유지해요. 번역 응답을 JEV로 거절 판정하고 명확한 거절만 제한된 자동 재요청을 해요. 번역·조회·판정은 같은 전체 호출 한도를 사용해요. HTTP 오류나 불확실한 프로바이더 실행은 자동 재생하지 않아요.
+source/hash·revision/CAS·idempotency·worker 소유권·취소·중복 방지 계약은 유지해요. 전역 판단 모델로 번역 응답을 판정하고 명확한 거절만 제한된 자동 재요청을 해요. 번역·조회·판정은 같은 전체 호출 한도를 사용해요. HTTP 오류나 불확실한 프로바이더 실행은 자동 재생하지 않아요.
 
 ## 화면의 전역 설정 읽기
 

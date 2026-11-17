@@ -131,6 +131,12 @@ export function retryRun(
           })
         : store.chat(original.chatId);
       const parentRevision = replacement ? replacement.parentRevision : chat.headRevision;
+      const action = options.request === undefined ? original.snapshot.storyUiAction : undefined;
+      if (
+        action &&
+        (!parentRevision || store.sourceMetadata(parentRevision).hash !== action.sourceHash)
+      )
+        throw new HttpError(409, 'STORY_UI_STALE_SOURCE');
       const profile = store.product.snapshot(chat.id, 'main', parentRevision);
       const request =
         options.request === undefined
@@ -156,6 +162,9 @@ export function retryRun(
           const snapshot: RunSnapshot = {
             chatId: chat.id,
             request,
+            ...(action && parentRevision
+              ? { storyUiAction: { ...action, sourceRevision: parentRevision } }
+              : {}),
             ...(original.snapshot.requestImages?.length
               ? { requestImages: structuredClone(original.snapshot.requestImages) }
               : {}),

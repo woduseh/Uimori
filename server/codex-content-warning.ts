@@ -14,8 +14,9 @@ import type {
 import { workspaceModelRef, type ModelSnapshot } from '../core/product.js';
 import type { Store } from './store.js';
 import type { JevCredentialStore } from './jev-credentials.js';
-import { executeJevJudgment, type JevHooks, type JevRequest } from './jev-judgment.js';
+import { executeJudgment, type JudgmentHooks, type JudgmentRequest } from './judgment.js';
 import { jevSettings } from './jev-settings.js';
+import { judgmentRuntime, assertJudgmentRuntimeWire } from './judgment-runtime.js';
 import { HttpError, fields, record, text } from './request-validation.js';
 import { promptWorkspace } from './prompt-workspace.js';
 
@@ -33,7 +34,7 @@ export function codexContentWarningRequest(
   role: CodexContentWarningRole,
   content: string,
   recentContext = ''
-): JevRequest {
+): JudgmentRequest {
   const boundary = CODEX_SEXUAL_CONTENT_BOUNDARY;
   if (role === 'selection-revision')
     return {
@@ -76,26 +77,29 @@ async function judge(
   credential: JevCredentialStore['resolve'],
   signal: AbortSignal,
   conservative: boolean,
-  settings: JevHooks['settings'] | undefined,
+  settings: JudgmentHooks['settings'] | undefined,
   owner: PreflightOwner
 ): Promise<CodexContentPreflightResult> {
   try {
-    if (!credential()) return { warning: conservative };
+    const judgment = judgmentRuntime(owner.store, credential);
+    if (!(await judgment.credential?.())) return { warning: conservative };
     const request = codexContentWarningRequest(role, content, recentContext);
     const timeout = AbortSignal.timeout(PREFLIGHT_TIMEOUT_MS);
-    const result = await executeJevJudgment(request, digest({ role, request }), null, {
+    const result = await executeJudgment(request, digest({ role, request }), null, {
       signal: AbortSignal.any([signal, timeout]),
-      credential,
-      settings,
+      ...judgment,
+      settings: judgment.target ? judgment.settings : settings,
       kind: 'codex-content-preflight',
-      onAttemptStart: (wire) =>
-        owner.store.product.startAttempt(
+      onAttemptStart: (wire) => {
+        assertJudgmentRuntimeWire(wire, judgment);
+        return owner.store.product.startAttempt(
           owner.chatId,
           owner.runId ?? null,
           owner.jobId ?? null,
           { ...wire, role: role === 'selection-revision' ? 'helper' : role },
           { kind: 'judgment', retainContent: false }
-        ),
+        );
+      },
       onAttemptFinish: (id, result) => owner.store.product.finishAttempt(id, result),
     });
     return { warning: result.scores.explicitSexualContent! >= CODEX_CONTENT_WARNING_THRESHOLD };
@@ -111,7 +115,7 @@ export async function autoTranslationNeedsConfirmation(
   source: string,
   credential: JevCredentialStore['resolve'],
   signal: AbortSignal,
-  settings: JevHooks['settings'] | undefined,
+  settings: JudgmentHooks['settings'] | undefined,
   owner: PreflightOwner
 ): Promise<boolean> {
   if (!isCodex(model)) return false;

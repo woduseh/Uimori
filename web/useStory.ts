@@ -1039,6 +1039,48 @@ export function useStory() {
       });
     }
   };
+  const storyUiFollow = useRef<{ chatId: string; runId: string; epoch: number } | null>(null);
+  const beginStoryUiAdmission = () => {
+    const { chat: chatId, epoch, destination: target } = navigation.current;
+    return (run: Run) => {
+      if (
+        target !== 'story' ||
+        run.chatId !== chatId ||
+        navigation.current.chat !== chatId ||
+        navigation.current.epoch !== epoch ||
+        navigation.current.destination !== 'story'
+      )
+        return;
+      storyUiFollow.current = null;
+      if (run.sourceRevision) {
+        chooseSource(run.sourceRevision, true);
+      } else {
+        chooseSource(run.parentRevision ?? '', true);
+        if (run.status === 'queued' || run.status === 'running')
+          storyUiFollow.current = { chatId, runId: run.id, epoch: navigation.current.epoch };
+      }
+    };
+  };
+  // A later explicit navigation cancels following this particular admitted run.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: chooseSource acts on the current navigation after the epoch check.
+  useEffect(() => {
+    const follow = storyUiFollow.current;
+    if (!follow) return;
+    if (
+      navigation.current.chat !== follow.chatId ||
+      navigation.current.epoch !== follow.epoch ||
+      navigation.current.destination !== 'story'
+    ) {
+      storyUiFollow.current = null;
+      return;
+    }
+    const run = detail?.runs.find((entry) => entry.id === follow.runId);
+    if (!run) return;
+    if (run.sourceRevision) {
+      storyUiFollow.current = null;
+      chooseSource(run.sourceRevision, true);
+    } else if (!['queued', 'running'].includes(run.status)) storyUiFollow.current = null;
+  }, [detail, view.epoch]);
   const sceneDeletionCompletion = (chatId: string) => {
     const epoch = navigation.current.epoch;
     return async (result: SceneDeletionResult) => {
@@ -1832,6 +1874,7 @@ export function useStory() {
     editLoreContextReset,
     select,
     chooseSource,
+    beginStoryUiAdmission,
     sceneDeletionCompletion,
     openTarget,
     readerTarget,

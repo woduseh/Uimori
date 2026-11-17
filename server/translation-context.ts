@@ -3,6 +3,7 @@ import type { RunSnapshot } from '../core/types.js';
 import type { TranslationReference } from '../core/translation-context.js';
 import { successfulTranslation, validateTranslationArtifact } from './translation-artifacts.js';
 import { sourceHash } from '../core/source-history.js';
+import { projectStoryUiText } from '../core/story-ui.js';
 
 /** Only completed, currently valid wording for the exact frozen ancestry/hash is eligible. */
 export function translationReferences(store: Store, snapshot: RunSnapshot): TranslationReference[] {
@@ -25,7 +26,7 @@ export function translationReferences(store: Store, snapshot: RunSnapshot): Tran
         revision: job.revision ?? 0,
         sourceRevision: source.id,
         sourceHash: source.hash,
-        text: String(job.result!.text),
+        text: projectStoryUiText(String(job.result!.text)),
         manual: job.result!.manual === true,
       });
     } catch {

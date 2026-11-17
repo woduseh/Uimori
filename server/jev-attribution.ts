@@ -1,8 +1,7 @@
-import { createHash } from 'node:crypto';
-import { isDeepStrictEqual } from 'node:util';
 import type { WireRecord } from '../core/transport.js';
 import { validateTranslationJudgmentPolicy } from '../core/translation-settings.js';
-import { JEV_ENDPOINT, JEV_MODEL } from './jev-judgment.js';
+import { readJudgmentRequest } from './judgment.js';
+import { matchesJudgmentWire } from './judgment-wire.js';
 import {
   translationJudgmentInputHash,
   translationJudgmentRequest,
@@ -16,7 +15,7 @@ export function validateTranslationJudgmentWire(
   expectedResponse?: string
 ) {
   const judgment = validateTranslationJudgmentPolicy(policy);
-  const response = record(record(wire.body).state).response;
+  const response = record(readJudgmentRequest(wire)?.state).response;
   if (
     typeof response !== 'string' ||
     (expectedResponse !== undefined && response !== expectedResponse)
@@ -34,22 +33,13 @@ export function validateTranslationJudgmentWire(
   )
     throw new HttpError(400, 'TRANSLATION_JUDGMENT_ATTEMPT_MISMATCH');
   const request = translationJudgmentRequest(sourceHash, response, version);
-  const body = { model: JEV_MODEL, ...request };
-  const digest = (value: unknown) =>
-    createHash('sha256').update(JSON.stringify(value)).digest('hex');
   if (
-    wire.judgment?.kind !== 'translation-refusal' ||
-    wire.role !== 'translation' ||
-    wire.protocol !== 'typesafe-systemone-v1' ||
-    wire.connectionId !== 'typesafe-judgment' ||
-    wire.modelId !== JEV_MODEL ||
-    wire.url !== JEV_ENDPOINT ||
-    wire.method !== 'POST' ||
-    wire.agentId ||
-    wire.nativeScript ||
-    !isDeepStrictEqual(wire.body, body) ||
-    wire.bodySha256 !== digest(body) ||
-    wire.stablePrefixSha256 !== digest(request.questions)
+    !matchesJudgmentWire(
+      wire,
+      request,
+      'translation-refusal',
+      translationJudgmentInputHash(sourceHash, response, judgment, version)
+    )
   )
     throw new HttpError(400, 'TRANSLATION_JUDGMENT_ATTEMPT_MISMATCH');
 }

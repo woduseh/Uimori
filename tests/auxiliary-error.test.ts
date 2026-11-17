@@ -121,6 +121,16 @@ it.each([
     '출력 길이 설정을 확인해 주세요.',
   ],
   ['JEV_EXECUTION_FAILED', '판단을 완료하지 못했어요.', '작업 상세와 연결을 확인해 주세요.'],
+  [
+    'JUDGMENT_CONNECTION_UNAVAILABLE',
+    '저장한 판단 연결을 사용할 수 없어요.',
+    '역할별 모델에서 사용할 수 있는 판단 연결을 선택해 주세요.',
+  ],
+  [
+    'JUDGMENT_CREDENTIAL_REQUIRED',
+    '판단 연결을 사용할 수 없어요.',
+    'API 키와 연결 설정을 확인해 주세요.',
+  ],
 ])('shows concise judgment details for %s', (code, message, action) => {
   expect(auxiliaryErrorDiagnostic(code)).toEqual({ code, message, action });
   expect(auxiliaryErrorMessage(code)).toBe(`${message} ${action}`);

@@ -379,6 +379,7 @@ export class Store {
       retryOf?: string;
       requestEdited?: boolean;
       requestImages?: { sha256: string; name: string }[];
+      storyUiAction?: Omit<NonNullable<RunSnapshot['storyUiAction']>, 'roll'>;
     },
     snapshot: (chat: Chat) => RunSnapshot
   ): { run: Run; created: boolean } {
@@ -436,6 +437,7 @@ export class Store {
       ...(command.requestImages?.length
         ? { requestImages: command.requestImages.map(({ sha256, name }) => ({ sha256, name })) }
         : {}),
+      ...(command.storyUiAction ? { storyUiAction: command.storyUiAction } : {}),
     });
   }
   /** Joins the host's transaction when an authored opening and its source commit together. */
@@ -673,6 +675,16 @@ export class Store {
       (replacement && this.source(replacement.sourceRevision).hash !== replacement.sourceHash)
     )
       throw new HttpError(409, 'Source revision changed');
+    const action = run.snapshot.storyUiAction;
+    if (action) {
+      const parent = this.sourceMetadata(action.sourceRevision);
+      if (
+        run.parentRevision !== parent.id ||
+        parent.chatId !== chat.id ||
+        parent.hash !== action.sourceHash
+      )
+        throw new HttpError(409, 'STORY_UI_STALE_SOURCE');
+    }
     const source: Source = {
       id: randomUUID(),
       runId: id,

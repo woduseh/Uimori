@@ -11,18 +11,22 @@ import {
 import type { Json, WireRecord } from '../core/transport.js';
 import type { JevSettings } from '../core/jev-provider.js';
 import {
-  executeJevJudgment,
+  executeJudgment,
   JEV_CHOICE_OPTION_LIMIT,
   JEV_ENDPOINT,
   JEV_MODEL,
   JEV_LONG_CONTEXT_TOKEN_LIMIT,
   JEV_REQUEST_TOKEN_LIMIT,
-  JevError,
+  JudgmentError,
   jevRequestBudget,
   jevRequestFits,
-  type JevHooks,
-  type JevRequest,
-} from './jev-judgment.js';
+  type JudgmentHooks,
+  type JudgmentRequest,
+  readJudgmentRequest,
+  targetFromJudgmentWire,
+  type JudgmentTarget,
+} from './judgment.js';
+import { matchesJudgmentWire } from './judgment-wire.js';
 import { HttpError, record } from './request-validation.js';
 import { imageJudgmentLegacyRequest } from './image-judgment-legacy.js';
 import { prepareJevImage } from './jev-images.js';
@@ -42,7 +46,7 @@ type ImageSelectionVersion =
   | 'image-selection-jev-v4'
   | 'image-selection-jev-v5';
 type ImageJudgmentSettings = Pick<JevSettings, 'images' | 'longContext'>;
-export const imageJudgmentInputHash = (request: JevRequest) =>
+export const imageJudgmentInputHash = (request: JudgmentRequest) =>
   digest({
     version: record(request.state).selectionVersion ?? 'image-selection-jev-v1',
     request,
@@ -100,7 +104,7 @@ function prepareImageJudgment(
     labels.set(id, label);
     return label;
   };
-  const build = (): JevRequest => {
+  const build = (): JudgmentRequest => {
     const included = new Set(selected.flat());
     return {
       state: {
@@ -143,11 +147,11 @@ function prepareImageJudgment(
       ),
     };
   };
-  const measuredTokens = (request: JevRequest) =>
+  const measuredTokens = (request: JudgmentRequest) =>
     modern
       ? jevRequestBudget(modelRequest(request)).requestTokens
       : estimateContextTokens({ model: JEV_MODEL, ...modelRequest(request) });
-  const fits = (request: JevRequest) =>
+  const fits = (request: JudgmentRequest) =>
     modern
       ? jevRequestFits(modelRequest(request), null, settings.longContext)
       : measuredTokens(request) <= inputTokens;
@@ -185,7 +189,7 @@ function prepareImageJudgment(
       .slice(0, IMAGE_JUDGMENT_LIMITS.candidatesPerBlock * 4)
   );
   let tokenEstimate = measuredTokens(build());
-  if (!fits(build())) throw new JevError('JEV_INPUT_BUDGET');
+  if (!fits(build())) throw new JudgmentError('JEV_INPUT_BUDGET');
   const included = new Set<string>();
   const metadataCost = new Map<string, number>();
   const admissions: { block: number; id: string }[] = [];
@@ -256,7 +260,7 @@ function prepareImageJudgment(
     selected[last.block].splice(selected[last.block].indexOf(last.id), 1);
     request = build();
   }
-  if (!selected.some((ids) => ids.length)) throw new JevError('JEV_INPUT_BUDGET');
+  if (!selected.some((ids) => ids.length)) throw new JudgmentError('JEV_INPUT_BUDGET');
   return { request, blocks, byId };
 }
 function imageReference(sourceHash: string, id: string, assetHash: string) {
@@ -280,14 +284,14 @@ export function imageJudgmentRequest(
   assets: readonly AssetEntry[],
   guidance = '',
   settings?: ImageJudgmentSettings
-): JevRequest | null {
+): JudgmentRequest | null {
   return (
     prepareImageJudgment(source, assets, guidance, 'image-selection-jev-v5', settings)?.request ??
     null
   );
 }
 /** Integrity fields bind the host receipt; they do not help the model choose an illustration. */
-function modelRequest(request: JevRequest): JevRequest {
+function modelRequest(request: JudgmentRequest): JudgmentRequest {
   const { sourceHash: _sourceHash, assets, ...state } = request.state as Record<string, Json>;
   return {
     ...request,
@@ -299,13 +303,27 @@ function modelRequest(request: JevRequest): JevRequest {
     },
   };
 }
+function providerRequest(request: JudgmentRequest, target?: JudgmentTarget): JudgmentRequest {
+  const projected = modelRequest(request);
+  if (!target || target.provider === 'typesafe' || target.provider === 'typesafe-compatible')
+    return projected;
+  // A paragraph with only "none" needs no model decision. Decisions APIs require two options.
+  return {
+    ...projected,
+    questions: Object.fromEntries(
+      Object.entries(projected.questions).filter(
+        ([, question]) => question.type !== 'choice' || Object.keys(question.criteria).length >= 2
+      )
+    ),
+  };
+}
 function archivedImageRequest(
   source: AuxiliarySource,
   assets: readonly AssetEntry[],
   guidance: string,
   body: Record<string, unknown>,
   version: ImageSelectionVersion
-): JevRequest | null {
+): JudgmentRequest | null {
   const state = record(body.state);
   if (version === 'image-selection-jev-v5' && state.settings === undefined)
     return prepareImageJudgment(source, assets, guidance, version)?.request ?? null;
@@ -321,7 +339,7 @@ function archivedImageRequest(
     const receivedAssets = record(body.assets);
     const refs = (record(expected.state).assets as { image: string }[]).map(({ image }) => image);
     if (Object.keys(receivedAssets).length !== refs.length) return null;
-    const restored: NonNullable<JevRequest['assets']> = {};
+    const restored: NonNullable<JudgmentRequest['assets']> = {};
     for (const ref of refs) {
       const asset = record(receivedAssets[ref]);
       if (
@@ -344,7 +362,7 @@ export async function judgeImagePlacement(
   source: AuxiliarySource,
   assets: readonly AssetEntry[],
   guidance: string,
-  hooks: JevHooks
+  hooks: JudgmentHooks
 ): Promise<PresentationAnnotation> {
   const plan = prepareImageJudgment(
     source,
@@ -359,14 +377,14 @@ export async function judgeImagePlacement(
     const catalog = record(request.state).assets as { id: string; image: string }[];
     request.assets = {};
     for (const { id, image } of catalog) {
-      if (hooks.signal.aborted) throw new JevError('JEV_CANCELLED');
+      if (hooks.signal.aborted) throw new JudgmentError('JEV_CANCELLED');
       const bytes = hooks.readImage?.(byId.get(id)!.hash);
-      if (!bytes) throw new JevError('JEV_IMAGE_INVALID');
+      if (!bytes) throw new JudgmentError('JEV_IMAGE_INVALID');
       request.assets[image] = await prepareJevImage(bytes);
     }
   }
-  const result = await executeJevJudgment(
-    modelRequest(request),
+  const result = await executeJudgment(
+    providerRequest(request, hooks.target),
     imageJudgmentInputHash(request),
     hooks.settings ? null : IMAGE_JUDGMENT_LIMITS.inputTokens,
     { ...hooks, kind: 'image-selection' }
@@ -406,14 +424,15 @@ export function validateImageJudgmentWire(
   assets: readonly AssetEntry[],
   wire: WireRecord
 ) {
-  const state = record(record(wire.body).state);
+  const received = readJudgmentRequest(wire);
+  const state = record(received?.state);
   const guidance = state.guidance;
   const version = state.selectionVersion;
   const expected =
     typeof guidance !== 'string'
       ? null
       : version === 'image-selection-jev-v5' || version === 'image-selection-jev-v4'
-        ? archivedImageRequest(source, assets, guidance, record(wire.body), version)
+        ? archivedImageRequest(source, assets, guidance, record(received), version)
         : version === 'image-selection-jev-v3' || version === 'image-selection-jev-v2'
           ? (prepareImageJudgment(source, assets, guidance, version)?.request ?? null)
           : version === undefined
@@ -421,6 +440,21 @@ export function validateImageJudgmentWire(
             : null;
   const bodyHash = digest(wire.body);
   const settings = state.settings === undefined ? {} : record(state.settings);
+  if (wire.protocol !== 'typesafe-systemone-v1') {
+    const target = targetFromJudgmentWire(wire);
+    if (
+      !expected ||
+      !target ||
+      !matchesJudgmentWire(
+        wire,
+        providerRequest(expected, target),
+        'image-selection',
+        imageJudgmentInputHash(expected)
+      )
+    )
+      throw new HttpError(400, 'IMAGE_JUDGMENT_ATTEMPT_MISMATCH');
+    return;
+  }
   if (
     !expected ||
     wire.judgment?.kind !== 'image-selection' ||

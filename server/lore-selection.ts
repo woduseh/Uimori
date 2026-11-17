@@ -14,16 +14,14 @@ import type { MainHooks } from './model-runner.js';
 import { estimateContextTokens } from '../core/context-budget.js';
 import { createCandidateSearch } from '../core/candidate-search.js';
 import {
-  executeJevJudgment,
+  executeJudgment,
   JEV_MODEL,
-  JEV_REQUEST_TOKEN_LIMIT,
-  JEV_STATE_QUESTION_TOKEN_LIMIT,
-  JEV_LONG_CONTEXT_TOKEN_LIMIT,
-  jevRequestFits,
-  JevError,
-  type JevHooks,
-  type JevRequest,
-} from './jev-judgment.js';
+  judgmentLimits,
+  judgmentRequestFits,
+  JudgmentError,
+  type JudgmentHooks,
+  type JudgmentRequest,
+} from './judgment.js';
 
 /**
  * One shared JEV judgment batch. The step runs in the worker, after the
@@ -278,7 +276,7 @@ async function selectOne(
   hooks: MainHooks,
   usage: Usage,
   reserveCalls: number,
-  jevHooks?: Pick<JevHooks, 'credential' | 'fetch' | 'settings'>,
+  jevHooks?: Pick<JudgmentHooks, 'credential' | 'fetch' | 'settings' | 'target'>,
   inputs?: ReturnType<typeof selectionInputs>
 ): Promise<LoreSelectionEntry> {
   const { key, payload, partial, policy, inputHash } = inputs ?? selectionInputs(target);
@@ -333,20 +331,18 @@ async function selectOne(
         },
       ])
     );
-    const makeRequest = (catalog: Candidate[]): JevRequest => ({
+    const makeRequest = (catalog: Candidate[]): JudgmentRequest => ({
       state,
       questions: Object.fromEntries(
         catalog.map((entry, index) => [`entry_${index}`, questions.get(entry.id)!])
       ),
     });
     const longContext = jevHooks?.settings?.longContext === true;
-    const requestLimit = Math.min(
-      policy.judgment.maxInputTokens,
-      longContext ? JEV_LONG_CONTEXT_TOKEN_LIMIT : JEV_REQUEST_TOKEN_LIMIT
-    );
-    const questionLimit = longContext
-      ? JEV_LONG_CONTEXT_TOKEN_LIMIT
-      : JEV_STATE_QUESTION_TOKEN_LIMIT;
+    const limits = judgmentLimits(jevHooks?.target, longContext);
+    const model = jevHooks?.target?.modelId ?? JEV_MODEL;
+    const maxQuestions = Math.min(LORE_SELECTION_LIMITS.ids, limits.maxQuestions);
+    const requestLimit = Math.min(policy.judgment.maxInputTokens, limits.requestTokens);
+    const questionLimit = limits.questionTokens;
     const stateTokens = estimateContextTokens(state);
     // Count each question once, then pack by addition. Full-catalog tokenization in a trimming
     // loop makes large lorebooks quadratic and delays cancellation before dispatch.
@@ -361,7 +357,7 @@ async function selectOne(
     );
     let catalog: Candidate[];
     if (
-      eligible.length <= LORE_SELECTION_LIMITS.ids &&
+      eligible.length <= maxQuestions &&
       totalTokens <= requestLimit &&
       eligible.every(fitsQuestion)
     ) {
@@ -391,7 +387,7 @@ async function selectOne(
       // Skip an oversized candidate so smaller relevant entries later in the ranking
       // still receive a judgment. Unasked candidates remain uncovered, not irrelevant.
       for (const id of ids) {
-        if (catalog.length >= LORE_SELECTION_LIMITS.ids || available <= 0) break;
+        if (catalog.length >= maxQuestions || available <= 0) break;
         const entry = byId.get(id)!;
         const cost = questionTokens.get(id)!;
         if (!fitsQuestion(entry) || cost > available) continue;
@@ -399,10 +395,13 @@ async function selectOne(
         available -= cost;
       }
     }
-    if (!catalog.length || !jevRequestFits(makeRequest(catalog), requestLimit, longContext))
+    if (
+      !catalog.length ||
+      !judgmentRequestFits(makeRequest(catalog), jevHooks?.target, requestLimit, longContext)
+    )
       return abandoned('JEV_INPUT_BUDGET');
     try {
-      const result = await executeJevJudgment(
+      const result = await executeJudgment(
         makeRequest(catalog),
         inputHash,
         policy.judgment.maxInputTokens,
@@ -421,7 +420,7 @@ async function selectOne(
           usage[key] === null || result.usage[key] === null
             ? null
             : usage[key]! + result.usage[key]!;
-      if (hooks.signal.aborted) return { ...base, model: JEV_MODEL, error: 'JEV_CANCELLED' };
+      if (hooks.signal.aborted) return { ...base, model, error: 'JEV_CANCELLED' };
       const ranked = catalog
         .map((entry, index) => ({ entry, probability: result.scores[`entry_${index}`]!, index }))
         .sort((a, b) => b.probability - a.probability || a.index - b.index);
@@ -451,7 +450,7 @@ async function selectOne(
       }
       return {
         ...base,
-        model: JEV_MODEL,
+        model,
         selected,
         omitted,
         coverage: { total: payload.catalog.length, evaluated: catalog.length },
@@ -465,7 +464,7 @@ async function selectOne(
         },
       };
     } catch (error) {
-      if (error instanceof JevError && error.usage)
+      if (error instanceof JudgmentError && error.usage)
         for (const key of ['inputTokens', 'outputTokens', 'costUsd'] as const)
           usage[key] =
             usage[key] === null || error.usage[key] === null
@@ -473,8 +472,8 @@ async function selectOne(
               : usage[key]! + error.usage[key]!;
       return {
         ...base,
-        model: JEV_MODEL,
-        error: error instanceof JevError ? error.code : 'JEV_EXECUTION_FAILED',
+        model,
+        error: error instanceof JudgmentError ? error.code : 'JEV_EXECUTION_FAILED',
       };
     }
   }
@@ -490,7 +489,10 @@ async function selectOne(
 export async function prepareLoreSelection(
   snapshot: RunSnapshot,
   hooks: MainHooks,
-  options: { reserveCalls: number; jev?: Pick<JevHooks, 'credential' | 'fetch' | 'settings'> }
+  options: {
+    reserveCalls: number;
+    jev?: Pick<JudgmentHooks, 'credential' | 'fetch' | 'settings' | 'target'>;
+  }
 ): Promise<{ snapshot: RunSnapshot; usage: Usage }> {
   const usage = emptyUsage();
   if (!loreSelectionPending(snapshot)) return { snapshot, usage };

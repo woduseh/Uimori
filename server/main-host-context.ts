@@ -10,6 +10,8 @@ import { nativeHostContextText, NATIVE_HOST_CONTEXT_ID } from '../core/provider-
 import { ProviderContractError, type ProviderRequest, type Json } from '../core/transport.js';
 import { agentSharedOptions } from './agent-shared-options.js';
 import { modelAuthorNotes } from '../core/notes.js';
+import { parseStoryUi } from '../core/story-ui.js';
+import { STORY_UI_CATALOG_ID } from '../core/story-ui-catalog.js';
 
 const json = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderRequest['input'] {
@@ -18,11 +20,36 @@ export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderR
   const structured = !!snapshot.promptCompilation;
   const used = new Set(snapshot.promptCompilation?.usedSlots ?? []);
   const collaboration = snapshot.profile?.promptPresets?.main?.program.collaboration;
+  const selectedUi = snapshot.storyUiAction
+    ? parseStoryUi(
+        snapshot.history.find((entry) => entry.revision === snapshot.storyUiAction!.sourceRevision)
+          ?.text ?? ''
+      ).find((part) => part.kind === 'ui' && part.id === snapshot.storyUiAction!.blockId)
+    : undefined;
   return {
     task: input.task,
     controls,
     source: json({
       parentRevision: snapshot.parentRevision,
+      ...(snapshot.settings.storyUi
+        ? {
+            storyUi: {
+              catalogId: STORY_UI_CATALOG_ID,
+              ...(snapshot.storyUiAction
+                ? {
+                    ...(selectedUi?.kind === 'ui'
+                      ? { referenceLayout: selectedUi.expression }
+                      : {}),
+                    submittedAction: {
+                      name: snapshot.storyUiAction.name,
+                      context: snapshot.storyUiAction.context,
+                      ...(snapshot.storyUiAction.roll ? { roll: snapshot.storyUiAction.roll } : {}),
+                    },
+                  }
+                : {}),
+            },
+          }
+        : {}),
       ...(input.pinnedSources?.some((item) => item.risuSource)
         ? { risuSourceGuide: RISU_SOURCE_GUIDANCE }
         : {}),

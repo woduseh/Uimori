@@ -1,5 +1,6 @@
 import type { ModelInput, RunSnapshot } from './types.js';
 import type { PromptHistoryMessage } from './risu-prompt.js';
+import { projectStoryUiText } from './story-ui.js';
 
 /** A bounded reference view of the existing checkpoint, never another memory store. */
 export function conversationSummary(snapshot: RunSnapshot) {
@@ -53,8 +54,12 @@ export function selectLogicalHistory(
       sourceRevision: entry.revision,
       ...(entry.contentHash ? { sourceHash: entry.contentHash } : {}),
     }))
-  ).filter(
-    (message) =>
-      snapshot.contextPlan || !message.sourceRevision || inputHistoryIds.has(message.sourceRevision)
-  );
+  )
+    .filter(
+      (message) =>
+        snapshot.contextPlan ||
+        !message.sourceRevision ||
+        inputHistoryIds.has(message.sourceRevision)
+    )
+    .map((message) => ({ ...message, text: projectStoryUiText(message.text) }));
 }

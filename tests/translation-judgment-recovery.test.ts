@@ -5,6 +5,7 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { backup } from 'node:sqlite';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { Job } from '../core/types.js';
+import { encodeStoryUi } from '../core/story-ui.js';
 import { canRejudgeTranslation } from '../core/translation-recovery.js';
 import { createApp, type App } from '../server/app.js';
 import { JEV_ENDPOINT } from '../server/jev-judgment.js';
@@ -50,11 +51,30 @@ test.each(['SQLite crash snapshot', 'graceful server shutdown'])(
       apps: [],
     } as (typeof owned)[number];
     owned.push(item);
-    const candidate = '보존할 완성 번역 😀\r\n마지막 문장.';
+    const prose = '보존할 완성 번역 😀\r\n마지막 문장.';
+    const withStoryUi = stop === 'graceful server shutdown';
+    const expression = '<a2ui>root = Text("Choose a route")</a2ui>';
+    const surface = (label: string) =>
+      encodeStoryUi(expression, [
+        {
+          version: '1.0',
+          createSurface: {
+            surfaceId: 'main',
+            catalogId: 'urn:uimori:story-ui:1',
+            components: [{ id: 'root', component: 'Text', text: label }],
+          },
+        },
+      ]);
+    const manuscript = `The original manuscript.${withStoryUi ? `\n\n${surface('Choose a route')}` : ''}`;
+    const candidate = withStoryUi ? `${prose}\n\n${surface('경로 선택')}` : prose;
+    const providerText = withStoryUi
+      ? `${prose}\n\n<UIMORI_UI_TRANSLATION_0>["경로 선택"]</UIMORI_UI_TRANSLATION_0>`
+      : prose;
+    const judgmentText = withStoryUi ? `${prose}\n\n경로 선택` : prose;
     const provider = await loopbackProvider((_request, response) => {
       response.writeHead(200, { 'content-type': 'text/event-stream' });
       response.end(
-        `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: candidate }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`
+        `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: providerText }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`
       );
     });
     item.close = provider.close;
@@ -130,7 +150,7 @@ test.each(['SQLite crash snapshot', 'graceful server shutdown'])(
       })
     ).run;
     app.store.startRun(run.id);
-    const source = app.store.completeRun(run.id, 'The original manuscript.', {
+    const source = app.store.completeRun(run.id, manuscript, {
       modelCalls: 0,
       inputTokens: null,
       outputTokens: null,
@@ -156,7 +176,7 @@ test.each(['SQLite crash snapshot', 'graceful server shutdown'])(
     expect(canRejudgeTranslation(reader.jobs.find((entry: Job) => entry.id === job.id))).toBe(true);
     expect(reopened.store.queuedJobs()).toEqual([]);
     expect(provider.requests).toHaveLength(1);
-    expect(judged).toEqual([candidate]);
+    expect(judged).toEqual([judgmentText]);
     const recovered = await api(reopened, `/api/jobs/${job.id}/rejudge`, {});
     await expect
       .poll(() => reopened.store.job(recovered.id).status, { timeout: 6000 })
@@ -169,7 +189,7 @@ test.each(['SQLite crash snapshot', 'graceful server shutdown'])(
     });
     expect((await api(reopened, `/api/jobs/${job.id}/rejudge`, {})).id).toBe(recovered.id);
     expect(provider.requests).toHaveLength(1);
-    expect(judged).toEqual([candidate, candidate]);
-    expect(reopened.store.source(source.id).text).toBe('The original manuscript.');
+    expect(judged).toEqual([judgmentText, judgmentText]);
+    expect(reopened.store.source(source.id).text).toBe(manuscript);
   }
 );

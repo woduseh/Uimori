@@ -273,6 +273,9 @@ export function createReadingMarkdown(policy: 'plain' | 'native'): InstanceType<
   };
   md.renderer.rules.fence = (tokens, index) => {
     const token = tokens[index];
+    const storySlot = (token.meta as { storySlot?: string } | null)?.storySlot;
+    if (storySlot !== undefined)
+      return `<div data-story-ui-slot="${escapeHtml(storySlot)}" ${token.attrs?.map(([name, value]) => `${name}="${escapeHtml(String(value))}"`).join(' ') ?? ''}></div>`;
     const mapped = token.meta as { lines: { start: number; end: number }[] } | null;
     const content = token.content.split('\n');
     const code = content
@@ -328,7 +331,8 @@ const plain = createReadingMarkdown('plain');
 export function compileReadingMarkdown(
   text: string,
   blocks: readonly ReadingBlock[] = [],
-  imageUrls: readonly string[] = []
+  imageUrls: readonly string[] = [],
+  storySlots: readonly { id: string; start: number }[] = []
 ) {
   const environment = {
     images: new Set(
@@ -358,6 +362,7 @@ export function compileReadingMarkdown(
     const token = tokens[index];
     if (token.type === 'fence' && token.map)
       token.meta = {
+        storySlot: storySlots.find((slot) => slot.start === offsets[token.map![0]])?.id,
         lines: lines.slice(token.map[0] + 1, token.map[1]).map((line, position) => ({
           start: offsets[token.map![0] + 1 + position],
           end: offsets[token.map![0] + 1 + position] + line.replace(/(?:\r\n|\n|\r)$/u, '').length,

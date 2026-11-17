@@ -18,6 +18,7 @@ import {
   validateMainJudgmentWire,
 } from '../server/main-judgment.js';
 import type { CodexRuntimeService } from '../server/codex-runtime.js';
+import type { ExternalJudgmentProvider } from '../core/judgment-settings.js';
 import type { ProviderRequest, WireRecord } from '../core/transport.js';
 import { injectWithFixtureBot } from './fixtures/chat.js';
 import { JEV_ENDPOINT } from '../server/jev-judgment.js';
@@ -43,6 +44,41 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const judgmentEndpoints = {
+  openai: {
+    endpoint: 'https://api.openai.com/v1',
+    modelId: 'gpt-6-luna',
+    protocol: 'openai-responses-v1',
+    wireProtocol: 'openai-decisions-v1',
+  },
+  gemini: {
+    endpoint: 'https://generativelanguage.googleapis.com/v1beta',
+    modelId: 'gemini-decision-1',
+    protocol: 'google-gemini-v1',
+    wireProtocol: 'gemini-decisions-v1',
+  },
+  'openai-compatible': {
+    endpoint: 'https://ai-gateway.vercel.sh/v1',
+    modelId: 'typesafe-ai/jev',
+    protocol: 'openai-chat-v1',
+    wireProtocol: 'openai-compatible-decisions-v1',
+  },
+  'typesafe-compatible': {
+    endpoint: 'https://openrouter.ai/api/v1',
+    modelId: 'jev-1.13',
+    protocol: 'openai-chat-v1',
+    wireProtocol: 'typesafe-compatible-systemone-v1',
+  },
+} satisfies Record<
+  ExternalJudgmentProvider,
+  {
+    endpoint: string;
+    modelId: string;
+    protocol: string;
+    wireProtocol: WireRecord['protocol'];
+  }
+>;
+const externalKey = 'synthetic-judgment-key';
 async function api(
   app: App,
   url: string,
@@ -67,27 +103,58 @@ async function fixture(
   judgmentEnabled = true,
   generationStatus: 'completed' | 'partial' = 'completed',
   mainThreshold = 0.9,
-  createShellWorkspace = false
+  createShellWorkspace = false,
+  selectedProvider?: ExternalJudgmentProvider
 ) {
   vi.stubEnv('TYPESAFE_API_KEY', key ? 'synthetic-jev-key' : '');
+  const selected = selectedProvider && judgmentEndpoints[selectedProvider];
+  const gemini = selectedProvider === 'gemini';
+  const systemOne = !selectedProvider || selectedProvider === 'typesafe-compatible';
+  const judgmentEndpoint = selected
+    ? `${selected.endpoint}/${systemOne ? 'systemone' : 'decisions'}`
+    : JEV_ENDPOINT;
   const judged: Record<string, any>[] = [];
   vi.stubGlobal('fetch', async (url: unknown, init?: RequestInit) => {
-    expect(url).toBe(JEV_ENDPOINT);
-    judged.push(JSON.parse(String(init?.body)));
+    expect(url).toBe(judgmentEndpoint);
+    const body = JSON.parse(String(init?.body));
+    judged.push(body);
+    if (selected) {
+      expect(new Headers(init?.headers).get(gemini ? 'x-goog-api-key' : 'authorization')).toBe(
+        gemini ? externalKey : `Bearer ${externalKey}`
+      );
+      expect(body.model).toBe(selected.modelId);
+      expect(systemOne ? body.state : JSON.parse(body.input)).toEqual({ response: candidate });
+      if (gemini || systemOne) expect(body.questions.explicitRefusal.type).toBe('noul');
+      else
+        expect(body.questions).toEqual([
+          expect.objectContaining({
+            name: 'explicitRefusal',
+            type: 'predicate',
+          }),
+        ]);
+    }
     if (scores === 'failure') throw new Error('synthetic transport failed');
     if (scores === 'budget')
       return new Response(JSON.stringify({ detail: { error_type: 'max_tokens_exceeded' } }), {
         status: 400,
       });
-    return new Response(
-      JSON.stringify({
-        model: 'jev-latest',
-        answers: {
-          explicitRefusal: { type: 'noul', noul: scores === 'invalid' ? 2 : scores },
-        },
-        usage: { input_tokens: 7, output_tokens: 3 },
-      })
-    );
+    const probability = scores === 'invalid' ? 2 : scores;
+    return Response.json({
+      ...(!gemini && { model: selected ? selected.modelId : 'jev-latest' }),
+      answers:
+        gemini || systemOne
+          ? {
+              explicitRefusal: {
+                type: 'noul',
+                noul: probability,
+                ...(gemini && { confidence: 0.95 }),
+              },
+            }
+          : [{ type: 'predicate', name: 'explicitRefusal', probability }],
+      usage: gemini
+        ? { total_input_tokens: 7, total_output_tokens: 0 }
+        : { input_tokens: 7, output_tokens: systemOne ? 3 : 0 },
+    });
   });
   const calls: ProviderRequest[] = [];
   const output = { text: candidate };
@@ -175,7 +242,36 @@ async function fixture(
   owner.app = app;
   observeExecutions(app.store);
   if (key) app.store.credentials.set('jev', 'synthetic-jev-key');
-  {
+  let judgmentConnectionId: string | undefined;
+  if (selectedProvider && selected) {
+    const selector = await api(app, '/api/connections', {
+      title: 'Synthetic judgment provider',
+      protocol: selected.protocol,
+      endpoint: selected.endpoint,
+      apiKey: externalKey,
+      enabled: true,
+    });
+    judgmentConnectionId = selector.id;
+    const workspace = await api(app, '/api/model-workspace');
+    await api(
+      app,
+      '/api/model-workspace',
+      {
+        routes: workspace.routes,
+        translationPolicy: workspace.translationPolicy,
+        expectedRevision: workspace.revision,
+        mainJudgmentEnabled: judgmentEnabled,
+        mainJudgmentThreshold: mainThreshold,
+        judgment: {
+          provider: selectedProvider,
+          connectionId: judgmentConnectionId,
+          modelId: selected.modelId,
+          images: false,
+        },
+      },
+      'PUT'
+    );
+  } else {
     const workspace = modelWorkspace(app.store);
     updateModelWorkspace(app.store, {
       routes: workspace.routes,
@@ -280,8 +376,51 @@ ${
     output,
     runtime,
     shellWorkspace,
+    judgmentConnectionId,
+    judgmentEndpoint,
   };
 }
+
+test.each(Object.keys(judgmentEndpoints) as ExternalJudgmentProvider[])(
+  'routes main refusal judgment to the configured %s connection without a Jev key',
+  async (provider) => {
+    const candidate = 'The boat was still waiting at the pier.';
+    const f = await fixture(
+      candidate,
+      0.05,
+      8,
+      false,
+      undefined,
+      true,
+      'completed',
+      0.9,
+      false,
+      provider
+    );
+    expect(f.run).toMatchObject({ status: 'completed', error: null, usage: { modelCalls: 2 } });
+    expect(f.app.store.sourceOriginal(f.run.sourceRevision!).text).toBe(candidate);
+    expect(f.calls.map(({ role }) => role)).toEqual(['main']);
+    expect(f.judged).toHaveLength(1);
+    const attempts = observedAttempts(f.app.store, f.run.id);
+    expect(attempts).toHaveLength(2);
+    expect(attempts[1]).toMatchObject({
+      status: 'completed',
+      role: 'main',
+      connectionId: f.judgmentConnectionId,
+      modelId: judgmentEndpoints[provider].modelId,
+      inputTokens: 7,
+      outputTokens: provider === 'typesafe-compatible' ? 3 : 0,
+      request: {
+        protocol: judgmentEndpoints[provider].wireProtocol,
+        url: f.judgmentEndpoint,
+        judgment: { kind: 'main-refusal' },
+      },
+    });
+    expect(
+      f.app.store.db.prepare('SELECT usage_kind FROM attempts WHERE id=?').get(attempts[1].id)
+    ).toMatchObject({ usage_kind: 'judgment' });
+  }
+);
 
 test.each([
   ['I cannot fulfill this request.', 0.99, 'refused', 'MAIN_RESPONSE_REFUSED'],

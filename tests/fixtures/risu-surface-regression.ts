@@ -468,6 +468,33 @@ export async function runSurfaceRegressions(mount: HTMLElement): Promise<string[
       flushSync(() => resize(18));
       flushSync(() => restyle(settings()));
     });
+    await run('Story UI slots coexist with authored content across updates', () => {
+      const node = host();
+      const root = createRoot(node);
+      cleanup.push(() => root.unmount());
+      let selected = 0;
+      const render = (suffix: string) =>
+        createElement(RisuMessageSurface, {
+          html: `<style>.card{color:rgb(12,34,56)}</style><p class="card">상태 ${suffix}</p><div data-uimori-story-ui="0"></div>`,
+          onAction: async () => {},
+          revisionKey: 'same',
+          renderStoryUi: () => createElement('button', { onClick: () => selected++ }, '선택'),
+        });
+      flushSync(() => root.render(render('전')));
+      const hostElement = node.querySelector('.risu-message-surface')!;
+      const shadow = hostElement.shadowRoot!;
+      const slot = shadow.querySelector<HTMLSlotElement>('slot[name="story-ui-0"]')!;
+      check(slot.assignedElements().length === 1, 'story UI was not assigned');
+      (hostElement.querySelector('button') as HTMLButtonElement).click();
+      check(selected === 1, 'story UI action did not fire');
+      flushSync(() => root.render(render('후')));
+      check(shadow.querySelector('slot[name="story-ui-0"]') !== null, 'updated slot missing');
+      check(
+        style(shadow.querySelector('.card')!, 'color') === 'rgb(12, 34, 56)',
+        'author style lost'
+      );
+      check(shadow.querySelector('.card')?.textContent === '상태 후', 'authored content lost');
+    });
     await run('Author CSS remains text and basic no-author-script behavior is retained', () => {
       const s = surface(
         '<style>.card{color:rgb(12,34,56);background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\'/%3E")}</style><p class="card">Card</p><button onclick="window.surfaceInjected=true" risu-btn="ok">Go</button><script>window.surfaceInjected=true</script><iframe></iframe>',

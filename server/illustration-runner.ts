@@ -1,8 +1,8 @@
 import { illustrationResearch, ILLUSTRATION_RESEARCH_TOOLS } from './illustration-research.js';
 import { recordToolDiagnostic, startToolDiagnostic } from './execution-diagnostics.js';
 import { checkCodexIllustrationContent } from './illustration-content-check.js';
-import type { JevHooks } from './jev-judgment.js';
-import { jevSettings } from './jev-settings.js';
+import type { JudgmentHooks } from './judgment.js';
+import { judgmentRuntime, assertJudgmentRuntimeWire } from './judgment-runtime.js';
 import { splitSource } from '../core/auxiliary.js';
 import { imageTargetSource } from './package-images.js';
 import {
@@ -72,7 +72,7 @@ import type { Source, Store } from './store.js';
 type MaybePromise<T> = T | Promise<T>;
 export type IllustrationRunnerHooks = {
   signal: AbortSignal;
-  resolveJevCredential?: JevHooks['credential'];
+  resolveJevCredential?: JudgmentHooks['credential'];
 
   resolveCredential?: Parameters<typeof executeProvider>[2]['resolveCredential'];
   resolveComfyCredential?: ComfyUIRequestOptions['resolveCredential'];
@@ -208,7 +208,7 @@ export async function runIllustrationJob(
     return { status: 'failed', code: 'ILLUSTRATION_SOURCE_UNAVAILABLE', images: 0 };
   }
   if (!claimed) return null;
-  const judgmentSettings = jevSettings(store.db);
+  const judgment = judgmentRuntime(store, hooks.resolveJevCredential);
   const { job, source } = claimed;
   const { generation, input } = job;
   const diagnostic: IllustrationDiagnostic = {
@@ -252,6 +252,7 @@ export async function runIllustrationJob(
   };
   await hooks.onProgress?.();
   const recordAttempt = async (wire: WireRecord) => {
+    if (wire.judgment) assertJudgmentRuntimeWire(wire, judgment);
     const id = await hooks.onAttemptStart(wire);
     diagnostic.attempts.push(id);
     updateIllustrationDiagnostic(store, jobId, generation, owner, diagnostic);
@@ -612,8 +613,7 @@ export async function runIllustrationJob(
         imageText,
         {
           signal: hooks.signal,
-          credential: hooks.resolveJevCredential,
-          settings: judgmentSettings,
+          ...judgment,
           onAttemptStart: recordAttempt,
           onAttemptFinish: hooks.onAttemptFinish,
         },

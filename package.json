@@ -1,6 +1,6 @@
 {
   "name": "uimori",
-  "version": "0.12.18",
+  "version": "0.12.19",
   "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
@@ -31,6 +31,7 @@
     "doctor": "node scripts/doctor.mjs",
     "cleanup": "node scripts/cleanup.mjs",
     "verify:ui": "node scripts/verify-ui.mjs",
+    "verify:story-ui": "node scripts/verify-story-ui.mjs",
     "verify:collaboration": "node scripts/verify-collaboration.mjs",
     "verify:evaluation": "node scripts/verify-evaluation.mjs",
     "verify:providers": "node scripts/verify-provider-management.mjs",
@@ -67,6 +68,9 @@
     "check:i18n": "node scripts/check-i18n.mjs"
   },
   "dependencies": {
+    "@a2ui/agent": "0.1.0",
+    "@a2ui/react": "0.15.0",
+    "@a2ui/web_core": "0.15.0",
     "@fastify/static": "10.1.3",
     "@huggingface/tokenizers": "0.2.0",
     "dompurify": "3.4.15",
@@ -83,7 +87,8 @@
     "tiktoken": "1.0.22",
     "undici": "7.29.1",
     "wasmoon": "1.16.0",
-    "web-push": "3.6.7"
+    "web-push": "3.6.7",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@babel/parser": "7.29.9",
@@ -98,5 +103,10 @@
     "typescript": "7.0.2",
     "vite": "8.2.2",
     "vitest": "5.0.0"
+  },
+  "overrides": {
+    "@a2ui/markdown-it": {
+      "@a2ui/web_core": "$@a2ui/web_core"
+    }
   }
 }

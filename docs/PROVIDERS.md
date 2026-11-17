@@ -55,7 +55,7 @@ Uimori에서 사용하는 AI 프로바이더 연결, 모델 프리셋 등록, �
 | **작문** | 본문 생성 및 스토리 이어쓰기를 담당하는 메인 모델이에요. |
 | **번역** | 원문 자동/수동 번역을 담당하는 모델이에요. |
 | **도우미** | 자료 제작, 설정 질의, 퇴고 제안을 수행하는 보조 모델이에요. |
-| **거절 감지** | 본문 생성 후 안전성 거절 여부를 판단하는 선택 모델이에요 (TypeSafe JEV 사용). |
+| **거절 감지** | 전역 판단 모델로 본문 생성 후 안전성 거절 여부를 확인해요. |
 
 - **빠른 프리셋 편집**: 선택 항목 옆의 **선택 모델 편집** 버튼을 누르면 해당 모델 프리셋 화면으로 바로 이동해 수정할 수 있어요.
 - **초안 보존**: 화면을 전환하더라도 저장하지 않은 역할 선택 상태는 유지돼요. 다른 모델 초안으로 교체할 때는 저장·계속 편집·버리기 확인 과정을 거쳐요. 프로바이더와 모델의 미저장 초안은 각각 유지되며, 한쪽을 저장하거나 화면을 옮겨도 다른 쪽 초안이 지워지지 않아요.
@@ -96,9 +96,34 @@ Gemini용 `vertex-gemini-v1` 연결은 Google Cloud의 기업용 엔드포인트
 - **오류 410 대처**: 서버 업데이트 전에 열어 둔 구버전 화면에서 등록을 시도하면 410 오류가 발생할 수 있어요. 이 경우 페이지를 새로고침한 뒤 JSON 파일을 다시 선택해 저장해 주세요.
 - **인증 재사용**: 등록된 Vertex 인증은 본문 생성뿐만 아니라 Google Model Garden 모델 목록 조회에도 함께 사용돼요. 교체하거나 삭제한 이전 서비스 계정은 실행 중인 작업이 참조하는 동안 보존돼요.
 
-### TypeSafe AI / JEV
+### 판단 프로바이더
 
-**프로바이더 추가 → TypeSafe AI**에서 API 키를 등록해요. 로어북 관련성 선별, 본문 삽화 이미지 선택, 그리고 선택적인 본문 거절 감지에 활용돼요.
+**설정 → 역할별 모델 → 판단 프로바이더**에서 로어 선별, 거절 감지, 이미지 배치, 생성 전 검사에 공통으로 사용할 모델을 선택해요. 기본값은 TypeSafe AI / JEV예요. OpenAI, Gemini 및 호환 API는 등록한 일반 프로바이더 연결과 그 연결에 저장한 API 키를 사용해요. 전역 설정을 저장할 때 활성 연결과 주소를 검사해요. 계정과 모델의 접근 권한은 실제 요청 시 제공사가 확인해요.
+
+| 선택 | 등록할 연결 | 실제 요청 주소와 모델 |
+| --- | --- | --- |
+| OpenAI Decisions | `https://api.openai.com/v1`의 OpenAI Responses 또는 OpenAI 호환 연결 | `https://api.openai.com/v1/decisions`, `gpt-6-luna`. [OpenAI API 문서](https://developers.openai.com/api/reference/resources/decisions/methods/create) |
+| Gemini Decisions | `https://generativelanguage.googleapis.com/v1beta`의 Gemini API 연결 | `https://generativelanguage.googleapis.com/v1beta/decisions`, `gemini-decision-1`. [Gemini API 문서](https://aistudio.google.com/docs/decisions-api) |
+| 호환 API · OpenAI Decisions 예시 | `https://ai-gateway.vercel.sh/v1`의 Vercel AI Gateway 연결 | `https://ai-gateway.vercel.sh/v1/decisions`, 예시 `openai/gpt-6-luna-decisions`. [Vercel AI Gateway 안내](https://vercel.com/changelog/openai-decisions-api-now-available-on-ai-gateway) |
+| 호환 API · TypeSafe System One 예시 | `https://openrouter.ai/api/v1`의 OpenAI 호환 연결 | `https://openrouter.ai/api/v1/systemone`, 예시 `jev-1.13`. [OpenRouter TypeSafe 호환 가이드](https://openrouter.ai/docs/guides/community/typesafe-sdk) |
+
+호환 API는 연결의 기본 주소에 선택한 형식에 따라 `/decisions` 또는 `/systemone`을 붙여요. 제공사가 해당 형식으로 받는 모델 ID를 입력해요. 지금 설정의 거절 감지 기준값은 그대로 적용돼요. 같은 점수의 의미와 판정 품질은 모델마다 달라질 수 있어요. 공개 문서와 합성 응답으로 형식을 검증했으며 실제 계정에서의 키·모델 가용성과 판정 품질은 확인하지 않았어요.
+
+이미지 배치는 기본적으로 후보의 텍스트 정보를 사용해요. OpenAI, Gemini 및 호환 API에서 **판단에 이미지 전송**을 켜면 해당 모델에 실제 후보 이미지를 보내요. 사용하는 연결과 모델이 이미지 입력을 지원해야 해요. TypeSafe의 이미지 및 긴 컨텍스트 옵션은 기본 JEV에 적용돼요.
+
+| 판단 API | 요청당 최대 질문 수 | 요청 전체 / 질문별 텍스트 토큰 추정 상한 |
+| --- | ---: | ---: |
+| TypeSafe AI / JEV | 2,000 | 64,000 / 32,000. 긴 컨텍스트 사용 시 262,000 / 262,000 |
+| OpenAI Decisions | 400 | 64,000 / 32,000 |
+| Gemini Decisions | 1,000 | 262,144 / 262,144 |
+| OpenAI Decisions 호환 | 128 | 64,000 / 32,000 |
+| TypeSafe System One 호환 | 2,000 | 64,000 / 32,000 |
+
+상한은 Uimori가 검사하는 값이에요. OpenAI Decisions 호환의 질문 수는 LiteLLM 게이트웨이와의 호환을 고려해 128개로 제한해요. 제공사나 모델의 한도가 더 낮으면 실제 요청에서 제한될 수 있어요. 판단 연결을 바꾸더라도 저장된 요청 영수증은 당시 프로바이더와 형식을 유지해요. 판단 요청의 전송 실패에 새 자동 재시도는 없어요.
+
+#### TypeSafe AI / JEV
+
+**프로바이더 추가 → TypeSafe AI**에서 기본 JEV 판단에 사용할 API 키를 등록해요.
 
 - **거절 감지**: 기본적으로 꺼져 있으며, **역할별 모델 → 거절 감지**에서 켤 수 있어요. 켜면 본문 생성 후 거절 여부를 판단해요.
 - **키 관리와 모델 테스트**: 프로바이더 화면에서 키를 관리하고, **모델 프리셋 → TypeSafe AI → JEV**에서 모델 ID 지정 및 판단 응답 테스트를 실행해요. 화면 전환 시에도 입력 초안과 진행 중인 테스트가 유지돼요.
@@ -199,7 +224,7 @@ Google AI Studio 및 Google Cloud Vertex AI 직접 연결 모델은 **고급 →
   - Anthropic Messages: `image`
   - Google Gemini / Vertex AI: `inlineData`
   - Codex: 전용 이미지 입력 객체 (Codex의 이미지 생성 도구는 켜지 않음)
-- **이미지 제약**: DeepSeek 직접 연결 및 명시적으로 확인된 텍스트 전용 모델은 이미지 입력을 거절해요. 지원 여부가 확인되지 않은 사용자 지정 모델은 지원 미확인 상태로 전송을 허용해요. 현재 이미지 입력은 본문 사용자 요청 범위이며 입력 번역, JEV 선별, 도우미 패널에는 이미지 첨부 UI가 노출되지 않아요.
+- **이미지 제약**: DeepSeek 직접 연결 및 명시적으로 확인된 텍스트 전용 모델은 이미지 입력을 거절해요. 지원 여부가 확인되지 않은 사용자 지정 모델은 지원 미확인 상태로 전송을 허용해요. 사용자 이미지 첨부 UI는 본문 요청에 표시돼요. 이미지 배치 판단의 후보 전송은 판단 프로바이더 옵션에서 따로 설정해요.
 - **Vercel Chat 변환**: 이전 assistant 메시지의 텍스트 조각들을 순서대로 합쳐 하나의 문자열로 전송해요.
 - **OpenAI Responses 변환**: 수동 대화 이력을 assistant를 포함하여 `input_text` 조각들로 구성하고 조각별 캐시 기준점을 유지해요. 도구 후속 요청에서는 프로바이더가 실제로 반환한 메시지·사고·도구 호출 항목을 원래 형식과 식별자로 이어 보내요.
 - **Gemini 대화 및 도구 처리**: 도구 호출 후 이어지는 요청은 모델의 원본 응답과 사고 서명을 보존하고, 동일한 사용자 턴 안의 추가 제어 텍스트를 도구 결과(`functionResponse`) 앞에 배치해 Vertex 엔드포인트 거절 문제를 방지해요 (Claude·OpenAI·Codex 요청 형식은 변경하지 않음).
@@ -221,7 +246,7 @@ Google AI Studio 및 Google Cloud Vertex AI 직접 연결 모델은 **고급 →
 
 ### 로어 포함 기록 메타데이터
 - 본문·번역 요청을 전송할 때 호스트가 기존 요청 JSON에 작은 메타데이터로 로어 포함 기록을 저장해요.
-- 자료 목록에 이름만 있거나 JEV에서 선별됐다는 사실만으로 실제 본문 포함을 확정하지 않으며, 프롬프트 가공 등으로 확인하지 못한 후보는 별도로 표시하고 기록이 없는 과거 요청은 미포함으로 추정하지 않아요.
+- 자료 목록에 이름만 있거나 판단 모델에서 선별됐다는 사실만으로 실제 본문 포함을 확정하지 않으며, 프롬프트 가공 등으로 확인하지 못한 후보는 별도로 표시하고 기록이 없는 과거 요청은 미포함으로 추정하지 않아요.
 - 로어 본문을 중복 저장하거나 이 기록을 모델에 전송하지 않으며, 기존 요청 기록 보관 범위를 그대로 따라요.
 
 ### 동시 수정 및 스트리밍 본문 조립

@@ -5,16 +5,21 @@ import {
 } from '../core/codex-content-warning.js';
 import type { IllustrationContentCheck } from '../core/illustration.js';
 import type { Json } from '../core/transport.js';
-import { executeJevJudgment, JevError, type JevHooks, type JevRequest } from './jev-judgment.js';
+import {
+  executeJudgment,
+  JudgmentError,
+  type JudgmentHooks,
+  type JudgmentRequest,
+} from './judgment.js';
 
 /** Check the exact text sent for this image, not the entire story. Image bytes are not inspected. */
 export async function checkCodexIllustrationContent(
   input: string,
-  hooks: JevHooks,
+  hooks: JudgmentHooks,
   previous?: IllustrationContentCheck
 ): Promise<IllustrationContentCheck> {
   hooks.signal.throwIfAborted();
-  const request: JevRequest = {
+  const request: JudgmentRequest = {
     state: { illustration: JSON.parse(input) as Json },
     questions: {
       explicitSexualContent: {
@@ -30,7 +35,7 @@ export async function checkCodexIllustrationContent(
   if (!hooks.credential)
     return { status: 'unavailable', inputHash, code: 'JEV_CREDENTIAL_REQUIRED' };
   try {
-    const result = await executeJevJudgment(request, inputHash, null, {
+    const result = await executeJudgment(request, inputHash, null, {
       ...hooks,
       kind: 'illustration-content',
       timeoutMs: 8_000,
@@ -45,7 +50,8 @@ export async function checkCodexIllustrationContent(
   } catch (error) {
     hooks.signal.throwIfAborted();
     // An unavailable guard is visible, not an "allowed" decision. Never hide storage failures.
-    if (!(error instanceof JevError) || error.code === 'JEV_ATTEMPT_FINISH_FAILED') throw error;
+    if (!(error instanceof JudgmentError) || error.code.endsWith('_ATTEMPT_FINISH_FAILED'))
+      throw error;
     return { status: 'unavailable', inputHash, code: error.code };
   }
 }

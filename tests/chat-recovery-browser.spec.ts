@@ -81,7 +81,7 @@ for (const viewport of [
       await manager.locator(':scope > summary').click();
       const image = dialog.getByRole('combobox', { name: '이미지 배치 담당', exact: true });
       await expect(image).not.toHaveAttribute('multiple');
-      await expect(image.locator('option')).toHaveText(['본문 모델', 'JEV']);
+      await expect(image.locator('option')).toHaveText(['본문 모델', '판단 모델']);
       await expect(dialog.getByLabel('원문 이미지 자동 배치', { exact: true })).toHaveCount(0);
       await expect(dialog.getByLabel('번역 이미지 자동 배치', { exact: true })).toHaveCount(0);
       const originalImage = await image.inputValue();

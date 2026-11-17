@@ -210,6 +210,7 @@ test('chat archive restores authored resources without execution and recovers re
     },
   ];
   const chat = importChatTranscript(source, { transcript, idempotencyKey: 'source-chat' }).chat;
+  source.settings(chat.id, chat.settingsRevision, { ...chat.settings, storyUi: true });
   const image = readImage(source.db, original.package.images![0].blobHash);
   source.transaction(() =>
     restoreIllustrations(source, source.history(chat.headRevision), [
@@ -233,6 +234,7 @@ test('chat archive restores authored resources without execution and recovers re
   const restored = importChatBackupArchiveRequest(target, command);
   expect(restored.chat.title).toBe(chat.title);
   expect(restored.chat.id).not.toBe(chat.id);
+  expect(restored.chat.settings.storyUi).toBe(true);
   expect(target.history(restored.chat.headRevision)[0].text).toBe(transcript.entries[0].text);
   expect(target.db.prepare('SELECT count(*) AS n FROM illustration_images').get()!.n).toBe(1);
   const illustration = target.db.prepare('SELECT hash,body FROM illustration_images').get()!;

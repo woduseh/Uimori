@@ -174,7 +174,7 @@ for (const width of [390, 1440]) {
       const { runSurfaceRegressions } = await import(path);
       return runSurfaceRegressions(document.getElementById('mount')!);
     });
-    expect(passed).toHaveLength(14);
+    expect(passed).toHaveLength(15);
     expect(errors).toEqual([]);
     await info.attach('surface-scenarios', {
       body: JSON.stringify({ width, passed, errors }, null, 2),

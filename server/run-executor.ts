@@ -1,4 +1,5 @@
 import { Store } from './store.js';
+import { normalizeStoryUiOutput } from './story-ui.js';
 import { readRunStatus, readStoredRunSnapshot } from './run-projections.js';
 import { ResponseStreamStore } from './response-stream.js';
 import { Controls } from './controls.js';
@@ -24,10 +25,11 @@ import {
   loreSelectionAttemptInputHashes,
   selectedLoreReceiptTokens,
 } from './lore-selection.js';
-import { JEV_ENDPOINT, JEV_MODEL, JevError } from './jev-judgment.js';
+import { JudgmentError, readJudgmentRequest } from './judgment.js';
+import { matchesJudgmentWire } from './judgment-wire.js';
+import { judgmentRuntime, assertJudgmentRuntimeWire } from './judgment-runtime.js';
 import { judgeMainRefusal, mainJudgmentInput, validateMainJudgmentWire } from './main-judgment.js';
 import { JevCredentialStore } from './jev-credentials.js';
-import { jevSettings } from './jev-settings.js';
 import { AnthropicBatchRun } from './anthropic-batch.js';
 import { readRequestImage } from './request-images.js';
 import { MainShell } from './main-shell.js';
@@ -83,7 +85,7 @@ export function createRunExecutor({
   afterSource,
 }: RunExecutorDependencies) {
   const execute = (id: string, resume = false) => {
-    const judgmentSettings = jevSettings(store.db);
+    const judgment = judgmentRuntime(store, jevCredential);
     const fixture = { ...controls.fixture };
     const controller = new AbortController();
     const nativeSessionOwner = {};
@@ -116,13 +118,15 @@ export function createRunExecutor({
             abortStatus: () => (signal.aborted ? 'interrupted' : 'cancelled'),
           });
           requireModel(run.snapshot.profile?.models.main, 'main');
-          if (judgeResponse && !(await jevCredential()))
-            throw new JevError('JEV_CREDENTIAL_REQUIRED');
+          if (judgeResponse && !(await judgment.credential?.()))
+            throw new JudgmentError(
+              judgment.target ? 'JUDGMENT_CREDENTIAL_REQUIRED' : 'JEV_CREDENTIAL_REQUIRED'
+            );
           if (
             judgeResponse &&
             run.snapshot.settings.maxCalls < (run.snapshot.judgmentRecovery ? 1 : 2)
           )
-            throw new JevError('MAIN_JUDGMENT_CALL_BUDGET');
+            throw new JudgmentError('MAIN_JUDGMENT_CALL_BUDGET');
           publish(run.chatId);
           await controls.wait('run', controller.signal);
           let requestOrdinal = 0;
@@ -236,21 +240,23 @@ export function createRunExecutor({
                 return store.product.resumeAttempt(resumeAttemptId, id, wire);
               }
               if (wire.judgment) {
+                assertJudgmentRuntimeWire(wire, judgment);
                 const current = readStoredRunSnapshot(store, id);
                 if (wire.judgment.kind === 'main-refusal') {
                   if (!current.mainJudgment) throw new Error('Missing main judgment input');
                   validateMainJudgmentWire(current.mainJudgment, wire);
                   return store.product.startAttempt(run.chatId, id, null, wire);
                 }
+                const judgmentRequest = readJudgmentRequest(wire);
                 if (
                   wire.judgment.kind !== 'lore-selection' ||
-                  wire.protocol !== 'typesafe-systemone-v1' ||
-                  wire.connectionId !== 'typesafe-judgment' ||
-                  wire.modelId !== JEV_MODEL ||
-                  wire.role !== 'context' ||
-                  wire.url !== JEV_ENDPOINT ||
-                  wire.method !== 'POST' ||
-                  wire.agentId ||
+                  !judgmentRequest ||
+                  !matchesJudgmentWire(
+                    wire,
+                    judgmentRequest,
+                    'lore-selection',
+                    wire.judgment.inputHash
+                  ) ||
                   !loreSelectionAttemptInputHashes(current).includes(wire.judgment.inputHash)
                 )
                   throw new Error('Invalid judgment attempt');
@@ -430,7 +436,7 @@ export function createRunExecutor({
             if (loreSelectionPending(executionSnapshot)) {
               assertCurrent();
               const selection = await prepareLoreSelection(executionSnapshot, hooks, {
-                jev: { credential: jevCredential, settings: judgmentSettings },
+                jev: judgment,
                 reserveCalls: 1 + Number(judgeResponse) + priorUsage.modelCalls,
               });
               priorUsage = mergeUsage(priorUsage, selection.usage);
@@ -566,7 +572,7 @@ export function createRunExecutor({
           store.stageRunOutput(id, result.text);
           if (judgeResponse) {
             if (priorUsage.modelCalls >= run.snapshot.settings.maxCalls)
-              throw new JevError('MAIN_JUDGMENT_CALL_BUDGET');
+              throw new JudgmentError('MAIN_JUDGMENT_CALL_BUDGET');
             const input = mainJudgmentInput(result.text, run.snapshot.mainJudgmentThreshold);
             store.transaction(() => {
               assertCurrent();
@@ -579,10 +585,9 @@ export function createRunExecutor({
                 id
               );
             });
-            const judgment = await judgeMainRefusal(input, {
+            const verdict = await judgeMainRefusal(input, {
               signal: controller.signal,
-              credential: jevCredential,
-              settings: judgmentSettings,
+              ...judgment,
               onAttemptStart: async (wire) => {
                 const attempt = await hooks.onAttemptStart(wire);
                 priorUsage.modelCalls++;
@@ -604,7 +609,7 @@ export function createRunExecutor({
                 "UPDATE runs SET snapshot=json_remove(snapshot,'$.mainJudgmentPending') WHERE id=?"
               )
               .run(id);
-            if (judgment.verdict !== 'accepted') {
+            if (verdict.verdict !== 'accepted') {
               store.finishRun(id, 'refused', 'MAIN_RESPONSE_REFUSED', result.text, priorUsage);
               publish(run.chatId);
               return;
@@ -622,6 +627,10 @@ export function createRunExecutor({
               'after-turn'
             ),
           });
+          const authoredText = nativeOutput.nativeRisuExecution?.output?.text ?? result.text;
+          const committedText = executionSnapshot.settings.storyUi
+            ? normalizeStoryUiOutput(authoredText)
+            : authoredText;
           store.transaction(() => {
             assertCurrent();
             if (nativeOutput.nativeRisuExecution)
@@ -632,12 +641,7 @@ export function createRunExecutor({
                 }),
                 id
               );
-            store.completeRunInTransaction(
-              id,
-              nativeOutput.nativeRisuExecution?.output?.text ?? result.text,
-              priorUsage,
-              controls
-            );
+            store.completeRunInTransaction(id, committedText, priorUsage, controls);
           });
           if (controls.crashAfterSourceCommit) process.exit(86);
           publish(run.chatId);
@@ -683,7 +687,8 @@ export function createRunExecutor({
               message === 'Model call budget exhausted' ||
               message === 'TOOL_RESULT_MISMATCH' ||
               message === 'ANTHROPIC_CONTINUATION_MISMATCH' ||
-              error instanceof JevError ||
+              message === 'STORY_UI_STALE_SOURCE' ||
+              error instanceof JudgmentError ||
               message.startsWith('Injected failure:') ||
               message.startsWith('MODEL_REQUIRED:') ||
               message.startsWith('CONTEXT_')

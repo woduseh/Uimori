@@ -1530,6 +1530,7 @@ function App() {
                           const { source, index } = entry;
                           return (
                             <SourceReader
+                              storyUiStyle={s.detail!.chat.settings.storyUiStyle}
                               portrait={
                                 s.attachmentsReady && s.bot ? (
                                   <ReaderGallery scene bot={s.bot} persona={s.persona} />
@@ -1604,6 +1605,7 @@ function App() {
                               assets={s.detail!.assets ?? []}
                               imageOwner={s.detail!.profile?.image === true}
                               refresh={() => s.refresh(s.selected)}
+                              beginStoryUiAdmission={s.beginStoryUiAdmission}
                               onError={s.setError}
                               onFork={s.fork}
                               deletionDisabled={
@@ -1740,6 +1742,7 @@ function App() {
                                 onError={s.setError}
                               />
                               <ResponseDisplay
+                                storyUiStyle={s.detail!.chat.settings.storyUiStyle}
                                 mode={responseDisplay}
                                 taskKind="main"
                                 taskId={run.id}

@@ -1031,11 +1031,11 @@ export const messages = {
     ja: 'モデル未設定',
     zh: '未指定模型',
   },
-  'library.loreTranslationRefusalAndImagePlacementDecisions': {
-    ko: '로어 선별, 번역 거절 판정, 이미지 배치',
-    en: 'Lore, translation refusal, and image placement decisions',
-    ja: 'ロア、翻訳拒否、画像配置の判断',
-    zh: '设定、翻译拒绝与图片排布判断',
+  'library.judgmentModel': {
+    ko: '판단 모델',
+    en: 'Judgment model',
+    ja: '判定モデル',
+    zh: '判断模型',
   },
   'library.promptsUsedByGlobalChatSettings': {
     ko: '전체 채팅 설정에서 사용하는 프롬프트',

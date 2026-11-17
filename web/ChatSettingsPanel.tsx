@@ -49,7 +49,7 @@ function getCategories() {
     },
     {
       id: 'prompts',
-      terms: t('chatsettings.searchPrompts'),
+      terms: `${t('chatsettings.searchPrompts')} ${t('storyUi.enable')} ${t('storyUi.style')}`,
       title: t('chatsettings.promptsModelsAndTranslation'),
       icon: PromptIcon,
       group: t('chatsettings.m85'),

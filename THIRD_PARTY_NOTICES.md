@@ -23,6 +23,13 @@ Uimori 프로젝트 소스의 라이선스는 **GNU Affero General Public Licens
 - 적용 조건: MIT. 패키지의 원저작권 고지와 전문을 [third_party/wasmoon/LICENSE](third_party/wasmoon/LICENSE)에 보존해요.
 - 사용: 별도 Worker에서 Lua 코드를 실행하고 Uimori의 공통 Host API로 JSON 요청·결과만 교환해요. Uimori의 Worker는 포함된 WASM의 메모리 상한을 제한하며 원본 npm 패키지 파일은 수정하지 않아요.
 
+## A2UI
+
+- 출처: [A2UI](https://github.com/a2ui-project/a2ui). npm `@a2ui/agent@0.1.0`, `@a2ui/web_core@0.15.0`, `@a2ui/react@0.15.0`을 사용해요.
+- 적용 조건: Apache-2.0. 배포 패키지에 포함된 전문과 부속 고지를 [Agent](third_party/a2ui/AGENT-LICENSE), [Core](third_party/a2ui/CORE-LICENSE), [React](third_party/a2ui/REACT-LICENSE)에 그대로 보존해요.
+- 사용: 이야기 UI 출력 컴파일·검증과 카탈로그 기반 렌더링에 사용해요. 원본 npm 파일은 수정하지 않고 Uimori의 카탈로그, 접근 가능한 React 컴포넌트, 저장·번역·액션 계약을 연결해요.
+- 스키마: [기본 카탈로그](third_party/a2ui/basic-catalog-v1.json)는 `@a2ui/web_core@0.15.0`의 공개 `basicCatalog.toJson()`으로 생성했어요. 서버의 문맥 투영과 원문 검증이 브라우저 컴포넌트를 초기화하지 않도록 스키마만 분리하며, 설치된 SDK와 일치하는지 테스트해요.
+
 ## 로컬 토크나이저
 
 모델별 로컬 계수에 사용하는 고정 자산과 라이선스·변환·검증 기록은

@@ -1,5 +1,71 @@
 /** Settings UI only. User data and model inputs are never translated here. */
 export const messages = {
+  'settings.judgmentProvider': {
+    ko: '판단 프로바이더',
+    en: 'Judgment provider',
+    ja: '判定プロバイダー',
+    zh: '判断服务商',
+  },
+  'settings.judgmentScope': {
+    ko: '로어 선별, 거절 감지, 이미지 배치, 생성 전 검사에 같은 모델을 사용해요.',
+    en: 'Lore selection, refusal checks, image placement, and preflight share this model.',
+    ja: 'ロアの選別、拒否の検知、画像の配置、生成前チェックで同じモデルを使います。',
+    zh: '设定资料筛选、拒绝检测、图片放置和生成前检查共用此模型。',
+  },
+  'settings.judgmentCompatible': {
+    ko: '호환 API',
+    en: 'Compatible API',
+    ja: '互換 API',
+    zh: '兼容 API',
+  },
+  'settings.judgmentConnection': {
+    ko: '판단 API 연결',
+    en: 'Judgment API connection',
+    ja: '判定 API 接続',
+    zh: '判断 API 连接',
+  },
+  'settings.judgmentConnectionRequired': {
+    ko: '이 판단 API에 사용할 수 있는 활성 연결을 등록해 주세요.',
+    en: 'Register an enabled connection for this judgment API.',
+    ja: 'この判定 API で使える有効な接続を登録してください。',
+    zh: '请注册可用于此判断 API 的已启用连接。',
+  },
+  'settings.judgmentConnectionPlaceholder': {
+    ko: '연결 선택',
+    en: 'Select connection',
+    ja: '接続を選択',
+    zh: '选择连接',
+  },
+  'settings.judgmentUnavailable': {
+    ko: '저장한 연결을 사용할 수 없음',
+    en: 'Saved connection unavailable',
+    ja: '保存した接続は利用できません',
+    zh: '已保存的连接不可用',
+  },
+  'settings.judgmentProtocol': {
+    ko: '판단 API 형식',
+    en: 'Judgment API format',
+    ja: '判定 API 形式',
+    zh: '判断 API 格式',
+  },
+  'settings.judgmentModelId': {
+    ko: '판단 모델 ID',
+    en: 'Judgment model ID',
+    ja: '判定モデル ID',
+    zh: '判断模型 ID',
+  },
+  'settings.judgmentImages': {
+    ko: '판단에 이미지 전송',
+    en: 'Send images for judgment',
+    ja: '判定に画像を送信',
+    zh: '发送图片以供判断',
+  },
+  'settings.judgmentImagesHelp': {
+    ko: '이미지 배치 판단에 후보 이미지 파일을 보내요. 사용하는 API와 모델이 이미지 입력을 지원해야 해요.',
+    en: 'Sends candidate image files for placement. The API and model must support image input.',
+    ja: '配置の判定に候補の画像ファイルを送ります。API とモデルが画像入力に対応している必要があります。',
+    zh: '发送候选图片文件以判断放置位置。API 和模型必须支持图片输入。',
+  },
   'settings.m0': {
     ko: '역할별 모델 설정을 불러오는 중이에요…',
     en: 'Loading role model settings…',

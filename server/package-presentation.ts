@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { splitSource } from '../core/auxiliary.js';
+import { parseStoryUi } from '../core/story-ui.js';
 import { RisuContentError } from '../core/risu-content.js';
 import type { RunSnapshot } from '../core/types.js';
 import { nativeRisuContext } from './risu-native-context.js';
@@ -64,16 +65,58 @@ export async function buildPackagePresentation(
           text: value,
           meta: { index },
         });
+        const editedText = edited.text ?? value;
+        const originalSegments =
+          canonical === undefined
+            ? []
+            : parseStoryUi(value).filter((part) => part.kind !== 'prose');
+        const segments =
+          canonical === undefined
+            ? []
+            : parseStoryUi(editedText).filter((part) => part.kind !== 'prose');
+        let nextOriginal = 0;
+        const replacements = segments.flatMap((part) => {
+          const raw = editedText.slice(part.start, part.end);
+          const ordinal = originalSegments.findIndex(
+            (original, at) =>
+              at >= nextOriginal && value.slice(original.start, original.end) === raw
+          );
+          if (ordinal < 0) return [];
+          nextOriginal = ordinal + 1;
+          const replacement = `\n\n<div data-uimori-story-ui="${ordinal}"></div>\n\n`;
+          return [
+            {
+              start: part.start,
+              end: part.end,
+              replacement,
+              delta: replacement.length - (part.end - part.start),
+            },
+          ];
+        });
+        let displayText = editedText;
+        for (const replacement of [...replacements].reverse())
+          displayText =
+            displayText.slice(0, replacement.start) +
+            replacement.replacement +
+            displayText.slice(replacement.end);
         const result = await renderer.run({
           native: native.native,
-          text: edited.text ?? value,
+          text: displayText,
           illustrationBlocks:
-            canonical === value && (edited.text ?? value) === value
+            canonical === value && editedText === value
               ? splitSource({
                   ...source,
                   text: value,
                   hash: createHash('sha256').update(value).digest('hex'),
-                }).map(({ anchor, end }) => ({ anchor, end }))
+                }).map(({ anchor, end }) => ({
+                  anchor,
+                  end:
+                    end +
+                    replacements.reduce(
+                      (sum, replacement) => sum + (replacement.end <= end ? replacement.delta : 0),
+                      0
+                    ),
+                }))
               : undefined,
           context: {
             ...native,

@@ -420,7 +420,11 @@ for (const width of DEFAULT_WIDTHS) {
     await settings.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
     expect((await conflictResponse).status()).toBe(409);
     await expect(promptSelect).toHaveValue(preset.id);
-    await expect(settings.getByText(/다른 요청에서 채팅 설정이 바뀌었어요/)).toBeVisible();
+    await expect(
+      settings.getByRole('alert').filter({
+        hasText: '채팅 설정이 바뀌었어요. 최신 설정을 확인한 뒤 다시 저장해 주세요.',
+      })
+    ).toBeVisible();
     // Generation owns one save action; profile reload remains in the material settings.
     await selectChatSettingsSection(page, '사용 자료');
     await settings.getByRole('button', { name: '사용 자료 다시 불러오기', exact: true }).click();
@@ -859,6 +863,96 @@ test('GMACK role model save finishes before a delayed refresh and preserves the 
   } finally {
     release();
   }
+});
+
+test('JDGUI01 saves a compatible judgment connection and model through the role settings draft', async ({
+  page,
+  request,
+}, info) => {
+  const endpoint = await request.post('/api/connections', {
+    data: {
+      title: 'JDGUI01 테스트 게이트웨이',
+      protocol: 'openai-chat-v1',
+      endpoint: 'http://127.0.0.1:9/v1',
+      enabled: true,
+    },
+  });
+  expect(endpoint.ok(), await endpoint.text()).toBe(true);
+  const connection = await endpoint.json();
+  const before = await models(request);
+  const open = async () => {
+    await page.goto('/');
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '역할별 모델');
+  };
+  await open();
+  const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
+  const provider = editor.getByLabel('판단 프로바이더', { exact: true });
+  const format = editor.getByLabel('판단 API 형식', { exact: true });
+  const model = editor.getByLabel('판단 모델 ID', { exact: true });
+  const images = editor.getByRole('switch', { name: '판단에 이미지 전송', exact: true });
+  const save = editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true });
+
+  await provider.selectOption('openai');
+  await expect(model).toHaveValue('gpt-6-luna');
+  await expect(model).toHaveAttribute('readonly', '');
+  await provider.selectOption('compatible');
+  await expect(save).toBeDisabled();
+  await editor.getByLabel('판단 API 연결', { exact: true }).selectOption(connection.id);
+  await format.selectOption('typesafe-compatible');
+  await expect(images).not.toBeChecked();
+  await model.fill('synthetic/decision');
+  await images.check();
+  expect(await models(request)).toEqual(before);
+  await save.click();
+  const expected = {
+    ...before,
+    revision: before.revision + 1,
+    judgment: {
+      provider: 'typesafe-compatible',
+      modelId: 'synthetic/decision',
+      connectionId: connection.id,
+      images: true,
+    },
+  };
+  await expect.poll(() => models(request)).toEqual(expected);
+  await expect(save).toBeDisabled();
+  await open();
+  await expect(provider).toHaveValue('compatible');
+  await expect(format).toHaveValue('typesafe-compatible');
+  await expect(model).toHaveValue('synthetic/decision');
+  await expect(images).toBeChecked();
+
+  if (visualReview) {
+    for (const width of DEFAULT_WIDTHS) {
+      await page.setViewportSize({ width, height: 900 });
+      await provider.evaluate((control) =>
+        control.closest('fieldset')?.scrollIntoView({ block: 'center' })
+      );
+      await expect(provider).toBeInViewport();
+      await expect(images).toBeInViewport();
+      await page.screenshot({ path: info.outputPath(`judgment-provider-${width}.png`) });
+    }
+  }
+
+  const chatResponse = await postFixtureChat(request, {
+    data: { title: 'JDGUI01 전역 판단 모델 확인' },
+  });
+  expect(chatResponse.ok(), await chatResponse.text()).toBe(true);
+  const chat = (await chatResponse.json()) as Chat;
+  await page.goto(`/?chat=${chat.id}`);
+  await openChatSettings(page);
+  const settings = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+  await selectChatSettingsSection(page, '생성 설정');
+  await expect(
+    settings.getByText('TypeSafe System One (synthetic/decision)', { exact: true })
+  ).toBeVisible();
+  await selectChatSettingsSection(page, '이미지');
+  await expect(
+    settings
+      .getByRole('combobox', { name: '이미지 배치 담당', exact: true })
+      .locator('option[value="jev"]')
+  ).toHaveText('판단 모델');
 });
 
 preservePromptWorkspace();

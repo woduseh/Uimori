@@ -126,6 +126,16 @@ export function mountRisuMessageSurface(
   content.className = 'risu-message-content';
   content.dataset.risuDisabled = 'true';
   content.innerHTML = prepared.html;
+  const installStoryUiSlots = () => {
+    for (const node of content.querySelectorAll<HTMLElement>('div[data-uimori-story-ui]:empty')) {
+      const index = node.dataset.uimoriStoryUi ?? '';
+      if (!/^(?:0|[1-9]\d*)$/u.test(index) || !Number.isSafeInteger(Number(index))) continue;
+      const slot = document.createElement('slot');
+      slot.name = `story-ui-${index}`;
+      node.replaceChildren(slot);
+    }
+  };
+  installStoryUiSlots();
   root.replaceChildren(authorStyle, content);
   const slots = new Map<string, HTMLSlotElement>();
   const findBoundaries = () =>
@@ -231,6 +241,7 @@ export function mountRisuMessageSurface(
           ? rememberControls(controls, root.activeElement)
           : undefined;
         content.innerHTML = next.html;
+        installStoryUiSlots();
         const nextControls = authoredControls(content);
         restore?.(nextControls);
         controls = nextControls;

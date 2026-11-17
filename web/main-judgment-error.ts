@@ -6,7 +6,7 @@ export function mainJudgmentError(error: string | null | undefined): string | un
   const image = requestImageError(error);
   if (image) return image;
   if (error === 'EVALUATION_SUBMISSION_REQUIRED') return auxiliaryErrorMessage(error);
-  if (error?.startsWith('JEV_')) {
+  if (error?.startsWith('JEV_') || error?.startsWith('JUDGMENT_')) {
     const diagnostic = auxiliaryErrorDiagnostic(error);
     return diagnostic.code ? auxiliaryErrorMessage(error) : t('errors.judgmentJev');
   }

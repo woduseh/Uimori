@@ -15,6 +15,7 @@ function walk(dir: string, out: string[] = []): string[] {
   const absolute = join(root, dir);
   if (!statSync(absolute, { throwIfNoEntry: false })?.isDirectory()) return out;
   for (const entry of readdirSync(absolute, { withFileTypes: true })) {
+    if (entry.name === 'node_modules') continue;
     const path = `${dir}/${entry.name}`;
     if (entry.isDirectory()) walk(path, out);
     else if (/\.(?:ts|tsx|js|mjs)$/.test(entry.name)) out.push(path);

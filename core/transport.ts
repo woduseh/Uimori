@@ -179,7 +179,13 @@ export type WireRecord = {
   /** Host-only attribution. Never supplied by model output or serialized to the provider. */
   agentId?: string;
   connectionId: string;
-  protocol: ProviderConnection['protocol'] | 'typesafe-systemone-v1';
+  protocol:
+    | ProviderConnection['protocol']
+    | 'typesafe-systemone-v1'
+    | 'typesafe-compatible-systemone-v1'
+    | 'openai-decisions-v1'
+    | 'openai-compatible-decisions-v1'
+    | 'gemini-decisions-v1';
   role: ProviderRole;
   modelId: string;
   method: 'POST' | 'RPC';

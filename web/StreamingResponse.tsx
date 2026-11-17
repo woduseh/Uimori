@@ -9,6 +9,40 @@ import type {
 import { api, ApiError } from './api.js';
 import { PlainProse } from './Prose.js';
 import { LoadingState } from './LoadingState.js';
+import { parseStoryUi } from '../core/story-ui.js';
+import { StoryUi } from './LazyStoryUi.js';
+
+type StoryStyle = import('../core/story-ui-style.js').StoryUiStyle;
+
+function StreamingStoryBlock({ text, style }: { text: string; style?: StoryStyle }) {
+  const [preview, setPreview] = useState('');
+  useEffect(() => {
+    if (!text.startsWith('<a2ui>') || !text.endsWith('</a2ui>')) return;
+    const controller = new AbortController();
+    void api<{ text: string }>('/story-ui/preview', { text }, 'POST', controller.signal)
+      .then((result) => setPreview(result.text))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [text]);
+  const part = parseStoryUi(preview).find((entry) => entry.kind === 'ui');
+  return part?.kind === 'ui' ? <StoryUi segment={part} style={style} /> : null;
+}
+
+export function StreamingStoryText({ text, style }: { text: string; style?: StoryStyle }) {
+  return (
+    <>
+      {parseStoryUi(text).map((part) =>
+        part.kind === 'prose' ? (
+          <PlainProse key={part.id} text={part.text.replace(/<(?:a(?:2(?:u(?:i)?)?)?)?$/u, '')} />
+        ) : part.kind === 'ui' ? (
+          <StoryUi key={part.id} segment={part} style={style} />
+        ) : part.kind === 'invalid' && part.text.startsWith('<a2ui>') ? (
+          <StreamingStoryBlock key={part.id} text={part.text} style={style} />
+        ) : null
+      )}
+    </>
+  );
+}
 
 const active = (status?: string) => status === undefined || ['queued', 'running'].includes(status);
 
@@ -29,6 +63,7 @@ type ResponseProps = {
   taskId: string;
   taskStatus?: string;
   visible?: boolean;
+  storyUiStyle?: StoryStyle;
 };
 
 /** Final answers belong to Source/helper messages, never to a completed transport stream. */
@@ -53,6 +88,7 @@ export function StreamingResponse({
   taskStatus,
   visible = true,
   settled = false,
+  storyUiStyle,
 }: ResponseProps & { settled?: boolean }) {
   useI18n();
   const [chunks, setChunks] = useState<ResponseChunk[]>([]);
@@ -254,7 +290,11 @@ export function StreamingResponse({
       </small>
       {[...parts].map(([key, value]) => (
         <div className="streaming-text" key={key}>
-          <PlainProse text={value} />
+          {taskKind === 'main' ? (
+            <StreamingStoryText text={value} style={storyUiStyle} />
+          ) : (
+            <PlainProse text={value} />
+          )}
         </div>
       ))}
     </div>

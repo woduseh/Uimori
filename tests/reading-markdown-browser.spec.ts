@@ -16,7 +16,14 @@ test.beforeAll(async () => {
     plugins: [react()],
     optimizeDeps: {
       noDiscovery: true,
-      include: ['react', 'react-dom/client', 'dompurify', 'markdown-it'],
+      include: [
+        'react',
+        'react-dom/client',
+        'dompurify',
+        'markdown-it',
+        '@a2ui/react',
+        '@a2ui/web_core',
+      ],
     },
     server: { host: '127.0.0.1', port: 0, watch: { ignored: ['**/output/**'] } },
   });

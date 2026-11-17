@@ -6,8 +6,10 @@ import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { UndoIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
+import { Switch } from './BooleanControls.js';
 import './settings-actions.css';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { storyUiStyles, type StoryUiStyle } from '../core/story-ui-style.js';
 import type { Chat, Settings } from '../core/types.js';
 import type { AutoTranslationDefaults } from '../core/chat-settings.js';
 import { api } from './api.js';
@@ -33,6 +35,7 @@ export function SettingsEditor({
   disabled?: boolean;
 }) {
   useI18n();
+  const storyUiHelpId = useId();
   const form = useRef<HTMLFormElement>(null);
   const [value, setValue] = useState<Settings>(chat.settings);
   const [revision, setRevision] = useState(chat.settingsRevision);
@@ -151,6 +154,36 @@ export function SettingsEditor({
                   <option value="inherit">{t('settings.m88')}</option>
                   <option value="on">{t('settings.m89')}</option>
                   <option value="off">{t('settings.m90')}</option>
+                </select>
+              </label>
+              <label className="settings-row settings-row-toggle">
+                <span className="settings-row-copy">
+                  <strong>{t('storyUi.enable')}</strong>
+                  <small id={storyUiHelpId}>{t('storyUi.enableHelp')}</small>
+                </span>
+                <span className="settings-row-control">
+                  <Switch
+                    aria-label={t('storyUi.enable')}
+                    aria-describedby={storyUiHelpId}
+                    checked={value.storyUi === true}
+                    onChange={(event) => update('storyUi', event.target.checked)}
+                  />
+                </span>
+              </label>
+              <label className="settings-row">
+                <span className="settings-row-copy">
+                  <strong>{t('storyUi.style')}</strong>
+                  <small>{t('storyUi.styleHelp')}</small>
+                </span>
+                <select
+                  value={value.storyUiStyle ?? 'default'}
+                  onChange={(event) => update('storyUiStyle', event.target.value as StoryUiStyle)}
+                >
+                  {storyUiStyles.map((style) => (
+                    <option key={style} value={style}>
+                      {t(`storyUi.style.${style}`)}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>

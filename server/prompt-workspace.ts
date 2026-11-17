@@ -7,9 +7,16 @@ import {
 } from '../core/summary-length.js';
 import { PROMPT_HTTP_BODY_MAX_BYTES } from '../core/content-limits.js';
 import { mainJudgmentThreshold } from '../core/main-judgment-settings.js';
+import {
+  DEFAULT_JUDGMENT_SELECTION,
+  OFFICIAL_JUDGMENT_MODELS,
+  isJudgmentConnection,
+  type JudgmentSelection,
+} from '../core/judgment-settings.js';
 import type { FastifyInstance } from 'fastify';
 import type {
   ChatProfile,
+  Connection,
   ContentRef,
   CurrentPrompt,
   ModelWorkspace,
@@ -95,6 +102,33 @@ export function validateCombinationOwner(value: unknown): PromptCombinationOwner
   return { kind: 'workspace', role: roleValue(b.role) };
 }
 
+function validateJudgmentSelection(value: unknown): JudgmentSelection {
+  if (value === undefined) return DEFAULT_JUDGMENT_SELECTION;
+  const input = record(value);
+  const provider: unknown = input.provider;
+  if (provider === 'typesafe') {
+    fields(input, ['provider']);
+    return DEFAULT_JUDGMENT_SELECTION;
+  }
+  if (
+    provider !== 'openai' &&
+    provider !== 'gemini' &&
+    provider !== 'openai-compatible' &&
+    provider !== 'typesafe-compatible'
+  )
+    throw new HttpError(400, 'JUDGMENT_PROVIDER_INVALID');
+  fields(input, ['provider', 'connectionId', 'modelId', 'images']);
+  const connectionId = text(input.connectionId, 'judgment connection ID', 100);
+  const modelId = text(input.modelId, 'judgment model ID', 200).trim();
+  if (
+    (provider === 'openai' || provider === 'gemini') &&
+    modelId !== OFFICIAL_JUDGMENT_MODELS[provider]
+  )
+    throw new HttpError(400, 'JUDGMENT_MODEL_INVALID');
+  if (typeof input.images !== 'boolean') throw new HttpError(400, 'JUDGMENT_IMAGES_INVALID');
+  return { provider, connectionId, modelId, images: input.images };
+}
+
 function validateSummaryLength(value: unknown): SummaryLengthSettings {
   if (value === undefined) return { ...DEFAULT_SUMMARY_LENGTH };
   const input = record(value);
@@ -119,6 +153,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     'translationPolicy',
     'mainJudgmentEnabled',
     'mainJudgmentThreshold',
+    'judgment',
     'modelRoutes',
     'titleModel',
     'helperModel',
@@ -140,6 +175,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
   if (b.mainJudgmentEnabled !== undefined && typeof b.mainJudgmentEnabled !== 'boolean')
     throw new HttpError(400, 'MAIN_JUDGMENT_ENABLED_INVALID');
   return {
+    judgment: validateJudgmentSelection(b.judgment),
     mainJudgmentThreshold: mainJudgmentThreshold(b.mainJudgmentThreshold),
     ...(b.mainJudgmentEnabled !== undefined
       ? { mainJudgmentEnabled: b.mainJudgmentEnabled as boolean }
@@ -166,6 +202,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
 
 export function defaultPromptWorkspace(): PromptWorkspace {
   return {
+    judgment: DEFAULT_JUDGMENT_SELECTION,
     revision: 1,
     summaryLength: { ...DEFAULT_SUMMARY_LENGTH },
     titleModel: null,
@@ -194,6 +231,10 @@ function savedWorkspace(store: Store): StoredPromptWorkspace {
     body: string;
   };
   return JSON.parse(row.body) as StoredPromptWorkspace;
+}
+
+export function judgmentSelection(store: Store): JudgmentSelection {
+  return validateJudgmentSelection(savedWorkspace(store).judgment);
 }
 
 /** Upgrade copied/anonymous bodies at boot, before accepting read-only requests. */
@@ -312,6 +353,7 @@ export function promptWorkspace(store: Store): PromptWorkspace {
   const saved = savedWorkspace(store);
   return {
     ...saved,
+    judgment: validateJudgmentSelection(saved.judgment),
     summaryLength: validateSummaryLength(saved.summaryLength),
     main: resolveSelection(store, saved.main, 'main'),
     translation: resolveSelection(store, saved.translation, 'translation'),
@@ -400,6 +442,7 @@ function validateModelRoutes(value: unknown): ModelWorkspace['routes'] {
 export function modelWorkspace(store: Store): ModelWorkspace {
   const current = promptWorkspace(store);
   return {
+    judgment: current.judgment,
     mainJudgmentEnabled: current.mainJudgmentEnabled === true,
     mainJudgmentThreshold: mainJudgmentThreshold(current.mainJudgmentThreshold),
     revision: current.revision,
@@ -420,6 +463,7 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
     'translationPolicy',
     'mainJudgmentEnabled',
     'mainJudgmentThreshold',
+    'judgment',
     'titleModel',
     'helperModel',
     'contextModel',
@@ -432,6 +476,7 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
       throw new HttpError(409, '전역 설정이 변경됐어요. 새로고침한 뒤 저장해 주세요.');
     const next = validatePromptWorkspace({
       ...prior,
+      ...(Object.hasOwn(input, 'judgment') ? { judgment: input.judgment } : {}),
       titleModel: Object.hasOwn(input, 'titleModel')
         ? validateTitleModel(input.titleModel)
         : (prior.titleModel ?? null),
@@ -463,6 +508,23 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
     assertModelSelection(store.product, next.helperModel ?? null, prior.helperModel ?? null);
     assertModelSelection(store.product, next.contextModel ?? null, prior.contextModel ?? null);
     assertModelSelection(store.product, next.scriptModel ?? null, prior.scriptModel ?? null);
+    const judgment = next.judgment;
+    if (
+      judgment &&
+      judgment.provider !== 'typesafe' &&
+      !isDeepStrictEqual(judgment, prior.judgment)
+    ) {
+      let connection: Connection;
+      try {
+        store.product.assertAvailable('connection', judgment.connectionId);
+        connection = store.product.get<Connection>('connection', judgment.connectionId);
+      } catch (error) {
+        if (!(error instanceof HttpError) || error.statusCode !== 404) throw error;
+        throw new HttpError(400, 'JUDGMENT_CONNECTION_INVALID');
+      }
+      if (!isJudgmentConnection(judgment.provider, connection))
+        throw new HttpError(400, 'JUDGMENT_CONNECTION_INVALID');
+    }
 
     savePromptWorkspace(store, next);
     for (const chat of store.chats()) store.event(chat.id, 'prompt-workspace.updated', chat.id);

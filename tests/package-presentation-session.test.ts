@@ -117,3 +117,19 @@ test('plain text creates no worker and invalid source identity is still rejected
     /PACKAGE_PRESENTATION_SOURCE_MISMATCH/u
   );
 });
+
+test('native display replaces only primary story blocks while preserving the source and other HTML', async () => {
+  const { snapshot } = fixture();
+  const text =
+    '<style>.panel{color:red}</style>\n<div class="panel">상태</div>\n\n```uimori-ui\ninvalid\n```\n\n끝';
+  const hash = createHash('sha256').update(text).digest('hex');
+  const source = { id: 'source', chatId: 'chat', text, hash };
+  const result = await buildPackagePresentation(snapshot, source);
+  assert.equal(result.sourceHash, hash);
+  assert.equal(result.original.text, text);
+  assert.equal(state.log[0], `hook:${text}`);
+  assert.match(state.log[1]!, /data-uimori-story-ui="0"/u);
+  assert.doesNotMatch(state.log[1]!, /```uimori-ui/u);
+  assert.match(state.log[1]!, /<style>\.panel\{color:red\}<\/style>/u);
+  assert.match(state.log[1]!, /<div class="panel">상태<\/div>/u);
+});

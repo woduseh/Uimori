@@ -60,7 +60,9 @@ import { RisuPromptError } from '../core/risu-prompt.js';
 import type { AuxiliaryFailureDiagnostic } from '../core/auxiliary-diagnostic.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { judgeTranslationRefusal } from './translation-judgment.js';
-import { JevError, type JevHooks } from './jev-judgment.js';
+import { projectStoryUiText } from '../core/story-ui.js';
+import { prepareStoryUiTranslation } from '../core/story-ui-translation.js';
+import { JudgmentError, type JudgmentHooks } from './judgment.js';
 import { uncertainAttemptResult } from './usage-accounting.js';
 
 type MaybePromise<T> = T | Promise<T>;
@@ -128,7 +130,7 @@ export type AuxiliaryStoreBridge = {
 };
 export type AuxiliaryJobHooks = {
   /** Server injection for isolated transport tests; never part of persisted user settings. */
-  jev?: Pick<JevHooks, 'credential' | 'fetch' | 'settings' | 'readImage'>;
+  jev?: Pick<JudgmentHooks, 'credential' | 'fetch' | 'settings' | 'readImage' | 'target'>;
   executeCodex?: import('../core/transport.js').ProviderExecutionOptions['executeCodex'];
   resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
   signal: AbortSignal;
@@ -163,7 +165,7 @@ class AuxiliaryExecutionError extends Error {
   }
 }
 const safeError = (error: unknown) => {
-  if (error instanceof AuxiliaryExecutionError || error instanceof JevError) return error.code;
+  if (error instanceof AuxiliaryExecutionError || error instanceof JudgmentError) return error.code;
   if (error instanceof RisuPromptError) return error.code;
   if (error instanceof Error && error.name === 'BudgetError')
     return 'AUXILIARY_CALL_BUDGET_EXHAUSTED';
@@ -225,7 +227,9 @@ export function sourceTimeContext(snapshot: RunSnapshot, kind: JobKind): SourceT
     references: [],
     scene:
       'Use the supplied source blocks and source-time references; later revisions are excluded.',
-    previousSources: snapshot.history.slice(-2).map((item) => ({ ...item })),
+    previousSources: snapshot.history
+      .slice(-2)
+      .map((item) => ({ ...item, text: projectStoryUiText(item.text) })),
     instructionRevision:
       kind === 'translation'
         ? profile?.promptPresets?.translation
@@ -401,6 +405,13 @@ export async function runAuxiliaryJob(
     job.kind === 'translation'
       ? translationInput(source, context, snapshot, mode)
       : presentationInput(imageSource, context, snapshot, assets);
+  const protectedTranslation =
+    job.kind === 'translation' ? prepareStoryUiTranslation(source.text) : undefined;
+  if (protectedTranslation?.protected) {
+    input.sourceText = protectedTranslation.text;
+    input.contract +=
+      '\nTranslate the prose and the human text strings in each UIMORI_UI_TRANSLATION tag. Preserve each tag exactly once and return its contents as a JSON array of strings in the same order and length. Do not add or remove entries.';
+  }
   const generation = await store.claim(jobId, owner, { input });
   if (generation === null) return null;
   await hooks.onProgress?.();
@@ -572,7 +583,8 @@ export async function runAuxiliaryJob(
         job.kind === 'translation' && target.structuredOutput === true
           ? parseStructuredTranslation(source, result.text)
           : result.text;
-      if (job.kind === 'translation' && output) candidateText = output;
+      if (job.kind === 'translation' && output && !protectedTranslation?.protected)
+        candidateText = output;
       return output;
     };
     return executeAuxiliary(packet, snapshot, request, {
@@ -723,7 +735,9 @@ export async function runAuxiliaryJob(
           const output = bundle.judgmentRecovery ?? (await runInput(input)).output;
           if (typeof output !== 'string' || !output.trim())
             throw new AuxiliaryExecutionError('AUXILIARY_PROVIDER_EMPTY');
-          candidateText = output;
+          candidateText = bundle.judgmentRecovery
+            ? output
+            : (protectedTranslation?.restore(output) ?? output);
         } catch (error) {
           if (
             error instanceof AuxiliaryExecutionError &&
@@ -750,7 +764,7 @@ export async function runAuxiliaryJob(
               });
             try {
               const judgment = await judgeTranslationRefusal(
-                candidateText,
+                projectStoryUiText(candidateText),
                 source.hash,
                 policy.judgment,
                 {
@@ -772,7 +786,8 @@ export async function runAuxiliaryJob(
               throw new AuxiliaryExecutionError(
                 hooks.signal.aborted
                   ? 'AUXILIARY_CANCELLED'
-                  : error instanceof JevError && error.code === 'JEV_INPUT_BUDGET'
+                  : error instanceof JudgmentError &&
+                      (error.code === 'JEV_INPUT_BUDGET' || error.code === 'JUDGMENT_INPUT_BUDGET')
                     ? error.code
                     : 'TRANSLATION_REFUSAL_CHECK_FAILED'
               );

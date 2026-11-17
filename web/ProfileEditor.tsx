@@ -6,6 +6,7 @@ import { SettingsIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ChatProfile, Library } from '../core/product.js';
+import type { ExternalJudgmentProvider } from '../core/judgment-settings.js';
 import { api } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { isModelSelectable } from './model-selection.js';
@@ -17,6 +18,12 @@ import './library.css';
 import './settings-actions.css';
 
 export type ProfileSection = 'characters' | 'prompts' | 'models' | 'story' | 'images';
+const judgmentProviderLabels: Record<ExternalJudgmentProvider, string> = {
+  openai: 'OpenAI Decisions',
+  gemini: 'Gemini Decisions',
+  'openai-compatible': 'OpenAI Decisions',
+  'typesafe-compatible': 'TypeSafe System One',
+};
 const sections: { id: ProfileSection; titleKey: string }[] = [
   {
     id: 'characters',
@@ -74,6 +81,7 @@ export function ProfileEditor({
   const [value, setValue] = useState(profile);
   const [dirty, setDirty] = useState(false);
   const { workspace } = usePromptWorkspace();
+  const judgment = workspace?.judgment;
   const [attachmentPending, setAttachmentPending] = useState(false);
   const [lorePending, setLorePending] = useState(false),
     [loreResetVersion, setLoreResetVersion] = useState(0);
@@ -261,7 +269,7 @@ export function ProfileEditor({
                       }
                     >
                       <option value="writer">{t('library.writingModel')}</option>
-                      <option value="jev">JEV</option>
+                      <option value="jev">{t('library.judgmentModel')}</option>
                     </select>
                   </span>
                 </label>
@@ -429,8 +437,14 @@ export function ProfileEditor({
                   </dd>
                 </div>
                 <div>
-                  <dt>{t('library.loreTranslationRefusalAndImagePlacementDecisions')}</dt>
-                  <dd>JEV</dd>
+                  <dt>{t('library.judgmentModel')}</dt>
+                  <dd>
+                    {!workspace
+                      ? t('library.loading')
+                      : judgment && judgment.provider !== 'typesafe'
+                        ? `${judgmentProviderLabels[judgment.provider]} (${judgment.modelId})`
+                        : 'JEV'}
+                  </dd>
                 </div>
               </dl>
             </div>

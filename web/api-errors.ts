@@ -1,5 +1,6 @@
 import { t, registerMessage, formatMessage, getLocale } from './i18n.js';
 import { messages as localizedErrors } from './locales/errors.js';
+import { messages as storyUiMessages } from './locales/story-ui.js';
 import { illustrationErrorMessage } from './illustration-labels.js';
 import { requestImageErrors } from './request-image-errors.js';
 import { requestFileErrors } from './request-file-errors.js';
@@ -10,6 +11,13 @@ import {
 } from '../core/risu-import.js';
 
 type ApiErrorDiagnostic = { code: string | null; message: string };
+
+const storyUiErrors: Record<string, keyof typeof storyUiMessages> = {
+  STORY_UI_STALE_SOURCE: 'storyUi.errorStaleSource',
+  STORY_UI_DISABLED: 'storyUi.errorDisabled',
+  STORY_UI_INVALID_ACTION: 'storyUi.errorInvalidAction',
+  OUTPUT_STORY_UI_INVALID: 'storyUi.errorTranslation.details',
+};
 
 const messages: Record<string, string> = {
   CHAT_COPY_REMOVED: '이전에 만든 채팅 사본이 삭제됐어요. 새 사본을 만들 수 있어요.',
@@ -225,6 +233,8 @@ export function apiErrorDiagnostic(
               ].includes(error)
             ? 'DRAFT_DISCARDED'
             : error;
+    if (Object.hasOwn(storyUiErrors, code))
+      return { code, message: storyUiMessages[storyUiErrors[code]].ko };
     if (Object.hasOwn(messages, code)) return { code, message: messages[code] };
     if (status === 409 && nativeActionConflict.test(code))
       return {
@@ -279,6 +289,7 @@ export function apiErrorDisplay(error: unknown, status: number, method: string):
     return t(key, values);
   };
   if (code === 'HELPER_CONVERSATION_COPY_CHANGED') return display('helperProjects.copyChanged');
+  if (code && Object.hasOwn(storyUiErrors, code)) return display(storyUiErrors[code]);
   const limits: Record<string, number> = {
     INPUT_TRANSLATION_TOO_LONG: REQUEST_TEXT_MAX_CHARS,
     PACKAGE_START_TEXT_TOO_LONG: SOURCE_TEXT_MAX_CHARS,

@@ -5,6 +5,7 @@ export type PreparedRisuMessage = {
   css: string;
   actions: Set<string>;
   illustrationAnchors: string[];
+  storyUiSlots: number[];
 };
 export const risuActionKey = (kind: string, name: string) => JSON.stringify([kind, name]);
 
@@ -89,5 +90,14 @@ export function prepareRisuMessage(html: string, css = ''): PreparedRisuMessage 
     if (!name || name.length > 1000) Element.prototype.removeAttribute.call(form, 'risu-form');
     else actions.add(risuActionKey('form', name));
   }
-  return { html: template.innerHTML, css, actions, illustrationAnchors };
+  const storyUiSlots = [
+    ...new Set(
+      [...template.content.querySelectorAll('div[data-uimori-story-ui]:empty')]
+        .map((node) => node.getAttribute('data-uimori-story-ui') ?? '')
+        .filter((value) => /^(?:0|[1-9]\d*)$/u.test(value))
+        .map(Number)
+        .filter(Number.isSafeInteger)
+    ),
+  ];
+  return { html: template.innerHTML, css, actions, illustrationAnchors, storyUiSlots };
 }

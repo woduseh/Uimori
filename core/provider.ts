@@ -9,6 +9,7 @@ import {
 import type { ModelInput, Resource, RunSnapshot, ToolEvent } from './types.js';
 import { executeStoryRead, STORY_READ_NAMES } from './story-context.js';
 import { validateSourceHistory } from './source-history.js';
+import { projectStoryUiText } from './story-ui.js';
 import {
   compiledPackages,
   packageContextFromCompiled,
@@ -297,7 +298,11 @@ export function buildMainInput(
   }
   input.history = validateSourceHistory(snapshot)
     .filter((entry) => entry.sceneContext?.sceneEnabled !== false)
-    .map(({ revision, text, contentHash }) => ({ revision, text, contentHash }));
+    .map(({ revision, text, contentHash }) => ({
+      revision,
+      text: projectStoryUiText(text),
+      contentHash,
+    }));
   input.tools.push(...STORY_READ_NAMES);
   if (snapshot.contextPlan) {
     const kept = new Set(snapshot.contextPlan.recentSourceRevisions);

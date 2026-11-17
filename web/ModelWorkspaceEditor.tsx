@@ -6,6 +6,12 @@ import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSett
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Library, ModelRef, ModelWorkspace } from '../core/product.js';
 import {
+  DEFAULT_JUDGMENT_SELECTION,
+  OFFICIAL_JUDGMENT_MODELS,
+  isJudgmentConnection,
+  type JudgmentSelection,
+} from '../core/judgment-settings.js';
+import {
   DEFAULT_SUMMARY_LENGTH,
   SUMMARY_LENGTH_VALUES,
   type SummaryLength,
@@ -40,6 +46,7 @@ export function ModelWorkspaceEditor({
   const id = useId();
   const [draft, setDraft] = useState<ModelWorkspace | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [judgmentEdited, setJudgmentEdited] = useState(false);
   const [operation, setOperation] = useState<'save' | 'reload' | null>(null);
   const busy = operation !== null;
   const lock = useRef(false);
@@ -57,6 +64,7 @@ export function ModelWorkspaceEditor({
           ? current
           : {
               revision: workspace.revision,
+              judgment: workspace.judgment ?? DEFAULT_JUDGMENT_SELECTION,
               summaryLength: workspace.summaryLength ?? DEFAULT_SUMMARY_LENGTH,
               titleModel: workspace.titleModel ?? null,
               helperModel: workspace.helperModel ?? null,
@@ -85,7 +93,23 @@ export function ModelWorkspaceEditor({
       />
     );
   const conflict = !!workspace && workspace.revision > draft.revision;
+  const judgment = draft.judgment ?? DEFAULT_JUDGMENT_SELECTION;
+  const compatible =
+    judgment.provider === 'openai-compatible' || judgment.provider === 'typesafe-compatible';
+  const judgmentConnections =
+    judgment.provider === 'typesafe'
+      ? []
+      : library.connections.filter((connection) =>
+          isJudgmentConnection(judgment.provider, connection)
+        );
+  const judgmentConnection =
+    judgment.provider === 'typesafe'
+      ? undefined
+      : judgmentConnections.find((connection) => connection.id === judgment.connectionId);
   const invalid =
+    (judgmentEdited &&
+      judgment.provider !== 'typesafe' &&
+      (!judgmentConnection || !judgment.modelId.trim())) ||
     !Number.isFinite(draft.mainJudgmentThreshold) ||
     (draft.mainJudgmentThreshold ?? 0.9) <= 0.5 ||
     (draft.mainJudgmentThreshold ?? 0.9) > 1 ||
@@ -114,6 +138,7 @@ export function ModelWorkspaceEditor({
       {
         expectedRevision: draft.revision,
         routes: draft.routes,
+        judgment,
         mainJudgmentEnabled: draft.mainJudgmentEnabled === true,
         mainJudgmentThreshold: draft.mainJudgmentThreshold,
         titleModel: draft.titleModel ?? null,
@@ -127,6 +152,7 @@ export function ModelWorkspaceEditor({
     )
       .then((accepted) => {
         setDraft(accepted);
+        setJudgmentEdited(false);
         setDirty(false);
         setMessage(uiMessage('settings.m1'));
         // The canonical write result completes saving; the shared read owns its own errors.
@@ -148,6 +174,11 @@ export function ModelWorkspaceEditor({
     setDirty(true);
     setMessage('');
   }
+  function changeJudgment(next: JudgmentSelection) {
+    if (!draft) return;
+    setJudgmentEdited(true);
+    change({ ...draft, judgment: next });
+  }
   async function reload() {
     if (lock.current) return;
     lock.current = true;
@@ -156,6 +187,7 @@ export function ModelWorkspaceEditor({
     try {
       const accepted = await api<ModelWorkspace>('/model-workspace');
       setDraft(accepted);
+      setJudgmentEdited(false);
       setDirty(false);
       setSaveError('');
       setMessage('');
@@ -321,6 +353,149 @@ export function ModelWorkspaceEditor({
             )}
           </div>
         </details>
+        <fieldset className="settings-group full">
+          <legend className="sr-only">{t('settings.judgmentProvider')}</legend>
+          <div className="settings-group-body">
+            <div className="settings-row">
+              <div className="settings-row-copy">
+                <label htmlFor={`${id}-judgment-provider`}>{t('settings.judgmentProvider')}</label>
+                <small id={`${id}-judgment-scope`}>{t('settings.judgmentScope')}</small>
+              </div>
+              <div className="settings-row-control">
+                <select
+                  id={`${id}-judgment-provider`}
+                  aria-describedby={`${id}-judgment-scope`}
+                  value={compatible ? 'compatible' : judgment.provider}
+                  onChange={(event) => {
+                    const provider = event.target.value;
+                    if (provider === 'typesafe') changeJudgment(DEFAULT_JUDGMENT_SELECTION);
+                    else if (provider === 'openai' || provider === 'gemini')
+                      changeJudgment({
+                        provider,
+                        connectionId: '',
+                        modelId: OFFICIAL_JUDGMENT_MODELS[provider],
+                        images: false,
+                      });
+                    else
+                      changeJudgment({
+                        provider: 'openai-compatible',
+                        connectionId: '',
+                        modelId: '',
+                        images: false,
+                      });
+                  }}
+                >
+                  <option value="typesafe">TypeSafe AI / JEV</option>
+                  <option value="openai">OpenAI Decisions</option>
+                  <option value="gemini">Gemini Decisions</option>
+                  <option value="compatible">{t('settings.judgmentCompatible')}</option>
+                </select>
+              </div>
+            </div>
+            {judgment.provider !== 'typesafe' && (
+              <>
+                <div className="settings-row">
+                  <div className="settings-row-copy">
+                    <label htmlFor={`${id}-judgment-connection`}>
+                      {t('settings.judgmentConnection')}
+                    </label>
+                    {judgmentConnections.length === 0 && (
+                      <small>{t('settings.judgmentConnectionRequired')}</small>
+                    )}
+                  </div>
+                  <div className="settings-row-control">
+                    <select
+                      id={`${id}-judgment-connection`}
+                      value={judgment.connectionId}
+                      onChange={(event) =>
+                        changeJudgment({ ...judgment, connectionId: event.target.value })
+                      }
+                    >
+                      <option value="">{t('settings.judgmentConnectionPlaceholder')}</option>
+                      {judgment.connectionId && !judgmentConnection && (
+                        <option value={judgment.connectionId} disabled>
+                          {t('settings.judgmentUnavailable')}
+                        </option>
+                      )}
+                      {judgmentConnections.map((connection) => (
+                        <option key={connection.id} value={connection.id}>
+                          {connection.title}
+                        </option>
+                      ))}
+                    </select>
+                    {judgmentConnections.length === 0 && (
+                      <button type="button" className="secondary" onClick={onManage}>
+                        <SettingsIcon size={18} aria-hidden="true" />
+                        {t('settings.m18')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {compatible && (
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <label htmlFor={`${id}-judgment-protocol`}>
+                        {t('settings.judgmentProtocol')}
+                      </label>
+                    </div>
+                    <div className="settings-row-control">
+                      <select
+                        id={`${id}-judgment-protocol`}
+                        value={judgment.provider}
+                        onChange={(event) =>
+                          changeJudgment({
+                            ...judgment,
+                            provider:
+                              event.target.value === 'typesafe-compatible'
+                                ? 'typesafe-compatible'
+                                : 'openai-compatible',
+                          })
+                        }
+                      >
+                        <option value="openai-compatible">OpenAI Decisions</option>
+                        <option value="typesafe-compatible">TypeSafe System One</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+                <div className="settings-row">
+                  <div className="settings-row-copy">
+                    <label htmlFor={`${id}-judgment-model`}>{t('settings.judgmentModelId')}</label>
+                  </div>
+                  <div className="settings-row-control">
+                    <input
+                      id={`${id}-judgment-model`}
+                      value={judgment.modelId}
+                      readOnly={!compatible}
+                      maxLength={200}
+                      onChange={(event) =>
+                        changeJudgment({ ...judgment, modelId: event.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="settings-row">
+                  <div className="settings-row-copy">
+                    <label htmlFor={`${id}-judgment-images`}>{t('settings.judgmentImages')}</label>
+                    <small id={`${id}-judgment-images-help`}>
+                      {t('settings.judgmentImagesHelp')}
+                    </small>
+                  </div>
+                  <div className="settings-row-control">
+                    <Switch
+                      id={`${id}-judgment-images`}
+                      aria-describedby={`${id}-judgment-images-help`}
+                      checked={judgment.images}
+                      onChange={(event) =>
+                        changeJudgment({ ...judgment, images: event.target.checked })
+                      }
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </fieldset>
         <details className="settings-group full model-secondary-settings task-behavior-settings">
           <summary className="settings-group-heading">
             {t('settings.m36')}

@@ -48,11 +48,24 @@ test.each([
   [409, 'MODEL_REQUIRED:helper', '도우미 모델'],
   [409, 'HELPER_EFFECTS_ALREADY_COMMITTED', '남은 작업만 새 요청'],
   [409, 'ILLUSTRATION_ACTIVE', '이 컷은 생성 중'],
+  [409, 'STORY_UI_STALE_SOURCE', '최신 장면'],
+  [409, 'STORY_UI_DISABLED', '채팅의 생성 설정'],
+  [400, 'STORY_UI_INVALID_ACTION', '선택이나 입력'],
+  [400, 'OUTPUT_STORY_UI_INVALID', '번역을 다시 시도'],
 ] as const)('business error %s %s has its own recovery message', async (status, code, message) => {
   const result = await rejected(status, code);
   expect(result).toMatchObject({ code, status });
   expect(result.message).toContain(message);
   expect(result.message).not.toContain('다른 요청이 먼저');
+});
+
+test('story UI errors preserve their diagnostic code and update retained translations', async () => {
+  const result = await rejected(409, 'STORY_UI_STALE_SOURCE');
+  setLocale('en');
+  expect(result).toMatchObject({ status: 409, code: 'STORY_UI_STALE_SOURCE' });
+  expect(result.displayMessage).toContain('Check the latest scene.');
+  expect(translateMessage(result.message)).toBe(result.displayMessage);
+  expect((await rejected(409, 'STORY_UI_STALE_SOURCE: untrusted suffix')).code).toBeNull();
 });
 
 test('unavailable models retain only the role code and show the current selection paths', async () => {

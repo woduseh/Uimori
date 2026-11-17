@@ -1,0 +1,179 @@
+.story-ui {
+  margin: 1em 0;
+  padding: 1em;
+  color: var(--text);
+  background: var(--panel);
+  border: 0.5px solid var(--border);
+  border-radius: 10px;
+  --a2ui-color-background: var(--panel);
+  --a2ui-color-on-background: var(--text);
+  --a2ui-color-surface: var(--panel);
+  --a2ui-color-border: var(--border);
+  --a2ui-color-primary: var(--accent);
+  --a2ui-color-on-primary: var(--accent-ink);
+  --a2ui-color-input: var(--input-bg);
+  --a2ui-color-on-input: var(--text);
+}
+.story-ui button,
+.story-ui input,
+.story-ui textarea {
+  font: inherit;
+}
+.story-ui-field {
+  display: grid;
+  gap: 0.3em;
+}
+.story-ui-field input,
+.story-ui-field textarea {
+  width: 100%;
+}
+.story-ui-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25em;
+}
+.story-ui-tabs [aria-selected="true"] {
+  border-bottom: 2px solid var(--accent);
+}
+.story-ui-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75em;
+  margin-top: 1em;
+}
+.story-ui-action label {
+  display: flex;
+  gap: 0.3em;
+  align-items: center;
+}
+.story-ui-table {
+  overflow-x: auto;
+}
+.story-ui table {
+  border-collapse: collapse;
+}
+.story-ui td,
+.story-ui th {
+  padding: 0.3em 0.6em;
+  border: 0.5px solid var(--border);
+}
+.story-ui-chart {
+  list-style: none;
+  padding: 0;
+}
+.story-ui-chart li {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+.story-ui-bar {
+  position: absolute;
+  height: 0.7em;
+  background: var(--accent);
+}
+.story-ui-bar-track {
+  position: relative;
+  flex: 1;
+  min-width: 4em;
+  height: 0.7em;
+}
+.story-ui-zero {
+  position: absolute;
+  top: -0.15em;
+  height: 1em;
+  border-left: 0.5px solid var(--text);
+}
+.story-ui meter {
+  display: block;
+  width: 100%;
+}
+.story-ui-line {
+  display: block;
+  width: 100%;
+  max-height: 12rem;
+  color: var(--accent);
+}
+
+/* Presets affect only the generated surface, including the SDK's shadow DOM. */
+.story-ui[data-story-ui-style]:not([data-story-ui-style="default"]) {
+  color-scheme: light;
+  color: var(--story-ink);
+  background: var(--story-paper);
+  border-color: var(--story-border);
+  border-radius: var(--story-radius);
+  --a2ui-color-background: var(--story-paper);
+  --a2ui-color-on-background: var(--story-ink);
+  --a2ui-color-surface: var(--story-surface);
+  --a2ui-color-on-surface: var(--story-ink);
+  --a2ui-color-border: var(--story-border);
+  --a2ui-color-primary: var(--story-accent);
+  --a2ui-color-on-primary: #fff;
+  --a2ui-color-secondary: var(--story-surface);
+  --a2ui-color-on-secondary: var(--story-ink);
+  --a2ui-color-input: var(--story-surface);
+  --a2ui-color-on-input: var(--story-ink);
+  --a2ui-border-radius: var(--story-radius);
+  --a2ui-font-family-title: var(--story-font);
+  font-family: var(--story-font);
+}
+.story-ui[data-story-ui-style="east-asian"] {
+  --story-paper: #f4efe2;
+  --story-surface: #fffaf0;
+  --story-ink: #292d29;
+  --story-border: #8b8d7a;
+  --story-accent: #8a3027;
+  --story-radius: 2px;
+  --story-font: Georgia, "Noto Serif CJK KR", serif;
+  border-left: 4px solid var(--story-accent);
+}
+.story-ui[data-story-ui-style="fantasy"] {
+  --story-paper: #efe3c6;
+  --story-surface: #faf2df;
+  --story-ink: #382b20;
+  --story-border: #a48b62;
+  --story-accent: #694c29;
+  --story-radius: 4px;
+  --story-font: Georgia, "Noto Serif CJK KR", serif;
+  border: 3px double var(--story-border);
+}
+.story-ui[data-story-ui-style="modern"] {
+  --story-paper: #f1f5f8;
+  --story-surface: #fff;
+  --story-ink: #1d2b37;
+  --story-border: #a7b8c5;
+  --story-accent: #245b80;
+  --story-radius: 10px;
+  --story-font: system-ui, sans-serif;
+}
+.story-ui[data-story-ui-style="period"] {
+  --story-paper: #eee9e1;
+  --story-surface: #fbf8f2;
+  --story-ink: #352e2a;
+  --story-border: #a6988b;
+  --story-accent: #704b48;
+  --story-radius: 0px;
+  --story-font: Georgia, "Noto Serif CJK KR", serif;
+  border-top: 4px solid var(--story-accent);
+}
+.story-ui[data-story-ui-style]:not([data-story-ui-style="default"]) button,
+.story-ui[data-story-ui-style]:not([data-story-ui-style="default"]) input,
+.story-ui[data-story-ui-style]:not([data-story-ui-style="default"]) textarea {
+  color: var(--story-ink);
+  background: var(--story-surface);
+  border-color: var(--story-border);
+}
+.story-ui[data-story-ui-style]:not([data-story-ui-style="default"]) :focus-visible {
+  outline: 2px solid var(--story-accent);
+  outline-offset: 2px;
+}
+.story-ui[data-story-ui-style]:not([data-story-ui-style="default"]) .story-ui-bar {
+  background: var(--story-accent);
+}
+.story-ui[data-story-ui-style]:not([data-story-ui-style="default"]) .story-ui-line {
+  color: var(--story-accent);
+}
+.story-ui[data-story-ui-style]:not([data-story-ui-style="default"]) td,
+.story-ui[data-story-ui-style]:not([data-story-ui-style="default"]) th {
+  border-color: var(--story-border);
+}

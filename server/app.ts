@@ -8,6 +8,9 @@ import { ManuscriptSearch, manuscriptSearchRoutes } from './manuscript-search.js
 import { BackupService, backupRoutes } from './backup-service.js';
 import { illustrationPresetRoutes } from './illustration-presets.js';
 import { normalizeChatSettings } from '../core/chat-settings.js';
+import { projectStoryUiText } from '../core/story-ui.js';
+import { storyUiRoutes } from './story-ui-routes.js';
+import { normalizeStoryUiOutput } from './story-ui.js';
 import { autoTranslationDefaultRoutes } from './auto-translation-defaults.js';
 import { REQUEST_TEXT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { createRunExecutor } from './run-executor.js';
@@ -100,6 +103,7 @@ import { deniedBrowserRequest, networkPolicy } from './network-policy.js';
 import { VertexCredentialStore } from './vertex-credentials.js';
 import { JevCredentialStore } from './jev-credentials.js';
 import { jevSettings } from './jev-settings.js';
+import { judgmentRuntime, assertJudgmentRuntimeWire } from './judgment-runtime.js';
 import { readImage as readJevImage } from './image-storage.js';
 import {
   autoTranslationNeedsConfirmation,
@@ -603,6 +607,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           let chatId = '';
           try {
             const queued = store.job(id);
+            const judgment = judgmentRuntime(store, jevCredentials.resolve);
             if (queued.kind === 'status') throw new HttpError(410, 'SCENE_COMMENTARY_RETIRED');
             chatId = queued.chatId;
             let mockTranslation = false;
@@ -636,8 +641,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             }
             await runAuxiliaryJob(auxiliaryBridge(store, controls, signal), id, instanceId, {
               jev: {
-                credential: jevCredentials.resolve,
-                settings: jevSettings(store.db),
+                ...judgment,
                 readImage: (hash) => readJevImage(store.db, hash).bytes,
               },
               signal,
@@ -648,6 +652,7 @@ export async function createApp(options: AppOptions): Promise<App> {
               vertexRequestTier: options.vertexRequestTier,
               onAttemptStart: (wire) => {
                 if (wire.judgment) {
+                  assertJudgmentRuntimeWire(wire, judgment);
                   const current = store.job(id);
                   if (current.status !== 'running' || signal.aborted)
                     throw new Error('Judgment job is inactive');
@@ -657,14 +662,15 @@ export async function createApp(options: AppOptions): Promise<App> {
                       imageCatalog(current.input),
                       wire
                     );
-                  else if (current.kind === 'translation')
+                  else if (current.kind === 'translation') {
+                    const recovery = record(current.input).judgmentRecovery?.text;
                     validateTranslationJudgmentWire(
                       current.sourceHash,
                       record(record(current.input).translationPolicy).judgment,
                       wire,
-                      record(current.input).judgmentRecovery?.text
+                      typeof recovery === 'string' ? projectStoryUiText(recovery) : recovery
                     );
-                  else throw new Error('Invalid judgment job kind');
+                  } else throw new Error('Invalid judgment job kind');
                 }
                 return store.product.startAttempt(chatId, null, id, wire);
               },
@@ -1184,9 +1190,21 @@ export async function createApp(options: AppOptions): Promise<App> {
     async (request) => readerActivities(store, request.params.id, request.query)
   );
   autoTranslationDefaultRoutes(app, store);
+  storyUiRoutes(app, store, { publish, execute, requireRequestModel });
+  app.post('/api/story-ui/preview', { bodyLimit: 2 * 1024 * 1024 }, async (request) => {
+    const body = record(request.body);
+    fields(body, ['text']);
+    return { text: normalizeStoryUiOutput(text(body.text, 'UI preview', 1_000_000, true)) };
+  });
   app.patch<{ Params: { id: string } }>('/api/chats/:id/settings', async (request) => {
     const body: RecordBody = record(request.body);
-    fields(body, ['expectedSettingsRevision', 'maxCalls', 'autoTranslate']);
+    fields(body, [
+      'expectedSettingsRevision',
+      'maxCalls',
+      'autoTranslate',
+      'storyUi',
+      'storyUiStyle',
+    ]);
     const chat = store.settings(
       request.params.id,
       number(body.expectedSettingsRevision, 'settings revision', 1, 1e9),
