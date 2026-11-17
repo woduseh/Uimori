@@ -20,9 +20,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     !/^0+$/.test(base)
   ) {
     try {
-      const files = execFileSync('git', ['diff', '--name-only', '-z', base, 'HEAD'], {
-        encoding: 'utf8',
-      })
+      // A source file renamed into docs still removes executable code.
+      const files = execFileSync(
+        'git',
+        ['diff', '--no-renames', '--name-only', '-z', base, 'HEAD'],
+        {
+          encoding: 'utf8',
+        }
+      )
         .split('\0')
         .filter(Boolean);
       docs = docsOnly(files);
