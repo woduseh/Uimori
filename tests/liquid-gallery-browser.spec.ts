@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp from 'sharp';
-import { get_encoding } from 'tiktoken';
+import { manuscriptTokenCount } from './fixtures/manuscript-token-count.js';
 import type { Content } from '../core/product.js';
 import type { ChatDetail, Run } from '../core/types.js';
 import { nativeContent } from './fixtures/native-content.js';
@@ -15,12 +15,12 @@ const passage = `창문 너머로 스며드는 햇살이 책장 끝에 닿았다
 “오늘은 조금 천천히 걸어도 괜찮겠지요.”
 
 그녀는 책갈피를 끼우고 고개를 들었다. 서두르지 않아도 되는 아침이라는 사실이 아직은 낯설었다. 맞은편에 앉은 여행자는 대답 대신 따뜻한 찻잔을 내밀었다. 말하지 않은 이야기들은 여전히 많았지만, 지금 이 순간만큼은 침묵도 나쁘지 않았다.`;
-const encoder = get_encoding('o200k_base');
-let longText = '# 비가 그친 아침에\n\n';
-while (encoder.encode(longText).length < 10500) longText += `${passage}\n\n`;
-longText += '마지막 문장. 두 사람은 마침내 함께 문을 나섰다.';
-const tokenCount = encoder.encode(longText).length;
-encoder.free();
+const longText = `# 비가 그친 아침에\n\n${`${passage}\n\n`.repeat(61)}마지막 문장. 두 사람은 마침내 함께 문을 나섰다.`;
+let tokenCount: number;
+test.beforeAll(async () => {
+  tokenCount = await manuscriptTokenCount(longText);
+  expect(tokenCount).toBeGreaterThan(10000);
+});
 const requestText =
   '다음 날 아침으로 이어줘. 두 사람이 어젯밤의 일을 의식하지만 먼저 말하지 못하는 분위기로, 풍경과 감정선을 충분히 보여줘.';
 const translationText =
@@ -235,7 +235,6 @@ for (const width of [1440, 412]) {
           node.scrollTop = top;
         }, top);
       await scroll(0);
-      expect(tokenCount).toBeGreaterThan(10000);
       const metrics = await reader.evaluate((node) => ({
         height: node.clientHeight,
         fullHeight: node.scrollHeight,
@@ -440,6 +439,7 @@ if (process.env.UIMORI_BENCHMARK === '1')
       const blob = await imageResponse.json();
       const widget = `<style>.perf-panel{border:2px solid rgb(30, 80, 120);padding:8px}.perf-panel img{width:24px;height:24px}</style>
 <div class="perf-panel"><img src="${blob.url}" alt="Synthetic local tile"><button risu-trigger="perfChoice">Author choice</button><details><summary>Author notes</summary><input aria-label="Author draft" value="Preserved widget"></details></div>`;
+      const { get_encoding } = await import('tiktoken');
       const encoding = get_encoding('o200k_base');
       const repeated = (unit: string, tokens: number) => {
         let text = unit.repeat(Math.ceil(tokens / encoding.encode(unit).length));

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { createServer, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react';
+import { visualReview } from './fixtures/visual-review.js';
 let server: ViteDevServer;
 let origin: string;
 test.beforeAll(async () => {
@@ -41,27 +42,9 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await server.close();
 });
-test('renders tabs and labelled input with keyboard navigation', async ({ page }) => {
-  await page.goto(origin);
-  await page.evaluate(async () => {
-    const path = '/tests/fixtures/story-ui.tsx';
-    const fixture = await import(path);
-    fixture.mountStoryUi(document.getElementById('mount'));
-  });
-  await expect(page.getByText('첫 화면')).toBeVisible();
-  const first = page.getByRole('tab', { name: '첫째' });
-  await first.focus();
-  await first.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: '둘째' })).toBeFocused();
-  await expect(page.getByText('다음 화면')).toBeVisible();
-  await page.getByLabel('이름').fill('시아');
-  await expect(page.getByLabel('이름')).toHaveValue('시아');
-  await page.screenshot({ path: 'output/story-ui-browser.png' });
-});
-
 test('renders bound image lists and icons without fetching edited external URLs', async ({
   page,
-}) => {
+}, info) => {
   const { normalizeStoryUiOutput } = await import('../server/story-ui.js');
   const source = normalizeStoryUiOutput(`<a2ui>
 $/people = [{name: "미라", portrait: "/api/assets/mira", icon: "person"}, {name: "솔", portrait: "/api/assets/sol", icon: "home"}]
@@ -107,7 +90,7 @@ root = Column([List(_template($/people, item)), TextField("첫 아이콘", $/peo
   await page.getByLabel('초상화 경로').fill('/api/package-image-blobs/changed');
   await expect(selected).toHaveAttribute('src', '/api/package-image-blobs/changed');
   expect(remoteRequests).toEqual([]);
-  await page.screenshot({ path: 'output/story-ui-bound-images.png' });
+  if (visualReview) await page.screenshot({ path: info.outputPath('story-ui-bound-images.png') });
 });
 
 test('reader submits its authored event through the real action route', async ({ page }) => {
@@ -302,29 +285,9 @@ test('switches original and translated UI when both start at the same offset', a
   await expect(page.getByLabel('Draft', { exact: true })).toHaveValue('아직 보내지 않은 답장');
 });
 
-test('presets reach SDK components and streaming surfaces at desktop and mobile widths', async ({
-  page,
-}) => {
-  for (const width of [1100, 390]) {
-    await page.setViewportSize({ width, height: 800 });
-    await page.goto(origin);
-    await page.evaluate(async () => {
-      const path = '/tests/fixtures/story-ui.tsx';
-      const fixture = await import(path);
-      fixture.mountStoryUi(document.getElementById('mount')!, 'fantasy');
-    });
-    const surface = page.locator('.story-ui');
-    await expect(surface.getByText('첫 화면')).toBeVisible();
-    await expect(surface).toHaveCSS('background-color', 'rgb(239, 227, 198)');
-    const sdkText = surface.getByText('첫 화면');
-    await expect(sdkText).toHaveCSS('color', 'rgb(56, 43, 32)');
-    await page.screenshot({ path: `output/story-ui-preset-${width}.png` });
-  }
-});
-
 test('story UI presets keep their controls usable at desktop and mobile widths', async ({
   page,
-}) => {
+}, info) => {
   for (const width of [1100, 390]) {
     for (const style of ['default', 'east-asian', 'fantasy', 'modern', 'period', 'blue-archive']) {
       await page.setViewportSize({ width, height: 900 });
@@ -345,17 +308,24 @@ test('story UI presets keep their controls usable at desktop and mobile widths',
             .getByRole('button', { name: '확인', exact: true })
             .getByText('확인', { exact: true })
         ).toHaveCSS('color', 'rgb(255, 255, 255)');
-      await expect(surface.getByText('오늘의 순찰 구역을 확인해 주세요.')).toBeVisible();
+      const tabText = surface.getByText('오늘의 순찰 구역을 확인해 주세요.');
+      await expect(tabText).toBeVisible();
+      if (style === 'fantasy') {
+        await expect(surface).toHaveCSS('background-color', 'rgb(239, 227, 198)');
+        await expect(tabText).toHaveCSS('color', 'rgb(56, 43, 32)');
+      }
       await surface.getByRole('tab', { name: '임무 정보' }).focus();
       await page.keyboard.press('ArrowRight');
+      await expect(surface.getByRole('tab', { name: '활동 기록' })).toBeFocused();
       await expect(surface.getByText('오늘의 활동 기록이에요.')).toBeVisible();
       await surface.getByLabel('조사 메모').fill('오후에 다시 확인');
       await expect(surface.getByLabel('조사 메모')).toHaveValue('오후에 다시 확인');
       expect(await surface.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
-      await page.screenshot({
-        path: `output/story-ui-${style}-${width}.png`,
-        fullPage: true,
-      });
+      if (visualReview)
+        await page.screenshot({
+          path: info.outputPath(`story-ui-${style}-${width}.png`),
+          fullPage: true,
+        });
     }
   }
 });

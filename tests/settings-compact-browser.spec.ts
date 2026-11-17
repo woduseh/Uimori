@@ -56,18 +56,20 @@ test('CSUILAYOUT all chat settings sections fit shared desktop and phone setting
           });
           expect(Math.abs(row.x + row.width - bounds.x - bounds.width)).toBeLessThanOrEqual(1);
         }
-        await pane.evaluate((node) => {
-          node.scrollTop = 0;
-        });
-        await page.screenshot({
-          path: info.outputPath(`chat-${section}-${colorScheme}-${width}-top.png`),
-        });
-        await pane.evaluate((node) => {
-          node.scrollTop = node.scrollHeight;
-        });
-        await page.screenshot({
-          path: info.outputPath(`chat-${section}-${colorScheme}-${width}-bottom.png`),
-        });
+        if (visualReview) {
+          await pane.evaluate((node) => {
+            node.scrollTop = 0;
+          });
+          await page.screenshot({
+            path: info.outputPath(`chat-${section}-${colorScheme}-${width}-top.png`),
+          });
+          await pane.evaluate((node) => {
+            node.scrollTop = node.scrollHeight;
+          });
+          await page.screenshot({
+            path: info.outputPath(`chat-${section}-${colorScheme}-${width}-bottom.png`),
+          });
+        }
       }
       await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
     }
@@ -223,12 +225,14 @@ for (const colorScheme of ['light', 'dark'] as const) {
         const bounds = (await dialog.boundingBox())!;
         expect(Math.abs(bounds.x + bounds.width / 2 - viewport.width / 2)).toBeLessThanOrEqual(2);
         if (viewport.width > 760) expect(bounds.width).toBeLessThan(1300);
-        await pane.evaluate((node) => {
-          node.scrollTop = 0;
-        });
-        await page.screenshot({
-          path: info.outputPath(`settings-${section}-${colorScheme}-${viewport.width}.png`),
-        });
+        if (visualReview) {
+          await pane.evaluate((node) => {
+            node.scrollTop = 0;
+          });
+          await page.screenshot({
+            path: info.outputPath(`settings-${section}-${colorScheme}-${viewport.width}.png`),
+          });
+        }
       }
       await dialog.getByRole('button', { name: '설정 닫기', exact: true }).click();
     });

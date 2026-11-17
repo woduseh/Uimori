@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp from 'sharp';
-import { get_encoding } from 'tiktoken';
+import { manuscriptTokenCount } from './fixtures/manuscript-token-count.js';
 import type { Content } from '../core/product.js';
 import type { PackageImage } from '../core/package-images.js';
 import type { ChatDetail } from '../core/types.js';
@@ -23,12 +23,12 @@ const requestText = '비가 그친 아침, 두 사람이 숲길을 따라 걸어
 const endMarker = '마지막 문장. 두 사람은 마침내 함께 문을 나섰다.';
 const passage =
   '창문 너머로 스며드는 햇살이 책장 끝에 닿았다. 밤새 내리던 비는 어느새 그쳐 있었다. 젖은 돌길 위로 바람이 지나갈 때마다 나뭇잎에 남아 있던 물방울이 작은 별처럼 반짝였다.\n\n“오늘은 조금 천천히 걸어도 괜찮겠지요.”\n\n그녀는 책갈피를 끼우고 고개를 들었다. 맞은편에 앉은 여행자는 대답 대신 따뜻한 찻잔을 내밀었다. 말하지 않은 이야기는 많았지만 지금 이 순간만큼은 침묵도 나쁘지 않았다.\n\n';
-const encoder = get_encoding('o200k_base');
-let longText = '# 비가 그친 아침에\n\n';
-while (encoder.encode(longText).length < 10500) longText += passage;
-longText += endMarker;
-const tokenCount = encoder.encode(longText).length;
-encoder.free();
+const longText = `# 비가 그친 아침에\n\n${passage.repeat(71)}${endMarker}`;
+let tokenCount: number;
+test.beforeAll(async () => {
+  tokenCount = await manuscriptTokenCount(longText);
+  expect(tokenCount).toBeGreaterThan(10000);
+});
 const translationText =
   '# After the rain\n\nMorning light reached the bookshelf.\n\n“Let us take our time today.”\n\nThey finally stepped outside together.';
 const readingPreferences = {
@@ -300,7 +300,6 @@ for (const layout of layouts) {
           fullHeight: node.scrollHeight,
           overflow: getComputedStyle(node).overflowY,
         }));
-        expect(tokenCount).toBeGreaterThan(10000);
         expect(metrics.fullHeight).toBeGreaterThan(metrics.height * 5);
         expect(metrics.height).toBeGreaterThan(100);
         expect(metrics.height).toBeLessThan(width === 1440 ? 1000 : 915);

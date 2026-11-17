@@ -20,7 +20,7 @@ test('AUDIT2 search explains an empty target selection and resumes after choosin
   page,
   request,
 }, info) => {
-  const { chat } = await createReadingChat(request, `검색 대상 안내 ${Date.now()}`);
+  const { chat } = await createReadingChat(request, `검색 대상 안내 ${Date.now()}`, 1);
   const searches: string[] = [];
   page.on('request', (event) => {
     if (event.method() === 'POST' && new URL(event.url()).pathname === '/api/search')

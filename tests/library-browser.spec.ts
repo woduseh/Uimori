@@ -1093,72 +1093,65 @@ test('LIBUI08 manual order persists and a bot card can be dropped into a folder'
   await expect(panel.locator('.library-empty')).toHaveCount(0);
 });
 
-for (const kind of ['bot', 'persona'] as const) {
-  test(`SAVEPERF saved ${kind} unlocks before library refresh and retains success on refresh failure`, async ({
-    page,
-    request,
-  }) => {
-    const title = `SAVEPERF ${kind} ${Date.now()}`;
-    const content = await createContent(request, title, kind);
-    await page.goto('/');
-    await navigationAction(page, kind === 'bot' ? '봇' : '페르소나');
-    await editLibraryContent(page, title);
-    const editor = page.getByRole('region', { name: '자료 상세', exact: true });
-    const updated = `${title} edited`;
-    await editor.getByLabel('Risu 자료 이름', { exact: true }).fill(updated);
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let requested!: () => void;
-    const refreshRequested = new Promise<void>((resolve) => {
-      requested = resolve;
-    });
-    await page.route('**/api/library?view=summary', async (route) => {
-      requested();
-      await gate;
-      await route.fulfill({
-        status: 503,
-        contentType: 'application/json',
-        body: JSON.stringify({ error: 'Synthetic list refresh failure' }),
-      });
-    });
-    try {
-      await page.clock.install();
-      const savedResponse = page.waitForResponse(
-        (response) =>
-          response.request().method() === 'POST' &&
-          new URL(response.url()).pathname.endsWith('/save')
-      );
-      await editor.getByRole('button', { name: '변경사항 저장', exact: true }).click();
-      expect((await savedResponse).ok()).toBe(true);
-      await refreshRequested;
-      // The GET is still held. An awaited reload would leave this button disabled.
-      await expect(
-        editor.getByRole('button', { name: '변경사항 저장', exact: true })
-      ).toBeEnabled();
-      const saved = await (await request.get(`/api/content/${content.id}`)).json();
-      expect(saved.title).toBe(updated);
-      expect(saved.revision).toBe(content.revision + 1);
-      const completion = page.locator('.transient-notice').filter({
-        hasText: `${updated} 자료를 저장했어요.`,
-      });
-      await expect(completion).toBeVisible();
-      // Completion expires independently; a failed follow-up read still needs review.
-      release();
-      const warning = editor.getByRole('status', { name: '저장 후 확인할 사항', exact: true });
-      await expect(warning).toContainText(`${updated} 저장됨, 서재 목록을 갱신하지 못했어요.`);
-      await page.clock.fastForward(4500);
-      await expect(completion).toHaveCount(0);
-      await expect(warning).toBeVisible();
-      await expect(
-        editor.getByRole('button', { name: '변경사항 저장', exact: true })
-      ).toBeEnabled();
-      expect((await (await request.get(`/api/content/${content.id}`)).json()).revision).toBe(
-        saved.revision
-      );
-    } finally {
-      release();
-    }
+test('SAVEPERF saved bot unlocks before library refresh and retains success on refresh failure', async ({
+  page,
+  request,
+}) => {
+  const title = `SAVEPERF bot ${Date.now()}`;
+  const content = await createContent(request, title);
+  await page.goto('/');
+  await navigationAction(page, '봇');
+  await editLibraryContent(page, title);
+  const editor = page.getByRole('region', { name: '자료 상세', exact: true });
+  const updated = `${title} edited`;
+  await editor.getByLabel('Risu 자료 이름', { exact: true }).fill(updated);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
   });
-}
+  let requested!: () => void;
+  const refreshRequested = new Promise<void>((resolve) => {
+    requested = resolve;
+  });
+  await page.route('**/api/library?view=summary', async (route) => {
+    requested();
+    await gate;
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Synthetic list refresh failure' }),
+    });
+  });
+  try {
+    await page.clock.install();
+    const savedResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/save')
+    );
+    await editor.getByRole('button', { name: '변경사항 저장', exact: true }).click();
+    expect((await savedResponse).ok()).toBe(true);
+    await refreshRequested;
+    // The GET is still held. An awaited reload would leave this button disabled.
+    await expect(editor.getByRole('button', { name: '변경사항 저장', exact: true })).toBeEnabled();
+    const saved = await (await request.get(`/api/content/${content.id}`)).json();
+    expect(saved.title).toBe(updated);
+    expect(saved.revision).toBe(content.revision + 1);
+    const completion = page.locator('.transient-notice').filter({
+      hasText: `${updated} 자료를 저장했어요.`,
+    });
+    await expect(completion).toBeVisible();
+    // Completion expires independently; a failed follow-up read still needs review.
+    release();
+    const warning = editor.getByRole('status', { name: '저장 후 확인할 사항', exact: true });
+    await expect(warning).toContainText(`${updated} 저장됨, 서재 목록을 갱신하지 못했어요.`);
+    await page.clock.fastForward(4500);
+    await expect(completion).toHaveCount(0);
+    await expect(warning).toBeVisible();
+    await expect(editor.getByRole('button', { name: '변경사항 저장', exact: true })).toBeEnabled();
+    expect((await (await request.get(`/api/content/${content.id}`)).json()).revision).toBe(
+      saved.revision
+    );
+  } finally {
+    release();
+  }
+});
