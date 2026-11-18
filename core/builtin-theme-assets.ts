@@ -45,6 +45,18 @@ export const BUILTIN_THEME_ASSET_FILES: BuiltinThemeAssetFile[] = [
     mime: 'image/webp',
     file: 'scrap-sprig.webp',
   },
+  {
+    hash: '66281a51e87708405727b34fdc160eeff2e25e4982159727f793d3f6ff39be57',
+    kind: 'image',
+    mime: 'image/webp',
+    file: 'cinema-corner.webp',
+  },
+  {
+    hash: '1062c7e4be2a02b8c13169c6476dea15814064307b684318f4fd4ceac532ca2a',
+    kind: 'image',
+    mime: 'image/webp',
+    file: 'cinema-wing.webp',
+  },
 ];
 
 export function builtinThemeAsset(name: string, file: string) {

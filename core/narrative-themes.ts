@@ -89,47 +89,6 @@ const messageCss = `
 function colors(id: string) {
   return BUILTIN_PALETTES.find((palette) => palette.id === id)!.colors;
 }
-export const cinematicTheme: ThemeDefinition = {
-  title: '시네마틱',
-  description: '가장자리로 스며드는 등장인물과 긴 이야기를 담은 장면',
-  colors: colors('midnight'),
-  appCss:
-    commonApp +
-    `
-/* The portrait shares the scene edge, rather than occupying a separate identity card. */
-.scene-portraits { position: relative; display: block; }
-.scene-portraits [data-uimori-part="bot-portrait"] { position: relative; }
-.scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { border: 0; border-radius: 0; background: transparent; }
-.scene-portraits [data-uimori-part="bot-portrait"] img { width: 100%; height: auto; max-height: 680px; object-fit: cover; object-position: center 20%; mask-image: linear-gradient(to right, transparent, black 22%), linear-gradient(to bottom, black 65%, transparent 100%); mask-composite: intersect; }
-.scene-portraits [data-uimori-part="bot-portrait"] figcaption { position: absolute; left: 28px; bottom: 26px; padding: 0; pointer-events: none; }
-.scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-size: var(--font-heading); }
-.scene-portraits figcaption small { display: none; }
-.scene-portraits [data-uimori-part="persona-portrait"] { position: absolute; right: 20px; bottom: 24px; gap: 8px; }
-.scene-portraits [data-uimori-part="persona-portrait"] figcaption { display: none; }
-.scene-portraits [data-uimori-part="persona-portrait"] .reader-portrait-button { border: var(--hairline) solid var(--line); }
-@container narrative-workspace (max-width: 850px) {
-  .scene-portraits [data-uimori-part="bot-portrait"] img { height: 130px; object-fit: cover; object-position: center 22%; mask-image: linear-gradient(to bottom, black 65%, transparent); }
-  .scene-portraits [data-uimori-part="bot-portrait"] figcaption { left: 20px; bottom: 16px; }
-  .scene-portraits [data-uimori-part="persona-portrait"] { right: 18px; bottom: 12px; }
-}
-` +
-    mobilePortrait,
-  messageCss,
-  templateHtml:
-    '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body" data-uimori-body-scroll></slot><footer class="actions"><slot name="actions"></slot></footer></div><aside class="portrait"><slot name="portrait"></slot></aside></section>',
-  templateCss:
-    commonTemplate +
-    `
-.manuscript { display: grid; grid-template-columns: minmax(0, 60%) minmax(0, 40%); gap: 0; padding: 0; border: var(--hairline) solid var(--line); }
-.copy { padding: 28px 20px 24px 32px; }
-.portrait { align-self: start; padding: 0; }
-@container narrative-scene (max-width: 680px) {
-  .manuscript { display: flex; flex-direction: column; padding: 0; gap: 0; }
-  .copy { padding: 12px 18px 24px; }
-  .portrait { order: -1; width: 100%; }
-}
-`,
-};
 const paperGrain =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E\")";
 const postmark =
@@ -506,5 +465,142 @@ export const classicFrameTheme: ThemeDefinition = {
 .heading { padding-bottom:12px; margin-bottom:20px; }
 .actions { margin-top:20px; }
 @container narrative-scene (max-width:680px) { .manuscript { display:block; padding:10px; } .portrait { margin-bottom:12px; } .copy { padding:18px 14px; } }
+`,
+};
+const sprockets =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 24'%3E%3Cpath fill-rule='evenodd' d='M0 0H18V24H0Z M5 6H13V16H5Z'/%3E%3C/svg%3E\")";
+const ticketNotches =
+  'radial-gradient(circle at 0 50%, #0000 9px, #000 9.5px) left / 51% 100% no-repeat, radial-gradient(circle at 100% 50%, #0000 9px, #000 9.5px) right / 51% 100% no-repeat';
+export const cinematicTheme: ThemeDefinition = {
+  title: '시네마틱',
+  description: '가장자리로 스며드는 등장인물과 긴 이야기를 담은 장면',
+  colors: colors('midnight'),
+  assets: [
+    builtinThemeAsset('title', 'GowunBatang-Regular.woff2'),
+    builtinThemeAsset('corner', 'cinema-corner.webp'),
+    builtinThemeAsset('wing', 'cinema-wing.webp'),
+  ],
+  appCss:
+    commonApp +
+    `
+/* An art-deco movie palace: the portrait is a film frame with a lower-third name card. */
+.scene-portraits { position: relative; display: block; }
+.scene-portraits [data-uimori-part="bot-portrait"] { position: relative; }
+.scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { border: 0; border-radius: 0; background: transparent; }
+.scene-portraits [data-uimori-part="bot-portrait"] img { width: 100%; height: auto; max-height: 640px; object-fit: cover; object-position: center 20%; mask-image: linear-gradient(to right, transparent, black 22%), linear-gradient(to bottom, black 65%, transparent 100%); mask-composite: intersect; }
+.scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-empty { min-height: 280px; background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 18%, var(--panel)), var(--panel)); }
+.scene-portraits [data-uimori-part="bot-portrait"] figcaption {
+  position: absolute;
+  left: 20px;
+  right: 34px;
+  bottom: 26px;
+  padding: 6px 12px 6px 14px;
+  border-left: 3px solid var(--accent);
+  background: linear-gradient(to right, color-mix(in srgb, var(--panel) 88%, transparent), transparent);
+  pointer-events: none;
+}
+.scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-family: var(--theme-font-title), serif; font-size: var(--font-heading); font-weight: 400; letter-spacing: 0.18em; }
+.scene-portraits figcaption small { display: none; }
+.scene-portraits [data-uimori-part="persona-portrait"] { position: absolute; right: 20px; bottom: 24px; gap: 8px; }
+.scene-portraits [data-uimori-part="persona-portrait"] figcaption { display: none; }
+.scene-portraits [data-uimori-part="persona-portrait"] .reader-portrait-button { border: var(--hairline) solid var(--line); }
+.reader [data-uimori-part="heading"] .folio { font-family: var(--theme-font-title), serif; font-size: var(--font-heading); font-weight: 400; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent-text); }
+/* The request is an admission ticket: notched sides and a perforated stub. */
+.reader .request-message:not(form) {
+  position: relative;
+  padding: 14px 72px 14px 24px;
+  border: 0;
+  border-radius: var(--radius-small);
+  color: var(--text);
+  background:
+    repeating-linear-gradient(to bottom, color-mix(in srgb, var(--accent) 60%, transparent) 0 5px, transparent 5px 9px) calc(100% - 52px) 0 / 1.5px 100% no-repeat,
+    linear-gradient(to right, transparent calc(100% - 52px), color-mix(in srgb, var(--accent) 22%, var(--panel)) calc(100% - 52px)),
+    color-mix(in srgb, var(--accent) 10%, var(--panel));
+  mask: ${ticketNotches};
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+:root[data-theme="dark"] .reader .request-message:not(form) { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), inset 0 0 18px color-mix(in srgb, var(--accent) 12%, transparent); }
+` +
+    mobilePortrait +
+    `
+@container narrative-workspace (max-width: 850px) {
+  .scene-portraits [data-uimori-part="bot-portrait"] img { height: 130px; object-fit: cover; object-position: center 22%; mask-image: linear-gradient(to bottom, black 65%, transparent); }
+  .scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-empty { min-height: 130px; }
+  .scene-portraits [data-uimori-part="bot-portrait"] figcaption { position: absolute; left: 16px; right: 16px; bottom: 14px; padding: 4px 10px; text-align: left; }
+  .scene-portraits [data-uimori-part="persona-portrait"] { right: 18px; bottom: 12px; }
+  .reader .request-message:not(form) { padding-right: 60px; }
+}
+`,
+  messageCss:
+    messageCss +
+    `
+:where(h1, h2, h3) { font-family: var(--theme-font-title), serif; font-weight: 400; letter-spacing: 0.08em; }
+`,
+  templateHtml:
+    '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><i class="corner top-left" aria-hidden="true"></i><i class="corner top-right" aria-hidden="true"></i><i class="corner bottom-left" aria-hidden="true"></i><i class="corner bottom-right" aria-hidden="true"></i><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body" data-uimori-body-scroll></slot><i class="wing" aria-hidden="true"></i><footer class="actions"><slot name="actions"></slot></footer></div><aside class="portrait"><slot name="portrait"></slot></aside></section>',
+  templateCss:
+    commonTemplate +
+    `
+/* Proscenium with deco corners, a marquee of bulbs, a projector beam and a film-strip edge. */
+.manuscript {
+  display: grid;
+  grid-template-columns: minmax(0, 60%) minmax(0, 40%);
+  gap: 0;
+  padding: 26px 0 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+  box-shadow: inset 0 0 0 6px var(--panel), inset 0 0 0 7px color-mix(in srgb, var(--accent) 40%, var(--line));
+  background:
+    conic-gradient(from 200deg at 100% 0%, transparent 0deg, color-mix(in srgb, var(--accent) 9%, transparent) 14deg, transparent 32deg),
+    radial-gradient(ellipse at 50% 30%, transparent 45%, color-mix(in srgb, var(--accent) 8%, transparent) 100%),
+    ${paperGrain},
+    var(--panel);
+}
+.manuscript::before {
+  content: '';
+  position: absolute;
+  inset: 12px 40px auto;
+  height: 8px;
+  background: radial-gradient(circle, var(--accent) 2.5px, transparent 3px) center / 16px 8px repeat-x;
+  pointer-events: none;
+}
+:host-context([data-theme="dark"]) .manuscript { background-color: color-mix(in srgb, var(--panel), black 25%); }
+:host-context([data-theme="dark"]) .manuscript::before { filter: drop-shadow(0 0 3px var(--accent)) drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 60%, transparent)); }
+.corner { position: absolute; z-index: 2; width: 64px; height: 64px; background: var(--accent-text); mask: var(--theme-image-corner) no-repeat center / contain; pointer-events: none; }
+.corner.top-left { top: 4px; left: 4px; }
+.corner.top-right { top: 4px; right: 4px; transform: scaleX(-1); }
+.corner.bottom-left { bottom: 4px; left: 4px; transform: scaleY(-1); }
+.corner.bottom-right { bottom: 4px; right: 4px; transform: scale(-1); }
+.copy { position: relative; z-index: 1; padding: 24px 24px 28px 40px; }
+/* A clapperboard hinge above the scene heading. */
+.heading { position: relative; padding-top: 18px; border-bottom-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.heading::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 10px;
+  background: repeating-linear-gradient(-60deg, var(--text) 0 12px, var(--panel) 12px 24px);
+  border: 1px solid var(--text);
+  opacity: 0.85;
+}
+.wing { display: block; height: 28px; margin: 18px auto 0; width: min(100%, 320px); background: var(--accent-text); mask: var(--theme-image-wing) no-repeat center / contain; }
+.actions { margin-top: 8px; border-top: 0; }
+.portrait { position: relative; align-self: start; padding: 0 22px 0 0; }
+.portrait::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 18px;
+  background: color-mix(in srgb, var(--text) 82%, var(--panel));
+  mask: ${sprockets} center top / 18px 24px repeat-y;
+}
+@container narrative-scene (max-width: 680px) {
+  .manuscript { display: flex; flex-direction: column; padding: 20px 0 0; }
+  .manuscript::before { inset: 8px 28px auto; }
+  .corner { width: 40px; height: 40px; }
+  .corner.bottom-left, .corner.bottom-right { display: none; }
+  .copy { padding: 12px 18px 24px; }
+  .portrait { order: -1; width: 100%; padding: 0 0 18px; }
+  .portrait::after { inset: auto 0 0 0; width: auto; height: 18px; mask: ${sprockets} left center / 24px 18px repeat-x; }
+}
 `,
 };
