@@ -37,19 +37,19 @@ export const HELPER_PRESENTATION_TOOLS: ProviderTool[] = [
   ),
   tool(
     'font.register',
-    'Download and register a web-embeddable font from a public HTTPS font-file URL. The URL is used for download only, not saved as font metadata. Registration does not apply it. A preview alone is not a creation request.',
+    'Download and register a web-embeddable font from a public HTTPS font-file URL. The URL is used for download only, not saved as font metadata. Registration does not apply it.',
     { title: string, url: string },
     ['title', 'url']
   ),
   tool(
     'font.select',
-    'Apply explicitly requested global app and reader fonts with the revision from font.list. Both IDs are required; preserve the other current choice. Null restores the default.',
+    'Apply the requested global app and reader fonts with the revision from font.list. Both IDs are required; preserve the other current choice. Null restores the default.',
     { expectedRevision: revision, appFontId: nullable, readerFontId: nullable },
     ['expectedRevision', 'appFontId', 'readerFontId']
   ),
   tool(
     'font.delete',
-    'Delete an explicitly requested registered font. Read current selections first.',
+    'Delete the registered font the request names. Read current selections first.',
     { id: string },
     ['id']
   ),
@@ -59,13 +59,13 @@ export const HELPER_PRESENTATION_TOOLS: ProviderTool[] = [
   ),
   tool(
     'palette.save',
-    'Create or update a standalone palette. model contains title, description and colors.light/dark using theme.guide color keys. Saving does not apply it; preview/proposal requests remain unsaved.',
+    'Create or update a standalone palette. model contains title, description and colors.light/dark using theme.guide color keys. Saving does not apply it.',
     { id: string, expectedRevision: revision, model: { type: 'object' } },
     ['model']
   ),
   tool(
     'palette.delete',
-    'Delete an explicitly requested saved palette using its current revision.',
+    'Delete the saved palette the request names, using its current revision.',
     { id: string, expectedRevision: revision },
     ['id', 'expectedRevision']
   ),

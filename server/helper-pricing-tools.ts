@@ -29,7 +29,7 @@ export const HELPER_PRICING_TOOLS: ProviderTool[] = [
   {
     name: 'model.pricing.update',
     description:
-      'Update only the pricing of a saved model after a user request. First read model.pricing.read for expectedRevision and actual connection/protocol. Verify rates for that actual connection from an official source; never substitute gateway prices for direct API prices. USD per million tokens; null means unknown, 0 means verified free. Manual updates require sourceUrl and checkedAt. Specify Flex, Batch, cache TTL and long-context rates separately when applicable; never infer a discount. This does not browse or change credentials, model options, reserved snapshots or historical costs. Legacy mode official selects only current connection catalog pricing.',
+      'Update only the pricing of a saved model. First read model.pricing.read for expectedRevision and actual connection/protocol. Verify rates for that actual connection from an official source; never substitute gateway prices for direct API prices. USD per million tokens; null means unknown, 0 means verified free. Manual updates require sourceUrl and checkedAt. Specify Flex, Batch, cache TTL and long-context rates separately when applicable; never infer a discount, and leave any rate you could not verify unchanged. This does not browse or change credentials, model options, reserved snapshots or historical costs. Legacy mode official selects only current connection catalog pricing.',
     inputSchema: schema(
       {
         modelId: { type: 'string', minLength: 1, maxLength: 100 },

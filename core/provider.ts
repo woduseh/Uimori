@@ -42,7 +42,7 @@ export type ReadBudget = {
   ranges?: (number | null)[];
 };
 export const CATALOG_READ_GUIDANCE =
-  'Relevant references may already be included in the input; do not read them again. The catalog contains summaries of additional references. If the reply needs missing detail, fetch known ids with knowledge.read({ids:[...]}), using a one-item array for a single reference. Request independently needed references together; wait for earlier results only when they are needed to choose the next reference. Use knowledge.search only when the needed entry is not identifiable from the catalog. Exact names favor normal search; mode=relevant ranks lexical matches, and mode=browse follows package/folder structure when vocabulary differs. Follow returned nextRead references; folder metadata is not evidence that the underlying text was read. Retrieval is optional when the supplied context is sufficient.';
+  'The catalog lists summaries of references whose full text is not in the input. When an entry bears on this request, read its full text first: fetch known ids with knowledge.read({ids:[...]}), using a one-item array for a single reference, and request independently needed references together. Wait for earlier results only when they decide the next read. References already delivered in full need no second read. Use knowledge.search when the catalog does not identify the entry you need: exact names favor normal search, mode=relevant ranks lexical matches, and mode=browse follows package/folder structure when vocabulary differs. Follow returned nextRead references; folder metadata is not evidence that the underlying text was read.';
 
 const metadata = ({ text: _text, chatId: _chatId, loreFolder: _loreFolder, ...item }: Resource) =>
   item;

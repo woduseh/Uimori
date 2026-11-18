@@ -74,7 +74,7 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'chat.lore',
     description:
-      'Read or edit a chat-only lore override. Read without selector for a paged items list (offset/limit); use item.scope plus item.id as loreId and a field to form selector. Read with selector for paged original and override text (textOffset/textLimit); never confuse an override with its shared original. Copy returned expected revision/hash fields into the patch body with selector and value. Missing originals are listed with originalMissing and read as original:null; they can still be removed using selector, expectedRevision and expectedHeadRevision. Mutations require a user request for chat-only lore; shared originals stay intact.',
+      'Read or edit a chat-only lore override. Read without selector for a paged items list (offset/limit); use item.scope plus item.id as loreId and a field to form selector. Read with selector for paged original and override text (textOffset/textLimit); never confuse an override with its shared original. Copy returned expected revision/hash fields into the patch body with selector and value. Missing originals are listed with originalMissing and read as original:null; they can still be removed using selector, expectedRevision and expectedHeadRevision. Edits change this chat only; shared originals stay intact.',
     inputSchema: schema(
       {
         action: { type: 'string', enum: ['read', 'patch', 'remove'] },
@@ -102,7 +102,7 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'editor.read',
     description:
-      'Read a compact overview of the captured device editor input. For structure and exact typed values, follow JSON Pointer path pages; long text uses textOffset/textLimit. For ordinary draft facts use data.search/read with scope=editor. The saved/unsaved input origin is returned. Never claims image understanding.',
+      'Read a compact overview of the captured device editor input. For structure and exact typed values, follow JSON Pointer path pages; long text uses textOffset/textLimit. For ordinary draft facts use data.search/read with scope=editor. The saved/unsaved input origin is returned. Images in the input are not described.',
     inputSchema: schema({
       path: str,
       fields: { type: 'array', items: str, maxItems: 50 },
@@ -114,8 +114,7 @@ const TOOLS: ProviderTool[] = [
   },
   {
     name: 'chat.rename',
-    description:
-      'Rename this chat using its current title revision after a user request. Read settings first.',
+    description: 'Rename this chat using its current title revision. Read settings first.',
     inputSchema: schema({ title: str, expectedRevision: { type: 'integer', minimum: 0 } }, [
       'title',
       'expectedRevision',
@@ -124,13 +123,13 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'chat.fork',
     description:
-      'Fork from an actual discovered source ID in this conversation ancestry. Only copies the chosen past, never this helper history or drafts. Requires the user request.',
+      'Fork from an actual discovered source ID in this conversation ancestry. Copies only the chosen past, not this helper history or drafts.',
     inputSchema: schema({ sourceId: str, title: str }, ['sourceId']),
   },
   {
     name: 'library.organize',
     description:
-      'Read current folder revision then create a folder or move explicitly requested items. Mutations require body.expectedRevision. For create-folder supply body.category and title. For move supply body.items, category and folderId (null moves to the category root); omit title. Item kind is content or prompt-preset; category is bot, persona, module or prompts. The host owns mutation identity.',
+      'Read current folder revision then create a folder or move the requested items. Mutations require body.expectedRevision. For create-folder supply body.category and title. For move supply body.items, category and folderId (null moves to the category root); omit title. Item kind is content or prompt-preset; category is bot, persona, module or prompts. The host owns mutation identity.',
     inputSchema: schema(
       {
         action: { type: 'string', enum: ['read', 'create-folder', 'move'] },
@@ -175,16 +174,14 @@ const TOOLS: ProviderTool[] = [
   },
   {
     name: 'context.compact',
-    description:
-      'Compact the current chat through the shared context service when the user requested compaction. Read context first.',
+    description: 'Compact the current chat through the shared context service. Read context first.',
     inputSchema: schema({ expectedRevision: { type: 'integer', minimum: 0 } }, [
       'expectedRevision',
     ]),
   },
   {
     name: 'context.edit',
-    description:
-      'Edit the active summary using its exact expected revision and a user request. Read context first.',
+    description: 'Edit the active summary using its exact expected revision. Read context first.',
     inputSchema: schema({ expectedRevision: { type: 'integer', minimum: 0 }, summary: str }, [
       'expectedRevision',
       'summary',
@@ -193,7 +190,7 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'outline.read',
     description:
-      'Read live composition in bounded pages. Default overview returns metadata/intent previews, never full review coverage. subtree needs nodeId; depth=0 includes only that node, 1 direct children, omitted all descendants. detail needs nodeId and section=intent (default), related, or writings (subtree source references). Use offset/limit in every mode: item counts for lists (default 20, capped at 50), UTF-16 units for explicit intent limit (capped at 10000); omitted intent limit uses 3000 local o200k tokens. Versions belong to the selected query; use a new first read when switching modes/sections. Later pages require expectedVersion; copy nextRead unchanged. OUTLINE_CHANGED requires restarting this scope. Intent ranges use UTF-16. coverage.wholeField means this one response includes the entire intent, not cumulative coverage; nextOffset=null means the last page. Overview intentCodePoints uses Unicode code points. Writings return exact data.read refs, not proof that plans were fulfilled.',
+      'Read the live composition in bounded pages. mode=overview (default) returns metadata and intent previews; subtree needs nodeId (depth=0 that node only, 1 direct children, omitted all descendants); detail needs nodeId and section=intent (default), related, or writings (source references for the subtree). Every mode pages with offset/limit: lists count items (default 20, max 50); an explicit intent limit is UTF-16 units (max 10000) and an omitted one reads 3000 local o200k tokens. A version belongs to one query: copy nextRead unchanged for later pages (they require expectedVersion), start with a new first read when switching mode or section, and restart the scope on OUTLINE_CHANGED. coverage.wholeField means this one response holds the entire intent, not cumulative coverage, and nextOffset=null marks the last page; an overview alone is not a full review. Overview intentCodePoints counts Unicode code points. Writings return exact data.read refs, not proof that plans were fulfilled.',
     inputSchema: schema({
       mode: { type: 'string', enum: ['overview', 'subtree', 'detail'] },
       nodeId: itemId,
@@ -207,7 +204,7 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'outline.write',
     description:
-      "Apply composition changes the user requested: create, update, move or remove items. One call may build a whole tree by giving each new item a ref and naming its parent with parentRef; create a parent before the items that name it. Related IDs connect other plans in the same chat; read new IDs before linking. Fixed is an authored keep-condition for ordinary elaboration, not an edit lock. The entire batch is atomic. Returns a compact applied receipt, not the whole tree. RevisionAfterOperation records that operation, not a later live revision. Never retry an uncertain write with a new call ID. This writes composition only, never story prose, and never marks anything as written. Update, move and remove need the item's exact current revision. User-requested edits may change pinned or written plans; active generation must finish before its plan is edited.",
+      "Apply composition changes: create, update, move or remove items. One call may build a whole tree by giving each new item a ref and naming its parent with parentRef; create a parent before the items that name it. Related IDs connect other plans in the same chat; read new IDs before linking. Fixed is an authored keep-condition for ordinary elaboration, not an edit lock. The entire batch is atomic. Returns a compact applied receipt, not the whole tree. RevisionAfterOperation records that operation, not a later live revision. Never retry an uncertain write with a new call ID. This writes composition only, never story prose, and never marks anything as written. Update, move and remove need the item's exact current revision. Edits may change pinned or written plans; active generation must finish before its plan is edited.",
     inputSchema: schema(
       {
         operations: {
@@ -244,7 +241,7 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'notes.write',
     description:
-      'Save a user note or correction after a user request. Read context.read for notesRevision and use it as body.expectedRevision. Supply body.text for a new note; add replacesId to replace a discovered note. To retire one, supply replacesId and retired:true instead of text. The host supplies the current chat head, source anchor, user attribution and mutation identity; do not supply them yourself.',
+      'Save a user note or correction. Read context.read for notesRevision and use it as body.expectedRevision. Supply body.text for a new note; add replacesId to replace a discovered note. To retire one, supply replacesId and retired:true instead of text. The host supplies the current chat head, source anchor, user attribution and mutation identity.',
     inputSchema: schema(
       {
         body: schema(

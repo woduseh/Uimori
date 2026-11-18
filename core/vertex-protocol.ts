@@ -114,11 +114,18 @@ export function encodeVertex(
   const continuationInput = continuationInputText(request);
   const generation = request.generation;
   if (generation) validateModelOptions(generation, protocol);
-  const argon = request.modelId === 'gemini-4-argon';
-  if (argon && generation?.thinkingLevel === 'MINIMAL') reject('ARGON_THINKING_LEVEL_UNSUPPORTED');
+  // Gemini 4 models ignore sampling values, reject MINIMAL thinking and cap one streamed segment.
+  const gemini4 =
+    request.modelId === 'gemini-4-argon'
+      ? 'ARGON'
+      : request.modelId === 'gemini-4-carbon'
+        ? 'CARBON'
+        : undefined;
+  if (gemini4 && generation?.thinkingLevel === 'MINIMAL')
+    reject(`${gemini4}_THINKING_LEVEL_UNSUPPORTED`);
   // Long decoding needs continuation_token handling, which the direct REST adapter does not yet do.
-  if (argon && (generation?.maxOutputTokens ?? 65_536) > 65_536)
-    reject('ARGON_LONG_DECODE_UNSUPPORTED');
+  if (gemini4 && (generation?.maxOutputTokens ?? 65_536) > 65_536)
+    reject(`${gemini4}_LONG_DECODE_UNSUPPORTED`);
   const maxOutputTokens =
     generation?.maxOutputTokens ??
     modelCapability(protocol, request.modelId)?.maxOutputTokens ??
@@ -316,10 +323,10 @@ export function encodeVertex(
       ...(generation?.thinkingLevel !== undefined
         ? { thinkingConfig: { thinkingLevel: generation.thinkingLevel } }
         : {}),
-      ...(!argon && generation?.temperature !== undefined && generation.temperature !== null
+      ...(!gemini4 && generation?.temperature !== undefined && generation.temperature !== null
         ? { temperature: generation.temperature }
         : {}),
-      ...(!argon && generation?.topP !== undefined ? { topP: generation.topP } : {}),
+      ...(!gemini4 && generation?.topP !== undefined ? { topP: generation.topP } : {}),
       ...(generation?.stopSequences !== undefined
         ? { stopSequences: structuredClone(generation.stopSequences) }
         : {}),

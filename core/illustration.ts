@@ -359,11 +359,13 @@ export const ILLUSTRATION_PROMPT_FIELDS = [
   'prompt: Describe the scene in English. Use tags for simple concepts and natural language for relationships, occlusion and materials. Follow any ComfyUI-specific grammar in styleGuidance and preserve requested trigger words, literal fragments and weights. Otherwise use ordinary visual descriptions.',
   'negativePrompt: Combine explicit exclusions from styleGuidance and negativeGuidance into a concise English list. When only one property is unwanted, keep the subject and describe its intended appearance in prompt.',
 ].join('\n\n');
+const ILLUSTRATION_CAPTION_FIELD =
+  'caption: one sentence in the language of the scene, under 200 characters, describing what the illustration shows. Only when allowSkip is true and the scene has no moment worth an illustration (no visual change, abstract discussion, near-duplicate of routine dialogue), return {"decision":"skip","reason": string} instead; when allowSkip is false always return a prompt. Keep the illustration free of text overlays and speech bubbles.';
 export const ILLUSTRATION_PROMPT_CONTRACT = [
   'Write a ComfyUI image prompt for a single illustration of the supplied story scene. When the input specifies a focus, depict that exact moment without selecting another. Otherwise pick the most visually striking, illustratable moment. Return only JSON: {"prompt": string, "negativePrompt": string, "caption": string}.',
   ILLUSTRATION_VISUAL_DIRECTION,
   ILLUSTRATION_PROMPT_FIELDS,
-  'caption: one sentence in the language of the scene, under 200 characters, describing what the illustration shows. Only when allowSkip is true and the scene has no moment worth an illustration (no visual change, abstract discussion, near-duplicate of routine dialogue), return {"decision":"skip","reason": string} instead; when allowSkip is false always return a prompt. Keep the illustration free of text overlays and speech bubbles.',
+  ILLUSTRATION_CAPTION_FIELD,
 ].join('\n\n');
 export const CODEX_ILLUSTRATION_PROMPT_FIELDS = [
   'prompt: Write a self-contained natural-language description of this moment for the image generator. Include the composition, lighting, mood and relevant style requirements.',
@@ -373,7 +375,7 @@ export const CODEX_ILLUSTRATION_PROMPT_CONTRACT = [
   'Write a natural-language image prompt for Codex to illustrate the supplied story scene. When the input specifies a focus, depict that exact moment without selecting another. Otherwise pick the most visually striking, illustratable moment. Return only JSON: {"prompt": string, "caption": string}.',
   ILLUSTRATION_VISUAL_DIRECTION,
   CODEX_ILLUSTRATION_PROMPT_FIELDS,
-  'caption: one sentence in the language of the scene, under 200 characters, describing what the illustration shows. Only when allowSkip is true and the scene has no moment worth an illustration, return {"decision":"skip","reason": string} instead; when allowSkip is false always return a prompt. Keep the illustration free of text overlays and speech bubbles.',
+  ILLUSTRATION_CAPTION_FIELD,
 ].join('\n\n');
 export function illustrationPromptRequest(
   model: ModelSnapshot,

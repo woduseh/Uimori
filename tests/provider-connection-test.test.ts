@@ -502,11 +502,9 @@ describe('one-call provider connection diagnostics', () => {
             : {}),
         };
         const request = connectionTestRequest(model, connection);
-        expect(request.generation).toMatchObject({
-          maxOutputTokens: 256,
-          temperature: null,
-          serviceTier: model.serviceTier,
-        });
+        expect(request.generation).toMatchObject({ maxOutputTokens: 256, temperature: null });
+        // A reviewed entry lists service tiers only when its sources document them.
+        expect(request.generation?.serviceTier).toBe(model.serviceTier);
         expect(request.stable.tools).toEqual([]);
         if (cap.reasoningEfforts)
           expect(request.generation?.reasoningEffort).toBe(model.reasoningEffort);

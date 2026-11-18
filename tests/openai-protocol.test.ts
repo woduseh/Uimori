@@ -613,6 +613,87 @@ describe('native Responses pure protocol (no live calls)', () => {
     expect(record(encodeResponses(input).body).reasoning).toEqual({ effort: 'none' });
   });
 
+  test.each(['gpt-6.2-astra', 'gpt-6.2-sol'])(
+    '%s leads input with the host contract as a developer message and replays it unchanged',
+    (modelId) => {
+      const input = request();
+      input.modelId = modelId;
+      input.generation = { maxOutputTokens: 8192, temperature: null, cacheMode: 'automatic' };
+      input.bootstrap = [
+        {
+          callId: 'known',
+          name: 'knowledge.read',
+          args: { id: 'lore-1' },
+          result: 0,
+          denied: false,
+        },
+      ];
+      const earlier = record(encodeResponses({ ...input, modelId: 'gpt-6-astra' }).body);
+      const run = first(input);
+      const wire = record(run.body);
+      expect(Object.keys(earlier).slice(0, 3)).toEqual(['model', 'instructions', 'input']);
+      expect(wire).not.toHaveProperty('instructions');
+      expect(wire.input[0]).toEqual({
+        role: 'developer',
+        content: [{ type: 'input_text', text: earlier.instructions }],
+      });
+      // Bootstrap history, request text and the stable cache anchor follow in their earlier form.
+      expect(wire.input.slice(1)).toEqual(earlier.input);
+      expect(wire.input.at(-1).content[0]).toEqual({
+        type: 'input_text',
+        text: 'Request data (JSON):\n',
+        prompt_cache_breakpoint: { mode: 'explicit' },
+      });
+      const { model: _model, instructions: _instructions, input: _input, ...settings } = earlier;
+      expect(wire).toEqual({ model: modelId, input: wire.input, ...settings });
+      run.decoder.accept(terminal([call()]));
+      const continued = next(input, run.decoder.finish());
+      continued.continuationInput = 'Keep the same scene.';
+      const replay = record(encodeResponses(continued).body);
+      expect(replay).not.toHaveProperty('instructions');
+      expect(replay.input.slice(0, wire.input.length)).toEqual(wire.input);
+      expect(replay.input.filter((item: any) => item.role === 'developer')).toHaveLength(1);
+      expect(replay.prompt_cache_options).toEqual(wire.prompt_cache_options);
+    }
+  );
+
+  test('GPT-6.2 keeps authored messages and cache points behind the developer message', () => {
+    const input = request();
+    input.generation = {
+      maxOutputTokens: 8192,
+      temperature: null,
+      cacheMode: 'explicit',
+      cacheTtl: '30m',
+    };
+    input.prompt = {
+      compilerVersion: 'risu-native-prompt-2',
+      values: {},
+      messages: (['system', 'user'] as const).map((role) => ({
+        id: role,
+        role,
+        content: [{ type: 'text', text: `Authored ${role} text.` }],
+        completion: 'complete',
+        provenance: { blockId: role, origin: role === 'user' ? 'current' : 'prompt' },
+      })),
+      cachePlan: [{ blockId: 'cache-system', afterMessageId: 'system', policy: 'require' }],
+    };
+    const earlier = record(encodeResponses({ ...input, modelId: 'gpt-6-astra' }).body);
+    for (const modelId of ['gpt-6.2-sol', 'gpt-6.2-sol-2026-11-05', 'openai/gpt-6.2-astra']) {
+      const wire = record(encodeResponses({ ...input, modelId }).body);
+      expect(wire).not.toHaveProperty('instructions');
+      expect(wire.input.map((item: any) => item.role)).toEqual(['developer', 'system', 'user']);
+      expect(wire.input[0].content).toEqual([{ type: 'input_text', text: earlier.instructions }]);
+      expect(wire.input.slice(1)).toEqual(earlier.input);
+      expect(wire.input[1].content[0].prompt_cache_breakpoint).toEqual({ mode: 'explicit' });
+      expect(wire.prompt_cache_options).toEqual({ mode: 'explicit', ttl: '30m' });
+    }
+    for (const modelId of ['gpt-6-astra', 'gpt-5.6-sol', 'gpt-6.20', 'user-selected-model']) {
+      const wire = record(encodeResponses({ ...input, modelId }).body);
+      expect(wire.instructions).toBe(earlier.instructions);
+      expect(wire.input).toEqual(earlier.input);
+    }
+  });
+
   test.each(['explicit', 'automatic', 'disabled'] as const)(
     'Responses cache %s reaches requests without a native prompt and preserves translation formatting',
     (cacheMode) => {

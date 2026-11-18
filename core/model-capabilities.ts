@@ -54,7 +54,7 @@ export type ModelCapability = Readonly<{
   defaultOutputEffort?: string;
   sources: readonly string[];
 }>;
-const openai = (id: string, name: string, astra = false): ModelCapability => ({
+const openai = (id: string, name: string, rejectsNone = false): ModelCapability => ({
   id,
   name,
   protocol: 'openai-responses-v1',
@@ -62,7 +62,7 @@ const openai = (id: string, name: string, astra = false): ModelCapability => ({
   temperature: false,
   topP: false,
   stopSequences: false,
-  reasoningEfforts: astra
+  reasoningEfforts: rejectsNone
     ? ['low', 'medium', 'high', 'xhigh', 'max']
     : ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
   defaultReasoningEffort: 'medium',
@@ -141,6 +141,23 @@ const capabilities: readonly ModelCapability[] = [
     })
   ),
   {
+    id: 'gemini-4-carbon',
+    name: 'Gemini 4 Carbon',
+    protocol: 'vertex-gemini-v1',
+    maxOutputTokens: 65_536,
+    temperature: false,
+    topP: false,
+    // Neither Carbon page documents stop sequences or the Agent Platform service tiers.
+    stopSequences: false,
+    thinkingLevels: ['LOW', 'MEDIUM', 'HIGH'],
+    defaultThinkingLevel: 'MEDIUM',
+    sources: [
+      'https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-carbon',
+      'https://aistudio.google.com/docs/whats-new-gemini-4-carbon',
+      'https://aistudio.google.com/docs/models/gemini-4-carbon',
+    ],
+  },
+  {
     id: 'gemini-4-argon',
     name: 'Gemini 4 Argon',
     protocol: 'vertex-gemini-v1',
@@ -193,6 +210,53 @@ const capabilities: readonly ModelCapability[] = [
     openai('gpt-5.6', 'GPT-5.6 (Sol alias)'),
     openai('gpt-6-astra', 'GPT-6 Astra', true),
   ],
+  ...(['astra', 'sol'] as const).map(
+    (variant): ModelCapability => ({
+      id: `gpt-6.2-${variant}`,
+      name: `GPT-6.2 ${variant === 'astra' ? 'Astra' : 'Sol'}`,
+      protocol: 'openai-responses-v1',
+      maxOutputTokens: 128_000,
+      temperature: false,
+      topP: false,
+      stopSequences: false,
+      // The GPT-6.2 pages reject `none` and replace `minimal` with `low`. They do not name a default
+      // effort, verbosity, reasoning mode or context, or service_tier values, so those stay unlisted.
+      reasoningEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+      cacheModes: ['disabled', 'explicit', 'automatic'],
+      cacheTtls: ['30m'],
+      sources: [
+        `https://developers.openai.com/api/docs/models/gpt-6.2-${variant}`,
+        'https://developers.openai.com/api/docs/guides/latest-model',
+        'https://developers.openai.com/api/docs/guides/reasoning',
+        'https://developers.openai.com/api/docs/guides/prompt-caching',
+      ],
+    })
+  ),
+  ...(['fable', 'mythos'] as const).map(
+    (line): ModelCapability => ({
+      id: `claude-${line}-5-2`,
+      // Mythos 5.2 is the same model for organizations verified by Anthropic.
+      name: `Claude ${line === 'fable' ? 'Fable' : 'Mythos'} 5.2`,
+      releasedAt: '2026-11-09',
+      protocol: 'anthropic-messages-v1',
+      maxOutputTokens: 128_000,
+      temperature: false,
+      topP: false,
+      stopSequences: true,
+      outputEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+      defaultOutputEffort: 'high',
+      thinkingModes: ['adaptive'],
+      serviceTiers: ['auto', 'standard_only'],
+      cacheModes: ['disabled', 'explicit', 'automatic'],
+      cacheTtls: ['5m', '1h'],
+      forcedTools: false,
+      sources: [
+        `https://platform.claude.com/docs/en/models/${line}-5-2/overview`,
+        'https://platform.claude.com/docs/en/models/fable-5-2/whats-new-fable-5-2',
+        'https://platform.claude.com/docs/en/models/fable-5-2/migration-guide',
+      ],
+    })
+  ),
   {
     id: 'claude-opus-5-5',
     name: 'Claude Opus 5.5',

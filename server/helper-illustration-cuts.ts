@@ -97,7 +97,7 @@ export const HELPER_ILLUSTRATION_CUT_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.cut.delete',
     description:
-      'Permanently delete the specified cut and its associated render history/images after an explicit user request. Use latestJobId, source hash and presentation revision from cuts.list; never delete queued or running work. This cannot be undone.',
+      'Permanently delete the cut the request names, with its render history and images. Use latestJobId, source hash and presentation revision from cuts.list; queued or running work cannot be deleted. This cannot be undone.',
     inputSchema: schema(
       {
         expectedLatestJobId: id,
