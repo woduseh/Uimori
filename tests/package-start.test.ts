@@ -84,19 +84,9 @@ test('native first and alternative greetings retain authored text with no indepe
     expect(() => validatePackageStarts([{ ...pkg.starts![0], ...extra }])).toThrow();
 });
 
-test.each(['first', 'alternative'])(
-  'native %s greetings preserve authored text at the stored message limit',
-  (kind) => {
-    const text = '가'.repeat(SOURCE_TEXT_MAX_CHARS);
-    const pkg = nativeContent({
-      first_mes: kind === 'first' ? text : 'First greeting',
-      alternate_greetings: kind === 'alternative' ? [text] : [],
-    });
-    expect(resolvePackageStart(pkg, kind === 'first' ? 'start-0' : 'start-1').text).toBe(text);
-  }
-);
-
-test('oversized greeting text has a distinct error from malformed authored starts', () => {
+test('greeting text at the stored message limit is preserved and oversized text has a distinct error', () => {
+  const text = '가'.repeat(SOURCE_TEXT_MAX_CHARS);
+  expect(resolvePackageStart(nativeContent({ first_mes: text }), 'start-0').text).toBe(text);
   const start = {
     id: 'start-0',
     title: 'Opening',

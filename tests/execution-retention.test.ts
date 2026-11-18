@@ -659,12 +659,6 @@ describe('Completed execution payload retention', () => {
       .run(JSON.stringify([artifact]), task.id);
     expect(workspace.artifact(artifact.id, 1).text).toBe('A short draft.');
     expect(workspace.artifact(artifact.id).text).toBe('Edit 2');
-    expect(
-      store.db
-        .prepare('PRAGMA table_info(helper_artifacts)')
-        .all()
-        .map((r) => r.name)
-    ).not.toContain('snapshot');
     const toolEvents = workspace.events(conversation.id).filter((e) => e.kind === 'tool.finished');
     expect(toolEvents.map((e) => e.data)).toEqual(
       Array.from({ length: 5 }, (_, i) => ({

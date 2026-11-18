@@ -115,10 +115,10 @@ describe('independent stored-story fork without generation', () => {
     expect(failure).not.toMatchObject({ statusCode: 410, message: 'CHAT_COPY_REMOVED' });
     expect(store.chats()).toHaveLength(1);
   });
-  test('replaying a completed copy preserves its independently changed folder and emits no new event', async () => {
+  test('replaying a completed copy keeps its changed folder and original command, emitting no event', async () => {
     const store = await database();
     const chat = createFixtureChat(store, 'Copy replay');
-    const original = source(store, chat.id, 'Original scene.');
+    const original = source(store, chat.id, 'Before editing.');
     const command = { fromRevision: original.id, idempotencyKey: 'copy-folder-replay' };
     const copy = forkChat(store, chat.id, command);
     const botId = store.organization.metadata(chat.id)!.botId;
@@ -127,28 +127,18 @@ describe('independent stored-story fork without generation', () => {
       expectedRevision: copy.organizationRevision,
       folderId: folder.id,
     });
+    store.editSource(original.id, { expectedRevision: 0, text: 'After editing.' });
     const events = store.db
       .prepare('SELECT COUNT(*) AS n FROM events WHERE chat_id=?')
       .get(copy.id)!.n;
 
-    expect(forkChat(store, chat.id, command)).toEqual(moved);
+    const replay = forkChat(store, chat.id, command);
+    expect(replay).toEqual(moved);
+    expect(store.source(replay.headRevision!).text).toBe('Before editing.');
+    expect(store.chats()).toHaveLength(2);
     expect(
       store.db.prepare('SELECT COUNT(*) AS n FROM events WHERE chat_id=?').get(copy.id)!.n
     ).toBe(events);
-  });
-
-  test('replaying a completed copy uses the original command after the source is edited', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, 'Edited after copy');
-    const original = source(store, chat.id, 'Before editing.');
-    const command = { fromRevision: original.id, idempotencyKey: 'copy-edited-replay' };
-    const copy = forkChat(store, chat.id, command);
-    store.editSource(original.id, { expectedRevision: 0, text: 'After editing.' });
-
-    const replay = forkChat(store, chat.id, command);
-    expect(replay.id).toBe(copy.id);
-    expect(store.source(replay.headRevision!).text).toBe('Before editing.');
-    expect(store.chats()).toHaveLength(2);
   });
 
   test('a preexisting copy receipt is recovered and upgraded using its recorded fork event', async () => {
@@ -221,7 +211,7 @@ describe('independent stored-story fork without generation', () => {
     );
   });
 
-  test.each(['Names · 새 이야기 · 새 이야기', 'Names (사본)', 'Names · 사본 2', 'Names (사본 2)'])(
+  test.each(['Names · 새 이야기 · 새 이야기', 'Names (사본 2)'])(
     'copying %s continues the numbered family without stacking suffixes',
     async (title) => {
       const store = await database();

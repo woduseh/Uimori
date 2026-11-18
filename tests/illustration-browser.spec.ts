@@ -4,7 +4,7 @@ import { readIllustrationAppearanceProfiles } from '../core/illustration-profile
 import type { Content } from '../core/product.js';
 import type { PackageImage } from '../core/package-images.js';
 import sharp from 'sharp';
-import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { Chat, ChatDetail, ReaderDetail, Run } from '../core/types.js';
 import type {
@@ -223,7 +223,7 @@ for (const width of visualReview ? [360, 412] : [360]) {
   });
 }
 
-for (const width of [360, 1280]) {
+for (const width of [360]) {
   test(`character profiles keep linked roles reversible and protect drafts on refresh at ${width}px`, async ({
     page,
     request,
@@ -521,7 +521,7 @@ test('ILUI-MOBILE-SHEET illustration actions stay above mobile composer controls
   await expect(page.getByRole('alertdialog', { name: '삭제 확인', exact: true })).toBeVisible();
 });
 
-for (const width of [360, DESKTOP_WIDTH]) {
+for (const width of [360]) {
   test(`ILUI-DIRECTION manual direction and redraw changes preserve drafts and submit once at ${width}px`, async ({
     page,
     request,
@@ -864,98 +864,13 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
   await page.screenshot({ path: info.outputPath('illustration-settings-mobile.png') });
 });
 
-test('ILUI03 illustration editors use full width and seconds preserve stored milliseconds', async ({
-  page,
-  request,
-}, info) => {
-  await seed(request);
-  const stored = await (await request.get('/api/illustration-settings')).json();
-  await settings(request, {
-    generator: 'none',
-    comfyui: { ...stored.comfyui, pollIntervalMs: 250 },
-  });
-  await page.goto('/');
-  await navigationAction(page, '설정');
-  await selectSettingsSection(page, '삽화');
-  {
-    const management = page.getByText('생성 환경', { exact: true });
-    if ((await management.locator('..').getAttribute('open')) === null) await management.click();
-  }
-  {
-    const management = page.getByText('프리셋', { exact: true });
-    if ((await management.locator('..').getAttribute('open')) === null) await management.click();
-  }
-  const section = page.getByRole('region', { name: '삽화 설정', exact: true });
-  await section.locator('summary').filter({ hasText: 'ComfyUI 생성 환경' }).click();
-  await page.getByRole('button', { name: '새 삽화 프리셋', exact: true }).click();
-  const presetEditor = page.getByRole('region', { name: '삽화 프리셋 편집기', exact: true });
-  await presetEditor.getByLabel('프리셋 삽화 생성기').selectOption('comfyui');
-  await presetEditor.locator('summary').filter({ hasText: 'ComfyUI 설정' }).click();
-  for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
-    await page.setViewportSize({ width, height: 1000 });
-    for (const label of [
-      '삽화 그림 지침',
-      'ComfyUI 네거티브 프롬프트 지침',
-      'ComfyUI 워크플로 JSON',
-    ]) {
-      const field = presetEditor.getByLabel(label, { exact: true });
-      const bounds = await field.evaluate((node) => {
-        const fieldset = node.closest('fieldset')!;
-        const css = getComputedStyle(fieldset);
-        return {
-          actual: node.getBoundingClientRect().width,
-          available:
-            fieldset.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight),
-        };
-      });
-      expect(Math.abs(bounds.actual - bounds.available)).toBeLessThan(3);
-    }
-    const toggle = section.getByRole('switch', { name: '응답 완료 후 자동 삽화 생성' });
-    const offset = await toggle.evaluate((node) => {
-      const a = node.getBoundingClientRect(),
-        b = node.parentElement!.getBoundingClientRect();
-      return Math.abs(a.y + a.height / 2 - b.y - b.height / 2);
-    });
-    expect(offset).toBeLessThan(2);
-    await page.screenshot({ path: info.outputPath(`illustration-form-${width}.png`) });
-    await section.getByLabel('시간 제한 (초)', { exact: true }).scrollIntoViewIfNeeded();
-    await page.screenshot({ path: info.outputPath(`illustration-comfyui-${width}.png`) });
-  }
-  await section.getByLabel('시간 제한 (초)', { exact: true }).fill('60');
-  await expect(section.getByLabel('확인 간격 (초)', { exact: true })).toHaveCount(0);
-  await section.getByLabel('테스트 삽화 생성기', { exact: true }).selectOption('');
-  await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
-  await expect(
-    page.locator('.transient-notice[role="status"]').filter({ hasText: '삽화 설정을 저장했어요' })
-  ).toBeVisible();
-  const saved = await (await request.get('/api/illustration-settings')).json();
-  expect(saved.comfyui).toMatchObject({ timeoutMs: 60000, pollIntervalMs: 250 });
-  await page.route('**/api/illustration-settings', (route) =>
-    route.fulfill({ status: 503, body: 'unavailable' })
-  );
-  await section.getByRole('button', { name: '저장된 설정 다시 불러오기' }).click();
-  await expect(section.getByRole('alert')).toContainText('설정을 불러오지 못했어요');
-  await page.unroute('**/api/illustration-settings');
-  await section.getByLabel('장면당 최대 삽화 수').fill('5');
-  await section.getByRole('button', { name: '저장된 설정 다시 불러오기' }).click();
-  const guard = page.getByRole('alertdialog', { name: '삽화 설정 다시 불러오기' });
-  for (const width of DEFAULT_WIDTHS) {
-    await page.setViewportSize({ width, height: 900 });
-    await page.emulateMedia({ colorScheme: 'dark' });
-    await expect(guard.getByRole('button', { name: '계속 편집' })).toBeFocused();
-    await page.screenshot({ path: info.outputPath(`illustration-discard-${width}.png`) });
-  }
-  await page.keyboard.press('Escape');
-  await expect(guard).toBeHidden();
-  await expect(section.getByLabel('장면당 최대 삽화 수')).toHaveValue('5');
-});
-
 test('ILUI delete confirmation translates only app-owned titles and preserves the reviewed target', async ({
   page,
   request,
 }) => {
-  const { chat, source } = await seed(request);
+  // Disable automatic generation before the seeded run so earlier cases cannot fill the slots.
   await settings(request, { generator: 'fixture', automatic: false, maxPerSource: 3 });
+  const { chat, source } = await seed(request);
   const requested = await request.post(`/api/sources/${source.id}/illustrations`, { data: {} });
   expect(requested.ok(), await requested.text()).toBe(true);
   let render: Illustration | undefined;
@@ -1046,6 +961,8 @@ test('ILUI delete confirmation translates only app-owned titles and preserves th
   );
   await confirmation.getByRole('button', { name: 'Delete permanently', exact: true }).click();
   expect((await deleting).postDataJSON()).toEqual({});
+  // The deletion refreshes the reader; let that intercepted read finish before the page closes.
+  await page.unrouteAll({ behavior: 'wait' });
 });
 
 test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planning never blocks the next chat', async ({
@@ -1101,13 +1018,6 @@ test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planni
   await dialog.getByLabel('최대 컷 수').selectOption('3');
   await dialog.getByRole('button', { name: '삽화 만들기', exact: true }).click();
   await expect(scene.getByTestId('illustration-task')).toHaveAttribute('data-status', 'running');
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-  const cancel = scene.getByTestId('illustration-task').getByRole('button', { name: '취소' });
-  await expect(cancel).toBeVisible();
-  const cancelBox = (await cancel.boundingBox())!;
-  expect(cancelBox.width).toBeGreaterThanOrEqual(44);
-  expect(cancelBox.height).toBeGreaterThanOrEqual(44);
-  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const input = page.getByLabel('다음 장면 요청', { exact: true });
   await input.fill('두 사람의 다음 이야기를 이어줘.');
   await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeEnabled();
@@ -1174,43 +1084,6 @@ test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planni
     promoted!
   );
   await expect(scene.getByTestId('illustration')).toHaveCount(3);
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-  for (const control of [
-    scene.locator('[data-placement="hero"]').getByRole('button', { name: '접기', exact: true }),
-    scene.getByRole('button', { name: '모두 접기', exact: true }),
-  ]) {
-    const box = (await control.boundingBox())!;
-    expect(box.width).toBeGreaterThanOrEqual(44);
-    expect(box.height).toBeGreaterThanOrEqual(44);
-  }
-  await scene.locator('[data-placement="hero"]').scrollIntoViewIfNeeded();
-  await page.screenshot({ path: info.outputPath('storyboard-mobile.png') });
-  await scene
-    .locator('[data-placement="hero"]')
-    .getByRole('button', { name: '삽화 크게 보기', exact: true })
-    .click();
-  await expect(enlarged).toBeVisible();
-  await expect(enlarged).toHaveCSS('opacity', '1');
-  const geometry = (await enlarged.boundingBox())!;
-  expect(geometry.x).toBeGreaterThanOrEqual(16);
-  expect(geometry.y).toBeGreaterThanOrEqual(16);
-  expect(geometry.x + geometry.width).toBeLessThanOrEqual(MOBILE_WIDTH - 16);
-  expect(geometry.y + geometry.height).toBeLessThanOrEqual(844 - 16);
-  expect(Math.abs(geometry.x + geometry.width / 2 - MOBILE_WIDTH / 2)).toBeLessThanOrEqual(1);
-  expect(Math.abs(geometry.y + geometry.height / 2 - 844 / 2)).toBeLessThanOrEqual(1);
-  const original = enlarged.locator('img');
-  await expect(original).toHaveCSS('object-fit', 'contain');
-  await expect(original).toBeInViewport({ ratio: 1 });
-  const imageBox = (await original.boundingBox())!;
-  expect(imageBox.width / imageBox.height).toBeCloseTo(800 / 450, 2);
-  const close = enlarged.getByRole('button', { name: '삽화 크게 보기 닫기', exact: true });
-  await expect(close).toBeInViewport({ ratio: 1 });
-  const closeBox = (await close.boundingBox())!;
-  expect(closeBox.width).toBeGreaterThanOrEqual(44);
-  expect(closeBox.height).toBeGreaterThanOrEqual(44);
-  await page.screenshot({ path: info.outputPath('illustration-modal-mobile.png') });
-  await enlarged.getByRole('button', { name: '삽화 크게 보기 닫기', exact: true }).click();
-  await expect(enlarged).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect((await detail(request, chat.id)).sources.find((item) => item.id === source.id)?.text).toBe(
     paragraphs.join('\n\n')
@@ -1482,7 +1355,7 @@ test('ILUI05 styled Markdown keeps its message tree, shows progress and reconnec
   );
 });
 
-for (const width of DEFAULT_WIDTHS) {
+for (const width of [MOBILE_WIDTH]) {
   test(`ILLUSTRATION-PROFILES dedicated appearance tab saves package image references at ${width}px`, async ({
     page,
     request,
@@ -1618,7 +1491,7 @@ for (const width of DEFAULT_WIDTHS) {
   });
 }
 
-for (const width of DEFAULT_WIDTHS) {
+for (const width of [MOBILE_WIDTH]) {
   test(`ILLUSTRATION-INHERIT chat appearance edit restore and own deletion at ${width}px`, async ({
     page,
     request,

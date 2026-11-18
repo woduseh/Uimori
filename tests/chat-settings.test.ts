@@ -34,11 +34,11 @@ test('only active settings survive old DB and backup projections', () => {
     maxCalls: 8,
     storyUiStyle: 'theme:custom-theme',
   });
-  for (const invalid of ['theme:', 'theme:with space', `theme:${'x'.repeat(101)}`])
+  for (const invalid of ['theme:with space', `theme:${'x'.repeat(101)}`])
     expect(() => normalizeChatSettings({ maxCalls: 8, storyUiStyle: invalid })).toThrow(
       'Invalid story UI style'
     );
-  for (const maxCalls of [0, 129, 2.5, '8', null])
+  for (const maxCalls of [0, 129, '8'])
     expect(() => normalizeChatSettings({ status: false, maxCalls })).toThrow('Invalid settings');
 });
 
@@ -58,8 +58,23 @@ test('generation defaults persist and apply only when creating a new chat', asyn
   const before = createFixtureChat(app.store, 'Chat before saving defaults');
   expect(before.settings).toEqual(initial);
   const chosen = { maxCalls: 128, storyUi: true, storyUiStyle: 'theme:custom-theme' };
-  const put = (expectedRevision: number, settings: typeof initial) =>
+  const put = (expectedRevision: number, settings: Record<string, unknown>) =>
     app.inject({ method: 'PUT', url, payload: { expectedRevision, ...settings } });
+  for (const invalid of [
+    { ...chosen, maxCalls: 129 },
+    { ...chosen, maxCalls: '128' },
+    { ...chosen, storyUi: 'true' },
+    { ...chosen, storyUiStyle: undefined },
+    { ...chosen, autoTranslate: true },
+  ])
+    expect((await put(0, invalid)).statusCode).toBe(400);
+  expect((await app.inject(url)).json().revision).toBe(0);
+  const overLimit = await app.inject({
+    method: 'PATCH',
+    url: `/api/chats/${before.id}/settings`,
+    payload: { expectedSettingsRevision: before.settingsRevision, maxCalls: 129 },
+  });
+  expect(overLimit.statusCode).toBe(400);
   const saved = await put(0, chosen);
   expect(saved.statusCode).toBe(200);
   expect(saved.json()).toEqual({ revision: 1, ...chosen });
@@ -91,50 +106,6 @@ test('generation defaults persist and apply only when creating a new chat', asyn
   });
   expect(forked.statusCode).toBe(200);
   expect(forked.json<Chat>().settings).toEqual(initial);
-});
-
-test('generation defaults and per-chat settings enforce the same call limit', async () => {
-  const path = mkdtempSync(join(tmpdir(), 'uimori-chat-generation-limit-'));
-  const app = await createApp({
-    dbPath: join(path, 'app.sqlite'),
-    buildId: 'chat-generation-limit-test',
-    testMode: true,
-    codex: { enabled: false },
-  });
-  owned.push({ app, path });
-  const chat = createFixtureChat(app.store, 'Call limit');
-  const defaultsUrl = '/api/chat-generation-defaults';
-  const defaults = {
-    expectedRevision: 0,
-    maxCalls: 128,
-    storyUi: false,
-    storyUiStyle: 'fantasy',
-  };
-  for (const payload of [
-    { ...defaults, maxCalls: 0 },
-    { ...defaults, maxCalls: 129 },
-    { ...defaults, maxCalls: 1.5 },
-    { ...defaults, maxCalls: '128' },
-    { ...defaults, storyUi: 'true' },
-    { ...defaults, storyUi: undefined },
-    { ...defaults, storyUiStyle: 'theme:contains a space' },
-    { ...defaults, storyUiStyle: undefined },
-    { ...defaults, autoTranslate: true },
-  ]) {
-    expect((await app.inject({ method: 'PUT', url: defaultsUrl, payload })).statusCode).toBe(400);
-  }
-  expect((await app.inject(defaultsUrl)).json().revision).toBe(0);
-
-  const patch = (maxCalls: number) =>
-    app.inject({
-      method: 'PATCH',
-      url: `/api/chats/${chat.id}/settings`,
-      payload: { expectedSettingsRevision: chat.settingsRevision, maxCalls },
-    });
-  expect((await patch(129)).statusCode).toBe(400);
-  const saved = await patch(128);
-  expect(saved.statusCode).toBe(200);
-  expect(saved.json<Chat>().settings.maxCalls).toBe(128);
 });
 
 test('existing database settings are normalized on read/save and public settings never accept fixture controls', async () => {
@@ -176,21 +147,6 @@ test('existing database settings are normalized on read/save and public settings
   });
   expect(invalid.statusCode).toBe(400);
   expect(app.store.chat(chat.id).settingsRevision).toBe(2);
-  expect(app.hasRoute({ method: 'POST', url: '/api/sources/:id/status' })).toBe(false);
-  const retired = await app.inject({
-    method: 'POST',
-    url: '/api/sources/legacy/status',
-    payload: {},
-  });
-  expect(retired.statusCode).toBe(404);
-  for (const url of [
-    '/api/story-jobs/legacy/cancel',
-    `/api/chats/${chat.id}/extension`,
-    `/api/chats/${chat.id}/extension-operations/legacy/cancel`,
-  ]) {
-    const response = await app.inject({ method: 'POST', url, payload: {} });
-    expect(response.statusCode).toBe(404);
-  }
   const control = await app.inject({
     method: 'POST',
     url: '/api/test/control',

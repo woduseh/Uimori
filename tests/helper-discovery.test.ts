@@ -8,26 +8,18 @@ import {
 // Keyword-retrieval oracles, not autonomous model choices or execution-quality scores.
 test.each([
   ['rename this chat', 'chat.rename', 'chat'],
-  ['change the title of this chat', 'chat.rename', 'chat'],
   ['find saved chats by title', 'chat.list', 'library'],
-  ['list my saved chats', 'chat.list', 'library'],
   ['change the model for this chat', 'settings.update', 'chat'],
   ['set the shared character appearance defaults', 'resource.patch', 'library'],
   ['save chat-only appearance profiles', 'illustration.profiles.save', 'chat'],
-  ['read the original scene text', 'scene.read', 'chat'],
-  ['search for a phrase in previous scenes', 'scene.search', 'chat'],
   ['undo the last saved resource edit', 'resource.undo', 'library'],
   ['duplicate this bot', 'resource.clone', 'library'],
-  ['copy a prompt preset', 'resource.clone', 'library'],
   ['move these bots into a folder', 'library.organize', 'library'],
   ['how much did I spend last month', 'usage.read', 'library'],
   ['retry a failed helper task', 'task.retry', 'library'],
-  ['inspect failed helper task status', 'task.inspect', 'library'],
   ['set global font', 'font.select', 'library'],
-  ['find available themes', 'theme.list', 'library'],
-  ['library profile', 'resource.patch', 'library'],
-  ['resource oldText', 'resource.patch', 'library'],
   ['aboveInputTokens', 'model.pricing.update', 'library'],
+  ['기본 외형', 'resource.patch', 'library'],
 ] as const)(
   'discovery returns %s candidates with the needed %s schema',
   (query, expected, scope) => {

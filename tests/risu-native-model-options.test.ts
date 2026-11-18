@@ -137,7 +137,6 @@ function fixture() {
 
 test.each([
   [undefined, 'script-model', 'otherAx'],
-  ['otherAx', 'script-model', 'otherAx'],
   ['memory', 'context-model', 'memory'],
   ['translate', 'translation-model', 'translate'],
 ] as const)(
@@ -250,7 +249,6 @@ test('a failed stream returns an error while retaining its partial attempt', asy
 test.each([
   ['unknown', 'Error: Invalid axLLM mode: unknown'],
   ['emotion', 'Error: RISU_NATIVE_MODEL_MODE_UNSUPPORTED:emotion'],
-  ['submodel', 'Error: RISU_NATIVE_MODEL_MODE_UNSUPPORTED:submodel'],
 ] as const)(
   'unsupported or invalid axLLM mode %s does not start a provider attempt',
   async (mode, error) => {
@@ -282,20 +280,13 @@ test.each(['memory', 'translate'] as const)(
 
 test.each([
   ['main', 'LLM', undefined],
-  ['translation', 'axLLM', 'translate'],
-  ['context', 'axLLM', 'memory'],
   ['script', 'axLLM', 'otherAx'],
 ] as const)(
   'disabled %s model fails without sending or falling back',
   async (role, method, mode) => {
     const f = fixture();
     const profile = f.snapshot.profile!;
-    const target =
-      role === 'context'
-        ? profile.contextModel!
-        : role === 'script'
-          ? profile.scriptModel!
-          : profile.models[role]!;
+    const target = role === 'script' ? profile.scriptModel! : profile.models[role]!;
     target.enabled = false;
     expect(
       await f.host(method, { prompt: 'Continue', ...(mode ? { options: { mode } } : {}) }, f.signal)

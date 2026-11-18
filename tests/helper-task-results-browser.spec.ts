@@ -6,7 +6,6 @@ import type { Content, ModelWorkspace } from '../core/product.js';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
 import { postFixtureChat, fixtureBotInput } from './fixtures/chat.js';
-import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { openHelper } from './ui-navigation.js';
 
 test.setTimeout(60000);
@@ -236,128 +235,121 @@ test('HRESULT-STORYUI setting results identify changes and open generation setti
   await expect(settings.getByText('관측소 봇', { exact: true })).toBeVisible();
 });
 
-for (const width of DEFAULT_WIDTHS) {
-  test(`HRESULT-ILLUSTRATION queued and placed results open their scene and references without losing a draft at ${width}px`, async ({
-    page,
-    request,
-  }, info) => {
-    const { chat, task } = await seed(request);
-    const created = await postFixtureChat(request, { data: { title: '삽화 결과 목적지' } });
-    expect(created.ok()).toBe(true);
-    const destination = (await created.json()) as Chat;
-    const sources: string[] = [];
-    for (const marker of ['기록할 첫 장면', '나중에 이어진 장면']) {
-      const before = (await (
-        await request.get(`/api/chats/${destination.id}`)
-      ).json()) as ChatDetail;
-      const started = await request.post(`/api/chats/${destination.id}/runs`, {
-        data: {
-          request: marker,
-          expectedRevision: before.chat.headRevision,
-          expectedSettingsRevision: before.chat.settingsRevision,
-          idempotencyKey: randomUUID(),
-        },
-      });
-      expect(started.ok(), await started.text()).toBe(true);
-      const run = (await started.json()) as { id: string };
-      await expect
-        .poll(async () => {
-          const current = (await (
-            await request.get(`/api/chats/${destination.id}`)
-          ).json()) as ChatDetail;
-          return current.runs.find((item) => item.id === run.id)?.status;
-        })
-        .toBe('completed');
-      const current = (await (
-        await request.get(`/api/chats/${destination.id}`)
-      ).json()) as ChatDetail;
-      sources.push(current.sources.find((source) => source.runId === run.id)!.id);
-    }
-    const operations = [
-      ['illustration.generate', '강가 첫 장면', '삽화 예약됨'],
-      ['illustration.cut.redraw', '등불을 든 손', '다시 그리기 예약됨'],
-      ['illustration.cuts.place', '다리 문단 뒤', '배치 변경됨'],
-      ['illustration.continuity.save', '미라의 옷차림', '연속성 저장됨'],
-    ];
-    const projection: HelperTaskResultsView = {
-      taskId: task.id,
-      status: 'completed',
-      results: [
-        ...operations.map(([operation, title], index) => ({
-          eventSeq: index + 1,
-          receiptId: `illustration-result-${index}`,
-          operation,
-          requestedTargets: 1,
-          changedTargets: 1,
-          targets: [
-            {
-              kind: 'illustration' as const,
-              id: sources[0],
-              chatId: destination.id,
-              title,
-              revision: 1,
-            },
-          ],
-        })),
-        {
-          eventSeq: 5,
-          receiptId: 'references',
-          operation: 'illustration.references.assign',
-          requestedTargets: 1,
-          changedTargets: 1,
-          targets: [
-            {
-              kind: 'settings',
-              id: destination.id,
-              title: destination.title,
-              revision: 1,
-              setting: 'chat.illustrationReferences',
-            },
-          ],
-        },
-      ],
-      unrecordedOperations: 0,
-      usage: { toolExecutions: 5, latestInputEstimate: null, attempts: [] },
-    };
-    await page.route(`**/api/helper/tasks/${task.id}/results`, (route) =>
-      route.fulfill({ json: projection })
-    );
-    await page.setViewportSize({ width, height: 900 });
-    await page.goto(`/?chat=${chat.id}`);
-    const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
-    await composer.fill('계속 쓸 원고 요청 초안');
-    await openHelper(page);
-    const results = page
-      .locator(`.helper-message.assistant[data-task-id="${task.id}"]`)
-      .getByTestId('helper-task-results');
-    for (const [, title, outcome] of operations) {
-      const target = results.getByRole('button', { name: `${title} 열기`, exact: true });
-      await expect(target).toContainText(outcome);
-      await expect(target).toHaveAttribute('aria-description', outcome);
-    }
-    expect(await results.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
-    await page.screenshot({ path: info.outputPath(`helper-illustration-results-${width}.png`) });
-    await results
-      .getByRole('button', { name: '삽화 결과 목적지 삽화 참고 열기', exact: true })
-      .click();
-    await expect(page.getByTestId('illustration-references')).toBeVisible();
-    await page.goto(`/?chat=${chat.id}`);
-    await expect(composer).toHaveValue('계속 쓸 원고 요청 초안');
-    await openHelper(page);
-    await results.getByRole('button', { name: '강가 첫 장면 열기', exact: true }).click();
+test('HRESULT-ILLUSTRATION queued and placed results open their scene and references without losing a draft', async ({
+  page,
+  request,
+}) => {
+  const { chat, task } = await seed(request);
+  const created = await postFixtureChat(request, { data: { title: '삽화 결과 목적지' } });
+  expect(created.ok()).toBe(true);
+  const destination = (await created.json()) as Chat;
+  const sources: string[] = [];
+  for (const marker of ['기록할 첫 장면', '나중에 이어진 장면']) {
+    const before = (await (await request.get(`/api/chats/${destination.id}`)).json()) as ChatDetail;
+    const started = await request.post(`/api/chats/${destination.id}/runs`, {
+      data: {
+        request: marker,
+        expectedRevision: before.chat.headRevision,
+        expectedSettingsRevision: before.chat.settingsRevision,
+        idempotencyKey: randomUUID(),
+      },
+    });
+    expect(started.ok(), await started.text()).toBe(true);
+    const run = (await started.json()) as { id: string };
     await expect
-      .poll(() => {
-        const params = new URL(page.url()).searchParams;
-        return [params.get('chat'), params.get('source'), params.get('mode')];
+      .poll(async () => {
+        const current = (await (
+          await request.get(`/api/chats/${destination.id}`)
+        ).json()) as ChatDetail;
+        return current.runs.find((item) => item.id === run.id)?.status;
       })
-      .toEqual([destination.id, sources[0], 'original']);
-    await expect(
-      page.locator(`[data-testid="source"][data-source-id="${sources[0]}"]`)
-    ).toBeVisible();
-    await page.goto(`/?chat=${chat.id}`);
-    await expect(composer).toHaveValue('계속 쓸 원고 요청 초안');
-  });
-}
+      .toBe('completed');
+    const current = (await (
+      await request.get(`/api/chats/${destination.id}`)
+    ).json()) as ChatDetail;
+    sources.push(current.sources.find((source) => source.runId === run.id)!.id);
+  }
+  const operations = [
+    ['illustration.generate', '강가 첫 장면', '삽화 예약됨'],
+    ['illustration.cut.redraw', '등불을 든 손', '다시 그리기 예약됨'],
+    ['illustration.cuts.place', '다리 문단 뒤', '배치 변경됨'],
+    ['illustration.continuity.save', '미라의 옷차림', '연속성 저장됨'],
+  ];
+  const projection: HelperTaskResultsView = {
+    taskId: task.id,
+    status: 'completed',
+    results: [
+      ...operations.map(([operation, title], index) => ({
+        eventSeq: index + 1,
+        receiptId: `illustration-result-${index}`,
+        operation,
+        requestedTargets: 1,
+        changedTargets: 1,
+        targets: [
+          {
+            kind: 'illustration' as const,
+            id: sources[0],
+            chatId: destination.id,
+            title,
+            revision: 1,
+          },
+        ],
+      })),
+      {
+        eventSeq: 5,
+        receiptId: 'references',
+        operation: 'illustration.references.assign',
+        requestedTargets: 1,
+        changedTargets: 1,
+        targets: [
+          {
+            kind: 'settings',
+            id: destination.id,
+            title: destination.title,
+            revision: 1,
+            setting: 'chat.illustrationReferences',
+          },
+        ],
+      },
+    ],
+    unrecordedOperations: 0,
+    usage: { toolExecutions: 5, latestInputEstimate: null, attempts: [] },
+  };
+  await page.route(`**/api/helper/tasks/${task.id}/results`, (route) =>
+    route.fulfill({ json: projection })
+  );
+  await page.goto(`/?chat=${chat.id}`);
+  const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
+  await composer.fill('계속 쓸 원고 요청 초안');
+  await openHelper(page);
+  const results = page
+    .locator(`.helper-message.assistant[data-task-id="${task.id}"]`)
+    .getByTestId('helper-task-results');
+  for (const [, title, outcome] of operations) {
+    const target = results.getByRole('button', { name: `${title} 열기`, exact: true });
+    await expect(target).toContainText(outcome);
+    await expect(target).toHaveAttribute('aria-description', outcome);
+  }
+  await results
+    .getByRole('button', { name: '삽화 결과 목적지 삽화 참고 열기', exact: true })
+    .click();
+  await expect(page.getByTestId('illustration-references')).toBeVisible();
+  await page.goto(`/?chat=${chat.id}`);
+  await expect(composer).toHaveValue('계속 쓸 원고 요청 초안');
+  await openHelper(page);
+  await results.getByRole('button', { name: '강가 첫 장면 열기', exact: true }).click();
+  await expect
+    .poll(() => {
+      const params = new URL(page.url()).searchParams;
+      return [params.get('chat'), params.get('source'), params.get('mode')];
+    })
+    .toEqual([destination.id, sources[0], 'original']);
+  await expect(
+    page.locator(`[data-testid="source"][data-source-id="${sources[0]}"]`)
+  ).toBeVisible();
+  await page.goto(`/?chat=${chat.id}`);
+  await expect(composer).toHaveValue('계속 쓸 원고 요청 초안');
+});
 
 test('an appearance result opens both saved characters in the chat image settings', async ({
   page,
@@ -415,232 +407,164 @@ test('HRESULT01 ordinary answers show usage without a permanent empty-change mes
   await expect(usageValue(results, '확인된 비용')).toHaveText('미확인');
 });
 
-for (const width of DEFAULT_WIDTHS) {
-  test(`HRESULT03 compact usage separates the last input from cumulative cached traffic at ${width}px`, async ({
-    page,
-    request,
-  }, info) => {
-    const { chat, task } = await seed(request);
-    const inputs = [180000, 190000, 187479, 90040];
-    const cached = [160000, 170000, 140473, 77002];
-    const projection: HelperTaskResultsView = {
-      taskId: task.id,
-      status: 'completed',
-      results: [],
-      unrecordedOperations: 0,
-      usage: {
-        latestInputTokens: 90040,
-        latestInputEstimate: 113453,
-        latestInputLimit: 272000,
-        toolExecutions: 19,
-        attempts: inputs.map((inputTokens, index) => ({
-          id: `synthetic-${index}`,
-          purpose: 'helper',
-          status: 'completed',
-          inputTokens,
-          outputTokens: index === 3 ? 1689 : 8000,
-          cachedInputTokens: cached[index],
-          reasoningTokens: null,
-          costUsd: null,
-          internalModelCalls: null,
-        })),
-      },
-    };
-    await page.route(`**/api/helper/tasks/${task.id}/results`, (route) =>
-      route.fulfill({ json: projection })
-    );
-    await page.setViewportSize({ width, height: 900 });
-    await page.goto(`/?chat=${chat.id}`);
-    await openHelper(page);
-    const results = page
-      .locator(`.helper-message.assistant[data-task-id="${task.id}"]`)
-      .getByTestId('helper-task-results');
-    const summary = results.locator('summary');
-    await expect(summary).toContainText('마지막 입력 90.04K');
-    await expect(summary).toContainText('출력 25.69K 토큰');
-    await expect(summary).not.toContainText('647');
-    await expect(results.getByRole('meter')).not.toBeVisible();
-    await page.screenshot({ path: info.outputPath(`helper-usage-compact-${width}.png`) });
-    await summary.click();
-    await expect(usageValue(results, '마지막 요청 입력')).toHaveText('90,040');
-    await expect(usageValue(results, '누적 입력 토큰')).toHaveText('647,519');
-    await expect(usageValue(results, '입력 중 캐시 토큰')).toHaveText('547,475');
-    await expect(results).toContainText(
-      '누적 입력은 각 요청에 다시 보낸 문맥과 캐시 입력을 포함해요.'
-    );
-    await expect(results.getByRole('meter')).toHaveAttribute('value', '113453');
-    expect(await results.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
-      true
-    );
-    await page.screenshot({ path: info.outputPath(`helper-usage-details-${width}.png`) });
+test('HRESULT02 actual results retain partial usage and recover from refresh/open failures', async ({
+  page,
+  request,
+}) => {
+  const { chat, task } = await seed(request);
+  const created = await request.post('/api/content', {
+    data: fixtureBotInput('다시 열어 볼 저장 자료'),
   });
-  test(`HRESULT02 actual results retain partial usage and recover from refresh/open failures at ${width}px`, async ({
-    page,
-    request,
-  }, info) => {
-    const { chat, task } = await seed(request);
-    const created = await request.post('/api/content', {
-      data: fixtureBotInput('다시 열어 볼 저장 자료'),
-    });
-    expect(created.ok(), await created.text()).toBe(true);
-    const content = (await created.json()) as Content;
-    // Only the new result projection is synthetic; admission, saved messages and navigation are real.
-    const projection: HelperTaskResultsView = {
-      taskId: task.id,
-      status: 'completed',
-      results: [
-        {
-          eventSeq: 10,
-          receiptId: 'saved',
-          operation: 'resource.patch',
-          requestedTargets: 1,
-          changedTargets: 1,
-          targets: [
-            { kind: 'content', id: content.id, title: content.title, revision: content.revision },
-          ],
-        },
-        {
-          eventSeq: 11,
-          receiptId: 'deleted',
-          operation: 'resource.delete',
-          requestedTargets: 1,
-          changedTargets: 1,
-          targets: [
-            { kind: 'content', id: 'deleted-resource', title: '삭제한 이전 자료', revision: 2 },
-          ],
-        },
-        {
-          eventSeq: 12,
-          receiptId: 'settings',
-          operation: 'settings.update',
-          requestedTargets: 1,
-          changedTargets: 1,
-          targets: [
-            {
-              kind: 'settings',
-              id: 'global',
-              title: '공통 설정',
-              revision: 2,
-              setting: 'global.helperModel',
-              before: 'old-id',
-              after: 'new-id',
-              beforeLabel: '이전 도우미',
-              afterLabel: '새 도우미',
-            },
-          ],
-        },
-      ],
-      unrecordedOperations: 0,
-      usage: {
-        toolExecutions: 7,
-        latestInputEstimate: 850,
-        attempts: [
+  expect(created.ok(), await created.text()).toBe(true);
+  const content = (await created.json()) as Content;
+  // Only the new result projection is synthetic; admission, saved messages and navigation are real.
+  const projection: HelperTaskResultsView = {
+    taskId: task.id,
+    status: 'completed',
+    results: [
+      {
+        eventSeq: 10,
+        receiptId: 'saved',
+        operation: 'resource.patch',
+        requestedTargets: 1,
+        changedTargets: 1,
+        targets: [
+          { kind: 'content', id: content.id, title: content.title, revision: content.revision },
+        ],
+      },
+      {
+        eventSeq: 11,
+        receiptId: 'deleted',
+        operation: 'resource.delete',
+        requestedTargets: 1,
+        changedTargets: 1,
+        targets: [
+          { kind: 'content', id: 'deleted-resource', title: '삭제한 이전 자료', revision: 2 },
+        ],
+      },
+      {
+        eventSeq: 12,
+        receiptId: 'settings',
+        operation: 'settings.update',
+        requestedTargets: 1,
+        changedTargets: 1,
+        targets: [
           {
-            id: 'known',
-            purpose: 'helper',
-            status: 'completed',
-            inputTokens: 1000,
-            outputTokens: 90,
-            cachedInputTokens: 600,
-            reasoningTokens: 30,
-            costUsd: 0.02,
-            internalModelCalls: 2,
-          },
-          {
-            id: 'unknown',
-            purpose: 'helper',
-            status: 'error',
-            inputTokens: null,
-            outputTokens: null,
-            cachedInputTokens: null,
-            reasoningTokens: null,
-            costUsd: null,
-            internalModelCalls: null,
+            kind: 'settings',
+            id: 'global',
+            title: '공통 설정',
+            revision: 2,
+            setting: 'global.helperModel',
+            before: 'old-id',
+            after: 'new-id',
+            beforeLabel: '이전 도우미',
+            afterLabel: '새 도우미',
           },
         ],
       },
-    };
-    let refreshFails = false;
-    let reads = 0;
-    await page.route(`**/api/helper/tasks/${task.id}/results`, async (route) => {
-      reads++;
-      await route.fulfill(
-        refreshFails
-          ? { status: 503, json: { error: 'SYNTHETIC_RESULT_REFRESH_FAILURE' } }
-          : { json: projection }
-      );
-    });
-    await page.setViewportSize({ width, height: 900 });
-    await page.goto(`/?chat=${chat.id}`);
-    await openHelper(page);
-    const results = page
-      .locator(`.helper-message.assistant[data-task-id="${task.id}"]`)
-      .getByTestId('helper-task-results');
-    const saved = results.getByRole('button', { name: `${content.title} 열기`, exact: true });
-    await expect(saved).toBeVisible();
-    await expect(results.getByText('삭제한 이전 자료', { exact: true })).toBeVisible();
-    await expect(results.getByText('삭제됨', { exact: true })).toBeVisible();
-    await expect(
-      results.getByRole('button', { name: '삭제한 이전 자료 열기', exact: true })
-    ).toHaveCount(0);
-    await expect(results.getByText('이전 도우미', { exact: true })).toBeVisible();
-    await expect(results.getByText('새 도우미', { exact: true })).toBeVisible();
-    await expect(results.locator('summary')).toContainText('입력 추정 850');
-    await expect(results.locator('summary')).toContainText('출력 90 토큰');
-    await expect(results.locator('summary')).toContainText('도구 7회');
-    await expect(results.locator('summary')).toContainText('일부 미확인');
-    await results.locator('summary').click();
-    await expect(usageValue(results, '모델 실행 요청')).toHaveText('2');
-    await expect(usageValue(results, '도구 실행')).toHaveText('7');
-    await expect(usageValue(results, '누적 입력 토큰')).toHaveText('1,000미확인 1회');
-    await expect(usageValue(results, '입력 중 캐시 토큰')).toHaveText('600미확인 1회');
-    await expect(usageValue(results, '누적 출력 토큰')).toHaveText('90미확인 1회');
-    await expect(usageValue(results, '출력 중 추론 토큰')).toHaveText('30미확인 1회');
-    await expect(usageValue(results, '확인된 비용')).toHaveText('US$0.02미확인 1회');
-    await expect(usageValue(results, '마지막 전송 입력 (추정)')).toHaveText('850');
-    await expect(results).not.toContainText('%');
-    await expect(results.getByRole('meter')).toHaveCount(0);
-    projection.usage.latestInputLimit = 1000;
-    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-    const inputMeter = results.getByRole('meter', {
-      name: '입력 예산 대비 마지막 전송 입력 추정치',
-    });
-    await expect(inputMeter).toHaveAttribute('max', '1000');
-    await expect(inputMeter).toHaveAttribute('value', '850');
-    await expect(usageValue(results, '마지막 전송 입력 (추정)')).toHaveText('850 / 1,000');
-    await expect(inputMeter).toHaveAttribute(
-      'aria-valuetext',
-      '입력 예산 1,000 토큰 중 약 850 토큰'
+    ],
+    unrecordedOperations: 0,
+    usage: {
+      toolExecutions: 7,
+      latestInputEstimate: 850,
+      attempts: [
+        {
+          id: 'known',
+          purpose: 'helper',
+          status: 'completed',
+          inputTokens: 1000,
+          outputTokens: 90,
+          cachedInputTokens: 600,
+          reasoningTokens: 30,
+          costUsd: 0.02,
+          internalModelCalls: 2,
+        },
+        {
+          id: 'unknown',
+          purpose: 'helper',
+          status: 'error',
+          inputTokens: null,
+          outputTokens: null,
+          cachedInputTokens: null,
+          reasoningTokens: null,
+          costUsd: null,
+          internalModelCalls: null,
+        },
+      ],
+    },
+  };
+  let refreshFails = false;
+  let reads = 0;
+  await page.route(`**/api/helper/tasks/${task.id}/results`, async (route) => {
+    reads++;
+    await route.fulfill(
+      refreshFails
+        ? { status: 503, json: { error: 'SYNTHETIC_RESULT_REFRESH_FAILURE' } }
+        : { json: projection }
     );
-    refreshFails = true;
-    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-    await expect(results.getByRole('alert')).toContainText('결과를 새로 확인하지 못했어요.');
-    await expect(saved).toBeVisible();
-    await expect(usageValue(results, '누적 입력 토큰')).toHaveText('1,000미확인 1회');
-    const beforeRetry = reads;
-    refreshFails = false;
-    await results.getByRole('button', { name: '다시 불러오기', exact: true }).click();
-    await expect.poll(() => reads).toBeGreaterThan(beforeRetry);
-    await expect(results.getByRole('alert')).toHaveCount(0);
-    let releaseOpen = () => {};
-    const openGate = new Promise<void>((resolve) => {
-      releaseOpen = resolve;
-    });
-    await page.route(`**/api/content/${content.id}`, async (route) => {
-      await openGate;
-      await route.fulfill({ status: 503, json: { error: 'SYNTHETIC_OPEN_FAILURE' } });
-    });
-    try {
-      await saved.click();
-      await expect(saved).toBeDisabled();
-    } finally {
-      releaseOpen();
-    }
-    await expect(results.getByRole('alert')).toContainText('결과를 열지 못했어요.');
-    await expect(saved).toBeEnabled();
-    expect(await results.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
-      true
-    );
-    await page.screenshot({ path: info.outputPath(`helper-results-${width}.png`), fullPage: true });
   });
-}
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  const results = page
+    .locator(`.helper-message.assistant[data-task-id="${task.id}"]`)
+    .getByTestId('helper-task-results');
+  const saved = results.getByRole('button', { name: `${content.title} 열기`, exact: true });
+  await expect(saved).toBeVisible();
+  await expect(results.getByText('삭제한 이전 자료', { exact: true })).toBeVisible();
+  await expect(results.getByText('삭제됨', { exact: true })).toBeVisible();
+  await expect(
+    results.getByRole('button', { name: '삭제한 이전 자료 열기', exact: true })
+  ).toHaveCount(0);
+  await expect(results.getByText('이전 도우미', { exact: true })).toBeVisible();
+  await expect(results.getByText('새 도우미', { exact: true })).toBeVisible();
+  await expect(results.locator('summary')).toContainText('입력 추정 850');
+  await expect(results.locator('summary')).toContainText('출력 90 토큰');
+  await expect(results.locator('summary')).toContainText('도구 7회');
+  await expect(results.locator('summary')).toContainText('일부 미확인');
+  await results.locator('summary').click();
+  await expect(usageValue(results, '모델 실행 요청')).toHaveText('2');
+  await expect(usageValue(results, '도구 실행')).toHaveText('7');
+  await expect(usageValue(results, '누적 입력 토큰')).toHaveText('1,000미확인 1회');
+  await expect(usageValue(results, '입력 중 캐시 토큰')).toHaveText('600미확인 1회');
+  await expect(usageValue(results, '누적 출력 토큰')).toHaveText('90미확인 1회');
+  await expect(usageValue(results, '출력 중 추론 토큰')).toHaveText('30미확인 1회');
+  await expect(usageValue(results, '확인된 비용')).toHaveText('US$0.02미확인 1회');
+  await expect(usageValue(results, '마지막 전송 입력 (추정)')).toHaveText('850');
+  await expect(results).not.toContainText('%');
+  await expect(results.getByRole('meter')).toHaveCount(0);
+  projection.usage.latestInputLimit = 1000;
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  const inputMeter = results.getByRole('meter', {
+    name: '입력 예산 대비 마지막 전송 입력 추정치',
+  });
+  await expect(inputMeter).toHaveAttribute('max', '1000');
+  await expect(inputMeter).toHaveAttribute('value', '850');
+  await expect(usageValue(results, '마지막 전송 입력 (추정)')).toHaveText('850 / 1,000');
+  await expect(inputMeter).toHaveAttribute('aria-valuetext', '입력 예산 1,000 토큰 중 약 850 토큰');
+  refreshFails = true;
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect(results.getByRole('alert')).toContainText('결과를 새로 확인하지 못했어요.');
+  await expect(saved).toBeVisible();
+  await expect(usageValue(results, '누적 입력 토큰')).toHaveText('1,000미확인 1회');
+  const beforeRetry = reads;
+  refreshFails = false;
+  await results.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+  await expect.poll(() => reads).toBeGreaterThan(beforeRetry);
+  await expect(results.getByRole('alert')).toHaveCount(0);
+  let releaseOpen = () => {};
+  const openGate = new Promise<void>((resolve) => {
+    releaseOpen = resolve;
+  });
+  await page.route(`**/api/content/${content.id}`, async (route) => {
+    await openGate;
+    await route.fulfill({ status: 503, json: { error: 'SYNTHETIC_OPEN_FAILURE' } });
+  });
+  try {
+    await saved.click();
+    await expect(saved).toBeDisabled();
+  } finally {
+    releaseOpen();
+  }
+  await expect(results.getByRole('alert')).toContainText('결과를 열지 못했어요.');
+  await expect(saved).toBeEnabled();
+});

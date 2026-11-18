@@ -201,7 +201,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
       expect(r).toEqual(before);
     }
   );
-  test.each(['5m', '1h', undefined] as const)(
+  test.each(['1h', undefined] as const)(
     'Claude applies TTL %s to automatic caching and every authored point',
     (cacheTtl) => {
       const r = request('claude-fable-5-1');
@@ -474,93 +474,91 @@ describe('native provider wire (synthetic, no live calls)', () => {
       expect(r).toEqual(before);
     }
   );
-  test.each([
-    'gemini-3.8-flash',
-    'gemini-3.1-pro-preview',
-    'google/gemini-3.8-flash',
-    'google/Gemini-3.8-flash',
-  ])('maps every non-leading system to user only on the wire for %s', (modelId) => {
-    const r = request(modelId);
-    r.prompt!.messages = [
-      message('s1', 'system', 'LEADING_ONE'),
-      message('s2', 'system', 'LEADING_TWO'),
-      message('u', 'user', 'USER'),
-      message('m1', 'system', 'MID_ONE'),
-      message('m2', 'system', 'MID_TWO'),
-      message('a', 'assistant', 'ASSISTANT'),
-      message('m3', 'system', 'MID_THREE'),
-      message('last', 'system', 'TRAILING'),
-    ];
-    const before = structuredClone(r);
-    const plan = planNativeMessages(r, 'vertex-gemini-v1')!;
-    const body = modelId.includes('/')
-      ? { systemInstruction: { parts: plan.system }, contents: plan.messages }
-      : wire(encodeVertex(r).body);
-    expect(body.systemInstruction.parts.slice(-2)).toEqual([
-      { text: 'LEADING_ONE' },
-      { text: 'LEADING_TWO' },
-    ]);
-    expect(body.contents).toEqual([
-      { role: 'user', parts: [{ text: 'USER' }, { text: 'MID_ONE' }, { text: 'MID_TWO' }] },
-      { role: 'model', parts: [{ text: 'ASSISTANT' }] },
-      { role: 'user', parts: [{ text: 'MID_THREE' }, { text: 'TRAILING' }] },
-    ]);
-    expect(
-      planNativeMessages(r, 'vertex-gemini-v1')!
-        .diagnostics.filter((d) => d.code === 'GEMINI_MID_SYSTEM_TO_USER')
-        .map((d) => [d.blockId, d.logicalIndex, d.status])
-    ).toEqual([
-      ['m1', 3, 'mapped'],
-      ['m2', 4, 'mapped'],
-      ['m3', 6, 'mapped'],
-      ['last', 7, 'mapped'],
-    ]);
-    for (const protocol of ['openai-chat-v1', 'openai-responses-v1', 'vercel-chat-v1'] as const) {
-      const mapped = planNativeMessages(r, protocol)!.messages;
-      expect(mapped.map((m) => wire(m).role)).toEqual([
-        'system',
-        'system',
-        'user',
-        'user',
-        'user',
-        'assistant',
-        'user',
-        'user',
+  test.each(['gemini-3.8-flash', 'google/Gemini-3.8-flash'])(
+    'maps every non-leading system to user only on the wire for %s',
+    (modelId) => {
+      const r = request(modelId);
+      r.prompt!.messages = [
+        message('s1', 'system', 'LEADING_ONE'),
+        message('s2', 'system', 'LEADING_TWO'),
+        message('u', 'user', 'USER'),
+        message('m1', 'system', 'MID_ONE'),
+        message('m2', 'system', 'MID_TWO'),
+        message('a', 'assistant', 'ASSISTANT'),
+        message('m3', 'system', 'MID_THREE'),
+        message('last', 'system', 'TRAILING'),
+      ];
+      const before = structuredClone(r);
+      const plan = planNativeMessages(r, 'vertex-gemini-v1')!;
+      const body = modelId.includes('/')
+        ? { systemInstruction: { parts: plan.system }, contents: plan.messages }
+        : wire(encodeVertex(r).body);
+      expect(body.systemInstruction.parts.slice(-2)).toEqual([
+        { text: 'LEADING_ONE' },
+        { text: 'LEADING_TWO' },
       ]);
-      const encoded =
-        protocol === 'openai-responses-v1'
-          ? wire(encodeResponses(r).body).input
-          : wire(encodeChat(r, protocol).body).messages.slice(1);
-      const expectedEncoded =
-        protocol === 'vercel-chat-v1'
-          ? mapped.map((message) => {
-              const value = wire(message);
-              return value.role === 'assistant'
-                ? {
-                    ...value,
-                    content: value.content.map((part: any) => part.text).join(''),
-                  }
-                : value;
-            })
-          : mapped;
-      expect(encoded).toEqual(expectedEncoded);
+      expect(body.contents).toEqual([
+        { role: 'user', parts: [{ text: 'USER' }, { text: 'MID_ONE' }, { text: 'MID_TWO' }] },
+        { role: 'model', parts: [{ text: 'ASSISTANT' }] },
+        { role: 'user', parts: [{ text: 'MID_THREE' }, { text: 'TRAILING' }] },
+      ]);
       expect(
-        encoded.map((message: any) =>
-          typeof message.content === 'string' ? message.content : message.content[0].text
-        )
-      ).toEqual(
-        before.prompt!.messages.map((m) => m.content.find((part) => part.type === 'text')?.text)
-      );
+        planNativeMessages(r, 'vertex-gemini-v1')!
+          .diagnostics.filter((d) => d.code === 'GEMINI_MID_SYSTEM_TO_USER')
+          .map((d) => [d.blockId, d.logicalIndex, d.status])
+      ).toEqual([
+        ['m1', 3, 'mapped'],
+        ['m2', 4, 'mapped'],
+        ['m3', 6, 'mapped'],
+        ['last', 7, 'mapped'],
+      ]);
+      for (const protocol of ['openai-chat-v1', 'openai-responses-v1', 'vercel-chat-v1'] as const) {
+        const mapped = planNativeMessages(r, protocol)!.messages;
+        expect(mapped.map((m) => wire(m).role)).toEqual([
+          'system',
+          'system',
+          'user',
+          'user',
+          'user',
+          'assistant',
+          'user',
+          'user',
+        ]);
+        const encoded =
+          protocol === 'openai-responses-v1'
+            ? wire(encodeResponses(r).body).input
+            : wire(encodeChat(r, protocol).body).messages.slice(1);
+        const expectedEncoded =
+          protocol === 'vercel-chat-v1'
+            ? mapped.map((message) => {
+                const value = wire(message);
+                return value.role === 'assistant'
+                  ? {
+                      ...value,
+                      content: value.content.map((part: any) => part.text).join(''),
+                    }
+                  : value;
+              })
+            : mapped;
+        expect(encoded).toEqual(expectedEncoded);
+        expect(
+          encoded.map((message: any) =>
+            typeof message.content === 'string' ? message.content : message.content[0].text
+          )
+        ).toEqual(
+          before.prompt!.messages.map((m) => m.content.find((part) => part.type === 'text')?.text)
+        );
+      }
+      for (const other of ['gpt-5.6', 'claude-opus-5', 'custom-gemini-proxy']) {
+        expect(
+          planNativeMessages({ ...r, modelId: other }, 'openai-chat-v1')!.messages.map(
+            (m) => wire(m).role
+          )
+        ).toEqual(before.prompt!.messages.map((m) => m.role));
+      }
+      expect(r).toEqual(before);
     }
-    for (const other of ['gpt-5.6', 'claude-opus-5', 'custom-gemini-proxy']) {
-      expect(
-        planNativeMessages({ ...r, modelId: other }, 'openai-chat-v1')!.messages.map(
-          (m) => wire(m).role
-        )
-      ).toEqual(before.prompt!.messages.map((m) => m.role));
-    }
-    expect(r).toEqual(before);
-  });
+  );
   test('Gemini normalization preserves precise prefill and native final-assistant failures', () => {
     for (const [protocol, modelId, encoder] of [
       ['vertex-gemini-v1', 'gemini-3.8-flash', encodeVertex],

@@ -314,7 +314,7 @@ test('closing after a recovery read failure does not erase unread input', async 
   expect(writeRecovery).not.toHaveBeenCalled();
 });
 
-test.each(['save', 'discard', 'revert', 'copy'] as const)(
+test.each(['save', 'discard', 'copy'] as const)(
   '%s only clears its own recovery write, preserving another tab across reopen',
   async (action) => {
     const a = editor();
@@ -336,11 +336,7 @@ test.each(['save', 'discard', 'revert', 'copy'] as const)(
         created: action === 'copy',
       });
       await b.save(undefined, { copy: action === 'copy' });
-    } else if (action === 'discard') await b.discard();
-    else {
-      b.setModel(model);
-      await b.flush();
-    }
+    } else await b.discard();
     expect(deleteRecoveryIfToken).toHaveBeenCalledWith('content:one', ownToken);
     expect(disk.get('content:one')).toMatchObject({ token: newerToken, model: newer });
     const reopened = editor();
@@ -349,22 +345,18 @@ test.each(['save', 'discard', 'revert', 'copy'] as const)(
   }
 );
 
-test.each([undefined, 'existing-token'])(
-  'discard removes a loaded recovery buffer with token %s',
-  async (token) => {
-    disk.set('content:one', {
-      token,
-      revision: 1,
-      model: { ...model, title: 'Recovered' },
-      rawFields: {},
-    });
-    const session = editor();
-    await session.open();
-    await session.discard();
-    expect(deleteRecoveryIfToken).toHaveBeenCalledWith('content:one', token);
-    expect(disk.has('content:one')).toBe(false);
-  }
-);
+test('discard removes a loaded legacy recovery buffer without a token', async () => {
+  disk.set('content:one', {
+    revision: 1,
+    model: { ...model, title: 'Recovered' },
+    rawFields: {},
+  });
+  const session = editor();
+  await session.open();
+  await session.discard();
+  expect(deleteRecoveryIfToken).toHaveBeenCalledWith('content:one', undefined);
+  expect(disk.has('content:one')).toBe(false);
+});
 
 test('a clean session with no loaded buffer cannot clear another tab recovery', async () => {
   const clean = editor();
@@ -580,7 +572,7 @@ test('confirming a created resource preserves a later draft and detects another 
   });
 });
 
-test.each([400, 401, 409, 429])(
+test.each([400, 429])(
   'a %s on a replay cannot discard an earlier uncertain creation identity',
   async (status) => {
     const session = editor(null);

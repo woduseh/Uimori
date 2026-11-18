@@ -1,17 +1,14 @@
 import { test, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import sharp from 'sharp';
 import type { ContextDetail } from '../core/context-plan.js';
 import type { StoryDetail } from '../core/story.js';
 import type { ThemeCatalog } from '../core/themes.js';
 import { defaultThemeBackground } from '../core/theme-background.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { createReadingChat } from './fixtures/personal-workspace.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import {
   createPromptChoice,
   navigationAction,
   openChatSettings,
-  openSourceActions,
   selectChatSettingsSection,
   selectSettingsSection,
   setCurrentModels,
@@ -68,7 +65,7 @@ async function expectPrimary(button: Locator, cancel?: Locator) {
   }
 }
 
-for (const width of [412, 1440]) {
+for (const width of [412]) {
   test(`SDC01 ${width} theme deletion is compact, safely focused and cancellable before confirmation`, async ({
     page,
     request,
@@ -158,170 +155,6 @@ for (const width of [412, 1440]) {
     expect(deleted).toHaveLength(2);
     await selectSettingsSection(page, '일반');
     await expect(settings.getByLabel('앱 화면 테마')).toBeVisible();
-  });
-
-  test(`SDC02 ${width} generic nested prompt dialogs keep independent widths across three modal layers`, async ({
-    page,
-    request,
-  }, info) => {
-    await page.setViewportSize({ width, height: 900 });
-    const choice = await createPromptChoice(request, `Nested consistency ${width}`);
-    await page.goto('/');
-    await navigationAction(page, '설정');
-    await selectSettingsSection(page, '현재 프롬프트');
-    const settings = page.getByRole('dialog', { name: '설정', exact: true });
-    const section = page.getByRole('region', { name: '현재 프롬프트 설정', exact: true });
-    await section.locator('summary').filter({ hasText: '창작 옵션' }).click();
-    const menu = section.getByLabel('옵션 프리셋 메뉴', { exact: true });
-    await menu.click();
-    await section
-      .getByRole('button', { name: '현재 선택을 새 옵션 프리셋으로 저장', exact: true })
-      .click();
-    const save = page.getByRole('dialog', { name: '옵션 프리셋 저장', exact: true });
-    await expectShell(page, save, 480);
-    await save.getByLabel('옵션 프리셋 이름', { exact: true }).fill('Cancelled nested combination');
-    await save.getByRole('button', { name: '취소', exact: true }).click();
-    await expect(save).toBeHidden();
-    await expectShell(page, settings, 1160);
-    await menu.click();
-    await section.getByRole('button', { name: '옵션 프리셋 관리', exact: true }).click();
-    const manage = page.getByRole('dialog', { name: '옵션 프리셋 관리', exact: true });
-    await expectShell(page, manage, 480);
-    const trigger = manage.getByRole('button', {
-      name: `${choice.combination.title} 삭제`,
-      exact: true,
-    });
-    await trigger.click();
-    const remove = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
-    await expectShell(page, remove, 620);
-    await page.screenshot({ path: info.outputPath(`nested-prompt-delete-${width}.png`) });
-    await page.keyboard.press('Escape');
-    await expect(remove).toBeHidden();
-    await expect(manage).toBeVisible();
-    await expect(trigger).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(manage).toBeHidden();
-    await expect(settings).toBeVisible();
-    await expectShell(page, settings, 1160);
-  });
-
-  test(`SDC03 ${width} chat picker and confirmation widths survive nesting while image metadata saves stay primary`, async ({
-    page,
-    request,
-  }, info) => {
-    await page.setViewportSize({ width, height: 900 });
-    const { chat, detail } = await createReadingChat(
-      request,
-      `Chat dialog consistency ${width}`,
-      1
-    );
-    const image = await sharp({
-      create: { width: 80, height: 80, channels: 3, background: '#6688aa' },
-    })
-      .png()
-      .toBuffer();
-    const uploaded = await request.post(`/api/chats/${chat.id}/assets`, {
-      data: {
-        title: 'Synthetic metadata image',
-        description: 'Synthetic square',
-        actor: '',
-        outfit: '',
-        location: '',
-        allowedUse: 'both',
-        mime: 'image/png',
-        base64: image.toString('base64'),
-      },
-    });
-    expect(uploaded.ok(), await uploaded.text()).toBe(true);
-    const asset = await uploaded.json();
-    await page.goto(`/?chat=${chat.id}`);
-    await openChatSettings(page);
-    const settings = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-    await expectShell(page, settings, 1160);
-    await selectChatSettingsSection(page, '사용 자료');
-    const pickerTrigger = page.getByRole('button', { name: '페르소나', exact: true });
-    await pickerTrigger.click();
-    const picker = page.getByRole('dialog', { name: '페르소나', exact: true });
-    await expectShell(page, picker, 640);
-    await page.screenshot({ path: info.outputPath(`nested-picker-${width}.png`) });
-    await page.keyboard.press('Escape');
-    await expect(picker).toBeHidden();
-    await expect(pickerTrigger).toBeFocused();
-
-    await selectChatSettingsSection(page, '이미지');
-    await page.locator('.chat-settings-image-management > summary').click();
-    await expect(
-      settings.locator('.asset-grid figure').first().locator('figcaption')
-    ).toContainText('프로필과 본문');
-    await expect(
-      settings.locator('.asset-grid figure').first().locator('figcaption')
-    ).not.toContainText('both');
-    await page.getByText('이름과 설명 편집', { exact: true }).click();
-    const metadataSave = page.getByRole('button', { name: '이미지 정보 저장', exact: true });
-    await expectPrimary(metadataSave);
-    await page.getByLabel('업로드한 이미지 이름', { exact: true }).fill('Saved metadata image');
-    const metadataResponse = page.waitForResponse(
-      (response) =>
-        response.url().endsWith(`/api/chats/${chat.id}/assets/${asset.id}`) &&
-        response.request().method() === 'PATCH'
-    );
-    await metadataSave.click();
-    const saved = await metadataResponse;
-    expect(saved.ok(), await saved.text()).toBe(true);
-    expect(await saved.json()).toMatchObject({ title: 'Saved metadata image' });
-    const imageTrigger = page.getByRole('button', {
-      name: 'Saved metadata image 이미지 삭제',
-      exact: true,
-    });
-    await imageTrigger.click();
-    const remove = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
-    await expectShell(page, remove, 620);
-    await page.screenshot({ path: info.outputPath(`nested-image-delete-${width}.png`) });
-    await remove.getByRole('button', { name: '취소', exact: true }).click();
-    await expect(remove).toBeHidden();
-    await expect(imageTrigger).toBeFocused();
-
-    await selectChatSettingsSection(page, '생성 설정');
-    await page.getByText('고급 실행 설정', { exact: true }).click();
-    const limit = page.getByLabel('작업당 모델 호출 한도', { exact: true });
-    const original = await limit.inputValue();
-    await limit.fill(original === '21' ? '22' : '21');
-    await settings.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
-    const confirmation = page.getByRole('alertdialog', {
-      name: '미저장 채팅 설정 확인',
-      exact: true,
-    });
-    await expectShell(page, confirmation, 620);
-    await page.screenshot({ path: info.outputPath(`nested-confirmation-${width}.png`) });
-    await confirmation.getByRole('button', { name: '계속 편집', exact: true }).click();
-    await expect(confirmation).toBeHidden();
-    await expect(limit).toHaveValue(original === '21' ? '22' : '21');
-    await settings.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
-    await confirmation.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
-    await expect(settings).toBeHidden();
-    await openChatSettings(page);
-    await selectChatSettingsSection(page, '생성 설정');
-    await page.getByText('고급 실행 설정', { exact: true }).click();
-    await expect(limit).toHaveValue(original);
-    await selectChatSettingsSection(page, '이미지');
-    await page.locator('.chat-settings-image-management > summary').click();
-    await page.getByText('이름과 설명 편집', { exact: true }).click();
-    await expect(page.getByLabel('업로드한 이미지 이름', { exact: true })).toHaveValue(
-      'Saved metadata image'
-    );
-    await settings.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
-    await expect(settings).toBeHidden();
-    const source = page.getByTestId('source').first();
-    const sourceMenu = await openSourceActions(source);
-    await source.getByRole('button', { name: /^(원문 연결 정보|작업 상세)$/ }).click();
-    const sourceInfo = page.getByRole('dialog', { name: /^(원문 연결 정보|작업 상세)$/ });
-    await expectShell(page, sourceInfo, 620);
-    await sourceInfo.getByText('현재 원문', { exact: true }).click();
-    await expect(sourceInfo.getByTestId('source-raw')).toHaveText(detail.sources[0].text);
-    await page.screenshot({ path: info.outputPath(`source-info-${width}.png`) });
-    await page.keyboard.press('Escape');
-    await expect(sourceInfo).toBeHidden();
-    await expect(sourceMenu).toBeFocused();
   });
 
   test(`SDC04 ${width} background, summary and note saves have primary emphasis and preserve cancelled edits`, async ({

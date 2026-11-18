@@ -13,16 +13,6 @@ const program = (declaration: unknown, text = '') =>
   });
 
 describe('read-only native preset diagnostics', () => {
-  it('preserves authored extra CR characters when comparing native option labels', () => {
-    const before = program('mode=Mode=select=A\r\n');
-    const after = program('mode=Mode=select=A\r\r\n');
-    expect(diagnoseRisuPreset(after, {}, before).diagnostics).toMatchObject([
-      {
-        code: 'toggle_option_meaning_changed',
-        option: { previousLabel: 'A', currentLabel: 'A\r' },
-      },
-    ]);
-  });
   it('uses native declaration and selection semantics, including empty options, aliases and defaults', () => {
     const source = program(
       [
@@ -129,6 +119,15 @@ describe('read-only native preset diagnostics', () => {
     ]);
     expect({ previous, current }).toEqual(before);
     expect(diagnoseRisuPreset(previous, { mode: '1' }, previous).diagnostics).toEqual([]);
+    // Authored extra CR characters stay part of the compared label.
+    const crBefore = program('mode=Mode=select=A\r\n');
+    const crAfter = program('mode=Mode=select=A\r\r\n');
+    expect(diagnoseRisuPreset(crAfter, {}, crBefore).diagnostics).toMatchObject([
+      {
+        code: 'toggle_option_meaning_changed',
+        option: { previousLabel: 'A', currentLabel: 'A\r' },
+      },
+    ]);
   });
 
   it('distinguishes removed selected choices from unselected choices and handles unavailable comparisons', () => {

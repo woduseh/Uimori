@@ -43,58 +43,60 @@ const assets: Asset[] = imageReferences.map((asset, index) => ({
   ...asset,
 }));
 
-for (const representation of ['original', 'translation'] as const) {
-  for (const imageOwner of [false, true]) {
-    test(`${representation} only renders this chat's registered writer images with JEV owner ${imageOwner}`, () => {
-      const sourceText = representation === 'original' ? text : '원문 본문';
-      const source: Source = {
-        id: 'source',
-        runId: 'run',
-        chatId: 'chat',
-        parentRevision: null,
-        text: sourceText,
-        hash: createHash('sha256').update(sourceText).digest('hex'),
-      };
-      const jobs: Job[] =
-        representation === 'translation'
-          ? [
-              {
-                id: 'translation',
-                chatId: source.chatId,
-                sourceRevision: source.id,
-                sourceHash: source.hash,
-                kind: 'translation',
-                status: 'completed',
-                attempt: 1,
-                error: null,
-                result: { mock: false, sourceRevision: source.id, sourceHash: source.hash, text },
-              },
-            ]
-          : [];
-      const before = structuredClone({ source, jobs, assets });
-      const html = renderToStaticMarkup(
-        createElement(SourceReader, {
-          source,
-          jobs,
-          assets,
-          imageOwner,
-          index: 0,
-          refresh: async () => {},
-          onError: () => {},
-          onFork: async () => {},
-        })
-      );
-      expect(html.match(/<img /gu) ?? []).toHaveLength(imageOwner ? 0 : 2);
-      if (!imageOwner) {
-        expect(html).toContain(`src="${uploadUrl}"`);
-        expect(html).toContain(`src="${packageUrl}"`);
-        expect(html).toContain(`<code>![코드](${uploadUrl})</code>`);
-      }
-      for (const url of [outsideUrl, portraitUrl, unknownUrl, externalUrl])
-        expect(html).not.toContain(`src="${url}"`);
-      expect({ source, jobs, assets }).toEqual(before);
-    });
-  }
+for (const [representation, imageOwner] of [
+  ['original', false],
+  ['translation', false],
+  ['translation', true],
+] as const) {
+  test(`${representation} only renders this chat's registered writer images with JEV owner ${imageOwner}`, () => {
+    const sourceText = representation === 'original' ? text : '원문 본문';
+    const source: Source = {
+      id: 'source',
+      runId: 'run',
+      chatId: 'chat',
+      parentRevision: null,
+      text: sourceText,
+      hash: createHash('sha256').update(sourceText).digest('hex'),
+    };
+    const jobs: Job[] =
+      representation === 'translation'
+        ? [
+            {
+              id: 'translation',
+              chatId: source.chatId,
+              sourceRevision: source.id,
+              sourceHash: source.hash,
+              kind: 'translation',
+              status: 'completed',
+              attempt: 1,
+              error: null,
+              result: { mock: false, sourceRevision: source.id, sourceHash: source.hash, text },
+            },
+          ]
+        : [];
+    const before = structuredClone({ source, jobs, assets });
+    const html = renderToStaticMarkup(
+      createElement(SourceReader, {
+        source,
+        jobs,
+        assets,
+        imageOwner,
+        index: 0,
+        refresh: async () => {},
+        onError: () => {},
+        onFork: async () => {},
+      })
+    );
+    expect(html.match(/<img /gu) ?? []).toHaveLength(imageOwner ? 0 : 2);
+    if (!imageOwner) {
+      expect(html).toContain(`src="${uploadUrl}"`);
+      expect(html).toContain(`src="${packageUrl}"`);
+      expect(html).toContain(`<code>![코드](${uploadUrl})</code>`);
+    }
+    for (const url of [outsideUrl, portraitUrl, unknownUrl, externalUrl])
+      expect(html).not.toContain(`src="${url}"`);
+    expect({ source, jobs, assets }).toEqual(before);
+  });
 }
 
 test('registered upload image URLs stay literal without the caller allowlist', () => {

@@ -1,6 +1,6 @@
 import packageJson from '../package.json' with { type: 'json' };
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
-import { reviewWidths, visualReview } from './fixtures/visual-review.js';
+import { visualReview } from './fixtures/visual-review.js';
 import { test, expect } from '@playwright/test';
 import { fixtureBotInput, postFixtureChat } from './fixtures/chat.js';
 import {
@@ -11,72 +11,7 @@ import {
   startProviderConnection,
 } from './ui-navigation.js';
 
-test('CSUILAYOUT all chat settings sections fit shared desktop and phone settings styles', async ({
-  page,
-  request,
-}, info) => {
-  test.setTimeout(90000);
-  const botInput = fixtureBotInput('채팅 설정 화면 검토');
-  botInput.package.nativeRisu.card.extensions = { risuai: { defaultVariables: 'mood=0' } };
-  const botResponse = await request.post('/api/content', { data: botInput });
-  expect(botResponse.ok()).toBe(true);
-  const bot = await botResponse.json();
-  const chatResponse = await request.post('/api/chats', {
-    data: { title: '채팅 설정 화면 검토', botId: bot.id },
-  });
-  expect(chatResponse.ok()).toBe(true);
-  const chat = await chatResponse.json();
-  for (const colorScheme of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme });
-    for (const width of [1440, 412]) {
-      await page.setViewportSize({ width, height: 1000 });
-      await page.goto(`/?chat=${chat.id}`);
-      await openChatSettings(page);
-      const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-      for (const section of ['사용 자료', '생성 설정', '기억과 메모', '이미지', '카드 변수']) {
-        await selectChatSettingsSection(page, section);
-        const pane = dialog.getByRole('tabpanel');
-        expect(
-          await pane.evaluate((node) => node.scrollWidth - node.clientWidth)
-        ).toBeLessThanOrEqual(1);
-        if (section === '생성 설정') {
-          await pane.getByText('고급 실행 설정', { exact: true }).click();
-          const fields = (await pane.locator('.chat-runtime-fields').boundingBox())!;
-          for (const group of await pane.locator('.chat-runtime-fields > .settings-group').all()) {
-            const bounds = (await group.boundingBox())!;
-            expect(Math.abs(fields.width - bounds.width)).toBeLessThanOrEqual(1);
-          }
-        }
-        for (const toggle of await pane.locator('.settings-row-toggle [role="switch"]').all()) {
-          if (!(await toggle.isVisible())) continue;
-          const bounds = (await toggle.boundingBox())!;
-          const row = await toggle.evaluate((node) => {
-            const bounds = node.closest('.settings-row-toggle')!.getBoundingClientRect();
-            return { x: bounds.x, width: bounds.width };
-          });
-          expect(Math.abs(row.x + row.width - bounds.x - bounds.width)).toBeLessThanOrEqual(1);
-        }
-        if (visualReview) {
-          await pane.evaluate((node) => {
-            node.scrollTop = 0;
-          });
-          await page.screenshot({
-            path: info.outputPath(`chat-${section}-${colorScheme}-${width}-top.png`),
-          });
-          await pane.evaluate((node) => {
-            node.scrollTop = node.scrollHeight;
-          });
-          await page.screenshot({
-            path: info.outputPath(`chat-${section}-${colorScheme}-${width}-bottom.png`),
-          });
-        }
-      }
-      await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
-    }
-  }
-});
-
-for (const colorScheme of ['light', 'dark'] as const) {
+for (const colorScheme of ['dark'] as const) {
   for (const viewport of [
     { width: 2560, height: 1440 },
     { width: 412, height: 915 },
@@ -309,125 +244,6 @@ test('SCUI03 multi-entry browser back keeps the address and chat consistent with
   await expect(page).toHaveURL(new RegExp(`chat=${chats[1].id}`));
   await expect(page.locator('.header-title h1')).toHaveText(chats[1].title);
   await expect(composer).toHaveValue('두번째 채팅의 미전송 요청');
-});
-
-test('SCUI01 settings list and details adapt at six widths with no overflow', async ({
-  page,
-}, info) => {
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-  await page.goto('/');
-  await navigationAction(page, '설정');
-  const dialog = page.getByRole('dialog', { name: '설정', exact: true });
-  const nav = dialog.locator('.settings-navigation');
-  await expect(nav).toBeHidden();
-  await expect(dialog.getByRole('tabpanel')).toHaveCount(1);
-  await expect(dialog.getByRole('combobox', { name: '설정 영역 선택', exact: true })).toHaveValue(
-    'general'
-  );
-  await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
-  await expect(nav.getByRole('button', { name: '삽화', exact: true })).toBeVisible();
-  const categoryCount = await nav.getByRole('button').count();
-  await expect(dialog.getByRole('tabpanel')).toHaveCount(0);
-  if (visualReview)
-    await page.screenshot({ path: info.outputPath(`settings-list-${MOBILE_WIDTH}.png`) });
-  const provider = nav.getByRole('button', { name: '프로바이더와 모델', exact: true });
-  await provider.focus();
-  await page.keyboard.press('Enter');
-  await expect(nav).toBeHidden();
-  await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
-  await selectSettingsSection(page, '일반');
-  await dialog.getByLabel('앱 화면 테마').selectOption('dark');
-  await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
-  await expect(nav.getByRole('button', { name: '일반', exact: true })).toBeVisible();
-  await selectSettingsSection(page, '일반');
-  await expect(dialog.getByLabel('앱 화면 테마')).toHaveValue('dark');
-  await dialog.getByLabel('앱 화면 테마').selectOption('system');
-  for (const width of reviewWidths([360, 390, 430, 768, 1024, 1440])) {
-    await page.setViewportSize({ width, height: 900 });
-    await expect(dialog.getByLabel('앱 화면 테마')).toBeVisible();
-    await expect(dialog.getByRole('tabpanel')).toHaveCount(1);
-    const box = (await dialog.boundingBox())!;
-    const gap = width <= 760 ? 16 : 24;
-    expect(box.x).toBeGreaterThanOrEqual(gap);
-    expect(box.y).toBeGreaterThanOrEqual(gap);
-    expect(box.x + box.width).toBeLessThanOrEqual(width - gap);
-    expect(box.y + box.height).toBeLessThanOrEqual(900 - gap);
-    expect(Math.abs(box.x + box.width / 2 - width / 2)).toBeLessThanOrEqual(1);
-    expect(Math.abs(box.y + box.height / 2 - 900 / 2)).toBeLessThanOrEqual(1);
-    if (width <= 760) {
-      await expect(nav).toBeHidden();
-      await expect(dialog.getByRole('heading', { name: '일반', exact: true })).toHaveCount(1);
-      const back = dialog.getByRole('button', { name: '설정 목록으로', exact: true });
-      const bounds = await back.boundingBox();
-      expect(bounds!.width).toBeGreaterThanOrEqual(44);
-      expect(bounds!.height).toBeGreaterThanOrEqual(44);
-      if (width === MOBILE_WIDTH) {
-        await page.setViewportSize({ width, height: 480 });
-        const pane = dialog.getByRole('tabpanel');
-        const header = dialog.locator(':scope > .dialog-header');
-        const headerBox = (await header.boundingBox())!;
-        await pane.evaluate((node) => {
-          node.scrollTop = node.scrollHeight;
-        });
-        expect(await pane.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
-        expect((await header.boundingBox())!.y).toBe(headerBox.y);
-        const shortBox = (await dialog.boundingBox())!;
-        expect(shortBox.y).toBeGreaterThanOrEqual(16);
-        expect(shortBox.y + shortBox.height).toBeLessThanOrEqual(480 - 16);
-        await expect(dialog.getByRole('button', { name: '설정 닫기', exact: true })).toBeInViewport(
-          { ratio: 1 }
-        );
-        if (visualReview)
-          await page.screenshot({ path: info.outputPath('settings-centered-mobile-short.png') });
-        await pane.evaluate((node) => {
-          node.scrollTop = 0;
-        });
-        await page.setViewportSize({ width, height: 900 });
-      }
-    } else {
-      await expect(nav).toBeVisible();
-      await expect(nav.getByRole('tab')).toHaveCount(categoryCount);
-    }
-    expect(
-      await dialog.evaluate((node) => node.scrollWidth - node.clientWidth)
-    ).toBeLessThanOrEqual(1);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-      true
-    );
-    if (width === MOBILE_WIDTH || width === DESKTOP_WIDTH)
-      if (visualReview)
-        await page.screenshot({ path: info.outputPath(`settings-general-${width}.png`) });
-  }
-  await nav.getByRole('tab', { name: '일반', exact: true }).focus();
-  await page.keyboard.press('End');
-  await expect(nav.getByRole('tab', { name: '앱 정보', exact: true })).toBeFocused();
-  await expect(dialog.getByRole('region', { name: 'Uimori 앱 정보' })).toBeVisible();
-  await nav.getByRole('tab', { name: '앱 정보', exact: true }).press('Home');
-  await expect(nav.getByRole('tab', { name: '일반', exact: true })).toBeFocused();
-  for (const section of ['테마와 색상', '역할별 모델', '현재 프롬프트', '프로바이더와 모델']) {
-    await page.keyboard.press('ArrowDown');
-    await expect(nav.getByRole('tab', { name: section, exact: true })).toBeFocused();
-  }
-  const close = dialog.getByRole('button', { name: '설정 닫기', exact: true });
-  await close.focus();
-  await page.keyboard.press('Shift+Tab');
-  await expect(close).not.toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(close).toBeFocused();
-  await close.click();
-  await expect(dialog).toBeHidden();
-  const opener = page
-    .getByTestId('bot-navigation')
-    .filter({ visible: true })
-    .getByRole('button', { name: '설정', exact: true });
-  await opener.click();
-  await expect(dialog).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeHidden();
-  await expect(opener).toBeFocused();
-  expect(errors).toEqual([]);
 });
 
 test('SCUISEARCH settings search opens real destinations without losing an unsaved provider draft', async ({

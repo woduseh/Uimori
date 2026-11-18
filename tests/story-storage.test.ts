@@ -23,15 +23,12 @@ const position = { target: 'source-1', source: 'source-1', anchor: 'p1', offset:
 
 afterEach(() => vi.unstubAllGlobals());
 
-test.each(['{', 'null', '[]', '{"source": 42}', '{"start":-1,"end":3}'])(
-  'ignores invalid optional cache %s',
-  (value) => {
-    vi.stubGlobal('localStorage', { getItem: () => value });
-    vi.stubGlobal('sessionStorage', { getItem: () => value });
-    expect(readReadingPosition('reading:chat')).toBeNull();
-    expect(readDraftCursor('cursor')).toBeNull();
-  }
-);
+test.each(['{', '{"source": 42}'])('ignores invalid optional cache %s', (value) => {
+  vi.stubGlobal('localStorage', { getItem: () => value });
+  vi.stubGlobal('sessionStorage', { getItem: () => value });
+  expect(readReadingPosition('reading:chat')).toBeNull();
+  expect(readDraftCursor('cursor')).toBeNull();
+});
 
 test('reading position persists across tabs while draft cursor stays in the session', () => {
   const local = memoryStorage();

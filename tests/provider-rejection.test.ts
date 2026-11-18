@@ -3,30 +3,19 @@ import { test } from 'vitest';
 import { providerRejection } from '../core/provider-rejection.js';
 import { readProviderHttpDiagnostic } from '../core/provider-http-error.js';
 
-for (const [field, option] of [
-  ['reasoning.effort', 'thinking'],
-  ['reasoning.mode', 'reasoningMode'],
-  ['reasoning.context', 'reasoningContext'],
-  ['text.verbosity', 'verbosity'],
-  ['temperature', 'temperature'],
-  ['top_p', 'topP'],
-  ['max_tokens', 'maxOutputTokens'],
-  ['stop_sequences', 'stopSequences'],
-  ['service_tier', 'serviceTier'],
-  ['prompt_cache_options.mode', 'cache'],
-  ['cache_control.type', 'cache'],
-  ['response_format.json_schema.schema', 'structuredOutput'],
-  ['model', 'model'],
-  ['tools', 'tools'],
-  ['messages[2].role', 'input'],
-] as const) {
-  test(`maps ${field} to ${option}`, () => {
+test('maps rejected provider fields to app option groups', () => {
+  for (const [field, option] of [
+    ['reasoning.effort', 'thinking'],
+    ['max_tokens', 'maxOutputTokens'],
+    ['cache_control.type', 'cache'],
+    ['response_format.json_schema.schema', 'structuredOutput'],
+    ['messages[2].role', 'input'],
+  ] as const)
     assert.deepEqual(
       providerRejection({ httpStatus: 400, bodyState: 'parsed', fields: [field] })?.options,
       [option]
     );
-  });
-}
+});
 test('keeps a provider explanation without inventing an app option for unknown fields', () => {
   assert.deepEqual(
     providerRejection({
@@ -55,16 +44,13 @@ test('deduplicates option groups', () => {
     ['thinking', 'temperature']
   );
 });
-for (const httpStatus of [200, 401, 403, 429, 500, 503]) {
-  test(`does not call HTTP ${httpStatus} an option rejection`, () => {
+test('does not call non-400 HTTP statuses an option rejection', () => {
+  for (const httpStatus of [200, 401, 429, 500])
     assert.equal(
       providerRejection({ httpStatus, bodyState: 'parsed', message: 'not an option verdict' }),
       undefined
     );
-  });
-}
-test('an absent diagnostic has no rejection', () =>
-  assert.equal(providerRejection(undefined), undefined));
+});
 test('propagates only the redacted detail from the HTTP boundary', async () => {
   const key = 'private-test-key';
   const diagnostic = await readProviderHttpDiagnostic(

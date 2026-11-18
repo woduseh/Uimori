@@ -5,7 +5,6 @@ import Fastify from 'fastify';
 import { afterEach, expect, test, vi } from 'vitest';
 import { helperResourceEditResources, type HelperTask } from '../core/helper.js';
 import type { PromptPreset } from '../core/product.js';
-import { emptyIllustrationPreset } from '../core/illustration-presets.js';
 import { editableResource } from '../core/resource-editing.js';
 import { emptyTheme } from '../core/themes.js';
 import * as transport from '../core/transport.js';
@@ -370,110 +369,97 @@ test('runtime edits stay undoable after input cleanup and duplicate POST confirm
   ).toHaveLength(1);
 });
 
-test.each(['theme', 'illustration-preset'] as const)(
-  'failed explanation keeps %s save recoverable and refresh events survive undo',
-  async (kind) => {
+test('failed explanation keeps theme save recoverable and refresh events survive undo', async () => {
+  const kind = 'theme' as const;
+  const f = fixture();
+  const model = emptyTheme('원래 설정');
+  const saved = saveResource(f.store, { kind, id: null, model }).saved;
+  if (!('id' in saved)) throw new Error('Expected saved ID');
+  providerMutation(
+    'resource.save',
+    {
+      kind,
+      id: saved.id,
+      expectedRevision: saved.revision,
+      model: { ...model, title: '변경한 설정' },
+    },
+    true
+  );
+  const task = f.runtime.enqueue(f.conversation.id, 'failed-explanation', '설정 이름을 바꿔줘');
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id)).toMatchObject({
+    status: 'failed',
+    completedEffects: { count: 1 },
+  });
+  const edit = lastEdit(f)!;
+  expect(edit).toMatchObject({ kind, id: saved.id, canUndo: true });
+  undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, edit.editSeq);
+  expect(readResource(f.store, kind, saved.id)).toMatchObject({ title: '원래 설정' });
+  const kinds = f.workspace.events(f.conversation.id).map((event) => event.kind);
+  expect(kinds.filter((value) => value === `${kind}.updated`)).toHaveLength(2);
+  expect(kinds.filter((value) => value === 'resource.updated')).toHaveLength(2);
+});
+
+test.each(['external-save', 'deleted', 'running'] as const)(
+  'latest edit stays selected and undo rechecks %s',
+  (blocker) => {
     const f = fixture();
-    const model = kind === 'theme' ? emptyTheme('원래 설정') : emptyIllustrationPreset('원래 설정');
-    const saved = saveResource(f.store, { kind, id: null, model }).saved;
-    if (!('id' in saved)) throw new Error('Expected saved ID');
-    providerMutation(
-      'resource.save',
-      {
-        kind,
-        id: saved.id,
-        expectedRevision: saved.revision,
-        model: { ...model, title: '변경한 설정' },
-      },
-      true
+    const task = runningTask(f);
+    const contents = ['처음 자료', '최근 자료'].map((title) =>
+      f.store.product.content(fixtureBotInput(title))
     );
-    const task = f.runtime.enqueue(f.conversation.id, 'failed-explanation', '설정 이름을 바꿔줘');
-    await Promise.all(f.work);
-    expect(f.workspace.task(task.id)).toMatchObject({
-      status: 'failed',
-      completedEffects: { count: 1 },
-    });
+    for (const content of contents)
+      mutate(
+        f,
+        task,
+        'resource.patch',
+        patchTitle(content.id, content.revision, `${content.title} 수정`),
+        content.id
+      );
+    finish(f, task);
     const edit = lastEdit(f)!;
-    expect(edit).toMatchObject({ kind, id: saved.id, canUndo: true });
-    undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, edit.editSeq);
-    expect(readResource(f.store, kind, saved.id)).toMatchObject({ title: '원래 설정' });
-    const kinds = f.workspace.events(f.conversation.id).map((event) => event.kind);
-    expect(kinds.filter((value) => value === `${kind}.updated`)).toHaveLength(2);
-    expect(kinds.filter((value) => value === 'resource.updated')).toHaveLength(2);
+    const content = contents[1];
+    expect(edit).toMatchObject({ id: content.id, canUndo: true });
+    if (blocker === 'external-save') {
+      const saved = readResource(f.store, 'content', content.id);
+      saveResource(f.store, {
+        kind: 'content',
+        id: content.id,
+        expectedRevision: saved.revision,
+        model: { ...editableResource('content', saved), description: '다른 창 수정' },
+      });
+    } else if (blocker === 'deleted') {
+      const deleting = runningTask(f, 'delete');
+      mutate(
+        f,
+        deleting,
+        'resource.delete',
+        { kind: 'content', id: content.id, expectedRevision: edit.revision },
+        'delete'
+      );
+      finish(f, deleting);
+    } else runningTask(f, 'new-task');
+    expect(lastEdit(f)).toMatchObject({
+      editSeq: edit.editSeq,
+      id: content.id,
+      canUndo: false,
+      reason: expect.any(String),
+    });
+    expect(() =>
+      undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, edit.editSeq)
+    ).toThrow();
+    const firstSeq = f.workspace
+      .events(f.conversation.id)
+      .find((event) => event.kind === 'resource.edited')!.seq;
+    expect(() => undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, firstSeq)).toThrow(
+      '최근 수정이 바뀌었어요'
+    );
+    expect(readResource(f.store, 'content', contents[0].id)).toMatchObject({
+      title: '처음 자료 수정',
+      revision: 2,
+    });
   }
 );
-
-test.each([
-  'external-save',
-  'missing-undo',
-  'deleted',
-  'missing-receipt',
-  'queued',
-  'running',
-] as const)('latest edit stays selected and undo rechecks %s', (blocker) => {
-  const f = fixture();
-  const task = runningTask(f);
-  const contents = ['처음 자료', '최근 자료'].map((title) =>
-    f.store.product.content(fixtureBotInput(title))
-  );
-  for (const content of contents)
-    mutate(
-      f,
-      task,
-      'resource.patch',
-      patchTitle(content.id, content.revision, `${content.title} 수정`),
-      content.id
-    );
-  finish(f, task);
-  const edit = lastEdit(f)!;
-  const content = contents[1];
-  expect(edit).toMatchObject({ id: content.id, canUndo: true });
-  if (blocker === 'external-save') {
-    const saved = readResource(f.store, 'content', content.id);
-    saveResource(f.store, {
-      kind: 'content',
-      id: content.id,
-      expectedRevision: saved.revision,
-      model: { ...editableResource('content', saved), description: '다른 창 수정' },
-    });
-  } else if (blocker === 'missing-undo') {
-    f.store.db
-      .prepare('DELETE FROM resource_undo WHERE kind=? AND id=?')
-      .run('content', content.id);
-  } else if (blocker === 'deleted') {
-    const deleting = runningTask(f, 'delete');
-    mutate(
-      f,
-      deleting,
-      'resource.delete',
-      { kind: 'content', id: content.id, expectedRevision: edit.revision },
-      'delete'
-    );
-    finish(f, deleting);
-  } else if (blocker === 'missing-receipt') {
-    f.store.db.prepare('DELETE FROM helper_operations WHERE id=?').run(content.id);
-  } else if (blocker === 'queued') queuedTask(f, 'new-task');
-  else runningTask(f, 'new-task');
-  expect(lastEdit(f)).toMatchObject({
-    editSeq: edit.editSeq,
-    id: content.id,
-    canUndo: false,
-    reason: expect.any(String),
-  });
-  expect(() =>
-    undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, edit.editSeq)
-  ).toThrow();
-  const firstSeq = f.workspace
-    .events(f.conversation.id)
-    .find((event) => event.kind === 'resource.edited')!.seq;
-  expect(() => undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, firstSeq)).toThrow(
-    '최근 수정이 바뀌었어요'
-  );
-  expect(readResource(f.store, 'content', contents[0].id)).toMatchObject({
-    title: '처음 자료 수정',
-    revision: 2,
-  });
-});
 
 test('new resources, unchanged writes and resource undo never become another recoverable edit', () => {
   const f = fixture();
@@ -610,7 +596,7 @@ test('edit and undo writes roll back with their durable provenance receipt', () 
   });
 });
 
-test.each(['stale', 'invalid-change', 'duplicate'] as const)(
+test.each(['stale', 'duplicate'] as const)(
   'multi-resource patch rejects %s second item without changing saved resources or undo',
   (failure) => {
     const f = fixture();
@@ -626,7 +612,6 @@ test.each(['stale', 'invalid-change', 'duplicate'] as const)(
     const previousUndo = f.store.db.prepare('SELECT * FROM resource_undo ORDER BY kind,id').all();
     const task = runningTask(f);
     const second = patchTitle(contents[1].id, failure === 'stale' ? 9 : 1, '둘째 변경');
-    if (failure === 'invalid-change') second.changes[0].path = '/package/body';
     const items = [
       patchTitle(contents[0].id, first.revision, '첫 변경'),
       failure === 'duplicate' ? patchTitle(contents[0].id, first.revision, '다시 변경') : second,

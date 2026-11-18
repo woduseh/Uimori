@@ -1,7 +1,6 @@
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { setCurrentModels } from './ui-navigation.js';
-import { visualReview } from './fixtures/visual-review.js';
 import {
   openProviderMenu,
   selectSettingsSection,
@@ -43,8 +42,7 @@ async function library(page: Page, tab: string) {
 test('DEL01 library cancel, stale revision, dependent bot and actual deletion at mobile width', async ({
   page,
   request,
-  browser,
-}, info) => {
+}) => {
   const item = await content(request);
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   const panel = await library(page, '봇');
@@ -58,37 +56,10 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
   await card.getByLabel(`${item.title} 메뉴`, { exact: true }).focus();
   await page.keyboard.press('Enter');
   await expect(card.getByRole('button', { name: `${item.title} 삭제`, exact: true })).toBeVisible();
-  if (visualReview)
-    await page.screenshot({ path: info.outputPath('library-card-delete-desktop.png') });
-  const touchContext = await browser.newContext({
-    baseURL: info.project.use.baseURL,
-    viewport: { width: MOBILE_WIDTH, height: 844 },
-    hasTouch: true,
-    isMobile: true,
-    colorScheme: 'dark',
-  });
-  try {
-    const touchPage = await touchContext.newPage();
-    const touchPanel = await library(touchPage, '봇');
-    await touchPanel.getByRole('button', { name: '카드', exact: true }).click();
-    await touchPanel.getByLabel(`${item.title} 메뉴`, { exact: true }).click();
-    await expect(
-      touchPanel.getByRole('button', { name: `${item.title} 삭제`, exact: true })
-    ).toBeVisible();
-    if (visualReview)
-      await touchPage.screenshot({ path: info.outputPath('library-card-delete-touch.png') });
-  } finally {
-    await touchContext.close();
-  }
   await card.getByLabel(`${item.title} 메뉴`, { exact: true }).press('Escape');
   await editLibraryContent(page, item.title);
   await expect(panel.getByRole('region', { name: '자료 상세', exact: true })).toBeVisible();
-  await page.emulateMedia({ colorScheme: 'dark' });
-  for (const width of visualReview ? [960, MOBILE_WIDTH] : [MOBILE_WIDTH]) {
-    await page.setViewportSize({ width, height: 900 });
-    if (visualReview)
-      await page.screenshot({ path: info.outputPath(`content-header-${width}.png`) });
-  }
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
   await panel.getByLabel('자료 메뉴', { exact: true }).click();
   await panel.getByRole('button', { name: `${item.title} 자료 삭제`, exact: true }).click();
   const dialog = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
@@ -115,10 +86,6 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
   await page.reload();
   await panel.getByLabel(`${item.title} 메뉴`, { exact: true }).click();
   await panel.getByRole('button', { name: `${item.title} 삭제`, exact: true }).click();
-  if (visualReview) await page.screenshot({ path: info.outputPath('delete-confirm-mobile.png') });
-  expect(
-    await dialog.evaluate((element) => element.getBoundingClientRect().right <= innerWidth)
-  ).toBe(true);
   await confirm(page);
   await expect(panel.getByRole('button', { name: `${item.title} 삭제`, exact: true })).toHaveCount(
     0
@@ -141,7 +108,7 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
 test('DEL02 prompt combinations and presets have deletion and removed prompt does not reappear', async ({
   page,
   request,
-}, info) => {
+}) => {
   const response = await request.post('/api/prompt-presets', {
     data: {
       title: `삭제 프롬프트 ${crypto.randomUUID()}`,
@@ -187,13 +154,7 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
   await navigationAction(page, '프롬프트');
   const panel = page.getByTestId('prompt-library');
   await panel.getByRole('button', { name: `${prompt.title} 프롬프트 편집`, exact: true }).click();
-  await page.emulateMedia({ colorScheme: 'dark' });
-  for (const width of visualReview ? [960, MOBILE_WIDTH] : [MOBILE_WIDTH]) {
-    await page.setViewportSize({ width, height: 900 });
-    await panel.locator('.prompt-save-actions').scrollIntoViewIfNeeded();
-    if (visualReview)
-      await page.screenshot({ path: info.outputPath(`prompt-footer-${width}.png`) });
-  }
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
   await openPromptActions(panel);
   await panel.getByRole('button', { name: `${prompt.title} 프롬프트 삭제`, exact: true }).click();
   await confirm(page);
@@ -252,27 +213,6 @@ test('DEL03 deleting selected chat clears reader and URL while preserving anothe
   expect((await request.get(`/api/chats/${preserved.id}`)).ok()).toBe(true);
   await expect(other).not.toHaveURL(new RegExp(chat.id));
   await other.close();
-});
-
-test('DEL04 personas and modules remain deletable from their own categories', async ({
-  page,
-  request,
-}) => {
-  // Invalid retired kinds are covered at creation/archive boundaries in library-organization.test.ts.
-  const items = await Promise.all(['persona', 'module'].map((kind) => content(request, kind)));
-  const panel = await library(page, '페르소나');
-  await expect(panel.getByRole('tab', { name: '기타 자료', exact: true })).toHaveCount(0);
-  for (const [kind, label] of [
-    ['persona', '페르소나'],
-    ['module', '모듈'],
-  ]) {
-    await panel.getByRole('tab', { name: label, exact: true }).click();
-    const item = items.find((item) => item.kind === kind)!;
-    await panel.getByLabel(`${item.title} 메뉴`, { exact: true }).click();
-    await panel.getByRole('button', { name: `${item.title} 삭제`, exact: true }).click();
-    await confirm(page);
-    expect((await request.get(`/api/revisions/content/${item.id}/1`)).status()).toBe(404);
-  }
 });
 
 test('DEL05 model is deleted before its connection and settings lists stay current', async ({

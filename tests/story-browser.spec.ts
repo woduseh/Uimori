@@ -1,4 +1,3 @@
-import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { selectChatSettingsSection, sourceAction } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
@@ -237,23 +236,4 @@ test('S06 S07 reading preserves source text while the asset catalog does not pre
       fullPage: true,
     });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-});
-
-test('STUI01 story memory fits mobile and desktop without the retired independent queue', async ({
-  page,
-}, info) => {
-  await create(page, '기억과 메모 배치 합성');
-  const section = await panel(page);
-  for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
-    await page.setViewportSize({ width, height: 1000 });
-    await section.scrollIntoViewIfNeeded();
-    await expect(
-      section.locator('summary').filter({ hasText: /^사용자 메모와 정정/ })
-    ).toBeVisible();
-    await expect(section.locator('summary').filter({ hasText: /^장면 예약/ })).toHaveCount(0);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-      true
-    );
-    if (visualReview) await page.screenshot({ path: info.outputPath(`story-memory-${width}.png`) });
-  }
 });

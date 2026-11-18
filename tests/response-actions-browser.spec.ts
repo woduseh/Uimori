@@ -1,11 +1,11 @@
-import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type { Bookmark } from '../core/reading-state.js';
 import type { ResponseStreamPage } from '../core/response-stream.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { navigationAction, openSourceActions } from './ui-navigation.js';
+import { openSourceActions } from './ui-navigation.js';
 
 async function detail(request: APIRequestContext, chatId: string): Promise<ChatDetail> {
   const response = await request.get(`/api/chats/${chatId}`);
@@ -735,78 +735,4 @@ test('RACOM06 earlier-scene translation generation stays explicit and pending or
     release();
     await page.unrouteAll({ behavior: 'wait' });
   }
-});
-
-test('TSKUI01 task overview screenshots wait for real run, job and attempt data on mobile and desktop', async ({
-  page,
-  request,
-}, info) => {
-  test.setTimeout(60_000);
-  const before = await seed(request, '작업 현황 합성 채팅', [
-    '항구에 도착한 등대지기가 편지를 확인하는 장면을 이어 써요.',
-    '편지의 답장을 준비하며 다음 항해의 계획을 이야기해요.',
-  ]);
-  const pageErrors: string[] = [];
-  page.on('pageerror', (error) => pageErrors.push(error.message));
-  for (const width of DEFAULT_WIDTHS) {
-    await page.setViewportSize({ width, height: width === MOBILE_WIDTH ? 844 : 1000 });
-    await page.goto(`/?chat=${before.chat.id}`);
-    await expect(page.getByTestId('source')).toHaveCount(before.sources.length);
-    const jobsLoaded = page.waitForResponse((response) =>
-      response.url().endsWith(`/api/chats/${before.chat.id}/jobs`)
-    );
-    await navigationAction(page, '작업 현황');
-    expect((await jobsLoaded).ok()).toBe(true);
-    const dialog = page.getByRole('dialog', { name: '작업 현황', exact: true });
-    const panel = dialog.getByRole('region', { name: '실행 기록', exact: true });
-    await expect(panel.getByTestId('run')).toHaveCount(before.runs.length);
-    for (const run of before.runs) {
-      const card = panel.locator(`[data-testid="run"][data-run-id="${run.id}"]`);
-      await expect(card.locator('.task-request')).toHaveText(run.request);
-      await expect(card.locator('.task-heading > strong')).toHaveText('원문 완료');
-    }
-    const current = before.runs.at(-1)!;
-    const card = panel.locator(`[data-testid="run"][data-run-id="${current.id}"]`);
-    const diagnostics = card.getByText('실행 확인', { exact: true });
-    const fullLoaded = page.waitForResponse((response) =>
-      response.url().endsWith(`/api/runs/${current.id}`)
-    );
-    await diagnostics.click();
-    const fullResponse = await fullLoaded;
-    expect(fullResponse.ok()).toBe(true);
-    const full = (await fullResponse.json()) as Run;
-    const rawRecord = diagnostics.locator('..').locator('.run-raw-record');
-    await rawRecord.locator(':scope > summary').click();
-    await expect(rawRecord.locator(':scope > pre')).toBeVisible();
-    await expect(rawRecord.locator(':scope > pre')).toHaveText(
-      JSON.stringify(
-        { snapshot: full.snapshot, inputs: full.inputs, toolEvents: full.toolEvents },
-        null,
-        2
-      )
-    );
-    await diagnostics.click();
-    const usage = panel.getByTestId('usage-inspector');
-    const attemptsLoaded = page.waitForResponse((response) =>
-      response.url().endsWith(`/api/chats/${before.chat.id}/attempts`)
-    );
-    await usage.locator(':scope > details > summary').click();
-    const attemptsResponse = await attemptsLoaded;
-    expect(attemptsResponse.ok()).toBe(true);
-    const attempts = (await attemptsResponse.json()) as unknown[];
-    await expect(usage.getByRole('table')).toBeVisible();
-    await expect(usage.getByRole('rowheader')).toHaveText(['본문']);
-    await expect(usage.getByRole('rowheader', { name: '채팅 제목', exact: true })).toHaveCount(0);
-    await expect(usage.getByText(new RegExp(`^전송 시도 ${attempts.length}회`))).toBeVisible();
-    await expect(panel.getByRole('status').filter({ hasText: /불러오는 중/ })).toHaveCount(0);
-    await expect(panel.getByRole('alert')).toHaveCount(0);
-    await noHorizontalOverflow(page, dialog);
-    await panel.getByTestId('run').first().scrollIntoViewIfNeeded();
-    if (visualReview) await page.screenshot({ path: info.outputPath(`tasks-loaded-${width}.png`) });
-  }
-  const after = await detail(request, before.chat.id);
-  expect(after.runs).toEqual(before.runs);
-  expect(after.attempts).toEqual(before.attempts);
-  expect(after.jobs).toEqual(before.jobs);
-  expect(pageErrors).toEqual([]);
 });

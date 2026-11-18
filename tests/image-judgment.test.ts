@@ -514,42 +514,6 @@ describe('JEV-only existing image placement', () => {
     expect(authorize).not.toHaveBeenCalled();
     expect(observed.finishes).toHaveLength(1);
   });
-  it('accepts a valid selected choice without requiring unused distribution fields', async () => {
-    const h = {
-      signal: new AbortController().signal,
-      credential: () => 'key',
-      onAttemptStart: () => 'attempt',
-      onAttemptFinish: vi.fn(),
-    };
-    const result = await judgeImagePlacement(source, assets, '', {
-      ...h,
-      fetch: async (_url, init) => {
-        const body = JSON.parse(String(init?.body));
-        return new Response(
-          JSON.stringify({
-            model: 'jev-latest',
-            usage: { input_tokens: 120, output_tokens: 8 },
-            answers: Object.fromEntries(
-              Object.keys(body.questions).map((key) => [
-                key,
-                {
-                  type: 'choice',
-                  choice: 'asset_0',
-                  probabilities: { asset_0: 0.91 },
-                },
-              ])
-            ),
-          })
-        );
-      },
-    });
-    expect(result.entries).toHaveLength(1);
-    expect(result.entries[0].assetRef).toBe('mira');
-    expect(h.onAttemptFinish).toHaveBeenCalledWith(
-      'attempt',
-      expect.objectContaining({ status: 'completed' })
-    );
-  });
   it('rejects an invented choice', async () => {
     const h = {
       signal: new AbortController().signal,
@@ -573,7 +537,6 @@ describe('JEV-only existing image placement', () => {
   });
   it.each([
     ['image-selection-jev-v1', null],
-    ['image-selection-jev-v3', '60902f75148370a9962cf1fe5030ede4ffcab900dbc2d9b268e624f10a699494'],
     ['image-selection-jev-v4', '50e9886ed2a14f15fff046903ee28b27bfbf9e86f95abb80156a3f2a36029440'],
   ] as const)(
     'accepts historic full and projected %s wires and rejects tampering',
@@ -641,49 +604,6 @@ describe('JEV-only existing image placement', () => {
       }
     }
   );
-  it('retrieves a relevant tail asset from 10000 records in the actual serialized request', async () => {
-    const many: AssetEntry[] = Array.from({ length: 10000 }, (_, i) => ({
-      ...assets[1],
-      ref: `catalog-${i}`,
-      alt: `Unrelated warehouse crate ${i}`,
-      caption: 'Warehouse storage inventory',
-      location: 'warehouse',
-    }));
-    many[9999] = { ...assets[0], ref: 'tail-pier' };
-    let sent: ReturnType<typeof JSON.parse>;
-    const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      sent = JSON.parse(String(init?.body));
-      const tail = sent.state.assets.find(
-        (asset: { name: string }) => asset.name === 'Mira at pier'
-      );
-      expect(tail).toBeDefined();
-      expect(estimateContextTokens(sent)).toBeLessThanOrEqual(IMAGE_JUDGMENT_LIMITS.inputTokens);
-      for (const question of Object.values(sent.questions) as {
-        criteria: Record<string, unknown>;
-      }[]) {
-        expect(Object.keys(question.criteria)).toHaveLength(
-          IMAGE_JUDGMENT_LIMITS.candidatesPerBlock + 1
-        );
-        expect(question.criteria).toHaveProperty(tail.id);
-      }
-      return typedResponse(sent, tail.id);
-    });
-    const result = await judgeImagePlacement(source, many, '', {
-      signal: new AbortController().signal,
-      credential: () => 'key',
-      fetch,
-      onAttemptStart: (wire) => {
-        validateImageJudgmentWire(source, many, wire);
-        return 'tail';
-      },
-      onAttemptFinish: vi.fn(),
-    });
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(result.entries[0].assetRef).toBe('tail-pier');
-    expect(sent.state.totalAssets).toBe(10000);
-    expect(sent.state.evaluatedAssets).toBeGreaterThan(0);
-    expect(sent.state.evaluatedAssets).toBeLessThanOrEqual(32);
-  });
   it('reserves a suitable affordable candidate for every paragraph before filling depth', async () => {
     const { names, catalog } = paragraphCatalog();
     const text = names

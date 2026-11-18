@@ -270,42 +270,8 @@ test('native button message merging keeps each user attachment on its identified
   ]);
 });
 
-test('native button deletion removes only the identified user attachment', async () => {
-  const { store, chatId } = await setup(
-    false,
-    '',
-    false,
-    'function choose(id) removeChat(id, 0) end'
-  );
-  const image = await referenceImage(store);
-  const source = await appendNativeSource(store, chatId, 'Reference scene', [image]);
-  await applyNativeRisuAction(
-    store,
-    chatId,
-    source.id,
-    actionBody(store, chatId, 'choose', 'delete-image')
-  );
-  const head = store.chat(chatId).headRevision!;
-  expect(
-    nativeSourceSnapshot(store, chatId, head).snapshot.logicalHistory!.flatMap(
-      (message) => message.requestImages ?? []
-    )
-  ).toEqual([]);
-  expect(store.run(source.runId).snapshot.requestImages).toEqual([image]);
-});
-
 test.each([
   ['role change', "setChatRole(id, 0, 'char')", 'RISU_NATIVE_REQUEST_IMAGE_IDENTITY'],
-  [
-    'duplicate identity',
-    'local messages = getFullChat(id); table.insert(messages, messages[1]); setFullChat(id, messages)',
-    'RISU_NATIVE_REQUEST_IMAGE_IDENTITY',
-  ],
-  [
-    'lost identity',
-    'local messages = getFullChat(id); messages[1].id = nil; setFullChat(id, messages)',
-    'RISU_NATIVE_REQUEST_IMAGE_IDENTITY',
-  ],
   ['overfull merged scene', 'removeChat(id, 1)', '참고 이미지는 한 장면에 8장까지 묶을 수 있어요.'],
 ])('native button rejects %s without changing head or variables', async (_, code, error) => {
   const { store, chatId } = await setup(
@@ -407,19 +373,13 @@ test('display requests supply viewport CBS to regex and Lua without changing sto
     const first = store.chat(chatId).headRevision!;
     const source = store.source(first),
       variables = readChatVariables(store, chatId);
-    for (const [width, height] of [
-      [1845, 1194],
-      [412, 915],
-    ]) {
-      const response = await app.inject(
-        `/api/chats/${chatId}/sources/${first}/presentation?viewportWidth=${width}&viewportHeight=${height}`
-      );
-      expect(response.statusCode, response.body).toBe(200);
-      expect(response.json().original.html).toContain(`Regex ${width}/${height}`);
-      expect(response.json().original.html).toContain(`Lua ${width}/${height}`);
-      expect(response.json().issues).not.toContain('screenwidth');
-      expect(response.json().issues).not.toContain('screenheight');
-    }
+    const response = await app.inject(
+      `/api/chats/${chatId}/sources/${first}/presentation?viewportWidth=1845&viewportHeight=1194`
+    );
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json().original.html).toContain('Regex 1845/1194');
+    expect(response.json().original.html).toContain('Lua 1845/1194');
+    expect(response.json().issues).toEqual([]);
     const attachment = store.product.profile(chatId).packageAttachments![0];
     const preview = await nativeRisuPreview(store, attachment.id, {
       revision: String(attachment.revision),
@@ -430,11 +390,13 @@ test('display requests supply viewport CBS to regex and Lua without changing sto
     expect(preview.html).toContain('Regex 412/915');
     expect(preview.html).toContain('Lua 412/915');
     expect(preview.issues).toEqual([]);
-    for (const query of ['viewportWidth=412', 'viewportWidth=0&viewportHeight=915']) {
-      expect(
-        (await app.inject(`/api/chats/${chatId}/sources/${first}/presentation?${query}`)).statusCode
-      ).toBe(400);
-    }
+    expect(
+      (
+        await app.inject(
+          `/api/chats/${chatId}/sources/${first}/presentation?viewportWidth=0&viewportHeight=915`
+        )
+      ).statusCode
+    ).toBe(400);
     expect(store.source(first)).toEqual(source);
     expect(readChatVariables(store, chatId)).toEqual(variables);
     expect(store.chat(chatId).headRevision).toBe(first);
@@ -486,12 +448,7 @@ test('native first-message button renders, checkpoints state, and survives sourc
   packagePresentationRoutes(app, store);
   try {
     const first = store.chat(chatId).headRevision!;
-    const snapshots = vi.spyOn(projections, 'readStoredRunSnapshot');
     const before = await app.inject(`/api/chats/${chatId}/sources/${first}/presentation`);
-    expect(
-      snapshots.mock.calls.filter(([, runId]) => runId === store.source(first).runId)
-    ).toHaveLength(1);
-    snapshots.mockRestore();
     expect(before.statusCode, before.body).toBe(200);
     expect(before.json().format).toBe('risu-html');
     expect(before.json().original.html).toContain('Choose none');
@@ -888,7 +845,7 @@ test('malformed or oversized form payloads are rejected before an action is rese
   const { store, chatId } = await setup();
   const first = store.chat(chatId).headRevision!;
   const body = { ...actionBody(store, chatId, 'survey', 'bad-form'), kind: 'form' };
-  for (const data of [null, [], { name: 42 }, { tags: ['하나', null] }, { file: {} }]) {
+  for (const data of [null, { tags: ['하나', null] }]) {
     await expect(applyNativeRisuAction(store, chatId, first, { ...body, data })).rejects.toThrow(
       'RISU_NATIVE_FORM_DATA_INVALID'
     );

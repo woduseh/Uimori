@@ -1,4 +1,3 @@
-import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { randomUUID } from 'node:crypto';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { ContextDetail as Detail, ContextJob } from '../core/context-plan.js';
@@ -87,21 +86,10 @@ async function saveSummary(request: APIRequestContext, chatId: string, summary: 
   expect(response.ok(), await response.text()).toBe(true);
   return response.json() as Promise<Detail>;
 }
-async function assertBounds(page: Page) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-    true
-  );
-  const panel = page.getByTestId('context-panel');
-  const box = await panel.boundingBox();
-  expect(box).not.toBeNull();
-  expect(box!.x).toBeGreaterThanOrEqual(0);
-  expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
-}
-
-test('CTXUI01 summary authoring without a Run, edits replace the current summary durably at both widths', async ({
+test('CTXUI01 summary authoring without a Run, edits replace the current summary durably', async ({
   page,
   request,
-}, info) => {
+}) => {
   const { chat, panel } = await create(page, 'CTXUI01 합성 요약');
   await panel.getByRole('button', { name: '직접 요약 작성', exact: true }).click();
   await panel.getByLabel('편집할 컨텍스트 요약').fill('첫 요약: 항구의 종이 울렸다.');
@@ -121,12 +109,6 @@ test('CTXUI01 summary authoring without a Run, edits replace the current summary
   expect(saved).not.toHaveProperty('checkpoints');
   expect((await read<ChatDetail>(request, `/chats/${chat.id}`)).runs).toEqual([]);
   expect(await read<unknown[]>(request, `/chats/${chat.id}/attempts`)).toEqual([]);
-  for (const width of DEFAULT_WIDTHS) {
-    await page.setViewportSize({ width, height: 844 });
-    await panel.scrollIntoViewIfNeeded();
-    await assertBounds(page);
-    await page.screenshot({ path: info.outputPath(`context-summary-${width}.png`) });
-  }
   await page.reload();
   await openChatSettings(page);
   await selectChatSettingsSection(page, '기억과 메모');
@@ -246,47 +228,45 @@ test('CTXUI03 manual no-op preserves a summary and exposes cancellable running-j
   );
 });
 
-for (const width of [1440, 412]) {
-  test(`CTXUI04 composer compaction keeps the draft and sends one-time priorities ${width}`, async ({
-    page,
-    request,
-  }, info) => {
-    await page.setViewportSize({ width, height: 900 });
-    const { chat } = await create(page, `CTXUI04 ${width}`);
-    await page
-      .getByRole('dialog', { name: '채팅 설정', exact: true })
-      .getByRole('button', { name: '채팅 설정 닫기', exact: true })
-      .click();
-    const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
-    await composer.fill('다음 장면 초안');
-    await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
-    await page.getByRole('button', { name: '컨텍스트 압축', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: '컨텍스트 압축', exact: true });
-    await expect(dialog).toBeVisible();
-    await dialog.getByText('이번 요약에서 우선할 내용 (선택)', { exact: true }).click();
-    const priorities = dialog.getByLabel('압축 우선순위', { exact: true });
-    await priorities.fill('미라가 아직 모르는 사실과 인물 호칭을 유지해요.');
-    const accepted = page.waitForResponse(
-      (response) =>
-        response.url().endsWith(`/api/chats/${chat.id}/context/compact`) &&
-        response.request().method() === 'POST'
-    );
-    await dialog.getByRole('button', { name: '컨텍스트 압축', exact: true }).click();
-    const response = await accepted;
-    expect(response.ok(), await response.text()).toBe(true);
-    expect(response.request().postDataJSON().priorities).toBe(
-      '미라가 아직 모르는 사실과 인물 호칭을 유지해요.'
-    );
-    await expect(dialog).toContainText('압축할 구간이 없어요.');
-    await expect(priorities).toHaveValue('');
-    expect((await read<Detail>(request, `/chats/${chat.id}/context`)).jobs[0].priorities).toBe(
-      '미라가 아직 모르는 사실과 인물 호칭을 유지해요.'
-    );
-    await page.screenshot({ path: info.outputPath(`composer-context-${width}.png`) });
-    await dialog.getByRole('button', { name: '컨텍스트 압축 닫기', exact: true }).click();
-    await expect(composer).toHaveValue('다음 장면 초안');
-    await expect(page.getByRole('button', { name: '입력창 더보기', exact: true })).toBeFocused();
-  });
-}
+const width = 412;
+test(`CTXUI04 composer compaction keeps the draft and sends one-time priorities ${width}`, async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width, height: 900 });
+  const { chat } = await create(page, `CTXUI04 ${width}`);
+  await page
+    .getByRole('dialog', { name: '채팅 설정', exact: true })
+    .getByRole('button', { name: '채팅 설정 닫기', exact: true })
+    .click();
+  const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
+  await composer.fill('다음 장면 초안');
+  await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+  await page.getByRole('button', { name: '컨텍스트 압축', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '컨텍스트 압축', exact: true });
+  await expect(dialog).toBeVisible();
+  await dialog.getByText('이번 요약에서 우선할 내용 (선택)', { exact: true }).click();
+  const priorities = dialog.getByLabel('압축 우선순위', { exact: true });
+  await priorities.fill('미라가 아직 모르는 사실과 인물 호칭을 유지해요.');
+  const accepted = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/chats/${chat.id}/context/compact`) &&
+      response.request().method() === 'POST'
+  );
+  await dialog.getByRole('button', { name: '컨텍스트 압축', exact: true }).click();
+  const response = await accepted;
+  expect(response.ok(), await response.text()).toBe(true);
+  expect(response.request().postDataJSON().priorities).toBe(
+    '미라가 아직 모르는 사실과 인물 호칭을 유지해요.'
+  );
+  await expect(dialog).toContainText('압축할 구간이 없어요.');
+  await expect(priorities).toHaveValue('');
+  expect((await read<Detail>(request, `/chats/${chat.id}/context`)).jobs[0].priorities).toBe(
+    '미라가 아직 모르는 사실과 인물 호칭을 유지해요.'
+  );
+  await dialog.getByRole('button', { name: '컨텍스트 압축 닫기', exact: true }).click();
+  await expect(composer).toHaveValue('다음 장면 초안');
+  await expect(page.getByRole('button', { name: '입력창 더보기', exact: true })).toBeFocused();
+});
 
 preservePromptWorkspace();

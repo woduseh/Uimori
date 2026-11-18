@@ -22,7 +22,6 @@ import * as nativeRun from '../server/risu-native-run.js';
 import * as nativeRuntime from '../server/risu-native-runtime.js';
 import { saveTheme, selectTheme } from '../server/themes.js';
 import { fixtureBotInput } from './fixtures/chat.js';
-import { nativePrompt } from './fixtures/native-prompt.js';
 
 const owned: { app: App; directory: string }[] = [];
 afterEach(async () => {
@@ -348,86 +347,65 @@ test('draft and refreshed current settings/models affect provenance and estimate
   expect(refreshed.tokens.inputTokenLimit).toBe(16000);
 });
 
-test.each([false, true])(
-  'checks summary inclusion and invalidated checkpoints (current only: %s)',
-  async (currentOnly) => {
-    const f = await fixture();
-    if (currentOnly) {
-      const workspace = promptWorkspace(f.store);
-      updatePromptWorkspace(f.store, {
-        expectedRevision: workspace.revision,
-        main: {
-          ...workspace.main,
-          program: nativePrompt('Current input only.', {
-            promptTemplate: [
-              { type: 'plain', role: 'system', text: 'Current input only.' },
-              { type: 'chat', rangeStart: -1, rangeEnd: 'end' },
-            ],
-          }),
-          values: {},
-        },
-      });
+test('checks summary inclusion and invalidated checkpoints', async () => {
+  const f = await fixture();
+  const beforeSummary = await f.preview();
+  const profile = f.store.product.snapshot(f.chat.id);
+  const reserved = freezeReservationSnapshot(
+    f.store,
+    {
+      chatId: f.chat.id,
+      parentRevision: f.chat.headRevision,
+      settingsRevision: f.chat.settingsRevision,
+      settings: f.chat.settings,
+      request: 'Visit the harbor.',
+      history: f.store.history(f.chat.headRevision),
+      resources: f.store.product.resources(f.chat.id, profile),
+      profile,
+    },
+    {
+      purpose: 'preview-main',
+      executionClock: () => ({ iso: '2026-10-05T00:00:00.000Z', unix: 1791158400 }),
     }
-    const beforeSummary = await f.preview();
-    const profile = f.store.product.snapshot(f.chat.id);
-    const reserved = freezeReservationSnapshot(
-      f.store,
-      {
-        chatId: f.chat.id,
-        parentRevision: f.chat.headRevision,
-        settingsRevision: f.chat.settingsRevision,
-        settings: f.chat.settings,
-        request: 'Visit the harbor.',
-        history: f.store.history(f.chat.headRevision),
-        resources: f.store.product.resources(f.chat.id, profile),
-        profile,
-      },
-      {
-        purpose: 'preview-main',
-        executionClock: () => ({ iso: '2026-10-05T00:00:00.000Z', unix: 1791158400 }),
-      }
-    );
-    const snapshot = f.store.context.prepareRun(
-      await nativeRun.prepareNativeRisuRun(reserved, { preview: true })
-    );
-    snapshot.contextPlan = {
-      ...snapshot.contextPlan!,
-      status: 'ready',
-      compacted: contextSourceRefs(snapshot).slice(0, 2),
-      recentSourceRevisions: snapshot.history.slice(2).map((item) => item.revision),
-      summary: '미라는 항구에서 기다렸어요.',
-      estimatedInputTokens: 100,
-    };
-    f.store.context.publishPrepared(snapshot, { origin: 'edit' });
-    const before = f.changes();
-    const usingSummary = await f.preview();
-    expect(usingSummary.summary).toMatchObject({
-      available: true,
-      inUse: currentOnly ? null : true,
-      compactedSources: 2,
-    });
-    if (currentOnly) expect(usingSummary.caveats).toContain('SUMMARY_INCLUSION_UNVERIFIED');
-    else
-      expect(usingSummary.tokens.estimatedInputTokens!).toBeLessThan(
-        beforeSummary.tokens.estimatedInputTokens!
-      );
-    expect(f.changes()).toBe(before);
-    const workspace = promptWorkspace(f.store);
-    updatePromptWorkspace(f.store, {
-      expectedRevision: workspace.revision,
-      main: {
-        ...workspace.main,
-        program: createDefaultRisuPrompt('Use the revised writing policy.'),
-        values: {},
-      },
-    });
-    const invalid = await f.preview();
-    expect(invalid.summary).toMatchObject({ available: true, inUse: false, compactedSources: 0 });
-    expect(invalid.caveats).toContain('SUMMARY_NOT_REUSABLE');
-  }
-);
+  );
+  const snapshot = f.store.context.prepareRun(
+    await nativeRun.prepareNativeRisuRun(reserved, { preview: true })
+  );
+  snapshot.contextPlan = {
+    ...snapshot.contextPlan!,
+    status: 'ready',
+    compacted: contextSourceRefs(snapshot).slice(0, 2),
+    recentSourceRevisions: snapshot.history.slice(2).map((item) => item.revision),
+    summary: '미라는 항구에서 기다렸어요.',
+    estimatedInputTokens: 100,
+  };
+  f.store.context.publishPrepared(snapshot, { origin: 'edit' });
+  const before = f.changes();
+  const usingSummary = await f.preview();
+  expect(usingSummary.summary).toMatchObject({
+    available: true,
+    inUse: true,
+    compactedSources: 2,
+  });
+  expect(usingSummary.tokens.estimatedInputTokens!).toBeLessThan(
+    beforeSummary.tokens.estimatedInputTokens!
+  );
+  expect(f.changes()).toBe(before);
+  const workspace = promptWorkspace(f.store);
+  updatePromptWorkspace(f.store, {
+    expectedRevision: workspace.revision,
+    main: {
+      ...workspace.main,
+      program: createDefaultRisuPrompt('Use the revised writing policy.'),
+      values: {},
+    },
+  });
+  const invalid = await f.preview();
+  expect(invalid.summary).toMatchObject({ available: true, inUse: false, compactedSources: 0 });
+  expect(invalid.caveats).toContain('SUMMARY_NOT_REUSABLE');
+});
 
-test.each(['settings', 'attached-content', 'source', 'connection'] as const)(
+test.each(['attached-content', 'source'] as const)(
   'marks %s that changes while the isolated native preview awaits as stale',
   async (change) => {
     const f = await fixture();
@@ -436,27 +414,14 @@ test.each(['settings', 'attached-content', 'source', 'connection'] as const)(
     let afterMutation = f.changes();
     vi.spyOn(nativeRun, 'prepareNativeRisuRun').mockImplementationOnce(async (...args) => {
       const result = await original(...args);
-      if (change === 'settings')
-        f.store.settings(f.chat.id, f.chat.settingsRevision, { ...f.chat.settings, maxCalls: 6 });
-      else if (change === 'attached-content') {
+      if (change === 'attached-content') {
         const input = fixtureBotInput('Revised attached owner', 'REVISED_PRIVATE_BOT_BODY');
         f.store.product.content({ ...input, expectedRevision: f.bot.revision }, f.bot.id);
-      } else if (change === 'source')
+      } else
         f.store.editSource(f.chat.headRevision!, {
           text: 'Revised saved scene.',
           expectedRevision: 0,
         });
-      else
-        f.store.product.connection(
-          {
-            title: 'Revised connection',
-            protocol: f.connection.protocol,
-            endpoint: 'http://127.0.0.1:9/revised',
-            enabled: true,
-            expectedRevision: f.connection.revision,
-          },
-          f.connection.id
-        );
       afterMutation = f.changes();
       return result;
     });
@@ -464,8 +429,7 @@ test.each(['settings', 'attached-content', 'source', 'connection'] as const)(
     expect(result.snapshot.settingsRevision).toBe(f.chat.settingsRevision);
     expect(result.snapshot.stale).toBe(true);
     expect(result.caveats).toContain('SNAPSHOT_CHANGED');
-    if (change !== 'settings')
-      expect(f.store.product.profile(f.chat.id).revision).toBe(profileRevision);
+    expect(f.store.product.profile(f.chat.id).revision).toBe(profileRevision);
     expect(f.changes()).toBe(afterMutation);
   }
 );

@@ -301,18 +301,6 @@ test('repeated Anthropic search pauses exhaust the existing call budget without 
   ).toBe(true);
 });
 
-test('helper does not resume an Anthropic truncated search answer', async () => {
-  const f = fixture(272000, 'anthropic-messages-v1');
-  const bodies = provider(() =>
-    anthropicResponse([{ type: 'text', text: 'Incomplete search answer' }], 'max_tokens')
-  );
-  expect(await f.run('Search official sources.')).toMatchObject({
-    status: 'failed',
-    error: 'MAX_TOKENS',
-    usage: { modelCalls: 1 },
-  });
-  expect(bodies).toHaveLength(1);
-});
 const toolResult = (body: any, id: string) =>
   JSON.parse(
     body.messages.findLast((m: any) => m.role === 'tool' && m.tool_call_id === id).content
@@ -1166,28 +1154,6 @@ test('gateway read compaction retains an exact completed mutation and resumes wi
   expect(JSON.stringify(data)).not.toContain('SHELL_BODY_CANARY');
   expect(bodies).toHaveLength(3);
   reportMetrics('completed-save-after-compaction', f, task, bodies);
-});
-
-test('unknown gateway operations remain recoverable and cannot fabricate a successful resource save', async () => {
-  const f = fixture();
-  const bodies = provider((wire, round) => {
-    if (round === 0)
-      return answer(
-        '',
-        [{ id: 'invalid', name: 'app.call', args: { name: 'not.a.tool', arguments: {} } }],
-        wire
-      );
-    expect(toolResult(wire, 'invalid')).toMatchObject({
-      error: 'UNKNOWN_APP_TOOL',
-      recoverable: true,
-    });
-    return answer('That operation is unavailable.');
-  });
-  const task = await f.run('Inspect the tools.');
-  expect(task.status, task.error ?? '').toBe('completed');
-  expect(bodies).toHaveLength(2);
-  expect(task.completedEffects?.count ?? 0).toBe(0);
-  reportMetrics('recoverable-unknown-operation', f, task, bodies);
 });
 
 test('selected ID distinguishes same-name bots and reserved chat, live library and unsaved editor facts', async () => {

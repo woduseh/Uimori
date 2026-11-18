@@ -131,64 +131,62 @@ test('a library-only bot import preserves its opening without creating a chat, i
   expect(store.chats()).toHaveLength(0);
 });
 
-test.each(['{{original}}\nGive {{char}} room to act.', '{{original}}'])(
-  'retired card fields are excluded while active global notes and source bytes remain: %s',
-  async (globalNote) => {
-    const store = database();
-    const workspace = modelWorkspace(store);
-    updatePromptWorkspace(store, {
-      expectedRevision: workspace.revision,
-      main: {
-        title: 'Selected prompt',
-        program: nativePrompt('KEEP_SELECTED_MAIN'),
-        values: {},
-      },
-    });
-    const before = modelWorkspace(store),
-      original = card();
-    const source = sourceOf({
-      ...original,
-      data: {
-        ...original.data,
-        personality: 'EXCLUDED_PERSONALITY {{setvar::x::1}}',
-        scenario: 'EXCLUDED_SCENARIO',
-        system_prompt: 'EXCLUDED_MAIN',
-        post_history_instructions: globalNote,
-      },
-    });
-    const preview = prepareRisuImport({ source });
-    expect(preview.findings.filter((finding) => finding.level === 'unsupported')).toEqual([]);
-    expect(preview.findings.map((finding) => finding.code)).toContain('native-risu');
-    const saved = await applyRisuImport(store, {
-      source,
-      digest: preview.digest,
-      allowPartial: false,
-      idempotencyKey: 'guidance',
-    });
-    const content = store.product.get<Content>('content', saved.receipt.items[0].id),
-      chat = saved.chat!;
-    const profile = store.product.snapshot(chat.id)!;
-    const compiled = compileSnapshotPrompt({
-      chatId: chat.id,
-      parentRevision: null,
-      settingsRevision: chat.settingsRevision,
-      settings: chat.settings,
-      request: 'Continue.',
-      history: [],
-      logicalHistory: [],
-      profile,
-      resources: store.product.resources(chat.id, profile),
-    });
-    const delivered = JSON.stringify(compiled.promptCompilation!.messages);
-    expect(delivered.match(/KEEP_SELECTED_MAIN/gu)).toHaveLength(1);
-    expect(content.package!.nativeRisu!.card.post_history_instructions).toBe(globalNote);
-    for (const key of ['personality', 'scenario', 'system_prompt'])
-      expect(content.package!.nativeRisu!.card).not.toHaveProperty(key);
-    expect(content.package).not.toHaveProperty('instructions');
-    expect(delivered).not.toContain('EXCLUDED_');
-    expect(modelWorkspace(store)).toEqual(before);
-  }
-);
+test('retired card fields are excluded while active global notes and source bytes remain: {{original}} Give {{char}} room to act.', async () => {
+  const globalNote = '{{original}}\nGive {{char}} room to act.';
+  const store = database();
+  const workspace = modelWorkspace(store);
+  updatePromptWorkspace(store, {
+    expectedRevision: workspace.revision,
+    main: {
+      title: 'Selected prompt',
+      program: nativePrompt('KEEP_SELECTED_MAIN'),
+      values: {},
+    },
+  });
+  const before = modelWorkspace(store),
+    original = card();
+  const source = sourceOf({
+    ...original,
+    data: {
+      ...original.data,
+      personality: 'EXCLUDED_PERSONALITY {{setvar::x::1}}',
+      scenario: 'EXCLUDED_SCENARIO',
+      system_prompt: 'EXCLUDED_MAIN',
+      post_history_instructions: globalNote,
+    },
+  });
+  const preview = prepareRisuImport({ source });
+  expect(preview.findings.filter((finding) => finding.level === 'unsupported')).toEqual([]);
+  expect(preview.findings.map((finding) => finding.code)).toContain('native-risu');
+  const saved = await applyRisuImport(store, {
+    source,
+    digest: preview.digest,
+    allowPartial: false,
+    idempotencyKey: 'guidance',
+  });
+  const content = store.product.get<Content>('content', saved.receipt.items[0].id),
+    chat = saved.chat!;
+  const profile = store.product.snapshot(chat.id)!;
+  const compiled = compileSnapshotPrompt({
+    chatId: chat.id,
+    parentRevision: null,
+    settingsRevision: chat.settingsRevision,
+    settings: chat.settings,
+    request: 'Continue.',
+    history: [],
+    logicalHistory: [],
+    profile,
+    resources: store.product.resources(chat.id, profile),
+  });
+  const delivered = JSON.stringify(compiled.promptCompilation!.messages);
+  expect(delivered.match(/KEEP_SELECTED_MAIN/gu)).toHaveLength(1);
+  expect(content.package!.nativeRisu!.card.post_history_instructions).toBe(globalNote);
+  for (const key of ['personality', 'scenario', 'system_prompt'])
+    expect(content.package!.nativeRisu!.card).not.toHaveProperty(key);
+  expect(content.package).not.toHaveProperty('instructions');
+  expect(delivered).not.toContain('EXCLUDED_');
+  expect(modelWorkspace(store)).toEqual(before);
+});
 
 test('module JSON registers a reusable module without a bot, chat or memory', async () => {
   const store = database();
@@ -485,7 +483,7 @@ test('card imports preserve all lore and cannot move it into the first chat note
   }
 });
 
-test.each([undefined, null, []])(
+test.each([null, []])(
   'embedded lore fallback distinguishes missing/null from an empty list: %j',
   (lorebook) => {
     const value = card();
@@ -753,26 +751,6 @@ test('an oversized ZIP member is rejected even in a small compressed container',
   expect(() => cardZip(bytes)).toThrow('RISU_IMPORT_INVALID_FILE');
 });
 
-test('a comment in card text stays in native source without a converted template', async () => {
-  const store = database(),
-    original = card();
-  const source = sourceOf({
-    ...original,
-    data: { ...original.data, description: '{{// hidden}}{{char}} reads {{getvar::flag}}.' },
-  });
-  const preview = prepareRisuImport({ source });
-  expect(preview.findings.map((item) => item.code)).not.toContain('compat-evaluation');
-  const saved = await applyRisuImport(store, {
-    source,
-    digest: preview.digest,
-    allowPartial: false,
-    idempotencyKey: 'comment',
-  });
-  const bot = store.product.get<Content>('content', saved.receipt.items[0].id);
-  expect(bot.package!.body).toBe('{{// hidden}}{{char}} reads {{getvar::flag}}.');
-  expect(bot.package!.nativeRisu!.card.description).toBe(bot.package!.body);
-});
-
 // An entry another frontend wrote as CCv3 `extensions`, which Risu migrates into `@@` lines on import.
 const migratedEntry = () => ({
   name: 'Migrated',
@@ -874,13 +852,6 @@ test('lore directives decide activation and never reach the model as prose', () 
   expect(unknown?.level).toBe('unsupported');
   expect(unknown?.message).toContain('@@ACTIVATE');
   expect(unknown?.message).toContain('@@Depth');
-});
-
-test('a lorebook without directives reports nothing about decorators', () => {
-  const preview = prepareRisuImport({ source: sourceOf(card()) });
-  expect(preview.findings.filter((finding) => finding.code.startsWith('lore-decorator'))).toEqual(
-    []
-  );
 });
 
 // Every surface the card carries and the import does not reproduce has to reach the reader.

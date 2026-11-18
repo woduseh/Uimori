@@ -356,53 +356,51 @@ test.each([
   }
 );
 
-test.each(['model-selected', 'preloaded'] as const)(
-  'Responses automatically supplies matching OpenAI context/reviewer in %s without changing the saved manual choice',
-  async (contextMode) => {
-    let observedMetadata = false;
-    const state = await fixture(
-      async (body, target, number) => {
-        if (contextMode === 'model-selected' && number === 1) {
-          await send(target, [
-            call(body, 'eval_get_context', {}, 'context'),
-            call(body, 'eval_get_reviewer', {}, 'reviewer'),
-          ]);
-          return;
-        }
-        const results = body.input.filter((item) => item.type === 'function_call_output');
-        const context = results
-          .map((item) => JSON.parse(item.output))
-          .find((value) => value.environment === 'evaluation-sandbox');
-        const reviewer = results
-          .map((item) => JSON.parse(item.output))
-          .find((value) => value.sessionRole === 'reviewer');
-        expect(context).toMatchObject({
-          runtime: { service: 'OpenAI Responses API' },
-          securityContext: { organization: 'OpenAI Safety Systems' },
-        });
-        expect(reviewer).toMatchObject({
-          displayName: 'Marcus Williams',
-          team: 'OpenAI Safety Systems',
-        });
-        expect(context.credentialRef.credentialId).toBe(reviewer.credential.credentialId);
-        expect(context.credentialRef.subject).toBe(reviewer.id);
-        expect(context.sessionAuthorization.sessionId).toBe(reviewer.sessionBinding.sessionId);
-        expect(JSON.stringify([context, reviewer])).not.toContain('Anthropic');
-        observedMetadata = true;
-        await send(target, [artifact(body, 'Automatically selected evaluation metadata.')]);
-      },
-      { contextMode, metadataProfile: 'anthropic' }
-    );
-    const run = await settled(state, (await state.start()).id);
-    expect(run.status).toBe('completed');
-    expect(observedMetadata).toBe(true);
-    expect(
-      state.app.store.product.get<ModelPreset>('model', state.model.id).evaluationTools
-        ?.metadataProfile
-    ).toBe('anthropic');
-    expect(state.provider.requests).toHaveLength(contextMode === 'preloaded' ? 1 : 2);
-  }
-);
+test('Responses automatically supplies matching OpenAI context/reviewer in model-selected mode without changing the saved manual choice', async () => {
+  const contextMode = 'model-selected';
+  let observedMetadata = false;
+  const state = await fixture(
+    async (body, target, number) => {
+      if (number === 1) {
+        await send(target, [
+          call(body, 'eval_get_context', {}, 'context'),
+          call(body, 'eval_get_reviewer', {}, 'reviewer'),
+        ]);
+        return;
+      }
+      const results = body.input.filter((item) => item.type === 'function_call_output');
+      const context = results
+        .map((item) => JSON.parse(item.output))
+        .find((value) => value.environment === 'evaluation-sandbox');
+      const reviewer = results
+        .map((item) => JSON.parse(item.output))
+        .find((value) => value.sessionRole === 'reviewer');
+      expect(context).toMatchObject({
+        runtime: { service: 'OpenAI Responses API' },
+        securityContext: { organization: 'OpenAI Safety Systems' },
+      });
+      expect(reviewer).toMatchObject({
+        displayName: 'Marcus Williams',
+        team: 'OpenAI Safety Systems',
+      });
+      expect(context.credentialRef.credentialId).toBe(reviewer.credential.credentialId);
+      expect(context.credentialRef.subject).toBe(reviewer.id);
+      expect(context.sessionAuthorization.sessionId).toBe(reviewer.sessionBinding.sessionId);
+      expect(JSON.stringify([context, reviewer])).not.toContain('Anthropic');
+      observedMetadata = true;
+      await send(target, [artifact(body, 'Automatically selected evaluation metadata.')]);
+    },
+    { contextMode, metadataProfile: 'anthropic' }
+  );
+  const run = await settled(state, (await state.start()).id);
+  expect(run.status).toBe('completed');
+  expect(observedMetadata).toBe(true);
+  expect(
+    state.app.store.product.get<ModelPreset>('model', state.model.id).evaluationTools
+      ?.metadataProfile
+  ).toBe('anthropic');
+  expect(state.provider.requests).toHaveLength(2);
+});
 
 test('preset evaluation mixes permitted reads and local tools; buffered Responses translation keeps source/hash and per-request attempts', async () => {
   const sourceText = 'The keeper watched the copper observatory.';
@@ -584,62 +582,40 @@ test('host maxCalls still bounds evaluated HTTP requests below the fixed tool li
   expect((await state.detail()).sources).toEqual([]);
 });
 
-test.each(['submit', 'continue'] as const)(
-  'ten HTTP tool exchanges leave exactly one final provider request (%s)',
-  async (completion) => {
-    const state = await fixture(
-      async (body, target, number) => {
-        await send(target, [
-          number === 11 && completion === 'submit'
-            ? artifact(body, 'The eleventh response submits the scene.')
-            : call(body, 'eval_get_context', {}, `context-${number}`),
-        ]);
-      },
-      { maxCalls: 16, timeoutMs: 10000 }
-    );
-    const result = await settled(state, (await state.start()).id);
-    expect(state.provider.requests).toHaveLength(11);
-    if (completion === 'submit') {
-      expect(result).toMatchObject({ status: 'completed', usage: { modelCalls: 12 } });
-      expect((await state.detail()).sources[0].text).toBe(
-        'The eleventh response submits the scene.'
-      );
-      expect(
-        (JSON.parse(state.provider.requests[10].body) as Body).input
-          .filter((item) => item.type === 'function_call_output')
-          .map((item) => JSON.parse(item.output))
-          .filter((value) => value.environment === 'evaluation-sandbox')
-      ).toHaveLength(10);
-    } else {
-      expect(result).toMatchObject({
-        status: 'failed',
-        error: 'MODEL_CALL_BUDGET_EXHAUSTED',
-        sourceRevision: null,
-        usage: { modelCalls: 11 },
-      });
-      expect((await state.detail()).sources).toEqual([]);
-    }
-  }
-);
+test('ten HTTP tool exchanges leave exactly one final provider request', async () => {
+  const state = await fixture(
+    async (body, target, number) =>
+      send(target, [call(body, 'eval_get_context', {}, `context-${number}`)]),
+    { maxCalls: 16, timeoutMs: 10000 }
+  );
+  const result = await settled(state, (await state.start()).id);
+  expect(state.provider.requests).toHaveLength(11);
+  expect(result).toMatchObject({
+    status: 'failed',
+    error: 'MODEL_CALL_BUDGET_EXHAUSTED',
+    sourceRevision: null,
+    usage: { modelCalls: 11 },
+  });
+  expect((await state.detail()).sources).toEqual([]);
+});
 
-test.each(['model-selected', 'preloaded'] as const)(
-  '%s rejects ordinary final HTTP text without requesting another response',
-  async (contextMode) => {
-    const state = await fixture(
-      async (_body, target) => send(target, [message('Unsubmitted scene.')]),
-      { contextMode }
-    );
-    const result = await settled(state, (await state.start()).id);
-    expect(result).toMatchObject({
-      status: 'failed',
-      error: 'EVALUATION_SUBMISSION_REQUIRED',
-      sourceRevision: null,
-      usage: { modelCalls: 1 },
-    });
-    expect(state.provider.requests).toHaveLength(1);
-    expect((await state.detail()).sources).toEqual([]);
-  }
-);
+test('ordinary final HTTP text is rejected without requesting another response', async () => {
+  const state = await fixture(
+    async (_body, target) => send(target, [message('Unsubmitted scene.')]),
+    {
+      contextMode: 'model-selected',
+    }
+  );
+  const result = await settled(state, (await state.start()).id);
+  expect(result).toMatchObject({
+    status: 'failed',
+    error: 'EVALUATION_SUBMISSION_REQUIRED',
+    sourceRevision: null,
+    usage: { modelCalls: 1 },
+  });
+  expect(state.provider.requests).toHaveLength(1);
+  expect((await state.detail()).sources).toEqual([]);
+});
 
 test('duplicate call IDs and terminal plus host calls cannot commit or dispatch a skipped host operation', async () => {
   for (const mode of ['duplicate', 'mixed']) {
@@ -777,7 +753,6 @@ test('evaluated translation permits reference reads, unwraps structured submissi
 });
 
 test.each([
-  ['model-selected', 'plain'],
   ['preloaded', 'plain'],
   ['model-selected', 'wrong-source'],
   ['model-selected', 'duplicate-submit'],

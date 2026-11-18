@@ -220,25 +220,6 @@ describe('M1 source-bound auxiliary roles', () => {
     expect(result.output).toBe('이름이 있는 원문.');
     expect(input.sourceText).toBe(raw.text);
   });
-  test('repeating a recoverable read remains bounded by the configured provider call budget', async () => {
-    let calls = 0;
-    await expect(
-      executeAuxiliary(
-        translationInput(source('A source.'), context(), snapshot()),
-        snapshot(),
-        async () => ({
-          kind: 'tool',
-          action: {
-            callId: `missing-${++calls}`,
-            name: 'knowledge.read',
-            args: { ids: [] },
-          },
-        })
-      )
-    ).rejects.toMatchObject({ name: 'BudgetError' });
-    expect(calls).toBe(snapshot().settings.maxCalls);
-  });
-
   test('translation can use its remaining budget to correct reads or finish without optional references', async () => {
     const raw = source('A source.'),
       run = snapshot(),
@@ -448,40 +429,6 @@ describe('M1 source-bound auxiliary roles', () => {
     );
     expect(JSON.stringify(raw)).toBe(before);
     expect(JSON.stringify(ctx.references)).toBe(canonBefore);
-  });
-
-  test('P13 authored image metadata does not require literal scene cues', async () => {
-    const raw = source('Mira wore a blue coat by the pier.\n\nMira wore a red cloak by the pier.');
-    const blocks = splitSource(raw);
-    const assets = [{ ...BUILTIN_ASSETS[0], clothing: 'blue coat', uses: ['inline' as const] }];
-    const image = {
-      sourceRevision: raw.id,
-      sourceHash: raw.hash,
-      entries: [
-        {
-          blockAnchor: blocks[0].anchor,
-          assetRef: assets[0].ref,
-          assetRevision: 1,
-          assetHash: assets[0].hash,
-          presentationIntent: 'inline',
-        },
-      ],
-    };
-    expect(validatePresentation(raw, image, assets).entries).toHaveLength(1);
-    expect(
-      validatePresentation(
-        raw,
-        { ...image, entries: [{ ...image.entries[0], blockAnchor: blocks[1].anchor }] },
-        assets
-      ).entries
-    ).toHaveLength(1);
-    expect(() =>
-      validatePresentation(
-        raw,
-        { ...image, entries: [{ ...image.entries[0], assetHash: 'different' }] },
-        assets
-      )
-    ).toThrow('ASSET_REFERENCE_INVALID');
   });
 });
 

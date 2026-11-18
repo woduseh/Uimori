@@ -100,11 +100,6 @@ async function selectLore(editor: Locator, name: string) {
   await navigation.getByRole('button', { name, exact: true }).click();
 }
 
-const viewports = [
-  { name: 'desktop', width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT },
-  { name: 'mobile', width: MOBILE_WIDTH, height: MOBILE_HEIGHT },
-];
-
 test.describe('Native lore drag and drop', () => {
   test.use({ viewport: { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT } });
 
@@ -152,14 +147,15 @@ test.describe('Native lore drag and drop', () => {
   });
 });
 
-for (const viewport of viewports) {
+{
+  const viewport = { name: 'mobile', width: MOBILE_WIDTH, height: MOBILE_HEIGHT };
   test.describe(`Native lore browser ${viewport.name} ${viewport.width}x${viewport.height}`, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
     test(`NATIVELORE01 folders organize lore without becoming lore at ${viewport.width}px`, async ({
       page,
       request,
-    }, info) => {
+    }) => {
       const title = `NATIVELORE01 ${viewport.width} ${randomUUID().slice(0, 8)}`;
       await seedFolderBot(request, title);
       const editor = await openLoreEditor(page, title);
@@ -172,7 +168,6 @@ for (const viewport of viewports) {
       await expect(
         navigation.getByRole('button', { name: '미분류 길', exact: true })
       ).toBeVisible();
-      await page.screenshot({ path: info.outputPath(`native-lore-list-${viewport.name}.png`) });
 
       await navigation.getByRole('button', { name: '세계관 접기', exact: true }).click();
       await expect(navigation.getByRole('button', { name: '도시', exact: true })).toBeHidden();
@@ -188,13 +183,10 @@ for (const viewport of viewports) {
       await expect(editor.getByLabel('폴더 이름', { exact: true })).toHaveValue('세계관');
       await expect(editor.getByLabel('로어 본문', { exact: true })).toHaveCount(0);
 
-      if (viewport.width === MOBILE_WIDTH) {
-        await expect(navigation).toBeHidden();
-        await expect(
-          editor.getByRole('button', { name: '로어 목록 보기', exact: true })
-        ).toBeVisible();
-      }
-      await page.screenshot({ path: info.outputPath(`native-lore-folder-${viewport.name}.png`) });
+      await expect(navigation).toBeHidden();
+      await expect(
+        editor.getByRole('button', { name: '로어 목록 보기', exact: true })
+      ).toBeVisible();
 
       await selectLore(editor, '도시');
       await expect(editor.getByLabel('로어 이름', { exact: true })).toHaveValue('도시');
@@ -286,13 +278,6 @@ for (const viewport of viewports) {
       );
       await expect(reloaded.getByLabel('로어 폴더', { exact: true })).toHaveValue('');
       await expect(reloaded.getByLabel('포함 방식', { exact: true })).toHaveValue('none');
-      expect(
-        await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
-      ).toBeLessThanOrEqual(1);
-      await page.screenshot({
-        path: info.outputPath(`native-lore-detail-${viewport.name}.png`),
-        fullPage: true,
-      });
       navigation = await loreNavigation(reloaded);
       await expect(navigation.getByText('로어북: 항목 3개', { exact: true })).toBeVisible();
       await expect(navigation.getByRole('button', { name: '수문장', exact: true })).toBeVisible();

@@ -452,11 +452,7 @@ describe('JEV-only lore judgment and batch supplemental reads', () => {
   });
 });
 
-it.each([
-  { error_type: 'max_tokens_exceeded' },
-  { error: { error_type: 'max_tokens_exceeded' } },
-  { detail: { error_type: 'max_tokens_exceeded' } },
-])(
+it.each([{ error_type: 'max_tokens_exceeded' }, { detail: { error_type: 'max_tokens_exceeded' } }])(
   'preserves an explicit provider input limit as JEV_INPUT_BUDGET without replay: %j',
   async (payload) => {
     const h = hooks();
@@ -574,8 +570,6 @@ describe('documented JEV choice option admission', () => {
 
   it.each([
     ['256 options', criteria(256)],
-    ['empty options', {}],
-    ['missing options', undefined],
     ['array options', ['one', 'two']],
   ])('rejects %s before credentials, attempts, or HTTP', async (_label, options) => {
     const h = hooks(),

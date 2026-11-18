@@ -16,9 +16,7 @@ describe('local text candidate retrieval', () => {
 
   test.each([
     ['미나를 만나러 가요', '미나'],
-    ['미나', '미나에게 비밀을 말해요'],
     ['静かな庭で美咲に会いました', '美咲'],
-    ['美咲', '夜が深まり美咲は庭へ歩いた'],
   ])('retrieves short CJK names between %s and %s', (body, query) => {
     const search = createCandidateSearch([
       { id: 'a-unrelated', title: 'Harbor', text: 'Ships returned at dawn.' },

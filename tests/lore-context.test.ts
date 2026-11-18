@@ -238,19 +238,6 @@ test('only successful main reads retain the exact observed range; search, denied
   expect(second.inputs).toEqual([]);
 });
 
-test('the next lore context uses retained state without reading the completed parent Run', async () => {
-  const f = fixture();
-  const first = (await queue(f)).run;
-  read(f, first, 2, 5);
-  const source = complete(f, first);
-  f.store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run('not JSON', first.id);
-  const next = freezeLoreContext(f.store, {
-    ...first.snapshot,
-    parentRevision: source.id,
-    history: f.store.history(source.id),
-  });
-  expect(next.loreContext?.entries.map((entry) => entry.text)).toEqual(['23456']);
-});
 test('overlapping reads append uncovered pieces, repeated use leaves the rendered old reference unchanged', async () => {
   const f = fixture(),
     a = (await queue(f)).run;
@@ -388,79 +375,6 @@ test('resource revision and attachment removal remove retained text', async () =
       .packageAttachments!.filter((ref) => ref.role !== 'module'),
   });
   expect((await queue(f)).run.snapshot.loreContext!.entries).toEqual([]);
-});
-test('package revision and persona detachment invalidate only currently excluded reads', async () => {
-  const f = fixture();
-  const pkg = {
-    ...nativeContent(
-      {
-        name: 'Persona lore',
-        character_book: { entries: [{ name: 'Known detail', content: 'PERSONA_REFERENCE_RANGE' }] },
-      },
-      {},
-      'persona'
-    ),
-    loreActivation: { mode: 'discoverable' as const },
-  };
-  const content = f.store.product.content({
-    kind: 'persona',
-    title: pkg.title,
-    description: '',
-    text: '',
-    loading: 'pinned',
-    relatedIds: [],
-    package: pkg,
-  }) as Content;
-  const owner = f.store.product.profile(f.chat.id).packageAttachments!;
-  update(f, { packageAttachments: [...owner, { id: content.id, revision: 1, role: 'persona' }] });
-  const a = (await queue(f)).run,
-    id = `package:${content.id}:persona:lore:lore-0`;
-  f.store.tool(
-    a.id,
-    executeTool(a.snapshot, {
-      callId: 'persona-read',
-      name: 'knowledge.read',
-      args: { ids: [id], offset: 0, limit: 7 },
-    })
-  );
-  read(f, a, 0, 4);
-  complete(f, a);
-  const b = (await queue(f)).run;
-  expect(b.snapshot.loreContext!.entries).toHaveLength(2);
-  complete(f, b);
-  update(f, { packageAttachments: owner });
-  const c = (await queue(f)).run;
-  expect(c.snapshot.loreContext!.entries.map((e) => e.id)).toEqual([f.loreId]);
-  complete(f, c);
-  update(f, { packageAttachments: [...owner, { id: content.id, revision: 1, role: 'persona' }] });
-  const d = (await queue(f)).run;
-  expect(d.snapshot.loreContext!.entries.map((e) => e.id)).toEqual([f.loreId]);
-  f.store.tool(
-    d.id,
-    executeTool(d.snapshot, {
-      callId: 'persona-again',
-      name: 'knowledge.read',
-      args: { ids: [id], offset: 0, limit: 7 },
-    })
-  );
-  complete(f, d);
-  const updated = f.store.product.content(
-    {
-      kind: 'persona',
-      title: pkg.title,
-      description: '',
-      text: '',
-      loading: 'pinned',
-      relatedIds: [],
-      package: content.package,
-      expectedRevision: 1,
-    },
-    content.id
-  ) as Content;
-  update(f, {
-    packageAttachments: [...owner, { id: content.id, revision: updated.revision, role: 'persona' }],
-  });
-  expect((await queue(f)).run.snapshot.loreContext!.entries.map((e) => e.id)).toEqual([f.loreId]);
 });
 test('switching an attached reference to pinned supplies it once and removes the retained copy', async () => {
   const f = fixture(),

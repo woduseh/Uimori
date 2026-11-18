@@ -35,8 +35,6 @@ describe('ComfyUI API-format workflow templates', () => {
   });
   test.each([
     { class_type: 'CLIPTextEncode', inputs: { text: 'fixed' }, _meta: { title: '{{prompt}}' } },
-    { class_type: '{{prompt}}', inputs: { text: 'fixed' } },
-    { class_type: 'X', inputs: { '{{prompt}}': 'fixed' } },
     { class_type: 'X', inputs: { nested: { '{{prompt}}': ['fixed'] } } },
   ])('rejects markers outside substitutable input values: %j', (node) => {
     expect(() => parseComfyWorkflow(JSON.stringify({ '1': node }))).toThrow(

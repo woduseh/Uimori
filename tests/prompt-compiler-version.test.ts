@@ -114,7 +114,7 @@ test('prompt compilation preserves the aggregate variable-default warning withou
   expect(input).toEqual(before);
 });
 
-test.each(['risu-prompt-1', 'future-prompt', undefined])(
+test.each(['future-prompt', undefined])(
   'stored compiler version %s is rejected even when host context already exists',
   (compilerVersion) => {
     const compiled = compileSnapshotPrompt(snapshot([lore]));

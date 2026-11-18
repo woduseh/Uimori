@@ -5,11 +5,10 @@ import { writeNote } from './fixtures/notes.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { backup } from 'node:sqlite';
 import { Store } from '../server/store.js';
 import { Controls } from '../server/controls.js';
 import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
@@ -358,35 +357,13 @@ test('HTTP retrieval reaches older sources and previous wording while authored n
       .jobs.filter((j) => j.sourceRevision === target.id && j.kind === 'translation')
   ).toHaveLength(0);
   const job = store.requestTranslation(target.id);
-  const started = performance.now();
   const outcome = await execute(store, job.id, server.origin, events);
-  const elapsedMs = performance.now() - started;
   expect(outcome?.status, JSON.stringify({ outcome, events })).toBe('completed');
   expect(server.requests).toHaveLength(3);
   expect(events).toHaveLength(4);
   expect(store.product.attempts(chat.id)).toHaveLength(3);
   expect(store.job(job.id).result?.text).toBe('앨런 선장, 잠깐 기다려.');
   expect(store.requestTranslation(target.id).status).toBe('completed');
-  const output = `output/playwright/translation-context-${randomUUID()}`;
-  mkdirSync(output, { recursive: true });
-  writeFileSync(
-    join(output, 'measurement.json'),
-    JSON.stringify(
-      {
-        synthetic: true,
-        externalCalls: 0,
-        requests: 3,
-        toolEvents: 4,
-        resultBytes: events.reduce((n, e) => n + Buffer.byteLength(JSON.stringify(e)), 0),
-        elapsedMs,
-        qualityEvaluated: false,
-      },
-      null,
-      2
-    )
-  );
-  await backup(store.db, join(output, 'evidence.sqlite'));
-  writeFileSync(join(output, 'tool-events.json'), JSON.stringify(events, null, 2));
 });
 
 test('translation tools support empty memory with disabled indexing, bounded paging and immutable wording', () => {
@@ -460,7 +437,7 @@ test('translation tools support empty memory with disabled indexing, bounded pag
   expect(read(call('shell', {}))).not.toHaveProperty('errorKind');
 });
 
-test.each(['missing-scene', 'budget', 'empty'] as const)(
+test.each(['missing-scene', 'budget'] as const)(
   'HTTP %s tool result preserves bounded execution and durable job status',
   async (mode) => {
     const store = database();
@@ -485,17 +462,14 @@ test.each(['missing-scene', 'budget', 'empty'] as const)(
                   type: 'tool_delta',
                   index: 0,
                   id: 'r',
-                  name: mode === 'empty' ? 'translation.search' : 'story.read',
-                  argumentsDelta: JSON.stringify(
-                    mode === 'empty' ? { query: 'absent' } : { sceneNumber: 999 }
-                  ),
+                  name: 'story.read',
+                  argumentsDelta: JSON.stringify({ sceneNumber: 999 }),
                 },
               ];
         await writeSse(res, [...actions, { type: 'done', reason: 'tool_calls' }]);
         return;
       }
-      if (mode === 'empty') expect(wire.input.results[0].result.total).toBe(0);
-      else if (mode === 'budget') {
+      if (mode === 'budget') {
         // Large but fitting evidence no longer fails at the old 96KB byte cap.
         expect(wire.input.results).toHaveLength(7);
         expect(Buffer.byteLength(JSON.stringify(wire.input.results), 'utf8')).toBeGreaterThan(

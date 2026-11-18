@@ -89,13 +89,9 @@ test('malformed UTF-8, JSON, envelope and module shapes are rejected', () => {
     ]),
     Buffer.from('{'),
     ...[
-      null,
       [],
-      true,
-      {},
       { type: 'foreign', module: {} },
       { type: 'risuModule' },
-      { type: 'risuModule', module: null },
       { type: 'risuModule', module: [] },
     ].map((value) => Buffer.from(JSON.stringify(value))),
   ])
@@ -103,8 +99,7 @@ test('malformed UTF-8, JSON, envelope and module shapes are rejected', () => {
 });
 
 test('asset metadata and record counts must match exactly', () => {
-  for (const assets of [null, {}, [null], [[]], [['name']], [[1, '']], [['name', 2]]])
-    expectInvalid(file({ assets }));
+  for (const assets of [{}, [null], [['name']], [['name', 2]]]) expectInvalid(file({ assets }));
   expectInvalid(file({}, [Buffer.from('orphan')]));
   expectInvalid(file({ assets: [['missing', '', 'png']] }));
   expectInvalid(

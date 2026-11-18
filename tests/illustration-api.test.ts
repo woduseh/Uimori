@@ -208,7 +208,7 @@ describe('illustration API in test mode with the synthetic generator', () => {
       ])
     );
   });
-  test('automatic retries follow the frozen limit and explicit retries resume failed work', async () => {
+  test('automatic retries follow the frozen limit, explicit retries resume failed work and reconcile needs an accepted remote prompt', async () => {
     const { api, respond, settle, settings } = await setup();
     const source = await respond();
     await settings({ generator: 'fixture', maxPerSource: 4, maxAutoRetries: 1 });
@@ -233,6 +233,10 @@ describe('illustration API in test mode with the synthetic generator', () => {
     );
     expect(exhausted).toMatchObject({ status: 'failed', attempt: 2, error: 'FIXTURE_FAILURE' });
     expect(exhausted.images).toEqual([]);
+    for (const id of [recovered.id, exhausted.id])
+      await api(`/api/illustrations/${id}/reconcile`, {}, 'POST', 409).then((body) =>
+        expect(body.error).toBe('ILLUSTRATION_NOT_RECONCILABLE')
+      );
     await api(`/api/illustrations/${exhausted.id}/retry`, {}, 'POST');
     const retried = await settle(exhausted.id);
     expect(retried).toMatchObject({ status: 'completed', attempt: 3 });
@@ -469,27 +473,6 @@ describe('illustration API in test mode with the synthetic generator', () => {
     const rejected = await api(`/api/sources/${source.id}/illustrations`, {}, 'POST', 409);
     expect(rejected.error).toBe('ILLUSTRATION_PROMPT_MODEL_REQUIRED');
   });
-});
-
-test('reconcile is refused for jobs without an accepted ComfyUI prompt', async () => {
-  const { api, respond, settle, settings } = await setup();
-  const source = await respond();
-  await settings({ generator: 'fixture', maxPerSource: 2, maxAutoRetries: 0 });
-  const done = await settle(
-    (await api<Illustration>(`/api/sources/${source.id}/illustrations`, {})).id
-  );
-  const refused = await api(`/api/illustrations/${done.id}/reconcile`, {}, 'POST', 409);
-  expect(refused.error).toBe('ILLUSTRATION_NOT_RECONCILABLE');
-  const failed = await settle(
-    (
-      await api<Illustration>(`/api/sources/${source.id}/illustrations`, {
-        fixture: { failures: 1 },
-      })
-    ).id
-  );
-  expect(failed.status).toBe('failed');
-  const stillRefused = await api(`/api/illustrations/${failed.id}/reconcile`, {}, 'POST', 409);
-  expect(stillRefused.error).toBe('ILLUSTRATION_NOT_RECONCILABLE');
 });
 
 test('illustration usage is scoped to actual attempts and the placement endpoint keeps existing images', async () => {

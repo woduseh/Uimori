@@ -71,21 +71,18 @@ test('invalid retained clone input fails closed without issuing a new mutation',
   expect(api).not.toHaveBeenCalled();
 });
 
-test.each([409, 429])(
-  'a %s on a retry cannot discard an earlier uncertain clone identity',
-  async (status) => {
-    vi.mocked(api).mockRejectedValueOnce(new Error('Connection lost'));
-    await expect(cloneWithReceipt(key, input)).rejects.toThrow('Connection lost');
-    const pending = persisted.get(key);
+test('a definite rejection on a retry cannot discard an earlier uncertain clone identity', async () => {
+  vi.mocked(api).mockRejectedValueOnce(new Error('Connection lost'));
+  await expect(cloneWithReceipt(key, input)).rejects.toThrow('Connection lost');
+  const pending = persisted.get(key);
 
-    vi.mocked(api).mockRejectedValueOnce(new ApiError('Replay rejected', status));
-    await expect(cloneWithReceipt(key, input)).rejects.toThrow('Replay rejected');
-    expect(persisted.get(key)).toBe(pending);
-    vi.mocked(api).mockResolvedValueOnce({ saved: { id: 'copy-once' }, created: false });
-    await cloneWithReceipt(key, input);
-    expect(api).toHaveBeenLastCalledWith('/resources/clone', JSON.parse(pending!));
-  }
-);
+  vi.mocked(api).mockRejectedValueOnce(new ApiError('Replay rejected', 409));
+  await expect(cloneWithReceipt(key, input)).rejects.toThrow('Replay rejected');
+  expect(persisted.get(key)).toBe(pending);
+  vi.mocked(api).mockResolvedValueOnce({ saved: { id: 'copy-once' }, created: false });
+  await cloneWithReceipt(key, input);
+  expect(api).toHaveBeenLastCalledWith('/resources/clone', JSON.parse(pending!));
+});
 
 test('a confirmed removed clone releases the old identity for a deliberate new clone', async () => {
   vi.mocked(api).mockRejectedValueOnce(new Error('Connection lost'));

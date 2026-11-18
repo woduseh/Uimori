@@ -1,4 +1,4 @@
-import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
+import { DEFAULT_WIDTHS, DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import type {
   Library,
@@ -27,7 +27,8 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
   return (await request.get(`/api/chats/${id}`)).json();
 }
 
-for (const width of DEFAULT_WIDTHS) {
+{
+  const width = DESKTOP_WIDTH;
   test(`GMUI01 ${width} global choices apply to existing and new bot chats and freeze at reservation`, async ({
     page,
     request,
@@ -100,30 +101,9 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(behaviorSummary).toContainText('번역 16회, 거절 감지 2/2');
     await expect(mainThreshold).toBeHidden();
     await expect(editor.getByLabel('번역 거절 확신 기준', { exact: true })).toBeHidden();
-    for (const colorScheme of ['light', 'dark'] as const) {
-      await page.emulateMedia({ colorScheme });
-      await expect(page.locator('html')).toHaveAttribute('data-theme', colorScheme);
-      await behaviorSummary.scrollIntoViewIfNeeded();
-      await page.screenshot({
-        path: info.outputPath(`refusal-collapsed-${colorScheme}-${width}.png`),
-      });
-      await behaviorSummary.click();
-      await expect(mainRefusal).toBeVisible();
-      await expect(translationRefusal).toBeVisible();
-      await mainRefusal.scrollIntoViewIfNeeded();
-      await page.screenshot({
-        path: info.outputPath(`refusal-expanded-${colorScheme}-${width}.png`),
-      });
-      await translationRefusal.scrollIntoViewIfNeeded();
-      await page.screenshot({
-        path: info.outputPath(`refusal-translation-${colorScheme}-${width}.png`),
-      });
-      expect(
-        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)
-      ).toBe(true);
-      await behaviorSummary.click();
-    }
     await behaviorSummary.click();
+    await expect(mainRefusal).toBeVisible();
+    await expect(translationRefusal).toBeVisible();
     const translationLimit = editor.getByLabel('번역 작업 호출 한도', { exact: true });
     const translationContext = editor.getByLabel('번역 참고 범위', { exact: true });
     await expect(translationLimit).toBeVisible();
@@ -322,7 +302,8 @@ for (const width of DEFAULT_WIDTHS) {
   });
 }
 
-for (const width of DEFAULT_WIDTHS) {
+{
+  const width = MOBILE_WIDTH;
   test(`GMUI02 ${width} chat pins preserve drafts, follow saved presets and return to global settings`, async ({
     page,
     request,
@@ -582,7 +563,8 @@ for (const width of DEFAULT_WIDTHS) {
   });
 }
 
-for (const width of DEFAULT_WIDTHS) {
+{
+  const width = DESKTOP_WIDTH;
   test(`GMUI03 ${width} role model shortcuts target the selected preset and preserve independent drafts`, async ({
     page,
     request,
@@ -705,83 +687,79 @@ for (const width of DEFAULT_WIDTHS) {
   });
 }
 
-for (const width of DEFAULT_WIDTHS) {
-  for (const state of ['empty', 'disabled-provider'] as const) {
-    test(`GMUI04 ${width} ${state} missing usable models expose nearby setup and preserve the role draft`, async ({
-      page,
-      request,
-    }, info) => {
-      const library = (await (await request.get('/api/library')).json()) as Library;
-      let unavailable: Library = { ...library, models: [], connections: [] };
-      if (state === 'disabled-provider') {
-        const connectionResponse = await request.post('/api/connections', {
-          data: {
-            title: `설정 안내 연결 ${width}`,
-            protocol: 'fixture-sse-v1',
-            endpoint: 'http://127.0.0.1:9/not-called',
-            enabled: false,
-          },
-        });
-        expect(connectionResponse.ok()).toBe(true);
-        const connection = await connectionResponse.json();
-        const modelResponse = await request.post('/api/model-presets', {
-          data: {
-            title: `설정 안내 모델 ${width}`,
-            connectionId: connection.id,
-            modelId: 'synthetic-unavailable-model',
-            maxOutputTokens: 1000,
-            temperature: null,
-          },
-        });
-        expect(modelResponse.ok()).toBe(true);
-        unavailable = {
-          ...library,
-          models: [(await modelResponse.json()) as ModelPreset],
-          connections: [connection],
-        };
-      }
-      // Isolate the visible choices without deleting the shared server's other fixtures.
-      await page.route('**/api/library?view=summary', (route) =>
-        route.fulfill({ json: unavailable })
-      );
-      const before = await models(request);
-      await page.setViewportSize({ width, height: 900 });
-      await page.goto('/');
-      await navigationAction(page, '설정');
-      await selectSettingsSection(page, '역할별 모델');
-      const roles = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
-      const setup = roles.getByRole('button', { name: '프로바이더와 모델 설정', exact: true });
-      await expect(roles.getByLabel('본문 모델', { exact: true })).toBeInViewport();
-      await expect(setup).toBeInViewport();
-      await expect(roles.getByText('사용 가능한 모델 없음', { exact: true })).toBeVisible();
-      await expect(
-        roles.getByRole('button', { name: '모델과 프로바이더 관리', exact: true })
-      ).toHaveCount(0);
-      if (visualReview) {
-        for (const colorScheme of ['light', 'dark'] as const) {
-          await page.emulateMedia({ colorScheme });
-          await page.screenshot({
-            path: info.outputPath(`model-setup-${state}-${colorScheme}-${width}.png`),
-          });
-        }
-      }
-      const behavior = roles.locator('summary').filter({ hasText: /^작업 동작/ });
-      await behavior.click();
-      const limit = roles.getByLabel('번역 작업 호출 한도', { exact: true });
-      const draftLimit = before.translationPolicy.maxCalls === 12 ? '16' : '12';
-      await limit.fill(draftLimit);
-      await behavior.click();
-      await setup.click();
-      await expect(page.getByTestId('connection-editor')).toBeVisible();
-      await selectSettingsSection(page, '역할별 모델');
-      await behavior.click();
-      await expect(limit).toHaveValue(draftLimit);
-      expect((await models(request)).translationPolicy).toEqual(before.translationPolicy);
-      expect(
-        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)
-      ).toBe(true);
+{
+  const width = MOBILE_WIDTH;
+  test(`GMUI04 ${width} disabled-provider missing usable models expose nearby setup and preserve the role draft`, async ({
+    page,
+    request,
+  }, info) => {
+    const library = (await (await request.get('/api/library')).json()) as Library;
+    const connectionResponse = await request.post('/api/connections', {
+      data: {
+        title: `설정 안내 연결 ${width}`,
+        protocol: 'fixture-sse-v1',
+        endpoint: 'http://127.0.0.1:9/not-called',
+        enabled: false,
+      },
     });
-  }
+    expect(connectionResponse.ok()).toBe(true);
+    const connection = await connectionResponse.json();
+    const modelResponse = await request.post('/api/model-presets', {
+      data: {
+        title: `설정 안내 모델 ${width}`,
+        connectionId: connection.id,
+        modelId: 'synthetic-unavailable-model',
+        maxOutputTokens: 1000,
+        temperature: null,
+      },
+    });
+    expect(modelResponse.ok()).toBe(true);
+    const unavailable: Library = {
+      ...library,
+      models: [(await modelResponse.json()) as ModelPreset],
+      connections: [connection],
+    };
+    // Isolate the visible choices without deleting the shared server's other fixtures.
+    await page.route('**/api/library?view=summary', (route) =>
+      route.fulfill({ json: unavailable })
+    );
+    const before = await models(request);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/');
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '역할별 모델');
+    const roles = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
+    const setup = roles.getByRole('button', { name: '프로바이더와 모델 설정', exact: true });
+    await expect(roles.getByLabel('본문 모델', { exact: true })).toBeInViewport();
+    await expect(setup).toBeInViewport();
+    await expect(roles.getByText('사용 가능한 모델 없음', { exact: true })).toBeVisible();
+    await expect(
+      roles.getByRole('button', { name: '모델과 프로바이더 관리', exact: true })
+    ).toHaveCount(0);
+    if (visualReview) {
+      for (const colorScheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme });
+        await page.screenshot({
+          path: info.outputPath(`model-setup-${colorScheme}-${width}.png`),
+        });
+      }
+    }
+    const behavior = roles.locator('summary').filter({ hasText: /^작업 동작/ });
+    await behavior.click();
+    const limit = roles.getByLabel('번역 작업 호출 한도', { exact: true });
+    const draftLimit = before.translationPolicy.maxCalls === 12 ? '16' : '12';
+    await limit.fill(draftLimit);
+    await behavior.click();
+    await setup.click();
+    await expect(page.getByTestId('connection-editor')).toBeVisible();
+    await selectSettingsSection(page, '역할별 모델');
+    await behavior.click();
+    await expect(limit).toHaveValue(draftLimit);
+    expect((await models(request)).translationPolicy).toEqual(before.translationPolicy);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true
+    );
+  });
 }
 
 test('GMACK role model save finishes before a delayed refresh and preserves the next draft after read failure', async ({

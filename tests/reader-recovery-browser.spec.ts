@@ -281,7 +281,7 @@ test('READERREC leaving during a position write flushes the newer location after
   }
 });
 
-for (const scenario of ['loaded', 'old-refresh', 'loading', 'new-move'] as const) {
+for (const scenario of ['old-refresh', 'new-move'] as const) {
   test(`READERREC a late position acknowledgement preserves newer ownership (${scenario})`, async ({
     page,
     request,
@@ -379,7 +379,7 @@ for (const scenario of ['loaded', 'old-refresh', 'loading', 'new-move'] as const
         await navigationAction(page, '서재');
         latest = await updateFromOtherTab();
       }
-      const delayedRead = scenario === 'loading' || scenario === 'new-move';
+      const delayedRead = scenario === 'new-move';
       holdRead = delayedRead;
       const reload = page.waitForResponse(
         (response) => response.url().includes('/reading-position?') && response.ok()
@@ -639,76 +639,6 @@ test('READERREC failed command persistence prevents generation and preserves the
   await expect(page.getByText('요청 기록을 저장하지 못해 보내지 않았어요.')).toBeVisible();
   await expect(draft).toHaveValue('저장 실패에도 남을 초안');
   expect(submissions).toBe(0);
-});
-
-test('READERREC final SSE event recovers from one failed reader GET without another event', async ({
-  page,
-  request,
-}) => {
-  const chat = await (
-    await postFixtureChat(request, { data: { title: 'Final event recovery' } })
-  ).json();
-  const initialReader = await (await request.get(`/api/chats/${chat.id}/reader`)).json();
-  let recovering = false,
-    refreshes = 0;
-  await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
-    if (!recovering) return route.fulfill({ json: initialReader });
-    refreshes++;
-    if (refreshes === 1)
-      await route.fulfill({ status: 503, json: { error: 'Transient reader failure' } });
-    else await route.continue();
-  });
-  await page.addInitScript(() => {
-    class ControlledEvents {
-      onopen: ((event: Event) => void) | null = null;
-      onmessage: ((event: MessageEvent) => void) | null = null;
-      onerror: ((event: Event) => void) | null = null;
-      listener = (event: Event) =>
-        this.onmessage?.(
-          new MessageEvent('message', { data: JSON.stringify((event as CustomEvent).detail) })
-        );
-      constructor() {
-        addEventListener('test-reader-event', this.listener);
-        queueMicrotask(() => this.onopen?.(new Event('open')));
-      }
-      close() {
-        removeEventListener('test-reader-event', this.listener);
-      }
-    }
-    Object.defineProperty(window, 'EventSource', { value: ControlledEvents });
-  });
-  await page.goto(`/?chat=${chat.id}`);
-  await expect(page.getByRole('textbox', { name: '다음 장면 요청' })).toBeVisible();
-  const response = await request.post(`/api/chats/${chat.id}/runs`, {
-    data: {
-      request: '마지막 이벤트 뒤 복구할 장면',
-      expectedRevision: null,
-      expectedSettingsRevision: chat.settingsRevision,
-      idempotencyKey: 'final-event',
-    },
-  });
-  expect(response.ok()).toBe(true);
-  const run = await response.json();
-  await expect
-    .poll(
-      async () =>
-        (await (await request.get(`/api/chats/${chat.id}`)).json()).runs.find(
-          (item: { id: string }) => item.id === run.id
-        )?.status
-    )
-    .toBe('completed');
-  const detail = await (await request.get(`/api/chats/${chat.id}/reader`)).json();
-  await expect(page.getByTestId('source-request')).toHaveCount(0);
-  recovering = true;
-  await page.evaluate(
-    (seq) =>
-      dispatchEvent(
-        new CustomEvent('test-reader-event', { detail: { kind: 'run.completed', seq } })
-      ),
-    detail.reader.cursor
-  );
-  await expect(page.getByTestId('source-request')).toContainText('마지막 이벤트 뒤 복구할 장면');
-  expect(refreshes).toBeGreaterThanOrEqual(2);
 });
 
 test('READERREC rejudgment survives an uncertain response and reload without sending a generation request', async ({

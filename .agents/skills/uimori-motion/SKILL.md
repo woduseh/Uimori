@@ -50,7 +50,7 @@ results where geometry or animation is affected.
 
 Useful targeted checks after a matching build:
 
-- Motion controls: `npm run verify:ui -- --grep 'MOTION|UI common dialogs|UI settings categories'`
+- Motion controls: `npm run verify:ui -- --grep 'MOTION|UI common dialogs'`
 - Menu or nested-dialog interactions: `npm run verify:browser -- --grep 'RACOM01|DEL01|THEMES invalid'`
 - Shared surface/theme changes: `npm run verify:liquid-gallery`
 

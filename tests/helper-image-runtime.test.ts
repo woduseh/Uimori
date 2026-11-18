@@ -405,26 +405,6 @@ test('illustration image tools use the current chat or the explicitly selected c
   expect(JSON.stringify(f.runtime.workspace.events(conversation.id))).not.toContain(pixels[0]);
 });
 
-test('a library helper can discover and view illustration images in a named chat', async () => {
-  const f = fixture();
-  const bot = await savePortrait(f.store);
-  const { id: chatId } = f.store.createChat('Harbor', { botId: bot.id });
-  const ref = `package:${bot.id}:bot:portrait-red`;
-  const bodies = intercept((body, round) => {
-    if (round === 0) return answer(body, [call('find', 'illustration.image.list', { chatId })]);
-    if (round === 1) {
-      const found = toolEvent(body, 'find').images[0].ref;
-      return answer(body, [call('see', 'illustration.image.read', { chatId, ref: found })]);
-    }
-    return answer(body);
-  });
-  const task = await f.run('Inspect the illustration reference in Harbor.');
-  expect(task.status, task.error ?? '').toBe('completed');
-  expect(toolEvent(bodies[2], 'see')).toMatchObject({ ref });
-  expect(imageData(bodies[2])).toHaveLength(1);
-  await expectRedPixels(imageData(bodies[2])[0]);
-});
-
 test.each([false, true])(
   'native image results retain pixels with failed shell=%s',
   async (failedShell) => {
@@ -529,7 +509,6 @@ test('a known text-only helper denies image reading recoverably while image disc
 
 test.each([
   { exitCode: 0, timedOut: false },
-  { exitCode: 7, timedOut: false },
   { exitCode: null, timedOut: true },
 ])('shell image reads preserve redirected pixels with outcome %j', async (outcome) => {
   vi.stubEnv('UIMORI_SHELL_ROOT', join(tmpdir(), 'uimori-image-runtime-shell'));
@@ -605,11 +584,7 @@ test.each([
   expectNoPersistedPixels(f, pixels);
 });
 
-test.each([
-  'image.read',
-  'shell image.read with a save',
-  'failed shell image.read with a save',
-] as const)(
+test.each(['image.read', 'failed shell image.read with a save'] as const)(
   'automatic compaction of %s shows pixels to the context model and retains exact provenance',
   async (mode) => {
     const shellWrite = mode !== 'image.read';

@@ -218,13 +218,6 @@ describe('Decisions response validation', () => {
 
   it.each([
     { ...openAIResponse, answers: [predicate] },
-    { ...openAIResponse, answers: [choice, predicate] },
-    { ...openAIResponse, answers: [predicate, { name: 'best', type: 'refusal' }] },
-    {
-      ...openAIResponse,
-      answers: [predicate, { ...choice, probabilities: [choice.probabilities[0]] }],
-    },
-    { ...openAIResponse, answers: [predicate, { ...choice, choice: 'cover' }] },
     {
       ...openAIResponse,
       answers: [

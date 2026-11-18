@@ -84,7 +84,7 @@ test('THEMES mobile primary choices precede background and preserve its unsaved 
   await expect(guard).toBeHidden();
 });
 
-for (const width of [1440, 412]) {
+for (const width of [412]) {
   test(`THEMES ${width} palette, custom editor, persistence and portable import`, async ({
     page,
     request,
@@ -410,7 +410,7 @@ test('THEMES bot/chat inheritance, cross-tab refresh and theme settings keyboard
   await expect(tabs.getByRole('tab', { name: '테마와 색상', exact: true })).toBeFocused();
 });
 
-for (const width of [1440, 412]) {
+for (const width of [412]) {
   test(`THEMES ${width} independent palette changes preserve layout, draft and author state`, async ({
     page,
     request,

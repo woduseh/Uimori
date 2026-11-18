@@ -4,15 +4,14 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { createApp, type App } from '../server/app.js';
 import { readerDetail } from '../server/reader.js';
-import type { Store } from '../server/store.js';
+import { Store } from '../server/store.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
 
-const owned: { app: App; directory: string }[] = [];
+const owned: { store: Store; directory: string }[] = [];
 afterEach(async () => {
-  for (const { app, directory } of owned.splice(0)) {
-    await app.close();
+  for (const { store, directory } of owned.splice(0)) {
+    store.close();
     const target = resolve(directory),
       within = relative(resolve(tmpdir()), target);
     if (
@@ -26,13 +25,9 @@ afterEach(async () => {
 });
 async function setup() {
   const directory = await mkdtemp(join(tmpdir(), 'uimori-rejection-tests-'));
-  const app = await createApp({
-    dbPath: join(directory, 'reader.sqlite'),
-    buildId: 'rejection-test',
-    testMode: true,
-  });
-  owned.push({ app, directory });
-  return app;
+  const store = new Store(join(directory, 'reader.sqlite'));
+  owned.push({ store, directory });
+  return store;
 }
 function newRun(store: Store, chatId: string) {
   const chat = store.chat(chatId);
@@ -92,8 +87,7 @@ const failure = (code: string, fields?: string[]): ProviderResult => ({
 });
 
 test('a 4xx main run carries the rejected options read from its stored attempt; other failures carry none', async () => {
-  const app = await setup(),
-    store = app.store;
+  const store = await setup();
   const chat = createFixtureChat(store, 'Rejection projection');
   const rejected = newRun(store, chat.id);
   store.product.finishAttempt(

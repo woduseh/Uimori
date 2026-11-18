@@ -118,13 +118,12 @@ test('stored attempt freezes reserved rates through settings changes and termina
   expect(attempts[0]).toEqual(before);
 });
 
-test.each(['cancelled', 'partial'] as const)(
-  '%s preserves reported usage and estimates without promoting status',
-  (status) => {
-    const { store, chat, wire } = setup();
+test('cancelled and partial attempts preserve reported usage and estimates without promoting status', () => {
+  const { store, chat, wire } = setup();
+  for (const status of ['cancelled', 'partial'] as const) {
     const id = store.product.startAttempt(chat.id, null, null, wire());
     store.product.finishAttempt(id, result(status));
-    expect(store.product.attempts(chat.id)[0]).toMatchObject({
+    expect(store.product.attempts(chat.id).at(-1)).toMatchObject({
       status,
       costUsd: null,
       inputTokens: 1000,
@@ -132,7 +131,7 @@ test.each(['cancelled', 'partial'] as const)(
       estimatedCost: { status: 'estimated', usd: 0.0025 },
     });
   }
-);
+});
 
 test('absent usage stays unknown after cancellation and provider tier mismatch is not billed with requested rates', () => {
   const { store, chat, wire } = setup();

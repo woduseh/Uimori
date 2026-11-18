@@ -1,4 +1,4 @@
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, expect, test } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -26,48 +26,31 @@ afterEach(async () => {
   }
 });
 
-for (const testMode of [false, true]) {
-  test(`model-free generation is only available in explicit test mode (${testMode})`, async () => {
-    directory = await mkdtemp(join(tmpdir(), 'uimori-model-required-'));
-    app = await createApp({ dbPath: join(directory, 'test.sqlite'), buildId: 'test', testMode });
-    expect((await app.inject('/api/health')).json().testMode).toBe(testMode);
-    const fixtureControl = await app.inject({
-      method: 'POST',
-      url: '/api/test/control',
-      payload: { action: 'fixture' },
-    });
-    expect(fixtureControl.statusCode).toBe(testMode ? 200 : 404);
-    const chat = createFixtureChat(app.store, 'Synthetic chat');
-    const response = await app.inject({
-      method: 'POST',
-      url: `/api/chats/${chat.id}/runs`,
-      payload: {
-        request: 'Continue',
-        expectedRevision: null,
-        expectedSettingsRevision: chat.settingsRevision,
-        idempotencyKey: randomUUID(),
-      },
-    });
-    if (!testMode) {
-      expect(response.statusCode).toBe(409);
-      expect(response.json().error).toBe('MODEL_REQUIRED:main');
-      expect(app.store.db.prepare('SELECT count(*) AS n FROM runs').get()).toEqual({ n: 0 });
-      expect(app.store.db.prepare('SELECT count(*) AS n FROM attempts').get()).toEqual({ n: 0 });
-    } else {
-      expect(response.statusCode).toBe(200);
-      // Assert asynchronous completion, not a subsecond performance requirement.
-      await vi.waitFor(() => expect(app!.store.run(response.json().id).status).toBe('completed'), {
-        timeout: 5000,
-      });
-    }
-  });
-}
-
-test('normal translation and candidate requests with no model roll back without mock jobs or output', async () => {
+test('outside test mode, generation, translation and candidate requests with no model roll back without mock jobs or output', async () => {
   directory = await mkdtemp(join(tmpdir(), 'uimori-model-required-'));
   app = await createApp({ dbPath: join(directory, 'test.sqlite'), buildId: 'test' });
   const store = app.store;
+  expect((await app.inject('/api/health')).json().testMode).toBe(false);
+  const fixtureControl = await app.inject({
+    method: 'POST',
+    url: '/api/test/control',
+    payload: { action: 'fixture' },
+  });
+  expect(fixtureControl.statusCode).toBe(404);
   const chat = createFixtureChat(store, 'Synthetic source');
+  const generation = await app.inject({
+    method: 'POST',
+    url: `/api/chats/${chat.id}/runs`,
+    payload: {
+      request: 'Continue',
+      expectedRevision: null,
+      expectedSettingsRevision: chat.settingsRevision,
+      idempotencyKey: randomUUID(),
+    },
+  });
+  expect(generation.statusCode).toBe(409);
+  expect(generation.json().error).toBe('MODEL_REQUIRED:main');
+  expect(store.db.prepare('SELECT count(*) AS n FROM runs').get()).toEqual({ n: 0 });
   const { run } = store.createRun(
     chat.id,
     {

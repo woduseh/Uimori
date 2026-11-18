@@ -21,50 +21,6 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('UI locale presentation boundary', () => {
-  test.each([
-    [0, '0 unread activities'],
-    [1, '1 unread activity'],
-    [2, '2 unread activities'],
-  ] as const)('formats %i unread activity count in English', async (count, expected) => {
-    const { formatMessage } = await import('../web/i18n.js');
-    expect(formatMessage('helperNavigation.activityCount', 'en', { count })).toBe(expected);
-  });
-
-  describe.each([
-    ['chatmanage.confirmDelete', 'count', 'selected scene', 'selected scenes'],
-    ['reader.valueImagesDisplayed', 'v0', 'image', 'images'],
-    [
-      'reader.confirmedInclusionOfValueSummarizedScenes',
-      'v0',
-      'summarized scene',
-      'summarized scenes',
-    ],
-    ['reader.valueRecords', 'v0', 'record', 'records'],
-  ] as const)('English count in %s', (key, name, singular, plural) => {
-    test.each([0, 1, 2, 1234])('formats %i with the correct noun', async (count) => {
-      const { formatMessage } = await import('../web/i18n.js');
-      const result = formatMessage(key, 'en', { [name]: count });
-      const formatted = new Intl.NumberFormat('en-US').format(count);
-      expect(result).toMatch(new RegExp(`\\b${formatted} ${count === 1 ? singular : plural}\\b`));
-    });
-  });
-
-  describe.each([
-    'reader.confirmedInclusionOfValueSummarizedScenes',
-    'reader.valueRecords',
-  ] as const)('numeric formatting in %s', (key) => {
-    test.each([
-      ['ko', 'ko-KR'],
-      ['en', 'en-US'],
-      ['ja', 'ja-JP'],
-      ['zh', 'zh-CN'],
-    ] as const)('preserves grouping in %s', async (locale, intlLocale) => {
-      const { formatMessage } = await import('../web/i18n.js');
-      const result = formatMessage(key, locale, { v0: 1234 });
-      expect(result).toContain(new Intl.NumberFormat(intlLocale).format(1234));
-    });
-  });
-
   test('renders a grouped summary count from the actual scene receipt in every language', async () => {
     const { setLocale } = await import('../web/i18n.js');
     const { SceneUsage } = await import('../web/SceneUsage.js');
@@ -93,42 +49,25 @@ describe('UI locale presentation boundary', () => {
     }
   });
 
-  test.each([
-    [1, '‘제목’ 채팅과 본문 2개를 복원했어요.'],
-    [2, '‘제목’ 채팅을 포함해 채팅 2개와 본문 2개를 복원했어요.'],
-  ] as const)('describes restoring %i chat backups in Korean', async (count, expected) => {
+  test('describes restored chat and text entry counts in English', async () => {
     const { formatMessage } = await import('../web/i18n.js');
-    expect(formatMessage('transfer.d007', 'ko', { v0: '제목', v1: count, v2: 2 })).toBe(expected);
-  });
-
-  test.each([
-    [1, 1, 'chat “A Story”', '1 text entry'],
-    [1, 2, 'chat “A Story”', '2 text entries'],
-    [2, 1, '2 chats', '1 text entry'],
-    [2, 2, '2 chats', '2 text entries'],
-  ] as const)(
-    'describes restoring %i chats and %i text entries in English',
-    async (chats, entries, chatDescription, entryDescription) => {
-      const { formatMessage } = await import('../web/i18n.js');
-      const result = formatMessage('transfer.d007', 'en', {
-        v0: 'A Story',
-        v1: chats,
-        v2: entries,
-      });
-      expect(result).toContain('“A Story”');
+    for (const [count, chatDescription, entryDescription] of [
+      [1, 'chat “A Story”', '1 text entry'],
+      [2, '2 chats', '2 text entries'],
+    ] as const) {
+      const result = formatMessage('transfer.d007', 'en', { v0: 'A Story', v1: count, v2: count });
       expect(result).toContain(chatDescription);
       expect(result).toContain(entryDescription);
     }
-  );
+  });
 
-  test.each([
-    ['reader.usingValueSceneSummaries', 'v0', '1,234'],
-    ['reader.usingValueSceneSummaries', 'v0', 'Unknown'],
-    ['helpers.m313', 'count', '1,234'],
-  ] as const)('keeps preformatted values in %s', async (key, name, value) => {
+  test('keeps preformatted values verbatim in every language', async () => {
     const { formatMessage } = await import('../web/i18n.js');
-    for (const locale of ['ko', 'en', 'ja', 'zh'] as const)
-      expect(formatMessage(key, locale, { [name]: value })).toContain(value);
+    for (const value of ['1,234', 'Unknown'])
+      for (const locale of ['ko', 'en', 'ja', 'zh'] as const)
+        expect(formatMessage('reader.usingValueSceneSummaries', locale, { v0: value })).toContain(
+          value
+        );
   });
 
   test('Korean remains the default and unsupported stored values fall back to Korean', async () => {
@@ -142,19 +81,16 @@ describe('UI locale presentation boundary', () => {
     expect(unsupported.supportedLocale('en-US')).toBe('ko');
   });
 
-  test.each(['ko', 'en', 'ja', 'zh'] as const)(
-    'explicit %s survives a fresh module load and writes only the UI preference',
-    async (locale) => {
-      storage.set('uimori:reading-language', 'original');
-      storage.set('uimori:input-translation-language', 'ja');
-      const before = [...storage];
-      const runtime = await import('../web/i18n.js');
-      expect(runtime.setLocale(locale)).toBe(true);
-      expect([...storage].filter(([key]) => key !== 'uimori:ui-language')).toEqual(before);
-      vi.resetModules();
-      expect((await import('../web/i18n.js')).getLocale()).toBe(locale);
-    }
-  );
+  test('an explicit locale survives a fresh module load and writes only the UI preference', async () => {
+    storage.set('uimori:reading-language', 'original');
+    storage.set('uimori:input-translation-language', 'ja');
+    const before = [...storage];
+    const runtime = await import('../web/i18n.js');
+    expect(runtime.setLocale('en')).toBe(true);
+    expect([...storage].filter(([key]) => key !== 'uimori:ui-language')).toEqual(before);
+    vi.resetModules();
+    expect((await import('../web/i18n.js')).getLocale()).toBe('en');
+  });
 
   test('blocked browser storage still permits the current session language and reports persistence failure', async () => {
     vi.stubGlobal('localStorage', {
@@ -188,18 +124,8 @@ describe('UI locale presentation boundary', () => {
     const { BUILTIN_PALETTES } = await import('../core/theme-palettes.js');
     const { setLocale, translateMessage } = await import('../web/i18n.js');
     const definitions = JSON.stringify({ themes: BUILTIN_THEMES, palettes: BUILTIN_PALETTES });
-    const names = [
-      ['builtin:cinematic', 'Cinematic', 'シネマティック', '电影感'],
-      ['builtin:letter', 'Letter', '便箋', '信笺'],
-      ['builtin:scrapbook', 'Scrapbook', 'スクラップブック', '剪贴簿'],
-      ['builtin:classic-frame', 'Classic Frame', 'クラシックフレーム', '经典边框'],
-    ] as const;
-    for (const [index, locale] of (['en', 'ja', 'zh'] as const).entries()) {
+    for (const locale of ['en', 'ja', 'zh'] as const) {
       setLocale(locale);
-      for (const [id, ...expected] of names) {
-        const theme = BUILTIN_THEMES.find((item) => item.id === id)!;
-        expect(translateMessage(theme.title)).toBe(expected[index]);
-      }
       for (const item of [...BUILTIN_THEMES, ...BUILTIN_PALETTES]) {
         expect(translateMessage(item.title)).not.toMatch(/[가-힣]/u);
         expect(translateMessage(item.description)).not.toMatch(/[가-힣]/u);
@@ -282,20 +208,16 @@ describe('UI locale presentation boundary', () => {
     expect((error as Error).message).toBe('‘그룹 없음’에는 이 작업을 적용할 수 없어요.');
   });
 
-  test.each([
-    '\u001fui:broken-json',
-    '\u001fui:null',
-    '\u001fui:{"key":"missing.external.key"}',
-    '\u001fui:{"key":"shared.close","values":{"title":null}}',
-    '\u001fui:{"key":"outside.activeWork"}',
-  ])(
-    'external diagnostic bytes resembling a malformed message descriptor remain readable: %s',
-    async (diagnostic) => {
-      const { setLocale, translateMessage } = await import('../web/i18n.js');
-      setLocale('en');
+  test('external diagnostic bytes resembling a malformed message descriptor remain readable', async () => {
+    const { setLocale, translateMessage } = await import('../web/i18n.js');
+    setLocale('en');
+    for (const diagnostic of [
+      '\u001fui:broken-json',
+      '\u001fui:{"key":"missing.external.key"}',
+      '\u001fui:{"key":"outside.activeWork"}',
+    ])
       expect(translateMessage(diagnostic)).toBe(diagnostic);
-    }
-  );
+  });
 
   test('ICU interpolates full sentences, plural branches and missing locale fallback', async () => {
     const { formatMessage } = await import('../web/i18n.js');

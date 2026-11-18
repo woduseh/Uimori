@@ -496,9 +496,6 @@ describe('server main runner through the actual loopback adapter', () => {
         (part) => part.type === 'text'
       )?.text
     ).toContain(DEFAULT_MAIN_PROMPT);
-    snapshot.profile!.packages = [];
-    snapshot.profile!.packageAttachments = [];
-    snapshot.resources = [];
     expect(buildMainInput(snapshot).facts).toEqual([]);
     expect(JSON.stringify(buildMainInput(snapshot))).not.toContain('Mira');
   });

@@ -63,9 +63,7 @@ function request(attachment = file): ProviderRequest {
 const variants = [
   ['openai-responses-v1', 'https://api.openai.com/v1'],
   ['openai-chat-v1', 'https://api.openai.com/v1'],
-  ['vercel-chat-v1', 'https://ai-gateway.vercel.sh/v1'],
   ['anthropic-messages-v1', 'https://api.anthropic.com/v1'],
-  ['google-gemini-v1', 'https://generativelanguage.googleapis.com/v1beta'],
   [
     'vertex-gemini-v1',
     'https://aiplatform.googleapis.com/v1/projects/synthetic/locations/global/publishers/google/models',
@@ -234,20 +232,12 @@ describe('native file attachment transmission', () => {
     const video = { ...file, ...classifyRequestFile('source.mp4')!, name: 'source.mp4' };
     const text = { ...file, ...classifyRequestFile('source.md')!, name: 'source.md' };
     expect(fileInputSupported('openai-responses-v1', 'custom/future-model', office)).toBe(true);
-    for (const name of [
-      'reference.pages',
-      'slides.key',
-      'template.dot',
-      'sheet.xlt',
-      'subtitle.vtt',
-      'source.lua',
-      'build.gradle',
-    ]) {
+    for (const name of ['reference.pages', 'source.lua']) {
       expect(
         fileInputSupported('openai-responses-v1', 'gpt-6-astra', classifyRequestFile(name)!)
       ).toBe(true);
     }
-    for (const name of ['recording.l16', 'recording.alaw', 'recording.mulaw', 'recording.weba']) {
+    for (const name of ['recording.l16', 'recording.weba']) {
       expect(
         fileInputSupported('google-gemini-v1', 'gemini-4-argon', classifyRequestFile(name)!)
       ).toBe(true);

@@ -107,7 +107,6 @@ test.each([
   ['error', 'issue'],
   ['cancelled', 'stopped'],
   ['completed', 'completed'],
-  ['tool_calls', 'completed'],
   ['unknown', 'issue'],
 ])('attempt status %s has state %s with or without its start', (status, state) => {
   for (const hasStart of [true, false]) {

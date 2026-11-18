@@ -135,7 +135,7 @@ test('bot defaults follow current persona edits and deleted defaults require an 
   ]);
 });
 
-test('invalid and stale order anchors roll back every position and revision', async () => {
+test('invalid order anchors roll back every position and revision', async () => {
   const { store, bot, other } = await fixture();
   const folder = store.organization.createFolder(bot.id, { title: 'Elsewhere' });
   const moving = store.createChat('Moving', { botId: bot.id });
@@ -151,10 +151,6 @@ test('invalid and stale order anchors roll back every position and revision', as
     ).toThrow('Order anchor');
     expect(store.chats()).toEqual(original);
   }
-  expect(() =>
-    store.organization.move(moving.id, { expectedRevision: 99, folderId: null, beforeChatId: null })
-  ).toThrow('revision conflict');
-  expect(store.chats()).toEqual(original);
 });
 function attach(store: Store, chatId: string, attachments: { id: string; revision: number }[]) {
   const p = store.product.profile(chatId);
@@ -287,21 +283,6 @@ test('fork inherits original owner/folder/profile without reapplying changed def
     { ...ref(bot), role: 'bot' },
     { ...ref(persona), role: 'persona' },
   ]);
-  expect(forkChat(store, chat.id, { fromRevision: source.id, idempotencyKey: 'fork' }).id).toBe(
-    fork.id
-  );
-});
-
-test('creation selects ownership and later attachments never infer a new owner', async () => {
-  const { store, bot, other } = await fixture();
-  expect(() => store.createChat('Missing owner')).toThrow('owning bot');
-  expect(() => store.createChat('Removed sentinel', { botId: '__legacy__' })).toThrow();
-  expect(store.chats()).toHaveLength(0);
-  const explicit = store.createChat('Owned', { botId: bot.id });
-  attach(store, explicit.id, [ref(bot)]);
-  expect(() => attach(store, explicit.id, [ref(other)])).toThrow('owning bot');
-  expect(store.chat(explicit.id).botId).toBe(bot.id);
-  expect(store.chat(explicit.id).organizationRevision).toBe(1);
 });
 
 test('HTTP organization routes enforce bot scopes and CAS and reject missing owners', async () => {

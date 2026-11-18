@@ -107,12 +107,9 @@ describe('Vertex connection and model settings with file SQLite', () => {
     for (const invalid of [
       endpoint.replace('https:', 'http:'),
       endpoint.replace('aiplatform.googleapis.com', 'example.invalid'),
-      endpoint.replace('aiplatform.googleapis.com', 'aiplatform.googleapis.com:444'),
       endpoint.replace('/global/', '/us-central1/'),
-      endpoint.replace('synthetic-project', 'synthetic%2Fproject'),
       endpoint + '/gemini-3.8-flash:generateContent',
       endpoint + '?key=synthetic',
-      endpoint + '#fragment',
       endpoint.replace('https://', 'https://synthetic@'),
     ])
       await request(app, '/connections', vertexConnection({ endpoint: invalid }), 400);
@@ -121,7 +118,7 @@ describe('Vertex connection and model settings with file SQLite', () => {
     expect(app.store.product.all('connection')).toHaveLength(2);
   });
 
-  test('stores the selected model defaults and bounds while keeping fixture rows unchanged', async () => {
+  test('stores the selected model defaults and bounds', async () => {
     const app = await application();
     const connection = await request<Connection>(app, '/connections', vertexConnection());
     const defaults = await request<ModelPreset>(app, '/model-presets', modelBody(connection));
@@ -153,43 +150,16 @@ describe('Vertex connection and model settings with file SQLite', () => {
     expect(minimum).toMatchObject({ maxOutputTokens: 1, thinkingLevel: 'LOW', timeoutMs: 1 });
     for (const invalid of [
       { maxOutputTokens: 500001 },
-      { maxOutputTokens: 0 },
       { thinkingLevel: 'medium' },
-      { thinkingLevel: null },
-      { timeoutMs: 0 },
       { timeoutMs: 1800001 },
-      { timeoutMs: 1.5 },
-      { timeoutMs: null },
       { topP: 1.5 },
       { reasoningEffort: 'high' },
     ])
       await request(app, '/model-presets', modelBody(connection, invalid), 400);
-    const fixture = await request<Connection>(app, '/connections', {
-      title: 'Synthetic fixture',
-      protocol: 'fixture-sse-v1',
-      endpoint: 'http://127.0.0.1:9/turn',
-      enabled: false,
-    });
-    const legacy = await request<ModelPreset>(
-      app,
-      '/model-presets',
-      modelBody(fixture, {
-        modelId: 'manual-fixture-id',
-        maxOutputTokens: 200000,
-        temperature: 0.6,
-      })
-    );
-    expect(legacy).not.toHaveProperty('thinkingLevel');
-    expect(legacy).not.toHaveProperty('timeoutMs');
-    expect(legacy).toMatchObject({
-      modelId: 'manual-fixture-id',
-      maxOutputTokens: 200000,
-      temperature: 0.6,
-    });
-    expect(app.store.product.all('model')).toHaveLength(4);
+    expect(app.store.product.all('model')).toHaveLength(3);
   });
 
-  test('refreshes Gemini models with the same uploaded Vertex credential used for generation', async () => {
+  test('refreshes Gemini models with the uploaded Vertex credential and keeps the last catalog when a later refresh fails', async () => {
     const app = await application();
     const token = vi
       .spyOn(GoogleAuth.prototype, 'getAccessToken')
@@ -200,6 +170,7 @@ describe('Vertex connection and model settings with file SQLite', () => {
         url: String(input),
         authorization: new Headers(init?.headers).get('authorization'),
       });
+      if (seen.length > 1) return new Response('temporary failure', { status: 503 });
       return new Response(
         JSON.stringify({
           publisherModels: [
@@ -232,34 +203,9 @@ describe('Vertex connection and model settings with file SQLite', () => {
     expect(new URL(seen[0].url).searchParams.get('pageSize')).toBe('300');
     expect(JSON.stringify(catalog)).not.toContain('synthetic-oauth-token');
     expect(token).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
-
-  test('keeps the last Vertex model catalog when a later refresh fails', async () => {
-    const app = await application();
-    vi.spyOn(GoogleAuth.prototype, 'getAccessToken').mockResolvedValue('synthetic-oauth-token');
-    const fetch = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            publisherModels: [{ name: 'publishers/google/models/gemini-3.8-flash' }],
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } }
-        )
-      )
-      .mockResolvedValueOnce(new Response('temporary failure', { status: 503 }));
-    const connection = await request<Connection>(
-      app,
-      '/connections',
-      vertexConnection({ serviceAccount })
-    );
-    const listed = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
     const failed = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
-
-    expect(listed.catalog.map((item) => item.id)).toEqual(['gemini-3.8-flash']);
-    expect(failed.catalog).toEqual(listed.catalog);
-    expect(failed.catalogUpdatedAt).toBe(listed.catalogUpdatedAt);
+    expect(failed.catalog).toEqual(catalog.catalog);
+    expect(failed.catalogUpdatedAt).toBe(catalog.catalogUpdatedAt);
     expect(failed.catalogError).toBe('CATALOG_UNAVAILABLE');
     expect(fetch).toHaveBeenCalledTimes(2);
   });

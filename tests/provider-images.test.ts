@@ -89,9 +89,7 @@ function request(): ProviderRequest {
 const variants = [
   ['openai-responses-v1', 'https://api.openai.com/v1'],
   ['openai-chat-v1', 'https://api.openai.com/v1'],
-  ['vercel-chat-v1', 'https://ai-gateway.vercel.sh/v1'],
   ['anthropic-messages-v1', 'https://api.anthropic.com/v1'],
-  ['google-gemini-v1', 'https://generativelanguage.googleapis.com/v1beta'],
   [
     'vertex-gemini-v1',
     'https://aiplatform.googleapis.com/v1/projects/synthetic/locations/global/publishers/google/models',

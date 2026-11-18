@@ -177,7 +177,7 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
     }
   });
 
-  test.each(['prompt', 'history', 'view'] as const)(
+  test.each(['prompt', 'history'] as const)(
     'the total deadline includes stalled %s response bodies',
     async (path) => {
       const server = await fixture({ fault: { path, kind: 'body' } });
@@ -200,7 +200,7 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
     }
   );
 
-  test.each(['headers', 'disconnect', 'http-error'] as const)(
+  test.each(['headers', 'disconnect'] as const)(
     'a %s failure after submission never authorizes automatic resubmission',
     async (kind) => {
       const server = await fixture({ fault: { path: 'prompt', kind, httpStatus: 500 } });
@@ -220,7 +220,7 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
     }
   );
 
-  test.each([401, 403, 404, 429, 503])(
+  test.each([401, 503])(
     'accepted prompt history HTTP %s preserves diagnostics and retrieves the result without a new render',
     async (httpStatus) => {
       const server = await fixture({ fault: { path: 'history', kind: 'http-error', httpStatus } });

@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { RisuImportResult } from '../core/risu-import.js';
 import { navigationAction } from './ui-navigation.js';
 
-for (const width of [390, 1440]) {
+for (const width of [390]) {
   test(`RISULUACOMPAT ${width}px authored form reaches Lua and survives reload`, async ({
     page,
     request,

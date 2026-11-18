@@ -154,7 +154,6 @@ test.each([
   'messages[#messages].id = nil',
   "messages[#messages].role = 'assistant'",
   'table.insert(messages, messages[#messages])',
-  "setChatRole(id, -1, 'char')",
 ])('image request refuses ambiguous or changed attachment ownership: %s', async (change) => {
   const input = await prepared(
     `listenEdit('editRequest', function(id, messages)

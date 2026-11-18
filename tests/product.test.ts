@@ -1,4 +1,3 @@
-import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
@@ -12,7 +11,6 @@ import { ProductStore } from '../server/product-store.js';
 import { buildMainInput } from '../core/provider.js';
 import type { ChatProfile, Connection, Content, ModelPreset } from '../core/product.js';
 import type { Chat, ChatDetail, Job, Run, RunSnapshot, Usage } from '../core/types.js';
-import { runMain } from '../server/model-runner.js';
 import type { ProviderResult } from '../core/transport.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 import { createApp } from '../server/app.js';
@@ -291,89 +289,6 @@ describe('M1 product data with actual file SQLite', () => {
     expect(product.get<Connection>('connection', bound.id)).toEqual(disabled);
     expect(() => product.get<Connection>('connection', bound.id, 1)).toThrow('Setting not found');
     expect(snapshot.models.main?.connection).toEqual(bound);
-  });
-
-  test('P05 P06 P12 records fixture refusals and partials without source/jobs; duplicate attempt finishes cannot rewrite usage', async () => {
-    const { item, store, product } = await database();
-    let calls = 0;
-    const server = await loopbackProvider(async (_captured, response) => {
-      calls++;
-      await writeSse(
-        response,
-        calls === 1
-          ? [
-              { type: 'refusal', message: 'Explicit fixture refusal' },
-              {
-                type: 'usage',
-                inputTokens: 13,
-                outputTokens: 2,
-                costUsd: null,
-                raw: { total_tokens: 15 },
-              },
-              { type: 'done', reason: 'refusal' },
-            ]
-          : [
-              { type: 'text_delta', delta: 'Unfinished fixture fragment' },
-              { type: 'usage', inputTokens: 7, outputTokens: 1, costUsd: null },
-            ]
-      );
-    });
-    item.close = server.close;
-    const chat = createFixtureChat(store, 'refusal-story');
-    const preserved = completedSource(store, product, chat.id, 'PRESERVED_ORIGINAL');
-    const originalJobCount = store.detail(chat.id).jobs.length;
-    const bound = product.connection({
-      title: 'Actual loopback fixture',
-      protocol: 'fixture-sse-v1',
-      endpoint: server.endpoint,
-      enabled: true,
-    }) as Connection;
-    const model = product.model({
-      title: 'Main fixture target',
-      connectionId: bound.id,
-      modelId: 'fixture-main',
-      maxOutputTokens: 4000,
-      temperature: null,
-    }) as ModelPreset;
-    profile(product, chat, [], {
-      routes: { main: { id: model.id }, translation: null },
-    });
-    for (const expected of ['refused', 'partial'] as const) {
-      const run = queuedRun(store, product, chat.id);
-      store.startRun(run.id);
-      const result = await runMain(await prepareNativeRisuRun(run.snapshot), {
-        signal: new AbortController().signal,
-
-        authorize: (value) => product.authorize(value),
-        onInput: (input) => store.input(run.id, input),
-        onToolEvent: (tool) => store.tool(run.id, tool),
-        onAttemptStart: (wire) => product.startAttempt(chat.id, run.id, null, wire),
-        onAttemptFinish: (id, value) => product.finishAttempt(id, value),
-      });
-      expect(result.status).toBe(expected);
-      store.finishRun(run.id, expected, result.error ?? '', result.text, result.usage);
-      expect(store.run(run.id)).toMatchObject({
-        status: expected,
-        sourceRevision: null,
-        usage: { costUsd: null },
-      });
-    }
-    expect(store.detail(chat.id).sources).toHaveLength(1);
-    expect(store.source(preserved.id).text).toBe('PRESERVED_ORIGINAL');
-    expect(store.chat(chat.id).headRevision).toBe(preserved.id);
-    expect(store.detail(chat.id).jobs).toHaveLength(originalJobCount);
-    const attempts = product.attempts(chat.id);
-    expect(attempts.map((attempt) => attempt.status)).toEqual(['refused', 'partial']);
-    expect(attempts.map((attempt) => attempt.inputTokens)).toEqual([13, 7]);
-    const firstResult = attempts[0].response as ProviderResult;
-    product.finishAttempt(attempts[0].id, {
-      ...firstResult,
-      status: 'completed',
-      usage: { ...firstResult.usage, inputTokens: 999, costUsd: 0 },
-    });
-    expect(product.attempts(chat.id)[0]).toEqual(attempts[0]);
-    expect(server.requests).toHaveLength(2);
-    expect(product.attempts(chat.id).every((attempt) => attempt.costUsd === null)).toBe(true);
   });
 });
 
@@ -814,6 +729,19 @@ describe('M1 real HTTP application boundaries', () => {
       const done = await terminalRun(url, run, signal);
       expect(done).toMatchObject({ status, sourceRevision: null });
     }
+    const refusedAttempt = app.store.product
+      .attempts(chat.id)
+      .find((attempt) => attempt.status === 'refused')!;
+    expect(refusedAttempt.inputTokens).toBe(8);
+    const refusedResult = refusedAttempt.response as ProviderResult;
+    app.store.product.finishAttempt(refusedAttempt.id, {
+      ...refusedResult,
+      status: 'completed',
+      usage: { ...refusedResult.usage, inputTokens: 999, costUsd: 0 },
+    });
+    expect(
+      app.store.product.attempts(chat.id).find((attempt) => attempt.id === refusedAttempt.id)
+    ).toEqual(refusedAttempt);
     const preserved = await api<ChatDetail>(url, `/api/chats/${chat.id}`);
     expect(preserved.sources).toEqual(success.sources);
     expect(preserved.jobs).toEqual([]);
@@ -835,74 +763,6 @@ describe('M1 real HTTP application boundaries', () => {
     expect(app.store.chat(chat.id).headRevision).toBe(completed.sourceRevision);
     expect(provider.requests).toHaveLength(4);
     expect(app.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-  });
-
-  test('P04 catalog refresh updates data only and retains prior data on HTTP failure without changing model routes or credentials', async () => {
-    const fixtureItem = await directory();
-    let fail = false;
-    const provider = await loopbackProvider((captured, response) => {
-      expect(captured.url).toBe('/models');
-      if (fail) {
-        response.writeHead(503, { 'content-type': 'application/json' });
-        response.end('{"error":"fixture unavailable"}');
-        return;
-      }
-      response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(
-        JSON.stringify({
-          models: [
-            { id: 'catalog-new-entry', label: 'New fixture model', capabilities: { tools: true } },
-          ],
-        })
-      );
-    });
-    fixtureItem.close = provider.close;
-    const envName = 'UIMORI_PROVIDER_CATALOG_FIXTURE';
-    const priorEnv = process.env[envName];
-    process.env[envName] = 'SYNTHETIC_CATALOG_CREDENTIAL';
-    try {
-      const { app, url } = await application({});
-      app.store.credentials.set('jev', 'synthetic-jev-key');
-      const bound = app.store.product.connection({
-        title: 'Catalog fixture',
-        protocol: 'fixture-sse-v1',
-        endpoint: provider.endpoint,
-        apiKey: process.env[envName],
-        enabled: true,
-      }) as Connection;
-      const model = app.store.product.model({
-        title: 'Unlisted manual ID',
-        connectionId: bound.id,
-        modelId: 'manual-unlisted-id',
-        maxOutputTokens: 1000,
-        temperature: null,
-      }) as ModelPreset;
-      await api(url, `/api/connections/${bound.id}/catalog`, {});
-      const refreshed = app.store.product.get<Connection>('connection', bound.id);
-      expect(refreshed.catalog.map((item) => item.id)).toEqual(['catalog-new-entry']);
-      expect(refreshed.catalog[0].capabilities.structuredOutput).toBeNull();
-      expect(refreshed.catalog[0].priceRevision).toBeNull();
-      expect(refreshed.credentialRef).toBe(bound.credentialRef);
-      expect(refreshed.enabled).toBe(true);
-      expect(app.store.product.get<ModelPreset>('model', model.id)).toEqual(model);
-      fail = true;
-      await api(url, `/api/connections/${bound.id}/catalog`, {});
-      const failed = app.store.product.get<Connection>('connection', bound.id);
-      expect(failed.catalog).toEqual(refreshed.catalog);
-      expect(failed.catalogError).toBeTruthy();
-      expect(failed.credentialRef).toBe(bound.credentialRef);
-      expect(failed.enabled).toBe(true);
-      expect(app.store.product.get<ModelPreset>('model', model.id).modelId).toBe(
-        'manual-unlisted-id'
-      );
-      expect(JSON.stringify(app.store.product.library())).not.toContain(
-        'SYNTHETIC_CATALOG_CREDENTIAL'
-      );
-      expect(provider.requests).toHaveLength(2);
-    } finally {
-      if (priorEnv === undefined) delete process.env[envName];
-      else process.env[envName] = priorEnv;
-    }
   });
 
   test('P12 protects data, events and asset bytes with an HttpOnly session, rejects foreign origins and revokes logout cookies', async () => {

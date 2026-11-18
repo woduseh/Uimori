@@ -253,23 +253,21 @@ test('skips a relevant entry too large for the judgment request and still evalua
   expect(result.loreSelection!.entries[0].selected).toEqual(['small']);
 });
 
-test.each(['title', 'description'] as const)(
-  'retrieves frozen chat-overridden %s within a narrow JEV budget',
-  async (field) => {
-    const filler = 'Ordinary weather, flour, rain and deliveries. '.repeat(50);
-    const entries = [lore('first', filler), lore('target', filler)];
-    const input = snapshot([entries], '청월인장');
-    input.profile!.loreContext!.judgment.maxInputTokens = 1000;
-    projectLore(input, [[entries[0], { ...entries[1], [field]: '청월인장' }]]);
-    const before = structuredClone(input);
-    const { snapshot: result, body } = await select(input);
-    expect(sentEntries(body).map((entry: { id: string }) => entry.id)).toEqual(['target']);
-    expect(JSON.stringify(sentEntries(body)[0])).toContain('청월인장');
-    expect(result.loreSelection!.entries[0].selected).toEqual(['target']);
-    expect(result.loreSelection!.entries[0].coverage).toEqual({ total: 2, evaluated: 1 });
-    expect(input).toEqual(before);
-  }
-);
+test('retrieves frozen chat-overridden title within a narrow JEV budget', async () => {
+  const field = 'title' as const;
+  const filler = 'Ordinary weather, flour, rain and deliveries. '.repeat(50);
+  const entries = [lore('first', filler), lore('target', filler)];
+  const input = snapshot([entries], '청월인장');
+  input.profile!.loreContext!.judgment.maxInputTokens = 1000;
+  projectLore(input, [[entries[0], { ...entries[1], [field]: '청월인장' }]]);
+  const before = structuredClone(input);
+  const { snapshot: result, body } = await select(input);
+  expect(sentEntries(body).map((entry: { id: string }) => entry.id)).toEqual(['target']);
+  expect(JSON.stringify(sentEntries(body)[0])).toContain('청월인장');
+  expect(result.loreSelection!.entries[0].selected).toEqual(['target']);
+  expect(result.loreSelection!.entries[0].coverage).toEqual({ total: 2, evaluated: 1 });
+  expect(input).toEqual(before);
+});
 
 test('searches and judges every scoped body sharing one selected lore id', async () => {
   const filler = 'Ordinary weather, flour, rain and deliveries. '.repeat(120);

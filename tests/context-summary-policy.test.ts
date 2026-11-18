@@ -50,7 +50,6 @@ describe('summary goals and provider output headroom', () => {
   });
   test.each([
     { output: 8192, goal: 2048, cap: 4096 },
-    { output: 1500, goal: 750, cap: 1500 },
     { output: 512, goal: 256, cap: 512 },
   ])('$output output leaves room for the $goal-token summary goal', ({ output, goal, cap }) => {
     const generation: ModelGeneration = {

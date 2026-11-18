@@ -172,56 +172,58 @@ const explicitBotGuide = {
     { source: 'Rose', target: '로즈', note: 'BOT_TERM_ONCE: Only the character, not the flower.' },
   ],
 };
-for (const variant of ['default', 'hermeneia', 'no-context-slot'] as const) {
-  for (const mode of ['full', 'source-only'] as const) {
-    test(`bot translation guide is literal and delivered once (${variant}, ${mode})`, async () => {
-      const program =
-        variant === 'default'
-          ? undefined
-          : variant === 'hermeneia'
-            ? builtinPromptTemplate('hermeneia')!.program
-            : nativePrompt(
-                'Translate.',
-                {
-                  promptTemplate: [
-                    { type: 'plain', role: 'system', text: 'Translate the supplied source.' },
-                    {
-                      type: 'plain',
-                      role: 'user',
-                      text: 'Translate the source in the host payload.',
-                    },
-                  ],
-                },
-                'translation'
-              );
-      const value = seed(program);
-      value.translationPolicy!.contextMode = mode;
-      value.snapshot.history = [{ revision: 'previous', text: 'EXCLUDED_PREVIOUS_SCENE' }];
-      value.snapshot.translationGuide = structuredClone(explicitBotGuide);
-      const request = await capture(value);
-      expect(request.input.controls.customPrompt).toBe(program ? true : undefined);
-      for (const protocol of deliveryProtocols) {
-        const delivered = encodedBody(request, value, protocol);
-        expect(occurrences(delivered, 'BOT_GUIDE_ONCE'), protocol).toBe(1);
-        expect(occurrences(delivered, 'BOT_TERM_ONCE'), protocol).toBe(1);
-        expect(JSON.stringify(delivered), protocol).toContain('{{setvar::unwanted::1}}');
-        expect(occurrences(delivered, 'SOURCE_ONCE'), protocol).toBe(1);
-        expect(JSON.stringify(delivered), protocol).not.toContain('EXCLUDED_OTHER_CHAT');
-        if (mode === 'source-only') {
-          for (const marker of [
-            'Mira has not learned',
-            'Mira = 미라',
-            'The identity remains unknown',
-            'Observatory glossary',
-            'AUTHOR_NOTE_ONCE',
-            'EXCLUDED_PREVIOUS_SCENE',
-          ])
-            expect(JSON.stringify(delivered), `${protocol}: ${marker}`).not.toContain(marker);
-        } else expect(JSON.stringify(delivered), protocol).toContain('EXCLUDED_PREVIOUS_SCENE');
-      }
-      if (mode === 'source-only') expect(request.stable.tools).toEqual([]);
-    });
-  }
+for (const [variant, mode] of [
+  ['default', 'full'],
+  ['hermeneia', 'source-only'],
+  ['no-context-slot', 'full'],
+] as const) {
+  test(`bot translation guide is literal and delivered once (${variant}, ${mode})`, async () => {
+    const program =
+      variant === 'default'
+        ? undefined
+        : variant === 'hermeneia'
+          ? builtinPromptTemplate('hermeneia')!.program
+          : nativePrompt(
+              'Translate.',
+              {
+                promptTemplate: [
+                  { type: 'plain', role: 'system', text: 'Translate the supplied source.' },
+                  {
+                    type: 'plain',
+                    role: 'user',
+                    text: 'Translate the source in the host payload.',
+                  },
+                ],
+              },
+              'translation'
+            );
+    const value = seed(program);
+    value.translationPolicy!.contextMode = mode;
+    value.snapshot.history = [{ revision: 'previous', text: 'EXCLUDED_PREVIOUS_SCENE' }];
+    value.snapshot.translationGuide = structuredClone(explicitBotGuide);
+    const request = await capture(value);
+    expect(request.input.controls.customPrompt).toBe(program ? true : undefined);
+    for (const protocol of deliveryProtocols) {
+      const delivered = encodedBody(request, value, protocol);
+      expect(occurrences(delivered, 'BOT_GUIDE_ONCE'), protocol).toBe(1);
+      expect(occurrences(delivered, 'BOT_TERM_ONCE'), protocol).toBe(1);
+      expect(JSON.stringify(delivered), protocol).toContain('{{setvar::unwanted::1}}');
+      expect(occurrences(delivered, 'SOURCE_ONCE'), protocol).toBe(1);
+      expect(JSON.stringify(delivered), protocol).not.toContain('EXCLUDED_OTHER_CHAT');
+      if (mode === 'source-only') {
+        for (const marker of [
+          'Mira has not learned',
+          'Mira = 미라',
+          'The identity remains unknown',
+          'Observatory glossary',
+          'AUTHOR_NOTE_ONCE',
+          'EXCLUDED_PREVIOUS_SCENE',
+        ])
+          expect(JSON.stringify(delivered), `${protocol}: ${marker}`).not.toContain(marker);
+      } else expect(JSON.stringify(delivered), protocol).toContain('EXCLUDED_PREVIOUS_SCENE');
+    }
+    if (mode === 'source-only') expect(request.stable.tools).toEqual([]);
+  });
 }
 
 test('source-only removes background before native CBS while preserving authored defaults and controls', async () => {

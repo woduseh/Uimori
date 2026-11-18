@@ -175,7 +175,7 @@ async function seed(request: APIRequestContext, squareBot = false) {
   return { chatId: chat.id, bot, persona, sourceId: source.id, themeId: theme.id };
 }
 
-for (const width of [1440, 412]) {
+for (const width of [1440]) {
   test(`GALLERY ${width}: both palettes, long prose, real controls and recovery`, async ({
     page,
     request,

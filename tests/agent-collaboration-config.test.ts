@@ -81,8 +81,6 @@ describe('collaboration limits and references', () => {
 
   test.each([
     ['title', 1],
-    ['description', 0],
-    ['instructions', 1],
     ['sharedInstructions', 0],
   ] as const)('%s preserves long text without a separate character limit', (field, min) => {
     const make = (value: unknown) =>

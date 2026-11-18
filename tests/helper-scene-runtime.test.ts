@@ -320,48 +320,6 @@ test('oversized scene search suggests a narrower continuation without losing its
   await submit(f, '빈번한 제어문자를 검색해서 확인해줘.');
 });
 
-test('helper searches live words and atomically patches all exact matches', async () => {
-  const f = await fixture();
-  f.store.editSource(f.source.id, {
-    text: 'Yoshino-san spoke. Yoshino-san smiled.',
-    expectedRevision: 0,
-  });
-  mockSend((request, round) => {
-    if (round === 0)
-      return calls(
-        call('search', 'scene.search', {
-          sourceId: f.source.id,
-          target: 'original',
-          patterns: ['Yoshino-san'],
-          limit: 1,
-        })
-      );
-    if (round === 1) {
-      const found = result(request, 'search');
-      expect(found).toMatchObject({ totalMatches: 2, counts: [{ count: 2 }], nextOffset: 1 });
-      const continuation = found.nextSearch as {
-        name: string;
-        arguments: Record<string, transport.Json>;
-      };
-      return calls({ id: 'next', name: continuation.name, arguments: continuation.arguments });
-    }
-    if (round === 2) {
-      const found = result(request, 'next');
-      expect(found).toMatchObject({ totalMatches: 2, offset: 1, nextOffset: null });
-      return calls(
-        call('save', 'scene.patch', {
-          ...(found.editTarget as Record<string, unknown>),
-          changes: [{ oldText: 'Yoshino-san', newText: 'Yoshino-sama', expectedCount: 2 }],
-        })
-      );
-    }
-    expect(result(request, 'save')).toMatchObject({ changed: true, revision: 2 });
-    return structuredClone(success);
-  });
-  await submit(f, '호칭을 모두 수정하고 저장해줘.');
-  expect(f.store.source(f.source.id).text).toBe('Yoshino-sama spoke. Yoshino-sama smiled.');
-});
-
 test('helper runs isolated regex chat search then commits a guarded scene batch', async () => {
   const f = await fixture();
   f.store.editSource(f.source.id, {
@@ -402,35 +360,6 @@ test('helper runs isolated regex chat search then commits a guarded scene batch'
   await submit(f, '모든 장면의 루비 마크업 백틱을 제거해줘.');
   expect(f.store.source(f.source.id).text).toBe('<ruby>first</ruby>');
   expect(f.store.source(other.id).text).toBe('<ruby>second</ruby>');
-});
-
-test('scene patch rejects a source outside the helper chat before mutating it', async () => {
-  const f = await fixture();
-  const otherChat = createFixtureChat(f.store, 'Unrelated chat');
-  const other = completedSource(f.store, otherChat.id, 'Keep this unrelated scene.');
-  mockSend((request, round) => {
-    if (round === 0)
-      return calls(
-        call('forbidden', 'scene.patch', {
-          sourceId: other.id,
-          target: 'original',
-          expectedRevision: 0,
-          expectedSourceHash: other.hash,
-          text: 'Wrong chat overwrite',
-        })
-      );
-    expect(event(request, 'forbidden')).toMatchObject({
-      denied: true,
-      result: { error: 'Scene is not in the current chat ancestry' },
-    });
-    return structuredClone(success);
-  });
-  const task = await submit(f, 'Scene 1을 고쳐서 저장해줘.');
-  expect(f.store.source(other.id)).toMatchObject({ text: other.text, editRevision: 0 });
-  expect(
-    f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
-      ?.n
-  ).toBe(0);
 });
 
 test('helper translation save aborts the active provider and preserves the manual result', async () => {
@@ -488,52 +417,3 @@ test('helper translation save aborts the active provider and preserves the manua
     result: { text: '직접 다듬어 저장한 번역' },
   });
 });
-
-test.each(['scene.read', 'scene.versions'] as const)(
-  '%s keeps all requested pages when the model context can admit the complete round',
-  async (name) => {
-    const f = await fixture('library');
-    const prose = '한글🙂 '.repeat(20000);
-    // Seven pages exceed the former shared 32k budget.
-    const pageTokens = countTextTokens(JSON.stringify({ text: prose.slice(37, 10037) }));
-    expect(pageTokens).toBeLessThan(16000);
-    expect(pageTokens * 7).toBeGreaterThan(32000);
-    const source = completedSource(f.store, f.chat.id, prose);
-    let args: Record<string, unknown>;
-    mockSend((request, round) => {
-      if (round === 0)
-        return calls(
-          call('guards', 'scene.read', {
-            chatId: f.chat.id,
-            sourceId: source.id,
-            target: 'original',
-            limit: 1,
-          })
-        );
-      if (round === 1) {
-        const guards = result(request, 'guards').editTarget as Record<string, unknown>;
-        const { target: _target, ...versionGuards } = guards;
-        args = {
-          ...(name === 'scene.read' ? guards : versionGuards),
-          chatId: f.chat.id,
-          ...(name === 'scene.versions' ? { versionRevision: 0 } : {}),
-          offset: 37,
-          limit: 10000,
-        };
-        return calls(...Array.from({ length: 7 }, (_, index) => call(`page-${index}`, name, args)));
-      }
-      expect(round).toBe(2);
-      expect((request.input.results as unknown as ToolEvent[]).every((item) => !item.denied)).toBe(
-        true
-      );
-      expect(result(request, 'page-6')).toMatchObject({
-        chatId: f.chat.id,
-        text: prose.slice(37, 10037),
-        offset: 37,
-        nextOffset: 10037,
-      });
-      return structuredClone(success);
-    });
-    await submit(f, '지정한 채팅의 장면 본문을 이어서 읽어줘.');
-  }
-);

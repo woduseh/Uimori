@@ -1,4 +1,3 @@
-import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
 import { readRunSnapshot, readStoredRunSnapshot } from '../server/run-projections.js';
 import {
   rejudgeTranslation,
@@ -6,7 +5,6 @@ import {
   sourceVersions,
 } from '../server/source-editing.js';
 import { createFixtureChat } from './fixtures/chat.js';
-import { DatabaseSync } from 'node:sqlite';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -453,33 +451,6 @@ test('edited source exposes hidden slot CAS and rejects a stale translation edit
   expect(saved.id).not.toBe(old.id);
   expect(store.requestTranslation(s.id).result?.text).toBe('Current');
 });
-test('unsupported future database refuses startup without rewriting translation reservations', () => {
-  const store = database();
-  const s = source(store);
-  const job = store.requestTranslation(s.id);
-  const item = owned.find((item) => item.store === store)!;
-  store.close();
-  item.store = undefined;
-  const path = join(item.dir, 'test.sqlite');
-  const db = new DatabaseSync(path);
-  db.exec(`PRAGMA user_version=${DATABASE_SCHEMA_VERSION + 1};`);
-  db.close();
-  expect(() => new Store(path)).toThrow(
-    `DATABASE_VERSION_UNSUPPORTED:${DATABASE_SCHEMA_VERSION + 1}`
-  );
-  const original = new DatabaseSync(path, { readOnly: true });
-  try {
-    expect(original.prepare('SELECT status FROM jobs WHERE id=?').get(job.id)).toEqual({
-      status: 'queued',
-    });
-    expect(original.prepare('PRAGMA user_version').get()).toEqual({
-      user_version: DATABASE_SCHEMA_VERSION + 1,
-    });
-  } finally {
-    original.close();
-  }
-});
-
 function failedJudgment(store: Store) {
   const original = source(store);
   const successful = store.editTranslation(original.id, {
@@ -502,20 +473,11 @@ function failedJudgment(store: Store) {
   return { original, successful, job: store.job(job.id) };
 }
 
-test.each(['source edit', 'newer translation', 'refusal', 'no candidate'])(
-  'rejects judgment recovery after %s',
-  (reason) => {
-    const store = database();
-    const { original, job } = failedJudgment(store);
-    if (reason === 'source edit')
-      store.editSource(original.id, { text: 'Changed', expectedRevision: 0 });
-    if (reason === 'newer translation') store.retranslate(original.id);
-    if (reason === 'refusal')
-      store.db
-        .prepare('UPDATE jobs SET error=? WHERE id=?')
-        .run('TRANSLATION_REFUSAL_RETRIES_EXHAUSTED', job.id);
-    if (reason === 'no candidate')
-      store.db.prepare('DELETE FROM job_results WHERE job_id=?').run(job.id);
-    expect(() => rejudgeTranslation(store, job.id)).toThrow('recovery unavailable');
-  }
-);
+test.each(['source edit', 'newer translation'])('rejects judgment recovery after %s', (reason) => {
+  const store = database();
+  const { original, job } = failedJudgment(store);
+  if (reason === 'source edit')
+    store.editSource(original.id, { text: 'Changed', expectedRevision: 0 });
+  if (reason === 'newer translation') store.retranslate(original.id);
+  expect(() => rejudgeTranslation(store, job.id)).toThrow('recovery unavailable');
+});

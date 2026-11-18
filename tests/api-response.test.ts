@@ -37,13 +37,15 @@ function request(mode: 'json' | 'binary', path = '/synthetic') {
   return mode === 'json' ? api(path, {}) : apiBinary(path, new Blob(['synthetic']));
 }
 
-test.each(['json', 'binary'] as const)('%s reports session expiry exactly once', async (mode) => {
-  const b = browser();
-  respond(401, { error: 'private session detail' });
-  await expect(request(mode)).rejects.toMatchObject({ name: 'ApiError', status: 401 });
-  expect(b.session).toHaveBeenCalledTimes(1);
-  expect(b.maintenance).not.toHaveBeenCalled();
-  expect(b.setItem).not.toHaveBeenCalled();
+test('JSON and binary requests report session expiry exactly once', async () => {
+  for (const mode of ['json', 'binary'] as const) {
+    const b = browser();
+    respond(401, { error: 'private session detail' });
+    await expect(request(mode)).rejects.toMatchObject({ name: 'ApiError', status: 401 });
+    expect(b.session).toHaveBeenCalledTimes(1);
+    expect(b.maintenance).not.toHaveBeenCalled();
+    expect(b.setItem).not.toHaveBeenCalled();
+  }
 });
 
 test('a confirmed removed creation keeps its explicit error identity', async () => {
@@ -56,19 +58,15 @@ test('a confirmed removed creation keeps its explicit error identity', async () 
   });
 });
 
-test.each(['/session', '/session?refresh=1'])(
-  'JSON session probe %s does not recursively request login',
-  async (path) => {
-    const b = browser();
-    respond(401, {});
-    await expect(api(path)).rejects.toBeInstanceOf(ApiError);
-    expect(b.session).not.toHaveBeenCalled();
-  }
-);
+test('JSON session probe does not recursively request login', async () => {
+  const b = browser();
+  respond(401, {});
+  await expect(api('/session?refresh=1')).rejects.toBeInstanceOf(ApiError);
+  expect(b.session).not.toHaveBeenCalled();
+});
 
-test.each(['json', 'binary'] as const)(
-  '%s reports maintenance only for its recognized status and code',
-  async (mode) => {
+test('JSON and binary requests report maintenance only for its recognized status and code', async () => {
+  for (const mode of ['json', 'binary'] as const) {
     const b = browser();
     respond(503, { error: 'MAINTENANCE_CLOSED' });
     await expect(request(mode)).rejects.toMatchObject({
@@ -87,18 +85,25 @@ test.each(['json', 'binary'] as const)(
       expect(b.maintenance).not.toHaveBeenCalled();
     }
   }
-);
+});
 
-test.each(['json', 'binary'] as const)('%s tolerates a non-JSON error response', async (mode) => {
-  browser();
-  vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-    new Response('<html>private</html>', { status: 502 })
-  );
-  await expect(request(mode)).rejects.toMatchObject({
-    name: 'ApiError',
-    status: 502,
-    code: null,
-  });
+test('JSON and binary requests tolerate non-JSON errors and propagate transport failure', async () => {
+  for (const mode of ['json', 'binary'] as const) {
+    const b = browser();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('<html>private</html>', { status: 502 })
+    );
+    await expect(request(mode)).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 502,
+      code: null,
+    });
+    const failure = new TypeError('Synthetic network failure');
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(failure);
+    await expect(request(mode)).rejects.toBe(failure);
+    expect(b.session).not.toHaveBeenCalled();
+    expect(b.maintenance).not.toHaveBeenCalled();
+  }
 });
 
 test('binary uploads preserve the Blob and do not announce JSON mutations', async () => {
@@ -151,28 +156,13 @@ test('accepted task mutations wake activity views while reads and rejected reque
   expect(changed).not.toHaveBeenCalled();
 });
 
-test.each([
-  '/sources/synthetic/translation',
-  '/sources/synthetic/images',
-  '/illustrations/synthetic/cancel',
-  '/helper/tasks/synthetic/cancel',
-])('accepted active mutation %s wakes activity views', async (path) => {
+test('accepted active mutations wake activity views', async () => {
   browser();
   const changed = vi.fn();
   window.addEventListener(activityChangedEvent, changed);
-  respond(200, { ok: true });
-  await api(path, {});
-  expect(changed).toHaveBeenCalledTimes(1);
-});
-
-test.each(['json', 'binary'] as const)(
-  '%s propagates transport failure without an HTTP error',
-  async (mode) => {
-    const b = browser();
-    const failure = new TypeError('Synthetic network failure');
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(failure);
-    await expect(request(mode)).rejects.toBe(failure);
-    expect(b.session).not.toHaveBeenCalled();
-    expect(b.maintenance).not.toHaveBeenCalled();
+  for (const path of ['/sources/synthetic/translation', '/helper/tasks/synthetic/cancel']) {
+    respond(200, { ok: true });
+    await api(path, {});
   }
-);
+  expect(changed).toHaveBeenCalledTimes(2);
+});

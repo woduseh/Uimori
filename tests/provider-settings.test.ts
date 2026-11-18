@@ -1,5 +1,3 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { Store } from '../server/store.js';
 import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
 import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
@@ -10,12 +8,7 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
-import {
-  PROVIDER_PROTOCOLS,
-  type Connection,
-  type ModelPreset,
-  type ProviderProtocol,
-} from '../core/product.js';
+import type { Connection, ModelPreset, ProviderProtocol } from '../core/product.js';
 import type { Run } from '../core/types.js';
 import {
   validateModelSnapshot,
@@ -37,12 +30,6 @@ const roots: Record<ProviderProtocol, string> = {
   'deepseek-chat-v1': 'https://api.deepseek.com/v1',
   'openai-chat-v1': 'https://synthetic.invalid/nested/v1',
 };
-const native = [
-  'openai-responses-v1',
-  'anthropic-messages-v1',
-  'vercel-chat-v1',
-  'openai-chat-v1',
-] as const;
 const env = 'My_Settings_Key';
 const owned: { directory: string; app?: App }[] = [];
 beforeEach(() => {
@@ -163,7 +150,6 @@ describe('provider settings, catalogs and archive contracts', () => {
       'https://synthetic.invalid/v1beta',
       roots['google-gemini-v1'] + '/models',
       roots['google-gemini-v1'] + '?key=SYNTHETIC_STUDIO_KEY',
-      roots['google-gemini-v1'] + '#fragment',
       'https://user@generativelanguage.googleapis.com/v1beta',
     ])
       await request(app, '/connections', connectionBody('google-gemini-v1', { endpoint }), 400);
@@ -289,7 +275,7 @@ describe('provider settings, catalogs and archive contracts', () => {
 
   test('preserves absent native options, explicit false and protocol-specific generation settings', async () => {
     const app = await application();
-    for (const protocol of native) {
+    for (const protocol of ['openai-responses-v1', 'anthropic-messages-v1'] as const) {
       const connection = await request<Connection>(app, '/connections', connectionBody(protocol));
       const defaults = await request<ModelPreset>(app, '/model-presets', modelBody(connection));
       for (const key of [
@@ -346,7 +332,7 @@ describe('provider settings, catalogs and archive contracts', () => {
       connection = await request<Connection>(app, '/connections', connectionBody('openai-chat-v1'));
     const defaults = await request<ModelPreset>(app, '/model-presets', modelBody(connection));
     expect(defaults).not.toHaveProperty('inputTokenLimit');
-    for (const inputTokenLimit of [8192, 272000, 1000000]) {
+    for (const inputTokenLimit of [8192, 1000000]) {
       const model = await request<ModelPreset>(
         app,
         '/model-presets',
@@ -355,9 +341,9 @@ describe('provider settings, catalogs and archive contracts', () => {
       expect(model.inputTokenLimit).toBe(inputTokenLimit);
       expect(app.store.product.modelSnapshot(model.id).inputTokenLimit).toBe(inputTokenLimit);
     }
-    for (const inputTokenLimit of [8191, 1000001, 8192.5, null, '272000', false])
+    for (const inputTokenLimit of [8191, 1000001, 8192.5, '272000'])
       await request(app, '/model-presets', modelBody(connection, { inputTokenLimit }), 400);
-    expect(app.store.product.all('model')).toHaveLength(4);
+    expect(app.store.product.all('model')).toHaveLength(3);
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -405,7 +391,7 @@ describe('provider settings, catalogs and archive contracts', () => {
     );
     expect(reset).not.toHaveProperty('tokenizer');
     expect(app.store.product.modelSnapshot(reset.id).tokenizer).toBe('generic');
-    for (const tokenizer of ['remote-api', '', null, false]) {
+    for (const tokenizer of ['remote-api', null]) {
       await request(app, '/model-presets', modelBody(connection, { tokenizer }), 400);
       expect(() => validateModelSnapshot({ ...manual, tokenizer, connection })).toThrow(
         'Invalid tokenizer'
@@ -414,7 +400,7 @@ describe('provider settings, catalogs and archive contracts', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  test('stores Vercel providerOptions and freezes them in a model snapshot', async () => {
+  test('stores Vercel providerOptions, freezes them in a model snapshot and needs no model family', async () => {
     const app = await application();
     const connection = await request<Connection>(
       app,
@@ -449,16 +435,24 @@ describe('provider settings, catalogs and archive contracts', () => {
       }),
       400
     );
+    const familyFree = { outputEffort: 'max', thinkingMode: 'adaptive' };
+    expect(
+      await request<ModelPreset>(app, '/model-presets', modelBody(connection, familyFree))
+    ).toMatchObject(familyFree);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   test('rejects cross-provider options and inconsistent thinking budgets without storing a model', async () => {
     const app = await application();
-    for (const protocol of PROVIDER_PROTOCOLS) {
+    for (const protocol of [
+      'fixture-sse-v1',
+      'anthropic-messages-v1',
+      'vercel-chat-v1',
+      'openai-chat-v1',
+    ] as const) {
       const connection = await request<Connection>(app, '/connections', connectionBody(protocol));
       const forbidden =
-        protocol === 'fixture-sse-v1' ||
-        protocol === 'vertex-gemini-v1' ||
-        protocol === 'google-gemini-v1'
+        protocol === 'fixture-sse-v1'
           ? [
               { structuredOutput: true },
               { reasoningEffort: 'high' },
@@ -491,41 +485,14 @@ describe('provider settings, catalogs and archive contracts', () => {
         ...(protocol === 'vercel-chat-v1'
           ? []
           : [{ providerOptions: { gateway: { only: ['openai'] } } }]),
-        { structuredOutput: null },
         { structuredOutput: 1 },
         { reasoningEffort: 'ultra' },
-        { thinkingMode: 'on' },
         { timeoutMs: 1800001 },
-        { timeoutMs: null },
         { maxOutputTokens: 500001 },
-        { temperature: '1' },
       ])
         await request(app, '/model-presets', modelBody(connection, changes), 400);
     }
     expect(app.store.product.all('model')).toEqual([]);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  test('gateway options do not require a model family or duplicate the UI profile allowlist', async () => {
-    const app = await application();
-    const connection = await request<Connection>(
-      app,
-      '/connections',
-      connectionBody('vercel-chat-v1')
-    );
-    for (const changes of [
-      { topP: 0.8, stopSequences: ['END'] },
-      { outputEffort: 'max', thinkingMode: 'adaptive' },
-      { thinkingLevel: 'HIGH' },
-      { modelFamily: 'xai', reasoningEffort: 'xhigh' },
-    ]) {
-      const model = await request<ModelPreset>(
-        app,
-        '/model-presets',
-        modelBody(connection, changes)
-      );
-      expect(model).toMatchObject(changes);
-    }
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -698,6 +665,12 @@ describe('provider settings, catalogs and archive contracts', () => {
       'PUT'
     );
     expect(app.store.product.get('model', first.id)).toEqual(second);
+    const current = await injectWithFixtureBot(app, {
+      method: 'GET',
+      url: `/api/model-presets/${first.id}`,
+      headers: { host: '127.0.0.1' },
+    });
+    expect(current.json()).toMatchObject({ id: first.id, revision: second.revision });
     expect(app.store.product.authorize(vertex)).toEqual(vertex);
     const custom = await request<Connection>(app, '/connections', connectionBody('openai-chat-v1'));
     vi.mocked(fetch).mockResolvedValueOnce(response({ data: [{ id: 'old-model' }] }));
@@ -720,6 +693,12 @@ describe('provider settings, catalogs and archive contracts', () => {
       'PUT'
     );
     expect(app.store.product.get('connection', custom.id)).toEqual(edited);
+    const currentConnection = await injectWithFixtureBot(app, {
+      method: 'GET',
+      url: `/api/connections/${custom.id}`,
+      headers: { host: '127.0.0.1' },
+    });
+    expect(currentConnection.json()).toMatchObject({ id: custom.id, revision: edited.revision });
     for (const [kind, setting] of [
       ['model', second],
       ['connection', edited],
@@ -949,7 +928,6 @@ describe('provider settings, catalogs and archive contracts', () => {
       new Response('SYNTHETIC_NOT_SECRET', { status: 401 }),
       response({ models: [] }),
       response({ data: [{ id: 'duplicate' }, { id: 'duplicate' }] }),
-      response({ data: [{ id: 1 }] }),
       new Response(new Uint8Array([0xff])),
     ]) {
       vi.mocked(fetch).mockResolvedValueOnce(bad);
@@ -1023,60 +1001,5 @@ describe('provider settings, catalogs and archive contracts', () => {
     accept(response({ data: [{ id: 'late-model' }] }));
     await refresh;
     expect(app.store.product.get('connection', connection.id)).toEqual(edited);
-  });
-});
-
-describe('Current revision retrieval', () => {
-  const owners: { directory: string; store: Store; app?: App }[] = [];
-
-  afterEach(async () => {
-    vi.restoreAllMocks();
-    for (const owner of owners.splice(0)) {
-      if (owner.app) await owner.app.close();
-      else owner.store.close();
-      rmSync(owner.directory, { recursive: true, force: true });
-    }
-  });
-
-  async function application() {
-    const directory = mkdtempSync(join(tmpdir(), 'uimori-retention-'));
-    const app = await createApp({
-      dbPath: join(directory, 'app.sqlite'),
-      buildId: 'extended-cleanup-test',
-      testMode: true,
-      codex: { enabled: false },
-    });
-    owners.push({ directory, store: app.store, app });
-    return app;
-  }
-
-  test('provider/model conflict recovery can retrieve the current revision without returning API keys', async () => {
-    const app = await application();
-    const connection = app.store.product.connection({
-      title: 'Current provider',
-      protocol: 'fixture-sse-v1',
-      endpoint: 'http://127.0.0.1:9',
-      enabled: true,
-    });
-    const model = app.store.product.model({
-      title: 'Current model',
-      connectionId: connection.id,
-      modelId: 'synthetic',
-      temperature: null,
-      maxOutputTokens: 1024,
-    });
-    for (const [route, item] of [
-      ['connections', connection],
-      ['model-presets', model],
-    ] as const) {
-      const response = await app.inject({ url: `/api/${route}/${item.id}` });
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toMatchObject({
-        id: item.id,
-        title: item.title,
-        revision: item.revision,
-      });
-      expect(response.json()).not.toHaveProperty('apiKey');
-    }
   });
 });

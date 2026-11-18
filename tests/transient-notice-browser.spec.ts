@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { fixtureBotInput, postFixtureChat } from './fixtures/chat.js';
-import { editLibraryContent, navigationAction, openChatMenu, openHelper } from './ui-navigation.js';
+import { postFixtureChat } from './fixtures/chat.js';
+import { openChatMenu, openHelper } from './ui-navigation.js';
 
 async function chat(request: APIRequestContext, title: string) {
   const response = await postFixtureChat(request, {
@@ -128,24 +128,4 @@ test('NOTICE02 modal, mobile helper, and docked helper keep notices accessible',
     }
     await page.clock.resume();
   }
-});
-
-test('NOTICE03 resource save keeps the bottom position without a composer', async ({
-  page,
-  request,
-}) => {
-  const title = `알림 자료 ${crypto.randomUUID().slice(0, 8)}`;
-  const response = await request.post('/api/content', { data: fixtureBotInput(title) });
-  expect(response.ok(), await response.text()).toBe(true);
-  await page.setViewportSize({ width: 320, height: 900 });
-  await page.goto('/');
-  await navigationAction(page, '봇');
-  await editLibraryContent(page, title);
-  const editor = page.getByRole('region', { name: '자료 상세', exact: true });
-  await editor.getByLabel('Risu 자료 이름', { exact: true }).fill(`${title} 변경`);
-  await editor.getByRole('button', { name: '변경사항 저장', exact: true }).click();
-  const notice = page.locator('.transient-notice');
-  await expect(notice).toBeVisible();
-  await expect(page.locator('.composer-dock')).toHaveCount(0);
-  await expectBottom(page, notice, 16);
 });

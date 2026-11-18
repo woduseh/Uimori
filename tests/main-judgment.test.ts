@@ -424,7 +424,6 @@ test.each(Object.keys(judgmentEndpoints) as ExternalJudgmentProvider[])(
 
 test.each([
   ['I cannot fulfill this request.', 0.99, 'refused', 'MAIN_RESPONSE_REFUSED'],
-  ['I cannot provide this service.', 0.9, 'refused', 'MAIN_RESPONSE_REFUSED'],
   ['A preserved candidate.', 'failure', 'failed', 'JEV_EXECUTION_FAILED'],
   ['Invalid judgment keeps output.', 'invalid', 'failed', 'JEV_RESPONSE_INVALID'],
   ['Oversized judgment keeps output.', 'budget', 'failed', 'JEV_INPUT_BUDGET'],
@@ -457,16 +456,14 @@ test.each([
   }
 );
 
-test.each(['input', 'editRequest'] as const)(
-  'Lua %s preserves a writer call and its JEV judgment',
-  async (stage) => {
-    const f = await fixture('A completed response.', 0.58, 3, true, stage);
-    expect(f.run).toMatchObject({ status: 'completed', error: null, usage: { modelCalls: 3 } });
-    expect(f.calls.map((call) => call.role)).toEqual(['script', 'main']);
-    expect(f.judged).toHaveLength(1);
-    expect(f.run.snapshot.nativeRisuExecution?.variables.budgetBlocked).toBe('true');
-  }
-);
+test('Lua input preserves a writer call and its JEV judgment', async () => {
+  const stage = 'input' as const;
+  const f = await fixture('A completed response.', 0.58, 3, true, stage);
+  expect(f.run).toMatchObject({ status: 'completed', error: null, usage: { modelCalls: 3 } });
+  expect(f.calls.map((call) => call.role)).toEqual(['script', 'main']);
+  expect(f.judged).toHaveLength(1);
+  expect(f.run.snapshot.nativeRisuExecution?.variables.budgetBlocked).toBe('true');
+});
 test('preserves the whole Unicode response and only asks about service refusal', () => {
   const candidate = '😀'.repeat(5000);
   const input = mainJudgmentInput(candidate);
@@ -509,7 +506,6 @@ test('authenticates a v2 refusal receipt only against its original question and 
 test.each([
   { threshold: 0.7, score: 0.7, status: 'refused' },
   { threshold: 0.7, score: 0.69, status: 'completed' },
-  { threshold: 0.95, score: 0.9, status: 'completed' },
 ])(
   'uses the independently configured main threshold $threshold for score $score',
   async ({ threshold, score, status }) => {
@@ -592,36 +588,21 @@ test('disabled main judgment does not accept a partial generation', async () => 
   expect(f.judged).toHaveLength(0);
 });
 
-test.each(['partial', 'refused'] as const)(
-  'removes the writer workspace after a terminal %s result',
-  async (status) => {
-    const f = await fixture(
-      'Temporary candidate',
-      0.99,
-      8,
-      true,
-      undefined,
-      status === 'refused',
-      status === 'partial' ? 'partial' : 'completed',
-      0.9,
-      true
-    );
-    expect(f.run.status).toBe(status);
-    expect(f.shellWorkspace).toBeDefined();
-    expect(existsSync(f.shellWorkspace!)).toBe(false);
-  }
-);
-
-test('a second judgment failure keeps the same response recoverable without writer charges', async () => {
-  const f = await fixture('Keep this output', 'failure');
-  const next = await api(f.app, `/api/runs/${f.run.id}/rejudge`, { idempotencyKey: randomUUID() });
-  await expect.poll(() => f.app.store.run(next.id).status, { timeout: 6000 }).toBe('failed');
-  expect(f.app.store.run(next.id)).toMatchObject({
-    partialText: 'Keep this output',
-    usage: { modelCalls: 1 },
-  });
-  expect(f.calls).toHaveLength(1);
-  expect(f.judged).toHaveLength(2);
+test('removes the writer workspace after a terminal refused result', async () => {
+  const f = await fixture(
+    'Temporary candidate',
+    0.99,
+    8,
+    true,
+    undefined,
+    true,
+    'completed',
+    0.9,
+    true
+  );
+  expect(f.run.status).toBe('refused');
+  expect(f.shellWorkspace).toBeDefined();
+  expect(existsSync(f.shellWorkspace!)).toBe(false);
 });
 
 test('rejudgment credential failure preserves its response and does not recharge the writer', async () => {

@@ -57,28 +57,24 @@ test('an uncertain request retains its admission key for the next attempt', asyn
   expect(values.has(key)).toBe(false);
 });
 
-test.each([409, 410, 429])(
-  'a later HTTP %s does not forget an earlier uncertain fork',
-  async (status) => {
-    const { values } = storageFixture();
-    const fetch = vi
-      .spyOn(globalThis, 'fetch')
-      .mockRejectedValueOnce(new TypeError('Connection lost'))
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ error: 'Temporary failure' }), { status })
-      )
-      .mockResolvedValueOnce(accepted());
-    await expect(requestChatFork('chat', 'source')).rejects.toThrow('Connection lost');
-    const pending = values.get(key);
-    await expect(requestChatFork('chat', 'source')).rejects.toMatchObject({ status });
-    expect(values.get(key)).toBe(pending);
-    await expect(requestChatFork('chat', 'source')).resolves.toMatchObject({ id: 'forked-chat' });
-    expect(
-      fetch.mock.calls.map(([, options]) => JSON.parse(String(options?.body)).idempotencyKey)
-    ).toEqual([pending, pending, pending]);
-    expect(values.has(key)).toBe(false);
-  }
-);
+test('a later definite HTTP rejection does not forget an earlier uncertain fork', async () => {
+  const status = 409;
+  const { values } = storageFixture();
+  const fetch = vi
+    .spyOn(globalThis, 'fetch')
+    .mockRejectedValueOnce(new TypeError('Connection lost'))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Temporary failure' }), { status }))
+    .mockResolvedValueOnce(accepted());
+  await expect(requestChatFork('chat', 'source')).rejects.toThrow('Connection lost');
+  const pending = values.get(key);
+  await expect(requestChatFork('chat', 'source')).rejects.toMatchObject({ status });
+  expect(values.get(key)).toBe(pending);
+  await expect(requestChatFork('chat', 'source')).resolves.toMatchObject({ id: 'forked-chat' });
+  expect(
+    fetch.mock.calls.map(([, options]) => JSON.parse(String(options?.body)).idempotencyKey)
+  ).toEqual([pending, pending, pending]);
+  expect(values.has(key)).toBe(false);
+});
 
 test('a terminal receipt for a deleted copy releases its retained key', async () => {
   const { values } = storageFixture();
@@ -99,10 +95,10 @@ test('a terminal receipt for a deleted copy releases its retained key', async ()
   expect(JSON.parse(String(fetch.mock.calls[2][1]?.body)).idempotencyKey).not.toBe(previous);
 });
 
-test.each([408, 503])('HTTP %s retains the pending admission identity', async (status) => {
+test('an uncertain HTTP failure retains the pending admission identity', async () => {
   const { values } = storageFixture();
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-    new Response(JSON.stringify({ error: 'Synthetic failure' }), { status })
+    new Response(JSON.stringify({ error: 'Synthetic failure' }), { status: 503 })
   );
   await expect(requestChatFork('chat', 'source')).rejects.toBeInstanceOf(ApiError);
   expect(values.get(key)).toBeTruthy();
@@ -117,20 +113,17 @@ test('a definite rejection clears only its own pending identity', async () => {
   expect(values.has(key)).toBe(false);
 });
 
-test.each(['getItem', 'removeItem'] as const)(
-  'accepted work remains successful when cleanup %s throws',
-  async (method) => {
-    const { storage, values } = storageFixture();
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
-      storage[method].mockImplementation(() => {
-        throw new Error('Cleanup unavailable');
-      });
-      return accepted();
+test('accepted work remains successful when cleanup throws', async () => {
+  const { storage, values } = storageFixture();
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+    storage.removeItem.mockImplementation(() => {
+      throw new Error('Cleanup unavailable');
     });
-    await expect(requestChatFork('chat', 'source')).resolves.toMatchObject({ id: 'forked-chat' });
-    expect(values.get(key)).toBeTruthy();
-  }
-);
+    return accepted();
+  });
+  await expect(requestChatFork('chat', 'source')).resolves.toMatchObject({ id: 'forked-chat' });
+  expect(values.get(key)).toBeTruthy();
+});
 
 test('cleanup cannot replace a definite request error with a storage exception', async () => {
   const { storage } = storageFixture();

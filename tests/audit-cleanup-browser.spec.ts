@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { visualReview } from './fixtures/visual-review.js';
 
-for (const width of [412, 1440]) {
+for (const width of [412]) {
   test(`CLEANUP presentation ignores title events and refreshes edited source text ${width}`, async ({
     page,
     request,

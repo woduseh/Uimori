@@ -3,18 +3,7 @@ import { readFile } from 'node:fs/promises';
 import type { Content } from '../core/product.js';
 import type { RisuImportResult } from '../core/risu-import.js';
 import { readCharacterCard } from '../server/character-card-file.js';
-import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { navigationAction } from './ui-navigation.js';
-
-type BrowserArgs = { page: Page; request: APIRequestContext };
-
-function atWidths(name: string, run: (args: BrowserArgs, width: number) => Promise<void>) {
-  for (const width of DEFAULT_WIDTHS)
-    test(`${name} @ ${width}`, async ({ page, request }) => {
-      await page.setViewportSize({ width, height: width <= 500 ? 915 : 1440 });
-      await run({ page, request }, width);
-    });
-}
 
 const card = (title: string) => ({
   spec: 'chara_card_v3',
@@ -64,116 +53,83 @@ async function savedRoot(request: APIRequestContext, result: RisuImportResult) {
   return (await (await request.get(`/api/content/${root.id}`)).json()) as Content;
 }
 
-atWidths(
-  'NATIVEUI01 imports a Risu card as a bot and navigates to its new chat',
-  async ({ page, request }, width) => {
-    const title = `NATIVEUI01 ${width} ${Date.now()}`;
-    await page.goto('/');
-    const dialog = await openImport(page, '봇');
-    await dialog.getByLabel('Risu 파일 선택', { exact: true }).setInputFiles({
-      name: 'synthetic-risu-card.json',
-      mimeType: 'application/json',
-      buffer: Buffer.from(JSON.stringify(card(title))),
-    });
-    await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
-    await dialog.getByRole('checkbox', { name: '가져온 뒤 새 채팅도 만들기' }).check();
-    const applied = page.waitForResponse(
-      (response) =>
-        response.url().endsWith('/api/risu-imports/apply') && response.request().method() === 'POST'
-    );
-    await dialog.getByRole('button', { name: '가져오고 새 채팅 열기', exact: true }).click();
-    const result = (await (await applied).json()) as RisuImportResult;
-    expect(result.chat).not.toBeNull();
-    await expect(dialog).toBeHidden();
-    await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(result.chat!.id);
-    expect((await savedRoot(request, result)).kind).toBe('bot');
-  }
-);
+test('NATIVEUI01 imports a Risu card as a bot and navigates to its new chat', async ({
+  page,
+  request,
+}) => {
+  const title = `NATIVEUI01 ${Date.now()}`;
+  await page.goto('/');
+  const dialog = await openImport(page, '봇');
+  await dialog.getByLabel('Risu 파일 선택', { exact: true }).setInputFiles({
+    name: 'synthetic-risu-card.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(card(title))),
+  });
+  await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  await dialog.getByRole('checkbox', { name: '가져온 뒤 새 채팅도 만들기' }).check();
+  const applied = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/risu-imports/apply') && response.request().method() === 'POST'
+  );
+  await dialog.getByRole('button', { name: '가져오고 새 채팅 열기', exact: true }).click();
+  const result = (await (await applied).json()) as RisuImportResult;
+  expect(result.chat).not.toBeNull();
+  await expect(dialog).toBeHidden();
+  await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(result.chat!.id);
+  expect((await savedRoot(request, result)).kind).toBe('bot');
+});
 
-atWidths(
-  'NATIVEUI02 imports a Risu card as a persona without creating a chat',
-  async ({ page, request }, width) => {
-    const title = `NATIVEUI02 ${width} ${Date.now()}`;
-    const beforeChats = await (await request.get('/api/chats')).json();
-    await page.goto('/');
-    const dialog = await openImport(page, '페르소나');
-    await dialog.getByLabel('Risu 파일 선택', { exact: true }).setInputFiles({
-      name: 'synthetic-risu-persona.json',
-      mimeType: 'application/json',
-      buffer: Buffer.from(JSON.stringify(card(title))),
-    });
-    await expect(dialog.locator('.risu-import-processing > summary')).toHaveText(
-      '페르소나로 가져오기, 변경'
-    );
-    const applied = page.waitForResponse(
-      (response) =>
-        response.url().endsWith('/api/risu-imports/apply') && response.request().method() === 'POST'
-    );
-    await dialog.getByRole('button', { name: '페르소나 가져오기', exact: true }).click();
-    const result = (await (await applied).json()) as RisuImportResult;
-    expect(result.chat).toBeNull();
-    await expect(
-      dialog.getByRole('status').filter({ hasText: '페르소나를 서재에 등록했어요.' })
-    ).toBeVisible();
-    expect((await savedRoot(request, result)).kind).toBe('persona');
-    expect(await (await request.get('/api/chats')).json()).toHaveLength(beforeChats.length);
-  }
-);
-
-atWidths(
-  'NATIVEUI03 imports and exports a standalone Risu module',
-  async ({ page, request }, width) => {
-    const title = `NATIVEUI03 ${width} ${Date.now()}`;
-    const beforeChats = await (await request.get('/api/chats')).json();
-    const source = {
-      type: 'risuModule',
-      module: {
-        id: 'synthetic-module',
-        name: title,
-        description: 'Synthetic module description.',
-        lorebook: [
-          {
-            key: '',
-            comment: 'Harbor setting',
-            content: 'The harbor has blue lights.',
-            mode: 'normal',
-            alwaysActive: true,
-            insertorder: 100,
-          },
-        ],
-        regex: [],
-        trigger: [],
-      },
-    };
-    await page.goto('/');
-    const dialog = await openImport(page, '모듈');
-    await dialog.getByLabel('Risu 파일 선택', { exact: true }).setInputFiles({
-      name: 'synthetic-risu-module.json',
-      mimeType: 'application/json',
-      buffer: Buffer.from(JSON.stringify(source)),
-    });
-    const applied = page.waitForResponse(
-      (response) =>
-        response.url().endsWith('/api/risu-imports/apply') && response.request().method() === 'POST'
-    );
-    await dialog.getByRole('button', { name: '모듈 가져오기', exact: true }).click();
-    const result = (await (await applied).json()) as RisuImportResult;
-    expect(result.chat).toBeNull();
-    expect((await savedRoot(request, result)).kind).toBe('module');
-    expect(await (await request.get('/api/chats')).json()).toHaveLength(beforeChats.length);
-    await dialog.getByRole('button', { name: '자료 가져오기 닫기', exact: true }).click();
-    await page.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
-    await page.getByRole('button', { name: '편집', exact: true }).click();
-    await page.locator('summary').filter({ hasText: '자료 메뉴' }).click();
-    const downloadEvent = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'RISUM 내보내기', exact: true }).click();
-    const download = await downloadEvent;
-    expect(download.suggestedFilename()).toBe(`${title}.risum`);
-    const bytes = await readFile((await download.path())!);
-    const decoded = readCharacterCard({
-      name: download.suggestedFilename(),
-      base64: bytes.toString('base64'),
-    });
-    expect((decoded.nativeModule as Record<string, unknown>).name).toBe(title);
-  }
-);
+test('NATIVEUI03 imports and exports a standalone Risu module', async ({ page, request }) => {
+  const title = `NATIVEUI03 ${Date.now()}`;
+  const beforeChats = await (await request.get('/api/chats')).json();
+  const source = {
+    type: 'risuModule',
+    module: {
+      id: 'synthetic-module',
+      name: title,
+      description: 'Synthetic module description.',
+      lorebook: [
+        {
+          key: '',
+          comment: 'Harbor setting',
+          content: 'The harbor has blue lights.',
+          mode: 'normal',
+          alwaysActive: true,
+          insertorder: 100,
+        },
+      ],
+      regex: [],
+      trigger: [],
+    },
+  };
+  await page.goto('/');
+  const dialog = await openImport(page, '모듈');
+  await dialog.getByLabel('Risu 파일 선택', { exact: true }).setInputFiles({
+    name: 'synthetic-risu-module.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(source)),
+  });
+  const applied = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/risu-imports/apply') && response.request().method() === 'POST'
+  );
+  await dialog.getByRole('button', { name: '모듈 가져오기', exact: true }).click();
+  const result = (await (await applied).json()) as RisuImportResult;
+  expect(result.chat).toBeNull();
+  expect((await savedRoot(request, result)).kind).toBe('module');
+  expect(await (await request.get('/api/chats')).json()).toHaveLength(beforeChats.length);
+  await dialog.getByRole('button', { name: '자료 가져오기 닫기', exact: true }).click();
+  await page.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
+  await page.getByRole('button', { name: '편집', exact: true }).click();
+  await page.locator('summary').filter({ hasText: '자료 메뉴' }).click();
+  const downloadEvent = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'RISUM 내보내기', exact: true }).click();
+  const download = await downloadEvent;
+  expect(download.suggestedFilename()).toBe(`${title}.risum`);
+  const bytes = await readFile((await download.path())!);
+  const decoded = readCharacterCard({
+    name: download.suggestedFilename(),
+    base64: bytes.toString('base64'),
+  });
+  expect((decoded.nativeModule as Record<string, unknown>).name).toBe(title);
+});

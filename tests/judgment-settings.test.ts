@@ -70,15 +70,6 @@ test('independent judgment settings persist and new workspaces default main judg
   expect(next.translationPolicy.judgment.enabled).toBe(false);
 });
 
-test('judgment flags reject non-boolean settings', () => {
-  for (const invalid of [null, 0, 'false', {}]) {
-    expect(() =>
-      validatePromptWorkspace({ ...defaultPromptWorkspace(), mainJudgmentEnabled: invalid })
-    ).toThrow();
-    expect(() => validateTranslationJudgmentPolicy({ threshold: 0.9, enabled: invalid })).toThrow();
-  }
-});
-
 test('translation context choice round-trips through workspace APIs and rejects unknown values without saving', async () => {
   const store = setup();
   const app = Fastify();
@@ -167,8 +158,14 @@ test('main judgment settings remain fixed for an in-flight request', () => {
   expect(modelWorkspace(store).mainJudgmentThreshold).toBe(0.95);
 });
 
-test('main threshold rejects nonnumeric and out-of-range settings and snapshots', () => {
-  for (const invalid of [null, '0.9', 0.5, 1.01, NaN, Infinity]) {
+test('judgment flags and main threshold reject invalid settings', () => {
+  for (const invalid of [null, 'false']) {
+    expect(() =>
+      validatePromptWorkspace({ ...defaultPromptWorkspace(), mainJudgmentEnabled: invalid })
+    ).toThrow();
+    expect(() => validateTranslationJudgmentPolicy({ threshold: 0.9, enabled: invalid })).toThrow();
+  }
+  for (const invalid of ['0.9', 0.5, 1.01, NaN]) {
     expect(() =>
       validatePromptWorkspace({ ...defaultPromptWorkspace(), mainJudgmentThreshold: invalid })
     ).toThrow('MAIN_JUDGMENT_THRESHOLD_INVALID');

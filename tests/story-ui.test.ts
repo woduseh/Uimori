@@ -127,11 +127,12 @@ describe('story UI', () => {
       `data-story-ui-slot="${slots[0].id}"`
     );
   });
-  it('preserves Markdown inline code containing expressions', () => {
+  it('preserves Markdown inline and fenced code containing expressions', () => {
     for (const source of [
       'Before `<a2ui>root=Text("x")</a2ui>` After',
       'Before ``<a2ui>root=Text("x")</a2ui>`` After',
       'Before `<a2ui>root=Text("x")\n</a2ui>` After',
+      '```example\n<a2ui>root = Text("code")</a2ui>\n```',
     ]) {
       expect(normalizeStoryUiOutput(source)).toBe(source);
       expect(parseStoryUi(source).map((part) => part.kind)).toEqual(['prose']);
@@ -147,11 +148,6 @@ root = List(_template($/people, item))
     expect(parseStoryUi(result)[0].kind).toBe('ui');
     expect(projectStoryUiText(result)).toContain('"name":"Mira"');
     expect(projectStoryUiText(result)).toContain('"name":"Sol"');
-  });
-  it('leaves ordinary fenced code as prose', () => {
-    const source = '```example\n<a2ui>root = Text("code")</a2ui>\n```';
-    expect(normalizeStoryUiOutput(source)).toBe(source);
-    expect(parseStoryUi(source)[0].kind).toBe('prose');
   });
   it('keeps invalid and unfinished output visible without losing adjacent text', () => {
     const source = 'A<a2ui>root = Unknown()</a2ui>B<a2ui>root =';
@@ -174,12 +170,6 @@ root = List(_template($/people, item))
         normalizeStoryUiOutput('<a2ui>root = Image("https://example.com/a.png")</a2ui>')
       )[0].kind
     ).toBe('invalid');
-  });
-  it('includes a formatString display template in the story projection', () => {
-    const source = normalizeStoryUiOutput(
-      `<a2ui>root = Text(formatString("Hello \${/name}"))</a2ui>`
-    );
-    expect(projectStoryUiText(source)).toContain(`Hello \${/name}`);
   });
   it('accepts resolved function context for a declared button event', () => {
     const source = normalizeStoryUiOutput(`<a2ui>

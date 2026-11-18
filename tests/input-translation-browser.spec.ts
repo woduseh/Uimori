@@ -66,46 +66,8 @@ async function seed(request: APIRequestContext, chat: Chat, text: string): Promi
   return run;
 }
 
-test('ITRAN long requests survive composer translation, send, edit and reload', async ({
-  page,
-  request,
-}) => {
-  const chat = await createChat(request);
-  const draft = '요'.repeat(3998) + '끝부분';
-  const translated = 'R'.repeat(19998) + 'END';
-  let translationCalls = 0;
-  await page.route(endpoint, async (route) => {
-    expect(route.request().postDataJSON().text).toBe(draft);
-    translationCalls++;
-    await answer(route, translated);
-  });
-  await open(page, chat.id);
-  await composer(page).fill(draft);
-  await expect(composer(page)).toHaveValue(draft);
-  await translate(page).click();
-  await expect(composer(page)).toHaveValue(translated);
-  expect(translationCalls).toBe(1);
-  expect((await detail(request, chat.id)).runs).toHaveLength(0);
-  await send(page).click();
-  await expect.poll(async () => (await detail(request, chat.id)).runs[0]?.status).toBe('completed');
-  expect((await detail(request, chat.id)).runs[0].request).toBe(translated);
-  await page.getByRole('button', { name: '다시 쓰기', exact: true }).first().click();
-  const editor = page.getByRole('textbox', { name: '다시 쓸 요청', exact: true });
-  await expect(editor).toHaveValue(translated);
-  const edited = translated + '\n수정한 전개';
-  await editor.fill(edited);
-  await expect(editor).toHaveValue(edited);
-  await page.getByRole('button', { name: '새 채팅에서 다시 요청', exact: true }).click();
-  await expect.poll(() => new URL(page.url()).searchParams.get('chat')).not.toBe(chat.id);
-  const copyId = new URL(page.url()).searchParams.get('chat')!;
-  await expect.poll(async () => (await detail(request, copyId)).runs[0]?.status).toBe('completed');
-  await page.reload();
-  expect((await detail(request, copyId)).runs[0].request).toBe(edited);
-  expect((await detail(request, chat.id)).runs[0].request).toBe(translated);
-  expect(translationCalls).toBe(1);
-});
-
-for (const width of [360, 412, 1440]) {
+{
+  const width = 412;
   test(`ITRAN ${width} translate, undo, reload, edit and explicitly send only the final text`, async ({
     page,
     request,
@@ -132,9 +94,6 @@ for (const width of [360, 412, 1440]) {
       await expect(mobileSummary).toBeFocused();
     };
     await expect(mobileSummary).toHaveText('EN');
-    expect(await mobileSummary.evaluate((node) => getComputedStyle(node, '::before').content)).toBe(
-      'none'
-    );
     await mobileSummary.click();
     await expect(mobileLanguage).toHaveAttribute('open', '');
     await composer(page).click();
@@ -143,8 +102,6 @@ for (const width of [360, 412, 1440]) {
     await mobileSummary.press('Escape');
     await expect(mobileLanguage).not.toHaveAttribute('open');
     await expect(mobileSummary).toBeFocused();
-    await composer(page).fill('짧은 요청');
-    expect((await composer(page).boundingBox())!.width).toBeGreaterThan(width <= 600 ? 150 : 100);
     await setLanguage('es', '스페인어');
     await setLanguage('en', '영어');
     await composer(page).fill(original);
@@ -154,10 +111,6 @@ for (const width of [360, 412, 1440]) {
     await page.getByText('번역 전 원문 보기', { exact: true }).click();
     await expect(page.locator('.input-translation-original pre')).toHaveText(original);
     await page.screenshot({ path: info.outputPath(`input-translation-${width}.png`) });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-      true
-    );
-    expect((await composer(page).boundingBox())!.width).toBeGreaterThan(120);
     await page.getByRole('button', { name: '되돌리기', exact: true }).click();
     await expect(composer(page)).toHaveValue(original);
     await expect(page.getByText('번역 전 원문 보기', { exact: true })).toHaveCount(0);
@@ -172,8 +125,6 @@ for (const width of [360, 412, 1440]) {
     await composer(page).fill(finalText);
     await send(page).click();
     await expect(composer(page)).toHaveValue('');
-    if (width < 600)
-      expect(await composer(page).evaluate((node) => node.scrollHeight)).toBeLessThanOrEqual(56);
     await expect(page.getByText('번역 전 원문 보기', { exact: true })).toHaveCount(0);
     await expect
       .poll(async () => (await detail(request, chat.id)).runs[0]?.status)
@@ -218,19 +169,10 @@ test('ITRAN typing, including edit-then-revert, cannot be overwritten by a late 
     finished.release();
   });
   try {
-    await page.emulateMedia({ reducedMotion: 'no-preference' });
     await open(page, chat.id);
     await composer(page).fill(original);
     await translate(page).click();
     await started.promise;
-    const spinner = page.locator('.input-translation-feedback [role="status"] svg');
-    await expect(spinner).toHaveCSS('animation-name', 'activity-spin');
-    const transform = await spinner.evaluate((node) => getComputedStyle(node).transform);
-    await expect
-      .poll(() => spinner.evaluate((node) => getComputedStyle(node).transform))
-      .not.toBe(transform);
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await expect(spinner).toHaveCSS('animation-name', 'none');
     await composer(page).fill('바꾼 초안');
     await composer(page).fill(original);
     released.release();

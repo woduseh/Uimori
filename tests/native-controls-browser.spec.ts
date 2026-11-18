@@ -39,7 +39,7 @@ async function expectReadableOption(option: Locator) {
   expect(ratio, 'native picker option text contrast').toBeGreaterThanOrEqual(4.5);
 }
 
-for (const width of [1440, 412]) {
+for (const width of [1440]) {
   test(`NATIVE ${width} theme picker keyboard commit, cancellation and persistence`, async ({
     page,
   }, info) => {

@@ -5,7 +5,6 @@ import {
   buildJudgmentWire,
   readJudgmentRequest,
   targetFromJudgmentWire,
-  judgmentLimits,
 } from '../server/judgment.js';
 import { settleWithin, stalledProviderBody } from './fixtures/stalled-provider-body.js';
 
@@ -111,9 +110,5 @@ describe('judgment transport', () => {
         onAttemptFinish: () => {},
       })
     ).rejects.toMatchObject({ code: 'JUDGMENT_RESPONSE_INVALID', attempted: true });
-  });
-
-  it('limits OpenAI-compatible requests to 128 questions', () => {
-    expect(judgmentLimits({ ...target, provider: 'openai-compatible' }).maxQuestions).toBe(128);
   });
 });

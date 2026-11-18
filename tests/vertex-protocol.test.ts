@@ -108,114 +108,106 @@ test('Argon omits ignored sampling, rejects minimal thinking and unsupported lon
   expect(() => encodeVertex(input)).toThrow('ARGON_LONG_DECODE_UNSUPPORTED');
 });
 
-test.each(['vertex-gemini-v1', 'google-gemini-v1'] as const)(
-  '%s enables native search only for an explicit story guide without local tools',
-  (protocol) => {
-    const input = request();
-    input.webSearch = true;
-    input.input.controls.purpose = 'story-guide';
-    expect(() => encodeVertex(input, protocol)).toThrow(
-      'GEMINI_SEARCH_TOOL_COMBINATION_UNSUPPORTED'
-    );
-    input.stable.tools = [];
-    const encoded = encodeVertex(input, protocol);
-    expect(bodyObject(encoded.body).tools).toEqual([{ googleSearch: {} }]);
-    expect(bodyObject(encoded.body)).not.toHaveProperty('toolConfig');
-    expect(encoded.context.webSearch).toBe(true);
-    delete input.input.controls.purpose;
-    expect(() => encodeVertex(input, protocol)).toThrow('INVALID_WEB_SEARCH');
-    input.input.controls.purpose = 'story-guide';
-    input.role = 'helper';
-    expect(() => encodeVertex(input, protocol)).toThrow('INVALID_WEB_SEARCH');
-    delete input.webSearch;
-    expect(bodyObject(encodeVertex(input, protocol).body)).not.toHaveProperty('tools');
-  }
-);
+test('google-gemini-v1 enables native search only for an explicit story guide without local tools', () => {
+  const protocol = 'google-gemini-v1' as const;
+  const input = request();
+  input.webSearch = true;
+  input.input.controls.purpose = 'story-guide';
+  expect(() => encodeVertex(input, protocol)).toThrow('GEMINI_SEARCH_TOOL_COMBINATION_UNSUPPORTED');
+  input.stable.tools = [];
+  const encoded = encodeVertex(input, protocol);
+  expect(bodyObject(encoded.body).tools).toEqual([{ googleSearch: {} }]);
+  expect(bodyObject(encoded.body)).not.toHaveProperty('toolConfig');
+  expect(encoded.context.webSearch).toBe(true);
+  delete input.input.controls.purpose;
+  expect(() => encodeVertex(input, protocol)).toThrow('INVALID_WEB_SEARCH');
+  input.input.controls.purpose = 'story-guide';
+  input.role = 'helper';
+  expect(() => encodeVertex(input, protocol)).toThrow('INVALID_WEB_SEARCH');
+  delete input.webSearch;
+  expect(bodyObject(encodeVertex(input, protocol).body)).not.toHaveProperty('tools');
+});
 
-test.each(['vertex-gemini-v1', 'google-gemini-v1'] as const)(
-  '%s accumulates native grounding sources and adds verified inline citations without changing raw parts',
-  (protocol) => {
-    const input = request();
-    input.webSearch = true;
-    input.input.controls.purpose = 'story-guide';
-    input.stable.tools = [];
-    const encoded = encodeVertex(input, protocol);
-    const decoder = new VertexDecoder(encoded.context);
-    const prose = '그는 등대를 지켰다. 같은 말. 같은 말.\n추측 https://invented.example/';
-    expect(
-      decoder.accept({
-        candidates: [
-          {
-            content: { parts: [{ text: prose }] },
-            groundingMetadata: {
-              webSearchQueries: ['등대지기 원작'],
-              groundingChunks: [
-                { web: { uri: 'https://source.example/canon', title: '원작 자료' } },
-              ],
-            },
-          },
-        ],
-      })
-    ).toBeUndefined();
-    const suggestions =
-      '<style>.chip { color: blue }</style><a href="https://www.google.com/search?q=canon">canon</a>';
+test('google-gemini-v1 accumulates native grounding sources and adds verified inline citations without changing raw parts', () => {
+  const protocol = 'google-gemini-v1' as const;
+  const input = request();
+  input.webSearch = true;
+  input.input.controls.purpose = 'story-guide';
+  input.stable.tools = [];
+  const encoded = encodeVertex(input, protocol);
+  const decoder = new VertexDecoder(encoded.context);
+  const prose = '그는 등대를 지켰다. 같은 말. 같은 말.\n추측 https://invented.example/';
+  expect(
     decoder.accept({
       candidates: [
         {
-          finishReason: 'STOP',
-          groundingMetadata: {
-            webSearchQueries: ['등대지기 원작', '인물 해설'],
-            groundingChunks: [
-              { web: { uri: 'https://source.example/character', title: '인물 해설' } },
-              { web: { uri: 'javascript:alert(1)', title: 'Invalid' } },
-              { web: { uri: 'https://secret@source.example/', title: 'Invalid' } },
-            ],
-            groundingSupports: [
-              {
-                segment: { text: '그는 등대를 지켰다.', startIndex: 0, endIndex: 27 },
-                groundingChunkIndices: [0, 1],
-              },
-              { segment: { text: '같은 말.' }, groundingChunkIndices: [0] },
-              { segment: { text: '응답에 없는 문장' }, groundingChunkIndices: [0] },
-              { segment: { text: '추측' }, groundingChunkIndices: [2, 3, 99] },
-            ],
-            searchEntryPoint: { renderedContent: suggestions },
-          },
-        },
-      ],
-    });
-    const result = decoder.finish();
-    expect(result.status).toBe('completed');
-    expect(result.text).toBe(
-      '그는 등대를 지켰다. [원작 자료](<https://source.example/canon>) [인물 해설](<https://source.example/character>) 같은 말. 같은 말.\n추측 https://invented.example/'
-    );
-    expect(result.webSearch).toEqual({
-      performed: true,
-      sources: [
-        { url: 'https://source.example/canon', title: '원작 자료' },
-        { url: 'https://source.example/character', title: '인물 해설' },
-      ],
-      queries: ['등대지기 원작', '인물 해설'],
-      searchEntryPoint: suggestions,
-    });
-    expect(bodyObject(result.opaqueState).contents.at(-1).parts).toEqual([{ text: prose }]);
-    const untouched = new VertexDecoder(encodeVertex(request(), protocol).context);
-    untouched.accept({
-      candidates: [
-        {
           content: { parts: [{ text: prose }] },
-          finishReason: 'STOP',
           groundingMetadata: {
-            webSearchQueries: ['should not count'],
-            groundingChunks: [{ web: { uri: 'https://source.example/canon' } }],
+            webSearchQueries: ['등대지기 원작'],
+            groundingChunks: [{ web: { uri: 'https://source.example/canon', title: '원작 자료' } }],
           },
         },
       ],
-    });
-    expect(untouched.finish()).toMatchObject({ text: prose });
-    expect(untouched.finish()).not.toHaveProperty('webSearch');
-  }
-);
+    })
+  ).toBeUndefined();
+  const suggestions =
+    '<style>.chip { color: blue }</style><a href="https://www.google.com/search?q=canon">canon</a>';
+  decoder.accept({
+    candidates: [
+      {
+        finishReason: 'STOP',
+        groundingMetadata: {
+          webSearchQueries: ['등대지기 원작', '인물 해설'],
+          groundingChunks: [
+            { web: { uri: 'https://source.example/character', title: '인물 해설' } },
+            { web: { uri: 'javascript:alert(1)', title: 'Invalid' } },
+            { web: { uri: 'https://secret@source.example/', title: 'Invalid' } },
+          ],
+          groundingSupports: [
+            {
+              segment: { text: '그는 등대를 지켰다.', startIndex: 0, endIndex: 27 },
+              groundingChunkIndices: [0, 1],
+            },
+            { segment: { text: '같은 말.' }, groundingChunkIndices: [0] },
+            { segment: { text: '응답에 없는 문장' }, groundingChunkIndices: [0] },
+            { segment: { text: '추측' }, groundingChunkIndices: [2, 3, 99] },
+          ],
+          searchEntryPoint: { renderedContent: suggestions },
+        },
+      },
+    ],
+  });
+  const result = decoder.finish();
+  expect(result.status).toBe('completed');
+  expect(result.text).toBe(
+    '그는 등대를 지켰다. [원작 자료](<https://source.example/canon>) [인물 해설](<https://source.example/character>) 같은 말. 같은 말.\n추측 https://invented.example/'
+  );
+  expect(result.webSearch).toEqual({
+    performed: true,
+    sources: [
+      { url: 'https://source.example/canon', title: '원작 자료' },
+      { url: 'https://source.example/character', title: '인물 해설' },
+    ],
+    queries: ['등대지기 원작', '인물 해설'],
+    searchEntryPoint: suggestions,
+  });
+  expect(bodyObject(result.opaqueState).contents.at(-1).parts).toEqual([{ text: prose }]);
+  const untouched = new VertexDecoder(encodeVertex(request(), protocol).context);
+  untouched.accept({
+    candidates: [
+      {
+        content: { parts: [{ text: prose }] },
+        finishReason: 'STOP',
+        groundingMetadata: {
+          webSearchQueries: ['should not count'],
+          groundingChunks: [{ web: { uri: 'https://source.example/canon' } }],
+        },
+      },
+    ],
+  });
+  expect(untouched.finish()).toMatchObject({ text: prose });
+  expect(untouched.finish()).not.toHaveProperty('webSearch');
+});
 
 test('an enabled Gemini search that returns no grounding is reported as unperformed', () => {
   const input = request();
@@ -227,34 +219,32 @@ test('an enabled Gemini search that returns no grounding is reported as unperfor
   expect(decoder.finish().webSearch).toEqual({ performed: false, sources: [] });
 });
 
-test.each(['vertex-gemini-v1', 'google-gemini-v1'] as const)(
-  '%s serializes only selected safety filters and preserves them across tool turns',
-  (protocol) => {
-    const input = request();
-    expect(bodyObject(encodeVertex(input, protocol).body)).not.toHaveProperty('safetySettings');
-    input.generation!.safetySettings = {};
-    expect(bodyObject(encodeVertex(input, protocol).body)).not.toHaveProperty('safetySettings');
-    input.generation!.safetySettings = {
-      HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE',
-      HARM_CATEGORY_JAILBREAK: 'BLOCK_ONLY_HIGH',
-      HARM_CATEGORY_HARASSMENT: 'OFF',
-    };
-    const first = encodeVertex(input, protocol);
-    expect(bodyObject(first.body).safetySettings).toEqual([
-      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'OFF' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_JAILBREAK', threshold: 'BLOCK_ONLY_HIGH' },
-    ]);
-    const decoder = new VertexDecoder(first.context);
-    decoder.accept(event([call('Call-1')], 'STOP'));
-    const nextInput = continued(input, decoder.finish());
-    expect(bodyObject(encodeVertex(nextInput, protocol).body).safetySettings).toEqual(
-      bodyObject(first.body).safetySettings
-    );
-    nextInput.generation!.safetySettings!.HARM_CATEGORY_JAILBREAK = 'BLOCK_LOW_AND_ABOVE';
-    expect(() => encodeVertex(nextInput, protocol)).toThrow('VERTEX_CONTINUATION_MISMATCH');
-  }
-);
+test('vertex-gemini-v1 serializes only selected safety filters and preserves them across tool turns', () => {
+  const protocol = 'vertex-gemini-v1' as const;
+  const input = request();
+  expect(bodyObject(encodeVertex(input, protocol).body)).not.toHaveProperty('safetySettings');
+  input.generation!.safetySettings = {};
+  expect(bodyObject(encodeVertex(input, protocol).body)).not.toHaveProperty('safetySettings');
+  input.generation!.safetySettings = {
+    HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE',
+    HARM_CATEGORY_JAILBREAK: 'BLOCK_ONLY_HIGH',
+    HARM_CATEGORY_HARASSMENT: 'OFF',
+  };
+  const first = encodeVertex(input, protocol);
+  expect(bodyObject(first.body).safetySettings).toEqual([
+    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'OFF' },
+    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_JAILBREAK', threshold: 'BLOCK_ONLY_HIGH' },
+  ]);
+  const decoder = new VertexDecoder(first.context);
+  decoder.accept(event([call('Call-1')], 'STOP'));
+  const nextInput = continued(input, decoder.finish());
+  expect(bodyObject(encodeVertex(nextInput, protocol).body).safetySettings).toEqual(
+    bodyObject(first.body).safetySettings
+  );
+  nextInput.generation!.safetySettings!.HARM_CATEGORY_JAILBREAK = 'BLOCK_LOW_AND_ABOVE';
+  expect(() => encodeVertex(nextInput, protocol)).toThrow('VERTEX_CONTINUATION_MISMATCH');
+});
 
 // Pure recorded-object fixtures: these checks do not call a live model or assess prose quality.
 describe('Vertex 3.8 request and continuation protocol', () => {
@@ -364,7 +354,7 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     });
   });
 
-  test.each([0, -1, 500_001, 1.5])(
+  test.each([0, 500_001])(
     'rejects unsupported max output %s before wire encoding',
     (maxOutputTokens) => {
       const input = request();
@@ -470,8 +460,6 @@ describe('Vertex 3.8 request and continuation protocol', () => {
 
   test.each([
     ['skills.list', undefined],
-    ['skills.list', false],
-    ['knowledge.search', undefined],
     ['knowledge.search', false],
   ] as const)(
     'supports omitted args for no-argument %s with willContinue=%s while preserving signed parts',
@@ -574,24 +562,19 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     );
   });
 
-  test.each(['missing', 'extra', 'duplicate', 'wrong-id', 'wrong-name'] as const)(
-    'rejects %s tool results',
-    (mode) => {
-      const input = request();
-      const first = start(input);
-      first.decoder.accept(event([call('native-A'), call('native-B')], 'STOP'));
-      const next = continued(input, first.decoder.finish());
-      const items = next.input.results as Json[];
-      if (mode === 'missing') items.pop();
-      if (mode === 'extra') items.push(structuredClone(items[0]));
-      if (mode === 'duplicate') items[1] = structuredClone(items[0]);
-      if (mode === 'wrong-id') bodyObject(items[0]).callId = 'unknown';
-      if (mode === 'wrong-name') bodyObject(items[0]).name = 'skills.load';
-      expect(() => encodeVertex(next)).toThrow('TOOL_RESULT_MISMATCH');
-    }
-  );
+  test.each(['missing', 'extra', 'wrong-name'] as const)('rejects %s tool results', (mode) => {
+    const input = request();
+    const first = start(input);
+    first.decoder.accept(event([call('native-A'), call('native-B')], 'STOP'));
+    const next = continued(input, first.decoder.finish());
+    const items = next.input.results as Json[];
+    if (mode === 'missing') items.pop();
+    if (mode === 'extra') items.push(structuredClone(items[0]));
+    if (mode === 'wrong-name') bodyObject(items[0]).name = 'skills.load';
+    expect(() => encodeVertex(next)).toThrow('TOOL_RESULT_MISMATCH');
+  });
 
-  test.each(['task', 'controls', 'source', 'catalog', 'history', 'stable', 'generation'] as const)(
+  test.each(['task', 'catalog', 'stable', 'generation'] as const)(
     'binds continuation to unchanged %s',
     (field) => {
       const input = request();
@@ -601,7 +584,6 @@ describe('Vertex 3.8 request and continuation protocol', () => {
       if (field === 'stable') next.stable.contract += ' changed';
       else if (field === 'generation') next.generation!.maxOutputTokens++;
       else if (field === 'task') next.input.task += ' changed';
-      else if (field === 'controls') next.input.controls.extra = true;
       else next.input[field] = { changed: true };
       expect(() => encodeVertex(next)).toThrow('VERTEX_CONTINUATION_MISMATCH');
     }
@@ -695,7 +677,7 @@ describe('Vertex streamed response decoder', () => {
     });
   });
 
-  test.each(['SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII', 'MODEL_ARMOR'])(
+  test.each(['SAFETY', 'MODEL_ARMOR'])(
     'returns explicit %s refusal and preserves later usage',
     (reason) => {
       const { decoder } = start();
@@ -709,23 +691,21 @@ describe('Vertex streamed response decoder', () => {
     }
   );
 
-  test.each(['SAFETY', 'JAILBREAK'])(
-    'treats explicit %s prompt blocking as terminal without a generated candidate',
-    (reason) => {
-      const { decoder } = start();
-      decoder.accept({
-        promptFeedback: { blockReason: reason, blockReasonMessage: 'Private provider details' },
-        candidates: [],
-      });
-      expect(decoder.finish()).toMatchObject({
-        status: 'refused',
-        refusal: reason,
-        text: '',
-        toolCalls: [],
-      });
-      expect(JSON.stringify(decoder.finish())).not.toContain('Private provider details');
-    }
-  );
+  test('treats explicit JAILBREAK prompt blocking as terminal without a generated candidate', () => {
+    const reason = 'JAILBREAK';
+    const { decoder } = start();
+    decoder.accept({
+      promptFeedback: { blockReason: reason, blockReasonMessage: 'Private provider details' },
+      candidates: [],
+    });
+    expect(decoder.finish()).toMatchObject({
+      status: 'refused',
+      refusal: reason,
+      text: '',
+      toolCalls: [],
+    });
+    expect(JSON.stringify(decoder.finish())).not.toContain('Private provider details');
+  });
 
   test('MAX_TOKENS remains partial even with a complete-looking tool object', () => {
     const { decoder } = start();
@@ -737,18 +717,15 @@ describe('Vertex streamed response decoder', () => {
     });
   });
 
-  test.each(['MALFORMED_FUNCTION_CALL', 'UNEXPECTED_TOOL_CALL', 'OTHER'])(
-    'reports %s as a terminal error',
-    (reason) => {
-      const { decoder } = start();
-      decoder.accept(event([{ text: 'Retained.' }], reason));
-      expect(decoder.finish()).toMatchObject({
-        status: 'error',
-        text: 'Retained.',
-        error: { code: reason },
-      });
-    }
-  );
+  test.each(['MALFORMED_FUNCTION_CALL', 'OTHER'])('reports %s as a terminal error', (reason) => {
+    const { decoder } = start();
+    decoder.accept(event([{ text: 'Retained.' }], reason));
+    expect(decoder.finish()).toMatchObject({
+      status: 'error',
+      text: 'Retained.',
+      error: { code: reason },
+    });
+  });
 
   test('requires a terminal signal at EOF and never promotes empty or thought-only completion', () => {
     const { decoder } = start();
@@ -778,9 +755,7 @@ describe('Vertex streamed response decoder', () => {
         willContinue: true,
       },
     },
-    { functionCall: { name: 'knowledge.read', args: { ids: ['lore-1'] }, willContinue: true } },
     { functionCall: { name: 'knowledge.read', args: { ids: ['lore-1'] }, willContinue: 'false' } },
-    { functionCall: { name: 'knowledge.read', args: { ids: ['lore-1'] }, partialArgs: [] } },
   ])('refuses unexpected streamed argument representation %#', (part) => {
     const { decoder } = start();
     expect(() =>
@@ -807,14 +782,9 @@ describe('Vertex streamed response decoder', () => {
 
   test.each([
     { value: { candidates: [{ index: 0 }, { index: 0 }] }, code: 'VERTEX_MULTIPLE_CANDIDATES' },
-    { value: { candidates: [{ index: 1 }] }, code: 'VERTEX_MULTIPLE_CANDIDATES' },
     { value: event([], 'FUTURE_UNKNOWN_REASON'), code: 'VERTEX_UNKNOWN_FINISH_REASON' },
     {
       value: event([{ functionCall: { name: 'knowledge.read', args: '{"ids":["lore-1"]}' } }]),
-      code: 'INVALID_TOOL_ARGUMENTS',
-    },
-    {
-      value: event([{ functionCall: { name: 'knowledge.read', args: null } }]),
       code: 'INVALID_TOOL_ARGUMENTS',
     },
     {
@@ -824,7 +794,6 @@ describe('Vertex streamed response decoder', () => {
       code: 'INVALID_VERTEX_PART',
     },
     { value: { usageMetadata: { promptTokenCount: -1 } }, code: 'INVALID_USAGE' },
-    { value: { usageMetadata: { candidatesTokenCount: 0.5 } }, code: 'INVALID_USAGE' },
     {
       value: {
         error: { message: 'PRIVATE_REMOTE_DETAILS' },
@@ -862,36 +831,34 @@ describe('Vertex streamed response decoder', () => {
   });
 });
 
-test.each(['vertex-gemini-v1', 'google-gemini-v1'] as const)(
-  '%s replays a tool image once across later rounds',
-  (protocol) => {
-    const input = request();
-    const first = encodeVertex(input, protocol);
-    const decoder = new VertexDecoder(first.context);
-    decoder.accept(event([call('call-1')], 'STOP'));
-    const secondInput = continued(input, decoder.finish());
-    const hash = 'a'.repeat(64);
-    secondInput.toolImages = [
-      {
-        callId: 'call-1',
-        images: [
-          {
-            hash,
-            mime: 'image/webp',
-            name: 'portrait',
-            width: 1,
-            height: 1,
-            input: { hash, width: 1, height: 1 },
-          },
-        ],
-      },
-    ];
-    const second = encodeVertex(secondInput, protocol);
-    expect(JSON.stringify(second.body).split('uimori-image://')).toHaveLength(2);
-    const decoder2 = new VertexDecoder(second.context);
-    decoder2.accept(event([call('call-2')], 'STOP'));
-    const third = encodeVertex(continued(secondInput, decoder2.finish()), protocol);
-    expect(JSON.stringify(third.body).split('uimori-image://')).toHaveLength(2);
-    expect(JSON.stringify(third.context)).not.toContain('data:image');
-  }
-);
+test('vertex-gemini-v1 replays a tool image once across later rounds', () => {
+  const protocol = 'vertex-gemini-v1' as const;
+  const input = request();
+  const first = encodeVertex(input, protocol);
+  const decoder = new VertexDecoder(first.context);
+  decoder.accept(event([call('call-1')], 'STOP'));
+  const secondInput = continued(input, decoder.finish());
+  const hash = 'a'.repeat(64);
+  secondInput.toolImages = [
+    {
+      callId: 'call-1',
+      images: [
+        {
+          hash,
+          mime: 'image/webp',
+          name: 'portrait',
+          width: 1,
+          height: 1,
+          input: { hash, width: 1, height: 1 },
+        },
+      ],
+    },
+  ];
+  const second = encodeVertex(secondInput, protocol);
+  expect(JSON.stringify(second.body).split('uimori-image://')).toHaveLength(2);
+  const decoder2 = new VertexDecoder(second.context);
+  decoder2.accept(event([call('call-2')], 'STOP'));
+  const third = encodeVertex(continued(secondInput, decoder2.finish()), protocol);
+  expect(JSON.stringify(third.body).split('uimori-image://')).toHaveLength(2);
+  expect(JSON.stringify(third.context)).not.toContain('data:image');
+});

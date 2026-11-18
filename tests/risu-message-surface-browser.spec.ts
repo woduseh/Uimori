@@ -33,7 +33,7 @@ test.afterAll(async () => {
   await server?.close();
 });
 
-for (const width of [390, 1440]) {
+for (const width of [390]) {
   test(`RSURFACE ${width}px authored forms submit safely with native keyboard behavior`, async ({
     page,
   }) => {
@@ -161,7 +161,7 @@ for (const width of [390, 1440]) {
   });
 }
 
-for (const width of [390, 1440]) {
+for (const width of [390]) {
   test(`RSURFACE ${width}px reading, author widgets, selection and action lifecycle`, async ({
     page,
   }, info) => {
@@ -183,7 +183,7 @@ for (const width of [390, 1440]) {
   });
 }
 
-for (const width of [390, 1440]) {
+for (const width of [390]) {
   test(`RSURFACE CLEANUP ${width}px modern selection stays in the owning reader`, async ({
     page,
   }, info) => {

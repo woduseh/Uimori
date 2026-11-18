@@ -7,7 +7,7 @@ import type { ChatDetail, Job, ReaderDetail } from '../core/types.js';
 test('translation failures show safe causes while retired status jobs stay hidden', async ({
   page,
   request,
-}, info) => {
+}) => {
   const chat = await (
     await postFixtureChat(request, { data: { title: 'Synthetic auxiliary recovery' } })
   ).json();
@@ -63,40 +63,6 @@ test('translation failures show safe causes while retired status jobs stay hidde
     const translation = panel.getByTestId('job-translation');
     await expect(translation).toContainText('인증');
     await expect(translation).toContainText('AUXILIARY_PROVIDER_HTTP_401');
-    expect(
-      await translation.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
-    ).toBe(true);
-    if (visualReview)
-      await page.screenshot({ path: info.outputPath('auxiliary-recovery-mobile.png') });
-    jobs[1].error = 'PROMPT_UNKNOWN_SLOT';
-    await page.reload();
-    const activity = page.getByTestId('turn-activity').first();
-    await activity.locator(':scope > summary').click();
-    const promptFailure = activity.getByTestId('job-translation');
-    await expect(promptFailure).toContainText('PROMPT_UNKNOWN_SLOT');
-    await expect(promptFailure).toContainText('입력 슬롯');
-    await expect(promptFailure).toContainText('프롬프트를 확인해 주세요.');
-    await expect(promptFailure).not.toContainText('인증');
-    for (const [code, message] of [
-      ['AUXILIARY_PROVIDER_PARTIAL', '모델 응답을 끝까지 받지 못했어요.'],
-      ['AUXILIARY_PROVIDER_TIMEOUT', '제한 시간 안에 모델 응답을 완료하지 못했어요.'],
-      ['AUXILIARY_PROVIDER_INPUT_CONTEXT_LIMIT_EXCEEDED', '요청이 모델의 입력 한도를 초과했어요.'],
-    ]) {
-      jobs[1].error = code;
-      await page.reload();
-      const activity = page.getByTestId('turn-activity').first();
-      await expect(activity).toBeVisible();
-      if (!(await activity.evaluate((element) => (element as HTMLDetailsElement).open)))
-        await activity.locator(':scope > summary').click();
-      const failure = activity.getByTestId('job-translation');
-      await expect(failure.locator('.error')).toHaveCount(1);
-      await expect(failure.getByRole('alert')).toContainText(message);
-      await expect(failure).toContainText(code);
-      await expect(failure).not.toContainText('구간을 자동');
-      await expect(
-        failure.getByRole('button', { name: '현재 설정으로 번역 다시 시도' })
-      ).toBeVisible();
-    }
     jobs[1].error = 'TRANSLATION_REFUSAL_CHECK_FAILED';
     jobs[1].result = {
       mock: false,

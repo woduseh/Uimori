@@ -51,7 +51,7 @@ test.each(encoders)(
   }
 );
 
-test.each(['automatic', 'explicit', 'disabled', undefined] as const)(
+test.each(['explicit', 'disabled', undefined] as const)(
   'reference cache anchors follow configured %s mode',
   (cacheMode) => {
     for (const { name, encode, parts } of encoders.filter(({ name }) =>
@@ -63,7 +63,7 @@ test.each(['automatic', 'explicit', 'disabled', undefined] as const)(
       else input.generation!.cacheMode = cacheMode;
       const blocks = parts(encode(input).body);
       const field = name === 'Responses' ? 'prompt_cache_breakpoint' : 'cache_control';
-      expect(Boolean(blocks[0][field])).toBe(cacheMode === 'automatic' || cacheMode === 'explicit');
+      expect(Boolean(blocks[0][field])).toBe(cacheMode === 'explicit');
       expect(blocks[1]).not.toHaveProperty(field);
     }
   }

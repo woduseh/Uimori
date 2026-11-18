@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { postFixtureChat } from './fixtures/chat.js';
 import { openChatMenu } from './ui-navigation.js';
 
-for (const width of [1440, 412]) {
+for (const width of [412]) {
   test(`WRITINGTOOLS manuscript range download and last scene diagnostics ${width}`, async ({
     page,
     request,

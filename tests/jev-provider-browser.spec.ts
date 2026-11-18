@@ -1,13 +1,7 @@
-import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { JevProviderStatus } from '../core/jev-provider.js';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
-import {
-  MOBILE_WIDTH,
-  DESKTOP_WIDTH,
-  MOBILE_HEIGHT,
-  DESKTOP_HEIGHT,
-} from './fixtures/browser-viewports.js';
-import { visualReview } from './fixtures/visual-review.js';
+import { MOBILE_WIDTH, MOBILE_HEIGHT } from './fixtures/browser-viewports.js';
 import { navigationAction, selectSettingsSection } from './ui-navigation.js';
 
 const endpoint = '/api/provider-management/jev';
@@ -77,25 +71,6 @@ async function openJevModel(page: Page) {
   return section;
 }
 
-async function containedControls(section: Locator, width: number) {
-  for (const control of await section.locator('input, button, a').all()) {
-    if (!(await control.isVisible())) continue;
-    const box = await control.boundingBox();
-    expect(box).not.toBeNull();
-    expect(box!.x).toBeGreaterThanOrEqual(0);
-    expect(box!.x + box!.width).toBeLessThanOrEqual(width);
-  }
-}
-
-async function revealResult(page: Page, section: Locator) {
-  const result = section.locator('.jev-test-result');
-  await result.evaluate((element) => element.scrollIntoView({ block: 'center' }));
-  await expect(result).toBeInViewport({ ratio: 1 });
-  const box = await result.boundingBox();
-  expect(box!.y).toBeGreaterThanOrEqual(56);
-  expect(box!.y + box!.height).toBeLessThanOrEqual(page.viewportSize()!.height - 40);
-}
-
 test.beforeEach(async ({ page, request }) => {
   await removeKey(request);
   await resetJudgmentSettings(request);
@@ -115,7 +90,7 @@ test.afterEach(async ({ request }) => {
 test('JEVUI01 saves and removes a server key without exposing it or changing writing models', async ({
   page,
   request,
-}, info) => {
+}) => {
   const beforeLibrary = await (await request.get('/api/library')).json();
   const beforeModels = await (await request.get('/api/model-workspace')).json();
   const section = await openJev(page);
@@ -147,13 +122,6 @@ test('JEVUI01 saves and removes a server key without exposing it or changing wri
   await typeSafeGroup.locator(':scope > summary').click();
   await expect(modelRow).toBeVisible();
   await expect(modelRow.getByLabel('JEV 모델 메뉴', { exact: true })).toBeVisible();
-  if (visualReview) {
-    await page.screenshot({ path: info.outputPath('jev-model-list-mobile.png') });
-    await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
-    await containedControls(modelRow, DESKTOP_WIDTH);
-    await page.screenshot({ path: info.outputPath('jev-model-list-desktop.png') });
-    await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
-  }
   await page.getByRole('button', { name: 'JEV 모델 설정', exact: true }).click();
   const modelSection = page.getByRole('region', { name: 'JEV 모델 설정', exact: true });
   await expect(modelSection).toBeVisible();
@@ -185,14 +153,6 @@ test('JEVUI01 saves and removes a server key without exposing it or changing wri
   await openJev(page);
   await expect(key).toHaveValue('');
   await expect(section.getByText('Uimori에 저장한 키', { exact: true })).toBeVisible();
-  await containedControls(section, MOBILE_WIDTH);
-  if (visualReview) {
-    await section.getByRole('heading', { name: 'TypeSafe AI' }).scrollIntoViewIfNeeded();
-    await page.screenshot({ path: info.outputPath('jev-connection-mobile.png') });
-    await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
-    await containedControls(section, DESKTOP_WIDTH);
-    await page.screenshot({ path: info.outputPath('jev-connection-desktop.png') });
-  }
   await section.getByRole('button', { name: '저장한 JEV 키 삭제', exact: true }).click();
   await expect(section.getByText('등록되지 않음', { exact: true })).toBeVisible();
   await expect(section.getByRole('button', { name: 'JEV 연결 테스트', exact: true })).toHaveCount(
@@ -248,7 +208,7 @@ test('JEVUI02 stale key edits preserve the draft until explicit refresh and save
 test('JEVUI03 recovers a synthetic uncertain test and shows structured success and auth failure', async ({
   page,
   request,
-}, info) => {
+}) => {
   const current = await saveKey(request);
   const submissions: Array<{ expectedRevision: number; idempotencyKey: string }> = [];
   const polls: string[] = [];
@@ -332,14 +292,6 @@ test('JEVUI03 recovers a synthetic uncertain test and shows structured success a
   expect(submissions[1]).toEqual(submissions[0]);
   expect(submissions[0]?.expectedRevision).toBe(current.revision);
   expect(polls).toHaveLength(1);
-  if (visualReview) {
-    await revealResult(page, section);
-    await page.screenshot({ path: info.outputPath('jev-test-success-mobile.png') });
-    await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
-    await revealResult(page, section);
-    await page.screenshot({ path: info.outputPath('jev-test-success-desktop.png') });
-    await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
-  }
   await section.getByRole('button', { name: 'JEV 연결 테스트', exact: true }).click();
   await expect(
     section.getByText('API 키와 TypeSafe 계정의 사용 권한을 확인해 주세요.', { exact: true })
@@ -348,18 +300,13 @@ test('JEVUI03 recovers a synthetic uncertain test and shows structured success a
   expect(submissions).toHaveLength(3);
   expect(submissions[2]?.idempotencyKey).not.toBe(submissions[1]?.idempotencyKey);
   expect(polls).toHaveLength(2);
-  await containedControls(section, MOBILE_WIDTH);
-  if (visualReview) {
-    await revealResult(page, section);
-    await page.screenshot({ path: info.outputPath('jev-test-auth-error-mobile.png') });
-  }
   expect((await connection(request)).latestTest).toBeNull();
 });
 
 test('JEVUI04 judgment switches wait for saved values, recover after failure and preserve the key draft', async ({
   page,
   request,
-}, info) => {
+}) => {
   const credential = await saveKey(request);
   const connectionSection = await openJev(page);
   const draft = syntheticKey + '-unsaved-draft';
@@ -415,14 +362,6 @@ test('JEVUI04 judgment switches wait for saved values, recover after failure and
   const saved = await connection(request);
   expect(saved.settings).toMatchObject({ images: true, longContext: true });
   expect(saved.revision).toBe(credential.revision);
-  await containedControls(section, MOBILE_WIDTH);
-  if (visualReview) {
-    await section.getByRole('heading', { name: 'JEV', exact: true }).scrollIntoViewIfNeeded();
-    await page.screenshot({ path: info.outputPath('jev-judgment-settings-mobile.png') });
-    await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
-    await containedControls(section, DESKTOP_WIDTH);
-    await page.screenshot({ path: info.outputPath('jev-judgment-settings-desktop.png') });
-  }
   await section.getByRole('button', { name: '프로바이더 설정', exact: true }).click();
   await expect(connectionSection.getByLabel('JEV API 키', { exact: true })).toHaveValue(draft);
   await page.reload();

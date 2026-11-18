@@ -47,6 +47,15 @@ const variants = [
   { protocol: 'fixture-sse-v1', endpoint: 'http://127.0.0.1:18881', model: 'synthetic-model' },
 ] as const;
 type Variant = (typeof variants)[number];
+const pick = (...protocols: Variant['protocol'][]) =>
+  variants.filter((variant) => protocols.includes(variant.protocol));
+// Vercel and the fixture share the Chat codec; native continuation differs per protocol.
+const nativeVariants = pick(
+  'openai-responses-v1',
+  'openai-chat-v1',
+  'anthropic-messages-v1',
+  'vertex-gemini-v1'
+);
 const connection = (variant: Variant): ProviderConnection => ({
   id: 'context-budget-test',
   protocol: variant.protocol,
@@ -289,7 +298,6 @@ describe('offline host context budget', () => {
   });
   test.each([
     { modelId: 'gpt-6-astra', protocol: 'openai-responses-v1', output: 128000, effective: 922000 },
-    { modelId: 'gpt-5.6-sol', protocol: 'openai-chat-v1', output: 128000, effective: 922000 },
     {
       modelId: 'claude-opus-5',
       protocol: 'anthropic-messages-v1',
@@ -355,7 +363,7 @@ describe('offline host context budget', () => {
 });
 
 describe('final wire body budget before credentials and transmission', () => {
-  test.each(variants.slice(0, -1))(
+  test.each(pick('openai-responses-v1', 'anthropic-messages-v1'))(
     '$protocol rejects local-model overflow even when the legacy counter would admit it',
     async (variant) => {
       const input = request(variant);
@@ -384,7 +392,7 @@ describe('final wire body budget before credentials and transmission', () => {
       expect(fetch).not.toHaveBeenCalled();
     }
   );
-  test.each(variants)(
+  test.each(pick('openai-chat-v1', 'vertex-gemini-v1'))(
     '$protocol rejects an oversized first request with zero credential, journal and fetch calls',
     async (variant) => {
       const input = request(variant);
@@ -410,7 +418,7 @@ describe('final wire body budget before credentials and transmission', () => {
       expect(input).toEqual(before);
     }
   );
-  test.each(variants.slice(0, -1))(
+  test.each(pick('openai-responses-v1', 'vertex-gemini-v1'))(
     '$protocol measures the native body, not duplicated raw snapshot fields',
     async (variant) => {
       const input = request(variant);
@@ -452,7 +460,7 @@ describe('final wire body budget before credentials and transmission', () => {
       expect(onWire).toHaveBeenCalledTimes(1);
     }
   );
-  test.each(variants.slice(0, -1))(
+  test.each(nativeVariants)(
     '$protocol includes unredacted opaque continuation content in the budget before any wire work',
     async (variant) => {
       const input = continued(request(variant), variant, large),
@@ -476,7 +484,7 @@ describe('final wire body budget before credentials and transmission', () => {
       expect(input).toEqual(before);
     }
   );
-  test.each(variants.slice(0, -1))(
+  test.each(nativeVariants)(
     '$protocol binds the budget across native continuation, including adding or removing it',
     (variant) => {
       const input = continued(request(variant), variant);

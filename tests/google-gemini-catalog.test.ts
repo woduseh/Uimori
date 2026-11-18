@@ -109,37 +109,39 @@ test('AI Studio refresh uses header API key, follows page tokens, and persists m
   expect(JSON.stringify(listed)).not.toContain(connectionBody.apiKey);
 });
 
-test.each([
-  'invalid payload',
-  'incomplete pagination',
-  'oversized response',
-  'too many models',
-  'failed response',
-])('AI Studio keeps its last catalog on %s', async (failure) => {
+test('AI Studio keeps its last catalog on invalid, incomplete, oversized, excessive or failed responses', async () => {
   const app = await application();
-  const fetch = vi
-    .spyOn(globalThis, 'fetch')
-    .mockResolvedValueOnce(jsonResponse({ models: [model] }));
-  const connection = await request(app, '/connections', connectionBody);
-  const listed = await request(app, `/connections/${connection.id}/catalog`, {});
-  fetch.mockImplementation(async () => {
-    if (failure === 'invalid payload') return jsonResponse({ models: {} });
-    if (failure === 'incomplete pagination')
-      return jsonResponse({ models: [model], nextPageToken: 'again' });
-    if (failure === 'oversized response')
-      return jsonResponse({ models: [], padding: 'x'.repeat(1_000_001) });
-    if (failure === 'too many models')
-      return jsonResponse({
-        models: Array.from({ length: 5001 }, () => ({ name: 'models/embedding-001' })),
-      });
-    return new Response(connectionBody.apiKey, { status: 403 });
-  });
-  const failed = await request(app, `/connections/${connection.id}/catalog`, {});
-  expect(failed.catalog).toEqual(listed.catalog);
-  expect(failed.catalogUpdatedAt).toBe(listed.catalogUpdatedAt);
-  expect(failed.catalogError).toBe('CATALOG_UNAVAILABLE');
-  expect(JSON.stringify(failed)).not.toContain(connectionBody.apiKey);
-  if (failure === 'incomplete pagination') expect(fetch).toHaveBeenCalledTimes(6);
+  const fetch = vi.spyOn(globalThis, 'fetch');
+  for (const failure of [
+    'invalid payload',
+    'incomplete pagination',
+    'oversized response',
+    'too many models',
+    'failed response',
+  ]) {
+    fetch.mockReset();
+    fetch.mockResolvedValueOnce(jsonResponse({ models: [model] }));
+    const connection = await request(app, '/connections', connectionBody);
+    const listed = await request(app, `/connections/${connection.id}/catalog`, {});
+    fetch.mockImplementation(async () => {
+      if (failure === 'invalid payload') return jsonResponse({ models: {} });
+      if (failure === 'incomplete pagination')
+        return jsonResponse({ models: [model], nextPageToken: 'again' });
+      if (failure === 'oversized response')
+        return jsonResponse({ models: [], padding: 'x'.repeat(1_000_001) });
+      if (failure === 'too many models')
+        return jsonResponse({
+          models: Array.from({ length: 5001 }, () => ({ name: 'models/embedding-001' })),
+        });
+      return new Response(connectionBody.apiKey, { status: 403 });
+    });
+    const failed = await request(app, `/connections/${connection.id}/catalog`, {});
+    expect(failed.catalog, failure).toEqual(listed.catalog);
+    expect(failed.catalogUpdatedAt).toBe(listed.catalogUpdatedAt);
+    expect(failed.catalogError).toBe('CATALOG_UNAVAILABLE');
+    expect(JSON.stringify(failed)).not.toContain(connectionBody.apiKey);
+    if (failure === 'incomplete pagination') expect(fetch).toHaveBeenCalledTimes(6);
+  }
 });
 
 test('revoking AI Studio while reading prevents further pages and both success and failure saves', async () => {

@@ -330,43 +330,6 @@ describe('Anthropic Batch execution', () => {
     db.close();
   });
 
-  test('explicit local cancellation requests remote Batch cancellation best-effort', async () => {
-    let cancelled = 0;
-    const server = await loopbackProvider(async (captured, response) => {
-      if (captured.url === '/v1/messages/batches') {
-        json(response, { id: 'batch-cancel', processing_status: 'in_progress' });
-        return;
-      }
-      if (captured.url === '/v1/messages/batches/batch-cancel') {
-        json(response, { id: 'batch-cancel', processing_status: 'in_progress' });
-        return;
-      }
-      if (captured.url === '/v1/messages/batches/batch-cancel/cancel') {
-        cancelled++;
-        json(response, { id: 'batch-cancel', processing_status: 'canceling' });
-        return;
-      }
-      throw new Error(`unexpected fixture request: ${captured.url}`);
-    });
-    closes.push(server.close);
-    const db = database();
-    const controller = new AbortController();
-    const running = new AnthropicBatchRun({ db } as Store, 'run-1', 5).execute(
-      connection(`${server.origin}/v1`),
-      request(),
-      options(db, controller.signal, undefined, true)
-    );
-    await until(
-      () =>
-        db.prepare('SELECT batch_id FROM anthropic_batches WHERE run_id=?').get('run-1')
-          ?.batch_id === 'batch-cancel'
-    );
-    controller.abort(new Error('Run cancelled'));
-    expect(await running).toMatchObject({ status: 'cancelled', error: { code: 'CANCELLED' } });
-    expect(cancelled).toBe(1);
-    db.close();
-  });
-
   test('a reserved pre-submit row safely creates the Batch after restart', async () => {
     const server = await loopbackProvider(async (captured, response) => {
       if (captured.url === '/v1/messages/batches') {

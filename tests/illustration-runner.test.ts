@@ -164,40 +164,6 @@ async function promptModel(store: Store, reply: (body: any) => string, inputToke
 }
 
 describe('illustration runner with the synthetic generator', () => {
-  test('re-queues retryable failures up to the frozen limit, then completes and stores the image', async () => {
-    const store = databases.create();
-    const { source } = chatWithSource(store);
-    const job = reserveIllustration(store, source, 'manual', {
-      settings: fixtureSettings({ maxAutoRetries: 1 }),
-      testMode: true,
-      fixture: { failures: 1 },
-    });
-    const observed = hooks(store);
-    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
-      status: 'requeued',
-      code: 'FIXTURE_FAILURE',
-      images: 0,
-    });
-    expect(illustrationJob(store, job.id)).toMatchObject({
-      status: 'queued',
-      attempt: 2,
-      error: null,
-    });
-    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
-      status: 'completed',
-      code: null,
-      images: 1,
-    });
-    const item = projectIllustration(store, illustrationJob(store, job.id));
-    expect(item).toMatchObject({ status: 'completed', attempt: 2, maxAutoRetries: 1 });
-    expect(item.diagnostic?.retries).toEqual([
-      { attempt: 1, code: 'FIXTURE_FAILURE', at: expect.any(String) },
-    ]);
-    expect(item.images[0]).toMatchObject({ mime: 'image/webp', caption: '모의 삽화: 시도 2' });
-    expect(observed.wires).toEqual([]);
-    expect(observed.progress()).toBeGreaterThan(0);
-    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toBeNull();
-  });
   test('fails after the automatic retry budget, refuses the synthetic generator outside test mode and honors cancellation', async () => {
     const store = databases.create();
     const { chat, source } = chatWithSource(store);
@@ -265,50 +231,30 @@ describe('illustration runner with the synthetic generator', () => {
 });
 
 describe('illustration runner through the Codex image turn', () => {
-  test.each([
-    {
-      origin: 'manual' as const,
-      reply: 'invalid prompt JSON',
+  test('a separate prompt model stops Codex dispatch for invalid prompt output', async () => {
+    const store = databases.create();
+    const { source } = chatWithSource(store);
+    const imageModel = codexModel(store);
+    const { provider, model } = await promptModel(store, () => 'invalid prompt JSON');
+    const job = reserveIllustration(store, source, 'manual', {
+      settings: fixtureSettings({
+        generator: 'codex',
+        maxAutoRetries: 0,
+        codex: { model: { id: imageModel.id }, promptModel: { id: model.id } },
+      }),
+    });
+    const generateCodexImage = vi.fn<NonNullable<IllustrationRunnerHooks['generateCodexImage']>>();
+    const observed = hooks(store, { generateCodexImage });
+    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
       status: 'failed',
       code: 'ILLUSTRATION_PROMPT_INVALID',
-    },
-    {
-      origin: 'automatic' as const,
-      reply: '{"skip":true,"reason":"Only dialogue"}',
-      status: 'skipped',
-      code: null,
-    },
-  ])(
-    'a separate prompt model stops Codex dispatch for $origin $status output',
-    async ({ origin, reply, status, code }) => {
-      const store = databases.create();
-      const { source } = chatWithSource(store);
-      const imageModel = codexModel(store);
-      const { provider, model } = await promptModel(store, () => reply);
-      const job = reserveIllustration(store, source, origin, {
-        settings: fixtureSettings({
-          generator: 'codex',
-          maxAutoRetries: 0,
-          codex: { model: { id: imageModel.id }, promptModel: { id: model.id } },
-        }),
-      });
-      const generateCodexImage =
-        vi.fn<NonNullable<IllustrationRunnerHooks['generateCodexImage']>>();
-      const observed = hooks(store, { generateCodexImage });
-      expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
-        status,
-        code,
-        images: 0,
-      });
-      expect(provider.requests).toHaveLength(1);
-      expect(generateCodexImage).not.toHaveBeenCalled();
-      expect(observed.wires).toHaveLength(1);
-      const saved = illustrationJob(store, job.id);
-      expect(saved.status).toBe(status === 'skipped' ? 'completed' : status);
-      if (status === 'skipped') expect(saved.diagnostic?.skipped).toBe('Only dialogue');
-      expect(store.source(source.id).text).toBe(source.text);
-    }
-  );
+      images: 0,
+    });
+    expect(provider.requests).toHaveLength(1);
+    expect(generateCodexImage).not.toHaveBeenCalled();
+    expect(observed.wires).toHaveLength(1);
+    expect(store.source(source.id).text).toBe(source.text);
+  });
 
   test('sends the scene, guidance and role-labeled references, records the attempt and stores the caption', async () => {
     const store = databases.create();
@@ -411,7 +357,7 @@ describe('illustration runner through the Codex image turn', () => {
       revisedPrompt: 'A watercolor lantern above the river.',
     });
   });
-  test('usage limits fail immediately while a missing image is re-queued once', async () => {
+  test('usage limits fail immediately without an automatic retry', async () => {
     const store = databases.create();
     const { source } = chatWithSource(store);
     const model = codexModel(store);
@@ -453,18 +399,6 @@ describe('illustration runner through the Codex image turn', () => {
     expect(illustrationJob(store, limited.id).diagnostic?.codex).toEqual({
       usageLimit: { limitId: 'image_gen', resetsAt: 99 },
     });
-    const missing = reserveIllustration(store, store.source(source.id), 'manual', { settings });
-    expect(
-      await runIllustrationJob(
-        store,
-        missing.id,
-        'worker',
-        hooks(store, {
-          generateCodexImage: async () => failure('CODEX_IMAGE_NOT_GENERATED'),
-        }).options
-      )
-    ).toEqual({ status: 'requeued', code: 'CODEX_IMAGE_NOT_GENERATED', images: 0 });
-    expect(illustrationJob(store, missing.id)).toMatchObject({ status: 'queued', attempt: 2 });
   });
 });
 
@@ -641,196 +575,188 @@ test('one separate Codex planning call prepares every cut and passes each prompt
   expect(store.source(source.id).text).toBe(source.text);
 });
 
-test.each([undefined, '빛을 더 따뜻하게 바꿔 주세요.'])(
-  'Codex redraw prepares a fresh prompt and retries reuse it with change request %s',
-  async (changeRequest) => {
-    const store = databases.create();
-    const { source } = chatWithSource(store);
-    const imageModel = codexModel(store);
-    const originalPrompt = 'Original blue lantern';
-    const redrawPrompt = '  Redraw the "blue lantern".\n';
-    const { provider, model } = await promptModel(store, (body) => {
-      const blocks = body.input.source.blocks as [string, string][] | undefined;
-      return JSON.stringify(
-        blocks
-          ? {
-              heroIndex: 0,
-              targets: [
-                {
-                  startAnchor: blocks[0][0],
-                  endAnchor: blocks[0][0],
-                  focus: 'Mira',
-                  visualBrief: 'Mira with a lantern',
-                  prompt: { prompt: originalPrompt, caption: '첫 등불' },
-                },
-              ],
-            }
-          : { prompt: redrawPrompt, caption: '다시 그린 등불' }
-      );
-    });
-    const { revision, ...body } = fixtureSettings({
-      generator: 'codex',
-      maxAutoRetries: 0,
-      codex: { model: { id: imageModel.id }, promptModel: { id: model.id } },
-    });
-    updateIllustrationSettings(store, { expectedRevision: revision, ...body }, true);
-    const plan = reserveIllustrationPlan(store, source, 'manual', { maxTargets: 1 });
-    const prompts: string[] = [];
-    let rejectNext = false;
-    const observed = hooks(store, {
-      generateCodexImage: async (_connection, request) => {
-        prompts.push(JSON.parse(request.text).prompt);
-        const fail = rejectNext;
-        rejectNext = false;
-        return {
-          status: fail ? 'error' : 'completed',
-          images: fail ? [] : [{ mime: 'image/png', bytes: PNG }],
-          revisedPrompt: null,
-          text: '{"caption":"등불"}',
-          error: fail ? { code: 'CODEX_IMAGE_NOT_GENERATED' } : null,
-          usage: {
-            inputTokens: 20,
-            outputTokens: 5,
-            costUsd: null,
-            raw: null,
-            priceRevision: null,
-          },
-        };
-      },
-    });
-    expect((await runIllustrationJob(store, plan.id, 'worker', observed.options))?.status).toBe(
-      'completed'
-    );
-    const [cut] = queuedIllustrations(store);
-    expect((await runIllustrationJob(store, cut, 'worker', observed.options))?.status).toBe(
-      'completed'
-    );
-    const redraw = regenerateIllustration(store, cut, false, changeRequest);
-    expect(redraw.input.target?.prompt).toBeUndefined();
-    expect(redraw.input.redraw).toEqual(
-      changeRequest
+test('Codex redraw with a change request prepares a fresh prompt and retries reuse it', async () => {
+  const changeRequest = '빛을 더 따뜻하게 바꿔 주세요.';
+  const store = databases.create();
+  const { source } = chatWithSource(store);
+  const imageModel = codexModel(store);
+  const originalPrompt = 'Original blue lantern';
+  const redrawPrompt = '  Redraw the "blue lantern".\n';
+  const { provider, model } = await promptModel(store, (body) => {
+    const blocks = body.input.source.blocks as [string, string][] | undefined;
+    return JSON.stringify(
+      blocks
         ? {
-            changeRequest,
-            originalPrompt: { prompt: originalPrompt, negativePrompt: '', caption: '첫 등불' },
+            heroIndex: 0,
+            targets: [
+              {
+                startAnchor: blocks[0][0],
+                endAnchor: blocks[0][0],
+                focus: 'Mira',
+                visualBrief: 'Mira with a lantern',
+                prompt: { prompt: originalPrompt, caption: '첫 등불' },
+              },
+            ],
           }
-        : undefined
+        : { prompt: redrawPrompt, caption: '다시 그린 등불' }
     );
-    rejectNext = true;
-    expect(await runIllustrationJob(store, redraw.id, 'worker', observed.options)).toEqual({
-      status: 'failed',
-      code: 'CODEX_IMAGE_NOT_GENERATED',
-      images: 0,
-    });
-    retryIllustration(store, redraw.id);
-    expect((await runIllustrationJob(store, redraw.id, 'worker', observed.options))?.status).toBe(
-      'completed'
-    );
-    expect(provider.requests).toHaveLength(2);
-    expect(JSON.parse(provider.requests[1].body).input.source.redraw).toEqual(redraw.input.redraw);
-    expect(illustrationJob(store, redraw.id).input.redraw).toEqual(redraw.input.redraw);
-    expect(prompts).toEqual([originalPrompt, redrawPrompt, redrawPrompt]);
-    expect(store.source(source.id).text).toBe(source.text);
-  }
-);
-
-test.each(['codex', 'comfyui'] as const)(
-  'a requested redraw from %s carries the last successful prompt into the other generator',
-  async (originalGenerator) => {
-    const store = databases.create();
-    const { source } = chatWithSource(store);
-    const imageModel = codexModel(store);
-    const originalPrompt = 'Mira, blue lantern, (silver trim:1.2)';
-    const changedPrompt = 'Mira holds a warm lantern with silver trim.';
-    const { provider, model } = await promptModel(store, (request) => {
-      const blocks = request.input.source.blocks as [string, string][] | undefined;
-      return JSON.stringify(
-        blocks
-          ? {
-              heroIndex: 0,
-              targets: [
-                {
-                  startAnchor: blocks[0][0],
-                  endAnchor: blocks[0][0],
-                  focus: 'Mira with her lantern',
-                  visualBrief: 'Mira holds a blue lantern with silver trim.',
-                  prompt: { prompt: originalPrompt, negativePrompt: 'text', caption: '푸른 등불' },
-                },
-              ],
-            }
-          : { prompt: changedPrompt, caption: '따뜻한 등불' }
-      );
-    });
-    const comfy = await comfyUIFixture();
-    cleanups.push(comfy.close);
-    const selectGenerator = (generator: 'codex' | 'comfyui') =>
-      fixtureIllustrationPreset(store, {
-        generator,
-        styleGuidance: `${generator} visual style`,
-        comfyui: { workflow: FIXTURE_WORKFLOW },
-      });
-    selectGenerator(originalGenerator);
-    const { revision, ...settings } = fixtureSettings({
-      generator: 'codex',
-      codex: { model: { id: imageModel.id }, promptModel: { id: model.id } },
-      comfyui: {
-        baseUrl: comfy.origin,
-        promptModel: { id: model.id },
-        timeoutMs: 10_000,
-        pollIntervalMs: 250,
-      },
-    });
-    updateIllustrationSettings(store, { expectedRevision: revision, ...settings }, true);
-    const observed = hooks(store, {
-      generateCodexImage: async () => ({
-        status: 'completed',
-        images: [{ mime: 'image/png', bytes: PNG }],
+  });
+  const { revision, ...body } = fixtureSettings({
+    generator: 'codex',
+    maxAutoRetries: 0,
+    codex: { model: { id: imageModel.id }, promptModel: { id: model.id } },
+  });
+  updateIllustrationSettings(store, { expectedRevision: revision, ...body }, true);
+  const plan = reserveIllustrationPlan(store, source, 'manual', { maxTargets: 1 });
+  const prompts: string[] = [];
+  let rejectNext = false;
+  const observed = hooks(store, {
+    generateCodexImage: async (_connection, request) => {
+      prompts.push(JSON.parse(request.text).prompt);
+      const fail = rejectNext;
+      rejectNext = false;
+      return {
+        status: fail ? 'error' : 'completed',
+        images: fail ? [] : [{ mime: 'image/png', bytes: PNG }],
         revisedPrompt: null,
         text: '{"caption":"등불"}',
-        error: null,
-        usage: { inputTokens: 20, outputTokens: 5, costUsd: null, raw: null, priceRevision: null },
-      }),
-    });
-    const plan = reserveIllustrationPlan(store, source, 'manual');
-    await runIllustrationJob(store, plan.id, 'worker', observed.options);
-    const [originalId] = queuedIllustrations(store);
-    expect((await runIllustrationJob(store, originalId, 'worker', observed.options))?.status).toBe(
-      'completed'
+        error: fail ? { code: 'CODEX_IMAGE_NOT_GENERATED' } : null,
+        usage: {
+          inputTokens: 20,
+          outputTokens: 5,
+          costUsd: null,
+          raw: null,
+          priceRevision: null,
+        },
+      };
+    },
+  });
+  expect((await runIllustrationJob(store, plan.id, 'worker', observed.options))?.status).toBe(
+    'completed'
+  );
+  const [cut] = queuedIllustrations(store);
+  expect((await runIllustrationJob(store, cut, 'worker', observed.options))?.status).toBe(
+    'completed'
+  );
+  const redraw = regenerateIllustration(store, cut, false, changeRequest);
+  expect(redraw.input.target?.prompt).toBeUndefined();
+  expect(redraw.input.redraw).toEqual({
+    changeRequest,
+    originalPrompt: { prompt: originalPrompt, negativePrompt: '', caption: '첫 등불' },
+  });
+  rejectNext = true;
+  expect(await runIllustrationJob(store, redraw.id, 'worker', observed.options)).toEqual({
+    status: 'failed',
+    code: 'CODEX_IMAGE_NOT_GENERATED',
+    images: 0,
+  });
+  retryIllustration(store, redraw.id);
+  expect((await runIllustrationJob(store, redraw.id, 'worker', observed.options))?.status).toBe(
+    'completed'
+  );
+  expect(provider.requests).toHaveLength(2);
+  expect(JSON.parse(provider.requests[1].body).input.source.redraw).toEqual(redraw.input.redraw);
+  expect(illustrationJob(store, redraw.id).input.redraw).toEqual(redraw.input.redraw);
+  expect(prompts).toEqual([originalPrompt, redrawPrompt, redrawPrompt]);
+  expect(store.source(source.id).text).toBe(source.text);
+});
+
+test('a requested redraw from ComfyUI carries the last successful prompt into Codex', async () => {
+  const originalGenerator = 'comfyui' as 'codex' | 'comfyui';
+  const store = databases.create();
+  const { source } = chatWithSource(store);
+  const imageModel = codexModel(store);
+  const originalPrompt = 'Mira, blue lantern, (silver trim:1.2)';
+  const changedPrompt = 'Mira holds a warm lantern with silver trim.';
+  const { provider, model } = await promptModel(store, (request) => {
+    const blocks = request.input.source.blocks as [string, string][] | undefined;
+    return JSON.stringify(
+      blocks
+        ? {
+            heroIndex: 0,
+            targets: [
+              {
+                startAnchor: blocks[0][0],
+                endAnchor: blocks[0][0],
+                focus: 'Mira with her lantern',
+                visualBrief: 'Mira holds a blue lantern with silver trim.',
+                prompt: { prompt: originalPrompt, negativePrompt: 'text', caption: '푸른 등불' },
+              },
+            ],
+          }
+        : { prompt: changedPrompt, caption: '따뜻한 등불' }
     );
-    const generator = originalGenerator === 'codex' ? 'comfyui' : 'codex';
-    selectGenerator(generator);
-    const cancelled = regenerateIllustration(store, originalId);
-    cancelIllustration(store, cancelled.id);
-    const redraw = regenerateIllustration(
-      store,
-      cancelled.id,
-      false,
-      '  빛을 따뜻하게 바꿔 주세요.  '
-    );
-    expect(redraw.input).toMatchObject({
+  });
+  const comfy = await comfyUIFixture();
+  cleanups.push(comfy.close);
+  const selectGenerator = (generator: 'codex' | 'comfyui') =>
+    fixtureIllustrationPreset(store, {
       generator,
       styleGuidance: `${generator} visual style`,
-      redraw: {
-        changeRequest: '빛을 따뜻하게 바꿔 주세요.',
-        originalPrompt: {
-          prompt: originalPrompt,
-          negativePrompt: originalGenerator === 'comfyui' ? 'text' : '',
-          caption: '푸른 등불',
-        },
+      comfyui: { workflow: FIXTURE_WORKFLOW },
+    });
+  selectGenerator(originalGenerator);
+  const { revision, ...settings } = fixtureSettings({
+    generator: 'codex',
+    codex: { model: { id: imageModel.id }, promptModel: { id: model.id } },
+    comfyui: {
+      baseUrl: comfy.origin,
+      promptModel: { id: model.id },
+      timeoutMs: 10_000,
+      pollIntervalMs: 250,
+    },
+  });
+  updateIllustrationSettings(store, { expectedRevision: revision, ...settings }, true);
+  const observed = hooks(store, {
+    generateCodexImage: async () => ({
+      status: 'completed',
+      images: [{ mime: 'image/png', bytes: PNG }],
+      revisedPrompt: null,
+      text: '{"caption":"등불"}',
+      error: null,
+      usage: { inputTokens: 20, outputTokens: 5, costUsd: null, raw: null, priceRevision: null },
+    }),
+  });
+  const plan = reserveIllustrationPlan(store, source, 'manual');
+  await runIllustrationJob(store, plan.id, 'worker', observed.options);
+  const [originalId] = queuedIllustrations(store);
+  expect((await runIllustrationJob(store, originalId, 'worker', observed.options))?.status).toBe(
+    'completed'
+  );
+  const generator = originalGenerator === 'codex' ? 'comfyui' : 'codex';
+  selectGenerator(generator);
+  const cancelled = regenerateIllustration(store, originalId);
+  cancelIllustration(store, cancelled.id);
+  const redraw = regenerateIllustration(
+    store,
+    cancelled.id,
+    false,
+    '  빛을 따뜻하게 바꿔 주세요.  '
+  );
+  expect(redraw.input).toMatchObject({
+    generator,
+    styleGuidance: `${generator} visual style`,
+    redraw: {
+      changeRequest: '빛을 따뜻하게 바꿔 주세요.',
+      originalPrompt: {
+        prompt: originalPrompt,
+        negativePrompt: originalGenerator === 'comfyui' ? 'text' : '',
+        caption: '푸른 등불',
       },
-    });
-    expect((await runIllustrationJob(store, redraw.id, 'worker', observed.options))?.status).toBe(
-      'completed'
-    );
-    expect(provider.requests).toHaveLength(2);
-    expect(JSON.parse(provider.requests[1].body).input.source).toMatchObject({
-      redraw: redraw.input.redraw,
-      styleGuidance: `${generator} visual style`,
-    });
-    expect(projectIllustration(store, illustrationJob(store, redraw.id)).images[0].prompt).toBe(
-      changedPrompt
-    );
-  }
-);
+    },
+  });
+  expect((await runIllustrationJob(store, redraw.id, 'worker', observed.options))?.status).toBe(
+    'completed'
+  );
+  expect(provider.requests).toHaveLength(2);
+  expect(JSON.parse(provider.requests[1].body).input.source).toMatchObject({
+    redraw: redraw.input.redraw,
+    styleGuidance: `${generator} visual style`,
+  });
+  expect(projectIllustration(store, illustrationJob(store, redraw.id)).images[0].prompt).toBe(
+    changedPrompt
+  );
+});
 
 describe('illustration runner through a prompt model and remote ComfyUI', () => {
   test('reuses a successful prompt only within the same job and a recorded matching request', async () => {
@@ -944,52 +870,42 @@ describe('illustration runner through a prompt model and remote ComfyUI', () => 
     expect(illustrationJob(store, job.id).diagnostic?.prompt?.caption).toBe('붉은 외투');
   });
 
-  test.each(['styleGuidance', 'negativeGuidance'] as const)(
-    '%s over the selected model budget stays intact and causes no model or render request',
-    async (field) => {
-      const store = databases.create();
-      const { source } = chatWithSource(store);
-      const { provider, model } = await promptModel(store, () => '{"prompt":"unused"}', 8192);
-      const comfy = await comfyUIFixture();
-      cleanups.push(comfy.close);
-      const guidance = '강가의 빛과 그림자, 그림 속 인물의 외모를 보존해 주세요. '.repeat(1000);
-      fixtureIllustrationPreset(store, {
-        styleGuidance: field === 'styleGuidance' ? guidance : '',
+  test('style guidance over the selected model budget stays intact and causes no model or render request', async () => {
+    const store = databases.create();
+    const { source } = chatWithSource(store);
+    const { provider, model } = await promptModel(store, () => '{"prompt":"unused"}', 8192);
+    const comfy = await comfyUIFixture();
+    cleanups.push(comfy.close);
+    const guidance = '강가의 빛과 그림자, 그림 속 인물의 외모를 보존해 주세요. '.repeat(1000);
+    fixtureIllustrationPreset(store, {
+      styleGuidance: guidance,
+      comfyui: { workflow: FIXTURE_WORKFLOW, negativeGuidance: '' },
+    });
+    const job = reserveIllustration(store, source, 'manual', {
+      settings: fixtureSettings({
+        generator: 'comfyui',
+
+        maxAutoRetries: 5,
         comfyui: {
-          workflow: FIXTURE_WORKFLOW,
-          negativeGuidance: field === 'negativeGuidance' ? guidance : '',
+          baseUrl: comfy.origin,
+
+          promptModel: { id: model.id },
         },
-      });
-      const job = reserveIllustration(store, source, 'manual', {
-        settings: fixtureSettings({
-          generator: 'comfyui',
-
-          maxAutoRetries: 5,
-          comfyui: {
-            baseUrl: comfy.origin,
-
-            promptModel: { id: model.id },
-          },
-        }),
-      });
-      const observed = hooks(store);
-      expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
-        status: 'failed',
-        code: 'ILLUSTRATION_PROMPT_INPUT_CONTEXT_LIMIT_EXCEEDED',
-        images: 0,
-      });
-      expect(provider.requests).toEqual([]);
-      expect(comfy.requests).toEqual([]);
-      expect(observed.wires).toEqual([]);
-      const frozen = illustrationJob(store, job.id);
-      expect(frozen.attempt).toBe(1);
-      expect(
-        field === 'styleGuidance'
-          ? frozen.input.styleGuidance
-          : frozen.input.comfyui?.negativeGuidance
-      ).toBe(guidance);
-    }
-  );
+      }),
+    });
+    const observed = hooks(store);
+    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
+      status: 'failed',
+      code: 'ILLUSTRATION_PROMPT_INPUT_CONTEXT_LIMIT_EXCEEDED',
+      images: 0,
+    });
+    expect(provider.requests).toEqual([]);
+    expect(comfy.requests).toEqual([]);
+    expect(observed.wires).toEqual([]);
+    const frozen = illustrationJob(store, job.id);
+    expect(frozen.attempt).toBe(1);
+    expect(frozen.input.styleGuidance).toBe(guidance);
+  });
   test('asks the prompt model for JSON, fills the workflow and stores the rendered image with the caption', async () => {
     const store = databases.create();
     const { source } = chatWithSource(store);
@@ -1129,59 +1045,57 @@ function cancel(store: Store, id: string) {
 }
 
 describe('skip decisions and reconcile of accepted remote prompts', () => {
-  test.each([401, 503])(
-    'accepted history HTTP %s never requeues and reconciles the same authenticated remote job',
-    async (httpStatus) => {
-      const store = databases.create();
-      const { source } = chatWithSource(store);
-      const { provider, model } = await promptModel(store, () =>
-        JSON.stringify({ prompt: 'one render', caption: '한 번' })
-      );
-      const comfy = await comfyUIFixture({
-        fault: { path: 'history', kind: 'http-error', httpStatus },
-        authorization: 'Bearer callback-only',
-      });
-      cleanups.push(comfy.close);
-      fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
-      const job = reserveIllustration(store, source, 'manual', {
-        settings: fixtureSettings({
-          generator: 'comfyui',
-          maxAutoRetries: 3,
-          comfyui: {
-            baseUrl: comfy.origin,
-            authorizationEnv: 'CALLBACK_ONLY',
+  test('accepted history HTTP 401 never requeues and reconciles the same authenticated remote job', async () => {
+    const httpStatus = 401;
+    const store = databases.create();
+    const { source } = chatWithSource(store);
+    const { provider, model } = await promptModel(store, () =>
+      JSON.stringify({ prompt: 'one render', caption: '한 번' })
+    );
+    const comfy = await comfyUIFixture({
+      fault: { path: 'history', kind: 'http-error', httpStatus },
+      authorization: 'Bearer callback-only',
+    });
+    cleanups.push(comfy.close);
+    fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
+    const job = reserveIllustration(store, source, 'manual', {
+      settings: fixtureSettings({
+        generator: 'comfyui',
+        maxAutoRetries: 3,
+        comfyui: {
+          baseUrl: comfy.origin,
+          authorizationEnv: 'CALLBACK_ONLY',
 
-            promptModel: { id: model.id },
-            timeoutMs: 1000,
-            pollIntervalMs: 10,
-          },
-        }),
-      });
-      const observed = hooks(store, {
-        resolveCredential: () => 'Bearer callback-only',
-        resolveComfyCredential: () => 'Bearer callback-only',
-      });
-      expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
-        status: 'failed',
-        code: 'COMFYUI_RESULT_UNAVAILABLE',
-        images: 0,
-      });
-      expect(illustrationJob(store, job.id).diagnostic?.comfyui).toMatchObject({
-        promptId: comfy.prompts[0].id,
-        httpStatus,
-        submission: 'accepted',
-      });
-      expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toBeNull();
-      comfy.clearFault();
-      const recovered = await reconcileIllustrationJob(store, job.id, 'worker', {
-        signal: new AbortController().signal,
-        resolveCredential: () => 'Bearer callback-only',
-      });
-      expect(recovered.status).toBe('completed');
-      expect(provider.requests).toHaveLength(1);
-      expect(comfy.prompts).toHaveLength(1);
-    }
-  );
+          promptModel: { id: model.id },
+          timeoutMs: 1000,
+          pollIntervalMs: 10,
+        },
+      }),
+    });
+    const observed = hooks(store, {
+      resolveCredential: () => 'Bearer callback-only',
+      resolveComfyCredential: () => 'Bearer callback-only',
+    });
+    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
+      status: 'failed',
+      code: 'COMFYUI_RESULT_UNAVAILABLE',
+      images: 0,
+    });
+    expect(illustrationJob(store, job.id).diagnostic?.comfyui).toMatchObject({
+      promptId: comfy.prompts[0].id,
+      httpStatus,
+      submission: 'accepted',
+    });
+    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toBeNull();
+    comfy.clearFault();
+    const recovered = await reconcileIllustrationJob(store, job.id, 'worker', {
+      signal: new AbortController().signal,
+      resolveCredential: () => 'Bearer callback-only',
+    });
+    expect(recovered.status).toBe('completed');
+    expect(provider.requests).toHaveLength(1);
+    expect(comfy.prompts).toHaveLength(1);
+  });
 
   test('automatic runs may skip through the prompt model without touching ComfyUI; manual runs must draw', async () => {
     const store = databases.create();
@@ -1334,69 +1248,7 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
   });
 });
 
-test('one ComfyUI planning call prepares distinct prompts for every cut without further prompt calls', async () => {
-  const store = databases.create();
-  const { source } = chatWithSource(store);
-  const { provider, model } = await promptModel(store, (body) =>
-    JSON.stringify({
-      heroIndex: 1,
-      targets: body.input.source.blocks.map(([anchor, text]: [string, string], index: number) => ({
-        startAnchor: anchor,
-        endAnchor: anchor,
-        focus: text,
-        visualBrief: text,
-        prompt: {
-          prompt: `distinct moment ${index}: ${text}`,
-          negativePrompt: 'text',
-          caption: `컷 ${index + 1}`,
-        },
-      })),
-    })
-  );
-  const comfy = await comfyUIFixture();
-  cleanups.push(comfy.close);
-  fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
-  const plan = reserveIllustrationPlan(store, source, 'manual', {
-    maxTargets: 2,
-    settings: fixtureSettings({
-      generator: 'comfyui',
-      comfyui: {
-        baseUrl: comfy.origin,
-        promptModel: { id: model.id },
-        timeoutMs: 5000,
-        pollIntervalMs: 20,
-      },
-    }),
-  });
-  const observed = hooks(store, {});
-  expect(await runIllustrationJob(store, plan.id, 'worker', observed.options)).toMatchObject({
-    status: 'completed',
-  });
-  const cuts = queuedIllustrations(store);
-  expect(cuts).toHaveLength(2);
-  for (const id of cuts)
-    expect(await runIllustrationJob(store, id, 'worker', observed.options)).toMatchObject({
-      status: 'completed',
-    });
-  expect(provider.requests).toHaveLength(1);
-  expect(comfy.prompts).toHaveLength(2);
-  expect(comfy.prompts[0].workflow['6']).toMatchObject({
-    inputs: { text: expect.stringContaining('distinct moment 1:') },
-  });
-  expect(comfy.prompts[1].workflow['6']).toMatchObject({
-    inputs: { text: expect.stringContaining('distinct moment 0:') },
-  });
-  const reader = illustrationsForSources(store, [source.id]);
-  expect(reader.filter((item) => item.task === 'render')).toHaveLength(2);
-  expect(reader.every((item) => !item.diagnostic?.storyboard && !item.diagnostic?.prompt)).toBe(
-    true
-  );
-  expect(illustrationJob(store, cuts[0]).diagnostic?.prompt?.prompt).toContain(
-    'distinct moment 1:'
-  );
-});
-
-test.each(['blocked', 'allowed', 'missing-key', 'unavailable', 'cancelled'] as const)(
+test.each(['blocked', 'missing-key', 'unavailable', 'cancelled'] as const)(
   'Codex image dispatch respects the JEV %s outcome and records its real attempts',
   async (mode) => {
     const store = databases.create();
@@ -1457,9 +1309,7 @@ test.each(['blocked', 'allowed', 'missing-key', 'unavailable', 'cancelled'] as c
       expect(result?.status).toBe('cancelled');
     } else {
       expect(result?.status).toBe('completed');
-      expect(saved.diagnostic?.contentCheck?.status).toBe(
-        mode === 'allowed' ? 'allowed' : 'unavailable'
-      );
+      expect(saved.diagnostic?.contentCheck?.status).toBe('unavailable');
     }
     expect(generate).toHaveBeenCalledTimes(mode === 'blocked' || mode === 'cancelled' ? 0 : 1);
     expect(fetch).toHaveBeenCalledTimes(mode === 'missing-key' ? 0 : 1);

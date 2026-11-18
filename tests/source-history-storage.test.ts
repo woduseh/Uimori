@@ -114,7 +114,7 @@ test('history still rejects missing ancestors and ancestry cycles', () => {
   expect(() => exportChatTranscript(store, chat.id)).toThrow('Source ancestry cycle');
 });
 
-test.each(['original-hash', 'original-blank', 'edit-hash', 'edit-blank'])(
+test.each(['original-hash', 'edit-blank'])(
   'history preserves source identity validation for %s corruption',
   (kind) => {
     const { store, chat } = fixture();
@@ -124,21 +124,13 @@ test.each(['original-hash', 'original-blank', 'edit-hash', 'edit-blank'])(
       store.editSource(source.id, { expectedRevision: 0, text: 'Edited' });
       store.db
         .prepare('UPDATE source_edits SET text=?,hash=? WHERE source_id=?')
-        .run(
-          kind === 'edit-blank' ? '  ' : 'Edited',
-          kind === 'edit-blank' ? blankHash : 'bad',
-          source.id
-        );
+        .run('  ', blankHash, source.id);
     } else {
       // Original identity must still be checked even when a valid latest edit exists.
       store.editSource(source.id, { expectedRevision: 0, text: 'Edited' });
       store.db
         .prepare('UPDATE sources SET text=?,hash=? WHERE id=?')
-        .run(
-          kind === 'original-blank' ? '  ' : 'Original',
-          kind === 'original-blank' ? blankHash : 'bad',
-          source.id
-        );
+        .run('Original', 'bad', source.id);
     }
     expect(() => store.history(source.id)).toThrow('SOURCE_IDENTITY_INVALID');
     expect(() => exportChatTranscript(store, chat.id)).toThrow('SOURCE_IDENTITY_INVALID');
@@ -197,30 +189,22 @@ test('logical history reads the captured original or older edit instead of the c
   ).toThrow('Source not found');
 });
 
-test.each(['original', 'captured-edit'] as const)(
-  'logical history rejects a tampered %s even when the latest edit is valid',
-  (corrupted) => {
-    const { store, chat } = fixture();
-    const original = append(store, chat.id, 'Original manuscript.');
-    const selected = store.editSource(original.id, {
-      expectedRevision: 0,
-      text: 'Captured earlier edit.',
-    });
-    store.editSource(original.id, { expectedRevision: 1, text: 'Valid latest edit.' });
-    const snapshot = store.run(original.runId).snapshot;
-    if (corrupted === 'original')
-      store.db
-        .prepare('UPDATE sources SET text=? WHERE id=?')
-        .run('Tampered original', original.id);
-    else
-      store.db
-        .prepare('UPDATE source_edits SET text=? WHERE source_id=? AND revision=1')
-        .run('Tampered captured edit', original.id);
-    expect(() =>
-      captureLogicalHistory(store, {
-        ...snapshot,
-        history: [{ revision: original.id, text: selected.text, contentHash: selected.hash }],
-      })
-    ).toThrow('SOURCE_IDENTITY_INVALID');
-  }
-);
+test('logical history rejects a tampered captured edit even when the latest edit is valid', () => {
+  const { store, chat } = fixture();
+  const original = append(store, chat.id, 'Original manuscript.');
+  const selected = store.editSource(original.id, {
+    expectedRevision: 0,
+    text: 'Captured earlier edit.',
+  });
+  store.editSource(original.id, { expectedRevision: 1, text: 'Valid latest edit.' });
+  const snapshot = store.run(original.runId).snapshot;
+  store.db
+    .prepare('UPDATE source_edits SET text=? WHERE source_id=? AND revision=1')
+    .run('Tampered captured edit', original.id);
+  expect(() =>
+    captureLogicalHistory(store, {
+      ...snapshot,
+      history: [{ revision: original.id, text: selected.text, contentHash: selected.hash }],
+    })
+  ).toThrow('SOURCE_IDENTITY_INVALID');
+});

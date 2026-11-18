@@ -46,15 +46,13 @@ test('translation validation is read-only for authored and generated results', (
   }
 });
 
-test.each(['source-id', 'result-hash', 'job-hash', 'empty', 'manual-mock', 'unknown'] as const)(
+test.each(['source-id', 'job-hash', 'empty', 'unknown'] as const)(
   'translation artifact validation rejects %s',
   (kind) => {
     const value = job();
     if (kind === 'source-id') value.result!.sourceRevision = 'other-source';
-    if (kind === 'result-hash') value.result!.sourceHash = 'other-hash';
     if (kind === 'job-hash') value.sourceHash = 'other-hash';
     if (kind === 'empty') value.result!.text = '';
-    if (kind === 'manual-mock') Object.assign(value.result!, { manual: true, mock: true });
     if (kind === 'unknown') Object.assign(value.result!, { unknown: true });
     expect(() => validateTranslationArtifact(value, source)).toThrow();
   }

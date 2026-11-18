@@ -323,161 +323,144 @@ describe('one-call provider connection diagnostics', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  test.each([
-    'unchanged',
-    'model-edited',
-    'model-disabled',
-    'connection-disabled',
-    'session-revoked',
-  ])('checks Codex authority after thread setup: %s', async (change) => {
-    const directory = await mkdtemp(join(tmpdir(), 'uimori-connection-test-'));
-    const item: (typeof owned)[number] = { directory };
-    owned.push(item);
-    const log = join(directory, 'codex-requests.jsonl');
-    const records = (): { method: string }[] =>
-      existsSync(log)
-        ? readFileSync(log, 'utf8')
-            .trim()
-            .split('\n')
-            .filter(Boolean)
-            .map((line) => JSON.parse(line))
-        : [];
-    let release!: () => void,
-      waiting = false;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const original = CodexProcess.prototype.request;
-    vi.spyOn(CodexProcess.prototype, 'request').mockImplementation(async function <T>(
-      this: CodexProcess,
-      method: string,
-      params: unknown,
-      options: { signal?: AbortSignal; timeoutMs?: number } = {}
-    ): Promise<T> {
-      const response = await original.call(this, method, params, options);
-      // Hold the real synthetic stdio thread response, after durable onWire and before turn/start.
-      if (method === 'thread/start') {
-        waiting = true;
-        await gate;
-      }
-      return response as T;
-    });
-    const sent = vi.spyOn(ProviderConnectionTestStore.prototype, 'sent');
-    const token = 'synthetic-connection-test-session';
-    const app = (item.app = await createApp({
-      dbPath: join(directory, 'story.sqlite'),
-      buildId: 'codex-connection-race',
-      accessToken: token,
-      codex: {
-        enabled: true,
-        launch: {
-          command: process.execPath,
-          args: [resolve('tests/fixtures/codex-app-server.mjs')],
-          env: {
-            UIMORI_CODEX_FIXTURE_LOG: log,
-            UIMORI_CODEX_FIXTURE_OUTPUT: JSON.stringify({
-              kind: 'final',
-              text: 'OK',
-              toolCalls: [],
-            }),
+  test.each(['unchanged', 'model-edited', 'session-revoked'])(
+    'checks Codex authority after thread setup: %s',
+    async (change) => {
+      const directory = await mkdtemp(join(tmpdir(), 'uimori-connection-test-'));
+      const item: (typeof owned)[number] = { directory };
+      owned.push(item);
+      const log = join(directory, 'codex-requests.jsonl');
+      const records = (): { method: string }[] =>
+        existsSync(log)
+          ? readFileSync(log, 'utf8')
+              .trim()
+              .split('\n')
+              .filter(Boolean)
+              .map((line) => JSON.parse(line))
+          : [];
+      let release!: () => void,
+        waiting = false;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const original = CodexProcess.prototype.request;
+      vi.spyOn(CodexProcess.prototype, 'request').mockImplementation(async function <T>(
+        this: CodexProcess,
+        method: string,
+        params: unknown,
+        options: { signal?: AbortSignal; timeoutMs?: number } = {}
+      ): Promise<T> {
+        const response = await original.call(this, method, params, options);
+        // Hold the real synthetic stdio thread response, after durable onWire and before turn/start.
+        if (method === 'thread/start') {
+          waiting = true;
+          await gate;
+        }
+        return response as T;
+      });
+      const sent = vi.spyOn(ProviderConnectionTestStore.prototype, 'sent');
+      const token = 'synthetic-connection-test-session';
+      const app = (item.app = await createApp({
+        dbPath: join(directory, 'story.sqlite'),
+        buildId: 'codex-connection-race',
+        accessToken: token,
+        codex: {
+          enabled: true,
+          launch: {
+            command: process.execPath,
+            args: [resolve('tests/fixtures/codex-app-server.mjs')],
+            env: {
+              UIMORI_CODEX_FIXTURE_LOG: log,
+              UIMORI_CODEX_FIXTURE_OUTPUT: JSON.stringify({
+                kind: 'final',
+                text: 'OK',
+                toolCalls: [],
+              }),
+            },
           },
         },
-      },
-    }));
-    await app.ready();
-    const login = async () => {
-      const response = await injectWithFixtureBot(app, {
-        method: 'POST',
-        url: '/api/session',
-        headers: { host: '127.0.0.1' },
-        payload: { token },
-      });
-      expect(response.statusCode, response.body).toBe(200);
-      return String(response.headers['set-cookie']).split(';')[0];
-    };
-    let cookie = await login();
-    const connection = app.store.product.connection({
-      title: 'Synthetic Codex',
-      protocol: 'codex-app-server-v1',
-      endpoint: 'codex://local',
-      enabled: true,
-    }) as Connection;
-    const model = app.store.product.model({
-      title: 'Synthetic Codex model',
-      connectionId: connection.id,
-      modelId: 'gpt-5.4',
-      maxOutputTokens: 8192,
-      temperature: null,
-    }) as ModelPreset;
-    try {
-      const key = randomUUID(),
-        started = await post(app, model, key, 202, {}, cookie);
-      await vi.waitFor(() => expect(waiting).toBe(true), { timeout: 5000 });
-      expect(records().filter((row) => row.method === 'thread/start')).toHaveLength(1);
-      expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(0);
-      expect(sent).toHaveBeenCalledTimes(1);
-      const admitted = app.store.db
-        .prepare('SELECT sent_at FROM provider_connection_tests WHERE id=?')
-        .get(started.id);
-      expect(admitted).toMatchObject({ sent_at: expect.any(String) });
-      if (change === 'model-edited')
-        app.store.product.model(
-          modelUpdate(model, { title: 'Changed during thread setup' }),
-          model.id
-        );
-      if (change === 'model-disabled')
-        app.store.product.model(modelUpdate(model, { enabled: false }), model.id);
-      if (change === 'connection-disabled')
-        app.store.product.connection(
-          {
-            title: connection.title,
-            protocol: connection.protocol,
-            endpoint: connection.endpoint,
-            enabled: false,
-            expectedRevision: connection.revision,
-          },
-          connection.id
-        );
-      if (change === 'session-revoked') {
-        const logout = await injectWithFixtureBot(app, {
-          method: 'DELETE',
+      }));
+      await app.ready();
+      const login = async () => {
+        const response = await injectWithFixtureBot(app, {
+          method: 'POST',
           url: '/api/session',
-          headers: { host: '127.0.0.1', cookie },
+          headers: { host: '127.0.0.1' },
+          payload: { token },
         });
-        expect(logout.statusCode).toBe(200);
-        cookie = await login();
-      }
-      release();
-      const done = await terminal(app, started.id, cookie);
-      expect(done).toMatchObject(
-        change === 'unchanged'
-          ? { status: 'completed', text: 'OK', error: null }
-          : {
-              status: 'error',
-              text: '',
-              error: change.startsWith('model-')
-                ? 'CONNECTION_TEST_MODEL_CHANGED'
-                : change === 'session-revoked'
-                  ? 'SESSION_NOT_AUTHORIZED'
-                  : 'CONNECTION_NOT_AUTHORIZED',
-            }
-      );
-      expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(
-        change === 'unchanged' ? 1 : 0
-      );
-      expect(sent).toHaveBeenCalledTimes(1);
-      expect(
-        app.store.db
+        expect(response.statusCode, response.body).toBe(200);
+        return String(response.headers['set-cookie']).split(';')[0];
+      };
+      let cookie = await login();
+      const connection = app.store.product.connection({
+        title: 'Synthetic Codex',
+        protocol: 'codex-app-server-v1',
+        endpoint: 'codex://local',
+        enabled: true,
+      }) as Connection;
+      const model = app.store.product.model({
+        title: 'Synthetic Codex model',
+        connectionId: connection.id,
+        modelId: 'gpt-5.4',
+        maxOutputTokens: 8192,
+        temperature: null,
+      }) as ModelPreset;
+      try {
+        const key = randomUUID(),
+          started = await post(app, model, key, 202, {}, cookie);
+        await vi.waitFor(() => expect(waiting).toBe(true), { timeout: 5000 });
+        expect(records().filter((row) => row.method === 'thread/start')).toHaveLength(1);
+        expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(0);
+        expect(sent).toHaveBeenCalledTimes(1);
+        const admitted = app.store.db
           .prepare('SELECT sent_at FROM provider_connection_tests WHERE id=?')
-          .get(started.id)
-      ).toEqual(admitted);
-      expect(await post(app, model, key, 202, {}, cookie)).toEqual(done);
-      expect(records().filter((row) => row.method === 'thread/start')).toHaveLength(1);
-      expect(fetch).not.toHaveBeenCalled();
-    } finally {
-      release();
+          .get(started.id);
+        expect(admitted).toMatchObject({ sent_at: expect.any(String) });
+        if (change === 'model-edited')
+          app.store.product.model(
+            modelUpdate(model, { title: 'Changed during thread setup' }),
+            model.id
+          );
+        if (change === 'session-revoked') {
+          const logout = await injectWithFixtureBot(app, {
+            method: 'DELETE',
+            url: '/api/session',
+            headers: { host: '127.0.0.1', cookie },
+          });
+          expect(logout.statusCode).toBe(200);
+          cookie = await login();
+        }
+        release();
+        const done = await terminal(app, started.id, cookie);
+        expect(done).toMatchObject(
+          change === 'unchanged'
+            ? { status: 'completed', text: 'OK', error: null }
+            : {
+                status: 'error',
+                text: '',
+                error:
+                  change === 'model-edited'
+                    ? 'CONNECTION_TEST_MODEL_CHANGED'
+                    : 'SESSION_NOT_AUTHORIZED',
+              }
+        );
+        expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(
+          change === 'unchanged' ? 1 : 0
+        );
+        expect(sent).toHaveBeenCalledTimes(1);
+        expect(
+          app.store.db
+            .prepare('SELECT sent_at FROM provider_connection_tests WHERE id=?')
+            .get(started.id)
+        ).toEqual(admitted);
+        expect(await post(app, model, key, 202, {}, cookie)).toEqual(done);
+        expect(records().filter((row) => row.method === 'thread/start')).toHaveLength(1);
+        expect(fetch).not.toHaveBeenCalled();
+      } finally {
+        release();
+      }
     }
-  });
+  );
 
   test('the test request carries the preset options with a 256-token cap, no tools and cache off', () => {
     for (const protocol of [

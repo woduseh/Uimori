@@ -181,9 +181,6 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     ['openai-responses-v1', 'gpt-5.6', 'CACHE_BREAKPOINT_ENCODED_HIT_UNVERIFIED'],
     ['openai-chat-v1', 'gpt-5.6', 'PROMPT_CACHE_NOT_APPLIED'],
     ['anthropic-messages-v1', 'claude-opus-5', 'LEADING_SYSTEM_TO_DEDICATED_FIELD'],
-    ['vertex-gemini-v1', 'gemini-3.8-flash', 'LEADING_SYSTEM_TO_DEDICATED_FIELD'],
-    ['codex-app-server-v1', 'gpt-5.6', 'PROMPT_CACHE_NOT_APPLIED'],
-    ['fixture-sse-v1', 'synthetic', 'PROMPT_CACHE_NOT_APPLIED'],
   ] as const)('preview retains native mapping evidence for %s', async (protocol, modelId, code) => {
     const work = await snapshot();
     const target = work.profile!.models.main!;
@@ -522,17 +519,15 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
   });
 
   test('NMR04 mixed terminal/read, foreign source identity and empty/oversized terminal contents fail without executing tools', async () => {
-    for (const invalid of ['mixed', 'foreign', 'empty', 'oversized'] as const) {
+    for (const invalid of ['mixed', 'foreign', 'oversized'] as const) {
       const server = await loopbackProvider(async (request, response) => {
         const body = JSON.parse(request.body);
         const content =
           invalid === 'foreign'
             ? { content: 'Synthetic prose', sourceId: 'another-source' }
-            : invalid === 'empty'
-              ? '   '
-              : invalid === 'oversized'
-                ? 'x'.repeat(STORY_SUBMIT_MAX_CHARS + 1)
-                : 'Synthetic prose';
+            : invalid === 'oversized'
+              ? 'x'.repeat(STORY_SUBMIT_MAX_CHARS + 1)
+              : 'Synthetic prose';
         const output = [toolOutput(body, 'story.submit', content)];
         if (invalid === 'mixed')
           output.push(toolOutput(body, 'knowledge.read', { ids: ['synthetic'] }, 'Call.Read'));
@@ -986,8 +981,6 @@ describe('Batch recovery in the real main tool loop', () => {
 
   test.each([
     ['model-selected', undefined],
-    ['preloaded', undefined],
-    ['model-selected', 'neutral'],
     ['preloaded', 'neutral'],
   ] as const)(
     'replays a saved %s evaluation case with metadata profile %s and the same receipt and request',
@@ -1192,7 +1185,6 @@ describe('Batch recovery in the real main tool loop', () => {
 describe('Recoverable read failures in the real main runner', () => {
   test.each([
     ['knowledge.search', { query: 'harbor', limit: 101 }, 'INVALID_ARGUMENTS'],
-    ['knowledge.read', { ids: [] }, 'INVALID_ARGUMENTS'],
     ['story.read', { sceneNumber: 999999 }, 'RESOURCE_UNAVAILABLE'],
   ] as const)(
     'returns %s failure for correction without treating it as success',

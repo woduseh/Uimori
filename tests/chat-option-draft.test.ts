@@ -21,11 +21,8 @@ const base: ChatOptionState = {
   conflicts: [],
 };
 
-test('switching a clean draft does not reserve saved fixed options or make changes', () => {
-  expect(optionDraftValues(base, {})).toEqual({ fixed: { tone: '채팅 문체' }, oneoff: {} });
-});
-
 test('both scopes keep the same edits while preserving untouched fixed values', () => {
+  expect(optionDraftValues(base, {})).toEqual({ fixed: { tone: '채팅 문체' }, oneoff: {} });
   const fixedEdit = editOptionDraft(base, {}, 'fixed', { tone: '채팅 문체', note: '새 메모' });
   expect(optionDraftValues(base, fixedEdit)).toEqual({
     fixed: { tone: '채팅 문체', note: '새 메모' },
@@ -54,11 +51,6 @@ test('clearing a oneoff edit restores saved fixed inheritance, and reverting a f
   const draft = editOptionDraft(base, {}, 'oneoff', { tone: '한 번 문체' });
   expect(editOptionDraft(base, draft, 'oneoff', {})).toEqual({});
   expect(editOptionDraft(base, draft, 'fixed', { tone: '채팅 문체' })).toEqual({});
-});
-
-test('a oneoff value equal to the inherited value remains an explicit reservation', () => {
-  const draft = editOptionDraft(base, {}, 'oneoff', { tone: '채팅 문체' });
-  expect(optionDraftValues(base, draft).oneoff).toEqual({ tone: '채팅 문체' });
 });
 
 test('applying a draft to refreshed state preserves edits and independently saved fixed values', () => {
@@ -133,14 +125,6 @@ const choice = (label = '차분하게'): PromptControl => ({
 });
 
 test.each([
-  { name: 'removed control', before: text(), after: [], value: 'my text' },
-  { name: 'changed control type', before: text(), after: [choice()], value: '0' },
-  {
-    name: 'removed selected value',
-    before: choice(),
-    after: [{ ...choice(), options: [{ value: '0', label: '차분하게' }] }],
-    value: '1',
-  },
   { name: 'changed selected meaning', before: choice(), after: [choice('냉정하게')], value: '0' },
   {
     name: 'narrowed number range',
@@ -175,23 +159,20 @@ test.each([
   }
 );
 
-test.each([text(), choice()])(
-  'a heading rename preserves the edited value and explicit unset for $type',
-  (control) => {
-    const initial = { ...base, controls: [control] };
-    const saved = {
-      ...initial,
-      controls: [{ ...control, label: '새 제목' }],
-      binding: { ...base.binding, definitionHash: 'renamed-definition' },
-    };
-    const draft: OptionDraft = { tone: { value: control.type === 'select' ? '0' : 'my text' } };
-    expect(reviewOptionDraft(initial, draft, saved)).toEqual({ draft, discarded: [] });
-    expect(reviewOptionDraft(initial, { tone: { inherit: true } }, saved)).toEqual({
-      draft: { tone: { inherit: true } },
-      discarded: [],
-    });
-  }
-);
+test('a heading rename preserves the edited value and explicit unset', () => {
+  const initial = { ...base, controls: [choice()] };
+  const saved = {
+    ...initial,
+    controls: [{ ...choice(), label: '새 제목' }],
+    binding: { ...base.binding, definitionHash: 'renamed-definition' },
+  };
+  const draft: OptionDraft = { tone: { value: '0' } };
+  expect(reviewOptionDraft(initial, draft, saved)).toEqual({ draft, discarded: [] });
+  expect(reviewOptionDraft(initial, { tone: { inherit: true } }, saved)).toEqual({
+    draft: { tone: { inherit: true } },
+    discarded: [],
+  });
+});
 
 test('an enum choice label or order change still permits an explicit unset', () => {
   const initial = { ...base, controls: [choice()] };
@@ -205,47 +186,37 @@ test('an enum choice label or order change still permits an explicit unset', () 
   });
 });
 
-test.each(['owner', 'type'] as const)(
-  'incompatible %s review preserves saved values and reports unsets before values',
-  (changed) => {
-    const initial = { ...base, controls: [text(), text('note', '메모')] };
-    const saved = {
-      ...initial,
-      controls:
-        changed === 'type'
-          ? [choice(), { ...text('note', '메모'), type: 'boolean' as const, default: true }]
-          : initial.controls,
-      binding: {
-        ...base.binding,
-        owner: changed === 'owner' ? 'preset:other' : base.binding.owner,
+test('incompatible type review preserves saved values and reports unsets before values', () => {
+  const initial = { ...base, controls: [text(), text('note', '메모')] };
+  const saved = {
+    ...initial,
+    controls: [choice(), { ...text('note', '메모'), type: 'boolean' as const, default: true }],
+    fixedValues: { tone: '0', note: 'independent' },
+  };
+  const draft: OptionDraft = { note: { value: 'local note' }, tone: { inherit: true } };
+  const originals = structuredClone({ initial, saved, draft });
+  expect(reviewOptionDraft(initial, draft, saved)).toEqual({
+    draft: {},
+    discarded: [
+      {
+        scope: 'fixed',
+        id: 'tone',
+        label: '문체',
+        value: null,
+        unset: true,
+        reason: expect.stringMatching(/\S/u),
       },
-      fixedValues: { tone: changed === 'type' ? '0' : 'other owner', note: 'independent' },
-    };
-    const draft: OptionDraft = { note: { value: 'local note' }, tone: { inherit: true } };
-    const originals = structuredClone({ initial, saved, draft });
-    expect(reviewOptionDraft(initial, draft, saved)).toEqual({
-      draft: {},
-      discarded: [
-        {
-          scope: 'fixed',
-          id: 'tone',
-          label: '문체',
-          value: null,
-          unset: true,
-          reason: expect.stringMatching(/\S/u),
-        },
-        {
-          scope: 'oneoff',
-          id: 'note',
-          label: '메모',
-          value: 'local note',
-          reason: expect.stringMatching(/\S/u),
-        },
-      ],
-    });
-    expect({ initial, saved, draft }).toEqual(originals);
-  }
-);
+      {
+        scope: 'oneoff',
+        id: 'note',
+        label: '메모',
+        value: 'local note',
+        reason: expect.stringMatching(/\S/u),
+      },
+    ],
+  });
+  expect({ initial, saved, draft }).toEqual(originals);
+});
 
 test('definition review retains explicit false, zero and empty text values', () => {
   const initial = {

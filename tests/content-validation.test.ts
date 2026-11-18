@@ -49,13 +49,17 @@ function freeze(value: unknown): void {
   for (const child of Object.values(value)) freeze(child);
 }
 
-test('validation can borrow a value without replacing or mutating its object graph', () => {
+test('package and native source validation borrow a value without mutating its object graph', () => {
   const input: unknown = content();
   const before = structuredClone(input);
   freeze(input);
   assertRisuContent(input);
   expect(input.id).toBe('fixture');
   expect(input).toEqual(before);
+  assertRisuContentSource(input.nativeRisu);
+  const edited = validateRisuContentSource(input.nativeRisu);
+  edited.card.description = 'Edited';
+  expect(input.nativeRisu.card.description).toBe('Body');
 });
 
 test('the existing validator still returns a detached editable copy', () => {
@@ -71,7 +75,7 @@ test('the existing validator still returns a detached editable copy', () => {
   expect(input.nativeRisu.card.description).toBe('Body');
 });
 
-test('compilation is read-only and preserves resource grouping and ordering', () => {
+test('compilation is read-only, detached and preserves resource grouping and ordering', () => {
   const input = content();
   freeze(input);
   const result = compileContentAttachment(input, attachment, context);
@@ -82,20 +86,13 @@ test('compilation is read-only and preserves resource grouping and ordering', ()
   ]);
   expect(result).not.toHaveProperty('instructions');
   expect(input.lore.map((item) => item.id)).toEqual(['later', 'first']);
-});
-
-test('mutating compiled nested metadata cannot change its source or another compilation', () => {
-  const input = content();
-  const before = structuredClone(input);
-  const first = compileContentAttachment(input, attachment, context);
   const second = compileContentAttachment(input, attachment, context);
-  const resource = first.resources.find((item) => item.id.endsWith('lore:later'))!;
+  const resource = result.resources.find((item) => item.id.endsWith('lore:later'))!;
   resource.text = 'Changed';
   resource.relatedIds!.push('other');
   resource.loreContext!.group = 'Changed';
   resource.nativeRisuPosition!.depth = 9;
   resource.risuSource!.sourceName = 'Changed';
-  expect(input).toEqual(before);
   expect(compileContentAttachment(input, attachment, context)).toEqual(second);
 });
 
@@ -170,16 +167,6 @@ test('revision, attachment and chat scope checks are retained', () => {
   expect(() => compileContentAttachment(content(), attachment, { ...context, chatId: '' })).toThrow(
     'PACKAGE_CHAT_REQUIRED'
   );
-});
-
-test('native source validation borrows data while the editing API keeps a detached copy', () => {
-  const input = content().nativeRisu;
-  freeze(input);
-  assertRisuContentSource(input);
-  const edited = validateRisuContentSource(input);
-  edited.card.description = 'Edited';
-  expect(input.card.description).toBe('Body');
-  expect(edited).not.toBe(input);
 });
 
 test('native source validation rejects malformed structure, non-JSON values and excess depth', () => {

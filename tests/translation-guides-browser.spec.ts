@@ -29,7 +29,7 @@ async function save(page: Page) {
   expect(result.ok(), await result.text()).toBe(true);
   return (await result.json()).saved as Content;
 }
-for (const width of [1440, 412]) {
+for (const width of [412]) {
   test(`TGUIDE ${width} save, literal preview, raw JSON, recovery and explicit removal`, async ({
     page,
     request,

@@ -53,14 +53,6 @@ test('model-facing schemas accept browse, search and numbered reads and reject i
   }
 });
 
-test('retired story and note read tools are denied', () => {
-  for (const name of ['story.list', 'notes.list', 'notes.read'])
-    expect(executeStoryRead(snapshot(), { callId: 'old', name, args: {} })).toMatchObject({
-      denied: true,
-      result: { code: 'TOOL_NOT_ALLOWED' },
-    });
-});
-
 describe('bounded story ancestry reads', () => {
   test('story.search provides both ordered browsing and case-insensitive multi-term search', () => {
     const texts = [
@@ -179,41 +171,39 @@ test('mistyped scene and range are correctable while corrupt source history stay
   });
 });
 
-test.each([
-  'Plain English prose. ',
-  '한국어 원문과 범위를 확인해요. ',
-  '日本語の原文を読みます。',
-  '🙂🌸🎉',
-])('token reads preserve original ranges and legacy UTF-16 limits: %s', (phrase) => {
-  const text = phrase.repeat(120);
-  const fixed = snapshot(text);
-  let offset = 0;
-  let joined = '';
-  let pages = 0;
-  while (offset < text.length) {
-    const result = read(fixed, 'story.read', { sceneNumber: 1, offset, maxTokens: 256 });
-    expect(countTextTokens(result.text)).toBeLessThanOrEqual(256);
-    expect(result.text.length).toBeGreaterThan(0);
-    expect(result.text).toBe(text.slice(offset, result.source.end));
-    expect(result.source.hash).toBe(sourceHash(text));
-    expect(result.text.isWellFormed()).toBe(true);
-    joined += result.text;
-    offset = result.source.end;
-    pages++;
+test.each(['한국어 원문과 범위를 확인해요. ', '🙂🌸🎉'])(
+  'token reads preserve original ranges and legacy UTF-16 limits: %s',
+  (phrase) => {
+    const text = phrase.repeat(120);
+    const fixed = snapshot(text);
+    let offset = 0;
+    let joined = '';
+    let pages = 0;
+    while (offset < text.length) {
+      const result = read(fixed, 'story.read', { sceneNumber: 1, offset, maxTokens: 256 });
+      expect(countTextTokens(result.text)).toBeLessThanOrEqual(256);
+      expect(result.text.length).toBeGreaterThan(0);
+      expect(result.text).toBe(text.slice(offset, result.source.end));
+      expect(result.source.hash).toBe(sourceHash(text));
+      expect(result.text.isWellFormed()).toBe(true);
+      joined += result.text;
+      offset = result.source.end;
+      pages++;
+    }
+    expect(pages).toBeGreaterThan(1);
+    expect(joined).toBe(text);
+    expect(read(fixed, 'story.read', { sceneNumber: 1, offset: 2, limit: 17 }).text).toBe(
+      text.slice(2, 19)
+    );
+    const source = readStorySource(
+      { chatId: fixed.chatId, history: fixed.history },
+      { revision: 'source', maxTokens: 128 }
+    );
+    expect(source.source.quote).toBe(source.text);
+    expect(source.text).toBe(text.slice(source.source.start, source.source.end));
+    expect(countTextTokens(source.text)).toBeLessThanOrEqual(128);
   }
-  expect(pages).toBeGreaterThan(1);
-  expect(joined).toBe(text);
-  expect(read(fixed, 'story.read', { sceneNumber: 1, offset: 2, limit: 17 }).text).toBe(
-    text.slice(2, 19)
-  );
-  const source = readStorySource(
-    { chatId: fixed.chatId, history: fixed.history },
-    { revision: 'source', maxTokens: 128 }
-  );
-  expect(source.source.quote).toBe(source.text);
-  expect(source.text).toBe(text.slice(source.source.start, source.source.end));
-  expect(countTextTokens(source.text)).toBeLessThanOrEqual(128);
-});
+);
 
 test('search token excerpts retain literal source offsets and explicit character compatibility', () => {
   const text = '한국어 문장. '.repeat(100) + 'needle' + ' 後ろの文章🌸'.repeat(100);

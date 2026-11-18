@@ -87,6 +87,11 @@ describe('grouped toggle document', () => {
     );
     expect(editToggleItem(source, 1, {}, '')).toBe('# unknown\r\na=A=select=,one,,');
     expect(() => editToggleItem(source, 1, {}, 'x=y')).toThrow('등호');
+    // Explicit caption keys and untouched caption bytes survive a description edit.
+    const keyed = 'a=A\r\nfirst=Old=caption\nsecond=Keep=caption\r\nb=B';
+    expect(editToggleItem(keyed, 0, {}, 'New\nKeep')).toBe(
+      'a=A\r\nfirst=New=caption\nsecond=Keep=caption\r\nb=B'
+    );
   });
   it('adds bounded groups and controls while reserving keys from unknown rows', () => {
     expect(addToggleGroup('opaque', 'G')).toBe('opaque\n=G=group\n==groupEnd');
@@ -97,12 +102,6 @@ describe('grouped toggle document', () => {
       '=G=group\r\nnew_toggle=Future=unknown\r\nnew_toggle_2=새 항목=text\r\n==groupEnd'
     );
     expect(addToggleItem('', -1, 'select')).toBe('new_toggle=새 항목=select=선택 1,선택 2');
-  });
-  it('preserves explicit caption keys and untouched caption bytes during a description edit', () => {
-    const source = 'a=A\r\nfirst=Old=caption\nsecond=Keep=caption\r\nb=B';
-    expect(editToggleItem(source, 0, {}, 'New\nKeep')).toBe(
-      'a=A\r\nfirst=New=caption\nsecond=Keep=caption\r\nb=B'
-    );
   });
   it('leaves malformed boundaries visible and rejects ambiguous structural operations', () => {
     for (const source of [
