@@ -2595,7 +2595,7 @@
   --story-radius: 0px;
   --story-font: var(--story-serif);
   --story-seal: light-dark(#a8372a, #d96f5e);
-  --story-brush: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='26' viewBox='0 0 220 26'><filter id='b' x='-5%' y='-60%' width='110%' height='220%'><feTurbulence type='fractalNoise' baseFrequency='.035 .55' numOctaves='2' seed='4' result='t'/><feDisplacementMap in='SourceGraphic' in2='t' scale='10' xChannelSelector='R' yChannelSelector='G'/></filter><path d='M6 14C50 8 130 9 214 12C170 16 70 19 6 14Z' filter='url(%23b)'/></svg>");
+  --story-brush: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='30' viewBox='0 0 240 30'><defs><filter id='e' x='-5%' y='-50%' width='110%' height='200%'><feTurbulence type='fractalNoise' baseFrequency='.02 .11' numOctaves='2' seed='7' result='w'/><feDisplacementMap in='SourceGraphic' in2='w' scale='5' xChannelSelector='R' yChannelSelector='G'/></filter><filter id='d' x='-5%' y='-50%' width='110%' height='200%'><feTurbulence type='fractalNoise' baseFrequency='.02 .11' numOctaves='2' seed='7' result='w'/><feDisplacementMap in='SourceGraphic' in2='w' scale='5' xChannelSelector='R' yChannelSelector='G' result='p'/><feTurbulence type='fractalNoise' baseFrequency='.008 1.1' numOctaves='1' seed='11' result='s'/><feColorMatrix in='s' type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 4 0 0 0 -1.5' result='m'/><feComposite in='p' in2='m' operator='in'/></filter></defs><path d='M6 15C24 6 62 5 122 9C172 11 212 12 236 14C206 17 172 19 122 21C70 23 30 24 6 15Z' filter='url(%23d)'/><path d='M6 15C24 6 62 5 112 8.5L118 21C70 23 30 24 6 15Z' filter='url(%23e)'/></svg>");
   border: 3px solid var(--story-ink);
   border-radius: 0;
   box-shadow:
@@ -3492,9 +3492,10 @@
 /* One dry stroke of the brush under a headline. */
 .story-ui[data-story-ui-style="east-asian"] .story-ui-text-headline::after {
   display: block;
-  inline-size: 5.5em;
-  block-size: 0.65em;
-  margin-block-start: 0.1em;
+  inline-size: 7.5em;
+  max-inline-size: 100%;
+  block-size: 0.95em;
+  margin-block-start: -0.05em;
   background: var(--story-seal);
   content: "";
   mask: var(--story-brush) left center / 100% 100% no-repeat;
@@ -3565,6 +3566,12 @@
   font-weight: 800;
   letter-spacing: 0.14em;
   rotate: -1.2deg;
+}
+.story-ui[data-story-ui-style="east-asian"]
+  .story-ui-column
+  > *
+  > .story-ui-button[data-variant="primary"] {
+  rotate: -0.4deg;
 }
 .story-ui[data-story-ui-style="east-asian"] .story-ui-tabs {
   gap: 0;
@@ -3645,44 +3652,49 @@
   > .story-ui-frame-body {
   background: none;
 }
-/* The speaker's name stands in a vertical column beside the line. */
+/* The speaker's name stands in a vertical column beside the line; a note about how it is
+   said sits above the words, so a long note cannot stretch the box. */
 .story-ui[data-story-ui-style="east-asian"] .story-ui-dialogue-box {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 0 0.9em;
+  align-items: start;
+  gap: 0.2em 0.9em;
   background: var(--story-surface);
   border: 1px solid color-mix(in srgb, var(--story-ink) 45%, transparent);
   border-radius: 0;
 }
 .story-ui[data-story-ui-style="east-asian"] .story-ui-dialogue-head {
-  flex-direction: row;
-  justify-content: flex-start;
-  gap: 0.5em;
-  margin: 0;
-  padding-inline-end: 0.2em;
-  padding-block-end: 0.7em;
-  border-block-end: 1px solid color-mix(in srgb, var(--story-ink) 45%, transparent);
-  writing-mode: vertical-rl;
+  display: contents;
 }
 .story-ui[data-story-ui-style="east-asian"] .story-ui-dialogue-name {
   position: static;
+  grid-row: 1 / span 2;
+  grid-column: 1;
   max-inline-size: none;
-  padding: 0;
+  max-block-size: 7em;
+  padding: 0 0.7em 0 0;
   color: var(--story-ink);
   background: none;
+  border-inline-start: 0;
+  border-right: 1px solid color-mix(in srgb, var(--story-ink) 45%, transparent);
+  border-radius: 0;
   font-size: 1em;
   font-weight: 800;
   letter-spacing: 0.2em;
   translate: none;
+  writing-mode: vertical-rl;
 }
 .story-ui[data-story-ui-style="east-asian"] .story-ui-dialogue-status {
+  grid-column: 2;
   font-style: normal;
   letter-spacing: 0.1em;
 }
 .story-ui[data-story-ui-style="east-asian"] .story-ui-dialogue-text {
   grid-column: 2;
 }
-.story-ui[data-story-ui-style="east-asian"] .story-ui-dialogue-box > :only-child {
+.story-ui[data-story-ui-style="east-asian"]
+  .story-ui-dialogue-box
+  > .story-ui-dialogue-text:only-child {
   grid-column: 1 / -1;
 }
 /* A grade is a square seal. */
