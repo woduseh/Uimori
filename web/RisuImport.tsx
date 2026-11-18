@@ -296,20 +296,25 @@ export function RisuImport({
     }
   }
 
-  function discardAndClose() {
-    if (active.current || uncertain || result) return;
-    const preparedId = preview?.preparedId;
-    const uploadId = source?.uploadId;
+  function clearImport() {
     setSource(null);
     setPreview(null);
     setKind(defaultKind);
     setImageHandoffIds([]);
     setAllowPartial(false);
     setCreateChat(false);
+    setResult(null);
     setError('');
     setNotice('');
     submission.current = null;
     requestKey.current = null;
+  }
+
+  function discardAndClose() {
+    if (active.current || uncertain || result) return;
+    const preparedId = preview?.preparedId;
+    const uploadId = source?.uploadId;
+    clearImport();
     setOpen(false);
     if (preparedId || uploadId)
       void api('/risu-imports/discard', {
@@ -328,7 +333,10 @@ export function RisuImport({
           className="secondary"
           icon={UploadIcon}
           onClick={() => {
-            if (!source && !active.current) setKind(defaultKind);
+            // A confirmed import is finished; reopening starts the next one. An uncertain
+            // outcome keeps its draft so the same request can be retried.
+            if (result && !active.current) clearImport();
+            else if (!source && !active.current) setKind(defaultKind);
             setOpen(true);
           }}
         />

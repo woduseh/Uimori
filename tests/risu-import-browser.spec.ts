@@ -292,6 +292,11 @@ test('RISUKINDUI03 bot import defaults to the library and appears in navigation 
   await expect(dialog.getByText('봇을 서재로 가져왔어요.', { exact: false })).toBeVisible();
   expect(await (await request.get('/api/chats')).json()).toHaveLength(before.length);
   await dialog.getByRole('button', { name: '자료 가져오기 닫기', exact: true }).click();
+  // A finished import does not trap the next one behind its success notice.
+  await page.getByRole('button', { name: '자료 가져오기', exact: true }).click();
+  await expect(dialog.getByText('봇을 서재로 가져왔어요.', { exact: false })).toBeHidden();
+  await expect(dialog.getByLabel('Risu 파일 선택', { exact: true })).toBeEnabled();
+  await dialog.getByRole('button', { name: '자료 가져오기 닫기', exact: true }).click();
   const nav = await visibleNavigation(page);
   const section = nav.getByRole('button', { name: '봇', exact: true });
   if ((await section.getAttribute('aria-expanded')) === 'false') await section.click();

@@ -3,7 +3,7 @@ import { readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node
 import { join } from 'node:path';
 import { readCharacterCardPath } from './character-card-file.js';
 import { analyzeNativeRisuImport } from './risu-native-import.js';
-import { processImage } from './image-processing.js';
+import { IMAGE_PROCESSING_SLOTS, processImage } from './image-processing.js';
 import { object, string } from './risu-import-card.js';
 import type { PreparedRisuAsset } from './risu-import-assets.js';
 import {
@@ -15,7 +15,7 @@ import { HttpError } from './request-validation.js';
 import { bundleDigest, type PreparedBundleImage } from './resource-bundle.js';
 import type { PreparedRisuImport } from './risu-import-prepared.js';
 
-/** One image at a time, including extraction: a large card never becomes a base64 image array. */
+/** At most one buffer per image slot, including extraction: a large card never becomes an image array. */
 export async function prepareRisuInWorker(input: {
   path: string;
   name: string;
@@ -54,23 +54,20 @@ export async function prepareRisuInWorker(input: {
   const card = await readCharacterCardPath(input.path, input.name, input.kind, input.directory);
   if ((card.card.assets?.length ?? 0) > RISU_IMPORT_MAX_ASSETS)
     throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
-  const preparedAssets = new Map<string, PreparedRisuAsset | null>();
-  const sourceHashes = new Map<string, PreparedRisuAsset | null>();
-  const images = new Map<string, PreparedBundleImage>();
-  let total = 0;
+  const entries: { uri: string; read: () => Buffer }[] = [];
+  const uris = new Set<string>();
   for (const raw of card.card.assets ?? []) {
     const uri = string(object(raw).uri);
-    if (preparedAssets.has(uri)) continue;
+    if (uris.has(uri)) continue;
     const path = uri.replace(/^(?:embeded|embedded):\/\//iu, '');
     const read = /^(?:embeded|embedded):\/\//iu.test(uri) ? card.members.get(path) : undefined;
     if (!read) continue;
-    // Container errors are not silently converted into missing-image findings.
-    const bytes = read();
-    const hash = createHash('sha256').update(bytes).digest('hex');
-    if (sourceHashes.has(hash)) {
-      preparedAssets.set(uri, sourceHashes.get(hash)!);
-      continue;
-    }
+    uris.add(uri);
+    entries.push({ uri, read });
+  }
+  const stored = new Map<string, PreparedBundleImage>();
+  let total = 0;
+  const prepareImage = async (bytes: Buffer): Promise<PreparedRisuAsset | null> => {
     try {
       const supported =
         bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) ||
@@ -83,22 +80,52 @@ export async function prepareRisuInWorker(input: {
       if (image.bytes.length > 64 * 1024 * 1024)
         throw new HttpError(400, 'Prepared image too large');
       const descriptor: PreparedRisuAsset = { hash: image.hash, mime: image.mime };
-      if (!images.has(image.hash)) {
+      if (!stored.has(image.hash)) {
         total += image.bytes.length;
         if (total > RISU_IMPORT_MAX_PREPARED_BYTES)
           throw new HttpError(413, 'RISU_IMPORT_IMAGES_TOO_LARGE');
         const path = join(input.directory, `${image.hash}.image`);
         writeFileSync(path, image.bytes, { flag: 'wx' });
-        images.set(image.hash, { ...descriptor, path, bytes: image.bytes.length });
+        stored.set(image.hash, { ...descriptor, path, bytes: image.bytes.length });
       }
-      sourceHashes.set(hash, descriptor);
-      preparedAssets.set(uri, descriptor);
+      return descriptor;
     } catch (error) {
       if (!(error instanceof HttpError) || error.statusCode === 413) throw error;
-      sourceHashes.set(hash, null);
-      preparedAssets.set(uri, null);
+      return null;
     }
-  }
+  };
+  // Validation decodes every frame and dominates large cards, so the image slots run together.
+  // Identical source bytes share one validation; results keep the card's asset order.
+  const bySource = new Map<string, Promise<PreparedRisuAsset | null>>();
+  const results: (PreparedRisuAsset | null)[] = new Array(entries.length);
+  let next = 0;
+  let failure: { error: unknown } | undefined;
+  await Promise.all(
+    Array.from({ length: Math.min(IMAGE_PROCESSING_SLOTS, entries.length) }, async () => {
+      while (!failure && next < entries.length) {
+        const index = next++;
+        try {
+          // Container errors are not silently converted into missing-image findings.
+          const bytes = entries[index].read();
+          const hash = createHash('sha256').update(bytes).digest('hex');
+          let pending = bySource.get(hash);
+          if (!pending) {
+            pending = prepareImage(bytes);
+            bySource.set(hash, pending);
+          }
+          results[index] = await pending;
+        } catch (error) {
+          failure ??= { error };
+        }
+      }
+    })
+  );
+  if (failure) throw failure.error;
+  const preparedAssets = new Map(entries.map((entry, index) => [entry.uri, results[index]]));
+  const images = new Map<string, PreparedBundleImage>();
+  for (const descriptor of results)
+    if (descriptor && !images.has(descriptor.hash))
+      images.set(descriptor.hash, stored.get(descriptor.hash)!);
   const analyzed = analyzeNativeRisuImport(card, preparedAssets);
   const { members, ...cardMetadata } = card;
   writeFileSync(

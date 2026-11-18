@@ -393,3 +393,48 @@ test('malformed input rejected by the worker removes its owned staging directory
   );
   expect(readdirSync(join(resolve(store.path, '..'), 'risu-prepared'))).toEqual([]);
 });
+
+test('parallel image preparation keeps card order and validates repeated bytes once', async () => {
+  const store = fixture();
+  const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#00ffff'];
+  const pngs = await Promise.all(
+    colors.map((background) =>
+      sharp({ create: { width: 2, height: 2, channels: 4, background } })
+        .png()
+        .toBuffer()
+    )
+  );
+  // More assets than image slots, with repeats of earlier members and of earlier bytes.
+  const members = ['a', 'b', 'a', 'c', 'd', 'b', 'e', 'copy-of-c'];
+  const bytesFor = (member: string) => pngs['abcde'.indexOf(member === 'copy-of-c' ? 'c' : member)];
+  const card = {
+    spec: 'chara_card_v3',
+    spec_version: '3.0',
+    data: {
+      name: 'Parallel card',
+      description: '',
+      first_mes: 'Opening',
+      assets: members.map((member, index) => ({
+        name: `asset-${index}`,
+        type: 'icon',
+        uri: `embeded://${member}.png`,
+        ext: 'png',
+      })),
+    },
+  };
+  const preview = await prepareStoredRisuImport(store.path, {
+    source: {
+      name: 'parallel.charx',
+      base64: writeRisuZip(
+        new Map([
+          ['card.json', Buffer.from(JSON.stringify(card))],
+          ...[...new Set(members)].map((member) => [`${member}.png`, bytesFor(member)] as const),
+        ])
+      ).toString('base64'),
+    },
+  });
+  const { processImage } = await import('../server/image-processing.js');
+  const expected = await Promise.all(pngs.map(async (png) => (await processImage(png)).hash));
+  const prepared = readPreparedRisuImport(store.path, preview.preparedId!);
+  expect(prepared.images.map((image) => image.hash)).toEqual(expected);
+});

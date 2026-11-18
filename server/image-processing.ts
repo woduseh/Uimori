@@ -6,7 +6,8 @@ import { IMAGE_INPUT_MAX_BYTES } from '../core/image-limits.js';
 export const MAX_IMAGE_INPUT_BYTES = IMAGE_INPUT_MAX_BYTES;
 const MAX_PIXELS = 64 * 1024 * 1024;
 const MAX_FRAMES = 500;
-const MAX_CONCURRENT_IMAGES = 2;
+/** Sharp runs on libuv's four default threads; one stays free for request file I/O. */
+export const IMAGE_PROCESSING_SLOTS = 3;
 let active = 0;
 const waiting: (() => void)[] = [];
 
@@ -20,7 +21,7 @@ export type ProcessedImage = {
 
 /** All intake conversions share the same bounded memory/CPU slots. */
 export async function withImageProcessing<T>(work: () => Promise<T>): Promise<T> {
-  if (active >= MAX_CONCURRENT_IMAGES) await new Promise<void>((resolve) => waiting.push(resolve));
+  if (active >= IMAGE_PROCESSING_SLOTS) await new Promise<void>((resolve) => waiting.push(resolve));
   else active++;
   try {
     return await work();
