@@ -868,8 +868,9 @@ test('ILUI delete confirmation translates only app-owned titles and preserves th
   page,
   request,
 }) => {
-  const { chat, source } = await seed(request);
+  // Disable automatic generation before the seeded run so earlier cases cannot fill the slots.
   await settings(request, { generator: 'fixture', automatic: false, maxPerSource: 3 });
+  const { chat, source } = await seed(request);
   const requested = await request.post(`/api/sources/${source.id}/illustrations`, { data: {} });
   expect(requested.ok(), await requested.text()).toBe(true);
   let render: Illustration | undefined;

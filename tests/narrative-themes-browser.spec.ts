@@ -312,7 +312,11 @@ for (const [layout, width, mode] of readerCases) {
     );
     const requestBox = await scene.locator('[data-uimori-part="request"]').boundingBox();
     const personaBox = await requestPersona.boundingBox();
-    expect(personaBox!.y + personaBox!.height).toBeLessThanOrEqual(requestBox!.y + 1);
+    if (width === 412) {
+      expect(personaBox!.y + personaBox!.height).toBeLessThanOrEqual(requestBox!.y + 1);
+    } else {
+      expect(personaBox!.x).toBeGreaterThanOrEqual(requestBox!.x + requestBox!.width - 1);
+    }
     await noHorizontalOverflow(page, scene);
     if (layout === 'classic-frame') {
       const botButton = gallery.locator('[data-uimori-part="bot-portrait"] button');
@@ -726,11 +730,7 @@ for (const [width, mode] of [[412, 'light']] as const) {
     }
     const requestBox = await scene.locator('[data-uimori-part="request"]').boundingBox();
     const personaBox = await requestPersona.boundingBox();
-    if (width === 412) {
-      expect(personaBox!.y + personaBox!.height).toBeLessThanOrEqual(requestBox!.y + 1);
-    } else {
-      expect(personaBox!.x).toBeGreaterThanOrEqual(requestBox!.x + requestBox!.width - 1);
-    }
+    expect(personaBox!.y + personaBox!.height).toBeLessThanOrEqual(requestBox!.y + 1);
     await expect(requestPersona.locator('figcaption small').filter({ visible: true })).toHaveCount(
       0
     );
