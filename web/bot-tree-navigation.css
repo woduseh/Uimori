@@ -99,6 +99,12 @@
 .bot-tree-navigation .action-menu-body small {
   white-space: normal;
 }
+.bot-tree-folder-heading .bot-folder-toggle > .library-folder-cover {
+  gap: 1px;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-small);
+}
 .bot-tree-folder-heading .bot-folder-toggle span {
   overflow: hidden;
   text-overflow: ellipsis;

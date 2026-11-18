@@ -16,7 +16,6 @@ import {
   AddIcon,
   ExpandIcon,
   FolderAddIcon,
-  FolderIcon,
   LibraryIcon,
   PromptIcon,
   RunningIcon,
@@ -28,6 +27,8 @@ import { api } from './api.js';
 import { chatActivitySummaries } from './chat-activity-summaries.js';
 import { useActivityFeed } from './useActivityFeed.js';
 import { ActivityNavigation } from './ActivityNavigation.js';
+import { LibraryFolderCover } from './LibraryFolderCover.js';
+import { contentPortraitUrl } from './content-portrait.js';
 import './bot-tree-navigation.css';
 
 export type { ChatFolder } from '../core/product.js';
@@ -229,6 +230,11 @@ export function BotNavigation(
         )
         .map((bot) => ({ key: `bot:${bot.id}`, title: bot.title, at: recent(bot), bot }))
     );
+  const folderPortraits = (folderId: string) =>
+    bots
+      .filter((bot) => folderOf(bot) === folderId)
+      .map((bot) => contentPortraitUrl(bot))
+      .filter(Boolean);
   const roots = sort([
     ...botEntries(null),
     ...folders.map((folder) => ({
@@ -696,7 +702,11 @@ export function BotNavigation(
                             size={12}
                             className={view.open[entry.key] ? 'expanded' : ''}
                           />
-                          <FolderIcon size={16} />
+                          <LibraryFolderCover
+                            coverImageHash={entry.folder!.coverImageHash}
+                            portraits={folderPortraits(entry.folder!.id)}
+                            iconSize={16}
+                          />
                           <span>{entry.title}</span>
                         </button>
                         <div className="bot-row-actions">

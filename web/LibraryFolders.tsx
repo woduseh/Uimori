@@ -16,13 +16,13 @@ import {
   CloseIcon,
   EditIcon,
   FolderAddIcon,
-  FolderIcon,
   ImagesIcon,
   MoreIcon,
   MoveIcon,
 } from './ui-icons.js';
 import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
 import { uploadPackageImage } from './package-image-upload.js';
+import { LibraryFolderCover, folderCoverUrl } from './LibraryFolderCover.js';
 import './library-folders.css';
 import './content-picker.css';
 
@@ -33,24 +33,7 @@ const categoryLabelKeys: Record<LibraryCategory, string> = {
   prompts: 'library.prompts',
 };
 export type FolderFilter = 'all' | 'unclassified' | string;
-const blobUrl = (hash: string) => `/api/package-image-blobs/${hash}`;
 const blobHash = (url: string) => /\/api\/package-image-blobs\/([a-f0-9]{64})$/u.exec(url)?.[1];
-
-/** A chosen image fills the cover; otherwise up to four portraits from the folder stand in. */
-function FolderCover({ folder, portraits }: { folder: LibraryFolder; portraits?: string[] }) {
-  const urls = folder.coverImageHash
-    ? [blobUrl(folder.coverImageHash)]
-    : (portraits ?? []).slice(0, 4);
-  return urls.length ? (
-    <span className="library-folder-cover" data-count={urls.length} aria-hidden="true">
-      {urls.map((url) => (
-        <img key={url} src={url} alt="" loading="lazy" draggable={false} />
-      ))}
-    </span>
-  ) : (
-    <FolderIcon size={28} aria-hidden="true" />
-  );
-}
 
 export function useLibraryOrganization(
   library: Library | null,
@@ -360,7 +343,11 @@ export function LibraryFolders({
               aria-label={t('library.openFolder', { v0: folder.title })}
               onClick={() => onChange(folder.id)}
             >
-              <FolderCover folder={folder} portraits={covers?.[folder.id]} />
+              <LibraryFolderCover
+                coverImageHash={folder.coverImageHash}
+                portraits={covers?.[folder.id]}
+                iconSize={28}
+              />
               <span>
                 <strong title={folder.title}>{folder.title}</strong>
                 <small>{t('library.itemCount', { count: counts[folder.id] ?? 0 })}</small>
@@ -420,9 +407,10 @@ export function LibraryFolders({
                 disabled={busy || uploadingCover}
                 onClick={() => void applyCover(coverFolder.id, null)}
               >
-                <FolderCover
-                  folder={{ ...coverFolder, coverImageHash: null }}
+                <LibraryFolderCover
+                  coverImageHash={null}
                   portraits={coverPortraits}
+                  iconSize={28}
                 />
                 <span>{t('library.automaticCover')}</span>
                 {!coverFolder.coverImageHash && <CheckIcon size={16} aria-hidden="true" />}
@@ -438,7 +426,7 @@ export function LibraryFolders({
                   onClick={() => void applyCover(coverFolder.id, hash)}
                 >
                   <span className="library-folder-cover" data-count={1} aria-hidden="true">
-                    <img src={blobUrl(hash)} alt="" loading="lazy" />
+                    <img src={folderCoverUrl(hash)} alt="" loading="lazy" />
                   </span>
                   {coverFolder.coverImageHash === hash && (
                     <CheckIcon size={16} aria-hidden="true" />
