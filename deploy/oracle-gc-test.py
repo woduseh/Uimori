@@ -186,6 +186,63 @@ class GarbageCollection(unittest.TestCase):
         self.assertEqual(next_plan["images"], [])
         self.assertEqual(next_plan["directories"], [])
 
+    def test_multi_tagged_workspace_image_untags_exact_refs_without_force(self):
+        self.containers.append({"Name": "/tia-workspace-workspace-1", "Image": "tia-workspace",
+                                "State": {"Running": True, "Health": {"Status": "healthy"}}})
+        from datetime import datetime, timedelta, timezone
+        stamp = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat()
+        target = image("ws-old", managed=False, tags=["sisters-workspace-candidate:old",
+                        "tia-workspace-local:old"], created=stamp)
+        previous = image("ws-previous", managed=False,
+                         tags=[gc.WORKSPACE_ROLLBACK_TAG], created=stamp)
+        self.images.extend([target, previous])
+        seen = []
+        def docker(*args):
+            seen.append(args)
+            if args[:2] == ("image", "inspect"):
+                tag = args[2]
+                matches = [item for item in self.images if tag in item.get("RepoTags", [])]
+                return json.dumps(matches)
+            if args[:2] == ("image", "rm"):
+                tag = args[2]
+                if tag == "obsolete":
+                    self.images = [item for item in self.images if item["Id"] != "obsolete"]
+                else:
+                    target["RepoTags"].remove(tag)
+                    if not target["RepoTags"]:
+                        self.images.remove(target)
+                return ""
+            if args == ("image", "ls", "-aq", "--no-trunc"):
+                return "\n".join(item["Id"] for item in self.images)
+            raise AssertionError(args)
+        plan = self.plan()
+        self.assertEqual(plan["imageTags"]["ws-old"],
+                         ["sisters-workspace-candidate:old", "tia-workspace-local:old"])
+        result = gc.apply_plan(plan, self.root, docker)
+        self.assertEqual(result["status"], "PASS", result)
+        self.assertIn("ws-old", result["removed"]["images"])
+        self.assertEqual([call for call in seen if call[:2] == ("image", "rm") and call[2] != "obsolete"], [
+            ("image", "rm", "sisters-workspace-candidate:old"),
+            ("image", "rm", "tia-workspace-local:old"),
+        ])
+        self.assertIn(previous, self.images)
+
+    def test_multi_tagged_image_rebound_tag_refuses_all_removal(self):
+        plan = {"images": ["old"], "imageTags": {"old": ["uimori:old", "uimori:old-alias"]},
+                "directories": []}
+        calls = []
+        def docker(*args):
+            calls.append(args)
+            if args[:2] == ("image", "inspect"):
+                return json.dumps([{"Id": "other" if args[2] == "uimori:old-alias" else "old"}])
+            if args == ("image", "ls", "-aq", "--no-trunc"):
+                return "old"
+            raise AssertionError("Unexpected mutation: " + repr(args))
+        outcome = gc.apply_plan(plan, self.root, docker)
+        self.assertEqual(outcome["status"], "WARN")
+        self.assertFalse(any(call[:2] == ("image", "rm") for call in calls))
+        self.assertEqual(outcome["removed"]["images"], [])
+
     def test_cascading_docker_reclamation_is_success_not_a_stale_plan_warning(self):
         self.images.extend([image("obsolete-a"), image("obsolete-b")])
         plan = {"images": ["obsolete-a", "obsolete-b"], "directories": []}

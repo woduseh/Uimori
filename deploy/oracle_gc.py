@@ -143,8 +143,10 @@ def plan_gc(root, live, containers, images, *, now=None):
                        and image_age_seconds(image, now) >= BUILD_LAYER_MIN_AGE_SECONDS)
         if final or build_layer:
             remove_images.append(image["Id"])
+    image_tags = {image["Id"]: list(image.get("RepoTags") or []) for image in images
+                  if image["Id"] in remove_images}
     return {"status": "PLAN", "recovery": str(current_dir), "images": sorted(set(remove_images)),
-            "directories": sorted(remove_dirs), "protectedImages": sorted(protected_images),
+            "imageTags": image_tags, "directories": sorted(remove_dirs), "protectedImages": sorted(protected_images),
             "protectedDirectories": sorted(protected_directories), "unknownDirectories": sorted(unknown)}
 
 
@@ -156,7 +158,22 @@ def apply_plan(plan, root, docker, remove=shutil.rmtree):
             continue
         failure = None
         try:
-            docker("image", "rm", image)  # No --force: newly referenced images cannot be removed.
+            tags = list(plan.get("imageTags", {}).get(image, []))
+            if len(tags) > 1:
+                # Docker refuses `image rm <ID>` with multiple tags. Check that every
+                # tag still resolves to this exact planned ID before untagging it.
+                # Never use --force; Docker protects images referenced by containers.
+                for tag in tags:
+                    inspected = json.loads(docker("image", "inspect", tag))
+                    if len(inspected) != 1 or inspected[0].get("Id") != image:
+                        raise RuntimeError("Planned image tag changed")
+                for tag in tags:
+                    inspected = json.loads(docker("image", "inspect", tag))
+                    if len(inspected) != 1 or inspected[0].get("Id") != image:
+                        raise RuntimeError("Planned image tag changed")
+                    docker("image", "rm", tag)
+            else:
+                docker("image", "rm", image)  # No --force: protect new container references.
         except Exception as error:
             failure = error
         try:
