@@ -15,7 +15,11 @@ import {
   type RequestFileUpload,
 } from '../core/request-files.js';
 import { apiBinary } from './api.js';
-import { deleteRecoveryIfToken, readRecovery, writeRecovery } from './editor-recovery.js';
+import {
+  deleteAttachmentDraft,
+  readAttachmentDraft,
+  writeAttachmentDraft,
+} from './attachment-draft-storage.js';
 import { message } from './i18n.js';
 import { requestDraftKey, type DraftImage } from './request-image-draft.js';
 
@@ -78,12 +82,11 @@ export async function loadHelperAttachments(id: string): Promise<void> {
   owner.loading ??= (async () => {
     try {
       const key = await requestDraftKey(logicalKey(id));
-      const saved = await readRecovery<HelperAttachmentDraft>(key);
+      const draft = await readAttachmentDraft<HelperAttachmentDraft>(key);
       if (owner.generation !== generation) return;
-      const draft = saved?.model;
       const latestToken = sessionStorage.getItem(tokenKey(id));
       if (draft && acceptedTokens(id).includes(draft.token)) {
-        await deleteRecoveryIfToken(key, draft.token);
+        await deleteAttachmentDraft(key, draft.token);
         const empty = emptyDraft();
         publish(owner, {
           draft:
@@ -124,12 +127,7 @@ function persist(id: string, draft: HelperAttachmentDraft): Promise<void> {
   const write = (owner.write ?? Promise.resolve())
     .catch(() => {})
     .then(async () => {
-      await writeRecovery(await requestDraftKey(logicalKey(id)), {
-        token: draft.token,
-        revision: null,
-        model: draft,
-        rawFields: {},
-      });
+      await writeAttachmentDraft(await requestDraftKey(logicalKey(id)), draft);
     });
   owner.write = write;
   void write.catch(() => publish(owner, { error: message('helperAttachments.saveFailed') }));
@@ -219,7 +217,7 @@ export async function acceptHelperAttachments(id: string, token: string): Promis
     sessionStorage.setItem(tokenKey(id), draft.token);
     publish(owner, { draft, error: '' });
   }
-  await deleteRecoveryIfToken(await requestDraftKey(logicalKey(id)), token);
+  await deleteAttachmentDraft(await requestDraftKey(logicalKey(id)), token);
   sessionStorage.setItem(
     acceptedKey(id),
     JSON.stringify(acceptedTokens(id).filter((value) => value !== token))
@@ -231,7 +229,7 @@ export async function deleteHelperAttachmentRecovery(id: string): Promise<void> 
   const owner = entry(id);
   owner.generation++;
   await owner.write?.catch(() => {});
-  await writeRecovery(await requestDraftKey(logicalKey(id)));
+  await deleteAttachmentDraft(await requestDraftKey(logicalKey(id)), null);
   publish(owner, { draft: emptyDraft(), ready: true, error: '' });
   sessionStorage.removeItem(acceptedKey(id));
   sessionStorage.removeItem(tokenKey(id));

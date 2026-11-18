@@ -26,7 +26,13 @@ export function captureReaderLocation(
   chatId: string,
   article?: HTMLElement
 ): ReaderTarget | null {
-  const location = readerLocation(reader, article);
+  return targetAtReaderLocation(chatId, readerLocation(reader, article));
+}
+
+export function targetAtReaderLocation(
+  chatId: string,
+  location: ReturnType<typeof readerLocation>
+): ReaderTarget | null {
   if (!location?.source.dataset.sourceId) return null;
   const { source, block, top } = location;
   const rect = block?.getBoundingClientRect();
@@ -52,6 +58,7 @@ export function useReadingSync(options: {
   chatId: string;
   reader: RefObject<HTMLDivElement | null>;
   storageKey: string;
+  capture: (target: HTMLElement | null) => ReaderTarget | null;
   onResume: (target: ReaderTarget) => void;
 }) {
   const [clientId] = useState(browserClientId);
@@ -68,8 +75,10 @@ export function useReadingSync(options: {
     key: string;
     remember: (target: ReaderTarget) => void;
     offer: (target: ReaderTarget, revision: number) => void;
+    flushScroll: () => boolean;
   } | null>(null);
   const pending = useRef<ReaderTarget | null>(null);
+  const flushScroll = useCallback(() => actions.current?.flushScroll() ?? false, []);
   const remember = useCallback((target: ReaderTarget) => {
     if (actions.current?.key === target.chatId) actions.current.remember(target);
     else pending.current = target;
@@ -84,6 +93,8 @@ export function useReadingSync(options: {
     let dirty: ReaderTarget | null = null;
     let touched = false;
     let userUntil = 0;
+    let scrollTimer: ReturnType<typeof setTimeout> | undefined;
+    let pendingScroll: { target: HTMLElement; user: boolean } | undefined;
     let loading: Promise<void> | null = null;
     const controller = new AbortController();
     const path = `/chats/${encodeURIComponent(chatId)}/reading-position`;
@@ -179,39 +190,52 @@ export function useReadingSync(options: {
         return;
       userUntil = performance.now() + 2500;
     };
+    const captureScroll = () => {
+      clearTimeout(scrollTimer);
+      scrollTimer = undefined;
+      if (!pendingScroll) return false;
+      const { target, user } = pendingScroll;
+      pendingScroll = undefined;
+      const { chatId: currentChat, reader, capture } = current.current;
+      if (currentChat !== chatId || !reader.current?.contains(target)) return false;
+      const captured = capture(target);
+      if (user && captured) {
+        touched = true;
+        dirty = captured;
+      }
+      return true;
+    };
     const scroll = (event: Event) => {
       const node = current.current.reader.current;
       const target = event.target;
       const body =
         target instanceof HTMLElement && target.matches(THEME_BODY_SCROLL_SELECTOR) ? target : null;
-      if (
-        !node ||
-        (target !== node && (!body || !node.contains(body))) ||
-        performance.now() > userUntil ||
-        document.visibilityState !== 'visible'
-      )
-        return;
-      const captured = captureReaderLocation(
-        node,
-        chatId,
-        body?.closest<HTMLElement>('[data-source-id][data-representation]') ?? undefined
-      );
-      if (captured) {
-        touched = true;
-        dirty = captured;
-      }
+      if (!node || (target !== node && (!body || !node.contains(body)))) return;
+      pendingScroll = {
+        target: body ?? node,
+        user: performance.now() <= userUntil && document.visibilityState === 'visible',
+      };
+      scrollTimer ??= setTimeout(captureScroll, 150);
     };
     const visibility = () => {
-      if (document.visibilityState === 'hidden') void save();
-      else
+      if (document.visibilityState === 'hidden') {
+        captureScroll();
+        void save();
+      } else
         void load().then(() => {
           if (alive) return save();
         });
     };
     const pagehide = () => {
+      if (!captureScroll() && current.current.chatId === chatId) current.current.capture(null);
       void save();
     };
-    actions.current = { key, remember: rememberTarget, offer: offerTarget };
+    actions.current = {
+      key,
+      remember: rememberTarget,
+      offer: offerTarget,
+      flushScroll: captureScroll,
+    };
     if (pending.current?.chatId === chatId) {
       touched = true;
       dirty = pending.current;
@@ -230,6 +254,7 @@ export function useReadingSync(options: {
     document.addEventListener('visibilitychange', visibility);
     addEventListener('pagehide', pagehide);
     return () => {
+      captureScroll();
       alive = false;
       controller.abort();
       clearInterval(timer);
@@ -273,6 +298,7 @@ export function useReadingSync(options: {
     setState((old) => ({ ...old }));
   };
   return {
+    flushScroll,
     remember,
     other: resume,
     resumeOrigin: other ? ('other-device' as const) : ('saved' as const),

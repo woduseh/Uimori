@@ -44,8 +44,37 @@ export function readerLocation(reader: HTMLElement, article?: HTMLElement) {
     scrollport !== reader &&
     (viewport.bottom <= outer.top || viewport.top >= outer.bottom);
   const top = (clippedBody ? viewport.top : Math.max(outer.top, viewport.top)) + 12;
-  const block = [...source.querySelectorAll<HTMLElement>('[data-block-anchor]')].find(
-    (item) => item.offsetParent !== null && item.getBoundingClientRect().bottom > top
-  );
+  const block = firstReadingBlock(source, top);
   return { source, block, scrollport, top };
+}
+
+export function localReadingBlock(
+  reader: HTMLElement,
+  location: ReturnType<typeof readerLocation>
+) {
+  if (location?.block || reader.querySelector(THEME_BODY_SCROLL_SELECTOR)) return location?.block;
+  return firstReadingBlock(reader, reader.getBoundingClientRect().top + 12, true);
+}
+
+function firstReadingBlock(scope: HTMLElement, top: number, ordered = false) {
+  const blocks = scope.querySelectorAll<HTMLElement>('[data-block-anchor]');
+  const markers = blocks[0]?.parentElement;
+  if (
+    ordered ||
+    (markers?.classList.contains('reading-markdown') &&
+      blocks[blocks.length - 1]?.parentElement === markers)
+  ) {
+    let low = 0;
+    let high = blocks.length;
+    while (low < high) {
+      const mid = (low + high) >>> 1;
+      if (blocks[mid].offsetParent === null) break;
+      if (blocks[mid].getBoundingClientRect().bottom <= top) low = mid + 1;
+      else high = mid;
+    }
+    if (low === high) return blocks[low] as HTMLElement | undefined;
+  }
+  for (const item of blocks) {
+    if (item.offsetParent !== null && item.getBoundingClientRect().bottom > top) return item;
+  }
 }

@@ -203,7 +203,7 @@ test('RIMAGE failed IndexedDB writes retain latest text and offer the previous a
         const key = `request:${sessionStorage.getItem('uimori:request-draft-tab')}:draft:${id}`;
         return new Promise<number>((resolve) => {
           const request = db.transaction('buffers').objectStore('buffers').get(key);
-          request.onsuccess = () => resolve(request.result?.model.images.length ?? 0);
+          request.onsuccess = () => resolve(request.result?.model.imageIds.length ?? 0);
         });
       }, chat.id)
     )
@@ -231,6 +231,75 @@ test('RIMAGE failed IndexedDB writes retain latest text and offer the previous a
   await page.getByRole('button', { name: '이전 첨부 복구', exact: true }).click();
   await expect(thumbnails(page)).toHaveCount(1);
   await expect(composer(page)).toHaveValue('선택하는 동안 다시 고친 최신 텍스트');
+});
+
+test('RIMAGE an existing attachment survives upgrades and text edits when further Blob writes are unavailable', async ({
+  page,
+  request,
+}) => {
+  const chat = await createChat(request);
+  await open(page, chat);
+  const attachment = await image();
+  await page.evaluate(
+    async ({ id, bytes }) => {
+      const tab = sessionStorage.getItem('uimori:request-draft-tab');
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const opened = indexedDB.open('uimori-editor-recovery', 1);
+        opened.onsuccess = () => resolve(opened.result);
+        opened.onerror = () => reject(opened.error);
+      });
+      const token = crypto.randomUUID();
+      const text = '이전 버전의 초안';
+      sessionStorage.setItem(`draft:${id}`, text);
+      sessionStorage.setItem(`request-state:draft:${id}`, JSON.stringify({ token, accepted: [] }));
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction('buffers', 'readwrite');
+        const blob = new Blob([Uint8Array.from(bytes)], { type: 'image/png' });
+        tx.objectStore('buffers').put(
+          {
+            token,
+            revision: null,
+            rawFields: {},
+            model: {
+              token,
+              text,
+              images: [{ id: crypto.randomUUID(), name: '이전.png', width: 64, height: 48, blob }],
+            },
+          },
+          `request:${tab}:draft:${id}`
+        );
+        tx.oncomplete = () => resolve();
+        tx.onabort = () => reject(tx.error);
+      });
+      db.close();
+    },
+    { id: chat.id, bytes: [...attachment.buffer] }
+  );
+  await page.reload();
+  await expect(composer(page)).toHaveValue('이전 버전의 초안');
+  await expect(thumbnails(page)).toHaveCount(1);
+  await composer(page).fill('첫 수정');
+  await page.reload();
+  await expect(composer(page)).toHaveValue('첫 수정');
+  await expect(thumbnails(page)).toHaveCount(1);
+  await page.evaluate(() => {
+    function containsBlob(value: unknown): boolean {
+      return (
+        value instanceof Blob ||
+        (value !== null && typeof value === 'object' && Object.values(value).some(containsBlob))
+      );
+    }
+    const put = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
+      if (this.name === 'buffers' && containsBlob(args[0]))
+        throw new DOMException('No more attachment storage', 'QuotaExceededError');
+      return put.apply(this, args);
+    };
+  });
+  await composer(page).fill('글만 바꾼 최신 초안');
+  await page.reload();
+  await expect(composer(page)).toHaveValue('글만 바꾼 최신 초안');
+  await expect(page.getByRole('button', { name: '이전.png 확대', exact: true })).toBeVisible();
 });
 
 test('RIMAGE late acceptance in another chat preserves an edited-then-reverted draft after IndexedDB writes fail', async ({

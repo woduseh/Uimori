@@ -10,7 +10,15 @@ export function imageOwnerDisplayText(
   assets: readonly (Pick<Asset, 'url'> & Partial<Pick<Asset, 'allowedUse'>>)[] = [],
   authoredTags: readonly string[] = []
 ): string {
-  if (!profile.image) return text;
+  return createImageOwnerDisplayText(profile, assets, authoredTags)(text);
+}
+
+export function createImageOwnerDisplayText(
+  profile: Pick<ProfileSnapshot, 'image' | 'chatId' | 'packages' | 'packageAttachments'>,
+  assets: readonly (Pick<Asset, 'url'> & Partial<Pick<Asset, 'allowedUse'>>)[] = [],
+  authoredTags: readonly string[] = []
+): (text: string) => string {
+  if (!profile.image) return (text) => text;
   const urls = new Set([
     ...assets.filter((asset) => asset.allowedUse !== 'profile').map((asset) => asset.url),
     ...packageImages(profile)
@@ -57,10 +65,12 @@ export function imageOwnerDisplayText(
       return url && (urls.has(url) || imageReferences.has(url)) ? '' : tag;
     });
   };
-  if (!text.includes('```uimori-ui') && !text.includes('<a2ui>')) return projectProse(text);
-  return parseStoryUi(text)
-    .map((part) =>
-      part.kind === 'prose' ? projectProse(part.text) : text.slice(part.start, part.end)
-    )
-    .join('');
+  return (text) => {
+    if (!text.includes('```uimori-ui') && !text.includes('<a2ui>')) return projectProse(text);
+    return parseStoryUi(text)
+      .map((part) =>
+        part.kind === 'prose' ? projectProse(part.text) : text.slice(part.start, part.end)
+      )
+      .join('');
+  };
 }

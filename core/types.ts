@@ -333,6 +333,8 @@ export type ReaderDetail = Omit<ChatDetail, 'runs' | 'attempts'> & {
   illustrations?: import('./illustration.js').Illustration[];
   reader: {
     navigation: ReaderNavigationItem[];
+    /** A negotiated delta carries an empty array when the client already has this navigation. */
+    navigationUnchanged?: boolean;
     /** Source-less turns belonging to this page, plus active work. */
     pendingRunIds?: string[];
     activity?: ReaderActivity[];

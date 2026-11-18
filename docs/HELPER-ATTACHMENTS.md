@@ -36,6 +36,7 @@
 - `core/provider-file-reference.ts`, `core/provider-files.ts`: 명시적으로 첨부한 참조만 실제 전송 바이트로 변환
 - `server/request-files.ts`, `server/request-file-storage.ts`: 업로드 확인, 형식 검사, 원본 보관과 다운로드
 - `server/helper-attachments.ts`, `server/helper-attachment-prompt.ts`: 메시지 소유권, 정리와 모델 입력 구성
-- `web/helper-attachment-draft.ts`: 대화별 Blob 초안과 전송 확인
+- `web/helper-attachment-draft.ts`: 대화별 첨부 초안과 전송 확인
+- `web/attachment-draft-storage.ts`: 본문·도우미 초안의 첨부 파일을 IndexedDB에 한 번씩 저장하고 초안 세대와 함께 복구
 
 일반 문자열이나 도구 출력에 파일 참조처럼 보이는 문자열이 있어도 저장 파일을 읽을 권한이 생기지 않아요. 이미지 도구는 서버가 소유 자료를 확인한 이미지 참조만 별도로 등록해요. 다운로드는 인증된 앱 경로에서 attachment 응답으로 제공해요.

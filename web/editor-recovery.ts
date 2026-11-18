@@ -9,7 +9,7 @@ export type RecoveryBuffer<T> = {
 let database: Promise<IDBDatabase> | undefined;
 
 /** One latest unsaved buffer per editor on this device. No journal, versions, or network sync. */
-function open(): Promise<IDBDatabase> {
+export function openRecoveryDatabase(): Promise<IDBDatabase> {
   database ??= new Promise((resolve, reject) => {
     const request = indexedDB.open('uimori-editor-recovery', 1);
     request.onupgradeneeded = () => request.result.createObjectStore('buffers');
@@ -27,7 +27,7 @@ function open(): Promise<IDBDatabase> {
 }
 
 export async function readRecovery<T>(key: string): Promise<RecoveryBuffer<T> | undefined> {
-  const db = await open();
+  const db = await openRecoveryDatabase();
   return new Promise((resolve, reject) => {
     const request = db.transaction('buffers').objectStore('buffers').get(key);
     request.onsuccess = () => resolve(request.result);
@@ -36,7 +36,7 @@ export async function readRecovery<T>(key: string): Promise<RecoveryBuffer<T> | 
 }
 
 export async function writeRecovery<T>(key: string, value?: RecoveryBuffer<T>): Promise<void> {
-  const db = await open();
+  const db = await openRecoveryDatabase();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('buffers', 'readwrite');
     const buffers = transaction.objectStore('buffers');
@@ -51,7 +51,7 @@ export async function writeRecovery<T>(key: string, value?: RecoveryBuffer<T>): 
 
 /** Copy a cloned tab's buffers once, before that tab starts editing independently. */
 export async function copyRecoveryPrefix(fromPrefix: string, toPrefix: string): Promise<void> {
-  const db = await open();
+  const db = await openRecoveryDatabase();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('buffers', 'readwrite');
     const buffers = transaction.objectStore('buffers');
@@ -73,7 +73,7 @@ async function deleteRecoveryIf<T>(
   key: string,
   matches: (value: RecoveryBuffer<T>) => boolean
 ): Promise<RecoveryBuffer<T> | undefined> {
-  const db = await open();
+  const db = await openRecoveryDatabase();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('buffers', 'readwrite');
     const buffers = transaction.objectStore('buffers');

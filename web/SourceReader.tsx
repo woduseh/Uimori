@@ -8,7 +8,7 @@ import {
 } from './i18n.js';
 import type { RequestImage } from '../core/request-images.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
-import { imageOwnerDisplayText } from '../core/image-placement.js';
+import { createImageOwnerDisplayText } from '../core/image-placement.js';
 import { compileReadingMarkdown, projectReadingText } from '../core/reading-markdown.js';
 import { themeBodyScroll, readerLocation } from './theme-body-scroll.js';
 import { BookmarkButton } from './Bookmarks.js';
@@ -223,6 +223,10 @@ export function SourceReader(props: ReaderProps) {
   useI18n();
   return <SourceReaderContent key={props.source.id} {...props} />;
 }
+function storyUiBlocks(text: string) {
+  return parseStoryUi(text).filter((part) => part.kind !== 'prose');
+}
+
 function latestTranslation(source: Source, jobs: Job[]) {
   return jobs
     .filter(
@@ -602,8 +606,10 @@ function SourceReaderContent({
       ? (image.result.annotations ?? [])
       : [];
   const translationText = validTranslation?.text ?? '';
-  const displayText = (text: string) =>
-    imageOwnerDisplayText(text, { image: imageOwner, chatId: source.chatId }, assets);
+  const displayText = useMemo(
+    () => createImageOwnerDisplayText({ image: imageOwner, chatId: source.chatId }, assets),
+    [imageOwner, source.chatId, assets]
+  );
   const allowedImageUrls = useMemo(
     () =>
       imageOwner
@@ -623,27 +629,25 @@ function SourceReaderContent({
   const plainBlockDisplay =
     !nativeDisplay &&
     !(mode === 'original' ? projected?.original.changed : projected?.translation?.changed);
-  const plainProjection = useMemo(
+  const canonicalText = mode === 'original' ? source.text : translationText;
+  const canonicalBlocks = mode === 'original' ? blocks : translationBlocks;
+  const plainProjection = useMemo(() => {
+    if (!plainBlockDisplay) return { text: '', blocks: [] };
+    return imageOwner
+      ? projectReadingText(canonicalText, canonicalBlocks, displayText)
+      : { text: canonicalText, blocks: canonicalBlocks };
+  }, [plainBlockDisplay, imageOwner, canonicalText, canonicalBlocks, displayText]);
+  const originalStorySegments = useMemo(() => storyUiBlocks(source.text), [source.text]);
+  const canonicalStorySegments = useMemo(
+    () => (canonicalText === source.text ? originalStorySegments : storyUiBlocks(canonicalText)),
+    [canonicalText, source.text, originalStorySegments]
+  );
+  const storySegments = useMemo(
     () =>
-      !plainBlockDisplay
-        ? { text: '', blocks: [] }
-        : projectReadingText(
-            mode === 'original' ? source.text : translationText,
-            mode === 'original' ? blocks : translationBlocks,
-            (text) =>
-              imageOwnerDisplayText(text, { image: imageOwner, chatId: source.chatId }, assets)
-          ),
-    [
-      plainBlockDisplay,
-      mode,
-      source.text,
-      source.chatId,
-      translationText,
-      blocks,
-      translationBlocks,
-      imageOwner,
-      assets,
-    ]
+      plainProjection.text === canonicalText
+        ? canonicalStorySegments
+        : storyUiBlocks(plainProjection.text),
+    [plainProjection.text, canonicalText, canonicalStorySegments]
   );
   const plainDocument = useMemo(
     () =>
@@ -653,21 +657,9 @@ function SourceReaderContent({
             plainProjection.text,
             plainProjection.blocks,
             allowedImageUrls,
-            parseStoryUi(plainProjection.text).filter((part) => part.kind !== 'prose')
+            storySegments
           ),
-    [plainBlockDisplay, plainProjection, allowedImageUrls]
-  );
-  const storySegments = useMemo(() => parseStoryUi(plainProjection.text), [plainProjection.text]);
-  const canonicalStorySegments = useMemo(
-    () =>
-      parseStoryUi(mode === 'original' ? source.text : translationText).filter(
-        (part) => part.kind !== 'prose'
-      ),
-    [mode, source.text, translationText]
-  );
-  const originalStorySegments = useMemo(
-    () => parseStoryUi(source.text).filter((part) => part.kind !== 'prose'),
-    [source.text]
+    [plainBlockDisplay, plainProjection, allowedImageUrls, storySegments]
   );
   const renderStoryPart = (
     part: (typeof canonicalStorySegments)[number] | undefined,
@@ -704,9 +696,8 @@ function SourceReaderContent({
     );
   };
   const renderStorySlot = (id: string) => {
-    const parts = storySegments.filter((part) => part.kind !== 'prose');
-    const index = parts.findIndex((part) => part.id === id);
-    return renderStoryPart(parts[index], index);
+    const index = storySegments.findIndex((part) => part.id === id);
+    return renderStoryPart(storySegments[index], index);
   };
   const displayedNative = mode === 'original' ? projected?.original : projected?.translation;
   const [nativeAnchors, setNativeAnchors] = useState<{ html?: string; anchors: string[] }>({

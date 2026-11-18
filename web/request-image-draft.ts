@@ -1,9 +1,9 @@
+import { copyRecoveryPrefix } from './editor-recovery.js';
 import {
-  copyRecoveryPrefix,
-  deleteRecoveryIfToken,
-  readRecovery,
-  writeRecovery,
-} from './editor-recovery.js';
+  deleteAttachmentDraft,
+  readAttachmentDraft,
+  writeAttachmentDraft,
+} from './attachment-draft-storage.js';
 
 export type DraftImage = { id: string; name: string; blob: Blob; width: number; height: number };
 export type RequestDraft = { token: string; text: string; images: DraftImage[] };
@@ -68,18 +68,18 @@ export async function readRequestDraft(
   key: string
 ): Promise<{ saved?: RequestDraft; conflict?: RequestDraft }> {
   const storageKey = await requestDraftKey(key);
-  let value = await readRecovery<RequestDraft>(storageKey);
+  let saved = await readAttachmentDraft<RequestDraft>(storageKey);
   const state = readState(key);
-  if (value && state?.accepted.includes(value.model.token)) {
+  if (saved && state?.accepted.includes(saved.token)) {
     // A known accepted request must never reappear when cleanup failed before reload.
     try {
-      value = (await deleteRecoveryIfToken(storageKey, value.model.token)) as typeof value;
+      if (await deleteAttachmentDraft(storageKey, saved.token)) return {};
+      saved = await readAttachmentDraft<RequestDraft>(storageKey);
     } catch {
       return {};
     }
   }
-  if (!value) return {};
-  const saved = value.model;
+  if (!saved) return {};
   if (
     state &&
     (state.token !== saved.token || saved.text !== (sessionStorage.getItem(key) ?? ''))
@@ -91,12 +91,8 @@ export async function readRequestDraft(
 
 export async function writeRequestDraft(key: string, model: RequestDraft) {
   rememberRequestDraft(key, model);
-  return writeRecovery(await requestDraftKey(key), {
-    token: model.token,
-    revision: null,
-    model,
-    rawFields: {},
-  });
+  const storageKey = await requestDraftKey(key);
+  return writeAttachmentDraft(storageKey, model);
 }
 
 export async function clearRequestDraft(key: string, token: string) {
@@ -108,7 +104,7 @@ export async function clearRequestDraft(key: string, token: string) {
   } else
     sessionStorage.setItem(stateKey(key), JSON.stringify({ token: state?.token ?? '', accepted }));
   // Keep the tombstone until a successful deletion. A newer saved tuple is never deleted.
-  const remaining = await deleteRecoveryIfToken(await requestDraftKey(key), token);
+  await deleteAttachmentDraft(await requestDraftKey(key), token);
   const latest = readState(key);
   if (latest)
     sessionStorage.setItem(
@@ -118,5 +114,4 @@ export async function clearRequestDraft(key: string, token: string) {
         accepted: latest.accepted.filter((item) => item !== token),
       })
     );
-  return remaining;
 }

@@ -23,20 +23,15 @@ export function initSceneContext(db: DatabaseSync): void {
   );`);
 }
 
-export function readSceneContext(db: DatabaseSync, sourceId: string): SceneContext {
-  const row = db
-    .prepare(
-      'SELECT revision,request_text,request_enabled,scene_enabled FROM scene_context WHERE source_id=?'
-    )
-    .get(sourceId) as
-    | {
-        revision: number;
-        request_text: string | null;
-        request_enabled: number;
-        scene_enabled: number;
-      }
-    | undefined;
-  return row
+export type SceneContextRow = {
+  revision: number | null;
+  request_text: string | null;
+  request_enabled: number | null;
+  scene_enabled: number | null;
+};
+
+export function sceneContextFromRow(row?: SceneContextRow): SceneContext {
+  return row?.revision != null
     ? {
         revision: row.revision,
         requestText: row.request_text,
@@ -44,6 +39,15 @@ export function readSceneContext(db: DatabaseSync, sourceId: string): SceneConte
         sceneEnabled: row.scene_enabled === 1,
       }
     : { ...DEFAULT_SCENE_CONTEXT };
+}
+
+export function readSceneContext(db: DatabaseSync, sourceId: string): SceneContext {
+  const row = db
+    .prepare(
+      'SELECT revision,request_text,request_enabled,scene_enabled FROM scene_context WHERE source_id=?'
+    )
+    .get(sourceId) as SceneContextRow | undefined;
+  return sceneContextFromRow(row);
 }
 
 export function updateSceneContext(store: Store, sourceId: string, value: unknown): SceneContext {

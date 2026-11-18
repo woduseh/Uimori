@@ -11,7 +11,7 @@ import { isReaderPendingRun, readerRequestOrder } from '../core/reader-conversat
 import { RUN_READER_DISMISSAL_PREFIX } from './run-reader-state.js';
 import type { SceneUsageReceipt } from '../core/scene-usage.js';
 import { outlineSceneTitles, sceneTitles } from './scene-titles.js';
-import { readSceneContext } from './scene-context.js';
+import { type SceneContextRow, sceneContextFromRow } from './scene-context.js';
 
 /** The failing attempt's stored provider diagnostic, read only for 4xx failures being displayed. */
 export function attemptRejection(store: Store, column: 'run_id' | 'job_id', id: string) {
@@ -247,13 +247,15 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
 
 /** Read projection only. Frozen execution records remain available through detail/run APIs. */
 export function readerDetail(store: Store, id: string, query: Record<string, string | undefined>) {
-  fields(record(query), ['source', 'since', 'known']);
+  fields(record(query), ['source', 'since', 'known', 'navigationCursor']);
   const chat = store.chat(id);
   const rows = store.db
     .prepare(
-      'SELECT id,parent_revision AS parentRevision,run_id AS runId FROM sources WHERE chat_id=?'
+      `SELECT s.id,s.parent_revision AS parentRevision,s.run_id AS runId,
+        c.revision,c.request_text,c.request_enabled,c.scene_enabled
+       FROM sources s LEFT JOIN scene_context c ON c.source_id=s.id WHERE s.chat_id=?`
     )
-    .all(id) as { id: string; parentRevision: string | null; runId: string }[];
+    .all(id) as ({ id: string; parentRevision: string | null; runId: string } & SceneContextRow)[];
   const byId = new Map(rows.map((row) => [row.id, row]));
   const chain: string[] = [];
   const seen = new Set<string>();
@@ -283,6 +285,21 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     throw new HttpError(400, 'Invalid reader cursor');
   const events =
     since === null ? null : (store.events(id, since) as { kind: string; entityId: string }[]);
+  const navigationUnchanged =
+    events !== null &&
+    query.navigationCursor === String(since) &&
+    events.every(
+      ({ kind }) =>
+        kind.startsWith('job.') ||
+        kind.startsWith('illustration.') ||
+        [
+          'run.delta',
+          'run.running',
+          'run.usage',
+          'run.context.updated',
+          'run.output.staged',
+        ].includes(kind)
+    );
   const changed = changedReaderSources(store, id, events ?? []);
   // The caller supplies only IDs from its current page; identity is scoped again by order.
   const known = new Set((query.known ?? '').split(','));
@@ -290,7 +307,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     .filter((sourceId) => !events || !known.has(sourceId) || changed.has(sourceId))
     .map((sourceId) => ({
       ...store.source(sourceId),
-      sceneContext: readSceneContext(store.db, sourceId),
+      sceneContext: sceneContextFromRow(byId.get(sourceId)!),
     }));
   const jobs = sources.flatMap((source) => {
     const ids = readerJobIds(store, source.id, source.hash);
@@ -319,10 +336,19 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
   // need not be materialized for the reader.
   const indexRows = store.db
     .prepare(`SELECT id,rowid AS admissionOrder,json_extract(command,'$.retryOf') AS retryOf,source_revision AS sourceRevision,status,
-    CASE WHEN id IN (SELECT value FROM json_each(?)) THEN request ELSE NULL END AS request,
-    json_extract(snapshot,'$.packageStart.mode') AS startMode
+    ${
+      navigationUnchanged
+        ? 'NULL AS request,NULL AS startMode'
+        : `CASE WHEN id IN (SELECT value FROM json_each(?)) THEN request END AS request,
+    json_extract(snapshot,'$.packageStart.mode') AS startMode`
+    }
     FROM runs WHERE chat_id=? ORDER BY created_at,id`)
-    .all(JSON.stringify(chain.map((sourceId) => byId.get(sourceId)!.runId)), id) as {
+    .all(
+      ...(navigationUnchanged
+        ? []
+        : [JSON.stringify(chain.map((sourceId) => byId.get(sourceId)!.runId))]),
+      id
+    ) as {
     id: string;
     sourceRevision: string | null;
     status: string;
@@ -367,39 +393,40 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
       );
     })
     .map((run) => run.id);
-  const runsById = new Map(indexRows.map((run) => [run.id, run]));
   // Requests label the chat's complete index without loading off-page source bodies.
   // Authored starts have no user request; never substitute generated or hidden content.
-  let sceneNumber = 0;
-  const titles = sceneTitles(store, id);
-  const outlineTitles = outlineSceneTitles(store, id);
-  const navigation = chain.map((sourceId) => {
-    const run = runsById.get(byId.get(sourceId)!.runId);
-    const control = readSceneContext(store.db, sourceId);
-    const request = String(control.requestText ?? run?.request ?? '')
-      .replace(/\s+/gu, ' ')
-      .trim();
-    // 202 UTF-16 units suffice to decide whether there are more than 100 codepoints.
-    // Avoid expanding a long request into an array only to discard all but its label.
-    const characters = Array.from(request.slice(0, 202));
-    const opening = run?.startMode === 'authored';
-    if (!opening) sceneNumber++;
-    const label = opening
-      ? '첫 메시지'
-      : characters.length > 100
-        ? `${characters.slice(0, 99).join('')}…`
-        : request || `장면 ${sceneNumber}`;
-    return {
-      id: sourceId,
-      number: sceneNumber,
-      label: titles.get(sourceId) || outlineTitles.get(sourceId) || label,
-      ...(titles.has(sourceId) ? { title: titles.get(sourceId)! } : {}),
-      ...(!opening && (titles.has(sourceId) || outlineTitles.has(sourceId))
-        ? { requestLabel: label }
-        : {}),
-      ...(opening ? { opening: true as const } : {}),
-    };
-  });
+  function buildNavigation() {
+    let sceneNumber = 0;
+    const titles = sceneTitles(store, id);
+    const outlineTitles = outlineSceneTitles(store, id);
+    return chain.map((sourceId) => {
+      const source = byId.get(sourceId)!;
+      const run = requestRows.get(source.runId);
+      const request = String(source.request_text ?? run?.request ?? '')
+        .replace(/\s+/gu, ' ')
+        .trim();
+      // 202 UTF-16 units suffice to decide whether there are more than 100 codepoints.
+      // Avoid expanding a long request into an array only to discard all but its label.
+      const characters = Array.from(request.slice(0, 202));
+      const opening = run?.startMode === 'authored';
+      if (!opening) sceneNumber++;
+      const label = opening
+        ? '첫 메시지'
+        : characters.length > 100
+          ? `${characters.slice(0, 99).join('')}…`
+          : request || `장면 ${sceneNumber}`;
+      return {
+        id: sourceId,
+        number: sceneNumber,
+        label: titles.get(sourceId) || outlineTitles.get(sourceId) || label,
+        ...(titles.has(sourceId) ? { title: titles.get(sourceId)! } : {}),
+        ...(!opening && (titles.has(sourceId) || outlineTitles.has(sourceId))
+          ? { requestLabel: label }
+          : {}),
+        ...(opening ? { opening: true as const } : {}),
+      };
+    });
+  }
   const activeJobs = Number(
     (
       store.db
@@ -430,7 +457,8 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     ...(assetsChanged ? { assets: mergedReaderAssets(store, id, order) } : {}),
     reader: {
       canChangePackageStart: canChangePackageStart(store, id),
-      navigation,
+      navigation: navigationUnchanged ? [] : buildNavigation(),
+      navigationUnchanged,
       presentationRevisions: readerPresentationRevisions(store, id, order),
       pendingRunIds,
       activity: readerActivity(store, id),

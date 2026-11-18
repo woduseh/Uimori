@@ -184,6 +184,24 @@ test('default reader keeps ordinary source anchor, capture and end navigation', 
   expect(await scrollTop(page, '#last-body')).toBe(0);
 });
 
+test('between scenes the local position keeps the next paragraph anchor', async ({ page }) => {
+  await mount(page, false);
+  const position = await page.evaluate(async () => {
+    const path = '/web/theme-body-scroll.ts';
+    const { readerLocation, localReadingBlock } = await import(path);
+    const reader = document.getElementById('reader')!;
+    const footer = document.getElementById('previous-action')!;
+    reader.scrollTop += footer.getBoundingClientRect().top - reader.getBoundingClientRect().top;
+    const location = readerLocation(reader);
+    return {
+      scene: location?.source.id,
+      sceneBlock: location?.block?.id ?? null,
+      localBlock: localReadingBlock(reader, location)?.id,
+    };
+  });
+  expect(position).toEqual({ scene: 'previous', sceneBlock: null, localBlock: 'target-block-0' });
+});
+
 async function settleLayout(page: Page) {
   // ResizeObserver, queued navigation and captured scroll events each get a rendering cycle.
   await page.evaluate(async () => {

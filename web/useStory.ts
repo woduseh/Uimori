@@ -9,8 +9,12 @@ import {
   type DraftImage,
   type RequestDraft,
 } from './request-image-draft.js';
-import { readerLocation, THEME_BODY_SCROLL_SELECTOR } from './theme-body-scroll.js';
-import { captureReaderLocation, useReadingSync } from './useReadingSync.js';
+import {
+  localReadingBlock,
+  readerLocation,
+  THEME_BODY_SCROLL_SELECTOR,
+} from './theme-body-scroll.js';
+import { captureReaderLocation, targetAtReaderLocation, useReadingSync } from './useReadingSync.js';
 import { readerTargetFromUrl, readerTargetUrl, type ReaderTarget } from '../core/reader-target.js';
 import { canDismissReaderRun, readerConversation } from '../core/reader-conversation.js';
 import { createReaderSync } from './reader-sync.js';
@@ -266,12 +270,6 @@ export function useStory() {
           '',
     key: `${selected}:${readSource}`,
   };
-  const readingSync = useReadingSync({
-    chatId: destination === 'story' ? selected : '',
-    reader,
-    storageKey: `reading:${selected}`,
-    onResume: (target) => openTarget(target),
-  });
   const explicitReadingIntent = useRef<{ chatId: string; sourceId: string } | null>(null);
   const refresh = useCallback(
     async (id: string, incremental = false) => {
@@ -316,6 +314,8 @@ export function useStory() {
         if (incremental && cached?.reader) {
           params.set('since', String(cached.reader.cursor));
           params.set('known', cached.reader.order.join(','));
+          if (cached.reader.navigationUnchanged !== undefined)
+            params.set('navigationCursor', String(cached.reader.cursor));
         }
         let value: ReaderDetail;
         let replacementSource: string | undefined;
@@ -346,6 +346,10 @@ export function useStory() {
           );
           const merged = {
             ...value,
+            reader:
+              value.reader.navigationUnchanged && cached
+                ? { ...value.reader, navigation: cached.reader.navigation }
+                : value.reader,
             assets: value.assets ?? cached?.assets ?? [],
             sources: value.reader!.order.map((id) => available.get(id)!).filter(Boolean),
             jobs: [
@@ -643,6 +647,51 @@ export function useStory() {
     },
     [viewKey, readSource, destination]
   );
+  const activeReadingSource = useRef<HTMLElement | null>(null);
+  const capturePosition = useCallback(
+    (target: HTMLElement | null) => {
+      const node = reader.current;
+      if (!node || !selected || navigation.current.epoch !== view.epoch) return null;
+      if (target?.matches(THEME_BODY_SCROLL_SELECTOR))
+        activeReadingSource.current = target.closest('[data-source-id][data-representation]');
+      else if (target === node) activeReadingSource.current = null;
+      const active = activeReadingSource.current;
+      const preferred =
+        active &&
+        node.contains(active) &&
+        active.getBoundingClientRect().bottom > node.getBoundingClientRect().top &&
+        active.getBoundingClientRect().top < node.getBoundingClientRect().bottom
+          ? active
+          : undefined;
+      const location = readerLocation(node, preferred);
+      if (restoredView.current === viewKey) {
+        const block = localReadingBlock(node, location);
+        const position: Position = {
+          target: readSource,
+          source: block?.closest<HTMLElement>('[data-source-id]')?.dataset.sourceId ?? '',
+          anchor: block?.dataset.blockAnchor?.split(' ')[0] || '',
+          offset: block
+            ? block.getBoundingClientRect().top -
+              (location?.scrollport ?? node).getBoundingClientRect().top
+            : 0,
+          top: node.scrollTop,
+        };
+        writeViewCache(`reading:${viewKey}`, position);
+      }
+      return targetAtReaderLocation(selected, location);
+    },
+    [selected, view.epoch, viewKey, readSource]
+  );
+  const readingSync = useReadingSync({
+    chatId: destination === 'story' ? selected : '',
+    reader,
+    capture: capturePosition,
+    storageKey: `reading:${selected}`,
+    onResume: (target) => openTarget(target),
+  });
+  const savePosition = useCallback(() => {
+    if (!readingSync.flushScroll()) capturePosition(null);
+  }, [capturePosition, readingSync.flushScroll]);
   const holdNavigationPosition = useCallback(
     (node: HTMLElement, position: ReaderNavigationPosition) => {
       cancelNavigationScroll.current?.();
@@ -672,53 +721,6 @@ export function useStory() {
       );
     },
     [selected, viewKey, readingSync.remember]
-  );
-  const activeReadingSource = useRef<HTMLElement | null>(null);
-  const savePosition = useCallback(
-    (event?: { target: EventTarget | null }) => {
-      const node = reader.current;
-      if (!node || restoredView.current !== viewKey || !selected) return;
-      const target = event?.target;
-      if (target instanceof HTMLElement && target.matches(THEME_BODY_SCROLL_SELECTOR))
-        activeReadingSource.current = target.closest('[data-source-id][data-representation]');
-      else if (target === node) activeReadingSource.current = null;
-      const active = activeReadingSource.current;
-      const preferred =
-        active &&
-        node.contains(active) &&
-        active.getBoundingClientRect().bottom > node.getBoundingClientRect().top &&
-        active.getBoundingClientRect().top < node.getBoundingClientRect().bottom
-          ? active
-          : undefined;
-      const nested = !!node.querySelector(THEME_BODY_SCROLL_SELECTOR);
-      const location = nested ? readerLocation(node, preferred) : null;
-      let block = location?.block;
-      if (!nested) {
-        // Preserve the unbounded reader's logarithmic geometry lookup.
-        const top = node.getBoundingClientRect().top + 12;
-        const blocks = node.querySelectorAll<HTMLElement>('[data-block-anchor]');
-        let low = 0,
-          high = blocks.length;
-        while (low < high) {
-          const mid = (low + high) >>> 1;
-          if (blocks[mid].getBoundingClientRect().bottom <= top) low = mid + 1;
-          else high = mid;
-        }
-        block = blocks[low];
-      }
-      const position: Position = {
-        target: readSource,
-        source: block?.closest('[data-source-id]')?.getAttribute('data-source-id') || '',
-        anchor: block?.dataset.blockAnchor?.split(' ')[0] || '',
-        offset: block
-          ? block.getBoundingClientRect().top -
-            (location?.scrollport ?? node).getBoundingClientRect().top
-          : 0,
-        top: node.scrollTop,
-      };
-      writeViewCache(`reading:${viewKey}`, position);
-    },
-    [selected, viewKey, readSource]
   );
   useLayoutEffect(() => {
     const text = sessionStorage.getItem(draftKey) || '';
@@ -768,24 +770,6 @@ export function useStory() {
       cancelAnimationFrame(frame);
     };
   }, [draftKey, setError]);
-  useEffect(() => {
-    const before = () => savePosition();
-    const scroll = (event: Event) => {
-      if (
-        event.target instanceof HTMLElement &&
-        event.target.matches(THEME_BODY_SCROLL_SELECTOR) &&
-        reader.current?.contains(event.target)
-      )
-        savePosition(event);
-    };
-    document.addEventListener('scroll', scroll, true);
-    addEventListener('pagehide', before);
-    return () => {
-      savePosition();
-      removeEventListener('pagehide', before);
-      document.removeEventListener('scroll', scroll, true);
-    };
-  }, [savePosition]);
   const rememberCursor = useCallback(() => {
     const node = input.current;
     if (node)
@@ -886,7 +870,6 @@ export function useStory() {
     persistDraft({ ...requestDraft.current, token: crypto.randomUUID(), text: value });
     draftIdentity.current = { text: value, revision: draftIdentity.current.revision + 1 };
     setDraft(value);
-    sessionStorage.setItem(draftKey, value);
   }
   function editLoreContextReset(value: boolean) {
     if (readCommand(commandStorageKey(selected))) return;
@@ -1868,7 +1851,6 @@ export function useStory() {
     loadChats,
     loadLibrary,
     retryLibrary,
-    savePosition,
     rememberCursor,
     editDraft,
     editLoreContextReset,

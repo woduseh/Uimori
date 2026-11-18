@@ -221,12 +221,13 @@ export function parseStoryUi(text: string): StoryUiSegment[] {
   const segments: StoryUiSegment[] = [];
   const pattern = /```uimori-ui\s*\r?\n|<a2ui>/g;
   let cursor = 0;
-  const codeRanges = [...markdownCodeRanges(text), ...inlineCodeRanges(text)];
+  const first = pattern.exec(text);
+  const codeRanges = first ? [...markdownCodeRanges(text), ...inlineCodeRanges(text)] : [];
   const addText = (kind: 'prose' | 'invalid' | 'pending', start: number, end: number) => {
     if (end > start)
       segments.push({ kind, id: `story-ui-${start}`, start, end, text: text.slice(start, end) });
   };
-  for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
+  for (let match = first; match; match = pattern.exec(text)) {
     const start = match.index;
     const codeRange = codeRanges.find(([from, to]) => start >= from && start < to);
     if (codeRange) {

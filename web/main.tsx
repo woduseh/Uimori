@@ -1460,12 +1460,7 @@ function App() {
               {s.detail?.chat.id === s.selected && s.attachmentsReady && s.bot && (
                 <ReaderGallery key={`gallery:${s.viewKey}`} bot={s.bot} persona={s.persona} />
               )}
-              <div
-                ref={s.reader}
-                className="reader-scrollport"
-                data-reader-scrollport
-                onScroll={s.savePosition}
-              >
+              <div ref={s.reader} className="reader-scrollport" data-reader-scrollport>
                 <section
                   className={`reader${s.selected && !s.detail ? ' reader-awaiting' : ''}`}
                   aria-label={t('main.m085')}

@@ -1,26 +1,25 @@
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { RecoveryBuffer } from '../web/editor-recovery.js';
+
 import type { HelperAttachmentDraft } from '../web/helper-attachment-draft.js';
 
 const state = vi.hoisted(() => ({
-  disk: new Map<string, RecoveryBuffer<HelperAttachmentDraft>>(),
+  disk: new Map<string, HelperAttachmentDraft>(),
   session: new Map<string, string>(),
   uploads: vi.fn(),
   cleanupFails: false,
   writeFails: false,
 }));
-vi.mock('../web/editor-recovery.js', () => ({
-  readRecovery: async (key: string) => state.disk.get(key),
-  writeRecovery: async (key: string, value?: RecoveryBuffer<HelperAttachmentDraft>) => {
+vi.mock('../web/attachment-draft-storage.js', () => ({
+  readAttachmentDraft: async (key: string) => state.disk.get(key),
+  writeAttachmentDraft: async (key: string, draft: HelperAttachmentDraft) => {
     if (state.writeFails) throw new Error('disk unavailable');
-    if (value) state.disk.set(key, structuredClone(value));
-    else state.disk.delete(key);
+    state.disk.set(key, structuredClone(draft));
   },
-  deleteRecoveryIfToken: async (key: string, token: string) => {
+  deleteAttachmentDraft: async (key: string, token: string | null) => {
     if (state.cleanupFails) throw new Error('disk unavailable');
     const found = state.disk.get(key);
-    if (found?.token === token) state.disk.delete(key);
-    else return found;
+    if (token === null || found?.token === token) return state.disk.delete(key);
+    return false;
   },
 }));
 vi.mock('../web/request-image-draft.js', () => ({
@@ -54,7 +53,7 @@ test('conversation drafts preserve original blobs and hydrate without attaching 
       { id: 'file-1', name: '참고 자료.txt', mime: 'text/plain', kind: 'text', blob: document() },
     ],
   };
-  state.disk.set(key('first'), { token: saved.token, revision: null, rawFields: {}, model: saved });
+  state.disk.set(key('first'), saved);
   const drafts = await import('../web/helper-attachment-draft.js');
   await Promise.all([
     drafts.loadHelperAttachments('first'),
@@ -81,7 +80,7 @@ test('late admission keeps a newer draft even when the user retypes identical te
   drafts.touchHelperAttachments('first');
   expect(drafts.helperAttachmentDraftMatches('first', sent.draftToken)).toBe(false);
   expect(await drafts.acceptHelperAttachments('first', sent.draftToken)).toBe(false);
-  expect(state.disk.get(key('first'))?.model.files).toHaveLength(1);
+  expect(state.disk.get(key('first'))?.files).toHaveLength(1);
   const next = await drafts.freezeHelperAttachments('first', model);
   expect(next.draftToken).not.toBe(sent.draftToken);
   expect(next.files).toEqual(sent.files);
@@ -123,7 +122,7 @@ test('failed identity writes followed by reload cannot let an old receipt erase 
   await drafts.loadHelperAttachments('first');
   expect(drafts.helperAttachmentDraftMatches('first', sent.draftToken)).toBe(false);
   expect(await drafts.acceptHelperAttachments('first', sent.draftToken)).toBe(false);
-  expect(state.disk.get(key('first'))?.model.files).toHaveLength(1);
+  expect(state.disk.get(key('first'))?.files).toHaveLength(1);
   const recovered = await drafts.freezeHelperAttachments('first', model);
   expect(recovered.draftToken).not.toBe(sent.draftToken);
   expect(recovered.files).toEqual(sent.files);
@@ -157,7 +156,7 @@ test('unsupported selections are atomic and a later model change blocks sending 
       modelId: 'deepseek-chat',
     })
   ).rejects.toThrow();
-  expect(state.disk.get(key('first'))?.model.files).toHaveLength(1);
+  expect(state.disk.get(key('first'))?.files).toHaveLength(1);
   expect((await drafts.freezeHelperAttachments('first', model)).files).toHaveLength(1);
 });
 

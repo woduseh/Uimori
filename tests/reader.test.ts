@@ -249,6 +249,13 @@ test('delta includes current edited source and matching latest translation only,
   expect(idle.jobs).toEqual([]);
   expect(idle.reader.navigation).toEqual(first.reader.navigation);
   expect(idle).not.toHaveProperty('assets');
+  store.event(chat.id, 'run.usage', b.runId);
+  const progress = readerDetail(store, chat.id, {
+    since: String(first.reader.cursor),
+    known,
+    navigationCursor: String(first.reader.cursor),
+  });
+  expect(progress.reader).toMatchObject({ navigationUnchanged: true, navigation: [] });
   const edited = store.editSource(a.id, { text: 'Revised source', expectedRevision: 0 });
   const changed = readerDetail(store, chat.id, { since: String(first.reader.cursor), known });
   expect(changed.sources.map((s) => s.id)).toEqual([a.id]);
@@ -368,7 +375,9 @@ test('scene names use manual titles then the smallest linked outline and preserv
   const delta = readerDetail(store, chat.id, {
     since: String(first.reader.cursor),
     known: written.id,
+    navigationCursor: String(first.reader.cursor),
   });
+  expect(delta.reader.navigationUnchanged).toBe(false);
   expect(delta.reader.navigation[0]).toMatchObject({
     label: 'Named by the author',
     title: 'Named by the author',
