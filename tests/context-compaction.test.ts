@@ -431,6 +431,8 @@ describe('input context projection and durable summary calls', () => {
   );
 
   test('summarizes older Korean exchanges with user wishes intact and keeps the latest exchanges that fit', async () => {
+    // The two latest exchanges are shorter so that both fit an 8,192-token window beside the
+    // writer's tool definitions. With six full-size scenes only the newest one is retained.
     const scenes = Array.from(
       { length: 6 },
       (_, index) => `장면 ${index}.\n${paragraph.repeat(index < 4 ? 70 : 50)}`

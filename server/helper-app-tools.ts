@@ -285,19 +285,20 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'context.read',
     description:
-      'Read the conversation summary that stands in for the older scenes of a chat, the scenes it covers, and the current author notes with their notesRevision. The summary covers only the scenes listed in checkpoint.plan.compacted. The chat can have newer scenes, so read those with chat.read and story.read before stating the latest situation.',
+      'Read the conversation summary that stands in for the older scenes of a chat, the scenes it covers, and the current author notes with their notesRevision, together with the activeRevision that context.compact and context.edit need. The summary covers only the scenes listed in checkpoint.plan.compacted. The chat can have newer scenes, so read those with chat.read and story.read before stating the latest situation.',
     inputSchema: schema({}),
   },
   {
     name: 'context.compact',
     description:
-      'Summarize the older scenes of the chat into its conversation summary now, using the regular compaction of the app. Take expectedRevision from context.read.',
+      'Summarize the older scenes of the chat into its conversation summary now, using the regular compaction of the app. expectedRevision is the activeRevision that context.read returns.',
     inputSchema: schema(
       {
         expectedRevision: {
           type: 'integer',
           minimum: 0,
-          description: 'Summary revision from context.read.',
+          description:
+            'activeRevision from context.read. It is the revision of the chat context, not checkpoint.revision.',
         },
       },
       ['expectedRevision']
@@ -306,13 +307,14 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'context.edit',
     description:
-      'Replace the text of the active conversation summary of a chat, for example to correct a fact it states wrongly. The summary is what the writer sees in place of the older scenes, so keep names, facts and who did what exact. Take expectedRevision from context.read.',
+      'Replace the text of the active conversation summary of a chat, for example to correct a fact it states wrongly. The summary is what the writer sees in place of the older scenes, so keep names, facts and who did what exact. expectedRevision is the activeRevision that context.read returns.',
     inputSchema: schema(
       {
         expectedRevision: {
           type: 'integer',
           minimum: 0,
-          description: 'Summary revision from context.read.',
+          description:
+            'activeRevision from context.read. It is the revision of the chat context, not checkpoint.revision.',
         },
         summary: described(str, 'The complete new summary text.'),
       },

@@ -48,6 +48,8 @@ Write a description for a reader who has only that text:
 - Keep the limits and caveats a model can act on, and leave out how the host implements them.
 - Put the meaning, unit, default and source of each argument in that property's `description`. A size argument always names its unit, because `limit` counts entries in some operations and UTF-16 code units in others.
 
+Natively registered definitions are sent with every request and count toward the input estimate. This matters most for the writer's read tools: at the minimum 8,192-token input limit, longer definitions leave room for fewer recent exchanges before compaction (see [Context limits](CONTEXT-LIMITS.md#입력-한도와-자동-정리)). Helper app operations are loaded on demand through `app.tools` and do not carry that fixed cost.
+
 Whether the user asked for a save, selection, cancellation or deletion is decided once in the helper contract, not repeated per operation. A description still states facts about the operation itself, such as a deletion that cannot be undone.
 
 The token-budget arguments (`tokenLimit`, `maxTokens`, `textLimit`) and the UTF-16 `limit` keep their existing names. Recorded read receipts and replayed arguments depend on them, so their descriptions name the unit instead.
