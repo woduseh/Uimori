@@ -284,3 +284,122 @@ test('switches original and translated UI when both start at the same offset', a
   await expect(page.getByText('Original', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Draft', { exact: true })).toHaveValue('아직 보내지 않은 답장');
 });
+
+const gallery = [
+  `<a2ui>
+root = Frame(page, "아르카 위키", "문서 · 은빛 서고", kind="page", accent="teal")
+page = Column([
+  Row([Avatar("은빛 서고", size="large"), Column([Text("은빛 서고", variant="headline"), Row([Badge("유적"), Badge("출입 제한", tone="danger"), Badge("3등급", tone="caution")])], weight=1)]),
+  Text("왕도 북쪽 절벽에 자리한 **지하 서고**. 건국 이전의 기록을 보관한다고 전해진다.", variant="body"),
+  KeyValue([{label: "위치", value: "왕도 북부 3구역"}, {label: "관리", value: "왕립 기록원"}, {label: "최초 발견", value: "성력 412년"}], "개요"),
+  Tabs([{title: "출입 기록", child: log}, {title: "소장 자료", child: table}]),
+  Details("전해지는 이야기", Text("밤마다 서가 사이에서 종이 넘기는 소리가 난다고 한다.", variant="quote"))
+])
+log = Timeline([{title: "1차 조사단 진입", time: "412.03", state: "done"}, {title: "하층 봉인 해제", time: "412.07", state: "failed", text: "조사단 2명 실종"}, {title: "2차 조사단 편성", state: "current"}, {title: "하층 재진입", state: "pending"}])
+table = DataTable("소장 자료", ["분류", "권수", "상태"], [["연대기", "1,204", "양호"], ["마도서", "87", "봉인"], ["지도", "312", "일부 훼손"]])
+</a2ui>`,
+  `<a2ui>
+$/_uimori/style = "modern"
+root = Frame(board, "길드 재무 보고", "제3분기", accent="indigo")
+board = Column([
+  Grid([Stat("총수입", "48,200 G", "+12% 전 분기 대비", tone="positive"), Stat("지출", "31,750 G", tone="danger"), Stat("의뢰 완료", 37), Stat("길드원", 24, "신입 3명")], columns=4),
+  Row([BarChart("부문별 수지", [{label: "토벌", value: 18400}, {label: "호위", value: 9200}, {label: "채집", value: -2100}], unit=" G"), PieChart("의뢰 유형", [{label: "토벌", value: 14}, {label: "호위", value: 9}, {label: "채집", value: 8}, {label: "조사", value: 6}], unit="건")]),
+  Row([LineChart("월별 평판", [{label: "7월", value: 62}, {label: "8월", value: 58}, {label: "9월", value: 71}, {label: "10월", value: 84}]), RadarChart("길드 역량", [{label: "전투", value: 8}, {label: "정보", value: 5}, {label: "교섭", value: 6}, {label: "보급", value: 4}, {label: "마법", value: 7}], max=10)])
+])
+</a2ui>`,
+  `<a2ui>
+root = Frame(log, "relay-07", "보안 콘솔", kind="terminal")
+log = Column([
+  Text("[02:14:07] 외부 접속 감지 — 포트 4471\n[02:14:09] 인증 실패 (3/3)\n[02:14:10] 격리 프로토콜 가동", variant="mono"),
+  Notice("제3격벽이 12초 뒤 폐쇄됩니다.", "경고", tone="caution", icon="warning"),
+  Gauge("격벽 전력", 38, 0, 100, "%", tone="caution")
+])
+</a2ui>`,
+  `<a2ui>
+root = Frame(memo, "냉장고 위 메모", kind="note")
+memo = Column([Text("저녁은 데워 먹어. 늦을 거야.\n\n**창문은 꼭 잠그고.**", variant="body"), Text("— 엄마", variant="caption", align="end")])
+</a2ui>`,
+  `<a2ui>
+$/form = {name: "", route: ["north"], pace: 3, torch: true}
+root = Column([
+  Text("원정 계획", variant="label"),
+  Text("출발 전에 정해 둘 것", variant="title"),
+  TextField("원정대 이름", $/form/name, "예: 새벽의 발자국"),
+  ChoicePicker("진입로", "mutuallyExclusive", [{label: "북쪽 능선", value: "north"}, {label: "지하 수로", value: "sewer"}, {label: "정문", value: "gate"}], $/form/route, "chips"),
+  Slider("행군 속도", 1, 5, $/form/pace, 4),
+  CheckBox("횃불을 챙긴다", $/form/torch),
+  Row([Button(Text("계획 확정"), "primary", Event("confirm_plan", {name: $/form/name, route: $/form/route})), Button(Text("나중에"), "borderless", Event("postpone"))])
+])
+</a2ui>`,
+];
+
+test('composed media render with their own shells in both schemes', async ({ page }, info) => {
+  const { normalizeStoryUiOutput, storyUiPrompt } = await import('../server/story-ui.js');
+  const { parseStoryUi } = await import('../core/story-ui.js');
+  const prompt = storyUiPrompt();
+  const taught = parseStoryUi(normalizeStoryUiOutput(prompt.slice(prompt.indexOf('## Examples'))))
+    .filter((part) => part.kind === 'ui')
+    .map((part) => normalizeStoryUiOutput(part.expression));
+  const sources = [...taught, ...gallery.map(normalizeStoryUiOutput)];
+  await page.setViewportSize({ width: 960, height: 900 });
+  await page.goto(origin);
+  await page.evaluate(async (value) => {
+    const path = '/tests/fixtures/story-ui.tsx';
+    await (await import(path)).mountGallery(document.getElementById('mount'), value);
+  }, sources);
+  const blocks = page.locator('.story-ui');
+  await expect(blocks).toHaveCount(sources.length);
+  await expect(page.locator('.story-ui > [role="status"]')).toHaveCount(0);
+  await expect(blocks.first()).toHaveAttribute('data-story-ui-kind', 'app');
+  const theirs = await page.getByText('어디야', { exact: true }).boundingBox();
+  const mine = await page.getByText('집 앞인데 왜', { exact: true }).boundingBox();
+  expect(mine!.x + mine!.width).toBeGreaterThan(theirs!.x + theirs!.width);
+  await expect(page.getByRole('meter', { name: '체력' })).toHaveAttribute('aria-valuenow', '64');
+  await page.getByRole('tab', { name: '소장 자료' }).click();
+  await expect(page.getByRole('cell', { name: '1,204' })).toBeVisible();
+  await page.getByRole('button', { name: '지하 수로' }).click();
+  await expect(page.getByRole('button', { name: '지하 수로' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  if (!visualReview) return;
+  // A theme switch must not be captured halfway through a color transition.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const capture = async (name: string) => {
+    for (let index = 0; index < sources.length; index++)
+      await blocks
+        .nth(index)
+        .screenshot({ path: info.outputPath(`story-ui-gallery-${name}-${index}.png`) });
+  };
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    await capture(theme);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await capture('mobile');
+  // The same blocks under every preset, light then dark.
+  await page.setViewportSize({ width: 960, height: 900 });
+  const sample = [sources[0], sources[2], sources[4], sources[sources.length - 1]];
+  for (const style of ['east-asian', 'fantasy', 'modern', 'period', 'blue-archive']) {
+    await page.evaluate(
+      async ([value, name]) => {
+        const path = '/tests/fixtures/story-ui.tsx';
+        document.getElementById('preset')?.remove();
+        const host = document.body.appendChild(document.createElement('div'));
+        host.id = 'preset';
+        await (await import(path)).mountGallery(host, value, name);
+      },
+      [sample, style] as const
+    );
+    const preset = page.locator('#preset');
+    await expect(preset.locator('.story-ui')).toHaveCount(sample.length);
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((value) => {
+        document.documentElement.dataset.theme = value;
+      }, theme);
+      await preset.screenshot({ path: info.outputPath(`story-ui-preset-${style}-${theme}.png`) });
+    }
+  }
+});

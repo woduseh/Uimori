@@ -86,9 +86,10 @@ Uimori 테마는 **화면 표현만 바꾸는 독립 자료**예요. 이야기 �
 
 CSS는 패널 안에 중첩 적용되며 **`&`는 패널 자체**, 일반 선택자는 패널 안 요소를 가리켜요. `@media`, `@supports`, 등록된 글꼴 이름과 CSS를 사용할 수 있어요.
 
-- 공통 변수: `--story-paper`, `--story-surface`, `--story-ink`, `--story-border`, `--story-accent`, `--story-font`, `--story-radius`
-- 요소 선택자: `.story-ui-tabs`, `.story-ui-field`, `.story-ui-table`, `.story-ui-chart`, `button`, `input`, `textarea`, `figure`, `figcaption`
-- SDK 내부 구성 요소: `--a2ui-color-*`, `--a2ui-border-radius`, `--a2ui-font-family-title`, `--a2ui-text-color-text` 등 상속되는 SDK CSS 변수를 사용해요. 외부 선택자는 SDK Shadow DOM 안으로 들어가지 않아요.
+- 공통 변수: `--story-paper`(바탕), `--story-surface`(카드와 말풍선), `--story-ink`, `--story-muted`, `--story-border`, `--story-accent`(채움색), `--story-accent-ink`(채움색 위 글자), `--story-accent-text`(바탕 위 강조 글자), `--story-font`, `--story-display`(제목 글꼴), `--story-radius`, 의미색 `--story-positive`, `--story-caution`, `--story-danger`, `--story-info`. 일부만 지정하면 흐린 글자는 `--story-ink`를, 강조 글자는 `--story-accent`를 따라가요.
+- 구성 요소 선택자: 모든 구성 요소는 `story-ui-*` 클래스를 가진 일반 요소예요. `.story-ui-frame`(`data-kind`, `data-accent`, 머리글 `.story-ui-frame-head`, 본문 `.story-ui-frame-body`), `.story-ui-message`(`data-side`)와 `.story-ui-bubble`, `.story-ui-post`(`data-variant`), `.story-ui-notice`, `.story-ui-badge`, `.story-ui-stat`, `.story-ui-gauge`, `.story-ui-keyvalue`, `.story-ui-timeline`, `.story-ui-card`, `.story-ui-details`, `.story-ui-button`(`data-variant`), `.story-ui-tabs`, `.story-ui-field`, `.story-ui-table`, `.story-ui-chart`, 글 종류별 `.story-ui-text-headline` 같은 클래스를 쓸 수 있어요. `button`, `input`, `textarea`, `figure`, `figcaption` 요소 선택자도 그대로 동작해요.
+- 밝은 화면과 어두운 화면: 기본 제공 스타일은 앱의 밝은·어두운 모드를 따라가요. 이름 있는 기반 스타일 위에 만든 사용자 테마는 그 스타일의 밝은 색으로 표시하므로, 어두운 테마를 만들려면 변수 값을 직접 어둡게 지정해 주세요. `default` 기반 테마는 앱의 모드를 따라가요.
+- 이전 버전의 `--a2ui-*` 변수는 더 이상 적용되지 않아요. 같은 역할의 `--story-*` 변수로 바꿔 주세요.
 
 [사용 흐름](STORY-UI.md#봇을-위한-사용자-테마)
 

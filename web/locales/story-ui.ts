@@ -107,6 +107,16 @@ export const messages = {
     ja: '入力',
     zh: '输入',
   },
+  'storyUi.filter': {
+    ko: '선택지 검색',
+    en: 'Filter options',
+    ja: '選択肢を検索',
+    zh: '筛选选项',
+  },
+  'storyUi.state.done': { ko: '완료', en: 'Done', ja: '完了', zh: '已完成' },
+  'storyUi.state.current': { ko: '진행 중', en: 'In progress', ja: '進行中', zh: '进行中' },
+  'storyUi.state.pending': { ko: '예정', en: 'Pending', ja: '予定', zh: '待进行' },
+  'storyUi.state.failed': { ko: '실패', en: 'Failed', ja: '失敗', zh: '失败' },
   'storyUi.older': {
     ko: '이 장면에서 분기한 뒤 선택할 수 있어요.',
     en: 'Branch from this scene to make a choice.',

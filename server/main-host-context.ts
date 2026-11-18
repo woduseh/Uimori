@@ -10,10 +10,21 @@ import { nativeHostContextText, NATIVE_HOST_CONTEXT_ID } from '../core/provider-
 import { ProviderContractError, type ProviderRequest, type Json } from '../core/transport.js';
 import { agentSharedOptions } from './agent-shared-options.js';
 import { modelAuthorNotes } from '../core/notes.js';
-import { parseStoryUi } from '../core/story-ui.js';
+import { parseStoryUi, projectStoryUiText } from '../core/story-ui.js';
+import { storyUiHistoryMode } from '../core/context-projection.js';
 import { STORY_UI_CATALOG_ID } from '../core/story-ui-catalog.js';
 
 const json = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
+/** The history a writer reads. Search and budgeting keep using the plain-text projection. */
+function writerHistory(snapshot: RunSnapshot, input: MainInput): MainInput['history'] {
+  const mode = storyUiHistoryMode(snapshot);
+  if (mode === 'text') return input.history;
+  const sources = new Map(snapshot.history.map((entry) => [entry.revision, entry.text]));
+  return input.history.map((entry) => {
+    const source = sources.get(entry.revision);
+    return source === undefined ? entry : { ...entry, text: projectStoryUiText(source, mode) };
+  });
+}
 export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderRequest['input'] {
   // Writing options belong to the selected RisuPrompt. Mock settings never cross this boundary.
   const controls: ProviderRequest['input']['controls'] = {};
@@ -95,7 +106,7 @@ export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderR
       ...(input.catalogPage ? { catalogPage: input.catalogPage } : {}),
     }),
     catalog: json(input.catalog),
-    ...(!snapshot.promptCompilation ? { history: json(input.history) } : {}),
+    ...(!snapshot.promptCompilation ? { history: json(writerHistory(snapshot, input)) } : {}),
     results: json(input.results),
   };
 }

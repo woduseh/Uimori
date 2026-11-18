@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { selectLogicalHistory } from '../core/context-projection.js';
+import { selectLogicalHistory, storyUiHistoryMode } from '../core/context-projection.js';
 import { encodeStoryUi, type StoryUiMessage } from '../core/story-ui.js';
 import type { RunSnapshot } from '../core/types.js';
 import { buildMainInput } from '../core/provider.js';
@@ -23,6 +23,12 @@ test('logical history projects visible UI text without mutating the frozen snaps
   } as RunSnapshot;
   const projected = selectLogicalHistory(snapshot, snapshot.history);
   expect(projected[0].text).toBe('Opening\nHarbor bulletin');
+  // A writer with the capability on continues from its own source, so placement stays visible.
+  expect(storyUiHistoryMode({ settings: {} } as RunSnapshot)).toBe('text');
+  expect(storyUiHistoryMode({ settings: { storyUi: true } } as RunSnapshot)).toBe('expression');
+  expect(selectLogicalHistory(snapshot, snapshot.history, 'expression')[0].text).toBe(
+    'Opening\n<a2ui>root = Text("Harbor bulletin")</a2ui>'
+  );
   expect(snapshot.history[0].text).toBe(text);
   expect(snapshot.logicalHistory?.[0].text).toBe(text);
 });

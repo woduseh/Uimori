@@ -1,6 +1,6 @@
 # 이야기 UI
 
-원고 안에 등장인물의 메시지 창, 조사 기록, 상태표, 선택지 같은 화면을 넣을 수 있어요. 모델이 본문을 생성할 때 화면도 함께 구성해요.
+원고 안에 메신저 대화, 게시판과 댓글, 뉴스 기사, 위키 문서, 상태창, 조우 알림, 선택지 같은 화면을 넣을 수 있어요. 모델이 본문을 생성할 때 화면도 함께 구성하며, 등장인물이 그 화면을 마주하는 본문 위치에 놓아요.
 
 ## 켜기와 사용하기
 
@@ -33,28 +33,38 @@
 
 ### 모델의 화면 조합
 
-모델은 A2UI 1.0의 Express 형식으로 본문 사이에 `<a2ui>…</a2ui>` 블록을 만들어요. 각 블록은 자체 화면과 상태를 정의해요. Uimori는 문서나 대화 같은 화면을 아래 구성 요소의 조합으로 표현해요.
+모델은 A2UI 1.0의 Express 형식으로 본문 사이에 `<a2ui>…</a2ui>` 블록을 만들어요. 각 블록은 자체 화면과 상태를 정의하며, 한 응답에 여러 개를 본문 중간중간 둘 수 있어요. Uimori는 아래 구성 요소의 조합으로 화면을 표현해요.
 
 | 용도 | 구성 요소 |
 | --- | --- |
-| 배치와 탐색 | `Row`, `Column`, `List`, `Card`, `Tabs`, `Modal`, `Divider` |
-| 내용과 행동 | `Text`, `Image`, `Icon`, `Button`, `TextField`, `CheckBox`, `ChoicePicker`, `Slider`, `DateTimeInput` |
-| 수치와 기록 | `BarChart`, `LineChart`, `DataTable`, `Gauge` |
+| 매체의 틀 | `Frame` (`kind`: `panel`, `app`, `page`, `paper`, `terminal`, `system`, `note`, `accent`: 대표색 10가지) |
+| 배치와 탐색 | `Row`, `Column`, `List`, `Grid`, `Card`, `Tabs`, `Details`, `Modal`, `Divider` |
+| 글과 그림 | `Text` (`headline`, `title`, `label`, `body`, `caption`, `quote`, `mono`), `Image`, `Avatar`, `Icon`, `Badge` |
+| 대화와 게시물 | `Message`, `Post` (`post`, `article`, `comment`, 답글 중첩), `Notice` |
+| 수치와 기록 | `Stat`, `Gauge`, `KeyValue`, `Timeline`, `DataTable`, `BarChart`, `LineChart`, `PieChart`, `RadarChart` |
+| 행동과 입력 | `Button`, `TextField`, `CheckBox`, `ChoicePicker`, `Slider`, `DateTimeInput` |
 
-예를 들어 아래 블록은 구성 요소 두 개를 세로로 배치해요.
+`Text`, `Notice`, `Badge`, `Stat`, `Gauge`의 `tone`(`neutral`, `accent`, `positive`, `caution`, `danger`, `info`)은 의미에 맞는 색을 지정해요.
+
+예를 들어 아래 블록은 메신저 화면이에요. `Frame`이 매체의 틀과 대표색을 정하고, 그 안에 말풍선을 쌓아요.
 
 ```text
 <a2ui>
-$/_uimori/style = "modern"
-root = Column([Text("조사 기록"), BarChart(title="신고 건수", items=[{label: "봄", value: 12}])])
+root = Frame(chat, "한서윤", kind="app", accent="amber")
+chat = Column([
+  Message("어디야", "한서윤", "23:41"),
+  Message("집 앞인데 왜", side="right", time="23:42")
+])
 </a2ui>
 ```
+
+모델에는 화면을 언제(등장인물이 형태가 있는 것을 볼 때, 구조가 의미를 전할 때, 사용자가 결정할 차례일 때), 어디에(마주하는 본문 위치에), 어떻게(매체에 맞는 틀과 그 세계의 말투로) 쓰는지를 예시와 함께 전달해요. 응답 끝마다 선택지와 요약을 붙이는 방식은 피하도록 안내해요. 실제 사용 빈도와 구성은 모델과 프롬프트에 따라 달라져요.
 
 이미지는 저장된 에셋, 패키지 이미지, 삽화 경로를 사용하며 목록 바인딩 경로에도 같은 규칙을 적용해요. 서버는 저장된 화면에 선언된 버튼·이벤트와 입력값을 검증해 다음 요청으로 전달해요. `roll` 이벤트의 주사위 면 수와 개수는 화면 정의에서 확인해 서버가 굴리며, 같은 제출을 재확인할 때는 기록된 결과를 재사용해요.
 
 ## 저장, 읽기와 번역
 
-서버는 본문 저장 시 완성된 `<a2ui>` 블록을 `uimori-ui` 코드 펜스 JSON(`version: 1`, `expression`, `messages`)으로 변환해 원문과 함께 보관해요. 검증을 통과하지 못한 원문은 그대로 보존하고, 이어 쓸 문맥에는 유효한 화면의 문구와 데이터를 투영해요. Risu 표시 변환 채팅에서도 유지된 이야기 UI 블록은 본문 안에서 정상 동작해요.
+서버는 본문 저장 시 완성된 `<a2ui>` 블록을 `uimori-ui` 코드 펜스 JSON(`version: 1`, `expression`, `messages`)으로 변환해 원문과 함께 보관해요. 검증을 통과하지 못한 원문은 그대로 보존해요. 이야기 UI를 켠 채팅에서는 이어 쓸 문맥에 이전 장면의 화면을 모델이 쓴 `<a2ui>` 원형 그대로 전달해, 화면이 놓였던 위치와 구성을 모델이 이어 갈 수 있게 해요. 이야기 UI를 끈 채팅, 요약, 번역 참고에는 화면의 문구와 데이터만 투영해요. Risu 표시 변환 채팅에서도 유지된 이야기 UI 블록은 본문 안에서 정상 동작해요.
 
 번역 시 화면 문자열만 모델에 전달해 저장된 구조에 복원하며, 구성 요소·이벤트·수치 값은 원본을 유지해요. 복원에 실패하면 번역 실패로 표시하고 원문은 그대로 읽을 수 있어요.
 
