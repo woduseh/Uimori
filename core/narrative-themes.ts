@@ -129,6 +129,16 @@ export const cinematicTheme: ThemeDefinition = {
 }
 `,
 };
+const paperGrain =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E\")";
+const postmark =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 60' fill='none' stroke='black' stroke-width='2.5'%3E%3Ccircle cx='30' cy='30' r='26'/%3E%3Ccircle cx='30' cy='30' r='19' stroke-width='1.2'/%3E%3Cpath d='M17 25h26M17 35h26' stroke-width='1.6'/%3E%3Cpath d='M58 18q6-6 12 0t12 0t12 0M58 30q6-6 12 0t12 0t12 0M58 42q6-6 12 0t12 0t12 0'/%3E%3C/svg%3E\")";
+const paperclip =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m16 6-8.414 8.586a2 2 0 0 0 2.828 2.828l8.414-8.586a4 4 0 0 0-5.656-5.656l-8.415 8.585a6 6 0 1 0 8.486 8.486'/%3E%3C/svg%3E\")";
+const letterMargin = (left: number) =>
+  `linear-gradient(to right, transparent ${left}px, var(--margin-rule) ${left}px ${left + 1}px, transparent ${left + 1}px ${left + 4}px, var(--margin-rule) ${left + 4}px ${left + 5}px, transparent ${left + 5}px)`;
+const letterPaper = (left: number) =>
+  `${paperGrain}, radial-gradient(ellipse at 50% 35%, transparent 55%, color-mix(in srgb, var(--accent) 12%, transparent) 100%), ${letterMargin(left)}, var(--panel)`;
 export const letterTheme: ThemeDefinition = {
   title: '편지지',
   description: '작은 인물 사진과 섬세한 줄, 여백이 있는 한 장의 편지',
@@ -137,12 +147,48 @@ export const letterTheme: ThemeDefinition = {
     commonApp +
     `
 .reader { width: min(100%, calc(var(--reading-width) + 96px)); }
-@container narrative-workspace (min-width: 851px) { .reader [data-uimori-body-scroll] { max-height: clamp(220px, calc(100dvh - 560px - var(--control-h) - 12px), 520px); } }
-/* The request reads as a note jotted above the letter rather than a chat bubble. */
-.reader .request-message { background: transparent; border: 0; border-inline-start: 2px solid var(--accent-line); border-radius: 0; padding: 4px 0 4px 16px; color: var(--muted); }
-/* The portrait is a small tilted postage stamp in the letter's corner. */
+@container narrative-workspace (min-width: 851px) { .reader [data-uimori-body-scroll] { max-height: clamp(220px, calc(100dvh - 630px - var(--control-h) - 12px), 520px); } }
+/* The request is a ruled note clipped above the letter. */
+.reader .request-message:not(form) {
+  position: relative;
+  margin-inline: 4px;
+  padding: 16px 20px 12px 24px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-small);
+  color: var(--text);
+  background:
+    repeating-linear-gradient(transparent 0 calc(1.8em - 1px), color-mix(in srgb, var(--accent) 22%, transparent) calc(1.8em - 1px) 1.8em) 0 16px,
+    linear-gradient(to right, transparent 12px, color-mix(in srgb, var(--error) 35%, transparent) 12px 13px, transparent 13px),
+    var(--panel);
+  transform: rotate(-0.6deg);
+}
+.reader .request-message:not(form)::before {
+  content: '';
+  position: absolute;
+  top: -12px;
+  left: 28px;
+  width: 16px;
+  height: 36px;
+  background: var(--muted);
+  mask: ${paperclip} no-repeat center / contain;
+  transform: rotate(10deg);
+  pointer-events: none;
+}
+/* The portrait is a tilted postage stamp, cancelled by a postmark. */
 .scene-portraits { display: block; }
-.scene-portraits [data-uimori-part="bot-portrait"] { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 104px; transform: rotate(2deg); }
+.scene-portraits [data-uimori-part="bot-portrait"] { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; width: 112px; transform: rotate(3deg); }
+.scene-portraits [data-uimori-part="bot-portrait"]::after {
+  content: '';
+  position: absolute;
+  top: 28px;
+  left: -44px;
+  width: 104px;
+  height: 62px;
+  background: color-mix(in srgb, var(--accent-text) 55%, transparent);
+  mask: ${postmark} no-repeat center / contain;
+  transform: rotate(-16deg);
+  pointer-events: none;
+}
 .scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button {
   --perforation: 4px;
   width: 100%;
@@ -154,20 +200,22 @@ export const letterTheme: ThemeDefinition = {
     radial-gradient(var(--perforation), #0000 98%, #000) round calc(var(--perforation) * -1.5) calc(var(--perforation) * -1.5) / calc(var(--perforation) * 3) calc(var(--perforation) * 3),
     linear-gradient(#000 0 0) no-repeat 50% / calc(100% - var(--perforation) * 3) calc(100% - var(--perforation) * 3);
 }
-.scene-portraits [data-uimori-part="bot-portrait"] img { aspect-ratio: 3 / 4; height: auto; object-fit: cover; object-position: center 20%; }
+.scene-portraits [data-uimori-part="bot-portrait"] img { aspect-ratio: 3 / 4; height: auto; object-fit: cover; object-position: center 20%; outline: var(--hairline) solid color-mix(in srgb, var(--text) 25%, transparent); }
 .scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-empty { min-height: 0; aspect-ratio: 3 / 4; }
 .scene-portraits [data-uimori-part="bot-portrait"] figcaption { padding: 0; text-align: center; }
-.scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-size: var(--font-small); color: var(--muted); }
+.scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-size: var(--font-small); color: var(--muted); font-style: italic; letter-spacing: 0.04em; }
 ` +
     mobilePortrait +
     `
 @container narrative-workspace (max-width: 850px) {
   .scene-portraits { display: block; }
-  .scene-portraits [data-uimori-part="bot-portrait"] { display: flex; width: 76px; }
+  .scene-portraits [data-uimori-part="bot-portrait"] { display: flex; width: 80px; }
+  .scene-portraits [data-uimori-part="bot-portrait"]::after { top: 20px; left: -32px; width: 76px; height: 46px; }
   .scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { --perforation: 3px; width: 100%; }
   .scene-portraits [data-uimori-part="bot-portrait"] img { width: 100%; height: auto; max-height: none; }
   .scene-portraits [data-uimori-part="bot-portrait"] figcaption { padding: 0; }
   .scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-size: var(--font-small); }
+  .reader .request-message:not(form) { padding: 14px 16px 10px 24px; }
 }
 `,
   messageCss,
@@ -176,19 +224,66 @@ export const letterTheme: ThemeDefinition = {
   templateCss:
     commonTemplate +
     `
-/* Two sheets peek out below the letter as hard edges, so the page has depth without a shadow. */
+/* Grained paper with a double margin rule, an airmail edge, sheets peeking out below as hard
+   edges and a wax seal where the letter closes. */
 .manuscript {
-  margin-bottom: 12px;
-  padding: 40px 48px 24px;
+  --margin-rule: color-mix(in srgb, var(--error) 40%, transparent);
+  margin-bottom: 28px;
+  padding: 48px 48px 28px 56px;
   border: var(--hairline) solid var(--line);
+  background: ${letterPaper(32)};
   box-shadow: 0 6px 0 -4px var(--panel), 0 6px 0 -3.5px var(--line), 0 12px 0 -8px var(--panel), 0 12px 0 -7.5px var(--line);
 }
-.letterhead { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: end; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 3px double var(--line); }
+.manuscript::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 8px;
+  background: repeating-linear-gradient(-45deg, var(--accent) 0 12px, transparent 12px 18px, color-mix(in srgb, var(--accent), var(--info) 70%) 18px 30px, transparent 30px 36px);
+  opacity: 0.85;
+}
+.manuscript::after {
+  content: '\\2766\\FE0E';
+  font-family: 'Segoe UI Symbol', 'Noto Sans Symbols 2', serif;
+  position: absolute;
+  right: 44px;
+  bottom: -24px;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 47% 53% 50% 50% / 52% 46% 54% 48%;
+  --wax: color-mix(in srgb, var(--error-solid) 60%, var(--accent));
+  background: radial-gradient(circle at 34% 30%, color-mix(in srgb, var(--wax), white 30%), var(--wax) 48%, color-mix(in srgb, var(--wax), black 40%));
+  box-shadow: inset 0 0 0 5px color-mix(in srgb, var(--wax), black 22%), inset 0 0 0 6px color-mix(in srgb, var(--wax), white 25%);
+  color: color-mix(in srgb, var(--wax), white 55%);
+  text-shadow: 0 1px 0 color-mix(in srgb, var(--wax), black 45%);
+  font-size: 24px;
+  line-height: 1;
+  transform: rotate(-12deg);
+  pointer-events: none;
+}
+.letterhead { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: end; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 3px double color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.letterhead::after {
+  content: '\\2766\\FE0E';
+  font-family: 'Segoe UI Symbol', 'Noto Sans Symbols 2', serif;
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  padding-inline: 12px;
+  background: var(--panel);
+  color: var(--accent-text);
+  font-size: 18px;
+  line-height: 1;
+  transform: translate(-50%, 55%);
+}
 .heading { border: 0; padding: 0; margin: 0; }
-.actions { border-top-style: dashed; }
+.actions { border-top: var(--hairline) dashed color-mix(in srgb, var(--accent) 45%, var(--line)); padding-right: 96px; }
 @container narrative-scene (max-width: 520px) {
-  .manuscript { padding: 24px 20px 16px; }
-  .letterhead { gap: 16px; margin-bottom: 20px; padding-bottom: 16px; }
+  .manuscript { padding: 32px 20px 20px 40px; background: ${letterPaper(24)}; }
+  .manuscript::after { right: 24px; bottom: -20px; width: 44px; height: 44px; font-size: 20px; }
+  .letterhead { gap: 16px; margin-bottom: 24px; padding-bottom: 16px; }
+  .actions { padding-right: 72px; }
 }
 `,
 };
