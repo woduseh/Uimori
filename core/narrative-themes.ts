@@ -443,30 +443,154 @@ export const classicFrameTheme: ThemeDefinition = {
   title: '클래식 프레임',
   description: '얇은 사각 프레임 안에 인물과 이야기를 나란히 담은 정갈한 장면',
   colors: colors('midnight'),
+  assets: [
+    builtinThemeAsset('title', 'GowunBatang-Regular.woff2'),
+    builtinThemeAsset('rosette', 'classic-rosette.webp'),
+    builtinThemeAsset('laurel', 'classic-laurel.webp'),
+  ],
   appCss:
     commonApp +
     `
-.scene-portraits [data-uimori-part="bot-portrait"] { padding: 8px; }
-.scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { border-radius: 0; border: 0; }
-.scene-portraits [data-uimori-part="bot-portrait"] img { width:100%; max-height:520px; object-fit:contain; }
-.scene-portraits [data-uimori-part="bot-portrait"] figcaption { padding:12px 8px 8px; text-align:center; }
-.scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-size:var(--font-heading); }
+@container narrative-workspace (min-width: 851px) { .reader [data-uimori-body-scroll] { max-height: clamp(220px, calc(100dvh - 620px - var(--control-h) - 12px), 520px); } }
+/* A neoclassical salon: the portrait hangs in a gilt frame above a brass nameplate. */
+.scene-portraits [data-uimori-part="bot-portrait"] { padding: 0; }
+.scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { border-radius: 0; border: 0; background: color-mix(in srgb, var(--panel), var(--text) 6%); }
+.scene-portraits [data-uimori-part="bot-portrait"] img { width: 100%; max-height: 500px; object-fit: contain; }
+.scene-portraits [data-uimori-part="bot-portrait"] figcaption {
+  position: relative;
+  margin: 16px auto 0;
+  width: fit-content;
+  max-width: 100%;
+  padding: 6px 28px;
+  text-align: center;
+  border: 3px double color-mix(in srgb, var(--accent-text) 60%, transparent);
+  background:
+    radial-gradient(circle at 12px 50%, var(--accent-text) 2px, color-mix(in srgb, var(--accent-text) 30%, transparent) 2.5px 3.5px, transparent 4px),
+    radial-gradient(circle at calc(100% - 12px) 50%, var(--accent-text) 2px, color-mix(in srgb, var(--accent-text) 30%, transparent) 2.5px 3.5px, transparent 4px),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 26%, var(--panel)), color-mix(in srgb, var(--accent) 12%, var(--panel)) 55%, color-mix(in srgb, var(--accent) 22%, var(--panel)));
+}
+.scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-family: var(--theme-font-title), serif; font-size: var(--font-body); font-weight: 400; letter-spacing: 0.2em; color: var(--text); }
+.reader [data-uimori-part="heading"] .folio { font-family: var(--theme-font-title), serif; font-size: var(--font-heading); font-weight: 400; letter-spacing: 0.16em; }
+/* The request is an engraved museum label. */
+.reader .request-message:not(form) {
+  padding: 14px 22px;
+  border: 1px solid color-mix(in srgb, var(--accent-text) 45%, var(--line));
+  border-radius: 0;
+  background: var(--panel);
+  box-shadow: inset 0 0 0 4px var(--panel), inset 0 0 0 5px color-mix(in srgb, var(--accent-text) 30%, var(--line));
+  font-family: var(--theme-font-title), serif;
+}
 ` +
-    mobilePortrait,
-  messageCss,
+    mobilePortrait +
+    `
+@container narrative-workspace (max-width: 850px) {
+  .scene-portraits [data-uimori-part="bot-portrait"] figcaption { position: relative; margin-top: 10px; padding: 4px 22px; }
+}
+`,
+  messageCss:
+    messageCss +
+    `
+:where(h1, h2, h3) { font-family: var(--theme-font-title), serif; font-weight: 400; letter-spacing: 0.04em; }
+`,
   templateHtml:
-    '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><aside class="portrait"><slot name="portrait"></slot></aside><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body" data-uimori-body-scroll></slot><footer class="actions"><slot name="actions"></slot></footer></div></section>',
+    '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><aside class="portrait"><div class="frame"><i class="rosette top-left" aria-hidden="true"></i><i class="rosette top-right" aria-hidden="true"></i><i class="rosette bottom-left" aria-hidden="true"></i><i class="rosette bottom-right" aria-hidden="true"></i><slot name="portrait"></slot></div></aside><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body" data-uimori-body-scroll></slot><footer class="actions"><slot name="actions"></slot></footer></div></section>',
   templateCss:
     commonTemplate +
     `
-.manuscript { display:grid; grid-template-columns:minmax(180px,29%) minmax(0,1fr); gap:18px; padding:16px; border:var(--hairline) solid var(--line); }
-.portrait { align-self:start; }
-.copy { padding:20px; }
-.heading { padding-bottom:12px; margin-bottom:20px; }
-.actions { margin-top:20px; }
-@container narrative-scene (max-width:680px) { .manuscript { display:block; padding:10px; } .portrait { margin-bottom:12px; } .copy { padding:18px 14px; } }
+/* Striped regency wallpaper under a picture light, with a placard page beside the framed portrait. */
+.manuscript {
+  display: grid;
+  grid-template-columns: minmax(180px, 29%) minmax(0, 1fr);
+  gap: 24px;
+  padding: 20px;
+  border: var(--hairline) solid var(--line);
+  box-shadow: inset 0 0 0 4px var(--panel), inset 0 0 0 5px color-mix(in srgb, var(--accent-text) 30%, var(--line));
+  background:
+    radial-gradient(ellipse 60% 40% at 15% 0, color-mix(in srgb, var(--accent) 16%, transparent), transparent),
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent) 0 14px, transparent 14px 18px, color-mix(in srgb, var(--accent) 4%, transparent) 18px 20px, transparent 20px 34px),
+    var(--panel);
+}
+.portrait { align-self: start; padding-top: 22px; position: relative; }
+/* Picture wire to a brass nail. */
+.portrait::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 25%;
+  right: 25%;
+  height: 24px;
+  background:
+    radial-gradient(circle at 50% 3px, var(--accent-text) 3px, transparent 3.5px),
+    linear-gradient(to top right, transparent calc(50% - 0.75px), var(--accent-text) calc(50% - 0.75px) calc(50% + 0.75px), transparent calc(50% + 0.75px)) left bottom / 50% 22px no-repeat,
+    linear-gradient(to top left, transparent calc(50% - 0.75px), var(--accent-text) calc(50% - 0.75px) calc(50% + 0.75px), transparent calc(50% + 0.75px)) right bottom / 50% 22px no-repeat;
+  opacity: 0.7;
+}
+/* Gilt moulding: stacked keylines around a bead row. */
+.frame {
+  position: relative;
+  padding: 14px;
+  background:
+    radial-gradient(circle, color-mix(in srgb, var(--accent-text) 70%, transparent) 1.5px, transparent 2px) 0 0 / 7px 7px,
+    color-mix(in srgb, var(--accent) 20%, var(--panel));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent-text) 70%, transparent),
+    0 0 0 3px var(--panel),
+    0 0 0 4px color-mix(in srgb, var(--accent-text) 45%, transparent),
+    inset 0 0 0 2px color-mix(in srgb, var(--accent-text) 80%, transparent),
+    inset 0 0 0 5px var(--panel),
+    inset 0 0 0 6px color-mix(in srgb, var(--accent-text) 50%, transparent);
+}
+.rosette { position: absolute; z-index: 1; width: 22px; height: 22px; background: var(--accent-text); mask: var(--theme-image-rosette) no-repeat center / contain; pointer-events: none; }
+.rosette.top-left { top: -4px; left: -4px; }
+.rosette.top-right { top: -4px; right: -4px; }
+.rosette.bottom-left { bottom: -4px; left: -4px; }
+.rosette.bottom-right { bottom: -4px; right: -4px; }
+:host([data-has-portrait="false"]) .rosette { display: none; }
+.copy {
+  position: relative;
+  padding: 24px 28px;
+  background: var(--panel);
+  outline: var(--hairline) solid color-mix(in srgb, var(--accent-text) 40%, var(--line));
+  outline-offset: -8px;
+}
+.heading { position: relative; padding-bottom: 18px; margin-bottom: 24px; border-bottom: 0; }
+.heading::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -8px;
+  height: 22px;
+  background:
+    linear-gradient(to right, color-mix(in srgb, var(--accent-text) 40%, var(--line)) calc(50% - 92px), transparent calc(50% - 92px) calc(50% + 92px), color-mix(in srgb, var(--accent-text) 40%, var(--line)) calc(50% + 92px)) center / 100% 1px no-repeat;
+  pointer-events: none;
+}
+.heading::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  width: 240px;
+  height: 22px;
+  transform: translateX(-50%);
+  background: var(--accent-text);
+  mask: var(--theme-image-laurel) no-repeat center / contain;
+  pointer-events: none;
+}
+.actions { margin-top: 20px; }
+@container narrative-scene (max-width: 680px) {
+  .manuscript { display: block; padding: 10px; }
+  .portrait { margin-bottom: 14px; padding-top: 0; }
+  .portrait::before { display: none; }
+  .frame { padding: 8px; }
+  .rosette { width: 16px; height: 16px; }
+  .copy { padding: 18px 16px; }
+  .heading::before { width: 130px; }
+  .heading::after { background: linear-gradient(to right, color-mix(in srgb, var(--accent-text) 40%, var(--line)) calc(50% - 72px), transparent calc(50% - 72px) calc(50% + 72px), color-mix(in srgb, var(--accent-text) 40%, var(--line)) calc(50% + 72px)) center / 100% 1px no-repeat; }
+}
 `,
 };
+
 const sprockets =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 24'%3E%3Cpath fill-rule='evenodd' d='M0 0H18V24H0Z M5 6H13V16H5Z'/%3E%3C/svg%3E\")";
 const ticketNotches =

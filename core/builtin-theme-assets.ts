@@ -57,6 +57,18 @@ export const BUILTIN_THEME_ASSET_FILES: BuiltinThemeAssetFile[] = [
     mime: 'image/webp',
     file: 'cinema-wing.webp',
   },
+  {
+    hash: 'aea13c5650506cef3363245de46e9c1b206ada0406ad112115736ad018ad35aa',
+    kind: 'image',
+    mime: 'image/webp',
+    file: 'classic-rosette.webp',
+  },
+  {
+    hash: 'b92bf82bc36104194819020069e763625c28d0a5130f1df4fd41b72897b2ccdd',
+    kind: 'image',
+    mime: 'image/webp',
+    file: 'classic-laurel.webp',
+  },
 ];
 
 export function builtinThemeAsset(name: string, file: string) {

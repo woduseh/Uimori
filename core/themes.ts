@@ -194,7 +194,7 @@ export const BUILTIN_THEMES: Theme[] = [
   { ...cinematicTheme, id: 'builtin:cinematic', revision: 5 },
   { ...letterTheme, id: 'builtin:letter', revision: 5 },
   { ...scrapbookTheme, id: 'builtin:scrapbook', revision: 5 },
-  { ...classicFrameTheme, id: 'builtin:classic-frame', revision: 3 },
+  { ...classicFrameTheme, id: 'builtin:classic-frame', revision: 4 },
 ];
 export function getBuiltinTheme(id: string): Theme | undefined {
   const currentId = id === 'builtin:liquid-gallery' ? 'builtin:cinematic' : id;
