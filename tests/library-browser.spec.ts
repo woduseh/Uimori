@@ -445,6 +445,8 @@ test('EDITORRECOVERY2 confirms an uncertain new resource despite an incomplete l
   page,
   request,
 }) => {
+  // An unfiled bot keeps the root list (and its create action) visible regardless of earlier cases.
+  await createContent(request, `EDITORRECOVERY2 seed ${crypto.randomUUID()}`);
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 800 });
   await page.goto('/');
   await navigationAction(page, '서재');
