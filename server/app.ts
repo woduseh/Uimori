@@ -11,6 +11,7 @@ import { normalizeChatSettings } from '../core/chat-settings.js';
 import { projectStoryUiText } from '../core/story-ui.js';
 import { storyUiRoutes } from './story-ui-routes.js';
 import { normalizeStoryUiOutput } from './story-ui.js';
+import { storyUiAssetResolver } from './story-ui-assets.js';
 import { autoTranslationDefaultRoutes } from './auto-translation-defaults.js';
 import { chatGenerationDefaultRoutes } from './chat-generation-defaults.js';
 import { REQUEST_TEXT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -40,7 +41,7 @@ import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import { Store } from './store.js';
-import { readRunSnapshot } from './run-projections.js';
+import { readRunSnapshot, readStoredRunSnapshot } from './run-projections.js';
 import { ChatTitleService } from './chat-title.js';
 import { HelperRuntime, helperWritingSnapshot } from './helper-runtime.js';
 import { invokeTaskTool } from './helper-task-tools.js';
@@ -1209,8 +1210,15 @@ export async function createApp(options: AppOptions): Promise<App> {
   storyUiRoutes(app, store, { publish, execute, requireRequestModel });
   app.post('/api/story-ui/preview', { bodyLimit: 2 * 1024 * 1024 }, async (request) => {
     const body = record(request.body);
-    fields(body, ['text']);
-    return { text: normalizeStoryUiOutput(text(body.text, 'UI preview', 1_000_000, true)) };
+    fields(body, ['text', 'runId']);
+    const block = text(body.text, 'UI preview', 1_000_000, true);
+    const runId = body.runId === undefined ? undefined : text(body.runId, 'run ID', 200);
+    return {
+      text: normalizeStoryUiOutput(
+        block,
+        runId ? storyUiAssetResolver(() => readStoredRunSnapshot(store, runId)) : undefined
+      ),
+    };
   });
   app.patch<{ Params: { id: string } }>('/api/chats/:id/settings', async (request) => {
     const body: RecordBody = record(request.body);

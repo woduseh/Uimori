@@ -4,9 +4,11 @@ import { basicCatalog } from '@a2ui/web_core/catalogs/basic/v1';
 import {
   type CSSProperties,
   cloneElement,
+  createContext,
   Fragment,
   isValidElement,
   type ReactNode,
+  useContext,
   useEffect,
   useId,
   useMemo,
@@ -14,8 +16,8 @@ import {
   useState,
 } from 'react';
 import { compileReadingMarkdown } from '../core/reading-markdown.js';
-import { storyUiCatalog } from '../core/story-ui-catalog.js';
-import { isStoryUiImageUrl } from '../core/story-ui.js';
+import { storyUiCatalog, storyUiImageKeys } from '../core/story-ui-catalog.js';
+import { isStoryUiImageUrl, storyUiImageName } from '../core/story-ui.js';
 import { storyUiIcons } from './story-ui-icons.js';
 import { t } from './i18n.js';
 
@@ -23,10 +25,21 @@ import { t } from './i18n.js';
 // story-ui.css and authored themes style the same markup. The SDK supplies data binding,
 // validation and actions; none of its own elements or styles are used.
 const api = (name: string) => storyUiCatalog.components.get(name)!;
-/** Every component carries its `look` names as `look-<name>` classes on its own element. */
+export const StoryUiImageUrls = createContext<Record<string, string> | undefined>(undefined);
 const createComponentImplementation: typeof implement = (component, render) =>
   implement(component, (args) => {
-    const node = render(args);
+    const urls = useContext(StoryUiImageUrls);
+    const key = storyUiImageKeys[component.name];
+    const name = key && storyUiImageName((args.props as Record<string, unknown>)[key]);
+    const node = name
+      ? render({
+          ...args,
+          props: {
+            ...args.props,
+            [key]: urls && Object.hasOwn(urls, name) ? urls[name] : undefined,
+          },
+        })
+      : render(args);
     const look = (args.props as { look?: unknown }).look;
     if (typeof look !== 'string' || !isValidElement<{ className?: string }>(node)) return node;
     if (node.type === Fragment) return node;
@@ -141,18 +154,21 @@ const Icon = createComponentImplementation(api('Icon'), ({ props, context }) => 
     </svg>
   ) : null;
 });
-const Image = createComponentImplementation(api('Image'), ({ props }) => (
-  <img
-    className="story-ui-image"
-    data-variant={props.variant ?? 'mediumFeature'}
-    src={isStoryUiImageUrl(props.url) ? props.url : undefined}
-    alt={props.description || ''}
-    style={{
-      ...flex(props.weight),
-      objectFit: props.fit === 'scaleDown' ? 'scale-down' : (props.fit ?? 'cover'),
-    }}
-  />
-));
+const Image = createComponentImplementation(api('Image'), ({ props }) => {
+  if (props.url === undefined) return props.description ? <span>{props.description}</span> : null;
+  return (
+    <img
+      className="story-ui-image"
+      data-variant={props.variant ?? 'mediumFeature'}
+      src={isStoryUiImageUrl(props.url) ? props.url : undefined}
+      alt={props.description || ''}
+      style={{
+        ...flex(props.weight),
+        objectFit: props.fit === 'scaleDown' ? 'scale-down' : (props.fit ?? 'cover'),
+      }}
+    />
+  );
+});
 const Avatar = createComponentImplementation(api('Avatar'), ({ props }) => (
   <Portrait label={str(props.label)} url={props.url} size={props.size ?? 'medium'} />
 ));

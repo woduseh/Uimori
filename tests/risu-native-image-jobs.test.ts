@@ -12,6 +12,7 @@ import { nativeRisuContext } from '../server/risu-native-context.js';
 import { buildMainInput } from '../core/provider.js';
 import { requestInput } from '../server/main-host-context.js';
 import { imageOwnerDisplayText } from '../core/image-placement.js';
+import { normalizeStoryUiOutput } from '../server/story-ui.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { completedSource, illustrationDatabases, PNG_BASE64 } from './fixtures/illustration.js';
@@ -172,6 +173,19 @@ test('one owner controls authored tags and JEV display copies without rewriting 
   const jevInput = buildMainInput(snapshot);
   expect(jevInput.facts.join('\n')).not.toContain('Use <img="Mira_happy">');
   expect(jevInput.imagePlacement).toEqual({ owner: 'jev' });
+});
+
+test('JEV removes a prose image tag while preserving the same tag inside a story UI block', async () => {
+  const { store, chat } = fixture();
+  const ui = normalizeStoryUiOutput(
+    '<a2ui>\nroot = Message("안녕", "미라", avatar="{{img::Mira_happy}}")\n</a2ui>'
+  );
+  expect(ui).toMatch(/^```uimori-ui/u);
+  const source = completedSource(store, chat.id, `도착했다. {{img::Mira_happy}}\n\n${ui}`);
+  const snapshot = readRunSnapshot(store, source.runId);
+  expect((await nativeImageDisplayText(store, snapshot, source.id)).text).toBe(
+    `도착했다. \n\n${ui}`
+  );
 });
 
 test('image guidance preserves outer CBS conditions and excludes surrounding story instructions', async () => {

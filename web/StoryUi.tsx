@@ -10,7 +10,7 @@ import type { Run } from '../core/types.js';
 import { compileReadingMarkdown } from '../core/reading-markdown.js';
 import { api, ApiError, definiteRejection } from './api.js';
 import { t } from './i18n.js';
-import { storyUiRenderCatalog } from './story-ui-catalog.js';
+import { StoryUiImageUrls, storyUiRenderCatalog } from './story-ui-catalog.js';
 import './story-ui.css';
 import { readStoryUiDraft, storyUiDraftChanges, writeStoryUiDraft } from './story-ui-draft.js';
 
@@ -179,7 +179,9 @@ export function StoryUi({
         {surface && (
           <div className="story-ui-surface" inert={!!action && !!chatId && (latest || uncertain)}>
             <MarkdownContext.Provider value={renderMarkdown}>
-              <A2uiSurface surface={surface} />
+              <StoryUiImageUrls.Provider value={segment.imageUrls}>
+                <A2uiSurface surface={surface} />
+              </StoryUiImageUrls.Provider>
             </MarkdownContext.Provider>
           </div>
         )}

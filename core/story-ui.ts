@@ -30,6 +30,7 @@ export type StoryUiSegment =
       end: number;
       expression: string;
       messages: StoryUiMessage[];
+      imageUrls?: Record<string, string>;
       surfaceId: string;
     };
 
@@ -44,6 +45,15 @@ export function isStoryUiImageUrl(value: unknown): value is string {
     /^\/api\/(?:assets|package-image-blobs|illustration-images)\/[A-Za-z0-9_-]+$/.test(value)
   );
 }
+
+export function storyUiImageName(value: unknown): string | undefined {
+  return typeof value === 'string'
+    ? /^\{\{img::([^{}\r\n]+)\}\}$/iu.exec(value)?.[1].trim() || undefined
+    : undefined;
+}
+
+const validImageUrls = (value: unknown): value is Record<string, string> =>
+  record(value) && Object.values(value).every(isStoryUiImageUrl);
 
 // Validate the source-owned surface shape. The SDK catalog owns callable functions;
 // resolved image sources are checked by the renderer.
@@ -84,7 +94,8 @@ export function validateStoryUiMessages(value: unknown): value is StoryUiMessage
     const { id: _id, component: _component, ...properties } = component;
     if (!api.schema.safeParse(properties).success) return false;
     const image = component[storyUiImageKeys[component.component]];
-    if (typeof image === 'string' && !isStoryUiImageUrl(image)) return false;
+    if (typeof image === 'string' && !isStoryUiImageUrl(image) && !storyUiImageName(image))
+      return false;
     components.set(component.id, component);
   }
   if (!components.has('root')) return false;
@@ -130,8 +141,12 @@ export function validateStoryUiMessages(value: unknown): value is StoryUiMessage
   return walk('root') && visited.size === components.size;
 }
 
-export function encodeStoryUi(expression: string, messages: StoryUiMessage[]): string {
-  return `\`\`\`uimori-ui\n${JSON.stringify({ version: 1, expression, messages })}\n\`\`\``;
+export function encodeStoryUi(
+  expression: string,
+  messages: StoryUiMessage[],
+  imageUrls?: Record<string, string>
+): string {
+  return `\`\`\`uimori-ui\n${JSON.stringify({ version: 1, expression, messages, imageUrls })}\n\`\`\``;
 }
 
 function markdownCodeRanges(text: string, includeCanonical = false): Array<[number, number]> {
@@ -237,11 +252,14 @@ export function parseStoryUi(text: string): StoryUiSegment[] {
         const parsed: unknown = JSON.parse(text.slice(pattern.lastIndex, ending.index));
         if (
           record(parsed) &&
-          Object.keys(parsed).every((key) => ['version', 'expression', 'messages'].includes(key)) &&
+          Object.keys(parsed).every((key) =>
+            ['version', 'expression', 'messages', 'imageUrls'].includes(key)
+          ) &&
           parsed.version === 1 &&
           typeof parsed.expression === 'string' &&
           parsed.expression.startsWith('<a2ui>') &&
           parsed.expression.endsWith('</a2ui>') &&
+          (parsed.imageUrls === undefined || validImageUrls(parsed.imageUrls)) &&
           validateStoryUiMessages(parsed.messages)
         ) {
           segments.push({
@@ -251,6 +269,7 @@ export function parseStoryUi(text: string): StoryUiSegment[] {
             end,
             expression: parsed.expression,
             messages: parsed.messages,
+            ...(parsed.imageUrls && { imageUrls: parsed.imageUrls }),
             surfaceId: 'main',
           });
           valid = true;

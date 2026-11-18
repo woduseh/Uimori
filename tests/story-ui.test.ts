@@ -289,6 +289,30 @@ root = List(_template($/party, row))
 </a2ui>`);
     expect(parseStoryUi(party)[0].kind).toBe('ui');
   });
+  it('pins card image names for literal and bound images without rewriting text or action values', () => {
+    const expression = `<a2ui>
+$/people = [{portrait: "{{img::미라_미소}}"}]
+root = Column([List(_template($/people, row)), Avatar("솔", "{{img::솔}}"), Image("{{img::없는그림}}")])
+row = Button(Image($portrait), action=Event("select", {original: $portrait}))
+</a2ui>`;
+    const stored = normalizeStoryUiOutput(
+      expression,
+      (name) => ({ 미라_미소: '/api/assets/mira', 솔: '/api/assets/sol' })[name]
+    );
+    const segment = parseStoryUi(stored)[0];
+    expect(segment.kind).toBe('ui');
+    if (segment.kind !== 'ui') throw new Error('Expected a compiled block');
+    expect(segment.imageUrls).toEqual({ 미라_미소: '/api/assets/mira', 솔: '/api/assets/sol' });
+    expect(segment.expression).toBe(expression);
+    expect(segment.messages[0]).toMatchObject({
+      createSurface: { dataModel: { people: [{ portrait: '{{img::미라_미소}}' }] } },
+    });
+    const translated = prepareStoryUiTranslation(stored);
+    expect(parseStoryUi(translated.restore(translated.text))[0]).toEqual(segment);
+    expect(
+      parseStoryUi(stored.replace('/api/assets/mira', 'https://outside.invalid/1'))[0].kind
+    ).toBe('invalid');
+  });
   it('keeps invalid and unfinished output visible without losing adjacent text', () => {
     const source = 'A<a2ui>root = Unknown()</a2ui>B<a2ui>root =';
     expect(normalizeStoryUiOutput(source)).toBe(source);

@@ -11,6 +11,7 @@ import { evaluateNativeRisuFields, type NativeRisuCbsContext } from './risu-nati
 import { imageOwnerDisplayText } from '../core/image-placement.js';
 import { successfulTranslation } from './translation-artifacts.js';
 import { packageImages } from '../core/package-images.js';
+import { parseStoryUi } from '../core/story-ui.js';
 
 async function imageGuidanceByPackage(
   snapshot: RunSnapshot,
@@ -116,19 +117,22 @@ export async function nativeImageDisplayText(
     job?.status === 'completed' && job.sourceHash === source.hash && job.result?.annotations
       ? imageTargetSource(store, job, true).text
       : fallback;
+  const prose = (text: string) =>
+    text.includes('```uimori-ui') || text.includes('<a2ui>')
+      ? parseStoryUi(text)
+          .flatMap((part) => (part.kind === 'prose' ? [part.text] : []))
+          .join('\n\n')
+      : text;
   const authoredTags = context
     ? await nativeCatalogImageTags({
         native: context.native,
         context: { ...context, viewport },
-        text: taggedText,
+        text: prose(taggedText),
         urls: assets.map((asset) => asset.url),
       })
     : [];
   const display = (text: string) =>
-    authoredTags.reduce(
-      (value, tag) => value.split(tag).join(''),
-      imageOwnerDisplayText(text, snapshot.profile!, assets)
-    );
+    imageOwnerDisplayText(text, snapshot.profile!, assets, authoredTags);
   if (
     !job ||
     job.status !== 'completed' ||
@@ -139,6 +143,7 @@ export async function nativeImageDisplayText(
   const target = imageTargetSource(store, job, true);
   const displayText = display(target.text);
   if (!context) return { text: displayText, issues: [] };
+  const displayedProse = prose(displayText);
   const catalog = imageCatalog(job.input);
   const validated = validatePresentation(
     target,
@@ -208,7 +213,7 @@ export async function nativeImageDisplayText(
     // host-validated URL. Markdown keeps them in the normal Risu message without inventing syntax.
     if (!tag && annotation.presentationIntent === 'inline') tag = `![](${asset.url})`;
     if (!tag) continue;
-    if (displayText.includes(tag)) continue;
+    if (displayedProse.includes(tag)) continue;
     const block = blocks.find((entry) => entry.anchor === annotation.blockAnchor)!;
     const before = /before (?:the )?paragraph|문단.*앞/iu.test(instructions);
     inserts.push({ offset: before ? block.start : block.end, text: `\n\n${tag}\n\n`, order });

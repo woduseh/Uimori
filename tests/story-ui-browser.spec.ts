@@ -46,12 +46,15 @@ test('renders bound image lists and icons without fetching edited external URLs'
   page,
 }, info) => {
   const { normalizeStoryUiOutput } = await import('../server/story-ui.js');
-  const source = normalizeStoryUiOutput(`<a2ui>
-$/people = [{name: "미라", portrait: "/api/assets/mira", icon: "person"}, {name: "솔", portrait: "/api/assets/sol", icon: "home"}]
+  const source = normalizeStoryUiOutput(
+    `<a2ui>
+$/people = [{name: "미라", portrait: "{{img::미라_미소}}", icon: "person"}, {name: "솔", portrait: "/api/assets/sol", icon: "home"}]
 $/portrait = "/api/assets/selected"
 item = Row([Image($portrait, description=$name, variant="avatar"), Icon($icon), Text($name)])
 root = Column([List(_template($/people, item)), TextField("첫 아이콘", $/people/0/icon), TextField("초상화 경로", $/portrait), Image($/portrait, description="선택한 초상화", fit="scaleDown")])
-</a2ui>`);
+</a2ui>`,
+    (name) => (name === '미라_미소' ? '/api/package-image-blobs/mira' : undefined)
+  );
   const remoteRequests: string[] = [];
   await page.route('**/api/{assets,package-image-blobs}/*', (route) =>
     route.fulfill({
@@ -70,7 +73,11 @@ root = Column([List(_template($/people, item)), TextField("첫 아이콘", $/peo
   }, source);
   await expect(page.getByRole('img', { name: '미라', exact: true })).toHaveAttribute(
     'src',
-    '/api/assets/mira'
+    '/api/package-image-blobs/mira'
+  );
+  await expect(page.getByRole('img', { name: '미라', exact: true })).toHaveJSProperty(
+    'naturalWidth',
+    40
   );
   await expect(page.getByRole('img', { name: '솔', exact: true })).toHaveAttribute(
     'src',
@@ -204,6 +211,7 @@ test('completed streamed UI remains visible as subsequent prose arrives', async 
   let requests = 0;
   await page.route('**/api/story-ui/preview', async (route) => {
     requests++;
+    expect(route.request().postDataJSON()).toEqual({ text: block, runId: 'streaming-run' });
     await route.fulfill({ json: { text: normalizeStoryUiOutput(block) } });
   });
   await page.goto(origin);
@@ -212,7 +220,8 @@ test('completed streamed UI remains visible as subsequent prose arrives', async 
     (window as any).showStream = await (await import(path)).mountStreaming(
       document.getElementById('mount'),
       value,
-      'modern'
+      'modern',
+      'streaming-run'
     );
   }, `${opening}\n\n${block}`);
   await expect(page.getByText('상태 표시')).toBeVisible();
@@ -418,7 +427,7 @@ test('composed media render with their own shells in both schemes', async ({ pag
   const taught = parseStoryUi(normalizeStoryUiOutput(prompt.slice(prompt.indexOf('## Examples'))))
     .filter((part) => part.kind === 'ui')
     .map((part) => normalizeStoryUiOutput(part.expression));
-  const sources = [...taught, ...gallery.map(normalizeStoryUiOutput)];
+  const sources = [...taught, ...gallery.map((entry) => normalizeStoryUiOutput(entry))];
   const remoteRequests: string[] = [];
   await page.route('**/api/assets/*', (route) =>
     route.fulfill({

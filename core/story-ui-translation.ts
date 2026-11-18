@@ -208,6 +208,7 @@ export function prepareStoryUiTranslation(source: string) {
     original: string;
     expression?: string;
     messages?: unknown;
+    imageUrls?: Record<string, string>;
     count: number;
   }[] = [];
   const text = segments
@@ -220,7 +221,9 @@ export function prepareStoryUiTranslation(source: string) {
       blocks.push({
         marker,
         original,
-        ...(segment.kind === 'ui' ? { expression: segment.expression, messages } : {}),
+        ...(segment.kind === 'ui'
+          ? { expression: segment.expression, messages, imageUrls: segment.imageUrls }
+          : {}),
         count: slots.length,
       });
       return `<${marker}>${JSON.stringify(slots.map((slot) => slot.text))}</${marker}>`;
@@ -280,7 +283,7 @@ export function prepareStoryUiTranslation(source: string) {
             (slot.owner as Record<string | number, unknown>)[slot.key] = values[index];
           });
           if (!validateStoryUiMessages(messages)) throw new Error('OUTPUT_STORY_UI_INVALID');
-          replacement = encodeStoryUi(block.expression, messages);
+          replacement = encodeStoryUi(block.expression, messages, block.imageUrls);
         }
         restored = restored.slice(0, start) + replacement + restored.slice(end + endTag.length);
       }

@@ -14,21 +14,23 @@ import { StoryUi } from './LazyStoryUi.js';
 
 type StoryStyle = import('../core/story-ui-style.js').StoryUiStyleSetting;
 
-function StreamingStoryBlock({ text, style }: { text: string; style?: StoryStyle }) {
+type StreamingStoryProps = { text: string; style?: StoryStyle; runId?: string };
+
+function StreamingStoryBlock({ text, style, runId }: StreamingStoryProps) {
   const [preview, setPreview] = useState('');
   useEffect(() => {
     if (!text.startsWith('<a2ui>') || !text.endsWith('</a2ui>')) return;
     const controller = new AbortController();
-    void api<{ text: string }>('/story-ui/preview', { text }, 'POST', controller.signal)
+    void api<{ text: string }>('/story-ui/preview', { text, runId }, 'POST', controller.signal)
       .then((result) => setPreview(result.text))
       .catch(() => {});
     return () => controller.abort();
-  }, [text]);
+  }, [text, runId]);
   const part = parseStoryUi(preview).find((entry) => entry.kind === 'ui');
   return part?.kind === 'ui' ? <StoryUi segment={part} style={style} /> : null;
 }
 
-export function StreamingStoryText({ text, style }: { text: string; style?: StoryStyle }) {
+export function StreamingStoryText({ text, style, runId }: StreamingStoryProps) {
   return (
     <>
       {parseStoryUi(text).map((part) =>
@@ -37,7 +39,7 @@ export function StreamingStoryText({ text, style }: { text: string; style?: Stor
         ) : part.kind === 'ui' ? (
           <StoryUi key={part.id} segment={part} style={style} />
         ) : part.kind === 'invalid' && part.text.startsWith('<a2ui>') ? (
-          <StreamingStoryBlock key={part.id} text={part.text} style={style} />
+          <StreamingStoryBlock key={part.id} text={part.text} style={style} runId={runId} />
         ) : null
       )}
     </>
@@ -291,7 +293,7 @@ export function StreamingResponse({
       {[...parts].map(([key, value]) => (
         <div className="streaming-text" key={key}>
           {taskKind === 'main' ? (
-            <StreamingStoryText text={value} style={storyUiStyle} />
+            <StreamingStoryText text={value} style={storyUiStyle} runId={taskId} />
           ) : (
             <PlainProse text={value} />
           )}

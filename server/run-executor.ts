@@ -1,5 +1,6 @@
 import { Store } from './store.js';
 import { normalizeStoryUiOutput } from './story-ui.js';
+import { storyUiAssetResolver } from './story-ui-assets.js';
 import { readRunStatus, readStoredRunSnapshot } from './run-projections.js';
 import { ResponseStreamStore } from './response-stream.js';
 import { Controls } from './controls.js';
@@ -629,7 +630,10 @@ export function createRunExecutor({
           });
           const authoredText = nativeOutput.nativeRisuExecution?.output?.text ?? result.text;
           const committedText = executionSnapshot.settings.storyUi
-            ? normalizeStoryUiOutput(authoredText)
+            ? normalizeStoryUiOutput(
+                authoredText,
+                storyUiAssetResolver(() => executionSnapshot)
+              )
             : authoredText;
           store.transaction(() => {
             assertCurrent();
