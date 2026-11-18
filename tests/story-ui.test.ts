@@ -1,4 +1,6 @@
+import { A2uiGenerator, CatalogConfig, ExpressFormatFactory } from '@a2ui/agent';
 import { describe, expect, it } from 'vitest';
+import { storyUiCatalog } from '../core/story-ui-catalog.js';
 import { compileReadingMarkdown } from '../core/reading-markdown.js';
 import { parseStoryUi, projectStoryUiText, validateStoryUiAction } from '../core/story-ui.js';
 import { resolveStoryUiPresentation, resolveStoryUiStyle } from '../core/story-ui-style.js';
@@ -27,8 +29,26 @@ describe('story UI', () => {
     expect(kinds.slice(0, 5)).toEqual(['prose', 'ui', 'prose', 'ui', 'prose']);
     for (const noise of ['dummy click', 'Surface targeting', '- weight:'])
       expect(prompt).not.toContain(noise);
-    expect(prompt).toContain('- Description: One chat bubble.');
+    expect(prompt).toContain('One chat bubble.');
     expect(prompt.indexOf('## Where it goes')).toBeLessThan(prompt.indexOf('## Block syntax'));
+  });
+  it('keeps the SDK’s positional and required arguments in the compact writing reference', () => {
+    const catalog = new CatalogConfig(storyUiCatalog);
+    const sdk = new A2uiGenerator([catalog], undefined, new ExpressFormatFactory());
+    const processor = sdk.createProcessor({ '1.0': { supportedCatalogIds: [catalog.catalog.id] } });
+    const signatures = [...processor.promptSnippet.matchAll(/^• (\w+)\((.*)\)$/gm)];
+    expect(signatures).toHaveLength(storyUiCatalog.components.size + storyUiCatalog.functions.size);
+    const lines = storyUiPrompt().split('\n');
+    for (const [, name, args] of signatures) {
+      const line = lines.find((entry) => entry.startsWith(`${name}(`));
+      expect(line, name).toBeDefined();
+      const signature = line!
+        .split(') ')[0]
+        .slice(name.length + 1)
+        .replace(/\{[^{}]*\}/g, '{}');
+      const names = [...signature.matchAll(/(?:^|, )(\w+\??):/g)].map((match) => match[1]);
+      expect(names, name).toEqual(args.replace(/ \([^)]*\)/g, '').split(', '));
+    }
   });
   it('keeps decoration and block CSS out of wording and translation, and images on stored paths', () => {
     const block = (frame: string) => `<a2ui>
@@ -54,11 +74,7 @@ body = Column([
     expect(translation.text).toContain('레이');
     expect(translation.text).not.toContain('story-paper');
     expect(translation.text).not.toContain('plate');
-    for (const invalid of [
-      'backdrop="https://outside.invalid/a.png"',
-      'surface="lava"',
-      'look="Not Valid!"',
-    ])
+    for (const invalid of ['surface="lava"', 'look="Not Valid!"'])
       expect(parseStoryUi(normalizeStoryUiOutput(block(invalid)))[0].kind).toBe('invalid');
   });
   it('translates day headings and entries of a schedule without touching its indexes', () => {
@@ -138,13 +154,32 @@ ${expression}
     expect(prepared.text).toContain('엘프');
     for (const hidden of ['amber', 'north', '"64"']) expect(prepared.text).not.toContain(hidden);
   });
-  it('accepts only stored images as portraits', () => {
-    const block = (avatar: string) =>
-      parseStoryUi(
-        normalizeStoryUiOutput(`<a2ui>root = Message("안녕", "미라", avatar="${avatar}")</a2ui>`)
-      )[0].kind;
-    expect(block('/api/assets/mira')).toBe('ui');
-    expect(block('https://example.com/mira.png')).toBe('invalid');
+  it('keeps a block whose portrait is not a stored image, pinning only names the card knows', () => {
+    const block = (avatar: string) => {
+      const part = parseStoryUi(
+        normalizeStoryUiOutput(
+          `<a2ui>root = Message("안녕", "미라", avatar=${JSON.stringify(avatar)})</a2ui>`,
+          (name) => (name === 'Mira_smile' ? '/api/assets/mira' : undefined)
+        )
+      )[0];
+      return part.kind === 'ui' ? (part.imageUrls ?? {}) : part.kind;
+    };
+    const pinned = { Mira_smile: '/api/assets/mira' };
+    for (const known of [
+      '{{img::Mira_smile}}',
+      '{{ img::Mira_smile }} ',
+      '{{raw::Mira_smile}}',
+      '{{emotion::Mira_smile}}',
+    ])
+      expect(block(known), known).toEqual(pinned);
+    for (const unknown of [
+      '/api/assets/mira',
+      '{{img::Mira_frown}}',
+      'Mira_smile',
+      '<img src="Mira_smile">',
+      'https://example.com/mira.png',
+    ])
+      expect(block(unknown), unknown).toEqual({});
   });
   it('accepts ordinary event data whose field names resemble function metadata', () => {
     const source = normalizeStoryUiOutput(
@@ -323,17 +358,12 @@ row = Button(Image($portrait), action=Event("select", {original: $portrait}))
       'pending',
     ]);
   });
-  it('rejects tampered components and external images', () => {
+  it('rejects tampered components', () => {
     const valid = normalizeStoryUiOutput('<a2ui>root = Text("hello")</a2ui>');
     expect(parseStoryUi(valid)[0].kind).toBe('ui');
     expect(parseStoryUi(valid.replace('"component":"Text"', '"component":"Video"'))[0].kind).toBe(
       'invalid'
     );
-    expect(
-      parseStoryUi(
-        normalizeStoryUiOutput('<a2ui>root = Image("https://example.com/a.png")</a2ui>')
-      )[0].kind
-    ).toBe('invalid');
   });
   it('accepts resolved function context for a declared button event', () => {
     const source = normalizeStoryUiOutput(`<a2ui>
