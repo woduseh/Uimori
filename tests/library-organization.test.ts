@@ -8,6 +8,7 @@ import { fixtureBotInput } from './fixtures/chat.js';
 import type { Content } from '../core/product.js';
 import { libraryCategory, libraryFolderOf } from '../core/library-organization.js';
 import { createApp } from '../server/app.js';
+import { pruneUnusedData } from '../server/unused-data.js';
 
 const owned: { dir: string; store: Store }[] = [];
 afterEach(() => {
@@ -227,4 +228,45 @@ test('HTTP routes share one organization revision and reject hidden or unknown f
     owned.pop();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('a chosen folder cover is validated, kept as a retention root and released with the folder', () => {
+  const store = fixture(),
+    target = folder(store, 'Covered');
+  expect(target.coverImageHash).toBeNull();
+  const hash = 'a'.repeat(64);
+  expect(() =>
+    store.libraryOrganization.updateFolder(target.id, {
+      expectedRevision: revision(store),
+      coverImageHash: hash,
+    })
+  ).toThrow('Folder cover image not found');
+  store.db
+    .prepare('INSERT INTO image_blobs VALUES(?,?,?)')
+    .run(hash, 'image/webp', new Uint8Array([1]));
+  const covered = store.libraryOrganization.updateFolder(target.id, {
+    expectedRevision: revision(store),
+    coverImageHash: hash,
+  });
+  expect(covered.folders.find((item) => item.id === target.id)!.coverImageHash).toBe(hash);
+  pruneUnusedData(store.db, null);
+  expect(store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(hash)).toBeTruthy();
+  const cleared = store.libraryOrganization.updateFolder(target.id, {
+    expectedRevision: revision(store),
+    coverImageHash: null,
+  });
+  expect(cleared.folders.find((item) => item.id === target.id)!.coverImageHash).toBeNull();
+  pruneUnusedData(store.db);
+  expect(store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(hash)).toBeUndefined();
+  store.db
+    .prepare('INSERT INTO image_blobs VALUES(?,?,?)')
+    .run(hash, 'image/webp', new Uint8Array([1]));
+  store.libraryOrganization.updateFolder(target.id, {
+    expectedRevision: revision(store),
+    coverImageHash: hash,
+  });
+  store.libraryOrganization.deleteFolder(target.id, { expectedRevision: revision(store) });
+  expect(store.db.prepare('SELECT 1 FROM library_folder_covers').get()).toBeUndefined();
+  pruneUnusedData(store.db);
+  expect(store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(hash)).toBeUndefined();
 });

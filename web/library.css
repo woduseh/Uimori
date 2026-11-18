@@ -1040,7 +1040,39 @@
   flex-shrink: 0;
 }
 /* Up to four portraits from the folder stand in for the generic folder icon. */
-.library-folder-open > .library-folder-cover {
+.library-cover-picker {
+  display: grid;
+  gap: 16px;
+}
+.library-cover-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.library-cover-choice {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 72px;
+  padding: 8px;
+  font-size: var(--font-small);
+  font-weight: 400;
+}
+.library-cover-choice > :first-child {
+  width: 56px;
+  height: 56px;
+}
+.library-cover-choice[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+.library-cover-choice > svg:last-child {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  color: var(--accent-text);
+}
+:is(.library-folder-open, .library-cover-choice) > .library-folder-cover {
   display: grid;
   flex-shrink: 0;
   grid-template-columns: 1fr 1fr;
@@ -1052,8 +1084,12 @@
   border-radius: var(--radius-control);
   background: var(--surface);
 }
-.library-folder-open > .library-folder-cover[data-count="1"] {
+:is(.library-folder-open, .library-cover-choice) > .library-folder-cover[data-count="1"] {
   grid-template-columns: 1fr;
+}
+.library-cover-choice > .library-folder-cover {
+  width: 56px;
+  height: 56px;
 }
 .library-folder-cover[data-count="3"] > img:first-child {
   grid-row: span 2;

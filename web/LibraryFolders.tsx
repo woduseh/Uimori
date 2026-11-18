@@ -17,10 +17,14 @@ import {
   EditIcon,
   FolderAddIcon,
   FolderIcon,
+  ImagesIcon,
   MoreIcon,
   MoveIcon,
 } from './ui-icons.js';
+import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
+import { uploadPackageImage } from './package-image-upload.js';
 import './library-folders.css';
+import './content-picker.css';
 
 const categoryLabelKeys: Record<LibraryCategory, string> = {
   bot: 'library.bot',
@@ -29,6 +33,24 @@ const categoryLabelKeys: Record<LibraryCategory, string> = {
   prompts: 'library.prompts',
 };
 export type FolderFilter = 'all' | 'unclassified' | string;
+const blobUrl = (hash: string) => `/api/package-image-blobs/${hash}`;
+const blobHash = (url: string) => /\/api\/package-image-blobs\/([a-f0-9]{64})$/u.exec(url)?.[1];
+
+/** A chosen image fills the cover; otherwise up to four portraits from the folder stand in. */
+function FolderCover({ folder, portraits }: { folder: LibraryFolder; portraits?: string[] }) {
+  const urls = folder.coverImageHash
+    ? [blobUrl(folder.coverImageHash)]
+    : (portraits ?? []).slice(0, 4);
+  return urls.length ? (
+    <span className="library-folder-cover" data-count={urls.length} aria-hidden="true">
+      {urls.map((url) => (
+        <img key={url} src={url} alt="" loading="lazy" draggable={false} />
+      ))}
+    </span>
+  ) : (
+    <FolderIcon size={28} aria-hidden="true" />
+  );
+}
 
 export function useLibraryOrganization(
   library: Library | null,
@@ -152,7 +174,7 @@ export function LibraryFolders({
   value: FolderFilter;
   onChange: (value: FolderFilter) => void;
   counts: Record<string, number>;
-  /** Portrait URLs of resources inside each folder; a folder without any keeps the folder icon. */
+  /** Portrait URLs of resources inside each folder: the automatic cover and the cover choices. */
   covers?: Record<string, string[]>;
   reload: () => Promise<void>;
   onError: (error: string) => void;
@@ -165,6 +187,11 @@ export function LibraryFolders({
   useI18n();
   const [edit, setEdit] = useState<{ folder: LibraryFolder | null; revision: number } | null>(null);
   const [title, setTitle] = useState('');
+  const [coverFolderId, setCoverFolderId] = useState<string | null>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [coverError, setCoverError] = useState('');
+  const coverUpload = useRef<AbortController | null>(null);
+  useEffect(() => () => coverUpload.current?.abort(), []);
   const draggedFolder = useRef<string | null>(null);
   const [folderDrop, setFolderDrop] = useState<{ id: string; edge: 'before' | 'after' } | null>(
     null
@@ -179,6 +206,34 @@ export function LibraryFolders({
     setTitle(folder?.title ?? '');
     setEdit({ folder, revision: organization.revision });
   }
+  function closeCover() {
+    coverUpload.current?.abort();
+    setUploadingCover(false);
+    setCoverError('');
+    setCoverFolderId(null);
+  }
+  async function applyCover(folderId: string, coverImageHash: string | null) {
+    setCoverError('');
+    if (
+      await mutate(`/library/folders/${encodeURIComponent(folderId)}`, { coverImageHash }, 'PATCH')
+    )
+      closeCover();
+  }
+  async function uploadCover(folderId: string, file: File) {
+    coverUpload.current?.abort();
+    const controller = new AbortController();
+    coverUpload.current = controller;
+    setCoverError('');
+    setUploadingCover(true);
+    try {
+      const image = await uploadPackageImage(file, controller.signal, 'profile');
+      await applyCover(folderId, image.blobHash);
+    } catch (error) {
+      if (!controller.signal.aborted) setCoverError((error as Error).message);
+    } finally {
+      if (coverUpload.current === controller) setUploadingCover(false);
+    }
+  }
   function folderActions(folder: LibraryFolder) {
     return (
       <>
@@ -191,6 +246,15 @@ export function LibraryFolders({
           >
             <EditIcon size={18} aria-hidden="true" />
             {t('library.rename')}
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={busy}
+            onClick={() => setCoverFolderId(folder.id)}
+          >
+            <ImagesIcon size={18} aria-hidden="true" />
+            {t('library.changeCover')}
           </button>
         </div>
         <div className="action-menu-group">
@@ -212,6 +276,11 @@ export function LibraryFolders({
     );
   }
   const selectedFolder = folders.find((item) => item.id === value);
+  const coverFolder = folders.find((item) => item.id === coverFolderId);
+  const coverPortraits = (coverFolder && covers?.[coverFolder.id]) || [];
+  const coverChoices = coverPortraits.map(blobHash).filter((hash) => hash !== undefined);
+  if (coverFolder?.coverImageHash && !coverChoices.includes(coverFolder.coverImageHash))
+    coverChoices.unshift(coverFolder.coverImageHash);
   function clearFolderDrag() {
     draggedFolder.current = null;
     setFolderDrop(null);
@@ -291,19 +360,7 @@ export function LibraryFolders({
               aria-label={t('library.openFolder', { v0: folder.title })}
               onClick={() => onChange(folder.id)}
             >
-              {covers?.[folder.id]?.length ? (
-                <span
-                  className="library-folder-cover"
-                  data-count={covers[folder.id].length}
-                  aria-hidden="true"
-                >
-                  {covers[folder.id].map((url) => (
-                    <img key={url} src={url} alt="" loading="lazy" draggable={false} />
-                  ))}
-                </span>
-              ) : (
-                <FolderIcon size={28} aria-hidden="true" />
-              )}
+              <FolderCover folder={folder} portraits={covers?.[folder.id]} />
               <span>
                 <strong title={folder.title}>{folder.title}</strong>
                 <small>{t('library.itemCount', { count: counts[folder.id] ?? 0 })}</small>
@@ -346,6 +403,76 @@ export function LibraryFolders({
           </LibraryItemMenu>
         </>
       )}
+      <Dialog
+        open={!!coverFolder}
+        title={t('library.folderCover')}
+        onClose={() => {
+          if (!busy) closeCover();
+        }}
+      >
+        {coverFolder && (
+          <div className="library-cover-picker">
+            <div className="library-cover-choices">
+              <button
+                type="button"
+                className="secondary library-cover-choice"
+                aria-pressed={!coverFolder.coverImageHash}
+                disabled={busy || uploadingCover}
+                onClick={() => void applyCover(coverFolder.id, null)}
+              >
+                <FolderCover
+                  folder={{ ...coverFolder, coverImageHash: null }}
+                  portraits={coverPortraits}
+                />
+                <span>{t('library.automaticCover')}</span>
+                {!coverFolder.coverImageHash && <CheckIcon size={16} aria-hidden="true" />}
+              </button>
+              {coverChoices.map((hash, index) => (
+                <button
+                  type="button"
+                  className="secondary library-cover-choice"
+                  key={hash}
+                  aria-label={t('library.coverImageChoice', { index: index + 1 })}
+                  aria-pressed={coverFolder.coverImageHash === hash}
+                  disabled={busy || uploadingCover}
+                  onClick={() => void applyCover(coverFolder.id, hash)}
+                >
+                  <span className="library-folder-cover" data-count={1} aria-hidden="true">
+                    <img src={blobUrl(hash)} alt="" loading="lazy" />
+                  </span>
+                  {coverFolder.coverImageHash === hash && (
+                    <CheckIcon size={16} aria-hidden="true" />
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="package-portrait-actions">
+              <label
+                className={`secondary package-portrait-upload${busy || uploadingCover ? ' is-disabled' : ''}`}
+              >
+                {t('library.uploadImage')}
+                <input
+                  type="file"
+                  accept={PACKAGE_IMAGE_MIMES.join(',')}
+                  aria-label={t('library.uploadCover')}
+                  disabled={busy || uploadingCover}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    if (file) void uploadCover(coverFolder.id, file);
+                  }}
+                />
+              </label>
+              {uploadingCover && <span role="status">{t('library.uploadingCover')}</span>}
+            </div>
+            {coverError && (
+              <p className="error" role="alert">
+                {coverError}
+              </p>
+            )}
+          </div>
+        )}
+      </Dialog>
       <Dialog
         open={!!edit}
         title={edit?.folder ? t('library.renameFolder') : t('library.newFolder')}

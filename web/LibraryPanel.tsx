@@ -509,7 +509,7 @@ export function LibraryPanel({
     counts[key] = (counts[key] ?? 0) + 1;
     const portrait = contentPortraitUrl(item);
     const cover = (folderCovers[key] ??= []);
-    if (portrait && cover.length < 4 && !cover.includes(portrait)) cover.push(portrait);
+    if (portrait && cover.length < 24 && !cover.includes(portrait)) cover.push(portrait);
   }
   const sort = sortByTab[tab];
   const manualOrder = manualOrderByTab[tab];

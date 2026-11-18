@@ -1,6 +1,7 @@
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import type { DatabaseSync } from 'node:sqlite';
 import type { Content } from '../core/product.js';
 import type {
   LibraryCategory,
@@ -11,6 +12,7 @@ import type {
 } from '../core/library-organization.js';
 import { libraryItemKey } from '../core/library-organization.js';
 import type { Store } from './store.js';
+import { queueImageCleanup } from './unused-data.js';
 
 const categories = ['bot', 'persona', 'module', 'prompts'];
 function category(value: unknown): LibraryCategory {
@@ -24,6 +26,14 @@ function itemKey(value: unknown): LibraryItemKey {
   if (!['content', 'prompt-preset'].includes(item.kind))
     throw new HttpError(400, 'Invalid library item kind');
   return { kind: item.kind, id: text(item.id, 'library item ID', 100) };
+}
+
+/** Chosen folder covers sit beside the folder rows, so the schema version stays unchanged. */
+export function initLibraryFolderCovers(db: DatabaseSync) {
+  db.exec(`CREATE TABLE IF NOT EXISTS library_folder_covers(
+    folder_id TEXT PRIMARY KEY REFERENCES library_folders(id) ON DELETE CASCADE,
+    hash TEXT NOT NULL
+  )`);
 }
 
 /** Current organization is independent of immutable content revisions and execution roles. */
@@ -50,7 +60,7 @@ export class LibraryOrganizationStore {
       revision: state.revision,
       folders: this.store.db
         .prepare(
-          'SELECT id,category,title,sort_position AS sortPosition FROM library_folders ORDER BY category,sort_position,id'
+          'SELECT f.id,f.category,f.title,f.sort_position AS sortPosition,c.hash AS coverImageHash FROM library_folders f LEFT JOIN library_folder_covers c ON c.folder_id=f.id ORDER BY f.category,f.sort_position,f.id'
         )
         .all() as LibraryFolder[],
       items: this.store.db
@@ -103,10 +113,27 @@ export class LibraryOrganizationStore {
         .run(randomUUID(), kind, title, count);
     });
   }
+  /** A replaced or removed cover is reclaimed once nothing else refers to its image. */
+  private clearCover(id: string) {
+    const previous = this.store.db
+      .prepare('SELECT hash FROM library_folder_covers WHERE folder_id=?')
+      .get(id);
+    if (!previous) return;
+    this.store.db.prepare('DELETE FROM library_folder_covers WHERE folder_id=?').run(id);
+    queueImageCleanup(this.store.db, [String(previous.hash)]);
+  }
+  private setCover(id: string, value: unknown) {
+    this.clearCover(id);
+    if (value === null) return;
+    const hash = text(value, 'folder cover image', 64);
+    if (!this.store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(hash))
+      throw new HttpError(400, 'Folder cover image not found');
+    this.store.db.prepare('INSERT INTO library_folder_covers VALUES(?,?)').run(id, hash);
+  }
   updateFolder(id: string, value: unknown) {
     const b = record(value);
-    fields(b, ['expectedRevision', 'title', 'beforeFolderId']);
-    if (b.title === undefined && b.beforeFolderId === undefined)
+    fields(b, ['expectedRevision', 'title', 'beforeFolderId', 'coverImageHash']);
+    if (b.title === undefined && b.beforeFolderId === undefined && b.coverImageHash === undefined)
       throw new HttpError(400, 'Folder update is empty');
     return this.edit(b.expectedRevision, () => {
       const folder = this.folder(id);
@@ -114,6 +141,7 @@ export class LibraryOrganizationStore {
         this.store.db
           .prepare('UPDATE library_folders SET title=? WHERE id=?')
           .run(text(b.title, 'folder title', 200).trim(), id);
+      if (b.coverImageHash !== undefined) this.setCover(id, b.coverImageHash);
       if (b.beforeFolderId !== undefined) {
         const anchor =
           b.beforeFolderId === null ? null : text(b.beforeFolderId, 'folder anchor', 100);
@@ -138,6 +166,7 @@ export class LibraryOrganizationStore {
     fields(b, ['expectedRevision']);
     return this.edit(b.expectedRevision, () => {
       const folder = this.folder(id);
+      this.clearCover(id);
       this.store.db
         .prepare('UPDATE library_placements SET folder_id=NULL WHERE folder_id=?')
         .run(id);

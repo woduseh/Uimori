@@ -145,6 +145,7 @@ export function pruneUnusedData(db: DatabaseSync, candidates: Iterable<string> |
     'SELECT text AS value FROM helper_message_changes WHERE deleted=0',
     'SELECT text AS value FROM helper_artifacts',
     'SELECT bot_id AS value FROM chat_organization',
+    'SELECT hash AS value FROM library_folder_covers',
   ])
     for (const row of db.prepare(sql).iterate()) scan(row.value);
   for (const row of db

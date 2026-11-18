@@ -479,6 +479,42 @@ export const messages = {
     ja: '変更は保存しましたが、一覧を更新できませんでした。{v0}',
     zh: '更改已保存，但无法刷新列表。{v0}',
   },
+  'library.changeCover': {
+    ko: '표지 바꾸기',
+    en: 'Change cover',
+    ja: '表紙を変更',
+    zh: '更换封面',
+  },
+  'library.folderCover': {
+    ko: '폴더 표지',
+    en: 'Folder cover',
+    ja: 'フォルダーの表紙',
+    zh: '文件夹封面',
+  },
+  'library.automaticCover': {
+    ko: '자동',
+    en: 'Automatic',
+    ja: '自動',
+    zh: '自动',
+  },
+  'library.coverImageChoice': {
+    ko: '표지 이미지 {index}',
+    en: 'Cover image {index}',
+    ja: '表紙画像 {index}',
+    zh: '封面图片 {index}',
+  },
+  'library.uploadCover': {
+    ko: '폴더 표지 이미지 업로드',
+    en: 'Upload folder cover image',
+    ja: 'フォルダーの表紙画像をアップロード',
+    zh: '上传文件夹封面图片',
+  },
+  'library.uploadingCover': {
+    ko: '이미지를 올리는 중이에요',
+    en: 'Uploading the image',
+    ja: '画像をアップロード中です',
+    zh: '正在上传图片',
+  },
   'library.rename': {
     ko: '이름 변경',
     en: 'Rename',

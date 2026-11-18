@@ -11,6 +11,7 @@ import { initStoryGuide } from './story-guide-store.js';
 import { initRequestFilesSchema } from './request-file-storage.js';
 import { initExecutionDiagnostics } from './execution-diagnostics.js';
 import { initThemeAssets, pruneThemeAssets } from './theme-assets.js';
+import { initLibraryFolderCovers } from './library-organization.js';
 
 export const DATABASE_SCHEMA_VERSION = 15;
 const FORMAT = 'uimori-personal-v1';
@@ -79,6 +80,7 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
     initDatabaseReadIndexes(db);
     initExecutionDiagnostics(db);
     initThemeAssets(db);
+    initLibraryFolderCovers(db);
     pruneThemeAssets(db, 'abandoned');
     return;
   }
@@ -92,6 +94,7 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
     initIllustrations(db);
     initExecutionDiagnostics(db);
     initThemeAssets(db);
+    initLibraryFolderCovers(db);
     initOutline(db);
     initLoreContextDefaults(db);
     db.exec(`
