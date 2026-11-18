@@ -18,8 +18,8 @@
 }
 .nt-sections {
   display: flex;
-  gap: 3px;
-  padding: 3px;
+  gap: 4px;
+  padding: 4px;
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-panel);
   background: var(--bg);
@@ -68,7 +68,7 @@
 }
 .nt-modes {
   display: flex;
-  gap: 3px;
+  gap: 4px;
   margin-left: auto;
 }
 .nt-search + .nt-modes {
@@ -137,7 +137,7 @@
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  margin: 4px 0 22px;
+  margin: 4px 0 24px;
 }
 .nt-heading > div:first-child {
   flex: 1;
@@ -211,7 +211,7 @@
   flex: 1;
   min-width: 0;
   min-height: 80px;
-  padding: 17px 8px 17px 0;
+  padding: 16px 8px 16px 0;
   border: 0;
   border-radius: var(--radius-control);
   background: transparent;
@@ -251,7 +251,7 @@
 }
 .nt-item-copy small {
   display: block;
-  margin-top: 3px;
+  margin-top: 4px;
   font-size: var(--font-small);
   color: var(--muted);
   line-height: 1.6;
@@ -265,7 +265,7 @@
   color: var(--muted);
   background: var(--bg);
   border-radius: var(--radius-control);
-  padding: 4px 7px;
+  padding: 4px 8px;
 }
 .nt-chevron {
   flex-shrink: 0;
@@ -275,7 +275,7 @@
   transform: rotate(180deg);
 }
 .nt-item.is-divider {
-  margin-top: 18px;
+  margin-top: 16px;
   border: 0;
 }
 .is-divider .nt-row-main {
@@ -305,7 +305,7 @@
 .nt-fields {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-  gap: 18px;
+  gap: 16px;
 }
 .native-editor .native-toggle-editor .nt-form label {
   font-size: var(--font-small);
@@ -443,7 +443,7 @@
   flex-shrink: 0;
 }
 .nt-preview .prompt-option-field {
-  padding-block: 18px;
+  padding-block: 16px;
   border-bottom: var(--hairline) solid var(--line);
 }
 .native-editor .nt-preview .prompt-option-field > label:not(.toggle-row) {
@@ -460,7 +460,7 @@
 }
 .nt-preview .prompt-option-field small {
   display: block;
-  margin-top: 5px;
+  margin-top: 4px;
   color: var(--muted);
   font-size: var(--font-small);
   line-height: 1.6;
@@ -563,7 +563,7 @@
   }
   .nt-sections button,
   .nt-modes button {
-    padding: 7px 9px;
+    padding: 8px 8px;
     font-size: var(--font-small);
     min-width: var(--control-h);
     min-height: var(--control-h);
@@ -586,7 +586,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    margin: 0 0 22px;
+    margin: 0 0 24px;
   }
   .native-editor .native-toggle-editor .nt-mobile-groups label {
     display: flex;
@@ -656,7 +656,7 @@
   }
   .nt-kind {
     font-size: var(--font-small);
-    padding: 3px 5px;
+    padding: 4px 4px;
   }
   .nt-type-icon {
     width: 26px;

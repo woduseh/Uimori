@@ -94,12 +94,12 @@
   min-width: 0;
 }
 .action-menu-group + .action-menu-group {
-  margin-top: 7px;
-  padding-top: 7px;
+  margin-top: 8px;
+  padding-top: 8px;
   border-top: var(--hairline) solid var(--line);
 }
 .action-menu-heading {
-  padding: 3px 10px 5px;
+  padding: 4px 10px 4px;
   color: var(--muted);
   font-size: var(--font-small);
   font-weight: 600;

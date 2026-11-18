@@ -14,7 +14,6 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 0 6px;
 }
 .helper-navigation-tools > input {
   flex: 1;
@@ -33,7 +32,7 @@
   scrollbar-width: thin;
 }
 .helper-navigation-tree {
-  padding: 0 6px 24px;
+  padding: 0 0 24px;
 }
 .helper-nav-project-heading {
   display: flex;
@@ -42,9 +41,9 @@
 .helper-nav-heading {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-height: 36px;
-  padding: 7px 9px;
+  padding: 8px 8px;
   border: 0;
   background: transparent;
   color: var(--text);

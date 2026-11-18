@@ -29,7 +29,7 @@ import {
   Square,
   X,
   Maximize2,
-  ArrowLeft,
+  Minimize2,
   ChevronDown,
 } from 'lucide-react';
 import { SettingsIcon, CloseIcon } from './ui-icons.js';
@@ -1320,7 +1320,7 @@ export function HelperPanel(props: Props) {
                 ? (props.returnLabel ?? t('helpers.returnToPrevious'))
                 : t('helpers.expand')
             }
-            icon={props.expanded ? ArrowLeft : Maximize2}
+            icon={!props.expanded ? Maximize2 : props.returnToSidecar ? Minimize2 : X}
             onClick={() => {
               if (props.expanded && !props.returnToSidecar) closePanel.current();
               else props.onToggleExpanded?.();

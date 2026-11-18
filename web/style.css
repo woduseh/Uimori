@@ -161,7 +161,7 @@ button {
   min-height: var(--control-h);
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-control);
-  padding: 9px 14px;
+  padding: 8px 14px;
   cursor: pointer;
   background: var(--surface-raised);
   color: var(--text);
@@ -433,7 +433,7 @@ input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   width: 18px;
   height: 18px;
-  margin-top: -6.5px;
+  margin-top: -6px;
   border: var(--hairline) solid var(--accent-text);
   border-radius: 50%;
   background: var(--accent);
@@ -688,7 +688,7 @@ input[type="checkbox"] {
 .sidebar {
   background: var(--nav);
   border-right: var(--hairline) solid var(--line);
-  padding: 15px 12px 12px;
+  padding: 16px 12px 12px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -698,7 +698,7 @@ input[type="checkbox"] {
   font-size: var(--font-heading);
   font-weight: 650;
   letter-spacing: -0.2px;
-  padding: 0 12px 18px;
+  padding: 0 12px 16px;
   line-height: 32px;
 }
 .nav-button {
@@ -707,7 +707,7 @@ input[type="checkbox"] {
   gap: 12px;
   text-align: left;
   width: 100%;
-  padding: 9px 12px;
+  padding: 8px 12px;
 }
 .nav-button {
   color: var(--text);
@@ -764,7 +764,7 @@ input[type="checkbox"] {
 }
 .nav-bottom {
   border-top: var(--hairline) solid var(--line);
-  padding-top: 9px;
+  padding-top: 8px;
   margin-top: 12px;
 }
 .count {
@@ -786,7 +786,7 @@ input[type="checkbox"] {
   align-items: center;
   border-bottom: var(--hairline) solid var(--line);
   padding: 6px 24px;
-  gap: 9px;
+  gap: 8px;
 }
 .header-title {
   position: relative;
@@ -911,14 +911,14 @@ input[type="checkbox"] {
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: stable both-edges;
   overscroll-behavior: contain;
   overflow-anchor: auto;
 }
 .reader {
   width: min(100%, calc(var(--reading-width) + 40px));
   margin: 0 auto;
-  padding: 26px 20px 48px;
+  padding: 24px 20px 48px;
   min-height: 100%;
   min-width: 0;
 }
@@ -928,7 +928,7 @@ input[type="checkbox"] {
   gap: 10px;
   font-size: var(--font-small);
   color: var(--muted);
-  margin-bottom: 26px;
+  margin-bottom: 24px;
   min-width: 0;
 }
 .profile-asset {
@@ -948,7 +948,7 @@ input[type="checkbox"] {
 .request-message {
   max-width: 86%;
   margin: 0 0 14px auto;
-  padding: 14px 17px;
+  padding: 14px 16px;
   background: var(--user);
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-panel);
@@ -977,8 +977,8 @@ input[type="checkbox"] {
   scroll-margin-top: 24px;
 }
 .source + .source {
-  margin-top: 30px;
-  padding-top: 22px;
+  margin-top: 32px;
+  padding-top: 24px;
   border-top: var(--hairline) solid var(--line);
 }
 /* Keep the view toggle separate from the activity summary. Natural wrapping accommodates
@@ -1040,7 +1040,7 @@ input[type="checkbox"] {
 .scene-badge {
   font-size: var(--font-small);
   line-height: 1.4;
-  padding: 1px 7px;
+  padding: 1px 8px;
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-control);
   color: var(--muted);
@@ -1053,7 +1053,7 @@ input[type="checkbox"] {
   gap: 0;
   border: var(--hairline) solid var(--line);
   border-radius: calc(var(--radius-control) + 3px);
-  padding: 3px;
+  padding: 4px;
   background: var(--nav);
 }
 .segmented button {
@@ -1077,7 +1077,7 @@ input[type="checkbox"] {
 .segmented.compact button {
   border-radius: var(--radius-small);
   min-height: 34px;
-  padding: 3px 10px;
+  padding: 4px 10px;
 }
 .prose {
   font-family: var(--reading-font-family, system-ui, sans-serif);
@@ -1190,7 +1190,7 @@ input[type="checkbox"] {
 }
 .job-summary button {
   font-size: var(--font-small);
-  padding: 7px 9px;
+  padding: 8px 8px;
 }
 .has-error {
   color: var(--error);
@@ -1270,7 +1270,7 @@ input[type="checkbox"] {
 }
 .inline-asset {
   max-width: 400px;
-  margin: 26px auto;
+  margin: 24px auto;
   text-align: center;
 }
 .inline-asset img {
@@ -1305,7 +1305,7 @@ input[type="checkbox"] {
     "more text send";
   align-items: end;
   column-gap: 2px;
-  padding: 5px 6px 5px 4px;
+  padding: 4px;
   background: var(--panel);
   border: var(--hairline) solid var(--input-border);
   border-radius: var(--radius-panel);
@@ -1325,7 +1325,7 @@ input[type="checkbox"] {
 .composer textarea {
   grid-area: text;
   width: 100%;
-  padding: 11px 8px;
+  padding: 12px 8px;
   border: 0;
   resize: none;
   min-height: var(--control-h);
@@ -1364,7 +1364,7 @@ input[type="checkbox"] {
 }
 .quick-controls select {
   border: 0;
-  padding: 5px 19px 5px 5px;
+  padding: 4px 20px 4px 4px;
   font-size: var(--font-small);
   color: var(--muted);
   background-color: transparent;
@@ -1393,7 +1393,7 @@ input[type="checkbox"] {
 }
 /* Notices only: the model lives in the header chip and the shortcut in the placeholder. */
 .composer-status {
-  margin: 5px 8px 0;
+  margin: 4px 8px 0;
   font-size: var(--font-small);
   color: var(--muted);
   overflow-wrap: anywhere;
@@ -1488,7 +1488,7 @@ input[type="checkbox"] {
 }
 .empty-state svg {
   color: var(--muted);
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 .empty-state h2 {
   font-size: var(--font-heading);
@@ -1516,7 +1516,7 @@ input[type="checkbox"] {
 .first-scene-avatar {
   --content-avatar-size: min(240px, 30vh);
   border-radius: var(--radius-panel);
-  margin-bottom: 22px;
+  margin-bottom: 24px;
 }
 .first-scene h2 {
   font-size: var(--font-heading);
@@ -1593,7 +1593,7 @@ input[type="checkbox"] {
   flex: none;
   min-width: 0;
   min-height: 56px;
-  padding: 10px 18px 10px 24px;
+  padding: 10px 16px 10px 24px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1639,14 +1639,14 @@ input[type="checkbox"] {
 }
 .new-story {
   display: grid;
-  gap: 18px;
+  gap: 16px;
 }
 .new-story > p {
   margin: 0;
 }
 .settings-stack {
   display: grid;
-  gap: 22px;
+  gap: 24px;
 }
 .settings-stack > label {
   gap: 8px;
@@ -1664,7 +1664,7 @@ input[type="checkbox"] {
 }
 .login > .wordmark {
   display: inline-block;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   font-size: var(--font-heading);
   font-weight: 650;
   letter-spacing: -0.2px;
@@ -1683,12 +1683,12 @@ input[type="checkbox"] {
     padding: 6px 16px;
   }
   .reader {
-    padding-left: 22px;
-    padding-right: 22px;
+    padding-left: 24px;
+    padding-right: 24px;
   }
   .composer-dock {
-    padding-left: 18px;
-    padding-right: 18px;
+    padding-left: 16px;
+    padding-right: 16px;
   }
 }
 @media (max-width: 760px) {
@@ -1704,8 +1704,8 @@ input[type="checkbox"] {
   .workspace-header {
     height: 56px;
     min-height: 56px;
-    padding: 5px 10px;
-    gap: 3px;
+    padding: 4px 10px;
+    gap: 4px;
   }
   .header-title h1 {
     font-size: var(--font-body);
@@ -1731,9 +1731,9 @@ input[type="checkbox"] {
     padding: 24px 20px 36px;
   }
   .story-context {
-    margin-bottom: 22px;
+    margin-bottom: 24px;
     font-size: var(--font-small);
-    gap: 7px;
+    gap: 8px;
   }
   .request-message {
     max-width: 94%;
@@ -1749,13 +1749,13 @@ input[type="checkbox"] {
     margin-bottom: var(--reading-paragraph-gap, 1.45em);
   }
   .composer-dock {
-    padding: 8px 9px max(7px, env(safe-area-inset-bottom));
+    padding: 8px 8px max(7px, env(safe-area-inset-bottom));
   }
   .composer-dock:has(.composer[hidden]) {
     padding: 0;
   }
   .composer {
-    padding: 3px 4px 3px 2px;
+    padding: 4px;
   }
   .composer textarea {
     padding: 10px 6px;
@@ -1763,14 +1763,14 @@ input[type="checkbox"] {
     min-height: var(--control-h);
   }
   .composer.grown textarea {
-    padding: 11px 12px 6px;
+    padding: 12px 12px 6px;
   }
   .composer-status {
     font-size: var(--font-small);
     margin-top: 4px;
   }
   .source + .source {
-    margin-top: 22px;
+    margin-top: 24px;
     padding-top: 16px;
   }
   .segmented.compact button,
@@ -1799,7 +1799,7 @@ input[type="checkbox"] {
     font-size: var(--font-heading);
   }
   .dialog-body {
-    padding: 20px 18px;
+    padding: 20px 16px;
   }
   .inline-asset img {
     height: 240px;
@@ -1839,7 +1839,7 @@ input[type="checkbox"] {
 .source-text-editor {
   display: grid;
   gap: 12px;
-  margin: 18px 0 28px;
+  margin: 16px 0 28px;
   padding: 16px;
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-panel);
@@ -1899,7 +1899,8 @@ input[type="checkbox"] {
 }
 .settings-search {
   width: 100%;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
+  background: transparent;
 }
 .settings-navigation-list[hidden] {
   display: none;
@@ -2031,7 +2032,7 @@ input[type="checkbox"] {
     border-radius: 0;
   }
   .settings-page {
-    padding: 16px 18px;
+    padding: 16px 16px;
   }
   .settings-page-title {
     margin-bottom: 14px;
@@ -2078,8 +2079,8 @@ input[type="checkbox"] {
   clip-path: inset(50%);
 }
 .quick-controls .content-picker-trigger {
-  padding: 5px 9px;
-  gap: 7px;
+  padding: 4px 8px;
+  gap: 8px;
   font-size: var(--font-small);
 }
 .quick-controls .content-avatar,

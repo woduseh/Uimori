@@ -49,7 +49,7 @@
 }
 .chat-specific-options > fieldset + section,
 .chat-specific-options > section + section {
-  margin-top: 22px;
+  margin-top: 24px;
 }
 .chat-specific-options h3 {
   margin: 0 0 8px;
@@ -221,7 +221,7 @@
 .prompt-option-field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
 }
 .prompt-option-field small {

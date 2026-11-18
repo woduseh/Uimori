@@ -30,7 +30,7 @@
 .section-navigation > button > span {
   display: grid;
   min-width: 0;
-  gap: 3px;
+  gap: 4px;
   overflow-wrap: anywhere;
 }
 .section-navigation-title {
@@ -40,7 +40,7 @@
 /* The list gap is 4px, so a group label needs a clear break above and almost none below;
    otherwise it floats between two items instead of heading the ones under it. */
 .section-navigation-group {
-  padding: 20px 12px 3px;
+  padding: 20px 12px 4px;
   font-size: var(--font-small);
   letter-spacing: 0.04em;
   color: var(--faint);

@@ -67,7 +67,7 @@
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 12px 18px 20px;
+  padding: 12px 16px 20px;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -92,16 +92,18 @@
   text-wrap: pretty;
 }
 
+/* Answer actions start under the answer's own text edge, away from the next request bubble. */
 .helper-response-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   margin-top: 2px;
+  margin-inline-start: -12px;
   opacity: 1;
 }
 .helper-copy-error {
   margin: 4px 0 0;
   font-size: var(--font-small);
-  text-align: right;
+  padding-inline-start: 12px;
 }
 
 .streaming-text {
@@ -185,7 +187,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 1px 7px;
+  padding: 1px 8px;
   border-radius: 999px;
   background: var(--surface);
   border: var(--hairline) solid var(--line);
@@ -213,7 +215,7 @@
 }
 .helper-composer {
   flex-shrink: 0;
-  padding: 8px 14px max(14px, env(safe-area-inset-bottom));
+  padding: 8px 14px max(8px, env(safe-area-inset-bottom));
 }
 .helper-composer .quick-controls {
   display: flex;
@@ -229,11 +231,11 @@
     "chips chips"
     "text text"
     "more send";
-  row-gap: 6px;
-  padding: 10px;
+  row-gap: 4px;
+  padding: 4px;
 }
 .helper-composer .helper-request-composer textarea {
-  padding: 4px 4px 8px;
+  padding: 10px 10px 6px;
   min-height: 52px;
   overflow-y: auto;
 }
@@ -383,7 +385,7 @@ details.helper-context-chip[open] {
 .helper-thread-content {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 24px;
   min-width: 0;
 }
 .helper-thread-empty {
@@ -534,7 +536,7 @@ details.helper-context-chip[open] {
 }
 
 .helper-message.request .request-message-wrap {
-  margin-top: 0;
+  margin-block: 0;
 }
 .helper-header h2,
 .helper-header small {
@@ -599,33 +601,53 @@ details.helper-context-chip[open] {
 .helper-prose pre {
   margin: 0 0 0.9em;
 }
+/* The copy control floats in the code block's corner instead of adding an empty header row. */
 .helper-code-toolbar {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  min-height: var(--control-h);
+  justify-content: flex-end;
+  gap: 8px;
+  height: 0;
   margin: 0;
-  padding: 2px 6px 2px 12px;
-  background: var(--surface);
-  border: var(--hairline) solid var(--line);
-  border-bottom: 0;
-  border-radius: var(--radius-control) var(--radius-control) 0 0;
+  padding: 0 4px;
   font-size: var(--font-small);
   line-height: 1.5;
 }
+.helper-code-toolbar > * {
+  transform: translateY(calc(var(--control-h) / 2 + 4px));
+}
 .helper-code-language {
-  flex: 1;
   color: var(--muted);
+}
+.helper-code-language:empty {
+  display: none;
+}
+.helper-code-toolbar:has(> .error) {
+  height: auto;
+  flex-wrap: wrap;
 }
 .helper-code-toolbar > .error {
   flex-basis: 100%;
+  transform: none;
 }
-.helper-code-toolbar + pre {
+.helper-prose .helper-code-toolbar + pre {
+  padding: 14px calc(var(--control-h) + 8px) 14px 14px;
   border: var(--hairline) solid var(--line);
-  border-top: 0;
-  border-radius: 0 0 var(--radius-control) var(--radius-control);
   background: var(--surface);
+}
+.helper-prose .helper-code-toolbar:has(> .helper-code-language:not(:empty)) + pre {
+  padding-top: calc(var(--control-h) + 8px);
+}
+.helper-composer .helper-model-chip {
+  border-color: transparent;
+  background: transparent;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+}
+.helper-composer .helper-model-chip:hover:not(:disabled) {
+  color: var(--text);
 }
 .helper-prose h1,
 .helper-prose h2,
@@ -668,7 +690,7 @@ details.helper-context-chip[open] {
 }
 @media (max-width: 760px) {
   .helper-messages {
-    padding: 10px 16px 18px;
+    padding: 10px 16px 16px;
   }
   .helper-composer {
     padding-inline: 12px;
@@ -763,5 +785,37 @@ details.helper-context-chip pre,
 @media (max-width: 1023px) {
   .app-shell.helper-open.helper-expanded {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* An empty conversation starts from the middle of the surface instead of a blank page above a
+   docked composer; phones keep the composer within thumb reach. */
+@media (min-width: 761px) {
+  .helper-panel:has(.helper-thread-empty:empty) > .helper-messages,
+  .helper-panel:has(.helper-thread-empty:empty) > .helper-composer {
+    flex: 1 1 0;
+  }
+}
+/* A pointer reveals request actions beside the bubble, so hidden actions leave no blank row. */
+@media (hover: hover) and (pointer: fine) and (min-width: 601px) {
+  .helper-message.request .request-message-wrap:not(:has(> form)) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) fit-content(min(86%, 100% - 96px));
+    align-items: end;
+    column-gap: 4px;
+  }
+  .helper-message.request .request-message-wrap:not(:has(> form)) > * {
+    grid-column: 1 / -1;
+  }
+  .helper-message.request .request-message-wrap:not(:has(> form)) > .request-message {
+    grid-column: 2;
+    grid-row: 1;
+    max-width: none;
+    margin: 0;
+  }
+  .helper-message.request .request-message-wrap:not(:has(> form)) > .request-message-actions {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: end;
   }
 }

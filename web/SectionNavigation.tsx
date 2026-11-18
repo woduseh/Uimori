@@ -1,5 +1,6 @@
-import { Fragment } from 'react';
+import { Fragment, type KeyboardEvent } from 'react';
 import type { LucideIcon } from 'lucide-react';
+import { ScrollStrip } from './ScrollStrip.js';
 import './section-navigation.css';
 
 type SectionNavigationItem<K extends string> = {
@@ -32,31 +33,31 @@ export function SectionNavigation<K extends string>({
   hidden?: boolean;
   orientation?: 'vertical' | 'horizontal';
 }) {
-  return (
-    <div
-      className="section-navigation"
-      role={compact ? 'navigation' : 'tablist'}
-      aria-label={label}
-      aria-orientation={compact ? undefined : orientation}
-      data-compact={compact}
-      hidden={hidden}
-      onKeyDown={(event) => {
-        const previousKey = orientation === 'horizontal' ? 'ArrowLeft' : 'ArrowUp';
-        const nextKey = orientation === 'horizontal' ? 'ArrowRight' : 'ArrowDown';
-        if (compact || ![previousKey, nextKey, 'Home', 'End'].includes(event.key)) return;
-        event.preventDefault();
-        const current = items.findIndex((item) => item.id === value);
-        const next =
-          event.key === 'Home'
-            ? 0
-            : event.key === 'End'
-              ? items.length - 1
-              : (current + (event.key === nextKey ? 1 : -1) + items.length) % items.length;
-        if (!items[next]) return;
-        onSelect(items[next].id);
-        event.currentTarget.querySelectorAll<HTMLButtonElement>('button')[next]?.focus();
-      }}
-    >
+  const navigationProps = {
+    role: compact ? 'navigation' : 'tablist',
+    'aria-label': label,
+    'aria-orientation': compact ? undefined : orientation,
+    'data-compact': compact,
+    hidden,
+    onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+      const previousKey = orientation === 'horizontal' ? 'ArrowLeft' : 'ArrowUp';
+      const nextKey = orientation === 'horizontal' ? 'ArrowRight' : 'ArrowDown';
+      if (compact || ![previousKey, nextKey, 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const current = items.findIndex((item) => item.id === value);
+      const next =
+        event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? items.length - 1
+            : (current + (event.key === nextKey ? 1 : -1) + items.length) % items.length;
+      if (!items[next]) return;
+      onSelect(items[next].id);
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('button')[next]?.focus();
+    },
+  };
+  const content = (
+    <>
       {items.map(({ id, title, icon: Icon, description, panelId, group }, index) => (
         <Fragment key={id}>
           {group && items[index - 1]?.group !== group && (
@@ -84,6 +85,15 @@ export function SectionNavigation<K extends string>({
           </button>
         </Fragment>
       ))}
+    </>
+  );
+  return orientation === 'horizontal' ? (
+    <ScrollStrip className="section-navigation" {...navigationProps}>
+      {content}
+    </ScrollStrip>
+  ) : (
+    <div className="section-navigation" {...navigationProps}>
+      {content}
     </div>
   );
 }

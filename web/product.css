@@ -357,14 +357,14 @@
   }
   .editor-grid,
   .control-grid {
-    gap: 15px;
+    gap: 16px;
   }
   .control-grid {
     padding: 14px;
   }
   .workspace-tools > summary small {
     display: block;
-    margin: 3px 0 0;
+    margin: 4px 0 0;
   }
   .form-actions button {
     font-size: var(--font-small);

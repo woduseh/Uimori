@@ -1,3 +1,4 @@
+import { ScrollStrip } from './ScrollStrip.js';
 import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -189,7 +190,7 @@ export function ProfileEditor({
       data-testid="profile-editor"
       aria-label={t('library.chatSettings')}
     >
-      <div
+      <ScrollStrip
         hidden={hideNavigation}
         className="profile-tabs"
         role="tablist"
@@ -224,7 +225,7 @@ export function ProfileEditor({
             {t(item.titleKey)}
           </button>
         ))}
-      </div>
+      </ScrollStrip>
       <form
         ref={form}
         onSubmit={(event) => {

@@ -7,7 +7,7 @@
   width: max-content;
   max-width: min(320px, calc(100vw - 16px));
   margin: 8px;
-  padding: 6px 9px;
+  padding: 6px 8px;
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-control);
   background: var(--panel);
@@ -27,6 +27,11 @@
   justify-self: end;
   align-self: start;
   margin-block-start: 0;
+}
+/* Chrome also shows interest when script moves focus, such as a panel focusing its close button
+   after a pointer click; only hover and keyboard focus should reveal the hint. */
+.ui-icon-button:not(:hover, :focus-visible) > .ui-tooltip {
+  visibility: hidden;
 }
 .app-dialog > .dialog-header > .ui-icon-button:last-child > .ui-tooltip {
   position-area: block-start;

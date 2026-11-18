@@ -21,7 +21,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 18px;
+  padding: 16px 16px;
   border-bottom: var(--hairline) solid var(--line);
 }
 .codex-connected-status {
@@ -40,7 +40,7 @@
 }
 .codex-plan-badge {
   flex: none;
-  padding: 4px 9px;
+  padding: 4px 8px;
   border-radius: var(--radius-small);
   background: var(--accent-soft);
   color: var(--text);
@@ -52,7 +52,7 @@
 }
 .codex-limit-row {
   min-width: 0;
-  padding: 16px 18px;
+  padding: 16px 16px;
 }
 .codex-limit-row + .codex-limit-row {
   border-top: var(--hairline) solid var(--line);
@@ -97,7 +97,7 @@
 }
 .codex-limit-unavailable {
   margin: 0;
-  padding: 16px 18px;
+  padding: 16px 16px;
 }
 .codex-credit-row {
   border-top: var(--hairline) solid var(--line);

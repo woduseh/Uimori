@@ -42,7 +42,7 @@
 .manuscript-search-filters {
   display: grid;
   grid-template-columns: minmax(150px, 0.65fr) minmax(0, 1fr);
-  gap: 18px;
+  gap: 16px;
   align-items: end;
 }
 .manuscript-search-kinds:only-child {
@@ -85,7 +85,7 @@
   align-items: center;
   gap: 6px;
   min-height: var(--control-h);
-  padding: 7px 11px;
+  padding: 8px 12px;
   border-radius: var(--radius-panel);
   border: var(--hairline) solid var(--line);
   background: transparent;
@@ -190,7 +190,7 @@
 }
 @media (max-width: 520px) {
   .manuscript-search-dialog > .dialog-body {
-    padding: 18px;
+    padding: 16px;
   }
   .manuscript-search-filters {
     grid-template-columns: minmax(0, 1fr);

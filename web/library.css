@@ -94,14 +94,14 @@
   margin-inline-start: auto;
   white-space: nowrap;
 }
+.scroll-strip:has(> .library-tabs, > .profile-tabs) {
+  border-bottom: var(--hairline) solid var(--border);
+}
 .library-tabs,
 .profile-tabs {
   display: flex;
-  gap: 5px;
-  border-bottom: var(--hairline) solid var(--border);
+  gap: 6px;
   padding-bottom: 12px;
-  overflow-x: auto;
-  scrollbar-width: thin;
 }
 .library-tabs > button,
 .profile-tabs > button {
@@ -110,7 +110,7 @@
   border: var(--hairline) solid transparent;
   background: transparent;
   color: var(--muted);
-  padding: 9px 13px;
+  padding: 8px 12px;
   font-size: var(--font-body);
   min-height: var(--control-h);
 }
@@ -120,12 +120,14 @@
   color: var(--text);
   border-color: var(--border);
 }
-.library-page .library-tabs {
-  gap: 16px;
-  padding-bottom: 0;
+.library-page .scroll-strip:has(> .library-tabs) {
   width: 100%;
   max-width: var(--collection-w);
   margin-inline: auto;
+}
+.library-page .library-tabs {
+  gap: 16px;
+  padding-bottom: 0;
 }
 .library-page .library-tabs > button {
   display: inline-flex;
@@ -133,7 +135,7 @@
   gap: 8px;
   padding: 8px 4px;
   border: 0;
-  border-bottom: var(--hairline) solid transparent;
+  border-bottom: 2px solid transparent;
   border-radius: 0;
   font-size: var(--font-body);
 }
@@ -154,7 +156,7 @@
   flex-direction: column;
   align-items: flex-start;
   min-width: 0;
-  padding: 20px 18px 18px;
+  padding: 20px 16px 16px;
   border: var(--hairline) solid var(--border);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
@@ -200,7 +202,7 @@
 .library-empty p {
   font-size: var(--font-body);
   color: var(--muted);
-  margin: 12px 0 22px;
+  margin: 12px 0 24px;
 }
 .library-detail {
   max-width: var(--detail-w);
@@ -211,8 +213,8 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 15px;
-  margin: 0 0 22px;
+  gap: 16px;
+  margin: 0 0 24px;
 }
 .library-detail-heading h2 {
   font-size: var(--font-heading);
@@ -310,7 +312,7 @@
 }
 .profile-savebar {
   border-top: var(--hairline) solid var(--border);
-  padding: 18px 0 4px;
+  padding: 16px 0 4px;
   margin-top: 24px;
 }
 .profile-savebar > button {
@@ -335,20 +337,20 @@
   }
   .library-heading > button:not(.ui-icon-button) {
     font-size: var(--font-body);
-    padding: 9px 12px;
+    padding: 8px 12px;
   }
   .library-tabs {
     gap: 1px;
   }
   .library-tabs > button {
-    padding: 8px 11px;
+    padding: 8px 12px;
   }
   .library-cards {
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
     gap: 14px;
   }
   .library-card {
-    padding: 18px;
+    padding: 16px;
   }
   .library-card > p {
     min-height: 0;
@@ -375,11 +377,11 @@
     gap: 0;
   }
   .profile-tabs > button {
-    padding: 8px 9px;
+    padding: 8px 8px;
     font-size: var(--font-small);
   }
   .profile-savebar {
-    gap: 9px;
+    gap: 8px;
   }
 }
 
@@ -391,7 +393,7 @@
 }
 .library-savebar {
   border-top: var(--hairline) solid var(--line);
-  padding-top: 18px;
+  padding-top: 16px;
   gap: 12px;
 }
 .library-savebar > span:empty {
@@ -509,7 +511,7 @@
 .library-view-buttons {
   display: flex;
   flex: none;
-  gap: 3px;
+  gap: 4px;
 }
 .library-view-buttons button[aria-pressed="true"],
 .library-ratio-buttons button[aria-pressed="true"] {
@@ -524,7 +526,7 @@
 .library-ratio-buttons {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 3px;
+  gap: 4px;
 }
 .library-ratio-buttons button {
   min-width: 0;
@@ -600,7 +602,7 @@
 }
 .library-item-copy {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
 }
 .library-item-copy strong {
@@ -792,7 +794,7 @@
     gap: 10px;
   }
   .library-portrait-card {
-    padding: 9px;
+    padding: 8px;
   }
   .library-item-copy strong {
     font-size: var(--font-body);

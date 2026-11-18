@@ -39,11 +39,11 @@
 }
 .ac-settings,
 .ac-agents {
-  gap: 18px;
+  gap: 16px;
 }
 .agent-collaboration .ac-field {
   font-size: var(--font-body);
-  gap: 7px;
+  gap: 8px;
 }
 .ac-budget {
   max-width: 520px;
@@ -146,7 +146,7 @@
   font-size: var(--font-small);
 }
 .ac-agent-fields {
-  padding: 6px 4px 18px;
+  padding: 6px 4px 16px;
   gap: 14px;
 }
 .ac-shared-summary {
@@ -163,7 +163,7 @@
 .ac-shared-summary > button {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
 }
 .ac-shared-tags {
   grid-column: 1 / -1;
@@ -172,7 +172,7 @@
   gap: 6px;
 }
 .ac-shared-tags > span {
-  padding: 5px 9px;
+  padding: 4px 8px;
   border-radius: var(--radius-control);
   background: var(--accent-soft);
   font-size: var(--font-small);
@@ -237,10 +237,10 @@
 }
 .ac-control-groups > button {
   display: grid;
-  gap: 3px;
+  gap: 4px;
   width: 100%;
   min-height: 54px;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border-color: transparent;
   text-align: left;
 }
@@ -259,7 +259,7 @@
 }
 .ac-control-picker-heading > span {
   flex: 0 0 auto;
-  padding: 6px 9px;
+  padding: 6px 8px;
   border-radius: var(--radius-control);
   background: var(--accent-soft);
   font-size: var(--font-small);

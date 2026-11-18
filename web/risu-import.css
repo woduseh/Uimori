@@ -49,7 +49,7 @@
   min-height: var(--control-h);
   display: inline-flex;
   align-items: center;
-  padding: 7px 10px;
+  padding: 8px 10px;
   border: var(--hairline) solid var(--border);
   border-radius: var(--radius-control);
   font-weight: 500;
@@ -71,7 +71,7 @@
 }
 .risu-import-counts > div {
   display: grid;
-  gap: 3px;
+  gap: 4px;
 }
 .risu-import-counts dt {
   color: var(--muted);
@@ -94,7 +94,7 @@
 }
 .risu-import-findings ul {
   margin: 8px 0 0;
-  padding-left: 22px;
+  padding-left: 24px;
 }
 .risu-import-findings li:lang(ko) {
   word-break: keep-all;
@@ -174,7 +174,7 @@
 }
 .risu-import-processing label {
   display: grid;
-  gap: 7px;
+  gap: 8px;
 }
 .risu-import-result {
   padding: 16px;

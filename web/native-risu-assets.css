@@ -52,7 +52,7 @@
   flex-direction: column;
   align-items: stretch;
   padding: 8px;
-  gap: 7px;
+  gap: 8px;
   text-align: left;
   white-space: normal;
   min-width: 0;
@@ -87,7 +87,7 @@
   align-content: start;
   gap: 12px;
   min-width: 0;
-  padding-left: 18px;
+  padding-left: 16px;
   border-left: var(--hairline) solid var(--line);
 }
 .native-assets-detail strong,

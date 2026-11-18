@@ -84,14 +84,14 @@
 }
 .archive-card-heading p,
 .archive-action-row p {
-  margin-top: 5px;
+  margin-top: 4px;
 }
 .archive-action-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
+  gap: 16px;
   padding-top: 4px;
 }
 .archive-action-row > div {
@@ -140,7 +140,7 @@
   margin-bottom: 4px;
 }
 .settings-service {
-  padding-block: 18px;
+  padding-block: 16px;
   min-width: 0;
 }
 .settings-service + .settings-service {

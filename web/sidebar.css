@@ -17,7 +17,7 @@
   --nav-w: var(--rail-w);
 }
 .sidebar-collapsed > .sidebar {
-  padding: 15px 6px 12px;
+  padding: 16px 6px 12px;
   align-items: center;
   overflow: hidden;
 }

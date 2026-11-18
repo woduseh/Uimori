@@ -1,8 +1,8 @@
 .activity-navigation {
   display: grid;
   align-content: start;
-  gap: 18px;
-  padding: 12px 6px 24px;
+  gap: 20px;
+  padding: 12px 0 24px;
   min-width: 0;
 }
 .activity-nav-section {
@@ -23,7 +23,7 @@
   background: transparent;
   text-align: left;
   border-radius: var(--radius-control);
-  padding: 7px 9px;
+  padding: 8px 8px;
   color: var(--muted);
   font-size: var(--font-small);
 }
@@ -33,7 +33,7 @@
 .activity-nav-heading-label {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
 .activity-nav-heading:hover,
 .activity-nav-heading:focus-visible {
@@ -47,9 +47,9 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   width: calc(100% - 18px);
-  margin: 7px 9px 1px;
+  margin: 8px 8px 1px;
   padding: 8px;
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-control);
@@ -71,7 +71,7 @@
   min-width: 0;
 }
 .activity-nav-date-group > h3 {
-  margin: 10px 9px 2px;
+  margin: 10px 8px 2px;
   color: var(--muted);
   font-size: var(--font-small);
   font-weight: 500;
@@ -107,8 +107,8 @@
   align-items: center;
   width: 100%;
   min-width: 0;
-  gap: 9px;
-  padding: 9px;
+  gap: 8px;
+  padding: 8px;
   text-align: left;
   border-radius: var(--radius-control);
 }
@@ -129,7 +129,7 @@
 .activity-nav-copy {
   flex: 1;
   display: grid;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 .activity-nav-copy strong,
@@ -164,9 +164,9 @@
 .activity-nav-confirm {
   display: flex;
   align-items: center;
-  gap: 3px;
-  margin: -2px 9px 5px 34px;
-  padding: 3px 7px;
+  gap: 4px;
+  margin: -2px 8px 4px 34px;
+  padding: 4px 8px;
   border: 0;
   background: transparent;
   color: var(--muted);
@@ -180,7 +180,7 @@
 .activity-nav-empty {
   color: var(--muted);
   font-size: var(--font-small);
-  margin: 5px 9px 8px;
+  margin: 4px 8px 8px;
 }
 .activity-nav-error {
   padding: 8px;
@@ -190,18 +190,17 @@
 .activity-nav-error button {
   font-size: var(--font-small);
 }
+/* Same two columns as the workspace switch above, so both rows share one left edge. */
 .bot-navigation-modes {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
-  margin: 0 8px 8px;
+  margin: 0 0 8px;
 }
 .bot-navigation-modes > button {
-  flex: 1;
   display: grid;
   place-items: center;
-  min-height: 35px;
+  min-height: var(--control-h);
   border-radius: var(--radius-control);
   border: 0;
   background: transparent;
@@ -210,11 +209,6 @@
 .bot-navigation-modes > button[aria-pressed="true"] {
   background: var(--nav-item-selected);
   color: var(--text);
-}
-@media (max-width: 760px) {
-  .bot-navigation-modes > button {
-    min-height: var(--control-h);
-  }
 }
 .bot-navigation-modes > button:hover {
   background: var(--nav-item-selected);

@@ -7,7 +7,7 @@
   height: 26px;
   min-height: 26px;
   margin: 0;
-  padding: 3.5px;
+  padding: 4px;
   border: var(--hairline) solid var(--muted);
   border-radius: 20px;
   background: var(--surface);

@@ -1691,7 +1691,7 @@
 }
 .story-ui[data-story-ui-style="blue-archive"] .story-ui-tabs {
   gap: 2px;
-  padding: 5px 5px 0;
+  padding: 4px 4px 0;
   background: color-mix(in srgb, var(--story-accent) 24%, var(--story-surface));
   border: 0;
   border-radius: 6px 6px 0 0;

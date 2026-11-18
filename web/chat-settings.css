@@ -52,7 +52,7 @@
    from reading as one pile of lines. */
 .settings-inherited {
   margin-top: 24px;
-  padding-top: 18px;
+  padding-top: 16px;
   border-top: var(--hairline) solid var(--line);
 }
 .settings-inherited > h4 {

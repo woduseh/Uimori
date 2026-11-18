@@ -1,3 +1,4 @@
+import { ScrollStrip } from './ScrollStrip.js';
 import { cloneWithReceipt } from './resource-create-retry.js';
 import {
   t,
@@ -990,7 +991,7 @@ export function LibraryPanel({
         </section>
       ) : (
         <>
-          <div
+          <ScrollStrip
             className="library-tabs"
             role="tablist"
             aria-label={t('library.libraryCategories')}
@@ -1025,7 +1026,7 @@ export function LibraryPanel({
                 {t(item.titleKey)}
               </button>
             ))}
-          </div>
+          </ScrollStrip>
           <div className="library-workspace">
             <div className="library-workspace-content">
               <div className="library-toolbar">

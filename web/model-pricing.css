@@ -63,15 +63,15 @@
   font-size: var(--font-small);
 }
 .model-pricing-rates dd {
-  margin: 3px 0 0;
+  margin: 4px 0 0;
 }
 .model-pricing-rates dd small {
   display: block;
-  margin-top: 3px;
+  margin-top: 4px;
 }
 .model-pricing-notes {
   margin: 0;
-  padding-left: 18px;
+  padding-left: 16px;
   color: var(--muted);
   font-size: var(--font-small);
 }

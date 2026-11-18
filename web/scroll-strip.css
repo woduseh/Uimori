@@ -1,0 +1,67 @@
+.scroll-strip {
+  --scroll-strip-fade: 40px;
+  position: relative;
+  min-width: 0;
+}
+.scroll-strip:has(> .scroll-strip-viewport[hidden]) {
+  display: none;
+}
+.scroll-strip-viewport {
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+  scroll-padding-inline: var(--scroll-strip-fade);
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 var(--scroll-strip-fade-start, 0px),
+    #000 calc(100% - var(--scroll-strip-fade-end, 0px)),
+    transparent
+  );
+}
+.scroll-strip[data-overflow-start] > .scroll-strip-viewport {
+  --scroll-strip-fade-start: var(--scroll-strip-fade);
+}
+.scroll-strip[data-overflow-end] > .scroll-strip-viewport {
+  --scroll-strip-fade-end: var(--scroll-strip-fade);
+}
+@media (prefers-reduced-motion: reduce) {
+  .scroll-strip-viewport {
+    scroll-behavior: auto;
+  }
+}
+/* Touch scrolls the row directly. A chevron stays, disabled, while the pointer is still on it at
+   the end, so a repeated click cannot land on whatever lies underneath. */
+.scroll-strip-button {
+  display: none;
+  position: absolute;
+  inset-block: 0;
+  width: 32px;
+  min-height: 0;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--muted);
+}
+.scroll-strip-button.start {
+  inset-inline-start: 0;
+}
+.scroll-strip-button.end {
+  inset-inline-end: 0;
+}
+@media (hover: hover) and (pointer: fine) {
+  .scroll-strip[data-overflow-start] > .scroll-strip-button.start,
+  .scroll-strip[data-overflow-end] > .scroll-strip-button.end,
+  .scroll-strip-button:hover {
+    display: grid;
+  }
+  .scroll-strip-button:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--hover);
+  }
+  .scroll-strip-button:disabled {
+    opacity: 0.35;
+  }
+}

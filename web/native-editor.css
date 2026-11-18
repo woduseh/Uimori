@@ -5,30 +5,31 @@
 .native-editor [hidden] {
   display: none !important;
 }
-.native-editor > .section-navigation {
-  display: flex;
-  gap: 24px;
-  overflow-x: auto;
+.native-editor > .scroll-strip {
   border-bottom: var(--hairline) solid var(--line);
-  padding: 0;
-  margin: 0;
   position: sticky;
   top: 0;
   z-index: 3;
   background: var(--bg);
 }
-.native-editor > .section-navigation > button {
+.native-editor > .scroll-strip > .section-navigation {
+  display: flex;
+  gap: 24px;
+  padding: 0;
+  margin: 0;
+}
+.native-editor > .scroll-strip > .section-navigation > button {
   flex: 0 0 auto;
   width: auto;
   min-height: 54px;
   padding: 12px 2px;
   border: 0;
-  border-bottom: var(--hairline) solid transparent;
+  border-bottom: 2px solid transparent;
   border-radius: 0;
   background: transparent;
   color: var(--muted);
 }
-.native-editor > .section-navigation > button[aria-selected="true"] {
+.native-editor > .scroll-strip > .section-navigation > button[aria-selected="true"] {
   color: var(--text);
   border-bottom-color: var(--accent);
 }
@@ -185,7 +186,7 @@
 }
 .native-editor label:not(.check) {
   display: grid;
-  gap: 9px;
+  gap: 8px;
   min-width: 0;
   color: var(--muted);
   font-size: var(--font-body);
@@ -386,8 +387,8 @@
   }
 }
 @media (max-width: 600px) {
-  .native-editor > .section-navigation {
-    gap: 22px;
+  .native-editor > .scroll-strip > .section-navigation {
+    gap: 20px;
   }
   .native-editor-split {
     display: block;
@@ -503,7 +504,7 @@
   top: calc(100% + 4px);
   bottom: auto;
 }
-.library-page-editing .native-editor > .section-navigation {
+.library-page-editing .native-editor > .scroll-strip {
   top: var(--editor-heading-offset, var(--editor-heading-h));
 }
 .library-page-editing .library-content-editor .editor-grid {
@@ -552,7 +553,7 @@
 .prompt-editor .native-editor textarea[spellcheck="false"] {
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
-.native-editor > .section-navigation > button[aria-selected="true"] {
+.native-editor > .scroll-strip > .section-navigation > button[aria-selected="true"] {
   background: transparent;
 }
 @media (max-width: 760px) {
@@ -663,9 +664,6 @@
   .library-page-editing .native-item-detail > * {
     flex-shrink: 0;
   }
-}
-.native-editor > .section-navigation {
-  scrollbar-width: none;
 }
 /* Headers use the page's full width without expanding an editor's scrollable box. */
 .library-page-editing {

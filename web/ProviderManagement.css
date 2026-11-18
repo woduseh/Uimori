@@ -15,7 +15,7 @@
   min-height: var(--control-h);
 }
 .connection-editor .editor-grid {
-  margin-top: 26px;
+  margin-top: 24px;
 }
 .connection-editor .editor-grid h3 {
   font-size: var(--font-heading);
@@ -59,7 +59,7 @@
 @media (max-width: 600px) {
   .connection-editor .editor-grid {
     grid-template-columns: minmax(0, 1fr);
-    gap: 15px;
+    gap: 16px;
   }
 }
 .provider-section-heading {
@@ -199,7 +199,7 @@ p.provider-draft-note:lang(ko),
   scroll-margin-top: 24px;
 }
 .provider-workspace-heading > p {
-  margin: 0 0 18px;
+  margin: 0 0 16px;
   font-size: var(--font-body);
   line-height: 1.7;
 }
@@ -231,7 +231,7 @@ p.provider-draft-note:lang(ko),
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 8px;
 }
 .provider-model-tabs .selected {
   background: var(--accent-soft);
@@ -314,7 +314,7 @@ p.provider-draft-note:lang(ko),
   gap: 6px 10px;
   align-items: center;
   text-align: left;
-  padding: 18px 14px;
+  padding: 16px 14px;
   min-height: 100px;
 }
 .provider-template strong {
@@ -415,7 +415,7 @@ p.provider-draft-note:lang(ko),
 .provider-catalog {
   min-width: 0;
   border-top: var(--hairline) solid var(--line);
-  padding-top: 18px;
+  padding-top: 16px;
 }
 .provider-catalog h4 {
   margin: 0;
@@ -447,7 +447,7 @@ p.provider-draft-note:lang(ko),
   position: relative;
   display: grid;
   gap: 6px;
-  padding: 13px 28px 13px 12px;
+  padding: 12px 28px 12px 12px;
   text-align: left;
   overflow-wrap: anywhere;
   min-width: 0;
@@ -535,7 +535,7 @@ p.provider-draft-note:lang(ko),
 }
 .provider-item-open.secondary {
   display: grid;
-  gap: 3px;
+  gap: 4px;
   padding: 8px;
   min-width: 0;
   border: 0;
@@ -574,7 +574,7 @@ p.provider-draft-note:lang(ko),
 .vertex-credential-upload {
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-panel);
-  padding: 18px;
+  padding: 16px;
   background: var(--panel);
   display: grid;
   gap: 12px;

@@ -94,7 +94,7 @@
 }
 .lore-context-stats > div {
   display: grid;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 .request-lore-groups {
@@ -170,7 +170,7 @@
 }
 .lore-context-entries,
 .lore-context-messages {
-  padding-left: 22px;
+  padding-left: 24px;
   margin: 10px 0 0;
   min-width: 0;
 }

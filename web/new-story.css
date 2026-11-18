@@ -46,10 +46,10 @@
 }
 @media (max-width: 760px) {
   .new-story-fields {
-    padding-inline: 18px;
+    padding-inline: 16px;
   }
   .new-story-submit {
-    padding-inline: 18px;
+    padding-inline: 16px;
   }
 }
 .new-story-opening {
@@ -158,12 +158,12 @@
 }
 .new-story-options > summary > small {
   display: block;
-  margin-left: 18px;
+  margin-left: calc(16px + 4px);
   color: var(--muted);
   font-weight: 400;
 }
 .new-story-options-content {
-  padding-block: 8px 18px;
+  padding-block: 8px 16px;
 }
 .new-story-options-content > fieldset {
   margin: 0;

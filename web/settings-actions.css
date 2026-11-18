@@ -22,7 +22,7 @@
 }
 .settings-save-label::after {
   content: attr(data-pending-label);
-  padding-inline-start: 26px;
+  padding-inline-start: calc(18px + 8px);
   visibility: hidden;
   pointer-events: none;
 }
@@ -142,7 +142,7 @@
 
 .task-behavior-section + .task-behavior-section {
   border-top: var(--hairline) solid var(--line);
-  padding-top: 18px;
+  padding-top: 16px;
 }
 
 .task-behavior-section > h4 {

@@ -53,7 +53,7 @@
 }
 .chat-variable-identity {
   display: grid;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 .chat-variable-key {
@@ -105,8 +105,8 @@
 @media (max-width: 760px) {
   .chat-variable-editor > .chat-variable-recovery-actions {
     bottom: -16px;
-    margin-inline: -18px;
-    padding-inline: 18px;
+    margin-inline: -16px;
+    padding-inline: 16px;
   }
   .chat-variable-row {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) 44px;

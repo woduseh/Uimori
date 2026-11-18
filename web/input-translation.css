@@ -69,7 +69,7 @@
   justify-content: space-between;
   gap: 12px;
   min-height: var(--control-h);
-  padding: 7px 10px;
+  padding: 8px 10px;
   border: 0;
   border-radius: var(--radius-small);
   background: transparent;
@@ -94,7 +94,7 @@
 .input-translation-feedback > p {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   margin: 4px 0;
 }
 .input-translation-feedback > p.error:lang(ko) {

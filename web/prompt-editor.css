@@ -18,7 +18,7 @@
 .prompt-editor-fields > label,
 .prompt-editor-row > label {
   display: grid;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
   font-size: var(--font-body);
 }
@@ -44,7 +44,7 @@
 .prompt-save-actions,
 .prompt-save-buttons {
   display: flex;
-  gap: 9px;
+  gap: 8px;
   flex-wrap: wrap;
   align-items: center;
   min-width: 0;
