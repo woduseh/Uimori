@@ -1,6 +1,7 @@
-"""Conservative Uimori-owned retention. No volume, builder-cache or global prune operations."""
+"""Receipt-guarded Uimori retention and bounded, explicitly identified image housekeeping."""
 import json
 import math
+from datetime import datetime, timezone
 from pathlib import Path
 import re
 import shutil
@@ -9,6 +10,55 @@ import sys
 
 MANAGER = "uimori-oracle-v2"
 KEEP_FAILURES = 5
+WORKSPACE_REPOSITORIES = {
+    "tia-workspace-local", "tia-workspace-candidate",
+    "sisters-workspace-candidate", "sisters-workspace-herdr-candidate",
+    "sisters-workspace-rollback",
+}
+WORKSPACE_ROLLBACK_TAG = "sisters-workspace-rollback:previous"
+WORKSPACE_MIN_AGE_SECONDS = 7 * 86400
+BUILD_LAYER_MIN_AGE_SECONDS = 2 * 86400
+
+
+def image_age_seconds(image, now):
+    try:
+        stamp = datetime.fromisoformat(image["Created"].replace("Z", "+00:00"))
+        if stamp.tzinfo is None:
+            return None
+        age = now.timestamp() - stamp.timestamp()
+        return age if age >= 0 else None
+    except (KeyError, ValueError, TypeError, AttributeError, OverflowError):
+        return None
+
+
+def workspace_retention(containers, images, protected, now):
+    """Protect the running Workspace and one fallback image; touch no unknown repositories."""
+    live = [container for container in containers
+            if container.get("Name") == "/tia-workspace-workspace-1"
+            and container.get("State", {}).get("Running") is True
+            and container.get("State", {}).get("Health", {}).get("Status") == "healthy"]
+    if len(live) != 1:
+        return set(), set()
+    matching = []
+    for image in images:
+        tags = image.get("RepoTags") or []
+        if tags and all(tag.split(":", 1)[0] in WORKSPACE_REPOSITORIES
+                        and tag.count(":") == 1 for tag in tags):
+            matching.append(image)
+    # Require a trustworthy creation order (or a pinned previous tag) before deleting others.
+    unused = [image for image in matching if image["Id"] not in protected]
+    explicit = [image for image in unused if WORKSPACE_ROLLBACK_TAG in image.get("RepoTags", [])]
+    if len(explicit) == 1:
+        previous = explicit[0]
+    elif not explicit and unused and all(image_age_seconds(image, now) is not None for image in unused):
+        previous = min(unused, key=lambda image: image_age_seconds(image, now))
+    else:
+        return set(), set()
+    keep = {previous["Id"]}
+    obsolete = {image["Id"] for image in unused if image["Id"] not in keep
+                and (age := image_age_seconds(image, now)) is not None
+                and age >= WORKSPACE_MIN_AGE_SECONDS}
+    return keep, obsolete
 
 
 def receipts(root):
@@ -41,7 +91,8 @@ def terminal(record):
             and record.get("rollback") in ("PASS", "NOT_NEEDED"))
 
 
-def plan_gc(root, live, containers, images):
+def plan_gc(root, live, containers, images, *, now=None):
+    now = now or datetime.now(timezone.utc)
     records, unknown = receipts(root)
     successful = [(directory, record) for directory, record in records
                   if terminal(record) and record["status"] == "PASS" and not record.get("checkOnly")
@@ -74,13 +125,23 @@ def plan_gc(root, live, containers, images):
     keep = {current_dir, *(directory for directory, _ in failures[:KEEP_FAILURES])}
     protected_directories = [str(directory) for directory, record in records if not terminal(record) or directory in keep]
     remove_dirs = [str(directory) for directory, _ in safe if directory not in keep]
-    remove_images = []
+    workspace_previous, workspace_old = workspace_retention(containers, images, protected_images, now)
+    protected_images.update(workspace_previous)
+    remove_images = list(workspace_old)
     for image in images:
         labels = image.get("Config", {}).get("Labels", {}) or {}
         tags = image.get("RepoTags") or []
-        if (image["Id"] not in protected_images and labels.get("io.uimori.managed") == "true"
-                and re.fullmatch(r"[0-9a-f]{40}", labels.get("org.opencontainers.image.revision", ""))
-                and all(re.fullmatch(r"uimori:candidate-[0-9a-f]{40}", tag) for tag in tags)):
+        if image["Id"] in protected_images:
+            continue
+        # The final image carries a revision; intermediate build-stage images carry
+        # only the early build-layer label. Never infer ownership of unrelated images.
+        final = (labels.get("io.uimori.managed") == "true"
+                 and re.fullmatch(r"[0-9a-f]{40}", labels.get("org.opencontainers.image.revision", ""))
+                 and all(re.fullmatch(r"uimori:[A-Za-z0-9_.-]+", tag) for tag in tags))
+        build_layer = (labels.get("io.uimori.build-layer") == "true"
+                       and not tags and image_age_seconds(image, now) is not None
+                       and image_age_seconds(image, now) >= BUILD_LAYER_MIN_AGE_SECONDS)
+        if final or build_layer:
             remove_images.append(image["Id"])
     return {"status": "PLAN", "recovery": str(current_dir), "images": sorted(set(remove_images)),
             "directories": sorted(remove_dirs), "protectedImages": sorted(protected_images),

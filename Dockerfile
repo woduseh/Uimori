@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM node:26.13.0-bookworm-slim AS base
+# Mark intermediate stages so old untagged Uimori layers can be safely identified.
+LABEL io.uimori.build-layer="true"
 WORKDIR /app
 RUN node -e "const [major, minor] = process.versions.node.split('.').map(Number); if (major !== 26 || minor < 13) process.exit(1)"
 

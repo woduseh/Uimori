@@ -1,5 +1,6 @@
 """Retention tests use disposable directories and in-memory Docker inventory only."""
 import importlib.util
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import tempfile
@@ -10,10 +11,11 @@ gc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gc)
 
 
-def image(name, *, managed=True, tags=None):
+def image(name, *, managed=True, tags=None, labels=None, created=None):
     return {"Id": name, "Config": {"Labels": {"io.uimori.managed": "true" if managed else "false",
-        "org.opencontainers.image.revision": "a" * 40}},
-        "RepoTags": ["uimori:candidate-" + "a" * 40] if tags is None else tags}
+        "org.opencontainers.image.revision": "a" * 40, **(labels or {})}},
+        "RepoTags": ["uimori:candidate-" + "a" * 40] if tags is None else tags,
+        **({"Created": created} if created else {})}
 
 
 class GarbageCollection(unittest.TestCase):
@@ -65,6 +67,79 @@ class GarbageCollection(unittest.TestCase):
         self.assertIn(str(interrupted), result["protectedDirectories"])
         self.assertNotIn("uncertain", result["images"])
         self.assertNotIn("uncertain-old", result["images"])
+
+    def test_tagged_managed_uimori_images_beyond_candidate_names_are_collected(self):
+        self.images.append(image("old-tagged", tags=["uimori:release-0.9"]))
+        self.images.append(image("other-registry", tags=["registry.example/uimori:legacy"]))
+        plan = self.plan()
+        self.assertIn("old-tagged", plan["images"])
+        self.assertNotIn("other-registry", plan["images"])
+
+    def test_intermediate_uimori_layers_require_label_age_and_no_container(self):
+        old = (datetime.now(timezone.utc) - timedelta(days=4)).isoformat()
+        fresh = datetime.now(timezone.utc).isoformat()
+        self.images.extend([
+            image("old-stage", managed=False, tags=[], labels={"io.uimori.build-layer": "true"}, created=old),
+            image("fresh-stage", managed=False, tags=[], labels={"io.uimori.build-layer": "true"}, created=fresh),
+            image("unowned-stage", managed=False, tags=[], created=old),
+            image("container-stage", managed=False, tags=[], labels={"io.uimori.build-layer": "true"}, created=old),
+        ])
+        self.containers.append({"Image": "container-stage"})
+        plan = self.plan()
+        self.assertIn("old-stage", plan["images"])
+        self.assertNotIn("fresh-stage", plan["images"])
+        self.assertNotIn("unowned-stage", plan["images"])
+        self.assertNotIn("container-stage", plan["images"])
+
+    def test_workspace_keeps_active_and_most_recent_unused_candidate(self):
+        old = (datetime.now(timezone.utc) - timedelta(days=35)).isoformat()
+        newer = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        self.containers.append({"Name": "/tia-workspace-workspace-1",
+                                "Image": "tia-workspace", "State": {"Running": True, "Health": {"Status": "healthy"}}})
+        self.images.extend([
+            image("ws-old", managed=False, tags=["sisters-workspace-candidate:1.0.4"], created=old),
+            image("ws-previous", managed=False, tags=["sisters-workspace-candidate:1.1.1"], created=newer),
+            image("ws-thirdparty", managed=False, tags=["another-repository:old"], created=old),
+        ])
+        plan = self.plan()
+        self.assertIn("ws-old", plan["images"])
+        self.assertNotIn("ws-previous", plan["images"])
+        self.assertIn("ws-previous", plan["protectedImages"])
+        self.assertNotIn("ws-thirdparty", plan["images"])
+        self.assertNotIn("tia-workspace", plan["images"])
+
+    def test_explicit_workspace_previous_wins_and_recent_builds_are_spared(self):
+        old = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat()
+        fresh = datetime.now(timezone.utc).isoformat()
+        self.containers.append({"Name": "/tia-workspace-workspace-1",
+                                "Image": "tia-workspace", "State": {"Running": True, "Health": {"Status": "healthy"}}})
+        self.images.extend([
+            image("ws-prev", managed=False, tags=[gc.WORKSPACE_ROLLBACK_TAG], created=old),
+            image("ws-old", managed=False, tags=["tia-workspace-candidate:1.0.4"], created=old),
+            image("ws-new", managed=False, tags=["sisters-workspace-candidate:1.2.0"], created=fresh),
+        ])
+        plan = self.plan()
+        self.assertIn("ws-prev", plan["protectedImages"])
+        self.assertNotIn("ws-prev", plan["images"])
+        self.assertNotIn("ws-new", plan["images"])
+        self.assertIn("ws-old", plan["images"])
+        self.containers.remove(self.containers[-1])
+        self.assertNotIn("ws-old", self.plan()["images"], "No running Workspace means no cross-service cleanup")
+
+    def test_workspace_ambiguous_previous_fails_closed(self):
+        old = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat()
+        self.containers.append({"Name": "/tia-workspace-workspace-1",
+                                "Image": "tia-workspace", "State": {"Running": True, "Health": {"Status": "healthy"}}})
+        self.images.extend([
+            image("ws-old", managed=False, tags=["sisters-workspace-candidate:1.0"], created=old),
+            image("ws-no-date", managed=False, tags=["sisters-workspace-candidate:1.1"]),
+        ])
+        self.assertNotIn("ws-old", self.plan()["images"])
+        self.images[-1]["Created"] = old
+        self.images[-1]["RepoTags"] = [gc.WORKSPACE_ROLLBACK_TAG]
+        self.assertIn("ws-old", self.plan()["images"])
+        self.containers[-1]["State"]["Health"]["Status"] = "unhealthy"
+        self.assertNotIn("ws-old", self.plan()["images"])
 
     def test_unmanaged_and_symlink_directories_are_not_adopted_for_cleanup(self):
         unowned = self.record("old-runner", 1, managedBy="older-runner")
