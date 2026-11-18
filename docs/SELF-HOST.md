@@ -56,7 +56,7 @@ API 키는 앱의 프로바이더 설정에서 직접 입력해요. JEV와 서�
 
 DB는 Compose의 `data` named volume 안의 `/data/uimori.sqlite`에 저장돼요. 큰 자료를 가져오는 동안에는 같은 볼륨의 `/data/uploads`에 임시 파일을 두고 등록이 끝나면 지워요. 실제 볼륨 이름은 `.env.self-host`의 `UIMORI_DATA_VOLUME`이며 기본값은 기존 `uimori_data`예요. 초기 volume은 이미지에서 준비한 UID 1000 소유 디렉터리를 사용해요. 프로그램 이미지를 다시 빌드하거나 컨테이너를 교체해도 volume은 유지돼요. 같은 DB를 여러 앱 프로세스에 연결하거나 `app`을 복제하지 마세요. [Docker volume의 수명과 초기 복사](https://docs.docker.com/engine/storage/volumes/)
 
-자동 백업은 `backups` volume, 도우미 작업 파일은 `helper_workspaces` volume에 저장돼요. `shell-runner`는 앱과 같은 이미지를 사용하고 도우미 작업 volume만 공유하며, 네트워크와 앱 DB에 직접 접근하지 않아요. 수동 업데이트 때도 앱과 runner를 같은 이미지로 교체해요.
+자동 백업은 `backups` volume, 도우미 작업 파일은 `helper_workspaces` volume에 저장돼요. `shell-runner`는 앱과 같은 이미지를 사용하고 도우미 작업 volume만 공유하며, 앱 DB에 직접 접근하지 않아요. 인터넷에는 앱·프록시와 분리된 `runner-egress` 네트워크로 나갈 수 있어요. 수동 업데이트 때도 앱과 runner를 같은 이미지로 교체해요.
 
 실행 중 작업을 마치고 앱의 일관된 DB 스냅샷과 기존 이미지 정보를 보관한 뒤 진행해요. 코드는 원하는 릴리스 태그로 선택하고, `UIMORI_IMAGE`를 지정했다면 이전 이미지를 덮어쓰지 않는 새 참조를 사용해요. 실제 설치의 Compose 파일·프로젝트·환경 파일·데이터 볼륨은 계속 동일하게 사용해요.
 

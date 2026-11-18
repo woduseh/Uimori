@@ -66,7 +66,9 @@ services:
       UIMORI_SHELL_ROOT: /workspace
     init: true
     restart: unless-stopped
-    network_mode: none
+    # Internet egress for helper scripts, on a network that does not contain the app.
+    networks:
+      - runner-egress
     read_only: true
     tmpfs:
       - /tmp
@@ -76,6 +78,9 @@ services:
       - no-new-privileges:true
     volumes:
       - helper_workspaces:/workspace
+
+networks:
+  runner-egress: {}
 
 volumes:
   helper_workspaces:

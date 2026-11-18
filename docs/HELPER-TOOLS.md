@@ -18,7 +18,7 @@ Uimori의 도우미는 대화와 서재에서 창작과 설정을 보조하는 �
 - **명시적 수정 요청 시에만 저장**: 사용자가 검토나 추천, 제안을 요청한 경우에는 저장하지 않고 검토 내용만 안내해요. 실제 수정을 명시적으로 요청했을 때만 저장 도구를 실행해요.
 - **수정 번호(Revision) 및 해시 기반 충돌 방지**: 자료나 장면을 수정할 때 항상 변경 전 수정 번호와 텍스트 해시를 검증해요. 다른 화면이나 외부에서 먼저 내용이 바뀌었다면 저장을 차단해 덮어쓰기 사고를 막아요.
 - **미저장 편집기 초안 보호**: 기기 편집기에 아직 저장되지 않은 초안(dirty draft)이 열려 있는 자료는 도우미가 수정할 수 없어요. 사용자가 편집기에서 먼저 저장해야 도우미를 통한 수정이 가능해요.
-- **읽기 전용 조회와 격리된 작업 공간**: SQL 조회와 정규식 검색은 읽기 전용 연결로, 짧은 시간 제한 안에서만 실행돼요. Linux runner에는 네트워크, 앱 데이터베이스, 앱 환경 변수, 자격 증명이 연결되지 않고 전용 작업 공간 볼륨만 공유해요.
+- **읽기 전용 조회와 격리된 작업 공간**: SQL 조회와 정규식 검색은 읽기 전용 연결로, 짧은 시간 제한 안에서만 실행돼요. Linux runner에는 앱 데이터베이스, 앱 환경 변수, 자격 증명이 연결되지 않고 전용 작업 공간 볼륨만 공유해요. 인터넷에는 앱과 분리된 전용 네트워크로 나갈 수 있어서 스크립트가 자료나 패키지를 내려받을 수 있지만, 작업 공간의 원고도 외부로 보낼 수 있다는 점은 알아 두세요.
 - **영수증 기반 추적과 불확실한 재실행 방지**: 도우미의 저장은 트랜잭션 내에서 고유 영수증(`receiptId`)을 남겨요. 응답이 중간에 끊겨도 완료된 저장은 기록에 남으며, 불확실한 외부 쓰기나 실패한 작업을 자동으로 재실행하지 않아요.
 - **작업 중 지침 추가와 직전 수정 되돌리기**: 작업 진행 중에는 **현재 작업에 추가**로 새 지침을 보낼 수 있고, 자료가 잘못 수정되었을 때는 **마지막 자료 수정 되돌리기**로 직전 저장본을 복원할 수 있어요.
 
@@ -89,7 +89,7 @@ Older receipts and operations without compact outcomes appear as `unrecordedOper
 
 ## Linux data workspace
 
-`data.exec {command, timeoutMs?, maxOutputBytes?}` executes noninteractive Bash in a reusable `shell-runner` Compose service (with `rg`, `jq`, Python 3 and Node). Multiple searches, transforms and scripts can run in a single call without forwarding their intermediate results into the model. The runner has no network, application database mount, application environment, or credentials. Compose shares only a dedicated workspace volume and two local Unix sockets. The app owns the database and builds each helper task's files on the first shell request.
+`data.exec {command, timeoutMs?, maxOutputBytes?}` executes noninteractive Bash in a reusable `shell-runner` Compose service (with `rg`, `jq`, Python 3 and Node). Multiple searches, transforms and scripts can run in a single call without forwarding their intermediate results into the model. The runner has no application database mount, application environment, or credentials. Compose gives it outbound internet on its own `runner-egress` network, which does not contain the app or proxy, so scripts can download data or packages (for example `npm install` into the task directory) but cannot reach the app except through its Unix sockets. Anything a script sends out leaves the server: workspace files include exported manuscripts. Compose shares only a dedicated workspace volume and two local Unix sockets. The app owns the database and builds each helper task's files on the first shell request.
 
 The first shell call prepares `INDEX.md`, `GUIDE.md`, compact `library/index.jsonl` and `chats/index.jsonl` catalogs, and the reserved editor, current-writing and conversation snapshots. It does not copy every saved library resource or every chat manuscript. The catalogs distinguish available targets from materialized files; a missing body file is not evidence that the resource or matching text is absent. Use `data.search` for live app-wide lookup without exporting bodies.
 
