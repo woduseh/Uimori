@@ -158,8 +158,8 @@ test('PWUI06 push consent is explicit, preferences are acknowledged before chang
   page,
 }, info) => {
   const { createECDH, randomBytes } = await import('node:crypto');
-  const { default: webPush } = await import('web-push');
-  const keys = webPush.generateVAPIDKeys();
+  const { generateVAPIDKeys } = await import('web-push');
+  const keys = generateVAPIDKeys();
   const ec = createECDH('prime256v1');
   ec.generateKeys();
   const subscription = {
