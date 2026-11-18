@@ -9,6 +9,7 @@ import { prepareInputContext, ContextCompactionError } from './context-compactio
 import {
   previousContextPlan,
   contextSourceRefs,
+  contextSourcesMatch,
   validateContextPlan,
   persistedContextSnapshot,
   measureMainContext,
@@ -135,9 +136,11 @@ export function createRunExecutor({
             fixture,
             reserveCalls: Number(judgeResponse),
             prepareRequest: async (request, usage) => {
+              const ordinal = requestOrdinal++;
+              if (!request.prompt || !executionSnapshot.nativeRisuExecution) return request;
               const current = readStoredRunSnapshot(store, id);
               const prepared = await prepareNativeRisuRequest(current, request, {
-                requestOrdinal: requestOrdinal++,
+                requestOrdinal: ordinal,
                 signal: controller.signal,
                 sessionOwner: nativeSessionOwner,
                 host: createNativeRisuHost(
@@ -287,6 +290,7 @@ export function createRunExecutor({
               store.product.finishAttempt(attempt, result);
             },
           };
+          const sourceRefs = contextSourceRefs(run.snapshot);
           const assertCurrent = () => {
             if (controller.signal.aborted || readRunStatus(store, id) !== 'running')
               throw new Error('CONTEXT_CANCELLED');
@@ -296,13 +300,7 @@ export function createRunExecutor({
               (run.snapshot.replacement &&
                 store.source(run.snapshot.replacement.sourceRevision).hash !==
                   run.snapshot.replacement.sourceHash) ||
-              JSON.stringify(contextSourceRefs(run.snapshot)) !==
-                JSON.stringify(
-                  contextSourceRefs({
-                    ...run.snapshot,
-                    history: store.history(run.parentRevision),
-                  })
-                ) ||
+              !contextSourcesMatch(store, run.parentRevision, sourceRefs) ||
               (run.snapshot.story &&
                 store.story.notes.canonHash({
                   chatId: run.chatId,

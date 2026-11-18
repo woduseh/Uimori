@@ -80,7 +80,7 @@ export function activityFeed(store: Store): ActivityFeed {
       NULL AS autoRunId,(r.status='interrupted' OR COALESCE(r.error,'') LIKE '%PROVIDER_UNCERTAIN%') AS uncertain
     FROM runs r WHERE r.updated_at>=? AND r.status IN ('completed','failed','partial','refused','interrupted')
       AND (r.status!='completed' OR EXISTS(SELECT 1 FROM attempts a WHERE a.run_id=r.id AND a.is_synthetic=0))
-      AND NOT (r.status='completed' AND EXISTS(SELECT 1 FROM jobs j WHERE j.kind='translation' AND json_extract(j.input,'$.autoTranslateRunId')=r.id))
+      AND NOT (r.status='completed' AND EXISTS(SELECT 1 FROM jobs j WHERE j.kind='translation' AND CAST(json_extract(j.input,'$.autoTranslateRunId') AS TEXT)=r.id))
       AND NOT (r.source_revision IS NULL AND EXISTS(SELECT 1 FROM runs newer WHERE newer.chat_id=r.chat_id AND json_extract(newer.command,'$.retryOf')=r.id))
     UNION ALL
     SELECT j.id,j.chat_id,j.kind,j.status,j.updated_at,

@@ -29,6 +29,36 @@ export const contextSourceRefs = (snapshot: RunSnapshot) =>
     hash: source.contentHash ?? createHash('sha256').update(source.text).digest('hex'),
   }));
 
+export function contextSourcesMatch(
+  store: Store,
+  head: string | null,
+  expected: ContextPlan['compacted']
+) {
+  if (head !== (expected.at(-1)?.revision ?? null)) return false;
+  if (head === null) return true;
+  const rows = store.db
+    .prepare(`WITH RECURSIVE ancestry(id,parent,original_hash,depth) AS (
+      SELECT id,parent_revision,hash,0 FROM sources WHERE id=?
+      UNION ALL
+      SELECT s.id,s.parent_revision,s.hash,a.depth+1 FROM ancestry a JOIN sources s ON s.id=a.parent
+      WHERE a.depth+1 < ?
+    ) SELECT a.id,a.parent,a.depth,COALESCE(
+      (SELECT hash FROM source_edits WHERE source_id=a.id ORDER BY revision DESC LIMIT 1),a.original_hash
+    ) AS hash FROM ancestry a`)
+    .all(head, expected.length);
+  return (
+    rows.length === expected.length &&
+    rows.every((row) => {
+      const index = expected.length - 1 - Number(row.depth);
+      return (
+        row.id === expected[index].revision &&
+        row.hash === expected[index].hash &&
+        row.parent === (expected[index - 1]?.revision ?? null)
+      );
+    })
+  );
+}
+
 export function seedContextPlan(
   snapshot: RunSnapshot,
   target: ModelSnapshot | undefined = snapshot.profile?.models.main

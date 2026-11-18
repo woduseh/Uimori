@@ -602,9 +602,9 @@ export class Store {
       );
     });
   }
-  stageRunOutput(id: string, output: string): Run {
+  stageRunOutput(id: string, output: string): void {
     if (typeof output !== 'string') throw new HttpError(400, 'Invalid run output');
-    return this.transaction(() => {
+    this.transaction(() => {
       const row = this.db
         .prepare('SELECT chat_id,status,partial_text FROM runs WHERE id=?')
         .get(id) as Row | undefined;
@@ -612,13 +612,12 @@ export class Store {
       if (row.status !== 'running') throw new HttpError(409, 'Run no longer owns output');
       if (row.partial_text !== null) {
         if (row.partial_text !== output) throw new HttpError(409, 'Run output is already staged');
-        return this.run(id);
+        return;
       }
       this.db
         .prepare('UPDATE runs SET partial_text=?,updated_at=? WHERE id=?')
         .run(output, now(), id);
       this.event(row.chat_id, 'run.output.staged', id);
-      return this.run(id);
     });
   }
   finishRun(

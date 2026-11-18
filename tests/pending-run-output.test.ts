@@ -77,8 +77,9 @@ test('a running main output is fixed once and terminal or unknown runs reject st
     'Invalid run output'
   );
 
-  expect(store.stageRunOutput(run.id, '')).toMatchObject({ status: 'running', partialText: '' });
-  expect(store.stageRunOutput(run.id, '')).toMatchObject({ status: 'running', partialText: '' });
+  store.stageRunOutput(run.id, '');
+  store.stageRunOutput(run.id, '');
+  expect(rawRun(store, run.id)).toMatchObject({ status: 'running', partial_text: '' });
   expect(
     store.db
       .prepare(

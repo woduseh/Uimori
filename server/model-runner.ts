@@ -610,13 +610,23 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         target.timeoutMs ??
         (isGeminiProtocol(target.connection.protocol) ? 300_000 : undefined),
       onWire: async (wire, resumeAttemptId) => {
+        const requestContext =
+          wire.requestContext ??
+          (request.contextBudget && {
+            estimatedInputTokens: estimateContextTokens(wire.body, request.contextBudget),
+            inputTokenLimit: request.contextBudget.inputTokenLimit,
+            estimator: request.contextBudget.estimator,
+            ...(request.contextBudget.estimator === 'model-local-v1' && {
+              tokenizer: request.contextBudget.tokenizer,
+              tokenizerFallback: tokenizerInfo(request.contextBudget.tokenizer).fallback,
+            }),
+          });
         readHeadroomTokens =
-          !native && !evaluation && request.contextBudget
+          !native && !evaluation && request.contextBudget && requestContext
             ? Math.max(
                 0,
                 (request.contextBudget.inputTokenLimit * 0.85 -
-                  (wire.requestContext?.estimatedInputTokens ??
-                    estimateContextTokens(wire.body, request.contextBudget))) /
+                  requestContext.estimatedInputTokens) /
                   2
               )
             : 0;
@@ -624,22 +634,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           {
             ...wire,
             requestReceipt: requestReceipt(fixed, wire),
-            ...(request.contextBudget
-              ? {
-                  requestContext: wire.requestContext ?? {
-                    estimatedInputTokens: estimateContextTokens(wire.body, request.contextBudget),
-                    inputTokenLimit: request.contextBudget.inputTokenLimit,
-                    estimator: request.contextBudget.estimator,
-                    ...(request.contextBudget.estimator === 'model-local-v1'
-                      ? {
-                          tokenizer: request.contextBudget.tokenizer,
-                          tokenizerFallback: tokenizerInfo(request.contextBudget.tokenizer)
-                            .fallback,
-                        }
-                      : {}),
-                  },
-                }
-              : {}),
+            ...(requestContext && { requestContext }),
             requestLore: requestLore(fixed, request, wire, {
               pinned: input.pinnedSources ?? [],
               catalog: input.catalog,

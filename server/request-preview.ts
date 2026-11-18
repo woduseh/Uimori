@@ -13,7 +13,11 @@ import {
 import type { Connection, ModelPreset, PromptPreset } from '../core/product.js';
 import { tokenizerInfo } from '../core/text-tokens.js';
 import type { RunSnapshot } from '../core/types.js';
-import { contextSourceRefs, withContextProjection } from './context-planning.js';
+import {
+  contextSourceRefs,
+  contextSourcesMatch,
+  withContextProjection,
+} from './context-planning.js';
 import { CONTEXT_COMPACTION_TRIGGER_RATIO } from './context-compaction.js';
 import { loreSelectionPending } from './lore-selection.js';
 import { buildMainProviderRequest, measureProviderRequest } from './main-request.js';
@@ -197,10 +201,7 @@ export async function previewNextRequest(
       stale =
         JSON.stringify(snapshot.storyUiThemeChoices) !==
         JSON.stringify(storyUiThemeChoices(store, current.botId));
-    stale ||=
-      JSON.stringify(
-        contextSourceRefs({ ...snapshot, history: store.history(current.headRevision) })
-      ) !== JSON.stringify(contextSourceRefs(snapshot));
+    stale ||= !contextSourcesMatch(store, current.headRevision, contextSourceRefs(snapshot));
     // Live attached links follow the latest library revision, including transitive modules,
     // without advancing the chat's stored profile revision. Read only their small metadata.
     const latestContent = store.db.prepare(

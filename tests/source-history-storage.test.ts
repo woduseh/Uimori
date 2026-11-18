@@ -6,6 +6,7 @@ import { afterEach, expect, test } from 'vitest';
 import { Store } from '../server/store.js';
 import { exportChatTranscript } from '../server/chat-transcript.js';
 import { captureLogicalHistory } from '../server/prompt-snapshot.js';
+import { contextSourcesMatch } from '../server/context-planning.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import type { RunSnapshot } from '../core/types.js';
 
@@ -112,6 +113,25 @@ test('history still rejects missing ancestors and ancestry cycles', () => {
   store.db.prepare('UPDATE sources SET parent_revision=? WHERE id=?').run(second.id, first.id);
   expect(() => store.history(second.id)).toThrow('Source ancestry cycle');
   expect(() => exportChatTranscript(store, chat.id)).toThrow('Source ancestry cycle');
+});
+
+test('a frozen history tracks the selected edit and the complete ordered ancestry', () => {
+  const { store, chat } = fixture();
+  const first = append(store, chat.id, 'Original');
+  const second = append(store, chat.id, 'Second');
+  const refs = [first, second].map(({ id: revision, hash }) => ({ revision, hash }));
+  expect(contextSourcesMatch(store, null, [])).toBe(true);
+  expect(contextSourcesMatch(store, second.id, refs)).toBe(true);
+  expect(contextSourcesMatch(store, second.id, refs.slice(1))).toBe(false);
+  store.editSource(first.id, { expectedRevision: 0, text: 'Edited' });
+  expect(contextSourcesMatch(store, second.id, refs)).toBe(false);
+  const edited = [
+    { revision: first.id, hash: createHash('sha256').update('Edited').digest('hex') },
+    refs[1],
+  ];
+  expect(contextSourcesMatch(store, second.id, edited)).toBe(true);
+  store.db.prepare('UPDATE sources SET parent_revision=? WHERE id=?').run(second.id, first.id);
+  expect(contextSourcesMatch(store, second.id, edited)).toBe(false);
 });
 
 test.each(['original-hash', 'edit-blank'])(
