@@ -69,6 +69,18 @@ export const BUILTIN_THEME_ASSET_FILES: BuiltinThemeAssetFile[] = [
     mime: 'image/webp',
     file: 'classic-laurel.webp',
   },
+  {
+    hash: 'd50a83935e37687ef4b094a6910b0f82a58c6e61d1a91ed266faad63581556d5',
+    kind: 'font',
+    mime: 'font/woff2',
+    file: 'DoHyeon-Regular.woff2',
+  },
+  {
+    hash: '6dcf9b0a253c30a11ececc42153447341c89ccaa4f0627b5ec59fa538f52761a',
+    kind: 'font',
+    mime: 'font/woff2',
+    file: 'Gaegu-Regular.woff2',
+  },
 ];
 
 export function builtinThemeAsset(name: string, file: string) {

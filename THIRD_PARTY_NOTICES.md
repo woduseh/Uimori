@@ -99,7 +99,9 @@ SOFTWARE.
 
 - 고운바탕(Gowun Batang): Copyright 2021 The Gowun Batang Project Authors. [google/fonts](https://github.com/google/fonts/tree/c1eda9233c33ad7775b27efd794f931095cf6133/ofl/gowunbatang)의 `GowunBatang-Regular.ttf`(revision `c1eda9233c33ad7775b27efd794f931095cf6133`)를 사용해요.
 - 나눔손글씨 펜(Nanum Pen Script): Copyright (c) 2010, NHN Corporation. 예약 글꼴 이름(Nanum, NanumPen 등)이 있어요. [google/fonts](https://github.com/google/fonts/tree/f3b0b9a42e276e9c4d4eff27d77e7ccadc9fa973/ofl/nanumpenscript)의 `NanumPenScript-Regular.ttf`(revision `f3b0b9a42e276e9c4d4eff27d77e7ccadc9fa973`)를 사용해요.
-- 적용 조건: 두 글꼴 모두 **SIL Open Font License 1.1**이에요. 전문은 [GowunBatang-OFL.txt](third_party/theme-assets/GowunBatang-OFL.txt)와 [NanumPenScript-OFL.txt](third_party/theme-assets/NanumPenScript-OFL.txt)에 있어요.
-- 변경: 2026-11-18, 글리프를 빼거나 바꾸지 않고 fontTools로 WOFF2 형식만 바꿔 [third_party/theme-assets](third_party/theme-assets)에 두었어요. 편지지 레이아웃의 장식 글자에 쓰며, 글꼴 자체를 따로 판매하거나 이름을 바꾸지 않아요.
+- 도현(Do Hyeon): Copyright 2018 The Do Hyeon Project Authors. [google/fonts](https://github.com/google/fonts/tree/1fe07bb1588837d35fbff38e1f3c2b18761ec72e/ofl/dohyeon)의 `DoHyeon-Regular.ttf`(revision `1fe07bb1588837d35fbff38e1f3c2b18761ec72e`)를 사용해요.
+- 개구(Gaegu): Copyright 2018 The Gaegu Project Authors. [google/fonts](https://github.com/google/fonts/tree/088df5c822dacc8fad9dd64dbbe5649cd6830e99/ofl/gaegu)의 `Gaegu-Regular.ttf`(revision `088df5c822dacc8fad9dd64dbbe5649cd6830e99`)를 사용해요.
+- 적용 조건: 네 글꼴 모두 **SIL Open Font License 1.1**이에요. 전문은 [GowunBatang-OFL.txt](third_party/theme-assets/GowunBatang-OFL.txt), [NanumPenScript-OFL.txt](third_party/theme-assets/NanumPenScript-OFL.txt), [DoHyeon-OFL.txt](third_party/theme-assets/DoHyeon-OFL.txt), [Gaegu-OFL.txt](third_party/theme-assets/Gaegu-OFL.txt)에 있어요.
+- 변경: 2026-11-18, 글리프를 빼거나 바꾸지 않고 fontTools로 WOFF2 형식만 바꿔 [third_party/theme-assets](third_party/theme-assets)에 두었어요. 내장 레이아웃의 장식 글자와 제목에 쓰며, 글꼴 자체를 따로 판매하거나 이름을 바꾸지 않아요. 도현과 개구는 원본부터 자주 쓰는 한글(2,350~2,437자)만 담고 있어서, 없는 글자는 테마 CSS의 다음 글꼴로 그려요.
 - 같은 폴더의 `letter-*.webp`, `scrap-*.webp`, `cinema-*.webp`, `classic-*.webp`는 Uimori가 직접 그린 장식 이미지로 프로젝트 라이선스를 따라요.
 

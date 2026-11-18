@@ -291,6 +291,7 @@ export const scrapbookTheme: ThemeDefinition = {
   colors: colors('charcoal'),
   assets: [
     builtinThemeAsset('hand', 'NanumPenScript-Regular.woff2'),
+    builtinThemeAsset('round', 'Gaegu-Regular.woff2'),
     builtinThemeAsset('torn', 'scrap-torn.webp'),
     builtinThemeAsset('sprig', 'scrap-sprig.webp'),
   ],
@@ -367,8 +368,7 @@ export const scrapbookTheme: ThemeDefinition = {
   messageCss:
     messageCss +
     `
-:where(h1, h2, h3) { font-family: var(--theme-font-hand), cursive; font-weight: 400; font-size: 1.25em; }
-:where(h1) { font-size: 2.2em; }
+:where(h1, h2, h3) { font-family: var(--theme-font-round), var(--theme-font-hand), cursive; font-weight: 400; }
 `,
   templateHtml:
     '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><aside class="portrait"><slot name="portrait"></slot></aside><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body" data-uimori-body-scroll></slot><footer class="actions"><slot name="actions"></slot></footer></div><i class="sprig" aria-hidden="true"></i></section>',
@@ -601,6 +601,7 @@ export const cinematicTheme: ThemeDefinition = {
   colors: colors('midnight'),
   assets: [
     builtinThemeAsset('title', 'GowunBatang-Regular.woff2'),
+    builtinThemeAsset('display', 'DoHyeon-Regular.woff2'),
     builtinThemeAsset('corner', 'cinema-corner.webp'),
     builtinThemeAsset('wing', 'cinema-wing.webp'),
   ],
@@ -623,12 +624,12 @@ export const cinematicTheme: ThemeDefinition = {
   background: linear-gradient(to right, color-mix(in srgb, var(--panel) 88%, transparent), transparent);
   pointer-events: none;
 }
-.scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-family: var(--theme-font-title), serif; font-size: var(--font-heading); font-weight: 400; letter-spacing: 0.18em; }
+.scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-family: var(--theme-font-display), var(--theme-font-title), sans-serif; font-size: 18px; font-weight: 400; letter-spacing: 0.08em; }
 .scene-portraits figcaption small { display: none; }
 .scene-portraits [data-uimori-part="persona-portrait"] { position: absolute; right: 20px; bottom: 24px; gap: 8px; }
 .scene-portraits [data-uimori-part="persona-portrait"] figcaption { display: none; }
 .scene-portraits [data-uimori-part="persona-portrait"] .reader-portrait-button { border: var(--hairline) solid var(--line); }
-.reader [data-uimori-part="heading"] .folio { font-family: var(--theme-font-title), serif; font-size: var(--font-heading); font-weight: 400; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent-text); }
+.reader [data-uimori-part="heading"] .folio { font-family: var(--theme-font-display), var(--theme-font-title), sans-serif; font-size: 18px; font-weight: 400; letter-spacing: 0.12em; color: var(--accent-text); }
 /* The request is an admission ticket: notched sides and a perforated stub. */
 .reader .request-message:not(form) {
   position: relative;
@@ -658,7 +659,7 @@ export const cinematicTheme: ThemeDefinition = {
   messageCss:
     messageCss +
     `
-:where(h1, h2, h3) { font-family: var(--theme-font-title), serif; font-weight: 400; letter-spacing: 0.08em; }
+:where(h1, h2, h3) { font-family: var(--theme-font-display), var(--theme-font-title), sans-serif; font-weight: 400; letter-spacing: 0.04em; }
 `,
   templateHtml:
     '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><i class="corner top-left" aria-hidden="true"></i><i class="corner top-right" aria-hidden="true"></i><i class="corner bottom-left" aria-hidden="true"></i><i class="corner bottom-right" aria-hidden="true"></i><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body" data-uimori-body-scroll></slot><i class="wing" aria-hidden="true"></i><footer class="actions"><slot name="actions"></slot></footer></div><aside class="portrait"><slot name="portrait"></slot></aside></section>',
