@@ -102,7 +102,7 @@ async function snapshot(
 test('Story UI guidance is an opted-in execution contract, not reference-data instructions', async () => {
   const off = await snapshot();
   expect(buildMainProviderRequest(off).request.stable.contract).not.toContain(
-    'Compose narrative interfaces'
+    'The story interface is on for this chat'
   );
   const enabled = await snapshot();
   enabled.settings.storyUi = true;
@@ -117,9 +117,11 @@ test('Story UI guidance is an opted-in execution contract, not reference-data in
     mode: 'short',
   };
   const { request } = buildMainProviderRequest(enabled);
-  expect(request.stable.contract).toContain('Compose narrative interfaces');
+  expect(request.stable.contract).toContain('The story interface is on for this chat');
   expect(request.stable.contract).toContain('The user chose a short interaction');
-  expect(JSON.stringify(request.input.source)).not.toContain('Compose narrative interfaces');
+  expect(JSON.stringify(request.input.source)).not.toContain(
+    'The story interface is on for this chat'
+  );
   const wire = encodeMainPreview(request, enabled.profile!.models.main!);
   expect(JSON.stringify(wire.body)).toContain('User-enabled story interface capability');
 });

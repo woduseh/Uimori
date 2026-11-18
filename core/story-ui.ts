@@ -1,5 +1,12 @@
 import type { ProcessableMessage } from '@a2ui/web_core';
-import { STORY_UI_CATALOG_ID, storyUiCatalog } from './story-ui-catalog.js';
+import {
+  STORY_UI_CATALOG_ID,
+  storyUiCatalog,
+  storyUiDisplayValues,
+  storyUiImageKeys,
+  storyUiNestedTextKeys,
+  storyUiTextKeys,
+} from './story-ui-catalog.js';
 
 export type StoryUiAction = {
   sourceRevision: string;
@@ -75,12 +82,8 @@ export function validateStoryUiMessages(value: unknown): value is StoryUiMessage
     if (!api) return false;
     const { id: _id, component: _component, ...properties } = component;
     if (!api.schema.safeParse(properties).success) return false;
-    if (
-      component.component === 'Image' &&
-      typeof component.url === 'string' &&
-      !isStoryUiImageUrl(component.url)
-    )
-      return false;
+    const image = component[storyUiImageKeys[component.component]];
+    if (typeof image === 'string' && !isStoryUiImageUrl(image)) return false;
     components.set(component.id, component);
   }
   if (!components.has('root')) return false;
@@ -263,11 +266,21 @@ export function parseStoryUi(text: string): StoryUiSegment[] {
   return segments;
 }
 
-// Extract story-bearing values, not component names, references or styling.
-export function projectStoryUiText(text: string): string {
+const projectedKeys = storyUiTextKeys.filter(
+  (key) => key !== 'placeholder' && key !== 'description'
+);
+
+/**
+ * Replace stored blocks with what a model should read. `text` keeps story-bearing values
+ * only, for summaries, translation references and chats with Story UI off. `expression`
+ * returns the model's own `<a2ui>` source, so a writer continuing the story sees where and
+ * how earlier scenes used the interface.
+ */
+export function projectStoryUiText(text: string, mode: 'text' | 'expression' = 'text'): string {
   return parseStoryUi(text)
     .map((segment) => {
       if (segment.kind !== 'ui') return segment.text;
+      if (mode === 'expression') return segment.expression;
       const message = segment.messages[0] as unknown as {
         createSurface: { components: Record<string, unknown>[] };
       };
@@ -294,20 +307,13 @@ export function projectStoryUiText(text: string): string {
           append(value.args.value);
       };
       for (const component of components) {
-        for (const key of ['text', 'label', 'title', 'unit', 'value']) {
-          const value = component[key];
-          if (key !== 'value' || component.component === 'Gauge') append(value);
+        for (const key of projectedKeys) append(component[key]);
+        if (storyUiDisplayValues.has(String(component.component))) append(component.value);
+        for (const [collection, keys] of Object.entries(storyUiNestedTextKeys)) {
+          const items = component[collection];
+          if (Array.isArray(items))
+            for (const item of items) if (record(item)) for (const key of keys) append(item[key]);
         }
-        if (Array.isArray(component.tabs))
-          for (const tab of component.tabs) if (record(tab)) append(tab.title);
-        if (Array.isArray(component.options))
-          for (const option of component.options) if (record(option)) append(option.label);
-        if (Array.isArray(component.items))
-          for (const item of component.items)
-            if (record(item)) {
-              append(item.label);
-              append(item.value);
-            }
         append(component.columns);
         append(component.rows);
       }

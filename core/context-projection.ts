@@ -38,10 +38,20 @@ export function projectedLogicalHistory(
   return messages;
 }
 
+/**
+ * How earlier Story UI blocks appear in a writer's history: as the `<a2ui>` source the model
+ * wrote while the capability is on, so placement and composition stay visible to it, and as
+ * plain wording otherwise.
+ */
+export function storyUiHistoryMode(snapshot: RunSnapshot): 'text' | 'expression' {
+  return snapshot.settings.storyUi ? 'expression' : 'text';
+}
+
 /** Select exactly the logical history used by the prompt before compaction projection. */
 export function selectLogicalHistory(
   snapshot: RunSnapshot,
-  sourceHistory: readonly ModelInput['history'][number][]
+  sourceHistory: readonly ModelInput['history'][number][],
+  storyUi: 'text' | 'expression' = 'text'
 ): PromptHistoryMessage[] {
   const inputHistoryIds = new Set(sourceHistory.map((entry) => entry.revision));
   return (
@@ -61,5 +71,5 @@ export function selectLogicalHistory(
         !message.sourceRevision ||
         inputHistoryIds.has(message.sourceRevision)
     )
-    .map((message) => ({ ...message, text: projectStoryUiText(message.text) }));
+    .map((message) => ({ ...message, text: projectStoryUiText(message.text, storyUi) }));
 }

@@ -51,6 +51,13 @@ export function StoryUi({
     themeState?.scope.botId
   );
   const theme = customTheme ?? presentation.theme?.storyUi;
+  // A root Frame is the block's own shell, so its medium and brand color style the block.
+  const root = (
+    segment.messages[0] as unknown as {
+      createSurface: { components: { id: string; component: string; [key: string]: unknown }[] };
+    }
+  ).createSurface.components.find((component) => component.id === 'root');
+  const frame = root?.component === 'Frame' ? root : undefined;
   const css = useMemo(() => scopedStoryUiCss(theme?.css ?? '', themeId), [theme?.css, themeId]);
   const [action, setAction] = useState<ActionPayload>();
   const [mode, setMode] = useState<'short' | 'continue'>('short');
@@ -159,10 +166,13 @@ export function StoryUi({
         className="story-ui"
         data-story-ui-style={theme?.baseStyle ?? presentation.style}
         data-story-ui-custom={theme ? themeId : undefined}
+        data-story-ui-root={root?.component}
+        data-story-ui-kind={frame ? String(frame.kind ?? 'panel') : undefined}
+        data-story-ui-accent={typeof frame?.accent === 'string' ? frame.accent : undefined}
       >
         {css && <style>{css}</style>}
         {surface && (
-          <div inert={!!action && !!chatId && (latest || uncertain)}>
+          <div className="story-ui-surface" inert={!!action && !!chatId && (latest || uncertain)}>
             <MarkdownContext.Provider value={renderMarkdown}>
               <A2uiSurface surface={surface} />
             </MarkdownContext.Provider>

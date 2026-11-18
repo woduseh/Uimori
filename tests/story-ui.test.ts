@@ -9,9 +9,74 @@ import {
   type Theme,
   type ThemeCatalog,
 } from '../core/themes.js';
-import { normalizeStoryUiOutput } from '../server/story-ui.js';
+import { normalizeStoryUiOutput, storyUiPrompt } from '../server/story-ui.js';
 
 describe('story UI', () => {
+  it('teaches placement with examples that compile, without form-assistant boilerplate', () => {
+    const prompt = storyUiPrompt();
+    const examples = parseStoryUi(
+      normalizeStoryUiOutput(
+        prompt.slice(prompt.indexOf('## Examples'), prompt.indexOf('## Rules'))
+      )
+    );
+    const kinds = examples.map((part) => part.kind);
+    expect(kinds.filter((kind) => kind === 'ui').length).toBeGreaterThanOrEqual(4);
+    expect(kinds).not.toContain('invalid');
+    expect(kinds).not.toContain('pending');
+    // The first example shows blocks inside a scene: prose, block, prose, block, prose.
+    expect(kinds.slice(0, 5)).toEqual(['prose', 'ui', 'prose', 'ui', 'prose']);
+    for (const noise of ['dummy click', 'Surface targeting', '- weight:'])
+      expect(prompt).not.toContain(noise);
+    expect(prompt).toContain('- Description: One chat bubble.');
+    expect(prompt.indexOf('## Where it goes')).toBeLessThan(prompt.indexOf('## Block syntax'));
+  });
+  it('reads composed media as wording, or as the expression a writer continues from', () => {
+    const expression = `<a2ui>
+root = Frame(chat, "한서윤", kind="app", accent="amber")
+chat = Column([
+  Message("어디야", "한서윤", "23:41"),
+  Post("본문", "익명", "제목", tag="목격"),
+  Stat("상태", "양호"),
+  Gauge("체력", 64, 0, 120),
+  KeyValue([{label: "종족", value: "엘프"}]),
+  ChoicePicker("진입로", "mutuallyExclusive", [{label: "북쪽 능선", value: "north"}], $/route)
+])
+</a2ui>`;
+    const stored = normalizeStoryUiOutput(`앞
+${expression}
+뒤`);
+    expect(parseStoryUi(stored)[1].kind).toBe('ui');
+    const wording = projectStoryUiText(stored);
+    for (const value of [
+      '한서윤',
+      '23:41',
+      '어디야',
+      '목격',
+      '제목',
+      '양호',
+      '64',
+      '엘프',
+      '북쪽 능선',
+    ])
+      expect(wording).toContain(value);
+    for (const hidden of ['amber', 'app', 'north', 'Frame']) expect(wording).not.toContain(hidden);
+    expect(wording.indexOf('한서윤')).toBeLessThan(wording.indexOf('어디야'));
+    expect(projectStoryUiText(stored, 'expression')).toBe(`앞
+${expression}
+뒤`);
+    const prepared = prepareStoryUiTranslation(stored);
+    expect(prepared.text).toContain('양호');
+    expect(prepared.text).toContain('엘프');
+    for (const hidden of ['amber', 'north', '"64"']) expect(prepared.text).not.toContain(hidden);
+  });
+  it('accepts only stored images as portraits', () => {
+    const block = (avatar: string) =>
+      parseStoryUi(
+        normalizeStoryUiOutput(`<a2ui>root = Message("안녕", "미라", avatar="${avatar}")</a2ui>`)
+      )[0].kind;
+    expect(block('/api/assets/mira')).toBe('ui');
+    expect(block('https://example.com/mira.png')).toBe('invalid');
+  });
   it('accepts ordinary event data whose field names resemble function metadata', () => {
     const source = normalizeStoryUiOutput(
       '<a2ui>root = Button(Text("Call"), action=Event("contact", {call: "Mira", functionCall: "phone"}))</a2ui>'
@@ -148,6 +213,12 @@ root = List(_template($/people, item))
     expect(parseStoryUi(result)[0].kind).toBe('ui');
     expect(projectStoryUiText(result)).toContain('"name":"Mira"');
     expect(projectStoryUiText(result)).toContain('"name":"Sol"');
+    const party = normalizeStoryUiOutput(`<a2ui>
+$/party = [{name: "Mira", hp: 30, state: "Hurt"}]
+row = Row([Stat($name, $state), Gauge($name, $hp, 0, 100)])
+root = List(_template($/party, row))
+</a2ui>`);
+    expect(parseStoryUi(party)[0].kind).toBe('ui');
   });
   it('keeps invalid and unfinished output visible without losing adjacent text', () => {
     const source = 'A<a2ui>root = Unknown()</a2ui>B<a2ui>root =';

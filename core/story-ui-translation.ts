@@ -1,4 +1,9 @@
 import { encodeStoryUi, parseStoryUi, validateStoryUiMessages } from './story-ui.js';
+import {
+  storyUiDisplayValues,
+  storyUiNestedTextKeys,
+  storyUiTextKeys as visibleFields,
+} from './story-ui-catalog.js';
 import { ExpressionParser } from '@a2ui/web_core/expressions';
 
 type Slot = {
@@ -8,7 +13,6 @@ type Slot = {
   format?: boolean;
 };
 const expressionParser = new ExpressionParser();
-const visibleFields = ['text', 'label', 'title', 'unit', 'placeholder', 'description'];
 const dynamicExpressions = (text: string) =>
   expressionParser
     .parse(text)
@@ -38,11 +42,11 @@ function textSlots(messages: unknown): Slot[] {
   for (const component of components) {
     if (!record(component)) continue;
     for (const key of visibleFields) add(component, key);
-    for (const collection of ['tabs', 'options', 'items']) {
+    if (storyUiDisplayValues.has(String(component.component))) add(component, 'value');
+    for (const [collection, keys] of Object.entries(storyUiNestedTextKeys)) {
       const items = component[collection];
       if (Array.isArray(items))
-        for (const item of items)
-          if (record(item)) add(item, collection === 'tabs' ? 'title' : 'label');
+        for (const item of items) if (record(item)) for (const key of keys) add(item, key);
     }
     if (component.component === 'DataTable') {
       if (Array.isArray(component.columns))
@@ -143,7 +147,13 @@ function textSlots(messages: unknown): Slot[] {
     const component = byId.get(id);
     if (!component) return;
     for (const [key, value] of Object.entries(component)) {
-      if (key !== 'children') bindings(value, visibleFields.includes(key), scope);
+      if (key !== 'children')
+        bindings(
+          value,
+          visibleFields.includes(key) ||
+            (key === 'value' && storyUiDisplayValues.has(String(component.component))),
+          scope
+        );
     }
     const refs: string[] = [];
     for (const key of ['child', 'trigger', 'content'])
