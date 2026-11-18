@@ -137,34 +137,59 @@ export const letterTheme: ThemeDefinition = {
     commonApp +
     `
 .reader { width: min(100%, calc(var(--reading-width) + 96px)); }
-@container narrative-workspace (min-width: 851px) { .reader [data-uimori-body-scroll] { max-height: clamp(220px, calc(100dvh - 650px - var(--control-h) - 12px), 450px); } }
-.scene-portraits { flex-direction: row; align-items: center; gap: 28px; }
-.scene-portraits [data-uimori-part="bot-portrait"] { display: flex; align-items: center; gap: 18px; flex: 0 1 auto; }
-.scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { width: 88px; flex: 0 0 88px; border-radius: var(--radius-small); background: var(--surface); }
-.scene-portraits [data-uimori-part="bot-portrait"] img { height: 88px; object-fit: cover; object-position: center 20%; }
-.scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-empty { min-height: 88px; }
-.scene-portraits figcaption { padding: 0; }
-.scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-size: var(--font-heading); }
-.scene-portraits [data-uimori-part="persona-portrait"] { padding-left: 24px; }
-@media (max-width: 760px) {
-  .scene-portraits { gap: 16px; flex-wrap: wrap; }
-  .scene-portraits [data-uimori-part="persona-portrait"] { padding-left: 14px; }
-  .scene-portraits [data-uimori-part="persona-portrait"] figcaption { display: none; }
-  .scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { width: 72px; flex-basis: 72px; }
-  .scene-portraits [data-uimori-part="bot-portrait"] img { height: 72px; }
+@container narrative-workspace (min-width: 851px) { .reader [data-uimori-body-scroll] { max-height: clamp(220px, calc(100dvh - 560px - var(--control-h) - 12px), 520px); } }
+/* The request reads as a note jotted above the letter rather than a chat bubble. */
+.reader .request-message { background: transparent; border: 0; border-inline-start: 2px solid var(--accent-line); border-radius: 0; padding: 4px 0 4px 16px; color: var(--muted); }
+/* The portrait is a small tilted postage stamp in the letter's corner. */
+.scene-portraits { display: block; }
+.scene-portraits [data-uimori-part="bot-portrait"] { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 104px; transform: rotate(2deg); }
+.scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button {
+  --perforation: 4px;
+  width: 100%;
+  padding: calc(var(--perforation) * 2);
+  border: 0;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--panel), var(--text) 12%);
+  mask:
+    radial-gradient(var(--perforation), #0000 98%, #000) round calc(var(--perforation) * -1.5) calc(var(--perforation) * -1.5) / calc(var(--perforation) * 3) calc(var(--perforation) * 3),
+    linear-gradient(#000 0 0) no-repeat 50% / calc(100% - var(--perforation) * 3) calc(100% - var(--perforation) * 3);
 }
+.scene-portraits [data-uimori-part="bot-portrait"] img { aspect-ratio: 3 / 4; height: auto; object-fit: cover; object-position: center 20%; }
+.scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-empty { min-height: 0; aspect-ratio: 3 / 4; }
+.scene-portraits [data-uimori-part="bot-portrait"] figcaption { padding: 0; text-align: center; }
+.scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-size: var(--font-small); color: var(--muted); }
 ` +
-    mobilePortrait,
+    mobilePortrait +
+    `
+@container narrative-workspace (max-width: 850px) {
+  .scene-portraits { display: block; }
+  .scene-portraits [data-uimori-part="bot-portrait"] { display: flex; width: 76px; }
+  .scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { --perforation: 3px; width: 100%; }
+  .scene-portraits [data-uimori-part="bot-portrait"] img { width: 100%; height: auto; max-height: none; }
+  .scene-portraits [data-uimori-part="bot-portrait"] figcaption { padding: 0; }
+  .scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-size: var(--font-small); }
+}
+`,
   messageCss,
   templateHtml:
-    '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><header class="portrait"><slot name="portrait"></slot></header><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body" data-uimori-body-scroll></slot><footer class="actions"><slot name="actions"></slot></footer></div></section>',
+    '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><div class="copy"><header class="letterhead"><div class="heading"><slot name="heading"></slot></div><aside class="portrait"><slot name="portrait"></slot></aside></header><slot name="body" data-uimori-body-scroll></slot><footer class="actions"><slot name="actions"></slot></footer></div></section>',
   templateCss:
     commonTemplate +
     `
-.manuscript { border: var(--hairline) solid var(--line); }
-.portrait { padding: 18px 28px; border-bottom: var(--hairline) solid var(--line); background: var(--surface); }
-.copy { padding: 28px 32px; }
-@container narrative-scene (max-width: 520px) { .copy { padding: 22px 18px; } .portrait { padding: 0; } }
+/* Two sheets peek out below the letter as hard edges, so the page has depth without a shadow. */
+.manuscript {
+  margin-bottom: 12px;
+  padding: 40px 48px 24px;
+  border: var(--hairline) solid var(--line);
+  box-shadow: 0 6px 0 -4px var(--panel), 0 6px 0 -3.5px var(--line), 0 12px 0 -8px var(--panel), 0 12px 0 -7.5px var(--line);
+}
+.letterhead { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: end; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 3px double var(--line); }
+.heading { border: 0; padding: 0; margin: 0; }
+.actions { border-top-style: dashed; }
+@container narrative-scene (max-width: 520px) {
+  .manuscript { padding: 24px 20px 16px; }
+  .letterhead { gap: 16px; margin-bottom: 20px; padding-bottom: 16px; }
+}
 `,
 };
 export const scrapbookTheme: ThemeDefinition = {
