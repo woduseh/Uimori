@@ -336,6 +336,11 @@ export const defaultProfile = (chatId: string): ChatProfile => ({
 });
 
 export const VERTEX_GEMINI_DEFAULT_TIMEOUT_MS = 300_000;
+/** Deadline for a model whose preset leaves its timeout unset; matches the provider HTTP default. */
+export const DEFAULT_MODEL_TIMEOUT_MS = 300_000;
+export function modelTimeoutMs(model: Pick<ModelPreset, 'timeoutMs'>): number {
+  return model.timeoutMs ?? DEFAULT_MODEL_TIMEOUT_MS;
+}
 
 /** The first live adapter supports Google's global project endpoint only. */
 export function validateVertexEndpoint(value: string): string {

@@ -3,7 +3,7 @@ import { uncertainAttemptResult } from './usage-accounting.js';
 import { modelRequestFields } from '../core/model-request-fields.js';
 import type { FastifyInstance } from 'fastify';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
-import { workspaceModelRef } from '../core/product.js';
+import { modelTimeoutMs, workspaceModelRef } from '../core/product.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
 import {
@@ -25,7 +25,6 @@ import { promptWorkspace } from './prompt-workspace.js';
 import { HttpError, fields, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
-const TIMEOUT_MS = 120_000;
 type Options = Pick<
   ProviderExecutionOptions,
   'resolveCredential' | 'executeCodex' | 'vertexRequestTier'
@@ -79,7 +78,8 @@ export function inputTranslationRoutes(app: FastifyInstance, store: Store, optio
         if (!reply.raw.writableEnded) disconnected.abort();
       };
       reply.raw.on('close', onClose);
-      const timeout = AbortSignal.timeout(TIMEOUT_MS);
+      const timeoutMs = modelTimeoutMs(model);
+      const timeout = AbortSignal.timeout(timeoutMs);
       const signal = AbortSignal.any([options.signal, disconnected.signal, timeout]);
       const authorize = () => {
         if (signal.aborted) throw new HttpError(408, 'INPUT_TRANSLATION_CANCELLED');
@@ -93,7 +93,7 @@ export function inputTranslationRoutes(app: FastifyInstance, store: Store, optio
           const result = await executeProvider(transportConnection(model.connection), input, {
             ...options,
             signal,
-            timeoutMs: TIMEOUT_MS,
+            timeoutMs,
             beforeTurn: authorize,
             onWire: (wire) => {
               authorize();

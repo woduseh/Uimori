@@ -26,7 +26,7 @@ import {
 } from '../core/transport.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
-import type { Connection, ModelSnapshot } from '../core/product.js';
+import { modelTimeoutMs, type Connection, type ModelSnapshot } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import {
   CODEX_ILLUSTRATION_INSTRUCTIONS,
@@ -311,8 +311,7 @@ export async function runIllustrationJob(
         }
       : request;
     // One normal model deadline covers the complete research loop, not a fresh timeout per read.
-    const timeoutMs =
-      model.timeoutMs ?? (connection.protocol === 'codex-app-server-v1' ? 300_000 : 30_000);
+    const timeoutMs = modelTimeoutMs(model);
     const signal = AbortSignal.any([hooks.signal, AbortSignal.timeout(timeoutMs)]);
     const results: import('../core/transport.js').Json[] = [];
     let opaqueState: ProviderRequest['opaqueState'];

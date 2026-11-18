@@ -12,7 +12,7 @@ import {
   CONTEXT_DERIVED_GUIDANCE,
   CONTEXT_RETRIEVAL_GUIDANCE,
 } from '../core/context-summary-policy.js';
-import type { Connection, ModelSnapshot } from '../core/product.js';
+import { modelTimeoutMs, type Connection, type ModelSnapshot } from '../core/product.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
 import { AUTHOR_NOTE_GUIDANCE, modelAuthorNotes } from '../core/notes.js';
@@ -248,7 +248,7 @@ export function createAgentCollaboration(
     if (!target) return finish('unavailable', 'ADVISOR_MODEL_SNAPSHOT_MISSING');
     const results: ToolEvent[] = [];
     let opaqueState: Json | undefined;
-    const deadline = Date.now() + (hooks.timeoutMs ?? target.timeoutMs ?? 120_000);
+    const deadline = Date.now() + (hooks.timeoutMs ?? modelTimeoutMs(target));
     const readTool = async (call: ProviderToolCall, readSignal: AbortSignal) => {
       readSignal.throwIfAborted();
       if (results.some((event) => event.callId === call.id))

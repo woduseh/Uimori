@@ -1,5 +1,10 @@
 import { supportedLocale, type UiLocale } from '../core/ui-locale.js';
-import { workspaceModelRef, type Connection, type ModelPreset } from '../core/product.js';
+import {
+  modelTimeoutMs,
+  workspaceModelRef,
+  type Connection,
+  type ModelPreset,
+} from '../core/product.js';
 import {
   executeProvider,
   ProviderContractError,
@@ -121,7 +126,7 @@ export class ChatTitleService {
       const signal = AbortSignal.any([
         controller.signal,
         this.options.signal,
-        AbortSignal.timeout(25_000),
+        AbortSignal.timeout(modelTimeoutMs(model)),
       ]);
       const authorize = () => {
         if (signal.aborted) throw new ProviderContractError('TITLE_CANCELLED');
@@ -157,7 +162,7 @@ export class ChatTitleService {
       result = await executeProvider(transportConnection(connection), request, {
         ...this.options,
         signal,
-        timeoutMs: 25_000,
+        timeoutMs: modelTimeoutMs(model),
         beforeTurn: authorize,
         onWire: (wire) => {
           authorize();

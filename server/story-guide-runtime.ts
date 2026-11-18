@@ -7,7 +7,7 @@ import {
   storyGuideWebSearchCapability,
   type ProviderWebSearch,
 } from '../core/helper-web-search.js';
-import { isGeminiProtocol } from '../core/product.js';
+import { isGeminiProtocol, modelTimeoutMs } from '../core/product.js';
 import { AUTHOR_NOTE_GUIDANCE, modelAuthorNotes } from '../core/notes.js';
 import { OUTLINE_CONTRACT } from '../core/outline.js';
 import { buildMainInput, executeTool } from '../core/provider.js';
@@ -242,7 +242,7 @@ export async function prepareStoryGuide(
   if (availableCalls < 1) return finish('STORY_GUIDE_CALL_BUDGET_EXHAUSTED');
   const results: ToolEvent[] = [];
   let searched: ProviderWebSearch = { performed: false, sources: [] };
-  const deadline = Date.now() + (hooks.timeoutMs ?? target.timeoutMs ?? 120_000);
+  const deadline = Date.now() + (hooks.timeoutMs ?? modelTimeoutMs(target));
   const authorize = async () => {
     checkAbort();
     const authorized = await hooks.authorize(structuredClone(target.connection));

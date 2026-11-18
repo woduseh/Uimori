@@ -36,7 +36,7 @@ const success: transport.ProviderResult = {
   usage: { inputTokens: 10, outputTokens: 20, costUsd: null, raw: null, priceRevision: null },
   opaqueState: null,
 };
-async function setup(withModel = true) {
+async function setup(withModel = true, timeoutMs?: number) {
   const path = mkdtempSync(join(tmpdir(), 'uimori-selection-revision-'));
   const app = await createApp({
     dbPath: join(path, 'app.sqlite'),
@@ -77,6 +77,7 @@ async function setup(withModel = true) {
     modelId: 'fixture',
     maxOutputTokens: 4096,
     temperature: null,
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
   });
   const workspace = modelWorkspace(store);
   updateModelWorkspace(store, {
@@ -180,6 +181,19 @@ test('one helper call returns only a proposal and numeric usage; unsaved draft a
     outputTokens: 20,
     costUsd: null,
   });
+});
+
+test('the proposal deadline follows the helper model timeout and its default', async () => {
+  for (const [timeoutMs, expected] of [
+    [undefined, 300_000],
+    [450_000, 450_000],
+  ] as const) {
+    const f = await setup(true, timeoutMs);
+    const send = mockSend();
+    expect((await f.post()).statusCode).toBe(200);
+    expect(send.mock.calls[0][2].timeoutMs).toBe(expected);
+    vi.restoreAllMocks();
+  }
 });
 
 test('changed stored source is rejected both before spending a call and after a response arrives', async () => {
