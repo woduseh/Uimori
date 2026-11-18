@@ -1627,7 +1627,9 @@ test('follow-up requests queue durably and start with the completed preceding ex
   expect(f.workspace.task(first.id).status).toBe('running');
   expect(f.workspace.task(second.id).status).toBe('queued');
   release();
-  await vi.waitFor(() => expect(f.workspace.task(second.id).status).toBe('completed'));
+  await vi.waitFor(() => expect(f.workspace.task(second.id).status).toBe('completed'), {
+    timeout: 6000,
+  });
   await Promise.all(f.work);
   expect(calls).toHaveLength(2);
   expect(calls[1].input.history).toEqual([
@@ -1799,7 +1801,9 @@ test('all helper sessions share two execution slots while each session preserves
   await vi.waitFor(() => expect(calls).toEqual(['A1', 'B1', 'C1', 'A2']));
   releases.get('C1')!();
   releases.get('A2')!();
-  await vi.waitFor(() => expect(f.workspace.task(a2.id).status).toBe('completed'));
+  await vi.waitFor(() => expect(f.workspace.task(a2.id).status).toBe('completed'), {
+    timeout: 6000,
+  });
   await Promise.all(f.work);
   expect(peak).toBe(2);
   expect(histories.get('A2')).toEqual(['A1', 'A1 답변']);

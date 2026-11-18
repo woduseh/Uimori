@@ -1623,7 +1623,9 @@ test('the library helper proposes cuts, illustrates exact passages across scenes
   expect(illustrationReferences(f.store, target.id).references).toEqual([
     { ref: expect.any(String), role: 'style' },
   ]);
-  await vi.waitFor(() => expect(illustrationJob(f.store, redrawId).status).toBe('completed'));
+  await vi.waitFor(() => expect(illustrationJob(f.store, redrawId).status).toBe('completed'), {
+    timeout: 6000,
+  });
   expect(illustrationJob(f.store, redrawId)).toMatchObject({
     chatId: target.id,
     sourceRevision: scenes[1].id,

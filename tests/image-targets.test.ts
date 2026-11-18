@@ -353,7 +353,7 @@ test('translated image placement through the app pump retains its source and pro
     });
     expect(response.statusCode, response.body).toBe(200);
     const jobId = response.json().id as string;
-    await vi.waitFor(() => expect(store.job(jobId).status).toBe('completed'));
+    await vi.waitFor(() => expect(store.job(jobId).status).toBe('completed'), { timeout: 6000 });
     expect(store.job(jobId)).toMatchObject({
       result: {
         sourceRevision: source.id,

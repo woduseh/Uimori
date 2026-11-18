@@ -1,7 +1,5 @@
 {
-  "sourceRuns": [
-    "44203833156"
-  ],
+  "sourceRuns": ["44203833156"],
   "seconds": {
     "tests/access-session.test.ts": 0.1,
     "tests/activity-acknowledgements.test.ts": 0.1,

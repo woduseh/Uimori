@@ -447,6 +447,7 @@ test('EDITORRECOVERY2 confirms an uncertain new resource despite an incomplete l
 }) => {
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 800 });
   await page.goto('/');
+  await navigationAction(page, '서재');
   const panel = page.getByTestId('library-panel');
   await createLibraryContent(page);
   const name = panel.getByLabel('Risu 자료 이름', { exact: true });

@@ -961,6 +961,8 @@ test('ILUI delete confirmation translates only app-owned titles and preserves th
   );
   await confirmation.getByRole('button', { name: 'Delete permanently', exact: true }).click();
   expect((await deleting).postDataJSON()).toEqual({});
+  // The deletion refreshes the reader; let that intercepted read finish before the page closes.
+  await page.unrouteAll({ behavior: 'wait' });
 });
 
 test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planning never blocks the next chat', async ({
