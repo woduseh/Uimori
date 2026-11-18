@@ -254,8 +254,8 @@ export const messages = {
   'visuals.m040': {
     ko: '삽화 참고 저장',
     en: 'Save illustration references',
-    ja: '参考画像を保存',
-    zh: '保存插图参考图片',
+    ja: '挿絵の参照を保存',
+    zh: '保存插图参考',
   },
   'visuals.characterProfiles': {
     ko: '인물 외형',
@@ -496,14 +496,14 @@ export const messages = {
   'visuals.refineCodexPrompt': {
     ko: '그림 프롬프트 다듬기',
     en: 'Refine illustration prompts',
-    ja: '挿絵プロンプトを調整する',
+    ja: '挿絵プロンプトを整える',
     zh: '润色插图提示词',
   },
   'visuals.refineCodexPromptDescription': {
-    ko: '새 삽화에서 Codex가 장면과 구도는 유지하고, 초안의 외형과 화풍 묘사를 참고 이미지와 스타일 지침에 맞춰 고쳐요.',
-    en: 'For new illustrations, Codex keeps the draft’s moment and composition and corrects its appearance and art-style details to match the references and style guidance.',
-    ja: '新しい挿絵では、Codexが場面と構図を保ったまま、下書きの外見や画風の描写を参照画像とスタイル指針に合わせて直します。',
-    zh: '生成新插图时，Codex会保留草稿的场景和构图，并根据参考图片和风格指南修正外貌与画风描述。',
+    ko: '새 삽화에서 Codex가 초안의 장면과 구도는 유지하고, 외형과 그림체 묘사를 참고 이미지와 그림 지침에 맞춰 다듬어요.',
+    en: 'For new illustrations, Codex keeps the draft’s scene and composition and refines its appearance and art-style details to match reference images and illustration instructions.',
+    ja: '新しい挿絵では、Codexが下書きの場面と構図を保ったまま、外見や画風の描写を参照画像と絵の指示に合わせて整えます。',
+    zh: '生成新插图时，Codex会保留草稿的场景和构图，并根据参考图片和绘图指引润色外貌与画风描述。',
   },
   'visuals.codexPreparedPrompt': {
     ko: '프롬프트 모델이 작성한 초안',
@@ -585,15 +585,15 @@ export const messages = {
   },
   'visuals.m083': {
     ko: '장면당 최대 삽화 수',
-    en: 'Illustrations per text',
-    ja: '本文ごとの挿絵数',
-    zh: '每篇正文的插图数量',
+    en: 'Maximum illustrations per scene',
+    ja: '場面ごとの挿絵上限',
+    zh: '每个场景的插图上限',
   },
   'visuals.m084': {
-    ko: '자동 배치 대상 수',
-    en: 'Automatic placement target count',
-    ja: '自動配置の対象数',
-    zh: '自动放置目标数量',
+    ko: '자동으로 고를 최대 컷 수',
+    en: 'Maximum cuts to select automatically',
+    ja: '自動選択するカット上限',
+    zh: '自动选择的画面上限',
   },
   'visuals.m085': {
     ko: '자동 재시도 횟수',
@@ -1013,7 +1013,7 @@ export const messages = {
     ko: '삽화 호출과 토큰',
     en: 'Illustration calls and tokens',
     ja: '挿絵の呼び出しとトークン',
-    zh: '插图调用与词元',
+    zh: '插图调用与 token',
   },
   'visuals.m175': {
     ko: '삽화 작업의 누적 사용량이에요. 다시 그리기와 위치 재연결, 사전 판단도 포함해요. ComfyUI 그림 생성은 모델 토큰에 포함하지 않아요.',

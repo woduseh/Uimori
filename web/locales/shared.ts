@@ -183,7 +183,7 @@ export const messages = {
     ko: '저장본 확인 완료',
     en: 'Finish reviewing saved version',
     ja: '保存済み内容の確認完了',
-    zh: '已确认保存版本',
+    zh: '完成查看已保存版本',
   },
   'shared.keepInput': {
     ko: '현재 입력 유지',
@@ -463,7 +463,7 @@ export const messages = {
   },
   'shared.syntaxError': {
     ko: '입력한 문법에 오류가 없는지 확인해 주세요. 작성한 내용은 그대로 유지돼요.',
-    en: 'Check input with syntax errors. Your input is preserved.',
+    en: 'Check your input for syntax errors. Your input is preserved.',
     ja: '構文エラーのある入力を確認してください。入力は保持します。',
     zh: '请检查存在语法错误的输入。输入会保留。',
   },

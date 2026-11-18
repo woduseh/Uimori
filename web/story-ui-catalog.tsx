@@ -281,7 +281,7 @@ const Modal = createComponentImplementation(api('Modal'), ({ props, buildChild }
           <button
             type="button"
             className="story-ui-modal-close"
-            aria-label={t('shared.close')}
+            aria-label={t('storyUi.close')}
             onClick={() => dialog.current?.close()}
           >
             ×

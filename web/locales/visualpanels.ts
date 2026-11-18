@@ -1483,9 +1483,9 @@ export const messages = {
   },
   'visualpanels.inclusionMayBeUncertainForMaterialProcessed': {
     ko: '스크립트나 프롬프트에서 변형된 자료는 포함 여부를 정확히 확인하지 못할 수 있어요.',
-    en: 'Inclusion may be uncertain for resources processed inside prompts.',
-    ja: 'プロンプト内で加工された資料などは、含まれたかを確定できない場合があります。',
-    zh: '对于在提示词中处理过的资料，可能无法确定是否包含。',
+    en: 'Inclusion may be uncertain for resources transformed by scripts or prompts.',
+    ja: 'スクリプトやプロンプトで加工された資料は、含まれたかを正確に確認できない場合があります。',
+    zh: '对于在脚本或提示词中转换过的资料，可能无法准确确认是否包含。',
   },
   'visualpanels.inclusionUnconfirmedVPluralOneOther': {
     ko: '포함 여부 미확인: {v0, number}건',

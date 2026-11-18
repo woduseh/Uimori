@@ -28,7 +28,7 @@ export const messages = {
     ko: '봇의 이야기 UI 기본값',
     en: 'Bot Story UI default',
     ja: 'ボットの物語 UI の既定値',
-    zh: '角色的故事界面默认值',
+    zh: '机器人的故事界面默认值',
   },
   'storyUi.modelStyle': {
     ko: '모델 스타일 따르기',
@@ -40,7 +40,7 @@ export const messages = {
     ko: '봇의 이야기 UI 기본값을 저장했어요.',
     en: 'Saved the bot Story UI default.',
     ja: 'ボットの物語 UI の既定値を保存しました。',
-    zh: '已保存角色的故事界面默认值。',
+    zh: '已保存机器人的故事界面默认值。',
   },
   'storyUi.unavailableTheme': {
     ko: '사용할 수 없는 테마',
@@ -109,9 +109,15 @@ export const messages = {
   },
   'storyUi.filter': {
     ko: '선택지 검색',
-    en: 'Filter options',
+    en: 'Filter choices',
     ja: '選択肢を検索',
     zh: '筛选选项',
+  },
+  'storyUi.close': {
+    ko: '닫기',
+    en: 'Close',
+    ja: '閉じる',
+    zh: '关闭',
   },
   'storyUi.state.done': { ko: '완료', en: 'Done', ja: '完了', zh: '已完成' },
   'storyUi.state.current': { ko: '진행 중', en: 'In progress', ja: '進行中', zh: '进行中' },
@@ -132,7 +138,7 @@ export const messages = {
   'storyUi.invalid': {
     ko: '이야기 화면을 표시할 수 없어요.',
     en: 'Could not display this story screen.',
-    ja: '物語内の画面を表示できませんでした。',
+    ja: '物語画面を表示できません。',
     zh: '无法显示此故事界面。',
   },
   'storyUi.errorStaleSource': {

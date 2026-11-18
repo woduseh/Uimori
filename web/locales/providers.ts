@@ -254,9 +254,9 @@ export const messages = {
   },
   'providers.m42': {
     ko: '저장본 확인',
-    en: 'Review saved changes',
-    ja: '保存内容の変更を確認',
-    zh: '查看已保存内容的更改',
+    en: 'Review saved version',
+    ja: '保存版を確認',
+    zh: '查看已保存版本',
   },
   'providers.m43': {
     ko: '프로바이더 이름',
@@ -410,13 +410,13 @@ export const messages = {
   },
   'providers.m70': {
     ko: '새 프로바이더 입력',
-    en: 'Enter a new provider',
+    en: 'Add new provider',
     ja: '新しいプロバイダーを入力',
     zh: '输入新提供商',
   },
   'providers.m71': {
     ko: '새 모델 입력',
-    en: 'Enter a new model',
+    en: 'Add new model',
     ja: '新しいモデルを入力',
     zh: '输入新模型',
   },
@@ -463,7 +463,7 @@ export const messages = {
     zh: '返回列表',
   },
   'providers.m83': {
-    ko: '빠른 프로바이더 진행',
+    ko: '빠른 프로바이더 설정 진행',
     en: 'Quick provider setup progress',
     ja: 'プロバイダー簡単設定の進行状況',
     zh: '提供商快速设置进度',
@@ -590,8 +590,8 @@ export const messages = {
   },
   'providers.m111': {
     ko: '모델 목록 조회 실패, 마지막 저장 목록을 유지해요.',
-    en: 'Failed to load model list, keeping the last saved list.',
-    ja: 'モデル一覧の取得に失敗しました、最後に保存した一覧を保持します。',
+    en: 'Failed to load model list. Keeping the last saved list.',
+    ja: 'モデル一覧の取得に失敗しました。最後に保存した一覧を保持します。',
     zh: '模型列表加载失败，保留上次保存的列表。',
   },
   'providers.m112': {
@@ -634,7 +634,7 @@ export const messages = {
     ko: '프로바이더 비활성',
     en: 'Provider disabled',
     ja: 'プロバイダー無効',
-    zh: '服务商已停用',
+    zh: '提供商已停用',
   },
   'providers.m125': {
     ko: '검색 조건에 맞는 모델이 없어요.',
@@ -944,7 +944,7 @@ export const messages = {
   },
   'providers.m180': {
     ko: '적응형 (adaptive)',
-    en: 'Adaptive (adaptive)',
+    en: 'Adaptive',
     ja: '適応型（adaptive）',
     zh: '自适应（adaptive）',
   },
@@ -2763,8 +2763,8 @@ export const messages = {
   'providers.m558': {
     ko: '이전 설정의 추론 강도: {value0}',
     en: 'Previous reasoning effort: {value0}',
-    ja: '以前の推論強度、{value0}',
-    zh: '旧设置的推理强度，{value0}',
+    ja: '以前の推論強度: {value0}',
+    zh: '旧设置的推理强度：{value0}',
   },
   'providers.m559': {
     ko: '범주 {value0}개',
@@ -2799,8 +2799,8 @@ export const messages = {
   'providers.m564': {
     ko: '직접 지정한 설정: {value0}개',
     en: 'Explicit settings: {value0, plural, one {# setting} other {# settings}}',
-    ja: '明示的な設定、{value0}個',
-    zh: '手动指定的设置，{value0} 项',
+    ja: '直接指定した設定: {value0}個',
+    zh: '手动指定的设置：{value0} 项',
   },
   'providers.m565': {
     ko: '{value0} 지정 해제',
@@ -2847,8 +2847,8 @@ export const messages = {
   'providers.m574': {
     ko: '모델 더 보기: {value0} / {value1}',
     en: 'Show more models: {value0} / {value1}',
-    ja: 'モデルをさらに表示、{value0} / {value1}',
-    zh: '显示更多模型，{value0} / {value1}',
+    ja: 'モデルをさらに表示: {value0} / {value1}',
+    zh: '显示更多模型：{value0} / {value1}',
   },
   'providers.m575': {
     ko: 'providerOptions가 너무 커요. {value0}자 이하로 줄여 주세요.',
@@ -2968,7 +2968,7 @@ export const messages = {
     ko: '입력 토큰이 {value0}개를 넘으면 장문 요금이 적용돼요.',
     en: 'Long-context rates apply when input tokens exceed {value0}.',
     ja: '入力トークンが{value0}個を超えると長文料金が適用されます。',
-    zh: '输入 Token 超过 {value0} 个时适用长文本费率。',
+    zh: '输入 token 超过 {value0} 个时适用长上下文费率。',
   },
   'providers.m595': {
     ko: '{value0} {value1} 요금',

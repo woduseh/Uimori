@@ -150,7 +150,7 @@ describe('UI locale presentation boundary', () => {
     expect(translateMessage(details)).toBe('Details');
     expect(translateMessage(literalTitle)).toBe('Delete 저장?');
     expect(translateMessage(nestedError)).toBe(
-      'The helper model changed, but settings could not be refreshed: Could not load.'
+      'The assistant model changed, but settings could not be refreshed: Could not load.'
     );
     expect(t('providers.m285')).toBe('Advanced');
   });
@@ -181,12 +181,12 @@ describe('UI locale presentation boundary', () => {
     expect(translateMessage(error.message)).toBe('Could not load.');
     const notice = message('helpers.modelRefreshFailed', { error: messageRef(error.message) });
     expect(translateMessage(notice)).toBe(
-      'The helper model changed, but settings could not be refreshed: Could not load.'
+      'The assistant model changed, but settings could not be refreshed: Could not load.'
     );
     setLocale('ja');
     expect(error.message).toBe('불러오지 못했어요.');
     expect(translateMessage(notice)).toBe(
-      'ヘルパーモデルは変更しましたが、設定を再読み込みできませんでした: 読み込めませんでした。'
+      'アシスタントモデルは変更しましたが、設定を再読み込みできませんでした: 読み込めませんでした。'
     );
   });
 

@@ -75,10 +75,10 @@ export const messages = {
     zh: '部分字体加载失败，已使用默认字体显示。',
   },
   'fonts.disabled': {
-    ko: '긴급 비활성화 중에는 등록한 글꼴도 적용하지 않아요.',
-    en: 'Custom fonts are also suspended while emergency disable is active.',
-    ja: '緊急無効化中は登録済みのフォントも適用しません。',
-    zh: '紧急禁用期间也不会应用自定义字体。',
+    ko: '이 탭에서 사용자 테마를 잠시 끈 동안에는 등록한 글꼴도 적용하지 않아요.',
+    en: 'Registered fonts are also disabled while custom themes are turned off in this tab.',
+    ja: 'このタブでカスタムテーマを一時的に無効にしている間は、登録済みのフォントも適用しません。',
+    zh: '此标签页暂时关闭自定义主题期间，也不会应用已注册的字体。',
   },
   'fonts.restore': {
     ko: '기본 글꼴로 되돌리기',

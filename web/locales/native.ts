@@ -45,8 +45,8 @@ export const messages = {
   'native.initialVariablesAndToggles': {
     ko: '변수와 토글 초기값',
     en: 'Initial variables and toggles',
-    ja: '変数の初期値、トグル',
-    zh: '变量初始值与开关',
+    ja: '変数とトグルの初期値',
+    zh: '变量与开关初始值',
   },
   'native.newChatDefaultVariables': {
     ko: '새 채팅의 기본 변수',
@@ -148,19 +148,19 @@ export const messages = {
     ko: 'Risu 에셋 편집',
     en: 'Edit Risu assets',
     ja: 'Risuアセット編集',
-    zh: '编辑Risu资源',
+    zh: '编辑Risu资产',
   },
   'native.text_a887a65c92': {
     ko: '에셋 검색',
     en: 'Search assets',
     ja: 'アセット検索',
-    zh: '搜索资源',
+    zh: '搜索资产',
   },
   'native.text_4671f4390f': {
     ko: '에셋 이름으로 검색',
     en: 'Search by asset name',
     ja: 'アセット名で検索',
-    zh: '按资源名称搜索',
+    zh: '按资产名称搜索',
   },
   'native.text_d4d4ce5c0e': {
     ko: '이미지 추가',
@@ -214,7 +214,7 @@ export const messages = {
     ko: '선택한 에셋',
     en: 'Selected asset',
     ja: '選択中のアセット',
-    zh: '所选资源',
+    zh: '所选资产',
   },
   'native.text_24016d85c7': {
     ko: '스크립트 참조 이름',
@@ -238,13 +238,13 @@ export const messages = {
     ko: '선택한 에셋 삭제',
     en: 'Remove selected asset',
     ja: '選択中のアセットを取り除く',
-    zh: '移除所选资源',
+    zh: '移除所选资产',
   },
   'native.text_7900d467e4': {
     ko: '이 에셋을 자료에서 제거할까요?',
     en: 'Remove this asset from the resource?',
     ja: 'このアセットを資料から取り除きますか？',
-    zh: '要从资料中移除此资源吗？',
+    zh: '要从资料中移除此资产吗？',
   },
   'native.text_07afd47e83': {
     ko: '본문, 로어, HTML, 스크립트에서 이 에셋을 참조하는 이름은 그대로 남아요. 제거하면 해당 이미지가 표시되지 않을 수 있어요.',
@@ -274,7 +274,7 @@ export const messages = {
     ko: '에셋 삭제',
     en: 'Remove asset',
     ja: 'アセットを取り除く',
-    zh: '移除资源',
+    zh: '移除资产',
   },
   'native.text_5ce4911d95': {
     ko: '로어북',
@@ -502,7 +502,7 @@ export const messages = {
     ko: '조건, 배치, 원문 설정',
     en: 'Conditions, placement and source settings',
     ja: '条件、配置、ソース設定',
-    zh: '条件、位置与源文设置',
+    zh: '条件、位置与源码设置',
   },
   'native.text_1922bfdd27': {
     ko: '키워드',
@@ -674,9 +674,9 @@ export const messages = {
   },
   'native.text_9cceef2250': {
     ko: '직접 편집 중인 원문이 있어요. 저장할 때 함께 반영돼요.',
-    en: 'There is source text being edited directly. It will be included when saving.',
-    ja: '直接編集中の原文があります。保存時に一緒に反映されます。',
-    zh: '有正在直接编辑的原文。保存时将一并反映。',
+    en: 'You have direct source edits. They will be applied when you save.',
+    ja: '直接編集中のソースがあります。保存時に一緒に反映されます。',
+    zh: '有正在直接编辑的源码。保存时将一并应用。',
   },
   'native.text_944b1569af': {
     ko: '프롬프트 블록 목록',
@@ -818,9 +818,9 @@ export const messages = {
   },
   'native.text_ed60b1eb22': {
     ko: '이 블록은 실행하지 않아요. 기억은 채팅의 기억과 메모 설정에서 관리해요.',
-    en: 'This block does not run. Manage memory in chat memory and lore settings.',
+    en: 'This block does not run. Manage memory in the chat’s Memory and notes settings.',
     ja: 'このブロックは実行されません。記憶はチャットの記憶とメモ設定で管理します。',
-    zh: '此块不会执行，记忆请在聊天的记忆与设定设置中管理。',
+    zh: '此块不会执行，记忆请在聊天的记忆与笔记设置中管理。',
   },
   'native.text_29efb69b57': {
     ko: '종류',
@@ -1660,7 +1660,7 @@ export const messages = {
     ko: '실행 조건과 순서 (원문 편집)',
     en: 'Conditions and order (source editor)',
     ja: '実行条件と順序（ソース編集）',
-    zh: '执行条件与顺序（源文编辑）',
+    zh: '执行条件与顺序（源码编辑）',
   },
   'native.text_8898368573': {
     ko: '등록된 Lua나 트리거가 없어요.',
@@ -1690,7 +1690,7 @@ export const messages = {
     ko: '에셋',
     en: 'Assets',
     ja: 'アセット',
-    zh: '资源',
+    zh: '资产',
   },
   'native.text_ecc580fe68': {
     ko: '번역 지침',
@@ -1730,9 +1730,9 @@ export const messages = {
   },
   'native.text_1c7e81d795': {
     ko: '대체 첫 메시지',
-    en: 'Alternate greeting',
-    ja: '代替開始文',
-    zh: '备选开场白',
+    en: 'Alternate first message',
+    ja: '代替の最初のメッセージ',
+    zh: '备选首条消息',
   },
   'native.text_5aa9d342d6': {
     ko: '트리거 / Lua',
@@ -1772,9 +1772,9 @@ export const messages = {
   },
   'native.text_0b4d698c5c': {
     ko: '적용하지 않은 원문이 있어요.',
-    en: 'There are unapplied source edits.',
-    ja: '未適用の原文があります。',
-    zh: '有未应用的原文。',
+    en: 'You have unapplied source edits.',
+    ja: '未反映のソースがあります。',
+    zh: '有未应用的源码编辑。',
   },
   'native.text_609d8be788': {
     ko: '원문 확인',
@@ -1808,9 +1808,9 @@ export const messages = {
   },
   'native.text_3a91359cae': {
     ko: '기본 첫 메시지',
-    en: 'Default greeting',
-    ja: '既定の開始文',
-    zh: '默认开场白',
+    en: 'Default first message',
+    ja: '既定の最初のメッセージ',
+    zh: '默认首条消息',
   },
   'native.text_1345bfd1e0': {
     ko: '로어 선택 방식',
@@ -2086,7 +2086,7 @@ export const messages = {
     ko: '이미지로 읽지 못한 원문 에셋 {count, number}개는 보존하고 있어요. 이 화면에서는 편집할 수 없으며, 내장 파일이 누락된 자료는 CHARX 내보내기가 제한될 수 있어요.',
     en: '{count, plural, one {# unreadable source asset is preserved.} other {# unreadable source assets are preserved.}} These cannot be edited here. Missing embedded files may limit CHARX exports.',
     ja: '画像として読み込めなかったソースアセット{count, number}件を保持しています。この画面では編集できません。内蔵ファイルが欠けた資料はCHARXの書き出しが制限される場合があります。',
-    zh: '已保留{count, number}个无法作为图片读取的源码资源，无法在此编辑。缺少内嵌文件的资料可能无法完整导出CHARX。',
+    zh: '已保留{count, number}个无法作为图片读取的源码资产，无法在此编辑。缺少内嵌文件的资料可能无法完整导出CHARX。',
   },
   'native.imageCount': {
     ko: '이미지 {count, number}개',
@@ -2098,7 +2098,7 @@ export const messages = {
     ko: '{name} 이미지와 이 자료의 에셋 연결을 제거해요. 원본 파일은 삭제하지 않아요.',
     en: 'Remove image {name} and its asset reference in this resource. The original file is kept.',
     ja: '画像{name}とこの資料のアセット参照を取り除きます。元のファイルは削除されません。',
-    zh: '移除图片{name}及此资料中的资源引用，原文件不会删除。',
+    zh: '移除图片{name}及此资料中的资产引用，原文件不会删除。',
   },
   'native.loreMoved': {
     ko: '‘{title}’ 항목을 이동했어요. 위치: {destination}',
@@ -2354,9 +2354,9 @@ export const messages = {
   },
   'native.sourceGreetings': {
     ko: '첫 메시지는 문자열 배열로 입력해 주세요.',
-    en: 'Enter greetings as an array of strings.',
-    ja: '開始文は文字列の配列で入力してください。',
-    zh: '请以字符串数组输入开场白。',
+    en: 'Enter first messages as an array of strings.',
+    ja: '最初のメッセージは文字列の配列で入力してください。',
+    zh: '请以字符串数组输入首条消息。',
   },
   'native.sourceItems': {
     ko: '각 항목은 JSON 객체여야 해요.',
@@ -2396,8 +2396,8 @@ export const messages = {
   },
   'native.useAddGroup': {
     ko: '‘그룹 추가’를 사용해 주세요.',
-    en: 'Please use “Add Group”.',
-    ja: '「グループ追加」を使用してください。',
+    en: 'Use “Add group”.',
+    ja: '「グループを追加」を使ってください。',
     zh: '请使用“添加分组”。',
   },
   'native.captionControlOnly': {

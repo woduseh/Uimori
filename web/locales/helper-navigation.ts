@@ -101,7 +101,7 @@ export const messages = {
   'helperNavigation.activityCount': {
     ko: '미확인 활동 {count}개',
     en: '{count, plural, one {# unread activity} other {# unread activities}}',
-    ja: '未確認のアクティビティ {count}件',
+    ja: '未確認の活動 {count}件',
     zh: '{count}条未读活动',
   },
   'helperNavigation.sort': { ko: '정렬', en: 'Sort', ja: '並べ替え', zh: '排序' },
@@ -111,7 +111,7 @@ export const messages = {
   'helperNavigation.acknowledge': {
     ko: '{title} 활동 확인',
     en: 'Mark activity in {title} as read',
-    ja: '{title}のアクティビティを確認',
+    ja: '{title}の活動を確認',
     zh: '将{title}的活动标为已读',
   },
 };

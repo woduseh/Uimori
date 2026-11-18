@@ -61,9 +61,9 @@ export const messages = {
   },
   'errors.FILE_INPUT_UNSUPPORTED_PROTOCOL': {
     ko: '이 프로바이더는 해당 파일 입력을 지원하지 않아요.',
-    en: 'This connection does not support this file input.',
-    ja: 'この接続はこのファイル入力に対応していません。',
-    zh: '此连接不支持这种文件输入。',
+    en: 'This provider does not support this file input.',
+    ja: 'このプロバイダーはこのファイル入力に対応していません。',
+    zh: '此提供商不支持这种文件输入。',
   },
   'errors.FILE_INPUT_UNSUPPORTED_MODEL': {
     ko: '이 모델은 해당 파일 입력을 지원하지 않아요.',
@@ -72,16 +72,16 @@ export const messages = {
     zh: '此模型不支持这种文件输入。',
   },
   'errors.FILE_INPUT_UNSUPPORTED_TYPE': {
-    ko: '이 연결은 해당 파일 형식을 지원하지 않아요.',
-    en: 'This connection does not support this file format.',
-    ja: 'この接続はこのファイル形式に対応していません。',
-    zh: '此连接不支持这种文件格式。',
+    ko: '이 프로바이더는 해당 파일 형식을 지원하지 않아요.',
+    en: 'This provider does not support this file format.',
+    ja: 'このプロバイダーはこのファイル形式に対応していません。',
+    zh: '此提供商不支持这种文件格式。',
   },
   'errors.FILE_INPUT_TOO_LARGE': {
     ko: '파일이 선택한 프로바이더의 크기 한도를 넘어요. 크기를 줄여 주세요.',
-    en: 'The file exceeds this connection’s size limit. Reduce its size.',
-    ja: '接続のファイルサイズ上限を超えています。サイズを減らしてください。',
-    zh: '文件超过连接的大小限制，请缩小文件。',
+    en: 'The file exceeds the selected provider’s size limit. Reduce its size.',
+    ja: '選択したプロバイダーのファイルサイズ上限を超えています。サイズを減らしてください。',
+    zh: '文件超过所选提供商的大小限制，请缩小文件。',
   },
   'errors.FILE_REQUEST_TOO_LARGE': {
     ko: '첨부를 포함한 전송 용량이 너무 커요. 파일 수나 크기를 줄여 주세요.',
@@ -121,15 +121,15 @@ export const messages = {
   },
   'errors.STORY_GUIDE_TIMEOUT': {
     ko: '작품 및 원작 참고가 제한 시간 안에 끝나지 않았어요. 다시 시도해 주세요.',
-    en: 'Canon reference timed out. Please write again.',
-    ja: '原作参照が時間内に完了しませんでした。執筆し直してください。',
-    zh: '原作参考超时。请重新创作。',
+    en: 'Canon reference timed out. Try again.',
+    ja: '原作参照が制限時間内に完了しませんでした。再試行してください。',
+    zh: '原作参考未在时限内完成。请重试。',
   },
   'errors.STORY_GUIDE_FAILED': {
     ko: '작품 및 원작 참고를 준비하지 못했어요. 본문 모델과 프로바이더를 확인해 주세요.',
-    en: 'Could not prepare canon references. Check the writing model and connection.',
-    ja: '原作参照を準備できませんでした。執筆モデルと接続を確認してください。',
-    zh: '未能准备原作参考。请检查写作模型和连接。',
+    en: 'Could not prepare canon references. Check the story model and provider.',
+    ja: '原作参照を準備できませんでした。本文モデルとプロバイダーを確認してください。',
+    zh: '未能准备原作参考。请检查正文模型和提供商。',
   },
   'errors.STORY_GUIDE_REFUSED': {
     ko: '모델이 작품 및 원작 참고 요청을 거절했어요.',
@@ -157,9 +157,9 @@ export const messages = {
   },
   'errors.STORY_GUIDE_PROVIDER_FAILED': {
     ko: '작품 및 원작 참고를 준비하지 못했어요. 본문 모델과 프로바이더를 확인해 주세요.',
-    en: 'Could not prepare canon references. Check the writing model and connection.',
-    ja: '原作参照を準備できませんでした。執筆モデルと接続を確認してください。',
-    zh: '未能准备原作参考。请检查写作模型和连接。',
+    en: 'Could not prepare canon references. Check the story model and provider.',
+    ja: '原作参照を準備できませんでした。本文モデルとプロバイダーを確認してください。',
+    zh: '未能准备原作参考。请检查正文模型和提供商。',
   },
   'errors.MANUSCRIPT_RANGE_CHANGED': {
     ko: '원고 범위가 바뀌었어요. 내보내기를 다시 열어 범위를 확인해 주세요.',
@@ -216,10 +216,10 @@ export const messages = {
     zh: '已保存的原文已更改。请检查草稿后重新请求。',
   },
   'errors.SELECTION_REVISION_TIMEOUT': {
-    ko: '퇴고 제안이 제한 시간 안에 끝나지 않았어요.',
-    en: 'Revision suggestions timed out.',
-    ja: '推敲案の作成が時間内に完了しませんでした。',
-    zh: '润色建议超时。',
+    ko: '퇴고 제안이 제한 시간 안에 끝나지 않았어요. 다시 요청하면 새 모델 호출이 발생해요.',
+    en: 'Revision suggestions timed out. Requesting again will make a new model call.',
+    ja: '推敲案の作成が制限時間内に完了しませんでした。再度依頼すると新しいモデル呼び出しが発生します。',
+    zh: '润色建议未在时限内完成。重新请求会产生新的模型调用。',
   },
   'errors.SELECTION_REVISION_CANCELLED': {
     ko: '퇴고 제안 요청이 중단됐어요.',
@@ -601,9 +601,9 @@ export const messages = {
   },
   'errors.IMAGE_INPUT_UNSUPPORTED_PROTOCOL': {
     ko: '선택한 프로바이더로는 이미지를 전달할 수 없어요. 본문 모델의 프로바이더를 바꿔 주세요.',
-    en: 'The selected connection cannot send images. Change the main model connection.',
-    ja: '選択した接続では画像を送れません。本文モデルの接続を変更してください。',
-    zh: '所选连接无法发送图片。请更换正文模型的连接。',
+    en: 'The selected provider cannot send images. Change the story model provider.',
+    ja: '選択したプロバイダーでは画像を送れません。本文モデルのプロバイダーを変更してください。',
+    zh: '所选提供商无法发送图片。请更换正文模型的提供商。',
   },
   'errors.IMAGE_INPUT_UNAVAILABLE': {
     ko: '참고 이미지를 불러오지 못했어요. 저장된 이미지와 연결 상태를 확인해 주세요.',
@@ -877,9 +877,9 @@ export const messages = {
   },
   'errors.status.interrupted': {
     ko: '서버 중단',
-    en: 'Server interruption, no automatic regeneration',
-    ja: 'サーバー中断（自動再生成なし）',
-    zh: '服务器中断，未自动重新生成',
+    en: 'Server interrupted',
+    ja: 'サーバー中断',
+    zh: '服务器中断',
   },
   'errors.status.stale': {
     ko: '이전 자료의 결과',
@@ -1027,7 +1027,7 @@ export const messages = {
   },
   'errors.auxiliary.SOURCE_DEPENDENCY_MISMATCH.details': {
     ko: '작업 결과가 가리키는 원문과 현재 작업의 원문이 일치하지 않아요. 최신 원문을 확인한 뒤 새 작업을 요청해 주세요.',
-    en: 'The original referenced by the result does not match this task original. Check the latest original before requesting a new task.',
+    en: 'The original text referenced by the result does not match this task’s original text. Check the latest original text before requesting a new task.',
     ja: '結果が参照する原文と、この作業の原文が一致しません。最新の原文を確認してから新たに依頼してください。',
     zh: '结果引用的原文与当前任务的原文不一致。请检查最新原文后发起新任务。',
   },
@@ -1315,7 +1315,7 @@ export const messages = {
   },
   'errors.auxiliary.SOURCE_DEPENDENCY_MISMATCH.message': {
     ko: '작업 결과가 가리키는 원문과 현재 작업의 원문이 일치하지 않아요.',
-    en: 'The original referenced by the result does not match this task original.',
+    en: 'The original text referenced by the result does not match this task’s original text.',
     ja: '結果が参照する原文と、この作業の原文が一致しません。',
     zh: '结果引用的原文与当前任务的原文不一致。',
   },

@@ -3,13 +3,13 @@ export const messages = {
     ko: '시작 설정이 바뀌었어요. 저장된 설정을 사용하면 선택한 내용은 적용되지 않아요.',
     en: 'Starting settings have changed. If you use the saved settings, your selections will not be applied.',
     ja: '開始設定が変更されました。保存された設定を使用すると、選択した内容は適用されません。',
-    zh: '开始设置已更改。如果使用已保存的设置，所选内容将不会应用。',
+    zh: '初始设置已更改。如果使用已保存的设置，所选内容将不会应用。',
   },
   'main.pendingProfileChanged': {
     ko: '시작 설정 복구 기록이 바뀌었어요. 다시 확인해 주세요.',
-    en: 'The saved starting request changed. Please check it again.',
-    ja: '保存した開始リクエストが変更されました。もう一度確認してください。',
-    zh: '保存的开始请求已更改，请重新确认。',
+    en: 'The starting settings recovery record changed. Please check it again.',
+    ja: '開始設定の復元記録が変更されました。もう一度確認してください。',
+    zh: '初始设置恢复记录已更改，请重新确认。',
   },
   'main.pendingProfileUseSaved': {
     ko: '저장된 설정 사용',
@@ -397,7 +397,7 @@ export const messages = {
   },
   'main.m047': {
     ko: '새 원고의 기본 보기',
-    en: 'Default view for new scenes',
+    en: 'Default view for new manuscripts',
     ja: '新しい原稿の標準表示',
     zh: '新稿件的默认视图',
   },
@@ -661,7 +661,7 @@ export const messages = {
   },
   'main.m091': {
     ko: '첫 장면을 들려주세요.',
-    en: 'Tell us the first scene.',
+    en: 'Describe the first scene.',
     ja: '最初のシーンを教えてください。',
     zh: '请描述第一个场景。',
   },
@@ -696,8 +696,8 @@ export const messages = {
     zh: '全局模型设置',
   },
   'main.m098': {
-    ko: '원본으로 돌아가기',
-    en: 'Return to original',
+    ko: '원본 채팅으로 돌아가기',
+    en: 'Return to original chat',
     ja: '元のチャットに戻る',
     zh: '返回原聊天',
   },
@@ -818,7 +818,7 @@ export const messages = {
   'main.m118': {
     ko: '빠른 페르소나',
     en: 'Quick persona',
-    ja: 'ペルソナを選択',
+    ja: 'クイックペルソナ',
     zh: '快捷角色',
   },
   'main.m119': {
@@ -921,7 +921,7 @@ export const messages = {
     ko: '시작 설정을 저장한 뒤 본문을 생성할 수 있어요.',
     en: 'Save starting settings before generating text.',
     ja: '開始設定を保存してから本文を生成できます。',
-    zh: '保存起始设置后方可生成正文。',
+    zh: '保存初始设置后方可生成正文。',
   },
   'main.m136': {
     ko: '닫기',

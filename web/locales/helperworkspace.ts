@@ -18,16 +18,16 @@ export const messages = {
     zh: '最近一次请求输入',
   },
   'helperResults.cumulativeExplanation': {
-    ko: '누적 입력은 각 요청에 다시 보낸 문맥과 캐시 입력을 포함해요.',
+    ko: '누적 입력은 각 요청에 다시 보낸 컨텍스트와 캐시 입력을 포함해요.',
     en: 'Cumulative input includes context sent again on each request and cached input.',
-    ja: '累積入力には、各リクエストで再送した文脈とキャッシュ入力が含まれます。',
+    ja: '累積入力には、各リクエストで再送したコンテキストとキャッシュ入力が含まれます。',
     zh: '累计输入包含每次请求重复发送的上下文和缓存输入。',
   },
   'helperResults.outputSummary': {
     ko: '출력 {count} 토큰',
     en: 'Output {count} tokens',
     ja: '出力 {count} トークン',
-    zh: '输出 {count} 令牌',
+    zh: '输出 {count} 词元',
   },
   'helperResults.toolSummary': {
     ko: '도구 {count}회',
@@ -51,7 +51,7 @@ export const messages = {
     ko: '입력 예산 {limit} 토큰 중 약 {input} 토큰',
     en: 'Approximately {input} of {limit} input-budget tokens',
     ja: '入力予算{limit}トークン中、約{input}トークン',
-    zh: '输入预算 {limit} 令牌中约 {input} 令牌',
+    zh: '输入预算 {limit} 词元中约 {input} 词元',
   },
   'helpers.searchSessions': {
     ko: '대화 검색',
@@ -171,25 +171,25 @@ export const messages = {
     ko: '누적 입력 토큰',
     en: 'Cumulative input tokens',
     ja: '累積入力トークン',
-    zh: '累计输入令牌',
+    zh: '累计输入词元',
   },
   'helperResults.output': {
     ko: '누적 출력 토큰',
     en: 'Cumulative output tokens',
     ja: '累積出力トークン',
-    zh: '累计输出令牌',
+    zh: '累计输出词元',
   },
   'helperResults.cached': {
     ko: '입력 중 캐시 토큰',
     en: 'Cached input tokens',
     ja: '入力のキャッシュトークン',
-    zh: '输入中的缓存令牌',
+    zh: '输入中的缓存词元',
   },
   'helperResults.reasoning': {
     ko: '출력 중 추론 토큰',
     en: 'Reasoning output tokens',
     ja: '出力の推論トークン',
-    zh: '输出中的推理令牌',
+    zh: '输出中的推理词元',
   },
   'helperResults.cost': {
     ko: '확인된 비용',

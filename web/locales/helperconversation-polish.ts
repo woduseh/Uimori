@@ -9,7 +9,7 @@ export const messages = {
     ko: '파일 {count}개 미측정',
     en: '{count} unmeasured files',
     ja: 'ファイル{count}件は未計測',
-    zh: '{count} 个文件未测量',
+    zh: '{count} 个文件未统计',
   },
   'helperConversation.inputEstimate': {
     ko: '추정 입력',

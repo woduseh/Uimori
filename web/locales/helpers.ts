@@ -31,14 +31,14 @@ export const messages = {
   },
   'helpers.modelPickerTitle': {
     ko: '도우미 모델 선택',
-    en: 'Choose helper model',
-    ja: 'ヘルパーモデルを選択',
+    en: 'Choose assistant model',
+    ja: 'アシスタントモデルを選択',
     zh: '选择助手模型',
   },
   'helpers.modelPickerScope': {
     ko: '모든 도우미 대화의 다음 요청부터 적용해요.',
-    en: 'Applies to the next request in every helper conversation.',
-    ja: 'すべてのヘルパー会話の次の依頼から適用します。',
+    en: 'Applies to the next request in every assistant conversation.',
+    ja: 'すべてのアシスタント会話の次の依頼から適用します。',
     zh: '从所有助手对话的下一次请求开始生效。',
   },
   'helpers.modelPickerNone': {
@@ -55,8 +55,8 @@ export const messages = {
   },
   'helpers.modelSaved': {
     ko: '도우미 모델을 변경했어요.',
-    en: 'Helper model changed.',
-    ja: 'ヘルパーモデルを変更しました。',
+    en: 'Assistant model changed.',
+    ja: 'アシスタントモデルを変更しました。',
     zh: '已更改助手模型。',
   },
   'helpers.modelCheckAgain': {
@@ -67,33 +67,33 @@ export const messages = {
   },
   'helpers.modelRefreshFailed': {
     ko: '도우미 모델은 변경했지만 설정을 다시 읽지 못했어요: {error}',
-    en: 'The helper model changed, but settings could not be refreshed: {error}',
-    ja: 'ヘルパーモデルは変更しましたが、設定を再読み込みできませんでした: {error}',
+    en: 'The assistant model changed, but settings could not be refreshed: {error}',
+    ja: 'アシスタントモデルは変更しましたが、設定を再読み込みできませんでした: {error}',
     zh: '助手模型已更改，但无法刷新设置：{error}',
   },
   'helpers.toneSaved': {
     ko: '도우미 말투를 저장했어요.',
-    en: 'Helper tone saved.',
-    ja: 'ヘルパーの話し方を保存しました。',
+    en: 'Assistant tone saved.',
+    ja: 'アシスタントの口調を保存しました。',
     zh: '已保存助手语气。',
   },
   'helpers.chatTitle': {
     ko: '채팅 도우미',
-    en: 'Chat helper',
-    ja: 'チャットヘルパー',
+    en: 'Chat assistant',
+    ja: 'チャットアシスタント',
     zh: '聊天助手',
   },
   'helpers.libraryTitle': {
     ko: '서재 도우미',
-    en: 'Library helper',
-    ja: 'ライブラリのヘルパー',
+    en: 'Library assistant',
+    ja: 'ライブラリアシスタント',
     zh: '资料库助手',
   },
   'helpers.sessionVoice': {
     ko: '이 대화의 도우미 말투',
-    en: 'Helper voice for this conversation',
-    ja: 'この会話のヘルパーの話し方',
-    zh: '此会话的助手语气',
+    en: 'Assistant tone for this conversation',
+    ja: 'この会話のアシスタントの口調',
+    zh: '此对话的助手语气',
   },
   'helpers.m002': {
     ko: '앞선 작업을 기다리고 있어요',
@@ -175,9 +175,9 @@ export const messages = {
   },
   'helpers.m014': {
     ko: '선택한 원문과 도우미 대화의 채팅이 달라요.',
-    en: 'The selected source text and assistant session belong to different chats.',
-    ja: '選択した原文とアシスタントセッションが別のチャットに属しています。',
-    zh: '所选原文与助手会话属于不同的聊天。',
+    en: 'The selected source text and assistant conversation belong to different chats.',
+    ja: '選択した原文とアシスタントの会話が別のチャットに属しています。',
+    zh: '所选原文与助手对话属于不同的聊天。',
   },
   'helpers.m015': {
     ko: '편집 초안을 확인하지 못했어요.',
@@ -877,21 +877,21 @@ export const messages = {
   },
   'helpers.m170': {
     ko: '도우미 대화',
-    en: 'Assistant session',
-    ja: 'アシスタントセッション',
-    zh: '助手会话',
+    en: 'Assistant conversation',
+    ja: 'アシスタントの会話',
+    zh: '助手对话',
   },
   'helpers.m171': {
     ko: '도우미 대화 선택',
-    en: 'Select assistant session',
-    ja: 'アシスタントセッションを選択',
-    zh: '选择助手会话',
+    en: 'Select assistant conversation',
+    ja: 'アシスタントの会話を選択',
+    zh: '选择助手对话',
   },
   'helpers.m172': {
     ko: '대화를 불러오는 중…',
-    en: 'Loading sessions…',
-    ja: 'セッションを読み込み中…',
-    zh: '正在加载会话…',
+    en: 'Loading conversations…',
+    ja: '会話を読み込み中…',
+    zh: '正在加载对话…',
   },
   'helpers.m173': {
     ko: '새 대화',
@@ -901,7 +901,7 @@ export const messages = {
   },
   'helpers.m174': {
     ko: ', 진행 중',
-    en: ', In progress',
+    en: ', in progress',
     ja: '、進行中',
     zh: '，进行中',
   },
@@ -913,27 +913,27 @@ export const messages = {
   },
   'helpers.m176': {
     ko: '새 도우미 대화',
-    en: 'New assistant session',
-    ja: '新しいアシスタントセッション',
-    zh: '新助手会话',
+    en: 'New assistant conversation',
+    ja: '新しいアシスタントの会話',
+    zh: '新助手对话',
   },
   'helpers.m177': {
     ko: '도우미 대화 관리',
-    en: 'Manage assistant sessions',
-    ja: 'アシスタントセッションを管理',
-    zh: '管理助手会话',
+    en: 'Manage assistant conversations',
+    ja: 'アシスタントの会話を管理',
+    zh: '管理助手对话',
   },
   'helpers.m178': {
     ko: '대화 이름 변경',
-    en: 'Rename session',
-    ja: 'セッション名を変更',
-    zh: '重命名会话',
+    en: 'Rename conversation',
+    ja: '会話名を変更',
+    zh: '重命名对话',
   },
   'helpers.m179': {
     ko: '대화 삭제',
-    en: 'Delete session',
-    ja: 'セッションを削除',
-    zh: '删除会话',
+    en: 'Delete conversation',
+    ja: '会話を削除',
+    zh: '删除对话',
   },
   'helpers.m180': {
     ko: '이 채팅',
@@ -943,15 +943,15 @@ export const messages = {
   },
   'helpers.m183': {
     ko: '도우미 대화 이름 변경',
-    en: 'Rename assistant session',
-    ja: 'アシスタントセッション名を変更',
-    zh: '重命名助手会话',
+    en: 'Rename assistant conversation',
+    ja: 'アシスタントの会話名を変更',
+    zh: '重命名助手对话',
   },
   'helpers.m184': {
     ko: '대화 이름',
-    en: 'Session name',
-    ja: 'セッション名',
-    zh: '会话名称',
+    en: 'Conversation name',
+    ja: '会話名',
+    zh: '对话名称',
   },
   'helpers.m185': {
     ko: '이름 저장',
@@ -961,9 +961,9 @@ export const messages = {
   },
   'helpers.m186': {
     ko: '도우미 대화 삭제',
-    en: 'Delete assistant session',
-    ja: 'アシスタントセッションを削除',
-    zh: '删除助手会话',
+    en: 'Delete assistant conversation',
+    ja: 'アシスタントの会話を削除',
+    zh: '删除助手对话',
   },
   'helpers.m188': {
     ko: '삭제할 자료와 진행 중인 작업을 확인하고 있어요…',
@@ -985,15 +985,15 @@ export const messages = {
   },
   'helpers.m194': {
     ko: '대화는 삭제됐지만 이 기기의 복구 초안을 지우지 못했어요.',
-    en: 'The session was deleted, but recovery drafts on this device could not be removed.',
-    ja: 'セッションは削除されましたが、この端末の復旧用下書きを削除できませんでした。',
-    zh: '会话已删除，但无法清除此设备上的恢复草稿。',
+    en: 'The conversation was deleted, but recovery drafts on this device could not be removed.',
+    ja: '会話は削除されましたが、この端末の復旧用下書きを削除できませんでした。',
+    zh: '对话已删除，但无法清除此设备上的恢复草稿。',
   },
   'helpers.m195': {
     ko: '대화 영구 삭제',
-    en: 'Permanently delete session',
-    ja: 'セッションを完全に削除',
-    zh: '永久删除会话',
+    en: 'Permanently delete conversation',
+    ja: '会話を完全に削除',
+    zh: '永久删除对话',
   },
   'helpers.m196': {
     ko: '자료 및 설정 변경',
@@ -1069,15 +1069,15 @@ export const messages = {
   },
   'helpers.m210': {
     ko: '대화를 불러오지 못했어요.',
-    en: 'Could not load sessions.',
-    ja: 'セッションを読み込めませんでした。',
-    zh: '无法加载会话。',
+    en: 'Could not load conversations.',
+    ja: '会話を読み込めませんでした。',
+    zh: '无法加载对话。',
   },
   'helpers.m211': {
     ko: '대화를 만들지 못했어요.',
-    en: 'Could not create the session.',
-    ja: 'セッションを作成できませんでした。',
-    zh: '无法创建会话。',
+    en: 'Could not create the conversation.',
+    ja: '会話を作成できませんでした。',
+    zh: '无法创建对话。',
   },
   'helpers.m212': {
     ko: '장면을 쓰는 중',
@@ -1165,7 +1165,7 @@ export const messages = {
   },
   'helpers.m226': {
     ko: '요청 접수됨, 상태 확인 중',
-    en: 'Request accepted, Checking status',
+    en: 'Request accepted, checking status',
     ja: 'リクエスト受付済み、状態を確認中',
     zh: '请求已接受，正在检查状态',
   },
@@ -1207,19 +1207,19 @@ export const messages = {
   },
   'helpers.m233': {
     ko: '{v0} 중단, 확인 필요',
-    en: '{v0} interrupted, Needs review',
+    en: '{v0} interrupted, needs review',
     ja: '{v0}中断、確認が必要',
     zh: '{v0}已中断，需要查看',
   },
   'helpers.m234': {
     ko: '{v0} 부분 결과, 확인 필요',
-    en: '{v0} partial result, Needs review',
+    en: '{v0} partial result, needs review',
     ja: '{v0}の部分結果、確認が必要',
     zh: '{v0}部分结果，需要查看',
   },
   'helpers.m235': {
     ko: '{v0} 자료 변경, 확인 필요',
-    en: '{v0} resources changed, Needs review',
+    en: '{v0} resources changed, needs review',
     ja: '{v0}の資料変更、確認が必要',
     zh: '{v0}资料已更改，需要查看',
   },
@@ -1231,7 +1231,7 @@ export const messages = {
   },
   'helpers.m237': {
     ko: '연결 확인 중, 진행 여부 미확인',
-    en: 'Checking connection, Unable to confirm progress',
+    en: 'Checking connection, unable to confirm progress',
     ja: '接続を確認中、進行状況を確認できません',
     zh: '正在检查连接，无法确认进度',
   },
@@ -1303,7 +1303,7 @@ export const messages = {
   },
   'helpers.m252': {
     ko: '연결 확인 중, 진행 상태 미확인',
-    en: 'Checking connection, Progress unconfirmed',
+    en: 'Checking connection, progress unconfirmed',
     ja: '接続を確認中、進行状態は未確認',
     zh: '正在检查连接，进度未确认',
   },
@@ -1574,7 +1574,7 @@ export const messages = {
   'helpers.m312': {
     ko: '저장한 작업: {labels}',
     en: 'Saved work: {labels}',
-    ja: '保存済みの作業、{labels}',
+    ja: '保存済みの作業: {labels}',
     zh: '已保存的工作：{labels}',
   },
   'helpers.m313': {
@@ -1609,7 +1609,7 @@ export const messages = {
   },
   'helpers.m318': {
     ko: '선택한 원문: {count}자',
-    en: 'Selected source text: Characters: {count}',
+    en: 'Selected source text: {count} characters',
     ja: '選択した原文：{count}文字',
     zh: '所选原文：{count}个字符',
   },
@@ -1645,9 +1645,9 @@ export const messages = {
   },
   'helpers.m324': {
     ko: '{scope}, 대화 {count}개',
-    en: '{scope}, Sessions: {count}',
-    ja: '{scope}、セッション{count}件',
-    zh: '{scope}，会话{count}个',
+    en: '{scope}, Conversations: {count}',
+    ja: '{scope}、会話{count}件',
+    zh: '{scope}，对话{count}个',
   },
   'helpers.m325': {
     ko: '새 소식 {count}',
@@ -1657,9 +1657,9 @@ export const messages = {
   },
   'helpers.m326': {
     ko: '‘{title}’ 대화를 삭제해요.',
-    en: 'Delete the “{title}” session.',
-    ja: '「{title}」セッションを削除します。',
-    zh: '将删除“{title}”会话。',
+    en: 'Delete the “{title}” conversation.',
+    ja: '「{title}」の会話を削除します。',
+    zh: '将删除“{title}”对话。',
   },
   'helpers.m327': {
     ko: '이 도우미 대화를 삭제해요. 진행 중인 작업은 먼저 중지해 주세요.',
@@ -1669,7 +1669,7 @@ export const messages = {
   },
   'helpers.m328': {
     ko: '진행 중이거나 대기 중인 요청 {active}개, 종료를 기다리는 외부 요청 {unsettled}개{worker, select, true {, 작업 정리 중} other {}}',
-    en: 'Running and queued requests: {active}, External requests awaiting termination: {unsettled}{worker, select, true {, Cleaning up tasks} other {}}',
+    en: 'Running and queued requests: {active}, external requests awaiting termination: {unsettled}{worker, select, true {, cleaning up tasks} other {}}',
     ja: '進行中または待機中のリクエスト{active}件、終了待ちの外部リクエスト{unsettled}件{worker, select, true {、作業を整理中} other {}}',
     zh: '进行中与排队中的请求{active}个，等待结束的外部请求{unsettled}个{worker, select, true {，正在清理任务} other {}}',
   },
@@ -1712,8 +1712,8 @@ export const messages = {
   'helpers.m335': {
     ko: '추가 지시: {status, select, pending {전달 대기} delivered {작업 입력에 반영} unconfirmed {전달 여부 미확인} other {전달 전에 작업 종료}}',
     en: 'Additional instructions: {status, select, pending {Waiting to deliver} delivered {Included in task input} unconfirmed {Delivery unconfirmed} other {Task ended before delivery}}',
-    ja: '追加の指示、{status, select, pending {送信待ち} delivered {作業の入力に反映済み} unconfirmed {送信の成否が未確認} other {送信前に作業が終了}}',
-    zh: '追加指令，{status, select, pending {等待传递} delivered {已纳入任务输入} unconfirmed {传递状态未确认} other {传递前任务已结束}}',
+    ja: '追加の指示: {status, select, pending {送信待ち} delivered {作業の入力に反映済み} unconfirmed {送信の成否が未確認} other {送信前に作業が終了}}',
+    zh: '追加指令：{status, select, pending {等待传递} delivered {已纳入任务输入} unconfirmed {传递状态未确认} other {传递前任务已结束}}',
   },
   'helpers.m336': {
     ko: '{kind, select, summary {대화 내용 정리 중이에요} whatif {가정 장면 작성 중이에요} other {도우미가 요청을 처리하고 있어요}}',
@@ -1723,9 +1723,9 @@ export const messages = {
   },
   'helpers.m337': {
     ko: '{mode, select, translation {번역 이미지 배치} other {원문 이미지 배치}}',
-    en: '{mode, select, translation {Translation image batch} other {Source text image batch}}',
-    ja: '{mode, select, translation {翻訳の画像バッチ} other {原文の画像バッチ}}',
-    zh: '{mode, select, translation {译文图片批次} other {原文图片批次}}',
+    en: '{mode, select, translation {Translation image placement} other {Original image placement}}',
+    ja: '{mode, select, translation {翻訳の画像配置} other {原文の画像配置}}',
+    zh: '{mode, select, translation {译文图片配置} other {原文图片配置}}',
   },
   'helpers.m338': {
     ko: '{name} {status}',

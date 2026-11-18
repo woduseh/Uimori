@@ -457,7 +457,7 @@ export const messages = {
   },
   'prompts.uiAddAsAPresetToEditFreelyThenLoad': {
     ko: '프리셋으로 추가해 편집하고, 프롬프트 설정에서 불러와 적용해요.',
-    en: 'Save as a preset to edit and load in prompt settings.',
+    en: 'Add as a preset to edit, then load and apply it in prompt settings.',
     ja: 'プリセットに追加して編集し、プロンプト設定で読み込んで適用します。',
     zh: '添加为预设进行编辑，并在提示词设置中加载应用。',
   },
@@ -517,9 +517,9 @@ export const messages = {
   },
   'prompts.uiUsesTheLatestSavedPresetDefaultOptionChangesApply': {
     ko: '프리셋의 최신 저장본을 사용하며, 변경한 기본 옵션은 모든 채팅의 다음 요청부터 적용돼요.',
-    en: 'Uses the latest saved preset. Options apply to every chat from its next request.',
-    ja: 'プリセットの最新保存版を使います。オプションは全チャットの次のリクエストから適用します。',
-    zh: '使用预设的最新保存版本。选项从所有聊天的下次请求起生效。',
+    en: 'Uses the latest saved preset. Changed default options apply to every chat from its next request.',
+    ja: 'プリセットの最新保存版を使います。変更した既定オプションは全チャットの次のリクエストから適用します。',
+    zh: '使用预设的最新保存版本。更改的默认选项从所有聊天的下次请求起生效。',
   },
   'prompts.uiSelectPrompt': {
     ko: '프롬프트 선택',
@@ -1071,7 +1071,7 @@ export const messages = {
     ko: '집필 전에 원작 참고',
     en: 'Consult canon reference before writing',
     ja: '執筆前に原作を参照',
-    zh: '写作前参考原作与角色',
+    zh: '写作前参考原作',
   },
   'prompts.uiReferenceSettings': {
     ko: '참고 설정',
@@ -1207,8 +1207,8 @@ export const messages = {
   },
   'prompts.uiAskMoreAboutCanonOrCharactersInThisChat': {
     ko: '원작이나 인물에 관한 질문은 이 채팅의 도우미에서 이어가요.',
-    en: "Ask more about the story or characters in this chat's assistant.",
-    ja: '原作や人物への質問はこのチャットのアシスタントで続けられます。',
+    en: "Ask more about the canon or characters in this chat's assistant.",
+    ja: '原作や人物に関する質問はこのチャットのアシスタントで続けられます。',
     zh: '有关原作或角色的问题可继续询问此聊天的助手。',
   },
   'prompts.uiAskHelper2': {
@@ -1359,13 +1359,13 @@ export const messages = {
     ko: '조회 로어 다시 포함',
     en: 'Include retrieved lore again',
     ja: '参照ロアを再度含める',
-    zh: '重新包含查询设定',
+    zh: '重新包含已查询的设定',
   },
   'prompts.uiExcludeRetrievedLore': {
     ko: '조회 로어 제외',
     en: 'Exclude retrieved lore',
     ja: '参照ロアを除外',
-    zh: '排除查询设定',
+    zh: '排除已查询的设定',
   },
   'prompts.uiMoreInputOptions': {
     ko: '입력창 더보기',
@@ -1395,7 +1395,7 @@ export const messages = {
     ko: '다음 생성에서 조회 로어 제외',
     en: 'Exclude retrieved lore from next generation',
     ja: '次の生成で参照ロアを除外',
-    zh: '下次生成时排除查询设定',
+    zh: '下次生成时排除已查询的设定',
   },
   'prompts.selectedCount': {
     ko: '{count, plural, other {#개 선택}}',
@@ -1485,8 +1485,8 @@ export const messages = {
   'prompts.inputLanguageNamed': {
     ko: '입력 번역 언어: {name}',
     en: 'Input translation language: {name}',
-    ja: '入力の翻訳先言語、{name}',
-    zh: '输入翻译目标语言，{name}',
+    ja: '入力の翻訳先言語: {name}',
+    zh: '输入翻译目标语言：{name}',
   },
   'prompts.outlineToggle': {
     ko: '{name} {collapsed, select, true {펼치기} other {접기}}',
@@ -1515,8 +1515,8 @@ export const messages = {
   'prompts.actualSources': {
     ko: '연결된 원문 {count}개, 아직 쓰지 않은 플롯은 예정된 계획으로만 전달해요.',
     en: 'Linked source scenes: {count}; unwritten outline items are passed only as planned direction.',
-    ja: 'リンクされた原文 {count}件、未執筆の構成は予定としてのみ伝えます。',
-    zh: '已关联原文 {count} 个，未撰写的提纲仅作为计划方向传递。',
+    ja: '関連づけた原文 {count}件、未執筆の構成は予定としてのみ伝えます。',
+    zh: '已关联原文 {count} 个，未撰写的大纲仅作为计划方向传递。',
   },
   'prompts.savedPlacement': {
     ko: '프롬프트는 저장됐지만 폴더에 배치하지 못했어요. {error}',

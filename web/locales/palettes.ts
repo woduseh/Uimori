@@ -313,9 +313,9 @@ export const messages = {
   },
   'palettes.color.shade': {
     ko: '배경 오버레이',
-    en: 'Overlay',
-    ja: 'オーバーレイ',
-    zh: '遮罩',
+    en: 'Background overlay',
+    ja: '背景オーバーレイ',
+    zh: '背景遮罩',
   },
   'palettes.color.error': {
     ko: '오류 글자',

@@ -2,12 +2,12 @@
 export const messages = {
   'settings.helperTaskTimeout': {
     ko: '도우미 작업 제한 시간 (분)',
-    en: 'Helper task timeout (minutes)',
+    en: 'Assistant task timeout (minutes)',
     ja: 'アシスタントの作業制限時間（分）',
     zh: '助手任务超时（分钟）',
   },
   'settings.helperTaskTimeoutHint': {
-    ko: '작업 전체에 적용돼요. 저장 후 새 요청부터 적용돼요.',
+    ko: '작업 전체의 제한 시간이에요. 저장 후 새 요청부터 적용돼요.',
     en: 'Covers the entire task. Applies to new requests after saving.',
     ja: '作業全体の上限です。保存後の新しいリクエストから適用されます。',
     zh: '限制整个任务的用时。保存后对新请求生效。',
@@ -20,9 +20,9 @@ export const messages = {
   },
   'settings.newChatDefaultsInvalid': {
     ko: '새 채팅 생성 기본값을 확인해 주세요.',
-    en: 'Check the new chat creation defaults.',
-    ja: '新しいチャットの作成時の既定値を確認してください。',
-    zh: '请检查新聊天的创建默认值。',
+    en: 'Check the new chat defaults.',
+    ja: '新しいチャットの既定値を確認してください。',
+    zh: '请检查新聊天默认值。',
   },
   'settings.newChatDefaultsConflict': {
     ko: '다른 창에서 새 채팅 생성 기본값이 변경됐어요. 다시 불러와 주세요.',
@@ -64,7 +64,7 @@ export const messages = {
     ko: '판단 프로바이더',
     en: 'Judgment provider',
     ja: '判定プロバイダー',
-    zh: '判断服务商',
+    zh: '判定提供商',
   },
   'settings.judgmentCompatible': {
     ko: '호환 API',
@@ -134,9 +134,9 @@ export const messages = {
   },
   'settings.m3': {
     ko: '본문 모델',
-    en: 'Source model',
-    ja: '原文モデル',
-    zh: '原文模型',
+    en: 'Writing model',
+    ja: '本文モデル',
+    zh: '正文模型',
   },
   'settings.m4': {
     ko: '본문 모델',
@@ -350,7 +350,7 @@ export const messages = {
   },
   'settings.m44': {
     ko: '본문과 번역 지침만',
-    en: 'Source and translation instructions only',
+    en: 'Text and translation instructions only',
     ja: '本文と翻訳指示のみ',
     zh: '仅正文和翻译指示',
   },
@@ -362,9 +362,9 @@ export const messages = {
   },
   'settings.m49': {
     ko: '본문 거절 감지',
-    en: 'Writing service refusal detection',
-    ja: '本文のサービス拒否検出',
-    zh: '正文服务拒绝检测',
+    en: 'Writing refusal detection',
+    ja: '本文の拒否検出',
+    zh: '正文拒绝检测',
   },
   'settings.m50': {
     ko: '본문',
@@ -375,8 +375,8 @@ export const messages = {
   'settings.m51': {
     ko: '본문 거절 감지 사용',
     en: 'Enable writing refusal detection',
-    ja: '本文のサービス拒否検出を使用',
-    zh: '启用正文服务拒绝检测',
+    ja: '本文の拒否検出を使用',
+    zh: '启用正文拒绝检测',
   },
   'settings.m52': {
     ko: '거절 확신 기준',
@@ -392,15 +392,15 @@ export const messages = {
   },
   'settings.m55': {
     ko: '번역 거절 감지',
-    en: 'Translation service refusal detection',
-    ja: '翻訳のサービス拒否検出',
-    zh: '翻译服务拒绝检测',
+    en: 'Translation refusal detection',
+    ja: '翻訳の拒否検出',
+    zh: '翻译拒绝检测',
   },
   'settings.m56': {
     ko: '번역 거절 감지 사용',
     en: 'Enable translation refusal detection',
-    ja: '翻訳のサービス拒否検出を使用',
-    zh: '启用翻译服务拒绝检测',
+    ja: '翻訳の拒否検出を使用',
+    zh: '启用翻译拒绝检测',
   },
   'settings.m57': {
     ko: '번역 거절 확신 기준',
@@ -866,9 +866,9 @@ export const messages = {
   },
   'settings.m141': {
     ko: '메인이 필요할 때',
-    en: 'When the main model needs help',
-    ja: 'メインが必要なとき',
-    zh: '主模型需要时',
+    en: 'When the writing model needs help',
+    ja: '本文モデルが必要なとき',
+    zh: '正文模型需要时',
   },
   'settings.m142': {
     ko: '이름',
@@ -926,9 +926,9 @@ export const messages = {
   },
   'settings.m151': {
     ko: '본문 모델을 함께 사용해요',
-    en: 'Use the main model',
-    ja: 'メインモデルを共有',
-    zh: '使用主模型',
+    en: 'Share the writing model',
+    ja: '本文モデルを共有',
+    zh: '共用正文模型',
   },
   'settings.m152': {
     ko: '모델을 다시 선택해 주세요',
@@ -1454,7 +1454,7 @@ export const messages = {
   },
   'settings.m250': {
     ko: '원문이나 확정 설정 변경',
-    en: 'Source or canon changed',
+    en: 'Original text or canon changed',
     ja: '原文または確定設定が変更',
     zh: '原文或确定设定已更改',
   },
@@ -1550,7 +1550,7 @@ export const messages = {
   },
   'settings.m266': {
     ko: '처음 읽은 원문',
-    en: 'First read source',
+    en: 'First read original',
     ja: '最初に読んだ原文',
     zh: '首次读取的原文',
   },
@@ -1634,7 +1634,7 @@ export const messages = {
   },
   'settings.m280': {
     ko: '현재 요청에는 원문을 사용해요.',
-    en: 'The current request uses the source.',
+    en: 'The current request uses the original text.',
     ja: '現在のリクエストでは原文を使用します。',
     zh: '当前请求使用原文。',
   },
@@ -1646,7 +1646,7 @@ export const messages = {
   },
   'settings.m282': {
     ko: '아직 저장된 요약이 없어요. 원문을 그대로 사용해요.',
-    en: 'No summary saved yet. The source is used as-is.',
+    en: 'No summary saved yet. The original text is used as-is.',
     ja: '保存済みの要約はありません。原文をそのまま使用します。',
     zh: '尚无已保存摘要，直接使用原文。',
   },
@@ -1700,9 +1700,9 @@ export const messages = {
   },
   'settings.m292': {
     ko: '컨텍스트 압축',
-    en: 'Compress with AI',
-    ja: 'AIで要約・圧縮',
-    zh: '用 AI 摘要压缩',
+    en: 'Compress context',
+    ja: 'コンテキストを圧縮',
+    zh: '压缩上下文',
   },
   'settings.m293': {
     ko: '압축 취소를 요청했어요.',
@@ -1731,8 +1731,8 @@ export const messages = {
   'settings.m297': {
     ko: '컨텍스트를 압축하고 있어요.',
     en: 'Compressing context.',
-    ja: 'コンテキストを整理中です。',
-    zh: '正在整理上下文。',
+    ja: 'コンテキストを圧縮中です。',
+    zh: '正在压缩上下文。',
   },
   'settings.m298': {
     ko: '압축할 구간이 없어요.',
@@ -1838,7 +1838,7 @@ export const messages = {
   },
   'settings.m319': {
     ko: '앞선 원문 {v0}개 요약,',
-    en: 'Summarized {v0} earlier sources,',
+    en: 'Summarized {v0} earlier originals,',
     ja: '前の原文{v0}件を要約、',
     zh: '已摘要先前{v0}份原文，',
   },
@@ -1988,7 +1988,7 @@ export const messages = {
   },
   'settings.contextReady': {
     ko: '{compacted, select, yes {앞선 원문 {sources}개 요약, } other {}}{known, select, yes {입력 약 {input}} other {입력 추정치 미확인}} / {limit} 토큰{summarized, select, yes {, 요약 {calls}회} other {}}',
-    en: '{compacted, select, yes {Earlier sources summarized: {sources}, } other {}}{known, select, yes {Input ≈ {input}} other {Input estimate unknown}} / {limit} tokens{summarized, select, yes {, Summary calls: {calls}} other {}}',
+    en: '{compacted, select, yes {Earlier originals summarized: {sources}, } other {}}{known, select, yes {Input ≈ {input}} other {Input estimate unknown}} / {limit} tokens{summarized, select, yes {, summary calls: {calls}} other {}}',
     ja: '{compacted, select, yes {前の原文{sources}件を要約、} other {}}{known, select, yes {入力 約{input}} other {入力推定値は不明}} / {limit}トークン{summarized, select, yes {、要約{calls}回} other {}}',
     zh: '{compacted, select, yes {已摘要先前{sources}份原文，} other {}}{known, select, yes {输入约{input}} other {输入估算未知}} / {limit}词元{summarized, select, yes {，摘要{calls}次} other {}}',
   },

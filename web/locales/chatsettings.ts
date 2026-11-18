@@ -541,9 +541,9 @@ export const messages = {
   },
   'chatsettings.m89': {
     ko: '집필 전 원작 설정과 인물 참고',
-    en: 'Source settings and character references before writing',
+    en: 'Canon settings and character references before writing',
     ja: '執筆前の原作設定と人物参考',
-    zh: '写作前的原作设定与角色参考',
+    zh: '写作前的原作设定与人物参考',
   },
   'chatsettings.m92': {
     ko: '고급',

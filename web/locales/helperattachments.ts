@@ -7,9 +7,9 @@ export const messages = {
   },
   'helperAttachments.acceptCleanupFailed': {
     ko: '요청은 접수됐지만 첨부 초안을 비우지 못했어요.',
-    en: 'The request was accepted, but attachment draft cleanup failed.',
-    ja: 'リクエストは受理されましたが、添付下書きを削除できませんでした。',
-    zh: '请求已受理，但未能清空附件草稿。',
+    en: 'The request was received, but the attachment draft could not be cleared.',
+    ja: 'リクエストは受け付けられましたが、添付ファイルの下書きを消去できませんでした。',
+    zh: '请求已接收，但未能清空附件草稿。',
   },
   'helperAttachments.attach': {
     ko: '파일 첨부',
@@ -32,9 +32,9 @@ export const messages = {
   },
   'helperAttachments.saveFailed': {
     ko: '첨부 초안을 기기에 저장하지 못했어요. 화면을 닫기 전에 파일을 보관해 주세요.',
-    en: 'Could not save attachments on this device. Keep your files before closing.',
-    ja: '添付ファイルの下書きを保存できませんでした。画面を閉じる前にファイルを保管してください。',
-    zh: '无法在设备上保存附件草稿，请在关闭前保留文件。',
+    en: 'Could not save the attachment draft on this device. Keep your files before closing.',
+    ja: '添付ファイルの下書きをこの端末に保存できませんでした。画面を閉じる前にファイルを保管してください。',
+    zh: '无法在此设备上保存附件草稿，请在关闭前保留文件。',
   },
   'helperAttachments.modelRequired': {
     ko: '첨부 파일을 보낼 모델을 선택해 주세요.',
@@ -80,9 +80,9 @@ export const messages = {
   },
   'helperAttachments.tooMany': {
     ko: '이미지는 최대 {images}장, 파일은 최대 {files}개까지 첨부할 수 있어요.',
-    en: 'Attach up to {images} images and {files} files.',
-    ja: '画像は{images}枚、ファイルは{files}個まで添付できます。',
-    zh: '最多可添加{images}张图片和{files}个文件。',
+    en: 'You can attach up to {images} images and {files} files.',
+    ja: '画像は最大{images}枚、ファイルは最大{files}個まで添付できます。',
+    zh: '最多可添加 {images} 张图片和 {files} 个文件。',
   },
   'helperAttachments.openFailed': {
     ko: '파일을 열지 못했어요.',

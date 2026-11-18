@@ -733,9 +733,9 @@ export const messages = {
   },
   'library.attachedPackages': {
     ko: '사용 중인 자료',
-    en: 'Attached packages',
-    ja: '装着パッケージ',
-    zh: '已关联的包',
+    en: 'Resources in use',
+    ja: '使用中の資料',
+    zh: '使用中的资料',
   },
   'library.previousSelectionsThatNoLongerMatchAvailable': {
     ko: '현재 옵션과 맞지 않는 이전 선택값은 기본값으로 조정했어요.',
@@ -745,15 +745,15 @@ export const messages = {
   },
   'library.loadingPackagesAndRequiredModules': {
     ko: '자료와 필수 모듈을 불러오는 중이에요…',
-    en: 'Loading packages and required modules…',
-    ja: 'パッケージと必須モジュールを読み込み中…',
-    zh: '正在加载包与必需模块…',
+    en: 'Loading resources and required modules…',
+    ja: '資料と必須モジュールを読み込み中…',
+    zh: '正在加载资料与必需模块…',
   },
   'library.checkPackageAttachmentsAgain': {
     ko: '사용 자료 다시 확인',
-    en: 'Check package attachments again',
-    ja: 'パッケージの接続を再確認',
-    zh: '重新检查包关联',
+    en: 'Check resources in use again',
+    ja: '使用資料を再確認',
+    zh: '重新检查使用资料',
   },
   'library.noSelection': {
     ko: '선택 안 함',
@@ -763,9 +763,9 @@ export const messages = {
   },
   'library.attachedPackage': {
     ko: '사용 중인 자료',
-    en: 'Attached package',
-    ja: '接続したパッケージ',
-    zh: '已关联的包',
+    en: 'Attached resource',
+    ja: '使用中の資料',
+    zh: '使用中的资料',
   },
   'library.primaryBotFixed': {
     ko: '소속 봇 (고정)',
@@ -1063,9 +1063,9 @@ export const messages = {
   },
   'library.reloadAttachmentSettings': {
     ko: '사용 자료 다시 불러오기',
-    en: 'Reload attachment settings',
-    ja: '装着設定を再読込',
-    zh: '重新加载关联设置',
+    en: 'Reload resources in use',
+    ja: '使用資料を再読込',
+    zh: '重新加载使用资料',
   },
   'library.youHaveUnsavedChanges': {
     ko: '저장하지 않은 변경이 있어요.',
@@ -1075,9 +1075,9 @@ export const messages = {
   },
   'library.saveChangesToConversationSetupPromptsModels': {
     ko: '대화 구성, 생성 설정, 로어 정책, 자동 배치의 변경을 함께 저장해요.',
-    en: 'Save changes to conversation setup, prompts, models, lore policies, and automatic placement together.',
-    ja: '会話構成、プロンプト、モデル、ロア方針、自動配置の変更をまとめて保存します。',
-    zh: '一并保存对话配置、提示词、模型、设定策略与自动排布的更改。',
+    en: 'Save changes to conversation setup, generation settings, lore policies, and automatic placement together.',
+    ja: '会話構成、生成設定、ロア方針、自動配置の変更をまとめて保存します。',
+    zh: '一并保存对话配置、生成设置、设定策略与自动排布的更改。',
   },
   'library.saveChatSettings': {
     ko: '채팅 설정 저장',
@@ -1089,13 +1089,13 @@ export const messages = {
     ko: '프로필과 본문',
     en: 'Profile and story',
     ja: 'プロフィールと本文',
-    zh: '资料与正文',
+    zh: '简介与正文',
   },
   'library.profile': {
     ko: '프로필',
     en: 'Profile',
     ja: 'プロフィール',
-    zh: '资料',
+    zh: '简介',
   },
   'library.story': {
     ko: '본문',
@@ -2166,10 +2166,10 @@ export const messages = {
     zh: '首条消息已更改，但无法刷新页面。{error}',
   },
   'library.botPersonaHint': {
-    ko: '{title}의 새 채팅에서 직접 고르거나 폴더 기본값이 없을 때 사용해요. 기존 채팅은 바뀌지 않아요.',
+    ko: '{title}의 새 채팅에서 페르소나를 직접 고르지 않고 폴더 기본값도 없을 때 사용해요. 기존 채팅은 바뀌지 않아요.',
     en: 'Used for new chats with {title} when no persona or folder default is chosen. Existing chats do not change.',
-    ja: '{title}の新しいチャットで直接選ぶかフォルダのデフォルトがない場合に使います。既存のチャットは変わりません。',
-    zh: '在 {title} 的新聊天中未直接选择或无文件夹默认值时使用。现有聊天不会改变。',
+    ja: '{title}の新規チャットで、直接選んだペルソナやフォルダーの初期値がない場合に使います。既存のチャットは変わりません。',
+    zh: '在 {title} 的新聊天中未直接选择角色且无文件夹默认值时使用。现有聊天不会改变。',
   },
   'library.notesSummary': {
     ko: '사용자 메모와 정정{imported, select, yes {, 가져온 기억} other {}} {count, number}개',

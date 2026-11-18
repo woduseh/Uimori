@@ -49,7 +49,7 @@ export const messages = {
   },
   'reader.requestKeepOutlineCondition': {
     ko: '상세화할 때 유지하도록 요청',
-    en: 'Ask the helper to preserve this when elaborating',
+    en: 'Ask to preserve this when elaborating',
     ja: '詳細化の際に維持するよう依頼',
     zh: '请求在细化时保留',
   },
@@ -207,7 +207,7 @@ export const messages = {
     ko: '봇 화면을 준비하고 있어요…',
     en: 'Preparing the bot view…',
     ja: 'ボット画面を準備中…',
-    zh: '正在准备角色界面…',
+    zh: '正在准备机器人界面…',
   },
   'reader.preparingTheKoreanTranslationTheOriginalIsSaved': {
     ko: '한국어 번역을 준비하고 있어요.',
@@ -271,9 +271,9 @@ export const messages = {
   },
   'reader.changeOpeningMessage': {
     ko: '첫 메시지 바꾸기',
-    en: 'Change first message message',
+    en: 'Change opening message',
     ja: '最初のメッセージを変更',
-    zh: '更换开场白',
+    zh: '更换首条消息',
   },
   'reader.excludeSceneFromContext': {
     ko: '장면을 컨텍스트에서 제외',
@@ -565,8 +565,8 @@ export const messages = {
   },
   'reader.copyYourEditsFirstCancelEditingReturnsToThe': {
     ko: '작성한 내용을 먼저 복사해 두세요. ‘편집 취소’를 누르면 저장된 본문으로 돌아가요.',
-    en: 'Copy your edits first. Pressing “Cancel Edit” returns to the saved text.',
-    ja: '作成した内容を先にコピーしてください。「編集の取り消し」を押すと保存済みの本文に戻ります。',
+    en: 'Copy your edits first. Pressing “Cancel editing” returns to the saved text.',
+    ja: '作成した内容を先にコピーしてください。「編集をキャンセル」を押すと保存済みの本文に戻ります。',
     zh: '请先复制所写内容。点击“取消编辑”将返回已保存的正文。',
   },
   'reader.retryTranslationJudgmentOnly': {
@@ -739,7 +739,7 @@ export const messages = {
   },
   'reader.valueNoPortraitImage': {
     ko: '{v0}, 대표 이미지 없음',
-    en: '{v0}, No portrait image',
+    en: '{v0}, no portrait image',
     ja: '{v0}、代表画像なし',
     zh: '{v0}，无代表图片',
   },
@@ -759,7 +759,7 @@ export const messages = {
     ko: '등장인물 갤러리',
     en: 'Character gallery',
     ja: '登場人物ギャラリー',
-    zh: '角色图库',
+    zh: '登场人物图库',
   },
   'reader.bot': {
     ko: '봇',
@@ -1303,8 +1303,8 @@ export const messages = {
   },
   'reader.checkingConnectionReceivedTextIsPreserved': {
     ko: '연결 확인 중, 받은 내용은 유지해요',
-    en: 'Checking connection, Received text is preserved',
-    ja: '接続を確認しています、受信済みの内容は保持します',
+    en: 'Checking connection, received text is preserved',
+    ja: '接続を確認中、受信済みの内容は保持します',
     zh: '正在检查连接，已接收内容会保留',
   },
   'reader.partialResponseReceived': {
@@ -2011,13 +2011,13 @@ export const messages = {
   },
   'reader.tokenTotals': {
     ko: '요청 {input}, 응답 {output} 토큰',
-    en: 'Request {input}, Response {output} tokens',
+    en: 'Request {input}, response {output} tokens',
     ja: '入力 {input}、出力 {output}トークン',
     zh: '请求{input}，回复{output} token',
   },
   'reader.contextPercent': {
     ko: ', 컨텍스트 사용량 {estimated, select, true {약 {percent}%} other {{percent}%}}',
-    en: ', Context usage {estimated, select, true {about {percent}%} other {{percent}%}}',
+    en: ', context usage {estimated, select, true {about {percent}%} other {{percent}%}}',
     ja: '、コンテキスト使用量 {estimated, select, true {約{percent}%} other {{percent}%}}',
     zh: '，上下文使用量{estimated, select, true {约{percent}%} other {{percent}%}}',
   },
@@ -2035,19 +2035,19 @@ export const messages = {
   },
   'reader.loreSelectionTotals': {
     ko: '자동 선별, 대상 {total}, 판단 {evaluated}, 선택 {selected}{failed, plural, =0 {} other {, 실패 #건}}',
-    en: 'Automatic selection, Candidates {total}, Evaluated {evaluated}, Selected {selected}{failed, plural, =0 {} one {, # failed} other {, # failed}}',
+    en: 'Automatic selection, candidates {total}, evaluated {evaluated}, selected {selected}{failed, plural, =0 {} one {, # failed} other {, # failed}}',
     ja: '自動選別、対象 {total}、判定 {evaluated}、選択 {selected}{failed, plural, =0 {} other {、失敗 #件}}',
     zh: '自动筛选，候选{total}，评估{evaluated}，选中{selected}{failed, plural, =0 {} other {，失败#项}}',
   },
   'reader.lorePreparationCounts': {
     ko: '고정 {pinned}, 유지 {retained}',
-    en: 'Pinned {pinned}, Retained {retained}',
+    en: 'Pinned {pinned}, retained {retained}',
     ja: '固定 {pinned}、維持 {retained}',
     zh: '固定{pinned}，保留{retained}',
   },
   'reader.imageTokenEstimate': {
     ko: '참고 이미지 {count}장, 이미지 입력 약 {tokens}토큰 포함',
-    en: '{count, plural, one {# reference image} other {# reference images}}, Includes about {tokens} image input tokens',
+    en: '{count, plural, one {# reference image} other {# reference images}}, includes about {tokens} image input tokens',
     ja: '参考画像 {count}枚、画像入力の推定 {tokens}トークンを含む',
     zh: '参考图片{count}张，含约{tokens}个图片输入 token',
   },

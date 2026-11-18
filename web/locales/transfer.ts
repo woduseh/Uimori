@@ -92,9 +92,9 @@ export const messages = {
   },
   'transfer.m013': {
     ko: '페르소나를 가져왔어요.',
-    en: 'Persona registered.',
-    ja: 'ペルソナを登録しました。',
-    zh: '角色已注册。',
+    en: 'Persona imported.',
+    ja: 'ペルソナを取り込みました。',
+    zh: '已导入角色。',
   },
   'transfer.m014': {
     ko: '가져오기는 완료했어요. 목록을 새로고침한 뒤 채팅을 열어 주세요.',
@@ -104,9 +104,9 @@ export const messages = {
   },
   'transfer.m015': {
     ko: '봇을 가져왔어요.',
-    en: 'Bot registered.',
-    ja: 'ボットを登録しました。',
-    zh: '机器人已注册。',
+    en: 'Bot imported.',
+    ja: 'ボットを取り込みました。',
+    zh: '已导入机器人。',
   },
   'transfer.m016': {
     ko: '자료 가져오기',
@@ -266,9 +266,9 @@ export const messages = {
   },
   'transfer.m052': {
     ko: '모듈을 가져왔어요. 기존 채팅의 사용 자료 설정에서 추가해 주세요.',
-    en: 'The module was added to the library. Attach it from the bot, persona, and module settings of an existing chat.',
-    ja: 'ライブラリにモジュールを登録しました。既存チャットのボット、ペルソナ、モジュール設定から装着してください。',
-    zh: '模块已添加到资料库，请在现有聊天的机器人、角色和模块设置中附加。',
+    en: 'The module was added to the library. Attach it in the Materials settings of an existing chat.',
+    ja: 'ライブラリにモジュールを登録しました。既存チャットの使用資料設定から追加してください。',
+    zh: '模块已添加到资料库，请在现有聊天的使用资料设置中添加。',
   },
   'transfer.m053': {
     ko: '페르소나를 서재에 등록했어요.',
@@ -458,21 +458,21 @@ export const messages = {
   },
   'transfer.m088': {
     ko: '이 자료의 모듈 에셋 이름이 겹쳐요. 에셋을 확인해 주세요.',
-    en: 'Module asset names conflict. Check the assets.',
-    ja: 'モジュールのアセット名が重複しています。アセットを確認してください。',
-    zh: '模块资源名称重复，请检查资源。',
+    en: 'Module asset names in this resource conflict. Check the assets.',
+    ja: 'この資料のモジュールアセット名が重複しています。アセットを確認してください。',
+    zh: '此资料的模块资产名称重复，请检查资产。',
   },
   'transfer.m089': {
     ko: '원문에 연결된 에셋 파일을 찾을 수 없어요. 에셋 탭에서 확인해 주세요.',
     en: 'An asset linked to the source is missing. Check the assets tab.',
     ja: 'ソースに関連するアセットファイルが見つかりません。アセットタブで確認してください。',
-    zh: '找不到源码关联的资源文件，请检查资源标签页。',
+    zh: '找不到源码关联的资产文件，请检查资产标签页。',
   },
   'transfer.m090': {
     ko: '원문 에셋의 파일 경로가 겹치거나 올바르지 않아요. 에셋을 확인해 주세요.',
     en: 'Source asset paths conflict or are invalid. Check the assets.',
     ja: 'ソースアセットのパスが重複しているか無効です。アセットを確認してください。',
-    zh: '源码资源路径重复或无效，请检查资源。',
+    zh: '源码资产的文件路径重复或无效，请检查资产。',
   },
   'transfer.m091': {
     ko: '내보낼 자료가 파일 크기 한도를 넘었어요.',
@@ -686,9 +686,9 @@ export const messages = {
   },
   'transfer.m137': {
     ko: '가져온 보조 에이전트의 모델은 본문 모델 따르기로 설정돼요.',
-    en: 'Imported advisors will follow the main model.',
-    ja: '取り込んだアドバイザーのモデル指定はメインモデルに従う設定になります。',
-    zh: '导入的顾问模型设置将改为跟随主模型。',
+    en: 'Imported advisors are set to follow the story model.',
+    ja: '取り込んだアドバイザーのモデルは本文モデルに従う設定になります。',
+    zh: '导入的顾问模型将设置为跟随正文模型。',
   },
   'transfer.m141': {
     ko: '전역 프롬프트와 역할 모델은 현재 작업실 설정을 사용하며 실행 기록과 도우미 내부 작업은 가져오지 않아요.',
@@ -1046,9 +1046,9 @@ export const messages = {
   },
   'transfer.m203': {
     ko: '선택한 범위에 아직 번역되지 않은 장면이 있으면 내보낼 수 없어요.',
-    en: 'The download stops if any scene in the range lacks a valid translation.',
-    ja: '範囲内に有効な翻訳のないシーンがある場合はダウンロードしません。',
-    zh: '如果范围内存在没有有效翻译的场景，将不会下载。',
+    en: 'Cannot export if any scene in the selected range lacks a translation.',
+    ja: '選択した範囲に未翻訳のシーンがある場合は書き出せません。',
+    zh: '所选范围内如有未翻译的场景，则无法导出。',
   },
   'transfer.m204': {
     ko: '원고 목록을 불러오는 중이에요…',
@@ -1491,8 +1491,8 @@ export const messages = {
   'transfer.m284': {
     ko: '작업실',
     en: 'Workspace',
-    ja: '作業スペース',
-    zh: '工作空间',
+    ja: 'ワークスペース',
+    zh: '工作室',
   },
   'transfer.m285': {
     ko: '서재',
