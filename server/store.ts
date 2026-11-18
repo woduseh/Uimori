@@ -56,6 +56,7 @@ import {
   mergedReaderAssets,
   imageTargetSource,
   scheduleTranslationImages,
+  translationImageSelection,
   latestImageJob,
 } from './package-images.js';
 import {
@@ -755,10 +756,60 @@ export class Store {
       }
     }
     if (
+      !run.snapshot.packageStart &&
+      !run.snapshot.transcriptImport &&
+      !run.snapshot.nativeRisuAuthored
+    ) {
+      this.story.reserveSourceInTransaction(source, run);
+      // Illustrations never block the source commit; reservation problems become visible jobs.
+      scheduleAutomaticIllustration(this, source);
+    }
+    checkpointChatVariablesInTransaction(this, source.id, source.chatId);
+    retainCompletedLore(
+      this,
+      run,
+      source,
+      verifiedRunLoreReads(this, { ...run, status: 'completed', sourceRevision: source.id })
+    );
+    let translationPlacesImages = false;
+    if (
+      run.snapshot.settings.autoTranslate === true &&
+      !run.snapshot.packageStart &&
+      !run.snapshot.transcriptImport &&
+      !run.snapshot.nativeRisuAuthored &&
+      !run.snapshot.executionPurpose
+    ) {
+      try {
+        // The nested savepoint keeps a failed translation reservation from losing the source.
+        translationPlacesImages = !!translationImageSelection(
+          requestTranslation(this, source.id, false, undefined, id)
+        );
+      } catch {
+        const jobId = randomUUID();
+        const time = now();
+        this.db
+          .prepare(
+            "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,input,error,created_at,updated_at) VALUES(?,?,?,?,'translation','failed',?,?,?,?)"
+          )
+          .run(
+            jobId,
+            source.chatId,
+            source.id,
+            source.hash,
+            json({ autoTranslateRunId: id }),
+            '자동 번역을 준비하지 못했어요. 번역 모델 설정을 확인하고 직접 다시 요청해 주세요.',
+            time,
+            time
+          );
+        this.event(source.chatId, 'job.failed', jobId);
+      }
+    }
+    if (
       run.snapshot.packageStart?.mode !== 'authored' &&
       !run.snapshot.transcriptImport &&
       !run.snapshot.nativeRisuAuthored &&
-      run.snapshot.profile?.image
+      run.snapshot.profile?.image &&
+      !translationPlacesImages
     ) {
       const imageInput = imageJobInput(this, run.snapshot);
       if (imageInput.imageCatalog.entries.length) {
@@ -781,52 +832,6 @@ export class Store {
             time
           );
         this.event(source.chatId, 'job.queued', jobId);
-      }
-    }
-    if (
-      !run.snapshot.packageStart &&
-      !run.snapshot.transcriptImport &&
-      !run.snapshot.nativeRisuAuthored
-    ) {
-      this.story.reserveSourceInTransaction(source, run);
-      // Illustrations never block the source commit; reservation problems become visible jobs.
-      scheduleAutomaticIllustration(this, source);
-    }
-    checkpointChatVariablesInTransaction(this, source.id, source.chatId);
-    retainCompletedLore(
-      this,
-      run,
-      source,
-      verifiedRunLoreReads(this, { ...run, status: 'completed', sourceRevision: source.id })
-    );
-    if (
-      run.snapshot.settings.autoTranslate === true &&
-      !run.snapshot.packageStart &&
-      !run.snapshot.transcriptImport &&
-      !run.snapshot.nativeRisuAuthored &&
-      !run.snapshot.executionPurpose
-    ) {
-      try {
-        // The nested savepoint keeps a failed translation reservation from losing the source.
-        requestTranslation(this, source.id, false, undefined, id);
-      } catch {
-        const jobId = randomUUID();
-        const time = now();
-        this.db
-          .prepare(
-            "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,input,error,created_at,updated_at) VALUES(?,?,?,?,'translation','failed',?,?,?,?)"
-          )
-          .run(
-            jobId,
-            source.chatId,
-            source.id,
-            source.hash,
-            json({ autoTranslateRunId: id }),
-            '자동 번역을 준비하지 못했어요. 번역 모델 설정을 확인하고 직접 다시 요청해 주세요.',
-            time,
-            time
-          );
-        this.event(source.chatId, 'job.failed', jobId);
       }
     }
     this.event(source.chatId, 'source.ready', source.id);

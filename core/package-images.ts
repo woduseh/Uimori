@@ -16,6 +16,11 @@ export type PackageImage = {
   mime: (typeof PACKAGE_IMAGE_MIMES)[number];
   allowedUse: 'profile' | 'inline' | 'both';
 };
+export const PACKAGE_IMAGE_THUMBNAIL_WIDTH = 256;
+const storedImageUrl = /^\/api\/package-image-blobs\/[a-f0-9]{64}$/u;
+export function packageImageThumbnailUrl(url: string): string {
+  return storedImageUrl.test(url) ? `${url}?w=${PACKAGE_IMAGE_THUMBNAIL_WIDTH}` : url;
+}
 const identifier = /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$/u;
 export function validatePackageImages(value: unknown): PackageImage[] {
   if (!Array.isArray(value) || value.length > RISU_ASSET_MAX)

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LibraryFolder } from '../core/library-organization.js';
-import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
+import { PACKAGE_IMAGE_MIMES, packageImageThumbnailUrl } from '../core/package-images.js';
 import { Dialog } from './Dialog.js';
 import { t, useI18n } from './i18n.js';
 import { uploadPackageImage } from './package-image-upload.js';
@@ -25,7 +25,13 @@ export function LibraryFolderCover({
   return urls.length ? (
     <span className="library-folder-cover" data-count={urls.length} aria-hidden="true">
       {urls.map((url) => (
-        <img key={url} src={url} alt="" loading="lazy" draggable={false} />
+        <img
+          key={url}
+          src={packageImageThumbnailUrl(url)}
+          alt=""
+          loading="lazy"
+          draggable={false}
+        />
       ))}
     </span>
   ) : (
@@ -114,7 +120,7 @@ export function LibraryFolderCoverDialog({
                 onClick={() => void apply(hash)}
               >
                 <span className="library-folder-cover" data-count={1} aria-hidden="true">
-                  <img src={folderCoverUrl(hash)} alt="" loading="lazy" />
+                  <img src={packageImageThumbnailUrl(folderCoverUrl(hash))} alt="" loading="lazy" />
                 </span>
                 {folder.coverImageHash === hash && <CheckIcon size={16} aria-hidden="true" />}
               </button>

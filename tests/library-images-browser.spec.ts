@@ -7,7 +7,10 @@ import type { RisuContent } from '../core/risu-content.js';
 import type { LibraryOrganization } from '../core/library-organization.js';
 import type { Content } from '../core/product.js';
 import type { ChatDetail } from '../core/types.js';
+import { packageImageThumbnailUrl } from '../core/package-images.js';
 import { revealLibraryEditor, selectPackageSection } from './ui-navigation.js';
+
+const thumbnail = (hash: string) => packageImageThumbnailUrl(`/api/package-image-blobs/${hash}`);
 
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNIK1/1HwAFVQKH+f6iOwAAAABJRU5ErkJggg==',
@@ -146,7 +149,7 @@ const portraitPart = (image: UploadedImage, id = 'portrait'): Partial<RisuConten
     await expect(picker).not.toBeVisible();
     await expect(portrait.locator('.package-portrait-avatar img')).toHaveAttribute(
       'src',
-      `/api/package-image-blobs/${secondHash.hash}`
+      thumbnail(secondHash.hash)
     );
     const saved = await save(page, library, original);
     expect(saved.package!.portraitImageId).toBe('inline');
@@ -190,16 +193,10 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
   expect(profile.allowedUse).toBe('profile');
   expect(profile.blobHash).not.toBe(originalHash.hash);
   expect(uploaded.package!.images).toHaveLength(2);
-  await expect(portrait.locator('img')).toHaveAttribute(
-    'src',
-    `/api/package-image-blobs/${profile.blobHash}`
-  );
+  await expect(portrait.locator('img')).toHaveAttribute('src', thumbnail(profile.blobHash));
   await library.getByRole('button', { name: '서재 목록', exact: true }).click();
   const card = library.getByRole('button', { name: `${original.title} 상세 보기`, exact: true });
-  await expect(card.locator('img')).toHaveAttribute(
-    'src',
-    `/api/package-image-blobs/${profile.blobHash}`
-  );
+  await expect(card.locator('img')).toHaveAttribute('src', thumbnail(profile.blobHash));
   await card.click();
   await library
     .locator('.library-detail-actions')
@@ -345,10 +342,7 @@ test('LIMG02 persona folder picker supports keyboard selection and nested Escape
   expect((await (await request.get(`/api/content/${module.id}`)).json()).kind).toBe('module');
   await trigger.click();
   await picker.getByRole('searchbox').fill(persona.title);
-  await expect(choice.locator('img')).toHaveAttribute(
-    'src',
-    `/api/package-image-blobs/${hash.hash}`
-  );
+  await expect(choice.locator('img')).toHaveAttribute('src', thumbnail(hash.hash));
   await picker.getByRole('button', { name: '페르소나 없음', exact: true }).click();
   await expect(trigger).toContainText('페르소나 없음');
   await trigger.click();
@@ -453,10 +447,7 @@ test('LIMG04 shared module references show current names and portraits while kee
     has: page.getByRole('button', { name: `${child.title} 새 이름 연결 해제`, exact: true }),
   });
   await expect(current).toBeVisible();
-  await expect(current.locator('img')).toHaveAttribute(
-    'src',
-    `/api/package-image-blobs/${newHash.hash}`
-  );
+  await expect(current.locator('img')).toHaveAttribute('src', thumbnail(newHash.hash));
   await expect(features.getByText(child.title, { exact: true })).toHaveCount(0);
   const restored = await request.post(`/api/resources/content/${child.id}/undo`, {
     data: { expectedRevision: child.revision + 1 },
@@ -521,10 +512,7 @@ test('LIMG05 quick persona selection shows one current selection after its image
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   const trigger = page.getByRole('button', { name: '빠른 페르소나', exact: true });
   await expect(trigger).toContainText(persona.title);
-  await expect(trigger.locator('img')).toHaveAttribute(
-    'src',
-    `/api/package-image-blobs/${newHash.hash}`
-  );
+  await expect(trigger.locator('img')).toHaveAttribute('src', thumbnail(newHash.hash));
   await trigger.click();
   const picker = page.getByRole('dialog', { name: '빠른 페르소나', exact: true });
   await picker.getByRole('searchbox').fill(persona.title);
@@ -533,10 +521,7 @@ test('LIMG05 quick persona selection shows one current selection after its image
     .filter({ has: page.getByText(`${persona.title} 최신`, { exact: true }) });
   await expect(current).toHaveCount(1);
   await expect(current).toHaveAttribute('aria-pressed', 'true');
-  await expect(current.locator('img')).toHaveAttribute(
-    'src',
-    `/api/package-image-blobs/${newHash.hash}`
-  );
+  await expect(current.locator('img')).toHaveAttribute('src', thumbnail(newHash.hash));
   await expect(picker.getByText(persona.title, { exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   const after: ChatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
@@ -579,14 +564,14 @@ test('LIBCOVER a folder cover follows its resources until an image is chosen or 
   const library = await openLibrary(page, 'bot');
   const card = library.locator(`[data-folder-id="${folderId}"]`);
   const cardCover = card.locator('.library-folder-cover img');
-  await expect(cardCover).toHaveAttribute('src', `/api/package-image-blobs/${portrait.hash}`);
+  await expect(cardCover).toHaveAttribute('src', thumbnail(portrait.hash));
   const section = page.locator('.bot-tree-section-heading > .bot-folder-toggle');
   if ((await section.getAttribute('aria-expanded')) !== 'true') await section.click();
   const treeCover = page
     .locator('.bot-tree-folder-heading')
     .filter({ hasText: title })
     .locator('.library-folder-cover img');
-  await expect(treeCover).toHaveAttribute('src', `/api/package-image-blobs/${portrait.hash}`);
+  await expect(treeCover).toHaveAttribute('src', thumbnail(portrait.hash));
 
   const dialog = page.getByRole('dialog', { name: '폴더 표지', exact: true });
   const openPicker = async () => {
@@ -603,22 +588,22 @@ test('LIBCOVER a folder cover follows its resources until an image is chosen or 
     buffer: otherPng,
   });
   await expect(dialog).toBeHidden();
-  const uploaded = await savedCover();
+  const uploaded = (await savedCover()) ?? '';
   expect(uploaded).toMatch(/^[a-f0-9]{64}$/u);
   expect(uploaded).not.toBe(portrait.hash);
-  await expect(cardCover).toHaveAttribute('src', `/api/package-image-blobs/${uploaded}`);
-  await expect(treeCover).toHaveAttribute('src', `/api/package-image-blobs/${uploaded}`);
+  await expect(cardCover).toHaveAttribute('src', thumbnail(uploaded));
+  await expect(treeCover).toHaveAttribute('src', thumbnail(uploaded));
 
   await openPicker();
   await expect(automatic).toHaveAttribute('aria-pressed', 'false');
   await expect(dialog.locator('.library-cover-choice[aria-pressed="true"] img')).toHaveAttribute(
     'src',
-    `/api/package-image-blobs/${uploaded}`
+    thumbnail(uploaded)
   );
   await automatic.click();
   await expect(dialog).toBeHidden();
   expect(await savedCover()).toBeNull();
-  await expect(cardCover).toHaveAttribute('src', `/api/package-image-blobs/${portrait.hash}`);
+  await expect(cardCover).toHaveAttribute('src', thumbnail(portrait.hash));
 
   const row = page.locator('.bot-tree-folder-heading').filter({ hasText: title });
   await row.hover();

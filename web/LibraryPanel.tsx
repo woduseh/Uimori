@@ -946,7 +946,7 @@ export function LibraryPanel({
             </div>
           </div>
           <div className="library-preview-heading">
-            <ContentAvatar content={detail} className="library-preview-avatar" />
+            <ContentAvatar content={detail} className="library-preview-avatar" fullSize />
             <div>
               <h2>{detail.title}</h2>
               <small className="ui-meta-row">

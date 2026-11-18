@@ -1,4 +1,4 @@
-import { processImageUpload } from './image-processing.js';
+import { imageThumbnail, processImageUpload } from './image-processing.js';
 import { readRunSnapshot } from './run-projections.js';
 import { storeImage, readImage } from './image-storage.js';
 import { assertPackageImageReferences } from './package-image-references.js';
@@ -6,7 +6,11 @@ import { HttpError, fields, isSha256Hex, record, text } from './request-validati
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { FastifyInstance } from 'fastify';
-import { packageImages, PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
+import {
+  packageImages,
+  PACKAGE_IMAGE_MIMES,
+  PACKAGE_IMAGE_THUMBNAIL_WIDTH,
+} from '../core/package-images.js';
 import type { Asset } from '../core/product.js';
 import type { ImageTarget, RunSnapshot } from '../core/types.js';
 import { splitSource, type AssetEntry } from '../core/auxiliary.js';
@@ -341,13 +345,17 @@ export function reserveImageJob(
   } else store.event(source.chatId, 'job.queued', id);
   return store.job(id);
 }
-export function scheduleTranslationImages(store: Store, translation: Job) {
+export function translationImageSelection(translation: Pick<Job, 'input'>) {
   const input =
     translation.input && typeof translation.input === 'object' ? record(translation.input) : {};
-  invalidateTranslationImages(store, translation.sourceRevision);
-  if (!input.translationImageSelection) return;
+  if (!input.translationImageSelection) return undefined;
   const frozen = record(input.translationImageSelection) as ReturnType<typeof imageJobInput>;
-  if (!imageCatalog(frozen).length) return;
+  return imageCatalog(frozen).length ? frozen : undefined;
+}
+export function scheduleTranslationImages(store: Store, translation: Job) {
+  invalidateTranslationImages(store, translation.sourceRevision);
+  const frozen = translationImageSelection(translation);
+  if (!frozen) return;
   const source = store.source(translation.sourceRevision);
   const body = (translation.result as { text: string }).text;
   reserveImageJob(
@@ -431,15 +439,25 @@ export function packageImageRoutes(
     );
     return { hash: blob.hash, mime: blob.mime, url: `/api/package-image-blobs/${blob.hash}` };
   });
-  app.get<{ Params: { hash: string } }>(
+  app.get<{ Params: { hash: string }; Querystring: { w?: string } }>(
     '/api/package-image-blobs/:hash',
     async (request, reply) => {
+      const width = request.query.w;
+      if (width !== undefined && width !== String(PACKAGE_IMAGE_THUMBNAIL_WIDTH))
+        throw new HttpError(400, 'Unsupported image width');
       const blob = readImage(store.db, request.params.hash);
+      const image =
+        width === undefined
+          ? blob
+          : {
+              mime: 'image/webp',
+              bytes: await imageThumbnail(blob.bytes, PACKAGE_IMAGE_THUMBNAIL_WIDTH),
+            };
       return reply
         .header('X-Content-Type-Options', 'nosniff')
         .header('Cache-Control', 'private, max-age=31536000, immutable')
-        .type(blob.mime)
-        .send(blob.bytes);
+        .type(image.mime)
+        .send(image.bytes);
     }
   );
   app.post('/api/package-bundles/export', { bodyLimit: 8 * 1024 * 1024 }, async (request) => {

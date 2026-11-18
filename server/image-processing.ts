@@ -139,6 +139,16 @@ export async function processImageUpload(value: { base64: unknown }) {
   return { mime: image.mime, base64: image.bytes.toString('base64') };
 }
 
+export async function imageThumbnail(bytes: Buffer, width: number): Promise<Buffer> {
+  return withImageProcessing(() =>
+    sharp(bytes, { limitInputPixels: MAX_PIXELS, failOn: 'none' })
+      .rotate()
+      .resize({ width, withoutEnlargement: true })
+      .webp({ quality: 80, effort: 2 })
+      .toBuffer()
+  );
+}
+
 /** Transmission-only copy. Originals and their hashes remain untouched in storage. */
 export async function resizeIllustrationReference(bytes: Buffer, mime: string) {
   const input = sharp(bytes, { limitInputPixels: MAX_PIXELS, failOn: 'error' });

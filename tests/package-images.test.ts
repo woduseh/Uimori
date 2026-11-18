@@ -3,6 +3,7 @@ import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { resolveInlineImage } from '../web/image-placement.js';
 import { afterEach, expect, test } from 'vitest';
+import sharp from 'sharp';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -21,7 +22,12 @@ import {
   requestImages,
   validateImageBlob,
 } from '../server/package-images.js';
-import { packageImages, type PackageImage } from '../core/package-images.js';
+import {
+  packageImages,
+  packageImageThumbnailUrl,
+  PACKAGE_IMAGE_THUMBNAIL_WIDTH,
+  type PackageImage,
+} from '../core/package-images.js';
 import type { ContentRole } from '../core/risu-content.js';
 import type { Content } from '../core/product.js';
 import { splitSource } from '../core/auxiliary.js';
@@ -236,6 +242,72 @@ test('source reservation and delayed worker keep old names and removed images; e
   expect(() => requestImages(store, source.id, command)).toThrow();
 });
 
+test('an automatically translated scene places images on the translation and leaves the original to an explicit request', () => {
+  const { store } = fixture(),
+    content = save(store, [image(store)]),
+    chat = createFixtureChat(store, 'Synthetic', { botId: content.id });
+  attach(store, chat.id, content);
+  store.settings(chat.id, chat.settingsRevision, { ...chat.settings, autoTranslate: true });
+  const source = finish(store, begin(store, chat.id));
+  const jobs = () =>
+    (
+      store.db
+        .prepare('SELECT id FROM jobs WHERE source_revision=? ORDER BY created_at,rowid')
+        .all(source.id) as { id: string }[]
+    ).map((row) => store.job(row.id));
+  expect(jobs().map((job) => [job.kind, job.status])).toEqual([['translation', 'queued']]);
+
+  const translation = jobs()[0],
+    claimed = store.claimJob(translation.id, 'worker', {})!;
+  store.finishAuxiliary(translation.id, claimed.generation, 'worker', {
+    status: 'completed',
+    result: {
+      mock: true,
+      sourceRevision: source.id,
+      sourceHash: source.hash,
+      text: '창가의 미소.',
+    },
+    error: null,
+  });
+  expect(jobs().map((job) => [job.kind, job.imageTarget?.mode])).toEqual([
+    ['translation', undefined],
+    ['image', 'translation'],
+  ]);
+
+  const original = requestImages(store, source.id, {
+    target: 'original',
+    expectedSourceHash: source.hash,
+    expectedRevision: 0,
+  });
+  expect([original.status, original.imageTarget?.mode]).toEqual(['queued', 'original']);
+});
+test('a stored image is served whole by default and as one bounded thumbnail width on request', async () => {
+  const { store, app } = fixture();
+  const original = await sharp({
+    create: { width: 1024, height: 1536, channels: 3, background: { r: 40, g: 90, b: 160 } },
+  })
+    .webp({ lossless: true })
+    .toBuffer();
+  const blob = putImageBlob(store.product, {
+    mime: 'image/webp',
+    base64: original.toString('base64'),
+  });
+  const whole = await app.inject({ url: `/api/package-image-blobs/${blob.hash}` });
+  expect(whole.rawPayload.equals(original)).toBe(true);
+  const thumbnail = await app.inject({
+    url: packageImageThumbnailUrl(`/api/package-image-blobs/${blob.hash}`),
+  });
+  expect(thumbnail.headers['content-type']).toBe('image/webp');
+  expect(thumbnail.headers['cache-control']).toBe(whole.headers['cache-control']);
+  expect(await sharp(thumbnail.rawPayload).metadata()).toMatchObject({
+    width: PACKAGE_IMAGE_THUMBNAIL_WIDTH,
+    height: 384,
+  });
+  expect(
+    (await app.inject({ url: `/api/package-image-blobs/${blob.hash}?w=4096` })).statusCode
+  ).toBe(400);
+  expect(packageImageThumbnailUrl('/api/assets/cover')).toBe('/api/assets/cover');
+});
 test('blob decoding enforces allowed signatures, canonical encoding and the per-file size limit', () => {
   for (const [mime, bytes] of [
     ['image/png', png],

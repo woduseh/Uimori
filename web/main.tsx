@@ -1506,7 +1506,7 @@ function App() {
                                 alt={s.profileAsset.description || s.profileAsset.title}
                               />
                             ) : (
-                              <ContentAvatar content={s.bot} />
+                              <ContentAvatar content={s.bot} fullSize />
                             )}
                           </ReaderPortraitButton>
                           {s.bot && <strong className="reader-bot-name">{s.bot.title}</strong>}
@@ -1523,7 +1523,11 @@ function App() {
                       {!s.sources.length && !s.visibleRuns.length && !s.active && (
                         <div className="first-scene">
                           {s.bot && (
-                            <ContentAvatar content={s.bot} className="first-scene-avatar" />
+                            <ContentAvatar
+                              content={s.bot}
+                              className="first-scene-avatar"
+                              fullSize
+                            />
                           )}
                           <h2>{t('main.m091')}</h2>
                         </div>
