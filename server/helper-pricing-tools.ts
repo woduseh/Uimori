@@ -10,44 +10,82 @@ const schema = (properties: Record<string, Json>, required: string[] = []): Json
   required,
   additionalProperties: false,
 });
+const modelId: Json = {
+  type: 'string',
+  minLength: 1,
+  maxLength: 100,
+  description: 'Saved model id, from model.list.',
+};
 const rate = { type: ['number', 'null'], minimum: 0, maximum: 1e6 } as Json;
 const rates = schema(
   { input: rate, output: rate, cacheRead: rate, cacheWrite: rate, cacheWrite1h: rate },
   ['input', 'output', 'cacheRead', 'cacheWrite']
 );
 const context = schema(
-  { aboveInputTokens: { type: 'integer', minimum: 1, maximum: 100000000 }, rates },
+  {
+    aboveInputTokens: {
+      type: 'integer',
+      minimum: 1,
+      maximum: 100000000,
+      description: 'Input token count above which these rates apply.',
+    },
+    rates,
+  },
   ['aboveInputTokens', 'rates']
 );
+const described = (value: Json, description: string): Json => ({
+  ...(value as Record<string, Json>),
+  description,
+});
 export const HELPER_PRICING_TOOLS: ProviderTool[] = [
   {
     name: 'model.pricing.read',
     description:
-      'Read one saved model pricing configuration, current effective rates and model revision. Use model.list to discover saved IDs. Provider credentials and endpoint paths are omitted; providerHost identifies the actual pricing service. Missing prices mean unknown, never free. Reserved and past calls retain their frozen prices.',
-    inputSchema: schema({ modelId: { type: 'string', minLength: 1, maxLength: 100 } }, ['modelId']),
+      'Read the pricing saved for one model: its configuration, the rates currently in effect and the model revision needed by model.pricing.update. providerHost names the service whose prices apply; credentials and endpoint paths are not included. A missing price means unknown, not free. Calls that are already reserved or finished keep the prices they were recorded with.',
+    inputSchema: schema({ modelId }, ['modelId']),
   },
   {
     name: 'model.pricing.update',
     description:
-      'Update only the pricing of a saved model after a user request. First read model.pricing.read for expectedRevision and actual connection/protocol. Verify rates for that actual connection from an official source; never substitute gateway prices for direct API prices. USD per million tokens; null means unknown, 0 means verified free. Manual updates require sourceUrl and checkedAt. Specify Flex, Batch, cache TTL and long-context rates separately when applicable; never infer a discount. This does not browse or change credentials, model options, reserved snapshots or historical costs. Legacy mode official selects only current connection catalog pricing.',
+      'Change the token prices saved for one model. Read model.pricing.read first for expectedRevision and for the actual connection and protocol, then take the rates for that exact service from its official pricing page; a gateway price is not the direct API price and the reverse. Rates are USD per million tokens: null means unknown and 0 means verified free. A manual update records sourceUrl and checkedAt. Give Flex, Batch, one-hour cache and long-context rates only where the provider publishes them, and never derive a discount that the page does not state. Only pricing changes: credentials, model options, reserved work and past costs stay as they are. This operation does not browse; use web search for the source.',
     inputSchema: schema(
       {
-        modelId: { type: 'string', minLength: 1, maxLength: 100 },
-        expectedRevision: { type: 'integer', minimum: 1 },
+        modelId,
+        expectedRevision: {
+          type: 'integer',
+          minimum: 1,
+          description: 'Model revision from model.pricing.read.',
+        },
         pricing: {
+          description:
+            'Either {mode:"manual", rates, sourceUrl, checkedAt, ...} with verified rates, or {mode:"official"}, which only selects the pricing of the current connection catalog.',
           anyOf: [
             schema({ mode: { const: 'official', type: 'string' } }, ['mode']),
             schema(
               {
                 mode: { const: 'manual', type: 'string' },
-                rates,
-                flexRates: rates,
-                batchRates: rates,
-                longContext: context,
-                flexLongContext: context,
-                batchLongContext: context,
-                sourceUrl: { type: 'string', minLength: 1, maxLength: 2000 },
-                checkedAt: { type: 'string', minLength: 10, maxLength: 40 },
+                rates: described(
+                  rates,
+                  'Standard rates in USD per million tokens: input, output, cacheRead, cacheWrite and optional cacheWrite1h. null is unknown, 0 is verified free.'
+                ),
+                flexRates: described(rates, 'Flex tier rates, when published.'),
+                batchRates: described(rates, 'Batch rates, when published.'),
+                longContext: described(context, 'Standard rates above a long-context threshold.'),
+                flexLongContext: described(context, 'Flex rates above a long-context threshold.'),
+                batchLongContext: described(context, 'Batch rates above a long-context threshold.'),
+                sourceUrl: {
+                  type: 'string',
+                  minLength: 1,
+                  maxLength: 2000,
+                  description: 'HTTPS URL of the official page the rates were taken from.',
+                },
+                checkedAt: {
+                  type: 'string',
+                  minLength: 10,
+                  maxLength: 40,
+                  description:
+                    'When the page was checked: YYYY-MM-DD, or a UTC date-time ending in Z.',
+                },
               },
               ['mode', 'rates', 'sourceUrl', 'checkedAt']
             ),

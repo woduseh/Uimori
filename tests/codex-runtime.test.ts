@@ -157,13 +157,13 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
           {
             type: 'function',
             name: 'uimori_data_search',
-            description: 'Find saved data',
+            description: 'Host tool: data.search. Find saved data',
             inputSchema: { type: 'object' },
           },
           {
             type: 'function',
             name: 'uimori_app_call',
-            description: 'Apply an edit',
+            description: 'Host tool: app.call. Apply an edit',
             inputSchema: { type: 'object' },
           },
         ],

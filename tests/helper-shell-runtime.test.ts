@@ -105,8 +105,8 @@ function answer(body: any, call?: { id: string; arguments: unknown }) {
             id: call.id,
             type: 'function',
             function: {
-              name: body.tools.find((tool: any) => tool.function.name.endsWith('_data_exec'))
-                .function.name,
+              name: body.tools.find((tool: any) => tool.function.name === 'data_exec').function
+                .name,
               arguments: JSON.stringify(call.arguments),
             },
           },

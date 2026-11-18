@@ -9,22 +9,39 @@ export const HELPER_ILLUSTRATION_GENERATION_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.generate',
     description:
-      'Queue illustrations for the requested moments, across one or more scenes. Use original paragraph anchors and source hashes from illustration.scene.read. Specify the exact instant in focus and optional visual direction for each cut. Explicitly selected moments are queued directly for prompt preparation and rendering; automatic storyboarding is separate. Rendering runs in the background.',
+      'Queue new illustrations for chosen moments of the story, in one or several scenes. Each moment is a paragraph range of one scene with the exact instant to depict. The chosen moments go straight to prompt preparation, the content check and rendering, one picture each, without an automatic storyboard of the whole scene. Rendering runs in the background: the result returns the queued jobIds per scene, and task.list or task.inspect shows their progress. Read the paragraphs and anchors with illustration.scene.read first, and check illustration.cuts.list so a moment is not illustrated twice.',
     inputSchema: {
       type: 'object',
       properties: {
         moments: {
           type: 'array',
           minItems: 1,
+          description: 'One entry per picture.',
           items: {
             type: 'object',
             properties: {
-              sourceId: { type: 'string' },
-              expectedSourceHash: { type: 'string', pattern: '^[a-f0-9]{64}$' },
-              startAnchor: { type: 'string' },
-              endAnchor: { type: 'string' },
-              focus: { type: 'string', minLength: 1, maxLength: 8000 },
-              direction: { type: 'string', maxLength: 8000 },
+              sourceId: { type: 'string', description: 'Id of the scene.' },
+              expectedSourceHash: {
+                type: 'string',
+                pattern: '^[a-f0-9]{64}$',
+                description: 'Current sourceHash of the scene, from illustration.scene.read.',
+              },
+              startAnchor: {
+                type: 'string',
+                description: 'First paragraph anchor of the moment, from illustration.scene.read.',
+              },
+              endAnchor: { type: 'string', description: 'Last paragraph anchor of the moment.' },
+              focus: {
+                type: 'string',
+                minLength: 1,
+                maxLength: 8000,
+                description: 'The exact instant to depict.',
+              },
+              direction: {
+                type: 'string',
+                maxLength: 8000,
+                description: 'Optional visual direction such as framing, angle or mood.',
+              },
             },
             required: ['sourceId', 'expectedSourceHash', 'startAnchor', 'endAnchor', 'focus'],
             additionalProperties: false,

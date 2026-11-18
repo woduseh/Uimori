@@ -15,14 +15,47 @@ const schema = (properties: Record<string, Json>, required: string[] = []): Json
 });
 const revision: Json = { type: 'integer', minimum: 0 };
 const hash: Json = { type: 'string', pattern: '^[a-f0-9]{64}$' };
-const sourceId: Json = { type: 'string', minLength: 1, maxLength: 100 };
-const target: Json = { type: 'string', enum: ['original', 'translation'] };
-const guards = { expectedRevision: revision, expectedSourceHash: hash };
+const sourceId: Json = {
+  type: 'string',
+  minLength: 1,
+  maxLength: 100,
+  description: 'Id of the scene, from chat.read, scene.search or data.search.',
+};
+const target: Json = {
+  type: 'string',
+  enum: ['original', 'translation'],
+  description: 'Which stored text of the scene: the original or its translation.',
+};
+const guards = {
+  expectedRevision: {
+    ...(revision as Record<string, Json>),
+    description:
+      'Guard from editTarget.expectedRevision of the read or search this call builds on.',
+  },
+  expectedSourceHash: {
+    ...(hash as Record<string, Json>),
+    description: 'Guard from editTarget.expectedSourceHash of the same read or search.',
+  },
+};
+const expectedTextHash: Json = {
+  ...(hash as Record<string, Json>),
+  description: 'Guard from editTarget.expectedTextHash: the hash of the exact text that was read.',
+};
 const paging = {
-  offset: revision,
-  limit: { type: 'integer', minimum: 1, maximum: 10000 } as Json,
+  offset: {
+    ...(revision as Record<string, Json>),
+    description:
+      'Start position in the text, in UTF-16 code units. A nonzero offset needs the three guards of the same read; copying nextRead supplies them.',
+  },
+  limit: {
+    type: 'integer',
+    minimum: 1,
+    maximum: 10000,
+    description:
+      'Maximum text to return, in UTF-16 code units. Omit to read up to about 3000 tokens.',
+  } as Json,
   ...guards,
-  expectedTextHash: hash,
+  expectedTextHash,
 };
 const mutationRequired = [
   'sourceId',
@@ -32,21 +65,49 @@ const mutationRequired = [
   'expectedTextHash',
 ];
 const editProperties = {
-  chatId: sourceId,
+  chatId: {
+    type: 'string',
+    minLength: 1,
+    maxLength: 100,
+    description: 'Chat that owns the scene. Omit for the current chat.',
+  } as Json,
   sourceId,
   target,
   ...guards,
-  expectedTextHash: hash,
-  text: { type: 'string', minLength: 1, maxLength: SOURCE_TEXT_MAX_CHARS },
+  expectedTextHash,
+  text: {
+    type: 'string',
+    minLength: 1,
+    maxLength: SOURCE_TEXT_MAX_CHARS,
+    description:
+      'Complete replacement text. Use either text or changes. Send it only after reading the whole scene.',
+  },
   changes: {
     type: 'array',
     minItems: 1,
     maxItems: 100,
+    description:
+      'Literal replacements, all checked against the same saved text before anything is saved. Use either changes or text.',
     items: schema(
       {
-        oldText: { type: 'string', minLength: 1, maxLength: SOURCE_TEXT_MAX_CHARS },
-        newText: { type: 'string', maxLength: SOURCE_TEXT_MAX_CHARS },
-        expectedCount: { type: 'integer', minimum: 1, maximum: 100000 },
+        oldText: {
+          type: 'string',
+          minLength: 1,
+          maxLength: SOURCE_TEXT_MAX_CHARS,
+          description: 'Exact existing text, case-sensitive. Whitespace-only text is allowed.',
+        },
+        newText: {
+          type: 'string',
+          maxLength: SOURCE_TEXT_MAX_CHARS,
+          description: 'Replacement text. An empty string deletes oldText.',
+        },
+        expectedCount: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 100000,
+          description:
+            'How many times oldText must occur; all of them are replaced. Default 1. A different count rejects the edit.',
+        },
       },
       ['oldText', 'newText']
     ),
@@ -54,37 +115,68 @@ const editProperties = {
 };
 const patchProperties = {
   ...editProperties,
-  translation: schema(editProperties, mutationRequired),
+  translation: {
+    ...(schema(editProperties, mutationRequired) as Record<string, Json>),
+    description:
+      'Only when target is original: a second complete patch for the translation of the same scene, with its own guards from a translation read. Both save together and the translation stays current.',
+  },
 };
 export const HELPER_SCENE_TOOLS: ProviderTool[] = [
   {
     name: 'scene.read',
     description:
-      'Read the latest editable stored original or displayed completed translation in this chat ancestry, not rendered HTML. Discover sourceId through chat.read/story tools. Pages use UTF-16 offsets. Omit limit for a 3000-token local o200k text budget; an explicit limit is UTF-16 code units (max 10000). Serialized body text stays within 9000 local o200k tokens; copy nextRead unchanged for sequential pages. For a nonzero offset or random access, pass all three guards (expectedRevision, expectedSourceHash, expectedTextHash) from the same scene.read result. Read every relevant page before full replacement. editTarget contains current save guards, while displayedTranslation identifies the visible previous success during regeneration. Missing translation is an error. Stale pages require restarting.',
+      'Read the saved text of one scene in a chat as it can be edited: the original, or the completed translation the reader currently shows. This is the live stored text, not rendered HTML and not the frozen history that story.read returns. Find the sourceId with chat.read, scene.search or data.search. The result includes editTarget with the guards (expectedRevision, expectedSourceHash, expectedTextHash) that scene.patch needs. Long scenes come in pages within about 9000 tokens: copy nextRead unchanged for the next page, and read every relevant page before replacing a whole scene. A scene that changed between pages must be read again from the start. While a new translation is being generated, displayedTranslation identifies the earlier completed translation that is still shown. Asking for a translation that does not exist is an error.',
     inputSchema: schema({ sourceId, target, ...paging }, ['sourceId', 'target']),
   },
   {
     name: 'scene.search',
     description:
-      'Search exact case-sensitive literal patterns in one live sourceId, or omit sourceId to search all enabled editable scenes in the selected chat. includeDisabled also includes disabled scenes in a chat-wide search. Returns matched text, positions and patch editTarget guards; multi-scene pages have a stable searchHash. Copy nextSearch unchanged; a changed scene or ancestry invalidates the cursor. Set regex:true for bounded non-overlapping regular-expression matches in an isolated read-only worker; long matches return offsets plus a truncated preview.',
+      'Find exact text in the saved scenes of a chat and get what scene.patch needs to change it. Use it to locate a typo, a name or a repeated phrase before an edit; for text in the library or in other chats use data.search. Give sourceId to search one scene, or omit it to search every enabled scene the chat owns, in story order. Patterns are case-sensitive literals unless regex is set. Each match returns the matched text, its UTF-16 position, surrounding context and an editTarget with the save guards. Copy nextSearch unchanged for more matches; if a scene or the story changed in between, the search has to start again. Regex matches do not overlap, and a match longer than 1000 characters comes back truncated with its offsets, so read it with scene.read before patching it.',
     inputSchema: schema(
       {
-        sourceId,
+        sourceId: {
+          ...(sourceId as Record<string, Json>),
+          description: 'Scene to search. Omit to search the whole chat.',
+        },
         target,
         patterns: {
           type: 'array',
           minItems: 1,
           maxItems: 8,
           items: { type: 'string', minLength: 1, maxLength: 256 },
+          description: 'Texts to find. Case-sensitive literals unless regex is true.',
         },
-        regex: { type: 'boolean' },
-        includeDisabled: { type: 'boolean' },
-        searchHash: hash,
-        context: { type: 'integer', minimum: 0, maximum: 120 },
-        offset: { type: 'integer', minimum: 0 },
-        limit: { type: 'integer', minimum: 1, maximum: 20 },
+        regex: {
+          type: 'boolean',
+          description: 'Treat patterns as case-sensitive Unicode regular expressions.',
+        },
+        includeDisabled: {
+          type: 'boolean',
+          description: 'Whole-chat search only: also search disabled scenes.',
+        },
+        searchHash: {
+          ...(hash as Record<string, Json>),
+          description: 'Whole-chat continuation guard. Copying nextSearch supplies it.',
+        },
+        context: {
+          type: 'integer',
+          minimum: 0,
+          maximum: 120,
+          description: 'Characters of surrounding text per match. Default 80.',
+        },
+        offset: {
+          type: 'integer',
+          minimum: 0,
+          description: 'Match offset. Copying nextSearch supplies it together with its guards.',
+        },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 20,
+          description: 'Maximum matches per page. Default 10.',
+        },
         ...guards,
-        expectedTextHash: hash,
+        expectedTextHash,
       },
       ['target', 'patterns']
     ),
@@ -92,19 +184,20 @@ export const HELPER_SCENE_TOOLS: ProviderTool[] = [
   {
     name: 'scene.patch',
     description:
-      'Save one guarded original or translation using complete text or exact-count literal changes. For an original edit, an optional translation object accepts a second complete scene.patch request with its own translation editTarget: both patches save atomically, creating a current manual translation instead of invalidating it. Without this explicit translation object original edits invalidate translation. Conflicts reject all changes. No regex or unchecked replace-all.',
+      'Save an edit to one saved scene: its original text or its translation. Give either text, a complete replacement, or changes, a list of exact literal replacements. Every oldText must occur exactly expectedCount times in the saved text and the matches must not overlap; all changes are checked against the same pre-edit text and then saved together, or nothing is saved. The three guards come from editTarget in scene.read or scene.search, and they reject the save when the scene changed after it was read. Editing an original makes its existing translation outdated unless you also pass translation, a second complete patch for the translation: then both save together and the translation is kept as a current manual translation. There is no regex replace and no unchecked replace-all. For several scenes at once use scene.patchMany. The result is a short saved receipt, not the scene text.',
     inputSchema: schema(patchProperties, mutationRequired),
   },
   {
     name: 'scene.patchMany',
     description:
-      'Atomically apply scene.patch to 1–16 different existing scenes. Each item requires independent editTarget guards and may include an explicitly guarded translation co-edit when target is original. Duplicate source IDs and any stale/invalid item reject the entire batch. Changed sourceIds are returned for reader notification; no automatic grouped undo.',
+      'Save edits to 1-16 different scenes of a chat as one atomic change, for example the same correction found by a whole-chat scene.search. Each item is a complete scene.patch request with its own guards from editTarget, and a scene may appear only once. Either every item saves or nothing does. The result lists each saved scene. Scene edits made this way have no grouped undo; each original keeps its own retained versions for scene.restore.',
     inputSchema: schema(
       {
         items: {
           type: 'array',
           minItems: 1,
           maxItems: 16,
+          description: 'One scene.patch request per scene.',
           items: schema(patchProperties, mutationRequired),
         },
       },
@@ -114,20 +207,37 @@ export const HELPER_SCENE_TOOLS: ProviderTool[] = [
   {
     name: 'scene.versions',
     description:
-      'List retained ORIGINAL version metadata (initial original and up to two recent edits), never a full archive. Select versionRevision to read bounded text pages; copy nextRead unchanged. For random access, copy the source revision/hash from editTarget and expectedTextHash from the selected version page textHash (not editTarget.expectedTextHash for the current original). Translation history is not supported. editTarget guards the current original for restore.',
-    inputSchema: schema({ sourceId, versionRevision: revision, ...paging }, ['sourceId']),
+      'List the earlier versions kept for the original text of one scene, and read one of them. Only the first original and up to two most recent edits are kept, so this is not a full history, and translations have no version history. Without versionRevision it returns the version list; with versionRevision it returns that version in text pages, where copying nextRead unchanged continues the read. The editTarget in the result guards the current original and is what scene.restore needs. To jump to a nonzero offset by hand, take expectedRevision and expectedSourceHash from editTarget but expectedTextHash from the textHash of the version page being read.',
+    inputSchema: schema(
+      {
+        sourceId,
+        versionRevision: {
+          ...(revision as Record<string, Json>),
+          description: 'Revision of the kept version to read, from the version list. Omit to list.',
+        },
+        ...paging,
+      },
+      ['sourceId']
+    ),
   },
   {
     name: 'scene.restore',
     description:
-      'Restore one retained ORIGINAL version after the user asks. Use current editTarget guards from scene.versions/read and versionRevision from the retained list. Saves as a new edit through ordinary source editing and retention; no historical rows are deleted beyond ordinary retention. Translation restore is not supported.',
+      'Bring back one kept earlier version of the original text of a scene. The restored text is saved as a new edit, so the text it replaces becomes a kept version in turn, under the same limit of the first original plus two recent edits. Take versionRevision from scene.versions and the guards from the current editTarget of scene.versions or scene.read. Translations cannot be restored, and the existing translation of the scene becomes outdated as with any original edit.',
     inputSchema: schema(
       {
         sourceId,
-        target: { type: 'string', enum: ['original'] },
-        versionRevision: revision,
+        target: {
+          type: 'string',
+          enum: ['original'],
+          description: 'Only original text can be restored. May be omitted.',
+        },
+        versionRevision: {
+          ...(revision as Record<string, Json>),
+          description: 'Revision of the kept version to restore, from scene.versions.',
+        },
         ...guards,
-        expectedTextHash: hash,
+        expectedTextHash,
       },
       ['sourceId', 'versionRevision', 'expectedRevision', 'expectedSourceHash']
     ),

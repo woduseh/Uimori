@@ -78,11 +78,7 @@ function start(input = request()) {
   const encoded = encodeAnthropic(input);
   return { ...encoded, decoder: new AnthropicDecoder(encoded.context) };
 }
-function toolPart(
-  id = 'call-1',
-  name = 'tool_0_knowledge_read',
-  input: Json = { id: 'lore-1' }
-): Json {
+function toolPart(id = 'call-1', name = 'knowledge_read', input: Json = { id: 'lore-1' }): Json {
   return { type: 'tool_use', id, name, input };
 }
 function turn(input = request(), parts: Json[] = [toolPart()]) {
@@ -140,7 +136,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
           {
             type: 'tool_use',
             id: 'batch-tool',
-            name: 'tool_0_knowledge_read',
+            name: 'knowledge_read',
             input: { id: 'lore-1' },
           },
         ],
@@ -168,9 +164,9 @@ describe('Anthropic Messages request and opaque continuation', () => {
     expect(wire.max_tokens).toBe(8192);
     expect(wire.system[0]).toEqual({ type: 'text', text: input.stable.contract });
     expect(wire.tools.map((item: any) => item.name)).toEqual([
-      'tool_0_knowledge_read',
-      'tool_1_skills_list',
-      'tool_2_knowledge_read',
+      'knowledge_read',
+      'skills_list',
+      'knowledge_read_2',
     ]);
     expect(wire.tools[0].input_schema).toEqual(input.stable.tools[0].inputSchema);
     expect(wire.tools[0]).not.toHaveProperty('strict');
@@ -416,7 +412,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
     block(decoder, 2, { type: 'future_annotation', opaque: { exact: [3, 2, 1] } });
     block(decoder, 3, { type: 'text', text: 'Checking the records.' });
     block(decoder, 4, toolPart('call-A'));
-    block(decoder, 5, toolPart('call-B', 'tool_0_knowledge_read', { id: 'lore-2' }));
+    block(decoder, 5, toolPart('call-B', 'knowledge_read', { id: 'lore-2' }));
     const output = end(decoder, 'tool_use');
     expect(output.text).toBe('Checking the records.');
     expect(output.toolCalls.map((call) => [call.id, call.name])).toEqual([
@@ -451,7 +447,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
     expect(diagnostic).not.toContain('SYNTHETIC_ENCRYPTED_THINKING');
     expect(JSON.stringify(body)).toContain('SYNTHETIC_PRIVATE_THOUGHT');
     begin(second);
-    block(second, 0, toolPart('call-C', 'tool_1_skills_list', {}));
+    block(second, 0, toolPart('call-C', 'skills_list', {}));
     const secondOutput = end(second, 'tool_use');
     const thirdInput = continued(next, secondOutput);
     delete thirdInput.continuationInput;
@@ -486,7 +482,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
   test('accepts host-normalized tool arguments while binding results by call id and tool name', () => {
     const input = request();
     const output = turn(input, [
-      toolPart('call-normalized', 'tool_0_knowledge_read', { id: 'lore-1', limit: 4096 }),
+      toolPart('call-normalized', 'knowledge_read', { id: 'lore-1', limit: 4096 }),
     ]);
     const next = continued(input, output);
     const fresh = (next.input.results as Record<string, Json>[])[0];
@@ -530,7 +526,7 @@ describe('Anthropic Messages stream lifecycle and usage', () => {
     decoder.accept({
       type: 'content_block_start',
       index: 0,
-      content_block: toolPart('call-1', 'tool_0_knowledge_read', {}),
+      content_block: toolPart('call-1', 'knowledge_read', {}),
     });
     const args = { id: '한글 🌊', nested: { quote: 'a"b\\c', flags: [true, null, 4] } };
     const serialized = JSON.stringify(args);
@@ -553,7 +549,7 @@ describe('Anthropic Messages stream lifecycle and usage', () => {
     block(decoder, 0, { type: 'thinking', thinking: '' }, [
       { type: 'signature_delta', signature: 'synthetic-signature-only' },
     ]);
-    block(decoder, 1, toolPart('zero-args', 'tool_1_skills_list', {}));
+    block(decoder, 1, toolPart('zero-args', 'skills_list', {}));
     const output = end(decoder, 'tool_use');
     expect(output.toolCalls[0].arguments).toEqual({});
     expect(output.text).toBe('');
@@ -575,7 +571,7 @@ describe('Anthropic Messages stream lifecycle and usage', () => {
     (partial) => {
       const { decoder } = start();
       begin(decoder);
-      block(decoder, 0, toolPart('call-1', 'tool_0_knowledge_read', {}), [
+      block(decoder, 0, toolPart('call-1', 'knowledge_read', {}), [
         { type: 'input_json_delta', partial_json: partial },
       ]);
       expect(() => end(decoder, 'tool_use')).toThrow('INVALID_TOOL_ARGUMENTS');
@@ -586,7 +582,7 @@ describe('Anthropic Messages stream lifecycle and usage', () => {
     const { decoder } = start();
     begin(decoder);
     const partial = '{"id":"PRIVATE_ARGUMENT';
-    block(decoder, 0, toolPart('call-bad', 'tool_0_knowledge_read', {}), [
+    block(decoder, 0, toolPart('call-bad', 'knowledge_read', {}), [
       { type: 'input_json_delta', partial_json: partial },
     ]);
     expect(() => end(decoder, 'tool_use')).toThrow('INVALID_TOOL_ARGUMENTS');
@@ -605,7 +601,7 @@ describe('Anthropic Messages stream lifecycle and usage', () => {
     const input = request();
     const { decoder } = start(input);
     begin(decoder, { input_tokens: 9, output_tokens: 1 });
-    block(decoder, 0, toolPart('truncated', 'tool_0_knowledge_read', {}), [
+    block(decoder, 0, toolPart('truncated', 'knowledge_read', {}), [
       { type: 'input_json_delta', partial_json: '{"id":"' },
     ]);
     const output = end(decoder, 'max_tokens', { output_tokens: 10 });

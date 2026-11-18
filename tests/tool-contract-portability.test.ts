@@ -1,6 +1,13 @@
 import { expect, test } from 'vitest';
+import { MAIN_SHELL_TOOL } from '../core/main-shell.js';
+import { providerToolNames } from '../core/provider-tool-names.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
-import { HELPER_APP_TOOLS, HELPER_GATEWAY_TOOLS } from '../server/helper-app-tools.js';
+import {
+  HELPER_APP_TOOLS,
+  HELPER_GATEWAY_TOOLS,
+  HELPER_OPERATION_AREAS,
+  helperGatewayTools,
+} from '../server/helper-app-tools.js';
 import { HELPER_DATA_TOOLS, HELPER_SHELL_TOOL } from '../server/helper-data-tools.js';
 import type { Json } from '../core/transport.js';
 
@@ -40,4 +47,48 @@ test('provider-facing tool roots stay portable and canonical', () => {
 test('helper app mutations keep operation identity host-owned', () => {
   for (const tool of HELPER_APP_TOOLS)
     expect(keysDeep(tool.inputSchema), tool.name).not.toContain('operationId');
+});
+
+test('writer read and helper tools describe each top-level argument', () => {
+  const tools = [
+    MAIN_SHELL_TOOL,
+    ...MAIN_READ_TOOLS,
+    HELPER_SHELL_TOOL,
+    ...HELPER_GATEWAY_TOOLS,
+    ...HELPER_APP_TOOLS,
+  ];
+  for (const tool of tools)
+    for (const [name, property] of Object.entries(record(record(tool.inputSchema).properties)))
+      expect(record(property).description, `${tool.name}.${name}`).toEqual(expect.any(String));
+});
+
+test('unambiguous provider aliases survive reordering and colliding tools get distinct names', () => {
+  expect(providerToolNames(['data.exec', 'knowledge.read'])).toEqual([
+    'data_exec',
+    'knowledge_read',
+  ]);
+  expect(providerToolNames(['knowledge.read', 'data.exec'])).toEqual([
+    'knowledge_read',
+    'data_exec',
+  ]);
+  expect(providerToolNames(['knowledge.read', 'knowledge_read'])).toEqual([
+    'knowledge_read',
+    'knowledge_read_2',
+  ]);
+});
+
+test('the helper gateway lists every available operation under a described area', () => {
+  const areas = new Set(HELPER_OPERATION_AREAS.map(([area]) => area));
+  const [catalog] = HELPER_GATEWAY_TOOLS;
+  for (const tool of HELPER_APP_TOOLS)
+    expect(areas.has(tool.name.slice(0, tool.name.indexOf('.'))), tool.name).toBe(true);
+  for (const [area, purpose] of HELPER_OPERATION_AREAS) {
+    const operations = HELPER_APP_TOOLS.filter((tool) => tool.name.startsWith(`${area}.`)).map(
+      (tool) => tool.name.slice(area.length + 1)
+    );
+    expect(catalog.description).toContain(`${area} (${purpose}): ${operations.join(', ')}`);
+  }
+  const [review] = helperGatewayTools(true);
+  expect(review.description).toContain('outline (plot outline and writing plans): read;');
+  expect(review.description).not.toContain('patch');
 });

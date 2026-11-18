@@ -20,8 +20,28 @@ import type { Store } from './store.js';
 const id = { type: 'string', minLength: 1, maxLength: 100 } as const;
 const hash = { type: 'string', minLength: 64, maxLength: 64 } as const;
 const paging = {
-  offset: { type: 'integer', minimum: 0 },
-  limit: { type: 'integer', minimum: 1 },
+  offset: {
+    type: 'integer',
+    minimum: 0,
+    description: 'Entry offset. Pass the previous nextOffset.',
+  },
+  limit: { type: 'integer', minimum: 1, description: 'Maximum entries per page.' },
+} as const;
+const guard = {
+  expectedSourceHash: {
+    ...hash,
+    description:
+      'Current sourceHash of the scene, from illustration.scene.read or illustration.cuts.list (currentSourceHash).',
+  },
+  expectedPresentationRevision: {
+    type: 'integer',
+    minimum: 0,
+    description: 'presentationRevision of the scene from illustration.cuts.list.',
+  },
+  expectedLatestJobId: {
+    ...id,
+    description: 'latestJobId of the cut from illustration.cuts.list.',
+  },
 } as const;
 const schema = (properties: Record<string, Json>, required: string[]): Json => ({
   type: 'object',
@@ -33,14 +53,24 @@ export const HELPER_ILLUSTRATION_CUT_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.scene.read',
     description:
-      'Read original scene paragraphs with their exact anchors and current sourceHash. Use them to select an illustration moment or move a cut. Pages preserve manuscript order. Supply anchor to center a page on one exact paragraph without guessing its index. maxBlockChars optionally shortens excerpts; start and end are full UTF-16 offsets.',
+      'Read the original text of one scene as paragraphs, each with the exact anchor and the scene sourceHash that the illustration operations need. Use it to choose the moment for a new illustration or the paragraph a cut should move to. Paragraphs keep manuscript order and their start and end are UTF-16 offsets in the full scene. Pass anchor to get a short page centred on one known paragraph instead of guessing its index.',
     inputSchema: schema(
       {
-        sourceId: id,
-        expectedSourceHash: hash,
-        anchor: id,
+        sourceId: { ...id, description: 'Id of the scene, from chat.read.' },
+        expectedSourceHash: {
+          ...hash,
+          description: 'Optional: fail if the scene no longer has this sourceHash.',
+        },
+        anchor: {
+          ...id,
+          description: 'Centre the page on this paragraph anchor. Do not combine with offset.',
+        },
         ...paging,
-        maxBlockChars: { type: 'integer', minimum: 1 },
+        maxBlockChars: {
+          type: 'integer',
+          minimum: 1,
+          description: 'Shorten each paragraph excerpt to this many characters.',
+        },
       },
       ['sourceId']
     ),
@@ -48,29 +78,52 @@ export const HELPER_ILLUSTRATION_CUT_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.cuts.list',
     description:
-      'List cuts from the story, optionally for one sourceId. Each cut includes the latest request, its displayed image variations, position, stale status and edit guards. Use an imageId with illustration.cut.read to see a particular variation.',
-    inputSchema: schema({ sourceId: id, ...paging }, []),
+      'List the illustration cuts of the story, or of one scene. Each cut shows its latest request, the image variations on display, its position in the scene, whether it is stale after a text edit, and the values the other cut operations need: targetId, latestJobId, imageId, currentSourceHash and presentationRevision. Use it to find an existing cut before suggesting new ones, and before redrawing, revising, moving or deleting a cut. To look at a picture, pass an imageId to illustration.cut.read.',
+    inputSchema: schema(
+      {
+        sourceId: {
+          ...id,
+          description: 'Limit to the cuts of this scene. Omit for the whole story.',
+        },
+        ...paging,
+      },
+      []
+    ),
   },
   {
     name: 'illustration.cut.read',
     description:
-      'Inspect one generated illustration variation by imageId. View its pixels and the caption, scene, generator and target that produced it. Set includeImage to false for metadata alone, or includePrompt to true to inspect the stored rendering prompt.',
+      'Look at one generated illustration variation by its imageId: the picture itself as image input, plus the caption, scene, generator and target that produced it. Use it to compare a picture with the manuscript or with the appearance profiles before judging or redrawing it. Set includeImage to false for the metadata alone, or includePrompt to true to see the stored rendering prompt.',
     inputSchema: schema(
-      { imageId: id, includeImage: { type: 'boolean' }, includePrompt: { type: 'boolean' } },
+      {
+        imageId: { ...id, description: 'Id of the image variation, from illustration.cuts.list.' },
+        includeImage: {
+          type: 'boolean',
+          description: 'Send the picture itself. Default true.',
+        },
+        includePrompt: {
+          type: 'boolean',
+          description: 'Also return the stored rendering prompt. Default false.',
+        },
+      },
       ['imageId']
     ),
   },
   {
     name: 'illustration.cut.redraw',
     description:
-      'Request a new rendering of the displayed cut using current settings. Supply the imageId of the chosen variation, currentSourceHash and presentationRevision from cuts.list, and any requested changes. The successful image stays visible until the queued replacement succeeds.',
+      'Queue a new rendering of a cut that already has a picture, with the current settings and optionally a requested change. The existing picture stays visible until the new one succeeds, and rendering continues in the background. For a cut that failed without producing a picture, use illustration.cut.revise instead.',
     inputSchema: schema(
       {
-        imageId: id,
-        expectedSourceHash: hash,
-        expectedPresentationRevision: { type: 'integer', minimum: 0 },
-        expectedLatestJobId: id,
-        changeRequest: { type: 'string', maxLength: 8000 },
+        imageId: { ...id, description: 'Id of the displayed variation to redraw.' },
+        expectedSourceHash: guard.expectedSourceHash,
+        expectedPresentationRevision: guard.expectedPresentationRevision,
+        expectedLatestJobId: guard.expectedLatestJobId,
+        changeRequest: {
+          type: 'string',
+          maxLength: 8000,
+          description: 'What should be different in the new picture. Omit to redraw as is.',
+        },
       },
       ['imageId', 'expectedSourceHash', 'expectedPresentationRevision']
     ),
@@ -78,18 +131,35 @@ export const HELPER_ILLUSTRATION_CUT_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.cut.revise',
     description:
-      'Replace the anchors, focus or visual brief of an image-less failed cut and queue a new render. Use targetId, latestJobId, currentSourceHash and presentationRevision from cuts.list. The old failure remains in history. This does not bypass prompt preparation or content checks.',
+      'Change the moment or the visual brief of a cut that failed, was cancelled or was interrupted without producing a picture, and queue a fresh render. The earlier failure stays in the history. The new request goes through prompt preparation and the content check like any other. For a cut that already has a picture, use illustration.cut.redraw.',
     inputSchema: schema(
       {
-        targetId: id,
-        expectedLatestJobId: id,
-        expectedSourceHash: hash,
-        expectedPresentationRevision: { type: 'integer', minimum: 0 },
-        startAnchor: id,
-        endAnchor: id,
-        focus: { type: 'string', minLength: 1, maxLength: 8000 },
-        visualBrief: { type: 'string', minLength: 1, maxLength: 8000 },
-        changeRequest: { type: 'string', maxLength: 8000 },
+        targetId: { ...id, description: 'targetId of the cut, from illustration.cuts.list.' },
+        expectedLatestJobId: guard.expectedLatestJobId,
+        expectedSourceHash: guard.expectedSourceHash,
+        expectedPresentationRevision: guard.expectedPresentationRevision,
+        startAnchor: {
+          ...id,
+          description: 'New first paragraph anchor of the moment, from illustration.scene.read.',
+        },
+        endAnchor: { ...id, description: 'New last paragraph anchor of the moment.' },
+        focus: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 8000,
+          description: 'The exact instant to depict.',
+        },
+        visualBrief: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 8000,
+          description: 'How the picture should look: framing, mood and visible details.',
+        },
+        changeRequest: {
+          type: 'string',
+          maxLength: 8000,
+          description: 'What should change compared with the failed request.',
+        },
       },
       ['targetId', 'expectedLatestJobId', 'expectedSourceHash', 'expectedPresentationRevision']
     ),
@@ -97,12 +167,12 @@ export const HELPER_ILLUSTRATION_CUT_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.cut.delete',
     description:
-      'Permanently delete the specified cut and its associated render history/images after an explicit user request. Use latestJobId, source hash and presentation revision from cuts.list; never delete queued or running work. This cannot be undone.',
+      'Permanently delete one illustration cut together with its pictures and render history. This cannot be undone. The cut is identified by its latestJobId; a cut that is queued or rendering cannot be deleted, so cancel it first with task.cancel if needed.',
     inputSchema: schema(
       {
-        expectedLatestJobId: id,
-        expectedSourceHash: hash,
-        expectedPresentationRevision: { type: 'integer', minimum: 0 },
+        expectedLatestJobId: guard.expectedLatestJobId,
+        expectedSourceHash: guard.expectedSourceHash,
+        expectedPresentationRevision: guard.expectedPresentationRevision,
       },
       ['expectedLatestJobId', 'expectedSourceHash', 'expectedPresentationRevision']
     ),

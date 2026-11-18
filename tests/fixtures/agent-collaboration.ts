@@ -358,9 +358,7 @@ export function packet(body: Body): any {
   throw new Error('Missing source packet in Responses fixture request');
 }
 export const toolName = (body: Body, name: string) => {
-  const alias = body.tools?.find((tool) =>
-    tool.name.endsWith('_' + name.replaceAll('.', '_'))
-  )?.name;
+  const alias = body.tools?.find((tool) => tool.name === name.replaceAll('.', '_'))?.name;
   if (!alias) throw new Error('Missing advertised tool: ' + name);
   return alias;
 };

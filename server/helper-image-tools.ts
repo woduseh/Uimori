@@ -15,7 +15,12 @@ import type { Store } from './store.js';
 
 const MAX_BYTES = 2 * 1024 * 1024;
 type ImageReadMode = 'full' | 'thumbnail';
-const readModeSchema = { type: 'string', enum: ['full', 'thumbnail'] };
+const readModeSchema = {
+  type: 'string',
+  enum: ['full', 'thumbnail'],
+  description:
+    'thumbnail (default) is at most 512 pixels on the longest side; full is at most 2048 pixels for fine detail.',
+};
 function readMode(args: ReturnType<typeof record>): ImageReadMode {
   if (args.mode === undefined || args.mode === 'thumbnail') return 'thumbnail';
   if (args.mode === 'full') return 'full';
@@ -23,19 +28,27 @@ function readMode(args: ReturnType<typeof record>): ImageReadMode {
 }
 const id = { type: 'string', minLength: 1, maxLength: 100 } as const;
 const paging = {
-  query: { type: 'string', maxLength: 200 },
-  offset: { type: 'integer', minimum: 0 },
-  limit: { type: 'integer', minimum: 1, maximum: 20 },
+  query: {
+    type: 'string',
+    maxLength: 200,
+    description: 'Search terms matched against image names and descriptions. Omit to list all.',
+  },
+  offset: {
+    type: 'integer',
+    minimum: 0,
+    description: 'Result offset. Pass the previous nextOffset.',
+  },
+  limit: { type: 'integer', minimum: 1, maximum: 20, description: 'Maximum images per page.' },
 } as const;
 export const HELPER_IMAGE_TOOLS: ProviderTool[] = [
   {
     name: 'image.list',
     description:
-      'List saved content images, including CHARX assets. Search titles, descriptions and original asset names with query; the package portrait is marked isPortrait. Follow nextOffset for more; image.read previews at 512px by default.',
+      'List the images saved with one bot, persona or module, including CHARX assets, to find an image by its title, description or original asset name. Returns metadata, the content revision and nextOffset, not pixels: view an image with image.read. The package portrait is marked isPortrait. Images in an unsaved editor draft are not included.',
     inputSchema: {
       type: 'object',
       properties: {
-        contentId: id,
+        contentId: { ...id, description: 'Id of the bot, persona or module that owns the images.' },
         ...paging,
       },
       required: ['contentId'],
@@ -45,12 +58,12 @@ export const HELPER_IMAGE_TOOLS: ProviderTool[] = [
   {
     name: 'image.read',
     description:
-      'View saved image pixels as WebP; omitted/thumbnail uses up to 512px, explicit mode:full up to 2048px. Animated images supply their first frame. The saved original is unchanged.',
+      'Look at one saved image of a bot, persona or module. The image arrives as actual image input, so use it before describing or judging what a picture shows. Start with the default thumbnail and ask for mode=full only when fine detail matters. An animated image is shown as its first frame. The saved original is never changed. A model without image input gets an unsupported-image result instead.',
     inputSchema: {
       type: 'object',
       properties: {
-        contentId: id,
-        imageId: id,
+        contentId: { ...id, description: 'Id of the bot, persona or module that owns the image.' },
+        imageId: { ...id, description: 'Id of the image, from image.list.' },
         mode: readModeSchema,
       },
       required: ['contentId', 'imageId'],
@@ -60,16 +73,24 @@ export const HELPER_IMAGE_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.image.list',
     description:
-      'Find chat and attached-package reference images; isPortrait marks package cover art and nativeNames names original CHARX assets. Search names/character/outfit/location; read only relevant refs, preferably as thumbnails first.',
+      'Find the images that can serve as illustration references in a chat: images uploaded to the chat and images of its attached bots, personas and modules. Search by name, character, outfit or location. Each entry has a ref for illustration.image.read, illustration.profiles.save and illustration.references.save; isPortrait marks package cover art and nativeNames gives the original CHARX asset names. This returns metadata only, so view just the relevant refs, thumbnails first.',
     inputSchema: { type: 'object', properties: paging, required: [], additionalProperties: false },
   },
   {
     name: 'illustration.image.read',
     description:
-      'View one illustration reference by ref; omitted/thumbnail previews at 512px, explicit mode:full returns up to 2048px. Animated images show the first frame.',
+      'Look at one illustration reference image by its ref from illustration.image.list. The image arrives as actual image input. Start with the default thumbnail and ask for mode=full only when fine detail matters. An animated image is shown as its first frame.',
     inputSchema: {
       type: 'object',
-      properties: { ref: { type: 'string', minLength: 1, maxLength: 300 }, mode: readModeSchema },
+      properties: {
+        ref: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 300,
+          description: 'Image ref exactly as returned by illustration.image.list.',
+        },
+        mode: readModeSchema,
+      },
       required: ['ref'],
       additionalProperties: false,
     },

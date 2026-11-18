@@ -126,7 +126,7 @@ describe('native file attachment transmission', () => {
             type: 'function_call',
             id: 'fn-1',
             call_id: 'call-1',
-            name: 'tool_0_read',
+            name: 'read',
             arguments: '{}',
             status: 'completed',
           },

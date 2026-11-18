@@ -18,38 +18,110 @@ import { readHelperResources, validateHelperPreset } from './helper-resource-ins
 const kind = {
   type: 'string',
   enum: ['content', 'prompt-preset', 'prompt-workspace', 'theme', 'illustration-preset'],
+  description:
+    'content is a saved bot, persona or module; prompt-preset a prompt preset; prompt-workspace the global prompt workspace; theme a theme; illustration-preset an illustration preset.',
 };
 const string = { type: 'string' };
+const resourceId = { type: 'string', description: 'Id of the saved resource.' };
 const revision = { type: 'integer', minimum: 1 };
+const expectedRevision = {
+  ...revision,
+  description: 'Current revision of the resource, from a read or the result of an earlier save.',
+};
 const readSelection = {
   kind,
-  id: string,
-  version: { type: 'string', enum: ['current', 'previous'] },
-  path: string,
-  fields: { type: 'array', items: string, maxItems: 50 },
-  offset: { type: 'integer', minimum: 0 },
-  limit: { type: 'integer', minimum: 1, maximum: 50 },
-  textOffset: { type: 'integer', minimum: 0 },
-  textLimit: { type: 'integer', minimum: 1, maximum: 10000 },
-  includeBodies: { type: 'boolean' },
+  id: resourceId,
+  version: {
+    type: 'string',
+    enum: ['current', 'previous'],
+    description:
+      'current (default) or previous. previous reads the single version kept for undo: it returns revision:null with currentRevision, has no editable targets, and is replaced by the next save.',
+  },
+  path: {
+    type: 'string',
+    description:
+      'JSON Pointer of the field, object or array to read, taken from readyPaths or an earlier result. Omit for the overview.',
+  },
+  fields: {
+    type: 'array',
+    items: string,
+    maxItems: 50,
+    description: 'Names of the object fields to return at path, instead of the whole object.',
+  },
+  offset: {
+    type: 'integer',
+    minimum: 0,
+    description: 'Entry offset in an array or object page. Pass the previous nextOffset.',
+  },
+  limit: {
+    type: 'integer',
+    minimum: 1,
+    maximum: 50,
+    description: 'Maximum array or object entries per page.',
+  },
+  textOffset: {
+    type: 'integer',
+    minimum: 0,
+    description:
+      'Start position inside a long string, in UTF-16 code units. Pass the previous nextOffset.',
+  },
+  textLimit: {
+    type: 'integer',
+    minimum: 1,
+    maximum: 10000,
+    description:
+      'Maximum string length to return, in UTF-16 code units. Omit to read up to about 2000 tokens.',
+  },
+  includeBodies: {
+    type: 'boolean',
+    description:
+      "Only with the promptTemplate array path: include each block's text, innerFormat and defaultText. Bodies that do not fit are listed in omittedBodyPaths.",
+  },
 };
 const patchProperties = {
-  kind: { type: 'string', enum: ['content', 'prompt-preset', 'theme'] },
-  id: string,
-  expectedRevision: revision,
+  kind: {
+    type: 'string',
+    enum: ['content', 'prompt-preset', 'theme'],
+    description:
+      'content is a saved bot, persona or module; prompt-preset a prompt preset; theme a theme with Story UI fields.',
+  },
+  id: resourceId,
+  expectedRevision,
   changes: {
     type: 'array',
     minItems: 1,
+    description: 'Changes applied in order and saved together.',
     items: {
       type: 'object',
       properties: {
-        path: string,
-        target: string,
-        op: { type: 'string', enum: ['set', 'replaceText', 'insert', 'remove', 'move'] },
-        from: string,
-        value: {},
-        oldText: string,
-        newText: string,
+        op: {
+          type: 'string',
+          enum: ['set', 'replaceText', 'insert', 'remove', 'move'],
+          description:
+            'set replaces a field value; replaceText replaces one exact excerpt inside a string; insert and remove act on an indexed array position; move reorders promptTemplate blocks.',
+        },
+        path: {
+          type: 'string',
+          description:
+            'JSON Pointer of the field or indexed array position. With target it is relative to that item, such as /text, or an empty string for the item itself.',
+        },
+        target: {
+          type: 'string',
+          description:
+            'Anchor of an existing array item, copied from resource.read. It keeps pointing at that item across earlier inserts, removals and moves in the same call. Accepted by set, replaceText and remove.',
+        },
+        from: {
+          type: 'string',
+          description:
+            'move only: full indexed path of the block to move. path is then the destination index, counted after the block is removed.',
+        },
+        value: { description: 'set and insert: the new JSON value.' },
+        oldText: {
+          type: 'string',
+          description:
+            'replaceText: the exact excerpt to replace. It must occur exactly once. When no exact match exists, a match that differs only in CRLF/LF line endings is used and reported.',
+        },
+        newText: { type: 'string', description: 'replaceText: the replacement text.' },
       },
       required: ['path', 'op'],
       additionalProperties: false,
@@ -79,35 +151,35 @@ const resourceTools: ResourceToolDefinition[] = [
     name: 'illustration-preset.list',
     effect: 'read',
     description:
-      'List illustration preset names, revisions and selections. Read a recipe with resource.read kind=illustration-preset.',
+      'List the saved illustration presets with their names, revisions and current selections. Read the recipe of one preset with resource.read kind=illustration-preset.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'illustration-preset.guide',
     effect: 'read',
     description:
-      'Read the portable illustration preset authoring contract. Saving and selecting are separate; this tool never generates images.',
+      'Read the authoring guide for portable illustration presets: the fields a preset recipe contains and how they are used. Read it before writing or editing a preset with resource.save. Saving a preset and selecting it are separate steps, and this operation does not generate images.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'theme.list',
     effect: 'read',
     description:
-      'List themes and palettes with compact metadata, current selections (including botStoryUiThemes) and preference revision. Themes with storyUi.baseStyle can style Story UI. Read CSS or colors with resource.read kind=theme and palette colors with palette.list.',
+      'List the saved themes and palettes with compact metadata, the current selections (including the per-bot Story UI themes in botStoryUiThemes) and the preference revision needed by theme.select. A theme that has storyUi.baseStyle can style the Story UI. Read the CSS or colors of one theme with resource.read kind=theme, and palette colors with palette.list.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'theme.guide',
     effect: 'read',
     description:
-      'Read the Story UI theme and Reader theme authoring contracts and examples. To create a Story UI theme for a bot, read its authored content and save with resource.save kind=theme. Apply only when requested.',
+      "Read the authoring guide and examples for Story UI themes and Reader themes. Read it before creating or editing a theme or palette. To design a Story UI theme for a bot, also read that bot's authored content, then save with resource.save kind=theme. Applying a theme is a separate step through theme.select.",
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'resource.read',
     effect: 'read',
     description:
-      'Read a compact resource overview, then follow readyPaths into authored fields. Native promptTemplate pages include id/name, type, role/role2 and textLengths without bodies by default. Set includeBodies:true only with the promptTemplate array path to include text/innerFormat/defaultText per block. Follow nextOffset for unread blocks and omittedBodyPaths for oversized bodies. This does not evaluate CBS. Long metadata has previews with exact-read paths. Editable array entries provide target anchors for resource.patch at this revision. Use limit:50 and follow nextOffset. Use path for one read or paths for 1-16 reads of the same resource/revision, never both. Follow nextIndex with paths.slice(nextIndex); shared fields/offset/limit and textOffset/textLimit apply to every path. Small values preserve JSON types; missing fields have exists:false. The complete response stays within 12000 local o200k tokens, including JSON metadata. Omitted textLimit reads up to 2000 local tokens; explicit textLimit remains a UTF-16 cap. version=previous reads only the retained undo model with revision:null and currentRevision; it has no editable targets. Compare before undo, and read current again before patching. Use resource.readMany for typed reads across resources, or data.read refs for already located strings. Shared bot/persona illustration appearance defaults live at source.appearanceProfilesPath.',
+      "Read a saved library resource in typed, bounded pieces: a bot, persona or module (kind=content, the character card with its description, first message, lorebook and other fields), a prompt preset (prompt template blocks, toggles, variables and saved values), the global prompt workspace, a theme or an illustration preset. Call it with kind and id alone for a compact overview with source, regions and readyPaths, then follow a returned JSON Pointer path into the field, array or text you need. Use it when you need exact typed values, array structure or the current revision before resource.patch. To find text by its content use data.search, and for the same question across several resources use resource.readMany. Long strings page with textOffset/textLimit and nextOffset, and arrays and objects page with offset/limit. Use path for one read or paths for 1-16 reads of the same resource, with nextIndex marking paths that were not returned. Editable array entries carry a target anchor for resource.patch at this revision. Prompt template pages list each block's id, name, type, roles and text lengths without the bodies unless includeBodies is set. Nothing is evaluated: CBS and scripts are returned as authored. The whole response stays within about 12000 tokens, and a page never means the omitted part was read. Small values keep their JSON types and a missing optional field is reported with exists:false. The shared illustration appearance defaults of a bot or persona are at source.appearanceProfilesPath.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -117,6 +189,8 @@ const resourceTools: ResourceToolDefinition[] = [
           minItems: 1,
           maxItems: 16,
           items: { type: 'string', maxLength: 1024 },
+          description:
+            'Several JSON Pointer paths of the same resource and revision, read in one call. Do not combine with path. The field and paging options apply to every path; continue with paths.slice(nextIndex).',
         },
       },
       required: ['kind', 'id'],
@@ -127,7 +201,7 @@ const resourceTools: ResourceToolDefinition[] = [
     name: 'resource.readMany',
     effect: 'read',
     description:
-      'Read 1-16 explicit resource/field selections with typed values and a shared 12000-local-token response budget. Use data.read refs for already located text across resources. Each selection takes the resource.read arguments except paths. Individual errors stay local. Follow nextIndex by resubmitting items.slice(nextIndex), and follow each result nextOffset for text or array pages. version=previous reads only the retained undo model with revision:null and currentRevision, never a complete history.',
+      'Read 1-16 selections across different library resources in one call, with typed values, when comparing or collecting the same fields from several bots, personas, modules or presets. Each selection takes the resource.read arguments except paths, and returns its own result or error. The selections share one response budget of about 12000 tokens: when nextIndex is not null, call again with items.slice(nextIndex), and follow the nextOffset of a result for the rest of its text or array. For text that data.search already located, data.read with those refs is shorter.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -135,6 +209,7 @@ const resourceTools: ResourceToolDefinition[] = [
           type: 'array',
           minItems: 1,
           maxItems: 16,
+          description: 'One selection per resource and path.',
           items: {
             type: 'object',
             properties: readSelection,
@@ -151,13 +226,22 @@ const resourceTools: ResourceToolDefinition[] = [
     name: 'preset.validate',
     effect: 'read',
     description:
-      'Inspect a saved prompt preset without executing CBS or changing values. Reports toggle declaration/value diagnostics and option value/label changes against the retained previous save when available. Advisory only: coverage explicitly excludes full CBS syntax, conditional branch analysis and externally supplied variables. Page diagnostics with offset/limit. A clean report is not proof that every CBS branch is valid.',
+      'Check a saved prompt preset for toggle problems without running it or changing anything. It reports toggle declaration and value diagnostics, and option value or label changes against the previous save when one is retained. The check is advisory and partial: it does not parse full CBS syntax, analyse conditional branches or know externally supplied variables, so a clean report does not prove that every branch is valid. Page the diagnostics with offset and limit.',
     inputSchema: {
       type: 'object',
       properties: {
-        id: string,
-        offset: { type: 'integer', minimum: 0 },
-        limit: { type: 'integer', minimum: 1, maximum: 50 },
+        id: { type: 'string', description: 'Id of the saved prompt preset.' },
+        offset: {
+          type: 'integer',
+          minimum: 0,
+          description: 'Diagnostic offset. Pass the previous nextOffset.',
+        },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 50,
+          description: 'Maximum diagnostics per page.',
+        },
       },
       required: ['id'],
       additionalProperties: false,
@@ -168,7 +252,7 @@ const resourceTools: ResourceToolDefinition[] = [
     effect: 'mutation',
     target: resourceTarget,
     description:
-      'Edit native card/module, prompt-preset or Story UI theme fields at expectedRevision. For kind=theme use set at /storyUi with the complete {baseStyle,css}, or set/replaceText on its existing /storyUi/baseStyle and /storyUi/css fields. set changes simple typed fields; replaceText changes one unique exact excerpt, falling back only to CRLF/LF-equivalent matching when no exact match exists. It preserves text outside the matched span and reports normalization. /title and the native preset name are independent. insert/remove use indexed lore, translationGuide/terms or promptTemplate paths; move is only within promptTemplate, destination indexed AFTER removal. Ordinary paths run sequentially. For an existing item use its read target (original full item path) plus relative path, e.g. target=.../promptTemplate/2, path=/text. target remains attached across earlier moves/inserts/deletes; remove with target uses path="". Only set/replaceText/remove accept target; a removed target fails. Set source.translationGuidePath to a complete {instructions,terms} guide. For shared bot/persona appearance defaults, set source.appearanceProfilesPath to the full array of {id,name,appearance,referenceImageId?}; use resource.read on the explicit content target first. Toggle definition edits reconcile inherited invalid/retired values and report resetKeys/removedKeys; explicitly supplied invalid values still fail. All changes validate and save together with one undo; failure saves nothing and identifies the change. Projection/identity/asset fields remain read only.',
+      'Edit fields of a saved bot, persona or module (kind=content), a prompt preset or the Story UI of a theme. This is the normal way to change a character description, first message, lorebook entry, prompt template block, toggle or display title without resending the rest of the resource. Take expectedRevision and paths from resource.read, or use the editTarget of a data.search or data.read result for a replaceText change. Changes apply in order, so a later index refers to the array as earlier changes left it; to address an existing array item regardless of earlier changes, pass its target anchor with a relative path. All changes validate and save together as one save that can be undone once; if any change fails nothing is saved and the result identifies the failing change. set also writes whole structured values: the complete {instructions,terms} translation guide at source.translationGuidePath, the full array of {id,name,appearance,referenceImageId?} at source.appearanceProfilesPath for shared bot or persona appearance defaults, and the complete {baseStyle,css} at /storyUi of a theme (its /storyUi/baseStyle and /storyUi/css fields can also be edited individually). insert and remove work on indexed lorebook entries, translation guide terms and promptTemplate blocks. The display /title and the native name of a preset are separate fields. Editing toggle definitions resets or removes saved values that became invalid and reports them in resetKeys and removedKeys. Identity, asset and derived projection fields are read only.',
     inputSchema: {
       type: 'object',
       properties: patchProperties,
@@ -189,7 +273,7 @@ const resourceTools: ResourceToolDefinition[] = [
           })
         : [],
     description:
-      'Apply resource.patch to 1-16 distinct explicit resources atomically, with each current expectedRevision. Every item must succeed or nothing is saved. The same target cannot appear twice. All affected unsaved editor input is protected. Each item supports the same target anchors, newline matching and toggle-value reconciliation as resource.patch. Returns per-resource saved results; changed resources form one undo group in the helper UI. Does not establish ongoing synchronization between presets.',
+      'Apply resource.patch changes to 1-16 different library resources as one atomic save, for example the same correction across several presets or bots. Each item is a complete resource.patch request with its own current expectedRevision, and a resource may appear only once. Either every item saves or nothing does. The result lists each saved resource, and the changed resources can be undone together from the helper screen. It applies the changes once; it does not keep the resources synchronized afterwards.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -197,6 +281,7 @@ const resourceTools: ResourceToolDefinition[] = [
           type: 'array',
           minItems: 1,
           maxItems: 16,
+          description: 'One resource.patch request per resource.',
           items: {
             type: 'object',
             properties: patchProperties,
@@ -217,15 +302,26 @@ const resourceTools: ResourceToolDefinition[] = [
         ? { kind: args.kind, id: null }
         : null,
     description:
-      'Create an independent copy (duplicate) of a saved bot/persona/module or prompt preset without reading or resending its full model. Requires sourceId, expectedSourceRevision and the new display title. Returns a new id/revision and the copied source id/revision; patch the returned id to edit the copy. Preserves prompt blocks, controls, defaults and current values. Native preset name is independent and preserved by default; syncNativeName:true updates it to the new title. Content copies follow native naming and start with no relatedIds. Does not copy unsaved editor input, saved option combinations, folder placement, active selections, chat history or undo history, and never edits the source. Singleton prompt-workspace is not supported.',
+      'Create an independent copy (duplicate) of a saved bot, persona, module or prompt preset without reading or resending its contents. Returns the id and revision of the new copy and of the source; edit the copy by patching the returned id. A preset copy keeps its prompt blocks, controls, defaults and current values. The copy does not include unsaved editor input, saved option combinations, folder placement, active selections, chat history or undo history, and a content copy starts with no relatedIds. The source is never changed. The global prompt workspace cannot be cloned.',
     inputSchema: {
       type: 'object',
       properties: {
-        kind: { type: 'string', enum: ['content', 'prompt-preset'] },
-        sourceId: string,
-        expectedSourceRevision: revision,
-        title: string,
-        syncNativeName: { type: 'boolean' },
+        kind: {
+          type: 'string',
+          enum: ['content', 'prompt-preset'],
+          description: 'content is a saved bot, persona or module; prompt-preset a prompt preset.',
+        },
+        sourceId: { type: 'string', description: 'Id of the resource to copy.' },
+        expectedSourceRevision: {
+          ...revision,
+          description: 'Current revision of the source resource.',
+        },
+        title: { type: 'string', description: 'Display title of the new copy.' },
+        syncNativeName: {
+          type: 'boolean',
+          description:
+            'Prompt presets only: also set the native preset name to the new title. By default the authored native name is kept.',
+        },
       },
       required: ['kind', 'sourceId', 'expectedSourceRevision', 'title'],
       additionalProperties: false,
@@ -236,10 +332,18 @@ const resourceTools: ResourceToolDefinition[] = [
     effect: 'mutation',
     target: resourceTarget,
     description:
-      'Create an application resource or save a complete editable model. For new Story UI themes use the storyUi example from theme.guide. Saving a theme and applying it with theme.select are separate. Use resource.clone to copy saved content or a prompt preset. For edits to native card/module, prompt-preset or an existing theme’s Story UI fields use resource.patch to preserve other fields. Use latest revision for existing IDs; omit id/revision to create. A draft/proposal request does not authorize saving.',
+      "Create a new library resource, or replace an existing one with a complete editable model. Use it to create a theme (start from the storyUi example in theme.guide) or an illustration preset, or when a whole model really must be replaced. To change some fields of a bot, persona, module, prompt preset or an existing theme's Story UI, use resource.patch, which keeps the other fields; to copy a bot or preset, use resource.clone. Omit id and expectedRevision to create; pass both, with the latest revision, to replace. Saving a theme does not apply it: that is theme.select.",
     inputSchema: {
       type: 'object',
-      properties: { kind, id: string, expectedRevision: revision, model: { type: 'object' } },
+      properties: {
+        kind,
+        id: { type: 'string', description: 'Id of the resource to replace. Omit to create.' },
+        expectedRevision: {
+          ...revision,
+          description: 'Latest revision of the resource to replace. Omit to create.',
+        },
+        model: { type: 'object', description: 'The complete editable model of the resource.' },
+      },
       required: ['kind', 'model'],
       additionalProperties: false,
     },
@@ -248,10 +352,11 @@ const resourceTools: ResourceToolDefinition[] = [
     name: 'resource.undo',
     effect: 'mutation',
     target: resourceTarget,
-    description: 'Restore the immediately previous saved resource using its current revision.',
+    description:
+      'Undo the most recent save of one library resource by restoring the single previous version that is kept for it, as a new save. Use it when the last edit to a library resource should be taken back. Only one previous version is kept and the next save replaces it, so when unsure what would come back, compare first with resource.read version=previous. It fails when no previous version is kept or when the resource changed since expectedRevision.',
     inputSchema: {
       type: 'object',
-      properties: { kind, id: string, expectedRevision: revision },
+      properties: { kind, id: resourceId, expectedRevision },
       required: ['kind', 'id', 'expectedRevision'],
       additionalProperties: false,
     },
@@ -261,16 +366,18 @@ const resourceTools: ResourceToolDefinition[] = [
     effect: 'mutation',
     target: resourceTarget,
     description:
-      'Remove a bot/persona/module or preset from the library using its current revision.',
+      'Delete a saved bot, persona, module, prompt preset, theme or illustration preset from the library. The helper has no operation that restores a deleted item, so check the id, title and current revision with a read first. A prompt preset that is the current default main or translation prompt cannot be deleted until another one is selected.',
     inputSchema: {
       type: 'object',
       properties: {
         kind: {
           type: 'string',
           enum: ['content', 'prompt-preset', 'theme', 'illustration-preset'],
+          description:
+            'content is a saved bot, persona or module; prompt-preset a prompt preset; theme a theme; illustration-preset an illustration preset.',
         },
-        id: string,
-        expectedRevision: revision,
+        id: resourceId,
+        expectedRevision,
       },
       required: ['kind', 'id', 'expectedRevision'],
       additionalProperties: false,
@@ -282,15 +389,24 @@ const resourceTools: ResourceToolDefinition[] = [
     target: (args) =>
       typeof args.contentId === 'string' ? { kind: 'content', id: args.contentId } : null,
     description:
-      'Edit an image display name and description used for JEV image selection. Does not change image bytes, IDs, or native script reference names. Read the owning content first.',
+      'Change the display name and description of one saved image of a bot, persona or module. These two texts are what JEV image selection reads, so describe what the image shows. The image bytes, its id and the names that native scripts use to reference it do not change. Get imageId and the content revision from image.list.',
     inputSchema: {
       type: 'object',
       properties: {
-        contentId: string,
-        imageId: string,
-        expectedRevision: revision,
-        title: string,
-        description: string,
+        contentId: {
+          type: 'string',
+          description: 'Id of the bot, persona or module that owns the image.',
+        },
+        imageId: { type: 'string', description: 'Id of the image, from image.list.' },
+        expectedRevision: {
+          ...revision,
+          description: 'Current revision of the owning content.',
+        },
+        title: {
+          type: 'string',
+          description: 'New display name. Both title and description are required.',
+        },
+        description: { type: 'string', description: 'New description of what the image shows.' },
       },
       required: ['contentId', 'imageId', 'expectedRevision', 'title', 'description'],
       additionalProperties: false,

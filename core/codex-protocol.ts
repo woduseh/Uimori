@@ -14,6 +14,7 @@ import { providerImagePart, requestImages } from './provider-image-reference.js'
 import { assertProviderFileSupport } from './provider-file-reference.js';
 import type { ProviderPrompt } from './risu-prompt.js';
 import { webSearchAllowed } from './helper-web-search.js';
+import { providerToolDescription } from './provider-tool-names.js';
 
 export const CODEX_ENDPOINT = 'codex://local';
 /** Native tools that do not require access to the Uimori host filesystem or credentials. */
@@ -231,7 +232,7 @@ export function prepareCodexNative(request: CodexNativeRequest) {
     return {
       type: 'function' as const,
       name,
-      description: tool.description,
+      description: providerToolDescription(tool, name),
       inputSchema: tool.inputSchema,
     };
   });

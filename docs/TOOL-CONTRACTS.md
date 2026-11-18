@@ -33,6 +33,25 @@ Prefer one canonical argument shape instead of schema unions:
 
 When a semantic condition cannot be represented portably without a union, keep the simple object schema and validate the condition in the host runtime.
 
+## Names, descriptions and parameters
+
+A tool has one canonical dotted name, such as `knowledge.read`. Descriptions, host guidance and result continuations such as `nextRead` always use it.
+
+OpenAI Responses/Chat and Anthropic function names allow no dots, so those adapters send the canonical name with unsupported characters replaced by `_` (`knowledge_read`). Noncolliding aliases are independent of tool order. When aliases collide, later occurrences gain numeric suffixes (`knowledge_read_2`). Codex applies the same replacement behind its `uimori_` prefix. Gemini accepts dotted names and receives the canonical name unchanged. Wherever the provider-facing name differs from the canonical one, the adapter prefixes the description with `Host tool: <canonical name>.` so the model can connect the two.
+
+The alias is part of the retained continuation state. A continuation recorded with the earlier index-prefixed aliases (`tool_0_knowledge_read`) no longer matches and is rejected like any other changed tool configuration, so finish active or resumable Batch runs before switching builds.
+
+Write a description for a reader who has only that text:
+
+- Lead with what the operation is for in the user's terms (bot, persona, lorebook entry, scene, outline) and when to use it or a neighbouring operation instead. The compact helper catalog shows only the first 260 characters.
+- Then state what comes back and how to continue.
+- Keep the limits and caveats a model can act on, and leave out how the host implements them.
+- Put the meaning, unit, default and source of each argument in that property's `description`. A size argument always names its unit, because `limit` counts entries in some operations and UTF-16 code units in others.
+
+Whether the user asked for a save, selection, cancellation or deletion is decided once in the helper contract, not repeated per operation. A description still states facts about the operation itself, such as a deletion that cannot be undone.
+
+The token-budget arguments (`tokenLimit`, `maxTokens`, `textLimit`) and the UTF-16 `limit` keep their existing names. Recorded read receipts and replayed arguments depend on them, so their descriptions name the unit instead.
+
 ## Provider continuation state
 
 OpenAI Responses/Chat (including compatible gateways), Anthropic Messages and Gemini use internal `*-turn-v2` continuation records. Each adapter retains its complete native transcript once. The already completed host-result prefix is bound by its count and canonical SHA-256 digest instead of a second copy of every result body. Later requests still validate the exact prefix, pending call IDs/names, used IDs, fixed configuration and state hash. Native thinking signatures, media and steering remain in their provider transcript positions.

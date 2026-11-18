@@ -533,7 +533,7 @@ test('attachment tool continuations preserve their segment binding (steering: tr
       const body = JSON.parse(options.body);
       sent.push(body);
       const first = sent.length === 1;
-      const discovery = body.tools.find((tool: any) => tool.name?.endsWith('_app_tools'));
+      const discovery = body.tools.find((tool: any) => tool.name === 'app_tools');
       if (first && steering) {
         const task = f.workspace.taskSummaries(f.conversation.id)[0];
         f.runtime.steer(

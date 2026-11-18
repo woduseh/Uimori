@@ -58,7 +58,7 @@ const message = (text: string): Json => ({
 });
 const call = (
   id = 'Call-A.Original',
-  name = 'tool_0_knowledge_read',
+  name = 'knowledge_read',
   args = '{"id":"lore-1","include":false,"limit":0}'
 ): Json => ({
   type: 'function_call',
@@ -212,7 +212,7 @@ describe('native Responses pure protocol (no live calls)', () => {
       {
         type: 'function_call',
         call_id: 'known',
-        name: 'tool_0_knowledge_read',
+        name: 'knowledge_read',
         arguments: '{"id":"lore-1"}',
       },
       { type: 'function_call_output', call_id: 'known', output: '0' },
@@ -236,8 +236,12 @@ describe('native Responses pure protocol (no live calls)', () => {
     expect(body).not.toHaveProperty('previous_response_id');
     expect(body).not.toHaveProperty('include');
     expect(body.tools.map((tool: any) => tool.name)).toEqual([
-      'tool_0_knowledge_read',
-      'tool_1_knowledge_read',
+      'knowledge_read',
+      'knowledge_read_2',
+    ]);
+    expect(body.tools.map((tool: any) => tool.description)).toEqual([
+      'Host tool: knowledge.read. Read allowed context',
+      'Host tool: knowledge_read. Different host tool with a colliding sanitized name',
     ]);
     expect(body.tools[0]).toMatchObject({
       strict: false,

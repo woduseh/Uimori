@@ -183,29 +183,57 @@ const toolSchemas: ProviderTool[] = [
   {
     name: 'translation.search',
     description:
-      'Search scoped prior translations for wording and register; an empty query lists metadata. These translations never establish new story facts.',
+      'Search the earlier translations available to this job to see how a name, term or tone was rendered before, so the new translation stays consistent. Every whitespace-separated term must occur in the original or its translation; omit query to list the available translations. Results are metadata with ids for translation.read. Earlier translations are a wording reference only and never establish new story facts.',
     inputSchema: {
       type: 'object',
       properties: {
-        query: { type: 'string' },
-        offset: { type: 'integer' },
-        limit: { type: 'integer' },
+        query: {
+          type: 'string',
+          maxLength: 512,
+          description: 'Terms to find, all required. Omit to list the available translations.',
+        },
+        offset: {
+          type: 'integer',
+          minimum: 0,
+          description: 'Result offset. Pass the previous nextOffset.',
+        },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 50,
+          description: 'Maximum results per page. Default 20.',
+        },
       },
-      required: ['query'],
       additionalProperties: false,
     },
   },
   {
     name: 'translation.read',
     description:
-      'Read discovered evidence with exact source provenance and range. Default body budget is 2048 local tokens. maxTokens narrows that budget; an explicit legacy limit caps UTF-16 units. Follow nextOffset for the next source range.',
+      'Read one earlier translation found by translation.search, with its exact source provenance and the range that was returned. Follow nextOffset for the rest of a long text.',
     inputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'string' },
-        offset: { type: 'integer' },
-        limit: { type: 'integer', minimum: 1, maximum: 4096 },
-        maxTokens: { type: 'integer', minimum: 1, maximum: 2048 },
+        id: { type: 'string', description: 'Id from translation.search.' },
+        offset: {
+          type: 'integer',
+          minimum: 0,
+          description:
+            'Start position in the text, in UTF-16 code units. Pass nextOffset to continue.',
+        },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 4096,
+          description:
+            'Optional hard cap on the returned text, in UTF-16 code units. Normally omit it and size the read with maxTokens.',
+        },
+        maxTokens: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 2048,
+          description: 'Text budget in locally estimated tokens. Default 2048.',
+        },
       },
       required: ['id'],
       additionalProperties: false,

@@ -19,20 +19,41 @@ export const ILLUSTRATION_RESEARCH_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.sources.search',
     description:
-      'Search frozen attached bot, persona and module native descriptions/lore and prior illustration captions/prompts. Literal case-insensitive search returns paths and excerpts; empty query lists text fields. Use illustration.sources.read for full passages.',
-    inputSchema: schema({ query: { type: 'string' }, ...paging }, ['query']),
+      'Search the reference material frozen for this illustration: the descriptions and lore of the attached bot, persona and modules, and the captions and prompts of earlier illustrations. Use it to check how a character, outfit or place is described before writing the prompt. The search is a case-insensitive literal match that returns the field path and a short excerpt; omit query to list the available text fields. Read a full passage with illustration.sources.read.',
+    inputSchema: schema(
+      {
+        query: {
+          type: 'string',
+          description: 'Literal text to find. Omit to list the text fields.',
+        },
+        ...paging,
+      },
+      []
+    ),
   },
   {
     name: 'illustration.sources.read',
     description:
-      'Read a frozen attached resource or prior illustration by catalog ID. An omitted path lists fields. Exact JSON pointer paths select passages, paged with textOffset/textLimit or offset/limit. Reads reservation-pinned data only.',
+      'Read a passage of the frozen reference material by the id and path that illustration.sources.search returned. Without path it lists the fields of that resource or earlier illustration. Long strings page with textOffset and textLimit, field lists with offset and limit. The data is the version reserved for this illustration, not later edits.',
     inputSchema: schema(
       {
-        id: { type: 'string' },
-        path: { type: 'string' },
+        id: { type: 'string', description: 'Catalog id of the resource or earlier illustration.' },
+        path: {
+          type: 'string',
+          description: 'Exact JSON Pointer of the field. Omit to list fields.',
+        },
         ...paging,
-        textOffset: { type: 'integer', minimum: 0 },
-        textLimit: { type: 'integer', minimum: 1, maximum: 10000 },
+        textOffset: {
+          type: 'integer',
+          minimum: 0,
+          description: 'Start position inside a long string, in UTF-16 code units.',
+        },
+        textLimit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 10000,
+          description: 'Maximum string length to return, in UTF-16 code units.',
+        },
       },
       ['id']
     ),
@@ -93,7 +114,12 @@ export function illustrationResearch(snapshot: RunSnapshot, input: IllustrationJ
     if (name !== 'illustration.sources.search')
       throw new Error('Read-only illustration tool required');
     fields(args, ['query', 'offset', 'limit']);
-    const query = text(args.query, 'query', 10000, true).toLocaleLowerCase();
+    const query = text(
+      args.query === undefined ? '' : args.query,
+      'query',
+      10000,
+      true
+    ).toLocaleLowerCase();
     const offset = args.offset === undefined ? 0 : number(args.offset, 'offset', 0);
     const limit = args.limit === undefined ? 20 : number(args.limit, 'limit', 1, 50);
     const matches: Json[] = [];

@@ -1,4 +1,5 @@
 import { toolImageParts } from './provider-image-reference.js';
+import { providerToolDescription, providerToolNames } from './provider-tool-names.js';
 import { canonicalJson as canonical } from './canonical-json.js';
 import type { ProviderTextUpdate } from './provider-progress.js';
 import { createHash } from 'node:crypto';
@@ -160,15 +161,16 @@ function prepare(
     )
   );
   const names = new Set<string>();
-  const aliases = request.stable.tools.map((tool, index) => {
+  for (const tool of request.stable.tools) {
     if (!nonempty(tool.name) || names.has(tool.name) || !object(tool.inputSchema))
       return reject('INVALID_TOOLS');
     names.add(tool.name);
-    return {
-      name: tool.name,
-      providerName: `tool_${index}_${tool.name.replace(/[^A-Za-z0-9_-]/gu, '_').slice(0, 48)}`,
-    };
-  });
+  }
+  const providerNames = providerToolNames(request.stable.tools.map((tool) => tool.name));
+  const aliases = request.stable.tools.map((tool, index) => ({
+    name: tool.name,
+    providerName: providerNames[index],
+  }));
   const wireInput = copy(input, 'INVALID_OPENAI_REQUEST') as Record<string, Json>;
   let previous: OpenAITurn | undefined;
   let fresh: Record<string, Json>[] = [];
@@ -517,7 +519,7 @@ export function encodeResponses(request: ProviderRequest): {
             ...request.stable.tools.map((tool, index) => ({
               type: 'function',
               name: aliases[index].providerName,
-              description: tool.description,
+              description: providerToolDescription(tool, aliases[index].providerName),
               parameters: copy(tool.inputSchema),
               strict: false,
             })),

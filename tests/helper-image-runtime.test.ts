@@ -176,8 +176,8 @@ function answer(body: any, calls: { id: string; name: string; args: unknown }[] 
           id: call.id,
           type: 'function',
           function: {
-            name: body.tools.find((tool: any) =>
-              tool.function.name.endsWith(`_${call.name.replaceAll('.', '_')}`)
+            name: body.tools.find(
+              (tool: any) => tool.function.name === call.name.replaceAll('.', '_')
             ).function.name,
             arguments: JSON.stringify(call.args),
           },

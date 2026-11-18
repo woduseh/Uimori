@@ -18,6 +18,10 @@ import {
 const string: Json = { type: 'string' };
 const revision: Json = { type: 'integer', minimum: 0 };
 const nullable: Json = { type: ['string', 'null'] };
+const described = (value: Json, description: string): Json => ({
+  ...(value as Record<string, Json>),
+  description,
+});
 function tool(
   name: string,
   description: string,
@@ -33,52 +37,83 @@ function tool(
 export const HELPER_PRESENTATION_TOOLS: ProviderTool[] = [
   tool(
     'font.list',
-    'List registered fonts and current global app/reader selections with their revision.'
+    'List the registered fonts and which font is currently selected for the app and for the reader, with the revision that font.select needs.'
   ),
   tool(
     'font.register',
-    'Download and register a web-embeddable font from a public HTTPS font-file URL. The URL is used for download only, not saved as font metadata. Registration does not apply it. A preview alone is not a creation request.',
-    { title: string, url: string },
+    'Add a font to the app by downloading a web-embeddable font file from a public HTTPS URL. The URL is used once for the download and is not stored with the font. Registering a font makes it available; applying it is a separate step through font.select.',
+    {
+      title: described(string, 'Display name of the font.'),
+      url: described(string, 'Public HTTPS URL of the font file itself, not of a web page.'),
+    },
     ['title', 'url']
   ),
   tool(
     'font.select',
-    'Apply explicitly requested global app and reader fonts with the revision from font.list. Both IDs are required; preserve the other current choice. Null restores the default.',
-    { expectedRevision: revision, appFontId: nullable, readerFontId: nullable },
+    'Choose the font used across the app and the font used in the reader. Both values are sent every time: repeat the current id from font.list for the one that should stay as it is, and pass null to return one to the default font.',
+    {
+      expectedRevision: described(revision, 'Revision from font.list.'),
+      appFontId: described(nullable, 'Font id for the app, or null for the default.'),
+      readerFontId: described(nullable, 'Font id for the reader, or null for the default.'),
+    },
     ['expectedRevision', 'appFontId', 'readerFontId']
   ),
   tool(
     'font.delete',
-    'Delete an explicitly requested registered font. Read current selections first.',
-    { id: string },
+    'Remove a registered font from the app. The helper cannot restore it; it would have to be registered again from its file. Check font.list first to see whether the font is currently selected.',
+    { id: described(string, 'Font id, from font.list.') },
     ['id']
   ),
   tool(
     'palette.list',
-    'List built-in and saved light/dark palettes and scoped selections with preference revision.'
+    'List the built-in and saved color palettes with their light and dark colors, where each is selected (global, bot or chat) and the preference revision.'
   ),
   tool(
     'palette.save',
-    'Create or update a standalone palette. model contains title, description and colors.light/dark using theme.guide color keys. Saving does not apply it; preview/proposal requests remain unsaved.',
-    { id: string, expectedRevision: revision, model: { type: 'object' } },
+    'Create a standalone color palette or update a saved one. The model holds title, description and colors.light and colors.dark, using the color keys described in theme.guide. Omit id and expectedRevision to create; pass both to update. Saving a palette does not apply it: that is theme.select with dimension=palette.',
+    {
+      id: described(string, 'Id of the palette to update. Omit to create.'),
+      expectedRevision: described(revision, 'Current revision of the palette to update.'),
+      model: {
+        type: 'object',
+        description: 'The complete palette: title, description and colors.light / colors.dark.',
+      },
+    },
     ['model']
   ),
   tool(
     'palette.delete',
-    'Delete an explicitly requested saved palette using its current revision.',
-    { id: string, expectedRevision: revision },
+    'Delete a saved color palette. Built-in palettes cannot be deleted, and the helper cannot restore a deleted palette.',
+    {
+      id: described(string, 'Palette id, from palette.list.'),
+      expectedRevision: described(revision, 'Current revision of the palette.'),
+    },
     ['id', 'expectedRevision']
   ),
   tool(
     'theme.select',
-    'Apply an explicitly requested theme, palette or bot Story UI theme independently. For dimension=storyUi use scope=bot, targetId=bot ID and themeId=saved theme ID (must include storyUi), or null to clear the bot default. Read theme.list for preference revision. Null inherits for bot/chat or restores the global default. Creation alone does not select.',
+    'Apply a theme, a palette or a Story UI theme. The three dimensions are chosen independently. dimension=theme or palette applies at scope global, bot or chat; passing null makes a bot or chat inherit again, or returns the global scope to the default. dimension=storyUi sets the default Story UI theme of one bot (scope=bot, targetId=the bot id), using a saved theme that has storyUi, or null to clear it; a Story UI choice for a single chat is settings.update chat.storyUiStyle instead. Take expectedRevision from theme.list.',
     {
-      scope: { type: 'string', enum: ['global', 'bot', 'chat'] },
-      targetId: string,
-      dimension: { type: 'string', enum: ['theme', 'palette', 'storyUi'] },
-      themeId: nullable,
-      paletteId: nullable,
-      expectedRevision: revision,
+      scope: {
+        type: 'string',
+        enum: ['global', 'bot', 'chat'],
+        description: 'Where the choice applies.',
+      },
+      targetId: described(string, 'The bot id or chat id for scope bot or chat. Omit for global.'),
+      dimension: {
+        type: 'string',
+        enum: ['theme', 'palette', 'storyUi'],
+        description: 'What is being chosen.',
+      },
+      themeId: described(
+        nullable,
+        'For dimension theme or storyUi: the saved theme id, or null to inherit or clear.'
+      ),
+      paletteId: described(
+        nullable,
+        'For dimension palette: the palette id, or null to inherit or clear.'
+      ),
+      expectedRevision: described(revision, 'Preference revision from theme.list.'),
     },
     ['scope', 'dimension', 'expectedRevision']
   ),

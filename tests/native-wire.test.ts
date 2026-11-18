@@ -92,7 +92,7 @@ function responseRound(input: ProviderRequest, id: string) {
     type: 'function_call',
     id: `fc-${id}`,
     call_id: `Call.${id}`,
-    name: 'tool_0_knowledge_read',
+    name: 'knowledge_read',
     arguments: '{"id":"synthetic"}',
     status: 'completed',
   };
@@ -438,7 +438,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
         {
           type: 'tool_use',
           id: 'Boundary.Call',
-          name: 'tool_0_knowledge_read',
+          name: 'knowledge_read',
           input: { id: 'synthetic' },
         },
       ];
@@ -626,7 +626,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
                 index: 0,
                 id: 'Chat.Call',
                 type: 'function',
-                function: { name: 'tool_0_knowledge_read', arguments: '{"id":"synthetic"}' },
+                function: { name: 'knowledge_read', arguments: '{"id":"synthetic"}' },
               },
             ],
           },
@@ -664,7 +664,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
       {
         type: 'tool_use',
         id: 'Anthropic.Call',
-        name: 'tool_0_knowledge_read',
+        name: 'knowledge_read',
         input: { id: 'synthetic' },
       },
     ];

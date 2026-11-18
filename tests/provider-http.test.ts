@@ -294,7 +294,7 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
                             index: 0,
                             id: 'unfinished-call',
                             type: 'function',
-                            function: { name: 'tool_0_knowledge_read', arguments: '{"id":' },
+                            function: { name: 'knowledge_read', arguments: '{"id":' },
                           },
                         ],
                       }
