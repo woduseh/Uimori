@@ -28,7 +28,7 @@ Phēmē RP와 소설은 배포본과 같이 영어 응답으로 시작해요. �
 
 `server/builtin-prompts.ts`가 목록과 독립 사본 생성을 담당해요. `GET /api/prompt-templates`는 제목·역할·설명만, `GET /api/prompt-templates/:id`는 선택한 프로그램과 기본 옵션을 반환해요. 두 API는 읽기 전용이에요. 추가·편집·선택에는 기존 프리셋 및 현재 프롬프트 API의 검증·수정 번호·초안 보호를 사용해요.
 
-Phēmē는 RisuToki의 Phēmē v5.6.0 배포본인 `risu/prompts/phēmē/dist/uimori/pheme-roleplay.uimori.json`과 `pheme-novel.uimori.json`의 V5.6.0 r2 프로그램·기본 선택값을 사용해요. 이 프로그램은 같은 버전의 `.risup`을 직접 가져온 결과와 같아요. 원본의 CBS·토글 선언·정규식·캐시 지점을 보존하고, 선택형 협업 설정만 별도로 붙여요.
+Phēmē는 RisuToki의 Phēmē v5.6.0 배포본(리비전 `921a84e`)인 `risu/prompts/phēmē/dist/uimori/pheme-roleplay.uimori.json`과 `pheme-novel.uimori.json`의 V5.6.0 r2 프로그램·기본 선택값을 사용해요. 이 프로그램은 같은 버전의 `.risup`을 직접 가져온 결과와 같아요. 원본의 CBS·토글 선언·정규식·캐시 지점을 보존하고, 선택형 협업 설정만 별도로 붙여요.
 
 Hermēneía는 v1.2.0의 `dist/hermeneia-preset.risup`을 번역 역할로 가져온 프로그램과 기본 선택값을 사용해요. `server/builtin-prompts/`에 세 프리셋의 본문과 기본 선택값, 작문용 협업 정의 두 개를 보관해요.
 
