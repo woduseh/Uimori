@@ -56,6 +56,8 @@ export type HelperLimits = { totalCalls: number; helperCalls: number };
 export const HELPER_TASK_LIMITS: Readonly<HelperLimits> = { totalCalls: 128, helperCalls: 64 };
 /** Tool callbacks are observable even when a native agent owns its internal model loop. */
 export const HELPER_TOOL_CALL_LIMIT = 256;
+/** Calls past the limit are answered without running; an agent that keeps calling is stopped. */
+export const HELPER_TOOL_CALL_GRACE = 16;
 export type HelperInstruction = {
   id: number;
   requestKey: string;

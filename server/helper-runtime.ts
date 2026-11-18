@@ -139,6 +139,7 @@ import {
 import {
   DEFAULT_HELPER_TASK_TIMEOUT_MINUTES,
   HELPER_TASK_LIMITS,
+  HELPER_TOOL_CALL_GRACE,
   HELPER_TOOL_CALL_LIMIT,
 } from '../core/helper.js';
 import { helperWebSearchCapability } from '../core/helper-web-search.js';
@@ -207,6 +208,8 @@ function retryRequest(workspace: HelperWorkspace, request: string, retryOf?: str
   ].join('\n\n');
 }
 
+const FINAL_CALL_GUIDANCE =
+  'The call budget allows only this response. Do not call tools. Reply to the user with what you completed, which changes were saved, any change whose outcome is uncertain, and what remains to do.';
 const CONTRACT = `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation. Apply, select, cancel or retry only when requested. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. ${AUTHOR_NOTE_GUIDANCE}
 Choose and combine the tools suited to the task: app operations, data.exec for workspace search and transformation, or shell workspace files described in INDEX.md. Reuse known schemas and successful results; use app.tools only for unfamiliar operations or arguments. Group independent work when useful, and use returned revisions and receipts directly instead of rereading only to confirm success. Distinguish live saved resources, frozen chat history and unsaved editor input. Base visual claims on inspected pixels.
 Edit saved targets using their recorded revisions and preserve unrelated fields. For workspace-file edits, use uimori apply to save; for app operations, follow their own save contracts. Reconcile conflicts against the latest version and report changes from successful receipts. If the target has an unsaved editor draft, ask the user to save it first. For translation guides, preserve established terms and distinguish proposed choices from authored facts.
@@ -1274,11 +1277,14 @@ export class HelperRuntime {
       queueMs = 0
     ) => {
       const returned: ToolEvent[] = [];
-      if (callIds.size + calls.length > HELPER_TOOL_CALL_LIMIT) {
+      if (callIds.size + calls.length > HELPER_TOOL_CALL_LIMIT + HELPER_TOOL_CALL_GRACE) {
         toolBudgetError = new Error('HELPER_TOOL_CALL_BUDGET_EXHAUSTED');
         toolBudgetController.abort(toolBudgetError);
         throw toolBudgetError;
       }
+      const overBudget = new Set(
+        calls.slice(Math.max(0, HELPER_TOOL_CALL_LIMIT - callIds.size)).map((call) => call.id)
+      );
       for (const call of calls) {
         if (callIds.has(call.id)) throw new Error('DUPLICATE_TOOL_ID');
         callIds.add(call.id);
@@ -1305,6 +1311,19 @@ export class HelperRuntime {
         };
         let call = wireCall;
         toolSignal.throwIfAborted();
+        if (overBudget.has(wireCall.id))
+          return {
+            wireCall,
+            call,
+            output: {
+              error: 'HELPER_TOOL_CALL_BUDGET_EXHAUSTED',
+              guidance: `This tool was not run: this task used its ${HELPER_TOOL_CALL_LIMIT} tool calls. Do not call more tools. ${FINAL_CALL_GUIDANCE}`,
+            },
+            denied: true,
+            errorKind: 'recoverable' as const,
+            elapsedMs: 0,
+            finishedAt: new Date().toISOString(),
+          };
         // HTTP corrections enter the next model request. Checking each tool also
         // stops later writes when the instruction arrives during an earlier read.
         if (
@@ -1566,9 +1585,10 @@ export class HelperRuntime {
             requestText
           )
         );
+        let finalCall = false;
         const continuationInput = () =>
           JSON.stringify({
-            controls: this.remainingBudget(task, helperCalls),
+            controls: this.remainingBudget(task, helperCalls, finalCall),
             additionalUserInstructions: instructions
               .filter((item) => item.status === 'pending')
               .map((item) => item.text),
@@ -1714,10 +1734,15 @@ export class HelperRuntime {
             } else if (estimate > inputLimit) throw new Error('HELPER_COMPACTION_NO_PROGRESS');
           }
         }
+        // The last call the budget allows reports the work instead of failing on the next round.
+        finalCall =
+          helperCalls + 1 >= task.snapshot.limits.helperCalls ||
+          this.workspace.taskState(id).usage.modelCalls + 1 >= task.snapshot.limits.totalCalls ||
+          callIds.size >= HELPER_TOOL_CALL_LIMIT;
         if (boundContinuation && request.opaqueState)
           request.continuationInput = continuationInput();
         else {
-          request.input.controls = this.remainingBudget(task, helperCalls);
+          request.input.controls = this.remainingBudget(task, helperCalls, finalCall);
           request = withNativeHostContext(request);
           // Native media prompts contain the original task and host controls too.
           // Freeze them with this segment; steering travels only through the delta.
@@ -1864,6 +1889,12 @@ export class HelperRuntime {
           writer.finish(status);
           return;
         }
+        if (finalCall)
+          throw new Error(
+            callIds.size >= HELPER_TOOL_CALL_LIMIT
+              ? 'HELPER_TOOL_CALL_BUDGET_EXHAUSTED'
+              : 'MODEL_CALL_BUDGET_EXHAUSTED'
+          );
         opaqueState = result.opaqueState ?? undefined;
         // Native Codex owns its tool history. Only the external provider loop
         // needs a second copy and read-change tracking for host compaction.
@@ -2027,8 +2058,9 @@ export class HelperRuntime {
       task.id
     );
   }
-  private remainingBudget(task: HelperTask, helperCalls: number) {
+  private remainingBudget(task: HelperTask, helperCalls: number, finalCall = false) {
     return {
+      ...(finalCall ? { finalCall: true, finalCallGuidance: FINAL_CALL_GUIDANCE } : {}),
       purpose: 'helper',
       helperCallsRemaining: Math.max(0, task.snapshot.limits.helperCalls - helperCalls),
       totalCallsRemaining: Math.max(

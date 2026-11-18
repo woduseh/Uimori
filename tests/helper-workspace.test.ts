@@ -17,6 +17,7 @@ import { readResource, saveResource } from '../server/resource-service.js';
 import * as transport from '../core/transport.js';
 import {
   HELPER_TASK_LIMITS,
+  HELPER_TOOL_CALL_GRACE,
   HELPER_TOOL_CALL_LIMIT,
   type HelperTaskSnapshot,
 } from '../core/helper.js';
@@ -938,7 +939,7 @@ test('legacy helper limits remain readable without rewriting stored conversation
 });
 
 test.each(['provider', 'native'] as const)(
-  'helper %s execution stops after 256 host tool callbacks',
+  'helper %s execution answers calls past 256 host tool callbacks without running them, then stops',
   async (execution) => {
     const f = fixture();
     // The limit is checked on a live connection. Sync its WAL at checkpoints instead of per event.
@@ -984,9 +985,17 @@ test.each(['provider', 'native'] as const)(
               options.signal
             );
           }
+          for (let index = 0; index < HELPER_TOOL_CALL_GRACE; index++) {
+            const denied = await options.onToolCall(
+              { name: 'missing.tool', arguments: {}, callId: `over-budget-${index}` },
+              options.signal
+            );
+            expect(denied.success).toBe(false);
+            expect(denied.text).toContain('HELPER_TOOL_CALL_BUDGET_EXHAUSTED');
+          }
           await expect(
             options.onToolCall(
-              { name: 'missing.tool', arguments: {}, callId: 'over-budget' },
+              { name: 'missing.tool', arguments: {}, callId: 'past-grace' },
               options.signal
             )
           ).rejects.toThrow('HELPER_TOOL_CALL_BUDGET_EXHAUSTED');
@@ -995,13 +1004,19 @@ test.each(['provider', 'native'] as const)(
         },
       });
     } else {
-      mockSend((_request, _options, index) => ({
-        ...structuredClone(success),
-        status: 'tool_calls',
-        text: '',
-        toolCalls:
-          index === 0 ? calls : [{ id: 'over-budget', name: 'missing.tool', arguments: {} }],
-      }));
+      mockSend((request, _options, index) => {
+        // The round after the limit is the final call; a model that still asks for tools fails.
+        expect(request.input.controls).toMatchObject(index === 0 ? {} : { finalCall: true });
+        return {
+          ...structuredClone(success),
+          status: 'tool_calls',
+          text: '',
+          toolCalls:
+            index === 0
+              ? [...calls, { id: 'over-budget', name: 'missing.tool', arguments: {} }]
+              : [{ id: 'after-final', name: 'missing.tool', arguments: {} }],
+        };
+      });
     }
     const task = runtime.enqueue(f.conversation.id, 'callback-guard', '도구를 확인해줘');
     await Promise.all(f.work);
@@ -1013,10 +1028,48 @@ test.each(['provider', 'native'] as const)(
     const remaining = f.workspace.events(f.conversation.id, firstPage.at(-1)!.seq);
     expect(
       [...firstPage, ...remaining].filter((event) => event.kind === 'tool.finished')
-    ).toHaveLength(HELPER_TOOL_CALL_LIMIT);
+    ).toHaveLength(HELPER_TOOL_CALL_LIMIT + (execution === 'native' ? HELPER_TOOL_CALL_GRACE : 1));
     if (execution === 'native') expect(nativeSignal?.aborted).toBe(true);
   }
 );
+
+test('the last call the budget allows reports the work instead of failing', async () => {
+  const f = fixture();
+  const task = f.runtime.enqueue(
+    f.conversation.id,
+    'final-call',
+    '도구를 확인해줘',
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    false
+  );
+  task.snapshot.limits = { helperCalls: 2, totalCalls: 2 };
+  f.store.db
+    .prepare('UPDATE helper_tasks SET snapshot=? WHERE id=?')
+    .run(JSON.stringify(task.snapshot), task.id);
+  const controls: unknown[] = [];
+  mockSend((request, _options, index) => {
+    controls.push(request.input.controls);
+    return index === 0
+      ? {
+          ...structuredClone(success),
+          status: 'tool_calls',
+          text: '',
+          toolCalls: [{ id: 'first-read', name: 'missing.tool', arguments: {} }],
+        }
+      : { ...structuredClone(success), text: '여기까지 했고, 남은 일은 이거예요.' };
+  });
+  f.runtime.pump();
+  await Promise.all(f.work);
+  expect(controls[0]).not.toHaveProperty('finalCall');
+  expect(controls[1]).toMatchObject({ finalCall: true, helperCallsRemaining: 1 });
+  expect(f.workspace.task(task.id)).toMatchObject({
+    status: 'completed',
+    usage: { modelCalls: 2 },
+  });
+});
 
 test('HTTP steering skips a stale write, delivers once and retains the correction in future history', async () => {
   const f = fixture();
