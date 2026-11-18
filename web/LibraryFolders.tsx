@@ -133,6 +133,7 @@ export function LibraryFolders({
   value,
   onChange,
   counts,
+  covers,
   reload,
   onError,
   presentation = 'breadcrumb',
@@ -151,6 +152,8 @@ export function LibraryFolders({
   value: FolderFilter;
   onChange: (value: FolderFilter) => void;
   counts: Record<string, number>;
+  /** Portrait URLs of resources inside each folder; a folder without any keeps the folder icon. */
+  covers?: Record<string, string[]>;
   reload: () => Promise<void>;
   onError: (error: string) => void;
   draggedItemId?: string | null;
@@ -288,7 +291,19 @@ export function LibraryFolders({
               aria-label={t('library.openFolder', { v0: folder.title })}
               onClick={() => onChange(folder.id)}
             >
-              <FolderIcon size={28} aria-hidden="true" />
+              {covers?.[folder.id]?.length ? (
+                <span
+                  className="library-folder-cover"
+                  data-count={covers[folder.id].length}
+                  aria-hidden="true"
+                >
+                  {covers[folder.id].map((url) => (
+                    <img key={url} src={url} alt="" loading="lazy" draggable={false} />
+                  ))}
+                </span>
+              ) : (
+                <FolderIcon size={28} aria-hidden="true" />
+              )}
               <span>
                 <strong title={folder.title}>{folder.title}</strong>
                 <small>{t('library.itemCount', { count: counts[folder.id] ?? 0 })}</small>

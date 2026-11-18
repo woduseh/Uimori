@@ -502,10 +502,14 @@ export function LibraryPanel({
     organizedLibrary?.contents.filter((item) => libraryCategory(organizedLibrary, item) === tab) ??
     [];
   const counts: Record<string, number> = { all: categoryItems.length };
+  const folderCovers: Record<string, string[]> = {};
   for (const item of categoryItems) {
     const key =
       libraryFolderOf(organizedLibrary!, { kind: 'content', id: item.id }) ?? 'unclassified';
     counts[key] = (counts[key] ?? 0) + 1;
+    const portrait = contentPortraitUrl(item);
+    const cover = (folderCovers[key] ??= []);
+    if (portrait && cover.length < 4 && !cover.includes(portrait)) cover.push(portrait);
   }
   const sort = sortByTab[tab];
   const manualOrder = manualOrderByTab[tab];
@@ -1212,6 +1216,7 @@ export function LibraryPanel({
                     value={folder}
                     onChange={changeFolder}
                     counts={counts}
+                    covers={folderCovers}
                     reload={reload}
                     onError={onError}
                     draggedItemId={draggedItemId}
