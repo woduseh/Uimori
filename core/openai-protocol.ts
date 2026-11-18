@@ -407,6 +407,9 @@ export function encodeResponses(request: ProviderRequest): {
       ? cache?.breakpoint
       : undefined;
   const requestLabel = 'Request data (JSON):\n';
+  // GPT-6.2 appends top-level `instructions` after `input`, outside the cacheable prefix. Its host
+  // contract leads `input` as a developer message; earlier models keep their existing wire form.
+  const developerFirst = /(?:^|\/)gpt-6\.2(?:$|-)/u.test(request.modelId);
   const bootstrapInput: Json[] = [];
   for (const item of bootstrap as Record<string, Json>[]) {
     bootstrapInput.push(
@@ -438,6 +441,15 @@ export function encodeResponses(request: ProviderRequest): {
         })),
       ]
     : [
+        // A continuation replays this stored item first; it is never added a second time.
+        ...(developerFirst
+          ? [
+              {
+                role: 'developer',
+                content: [{ type: 'input_text', text: prepared.instructions }],
+              },
+            ]
+          : []),
         ...bootstrapInput,
         ...(plan
           ? structuredClone(plan.messages)
@@ -497,7 +509,7 @@ export function encodeResponses(request: ProviderRequest): {
   const cacheOptions = plan?.options ?? cache?.options;
   const body: Json = {
     model: request.modelId,
-    instructions: prepared.instructions,
+    ...(developerFirst ? {} : { instructions: prepared.instructions }),
     input,
     stream: true,
     store: false,

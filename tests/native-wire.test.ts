@@ -305,14 +305,17 @@ describe('native provider wire (synthetic, no live calls)', () => {
       expect(() => planNativeMessages(r, protocol)).toThrow('PROMPT_CACHE_UNSUPPORTED');
     }
   });
-  test('reviewed Opus 5.5 preserves an authored cache point without selecting a cache mode', () => {
-    const r = request('claude-opus-5-5');
-    r.prompt!.cachePlan = [{ blockId: 'cache', afterMessageId: 'system', policy: 'require' }];
-    const body = wire(encodeAnthropic(r).body);
-    expect(body.system.at(-1).cache_control).toEqual({ type: 'ephemeral' });
-    r.toolChoice = 'knowledge.read';
-    expect(() => encodeAnthropic(r)).toThrow('UNSUPPORTED_MODEL_TOOL_CHOICE');
-  });
+  test.each(['claude-opus-5-5', 'claude-fable-5-2', 'claude-mythos-5-2'])(
+    'reviewed %s preserves an authored cache point without selecting a cache mode',
+    (modelId) => {
+      const r = request(modelId);
+      r.prompt!.cachePlan = [{ blockId: 'cache', afterMessageId: 'system', policy: 'require' }];
+      const body = wire(encodeAnthropic(r).body);
+      expect(body.system.at(-1).cache_control).toEqual({ type: 'ephemeral' });
+      r.toolChoice = 'knowledge.read';
+      expect(() => encodeAnthropic(r)).toThrow('UNSUPPORTED_MODEL_TOOL_CHOICE');
+    }
+  );
   test('rejects prefill while Anthropic accepts mid-system for any model ID', () => {
     for (const [encoder, model] of [
       [encodeResponses, 'gpt-5.6'],

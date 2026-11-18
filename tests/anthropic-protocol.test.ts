@@ -258,57 +258,75 @@ describe('Anthropic Messages request and opaque continuation', () => {
     expect(() => encodeAnthropic(next)).toThrow('ANTHROPIC_CONTINUATION_MISMATCH');
   });
 
-  test('Fable 5.1 preserves the exact system, tools, message prefix and signed thinking across tool rounds', () => {
-    const input = request();
-    input.modelId = 'claude-fable-5-1';
-    input.generation = {
-      maxOutputTokens: 8192,
-      temperature: null,
-      outputEffort: 'max',
-      thinkingMode: 'adaptive',
-    };
-    const first = start(input);
-    const original = native(first.body);
-    begin(first.decoder);
-    const thinking = {
-      type: 'thinking',
-      thinking: '',
-      signature: 'FABLE_SIGNATURE',
-      future_metadata: { binding: 'fable-original' },
-    };
-    block(first.decoder, 0, thinking);
-    block(first.decoder, 1, toolPart());
-    const output = end(first.decoder, 'tool_use');
-    const next = continued(input, output);
-    const wire = native(encodeAnthropic(next).body);
-    expect(wire.system).toEqual(original.system);
-    expect(wire.tools).toEqual(original.tools);
-    expect(wire.messages.slice(0, original.messages.length)).toEqual(original.messages);
-    expect(wire.messages[original.messages.length].content).toEqual([thinking, toolPart()]);
-    expect(wire.output_config).toEqual({ effort: 'max' });
-    expect(wire.thinking).toEqual({ type: 'adaptive' });
-    expect(JSON.stringify(diagnosticAnthropicBody(wire))).not.toContain('FABLE_SIGNATURE');
-    for (const mutation of ['system', 'tools', 'history'] as const) {
-      const changed = structuredClone(next);
-      if (mutation === 'system') changed.stable.contract += ' changed';
-      if (mutation === 'tools') changed.stable.tools.reverse();
-      if (mutation === 'history') changed.input.history = [];
-      expect(() => encodeAnthropic(changed)).toThrow('ANTHROPIC_CONTINUATION_MISMATCH');
+  // Fable 5.2 answers a changed prefix with a 400, so each round must only append.
+  test.each(['claude-fable-5-1', 'claude-fable-5-2'])(
+    '%s preserves the exact system, tools, message prefix and signed thinking across tool rounds',
+    (modelId) => {
+      const input = request();
+      input.modelId = modelId;
+      input.generation = {
+        maxOutputTokens: 8192,
+        temperature: null,
+        outputEffort: 'max',
+        thinkingMode: 'adaptive',
+      };
+      const first = start(input);
+      const original = native(first.body);
+      begin(first.decoder);
+      const thinking = {
+        type: 'thinking',
+        thinking: '',
+        signature: 'FABLE_SIGNATURE',
+        future_metadata: { binding: 'fable-original' },
+      };
+      block(first.decoder, 0, thinking);
+      block(first.decoder, 1, toolPart());
+      const output = end(first.decoder, 'tool_use');
+      const next = continued(input, output);
+      const second = start(next);
+      const wire = native(second.body);
+      expect(wire.system).toEqual(original.system);
+      expect(wire.tools).toEqual(original.tools);
+      expect(wire.messages.slice(0, original.messages.length)).toEqual(original.messages);
+      expect(wire.messages[original.messages.length].content).toEqual([thinking, toolPart()]);
+      expect(wire.output_config).toEqual({ effort: 'max' });
+      expect(wire.thinking).toEqual({ type: 'adaptive' });
+      expect(JSON.stringify(diagnosticAnthropicBody(wire))).not.toContain('FABLE_SIGNATURE');
+      for (const mutation of ['system', 'tools', 'history'] as const) {
+        const changed = structuredClone(next);
+        if (mutation === 'system') changed.stable.contract += ' changed';
+        if (mutation === 'tools') changed.stable.tools.reverse();
+        if (mutation === 'history') changed.input.history = [];
+        expect(() => encodeAnthropic(changed)).toThrow('ANTHROPIC_CONTINUATION_MISMATCH');
+      }
+      // A later round with extra host input still sends the earlier rounds as an unchanged prefix.
+      begin(second.decoder);
+      block(second.decoder, 0, { ...thinking, signature: 'SECOND_SIGNATURE' });
+      block(second.decoder, 1, toolPart('call-2'));
+      const third = continued(next, end(second.decoder, 'tool_use'));
+      third.continuationInput = 'Keep the same scene.';
+      const later = native(encodeAnthropic(third).body);
+      expect(later.system).toEqual(original.system);
+      expect(later.tools).toEqual(original.tools);
+      expect(later.messages.slice(0, wire.messages.length)).toEqual(wire.messages);
     }
-  });
+  );
 
-  test('Fable 5.1 rejects forced tool selection; disabled thinking reaches the wire for the provider to judge', () => {
-    const input = request();
-    input.modelId = 'claude-fable-5-1';
-    input.toolChoice = 'knowledge.read';
-    const original = structuredClone(input);
-    expect(() => encodeAnthropic(input)).toThrow('UNSUPPORTED_MODEL_TOOL_CHOICE');
-    expect(input).toEqual(original);
-    input.toolChoice = 'auto';
-    expect(native(encodeAnthropic(input).body).tool_choice).toEqual({ type: 'auto' });
-    input.generation!.thinkingMode = 'disabled';
-    expect(native(encodeAnthropic(input).body).thinking).toEqual({ type: 'disabled' });
-  });
+  test.each(['claude-fable-5-1', 'claude-fable-5-2', 'claude-mythos-5-2'])(
+    '%s rejects forced tool selection; disabled thinking reaches the wire for the provider to judge',
+    (modelId) => {
+      const input = request();
+      input.modelId = modelId;
+      input.toolChoice = 'knowledge.read';
+      const original = structuredClone(input);
+      expect(() => encodeAnthropic(input)).toThrow('UNSUPPORTED_MODEL_TOOL_CHOICE');
+      expect(input).toEqual(original);
+      input.toolChoice = 'auto';
+      expect(native(encodeAnthropic(input).body).tool_choice).toEqual({ type: 'auto' });
+      input.generation!.thinkingMode = 'disabled';
+      expect(native(encodeAnthropic(input).body).thinking).toEqual({ type: 'disabled' });
+    }
+  );
 
   test.each(['explicit', 'automatic', 'disabled'] as const)(
     'Claude cache %s reaches requests without a native prompt and preserves translation formatting',

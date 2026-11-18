@@ -87,26 +87,40 @@ function translationRequest() {
   return { input };
 }
 
-test('Argon omits ignored sampling, rejects minimal thinking and unsupported long REST decodes', () => {
-  const input = request();
-  input.modelId = 'gemini-4-argon';
-  input.generation = {
-    maxOutputTokens: 32_768,
-    temperature: 1,
-    topP: 0.9,
-    thinkingLevel: 'MEDIUM',
-  };
-  const wire = bodyObject(encodeVertex(input).body);
-  expect(wire.generationConfig).toEqual({
-    maxOutputTokens: 32_768,
-    thinkingConfig: { thinkingLevel: 'MEDIUM' },
-  });
-  input.generation.thinkingLevel = 'MINIMAL';
-  expect(() => encodeVertex(input)).toThrow('ARGON_THINKING_LEVEL_UNSUPPORTED');
-  input.generation.thinkingLevel = 'HIGH';
-  input.generation.maxOutputTokens = 65_537;
-  expect(() => encodeVertex(input)).toThrow('ARGON_LONG_DECODE_UNSUPPORTED');
-});
+test.each([
+  ['gemini-4-argon', 'ARGON'],
+  ['gemini-4-carbon', 'CARBON'],
+])(
+  '%s omits ignored sampling, rejects minimal thinking and unsupported long REST decodes',
+  (modelId, code) => {
+    const input = request();
+    input.modelId = modelId;
+    input.generation = {
+      maxOutputTokens: 32_768,
+      temperature: 1,
+      topP: 0.9,
+      thinkingLevel: 'MEDIUM',
+    };
+    const wire = bodyObject(encodeVertex(input).body);
+    expect(wire.generationConfig).toEqual({
+      maxOutputTokens: 32_768,
+      thinkingConfig: { thinkingLevel: 'MEDIUM' },
+    });
+    expect(bodyObject(encodeVertex(input, 'google-gemini-v1').body).generationConfig).toEqual(
+      wire.generationConfig
+    );
+    delete input.generation.thinkingLevel;
+    input.generation.maxOutputTokens = 65_536;
+    expect(bodyObject(encodeVertex(input).body).generationConfig).toEqual({
+      maxOutputTokens: 65_536,
+    });
+    input.generation.thinkingLevel = 'MINIMAL';
+    expect(() => encodeVertex(input)).toThrow(`${code}_THINKING_LEVEL_UNSUPPORTED`);
+    input.generation.thinkingLevel = 'HIGH';
+    input.generation.maxOutputTokens = 65_537;
+    expect(() => encodeVertex(input)).toThrow(`${code}_LONG_DECODE_UNSUPPORTED`);
+  }
+);
 
 test('google-gemini-v1 enables native search only for an explicit story guide without local tools', () => {
   const protocol = 'google-gemini-v1' as const;

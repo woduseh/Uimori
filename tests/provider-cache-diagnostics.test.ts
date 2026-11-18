@@ -86,6 +86,18 @@ test.each(protocols)(
   }
 );
 
+test('GPT-6.2 fingerprints cover the leading developer message', () => {
+  const protocol = 'openai-responses-v1' as const;
+  const input = request(protocol);
+  input.modelId = 'gpt-6.2-sol';
+  const points = providerCacheBoundaries(protocol, encode(protocol, input));
+  expect(points.map((point) => point.path)).toEqual(['input[1].content[0]', 'input[3].content[0]']);
+  input.stable.contract = 'A changed host contract.';
+  const changed = providerCacheBoundaries(protocol, encode(protocol, input));
+  expect(changed.map((point) => point.path)).toEqual(points.map((point) => point.path));
+  expect(changed[0].sha256).not.toBe(points[0].sha256);
+});
+
 test.each(protocols)(
   '%s fingerprints include settings, schema, tool order and earlier bootstrap',
   (protocol) => {

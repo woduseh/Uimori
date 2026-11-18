@@ -298,13 +298,21 @@ describe('offline host context budget', () => {
   });
   test.each([
     { modelId: 'gpt-6-astra', protocol: 'openai-responses-v1', output: 128000, effective: 922000 },
+    { modelId: 'gpt-6.2-sol', protocol: 'openai-responses-v1', output: 128000, effective: 922000 },
     {
       modelId: 'claude-opus-5',
       protocol: 'anthropic-messages-v1',
       output: 128000,
       effective: 872000,
     },
+    {
+      modelId: 'claude-fable-5-2',
+      protocol: 'anthropic-messages-v1',
+      output: 128000,
+      effective: 872000,
+    },
     { modelId: 'gemini-3.8-flash', protocol: 'vertex-gemini-v1', output: 65536, effective: 983040 },
+    { modelId: 'gemini-4-carbon', protocol: 'google-gemini-v1', output: 65536, effective: 983040 },
   ] as const)(
     '$protocol reserves the selected output inside the reviewed native window without rewriting settings',
     ({ modelId, protocol, output, effective }) => {
