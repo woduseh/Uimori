@@ -149,6 +149,14 @@ export type AppOptions = {
 export type App = FastifyInstance & { store: Store; controls: Controls };
 type RecordBody = Record<string, unknown>;
 
+/** A code or a source location only: free-form messages can quote manuscript or settings data. */
+function requestFailureLabel(error: unknown): string {
+  if (!(error instanceof Error)) return 'NON_ERROR';
+  if (/^[A-Z][A-Z0-9_]{2,100}$/u.test(error.message)) return error.message;
+  const frame = /\(([^()]+):(\d+):\d+\)/u.exec(error.stack ?? '');
+  return frame ? `${error.name} at ${basename(frame[1])}:${frame[2]}` : error.name;
+}
+
 export async function createApp(options: AppOptions): Promise<App> {
   const network = networkPolicy(options);
   const app = Fastify({ logger: false, bodyLimit: 4 * 1024 * 1024 }) as unknown as App;
@@ -876,7 +884,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     });
     if (denied) throw new HttpError(403, denied);
   });
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
     const transferCode =
       error instanceof NativeTransferError && /^NATIVE_TRANSFER_[A-Z0-9_]{1,100}$/.test(error.code);
     const startLimitCode =
@@ -890,6 +898,10 @@ export async function createApp(options: AppOptions): Promise<App> {
         : typeof statusCode === 'number' && statusCode < 500
           ? statusCode
           : 500;
+    if (code >= 500)
+      process.stderr.write(
+        `REQUEST_FAILED ${request.method} ${request.routeOptions.url ?? 'unknown'} ${requestFailureLabel(error)}\n`
+      );
     void reply.code(code).send({
       error:
         error instanceof HttpError ||

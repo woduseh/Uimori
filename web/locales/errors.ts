@@ -629,6 +629,24 @@ export const messages = {
     ja: 'Risuスクリプトが画像と元の依頼の関連付けを変更しました。画像付きユーザーメッセージのidとロールを維持するようスクリプトを確認してください。',
     zh: 'Risu脚本更改了图片与原请求的关联。请检查脚本，确保保留带图片的用户消息的id和角色。',
   },
+  'errors.RISU_NATIVE_TIMEOUT': {
+    ko: 'Risu 표시 스크립트가 제한 시간 안에 끝나지 않았어요. 카드나 모듈의 표시 스크립트를 확인해 주세요.',
+    en: 'A Risu display script did not finish within the time limit. Check the display scripts of the card or module.',
+    ja: 'Risuの表示スクリプトが制限時間内に終わりませんでした。カードやモジュールの表示スクリプトを確認してください。',
+    zh: 'Risu显示脚本未在时限内完成。请检查角色卡或模块的显示脚本。',
+  },
+  'errors.RISU_NATIVE_CBS_TIMEOUT': {
+    ko: 'Risu 표시 스크립트가 제한 시간 안에 끝나지 않았어요. 카드나 모듈의 표시 스크립트를 확인해 주세요.',
+    en: 'A Risu display script did not finish within the time limit. Check the display scripts of the card or module.',
+    ja: 'Risuの表示スクリプトが制限時間内に終わりませんでした。カードやモジュールの表示スクリプトを確認してください。',
+    zh: 'Risu显示脚本未在时限内完成。请检查角色卡或模块的显示脚本。',
+  },
+  'errors.RISU_LUA_PROGRAM_TIMEOUT': {
+    ko: 'Risu 표시 스크립트가 제한 시간 안에 끝나지 않았어요. 카드나 모듈의 표시 스크립트를 확인해 주세요.',
+    en: 'A Risu display script did not finish within the time limit. Check the display scripts of the card or module.',
+    ja: 'Risuの表示スクリプトが制限時間内に終わりませんでした。カードやモジュールの表示スクリプトを確認してください。',
+    zh: 'Risu显示脚本未在时限内完成。请检查角色卡或模块的显示脚本。',
+  },
   'errors.transcriptInvalid': {
     ko: '본문 파일의 형식이 올바르지 않아요. 파일 내용을 확인해 주세요.',
     en: 'The transcript format is invalid. Check the file contents.',

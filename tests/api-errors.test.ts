@@ -195,3 +195,10 @@ test('retained manuscript translation errors retranslate scene labels after loca
   expect(result.message).toBe(retained);
   expect(result.code).toBe('MANUSCRIPT_TRANSLATION_MISSING');
 });
+
+test('Risu display timeouts name the script stage instead of a bare server failure', async () => {
+  const result = await rejected(500, 'RISU_NATIVE_TIMEOUT', 'GET');
+  expect(result).toMatchObject({ status: 500, code: 'RISU_NATIVE_TIMEOUT' });
+  expect(result.message).toContain('표시 스크립트');
+  expect((await rejected(500, 'Request failed', 'GET')).message).toContain('(500)');
+});

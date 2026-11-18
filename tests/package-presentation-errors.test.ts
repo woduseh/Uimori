@@ -1,0 +1,74 @@
+import { afterEach, expect, test, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { createApp, type App } from '../server/app.js';
+import { importChatTranscript } from '../server/chat-transcript.js';
+import { fixtureBotInput } from './fixtures/chat.js';
+
+const failure = vi.hoisted(() => ({ error: new Error('unset') as Error }));
+vi.mock('../server/package-presentation.js', async (original) => ({
+  ...(await original<typeof import('../server/package-presentation.js')>()),
+  buildPackagePresentation: async () => {
+    throw failure.error;
+  },
+}));
+
+const owned: { app: App; path: string }[] = [];
+afterEach(async () => {
+  vi.restoreAllMocks();
+  for (const { app, path } of owned.splice(0)) {
+    await app.close();
+    rmSync(path, { recursive: true, force: true });
+  }
+});
+
+async function presentation(error: Error) {
+  failure.error = error;
+  const path = mkdtempSync(join(tmpdir(), 'uimori-presentation-errors-'));
+  const app = await createApp({
+    dbPath: join(path, 'app.sqlite'),
+    buildId: 'presentation-errors-test',
+    testMode: true,
+  });
+  owned.push({ app, path });
+  const bot = app.store.product.content(fixtureBotInput());
+  const chat = importChatTranscript(app.store, {
+    idempotencyKey: randomUUID(),
+    transcript: {
+      format: 'uimori-chat-transcript',
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      title: 'Presentation errors',
+      packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+      notes: [],
+      entries: [{ request: 'First scene', text: '미라는 문턱에서 멈췄다.', translation: null }],
+    },
+  }).chat;
+  const log = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  const response = await app.inject({
+    method: 'GET',
+    url: `/api/chats/${chat.id}/sources/${chat.headRevision}/presentation`,
+  });
+  const lines = log.mock.calls.map(([line]) => String(line));
+  log.mockRestore();
+  return { response, lines };
+}
+
+test('a Risu stage failure reaches the reader as its code and is logged', async () => {
+  const { response, lines } = await presentation(new Error('RISU_NATIVE_TIMEOUT'));
+  expect(response.statusCode).toBe(500);
+  expect(response.json()).toEqual({ error: 'RISU_NATIVE_TIMEOUT' });
+  expect(lines).toContain(
+    'REQUEST_FAILED GET /api/chats/:id/sources/:sourceId/presentation RISU_NATIVE_TIMEOUT\n'
+  );
+});
+
+test('an unexpected failure logs its location without its free-form message', async () => {
+  const { response, lines } = await presentation(new TypeError('미라의 비밀 대사'));
+  expect(response.json()).toEqual({ error: 'Request failed' });
+  const line = lines.find((item) => item.startsWith('REQUEST_FAILED'));
+  expect(line).toMatch(/ TypeError at [\w.-]+:\d+\n$/u);
+  expect(line).not.toContain('비밀');
+});

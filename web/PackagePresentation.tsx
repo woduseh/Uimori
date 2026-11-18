@@ -2,6 +2,7 @@ import { t, useI18n, translateMessage, message as uiMessage, messageRef } from '
 import { useEffect, useRef, useState } from 'react';
 import type { Job, Source } from '../core/types.js';
 import { useWindowViewport } from './window-viewport.js';
+import { apiErrorDisplay } from './api-errors.js';
 
 export type PackagePresentation = {
   sourceRevision: string;
@@ -72,9 +73,7 @@ export function usePackagePresentation(
         );
         if (!response.ok) {
           const error = await response.json().catch(() => ({}));
-          throw new Error(
-            typeof error.message === 'string' ? error.message : `HTTP ${response.status}`
-          );
+          throw new Error(apiErrorDisplay(error.error, response.status, 'GET'));
         }
         const data = (await response.json()) as PackagePresentation;
         if (data.sourceRevision !== source.id || data.sourceHash !== source.hash)

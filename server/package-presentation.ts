@@ -17,6 +17,9 @@ export type PackagePresentationSource = {
   translation?: { text: string; sourceRevision: string; sourceHash: string };
 };
 /** Render the selected source against the caller's current authored context. */
+/** Each render call's budget, including the request's first worker start and module load. */
+const PRESENTATION_RENDER_TIMEOUT_MS = 10_000;
+
 export async function buildPackagePresentation(
   snapshot: RunSnapshot,
   source: PackagePresentationSource,
@@ -49,7 +52,8 @@ export async function buildPackagePresentation(
   if (native) {
     const renderer = createNativeRisuWorkerSession<NativeRisuRenderInput, NativeRisuRenderResult>(
       new URL('./risu-native-render.js', import.meta.url),
-      'renderNativeRisuMessageInWorker'
+      'renderNativeRisuMessageInWorker',
+      PRESENTATION_RENDER_TIMEOUT_MS
     );
     try {
       const index =

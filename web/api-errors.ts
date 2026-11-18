@@ -27,6 +27,12 @@ const messages: Record<string, string> = {
     '삭제된 장면을 포함한 작업은 다시 실행할 수 없어요. 현재 이야기에서 새 요청을 보내 주세요.',
   ...requestImageErrors,
   ...requestFileErrors,
+  RISU_NATIVE_TIMEOUT:
+    'Risu 표시 스크립트가 제한 시간 안에 끝나지 않았어요. 카드나 모듈의 표시 스크립트를 확인해 주세요.',
+  RISU_NATIVE_CBS_TIMEOUT:
+    'Risu 표시 스크립트가 제한 시간 안에 끝나지 않았어요. 카드나 모듈의 표시 스크립트를 확인해 주세요.',
+  RISU_LUA_PROGRAM_TIMEOUT:
+    'Risu 표시 스크립트가 제한 시간 안에 끝나지 않았어요. 카드나 모듈의 표시 스크립트를 확인해 주세요.',
   STORY_GUIDE_STALE: '참고 설정이나 이야기가 바뀌었어요. 최신 내용으로 다시 집필해 주세요.',
   STORY_GUIDE_CANCELLED: '작품 및 원작 참고가 중단됐어요.',
   STORY_GUIDE_TIMEOUT: '작품 및 원작 참고가 제한 시간 안에 끝나지 않았어요. 다시 시도해 주세요.',
