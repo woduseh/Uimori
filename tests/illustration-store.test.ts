@@ -299,6 +299,7 @@ describe('illustration storage on the current schema', () => {
       model: { id: codex.id },
       promptModel: null,
       useReferences: false,
+      refinePrompt: false,
     });
     expect(
       http(() =>
@@ -325,7 +326,11 @@ describe('illustration storage on the current schema', () => {
     }) as ModelPreset;
     const { revision, ...body } = fixtureSettings({
       generator: 'codex',
-      codex: { model: { id: imageModel.id }, promptModel: { id: promptModel.id } },
+      codex: {
+        model: { id: imageModel.id },
+        promptModel: { id: promptModel.id },
+        refinePrompt: true,
+      },
     });
     let saved = updateIllustrationSettings(store, { expectedRevision: revision, ...body }, true);
     expect(illustrationSettings(store).codex).toEqual(saved.codex);
@@ -341,6 +346,8 @@ describe('illustration storage on the current schema', () => {
     );
     expect(saved.codex.promptModel).toEqual({ id: promptModel.id });
     const job = reserveIllustration(store, source, 'manual');
+    expect(saved.codex.refinePrompt).toBe(true);
+    expect(job.input.codex?.refinePrompt).toBe(true);
     expect(job.input.codex?.model.modelId).toBe('gpt-5.4');
     expect(job.input.codex?.promptModel).toMatchObject({
       modelId: 'prompt-v1',

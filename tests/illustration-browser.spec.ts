@@ -1090,7 +1090,7 @@ test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planni
   );
 });
 
-test('ILUI06 Codex settings require a prompt model and persist separate or shared Codex selections', async ({
+test('ILUI06 Codex settings persist model selections and optional prompt refinement', async ({
   page,
   request,
 }, info) => {
@@ -1140,7 +1140,7 @@ test('ILUI06 Codex settings require a prompt model and persist separate or share
   ).json()) as IllustrationSettings;
   const baseline = await settings(request, {
     generator: 'none',
-    codex: { ...current.codex, model: models[0], promptModel: null },
+    codex: { ...current.codex, model: models[0], promptModel: null, refinePrompt: false },
   });
   const generationRequests: string[] = [];
   page.on('request', (entry) => {
@@ -1160,26 +1160,38 @@ test('ILUI06 Codex settings require a prompt model and persist separate or share
   await openSettings();
   const section = page.getByRole('region', { name: '삽화 설정', exact: true });
   const prompt = section.getByRole('combobox', { name: '프롬프트 모델', exact: true });
+  const refine = section.getByRole('switch', { name: '그림 프롬프트 다듬기' });
   await expect(prompt).toHaveValue('');
+  await expect(refine).not.toBeChecked();
   await expect(prompt.locator('option[value=""]')).toHaveText('모델 미지정');
   await expect(page.locator('.illustration-preset-current')).toContainText('프롬프트 모델을 선택');
   await prompt.selectOption(models[1].id);
+  await refine.focus();
+  await refine.press('Space');
+  await expect(refine).toBeChecked();
   await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
   await expect(section.getByRole('button', { name: '삽화 설정 저장', exact: true })).toBeDisabled();
   const selected = (await (
     await request.get('/api/illustration-settings')
   ).json()) as IllustrationSettings;
-  expect(selected.codex).toEqual({ ...baseline.codex, promptModel: models[1] });
+  expect(selected.codex).toEqual({ ...baseline.codex, promptModel: models[1], refinePrompt: true });
   expect(selected.comfyui).toEqual(baseline.comfyui);
   await openSettings();
   await expect(prompt).toHaveValue(models[1].id);
+  await expect(refine).toBeChecked();
   await expect(section.getByLabel('Codex 삽화 모델', { exact: true })).toHaveValue(models[0].id);
-  await prompt.scrollIntoViewIfNeeded();
+  await refine.scrollIntoViewIfNeeded();
   expect(await section.evaluate((node) => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(
     1
   );
   await page.screenshot({ path: info.outputPath('codex-separate-prompt-model-mobile.png') });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openSettings();
+  await expect(refine).toBeChecked();
+  await refine.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath('codex-refine-prompt-desktop.png') });
   await prompt.selectOption(models[0].id);
+  await refine.click();
   await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
   await expect(section.getByRole('button', { name: '삽화 설정 저장', exact: true })).toBeDisabled();
   await openSettings();

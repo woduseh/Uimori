@@ -125,7 +125,7 @@ export function validateIllustrationSettings(
   if (b.generator === 'fixture' && !options.testMode)
     throw new HttpError(400, 'Fixture generator requires test mode');
   const codex = record(b.codex);
-  fields(codex, ['model', 'useReferences', 'promptModel']);
+  fields(codex, ['model', 'useReferences', 'promptModel', 'refinePrompt']);
   const comfyui = record(b.comfyui);
   fields(comfyui, ['baseUrl', 'authorizationEnv', 'timeoutMs', 'pollIntervalMs', 'promptModel']);
   const baseUrl = text(comfyui.baseUrl, 'ComfyUI address', 2000, true).trim();
@@ -161,6 +161,7 @@ export function validateIllustrationSettings(
     codex: {
       model: modelRef(codex.model, 'Codex illustration model'),
       useReferences: boolean(codex.useReferences, 'useReferences'),
+      refinePrompt: boolean(codex.refinePrompt, 'refinePrompt'),
       promptModel: modelRef(codex.promptModel, 'Codex illustration prompt model'),
     },
     comfyui: {
@@ -229,10 +230,12 @@ export function updateIllustrationSettings(
     const next = validateIllustrationSettings(
       {
         ...rest,
-        // Older clients do not know this field and must not clear a newer selection.
-        codex: Object.hasOwn(suppliedCodex, 'promptModel')
-          ? suppliedCodex
-          : { ...suppliedCodex, promptModel: prior.codex.promptModel },
+        // Preserve fields omitted by older clients.
+        codex: {
+          promptModel: prior.codex.promptModel,
+          refinePrompt: prior.codex.refinePrompt,
+          ...suppliedCodex,
+        },
       },
       { revision: prior.revision + 1, testMode }
     );
@@ -720,6 +723,7 @@ function frozenInput(
       codex: {
         model,
         promptModel,
+        refinePrompt: settings.codex.refinePrompt,
         references: settings.codex.useReferences
           ? frozenIllustrationReferences(store, source.chatId)
           : [],
@@ -1160,6 +1164,9 @@ export function regenerateIllustration(
       redraw = {
         changeRequest: requestedChange,
         ...(originalPrompt ? { originalPrompt } : {}),
+        ...(original?.input.codex?.refinePrompt && image?.prompt && image.revisedPrompt
+          ? { revisedPrompt: image.revisedPrompt }
+          : {}),
       };
     }
     const currentInput = frozenInput(store, source, illustrationSettings(store), { testMode });

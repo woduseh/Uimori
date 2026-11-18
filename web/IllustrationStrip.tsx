@@ -709,7 +709,9 @@ function IllustrationCard({
             )}
             {detail.diagnostic?.prompt && (
               <>
-                <h4>{t('visuals.m158')}</h4>
+                <h4>
+                  {t(detail.generator === 'codex' ? 'visuals.codexPreparedPrompt' : 'visuals.m158')}
+                </h4>
                 <pre>{detail.diagnostic.prompt.prompt}</pre>
                 {detail.diagnostic.prompt.negativePrompt && (
                   <pre>{detail.diagnostic.prompt.negativePrompt}</pre>

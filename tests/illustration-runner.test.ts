@@ -575,11 +575,12 @@ test('one separate Codex planning call prepares every cut and passes each prompt
   expect(store.source(source.id).text).toBe(source.text);
 });
 
-test('Codex redraw with a change request prepares a fresh prompt and retries reuse it', async () => {
+test('Codex redraw uses the new refinement setting and retries keep the draft and mode', async () => {
   const changeRequest = '빛을 더 따뜻하게 바꿔 주세요.';
   const store = databases.create();
   const { source } = chatWithSource(store);
   const imageModel = codexModel(store);
+  fixtureIllustrationPreset(store, { styleGuidance: 'watercolor' });
   const originalPrompt = 'Original blue lantern';
   const redrawPrompt = '  Redraw the "blue lantern".\n';
   const { provider, model } = await promptModel(store, (body) => {
@@ -606,20 +607,20 @@ test('Codex redraw with a change request prepares a fresh prompt and retries reu
     maxAutoRetries: 0,
     codex: { model: { id: imageModel.id }, promptModel: { id: model.id } },
   });
-  updateIllustrationSettings(store, { expectedRevision: revision, ...body }, true);
+  let saved = updateIllustrationSettings(store, { expectedRevision: revision, ...body }, true);
   const plan = reserveIllustrationPlan(store, source, 'manual', { maxTargets: 1 });
-  const prompts: string[] = [];
+  const captured: CodexImageRequest[] = [];
   let rejectNext = false;
   const observed = hooks(store, {
     generateCodexImage: async (_connection, request) => {
-      prompts.push(JSON.parse(request.text).prompt);
+      captured.push(request);
       const fail = rejectNext;
       rejectNext = false;
       return {
         status: fail ? 'error' : 'completed',
         images: fail ? [] : [{ mime: 'image/png', bytes: PNG }],
-        revisedPrompt: null,
-        text: '{"caption":"등불"}',
+        revisedPrompt: fail ? null : 'Mira holds a lantern in warm light.',
+        text: '{"caption":"따뜻한 빛을 비추는 등불"}',
         error: fail ? { code: 'CODEX_IMAGE_NOT_GENERATED' } : null,
         usage: {
           inputTokens: 20,
@@ -635,9 +636,16 @@ test('Codex redraw with a change request prepares a fresh prompt and retries reu
     'completed'
   );
   const [cut] = queuedIllustrations(store);
+  saved = updateIllustrationSettings(
+    store,
+    { expectedRevision: saved.revision, ...body, codex: { ...body.codex, refinePrompt: true } },
+    true
+  );
   expect((await runIllustrationJob(store, cut, 'worker', observed.options))?.status).toBe(
     'completed'
   );
+  expect(captured[0].developerInstructions).toContain('verbatim');
+  expect(projectIllustration(store, illustrationJob(store, cut)).images[0].caption).toBe('첫 등불');
   const redraw = regenerateIllustration(store, cut, false, changeRequest);
   expect(redraw.input.target?.prompt).toBeUndefined();
   expect(redraw.input.redraw).toEqual({
@@ -650,6 +658,7 @@ test('Codex redraw with a change request prepares a fresh prompt and retries reu
     code: 'CODEX_IMAGE_NOT_GENERATED',
     images: 0,
   });
+  updateIllustrationSettings(store, { expectedRevision: saved.revision, ...body }, true);
   retryIllustration(store, redraw.id);
   expect((await runIllustrationJob(store, redraw.id, 'worker', observed.options))?.status).toBe(
     'completed'
@@ -657,7 +666,38 @@ test('Codex redraw with a change request prepares a fresh prompt and retries reu
   expect(provider.requests).toHaveLength(2);
   expect(JSON.parse(provider.requests[1].body).input.source.redraw).toEqual(redraw.input.redraw);
   expect(illustrationJob(store, redraw.id).input.redraw).toEqual(redraw.input.redraw);
-  expect(prompts).toEqual([originalPrompt, redrawPrompt, redrawPrompt]);
+  const sent = captured.map(({ text }) => JSON.parse(text));
+  expect(sent.map((text) => text.prompt ?? text.draft)).toEqual([
+    originalPrompt,
+    redrawPrompt,
+    redrawPrompt,
+  ]);
+  expect(sent[0].draft).toBeUndefined();
+  expect(sent[1].prompt).toBeUndefined();
+  expect(captured[1].developerInstructions).toContain('could not see the attached images');
+  expect(sent[1].styleGuidance).toContain('watercolor');
+  expect(sent[1].changeRequest).toBe(changeRequest);
+  expect(JSON.parse(captured[1].text).moment).toEqual({
+    focus: 'Mira',
+    visualBrief: 'Mira with a lantern',
+  });
+  expect(captured[2].text).toBe(captured[1].text);
+  expect(captured[2].developerInstructions).toBe(captured[1].developerInstructions);
+  expect(projectIllustration(store, illustrationJob(store, redraw.id)).images[0]).toMatchObject({
+    caption: '따뜻한 빛을 비추는 등불',
+    prompt: redrawPrompt,
+    revisedPrompt: 'Mira holds a lantern in warm light.',
+  });
+  const followup = regenerateIllustration(store, redraw.id, false, '장갑 색만 바꿔 주세요.');
+  expect(followup.input.redraw).toEqual({
+    changeRequest: '장갑 색만 바꿔 주세요.',
+    originalPrompt: {
+      prompt: redrawPrompt,
+      negativePrompt: '',
+      caption: '따뜻한 빛을 비추는 등불',
+    },
+    revisedPrompt: 'Mira holds a lantern in warm light.',
+  });
   expect(store.source(source.id).text).toBe(source.text);
 });
 

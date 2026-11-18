@@ -12,7 +12,7 @@ import {
   useSettingsSaveGroup,
   type SettingsSaveRegistration,
 } from './useSettingsSaveHandler.js';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { RefreshIcon } from './ui-icons.js';
 import type { Library, ModelRef } from '../core/product.js';
 import type { IllustrationSettings } from '../core/illustration.js';
@@ -98,6 +98,7 @@ function IllustrationEnvironmentEditor({
   }, [dirty, busy, onDirtyChange]);
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
   useSettingsSaveHandler(onSaveHandlerChange, async () => (!draft ? false : save()));
+  const refinementDescription = useId();
   if (!draft)
     return (
       <LoadingState
@@ -399,6 +400,27 @@ function IllustrationEnvironmentEditor({
             {selector(t('visuals.m077'), draft.codex.promptModel, library.models, (ref) =>
               change({ ...draft, codex: { ...draft.codex, promptModel: ref } })
             )}
+            <label className="settings-row settings-row-toggle">
+              <span className="settings-row-copy">
+                <span>{t('visuals.refineCodexPrompt')}</span>
+                <small id={refinementDescription}>
+                  {t('visuals.refineCodexPromptDescription')}
+                </small>
+              </span>
+              <span className="settings-row-control">
+                <Switch
+                  aria-label={t('visuals.refineCodexPrompt')}
+                  aria-describedby={refinementDescription}
+                  checked={draft.codex.refinePrompt}
+                  onChange={(event) =>
+                    change({
+                      ...draft,
+                      codex: { ...draft.codex, refinePrompt: event.target.checked },
+                    })
+                  }
+                />
+              </span>
+            </label>
             <label className="settings-row settings-row-toggle">
               <span className="settings-row-copy">{t('visuals.m068')}</span>
               <span className="settings-row-control">

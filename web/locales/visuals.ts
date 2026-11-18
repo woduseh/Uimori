@@ -493,6 +493,24 @@ export const messages = {
     ja: 'Codexが返した修正プロンプト',
     zh: 'Codex返回的修改后提示词',
   },
+  'visuals.refineCodexPrompt': {
+    ko: '그림 프롬프트 다듬기',
+    en: 'Refine illustration prompts',
+    ja: '挿絵プロンプトを調整する',
+    zh: '润色插图提示词',
+  },
+  'visuals.refineCodexPromptDescription': {
+    ko: '새 삽화에서 Codex가 장면과 구도는 유지하고, 초안의 외형과 화풍 묘사를 참고 이미지와 스타일 지침에 맞춰 고쳐요.',
+    en: 'For new illustrations, Codex keeps the draft’s moment and composition and corrects its appearance and art-style details to match the references and style guidance.',
+    ja: '新しい挿絵では、Codexが場面と構図を保ったまま、下書きの外見や画風の描写を参照画像とスタイル指針に合わせて直します。',
+    zh: '生成新插图时，Codex会保留草稿的场景和构图，并根据参考图片和风格指南修正外貌与画风描述。',
+  },
+  'visuals.codexPreparedPrompt': {
+    ko: '프롬프트 모델이 작성한 초안',
+    en: 'Draft from the prompt model',
+    ja: 'プロンプトモデルが作成した下書き',
+    zh: '提示词模型生成的草稿',
+  },
   'visuals.m069': {
     ko: 'ComfyUI 생성 환경',
     en: 'ComfyUI generation environment',

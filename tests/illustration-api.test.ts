@@ -619,7 +619,12 @@ test('consecutive storyboard cuts reuse a session, preserve successful cuts and 
     generator: 'codex',
     maxPerSource: 3,
     maxAutoRetries: 0,
-    codex: { model: { id: model.id }, promptModel: { id: model.id }, useReferences: false },
+    codex: {
+      model: { id: model.id },
+      promptModel: { id: model.id },
+      useReferences: false,
+      refinePrompt: false,
+    },
   });
   const plan = await api<Illustration>(`/api/sources/${source.id}/illustrations`, {
     maxTargets: 3,

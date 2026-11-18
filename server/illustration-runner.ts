@@ -32,6 +32,7 @@ import {
   CODEX_ILLUSTRATION_INSTRUCTIONS,
   CODEX_ILLUSTRATION_OUTPUT_SCHEMA,
   CODEX_PREPARED_ILLUSTRATION_INSTRUCTIONS,
+  CODEX_REFINE_ILLUSTRATION_INSTRUCTIONS,
   codexIllustrationPromptRequest,
   codexIllustrationText,
   codexPreparedIllustrationText,
@@ -601,11 +602,23 @@ export async function runIllustrationJob(
         if (preparedPrompt.kind === 'skip') diagnostic.skipped = preparedPrompt.reason;
       }
       if (preparedPrompt?.kind === 'skip') return await finish([]);
+      const draft = preparedPrompt?.prompt;
+      const refinePrompt = input.codex.refinePrompt === true;
       const connection = await authorizedConnection(hooks, model);
-      const imageText =
-        preparedPrompt?.kind === 'generate'
-          ? codexPreparedIllustrationText(preparedPrompt.prompt.prompt, references)
-          : codexIllustrationText(context, references);
+      const imageText = draft
+        ? codexPreparedIllustrationText(
+            draft.prompt,
+            references,
+            refinePrompt
+              ? {
+                  caption: draft.caption,
+                  styleGuidance: context.styleGuidance,
+                  moment: input.target,
+                  changeRequest: input.redraw?.changeRequest,
+                }
+              : undefined
+          )
+        : codexIllustrationText(context, references);
       diagnostic.stage = 'content-check';
       await progress();
       diagnostic.contentCheck = await checkCodexIllustrationContent(
@@ -639,10 +652,11 @@ export async function runIllustrationJob(
               modelId: model.modelId,
               contextBudget: contextBudgetForModel(model),
               reasoningEffort: model.reasoningEffort,
-              developerInstructions:
-                preparedPrompt?.kind === 'generate'
-                  ? CODEX_PREPARED_ILLUSTRATION_INSTRUCTIONS
-                  : CODEX_ILLUSTRATION_INSTRUCTIONS,
+              developerInstructions: !draft
+                ? CODEX_ILLUSTRATION_INSTRUCTIONS
+                : refinePrompt
+                  ? CODEX_REFINE_ILLUSTRATION_INSTRUCTIONS
+                  : CODEX_PREPARED_ILLUSTRATION_INSTRUCTIONS,
               text: imageText,
               outputSchema: CODEX_ILLUSTRATION_OUTPUT_SCHEMA,
               references: imageReferences,
@@ -675,16 +689,17 @@ export async function runIllustrationJob(
         const code = result.error?.code ?? 'CODEX_IMAGE_NOT_GENERATED';
         throw new IllustrationError(code, isRetryableIllustrationCode(code));
       }
+      const renderedCaption =
+        caption.unavailable || caption.skipped !== null ? '' : caption.caption;
       generated = result.images.map((image) => ({
         mime: image.mime,
         bytes: image.bytes,
-        caption:
-          preparedPrompt?.kind === 'generate'
-            ? preparedPrompt.prompt.caption
-            : caption.unavailable
-              ? ''
-              : caption.caption,
-        ...(preparedPrompt?.kind === 'generate' ? { prompt: preparedPrompt.prompt.prompt } : {}),
+        caption: draft
+          ? (refinePrompt && renderedCaption) || draft.caption
+          : caption.unavailable
+            ? ''
+            : caption.caption,
+        ...(draft ? { prompt: draft.prompt } : {}),
         ...(result.revisedPrompt ? { revisedPrompt: result.revisedPrompt } : {}),
       }));
     } else if (input.generator === 'comfyui') {
