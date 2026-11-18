@@ -136,7 +136,11 @@ import {
   helperRequestContext,
   publishHelperContext,
 } from './helper-context.js';
-import { HELPER_TASK_LIMITS, HELPER_TOOL_CALL_LIMIT } from '../core/helper.js';
+import {
+  DEFAULT_HELPER_TASK_TIMEOUT_MINUTES,
+  HELPER_TASK_LIMITS,
+  HELPER_TOOL_CALL_LIMIT,
+} from '../core/helper.js';
 import { helperWebSearchCapability } from '../core/helper-web-search.js';
 import { ChatOverridesStore } from './chat-overrides.js';
 import { ChatOptionsStore, invokeHelperOptions } from './chat-options.js';
@@ -1014,6 +1018,7 @@ export class HelperRuntime {
         ...(retryOf ? { retryOf } : {}),
         scope,
         model,
+        taskTimeoutMinutes: workspace.helperTaskTimeoutMinutes,
         summaryLength: structuredClone(workspace.summaryLength ?? DEFAULT_SUMMARY_LENGTH),
         history,
         context,
@@ -1195,7 +1200,9 @@ export class HelperRuntime {
       controller.signal,
       this.options.signal,
       toolBudgetController.signal,
-      AbortSignal.timeout(20 * 60_000),
+      AbortSignal.timeout(
+        (task.snapshot.taskTimeoutMinutes ?? DEFAULT_HELPER_TASK_TIMEOUT_MINUTES) * 60_000
+      ),
     ]);
     const scope = task.snapshot.scope;
     const writer = this.options.streams.createWriter({

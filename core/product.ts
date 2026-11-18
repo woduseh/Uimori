@@ -95,6 +95,7 @@ export type CurrentPrompt = {
   defaultValues?: Record<string, import('./risu-prompt.js').PromptValue>;
 };
 export type ModelWorkspace = {
+  helperTaskTimeoutMinutes?: number;
   judgment?: import('./judgment-settings.js').JudgmentSelection;
   summaryLength?: import('./summary-length.js').SummaryLengthSettings;
   mainJudgmentThreshold?: number;
@@ -108,6 +109,7 @@ export type ModelWorkspace = {
   translationPolicy: PromptWorkspace['translationPolicy'];
 };
 export type PromptWorkspace = {
+  helperTaskTimeoutMinutes?: number;
   judgment?: import('./judgment-settings.js').JudgmentSelection;
   summaryLength?: import('./summary-length.js').SummaryLengthSettings;
   mainJudgmentThreshold?: number;

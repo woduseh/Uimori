@@ -120,6 +120,12 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
       translationRefusal.getByLabel('번역 거절 확신 기준', { exact: true })
     ).toBeVisible();
     await supportingSummary.click();
+    const helperTimeout = editor.getByLabel('도우미 작업 제한 시간 (분)', { exact: true });
+    const saveModels = editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true });
+    await expect(helperTimeout).toHaveValue('60');
+    await helperTimeout.fill('0');
+    await expect(saveModels).toBeDisabled();
+    await helperTimeout.fill('90');
     for (const label of ['도우미 모델', '컨텍스트 요약 모델', '채팅 제목 모델', '확장 호출 모델'])
       await expect(editor.getByLabel(label, { exact: true })).toBeVisible();
     for (const label of ['본문 모델', '번역 모델', '채팅 제목 모델', '확장 호출 모델'])
@@ -134,6 +140,7 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
     await expect.poll(async () => (await models(request)).routes.main?.id).toBe(ids[0]);
     const selected = await models(request);
+    expect(selected.helperTaskTimeoutMinutes).toBe(90);
     expect(selected.titleModel).toEqual({ id: ids[0] });
     expect(selected.scriptModel).toEqual({ id: ids[0] });
     expect(selected.mainJudgmentEnabled).toBe(false);
@@ -147,6 +154,16 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await page.reload();
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '역할별 모델');
+    await supportingSummary.click();
+    await expect(helperTimeout).toHaveValue('90');
+    if (visualReview) {
+      for (const reviewWidth of [width, MOBILE_WIDTH]) {
+        await page.setViewportSize({ width: reviewWidth, height: 900 });
+        await helperTimeout.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: info.outputPath(`helper-timeout-${reviewWidth}.png`) });
+      }
+      await page.setViewportSize({ width, height: 900 });
+    }
     await expect(mainThreshold).toBeHidden();
     await behaviorSummary.click();
     await expect(mainToggle).not.toBeChecked();

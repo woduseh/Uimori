@@ -8,6 +8,10 @@ import {
 import { PROMPT_HTTP_BODY_MAX_BYTES } from '../core/content-limits.js';
 import { mainJudgmentThreshold } from '../core/main-judgment-settings.js';
 import {
+  DEFAULT_HELPER_TASK_TIMEOUT_MINUTES,
+  MAX_HELPER_TASK_TIMEOUT_MINUTES,
+} from '../core/helper.js';
+import {
   DEFAULT_JUDGMENT_SELECTION,
   OFFICIAL_JUDGMENT_MODELS,
   isJudgmentConnection,
@@ -144,6 +148,12 @@ function validateSummaryLength(value: unknown): SummaryLengthSettings {
   };
 }
 
+function validateHelperTaskTimeoutMinutes(value: unknown): number {
+  return value === undefined
+    ? DEFAULT_HELPER_TASK_TIMEOUT_MINUTES
+    : number(value, 'helper task timeout in minutes', 1, MAX_HELPER_TASK_TIMEOUT_MINUTES);
+}
+
 export function validatePromptWorkspace(value: unknown): PromptWorkspace {
   const b = record(value);
   fields(b, [
@@ -157,6 +167,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     'modelRoutes',
     'titleModel',
     'helperModel',
+    'helperTaskTimeoutMinutes',
     'contextModel',
     'scriptModel',
     'summaryLength',
@@ -184,6 +195,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     summaryLength: validateSummaryLength(b.summaryLength),
     titleModel: validateTitleModel(b.titleModel ?? null),
     helperModel: validateTitleModel(b.helperModel ?? null),
+    helperTaskTimeoutMinutes: validateHelperTaskTimeoutMinutes(b.helperTaskTimeoutMinutes),
     contextModel: validateTitleModel(b.contextModel ?? null),
     scriptModel: validateTitleModel(b.scriptModel ?? null),
     modelRoutes: validateModelRoutes(
@@ -207,6 +219,7 @@ export function defaultPromptWorkspace(): PromptWorkspace {
     summaryLength: { ...DEFAULT_SUMMARY_LENGTH },
     titleModel: null,
     helperModel: null,
+    helperTaskTimeoutMinutes: DEFAULT_HELPER_TASK_TIMEOUT_MINUTES,
     contextModel: null,
     scriptModel: null,
     modelRoutes: emptyModelRoutes(),
@@ -359,6 +372,7 @@ export function promptWorkspace(store: Store): PromptWorkspace {
     translation: resolveSelection(store, saved.translation, 'translation'),
     titleModel: validateTitleModel(saved.titleModel ?? null),
     helperModel: validateTitleModel(saved.helperModel ?? null),
+    helperTaskTimeoutMinutes: validateHelperTaskTimeoutMinutes(saved.helperTaskTimeoutMinutes),
     contextModel: validateTitleModel(saved.contextModel ?? null),
     scriptModel: validateTitleModel(saved.scriptModel ?? null),
     modelRoutes: Object.hasOwn(saved, 'modelRoutes')
@@ -449,6 +463,7 @@ export function modelWorkspace(store: Store): ModelWorkspace {
     summaryLength: validateSummaryLength(current.summaryLength),
     titleModel: workspaceModelRef(current, 'title'),
     helperModel: workspaceModelRef(current, 'helper'),
+    helperTaskTimeoutMinutes: current.helperTaskTimeoutMinutes,
     contextModel: workspaceModelRef(current, 'context'),
     scriptModel: workspaceModelRef(current, 'script'),
     routes: current.modelRoutes,
@@ -466,6 +481,7 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
     'judgment',
     'titleModel',
     'helperModel',
+    'helperTaskTimeoutMinutes',
     'contextModel',
     'scriptModel',
     'summaryLength',
@@ -483,6 +499,9 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
       helperModel: Object.hasOwn(input, 'helperModel')
         ? validateTitleModel(input.helperModel)
         : (prior.helperModel ?? null),
+      helperTaskTimeoutMinutes: Object.hasOwn(input, 'helperTaskTimeoutMinutes')
+        ? input.helperTaskTimeoutMinutes
+        : prior.helperTaskTimeoutMinutes,
       contextModel: Object.hasOwn(input, 'contextModel')
         ? validateTitleModel(input.contextModel)
         : (prior.contextModel ?? null),

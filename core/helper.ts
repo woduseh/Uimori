@@ -3,6 +3,10 @@ import type { ModelSnapshot } from './product.js';
 import type { RunSnapshot, Usage } from './types.js';
 import type { ContextCheckpointRef } from './context-plan.js';
 
+export const DEFAULT_HELPER_TASK_TIMEOUT_MINUTES = 60;
+// AbortSignal.timeout uses a timer capped at the signed 32-bit millisecond limit.
+export const MAX_HELPER_TASK_TIMEOUT_MINUTES = Math.floor(2_147_483_647 / 60_000);
+
 export type HelperScope = { kind: 'chat'; chatId: string } | { kind: 'library'; workId: string };
 export type HelperConversation = {
   id: string;
@@ -77,6 +81,8 @@ export type HelperTaskSnapshot = {
   invalidatedBySceneDeletion?: true;
   /** Frozen when this task is queued. */
   summaryLength?: import('./summary-length.js').SummaryLengthSettings;
+  /** Frozen when this task is queued. */
+  taskTimeoutMinutes?: number;
   retryOf?: string;
   /** Kept after input cleanup so an admission retry cannot silently change its input. */
   requestFingerprint?: string;

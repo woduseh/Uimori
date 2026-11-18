@@ -6,6 +6,10 @@ import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSett
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Library, ModelRef, ModelWorkspace } from '../core/product.js';
 import {
+  DEFAULT_HELPER_TASK_TIMEOUT_MINUTES,
+  MAX_HELPER_TASK_TIMEOUT_MINUTES,
+} from '../core/helper.js';
+import {
   DEFAULT_JUDGMENT_SELECTION,
   OFFICIAL_JUDGMENT_MODELS,
   isJudgmentConnection,
@@ -68,6 +72,7 @@ export function ModelWorkspaceEditor({
               summaryLength: workspace.summaryLength ?? DEFAULT_SUMMARY_LENGTH,
               titleModel: workspace.titleModel ?? null,
               helperModel: workspace.helperModel ?? null,
+              helperTaskTimeoutMinutes: workspace.helperTaskTimeoutMinutes,
               contextModel: workspace.contextModel ?? null,
               scriptModel: workspace.scriptModel ?? null,
               routes: workspace.modelRoutes,
@@ -106,7 +111,14 @@ export function ModelWorkspaceEditor({
     judgment.provider === 'typesafe'
       ? undefined
       : judgmentConnections.find((connection) => connection.id === judgment.connectionId);
+  const helperTaskTimeoutMinutes =
+    draft.helperTaskTimeoutMinutes ?? DEFAULT_HELPER_TASK_TIMEOUT_MINUTES;
+  const invalidHelperTaskTimeout =
+    !Number.isInteger(helperTaskTimeoutMinutes) ||
+    helperTaskTimeoutMinutes < 1 ||
+    helperTaskTimeoutMinutes > MAX_HELPER_TASK_TIMEOUT_MINUTES;
   const invalid =
+    invalidHelperTaskTimeout ||
     (judgmentEdited &&
       judgment.provider !== 'typesafe' &&
       (!judgmentConnection || !judgment.modelId.trim())) ||
@@ -143,6 +155,7 @@ export function ModelWorkspaceEditor({
         mainJudgmentThreshold: draft.mainJudgmentThreshold,
         titleModel: draft.titleModel ?? null,
         helperModel: draft.helperModel ?? null,
+        helperTaskTimeoutMinutes,
         contextModel: draft.contextModel ?? null,
         summaryLength: draft.summaryLength ?? DEFAULT_SUMMARY_LENGTH,
         scriptModel: draft.scriptModel ?? null,
@@ -303,6 +316,32 @@ export function ModelWorkspaceEditor({
             {selector('helper', t('settings.m20'), draft.helperModel ?? null, (ref) =>
               change({ ...draft, helperModel: ref })
             )}
+            <div className="settings-row">
+              <div className="settings-row-copy">
+                <label htmlFor={`${id}-helper-task-timeout`}>
+                  {t('settings.helperTaskTimeout')}
+                </label>
+                <small id={`${id}-helper-task-timeout-hint`}>
+                  {invalidHelperTaskTimeout
+                    ? t('settings.helperTaskTimeoutRange', { max: MAX_HELPER_TASK_TIMEOUT_MINUTES })
+                    : t('settings.helperTaskTimeoutHint')}
+                </small>
+              </div>
+              <div className="settings-row-control">
+                <input
+                  id={`${id}-helper-task-timeout`}
+                  aria-describedby={`${id}-helper-task-timeout-hint`}
+                  aria-invalid={invalidHelperTaskTimeout || undefined}
+                  type="number"
+                  min={1}
+                  max={MAX_HELPER_TASK_TIMEOUT_MINUTES}
+                  value={Number.isNaN(helperTaskTimeoutMinutes) ? '' : helperTaskTimeoutMinutes}
+                  onChange={(event) =>
+                    change({ ...draft, helperTaskTimeoutMinutes: event.target.valueAsNumber })
+                  }
+                />
+              </div>
+            </div>
             {selector('context', t('settings.m22'), draft.contextModel ?? null, (ref) =>
               change({ ...draft, contextModel: ref })
             )}

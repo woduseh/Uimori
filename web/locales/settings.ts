@@ -1,5 +1,23 @@
 /** Settings UI only. User data and model inputs are never translated here. */
 export const messages = {
+  'settings.helperTaskTimeout': {
+    ko: '도우미 작업 제한 시간 (분)',
+    en: 'Helper task timeout (minutes)',
+    ja: 'アシスタントの作業制限時間（分）',
+    zh: '助手任务超时（分钟）',
+  },
+  'settings.helperTaskTimeoutHint': {
+    ko: '작업 전체에 적용돼요. 저장 후 새 요청부터 적용돼요.',
+    en: 'Covers the entire task. Applies to new requests after saving.',
+    ja: '作業全体の上限です。保存後の新しいリクエストから適用されます。',
+    zh: '限制整个任务的用时。保存后对新请求生效。',
+  },
+  'settings.helperTaskTimeoutRange': {
+    ko: '1~{max} 사이의 정수를 입력해 주세요.',
+    en: 'Enter a whole number from 1 to {max}.',
+    ja: '1〜{max} の整数を入力してください。',
+    zh: '请输入 1 到 {max} 之间的整数。',
+  },
   'settings.newChatDefaultsInvalid': {
     ko: '새 채팅 생성 기본값을 확인해 주세요.',
     en: 'Check the new chat creation defaults.',

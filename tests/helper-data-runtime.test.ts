@@ -173,6 +173,42 @@ function provider(action: (body: any, round: number) => Response) {
   );
   return bodies;
 }
+
+test('a queued helper uses the task timeout saved at admission', async () => {
+  const f = fixture();
+  const current = modelWorkspace(f.store);
+  expect(current.helperTaskTimeoutMinutes).toBe(60);
+  const saveTimeout = (minutes: number) => {
+    const { revision, routes, translationPolicy } = modelWorkspace(f.store);
+    return updateModelWorkspace(f.store, {
+      expectedRevision: revision,
+      routes,
+      translationPolicy,
+      helperTaskTimeoutMinutes: minutes,
+    });
+  };
+  expect(() => saveTimeout(0)).toThrow('Invalid helper task timeout in minutes');
+  saveTimeout(90);
+  const task = f.runtime.enqueue(
+    f.conversation.id,
+    randomUUID(),
+    'Inspect synthetic data',
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    false
+  );
+  saveTimeout(120);
+  const timeout = vi.spyOn(AbortSignal, 'timeout');
+  provider(() => answer('Done'));
+  f.runtime.pump();
+  await Promise.all(f.work);
+  expect(f.runtime.workspace.task(task.id).status).toBe('completed');
+  expect(timeout).toHaveBeenCalledWith(90 * 60_000);
+  expect(timeout).not.toHaveBeenCalledWith(120 * 60_000);
+});
+
 function anthropicResponse(content: unknown[], stopReason: string) {
   const events = [
     {

@@ -300,7 +300,7 @@ function getSettingsCategories(): SettingsCategory[] {
       key: 'models',
       label: t('chatsettings.m27'),
       icon: ModelIcon,
-      terms: t('chatsettings.m28'),
+      terms: `${t('chatsettings.m28')} ${t('settings.helperTaskTimeout')}`,
     },
     {
       key: 'prompts',
