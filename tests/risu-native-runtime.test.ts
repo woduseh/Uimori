@@ -108,6 +108,60 @@ describe('native Risu execution', () => {
     expect(result.variables).toEqual({ caught: 'true', result: 'Test:null' });
   });
 
+  it('returns the given conversation when a script leaves it alone and its edits when it writes', async () => {
+    const content = native([
+      lua(`function quiet(id) setChatVar(id, 'ran', 'yes') end
+      function read(id)
+        setChatVar(id, 'user', getUserLastMessage(id))
+        setChatVar(id, 'char', getCharacterLastMessage(id))
+        local recent = getRecentChats(id, 2)
+        setChatVar(id, 'recent', recent[1].data .. '|' .. recent[2].data)
+        setChatVar(id, 'last', cbs('{{lastmessage}}'))
+      end
+      function edit(id)
+        insertChat(id, 1, 'user', 'inserted')
+        addChat(id, 'char', 'added')
+        setChatVar(id, 'last', cbs('{{lastmessage}}'))
+        cutChat(id, 1, 3)
+      end`),
+    ]);
+    const conversation = [
+      { id: 'a', role: 'char' as const, data: 'Opening' },
+      { id: 'b', role: 'user' as const, data: 'Question' },
+      { id: 'c', role: 'char' as const, data: 'Answer' },
+    ];
+    const options = { sessionKey: 'conversation-on-demand' };
+    const run = (argument: string, messages = conversation) =>
+      executeRisuNative({ ...input(content), messages, argument }, options);
+
+    const quiet = await run('quiet');
+    expect(quiet.variables.ran).toBe('yes');
+    expect(quiet.messages).toEqual(conversation);
+
+    const read = await run('read');
+    expect(read.variables).toMatchObject({
+      user: 'Question',
+      char: 'Answer',
+      recent: 'Question|Answer',
+      last: 'Answer',
+    });
+    expect(read.messages).toEqual(conversation);
+
+    const edited = await run('edit');
+    expect(edited.variables.last).toBe('added');
+    expect(edited.messages).toEqual([
+      { role: 'user', data: 'inserted' },
+      { id: 'b', role: 'user', data: 'Question' },
+    ]);
+
+    // The reused VM starts each invocation from the conversation it is given, not its last edit.
+    expect((await run('read', conversation.slice(0, 2))).variables).toMatchObject({
+      user: 'Question',
+      char: 'Opening',
+      last: 'Question',
+    });
+  });
+
   it('keeps a growing conversation intact across Lua sessions and full-chat reads and writes', async () => {
     const content = native([
       lua(`local calls = 0

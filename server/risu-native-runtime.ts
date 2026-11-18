@@ -358,7 +358,6 @@ async function executeNativeRisuInvocation(
       source,
       {
         variables: state.variables,
-        messages: state.messages,
         event: input.event,
         argument: input.argument ?? '',
         text: input.text ?? null,
@@ -375,6 +374,7 @@ async function executeNativeRisuInvocation(
         manualHandled,
         globalVariables: input.globalVariables ?? {},
       },
+      state.messages,
       options,
       async (method, args, signal) => {
         if (method === 'hash') {
@@ -403,7 +403,7 @@ async function executeNativeRisuInvocation(
         if (method === 'cbs') {
           const payload = record(args);
           state.variables = variables(payload.variables);
-          state.messages = messages(payload.messages);
+          if (Object.hasOwn(payload, 'messages')) state.messages = messages(payload.messages);
           if (payload.operation === 'getLoreBooks') {
             const entries = nativeRisuLore(input.native);
             const books = (readableLore ??= input.loreSources
@@ -443,7 +443,7 @@ async function executeNativeRisuInvocation(
     )
   );
   output.variables = variables(value.variables);
-  output.messages = messages(value.messages);
+  output.messages = Object.hasOwn(value, 'messages') ? messages(value.messages) : state.messages;
   if (Object.hasOwn(value, 'text')) {
     if (typeof value.text !== 'string') fail('RISU_NATIVE_EDIT_RESULT');
     output.text = value.text as string;

@@ -14,9 +14,13 @@ function updateViewport() {
   viewport = next;
   for (const listener of listeners) listener();
 }
+// Mobile browsers change only the height when the on-screen keyboard or the address bar
+// shows or hides, so a height change alone is not a new display size.
 function onResize() {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(updateViewport, 150);
+  resizeTimer = setTimeout(() => {
+    if (window.innerWidth !== viewport?.width) updateViewport();
+  }, 150);
 }
 function subscribe(listener: () => void) {
   if (listeners.size === 0) {

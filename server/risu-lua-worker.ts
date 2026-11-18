@@ -112,7 +112,7 @@ async function createEngine(maximumBytes: number) {
 // Every bound below is interpolated from the runtime-owned limits.
 function harnessSource(limits: NativeLuaWorkerLimits) {
   return String.raw`
-local source, inputJSON = ...
+local source, inputJSON, historyJSON = ...
 local type, next, rawget, rawset = type, next, rawget, rawset
 local getmetatable, setmetatable = getmetatable, setmetatable
 local pcall, error, load = pcall, error, load
@@ -321,6 +321,7 @@ api.snapshot = {
   encode=function(value) return encode(value, ${limits.snapshotJsonBytes}) end,
   decode=function(text) return decode(text, ${limits.snapshotJsonBytes}) end,
 }
+api.history = function() return historyJSON end
 api.host = {call=function(method, args)
   if type(method) ~= 'string' or #method == 0 or #method > ${limits.hostMethodChars} then error('RISU_LUA_HOST_ARGUMENTS', 0) end
   calls = calls + 1
@@ -329,9 +330,9 @@ api.host = {call=function(method, args)
   local maximum = snapshot and ${limits.snapshotJsonBytes} or ${limits.guestJsonBytes}
   local ok, argsJSON = pcall(encode, args, maximum)
   if not ok then error('RISU_LUA_HOST_ARGUMENTS', 0) end
-  local success, text, reset = yield(method, argsJSON)
+  local success, text, reset, history = yield(method, argsJSON)
   if not success then error(text, 0) end
-  if reset then calls, resultBytes = 0, 0 end
+  if reset then calls, resultBytes, historyJSON = 0, 0, history end
   if not snapshot then resultBytes = resultBytes + #text end
   if #text > maximum or resultBytes > ${limits.hostResultBytes} then error('RISU_LUA_HOST_RESULT_LIMIT', 0) end
   return decode(text, maximum)
@@ -386,8 +387,10 @@ async function run() {
     !validLimits(input.limits) ||
     typeof input.source !== 'string' ||
     typeof input.inputJSON !== 'string' ||
+    typeof input.historyJSON !== 'string' ||
     Buffer.byteLength(input.source) > input.limits.sourceBytes ||
     Buffer.byteLength(input.inputJSON) > input.limits.snapshotJsonBytes ||
+    Buffer.byteLength(input.historyJSON) > input.limits.snapshotJsonBytes ||
     !Array.isArray(input.hostErrorCodes)
   ) {
     fail('RISU_LUA_PROGRAM_INPUT_SIZE');
@@ -412,7 +415,9 @@ async function run() {
     // headroom by input size so long history alone does not exhaust the script budget.
     return limits.cpuMs + Math.ceil(size / (1024 * 1024)) * 500;
   };
-  let cpuRemaining = invocationBudget(Buffer.byteLength(input.inputJSON));
+  let cpuRemaining = invocationBudget(
+    Buffer.byteLength(input.inputJSON) + Buffer.byteLength(input.historyJSON)
+  );
   for (const library of [
     LuaLibraries.Base,
     LuaLibraries.Coroutine,
@@ -440,7 +445,8 @@ async function run() {
   thread.loadString(harnessSource(limits), 'uimori-lua-harness');
   thread.pushValue(input.source);
   thread.pushValue(input.inputJSON);
-  let args = 2;
+  thread.pushValue(input.historyJSON);
+  let args = 3;
   let phaseSequence = 0;
   let hostId = 0;
   let invocationCalls = 0;
@@ -514,10 +520,14 @@ async function run() {
     if (result.ok && result.resetBudget === true) {
       if (
         typeof result.json !== 'string' ||
-        Buffer.byteLength(result.json) > limits.snapshotJsonBytes
+        typeof result.historyJSON !== 'string' ||
+        Buffer.byteLength(result.json) > limits.snapshotJsonBytes ||
+        Buffer.byteLength(result.historyJSON) > limits.snapshotJsonBytes
       )
         throw new Error('LUA_PROTOCOL');
-      cpuRemaining = invocationBudget(Buffer.byteLength(result.json));
+      cpuRemaining = invocationBudget(
+        Buffer.byteLength(result.json) + Buffer.byteLength(result.historyJSON)
+      );
       timedOut = false;
       hostResultBytes = 0;
       invocationCalls = 0;
@@ -538,8 +548,10 @@ async function run() {
         input.hostErrorCodes.includes(result.code) ? result.code : 'RISU_LUA_HOST_CALL_FAILED'
       );
     }
-    thread.pushValue(result.ok && result.resetBudget === true);
-    args = 3;
+    const next = result.ok && result.resetBudget === true;
+    thread.pushValue(next);
+    thread.pushValue(next ? result.historyJSON : '');
+    args = 4;
   }
 }
 

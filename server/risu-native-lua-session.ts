@@ -168,7 +168,7 @@ class Session {
     this.work.add(operation);
     void operation.finally(() => this.work.delete(operation));
   }
-  invoke(input: unknown, options: Options, host: Host): Promise<unknown> {
+  invoke(input: unknown, history: unknown, options: Options, host: Host): Promise<unknown> {
     if (this.closed || this.current) return Promise.reject(failure('RISU_NATIVE_SESSION_BUSY'));
     if (options.signal?.aborted) return Promise.reject(failure('RISU_NATIVE_ABORTED'));
     if (executing >= 8) return Promise.reject(failure('RISU_NATIVE_BUSY'));
@@ -206,6 +206,7 @@ class Session {
             workerData: {
               source: this.source,
               inputJSON: json({ state: {}, input }, true),
+              historyJSON: json(history, true),
               limits: NATIVE_LUA_LIMITS,
               hostErrorCodes: ['RISU_NATIVE_HOST_UNAVAILABLE'],
             },
@@ -226,6 +227,7 @@ class Session {
             id: this.waitingId,
             ok: true,
             json: json(input, true),
+            historyJSON: json(history, true),
             resetBudget: true,
           });
           this.waitingId = undefined;
@@ -252,6 +254,7 @@ export function disposeNativeRisuChatSessions(chatId: string) {
 export async function runNativeRisuLua(
   source: string,
   input: unknown,
+  history: unknown,
   options: Options,
   host: Host
 ): Promise<unknown> {
@@ -277,7 +280,7 @@ export async function runNativeRisuLua(
       session = new Session(source, fingerprint, key);
       if (key) sessions.set(key, session);
     }
-    return session.invoke(input, options, host);
+    return session.invoke(input, history, options, host);
   };
   if (!key) return run();
   if (key.length > 1000) throw failure('RISU_NATIVE_SESSION_KEY');

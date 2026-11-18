@@ -1,6 +1,7 @@
 /** Risu API bridge executed inside the existing JSON-only Lua worker sandbox. */
 export const RISU_NATIVE_LUA_PRELUDE = String.raw`
 local __json, __snapshot, __input, __host = api.json, api.snapshot, api.input, api.host.call
+local __history = api.history
 local __load, __pcall, __pack, __unpack = load, pcall, table.pack, table.unpack
 local __allowed
 local function __scoped(allowed, callback, ...)
@@ -11,7 +12,12 @@ local function __scoped(allowed, callback, ...)
   if not result[1] then error(result[2], 0) end
   return __unpack(result, 2, result.n)
 end
-local __variables, __messages = __input.variables, __input.messages
+local __variables = __input.variables
+local __messages, __messagesChanged
+local function __chat()
+  if __messages == nil then __messages = __snapshot.decode(__history()) end
+  return __messages
+end
 local __callbacks = {editRequest={}, editDisplay={}, editInput={}, editOutput={}}
 local __effects = {reloadDisplay=false, stopChat=false, notifications=__json.array({})}
 local __id = 'uimori-native-risu'
@@ -69,55 +75,58 @@ function setStateChanged(id, name, value) return setChatVarChanged(id, '__' .. n
 local function __index(index)
   if type(index) ~= 'number' or index ~= index or math.abs(index) == math.huge then error('RISU_NATIVE_CHAT_INDEX') end
   index = index < 0 and math.ceil(index) or math.floor(index)
-  if index < 0 then index = #__messages + index end
+  if index < 0 then index = #__chat() + index end
   return index + 1
 end
 local function __copy(value) return __decode(__snapshot.decode(__snapshot.encode(value))) end
-function getChat(id, index) return __copy(__messages[__index(index)] or __json.null) end
+function getChat(id, index) return __copy(__chat()[__index(index)] or __json.null) end
 function getChatMain(id, index) return __snapshot.encode(__encode(getChat(id, index), {})) end
 function getChatData(id, index) local chat = getChat(id, index); return chat and chat.data or '' end
 function getChatRole(id, index) local chat = getChat(id, index); return chat and chat.role or '' end
-function getChatLength(id) return #__messages end
-function getFullChat(id) return __copy(__messages) end
-function getFullChatMain(id) return __snapshot.encode(__messages) end
+function getChatLength(id) return #__chat() end
+function getFullChat(id) return __copy(__chat()) end
+function getFullChatMain(id) return __snapshot.encode(__chat()) end
 function getRecentChats(id, count)
-  local result = {}
-  for i = math.max(1, #__messages - math.max(0, math.floor(count or 0)) + 1), #__messages do
-    result[#result + 1] = __copy(__messages[i])
+  local chat, result = __chat(), {}
+  for i = math.max(1, #chat - math.max(0, math.floor(count or 0)) + 1), #chat do
+    result[#result + 1] = __copy(chat[i])
   end
   return result
 end
 function getRecentChatsMain(id, count) return __snapshot.encode(__encode(getRecentChats(id, count), {})) end
 local function __writeChat()
   if __input.event == 'display' or __input.event == 'editDisplay' then error('RISU_NATIVE_DISPLAY_CHAT_WRITE_DENIED') end
+  __messagesChanged = true
 end
 function setChat(id, index, value)
   __writeChat()
-  local chat = __messages[__index(index)]
-  if chat then chat.data = value or '' end
+  local message = __chat()[__index(index)]
+  if message then message.data = value or '' end
 end
 function setChatRole(id, index, role)
   __writeChat()
-  local chat = __messages[__index(index)]
-  if chat then chat.role = role == 'user' and 'user' or 'char' end
+  local message = __chat()[__index(index)]
+  if message then message.role = role == 'user' and 'user' or 'char' end
 end
 function addChat(id, role, value)
   __writeChat()
-  __messages[#__messages + 1] = {role=role == 'user' and 'user' or 'char', data=value or ''}
+  local chat = __chat()
+  chat[#chat + 1] = {role=role == 'user' and 'user' or 'char', data=value or ''}
 end
 function insertChat(id, index, role, value)
   __writeChat()
-  table.insert(__messages, math.max(1, math.min(#__messages + 1, __index(index))), {role=role == 'user' and 'user' or 'char', data=value or ''})
+  local chat = __chat()
+  table.insert(chat, math.max(1, math.min(#chat + 1, __index(index))), {role=role == 'user' and 'user' or 'char', data=value or ''})
 end
 function removeChat(id, index)
   __writeChat()
-  local at = __index(index)
-  if at >= 1 and at <= #__messages then table.remove(__messages, at) end
+  local chat, at = __chat(), __index(index)
+  if at >= 1 and at <= #chat then table.remove(chat, at) end
 end
 function cutChat(id, first, last)
   __writeChat()
-  local result = __json.array({})
-  for i = math.max(1, __index(first)), math.min(#__messages, __index(last) - 1) do result[#result + 1] = __messages[i] end
+  local chat, result = __chat(), __json.array({})
+  for i = math.max(1, __index(first)), math.min(#chat, __index(last) - 1) do result[#result + 1] = chat[i] end
   __messages = result
 end
 function setFullChat(id, value)
@@ -131,11 +140,13 @@ function setFullChat(id, value)
 end
 function setFullChatMain(id, value) setFullChat(id, __decode(__snapshot.decode(value))) end
 function getUserLastMessage(id)
-  for i = #__messages, 1, -1 do if __messages[i].role == 'user' then return __messages[i].data end end
+  local chat = __chat()
+  for i = #chat, 1, -1 do if chat[i].role == 'user' then return chat[i].data end end
   return ''
 end
 function getCharacterLastMessage(id)
-  for i = #__messages, 1, -1 do if __messages[i].role == 'char' then return __messages[i].data end end
+  local chat = __chat()
+  for i = #chat, 1, -1 do if chat[i].role == 'char' then return chat[i].data end end
   return __input.firstMessage
 end
 function getName(id) return __input.charName end
@@ -186,7 +197,7 @@ local function __model(method, script, allowed, id, prompt, multimodal, options)
   return __awaitable(__decode(result))
 end
 local function __cbs(text)
-  local result = __host('cbs', {text=text, variables=__variables, messages=__messages})
+  local result = __host('cbs', {text=text, variables=__variables, messages=__messagesChanged and __messages or nil})
   __variables = result.variables
   return result.text
 end
@@ -194,7 +205,7 @@ function cbs(text) return __cbs(text) end
 function getPersonaDescription(id) return __cbs(__input.persona) end
 function getLoreBooks(id, search)
   -- Wasmoon passes Lua nil as JavaScript null, distinct from a missing comment.
-  local result = __host('cbs', {operation='getLoreBooks', search=__encode(search, {}), variables=__variables, messages=__messages})
+  local result = __host('cbs', {operation='getLoreBooks', search=__encode(search, {}), variables=__variables, messages=__messagesChanged and __messages or nil})
   __variables = result.variables
   return __decode(result.books)
 end
@@ -265,7 +276,7 @@ local function __dispatch()
       if result == false then __effects.stopChat = true end
     elseif event == 'manual' and not __input.manualHandled then error('RISU_NATIVE_TRIGGER_NOT_FOUND') end
   end
-  local result = {ok=true, variables=__variables, messages=__messages, effects=__effects}
+  local result = {ok=true, variables=__variables, messages=__messagesChanged and __messages or nil, effects=__effects}
   if edit == 'editRequest' then result.request=__encode(value, {})
   elseif value ~= __json.null and value ~= nil then result.text=value end
   return result
@@ -277,7 +288,7 @@ while true do
   else ok, result = false, initializeError end
   if not ok then result = {ok=false, error=type(result) == 'string' and result or 'RISU_NATIVE_LUA_FAILED'} end
   __input = __host('__native.next', result)
-  __variables, __messages = __input.variables, __input.messages
+  __variables, __messages, __messagesChanged = __input.variables, nil, false
   __effects = {reloadDisplay=false, stopChat=false, notifications=__json.array({})}
 end
 `;

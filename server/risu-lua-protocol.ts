@@ -48,6 +48,8 @@ export type NativeLuaWorkerLimits = {
 export type NativeLuaWorkerInput = {
   source: string;
   inputJSON: string;
+  /** The conversation as JSON text. The guest decodes it only when a script reads the chat. */
+  historyJSON: string;
   hostErrorCodes: string[];
   limits: NativeLuaWorkerLimits;
 };
@@ -74,5 +76,13 @@ export type NativeLuaWorkerMessage =
   | NativeLuaWorkerPhaseReport;
 /** Host to worker. */
 export type NativeLuaHostReply =
-  | { type: 'host-result'; id: number; ok: true; json: string; resetBudget?: boolean }
+  | {
+      type: 'host-result';
+      id: number;
+      ok: true;
+      json: string;
+      resetBudget?: boolean;
+      /** Sent with `resetBudget`: the next invocation's conversation. */
+      historyJSON?: string;
+    }
   | { type: 'host-result'; id: number; ok: false; code: string };

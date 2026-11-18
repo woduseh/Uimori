@@ -200,6 +200,7 @@ test('RSURFACE viewport projections retain local controls and action locks until
   const previews: { width: number; height: number }[] = [];
   let nativeRevision = 0;
   let draftDefault = 'Original draft';
+  let heldWidthText: number | undefined;
   let waitForResize = false;
   let releaseResize!: () => void;
   const resizeGate = new Promise<void>((resolve) => {
@@ -231,8 +232,8 @@ test('RSURFACE viewport projections retain local controls and action locks until
           expectedVariableRevision: nativeRevision,
         },
         original: {
-          text: `Width ${viewport.width}`,
-          html: `<p>Width ${viewport.width}</p>
+          text: `Width ${heldWidthText ?? viewport.width}`,
+          html: `<p>Width ${heldWidthText ?? viewport.width}</p>
             <input id="draft" aria-label="Card draft" value="${draftDefault}">
             <textarea risu-id="notes" aria-label="Card notes">Original notes ${nativeRevision}</textarea>
             <select name="choice" aria-label="Card choice">
@@ -243,7 +244,7 @@ test('RSURFACE viewport projections retain local controls and action locks until
             <input id="panel-toggle" type="checkbox" aria-label="Panel open">
             <details id="details"><summary>Card details</summary>Extra information</details>
             <button risu-trigger="one">One</button>`,
-          css: `#draft { max-width: ${viewport.height}px; }`,
+          css: `#draft { max-width: ${viewport.width}px; }`,
           changed: true,
           applied: [],
         },
@@ -325,16 +326,23 @@ test('RSURFACE viewport projections retain local controls and action locks until
   await presentation.getByRole('button', { name: 'One', exact: true }).click();
   await expect(page.getByLabel('Action calls')).toHaveText('1');
 
+  // A height-only change, as from an on-screen keyboard, is not a new display size.
+  const settledRequests = requests.length;
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT + 60 });
+  await page.clock.fastForward(1000);
+  expect(requests).toHaveLength(settledRequests);
+
   // A CSS-only projection keeps the actual input node and the successful action lock.
   const draftNode = await draft.elementHandle();
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT + 60 });
+  heldWidthText = MOBILE_WIDTH;
+  await page.setViewportSize({ width: MOBILE_WIDTH + 2, height: MOBILE_HEIGHT + 60 });
   await expect
     .poll(() => requests.at(-1))
     .toEqual({
-      width: MOBILE_WIDTH,
+      width: MOBILE_WIDTH + 2,
       height: MOBILE_HEIGHT + 60,
     });
-  await expect(draft).toHaveCSS('max-width', `${MOBILE_HEIGHT + 60}px`);
+  await expect(draft).toHaveCSS('max-width', `${MOBILE_WIDTH + 2}px`);
   await expect(page.getByLabel('Presentation status')).toHaveText('ready');
   expect(
     await draftNode!.evaluate(
@@ -348,6 +356,7 @@ test('RSURFACE viewport projections retain local controls and action locks until
   await expect(page.getByLabel('Action calls')).toHaveText('1');
 
   // An authored default change wins over a stale local value even at the same revision.
+  heldWidthText = undefined;
   draftDefault = 'Updated authored default';
   await page.setViewportSize({ width: MOBILE_WIDTH + 1, height: MOBILE_HEIGHT });
   await expect(presentation).toContainText(`Width ${MOBILE_WIDTH + 1}`);
