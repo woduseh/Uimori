@@ -9,19 +9,19 @@
 - 원문·번역을 직접 편집하고, 채팅을 독립 사본으로 복사해요.
 - 이야기 기억과 백업 기능을 제공해요.
 
-> **현재 버전 `v0.12.21` · DB 스키마 15**
+> **현재 버전 `v0.13.0` · DB 스키마 15**
 >
-> 사용자 이야기 UI 테마 제작과 새 채팅 생성 기본값을 추가하고, 본문 모델 호출 한도를 1~128회로 확장했어요. 자세한 변경은 [릴리스 노트](docs/releases/v0.12.21.md), 기존 설치의 업데이트 절차는 [업데이트 안내](docs/UPDATES.md)를 참고해요.
+> 이야기 UI의 장면 속 화면 구성을 확장하고 도우미의 도구 검색을 개선했어요. 모델 카탈로그와 기본 Phēmē 프리셋도 갱신했어요. [릴리스 노트](docs/releases/v0.13.0.md) · [업데이트 안내](docs/UPDATES.md)
 
 ## 빠른 시작 (Windows)
 
 **준비물**: Node **24.22.1 이상 24.x**, npm, Chrome 또는 Edge. SQLite는 Node에 포함된 기능을 사용하므로 따로 설치하지 않아요.
 
-1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.12.21` 릴리스가 공개됐는지 확인해요.
+1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.13.0` 릴리스가 공개됐는지 확인해요.
 2. 소스를 받아 실행해요.
 
    ```powershell
-   git clone --branch v0.12.21 --single-branch https://github.com/woduseh/Uimori.git
+   git clone --branch v0.13.0 --single-branch https://github.com/woduseh/Uimori.git
    cd Uimori
    npm ci
    npm run dev
