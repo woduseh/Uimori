@@ -143,6 +143,7 @@ export type AuxiliaryJobHooks = {
   onAttemptStart: (wire: WireRecord) => MaybePromise<string>;
   onAttemptFinish: (id: string, result: ProviderResult) => MaybePromise<void>;
   onInput?: (jobId: string, input: AuxiliaryInput) => MaybePromise<void>;
+  onScriptedInput?: (input: AuxiliaryInput) => MaybePromise<void>;
   onToolStart?: (
     jobId: string,
     event: Pick<ToolEvent, 'callId' | 'name' | 'args'>,
@@ -597,6 +598,7 @@ export async function runAuxiliaryJob(
       if (evaluation && evaluation.remainingMs() === 0)
         throw new AuxiliaryExecutionError('AUXILIARY_PROVIDER_TIMEOUT');
       if (!target) {
+        await hooks.onScriptedInput?.(structuredClone(next));
         calls++;
         return scriptedAuxiliary(next, hooks.signal);
       }
@@ -648,8 +650,10 @@ export async function runAuxiliaryJob(
         candidateText = output;
       return output;
     };
+    const { onInput } = hooks;
     return executeAuxiliary(packet, snapshot, request, {
       signal: hooks.signal,
+      captureInputs: false,
       maxCalls: evaluation ? Math.min(maxCalls, evaluation.maxCalls) : maxCalls,
       localTools: {
         names: [
@@ -703,7 +707,7 @@ export async function runAuxiliaryJob(
           };
         },
       },
-      onInput: (value) => hooks.onInput?.(jobId, value),
+      onInput: onInput && ((value) => onInput(jobId, value)),
       onToolStart: (value) => hooks.onToolStart?.(jobId, value, generation),
       prepareToolEvent: (event, next, remainingActions) => {
         if (

@@ -621,7 +621,6 @@ export async function createApp(options: AppOptions): Promise<App> {
             const judgment = judgmentRuntime(store, jevCredentials.resolve);
             if (queued.kind === 'status') throw new HttpError(410, 'SCENE_COMMENTARY_RETIRED');
             chatId = queued.chatId;
-            let mockTranslation = false;
             const reservation =
               queued.kind === 'translation' && queued.input ? record(queued.input) : undefined;
             if (
@@ -652,7 +651,6 @@ export async function createApp(options: AppOptions): Promise<App> {
             }
             const bridge = auxiliaryBridge(store, controls, signal, (target, recovery) => {
               if (!recovery) requireModel(target, 'translation');
-              mockTranslation = !target;
             });
             await runAuxiliaryJob(bridge, id, instanceId, {
               jev: {
@@ -690,9 +688,8 @@ export async function createApp(options: AppOptions): Promise<App> {
                 return store.product.startAttempt(chatId, null, id, wire);
               },
               onAttemptFinish: (attempt, result) => store.product.finishAttempt(attempt, result),
-              onInput: (_id, input) => {
-                if (mockTranslation)
-                  store.product.mockAttempt(chatId, null, id, 'translation', input);
+              onScriptedInput: (input) => {
+                store.product.mockAttempt(chatId, null, id, 'translation', input);
               },
               onToolStart: (_id, event, generation) =>
                 startToolDiagnostic(

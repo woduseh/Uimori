@@ -1,6 +1,19 @@
 import { isDeepStrictEqual } from 'node:util';
 import type { ProductStore } from '../../server/product-store.js';
 import { modelWorkspace, updateModelWorkspace } from '../../server/prompt-workspace.js';
+import type { Store } from '../../server/store.js';
+
+export function enableTranslationJudgment(store: Store) {
+  const workspace = modelWorkspace(store);
+  updateModelWorkspace(store, {
+    expectedRevision: workspace.revision,
+    routes: workspace.routes,
+    translationPolicy: {
+      ...workspace.translationPolicy,
+      judgment: { ...workspace.translationPolicy.judgment, enabled: true },
+    },
+  });
+}
 
 /** Existing synthetic scenarios explicitly install their requested global routes before editing chat data. */
 export function updateTestProfile(

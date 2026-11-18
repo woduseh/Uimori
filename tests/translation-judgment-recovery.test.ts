@@ -11,7 +11,7 @@ import { createApp, type App } from '../server/app.js';
 import { JEV_ENDPOINT } from '../server/jev-judgment.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { loopbackProvider } from './fixtures/loopback-provider.js';
-import { updateTestProfile } from './fixtures/model-workspace.js';
+import { enableTranslationJudgment, updateTestProfile } from './fixtures/model-workspace.js';
 
 const owned: { directory: string; apps: App[]; close?: () => Promise<void> }[] = [];
 afterEach(async () => {
@@ -110,6 +110,7 @@ test.each(['SQLite crash snapshot', 'graceful server shutdown'])(
     const app = await launch('original.sqlite');
     app.store.credentials.set('jev', 'synthetic-jev-key');
     const chat = createFixtureChat(app.store, 'Interrupted translation');
+    enableTranslationJudgment(app.store);
     const connection = app.store.product.connection({
       title: 'Local translator',
       protocol: 'openai-chat-v1',

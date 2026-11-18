@@ -344,6 +344,7 @@ export async function executeAuxiliary(
   hooks: {
     signal?: AbortSignal;
     maxCalls?: number;
+    captureInputs?: boolean;
     onInput?: (input: AuxiliaryInput) => void | Promise<void>;
     onToolStart?: (event: Pick<ToolEvent, 'callId' | 'name' | 'args'>) => void | Promise<void>;
     onToolEvent?: (event: ToolEvent, timing?: ToolEventTiming) => void | Promise<void>;
@@ -367,6 +368,7 @@ export async function executeAuxiliary(
   const fixedInput = structuredClone(input);
   const fixedScope = structuredClone(snapshot);
   const inputs: AuxiliaryInput[] = [];
+  let modelCalls = 0;
   const toolEvents: ToolEvent[] = [];
   const limit = hooks.maxCalls ?? snapshot.settings.maxCalls;
   const check = () => {
@@ -375,12 +377,13 @@ export async function executeAuxiliary(
   };
   while (true) {
     check();
-    if (!Number.isSafeInteger(limit) || limit < 1 || inputs.length >= limit)
+    if (!Number.isSafeInteger(limit) || limit < 1 || modelCalls >= limit)
       throw Object.assign(new Error('Auxiliary call budget exhausted'), { name: 'BudgetError' });
-    const current = { ...structuredClone(fixedInput), results: structuredClone(toolEvents) };
-    inputs.push(structuredClone(current));
+    const current = { ...fixedInput, results: toolEvents };
+    if (hooks.captureInputs !== false) inputs.push(structuredClone(current));
     await hooks.onInput?.(structuredClone(current));
     check();
+    modelCalls++;
     const output = await request(structuredClone(current), hooks.signal);
     check();
     if (
@@ -393,7 +396,7 @@ export async function executeAuxiliary(
           output && typeof output === 'object' && (output as { kind?: string }).kind === 'output'
             ? (output as { output?: unknown }).output
             : output,
-        modelCalls: inputs.length,
+        modelCalls,
         inputs,
         toolEvents,
       };
@@ -438,7 +441,7 @@ export async function executeAuxiliary(
             diagnosticArgs: action.args,
           });
           check();
-          return { output: local.terminalOutput, modelCalls: inputs.length, inputs, toolEvents };
+          return { output: local.terminalOutput, modelCalls, inputs, toolEvents };
         }
         event = local;
         if (event.callId !== action.callId || event.name !== action.name)

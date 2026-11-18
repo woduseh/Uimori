@@ -9,6 +9,7 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import { createApp, type App } from '../server/app.js';
+import { enableTranslationJudgment } from './fixtures/model-workspace.js';
 import type { Chat, ChatDetail, Run, Source } from '../core/types.js';
 import type { ChatProfile, Connection, Content, ModelPreset } from '../core/product.js';
 import type { Json } from '../core/transport.js';
@@ -449,6 +450,7 @@ test('preset evaluation mixes permitted reads and local tools; buffered Response
     hash: createHash('sha256').update(sourceText).digest('hex'),
     runId: run.id,
   });
+  enableTranslationJudgment(state.app.store);
   await api(state.app, `/api/sources/${source.id}/translation`, {});
   await expect
     .poll(async () => (await state.detail()).jobs[0]?.status, { timeout: 6000 })

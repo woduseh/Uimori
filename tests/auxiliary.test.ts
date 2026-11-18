@@ -176,7 +176,7 @@ describe('M1 source-bound auxiliary roles', () => {
           kind: 'tool',
           action: { callId: `search-${++calls}`, name: 'knowledge.search', args: {} },
         }),
-        { maxCalls: 2 }
+        { maxCalls: 2, captureInputs: false }
       )
     ).rejects.toMatchObject({ name: 'BudgetError' });
     expect(calls).toBe(2);
