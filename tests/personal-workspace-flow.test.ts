@@ -157,16 +157,7 @@ test('image metadata editing changes the JEV catalog without rewriting bytes or 
   };
   saveResource(store, { kind: 'content', id: bot.id, expectedRevision: bot.revision, model });
   const profile = store.product.snapshot(chat.id);
-  const inputCatalog = imageJobInput(store, {
-    chatId: chat.id,
-    request: 'A rain scene',
-    profile,
-    settings: chat.settings,
-    history: [],
-    resources: [],
-    settingsRevision: chat.settingsRevision,
-    parentRevision: chat.headRevision,
-  });
+  const inputCatalog = imageJobInput(store, { chatId: chat.id, profile });
   const source = store.source(chat.headRevision!);
   const request = imageJudgmentRequest(source, inputCatalog.imageCatalog.entries);
   expect(JSON.stringify(request)).toContain('우산을 들고 웃는 모습');

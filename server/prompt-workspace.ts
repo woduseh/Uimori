@@ -33,8 +33,8 @@ import type {
 } from '../core/product.js';
 import { workspaceModelRef } from '../core/product.js';
 import {
-  translationContextMode,
-  validateTranslationJudgmentPolicy,
+  translationPolicy,
+  type TranslationPolicy,
   DEFAULT_TRANSLATION_JUDGMENT,
 } from '../core/translation-settings.js';
 import { builtinCurrentPrompt } from './builtin-prompts.js';
@@ -173,15 +173,16 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     'summaryLength',
   ]);
   const policy = record(b.translationPolicy);
-  fields(policy, ['maxRetries', 'maxCalls', 'judgment', 'contextMode']);
-  const judgment = validateTranslationJudgmentPolicy(policy.judgment);
-  let contextMode: PromptWorkspace['translationPolicy']['contextMode'];
-  if (policy.contextMode !== undefined) {
-    try {
-      contextMode = translationContextMode(policy.contextMode);
-    } catch {
-      throw new HttpError(400, 'TRANSLATION_CONTEXT_MODE_INVALID');
-    }
+  let checkedPolicy: TranslationPolicy;
+  try {
+    checkedPolicy = translationPolicy({
+      ...policy,
+      judgment: policy.judgment as TranslationPolicy['judgment'],
+      maxRetries: number(policy.maxRetries, 'translation automatic retries', 0, 5),
+      maxCalls: number(policy.maxCalls, 'translation call limit', 2, 64),
+    });
+  } catch (error) {
+    throw new HttpError(400, error instanceof Error ? error.message : 'TRANSLATION_POLICY_INVALID');
   }
   if (b.mainJudgmentEnabled !== undefined && typeof b.mainJudgmentEnabled !== 'boolean')
     throw new HttpError(400, 'MAIN_JUDGMENT_ENABLED_INVALID');
@@ -203,12 +204,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     ),
     main: validateCurrentPrompt(b.main, 'main'),
     translation: validateCurrentPrompt(b.translation, 'translation'),
-    translationPolicy: {
-      judgment,
-      ...(contextMode !== undefined ? { contextMode } : {}),
-      maxRetries: number(policy.maxRetries, 'translation automatic retries', 0, 5),
-      maxCalls: number(policy.maxCalls, 'translation call limit', 2, 64),
-    },
+    translationPolicy: checkedPolicy,
   };
 }
 
@@ -226,7 +222,9 @@ export function defaultPromptWorkspace(): PromptWorkspace {
     main: builtinCurrentPrompt('main'),
     translation: builtinCurrentPrompt('translation'),
     translationPolicy: {
-      judgment: { ...DEFAULT_TRANSLATION_JUDGMENT },
+      judgment: { ...DEFAULT_TRANSLATION_JUDGMENT, enabled: false },
+      retryProviderRefusal: true,
+      previousSceneTokens: 2048,
       maxRetries: 1,
       maxCalls: 16,
     },

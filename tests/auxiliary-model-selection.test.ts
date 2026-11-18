@@ -1,5 +1,7 @@
 import { readRunSnapshot, readStoredRunSnapshot } from '../server/run-projections.js';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
+import { translationSnapshot } from '../core/translation-context.js';
+import { completedSource } from './fixtures/illustration.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
@@ -28,6 +30,31 @@ function database() {
   owned.push({ path, store });
   return store;
 }
+
+test('source-only translation of a settled scene preserves its frozen prompt without rebuilding the manuscript', async () => {
+  const store = database();
+  const chat = createFixtureChat(store, 'Translation selection');
+  completedSource(store, chat.id, 'An earlier scene');
+  const source = completedSource(store, chat.id, 'The passage to translate');
+  const before = readRunSnapshot(store, source.runId);
+  const workspace = modelWorkspace(store);
+  updateModelWorkspace(store, {
+    expectedRevision: workspace.revision,
+    routes: workspace.routes,
+    translationPolicy: { ...workspace.translationPolicy, contextMode: 'source-only' },
+  });
+  const history = vi.spyOn(store, 'history');
+  const resources = vi.spyOn(store.product, 'resources');
+  const job = store.requestTranslation(source.id);
+  const bundle = await auxiliaryBridge(store, new Controls(), new AbortController().signal).load(
+    job.id
+  );
+  expect(translationSnapshot(bundle.snapshot, 'source-only')).toEqual(
+    translationSnapshot(store.product.resolveJobPrompt(before, job.input), 'source-only')
+  );
+  expect(history).not.toHaveBeenCalled();
+  expect(resources).not.toHaveBeenCalled();
+});
 
 test('new auxiliary reservations use current generation models while JEV judgments stay separate and prior Runs remain frozen', async () => {
   const store = database();

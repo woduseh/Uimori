@@ -13,7 +13,7 @@ import { Store } from '../server/store.js';
 import { Controls } from '../server/controls.js';
 import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
 import { runAuxiliaryJob } from '../server/product-auxiliary.js';
-import { translationReferences } from '../server/translation-context.js';
+import { captureTranslationReferences } from '../server/translation-context.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import { translationReader } from '../core/translation-context.js';
 import { executeTool, knowledgeReadResults } from '../core/provider.js';
@@ -23,6 +23,10 @@ import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 import { translationFixtureSlot } from './fixtures/translation-job.js';
 
 const owned: { store: Store; dir: string }[] = [];
+function translationReferences(store: Store, snapshot: RunSnapshot) {
+  using captured = captureTranslationReferences(store, snapshot);
+  return captured.load();
+}
 const servers: (() => Promise<void>)[] = [];
 afterEach(async () => {
   for (const close of servers.splice(0)) await close();
@@ -238,6 +242,29 @@ test('SQLite wording references keep the latest edited source and completed word
     storedInput
   );
   expect(store.job(wording.id).input).toEqual(retainedInput);
+});
+
+test('overlapping readers retain their captured wording when later edits prune its stored result', () => {
+  const store = database();
+  const chat = createFixtureChat(store, 'wording under revision');
+  const first = source(store, chat.id);
+  const edit = (text: string, expectedRevision: number) =>
+    store.editTranslation(first.id, { text, expectedRevision, expectedSourceHash: first.hash });
+  const original = edit('original wording', 0);
+  const target = source(store, chat.id);
+  const snapshot = readRunSnapshot(store, target.runId);
+  const earlier = captureTranslationReferences(store, snapshot);
+  using overlap = captureTranslationReferences(store, snapshot);
+  earlier[Symbol.dispose]();
+  const later = edit('revised wording', original.revision!);
+  using afterEdit = captureTranslationReferences(store, snapshot);
+  edit('newest wording', later.revision!);
+  expect(
+    store.db.prepare('SELECT job_id FROM job_results WHERE job_id=?').get(original.id)
+  ).toBeUndefined();
+  expect(overlap.load(original.id)).toMatchObject([{ text: 'original wording', id: original.id }]);
+  expect(overlap.load(later.id)).toEqual([]);
+  expect(afterEdit.load()).toMatchObject([{ text: 'revised wording', id: later.id }]);
 });
 
 test('SQLite wording references exclude mismatched results and foreign sources even when listed in captured history', () => {

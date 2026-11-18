@@ -1,4 +1,5 @@
 import { executionSnapshot } from './execution-snapshot.js';
+import { translationSnapshot } from '../core/translation-context.js';
 import type { Run, RunSnapshot } from '../core/types.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
@@ -24,4 +25,29 @@ export function readStoredRunSnapshot(store: Pick<Store, 'db'>, id: string): Run
 /** Rebuild full current context only when explicitly requested. */
 export function readRunSnapshot(store: Store, id: string): RunSnapshot {
   return executionSnapshot(store, readStoredRunSnapshot(store, id));
+}
+
+export function readTranslationSelection(store: Store, runId: string, input: unknown): RunSnapshot {
+  const stored = readStoredRunSnapshot(store, runId);
+  let snapshot = stored;
+  if (stored.settled) {
+    if (
+      input &&
+      typeof input === 'object' &&
+      Object.hasOwn(input, 'translationModelSelection') &&
+      Object.hasOwn(input, 'translationPrompt')
+    ) {
+      const { chatId, revision, image } = store.product.profile(stored.chatId);
+      snapshot = {
+        ...stored,
+        profile: { chatId, revision, image, routes: { main: null, translation: null }, models: {} },
+      };
+    } else {
+      snapshot = {
+        ...stored,
+        profile: store.product.snapshot(stored.chatId, 'inspect', stored.parentRevision),
+      };
+    }
+  }
+  return store.product.resolveJobPrompt(translationSnapshot(snapshot, 'source-only'), input);
 }

@@ -11,6 +11,7 @@ import { judgeImagePlacement } from './image-judgment.js';
 import { nativeImageGuidance } from './risu-native-images.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
+import { textTokenExcerpt } from '../core/text-tokens.js';
 import { withNativeHostContext } from '../core/provider-messages.js';
 import {
   compileTranslationPrompt,
@@ -108,6 +109,9 @@ export type AuxiliaryOutcome = {
 };
 /** Every mutating bridge method must check owner+generation and the source dependency. */
 export type AuxiliaryStoreBridge = {
+  captureTranslationReferences?: (snapshot: RunSnapshot) => Disposable & {
+    load: (id?: string) => readonly TranslationReference[];
+  };
   load: (jobId: string) => MaybePromise<AuxiliaryBundle>;
   claim: (
     jobId: string,
@@ -243,9 +247,31 @@ const toolSchemas: ProviderTool[] = [
 ];
 
 /** This projection uses the originating Run's frozen contents, never current revisions. */
-export function sourceTimeContext(snapshot: RunSnapshot, kind: JobKind): SourceTimeContext {
+export function sourceTimeContext(
+  snapshot: RunSnapshot,
+  kind: JobKind,
+  previousSceneTokens?: number
+): SourceTimeContext {
   const profile = snapshot.profile;
   const target = kind === 'image' ? undefined : profile?.models[kind];
+  const previousSources: SourceTimeContext['previousSources'] = [];
+  let remaining = previousSceneTokens;
+  for (const item of snapshot.history.slice(-2).reverse()) {
+    if (remaining === 0) break;
+    const text = projectStoryUiText(item.text);
+    if (remaining === undefined) {
+      previousSources.unshift({ ...item, text });
+    } else {
+      const excerpt = textTokenExcerpt(text, remaining, {
+        side: 'end',
+        marker: '…',
+        profile: target?.tokenizer,
+      });
+      if (excerpt.text && !(excerpt.truncated && excerpt.text === '…'))
+        previousSources.unshift({ revision: item.revision, text: excerpt.text });
+      remaining -= excerpt.tokens;
+    }
+  }
   return {
     revision: profile
       ? `${profile.chatId}@${profile.revision}`
@@ -256,9 +282,7 @@ export function sourceTimeContext(snapshot: RunSnapshot, kind: JobKind): SourceT
     references: [],
     scene:
       'Use the supplied source blocks and source-time references; later revisions are excluded.',
-    previousSources: snapshot.history
-      .slice(-2)
-      .map((item) => ({ ...item, text: projectStoryUiText(item.text) })),
+    previousSources,
     instructionRevision:
       kind === 'translation'
         ? profile?.promptPresets?.translation
@@ -400,6 +424,10 @@ export async function runAuxiliaryJob(
     source.chatId !== snapshot.chatId
   )
     throw new Error('SOURCE_DEPENDENCY_MISMATCH');
+  using references =
+    job.kind === 'translation' && mode === 'full' && !bundle.judgmentRecovery
+      ? store.captureTranslationReferences?.(snapshot)
+      : undefined;
   let nativePreparationError: unknown;
   if (!bundle.judgmentRecovery && nativeRisuSnapshotNeedsRefresh(snapshot)) {
     try {
@@ -412,7 +440,11 @@ export async function runAuxiliaryJob(
   }
   let executionSnapshot = snapshot;
   const imageSource = bundle.imageSource ?? source;
-  const context = sourceTimeContext(snapshot, job.kind);
+  const context = sourceTimeContext(
+    snapshot,
+    job.kind,
+    job.kind === 'translation' ? policy.previousSceneTokens : undefined
+  );
   let nativeImagePreparationError: unknown;
   let imageGuidance = '';
   if (job.kind === 'image') {
@@ -446,7 +478,7 @@ export async function runAuxiliaryJob(
   await hooks.onProgress?.();
   const target = job.kind === 'image' ? undefined : snapshot.profile?.models[job.kind];
   let calls = 0;
-  const readTranslation = translationReader(snapshot, bundle.translationReferences ?? []);
+  let readTranslation: ReturnType<typeof translationReader> | undefined;
   const evaluation = createEvaluationToolSession(target, hooks.timeoutMs);
   let evaluationRounds = 0;
   // Fixture annotations remain explicitly marked; live output still requires artifact validation.
@@ -625,7 +657,13 @@ export async function runAuxiliaryJob(
           ...(evaluation?.allNames ?? []),
         ],
         execute: (action) => {
-          if (TRANSLATION_READ_NAMES.includes(action.name)) return readTranslation(action);
+          if (TRANSLATION_READ_NAMES.includes(action.name)) {
+            readTranslation ??= translationReader(
+              snapshot,
+              references?.load ?? bundle.translationReferences ?? []
+            );
+            return readTranslation(action);
+          }
           const call = {
             id: action.callId,
             name: action.name,
@@ -771,7 +809,7 @@ export async function runAuxiliaryJob(
           if (
             error instanceof AuxiliaryExecutionError &&
             error.code === 'AUXILIARY_PROVIDER_REFUSED' &&
-            policy.judgment.enabled !== false &&
+            (policy.retryProviderRefusal ?? policy.judgment.enabled !== false) &&
             error.retryable &&
             !hooks.signal.aborted
           ) {

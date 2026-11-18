@@ -57,15 +57,20 @@ export type TranslationReference = {
 /** Detached wording evidence. Current source and author declarations always take precedence. */
 export function translationReader(
   snapshot: RunSnapshot,
-  references: readonly TranslationReference[]
+  references: readonly TranslationReference[] | ((id?: string) => readonly TranslationReference[])
 ) {
   const hashes = new Map(
     snapshot.history.map((item) => [item.revision, item.contentHash ?? sourceHash(item.text)])
   );
   const originals = new Map(snapshot.history.map((item) => [item.revision, item.text]));
-  const scope = structuredClone(
-    references.filter((item) => hashes.get(item.sourceRevision) === item.sourceHash)
-  );
+  const inScope = (item: TranslationReference) =>
+    hashes.get(item.sourceRevision) === item.sourceHash;
+  const fixed =
+    typeof references === 'function' ? undefined : structuredClone(references.filter(inScope));
+  const scope =
+    typeof references === 'function'
+      ? (id?: string) => references(id).filter(inScope)
+      : () => fixed!;
   return (action: ToolAction): ToolEvent => {
     const denied = (code: string): ToolEvent => ({
       callId: action.callId,
@@ -117,13 +122,12 @@ export function translationReader(
       const query = args.query === undefined ? '' : args.query;
       if (typeof query !== 'string' || query.length > 512) return denied('INVALID_ARGUMENTS');
       const terms = query.toLocaleLowerCase('en').split(/\s+/u).filter(Boolean);
-      const found = scope.filter((item) =>
-        terms.every((term) =>
-          `${originals.get(item.sourceRevision) ?? ''} ${item.text}`
-            .toLocaleLowerCase('en')
-            .includes(term)
-        )
-      );
+      const found = scope().filter((item) => {
+        if (!terms.length) return true;
+        const searchable =
+          `${originals.get(item.sourceRevision) ?? ''} ${item.text}`.toLocaleLowerCase('en');
+        return terms.every((term) => searchable.includes(term));
+      });
       const end = Number(offset) + Number(limit);
       return {
         ...action,
@@ -136,7 +140,7 @@ export function translationReader(
       };
     }
     if (typeof args.id !== 'string' || args.id.length > 200) return denied('INVALID_ARGUMENTS');
-    const item = scope.find((item) => item.id === args.id);
+    const item = scope(args.id).find((item) => item.id === args.id);
     if (!item || Number(offset) > item.text.length) return denied('RESOURCE_UNAVAILABLE');
     const available = item.text.slice(
       Number(offset),

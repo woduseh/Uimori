@@ -119,7 +119,10 @@ export function assetEntry(asset: Asset): AssetEntry {
   };
 }
 export type ImageCatalog = { version: 1; hash: string; entries: AssetEntry[] };
-export function imageJobInput(store: Store, snapshot: RunSnapshot): { imageCatalog: ImageCatalog } {
+export function imageJobInput(
+  store: Store,
+  snapshot: Pick<RunSnapshot, 'chatId' | 'profile'>
+): { imageCatalog: ImageCatalog } {
   const entries = [
     ...store.product
       .assets(snapshot.chatId)
@@ -264,7 +267,10 @@ export function imageTargetSource(
   const projected = { ...source, text: body, hash: target.textHash };
   return { ...projected, blocks: splitSource(projected) };
 }
-export function automaticImageSelection(store: Store, snapshot: RunSnapshot) {
+export function automaticImageSelection(
+  store: Store,
+  snapshot: Pick<RunSnapshot, 'chatId' | 'profile'>
+) {
   const catalog = imageJobInput(store, snapshot);
   return catalog.imageCatalog.entries.length ? catalog : undefined;
 }

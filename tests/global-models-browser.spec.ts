@@ -106,8 +106,12 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await expect(translationRefusal).toBeVisible();
     const translationLimit = editor.getByLabel('번역 작업 호출 한도', { exact: true });
     const translationContext = editor.getByLabel('번역 참고 범위', { exact: true });
+    const previousSceneLimit = editor.getByLabel('이전 두 장면의 참고 토큰 한도');
+    const retryProvider = editor.getByRole('switch', { name: '공급자가 거절하면 재시도' });
     await expect(translationLimit).toBeVisible();
     await expect(translationContext).toHaveValue('full');
+    await expect(previousSceneLimit).toHaveValue('');
+    await expect(retryProvider).toBeChecked();
     await expect(translationRefusal.getByLabel('번역 작업 호출 한도')).toHaveCount(0);
     await expect(mainThreshold).toHaveValue('0.9');
     const mainToggle = editor.getByRole('switch', { name: '본문 거절 감지 사용' });
@@ -126,6 +130,9 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await helperTimeout.fill('0');
     await expect(saveModels).toBeDisabled();
     await helperTimeout.fill('90');
+    await previousSceneLimit.fill('32769');
+    await expect(saveModels).toBeDisabled();
+    await previousSceneLimit.fill('1024');
     for (const label of ['도우미 모델', '컨텍스트 요약 모델', '채팅 제목 모델', '확장 호출 모델'])
       await expect(editor.getByLabel(label, { exact: true })).toBeVisible();
     for (const label of ['본문 모델', '번역 모델', '채팅 제목 모델', '확장 호출 모델'])
@@ -133,10 +140,12 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await editor.getByLabel('번역 자동 재요청 횟수').fill('2');
     await translationLimit.fill('12');
     await translationContext.selectOption('source-only');
+    await expect(previousSceneLimit).toHaveCount(0);
     await mainThreshold.fill('0.8');
     await editor.getByLabel('번역 거절 확신 기준', { exact: true }).fill('0.85');
     await mainToggle.uncheck();
     await translationToggle.uncheck();
+    await expect(retryProvider).toBeChecked();
     await editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
     await expect.poll(async () => (await models(request)).routes.main?.id).toBe(ids[0]);
     const selected = await models(request);
@@ -148,6 +157,8 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     expect(selected.translationPolicy).toEqual({
       judgment: { threshold: 0.85, enabled: false },
       contextMode: 'source-only',
+      previousSceneTokens: 1024,
+      retryProviderRefusal: true,
       maxRetries: 2,
       maxCalls: 12,
     });
@@ -169,6 +180,25 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await expect(mainToggle).not.toBeChecked();
     await expect(translationToggle).not.toBeChecked();
     await expect(translationContext).toHaveValue('source-only');
+    await expect(retryProvider).toBeChecked();
+    await retryProvider.uncheck();
+    await translationContext.selectOption('full');
+    await expect(previousSceneLimit).toHaveValue('1024');
+    if (visualReview) {
+      for (const reviewWidth of [width, MOBILE_WIDTH]) {
+        await page.setViewportSize({ width: reviewWidth, height: 900 });
+        for (const [control, name] of [
+          [previousSceneLimit, 'context'],
+          [retryProvider, 'refusal'],
+        ] as const) {
+          await control.scrollIntoViewIfNeeded();
+          await page.screenshot({
+            path: info.outputPath(`translation-${name}-${reviewWidth}.png`),
+          });
+        }
+      }
+      await page.setViewportSize({ width, height: 900 });
+    }
     await expect(mainThreshold).toHaveValue('0.8');
     await expect(editor.getByLabel('번역 거절 확신 기준', { exact: true })).toHaveValue('0.85');
     await mainToggle.check();
@@ -176,6 +206,7 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await expect.poll(async () => (await models(request)).mainJudgmentEnabled).toBe(true);
     expect((await models(request)).translationPolicy.judgment.enabled).toBe(false);
     await translationToggle.check();
+    await expect(retryProvider).not.toBeChecked();
     await editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
     await expect
       .poll(async () => (await models(request)).translationPolicy.judgment.enabled)

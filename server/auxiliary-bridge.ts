@@ -2,18 +2,21 @@ import { stageTranslationJudgment, translationRecovery } from './source-editing.
 import { translationPolicy, type TranslationPolicy } from '../core/translation-settings.js';
 import type { Store } from './store.js';
 import { HttpError } from './request-validation.js';
-import { readRunSnapshot } from './run-projections.js';
+import { readRunSnapshot, readTranslationSelection } from './run-projections.js';
+import type { ModelSnapshot } from '../core/product.js';
 import type { AuxiliaryStoreBridge } from './product-auxiliary.js';
 import type { Controls } from './controls.js';
-import { translationReferences } from './translation-context.js';
+import { captureTranslationReferences } from './translation-context.js';
 import { imageCatalog, imageTargetSource } from './package-images.js';
 
 export function auxiliaryBridge(
   store: Store,
   controls: Controls,
-  signal: AbortSignal
+  signal: AbortSignal,
+  onTranslation?: (target: ModelSnapshot | undefined, recovery: boolean) => void
 ): AuxiliaryStoreBridge {
   return {
+    captureTranslationReferences: (snapshot) => captureTranslationReferences(store, snapshot),
     load(id) {
       const job = store.job(id);
       if (job.kind === 'status') throw new HttpError(410, 'SCENE_COMMENTARY_RETIRED');
@@ -25,10 +28,14 @@ export function auxiliaryBridge(
           ? translationPolicy(job.input.translationPolicy as TranslationPolicy)
           : undefined;
       const source = store.sourceAtHash(job.sourceRevision, job.sourceHash);
-      const snapshot = store.product.resolveJobPrompt(
-        readRunSnapshot(store, source.runId),
-        job.input
-      );
+      const snapshot =
+        policy?.contextMode === 'source-only'
+          ? readTranslationSelection(store, source.runId, job.input)
+          : store.product.resolveJobPrompt(readRunSnapshot(store, source.runId), job.input);
+      const recovery =
+        job.kind === 'translation' ? translationRecovery(job.input, source.hash) : undefined;
+      if (job.kind === 'translation')
+        onTranslation?.(snapshot.profile?.models.translation, recovery !== undefined);
       const imageOwner = (job.input as { imageOwner?: string } | null)?.imageOwner;
       if (snapshot.profile && (imageOwner === 'writer' || imageOwner === 'jev'))
         snapshot.profile.image = imageOwner === 'jev';
@@ -39,9 +46,7 @@ export function auxiliaryBridge(
         ...(job.kind === 'image' ? { imageSource: imageTargetSource(store, job, true) } : {}),
         ...(job.kind === 'translation'
           ? {
-              translationReferences:
-                policy?.contextMode === 'source-only' ? [] : translationReferences(store, snapshot),
-              judgmentRecovery: translationRecovery(job.input, source.hash),
+              judgmentRecovery: recovery,
             }
           : {}),
         assets: job.kind === 'image' ? imageCatalog(job.input) : [],

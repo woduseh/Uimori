@@ -41,7 +41,7 @@ import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import { Store } from './store.js';
-import { readRunSnapshot, readStoredRunSnapshot } from './run-projections.js';
+import { readTranslationSelection, readStoredRunSnapshot } from './run-projections.js';
 import { ChatTitleService } from './chat-title.js';
 import { HelperRuntime, helperWritingSnapshot } from './helper-runtime.js';
 import { invokeTaskTool } from './helper-task-tools.js';
@@ -183,11 +183,8 @@ export async function createApp(options: AppOptions): Promise<App> {
     const job = store.job(id);
     if (job.kind === 'status') throw new HttpError(410, 'SCENE_COMMENTARY_RETIRED');
     const source = store.sourceAtHash(job.sourceRevision, job.sourceHash);
-    const snapshot = store.product.resolveJobPrompt(
-      readRunSnapshot(store, source.runId),
-      job.input
-    );
-    if (job.kind !== 'image') requireModel(snapshot.profile?.models[job.kind], job.kind);
+    const snapshot = readTranslationSelection(store, source.runId, job.input);
+    if (job.kind === 'translation') requireModel(snapshot.profile?.models.translation, job.kind);
   };
   const credentials = new VertexCredentialStore(store.db);
   const jevCredentials = new JevCredentialStore(store.db);
@@ -625,24 +622,25 @@ export async function createApp(options: AppOptions): Promise<App> {
             if (queued.kind === 'status') throw new HttpError(410, 'SCENE_COMMENTARY_RETIRED');
             chatId = queued.chatId;
             let mockTranslation = false;
-            if (queued.kind === 'translation') {
+            const reservation =
+              queued.kind === 'translation' && queued.input ? record(queued.input) : undefined;
+            if (
+              reservation?.autoTranslateRunId &&
+              (!Object.hasOwn(reservation, 'translationModelSelection') ||
+                reservation.translationModelSnapshot?.connection?.protocol ===
+                  'codex-app-server-v1')
+            ) {
               const source = store.sourceAtHash(queued.sourceRevision, queued.sourceHash);
-              const snapshot = store.product.resolveJobPrompt(
-                readRunSnapshot(store, source.runId),
-                queued.input
-              );
-              if (!record(queued.input).judgmentRecovery)
-                requireModel(snapshot.profile?.models.translation, queued.kind);
+              const snapshot = readTranslationSelection(store, source.runId, queued.input);
               if (
-                record(queued.input).autoTranslateRunId &&
-                (await autoTranslationNeedsConfirmation(
+                await autoTranslationNeedsConfirmation(
                   snapshot.profile?.models.translation,
                   source.text,
                   jevCredentials.resolve,
                   signal,
                   jevSettings(store.db),
                   { store, chatId, jobId: id }
-                ))
+                )
               ) {
                 store.failQueuedJob(
                   id,
@@ -651,9 +649,12 @@ export async function createApp(options: AppOptions): Promise<App> {
                 );
                 return;
               }
-              mockTranslation = !snapshot.profile?.models.translation;
             }
-            await runAuxiliaryJob(auxiliaryBridge(store, controls, signal), id, instanceId, {
+            const bridge = auxiliaryBridge(store, controls, signal, (target, recovery) => {
+              if (!recovery) requireModel(target, 'translation');
+              mockTranslation = !target;
+            });
+            await runAuxiliaryJob(bridge, id, instanceId, {
               jev: {
                 ...judgment,
                 readImage: (hash) => readJevImage(store.db, hash).bytes,

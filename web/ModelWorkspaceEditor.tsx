@@ -21,6 +21,7 @@ import {
   type SummaryLength,
 } from '../core/summary-length.js';
 import { api, ApiError } from './api.js';
+import { MAX_TRANSLATION_PREVIOUS_SCENE_TOKENS } from '../core/translation-settings.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { useModelSelection } from './model-selection.js';
@@ -117,8 +118,18 @@ export function ModelWorkspaceEditor({
     !Number.isInteger(helperTaskTimeoutMinutes) ||
     helperTaskTimeoutMinutes < 1 ||
     helperTaskTimeoutMinutes > MAX_HELPER_TASK_TIMEOUT_MINUTES;
+  const previousSceneTokens = draft.translationPolicy.previousSceneTokens;
+  const invalidPreviousSceneTokens =
+    previousSceneTokens !== undefined &&
+    (!Number.isInteger(previousSceneTokens) ||
+      previousSceneTokens < 0 ||
+      previousSceneTokens > MAX_TRANSLATION_PREVIOUS_SCENE_TOKENS);
+  const retryProviderRefusal =
+    draft.translationPolicy.retryProviderRefusal ??
+    draft.translationPolicy.judgment.enabled !== false;
   const invalid =
     invalidHelperTaskTimeout ||
+    invalidPreviousSceneTokens ||
     (judgmentEdited &&
       judgment.provider !== 'typesafe' &&
       (!judgmentConnection || !judgment.modelId.trim())) ||
@@ -563,6 +574,34 @@ export function ModelWorkspaceEditor({
                   <option value="source-only">{t('settings.m44')}</option>
                 </select>
               </label>
+              {(draft.translationPolicy.contextMode !== 'source-only' ||
+                invalidPreviousSceneTokens) && (
+                <div className="refusal-field-row">
+                  <label htmlFor="translation-previous-scene-tokens">
+                    {t('settings.translationPreviousSceneTokens')}
+                  </label>
+                  <input
+                    id="translation-previous-scene-tokens"
+                    aria-invalid={invalidPreviousSceneTokens}
+                    type="number"
+                    min={0}
+                    max={MAX_TRANSLATION_PREVIOUS_SCENE_TOKENS}
+                    step={1}
+                    value={previousSceneTokens ?? ''}
+                    placeholder={t('settings.translationUnbounded')}
+                    onChange={(event) =>
+                      change({
+                        ...draft,
+                        translationPolicy: {
+                          ...draft.translationPolicy,
+                          previousSceneTokens:
+                            event.target.value === '' ? undefined : event.target.valueAsNumber,
+                        },
+                      })
+                    }
+                  />
+                </div>
+              )}
               <div className="refusal-field-row">
                 <label htmlFor="translation-call-limit">{t('settings.m46')}</label>
                 <input
@@ -633,6 +672,7 @@ export function ModelWorkspaceEditor({
                         ...draft,
                         translationPolicy: {
                           ...draft.translationPolicy,
+                          retryProviderRefusal,
                           judgment: {
                             ...draft.translationPolicy.judgment,
                             enabled: event.target.checked,
@@ -665,6 +705,24 @@ export function ModelWorkspaceEditor({
                             ...draft.translationPolicy.judgment,
                             threshold: event.target.valueAsNumber,
                           },
+                        },
+                      })
+                    }
+                  />
+                </div>
+                <div className="refusal-role-heading">
+                  <label htmlFor="translation-provider-refusal-retry">
+                    {t('settings.translationProviderRefusalRetry')}
+                  </label>
+                  <Switch
+                    id="translation-provider-refusal-retry"
+                    checked={retryProviderRefusal}
+                    onChange={(event) =>
+                      change({
+                        ...draft,
+                        translationPolicy: {
+                          ...draft.translationPolicy,
+                          retryProviderRefusal: event.target.checked,
                         },
                       })
                     }

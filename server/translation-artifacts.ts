@@ -15,7 +15,10 @@ export function successfulTranslation(
     .get(source.id, source.hash) as { id: string } | undefined;
   return row ? store.job(row.id, view) : null;
 }
-export function validateTranslationArtifact(job: Job, source: Pick<Source, 'id' | 'hash'>): void {
+export function validateTranslationArtifact(
+  job: Pick<Job, 'result' | 'sourceHash'>,
+  source: Pick<Source, 'id' | 'hash'>
+): void {
   const result = record(job.result);
   fields(result, ['mock', 'manual', 'text', 'sourceRevision', 'sourceHash']);
   if (

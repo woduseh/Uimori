@@ -104,6 +104,23 @@ function complete(store: Store, chatId: string) {
   };
 }
 
+test('only new workspaces select the economical translation defaults', () => {
+  const store = database();
+  const current = modelWorkspace(store);
+  expect(current.translationPolicy).toMatchObject({
+    judgment: { enabled: false },
+    retryProviderRefusal: true,
+    previousSceneTokens: 2048,
+  });
+  const legacy = { judgment: { threshold: 0.9 }, maxRetries: 1, maxCalls: 16 };
+  updateModelWorkspace(store, {
+    expectedRevision: current.revision,
+    routes: current.routes,
+    translationPolicy: legacy,
+  });
+  expect(modelWorkspace(store).translationPolicy).toEqual(legacy);
+});
+
 test('optional title model is independent of task routes, strict, CAS protected and preserved by omitted updates', () => {
   const store = database();
   expect(modelWorkspace(store).titleModel).toBeNull();

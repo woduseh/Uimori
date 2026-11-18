@@ -2,6 +2,7 @@ import { nativeContent } from './fixtures/native-content.js';
 import { describe, expect, test } from 'vitest';
 import { createHash } from 'node:crypto';
 import { translationInput } from '../core/auxiliary.js';
+import { countTextTokens } from '../core/text-tokens.js';
 import { defaultProfile } from '../core/product.js';
 import { sourceTimeContext, type AuxiliaryBundle } from '../server/product-auxiliary.js';
 function bundle(count = 5): AuxiliaryBundle {
@@ -69,6 +70,25 @@ function bundle(count = 5): AuxiliaryBundle {
   };
 }
 describe('whole-source translation continuity', () => {
+  test('spends a shared prior-scene budget on the latest endings while keeping the current source intact', () => {
+    const seed = bundle();
+    seed.snapshot.history = [
+      { revision: 'older', text: 'Earlier. '.repeat(120) + 'The old letter.' },
+      { revision: 'recent', text: 'The letter arrived.' },
+    ];
+    const context = sourceTimeContext(seed.snapshot, 'translation', 25);
+    expect(context.previousSources.map((item) => item.revision)).toEqual(['older', 'recent']);
+    expect(context.previousSources[0].text).toMatch(/^….*The old letter\.$/u);
+    expect(context.previousSources[1].text).toBe(seed.snapshot.history[1].text);
+    expect(
+      context.previousSources.reduce((sum, item) => sum + countTextTokens(item.text), 0)
+    ).toBeLessThanOrEqual(25);
+    expect(translationInput(seed.source, context, seed.snapshot).sourceText).toBe(seed.source.text);
+    expect(sourceTimeContext(seed.snapshot, 'translation', 0).previousSources).toEqual([]);
+    expect(sourceTimeContext(seed.snapshot, 'translation').previousSources).toEqual(
+      seed.snapshot.history
+    );
+  });
   test('keeps source-time bot, persona, glossary and prior originals frozen in one input', () => {
     const seed = bundle(20);
     seed.snapshot.history = [{ revision: 'prior', text: 'An earlier source.' }];

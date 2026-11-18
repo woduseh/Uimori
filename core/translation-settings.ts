@@ -2,6 +2,8 @@ export type TranslationPolicy = {
   judgment: TranslationJudgmentPolicy;
   maxRetries: number;
   maxCalls: number;
+  previousSceneTokens?: number;
+  retryProviderRefusal?: boolean;
   /** Absent in older workspaces/jobs, which keep the original full context. */
   contextMode?: TranslationContextMode;
 };
@@ -35,6 +37,7 @@ export function validateTranslationJudgmentPolicy(value: unknown): TranslationJu
 }
 export const DEFAULT_TRANSLATION_MAX_RETRIES = 1;
 export const DEFAULT_TRANSLATION_MAX_CALLS = 16;
+export const MAX_TRANSLATION_PREVIOUS_SCENE_TOKENS = 32_768;
 export function translationMaxRetries(value: unknown = DEFAULT_TRANSLATION_MAX_RETRIES): number {
   if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > 5)
     throw new Error('TRANSLATION_RETRY_LIMIT_INVALID');
@@ -52,16 +55,39 @@ export function translationPolicy(value?: TranslationPolicy): TranslationPolicy 
       typeof value !== 'object' ||
       Array.isArray(value) ||
       Object.keys(value).some(
-        (key) => !['judgment', 'maxRetries', 'maxCalls', 'contextMode'].includes(key)
+        (key) =>
+          ![
+            'judgment',
+            'maxRetries',
+            'maxCalls',
+            'contextMode',
+            'previousSceneTokens',
+            'retryProviderRefusal',
+          ].includes(key)
       ))
   )
     throw new Error('TRANSLATION_POLICY_INVALID');
+  if (
+    value?.previousSceneTokens !== undefined &&
+    (!Number.isSafeInteger(value.previousSceneTokens) ||
+      value.previousSceneTokens < 0 ||
+      value.previousSceneTokens > MAX_TRANSLATION_PREVIOUS_SCENE_TOKENS)
+  )
+    throw new Error('TRANSLATION_PREVIOUS_SCENE_TOKENS_INVALID');
+  if (value?.retryProviderRefusal !== undefined && typeof value.retryProviderRefusal !== 'boolean')
+    throw new Error('TRANSLATION_PROVIDER_RETRY_INVALID');
   return {
     judgment: validateTranslationJudgmentPolicy(
       value === undefined ? DEFAULT_TRANSLATION_JUDGMENT : value.judgment
     ),
     maxRetries: translationMaxRetries(value?.maxRetries),
     maxCalls: translationMaxCalls(value?.maxCalls),
+    ...(value?.previousSceneTokens === undefined
+      ? {}
+      : { previousSceneTokens: value.previousSceneTokens }),
+    ...(value?.retryProviderRefusal === undefined
+      ? {}
+      : { retryProviderRefusal: value.retryProviderRefusal }),
     ...(value?.contextMode === undefined
       ? {}
       : { contextMode: translationContextMode(value.contextMode) }),

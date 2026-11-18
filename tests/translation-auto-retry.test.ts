@@ -451,3 +451,35 @@ test('disabled translation judgment preserves a provider refusal as a failure', 
   expect(credential).not.toHaveBeenCalled();
   expect(send).not.toHaveBeenCalled();
 });
+
+test.each([
+  { judgment: false, retryProviderRefusal: true, calls: 2, status: 'completed' },
+  { judgment: true, retryProviderRefusal: false, calls: 1, status: 'failed' },
+])(
+  'explicit provider refusals follow the retry switch with judgment=$judgment',
+  async ({ judgment, retryProviderRefusal, calls, status }) => {
+    let attempts = 0;
+    const server = await fixture((_request, response) =>
+      ++attempts === 1
+        ? chat(response, '', 'stop', 'Refused by provider')
+        : chat(response, '번역 결과')
+    );
+    const seed = bundle();
+    native(seed, server.endpoint);
+    seed.translationPolicy = {
+      judgment: { enabled: judgment, threshold: 0.9 },
+      retryProviderRefusal,
+      maxRetries: 1,
+      maxCalls: 2,
+    };
+    const observed = hooks(server.origin);
+    const send = vi.fn();
+    const outcome = await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', {
+      ...observed.options,
+      jev: { credential: () => undefined, fetch: send },
+    });
+    expect(outcome?.status).toBe(status);
+    expect(server.requests).toHaveLength(calls);
+    expect(send).not.toHaveBeenCalled();
+  }
+);

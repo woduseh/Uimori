@@ -6,13 +6,15 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Store } from '../dist/server/store.js';
-import { translationReferences } from '../dist/server/translation-context.js';
+import { captureTranslationReferences } from '../dist/server/translation-context.js';
 import { createSyntheticBot } from './synthetic-story.mjs';
 import { assertBuild, fingerprint, json, root } from './lib.mjs';
 
 // Reuse only this runner's isolated fixtures; never point it at an application DB.
 const directory = path.resolve(process.argv[2]);
 const label = process.argv[3] ?? 'baseline';
+const access = process.argv[4] ?? 'all';
+assert.ok(['none', 'one', 'all'].includes(access));
 assert.match(label, /^[a-z0-9-]+$/u);
 assert.ok(globalThis.gc, 'Use node --expose-gc');
 const scenarios = [30, 300].map((scenes) => ({
@@ -41,8 +43,7 @@ const report = {
     cpu: os.cpus()[0].model,
   },
   method: {
-    boundary:
-      'translationReferences: prior wording preparation used by auxiliaryBridge.load before translation execution',
+    boundary: `Translation reference identity capture followed by ${access} wording access`,
     excluded:
       'Current job/snapshot preparation, provider/model calls, browser and network latency; OS cache not reset',
     fixture:
@@ -52,7 +53,9 @@ const report = {
     resources:
       'Process CPU and heap/RSS at entry/return; synchronous peaks are not measured; explicit GC outside timing',
     acceptance:
-      'Same exact reference output and unchanged stored rows; long-case median saves at least 50ms and 15%; no material normal-case regression',
+      access === 'all'
+        ? 'Same exact reference output and unchanged stored rows; long-case median saves at least 50ms and 15%; no material normal-case regression'
+        : 'Exact selected wording and unchanged stored rows',
   },
   conditions: [],
 };
@@ -179,10 +182,9 @@ for (const scenario of scenarios) {
     store.db.prepare = (...args) => {
       if (counters) counters.sqlStatements++;
       const statement = originalPrepare(...args);
-      const get = statement.get.bind(statement);
-      statement.get = (...parameters) => {
-        const row = get(...parameters);
+      const measure = (row) => {
         if (counters && row) {
+          if (typeof row.result === 'string') counters.wordingRows++;
           counters.returnedTextBytes += Object.values(row).reduce(
             (sum, value) => sum + (typeof value === 'string' ? Buffer.byteLength(value) : 0),
             0
@@ -190,15 +192,25 @@ for (const scenario of scenarios) {
         }
         return row;
       };
+      const get = statement.get.bind(statement);
+      const all = statement.all.bind(statement);
+      const iterate = statement.iterate.bind(statement);
+      statement.get = (...parameters) => measure(get(...parameters));
+      statement.all = (...parameters) => all(...parameters).map(measure);
+      statement.iterate = function* (...parameters) {
+        for (const row of iterate(...parameters)) yield measure(row);
+      };
       return statement;
     };
     function flow() {
       globalThis.gc();
-      counters = { sqlStatements: 0, returnedTextBytes: 0 };
+      counters = { sqlStatements: 0, returnedTextBytes: 0, wordingRows: 0 };
       const memory = process.memoryUsage(),
         cpu = process.cpuUsage(),
         start = performance.now();
-      const references = translationReferences(store, snapshot);
+      using captured = captureTranslationReferences(store, snapshot);
+      const references =
+        access === 'none' ? [] : captured.load(access === 'one' ? expected[0].id : undefined);
       const ms = performance.now() - start,
         used = process.cpuUsage(cpu),
         after = process.memoryUsage();
@@ -210,7 +222,14 @@ for (const scenario of scenarios) {
         ...counters,
       };
       counters = undefined;
-      assert.deepEqual(references, expected);
+      assert.equal(
+        sample.wordingRows,
+        access === 'none' ? 0 : access === 'one' ? 1 : expected.length
+      );
+      assert.deepEqual(
+        references,
+        access === 'none' ? [] : access === 'one' ? expected.slice(0, 1) : expected
+      );
       return sample;
     }
     const first = flow();
@@ -219,10 +238,13 @@ for (const scenario of scenarios) {
     assert.equal(store.db.prepare('SELECT total_changes() AS n').get().n, changesBefore);
     assert.equal(databaseHash(store), fixtureHash);
     const condition = {
+      access,
       ...scenario,
       fixtureHash,
       inputHash: hash(JSON.stringify(snapshot)),
-      outputHash: hash(JSON.stringify(expected)),
+      outputHash: hash(
+        JSON.stringify(access === 'none' ? [] : access === 'one' ? expected.slice(0, 1) : expected)
+      ),
       first,
       samples,
       summary: Object.fromEntries(Object.keys(first).map((key) => [key, summary(samples, key)])),

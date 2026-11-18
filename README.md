@@ -49,7 +49,7 @@ Notes:
 4. **Translate**: Select **Generate translation** on a manuscript to start translating. Open saved translations with **View translation**, and request failed ones again with **Retry translation**.
    - Switching views of a saved translation and saving source or translation edits do not call a model.
 
-> **JEV (optional)**: Choosing **TypeSafe AI** when adding a provider registers **JEV** in the model list. JEV handles refusal checks for text and translations and lore relevance; existing image placement uses either the writing model or JEV. Only features that use JEV need its key, and text refusal detection is off by default.
+> **JEV (optional)**: Choosing **TypeSafe AI** when adding a provider registers **JEV** in the model list. JEV handles refusal checks for text and translations and lore relevance; existing image placement uses either the writing model or JEV. Only features that use JEV need its key. New workspaces start with refusal checks off for both writing and translation.
 
 Choose the interface language in **Settings → General → Interface language**: Korean, English, Japanese or Simplified Chinese. The choice is stored in the browser and does not change manuscripts, saved translations, or the target language of generation and translation. See [language settings and scope](docs/I18N.md).
 

@@ -1,5 +1,5 @@
 import { pruneSourceEdits, pruneTranslationHistory } from './text-retention.js';
-import { readRunSnapshot } from './run-projections.js';
+import { readTranslationSelection } from './run-projections.js';
 import { currentBotTranslationGuide } from './translation-guide.js';
 import { canRejudgeTranslation } from '../core/translation-recovery.js';
 import { validateTranslationArtifact } from './translation-artifacts.js';
@@ -146,12 +146,14 @@ export function requestTranslation(
     }
     const workspace = promptWorkspace(store);
     const selected = workspaceModelRef(workspace, 'translation');
-    const profile = store.product.snapshot(source.chatId, 'translation');
-    const automatic = profile?.image === true;
+    const automatic = store.product.profile(source.chatId).image;
+    const imageProfile = automatic
+      ? store.product.snapshot(source.chatId, 'translation')
+      : undefined;
     const selection = automatic
       ? automaticImageSelection(store, {
-          ...readRunSnapshot(store, source.runId),
-          ...(profile ? { profile } : {}),
+          chatId: source.chatId,
+          profile: imageProfile,
         })
       : undefined;
     const input = {
@@ -163,11 +165,15 @@ export function requestTranslation(
       promptWorkspaceRevision: workspace.revision,
       translationModelSelection: selected,
       ...(selected
-        ? { translationModelSnapshot: store.product.modelSnapshot(selected.id, 'translation') }
+        ? {
+            translationModelSnapshot:
+              imageProfile?.models.translation ??
+              store.product.modelSnapshot(selected.id, 'translation'),
+          }
         : {}),
       translationPolicy: translationPolicy(workspace.translationPolicy),
     };
-    store.product.resolveJobPrompt(readRunSnapshot(store, source.runId), input);
+    readTranslationSelection(store, source.runId, input);
     const jobId = randomUUID();
     const time = new Date().toISOString();
     store.db

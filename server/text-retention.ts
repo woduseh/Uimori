@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { retainPrunedTranslation } from './translation-context.js';
 import { imageDataHashes, queueImageCleanup } from './unused-data.js';
 
 /** Exact captured hashes still needed by unfinished/retryable work, not all completed history. */
@@ -75,7 +76,10 @@ export function pruneTranslationHistory(db: DatabaseSync, sourceId: string): voi
   for (const row of jobs) {
     const id = String(row.id);
     if (keep.has(id)) continue;
-    if (row.result) queueImageCleanup(db, imageDataHashes(row.result));
+    if (typeof row.result === 'string') {
+      retainPrunedTranslation(db, id, row.result);
+      queueImageCleanup(db, imageDataHashes(row.result));
+    }
     db.prepare('DELETE FROM job_results WHERE job_id=?').run(id);
     // A billed call remains as compact execution metadata. Manual edit-only rows have no such use.
     if (db.prepare('SELECT 1 FROM attempts WHERE job_id=? LIMIT 1').get(id))

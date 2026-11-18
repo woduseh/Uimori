@@ -136,7 +136,8 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
           role: 'translation' as const,
           program,
         };
-        const mode = translationContextMode(promptWorkspace(store).translationPolicy.contextMode);
+        const policy = promptWorkspace(store).translationPolicy;
+        const mode = translationContextMode(policy.contextMode);
         const fixed = translationSnapshot(
           {
             ...frozen,
@@ -165,7 +166,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
         );
         const input = translationInput(
           source,
-          sourceTimeContext(evaluated, 'translation'),
+          sourceTimeContext(evaluated, 'translation', policy.previousSceneTokens),
           evaluated,
           mode
         );

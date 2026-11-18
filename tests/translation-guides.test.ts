@@ -247,7 +247,11 @@ test('empty guide is captured explicitly and judgment-only recovery never adopts
   const workspace = promptWorkspace(store);
   updatePromptWorkspace(store, {
     expectedRevision: workspace.revision,
-    translationPolicy: { ...workspace.translationPolicy, contextMode: 'source-only' },
+    translationPolicy: {
+      ...workspace.translationPolicy,
+      judgment: { ...workspace.translationPolicy.judgment, enabled: true },
+      contextMode: 'source-only',
+    },
   });
   const first = requestTranslation(
     store,

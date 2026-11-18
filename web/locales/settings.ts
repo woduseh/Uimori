@@ -1,5 +1,23 @@
 /** Settings UI only. User data and model inputs are never translated here. */
 export const messages = {
+  'settings.translationPreviousSceneTokens': {
+    ko: '이전 두 장면의 참고 토큰 한도',
+    en: 'Token limit for the previous two scenes',
+    ja: '直前2シーンの参照トークン上限',
+    zh: '前两个场景的参考词元上限',
+  },
+  'settings.translationUnbounded': {
+    ko: '제한 없음',
+    en: 'No limit',
+    ja: '制限なし',
+    zh: '不限',
+  },
+  'settings.translationProviderRefusalRetry': {
+    ko: '공급자가 거절하면 재시도',
+    en: 'Retry when the provider reports a refusal',
+    ja: 'プロバイダーが拒否を返したら再試行',
+    zh: '提供商明确拒绝时重试',
+  },
   'settings.helperTaskTimeout': {
     ko: '도우미 작업 제한 시간 (분)',
     en: 'Assistant task timeout (minutes)',

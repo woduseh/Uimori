@@ -122,12 +122,7 @@ export type PromptWorkspace = {
   revision: number;
   main: CurrentPrompt;
   translation: CurrentPrompt;
-  translationPolicy: {
-    judgment: import('./translation-settings.js').TranslationJudgmentPolicy;
-    contextMode?: 'full' | 'source-only';
-    maxRetries: number;
-    maxCalls: number;
-  };
+  translationPolicy: import('./translation-settings.js').TranslationPolicy;
 };
 export type TaskRole = 'main' | 'translation' | 'image';
 export type TaskModelRole = Exclude<TaskRole, 'image'>;
