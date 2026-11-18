@@ -128,7 +128,7 @@ test('native display replaces only primary story blocks while preserving the sou
   assert.equal(result.sourceHash, hash);
   assert.equal(result.original.text, text);
   assert.equal(state.log[0], `hook:${text}`);
-  assert.match(state.log[1]!, /data-uimori-story-ui="0"/u);
+  assert.match(state.log[1]!, /<div data-uimori-story-ui=0><\/div>/u);
   assert.doesNotMatch(state.log[1]!, /```uimori-ui/u);
   assert.match(state.log[1]!, /<style>\.panel\{color:red\}<\/style>/u);
   assert.match(state.log[1]!, /<div class="panel">상태<\/div>/u);

@@ -87,7 +87,7 @@ export async function buildPackagePresentation(
           );
           if (ordinal < 0) return [];
           nextOriginal = ordinal + 1;
-          const replacement = `\n\n<div data-uimori-story-ui="${ordinal}"></div>\n\n`;
+          const replacement = `\n\n<div data-uimori-story-ui=${ordinal}></div>\n\n`;
           return [
             {
               start: part.start,

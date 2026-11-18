@@ -3,7 +3,6 @@ import {
   STORY_UI_CATALOG_ID,
   storyUiCatalog,
   storyUiDisplayValues,
-  storyUiImageKeys,
   storyUiNestedTextKeys,
   storyUiTextKeys,
   storyUiTextLists,
@@ -48,7 +47,9 @@ export function isStoryUiImageUrl(value: unknown): value is string {
 
 export function storyUiImageName(value: unknown): string | undefined {
   return typeof value === 'string'
-    ? /^\{\{img::([^{}\r\n]+)\}\}$/iu.exec(value)?.[1].trim() || undefined
+    ? /^\s*\{\{\s*(?:img|image|asset|emotion|raw|path)::([^{}\r\n]+)\}\}\s*$/iu
+        .exec(value)?.[1]
+        .trim() || undefined
     : undefined;
 }
 
@@ -93,9 +94,6 @@ export function validateStoryUiMessages(value: unknown): value is StoryUiMessage
     if (!api) return false;
     const { id: _id, component: _component, ...properties } = component;
     if (!api.schema.safeParse(properties).success) return false;
-    const image = component[storyUiImageKeys[component.component]];
-    if (typeof image === 'string' && !isStoryUiImageUrl(image) && !storyUiImageName(image))
-      return false;
     components.set(component.id, component);
   }
   if (!components.has('root')) return false;

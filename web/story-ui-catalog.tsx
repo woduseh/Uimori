@@ -30,16 +30,18 @@ const createComponentImplementation: typeof implement = (component, render) =>
   implement(component, (args) => {
     const urls = useContext(StoryUiImageUrls);
     const key = storyUiImageKeys[component.name];
-    const name = key && storyUiImageName((args.props as Record<string, unknown>)[key]);
-    const node = name
-      ? render({
-          ...args,
-          props: {
-            ...args.props,
-            [key]: urls && Object.hasOwn(urls, name) ? urls[name] : undefined,
-          },
-        })
-      : render(args);
+    const value = key ? (args.props as Record<string, unknown>)[key] : undefined;
+    const name = storyUiImageName(value);
+    const node =
+      typeof value === 'string' && !isStoryUiImageUrl(value)
+        ? render({
+            ...args,
+            props: {
+              ...args.props,
+              [key]: name && urls && Object.hasOwn(urls, name) ? urls[name] : undefined,
+            },
+          })
+        : render(args);
     const look = (args.props as { look?: unknown }).look;
     if (typeof look !== 'string' || !isValidElement<{ className?: string }>(node)) return node;
     if (node.type === Fragment) return node;
@@ -155,7 +157,7 @@ const Icon = createComponentImplementation(api('Icon'), ({ props, context }) => 
   ) : null;
 });
 const Image = createComponentImplementation(api('Image'), ({ props }) => {
-  if (props.url === undefined) return props.description ? <span>{props.description}</span> : null;
+  if (props.url === undefined) return null;
   return (
     <img
       className="story-ui-image"

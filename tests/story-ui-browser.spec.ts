@@ -51,7 +51,7 @@ test('renders bound image lists and icons without fetching edited external URLs'
 $/people = [{name: "미라", portrait: "{{img::미라_미소}}", icon: "person"}, {name: "솔", portrait: "/api/assets/sol", icon: "home"}]
 $/portrait = "/api/assets/selected"
 item = Row([Image($portrait, description=$name, variant="avatar"), Icon($icon), Text($name)])
-root = Column([List(_template($/people, item)), TextField("첫 아이콘", $/people/0/icon), TextField("초상화 경로", $/portrait), Image($/portrait, description="선택한 초상화", fit="scaleDown")])
+root = Column([List(_template($/people, item)), TextField("첫 아이콘", $/people/0/icon), TextField("초상화 경로", $/portrait), Image($/portrait, description="선택한 초상화", fit="scaleDown"), Image("https://outside.invalid/literal.png", description="밖의 그림"), Text("끝")])
 </a2ui>`,
     (name) => (name === '미라_미소' ? '/api/package-image-blobs/mira' : undefined)
   );
@@ -83,6 +83,9 @@ root = Column([List(_template($/people, item)), TextField("첫 아이콘", $/peo
     'src',
     '/api/assets/sol'
   );
+  await expect(page.getByText('끝', { exact: true })).toBeVisible();
+  await expect(page.getByRole('img', { name: '밖의 그림' })).toHaveCount(0);
+  await expect(page.getByText('밖의 그림')).toHaveCount(0);
   await expect(page.locator('svg.lucide')).toHaveCount(2);
   await expect(page.locator('svg.lucide-user-round')).toBeVisible();
   await expect(page.locator('svg.lucide-house')).toBeVisible();
@@ -93,7 +96,7 @@ root = Column([List(_template($/people, item)), TextField("첫 아이콘", $/peo
   const selected = page.getByRole('img', { name: '선택한 초상화', exact: true });
   await expect(selected).toHaveCSS('object-fit', 'scale-down');
   await page.getByLabel('초상화 경로').fill('https://outside.invalid/portrait.png');
-  await expect(selected).not.toHaveAttribute('src');
+  await expect(selected).toHaveCount(0);
   await page.getByLabel('초상화 경로').fill('/api/package-image-blobs/changed');
   await expect(selected).toHaveAttribute('src', '/api/package-image-blobs/changed');
   expect(remoteRequests).toEqual([]);

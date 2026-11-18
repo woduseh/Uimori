@@ -152,6 +152,9 @@ export function buildMainProviderRequest(
     input.contract + '\n' + CONTEXT_DERIVED_GUIDANCE + '\n' + CONTEXT_RETRIEVAL_GUIDANCE;
   if (fixed.settings.storyUi) {
     contract += '\n\nUser-enabled story interface capability:\n' + storyUiPrompt();
+    if (input.imagePlacement?.owner === 'jev')
+      contract +=
+        '\nJEV places images in the prose only. Image fields inside interface blocks stay yours: a card image name you know is welcome there.';
     if (fixed.storyUiAction)
       contract +=
         fixed.storyUiAction.mode === 'short'

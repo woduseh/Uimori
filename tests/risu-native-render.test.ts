@@ -25,13 +25,39 @@ const native = (extra: Partial<RisuContentSource> = {}): RisuContentSource => ({
 test('native Markdown preserves a story UI slot beside authored HTML and styles', async () => {
   const result = await renderNativeRisuMessage({
     native: native(),
-    text: '<style>.panel{color:red}</style>\n<div class="panel">상태</div>\n\n<div data-uimori-story-ui="0"></div>\n\n이야기',
+    text: '<style>.panel{color:red}</style>\n<div class="panel">상태</div>\n\n<div data-uimori-story-ui=0></div>\n\n이야기',
     context: { variables: {} },
   });
   expect(result.html).toContain('<style>.panel{color:red}</style>');
   expect(result.html).toContain('<div class="panel">상태</div>');
-  expect(result.html).toContain('<div data-uimori-story-ui="0"></div>');
+  expect(result.html).toContain('<div data-uimori-story-ui=0></div>');
   expect(result.html).toContain('이야기');
+});
+
+test('a card script that styles quoted speech leaves the story UI slot intact', async () => {
+  const result = await renderNativeRisuMessage({
+    native: native({
+      card: {
+        name: 'Guide',
+        extensions: {
+          risuai: {
+            customScripts: [
+              {
+                type: 'editdisplay',
+                in: '"(.+?)"',
+                out: '<span class="say">"$1"</span>',
+                flag: 'g',
+              },
+            ],
+          },
+        },
+      },
+    }),
+    text: '그가 말했다. "왔어."\n\n<div data-uimori-story-ui=0></div>\n\n끝',
+    context: { variables: {} },
+  });
+  expect(result.html).toContain('<span class="say">');
+  expect(result.html).toContain('<div data-uimori-story-ui=0></div>');
 });
 
 test('literal fields before and after CBS preserve limits, aliases, roles and shared writes', () => {
