@@ -29,11 +29,12 @@ import { planProviderCache } from './provider-cache.js';
 import { webCitationLinks, webSearchAllowed, webSearchSources } from './helper-web-search.js';
 
 export class AnthropicProtocolError extends Error {
-  constructor(
-    readonly code: string,
-    readonly toolArgumentDiagnostic?: ProviderToolArgumentDiagnostic
-  ) {
+  readonly code: string;
+  readonly toolArgumentDiagnostic?: ProviderToolArgumentDiagnostic;
+  constructor(code: string, toolArgumentDiagnostic?: ProviderToolArgumentDiagnostic) {
     super(code);
+    this.code = code;
+    this.toolArgumentDiagnostic = toolArgumentDiagnostic;
     this.name = 'AnthropicProtocolError';
   }
 }

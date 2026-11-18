@@ -97,7 +97,10 @@ export function initHelperWorkspace(store: Store) {
 }
 
 export class HelperWorkspace {
-  constructor(readonly store: Store) {}
+  readonly store: Store;
+  constructor(store: Store) {
+    this.store = store;
+  }
   conversation(id: string): HelperConversation {
     const row = this.store.db
       .prepare(`SELECT c.*, member.group_id,

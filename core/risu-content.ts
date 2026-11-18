@@ -48,11 +48,12 @@ export type RisuContent = {
 };
 export class RisuContentError extends Error {
   readonly statusCode = 400;
-  constructor(
-    readonly code: string,
-    readonly itemId?: string
-  ) {
+  readonly code: string;
+  readonly itemId?: string;
+  constructor(code: string, itemId?: string) {
     super(`${code}${itemId ? ` (${itemId})` : ''}`);
+    this.code = code;
+    this.itemId = itemId;
     this.name = 'RisuContentError';
   }
 }

@@ -25,8 +25,10 @@ const caps = {
 export const UNSAFE_PROMPT_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 export class PromptEvaluationError extends Error {
   readonly statusCode = 400;
-  constructor(readonly code: string) {
+  readonly code: string;
+  constructor(code: string) {
     super(code);
+    this.code = code;
     this.name = 'PromptEvaluationError';
   }
 }
@@ -39,11 +41,13 @@ export class PromptBudget {
   readonly limits: Required<PromptEvaluationLimits>;
   private steps = 0;
   private readonly started = performance.now();
+  readonly timing: 'elapsed' | 'deterministic';
   constructor(
     input: PromptEvaluationLimits = {},
     /** Host-only choice for reproducible stored text; data ASTs cannot select this mode. */
-    readonly timing: 'elapsed' | 'deterministic' = 'elapsed'
+    timing: 'elapsed' | 'deterministic' = 'elapsed'
   ) {
+    this.timing = timing;
     this.limits = { ...caps };
     for (const key of Object.keys(input) as (keyof PromptEvaluationLimits)[]) {
       if (

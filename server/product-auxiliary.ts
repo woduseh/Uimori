@@ -157,11 +157,12 @@ export type AuxiliaryJobHooks = {
 };
 const json = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 class AuxiliaryExecutionError extends Error {
-  constructor(
-    readonly code: string,
-    readonly retryable: boolean = false
-  ) {
+  readonly code: string;
+  readonly retryable: boolean;
+  constructor(code: string, retryable: boolean = false) {
     super(code);
+    this.code = code;
+    this.retryable = retryable;
   }
 }
 const safeError = (error: unknown) => {

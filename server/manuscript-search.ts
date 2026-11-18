@@ -14,10 +14,12 @@ export class ManuscriptSearch {
   private indexing: Promise<void> | null = null;
   private timer?: ReturnType<typeof setTimeout>;
   private closed = false;
-  constructor(
-    private readonly store: Store,
-    private readonly writable: () => boolean = () => true
-  ) {}
+  private readonly store: Store;
+  private readonly writable: () => boolean;
+  constructor(store: Store, writable: () => boolean = () => true) {
+    this.store = store;
+    this.writable = writable;
+  }
   private work<T>(
     operation: 'index' | 'search',
     query?: ManuscriptSearchQuery,

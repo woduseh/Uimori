@@ -789,10 +789,11 @@ export class HelperRuntime {
       pending: Promise<void>;
     }
   >();
-  constructor(
-    readonly store: Store,
-    readonly options: Options
-  ) {
+  readonly store: Store;
+  readonly options: Options;
+  constructor(store: Store, options: Options) {
+    this.store = store;
+    this.options = options;
     this.workspace = new HelperWorkspace(store);
     this.shell = new HelperShell(store, this.workspace, options.services?.sceneUpdated);
   }

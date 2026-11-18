@@ -167,7 +167,7 @@ async function worker(input: unknown, signal?: AbortSignal) {
     if (signal?.aborted) return reject(new HttpError(499, 'RISU_IMPORT_CANCELLED'));
     const thread = new Worker(bootstrap, {
       eval: true,
-      execArgv: ['--experimental-transform-types', '--disable-warning=ExperimentalWarning'],
+      execArgv: ['--experimental-strip-types', '--disable-warning=ExperimentalWarning'],
       workerData: {
         module: new URL('./risu-import-prepared-worker.js', import.meta.url).href,
         input,

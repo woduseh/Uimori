@@ -28,7 +28,10 @@ function itemKey(value: unknown): LibraryItemKey {
 
 /** Current organization is independent of immutable content revisions and execution roles. */
 export class LibraryOrganizationStore {
-  constructor(readonly store: Store) {}
+  readonly store: Store;
+  constructor(store: Store) {
+    this.store = store;
+  }
   init() {
     this.store.db.exec(`
       CREATE TABLE library_organization_state(id INTEGER PRIMARY KEY CHECK(id=1),revision INTEGER NOT NULL CHECK(revision>0));

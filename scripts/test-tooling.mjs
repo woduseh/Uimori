@@ -74,7 +74,7 @@ export async function testTooling(files) {
       if (event.type === 'test:summary' && !event.data.file) aggregate = event.data;
       if (event.type === 'test:pass' || event.type === 'test:fail') {
         const data = event.data;
-        // Node 24 counts an empty module as a passing test named after the file.
+        // Node 26 counts an empty module as a passing test named after the file.
         // Preserve that event, but never treat loading a file as an executed check.
         const fileLoadOnly = data.name === data.file && data.line === 1 && data.column === 1;
         const status = data.skip

@@ -24,8 +24,10 @@ import {
 } from './provider-messages.js';
 
 export class VertexProtocolError extends Error {
-  constructor(readonly code: string) {
+  readonly code: string;
+  constructor(code: string) {
     super(code);
+    this.code = code;
     this.name = 'VertexProtocolError';
   }
 }

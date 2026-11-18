@@ -74,14 +74,19 @@ export class ResourceEditorSession {
   private loadVersion = 0;
   private readonly preparations = new Map<string, (model: ResourceModel) => ResourceModel>();
   private disposed = false;
-  constructor(
-    readonly options: {
-      editorKey: string;
-      kind: ResourceKind;
-      targetId: string | null;
-      initialModel: ResourceModel;
-    }
-  ) {
+  readonly options: {
+    editorKey: string;
+    kind: ResourceKind;
+    targetId: string | null;
+    initialModel: ResourceModel;
+  };
+  constructor(options: {
+    editorKey: string;
+    kind: ResourceKind;
+    targetId: string | null;
+    initialModel: ResourceModel;
+  }) {
+    this.options = options;
     this.state = {
       document: {
         targetId: options.targetId,

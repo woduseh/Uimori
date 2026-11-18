@@ -76,7 +76,10 @@ const conflict = (message: string): never => {
 };
 
 export class ChatOptionsStore {
-  constructor(readonly store: Store) {}
+  readonly store: Store;
+  constructor(store: Store) {
+    this.store = store;
+  }
   private saved(chatId: string): {
     revision: number;
     binding: OptionBinding | null;

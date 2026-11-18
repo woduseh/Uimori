@@ -36,11 +36,12 @@ function initHelperSeeds(db: DatabaseSync) {
 }
 
 export class DatabaseSchemaError extends Error {
-  constructor(
-    readonly code: string,
-    readonly version: number
-  ) {
+  readonly code: string;
+  readonly version: number;
+  constructor(code: string, version: number) {
     super(`${code}:${version}`);
+    this.code = code;
+    this.version = version;
     this.name = 'DatabaseSchemaError';
   }
 }

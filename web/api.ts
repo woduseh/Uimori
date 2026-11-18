@@ -2,13 +2,14 @@ import { apiErrorDiagnostic, apiErrorDisplay } from './api-errors.js';
 import { t } from './i18n.js';
 
 export class ApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly code: string | null = null,
-    private readonly display?: () => string
-  ) {
+  readonly status: number;
+  readonly code: string | null;
+  private readonly display?: () => string;
+  constructor(message: string, status: number, code: string | null = null, display?: () => string) {
     super(message);
+    this.status = status;
+    this.code = code;
+    this.display = display;
     this.name = 'ApiError';
   }
   /** Display follows the current UI language; message remains the legacy error contract. */

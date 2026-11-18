@@ -1,6 +1,6 @@
 import { pushAllowed } from '../core/push.js';
 import { createHash, randomUUID } from 'node:crypto';
-import webPush from 'web-push';
+import { generateVAPIDKeys } from 'web-push';
 import type { FastifyInstance } from 'fastify';
 import {
   DEFAULT_PUSH_PREFERENCES,
@@ -45,10 +45,11 @@ export class PushService {
   private readonly active = new Map<string, AbortController>();
   private readonly sender: PushSender;
   private readonly now: () => number;
-  constructor(
-    private readonly store: Store,
-    private readonly options: Options
-  ) {
+  private readonly store: Store;
+  private readonly options: Options;
+  constructor(store: Store, options: Options) {
+    this.store = store;
+    this.options = options;
     this.sender = options.sender ?? sendWebPush;
     this.now = options.now ?? Date.now;
   }
@@ -94,7 +95,7 @@ export class PushService {
     if (!this.keys())
       this.store.db
         .prepare('INSERT INTO app_metadata(key,value) VALUES(?,?)')
-        .run(KEYS, JSON.stringify(webPush.generateVAPIDKeys()));
+        .run(KEYS, JSON.stringify(generateVAPIDKeys()));
     return this.info(clientId, cookie);
   }
   subscribe(value: unknown, cookie?: string): PushInfo {

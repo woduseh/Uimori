@@ -261,10 +261,12 @@ type TurnOutcome =
 class Slots {
   occupied = 0;
   private waiters: { resolve(): void; reject(error: Error): void; cleanup(): void }[] = [];
-  constructor(
-    readonly limit: number,
-    private readonly maxWaiting: number
-  ) {}
+  readonly limit: number;
+  private readonly maxWaiting: number;
+  constructor(limit: number, maxWaiting: number) {
+    this.limit = limit;
+    this.maxWaiting = maxWaiting;
+  }
   async acquire(signal: AbortSignal, closed: boolean): Promise<void> {
     if (signal.aborted) error('CANCELLED');
     if (closed) error('CODEX_CLOSED');
@@ -478,10 +480,9 @@ export class CodexRuntime implements CodexRuntimeService {
   private limitValue: CodexRuntimeStatus['limits'] = [];
   private creditValue: CodexRuntimeStatus['credits'] = null;
   private limitsAt = 0;
-  constructor(
-    dbPath: string,
-    private readonly options: CodexRuntimeOptions = {}
-  ) {
+  private readonly options: CodexRuntimeOptions;
+  constructor(dbPath: string, options: CodexRuntimeOptions = {}) {
+    this.options = options;
     this.home = resolve(dbPath) + '.codex';
     if (
       options.maxConcurrent !== undefined &&

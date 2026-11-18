@@ -129,11 +129,14 @@ export function recoverableAnthropicBatchRun(store: Store, runId: string): boole
 export class AnthropicBatchRun {
   private ordinal = 0;
 
-  constructor(
-    private readonly store: Store,
-    private readonly runId: string,
-    private readonly pollIntervalMs = 10_000
-  ) {}
+  private readonly store: Store;
+  private readonly runId: string;
+  private readonly pollIntervalMs: number;
+  constructor(store: Store, runId: string, pollIntervalMs = 10_000) {
+    this.store = store;
+    this.runId = runId;
+    this.pollIntervalMs = pollIntervalMs;
+  }
 
   private row(ordinal: number): BatchRow | undefined {
     const row = this.store.db

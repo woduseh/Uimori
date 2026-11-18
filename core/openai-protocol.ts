@@ -29,8 +29,10 @@ import { ProviderOptionsError, validateProviderOptions } from './provider-option
 import { webCitationLinks, webSearchAllowed, webSearchSources } from './helper-web-search.js';
 
 export class OpenAIProtocolError extends Error {
-  constructor(readonly code: string) {
+  readonly code: string;
+  constructor(code: string) {
     super(code);
+    this.code = code;
     this.name = 'OpenAIProtocolError';
   }
 }

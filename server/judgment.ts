@@ -118,12 +118,14 @@ export type JudgmentHooks = {
   onStarted?: () => void;
 };
 export class JudgmentError extends Error {
-  constructor(
-    readonly code: string,
-    readonly usage?: ProviderResult['usage'],
-    readonly attempted = false
-  ) {
+  readonly code: string;
+  readonly usage?: ProviderResult['usage'];
+  readonly attempted: boolean;
+  constructor(code: string, usage?: ProviderResult['usage'], attempted = false) {
     super(code);
+    this.code = code;
+    this.usage = usage;
+    this.attempted = attempted;
     this.name = 'JevError';
   }
 }

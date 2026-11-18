@@ -287,7 +287,10 @@ export function parseOutlineOperations(value: unknown): OutlineOperation[] {
 
 /** Composition is owned by one chat, exactly like the scene commands it schedules. */
 export class OutlineStore {
-  constructor(readonly store: Store) {}
+  readonly store: Store;
+  constructor(store: Store) {
+    this.store = store;
+  }
   get db() {
     return this.store.db;
   }

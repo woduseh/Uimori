@@ -96,12 +96,14 @@ export type ProviderPrompt = Pick<
 >;
 export class RisuPromptError extends Error {
   readonly statusCode = 400;
-  constructor(
-    readonly code: string,
-    readonly blockId?: string,
-    readonly slotName?: string
-  ) {
+  readonly code: string;
+  readonly blockId?: string;
+  readonly slotName?: string;
+  constructor(code: string, blockId?: string, slotName?: string) {
     super(`${code}${blockId ? ` (${blockId})` : ''}`);
+    this.code = code;
+    this.blockId = blockId;
+    this.slotName = slotName;
     this.name = 'RisuPromptError';
   }
 }

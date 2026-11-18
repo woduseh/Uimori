@@ -40,12 +40,14 @@ export type ContextCompactionHooks = MainHooks & {
   reserveInputTokens?: number;
 };
 export class ContextCompactionError extends Error {
-  constructor(
-    readonly code: string,
-    readonly usage: Usage,
-    readonly plan: ContextPlan
-  ) {
+  readonly code: string;
+  readonly usage: Usage;
+  readonly plan: ContextPlan;
+  constructor(code: string, usage: Usage, plan: ContextPlan) {
     super(code);
+    this.code = code;
+    this.usage = usage;
+    this.plan = plan;
     this.name = 'ContextCompactionError';
   }
 }

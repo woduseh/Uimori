@@ -17,7 +17,10 @@ type Row = Record<string, any>;
 
 /** Organization never rewrites execution inputs or story content. */
 export class ChatOrganizationStore {
-  constructor(readonly store: Store) {}
+  readonly store: Store;
+  constructor(store: Store) {
+    this.store = store;
+  }
   init() {
     this.store.db.exec(`CREATE TABLE IF NOT EXISTS chat_folders(id TEXT PRIMARY KEY,bot_id TEXT NOT NULL,title TEXT NOT NULL,default_persona TEXT,revision INTEGER NOT NULL CHECK(revision>0));
       CREATE TABLE IF NOT EXISTS chat_organization(chat_id TEXT PRIMARY KEY REFERENCES chats(id),bot_id TEXT NOT NULL,folder_id TEXT REFERENCES chat_folders(id),revision INTEGER NOT NULL CHECK(revision>0),sort_position INTEGER NOT NULL);

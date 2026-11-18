@@ -103,7 +103,9 @@ export class Store {
   readonly organization: ChatOrganizationStore;
   readonly libraryOrganization: LibraryOrganizationStore;
   private readonly ownership: DatabaseSync;
-  constructor(readonly path: string) {
+  readonly path: string;
+  constructor(path: string) {
+    this.path = path;
     mkdirSync(dirname(path), { recursive: true });
     this.path = existsSync(path)
       ? realpathSync(path)

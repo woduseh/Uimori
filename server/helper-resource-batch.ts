@@ -11,13 +11,21 @@ type PatchItem = {
 
 /** Adds the failing resource without discarding the single-patch diagnostic. */
 export class HelperResourceBatchError extends HttpError {
+  readonly itemIndex: number;
+  readonly kind: PatchItem['kind'] | undefined;
+  readonly id: string | undefined;
+  override readonly cause: HttpError;
   constructor(
-    readonly itemIndex: number,
-    readonly kind: PatchItem['kind'] | undefined,
-    readonly id: string | undefined,
-    override readonly cause: HttpError
+    itemIndex: number,
+    kind: PatchItem['kind'] | undefined,
+    id: string | undefined,
+    cause: HttpError
   ) {
     super(cause.statusCode, cause.message);
+    this.itemIndex = itemIndex;
+    this.kind = kind;
+    this.id = id;
+    this.cause = cause;
   }
 }
 

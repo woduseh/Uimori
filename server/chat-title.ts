@@ -39,10 +39,12 @@ type TitleSource = {
 /** Optional one-shot helper. Its journal survives restarts; failures never replay. */
 export class ChatTitleService {
   private active = new Map<string, AbortController>();
-  constructor(
-    private readonly store: Store,
-    private readonly options: Options
-  ) {}
+  private readonly store: Store;
+  private readonly options: Options;
+  constructor(store: Store, options: Options) {
+    this.store = store;
+    this.options = options;
+  }
   private has(chatId: string, ...kinds: string[]) {
     return kinds.some(
       (kind) =>

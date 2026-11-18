@@ -35,10 +35,11 @@ export class MainShell {
   private starting?: Promise<void>;
   private readonly active = new Map<string, AbortSignal | undefined>();
 
-  constructor(
-    readonly store?: Store,
-    readonly id: string = randomUUID()
-  ) {
+  readonly store?: Store;
+  readonly id: string;
+  constructor(store?: Store, id: string = randomUUID()) {
+    this.store = store;
+    this.id = id;
     if (!/^[a-f0-9-]{36}$/u.test(id)) throw new Error('SHELL_RUN_ID_INVALID');
     this.directory = join(this.root, 'tasks', id);
   }

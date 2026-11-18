@@ -10,8 +10,10 @@ export type CodexProcessErrorCode =
   | 'CODEX_CANCELLED';
 /** Never include provider errors, stderr, request parameters, or auth data. */
 export class CodexProcessError extends Error {
-  constructor(readonly code: CodexProcessErrorCode) {
+  readonly code: CodexProcessErrorCode;
+  constructor(code: CodexProcessErrorCode) {
     super(code);
+    this.code = code;
     this.name = 'CodexProcessError';
   }
 }
@@ -62,7 +64,9 @@ export class CodexProcess {
   private toolRequests = new Set<string>();
   private readonly maxLineBytes: number;
   private readonly maxWriteBytes: number;
-  constructor(private readonly options: CodexProcessOptions) {
+  private readonly options: CodexProcessOptions;
+  constructor(options: CodexProcessOptions) {
+    this.options = options;
     const limit = options.maxLineBytes ?? MAX_LINE_BYTES;
     if (!Number.isSafeInteger(limit) || limit < 1024 || limit > 256 * 1024 * 1024)
       throw new CodexProcessError('CODEX_START_FAILED');

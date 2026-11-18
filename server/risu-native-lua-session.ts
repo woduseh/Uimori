@@ -52,11 +52,14 @@ class Session {
   closed = false;
   timer?: ReturnType<typeof setTimeout>;
   readonly work = new Set<Promise<void>>();
-  constructor(
-    readonly source: string,
-    readonly fingerprint: string,
-    readonly key?: string
-  ) {}
+  readonly source: string;
+  readonly fingerprint: string;
+  readonly key?: string;
+  constructor(source: string, fingerprint: string, key?: string) {
+    this.source = source;
+    this.fingerprint = fingerprint;
+    this.key = key;
+  }
   watch(ms: number, idle = false) {
     clearTimeout(this.timer);
     this.timer = setTimeout(

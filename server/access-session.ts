@@ -5,8 +5,10 @@ import type { DatabaseSync } from 'node:sqlite';
 const digest = (value: string) => createHash('sha256').update(value).digest();
 const COOKIE_AGE_SECONDS = 400 * 24 * 60 * 60;
 export class AccessSessionRateLimitError extends HttpError {
-  constructor(readonly retryAfterSeconds: number) {
+  readonly retryAfterSeconds: number;
+  constructor(retryAfterSeconds: number) {
     super(429, '잠시 후 다시 로그인해 주세요.');
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -19,10 +21,12 @@ export class AccessSessions {
   private blockedUntil = 0;
   private readonly now: () => number;
 
+  private readonly db: DatabaseSync;
   constructor(
-    private readonly db: DatabaseSync,
+    db: DatabaseSync,
     options: { accessToken?: string; publicOrigin?: string; now?: () => number }
   ) {
+    this.db = db;
     this.required = !!options.accessToken;
     this.authority = digest(options.accessToken ?? '');
     this.secure = !!options.publicOrigin;

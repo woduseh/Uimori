@@ -6,6 +6,7 @@
     "moduleResolution": "NodeNext",
     "jsx": "react-jsx",
     "strict": true,
+    "erasableSyntaxOnly": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,

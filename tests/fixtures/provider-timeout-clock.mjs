@@ -56,7 +56,7 @@ const advance = async (milliseconds) => {
 let requests = [];
 try {
   mock.timers.enable({ apis: ['setTimeout'] });
-  // Node 24 MockTimers' refresh does not repeatedly schedule Undici's fast
+  // Node 26 MockTimers' refresh does not repeatedly schedule Undici's fast
   // timer. Use its supported optional-refresh fallback, only in this process.
   const mockedSetTimeout = globalThis.setTimeout;
   globalThis.setTimeout = (...args) => {

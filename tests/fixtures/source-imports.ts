@@ -72,11 +72,7 @@ export function sourceImports(source: string, file = 'input.ts') {
     }
     const node = value as Record<string, unknown>;
     const source = (
-      node.type === 'ImportExpression'
-        ? node.source
-        : node.type === 'TSImportType'
-          ? node.argument
-          : undefined
+      node.type === 'ImportExpression' || node.type === 'TSImportType' ? node.source : undefined
     ) as { type?: string; value?: string } | undefined;
     if (source?.type === 'StringLiteral' && typeof source.value === 'string')
       result.push({ specifier: source.value, runtime: node.type !== 'TSImportType', eager: false });

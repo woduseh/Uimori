@@ -90,11 +90,10 @@ export type MainHooks = {
 
 /** Carries accounting out of fatal host failures without exposing the host exception to guests. */
 export class ModelRunError extends Error {
-  constructor(
-    cause: unknown,
-    readonly usage: Usage
-  ) {
+  readonly usage: Usage;
+  constructor(cause: unknown, usage: Usage) {
     super('MODEL_EXECUTION_FAILED', { cause });
+    this.usage = usage;
     this.name = 'ModelRunError';
   }
 }

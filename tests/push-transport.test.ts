@@ -3,7 +3,7 @@ import { MockAgent, getGlobalDispatcher, setGlobalDispatcher } from 'undici';
 import { createECDH, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
-import webPush from 'web-push';
+import { generateVAPIDKeys } from 'web-push';
 import { pushEndpoint, validatePushSubscription, sendWebPush } from '../server/push-transport.js';
 import { notificationIntent, type PushEnvelope } from '../core/push.js';
 
@@ -65,7 +65,7 @@ test('the encrypted standard HTTP adapter preserves status, bounded retries and 
   setGlobalDispatcher(mock);
   const pool = mock.get('https://fcm.googleapis.com');
   const sub = subscription(),
-    keys = webPush.generateVAPIDKeys();
+    keys = generateVAPIDKeys();
   const send = (signal = new AbortController().signal) =>
     sendWebPush(
       sub,

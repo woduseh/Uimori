@@ -15,7 +15,7 @@
 
 ## 빠른 시작 (Windows)
 
-**준비물**: Node **24.22.1 이상 24.x**, npm, Chrome 또는 Edge. SQLite는 Node에 포함된 기능을 사용하므로 따로 설치하지 않아요.
+**준비물**: Node **26.13.0 이상 26.x**, npm, Chrome 또는 Edge. SQLite는 Node에 포함된 기능을 사용하므로 따로 설치하지 않아요.
 
 1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.13.0` 릴리스가 공개됐는지 확인해요.
 2. 소스를 받아 실행해요.

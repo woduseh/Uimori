@@ -1,5 +1,5 @@
 import { createHash, ECDH } from 'node:crypto';
-import webPush from 'web-push';
+import { generateRequestDetails } from 'web-push';
 import type { PushEnvelope, PushSubscriptionData } from '../core/push.js';
 import { fields, record, HttpError } from './request-validation.js';
 
@@ -81,7 +81,7 @@ export function encryptedPushRequest(
   pushEndpoint(subscription.endpoint);
   const serialized = JSON.stringify(payload);
   if (Buffer.byteLength(serialized) > 3000) throw new Error('PUSH_PAYLOAD_TOO_LARGE');
-  return webPush.generateRequestDetails(subscription, serialized, {
+  return generateRequestDetails(subscription, serialized, {
     vapidDetails: { subject: origin, ...keys },
     TTL: Math.max(1, Math.min(7200, Math.floor(ttl))),
     urgency: 'normal',

@@ -20,8 +20,10 @@ import {
 
 export class NativeTransferError extends Error {
   readonly statusCode = 400;
-  constructor(readonly code: string) {
+  readonly code: string;
+  constructor(code: string) {
     super(code);
+    this.code = code;
   }
 }
 const fail = (code: string): never => {

@@ -40,7 +40,10 @@ const keyOf = (identity: StreamIdentity) => JSON.stringify([identity.taskKind, i
 /** Public text has its own cursor; streaming never requires reloading the whole chat. */
 export class ResponseStreamStore {
   private readonly listeners = new Map<string, Set<() => void>>();
-  constructor(private readonly store: Pick<Store, 'db' | 'transaction'>) {}
+  private readonly store: Pick<Store, 'db' | 'transaction'>;
+  constructor(store: Pick<Store, 'db' | 'transaction'>) {
+    this.store = store;
+  }
 
   recover() {
     this.store.db

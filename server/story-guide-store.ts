@@ -20,7 +20,10 @@ export function initStoryGuide(db: DatabaseSync): void {
 }
 
 export class StoryGuideStore {
-  constructor(readonly store: Store) {}
+  readonly store: Store;
+  constructor(store: Store) {
+    this.store = store;
+  }
 
   get(chatId: string): StoryGuideState {
     this.store.chat(chatId);

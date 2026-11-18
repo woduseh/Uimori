@@ -94,12 +94,18 @@ export class BackupService {
   get isActive(): boolean {
     return this.active !== null;
   }
+  private readonly store: Store;
+  private readonly buildId: string;
+  private readonly canRun: () => boolean;
   constructor(
-    private readonly store: Store,
-    private readonly buildId: string,
+    store: Store,
+    buildId: string,
     directory?: string,
-    private readonly canRun: () => boolean = () => true
+    canRun: () => boolean = () => true
   ) {
+    this.store = store;
+    this.buildId = buildId;
+    this.canRun = canRun;
     this.directory = resolve(directory ?? join(dirname(store.path), 'backups'));
     this.state = this.load<SavedState>(STATE) ?? {
       status: 'idle',

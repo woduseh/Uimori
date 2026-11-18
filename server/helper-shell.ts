@@ -229,11 +229,10 @@ function assertExistingWorkspaceFile(base: string, file: string) {
 }
 /** A transport failure cannot undo saves whose receipts already committed. */
 export class HelperShellExecutionError extends Error {
-  constructor(
-    message: string,
-    readonly applied: unknown[]
-  ) {
+  readonly applied: unknown[];
+  constructor(message: string, applied: unknown[]) {
     super(message);
+    this.applied = applied;
   }
 }
 class ShellRevisionConflict extends HttpError {
@@ -282,11 +281,14 @@ export class HelperShell {
   private readonly tasks = new Map<string, TaskFiles>();
   private readonly active = new Map<string, Execution>();
   private readonly applied = new Map<string, unknown[]>();
-  constructor(
-    readonly store: Store,
-    readonly workspace: HelperWorkspace,
-    readonly sceneUpdated?: (id: string) => void
-  ) {}
+  readonly store: Store;
+  readonly workspace: HelperWorkspace;
+  readonly sceneUpdated?: (id: string) => void;
+  constructor(store: Store, workspace: HelperWorkspace, sceneUpdated?: (id: string) => void) {
+    this.store = store;
+    this.workspace = workspace;
+    this.sceneUpdated = sceneUpdated;
+  }
 
   private taskDir(taskId: string) {
     return join(this.root, 'tasks', taskId);

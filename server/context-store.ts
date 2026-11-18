@@ -37,7 +37,10 @@ const ref = (checkpoint: ContextCheckpoint): ContextCheckpointRef => ({
 
 /** One immutable checkpoint format for automatic, manual and authored summaries. */
 export class ContextStore {
-  constructor(readonly store: Store) {}
+  readonly store: Store;
+  constructor(store: Store) {
+    this.store = store;
+  }
   get db() {
     return this.store.db;
   }

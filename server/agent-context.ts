@@ -8,8 +8,10 @@ import {
 import type { ToolEvent } from '../core/types.js';
 
 export class AgentContextError extends Error {
-  constructor(readonly code: string) {
+  readonly code: string;
+  constructor(code: string) {
     super(code);
+    this.code = code;
     this.name = 'AgentContextError';
   }
 }

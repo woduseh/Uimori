@@ -17,8 +17,10 @@ const pendingKey = (chatId: string) => `pending-profile:${chatId}`;
 const saving = new Map<string, Promise<void>>();
 
 export class PendingStoryProfileConflict extends Error {
-  constructor(readonly savedIntent: string) {
+  readonly savedIntent: string;
+  constructor(savedIntent: string) {
     super(uiMessage('main.pendingProfileConflict'));
+    this.savedIntent = savedIntent;
   }
 }
 

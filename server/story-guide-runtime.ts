@@ -64,8 +64,10 @@ export type StoryGuideResult = {
   cached: boolean;
 };
 export class StoryGuideCancelledError extends Error {
-  constructor(readonly usage: Usage) {
+  readonly usage: Usage;
+  constructor(usage: Usage) {
     super('STORY_GUIDE_CANCELLED');
+    this.usage = usage;
     this.name = 'AbortError';
   }
 }

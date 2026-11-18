@@ -10,7 +10,9 @@ type Row = Record<string, any>;
 /** User notes and explicit scene commands; authored card variables belong to the Risu runtime. */
 export class StoryStore {
   readonly notes: StoryNotes;
-  constructor(readonly store: Store) {
+  readonly store: Store;
+  constructor(store: Store) {
+    this.store = store;
     this.notes = new StoryNotes(store);
   }
   get db() {

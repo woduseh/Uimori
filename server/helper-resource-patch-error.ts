@@ -21,11 +21,9 @@ export type HelperResourcePatchFailure = {
 
 /** A rejected proposal has no saved effects; details identify the change to revise. */
 export class HelperResourcePatchError extends HttpError {
-  constructor(
-    statusCode: number,
-    message: string,
-    readonly details: HelperResourcePatchFailure
-  ) {
+  readonly details: HelperResourcePatchFailure;
+  constructor(statusCode: number, message: string, details: HelperResourcePatchFailure) {
     super(statusCode, message);
+    this.details = details;
   }
 }

@@ -24,8 +24,10 @@ export type ProviderOptionsErrorCode =
   | 'PROVIDER_OPTIONS_SENSITIVE_FIELD';
 
 export class ProviderOptionsError extends Error {
-  constructor(readonly code: ProviderOptionsErrorCode) {
+  readonly code: ProviderOptionsErrorCode;
+  constructor(code: ProviderOptionsErrorCode) {
     super(code);
+    this.code = code;
     this.name = 'ProviderOptionsError';
   }
 }

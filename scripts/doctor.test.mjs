@@ -30,16 +30,15 @@ function childStub({ output = 'uimori-doctor-child-ready', code = 0, error, hang
 }
 
 test('doctor enforces the supported Node patch, minor and major boundaries', () => {
-  for (const version of ['24.22.1', 'v24.22.2', '24.23.0', '24.99.0'])
+  for (const version of ['26.13.0', 'v26.13.1', '26.14.0', '26.99.0'])
     assert.equal(supportedNode(version), true);
   for (const version of [
-    '24.14.0',
-    '24.21.9',
-    '24.22.0',
-    '22.20.0',
+    '24.22.1',
+    '26.12.9',
+    '26.13.0-rc.1',
     '25.0.0',
-    '24.22',
-    '24.22.1-rc.1',
+    '27.0.0',
+    '26.13',
     'invalid',
   ])
     assert.equal(supportedNode(version), false, version);
@@ -102,7 +101,7 @@ test('unsupported runtime and malformed child output remain visible with indepen
   try {
     const result = await doctor(directory, {
       browser: false,
-      nodeVersion: '24.22.0',
+      nodeVersion: '26.12.1',
       spawnChild: childStub({ output: 'incorrect-ready' }),
     });
     const checks = Object.fromEntries(result.checks.map((check) => [check.name, check]));

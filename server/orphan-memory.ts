@@ -14,7 +14,10 @@ import type { Store } from './store.js';
 
 /** Lost anchors are review candidates, never permission to erase authored memory. */
 export class OrphanMemory {
-  constructor(readonly store: Store) {}
+  readonly store: Store;
+  constructor(store: Store) {
+    this.store = store;
+  }
 
   detail(chatId: string): OrphanMemoryDetail {
     const chat = this.store.chat(chatId);

@@ -68,7 +68,10 @@ export function connectionTestRequest(model: ModelPreset, connection: Connection
 }
 
 export class ProviderConnectionTestStore {
-  constructor(private readonly store: Store) {}
+  private readonly store: Store;
+  constructor(store: Store) {
+    this.store = store;
+  }
   get(id: string): ProviderConnectionTest {
     const row = this.store.db
       .prepare('SELECT body FROM provider_connection_tests WHERE id=?')

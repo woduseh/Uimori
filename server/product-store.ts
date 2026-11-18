@@ -120,7 +120,10 @@ function validatePinnedProfile(value: unknown): NonNullable<ChatProfile['pinned'
 }
 
 export class ProductStore {
-  constructor(readonly store: Store) {}
+  readonly store: Store;
+  constructor(store: Store) {
+    this.store = store;
+  }
   get db() {
     return this.store.db;
   }

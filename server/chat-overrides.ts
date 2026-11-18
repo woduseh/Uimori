@@ -36,7 +36,10 @@ const maxField = (selector: ChatLoreSelector) =>
   selector.field === 'text' ? SOURCE_TEXT_MAX_CHARS : selector.field === 'description' ? 4000 : 200;
 
 export class ChatOverridesStore {
-  constructor(readonly store: Store) {}
+  readonly store: Store;
+  constructor(store: Store) {
+    this.store = store;
+  }
   revision(chatId: string): number {
     this.store.chat(chatId);
     return Number(

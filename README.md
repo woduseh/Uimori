@@ -18,7 +18,7 @@ Uimori is a personal creative-writing web app for reading long manuscripts and c
 
 ## Quick start (Windows)
 
-**Requirements**: Node **24.22.1 or later 24.x**, npm, and Chrome or Edge. SQLite comes built into Node, so no separate install is needed.
+**Requirements**: Node **26.13.0 or later 26.x**, npm, and Chrome or Edge. SQLite comes built into Node, so no separate install is needed.
 
 1. Check that the `v0.13.0` release is published on [GitHub Releases](https://github.com/woduseh/Uimori/releases).
 2. Get the source and start the app.

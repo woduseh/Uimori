@@ -87,11 +87,12 @@ export interface NativeRisuExecutionOptions {
 
 export class NativeRisuRuntimeError extends Error {
   readonly statusCode = 400;
-  constructor(
-    readonly code: string,
-    readonly detail?: string
-  ) {
+  readonly code: string;
+  readonly detail?: string;
+  constructor(code: string, detail?: string) {
     super(detail ? `${code}: ${detail}` : code);
+    this.code = code;
+    this.detail = detail;
     this.name = 'NativeRisuRuntimeError';
   }
 }

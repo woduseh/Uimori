@@ -7,7 +7,10 @@ import type { Store } from './store.js';
 
 type Row = Record<string, any>;
 export class StoryNotes {
-  constructor(readonly store: Store) {}
+  readonly store: Store;
+  constructor(store: Store) {
+    this.store = store;
+  }
   get db() {
     return this.store.db;
   }
