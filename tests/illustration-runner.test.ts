@@ -20,7 +20,9 @@ import {
   regenerateIllustration,
   updateIllustrationSettings,
   updateIllustrationReferences,
+  scheduleIllustrationPlacement,
 } from '../server/illustrations.js';
+import { illustrationPresentation } from '../server/illustration-presentation.js';
 import type { Store } from '../server/store.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 import { comfyUIFixture, FIXTURE_WORKFLOW } from './fixtures/comfyui-server.js';
@@ -1354,6 +1356,116 @@ test.each(['blocked', 'missing-key', 'unavailable', 'cancelled'] as const)(
     expect(generate).toHaveBeenCalledTimes(mode === 'blocked' || mode === 'cancelled' ? 0 : 1);
     expect(fetch).toHaveBeenCalledTimes(mode === 'missing-key' ? 0 : 1);
     expect(store.source(source.id).text).toBe(source.text);
+  }
+);
+
+test.each(['paragraph', 'none', 'missing-key', 'unavailable'] as const)(
+  'translation placement asks the judgment model first: %s',
+  async (mode) => {
+    const store = databases.create();
+    const { source } = chatWithSource(store);
+    const model = codexModel(store);
+    const plan = reserveIllustrationPlan(store, source, 'manual', {
+      maxTargets: 1,
+      settings: fixtureSettings({
+        generator: 'codex',
+        codex: { model: { id: model.id }, promptModel: { id: model.id } },
+      }),
+    });
+    const usage = {
+      inputTokens: 20,
+      outputTokens: 5,
+      costUsd: null,
+      raw: null,
+      priceRevision: null,
+    };
+    const executeCodex = vi.fn<NonNullable<IllustrationRunnerHooks['executeCodex']>>(
+      async (_connection, request) => {
+        const blocks = (request.input.source as { blocks?: [string, string][] }).blocks;
+        return {
+          status: 'completed',
+          text: blocks
+            ? JSON.stringify({
+                heroIndex: 0,
+                targets: [
+                  {
+                    startAnchor: blocks[1][0],
+                    endAnchor: blocks[1][0],
+                    focus: 'Mira on the pier',
+                    visualBrief: 'Mira waiting on the pier',
+                    prompt: { prompt: 'Mira on a pier', caption: '부두의 미라' },
+                  },
+                ],
+              })
+            : '{"afterByTarget":{"i0":"t0"}}',
+          toolCalls: [],
+          refusal: null,
+          error: null,
+          usage,
+          opaqueState: null,
+        };
+      }
+    );
+    const generateCodexImage = vi.fn<NonNullable<IllustrationRunnerHooks['generateCodexImage']>>(
+      async () => ({
+        status: 'completed',
+        images: [{ mime: 'image/png', bytes: PNG }],
+        revisedPrompt: null,
+        text: '{"caption":"부두의 미라"}',
+        error: null,
+        usage,
+      })
+    );
+    const setup = hooks(store, { executeCodex, generateCodexImage });
+    await runIllustrationJob(store, plan.id, 'worker', setup.options);
+    await runIllustrationJob(store, queuedIllustrations(store)[0], 'worker', setup.options);
+    const translation = store.editTranslation(source.id, {
+      expectedRevision: 0,
+      expectedSourceHash: source.hash,
+      text: '강 위로 등불이 흔들렸다.\n\n미라는 부두에서 기다렸다.',
+    });
+    const placement = scheduleIllustrationPlacement(store, source.id)!;
+    const [targetId] = placement.input.placement!.targets.map((target) => target.id);
+    const choice = mode === 'none' ? 'none' : 't1';
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      mode === 'unavailable'
+        ? new Response('synthetic unavailable', { status: 503 })
+        : Response.json({
+            model: 'jev-latest',
+            answers: {
+              i0: {
+                type: 'choice',
+                choice,
+                confidence: 0.9,
+                probabilities: { none: 0.05, t0: 0.05, t1: 0.05, [choice]: 0.9 },
+              },
+            },
+            usage: { input_tokens: 60, output_tokens: 1 },
+          })
+    );
+    const observed = hooks(store, {
+      executeCodex,
+      resolveJevCredential: () => (mode === 'missing-key' ? undefined : 'synthetic-test-key'),
+    });
+    const result = await runIllustrationJob(store, placement.id, 'worker', observed.options);
+    const mapping = illustrationPresentation(store, source.id)?.translation;
+    const judged = observed.wires.filter((wire) => wire.judgment);
+    expect(fetch).toHaveBeenCalledTimes(mode === 'missing-key' ? 0 : 1);
+    expect(executeCodex).toHaveBeenCalledTimes(mode === 'missing-key' ? 2 : 1);
+    expect(generateCodexImage).toHaveBeenCalledTimes(1);
+    if (mode === 'unavailable') {
+      expect(result).toEqual({ status: 'failed', code: 'JEV_HTTP_503', images: 0 });
+      expect(mapping).toBeUndefined();
+      return;
+    }
+    expect(result?.status).toBe('completed');
+    const anchors = translation.translationLayout!.blocks.map((block) => block.anchor);
+    expect(mapping?.afterByTarget).toEqual({
+      [targetId]: mode === 'none' ? null : anchors[mode === 'paragraph' ? 1 : 0],
+    });
+    expect(judged.map((wire) => [wire.role, wire.judgment?.kind])).toEqual(
+      mode === 'missing-key' ? [] : [['illustration', 'illustration-placement']]
+    );
   }
 );
 

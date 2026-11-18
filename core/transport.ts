@@ -169,7 +169,8 @@ export type WireRecord = {
       | 'translation-refusal'
       | 'image-selection'
       | 'main-refusal'
-      | 'illustration-content';
+      | 'illustration-content'
+      | 'illustration-placement';
     inputHash: string;
   };
   pricingSnapshot?: PricingSnapshot;

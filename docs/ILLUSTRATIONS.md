@@ -184,6 +184,14 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
   - `CODEX_IMAGE_UNAVAILABLE`: 명시적 생성 거부 (자동 재요청 안 함)
   - `CODEX_IMAGE_NOT_GENERATED`: 일반 생성 실패 (재요청 가능)
 
+### 번역 위치 연결의 판단 모델 사용
+
+번역 위치 연결은 [판단 프로바이더](PROVIDERS.md#판단-프로바이더)를 먼저 사용해요. 번역 문단 전체를 공통 입력에 한 번 넣고 컷마다 "이 순간의 서술이 끝나는 번역 문단"을 묻는 선택 질문을 하나씩 만들어 한 번의 호출로 보내요. 판단 모델이 `none`을 고른 컷은 위치 없음으로 저장해요.
+
+- **기존 경로를 쓰는 경우**: 판단 키가 없거나 선택한 판단 연결을 쓸 수 없을 때, 요청이 판단 API의 토큰 한도를 넘을 때, 번역 문단이 선택지 한도(`none` 포함 255개)를 넘을 때는 요청을 보내지 않고 기존처럼 프롬프트 모델이나 Codex 텍스트 턴이 위치를 정해요.
+- **전송 후 실패**: 판단 요청을 보낸 뒤의 HTTP 오류·시간 초과·응답 형식 오류는 작업 실패로 기록하고 프롬프트 모델로 대신 처리하지 않아요. **번역 위치 다시 연결**로 다시 요청할 수 있어요.
+- **기록**: 판정 호출은 `illustration-placement` 사용량으로 귀속돼요. 실제 판단 모델의 문단 선택 정확도는 합성 테스트로 확인한 범위가 아니에요.
+
 ### Codex 이미지 요청의 JEV 사전 판정
 
 이미지 생성 직전에 Codex로 보낼 텍스트(프롬프트 모델이 작성한 프롬프트 또는 예약된 장면 자료, 참조 이미지 라벨)를 JEV 모델로 사전 검사해요. 다듬기를 켠 경우에도 사전 판정의 범위는 이미지 턴에 보내는 텍스트까지예요.
@@ -236,6 +244,7 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
   - `tests/illustration-profiles.test.ts`: 인물 기본 외형 상속 및 CHARX 왕복 보존 검증
   - `tests/illustration-presets.test.ts`: 범위별 선택, 직전 저장 되돌리기, 기존 설정 호환, 고정 작업 입력 검증
   - `tests/illustration-storyboard.test.ts`: 컷 계획 원자성, 중복 실행 방지, 재생성 중 기존본 유지, 번역 위치 연결 검증
+  - `tests/illustration-runner.test.ts`: 번역 위치 연결의 판단 모델 선택, `none`, 키 미설정 시 기존 경로, 전송 후 실패
   - `tests/comfyui-client.test.ts`, `tests/codex-image.test.ts`: 각 생성기 클라이언트 및 가상 응답 계약 검증
   - `tests/illustration-*.test.ts`: 저장, 실행 큐, API 엔드포인트 계약 검증
 - **통합 검증 명령어**: `npm run verify:illustration`

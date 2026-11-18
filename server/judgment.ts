@@ -503,7 +503,7 @@ export function buildJudgmentWire(
     connectionId: target.connectionId,
     protocol,
     role:
-      hooks.kind === 'illustration-content'
+      hooks.kind === 'illustration-content' || hooks.kind === 'illustration-placement'
         ? 'illustration'
         : hooks.kind === 'main-refusal'
           ? 'main'

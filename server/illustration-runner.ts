@@ -1,6 +1,7 @@
 import { illustrationResearch, ILLUSTRATION_RESEARCH_TOOLS } from './illustration-research.js';
 import { recordToolDiagnostic, startToolDiagnostic } from './execution-diagnostics.js';
 import { checkCodexIllustrationContent } from './illustration-content-check.js';
+import { judgeIllustrationPlacement } from './illustration-placement-judgment.js';
 import type { JudgmentHooks } from './judgment.js';
 import { judgmentRuntime, assertJudgmentRuntimeWire } from './judgment-runtime.js';
 import { splitSource } from '../core/auxiliary.js';
@@ -550,21 +551,30 @@ export async function runIllustrationJob(
           ])
         );
       } else {
-        const model = input.comfyui?.promptModel ?? input.codex?.model;
-        if (!model) throw new IllustrationError('ILLUSTRATION_MODEL_REQUIRED');
-        const request = illustrationPlacementRequest(
-          model,
-          context,
-          source,
-          translation,
-          input.placement,
-          generationFromModel(model)
-        );
-        afterByTarget = parseIllustrationPlacement(
-          await textRequest(model, request),
-          input.placement.targets.map((target) => target.id),
-          blocks
-        );
+        const judged = await judgeIllustrationPlacement(source, translation, input.placement, {
+          signal: hooks.signal,
+          ...judgment,
+          onAttemptStart: recordAttempt,
+          onAttemptFinish: hooks.onAttemptFinish,
+        });
+        if (judged) afterByTarget = judged;
+        else {
+          const model = input.comfyui?.promptModel ?? input.codex?.model;
+          if (!model) throw new IllustrationError('ILLUSTRATION_MODEL_REQUIRED');
+          const request = illustrationPlacementRequest(
+            model,
+            context,
+            source,
+            translation,
+            input.placement,
+            generationFromModel(model)
+          );
+          afterByTarget = parseIllustrationPlacement(
+            await textRequest(model, request),
+            input.placement.targets.map((target) => target.id),
+            blocks
+          );
+        }
       }
       hooks.signal.throwIfAborted();
       const stored = completeIllustrationPlacement(store, job, owner, afterByTarget, diagnostic);
