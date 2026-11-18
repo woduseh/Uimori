@@ -498,9 +498,8 @@ describe('built server process boundary', () => {
         const body = JSON.parse(request.body).requests[0];
         batches.push({
           customId: body.custom_id,
-          tool: body.params.tools.find((tool: { name: string }) =>
-            tool.name.endsWith('_knowledge_search')
-          ).name,
+          tool: body.params.tools.find((tool: { name: string }) => tool.name === 'knowledge_search')
+            .name,
         });
         json({ id: `batch-${batches.length}`, processing_status: 'in_progress' });
         return;

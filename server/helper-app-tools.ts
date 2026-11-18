@@ -27,19 +27,42 @@ const str: Json = { type: 'string' },
   integer: Json = { type: 'integer', minimum: 1 },
   revision: Json = { type: 'integer', minimum: 0 },
   itemId: Json = { type: 'string', minLength: 1, maxLength: 100 };
-const loreSelector = schema(
-  {
-    id: { type: 'string', minLength: 1, maxLength: 64 },
-    role: { type: 'string', enum: ['bot', 'persona', 'module'] },
-    modulePath: {
-      type: 'array',
-      maxItems: 20,
-      items: { type: 'string', minLength: 1, maxLength: 64 },
+const described = (value: Json, description: string): Json => ({
+  ...(value as Record<string, Json>),
+  description,
+});
+const resultOffset: Json = {
+  type: 'integer',
+  minimum: 0,
+  description: 'Entry offset. Pass the previous nextOffset.',
+};
+const textOffset: Json = {
+  type: 'integer',
+  minimum: 0,
+  description: 'Start position inside a long text, in UTF-16 code units.',
+};
+const textLimit: Json = {
+  type: 'integer',
+  minimum: 1,
+  maximum: 10000,
+  description: 'Maximum text to return, in UTF-16 code units.',
+};
+const loreSelector = described(
+  schema(
+    {
+      id: { type: 'string', minLength: 1, maxLength: 64 },
+      role: { type: 'string', enum: ['bot', 'persona', 'module'] },
+      modulePath: {
+        type: 'array',
+        maxItems: 20,
+        items: { type: 'string', minLength: 1, maxLength: 64 },
+      },
+      loreId: { type: 'string', minLength: 1, maxLength: 64 },
+      field: { type: 'string', enum: ['title', 'description', 'text'] },
     },
-    loreId: { type: 'string', minLength: 1, maxLength: 64 },
-    field: { type: 'string', enum: ['title', 'description', 'text'] },
-  },
-  ['id', 'role', 'modulePath', 'loreId', 'field']
+    ['id', 'role', 'modulePath', 'loreId', 'field']
+  ),
+  'One lore field of one entry. Build it from a listed item: id, role and modulePath from item.scope, item.id as loreId, and the field to address.'
 );
 const TOOLS: ProviderTool[] = [
   ...RESOURCE_TOOLS,
@@ -52,48 +75,82 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'chat.list',
     description:
-      'Find saved chats by title (query optional). Returns only ID, title, head and relevant revisions, in pages. Follow nextOffset, then pass the selected chatId to chat-only tools; full settings belong to settings.read.',
+      'Find saved chats by title, to get the chatId that chat operations take. Returns the id, title, headRevision, titleRevision and last activity of each chat in pages; follow nextOffset. The settings of a chat are in settings.read and its scenes in chat.read.',
     inputSchema: schema({
-      query: { type: 'string', maxLength: 200 },
-      offset: { type: 'integer', minimum: 0 },
-      limit: { type: 'integer', minimum: 1, maximum: 50 },
+      query: {
+        type: 'string',
+        maxLength: 200,
+        description: 'Text that the chat title must contain. Omit to list all chats.',
+      },
+      offset: resultOffset,
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 50,
+        description: 'Maximum chats per page. Default 20.',
+      },
     }),
   },
   {
     name: 'chat.read',
     description:
-      'Read a chat, its current head and paged scene IDs with stable visible scene numbers (including any introduction), original lengths and enabled state. Follow nextOffset; includePreview:true adds up to 120 characters of original per scene. Hidden scenes have sceneNumber:null. Use chatId to target another chat.',
+      'Read the scene index of a chat: its current head and, in story order, the id (sourceId), visible sceneNumber, original length and enabled state of each scene. Use it to find the sourceId of a scene before reading or editing it. Scene numbers count the enabled scenes from 1, starting with any introduction, and a hidden scene has sceneNumber null. includePreview adds the opening of each original, about 60 tokens. Follow nextOffset for more scenes. The text of a scene comes from scene.read.',
     inputSchema: schema({
       chatId: itemId,
-      includePreview: { type: 'boolean' },
-      offset: { type: 'integer', minimum: 0 },
-      limit: { type: 'integer', minimum: 1, maximum: 100 },
+      includePreview: {
+        type: 'boolean',
+        description: 'Add a short preview of each original. Default false.',
+      },
+      offset: described(resultOffset, 'Scene offset. Pass the previous nextOffset.'),
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 100,
+        description: 'Maximum scenes per page.',
+      },
     }),
   },
   ...helperOptionTools,
   {
     name: 'chat.lore',
     description:
-      'Read or edit a chat-only lore override. Read without selector for a paged items list (offset/limit); use item.scope plus item.id as loreId and a field to form selector. Read with selector for paged original and override text (textOffset/textLimit); never confuse an override with its shared original. Copy returned expected revision/hash fields into the patch body with selector and value. Missing originals are listed with originalMissing and read as original:null; they can still be removed using selector, expectedRevision and expectedHeadRevision. Edits change this chat only; shared originals stay intact.',
+      'Read or change the chat-only lore overrides of a chat: a private version of one lore field (title, description or text) that applies in this chat only and leaves the shared library entry as it is. action=read without selector lists the lore items in pages. action=read with selector returns the shared original and the override of that field in text pages, together with the expected revision and hash values that a change needs. action=patch saves body.value as the override; action=remove deletes the override so the shared original applies again. An item whose original no longer exists is listed with originalMissing and read as original:null, and its override can still be removed. To change the shared entry for every chat, edit the library resource with resource.patch instead.',
     inputSchema: schema(
       {
-        action: { type: 'string', enum: ['read', 'patch', 'remove'] },
+        action: {
+          type: 'string',
+          enum: ['read', 'patch', 'remove'],
+          description:
+            'read lists items or reads one field; patch saves an override; remove deletes it.',
+        },
         selector: loreSelector,
-        offset: { type: 'integer', minimum: 0 },
-        limit: { type: 'integer', minimum: 1, maximum: 50 },
-        textOffset: { type: 'integer', minimum: 0 },
-        textLimit: { type: 'integer', minimum: 1, maximum: 10000 },
-        body: schema(
-          {
-            selector: loreSelector,
-            expectedRevision: revision,
-            expectedHeadRevision: { type: ['string', 'null'], maxLength: 100 },
-            expectedProfileRevision: integer,
-            expectedPackageRevision: integer,
-            expectedFieldHash: { type: 'string', pattern: '^[a-f0-9]{64}$' },
-            value: { type: 'string', maxLength: SOURCE_TEXT_MAX_CHARS },
-          },
-          ['selector', 'expectedRevision', 'expectedHeadRevision']
+        offset: resultOffset,
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 50,
+          description: 'read without selector: maximum items per page.',
+        },
+        textOffset,
+        textLimit,
+        body: described(
+          schema(
+            {
+              selector: loreSelector,
+              expectedRevision: revision,
+              expectedHeadRevision: { type: ['string', 'null'], maxLength: 100 },
+              expectedProfileRevision: integer,
+              expectedPackageRevision: integer,
+              expectedFieldHash: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+              value: {
+                type: 'string',
+                maxLength: SOURCE_TEXT_MAX_CHARS,
+                description: 'patch: the complete override text for the field.',
+              },
+            },
+            ['selector', 'expectedRevision', 'expectedHeadRevision']
+          ),
+          'patch and remove: the selector plus the expected* values copied from the read of that selector, and value for patch.'
         ),
       },
       ['action']
@@ -102,54 +159,113 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'editor.read',
     description:
-      'Read a compact overview of the captured device editor input. For structure and exact typed values, follow JSON Pointer path pages; long text uses textOffset/textLimit. For ordinary draft facts use data.search/read with scope=editor. The saved/unsaved input origin is returned. Images in the input are not described.',
+      'Read what the user has open in the editor, as captured when this request was sent, including changes that are not saved yet. Use it for the structure and exact typed values of the draft; for ordinary facts in it, data.search with scope=editor is shorter. Without path it returns a compact overview. Follow a returned JSON Pointer path for a field, object or array, and page with fields, offset/limit or textOffset/textLimit. inputOrigin tells whether the content is the saved revision or an unsaved draft. This never saves the draft, and a later saved version is not substituted. Images in the editor are not interpreted.',
     inputSchema: schema({
-      path: str,
-      fields: { type: 'array', items: str, maxItems: 50 },
-      offset: { type: 'integer', minimum: 0 },
-      limit: { type: 'integer', minimum: 1, maximum: 50 },
-      textOffset: { type: 'integer', minimum: 0 },
-      textLimit: { type: 'integer', minimum: 1, maximum: 10000 },
+      path: described(
+        str,
+        'JSON Pointer of the field, object or array to read, from the overview or an earlier result. Omit for the overview.'
+      ),
+      fields: {
+        type: 'array',
+        items: str,
+        maxItems: 50,
+        description: 'Names of the object fields to return at path.',
+      },
+      offset: resultOffset,
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 50,
+        description: 'Maximum array or object entries per page.',
+      },
+      textOffset,
+      textLimit,
     }),
   },
   {
     name: 'chat.rename',
-    description: 'Rename this chat using its current title revision. Read settings first.',
-    inputSchema: schema({ title: str, expectedRevision: { type: 'integer', minimum: 0 } }, [
-      'title',
-      'expectedRevision',
-    ]),
+    description:
+      'Change the title of a chat. expectedRevision is the titleRevision of that chat, which chat.list returns.',
+    inputSchema: schema(
+      {
+        title: described(str, 'The new chat title.'),
+        expectedRevision: {
+          type: 'integer',
+          minimum: 0,
+          description: 'titleRevision of the chat from chat.list.',
+        },
+      },
+      ['title', 'expectedRevision']
+    ),
   },
   {
     name: 'chat.fork',
     description:
-      'Fork from an actual discovered source ID in this conversation ancestry. Copies only the chosen past, not this helper history or drafts.',
-    inputSchema: schema({ sourceId: str, title: str }, ['sourceId']),
+      'Create a new chat that branches off from an earlier scene of the story of this chat. Only the story up to the chosen scene is copied; this helper conversation and any drafts are not. The original chat is left unchanged.',
+    inputSchema: schema(
+      {
+        sourceId: described(
+          str,
+          'Id of the scene to branch from, from chat.read or the story tools.'
+        ),
+        title: described(str, 'Title of the new chat. Optional.'),
+      },
+      ['sourceId']
+    ),
   },
   {
     name: 'library.organize',
     description:
-      'Read current folder revision then create a folder or move the requested items. Mutations require body.expectedRevision. For create-folder supply body.category and title. For move supply body.items, category and folderId (null moves to the category root); omit title. Item kind is content or prompt-preset; category is bot, persona, module or prompts. The host owns mutation identity.',
+      'Organize the library into folders: read the folder tree, create a folder, or move bots, personas, modules and prompt presets into a folder. action=read returns the folders and the revision. create-folder and move need body with that revision as expectedRevision: create-folder takes body.category and body.title, and move takes body.items, body.category and body.folderId, where null moves the items to the top of the category.',
     inputSchema: schema(
       {
-        action: { type: 'string', enum: ['read', 'create-folder', 'move'] },
-        body: schema(
-          {
-            expectedRevision: integer,
-            category: { type: 'string', enum: ['bot', 'persona', 'module', 'prompts'] },
-            title: { type: 'string', minLength: 1, maxLength: 200 },
-            items: {
-              type: 'array',
-              minItems: 1,
-              maxItems: 1000,
-              items: schema(
-                { kind: { type: 'string', enum: ['content', 'prompt-preset'] }, id: itemId },
-                ['kind', 'id']
-              ),
+        action: {
+          type: 'string',
+          enum: ['read', 'create-folder', 'move'],
+          description: 'read the folder tree, create a folder, or move items.',
+        },
+        body: described(
+          schema(
+            {
+              expectedRevision: described(integer, 'Folder revision from action=read.'),
+              category: {
+                type: 'string',
+                enum: ['bot', 'persona', 'module', 'prompts'],
+                description: 'Library category the folder or the items belong to.',
+              },
+              title: {
+                type: 'string',
+                minLength: 1,
+                maxLength: 200,
+                description: 'create-folder: name of the new folder. Omit for move.',
+              },
+              items: {
+                type: 'array',
+                minItems: 1,
+                maxItems: 1000,
+                description: 'move: the items to move.',
+                items: schema(
+                  {
+                    kind: {
+                      type: 'string',
+                      enum: ['content', 'prompt-preset'],
+                      description:
+                        'content is a bot, persona or module; prompt-preset a prompt preset.',
+                    },
+                    id: itemId,
+                  },
+                  ['kind', 'id']
+                ),
+              },
+              folderId: {
+                type: ['string', 'null'],
+                maxLength: 100,
+                description: 'move: the destination folder, or null for the top of the category.',
+              },
             },
-            folderId: { type: ['string', 'null'], maxLength: 100 },
-          },
-          ['expectedRevision', 'category']
+            ['expectedRevision', 'category']
+          ),
+          'Required for create-folder and move.'
         ),
       },
       ['action'],
@@ -169,66 +285,140 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'context.read',
     description:
-      'Read the active summary, its covered source references and current user notes. The summary covers only checkpoint.plan.compacted; the chat head and recent sources may be newer. Read those sources before claiming the latest state.',
+      'Read the conversation summary that stands in for the older scenes of a chat, the scenes it covers, and the current author notes with their notesRevision. The summary covers only the scenes listed in checkpoint.plan.compacted. The chat can have newer scenes, so read those with chat.read and story.read before stating the latest situation.',
     inputSchema: schema({}),
   },
   {
     name: 'context.compact',
-    description: 'Compact the current chat through the shared context service. Read context first.',
-    inputSchema: schema({ expectedRevision: { type: 'integer', minimum: 0 } }, [
-      'expectedRevision',
-    ]),
+    description:
+      'Summarize the older scenes of the chat into its conversation summary now, using the regular compaction of the app. Take expectedRevision from context.read.',
+    inputSchema: schema(
+      {
+        expectedRevision: {
+          type: 'integer',
+          minimum: 0,
+          description: 'Summary revision from context.read.',
+        },
+      },
+      ['expectedRevision']
+    ),
   },
   {
     name: 'context.edit',
-    description: 'Edit the active summary using its exact expected revision. Read context first.',
-    inputSchema: schema({ expectedRevision: { type: 'integer', minimum: 0 }, summary: str }, [
-      'expectedRevision',
-      'summary',
-    ]),
+    description:
+      'Replace the text of the active conversation summary of a chat, for example to correct a fact it states wrongly. The summary is what the writer sees in place of the older scenes, so keep names, facts and who did what exact. Take expectedRevision from context.read.',
+    inputSchema: schema(
+      {
+        expectedRevision: {
+          type: 'integer',
+          minimum: 0,
+          description: 'Summary revision from context.read.',
+        },
+        summary: described(str, 'The complete new summary text.'),
+      },
+      ['expectedRevision', 'summary']
+    ),
   },
   {
     name: 'outline.read',
     description:
-      'Read the live composition in bounded pages. mode=overview (default) returns metadata and intent previews; subtree needs nodeId (depth=0 that node only, 1 direct children, omitted all descendants); detail needs nodeId and section=intent (default), related, or writings (source references for the subtree). Every mode pages with offset/limit: lists count items (default 20, max 50); an explicit intent limit is UTF-16 units (max 10000) and an omitted one reads 3000 local o200k tokens. A version belongs to one query: copy nextRead unchanged for later pages (they require expectedVersion), start with a new first read when switching mode or section, and restart the scope on OUTLINE_CHANGED. coverage.wholeField means this one response holds the entire intent, not cumulative coverage, and nextOffset=null marks the last page; an overview alone is not a full review. Overview intentCodePoints counts Unicode code points. Writings return exact data.read refs, not proof that plans were fulfilled.',
+      'Read the plot outline (composition) of a chat in bounded pages: the tree of themes, main story, arcs, episodes and beats, each with a writing intent. mode=overview (default) lists the items with metadata and short intent previews. mode=subtree returns the items under nodeId, limited by depth. mode=detail reads one section of one item: intent (default) is the full writing brief in text pages, related lists the linked plans, and writings lists the scenes written for the item and its subtree as data.read refs. Later pages need the expectedVersion of the first page: copy nextRead unchanged, and after OUTLINE_CHANGED start that read again. Switching mode or section starts a new read with its own version. An overview preview is not the full intent; coverage.wholeField means this one response contains the entire intent, and nextOffset null means the last page. A writings reference shows where text was written, not that the plan was fulfilled.',
     inputSchema: schema({
-      mode: { type: 'string', enum: ['overview', 'subtree', 'detail'] },
-      nodeId: itemId,
-      depth: { type: 'integer', minimum: 0, maximum: 4 },
-      offset: { type: 'integer', minimum: 0 },
-      limit: { type: 'integer', minimum: 1, maximum: 10000 },
-      expectedVersion: { type: 'string', maxLength: 64 },
-      section: { type: 'string', enum: ['intent', 'related', 'writings'] },
+      mode: {
+        type: 'string',
+        enum: ['overview', 'subtree', 'detail'],
+        description: 'overview (default), subtree of nodeId, or detail of nodeId.',
+      },
+      nodeId: described(itemId, 'Outline item to read. Required for subtree and detail.'),
+      depth: {
+        type: 'integer',
+        minimum: 0,
+        maximum: 4,
+        description:
+          'subtree only: 0 returns the item alone, 1 adds its direct children. Omit for all descendants.',
+      },
+      section: {
+        type: 'string',
+        enum: ['intent', 'related', 'writings'],
+        description: 'detail only: which section to read. Default intent.',
+      },
+      offset: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'Page offset: an item offset for lists, or a UTF-16 position inside intent text.',
+      },
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 10000,
+        description:
+          'Page size: items for lists (default 20, at most 50), or UTF-16 code units for intent text (at most 10000; omit for about 3000 tokens).',
+      },
+      expectedVersion: {
+        type: 'string',
+        maxLength: 64,
+        description: 'Version from the first page of this read. Copying nextRead supplies it.',
+      },
     }),
   },
   {
     name: 'outline.write',
     description:
-      "Apply composition changes: create, update, move or remove items. One call may build a whole tree by giving each new item a ref and naming its parent with parentRef; create a parent before the items that name it. Related IDs connect other plans in the same chat; read new IDs before linking. Fixed is an authored keep-condition for ordinary elaboration, not an edit lock. The entire batch is atomic. Returns a compact applied receipt, not the whole tree. RevisionAfterOperation records that operation, not a later live revision. Never retry an uncertain write with a new call ID. This writes composition only, never story prose, and never marks anything as written. Update, move and remove need the item's exact current revision. Edits may change pinned or written plans; active generation must finish before its plan is edited.",
+      'Create, update, move or remove items of the plot outline of a chat, as one atomic batch. A whole tree can be built in one call: give each new item a ref and name its parent with parentRef, listing a parent before its children. update, move and remove need the current revision of the item as expectedRevision. relatedIds link other plans of the same chat; read the ids before linking them. fixed marks an item the author wants kept when the outline is elaborated; it does not lock the item against edits the user asks for. An item whose text is being generated right now cannot be edited until that finishes. This changes the outline only: it writes no story prose and never marks anything as written. The result is a short receipt of what was applied, with the revision each operation produced, not the whole tree. If a call ends without a clear result, read the outline before trying again, because repeating a create would add the items twice.',
     inputSchema: schema(
       {
         operations: {
           type: 'array',
           minItems: 1,
           maxItems: 200,
+          description: 'Operations applied in order; all of them save or none does.',
           items: {
             type: 'object',
             properties: {
-              op: { type: 'string', enum: ['create', 'update', 'move', 'remove'] },
-              ref: str,
-              parentRef: str,
-              parentId: { type: ['string', 'null'] },
+              op: {
+                type: 'string',
+                enum: ['create', 'update', 'move', 'remove'],
+                description: 'What to do with the item.',
+              },
+              ref: described(
+                str,
+                'create: a temporary name for the new item, so later operations in this call can use it as parentRef.'
+              ),
+              parentRef: described(str, 'Parent created earlier in this call, by its ref.'),
+              parentId: {
+                type: ['string', 'null'],
+                description: 'Id of an existing parent item, or null for the top level.',
+              },
               level: {
                 type: 'string',
                 enum: ['theme', 'mainStory', 'arc', 'episode', 'beat'],
+                description: 'Kind of outline item.',
               },
-              title: str,
-              intent: str,
-              position: { type: 'integer', minimum: 0 },
-              id: str,
-              expectedRevision: { type: 'integer', minimum: 1 },
-              fixed: { type: 'boolean' },
-              relatedIds: { type: 'array', maxItems: 40, items: str },
+              title: described(str, 'Title of the item.'),
+              intent: described(str, 'The writing brief of the item: what it should achieve.'),
+              position: {
+                type: 'integer',
+                minimum: 0,
+                description: 'Index among the siblings under the parent.',
+              },
+              id: described(str, 'update, move, remove: id of the existing item.'),
+              expectedRevision: {
+                type: 'integer',
+                minimum: 1,
+                description:
+                  'update, move, remove: current revision of the item, from outline.read.',
+              },
+              fixed: {
+                type: 'boolean',
+                description: 'Mark the item as one the author wants kept during elaboration.',
+              },
+              relatedIds: {
+                type: 'array',
+                maxItems: 40,
+                items: str,
+                description: 'Ids of other plans in the same chat that this item relates to.',
+              },
             },
             required: ['op'],
             additionalProperties: false,
@@ -241,17 +431,29 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'notes.write',
     description:
-      'Save a user note or correction. Read context.read for notesRevision and use it as body.expectedRevision. Supply body.text for a new note; add replacesId to replace a discovered note. To retire one, supply replacesId and retired:true instead of text. The host supplies the current chat head, source anchor, user attribution and mutation identity.',
+      'Save, replace or retire an author note of a chat: a fact, correction or standing instruction from the user that later writing must respect. Take notesRevision from context.read as body.expectedRevision. body.text alone adds a note; with replacesId it replaces that note; replacesId with retired:true and no text retires it. The position in the chat, the source anchor and the attribution to the user are filled in by the app.',
     inputSchema: schema(
       {
-        body: schema(
-          {
-            expectedRevision: revision,
-            text: { type: 'string', minLength: 1, maxLength: 32000 },
-            replacesId: itemId,
-            retired: { type: 'boolean', enum: [true] },
-          },
-          ['expectedRevision']
+        body: described(
+          schema(
+            {
+              expectedRevision: described(revision, 'notesRevision from context.read.'),
+              text: {
+                type: 'string',
+                minLength: 1,
+                maxLength: 32000,
+                description: 'Text of the new or replacing note.',
+              },
+              replacesId: described(itemId, 'Id of the existing note to replace or retire.'),
+              retired: {
+                type: 'boolean',
+                enum: [true],
+                description: 'With replacesId and no text: retire that note.',
+              },
+            },
+            ['expectedRevision']
+          ),
+          'The note change: add, replace or retire.'
         ),
       },
       ['body'],
@@ -261,14 +463,25 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'artifact.read',
     description:
-      'Read an exact artifact revision in UTF-16 pages. field=text (default) reads the hypothetical scene; field=request reads its original generation request. offset defaults to 0; omitted limit uses 2000 local o200k tokens, while explicit limit remains a UTF-16 cap (max 10000); follow nextOffset for unread text. A saved reference alone does not mean you read its prose. This artifact is not a played story event.',
+      'Read a saved artifact at an exact revision: a hypothetical scene that was generated outside the played story, or the request that produced it. An artifact is not a story event that happened, and a reference to one does not mean its text was read. Text comes in pages; follow nextOffset for the rest.',
     inputSchema: schema(
       {
-        id: str,
-        revision: integer,
-        field: { type: 'string', enum: ['text', 'request'] },
-        offset: { type: 'integer', minimum: 0 },
-        limit: { type: 'integer', minimum: 1, maximum: 10000 },
+        id: described(str, 'Artifact id.'),
+        revision: described(integer, 'Exact artifact revision to read.'),
+        field: {
+          type: 'string',
+          enum: ['text', 'request'],
+          description:
+            'text (default) is the hypothetical scene; request is the generation request.',
+        },
+        offset: textOffset,
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 10000,
+          description:
+            'Maximum text to return, in UTF-16 code units. Omit to read up to about 2000 tokens.',
+        },
       },
       ['id', 'revision']
     ),
@@ -378,61 +591,141 @@ export const HELPER_APP_TOOLS: ProviderTool[] = [
   const input = tool.inputSchema as Record<string, Json>;
   return {
     ...tool,
-    description:
-      tool.description + ' Optional chatId selects another chat; omission uses the current chat.',
     inputSchema: {
       ...input,
       properties: {
         ...(input.properties as Record<string, Json>),
-        chatId: itemId,
+        chatId: described(itemId, 'Chat to act on. Omit for the current chat.'),
       },
     },
   };
 });
 
-export const HELPER_GATEWAY_TOOLS: ProviderTool[] = [
-  {
-    name: 'app.tools',
-    description:
-      'Find Uimori operations using an English purpose or exact operation name. query returns ranked matches with complete schemas (3 by default; limit/offset page results); an exact name selects that operation only. names returns exact schemas for selected operations. Without query/names, browse a compact catalog. Invoke with app.call.',
-    inputSchema: schema(
-      {
-        names: { type: 'array', minItems: 1, items: str },
-        query: str,
-        offset: { type: 'integer', minimum: 0 },
-        limit: { type: 'integer', minimum: 1 },
-      },
-      [],
-      [{ names: ['outline.read'] }]
-    ),
-  },
-  {
-    name: 'app.call',
-    description:
-      'Execute an app operation using its exact name and argument schema from app.tools. Follow its revision, source scope and save contract.',
-    inputSchema: schema(
-      { name: str, arguments: { type: 'object' } },
-      ['name', 'arguments'],
-      [{ name: 'outline.read', arguments: { mode: 'overview', limit: 5 } }]
-    ),
-  },
+/**
+ * Operation areas in catalog order, most used first. The model sees this index with the gateway,
+ * so it can name an operation without a lexical search; every registered area needs an entry.
+ */
+export const HELPER_OPERATION_AREAS: readonly (readonly [area: string, purpose: string])[] = [
+  ['data', 'search and read text in the library, chats, editor input and this conversation'],
+  ['resource', 'saved bots, personas, modules, prompt presets and themes'],
+  ['chat', 'chat list, scene index, title, fork and chat-only lore'],
+  ['scene', 'saved story scenes and their translations'],
+  ['story', 'frozen story history of this task'],
+  ['knowledge', 'frozen writing references of this task'],
+  ['skills', 'writing guidance'],
+  ['outline', 'plot outline and writing plans'],
+  ['context', 'conversation summary'],
+  ['notes', 'author notes'],
+  ['options', 'writing options of a chat'],
+  ['editor', 'captured editor input'],
+  ['artifact', 'hypothetical scenes'],
+  ['db', 'read-only SQL'],
+  ['settings', 'models, prompts and chat settings'],
+  ['model', 'saved models and pricing'],
+  ['usage', 'cost and tokens'],
+  ['task', 'runs and background jobs'],
+  ['image', 'saved content images'],
+  ['illustration', 'illustrations, cuts, appearance profiles and references'],
+  ['illustration-preset', 'illustration presets'],
+  ['preset', 'prompt preset checks'],
+  ['library', 'folders'],
+  ['theme', 'themes'],
+  ['palette', 'color palettes'],
+  ['font', 'fonts'],
 ];
+const operationArea = (name: string) => name.slice(0, name.indexOf('.'));
+const areaRank = new Map(HELPER_OPERATION_AREAS.map(([area], index) => [area, index]));
+const byArea = (a: ProviderTool, b: ProviderTool) =>
+  (areaRank.get(operationArea(a.name)) ?? areaRank.size) -
+  (areaRank.get(operationArea(b.name)) ?? areaRank.size);
+function operationIndex(tools: readonly ProviderTool[]): string {
+  return HELPER_OPERATION_AREAS.flatMap(([area, purpose]) => {
+    const names = tools
+      .filter((tool) => operationArea(tool.name) === area)
+      .map((tool) => tool.name.slice(area.length + 1));
+    return names.length ? [`${area} (${purpose}): ${names.join(', ')}`] : [];
+  }).join('; ');
+}
+
+const gatewayTools = (review: boolean): ProviderTool[] => {
+  const allowed = review
+    ? HELPER_APP_TOOLS.filter((tool) => helperToolTraits(tool.name).reviewAllowed)
+    : HELPER_APP_TOOLS;
+  return [
+    {
+      name: 'app.tools',
+      description: `Look up Uimori app operations: what each one does and its exact argument schema. Operations run through app.call. Pass names for the schemas of operations you can already name from the list below, for example ${review ? '["outline.read","story.read"]' : '["resource.read","resource.patch"]'}. Pass query, an English purpose such as ${review ? '"read outline intent"' : '"edit lorebook entry"'} or an exact operation name, for ranked candidates with complete schemas (3 by default; limit and offset page them). A ranked candidate is only a lexical match, so read its description before relying on it. Pass neither to page through a compact catalog without schemas. ${
+        review
+          ? 'During this review only read-only operations are available. '
+          : 'A schema you have already seen can be reused without looking it up again. '
+      }Operations by area, written as area.operation: ${operationIndex(allowed)}.`,
+      inputSchema: schema(
+        {
+          names: {
+            type: 'array',
+            minItems: 1,
+            items: str,
+            description: 'Exact operation names whose descriptions and schemas to return.',
+          },
+          query: described(
+            str,
+            'An English purpose or one exact operation name. Not combined with names.'
+          ),
+          offset: resultOffset,
+          limit: {
+            type: 'integer',
+            minimum: 1,
+            description: 'Maximum entries: 3 by default for a query, 20 for the catalog.',
+          },
+        },
+        [],
+        [{ names: ['outline.read'] }]
+      ),
+    },
+    {
+      name: 'app.call',
+      description: review
+        ? 'Run one read-only outline, story or reference operation by its exact name, with arguments that follow its schema from app.tools. Saving is not available during a review. Keep the versions and coverage fields that results return, and copy a returned nextRead unchanged to continue a read.'
+        : 'Run one Uimori app operation by its exact name, with arguments that follow its schema from app.tools. Read operations return data with continuation fields such as nextOffset, nextIndex or a ready nextRead. Operations that save return a receipt with the new revision, so rereading only to confirm a successful save is unnecessary. A failed call returns an error code and says whether to correct the arguments, refresh and retry, or stop.',
+      inputSchema: schema(
+        {
+          name: described(
+            str,
+            `Exact operation name, such as ${review ? 'outline.read' : 'resource.read'}.`
+          ),
+          arguments: {
+            type: 'object',
+            description: 'Arguments object of that operation. Use {} when it takes none.',
+          },
+        },
+        ['name', 'arguments'],
+        [{ name: 'outline.read', arguments: { mode: 'overview', limit: 5 } }]
+      ),
+    },
+  ];
+};
+export const HELPER_GATEWAY_TOOLS: ProviderTool[] = gatewayTools(false);
+const REVIEW_GATEWAY_TOOLS: ProviderTool[] = gatewayTools(true);
 export function helperGatewayTools(review: boolean): ProviderTool[] {
-  return review
-    ? HELPER_GATEWAY_TOOLS.map((tool) => ({
-        ...tool,
-        description:
-          tool.name === 'app.tools'
-            ? 'Discover allowed read-only outline and story/reference operations using an English purpose or exact name. Query matches include complete schemas (3 by default; limit/offset page results); names selects exact schemas. Without query/names, browse a compact catalog. Call through app.call.'
-            : 'Execute an allowed read-only outline or story/reference operation. Writes are unavailable during review. Preserve returned versions and coverage.',
-      }))
-    : HELPER_GATEWAY_TOOLS;
+  return review ? REVIEW_GATEWAY_TOOLS : HELPER_GATEWAY_TOOLS;
 }
 
 /** Search synonyms supplement owning descriptions; they are not execution aliases. */
 const discoveryTerms: Record<string, string> = {
-  'resource.read': 'shared library inspect 기본 외형 프로필 라이브러리',
-  'resource.patch': 'shared library save edit 기본 외형 프로필 라이브러리',
+  'resource.read':
+    'shared library inspect open view show character card bot persona module lorebook lore entry greeting system prompt preset 기본 외형 프로필 라이브러리',
+  'resource.patch':
+    'shared library save edit change update modify fix rename character card bot persona module lorebook lore entry greeting system prompt preset 기본 외형 프로필 라이브러리',
+  'data.search': 'find grep locate lookup text anywhere across all chats library',
+  'scene.search': 'find locate typo phrase manuscript prose',
+  'scene.read': 'open view show manuscript prose text',
+  'scene.patch': 'fix correct typo edit change manuscript prose rewrite',
+  'settings.update': 'switch select choose model prompt preset',
+  'task.inspect': 'why failed failure error diagnose',
+  'image.read': 'view see show open picture',
+  'illustration.image.read': 'view see show open picture',
+  'illustration.cut.read': 'view see show open picture',
+  'chat.read': 'scene list index',
   'illustration.profiles.read': 'local override 채팅 외형 프로필',
   'illustration.profiles.save': 'local override 채팅 외형 프로필',
 };
@@ -490,7 +783,7 @@ const searchIndex = new Map(
   })
 );
 
-/** BM25 over the allowed registry; rare terms and shorter focused descriptions rank higher. */
+/** BM25 over the allowed registry. Length normalization stays mild: a long description here reflects a complex operation, not an unfocused one. */
 function searchHelperTools(allowed: ProviderTool[], query: string, scope?: 'chat' | 'library') {
   const exact = HELPER_APP_TOOLS.find(
     (tool) => tool.name.toLowerCase() === query.trim().toLowerCase()
@@ -502,7 +795,7 @@ function searchHelperTools(allowed: ProviderTool[], query: string, scope?: 'chat
   const averageLength =
     documents.reduce((sum, doc) => sum + doc.index.length, 0) / documents.length;
   const k1 = 1.2,
-    b = 0.75;
+    b = 0.3;
   const scores = new Map(allowed.map((tool) => [tool.name, 0]));
   const covered = new Map(allowed.map((tool) => [tool.name, 0]));
   for (const term of terms) {
@@ -597,7 +890,7 @@ export function describeHelperTools(
     Number(limit) < 1
   )
     throw new HttpError(400, 'INVALID_ARGUMENTS');
-  const found = searching ? searchHelperTools(allowed, query, scope) : [...allowed];
+  const found = searching ? searchHelperTools(allowed, query, scope) : [...allowed].sort(byArea);
   if (!searching && scope === 'library')
     found.sort((a, b) => Number(chatToolNames.has(a.name)) - Number(chatToolNames.has(b.name)));
   const page = found.slice(

@@ -242,9 +242,7 @@ function packet(body: Body): any {
   throw new Error('Missing request data packet');
 }
 function call(body: Body, name: string, args: Json, id: string): Json {
-  const alias = body.tools.find((tool) =>
-    tool.name.endsWith('_' + name.replaceAll('.', '_'))
-  )?.name;
+  const alias = body.tools.find((tool) => tool.name === name.replaceAll('.', '_'))?.name;
   if (!alias) throw new Error('Missing advertised tool: ' + name);
   return {
     type: 'function_call',

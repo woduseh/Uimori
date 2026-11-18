@@ -1,4 +1,5 @@
 import { toolImageParts } from './provider-image-reference.js';
+import { providerToolDescription } from './provider-tool-names.js';
 import type { ProviderTextUpdate } from './provider-progress.js';
 import { OpenAIProtocolError, openAIProtocol, type OpenAITurn } from './openai-protocol.js';
 import type { Json, ProviderRequest, ProviderResult, ProviderToolCall } from './transport.js';
@@ -190,7 +191,7 @@ export function encodeChat(
             type: 'function',
             function: {
               name: aliases[index].providerName,
-              description: tool.description,
+              description: providerToolDescription(tool, aliases[index].providerName),
               parameters: copy(tool.inputSchema),
               strict: false,
             },

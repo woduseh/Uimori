@@ -131,7 +131,7 @@ test('Responses hosted search streams append-only prose and visible links, retai
     type: 'function_call',
     id: 'fc-1',
     call_id: 'host-1',
-    name: 'tool_0_app_read',
+    name: 'app_read',
     arguments: '{}',
     status: 'completed',
   };
@@ -235,7 +235,7 @@ test('Anthropic hosted blocks and citation deltas stay distinct from host tool c
   await accept({
     type: 'content_block_start',
     index: 3,
-    content_block: { type: 'tool_use', id: 'host-1', name: 'tool_0_app_read', input: {} },
+    content_block: { type: 'tool_use', id: 'host-1', name: 'app_read', input: {} },
   });
   await accept({ type: 'content_block_stop', index: 3 });
   await accept({ type: 'message_delta', delta: { stop_reason: 'tool_use' } });
@@ -307,7 +307,7 @@ test('Anthropic parallel hosted search may resolve after the client tool continu
           name: 'web_search',
           input: { query: 'current' },
         },
-        { type: 'tool_use', id: 'host-1', name: 'tool_0_app_read', input: {} },
+        { type: 'tool_use', id: 'host-1', name: 'app_read', input: {} },
       ],
     },
     encodeAnthropic(input).context

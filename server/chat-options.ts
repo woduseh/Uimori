@@ -308,23 +308,32 @@ export const helperOptionTools: ProviderTool[] = [
   {
     name: 'options.read',
     description:
-      'Read writing option definitions, global/fixed values, pending one-off values and conflicts. Use the current definitions and revision when saving. Prompt prose is omitted.',
+      'Read the writing options of a chat: the option definitions of its prompt preset, the values fixed globally or for the chat, any values staged for the next request only, and conflicts between them. It returns the binding and the revision that options.oneoff needs. The prompt text itself is not included.',
     inputSchema: schema({}),
   },
   {
     name: 'options.oneoff',
     description:
-      'Set next-request option values for the selected chat. Read options first for definitions and the current revision.',
+      'Stage writing option values for the next request of a chat only, without changing its saved options. Use it when the user wants one upcoming reply written differently, for example longer or in another style. Take the option keys, allowed values, binding and revision from options.read.',
     inputSchema: schema(
       {
-        expectedRevision: { type: 'integer', minimum: 0 },
+        expectedRevision: {
+          type: 'integer',
+          minimum: 0,
+          description: 'Revision from options.read.',
+        },
         binding: {
           type: 'object',
+          description: 'The binding object exactly as returned by options.read.',
           properties: { owner: str, definitionHash: str },
           required: ['owner', 'definitionHash'],
           additionalProperties: false,
         },
-        values: { type: 'object' },
+        values: {
+          type: 'object',
+          description:
+            'Option keys and their values for the next request, using the definitions from options.read.',
+        },
       },
       ['expectedRevision', 'binding', 'values']
     ),

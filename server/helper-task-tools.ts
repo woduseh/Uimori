@@ -6,8 +6,18 @@ import { HttpError, choice, fields, number, record, text } from './request-valid
 import type { Store } from './store.js';
 import { providerCacheUsage } from '../core/provider-cache-usage.js';
 
-const id: Json = { type: 'string', minLength: 1, maxLength: 100 };
-const kind: Json = { type: 'string', enum: ['run', 'job', 'illustration', 'helper'] };
+const id: Json = {
+  type: 'string',
+  minLength: 1,
+  maxLength: 100,
+  description: 'Exact task id, from task.list or an earlier result.',
+};
+const kind: Json = {
+  type: 'string',
+  enum: ['run', 'job', 'illustration', 'helper'],
+  description:
+    'run is a writing run, job an auxiliary job such as a translation, illustration an illustration render, helper a helper task.',
+};
 const schema: Json = {
   type: 'object',
   properties: { kind, id },
@@ -19,14 +29,31 @@ export const HELPER_TASK_TOOLS: ProviderTool[] = [
   {
     name: 'task.list',
     description:
-      'Find recent task IDs, including queued work with no provider attempt yet. Filter by kind, status or chatId. Defaults to active work in the current chat; a library helper without a chat sees all work. Returns only kind, ID, chat ID, status, auxiliary kind and update time.',
+      'Find recent tasks and their ids: writing runs, auxiliary jobs, illustration renders and helper tasks, including queued work that has not reached a provider yet. Use it to see what is running or what failed before task.inspect, task.cancel or task.retry. By default it lists active work in the current chat; a library helper without a chat sees all chats. Each entry has only the kind, id, chat id, status, auxiliary kind and update time.',
     inputSchema: {
       type: 'object',
       properties: {
-        chatId: id,
-        kind,
-        status: { type: 'string', enum: ['active', 'failed', 'all'] },
-        limit: { type: 'integer', minimum: 1, maximum: 20 },
+        chatId: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 100,
+          description: 'List tasks of this chat instead of the current one.',
+        },
+        kind: {
+          ...(kind as Record<string, Json>),
+          description: 'Limit to one kind of task: run, job, illustration or helper.',
+        },
+        status: {
+          type: 'string',
+          enum: ['active', 'failed', 'all'],
+          description: 'active (default) is queued or running work; failed; or all.',
+        },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 20,
+          description: 'Maximum tasks to return.',
+        },
       },
       additionalProperties: false,
     },
@@ -34,17 +61,36 @@ export const HELPER_TASK_TOOLS: ProviderTool[] = [
   {
     name: 'task.inspect',
     description:
-      'Inspect one known run, auxiliary job, illustration job or helper task by exact ID. Returns compact status, error, usage and available actions without manuscript or execution snapshots. includeDiagnostics:true adds recorded, content-bounded provider and tool events (20 per page); use attemptsOffset and toolsOffset for later pages. Missing old records or timing are unknown, not evidence of no calls. Illustration inspection also reports the failed stage, target and available prompt status; includePrompt:true explicitly includes any stored prepared prompt (refusals may have none). For helpers, committedEffects lists durable receipt-backed effects (20 per page); pass nextOffset as effectsOffset. It confirms the recorded commit, not current resource state or task success. Missing tool/callId is unknown, and no receipt is not proof that an uncertain action had no effect. Inspection never retries a write.',
+      'Inspect one run, auxiliary job, illustration render or helper task by its exact id, to explain why it failed, what it cost or what it changed. Returns compact status, error, usage and the actions that are available, without manuscript text or execution snapshots. includeDiagnostics adds the recorded provider attempts and tool events in pages of 20. For an illustration it also reports the stage that failed, the target and whether a prepared prompt exists; includePrompt returns that prompt, which a refused request may not have. For a helper task, committedEffects lists the saves that have a durable receipt in pages of 20; a receipt confirms that the save was committed, not that the resource still has that state or that the task succeeded. Missing records of old tasks mean unknown, not that nothing happened, and no receipt does not prove that an uncertain action had no effect.',
     inputSchema: {
       type: 'object',
       properties: {
         kind,
         id,
-        effectsOffset: { type: 'integer', minimum: 0 },
-        includePrompt: { type: 'boolean' },
-        includeDiagnostics: { type: 'boolean' },
-        attemptsOffset: { type: 'integer', minimum: 0 },
-        toolsOffset: { type: 'integer', minimum: 0 },
+        includeDiagnostics: {
+          type: 'boolean',
+          description: 'Add recorded provider attempts and tool events.',
+        },
+        attemptsOffset: {
+          type: 'integer',
+          minimum: 0,
+          description: 'With includeDiagnostics: offset into the provider attempts.',
+        },
+        toolsOffset: {
+          type: 'integer',
+          minimum: 0,
+          description: 'With includeDiagnostics: offset into the tool events.',
+        },
+        includePrompt: {
+          type: 'boolean',
+          description: 'Illustration only: include the stored prepared prompt when one exists.',
+        },
+        effectsOffset: {
+          type: 'integer',
+          minimum: 0,
+          description:
+            'Helper task only: offset into committedEffects. Pass the previous nextOffset.',
+        },
       },
       required: ['kind', 'id'],
       additionalProperties: false,
@@ -53,13 +99,13 @@ export const HELPER_TASK_TOOLS: ProviderTool[] = [
   {
     name: 'task.cancel',
     description:
-      'Cancel one known active task. Running provider work is aborted by its existing owner. Cannot cancel this helper task.',
+      'Cancel one queued or running task by its kind and id from task.list: a writing run, auxiliary job, illustration render or another helper task. Work already sent to a provider is aborted. Saves that the task already completed stay saved. The helper task that is making this call cannot cancel itself.',
     inputSchema: schema,
   },
   {
     name: 'task.retry',
     description:
-      'Retry one known eligible task. A run retry may fork a new chat; returns its new task and chat IDs. Cannot retry this helper task or replay committed helper effects.',
+      'Retry one failed or otherwise eligible task by its kind and id. task.inspect shows whether retry is available. Retrying a writing run may continue in a new forked chat; the result returns the new task id and chat id. Saves that a helper task already committed are not replayed, and the helper task that is making this call cannot retry itself.',
     inputSchema: schema,
   },
 ];

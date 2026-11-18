@@ -16,24 +16,44 @@ export const HELPER_ILLUSTRATION_PLACEMENT_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.cuts.place',
     description:
-      'Place existing pictures at new paragraphs in their original scenes, including after a text edit. Use the displayed render job ID, current source hash and layout revision from cut inspection, and exact original paragraph anchors. An optional focus or visualBrief describes the revised moment for a future redraw. Set hero to change the lead image. All moves are saved together and reuse the existing images.',
+      'Move existing illustrations to other paragraphs of their own scenes without rendering them again, for example after the text around a picture was edited. All moves in one call are saved together. An optional focus or visualBrief records the revised moment for a later redraw, and hero changes which picture leads the scene.',
     inputSchema: {
       type: 'object',
       properties: {
         placements: {
           type: 'array',
           minItems: 1,
+          description: 'One entry per picture to move.',
           items: {
             type: 'object',
             properties: {
-              jobId: id,
-              expectedSourceHash: id,
-              expectedPresentationRevision: { type: 'integer', minimum: 0 },
-              startAnchor: id,
-              endAnchor: id,
-              focus: id,
-              visualBrief: id,
-              hero: { type: 'boolean' },
+              jobId: {
+                ...id,
+                description:
+                  'Id of the displayed render job of the cut, from illustration.cuts.list.',
+              },
+              expectedSourceHash: {
+                ...id,
+                description:
+                  'Current sourceHash of the scene, from illustration.scene.read or illustration.cuts.list (currentSourceHash).',
+              },
+              expectedPresentationRevision: {
+                type: 'integer',
+                minimum: 0,
+                description: 'presentationRevision of the scene from illustration.cuts.list.',
+              },
+              startAnchor: {
+                ...id,
+                description:
+                  'First paragraph anchor of the new position, from illustration.scene.read.',
+              },
+              endAnchor: { ...id, description: 'Last paragraph anchor of the new position.' },
+              focus: { ...id, description: 'Optional: the instant the picture now belongs to.' },
+              visualBrief: {
+                ...id,
+                description: 'Optional: revised visual description for a later redraw.',
+              },
+              hero: { type: 'boolean', description: 'Make this the lead picture of the scene.' },
             },
             required: [
               'jobId',

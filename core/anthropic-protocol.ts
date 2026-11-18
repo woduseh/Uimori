@@ -1,4 +1,5 @@
 import { toolImageParts } from './provider-image-reference.js';
+import { providerToolDescription, providerToolNames } from './provider-tool-names.js';
 import { canonicalJson as canonical } from './canonical-json.js';
 import type { ProviderTextUpdate } from './provider-progress.js';
 import { createHash } from 'node:crypto';
@@ -161,7 +162,7 @@ export function encodeAnthropic(request: ProviderRequest): {
   )
     reject('INVALID_TOOLS');
   const names = new Set<string>();
-  const toolNames: ToolName[] = request.stable.tools.map((tool, index) => {
+  for (const tool of request.stable.tools) {
     if (
       !nonempty(tool.name) ||
       tool.name.length > 200 ||
@@ -171,11 +172,12 @@ export function encodeAnthropic(request: ProviderRequest): {
     )
       reject('INVALID_TOOLS');
     names.add(tool.name);
-    return {
-      name: tool.name,
-      wireName: 'tool_' + index + '_' + tool.name.replace(/[^A-Za-z0-9_-]/gu, '_').slice(0, 48),
-    };
-  });
+  }
+  const wireNames = providerToolNames(request.stable.tools.map((tool) => tool.name));
+  const toolNames: ToolName[] = request.stable.tools.map((tool, index) => ({
+    name: tool.name,
+    wireName: wireNames[index],
+  }));
   const { results: rawResults, ...input } = request.input;
   let schema: Json | undefined;
   if (structuredTranslation) {
@@ -394,7 +396,7 @@ export function encodeAnthropic(request: ProviderRequest): {
           tools: [
             ...request.stable.tools.map((tool, index) => ({
               name: toolNames[index].wireName,
-              description: 'Host tool: ' + tool.name + '. ' + tool.description,
+              description: providerToolDescription(tool, toolNames[index].wireName),
               input_schema: copy(tool.inputSchema, 'INVALID_TOOLS'),
             })),
             ...(request.webSearch

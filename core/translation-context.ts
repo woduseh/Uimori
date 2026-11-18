@@ -114,9 +114,9 @@ export function translationReader(
       use: 'wording-reference-only',
     });
     if (search) {
-      if (typeof args.query !== 'string' || args.query.length > 512)
-        return denied('INVALID_ARGUMENTS');
-      const terms = args.query.toLocaleLowerCase('en').split(/\s+/u).filter(Boolean);
+      const query = args.query === undefined ? '' : args.query;
+      if (typeof query !== 'string' || query.length > 512) return denied('INVALID_ARGUMENTS');
+      const terms = query.toLocaleLowerCase('en').split(/\s+/u).filter(Boolean);
       const found = scope.filter((item) =>
         terms.every((term) =>
           `${originals.get(item.sourceRevision) ?? ''} ${item.text}`

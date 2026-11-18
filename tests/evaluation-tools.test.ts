@@ -358,8 +358,8 @@ describe('provider-neutral evaluation tools', () => {
     };
     const encoded = encodeResponses(request),
       body = encoded.body as Record<string, any>;
-    const wireName = body.tools.find((tool: { name: string }) =>
-      tool.name.endsWith('_eval_submit_artifact')
+    const wireName = body.tools.find(
+      (tool: { name: string }) => tool.name === 'eval_submit_artifact'
     ).name;
     const decoder = new ResponsesDecoder(encoded.context);
     decoder.accept({

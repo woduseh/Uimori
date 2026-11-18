@@ -109,7 +109,7 @@ function continued(
             type: 'function_call',
             id: 'function-budget',
             call_id: 'call-budget',
-            name: 'tool_0_knowledge_read',
+            name: 'knowledge_read',
             arguments: '{}',
             status: 'completed',
           },
@@ -132,7 +132,7 @@ function continued(
     });
     const parts = [
       { type: 'thinking', thinking: 'synthetic reasoning', signature: privateText },
-      { type: 'tool_use', id: 'call-budget', name: 'tool_0_knowledge_read', input: {} },
+      { type: 'tool_use', id: 'call-budget', name: 'knowledge_read', input: {} },
     ];
     for (const [index, content_block] of parts.entries()) {
       decoder.accept({ type: 'content_block_start', index, content_block });
@@ -179,7 +179,7 @@ function continued(
                 index: 0,
                 id: 'call-budget',
                 type: 'function',
-                function: { name: 'tool_0_knowledge_read', arguments: '{}' },
+                function: { name: 'knowledge_read', arguments: '{}' },
               },
             ],
           },

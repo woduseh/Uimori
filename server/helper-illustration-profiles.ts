@@ -18,12 +18,16 @@ export const HELPER_ILLUSTRATION_PROFILE_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.profiles.read',
     description:
-      'Read chat-local appearance profiles, explicit references, effectiveReferences (actual character/style roles and linked profileIds) and revision. Find image refs via illustration.image.list. Shared bot/persona defaults are library resources read with resource.read.',
+      'Read the character appearance profiles of a chat that illustrations use, the reference images with their explicit roles, effectiveReferences (the roles and linked profileIds actually in effect) and the revision needed for saving. These are the chat-local profiles. The shared defaults of a bot or persona are part of the library resource: read them with resource.read at source.appearanceProfilesPath.',
     inputSchema: {
       type: 'object',
       properties: {
-        offset: { type: 'integer', minimum: 0 },
-        limit: { type: 'integer', minimum: 1 },
+        offset: {
+          type: 'integer',
+          minimum: 0,
+          description: 'Profile offset. Pass the previous nextOffset.',
+        },
+        limit: { type: 'integer', minimum: 1, description: 'Maximum profiles per page.' },
       },
       additionalProperties: false,
     },
@@ -31,22 +35,48 @@ export const HELPER_ILLUSTRATION_PROFILE_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.profiles.save',
     description:
-      'Save character appearances together in this chat. Extract visible/source-backed traits, or follow the brief for original designs. Create with name and appearance; edit using profileId. referenceRef links the character image for generation (null unlinks); no second references.save is needed. Use expectedRevision from profiles.read. The result includes effectiveReferences, so do not reread solely to confirm a successful save. Shared bot/persona defaults are edited with resource.patch instead.',
+      "Create or edit character appearance profiles for the illustrations of a chat, several at once. Describe what is visible: take the traits from the source text and reference images, or follow the user's brief for an original design. An entry with name and appearance and no profileId creates a profile; an entry with profileId edits one, and fields left out keep their values. referenceRef links a character image for generation and null removes the link; a linked image is active immediately, so illustration.references.save is not needed for it. Every entry is validated before anything is saved. The result includes effectiveReferences, so no reread is needed to confirm the save. The shared defaults of a bot or persona are edited with resource.patch instead.",
     inputSchema: {
       type: 'object',
       properties: {
-        expectedRevision: { type: 'integer', minimum: 0 },
+        expectedRevision: {
+          type: 'integer',
+          minimum: 0,
+          description: 'Revision from illustration.profiles.read.',
+        },
         profiles: {
           type: 'array',
           minItems: 1,
           maxItems: 32,
+          description: 'Profiles to create or edit.',
           items: {
             type: 'object',
             properties: {
-              profileId: { type: 'string', minLength: 1, maxLength: 100 },
-              name: { type: 'string', minLength: 1, maxLength: 200 },
-              appearance: { type: 'string', minLength: 1, maxLength: 2000 },
-              referenceRef: { type: ['string', 'null'], minLength: 1, maxLength: 300 },
+              profileId: {
+                type: 'string',
+                minLength: 1,
+                maxLength: 100,
+                description: 'Id of the profile to edit. Omit to create a new profile.',
+              },
+              name: {
+                type: 'string',
+                minLength: 1,
+                maxLength: 200,
+                description: 'Character name. Required when creating.',
+              },
+              appearance: {
+                type: 'string',
+                minLength: 1,
+                maxLength: 2000,
+                description: 'Visible appearance of the character. Required when creating.',
+              },
+              referenceRef: {
+                type: ['string', 'null'],
+                minLength: 1,
+                maxLength: 300,
+                description:
+                  'Image ref from illustration.image.list to link as the character reference, or null to remove the link.',
+              },
             },
             additionalProperties: false,
           },

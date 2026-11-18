@@ -49,7 +49,14 @@ export const STORY_SUBMIT_TOOL: ProviderTool = {
     'Final submission boundary for this main fiction run. Submit only the finished reader-facing fiction in content, without analysis, preface, reasoning, tool narration or notices. Call it alone, not combined with other tools. This completes the run without another model call. The host owns source/chat identity and storage.',
   inputSchema: {
     type: 'object',
-    properties: { content: { type: 'string', minLength: 1, maxLength: STORY_SUBMIT_MAX_CHARS } },
+    properties: {
+      content: {
+        type: 'string',
+        minLength: 1,
+        maxLength: STORY_SUBMIT_MAX_CHARS,
+        description: 'The complete finished fiction, exactly as the reader should see it.',
+      },
+    },
     required: ['content'],
     additionalProperties: false,
   },
@@ -107,15 +114,29 @@ export function buildMainProviderRequest(
           inputSchema: {
             type: 'object',
             properties: {
-              agentId: { type: 'string', enum: collaboration.agents.map((agent) => agent.id) },
-              question: { type: 'string', minLength: 1 },
+              agentId: {
+                type: 'string',
+                enum: collaboration.agents.map((agent) => agent.id),
+                description: 'The configured advisor to ask.',
+              },
+              question: {
+                type: 'string',
+                minLength: 1,
+                description: 'What you want the advisor to weigh in on.',
+              },
               contextRefs: {
                 type: 'array',
                 items: { type: 'string', minLength: 1, maxLength: 500 },
                 maxItems: AGENT_CONTEXT_REFS_MAX,
                 uniqueItems: true,
+                description:
+                  'Call ids of completed advisor or read tool calls of this run whose results the advisor should see.',
               },
-              draft: { type: 'string', minLength: 1 },
+              draft: {
+                type: 'string',
+                minLength: 1,
+                description: 'Uncommitted draft text for the advisor to consider.',
+              },
             },
             required: ['agentId', 'question'],
             additionalProperties: false,

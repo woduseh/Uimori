@@ -162,7 +162,10 @@ test('SQLite scopes prior wording to frozen ancestry/hash and excludes future, s
       manual: false,
     },
   ]);
-  expect(read(call('translation.search', { query: '' })).result).toMatchObject({ total: 1 });
+  const listed = read(call('translation.search', {})).result;
+  expect(listed).toMatchObject({ total: 1 });
+  expect(read(call('translation.search', { query: '' })).result).toEqual(listed);
+  expect(read(call('translation.search', { query: null })).denied).toBe(true);
   expect(read(call('translation.read', { id: wording.id })).result).toMatchObject({
     text: '앨런 선장, 기다려.',
     source: { sourceRevision: first.id, sourceHash: first.hash, use: 'wording-reference-only' },

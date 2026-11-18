@@ -42,6 +42,10 @@ test('research reads native frozen descriptions and lore by exact paths, pages m
   const research = illustrationResearch(structuredClone(snapshot), structuredClone(input));
   pkg.nativeRisu.card.description = 'Changed after reservation';
   expect(research.catalog).toHaveLength(2);
+  expect(research.execute('illustration.sources.search', {})).toEqual(
+    research.execute('illustration.sources.search', { query: '' })
+  );
+  expect(() => research.execute('illustration.sources.search', { query: null })).toThrow();
   const result = research.execute('illustration.sources.search', {
     query: 'green eyes',
     limit: 1,

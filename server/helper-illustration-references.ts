@@ -12,23 +12,46 @@ export const HELPER_ILLUSTRATION_REFERENCE_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.references.save',
     description:
-      'Assign reference images together using the revision from illustration.profiles.read. For each image supply a candidate ref, or an imageId from a completed cut to reuse that exact variation. Set role to character, style, or null to clear its explicit role. When provided, profileIds replaces the people linked to that image; use an empty list to unlink them. Linked images guide character design. For a character image linked through referenceRef, use illustration.profiles.save instead; this tool is for explicit style roles, reassignment and generated-cut promotion. Omitted roles and links stay as saved.',
+      'Set the roles and character links of several illustration reference images at once: mark an image as a style reference, reassign which characters an image depicts, or promote a completed cut to a reference. A character image linked through referenceRef in illustration.profiles.save needs nothing from this operation. Roles and links that an assignment leaves out stay as saved. When turning a linked character image into a style reference, unlink its profiles explicitly with an empty profileIds.',
     inputSchema: {
       type: 'object',
       properties: {
-        expectedRevision: { type: 'integer', minimum: 0 },
+        expectedRevision: {
+          type: 'integer',
+          minimum: 0,
+          description: 'Revision from illustration.profiles.read.',
+        },
         assignments: {
           type: 'array',
           minItems: 1,
+          description: 'One entry per image. Give either ref or imageId.',
           items: {
             type: 'object',
             properties: {
-              ref: { type: 'string', minLength: 1, maxLength: 300 },
-              imageId: { type: 'string', minLength: 1, maxLength: 100 },
-              role: { type: ['string', 'null'], enum: ['character', 'style', null] },
+              ref: {
+                type: 'string',
+                minLength: 1,
+                maxLength: 300,
+                description: 'Image ref from illustration.image.list.',
+              },
+              imageId: {
+                type: 'string',
+                minLength: 1,
+                maxLength: 100,
+                description:
+                  'Image id of a completed cut, to reuse that exact picture as a reference.',
+              },
+              role: {
+                type: ['string', 'null'],
+                enum: ['character', 'style', null],
+                description:
+                  'Explicit role of the image, or null to clear it. Omit to keep the saved role.',
+              },
               profileIds: {
                 type: 'array',
                 items: { type: 'string', minLength: 1, maxLength: 100 },
+                description:
+                  'Replaces the profiles linked to this image. An empty list unlinks all. Omit to keep the saved links.',
               },
             },
             additionalProperties: false,

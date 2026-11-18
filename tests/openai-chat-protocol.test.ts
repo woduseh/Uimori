@@ -97,7 +97,7 @@ const tool = (
   index,
   id,
   type: 'function',
-  function: { name: 'tool_0_knowledge_read', arguments: args },
+  function: { name: 'knowledge_read', arguments: args },
 });
 function next(input: ProviderRequest, result: ProviderResult): ProviderRequest {
   return {
@@ -140,11 +140,11 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
         tool_calls: [
           {
             id: 'known',
-            function: { name: 'tool_0_knowledge_read', arguments: '{"id":"lore-1"}' },
+            function: { name: 'knowledge_read', arguments: '{"id":"lore-1"}' },
           },
         ],
       },
-      { role: 'tool', tool_call_id: 'known', name: 'tool_0_knowledge_read', content: '0' },
+      { role: 'tool', tool_call_id: 'known', name: 'knowledge_read', content: '0' },
       {
         role: 'assistant',
         tool_calls: [{ id: 'retired', function: { name: 'context.new', arguments: '{}' } }],
@@ -372,7 +372,7 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
     expect(wire.tools[0]).toMatchObject({
       type: 'function',
       function: {
-        name: 'tool_0_knowledge_read',
+        name: 'knowledge_read',
         strict: false,
         parameters: input.stable.tools[0].inputSchema,
       },
@@ -555,7 +555,7 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
       run.decoder.accept(
         chunk(
           mode === 'legacy-call'
-            ? { function_call: { name: 'tool_0_knowledge_read', arguments: '{}' } }
+            ? { function_call: { name: 'knowledge_read', arguments: '{}' } }
             : { tool_calls: tools },
           reason
         )
@@ -613,7 +613,7 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
           {
             type: 'function_call',
             call_id: 'responses-call',
-            name: 'tool_0_knowledge_read',
+            name: 'knowledge_read',
             arguments: '{}',
           },
         ],

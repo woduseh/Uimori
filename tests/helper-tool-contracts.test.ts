@@ -524,6 +524,27 @@ test('the full helper catalog includes actionable metadata and ranks exact opera
   expect(query.tools[0]?.name).toBe('illustration.generate');
 });
 
+test('purpose queries in user terms rank the operation that does the work', () => {
+  for (const [query, name] of [
+    ['change character description', 'resource.patch'],
+    ['read character card', 'resource.read'],
+    ['rename bot', 'resource.patch'],
+    ['fix typo in scene', 'scene.patch'],
+    ['find text across chats', 'data.search'],
+    ['switch model', 'settings.update'],
+    ['why did the run fail', 'task.inspect'],
+  ]) {
+    const found = describeHelperTools({ query }, false, 'chat');
+    expect(found.tools[0]?.name, query).toBe(name);
+  }
+  const catalog = describeHelperTools({}, false, 'chat');
+  expect(catalog.tools.slice(0, 3).map((tool) => tool.name)).toEqual([
+    'data.search',
+    'data.read',
+    'resource.read',
+  ]);
+});
+
 test('library chat-only tools explain how to select a chat instead of telling the model to stop', async () => {
   const f = await fixture('library');
   mockSend((request, round) => {

@@ -49,23 +49,36 @@ export const HELPER_SETTINGS_TOOLS: ProviderTool[] = [
   {
     name: 'model.list',
     description:
-      'List saved model IDs and titles with their current selectable state. Read this before choosing an unfamiliar model ID. Credentials and endpoints are omitted.',
+      'List the saved models with their ids, titles and whether each can currently be selected. Use it to turn a model name the user mentions into a model id for settings.update or model.pricing.read. Credentials and endpoints are not included.',
     inputSchema: schema({}),
   },
   {
     name: 'settings.read',
     description:
-      'Read compact global and selected-chat model and prompt references, pinned versus effective selections, chat call limit, story UI enablement/style, new-chat creation defaults and the revisions needed to update them. Prompt bodies and credentials are omitted.',
+      'Read the current settings: which model is used for each role globally (main, translation, helper, context, script, title), the model and prompt preset pinned to the selected chat and the ones actually in effect, the chat call limit, Story UI on/off and style, and the defaults for new chats. Each group comes with the revision that settings.update needs. Prompt texts and credentials are not included; read a prompt preset with resource.read.',
     inputSchema: schema({}),
   },
   {
     name: 'settings.update',
-    description: `Change one requested setting using the revision from settings.read. Global model targets accept a saved model ID or null; chat.mainModel and chat.mainPromptPreset accept an ID or null; chat.maxCalls accepts an integer from 1 to ${MAX_MAIN_MODEL_CALLS}. chat.storyUi accepts a boolean; chat.storyUiStyle accepts auto (follow bot default or model choice), ${storyUiStyles.join(', ')}, or theme:<saved theme ID> from theme.list. Use theme.select for a bot-wide Story UI default. Use chat.settingsRevision for chat settings. newChat.maxCalls, newChat.storyUi and newChat.storyUiStyle use the same values with newChat.revision, require no selected chat, and only change defaults copied into newly created chats; existing chats, copies and imports retain their settings. Global model choices affect future requests across chats; reserved jobs keep their frozen models. Existing services preserve unrelated settings.`,
+    description:
+      'Change one setting: the model used for a role, the model or prompt preset pinned to a chat, the call limit of a chat, or Story UI on/off and style. Read settings.read first for the current value and the matching revision. global.* settings choose the model for a role in every chat and affect future requests only; work that is already reserved keeps its model. chat.* settings apply to the selected chat. newChat.* settings are defaults copied into chats created later and need no selected chat; existing chats, copies and imports keep their own settings. A Story UI default for a whole bot is set with theme.select instead.',
     inputSchema: schema(
       {
-        setting: { type: 'string', enum: [...settings] },
-        expectedRevision: { type: 'integer', minimum: 0 },
-        value: { type: ['string', 'integer', 'boolean', 'null'] },
+        setting: {
+          type: 'string',
+          enum: [...settings],
+          description: 'The one setting to change.',
+        },
+        expectedRevision: {
+          type: 'integer',
+          minimum: 0,
+          description:
+            'Revision from settings.read for the group being changed: global.revision for global.* settings; chat.profileRevision for chat.mainModel and chat.mainPromptPreset; chat.settingsRevision for chat.maxCalls, chat.storyUi and chat.storyUiStyle; newChat.revision for newChat.* settings.',
+        },
+        value: {
+          type: ['string', 'integer', 'boolean', 'null'],
+          description: `New value. Model and prompt preset settings take a saved id, or null to clear the choice. maxCalls takes an integer from 1 to ${MAX_MAIN_MODEL_CALLS}. storyUi takes a boolean. storyUiStyle takes auto (follow the bot default or the model choice), ${storyUiStyles.join(', ')}, or theme:<saved theme id> from theme.list.`,
+        },
       },
       ['setting', 'expectedRevision', 'value']
     ),
@@ -73,12 +86,24 @@ export const HELPER_SETTINGS_TOOLS: ProviderTool[] = [
   {
     name: 'usage.read',
     description:
-      'Read spending, cost and token usage totals for inclusive Seoul calendar dates. Omitted breakdown returns totals, undated usage and coverage only; choose days, models, kinds or all for those breakdowns in the same call. Reported, estimated, partial and unknown costs retain their distinct meanings.',
+      'Read spending and token usage totals for a range of calendar dates in Seoul time, both ends included. Use it for questions about cost, tokens or how much a period used. Without breakdown it returns totals, undated usage and coverage only; breakdown adds a split by day, model or kind, or all of them. Costs keep their status: reported, estimated, partial or unknown, and an unknown cost is not zero. For per-task or per-chat detail query agent_usage with db.query.',
     inputSchema: schema(
       {
-        from: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
-        to: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
-        breakdown: { type: 'string', enum: [...USAGE_BREAKDOWNS, 'all'] },
+        from: {
+          type: 'string',
+          pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+          description: 'First date, YYYY-MM-DD in Seoul time.',
+        },
+        to: {
+          type: 'string',
+          pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+          description: 'Last date, YYYY-MM-DD in Seoul time, included.',
+        },
+        breakdown: {
+          type: 'string',
+          enum: [...USAGE_BREAKDOWNS, 'all'],
+          description: 'Optional split of the totals. Omit for totals only.',
+        },
       },
       ['from', 'to']
     ),

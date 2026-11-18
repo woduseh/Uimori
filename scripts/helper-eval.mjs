@@ -508,9 +508,8 @@ function scriptedResponse(caseId, wire, round, turn, bot) {
           id: t.id,
           type: 'function',
           function: {
-            name: wire.tools.find((v) =>
-              v.function.name.endsWith('_' + t.name.replaceAll('.', '_'))
-            ).function.name,
+            name: wire.tools.find((v) => v.function.name === t.name.replaceAll('.', '_')).function
+              .name,
             arguments: JSON.stringify(t.args),
           },
         })),

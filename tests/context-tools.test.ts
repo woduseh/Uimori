@@ -393,8 +393,8 @@ test('Chat continuation pairs every shell result while admitting accumulated out
               id: `chat-shell-${index}`,
               type: 'function',
               function: {
-                name: body.tools.find((tool: any) => tool.function.name.endsWith('_data_exec'))
-                  .function.name,
+                name: body.tools.find((tool: any) => tool.function.name === 'data_exec').function
+                  .name,
                 arguments: JSON.stringify({ command: 'cat current/resources/0.txt' }),
               },
             })),
@@ -1249,8 +1249,8 @@ test.each([
       bodies.push(body);
       const first = bodies.length === 1;
       expect(body.model).not.toBe('synthetic-summary');
-      const name = body.tools.find((tool: any) => tool.function.name.endsWith('_knowledge_read'))
-        .function.name;
+      const name = body.tools.find((tool: any) => tool.function.name === 'knowledge_read').function
+        .name;
       const delta = first
         ? {
             role: 'assistant',

@@ -108,9 +108,8 @@ function answer(text: string, tools?: { id: string; name: string; args: unknown 
           id: t.id,
           type: 'function',
           function: {
-            name: body.tools.find((v: any) =>
-              v.function.name.endsWith('_' + t.name.replaceAll('.', '_'))
-            ).function.name,
+            name: body.tools.find((v: any) => v.function.name === t.name.replaceAll('.', '_'))
+              .function.name,
             arguments: JSON.stringify(t.args),
           },
         })),
@@ -753,10 +752,7 @@ test('a native two-call fact lookup uses the gateway without a runner, full edit
     model: editableResource('content', bot),
   };
   const bodies = provider((wire, round) => {
-    expect(wire.tools.map((t: any) => t.function.name.replace(/^tool_\d+_/, ''))).toEqual([
-      'app_tools',
-      'app_call',
-    ]);
+    expect(wire.tools.map((t: any) => t.function.name)).toEqual(['app_tools', 'app_call']);
     if (round === 0) {
       expect(JSON.stringify(wire)).not.toContain('Irrelevant native design');
       return answer(

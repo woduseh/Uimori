@@ -430,8 +430,12 @@ describe('input context projection and durable summary calls', () => {
     }
   );
 
-  test('oversized Korean exchanges are summarized with user wishes intact before main generation, retaining the latest two exchanges', async () => {
-    const source = await snapshot(oldScenes()),
+  test('summarizes older Korean exchanges with user wishes intact and keeps the latest exchanges that fit', async () => {
+    const scenes = Array.from(
+      { length: 6 },
+      (_, index) => `장면 ${index}.\n${paragraph.repeat(index < 4 ? 70 : 50)}`
+    );
+    const source = await snapshot(scenes),
       original = structuredClone(source),
       log = observed(),
       payloads = respondWithMergedSummary(log);

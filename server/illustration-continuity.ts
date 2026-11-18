@@ -16,28 +16,51 @@ export const HELPER_ILLUSTRATION_CONTINUITY_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.continuity.read',
     description:
-      'Read temporary visual notes and their revision. Set sourceId to see only the notes for one scene.',
-    inputSchema: { type: 'object', properties: { sourceId: idField }, additionalProperties: false },
+      'Read the temporary visual notes of a chat (outfits, props and other visible details that hold for a range of scenes) together with the revision needed for saving. Pass sourceId to see only the notes that apply to one scene.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sourceId: { ...idField, description: 'Limit to the notes that apply to this scene.' },
+      },
+      additionalProperties: false,
+    },
   },
   {
     name: 'illustration.continuity.save',
     description:
-      'Save temporary outfits, props or other visible details for a range of existing scenes. Create a note with text and fromSourceId; toSourceId is inclusive and defaults to the same scene. Edit by id with only the fields to change, or remove with {id, remove:true}. Overlapping notes apply together.',
+      'Create, edit or remove temporary visual notes that illustrations should respect across a range of existing scenes, such as an outfit worn for three scenes. A new note needs text and fromSourceId; toSourceId is the last scene it covers, included, and defaults to the same scene. Notes whose ranges overlap all apply together. A range can only name scenes that exist; extend it later when new scenes are written.',
     inputSchema: {
       type: 'object',
       properties: {
-        expectedRevision: { type: 'integer', minimum: 0 },
+        expectedRevision: {
+          type: 'integer',
+          minimum: 0,
+          description: 'Revision from illustration.continuity.read.',
+        },
         edits: {
           type: 'array',
           minItems: 1,
+          description: 'Notes to create, edit or remove.',
           items: {
             type: 'object',
             properties: {
-              id: idField,
-              fromSourceId: idField,
-              toSourceId: idField,
-              text: { type: 'string', minLength: 1, maxLength: noteMax },
-              remove: { type: 'boolean', enum: [true] },
+              id: {
+                ...idField,
+                description: 'Id of the note to edit or remove. Omit to create a note.',
+              },
+              fromSourceId: { ...idField, description: 'First scene the note covers.' },
+              toSourceId: { ...idField, description: 'Last scene the note covers, included.' },
+              text: {
+                type: 'string',
+                minLength: 1,
+                maxLength: noteMax,
+                description: 'The visible detail to keep consistent.',
+              },
+              remove: {
+                type: 'boolean',
+                enum: [true],
+                description: 'With id: delete the note.',
+              },
             },
             additionalProperties: false,
           },

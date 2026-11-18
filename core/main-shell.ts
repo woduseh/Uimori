@@ -4,9 +4,26 @@ export const SHELL_TIMEOUT_MAX_MS = 300_000;
 export const SHELL_OUTPUT_DEFAULT_BYTES = 16_384;
 export const SHELL_OUTPUT_MAX_BYTES = 65_536;
 export const SHELL_EXEC_PROPERTIES = {
-  command: { type: 'string', minLength: 1, maxLength: 50_000 },
-  timeoutMs: { type: 'integer', minimum: 1000, maximum: SHELL_TIMEOUT_MAX_MS },
-  maxOutputBytes: { type: 'integer', minimum: 256, maximum: SHELL_OUTPUT_MAX_BYTES },
+  command: {
+    type: 'string',
+    minLength: 1,
+    maxLength: 50_000,
+    description: 'Bash command or script to run.',
+  },
+  timeoutMs: {
+    type: 'integer',
+    minimum: 1000,
+    maximum: SHELL_TIMEOUT_MAX_MS,
+    description:
+      'Time limit in milliseconds. Default 10000; it never extends past the enclosing task deadline.',
+  },
+  maxOutputBytes: {
+    type: 'integer',
+    minimum: 256,
+    maximum: SHELL_OUTPUT_MAX_BYTES,
+    description:
+      'Size of the UTF-8 head/tail output preview in bytes. Default 16384. The complete log is always kept in outputFile.',
+  },
 };
 
 /** Shell lifetime remains subordinate to the enclosing model run's cancellation/deadline. */
@@ -34,7 +51,7 @@ export function shellExecutionOptions(args: Record<string, unknown>) {
 export const MAIN_SHELL_TOOL: ProviderTool = {
   name: 'data.exec',
   description:
-    'Run Bash, rg, jq, Python or Node in this writing run’s Linux workspace for multi-step searches and local processing. INDEX.md lists the paths: current/ holds the frozen effective references, complete source history and existing summary, ready on the first call. For other saved library or chat data, run uimori export with JSON: {"scope":"library"} or {"scope":"chats"} writes an index; add "id":"..." for one resource or chat, or "all":true for a full export. Those exports are live data, separate from the frozen current/ files. Workspace edits are scratch work and never save to the app, and output is working evidence, not adopted lore or canonical memory. Commands run synchronously (10 seconds by default, up to 300000ms, within the run deadline) and cannot leave background jobs running. maxOutputBytes sets the UTF-8 head/tail preview (default 16384, max 65536); the complete stdout/stderr log stays in outputFile for further filtering. No server credentials or database file are exported.',
+    'Run Bash with rg, jq, Python or Node in the Linux workspace of this writing run. Use it for multi-step reference searches and local processing that single reads cannot do in one call; knowledge.read stays the shorter route for known ids. Start with INDEX.md for file paths. current/ holds the frozen effective references, the complete source history and the existing summary, ready on the first call. To read other saved library or chat data, run uimori export with JSON: {"scope":"library"} or {"scope":"chats"} writes an index, "id":"..." adds one resource or chat, and "all":true exports everything. These live exports are separate from the frozen current/ files. File edits here are scratch work and never save to the app, and printed output is working evidence, not adopted lore or memory. Each call is synchronous and cannot leave background jobs running. The result shows a head/tail preview of the output and the path of the complete log in outputFile; filter that file for more passages.',
   inputSchema: {
     type: 'object',
     properties: SHELL_EXEC_PROPERTIES,
