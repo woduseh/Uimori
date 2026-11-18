@@ -529,6 +529,7 @@ test('composed media render with their own shells in both schemes', async ({ pag
     sources[first + 8],
     sources[first + 9],
     sources[first + 10],
+    sources[first],
   ];
   const { storyUiStyles } = await import('../core/story-ui-style.js');
   for (const style of storyUiStyles.filter((name) => name !== 'default')) {
