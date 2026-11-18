@@ -14,6 +14,7 @@ import type {
 import { promptWorkspace, updatePromptWorkspace } from './prompt-workspace.js';
 import { editableResource } from '../core/resource-editing.js';
 import { HttpError } from './request-validation.js';
+import { pruneThemeAssets, themeAssetHashes } from './theme-assets.js';
 
 type CreationReceipt = { kind: ResourceKind; id: string; organizationRevision?: number };
 
@@ -97,6 +98,8 @@ export function saveResource(
         .prepare(`INSERT INTO resource_undo(kind,id,saved_revision,model) VALUES(?,?,?,?)
       ON CONFLICT(kind,id) DO UPDATE SET saved_revision=excluded.saved_revision,model=excluded.model`)
         .run(edit.kind, id, saved.revision, JSON.stringify(editableResource(edit.kind, previous)));
+    if (edit.kind === 'theme' && typeof oldUndo === 'string')
+      pruneThemeAssets(store.db, themeAssetHashes(JSON.parse(oldUndo)));
     if (typeof oldUndo === 'string') {
       const retained = JSON.stringify([saved, previous]);
       const removedImage = [...oldUndo.matchAll(/[a-f0-9]{64}/gu)].some(

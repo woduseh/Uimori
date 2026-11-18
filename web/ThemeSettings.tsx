@@ -28,7 +28,6 @@ import {
   parseThemeFile,
   resolvePaletteId,
   resolveTheme,
-  themeFile,
   themeDefinition,
   validateTheme,
   type Theme,
@@ -52,6 +51,8 @@ import { StoryUi } from './LazyStoryUi.js';
 import { Switch } from './BooleanControls.js';
 import { storyUiStyles, type StoryUiStyle } from '../core/story-ui-style.js';
 import { storyUiPreview } from './story-ui-preview.js';
+import { ThemeAssetEditor } from './ThemeAssetEditor.js';
+import { adoptThemeFile, exportThemeFile } from './theme-assets.js';
 
 type Draft = { id: string | null; revision?: number; model: ThemeDefinition };
 const labels: Partial<Record<ThemeColorKey, string>> = {
@@ -344,9 +345,9 @@ export function ThemeSettings({
       return;
     }
     await action(async () => {
-      if (file.size > 4 * 1024 * 1024)
-        throw new Error(uiMessage('visualpanels.importAThemeFileNoLargerThan'));
-      const model = parseThemeFile(JSON.parse(await file.text()));
+      if (file.size > 96 * 1024 * 1024) throw new Error(uiMessage('themeAssets.importTooLarge'));
+      const parsed = parseThemeFile(JSON.parse(await file.text()));
+      const model = await adoptThemeFile(parsed.theme, parsed.files);
       themeTemplate(model.templateHtml);
       storyUiDraft.current = model.storyUi;
       setDraft({ id: null, model });
@@ -536,9 +537,11 @@ export function ThemeSettings({
                   })}
                   icon={DownloadIcon}
                   onClick={() =>
-                    saveDownload(
-                      `${theme.title}.uimori-theme.json`,
-                      themeFile(themeDefinition(theme))
+                    void action(async () =>
+                      saveDownload(
+                        `${theme.title}.uimori-theme.json`,
+                        await exportThemeFile(themeDefinition(theme))
+                      )
                     )
                   }
                 />
@@ -895,6 +898,11 @@ export function ThemeSettings({
                   </label>
                 ))}
               </div>
+              <ThemeAssetEditor
+                assets={draft.model.assets ?? []}
+                onChange={(assets) => patch({ assets: assets.length ? assets : undefined })}
+                onError={setError}
+              />
               <details className="theme-code">
                 <summary>{t('visualpanels.editCssAndHtmlDirectly')}</summary>
                 {(

@@ -25,6 +25,7 @@ import { messages as chatmanagement } from './chatmanagement.js';
 import { messages as orphanmemory } from './orphanmemory.js';
 import { messages as helperattachments } from './helperattachments.js';
 import { messages as storyUi } from './story-ui.js';
+import { messages as themeAssets } from './theme-assets.js';
 export const messages: Record<string, { ko: string; en: string; ja: string; zh: string }> = {
   ...common,
   ...errors,
@@ -53,4 +54,5 @@ export const messages: Record<string, { ko: string; en: string; ja: string; zh: 
   ...orphanmemory,
   ...helperattachments,
   ...storyUi,
+  ...themeAssets,
 };

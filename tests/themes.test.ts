@@ -64,15 +64,17 @@ function save(store: Store, title = 'Custom') {
 }
 test('portable definitions preserve styles but never import identities or choose a theme', () => {
   for (const builtin of BUILTIN_THEMES)
-    expect(parseThemeFile(themeFile(themeDefinition(builtin)))).toEqual(themeDefinition(builtin));
+    expect(parseThemeFile(themeFile(themeDefinition(builtin))).theme).toEqual(
+      themeDefinition(builtin)
+    );
   expect(
     parseThemeFile({
       ...themeFile(emptyTheme()),
       theme: { ...emptyTheme(), id: 'existing', revision: 99 },
-    })
+    }).theme
   ).not.toHaveProperty('id');
   expect(() => parseThemeFile({ format: 'risu', version: 1 })).toThrow();
-  expect(() => parseThemeFile({ format: 'uimori-theme', version: 2 })).toThrow();
+  expect(() => parseThemeFile({ format: 'uimori-theme', version: 3 })).toThrow();
   expect(() => validateTheme({ ...emptyTheme(), title: ' ' })).toThrow();
   expect(() =>
     validateTheme({ ...emptyTheme(), colors: { light: { accent: 'red;display:none' } } })
@@ -338,7 +340,7 @@ test('portable story UI themes use their own bot selection and the shared revisi
   const theme = created.json().saved;
   expect(theme.storyUi).toEqual(model.storyUi);
   const exported = await app.inject(`/api/themes/${theme.id}/export`);
-  const portable = parseThemeFile(exported.json());
+  const portable = parseThemeFile(exported.json()).theme;
   expect(portable).toMatchObject(model);
   const imported = (await save(portable)).json().saved;
   expect(imported.id).not.toBe(theme.id);

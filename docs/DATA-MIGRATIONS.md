@@ -88,6 +88,7 @@ Uimori 개인 작업실 데이터베이스의 현재 스키마 버전, 보관 �
   - `helper_seed_messages`: 과거 도우미 세션 분기로 복제된 대화문을 보존하기 위해 서버 시작 시 필요에 따라 자동 생성해요.
   - `execution_tool_diagnostics`: 본문, 번역, 삽화 작업에 소유권을 연결한 경량 진단 메타데이터를 저장하기 위해 필요에 따라 생성해요. (기존 `tool_events`의 재실행 영수증을 대체하지 않아요.)
   - `image_cleanup_candidates`: 활성 작업으로 인해 즉시 삭제할 수 없는 고아 이미지 해시를 보관하는 지연 정리 큐 테이블이에요.
+  - `theme_assets`: 테마가 담은 글꼴과 이미지 원본을 해시로 보관해요. 저장된 테마와 그 되돌리기 사본이 참조하는 동안 유지하고, 저장에 쓰이지 않은 업로드는 하루가 지난 뒤 서버 시작 시 정리해요. 사용자 글꼴(`font_assets`)이나 본문 이미지(`image_blobs`)와는 섞지 않아요.
 - **메타데이터 키 규약 (`app_metadata`)**:
   - `source-title:<sourceId>`: 선택적인 장면 이름 저장
   - `illustration-presentation:<sourceId>`: 문단 삽화의 대표/표시 선택 및 번역 위치 보관

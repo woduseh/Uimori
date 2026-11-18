@@ -67,7 +67,17 @@ export type ThemeDefinition = {
   templateHtml: string;
   templateCss: string;
   storyUi?: { baseStyle: StoryUiStyle; css: string };
+  /** Fonts and images the theme's CSS reaches through `--theme-font-<name>` / `--theme-image-<name>`. */
+  assets?: ThemeAsset[];
 };
+export type ThemeAssetKind = 'font' | 'image';
+export type ThemeAsset = { name: string; kind: ThemeAssetKind; hash: string };
+/** Bytes carried by an exported theme file, keyed by the hash its manifest references. */
+export type ThemeAssetFile = { hash: string; kind: ThemeAssetKind; mime: string; data: string };
+export const MAX_THEME_ASSETS = 24;
+export function themeAssetVariable(asset: Pick<ThemeAsset, 'name' | 'kind'>): string {
+  return `--theme-${asset.kind}-${asset.name}`;
+}
 export type Theme = ThemeDefinition & { id: string; revision: number };
 export type ThemePreferences = {
   revision: number;
@@ -314,6 +324,7 @@ export function validateTheme(value: unknown): ThemeDefinition {
       css: string(definition.css, '이야기 UI CSS', 1_000_000),
     };
   }
+  const assets = validateThemeAssets(v.assets);
   return {
     title,
     description: string(v.description, '설명', 2000),
@@ -323,14 +334,64 @@ export function validateTheme(value: unknown): ThemeDefinition {
     templateHtml: string(v.templateHtml, '레이아웃 HTML', 100_000),
     templateCss: string(v.templateCss, '레이아웃 CSS', 1_000_000),
     ...(storyUi && { storyUi }),
+    ...(assets.length && { assets }),
   };
 }
-export function parseThemeFile(value: unknown): ThemeDefinition {
-  const file = object(value, '테마 파일');
-  if (file.format !== THEME_FILE_FORMAT || file.version !== 1)
-    throw new Error('Uimori 테마 v1 파일이 아니에요. Risu 테마의 자동 변환은 지원하지 않아요.');
-  return validateTheme(file.theme);
+function validateThemeAssets(value: unknown): ThemeAsset[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > MAX_THEME_ASSETS)
+    throw new Error(`자료 파일은 최대 ${MAX_THEME_ASSETS}개까지 넣을 수 있어요.`);
+  const names = new Set<string>();
+  return value.map((item) => {
+    const asset = object(item, '자료 파일');
+    const name = asset.name;
+    if (typeof name !== 'string' || !/^[a-z][a-z0-9-]{0,31}$/u.test(name))
+      throw new Error(
+        '자료 파일 이름은 영문 소문자로 시작하는 32자 이하 영문·숫자·하이픈이어야 해요.'
+      );
+    if (asset.kind !== 'font' && asset.kind !== 'image')
+      throw new Error(`${name}: 글꼴 또는 이미지 자료만 넣을 수 있어요.`);
+    if (typeof asset.hash !== 'string' || !/^[a-f0-9]{64}$/u.test(asset.hash))
+      throw new Error(`${name}: 자료 파일 해시를 확인해 주세요.`);
+    const key = `${asset.kind}:${name}`;
+    if (names.has(key)) throw new Error(`${name}: 같은 이름의 자료 파일이 이미 있어요.`);
+    names.add(key);
+    return { name, kind: asset.kind, hash: asset.hash };
+  });
 }
-export function themeFile(theme: ThemeDefinition) {
-  return { format: THEME_FILE_FORMAT, version: 1, theme: validateTheme(theme) };
+export function parseThemeFile(value: unknown): {
+  theme: ThemeDefinition;
+  files: ThemeAssetFile[];
+} {
+  const file = object(value, '테마 파일');
+  if (file.format !== THEME_FILE_FORMAT || (file.version !== 1 && file.version !== 2))
+    throw new Error('Uimori 테마 파일이 아니에요. Risu 테마의 자동 변환은 지원하지 않아요.');
+  const theme = validateTheme(file.theme);
+  const files = file.version === 2 && Array.isArray(file.files) ? file.files : [];
+  const parsed = files.map((item): ThemeAssetFile => {
+    const entry = object(item, '자료 파일');
+    if (
+      typeof entry.hash !== 'string' ||
+      (entry.kind !== 'font' && entry.kind !== 'image') ||
+      typeof entry.mime !== 'string' ||
+      typeof entry.data !== 'string'
+    )
+      throw new Error('테마 파일의 자료 파일 형식을 확인해 주세요.');
+    return { hash: entry.hash, kind: entry.kind, mime: entry.mime, data: entry.data };
+  });
+  for (const asset of theme.assets ?? [])
+    if (!parsed.some((entry) => entry.hash === asset.hash && entry.kind === asset.kind))
+      throw new Error(`${asset.name}: 테마 파일에 이 자료 파일이 들어 있지 않아요.`);
+  return { theme, files: parsed };
+}
+export function themeFile(theme: ThemeDefinition, files: ThemeAssetFile[] = []) {
+  const definition = validateTheme(theme);
+  const assets = definition.assets ?? [];
+  if (!assets.length) return { format: THEME_FILE_FORMAT, version: 1, theme: definition };
+  return {
+    format: THEME_FILE_FORMAT,
+    version: 2,
+    theme: definition,
+    files: files.filter((file) => assets.some((asset) => asset.hash === file.hash)),
+  };
 }

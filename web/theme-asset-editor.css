@@ -1,0 +1,72 @@
+.theme-asset-editor {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.theme-asset-editor h4 {
+  margin: 0;
+  font-size: var(--font-body);
+}
+.theme-asset-editor > p {
+  margin: 0;
+  font-size: var(--font-small);
+}
+.theme-asset-editor ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.theme-asset-editor li {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-block: 4px;
+  border-bottom: var(--hairline) solid var(--line);
+}
+.theme-asset-editor li > img,
+.theme-asset-font-sample {
+  width: 56px;
+  height: 40px;
+  border-radius: var(--radius-small);
+  background: var(--surface);
+}
+.theme-asset-editor li > img {
+  object-fit: cover;
+}
+.theme-asset-font-sample {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: var(--font-body);
+}
+.theme-asset-editor code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--font-small);
+}
+.theme-asset-add {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: end;
+  gap: 8px;
+}
+.theme-asset-add > label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.theme-asset-add > label:nth-of-type(3) {
+  grid-column: 1 / -1;
+}
+.theme-asset-add > button {
+  grid-column: 1 / -1;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}

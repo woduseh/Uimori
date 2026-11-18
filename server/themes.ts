@@ -27,6 +27,12 @@ import {
 } from '../core/theme-palettes.js';
 
 import { defaultThemeBackground, validateThemeBackground } from '../core/theme-background.js';
+import {
+  assertThemeAssetsStored,
+  pruneThemeAssets,
+  readThemeAsset,
+  themeAssetHashes,
+} from './theme-assets.js';
 const preferenceKey = 'theme-preferences';
 export function readTheme(store: Store, id: string): Theme {
   return getBuiltinTheme(id) ?? store.product.get<Theme>('theme', id);
@@ -73,6 +79,7 @@ export function saveTheme(
   } catch (error) {
     throw new HttpError(400, (error as Error).message);
   }
+  assertThemeAssetsStored(store.db, model.assets);
   return store.product.save('theme', model, id, expectedRevision) as Theme;
 }
 function writePreferences(store: Store, p: ThemePreferences): ThemePreferences {
@@ -192,6 +199,13 @@ export function deleteTheme(store: Store, id: string, expectedRevision: number) 
     const theme = readTheme(store, id);
     if (theme.revision !== expectedRevision)
       throw new HttpError(409, '테마가 변경됐어요. 최신 저장본을 확인해 주세요.');
+    const undo = store.db
+      .prepare("SELECT model FROM resource_undo WHERE kind='theme' AND id=?")
+      .get(id)?.model;
+    const owned = [
+      ...themeAssetHashes(theme),
+      ...(typeof undo === 'string' ? themeAssetHashes(JSON.parse(undo)) : []),
+    ];
     const p = themePreferences(store);
     if (p.defaultThemeId === id) p.defaultThemeId = DEFAULT_THEME_ID;
     for (const map of [p.botThemes, p.chatThemes, p.botStoryUiThemes]) {
@@ -201,6 +215,7 @@ export function deleteTheme(store: Store, id: string, expectedRevision: number) 
     writePreferences(store, p);
     store.db.prepare('DELETE FROM versions WHERE kind=? AND id=?').run('theme', id);
     store.db.prepare('DELETE FROM resource_undo WHERE kind=? AND id=?').run('theme', id);
+    pruneThemeAssets(store.db, owned);
     return { deleted: id };
   });
 }
@@ -297,9 +312,19 @@ export function themeRoutes(app: FastifyInstance, store: Store) {
   });
   app.post('/api/themes/selection', (request) => selectTheme(store, request.body));
   app.post('/api/themes/background', (request) => selectThemeBackground(store, request.body));
-  app.get<{ Params: { id: string } }>('/api/themes/:id/export', (request) =>
-    themeFile(readTheme(store, request.params.id))
-  );
+  app.get<{ Params: { id: string } }>('/api/themes/:id/export', (request) => {
+    const theme = readTheme(store, request.params.id);
+    const files = (theme.assets ?? []).map((asset) => {
+      const stored = readThemeAsset(store.db, asset.hash);
+      return {
+        hash: asset.hash,
+        kind: stored.kind,
+        mime: stored.mime,
+        data: stored.bytes.toString('base64'),
+      };
+    });
+    return themeFile(theme, files);
+  });
   app.delete<{ Params: { id: string } }>('/api/themes/:id', (request) => {
     const b = record(request.body);
     fields(b, ['expectedRevision']);

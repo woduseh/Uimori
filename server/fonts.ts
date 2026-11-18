@@ -47,7 +47,7 @@ function readFont(store: Store, id: string) {
     bytes: Buffer.from(row.bytes as Uint8Array),
   };
 }
-function format(bytes: Buffer): FontFormat {
+export function fontFileFormat(bytes: Buffer): FontFormat {
   if (bytes.length < 12 || bytes.length > MAX_FONT_BYTES)
     throw new HttpError(400, '글꼴 파일은 20 MiB 이하여야 해요.');
   const signature = bytes.toString('ascii', 0, 4);
@@ -81,7 +81,7 @@ export function registerFont(store: Store, input: { title: string; bytes: Uint8A
   initFonts(store);
   const title = text(input.title, 'title', 200).trim();
   const bytes = Buffer.from(input.bytes);
-  const fontFormat = format(bytes);
+  const fontFormat = fontFileFormat(bytes);
   const id = createHash('sha256').update(bytes).digest('hex');
   const existing = store.db.prepare('SELECT metadata FROM font_assets WHERE id=?').get(id);
   if (existing) return JSON.parse(String(existing.metadata));

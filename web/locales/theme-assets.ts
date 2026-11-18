@@ -1,0 +1,53 @@
+export const messages = {
+  'themeAssets.title': { ko: '자료 파일', en: 'Asset files', ja: '素材ファイル', zh: '素材文件' },
+  'themeAssets.help': {
+    ko: '글꼴과 이미지를 테마에 넣고 모든 CSS에서 변수로 써요.',
+    en: 'Bundle fonts and images with the theme and use them as variables in any CSS.',
+    ja: 'フォントと画像をテーマに含め、すべての CSS で変数として使います。',
+    zh: '将字体和图片放入主题，并在所有 CSS 中作为变量使用。',
+  },
+  'themeAssets.kind': { ko: '종류', en: 'Type', ja: '種類', zh: '类型' },
+  'themeAssets.font': { ko: '글꼴', en: 'Font', ja: 'フォント', zh: '字体' },
+  'themeAssets.image': { ko: '이미지', en: 'Image', ja: '画像', zh: '图片' },
+  'themeAssets.name': { ko: '변수 이름', en: 'Variable name', ja: '変数名', zh: '变量名' },
+  'themeAssets.nameHint': {
+    ko: '영문 소문자로 시작하는 영문, 숫자, 하이픈',
+    en: 'Lowercase letter first, then letters, digits or hyphens',
+    ja: '英小文字で始まる英数字とハイフン',
+    zh: '以小写字母开头的字母、数字或连字符',
+  },
+  'themeAssets.file': { ko: '파일', en: 'File', ja: 'ファイル', zh: '文件' },
+  'themeAssets.add': { ko: '자료 추가', en: 'Add asset', ja: '素材を追加', zh: '添加素材' },
+  'themeAssets.remove': {
+    ko: '{name} 자료 제거',
+    en: 'Remove {name}',
+    ja: '{name} を削除',
+    zh: '移除 {name}',
+  },
+  'themeAssets.copy': {
+    ko: '{variable} 복사',
+    en: 'Copy {variable}',
+    ja: '{variable} をコピー',
+    zh: '复制 {variable}',
+  },
+  'themeAssets.copied': { ko: '복사했어요', en: 'Copied', ja: 'コピーしました', zh: '已复制' },
+  'themeAssets.fontSample': { ko: 'Aa 가나다', en: 'Aa Bb Cc', ja: 'Aa あいう', zh: 'Aa 你好' },
+  'themeAssets.duplicateName': {
+    ko: '같은 종류에 같은 이름의 자료가 이미 있어요.',
+    en: 'An asset of this type already uses that name.',
+    ja: '同じ種類に同じ名前の素材がすでにあります。',
+    zh: '同类型中已有同名素材。',
+  },
+  'themeAssets.limit': {
+    ko: '자료 파일은 테마마다 최대 {count}개까지 넣을 수 있어요.',
+    en: 'A theme can hold up to {count} asset files.',
+    ja: '素材ファイルはテーマごとに最大 {count} 個までです。',
+    zh: '每个主题最多可包含 {count} 个素材文件。',
+  },
+  'themeAssets.importTooLarge': {
+    ko: '테마 파일은 96 MiB 이하만 가져올 수 있어요.',
+    en: 'Import theme files of 96 MiB or less.',
+    ja: '96 MiB 以下のテーマファイルを読み込んでください。',
+    zh: '请导入 96 MiB 以内的主题文件。',
+  },
+};

@@ -21,6 +21,7 @@ import {
 } from '../core/themes.js';
 import { api } from './api.js';
 import { updateMessageTheme } from './theme-message-style.js';
+import { applyThemeAssets } from './theme-assets.js';
 
 export const themesChangedKey = 'uimori:themes-changed';
 const initial: ThemeCatalog = { themes: BUILTIN_THEMES, preferences: defaultThemePreferences() };
@@ -171,7 +172,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     style.textContent = active.appCss;
     document.head.append(style);
     updateMessageTheme(document, active.messageCss);
+    const removeAssets = applyThemeAssets(root, active.assets);
     return () => {
+      removeAssets();
       observer.disconnect();
       style.remove();
       updateMessageTheme(document, '');
