@@ -555,6 +555,48 @@ export const storyUiExtensions: { name: string; schema: z.ZodTypeAny; purpose?: 
       .strict(),
   },
   {
+    name: 'Combatant',
+    purpose:
+      'One fighter in a battle readout: name, portrait, resource bars such as HP and MP, and status effects. Stack allies and enemies in Columns for a party screen, a duel or a boss encounter.',
+    schema: z
+      .object({
+        title: text('The name.'),
+        bars: z
+          .array(
+            z
+              .object({
+                label,
+                value: z.number().finite(),
+                max: z.number().finite().positive(),
+                tone,
+              })
+              .strict()
+          )
+          .min(1)
+          .max(4)
+          .describe(
+            'Resource bars in order, named as the world names them (HP, MP, stamina, qi, shield). Without a tone the first bar turns from green to amber to red as it empties.'
+          ),
+        subtitle: text('Level, class or rank beside the name.').optional(),
+        image: text('Optional portrait image URL.').optional(),
+        effects: z
+          .array(z.object({ label, tone }).strict())
+          .max(8)
+          .describe('Status effects shown as small tags, such as poison or haste.')
+          .optional(),
+        side: z
+          .enum(['ally', 'enemy'])
+          .describe('enemy mirrors the row and uses the danger color.')
+          .optional(),
+        state: z
+          .enum(['active', 'guard', 'down'])
+          .describe('active: whose turn it is. guard: defending. down: defeated.')
+          .optional(),
+        weight,
+      })
+      .strict(),
+  },
+  {
     name: 'Route',
     purpose:
       'Places joined along a line, read from left to right: a journey, a subway or patrol route, stage progression, a chain of locations with the current one marked.',
@@ -607,6 +649,8 @@ export const storyUiNestedTextKeys: Record<string, string[]> = {
   tabs: ['title'],
   options: ['label'],
   items: ['label', 'value', 'title', 'text', 'time'],
+  bars: ['label', 'value', 'max'],
+  effects: ['label'],
 };
 /** Components whose `value` is displayed rather than edited. */
 export const storyUiDisplayValues = new Set(['Gauge', 'Rank', 'Ring', 'Slot', 'Stat']);
@@ -621,6 +665,7 @@ export const storyUiImageKeys: Record<string, string> = {
   Dialogue: 'portrait',
   Profile: 'image',
   Slot: 'image',
+  Combatant: 'image',
 };
 /** List-valued properties whose every string is wording. `rows` holds lists of such lists. */
 export const storyUiTextLists = ['columns', 'days'];

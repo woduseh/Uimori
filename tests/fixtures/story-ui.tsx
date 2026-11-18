@@ -94,6 +94,7 @@ export function mountPreset(
     horror: '폐병원 조사 기록',
     tactical: '작전 상황판',
     romance: '둘만의 교환 일기',
+    pop: '방과 후 작전 회의',
   };
   const segment = {
     kind: 'ui',

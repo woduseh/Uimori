@@ -374,6 +374,23 @@ body = Column([
 ])
 </a2ui>`,
   `<a2ui>
+root = Frame(body, "전투", "3턴 · 폐허의 예배당", kind="system", accent="red")
+body = Column([
+  Row([
+    Column([
+      Combatant("아리엘", [{label: "HP", value: 412, max: 520}, {label: "MP", value: 86, max: 140}], "Lv.24 성기사", "/api/assets/ray", [{label: "수호", tone: "info"}], state="active"),
+      Combatant("테오", [{label: "HP", value: 141, max: 380}, {label: "MP", value: 12, max: 90}], "Lv.22 도적", effects=[{label: "중독", tone: "danger"}, {label: "가속", tone: "positive"}]),
+      Combatant("미라", [{label: "HP", value: 0, max: 260}, {label: "MP", value: 190, max: 310}], "Lv.23 마법사", state="down")
+    ], weight=1),
+    Column([
+      Combatant("타락한 사제", [{label: "HP", value: 2380, max: 6000}, {label: "분노", value: 70, max: 100, tone: "caution"}], "보스", side="enemy", effects=[{label: "광폭화", tone: "danger"}]),
+      Combatant("망령", [{label: "HP", value: 90, max: 600}], side="enemy", state="guard")
+    ], weight=1)
+  ]),
+  Row([Button(Text("공격"), "primary", Event("attack")), Button(Text("스킬"), action=Event("skill")), Button(Text("방어"), action=Event("guard")), Button(Text("도주 (판정)"), "borderless", Event("roll", {sides: 20, count: 1}))])
+])
+</a2ui>`,
+  `<a2ui>
 $/_uimori/css = r"""
 & { --story-paper: #0a0714; --story-surface: #1a1230; --story-ink: #f3e9ff; --story-muted: #b7a6d9; --story-border: #4b2f7a; --story-accent: #ff3df2; --story-accent-ink: #14041a; --story-accent-text: #ff7df7; --story-radius: 2px; color-scheme: dark; background: radial-gradient(120% 90% at 50% 0%, #2a0f4d, #0a0714 70%); border-color: #ff3df2; }
 .look-marquee { background: linear-gradient(90deg, #ff3df2, #3df2ff, #ff3df2); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: slide 4s linear infinite; text-shadow: none; }
@@ -454,6 +471,14 @@ test('composed media render with their own shells in both schemes', async ({ pag
     '화'
   );
   await expect(page.locator('.story-ui-slot[data-state="equipped"]')).toContainText('장착');
+  // The first bar warns as it empties; a named tone or a later bar does not.
+  const bar = (name: string) => page.getByRole('meter', { name, exact: true }).locator('xpath=..');
+  await expect(bar('아리엘 HP')).toHaveAttribute('data-tone', 'positive');
+  await expect(bar('테오 HP')).toHaveAttribute('data-tone', 'caution');
+  await expect(bar('망령 HP')).toHaveAttribute('data-tone', 'danger');
+  await expect(bar('테오 MP')).toHaveAttribute('data-tone', 'info');
+  await expect(bar('타락한 사제 분노')).toHaveAttribute('data-tone', 'caution');
+  await expect(page.locator('.story-ui-combatant[data-state="down"]')).toContainText('전투 불능');
   // The model's own CSS restyles its block, and only its block, without leaving the page.
   const authored = page.locator('.story-ui[data-story-ui-authored]');
   await expect(authored).toHaveCount(1);
@@ -503,6 +528,7 @@ test('composed media render with their own shells in both schemes', async ({ pag
     sources[first + 5],
     sources[first + 8],
     sources[first + 9],
+    sources[first + 10],
   ];
   const { storyUiStyles } = await import('../core/story-ui-style.js');
   for (const style of storyUiStyles.filter((name) => name !== 'default')) {

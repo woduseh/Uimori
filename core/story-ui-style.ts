@@ -13,6 +13,7 @@ export const storyUiStyles = [
   'horror',
   'tactical',
   'romance',
+  'pop',
 ] as const;
 export type StoryUiStyle = (typeof storyUiStyles)[number];
 type StoryUiThemeSetting = `theme:${string}`;

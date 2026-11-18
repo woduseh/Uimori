@@ -927,6 +927,65 @@ const Rank = createComponentImplementation(api('Rank'), ({ props }) => {
     </div>
   );
 });
+type Bar = { label: string; value: number; max: number; tone?: string };
+const Combatant = createComponentImplementation(api('Combatant'), ({ props }) => {
+  const name = str(props.title);
+  const state: string | undefined = props.state;
+  const effects: { label: string; tone?: string }[] = props.effects ?? [];
+  return (
+    <div
+      className="story-ui-combatant"
+      data-side={props.side ?? 'ally'}
+      data-state={state}
+      style={flex(props.weight)}
+    >
+      <Portrait label={name} url={props.image} size="medium" />
+      <div className="story-ui-combatant-main">
+        <p className="story-ui-combatant-head">
+          <span className="story-ui-combatant-name">{name}</span>
+          {props.subtitle && <span className="story-ui-combatant-rank">{str(props.subtitle)}</span>}
+          {state && (
+            <span className="story-ui-combatant-state">{t(`storyUi.combatant.${state}`)}</span>
+          )}
+        </p>
+        {(props.bars as Bar[]).map((bar, index) => {
+          const ratio = Math.min(1, Math.max(0, bar.value / bar.max));
+          // The first bar is the one a fight is read by, so it warns as it empties.
+          const tone =
+            bar.tone ??
+            (index > 0 ? 'info' : ratio > 0.5 ? 'positive' : ratio > 0.2 ? 'caution' : 'danger');
+          return (
+            <div key={index} className="story-ui-combatant-bar" data-tone={tone}>
+              <span className="story-ui-combatant-label">{bar.label}</span>
+              <span
+                className="story-ui-combatant-track"
+                role="meter"
+                aria-label={`${name} ${bar.label}`}
+                aria-valuemin={0}
+                aria-valuemax={bar.max}
+                aria-valuenow={bar.value}
+              >
+                <span style={{ inlineSize: `${ratio * 100}%` }} />
+              </span>
+              <span className="story-ui-combatant-value">
+                <b>{figure(bar.value)}</b>/{figure(bar.max)}
+              </span>
+            </div>
+          );
+        })}
+        {effects.length > 0 && (
+          <p className="story-ui-combatant-effects">
+            {effects.map((effect, index) => (
+              <span key={index} className="story-ui-badge" data-tone={effect.tone}>
+                {effect.label}
+              </span>
+            ))}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+});
 const Route = createComponentImplementation(api('Route'), ({ props }) => (
   <figure className="story-ui-route" style={flex(props.weight)}>
     <Caption>{props.title}</Caption>
@@ -1260,6 +1319,7 @@ const implementations = new Map(
     Slot,
     Rank,
     Route,
+    Combatant,
     Details,
     Tabs,
     Modal,

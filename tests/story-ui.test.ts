@@ -67,13 +67,18 @@ root = Column([
   Schedule(["월", "화"], [{day: 1, title: "보컬 레슨", time: "16:00"}], "이번 주", current=1),
   Rank("S", "보컬", stars=5),
   Slot("응원봉", value=12, rarity="rare"),
-  Compare([{label: "사키", value: 152}, {label: "탑", value: 620, text: "무대"}], unit="cm")
+  Compare([{label: "사키", value: 152}, {label: "탑", value: 620, text: "무대"}], unit="cm"),
+  Combatant("아리엘", [{label: "체력", value: 412, max: 520}], "성기사", effects=[{label: "중독", tone: "danger"}], state="active")
 ])
 </a2ui>`);
     expect(parseStoryUi(stored)[0].kind).toBe('ui');
     const wording = projectStoryUiText(stored);
     for (const value of ['월', '화', '보컬 레슨', '이번 주', 'S', '응원봉', '12', '사키', '무대'])
       expect(wording).toContain(value);
+    // A battle readout is read as who, how much of what, and what afflicts them.
+    for (const value of ['아리엘', '성기사', '체력', '412', '520', '중독'])
+      expect(wording).toContain(value);
+    expect(wording).not.toContain('active');
     const translation = prepareStoryUiTranslation(stored);
     const strings: string[] = JSON.parse(
       translation.text.replace(/<\/?UIMORI_UI_TRANSLATION_0>/g, '')
