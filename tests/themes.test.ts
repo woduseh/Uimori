@@ -63,10 +63,17 @@ function save(store: Store, title = 'Custom') {
   }).saved as import('../core/themes.js').Theme;
 }
 test('portable definitions preserve styles but never import identities or choose a theme', () => {
-  for (const builtin of BUILTIN_THEMES)
-    expect(parseThemeFile(themeFile(themeDefinition(builtin))).theme).toEqual(
+  for (const builtin of BUILTIN_THEMES) {
+    const files = (builtin.assets ?? []).map(({ hash, kind }) => ({
+      hash,
+      kind,
+      mime: '',
+      data: '',
+    }));
+    expect(parseThemeFile(themeFile(themeDefinition(builtin), files)).theme).toEqual(
       themeDefinition(builtin)
     );
+  }
   expect(
     parseThemeFile({
       ...themeFile(emptyTheme()),

@@ -183,3 +183,29 @@ test('an upload never saved into a theme is swept on a later start, not before',
   owned.push({ directory, store: later });
   expect(!!later.db.prepare('SELECT 1 FROM theme_assets WHERE hash=?').get(font.hash)).toBe(false);
 });
+
+test('built-in assets ship as hashed files and saved copies carry their own bytes', async () => {
+  const { BUILTIN_THEME_ASSET_FILES } = await import('../core/builtin-theme-assets.js');
+  const { BUILTIN_THEMES, themeDefinition } = await import('../core/themes.js');
+  const { createHash } = await import('node:crypto');
+  const { readFileSync } = await import('node:fs');
+  for (const entry of BUILTIN_THEME_ASSET_FILES)
+    expect(
+      createHash('sha256')
+        .update(readFileSync(join('third_party/theme-assets', entry.file)))
+        .digest('hex'),
+      entry.file
+    ).toBe(entry.hash);
+  const { app } = await server();
+  const letter = BUILTIN_THEMES.find((theme) => theme.id === 'builtin:letter')!;
+  expect(letter.assets?.length).toBeGreaterThan(0);
+  const exported = (await app.inject('/api/themes/builtin:letter/export')).json();
+  expect(parseThemeFile(exported).files).toHaveLength(letter.assets!.length);
+  const copy = await app.inject({
+    method: 'POST',
+    url: '/api/resources/save',
+    payload: { kind: 'theme', model: { ...themeDefinition(letter), title: 'Letter copy' } },
+  });
+  expect(copy.statusCode, copy.body).toBe(200);
+  for (const asset of letter.assets!) expect(stored(app, asset.hash)).toBe(true);
+});

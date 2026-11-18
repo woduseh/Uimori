@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
+import { BUILTIN_THEME_ASSET_FILES } from '../core/builtin-theme-assets.js';
 import { MAX_FONT_BYTES } from '../core/fonts.js';
 import type { ThemeAsset, ThemeAssetKind } from '../core/themes.js';
 import { fontFileFormat } from './fonts.js';
@@ -65,7 +68,23 @@ export async function storeThemeAsset(
   return { hash, kind, mime, byteLength: bytes.length };
 }
 
+/** Built-in theme files ship with the app (the Docker image copies third_party). */
+const builtinRoot = resolve('third_party/theme-assets');
+const builtinBytes = new Map<string, Buffer>();
+function builtinThemeAsset(hash: string) {
+  const entry = BUILTIN_THEME_ASSET_FILES.find((item) => item.hash === hash);
+  if (!entry) return null;
+  let bytes = builtinBytes.get(hash);
+  if (!bytes) {
+    bytes = readFileSync(join(builtinRoot, entry.file));
+    builtinBytes.set(hash, bytes);
+  }
+  return { kind: entry.kind, mime: entry.mime, bytes };
+}
+
 export function readThemeAsset(db: DatabaseSync, hash: string) {
+  const builtin = builtinThemeAsset(hash);
+  if (builtin) return builtin;
   const row = db.prepare('SELECT kind,mime,bytes FROM theme_assets WHERE hash=?').get(hash);
   if (!row) throw new HttpError(404, '테마 자료 파일을 찾을 수 없어요.');
   return {
@@ -75,10 +94,19 @@ export function readThemeAsset(db: DatabaseSync, hash: string) {
   };
 }
 
+/** A saved copy of a built-in theme takes its own copy of the built-in bytes. */
 export function assertThemeAssetsStored(db: DatabaseSync, assets: ThemeAsset[] = []) {
   const read = db.prepare('SELECT kind FROM theme_assets WHERE hash=?');
+  const copy = db.prepare(
+    'INSERT INTO theme_assets(hash,kind,mime,bytes,created_at) VALUES(?,?,?,?,?)'
+  );
   for (const asset of assets) {
-    const row = read.get(asset.hash);
+    let row = read.get(asset.hash);
+    const builtin = row ? null : builtinThemeAsset(asset.hash);
+    if (builtin) {
+      copy.run(asset.hash, builtin.kind, builtin.mime, builtin.bytes, new Date().toISOString());
+      row = { kind: builtin.kind };
+    }
     if (!row) throw new HttpError(400, `${asset.name}: 자료 파일을 먼저 업로드해 주세요.`);
     if (row.kind !== asset.kind)
       throw new HttpError(400, `${asset.name}: 자료 파일 종류가 업로드한 파일과 달라요.`);

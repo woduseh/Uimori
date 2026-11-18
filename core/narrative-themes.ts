@@ -1,5 +1,6 @@
 import type { ThemeDefinition } from './themes.js';
 import { BUILTIN_PALETTES } from './theme-palettes.js';
+import { builtinThemeAsset } from './builtin-theme-assets.js';
 
 /** Layouts consume app-owned portrait slots; exported themes never embed a character or URL. */
 const commonApp = `
@@ -143,6 +144,12 @@ export const letterTheme: ThemeDefinition = {
   title: '편지지',
   description: '작은 인물 사진과 섬세한 줄, 여백이 있는 한 장의 편지',
   colors: colors('cream'),
+  assets: [
+    builtinThemeAsset('title', 'GowunBatang-Regular.woff2'),
+    builtinThemeAsset('hand', 'NanumPenScript-Regular.woff2'),
+    builtinThemeAsset('corner', 'letter-corner.webp'),
+    builtinThemeAsset('divider', 'letter-divider.webp'),
+  ],
   appCss:
     commonApp +
     `
@@ -203,7 +210,10 @@ export const letterTheme: ThemeDefinition = {
 .scene-portraits [data-uimori-part="bot-portrait"] img { aspect-ratio: 3 / 4; height: auto; object-fit: cover; object-position: center 20%; outline: var(--hairline) solid color-mix(in srgb, var(--text) 25%, transparent); }
 .scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-empty { min-height: 0; aspect-ratio: 3 / 4; }
 .scene-portraits [data-uimori-part="bot-portrait"] figcaption { padding: 0; text-align: center; }
-.scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-size: var(--font-small); color: var(--muted); font-style: italic; letter-spacing: 0.04em; }
+.scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-family: var(--theme-font-hand), cursive; font-size: 18px; font-weight: 400; color: var(--muted); }
+/* Decorative text takes the theme's own fonts; the manuscript keeps the reader's font. */
+.reader .request-message:not(form) p { font-family: var(--theme-font-hand), cursive; font-size: 19px; line-height: calc(var(--font-body) * 1.8); }
+.reader [data-uimori-part="heading"] .folio { font-family: var(--theme-font-title), serif; font-size: var(--font-heading); font-weight: 400; letter-spacing: 0.06em; }
 ` +
     mobilePortrait +
     `
@@ -214,13 +224,17 @@ export const letterTheme: ThemeDefinition = {
   .scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { --perforation: 3px; width: 100%; }
   .scene-portraits [data-uimori-part="bot-portrait"] img { width: 100%; height: auto; max-height: none; }
   .scene-portraits [data-uimori-part="bot-portrait"] figcaption { padding: 0; }
-  .scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-size: var(--font-small); }
+  .scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-size: 16px; }
   .reader .request-message:not(form) { padding: 14px 16px 10px 24px; }
 }
 `,
-  messageCss,
+  messageCss:
+    messageCss +
+    `
+:where(h1, h2, h3) { font-family: var(--theme-font-title), serif; font-weight: 400; letter-spacing: 0.02em; }
+`,
   templateHtml:
-    '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><div class="copy"><header class="letterhead"><div class="heading"><slot name="heading"></slot></div><aside class="portrait"><slot name="portrait"></slot></aside></header><slot name="body" data-uimori-body-scroll></slot><footer class="actions"><slot name="actions"></slot></footer></div></section>',
+    '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><i class="corner top-left" aria-hidden="true"></i><i class="corner top-right" aria-hidden="true"></i><i class="corner bottom-left" aria-hidden="true"></i><i class="corner bottom-right" aria-hidden="true"></i><div class="copy"><header class="letterhead"><div class="heading"><slot name="heading"></slot></div><aside class="portrait"><slot name="portrait"></slot></aside></header><slot name="body" data-uimori-body-scroll></slot><footer class="actions"><slot name="actions"></slot></footer></div></section>',
   templateCss:
     commonTemplate +
     `
@@ -263,26 +277,41 @@ export const letterTheme: ThemeDefinition = {
   transform: rotate(-12deg);
   pointer-events: none;
 }
-.letterhead { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: end; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 3px double color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.letterhead { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: end; margin-bottom: 32px; padding-bottom: 20px;
+  --rule: color-mix(in srgb, var(--accent) 45%, var(--line));
+  --rule-gap: 116px;
+  --rule-line: linear-gradient(to right, var(--rule) calc(50% - var(--rule-gap)), transparent calc(50% - var(--rule-gap)) calc(50% + var(--rule-gap)), var(--rule) calc(50% + var(--rule-gap)));
+  background: var(--rule-line) 0 100% / 100% 1px no-repeat, var(--rule-line) 0 calc(100% - 3px) / 100% 1px no-repeat;
+}
+/* The double rule leaves a gap for the divider ornament instead of painting a patch over it. */
 .letterhead::after {
-  content: '\\2766\\FE0E';
-  font-family: 'Segoe UI Symbol', 'Noto Sans Symbols 2', serif;
+  content: '';
   position: absolute;
   left: 50%;
   bottom: 0;
-  padding-inline: 12px;
-  background: var(--panel);
-  color: var(--accent-text);
-  font-size: 18px;
-  line-height: 1;
-  transform: translate(-50%, 55%);
+  width: 220px;
+  height: 30px;
+  transform: translate(-50%, 45%);
+  background: var(--accent-text);
+  mask: var(--theme-image-divider) no-repeat center / contain;
+  pointer-events: none;
 }
+.copy { position: relative; z-index: 1; }
+/* Vine corners frame the sheet; they sit under the text and the stamp. */
+.corner { position: absolute; z-index: 0; width: 76px; height: 76px; background: color-mix(in srgb, var(--accent-text) 60%, transparent); mask: var(--theme-image-corner) no-repeat center / contain; pointer-events: none; }
+.corner.top-left { top: 14px; left: 6px; }
+.corner.top-right { top: 14px; right: 6px; transform: scaleX(-1); }
+.corner.bottom-left { bottom: 6px; left: 6px; transform: scaleY(-1); }
+.corner.bottom-right { bottom: 6px; right: 6px; transform: scale(-1); }
 .heading { border: 0; padding: 0; margin: 0; }
 .actions { border-top: var(--hairline) dashed color-mix(in srgb, var(--accent) 45%, var(--line)); padding-right: 96px; }
 @container narrative-scene (max-width: 520px) {
   .manuscript { padding: 32px 20px 20px 40px; background: ${letterPaper(24)}; }
   .manuscript::after { right: 24px; bottom: -20px; width: 44px; height: 44px; font-size: 20px; }
   .letterhead { gap: 16px; margin-bottom: 24px; padding-bottom: 16px; }
+  .letterhead { --rule-gap: 84px; }
+  .letterhead::after { width: 160px; }
+  .corner { width: 48px; height: 48px; }
   .actions { padding-right: 72px; }
 }
 `,

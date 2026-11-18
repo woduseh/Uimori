@@ -192,7 +192,7 @@ export const BUILTIN_THEMES: Theme[] = [
 `,
   },
   { ...cinematicTheme, id: 'builtin:cinematic', revision: 4 },
-  { ...letterTheme, id: 'builtin:letter', revision: 4 },
+  { ...letterTheme, id: 'builtin:letter', revision: 5 },
   { ...scrapbookTheme, id: 'builtin:scrapbook', revision: 4 },
   { ...classicFrameTheme, id: 'builtin:classic-frame', revision: 3 },
 ];

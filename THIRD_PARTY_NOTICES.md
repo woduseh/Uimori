@@ -94,3 +94,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## 내장 테마 글꼴
+
+- 고운바탕(Gowun Batang): Copyright 2021 The Gowun Batang Project Authors. [google/fonts](https://github.com/google/fonts/tree/c1eda9233c33ad7775b27efd794f931095cf6133/ofl/gowunbatang)의 `GowunBatang-Regular.ttf`(revision `c1eda9233c33ad7775b27efd794f931095cf6133`)를 사용해요.
+- 나눔손글씨 펜(Nanum Pen Script): Copyright (c) 2010, NHN Corporation. 예약 글꼴 이름(Nanum, NanumPen 등)이 있어요. [google/fonts](https://github.com/google/fonts/tree/f3b0b9a42e276e9c4d4eff27d77e7ccadc9fa973/ofl/nanumpenscript)의 `NanumPenScript-Regular.ttf`(revision `f3b0b9a42e276e9c4d4eff27d77e7ccadc9fa973`)를 사용해요.
+- 적용 조건: 두 글꼴 모두 **SIL Open Font License 1.1**이에요. 전문은 [GowunBatang-OFL.txt](third_party/theme-assets/GowunBatang-OFL.txt)와 [NanumPenScript-OFL.txt](third_party/theme-assets/NanumPenScript-OFL.txt)에 있어요.
+- 변경: 2026-11-18, 글리프를 빼거나 바꾸지 않고 fontTools로 WOFF2 형식만 바꿔 [third_party/theme-assets](third_party/theme-assets)에 두었어요. 편지지 레이아웃의 장식 글자에 쓰며, 글꼴 자체를 따로 판매하거나 이름을 바꾸지 않아요.
+- 같은 폴더의 `letter-corner.webp`, `letter-divider.webp`는 Uimori가 직접 그린 장식 이미지로 프로젝트 라이선스를 따라요.
+
