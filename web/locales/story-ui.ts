@@ -135,6 +135,8 @@ export const messages = {
     ja: '横にスクロールするリスト',
     zh: '可横向滚动的列表',
   },
+  'storyUi.slot.locked': { ko: '잠김', en: 'Locked', ja: 'ロック', zh: '未解锁' },
+  'storyUi.slot.equipped': { ko: '장착', en: 'Equipped', ja: '装備中', zh: '已装备' },
   'storyUi.state.done': { ko: '완료', en: 'Done', ja: '完了', zh: '已完成' },
   'storyUi.state.current': { ko: '진행 중', en: 'In progress', ja: '進行中', zh: '进行中' },
   'storyUi.state.pending': { ko: '예정', en: 'Pending', ja: '予定', zh: '待进行' },

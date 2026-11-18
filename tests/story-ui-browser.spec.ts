@@ -356,6 +356,24 @@ root = Frame(body, "왕립 서고 열람증", kind="paper", accent="red", orname
 body = Row([Card(Text("제 412 호", variant="title"), surface="gradient", accent="red"), Frame(Text("열람 기한: 성력 413년 봄", variant="body"), ornament="inset", surface="outline", accent="indigo", weight=1)])
 </a2ui>`,
   `<a2ui>
+root = Frame(body, "하츠보시 프로덕션", "프로듀서 수첩", kind="page", accent="pink")
+body = Column([
+  Profile("하나미 사키", "1학년 · 보컬 담당", "/api/assets/ray", "무대에 서면 **표정이 달라지는** 연습 벌레.", [{label: "나이", value: "15"}, {label: "키", value: "152cm"}, {label: "특기", value: "고음"}, {label: "컨디션", value: "양호"}], Row([Badge("센터 후보", tone="accent"), Badge("체력 주의", tone="caution")])),
+  Schedule(["월", "화", "수", "목", "금"], [{day: 0, title: "보컬 레슨", time: "16:00", tone: "info"}, {day: 1, title: "댄스 레슨", time: "16:00"}, {day: 1, title: "잡지 촬영", time: "19:00", text: "스튜디오 B", tone: "accent"}, {day: 3, title: "중간 심사", time: "17:30", tone: "danger"}, {day: 4, title: "휴식", tone: "positive"}], "이번 주 일정", current=1),
+  Row([Rank("A+", "중간 심사", "센터 자격 충분", stars=4.5, tone="accent"), Rank("S", "보컬", stars=5, tone="positive"), Rank("C", "체력", "보강 필요", stars=2, tone="caution")]),
+])
+</a2ui>`,
+  `<a2ui>
+root = Frame(body, "하츠보시 프로덕션", "레슨 기록", kind="page", accent="pink")
+body = Column([
+  Compare([{label: "사키", value: 152, text: "보컬"}, {label: "프로듀서", value: 178}, {label: "무대 세트", value: 620, text: "메인 타워"}], "키 비교", "cm"),
+  Compare([{label: "보컬", value: 86}, {label: "댄스", value: 54}, {label: "비주얼", value: 71}], "이번 주 성장", shape="bar"),
+  Divider(),
+  Grid([Slot("응원봉", value=12, rarity="common", icon="star"), Slot("무대 의상", rarity="epic", state="equipped", image="/api/assets/city"), Slot("행운의 부적", value="Lv.3", rarity="legendary"), Slot("비타민", value=3, rarity="uncommon"), Slot("비밀 악보", rarity="rare", state="locked"), Slot("빈 칸", state="empty")], columns=4),
+  Route([{title: "기숙사", time: "07:30", state: "done"}, {title: "학원", time: "08:10", state: "done"}, {title: "레슨실", state: "current", text: "보컬 레슨 중"}, {title: "스튜디오 B", time: "19:00", state: "pending"}, {title: "기숙사", state: "pending"}], "오늘의 동선")
+])
+</a2ui>`,
+  `<a2ui>
 $/_uimori/css = r"""
 & { --story-paper: #0a0714; --story-surface: #1a1230; --story-ink: #f3e9ff; --story-muted: #b7a6d9; --story-border: #4b2f7a; --story-accent: #ff3df2; --story-accent-ink: #14041a; --story-accent-text: #ff7df7; --story-radius: 2px; color-scheme: dark; background: radial-gradient(120% 90% at 50% 0%, #2a0f4d, #0a0714 70%); border-color: #ff3df2; }
 .look-marquee { background: linear-gradient(90deg, #ff3df2, #3df2ff, #ff3df2); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: slide 4s linear infinite; text-shadow: none; }
@@ -425,6 +443,17 @@ test('composed media render with their own shells in both schemes', async ({ pag
   const base = await page.locator('.story-ui-stack img').boundingBox();
   expect(overlay!.y).toBeGreaterThan(base!.y);
   expect(overlay!.y + overlay!.height).toBeLessThanOrEqual(base!.y + base!.height);
+  // A figure keeps its proportions, so heights compare as the values do.
+  const figures = page.locator('.story-ui-compare[data-shape="figure"] svg');
+  const small = await figures.nth(0).boundingBox();
+  const tall = await figures.nth(2).boundingBox();
+  expect(tall!.height / small!.height).toBeCloseTo(620 / 152, 1);
+  expect(small!.y + small!.height).toBeCloseTo(tall!.y + tall!.height, 0);
+  await expect(page.getByRole('img', { name: '4.5 / 5' })).toBeVisible();
+  await expect(page.locator('.story-ui-schedule-days > section[data-current] > h5')).toHaveText(
+    '화'
+  );
+  await expect(page.locator('.story-ui-slot[data-state="equipped"]')).toContainText('장착');
   // The model's own CSS restyles its block, and only its block, without leaving the page.
   const authored = page.locator('.story-ui[data-story-ui-authored]');
   await expect(authored).toHaveCount(1);
@@ -445,6 +474,8 @@ test('composed media render with their own shells in both schemes', async ({ pag
   expect(escaped!.x).toBeGreaterThanOrEqual(host!.x - 200);
   expect(remoteRequests).toEqual([]);
   if (!visualReview) return;
+  // Every block is captured under every preset in both schemes.
+  test.setTimeout(180_000);
   // A theme switch must not be captured halfway through a color transition.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const capture = async (name: string) => {
@@ -464,7 +495,15 @@ test('composed media render with their own shells in both schemes', async ({ pag
   // The same blocks under every preset, light then dark.
   await page.setViewportSize({ width: 960, height: 900 });
   const first = taught.length;
-  const sample = [sources[0], sources[2], sources[4], sources[first + 4], sources[first + 5]];
+  const sample = [
+    sources[0],
+    sources[2],
+    sources[4],
+    sources[first + 4],
+    sources[first + 5],
+    sources[first + 8],
+    sources[first + 9],
+  ];
   const { storyUiStyles } = await import('../core/story-ui-style.js');
   for (const style of storyUiStyles.filter((name) => name !== 'default')) {
     await page.evaluate(

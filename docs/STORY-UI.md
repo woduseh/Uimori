@@ -43,8 +43,10 @@
 | 배치와 탐색 | `Row`, `Column`, `List`, `Grid`, `Card`, `Stack`, `Carousel`, `Tabs`, `Details`, `Modal`, `Divider` |
 | 글과 그림 | `Text` (`display`, `headline`, `title`, `label`, `body`, `caption`, `quote`, `mono`), `Image`, `Avatar`, `Icon`, `Badge` |
 | 연출 | `Hero` (그림이나 대표색 위의 큰 제목), `Dialogue` (이름표와 초상화가 붙은 대사창) |
+| 인물과 물건 | `Profile` (초상화·이름·소개·항목을 묶은 인물 카드), `Slot` (아이템 칸: 수량, 등급 `rarity`, 상태 `empty`·`locked`·`equipped`), `Rank` (큰 등급 도장과 별점) |
 | 대화와 게시물 | `Message`, `Post` (`post`, `article`, `comment`, 답글 중첩), `Notice` |
-| 수치와 기록 | `Stat`, `Gauge`, `Ring`, `KeyValue`, `Timeline`, `DataTable`, `BarChart`, `LineChart`, `PieChart`, `RadarChart` |
+| 수치와 기록 | `Stat`, `Gauge`, `Ring`, `KeyValue`, `Timeline`, `DataTable`, `BarChart`, `LineChart`, `PieChart`, `RadarChart`, `Compare` (크기 비율대로 나란히 선 실루엣이나 막대) |
+| 일정과 장소 | `Schedule` (요일별 시간표), `Route` (장소를 잇는 이동 경로) |
 | 행동과 입력 | `Button`, `TextField`, `CheckBox`, `ChoicePicker`, `Slider`, `DateTimeInput` |
 
 `Text`, `Notice`, `Badge`, `Stat`, `Gauge`, `Ring`의 `tone`(`neutral`, `accent`, `positive`, `caution`, `danger`, `info`)은 의미에 맞는 색을 지정해요.

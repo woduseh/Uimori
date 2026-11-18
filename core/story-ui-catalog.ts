@@ -430,6 +430,154 @@ export const storyUiExtensions: { name: string; schema: z.ZodTypeAny; purpose?: 
       })
       .strict(),
   },
+  {
+    name: 'Profile',
+    purpose:
+      'A character card: portrait, name, a line about them and a few facts. Use it for an introduction, a roster entry, an idol or student file, a wanted notice or a dating-app profile.',
+    schema: z
+      .object({
+        title: text('The name.'),
+        subtitle: text('Role, affiliation or epithet under the name.').optional(),
+        image: text('Optional portrait image URL. The initial is shown without it.').optional(),
+        text: text('A short description. Simple Markdown is accepted.').optional(),
+        items: z
+          .array(z.object({ label, value: z.string().max(2000) }).strict())
+          .max(12)
+          .describe('Short facts such as age, height, class or rank.')
+          .optional(),
+        child: child(
+          'Optional content under the facts, such as a Row of Badge or Button.'
+        ).optional(),
+        accent: accent('Color of this card.'),
+        weight,
+      })
+      .strict(),
+  },
+  {
+    name: 'Schedule',
+    purpose:
+      'A timetable: one column per day or slot with the entries that fall in it. Use it for a weekly plan, a lesson or training calendar, a tour, a shift roster or a festival program.',
+    schema: z
+      .object({
+        days: z.array(label).min(1).max(7).describe('Column headings in order, such as weekdays.'),
+        items: z
+          .array(
+            z
+              .object({
+                day: z.number().int().min(0).max(6).describe('Index into days, from 0.'),
+                title: label,
+                time: label.optional(),
+                text: z.string().max(2000).optional(),
+                tone,
+              })
+              .strict()
+          )
+          .max(60),
+        title: label.optional(),
+        current: z
+          .number()
+          .int()
+          .min(0)
+          .max(6)
+          .describe('Index of the day to highlight as today.')
+          .optional(),
+        weight,
+      })
+      .strict(),
+  },
+  {
+    name: 'Compare',
+    purpose:
+      'Figures standing side by side at their relative size, each with its value. Use it to compare heights, sizes, power levels, prices or scores, where the difference itself is the point.',
+    schema: z
+      .object({
+        items: z
+          .array(
+            z
+              .object({ label, value: z.number().finite().nonnegative(), text: label.optional() })
+              .strict()
+          )
+          .min(2)
+          .max(8)
+          .describe('label: who or what. value: the amount. text: a short note under the label.'),
+        title: label.optional(),
+        unit: z.string().max(100).describe('Unit shown after each value.').optional(),
+        shape: z
+          .enum(['figure', 'bar'])
+          .describe('figure (default): a standing silhouette. bar: a plain column.')
+          .optional(),
+        weight,
+      })
+      .strict(),
+  },
+  {
+    name: 'Slot',
+    purpose:
+      'One square item tile for a Grid: an inventory or equipment slot, a skill, a collectible card, a reward.',
+    schema: z
+      .object({
+        label: text('Name under the tile.'),
+        image: text('Optional item image URL.').optional(),
+        icon: z
+          .enum(iconNames)
+          .describe('An icon shown when there is no image. The initial is shown without either.')
+          .optional(),
+        value: z
+          .union([text('A short mark.'), number('A count.')])
+          .describe('Count or short mark in the corner, such as 3 or "Lv.5".')
+          .optional(),
+        rarity: z
+          .enum(['common', 'uncommon', 'rare', 'epic', 'legendary'])
+          .describe('Grade shown by the color and glow of the tile.')
+          .optional(),
+        state: z
+          .enum(['empty', 'locked', 'equipped'])
+          .describe('empty: a vacant slot. locked: not yet available. equipped: in use.')
+          .optional(),
+        weight,
+      })
+      .strict(),
+  },
+  {
+    name: 'Rank',
+    purpose:
+      'A large grade stamp with optional stars: a performance result, an exam grade, a threat level, a review score, a tier.',
+    schema: z
+      .object({
+        value: text('The grade itself, one to three characters such as "S", "A+" or "92".'),
+        label: text('What is graded.').optional(),
+        text: text('A short verdict line.').optional(),
+        stars: z.number().min(0).max(10).describe('Filled stars. Halves are allowed.').optional(),
+        max: z.number().int().min(1).max(10).describe('Total stars. Defaults to 5.').optional(),
+        tone,
+        weight,
+      })
+      .strict(),
+  },
+  {
+    name: 'Route',
+    purpose:
+      'Places joined along a line, read from left to right: a journey, a subway or patrol route, stage progression, a chain of locations with the current one marked.',
+    schema: z
+      .object({
+        items: z
+          .array(
+            z
+              .object({
+                title: label,
+                text: z.string().max(2000).optional(),
+                time: label.optional(),
+                state: z.enum(['done', 'current', 'pending', 'failed']).optional(),
+              })
+              .strict()
+          )
+          .min(2)
+          .max(20),
+        title: label.optional(),
+        weight,
+      })
+      .strict(),
+  },
 ];
 
 /**
@@ -461,7 +609,7 @@ export const storyUiNestedTextKeys: Record<string, string[]> = {
   items: ['label', 'value', 'title', 'text', 'time'],
 };
 /** Components whose `value` is displayed rather than edited. */
-export const storyUiDisplayValues = new Set(['Gauge', 'Ring', 'Stat']);
+export const storyUiDisplayValues = new Set(['Gauge', 'Rank', 'Ring', 'Slot', 'Stat']);
 /** Properties that must name an image stored by this app. */
 export const storyUiImageKeys: Record<string, string> = {
   Image: 'url',
@@ -471,7 +619,11 @@ export const storyUiImageKeys: Record<string, string> = {
   Frame: 'backdrop',
   Hero: 'image',
   Dialogue: 'portrait',
+  Profile: 'image',
+  Slot: 'image',
 };
+/** List-valued properties whose every string is wording. `rows` holds lists of such lists. */
+export const storyUiTextLists = ['columns', 'days'];
 
 /**
  * A style hook on every component. The renderer turns each name into a `look-<name>` class

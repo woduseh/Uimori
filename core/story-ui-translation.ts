@@ -2,6 +2,7 @@ import { encodeStoryUi, parseStoryUi, validateStoryUiMessages } from './story-ui
 import {
   storyUiDisplayValues,
   storyUiNestedTextKeys,
+  storyUiTextLists,
   storyUiTextKeys as visibleFields,
 } from './story-ui-catalog.js';
 import { ExpressionParser } from '@a2ui/web_core/expressions';
@@ -48,11 +49,14 @@ function textSlots(messages: unknown): Slot[] {
       if (Array.isArray(items))
         for (const item of items) if (record(item)) for (const key of keys) add(item, key);
     }
-    if (component.component === 'DataTable') {
-      if (Array.isArray(component.columns))
-        component.columns.forEach((_, i) => {
-          add(component.columns as unknown[], i);
+    for (const key of storyUiTextLists) {
+      const list = component[key];
+      if (Array.isArray(list))
+        list.forEach((_, i) => {
+          add(list, i);
         });
+    }
+    if (component.component === 'DataTable') {
       if (Array.isArray(component.rows))
         for (const row of component.rows)
           if (Array.isArray(row))

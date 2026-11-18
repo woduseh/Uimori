@@ -748,6 +748,204 @@ const Dialogue = createComponentImplementation(api('Dialogue'), ({ props }) => {
     </div>
   );
 });
+type TimelineItem = { title: string; text?: string; time?: string; state?: string };
+const Profile = createComponentImplementation(api('Profile'), ({ props, buildChild }) => {
+  const name = str(props.title);
+  const facts: { label: string; value: string }[] = props.items ?? [];
+  return (
+    <article className="story-ui-profile" data-accent={props.accent} style={flex(props.weight)}>
+      <div className="story-ui-profile-portrait">
+        {isStoryUiImageUrl(props.image) ? (
+          <img src={props.image} alt={name} />
+        ) : (
+          <span aria-hidden="true">{[...name.trim()][0]}</span>
+        )}
+      </div>
+      <div className="story-ui-profile-main">
+        <header>
+          <h4 className="story-ui-profile-name">{name}</h4>
+          {props.subtitle && <p className="story-ui-profile-role">{str(props.subtitle)}</p>}
+        </header>
+        {props.text && (
+          <Markdown text={str(props.text)} className="story-ui-profile-text story-ui-prose" />
+        )}
+        {facts.length > 0 && (
+          <dl className="story-ui-profile-facts">
+            {facts.map((fact, index) => (
+              <div key={index}>
+                <dt>{fact.label}</dt>
+                <dd>{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        {props.child && (
+          <div className="story-ui-profile-extra">{one(props.child, buildChild)}</div>
+        )}
+      </div>
+    </article>
+  );
+});
+type ScheduleItem = { day: number; title: string; time?: string; text?: string; tone?: string };
+const Schedule = createComponentImplementation(api('Schedule'), ({ props }) => {
+  const days: string[] = props.days;
+  const items: ScheduleItem[] = props.items ?? [];
+  return (
+    <figure className="story-ui-schedule" style={flex(props.weight)}>
+      <Caption>{props.title}</Caption>
+      <div
+        className="story-ui-schedule-days"
+        style={{ '--story-days': days.length } as CSSProperties}
+      >
+        {days.map((day, index) => (
+          <section key={index} data-current={props.current === index || undefined}>
+            <h5>{day}</h5>
+            <ul>
+              {items
+                .filter((item) => item.day === index)
+                .map((item, position) => (
+                  <li key={position} data-tone={item.tone}>
+                    {item.time && <time>{item.time}</time>}
+                    <span className="story-ui-schedule-title">{item.title}</span>
+                    {item.text && <span className="story-ui-schedule-text">{item.text}</span>}
+                  </li>
+                ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </figure>
+  );
+});
+type CompareItem = { label: string; value: number; text?: string };
+const Compare = createComponentImplementation(api('Compare'), ({ props }) => {
+  const items: CompareItem[] = props.items;
+  const max = Math.max(...items.map((item) => item.value)) || 1;
+  const least = Math.min(...items.map((item) => item.value).filter((value) => value > 0));
+  const bar = props.shape === 'bar';
+  return (
+    <figure
+      className="story-ui-compare"
+      data-shape={bar ? 'bar' : 'figure'}
+      style={flex(props.weight)}
+    >
+      <Caption>{props.title}</Caption>
+      <ol>
+        {items.map((item, index) => {
+          const size = `${Math.max(1.5, (item.value / max) * 100)}%`;
+          return (
+            <li key={index} data-series={index % 8}>
+              <span className="story-ui-compare-value">
+                {figure(item.value)}
+                {props.unit}
+              </span>
+              <span className="story-ui-compare-stage" aria-hidden="true">
+                {bar ? (
+                  <span className="story-ui-compare-mark" style={{ blockSize: size }} />
+                ) : (
+                  // One silhouette scaled as a whole, so a small figure keeps its proportions.
+                  <svg
+                    className="story-ui-compare-mark"
+                    viewBox="0 0 20 60"
+                    focusable="false"
+                    style={{ blockSize: size }}
+                  >
+                    <circle cx="10" cy="7" r="6" />
+                    <path d="M3 22Q3 15 10 15Q17 15 17 22V58Q17 60 15 60H5Q3 60 3 58Z" />
+                  </svg>
+                )}
+              </span>
+              <span className="story-ui-compare-label">{item.label}</span>
+              {item.text && <span className="story-ui-compare-text">{item.text}</span>}
+              {Number.isFinite(least) && item.value > least && (
+                <span className="story-ui-compare-ratio">×{figure(item.value / least)}</span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </figure>
+  );
+});
+const Slot = createComponentImplementation(api('Slot'), ({ props }) => {
+  const label = str(props.label);
+  const Glyph =
+    props.icon && Object.hasOwn(storyUiIcons, props.icon) ? storyUiIcons[props.icon] : undefined;
+  const state: string | undefined = props.state;
+  const mark = props.value;
+  return (
+    <div
+      className="story-ui-slot"
+      data-rarity={props.rarity}
+      data-state={state}
+      style={flex(props.weight)}
+    >
+      <span className="story-ui-slot-tile">
+        {isStoryUiImageUrl(props.image) ? (
+          <img src={props.image} alt="" />
+        ) : Glyph ? (
+          <Glyph className="story-ui-icon" aria-hidden="true" focusable="false" strokeWidth={1.5} />
+        ) : (
+          state !== 'empty' && <span aria-hidden="true">{[...label.trim()][0]}</span>
+        )}
+        {state && state !== 'empty' && (
+          <span className="story-ui-slot-state">{t(`storyUi.slot.${state}`)}</span>
+        )}
+        {mark !== undefined && mark !== '' && (
+          <span className="story-ui-slot-count">
+            {typeof mark === 'number' ? figure(mark) : str(mark)}
+          </span>
+        )}
+      </span>
+      <span className="story-ui-slot-label">{label}</span>
+    </div>
+  );
+});
+const Rank = createComponentImplementation(api('Rank'), ({ props }) => {
+  const total: number = props.max ?? 5;
+  const stars: number | undefined = props.stars;
+  return (
+    <div className="story-ui-rank" data-tone={props.tone} style={flex(props.weight)}>
+      <span className="story-ui-rank-stamp">{str(props.value)}</span>
+      <div className="story-ui-rank-main">
+        {props.label && <span className="story-ui-rank-label">{str(props.label)}</span>}
+        {stars !== undefined && (
+          <span
+            className="story-ui-rank-stars"
+            role="img"
+            aria-label={`${figure(stars)} / ${total}`}
+            style={
+              {
+                '--story-stars': Math.min(stars, total),
+                '--story-star-max': total,
+              } as CSSProperties
+            }
+          />
+        )}
+        {props.text && <span className="story-ui-rank-text">{str(props.text)}</span>}
+      </div>
+    </div>
+  );
+});
+const Route = createComponentImplementation(api('Route'), ({ props }) => (
+  <figure className="story-ui-route" style={flex(props.weight)}>
+    <Caption>{props.title}</Caption>
+    <ol>
+      {(props.items as TimelineItem[]).map((item, index) => (
+        <li key={index} data-state={item.state}>
+          <span
+            className="story-ui-route-mark"
+            role={item.state ? 'img' : undefined}
+            aria-label={item.state ? t(`storyUi.state.${item.state}`) : undefined}
+          />
+          <span className="story-ui-route-title">{item.title}</span>
+          {item.time && <time>{item.time}</time>}
+          {item.text && <span className="story-ui-route-text">{item.text}</span>}
+        </li>
+      ))}
+    </ol>
+  </figure>
+));
 const KeyValue = createComponentImplementation(api('KeyValue'), ({ props }) => (
   <figure className="story-ui-keyvalue" style={flex(props.weight)}>
     <Caption>{props.title}</Caption>
@@ -761,7 +959,6 @@ const KeyValue = createComponentImplementation(api('KeyValue'), ({ props }) => (
     </dl>
   </figure>
 ));
-type TimelineItem = { title: string; text?: string; time?: string; state?: string };
 const Timeline = createComponentImplementation(api('Timeline'), ({ props }) => (
   <figure className="story-ui-timeline" style={flex(props.weight)}>
     <Caption>{props.title}</Caption>
@@ -1057,6 +1254,12 @@ const implementations = new Map(
     Carousel,
     Ring,
     Dialogue,
+    Profile,
+    Schedule,
+    Compare,
+    Slot,
+    Rank,
+    Route,
     Details,
     Tabs,
     Modal,

@@ -1950,6 +1950,478 @@
   line-height: 1.7;
 }
 
+/* Profile: a character card. */
+.story-ui .story-ui-profile {
+  display: flex;
+  gap: 1em;
+  min-inline-size: 0;
+  padding: 0.9em;
+  background: var(--story-surface);
+  border: 1px solid var(--story-hair);
+  border-block-start: 3px solid var(--story-accent);
+  border-radius: var(--story-radius);
+}
+.story-ui .story-ui-profile[data-accent] {
+  --story-soft: color-mix(in srgb, var(--story-accent-text) 12%, transparent);
+  --story-tone: var(--story-accent-text);
+}
+.story-ui .story-ui-profile-portrait {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 6.5em;
+  block-size: 8.4em;
+  overflow: hidden;
+  color: var(--story-accent-text);
+  background: color-mix(in srgb, var(--story-accent-text) 14%, var(--story-paper));
+  border-radius: calc(var(--story-radius) - 2px);
+  font-family: var(--story-display);
+  font-size: 1em;
+  font-weight: 800;
+}
+.story-ui .story-ui-profile-portrait > span {
+  font-size: 2.6em;
+}
+.story-ui .story-ui-profile-portrait > img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+}
+.story-ui .story-ui-profile-main {
+  display: grid;
+  flex: 1;
+  align-content: start;
+  gap: 0.55em;
+  min-inline-size: 0;
+}
+.story-ui .story-ui-profile-name {
+  margin: 0;
+  font-family: var(--story-display);
+  font-size: 1.3em;
+  font-weight: 800;
+  line-height: 1.25;
+}
+.story-ui .story-ui-profile-role {
+  margin: 0.1em 0 0;
+  color: var(--story-accent-text);
+  font-size: 0.84em;
+  font-weight: 650;
+}
+.story-ui .story-ui-profile-text {
+  font-size: 0.94em;
+}
+.story-ui .story-ui-profile-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(4.8em, 1fr));
+  gap: 0.4em 0.9em;
+  margin: 0;
+  padding-block-start: 0.55em;
+  border-block-start: 1px solid var(--story-hair);
+}
+.story-ui .story-ui-profile-facts dt {
+  color: var(--story-muted);
+  font-size: 0.72em;
+  font-weight: 650;
+}
+.story-ui .story-ui-profile-facts dd {
+  margin: 0;
+  font-size: 0.94em;
+  font-weight: 650;
+}
+@container (inline-size < 24em) {
+  .story-ui .story-ui-profile-portrait {
+    inline-size: 4.6em;
+    block-size: 6em;
+  }
+}
+
+/* Schedule: a column per day; a row per day on a narrow screen. */
+.story-ui .story-ui-schedule-days {
+  display: grid;
+  grid-template-columns: repeat(var(--story-days), minmax(0, 1fr));
+  gap: 0.4em;
+}
+.story-ui .story-ui-schedule-days > section {
+  display: grid;
+  align-content: start;
+  gap: 0.35em;
+  min-inline-size: 0;
+  padding: 0.45em;
+  background: color-mix(in srgb, var(--story-ink) 4%, transparent);
+  border-radius: calc(var(--story-radius) - 2px);
+}
+.story-ui .story-ui-schedule-days > section[data-current] {
+  background: var(--story-soft);
+  box-shadow: inset 0 0 0 1.5px var(--story-accent-text);
+}
+.story-ui .story-ui-schedule-days h5 {
+  margin: 0;
+  color: var(--story-muted);
+  font-family: var(--story-display);
+  font-size: 0.8em;
+  font-weight: 750;
+  text-align: center;
+}
+.story-ui .story-ui-schedule-days > section[data-current] > h5 {
+  color: var(--story-accent-text);
+}
+.story-ui .story-ui-schedule-days ul {
+  display: grid;
+  gap: 0.3em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.story-ui .story-ui-schedule-days ul:empty::after {
+  color: var(--story-muted);
+  content: "·";
+  text-align: center;
+}
+.story-ui .story-ui-schedule-days li {
+  display: grid;
+  gap: 0.05em;
+  min-inline-size: 0;
+  padding: 0.35em 0.5em;
+  background: var(--story-surface);
+  border-inline-start: 3px solid var(--story-tone);
+  border-radius: calc(var(--story-radius) - 4px);
+  font-size: 0.86em;
+  line-height: 1.35;
+}
+.story-ui .story-ui-schedule-days time {
+  color: var(--story-muted);
+  font-size: 0.82em;
+  font-variant-numeric: tabular-nums;
+}
+.story-ui .story-ui-schedule-title {
+  font-weight: 650;
+}
+.story-ui .story-ui-schedule-text {
+  color: var(--story-muted);
+  font-size: 0.9em;
+}
+@container (inline-size < 34em) {
+  .story-ui .story-ui-schedule-days {
+    grid-template-columns: 1fr;
+  }
+  .story-ui .story-ui-schedule-days > section {
+    grid-template-columns: 4.2em 1fr;
+    align-items: start;
+  }
+  .story-ui .story-ui-schedule-days h5 {
+    padding-block-start: 0.4em;
+    text-align: start;
+  }
+}
+
+/* Compare: marks standing on one ground line at their relative size. */
+.story-ui .story-ui-compare > ol {
+  display: flex;
+  gap: 0.5em;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  list-style: none;
+}
+.story-ui .story-ui-compare li {
+  display: grid;
+  flex: 1 0 4em;
+  grid-template-rows: auto 9em auto;
+  /* Columns differ in how many lines they carry; the marks must still share one ground. */
+  align-content: start;
+  justify-items: center;
+  gap: 0.25em;
+  min-inline-size: 0;
+  text-align: center;
+}
+.story-ui .story-ui-compare-value {
+  font-family: var(--story-display);
+  font-size: 0.9em;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+}
+.story-ui .story-ui-compare-stage {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  inline-size: 100%;
+  block-size: 100%;
+  border-block-end: 2px solid var(--story-border);
+}
+.story-ui .story-ui-compare-mark {
+  display: block;
+  flex: none;
+  fill: var(--story-series);
+}
+.story-ui .story-ui-compare[data-shape="bar"] .story-ui-compare-mark {
+  inline-size: min(2.6em, 70%);
+  background: var(--story-series);
+  border-radius: calc(var(--story-radius) - 4px) calc(var(--story-radius) - 4px) 0 0;
+}
+.story-ui .story-ui-compare-label {
+  font-size: 0.86em;
+  font-weight: 650;
+}
+.story-ui .story-ui-compare-text,
+.story-ui .story-ui-compare-ratio {
+  color: var(--story-muted);
+  font-size: 0.76em;
+}
+.story-ui .story-ui-compare-ratio {
+  color: var(--story-accent-text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.story-ui .story-ui-compare [data-series="0"] {
+  --story-series: var(--story-series-0);
+}
+.story-ui .story-ui-compare [data-series="1"] {
+  --story-series: var(--story-series-1);
+}
+.story-ui .story-ui-compare [data-series="2"] {
+  --story-series: var(--story-series-2);
+}
+.story-ui .story-ui-compare [data-series="3"] {
+  --story-series: var(--story-series-3);
+}
+.story-ui .story-ui-compare [data-series="4"] {
+  --story-series: var(--story-series-4);
+}
+.story-ui .story-ui-compare [data-series="5"] {
+  --story-series: var(--story-series-5);
+}
+.story-ui .story-ui-compare [data-series="6"] {
+  --story-series: var(--story-series-6);
+}
+.story-ui .story-ui-compare [data-series="7"] {
+  --story-series: var(--story-series-7);
+}
+
+/* Slot: one square item tile. */
+.story-ui .story-ui-slot {
+  --story-grade: var(--story-border);
+  display: grid;
+  justify-items: center;
+  gap: 0.3em;
+  min-inline-size: 0;
+}
+.story-ui .story-ui-slot[data-rarity="uncommon"] {
+  --story-grade: var(--story-positive);
+}
+.story-ui .story-ui-slot[data-rarity="rare"] {
+  --story-grade: var(--story-info);
+}
+.story-ui .story-ui-slot[data-rarity="epic"] {
+  --story-grade: light-dark(#7c4ddb, #b99bff);
+}
+.story-ui .story-ui-slot[data-rarity="legendary"] {
+  --story-grade: light-dark(#c98a00, #ffc53d);
+}
+.story-ui .story-ui-slot-tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  max-inline-size: 5.5em;
+  aspect-ratio: 1;
+  overflow: hidden;
+  color: var(--story-grade);
+  background:
+    radial-gradient(
+      circle at 50% 35%,
+      color-mix(in srgb, var(--story-grade) 22%, transparent),
+      transparent 70%
+    ),
+    var(--story-surface);
+  border: 1.5px solid var(--story-grade);
+  border-radius: calc(var(--story-radius) - 2px);
+  font-family: var(--story-display);
+  font-weight: 800;
+}
+.story-ui .story-ui-slot:is(:not([data-rarity]), [data-rarity="common"]) > .story-ui-slot-tile {
+  color: var(--story-muted);
+}
+.story-ui .story-ui-slot[data-rarity="legendary"] > .story-ui-slot-tile {
+  box-shadow: 0 0 0.9em -0.3em var(--story-grade);
+}
+.story-ui .story-ui-slot-tile > img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+.story-ui .story-ui-slot-tile > span[aria-hidden],
+.story-ui .story-ui-slot-tile > .story-ui-icon {
+  font-size: 1.5em;
+}
+.story-ui .story-ui-slot-count,
+.story-ui .story-ui-slot-state {
+  position: absolute;
+  padding: 0 0.4em;
+  color: var(--story-ink);
+  background: color-mix(in srgb, var(--story-paper) 86%, transparent);
+  font-family: var(--story-font);
+  font-size: 0.7em;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.story-ui .story-ui-slot-count {
+  inset-block-end: 0;
+  inset-inline-end: 0;
+  border-start-start-radius: 0.4em;
+}
+.story-ui .story-ui-slot-state {
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  border-end-end-radius: 0.4em;
+}
+.story-ui .story-ui-slot[data-state="equipped"] .story-ui-slot-state {
+  color: var(--story-accent-ink);
+  background: var(--story-accent);
+}
+.story-ui .story-ui-slot[data-state="empty"] > .story-ui-slot-tile {
+  background: none;
+  border-style: dashed;
+}
+.story-ui
+  .story-ui-slot[data-state="locked"]
+  > .story-ui-slot-tile
+  > :is(img, span[aria-hidden], .story-ui-icon) {
+  opacity: 0.35;
+}
+.story-ui .story-ui-slot-label {
+  max-inline-size: 100%;
+  font-size: 0.8em;
+  line-height: 1.3;
+  text-align: center;
+}
+.story-ui .story-ui-slot:is([data-state="empty"], [data-state="locked"]) > .story-ui-slot-label {
+  color: var(--story-muted);
+}
+
+/* Rank: a grade stamp with stars. */
+.story-ui .story-ui-rank {
+  display: flex;
+  align-items: center;
+  gap: 0.9em;
+  min-inline-size: 0;
+}
+.story-ui .story-ui-rank-stamp {
+  display: grid;
+  flex: none;
+  place-items: center;
+  min-inline-size: 2em;
+  block-size: 2em;
+  padding-inline: 0.25em;
+  color: var(--story-tone);
+  border: 0.09em solid var(--story-tone);
+  border-radius: 999px;
+  box-shadow:
+    inset 0 0 0 0.09em var(--story-paper),
+    inset 0 0 0 0.13em var(--story-tone);
+  font-family: var(--story-display);
+  font-size: 1.9em;
+  font-weight: 900;
+  line-height: 1;
+  rotate: -8deg;
+}
+.story-ui .story-ui-rank-main {
+  display: grid;
+  gap: 0.2em;
+  min-inline-size: 0;
+}
+.story-ui .story-ui-rank-label {
+  color: var(--story-muted);
+  font-size: 0.78em;
+  font-weight: 700;
+}
+.story-ui .story-ui-rank-stars {
+  inline-size: calc(var(--story-star-max) * 1.15em);
+  block-size: 1.15em;
+  background: linear-gradient(
+    90deg,
+    var(--story-tone) calc(var(--story-stars) / var(--story-star-max) * 100%),
+    color-mix(in srgb, var(--story-ink) 18%, transparent) 0
+  );
+  mask:
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.6L12 17.5l-5.9 3.2 1.2-6.6L2.5 9.5l6.6-.9z'/></svg>")
+    left / 1.15em 1.15em repeat-x;
+}
+.story-ui .story-ui-rank-text {
+  font-weight: 650;
+}
+
+/* Route: places along a line. */
+.story-ui .story-ui-route > ol {
+  display: flex;
+  margin: 0;
+  padding: 0.2em 0 0.4em;
+  overflow-x: auto;
+  list-style: none;
+}
+.story-ui .story-ui-route li {
+  position: relative;
+  display: grid;
+  flex: 1 0 5.5em;
+  align-content: start;
+  justify-items: center;
+  gap: 0.15em;
+  min-inline-size: 0;
+  padding-inline: 0.3em;
+  text-align: center;
+}
+.story-ui .story-ui-route li:not(:first-child)::before {
+  position: absolute;
+  inset-block-start: calc(0.5em - 1px);
+  inset-inline: -50% 50%;
+  border-block-start: 2px solid var(--story-hair);
+  content: "";
+}
+.story-ui .story-ui-route li:is([data-state="done"], [data-state="current"])::before {
+  border-color: var(--story-accent-text);
+}
+.story-ui .story-ui-route-mark {
+  position: relative;
+  z-index: 1;
+  inline-size: 1em;
+  block-size: 1em;
+  margin-block-end: 0.3em;
+  background: var(--story-paper);
+  border: 2px solid var(--story-muted);
+  border-radius: 50%;
+}
+.story-ui .story-ui-route li[data-state="done"] > .story-ui-route-mark {
+  background: var(--story-accent-text);
+  border-color: var(--story-accent-text);
+}
+.story-ui .story-ui-route li[data-state="current"] > .story-ui-route-mark {
+  border-color: var(--story-accent-text);
+  box-shadow: 0 0 0 4px var(--story-soft);
+}
+.story-ui .story-ui-route li[data-state="failed"] > .story-ui-route-mark {
+  background: var(--story-danger);
+  border-color: var(--story-danger);
+  border-radius: 2px;
+  rotate: 45deg;
+}
+.story-ui .story-ui-route-title {
+  font-size: 0.88em;
+  font-weight: 650;
+  line-height: 1.3;
+}
+.story-ui .story-ui-route li[data-state="current"] > .story-ui-route-title {
+  color: var(--story-accent-text);
+}
+.story-ui .story-ui-route li[data-state="pending"] {
+  color: var(--story-muted);
+}
+.story-ui .story-ui-route time,
+.story-ui .story-ui-route-text {
+  color: var(--story-muted);
+  font-size: 0.76em;
+}
+
 /* A block styled by the model's own CSS clips whatever that CSS paints, and its motion
    yields to the reader's preference. Model CSS never carries !important. */
 .story-ui-block[data-authored] {
@@ -2351,6 +2823,7 @@
 
 /* Material touches for the classic presets. */
 .story-ui[data-story-ui-style="east-asian"] .story-ui-chip,
+.story-ui[data-story-ui-style="tactical"] .story-ui-chip,
 .story-ui[data-story-ui-style="period"] .story-ui-chip {
   border-radius: 2px;
 }
@@ -2598,7 +3071,8 @@
   background: var(--story-ba-navy);
   box-shadow: inset 0 -3px var(--story-ba-yellow);
 }
-.story-ui[data-story-ui-style="blue-archive"] :is(.story-ui-card, .story-ui-stat) {
+.story-ui[data-story-ui-style="blue-archive"]
+  :is(.story-ui-card:not([data-surface]), .story-ui-stat) {
   background: var(--story-surface);
   border-color: var(--story-border);
   box-shadow: 0 2px 0 color-mix(in srgb, var(--story-ink) 16%, transparent);
@@ -2798,7 +3272,16 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
-.story-ui[data-story-ui-style="neon"] .story-ui-frame-subtitle {
+.story-ui[data-story-ui-style="neon"]
+  .story-ui-frame[data-kind="app"]
+  > .story-ui-frame-head
+  > :is(.story-ui-frame-title, .story-ui-frame-subtitle) {
+  color: inherit;
+}
+.story-ui[data-story-ui-style="neon"]
+  .story-ui-frame:not([data-kind="app"])
+  > .story-ui-frame-head
+  > .story-ui-frame-subtitle {
   color: #ff5a78;
   font-family: var(--story-mono);
   letter-spacing: 0.08em;

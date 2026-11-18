@@ -6,6 +6,7 @@ import {
   storyUiImageKeys,
   storyUiNestedTextKeys,
   storyUiTextKeys,
+  storyUiTextLists,
 } from './story-ui-catalog.js';
 
 export type StoryUiAction = {
@@ -314,7 +315,7 @@ export function projectStoryUiText(text: string, mode: 'text' | 'expression' = '
           if (Array.isArray(items))
             for (const item of items) if (record(item)) for (const key of keys) append(item[key]);
         }
-        append(component.columns);
+        for (const list of storyUiTextLists) append(component[list]);
         append(component.rows);
       }
       return values.join('\n');
