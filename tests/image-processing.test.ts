@@ -54,24 +54,21 @@ test('repeated WebP intake is byte-identical rather than another lossy encoding'
   expect(second.hash).toBe(first.hash);
 });
 
-test('WebP with intact dimensions but damaged pixel data is rejected before storage (lossless=true)', async () => {
-  const lossless = true;
+test('a truncated WebP is rejected before storage without decoding its pixels', async () => {
   const pixels = Buffer.alloc(64 * 64 * 3);
   for (let index = 0; index < pixels.length; index++)
     pixels[index] = (index * 17 + (index % 29)) % 256;
-  const damaged = await sharp(pixels, { raw: { width: 64, height: 64, channels: 3 } })
-    .webp({ lossless })
+  const original = await sharp(pixels, { raw: { width: 64, height: 64, channels: 3 } })
+    .webp({ lossless: true })
     .toBuffer();
-  damaged.fill(255, 40);
-  expect(await sharp(damaged).metadata()).toMatchObject({
-    format: 'webp',
-    width: 64,
-    height: 64,
-  });
-  await expect(processImage(damaged)).rejects.toThrow('이미지를 읽거나 WebP로 변환하지 못했어요.');
+  expect((await processImage(original)).bytes).toBe(original);
+  for (const truncated of [original.subarray(0, original.length - 1), original.subarray(0, 30)])
+    await expect(processImage(Buffer.from(truncated))).rejects.toThrow(
+      '이미지를 읽거나 WebP로 변환하지 못했어요.'
+    );
 });
 
-test('WebP intake preserves animated bytes and validates pixels in the last frame', async () => {
+test('WebP intake preserves animated bytes and checks the container of every frame', async () => {
   const pixels = Buffer.alloc(64 * 128 * 4);
   for (let index = 0; index < pixels.length; index += 4) {
     pixels[index] = (index * 17 + (index % 29)) % 256;
@@ -94,20 +91,21 @@ test('WebP intake preserves animated bytes and validates pixels in the last fram
     loop: 2,
   });
 
-  const damaged = Buffer.from(original);
   let lastFrame = 0;
-  for (let offset = 12; offset < damaged.length; ) {
-    const size = damaged.readUInt32LE(offset + 4);
-    if (damaged.toString('ascii', offset, offset + 4) === 'ANMF') lastFrame = offset;
+  for (let offset = 12; offset < original.length; ) {
+    const size = original.readUInt32LE(offset + 4);
+    if (original.toString('ascii', offset, offset + 4) === 'ANMF') lastFrame = offset;
     offset += 8 + size + (size % 2);
   }
-  expect(lastFrame).toBeGreaterThan(0);
-  // Keep the frame/chunk headers and VP8 dimensions intact; corrupt only its pixel bitstream.
-  expect(damaged.toString('ascii', lastFrame + 24, lastFrame + 28)).toBe('VP8 ');
-  damaged.fill(255, lastFrame + 42, lastFrame + 8 + damaged.readUInt32LE(lastFrame + 4));
-  expect(await sharp(damaged, { animated: true }).metadata()).toMatchObject({ pages: 2 });
-  expect((await sharp(damaged, { pages: 1 }).raw().toBuffer()).length).toBe(64 * 64 * 3);
-  await expect(processImage(damaged)).rejects.toThrow('이미지를 읽거나 WebP로 변환하지 못했어요.');
+  expect(original.toString('ascii', lastFrame + 24, lastFrame + 28)).toBe('VP8 ');
+  // Pixel damage inside an intact container is stored as received, not decoded at intake.
+  const repainted = Buffer.from(original);
+  repainted.fill(255, lastFrame + 42, lastFrame + 8 + repainted.readUInt32LE(lastFrame + 4));
+  expect((await processImage(repainted)).bytes).toBe(repainted);
+  // A frame whose image chunk overruns its frame is rejected.
+  const overrun = Buffer.from(original);
+  overrun.writeUInt32LE(overrun.readUInt32LE(lastFrame + 28) + 64, lastFrame + 28);
+  await expect(processImage(overrun)).rejects.toThrow('이미지를 읽거나 WebP로 변환하지 못했어요.');
 });
 
 test('Codex reference transmission bounds pixels without modifying stored image bytes or enlarging small references', async () => {

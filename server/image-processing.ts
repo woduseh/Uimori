@@ -32,6 +32,50 @@ export async function withImageProcessing<T>(work: () => Promise<T>): Promise<T>
   }
 }
 
+const WEBP_FRAME_CHUNKS = new Set(['VP8 ', 'VP8L']);
+
+/**
+ * Stored WebP keeps its original bytes, so intake checks the container instead of decoding
+ * every frame: chunk sizes must fit the declared RIFF length and every frame needs image data.
+ * This rejects truncated files; damage inside a frame's pixel data is stored as received.
+ */
+function assertWebpStructure(bytes: Buffer): void {
+  const fail = () => {
+    throw new Error('WEBP_STRUCTURE_INVALID');
+  };
+  if (
+    bytes.length < 20 ||
+    bytes.toString('ascii', 0, 4) !== 'RIFF' ||
+    bytes.toString('ascii', 8, 12) !== 'WEBP'
+  )
+    fail();
+  const end = 8 + bytes.readUInt32LE(4);
+  if (end > bytes.length) fail();
+  const chunks = (start: number, limit: number) => {
+    const found: { id: string; offset: number; size: number }[] = [];
+    for (let offset = start; offset < limit; ) {
+      if (offset + 8 > limit) fail();
+      const size = bytes.readUInt32LE(offset + 4);
+      if (offset + 8 + size > limit) fail();
+      found.push({ id: bytes.toString('ascii', offset, offset + 4), offset, size });
+      // Chunks are padded to even sizes; a final odd chunk may omit its pad byte.
+      offset += 8 + size + (size % 2);
+    }
+    return found;
+  };
+  const top = chunks(12, end);
+  const frames = top.filter((chunk) => chunk.id === 'ANMF');
+  const hasImage = (list: { id: string; size: number }[]) =>
+    list.some((chunk) => WEBP_FRAME_CHUNKS.has(chunk.id) && chunk.size > 0);
+  if (frames.length) {
+    for (const frame of frames) {
+      // An ANMF payload starts with 16 bytes of frame placement before its own chunks.
+      if (frame.size < 16) fail();
+      if (!hasImage(chunks(frame.offset + 24, frame.offset + 8 + frame.size))) fail();
+    }
+  } else if (!hasImage(top)) fail();
+}
+
 /** Intake only. Renames, reads and restores of existing WebP data never re-encode the image. */
 export async function processImage(bytes: Buffer): Promise<ProcessedImage> {
   if (!bytes.length || bytes.length > MAX_IMAGE_INPUT_BYTES)
@@ -57,13 +101,7 @@ export async function processImage(bytes: Buffer): Promise<ProcessedImage> {
         );
       if (!['png', 'jpeg', 'webp', 'gif', 'heif', 'avif', 'tiff'].includes(metadata.format ?? ''))
         throw new HttpError(400, '지원하지 않는 이미지 형식이에요.');
-      // libwebp reads each complete frame bitstream even when decoding to scaled pixels.
-      // Validate every frame with one output pixel, keeping the original encoding for storage.
-      if (metadata.format === 'webp')
-        await input
-          .resize({ width: 1, height: 1, fit: 'fill', kernel: 'nearest' })
-          .raw()
-          .toBuffer();
+      if (metadata.format === 'webp') assertWebpStructure(bytes);
       const output =
         metadata.format === 'webp'
           ? bytes
