@@ -541,6 +541,10 @@ export function LibraryPanel({
     );
   }
   const categoryEmpty = !!library && categoryItems.length === 0 && !query;
+  // Root and unclassified views show folders instead of an empty state while filed items exist.
+  const emptyState =
+    filtered.length === 0 &&
+    !((folder === 'all' || folder === 'unclassified') && !query.trim() && categoryItems.length > 0);
   function setView(mode: ViewMode) {
     const next = { ...views, [tab]: mode };
     setViews(next);
@@ -1178,7 +1182,7 @@ export function LibraryPanel({
                     />
                   </>
                 )}
-                {!selecting && (filtered.length > 0 || !!query) && (
+                {!selecting && !(emptyState && !query) && (
                   <button
                     type="button"
                     className="library-create primary ui-icon-button"
@@ -1314,46 +1318,41 @@ export function LibraryPanel({
                     {!selecting && itemMenu(item)}
                   </article>
                 ))}
-                {filtered.length === 0 &&
-                  !(
-                    (folder === 'all' || folder === 'unclassified') &&
-                    !query.trim() &&
-                    categoryItems.length > 0
-                  ) && (
-                    <div className="library-empty">
-                      <h2>
-                        {query
-                          ? t('library.noMatchingResources')
-                          : folder !== 'all'
-                            ? t('library.thisFolderIsEmpty')
-                            : folders.length > 0
-                              ? t('library.noUncategorizedResources')
-                              : t('library.noRegisteredResourcesYet')}
-                      </h2>
-                      <div className="library-empty-actions">
-                        {query && (
-                          <button type="button" className="secondary" onClick={() => setQuery('')}>
-                            {t('library.clearSearch')}
-                          </button>
-                        )}
-                        {folder !== 'all' && (
-                          <button
-                            type="button"
-                            className="secondary"
-                            onClick={() => changeFolder('all')}
-                          >
-                            {t('library.showAll')}
-                          </button>
-                        )}
-                        {!query && (
-                          <button type="button" onClick={openNew}>
-                            <AddIcon size={20} aria-hidden="true" />
-                            {t('library.create', { v0: t(contentLabelKeys[tab]) })}
-                          </button>
-                        )}
-                      </div>
+                {emptyState && (
+                  <div className="library-empty">
+                    <h2>
+                      {query
+                        ? t('library.noMatchingResources')
+                        : folder !== 'all'
+                          ? t('library.thisFolderIsEmpty')
+                          : folders.length > 0
+                            ? t('library.noUncategorizedResources')
+                            : t('library.noRegisteredResourcesYet')}
+                    </h2>
+                    <div className="library-empty-actions">
+                      {query && (
+                        <button type="button" className="secondary" onClick={() => setQuery('')}>
+                          {t('library.clearSearch')}
+                        </button>
+                      )}
+                      {folder !== 'all' && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => changeFolder('all')}
+                        >
+                          {t('library.showAll')}
+                        </button>
+                      )}
+                      {!query && (
+                        <button type="button" onClick={openNew}>
+                          <AddIcon size={20} aria-hidden="true" />
+                          {t('library.create', { v0: t(contentLabelKeys[tab]) })}
+                        </button>
+                      )}
                     </div>
-                  )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

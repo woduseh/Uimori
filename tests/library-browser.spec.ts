@@ -2,7 +2,12 @@ import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext, type Page, type Locator } from '@playwright/test';
 import type { Content, Library, PromptPreset } from '../core/product.js';
-import type { LibraryOrganization, LibraryFolder } from '../core/library-organization.js';
+import {
+  libraryCategory,
+  libraryFolderOf,
+  type LibraryOrganization,
+  type LibraryFolder,
+} from '../core/library-organization.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import {
   createLibraryContent,
@@ -441,12 +446,64 @@ for (const externalMove of ['none', 'folder'] as const) {
   });
 }
 
+test('LIBUI10 the library root keeps its create action when every resource is in a folder', async ({
+  page,
+  request,
+}) => {
+  const prefix = `LIBUI10 ${crypto.randomUUID()}`;
+  await createContent(request, `${prefix} persona`, 'persona');
+  const response = await request.get('/api/library');
+  expect(response.ok()).toBe(true);
+  const library = (await response.json()) as Library;
+  const unfiled = library.contents
+    .filter(
+      (item) =>
+        libraryCategory(library, item) === 'persona' &&
+        libraryFolderOf(library, { kind: 'content', id: item.id }) === null
+    )
+    .map((item) => ({ kind: 'content' as const, id: item.id }));
+  const created = await request.post('/api/library/folders', {
+    data: {
+      expectedRevision: (await organization(request)).revision,
+      category: 'persona',
+      title: `${prefix} folder`,
+    },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const folder = ((await created.json()) as LibraryOrganization).folders.find(
+    (item) => item.title === `${prefix} folder`
+  )!;
+  const move = async (folderId: string | null) => {
+    const moved = await request.post('/api/library/organization/move', {
+      data: {
+        expectedRevision: (await organization(request)).revision,
+        items: unfiled,
+        category: 'persona',
+        folderId,
+      },
+    });
+    expect(moved.ok(), await moved.text()).toBe(true);
+  };
+  await move(folder.id);
+  try {
+    await page.goto('/');
+    await navigationAction(page, '서재');
+    const panel = page.getByTestId('library-panel');
+    await panel.getByRole('tab', { name: '페르소나', exact: true }).click();
+    await expect(panel.getByRole('button', { name: `${prefix} folder 폴더 열기` })).toBeVisible();
+    const create = panel.getByRole('button', { name: '페르소나 만들기', exact: true });
+    await expect(create).toHaveCount(1);
+    await create.click();
+    await expect(panel.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
+  } finally {
+    await move(null);
+  }
+});
+
 test('EDITORRECOVERY2 confirms an uncertain new resource despite an incomplete later title', async ({
   page,
   request,
 }) => {
-  // An unfiled bot keeps the root list (and its create action) visible regardless of earlier cases.
-  await createContent(request, `EDITORRECOVERY2 seed ${crypto.randomUUID()}`);
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 800 });
   await page.goto('/');
   await navigationAction(page, '서재');
