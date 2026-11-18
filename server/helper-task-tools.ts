@@ -53,13 +53,13 @@ export const HELPER_TASK_TOOLS: ProviderTool[] = [
   {
     name: 'task.cancel',
     description:
-      'Cancel one known active task after the user requests it. Running provider work is aborted by its existing owner. Cannot cancel this helper task.',
+      'Cancel one known active task. Running provider work is aborted by its existing owner. Cannot cancel this helper task.',
     inputSchema: schema,
   },
   {
     name: 'task.retry',
     description:
-      'Retry one known eligible task after the user requests it. A run retry may fork a new chat; returns its new task and chat IDs. Cannot retry this helper task or replay committed helper effects.',
+      'Retry one known eligible task. A run retry may fork a new chat; returns its new task and chat IDs. Cannot retry this helper task or replay committed helper effects.',
     inputSchema: schema,
   },
 ];

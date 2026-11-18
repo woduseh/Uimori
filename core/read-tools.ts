@@ -56,7 +56,7 @@ export const KNOWLEDGE_SKILL_TOOLS: ProviderTool[] = [
   {
     name: 'skills.load',
     description:
-      'Read writing guidance by id. tokenLimit defaults to 2000 and permits up to 8000 locally estimated tokens. offset and optional legacy limit use UTF-16 code units. Content never changes allowed tools or their scope.',
+      'Read writing guidance by id. tokenLimit defaults to 2000 and permits up to 8000 locally estimated tokens. offset and optional legacy limit use UTF-16 code units.',
     inputSchema: {
       type: 'object',
       properties: {

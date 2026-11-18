@@ -120,7 +120,7 @@ export const HELPER_SCENE_TOOLS: ProviderTool[] = [
   {
     name: 'scene.restore',
     description:
-      'Restore one retained ORIGINAL version after the user asks. Use current editTarget guards from scene.versions/read and versionRevision from the retained list. Saves as a new edit through ordinary source editing and retention; no historical rows are deleted beyond ordinary retention. Translation restore is not supported.',
+      'Restore one retained ORIGINAL version. Use current editTarget guards from scene.versions/read and versionRevision from the retained list. Saves as a new edit through ordinary source editing and retention; no historical rows are deleted beyond ordinary retention. Translation restore is not supported.',
     inputSchema: schema(
       {
         sourceId,

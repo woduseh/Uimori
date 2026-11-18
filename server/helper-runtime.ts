@@ -203,15 +203,15 @@ function retryRequest(workspace: HelperWorkspace, request: string, retryOf?: str
   ].join('\n\n');
 }
 
-const CONTRACT = `Complete the user's Uimori task and reply in their language. Save requested edits; for reviews, comparisons and proposals, return findings. Resolve routine choices and carry out authorized work without per-step confirmation; ask when missing input materially changes the result. ${AUTHOR_NOTE_GUIDANCE}
+const CONTRACT = `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation, changing nothing the request does not call for. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. ${AUTHOR_NOTE_GUIDANCE}
 Choose and combine the tools suited to the task: app operations, data.exec for workspace search and transformation, or shell workspace files described in INDEX.md. Reuse known schemas and successful results; use app.tools only for unfamiliar operations or arguments. Group independent work when useful, and use returned revisions and receipts directly instead of rereading only to confirm success. Distinguish live saved resources, frozen chat history and unsaved editor input. Base visual claims on inspected pixels.
 Edit saved targets using their recorded revisions and preserve unrelated fields. For workspace-file edits, use uimori apply to save; for app operations, follow their own save contracts. Reconcile conflicts against the latest version and report changes from successful receipts. If the target has an unsaved editor draft, ask the user to save it first. For translation guides, preserve established terms and distinguish proposed choices from authored facts.
 For a bot’s Story UI appearance, use theme.guide and read the bot’s authored content. In a chat, writing.packages identifies the owning bot by role=bot. Saving a theme creates it; when the user requests application, use theme.select with dimension=storyUi for the bot or settings.update for an explicit chat choice.
-For questions about an original work, use the configured edition, references and spoiler position. Distinguish source evidence from model knowledge. For price updates use the provider's official page, date, currency and units; retain unverified rates unchanged. Cite web evidence only after a search returns it.
-Finish within the remaining host calls.
+For questions about an original work, use the configured edition, references and spoiler position, and distinguish source evidence from model knowledge. Cite web evidence only after a search returns it.
+Finish within the remaining host calls given in controls.
 ${CONTEXT_DERIVED_GUIDANCE}
 ${CONTEXT_RETRIEVAL_GUIDANCE}
-Reply concisely with the result and any unresolved decision or conflict.`;
+Write the final reply for a reader who has not seen your tool calls. Lead with the outcome, say what was saved and what is only proposed, and name any decision or conflict left to the user. Refer to things by their titles rather than internal IDs, revisions or receipts unless the user needs them. Give the detail the request calls for and no more.`;
 
 /** Command outcome is independent of denial; failed output remains ordinary read evidence. */
 function shellFailed(result: unknown) {
@@ -1925,7 +1925,7 @@ export class HelperRuntime {
               ? '\n' + OUTLINE_REVIEW_GUIDANCE
               : '') +
             (task.snapshot.persona
-              ? `\nOptional explanation persona (user-facing explanation only; never in saved drafts, artifacts, lore, notes, summaries, prompts, translations, code or tool arguments, and never a permission): ${task.snapshot.persona}`
+              ? `\nVoice for your replies to the user. It shapes explanations and conversation only; saved drafts, artifacts, lore, notes, summaries, prompts, translations, code and tool arguments keep the style their own task requires:\n${task.snapshot.persona}`
               : ''),
           tools: [
             ...(process.env.UIMORI_SHELL_ROOT && task.snapshot.outline?.target.purpose !== 'review'
