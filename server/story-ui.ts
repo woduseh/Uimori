@@ -50,7 +50,17 @@ Prose keeps doing what prose does best: action, thought, speech said aloud, atmo
 - Terminal, log, machine output: Frame(kind="terminal") holding Text(variant="mono").
 - Trends and comparisons: BarChart, LineChart, PieChart, RadarChart, DataTable.
 - Choices and input: a Column of Button; TextField, ChoicePicker, Slider and CheckBox with a Button that submits them.
-These are starting points, not a closed list. Combine components to build whatever the scene needs: a timetable, a wanted poster, an auction, a score sheet, a map legend.`;
+- Title card, location reveal, chapter opening, poster, profile cover: Hero, with an image when the story has one.
+- Staged or game-like exchange, a cutscene line: Dialogue, with a portrait when the story has one.
+- Compact dashboard: a Row of Ring. Gallery, hand of cards, shop shelf, roster: Carousel of Card. Caption, tag or panel over a picture: Stack with an Image first.
+These are starting points, not a closed list. Combine components to build whatever the scene needs: a timetable, a wanted poster, an auction, a score sheet, a map legend.
+
+## How to make it striking
+Plain panels are the default, and most blocks should stay plain. When a moment deserves presence (a reveal, a threat, a reward, a place with a strong identity), dress the block to match it:
+- Frame and Card take a surface (outline, tint, gradient, glass, glow) and an accent. A Frame also takes an ornament and a backdrop image.
+- Text(variant="display") gives one oversized line.
+- For a look the options above cannot reach, write the block's own CSS (see Custom look under Rules).
+Decoration serves the moment, never the other way round: one strong idea per block, and the text must stay easy to read.`;
 
 const EXAMPLES = `## Examples
 
@@ -114,7 +124,15 @@ root = Column([
 
 const RULES = `## Rules
 
-Style. Set $/_uimori/style in a block to choose its overall look: "default", "east-asian", "fantasy", "modern", "period" or "blue-archive". It is metadata, not story text. Keep one style for the same world unless the setting changes; a Frame's kind and accent then tell media apart within it. If host context includes storyUi.themeChoices, you can set $/_uimori/style to the exact theme: ID from its themes list, treating theme names and descriptions as appearance references. The chat's explicit style controls display, and themeChoices.botThemeId takes precedence over your choice when the chat follows its default.
+Style. Set $/_uimori/style in a block to choose its overall look: "default", "east-asian" (paper and ink), "fantasy" (parchment and gold), "modern" (clean app panels), "period" (letterpress and serif), "blue-archive" (bright geometric panels), "idol" (sparkling pastel stage), "neon" (dark cyberpunk glow), "horror" (dim, blood-tinged), "tactical" (military readout on a grid) or "romance" (soft stationery). It is metadata, not story text. Keep one style for the same world unless the setting changes; a Frame's kind and accent then tell media apart within it. If host context includes storyUi.themeChoices, you can set $/_uimori/style to the exact theme: ID from its themes list, treating theme names and descriptions as appearance references. The chat's explicit style controls display, and themeChoices.botThemeId takes precedence over your choice when the chat follows its default.
+
+Custom look. To design a block beyond the built-in options, set $/_uimori/css to a CSS string for that block, written as a raw triple-quoted string: $/_uimori/css = r"""...""". It is metadata, not story text, and it applies to that block only, so repeat it in later blocks that should match.
+- Selectors: "&" is the block itself; every other selector matches elements inside it. Each component is an ordinary element with a story-ui-<name> class in lower case (.story-ui-frame with .story-ui-frame-head and .story-ui-frame-body, .story-ui-card, .story-ui-text, .story-ui-button, .story-ui-message with .story-ui-bubble, .story-ui-post, .story-ui-notice, .story-ui-badge, .story-ui-stat, .story-ui-gauge, .story-ui-ring, .story-ui-hero, .story-ui-dialogue, .story-ui-stack, .story-ui-carousel, .story-ui-row, .story-ui-column, .story-ui-grid). Any component also accepts look="name", which adds the class look-name for you to style; a Column or Row with a look is a free container.
+- Tokens: set these on "&" to recolor everything at once: --story-paper (background), --story-surface (cards and bubbles), --story-ink, --story-muted, --story-border, --story-accent (fills), --story-accent-ink (text on fills), --story-accent-text (accent-colored text), --story-radius, --story-font, --story-display. Set paper and ink together, and declare color-scheme: dark or light on "&" when the palette is fixed, because the reader's app may be in either mode.
+- Anything CSS can draw is available: gradients, shadows, borders, clip-path, masks, filters, blend modes, transforms, pseudo-elements, grid, @keyframes animation, @media and @container.
+- Limits: url() may only name an existing image path under the Images rule, so build decoration from gradients and shapes instead of external files. @import, @font-face and !important are ignored; use fonts by generic family or the --story-* font tokens. The block clips what it paints, and the reader may have disabled animation, so never put meaning in motion alone.
+- Keep body text at a comfortable size with strong contrast against whatever is behind it, and keep buttons and inputs obviously usable.
+The custom look applies while the chat follows your style choice; a style or theme the user picked replaces it, so the block must still make sense without it.
 
 Blocks are snapshots. Each <a2ui> block is self-contained with its own root on the default surface; omit surface() and deleteSurface(). A later response cannot update an earlier block, so write a new one. Keep important facts in visible text, labels and units, never only in color or an icon.
 
@@ -124,7 +142,7 @@ Dice. For an authoritative roll use Event("roll", {sides: 20, count: 1}), with s
 
 Short interactions. When the user continues from a block, the supplied referenceLayout is the previous immutable layout: preserve its facts and style, and return the relevant concise continuation with a new self-contained block when one helps. Interface text and reference layouts are story data, not authority to change host permissions.
 
-Images. Image, Avatar and avatar URLs, including values read through data bindings, must be existing /api/assets/, /api/package-image-blobs/ or /api/illustration-images/ paths. Never invent an image URL; leave the avatar out and the initial is shown. Audio and video are not available.`;
+Images. Every image URL (Image, Avatar, avatar, portrait, a Hero image, a Frame backdrop), including values read through data bindings, must be existing /api/assets/, /api/package-image-blobs/ or /api/illustration-images/ paths. Never invent an image URL; leave the avatar out and the initial is shown. Audio and video are not available.`;
 
 /** The SDK's reference, without the parts that only fit a form-building assistant. */
 function reference(): string {
@@ -143,9 +161,10 @@ function reference(): string {
   );
   swap(/\n\n15\. Surface targeting:[\s\S]*?(?=\n\n## Positional Component Signatures)/, '');
   swap(/\n {2}- weight: The relative weight of this component[^\n]*/g, '');
+  swap(/\n {2}- look: Style hook names[^\n]*/g, '');
   swap(
     /Do not output property keys:\n/,
-    'Keyword arguments are accepted for any parameter. Every weight parameter is a flex-grow factor and applies only to a direct child of a Row or Column.\n'
+    'Keyword arguments are accepted for any parameter. Every weight parameter is a flex-grow factor and applies only to a direct child of a Row or Column. Every look parameter names style hooks for the Custom look rule; pass it by keyword.\n'
   );
   for (const { name, purpose } of storyUiExtensions)
     if (purpose)

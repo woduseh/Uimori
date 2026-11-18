@@ -8,6 +8,11 @@ export const storyUiStyles = [
   'modern',
   'period',
   'blue-archive',
+  'idol',
+  'neon',
+  'horror',
+  'tactical',
+  'romance',
 ] as const;
 export type StoryUiStyle = (typeof storyUiStyles)[number];
 type StoryUiThemeSetting = `theme:${string}`;
@@ -26,14 +31,32 @@ export function isStoryUiStyleSetting(value: unknown): value is StoryUiStyleSett
   return value === 'auto' || isStoryUiStyle(value) || isStoryUiThemeSetting(value);
 }
 
-function modelStoryUiStyle(messages: unknown): unknown {
+function blockMetadata(messages: unknown, key: 'style' | 'css'): unknown {
   const record = (value: unknown): value is Record<string, unknown> =>
     !!value && typeof value === 'object' && !Array.isArray(value);
   const message = Array.isArray(messages) ? messages[0] : undefined;
   const surface = record(message) ? message.createSurface : undefined;
   const dataModel = record(surface) ? surface.dataModel : undefined;
   const metadata = record(dataModel) ? dataModel._uimori : undefined;
-  return record(metadata) ? metadata.style : undefined;
+  return record(metadata) ? metadata[key] : undefined;
+}
+const modelStoryUiStyle = (messages: unknown) => blockMetadata(messages, 'style');
+
+/**
+ * CSS the model wrote for one block. It dresses the model's own style choice, so it applies
+ * only while the chat follows that choice: an explicit style or a theme replaces it.
+ */
+export function storyUiBlockCss(
+  setting: StoryUiStyleSetting | undefined,
+  messages: unknown,
+  presentation: StoryUiPresentation
+): string {
+  const css = blockMetadata(messages, 'css');
+  return typeof css === 'string' &&
+    (setting === undefined || setting === 'auto') &&
+    !presentation.theme
+    ? css
+    : '';
 }
 
 export function resolveStoryUiPresentation(

@@ -331,6 +331,49 @@ root = Column([
   Row([Button(Text("계획 확정"), "primary", Event("confirm_plan", {name: $/form/name, route: $/form/route})), Button(Text("나중에"), "borderless", Event("postpone"))])
 ])
 </a2ui>`,
+  `<a2ui>
+root = Frame(body, "제7구역 관제", "접근 제한", kind="system", accent="teal", surface="glow", ornament="corners", backdrop="/api/assets/city")
+body = Column([
+  Hero("제7구역", "허가 없이 들어온 자는 기록에서 지워진다", "/api/assets/city", "LOCATION", Row([Badge("봉쇄", tone="danger"), Badge("야간")]), size="large"),
+  Dialogue("여기서부턴 **혼자** 가야 해. 돌아보지 마.", "레이", "/api/assets/ray", "낮은 목소리로", accent="pink"),
+  Dialogue("…알았어.", "나", side="right"),
+  Row([Ring("동기화", 72, 0, 100, "%", tone="info"), Ring("실드", 30, 0, 100, tone="danger"), Ring("잔여 시간", 8, 0, 60, "분", tone="caution", size="small")], justify="spaceAround"),
+  Carousel([
+    Card(Column([Text("EMP 수류탄", variant="title"), Text("반경 5m 전자기기 정지", variant="caption")]), surface="gradient", accent="violet"),
+    Card(Column([Text("위조 출입증", variant="title"), Text("3등급 구역까지 통과", variant="caption")]), surface="tint", accent="amber"),
+    Card(Column([Text("진통제", variant="title"), Text("체력 20 회복", variant="caption")]), surface="outline", accent="green"),
+    Card(Column([Text("낡은 무전기", variant="title"), Text("주파수 미상", variant="caption")]), surface="glow", accent="red")
+  ], itemWidth="narrow"),
+  Stack([Image("/api/assets/city", variant="header"), Card(Text("CAM-04 · 신호 약함", variant="mono"), surface="glass"), Badge("LIVE", tone="danger")], align="bottomStart")
+])
+</a2ui>`,
+  `<a2ui>
+root = Frame(body, "경고", kind="panel", accent="amber", ornament="stripes", surface="tint")
+body = Column([Text("격리 구역", variant="display", tone="caution", align="center"), Text("이 문 너머의 일은 보고되지 않습니다.", variant="body", align="center")])
+</a2ui>`,
+  `<a2ui>
+root = Frame(body, "왕립 서고 열람증", kind="paper", accent="red", ornament="ribbon")
+body = Row([Card(Text("제 412 호", variant="title"), surface="gradient", accent="red"), Frame(Text("열람 기한: 성력 413년 봄", variant="body"), ornament="inset", surface="outline", accent="indigo", weight=1)])
+</a2ui>`,
+  `<a2ui>
+$/_uimori/css = r"""
+& { --story-paper: #0a0714; --story-surface: #1a1230; --story-ink: #f3e9ff; --story-muted: #b7a6d9; --story-border: #4b2f7a; --story-accent: #ff3df2; --story-accent-ink: #14041a; --story-accent-text: #ff7df7; --story-radius: 2px; color-scheme: dark; background: radial-gradient(120% 90% at 50% 0%, #2a0f4d, #0a0714 70%); border-color: #ff3df2; }
+.look-marquee { background: linear-gradient(90deg, #ff3df2, #3df2ff, #ff3df2); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: slide 4s linear infinite; text-shadow: none; }
+.look-scan { position: relative; clip-path: polygon(0 0, calc(100% - 1em) 0, 100% 1em, 100% 100%, 1em 100%, 0 calc(100% - 1em)); border: 1px solid #3df2ff !important; background-image: url("https://outside.invalid/track.png"); }
+.look-scan::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, #ffffff10 0 1px, transparent 1px 4px); pointer-events: none; }
+.story-ui-button { text-transform: uppercase; letter-spacing: .12em; border-color: #3df2ff; box-shadow: 0 0 10px #3df2ff66; }
+.look-escape { position: fixed; inset: -200px; opacity: 0; pointer-events: none; }
+@keyframes slide { to { background-position: 200% 0; } }
+@font-face { font-family: Evil; src: url("https://outside.invalid/font.woff2"); }
+@import url("https://outside.invalid/sheet.css");
+"""
+root = Column([
+  Text("NEON ARCADE", variant="display", align="center", look="marquee"),
+  Card(Column([Text("INSERT COIN", variant="label"), Text("최고 점수 1,204,800 — 플레이어 REI", variant="mono")]), look="scan"),
+  Row([Button(Text("게임 시작"), "primary", Event("start_game")), Button(Text("랭킹 보기"), action=Event("show_ranking"))]),
+  Column([], look="escape")
+])
+</a2ui>`,
 ];
 
 test('composed media render with their own shells in both schemes', async ({ page }, info) => {
@@ -341,6 +384,17 @@ test('composed media render with their own shells in both schemes', async ({ pag
     .filter((part) => part.kind === 'ui')
     .map((part) => normalizeStoryUiOutput(part.expression));
   const sources = [...taught, ...gallery.map(normalizeStoryUiOutput)];
+  const remoteRequests: string[] = [];
+  await page.route('**/api/assets/*', (route) =>
+    route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1d3557"/><stop offset=".55" stop-color="#7b2cbf"/><stop offset="1" stop-color="#ff6b6b"/></linearGradient></defs><rect width="640" height="360" fill="url(#g)"/><circle cx="470" cy="110" r="60" fill="#ffd166" opacity=".85"/></svg>',
+    })
+  );
+  await page.route('https://outside.invalid/**', (route) => {
+    remoteRequests.push(route.request().url());
+    return route.abort();
+  });
   await page.setViewportSize({ width: 960, height: 900 });
   await page.goto(origin);
   await page.evaluate(async (value) => {
@@ -362,6 +416,34 @@ test('composed media render with their own shells in both schemes', async ({ pag
     'aria-pressed',
     'true'
   );
+  await expect(page.getByRole('meter', { name: '동기화' })).toHaveAttribute('aria-valuenow', '72');
+  await expect(page.getByRole('img', { name: '레이', exact: true })).toHaveAttribute(
+    'src',
+    '/api/assets/ray'
+  );
+  const overlay = await page.getByText('CAM-04 · 신호 약함').boundingBox();
+  const base = await page.locator('.story-ui-stack img').boundingBox();
+  expect(overlay!.y).toBeGreaterThan(base!.y);
+  expect(overlay!.y + overlay!.height).toBeLessThanOrEqual(base!.y + base!.height);
+  // The model's own CSS restyles its block, and only its block, without leaving the page.
+  const authored = page.locator('.story-ui[data-story-ui-authored]');
+  await expect(authored).toHaveCount(1);
+  await expect(authored).toHaveCSS('color', 'rgb(243, 233, 255)');
+  await expect(blocks.first()).not.toHaveCSS('color', 'rgb(243, 233, 255)');
+  const marquee = authored.locator('.look-marquee');
+  await expect(marquee).toHaveText('NEON ARCADE');
+  expect(await marquee.evaluate((node) => getComputedStyle(node).animationName)).toMatch(
+    /^story-ui-.+-slide$/
+  );
+  const sheet = await authored.locator('style').textContent();
+  expect(sheet).not.toMatch(/outside\.invalid|important|@font-face|@import/);
+  await expect(authored.locator('.look-scan')).toHaveCSS('background-image', 'none');
+  await expect(page.locator('.story-ui-block[data-authored]')).toHaveCSS('overflow-x', 'clip');
+  const escaped = await authored.locator('.look-escape').boundingBox();
+  const host = await page.locator('.story-ui-block[data-authored]').boundingBox();
+  expect(escaped!.width).toBeLessThanOrEqual(host!.width + 400);
+  expect(escaped!.x).toBeGreaterThanOrEqual(host!.x - 200);
+  expect(remoteRequests).toEqual([]);
   if (!visualReview) return;
   // A theme switch must not be captured halfway through a color transition.
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -381,8 +463,10 @@ test('composed media render with their own shells in both schemes', async ({ pag
   await capture('mobile');
   // The same blocks under every preset, light then dark.
   await page.setViewportSize({ width: 960, height: 900 });
-  const sample = [sources[0], sources[2], sources[4], sources[sources.length - 1]];
-  for (const style of ['east-asian', 'fantasy', 'modern', 'period', 'blue-archive']) {
+  const first = taught.length;
+  const sample = [sources[0], sources[2], sources[4], sources[first + 4], sources[first + 5]];
+  const { storyUiStyles } = await import('../core/story-ui-style.js');
+  for (const style of storyUiStyles.filter((name) => name !== 'default')) {
     await page.evaluate(
       async ([value, name]) => {
         const path = '/tests/fixtures/story-ui.tsx';
@@ -399,7 +483,11 @@ test('composed media render with their own shells in both schemes', async ({ pag
       await page.evaluate((value) => {
         document.documentElement.dataset.theme = value;
       }, theme);
-      await preset.screenshot({ path: info.outputPath(`story-ui-preset-${style}-${theme}.png`) });
+      for (let index = 0; index < sample.length; index++)
+        await preset
+          .locator('.story-ui')
+          .nth(index)
+          .screenshot({ path: info.outputPath(`story-ui-preset-${style}-${theme}-${index}.png`) });
     }
   }
 });

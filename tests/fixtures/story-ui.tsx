@@ -89,6 +89,11 @@ export function mountPreset(
     modern: '팀 업무 현황',
     period: '경성 조사 일지',
     'blue-archive': '샬레 업무 보고',
+    idol: '오늘의 레슨 일정',
+    neon: '제7구역 관제',
+    horror: '폐병원 조사 기록',
+    tactical: '작전 상황판',
+    romance: '둘만의 교환 일기',
   };
   const segment = {
     kind: 'ui',

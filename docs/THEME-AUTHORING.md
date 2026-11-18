@@ -71,7 +71,7 @@ Uimori 테마는 **화면 표현만 바꾸는 독립 자료**예요. 이야기 �
 
 ### 이야기 UI 테마
 
-테마 자료에는 앱 레이아웃과 별개인 `storyUi`를 추가할 수 있어요. 테마 편집기에서 **이야기 UI 테마 포함**을 켜고 기반 스타일(`default`, `east-asian`, `fantasy`, `modern`, `period`, `blue-archive`)과 CSS를 작성해요. 공유 파일은 기존 `{ "format": "uimori-theme", "version": 1, "theme": ... }` 형식을 그대로 써요.
+테마 자료에는 앱 레이아웃과 별개인 `storyUi`를 추가할 수 있어요. 테마 편집기에서 **이야기 UI 테마 포함**을 켜고 기반 스타일(`default`, `east-asian`, `fantasy`, `modern`, `period`, `blue-archive`, `idol`, `neon`, `horror`, `tactical`, `romance`)과 CSS를 작성해요. 공유 파일은 기존 `{ "format": "uimori-theme", "version": 1, "theme": ... }` 형식을 그대로 써요.
 
 ```json
 {
@@ -87,8 +87,8 @@ Uimori 테마는 **화면 표현만 바꾸는 독립 자료**예요. 이야기 �
 CSS는 패널 안에 중첩 적용되며 **`&`는 패널 자체**, 일반 선택자는 패널 안 요소를 가리켜요. `@media`, `@supports`, 등록된 글꼴 이름과 CSS를 사용할 수 있어요.
 
 - 공통 변수: `--story-paper`(바탕), `--story-surface`(카드와 말풍선), `--story-ink`, `--story-muted`, `--story-border`, `--story-accent`(채움색), `--story-accent-ink`(채움색 위 글자), `--story-accent-text`(바탕 위 강조 글자), `--story-font`, `--story-display`(제목 글꼴), `--story-radius`, 의미색 `--story-positive`, `--story-caution`, `--story-danger`, `--story-info`. 일부만 지정하면 흐린 글자는 `--story-ink`를, 강조 글자는 `--story-accent`를 따라가요.
-- 구성 요소 선택자: 모든 구성 요소는 `story-ui-*` 클래스를 가진 일반 요소예요. `.story-ui-frame`(`data-kind`, `data-accent`, 머리글 `.story-ui-frame-head`, 본문 `.story-ui-frame-body`), `.story-ui-message`(`data-side`)와 `.story-ui-bubble`, `.story-ui-post`(`data-variant`), `.story-ui-notice`, `.story-ui-badge`, `.story-ui-stat`, `.story-ui-gauge`, `.story-ui-keyvalue`, `.story-ui-timeline`, `.story-ui-card`, `.story-ui-details`, `.story-ui-button`(`data-variant`), `.story-ui-tabs`, `.story-ui-field`, `.story-ui-table`, `.story-ui-chart`, 글 종류별 `.story-ui-text-headline` 같은 클래스를 쓸 수 있어요. `button`, `input`, `textarea`, `figure`, `figcaption` 요소 선택자도 그대로 동작해요.
-- 밝은 화면과 어두운 화면: 기본 제공 스타일은 앱의 밝은·어두운 모드를 따라가요. 이름 있는 기반 스타일 위에 만든 사용자 테마는 그 스타일의 밝은 색으로 표시하므로, 어두운 테마를 만들려면 변수 값을 직접 어둡게 지정해 주세요. `default` 기반 테마는 앱의 모드를 따라가요.
+- 구성 요소 선택자: 모든 구성 요소는 `story-ui-*` 클래스를 가진 일반 요소예요. `.story-ui-frame`(`data-kind`, `data-accent`, 머리글 `.story-ui-frame-head`, 본문 `.story-ui-frame-body`), `.story-ui-message`(`data-side`)와 `.story-ui-bubble`, `.story-ui-post`(`data-variant`), `.story-ui-notice`, `.story-ui-badge`, `.story-ui-stat`, `.story-ui-gauge`, `.story-ui-keyvalue`, `.story-ui-timeline`, `.story-ui-card`, `.story-ui-details`, `.story-ui-button`(`data-variant`), `.story-ui-tabs`, `.story-ui-field`, `.story-ui-table`, `.story-ui-chart`, `.story-ui-hero`, `.story-ui-dialogue`(`data-side`), `.story-ui-ring`, `.story-ui-stack`, `.story-ui-carousel`, 글 종류별 `.story-ui-text-headline` 같은 클래스를 쓸 수 있어요. `.story-ui-frame`과 `.story-ui-card`에는 `data-surface`가, 틀에는 `data-ornament`와 `data-backdrop`도 붙어요. 모델이 구성 요소에 `look="이름"`을 지정하면 `look-이름` 클래스가 붙어요. `button`, `input`, `textarea`, `figure`, `figcaption` 요소 선택자도 그대로 동작해요.
+- 밝은 화면과 어두운 화면: 기본 제공 스타일은 앱의 밝은·어두운 모드를 따라가요. 이름 있는 기반 스타일 위에 만든 사용자 테마는 그 스타일의 밝은 색으로 표시하므로, 어두운 테마를 만들려면 변수 값을 직접 어둡게 지정해 주세요. `neon`과 `horror`는 원래 어두운 스타일이라 그 위의 사용자 테마도 어두운 색으로 표시해요. `default` 기반 테마는 앱의 모드를 따라가요.
 - 이전 버전의 `--a2ui-*` 변수는 더 이상 적용되지 않아요. 같은 역할의 `--story-*` 변수로 바꿔 주세요.
 
 [사용 흐름](STORY-UI.md#봇을-위한-사용자-테마)

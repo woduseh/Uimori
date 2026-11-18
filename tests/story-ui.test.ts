@@ -30,6 +30,37 @@ describe('story UI', () => {
     expect(prompt).toContain('- Description: One chat bubble.');
     expect(prompt.indexOf('## Where it goes')).toBeLessThan(prompt.indexOf('## Block syntax'));
   });
+  it('keeps decoration and block CSS out of wording and translation, and images on stored paths', () => {
+    const block = (frame: string) => `<a2ui>
+$/_uimori/css = r"""& { --story-paper: #101018; } .look-plate { letter-spacing: .2em; }"""
+root = Frame(body, "관제실", ${frame})
+body = Column([
+  Hero("제7구역", "접근 제한", "/api/assets/city", "LOCATION"),
+  Dialogue("돌아보지 마.", "레이", "/api/assets/ray", "낮게"),
+  Ring("동기화", 72, 0, 100, "%"),
+  Text("판정", variant="display", look="plate")
+])
+</a2ui>`;
+    const stored = normalizeStoryUiOutput(
+      block('surface="glow", ornament="corners", backdrop="/api/assets/city"')
+    );
+    expect(parseStoryUi(stored)[0].kind).toBe('ui');
+    const wording = projectStoryUiText(stored);
+    for (const value of ['관제실', '제7구역', 'LOCATION', '레이', '돌아보지 마.', '낮게', '72'])
+      expect(wording).toContain(value);
+    for (const hidden of ['story-paper', 'look-plate', 'glow', 'corners', '/api/assets'])
+      expect(wording).not.toContain(hidden);
+    const translation = prepareStoryUiTranslation(stored);
+    expect(translation.text).toContain('레이');
+    expect(translation.text).not.toContain('story-paper');
+    expect(translation.text).not.toContain('plate');
+    for (const invalid of [
+      'backdrop="https://outside.invalid/a.png"',
+      'surface="lava"',
+      'look="Not Valid!"',
+    ])
+      expect(parseStoryUi(normalizeStoryUiOutput(block(invalid)))[0].kind).toBe('invalid');
+  });
   it('reads composed media as wording, or as the expression a writer continues from', () => {
     const expression = `<a2ui>
 root = Frame(chat, "한서윤", kind="app", accent="amber")

@@ -1,10 +1,10 @@
 import { A2uiSurface, MarkdownContext, type ReactCatalogComponent } from '@a2ui/react';
 import { MessageProcessor, type ActionPayload } from '@a2ui/web_core';
 import { useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { resolveStoryUiPresentation } from '../core/story-ui-style.js';
+import { resolveStoryUiPresentation, storyUiBlockCss } from '../core/story-ui-style.js';
 import type { ThemeDefinition } from '../core/themes.js';
 import { ThemeContext } from './ThemeContext.js';
-import { scopedStoryUiCss } from './story-ui-theme.js';
+import { modelStoryUiCss, scopedStoryUiCss } from './story-ui-theme.js';
 import type { StoryUiSegment } from '../core/story-ui.js';
 import type { Run } from '../core/types.js';
 import { compileReadingMarkdown } from '../core/reading-markdown.js';
@@ -59,6 +59,8 @@ export function StoryUi({
   ).createSurface.components.find((component) => component.id === 'root');
   const frame = root?.component === 'Frame' ? root : undefined;
   const css = useMemo(() => scopedStoryUiCss(theme?.css ?? '', themeId), [theme?.css, themeId]);
+  const blockCss = theme ? '' : storyUiBlockCss(style, segment.messages, presentation);
+  const authored = useMemo(() => modelStoryUiCss(blockCss, themeId), [blockCss, themeId]);
   const [action, setAction] = useState<ActionPayload>();
   const [mode, setMode] = useState<'short' | 'continue'>('short');
   const [pending, setPending] = useState(false);
@@ -161,16 +163,19 @@ export function StoryUi({
     }
   };
   return (
-    <div className="story-ui-block">
+    <div className="story-ui-block" data-authored={authored ? '' : undefined}>
       <section
         className="story-ui"
         data-story-ui-style={theme?.baseStyle ?? presentation.style}
         data-story-ui-custom={theme ? themeId : undefined}
+        data-story-ui-authored={authored ? themeId : undefined}
         data-story-ui-root={root?.component}
         data-story-ui-kind={frame ? String(frame.kind ?? 'panel') : undefined}
         data-story-ui-accent={typeof frame?.accent === 'string' ? frame.accent : undefined}
+        data-story-ui-surface={typeof frame?.surface === 'string' ? frame.surface : undefined}
       >
         {css && <style>{css}</style>}
+        {authored && <style>{authored}</style>}
         {surface && (
           <div className="story-ui-surface" inert={!!action && !!chatId && (latest || uncertain)}>
             <MarkdownContext.Provider value={renderMarkdown}>

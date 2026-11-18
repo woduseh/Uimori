@@ -6,9 +6,9 @@
 
 **채팅 설정 → 생성 설정 → 이야기 UI**를 켜고 저장해요. 새 채팅은 [전역 생성 기본값](CONTEXT-LIMITS.md#새-채팅-생성-기본값)을 복사하며, 저장 뒤 시작하는 생성부터 화면 구성 방법을 모델에 전달해요. 필요한 장면이라면 요청에 원하는 화면과 담을 내용을 적어 주세요(예: “조사팀의 통화 기록을 표로 보여 주고, 다음에 전화할 사람을 선택할 수 있게 해 줘”).
 
-**이야기 UI 스타일** 기본값은 **자동**이에요. 모델이 화면마다 고른 스타일을 저장하며, 선택이 없거나 유효하지 않으면 기본 스타일로 표시해요. 기본, 동양풍, 서양 판타지, 현대, 시대극, 블루 아카이브나 사용자 테마를 직접 선택하면 저장된 화면과 생성 중인 화면에 적용돼요.
+**이야기 UI 스타일** 기본값은 **자동**이에요. 모델이 화면마다 고른 스타일을 저장하며, 선택이 없거나 유효하지 않으면 기본 스타일로 표시해요. 기본 제공 스타일이나 사용자 테마를 직접 선택하면 저장된 화면과 생성 중인 화면에 적용돼요.
 
-동양풍(종이색·먹선·붉은 테두리), 서양 판타지(양피지·이중 금색 프레임), 현대(세그먼트 탭·흰 패널), 시대극(서간 선·명조체), 블루 아카이브(밝은 기하학 패널·하늘색 조작부·노란 선택선)를 선택할 수 있고, 도우미로 켜기와 스타일을 바꿀 수도 있어요.
+동양풍(종이색·먹선·붉은 테두리), 서양 판타지(양피지·이중 금색 프레임), 현대(세그먼트 탭·흰 패널), 시대극(서간 선·명조체), 블루 아카이브(밝은 기하학 패널·하늘색 조작부·노란 선택선), 아이돌 스테이지(파스텔 빛 번짐·알약 버튼·분홍 보라 그러데이션), 네온(어두운 격자·형광 테두리), 호러(먹빛 바탕·바랜 붉은색·어두운 가장자리), 택티컬(올리브색 격자·고정폭 표기·각진 칸), 로맨스(크림색 편지지·안쪽 선·둥근 버튼)를 선택할 수 있고, 도우미로 켜기와 스타일을 바꿀 수도 있어요.
 
 탭 전환이나 입력값 편집 중에는 모델을 호출하지 않아요. 최신 장면에서 버튼을 누르면 전송 방식 선택이 열리며, 미전송 입력은 같은 브라우저 탭의 세션에 보관해 원문·번역 전환 시에도 유지해요(원문 수정 시 이전 초안은 초기화).
 
@@ -38,13 +38,31 @@
 | 용도 | 구성 요소 |
 | --- | --- |
 | 매체의 틀 | `Frame` (`kind`: `panel`, `app`, `page`, `paper`, `terminal`, `system`, `note`, `accent`: 대표색 10가지) |
-| 배치와 탐색 | `Row`, `Column`, `List`, `Grid`, `Card`, `Tabs`, `Details`, `Modal`, `Divider` |
-| 글과 그림 | `Text` (`headline`, `title`, `label`, `body`, `caption`, `quote`, `mono`), `Image`, `Avatar`, `Icon`, `Badge` |
+| 배치와 탐색 | `Row`, `Column`, `List`, `Grid`, `Card`, `Stack`, `Carousel`, `Tabs`, `Details`, `Modal`, `Divider` |
+| 글과 그림 | `Text` (`display`, `headline`, `title`, `label`, `body`, `caption`, `quote`, `mono`), `Image`, `Avatar`, `Icon`, `Badge` |
+| 연출 | `Hero` (그림이나 대표색 위의 큰 제목), `Dialogue` (이름표와 초상화가 붙은 대사창) |
 | 대화와 게시물 | `Message`, `Post` (`post`, `article`, `comment`, 답글 중첩), `Notice` |
-| 수치와 기록 | `Stat`, `Gauge`, `KeyValue`, `Timeline`, `DataTable`, `BarChart`, `LineChart`, `PieChart`, `RadarChart` |
+| 수치와 기록 | `Stat`, `Gauge`, `Ring`, `KeyValue`, `Timeline`, `DataTable`, `BarChart`, `LineChart`, `PieChart`, `RadarChart` |
 | 행동과 입력 | `Button`, `TextField`, `CheckBox`, `ChoicePicker`, `Slider`, `DateTimeInput` |
 
-`Text`, `Notice`, `Badge`, `Stat`, `Gauge`의 `tone`(`neutral`, `accent`, `positive`, `caution`, `danger`, `info`)은 의미에 맞는 색을 지정해요.
+`Text`, `Notice`, `Badge`, `Stat`, `Gauge`, `Ring`의 `tone`(`neutral`, `accent`, `positive`, `caution`, `danger`, `info`)은 의미에 맞는 색을 지정해요.
+
+### 꾸밈
+
+- `Frame`과 `Card`의 `surface`는 칠하는 방식을 정해요: `outline`(채움 없이 강조색 테두리), `tint`(옅은 강조색), `gradient`(강조색 그러데이션과 밝은 글자), `glass`(반투명과 흐림), `glow`(빛나는 테두리). `Card`도 `accent`를 받아요.
+- `Frame`의 `backdrop`은 저장된 이미지를 내용 뒤에 깔고 글자가 읽히도록 바탕색을 덧씌워요. `ornament`는 `corners`(모서리 표식), `inset`(안쪽 선), `ribbon`(접힌 모서리), `stripes`(위아래 경고 띠)를 그려요.
+- `Stack`은 첫 자식 위에 나머지를 겹쳐 놓고(`align`으로 위치 지정), `Carousel`은 옆으로 넘기며 한 장씩 멈추는 줄을 만들어요.
+
+### 모델이 직접 쓰는 CSS
+
+정해진 옵션으로 부족하면 모델이 블록마다 `$/_uimori/css`에 CSS를 써서 화면을 꾸밀 수 있어요. 문법은 [사용자 테마](THEME-AUTHORING.md#이야기-ui-테마)와 같아요: `&`는 블록 자체이고, `--story-*` 변수와 `story-ui-*` 클래스를 쓰며, 모든 구성 요소의 `look="이름"`은 `look-이름` 클래스를 붙여 줘요. 그러데이션, 그림자, `clip-path`, 가상 요소, `@keyframes` 애니메이션 등을 쓸 수 있어요.
+
+구조와 문구는 계속 구성 요소로 저장하므로 검증, 번역, 문맥 전달은 그대로 동작해요. CSS는 번역하지 않고, 이야기 UI를 끈 채팅이나 요약에는 전달하지 않아요. 모델이 쓴 글이므로 사용자 테마보다 좁게 적용해요.
+
+- 해당 블록 안에만 적용하고, 블록 밖으로 나가는 그림은 잘라내요. `position: fixed`도 블록을 벗어나지 못해요.
+- `url()`은 저장된 이미지 경로만 허용하고, 외부 주소를 여는 선언은 버려요. `@import`, `@font-face`, `@property`와 `!important`는 적용하지 않아요.
+- `@keyframes` 이름은 블록마다 따로 붙여 앱이나 다른 블록의 애니메이션과 겹치지 않아요. 기기에서 동작 줄이기를 켜면 애니메이션과 전환을 멈춰요.
+- 스타일이 **자동**이고 사용자 테마가 적용되지 않을 때만 써요. 채팅에서 스타일이나 테마를 직접 고르거나 봇 기본 테마가 있으면 모델의 CSS는 적용하지 않으니, 모델이 꾸민 화면이 마음에 들지 않을 때는 스타일을 직접 선택하면 돼요.
 
 예를 들어 아래 블록은 메신저 화면이에요. `Frame`이 매체의 틀과 대표색을 정하고, 그 안에 말풍선을 쌓아요.
 

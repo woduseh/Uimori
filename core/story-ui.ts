@@ -288,8 +288,8 @@ export function projectStoryUiText(text: string, mode: 'text' | 'expression' = '
       const values: string[] = [];
       const dataModel = (message.createSurface as { dataModel?: unknown }).dataModel;
       if (dataModel !== undefined) {
-        if (record(dataModel) && record(dataModel._uimori) && 'style' in dataModel._uimori) {
-          const { style: _style, ...metadata } = dataModel._uimori;
+        if (record(dataModel) && record(dataModel._uimori)) {
+          const { style: _style, css: _css, ...metadata } = dataModel._uimori;
           const { _uimori: _original, ...rest } = dataModel;
           if (Object.keys(metadata).length) rest._uimori = metadata;
           if (Object.keys(rest).length) values.push(JSON.stringify(rest));

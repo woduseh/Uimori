@@ -82,6 +82,9 @@
 .story-ui[data-story-ui-custom]:not([data-story-ui-style="default"]) {
   color-scheme: light;
 }
+.story-ui[data-story-ui-custom]:is([data-story-ui-style="neon"], [data-story-ui-style="horror"]) {
+  color-scheme: dark;
+}
 
 /* Tones and brand colors. */
 .story-ui [data-tone="neutral"] {
@@ -1509,6 +1512,462 @@
   font-size: 0.8em;
 }
 
+/* Showpiece text. */
+.story-ui .story-ui-text-display {
+  font-family: var(--story-display);
+  font-size: clamp(1.9em, 9cqi, 3em);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+/* A component with its own accent recomputes the tokens derived from it. */
+.story-ui :is(.story-ui-card, .story-ui-hero, .story-ui-dialogue)[data-accent] {
+  --story-soft: color-mix(in srgb, var(--story-accent-text) 12%, transparent);
+  --story-tone: var(--story-accent-text);
+  --story-series-0: var(--story-accent-text);
+}
+
+/* Surfaces: how a frame or card is painted. They follow the frame kinds so they win. */
+.story-ui :is(.story-ui-frame, .story-ui-card)[data-surface="outline"] {
+  background: none;
+  border: 1.5px solid var(--story-accent-text);
+}
+.story-ui :is(.story-ui-frame, .story-ui-card)[data-surface="tint"] {
+  background: color-mix(in srgb, var(--story-accent-text) 11%, var(--story-paper));
+  border-color: color-mix(in srgb, var(--story-accent-text) 30%, transparent);
+}
+.story-ui :is(.story-ui-frame, .story-ui-card)[data-surface="glass"] {
+  background: color-mix(in srgb, var(--story-paper) 58%, transparent);
+  border-color: color-mix(in srgb, var(--story-ink) 16%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 28%, transparent);
+  backdrop-filter: blur(12px) saturate(1.4);
+}
+.story-ui :is(.story-ui-frame, .story-ui-card)[data-surface="glow"],
+.story-ui[data-story-ui-surface="glow"] {
+  border-color: var(--story-accent-text);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--story-accent-text) 35%, transparent),
+    0 0 1.4em -0.3em var(--story-accent-text),
+    inset 0 0 1.6em -0.9em var(--story-accent-text);
+}
+.story-ui[data-story-ui-surface="outline"] {
+  border: 1.5px solid var(--story-accent-text);
+}
+.story-ui[data-story-ui-surface="tint"] {
+  border-color: color-mix(in srgb, var(--story-accent-text) 30%, transparent);
+}
+/* A filled surface swaps the accent pair for its content, so text, controls and marks stay
+   legible on the fill. The fill is named first because a token cannot refer to itself. */
+.story-ui :is(.story-ui-frame, .story-ui-card)[data-surface="gradient"],
+.story-ui .story-ui-hero {
+  --story-fill: var(--story-accent);
+  --story-fill-ink: var(--story-accent-ink);
+  color: var(--story-fill-ink);
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--story-fill) 80%, #fff),
+    var(--story-fill) 45%,
+    color-mix(in oklab, var(--story-fill) 70%, #000)
+  );
+  border-color: transparent;
+}
+.story-ui :is(.story-ui-frame, .story-ui-card)[data-surface="gradient"] > *,
+.story-ui .story-ui-hero > * {
+  --story-ink: var(--story-fill-ink);
+  --story-muted: color-mix(in srgb, var(--story-fill-ink) 78%, transparent);
+  --story-hair: color-mix(in srgb, var(--story-fill-ink) 24%, transparent);
+  --story-border: color-mix(in srgb, var(--story-fill-ink) 40%, transparent);
+  --story-surface: color-mix(in srgb, var(--story-fill-ink) 14%, transparent);
+  --story-paper: color-mix(in srgb, var(--story-fill-ink) 12%, var(--story-fill));
+  --story-accent: var(--story-fill-ink);
+  --story-accent-ink: var(--story-fill);
+  --story-accent-text: var(--story-fill-ink);
+  --story-soft: color-mix(in srgb, var(--story-fill-ink) 16%, transparent);
+  --story-tone: var(--story-fill-ink);
+  --story-series-0: var(--story-fill-ink);
+  /* Fills are mid to dark, so semantic colors take their light values in either scheme. */
+  --story-positive: #7ee2a8;
+  --story-caution: #ffd666;
+  --story-danger: #ffb3ad;
+  --story-info: #a8d2ff;
+  color: var(--story-fill-ink);
+}
+.story-ui .story-ui-frame[data-root][data-surface] {
+  border: 0;
+  box-shadow: none;
+}
+
+/* Backdrop: an image behind a frame, veiled so the frame's own ink stays legible. */
+.story-ui .story-ui-frame[data-backdrop] {
+  position: relative;
+  isolation: isolate;
+}
+.story-ui .story-ui-frame-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+.story-ui .story-ui-frame[data-backdrop]:not([data-kind="app"]) > .story-ui-frame-head {
+  background: color-mix(in srgb, var(--story-paper) 74%, transparent);
+  backdrop-filter: blur(8px);
+}
+.story-ui .story-ui-frame[data-backdrop] > .story-ui-frame-body {
+  background: linear-gradient(
+    color-mix(in srgb, var(--story-paper) 52%, transparent),
+    color-mix(in srgb, var(--story-paper) 86%, transparent) 9em
+  );
+}
+
+/* Ornaments drawn on a frame. */
+.story-ui .story-ui-frame[data-ornament] {
+  position: relative;
+}
+.story-ui .story-ui-frame:is([data-ornament="corners"], [data-ornament="inset"])::before {
+  position: absolute;
+  inset: 0.45em;
+  z-index: 1;
+  content: "";
+  pointer-events: none;
+}
+.story-ui .story-ui-frame[data-ornament="inset"]::before {
+  border: 1px solid color-mix(in srgb, var(--story-accent-text) 55%, transparent);
+  border-radius: max(0px, calc(var(--story-radius) - 0.45em));
+}
+.story-ui .story-ui-frame[data-ornament="corners"]::before {
+  --story-mark: linear-gradient(var(--story-accent-text), var(--story-accent-text));
+  background:
+    var(--story-mark) top left / 1.1em 2px,
+    var(--story-mark) top left / 2px 1.1em,
+    var(--story-mark) top right / 1.1em 2px,
+    var(--story-mark) top right / 2px 1.1em,
+    var(--story-mark) bottom left / 1.1em 2px,
+    var(--story-mark) bottom left / 2px 1.1em,
+    var(--story-mark) bottom right / 1.1em 2px,
+    var(--story-mark) bottom right / 2px 1.1em;
+  background-repeat: no-repeat;
+}
+.story-ui .story-ui-frame[data-ornament="ribbon"]::before {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  z-index: 1;
+  inline-size: 2.6em;
+  block-size: 2.6em;
+  background: linear-gradient(to bottom left, var(--story-accent) 50%, transparent 50%);
+  content: "";
+  pointer-events: none;
+}
+.story-ui .story-ui-frame[data-ornament="stripes"]::before,
+.story-ui .story-ui-frame[data-ornament="stripes"]::after {
+  flex: none;
+  block-size: 0.55em;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--story-accent) 0 0.6em,
+    color-mix(in srgb, var(--story-ink) 88%, var(--story-paper)) 0.6em 1.2em
+  );
+  content: "";
+}
+
+/* Hero: large text over an image or an accent fill. */
+.story-ui .story-ui-hero {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: flex-end;
+  min-inline-size: 0;
+  min-block-size: 11em;
+  padding: 1.2em 1.3em;
+  overflow: hidden;
+  border-radius: var(--story-radius);
+}
+.story-ui .story-ui-hero[data-size="small"] {
+  min-block-size: 7em;
+}
+.story-ui .story-ui-hero[data-size="large"] {
+  min-block-size: 17em;
+}
+.story-ui .story-ui-hero[data-image] {
+  --story-fill: #14161a;
+  --story-fill-ink: #fff;
+}
+.story-ui .story-ui-hero-image {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+.story-ui .story-ui-hero[data-image]::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(to top, #000000d1, #00000059 55%, #0000001f);
+  content: "";
+}
+.story-ui .story-ui-hero-content {
+  display: grid;
+  gap: 0.25em;
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+.story-ui .story-ui-hero[data-align="center"] > .story-ui-hero-content {
+  justify-items: center;
+  text-align: center;
+}
+.story-ui .story-ui-hero[data-align="end"] > .story-ui-hero-content {
+  justify-items: end;
+  text-align: end;
+}
+.story-ui .story-ui-hero-label {
+  margin: 0;
+  font-size: 0.74em;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  opacity: 0.86;
+  text-transform: uppercase;
+}
+.story-ui .story-ui-hero-title {
+  margin: 0;
+  font-family: var(--story-display);
+  font-size: clamp(1.5em, 7cqi, 2.1em);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.story-ui .story-ui-hero-subtitle {
+  margin: 0;
+  opacity: 0.9;
+}
+.story-ui .story-ui-hero-extra {
+  margin-block-start: 0.6em;
+}
+
+/* Stack: overlays on a base. */
+.story-ui .story-ui-stack {
+  display: grid;
+  min-inline-size: 0;
+  overflow: hidden;
+  border-radius: var(--story-radius);
+}
+.story-ui .story-ui-stack > * > * {
+  grid-area: 1 / 1;
+  min-inline-size: 0;
+}
+.story-ui .story-ui-stack > :first-child > .story-ui-image {
+  inline-size: 100%;
+  border-radius: 0;
+}
+.story-ui .story-ui-stack > :not(:first-child) > * {
+  z-index: 1;
+  max-inline-size: calc(100% - 1.4em);
+  margin: 0.7em;
+  place-self: end start;
+}
+.story-ui .story-ui-stack[data-align="center"] > :not(:first-child) > * {
+  place-self: center;
+}
+.story-ui .story-ui-stack[data-align="top"] > :not(:first-child) > * {
+  place-self: start center;
+}
+.story-ui .story-ui-stack[data-align="bottom"] > :not(:first-child) > * {
+  place-self: end center;
+}
+.story-ui .story-ui-stack[data-align="start"] > :not(:first-child) > * {
+  place-self: center start;
+}
+.story-ui .story-ui-stack[data-align="end"] > :not(:first-child) > * {
+  place-self: center end;
+}
+.story-ui .story-ui-stack[data-align="topStart"] > :not(:first-child) > * {
+  place-self: start;
+}
+.story-ui .story-ui-stack[data-align="topEnd"] > :not(:first-child) > * {
+  place-self: start end;
+}
+.story-ui .story-ui-stack[data-align="bottomEnd"] > :not(:first-child) > * {
+  place-self: end;
+}
+
+/* Carousel: a strip that snaps item by item. */
+.story-ui .story-ui-carousel {
+  --story-item: max(11em, 62%);
+  display: flex;
+  gap: 0.7em;
+  min-inline-size: 0;
+  padding-block-end: 0.5em;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+.story-ui .story-ui-carousel[data-item="narrow"] {
+  --story-item: max(8em, 36%);
+}
+.story-ui .story-ui-carousel[data-item="wide"] {
+  --story-item: 88%;
+}
+.story-ui .story-ui-carousel > * > * {
+  flex: 0 0 var(--story-item);
+  min-inline-size: 0;
+  scroll-snap-align: start;
+}
+
+/* Ring: a circular meter. */
+.story-ui .story-ui-ring {
+  --story-ring: 5.6em;
+  display: grid;
+  justify-items: center;
+  gap: 0.3em;
+  min-inline-size: 0;
+}
+.story-ui .story-ui-ring[data-size="small"] {
+  --story-ring: 4.2em;
+}
+.story-ui .story-ui-ring[data-size="large"] {
+  --story-ring: 7.6em;
+}
+.story-ui .story-ui-ring-dial {
+  position: relative;
+  inline-size: var(--story-ring);
+  block-size: var(--story-ring);
+}
+.story-ui .story-ui-ring-dial > svg {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+}
+.story-ui .story-ui-ring-dial circle {
+  fill: none;
+  stroke-width: 4;
+}
+.story-ui .story-ui-ring-track {
+  stroke: color-mix(in srgb, var(--story-ink) 10%, transparent);
+}
+.story-ui .story-ui-ring-fill {
+  stroke: var(--story-tone);
+  stroke-linecap: round;
+}
+.story-ui .story-ui-ring-value {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  color: var(--story-muted);
+  font-size: calc(var(--story-ring) * 0.13);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.story-ui .story-ui-ring-value > b {
+  color: var(--story-ink);
+  font-family: var(--story-display);
+  font-size: 1.9em;
+}
+.story-ui .story-ui-ring-label {
+  font-size: 0.82em;
+  font-weight: 650;
+  text-align: center;
+}
+
+/* Dialogue: a staged line with a name plate. */
+.story-ui .story-ui-dialogue {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.8em;
+  min-inline-size: 0;
+}
+.story-ui .story-ui-dialogue[data-side="right"] {
+  flex-direction: row-reverse;
+}
+.story-ui .story-ui-dialogue-portrait {
+  flex: none;
+  inline-size: 5.5em;
+  block-size: 7em;
+  border: 1px solid var(--story-hair);
+  border-radius: var(--story-radius);
+  object-fit: cover;
+  object-position: center 20%;
+}
+@container (inline-size < 26em) {
+  .story-ui .story-ui-dialogue-portrait {
+    inline-size: 4.2em;
+    block-size: 5.4em;
+  }
+}
+.story-ui .story-ui-dialogue-box {
+  position: relative;
+  flex: 1;
+  min-inline-size: 0;
+  margin-block-start: 0.8em;
+  padding: 0.95em 1.1em 0.85em;
+  background: var(--story-surface);
+  border: 1px solid color-mix(in srgb, var(--story-accent-text) 35%, transparent);
+  border-radius: var(--story-radius);
+}
+.story-ui .story-ui-dialogue-head {
+  display: flex;
+  justify-content: flex-end;
+  min-block-size: 0.5em;
+  margin: 0 0 0.2em;
+}
+.story-ui .story-ui-dialogue[data-side="right"] .story-ui-dialogue-head {
+  justify-content: flex-start;
+}
+.story-ui .story-ui-dialogue-name {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0.9em;
+  max-inline-size: calc(100% - 1.8em);
+  padding: 0.1em 0.85em;
+  overflow: hidden;
+  color: var(--story-accent-ink);
+  background: var(--story-accent);
+  border-radius: max(2px, calc(var(--story-radius) - 6px));
+  font-family: var(--story-display);
+  font-size: 0.86em;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  translate: 0 -55%;
+  white-space: nowrap;
+}
+.story-ui .story-ui-dialogue[data-side="right"] .story-ui-dialogue-name {
+  inset-inline: auto 0.9em;
+}
+.story-ui .story-ui-dialogue-status {
+  color: var(--story-muted);
+  font-size: 0.78em;
+  font-style: italic;
+}
+.story-ui .story-ui-dialogue-text {
+  line-height: 1.7;
+}
+
+/* A block styled by the model's own CSS clips whatever that CSS paints, and its motion
+   yields to the reader's preference. Model CSS never carries !important. */
+.story-ui-block[data-authored] {
+  /* Layout containment makes the block the containing block of fixed-position content. */
+  contain: layout;
+  overflow: clip;
+  overflow-clip-margin: 1.5em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-ui[data-story-ui-authored],
+  .story-ui[data-story-ui-authored] *,
+  .story-ui[data-story-ui-authored] *::before,
+  .story-ui[data-story-ui-authored] *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 /* The host's send confirmation under a block. */
 .story-ui-action {
   display: flex;
@@ -1613,6 +2072,121 @@
   box-shadow:
     0 3px 0 color-mix(in srgb, var(--story-ink) 32%, transparent),
     0 6px 14px #14283c2e;
+}
+
+.story-ui[data-story-ui-style="idol"] {
+  --story-paper: light-dark(#fff8fc, #1d1626);
+  --story-surface: light-dark(#ffffff, #2a2036);
+  --story-ink: light-dark(#3b2a4a, #f3e9fb);
+  --story-muted: light-dark(#7d6a8f, #b3a2c6);
+  --story-border: light-dark(#efc3e0, #4d3a63);
+  --story-accent: light-dark(#dc2f8a, #ff7dbb);
+  --story-accent-ink: light-dark(#ffffff, #2a0f1f);
+  --story-accent-text: light-dark(#c81e78, #ff9acb);
+  --story-radius: 18px;
+  --story-font: var(--story-sans);
+  --story-shine: linear-gradient(135deg, #e0348f, #8b5cf6);
+  background-image:
+    radial-gradient(circle at 10% 0%, light-dark(#ffd6ecb3, #ff7dbb26), transparent 45%),
+    radial-gradient(circle at 100% 15%, light-dark(#cfe6ffb3, #7db4ff24), transparent 42%),
+    radial-gradient(circle at 60% 115%, light-dark(#fff1b0b3, #ffd86a1c), transparent 45%);
+  border: 2px solid light-dark(#ffffff, #4d3a63);
+  box-shadow: 0 8px 24px -12px light-dark(#dc2f8a80, #000000b3);
+}
+/* neon and horror are night scenes: they keep their dark palette in either app mode. */
+.story-ui[data-story-ui-style="neon"] {
+  --story-paper: #0b0d1a;
+  --story-surface: #151a30;
+  --story-ink: #e6ecff;
+  --story-muted: #93a0c8;
+  --story-border: #2f3b6b;
+  --story-accent: #22d3ee;
+  --story-accent-ink: #04121a;
+  --story-accent-text: #5ee7ff;
+  --story-radius: 2px;
+  --story-font: var(--story-sans);
+  --story-display: var(--story-mono);
+  color-scheme: dark;
+  background-image:
+    linear-gradient(#22d3ee0f 1px, transparent 1px),
+    linear-gradient(90deg, #22d3ee0f 1px, transparent 1px);
+  background-size: 24px 24px;
+  border-color: #22d3ee99;
+  box-shadow:
+    0 0 0 1px #22d3ee33,
+    0 0 22px -8px #22d3ee,
+    inset 0 0 36px -20px #d946ef;
+}
+.story-ui[data-story-ui-style="horror"] {
+  --story-paper: #120d0d;
+  --story-surface: #1d1414;
+  --story-ink: #dcd1c8;
+  --story-muted: #978680;
+  --story-border: #442c29;
+  --story-accent: #8c1c1c;
+  --story-accent-ink: #f7e8e2;
+  --story-accent-text: #d85c50;
+  --story-radius: 1px;
+  --story-font: var(--story-serif);
+  color-scheme: dark;
+  background-image: radial-gradient(130% 90% at 50% 0%, transparent 35%, #000000b3);
+  border-color: #442c29;
+  box-shadow: inset 0 0 60px -24px #000;
+}
+.story-ui[data-story-ui-style="tactical"] {
+  --story-paper: light-dark(#e6e7dc, #14170f);
+  --story-surface: light-dark(#f1f2e8, #1d2216);
+  --story-ink: light-dark(#23281c, #d7dcc4);
+  --story-muted: light-dark(#5c6350, #969d82);
+  --story-border: light-dark(#9aa086, #454d36);
+  --story-accent: light-dark(#4c5a2a, #a3b35a);
+  --story-accent-ink: light-dark(#f4f6e6, #14170f);
+  --story-accent-text: light-dark(#44521f, #b7c76b);
+  --story-radius: 0px;
+  --story-font: var(--story-sans);
+  --story-display: var(--story-mono);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--story-ink) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--story-ink) 6%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 20px 20px;
+  border-color: var(--story-border);
+  border-radius: 0;
+  box-shadow:
+    inset 0 0 0 3px var(--story-paper),
+    inset 0 0 0 4px var(--story-border);
+}
+.story-ui[data-story-ui-style="romance"] {
+  --story-paper: light-dark(#fbf3ee, #221a1c);
+  --story-surface: light-dark(#fffaf6, #2d2326);
+  --story-ink: light-dark(#4a3438, #efdfdc);
+  --story-muted: light-dark(#876a6c, #b59c9c);
+  --story-border: light-dark(#e2c3be, #55403f);
+  --story-accent: light-dark(#b24c63, #e08c9c);
+  --story-accent-ink: light-dark(#fff7f5, #2a1318);
+  --story-accent-text: light-dark(#a3415a, #eaa1ae);
+  --story-radius: 10px;
+  --story-font: var(--story-serif);
+  border-color: var(--story-border);
+  box-shadow:
+    inset 0 0 0 5px var(--story-paper),
+    inset 0 0 0 6px var(--story-border);
+}
+/* A textured preset shows through a plain root frame. */
+.story-ui:is(
+  [data-story-ui-style="idol"],
+  [data-story-ui-style="neon"],
+  [data-story-ui-style="horror"],
+  [data-story-ui-style="tactical"]
+)
+.story-ui-frame[data-root]:is([data-kind="panel"], [data-kind="page"]):not(
+  [data-surface],
+  [data-backdrop]
+) {
+  background: none;
 }
 
 /* An authored theme usually sets a few of the shared tokens. The ones it leaves out follow
@@ -1727,6 +2301,149 @@
   border-radius: 5px 12px;
   box-shadow: 0 2px 1px color-mix(in srgb, var(--story-ink) 35%, transparent);
   font-weight: 700;
+}
+
+.story-ui[data-story-ui-style="idol"] .story-ui-button:not([data-variant="borderless"]),
+.story-ui[data-story-ui-style="idol"] .story-ui-tabs > button {
+  border-radius: 999px;
+}
+.story-ui[data-story-ui-style="idol"] .story-ui-button[data-variant="primary"] {
+  color: #fff;
+  background: var(--story-shine);
+  box-shadow: 0 4px 12px -6px #8b5cf6;
+  font-weight: 750;
+}
+.story-ui[data-story-ui-style="idol"] .story-ui-tabs {
+  gap: 0.3em;
+  padding: 0.25em;
+  background: var(--story-surface);
+  border: 1px solid var(--story-border);
+  border-radius: 999px;
+}
+.story-ui[data-story-ui-style="idol"] .story-ui-tabs > button {
+  flex: 1 1 auto;
+  margin: 0;
+  border: 0;
+}
+.story-ui[data-story-ui-style="idol"] .story-ui-tabs > button[aria-selected="true"] {
+  color: #fff;
+  background: var(--story-shine);
+}
+.story-ui[data-story-ui-style="idol"] :is(figcaption, .story-ui-text-title)::before {
+  margin-inline-end: 0.4em;
+  color: var(--story-accent-text);
+  content: "✦";
+}
+.story-ui[data-story-ui-style="idol"]
+  .story-ui-gauge:not([data-tone])
+  > .story-ui-gauge-track
+  > span {
+  background: var(--story-shine);
+}
+.story-ui[data-story-ui-style="idol"] :is(.story-ui-card, .story-ui-stat) {
+  box-shadow: 0 4px 14px -10px var(--story-accent);
+}
+
+.story-ui[data-story-ui-style="neon"] :is(.story-ui-text-headline, .story-ui-text-display) {
+  text-shadow: 0 0 0.5em color-mix(in srgb, var(--story-accent-text) 70%, transparent);
+}
+.story-ui[data-story-ui-style="neon"] :is(.story-ui-card, .story-ui-stat) {
+  border-inline-start: 3px solid var(--story-accent);
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-button:not([data-variant="borderless"]) {
+  border-color: var(--story-accent-text);
+  letter-spacing: 0.04em;
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-button[data-variant="primary"] {
+  box-shadow: 0 0 14px -4px var(--story-accent);
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-tabs > button[aria-selected="true"] {
+  color: var(--story-accent-text);
+  box-shadow: 0 6px 10px -8px var(--story-accent);
+}
+.story-ui[data-story-ui-style="neon"] :is(figcaption, .story-ui-text-label) {
+  font-family: var(--story-mono);
+  letter-spacing: 0.1em;
+}
+
+.story-ui[data-story-ui-style="horror"] .story-ui-frame-head,
+.story-ui[data-story-ui-style="horror"] .story-ui-tabs {
+  border-block-end: 1px solid;
+  border-image: linear-gradient(90deg, transparent, var(--story-accent-text), transparent) 1;
+}
+.story-ui[data-story-ui-style="horror"] :is(.story-ui-text-headline, .story-ui-frame-title) {
+  letter-spacing: 0.08em;
+}
+.story-ui[data-story-ui-style="horror"] :is(.story-ui-card, .story-ui-stat) {
+  background: color-mix(in srgb, #000 28%, var(--story-surface));
+  box-shadow: inset 0 0 1.6em -0.8em #000;
+}
+.story-ui[data-story-ui-style="horror"]
+  .story-ui-button:not([data-variant="primary"], [data-variant="borderless"]) {
+  border-color: color-mix(in srgb, var(--story-accent-text) 45%, var(--story-border));
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-tabs > button[aria-selected="true"] {
+  color: var(--story-accent-text);
+}
+
+.story-ui[data-story-ui-style="tactical"] :is(figcaption, .story-ui-text-label) {
+  font-family: var(--story-mono);
+  letter-spacing: 0.1em;
+}
+.story-ui[data-story-ui-style="tactical"] :is(figcaption, .story-ui-text-label)::before {
+  content: "// ";
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-stat-value {
+  font-family: var(--story-mono);
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-tabs {
+  gap: 0;
+  border: 1px solid var(--story-border);
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-tabs > button {
+  flex: 1 1 auto;
+  margin: 0;
+  border: 0;
+  border-inline-end: 1px solid var(--story-border);
+  font-family: var(--story-mono);
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-tabs > button[aria-selected="true"] {
+  color: var(--story-accent-ink);
+  background: var(--story-accent);
+}
+.story-ui[data-story-ui-style="tactical"]
+  .story-ui-button:not([data-variant="primary"], [data-variant="borderless"]) {
+  border-color: var(--story-ink);
+}
+.story-ui[data-story-ui-style="tactical"] :is(.story-ui-card, .story-ui-stat) {
+  border-style: dashed;
+  border-color: var(--story-border);
+}
+
+.story-ui[data-story-ui-style="romance"] .story-ui-button:not([data-variant="borderless"]) {
+  border-radius: 999px;
+}
+.story-ui[data-story-ui-style="romance"]
+  .story-ui-button:not([data-variant="primary"], [data-variant="borderless"]) {
+  color: var(--story-accent-text);
+  border-color: color-mix(in srgb, var(--story-accent-text) 55%, transparent);
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-tabs {
+  border-block-end-style: dotted;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-tabs > button[aria-selected="true"] {
+  color: var(--story-accent-text);
+}
+.story-ui[data-story-ui-style="romance"] :is(figcaption, .story-ui-text-label) {
+  letter-spacing: 0.12em;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-frame-head {
+  justify-content: center;
+  border-block-end-style: dotted;
+  text-align: center;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-frame-subtitle {
+  margin-inline-start: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

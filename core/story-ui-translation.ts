@@ -65,7 +65,7 @@ function textSlots(messages: unknown): Slot[] {
   // feeds an action or editable input must retain its original data value.
   const visiblePaths = new Map<string, string[]>();
   const protectedPaths = new Map<string, string[]>();
-  protectedPaths.set(JSON.stringify(['_uimori', 'style']), ['_uimori', 'style']);
+  protectedPaths.set(JSON.stringify(['_uimori']), ['_uimori']);
   const formatted = new Set<Record<string, unknown>>();
   const dataModel = messages[0].createSurface.dataModel;
   const resolve = (path: string, scope: string[]) => {

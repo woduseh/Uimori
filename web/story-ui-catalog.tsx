@@ -1,9 +1,11 @@
-import { createComponentImplementation } from '@a2ui/react';
+import { createComponentImplementation as implement } from '@a2ui/react';
 import { Catalog } from '@a2ui/web_core';
 import { basicCatalog } from '@a2ui/web_core/catalogs/basic/v1';
 import {
   type CSSProperties,
+  cloneElement,
   Fragment,
+  isValidElement,
   type ReactNode,
   useEffect,
   useId,
@@ -21,6 +23,18 @@ import { t } from './i18n.js';
 // story-ui.css and authored themes style the same markup. The SDK supplies data binding,
 // validation and actions; none of its own elements or styles are used.
 const api = (name: string) => storyUiCatalog.components.get(name)!;
+/** Every component carries its `look` names as `look-<name>` classes on its own element. */
+const createComponentImplementation: typeof implement = (component, render) =>
+  implement(component, (args) => {
+    const node = render(args);
+    const look = (args.props as { look?: unknown }).look;
+    if (typeof look !== 'string' || !isValidElement<{ className?: string }>(node)) return node;
+    if (node.type === Fragment) return node;
+    const names = look.split(' ').map((name) => `look-${name}`);
+    return cloneElement(node, {
+      className: [node.props.className, ...names].filter(Boolean).join(' '),
+    });
+  });
 type ChildRef = string | { id: string; basePath?: string };
 type Build = (id: string, basePath?: string) => ReactNode;
 
@@ -185,7 +199,12 @@ const Grid = createComponentImplementation(api('Grid'), ({ props, buildChild }) 
   </div>
 ));
 const Card = createComponentImplementation(api('Card'), ({ props, buildChild }) => (
-  <div className="story-ui-card" style={flex(props.weight)}>
+  <div
+    className="story-ui-card"
+    data-surface={props.surface}
+    data-accent={props.accent}
+    style={flex(props.weight)}
+  >
     {one(props.child, buildChild)}
   </div>
 ));
@@ -198,8 +217,14 @@ const Frame = createComponentImplementation(api('Frame'), ({ props, buildChild, 
     data-root={context.componentModel.id === 'root' || undefined}
     data-kind={props.kind ?? 'panel'}
     data-accent={props.accent}
+    data-surface={props.surface}
+    data-ornament={props.ornament}
+    data-backdrop={isStoryUiImageUrl(props.backdrop) || undefined}
     style={flex(props.weight)}
   >
+    {isStoryUiImageUrl(props.backdrop) && (
+      <img className="story-ui-frame-backdrop" src={props.backdrop} alt="" />
+    )}
     {(props.title || props.subtitle) && (
       <header className="story-ui-frame-head">
         {props.title && <span className="story-ui-frame-title">{str(props.title)}</span>}
@@ -208,6 +233,48 @@ const Frame = createComponentImplementation(api('Frame'), ({ props, buildChild, 
     )}
     <div className="story-ui-frame-body">{one(props.child, buildChild)}</div>
   </section>
+));
+const Hero = createComponentImplementation(api('Hero'), ({ props, buildChild }) => {
+  const image = isStoryUiImageUrl(props.image);
+  return (
+    <header
+      className="story-ui-hero"
+      data-size={props.size ?? 'medium'}
+      data-align={props.align ?? 'start'}
+      data-accent={props.accent}
+      data-image={image || undefined}
+      style={flex(props.weight)}
+    >
+      {image && <img className="story-ui-hero-image" src={props.image} alt="" />}
+      <div className="story-ui-hero-content">
+        {props.label && <p className="story-ui-hero-label">{str(props.label)}</p>}
+        <h3 className="story-ui-hero-title">{str(props.title)}</h3>
+        {props.subtitle && <p className="story-ui-hero-subtitle">{str(props.subtitle)}</p>}
+        {props.child && <div className="story-ui-hero-extra">{one(props.child, buildChild)}</div>}
+      </div>
+    </header>
+  );
+});
+const Stack = createComponentImplementation(api('Stack'), ({ props, buildChild }) => (
+  <div
+    className="story-ui-stack"
+    data-align={props.align ?? 'bottomStart'}
+    style={flex(props.weight)}
+  >
+    {many(props.children, buildChild)}
+  </div>
+));
+const Carousel = createComponentImplementation(api('Carousel'), ({ props, buildChild }) => (
+  <div
+    className="story-ui-carousel"
+    role="group"
+    aria-label={t('storyUi.carousel')}
+    tabIndex={0}
+    data-item={props.itemWidth ?? 'medium'}
+    style={flex(props.weight)}
+  >
+    {many(props.children, buildChild)}
+  </div>
 ));
 const Details = createComponentImplementation(api('Details'), ({ props, buildChild }) => (
   <details className="story-ui-details" open={props.open} style={flex(props.weight)}>
@@ -616,6 +683,71 @@ const Gauge = createComponentImplementation(api('Gauge'), ({ props }) => {
     </div>
   );
 });
+const Ring = createComponentImplementation(api('Ring'), ({ props }) => {
+  const min = Number(props.min);
+  const max = Number(props.max);
+  const value = Number(props.value);
+  const share = Math.min(1, Math.max(0, (value - min) / (max - min || 1))) * 100;
+  const label = str(props.label);
+  return (
+    <div
+      className="story-ui-ring"
+      data-tone={props.tone}
+      data-size={props.size ?? 'medium'}
+      style={flex(props.weight)}
+    >
+      <div
+        className="story-ui-ring-dial"
+        role="meter"
+        aria-label={label}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuenow={Number.isFinite(value) ? value : min}
+      >
+        <svg viewBox="0 0 42 42" aria-hidden="true" focusable="false">
+          <circle className="story-ui-ring-track" cx="21" cy="21" r="15.9155" />
+          <circle
+            className="story-ui-ring-fill"
+            cx="21"
+            cy="21"
+            r="15.9155"
+            strokeDasharray={`${share} ${100 - share}`}
+            strokeDashoffset="25"
+          />
+        </svg>
+        <span className="story-ui-ring-value">
+          <b>{figure(value)}</b>
+          {props.unit && <span>{props.unit}</span>}
+        </span>
+      </div>
+      <span className="story-ui-ring-label">{label}</span>
+    </div>
+  );
+});
+const Dialogue = createComponentImplementation(api('Dialogue'), ({ props }) => {
+  const speaker = str(props.speaker);
+  return (
+    <div
+      className="story-ui-dialogue"
+      data-side={props.side ?? 'left'}
+      data-accent={props.accent}
+      style={flex(props.weight)}
+    >
+      {isStoryUiImageUrl(props.portrait) && (
+        <img className="story-ui-dialogue-portrait" src={props.portrait} alt={speaker} />
+      )}
+      <div className="story-ui-dialogue-box">
+        {(speaker || props.status) && (
+          <p className="story-ui-dialogue-head">
+            {speaker && <span className="story-ui-dialogue-name">{speaker}</span>}
+            {props.status && <span className="story-ui-dialogue-status">{str(props.status)}</span>}
+          </p>
+        )}
+        <Markdown text={str(props.text)} className="story-ui-dialogue-text story-ui-prose" />
+      </div>
+    </div>
+  );
+});
 const KeyValue = createComponentImplementation(api('KeyValue'), ({ props }) => (
   <figure className="story-ui-keyvalue" style={flex(props.weight)}>
     <Caption>{props.title}</Caption>
@@ -920,6 +1052,11 @@ const implementations = new Map(
     Card,
     Divider,
     Frame,
+    Hero,
+    Stack,
+    Carousel,
+    Ring,
+    Dialogue,
     Details,
     Tabs,
     Modal,

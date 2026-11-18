@@ -42,6 +42,15 @@ export const storyUiAccents = [
   'gray',
 ] as const;
 const tone = z.enum(storyUiTones).describe('Semantic color. Omit for the neutral look.').optional();
+export const storyUiSurfaces = ['outline', 'tint', 'gradient', 'glass', 'glow'] as const;
+const surface = z
+  .enum(storyUiSurfaces)
+  .describe(
+    'How the panel is painted. Omit for the plain look. outline: no fill and a strong accent border. tint: a soft wash of the accent. gradient: a bold accent gradient with light text, for a short panel. glass: translucent and blurred, for a panel over a backdrop or image. glow: a lit accent edge for magic, neon or alarms.'
+  )
+  .optional();
+const accent = (description: string) => z.enum(storyUiAccents).describe(description).optional();
+const size = z.enum(['small', 'medium', 'large']).optional();
 const iconNames = basicSchema.components.Icon.properties.name.oneOf.find(
   (option) => 'enum' in option
 )!.enum as [string, ...string[]];
@@ -71,9 +80,9 @@ export const storyUiExtensions: { name: string; schema: z.ZodTypeAny; purpose?: 
           'The text. body and quote accept simple Markdown (bold, italics, lists); the other variants are plain.'
         ),
         variant: z
-          .enum(['body', 'caption', 'headline', 'title', 'label', 'quote', 'mono'])
+          .enum(['body', 'caption', 'headline', 'title', 'label', 'quote', 'mono', 'display'])
           .describe(
-            'headline: the largest heading. title: a section heading. label: a small overline above content. caption: small secondary text. quote: an indented quotation. mono: fixed-width text for code, logs and readouts, with line breaks kept.'
+            'display: one oversized showpiece line, such as a logo, a score or a verdict. headline: the largest heading. title: a section heading. label: a small overline above content. caption: small secondary text. quote: an indented quotation. mono: fixed-width text for code, logs and readouts, with line breaks kept.'
           )
           .optional(),
         tone,
@@ -97,9 +106,123 @@ export const storyUiExtensions: { name: string; schema: z.ZodTypeAny; purpose?: 
             'The medium. panel: a neutral titled panel. app: a phone app screen such as a messenger or feed. page: a website, board or wiki page. paper: print such as a newspaper, letter, flyer or official document. terminal: a console or machine readout. system: a game-like system, status or quest window. note: a memo or handwritten note.'
           )
           .optional(),
-        accent: z
-          .enum(storyUiAccents)
-          .describe('Brand color of this medium, applied to its header and highlights.')
+        accent: accent('Brand color of this medium, applied to its header and highlights.'),
+        weight,
+        surface,
+        backdrop: text(
+          'Optional image URL painted behind the content, under a veil that keeps text legible.'
+        ).optional(),
+        ornament: z
+          .enum(['corners', 'inset', 'ribbon', 'stripes'])
+          .describe(
+            'Decoration drawn on the frame. corners: bracket marks in the four corners. inset: a fine inner border. ribbon: a folded accent corner. stripes: hazard bands along the top and bottom.'
+          )
+          .optional(),
+      })
+      .strict(),
+  },
+  {
+    name: 'Card',
+    purpose: 'A raised panel around one child. Give it a surface or accent to set it apart.',
+    schema: z
+      .object({
+        child: child('The single component shown inside. Use a Column for several.'),
+        weight,
+        surface,
+        accent: accent('Color of this card and its highlights.'),
+      })
+      .strict(),
+  },
+  {
+    name: 'Hero',
+    purpose:
+      'A banner with large text over an image or an accent gradient: a title card, location reveal, chapter opening, poster, event splash or profile cover.',
+    schema: z
+      .object({
+        title: text('The large line.'),
+        subtitle: text('A line under the title.').optional(),
+        image: text(
+          'Optional image URL filling the banner. An accent gradient is shown without it.'
+        ).optional(),
+        label: text('A small overline above the title.').optional(),
+        child: child(
+          'Optional content under the text, such as a Row of Badge or Button.'
+        ).optional(),
+        size,
+        align: z.enum(['start', 'center', 'end']).optional(),
+        accent: accent('Color of the gradient and highlights.'),
+        weight,
+      })
+      .strict(),
+  },
+  {
+    name: 'Dialogue',
+    purpose:
+      'A visual-novel line: a speech box with a name plate and an optional standing portrait. Use it for a game-like or staged exchange, not for ordinary prose dialogue.',
+    schema: z
+      .object({
+        text: text('The spoken line. Simple Markdown is accepted.'),
+        speaker: text('Name on the plate.').optional(),
+        portrait: text('Optional portrait image URL.').optional(),
+        status: text('A short stage direction or mood beside the name.').optional(),
+        side: z.enum(['left', 'right']).describe('Which side the portrait stands on.').optional(),
+        accent: accent('Color of the name plate.'),
+        weight,
+      })
+      .strict(),
+  },
+  {
+    name: 'Ring',
+    purpose:
+      'A circular meter with the figure in its center. Put several in a Row for a compact dashboard.',
+    schema: z
+      .object({
+        label: text('What is measured.'),
+        value: number('The current amount.'),
+        min: z.number().finite(),
+        max: z.number().finite(),
+        unit: z.string().max(100).optional(),
+        tone,
+        size,
+        weight,
+      })
+      .strict(),
+  },
+  {
+    name: 'Carousel',
+    purpose:
+      'A horizontal strip the reader swipes through, one item snapping into place at a time: a gallery, a hand of cards, a shop shelf, a character roster.',
+    schema: z
+      .object({
+        children: children('The items, usually Card or Image.'),
+        itemWidth: z
+          .enum(['narrow', 'medium', 'wide'])
+          .describe('narrow shows several items at once; wide shows about one.')
+          .optional(),
+        weight,
+      })
+      .strict(),
+  },
+  {
+    name: 'Stack',
+    purpose:
+      'Layers its children on top of each other. The first child is the base, such as an Image; the rest are laid over it at the aligned position, such as a Badge, a caption or a Card with surface="glass".',
+    schema: z
+      .object({
+        children: children('The base first, then the overlays.'),
+        align: z
+          .enum([
+            'center',
+            'top',
+            'bottom',
+            'start',
+            'end',
+            'topStart',
+            'topEnd',
+            'bottomStart',
+            'bottomEnd',
+          ])
+          .describe('Where the overlays sit on the base. Defaults to bottomStart.')
           .optional(),
         weight,
       })
@@ -260,7 +383,7 @@ export const storyUiExtensions: { name: string; schema: z.ZodTypeAny; purpose?: 
       .object({
         label: text('The name. Its first character is shown when there is no image.'),
         url: text('Optional portrait image URL.').optional(),
-        size: z.enum(['small', 'medium', 'large']).optional(),
+        size,
         weight,
       })
       .strict(),
@@ -319,6 +442,7 @@ export const storyUiTextKeys = [
   'title',
   'subtitle',
   'sender',
+  'speaker',
   'author',
   'time',
   'text',
@@ -337,14 +461,29 @@ export const storyUiNestedTextKeys: Record<string, string[]> = {
   items: ['label', 'value', 'title', 'text', 'time'],
 };
 /** Components whose `value` is displayed rather than edited. */
-export const storyUiDisplayValues = new Set(['Gauge', 'Stat']);
+export const storyUiDisplayValues = new Set(['Gauge', 'Ring', 'Stat']);
 /** Properties that must name an image stored by this app. */
 export const storyUiImageKeys: Record<string, string> = {
   Image: 'url',
   Avatar: 'url',
   Message: 'avatar',
   Post: 'avatar',
+  Frame: 'backdrop',
+  Hero: 'image',
+  Dialogue: 'portrait',
 };
+
+/**
+ * A style hook on every component. The renderer turns each name into a `look-<name>` class
+ * that the block's own CSS (`$/_uimori/css`) or an authored theme can target.
+ */
+const look = z
+  .string()
+  .regex(/^[a-z][a-z0-9-]{0,31}(?: [a-z][a-z0-9-]{0,31}){0,3}$/)
+  .describe('Style hook names for the block CSS, separated by spaces.')
+  .optional();
+const withLook = (schema: z.ZodTypeAny): z.ZodTypeAny =>
+  (schema as z.AnyZodObject).extend({ look });
 
 const allowed = new Set([
   'Image',
@@ -352,7 +491,6 @@ const allowed = new Set([
   'Row',
   'Column',
   'List',
-  'Card',
   'Tabs',
   'Modal',
   'Divider',
@@ -367,8 +505,10 @@ export const storyUiCatalog = new Catalog(
   STORY_UI_CATALOG_ID,
   '1.0',
   [
-    ...[...basicCatalog.components.values()].filter((entry) => allowed.has(entry.name)),
-    ...storyUiExtensions.map(({ name, schema }) => ({ name, schema })),
+    ...[...basicCatalog.components.values()]
+      .filter((entry) => allowed.has(entry.name))
+      .map(({ name, schema }) => ({ name, schema: withLook(schema) })),
+    ...storyUiExtensions.map(({ name, schema }) => ({ name, schema: withLook(schema) })),
   ],
   [...basicCatalog.functions.values()].filter((entry) => entry.name !== 'openUrl'),
   {
