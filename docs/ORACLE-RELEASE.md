@@ -99,7 +99,7 @@ SSH가 끊기면 같은 명령을 바로 재실행하지 말고 알려진 run ID
 
 현재 실행 이미지와 직전 복구용 이미지, 최신 성공 배포의 직전 DB·동반 파일·환경 백업을 한 복구 세트로 보존해요. 실제 컨테이너 image/volume, 백업 무결성 기록, 백업 파일 존재, 두 이미지의 존재가 확인되어야 오래된 세트를 지워요. 기존 컨테이너가 참조하는 이미지(중지된 컨테이너 포함)도 보존해요.
 
-삭제 대상은 `uimori-oracle-v2` 관리 표식과 정상 종료 기록이 있는 오래된 릴리스, `io.uimori.managed=true` 이미지 중 `uimori:candidate-<SHA>` 태그만 있거나 태그가 없고 더 이상 보호되지 않는 이미지예요. 한 이미지 삭제가 다른 계획 대상 parent/intermediate 이미지까지 함께 회수한 경우에는 최신 Docker image inventory로 이미 사라진 ID를 확인해 정상 정리로 처리하고, 실제 ID가 남아 있거나 현재 상태를 다시 확인할 수 없을 때만 경고를 기록해요. 최근 종료된 실패 기록은 5개 남겨요. 중단/롤백 실패/쓰기 상태 불명확/임시 정리 실패 기록과 관련 이미지는 자동 삭제하지 않아요. 이전 배포 도구가 만든 미표식 디렉터리·이미지는 자동으로 관리 대상으로 편입하지 않아요. 첫 개편 배포 뒤에도 이런 예전 자료가 남을 수 있으며 `--cleanup-plan`에서 미확인 대상으로 표시해요.
+삭제 대상은 `uimori-oracle-v2` 관리 표식과 정상 종료 기록이 있는 오래된 릴리스, `io.uimori.managed=true`와 유효한 전체 SHA 라벨이 붙은 `uimori:*` 태그(또는 무태그) 이미지 중 보호되지 않는 이미지예요. 빌드 중간 단계는 별도 `io.uimori.build-layer=true` 라벨을 달아 식별하고, 무태그이면서 생성된 지 48시간이 지난 것만 정리해요. 한 이미지에 관리 대상 태그가 여러 개 붙어 있으면 각각이 같은 이미지 ID를 가리키는지 확인하고 `--force` 없이 순서대로 제거해요. 한 이미지 삭제가 다른 계획 대상 parent/intermediate 이미지까지 함께 회수한 경우에는 최신 Docker image inventory로 이미 사라진 ID를 확인해 정상 정리로 처리하고, 실제 ID가 남아 있거나 현재 상태를 다시 확인할 수 없을 때만 경고를 기록해요. 최근 종료된 실패 기록은 5개 남겨요. 중단/롤백 실패/쓰기 상태 불명확/임시 정리 실패 기록과 관련 이미지는 자동 삭제하지 않아요. 이전 배포 도구가 만든 미표식 디렉터리·이미지는 자동으로 관리 대상으로 편입하지 않아요. 첫 개편 배포 뒤에도 이런 예전 자료가 남을 수 있으며 `--cleanup-plan`에서 미확인 대상으로 표시해요.
 
 ```bash
 npm run release:oracle -- --config .local/oracle-release.json --cleanup-plan
@@ -109,7 +109,9 @@ npm run release:oracle -- --config .local/oracle-release.json --cleanup-plan
 
 컨트롤러 preview는 읽기 전용이며 별도 수동 apply 모드를 제공하지 않아요. 실제 정리는 정상 배포 뒤 자동 수행해요. 동작 중인 배포가 lock을 잡고 있다면 preview도 재시도하기 전 해당 배포 종료를 확인해요.
 
-**운영 데이터 볼륨과 fresh 모드의 이전 볼륨은 자동 삭제하지 않아요.** PocketRisu, Tia Workspace, SSH/인증 파일, 개발 브랜치·worktree, 공유 Docker builder 캐시와 서버 전체 네트워크도 이 정리 대상이 아니에요. `docker system prune`, 전역 image/volume/builder prune을 실행하지 않아요.
+Sisters Workspace도 별도 보존 규칙을 적용해요. 실행 중인 `tia-workspace-workspace-1`이 확인될 때만 `tia-workspace-local`, `tia-workspace-candidate`, `sisters-workspace-candidate`, `sisters-workspace-herdr-candidate`, `sisters-workspace-rollback` 태그를 가진 이미지를 대상으로 판단해요. 모든 컨테이너(중지 포함)가 참조하는 이미지를 먼저 보호하고, `sisters-workspace-rollback:previous`가 있으면 그것을, 없으면 가장 최근의 미사용 후보 이미지 하나를 추가 보존해요. 더 오래된 후보도 생성된 지 7일이 지나야 제거하며 이미지 생성 순서를 확인할 수 없으면 해당 서비스 정리를 건너뛰어요. Sisters의 다음 정상 배포부터 직전 이미지를 `sisters-workspace-rollback:previous`로 고정하므로, 그 전에는 최근 후보 보존이 보수적인 대체 규칙일 뿐 실제 직전 이미지임을 보증하지 않아요.
+
+**운영 데이터 볼륨과 fresh 모드의 이전 볼륨은 자동 삭제하지 않아요.** PocketRisu, 인식되지 않은 타 서비스 이미지/태그, SSH·인증 파일, 개발 브랜치·worktree, 공유 Docker builder 캐시와 서버 전체 네트워크도 정리 대상이 아니에요. `docker system prune`, 전역 image/volume/builder prune을 실행하지 않아요. 이 정리는 Uimori의 정상 배포가 완료된 때 실행되므로 Sisters Workspace만 단독 업데이트했다면 다음 Uimori 정상 배포 전까지 과거 후보가 남을 수 있어요.
 
 ## 데이터 호환성과 초기화
 
