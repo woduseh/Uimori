@@ -20,11 +20,8 @@ import {
   MoreIcon,
   MoveIcon,
 } from './ui-icons.js';
-import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
-import { uploadPackageImage } from './package-image-upload.js';
-import { LibraryFolderCover, folderCoverUrl } from './LibraryFolderCover.js';
+import { LibraryFolderCover, LibraryFolderCoverDialog } from './LibraryFolderCover.js';
 import './library-folders.css';
-import './content-picker.css';
 
 const categoryLabelKeys: Record<LibraryCategory, string> = {
   bot: 'library.bot',
@@ -33,7 +30,6 @@ const categoryLabelKeys: Record<LibraryCategory, string> = {
   prompts: 'library.prompts',
 };
 export type FolderFilter = 'all' | 'unclassified' | string;
-const blobHash = (url: string) => /\/api\/package-image-blobs\/([a-f0-9]{64})$/u.exec(url)?.[1];
 
 export function useLibraryOrganization(
   library: Library | null,
@@ -171,10 +167,6 @@ export function LibraryFolders({
   const [edit, setEdit] = useState<{ folder: LibraryFolder | null; revision: number } | null>(null);
   const [title, setTitle] = useState('');
   const [coverFolderId, setCoverFolderId] = useState<string | null>(null);
-  const [uploadingCover, setUploadingCover] = useState(false);
-  const [coverError, setCoverError] = useState('');
-  const coverUpload = useRef<AbortController | null>(null);
-  useEffect(() => () => coverUpload.current?.abort(), []);
   const draggedFolder = useRef<string | null>(null);
   const [folderDrop, setFolderDrop] = useState<{ id: string; edge: 'before' | 'after' } | null>(
     null
@@ -188,34 +180,6 @@ export function LibraryFolders({
     if (!organization) return;
     setTitle(folder?.title ?? '');
     setEdit({ folder, revision: organization.revision });
-  }
-  function closeCover() {
-    coverUpload.current?.abort();
-    setUploadingCover(false);
-    setCoverError('');
-    setCoverFolderId(null);
-  }
-  async function applyCover(folderId: string, coverImageHash: string | null) {
-    setCoverError('');
-    if (
-      await mutate(`/library/folders/${encodeURIComponent(folderId)}`, { coverImageHash }, 'PATCH')
-    )
-      closeCover();
-  }
-  async function uploadCover(folderId: string, file: File) {
-    coverUpload.current?.abort();
-    const controller = new AbortController();
-    coverUpload.current = controller;
-    setCoverError('');
-    setUploadingCover(true);
-    try {
-      const image = await uploadPackageImage(file, controller.signal, 'profile');
-      await applyCover(folderId, image.blobHash);
-    } catch (error) {
-      if (!controller.signal.aborted) setCoverError((error as Error).message);
-    } finally {
-      if (coverUpload.current === controller) setUploadingCover(false);
-    }
   }
   function folderActions(folder: LibraryFolder) {
     return (
@@ -260,10 +224,6 @@ export function LibraryFolders({
   }
   const selectedFolder = folders.find((item) => item.id === value);
   const coverFolder = folders.find((item) => item.id === coverFolderId);
-  const coverPortraits = (coverFolder && covers?.[coverFolder.id]) || [];
-  const coverChoices = coverPortraits.map(blobHash).filter((hash) => hash !== undefined);
-  if (coverFolder?.coverImageHash && !coverChoices.includes(coverFolder.coverImageHash))
-    coverChoices.unshift(coverFolder.coverImageHash);
   function clearFolderDrag() {
     draggedFolder.current = null;
     setFolderDrop(null);
@@ -390,77 +350,19 @@ export function LibraryFolders({
           </LibraryItemMenu>
         </>
       )}
-      <Dialog
-        open={!!coverFolder}
-        title={t('library.folderCover')}
-        onClose={() => {
-          if (!busy) closeCover();
-        }}
-      >
-        {coverFolder && (
-          <div className="library-cover-picker">
-            <div className="library-cover-choices">
-              <button
-                type="button"
-                className="secondary library-cover-choice"
-                aria-pressed={!coverFolder.coverImageHash}
-                disabled={busy || uploadingCover}
-                onClick={() => void applyCover(coverFolder.id, null)}
-              >
-                <LibraryFolderCover
-                  coverImageHash={null}
-                  portraits={coverPortraits}
-                  iconSize={28}
-                />
-                <span>{t('library.automaticCover')}</span>
-                {!coverFolder.coverImageHash && <CheckIcon size={16} aria-hidden="true" />}
-              </button>
-              {coverChoices.map((hash, index) => (
-                <button
-                  type="button"
-                  className="secondary library-cover-choice"
-                  key={hash}
-                  aria-label={t('library.coverImageChoice', { index: index + 1 })}
-                  aria-pressed={coverFolder.coverImageHash === hash}
-                  disabled={busy || uploadingCover}
-                  onClick={() => void applyCover(coverFolder.id, hash)}
-                >
-                  <span className="library-folder-cover" data-count={1} aria-hidden="true">
-                    <img src={folderCoverUrl(hash)} alt="" loading="lazy" />
-                  </span>
-                  {coverFolder.coverImageHash === hash && (
-                    <CheckIcon size={16} aria-hidden="true" />
-                  )}
-                </button>
-              ))}
-            </div>
-            <div className="package-portrait-actions">
-              <label
-                className={`secondary package-portrait-upload${busy || uploadingCover ? ' is-disabled' : ''}`}
-              >
-                {t('library.uploadImage')}
-                <input
-                  type="file"
-                  accept={PACKAGE_IMAGE_MIMES.join(',')}
-                  aria-label={t('library.uploadCover')}
-                  disabled={busy || uploadingCover}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    event.target.value = '';
-                    if (file) void uploadCover(coverFolder.id, file);
-                  }}
-                />
-              </label>
-              {uploadingCover && <span role="status">{t('library.uploadingCover')}</span>}
-            </div>
-            {coverError && (
-              <p className="error" role="alert">
-                {coverError}
-              </p>
-            )}
-          </div>
-        )}
-      </Dialog>
+      <LibraryFolderCoverDialog
+        folder={coverFolder}
+        portraits={coverFolder ? covers?.[coverFolder.id] : undefined}
+        busy={busy}
+        onApply={(coverImageHash) =>
+          mutate(
+            `/library/folders/${encodeURIComponent(coverFolder!.id)}`,
+            { coverImageHash },
+            'PATCH'
+          )
+        }
+        onClose={() => setCoverFolderId(null)}
+      />
       <Dialog
         open={!!edit}
         title={edit?.folder ? t('library.renameFolder') : t('library.newFolder')}

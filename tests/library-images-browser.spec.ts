@@ -547,3 +547,85 @@ test('LIMG05 quick persona selection shows one current selection after its image
   });
   expect(after.runs).toHaveLength(0);
 });
+
+test('LIBCOVER a folder cover follows its resources until an image is chosen or uploaded, in the library and the sidebar', async ({
+  page,
+  request,
+}) => {
+  const portrait = await blob(request),
+    title = `표지 폴더 ${Date.now()}`,
+    bot = await seed(request, 'bot', `표지 자료 ${Date.now()}`, portraitPart(portrait));
+  const organization = async () =>
+    (await (await request.get('/api/library/organization')).json()) as LibraryOrganization;
+  const created = await request.post('/api/library/folders', {
+    data: { title, category: 'bot', expectedRevision: (await organization()).revision },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const folderId = ((await created.json()) as LibraryOrganization).folders.find(
+    (folder) => folder.title === title
+  )!.id;
+  const moved = await request.post('/api/library/organization/move', {
+    data: {
+      items: [{ kind: 'content', id: bot.id }],
+      category: 'bot',
+      folderId,
+      expectedRevision: (await organization()).revision,
+    },
+  });
+  expect(moved.ok(), await moved.text()).toBe(true);
+  const savedCover = async () =>
+    (await organization()).folders.find((folder) => folder.id === folderId)!.coverImageHash;
+
+  const library = await openLibrary(page, 'bot');
+  const card = library.locator(`[data-folder-id="${folderId}"]`);
+  const cardCover = card.locator('.library-folder-cover img');
+  await expect(cardCover).toHaveAttribute('src', `/api/package-image-blobs/${portrait.hash}`);
+  const section = page.locator('.bot-tree-section-heading > .bot-folder-toggle');
+  if ((await section.getAttribute('aria-expanded')) !== 'true') await section.click();
+  const treeCover = page
+    .locator('.bot-tree-folder-heading')
+    .filter({ hasText: title })
+    .locator('.library-folder-cover img');
+  await expect(treeCover).toHaveAttribute('src', `/api/package-image-blobs/${portrait.hash}`);
+
+  const dialog = page.getByRole('dialog', { name: '폴더 표지', exact: true });
+  const openPicker = async () => {
+    await card.getByLabel(`${title} 폴더 메뉴`, { exact: true }).click();
+    await card.getByRole('button', { name: '표지 바꾸기', exact: true }).click();
+    await expect(dialog).toBeVisible();
+  };
+  await openPicker();
+  const automatic = dialog.getByRole('button', { name: '자동', exact: true });
+  await expect(automatic).toHaveAttribute('aria-pressed', 'true');
+  await dialog.getByLabel('폴더 표지 이미지 업로드', { exact: true }).setInputFiles({
+    name: 'cover.png',
+    mimeType: 'image/png',
+    buffer: otherPng,
+  });
+  await expect(dialog).toBeHidden();
+  const uploaded = await savedCover();
+  expect(uploaded).toMatch(/^[a-f0-9]{64}$/u);
+  expect(uploaded).not.toBe(portrait.hash);
+  await expect(cardCover).toHaveAttribute('src', `/api/package-image-blobs/${uploaded}`);
+  await expect(treeCover).toHaveAttribute('src', `/api/package-image-blobs/${uploaded}`);
+
+  await openPicker();
+  await expect(automatic).toHaveAttribute('aria-pressed', 'false');
+  await expect(dialog.locator('.library-cover-choice[aria-pressed="true"] img')).toHaveAttribute(
+    'src',
+    `/api/package-image-blobs/${uploaded}`
+  );
+  await automatic.click();
+  await expect(dialog).toBeHidden();
+  expect(await savedCover()).toBeNull();
+  await expect(cardCover).toHaveAttribute('src', `/api/package-image-blobs/${portrait.hash}`);
+
+  const row = page.locator('.bot-tree-folder-heading').filter({ hasText: title });
+  await row.hover();
+  await row.getByLabel(new RegExp(title)).last().click();
+  await page.getByRole('button', { name: '표지 바꾸기', exact: true }).click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: '표지 이미지 1', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect(await savedCover()).toBe(portrait.hash);
+});

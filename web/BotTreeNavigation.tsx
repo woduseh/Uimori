@@ -22,12 +22,13 @@ import {
   SearchIcon,
   SettingsIcon,
   EditIcon,
+  ImagesIcon,
 } from './ui-icons.js';
 import { api } from './api.js';
 import { chatActivitySummaries } from './chat-activity-summaries.js';
 import { useActivityFeed } from './useActivityFeed.js';
 import { ActivityNavigation } from './ActivityNavigation.js';
-import { LibraryFolderCover } from './LibraryFolderCover.js';
+import { LibraryFolderCover, LibraryFolderCoverDialog } from './LibraryFolderCover.js';
 import { contentPortraitUrl } from './content-portrait.js';
 import './bot-tree-navigation.css';
 
@@ -156,6 +157,7 @@ export function BotNavigation(
   const [editing, setEditing] = useState<LibraryFolder | 'new' | null>(null);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
+  const [coverFolderId, setCoverFolderId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const lock = useRef(false);
   const dragEntry = useRef<{ entry: Entry; revision: number } | null>(null);
@@ -235,6 +237,7 @@ export function BotNavigation(
       .filter((bot) => folderOf(bot) === folderId)
       .map((bot) => contentPortraitUrl(bot))
       .filter(Boolean);
+  const coverFolder = folders.find((folder) => folder.id === coverFolderId);
   const roots = sort([
     ...botEntries(null),
     ...folders.map((folder) => ({
@@ -721,6 +724,13 @@ export function BotNavigation(
                                 <EditIcon size={18} aria-hidden="true" />
                                 {t('transfer.m299')}
                               </button>
+                              <button
+                                disabled={busy}
+                                onClick={() => setCoverFolderId(entry.folder!.id)}
+                              >
+                                <ImagesIcon size={18} aria-hidden="true" />
+                                {t('library.changeCover')}
+                              </button>
                             </div>
                             <div className="action-menu-group">
                               <button
@@ -776,6 +786,16 @@ export function BotNavigation(
           </div>
         </>
       )}
+      <LibraryFolderCoverDialog
+        folder={coverFolder}
+        portraits={coverFolder ? folderPortraits(coverFolder.id) : undefined}
+        busy={busy}
+        onApply={async (coverImageHash) =>
+          (await mutate(`/library/folders/${coverFolder!.id}`, { coverImageHash }, 'PATCH')) ===
+          true
+        }
+        onClose={() => setCoverFolderId(null)}
+      />
       <Dialog
         open={editing !== null}
         title={editing === 'new' ? t('transfer.m304') : t('transfer.m305')}

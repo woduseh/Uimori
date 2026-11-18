@@ -1040,45 +1040,9 @@
   flex-shrink: 0;
 }
 /* Up to four portraits from the folder stand in for the generic folder icon. */
-.library-cover-picker {
-  display: grid;
-  gap: 16px;
-}
-.library-cover-choices {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.library-cover-choice {
-  position: relative;
-  display: grid;
-  justify-items: center;
-  gap: 4px;
-  min-width: 72px;
-  padding: 8px;
-  font-size: var(--font-small);
-  font-weight: 400;
-}
-.library-cover-choice > :first-child {
-  width: 56px;
-  height: 56px;
-}
-.library-cover-choice[aria-pressed="true"] {
-  border-color: var(--accent);
-}
-.library-cover-choice > svg:last-child {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  color: var(--accent-text);
-}
 /* The card's text column rule below also matches the cover span. */
 .library-folder-open > .library-folder-cover {
   gap: 2px;
-}
-.library-cover-choice > .library-folder-cover {
-  width: 56px;
-  height: 56px;
 }
 .library-folder-open > span {
   display: grid;
