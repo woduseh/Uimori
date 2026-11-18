@@ -5,6 +5,14 @@
  * story-ui-* class names. Colors that differ between light and dark use light-dark(), driven
  * by the app's color-scheme, so one rule serves both.
  */
+@font-face {
+  font-family: "Story Latin Mono";
+  src:
+    local("Cascadia Code"), local("Cascadia Mono"), local("Consolas"), local("SF Mono"),
+    local("Menlo"), local("DejaVu Sans Mono"), local("Liberation Mono");
+  /* The space is left to the sans face, so words of Hangul are not set too far apart. */
+  unicode-range: U+0021-007E, U+00A1-024F, U+2010-205E, U+2190-21FF, U+2500-25FF;
+}
 .story-ui {
   --story-sans: var(
     --app-font-family,
@@ -21,6 +29,9 @@
     serif;
   --story-mono:
     ui-monospace, "Cascadia Code", "SF Mono", Consolas, "D2Coding", "Malgun Gothic", monospace;
+  /* Readout lettering: Latin and digits in a mono face, Hangul in the sans face, because a
+     mono face spaces Hangul too widely for labels and buttons. */
+  --story-tech: "Story Latin Mono", var(--story-sans);
 
   --story-paper: var(--panel);
   --story-surface: color-mix(in srgb, var(--text) 5%, var(--panel));
@@ -2572,29 +2583,41 @@
 
 /* Presets. Each sets the palette for both schemes, then its material. */
 .story-ui[data-story-ui-style="east-asian"] {
+  /* A stamped page from a bound book: ink in two weights on paper, and one vermilion. */
   --story-paper: light-dark(#f4efe2, #1b1c19);
   --story-surface: light-dark(#fbf7ec, #252621);
-  --story-ink: light-dark(#262a26, #e6e1d2);
-  --story-muted: light-dark(#6a6959, #a5a18f);
-  --story-border: light-dark(#bdb69f, #4a4a40);
-  --story-accent: light-dark(#a23a2c, #d96f5e);
-  --story-accent-ink: light-dark(#fff8ee, #1b1c19);
-  --story-accent-text: light-dark(#a23a2c, #e08675);
-  --story-radius: 3px;
+  --story-ink: light-dark(#1f221f, #e6e1d2);
+  --story-muted: light-dark(#66665a, #a5a18f);
+  --story-border: light-dark(#8f8a78, #5a5a4e);
+  --story-accent: light-dark(#a8372a, #cf5f4d);
+  --story-accent-ink: light-dark(#fbf3e6, #1b1c19);
+  --story-accent-text: light-dark(#3f423d, #c9c3b1);
+  --story-radius: 0px;
   --story-font: var(--story-serif);
-  box-shadow: inset 3px 0 0 var(--story-accent);
+  --story-seal: light-dark(#a8372a, #d96f5e);
+  --story-brush: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='26' viewBox='0 0 220 26'><filter id='b' x='-5%' y='-60%' width='110%' height='220%'><feTurbulence type='fractalNoise' baseFrequency='.035 .55' numOctaves='2' seed='4' result='t'/><feDisplacementMap in='SourceGraphic' in2='t' scale='10' xChannelSelector='R' yChannelSelector='G'/></filter><path d='M6 14C50 8 130 9 214 12C170 16 70 19 6 14Z' filter='url(%23b)'/></svg>");
+  border: 3px solid var(--story-ink);
+  border-radius: 0;
+  box-shadow:
+    inset 0 0 0 3px var(--story-paper),
+    inset 0 0 0 4px var(--story-ink);
 }
 .story-ui[data-story-ui-style="fantasy"] {
-  --story-paper: light-dark(#f1e5c8, #201a13);
-  --story-surface: light-dark(#f9f0da, #2b2319);
+  /* An illuminated chronicle with brass instruments: parchment or stone, engraved gilt,
+     and rubric red for the words that name things. */
+  --story-paper: light-dark(#f1e5c8, #1d1915);
+  --story-surface: light-dark(#f9f0da, #29231c);
   --story-ink: light-dark(#35291d, #eadcbc);
-  --story-muted: light-dark(#76664e, #ad9e7f);
+  --story-muted: light-dark(#75654d, #ad9e7f);
   --story-border: light-dark(#b89d68, #63512f);
-  --story-accent: light-dark(#86601f, #d9b25f);
+  --story-accent: light-dark(#8a6418, #d9b25f);
   --story-accent-ink: light-dark(#fff7e2, #201a13);
   --story-accent-text: light-dark(#7b5718, #dfbb6c);
-  --story-radius: 6px;
+  --story-radius: 2px;
   --story-font: var(--story-serif);
+  --story-gold: light-dark(#a57c2c, #d9b25f);
+  --story-rubric: light-dark(#9b2c1f, #e58a76);
+  --story-fade: linear-gradient(90deg, transparent, var(--story-gold) 14% 86%, transparent) 1;
   border: 3px double var(--story-border);
 }
 .story-ui[data-story-ui-style="modern"] {
@@ -2625,19 +2648,25 @@
     0 14px 34px -20px light-dark(#1b2a4a99, #000000e6);
 }
 .story-ui[data-story-ui-style="period"] {
+  /* Printed matter and paperwork: a masthead between heavy rules, boxed forms, stamps. */
   --story-paper: light-dark(#eee8dd, #1e1b19);
   --story-surface: light-dark(#f8f4ec, #282422);
-  --story-ink: light-dark(#322b27, #e4dbcf);
-  --story-muted: light-dark(#72665c, #a4998c);
-  --story-border: light-dark(#a99a87, #564d45);
-  --story-accent: light-dark(#7a4a44, #c98f86);
-  --story-accent-ink: light-dark(#fff8f2, #1e1b19);
-  --story-accent-text: light-dark(#7a4a44, #d6a097);
+  --story-ink: light-dark(#262120, #e4dbcf);
+  --story-muted: light-dark(#6c6158, #a4998c);
+  --story-border: light-dark(#262120, #b7ab9c);
+  --story-accent: light-dark(#262120, #e4dbcf);
+  --story-accent-ink: light-dark(#f8f4ec, #1e1b19);
+  --story-accent-text: light-dark(#7a3b34, #d6a097);
   --story-radius: 0px;
   --story-font: var(--story-serif);
   border-inline: 0;
-  border-block: 3px double var(--story-border);
+  border-block: 4px solid var(--story-ink);
   border-radius: 0;
+  box-shadow:
+    inset 0 3px 0 var(--story-paper),
+    inset 0 4px 0 var(--story-ink),
+    inset 0 -3px 0 var(--story-paper),
+    inset 0 -4px 0 var(--story-ink);
 }
 .story-ui[data-story-ui-style="blue-archive"] {
   /* Values follow the game's own screens: slate text, sky-blue controls, a yellow confirm
@@ -2710,7 +2739,7 @@
   --story-danger: #ff4d6d;
   --story-radius: 0px;
   --story-font: var(--story-sans);
-  --story-display: var(--story-mono);
+  --story-display: var(--story-tech);
   --story-cut: 16px;
   color-scheme: dark;
   background-image:
@@ -2748,46 +2777,41 @@
   box-shadow: inset 0 0 90px -30px #000;
 }
 .story-ui[data-story-ui-style="tactical"] {
-  --story-paper: light-dark(#e6e7dc, #14170f);
-  --story-surface: light-dark(#f1f2e8, #1d2216);
-  --story-ink: light-dark(#23281c, #d7dcc4);
-  --story-muted: light-dark(#5c6350, #969d82);
-  --story-border: light-dark(#9aa086, #454d36);
+  /* A field report filed under pressure: a paper dossier by day, a readout by night. */
+  --story-paper: light-dark(#e9e8dc, #12150e);
+  --story-surface: light-dark(#f3f2e8, #1b2014);
+  --story-ink: light-dark(#20241a, #d7dcc4);
+  --story-muted: light-dark(#5a6150, #969d82);
+  --story-border: light-dark(#8d937a, #4b543a);
   --story-accent: light-dark(#4c5a2a, #a3b35a);
   --story-accent-ink: light-dark(#f4f6e6, #14170f);
   --story-accent-text: light-dark(#44521f, #b7c76b);
   --story-radius: 0px;
   --story-font: var(--story-sans);
-  --story-display: var(--story-mono);
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--story-ink) 6%, transparent) 1px, transparent 1px),
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--story-ink) 6%, transparent) 1px,
-      transparent 1px
-    );
-  background-size: 20px 20px;
+  --story-display: var(--story-tech);
+  --story-bracket: linear-gradient(var(--story-ink), var(--story-ink));
   border-color: var(--story-border);
   border-radius: 0;
-  box-shadow:
-    inset 0 0 0 3px var(--story-paper),
-    inset 0 0 0 4px var(--story-border);
 }
 .story-ui[data-story-ui-style="romance"] {
+  /* A diary page someone decorated: tape, highlighter and stickers on cream paper. */
   --story-paper: light-dark(#fbf3ee, #221a1c);
   --story-surface: light-dark(#fffaf6, #2d2326);
   --story-ink: light-dark(#4a3438, #efdfdc);
-  --story-muted: light-dark(#876a6c, #b59c9c);
+  --story-muted: light-dark(#846769, #b59c9c);
   --story-border: light-dark(#e2c3be, #55403f);
   --story-accent: light-dark(#b24c63, #e08c9c);
   --story-accent-ink: light-dark(#fff7f5, #2a1318);
   --story-accent-text: light-dark(#a3415a, #eaa1ae);
-  --story-radius: 10px;
+  --story-radius: 14px;
   --story-font: var(--story-serif);
+  --story-marker: linear-gradient(
+    transparent 56%,
+    color-mix(in srgb, var(--story-accent) 30%, transparent) 56% 92%,
+    transparent 92%
+  );
+  --story-wobble: 14px 18px 12px 20px / 18px 12px 20px 14px;
   border-color: var(--story-border);
-  box-shadow:
-    inset 0 0 0 5px var(--story-paper),
-    inset 0 0 0 6px var(--story-border);
 }
 .story-ui[data-story-ui-style="pop"] {
   /* Comic panels: black, white and one hot color, heavy outlines and hard offset shadows. */
@@ -2828,7 +2852,6 @@
   pointer-events: none;
 }
 .story-ui[data-story-ui-style="east-asian"] {
-  --story-corners: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='132' height='132' fill='none' stroke='%23a8443a' stroke-width='1.5' stroke-linecap='square'><defs><g id='c'><path d='M4 40V4H40'/><path d='M10 32V10H32V24H18V17H25' stroke-opacity='.8'/></g></defs><use href='%23c'/><use href='%23c' transform='matrix(-1 0 0 1 132 0)'/><use href='%23c' transform='matrix(1 0 0 -1 0 132)'/><use href='%23c' transform='matrix(-1 0 0 -1 132 132)'/><path d='M44 4H88M44 128H88M4 44V88M128 44V88' stroke-opacity='.55'/></svg>");
   --story-rule: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='14' fill='none' stroke='%23a8443a' stroke-width='1.3'><path d='M6 7C30 4 50 9 70 7M90 7C110 5 130 10 154 7' stroke-linecap='round'/><rect x='75' y='2' width='10' height='10'/><path d='M78 5H82V9H80V7'/></svg>");
   background-image: var(--story-grain);
 }
@@ -2839,7 +2862,6 @@
     var(--story-grain), radial-gradient(120% 100% at 50% 40%, transparent 55%, #7a4e1433);
 }
 .story-ui[data-story-ui-style="period"] {
-  --story-corners: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='132' height='132' fill='none' stroke='%23946a60' stroke-width='1.4' stroke-linecap='square'><defs><g id='c'><path d='M4 40V4H40'/><path d='M9 32V9H32' stroke-opacity='.75'/><path d='M14 24V14H24' stroke-opacity='.55'/><path d='M18 18h4v4h-4z' fill='%23946a60' stroke='none'/></g></defs><use href='%23c'/><use href='%23c' transform='matrix(-1 0 0 1 132 0)'/><use href='%23c' transform='matrix(1 0 0 -1 0 132)'/><use href='%23c' transform='matrix(-1 0 0 -1 132 132)'/></svg>");
   --story-rule: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='14' fill='none' stroke='%23946a60' stroke-width='1.2'><path d='M6 5H66M6 9H66M94 5H154M94 9H154'/><path d='M80 2L85 7L80 12L75 7Z' fill='%23946a60'/></svg>");
   background-image:
     var(--story-grain),
@@ -2849,7 +2871,7 @@
     5px 5px;
 }
 .story-ui[data-story-ui-style="romance"] {
-  --story-corners: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='132' height='132' fill='none' stroke='%23c9798a' stroke-width='1.3' stroke-linecap='round'><defs><g id='c'><path d='M5 42C5 30 8 24 13 19M42 5C30 5 24 8 19 13'/><path d='M14 19C8 14.5 8 10 11 10C12.6 10 14 11.2 14 12.4C14 11.2 15.4 10 17 10C20 10 20 14.5 14 19Z' fill='%23c9798a' stroke='none'/><g fill='%23c9798a' stroke='none' fill-opacity='.75'><ellipse cx='6.5' cy='33' rx='1.4' ry='2.6'/><ellipse cx='9.5' cy='25.5' rx='1.4' ry='2.6' transform='rotate(-25 9.5 25.5)'/><ellipse cx='33' cy='6.5' rx='2.6' ry='1.4'/><ellipse cx='25.5' cy='9.5' rx='2.6' ry='1.4' transform='rotate(-65 25.5 9.5)'/></g></g></defs><use href='%23c'/><use href='%23c' transform='matrix(-1 0 0 1 132 0)'/><use href='%23c' transform='matrix(1 0 0 -1 0 132)'/><use href='%23c' transform='matrix(-1 0 0 -1 132 132)'/></svg>");
+  --story-corners: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='132' height='132'><g transform='rotate(-38 14 14)'><rect x='-14' y='7' width='58' height='14' fill='%23f2b5c2' fill-opacity='.88'/><path d='M-8 7v14M0 7v14M8 7v14M16 7v14M24 7v14M32 7v14M40 7v14' stroke='%23fff' stroke-opacity='.55' stroke-width='2.5'/></g><g transform='rotate(-38 118 118)'><rect x='88' y='111' width='58' height='14' fill='%23b8e0d2' fill-opacity='.9'/><path d='M94 111v14M102 111v14M110 111v14M118 111v14M126 111v14M134 111v14M142 111v14' stroke='%23fff' stroke-opacity='.55' stroke-width='2.5'/></g></svg>");
   --story-rule: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='14' fill='none' stroke='%23c9798a' stroke-width='1.2' stroke-linecap='round'><path d='M6 7C26 3 46 11 66 7M94 7C114 3 134 11 154 7'/><path d='M80 12.5C73 7.5 73 2.5 76.5 2.5C78.4 2.5 80 3.8 80 5.2C80 3.8 81.6 2.5 83.5 2.5C87 2.5 87 7.5 80 12.5Z' fill='%23c9798a' stroke='none'/></svg>");
   background-image: var(--story-grain);
   box-shadow: none;
@@ -2960,51 +2982,14 @@
 }
 
 /* Material touches for the classic presets. */
-.story-ui[data-story-ui-style="east-asian"] .story-ui-chip,
-.story-ui[data-story-ui-style="tactical"] .story-ui-chip,
-.story-ui[data-story-ui-style="period"] .story-ui-chip {
-  border-radius: 2px;
-}
-.story-ui[data-story-ui-style="east-asian"] .story-ui-text-headline::after {
-  display: block;
-  inline-size: 2.4em;
-  block-size: 3px;
-  margin-block-start: 0.3em;
-  background: var(--story-accent);
-  border-radius: 2px 60% 2px 40%;
-  content: "";
-}
+
 .story-ui:is([data-story-ui-style="east-asian"], [data-story-ui-style="period"])
-  .story-ui-button[data-variant="primary"] {
+.story-ui-button[data-variant="primary"] {
   box-shadow:
     inset 0 0 0 2px var(--story-accent),
     inset 0 0 0 3px color-mix(in srgb, var(--story-accent-ink) 65%, transparent);
 }
-.story-ui[data-story-ui-style="fantasy"] .story-ui-button[data-variant="primary"] {
-  color: #fff8e6;
-  background: linear-gradient(#c79a45, #8a6418);
-  border: 1px solid #6e4f12;
-  box-shadow:
-    inset 0 1px 0 #ffffff66,
-    0 2px 0 #5a400e;
-  text-shadow: 0 1px 0 #00000055;
-}
-.story-ui[data-story-ui-style="fantasy"]
-  .story-ui-button:not([data-variant="primary"], [data-variant="borderless"]) {
-  background: linear-gradient(
-    var(--story-surface),
-    color-mix(in srgb, var(--story-border) 32%, var(--story-surface))
-  );
-}
-.story-ui[data-story-ui-style="fantasy"]
-  :is(.story-ui-text-headline, .story-ui-frame-title, .story-ui-stat-value) {
-  color: var(--story-accent-text);
-  letter-spacing: 0.03em;
-}
-.story-ui[data-story-ui-style="fantasy"] .story-ui-gauge-track {
-  block-size: 0.7em;
-  border: 1px solid var(--story-border);
-}
+
 .story-ui:is(
     [data-story-ui-style="fantasy"],
     [data-story-ui-style="modern"],
@@ -3031,56 +3016,6 @@
   --story-muted: color-mix(in srgb, var(--story-ink) 66%, var(--story-paper));
 }
 
-.story-ui[data-story-ui-style="east-asian"] .story-ui-tabs > button[aria-selected="true"] {
-  color: var(--story-accent-text);
-  background: var(--story-surface);
-  border: 1px solid var(--story-accent-text);
-}
-.story-ui[data-story-ui-style="east-asian"] :is(figcaption, .story-ui-field > label) {
-  padding-inline-start: 0.6em;
-  border-inline-start: 3px solid var(--story-accent);
-}
-.story-ui[data-story-ui-style="east-asian"]
-  .story-ui
-  .story-ui-button:not([data-variant="primary"], [data-variant="borderless"]) {
-  color: var(--story-accent-text);
-  border-color: var(--story-accent-text);
-}
-.story-ui[data-story-ui-style="fantasy"]
-  .story-ui
-  .story-ui-button:not([data-variant="primary"], [data-variant="borderless"]),
-.story-ui[data-story-ui-style="fantasy"] .story-ui-card,
-.story-ui[data-story-ui-style="period"]
-  .story-ui
-  .story-ui-button:not([data-variant="primary"], [data-variant="borderless"]) {
-  border: 3px double var(--story-border);
-}
-.story-ui[data-story-ui-style="fantasy"] .story-ui-tabs > button {
-  background: color-mix(in srgb, var(--story-border) 30%, transparent);
-  border: 1px solid var(--story-border);
-  border-block-end: 0;
-  border-radius: 6px 6px 0 0;
-}
-.story-ui[data-story-ui-style="fantasy"] .story-ui-tabs > button[aria-selected="true"] {
-  background: var(--story-surface);
-  box-shadow: inset 0 3px var(--story-accent);
-}
-
-.story-ui[data-story-ui-style="period"] .story-ui-tabs {
-  gap: 0;
-  border-block: 1px solid var(--story-border);
-}
-.story-ui[data-story-ui-style="period"] .story-ui-tabs > button {
-  margin: 0;
-  border-inline-end: 1px solid var(--story-border);
-}
-.story-ui[data-story-ui-style="period"] .story-ui-tabs > button[aria-selected="true"] {
-  color: var(--story-accent-text);
-  box-shadow: inset 0 -3px var(--story-accent);
-}
-.story-ui[data-story-ui-style="period"] :is(figcaption, .story-ui-text-label) {
-  letter-spacing: 0.12em;
-}
 /* Blue Archive: slanted controls, a yellow confirm button, and the messenger's bubbles. */
 .story-ui[data-story-ui-style="blue-archive"] .story-ui-tabs {
   gap: 4px;
@@ -3095,7 +3030,6 @@
   border: 1px solid var(--story-border);
   border-block-end: 0;
   border-radius: 6px 6px 0 0;
-  font-style: italic;
   font-weight: 800;
   transform: skewX(-12deg);
 }
@@ -3149,7 +3083,6 @@
   box-shadow:
     inset 0 -3px #4fb2e0,
     0 2px 3px color-mix(in srgb, var(--story-ink) 30%, transparent);
-  font-style: italic;
   font-weight: 800;
   transform: skewX(-10deg);
 }
@@ -3301,7 +3234,7 @@
 .story-ui[data-story-ui-style="neon"]
   :is(.story-ui-text-headline, .story-ui-text-display, .story-ui-hero-title) {
   color: var(--story-accent);
-  font-family: var(--story-mono);
+  font-family: var(--story-tech);
   letter-spacing: 0.02em;
   text-shadow:
     0.06em 0 #ff003c99,
@@ -3314,7 +3247,7 @@
 .story-ui[data-story-ui-style="neon"]
   :is(figcaption, .story-ui-text-label, .story-ui-stat-label, .story-ui-gauge-label) {
   color: var(--story-accent);
-  font-family: var(--story-mono);
+  font-family: var(--story-tech);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -3329,7 +3262,7 @@
 }
 .story-ui[data-story-ui-style="neon"] .story-ui-frame-title {
   color: var(--story-accent);
-  font-family: var(--story-mono);
+  font-family: var(--story-tech);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -3344,7 +3277,7 @@
   > .story-ui-frame-head
   > .story-ui-frame-subtitle {
   color: #ff5a78;
-  font-family: var(--story-mono);
+  font-family: var(--story-tech);
   letter-spacing: 0.08em;
 }
 .story-ui[data-story-ui-style="neon"] :is(.story-ui-card, .story-ui-stat, .story-ui-details) {
@@ -3356,7 +3289,7 @@
 }
 .story-ui[data-story-ui-style="neon"] .story-ui-stat-value {
   color: var(--story-accent-text);
-  font-family: var(--story-mono);
+  font-family: var(--story-tech);
 }
 /* Controls are cut at one corner. The outline is the control's own fill, with an inner
    layer one pixel smaller, because a clip path would cut a real border away. */
@@ -3374,7 +3307,7 @@
     calc(100% - var(--story-notch)) 100%,
     0 100%
   );
-  font-family: var(--story-mono);
+  font-family: var(--story-tech);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -3420,7 +3353,7 @@
 .story-ui[data-story-ui-style="neon"] .story-ui-tabs > button {
   margin: 0;
   border: 0;
-  font-family: var(--story-mono);
+  font-family: var(--story-tech);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -3431,7 +3364,7 @@
 }
 .story-ui[data-story-ui-style="neon"] .story-ui-chip {
   border-radius: 0;
-  font-family: var(--story-mono);
+  font-family: var(--story-tech);
 }
 .story-ui[data-story-ui-style="neon"] .story-ui-chip[aria-pressed="true"] {
   clip-path: polygon(0.5em 0, 100% 0, 100% 100%, 0 100%, 0 0.5em);
@@ -3462,7 +3395,7 @@
   background: none;
   border: 1px solid currentColor;
   border-radius: 0;
-  font-family: var(--story-mono);
+  font-family: var(--story-tech);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -3482,79 +3415,481 @@
   border-color: #ff003c80;
 }
 .story-ui[data-story-ui-style="neon"] .story-ui-dialogue-name {
-  font-family: var(--story-mono);
+  font-family: var(--story-tech);
   letter-spacing: 0.08em;
 }
 .story-ui[data-story-ui-style="neon"]
   :is(input:not([type="checkbox"], [type="radio"], [type="range"]), textarea) {
   background: #05070a;
   border-color: #00f0ff59;
-  font-family: var(--story-mono);
+  font-family: var(--story-tech);
 }
 .story-ui[data-story-ui-style="neon"] :is(th, .story-ui-timeline-title > time) {
   color: var(--story-accent);
-  font-family: var(--story-mono);
+  font-family: var(--story-tech);
   letter-spacing: 0.08em;
 }
 
-.story-ui[data-story-ui-style="tactical"] :is(figcaption, .story-ui-text-label) {
-  font-family: var(--story-mono);
-  letter-spacing: 0.1em;
-}
-.story-ui[data-story-ui-style="tactical"] :is(figcaption, .story-ui-text-label)::before {
-  content: "// ";
-}
-.story-ui[data-story-ui-style="tactical"] .story-ui-stat-value {
-  font-family: var(--story-mono);
-}
-.story-ui[data-story-ui-style="tactical"] .story-ui-tabs {
-  gap: 0;
-  border: 1px solid var(--story-border);
-}
-.story-ui[data-story-ui-style="tactical"] .story-ui-tabs > button {
-  flex: 1 1 auto;
-  margin: 0;
-  border: 0;
-  border-inline-end: 1px solid var(--story-border);
-  font-family: var(--story-mono);
-}
-.story-ui[data-story-ui-style="tactical"] .story-ui-tabs > button[aria-selected="true"] {
-  color: var(--story-accent-ink);
-  background: var(--story-accent);
-}
-.story-ui[data-story-ui-style="tactical"]
-  .story-ui-button:not([data-variant="primary"], [data-variant="borderless"]) {
-  border-color: var(--story-ink);
-}
-.story-ui[data-story-ui-style="tactical"] :is(.story-ui-card, .story-ui-stat) {
-  border-style: dashed;
-  border-color: var(--story-border);
-}
-
-.story-ui[data-story-ui-style="romance"] .story-ui-button:not([data-variant="borderless"]) {
-  border-radius: 999px;
-}
-.story-ui[data-story-ui-style="romance"]
-  .story-ui-button:not([data-variant="primary"], [data-variant="borderless"]) {
-  color: var(--story-accent-text);
-  border-color: color-mix(in srgb, var(--story-accent-text) 55%, transparent);
-}
-.story-ui[data-story-ui-style="romance"] .story-ui-tabs {
-  border-block-end-style: dotted;
-}
-.story-ui[data-story-ui-style="romance"] .story-ui-tabs > button[aria-selected="true"] {
-  color: var(--story-accent-text);
-}
-.story-ui[data-story-ui-style="romance"] :is(figcaption, .story-ui-text-label) {
-  letter-spacing: 0.12em;
-}
-.story-ui[data-story-ui-style="romance"] .story-ui-frame-head {
+/*
+ * east-asian: a stamped page from a bound book. The block is the page frame, the header is
+ * the fold mark with its fish tails, speech is ruled columns, and the one red is the seal.
+ */
+.story-ui[data-story-ui-style="east-asian"]
+  .story-ui-frame:not([data-kind="app"], [data-kind="terminal"], [data-kind="note"])
+  > .story-ui-frame-head {
+  flex-direction: row;
+  align-items: center;
   justify-content: center;
-  border-block-end-style: dotted;
+  gap: 0.2em 0.8em;
+  margin-inline: 0;
+  border-block-end: 1px solid var(--story-ink);
   text-align: center;
 }
-.story-ui[data-story-ui-style="romance"] .story-ui-frame-subtitle {
-  margin-inline-start: 0;
+.story-ui[data-story-ui-style="east-asian"]
+  .story-ui-frame[data-kind]
+  > .story-ui-frame-head
+  > .story-ui-frame-title {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  inline-size: auto;
+  color: var(--story-ink);
+  font-size: 1.1em;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: none;
+}
+.story-ui[data-story-ui-style="east-asian"]
+  .story-ui-frame:not([data-kind="app"], [data-kind="terminal"], [data-kind="note"])
+  > .story-ui-frame-head
+  > .story-ui-frame-title::before,
+.story-ui[data-story-ui-style="east-asian"]
+  .story-ui-frame:not([data-kind="app"], [data-kind="terminal"], [data-kind="note"])
+  > .story-ui-frame-head
+  > .story-ui-frame-title::after {
+  flex: none;
+  inline-size: 1.3em;
+  block-size: 0.8em;
+  background: var(--story-ink);
+  border-radius: 0;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 55%, 0 100%);
+  content: "";
+}
+.story-ui[data-story-ui-style="east-asian"]
+  .story-ui-frame[data-kind]
+  > .story-ui-frame-head
+  > .story-ui-frame-subtitle {
+  margin: 0;
+  padding: 0;
+  color: var(--story-muted);
+  background: none;
+  font-family: var(--story-serif);
+  letter-spacing: 0.1em;
+}
+.story-ui[data-story-ui-style="east-asian"] :is(.story-ui-text-headline, .story-ui-text-display) {
+  letter-spacing: 0.06em;
+}
+/* One dry stroke of the brush under a headline. */
+.story-ui[data-story-ui-style="east-asian"] .story-ui-text-headline::after {
+  display: block;
+  inline-size: 5.5em;
+  block-size: 0.65em;
+  margin-block-start: 0.1em;
+  background: var(--story-seal);
+  content: "";
+  mask: var(--story-brush) left center / 100% 100% no-repeat;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-text-headline[style*="center"]::after {
+  margin-inline: auto;
+}
+.story-ui[data-story-ui-style="east-asian"] :is(figcaption, .story-ui-text-label) {
+  color: var(--story-ink);
+  border-block-end: 1px solid color-mix(in srgb, var(--story-ink) 55%, transparent);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+.story-ui[data-story-ui-style="east-asian"] figcaption {
+  padding-block-end: 0.3em;
+}
+.story-ui[data-story-ui-style="east-asian"]
+  :is(
+    .story-ui-card:not([data-surface]),
+    .story-ui-stat,
+    .story-ui-profile,
+    .story-ui-combatant,
+    .story-ui-details
+  ) {
+  background: var(--story-surface);
+  border: 1px solid color-mix(in srgb, var(--story-ink) 45%, transparent);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-profile {
+  border-block-start: 3px solid var(--story-ink);
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-stat-label {
+  padding-block-end: 0.2em;
+  border-block-end: 1px solid color-mix(in srgb, var(--story-ink) 30%, transparent);
+  letter-spacing: 0.14em;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-stat-value {
+  font-weight: 800;
+}
+/* The first choice is the seal; the others are text over a ruled line. */
+.story-ui[data-story-ui-style="east-asian"]
+.story-ui-button:not([data-variant="primary"], [data-variant="borderless"]) {
+  color: var(--story-ink);
+  background: none;
+  border: 0;
+  border-block-end: 1px solid color-mix(in srgb, var(--story-ink) 60%, transparent);
+  letter-spacing: 0.08em;
+}
+.story-ui[data-story-ui-style="east-asian"]
+  .story-ui-button:not([data-variant="primary"], [data-variant="borderless"]):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--story-ink) 7%, transparent);
+  border-block-end-color: var(--story-seal);
+}
+.story-ui[data-story-ui-style="east-asian"]
+  .story-ui-row
+  > *
+  > .story-ui-button:not([data-variant="primary"], [data-variant="borderless"]) {
+  border: 1px solid color-mix(in srgb, var(--story-ink) 60%, transparent);
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-button[data-variant="primary"] {
+  color: var(--story-accent-ink);
+  background: var(--story-seal);
+  border: 0;
+  border-radius: 3px;
+  box-shadow:
+    inset 0 0 0 2px var(--story-seal),
+    inset 0 0 0 3px color-mix(in srgb, var(--story-accent-ink) 70%, transparent);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  rotate: -1.2deg;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-tabs {
+  gap: 0;
+  border-block-end: 1px solid var(--story-ink);
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-tabs > button {
+  margin: 0;
+  border: 0;
+  border-inline-end: 1px solid color-mix(in srgb, var(--story-ink) 35%, transparent);
+  letter-spacing: 0.1em;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-tabs > button[aria-selected="true"] {
+  color: var(--story-paper);
+  background: var(--story-ink);
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-gauge:not([data-tone]),
+.story-ui[data-story-ui-style="east-asian"] .story-ui-ring:not([data-tone]) {
+  --story-tone: var(--story-ink);
+}
+.story-ui[data-story-ui-style="east-asian"] :is(.story-ui-gauge-track, .story-ui-combatant-track) {
+  background: color-mix(in srgb, var(--story-ink) 10%, transparent);
+  border-radius: 0;
+}
+/* An ink bar that runs dry at its tail. */
+.story-ui[data-story-ui-style="east-asian"]
+  :is(.story-ui-gauge-track, .story-ui-combatant-track)
+  > span {
+  background-image: none;
+  border-radius: 0;
+  mask: linear-gradient(90deg, #000 calc(100% - 1.8em), #0004);
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-notice {
+  background: color-mix(in srgb, var(--story-tone) 7%, transparent);
+  border: 0;
+  border-inline-start: 4px solid var(--story-tone);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-badge {
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 0;
+  letter-spacing: 0.1em;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-chip {
+  background: none;
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-chip[aria-pressed="true"] {
+  color: var(--story-paper);
+  background: var(--story-ink);
+}
+/* Speech is set in ruled columns, not bubbles. */
+.story-ui[data-story-ui-style="east-asian"] .story-ui-bubble,
+.story-ui[data-story-ui-style="east-asian"]
+  .story-ui-frame[data-kind="app"]
+  .story-ui-message[data-side="left"]
+  .story-ui-bubble {
+  padding-block: 0.15em;
+  color: var(--story-ink);
+  background: none;
+  border-inline-start: 1px solid color-mix(in srgb, var(--story-ink) 55%, transparent);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-message[data-side="right"] .story-ui-bubble {
+  background: none;
+  border-inline-start: 0;
+  border-inline-end: 3px double color-mix(in srgb, var(--story-ink) 70%, transparent);
+}
+.story-ui[data-story-ui-style="east-asian"]
+  .story-ui-frame[data-kind="app"]
+  > .story-ui-frame-head {
+  color: var(--story-ink);
+  background: none;
+  border-block-end: 1px solid var(--story-ink);
+}
+.story-ui[data-story-ui-style="east-asian"]
+  .story-ui-frame[data-kind="app"]
+  > .story-ui-frame-body {
+  background: none;
+}
+/* The speaker's name stands in a vertical column beside the line. */
+.story-ui[data-story-ui-style="east-asian"] .story-ui-dialogue-box {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 0.9em;
+  background: var(--story-surface);
+  border: 1px solid color-mix(in srgb, var(--story-ink) 45%, transparent);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-dialogue-head {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 0.5em;
+  margin: 0;
+  padding-inline-end: 0.2em;
+  padding-block-end: 0.7em;
+  border-block-end: 1px solid color-mix(in srgb, var(--story-ink) 45%, transparent);
+  writing-mode: vertical-rl;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-dialogue-name {
+  position: static;
+  max-inline-size: none;
+  padding: 0;
+  color: var(--story-ink);
+  background: none;
+  font-size: 1em;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  translate: none;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-dialogue-status {
+  font-style: normal;
+  letter-spacing: 0.1em;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-dialogue-text {
+  grid-column: 2;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-dialogue-box > :only-child {
+  grid-column: 1 / -1;
+}
+/* A grade is a square seal. */
+.story-ui[data-story-ui-style="east-asian"] .story-ui-rank-stamp {
+  color: var(--story-accent-ink);
+  background: var(--story-seal);
+  border: 0;
+  border-radius: 4px;
+  box-shadow:
+    inset 0 0 0 0.08em var(--story-seal),
+    inset 0 0 0 0.12em color-mix(in srgb, var(--story-accent-ink) 70%, transparent);
+  font-weight: 800;
+  rotate: -3deg;
+}
+.story-ui[data-story-ui-style="east-asian"]
+  :is(input:not([type="checkbox"], [type="radio"], [type="range"]), textarea) {
+  background: var(--story-surface);
+  border: 1px solid color-mix(in srgb, var(--story-ink) 45%, transparent);
+}
+
+/*
+ * fantasy: an illuminated chronicle with brass instruments. Rules are gilt and fade at
+ * both ends, dials are engraved bands, labels are rubricated, tabs are pennants.
+ */
+.story-ui[data-story-ui-style="fantasy"] .story-ui-frame-head {
+  border-block-end: 1px solid;
+  border-image: var(--story-fade);
+}
+.story-ui[data-story-ui-style="fantasy"]
+  :is(
+    .story-ui-frame-title,
+    .story-ui-text-headline,
+    .story-ui-text-display,
+    .story-ui-profile-name
+  ) {
+  color: var(--story-accent-text);
+  letter-spacing: 0.05em;
+}
+.story-ui[data-story-ui-style="fantasy"]
+  :is(figcaption, .story-ui-text-label, .story-ui-stat-label, .story-ui-rank-label) {
+  color: var(--story-rubric);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+/* A quotation opens with a rubricated initial. */
+.story-ui[data-story-ui-style="fantasy"] .story-ui-text-quote {
+  border-inline-start: 0;
+  padding-inline-start: 0;
+}
+.story-ui[data-story-ui-style="fantasy"]
+  .story-ui-text-quote
+  .story-ui-prose
+  > p:first-child::first-letter {
+  float: inline-start;
+  padding-inline-end: 0.1em;
+  color: var(--story-rubric);
+  font-size: 2.7em;
+  font-weight: 800;
+  line-height: 0.92;
+}
+.story-ui[data-story-ui-style="fantasy"]
+  :is(
+    .story-ui-card:not([data-surface]),
+    .story-ui-stat,
+    .story-ui-profile,
+    .story-ui-combatant,
+    .story-ui-details,
+    .story-ui-dialogue-box
+  ) {
+  background: linear-gradient(
+    color-mix(in srgb, var(--story-surface) 80%, transparent),
+    color-mix(in srgb, var(--story-surface) 35%, transparent)
+  );
+  border: 0;
+  border-block: 1px solid;
+  border-image: var(--story-fade);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-stat-value {
+  color: var(--story-accent-text);
+  letter-spacing: 0.03em;
+}
+/* A flat engraved plate; the other choices are text between two fading rules. */
+.story-ui[data-story-ui-style="fantasy"] .story-ui-button[data-variant="primary"] {
+  color: #fff8e6;
+  background: linear-gradient(#b08a38, #96721f);
+  border: 0;
+  border-radius: 2px;
+  box-shadow:
+    inset 0 0 0 1px #6e4f12,
+    inset 0 0 0 2px #f0d99466;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.story-ui[data-story-ui-style="fantasy"]
+  .story-ui-button:not([data-variant="primary"], [data-variant="borderless"]) {
+  background: color-mix(in srgb, var(--story-surface) 55%, transparent);
+  border: 0;
+  border-block: 1px solid;
+  border-image: var(--story-fade);
+  border-radius: 0;
+  letter-spacing: 0.05em;
+}
+.story-ui[data-story-ui-style="fantasy"]
+  .story-ui-button:not([data-variant="primary"], [data-variant="borderless"]):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--story-gold) 16%, var(--story-surface));
+}
+/* Pennants. */
+.story-ui[data-story-ui-style="fantasy"] .story-ui-tabs {
+  gap: 0.35em;
+  border-block-end: 0;
+  border-block-start: 1px solid var(--story-gold);
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-tabs > button {
+  margin: 0;
+  padding-block: 0.5em 0.95em;
+  color: var(--story-ink);
+  background: color-mix(in srgb, var(--story-gold) 22%, var(--story-surface));
+  border: 0;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 0.5em), 0 100%);
+  letter-spacing: 0.04em;
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-tabs > button[aria-selected="true"] {
+  color: #fff8e6;
+  background: linear-gradient(#b08a38, #8a6418);
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-tabs > button:focus-visible {
+  outline-offset: -4px;
+}
+.story-ui[data-story-ui-style="fantasy"] :is(.story-ui-gauge-track, .story-ui-combatant-track) {
+  block-size: 0.7em;
+  background: color-mix(in srgb, var(--story-ink) 9%, transparent);
+  border: 1px solid var(--story-gold);
+  border-radius: 1px;
+}
+.story-ui[data-story-ui-style="fantasy"]
+  :is(.story-ui-gauge-track, .story-ui-combatant-track)
+  > span {
+  background-image: none;
+  border-radius: 0;
+}
+/* A dial is an engraved band with tick marks. */
+.story-ui[data-story-ui-style="fantasy"] .story-ui-ring-dial::before {
+  position: absolute;
+  inset: -0.4em;
+  background: repeating-conic-gradient(var(--story-gold) 0 1.2deg, transparent 1.2deg 10deg);
+  border-radius: 50%;
+  content: "";
+  mask: radial-gradient(closest-side, transparent calc(100% - 0.32em), #000 calc(100% - 0.3em));
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-ring {
+  padding: 0.4em;
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-ring-track {
+  stroke: color-mix(in srgb, var(--story-gold) 30%, transparent);
+}
+.story-ui[data-story-ui-style="fantasy"]
+  :is(.story-ui-avatar, .story-ui-profile-portrait, .story-ui-dialogue-portrait) {
+  border: 0;
+  box-shadow:
+    0 0 0 2px var(--story-paper),
+    0 0 0 3px var(--story-gold);
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-notice {
+  background: color-mix(in srgb, var(--story-tone) 8%, transparent);
+  border: 0;
+  border-block: 1px solid;
+  border-image: linear-gradient(90deg, transparent, var(--story-tone) 14% 86%, transparent) 1;
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-badge {
+  background: color-mix(in srgb, var(--story-tone) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--story-tone) 60%, transparent);
+  border-radius: 2px;
+  letter-spacing: 0.06em;
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-chip {
+  border-color: var(--story-gold);
+  border-radius: 2px;
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-bubble {
+  border: 1px solid color-mix(in srgb, var(--story-gold) 55%, transparent);
+  border-radius: 3px;
+}
+/* The speaker's name hangs on a banner. */
+.story-ui[data-story-ui-style="fantasy"] .story-ui-dialogue-name {
+  padding-inline: 1.4em;
+  color: #fff8e6;
+  background: linear-gradient(#b08a38, #8a6418);
+  border-radius: 0;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 0.55em) 50%, 100% 100%, 0 100%, 0.55em 50%);
+  letter-spacing: 0.08em;
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-rank-stamp {
+  color: var(--story-rubric);
+  border-color: var(--story-gold);
+  box-shadow:
+    inset 0 0 0 0.09em var(--story-paper),
+    inset 0 0 0 0.13em var(--story-gold);
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-rank[data-tone] > .story-ui-rank-stamp {
+  color: var(--story-tone);
+}
+.story-ui[data-story-ui-style="fantasy"]
+  :is(input:not([type="checkbox"], [type="radio"], [type="range"]), textarea) {
+  background: color-mix(in srgb, var(--story-surface) 70%, transparent);
+  border-color: var(--story-gold);
 }
 
 /*
@@ -3936,6 +4271,762 @@
 }
 
 /*
+ * period: printed matter and paperwork. A masthead with a dateline, ledger cells, ticket
+ * stubs for buttons, rubber stamps for badges, telegram strips for messages, and a silent
+ * film's intertitle card for speech.
+ */
+.story-ui[data-story-ui-style="period"]:not([data-story-ui-custom]) {
+  --story-inset: 1.5em;
+  padding: 1.6em var(--story-inset);
+}
+.story-ui[data-story-ui-style="period"]
+  .story-ui-frame:not([data-kind="app"], [data-kind="terminal"], [data-kind="note"])
+  > .story-ui-frame-head {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2em;
+  margin-inline: var(--story-inset, 1.2em);
+  padding-inline: 0;
+  border-block-end: 3px double var(--story-ink);
+  text-align: center;
+}
+.story-ui[data-story-ui-style="period"]
+  .story-ui-frame[data-kind]
+  > .story-ui-frame-head
+  > .story-ui-frame-title {
+  display: block;
+  inline-size: auto;
+  color: var(--story-ink);
+  font-size: 1.5em;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: none;
+}
+.story-ui[data-story-ui-style="period"]
+  .story-ui-frame:not([data-kind="app"], [data-kind="terminal"], [data-kind="note"])
+  > .story-ui-frame-head
+  > .story-ui-frame-title::before,
+.story-ui[data-story-ui-style="period"]
+  .story-ui-frame:not([data-kind="app"], [data-kind="terminal"], [data-kind="note"])
+  > .story-ui-frame-head
+  > .story-ui-frame-title::after {
+  content: none;
+}
+/* The dateline. */
+.story-ui[data-story-ui-style="period"]
+  .story-ui-frame:not([data-kind="app"], [data-kind="terminal"], [data-kind="note"])
+  > .story-ui-frame-head
+  > .story-ui-frame-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  inline-size: 100%;
+  margin: 0;
+  padding: 0.15em 0;
+  color: var(--story-ink);
+  background: none;
+  border-block-start: 1px solid var(--story-ink);
+  border-radius: 0;
+  font-family: var(--story-serif);
+  font-size: 0.74em;
+  font-weight: 700;
+  justify-content: center;
+  letter-spacing: 0.24em;
+}
+.story-ui[data-story-ui-style="period"]
+  :is(figcaption, .story-ui-text-label, .story-ui-stat-label) {
+  color: var(--story-ink);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+.story-ui[data-story-ui-style="period"] :is(.story-ui-text-headline, .story-ui-text-display) {
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+.story-ui[data-story-ui-style="period"]
+  :is(
+    .story-ui-card:not([data-surface]),
+    .story-ui-stat,
+    .story-ui-profile,
+    .story-ui-combatant,
+    .story-ui-details
+  ) {
+  background: var(--story-surface);
+  border: 1px solid var(--story-ink);
+  border-radius: 0;
+}
+/* A ledger cell: the heading sits over a rule. */
+.story-ui[data-story-ui-style="period"] .story-ui-stat {
+  padding: 0;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-stat > * {
+  padding-inline: 0.75em;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-stat-label {
+  padding-block: 0.3em;
+  border-block-end: 1px solid var(--story-ink);
+}
+.story-ui[data-story-ui-style="period"] .story-ui-stat-value {
+  padding-block-start: 0.2em;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-stat > :last-child {
+  padding-block-end: 0.5em;
+}
+/* Ticket stubs: a notch bitten out of each end. The notches are a mask, so the focus ring
+   is drawn inside the stub. */
+.story-ui[data-story-ui-style="period"] .story-ui-button:not([data-variant="borderless"]) {
+  padding-inline: 1.4em;
+  background: var(--story-surface);
+  border: 1px solid var(--story-ink);
+  border-radius: 0;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  mask:
+    radial-gradient(circle at 0 50%, transparent 0.42em, #000 0.45em) left / 51% 100% no-repeat,
+    radial-gradient(circle at 100% 50%, transparent 0.42em, #000 0.45em) right / 51% 100% no-repeat;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-button[data-variant="primary"] {
+  color: var(--story-accent-ink);
+  background: var(--story-ink);
+  box-shadow:
+    inset 0 0 0 3px var(--story-ink),
+    inset 0 0 0 4px var(--story-accent-ink);
+}
+.story-ui[data-story-ui-style="period"]
+  .story-ui-button:not([data-variant="borderless"]):focus-visible {
+  outline-offset: -5px;
+}
+.story-ui[data-story-ui-style="period"]
+  .story-ui-button:not([data-variant="primary"], [data-variant="borderless"]):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--story-ink) 9%, var(--story-surface));
+  border-color: var(--story-ink);
+}
+.story-ui[data-story-ui-style="period"] .story-ui-tabs {
+  gap: 0;
+  border-block: 1px solid var(--story-ink);
+}
+.story-ui[data-story-ui-style="period"] .story-ui-tabs > button {
+  margin: 0;
+  border: 0;
+  border-inline-end: 1px solid var(--story-ink);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-tabs > button[aria-selected="true"] {
+  color: var(--story-accent-ink);
+  background: var(--story-ink);
+}
+.story-ui[data-story-ui-style="period"] .story-ui-gauge:not([data-tone]) {
+  --story-tone: var(--story-ink);
+}
+/* A ruled scale. */
+.story-ui[data-story-ui-style="period"] :is(.story-ui-gauge-track, .story-ui-combatant-track) {
+  position: relative;
+  block-size: 0.8em;
+  background: none;
+  border: 1px solid var(--story-ink);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="period"]
+  :is(.story-ui-gauge-track, .story-ui-combatant-track)::after {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 calc(10% - 1px),
+    var(--story-ink) calc(10% - 1px) 10%
+  );
+  content: "";
+  opacity: 0.5;
+}
+.story-ui[data-story-ui-style="period"]
+  :is(.story-ui-gauge-track, .story-ui-combatant-track)
+  > span {
+  background-image: none;
+  border-radius: 0;
+  opacity: 0.8;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-notice {
+  background: none;
+  border: 0;
+  border-block: 3px double var(--story-tone);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-notice-title {
+  letter-spacing: 0.16em;
+}
+/* A rubber stamp, pressed a little askew. */
+.story-ui[data-story-ui-style="period"] .story-ui-badge {
+  background: none;
+  border: 3px double currentColor;
+  border-radius: 2px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  opacity: 0.9;
+  rotate: -3deg;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-rank-stamp {
+  border-style: double;
+  border-width: 0.14em;
+  box-shadow: none;
+}
+/* Telegram strips pasted to the page. */
+.story-ui[data-story-ui-style="period"] .story-ui-bubble,
+.story-ui[data-story-ui-style="period"]
+  .story-ui-frame[data-kind="app"]
+  .story-ui-message[data-side="left"]
+  .story-ui-bubble {
+  color: var(--story-ink);
+  background: var(--story-surface);
+  border-radius: 0;
+  box-shadow: 0 1px 2px #00000040;
+  font-family: var(--story-mono);
+  font-size: 0.94em;
+  letter-spacing: 0.04em;
+  rotate: -0.5deg;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-message[data-side="right"] .story-ui-bubble {
+  color: var(--story-ink);
+  background: color-mix(in srgb, var(--story-ink) 12%, var(--story-surface));
+  border-radius: 0;
+  rotate: 0.5deg;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-frame[data-kind="app"] > .story-ui-frame-head {
+  color: var(--story-ink);
+  background: none;
+  border-block-end: 3px double var(--story-ink);
+}
+.story-ui[data-story-ui-style="period"] .story-ui-frame[data-kind="app"] > .story-ui-frame-body {
+  background: none;
+}
+/* An intertitle card: white type centered on black inside a fine frame. */
+.story-ui[data-story-ui-style="period"] .story-ui-dialogue-box {
+  --story-ink: #f2ece0;
+  --story-muted: #b9b0a2;
+  padding: 1.5em 1.7em 1.4em;
+  color: #f2ece0;
+  background: #161311;
+  border: 0;
+  border-radius: 0;
+  outline: 1px solid #f2ece073;
+  outline-offset: -0.55em;
+  text-align: center;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-dialogue-head {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1em;
+  margin-block-end: 0.6em;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-dialogue-name {
+  position: static;
+  max-inline-size: none;
+  padding: 0;
+  color: #f2ece0;
+  background: none;
+  font-size: 0.8em;
+  font-weight: 700;
+  letter-spacing: 0.34em;
+  translate: none;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-dialogue-text {
+  font-size: 1.08em;
+  line-height: 1.8;
+}
+.story-ui[data-story-ui-style="period"]
+  :is(input:not([type="checkbox"], [type="radio"], [type="range"]), textarea) {
+  background: var(--story-surface);
+  border: 1px solid var(--story-ink);
+}
+.story-ui[data-story-ui-style="period"] .story-ui-chip {
+  background: none;
+  border-color: var(--story-ink);
+}
+.story-ui[data-story-ui-style="period"] .story-ui-chip[aria-pressed="true"] {
+  color: var(--story-accent-ink);
+  background: var(--story-ink);
+}
+
+/*
+ * tactical: a field report filed under pressure. Form cells with their label set into the
+ * border, bracket corners, pressed stamps, radio transcript lines, folder tabs, and hazard
+ * stripes on warnings only.
+ */
+.story-ui[data-story-ui-style="tactical"] :is(figcaption, .story-ui-text-label) {
+  color: var(--story-muted);
+  font-family: var(--story-tech);
+  letter-spacing: 0.1em;
+}
+.story-ui[data-story-ui-style="tactical"] :is(figcaption, .story-ui-text-label)::before {
+  color: var(--story-accent-text);
+  content: "// ";
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-frame-head {
+  align-items: center;
+  border-block-end: 1px solid var(--story-ink);
+}
+.story-ui[data-story-ui-style="tactical"]
+  .story-ui-frame[data-kind]
+  > .story-ui-frame-head
+  > .story-ui-frame-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  inline-size: auto;
+  color: var(--story-ink);
+  font-family: var(--story-tech);
+  font-size: 1em;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+.story-ui[data-story-ui-style="tactical"]
+  .story-ui-frame:not([data-kind="terminal"])
+  > .story-ui-frame-head
+  > .story-ui-frame-title::before {
+  flex: none;
+  inline-size: 0.5em;
+  block-size: 1.1em;
+  margin: 0;
+  background: var(--story-accent);
+  border-radius: 0;
+  content: "";
+}
+.story-ui[data-story-ui-style="tactical"]
+  .story-ui-frame[data-kind]
+  > .story-ui-frame-head
+  > .story-ui-frame-title::after {
+  content: none;
+}
+.story-ui[data-story-ui-style="tactical"]
+  .story-ui-frame[data-kind]
+  > .story-ui-frame-head
+  > .story-ui-frame-subtitle {
+  margin-block: 0;
+  margin-inline: auto 0;
+  padding: 0.05em 0.6em;
+  color: var(--story-muted);
+  background: none;
+  border: 1px solid var(--story-border);
+  border-radius: 0;
+  font-family: var(--story-tech);
+  letter-spacing: 0.08em;
+}
+/* Panels are marked at their corners instead of being boxed. */
+.story-ui[data-story-ui-style="tactical"]
+:is(
+  .story-ui-card:not([data-surface]),
+  .story-ui-profile,
+  .story-ui-combatant,
+  .story-ui-details,
+  .story-ui-dialogue-box
+) {
+  background:
+    var(--story-bracket) top left / 0.8em 1.5px,
+    var(--story-bracket) top left / 1.5px 0.8em,
+    var(--story-bracket) top right / 0.8em 1.5px,
+    var(--story-bracket) top right / 1.5px 0.8em,
+    var(--story-bracket) bottom left / 0.8em 1.5px,
+    var(--story-bracket) bottom left / 1.5px 0.8em,
+    var(--story-bracket) bottom right / 0.8em 1.5px,
+    var(--story-bracket) bottom right / 1.5px 0.8em,
+    color-mix(in srgb, var(--story-surface) 75%, transparent);
+  background-repeat: no-repeat;
+  border: 0;
+  border-radius: 0;
+}
+/* A form cell: the field name is set into the top border. */
+.story-ui[data-story-ui-style="tactical"] .story-ui-stat {
+  position: relative;
+  padding-block-start: 0.95em;
+  background: none;
+  border: 1px solid var(--story-border);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-stat-label {
+  position: absolute;
+  inset-block-start: -0.75em;
+  inset-inline-start: 0.6em;
+  padding: 0 0.4em;
+  background: var(--story-paper);
+  font-family: var(--story-tech);
+  letter-spacing: 0.08em;
+}
+.story-ui[data-story-ui-style="tactical"] :is(.story-ui-stat-value, .story-ui-ring-value > b) {
+  font-family: var(--story-tech);
+  font-weight: 800;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-button:not([data-variant="borderless"]) {
+  border: 1px solid var(--story-ink);
+  border-inline-start: 0.4em solid var(--story-ink);
+  border-radius: 0;
+  font-family: var(--story-tech);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-button[data-variant="primary"] {
+  border-color: var(--story-accent);
+  border-inline-start-color: var(--story-ink);
+}
+/* Folder tabs. */
+.story-ui[data-story-ui-style="tactical"] .story-ui-tabs {
+  gap: 0.15em;
+  border-block-end: 1px solid var(--story-ink);
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-tabs > button {
+  margin: 0;
+  padding-inline: 0.9em 1.5em;
+  color: var(--story-muted);
+  background: color-mix(in srgb, var(--story-ink) 9%, transparent);
+  border: 0;
+  clip-path: polygon(0 0, calc(100% - 0.8em) 0, 100% 100%, 0 100%);
+  font-family: var(--story-tech);
+  letter-spacing: 0.08em;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-tabs > button[aria-selected="true"] {
+  color: var(--story-accent-ink);
+  background: var(--story-accent);
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-tabs > button:focus-visible {
+  outline-offset: -4px;
+}
+/* A bar is a row of blocks. */
+.story-ui[data-story-ui-style="tactical"] :is(.story-ui-gauge-track, .story-ui-combatant-track) {
+  block-size: 0.75em;
+  background: none;
+  border-radius: 0;
+  box-shadow: inset 0 -1px 0 var(--story-border);
+}
+.story-ui[data-story-ui-style="tactical"]
+  :is(.story-ui-gauge-track, .story-ui-combatant-track)
+  > span {
+  background-image: none;
+  border-radius: 0;
+  mask: repeating-linear-gradient(90deg, #000 0 0.5em, transparent 0.5em 0.68em);
+}
+/* Hazard stripes belong to warnings alone. */
+.story-ui[data-story-ui-style="tactical"] .story-ui-notice {
+  padding-inline-start: 1.7em;
+  background:
+    repeating-linear-gradient(-45deg, var(--story-tone) 0 0.4em, transparent 0.4em 0.8em) left /
+    0.8em 100% no-repeat,
+    color-mix(in srgb, var(--story-tone) 8%, transparent);
+  border: 1px solid var(--story-tone);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-notice-title {
+  font-family: var(--story-tech);
+  letter-spacing: 0.1em;
+}
+/* A stamp, pressed askew. */
+.story-ui[data-story-ui-style="tactical"] .story-ui-badge {
+  background: none;
+  border: 2px solid currentColor;
+  border-radius: 0;
+  font-family: var(--story-tech);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  rotate: -3deg;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-rank-stamp {
+  border-radius: 0;
+  border-width: 0.12em;
+  box-shadow: none;
+  font-family: var(--story-tech);
+  rotate: -7deg;
+}
+/* A radio transcript: time, call sign, then the words, one line each. */
+.story-ui[data-story-ui-style="tactical"] .story-ui-message:not([data-side="center"]) {
+  justify-content: flex-start;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-message > .story-ui-avatar {
+  display: none;
+}
+.story-ui[data-story-ui-style="tactical"]
+  .story-ui-column
+  > *
+  > .story-ui-message[data-side="left"]:not(:has(> .story-ui-avatar)) {
+  padding-inline-start: 0;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-message-main,
+.story-ui[data-story-ui-style="tactical"]
+  .story-ui-message[data-side="right"]
+  .story-ui-message-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-items: start;
+  gap: 0 0.6em;
+  max-inline-size: 100%;
+  font-family: var(--story-tech);
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-message-line {
+  display: contents;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-message-meta {
+  display: flex;
+  order: -1;
+  gap: 0.4em;
+  font-size: 0.86em;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-message-meta > time::before {
+  content: "[";
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-message-meta > time::after {
+  content: "]";
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-message-sender {
+  padding: 0;
+  color: var(--story-accent-text);
+  font-size: 0.94em;
+  font-weight: 800;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-message-sender::after {
+  content: ":";
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-bubble,
+.story-ui[data-story-ui-style="tactical"]
+  .story-ui-frame[data-kind="app"]
+  .story-ui-message[data-side="left"]
+  .story-ui-bubble,
+.story-ui[data-story-ui-style="tactical"] .story-ui-message[data-side="right"] .story-ui-bubble {
+  padding: 0;
+  color: var(--story-ink);
+  background: none;
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="tactical"]
+  .story-ui-message[data-side="right"]
+  .story-ui-bubble::before {
+  margin-inline-end: 0.4em;
+  color: var(--story-accent-text);
+  content: "»";
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-frame[data-kind="app"] > .story-ui-frame-head {
+  flex-direction: row;
+  color: var(--story-ink);
+  background: none;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-frame[data-kind="app"] > .story-ui-frame-body {
+  background: none;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-dialogue-name {
+  color: var(--story-paper);
+  background: var(--story-ink);
+  border-radius: 0;
+  font-family: var(--story-tech);
+  letter-spacing: 0.1em;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-dialogue-box {
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="tactical"]
+  :is(input:not([type="checkbox"], [type="radio"], [type="range"]), textarea) {
+  background: none;
+  border: 0;
+  border-block-end: 1.5px solid var(--story-ink);
+  font-family: var(--story-tech);
+}
+
+/*
+ * romance: a diary page someone decorated. Tape holds things down, a highlighter marks
+ * what matters, stickers sit a little crooked, and nothing has a perfectly even corner.
+ */
+.story-ui[data-story-ui-style="romance"]
+:is(
+  .story-ui-button,
+  .story-ui-tabs,
+  .story-ui-chip,
+  .story-ui-field,
+  .story-ui-choice,
+  .story-ui-badge,
+  .story-ui-stat-label,
+  figcaption
+) {
+  font-family: var(--story-sans);
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-frame-head {
+  justify-content: center;
+  border-block-end: 2px dotted var(--story-border);
+  text-align: center;
+}
+.story-ui[data-story-ui-style="romance"]
+  .story-ui-frame[data-kind]
+  > .story-ui-frame-head
+  > .story-ui-frame-subtitle {
+  margin-inline-start: 0;
+  background: none;
+}
+.story-ui[data-story-ui-style="romance"]
+  :is(
+    .story-ui-frame-title,
+    .story-ui-text-title,
+    .story-ui-text-headline,
+    .story-ui-profile-name,
+    .story-ui-dialogue-name
+  ) {
+  inline-size: fit-content;
+  padding-inline: 0.2em;
+  background: var(--story-marker);
+}
+.story-ui[data-story-ui-style="romance"]
+  .story-ui-text[style*="center"]:is(.story-ui-text-title, .story-ui-text-headline) {
+  margin-inline: auto;
+}
+.story-ui[data-story-ui-style="romance"] :is(figcaption, .story-ui-text-label) {
+  letter-spacing: 0.1em;
+}
+.story-ui[data-story-ui-style="romance"]
+  :is(
+    .story-ui-card:not([data-surface]),
+    .story-ui-stat,
+    .story-ui-profile,
+    .story-ui-combatant,
+    .story-ui-details,
+    .story-ui-dialogue-box
+  ) {
+  background: var(--story-surface);
+  border: 1px solid var(--story-border);
+  border-radius: var(--story-wobble);
+  box-shadow: 0 3px 8px -6px color-mix(in srgb, var(--story-ink) 60%, transparent);
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-profile {
+  border-block-start-width: 1px;
+}
+/* A photograph with a white border, set down a little crooked. */
+.story-ui[data-story-ui-style="romance"] .story-ui-profile-portrait {
+  padding: 0.3em 0.3em 0.9em;
+  background: light-dark(#ffffff, #f3e9e6);
+  border-radius: 2px;
+  box-shadow: 0 2px 6px -2px #00000059;
+  rotate: -2.5deg;
+}
+/* Tape labels with torn ends. */
+.story-ui[data-story-ui-style="romance"] .story-ui-button:not([data-variant="borderless"]) {
+  padding-inline: 1.3em;
+  color: var(--story-ink);
+  background:
+    repeating-linear-gradient(135deg, #ffffff40 0 0.35em, transparent 0.35em 0.7em),
+    color-mix(in srgb, var(--story-accent) 24%, var(--story-surface));
+  border: 0;
+  border-radius: 0;
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    calc(100% - 0.3em) 25%,
+    100% 50%,
+    calc(100% - 0.3em) 75%,
+    100% 100%,
+    0 100%,
+    0.3em 75%,
+    0 50%,
+    0.3em 25%
+  );
+  font-weight: 700;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-button[data-variant="primary"] {
+  color: var(--story-accent-ink);
+  background:
+    repeating-linear-gradient(135deg, #ffffff26 0 0.35em, transparent 0.35em 0.7em),
+    var(--story-accent);
+}
+.story-ui[data-story-ui-style="romance"]
+  .story-ui-button:not([data-variant="borderless"]):hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+.story-ui[data-story-ui-style="romance"]
+  .story-ui-button:not([data-variant="borderless"]):focus-visible {
+  outline-offset: -5px;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-tabs {
+  gap: 0.2em 0.9em;
+  border-block-end: 2px dotted var(--story-border);
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-tabs > button {
+  border: 0;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-tabs > button[aria-selected="true"] {
+  color: var(--story-ink);
+  background: var(--story-marker);
+}
+/* A dotted line filled in with highlighter. */
+.story-ui[data-story-ui-style="romance"] :is(.story-ui-gauge-track, .story-ui-combatant-track) {
+  block-size: 0.75em;
+  overflow: visible;
+  background: none;
+  border-block-end: 2px dotted var(--story-border);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="romance"]
+  :is(.story-ui-gauge-track, .story-ui-combatant-track)
+  > span {
+  background: color-mix(in srgb, var(--story-tone) 48%, transparent);
+  border-radius: 3px 8px 4px 6px;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-notice {
+  border-radius: var(--story-wobble);
+}
+/* Stickers. */
+.story-ui[data-story-ui-style="romance"] .story-ui-badge {
+  background: color-mix(in srgb, var(--story-tone) 24%, var(--story-surface));
+  border: 2px solid var(--story-surface);
+  box-shadow: 0 1px 3px #00000040;
+  rotate: 2deg;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-row > :nth-child(even) > .story-ui-badge {
+  rotate: -2.5deg;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-bubble {
+  background: var(--story-surface);
+  border: 1px solid var(--story-border);
+  border-radius: 1.3em;
+  border-end-start-radius: 0.4em;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-message[data-side="right"] .story-ui-bubble {
+  color: var(--story-ink);
+  background: color-mix(in srgb, var(--story-accent) 26%, var(--story-surface));
+  border-radius: 1.3em;
+  border-end-end-radius: 0.4em;
+}
+/* A note held down by a strip of tape. */
+.story-ui[data-story-ui-style="romance"] .story-ui-dialogue-box {
+  margin-block-start: 1em;
+  rotate: -0.4deg;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-dialogue-box::before {
+  position: absolute;
+  inset-block-start: -0.6em;
+  inset-inline-start: calc(50% - 2.6em);
+  inline-size: 5.2em;
+  block-size: 1.1em;
+  background:
+    repeating-linear-gradient(90deg, #ffffff66 0 0.3em, transparent 0.3em 0.6em), #f2b5c2d9;
+  content: "";
+  rotate: -3deg;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-dialogue-name {
+  position: static;
+  color: var(--story-ink);
+  border-radius: 0;
+  font-weight: 800;
+  translate: none;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-dialogue-head {
+  justify-content: space-between;
+  align-items: baseline;
+  margin-block-end: 0.4em;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-rank-stamp {
+  border-style: dashed;
+  box-shadow: none;
+}
+.story-ui[data-story-ui-style="romance"]
+  :is(input:not([type="checkbox"], [type="radio"], [type="range"]), textarea) {
+  background: var(--story-surface);
+  border-radius: var(--story-wobble);
+}
+
+/*
  * modern: a real app on a real phone. Glass panels with a lit top edge, large numerals,
  * pill controls, and one system blue.
  */
@@ -4129,7 +5220,6 @@
   padding: 0.1em 0.8em;
   color: var(--story-paper);
   background: var(--story-ink);
-  font-style: italic;
   font-weight: 800;
   transform: skewX(-12deg);
 }
