@@ -26,6 +26,9 @@ import { readResource } from './resource-service.js';
 import { applyHelperResourceMutation } from './helper-resource-undo.js';
 import { helperSceneSource } from './helper-scene-tools.js';
 import { HELPER_SHELL_GUIDE } from './helper-shell-guide.js';
+import { REPETITION_SCRIPT } from './helper-shell-scripts.js';
+import { latestTranslation } from './source-editing.js';
+import { displayTranslationJob } from '../core/translation-display.js';
 import { HELPER_APP_TOOLS, HELPER_GATEWAY_TOOLS } from './helper-app-tools.js';
 import { fields, HttpError, record } from './request-validation.js';
 import type { Store } from './store.js';
@@ -478,6 +481,7 @@ export class HelperShell {
       attempts.map((a) => JSON.stringify(a)).join('\n') + '\n'
     );
     write(join(base, 'GUIDE.md'), HELPER_SHELL_GUIDE);
+    write(join(base, 'tools/repetition.py'), REPETITION_SCRIPT);
     write(
       join(base, 'INDEX.md'),
       '# Uimori workspace\n\n' +
@@ -488,6 +492,8 @@ export class HelperShell {
         'Use `uimori export \'{"scope":"library","id":"..."}\'` or `uimori export \'{"scope":"chats","id":"..."}\'` to prepare an item; use all:true for all. Repeated exports preserve existing working files.\n' +
         'Use data.search for full live searches, or export all before searching workspace bodies. An unmaterialized file is not evidence of an absent match.\n' +
         'Materialized library/<id>/resource.json and chats/<id>/scenes/*.txt are editable; lorebook.jsonl is a derived index. chats/<id>/scenes.json holds saved scene metadata.\n' +
+        'chats/<id>/translations/*.txt are read-only copies of the translations the Reader shows, indexed by translations.json; save translations through scene.patch.\n' +
+        'tools/ holds bundled scripts you may run or adapt: `python3 tools/repetition.py chats/<id>` lists phrases repeated across recent original and translated scenes (--help for options).\n' +
         'current/scenes.json indexes the fixed task-admission scene snapshot in current/scenes/*.txt. current/ and chats/ may differ; do not mix their versions.\n' +
         'For live summary, notes and story-guide data use uimori call context.read; for chat lore overrides use uimori call chat.lore with action=read. These are live reads, not fixed current/ snapshots.\n' +
         'editor/ and current/ are reserved task snapshots, not live editable resources.\n' +
@@ -519,10 +525,23 @@ export class HelperShell {
     const output: [string, string][] = [];
     const targets: [string, Extract<FileTarget, { kind: 'scene' }>][] = [];
     const scenes: ReturnType<typeof this.sceneIndexEntry>[] = [];
+    // Read-only copies of the translation the Reader shows; scene.patch owns translation saves.
+    const translations: { sourceId: string; file: string; originalSha256: string }[] = [];
     let sceneNumber = 0;
     for (const item of history) {
       if (!safeId(item.revision)) continue;
       const file = `${dir}/scenes/${item.revision}.txt`;
+      const latest = latestTranslation(this.store, item.revision);
+      const shown = latest && displayTranslationJob(this.store.source(item.revision), latest);
+      if (typeof shown?.result?.text === 'string') {
+        const translationFile = `${dir}/translations/${item.revision}.txt`;
+        output.push([translationFile, shown.result.text]);
+        translations.push({
+          sourceId: item.revision,
+          file: translationFile,
+          originalSha256: sha(item.text),
+        });
+      }
       const sceneEnabled = item.sceneContext?.sceneEnabled !== false;
       if (sceneEnabled) sceneNumber++;
       const target = {
@@ -539,7 +558,8 @@ export class HelperShell {
     }
     output.push(
       [`${dir}/metadata.json`, JSON.stringify(chat, null, 2) + '\n'],
-      [`${dir}/scenes.json`, JSON.stringify(scenes, null, 2) + '\n']
+      [`${dir}/scenes.json`, JSON.stringify(scenes, null, 2) + '\n'],
+      [`${dir}/translations.json`, JSON.stringify(translations, null, 2) + '\n']
     );
     const base = this.taskDir(taskId);
     for (const [file] of output) assertNewWorkspaceFile(base, file);

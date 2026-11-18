@@ -2,7 +2,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
-import { spawn, execFile, type ChildProcess } from 'node:child_process';
+import { spawn, execFile, execFileSync, type ChildProcess } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -185,6 +185,86 @@ test('an unavailable runner still exports current saved scene revisions and the 
     rmSync(f.dir, { recursive: true, force: true });
   }
 });
+
+const python3 = (() => {
+  try {
+    return Boolean(execFileSync('python3', ['--version']));
+  } catch {
+    return false;
+  }
+})();
+
+(python3 ? test : test.skip)(
+  'chat exports carry read-only translations and the bundled repetition script reads both',
+  async () => {
+    const f = workspaceFixture();
+    try {
+      const chat = createFixtureChat(f.store, 'Repeated story');
+      const lines = [
+        'She took a slow breath and looked away.',
+        'Rain fell. She took a slow breath and smiled.',
+        'He laughed. She took a slow breath at the door.',
+      ];
+      const ko = [
+        '그녀는 천천히 숨을 들이쉬고 시선을 돌렸다.',
+        '비가 내렸다. 그녀는 천천히 숨을 들이쉬고 웃었다.',
+        '그가 웃었다. 그녀는 천천히 숨을 들이쉬며 문을 보았다.',
+      ];
+      const sources = lines.map((line) => completedSource(f.store, chat.id, line));
+      for (const [index, source] of sources.entries())
+        f.store.editTranslation(source.id, {
+          text: ko[index],
+          expectedRevision: 0,
+          expectedSourceHash: f.store.source(source.id).hash,
+        });
+      const untranslated = completedSource(f.store, chat.id, 'Nothing else happened.');
+      prepareFiles(f, 'chats', chat.id);
+      const base = join(f.root, 'tasks', f.task.id);
+      const translations = JSON.parse(
+        readFileSync(join(base, `chats/${chat.id}/translations.json`), 'utf8')
+      );
+      expect(translations.map((t: { sourceId: string }) => t.sourceId)).toEqual(
+        sources.map((s) => s.id)
+      );
+      expect(translations.some((t: { sourceId: string }) => t.sourceId === untranslated.id)).toBe(
+        false
+      );
+      expect(readFileSync(join(base, translations[0].file), 'utf8')).toBe(ko[0]);
+      expect(readFileSync(join(base, 'INDEX.md'), 'utf8')).toContain('tools/repetition.py');
+
+      // A locally edited original makes its exported translation stale for the script.
+      writeFileSync(
+        join(base, `chats/${chat.id}/scenes/${sources[2].id}.txt`),
+        lines[2] + ' Edited.'
+      );
+      const run = (target: string) =>
+        promisify(execFile)(
+          'python3',
+          ['tools/repetition.py', `chats/${chat.id}`, '--target', target, '--n', '3', '--json'],
+          { cwd: base }
+        ).then(({ stdout }) => JSON.parse(stdout)[0]);
+      const original = await run('original');
+      expect(original.results[0].phrases[0]).toMatchObject({
+        phrase: 'she took a slow breath',
+        sceneCount: 3,
+        scenes: [1, 2, 3],
+      });
+      const translated = await run('translation');
+      expect(translated).toMatchObject({ staleTranslations: [3], untranslatedScenes: 1 });
+      expect(translated.results).toEqual([]);
+      writeFileSync(join(base, `chats/${chat.id}/scenes/${sources[2].id}.txt`), lines[2]);
+      const loose = (await run('translation')).results.find(
+        (r: { mode: string }) => r.mode === 'loose-korean'
+      );
+      expect(loose.phrases[0]).toMatchObject({ sceneCount: 3, scenes: [1, 2, 3] });
+      expect(loose.phrases[0].phrase).toContain('들이쉬');
+    } finally {
+      f.shell.close();
+      f.store.close();
+      rmSync(f.dir, { recursive: true, force: true });
+    }
+  }
+);
 
 test('batch scene projection refresh preserves drafts and writes each affected index once', async () => {
   const f = workspaceFixture();

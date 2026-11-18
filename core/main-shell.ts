@@ -1,6 +1,8 @@
 import type { ProviderTool } from './transport.js';
 
-export const SHELL_TIMEOUT_MAX_MS = 300_000;
+// The enclosing task deadline and cancellation bound a shell call; this only keeps the value
+// a sane timer duration (24 hours, below the 2^31-1 ms setTimeout limit).
+export const SHELL_TIMEOUT_MAX_MS = 86_400_000;
 export const SHELL_OUTPUT_DEFAULT_BYTES = 16_384;
 export const SHELL_OUTPUT_MAX_BYTES = 65_536;
 export const SHELL_EXEC_PROPERTIES = {

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { afterEach, expect, test, vi } from 'vitest';
-import { shellExecutionOptions } from '../core/main-shell.js';
+import { SHELL_TIMEOUT_MAX_MS, shellExecutionOptions } from '../core/main-shell.js';
 import type { RunSnapshot } from '../core/types.js';
 import { MainShell } from '../server/main-shell.js';
 import { Store } from '../server/store.js';
@@ -87,11 +87,13 @@ test('shell request bounds permit useful long work and explicit bounded output',
   expect(
     shellExecutionOptions({
       command: 'python3 analyze.py',
-      timeoutMs: 300000,
+      timeoutMs: 3_600_000,
       maxOutputBytes: 65536,
     })
-  ).toMatchObject({ timeoutMs: 300000, maxOutputBytes: 65536 });
-  expect(() => shellExecutionOptions({ command: 'true', timeoutMs: 300001 })).toThrow('INVALID');
+  ).toMatchObject({ timeoutMs: 3_600_000, maxOutputBytes: 65536 });
+  expect(() =>
+    shellExecutionOptions({ command: 'true', timeoutMs: SHELL_TIMEOUT_MAX_MS + 1 })
+  ).toThrow('INVALID');
   expect(() => shellExecutionOptions({ command: 'true', maxOutputBytes: 1000000 })).toThrow(
     'INVALID'
   );

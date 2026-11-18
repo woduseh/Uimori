@@ -73,7 +73,8 @@ function run(args, signal) {
     mkdirSync(scratch, { recursive: true });
     const outputFile = join(scratch, `exec-${randomUUID()}.log`);
     const fd = openSync(outputFile, 'w');
-    const timeoutMs = Math.min(300000, Math.max(1000, Number(args.timeoutMs) || 10000));
+    // Mirrors SHELL_TIMEOUT_MAX_MS in core/main-shell.ts; the app's task deadline is the real bound.
+    const timeoutMs = Math.min(86400000, Math.max(1000, Number(args.timeoutMs) || 10000));
     const maxOutputBytes = Math.min(65536, Math.max(256, Math.floor(Number(args.maxOutputBytes) || 16384)));
     let child;
     try {
