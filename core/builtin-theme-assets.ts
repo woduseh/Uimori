@@ -33,6 +33,18 @@ export const BUILTIN_THEME_ASSET_FILES: BuiltinThemeAssetFile[] = [
     mime: 'image/webp',
     file: 'letter-divider.webp',
   },
+  {
+    hash: 'ca06092f05c8578d89e2eaf5eedb393870663e3850147685433c28193413c569',
+    kind: 'image',
+    mime: 'image/webp',
+    file: 'scrap-torn.webp',
+  },
+  {
+    hash: '0f105fa3cfdf87262c29ba69567b9638c1f93f7268ca1817f1c114576e823a5c',
+    kind: 'image',
+    mime: 'image/webp',
+    file: 'scrap-sprig.webp',
+  },
 ];
 
 export function builtinThemeAsset(name: string, file: string) {

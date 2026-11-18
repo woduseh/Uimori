@@ -316,41 +316,167 @@ export const letterTheme: ThemeDefinition = {
 }
 `,
 };
+const squiggle =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 8'%3E%3Cpath d='M0 4 Q 6 0 12 4 T 24 4' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E\")";
+const rubberStamp =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none' stroke='black'%3E%3Ccircle cx='50' cy='50' r='46' stroke-width='4'/%3E%3Ccircle cx='50' cy='50' r='38' stroke-width='1.5'/%3E%3Cpath d='M50 30 L55 45 L71 45 L58 54 L63 70 L50 60 L37 70 L42 54 L29 45 L45 45 Z' fill='black' stroke='none'/%3E%3Cpath d='M50 8 V16 M50 84 V92 M8 50 H16 M84 50 H92' stroke-width='3'/%3E%3C/svg%3E\")";
+const washiTape = (angle: number) => `
+  background: repeating-linear-gradient(${angle}deg, color-mix(in srgb, var(--accent) 38%, var(--panel)) 0 6px, color-mix(in srgb, var(--info) 30%, var(--panel)) 6px 12px);
+  mask: conic-gradient(from -45deg at left, #0000 25%, #000 0) left / 51% 8px repeat-y, conic-gradient(from 135deg at right, #0000 25%, #000 0) right / 51% 8px repeat-y;
+  opacity: 0.9;`;
+const journalPage = (holeX: number, holeR: number, step: number) =>
+  `${paperGrain}, radial-gradient(circle at ${holeX}px 50%, var(--bg) ${holeR}px, color-mix(in srgb, var(--text) 25%, transparent) ${holeR + 0.5}px ${holeR + 1}px, transparent ${holeR + 1.5}px) 0 0 / ${holeX * 2}px ${step}px repeat-y, radial-gradient(color-mix(in srgb, var(--text) 16%, transparent) 1px, transparent 1.5px) 0 0 / 20px 20px, var(--panel)`;
 export const scrapbookTheme: ThemeDefinition = {
   title: '스크랩북',
   description: '테이프로 붙인 인물 사진과 나란히 놓인 기록',
   colors: colors('charcoal'),
+  assets: [
+    builtinThemeAsset('hand', 'NanumPenScript-Regular.woff2'),
+    builtinThemeAsset('torn', 'scrap-torn.webp'),
+    builtinThemeAsset('sprig', 'scrap-sprig.webp'),
+  ],
   appCss:
     commonApp +
     `
-.scene-portraits [data-uimori-part="bot-portrait"] { position: relative; padding: 12px 12px 20px; background: var(--surface-raised); border: var(--hairline) solid var(--line); margin: 10px 4px 14px; }
-.scene-portraits [data-uimori-part="bot-portrait"]::before { content: ''; position: absolute; width: 56px; height: 16px; top: -8px; left: calc(50% - 28px); background: var(--accent-soft); border: var(--hairline) solid var(--accent-line); border-radius: var(--radius-small); z-index: 1; pointer-events: none; }
+/* A travel-journal collage: a taped polaroid, a torn graph-paper note and a highlighted folio. */
+.scene-portraits [data-uimori-part="bot-portrait"] {
+  position: relative;
+  padding: 10px 10px 36px;
+  margin: 14px 8px 18px;
+  background: color-mix(in srgb, var(--panel), var(--text) 5%);
+  border: var(--hairline) solid var(--line);
+  box-shadow: 7px 6px 0 -1px var(--surface), 7px 6px 0 -0.5px var(--line);
+  transform: rotate(-2.5deg);
+}
+.scene-portraits [data-uimori-part="bot-portrait"]::before,
+.scene-portraits [data-uimori-part="bot-portrait"]::after {
+  content: '';
+  position: absolute;
+  top: -10px;
+  width: 84px;
+  height: 22px;
+  z-index: 1;
+  pointer-events: none;${washiTape(90)}
+}
+.scene-portraits [data-uimori-part="bot-portrait"]::before { left: -16px; transform: rotate(-32deg); }
+.scene-portraits [data-uimori-part="bot-portrait"]::after { right: -14px; transform: rotate(28deg); }
 .scene-portraits [data-uimori-part="bot-portrait"] .reader-portrait-button { border: 0; border-radius: 0; }
 .scene-portraits [data-uimori-part="bot-portrait"] img { max-height: 520px; }
-.scene-portraits [data-uimori-part="bot-portrait"] figcaption { text-align: right; padding: 14px 4px 0; }
-@container narrative-workspace (max-width: 850px) {
-  .scene-portraits { flex-direction: row; align-items: center; gap: 20px; }
-  .scene-portraits [data-uimori-part="bot-portrait"] { width: 130px; flex: 0 0 130px; padding: 8px 8px 14px; }
-  .scene-portraits [data-uimori-part="bot-portrait"] img { height: 112px; object-fit: cover; object-position: center 20%; }
-  .scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-size: var(--font-body); }
-  .scene-portraits [data-uimori-part="bot-portrait"] figcaption small { display: none; }
-  .scene-portraits [data-uimori-part="persona-portrait"] { flex-direction: column; align-items: flex-start; }
+.scene-portraits [data-uimori-part="bot-portrait"] figcaption { position: absolute; inset: auto 10px 6px; padding: 0; text-align: center; }
+.scene-portraits [data-uimori-part="bot-portrait"] figcaption strong { font-family: var(--theme-font-hand), cursive; font-size: 22px; font-weight: 400; color: var(--text); }
+.reader [data-uimori-part="heading"] .folio {
+  padding: 0 6px;
+  font-family: var(--theme-font-hand), cursive;
+  font-size: 22px;
+  font-weight: 400;
+  background: linear-gradient(176deg, transparent 52%, color-mix(in srgb, var(--accent) 32%, transparent) 54% 88%, transparent 90%);
+}
+.reader .request-message:not(form) {
+  position: relative;
+  padding: 18px 20px 24px;
+  border: 0;
+  border-radius: 0;
+  color: var(--text);
+  background:
+    linear-gradient(color-mix(in srgb, var(--info) 14%, transparent) 1px, transparent 1px) 0 0 / 14px 14px,
+    linear-gradient(90deg, color-mix(in srgb, var(--info) 14%, transparent) 1px, transparent 1px) 0 0 / 14px 14px,
+    color-mix(in srgb, var(--panel), var(--text) 3%);
+  mask: linear-gradient(#000 0 0) top / 100% calc(100% - 10px) no-repeat, var(--theme-image-torn) bottom / 256px 12px repeat-x;
+  transform: rotate(0.8deg);
+}
+.reader .request-message:not(form) p { font-family: var(--theme-font-hand), cursive; font-size: 20px; line-height: 1.4; }
+.reader .request-message:not(form)::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: calc(50% - 40px);
+  width: 80px;
+  height: 18px;
+  pointer-events: none;${washiTape(0)}
 }
 ` +
-    mobilePortrait,
-  messageCss,
+    mobilePortrait +
+    `
+@container narrative-workspace (max-width: 850px) {
+  .scene-portraits [data-uimori-part="bot-portrait"] { transform: rotate(-1deg); margin: 12px 4px 16px; }
+  .scene-portraits [data-uimori-part="bot-portrait"]::before { left: 12px; transform: rotate(-12deg); }
+  .scene-portraits [data-uimori-part="bot-portrait"]::after { display: none; }
+  .scene-portraits [data-uimori-part="bot-portrait"] figcaption { position: absolute; padding: 0; }
+  .reader .request-message:not(form) { transform: none; }
+}
+`,
+  messageCss:
+    messageCss +
+    `
+:where(h1, h2, h3) { font-family: var(--theme-font-hand), cursive; font-weight: 400; font-size: 1.25em; }
+:where(h1) { font-size: 2.2em; }
+`,
   templateHtml:
-    '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><aside class="portrait"><slot name="portrait"></slot></aside><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body" data-uimori-body-scroll></slot><footer class="actions"><slot name="actions"></slot></footer></div></section>',
+    '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><section class="manuscript"><aside class="portrait"><slot name="portrait"></slot></aside><div class="copy"><header class="heading"><slot name="heading"></slot></header><slot name="body" data-uimori-body-scroll></slot><footer class="actions"><slot name="actions"></slot></footer></div><i class="sprig" aria-hidden="true"></i></section>',
   templateCss:
     commonTemplate +
     `
-.manuscript { display: grid; grid-template-columns: minmax(180px, 31%) minmax(0, 1fr); gap: 36px; padding: 32px; border: var(--hairline) solid var(--line); }
-.portrait { padding-right: 26px; align-self: start; }
-.heading { border-bottom-style: dashed; }
-@container narrative-scene (max-width: 680px) {
-  .manuscript { display: block; padding: 22px 18px; }
-  .portrait { border: 0; padding: 0 8px 16px; max-width: none; margin-inline: auto; }
+/* Dot-grid journal page with binder holes, a stitched edge, a folded corner and a pressed sprig. */
+.manuscript {
+  display: grid;
+  grid-template-columns: minmax(180px, 31%) minmax(0, 1fr);
+  gap: 36px;
+  padding: 36px 36px 32px 56px;
+  border: var(--hairline) solid var(--line);
+  outline: 1.5px dashed color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: -10px;
+  background: ${journalPage(22, 7, 44)};
 }
+.manuscript::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(to top left, var(--bg) 50%, color-mix(in srgb, var(--panel), var(--text) 14%) 50%);
+}
+.portrait { position: relative; padding-right: 12px; align-self: start; }
+.portrait::after {
+  content: '';
+  position: absolute;
+  left: -18px;
+  bottom: -26px;
+  width: 92px;
+  height: 92px;
+  background: color-mix(in srgb, var(--error) 50%, transparent);
+  mask: ${rubberStamp} no-repeat center / contain;
+  transform: rotate(-14deg);
+  pointer-events: none;
+}
+.copy { position: relative; z-index: 1; }
+.heading { position: relative; border-bottom: 0; }
+.heading::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 -4px;
+  height: 8px;
+  background: color-mix(in srgb, var(--accent) 55%, var(--line));
+  mask: ${squiggle} left / 24px 8px repeat-x;
+}
+.sprig {
+  position: absolute;
+  left: 64px;
+  bottom: 28px;
+  z-index: 0;
+  width: 96px;
+  height: 144px;
+  background: color-mix(in srgb, var(--success) 45%, transparent);
+  mask: var(--theme-image-sprig) no-repeat center / contain;
+  transform: rotate(-18deg);
+  pointer-events: none;
+}
+@container narrative-scene (max-width: 680px) {
+  .manuscript { display: block; padding: 24px 18px 24px 40px; background: ${journalPage(16, 5, 36)}; }
+  .portrait { border: 0; padding: 0 8px 16px; max-width: none; margin-inline: auto; }
+  .portrait::after, .sprig { display: none; }
+}
+:host([data-has-portrait="false"]) .sprig, :host-context(.focus-reading) .sprig { display: none; }
 `,
 };
 

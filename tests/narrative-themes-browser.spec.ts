@@ -1015,6 +1015,16 @@ test('BACKGROUND pending upload discard and dirty save-close preserve scope owne
   ).toBe(true);
 });
 
+/** The app height follows visualViewport resize events, which can arrive after innerHeight. */
+async function resizeApp(page: Page, width: number, height: number) {
+  await page.setViewportSize({ width, height });
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.documentElement.style.getPropertyValue('--app-height'))
+    )
+    .toBe(`${height}px`);
+}
+
 for (const layout of ['letter'] as const) {
   test(`NARRATIVE HEIGHT ${layout}: reader space, composer and navigator clearance`, async ({
     page,
@@ -1028,8 +1038,7 @@ for (const layout of ['letter'] as const) {
     for (const width of [360, 412]) {
       let previous = 0;
       for (const height of [600, 700, 800, 915]) {
-        await page.setViewportSize({ width, height });
-        await expect.poll(() => page.evaluate(() => window.innerHeight)).toBe(height);
+        await resizeApp(page, width, height);
         const bodyHeight = await bodyScroll.evaluate((node) => node.clientHeight);
         const readerHeight = await reader.evaluate((node) => node.clientHeight);
         expect(readerHeight).toBeGreaterThan(300);
@@ -1041,7 +1050,7 @@ for (const layout of ['letter'] as const) {
         await noHorizontalOverflow(page, scene);
       }
     }
-    await page.setViewportSize({ width: 412, height: 700 });
+    await resizeApp(page, 412, 700);
     // A short translation uses its content height, rather than stretching to the cap.
     const originalHeight = await bodyScroll.evaluate((node) => node.clientHeight);
     await sourceAction(scene, '번역 보기');
@@ -1051,7 +1060,7 @@ for (const layout of ['letter'] as const) {
     await page.keyboard.press('Escape');
     await expect(scene.getByTestId('source-text')).toContainText(endMarker);
 
-    await page.setViewportSize({ width: 360, height: 600 });
+    await resizeApp(page, 360, 600);
     const compactBody = await bodyScroll.evaluate((node) => node.clientHeight);
     const compactReader = await reader.evaluate((node) => node.clientHeight);
     await composer.fill('작성 중인 여러 줄 요청\n'.repeat(12));
