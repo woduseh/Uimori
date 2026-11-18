@@ -263,6 +263,30 @@ export const messages = {
     ja: '応答を生成できませんでした。',
     zh: '无法生成响应。',
   },
+  'shared.timeoutFailure': {
+    ko: '제한 시간 안에 응답이 오지 않았어요.',
+    en: 'The response did not arrive in time.',
+    ja: '制限時間内に応答が届きませんでした。',
+    zh: '未在限定时间内收到响应。',
+  },
+  'shared.connectionFailure': {
+    ko: '프로바이더에 연결하지 못했어요.',
+    en: 'Could not connect to the provider.',
+    ja: 'プロバイダーに接続できませんでした。',
+    zh: '无法连接到提供商。',
+  },
+  'shared.authFailure': {
+    ko: '프로바이더가 인증을 거부했어요.',
+    en: 'The provider rejected the credentials.',
+    ja: 'プロバイダーが認証を拒否しました。',
+    zh: '提供商拒绝了身份验证。',
+  },
+  'shared.providerFailure': {
+    ko: '프로바이더 서버에서 오류가 났어요.',
+    en: 'The provider returned a server error.',
+    ja: 'プロバイダーのサーバーでエラーが発生しました。',
+    zh: '提供商服务器出错。',
+  },
   'shared.failedRequest': {
     ko: '실패한 요청',
     en: 'Failed request',

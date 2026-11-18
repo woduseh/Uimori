@@ -45,7 +45,15 @@ export function RetryFailure({
                 ? t('shared.unsupportedOptions')
                 : error?.includes('429')
                   ? t('shared.rateLimit')
-                  : t('shared.responseFailure');
+                  : error?.includes('TIMEOUT')
+                    ? t('shared.timeoutFailure')
+                    : error?.includes('TRANSPORT_ERROR')
+                      ? t('shared.connectionFailure')
+                      : /HTTP_40[13]/u.test(error ?? '')
+                        ? t('shared.authFailure')
+                        : /HTTP_5\d\d/u.test(error ?? '')
+                          ? t('shared.providerFailure')
+                          : t('shared.responseFailure');
   return (
     <div
       className="turn-failure chat-retry-failure"

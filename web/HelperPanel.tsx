@@ -31,8 +31,9 @@ import {
   Maximize2,
   Minimize2,
   ChevronDown,
+  MessageCircle,
 } from 'lucide-react';
-import { SettingsIcon, CloseIcon } from './ui-icons.js';
+import { SettingsIcon, CloseIcon, LibraryIcon } from './ui-icons.js';
 import type { Library } from '../core/product.js';
 import type {
   HelperConversation,
@@ -141,6 +142,8 @@ type Props = {
   modelTitle: string;
   modelRevision: number;
   library: Library | null;
+  /** The chat open in the reader, so a conversation about it can name it. */
+  currentChat?: { id: string; title: string } | null;
 };
 export type HelperHandoff =
   | ({ kind: 'outline'; epoch: number } & OutlineHelperRequest)
@@ -171,6 +174,14 @@ type Outbox = Partial<FrozenHelperAttachments> & {
   outline?: OutlineTarget;
 };
 const active = (task: HelperTaskView) => task.status === 'queued' || task.status === 'running';
+const starterKeys: Record<HelperScope['kind'], string[]> = {
+  chat: ['helpers.starterChatSummary', 'helpers.starterChatConsistency', 'helpers.starterChatNext'],
+  library: [
+    'helpers.starterLibraryOrganize',
+    'helpers.starterLibraryGaps',
+    'helpers.starterLibraryDraft',
+  ],
+};
 function helperTaskError(error: string | null | undefined): string {
   if (error === 'HELPER_CONTEXT_DEPENDENCY_CHANGED')
     return t('errors.HELPER_CONTEXT_DEPENDENCY_CHANGED');
@@ -460,6 +471,11 @@ export function HelperPanel(props: Props) {
   const [personas, setPersonas] = useState<Record<string, { text: string; revision: number }>>({});
   const [savingPersona, setSavingPersona] = useState(false);
   const compact = (props.modal ?? false) && !props.expanded;
+  // A hardware keyboard has Shift+Enter for line breaks; a touch keyboard keeps the app setting.
+  const [hardwareKeyboard] = useState(
+    () => matchMedia('(hover: hover) and (pointer: fine)').matches
+  );
+  const enterSend = props.enterSend || hardwareKeyboard;
   const [frozenEditors, setFrozenEditors] = useState<
     Record<string, ReturnType<typeof captureActiveEditorContext>>
   >({});
@@ -1181,7 +1197,7 @@ export function HelperPanel(props: Props) {
           )}
           <RetryFailure
             status={task.status}
-            error={helperTaskError(task.error)}
+            error={task.error}
             disabled={busy || Boolean(outbox)}
             onRetry={task.completedEffects ? undefined : () => void retry(task)}
             onSettings={props.onModelSettings}
@@ -1554,6 +1570,39 @@ export function HelperPanel(props: Props) {
               label={t('helpers.m061')}
             />
           ) : null}
+          {conversation && !data.loading && messages.length === 0 && (
+            <div className="helper-start" data-testid="helper-start">
+              <p className="helper-start-scope">
+                {scope.kind === 'chat' ? (
+                  <MessageCircle size={16} aria-hidden="true" />
+                ) : (
+                  <LibraryIcon size={16} aria-hidden="true" />
+                )}
+                <span>
+                  {scope.kind === 'chat' && scope.chatId === props.currentChat?.id
+                    ? props.currentChat.title
+                    : t(scope.kind === 'chat' ? 'helpers.chatTitle' : 'helpers.libraryTitle')}
+                </span>
+              </p>
+              <ul className="helper-start-list" aria-label={t('helpers.starters')}>
+                {starterKeys[scope.kind].map((key) => (
+                  <li key={key}>
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={props.ready === false || !hydrated[scopeKey] || !attachments.ready}
+                      onClick={() => {
+                        editDraft(t(key));
+                        input.current?.focus();
+                      }}
+                    >
+                      {t(key)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {conversation &&
             messages.map((message) => {
               const task = taskMap.get(message.taskId);
@@ -1624,18 +1673,16 @@ export function HelperPanel(props: Props) {
                     />
                   ))}
                   {task && (message.role === 'assistant' || !answered.has(task.id)) && (
-                    <HelperTaskResults
-                      taskId={task.id}
-                      status={task.status}
-                      visible={props.open}
-                      onOpenTarget={props.onOpenTarget}
-                    />
+                    <div className="helper-turn-meta">
+                      <HelperTaskResults
+                        taskId={task.id}
+                        status={task.status}
+                        visible={props.open}
+                        onOpenTarget={props.onOpenTarget}
+                      />
+                      {taskStatus(task)}
+                    </div>
                   )}
-                  {message.role === 'user' &&
-                    taskMap.get(message.taskId) &&
-                    !answered.has(message.taskId) &&
-                    taskStatus(taskMap.get(message.taskId)!)}
-                  {message.role === 'assistant' && task && taskStatus(task)}
                 </article>
               );
             })}
@@ -2075,13 +2122,17 @@ export function HelperPanel(props: Props) {
           )}
           <ComposerInput
             inputRef={input}
-            enterSend={props.enterSend}
+            enterSend={enterSend}
             aria-label={t('helpers.m103')}
             value={draft}
             disabled={
               props.ready === false || !conversation || !hydrated[scopeKey] || !attachments.ready
             }
-            placeholder={t('helpers.m104')}
+            placeholder={
+              hardwareKeyboard && !compact
+                ? t('helpers.requestPlaceholder', { key: 'Enter' })
+                : t('helpers.m104')
+            }
             maxLength={REQUEST_TEXT_MAX_CHARS}
             onChange={(event) => editDraft(event.target.value)}
             onPaste={(event) => {

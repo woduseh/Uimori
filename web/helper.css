@@ -791,10 +791,104 @@ details.helper-context-chip pre,
 /* An empty conversation starts from the middle of the surface instead of a blank page above a
    docked composer; phones keep the composer within thumb reach. */
 @media (min-width: 761px) {
-  .helper-panel:has(.helper-thread-empty:empty) > .helper-messages,
-  .helper-panel:has(.helper-thread-empty:empty) > .helper-composer {
+  .helper-panel:has(.helper-thread-empty:empty, .helper-thread-empty > .helper-start:only-child)
+    > :is(.helper-messages, .helper-composer) {
     flex: 1 1 0;
   }
+  .helper-thread-empty:has(> .helper-start:only-child) {
+    justify-content: flex-end;
+  }
+}
+.helper-start {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.helper-start-scope {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-small);
+}
+.helper-start-scope > svg {
+  flex-shrink: 0;
+}
+.helper-start-scope > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.helper-start-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.helper-start-list button {
+  max-width: 100%;
+  font-weight: 400;
+  text-align: start;
+  white-space: normal;
+}
+.helper-start-list button:lang(ko) {
+  word-break: keep-all;
+}
+
+/* A turn's status and usage read as one quiet row; an opened disclosure takes the full width. */
+.helper-turn-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 16px;
+  min-width: 0;
+  margin-top: 4px;
+}
+.helper-turn-meta > :is(.helper-task-results, .helper-task) {
+  display: contents;
+}
+.helper-turn-meta > * > * {
+  flex: 0 0 100%;
+  min-width: 0;
+  order: 3;
+}
+.helper-turn-meta :is(.helper-result-list, .helper-result-note) {
+  order: 0;
+}
+.helper-turn-meta .helper-result-list:empty {
+  display: none;
+}
+.helper-turn-meta .helper-task > .turn-activity {
+  order: 1;
+  margin: 0;
+}
+.helper-turn-meta .helper-result-usage {
+  order: 2;
+  font-size: var(--font-small);
+}
+.helper-turn-meta .helper-task > .turn-activity:not([open]),
+.helper-turn-meta .helper-result-usage:not(:has(> [open])) {
+  flex: 0 1 auto;
+}
+.helper-turn-meta .turn-activity > summary {
+  flex: none;
+}
+.helper-turn-meta .execution-record {
+  margin-top: 0;
+}
+.helper-turn-meta .execution-record:not([open]) {
+  border-color: transparent;
+  background: transparent;
+}
+.helper-turn-meta .execution-record:not([open]) > summary {
+  padding: 0;
+  align-content: center;
 }
 /* A pointer reveals request actions beside the bubble, so hidden actions leave no blank row. */
 @media (hover: hover) and (pointer: fine) and (min-width: 601px) {

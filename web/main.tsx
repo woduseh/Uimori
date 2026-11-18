@@ -2410,6 +2410,7 @@ function App() {
         }
         modelRevision={s.promptWorkspace?.revision ?? 0}
         library={s.library}
+        currentChat={s.detail?.chat}
         open={helperOpen}
         navigation={helperNavigation}
         handoff={helperHandoff}
