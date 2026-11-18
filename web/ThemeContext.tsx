@@ -164,13 +164,22 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         else root.style.removeProperty(`--${key}`);
       }
     };
+    const syncBrowserThemeColor = () => {
+      const background = getComputedStyle(document.body).backgroundColor;
+      if (background !== 'rgba(0, 0, 0, 0)')
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', background);
+    };
     applyColors();
-    const observer = new MutationObserver(applyColors);
+    const observer = new MutationObserver(() => {
+      applyColors();
+      syncBrowserThemeColor();
+    });
     observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] });
     const style = document.createElement('style');
     style.id = 'uimori-theme-css';
     style.textContent = active.appCss;
     document.head.append(style);
+    syncBrowserThemeColor();
     updateMessageTheme(document, active.messageCss);
     const removeAssets = applyThemeAssets(root, active.assets);
     return () => {

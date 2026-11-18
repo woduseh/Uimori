@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'vitest';
-import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { runInNewContext } from 'node:vm';
@@ -102,4 +102,30 @@ test('install resources can load before login, revalidate after updates, and do 
   expect((await app.inject({ method: 'GET', url: '/icons/app-192.png' })).statusCode).toBe(200);
   for (const url of ['/api/chats', '/api/usage?from=2026-09-27&to=2026-09-27', '/api/backups'])
     expect((await app.inject({ method: 'GET', url })).statusCode).toBe(401);
+});
+
+test('the app document blocks foreign scripts and withholds its address from remote card assets', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-document-'));
+  directories.push(directory);
+  const webRoot = join(directory, 'web');
+  mkdirSync(webRoot);
+  writeFileSync(join(webRoot, 'index.html'), '<!doctype html><title>Uimori</title>');
+  writeFileSync(join(webRoot, 'app.js'), '');
+  const app = await createApp({
+    dbPath: join(directory, 'app.sqlite'),
+    buildId: 'synthetic-document',
+    testMode: true,
+    webRoot,
+  });
+  apps.push(app);
+  for (const url of ['/', '/index.html', '/chats/deep-link']) {
+    const document = await app.inject({ method: 'GET', url });
+    expect(document.statusCode, url).toBe(200);
+    expect(document.headers['content-security-policy'], url).toBe(
+      "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+    );
+    expect(document.headers['referrer-policy'], url).toBe('no-referrer');
+  }
+  const script = await app.inject({ method: 'GET', url: '/app.js' });
+  expect(script.headers['content-security-policy']).toBeUndefined();
 });

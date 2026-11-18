@@ -150,6 +150,9 @@ export type AppOptions = {
 };
 export type App = FastifyInstance & { store: Store; controls: Controls };
 type RecordBody = Record<string, unknown>;
+// Scripts only: authored card and theme HTML rely on inline styles, remote images and fonts.
+const DOCUMENT_CONTENT_SECURITY_POLICY =
+  "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
 
 /** A code or a source location only: free-form messages can quote manuscript or settings data. */
 function requestFailureLabel(error: unknown): string {
@@ -1568,6 +1571,10 @@ export async function createApp(options: AppOptions): Promise<App> {
       root: options.webRoot,
       setHeaders(response, path) {
         const name = basename(path);
+        if (name === 'index.html') {
+          response.header('Content-Security-Policy', DOCUMENT_CONTENT_SECURITY_POLICY);
+          response.header('Referrer-Policy', 'no-referrer');
+        }
         if (name === 'sw.js' || name === 'manifest.webmanifest') {
           response.header('Cache-Control', 'no-cache');
           response.header('X-Content-Type-Options', 'nosniff');
