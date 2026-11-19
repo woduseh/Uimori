@@ -8,11 +8,16 @@ import { pruneSourceEdits, pruneTranslationHistory } from './text-retention.js';
 import { retainCompletedLore } from './lore-retention-state.js';
 import { verifiedRunLoreReads } from './lore-context.js';
 import { captureNativeMessageChanges } from './native-message-changes.js';
-import { releaseCompletedRunInputs, releaseCompletedJobInputs } from './execution-retention.js';
+import {
+  releaseCompletedRunInputs,
+  releaseCompletedJobInputs,
+  releaseEndedRunSnapshots,
+} from './execution-retention.js';
 import { recordToolDiagnostic } from './execution-diagnostics.js';
 import { retryRun as retryPersonalRun } from './run-retry.js';
-import { settleSnapshot } from './execution-snapshot.js';
-import { readRunSnapshot } from './run-projections.js';
+import { releaseEndedSnapshot, settleSnapshot } from './execution-snapshot.js';
+import { readRunSnapshot, readRunState } from './run-projections.js';
+import { canRecoverMainJudgment } from '../core/main-judgment-recovery.js';
 import { CredentialStore, initCredentials } from './credentials.js';
 import { DatabaseSync } from 'node:sqlite';
 import { initHelperWorkspace } from './helper-workspace.js';
@@ -128,7 +133,9 @@ export class Store {
     }
     try {
       databaseSchemaVersion(this.db);
-      this.db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000;');
+      this.db.exec(
+        'PRAGMA journal_mode=WAL; PRAGMA journal_size_limit=67108864; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000;'
+      );
       this.credentials = new CredentialStore(this.db);
       this.product = new ProductStore(this);
       this.story = new StoryStore(this);
@@ -578,7 +585,7 @@ export class Store {
   }
   startRun(id: string) {
     return this.transaction(() => {
-      const run = this.run(id);
+      const run = readRunState(this, id);
       if (run.status !== 'queued') return false;
       this.db.prepare("UPDATE runs SET status='running',updated_at=? WHERE id=?").run(now(), id);
       this.event(run.chatId, 'run.running', id);
@@ -629,8 +636,8 @@ export class Store {
     usage?: Usage
   ) {
     return this.transaction(() => {
-      const run = this.run(id);
-      if (!['queued', 'running'].includes(run.status)) return run;
+      const run = readRunState(this, id);
+      if (!['queued', 'running'].includes(run.status)) return this.run(id);
       this.db
         .prepare(
           'UPDATE runs SET status=?,error=?,partial_text=COALESCE(?,partial_text),usage=COALESCE(?,usage),updated_at=? WHERE id=?'
@@ -645,12 +652,25 @@ export class Store {
         );
       this.story.finishCommandInTransaction(id, status === 'cancelled' ? 'cancelled' : 'failed');
       this.event(run.chatId, `run.${status}`, id);
-      return this.run(id);
+      return this.releaseEndedRunInTransaction(id);
     });
+  }
+  /** Only a preserved response awaiting judgment can replay this run's own frozen input. */
+  releaseEndedRunInTransaction(id: string): Run {
+    const run = this.run(id);
+    if (
+      ['queued', 'running', 'completed'].includes(run.status) ||
+      run.snapshot.settled ||
+      canRecoverMainJudgment(run)
+    )
+      return run;
+    const snapshot = releaseEndedSnapshot(run.snapshot);
+    this.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(json(snapshot), id);
+    return { ...run, snapshot };
   }
   settleCancelledUsage(id: string, usage: Usage): Run {
     return this.transaction(() => {
-      const run = this.run(id);
+      const run = readRunState(this, id);
       // A cancel endpoint may finish the run before the in-flight attempt returns.
       // Fill that missing aggregate once without changing status, source, or prior usage.
       const changed = this.db
@@ -1124,7 +1144,7 @@ export class Store {
       if (value.status === 'completed') {
         releaseCompletedJobInputs(this.db, id);
         if (row.kind === 'translation') pruneTranslationHistory(this.db, row.source_revision);
-        pruneSourceEdits(this.db, row.source_revision);
+        pruneSourceEdits(this.db, { sourceId: row.source_revision });
       }
       this.event(row.chat_id, `job.${value.status}`, id);
       return true;
@@ -1134,10 +1154,10 @@ export class Store {
   recover(): string[] {
     const resumed: string[] = [];
     this.transaction(() => {
-      for (const row of this.db
-        .prepare("SELECT id FROM runs WHERE status IN ('queued','running')")
-        .all() as Row[]) {
-        const run = this.run(row.id);
+      releaseEndedRunSnapshots(this.db, (id) => this.releaseEndedRunInTransaction(id));
+      for (const run of this.db
+        .prepare("SELECT id,chat_id AS chatId FROM runs WHERE status IN ('queued','running')")
+        .all() as { id: string; chatId: string }[]) {
         if (recoverableAnthropicBatchRun(this, run.id)) {
           this.db
             .prepare("UPDATE runs SET status='queued',error=NULL,updated_at=? WHERE id=?")
@@ -1150,6 +1170,7 @@ export class Store {
           .prepare("UPDATE runs SET status='interrupted',error=?,updated_at=? WHERE id=?")
           .run('Server stopped; generation was not automatically replayed', now(), run.id);
         this.story.finishCommandInTransaction(run.id, 'failed');
+        this.releaseEndedRunInTransaction(run.id);
         this.event(run.chatId, 'run.interrupted', run.id);
       }
       // Retired commentary jobs retain their receipts but can never resume provider work.

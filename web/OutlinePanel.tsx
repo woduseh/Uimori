@@ -39,7 +39,7 @@ import {
   type OutlineSnapshot,
 } from '../core/outline.js';
 import type { StoryState } from './useStory.js';
-import type { Run } from '../core/types.js';
+import type { RunReceipt } from '../core/types.js';
 import type { SceneCommand } from '../core/story.js';
 import './outline.css';
 
@@ -306,7 +306,7 @@ export function OutlinePanel({
           operation = { ...operation, commandId: command.id };
           if (!remember(operation, operation.body.idempotencyKey)) return;
         }
-        await api<Run>(`/scene-commands/${operation.commandId}/run`, operation.body);
+        await api<RunReceipt>(`/scene-commands/${operation.commandId}/run`, operation.body);
       }
       if (!remember(null, operation.body.idempotencyKey)) return;
       if (operation.kind === 'write' && mounted.current) {

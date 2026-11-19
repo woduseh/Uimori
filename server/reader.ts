@@ -192,6 +192,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     CASE WHEN status IN ('queued','running') THEN '' ELSE partial_text END AS partialText,
     (((status='failed' AND substr(error,1,4)='JEV_')
       OR (status='interrupted' AND json_extract(snapshot,'$.mainJudgmentPending')=1)) AND source_revision IS NULL
+      AND json_type(snapshot,'$.settled') IS NULL
       AND COALESCE(json_extract(snapshot,'$.mainJudgmentEnabled'),0)!=0
       AND json_type(snapshot,'$.mainJudgment')='object'
       AND partial_text=json_extract(snapshot,'$.mainJudgment.response')

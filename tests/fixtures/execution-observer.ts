@@ -6,8 +6,8 @@ const observations = new WeakMap<Store, Map<string, ExecutionObservation>>();
 const attempts = new WeakMap<Store, Map<string, ReturnType<Store['product']['attempts']>>>();
 
 /**
- * Capture what a synthetic run actually executed before successful completion releases its
- * diagnostic inputs. This is test-only memory, not a historical storage mode or an API mock.
+ * Capture what a synthetic run actually executed before its end releases the frozen input and,
+ * on success, its diagnostic inputs. This is test-only memory, not a historical storage mode or an API mock.
  * Tests about durable state must read store.run()/readStoredRunSnapshot() instead.
  */
 export function observeExecutions(store: Store): void {
@@ -26,6 +26,12 @@ export function observeExecutions(store: Store): void {
     attempts.get(store)!.set(args[0], structuredClone(requests));
     captured.set(args[0], observation);
     return source;
+  });
+  const release = store.releaseEndedRunInTransaction.bind(store);
+  vi.spyOn(store, 'releaseEndedRunInTransaction').mockImplementation((id) => {
+    const { snapshot, inputs, toolEvents } = store.run(id);
+    if (!snapshot.settled) captured.set(id, structuredClone({ snapshot, inputs, toolEvents }));
+    return release(id);
   });
 }
 

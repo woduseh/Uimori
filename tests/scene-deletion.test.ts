@@ -450,13 +450,13 @@ test('failed runs that captured deleted text lose that captured context and cann
   const f = manuscript(),
     failed = queued(f.store, f.chatId);
   f.store.finishRun(failed.id, 'failed', 'Synthetic provider failure');
-  expect(
-    readStoredRunSnapshot(f.store, failed.id).history.some((source) => source.revision === f.b.id)
-  ).toBe(true);
+  const released = readStoredRunSnapshot(f.store, failed.id);
+  expect(released.history).toEqual([]);
+  expect(released.capturedSources).toContain(f.b.id);
   deleteScenes(f.store, f.chatId, f.b.id, request(f));
   const snapshot = readStoredRunSnapshot(f.store, failed.id);
   expect(snapshot.invalidatedBySceneDeletion).toBe(true);
-  expect(snapshot.history).toEqual([]);
+  expect(snapshot.capturedSources).toBeUndefined();
   expect(() => f.store.retryRun(failed.id, 'deleted-context-retry')).toThrow(
     'SCENE_DELETED_RETRY_UNAVAILABLE'
   );

@@ -6,6 +6,7 @@ import {
 import { jsonPayloadHash } from './json-hash.js';
 import { fields, HttpError, isSha256Hex, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
+import { readRunState } from './run-projections.js';
 
 export type ChatVariableCommand = {
   expectedRevision: number;
@@ -124,7 +125,7 @@ export function checkpointChatVariablesInTransaction(
   if (!store.db.isTransaction) throw new Error('CHAT_VARIABLE_TRANSACTION_REQUIRED');
   store.chat(chatId);
   const source = store.sourceOriginal(sourceId);
-  if (source.chatId !== chatId || store.run(source.runId).chatId !== chatId)
+  if (source.chatId !== chatId || readRunState(store, source.runId).chatId !== chatId)
     throw new HttpError(400, 'CHAT_VARIABLE_SOURCE_OWNER');
   if (store.db.prepare('SELECT 1 FROM chat_variable_outputs WHERE source_id=?').get(sourceId))
     return;

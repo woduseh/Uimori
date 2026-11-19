@@ -17,6 +17,9 @@ import {
   selectChatSettingsSection,
   selectSettingsSection,
 } from './ui-navigation.js';
+import { requestFullRunResponses } from './fixtures/full-run-response.js';
+
+test.beforeEach(({ page }) => requestFullRunResponses(page));
 
 async function models(request: APIRequestContext): Promise<ModelWorkspace> {
   const response = await request.get('/api/model-workspace');
@@ -545,6 +548,10 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
       expect(run.snapshot.profile?.promptPresets?.main?.title).toBe(updatedPreset.title);
       expect((await detail(request, chat.id)).attempts).toHaveLength(0);
       expect((await request.post(`/api/runs/${run.id}/cancel`)).ok()).toBe(true);
+      const released = (await detail(request, chat.id)).runs.find(
+        (item) => item.id === run.id
+      )!.snapshot;
+      expect(released).toMatchObject({ settled: true, history: [], request: run.request });
 
       expect(
         (
@@ -602,7 +609,7 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
       await expect(composer).toHaveValue('삭제한 프리셋으로는 실행하지 않기');
       const final = await detail(request, chat.id);
       expect(final.profile?.routes.main).toEqual({ id: globalModel.id });
-      expect(final.runs.find((item) => item.id === run.id)?.snapshot).toEqual(run.snapshot);
+      expect(final.runs.find((item) => item.id === run.id)?.snapshot).toEqual(released);
       expect(final.attempts).toHaveLength(0);
     } finally {
       for (const run of reserved) await request.post(`/api/runs/${run.id}/cancel`);

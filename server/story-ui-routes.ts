@@ -13,6 +13,7 @@ import {
   text,
 } from './request-validation.js';
 import type { Store } from './store.js';
+import { runResponse } from './run-projections.js';
 
 type ActionCommand = Omit<StoryUiAction, 'roll'>;
 
@@ -175,7 +176,7 @@ export function storyUiRoutes(
         options.publish(chatId);
         if (result.run.status === 'queued') options.execute(result.run.id);
       }
-      return result.run;
+      return runResponse(request.headers.prefer, result.run);
     }
   );
 }

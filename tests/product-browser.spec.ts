@@ -20,8 +20,10 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type { Connection, Content, Library, ModelPreset } from '../core/product.js';
 import type { ChatOptionState } from '../core/chat-options.js';
+import { requestFullRunResponses } from './fixtures/full-run-response.js';
 
 preservePromptWorkspace();
+test.beforeEach(({ page }) => requestFullRunResponses(page));
 
 async function getDetail(request: APIRequestContext, id: string): Promise<ChatDetail> {
   const response = await request.get(`/api/chats/${id}`);

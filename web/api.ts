@@ -71,6 +71,9 @@ async function readApiResponse<T>(
   );
 }
 
+const runAdmission =
+  /^(?:\/runs\/[^/]+\/(?:retry|rejudge|candidate|cancel)|\/chats\/[^/]+\/(?:runs|story-ui\/actions)|\/scene-commands\/[^/]+\/run)$/u;
+
 export async function api<T>(
   path: string,
   body?: unknown,
@@ -84,7 +87,10 @@ export async function api<T>(
       : {
           method,
           signal,
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(runAdmission.test(path) ? { Prefer: 'return=minimal' } : {}),
+          },
           body: JSON.stringify(body),
         }
   );

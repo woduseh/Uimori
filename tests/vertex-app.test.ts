@@ -1,6 +1,7 @@
 import { setFixtureModelRoutes } from './fixtures/chat.js';
 import type { Job } from '../core/types.js';
 import { readStoredRunSnapshot } from '../server/run-projections.js';
+import { releaseEndedSnapshot } from '../server/execution-snapshot.js';
 import { installJevFixture, configureJevFixture } from './fixtures/jev.js';
 import { injectWithFixtureBot, fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -406,7 +407,9 @@ test.each(['main', 'translation'] as const)(
     });
     const selected = await setup(state.app, stalledRole === 'translation');
     const input = command(selected.chat, selected.profile);
+    const reserve = vi.spyOn(state.app.store, 'createRunInTransaction');
     const run = await api<Run>(state.app, `/api/chats/${selected.chat.id}/runs`, input);
+    const reserved = (reserve.mock.results[0].value as { run: Run }).run.snapshot;
     if (stalledRole === 'translation') {
       const completed = await runDone(state, run.id);
       expect((await api<ChatDetail>(state.app, `/api/chats/${selected.chat.id}`)).jobs).toEqual([]);
@@ -416,7 +419,7 @@ test.each(['main', 'translation'] as const)(
     const before = await api<ChatDetail>(state.app, `/api/chats/${selected.chat.id}`);
     const transmittedSnapshot = readStoredRunSnapshot(state.app.store, run.id);
     if (stalledRole === 'main') {
-      expect(frozenInputs(transmittedSnapshot)).toEqual(frozenInputs(run.snapshot));
+      expect(frozenInputs(transmittedSnapshot)).toEqual(frozenInputs(reserved));
       expect(transmittedSnapshot.contextPlan).toMatchObject({
         status: 'ready',
         compacted: [],
@@ -439,7 +442,9 @@ test.each(['main', 'translation'] as const)(
     const after = await api<ChatDetail>(reopened, `/api/chats/${selected.chat.id}`);
     expect(after.sources).toEqual(before.sources);
     expect(after.attempts!.map((attempt) => attempt.id)).toEqual(attemptIds);
-    expect(readStoredRunSnapshot(reopened.store, run.id)).toEqual(transmittedSnapshot);
+    expect(readStoredRunSnapshot(reopened.store, run.id)).toEqual(
+      stalledRole === 'main' ? releaseEndedSnapshot(transmittedSnapshot) : transmittedSnapshot
+    );
     if (stalledRole === 'main') {
       expect(after.runs.find((item) => item.id === run.id)).toMatchObject({
         status: 'interrupted',

@@ -222,7 +222,8 @@ export function deleteScenes(
       }
       if (!refersToDeleted(original, ids) && !ids.has(String(row.parent_revision))) continue;
       store.db.prepare('DELETE FROM execution_tool_diagnostics WHERE run_id=?').run(id);
-      let snapshot = original.settled ? { ...original } : settleSnapshot(original);
+      let snapshot =
+        original.settled && row.status === 'completed' ? { ...original } : settleSnapshot(original);
       snapshot.parentRevision = survivor(snapshot.parentRevision);
       if (snapshot.replacement && ids.has(snapshot.replacement.sourceRevision))
         delete snapshot.replacement;

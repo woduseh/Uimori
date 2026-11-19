@@ -1,7 +1,7 @@
 import { supportedLocale } from '../core/ui-locale.js';
 import { PushService, pushRoutes } from './push-service.js';
 import type { PushSender } from './push-transport.js';
-import { basename } from 'node:path';
+import { basename, relative, sep } from 'node:path';
 import { usageRoutes } from './usage-report.js';
 import { readingStateRoutes } from './reading-state.js';
 import { ManuscriptSearch, manuscriptSearchRoutes } from './manuscript-search.js';
@@ -41,7 +41,7 @@ import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import { Store } from './store.js';
-import { readTranslationSelection, readStoredRunSnapshot } from './run-projections.js';
+import { readTranslationSelection, readStoredRunSnapshot, runResponse } from './run-projections.js';
 import { ChatTitleService } from './chat-title.js';
 import { HelperRuntime, helperWritingSnapshot } from './helper-runtime.js';
 import { invokeTaskTool } from './helper-task-tools.js';
@@ -1318,7 +1318,7 @@ export async function createApp(options: AppOptions): Promise<App> {
         publish(request.params.id);
         if (result.run.status === 'queued') execute(result.run.id);
       }
-      return result.run;
+      return runResponse(request.headers.prefer, result.run);
     }
   );
   app.get<{ Params: { id: string } }>('/api/runs/:id', async (request) =>
@@ -1344,7 +1344,7 @@ export async function createApp(options: AppOptions): Promise<App> {
               body.request,
               'request',
               REQUEST_TEXT_MAX_CHARS,
-              !!store.run(request.params.id).snapshot.requestImages?.length
+              !!readStoredRunSnapshot(store, request.params.id).requestImages?.length
             ),
         body.mode as 'replace' | 'copy' | undefined
       );
@@ -1352,7 +1352,7 @@ export async function createApp(options: AppOptions): Promise<App> {
         publish(result.run.chatId);
         execute(result.run.id);
       }
-      return result.run;
+      return runResponse(request.headers.prefer, result.run);
     }
   );
   app.post<{ Params: { id: string } }>('/api/runs/:id/candidate', async (request) => {
@@ -1368,7 +1368,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       publish(result.run.chatId);
       execute(result.run.id);
     }
-    return result.run;
+    return runResponse(request.headers.prefer, result.run);
   });
   app.post<{ Params: { id: string } }>('/api/runs/:id/rejudge', async (request) => {
     const body = record(request.body);
@@ -1384,13 +1384,13 @@ export async function createApp(options: AppOptions): Promise<App> {
       publish(result.run.chatId);
       execute(result.run.id);
     }
-    return result.run;
+    return runResponse(request.headers.prefer, result.run);
   });
   app.post<{ Params: { id: string } }>('/api/runs/:id/cancel', async (request) => {
     const run = store.finishRun(request.params.id, 'cancelled', 'Run cancelled');
     runs.get(run.id)?.abort(new Error('Run cancelled'));
     publish(run.chatId);
-    return run;
+    return runResponse(request.headers.prefer, run);
   });
   app.post<{ Params: { id: string } }>('/api/runs/:id/dismiss-reader', async (request) => {
     fields(record(request.body ?? {}), []);
@@ -1567,8 +1567,11 @@ export async function createApp(options: AppOptions): Promise<App> {
   if (options.webRoot && existsSync(options.webRoot)) {
     await app.register(fastifyStatic, {
       root: options.webRoot,
+      preCompressed: true,
       setHeaders(response, path) {
         const name = basename(path);
+        if (relative(options.webRoot!, path).split(sep)[0] === 'assets')
+          response.header('Cache-Control', 'public, max-age=31536000, immutable');
         if (name === 'index.html') {
           response.header('Content-Security-Policy', DOCUMENT_CONTENT_SECURITY_POLICY);
           response.header('Referrer-Policy', 'no-referrer');

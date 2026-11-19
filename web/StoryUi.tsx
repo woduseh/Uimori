@@ -6,7 +6,7 @@ import type { ThemeDefinition } from '../core/themes.js';
 import { ThemeContext } from './ThemeContext.js';
 import { modelStoryUiCss, scopedStoryUiCss } from './story-ui-theme.js';
 import type { StoryUiSegment } from '../core/story-ui.js';
-import type { Run } from '../core/types.js';
+import type { RunReceipt } from '../core/types.js';
 import { compileReadingMarkdown } from '../core/reading-markdown.js';
 import { api, ApiError, definiteRejection } from './api.js';
 import { t } from './i18n.js';
@@ -40,7 +40,7 @@ export function StoryUi({
   latest?: boolean;
   refresh?: () => Promise<void>;
   actionBlockId?: string;
-  beginAdmission?: () => (run: Run) => void;
+  beginAdmission?: () => (run: RunReceipt) => void;
 }) {
   const themeState = useContext(ThemeContext);
   const themeId = useId();
@@ -136,7 +136,7 @@ export function StoryUi({
     setFailure(undefined);
     const admitted = beginAdmission?.();
     try {
-      const run = await api<Run>(
+      const run = await api<RunReceipt>(
         `/chats/${encodeURIComponent(chatId)}/story-ui/actions`,
         command.body
       );

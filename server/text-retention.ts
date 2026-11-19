@@ -29,12 +29,20 @@ function pinnedSourceHashes(db: DatabaseSync): Set<string> {
 }
 
 /** The authored original remains a message identity; edits retain two versions and actual captures. */
-export function pruneSourceEdits(db: DatabaseSync, sourceId?: string): void {
+export function pruneSourceEdits(
+  db: DatabaseSync,
+  scope?: { sourceId: string } | { chatId: string }
+): void {
+  const within = !scope
+    ? ''
+    : 'sourceId' in scope
+      ? 'source_id=? AND'
+      : 'source_id IN (SELECT id FROM sources WHERE chat_id=?) AND';
   const candidates = db
     .prepare(`SELECT source_id,revision,text,hash FROM source_edits e
-    WHERE ${sourceId ? 'source_id=? AND' : ''} revision NOT IN
+    WHERE ${within} revision NOT IN
       (SELECT revision FROM source_edits WHERE source_id=e.source_id ORDER BY revision DESC LIMIT 2)`)
-    .all(...(sourceId ? [sourceId] : []));
+    .all(...(scope ? ['sourceId' in scope ? scope.sourceId : scope.chatId] : []));
   if (!candidates.length) return;
   const pinned = pinnedSourceHashes(db);
   const remove = db.prepare('DELETE FROM source_edits WHERE source_id=? AND revision=?');

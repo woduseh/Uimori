@@ -51,6 +51,21 @@ export function settleSnapshot(snapshot: RunSnapshot): RunSnapshot {
   };
 }
 
+/** A run that ended without a source keeps its outcome; a retry rebuilds context from current sources. */
+export function releaseEndedSnapshot(snapshot: RunSnapshot): RunSnapshot {
+  return {
+    ...settleSnapshot(snapshot),
+    ...(snapshot.history.length
+      ? { capturedSources: snapshot.history.map((source) => source.revision) }
+      : {}),
+    ...(snapshot.mainJudgment ? { mainJudgment: snapshot.mainJudgment } : {}),
+    ...(snapshot.contextBase ? { contextBase: snapshot.contextBase } : {}),
+    ...(snapshot.contextPlan ? { contextPlan: snapshot.contextPlan } : {}),
+    ...(snapshot.loreContextReset ? { loreContextReset: true } : {}),
+    ...(snapshot.invalidatedBySceneDeletion ? { invalidatedBySceneDeletion: true } : {}),
+  };
+}
+
 /** An explicit full-context read reconstructs user data from messages and today's library. */
 export function executionSnapshot(store: Store, snapshot: RunSnapshot): RunSnapshot {
   if (!snapshot.settled) return snapshot;

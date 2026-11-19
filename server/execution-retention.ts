@@ -30,7 +30,21 @@ export function releaseCompletedRunInputs(db: DatabaseSync, runId: string): void
   db.prepare('UPDATE anthropic_batches SET result=NULL WHERE run_id=?').run(runId);
   releaseAttemptBodies(db, 'run', runId);
   pruneContextHistory(db);
-  pruneSourceEdits(db);
+  const run = db.prepare('SELECT chat_id AS chatId FROM runs WHERE id=?').get(runId);
+  if (run) pruneSourceEdits(db, { chatId: String(run.chatId) });
+}
+
+const ENDED_RUN_SNAPSHOTS_RELEASED = 'ended-run-snapshots-released';
+
+/** Runs that ended before this release kept their whole frozen input; release them once. */
+export function releaseEndedRunSnapshots(db: DatabaseSync, release: (runId: string) => void): void {
+  if (db.prepare('SELECT 1 FROM app_metadata WHERE key=?').get(ENDED_RUN_SNAPSHOTS_RELEASED))
+    return;
+  for (const row of db
+    .prepare("SELECT id FROM runs WHERE status NOT IN ('queued','running','completed')")
+    .all())
+    release(String(row.id));
+  db.prepare('INSERT INTO app_metadata VALUES(?,?)').run(ENDED_RUN_SNAPSHOTS_RELEASED, '1');
 }
 
 /** Retain image catalogs/targets and translation settings used by display and dependent jobs. */

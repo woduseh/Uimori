@@ -5,6 +5,7 @@ import type { Store, Source, Run } from './store.js';
 import type { StorySnapshot, StoryDetail, SceneCommand } from '../core/story.js';
 import type { RunSnapshot } from '../core/types.js';
 import { StoryNotes } from './story-notes.js';
+import { readRunState, readRunStatus } from './run-projections.js';
 
 type Row = Record<string, any>;
 /** User notes and explicit scene commands; authored card variables belong to the Risu runtime. */
@@ -98,13 +99,13 @@ export class StoryStore {
   }
   bindCommandInTransaction(commandId: string, runId: string) {
     const command = this.command(commandId);
-    const run = this.store.run(runId);
+    const run = readRunState(this.store, runId);
     if (
       command.chatId !== run.chatId ||
       command.request !== run.request ||
       command.status === 'consumed' ||
       (command.status === 'cancelled' && !command.runId) ||
-      (command.runId && ['queued', 'running'].includes(this.store.run(command.runId).status))
+      (command.runId && ['queued', 'running'].includes(readRunStatus(this.store, command.runId)))
     )
       throw new HttpError(409, 'Scene command is unavailable');
     this.db
@@ -124,7 +125,7 @@ export class StoryStore {
   }
   cancelCommand(id: string): SceneCommand {
     const command = this.command(id);
-    if (command.runId && ['queued', 'running'].includes(this.store.run(command.runId).status))
+    if (command.runId && ['queued', 'running'].includes(readRunStatus(this.store, command.runId)))
       throw new HttpError(409, '진행 중인 원문 생성을 먼저 취소해 주세요.');
     if (command.status !== 'consumed')
       this.db.prepare("UPDATE scene_commands SET status='cancelled' WHERE id=?").run(id);

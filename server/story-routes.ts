@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { searchAssets, resolveAsset } from '../core/asset-manifest.js';
 import type { RunSnapshot } from '../core/types.js';
+import { runResponse } from './run-projections.js';
 
 export function storyRoutes(
   app: FastifyInstance,
@@ -52,7 +53,7 @@ export function storyRoutes(
       hooks.publish(scene.chatId);
       if (result.run.status === 'queued') hooks.execute(result.run.id);
     }
-    return result.run;
+    return runResponse(request.headers.prefer, result.run);
   });
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>(
     '/api/chats/:id/asset-manifest',

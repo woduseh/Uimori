@@ -154,7 +154,7 @@ describe('Saved text and dependent image retention', () => {
     store.db
       .prepare("UPDATE helper_tasks SET status='completed',snapshot='{}' WHERE id='retained-input'")
       .run();
-    pruneSourceEdits(store.db, source.id);
+    pruneSourceEdits(store.db, { sourceId: source.id });
     expect(() => store.sourceAtHash(source.id, pinnedHash)).toThrow('Unknown source content hash');
   });
 

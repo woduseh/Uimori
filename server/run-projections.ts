@@ -1,6 +1,6 @@
 import { executionSnapshot } from './execution-snapshot.js';
 import { translationSnapshot } from '../core/translation-context.js';
-import type { Run, RunSnapshot } from '../core/types.js';
+import type { Run, RunReceipt, RunSnapshot } from '../core/types.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -11,6 +11,28 @@ export function readRunStatus(store: Pick<Store, 'db'>, id: string): Run['status
     | undefined;
   if (!row) throw new HttpError(404, 'Run not found');
   return row.status;
+}
+
+/** Ownership and live state without hydrating the snapshot or diagnostic histories. */
+export function readRunState(
+  store: Pick<Store, 'db'>,
+  id: string
+): Pick<Run, 'id' | 'chatId' | 'status' | 'request'> {
+  const row = store.db
+    .prepare('SELECT id,chat_id AS chatId,status,request FROM runs WHERE id=?')
+    .get(id) as Pick<Run, 'id' | 'chatId' | 'status' | 'request'> | undefined;
+  if (!row) throw new HttpError(404, 'Run not found');
+  return row;
+}
+
+/**
+ * RFC 7240 `Prefer: return=minimal`: a client that only follows the run gets its receipt, not
+ * the frozen execution input and diagnostic histories.
+ */
+export function runResponse(prefer: unknown, run: Run): Run | RunReceipt {
+  if (!/(?:^|[\s,;])return=minimal(?:$|[\s,;])/u.test(String(prefer ?? ''))) return run;
+  const { snapshot: _snapshot, inputs: _inputs, toolEvents: _toolEvents, ...receipt } = run;
+  return receipt;
 }
 
 /** Explicitly decode a run snapshot. Ordinary SQL reads have no hidden transformations. */

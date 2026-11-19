@@ -106,6 +106,8 @@ export type RunSnapshot = {
   messageChanges?: import('./message-changes.js').MessageChanges;
   /** A completed message can store just display metadata instead of execution input. */
   settled?: boolean;
+  /** Scenes an ended run had read, kept after its frozen text is released so deleting one still invalidates it. */
+  capturedSources?: string[];
   /** Deleted source captures cannot be replayed through retry or judgment recovery. */
   invalidatedBySceneDeletion?: true;
   displayModelTitle?: string;
@@ -184,6 +186,7 @@ export type Run = {
   toolEvents: ToolEvent[];
   partialText?: string;
 };
+export type RunReceipt = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'>;
 export type Source = {
   sceneContext?: import('./scene-context.js').SceneContext;
   editRevision?: number;

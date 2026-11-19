@@ -114,7 +114,7 @@ export function editSource(store: Store, id: string, value: unknown): Source {
         "UPDATE jobs SET status='stale',generation=generation+1,owner=NULL,error=NULL,updated_at=? WHERE source_revision=? AND status!='stale'"
       )
       .run(new Date().toISOString(), id);
-    pruneSourceEdits(store.db, id);
+    pruneSourceEdits(store.db, { sourceId: id });
     pruneTranslationHistory(store.db, id);
     store.event(source.chatId, 'source.edited', id);
     return store.source(id);

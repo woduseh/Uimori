@@ -18,7 +18,7 @@ import { chatVariableProfile } from './chat-variable-context.js';
 import { readChatVariables, writeChatVariablesInTransaction } from './chat-variables.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
-import { readRunSnapshot, readStoredRunSnapshot } from './run-projections.js';
+import { readRunSnapshot, readRunStatus, readStoredRunSnapshot } from './run-projections.js';
 
 const zeroUsage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -342,7 +342,7 @@ export async function applyNativeRisuAction(
     });
     return store.transaction(() => {
       check();
-      if (store.run(reserved.id).status !== 'running')
+      if (readRunStatus(store, reserved.id) !== 'running')
         throw new HttpError(409, 'RISU_NATIVE_ACTION_CANCELLED');
       // The atomic rewind is immediately followed by copy-on-write source commits.
       store.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(retained, chatId);
@@ -419,7 +419,7 @@ export async function applyNativeRisuAction(
     });
   } catch (error) {
     disposeNativeRisuSession(nativeRisuSessionKey(captured.snapshot), sessionOwner);
-    if (store.run(reserved.id).status === 'running')
+    if (readRunStatus(store, reserved.id) === 'running')
       store.finishRun(
         reserved.id,
         'failed',
@@ -427,7 +427,7 @@ export async function applyNativeRisuAction(
         undefined,
         usage
       );
-    else if (store.run(reserved.id).status === 'cancelled')
+    else if (readRunStatus(store, reserved.id) === 'cancelled')
       store.settleCancelledUsage(reserved.id, usage);
     throw error;
   }

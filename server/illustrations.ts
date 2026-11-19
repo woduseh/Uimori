@@ -586,7 +586,7 @@ export function illustrationsForSources(store: Store, sourceIds: string[]): Illu
   return (
     store.db
       .prepare(
-        `SELECT * FROM illustration_jobs WHERE source_revision IN (SELECT value FROM json_each(?)) ORDER BY created_at,id`
+        `SELECT id,chat_id,source_revision,source_hash,origin,status,generation,owner,attempt,json_remove(input,'$.research') AS input,diagnostic,error,created_at,updated_at FROM illustration_jobs WHERE source_revision IN (SELECT value FROM json_each(?)) ORDER BY created_at,id`
       )
       .all(json(sourceIds)) as Row[]
   ).map((row) => {

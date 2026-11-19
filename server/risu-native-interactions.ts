@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { HttpError, record } from './request-validation.js';
+import { readRunStatus } from './run-projections.js';
 
 export type NativeInteraction = {
   id: string;
@@ -102,7 +103,7 @@ export function nativeInteractionRoutes(app: FastifyInstance, store: Store) {
       const entry = entries(store).get(request.params.interactionId);
       if (!entry || entry.chatId !== request.params.id)
         throw new HttpError(404, 'RISU_NATIVE_INTERACTION_EXPIRED');
-      if (store.run(entry.runId).status !== 'running')
+      if (readRunStatus(store, entry.runId) !== 'running')
         throw new HttpError(409, 'RISU_NATIVE_ACTION_INACTIVE');
       const body = record(request.body),
         answer = body.answer;

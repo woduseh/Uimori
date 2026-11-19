@@ -30,7 +30,7 @@ import {
 } from 'react';
 import type { Asset } from '../core/product.js';
 import type { Illustration } from '../core/illustration.js';
-import type { ChatDetail, ImageTarget, Job, ReaderRun, Run, Source } from '../core/types.js';
+import type { ChatDetail, ImageTarget, Job, ReaderRun, RunReceipt, Source } from '../core/types.js';
 import { useIllustrationLayout } from './IllustrationStrip.js';
 import { illustrationActive } from './illustration-labels.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
@@ -146,7 +146,7 @@ type ReaderProps = {
   hasPackages?: boolean;
   presentationRefreshKey?: string | number;
   nativeInteractionRevision?: number;
-  beginStoryUiAdmission?: () => (run: Run) => void;
+  beginStoryUiAdmission?: () => (run: RunReceipt) => void;
   storyUiStyle?: import('../core/story-ui-style.js').StoryUiStyleSetting;
 };
 type AnchorPosition = { anchors: string[]; top: number; scrollport: HTMLElement };
