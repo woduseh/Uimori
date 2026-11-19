@@ -282,10 +282,10 @@ export const messages = {
     zh: '插图',
   },
   'chatsettings.m38': {
-    ko: '이미지 생성 ComfyUI',
-    en: 'Image generation ComfyUI',
-    ja: '画像 生成 ComfyUI',
-    zh: '图像 生成 ComfyUI',
+    ko: '이미지 생성 ComfyUI NovelAI',
+    en: 'Image generation ComfyUI NovelAI',
+    ja: '画像 生成 ComfyUI NovelAI',
+    zh: '图像 生成 ComfyUI NovelAI',
   },
   'chatsettings.m39': {
     ko: '사용량',

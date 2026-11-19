@@ -100,9 +100,11 @@ import {
   cancelIllustration,
   illustrationJob,
   illustrationRoutes,
+  NOVELAI_CREDENTIAL_ID,
   queuedIllustrations,
   retryIllustration,
 } from './illustrations.js';
+import { CredentialStore } from './credentials.js';
 import { createPackageStart } from './package-start.js';
 import { deniedBrowserRequest, networkPolicy } from './network-policy.js';
 import { VertexCredentialStore } from './vertex-credentials.js';
@@ -798,6 +800,7 @@ export async function createApp(options: AppOptions): Promise<App> {
 
               resolveCredential,
               resolveComfyCredential: (name) => process.env[name],
+              resolveNovelAIToken: () => new CredentialStore(store.db).get(NOVELAI_CREDENTIAL_ID),
               cancelRemoteOnAbort: () => controller.signal.aborted && !stopping.signal.aborted,
               executeCodex,
               generateCodexImage: (connection, request, execution) =>

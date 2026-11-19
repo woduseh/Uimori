@@ -24,9 +24,10 @@ import type { Json, ProviderRequest } from './transport.js';
 import { IMAGE_INPUT_MAX_BYTES } from './image-limits.js';
 import { contextBudgetForModel } from './context-budget.js';
 import { textTokenExcerpt } from './text-tokens.js';
+import type { NovelAIRenderSettings } from './novelai-settings.js';
 
 /** Scene illustration generation. Independent of the existing image placement job kind. */
-export const ILLUSTRATION_GENERATORS = ['none', 'codex', 'comfyui', 'fixture'] as const;
+export const ILLUSTRATION_GENERATORS = ['none', 'codex', 'comfyui', 'novelai', 'fixture'] as const;
 export type IllustrationGenerator = (typeof ILLUSTRATION_GENERATORS)[number];
 export type ActiveIllustrationGenerator = Exclude<IllustrationGenerator, 'none'>;
 export const ILLUSTRATION_REFERENCE_ROLES = ['character', 'style'] as const;
@@ -74,7 +75,13 @@ export type IllustrationSettings = {
     /** Text model that turns the scene into an image prompt. Required for ComfyUI. */
     promptModel: ModelRef | null;
   };
+  novelai: NovelAIRenderSettings & {
+    /** Text model that turns the scene into tags. Required for NovelAI. */
+    promptModel: ModelRef | null;
+  };
 };
+/** API projection: whether a NovelAI token is saved, never the token itself. */
+export type IllustrationSettingsView = IllustrationSettings & { novelaiTokenConfigured: boolean };
 export function defaultIllustrationSettings(): IllustrationSettings {
   return {
     revision: 1,
@@ -90,6 +97,16 @@ export function defaultIllustrationSettings(): IllustrationSettings {
       authorizationEnv: '',
       timeoutMs: 300_000,
       pollIntervalMs: 1000,
+      promptModel: null,
+    },
+    novelai: {
+      model: 'nai-diffusion-5-full',
+      width: 832,
+      height: 1216,
+      steps: 23,
+      scale: 5,
+      sampler: 'k_euler_ancestral',
+      timeoutMs: 120_000,
       promptModel: null,
     },
   };
@@ -175,6 +192,7 @@ export type IllustrationJobInput = {
     /** Archive restores preserve the evidence but require a new explicitly configured request. */
     disabled?: true;
   };
+  novelai?: NovelAIRenderSettings & { negativeGuidance: string; promptModel: ModelSnapshot };
   /** Test-mode generator: synthetic PNG after the configured number of failures. */
   fixture?: { failures: number; delayMs: number };
 };
@@ -222,6 +240,8 @@ export type IllustrationDiagnostic = {
     nodeErrors?: { nodeId: string; classType: string; messages: string[] }[];
     statusMessages?: string[];
   };
+  /** Bounded HTTP status and provider message; never the request body or credential. */
+  novelai?: { httpStatus?: number; message?: string; seed?: number };
   codex?: {
     usageLimit?: { limitId: string; resetsAt: number | null };
     /** Bounded plain-text caption reason, not a raw transport error. */
@@ -380,15 +400,27 @@ export const CODEX_ILLUSTRATION_PROMPT_CONTRACT = [
   CODEX_ILLUSTRATION_PROMPT_FIELDS,
   ILLUSTRATION_CAPTION_FIELD,
 ].join('\n\n');
+// https://docs.novelai.net/en/image/tags, /en/image/strengthening-weakening (2026-11-20).
+export const NOVELAI_ILLUSTRATION_PROMPT_FIELDS = [
+  'prompt: Write a NovelAI prompt in English: lower-case tags separated by ", ", starting with subject counts such as 1girl or 2boys, then characters, then everything else, with the main subject in the first half. Add short natural-language sentences for actions, relationships and composition. Numeric emphasis is 1.3::tags :: and values below 1 weaken. Follow any NovelAI-specific grammar in styleGuidance and preserve its tags, names and weights verbatim.',
+  'negativePrompt: Combine explicit exclusions from styleGuidance and negativeGuidance into a concise list of English tags. When only one property is unwanted, keep the subject and describe its intended appearance in prompt.',
+].join('\n\n');
+export const NOVELAI_ILLUSTRATION_PROMPT_CONTRACT = [
+  'Write a NovelAI image prompt for a single illustration of the supplied story scene. When the input specifies a focus, depict that exact moment without selecting another. Otherwise pick the most visually striking, illustratable moment. Return only JSON: {"prompt": string, "negativePrompt": string, "caption": string}.',
+  ILLUSTRATION_VISUAL_DIRECTION,
+  NOVELAI_ILLUSTRATION_PROMPT_FIELDS,
+  ILLUSTRATION_CAPTION_FIELD,
+].join('\n\n');
 export function illustrationPromptRequest(
   model: ModelSnapshot,
   scene: IllustrationScene,
-  generation: ProviderRequest['generation']
+  generation: ProviderRequest['generation'],
+  contract = ILLUSTRATION_PROMPT_CONTRACT
 ): ProviderRequest {
   return {
     role: 'illustration',
     ...modelRequestFields(model),
-    stable: { contract: ILLUSTRATION_PROMPT_CONTRACT, tools: [] },
+    stable: { contract, tools: [] },
     generation,
     contextBudget: contextBudgetForModel(model),
     input: {

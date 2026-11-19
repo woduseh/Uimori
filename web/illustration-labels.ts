@@ -72,6 +72,15 @@ const messages: Record<string, string> = {
   COMFYUI_HTTP_5XX: 'visuals.m242',
   COMFYUI_HTTP_ERROR: 'visuals.m243',
   FIXTURE_FAILURE: 'visuals.m244',
+  NOVELAI_TOKEN_MISSING: 'visuals.novelaiTokenMissing',
+  NOVELAI_UNAUTHORIZED: 'visuals.novelaiUnauthorized',
+  NOVELAI_ANLAS_INSUFFICIENT: 'visuals.novelaiAnlasInsufficient',
+  NOVELAI_BUSY: 'visuals.novelaiBusy',
+  NOVELAI_REQUEST_REJECTED: 'visuals.novelaiRequestRejected',
+  NOVELAI_RESULT_UNCERTAIN: 'visuals.novelaiResultUncertain',
+  NOVELAI_UNREACHABLE: 'visuals.novelaiUnreachable',
+  NOVELAI_RESPONSE_INVALID: 'visuals.novelaiResponseInvalid',
+  NOVELAI_IMAGE_INVALID: 'visuals.novelaiImageInvalid',
 };
 export function illustrationErrorMessage(
   code: string | null | undefined,
@@ -91,6 +100,7 @@ export function illustrationErrorMessage(
 export const illustrationGeneratorLabels: Record<Illustration['generator'], string> = {
   codex: 'Codex',
   comfyui: 'ComfyUI',
+  novelai: 'NovelAI',
   get fixture() {
     return t('visuals.m246');
   },

@@ -2,13 +2,14 @@ import { SOURCE_TEXT_MAX_CHARS } from './content-limits.js';
 import { parseComfyWorkflow } from './illustration-workflow.js';
 
 /** Portable generator + visual recipe. Connection details and scheduling stay local. */
-export type IllustrationPresetGenerator = 'codex' | 'comfyui';
+export type IllustrationPresetGenerator = 'codex' | 'comfyui' | 'novelai';
 export type IllustrationPresetDefinition = {
   title: string;
   generator: IllustrationPresetGenerator;
   description: string;
   styleGuidance: string;
   comfyui: { workflow: string; negativeGuidance: string };
+  novelai: { negativeGuidance: string };
 };
 export type IllustrationPreset = IllustrationPresetDefinition & { id: string; revision: number };
 export type IllustrationPresetStamp = Pick<IllustrationPreset, 'id' | 'revision' | 'title'>;
@@ -34,6 +35,7 @@ export function emptyIllustrationPreset(title = '새 삽화 프리셋'): Illustr
     description: '',
     styleGuidance: '',
     comfyui: { workflow: '', negativeGuidance: '' },
+    novelai: { negativeGuidance: '' },
   };
 }
 export const BUILTIN_ILLUSTRATION_PRESET: IllustrationPreset = {
@@ -79,7 +81,11 @@ export function illustrationPresetGenerator(preset: {
   return preset.generator ?? (preset.comfyui.workflow.trim() ? 'comfyui' : 'codex');
 }
 export function normalizeIllustrationPreset(preset: IllustrationPreset): IllustrationPreset {
-  return { ...preset, generator: illustrationPresetGenerator(preset) };
+  return {
+    ...preset,
+    generator: illustrationPresetGenerator(preset),
+    novelai: preset.novelai ?? { negativeGuidance: '' },
+  };
 }
 export function illustrationPresetStamp(preset: IllustrationPreset): IllustrationPresetStamp {
   return { id: preset.id, revision: preset.revision, title: preset.title };
@@ -103,10 +109,11 @@ export function validateIllustrationPreset(value: unknown): IllustrationPresetDe
   const comfyui = v.comfyui === undefined ? {} : object(v.comfyui);
   const workflow = string(comfyui.workflow, 'ComfyUI 워크플로', ILLUSTRATION_WORKFLOW_MAX_CHARS);
   if (workflow.trim()) parseComfyWorkflow(workflow);
+  const novelai = v.novelai === undefined ? {} : object(v.novelai);
   const generator =
     v.generator === undefined ? (workflow.trim() ? 'comfyui' : 'codex') : v.generator;
-  if (generator !== 'codex' && generator !== 'comfyui')
-    throw new Error('삽화 생성기는 Codex 또는 ComfyUI를 선택해 주세요.');
+  if (generator !== 'codex' && generator !== 'comfyui' && generator !== 'novelai')
+    throw new Error('삽화 생성기는 Codex, ComfyUI 또는 NovelAI를 선택해 주세요.');
   return {
     title,
     generator,
@@ -116,13 +123,16 @@ export function validateIllustrationPreset(value: unknown): IllustrationPresetDe
       workflow,
       negativeGuidance: string(comfyui.negativeGuidance, '제외 지침', SOURCE_TEXT_MAX_CHARS),
     },
+    novelai: {
+      negativeGuidance: string(novelai.negativeGuidance, '제외 지침', SOURCE_TEXT_MAX_CHARS),
+    },
   };
 }
 export function illustrationPresetDefinition(
   preset: IllustrationPreset
 ): IllustrationPresetDefinition {
-  const { id: _id, revision: _revision, ...definition } = preset;
-  return { ...definition, generator: illustrationPresetGenerator(preset) };
+  const { id: _id, revision: _revision, ...definition } = normalizeIllustrationPreset(preset);
+  return definition;
 }
 export function illustrationPresetFile(preset: IllustrationPresetDefinition) {
   return {

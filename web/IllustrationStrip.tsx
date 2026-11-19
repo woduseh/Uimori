@@ -661,9 +661,7 @@ function IllustrationCard({
             {detail.error && <p>{t('shared.errorCode', { code: detail.error })}</p>}
             {detail.modelTitle && (
               <p className="ui-meta-row">
-                <span>
-                  {detail.generator === 'comfyui' ? t('visuals.m077') : t('visuals.m149')}
-                </span>
+                <span>{detail.generator === 'codex' ? t('visuals.m149') : t('visuals.m077')}</span>
                 <span>{detail.modelTitle}</span>
               </p>
             )}
@@ -720,6 +718,9 @@ function IllustrationCard({
             )}
             {detail.diagnostic?.comfyui && (
               <pre>{JSON.stringify(detail.diagnostic.comfyui, null, 2)}</pre>
+            )}
+            {detail.diagnostic?.novelai && (
+              <pre>{JSON.stringify(detail.diagnostic.novelai, null, 2)}</pre>
             )}
             {!!detail.diagnostic?.retries.length && (
               <p>{t('visuals.retries', { count: detail.diagnostic.retries.length })}</p>

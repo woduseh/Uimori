@@ -82,7 +82,7 @@ The [self-hosting guide](docs/SELF-HOST.md) covers Docker Compose and an Nginx H
 | [Risu export](docs/RISU-EXPORT.md) | Exporting saved cards, modules and prompts as CHARX, RISUM and RISUP |
 | [Reading position and bookmarks](docs/READING-STATE.md) | Per-device resume reading, bookmarks and personal backups |
 | [Manuscript search](docs/MANUSCRIPT-SEARCH.md) | Searching source text, translations and requests, and jumping to scenes |
-| [Scene illustrations](docs/ILLUSTRATIONS.md) | Per-response illustrations via Codex image generation or remote ComfyUI; automatic generation, retries and count limits |
+| [Scene illustrations](docs/ILLUSTRATIONS.md) | Per-response illustrations via Codex image generation, remote ComfyUI or NovelAI; automatic generation, retries and count limits |
 | [Helper tools](docs/HELPER-TOOLS.md) · [Codex connection](docs/CODEX.md) | Partial reads and edits, settings and task control, native execution |
 | [Workspace usage](docs/USAGE-REPORT.md) | Calls, tokens and reported/estimated costs by day, model and purpose |
 | [App install and notifications](docs/PWA.md) | PWA install, a service worker without manuscript caching, explicit per-device Web Push |

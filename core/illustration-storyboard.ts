@@ -10,6 +10,7 @@ import {
   ILLUSTRATION_VISUAL_DIRECTION,
   ILLUSTRATION_PROMPT_FIELDS,
   CODEX_ILLUSTRATION_PROMPT_FIELDS,
+  NOVELAI_ILLUSTRATION_PROMPT_FIELDS,
   illustrationReferenceLabels,
   IllustrationError,
   type IllustrationPrompt,
@@ -94,12 +95,14 @@ export function illustrationTargetSet(targets: IllustrationTarget[]): {
   };
 }
 
-export type IllustrationPromptMode = 'none' | 'comfyui' | 'codex';
+export type IllustrationPromptMode = 'none' | 'comfyui' | 'novelai' | 'codex';
+const negativePromptMode = (mode: IllustrationPromptMode) =>
+  mode === 'comfyui' || mode === 'novelai';
 function storyboardContract(mode: IllustrationPromptMode, selected: boolean): string {
   const promptField =
     mode === 'codex'
       ? ',"prompt":{"prompt":string,"caption":string}'
-      : mode === 'comfyui'
+      : negativePromptMode(mode)
         ? ',"prompt":{"prompt":string,"negativePrompt":string,"caption":string}'
         : '';
   const fields = `"visualBrief":string${promptField}`;
@@ -124,7 +127,11 @@ function storyboardContract(mode: IllustrationPromptMode, selected: boolean): st
       ? []
       : [
           'Write each caption as a brief sentence in the scene language. Keep overlays, watermarks and speech bubbles out of the illustration.',
-          mode === 'codex' ? CODEX_ILLUSTRATION_PROMPT_FIELDS : ILLUSTRATION_PROMPT_FIELDS,
+          mode === 'codex'
+            ? CODEX_ILLUSTRATION_PROMPT_FIELDS
+            : mode === 'novelai'
+              ? NOVELAI_ILLUSTRATION_PROMPT_FIELDS
+              : ILLUSTRATION_PROMPT_FIELDS,
         ]),
   ].join('\n\n');
 }
@@ -191,7 +198,9 @@ export function storyboardRequest(
           : {}),
         ...(scene.visualCanon?.length ? { visualCanon: scene.visualCanon } : {}),
         ...(scene.direction ? { direction: scene.direction } : {}),
-        ...(options.generator === 'comfyui' ? { negativeGuidance: scene.negativeGuidance } : {}),
+        ...(negativePromptMode(options.promptMode)
+          ? { negativeGuidance: scene.negativeGuidance }
+          : {}),
         ...(options.promptMode === 'codex'
           ? { attachedReferences: illustrationReferenceLabels(scene.references ?? []) }
           : {}),
@@ -290,12 +299,14 @@ export function parseStoryboard(
     let prompt: IllustrationPrompt | undefined;
     if (promptMode !== 'none') {
       const fields = entry.prompt as Record<string, unknown> | undefined;
-      if (!fields || (promptMode === 'comfyui' && typeof fields.negativePrompt !== 'string'))
+      if (!fields || (negativePromptMode(promptMode) && typeof fields.negativePrompt !== 'string'))
         throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID', true);
       const promptText = required(fields.prompt);
       prompt = {
         prompt: promptMode === 'codex' ? (fields.prompt as string) : promptText,
-        negativePrompt: promptMode === 'comfyui' ? (fields.negativePrompt as string).trim() : '',
+        negativePrompt: negativePromptMode(promptMode)
+          ? (fields.negativePrompt as string).trim()
+          : '',
         caption: required(fields.caption),
       };
     }

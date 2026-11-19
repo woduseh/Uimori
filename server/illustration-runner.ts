@@ -41,6 +41,7 @@ import {
   illustrationPromptRequest,
   IllustrationError,
   isRetryableIllustrationCode,
+  NOVELAI_ILLUSTRATION_PROMPT_CONTRACT,
   parseCodexIllustrationCaption,
   parseComfyWorkflow,
   parseIllustrationPlan,
@@ -57,6 +58,7 @@ import {
   generateWithComfyUI,
   type ComfyUIRequestOptions,
 } from './comfyui-client.js';
+import { generateWithNovelAI } from './novelai-client.js';
 import {
   claimIllustration,
   claimIllustrationForReconcile,
@@ -78,6 +80,7 @@ export type IllustrationRunnerHooks = {
 
   resolveCredential?: Parameters<typeof executeProvider>[2]['resolveCredential'];
   resolveComfyCredential?: ComfyUIRequestOptions['resolveCredential'];
+  resolveNovelAIToken?: () => string | undefined;
   cancelRemoteOnAbort?: () => boolean;
   executeCodex?: Parameters<typeof executeProvider>[2]['executeCodex'];
   generateCodexImage?: (
@@ -149,7 +152,7 @@ function scene(
       name,
       appearance,
     })),
-    negativeGuidance: input.comfyui?.negativeGuidance ?? '',
+    negativeGuidance: input.comfyui?.negativeGuidance ?? input.novelai?.negativeGuidance ?? '',
     ...(input.plan?.direction ? { direction: input.plan.direction } : {}),
     ...(input.redraw ? { redraw: input.redraw } : {}),
     bot: body('bot'),
@@ -405,8 +408,14 @@ export async function runIllustrationJob(
       return { kind: 'generate', prompt };
     }
     const codex = input.generator === 'codex';
-    const buildRequest = codex ? codexIllustrationPromptRequest : illustrationPromptRequest;
-    const request = buildRequest(model, context, generationFromModel(model));
+    const request = codex
+      ? codexIllustrationPromptRequest(model, context, generationFromModel(model))
+      : illustrationPromptRequest(
+          model,
+          context,
+          generationFromModel(model),
+          ...(input.generator === 'novelai' ? [NOVELAI_ILLUSTRATION_PROMPT_CONTRACT] : [])
+        );
     const requestHash = createHash('sha256').update(JSON.stringify(request)).digest('hex');
     if (diagnostic.prompt && diagnostic.promptRequestHash === requestHash)
       return { kind: 'generate', prompt: diagnostic.prompt };
@@ -465,8 +474,8 @@ export async function runIllustrationJob(
           ? labeledReferences.map(({ role, label }) => ({ role, label }))
           : references.map(({ role, label }) => ({ role, label }));
     const promptMode =
-      input.generator === 'comfyui'
-        ? 'comfyui'
+      input.generator === 'comfyui' || input.generator === 'novelai'
+        ? input.generator
         : input.generator === 'codex' && input.codex?.promptModel
           ? 'codex'
           : 'none';
@@ -499,7 +508,11 @@ export async function runIllustrationJob(
           ...(!targets.length ? { skipReason: '새로운 시각적 순간이 없어요.' } : {}),
         };
       } else {
-        const model = input.comfyui?.promptModel ?? input.codex?.promptModel ?? input.codex?.model;
+        const model =
+          input.comfyui?.promptModel ??
+          input.novelai?.promptModel ??
+          input.codex?.promptModel ??
+          input.codex?.model;
         if (!model) throw new IllustrationError('ILLUSTRATION_MODEL_REQUIRED');
         const request = storyboardRequest(
           model,
@@ -559,7 +572,8 @@ export async function runIllustrationJob(
         });
         if (judged) afterByTarget = judged;
         else {
-          const model = input.comfyui?.promptModel ?? input.codex?.model;
+          const model =
+            input.comfyui?.promptModel ?? input.novelai?.promptModel ?? input.codex?.model;
           if (!model) throw new IllustrationError('ILLUSTRATION_MODEL_REQUIRED');
           const request = illustrationPlacementRequest(
             model,
@@ -756,6 +770,28 @@ export async function runIllustrationJob(
           prompt: prompt.prompt,
         }));
       }
+    } else if (input.generator === 'novelai') {
+      if (!input.novelai) throw new IllustrationError('ILLUSTRATION_GENERATOR_UNCONFIGURED');
+      const { promptModel, negativeGuidance: _negativeGuidance, ...render } = input.novelai;
+      const connection = await authorizedConnection(hooks, promptModel);
+      const plan = await preparePrompt(promptModel, context, connection);
+      if (plan.kind === 'skip') diagnostic.skipped = plan.reason;
+      else {
+        const prompt = plan.prompt;
+        diagnostic.stage = 'generate';
+        await progress();
+        const rendered = await generateWithNovelAI(render, prompt, {
+          signal: hooks.signal,
+          token: () => hooks.resolveNovelAIToken?.(),
+        });
+        diagnostic.novelai = { seed: rendered.seed };
+        generated = rendered.images.map((image) => ({
+          mime: image.mime,
+          bytes: image.bytes,
+          caption: prompt.caption,
+          prompt: prompt.prompt,
+        }));
+      }
     } else throw new IllustrationError('ILLUSTRATION_GENERATOR_UNCONFIGURED');
     return await finish(generated);
   } catch (error) {
@@ -771,6 +807,7 @@ export async function runIllustrationJob(
       if (error.diagnostic.comfyui)
         diagnostic.comfyui = { ...diagnostic.comfyui, ...error.diagnostic.comfyui };
       if (error.diagnostic.codex) diagnostic.codex = error.diagnostic.codex;
+      if (error.diagnostic.novelai) diagnostic.novelai = error.diagnostic.novelai;
     }
     diagnostic.code = code;
     const retryable =

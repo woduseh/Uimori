@@ -15,7 +15,12 @@ import {
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { RefreshIcon } from './ui-icons.js';
 import type { Library, ModelRef } from '../core/product.js';
-import type { IllustrationSettings } from '../core/illustration.js';
+import type { IllustrationSettingsView } from '../core/illustration.js';
+import {
+  NOVELAI_SAMPLERS,
+  novelAIUsesAnlas,
+  type NovelAISampler,
+} from '../core/novelai-settings.js';
 import { ILLUSTRATION_MAX_PER_SOURCE } from '../core/illustration-cuts.js';
 import { api, ApiError } from './api.js';
 import { SaveButton } from './SaveButton.js';
@@ -30,7 +35,17 @@ import './settings-actions.css';
 import './settings-layout.css';
 import './illustrations.css';
 
-type Draft = Omit<IllustrationSettings, 'revision'> & { revision: number };
+type Draft = IllustrationSettingsView;
+/** undefined keeps the saved token, a string replaces it and null removes it on save. */
+type TokenChange = string | null | undefined;
+const NOVELAI_SIZES = [
+  { width: 832, height: 1216, label: 'visuals.novelaiSizePortrait' },
+  { width: 1216, height: 832, label: 'visuals.novelaiSizeLandscape' },
+  { width: 1024, height: 1024, label: 'visuals.novelaiSizeSquare' },
+] as const;
+type NovelAITestResult =
+  | { ok: true; tier: string | null; active: boolean }
+  | { ok: false; code: string };
 const validCutLimit = (value: number) =>
   Number.isInteger(value) && value >= 1 && value <= ILLUSTRATION_MAX_PER_SOURCE;
 // An empty or invalid limit is an edit in progress. Preserve its dependent counts.
@@ -56,10 +71,13 @@ function IllustrationEnvironmentEditor({
   activeGenerator: IllustrationPresetGenerator;
   onDirtyChange: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
-  onSavedChange: (settings: IllustrationSettings) => void;
+  onSavedChange: (settings: IllustrationSettingsView) => void;
 }) {
   useI18n();
-  const [saved, setSaved] = useState<IllustrationSettings | null>(null);
+  const [saved, setSaved] = useState<IllustrationSettingsView | null>(null);
+  const [token, setToken] = useState<TokenChange>(undefined);
+  const [novelaiTest, setNovelaiTest] = useState<NovelAITestResult | null>(null);
+  const [novelaiTesting, setNovelaiTesting] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [dirty, setDirty] = useState(false);
   const [confirmReload, setConfirmReload] = useState(false);
@@ -76,7 +94,7 @@ function IllustrationEnvironmentEditor({
   const { canSelect } = useModelSelection(library.models, library.connections);
   const load = useCallback(async () => {
     try {
-      const value = await api<IllustrationSettings>('/illustration-settings');
+      const value = await api<IllustrationSettingsView>('/illustration-settings');
       setSaved(value);
       setLoadError('');
     } catch (error) {
@@ -98,6 +116,7 @@ function IllustrationEnvironmentEditor({
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
   useSettingsSaveHandler(onSaveHandlerChange, async () => (!draft ? false : save()));
   const refinementDescription = useId();
+  const tokenDescription = useId();
   if (!draft)
     return (
       <LoadingState
@@ -196,7 +215,17 @@ function IllustrationEnvironmentEditor({
     Number.isInteger(draft.comfyui.timeoutMs) &&
     draft.comfyui.timeoutMs >= 10_000 &&
     Number.isInteger(draft.comfyui.pollIntervalMs) &&
-    draft.comfyui.pollIntervalMs >= 250;
+    draft.comfyui.pollIntervalMs >= 250 &&
+    /^[a-z0-9][a-z0-9._-]*$/u.test(draft.novelai.model.trim()) &&
+    Number.isInteger(draft.novelai.steps) &&
+    draft.novelai.steps >= 1 &&
+    draft.novelai.steps <= 50 &&
+    Number.isFinite(draft.novelai.scale) &&
+    draft.novelai.scale >= 0 &&
+    draft.novelai.scale <= 10 &&
+    Number.isInteger(draft.novelai.timeoutMs) &&
+    draft.novelai.timeoutMs >= 10_000 &&
+    draft.novelai.timeoutMs <= 600_000;
   const save = async () => {
     if (lock.current || !valid) return false;
     if (conflict) {
@@ -209,14 +238,20 @@ function IllustrationEnvironmentEditor({
     setSaveError('');
     setMessage('');
     const { revision, ...body } = draft;
-    return api<IllustrationSettings>(
+    return api<IllustrationSettingsView>(
       '/illustration-settings',
-      { expectedRevision: revision, ...body },
+      {
+        expectedRevision: revision,
+        ...body,
+        novelai: { ...body.novelai, model: body.novelai.model.trim() },
+        ...(token === undefined ? {} : { novelaiToken: token === null ? null : token.trim() }),
+      },
       'PUT'
     )
       .then(async (accepted) => {
         setSaved(accepted);
         setDraft(structuredClone(accepted));
+        setToken(undefined);
         setDirty(false);
         setMessage(uiMessage('visuals.m046'));
         return true;
@@ -240,9 +275,10 @@ function IllustrationEnvironmentEditor({
     setLoadError('');
     setMessage('');
     try {
-      const value = await api<IllustrationSettings>('/illustration-settings');
+      const value = await api<IllustrationSettingsView>('/illustration-settings');
       setSaved(value);
       setDraft(structuredClone(value));
+      setToken(undefined);
       setDirty(false);
       setSaveError('');
       setMessage('');
@@ -280,6 +316,41 @@ function IllustrationEnvironmentEditor({
       setTesting(false);
     }
   };
+  const runNovelaiTest = async () => {
+    setNovelaiTesting(true);
+    setNovelaiTest(null);
+    try {
+      const result = await api<{ tier: string | null; active: boolean }>(
+        '/illustration-settings/novelai/test',
+        typeof token === 'string' && token.trim() ? { token: token.trim() } : {}
+      );
+      setNovelaiTest({ ok: true, ...result });
+    } catch (error) {
+      let code = 'NOVELAI_UNREACHABLE';
+      try {
+        const parsed = JSON.parse(error instanceof ApiError ? error.message : '') as {
+          code?: string;
+        };
+        if (typeof parsed.code === 'string') code = parsed.code;
+      } catch {
+        // A non-JSON failure is reported as unreachable.
+      }
+      setNovelaiTest({ ok: false, code });
+    } finally {
+      setNovelaiTesting(false);
+    }
+  };
+  const novelai = (patch: Partial<Draft['novelai']>) =>
+    change({ ...draft, novelai: { ...draft.novelai, ...patch } });
+  const changeToken = (next: TokenChange) => {
+    setToken(next);
+    setDirty(true);
+    setMessage('');
+    setNovelaiTest(null);
+  };
+  const novelaiSize = NOVELAI_SIZES.find(
+    (size) => size.width === draft.novelai.width && size.height === draft.novelai.height
+  );
   return (
     <section
       aria-label={t('visuals.m048')}
@@ -536,6 +607,161 @@ function IllustrationEnvironmentEditor({
             )}
           </fieldset>
         </details>
+        <details
+          className="illustration-preset-disclosure illustration-environment-disclosure"
+          open={activeGenerator === 'novelai'}
+        >
+          <summary>{t('visuals.novelaiEnvironment')}</summary>
+          <fieldset className="settings-group-body illustration-environment-options">
+            <label className="settings-row">
+              <span className="settings-row-copy">
+                <span>{t('visuals.novelaiToken')}</span>
+                <small id={tokenDescription}>
+                  {token === null
+                    ? t('visuals.novelaiTokenRemovePending')
+                    : t('visuals.novelaiTokenDescription')}
+                </small>
+              </span>
+              <span className="settings-row-control">
+                <input
+                  aria-label={t('visuals.novelaiToken')}
+                  aria-describedby={tokenDescription}
+                  type="password"
+                  autoComplete="off"
+                  disabled={token === null}
+                  placeholder={
+                    draft.novelaiTokenConfigured && token !== null
+                      ? t('visuals.novelaiTokenSaved')
+                      : 'pst-…'
+                  }
+                  value={typeof token === 'string' ? token : ''}
+                  onChange={(event) =>
+                    changeToken(event.target.value.trim() ? event.target.value : undefined)
+                  }
+                />
+              </span>
+            </label>
+            <div className="illustration-test full">
+              {draft.novelaiTokenConfigured && (
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => changeToken(token === null ? undefined : null)}
+                >
+                  {token === null ? t('visuals.novelaiTokenKeep') : t('visuals.novelaiTokenRemove')}
+                </button>
+              )}
+              <button
+                type="button"
+                className="secondary"
+                disabled={
+                  novelaiTesting ||
+                  token === null ||
+                  (!draft.novelaiTokenConfigured && typeof token !== 'string')
+                }
+                onClick={() => void runNovelaiTest()}
+              >
+                {novelaiTesting ? t('visuals.m074') : t('visuals.novelaiTest')}
+              </button>
+              {novelaiTest && (
+                <span className="illustration-test-result" role="status">
+                  {novelaiTest.ok
+                    ? novelaiTest.active
+                      ? t('visuals.novelaiTestConnected', {
+                          tier: novelaiTest.tier ?? t('visuals.novelaiTierUnknown'),
+                        })
+                      : t('visuals.novelaiTestInactive')
+                    : `${illustrationErrorMessage(novelaiTest.code)} (${novelaiTest.code})`}
+                </span>
+              )}
+            </div>
+            <label className="settings-row">
+              <span className="settings-row-copy">{t('visuals.novelaiModel')}</span>
+              <span className="settings-row-control">
+                <input
+                  aria-label={t('visuals.novelaiModel')}
+                  type="text"
+                  list={`${tokenDescription}-models`}
+                  spellCheck={false}
+                  value={draft.novelai.model}
+                  onChange={(event) => novelai({ model: event.target.value })}
+                />
+                <datalist id={`${tokenDescription}-models`}>
+                  <option value="nai-diffusion-5-full" />
+                  <option value="nai-diffusion-5-curated" />
+                  <option value="nai-diffusion-4-5-full" />
+                  <option value="nai-diffusion-4-5-curated" />
+                </datalist>
+              </span>
+            </label>
+            {selector(t('visuals.m077'), draft.novelai.promptModel, library.models, (ref) =>
+              novelai({ promptModel: ref })
+            )}
+            <label className="settings-row">
+              <span className="settings-row-copy">{t('visuals.novelaiSize')}</span>
+              <span className="settings-row-control">
+                <select
+                  aria-label={t('visuals.novelaiSize')}
+                  value={`${draft.novelai.width}x${draft.novelai.height}`}
+                  onChange={(event) => {
+                    const [width, height] = event.target.value.split('x').map(Number);
+                    novelai({ width, height });
+                  }}
+                >
+                  {!novelaiSize && (
+                    <option value={`${draft.novelai.width}x${draft.novelai.height}`}>
+                      {`${draft.novelai.width}×${draft.novelai.height}`}
+                    </option>
+                  )}
+                  {NOVELAI_SIZES.map((size) => (
+                    <option key={size.label} value={`${size.width}x${size.height}`}>
+                      {t(size.label)}
+                    </option>
+                  ))}
+                </select>
+              </span>
+            </label>
+            {numberField(t('visuals.novelaiSteps'), draft.novelai.steps, 1, 50, (value) =>
+              novelai({ steps: value })
+            )}
+            {numberField(
+              t('visuals.novelaiScale'),
+              draft.novelai.scale,
+              0,
+              10,
+              (value) => novelai({ scale: value }),
+              0.1
+            )}
+            <label className="settings-row">
+              <span className="settings-row-copy">{t('visuals.novelaiSampler')}</span>
+              <span className="settings-row-control">
+                <select
+                  aria-label={t('visuals.novelaiSampler')}
+                  value={draft.novelai.sampler}
+                  onChange={(event) => novelai({ sampler: event.target.value as NovelAISampler })}
+                >
+                  {NOVELAI_SAMPLERS.map((sampler) => (
+                    <option key={sampler} value={sampler}>
+                      {sampler}
+                    </option>
+                  ))}
+                </select>
+              </span>
+            </label>
+            {novelAIUsesAnlas(draft.novelai) && (
+              <NoticeBanner className="full">{t('visuals.novelaiAnlasWarning')}</NoticeBanner>
+            )}
+            {numberField(
+              t('visuals.m079'),
+              draft.novelai.timeoutMs / 1000,
+              10,
+              600,
+              (value) => novelai({ timeoutMs: Math.round(value * 1000) }),
+              1
+            )}
+            <small className="full">{t('visuals.novelaiNoAutoRetry')}</small>
+          </fieldset>
+        </details>
         <div className="form-actions settings-save-actions full">
           {(dirty || conflict) && (
             <button
@@ -562,7 +788,7 @@ function IllustrationEnvironmentEditor({
         title={t('visuals.m082')}
         onClose={() => setSaveConflict(false)}
         readSaved={async () => {
-          const value = await api<IllustrationSettings>('/illustration-settings');
+          const value = await api<IllustrationSettingsView>('/illustration-settings');
           return () => [
             { label: t('visuals.m083'), value: String(value.maxPerSource) },
             {
@@ -639,7 +865,7 @@ export function IllustrationSettingsEditor({
 }) {
   useI18n();
   const [activeGenerator, setActiveGenerator] = useState<IllustrationPresetGenerator>('codex');
-  const [environment, setEnvironment] = useState<IllustrationSettings | null>(null);
+  const [environment, setEnvironment] = useState<IllustrationSettingsView | null>(null);
   const [presetsDirty, setPresetsDirty] = useState(false);
   const [environmentDirty, setEnvironmentDirty] = useState(false);
   const group = useSettingsSaveGroup(illustrationSections);

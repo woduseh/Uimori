@@ -2063,4 +2063,28 @@ export const messages = {
     ja: '桜',
     zh: '樱花',
   },
+  'visualpanels.novelaiPersistentToken': {
+    ko: 'NovelAI, Persistent API 토큰',
+    en: 'NovelAI, Persistent API token',
+    ja: 'NovelAI、Persistent APIトークン',
+    zh: 'NovelAI，Persistent API 令牌',
+  },
+  'visualpanels.novelaiSharedEnvironment': {
+    ko: 'NovelAI, 공용 생성 환경',
+    en: 'NovelAI, Shared generation environment',
+    ja: 'NovelAI、共通生成環境',
+    zh: 'NovelAI，共享生成环境',
+  },
+  'visualpanels.novelaiSettings': {
+    ko: 'NovelAI 설정',
+    en: 'NovelAI settings',
+    ja: 'NovelAI設定',
+    zh: 'NovelAI设置',
+  },
+  'visualpanels.novelaiNegativePromptInstructions': {
+    ko: 'NovelAI 제외 프롬프트 지침',
+    en: 'NovelAI undesired content instructions',
+    ja: 'NovelAI除外プロンプトの指示',
+    zh: 'NovelAI排除提示词指引',
+  },
 };

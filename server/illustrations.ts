@@ -60,9 +60,15 @@ import {
   type IllustrationReference,
   type IllustrationReferences,
   type IllustrationSettings,
+  type IllustrationSettingsView,
   type IllustrationStatus,
 } from '../core/illustration.js';
 import { comfyUISystemStats, validateComfyBaseUrl } from './comfyui-client.js';
+import { novelAISubscription } from './novelai-client.js';
+import { NOVELAI_SAMPLERS } from '../core/novelai-settings.js';
+import { CredentialStore, apiKey } from './credentials.js';
+
+export const NOVELAI_CREDENTIAL_ID = 'novelai';
 
 type Row = Record<string, any>;
 const now = () => new Date().toISOString();
@@ -119,6 +125,7 @@ export function validateIllustrationSettings(
     'maxAutoRetries',
     'codex',
     'comfyui',
+    'novelai',
   ]);
   if (b.generator !== undefined && !ILLUSTRATION_GENERATORS.includes(b.generator))
     throw new HttpError(400, 'Invalid generator');
@@ -132,6 +139,35 @@ export function validateIllustrationSettings(
   const authorizationEnv = text(comfyui.authorizationEnv, 'ComfyUI credential env', 128, true);
   if (authorizationEnv && !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(authorizationEnv))
     throw new HttpError(400, 'Invalid ComfyUI credential env');
+  const novelai =
+    b.novelai === undefined ? defaultIllustrationSettings().novelai : record(b.novelai);
+  fields(novelai, [
+    'model',
+    'width',
+    'height',
+    'steps',
+    'scale',
+    'sampler',
+    'timeoutMs',
+    'promptModel',
+  ]);
+  const dimension = (value: unknown, name: string) => {
+    const result = number(value, name, 64, 2048);
+    if (result % 64) throw new HttpError(400, `Invalid ${name}: expected a multiple of 64`);
+    return result;
+  };
+  if (
+    typeof novelai.scale !== 'number' ||
+    !Number.isFinite(novelai.scale) ||
+    novelai.scale < 0 ||
+    novelai.scale > 10
+  )
+    throw new HttpError(400, 'Invalid NovelAI guidance scale');
+  if (!NOVELAI_SAMPLERS.includes(novelai.sampler))
+    throw new HttpError(400, 'Invalid NovelAI sampler');
+  const novelaiModel = text(novelai.model, 'NovelAI model', 100).trim();
+  if (!/^[a-z0-9][a-z0-9._-]*$/u.test(novelaiModel))
+    throw new HttpError(400, 'Invalid NovelAI model');
   const automaticCountMode = b.automaticCountMode ?? 'fixed';
   if (!['fixed', 'auto'].includes(automaticCountMode))
     throw new HttpError(400, 'Invalid automaticCountMode');
@@ -179,6 +215,16 @@ export function validateIllustrationSettings(
       pollIntervalMs: number(comfyui.pollIntervalMs, 'ComfyUI poll interval', 250, 10_000),
       promptModel: modelRef(comfyui.promptModel, 'illustration prompt model'),
     },
+    novelai: {
+      model: novelaiModel,
+      width: dimension(novelai.width, 'NovelAI width'),
+      height: dimension(novelai.height, 'NovelAI height'),
+      steps: number(novelai.steps, 'NovelAI steps', 1, 50),
+      scale: Math.round(novelai.scale * 10) / 10,
+      sampler: novelai.sampler,
+      timeoutMs: number(novelai.timeoutMs, 'NovelAI timeout', 10_000, 600_000),
+      promptModel: modelRef(novelai.promptModel, 'NovelAI prompt model'),
+    },
   };
 }
 export function illustrationSettings(store: Store): IllustrationSettings {
@@ -206,6 +252,13 @@ export function illustrationSettings(store: Store): IllustrationSettings {
     ...(generator === 'none' ? { automatic: false } : {}),
     codex,
     comfyui: { ...defaults.comfyui, ...(saved.comfyui ?? {}) },
+    novelai: { ...defaults.novelai, ...(saved.novelai ?? {}) },
+  };
+}
+export function illustrationSettingsView(store: Store): IllustrationSettingsView {
+  return {
+    ...illustrationSettings(store),
+    novelaiTokenConfigured: new CredentialStore(store.db).status(NOVELAI_CREDENTIAL_ID).configured,
   };
 }
 function assertCodexModel(store: Store, ref: ModelRef | null) {
@@ -221,7 +274,10 @@ export function updateIllustrationSettings(
   testMode = false
 ): IllustrationSettings {
   const b = record(value);
-  const { expectedRevision, ...rest } = b;
+  // Write-only: an omitted token keeps the saved one; null removes it. The read-only
+  // configured flag is accepted so a GET response can be saved back unchanged.
+  const { expectedRevision, novelaiToken, novelaiTokenConfigured: _configured, ...rest } = b;
+  const token = novelaiToken === undefined ? undefined : apiKey(novelaiToken);
   return store.transaction(() => {
     const prior = illustrationSettings(store);
     if (prior.revision !== number(expectedRevision, 'illustration settings revision'))
@@ -230,6 +286,7 @@ export function updateIllustrationSettings(
     const next = validateIllustrationSettings(
       {
         ...rest,
+        novelai: rest.novelai ?? prior.novelai,
         // Preserve fields omitted by older clients.
         codex: {
           promptModel: prior.codex.promptModel,
@@ -243,7 +300,9 @@ export function updateIllustrationSettings(
     assertCodexModel(store, next.codex.model);
     assertModelSelection(store.product, next.codex.promptModel, prior.codex.promptModel);
     assertModelSelection(store.product, next.comfyui.promptModel, prior.comfyui.promptModel);
+    assertModelSelection(store.product, next.novelai.promptModel, prior.novelai.promptModel);
     store.db.prepare('UPDATE illustration_settings SET body=? WHERE id=1').run(json(next));
+    if (token !== undefined) new CredentialStore(store.db).set(NOVELAI_CREDENTIAL_ID, token);
     return next;
   });
 }
@@ -758,6 +817,25 @@ function frozenInput(
       },
     };
   }
+  if (generator === 'novelai') {
+    if (!settings.novelai.promptModel)
+      throw new HttpError(409, 'ILLUSTRATION_PROMPT_MODEL_REQUIRED');
+    if (!new CredentialStore(store.db).status(NOVELAI_CREDENTIAL_ID).configured)
+      throw new HttpError(409, 'NOVELAI_TOKEN_MISSING');
+    const { promptModel, ...render } = settings.novelai;
+    return {
+      ...base,
+      // NovelAI requires each generation to start from a person's action, so a failure is
+      // retried only when the user asks.
+      maxAutoRetries: 0,
+      generator: 'novelai',
+      novelai: {
+        ...render,
+        negativeGuidance: preset.novelai.negativeGuidance,
+        promptModel: store.product.modelSnapshot(promptModel.id, 'illustration'),
+      },
+    };
+  }
   if (generator === 'fixture' && options.testMode)
     return {
       ...base,
@@ -1068,7 +1146,7 @@ export function scheduleIllustrationPlacement(
   const first = presentation.targets[targets[0].id];
   const recipe = illustrationJob(store, first.latestRequestedJobId).input;
   // A restored chat contains results, not credentials or runnable recipes.
-  if (!recipe.codex && !recipe.comfyui && !recipe.fixture) return null;
+  if (!recipe.codex && !recipe.comfyui && !recipe.novelai && !recipe.fixture) return null;
   const { plan: _plan, target: _target, placement: _placement, ...base } = recipe;
   return insertIllustrationJob(store, source, force ? 'manual' : 'automatic', {
     ...base,
@@ -1409,7 +1487,7 @@ export function retryIllustration(store: Store, id: string): Illustration {
     if (job.error === 'ILLUSTRATION_CODEX_CONTENT_BLOCKED') throw new HttpError(409, job.error);
     if (job.error === 'ILLUSTRATION_GENERATOR_UNCONFIGURED' || !job.input.generator)
       throw new HttpError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
-    if (!job.input.codex && !job.input.comfyui && !job.input.fixture)
+    if (!job.input.codex && !job.input.comfyui && !job.input.novelai && !job.input.fixture)
       throw new HttpError(409, job.error ?? 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
     const placement = illustrationPresentation(store, job.sourceRevision);
     const target = job.input.target;
@@ -1624,14 +1702,35 @@ export function illustrationRoutes(
   }
 ) {
   app.get('/api/illustration-settings', async (_request, reply) =>
-    reply.header('Cache-Control', 'no-store').send(illustrationSettings(store))
+    reply.header('Cache-Control', 'no-store').send(illustrationSettingsView(store))
   );
-  app.put('/api/illustration-settings', { bodyLimit: 32 * 1024 * 1024 }, async (request) => {
-    const settings = updateIllustrationSettings(store, request.body, hooks.testMode);
+  app.put('/api/illustration-settings', { bodyLimit: 32 * 1024 * 1024 }, async (request, reply) => {
+    updateIllustrationSettings(store, request.body, hooks.testMode);
     for (const chat of store.chats())
       store.event(chat.id, 'illustration-settings.updated', chat.id);
     for (const chat of store.chats()) hooks.publish(chat.id);
-    return settings;
+    return reply.header('Cache-Control', 'no-store').send(illustrationSettingsView(store));
+  });
+  app.post('/api/illustration-settings/novelai/test', async (request, reply) => {
+    const b = record(request.body ?? {});
+    fields(b, ['token']);
+    const draft = b.token === undefined ? undefined : apiKey(b.token);
+    reply.header('Cache-Control', 'no-store');
+    try {
+      return await novelAISubscription({
+        signal: AbortSignal.timeout(10_000),
+        token: () => draft ?? new CredentialStore(store.db).get(NOVELAI_CREDENTIAL_ID),
+      });
+    } catch (error) {
+      if (error instanceof IllustrationError)
+        throw new HttpError(
+          error.code === 'NOVELAI_TOKEN_MISSING' ? 400 : 502,
+          JSON.stringify({ code: error.code, novelai: error.diagnostic.novelai ?? {} })
+        );
+      if (error instanceof Error && error.name === 'TimeoutError')
+        throw new HttpError(502, JSON.stringify({ code: 'NOVELAI_UNREACHABLE', novelai: {} }));
+      throw error;
+    }
   });
   app.post('/api/illustration-settings/comfyui/test', async (request, reply) => {
     const b = record(request.body);
@@ -1770,7 +1869,8 @@ export function illustrationRoutes(
       modelTitle:
         (job.input.task === 'plan' ? job.input.codex?.promptModel?.title : undefined) ??
         job.input.codex?.model.title ??
-        job.input.comfyui?.promptModel.title,
+        job.input.comfyui?.promptModel.title ??
+        job.input.novelai?.promptModel.title,
     };
   });
   app.post<{ Params: { id: string } }>('/api/illustrations/:id/retry', async (request) => {

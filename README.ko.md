@@ -79,7 +79,7 @@
 | [Risu 자료 내보내기](docs/RISU-EXPORT.md) | 저장한 카드·모듈·프롬프트를 CHARX·RISUM·RISUP으로 내보내기 |
 | [읽기 위치·책갈피](docs/READING-STATE.md) | 기기별 이어 읽기, 책갈피와 개인 백업 |
 | [원고 검색](docs/MANUSCRIPT-SEARCH.md) | 원문·번역·요청의 본문 검색과 장면 이동 |
-| [장면 삽화](docs/ILLUSTRATIONS.md) | Codex 이미지 생성·원격 ComfyUI로 응답별 삽화 생성, 자동 생성·재요청·개수 한도 |
+| [장면 삽화](docs/ILLUSTRATIONS.md) | Codex 이미지 생성·원격 ComfyUI·NovelAI로 응답별 삽화 생성, 자동 생성·재요청·개수 한도 |
 | [도우미 도구](docs/HELPER-TOOLS.md) · [Codex 연결](docs/CODEX.md) | 부분 조회·편집, 설정·작업 제어와 네이티브 실행 |
 | [작업실 사용량](docs/USAGE-REPORT.md) | 일별·모델별·용도별 호출·토큰·보고/추정 비용 |
 | [앱 설치·완료 알림](docs/PWA.md) | PWA 설치, 원고 캐시 없는 서비스 워커, 명시적 기기별 Web Push |

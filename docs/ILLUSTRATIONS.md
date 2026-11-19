@@ -2,7 +2,7 @@
 
 완성된 응답의 서로 다른 순간을 포착해, 대표 삽화는 장면 맨 위에 한 번, 다른 삽화는 해당 사건이 일어난 본문 문단 뒤에 자연스럽게 배치하는 기능이에요.
 
-삽화 생성은 본문 작성이나 번역과 완전히 분리된 작업 큐에서 비동기로 실행돼요. 삽화가 만들어지는 중이거나 일시적으로 실패하더라도 본문 읽기, 이어쓰기, 번역 작업은 방해받지 않고 계속 진행할 수 있어요. 지원하는 생성기는 **Codex 프로바이더의 공식 이미지 생성 도구**와 **원격 PC의 ComfyUI API**예요.
+삽화 생성은 본문 작성이나 번역과 완전히 분리된 작업 큐에서 비동기로 실행돼요. 삽화가 만들어지는 중이거나 일시적으로 실패하더라도 본문 읽기, 이어쓰기, 번역 작업은 방해받지 않고 계속 진행할 수 있어요. 지원하는 생성기는 **Codex 프로바이더의 공식 이미지 생성 도구**, **원격 PC의 ComfyUI API**, **NovelAI 이미지 생성 API**예요.
 
 > [!NOTE]
 > 기존의 **이미지 배치**(`image` 역할: 이미 카드나 서재에 등록된 이미지를 문단 사이에 골라 넣는 기능)와는 완전히 다른 기능이에요. 삽화는 장면에 맞춰 새로운 이미지를 생성하고, 배치는 기존 이미지를 선택해요. 두 기능은 저장 테이블, 작업 큐, 설정이 완전히 분리되어 있어요.
@@ -24,6 +24,14 @@
 2. 장면을 분석해 프롬프트로 변환할 **프롬프트 모델**(어떤 텍스트 모델 프리셋이든 가능)을 지정해요.
 3. ComfyUI에서 **Export (API)**로 저장한 워크플로 JSON을 프리셋에 등록하고 선택해요.
 4. **ComfyUI 연결 확인** 버튼을 누르면 원격 서버의 `GET /system_stats`를 호출해 서버 버전과 장치 상태를 점검해요.
+
+### 3. NovelAI 생성 환경 설정
+
+1. NovelAI → 설정 → 계정에서 **Persistent API 토큰**을 발급해 **NovelAI 생성 환경**의 토큰 칸에 붙여 넣고 저장해요. 토큰은 서버의 비밀 저장소에만 남고 설정 응답·작업 입력·프리셋 파일에는 들어가지 않아요. 칸을 비워 두면 저장된 토큰을 유지하고, **저장된 토큰 삭제**를 누른 뒤 저장해야 지워져요.
+2. **NovelAI 연결 확인**은 `GET /user/subscription`으로 구독 등급만 읽어요. 이미지는 만들지 않아요.
+3. **모델 ID**(기본 `nai-diffusion-5-full`), **프롬프트 모델**, 크기, 스텝, 프롬프트 가이던스, 샘플러를 골라요. 프롬프트 모델이 장면을 읽고 NovelAI용 태그 프롬프트와 제외 프롬프트를 써요.
+4. Opus 구독의 무료 생성은 한 번에 한 장, 28스텝 이하, Normal 크기 조건이에요([구독 안내](https://docs.novelai.net/en/subscription)). 문서가 Normal 크기를 정의하지 않아서, 화면은 28스텝을 넘거나 면적이 1024×1024를 넘으면 Anlas가 소모될 수 있다고 표시해요. V5는 무료 조건이어도 별도의 Opus 사용량 게이지를 써요.
+5. NovelAI API 설명은 모든 생성 요청이 사람의 동작으로 시작돼야 한다고 요구해요([API 스키마](https://image.novelai.net/docs/doc.json)). 그래서 NovelAI 작업은 자동 재시도를 0회로 고정해요. 자동 생성은 사용자가 켠 경우에만, 사용자가 보낸 메시지의 응답에서 실행돼요.
 
 ## 자동 생성과 수동 요청
 
@@ -81,7 +89,7 @@
 
 ### 1. 프리셋의 구성과 우선순위
 
-- **프리셋 저장 내용**: **생성기(`codex` 또는 `comfyui`), 이름, 설명, 그림 지침**, 그리고 ComfyUI 전용 워크플로 JSON과 추가 제외 지침을 저장해요.
+- **프리셋 저장 내용**: **생성기(`codex`, `comfyui`, `novelai`), 이름, 설명, 그림 지침**, 그리고 ComfyUI 전용 워크플로 JSON과 추가 제외 지침, NovelAI 전용 추가 제외 지침을 저장해요.
 - **생성 환경과의 분리**: 모델 선택, ComfyUI 접속 주소, 인증 정보, 자동 생성 정책은 프리셋이 아닌 공용 **생성 환경**에 저장돼요. 프리셋을 바꾸면 사용하는 생성 환경도 함께 전환되지만 공용 환경의 저장값 자체를 덮어쓰지는 않아요.
 - **적용 우선순위**: **현재 채팅 → 현재 봇 → 작업실 기본 → 내장 기본** 순서로 적용돼요. 채팅이나 봇에서 **상위 설정 따르기**를 누르면 해당 선택을 해제해요.
 - **저장과 적용의 분리**: 프리셋 편집 내용은 저장 즉시 이전 작업에 소급 적용되지 않으며, 해당 프리셋을 쓰는 채팅의 **다음 생성 예약부터** 반영돼요. 이미 진행 중인 작업이나 과거 결과는 당시 고정된 설정을 유지해요.
@@ -99,12 +107,13 @@
     "generator": "codex",
     "description": "부드러운 빛과 종이 질감",
     "styleGuidance": "watercolor, soft light, textured paper",
-    "comfyui": { "workflow": "", "negativeGuidance": "" }
+    "comfyui": { "workflow": "", "negativeGuidance": "" },
+    "novelai": { "negativeGuidance": "" }
   }
 }
 ```
 
-- v2 파일은 생성기 정보를 포함해요. 생성기 필드가 없는 이전 v1 파일은 워크플로 유무에 따라 ComfyUI 또는 Codex로 자동 인식해요.
+- v2 파일은 생성기 정보를 포함해요. 생성기 필드가 없는 이전 v1 파일은 워크플로 유무에 따라 ComfyUI 또는 Codex로 자동 인식해요. `novelai` 항목이 없는 파일은 NovelAI 제외 지침을 빈 값으로 읽어요.
 - 파일 크기는 16MiB, 워크플로 문자열은 400,000자, 그림/제외 지침은 각각 200만 자까지 저장할 수 있어요.
 - 워크플로 JSON에 개인 API 키나 로컬 파일 경로가 포함되어 있지 않은지 공유 전에 반드시 확인해 주세요.
 
@@ -116,6 +125,7 @@
 
 - **Codex**: 공통 시각적 지침을 이미지 생성 도구에 전달해요. 캐릭터 참조는 외형, 스타일 참조는 화풍을 전달하는 역할을 맡아요. ComfyUI 전용 태그 문법은 제외돼요.
 - **ComfyUI**: 프롬프트 모델이 지침을 읽고 각 컷의 `{prompt, negativePrompt, caption}`을 작성해요. 워크플로의 `{{prompt}}`, `{{negative}}`, `{{seed}}` 자리에 해당 내용이 자동 치환돼요.
+- **NovelAI**: 프롬프트 모델이 같은 `{prompt, negativePrompt, caption}`을 쓰되, 계약에 NovelAI 문법을 짧게 안내해요. 소문자 태그를 `, `로 구분하고 `1girl` 같은 인원 태그를 앞에 두며, 관계와 구도는 짧은 영어 문장으로, 가중치는 `1.3::태그 ::`로 써요([태그 안내](https://docs.novelai.net/en/image/tags), [강조 안내](https://docs.novelai.net/en/image/strengthening-weakening)). 프리셋의 그림 지침에 적은 NovelAI 문법과 태그는 그대로 보존해요.
 
 특정 체크포인트 모델의 문법이 필요하다면 그림 지침에 명시할 수 있어요. 예를 들어 [Anima 공식 모델 카드](https://huggingface.co/circlestone-labs/Anima#prompting)나 [OpenAI 이미지 프롬프팅 안내](https://developers.openai.com/api/docs/guides/image-prompting)를 참고해 다음과 같이 작성할 수 있어요.
 
@@ -129,11 +139,11 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 
 | 항목 | 설정 범위 | 설명 |
 | --- | --- | --- |
-| **생성기** | `codex` / `comfyui` | 프리셋에서 선택하며, 연결 주소 및 모델은 해당 생성기의 공용 환경을 사용해요. (`fixture`는 테스트 전용) |
+| **생성기** | `codex` / `comfyui` / `novelai` | 프리셋에서 선택하며, 연결 주소 및 모델은 해당 생성기의 공용 환경을 사용해요. (`fixture`는 테스트 전용) |
 | **자동 생성** | 켜기 / 끄기 | 새 본문 저장 직후 자동으로 계획을 예약해요. 후보 응답, 작성된 도입문, 포크 복사본에는 실행되지 않아요. |
 | **자동으로 고를 최대 컷 수** | 1~10컷 (기본 10) | `automaticMaxTargets`. 응답 전체 한도 내에서 모델이 이야기 분량에 맞춰 필요한 만큼만 계획해요. |
 | **장면당 최대 삽화 수** | 1~10컷 (기본 10) | 현재 장면에 등록될 수 있는 서로 다른 컷의 총 상한이에요. 동일 컷의 재생성이나 다중 결과 이미지는 추가 컷으로 세지 않아요. |
-| **자동 재시도 횟수** | 0~5회 (기본 1) | 네트워크 일시 단절, 명확한 원격 실행 실패 등 안전한 실패에만 적용해요. 전송 후 타임아웃이나 5xx 오류는 접수 불확실로 남겨 자동 재생성하지 않아요. |
+| **자동 재시도 횟수** | 0~5회 (기본 1) | 네트워크 일시 단절, 명확한 원격 실행 실패 등 안전한 실패에만 적용해요. 전송 후 타임아웃이나 5xx 오류는 접수 불확실로 남겨 자동 재생성하지 않아요. NovelAI 작업은 이 값과 관계없이 0회예요. |
 | **그림 지침·제외 지침** | 각 200만 자 | 저장 보호 상한이에요. 실제 모델 전송 가능 여부는 요청의 전체 입력 토큰 예산으로 검사해요. |
 
 ## 구현 참고
@@ -209,11 +219,19 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 - **취소**: 사용자의 명시적 취소 시에만 `POST /api/jobs/{prompt_id}/cancel`을 호출해요. 해당 API가 없으면 `POST /queue` `{delete: [id]}`로 대기열에서만 제거해요. (전역 `/interrupt`는 호출하지 않아요.)
 - **실패 진단 코드**: `COMFYUI_PROMPT_REJECTED` (노드 설정 오류), `COMFYUI_EXECUTION_FAILED` (실행 도중 오류), `COMFYUI_SUBMISSION_UNCERTAIN` (접수 불확실, 자동 재제출 금지), `COMFYUI_RESULT_UNAVAILABLE` (접수 후 조회 실패).
 
+### NovelAI 경로 기술 계약
+
+- **요청**: 계획 모델 호출 → 컷마다 `POST https://image.novelai.net/ai/generate-image` 한 번. 본문은 `input`, `model`, `action: "generate"`, `parameters`이고, 프롬프트는 `v4_prompt.caption.base_caption`, 제외 프롬프트는 `negative_prompt`와 `v4_negative_prompt.caption.base_caption`에 넣어요. 인물별 캡션(`char_captions`)과 참조 이미지는 아직 보내지 않아요. 인증은 `Authorization: Bearer <Persistent API 토큰>`이고 리다이렉트는 따라가지 않아요.
+- **응답**: ZIP 안의 첫 이미지(또는 이미지 본문 자체)를 실제 이미지 서명으로 검증해 공통 WebP 저장 경로로 보내요. 사용한 시드는 진단의 `novelai.seed`에 남아요.
+- **실패 코드**: `NOVELAI_TOKEN_MISSING`(토큰 없음, 요청 안 보냄), `NOVELAI_UNAUTHORIZED`(401/403), `NOVELAI_ANLAS_INSUFFICIENT`(402), `NOVELAI_BUSY`(429, 같은 계정의 다른 생성), `NOVELAI_REQUEST_REJECTED`(그 밖의 4xx, 모델 ID·크기 확인), `NOVELAI_UNREACHABLE`(연결 전 실패), `NOVELAI_RESULT_UNCERTAIN`(전송 후 시간 초과·연결 끊김·5xx), `NOVELAI_RESPONSE_INVALID`, `NOVELAI_IMAGE_INVALID`. 진단에는 HTTP 상태와 최대 300자의 NovelAI 메시지만 남겨요.
+- **불확실한 결과**: NovelAI는 작업 ID를 돌려주지 않아 결과를 다시 조회할 수 없어요. 불확실한 실패도 **다시 요청**은 허용하며, 이때 저장된 프롬프트를 재사용해 이미지 요청만 다시 보내요. 취소하면 연결은 끊지만 NovelAI 쪽 생성은 끝까지 진행될 수 있어요.
+- **사전 판정**: Codex 전용 노골성 사전 판정은 적용하지 않아요.
+
 ### API 명세
 
 | 경로 | 메서드 | 설명 |
 | --- | --- | --- |
-| `/api/illustration-settings` | `GET` / `PUT` | 전역 실행 환경 및 정책. `PUT`은 `expectedRevision` CAS를 사용해요. |
+| `/api/illustration-settings` | `GET` / `PUT` | 전역 실행 환경 및 정책. `PUT`은 `expectedRevision` CAS를 사용해요. 응답의 `novelaiTokenConfigured`는 토큰 저장 여부만 알려 주고, `PUT`의 쓰기 전용 `novelaiToken`은 문자열이면 교체, `null`이면 삭제, 생략하면 유지해요. |
 | `/api/illustration-presets` | `GET` | 내장 및 저장된 프리셋 목록과 범위별 선택 상태를 반환해요. |
 | `/api/resources/save` | `POST` | 프리셋 저장 (`kind: 'illustration-preset'`). `expectedRevision` 지원. |
 | `/api/resources/illustration-preset/:id` | `GET` | 프리셋 단일 항목을 조회해요. |
@@ -222,6 +240,7 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 | `/api/illustration-presets/:id/export` | `GET` | 프리셋을 JSON 파일로 내보내요. |
 | `/api/illustration-presets/:id` | `DELETE` | 프리셋을 삭제해요 (`expectedRevision` 필요). |
 | `/api/illustration-settings/comfyui/test` | `POST` | ComfyUI 연결을 점검해요 (`GET /system_stats`). |
+| `/api/illustration-settings/novelai/test` | `POST` | 저장된 토큰(또는 본문의 `token`)으로 NovelAI 구독 등급을 조회해요. |
 | `/api/chats/:id/illustration-references` | `GET` / `PUT` | 채팅별 참조 역할 및 인물 외형 설정. |
 | `/api/sources/:id/illustrations` | `POST` | 수동 삽화 계획을 예약해요 (`maxTargets`, `direction` 등 전달). `task: plan` 반환. |
 | `/api/sources/:id/illustration-presentation` | `PATCH` | 대표 삽화 타깃 선택을 변경해요. |
@@ -246,6 +265,7 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
   - `tests/illustration-storyboard.test.ts`: 컷 계획 원자성, 중복 실행 방지, 재생성 중 기존본 유지, 번역 위치 연결 검증
   - `tests/illustration-runner.test.ts`: 번역 위치 연결의 판단 모델 선택, `none`, 키 미설정 시 기존 경로, 전송 후 실패
   - `tests/comfyui-client.test.ts`, `tests/codex-image.test.ts`: 각 생성기 클라이언트 및 가상 응답 계약 검증
+  - `tests/novelai-illustration.test.ts`: NovelAI 요청 본문·상태 코드 분류, 토큰 저장 경계, 자동 재시도 0회와 수동 재요청의 프롬프트 재사용 검증 (`fetch` 가로채기, 실제 NovelAI 호출 없음)
   - `tests/illustration-*.test.ts`: 저장, 실행 큐, API 엔드포인트 계약 검증
 - **통합 검증 명령어**: `npm run verify:illustration`
   - 대표/문단 배치, 접기 상태 보존, 생성 중 다음 채팅 전송, 재요청, 삭제, 충돌 처리, 새로고침 후 표시 복원을 검증해요.

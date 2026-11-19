@@ -22,7 +22,7 @@ import {
 } from '../core/illustration-presets.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import type { Library } from '../core/product.js';
-import type { IllustrationSettings } from '../core/illustration.js';
+import type { IllustrationSettingsView } from '../core/illustration.js';
 import { isModelSelectable } from './model-selection.js';
 import { api, ApiError, saveDownload } from './api.js';
 import { Dialog } from './Dialog.js';
@@ -30,7 +30,7 @@ import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
-import { illustrationErrorMessage } from './illustration-labels.js';
+import { illustrationErrorMessage, illustrationGeneratorLabels } from './illustration-labels.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import './illustration-presets.css';
 import './settings-layout.css';
@@ -58,7 +58,7 @@ export function IllustrationPresetSettings({
   onGeneratorChange,
 }: {
   library: Library;
-  environment: IllustrationSettings | null;
+  environment: IllustrationSettingsView | null;
   scope: IllustrationPresetScope;
   onDirtyChange: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
@@ -274,7 +274,11 @@ export function IllustrationPresetSettings({
   const effective = resolveIllustrationPreset(catalog, scope);
   const modelRef =
     environment &&
-    (effective.generator === 'codex' ? environment.codex.model : environment.comfyui.promptModel);
+    (effective.generator === 'codex'
+      ? environment.codex.model
+      : effective.generator === 'novelai'
+        ? environment.novelai.promptModel
+        : environment.comfyui.promptModel);
   const model = library.models.find((item) => item.id === modelRef?.id);
   const promptModelRef = effective.generator === 'codex' ? environment?.codex.promptModel : null;
   const promptModel = library.models.find((item) => item.id === promptModelRef?.id);
@@ -296,7 +300,9 @@ export function IllustrationPresetSettings({
             ? t('visualpanels.setupNeededEnterAComfyuiAddressIn')
             : effective.generator === 'comfyui' && !effective.comfyui.workflow.trim()
               ? t('visualpanels.setupNeededSaveAComfyuiWorkflowIn')
-              : '';
+              : effective.generator === 'novelai' && !environment.novelaiTokenConfigured
+                ? t('visuals.novelaiTokenMissing')
+                : '';
   const conflict =
     !!draft?.id &&
     !!catalog.presets.find((item) => item.id === draft.id && item.revision !== draft.revision);
@@ -429,9 +435,11 @@ export function IllustrationPresetSettings({
               <small>
                 {preset.generator === 'codex'
                   ? t('visualpanels.codexSharedIllustrationModel')
-                  : preset.comfyui.workflow.trim()
-                    ? t('visualpanels.comfyuiWorkflowIncluded')
-                    : t('visualpanels.comfyuiWorkflowSetupNeeded')}
+                  : preset.generator === 'novelai'
+                    ? t('visualpanels.novelaiSharedEnvironment')
+                    : preset.comfyui.workflow.trim()
+                      ? t('visualpanels.comfyuiWorkflowIncluded')
+                      : t('visualpanels.comfyuiWorkflowSetupNeeded')}
               </small>
             </button>
             <div className="illustration-preset-actions">
@@ -587,6 +595,7 @@ export function IllustrationPresetSettings({
                   {t('visualpanels.codexImageGenerationWithAChatgptSubscription')}
                 </option>
                 <option value="comfyui">{t('visualpanels.comfyuiRemotePcApi')}</option>
+                <option value="novelai">{t('visualpanels.novelaiPersistentToken')}</option>
               </select>
             </label>
             <label className="full">
@@ -611,6 +620,25 @@ export function IllustrationPresetSettings({
                 <pre>{t('visualpanels.whenWritingPromptsForAnimaInComfyui', {})}</pre>
               </div>
             </details>
+            {draft.model.generator === 'novelai' && (
+              <fieldset
+                className="full control-grid illustration-preset-novelai"
+                aria-label={t('visualpanels.novelaiSettings')}
+              >
+                <label className="full">
+                  {t('visualpanels.additionalNegativeGuidance')}{' '}
+                  <textarea
+                    aria-label={t('visualpanels.novelaiNegativePromptInstructions')}
+                    rows={3}
+                    maxLength={SOURCE_TEXT_MAX_CHARS}
+                    value={draft.model.novelai.negativeGuidance}
+                    onChange={(event) =>
+                      patch({ novelai: { negativeGuidance: event.target.value } })
+                    }
+                  />
+                </label>
+              </fieldset>
+            )}
             {(draft.model.generator === 'comfyui' || workflowError) && (
               <fieldset
                 className="full control-grid illustration-preset-comfyui"
@@ -717,7 +745,7 @@ export function IllustrationPresetSettings({
             { label: t('visualpanels.name'), value: value.title },
             {
               label: t('visualpanels.generator2'),
-              value: value.generator === 'comfyui' ? 'ComfyUI' : 'Codex',
+              value: illustrationGeneratorLabels[value.generator],
             },
             { label: t('visualpanels.description'), value: value.description },
             { label: t('visualpanels.illustrationInstructions'), value: value.styleGuidance },
