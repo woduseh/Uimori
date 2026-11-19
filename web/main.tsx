@@ -2306,12 +2306,22 @@ function App() {
                           {t('main.m125')}
                         </button>
                       </div>
+                      {compact && !s.inputTranslation.busy && (
+                        <InputTranslationControls
+                          translation={s.inputTranslation}
+                          disabled={inputTranslationDisabled}
+                          empty={draftEmpty}
+                          inMenu
+                        />
+                      )}
                     </ComposerMore>
-                    <InputTranslationControls
-                      translation={s.inputTranslation}
-                      disabled={inputTranslationDisabled}
-                      empty={draftEmpty}
-                    />
+                    {(!compact || s.inputTranslation.busy) && (
+                      <InputTranslationControls
+                        translation={s.inputTranslation}
+                        disabled={inputTranslationDisabled}
+                        empty={draftEmpty}
+                      />
+                    )}
                     {compact &&
                       sceneNavigatorEnabled &&
                       !focus &&

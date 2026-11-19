@@ -154,6 +154,7 @@ for (const width of [MOBILE_WIDTH]) {
     await page.route('**/api/chats/*/input-translation', (route) =>
       route.fulfill({ json: { text: 'Composer translation to preserve', targetLanguage: 'en' } })
     );
+    await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
     await page.getByRole('button', { name: '입력 번역', exact: true }).click();
     await expect(composer).toHaveValue('Composer translation to preserve');
     await source.getByTestId('source-request').hover();

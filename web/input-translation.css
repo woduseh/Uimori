@@ -144,3 +144,13 @@
     display: none;
   }
 }
+.input-translation-menu-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.input-translation-menu-row > select {
+  width: auto;
+  min-height: var(--control-h);
+}

@@ -91,6 +91,11 @@ export function ComposerMore({
           className="composer-more-panel"
           role="group"
           aria-label={t('prompts.uiOptionsForThisRequest')}
+          onClick={(event) => {
+            if (!(event.target as Element).closest('[data-closes-composer-menu]')) return;
+            setOpen(false);
+            trigger.current?.focus();
+          }}
         >
           {children && (
             <div

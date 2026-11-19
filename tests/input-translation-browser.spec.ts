@@ -12,7 +12,12 @@ async function clipboardText(page: Page) {
   return (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, '\n');
 }
 const composer = (page: Page) => page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
-const translate = (page: Page) => page.getByRole('button', { name: '입력 번역', exact: true });
+async function translate(page: Page) {
+  const button = page.getByRole('button', { name: '입력 번역', exact: true });
+  if (!(await button.isVisible()))
+    await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+  return button;
+}
 const send = (page: Page) => page.getByRole('button', { name: '원문 생성', exact: true });
 function gate() {
   let release!: () => void;
@@ -84,28 +89,18 @@ async function seed(request: APIRequestContext, chat: Chat, text: string): Promi
       await answer(route);
     });
     await open(page, chat.id);
-    const mobileLanguage = page.locator('.input-translation-language-mobile');
-    const mobileSummary = mobileLanguage.locator('summary');
-    const setLanguage = async (code: 'en' | 'es' | 'ja', label: string) => {
-      await mobileSummary.click();
-      await mobileLanguage.getByRole('button', { name: label, exact: true }).click();
-      await expect(mobileSummary).toHaveText(code.toUpperCase());
-      await expect(mobileLanguage).not.toHaveAttribute('open');
-      await expect(mobileSummary).toBeFocused();
+    await expect(page.locator('.input-translation-language-mobile')).toHaveCount(0);
+    const languageSelect = page.getByRole('combobox', { name: '입력 번역 언어 선택', exact: true });
+    const setLanguage = async (code: 'en' | 'es' | 'ja') => {
+      if (!(await languageSelect.isVisible()))
+        await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+      await languageSelect.selectOption(code);
+      await expect(languageSelect).toHaveValue(code);
     };
-    await expect(mobileSummary).toHaveText('EN');
-    await mobileSummary.click();
-    await expect(mobileLanguage).toHaveAttribute('open', '');
-    await composer(page).click();
-    await expect(mobileLanguage).not.toHaveAttribute('open');
-    await mobileSummary.click();
-    await mobileSummary.press('Escape');
-    await expect(mobileLanguage).not.toHaveAttribute('open');
-    await expect(mobileSummary).toBeFocused();
-    await setLanguage('es', '스페인어');
-    await setLanguage('en', '영어');
+    await setLanguage('es');
+    await setLanguage('en');
     await composer(page).fill(original);
-    await translate(page).click();
+    await (await translate(page)).click();
     await expect(composer(page)).toHaveValue(translated);
     expect((await detail(request, chat.id)).runs).toHaveLength(0);
     await page.getByText('번역 전 원문 보기', { exact: true }).click();
@@ -114,12 +109,14 @@ async function seed(request: APIRequestContext, chat: Chat, text: string): Promi
     await page.getByRole('button', { name: '되돌리기', exact: true }).click();
     await expect(composer(page)).toHaveValue(original);
     await expect(page.getByText('번역 전 원문 보기', { exact: true })).toHaveCount(0);
-    await translate(page).click();
+    await (await translate(page)).click();
     await expect(composer(page)).toHaveValue(translated);
-    await setLanguage('ja', '일본어');
+    await setLanguage('ja');
     await page.reload();
     await expect(composer(page)).toHaveValue(translated);
-    await expect(mobileSummary).toHaveText('JA');
+    if (!(await languageSelect.isVisible()))
+      await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+    await expect(languageSelect).toHaveValue('ja');
     await expect(page.getByText('번역 전 원문 보기', { exact: true })).toBeVisible();
     const finalText = `${translated}\n  Keep the ending unresolved.  `;
     await composer(page).fill(finalText);
@@ -171,7 +168,7 @@ test('ITRAN typing, including edit-then-revert, cannot be overwritten by a late 
   try {
     await open(page, chat.id);
     await composer(page).fill(original);
-    await translate(page).click();
+    await (await translate(page)).click();
     await started.promise;
     await composer(page).fill('바꾼 초안');
     await composer(page).fill(original);
@@ -213,10 +210,10 @@ test('ITRAN explicit cancellation and a newer translation discard the older resp
   try {
     await open(page, chat.id);
     await composer(page).fill(original);
-    await translate(page).click();
+    await (await translate(page)).click();
     await started.promise;
     await page.getByRole('button', { name: '입력 번역 취소', exact: true }).click();
-    await translate(page).click();
+    await (await translate(page)).click();
     await expect(composer(page)).toHaveValue('NEW_TRANSLATION');
     released.release();
     await finished.promise;
@@ -246,7 +243,7 @@ test('ITRAN leaving and returning to a chat never applies the translation from i
   try {
     await open(page, first.id);
     await composer(page).fill(original);
-    await translate(page).click();
+    await (await translate(page)).click();
     await started.promise;
     await spaNavigate(page, `/?chat=${second.id}`);
     await expect(composer(page)).toHaveValue('');
@@ -282,7 +279,7 @@ test('ITRAN send intent invalidates a running translation without making transla
   try {
     await open(page, chat.id);
     await composer(page).fill(original);
-    await translate(page).click();
+    await (await translate(page)).click();
     await started.promise;
     await send(page).click();
     await expect(composer(page)).toHaveValue('');
@@ -323,7 +320,7 @@ test('ITRAN send invalidates translation even while its preflight is pending', a
   try {
     await open(page, chat.id);
     await composer(page).fill(original);
-    await translate(page).click();
+    await (await translate(page)).click();
     await started.promise;
     await send(page).click();
     await expect(page.getByRole('alert')).toContainText('요청을 처리할 수 없어요. (422)');
@@ -349,11 +346,11 @@ test('ITRAN refused translation and rejected submission preserve the editable dr
   });
   await open(page, chat.id);
   await composer(page).fill(original);
-  await translate(page).click();
+  await (await translate(page)).click();
   await expect(page.getByRole('alert').filter({ hasText: '번역을 거절했어요' })).toBeVisible();
   await expect(composer(page)).toHaveValue(original);
   rejectedTranslation = false;
-  await translate(page).click();
+  await (await translate(page)).click();
   await expect(composer(page)).toHaveValue(translated);
   await page.route(`**/api/chats/${chat.id}/runs`, (route) =>
     route.fulfill({ status: 400, json: { error: 'Rejected fixture' } })
@@ -386,7 +383,7 @@ test('ITRAN uncertain admission retains undo across reload and cleans it only af
   });
   await open(page, chat.id);
   await composer(page).fill(original);
-  await translate(page).click();
+  await (await translate(page)).click();
   await expect(composer(page)).toHaveValue(translated);
   await send(page).click();
   await expect(page.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeEnabled();

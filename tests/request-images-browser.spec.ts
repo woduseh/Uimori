@@ -58,6 +58,7 @@ for (const width of [360]) {
     await page.route('**/api/chats/*/input-translation', (route) =>
       route.fulfill({ json: { text: 'Use these clothes.', targetLanguage: 'en' } })
     );
+    await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
     await page.getByRole('button', { name: '입력 번역', exact: true }).click();
     await expect(composer(page)).toHaveValue('Use these clothes.');
     await expect(thumbnails(page)).toHaveCount(1);

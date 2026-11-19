@@ -716,6 +716,19 @@
   border-radius: var(--radius-panel);
   font-size: var(--font-heading);
 }
+@media (min-width: 761px) {
+  .library-portrait-card .library-item-avatar:has(> span),
+  .library-preview-avatar:has(> span) {
+    background: linear-gradient(160deg, var(--accent-soft), var(--surface) 72%);
+    color: var(--accent-text);
+    font-family: Georgia, "Batang", "Noto Serif CJK KR", serif;
+    font-weight: 500;
+    font-size: 48px;
+  }
+  .library-preview-avatar:has(> span) {
+    font-size: 64px;
+  }
+}
 .library-preview-counts {
   font-size: var(--font-body);
   margin: 0 0 8px;

@@ -1,6 +1,7 @@
 import { expect, test, type Locator } from '@playwright/test';
 import { BUILTIN_PALETTES, DEFAULT_PALETTE_COLORS } from '../core/theme-palettes.js';
 import { postFixtureChat } from './fixtures/chat.js';
+import { DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 
 async function expectReadableText(locator: Locator, description: string) {
   await expect(locator).toBeVisible();
@@ -32,7 +33,7 @@ async function expectReadableText(locator: Locator, description: string) {
   expect(contrast, description).toBeGreaterThanOrEqual(4.5);
 }
 
-test('COLOR selected mobile language and avatar text stay readable in default and named palettes', async ({
+test('COLOR selected input language and avatar text stay readable in default and named palettes', async ({
   page,
   request,
 }, info) => {
@@ -51,6 +52,7 @@ test('COLOR selected mobile language and avatar text stay readable in default an
     },
   });
   expect(layout.ok()).toBe(true);
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   await page.goto(`/?chat=${chat.id}`);
   const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
   await composer.fill('팔레트를 바꿔도 이 요청과 선택한 언어를 유지해요.');

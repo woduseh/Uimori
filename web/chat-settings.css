@@ -193,15 +193,6 @@
   flex: 1;
   gap: 4px;
 }
-.chat-settings-panel .chat-composition-persona .content-picker-trigger {
-  min-height: var(--control-h);
-  padding: 4px 8px 4px 0;
-  border-color: transparent;
-  background: transparent;
-}
-.chat-settings-panel .chat-composition-persona .content-picker-trigger:hover {
-  background: var(--surface);
-}
 .chat-settings-panel .chat-composition-lore > summary {
   display: flex;
   align-items: center;

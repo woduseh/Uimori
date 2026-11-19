@@ -12,7 +12,8 @@ export function InputTranslationControls({
   translation,
   disabled,
   empty,
-}: Props & { empty: boolean }) {
+  inMenu = false,
+}: Props & { empty: boolean; inMenu?: boolean }) {
   const { t } = useI18n();
   const languageMenu = useRef<HTMLDetailsElement>(null);
   const languageTrigger = useRef<HTMLElement>(null);
@@ -35,6 +36,36 @@ export function InputTranslationControls({
   const current =
     INPUT_TRANSLATION_LANGUAGES.find((language) => language.code === translation.language) ??
     INPUT_TRANSLATION_LANGUAGES[0];
+  if (inMenu)
+    return (
+      <div
+        className="composer-menu-group input-translation-menu-row"
+        role="group"
+        aria-label={t('prompts.uiInputTranslationTools')}
+      >
+        <button
+          type="button"
+          data-closes-composer-menu
+          disabled={disabled || empty}
+          onClick={() => void translation.translate()}
+        >
+          <Languages size={18} aria-hidden="true" />
+          {t('prompts.uiTranslateInput')}
+        </button>
+        <select
+          aria-label={t('prompts.uiSelectInputTranslationLanguage')}
+          value={translation.language}
+          disabled={disabled}
+          onChange={(event) => translation.changeLanguage(event.target.value)}
+        >
+          {INPUT_TRANSLATION_LANGUAGES.map((language) => (
+            <option key={language.code} value={language.code}>
+              {t(`prompts.language.${language.code}`)}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
   return (
     <div
       className="input-translation-controls"

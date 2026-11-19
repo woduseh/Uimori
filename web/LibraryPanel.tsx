@@ -963,6 +963,7 @@ export function LibraryPanel({
           <div className="library-use-actions">
             <button
               type="button"
+              className="primary"
               aria-label={roleActionLabel(detailRole, t(contentLabelKeys[detailRole]))}
               disabled={
                 loading || (detailRole === 'bot' ? !onUseContent && !onStartStory : !onUseContent)
