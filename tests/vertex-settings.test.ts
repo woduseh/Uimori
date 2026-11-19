@@ -84,7 +84,7 @@ const modelBody = (connection: Connection, changes: Record<string, unknown> = {}
 });
 
 describe('Vertex connection and model settings with file SQLite', () => {
-  test('accepts ADC and app-entered Bearer keys, normalizes the global base path and rejects unsupported authority', async () => {
+  test('accepts ADC and app-entered Bearer keys, normalizes global and located base paths and rejects unsupported authority', async () => {
     const app = await application();
     const adc = await request<Connection>(
       app,
@@ -104,7 +104,30 @@ describe('Vertex connection and model settings with file SQLite', () => {
       vertexConnection({ apiKey: 'synthetic-vertex-token' })
     );
     expect(app.store.credentials.get(bearer.credentialRef!)).toBe('synthetic-vertex-token');
+    for (const [host, location] of [
+      ['aiplatform.us.rep.googleapis.com', 'us'],
+      ['aiplatform.eu.rep.googleapis.com', 'eu'],
+      ['asia-northeast3-aiplatform.googleapis.com', 'asia-northeast3'],
+    ]) {
+      const located = endpoint
+        .replace('aiplatform.googleapis.com', host)
+        .replace('/global/', `/${location}/`);
+      const saved = await request<Connection>(
+        app,
+        '/connections',
+        vertexConnection({ endpoint: located + '/', apiKey: 'synthetic-vertex-token' })
+      );
+      expect(saved.endpoint).toBe(located);
+    }
     for (const invalid of [
+      endpoint.replace('aiplatform.googleapis.com', 'aiplatform.us.rep.googleapis.com'),
+      endpoint
+        .replace('aiplatform.googleapis.com', 'aiplatform.us.rep.googleapis.com')
+        .replace('/global/', '/eu/'),
+      endpoint
+        .replace('aiplatform.googleapis.com', 'us-central1-aiplatform.googleapis.com')
+        .replace('/global/', '/us-east4/'),
+      endpoint.replace('/global/', '/us_central1/'),
       endpoint.replace('https:', 'http:'),
       endpoint.replace('aiplatform.googleapis.com', 'example.invalid'),
       endpoint.replace('/global/', '/us-central1/'),
@@ -115,7 +138,7 @@ describe('Vertex connection and model settings with file SQLite', () => {
       await request(app, '/connections', vertexConnection({ endpoint: invalid }), 400);
     for (const apiKey of [false, 0, 'line\nbreak'])
       await request(app, '/connections', vertexConnection({ apiKey }), 400);
-    expect(app.store.product.all('connection')).toHaveLength(2);
+    expect(app.store.product.all('connection')).toHaveLength(5);
   });
 
   test('stores the selected model defaults and bounds', async () => {

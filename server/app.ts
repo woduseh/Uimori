@@ -17,6 +17,7 @@ import { chatGenerationDefaultRoutes } from './chat-generation-defaults.js';
 import { REQUEST_TEXT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { createRunExecutor } from './run-executor.js';
 import { imageInputSupported } from '../core/provider-images.js';
+import { sameVertexProject } from '../core/vertex-location.js';
 import { APP_VERSION } from './app-version.js';
 import { flushPendingImageCleanup } from './unused-data.js';
 import { themeRoutes } from './themes.js';
@@ -313,7 +314,11 @@ export async function createApp(options: AppOptions): Promise<App> {
       if (
         !current.enabled ||
         current.protocol !== connection.protocol ||
-        current.endpoint !== connection.endpoint ||
+        (current.endpoint !== connection.endpoint &&
+          !(
+            connection.protocol === 'vertex-gemini-v1' &&
+            sameVertexProject(current.endpoint, connection.endpoint)
+          )) ||
         current.credentialRef !== reference
       )
         throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');

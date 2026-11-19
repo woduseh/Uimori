@@ -70,12 +70,18 @@ import {
 } from './provider-model-draft.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ProviderModelTest, useProviderModelTests } from './ProviderModelTest.js';
+import { parseVertexEndpoint } from '../core/vertex-location.js';
 import { JevProviderSettings } from './JevProviderSettings.js';
 import { useTestMode } from './useTestMode.js';
 import './ProviderManagement.css';
 import './settings-actions.css';
 
 const versionRef = (item: { id: string; revision: number }) => `${item.id}@${item.revision}`;
+function vertexLocationOf(connections: Connection[], connectionId: string): string | undefined {
+  const connection = connections.find((candidate) => candidate.id === connectionId);
+  if (connection?.protocol !== 'vertex-gemini-v1') return undefined;
+  return parseVertexEndpoint(connection.endpoint)?.location;
+}
 const matches = (query: string, ...values: (string | undefined)[]) =>
   !query || values.some((value) => value?.toLocaleLowerCase().includes(query));
 
@@ -1431,7 +1437,8 @@ export function ConnectionEditor({
                       </div>
                       <ProviderModelTest
                         model={item}
-                        record={modelTests.records[versionRef(item)]}
+                        records={modelTests.records}
+                        vertexLocation={vertexLocationOf(library.connections, item.connectionId)}
                         available={
                           item.enabled !== false &&
                           library.connections.some(

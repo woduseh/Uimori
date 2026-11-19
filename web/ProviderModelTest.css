@@ -30,3 +30,40 @@
 .provider-test-result details p {
   white-space: pre-wrap;
 }
+.provider-location-compare {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.provider-location-results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--font-body);
+  line-height: 1.6;
+}
+.provider-location-results li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding-block: 6px;
+}
+.provider-location-results li + li {
+  border-top: var(--hairline) solid var(--line);
+}
+.provider-location-name {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.provider-location-name small {
+  font-size: var(--font-small);
+  color: var(--accent-text);
+}
+.provider-location-outcome {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}

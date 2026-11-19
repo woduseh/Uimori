@@ -9,9 +9,19 @@ import { IconButton } from './IconButton.js';
 import { CloseIcon } from './ui-icons.js';
 import { VertexCredentialUpload } from './VertexCredentialUpload.js';
 import type { ProviderEditorState, ConnectionDraft } from './provider-editor-state.js';
+import {
+  parseVertexEndpoint,
+  VERTEX_LOCATION_CHOICES,
+  vertexModelsEndpoint,
+} from '../core/vertex-location.js';
+import { vertexLocationLabel } from './vertex-location-label.js';
 
-function vertexEndpoint(projectId: string): string {
-  return `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models`;
+function vertexParts(endpoint: string) {
+  const parsed = parseVertexEndpoint(endpoint);
+  return {
+    projectId: parsed?.projectId ?? endpoint.match(/\/projects\/([^/]+)\//u)?.[1] ?? '',
+    location: parsed?.location ?? endpoint.match(/\/locations\/([^/]+)\//u)?.[1] ?? 'global',
+  };
 }
 
 type Props = {
@@ -57,8 +67,9 @@ export function ProviderConnectionForm({
   } = draft;
   const codex = connection.protocol === 'codex-app-server-v1';
   const vertex = connection.protocol === 'vertex-gemini-v1';
-  const vertexProjectId =
-    connection.endpoint.match(/\/projects\/([^/]+)\/locations\/global\//)?.[1] ?? '';
+  const { projectId: vertexProjectId, location: vertexLocation } = vertexParts(connection.endpoint);
+  const vertexLocations: string[] = [...VERTEX_LOCATION_CHOICES];
+  if (!vertexLocations.includes(vertexLocation)) vertexLocations.push(vertexLocation);
   const definition = providerDefinition(connection.protocol);
   const endpointLabel = codex
     ? t('providers.m126')
@@ -164,7 +175,10 @@ export function ProviderConnectionForm({
                 credentialRef: '',
                 apiKey: undefined,
                 vertexAccount: value,
-                endpoint: vertexEndpoint(value.projectId),
+                endpoint: vertexModelsEndpoint(
+                  value.projectId,
+                  vertexParts(current.endpoint).location
+                ),
               }))
             }
           />
@@ -180,11 +194,33 @@ export function ProviderConnectionForm({
                 onChange({
                   ...connection,
                   endpoint: event.target.value.trim()
-                    ? vertexEndpoint(event.target.value.trim())
+                    ? vertexModelsEndpoint(event.target.value.trim(), vertexLocation)
                     : '',
                 })
               }
             />
+          </label>
+        )}
+        {vertex && (
+          <label className="full">
+            {t('providers.vertexLocation')}
+            <select
+              aria-label={t('providers.vertexLocation')}
+              disabled={!vertexProjectId}
+              value={vertexLocation}
+              onChange={(event) =>
+                onChange({
+                  ...connection,
+                  endpoint: vertexModelsEndpoint(vertexProjectId, event.target.value),
+                })
+              }
+            >
+              {vertexLocations.map((location) => (
+                <option key={location} value={location}>
+                  {vertexLocationLabel(location)}
+                </option>
+              ))}
+            </select>
           </label>
         )}
         <label className="full">

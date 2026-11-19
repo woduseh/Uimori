@@ -4,6 +4,8 @@ import type { ModelPreset } from '../core/product.js';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
 import { api } from './api.js';
 import { ProviderRejectionNotice, rejectionMessage } from './provider-rejection.js';
+import { VERTEX_LOCATION_CHOICES } from '../core/vertex-location.js';
+import { vertexLocationLabel } from './vertex-location-label.js';
 import './ProviderModelTest.css';
 
 type TestDisplay = {
@@ -12,7 +14,8 @@ type TestDisplay = {
   result?: ProviderConnectionTest;
   error?: string;
 };
-const scope = (model: Pick<ModelPreset, 'id' | 'revision'>) => `${model.id}@${model.revision}`;
+export const testKey = (model: Pick<ModelPreset, 'id' | 'revision'>, location?: string) =>
+  `${model.id}@${model.revision}${location === undefined ? '' : `#${location}`}`;
 function pause(signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
@@ -48,8 +51,8 @@ export function useProviderModelTests() {
     current.current = { ...current.current, [key]: value };
     setRecords(current.current);
   }
-  async function start(model: ModelPreset) {
-    const key = scope(model);
+  async function start(model: ModelPreset, location?: string) {
+    const key = testKey(model, location);
     if (controllers.current.has(key)) return;
     const previous = current.current[key],
       controller = new AbortController();
@@ -67,10 +70,18 @@ export function useProviderModelTests() {
           )
         : await api<ProviderConnectionTest>(
             `/provider-management/models/${encodeURIComponent(model.id)}/test`,
-            { expectedRevision: model.revision, idempotencyKey }
+            {
+              expectedRevision: model.revision,
+              idempotencyKey,
+              ...(location === undefined ? {} : { location }),
+            }
           );
       while (active()) {
-        if (result.modelId !== model.id || result.modelRevision !== model.revision) {
+        if (
+          result.modelId !== model.id ||
+          result.modelRevision !== model.revision ||
+          result.location !== location
+        ) {
           result = undefined;
           throw new Error(uiMessage('providers.m292'));
         }
@@ -120,20 +131,99 @@ const statusLabel: Record<ProviderConnectionTest['status'], string> = {
     return t('providers.m300');
   },
 };
+function locationOutcome(record: TestDisplay | undefined): string {
+  const result = record?.result;
+  if (record?.pending || result?.status === 'running') return t('providers.m294');
+  if (record?.error || !result) return t('providers.m300');
+  if (result.status === 'completed' && result.latencyMs !== null)
+    return t('providers.vertexCompareSeconds', { value0: (result.latencyMs / 1000).toFixed(1) });
+  if (result.error === 'HTTP_404') return t('providers.vertexCompareUnavailable');
+  if (result.error === 'HTTP_429') return t('providers.vertexCompareBusy');
+  if (result.error === 'HTTP_503') return t('providers.vertexCompareDown');
+  if (result.error === 'TIMEOUT') return t('providers.vertexCompareTimeout');
+  return result.error ? translateMessage(result.error) : statusLabel[result.status];
+}
+
+function LocationComparison({
+  model,
+  records,
+  current,
+  disabled,
+  onStart,
+}: {
+  model: ModelPreset;
+  records: Record<string, TestDisplay>;
+  current: string;
+  disabled: boolean;
+  onStart: (model: ModelPreset, location?: string) => Promise<void>;
+}) {
+  const rows = VERTEX_LOCATION_CHOICES.map((location) => ({
+    location,
+    record: records[testKey(model, location)],
+  }));
+  const comparing = rows.some((row) => row.record?.pending);
+  const timed = rows.flatMap(({ location, record }) =>
+    record?.result?.status === 'completed' && record.result.latencyMs !== null && !record.pending
+      ? [{ location, latencyMs: record.result.latencyMs }]
+      : []
+  );
+  const fastest = timed.length
+    ? timed.reduce((best, row) => (row.latencyMs < best.latencyMs ? row : best)).location
+    : undefined;
+  return (
+    <div className="provider-location-compare">
+      <div className="provider-actions">
+        <button
+          type="button"
+          className="secondary"
+          disabled={disabled || comparing}
+          onClick={() => {
+            for (const { location } of rows) void onStart(model, location);
+          }}
+        >
+          {comparing ? t('providers.m294') : t('providers.vertexCompare')}
+        </button>
+        <small>{t('providers.vertexCompareCost', { value0: rows.length })}</small>
+      </div>
+      {rows.some((row) => row.record) && (
+        <ul
+          className="provider-location-results"
+          aria-label={t('providers.vertexCompareResults', { value0: model.title })}
+        >
+          {rows.map(({ location, record }) => (
+            <li key={location}>
+              <span className="provider-location-name">
+                {vertexLocationLabel(location)}
+                {location === current && <small>{t('providers.vertexCompareCurrent')}</small>}
+                {location === fastest && <small>{t('providers.vertexCompareFastest')}</small>}
+              </span>
+              <span className="provider-location-outcome">{locationOutcome(record)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function ProviderModelTest({
   model,
-  record,
+  records,
+  vertexLocation,
   available,
   busy,
   onStart,
 }: {
   model: ModelPreset;
-  record: TestDisplay | undefined;
+  records: Record<string, TestDisplay>;
+  /** The saved location of the model's Vertex connection; absent for other providers. */
+  vertexLocation?: string;
   available: boolean;
   busy: boolean;
-  onStart: (model: ModelPreset) => Promise<void>;
+  onStart: (model: ModelPreset, location?: string) => Promise<void>;
 }) {
   useI18n();
+  const record = records[testKey(model)];
   const result = record?.result;
   return (
     <section
@@ -158,6 +248,15 @@ export function ProviderModelTest({
         </button>
       </div>
       {!available && <small>{t('providers.m305')}</small>}
+      {vertexLocation !== undefined && (
+        <LocationComparison
+          model={model}
+          records={records}
+          current={vertexLocation}
+          disabled={!available || busy}
+          onStart={onStart}
+        />
+      )}
       {record?.error ? (
         <div className="provider-test-result" role="alert">
           <p>{t('providers.m306')}</p>

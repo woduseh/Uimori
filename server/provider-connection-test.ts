@@ -23,10 +23,20 @@ import { resolveTokenizerProfile } from '../core/tokenizer-profiles.js';
 import type { Store } from './store.js';
 import { resolveModelPricing } from '../core/model-pricing.js';
 import { estimateCost } from '../core/pricing-estimate.js';
+import {
+  isVertexLocation,
+  parseVertexEndpoint,
+  vertexModelsEndpoint,
+} from '../core/vertex-location.js';
 
 export const CONNECTION_TEST_TIMEOUT_MS = 25_000;
 const nullUsage = () => ({ inputTokens: null, outputTokens: null, costUsd: null });
-type Target = { model: ModelPreset; connection: Connection; request: ProviderRequest };
+type Target = {
+  model: ModelPreset;
+  connection: Connection;
+  authority: Connection;
+  request: ProviderRequest;
+};
 type TestRow = { id: string; model_id: string; model_revision: number; body: string };
 type TestOptions = Pick<
   ProviderExecutionOptions,
@@ -81,31 +91,55 @@ export class ProviderConnectionTestStore {
   }
   create(modelId: string, value: unknown): { view: ProviderConnectionTest; target?: Target } {
     const body = record(value);
-    fields(body, ['expectedRevision', 'idempotencyKey']);
+    fields(body, ['expectedRevision', 'idempotencyKey', 'location']);
     const expectedRevision = number(body.expectedRevision, 'expectedRevision');
     const key = text(body.idempotencyKey, 'idempotencyKey', 200);
+    const location = body.location === undefined ? undefined : text(body.location, 'location', 40);
+    const sameLocation = (row: Pick<TestRow, 'body'>) =>
+      (JSON.parse(row.body) as ProviderConnectionTest).location === location;
     return this.store.transaction(() => {
       const prior = this.store.db
         .prepare(
-          'SELECT id,model_id,model_revision FROM provider_connection_tests WHERE idempotency_key=?'
+          'SELECT id,model_id,model_revision,body FROM provider_connection_tests WHERE idempotency_key=?'
         )
         .get(key) as TestRow | undefined;
       if (prior) {
-        if (prior.model_id !== modelId || prior.model_revision !== expectedRevision)
+        if (
+          prior.model_id !== modelId ||
+          prior.model_revision !== expectedRevision ||
+          !sameLocation(prior)
+        )
           throw new HttpError(409, 'Connection test key reused with different model or revision');
         return { view: this.get(prior.id) };
       }
       const model = this.store.product.get<ModelPreset>('model', modelId);
       if (model.revision !== expectedRevision) throw new HttpError(409, 'Model revision conflict');
       if (model.enabled === false) throw new HttpError(403, 'Connection test model disabled');
-      const connection = this.store.product.get<Connection>('connection', model.connectionId);
-      this.store.product.authorize(connection);
+      const authority = this.store.product.get<Connection>('connection', model.connectionId);
+      this.store.product.authorize(authority);
       if (
-        this.store.db
-          .prepare("SELECT 1 FROM provider_connection_tests WHERE model_id=? AND status='running'")
-          .get(modelId)
+        (
+          this.store.db
+            .prepare(
+              "SELECT body FROM provider_connection_tests WHERE model_id=? AND status='running'"
+            )
+            .all(modelId) as Pick<TestRow, 'body'>[]
+        ).some(sameLocation)
       )
         throw new HttpError(409, 'Connection test already running for this model');
+      let connection = authority;
+      if (location !== undefined) {
+        const endpoint =
+          authority.protocol === 'vertex-gemini-v1'
+            ? parseVertexEndpoint(authority.endpoint)
+            : null;
+        if (!endpoint || !isVertexLocation(location))
+          throw new HttpError(400, 'Invalid Vertex location');
+        connection = {
+          ...authority,
+          endpoint: vertexModelsEndpoint(endpoint.projectId, location),
+        };
+      }
       let request: ProviderRequest;
       try {
         request = connectionTestRequest(model, connection);
@@ -121,6 +155,7 @@ export class ProviderConnectionTestStore {
         modelRevision: model.revision,
         providerModelId: model.modelId,
         connectionId: connection.id,
+        ...(location !== undefined ? { location } : {}),
         createdAt: new Date().toISOString(),
         finishedAt: null,
         status: 'running',
@@ -135,7 +170,7 @@ export class ProviderConnectionTestStore {
           'INSERT INTO provider_connection_tests(id,idempotency_key,model_id,model_revision,status,body) VALUES(?,?,?,?,?,?)'
         )
         .run(view.id, key, modelId, model.revision, view.status, JSON.stringify(view));
-      return { view, target: { model, connection, request } };
+      return { view, target: { model, connection, authority, request } };
     });
   }
   sent(id: string) {
@@ -208,7 +243,7 @@ export function providerConnectionTestRoutes(
       if (options.signal.aborted) throw new HttpError(503, 'Server stopping');
       const admission = journal.create(request.params.id, request.body);
       if (admission.target) {
-        const { model, connection, request: input } = admission.target;
+        const { model, connection, authority, request: input } = admission.target;
         const id = admission.view.id;
         options.track(
           (async () => {
@@ -229,7 +264,7 @@ export function providerConnectionTestRoutes(
               if (current.enabled === false || current.revision !== model.revision)
                 throw new ProviderContractError('CONNECTION_TEST_MODEL_CHANGED');
               try {
-                store.product.authorize(connection);
+                store.product.authorize(authority);
               } catch {
                 throw new ProviderContractError('CONNECTION_NOT_AUTHORIZED');
               }

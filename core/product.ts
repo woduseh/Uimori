@@ -2,6 +2,7 @@ import type { EvaluationToolOptions } from './evaluation-tool-config.js';
 import type { GeminiSafetySettings } from './gemini-safety.js';
 import type { ProviderOptions } from './provider-options.js';
 import { DEFAULT_LORE_CONTEXT } from './lore-context.js';
+import { parseVertexEndpoint, vertexModelsEndpoint } from './vertex-location.js';
 export const PROVIDER_PROTOCOLS = [
   'fixture-sse-v1',
   'vertex-gemini-v1',
@@ -337,27 +338,10 @@ export function modelTimeoutMs(model: Pick<ModelPreset, 'timeoutMs'>): number {
   return model.timeoutMs ?? DEFAULT_MODEL_TIMEOUT_MS;
 }
 
-/** The first live adapter supports Google's global project endpoint only. */
 export function validateVertexEndpoint(value: string): string {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error('INVALID_VERTEX_ENDPOINT');
-  }
-  if (
-    url.origin !== 'https://aiplatform.googleapis.com' ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash ||
-    !/^\/v1\/projects\/(?:[a-z][a-z0-9-]{4,28}[a-z0-9]|[0-9]+)\/locations\/global\/publishers\/google\/models\/?$/.test(
-      url.pathname
-    )
-  ) {
-    throw new Error('INVALID_VERTEX_ENDPOINT');
-  }
-  return url.origin + url.pathname.replace(/\/$/, '');
+  const endpoint = parseVertexEndpoint(value);
+  if (!endpoint) throw new Error('INVALID_VERTEX_ENDPOINT');
+  return vertexModelsEndpoint(endpoint.projectId, endpoint.location);
 }
 
 /** API roots are connection settings; paths supplied by model output never change them. */

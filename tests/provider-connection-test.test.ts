@@ -462,6 +462,60 @@ describe('one-call provider connection diagnostics', () => {
     }
   );
 
+  test('a Vertex location test goes to that location with the saved credential and runs beside the default test', async () => {
+    const { app, model: fixtureModel } = await setup();
+    const saved =
+      'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models';
+    const connection = app.store.product.connection({
+      title: 'Synthetic Vertex',
+      protocol: 'vertex-gemini-v1',
+      endpoint: saved,
+      enabled: true,
+      apiKey: 'synthetic-vertex-token',
+    }) as Connection;
+    const modelId = supportedModels('vertex-gemini-v1')[0].id;
+    const model = app.store.product.model({
+      title: 'Synthetic Vertex model',
+      connectionId: connection.id,
+      modelId,
+      maxOutputTokens: 10000,
+      temperature: null,
+    }) as ModelPreset;
+    const fetch = vi.mocked(globalThis.fetch).mockImplementation(async () =>
+      sse({
+        candidates: [
+          { index: 0, content: { role: 'model', parts: [{ text: 'OK' }] }, finishReason: 'STOP' },
+        ],
+        usageMetadata: { promptTokenCount: 8, candidatesTokenCount: 1, totalTokenCount: 9 },
+      })
+    );
+    const located = await post(app, model, randomUUID(), 202, { location: 'us' });
+    const ordinary = await post(app, model);
+    expect(located.location).toBe('us');
+    expect(ordinary).not.toHaveProperty('location');
+    expect(await terminal(app, located.id)).toMatchObject({ status: 'completed', text: 'OK' });
+    expect(await terminal(app, ordinary.id)).toMatchObject({ status: 'completed' });
+    const sent = fetch.mock.calls.map(([url, init]) => ({
+      url: String(url),
+      authorization: new Headers(init?.headers).get('authorization'),
+    }));
+    expect(sent).toEqual(
+      expect.arrayContaining([
+        {
+          url: `https://aiplatform.us.rep.googleapis.com/v1/projects/synthetic-project/locations/us/publishers/google/models/${modelId}:streamGenerateContent?alt=sse`,
+          authorization: 'Bearer synthetic-vertex-token',
+        },
+        {
+          url: `${saved}/${modelId}:streamGenerateContent?alt=sse`,
+          authorization: 'Bearer synthetic-vertex-token',
+        },
+      ])
+    );
+    expect(app.store.product.get<Connection>('connection', connection.id).endpoint).toBe(saved);
+    await post(app, model, randomUUID(), 400, { location: 'us_central1' });
+    await post(app, fixtureModel, randomUUID(), 400, { location: 'us' });
+  });
+
   test('the test request carries the preset options with a 256-token cap, no tools and cache off', () => {
     for (const protocol of [
       'vertex-gemini-v1',

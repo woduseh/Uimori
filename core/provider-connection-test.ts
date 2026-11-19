@@ -5,6 +5,8 @@ export type ProviderConnectionTest = {
   modelRevision: number;
   providerModelId: string;
   connectionId: string;
+  /** Vertex location this test was sent to instead of the connection's own location. */
+  location?: string;
   createdAt: string;
   finishedAt: string | null;
   status: 'running' | 'completed' | 'refused' | 'partial' | 'error' | 'cancelled' | 'interrupted';
