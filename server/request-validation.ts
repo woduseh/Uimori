@@ -16,28 +16,43 @@ export const record = (value: unknown): RequestRecord => {
   return value as RequestRecord;
 };
 export const fields = (body: RequestRecord, keys: string[]) => {
-  if (Object.keys(body).some((key) => !keys.includes(key)))
-    throw new HttpError(400, 'Unknown request field');
+  const unknown = Object.keys(body).filter((key) => !keys.includes(key));
+  if (unknown.length)
+    throw new HttpError(
+      400,
+      `Unknown request field: ${unknown.join(', ')}; allowed: ${keys.join(', ') || 'none'}`
+    );
 };
 export const text = (value: unknown, name: string, max = 4000, empty = false): string => {
   if (typeof value !== 'string' || (!empty && !value.trim()) || value.length > max)
-    throw new HttpError(400, `Invalid ${name}`);
+    throw new HttpError(
+      400,
+      `Invalid ${name}: expected a ${empty ? '' : 'non-empty '}string${
+        Number.isFinite(max) ? ` of at most ${max} characters` : ''
+      }`
+    );
   return value;
 };
 export const chatTitle = (value: unknown): string => text(value, 'chat title', Infinity);
 export const number = (value: unknown, name: string, min = 1, max = 1e9): number => {
   if (!Number.isSafeInteger(value) || Number(value) < min || Number(value) > max)
-    throw new HttpError(400, `Invalid ${name}`);
+    throw new HttpError(
+      400,
+      `Invalid ${name}: expected an integer ${
+        Number.isFinite(max) ? `from ${min} to ${max}` : `of at least ${min}`
+      }`
+    );
   return Number(value);
 };
 
 export const parse = (s: any) => (s == null ? null : JSON.parse(String(s)));
 export const choice = <T extends string>(v: unknown, values: T[], name: string): T => {
-  if (!values.includes(v as T)) throw new HttpError(400, `Invalid ${name}`);
+  if (!values.includes(v as T))
+    throw new HttpError(400, `Invalid ${name}: expected one of ${values.join(', ')}`);
   return v as T;
 };
 export const boolean = (v: unknown): boolean => {
-  if (typeof v !== 'boolean') throw new HttpError(400, 'Invalid boolean');
+  if (typeof v !== 'boolean') throw new HttpError(400, 'Invalid boolean: expected true or false');
   return v;
 };
 export const archiveId = (value: unknown) => {
@@ -47,7 +62,7 @@ export const archiveId = (value: unknown) => {
 };
 export function archiveList(value: unknown, maximum = 300): any[] {
   if (!Array.isArray(value) || value.length > maximum)
-    throw new HttpError(400, 'Invalid archive list');
+    throw new HttpError(400, `Invalid archive list: expected an array of at most ${maximum} items`);
   return value;
 }
 /** Archives record every hash as a lowercase sha256 digest. */

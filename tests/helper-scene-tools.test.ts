@@ -106,6 +106,7 @@ test('literal scene changes save once and fail atomically for ambiguous, overlap
     /changed/
   );
   const next = read().editTarget;
+  expect(result.editTarget).toEqual(next);
   expect(() =>
     call('scene.patch', { ...next, expectedSourceHash: '0'.repeat(64), text: 'wrong source' })
   ).toThrow(/changed/);
@@ -545,7 +546,8 @@ test('guarded original and translation co-edit keeps a new valid manual translat
   ).toThrow(/translation changed/);
   expect(store.source(source.id).text).toBe('`<ruby>moon</ruby>`');
   expect(read('translation').text).toBe('`<ruby>달</ruby>`');
-  expect(call('scene.patch', patch)).toMatchObject({
+  const receipt = call('scene.patch', patch);
+  expect(receipt).toMatchObject({
     changed: true,
     revision: 1,
     translationRevision: 2,
@@ -554,6 +556,8 @@ test('guarded original and translation co-edit keeps a new valid manual translat
   const edited = store.source(source.id);
   expect(edited.text).toBe('<ruby>moon</ruby>');
   expect(read('translation').text).toBe('<ruby>달</ruby>');
+  expect(receipt.editTarget).toEqual(read().editTarget);
+  expect(receipt.translationEditTarget).toEqual(read('translation').editTarget);
   expect(latestTranslation(store, source.id)).toMatchObject({
     status: 'completed',
     sourceHash: edited.hash,

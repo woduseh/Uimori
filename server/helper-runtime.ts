@@ -69,7 +69,7 @@ import { sourceHash } from '../core/source-history.js';
 import { AUTHOR_NOTE_GUIDANCE, modelAuthorNotes } from '../core/notes.js';
 import { RisuContentError } from '../core/risu-content.js';
 import { readHelperChatLore } from './helper-lore-read.js';
-import { generationFromModel } from '../core/model-capabilities.js';
+import { generationFromModel, helperGenerationFromModel } from '../core/model-capabilities.js';
 import { shellExecutionOptions } from '../core/main-shell.js';
 import { executeTool } from '../core/provider.js';
 import {
@@ -435,6 +435,11 @@ function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
     /^(EDITOR_SAVE_REQUIRED|CURRENT_HELPER_TASK|HELPER_EFFECTS_ALREADY_COMMITTED|TASK_NOT_|MODEL_CALL_BUDGET)/u.test(
       code
     );
+  const invalidArguments =
+    !['DATA_RESULT_INVALID', 'DATA_INPUT_INVALID'].includes(code) &&
+    /^(DATA_[A-Z_]+_(INVALID|REQUIRED)|DATA_UNKNOWN_ARGUMENT|DATA_EMPTY_PATTERN|DATA_USE_CHATS_SCOPE|SCENE_REGEX_INVALID_[A-Z_]+|SCENE_SEARCH_GUARDS_REQUIRED)$/u.test(
+      code
+    );
   const wrongProfileScope = code === 'ILLUSTRATION_PROFILE_CHAT_ONLY';
   const needsChat = code === 'CHAT_SCOPE_REQUIRED';
   const retryMode = needsChat
@@ -443,7 +448,7 @@ function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
       ? 'never'
       : wrongProfileScope
         ? 'switch_tool'
-        : unknownSqlColumn || patch
+        : unknownSqlColumn || patch || invalidArguments
           ? 'correct_arguments'
           : status === 409 || status === 404
             ? 'refresh_then_retry'
@@ -1950,7 +1955,7 @@ export class HelperRuntime {
       {
         role: 'helper',
         ...modelRequestFields(target),
-        generation: generationFromModel(target),
+        generation: helperGenerationFromModel(target, target.connection.protocol),
         contextBudget: contextBudgetForModel(target),
         ...(helperWebSearchCapability(target.connection.protocol).supported
           ? { webSearch: true }

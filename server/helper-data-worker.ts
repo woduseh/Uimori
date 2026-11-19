@@ -40,25 +40,42 @@ const object = (value: unknown): Record<string, any> => {
     throw new Error('DATA_OBJECT_REQUIRED');
   return value as Record<string, any>;
 };
-const number = (value: unknown, fallback: number, max: number, min = 0) => {
+const number = (name: string, value: unknown, fallback: number, max: number, min = 0) => {
   const n = value ?? fallback;
   if (!Number.isSafeInteger(n) || Number(n) < min || Number(n) > max)
-    throw new Error('DATA_RANGE_INVALID');
+    throw new Error(`DATA_RANGE_INVALID: ${name} must be an integer from ${min} to ${max}`);
   return Number(n);
 };
-const string = (value: unknown, fallback = '', max = 512) => {
+const cap = (name: string, value: unknown, fallback: number, max: number, min = 0) => {
+  const n = value ?? fallback;
+  if (!Number.isSafeInteger(n))
+    throw new Error(`DATA_RANGE_INVALID: ${name} must be an integer from ${min} to ${max}`);
+  return Math.min(max, Math.max(min, Number(n)));
+};
+const string = (name: string, value: unknown, fallback = '', max = 512) => {
   const s = value ?? fallback;
-  if (typeof s !== 'string' || s.length > max) throw new Error('DATA_STRING_INVALID');
+  if (typeof s !== 'string' || s.length > max)
+    throw new Error(`DATA_STRING_INVALID: ${name} must be a string of at most ${max} characters`);
   return s;
 };
-const only = (args: Record<string, unknown>, keys: string[]) => {
-  if (Object.keys(args).some((key) => !keys.includes(key)))
-    throw new Error('DATA_UNKNOWN_ARGUMENT');
+const oneOf = (name: string, value: unknown, fallback: string, values: string[]) => {
+  const s = value ?? fallback;
+  if (!values.includes(s as string))
+    throw new Error(
+      `DATA_${name.toUpperCase()}_INVALID: ${name} must be one of ${values.join(', ')}`
+    );
+  return s as string;
 };
-const strings = (value: unknown, max: number): string[] => {
+const only = (args: Record<string, unknown>, keys: string[]) => {
+  const unknown = Object.keys(args).filter((key) => !keys.includes(key));
+  if (unknown.length)
+    throw new Error(`DATA_UNKNOWN_ARGUMENT: ${unknown.join(', ')}; allowed: ${keys.join(', ')}`);
+};
+const strings = (name: string, value: unknown, max: number): string[] => {
   if (value === undefined) return [];
-  if (!Array.isArray(value) || value.length > max) throw new Error('DATA_LIST_INVALID');
-  return value.map((item) => string(item));
+  if (!Array.isArray(value) || value.length > max)
+    throw new Error(`DATA_LIST_INVALID: ${name} must be an array of at most ${max} strings`);
+  return value.map((item) => string(`${name} item`, item));
 };
 const pointer = (key: string) => key.replaceAll('~', '~0').replaceAll('/', '~1');
 function* fields(value: unknown, path = ''): Generator<[string, string, boolean]> {
@@ -162,9 +179,9 @@ function query(db: DatabaseSync, args: Record<string, unknown>) {
       guidance:
         'SELECT/CTE over these views only. agent_resources.document has roots card/module for content and program/values for prompt presets. The exported /package/nativeRisu/card maps to SQL $.card (not $.package.nativeRisu.card). Use resource.read source paths for typed reads/edits, or data.search/read for excerpts and exact field hashes. Read schemas once; select only needed fields. SQL usage is provider-reported, not local estimates.',
     };
-  const sql = string(args.sql, '', 12_000).trim().replace(/;\s*$/u, '');
+  const sql = string('sql', args.sql, '', 12_000).trim().replace(/;\s*$/u, '');
   if (!sql) throw new Error('DATA_SQL_REQUIRED');
-  const limit = number(args.limit, 50, 200, 1);
+  const limit = cap('limit', args.limit, 50, 200, 1);
   const params = args.params ?? [];
   if (
     !Array.isArray(params) ||
@@ -175,7 +192,9 @@ function query(db: DatabaseSync, args: Record<string, unknown>) {
         (typeof p === 'number' ? !Number.isFinite(p) : typeof p !== 'string' || p.length > 12000)
     )
   )
-    throw new Error('DATA_SQL_PARAMS_INVALID');
+    throw new Error(
+      'DATA_SQL_PARAMS_INVALID: params must be an array of at most 50 null, finite number or string (at most 12000 characters) values'
+    );
   // Native SQLite authorizer, not a SQL keyword denylist. The connection itself is read-only too.
   const columns: Record<string, readonly string[]> = {
     versions: ['kind', 'id', 'revision', 'body'],
@@ -270,7 +289,7 @@ function* documents(
   scope: DataScope,
   args: Record<string, unknown>
 ): Generator<Document> {
-  const ids = strings(args.ids, 50);
+  const ids = strings('ids', args.ids, 50);
   const accepts = (id: string) => !ids.length || ids.includes(id);
   if (scope === 'conversation') {
     // Runtime reserves helperHistory before this request, excluding superseded retries and
@@ -399,16 +418,16 @@ function* documents(
     return;
   }
   if (scope === 'library') {
-    const kinds = strings(args.kinds, 8);
+    const kinds = strings('kinds', args.kinds, 8);
     const metadataOnly =
       args.output === 'documents' &&
-      !strings(args.patterns, 8).length &&
-      !strings(args.paths, 16).length;
+      !strings('patterns', args.patterns, 8).length &&
+      !strings('paths', args.paths, 16).length;
     const conditions = [
       ids.length ? `id IN (${ids.map(() => '?').join(',')})` : '',
       kinds.length ? `kind IN (${kinds.map(() => '?').join(',')})` : '',
     ].filter(Boolean);
-    const queryTerms = fold(string(args.query)).trim().split(/\s+/u).filter(Boolean);
+    const queryTerms = fold(string('query', args.query)).trim().split(/\s+/u).filter(Boolean);
     // A title/ID filter should not transfer unrelated authored documents into this process.
     // Keep the unfiltered traversal as one query instead of adding a lookup per document.
     const document =
@@ -448,7 +467,7 @@ function* documents(
     }
     return;
   }
-  const chatId = args.chatId === undefined ? undefined : string(args.chatId);
+  const chatId = args.chatId === undefined ? undefined : string('chatId', args.chatId);
   const messages = chatId ? `(${chatMessagesSql(true)})` : 'agent_messages';
   // Scope ancestry at its seed; filter source IDs after numbering the entire selected history.
   const condition = ids.length ? `WHERE m.id IN (${ids.map(() => '?').join(',')})` : '';
@@ -647,18 +666,17 @@ function search(db: DatabaseSync, snapshot: DataSnapshot, args: Record<string, u
     'limit',
     'context',
   ]);
-  const scope = string(
+  const scope = oneOf(
+    'scope',
     args.scope,
-    snapshot.editor?.model ? 'editor' : snapshot.writing ? 'current' : 'library'
+    snapshot.editor?.model ? 'editor' : snapshot.writing ? 'current' : 'library',
+    ['current', 'library', 'chats', 'editor', 'conversation']
   ) as DataScope;
-  if (!['current', 'library', 'chats', 'editor', 'conversation'].includes(scope))
-    throw new Error('DATA_SCOPE_INVALID');
   if (scope !== 'chats' && args.chatId !== undefined) throw new Error('DATA_USE_CHATS_SCOPE');
-  const output = string(args.output, 'matches');
-  if (!['matches', 'documents'].includes(output)) throw new Error('DATA_OUTPUT_INVALID');
-  const patterns = strings(args.patterns, 8);
+  const output = oneOf('output', args.output, 'matches', ['matches', 'documents']);
+  const patterns = strings('patterns', args.patterns, 8);
   if (patterns.some((p) => !p.trim())) throw new Error('DATA_EMPTY_PATTERN');
-  const paths = strings(args.paths, 16);
+  const paths = strings('paths', args.paths, 16);
   if (
     paths.some(
       (path) =>
@@ -668,19 +686,20 @@ function search(db: DatabaseSync, snapshot: DataSnapshot, args: Record<string, u
         /~(?![01])/u.test(path)
     )
   )
-    throw new Error('DATA_PATH_INVALID');
+    throw new Error(
+      'DATA_PATH_INVALID: paths must be JSON Pointers that start with /, with no empty segment or trailing /'
+    );
   if (args.regex !== undefined && typeof args.regex !== 'boolean')
-    throw new Error('DATA_REGEX_INVALID');
-  const mode = string(args.match, 'any');
-  if (!['any', 'all'].includes(mode)) throw new Error('DATA_MATCH_INVALID');
+    throw new Error('DATA_REGEX_INVALID: regex must be true or false');
+  const mode = oneOf('match', args.match, 'any', ['any', 'all']);
   const expressions = patterns.map(
     (p) => new RegExp(args.regex ? p : p.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'giu')
   );
-  const kinds = strings(args.kinds, 8);
-  const offset = number(args.offset, 0, 1_000_000),
-    limit = number(args.limit, 5, 50, 1),
-    context = number(args.context, 160, 1200);
-  const queryTerms = fold(string(args.query)).trim().split(/\s+/u).filter(Boolean);
+  const kinds = strings('kinds', args.kinds, 8);
+  const offset = number('offset', args.offset, 0, 1_000_000),
+    limit = cap('limit', args.limit, 5, 50, 1),
+    context = cap('context', args.context, 160, 1200);
+  const queryTerms = fold(string('query', args.query)).trim().split(/\s+/u).filter(Boolean);
   const items: unknown[] = [];
   let matches = 0,
     inspected = 0,
@@ -774,7 +793,9 @@ function read(
     typeof ref.hash !== 'string' ||
     !/^[a-f0-9]{64}$/u.test(ref.hash)
   )
-    throw new Error('DATA_REFERENCE_INVALID');
+    throw new Error(
+      'DATA_REFERENCE_INVALID: pass a ref exactly as data.search or data.read returned it ({scope,kind,id,revision,field,hash,chatId?})'
+    );
   const key = JSON.stringify({
     scope: ref.scope,
     kind: ref.kind,
@@ -799,10 +820,13 @@ function read(
   if (text === undefined) throw new Error('DATA_FIELD_UNAVAILABLE');
   if (doc.revision !== ref.revision || sha(text) !== ref.hash)
     throw new Error('DATA_SOURCE_CHANGED: search again for the current reference');
-  const offset = number(args.offset, 0, Number.MAX_SAFE_INTEGER);
+  const offset = number('offset', args.offset, 0, Number.MAX_SAFE_INTEGER);
   if (ref.field === '') {
-    if (offset > all.length) throw new Error('DATA_RANGE_INVALID');
-    const limit = number(args.limit, 20, 50, 1);
+    if (offset > all.length)
+      throw new Error(
+        `DATA_RANGE_INVALID: offset must be at most ${all.length} for this field directory`
+      );
+    const limit = cap('limit', args.limit, 20, 50, 1);
     const rows: unknown[] = [];
     let size = 0;
     for (const [field, value] of all.slice(offset, offset + limit)) {
@@ -828,8 +852,9 @@ function read(
       nextOffset: offset + rows.length < all.length ? offset + rows.length : null,
     };
   }
-  if (offset > text.length) throw new Error('DATA_RANGE_INVALID');
-  const limit = number(args.limit, 4000, 10_000, 1);
+  if (offset > text.length)
+    throw new Error(`DATA_RANGE_INVALID: offset must be at most ${text.length} for this field`);
+  const limit = cap('limit', args.limit, 4000, 10_000, 1);
   const { ref: _ref, ...page } = excerpt(
     doc,
     ref.field,
@@ -858,22 +883,27 @@ function sceneRegex(db: DatabaseSync, args: Record<string, unknown>) {
     'expectedSourceHash',
     'expectedTextHash',
   ]);
-  const chatId = string(args.chatId, '', 100);
-  const requestedId = args.sourceId === undefined ? undefined : string(args.sourceId, '', 100);
-  const target = string(args.target, '', 20);
-  if (!chatId || !['original', 'translation'].includes(target) || args.regex !== true)
-    throw new Error('SCENE_REGEX_INVALID_ARGUMENTS');
+  const chatId = string('chatId', args.chatId, '', 100);
+  const requestedId =
+    args.sourceId === undefined ? undefined : string('sourceId', args.sourceId, '', 100);
+  const target = string('target', args.target, '', 20);
+  if (!chatId) throw new Error('SCENE_REGEX_INVALID_ARGUMENTS: chatId is required');
+  if (!['original', 'translation'].includes(target))
+    throw new Error('SCENE_REGEX_INVALID_ARGUMENTS: target must be one of original, translation');
+  if (args.regex !== true) throw new Error('SCENE_REGEX_INVALID_ARGUMENTS: regex must be true');
   if (args.includeDisabled !== undefined && typeof args.includeDisabled !== 'boolean')
-    throw new Error('SCENE_REGEX_INVALID_ARGUMENTS');
+    throw new Error('SCENE_REGEX_INVALID_ARGUMENTS: includeDisabled must be true or false');
   if (requestedId && args.includeDisabled !== undefined)
-    throw new Error('SCENE_REGEX_INVALID_ARGUMENTS');
-  const patterns = strings(args.patterns, 8);
+    throw new Error('SCENE_REGEX_INVALID_ARGUMENTS: omit includeDisabled when sourceId is given');
+  const patterns = strings('patterns', args.patterns, 8);
   if (!patterns.length || patterns.some((value) => !value.length || value.length > 256))
-    throw new Error('SCENE_REGEX_INVALID_PATTERNS');
+    throw new Error(
+      'SCENE_REGEX_INVALID_PATTERNS: patterns must hold 1 to 8 non-empty strings of at most 256 characters'
+    );
   const expressions = patterns.map((value) => new RegExp(value, 'gu'));
-  const offset = number(args.offset, 0, Number.MAX_SAFE_INTEGER);
-  const limit = number(args.limit, 10, 20, 1);
-  const context = number(args.context, 80, 120);
+  const offset = number('offset', args.offset, 0, Number.MAX_SAFE_INTEGER);
+  const limit = cap('limit', args.limit, 10, 20, 1);
+  const context = cap('context', args.context, 80, 120);
   const chat = db.prepare('SELECT head_revision AS head FROM chats WHERE id=?').get(chatId);
   if (!chat) throw new Error('SCENE_CHAT_UNAVAILABLE');
   const list = db.prepare(`WITH RECURSIVE ancestry(id,depth) AS (
@@ -971,7 +1001,8 @@ function sceneRegex(db: DatabaseSync, args: Record<string, unknown>) {
         throw new Error('SCENE_SEARCH_GUARDS_REQUIRED: Supply matching scene guards');
       if (
         (args.expectedRevision !== undefined &&
-          number(args.expectedRevision, 0, Number.MAX_SAFE_INTEGER) !== revision) ||
+          number('expectedRevision', args.expectedRevision, 0, Number.MAX_SAFE_INTEGER) !==
+            revision) ||
         (args.expectedSourceHash !== undefined && args.expectedSourceHash !== sourceHash) ||
         (args.expectedTextHash !== undefined &&
           args.expectedTextHash !== editTarget.expectedTextHash)
@@ -1100,7 +1131,7 @@ function runDataOperation(input: DataOperation): unknown {
     if (input.name === 'data.read') {
       only(input.args, ['refs', 'offset', 'limit']);
       if (!Array.isArray(input.args.refs) || !input.args.refs.length || input.args.refs.length > 16)
-        throw new Error('DATA_LIST_INVALID');
+        throw new Error('DATA_LIST_INVALID: refs must be an array of 1 to 16 refs');
       requestedRefs = input.args.refs;
     }
     const scopes =

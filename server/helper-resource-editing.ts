@@ -640,7 +640,10 @@ export function patchHelperResource(
     throw new HttpError(400, '변경 목록이 필요해요.');
   const current = readResource(store, kind, id);
   if (current.revision !== revision)
-    throw new HttpError(409, '저장된 자료가 변경됐어요. 최신 자료를 확인해 주세요.');
+    throw new HttpError(
+      409,
+      `저장된 자료가 변경됐어요. 최신 자료를 확인해 주세요. (expected revision ${revision}, current revision ${current.revision})`
+    );
   const original = editableResource(kind, current);
   const model = structuredClone(original) as ResourceModel;
   if (kind === 'content' && !sourceFor(current as Content))

@@ -220,7 +220,7 @@ test('stale revision and ambiguous literal reject the complete proposal', () => 
       expectedRevision: content.revision + 1,
       changes: [{ path: '/package/nativeRisu/card/name', op: 'set', value: 'Wrong' }],
     })
-  ).toThrow('저장된 자료가 변경됐어요');
+  ).toThrow(`current revision ${content.revision}`);
   expect(() =>
     call(store, 'resource.patch', {
       kind: 'content',

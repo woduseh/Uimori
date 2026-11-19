@@ -847,6 +847,24 @@ export function invokeHelperSceneTool(
       sourceHash,
       translationInvalidated: changed && current.target === 'original' && !translationEdit,
       ...(translationRevision !== undefined ? { translationRevision } : {}),
+      editTarget: {
+        ...editTarget,
+        expectedRevision: savedRevision,
+        expectedSourceHash: sourceHash,
+        expectedTextHash: digest(content),
+      },
+      ...(translationEdit
+        ? {
+            translationEditTarget: {
+              chatId,
+              sourceId: source.id,
+              target: 'translation',
+              expectedRevision: translationRevision ?? translationEdit.revision,
+              expectedSourceHash: sourceHash,
+              expectedTextHash: digest(translationEdit.content),
+            },
+          }
+        : {}),
     };
   });
 }

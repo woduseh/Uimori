@@ -351,6 +351,18 @@ export function generationFromModel(model: ModelGeneration): ModelGeneration {
     )
   ) as ModelGeneration;
 }
+/** A helper task re-sends its growing prefix on every tool step, so a reviewed Claude model caches it unless the preset chose a cache mode. */
+export function helperGenerationFromModel(
+  model: ModelGeneration & { modelId: string },
+  protocol: ProviderProtocol
+): ModelGeneration {
+  const generation = generationFromModel(model);
+  return generation.cacheMode === undefined &&
+    protocol === 'anthropic-messages-v1' &&
+    modelCapability(protocol, model.modelId)?.cacheModes?.includes('automatic')
+    ? { ...generation, cacheMode: 'automatic' }
+    : generation;
+}
 const reject = (code = 'UNSUPPORTED_GENERATION_OPTIONS'): never => {
   throw new ProviderContractError(code);
 };

@@ -572,6 +572,42 @@ test('invalid SQL column gives schema-discovery recovery without relaxing other 
   ).toMatchObject({ denied: true, errorKind: 'recoverable' });
 });
 
+test('data argument errors name the fix and ask for corrected arguments, while cost caps clamp', async () => {
+  const f = fixture();
+  const bodies = provider((wire, round) => {
+    if (round === 0)
+      return answer(
+        '',
+        [
+          { id: 'unknown', name: 'data.search', args: { scope: 'library', bogus: 1 } },
+          { id: 'scope', name: 'data.search', args: { scope: 'everything' } },
+          {
+            id: 'capped',
+            name: 'db.query',
+            args: { sql: 'SELECT id FROM agent_messages', limit: 10_000 },
+          },
+        ],
+        wire
+      );
+    expect(toolResult(wire, 'unknown')).toMatchObject({
+      code: 'DATA_UNKNOWN_ARGUMENT',
+      error: expect.stringMatching(/^DATA_UNKNOWN_ARGUMENT: bogus; allowed: .*\bscope\b/u),
+      recoverable: true,
+      retryMode: 'correct_arguments',
+    });
+    expect(toolResult(wire, 'scope')).toMatchObject({
+      code: 'DATA_SCOPE_INVALID',
+      error: expect.stringContaining('current, library, chats, editor, conversation'),
+      retryMode: 'correct_arguments',
+    });
+    expect(toolResult(wire, 'capped')).toMatchObject({ scope: 'live-database', rows: [] });
+    return answer('Done.');
+  });
+  const task = await f.run('Search the library.');
+  expect(task.status).toBe('completed');
+  expect(bodies).toHaveLength(2);
+});
+
 test('independent helper data reads refill a free slot while results, budgets and mutations retain call order', async () => {
   const f = fixture();
   const releases: (() => void)[] = [];

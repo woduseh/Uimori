@@ -18,7 +18,7 @@ describe('shared request validation contract', () => {
     const body = { text: 'kept', revision: 1 };
     expect(record(body)).toBe(body);
     fields(body, ['text', 'revision']);
-    rejectsRequest(() => fields(body, ['text']), 'Unknown request field');
+    rejectsRequest(() => fields(body, ['text']), 'Unknown request field: revision; allowed: text');
     expect(body).toEqual({ text: 'kept', revision: 1 });
   });
 
@@ -27,18 +27,27 @@ describe('shared request validation contract', () => {
     expect(text('', 'text', 0, true)).toBe('');
     expect(text('  ', 'text', 2, true)).toBe('  ');
     for (const value of ['', '  ', 'abcd', null, 123])
-      rejectsRequest(() => text(value, 'text', 3), 'Invalid text');
-    rejectsRequest(() => text('a', 'text', 0, true), 'Invalid text');
+      rejectsRequest(
+        () => text(value, 'text', 3),
+        'Invalid text: expected a non-empty string of at most 3 characters'
+      );
+    rejectsRequest(
+      () => text('a', 'text', 0, true),
+      'Invalid text: expected a string of at most 0 characters'
+    );
   });
 
   it('accepts inclusive integer boundaries without coercion, truncation or unsafe revisions', () => {
     expect(number(0, 'revision', 0, 2)).toBe(0);
     expect(number(2, 'revision', 0, 2)).toBe(2);
     for (const value of [-1, 3, 1.5, '1', null, NaN, Infinity])
-      rejectsRequest(() => number(value, 'revision', 0, 2), 'Invalid revision');
+      rejectsRequest(
+        () => number(value, 'revision', 0, 2),
+        'Invalid revision: expected an integer from 0 to 2'
+      );
     rejectsRequest(
       () => number(Number.MAX_SAFE_INTEGER + 1, 'revision', 0, Infinity),
-      'Invalid revision'
+      'Invalid revision: expected an integer of at least 0'
     );
   });
 });

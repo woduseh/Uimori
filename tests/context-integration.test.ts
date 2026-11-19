@@ -478,7 +478,9 @@ describe('standalone context summaries and explicit corrections', () => {
         { ...command, priorities: 'x'.repeat(4001) },
         400
       )
-    ).toMatchObject({ error: 'Invalid compaction priorities' });
+    ).toMatchObject({
+      error: 'Invalid compaction priorities: expected a string of at most 4000 characters',
+    });
     expect(bodies).toHaveLength(0);
     const queued = await contextApi(app, chatId, 'POST', '/context/compact', command);
     expect(queued.priorities).toBe(priorities);

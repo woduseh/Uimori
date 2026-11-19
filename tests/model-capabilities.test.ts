@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import {
   generationFromModel,
+  helperGenerationFromModel,
   protocolOptionKeys,
   validateModelOptions,
 } from '../core/model-capabilities.js';
@@ -217,4 +218,24 @@ test('opt-in economy can lower effort but cannot change cache, tier, stop string
       generationBinding: { ...base, reasoningEffort: 'none' },
     })
   ).toThrow('INVALID_GENERATION_BINDING');
+});
+
+test('a helper request caches by default only on a reviewed Claude model without a chosen cache mode', () => {
+  const claude = { ...base, modelId: 'claude-opus-5-5' };
+  expect(helperGenerationFromModel(claude, 'anthropic-messages-v1').cacheMode).toBe('automatic');
+  expect(
+    helperGenerationFromModel({ ...claude, cacheMode: 'disabled' }, 'anthropic-messages-v1')
+      .cacheMode
+  ).toBe('disabled');
+  expect(
+    helperGenerationFromModel({ ...claude, cacheMode: 'explicit' }, 'anthropic-messages-v1')
+      .cacheMode
+  ).toBe('explicit');
+  expect(
+    helperGenerationFromModel({ ...base, modelId: 'unreviewed-model' }, 'anthropic-messages-v1')
+      .cacheMode
+  ).toBeUndefined();
+  expect(
+    helperGenerationFromModel({ ...base, modelId: 'gpt-5.5' }, 'openai-responses-v1').cacheMode
+  ).toBeUndefined();
 });

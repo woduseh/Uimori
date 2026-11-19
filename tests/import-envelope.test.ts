@@ -18,7 +18,7 @@ const inline = (bytes = payload, name = 'sample.json') => ({
   base64: bytes.toString('base64'),
 });
 const uploadId = 'a'.repeat(32);
-const refuses = (value: unknown, statusCode: number, message: string) => {
+const refuses = (value: unknown, statusCode: number, message: unknown) => {
   expect(() => readImportEnvelope(value, options)).toThrowError(
     expect.objectContaining({ statusCode, message })
   );
@@ -45,7 +45,7 @@ test('only the exact field set of the offered form is read', () => {
     { ...inline(), uploadId },
     { ...inline(), b: 1 },
   ])
-    refuses(value, 400, 'Unknown request field');
+    refuses(value, 400, expect.stringMatching(/^Unknown request field: /u));
   // A missing half of the form is the reader's own refusal, not an unknown field.
   refuses({}, 400, options.invalid);
   refuses({ name: 'sample.json' }, 400, options.invalid);
@@ -168,11 +168,23 @@ test('the staged form is read only when the caller offers a staged reader', () =
   ).toThrowError(expect.objectContaining({ statusCode: 400, message: options.invalid }));
   for (const value of [3, '', ' ', 'a'.repeat(101)])
     expect(() => readImportEnvelope({ name: 'sample.json', uploadId: value }, staged)).toThrowError(
-      expect.objectContaining({ statusCode: 400, message: 'Invalid upload ID' })
+      expect.objectContaining({
+        statusCode: 400,
+        message: expect.stringMatching(/^Invalid upload ID: /u),
+      })
     );
   expect(() =>
     readImportEnvelope({ name: 'sample.json', uploadId, base64: '' }, staged)
-  ).toThrowError(expect.objectContaining({ statusCode: 400, message: 'Unknown request field' }));
+  ).toThrowError(
+    expect.objectContaining({
+      statusCode: 400,
+      message: expect.stringMatching(/^Unknown request field: base64;/u),
+    })
+  );
   // Without a reader the staged form is not part of the field set at all.
-  refuses({ name: 'sample.json', uploadId }, 400, 'Unknown request field');
+  refuses(
+    { name: 'sample.json', uploadId },
+    400,
+    'Unknown request field: uploadId; allowed: name, base64'
+  );
 });
