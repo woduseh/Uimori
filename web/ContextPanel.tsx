@@ -2,8 +2,6 @@ import { t, translateMessage, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
-import { IconButton } from './IconButton.js';
-import { RefreshCw } from 'lucide-react';
 import { SOURCE_TEXT_MAX_CHARS as CONTEXT_SUMMARY_MAX_CHARS } from '../core/content-limits.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { CheckIcon, CloseIcon } from './ui-icons.js';
@@ -64,6 +62,7 @@ export function ContextPanel({
   }).current;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [readFailed, setReadFailed] = useState(false);
   const [message, setMessage] = useState('');
   const alive = useRef(true);
   const readSequence = useRef(0);
@@ -115,14 +114,17 @@ export function ContextPanel({
       )
         return;
       setDetail(result);
+      setReadFailed(false);
       if (result.notesRevision !== notesCache.current.revision) await onRefreshStory();
     } catch (caught) {
       if (
         alive.current &&
         generation === scope.current.generation &&
         sequence === readSequence.current
-      )
+      ) {
+        setReadFailed(true);
         report(caught);
+      }
     }
   }
   // biome-ignore lint/correctness/useExhaustiveDependencies: Scope/event changes refresh server data without resetting editor state or depending on render-local callbacks.
@@ -219,20 +221,30 @@ export function ContextPanel({
     >
       <div className="context-heading">
         <h4>{t('reader.storySummary')}</h4>
-        <IconButton
-          icon={RefreshCw}
-          size={18}
-          className="secondary"
-          label={t('settings.m277')}
-          disabled={busy}
-          onClick={() => {
-            setError('');
-            void refreshAll();
-          }}
-        />
       </div>
       <div className="context-content">
-        {detail && error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+        {detail && error && (
+          <NoticeBanner
+            tone="error"
+            actions={
+              readFailed ? (
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => {
+                    setError('');
+                    void refreshAll();
+                  }}
+                >
+                  {t('shared.retry')}
+                </button>
+              ) : undefined
+            }
+          >
+            {translateMessage(error)}
+          </NoticeBanner>
+        )}
         <TransientNotice message={message} />
         {!detail ? (
           <LoadingState

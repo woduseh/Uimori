@@ -66,7 +66,6 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   await expect(
     collaboration.locator('.ac-shared-tags').getByText('합성 시점', { exact: true })
   ).toBeVisible();
-  await collaboration.locator('.ac-limits > summary').click();
   await collaboration.getByLabel('전체 추가 호출 한도', { exact: true }).fill('4');
   const updated = page.waitForResponse(
     (item) => /\/api\/resources\/save$/.test(item.url()) && item.request().method() === 'POST'

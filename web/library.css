@@ -977,11 +977,6 @@
   flex: 0 0 auto;
 }
 
-.prompt-settings-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
 .prompt-library-actions {
   display: flex;
   align-items: center;

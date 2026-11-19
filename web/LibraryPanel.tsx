@@ -1627,19 +1627,17 @@ function ContentEditor({
               {translateMessage(error)}
             </p>
           )}
-          <div className="library-savebar form-actions full">
-            {selected && (selected.kind === 'bot' || selected.package) && onStartStory && (
+          {selected?.kind === 'bot' && onStartStory && (
+            <div className="library-savebar form-actions full">
               <button
                 type="button"
                 disabled={editorUnavailable || dirty || nativeDraftDirty || portraitBusy}
                 onClick={() => onStartStory(selected)}
               >
-                {selected.kind === 'bot'
-                  ? t('library.startChat')
-                  : t('library.startWithThisResourceAsBot')}
+                {t('library.startChat')}
               </button>
-            )}
-          </div>
+            </div>
+          )}
           <TransientNotice message={saved} />
           {!!saveWarnings.length && (
             <NoticeBanner className="full" label={t('library.reviewAfterSaving')}>

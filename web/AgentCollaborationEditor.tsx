@@ -384,24 +384,18 @@ export function AgentCollaborationEditor({
                   )}
                 </div>
               </section>
-              <details className="ac-limits">
-                <summary>
-                  <span>{t('settings.m175')}</span>
-                  <small>{t('settings.flow6', { v0: collaboration.maxCalls })}</small>
-                </summary>
-                <label className="ac-field ac-budget">
-                  {t('settings.m177')}
-                  <input
-                    type="number"
-                    min={1}
-                    max={12}
-                    step={1}
-                    value={collaboration.maxCalls || ''}
-                    aria-label={t('settings.m177')}
-                    onChange={(event) => update({ maxCalls: Number(event.target.value) })}
-                  />
-                </label>
-              </details>
+              <label className="ac-field ac-budget">
+                {t('settings.m177')}
+                <input
+                  type="number"
+                  min={1}
+                  max={12}
+                  step={1}
+                  value={collaboration.maxCalls || ''}
+                  aria-label={t('settings.m177')}
+                  onChange={(event) => update({ maxCalls: Number(event.target.value) })}
+                />
+              </label>
               {issue && (
                 <p className="ac-validation" role="status">
                   {translateMessage(issue)}

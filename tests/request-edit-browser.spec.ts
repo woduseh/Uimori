@@ -86,8 +86,8 @@ for (const width of [MOBILE_WIDTH]) {
     await message.hover();
     if (width !== DESKTOP_WIDTH) await message.click();
     await source.getByLabel('요청 및 컨텍스트 메뉴', { exact: true }).click();
-    await source.getByRole('button', { name: '컨텍스트용 요청 수정', exact: true }).click();
-    await expect(source.getByText('이후 생성 문맥에 반영해요.', { exact: true })).toBeVisible();
+    await source.getByRole('button', { name: '요청 수정', exact: true }).click();
+    await expect(source.getByText('이후 생성 컨텍스트에 반영해요.', { exact: true })).toBeVisible();
     await page.getByRole('textbox', { name: '요청 수정 내용' }).fill('저장된 수정 입력');
     await page.getByRole('button', { name: '입력 저장' }).click();
     await expect(message).toContainText('저장된 수정 입력');
@@ -109,9 +109,7 @@ for (const width of [MOBILE_WIDTH]) {
     await source.getByLabel('요청 및 컨텍스트 메뉴', { exact: true }).click();
     await source.getByRole('button', { name: '장면을 컨텍스트에서 제외' }).click();
     await expect(source).toHaveClass(/scene-context-muted/);
-    await expect(source.locator('.scene-context-notice')).toContainText(
-      '이후 생성 컨텍스트에서 제외'
-    );
+    await expect(source.locator('.scene-badge', { hasText: '컨텍스트에서 제외됨' })).toBeVisible();
     await page.reload();
     const restored = page.getByTestId('source').first();
     await expect(restored).toHaveClass(/scene-context-muted/);

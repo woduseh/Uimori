@@ -1,8 +1,7 @@
-.codex-agent-heading {
-  display: flex;
+.codex-login-code {
+  display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
+  gap: 8px;
 }
 .codex-agent-status {
   font-weight: 600;
@@ -106,14 +105,6 @@
   margin-top: 0;
   justify-content: flex-end;
 }
-.codex-agent-refreshing svg {
-  animation: codex-agent-spin 1s linear infinite;
-}
-@keyframes codex-agent-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 @media (max-width: 520px) {
   .codex-account-summary {
     align-items: flex-start;
@@ -124,11 +115,6 @@
   }
   .codex-limit-meta {
     align-items: flex-start;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .codex-agent-refreshing svg {
-    animation: none;
   }
 }
 .codex-agent-settings {

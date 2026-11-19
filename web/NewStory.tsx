@@ -549,7 +549,6 @@ export function NewStory({
             />
           ) : (
             <>
-              <p className="new-story-settings-scope">{t('transfer.followGlobalSettings')}</p>
               <dl className="new-story-settings-summary">
                 <div>
                   <dt>{t('transfer.m332')}</dt>

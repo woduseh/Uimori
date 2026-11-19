@@ -19,6 +19,7 @@ export function SettingsEditor({
   onError,
   onDirtyChange,
   onSaveHandlerChange,
+  onDiscardHandlerChange,
   hideHeading = false,
   hideSaveActions = false,
   onSaveRequest,
@@ -29,6 +30,7 @@ export function SettingsEditor({
   onError: (e: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
+  onDiscardHandlerChange?: SettingsSaveRegistration;
   hideHeading?: boolean;
   hideSaveActions?: boolean;
   onSaveRequest?: () => void;
@@ -62,6 +64,10 @@ export function SettingsEditor({
   }, [dirty, saving, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   useSettingsSaveHandler(onSaveHandlerChange, save);
+  useSettingsSaveHandler(onDiscardHandlerChange, async () => {
+    discard();
+    return true;
+  });
   useEffect(() => {
     if (!dirty && chat.settingsRevision >= revision) {
       setValue(chat.settings);
@@ -72,6 +78,14 @@ export function SettingsEditor({
     setDirty(true);
     setMessage('');
     setValue((old) => ({ ...old, [key]: next }));
+  }
+  function discard() {
+    setValue(chat.settings);
+    setRevision(chat.settingsRevision);
+    setDirty(false);
+    setLocalError('');
+    setMessage('');
+    onError('');
   }
   async function save() {
     if (saving) return false;
@@ -130,13 +144,6 @@ export function SettingsEditor({
               <label className="settings-row">
                 <span className="settings-row-copy">
                   <strong>{t('settings.m85')}</strong>
-                  {globalAutoTranslate !== null && (
-                    <small>
-                      {t('settings.flow2', {
-                        v0: globalAutoTranslate ? t('settings.m73') : t('settings.m74'),
-                      })}
-                    </small>
-                  )}
                 </span>
                 <select
                   aria-label={t('settings.m85')}
@@ -154,7 +161,13 @@ export function SettingsEditor({
                     )
                   }
                 >
-                  <option value="inherit">{t('settings.m88')}</option>
+                  <option value="inherit">
+                    {globalAutoTranslate === null
+                      ? t('settings.m88')
+                      : t('library.globalValue', {
+                          value: globalAutoTranslate ? t('settings.m73') : t('settings.m74'),
+                        })}
+                  </option>
                   <option value="on">{t('settings.m89')}</option>
                   <option value="off">{t('settings.m90')}</option>
                 </select>
@@ -171,15 +184,17 @@ export function SettingsEditor({
                   />
                 </span>
               </label>
-              <label className="settings-row">
-                <span className="settings-row-copy">
-                  <strong>{t('storyUi.style')}</strong>
-                </span>
-                <StoryUiStyleSelect
-                  value={value.storyUiStyle ?? 'auto'}
-                  onChange={(style) => update('storyUiStyle', style)}
-                />
-              </label>
+              {value.storyUi === true && (
+                <label className="settings-row">
+                  <span className="settings-row-copy">
+                    <strong>{t('storyUi.style')}</strong>
+                  </span>
+                  <StoryUiStyleSelect
+                    value={value.storyUiStyle ?? 'auto'}
+                    onChange={(style) => update('storyUiStyle', style)}
+                  />
+                </label>
+              )}
             </div>
           </div>
           <details className="settings-group full">
@@ -203,24 +218,21 @@ export function SettingsEditor({
               </label>
             </div>
           </details>
-          <div
-            className="form-actions full settings-save-actions"
-            hidden={hideSaveActions && !dirty}
-          >
-            {dirty && (
-              <button type="button" className="secondary" onClick={() => setConfirmReload(true)}>
-                <UndoIcon size={18} aria-hidden="true" />
-                {t('settings.m94')}
-              </button>
-            )}
-            {!hideSaveActions && (
+          {!hideSaveActions && (
+            <div className="form-actions full settings-save-actions">
+              {dirty && (
+                <button type="button" className="secondary" onClick={() => setConfirmReload(true)}>
+                  <UndoIcon size={18} aria-hidden="true" />
+                  {t('settings.m94')}
+                </button>
+              )}
               <SaveButton
                 label={t('settings.m95')}
                 disabled={!dirty || saving}
                 aria-busy={saving}
               />
-            )}
-          </div>
+            </div>
+          )}
         </fieldset>
         <TransientNotice message={hideSaveActions ? '' : message} />
         {localError && (
@@ -244,12 +256,7 @@ export function SettingsEditor({
           disabled={saving}
           onContinue={() => setConfirmReload(false)}
           onDiscard={() => {
-            setValue(chat.settings);
-            setRevision(chat.settingsRevision);
-            setDirty(false);
-            setLocalError('');
-            setMessage('');
-            onError('');
+            discard();
             setConfirmReload(false);
           }}
           discardLabel={t('settings.m98')}

@@ -41,6 +41,24 @@ export const messages = {
     ja: '設定セクションを選択',
     zh: '选择设置分类',
   },
+  'chatsettings.groupDisplay': {
+    ko: '화면과 읽기',
+    en: 'Display and reading',
+    ja: '表示と読書',
+    zh: '显示与阅读',
+  },
+  'chatsettings.groupGeneration': {
+    ko: '모델과 생성',
+    en: 'Models and generation',
+    ja: 'モデルと生成',
+    zh: '模型与生成',
+  },
+  'chatsettings.groupSystem': {
+    ko: '시스템과 데이터',
+    en: 'System and data',
+    ja: 'システムとデータ',
+    zh: '系统与数据',
+  },
   'chatsettings.m0': {
     ko: '이야기를 열면 실행한 작업을 확인할 수 있어요.',
     en: 'Open a story to see its tasks.',
@@ -382,12 +400,6 @@ export const messages = {
     en: 'No results.',
     ja: '検索結果はありません。',
     zh: '没有搜索结果。',
-  },
-  'chatsettings.m58': {
-    ko: '이 기기',
-    en: 'This device',
-    ja: 'この端末',
-    zh: '此设备',
   },
   'chatsettings.m59': {
     ko: '화면 테마',
@@ -821,12 +833,6 @@ export const messages = {
     ja: 'プロンプトの初期値を使用',
     zh: '使用提示词默认值',
   },
-  'chatsettings.m142': {
-    ko: '프롬프트 기본값',
-    en: 'Prompt default',
-    ja: 'プロンプトの初期値',
-    zh: '提示词默认值',
-  },
   'chatsettings.m143': {
     ko: '이 채팅 지정',
     en: 'Set for this chat',
@@ -958,12 +964,6 @@ export const messages = {
     en: 'Current chat',
     ja: '現在のチャット',
     zh: '当前聊天',
-  },
-  'chatsettings.m168': {
-    ko: '다시 불러오기',
-    en: 'Reload',
-    ja: '再読み込み',
-    zh: '重新加载',
   },
   'chatsettings.m170': {
     ko: '카드 변수를 불러오는 중이에요…',

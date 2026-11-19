@@ -167,12 +167,6 @@ export const messages = {
     ja: '保存済み内容を確認中…',
     zh: '正在查看已保存版本…',
   },
-  'shared.reviewBusy': {
-    ko: '저장본 확인 중…',
-    en: 'Loading saved version…',
-    ja: '保存済み内容を確認中…',
-    zh: '正在查看已保存版本…',
-  },
   'shared.reviewSaved': {
     ko: '저장본 확인',
     en: 'Review saved version',
@@ -430,12 +424,6 @@ export const messages = {
     en: 'Not yet registered',
     ja: '登録前',
     zh: '尚未注册',
-  },
-  'shared.recoverySaved': {
-    ko: '이 기기에 복구용 입력 보관됨',
-    en: 'Recovery input kept on this device',
-    ja: 'この端末に復元用の入力を保管済み',
-    zh: '已在此设备上保留恢复输入',
   },
   'shared.recoveryFailure': {
     ko: '복구용 입력을 보관하지 못했어요. 닫기 전에 저장해 주세요.',

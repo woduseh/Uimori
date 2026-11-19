@@ -30,8 +30,6 @@ function presetFindingMessage(finding: RisuPresetImportPreview['findings'][numbe
   switch (finding.code) {
     case 'RISU_PRESET_HOST_MEMORY':
       return t('transfer.finding.RISU_PRESET_HOST_MEMORY');
-    case 'RISU_PRESET_NATIVE_PROMPT':
-      return t('transfer.finding.RISU_PRESET_NATIVE_PROMPT');
     case 'RISU_PRESET_UNSUPPORTED_BLOCK': {
       const match =
         /^(\d+)번 블록\((.*)\)은 저장되지만 실행되지 않아요\. 실행하려면 지원하는 종류의 프롬프트 블록으로 바꿔 주세요\.$/su.exec(

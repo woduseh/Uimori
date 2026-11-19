@@ -430,10 +430,12 @@
   }
 }
 
-.theme-advanced > summary {
+.theme-advanced > summary,
+.palette-advanced > summary {
   padding-block: 12px;
 }
-.theme-advanced > :not(summary) {
+.theme-advanced > :not(summary),
+.palette-advanced > :not(summary) {
   margin-top: 16px;
 }
 

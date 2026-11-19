@@ -1,6 +1,7 @@
 import { useI18n, formatNumber } from './i18n.js';
 import { useState, type DragEvent, type ReactNode } from 'react';
 import { IconButton } from './IconButton.js';
+import { NativeDeleteDialog } from './NativeDeleteDialog.js';
 import { AddIcon, UpIcon, DownIcon, DeleteIcon, DragHandleIcon } from './ui-icons.js';
 
 export function NativeCollectionEditor({
@@ -10,6 +11,7 @@ export function NativeCollectionEditor({
   onMove,
   onReorder,
   onRemove,
+  isEmpty,
   children,
 }: {
   label: string;
@@ -18,6 +20,7 @@ export function NativeCollectionEditor({
   onMove?: (index: number, delta: number) => void;
   onReorder?: (from: number, to: number) => void;
   onRemove?: (index: number) => void;
+  isEmpty?: (index: number) => boolean;
   children: (index: number) => ReactNode;
 }) {
   const { t } = useI18n();
@@ -33,7 +36,13 @@ export function NativeCollectionEditor({
     title: string;
     position: number;
   } | null>(null);
+  const [removing, setRemoving] = useState<number | null>(null);
   const index = Math.min(selected, Math.max(0, items.length - 1));
+  const remove = (target: number) => {
+    setRemoving(null);
+    onRemove?.(target);
+    setSelected(Math.max(0, target - 1));
+  };
   const found = items
     .map((item, i) => ({ item, i }))
     .filter(({ item }) => item.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
@@ -185,10 +194,7 @@ export function NativeCollectionEditor({
                 <IconButton
                   label={t('native.collectionDelete', { label })}
                   icon={DeleteIcon}
-                  onClick={() => {
-                    onRemove(index);
-                    setSelected(Math.max(0, index - 1));
-                  }}
+                  onClick={() => (isEmpty?.(index) ? remove(index) : setRemoving(index))}
                 />
               )}
             </div>
@@ -203,6 +209,14 @@ export function NativeCollectionEditor({
           </div>
         )}
       </div>
+      <NativeDeleteDialog
+        target={removing === null ? null : (items[removing]?.title ?? '')}
+        action={t('native.collectionDeleteConfirm', { label })}
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => {
+          if (removing !== null) remove(removing);
+        }}
+      />
     </div>
   );
 }

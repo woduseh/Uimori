@@ -260,7 +260,7 @@ async function openPrompt(page: Page, preset: PromptPreset) {
     await expect(dialog).toBeHidden();
     await expect(images.getByRole('button')).toHaveCount(1);
     await expect(
-      library.getByRole('status').filter({ hasText: '자료에서 제거했어요. 저장하면 적용돼요.' })
+      library.getByRole('status').filter({ hasText: '자료에서 제거했어요.' })
     ).toBeVisible();
     await images.getByRole('button', { name: '유지할 이미지', exact: true }).click();
     await expect(library.getByLabel('이미지 설명', { exact: true })).toHaveValue(

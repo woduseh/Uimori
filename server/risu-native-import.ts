@@ -79,23 +79,6 @@ export function analyzeNativeRisuImport(
     input.kind,
     findings
   );
-  if (pkg.lore.length)
-    findings.add(
-      'native-lore-model',
-      'info',
-      '로어 원문과 규칙은 보존하며 선택적 로어의 관련성은 JEV가 판단해요. 선택되지 않은 로어도 작문 모델이 조회할 수 있어요.'
-    );
-  if (input.source.base64 === undefined)
-    findings.add(
-      'source-file-not-retained',
-      'info',
-      '카드와 모듈의 원문, 지원 이미지는 자료에 보존해요. 원본 파일 자체가 필요하면 직접 보관해 주세요.'
-    );
-  findings.add(
-    'native-risu',
-    'info',
-    '카드, 모듈, CBS, 정규식, 트리거 코드는 Risu 원문으로 보존해요. 본문, 첫 메시지, 로어는 이 원문에서 읽어 표시해요. 원문을 보존해도 모든 스크립트가 실행되는 것은 아니에요.'
-  );
   if (
     nativeRisuTriggers(native).some(
       (trigger) =>

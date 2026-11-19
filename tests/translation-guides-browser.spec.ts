@@ -30,7 +30,7 @@ async function save(page: Page) {
   return (await result.json()).saved as Content;
 }
 for (const width of [412]) {
-  test(`TGUIDE ${width} save, literal preview, raw JSON, recovery and explicit removal`, async ({
+  test(`TGUIDE ${width} save, raw JSON, recovery and explicit removal`, async ({
     page,
     request,
   }, info) => {
@@ -54,10 +54,6 @@ for (const width of [412]) {
     await page
       .getByLabel('표기 1 조건과 설명', { exact: true })
       .fill('인물 이름일 때만. 꽃은 장미.');
-    await page.getByText('번역에 전달할 지침 미리보기', { exact: true }).click();
-    const preview = page.locator('.translation-guide-preview pre');
-    await expect(preview).toContainText('{{char}}');
-    await expect(preview).toContainText('로즈');
     const saved = await save(page);
     expect(readTranslationGuide(saved.package.nativeRisu.card).terms[0]).toEqual({
       source: 'Rose',
@@ -75,8 +71,26 @@ for (const width of [412]) {
     // The regular resource recovery buffer must preserve unfinished term rows, not discard them.
     await page.getByRole('button', { name: '표기 추가', exact: true }).click();
     await page.getByLabel('표기 2 원문', { exact: true }).fill('Mira');
-    // The compact header hides this secondary hint; persistence is verified by reload below.
-    await expect(page.getByText('이 기기에 복구용 입력 보관됨', { exact: true })).toBeAttached();
+    await expect
+      .poll(() =>
+        page.evaluate(async (text) => {
+          const db = await new Promise<IDBDatabase>((resolve, reject) => {
+            const request = indexedDB.open('uimori-editor-recovery', 1);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+          });
+          try {
+            return await new Promise<boolean>((resolve, reject) => {
+              const request = db.transaction('buffers').objectStore('buffers').getAll();
+              request.onsuccess = () => resolve(JSON.stringify(request.result).includes(text));
+              request.onerror = () => reject(request.error);
+            });
+          } finally {
+            db.close();
+          }
+        }, 'Mira')
+      )
+      .toBe(true);
     await open(page, title);
     await expect(page.getByLabel('표기 2 원문', { exact: true })).toHaveValue('Mira');
     await expect(page.getByLabel('표기 2 번역', { exact: true })).toHaveValue('');

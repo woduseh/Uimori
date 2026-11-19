@@ -753,7 +753,7 @@ export function OutlinePanel({
                         setDraft(null);
                       }}
                     >
-                      {t('prompts.uiCloseKeepDraft')}
+                      {t('prompts.uiClose')}
                     </button>
                     <button type="submit" disabled={disabled || !draft.title.trim()}>
                       {' '}
@@ -860,6 +860,10 @@ export function OutlinePanel({
                     )}
                   </div>
                   <div className="outline-primary-actions">
+                    <button type="button" className="secondary" disabled={disabled} onClick={edit}>
+                      <EditIcon size={17} />
+                      {t('prompts.uiEdit2')}
+                    </button>
                     <button
                       type="button"
                       className="secondary"
@@ -876,9 +880,7 @@ export function OutlinePanel({
                         onClick={() => void prepareWriting()}
                       >
                         <PenLine size={17} />
-                        {sources.length
-                          ? t('prompts.uiContinueWriting')
-                          : t('prompts.uiWriteThisUnit')}
+                        {sources.length ? t('prompts.uiContinueWriting') : t('prompts.uiWrite')}
                       </button>
                     )}
                     <button
@@ -892,17 +894,6 @@ export function OutlinePanel({
                     </button>
                   </div>
                   <article className="outline-intent-card">
-                    <div className="outline-card-heading">
-                      <span>{t('prompts.uiOutlineContent')}</span>
-                      <button
-                        type="button"
-                        className="text-button"
-                        disabled={disabled}
-                        onClick={edit}
-                      >
-                        {t('prompts.uiEdit2')}
-                      </button>
-                    </div>
                     {selected.intent ? (
                       <Prose text={selected.intent} />
                     ) : (
@@ -950,16 +941,6 @@ export function OutlinePanel({
                           onClick={() => setWriting(false)}
                         />
                       </div>
-                      <section
-                        aria-label={t('prompts.uiCurrentOutline')}
-                        className="outline-writing-plan"
-                      >
-                        <Prose
-                          text={
-                            brief.outline.path.at(-1)?.intent || t('prompts.uiNoOutlineContentYet')
-                          }
-                        />
-                      </section>
                       <label>
                         {t('prompts.uiAdditionalInstructionsAndStoppingPointOptional')}
                         <textarea
@@ -978,11 +959,13 @@ export function OutlinePanel({
                       </label>
                       {previousRequest && (
                         <details className="outline-reference-picker">
-                          <summary>{t('prompts.uiPreviousWritingRequestDraftReadAndCopy')}</summary>
-                          <label>
-                            {t('prompts.uiPreviousWritingRequestDraft')}
-                            <textarea rows={5} value={previousRequest} readOnly />
-                          </label>
+                          <summary>{t('prompts.uiPreviousWritingRequest')}</summary>
+                          <textarea
+                            aria-label={t('prompts.uiPreviousWritingRequestDraft')}
+                            rows={5}
+                            value={previousRequest}
+                            readOnly
+                          />
                           <button
                             type="button"
                             className="secondary"
@@ -1028,7 +1011,7 @@ export function OutlinePanel({
                     <section className="outline-brief">
                       <h4>{t('prompts.uiOutlinesIncludedInThisRequest')}</h4>
                       {[
-                        [t('prompts.uiParentDirectionAndSelectedUnit'), brief.outline.path],
+                        [t('prompts.uiParentOutlinesAndCurrentItem'), brief.outline.path],
                         [t('prompts.uiChildEvents'), brief.outline.children],
                         [t('prompts.uiRelatedPlans'), brief.outline.related ?? []],
                       ].map(([title, items]) => (

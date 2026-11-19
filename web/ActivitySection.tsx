@@ -37,7 +37,7 @@ export function ActivitySection({
   label: string;
   total: number;
   children: (limit: number) => ReactNode;
-  empty: string;
+  empty?: string;
 }) {
   useI18n();
   const [expanded, setExpanded] = useState(() => readExpanded(id, storageKey));
@@ -75,7 +75,8 @@ export function ActivitySection({
         <span>{formatNumber(total)}</span>
       </button>
       <div id={contentsId} hidden={!expanded}>
-        {expanded && (total ? children(limit) : <p className="activity-nav-empty">{empty}</p>)}
+        {expanded &&
+          (total ? children(limit) : empty && <p className="activity-nav-empty">{empty}</p>)}
         {expanded && limit < total && (
           <button
             type="button"

@@ -116,6 +116,10 @@ export function NativeRisuRegexEditor({
             write(next);
           }}
           onRemove={(index) => write(value.filter((_, i) => index !== i))}
+          isEmpty={(index) => {
+            const entry = value[index];
+            return regexRecord(entry) && !regexText(entry.in) && !regexText(entry.out);
+          }}
         >
           {(index) => {
             const entry = value[index];

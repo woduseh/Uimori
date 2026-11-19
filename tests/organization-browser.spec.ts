@@ -512,9 +512,6 @@ test('ORG04 unselected chat and collapsed folder display compact pending activit
     });
     await page.goto('/');
     let nav = await visibleNavigation(page);
-    const section = nav.getByRole('button', { name: '봇', exact: true });
-    await expect(section).toHaveAttribute('aria-expanded', 'false');
-    await section.click();
     const folder = nav.locator(`[data-bot-folder-id="${shared.id}"]`);
     await folder.getByRole('button', { name: `${folderTitle} 봇 폴더`, exact: true }).click();
     const branches = folder.locator('[data-bot-id]');
@@ -642,11 +639,6 @@ test('ORG04 unselected chat and collapsed folder display compact pending activit
       .getByRole('button', { name: '새 채팅', exact: true })
       .filter({ visible: true })
       .click();
-    const library = page.getByTestId('library-panel');
-    await expect(library).toBeVisible();
-    await expect(library.getByRole('tab', { name: '봇', exact: true })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
+    await expect(page.getByRole('dialog', { name: '새 채팅', exact: true })).toBeVisible();
   });
 }

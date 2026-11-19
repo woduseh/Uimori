@@ -279,17 +279,13 @@ export function StreamingResponse({
       aria-label={settled ? t('reader.partialResponse') : t('reader.responseBeingGenerated')}
       data-status={status}
     >
-      <small>
-        {disconnected
-          ? t('reader.checkingConnectionReceivedTextIsPreserved')
-          : settled
-            ? t('reader.partialResponseReceived')
-            : status === 'running'
-              ? t('reader.writing')
-              : status === 'completed'
-                ? t('reader.receivedResponse')
-                : t('reader.partialResponseReceived')}
-      </small>
+      {disconnected ? (
+        <small>{t('reader.checkingConnectionReceivedTextIsPreserved')}</small>
+      ) : (
+        (settled || (status !== 'running' && status !== 'completed')) && (
+          <small>{t('reader.partialResponseReceived')}</small>
+        )
+      )}
       {[...parts].map(([key, value]) => (
         <div className="streaming-text" key={key}>
           {taskKind === 'main' ? (

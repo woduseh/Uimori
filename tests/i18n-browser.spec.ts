@@ -548,16 +548,15 @@ test('I18N10 saved conflict reviews re-render field statuses and React content f
         data: workspaceBody(before, saved),
       });
       expect(updated.ok(), await updated.text()).toBe(true);
-      await editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
-      await switchFromAnotherTab(page, 'en');
-      const dialog = page.getByRole('alertdialog');
-      await expect(dialog).toHaveAccessibleName('Review saved role model settings');
       let reads = 0;
       page.on('request', (entry) => {
         if (entry.method() === 'GET' && new URL(entry.url()).pathname === '/api/model-workspace')
           reads++;
       });
-      await dialog.getByRole('button', { name: 'Review saved version', exact: true }).click();
+      await editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
+      await switchFromAnotherTab(page, 'en');
+      const dialog = page.getByRole('alertdialog');
+      await expect(dialog).toHaveAccessibleName('Review saved role model settings');
       const review = dialog.locator('.saved-version-review');
       await expect(
         review.locator('.settings-row').filter({ hasText: 'Translation automatic retry count' })
@@ -624,10 +623,6 @@ test('I18N10 saved conflict reviews re-render field statuses and React content f
         },
       });
       expect(changed.ok(), await changed.text()).toBe(true);
-      await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
-      await switchFromAnotherTab(view, 'en');
-      const dialog = view.getByRole('alertdialog');
-      await expect(dialog).toHaveAccessibleName('Review changed saved version');
       let reads = 0;
       view.on('request', (entry) => {
         if (
@@ -636,7 +631,10 @@ test('I18N10 saved conflict reviews re-render field statuses and React content f
         )
           reads++;
       });
-      await dialog.getByRole('button', { name: 'Review saved version', exact: true }).click();
+      await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
+      await switchFromAnotherTab(view, 'en');
+      const dialog = view.getByRole('alertdialog');
+      await expect(dialog).toHaveAccessibleName('Review changed saved version');
       const review = dialog.locator('.saved-version-review');
       await expect(review).toContainText('Changed elsewhere / 保存済み本文');
       await expect(review).toContainText('Copy your input first if you want to keep it.');

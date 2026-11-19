@@ -197,7 +197,6 @@ test('OPTIONREVIEW1 failed reads expose retry; one shared draft survives scope c
   await panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true }).click();
   const dialog = page.getByRole('alertdialog', { name: '채팅 옵션 저장본 확인', exact: true });
   await expect(dialog).toBeVisible();
-  await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
   const discarded = dialog.getByRole('region', { name: '유지할 수 없는 입력', exact: true });
   await expect(discarded).toContainText('합성 문체');
   await expect(discarded).toContainText('사라질 1회 입력');
@@ -252,7 +251,6 @@ test('OPTIONREVIEW3 saved-version adoption keeps dormant oneoff intent while edi
   const remote = await externalFixed(request, chat, '외부에서 저장한 메모');
   await panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true }).click();
   const dialog = page.getByRole('alertdialog', { name: '채팅 옵션 저장본 확인', exact: true });
-  await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
   await dialog.getByRole('button', { name: '입력 유지하고 계속 편집', exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(panel.getByLabel('독립 메모', { exact: true })).toHaveValue('원래 고정 메모');
@@ -292,7 +290,6 @@ test('OPTIONREVIEW2 conflicted oneoff and cancel actions stay available; a lost 
   await expect(stage).toBeEnabled();
   await stage.click();
   const dialog = page.getByRole('alertdialog', { name: '채팅 옵션 저장본 확인', exact: true });
-  await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
   await expect(
     dialog.getByRole('button', { name: '입력 유지하고 계속 편집', exact: true })
   ).toBeVisible();
@@ -354,7 +351,6 @@ test('OPTIONREVIEW2 conflicted oneoff and cancel actions stay available; a lost 
   const cancel = pending.getByRole('button', { name: '예약 취소', exact: true });
   await expect(cancel).toBeEnabled();
   await cancel.click();
-  await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
   await dialog.getByRole('button', { name: '입력 유지하고 계속 편집', exact: true }).click();
   await expect(dialog).toBeHidden();
   expect((await readOptions(request, chat)).pending).toHaveLength(1);

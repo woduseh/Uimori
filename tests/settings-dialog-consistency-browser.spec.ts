@@ -5,6 +5,7 @@ import type { ThemeCatalog } from '../core/themes.js';
 import { defaultThemeBackground } from '../core/theme-background.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
+import { setGlobalBackgroundImage } from './fixtures/theme-background.js';
 import {
   createPromptChoice,
   navigationAction,
@@ -163,9 +164,12 @@ for (const width of [412]) {
   }, info) => {
     test.setTimeout(60_000);
     await page.setViewportSize({ width, height: 900 });
-    const before = await read<ThemeCatalog>(request, '/themes');
-    const originalBackground = before.preferences.defaultBackground ?? defaultThemeBackground;
+    const originalBackground =
+      (await read<ThemeCatalog>(request, '/themes')).preferences.defaultBackground ??
+      defaultThemeBackground;
     try {
+      await setGlobalBackgroundImage(request);
+      const before = await read<ThemeCatalog>(request, '/themes');
       await page.goto('/');
       await navigationAction(page, '설정');
       await selectSettingsSection(page, '테마와 색상');

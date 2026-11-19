@@ -114,14 +114,7 @@ export function AuthorNotesEditor({
       setConflictOpen(true);
       return false;
     }
-    if (
-      !retired &&
-      (!value.text.trim() ||
-        !value.author.trim() ||
-        value.text.length > 32000 ||
-        value.author.length > 200)
-    )
-      return false;
+    if (!retired && (!value.text.trim() || value.text.length > 32000)) return false;
     const command = {
       expectedRevision: value.revision,
       expectedHeadRevision: value.headRevision,
@@ -194,7 +187,6 @@ export function AuthorNotesEditor({
                 {t('library.noteAttribution', {
                   imported: note.kind === 'imported-memory' ? 'yes' : 'no',
                   origin: note.origin?.title ?? '',
-                  author: note.declaration.author,
                   linked: note.atRevision ? 'yes' : 'no',
                 })}
               </small>
@@ -255,16 +247,6 @@ export function AuthorNotesEditor({
             void save(draft);
           }}
         >
-          <label>
-            {t('library.noteAuthor')}
-            <input
-              required
-              maxLength={200}
-              value={draft.author}
-              disabled={busy}
-              onChange={(event) => setDraft({ ...draft, author: event.target.value })}
-            />
-          </label>
           <label className="full">
             {t('library.noteOrCorrection')}
             <textarea
@@ -281,7 +263,7 @@ export function AuthorNotesEditor({
               className="primary"
               label={draft.originalId ? t('library.saveEditedNote') : t('library.saveNewNote')}
               aria-busy={busy}
-              disabled={busy || disabled || !draft.text.trim() || !draft.author.trim()}
+              disabled={busy || disabled || !draft.text.trim()}
             />
             <button
               type="button"

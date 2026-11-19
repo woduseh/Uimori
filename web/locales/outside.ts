@@ -221,12 +221,6 @@ export const messages = {
     ja: 'ライセンス',
     zh: '许可证',
   },
-  'outside.readFull': {
-    ko: '전문 보기',
-    en: 'Read full text',
-    ja: '全文を見る',
-    zh: '查看全文',
-  },
   'outside.sourceRepo': {
     ko: '소스 저장소',
     en: 'Source repository',

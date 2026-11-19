@@ -72,9 +72,7 @@ export function PackagePortraitEditor({
     setOpen(false);
     setError('');
     setNotice(
-      selected.allowedUse === 'inline'
-        ? uiMessage('library.changedTheStoryImageToPortraitAnd')
-        : uiMessage('library.portraitSelectedSaveTheResourceToApply')
+      selected.allowedUse === 'inline' ? uiMessage('library.changedTheStoryImageToPortraitAnd') : ''
     );
   }
   async function addFile(file: File) {
@@ -254,7 +252,7 @@ export function PackagePortraitEditor({
                 <strong>{image.title}</strong>
                 <small>
                   {image.allowedUse === 'inline'
-                    ? t('library.selectingThisImageAllowsPortraitAndStory')
+                    ? t('library.storyOnly')
                     : image.allowedUse === 'profile'
                       ? t('library.portraitOnly')
                       : t('library.portraitAndStory')}

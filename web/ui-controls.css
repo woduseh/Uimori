@@ -55,7 +55,7 @@
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-panel);
   background: var(--panel);
-  box-shadow: 0 2px 8px var(--shade);
+  box-shadow: var(--shadow-float);
 }
 :is(.action-menu-body, .action-menu-group) > button,
 :is(.action-menu-body, .action-menu-group) > .resource-export-action > button,
@@ -171,7 +171,7 @@
     overflow-y: auto;
     border-radius: var(--radius-panel);
     padding: 6px;
-    box-shadow: 0 2px 8px var(--shade);
+    box-shadow: var(--shadow-float);
   }
   .action-menu[open] > .action-menu-body.action-menu-body > button,
   .action-menu[open] > .action-menu-body.action-menu-body > .resource-export-action > button,

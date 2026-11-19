@@ -18,7 +18,6 @@ import type { Library, ModelRef } from '../core/product.js';
 import type { IllustrationSettings } from '../core/illustration.js';
 import { ILLUSTRATION_MAX_PER_SOURCE } from '../core/illustration-cuts.js';
 import { api, ApiError } from './api.js';
-import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
 import { Switch } from './BooleanControls.js';
 import { Dialog } from './Dialog.js';
@@ -286,6 +285,7 @@ function IllustrationEnvironmentEditor({
       aria-label={t('visuals.m048')}
       className="settings-section settings-group illustration-settings illustration-environment"
     >
+      <h3>{t('visuals.m091')}</h3>
       <fieldset disabled={busy} className="illustration-environment-fields">
         <div className="settings-group-body illustration-automatic-settings">
           {testMode && (
@@ -537,13 +537,17 @@ function IllustrationEnvironmentEditor({
           </fieldset>
         </details>
         <div className="form-actions settings-save-actions full">
-          <IconButton
-            icon={RefreshIcon}
-            label={t('visuals.m080')}
-            className="secondary"
-            aria-busy={busy}
-            onClick={() => (dirty ? setConfirmReload(true) : void reload())}
-          />
+          {(dirty || conflict) && (
+            <button
+              type="button"
+              className="secondary"
+              aria-busy={operation === 'reload'}
+              onClick={() => (dirty ? setConfirmReload(true) : void reload())}
+            >
+              <RefreshIcon size={18} aria-hidden="true" />
+              {t('visuals.m080')}
+            </button>
+          )}
           <SaveButton
             type="button"
             label={t('visuals.m081')}
@@ -601,7 +605,21 @@ function IllustrationEnvironmentEditor({
       ) : null}
       <TransientNotice message={message} />
       {loadError && !confirmReload && (
-        <NoticeBanner tone="error">{translateMessage(loadError)}</NoticeBanner>
+        <NoticeBanner
+          tone="error"
+          actions={
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy}
+              onClick={() => (dirty ? setConfirmReload(true) : void reload())}
+            >
+              {t('shared.retry')}
+            </button>
+          }
+        >
+          {translateMessage(loadError)}
+        </NoticeBanner>
       )}
     </section>
   );
@@ -642,16 +660,13 @@ export function IllustrationSettingsEditor({
         onDirtyChange={setPresetsDirty}
         onSaveHandlerChange={group.registrations.presets}
       />
-      <details className="illustration-preset-disclosure">
-        <summary>{t('visuals.m091')}</summary>
-        <IllustrationEnvironmentEditor
-          library={library}
-          onSavedChange={setEnvironment}
-          activeGenerator={activeGenerator}
-          onDirtyChange={setEnvironmentDirty}
-          onSaveHandlerChange={group.registrations.environment}
-        />
-      </details>
+      <IllustrationEnvironmentEditor
+        library={library}
+        onSavedChange={setEnvironment}
+        activeGenerator={activeGenerator}
+        onDirtyChange={setEnvironmentDirty}
+        onSaveHandlerChange={group.registrations.environment}
+      />
     </>
   );
 }

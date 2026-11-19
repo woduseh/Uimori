@@ -369,7 +369,7 @@ test('ACTUI06 old notification pages, bulk confirmation and execution identity s
     dialog
       .locator('[data-activity-id="running-job"]')
       .getByRole('button', { name: '확인', exact: true })
-  ).toBeDisabled();
+  ).toHaveCount(0);
   await expect(
     dialog
       .locator('[data-activity-id="uncertain-job"]')
@@ -904,5 +904,10 @@ test('ACTUI11 an already visible source is confirmed only after its inbox entry 
   expect(legacyReads).toEqual([]);
   await activity.locator('.activity-nav-entry .activity-nav-link').click();
   await expect.poll(() => confirmations).toBe(1);
-  await expect(activity.getByText('확인할 활동이 없어요.')).toBeVisible();
+  await expect(
+    activity.locator('[data-activity-section="unread"] .activity-nav-heading')
+  ).toContainText('0');
+  await expect(
+    activity.locator('[data-activity-section="unread"] .activity-nav-entry')
+  ).toHaveCount(0);
 });

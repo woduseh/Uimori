@@ -51,8 +51,6 @@ for (const width of [412]) {
         failing = false;
         if (width === 1440 && destination === '서재') {
           const nav = await visibleNavigation(page);
-          const bots = nav.getByRole('button', { name: '봇', exact: true });
-          if ((await bots.getAttribute('aria-expanded')) !== 'true') await bots.click();
           await nav.getByRole('button', { name: '다시 불러오기', exact: true }).click();
         } else if (width === 1440 && destination === '프롬프트') {
           await navigationAction(page, '설정');

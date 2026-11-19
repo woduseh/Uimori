@@ -30,11 +30,13 @@ import {
   ImagesIcon,
   BehaviorIcon,
   ExpandIcon,
+  UndoIcon,
 } from './ui-icons.js';
 import './chat-settings.css';
 import './settings-layout.css';
 
 const saveSections = ['story', 'guide', 'profile', 'image', 'reference', 'runtime'] as const;
+const generationSections = ['profile', 'runtime'] as const;
 
 export type Section = ProfileSection | 'story' | 'guide' | 'images' | 'runtime' | 'packages';
 // Two groups: the basics every chat needs, then the advanced automation sections.
@@ -138,6 +140,8 @@ export function ChatSettingsPanel({
   const [saveNotice, setSaveNotice] = useState('');
   const savingPageRef = useRef(false);
   const saveGroup = useSettingsSaveGroup(saveSections);
+  const discardGroup = useSettingsSaveGroup(generationSections);
+  const [confirmGenerationDiscard, setConfirmGenerationDiscard] = useState(false);
   const dirty =
     profileDirty || storyDirty || guideDirty || imageDirty || referenceDirty || runtimeDirty;
   const compact = useCompactLayout();
@@ -439,6 +443,7 @@ export function ChatSettingsPanel({
                   onSaveRequest={() => void saveGeneration()}
                   onDirtyChange={setRuntimeDirty}
                   onSaveHandlerChange={saveGroup.registrations.runtime}
+                  onDiscardHandlerChange={discardGroup.registrations.runtime}
                 />
               </div>
             )}
@@ -455,6 +460,7 @@ export function ChatSettingsPanel({
                 onError={state.setError}
                 onDirtyChange={setProfileDirty}
                 onSaveHandlerChange={saveGroup.registrations.profile}
+                onDiscardHandlerChange={discardGroup.registrations.profile}
                 onGlobalSettings={(section) => requestClose(() => onGlobalSettings(section))}
                 nextRequest={state.pendingRequest ?? draft}
                 loreContextReset={state.loreContextReset}
@@ -462,6 +468,17 @@ export function ChatSettingsPanel({
             )}
             {profileTab === 'prompts' && (
               <div className="form-actions settings-save-actions">
+                {(profileDirty || runtimeDirty) && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={savingPage || savingClose}
+                    onClick={() => setConfirmGenerationDiscard(true)}
+                  >
+                    <UndoIcon size={18} aria-hidden="true" />
+                    {t('settings.m94')}
+                  </button>
+                )}
                 <SaveButton
                   type="button"
                   label={t('library.saveChatSettings')}
@@ -558,6 +575,7 @@ export function ChatSettingsPanel({
                       <ChatVariables
                         key={packageScope}
                         chatId={state.selected}
+                        active={active === 'packages' && showingDetail}
                         refreshKey={state.detail?.reader.cursor ?? 0}
                         onChange={() => {
                           void state.refresh(state.selected);
@@ -620,6 +638,25 @@ export function ChatSettingsPanel({
             closeHistory();
           }}
           discardLabel={t('chatsettings.m82')}
+        />
+      </Dialog>
+      <Dialog
+        open={confirmGenerationDiscard}
+        title={t('settings.m96')}
+        variant="confirmation"
+        role="alertdialog"
+        onClose={() => setConfirmGenerationDiscard(false)}
+      >
+        <p>{t('settings.m97')}</p>
+        <DraftDiscardActions
+          open={confirmGenerationDiscard}
+          disabled={savingPage}
+          onContinue={() => setConfirmGenerationDiscard(false)}
+          onDiscard={async () => {
+            await discardGroup.save({ profile: profileDirty, runtime: runtimeDirty });
+            setConfirmGenerationDiscard(false);
+          }}
+          discardLabel={t('settings.m98')}
         />
       </Dialog>
     </Dialog>

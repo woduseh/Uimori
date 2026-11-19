@@ -139,10 +139,10 @@ export const messages = {
     zh: '上传失败。',
   },
   'native.text_0efca75d2d': {
-    ko: '파일을 교체했어요. 원래 에셋 이름과 연결은 유지돼요. 저장하면 적용돼요.',
-    en: 'The file has been replaced. Original asset names and connections are preserved. Save to apply.',
-    ja: 'ファイルを置き換えました。元のアセット名と関連付けは維持されます。保存すると適用されます。',
-    zh: '已替换文件。原资产名称和关联保持不变。保存后生效。',
+    ko: '파일을 교체했어요. 원래 에셋 이름과 연결은 유지돼요.',
+    en: 'The file has been replaced. Original asset names and connections are preserved.',
+    ja: 'ファイルを置き換えました。元のアセット名と関連付けは維持されます。',
+    zh: '已替换文件。原资产名称和关联保持不变。',
   },
   'native.text_6b1779397e': {
     ko: 'Risu 에셋 편집',
@@ -259,10 +259,10 @@ export const messages = {
     zh: '取消',
   },
   'native.text_00ea313249': {
-    ko: '자료에서 제거했어요. 저장하면 적용돼요.',
-    en: 'Removed from the resource. Save to apply.',
-    ja: '資料から取り除きました。保存すると適用されます。',
-    zh: '已从资料移除，保存后生效。',
+    ko: '자료에서 제거했어요.',
+    en: 'Removed from the resource.',
+    ja: '資料から取り除きました。',
+    zh: '已从资料移除。',
   },
   'native.text_949e1ae936': {
     ko: '제거하지 못했어요.',
@@ -1242,12 +1242,6 @@ export const messages = {
     ja: '選択肢にカンマは使えません。',
     zh: '单个选项不能包含逗号。',
   },
-  'native.text_ef58acc694': {
-    ko: '선택지 순서 변경',
-    en: 'Reorder options',
-    ja: '選択肢の並べ替え',
-    zh: '调整选项顺序',
-  },
   'native.text_58d33aab03': {
     ko: '기존 채팅은 선택지 번호를 저장해요. 순서를 바꾸면 같은 번호가 다른 선택지를 가리킬 수 있어요.',
     en: 'Chats store option numbers. Reordering may make the same number refer to a different option.',
@@ -2064,6 +2058,18 @@ export const messages = {
     ja: '選択中の{label}を削除',
     zh: '删除所选{label}',
   },
+  'native.collectionDeleteConfirm': {
+    ko: '{label} 삭제',
+    en: 'Delete {label}',
+    ja: '{label}を削除',
+    zh: '删除{label}',
+  },
+  'native.blockDelete': {
+    ko: '블록 삭제',
+    en: 'Delete block',
+    ja: 'ブロックを削除',
+    zh: '删除块',
+  },
   'native.collectionEmpty': {
     ko: '아직 {label} 항목이 없어요.',
     en: 'No {label} items yet.',
@@ -2077,10 +2083,10 @@ export const messages = {
     zh: '已将{title}移至第{position, number}项。',
   },
   'native.imagesAdded': {
-    ko: '이미지 {count, number}개를 추가했어요. 저장하면 적용돼요.',
-    en: '{count, plural, one {Added # image. Save to apply.} other {Added # images. Save to apply.}}',
-    ja: '画像を{count, number}枚追加しました。保存すると適用されます。',
-    zh: '已添加{count, number}张图片，保存后生效。',
+    ko: '이미지 {count, number}개를 추가했어요.',
+    en: '{count, plural, one {Added # image.} other {Added # images.}}',
+    ja: '画像を{count, number}枚追加しました。',
+    zh: '已添加{count, number}张图片。',
   },
   'native.imagesMissing': {
     ko: '이미지로 읽지 못한 원문 에셋 {count, number}개는 보존하고 있어요. 이 화면에서는 편집할 수 없으며, 내장 파일이 누락된 자료는 CHARX 내보내기가 제한될 수 있어요.',

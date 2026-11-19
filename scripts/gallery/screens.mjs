@@ -143,7 +143,7 @@ export const screens = [
     steps: [
       { click: { testid: 'source-request' } },
       { menu: '요청 및 컨텍스트 메뉴', which: 'first' },
-      { visible: { role: 'button', name: '컨텍스트용 요청 수정', within: inMenu } },
+      { visible: { role: 'button', name: '요청 수정', within: inMenu } },
     ],
     viewports: ['mobile'],
   },

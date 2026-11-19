@@ -25,14 +25,6 @@ async function open(page: Page, request: APIRequestContext) {
   await page.goto(`/?chat=${chat.id}`);
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '삽화');
-  {
-    const management = page.getByText('생성 환경', { exact: true });
-    if ((await management.locator('..').getAttribute('open')) === null) await management.click();
-  }
-  {
-    const management = page.getByText('프리셋', { exact: true });
-    if ((await management.locator('..').getAttribute('open')) === null) await management.click();
-  }
   const section = page.getByRole('region', { name: '삽화 프리셋', exact: true });
   await expect(section.getByRole('button', { name: '새 삽화 프리셋', exact: true })).toBeVisible();
   return {
@@ -60,10 +52,7 @@ test('IPUI01 named recipes save, apply by scope, duplicate and round-trip throug
     .getByLabel('삽화 그림 지침', { exact: true })
     .fill('watercolor, soft light, textured paper');
   await editor.getByLabel('프리셋 삽화 생성기', { exact: true }).selectOption('comfyui');
-  const comfySettings = editor.locator('summary').filter({ hasText: 'ComfyUI 설정' });
-  await expect(editor.getByLabel('ComfyUI 워크플로 JSON', { exact: true })).toBeHidden();
-  await expect(comfySettings).toContainText('워크플로 없음');
-  await comfySettings.click();
+  await expect(editor.getByLabel('ComfyUI 워크플로 JSON', { exact: true })).toBeVisible();
   await editor
     .getByLabel('ComfyUI 네거티브 프롬프트 지침', { exact: true })
     .fill('text, watermark');
@@ -76,8 +65,9 @@ test('IPUI01 named recipes save, apply by scope, duplicate and round-trip throug
   await editor.getByRole('button', { name: '편집기 닫기', exact: true }).click();
   await section.getByLabel('삽화 프리셋 적용 범위').selectOption('bot');
   await section.getByRole('button', { name: `${title} 삽화 프리셋 적용`, exact: true }).click();
-  await expect(section.locator('.illustration-preset-current')).toContainText(title);
-  await expect(section.locator('.illustration-preset-current')).toContainText('ComfyUI');
+  await expect(
+    section.getByRole('button', { name: `${title} 삽화 프리셋 적용`, exact: true })
+  ).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByLabel('ComfyUI 주소', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Codex 삽화 모델', { exact: true })).toBeHidden();
   expect((await catalog(request)).preferences.botPresets[chat.botId!]).toBe(original.id);
@@ -87,7 +77,7 @@ test('IPUI01 named recipes save, apply by scope, duplicate and round-trip throug
     DEFAULT_ILLUSTRATION_PRESET_ID
   );
   await section.getByRole('button', { name: '상위 설정 따르기', exact: true }).click();
-  await expect(section.locator('.illustration-preset-current')).toContainText(title);
+  await expect(section.locator('.illustration-preset-effective')).toContainText(title);
   expect((await catalog(request)).preferences.chatPresets[chat.id]).toBeUndefined();
 
   await section
@@ -145,14 +135,6 @@ test('IPUI01 named recipes save, apply by scope, duplicate and round-trip throug
   await page.reload();
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '삽화');
-  {
-    const management = page.getByText('생성 환경', { exact: true });
-    if ((await management.locator('..').getAttribute('open')) === null) await management.click();
-  }
-  {
-    const management = page.getByText('프리셋', { exact: true });
-    if ((await management.locator('..').getAttribute('open')) === null) await management.click();
-  }
   await expect(
     section.getByRole('button', { name: `${title} 가져옴 삽화 프리셋 적용`, exact: true })
   ).toBeVisible();
@@ -187,7 +169,6 @@ test('IPUI02 stale edits are not overwritten and can be saved as a new copy', as
   expect(remote.ok()).toBe(true);
   await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
   const conflictDialog = page.getByRole('alertdialog', { name: '삽화 프리셋 저장본 확인' });
-  await conflictDialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
   await expect(conflictDialog.getByLabel('현재 저장본')).toContainText('saved in another window');
   await expect(conflictDialog.getByLabel('현재 저장본')).not.toContainText(
     'unsaved local direction'
@@ -224,10 +205,7 @@ test('IPUI03 invalid recipes never save and the close guard preserves failed dra
   const title = `저장 검증 ${Date.now().toString(36).slice(-5)}`;
   await editor.getByLabel('삽화 프리셋 이름').fill(title);
   await editor.getByLabel('프리셋 삽화 생성기', { exact: true }).selectOption('comfyui');
-  const comfySettings = editor.locator('summary').filter({ hasText: 'ComfyUI 설정' });
-  await comfySettings.click();
   await editor.getByLabel('ComfyUI 워크플로 JSON').fill('{"nodes":[]}');
-  await comfySettings.click();
   await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
   await expect(section.getByRole('alert')).toBeVisible();
   await expect(editor.getByLabel('ComfyUI 워크플로 JSON')).toBeVisible();

@@ -69,7 +69,6 @@ for (const format of ['charx', 'json'] as const) {
     await navigationAction(page, '모듈');
     await page.getByRole('button', { name: '자료 가져오기', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: '자료 가져오기', exact: true });
-    await dialog.locator('.risu-import-processing > summary').click();
     await expect(
       dialog.getByRole('combobox', { name: '가져올 자료 종류', exact: true })
     ).toHaveValue('module');
@@ -130,7 +129,6 @@ test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep 
   await trigger.click();
   const dialog = page.getByRole('dialog', { name: '자료 가져오기', exact: true });
   const initialKind = dialog.getByRole('combobox', { name: '가져올 자료 종류', exact: true });
-  await dialog.locator('.risu-import-processing > summary').click();
   await expect(initialKind).toHaveValue('');
   await dialog.getByLabel('Risu 파일 선택', { exact: true }).setInputFiles({
     name: 'synthetic.charx',
@@ -152,12 +150,7 @@ test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep 
     }
     await page.setViewportSize(viewport);
   }
-  const revealKind = async () => {
-    const processing = dialog.locator('.risu-import-processing');
-    if ((await processing.getAttribute('open')) === null)
-      await processing.locator('summary').click();
-    return processing.getByRole('combobox', { name: '자료 종류', exact: true });
-  };
+  const revealKind = async () => dialog.getByRole('combobox', { name: '자료 종류', exact: true });
   rejectKind = true;
   await (await revealKind()).selectOption('module');
   await expect(dialog.getByRole('alert')).toContainText('자료 종류는 유지했어요');
@@ -298,8 +291,6 @@ test('RISUKINDUI03 bot import defaults to the library and appears in navigation 
   await expect(dialog.getByLabel('Risu 파일 선택', { exact: true })).toBeEnabled();
   await dialog.getByRole('button', { name: '자료 가져오기 닫기', exact: true }).click();
   const nav = await visibleNavigation(page);
-  const section = nav.getByRole('button', { name: '봇', exact: true });
-  if ((await section.getAttribute('aria-expanded')) === 'false') await section.click();
   const botId = imported.receipt.items.find((item) => item.root)!.id;
   const branch = nav.locator(`[data-bot-id="${botId}"]`);
   await expect(branch).toBeVisible();

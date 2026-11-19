@@ -343,6 +343,12 @@ export const messages = {
     ja: '参照画像',
     zh: '参考图片',
   },
+  'visuals.referenceSelectionCount': {
+    ko: '{count, number} / {limit, number} 선택',
+    en: '{count, number} / {limit, number} selected',
+    ja: '{count, number} / {limit, number} 選択',
+    zh: '已选 {count, number} / {limit, number}',
+  },
   'visuals.reviewReferences': {
     ko: '삽화 참고 저장본 확인',
     en: 'Review saved illustration references',
@@ -632,10 +638,10 @@ export const messages = {
     zh: '生成环境',
   },
   'visuals.m092': {
-    ko: '원문이 수정되어 생성 당시 위치와 달라졌어요. 그림은 그대로 보관해요.',
-    en: 'The source was edited and its original position changed. The image is kept.',
-    ja: '原文が編集され、生成時の位置と変わりました。画像は保持しています。',
-    zh: '原文已修改，位置与生成时不同。图片已保留。',
+    ko: '원문이 수정되어 생성 당시 위치와 달라졌어요.',
+    en: 'The source was edited and its original position changed.',
+    ja: '原文が編集され、生成時の位置と変わりました。',
+    zh: '原文已修改，位置与生成时不同。',
   },
   'visuals.m093': {
     ko: '문단 위치 정보가 없는 기존 삽화예요.',
@@ -644,10 +650,10 @@ export const messages = {
     zh: '这是没有段落位置信息的旧插图。',
   },
   'visuals.m094': {
-    ko: '번역문에 삽화 위치를 연결하고 있어요. 그림은 그대로예요.',
-    en: 'Aligning the illustration with the translation. The image is unchanged.',
-    ja: '翻訳文の挿絵位置を対応付けています。画像は変わりません。',
-    zh: '正在匹配译文中的插图位置，图片保持不变。',
+    ko: '번역문에 삽화 위치를 연결하고 있어요.',
+    en: 'Aligning the illustration with the translation.',
+    ja: '翻訳文の挿絵位置を対応付けています。',
+    zh: '正在匹配译文中的插图位置。',
   },
   'visuals.m095': {
     ko: '번역문에서 이 장면의 위치를 찾지 못했어요. 위치만 다시 연결할 수 있어요.',
@@ -1694,10 +1700,10 @@ export const messages = {
     zh: '{task}{status, select, queued {等待中} running {进行中} cancelled {已取消} other {失败}}',
   },
   'visuals.chartPeriod': {
-    ko: '{step, plural, =1 {일별} other {#일 단위}}, 한국 시간',
-    en: '{step, plural, =1 {Daily} other {Every # days}}, Korea time',
-    ja: '{step, plural, =1 {日別} other {#日単位}}、韓国時間',
-    zh: '{step, plural, =1 {按日} other {每#天}}，韩国时间',
+    ko: '{step, plural, =1 {일별} other {#일 단위}}',
+    en: '{step, plural, =1 {Daily} other {Every # days}}',
+    ja: '{step, plural, =1 {日別} other {#日単位}}',
+    zh: '{step, plural, =1 {按日} other {每#天}}',
   },
   'visuals.bucket': {
     ko: '{date}, {cost}{calls, plural, =0 {} other {, #회}}{unknown, plural, =0 {} other {, 미확인 #회}}{partial, plural, =0 {} other {, 부분 추정 #회}}',
@@ -1734,11 +1740,5 @@ export const messages = {
     en: 'Version unknown',
     ja: 'バージョン未確認',
     zh: '版本未知',
-  },
-  'visuals.renderStatus': {
-    ko: '{message}{preserved, select, true { 기존 그림은 유지돼요.} other {}}',
-    en: '{message}{preserved, select, true { The existing image is kept.} other {}}',
-    ja: '{message}{preserved, select, true { 既存の画像は保持します。} other {}}',
-    zh: '{message}{preserved, select, true { 保留原有图片。} other {}}',
   },
 };

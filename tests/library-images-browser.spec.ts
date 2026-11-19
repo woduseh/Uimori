@@ -565,8 +565,6 @@ test('LIBCOVER a folder cover follows its resources until an image is chosen or 
   const card = library.locator(`[data-folder-id="${folderId}"]`);
   const cardCover = card.locator('.library-folder-cover img');
   await expect(cardCover).toHaveAttribute('src', thumbnail(portrait.hash));
-  const section = page.locator('.bot-tree-section-heading > .bot-folder-toggle');
-  if ((await section.getAttribute('aria-expanded')) !== 'true') await section.click();
   const treeCover = page
     .locator('.bot-tree-folder-heading')
     .filter({ hasText: title })

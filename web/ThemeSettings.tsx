@@ -720,12 +720,6 @@ export function ThemeSettings({
       />
       <details className="theme-advanced" ref={management}>
         <summary>{t('visualpanels.manageThemes')}</summary>
-        <PaletteSettings
-          active={active}
-          disabled={busy || backgroundDirty || dirty}
-          onDirtyChange={setPaletteDirty}
-          onSaveHandlerChange={registerPaletteSave}
-        />
         <section className="theme-library-tools">
           <div className="theme-library-actions">
             <button
@@ -981,6 +975,15 @@ export function ThemeSettings({
             query: '?theme-safe=1',
           })}
         </p>
+      </details>
+      <details className="palette-advanced">
+        <summary>{t('palettes.manage')}</summary>
+        <PaletteSettings
+          active={active}
+          disabled={busy || backgroundDirty || dirty}
+          onDirtyChange={setPaletteDirty}
+          onSaveHandlerChange={registerPaletteSave}
+        />
       </details>
       {state.preview && (
         <p role="status">{t('visualpanels.previewingAnUnsavedThemeMovingToAnother')}</p>

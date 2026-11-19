@@ -32,7 +32,6 @@ export function PackageFeaturesEditor({
     [loading, setLoading] = useState(false),
     [listError, setListError] = useState(''),
     [error, setError] = useState(''),
-    [notice, setNotice] = useState(''),
     [reload, setReload] = useState(0);
   const latest = useRef({ value, onChange });
   latest.current = { value, onChange };
@@ -130,7 +129,6 @@ export function PackageFeaturesEditor({
       id = scope;
     setBusy(true);
     setError('');
-    setNotice('');
     try {
       await work(request, id);
     } catch (caught) {
@@ -143,7 +141,6 @@ export function PackageFeaturesEditor({
     try {
       latest.current.onChange(validateRisuContent({ ...latest.current.value, ...part }));
       setError('');
-      setNotice(uiMessage('library.appliedToTheResourceDraftSaveTo'));
       return true;
     } catch (caught) {
       setError((caught as Error).message);
@@ -236,7 +233,6 @@ export function PackageFeaturesEditor({
         </NoticeBanner>
       )}
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
-      {notice && <NoticeBanner>{translateMessage(notice)}</NoticeBanner>}
     </div>
   );
 }

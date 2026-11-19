@@ -521,7 +521,6 @@ test('CSUI05 save and close persists a valid user note and keeps an invalid note
   await expect(notes).toBeVisible();
   await notes.locator(':scope > summary').click();
   await notes.getByRole('button', { name: '메모 추가', exact: true }).click();
-  await notes.getByLabel('메모 작성자', { exact: true }).fill('합성 사용자');
   await notes.getByLabel('메모와 정정 내용', { exact: true }).fill(noteText);
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   await expect(confirm).toBeVisible();
@@ -538,8 +537,7 @@ test('CSUI05 save and close persists a valid user note and keeps an invalid note
   await expect(notes).toBeVisible();
   await notes.locator(':scope > summary').click();
   await notes.getByRole('button', { name: '메모 추가', exact: true }).click();
-  await notes.getByLabel('메모 작성자', { exact: true }).fill('');
-  await notes.getByLabel('메모와 정정 내용', { exact: true }).fill('작성자가 없는 메모 초안');
+  await notes.getByLabel('메모와 정정 내용', { exact: true }).fill('   ');
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
@@ -548,7 +546,7 @@ test('CSUI05 save and close persists a valid user note and keeps an invalid note
   expect((await readStory()).notes.map((note) => note.text)).toEqual([noteText]);
   await confirm.getByRole('button', { name: '계속 편집', exact: true }).click();
   await expect(page.getByRole('textbox', { name: '메모와 정정 내용', exact: true })).toHaveValue(
-    '작성자가 없는 메모 초안'
+    '   '
   );
   await notes.getByRole('button', { name: '편집 취소', exact: true }).click();
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
@@ -567,10 +565,10 @@ test('CSUI08 automatic translation toggle persists per chat and reopens without 
   const globalDefault = (await (await request.get('/api/auto-translation-defaults')).json()) as {
     autoTranslate: boolean;
   };
-  await expect(
-    dialog.getByText(`현재 전체 기본값: ${globalDefault.autoTranslate ? '켜짐' : '꺼짐'}`)
-  ).toBeVisible();
   let choice = dialog.getByRole('combobox', { name: '본문 생성 후 자동 번역', exact: true });
+  await expect(choice.locator('option[value="inherit"]')).toHaveText(
+    `전체 기본값 따르기: ${globalDefault.autoTranslate ? '켜짐' : '꺼짐'}`
+  );
   await expect(choice).toHaveValue('inherit');
   await choice.selectOption('on');
   await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
@@ -681,8 +679,10 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
     'sandbox',
     'allow-popups allow-popups-to-escape-sandbox'
   );
+  await selectChatSettingsSection(page, '기억과 메모');
   const notes = dialog.getByTestId('context-notes');
-  await notes.locator(':scope > summary').click();
+  if ((await notes.evaluate((node) => node.tagName)) === 'DETAILS')
+    await notes.locator(':scope > summary').click();
   await notes.getByRole('button', { name: '메모 추가', exact: true }).click();
   await notes
     .getByLabel('메모와 정정 내용', { exact: true })

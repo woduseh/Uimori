@@ -85,14 +85,14 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await selectSettingsSection(page, '역할별 모델');
     const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
     await expect(editor.getByLabel('본문 모델', { exact: true })).toHaveValue('');
-    const supportingSummary = editor.locator('summary').filter({ hasText: /^보조 작업/ });
-    await expect(supportingSummary).toHaveCount(1);
-    await expect(supportingSummary).toBeVisible();
-    await expect(editor.getByLabel('도우미 모델', { exact: true })).toBeHidden();
-    await expect(editor.getByLabel('컨텍스트 요약 모델', { exact: true })).toBeHidden();
+    await expect(editor.getByRole('group', { name: '보조 작업', exact: true })).toBeVisible();
+    await expect(editor.locator('summary').filter({ hasText: /^보조 작업/ })).toHaveCount(0);
+    await expect(editor.getByLabel('도우미 모델', { exact: true })).toBeVisible();
+    await expect(editor.getByLabel('컨텍스트 요약 모델', { exact: true })).toBeVisible();
     await expect(editor.getByLabel('장면 해설 모델', { exact: true })).toHaveCount(0);
-    await expect(editor.getByLabel('채팅 제목 모델', { exact: true })).toBeHidden();
-    await expect(editor.getByLabel('확장 호출 모델', { exact: true })).toBeHidden();
+    await expect(editor.getByLabel('채팅 제목 모델', { exact: true })).toBeVisible();
+    await expect(editor.getByLabel('확장 호출 모델', { exact: true })).toBeVisible();
+    await expect(editor.getByLabel('판단 프로바이더', { exact: true })).toBeHidden();
     const behaviorSummary = editor.locator('summary').filter({ hasText: /^작업 동작/ });
     const mainRefusal = editor.getByRole('region', { name: '본문 거절 감지', exact: true });
     const translationRefusal = editor.getByRole('region', {
@@ -126,7 +126,6 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await expect(
       translationRefusal.getByLabel('번역 거절 확신 기준', { exact: true })
     ).toBeVisible();
-    await supportingSummary.click();
     const helperTimeout = editor.getByLabel('도우미 작업 제한 시간 (분)', { exact: true });
     const saveModels = editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true });
     await expect(helperTimeout).toHaveValue('60');
@@ -168,7 +167,6 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await page.reload();
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '역할별 모델');
-    await supportingSummary.click();
     await expect(helperTimeout).toHaveValue('90');
     if (visualReview) {
       for (const reviewWidth of [width, MOBILE_WIDTH]) {
@@ -202,13 +200,15 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
       }
       await page.setViewportSize({ width, height: 900 });
     }
-    await expect(mainThreshold).toHaveValue('0.8');
-    await expect(editor.getByLabel('번역 거절 확신 기준', { exact: true })).toHaveValue('0.85');
+    await expect(mainThreshold).toHaveCount(0);
+    await expect(editor.getByLabel('번역 거절 확신 기준', { exact: true })).toHaveCount(0);
     await mainToggle.check();
+    await expect(mainThreshold).toHaveValue('0.8');
     await editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
     await expect.poll(async () => (await models(request)).mainJudgmentEnabled).toBe(true);
     expect((await models(request)).translationPolicy.judgment.enabled).toBe(false);
     await translationToggle.check();
+    await expect(editor.getByLabel('번역 거절 확신 기준', { exact: true })).toHaveValue('0.85');
     await expect(retryProvider).not.toBeChecked();
     await editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
     await expect
@@ -913,13 +913,17 @@ test('JDGUI01 saves a compatible judgment connection and model through the role 
   expect(endpoint.ok(), await endpoint.text()).toBe(true);
   const connection = await endpoint.json();
   const before = await models(request);
+  const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
   const open = async () => {
     await page.goto('/');
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '역할별 모델');
+    await editor
+      .locator('summary')
+      .filter({ hasText: /^판단 프로바이더/ })
+      .click();
   };
   await open();
-  const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
   const provider = editor.getByLabel('판단 프로바이더', { exact: true });
   const format = editor.getByLabel('API 형식', { exact: true });
   const model = editor.getByLabel('모델 ID', { exact: true });
@@ -960,7 +964,7 @@ test('JDGUI01 saves a compatible judgment connection and model through the role 
     for (const width of DEFAULT_WIDTHS) {
       await page.setViewportSize({ width, height: 900 });
       await provider.evaluate((control) =>
-        control.closest('fieldset')?.scrollIntoView({ block: 'center' })
+        control.closest('details')?.scrollIntoView({ block: 'center' })
       );
       await expect(provider).toBeInViewport();
       await expect(images).toBeInViewport();

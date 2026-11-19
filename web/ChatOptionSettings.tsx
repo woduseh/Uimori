@@ -508,13 +508,11 @@ function SelectiveValues({
           </div>
         )}
         <div className="chat-option-scope">
-          <span className="chat-option-origin">
-            {selected
-              ? words.scoped
-              : mode === 'oneoff' && Object.hasOwn(fixedValues, control.id)
-                ? t('chatsettings.m117')
-                : t('chatsettings.m142')}
-          </span>
+          {(selected || (mode === 'oneoff' && Object.hasOwn(fixedValues, control.id))) && (
+            <span className="chat-option-origin">
+              {selected ? words.scoped : t('chatsettings.m117')}
+            </span>
+          )}
           {(selected || !live) && (
             <IconButton
               type="button"

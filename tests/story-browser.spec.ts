@@ -105,7 +105,6 @@ test('S04 explicit user note and correction remain separate from prose after rel
   const chat = await create(page, 'S04 합성 사용자 메모');
   const notes = await open(await panel(page), /^사용자 메모와 정정/);
   await notes.getByRole('button', { name: '메모 추가', exact: true }).click();
-  await notes.getByLabel('메모 작성자').fill('합성 작가');
   await notes.getByLabel('메모와 정정 내용').fill('항구의 종은 파란색이다.');
   await notes.getByRole('button', { name: '새 메모 저장', exact: true }).click();
   await expect.poll(async () => (await story(request, chat.id)).notes.length).toBe(1);
@@ -123,7 +122,7 @@ test('S04 explicit user note and correction remain separate from prose after rel
   await expect(reloaded.getByText('항구의 종은 파란색이다.', { exact: true })).toHaveCount(0);
   expect((await story(request, chat.id)).notes[0]).toMatchObject({
     kind: 'author-note',
-    declaration: { author: '합성 작가' },
+    declaration: { author: '사용자' },
   });
   if (visualReview)
     await page.screenshot({

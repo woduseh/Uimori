@@ -198,10 +198,10 @@ export const messages = {
     zh: '选中的原文最多可包含 {v0} 个字符。',
   },
   'helpers.m018': {
-    ko: '요청을 보관하지 못했어요.',
-    en: 'Could not retain the request.',
-    ja: 'リクエストを保管できませんでした。',
-    zh: '无法保留请求。',
+    ko: '요청을 임시 저장하지 못했어요.',
+    en: 'Could not save the request temporarily.',
+    ja: 'リクエストを一時保存できませんでした。',
+    zh: '无法临时保存请求。',
   },
   'helpers.m019': {
     ko: '요청은 접수됐지만 목록을 새로고침하지 못했어요: {v0}',
@@ -402,10 +402,10 @@ export const messages = {
     zh: '查看更多旧任务',
   },
   'helpers.m073': {
-    ko: '도우미 요청 보관',
-    en: 'Retain assistant request',
-    ja: 'アシスタント依頼の保管',
-    zh: '保留助手请求',
+    ko: '도우미 요청 임시 저장',
+    en: 'Temporarily save assistant request',
+    ja: 'アシスタント依頼の一時保存',
+    zh: '临时保存助手请求',
   },
   'helpers.m074': {
     ko: '도우미 요청 확인',
@@ -414,10 +414,10 @@ export const messages = {
     zh: '确认助手请求',
   },
   'helpers.m075': {
-    ko: '요청을 보관하지 못해 보내지 않았어요.',
-    en: 'Could not retain the request, so it was not sent.',
-    ja: 'リクエストを保管できなかったため送信しませんでした。',
-    zh: '未能保留请求，未予发送。',
+    ko: '요청을 임시 저장하지 못해 보내지 않았어요.',
+    en: 'Could not save the request temporarily, so it was not sent.',
+    ja: 'リクエストを一時保存できなかったため送信しませんでした。',
+    zh: '未能临时保存请求，未予发送。',
   },
   'helpers.m076': {
     ko: '이전 요청의 접수 여부를 확인하지 못했어요.',
@@ -438,16 +438,16 @@ export const messages = {
     zh: '关闭',
   },
   'helpers.m079': {
-    ko: '보관 없이 보내기',
-    en: 'Send without retaining',
-    ja: '保管せずに送信',
-    zh: '不保留直接发送',
+    ko: '임시 저장 없이 보내기',
+    en: 'Send without saving temporarily',
+    ja: '一時保存せずに送信',
+    zh: '不临时保存直接发送',
   },
   'helpers.m080': {
-    ko: '다시 보관하고 보내기',
-    en: 'Retain again and send',
-    ja: '再度保管して送信',
-    zh: '重新保留并发送',
+    ko: '다시 임시 저장하고 보내기',
+    en: 'Save temporarily again and send',
+    ja: '再度一時保存して送信',
+    zh: '重新临时保存并发送',
   },
   'helpers.m081': {
     ko: '접수 확인 및 재시도',
@@ -863,11 +863,11 @@ export const messages = {
     ja: 'アシスタントによる最近の資料編集',
     zh: '助手最近的资料修改',
   },
-  'helpers.m157': {
-    ko: '수정 되돌림',
-    en: 'Change restored',
-    ja: '変更を復元済み',
-    zh: '已恢复更改',
+  'helpers.resourceEditRestored': {
+    ko: '{title} 수정을 되돌렸어요.',
+    en: 'Restored the changes to {title}.',
+    ja: '{title}の変更を元に戻しました。',
+    zh: '已撤销对{title}的修改。',
   },
   'helpers.m158': {
     ko: '최근 수정',
@@ -1110,10 +1110,10 @@ export const messages = {
     zh: '无法加载之前的记录。',
   },
   'helpers.m209': {
-    ko: '대화 생성 요청을 보관하지 못했어요.',
-    en: 'Could not retain the conversation creation request.',
-    ja: '会話作成のリクエストを保管できませんでした。',
-    zh: '无法保留创建对话的请求。',
+    ko: '대화 생성 요청을 임시 저장하지 못했어요.',
+    en: 'Could not save the conversation creation request temporarily.',
+    ja: '会話作成のリクエストを一時保存できませんでした。',
+    zh: '无法临时保存创建对话的请求。',
   },
   'helpers.m210': {
     ko: '대화를 불러오지 못했어요.',
@@ -1415,12 +1415,6 @@ export const messages = {
     ja: '確認が必要な活動',
     zh: '待查看的活动',
   },
-  'helpers.m264': {
-    ko: '확인할 활동이 없어요.',
-    en: 'No activity to review.',
-    ja: '確認が必要な活動はありません。',
-    zh: '没有需要查看的活动。',
-  },
   'helpers.m265': {
     ko: ' 외 {v0}건',
     en: ' and {v0} more',
@@ -1438,12 +1432,6 @@ export const messages = {
     en: 'Acknowledge',
     ja: '確認',
     zh: '确认',
-  },
-  'helpers.m268': {
-    ko: '진행 중인 작업이 없어요.',
-    en: 'No tasks are running.',
-    ja: '進行中の作業はありません。',
-    zh: '没有进行中的任务。',
   },
   'helpers.m270': {
     ko: '최근 채팅',
@@ -1534,12 +1522,6 @@ export const messages = {
     en: 'Could not confirm the execution result.',
     ja: '実行結果を確認できませんでした。',
     zh: '无法确认执行结果。',
-  },
-  'helpers.m296': {
-    ko: '진행 중인 작업 알림은 아직 ‘확인’으로 표시할 수 없어요.',
-    en: 'Running task notifications cannot be marked as acknowledged yet.',
-    ja: '進行中の作業通知は、まだ「確認済み」にできません。',
-    zh: '进行中任务的通知暂时无法标记为已确认。',
   },
   'helpers.m297': {
     ko: '확인할 알림이 없어요.',

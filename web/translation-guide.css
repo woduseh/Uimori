@@ -47,68 +47,38 @@
 }
 .translation-guide-terms {
   display: grid;
-  gap: 20px;
+  gap: 8px;
 }
-.translation-guide-term {
+.translation-guide-term,
+.translation-guide-term-columns {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: 12px;
-  border: 0;
-  padding: 0;
-  margin: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr) var(--control-h);
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
-.translation-guide-term + .translation-guide-term {
-  border-top: var(--hairline) solid var(--line);
-  padding-top: 20px;
-}
-.translation-guide-term legend {
+.translation-guide-term-columns {
+  font-size: var(--font-small);
   color: var(--muted);
-  padding: 0 0 8px;
-  font-size: var(--font-body);
 }
-.translation-guide-term-note {
-  grid-column: 1 / 3;
-}
-.translation-guide-term-delete {
-  grid-column: 3;
-  grid-row: 1 / 3;
-  align-self: end;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.translation-guide-preview {
-  border-top: var(--hairline) solid var(--line);
-  padding-top: 16px;
-}
-.translation-guide-preview summary {
-  cursor: pointer;
-}
-.translation-guide-preview p {
-  margin-top: 12px;
-}
-.translation-guide-preview pre {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-size: var(--font-body);
-  max-height: 360px;
-  overflow: auto;
-  background: var(--surface-raised);
-  padding: 16px;
-  border-radius: var(--radius-control);
+.translation-guide-term > input {
+  min-width: 0;
 }
 @media (max-width: 760px) {
-  .translation-guide-term {
-    grid-template-columns: 1fr;
+  .translation-guide-term,
+  .translation-guide-term-columns {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--control-h);
   }
-  .translation-guide-term-note,
-  .translation-guide-term-delete {
-    grid-column: 1;
-    grid-row: auto;
+  .translation-guide-term-columns > span:nth-child(3) {
+    display: none;
   }
-  .translation-guide-term-delete {
-    justify-self: end;
+  .translation-guide-term > .translation-guide-term-note {
+    grid-column: 1 / 3;
+    grid-row: 2;
+  }
+  .translation-guide-term + .translation-guide-term {
+    border-top: var(--hairline) solid var(--line);
+    padding-top: 8px;
   }
   .translation-guide-terms-heading {
     align-items: center;

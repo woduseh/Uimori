@@ -80,7 +80,7 @@ test(`PRICEUI${width} catalog fallback and manual Flex zero/unknown rates surviv
   expect((await library(request)).models.find((model) => model.title === title)).toBeUndefined();
   await pricing.getByLabel('Standard 입력 요금', { exact: true }).fill('3');
   await expect(pricing.getByRole('alert')).toHaveCount(0);
-  await expect(pricing).toContainText('실제 청구액과 다를 수 있어요');
+  await expect(pricing).not.toContainText('실제 청구액과 다를 수 있어요');
   await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
   await expect
     .poll(async () => (await library(request)).models.find((model) => model.title === title))

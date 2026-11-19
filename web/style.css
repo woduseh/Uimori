@@ -3,8 +3,8 @@
   --bg: #f2f0eb;
   --nav: #f8f7f4;
   --panel: #f8f7f4;
-  --surface: #e5e3df;
-  --surface-raised: #e1dfda;
+  --surface: #ebe9e4;
+  --surface-raised: #fbfaf8;
   --surface-active: #d9d7d2;
   --hover: #dfddd8;
   --line: #d3d1cd;
@@ -65,6 +65,12 @@
   --radius-small: 4px;
   --radius-control: 6px;
   --radius-panel: 10px;
+  --shadow-float:
+    0 4px 16px color-mix(in srgb, var(--shade) 16%, transparent),
+    0 1px 3px color-mix(in srgb, var(--shade) 10%, transparent);
+  --shadow-dialog:
+    0 12px 32px color-mix(in srgb, var(--shade) 25%, transparent),
+    0 2px 6px color-mix(in srgb, var(--shade) 12%, transparent);
   /* Only state changes that benefit from continuity use motion. */
   --motion-fast: 250ms;
   --motion-panel: 250ms;
@@ -307,7 +313,7 @@ input[type="search"]::-webkit-search-cancel-button {
     background: var(--panel);
     border: var(--hairline) solid var(--input-border);
     border-radius: var(--radius-panel);
-    box-shadow: 0 8px 24px color-mix(in srgb, var(--shade) 25%, transparent);
+    box-shadow: var(--shadow-float);
     padding: 4px;
     margin-block: 4px;
     min-inline-size: anchor-size(self-inline);
@@ -551,6 +557,7 @@ h2 {
 }
 h3 {
   font-size: var(--font-heading);
+  font-weight: 600;
 }
 small,
 .muted {
@@ -1572,7 +1579,7 @@ input[type="checkbox"] {
   padding: 0;
   background: var(--bg);
   color: var(--text);
-  box-shadow: 0 8px 24px var(--shade);
+  box-shadow: var(--shadow-dialog);
   overflow: hidden;
 }
 .app-dialog.wide {
@@ -1674,6 +1681,10 @@ input[type="checkbox"] {
 }
 .login .editor-grid {
   grid-template-columns: 1fr;
+}
+.login > .ui-language-setting {
+  margin-top: 24px;
+  border-top: var(--hairline) solid var(--line);
 }
 @media (max-width: 1000px) {
   :root {
@@ -1925,6 +1936,15 @@ input[type="checkbox"] {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.settings-navigation-group {
+  display: block;
+  padding: 16px 14px 4px;
+  font-size: var(--font-small);
+  color: var(--faint);
+}
+.settings-navigation-group:first-child {
+  padding-top: 2px;
+}
 .settings-search-results > button {
   justify-content: space-between;
   flex-wrap: wrap;
@@ -2030,6 +2050,9 @@ input[type="checkbox"] {
     color: var(--text);
     border-bottom: var(--hairline) solid var(--line);
     border-radius: 0;
+  }
+  .settings-navigation-group {
+    padding: 20px 12px 6px;
   }
   .settings-page {
     padding: 16px 16px;

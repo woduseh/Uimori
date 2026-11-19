@@ -44,12 +44,13 @@ import {
   BackIcon,
   ConnectionIcon,
   CopyIcon,
+  DownIcon,
   ForwardIcon,
   ModelIcon,
-  MoveIcon,
   PowerIcon,
   RefreshIcon,
   SearchIcon,
+  UpIcon,
 } from './ui-icons.js';
 import type {
   Connection,
@@ -69,7 +70,11 @@ import {
   type ModelDraft,
 } from './provider-model-draft.js';
 import { DeleteButton } from './DeleteButton.js';
-import { ProviderModelTest, useProviderModelTests } from './ProviderModelTest.js';
+import {
+  ProviderModelTest,
+  ProviderModelTestActions,
+  useProviderModelTests,
+} from './ProviderModelTest.js';
 import { parseVertexEndpoint } from '../core/vertex-location.js';
 import { JevProviderSettings } from './JevProviderSettings.js';
 import { useTestMode } from './useTestMode.js';
@@ -128,12 +133,6 @@ export function ConnectionEditor({
   });
   const dragged = useRef<{ kind: 'connection' | 'model'; id: string } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
-  const [movingDisplay, setMovingDisplay] = useState<{
-    kind: 'connection' | 'model';
-    id: string;
-  } | null>(null);
-  const [moveTarget, setMoveTarget] = useState('');
-  const [movePosition, setMovePosition] = useState<'before' | 'after'>('before');
   const [screen, setScreen] = useState<
     'models' | 'connections' | 'providers' | 'connection' | 'model' | 'jev'
   >('models');
@@ -583,57 +582,50 @@ export function ConnectionEditor({
         if (!event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
         event.preventDefault();
         event.stopPropagation();
-        const group =
-          kind === 'connection'
-            ? providerIds.filter((item) => item !== 'missing-provider')
-            : library.models
-                .filter(
-                  (item) =>
-                    item.connectionId ===
-                    library.models.find((item) => item.id === id)?.connectionId
-                )
-                .map((item) => item.id);
-        const offset = event.key === 'ArrowUp' ? -1 : 1;
-        const target = group[group.indexOf(id) + offset];
-        if (target) moveDisplay(kind, id, target, offset < 0 ? 'before' : 'after');
+        moveBeside(kind, id, event.key === 'ArrowUp' ? -1 : 1);
       },
     };
   }
+  function displayNeighbor(kind: 'connection' | 'model', id: string, offset: -1 | 1) {
+    const group =
+      kind === 'connection'
+        ? providerIds.filter((item) => item !== 'missing-provider')
+        : library.models
+            .filter(
+              (item) =>
+                item.connectionId === library.models.find((item) => item.id === id)?.connectionId
+            )
+            .map((item) => item.id);
+    return group[group.indexOf(id) + offset];
+  }
+  function moveBeside(kind: 'connection' | 'model', id: string, offset: -1 | 1) {
+    const target = displayNeighbor(kind, id, offset);
+    if (target) moveDisplay(kind, id, target, offset < 0 ? 'before' : 'after');
+  }
   function orderMenu(kind: 'connection' | 'model', id: string) {
     return (
-      <button
-        type="button"
-        className="secondary"
-        disabled={busy || !!filter}
-        onClick={() => {
-          setMovingDisplay({ kind, id });
-          setMoveTarget('');
-          setMovePosition('before');
-        }}
-      >
-        <MoveIcon size={18} aria-hidden="true" />
-        {t('providers.m17')}
-      </button>
+      <>
+        <button
+          type="button"
+          className="secondary"
+          disabled={busy || !!filter || !displayNeighbor(kind, id, -1)}
+          onClick={() => moveBeside(kind, id, -1)}
+        >
+          <UpIcon size={18} aria-hidden="true" />
+          {t('providers.moveUp')}
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          disabled={busy || !!filter || !displayNeighbor(kind, id, 1)}
+          onClick={() => moveBeside(kind, id, 1)}
+        >
+          <DownIcon size={18} aria-hidden="true" />
+          {t('providers.moveDown')}
+        </button>
+      </>
     );
   }
-  const moveChoices = !movingDisplay
-    ? []
-    : movingDisplay.kind === 'connection'
-      ? providerIds
-          .filter((id) => id !== movingDisplay.id && id !== 'missing-provider')
-          .map((id) => ({
-            id,
-            title:
-              id === JEV_PROVIDER_DEFINITION.id
-                ? 'TypeSafe AI'
-                : library.connections.find((item) => item.id === id)!.title,
-          }))
-      : library.models.filter(
-          (item) =>
-            item.id !== movingDisplay.id &&
-            item.connectionId ===
-              library.models.find((model) => model.id === movingDisplay.id)?.connectionId
-        );
   async function latest(kind: 'connection' | 'model') {
     if (kind === 'connection' && editingConnection) {
       const value = await api<Connection>(`/connections/${editingConnection.id}`);
@@ -877,48 +869,6 @@ export function ConnectionEditor({
       data-testid="connection-editor"
       aria-label={t('providers.m34')}
     >
-      <Dialog
-        open={!!movingDisplay}
-        title={t('providers.m35')}
-        onClose={() => setMovingDisplay(null)}
-      >
-        <div className="control-grid">
-          <label className="full">
-            {t('providers.m36')}
-            <select value={moveTarget} onChange={(event) => setMoveTarget(event.target.value)}>
-              <option value="">{t('providers.m37')}</option>
-              {moveChoices.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="full">
-            {t('providers.m38')}
-            <select
-              value={movePosition}
-              onChange={(event) => setMovePosition(event.target.value as 'before' | 'after')}
-            >
-              <option value="before">{t('providers.m39')}</option>
-              <option value="after">{t('providers.m40')}</option>
-            </select>
-          </label>
-        </div>
-        <div className="form-actions">
-          <button
-            type="button"
-            disabled={!moveTarget || busy}
-            onClick={() => {
-              if (movingDisplay)
-                moveDisplay(movingDisplay.kind, movingDisplay.id, moveTarget, movePosition);
-              setMovingDisplay(null);
-            }}
-          >
-            {t('providers.m41')}
-          </button>
-        </div>
-      </Dialog>
       <SaveConflictDialog
         open={saveConflict !== null}
         title={t('providers.m42')}
@@ -1432,6 +1382,25 @@ export function ConnectionEditor({
                                 {t('providers.m104')}
                               </button>
                             </div>
+                            <div className="action-menu-group">
+                              <ProviderModelTestActions
+                                model={item}
+                                records={modelTests.records}
+                                vertexLocation={vertexLocationOf(
+                                  library.connections,
+                                  item.connectionId
+                                )}
+                                available={
+                                  item.enabled !== false &&
+                                  library.connections.some(
+                                    (connection) =>
+                                      connection.id === item.connectionId && connection.enabled
+                                  )
+                                }
+                                busy={busy}
+                                onStart={modelTests.start}
+                              />
+                            </div>
                             <div className="action-menu-group">{orderMenu('model', item.id)}</div>
                             <div className="action-menu-group">{deleteModel(item)}</div>
                           </ActionMenu>
@@ -1441,15 +1410,7 @@ export function ConnectionEditor({
                         model={item}
                         records={modelTests.records}
                         vertexLocation={vertexLocationOf(library.connections, item.connectionId)}
-                        available={
-                          item.enabled !== false &&
-                          library.connections.some(
-                            (connection) =>
-                              connection.id === item.connectionId && connection.enabled
-                          )
-                        }
-                        busy={busy}
-                        onStart={modelTests.start}
+                        onDismiss={modelTests.dismiss}
                       />
                     </article>
                   ))}

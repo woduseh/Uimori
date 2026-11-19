@@ -161,7 +161,8 @@ test('SPUI01 usage dashboard keeps partial bills honest, filters atomically, and
   pendingResponse = new Promise<void>((resolve) => {
     releaseResponse = resolve;
   });
-  await panel.getByRole('button', { name: '사용량 새로고침', exact: true }).click();
+  await selectSettingsSection(page, '일반');
+  await selectSettingsSection(page, '사용량');
   await expect(panel.getByRole('status')).toContainText('사용량을 새로 불러오는 중');
   await expect(panel.locator('.usage-results')).toHaveAttribute('aria-busy', 'true');
   await expect(totals).toHaveText(['US$2.58', '4', '400K']);
@@ -282,7 +283,7 @@ test('SPUI03 usage keeps no-call periods compact without hiding free or unconfir
   await expect(panel.locator('summary').filter({ hasText: '일별 및 용도별 상세' })).toHaveCount(0);
   await expect(panel).toContainText('시각 미확인 3회, US$0.03는 기간 합계에서 제외했어요.');
   await expect(panel.locator('.usage-note').filter({ hasText: '상세 집계 시작' })).toHaveText(
-    '상세 집계 시작: 2026. 4. 1. 삭제된 과거 기록은 복원하지 않아요.'
+    '상세 집계 시작: 2026. 4. 1.'
   );
   for (const theme of ['dark', 'light']) {
     await selectSettingsSection(page, '일반');
@@ -307,7 +308,8 @@ test('SPUI03 usage keeps no-call periods compact without hiding free or unconfir
   pendingResponse = new Promise<void>((resolve) => {
     releaseResponse = resolve;
   });
-  await panel.getByRole('button', { name: '사용량 새로고침', exact: true }).click();
+  await selectSettingsSection(page, '일반');
+  await selectSettingsSection(page, '사용량');
   await expect(panel.locator('.usage-results')).toHaveAttribute('aria-busy', 'true');
   await expect(emptyMessage).toHaveCount(1);
   await expect(totals).toHaveText(['US$0.00', '0', '0']);
@@ -323,7 +325,8 @@ test('SPUI03 usage keeps no-call periods compact without hiding free or unconfir
   await expect(panel.locator('summary[aria-label="CSV 내보내기"]')).toHaveCount(1);
   for (const next of ['free', 'unknown', 'unconfirmed'] as const) {
     state = next;
-    await panel.getByRole('button', { name: '사용량 새로고침', exact: true }).click();
+    await selectSettingsSection(page, '일반');
+    await selectSettingsSection(page, '사용량');
     await expect(panel.getByRole('region', { name: '모델별 비용', exact: true })).toContainText(
       `${next}-model`
     );

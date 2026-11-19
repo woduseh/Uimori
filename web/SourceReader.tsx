@@ -158,17 +158,25 @@ type EditorOrigin = {
   bodyTop?: number;
 };
 
-function initialMode(sourceId: string, hasTranslation: boolean): ReaderMode {
+function preferredMode(hasTranslation: boolean): ReaderMode {
   if (!hasTranslation) return 'original';
   try {
-    const saved = sessionStorage.getItem(`reader-mode:${sourceId}`);
-    if (saved === 'original' || saved === 'translation') return saved;
     return localStorage.getItem('uimori:reading-language') === 'original'
       ? 'original'
       : 'translation';
   } catch {
     return 'translation';
   }
+}
+function initialMode(sourceId: string, hasTranslation: boolean): ReaderMode {
+  if (!hasTranslation) return 'original';
+  try {
+    const saved = sessionStorage.getItem(`reader-mode:${sourceId}`);
+    if (saved === 'original' || saved === 'translation') return saved;
+  } catch {
+    return 'translation';
+  }
+  return preferredMode(true);
 }
 function currentAnchor(container: HTMLElement | null): AnchorPosition | undefined {
   const outer = container?.closest<HTMLElement>('[data-reader-scrollport], .reader-scrollport');
@@ -896,11 +904,11 @@ function SourceReaderContent({
         </button>
       )}
     </div>
-  ) : (
+  ) : mode !== preferredMode(targetTranslationAvailable) ? (
     <span className="scene-badge" data-testid="scene-representation">
       {mode === 'translation' ? t('reader.translation') : t('reader.original')}
     </span>
-  );
+  ) : null;
   const activityNode = activity?.({ leading, badges }) || null;
   const canRetranslate = !!translation && !activeJob(translation) && !retryable(translation.status);
   // The menu entry names the scope, the existing translation stays until the new one lands,
@@ -990,11 +998,6 @@ function SourceReaderContent({
             )}
             <div className="scene-header-tools">{trailing}</div>
           </div>
-          {!sceneEnabled && (
-            <p className="scene-context-notice" role="status">
-              {t('reader.thisScenesRequestAndTextAreExcludedFromFuture')}
-            </p>
-          )}
           {!activityNode && <ContextSummaryStatus summary={contextSummary} />}
         </div>
         <div slot="body" data-uimori-part="body">
@@ -1016,10 +1019,11 @@ function SourceReaderContent({
           )}
           <div hidden={!!editor} className="source-reading-content">
             {illustrationLayout.header}
-            {validTranslation && translation?.status !== 'completed' && mode === 'translation' && (
-              <p role="status">
-                {t('reader.showingThePreviousCompletedTranslationItWillBeReplaced')}
-              </p>
+            {validTranslation && translationLoading && mode === 'translation' && (
+              <LoadingState
+                presentation="inline"
+                label={t('reader.preparingTheKoreanTranslationTheOriginalIsSaved')}
+              />
             )}
             {hasPackages && !presentation ? (
               <LoadingState presentation="placeholder" label={t('reader.preparingTheBotView')} />

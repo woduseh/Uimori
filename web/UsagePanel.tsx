@@ -1,11 +1,10 @@
 import { t, useI18n, translateMessage, formatNumber, formatDate } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
-import { CalendarDays, Download, RefreshCw } from 'lucide-react';
+import { CalendarDays, Download } from 'lucide-react';
 import { USAGE_KIND_LABELS, type UsageReport, type UsageTotals } from '../core/usage-report.js';
 import { api } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
-import { IconButton } from './IconButton.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { UsageChart } from './UsageChart.js';
 import {
@@ -96,8 +95,10 @@ function TotalsTable({ rows, label }: { rows: Row[]; label: string }) {
 }
 export function UsagePanel({
   connections = [],
+  active = true,
 }: {
   connections?: { id: string; title: string }[];
+  active?: boolean;
 }) {
   useI18n();
   const [range, setRange] = useState(() => usagePeriod('calendar'));
@@ -122,6 +123,7 @@ export function UsagePanel({
   const query = new URLSearchParams(range).toString();
   // biome-ignore lint/correctness/useExhaustiveDependencies: explicit retry repeats the same read.
   useEffect(() => {
+    if (!active) return;
     const controller = new AbortController();
     setBusy(true);
     void api<UsageReport>(`/usage?${query}`, undefined, 'GET', controller.signal)
@@ -137,8 +139,11 @@ export function UsagePanel({
       .finally(() => {
         if (!controller.signal.aborted) setBusy(false);
       });
-    return () => controller.abort();
-  }, [query, refresh]);
+    return () => {
+      controller.abort();
+      setBusy(false);
+    };
+  }, [active, query, refresh]);
   function choose(kind: Exclude<typeof period, 'custom'>) {
     const next = usagePeriod(kind);
     setPeriod(kind);
@@ -193,12 +198,6 @@ export function UsagePanel({
           </button>
         </div>
         <div className="usage-toolbar-actions">
-          <IconButton
-            icon={RefreshCw}
-            label={t('visualpanels.refreshUsage')}
-            disabled={busy}
-            onClick={retry}
-          />
           {current && !busy && !error && (
             <ActionMenu label={t('visualpanels.exportCsv')} icon={Download} viewport>
               {(
@@ -437,7 +436,7 @@ export function UsagePanel({
             </>
           )}
           <p className="usage-note">
-            {t('visualpanels.detailedTrackingBeganDeletedHistoricalRecordsAre', {
+            {t('visualpanels.detailedTrackingSince', {
               v0: formatDate(new Date(current.coverageSince), { timeZone: 'Asia/Seoul' }),
             })}
           </p>

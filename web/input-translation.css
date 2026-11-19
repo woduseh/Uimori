@@ -61,7 +61,7 @@
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-panel);
   background: var(--panel);
-  box-shadow: 0 2px 8px var(--shade);
+  box-shadow: var(--shadow-float);
 }
 .input-translation-language-menu > button {
   display: flex;

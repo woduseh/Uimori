@@ -19,11 +19,11 @@
   flex: 1;
   min-width: 0;
 }
-.helper-navigation-tools > .action-menu {
-  flex: none;
-}
-.helper-navigation-tools .action-menu-body select {
-  width: 100%;
+.helper-navigation-sort {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 0;
+  max-width: 40%;
 }
 .helper-navigation-scroll {
   flex: 1;

@@ -131,11 +131,7 @@ export function ActivityNotifications({
                         timeStyle: 'medium',
                       })}
                     </time>
-                    <span>
-                      {item.kind === 'request'
-                        ? t('helpers.m288')
-                        : t('helpers.m238', { v0: item.runId.slice(0, 8) })}
-                    </span>
+                    {item.kind === 'request' && <span>{t('helpers.m288')}</span>}
                   </small>
                 </div>
                 <div className="activity-notification-actions">
@@ -170,17 +166,19 @@ export function ActivityNotifications({
                       )}
                     </>
                   ) : (
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={confirmed || !canAcknowledge(item)}
-                      onClick={() => {
-                        onAcknowledge([item]);
-                        if (inspected === item.acknowledgementKey) setInspected(null);
-                      }}
-                    >
-                      {confirmed ? t('helpers.m292') : t('helpers.m267')}
-                    </button>
+                    canAcknowledge(item) && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={confirmed}
+                        onClick={() => {
+                          onAcknowledge([item]);
+                          if (inspected === item.acknowledgementKey) setInspected(null);
+                        }}
+                      >
+                        {confirmed ? t('helpers.m292') : t('helpers.m267')}
+                      </button>
+                    )
                   )}
                 </div>
               </div>
@@ -188,8 +186,6 @@ export function ActivityNotifications({
                 <small>{recoverable ? t('helpers.m293') : t('helpers.m294')}</small>
               ) : item.executionUncertain && canAcknowledge(item) ? (
                 <small>{t('helpers.m295')}</small>
-              ) : !canAcknowledge(item) ? (
-                <small>{t('helpers.m296')}</small>
               ) : null}
               {recoverable && recoveryError && (
                 <NoticeBanner tone="error">{translateMessage(recoveryError)}</NoticeBanner>

@@ -47,12 +47,6 @@ export const messages = {
     ja: 'このチャットの本文モデル',
     zh: '此聊天的正文模型',
   },
-  'main.modelPickerScope': {
-    ko: '선택하면 이 채팅의 다음 요청부터 적용돼요.',
-    en: 'Your selection applies from the next request in this chat.',
-    ja: '選択すると、このチャットの次のリクエストから適用されます。',
-    zh: '选择后将从此聊天的下次请求开始应用。',
-  },
   'main.modelPickerSearch': {
     ko: '모델 검색',
     en: 'Search models',
@@ -1008,10 +1002,16 @@ export const messages = {
     zh: '不可用',
   },
   'main.modelChip': {
-    ko: '{model}{pinned, select, true {, 고정} other {}}{prompt, select, true {} other {, 프롬프트 사용 불가}}',
-    en: '{model}{pinned, select, true {, pinned} other {}}{prompt, select, true {} other {, prompt unavailable}}',
-    ja: '{model}{pinned, select, true {、固定} other {}}{prompt, select, true {} other {、プロンプト利用不可}}',
-    zh: '{model}{pinned, select, true {，已固定} other {}}{prompt, select, true {} other {，提示词不可用}}',
+    ko: '{model}{prompt, select, true {} other {, 프롬프트 사용 불가}}',
+    en: '{model}{prompt, select, true {} other {, prompt unavailable}}',
+    ja: '{model}{prompt, select, true {} other {、プロンプト利用不可}}',
+    zh: '{model}{prompt, select, true {} other {，提示词不可用}}',
+  },
+  'main.persona': {
+    ko: '페르소나 {persona}',
+    en: 'Persona {persona}',
+    ja: 'ペルソナ {persona}',
+    zh: '角色 {persona}',
   },
   'main.botPersona': {
     ko: '{bot}{hasPersona, select, true {, 페르소나 {persona}} other {}}',

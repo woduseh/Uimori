@@ -342,6 +342,9 @@ export function NativeRisuToggleEditor({
                 <div className="nt-options-heading">
                   <span>{t('native.storedValueAndOption')}</span>
                 </div>
+                {options.length > 1 && (
+                  <small className="nt-options-note">{t('native.text_58d33aab03')}</small>
+                )}
                 {options.map((option, index) => (
                   <div className="nt-option" key={index}>
                     <span>{index}</span>
@@ -365,19 +368,13 @@ export function NativeRisuToggleEditor({
                           icon={delta < 0 ? UpIcon : DownIcon}
                           disabled={locked || index + delta < 0 || index + delta >= options.length}
                           onClick={() =>
-                            setConfirmation({
-                              title: () => t('native.text_ef58acc694'),
-                              description: () => t('native.text_58d33aab03'),
-                              action: () => {
-                                write(() => {
-                                  const next = [...options];
-                                  [next[index], next[index + delta]] = [
-                                    next[index + delta]!,
-                                    next[index]!,
-                                  ];
-                                  return setOptions(next);
-                                });
-                              },
+                            write(() => {
+                              const next = [...options];
+                              [next[index], next[index + delta]] = [
+                                next[index + delta]!,
+                                next[index]!,
+                              ];
+                              return setOptions(next);
                             })
                           }
                         />

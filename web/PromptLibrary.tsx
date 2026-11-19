@@ -720,25 +720,19 @@ export function PromptLibrary({
                       changeEditing({ preset, role: preset.role });
                     }}
                   />
-                  <button
-                    type="button"
-                    className="secondary prompt-settings-link ui-icon-button"
-                    aria-label={t('prompts.uiCurrentPromptSettings')}
-                    title={t('prompts.uiCurrentPromptSettings')}
+                  <IconButton
+                    icon={SettingsIcon}
+                    size={18}
+                    label={t('prompts.uiCurrentPromptSettings')}
                     onClick={onOpenCurrentPrompts}
-                  >
-                    <SettingsIcon size={18} aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary prompt-templates-open ui-icon-button"
-                    aria-label={t('prompts.uiBuiltInPrompts')}
-                    title={t('prompts.uiBuiltInPrompts')}
+                  />
+                  <IconButton
+                    icon={PromptIcon}
+                    size={18}
+                    label={t('prompts.uiBuiltInPrompts')}
                     disabled={busy || organizer.busy}
                     onClick={() => setTemplatesOpen(true)}
-                  >
-                    <PromptIcon size={18} aria-hidden="true" />
-                  </button>
+                  />
                 </div>
               )}
               {!selecting && (

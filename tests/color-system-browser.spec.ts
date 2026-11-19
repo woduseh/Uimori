@@ -91,7 +91,8 @@ test('COLOR selected mobile language and avatar text stay readable in default an
       await selected.hover();
       await expectReadableText(selected, `${palette.id} ${mode}: hovered selected language`);
       const avatar = page.locator('.content-avatar').filter({ visible: true }).first();
-      await expectReadableText(avatar, `${palette.id} ${mode}: avatar initial`);
+      if (await avatar.count())
+        await expectReadableText(avatar, `${palette.id} ${mode}: avatar initial`);
       await expect(menu).toHaveAttribute('open', '');
       await expect(selected).toHaveText('일본어');
       await expect(composer).toHaveValue('팔레트를 바꿔도 이 요청과 선택한 언어를 유지해요.');

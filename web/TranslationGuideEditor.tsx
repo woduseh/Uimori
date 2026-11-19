@@ -48,12 +48,20 @@ export function TranslationGuideEditor({
           }
         />
       </div>
-      <div className="translation-guide-terms">
-        {value.terms.map((item, index) => (
-          <fieldset className="translation-guide-term" key={index}>
-            <legend>{t('library.termNumber', { number: index + 1 })}</legend>
-            <label>
-              {t('library.originalTerm')}
+      {value.terms.length > 0 && (
+        <div className="translation-guide-terms">
+          <div className="translation-guide-term-columns" aria-hidden="true">
+            <span>{t('library.originalTerm')}</span>
+            <span>{t('library.preferredTerm')}</span>
+            <span>{t('library.conditionsOrDescription')}</span>
+          </div>
+          {value.terms.map((item, index) => (
+            <div
+              className="translation-guide-term"
+              role="group"
+              aria-label={t('library.termNumber', { number: index + 1 })}
+              key={index}
+            >
               <input
                 aria-label={t('library.termOriginal', { v0: index + 1 })}
                 value={item.source}
@@ -61,9 +69,6 @@ export function TranslationGuideEditor({
                 placeholder="Mira"
                 onChange={(e) => term(index, { source: e.target.value })}
               />
-            </label>
-            <label>
-              {t('library.preferredTerm')}
               <input
                 aria-label={t('library.termTranslation', { v0: index + 1 })}
                 value={item.target}
@@ -71,34 +76,28 @@ export function TranslationGuideEditor({
                 placeholder={t('library.mira')}
                 onChange={(e) => term(index, { target: e.target.value })}
               />
-            </label>
-            <label className="translation-guide-term-note">
-              <span>{t('library.conditionsOrDescription')}</span>
               <input
+                className="translation-guide-term-note"
                 aria-label={t('library.termConditionsOrDescription', { v0: index + 1 })}
                 value={item.note ?? ''}
                 maxLength={TRANSLATION_GUIDE_LIMITS.note}
                 placeholder={t('library.applyOnlyWhenUsedAsAPerson')}
                 onChange={(e) => term(index, { note: e.target.value })}
               />
-            </label>
-            <IconButton
-              type="button"
-              className="ghost translation-guide-term-delete"
-              icon={Trash2}
-              size={16}
-              label={t('library.deleteTerm', { v0: index + 1 })}
-              onClick={() =>
-                onChange({ ...value, terms: value.terms.filter((_, i) => i !== index) })
-              }
-            />
-          </fieldset>
-        ))}
-      </div>
-      <details className="translation-guide-preview">
-        <summary>{t('library.previewInstructionsSentToTranslation')}</summary>
-        <pre>{JSON.stringify(value, null, 2)}</pre>
-      </details>
+              <IconButton
+                type="button"
+                className="ghost"
+                icon={Trash2}
+                size={16}
+                label={t('library.deleteTerm', { v0: index + 1 })}
+                onClick={() =>
+                  onChange({ ...value, terms: value.terms.filter((_, i) => i !== index) })
+                }
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { DEFAULT_THEME_TEMPLATE, emptyTheme, themeFile } from '../core/themes.js';
 import { BUILTIN_PALETTES } from '../core/theme-palettes.js';
 import { navigationAction, selectSettingsSection } from './ui-navigation.js';
+import { restoreGlobalBackground, setGlobalBackgroundImage } from './fixtures/theme-background.js';
 
 async function expectPalette(page: Page, id: string, mode: 'light' | 'dark' = 'light') {
   const palette = BUILTIN_PALETTES.find((entry) => entry.id === id)!;
@@ -38,6 +39,7 @@ test('THEMES mobile primary choices precede background and preserve its unsaved 
   request,
 }, info) => {
   await page.setViewportSize({ width: 412, height: 844 });
+  const originalBackground = await setGlobalBackgroundImage(request);
   const before = await (await request.get('/api/themes')).json();
   await page.goto('/');
   await navigationAction(page, '설정');
@@ -51,7 +53,7 @@ test('THEMES mobile primary choices precede background and preserve its unsaved 
   const background = page.getByRole('region', { name: '본문 바깥 배경', exact: true });
   await expect(layout).toBeVisible();
   await expect(palette).toBeVisible();
-  await expect(page.getByRole('combobox', { name: '앱 글꼴', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: '글꼴', exact: true })).toBeVisible();
   await expect(background).toBeVisible();
   await expect(page.getByRole('button', { name: '새 커스텀 테마', exact: true })).toBeHidden();
   await page.screenshot({ path: info.outputPath('theme-primary-mobile.png') });
@@ -82,6 +84,7 @@ test('THEMES mobile primary choices precede background and preserve its unsaved 
   expect((await (await request.get('/api/themes')).json()).preferences).toEqual(before.preferences);
   await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await expect(guard).toBeHidden();
+  await restoreGlobalBackground(request, originalBackground);
 });
 
 for (const width of [412]) {

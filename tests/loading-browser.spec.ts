@@ -532,7 +532,6 @@ test('LOADUI02 same-source tabs keep CAS drafts and isolate another chat, manual
   await second.getByRole('button', { name: '원문 저장', exact: true }).click();
   const sourceConflict = second.getByRole('alertdialog', { name: '원문 저장 충돌', exact: true });
   await expect(sourceConflict).toBeVisible();
-  await sourceConflict.getByRole('button', { name: '저장본 확인', exact: true }).click();
   await expect(
     sourceConflict.getByText('Accepted source revision from first tab.', { exact: true })
   ).toBeVisible();

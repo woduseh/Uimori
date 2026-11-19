@@ -69,7 +69,6 @@ test(`DECISION resource conflict review and failed recovery preserve input at ${
   });
   await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
   await expect(review).toBeVisible();
-  await review.getByRole('button', { name: '저장본 확인', exact: true }).click();
   await expect(review).toContainText('Changed elsewhere');
   await review.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
   await expect(body).toHaveValue('Keep my unsaved instructions');

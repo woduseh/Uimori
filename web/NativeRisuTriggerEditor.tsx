@@ -8,6 +8,7 @@ import {
 } from './resource-editor.js';
 import { AddIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
+import { NativeDeleteDialog } from './NativeDeleteDialog.js';
 import './native-risu-trigger.css';
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -37,6 +38,7 @@ export function NativeRisuTriggerEditor({
     null
   );
   const [error, setError] = useState('');
+  const [removing, setRemoving] = useState<number | null>(null);
   const pending = draft !== null;
   const index = draft?.index ?? Math.min(selected, Math.max(0, value.length - 1));
   const entry = value[index];
@@ -66,6 +68,16 @@ export function NativeRisuTriggerEditor({
 
   function replace(next: unknown) {
     onChange(value.map((item, i) => (i === index ? next : item)));
+  }
+  function triggerTitle(item: unknown, i: number) {
+    return record(item) && typeof item.comment === 'string' && item.comment
+      ? item.comment
+      : t('native.triggerNumber', { number: i + 1 });
+  }
+  function remove(target: number) {
+    setRemoving(null);
+    onChange(value.filter((_, i) => i !== target));
+    setSelected(Math.max(0, target - 1));
   }
   function move(delta: number) {
     const next = [...value];
@@ -167,9 +179,7 @@ export function NativeRisuTriggerEditor({
           >
             {value.map((item, i) => (
               <option key={i} value={i}>
-                {record(item) && typeof item.comment === 'string' && item.comment
-                  ? item.comment
-                  : t('native.triggerNumber', { number: i + 1 })}
+                {triggerTitle(item, i)}
               </option>
             ))}
           </select>
@@ -248,15 +258,24 @@ export function NativeRisuTriggerEditor({
             type="button"
             className="ghost"
             disabled={disabled || pending}
-            onClick={() => {
-              onChange(value.filter((_, i) => i !== index));
-              setSelected(Math.max(0, index - 1));
-            }}
+            onClick={() =>
+              lua && effects.every((effect) => !String(effect.code).trim())
+                ? remove(index)
+                : setRemoving(index)
+            }
           >
             {t('native.text_28e82332d9')}
           </button>
         </div>
       )}
+      <NativeDeleteDialog
+        target={removing === null ? null : triggerTitle(value[removing], removing)}
+        action={t('native.text_28e82332d9')}
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => {
+          if (removing !== null) remove(removing);
+        }}
+      />
     </section>
   );
 }

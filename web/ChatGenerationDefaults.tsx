@@ -157,16 +157,18 @@ export function ChatGenerationDefaults({
                   />
                 </span>
               </label>
-              <label className="settings-row">
-                <span className="settings-row-copy">
-                  <strong>{t('storyUi.style')}</strong>
-                </span>
-                <StoryUiStyleSelect
-                  aria-label={t('storyUi.style')}
-                  value={value.storyUiStyle}
-                  onChange={(style) => update('storyUiStyle', style)}
-                />
-              </label>
+              {value.storyUi && (
+                <label className="settings-row">
+                  <span className="settings-row-copy">
+                    <strong>{t('storyUi.style')}</strong>
+                  </span>
+                  <StoryUiStyleSelect
+                    aria-label={t('storyUi.style')}
+                    value={value.storyUiStyle}
+                    onChange={(style) => update('storyUiStyle', style)}
+                  />
+                </label>
+              )}
             </div>
             <div className="form-actions settings-save-actions">
               <SaveButton

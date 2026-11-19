@@ -57,12 +57,6 @@ export function importRisuPresetProgram(value: unknown): RisuPresetProgramImport
             },
           ]
         : []),
-      {
-        code: 'RISU_PRESET_NATIVE_PROMPT',
-        level: 'warning',
-        message:
-          '프롬프트 구성, CBS, 토글, 기본 변수, 정규식을 원래 형식으로 사용해요. 모델, 연결, 생성 설정은 Uimori의 선택을 유지해요.',
-      },
     ],
   };
 }

@@ -56,7 +56,7 @@
   background: var(--surface-raised);
   border: var(--hairline) solid var(--border);
   border-radius: var(--radius-panel);
-  box-shadow: 0 2px 8px var(--shade);
+  box-shadow: var(--shadow-float);
 }
 .library-item-menu > div > button,
 .library-item-menu > div > .action-menu-group > button,

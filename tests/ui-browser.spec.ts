@@ -1348,7 +1348,6 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   await libraryEditor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
   const review = page.getByRole('alertdialog', { name: '변경된 저장본 확인', exact: true });
   await expect(review).toBeVisible();
-  await review.getByRole('button', { name: '저장본 확인', exact: true }).click();
   await expect(review).toContainText(concurrentText);
   await review.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
   await expect(await promptBody(libraryEditor)).toHaveValue(edited);

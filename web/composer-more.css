@@ -16,7 +16,7 @@
   border-radius: var(--radius-panel);
   background: var(--panel);
   color: var(--text);
-  box-shadow: 0 2px 8px var(--shade);
+  box-shadow: var(--shadow-float);
   z-index: 20;
   max-height: min(540px, calc(var(--app-height, 100dvh) - 112px));
   overflow-y: auto;
@@ -144,4 +144,25 @@
   background: var(--panel);
   color: var(--text);
   font-size: var(--font-small);
+}
+@media (max-width: 600px) {
+  .composer-more:has(> .composer-more-panel)::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 19;
+    background: var(--shade);
+  }
+  .composer-more:has(> .composer-more-panel) > button {
+    position: relative;
+    z-index: 20;
+  }
+  .composer-more-panel {
+    position: fixed;
+    inset: auto 8px max(8px, env(safe-area-inset-bottom)) 8px;
+    width: auto;
+    max-width: none;
+    max-height: calc(var(--app-height, 100dvh) - 72px);
+    padding: 6px;
+  }
 }

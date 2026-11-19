@@ -84,8 +84,26 @@ for (const width of [412]) {
     expect((await save(page)).text).toBe(card.description);
     await selectPackageSection(page, '기본 정보');
     await page.getByLabel('Risu 자료 이름', { exact: true }).fill('Recovered local input');
-    // The compact header hides this secondary hint; persistence is verified by reload below.
-    await expect(page.getByText('이 기기에 복구용 입력 보관됨', { exact: true })).toBeAttached();
+    await expect
+      .poll(() =>
+        page.evaluate(async (text) => {
+          const db = await new Promise<IDBDatabase>((resolve, reject) => {
+            const request = indexedDB.open('uimori-editor-recovery', 1);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+          });
+          try {
+            return await new Promise<boolean>((resolve, reject) => {
+              const request = db.transaction('buffers').objectStore('buffers').getAll();
+              request.onsuccess = () => resolve(JSON.stringify(request.result).includes(text));
+              request.onerror = () => reject(request.error);
+            });
+          } finally {
+            db.close();
+          }
+        }, 'Recovered local input')
+      )
+      .toBe(true);
     await page.reload();
     // Navigation state need not persist; the resource's per-device input does.
     if (!(await page.getByLabel('Risu 자료 이름', { exact: true }).isVisible()))

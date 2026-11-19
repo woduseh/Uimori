@@ -48,9 +48,7 @@ export function InputTranslationControls({
           translation.busy ? t('prompts.uiCancelInputTranslation') : t('prompts.uiTranslateInput')
         }
         title={
-          translation.busy
-            ? t('prompts.uiCancelInputTranslation')
-            : t('prompts.uiTranslateInputWithoutSendingItAutomatically')
+          translation.busy ? t('prompts.uiCancelInputTranslation') : t('prompts.uiTranslateInput')
         }
         disabled={!translation.busy && (disabled || empty)}
         onClick={() => {
@@ -141,10 +139,7 @@ export function InputTranslationFeedback({ translation, disabled }: Props) {
       aria-label={t('prompts.uiInputTranslationStatus')}
     >
       {translation.busy && (
-        <LoadingState
-          presentation="placeholder"
-          label={t('prompts.uiTranslatingYourInputYouCanKeepEditing')}
-        />
+        <LoadingState presentation="placeholder" label={t('prompts.uiTranslatingInput')} />
       )}
       {translation.original !== null && (
         <div className="input-translation-original">
@@ -188,7 +183,7 @@ export function InputTranslationFeedback({ translation, disabled }: Props) {
       )}
       {translation.error && (
         <p className="error" role="alert">
-          {t('prompts.inputErrorKept', { error: translateMessage(translation.error) })}
+          {translateMessage(translation.error)}
         </p>
       )}
     </section>

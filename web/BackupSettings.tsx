@@ -240,7 +240,6 @@ export function BackupSettings({
                 <dt>{t('transfer.m164')}</dt>
                 <dd>
                   {status.settings.nextRunAt ? date(status.settings.nextRunAt) : t('transfer.m165')}
-                  {dirty && <small>{t('transfer.m166')}</small>}
                 </dd>
               </div>
             </dl>
@@ -281,7 +280,6 @@ export function BackupSettings({
                             minimumFractionDigits: 1,
                             maximumFractionDigits: 1,
                           }),
-                          schema: item.schema,
                         })}
                       </small>
                     </span>

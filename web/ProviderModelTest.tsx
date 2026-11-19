@@ -1,11 +1,14 @@
 import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
+import { Activity as TestIcon, Globe as LocationIcon } from 'lucide-react';
 import type { ModelPreset } from '../core/product.js';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
 import { api } from './api.js';
 import { ProviderRejectionNotice, rejectionMessage } from './provider-rejection.js';
 import { VERTEX_LOCATION_CHOICES } from '../core/vertex-location.js';
 import { vertexLocationLabel } from './vertex-location-label.js';
+import { IconButton } from './IconButton.js';
+import { CloseIcon } from './ui-icons.js';
 import './ProviderModelTest.css';
 
 type TestDisplay = {
@@ -105,7 +108,16 @@ export function useProviderModelTests() {
       if (controllers.current.get(key) === controller) controllers.current.delete(key);
     }
   }
-  return { records, start };
+  function dismiss(model: ModelPreset) {
+    const own = testKey(model);
+    current.current = Object.fromEntries(
+      Object.entries(current.current).filter(
+        ([key, record]) => record.pending || !(key === own || key.startsWith(`${own}#`))
+      )
+    );
+    setRecords(current.current);
+  }
+  return { records, start, dismiss };
 }
 
 const statusLabel: Record<ProviderConnectionTest['status'], string> = {
@@ -144,24 +156,20 @@ function locationOutcome(record: TestDisplay | undefined): string {
   return result.error ? translateMessage(result.error) : statusLabel[result.status];
 }
 
-function LocationComparison({
+function LocationResults({
   model,
   records,
   current,
-  disabled,
-  onStart,
 }: {
   model: ModelPreset;
   records: Record<string, TestDisplay>;
   current: string;
-  disabled: boolean;
-  onStart: (model: ModelPreset, location?: string) => Promise<void>;
 }) {
   const rows = VERTEX_LOCATION_CHOICES.map((location) => ({
     location,
     record: records[testKey(model, location)],
   }));
-  const comparing = rows.some((row) => row.record?.pending);
+  if (!rows.some((row) => row.record)) return null;
   const timed = rows.flatMap(({ location, record }) =>
     record?.result?.status === 'completed' && record.result.latencyMs !== null && !record.pending
       ? [{ location, latencyMs: record.result.latencyMs }]
@@ -171,49 +179,25 @@ function LocationComparison({
     ? timed.reduce((best, row) => (row.latencyMs < best.latencyMs ? row : best)).location
     : undefined;
   return (
-    <div className="provider-location-compare">
-      <div className="provider-actions">
-        <button
-          type="button"
-          className="secondary"
-          disabled={disabled || comparing}
-          onClick={() => {
-            for (const { location } of rows) void onStart(model, location);
-          }}
-        >
-          {comparing ? t('providers.m294') : t('providers.vertexCompare')}
-        </button>
-        <small>{t('providers.vertexCompareCost', { value0: rows.length })}</small>
-      </div>
-      {rows.some((row) => row.record) && (
-        <ul
-          className="provider-location-results"
-          aria-label={t('providers.vertexCompareResults', { value0: model.title })}
-        >
-          {rows.map(({ location, record }) => (
-            <li key={location}>
-              <span className="provider-location-name">
-                {vertexLocationLabel(location)}
-                {location === current && <small>{t('providers.vertexCompareCurrent')}</small>}
-                {location === fastest && <small>{t('providers.vertexCompareFastest')}</small>}
-              </span>
-              <span className="provider-location-outcome">{locationOutcome(record)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <ul
+      className="provider-location-results"
+      aria-label={t('providers.vertexCompareResults', { value0: model.title })}
+    >
+      {rows.map(({ location, record }) => (
+        <li key={location}>
+          <span className="provider-location-name">
+            {vertexLocationLabel(location)}
+            {location === current && <small>{t('providers.vertexCompareCurrent')}</small>}
+            {location === fastest && <small>{t('providers.vertexCompareFastest')}</small>}
+          </span>
+          <span className="provider-location-outcome">{locationOutcome(record)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
-export function ProviderModelTest({
-  model,
-  records,
-  vertexLocation,
-  available,
-  busy,
-  onStart,
-}: {
+type TestProps = {
   model: ModelPreset;
   records: Record<string, TestDisplay>;
   /** The saved location of the model's Vertex connection; absent for other providers. */
@@ -221,73 +205,127 @@ export function ProviderModelTest({
   available: boolean;
   busy: boolean;
   onStart: (model: ModelPreset, location?: string) => Promise<void>;
+};
+
+/** Menu items of a model card; results appear beside the card only after a test ran. */
+export function ProviderModelTestActions({
+  model,
+  records,
+  vertexLocation,
+  available,
+  busy,
+  onStart,
+}: TestProps) {
+  useI18n();
+  const record = records[testKey(model)];
+  const comparing = VERTEX_LOCATION_CHOICES.some(
+    (location) => records[testKey(model, location)]?.pending
+  );
+  const unavailable = available ? undefined : t('providers.m305');
+  return (
+    <>
+      <button
+        type="button"
+        className="secondary"
+        disabled={!available || busy || record?.pending}
+        title={unavailable}
+        aria-label={t('providers.m573', { value0: model.title })}
+        onClick={() => {
+          void onStart(model);
+        }}
+      >
+        <TestIcon size={18} aria-hidden="true" />
+        {record?.pending
+          ? t('providers.m294')
+          : record?.error
+            ? t('providers.m303')
+            : t('providers.m304')}
+      </button>
+      {vertexLocation !== undefined && (
+        <button
+          type="button"
+          className="secondary"
+          disabled={!available || busy || comparing}
+          title={
+            unavailable ??
+            t('providers.vertexCompareCost', { value0: VERTEX_LOCATION_CHOICES.length })
+          }
+          onClick={() => {
+            for (const location of VERTEX_LOCATION_CHOICES) void onStart(model, location);
+          }}
+        >
+          <LocationIcon size={18} aria-hidden="true" />
+          {comparing ? t('providers.m294') : t('providers.vertexCompare')}
+        </button>
+      )}
+    </>
+  );
+}
+
+export function ProviderModelTest({
+  model,
+  records,
+  vertexLocation,
+  onDismiss,
+}: Pick<TestProps, 'model' | 'records' | 'vertexLocation'> & {
+  onDismiss: (model: ModelPreset) => void;
 }) {
   useI18n();
   const record = records[testKey(model)];
   const result = record?.result;
+  const compared =
+    vertexLocation !== undefined &&
+    VERTEX_LOCATION_CHOICES.some((location) => records[testKey(model, location)]);
+  if (!record && !compared) return null;
+  const pending =
+    record?.pending ||
+    VERTEX_LOCATION_CHOICES.some((location) => records[testKey(model, location)]?.pending);
   return (
     <section
-      className="provider-model-test"
+      className="provider-model-test dismissible"
       aria-label={t('providers.m572', { value0: model.title })}
     >
-      <div className="provider-actions">
-        <button
-          type="button"
-          className="secondary"
-          disabled={!available || busy || record?.pending}
-          aria-label={t('providers.m573', { value0: model.title })}
-          onClick={() => {
-            void onStart(model);
-          }}
-        >
-          {record?.pending
-            ? t('providers.m294')
-            : record?.error
-              ? t('providers.m303')
-              : t('providers.m304')}
-        </button>
-      </div>
-      {!available && <small>{t('providers.m305')}</small>}
-      {vertexLocation !== undefined && (
-        <LocationComparison
-          model={model}
-          records={records}
-          current={vertexLocation}
-          disabled={!available || busy}
-          onStart={onStart}
-        />
-      )}
-      {record?.error ? (
-        <div className="provider-test-result" role="alert">
-          <p>{t('providers.m306')}</p>
-          <details>
-            <summary>{t('providers.m307')}</summary>
-            <p>{translateMessage(record.error)}</p>
-          </details>
-        </div>
-      ) : (
-        result && (
-          <div className="provider-test-result" role="status">
-            <p>{statusLabel[result.status]}</p>
-            {result.status !== 'completed' && result.status !== 'running' && (
-              <>
-                {result.rejection ? (
-                  <p>{rejectionMessage(result.rejection)}</p>
-                ) : result.error === 'ENDPOINT_NOT_APPROVED' ? (
-                  <p>{t('providers.m308')}</p>
-                ) : null}
-                {(result.error || result.rejection) && (
-                  <details>
-                    <summary>{t('providers.m307')}</summary>
-                    {result.rejection && <ProviderRejectionNotice rejection={result.rejection} />}
-                    {result.error && <p className="error">{translateMessage(result.error)}</p>}
-                  </details>
-                )}
-              </>
-            )}
+      <div className="provider-model-test-content">
+        {record?.pending && !result && <p role="status">{t('providers.m294')}</p>}
+        {record?.error ? (
+          <div className="provider-test-result" role="alert">
+            <p>{t('providers.m306')}</p>
+            <details>
+              <summary>{t('providers.m307')}</summary>
+              <p>{translateMessage(record.error)}</p>
+            </details>
           </div>
-        )
-      )}
+        ) : (
+          result && (
+            <div className="provider-test-result" role="status">
+              <p>{statusLabel[result.status]}</p>
+              {result.status !== 'completed' && result.status !== 'running' && (
+                <>
+                  {result.rejection ? (
+                    <p>{rejectionMessage(result.rejection)}</p>
+                  ) : result.error === 'ENDPOINT_NOT_APPROVED' ? (
+                    <p>{t('providers.m308')}</p>
+                  ) : null}
+                  {(result.error || result.rejection) && (
+                    <details>
+                      <summary>{t('providers.m307')}</summary>
+                      {result.rejection && <ProviderRejectionNotice rejection={result.rejection} />}
+                      {result.error && <p className="error">{translateMessage(result.error)}</p>}
+                    </details>
+                  )}
+                </>
+              )}
+            </div>
+          )
+        )}
+        {compared && <LocationResults model={model} records={records} current={vertexLocation} />}
+      </div>
+      <IconButton
+        icon={CloseIcon}
+        label={t('providers.dismissTestResult', { value0: model.title })}
+        disabled={pending}
+        onClick={() => onDismiss(model)}
+      />
     </section>
   );
 }

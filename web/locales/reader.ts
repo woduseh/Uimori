@@ -191,18 +191,6 @@ export const messages = {
     ja: 'このブラウザーではコピーできません。',
     zh: '此浏览器不支持复制。',
   },
-  'reader.thisScenesRequestAndTextAreExcludedFromFuture': {
-    ko: '이 장면의 입력과 본문은 이후 생성 컨텍스트에서 제외돼요.',
-    en: 'This scene’s input and text are excluded from future generation context.',
-    ja: 'この場面の入力と本文は今後の生成コンテキストから除外されます。',
-    zh: '此场景的输入和正文将从后续生成上下文中排除。',
-  },
-  'reader.showingThePreviousCompletedTranslationItWillBeReplaced': {
-    ko: '이전 완료 번역을 표시하고 있어요. 새 번역이 성공하면 교체돼요.',
-    en: 'Showing the previous completed translation. It will be replaced when the new translation succeeds.',
-    ja: '前回完了した訳文を表示しています。新しい翻訳が成功すると置き換わります。',
-    zh: '正在显示上次完成的译文。新翻译成功后会替换。',
-  },
   'reader.preparingTheBotView': {
     ko: '봇 화면을 준비하고 있어요…',
     en: 'Preparing the bot view…',
@@ -1313,18 +1301,6 @@ export const messages = {
     ja: '受信した応答の一部',
     zh: '已收到的部分回复',
   },
-  'reader.writing': {
-    ko: '작성 중…',
-    en: 'Writing…',
-    ja: '執筆中…',
-    zh: '正在撰写…',
-  },
-  'reader.receivedResponse': {
-    ko: '받은 응답',
-    en: 'Received response',
-    ja: '受信した応答',
-    zh: '已收到的回复',
-  },
   'reader.readingStyleSettings': {
     ko: '읽기 스타일 설정',
     en: 'Reading style settings',
@@ -1644,9 +1620,9 @@ export const messages = {
     zh: '请确认上次发送是否已被接受。使用同一请求确认。',
   },
   'reader.appliesToFutureGenerationContextExistingScenesArePreserved': {
-    ko: '이후 생성 문맥에 반영해요.',
+    ko: '이후 생성 컨텍스트에 반영해요.',
     en: 'Applies to future generation context.',
-    ja: '今後の生成文脈に反映します。',
+    ja: '今後の生成コンテキストに反映します。',
     zh: '应用于后续生成上下文。',
   },
   'reader.closeRequestEditor': {
@@ -1752,10 +1728,10 @@ export const messages = {
     zh: '请求与上下文菜单',
   },
   'reader.editContextRequest': {
-    ko: '컨텍스트용 요청 수정',
-    en: 'Edit context request',
-    ja: 'コンテキスト用リクエストを編集',
-    zh: '编辑上下文请求',
+    ko: '요청 수정',
+    en: 'Edit request',
+    ja: 'リクエストを編集',
+    zh: '编辑请求',
   },
   'reader.excludeInputFromContext': {
     ko: '입력을 컨텍스트에서 제외',

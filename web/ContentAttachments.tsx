@@ -202,7 +202,7 @@ export function ContentAttachments({
               <div>
                 <small>
                   {fixedBot
-                    ? t('library.primaryBotFixed')
+                    ? t('library.primaryBot')
                     : automatic
                       ? t('library.requiredModuleAttachedAutomatically')
                       : t('library.additionalModule')}

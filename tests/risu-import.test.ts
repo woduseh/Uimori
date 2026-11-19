@@ -157,7 +157,6 @@ test('retired card fields are excluded while active global notes and source byte
   });
   const preview = prepareRisuImport({ source });
   expect(preview.findings.filter((finding) => finding.level === 'unsupported')).toEqual([]);
-  expect(preview.findings.map((finding) => finding.code)).toContain('native-risu');
   const saved = await applyRisuImport(store, {
     source,
     digest: preview.digest,
@@ -329,7 +328,6 @@ test('module scripts remain native source and module import cannot create memory
     },
   });
   const preview = prepareRisuImport({ source });
-  expect(preview.findings.some((item) => item.code === 'native-risu')).toBe(true);
   const body = {
     source,
     digest: preview.digest,
@@ -373,7 +371,6 @@ test('card display regex stays native without creating a second transform progra
   const source = sourceOf(value),
     preview = prepareRisuImport({ source });
   expect(preview.findings.some((item) => item.level === 'unsupported')).toBe(false);
-  expect(preview.findings).toContainEqual(expect.objectContaining({ code: 'native-risu' }));
   const saved = await applyRisuImport(store, {
     source,
     digest: preview.digest,
@@ -637,9 +634,6 @@ test('charx keeps card-owned images while reading its embedded module; corrupt f
   const source = { name: 'synthetic.charx', base64: bytes.toString('base64') };
   const preview = prepareRisuImport({ source });
   expect(preview.summary.images).toBe(1);
-  expect(preview.findings).toContainEqual(
-    expect.objectContaining({ code: 'native-risu', level: 'info' })
-  );
   const body = {
     source,
     digest: preview.digest,
@@ -706,11 +700,6 @@ test('a container beyond the inline limit is staged on disk, imported, and never
     expect(prepared.statusCode).toBe(200);
     const preview = prepared.json();
     expect(preview.title).toBe('Synthetic Pilot');
-    const notRetained = preview.findings.find(
-      (finding: { code: string }) => finding.code === 'source-file-not-retained'
-    );
-    expect(notRetained.level).toBe('info');
-    expect(notRetained.message).not.toMatch(/24\s*MiB|넘어/u);
 
     const applied = await app.inject({
       method: 'POST',
@@ -835,7 +824,6 @@ test('lore directives decide activation and never reach the model as prose', () 
   );
   expect(levels['lore-not-activated']).toBe('warning');
   // The keyword rules are carried now, so neither notice about dropping them is raised any more.
-  expect(levels['native-lore-model']).toBe('info');
   expect(levels).not.toHaveProperty('lore-discovery');
   expect(levels).not.toHaveProperty('lore-rules');
   expect(levels['lore-decorator-position']).toBe('unsupported');
@@ -912,7 +900,6 @@ test('card metadata and typed assets remain in native source without conversion 
     preview.findings.map((finding) => [finding.code, finding.level])
   );
   for (const code of SURFACE_CODES) expect(levels).not.toHaveProperty(code);
-  expect(levels['native-risu']).toBe('info');
   // The settings that now have their own notice no longer fall into the generic bucket.
   expect(levels['extension-settings']).toBeUndefined();
   const saved = await applyRisuImport(store, {
@@ -933,10 +920,7 @@ test('card metadata and typed assets remain in native source without conversion 
 
   const plain = sourceOf(card());
   const plainPreview = prepareRisuImport({ source: plain });
-  const plainCodes = plainPreview.findings.map((finding) => finding.code);
-  for (const code of [...SURFACE_CODES, 'creator-notes-truncated'])
-    expect(plainCodes).not.toContain(code);
-  expect(plainPreview.findings.filter((finding) => finding.level === 'unsupported')).toEqual([]);
+  expect(plainPreview.findings).toEqual([]);
   const plainSaved = await applyRisuImport(store, {
     source: plain,
     digest: plainPreview.digest,

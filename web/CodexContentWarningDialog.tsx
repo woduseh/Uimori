@@ -17,7 +17,6 @@ export function CodexContentWarningDialog({ gate }: { gate: CodexContentWarningG
       <p>
         {translation ? t('providers.m468') : revision ? t('providers.m469') : t('providers.m470')}
       </p>
-      <p className="muted">{t('providers.m471')}</p>
       <div className="form-actions">
         <button type="button" className="secondary" onClick={gate.cancelRequest}>
           {t('providers.m472')}

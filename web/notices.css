@@ -90,7 +90,7 @@ body:has(.app-shell.helper-open:is(.panel-overlay, .helper-expanded)):not(:has(d
   background: var(--surface-raised);
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-panel);
-  box-shadow: 0 2px 8px var(--shade);
+  box-shadow: var(--shadow-float);
   overflow-wrap: anywhere;
 }
 .transient-notice:lang(ko) {

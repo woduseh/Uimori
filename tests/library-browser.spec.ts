@@ -40,7 +40,7 @@ async function organization(request: APIRequestContext) {
   return response.json() as Promise<LibraryOrganization>;
 }
 async function createFolder(page: Page, panel: Locator, title: string) {
-  await revealFolderActions(panel);
+  await expect(panel.locator('.library-folders')).toBeVisible();
   await panel.getByRole('button', { name: '새 폴더', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '새 폴더', exact: true });
   await dialog.getByLabel('폴더 이름', { exact: true }).fill(title);
@@ -51,13 +51,11 @@ async function createFolder(page: Page, panel: Locator, title: string) {
   await expect(dialog).toBeHidden();
   return (await organization(page.request)).folders.find((folder) => folder.title === title)!;
 }
-async function revealFolderActions(panel: Locator) {
-  await expect(panel.locator('.library-folders')).toBeVisible();
-  const summary = panel.getByLabel('폴더 관리', { exact: true });
-  if (
-    (await summary.isVisible()) &&
-    !(await summary.evaluate((node) => (node.parentElement as HTMLDetailsElement).open))
-  )
+async function revealFolderActions(panel: Locator, title: string) {
+  const summary = panel
+    .locator('.library-folders')
+    .getByLabel(`${title} 폴더 메뉴`, { exact: true });
+  if (!(await summary.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
     await summary.click();
 }
 async function revealListOptions(panel: Locator) {
@@ -228,15 +226,14 @@ test('LIBUI02 mobile folder deletion refreshes another page and stale moves requ
   await otherPanel.getByRole('checkbox', { name: `${item.title} 선택`, exact: true }).check();
   await page.bringToFront();
   if (visualReview) await page.screenshot({ path: info.outputPath('library-folders-mobile.png') });
-  await revealFolderActions(panel);
+  await revealFolderActions(panel, folder.title);
   await panel.getByRole('button', { name: `${folder.title} 폴더 삭제`, exact: true }).click();
   const confirm = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
   await expect(confirm).toContainText('미분류');
   await confirm.getByRole('button', { name: '폴더 삭제', exact: true }).click();
   await expect(confirm).toBeHidden();
-  const folderMenu = panel.locator('details.action-menu:has(> summary[aria-label="폴더 관리"])');
-  await expect(folderMenu).not.toHaveAttribute('open');
-  await expect(panel.getByLabel('폴더 관리', { exact: true })).toBeFocused();
+  await expect(panel.getByLabel(`${folder.title} 폴더 메뉴`, { exact: true })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: '새 폴더', exact: true })).toBeFocused();
   await expect(otherPanel.getByRole('checkbox', { name: `${item.title} 선택` })).toHaveCount(1);
   await expect(
     otherPanel.getByRole('button', { name: `${item.title} 선택`, exact: true })

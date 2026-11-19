@@ -114,8 +114,7 @@ const strengthLabels: Record<string, string> = {
     return t('providers.m177');
   },
 };
-const strengthLabel = (value: string) =>
-  strengthLabels[value] ? `${strengthLabels[value]} (${value})` : value;
+const strengthLabel = (value: string) => strengthLabels[value] ?? value;
 const modeLabel = (value: string) =>
   value === 'adaptive' ? t('providers.m180') : value === 'disabled' ? t('providers.m181') : value;
 const UNDOCUMENTED = () => t('providers.m182');
@@ -389,9 +388,9 @@ export function ProviderModelFields({
       ['inputTokenLimit', t('providers.m192')],
       ['timeoutSeconds', t('providers.m193')],
       ['thinkingMode', t('providers.m194')],
-      ['verbosity', 'Verbosity'],
-      ['reasoningMode', 'Reasoning Mode'],
-      ['reasoningContext', 'Reasoning Context'],
+      ['verbosity', t('providers.verbosity')],
+      ['reasoningMode', t('providers.reasoningMode')],
+      ['reasoningContext', t('providers.reasoningContext')],
       ['temperature', 'Temperature'],
       ['topP', 'Top P'],
       ['cacheMode', t('providers.m195')],
@@ -667,7 +666,7 @@ export function ProviderModelFields({
         )}
         {(sends('verbosity') || value.verbosity) && (
           <ModelOptionSelect
-            label="Verbosity"
+            label={t('providers.verbosity')}
             value={value.verbosity}
             choices={capability?.verbosities}
             vocabulary={sends('verbosity') ? PROTOCOL_OPTION_VALUES.verbosity : []}
@@ -676,7 +675,7 @@ export function ProviderModelFields({
         )}
         {(sends('reasoningMode') || value.reasoningMode) && (
           <ModelOptionSelect
-            label="Reasoning Mode"
+            label={t('providers.reasoningMode')}
             value={value.reasoningMode}
             choices={capability?.reasoningModes}
             vocabulary={sends('reasoningMode') ? PROTOCOL_OPTION_VALUES.reasoningMode : []}
@@ -685,7 +684,7 @@ export function ProviderModelFields({
         )}
         {(sends('reasoningContext') || value.reasoningContext) && (
           <ModelOptionSelect
-            label="Reasoning Context"
+            label={t('providers.reasoningContext')}
             value={value.reasoningContext}
             choices={capability?.reasoningContexts}
             vocabulary={sends('reasoningContext') ? PROTOCOL_OPTION_VALUES.reasoningContext : []}

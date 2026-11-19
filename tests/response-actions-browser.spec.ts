@@ -561,7 +561,7 @@ test('RACOM05 earlier scenes keep bookmark and menu visible while copy, editing 
     await expect(latest.getByRole('button', { name: '원문 수정', exact: true })).toBeVisible();
     await expect(latest.getByRole('button', { name: '번역 생성', exact: true })).toBeVisible();
     await expect(scene.locator('.scene-header button')).toHaveCount(0);
-    await expect(scene.getByTestId('scene-representation')).toHaveText('원문');
+    await expect(scene.getByTestId('scene-representation')).toHaveCount(0);
     const footer = scene.locator('.source-actions');
     await expect(footer.locator(':scope > button')).toHaveCount(1);
     await expect(footer.getByRole('button', { name: '책갈피 추가', exact: true })).toBeVisible();
@@ -616,7 +616,7 @@ test('RACOM05 earlier scenes keep bookmark and menu visible while copy, editing 
     await page.screenshot({ path: info.outputPath(`past-scene-actions-${width}.png`) });
     await noHorizontalOverflow(page, scene);
     await page.reload();
-    await expect(scene.getByTestId('scene-representation')).toHaveText('원문');
+    await expect(scene.getByTestId('scene-representation')).toHaveCount(0);
   }
   const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
   // The standing bookmark still captures the selected original passage and scene identity.
@@ -718,7 +718,7 @@ test('RACOM06 earlier-scene translation generation stays explicit and pending or
     expect(submissions).toBe(2);
     release();
     await expect(scene.getByTestId('translation-text')).toBeVisible();
-    await expect(scene.getByTestId('scene-representation')).toHaveText('번역');
+    await expect(scene.getByTestId('scene-representation')).toHaveCount(0);
     await expect(retry).toHaveCount(0);
     await openSourceActions(scene);
     await scene.getByRole('button', { name: '원문 보기', exact: true }).click();

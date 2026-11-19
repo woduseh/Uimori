@@ -10,7 +10,6 @@ import {
   Inbox,
   MessageCircle,
   Pencil,
-  SlidersHorizontal,
   Trash2,
 } from 'lucide-react';
 import { AddIcon, DoneIcon, IssueIcon, RunningIcon, StopIcon } from './ui-icons.js';
@@ -371,30 +370,27 @@ export function HelperNavigation(props: Props) {
           onClick={props.onNewProject}
         />
         {view.mode === 'projects' && (
-          <ActionMenu label={t('helperNavigation.sort')} icon={SlidersHorizontal} viewport>
-            <label>
-              {t('helperNavigation.sort')}
-              <select
-                aria-label={t('helperNavigation.sort')}
-                value={view.sort}
-                onChange={(event) =>
-                  setView((old) => ({
-                    ...old,
-                    sort:
-                      event.target.value === 'manual'
-                        ? 'manual'
-                        : event.target.value === 'name'
-                          ? 'name'
-                          : 'recent',
-                  }))
-                }
-              >
-                <option value="manual">{t('transfer.m296')}</option>
-                <option value="recent">{t('transfer.m295')}</option>
-                <option value="name">{t('helperNavigation.sortName')}</option>
-              </select>
-            </label>
-          </ActionMenu>
+          <select
+            className="helper-navigation-sort"
+            aria-label={t('helperNavigation.sort')}
+            title={t('helperNavigation.sort')}
+            value={view.sort}
+            onChange={(event) =>
+              setView((old) => ({
+                ...old,
+                sort:
+                  event.target.value === 'manual'
+                    ? 'manual'
+                    : event.target.value === 'name'
+                      ? 'name'
+                      : 'recent',
+              }))
+            }
+          >
+            <option value="manual">{t('transfer.m296')}</option>
+            <option value="recent">{t('transfer.m295')}</option>
+            <option value="name">{t('helperNavigation.sortName')}</option>
+          </select>
         )}
       </div>
       {props.children}
@@ -522,7 +518,6 @@ export function HelperNavigation(props: Props) {
               storageKey={sectionStorage}
               label={t('helpers.m263')}
               total={unread.length}
-              empty={t('helpers.m264')}
             >
               {(limit) => unread.slice(0, limit).map((session) => row(session, 'unread'))}
             </ActivitySection>
@@ -531,7 +526,6 @@ export function HelperNavigation(props: Props) {
               storageKey={sectionStorage}
               label={t('helpers.m113')}
               total={running.length}
-              empty={t('helpers.m268')}
             >
               {(limit) => running.slice(0, limit).map((session) => row(session, 'running'))}
             </ActivitySection>

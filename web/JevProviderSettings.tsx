@@ -9,8 +9,6 @@ import { JEV_PROVIDER_DEFINITION, type JevProviderStatus } from '../core/jev-pro
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
 import { api, ApiError } from './api.js';
 import { SaveButton } from './SaveButton.js';
-import { IconButton } from './IconButton.js';
-import { RefreshIcon } from './ui-icons.js';
 import { ToggleRow } from './ToggleRow.js';
 import './JevProviderSettings.css';
 
@@ -284,14 +282,6 @@ export function JevProviderSettings({
             ? JEV_PROVIDER_DEFINITION.label
             : JEV_PROVIDER_DEFINITION.modelLabel}
         </h3>
-        <IconButton
-          className="secondary"
-          icon={RefreshIcon}
-          size={18}
-          label={t('providers.m350')}
-          disabled={busy}
-          onClick={() => setRefresh((value) => value + 1)}
-        />
       </div>
       {loading && (
         <LoadingState
@@ -526,7 +516,23 @@ export function JevProviderSettings({
           </section>
         </>
       )}
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      {error && (
+        <NoticeBanner
+          tone="error"
+          actions={
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy}
+              onClick={() => setRefresh((value) => value + 1)}
+            >
+              {t('providers.m350')}
+            </button>
+          }
+        >
+          {translateMessage(error)}
+        </NoticeBanner>
+      )}
       <TransientNotice message={message} />
     </section>
   );

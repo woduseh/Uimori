@@ -95,12 +95,7 @@ export function ActivityNavigation({
   };
   return (
     <nav className="activity-navigation" aria-label={t('helpers.m262')}>
-      <ActivitySection
-        id="unread"
-        label={t('helpers.m263')}
-        total={unread.length}
-        empty={t('helpers.m264')}
-      >
+      <ActivitySection id="unread" label={t('helpers.m263')} total={unread.length}>
         {(limit) =>
           unread.slice(0, limit).map(([chatId, items]) => {
             const chat = chatById.get(chatId)!;
@@ -163,12 +158,7 @@ export function ActivityNavigation({
           })
         }
       </ActivitySection>
-      <ActivitySection
-        id="running"
-        label={t('helpers.m113')}
-        total={running.size}
-        empty={t('helpers.m268')}
-      >
+      <ActivitySection id="running" label={t('helpers.m113')} total={running.size}>
         {(limit) =>
           [...running].slice(0, limit).map(([chatId, info]) => {
             const chat = chatById.get(chatId)!;

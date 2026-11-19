@@ -608,6 +608,10 @@ for (const viewport of [
           extra: { preserved: true },
         });
       await page.getByRole('button', { name: '선택한 정규식 삭제', exact: true }).click();
+      const confirm = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
+      await expect(confirm).toContainText('First rule');
+      expect((await value()).length).toBe(4);
+      await confirm.getByRole('button', { name: '정규식 삭제', exact: true }).click();
       await expect.poll(async () => (await value()).length).toBe(3);
       await page.getByText('고급 JSON 편집', { exact: true }).click();
       await page.getByLabel('Risu 정규식 JSON', { exact: true }).fill('[invalid');

@@ -18,6 +18,7 @@ import {
 } from './resource-editor.js';
 import { SectionNavigation } from './SectionNavigation.js';
 import { IconButton } from './IconButton.js';
+import { NativeDeleteDialog } from './NativeDeleteDialog.js';
 import { AddIcon, UpIcon, DownIcon, DeleteIcon, DragHandleIcon } from './ui-icons.js';
 import './native-editor.css';
 
@@ -71,6 +72,7 @@ export function NativeRisuPresetEditor({
   const [dropTarget, setDropTarget] = useState<BlockDropTarget | null>(null);
   const [regexPending, setRegexPending] = useState(false);
   const [togglePending, setTogglePending] = useState(false);
+  const [removing, setRemoving] = useState<number | null>(null);
   const [pendingParts, setPendingParts] = useBufferedEditorState<string[]>(
     'prompt.native.pendingParts',
     []
@@ -189,6 +191,14 @@ export function NativeRisuPresetEditor({
     update({ promptTemplate: next });
     setSelected(insertion);
   }
+  function blockTitle(block: Record<string, unknown>) {
+    return text(block.name) || blockTypes[text(block.type)] || text(block.type);
+  }
+  function remove(target: number) {
+    setRemoving(null);
+    update({ promptTemplate: items.filter((_, i) => i !== target) });
+    setSelected(Math.max(0, target - 1));
+  }
   function add() {
     update({
       promptTemplate: [...items, { type: 'plain', role: 'system', text: '', name: '새 프롬프트' }],
@@ -259,7 +269,7 @@ export function NativeRisuPresetEditor({
                 onDrop={(event) => drop(event, blockDropTarget(event, i))}
               >
                 <strong>
-                  {i + 1}. {text(block.name) || blockTypes[text(block.type)] || text(block.type)}
+                  {i + 1}. {blockTitle(block)}
                 </strong>
                 <small className="ui-meta-row">
                   <span>{blockRole(block)}</span>
@@ -283,7 +293,7 @@ export function NativeRisuPresetEditor({
               >
                 {items.map((block, i) => (
                   <option key={i} value={i}>
-                    {i + 1}. {text(block.name) || blockTypes[text(block.type)] || text(block.type)}
+                    {i + 1}. {blockTitle(block)}
                   </option>
                 ))}
               </select>
@@ -293,7 +303,7 @@ export function NativeRisuPresetEditor({
           {entry ? (
             <>
               <div className="native-detail-heading">
-                <h3>{text(entry.name) || blockTypes[text(entry.type)] || text(entry.type)}</h3>
+                <h3>{blockTitle(entry)}</h3>
                 <IconButton
                   label={t('native.text_baea99787c')}
                   icon={UpIcon}
@@ -309,10 +319,11 @@ export function NativeRisuPresetEditor({
                 <IconButton
                   label={t('native.text_47a1c510fc')}
                   icon={DeleteIcon}
-                  onClick={() => {
-                    update({ promptTemplate: items.filter((_, i) => i !== index) });
-                    setSelected(Math.max(0, index - 1));
-                  }}
+                  onClick={() =>
+                    entry.type === 'plain' && !text(entry.text).trim()
+                      ? remove(index)
+                      : setRemoving(index)
+                  }
                 />
               </div>
               <div className="native-field-row">
@@ -554,6 +565,14 @@ export function NativeRisuPresetEditor({
           {collaboration}
         </div>
       )}
+      <NativeDeleteDialog
+        target={removing === null ? null : blockTitle(items[removing] ?? {})}
+        action={t('native.blockDelete')}
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => {
+          if (removing !== null) remove(removing);
+        }}
+      />
     </section>
   );
 }

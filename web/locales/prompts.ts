@@ -803,12 +803,6 @@ export const messages = {
     ja: '名前',
     zh: '名称',
   },
-  'prompts.uiOutlineContent': {
-    ko: '플롯 내용',
-    en: 'Outline content',
-    ja: '構成内容',
-    zh: '大纲内容',
-  },
   'prompts.uiAdvancedRelatedOutlines': {
     ko: '함께 참고할 플롯',
     en: 'Related outlines',
@@ -838,12 +832,6 @@ export const messages = {
     en: 'Load latest version',
     ja: '最新の内容を読み込む',
     zh: '加载最新内容',
-  },
-  'prompts.uiCloseKeepDraft': {
-    ko: '초안을 보관하고 닫기',
-    en: 'Keep draft and close',
-    ja: '下書きを保持して閉じる',
-    zh: '保留草稿并关闭',
   },
   'prompts.uiManageOutline': {
     ko: '플롯 관리',
@@ -911,11 +899,11 @@ export const messages = {
     ja: '続きを書く',
     zh: '续写',
   },
-  'prompts.uiWriteThisUnit': {
-    ko: '이 단위 집필',
-    en: 'Write this unit',
-    ja: 'この単位を執筆',
-    zh: '撰写此单元',
+  'prompts.uiWrite': {
+    ko: '집필하기',
+    en: 'Write',
+    ja: '執筆する',
+    zh: '写作',
   },
   'prompts.uiCheckAgainstSource': {
     ko: '원문과 점검',
@@ -941,23 +929,17 @@ export const messages = {
     ja: '執筆準備を閉じる',
     zh: '关闭写作准备',
   },
-  'prompts.uiNoOutlineContentYet': {
-    ko: '아직 플롯 내용이 없어요.',
-    en: 'No outline content yet.',
-    ja: '構成内容はまだありません。',
-    zh: '还没有大纲内容。',
-  },
   'prompts.uiAdditionalInstructionsAndStoppingPointOptional': {
     ko: '이번 추가 지시와 멈출 지점 (선택)',
     en: 'Additional instructions and stopping point (optional)',
     ja: '今回の追加指示と停止位置（任意）',
     zh: '本次补充指令与停止位置（可选）',
   },
-  'prompts.uiPreviousWritingRequestDraftReadAndCopy': {
-    ko: '이전 집필 요청 초안 (읽기 및 복사)',
-    en: 'Previous writing request draft (view and copy)',
-    ja: '以前の執筆リクエスト下書き（閲覧とコピー）',
-    zh: '先前写作请求草稿（查看与复制）',
+  'prompts.uiPreviousWritingRequest': {
+    ko: '이전 집필 요청',
+    en: 'Previous writing request',
+    ja: '以前の執筆リクエスト',
+    zh: '上次写作请求',
   },
   'prompts.uiPreviousWritingRequestDraft': {
     ko: '이전 집필 요청 초안',
@@ -1001,11 +983,11 @@ export const messages = {
     ja: '今回の執筆で使う保存済み構成を表示します。',
     zh: '显示本次写作所用的已保存大纲。',
   },
-  'prompts.uiParentDirectionAndSelectedUnit': {
-    ko: '상위 방향과 선택 단위',
-    en: 'Parent direction and selected unit',
-    ja: '上位の方向性と選択単位',
-    zh: '上级方向与所选单元',
+  'prompts.uiParentOutlinesAndCurrentItem': {
+    ko: '상위 플롯과 현재 항목',
+    en: 'Parent outlines and current item',
+    ja: '上位の構成と現在の項目',
+    zh: '上级大纲与当前项目',
   },
   'prompts.uiChildEvents': {
     ko: '하위 사건',
@@ -1277,12 +1259,6 @@ export const messages = {
     ja: '入力を翻訳',
     zh: '翻译输入',
   },
-  'prompts.uiTranslateInputWithoutSendingItAutomatically': {
-    ko: '입력을 번역해요. 자동으로 전송하지 않아요.',
-    en: 'Translate input without sending it automatically.',
-    ja: '入力を翻訳します。自動送信はしません。',
-    zh: '翻译输入内容，不会自动发送。',
-  },
   'prompts.uiInputTranslationLanguage': {
     ko: '입력 번역 언어',
     en: 'Input translation language',
@@ -1301,11 +1277,11 @@ export const messages = {
     ja: '入力翻訳の状態',
     zh: '输入翻译状态',
   },
-  'prompts.uiTranslatingYourInputYouCanKeepEditing': {
-    ko: '입력을 번역하고 있어요. 계속 수정해도 괜찮아요.',
-    en: 'Translating your input. You can keep editing.',
-    ja: '入力を翻訳中… 引き続き編集できます。',
-    zh: '正在翻译输入，可以继续编辑。',
+  'prompts.uiTranslatingInput': {
+    ko: '입력 번역 중…',
+    en: 'Translating input…',
+    ja: '入力を翻訳中…',
+    zh: '正在翻译输入…',
   },
   'prompts.uiViewOriginalInput': {
     ko: '번역 전 원문 보기',
@@ -1450,12 +1426,6 @@ export const messages = {
     en: '{error} Your edits are preserved.',
     ja: '{error} 編集内容は保持しています。',
     zh: '{error} 已保留编辑内容。',
-  },
-  'prompts.inputErrorKept': {
-    ko: '{error} 작성한 입력은 유지돼요.',
-    en: '{error} Your input is preserved.',
-    ja: '{error} 入力は保持しています。',
-    zh: '{error} 已保留输入。',
   },
   'prompts.addNamed': { ko: '{name} 추가', en: 'Add {name}', ja: '{name}を追加', zh: '添加{name}' },
   'prompts.retryNamed': {

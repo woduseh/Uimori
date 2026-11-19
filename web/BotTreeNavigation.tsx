@@ -55,22 +55,22 @@ function readView(): View {
     return { open: {}, sort: 'recent', order: [], mode: 'bots' };
   }
 }
-/** First row of the sidebar and the drawer: choose a bot in the library or find any chat. */
+/** First row of the sidebar and the drawer: start a chat or find any chat. */
 export function NavigationQuickActions({
   onSearch,
-  onLibrary,
+  onNewChat,
   onNewHelper,
   helperWorkspace = false,
 }: {
   onSearch: () => void;
-  onLibrary: (tab: 'bot') => void;
+  onNewChat: () => void;
   onNewHelper?: () => void;
   helperWorkspace?: boolean;
 }) {
   useI18n();
   const newLabel = t(helperWorkspace ? 'helpers.m173' : 'transfer.m246');
   const searchLabel = t(helperWorkspace ? 'helpers.searchSessions' : 'transfer.m276');
-  const onNew = helperWorkspace ? onNewHelper : () => onLibrary('bot');
+  const onNew = helperWorkspace ? onNewHelper : () => onNewChat();
   return (
     <div className="navigation-quick-actions">
       <IconButton label={newLabel} icon={AddIcon} onClick={onNew} />
@@ -83,6 +83,7 @@ export const BotNavigation = memo(function BotNavigation(
     onLibraryChanged: () => Promise<void>;
     libraryError?: string;
     onSearch: () => void;
+    onNewChat: () => void;
     onNewHelper?: () => void;
     onHelperActivity?: () => void;
     quickActions?: boolean;
@@ -475,7 +476,7 @@ export const BotNavigation = memo(function BotNavigation(
         </nav>
         <NavigationQuickActions
           onSearch={props.onSearch}
-          onLibrary={onLibrary}
+          onNewChat={props.onNewChat}
           helperWorkspace={props.helperExpanded}
           onNewHelper={props.onNewHelper}
         />
@@ -537,7 +538,7 @@ export const BotNavigation = memo(function BotNavigation(
           {quickActions && (
             <NavigationQuickActions
               onSearch={props.onSearch}
-              onLibrary={onLibrary}
+              onNewChat={props.onNewChat}
               helperWorkspace={props.helperExpanded}
               onNewHelper={props.onNewHelper}
             />
@@ -582,42 +583,30 @@ export const BotNavigation = memo(function BotNavigation(
         <div ref={props.helperNavigationRef} className="helper-navigation-host" />
       ) : (
         <>
-          <nav className="bot-navigation-modes" aria-label={t('transfer.m291')}>
-            <button
-              type="button"
-              aria-label={t('transfer.m287')}
-              aria-pressed={view.mode === 'bots'}
-              title={t('transfer.m287')}
-              onClick={() => setMode('bots')}
-            >
-              <MessageCircle size={19} />
-            </button>
-            <button
-              type="button"
-              aria-label={t('transfer.d024', { v0: unreadChats })}
-              aria-pressed={view.mode === 'activity'}
-              title={t('transfer.m292')}
-              onClick={() => setMode('activity')}
-            >
-              <Inbox size={19} />
-              {unreadChats > 0 && <span className="activity-mode-count">{unreadChats}</span>}
-            </button>
-          </nav>
-          {view.mode === 'bots' && (
-            <div
-              className={`bot-tree-section-heading ${dropKey === 'unfiled' ? 'tree-drop-target' : ''}`}
-              onDragOver={(event) => overEntry(event, 'unfiled')}
-              onDrop={(event) => void dropEntry(event, null)}
-            >
+          <div
+            className={`bot-navigation-header bot-tree-section-heading ${dropKey === 'unfiled' ? 'tree-drop-target' : ''}`}
+            onDragOver={(event) => overEntry(event, 'unfiled')}
+            onDrop={(event) => void dropEntry(event, null)}
+          >
+            <nav className="bot-navigation-modes" aria-label={t('transfer.m291')}>
               <button
-                className="bot-folder-toggle"
-                aria-label={t('transfer.m005')}
-                aria-expanded={!!view.open.section}
-                onClick={() => toggle('section')}
+                type="button"
+                aria-pressed={view.mode === 'bots'}
+                onClick={() => setMode('bots')}
               >
                 {t('transfer.m005')}
-                <ExpandIcon size={14} className={view.open.section ? 'expanded' : ''} />
               </button>
+              <button
+                type="button"
+                aria-label={t('transfer.d024', { v0: unreadChats })}
+                aria-pressed={view.mode === 'activity'}
+                onClick={() => setMode('activity')}
+              >
+                {t('transfer.m292')}
+                {unreadChats > 0 && <span className="activity-mode-count">{unreadChats}</span>}
+              </button>
+            </nav>
+            {view.mode === 'bots' && (
               <div className="bot-row-actions">
                 <ActionMenu label={t('transfer.m293')} viewport>
                   <div className="action-menu-group">
@@ -655,8 +644,8 @@ export const BotNavigation = memo(function BotNavigation(
                   </div>
                 </ActionMenu>
               </div>
-            </div>
-          )}
+            )}
+          </div>
           <div className="bot-navigation-scroll">
             {view.mode === 'activity' && (
               <ActivityNavigation
@@ -675,7 +664,7 @@ export const BotNavigation = memo(function BotNavigation(
                 onRetry={() => void activityFeed.refresh()}
               />
             )}
-            {view.mode === 'bots' && view.open.section && (
+            {view.mode === 'bots' && (
               <nav
                 aria-label={t('transfer.m298')}
                 onKeyDown={(event) => {

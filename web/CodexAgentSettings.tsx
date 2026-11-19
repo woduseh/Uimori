@@ -6,10 +6,11 @@ import {
   formatDate,
   message as uiMessage,
 } from './i18n.js';
-import { RefreshIcon } from './ui-icons.js';
+import { CheckIcon, CopyIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
+import { TransientNotice } from './TransientNotice.js';
 import './codex-agent-settings.css';
 import { useEffect, useRef, useState } from 'react';
 import type { CodexRuntimeStatus } from '../core/agent-runtime.js';
@@ -108,7 +109,9 @@ export function CodexAgentSettings({
   const [checking, setChecking] = useState(false);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
-    [refresh, setRefresh] = useState(0);
+    [refresh, setRefresh] = useState(0),
+    [copied, setCopied] = useState(false),
+    [copyError, setCopyError] = useState('');
   const version = useRef(0),
     locked = useRef(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Explicit refresh restarts polling and its login deadline.
@@ -160,6 +163,26 @@ export function CodexAgentSettings({
       setBusy(false);
     }
   }
+  const recheck = () => setRefresh((value) => value + 1);
+  async function copyLoginCode(code: string) {
+    setCopyError('');
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+    } catch {
+      setCopyError(uiMessage('providers.loginCodeCopyFailed'));
+    }
+  }
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1800);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const recheckAction = (
+    <button type="button" className="secondary" disabled={busy || checking} onClick={recheck}>
+      {t('providers.m423')}
+    </button>
+  );
   // Only the official HTTPS verification page may be opened from runtime data.
   const verificationUrl = (() => {
     try {
@@ -181,18 +204,14 @@ export function CodexAgentSettings({
       className={`codex-agent-settings${!status ? ' settings-loading-region' : ''}`}
       aria-label={t('providers.m421')}
     >
-      <div className="codex-agent-heading">
-        <IconButton
-          icon={RefreshIcon}
-          label={t('providers.m423')}
-          disabled={busy || checking}
-          aria-busy={checking}
-          className={checking ? 'codex-agent-refreshing' : ''}
-          onClick={() => setRefresh((value) => value + 1)}
-        />
-      </div>
       {!status ? (
-        <LoadingState presentation="region" loading={!error} label={t('providers.m424')} />
+        <LoadingState
+          presentation="region"
+          loading={!error}
+          error={translateMessage(error)}
+          label={t('providers.m424')}
+          onRetry={recheck}
+        />
       ) : (
         <>
           {!(status.authenticated && status.authMode === 'chatgpt') && (
@@ -207,7 +226,9 @@ export function CodexAgentSettings({
             </p>
           )}
           {!status.available ? (
-            <p>{(status.error && runtimeErrors[status.error]) || t('providers.m429')}</p>
+            <NoticeBanner actions={recheckAction}>
+              {(status.error && runtimeErrors[status.error]) || t('providers.m429')}
+            </NoticeBanner>
           ) : status.authMode === 'apikey' ? (
             <p>{t('providers.m430')}</p>
           ) : status.error && status.error !== 'CODEX_LOGIN_REQUIRED' ? (
@@ -218,7 +239,21 @@ export function CodexAgentSettings({
           {status.login && (
             <div className="compact-card" role="region" aria-label={t('providers.m443')}>
               <strong>{t('providers.m444')}</strong>
-              <code>{status.login.userCode}</code>
+              <span className="codex-login-code">
+                <code>{status.login.userCode}</code>
+                <IconButton
+                  icon={copied ? CheckIcon : CopyIcon}
+                  label={t('providers.copyLoginCode')}
+                  className="secondary"
+                  size={16}
+                  onClick={() => void copyLoginCode(status.login!.userCode)}
+                />
+              </span>
+              {copyError && (
+                <span className="error" role="alert">
+                  {translateMessage(copyError)}
+                </span>
+              )}
               {verificationUrl ? (
                 <a href={verificationUrl} target="_blank" rel="noopener noreferrer">
                   {t('providers.m445')}
@@ -341,7 +376,12 @@ export function CodexAgentSettings({
           </div>
         </>
       )}
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      {status && error && (
+        <NoticeBanner tone="error" actions={recheckAction}>
+          {translateMessage(error)}
+        </NoticeBanner>
+      )}
+      <TransientNotice message={copied ? uiMessage('providers.loginCodeCopied') : ''} />
     </section>
   );
 }

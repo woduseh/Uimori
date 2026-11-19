@@ -27,7 +27,7 @@ import './recovery-settings.css';
 import './settings-layout.css';
 import { IllustrationSettingsEditor } from './IllustrationSettingsEditor.js';
 import { LoreContextDefaultsEditor } from './LoreContextDefaultsEditor.js';
-import { useEffect, useId, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useRef, useState } from 'react';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
 import { useCompactLayout } from './useCompactLayout.js';
@@ -261,13 +261,23 @@ const appSaveSections = [
 ] as const;
 
 type SettingsDestination = { label: string; terms: string; anchor?: string };
+type SettingsGroup = 'display' | 'generation' | 'system';
 type SettingsCategory = {
   key: string;
   label: string;
   icon: LucideIcon;
+  group: SettingsGroup;
   terms?: string;
   destinations?: SettingsDestination[];
 };
+
+function getSettingsGroupLabels(): Record<SettingsGroup, string> {
+  return {
+    display: t('chatsettings.groupDisplay'),
+    generation: t('chatsettings.groupGeneration'),
+    system: t('chatsettings.groupSystem'),
+  };
+}
 
 function getSettingsCategories(): SettingsCategory[] {
   return [
@@ -275,6 +285,7 @@ function getSettingsCategories(): SettingsCategory[] {
       key: 'general',
       label: t('chatsettings.m15'),
       icon: SettingsIcon,
+      group: 'display',
       destinations: [
         {
           label: t('chatsettings.m16'),
@@ -295,43 +306,67 @@ function getSettingsCategories(): SettingsCategory[] {
         { label: t('chatsettings.m23'), terms: t('chatsettings.m24'), anchor: 'session' },
       ],
     },
-    { key: 'themes', label: t('chatsettings.m25'), icon: Palette, terms: t('chatsettings.m26') },
+    {
+      key: 'themes',
+      label: t('chatsettings.m25'),
+      icon: Palette,
+      group: 'display',
+      terms: t('chatsettings.m26'),
+    },
     {
       key: 'models',
       label: t('chatsettings.m27'),
       icon: ModelIcon,
+      group: 'generation',
       terms: `${t('chatsettings.m28')} ${t('settings.helperTaskTimeout')}`,
     },
     {
       key: 'prompts',
       label: t('chatsettings.m29'),
       icon: PromptIcon,
+      group: 'generation',
       terms: t('chatsettings.m30'),
     },
     {
       key: 'connections',
       label: t('chatsettings.m31'),
       icon: ConnectionIcon,
+      group: 'generation',
       terms: t('chatsettings.m32'),
     },
-    { key: 'lore', label: t('chatsettings.m33'), icon: LibraryIcon, terms: t('chatsettings.m34') },
-    { key: 'agents', label: t('chatsettings.m35'), icon: AgentIcon, terms: t('chatsettings.m36') },
+    {
+      key: 'lore',
+      label: t('chatsettings.m33'),
+      icon: LibraryIcon,
+      group: 'generation',
+      terms: t('chatsettings.m34'),
+    },
+    {
+      key: 'agents',
+      label: t('chatsettings.m35'),
+      icon: AgentIcon,
+      group: 'generation',
+      terms: t('chatsettings.m36'),
+    },
     {
       key: 'illustrations',
       label: t('chatsettings.m37'),
       icon: IllustrationIcon,
+      group: 'generation',
       terms: t('chatsettings.m38'),
     },
     {
       key: 'usage',
       label: t('chatsettings.m39'),
       icon: ChartNoAxesColumn,
+      group: 'system',
       terms: t('chatsettings.m40'),
     },
     {
       key: 'data',
       label: t('chatsettings.m41'),
       icon: DataIcon,
+      group: 'system',
       destinations: [
         {
           label: t('chatsettings.m42'),
@@ -339,7 +374,13 @@ function getSettingsCategories(): SettingsCategory[] {
         },
       ],
     },
-    { key: 'about', label: t('chatsettings.m44'), icon: Info, terms: t('chatsettings.m45') },
+    {
+      key: 'about',
+      label: t('chatsettings.m44'),
+      icon: Info,
+      group: 'system',
+      terms: t('chatsettings.m45'),
+    },
   ];
 }
 
@@ -389,6 +430,7 @@ export function AppSettingsPanel({
 }) {
   useI18n();
   const settingsCategories = getSettingsCategories();
+  const settingsGroupLabels = getSettingsGroupLabels();
   const librarySettingsSubjects = getLibrarySettingsSubjects();
   const [signingOut, setSigningOut] = useState(false);
   const startTab =
@@ -576,10 +618,16 @@ export function AppSettingsPanel({
             <button type="button">
               <span>{title}</span>
             </button>
-            {settingsCategories.map((item) => (
-              <option key={item.key} value={item.key}>
-                {item.label}
-              </option>
+            {(Object.keys(settingsGroupLabels) as SettingsGroup[]).map((group) => (
+              <optgroup key={group} label={settingsGroupLabels[group]}>
+                {settingsCategories
+                  .filter((item) => item.group === group)
+                  .map((item) => (
+                    <option key={item.key} value={item.key}>
+                      {item.label}
+                    </option>
+                  ))}
+              </optgroup>
             ))}
           </select>
         ) : undefined
@@ -636,21 +684,27 @@ export function AppSettingsPanel({
                 [next]?.focus();
             }}
           >
-            {settingsCategories.map(({ key, label, icon: Icon }) => (
-              <button
-                type="button"
-                role={compact ? undefined : 'tab'}
-                key={key}
-                id={`${id}-${key}-tab`}
-                aria-controls={`${id}-${key}-panel`}
-                aria-label={label}
-                aria-selected={compact ? undefined : active === key}
-                tabIndex={compact || active === key ? 0 : -1}
-                onClick={() => select(key)}
-              >
-                <Icon size={18} aria-hidden="true" />
-                <span>{label}</span>
-              </button>
+            {settingsCategories.map(({ key, label, icon: Icon, group }, index) => (
+              <Fragment key={key}>
+                {settingsCategories[index - 1]?.group !== group && (
+                  <span className="settings-navigation-group" aria-hidden="true">
+                    {settingsGroupLabels[group]}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  role={compact ? undefined : 'tab'}
+                  id={`${id}-${key}-tab`}
+                  aria-controls={`${id}-${key}-panel`}
+                  aria-label={label}
+                  aria-selected={compact ? undefined : active === key}
+                  tabIndex={compact || active === key ? 0 : -1}
+                  onClick={() => select(key)}
+                >
+                  <Icon size={18} aria-hidden="true" />
+                  <span>{label}</span>
+                </button>
+              </Fragment>
             ))}
           </div>
           {query && (
@@ -717,10 +771,7 @@ export function AppSettingsPanel({
                       tabIndex={-1}
                       className="settings-section settings-group"
                     >
-                      <h3>
-                        {t('chatsettings.m16')}
-                        <span className="scope-badge">{t('chatsettings.m58')}</span>
-                      </h3>
+                      <h3>{t('chatsettings.m16')}</h3>
                       <div className="settings-group-body">
                         <LanguageSelect />
                         <label className="settings-row">
@@ -834,10 +885,7 @@ export function AppSettingsPanel({
                       tabIndex={-1}
                       className="settings-section"
                     >
-                      <h3>
-                        {t('chatsettings.readingSettings')}
-                        <span className="scope-badge">{t('chatsettings.m58')}</span>
-                      </h3>
+                      <h3>{t('chatsettings.readingSettings')}</h3>
                       {readingSettings}
                     </section>
                   )}
@@ -848,15 +896,17 @@ export function AppSettingsPanel({
                       className="settings-section settings-services"
                       aria-label={t('chatsettings.m21')}
                     >
-                      <h3>
-                        {t('chatsettings.m21')}
-                        <span className="scope-badge">{t('chatsettings.m58')}</span>
-                      </h3>
+                      <h3>{t('chatsettings.m21')}</h3>
                       <InstallApp />
                       <PushSettings />
                     </section>
                   )}
-                  {key === 'usage' && <UsagePanel connections={state.library?.connections} />}
+                  {key === 'usage' && (
+                    <UsagePanel
+                      connections={state.library?.connections}
+                      active={active === 'usage' && showingDetail}
+                    />
+                  )}
                   {key === 'models' && state.library && (
                     <ModelWorkspaceEditor
                       library={state.library}

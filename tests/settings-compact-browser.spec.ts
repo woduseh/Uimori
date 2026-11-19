@@ -129,19 +129,14 @@ for (const colorScheme of ['dark'] as const) {
         } else if (section === '프로바이더와 모델') {
           await expect(pane.getByLabel('프로바이더와 모델 검색', { exact: true })).toBeVisible();
         } else if (section === '삽화') {
-          await expect(
-            pane.getByRole('region', { name: '현재 삽화 설정', exact: true })
-          ).toBeVisible();
-          await expect(pane.getByLabel('삽화 프리셋 적용 범위', { exact: true })).toBeHidden();
-          await pane
-            .locator('summary')
-            .filter({ hasText: /^프리셋$/ })
-            .click();
+          await expect(pane.getByRole('heading', { name: '프리셋', exact: true })).toBeVisible();
+          await expect(pane.getByRole('heading', { name: '생성 환경', exact: true })).toBeVisible();
           await expect(pane.getByLabel('삽화 프리셋 적용 범위', { exact: true })).toBeVisible();
         } else if (section === '사용량') {
+          await expect(pane.getByRole('button', { name: '이번 달', exact: true })).toBeVisible();
           await expect(
             pane.getByRole('button', { name: '사용량 새로고침', exact: true })
-          ).toBeVisible();
+          ).toHaveCount(0);
         } else {
           await expect(pane.getByTestId('app-version')).toHaveText(`v${packageJson.version}`);
           await expect(pane.getByTestId('app-build-id')).toHaveText(health.buildId);
@@ -499,10 +494,6 @@ test('SCUILEAVE global illustration settings retain failed drafts and save befor
     await page.goto('/');
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '삽화');
-    await page
-      .locator('summary')
-      .filter({ hasText: /^생성 환경$/ })
-      .click();
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
     const count = settings.getByLabel('장면당 최대 삽화 수', { exact: true });
     await settings.getByLabel('응답 완료 후 자동 삽화 생성', { exact: true }).check();

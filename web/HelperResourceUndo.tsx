@@ -4,8 +4,10 @@ import { Undo2 } from 'lucide-react';
 import { helperResourceEditResources, type HelperResourceEdit } from '../core/helper.js';
 import { api } from './api.js';
 import { Dialog } from './Dialog.js';
+import { DismissibleError } from './DismissibleError.js';
 import { IconButton } from './IconButton.js';
 import { editorContextChanged, hasUnsavedResourceEditor } from './resource-editor.js';
+import { TransientNotice } from './TransientNotice.js';
 import './helper-resource-undo.css';
 
 const hasUnsavedEditResource = (edit: HelperResourceEdit) =>
@@ -30,6 +32,7 @@ export function HelperResourceUndo({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [restored, setRestored] = useState(false);
+  const [attempted, setAttempted] = useState(false);
   const [dirty, setDirty] = useState(() => hasUnsavedEditResource(edit));
   const alive = useRef(true);
   const locked = useRef(false);
@@ -54,7 +57,7 @@ export function HelperResourceUndo({
     resources.length > 1
       ? t('helpers.m151', { v0: edit.title, v1: formatNumber(resources.length - 1) })
       : edit.title;
-  const undone = restored || edit.undone;
+  const undone = restored || !!edit.undone;
   const reason = dirty ? t('helpers.m152') : edit.reason;
   const unavailable = disabled || busy || dirty || !edit.canUndo || !!undone;
   async function undo() {
@@ -64,6 +67,7 @@ export function HelperResourceUndo({
       return;
     }
     locked.current = true;
+    setAttempted(true);
     setBusy(true);
     setError('');
     let accepted = false;
@@ -99,32 +103,39 @@ export function HelperResourceUndo({
       if (alive.current) setBusy(false);
     }
   }
+  if (undone || !edit.canUndo)
+    return (
+      <>
+        <TransientNotice
+          message={undone && attempted ? uiMessage('helpers.resourceEditRestored', { title }) : ''}
+        />
+        <DismissibleError message={error} onDismiss={() => setError('')} />
+      </>
+    );
   return (
     <section className="helper-resource-undo" aria-label={t('helpers.m156')}>
       <div>
-        <span role={undone ? 'status' : undefined} className="ui-meta-row">
-          <span>{undone ? t('helpers.m157') : t('helpers.m158')}</span>
+        <span className="ui-meta-row">
+          <span>{t('helpers.m158')}</span>
           <span>{title}</span>
         </span>
-        {!undone && (
-          <IconButton
-            icon={Undo2}
-            label={t('helpers.m159')}
-            title={reason ? translateMessage(reason) : t('helpers.m160')}
-            disabled={unavailable}
-            className="secondary"
-            onClick={() => setConfirming(true)}
-          />
-        )}
+        <IconButton
+          icon={Undo2}
+          label={t('helpers.m159')}
+          title={reason ? translateMessage(reason) : t('helpers.m160')}
+          disabled={unavailable}
+          className="secondary"
+          onClick={() => setConfirming(true)}
+        />
       </div>
-      {!undone && reason && <small>{translateMessage(reason)}</small>}
+      {reason && <small>{translateMessage(reason)}</small>}
       {error && (
         <p className="error" role="alert">
           {translateMessage(error)}
         </p>
       )}
       <Dialog
-        open={confirming && !undone}
+        open={confirming}
         title={t('helpers.m161')}
         variant="confirmation"
         onClose={() => {

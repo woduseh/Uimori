@@ -834,12 +834,6 @@ export const messages = {
     ja: '未予約',
     zh: '未安排',
   },
-  'transfer.m166': {
-    ko: '저장된 설정 기준',
-    en: 'Based on saved settings',
-    ja: '保存済み設定に基づく',
-    zh: '基于已保存的设置',
-  },
   'transfer.m167': {
     ko: '지금 백업',
     en: 'Back up now',
@@ -1039,10 +1033,10 @@ export const messages = {
     zh: '结束场景',
   },
   'transfer.m202': {
-    ko: 'HTML과 Risu 상태창 표기는 그대로 담아요. 이미지와 EPUB는 포함하지 않아요.',
-    en: 'HTML and Risu status markup is preserved. Images and EPUB are excluded.',
-    ja: 'HTML、Risuのステータス表示はそのまま含めます。画像、EPUBは含めません。',
-    zh: '保留 HTML 和 Risu 状态栏标记，不包含图片和 EPUB。',
+    ko: '이미지는 제외돼요.',
+    en: 'Images are excluded.',
+    ja: '画像は含めません。',
+    zh: '不包含图片。',
   },
   'transfer.m203': {
     ko: '선택한 범위에 아직 번역되지 않은 장면이 있으면 내보낼 수 없어요.',
@@ -1506,12 +1500,6 @@ export const messages = {
     ja: 'プロンプト',
     zh: '提示词',
   },
-  'transfer.m287': {
-    ko: '봇 탐색',
-    en: 'Browse bots',
-    ja: 'ボットを探す',
-    zh: '浏览机器人',
-  },
   'transfer.m288': {
     ko: '앱 탐색',
     en: 'App navigation',
@@ -1693,10 +1681,10 @@ export const messages = {
     zh: '请重新确认所选的起始项。',
   },
   'transfer.m320': {
-    ko: '채팅 생성 응답을 확인하지 못했어요. 목록을 새로 확인한 뒤 이어서 설정해 주세요. 중복 생성을 막기 위해 자동 재전송하지 않아요.',
-    en: 'The chat creation response is unknown. Refresh the list, then continue setting up. It will not be resent automatically to avoid duplicates.',
-    ja: 'チャット作成の応答を確認できませんでした。一覧を更新してから設定を続けてください。重複作成を避けるため自動再送しません。',
-    zh: '无法确认聊天创建响应，请刷新列表后继续设置。为避免重复创建，不会自动重发。',
+    ko: '채팅 생성 응답을 확인하지 못했어요. 목록을 새로 확인한 뒤 이어서 설정해 주세요.',
+    en: 'The chat creation response is unknown. Refresh the list, then continue setting up.',
+    ja: 'チャット作成の応答を確認できませんでした。一覧を更新してから設定を続けてください。',
+    zh: '无法确认聊天创建响应，请刷新列表后继续设置。',
   },
   'transfer.m321': {
     ko: '이름 지정됨',
@@ -1789,10 +1777,10 @@ export const messages = {
     zh: '全局模型设置',
   },
   'transfer.m336': {
-    ko: '본문 생성 전에 사용 가능한 전역 본문 모델을 선택해 주세요. 채팅만 먼저 만들 수도 있어요.',
-    en: 'Select an available global story model before generating text. You can create the chat first.',
-    ja: '本文を生成する前に、使用できる全体の本文モデルを選んでください。先にチャットだけ作成することもできます。',
-    zh: '生成正文前请选择可用的全局正文模型，也可先创建聊天。',
+    ko: '본문 생성 전에 사용 가능한 전역 본문 모델을 선택해 주세요.',
+    en: 'Select an available global story model before generating text.',
+    ja: '本文を生成する前に、使用できる全体の本文モデルを選んでください。',
+    zh: '生成正文前请选择可用的全局正文模型。',
   },
   'transfer.m337': {
     ko: '전역 설정을 다시 불러오는 중이에요…',
@@ -1943,12 +1931,6 @@ export const messages = {
     en: 'v3 CHARX, JPEG, PNG, JSON, .risum, module ZIP, up to {v0, number} MiB',
     ja: 'v3 CHARX、JPEG、PNG、JSON、.risum、モジュールZIP、最大{v0, number} MiB',
     zh: 'v3 CHARX，JPEG，PNG，JSON，.risum，模块 ZIP，最大 {v0, number} MiB',
-  },
-  'transfer.d005': {
-    ko: '자료 종류: {v0}',
-    en: 'Resource type: {v0}',
-    ja: '資料の種類：{v0}',
-    zh: '资料类型，{v0}',
   },
   'transfer.d006': {
     ko: '자료 {v0, number}개를 추가했어요.',
@@ -2106,12 +2088,6 @@ export const messages = {
     ja: '{error}{retained, select, true { 確認済みのファイルは保持しました。} other {}}',
     zh: '{error}{retained, select, true { 已保留之前检查的文件。} other {}}',
   },
-  'transfer.importTypeChange': {
-    ko: '{kind, select, bot {봇으로} module {모듈로} persona {페르소나로} other {자료로}} 가져오기, 변경',
-    en: 'Import as {kind, select, bot {bot} module {module} persona {persona} other {resource}}, Change',
-    ja: '{kind, select, bot {ボット} module {モジュール} persona {ペルソナ} other {資料}}として取り込む、変更',
-    zh: '导入为{kind, select, bot {机器人} module {模块} persona {角色} other {资料}}，更改',
-  },
   'transfer.importKind': {
     ko: '{kind, select, module {모듈} persona {페르소나} other {봇}} 가져오기',
     en: 'Import {kind, select, module {module} persona {persona} other {bot}}',
@@ -2221,10 +2197,10 @@ export const messages = {
     zh: '{count, number} 项进行中',
   },
   'transfer.backupSize': {
-    ko: '{size} MiB, DB {schema}',
-    en: '{size} MiB, DB {schema}',
-    ja: '{size} MiB、DB {schema}',
-    zh: '{size} MiB，DB {schema}',
+    ko: '{size} MiB',
+    en: '{size} MiB',
+    ja: '{size} MiB',
+    zh: '{size} MiB',
   },
   'transfer.finding.asset-unavailable': {
     ko: '파일 밖의 이미지나 찾을 수 없는 첨부 자료는 가져오지 않아요.',
@@ -2274,24 +2250,6 @@ export const messages = {
     ja: '資料の説明は先頭4,000文字まで表示します。',
     zh: '资料说明最多显示前 4,000 个字符。',
   },
-  'transfer.finding.native-lore-model': {
-    ko: '선택적 로어는 관련성에 따라 선별해요. 선택되지 않은 로어도 본문 모델이 조회할 수 있어요.',
-    en: 'Optional lore is selected based on relevance. Unselected lore can also be looked up by the story model.',
-    ja: '任意のロアは関連性に応じて選別します。選ばれなかったロアも本文モデルが参照できます。',
-    zh: '可选设定将按相关性进行筛选。未选中的设定也可由正文模型查询。',
-  },
-  'transfer.finding.source-file-not-retained': {
-    ko: '원본 파일은 앱에 보관하지 않아요.',
-    en: 'Original files are not stored in the app.',
-    ja: '元ファイルはアプリ内に保管されません。',
-    zh: '原始文件不会保存在应用中。',
-  },
-  'transfer.finding.native-risu': {
-    ko: '카드, 모듈, CBS, 정규식, 트리거 코드를 Risu 형식으로 가져와요. 본문, 첫 메시지, 로어는 가져온 자료에서 표시해요. 일부 스크립트는 실행되지 않을 수 있어요.',
-    en: 'Cards, modules, CBS, regular expressions, and trigger codes are imported in Risu format. Text, first messages, and lore are displayed from imported resources. Some scripts may not run.',
-    ja: 'カード、モジュール、CBS、正規表現、トリガーコードをRisu形式でインポートします。本文、最初のメッセージ、ロアはインポートした資料から表示します。一部のスクリプトは実行されない場合があります。',
-    zh: '以 Risu 格式导入卡片、模块、CBS、正则表达式和触发器代码。正文、首条消息和设定从导入的资料中显示。部分脚本可能无法执行。',
-  },
   'transfer.finding.native-model-calls': {
     ko: '스크립트에서 모델 호출로 보이는 코드를 찾았어요.',
     en: 'Found code in the script that appears to call a model.',
@@ -2309,12 +2267,6 @@ export const messages = {
     en: 'The position and surrounding text specified by the memory block are not applied. Summaries and memories sent to the model follow Uimori’s context handling.',
     ja: 'memoryブロックの位置と前後の文は適用しません。要約や記憶をモデルに送る際はUimoriのコンテキスト処理に従います。',
     zh: '不应用 memory 区块指定的位置和前后文本。向模型发送摘要和记忆时，使用 Uimori 的上下文处理方式。',
-  },
-  'transfer.finding.RISU_PRESET_NATIVE_PROMPT': {
-    ko: '프롬프트 구성, CBS, 토글, 기본 변수, 정규식을 원래 형식으로 사용해요. 모델, 연결, 생성 설정은 Uimori의 선택을 유지해요.',
-    en: 'Prompt structure, CBS, toggles, default variables, and regular expressions use their original format. Uimori’s selected model, connection, and generation settings stay in effect.',
-    ja: 'プロンプト構成、CBS、トグル、既定変数、正規表現は元の形式で使います。モデル、接続、生成設定はUimoriでの選択を保持します。',
-    zh: '以原始格式使用提示词结构、CBS、开关、默认变量和正则表达式，保留 Uimori 中选择的模型、连接和生成设置。',
   },
   'transfer.finding.decoratorPosition': {
     ko: '로어의 `@@{decorator}` 위치 및 삽입 지시문은 현재 컨텍스트 배치에 적용하지 않아요.',
@@ -2351,11 +2303,5 @@ export const messages = {
     en: 'Choose a chat to view its tasks',
     ja: '作業状況を確認するチャット',
     zh: '选择要查看任务的聊天',
-  },
-  'transfer.followGlobalSettings': {
-    ko: '전역 설정 따름',
-    en: 'Uses global settings',
-    ja: '全体設定に従う',
-    zh: '使用全局设置',
   },
 } as const;

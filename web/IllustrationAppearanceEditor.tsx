@@ -1,9 +1,9 @@
-import { Check, ImagePlus, Plus, Trash2, Unlink } from 'lucide-react';
+import { ImagePlus, Plus, Trash2, Unlink } from 'lucide-react';
 import { useState } from 'react';
 import type { IllustrationAppearanceProfile } from '../core/illustration-profiles.js';
 import type { PackageImage } from '../core/package-images.js';
-import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
+import { ImageChoiceDialog } from './ImageChoiceDialog.js';
 import { t, useI18n } from './i18n.js';
 import './illustration-appearance.css';
 
@@ -18,15 +18,9 @@ export function IllustrationAppearanceEditor({
 }) {
   useI18n();
   const [picking, setPicking] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
   const edit = (id: string, change: Partial<IllustrationAppearanceProfile>) =>
     onChange(value.map((profile) => (profile.id === id ? { ...profile, ...change } : profile)));
   const selected = value.find((profile) => profile.id === picking);
-  const found = images.filter((image) =>
-    `${image.title} ${image.description}`
-      .toLocaleLowerCase()
-      .includes(query.trim().toLocaleLowerCase())
-  );
   return (
     <section className="appearance-editor" aria-label={t('visuals.defaultAppearances')}>
       {value.map((profile) => {
@@ -39,10 +33,7 @@ export function IllustrationAppearanceEditor({
                 className="secondary appearance-image-picker"
                 aria-label={t('visuals.chooseReferenceImage')}
                 disabled={!images.length}
-                onClick={() => {
-                  setQuery('');
-                  setPicking(profile.id);
-                }}
+                onClick={() => setPicking(profile.id)}
               >
                 {image ? (
                   <img src={`/api/package-image-blobs/${image.blobHash}`} alt={image.title} />
@@ -103,41 +94,20 @@ export function IllustrationAppearanceEditor({
         <Plus size={18} aria-hidden="true" />
         {t('visuals.addCharacterProfile')}
       </button>
-      <Dialog
+      <ImageChoiceDialog
         open={!!selected}
-        title={t('visuals.chooseReferenceImage')}
+        images={images.map((image) => ({
+          id: image.id,
+          title: image.title,
+          description: image.description,
+          url: `/api/package-image-blobs/${image.blobHash}`,
+        }))}
+        selectedId={selected?.referenceImageId}
+        onChoose={(id) => {
+          if (selected) edit(selected.id, { referenceImageId: id });
+        }}
         onClose={() => setPicking(null)}
-      >
-        <input
-          type="search"
-          aria-label={t('library.searchImages')}
-          placeholder={t('library.nameOrDescription')}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') event.preventDefault();
-          }}
-        />
-        <div className="appearance-image-choices">
-          {found.map((image) => (
-            <button
-              type="button"
-              className="secondary"
-              key={image.id}
-              aria-pressed={selected?.referenceImageId === image.id}
-              onClick={() => {
-                if (selected) edit(selected.id, { referenceImageId: image.id });
-                setPicking(null);
-              }}
-            >
-              <img src={`/api/package-image-blobs/${image.blobHash}`} alt="" loading="lazy" />
-              <span>{image.title}</span>
-              {selected?.referenceImageId === image.id && <Check size={18} aria-hidden="true" />}
-            </button>
-          ))}
-          {!found.length && query && <p className="muted">{t('library.noSearchResults')}</p>}
-        </div>
-      </Dialog>
+      />
     </section>
   );
 }

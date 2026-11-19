@@ -170,6 +170,16 @@
   font-size: var(--font-body);
   font-weight: 600;
 }
+.illustration-reference-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.illustration-reference-heading small {
+  font-size: var(--font-small);
+  color: var(--muted);
+}
 .illustration-references > p,
 .illustration-character-profiles > p {
   margin: 0;
@@ -221,8 +231,23 @@
   object-fit: cover;
   border-radius: var(--radius-control);
 }
-.illustration-profile-reference select {
+.illustration-profile-reference .settings-row-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
+}
+.illustration-reference-picker {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 60px;
+  padding: 0;
+  overflow: hidden;
+}
+.illustration-reference-picker img {
+  border-radius: 0;
 }
 .illustration-profile-add {
   justify-self: start;

@@ -326,6 +326,10 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
   const partial = [totals.inputTokens, totals.outputTokens].some(
     (amount) => amount.reported > 0 && amount.unknown > 0
   );
+  const repeatedInput =
+    usage.attempts.length > 1 ||
+    totals.internalModelCalls.value > 1 ||
+    totals.cachedInputTokens.value > 0;
   return (
     <div className="helper-result-usage">
       <details className="execution-record scene-usage">
@@ -442,7 +446,9 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
             <UsageAmount amount={totals.costUsd} cost />
           </dd>
         </dl>
-        <p className="helper-usage-note">{t('helperResults.cumulativeExplanation')}</p>
+        {repeatedInput && (
+          <p className="helper-usage-note">{t('helperResults.cumulativeExplanation')}</p>
+        )}
       </details>
     </div>
   );

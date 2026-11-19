@@ -27,6 +27,7 @@ function PricingSummary({
     ...primaryRates,
     ...(snapshot.rates.cacheWrite1h !== undefined ? ['cacheWrite1h' as const] : []),
   ];
+  const notes = snapshot.source === 'manual' && context === 'current' ? [] : snapshot.notes;
   return (
     <div className="model-pricing-summary">
       <p className="ui-meta-row">
@@ -110,9 +111,9 @@ function PricingSummary({
           })}
         </p>
       )}
-      {snapshot.notes.length > 0 && (
+      {notes.length > 0 && (
         <ul className="model-pricing-notes">
-          {snapshot.notes.map((note, index) => (
+          {notes.map((note, index) => (
             <li key={`${index}:${note}`}>{pricingNote(note)}</li>
           ))}
         </ul>
@@ -170,8 +171,7 @@ export function ModelPricingEditor({
   forcedVertexTier?: VertexRequestTier;
 }) {
   useI18n();
-  if (connection?.protocol === 'codex-app-server-v1')
-    return <p className="muted full">{t('providers.m492')}</p>;
+  if (connection?.protocol === 'codex-app-server-v1') return null;
   const draft = value.pricing;
   let snapshot: PricingSnapshot | undefined;
   let error = '';

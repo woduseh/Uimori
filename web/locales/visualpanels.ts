@@ -281,6 +281,12 @@ export const messages = {
     ja: '適用範囲',
     zh: '应用范围',
   },
+  'visualpanels.effectivePreset': {
+    ko: '현재 적용: {v0}',
+    en: 'In use: {v0}',
+    ja: '現在の適用：{v0}',
+    zh: '当前使用：{v0}',
+  },
   'visualpanels.themeScope': {
     ko: '테마 적용 범위',
     en: 'Theme scope',
@@ -707,12 +713,6 @@ export const messages = {
     ja: 'プリセットを再読み込み',
     zh: '重新加载预设',
   },
-  'visualpanels.openTheDefaultGenerationEnvironmentToCheck': {
-    ko: '기본 생성 환경을 열어 저장된 설정을 확인해 주세요.',
-    en: 'Open the default generation environment to check saved settings.',
-    ja: '基本生成環境を開いて保存済みの設定を確認してください。',
-    zh: '请打开默认生成环境以检查已保存的设置。',
-  },
   'visualpanels.setupNeededSelectAModelAndEnable': {
     ko: '사용할 모델을 선택해 주세요.',
     en: 'Select an available model.',
@@ -742,54 +742,6 @@ export const messages = {
     en: 'Preset changed. Applies from the next generation.',
     ja: 'プリセットを変更しました。次の生成から適用されます。',
     zh: '预设已更改，将从下次生成开始应用。',
-  },
-  'visualpanels.currentIllustrationSettings': {
-    ko: '현재 삽화 설정',
-    en: 'Current illustration settings',
-    ja: '現在の挿絵設定',
-    zh: '当前插图设置',
-  },
-  'visualpanels.currentChat': {
-    ko: '현재 채팅',
-    en: 'Current chat',
-    ja: '現在のチャット',
-    zh: '当前聊天',
-  },
-  'visualpanels.currentBot': {
-    ko: '현재 봇',
-    en: 'Current bot',
-    ja: '現在のボット',
-    zh: '当前机器人',
-  },
-  'visualpanels.generator': {
-    ko: '생성기: {v0}',
-    en: 'Generator: {v0}',
-    ja: '生成器：{v0}',
-    zh: '生成器：{v0}',
-  },
-  'visualpanels.promptModel': {
-    ko: '프롬프트 모델',
-    en: 'Prompt model',
-    ja: 'プロンプトモデル',
-    zh: '提示词模型',
-  },
-  'visualpanels.illustrationModel': {
-    ko: '삽화 모델',
-    en: 'Illustration model',
-    ja: '挿絵モデル',
-    zh: '插图模型',
-  },
-  'visualpanels.noModelSelected': {
-    ko: '모델 미지정',
-    en: 'No model selected',
-    ja: 'モデル未指定',
-    zh: '未指定模型',
-  },
-  'visualpanels.checking': {
-    ko: '확인 중',
-    en: 'Checking',
-    ja: '確認中',
-    zh: '正在检查',
   },
   'visualpanels.managePresetsAndScopes': {
     ko: '프리셋',
@@ -1090,12 +1042,6 @@ export const messages = {
     en: 'Workflow present',
     ja: 'ワークフローあり',
     zh: '有工作流',
-  },
-  'visualpanels.noWorkflow': {
-    ko: '워크플로 없음',
-    en: 'No workflow',
-    ja: 'ワークフローなし',
-    zh: '无工作流',
   },
   'visualpanels.additionalNegativeGuidance': {
     ko: '추가 제외 지침',
@@ -1673,12 +1619,6 @@ export const messages = {
     ja: '直接選択',
     zh: '自选范围',
   },
-  'visualpanels.refreshUsage': {
-    ko: '사용량 새로고침',
-    en: 'Refresh usage',
-    ja: '使用量を更新',
-    zh: '刷新用量',
-  },
   'visualpanels.exportCsv': {
     ko: 'CSV 내보내기',
     en: 'Export CSV',
@@ -1871,11 +1811,11 @@ export const messages = {
     ja: '用途未分類',
     zh: '用途未分类',
   },
-  'visualpanels.detailedTrackingBeganDeletedHistoricalRecordsAre': {
-    ko: '상세 집계 시작: {v0} 삭제된 과거 기록은 복원하지 않아요.',
-    en: 'Detailed tracking began: {v0}. Deleted historical records are not restored.',
-    ja: '詳細集計の開始：{v0}。削除済みの過去の記録は復元しません。',
-    zh: '详细统计起始日期：{v0}。不会恢复已删除的历史记录。',
+  'visualpanels.detailedTrackingSince': {
+    ko: '상세 집계 시작: {v0}',
+    en: 'Detailed tracking began: {v0}',
+    ja: '詳細集計の開始：{v0}',
+    zh: '详细统计起始日期：{v0}',
   },
   'visualpanels.callsWithUnknownTimeExcludedFromPeriod': {
     ko: '시각 미확인 {v0, number}회, {v1}는 기간 합계에서 제외했어요.',

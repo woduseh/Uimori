@@ -643,7 +643,7 @@ test('NSQ05 an uncertain chat admission stops automatic and manual resubmission'
   const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
   await expect(dialog.getByRole('alert')).toContainText('채팅 생성 응답을 확인하지 못했어요');
   await expect(dialog.getByRole('alert')).toContainText(
-    '중복 생성을 막기 위해 자동 재전송하지 않아요'
+    '목록을 새로 확인한 뒤 이어서 설정해 주세요'
   );
   await expect(dialog.getByRole('button', { name: '채팅 만들기', exact: true })).toBeDisabled();
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
@@ -683,8 +683,6 @@ test('NSQ05 an uncertain chat admission stops automatic and manual resubmission'
     });
     await page.goto('/');
     const nav = await visibleNavigation(page);
-    const section = nav.getByRole('button', { name: '봇', exact: true });
-    if ((await section.getAttribute('aria-expanded')) === 'false') await section.click();
     const branch = nav.locator(`[data-bot-id="${bot.id}"]`);
     await branch.hover();
     await branch.getByLabel(`${bot.title} 관리`, { exact: true }).click();

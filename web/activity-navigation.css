@@ -190,21 +190,29 @@
 .activity-nav-error button {
   font-size: var(--font-small);
 }
-/* Same two columns as the workspace switch above, so both rows share one left edge. */
-.bot-navigation-modes {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.bot-navigation-header {
+  display: flex;
+  align-items: center;
   gap: 4px;
   margin: 0 0 8px;
 }
+.bot-navigation-modes {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
 .bot-navigation-modes > button {
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-height: var(--control-h);
+  padding: 0 12px;
   border-radius: var(--radius-control);
   border: 0;
   background: transparent;
   color: var(--muted);
+  font-weight: 500;
 }
 .bot-navigation-modes > button[aria-pressed="true"] {
   background: var(--nav-item-selected);
@@ -213,17 +221,12 @@
 .bot-navigation-modes > button:hover {
   background: var(--nav-item-selected);
 }
-.bot-navigation-modes > button {
-  position: relative;
-}
 .activity-mode-count {
-  position: absolute;
-  top: 2px;
-  right: 12%;
-  min-width: 15px;
-  height: 15px;
-  line-height: 15px;
-  border-radius: var(--radius-control);
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  line-height: 16px;
+  border-radius: var(--radius-small);
   background: var(--accent);
   color: var(--accent-ink);
   font-size: var(--font-small);

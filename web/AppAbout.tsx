@@ -76,9 +76,6 @@ export function AppAbout() {
             <strong>{t('outside.license')}</strong>
             <p className="muted">GNU Affero General Public License v3</p>
           </div>
-          <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noreferrer">
-            <ExternalLinkIcon size={16} aria-hidden="true" /> {t('outside.readFull')}
-          </a>
         </div>
         <div className="settings-row">
           <div className="settings-row-copy">

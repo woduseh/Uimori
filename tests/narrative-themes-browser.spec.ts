@@ -1000,12 +1000,11 @@ test('BACKGROUND pending upload discard and dirty save-close preserve scope owne
     if (await advanced.isVisible()) await advanced.click();
   }
   await expect(page.getByRole('button', { name: '배경 저장', exact: true })).toBeDisabled();
-  await page.getByLabel('배경 흐림', { exact: true }).fill('9');
+  await expect(page.getByLabel('배경 흐림', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
-  await page.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
   await expect(page.getByRole('button', { name: '설정 닫기', exact: true })).toHaveCount(0);
   const catalog = await (await request.get('/api/themes')).json();
-  expect(catalog.preferences.defaultBackground).toMatchObject({ imageHash: null, blur: 9 });
+  expect(catalog.preferences.defaultBackground?.imageHash ?? null).toBeNull();
   expect(
     (
       await request.post('/api/themes/background', {

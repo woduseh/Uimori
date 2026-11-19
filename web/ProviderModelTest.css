@@ -10,6 +10,21 @@
   line-height: 1.6;
   color: var(--muted);
 }
+.provider-model-test.dismissible {
+  display: flex;
+  align-items: flex-start;
+}
+.provider-model-test-content {
+  flex: 1;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--font-body);
+  line-height: 1.6;
+}
+.provider-model-test.dismissible > button {
+  flex-shrink: 0;
+}
 .provider-model-test p {
   margin: 0;
 }
@@ -29,11 +44,6 @@
 }
 .provider-test-result details p {
   white-space: pre-wrap;
-}
-.provider-location-compare {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
 }
 .provider-location-results {
   margin: 0;

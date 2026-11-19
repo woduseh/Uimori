@@ -455,12 +455,6 @@ export const messages = {
     ja: 'チャットを開始',
     zh: '开始聊天',
   },
-  'library.startWithThisResourceAsBot': {
-    ko: '이 자료를 봇으로 시작',
-    en: 'Start with this resource as bot',
-    ja: 'この資料をボットとして開始',
-    zh: '以此资料为机器人开始',
-  },
   'library.reviewAfterSaving': {
     ko: '저장 후 확인할 사항',
     en: 'Review after saving',
@@ -568,12 +562,6 @@ export const messages = {
     en: 'All',
     ja: 'すべて',
     zh: '全部',
-  },
-  'library.manageFolders': {
-    ko: '폴더 관리',
-    en: 'Manage folders',
-    ja: 'フォルダーを管理',
-    zh: '管理文件夹',
   },
   'library.newFolder': {
     ko: '새 폴더',
@@ -803,11 +791,11 @@ export const messages = {
     ja: '使用中の資料',
     zh: '使用中的资料',
   },
-  'library.primaryBotFixed': {
-    ko: '소속 봇 (고정)',
-    en: 'Primary bot, fixed',
-    ja: '所属ボット（固定）',
-    zh: '所属机器人，固定',
+  'library.primaryBot': {
+    ko: '소속 봇',
+    en: 'Primary bot',
+    ja: '所属ボット',
+    zh: '所属机器人',
   },
   'library.requiredModuleAttachedAutomatically': {
     ko: '필수 모듈 (자동 포함)',
@@ -995,11 +983,11 @@ export const messages = {
     ja: '未設定または要確認',
     zh: '未指定或需要检查',
   },
-  'library.noStoryModelIsSelectedSavedManuscripts': {
-    ko: '본문 모델이 지정되지 않았어요. 저장된 원고는 읽을 수 있지만 새 생성은 시작할 수 없어요.',
-    en: 'No story model is selected. Saved manuscripts remain readable, but new generation cannot start.',
-    ja: '本文モデルが未設定です。保存した原稿は読めますが、新しい生成は開始できません。',
-    zh: '未指定正文模型，可以阅读已保存的原稿，但无法开始生成。',
+  'library.noStoryModelCannotGenerate': {
+    ko: '본문 모델이 지정되지 않아 새 생성을 시작할 수 없어요.',
+    en: 'No story model is selected, so new generation cannot start.',
+    ja: '本文モデルが未設定のため、新しい生成を開始できません。',
+    zh: '未指定正文模型，无法开始新的生成。',
   },
   'library.theSelectedStoryModelIsUnavailableChoose': {
     ko: '선택한 본문 모델을 사용할 수 없어 새 원문을 생성할 수 없어요. 사용 가능한 모델을 고르거나 전체 설정을 확인해 주세요.',
@@ -1032,10 +1020,10 @@ export const messages = {
     zh: '正在加载…',
   },
   'library.thisChatSWritingPromptIsUnavailable': {
-    ko: '이 채팅에 지정한 창작 프롬프트를 사용할 수 없어 새 원문을 생성할 수 없어요. 다른 프롬프트를 고르거나 ‘전역 따르기’로 바꿔 저장해 주세요.',
-    en: "This chat's writing prompt is unavailable. Choose another prompt or follow global settings, then save.",
-    ja: 'このチャットの創作プロンプトが使えず、新しい原文を生成できません。別のプロンプトを選ぶか「全体に従う」に変えて保存してください。',
-    zh: '此聊天的创作提示词不可用，无法生成新原文。请选择其他提示词或改用全局设置后保存。',
+    ko: '이 채팅에 지정한 창작 프롬프트를 사용할 수 없어 새 원문을 생성할 수 없어요. 다른 프롬프트를 고르거나 ‘전체 기본값 따르기’로 바꿔 저장해 주세요.',
+    en: "This chat's writing prompt is unavailable. Choose another prompt or follow the global default, then save.",
+    ja: 'このチャットの創作プロンプトが使えず、新しい原文を生成できません。別のプロンプトを選ぶか「全体の既定値に従う」に変えて保存してください。',
+    zh: '此聊天的创作提示词不可用，无法生成新原文。请选择其他提示词或改用全局默认值后保存。',
   },
   'library.risuAuthorNote': {
     ko: 'Risu 작가 노트',
@@ -1350,16 +1338,10 @@ export const messages = {
     zh: '仅正文',
   },
   'library.changedTheStoryImageToPortraitAnd': {
-    ko: '본문용 이미지의 사용 위치를 대표 이미지와 본문으로 바꿨어요. 자료를 저장하면 적용돼요.',
-    en: 'Changed the story image to portrait and story use. Save the resource to apply.',
-    ja: '本文用画像の用途を代表画像と本文に変更しました。資料を保存すると反映します。',
-    zh: '已将正文图片改为封面与正文用途，保存资料后生效。',
-  },
-  'library.portraitSelectedSaveTheResourceToApply': {
-    ko: '대표 이미지를 선택했어요. 자료를 저장하면 적용돼요.',
-    en: 'Portrait selected. Save the resource to apply.',
-    ja: '代表画像を選びました。資料を保存すると反映します。',
-    zh: '已选择封面，保存资料后生效。',
+    ko: '본문용 이미지의 사용 위치를 대표 이미지와 본문으로 바꿨어요.',
+    en: 'Changed the story image to portrait and story use.',
+    ja: '本文用画像の用途を代表画像と本文に変更しました。',
+    zh: '已将正文图片改为封面与正文用途。',
   },
   'library.aResourceCanContainUpTo2': {
     ko: '자료 하나에 이미지를 2,000개까지 등록할 수 있어요.',
@@ -1368,10 +1350,10 @@ export const messages = {
     zh: '每份资料最多可添加2,000张图片。',
   },
   'library.addedForPortraitUseOnlySaveThe': {
-    ko: '대표 이미지 전용으로 추가했어요. 자료를 저장하면 적용돼요.',
-    en: 'Added for portrait use only. Save the resource to apply.',
-    ja: '代表画像専用として追加しました。資料を保存すると反映します。',
-    zh: '已添加为仅封面用途，保存资料后生效。',
+    ko: '대표 이미지 전용으로 추가했어요.',
+    en: 'Added for portrait use only.',
+    ja: '代表画像専用として追加しました。',
+    zh: '已添加为仅封面用途。',
   },
   'library.couldNotUpload': {
     ko: '업로드하지 못했어요.',
@@ -1416,10 +1398,10 @@ export const messages = {
     zh: '从现有图片选择',
   },
   'library.portraitDesignationRemovedTheImageRemainsIn': {
-    ko: '대표 지정을 해제했어요. 이미지 파일은 자료에 남아요. 저장하면 적용돼요.',
-    en: 'Portrait designation removed. The image remains in the resource. Save to apply.',
-    ja: '代表指定を解除しました。画像ファイルは資料に残ります。保存すると反映します。',
-    zh: '已取消封面指定，图片文件保留在资料中，保存后生效。',
+    ko: '대표 지정을 해제했어요. 이미지 파일은 자료에 남아요.',
+    en: 'Portrait designation removed. The image remains in the resource.',
+    ja: '代表指定を解除しました。画像ファイルは資料に残ります。',
+    zh: '已取消封面指定，图片文件保留在资料中。',
   },
   'library.removePortraitDesignation': {
     ko: '대표 이미지 해제',
@@ -1475,12 +1457,6 @@ export const messages = {
     ja: '名前または説明',
     zh: '名称或描述',
   },
-  'library.selectingThisImageAllowsPortraitAndStory': {
-    ko: '선택하면 대표 이미지와 본문에 사용해요.',
-    en: 'Selecting this image allows portrait and story use.',
-    ja: '選ぶと代表画像と本文に使います。',
-    zh: '选择后将用于封面与正文。',
-  },
   'library.noSearchResults': {
     ko: '검색 결과가 없어요.',
     en: 'No search results.',
@@ -1504,12 +1480,6 @@ export const messages = {
     en: 'Could not find or read the attached resource.',
     ja: '接続した資料が見つからないか、読み込めません。',
     zh: '无法找到或读取关联的资料。',
-  },
-  'library.appliedToTheResourceDraftSaveTo': {
-    ko: '자료 초안에 반영했어요. 저장하면 다음 실행부터 사용해요.',
-    en: 'Applied to the resource draft. Save to use in future runs.',
-    ja: '資料の下書きに反映しました。保存すると次の実行から使います。',
-    zh: '已应用于资料草稿，保存后用于后续运行。',
   },
   'library.onlyResourcesWithACommonPackageCan': {
     ko: '공통 패키지인 자료만 연결할 수 있어요.',
@@ -1823,12 +1793,6 @@ export const messages = {
     ja: '保存の競合を確認',
     zh: '检查保存冲突',
   },
-  'library.noteAuthor': {
-    ko: '메모 작성자',
-    en: 'Note author',
-    ja: 'メモの作成者',
-    zh: '备注作者',
-  },
   'library.noteOrCorrection': {
     ko: '메모와 정정 내용',
     en: 'Note or correction',
@@ -2009,12 +1973,6 @@ export const messages = {
     ja: '削除',
     zh: '删除',
   },
-  'library.previewInstructionsSentToTranslation': {
-    ko: '번역에 전달할 지침 미리보기',
-    en: 'Preview instructions sent to translation',
-    ja: '翻訳に渡す指示をプレビュー',
-    zh: '预览发送给翻译的指引',
-  },
   'library.thisPreviewsCurrentEditsSaveChangesTo': {
     ko: '현재 편집 내용이에요. ‘변경사항 저장’ 후 다음 번역 요청에 전달하며, 미리보기는 모델을 호출하지 않아요. 기존 봇, 페르소나, 로어는 별도 참고 자료로 계속 사용해요.',
     en: 'This previews current edits. Save changes to send them with the next translation request. Preview does not call the model. Existing bots, personas, and lore remain separate references.',
@@ -2106,10 +2064,10 @@ export const messages = {
     zh: '创建为{role}的副本',
   },
   'library.savedResource': {
-    ko: '{title} 자료를 저장했어요. 다음 실행부터 사용해요.',
-    en: '{title} saved. Future runs will use it.',
-    ja: '{title}を保存しました。次の実行から使います。',
-    zh: '已保存{title}，将用于后续运行。',
+    ko: '{title} 자료를 저장했어요.',
+    en: '{title} saved.',
+    ja: '{title}を保存しました。',
+    zh: '已保存{title}。',
   },
   'library.savedPlacementWarning': {
     ko: '{title} 저장됨, 서재의 분류 반영을 확인해 주세요.',
@@ -2172,10 +2130,10 @@ export const messages = {
     zh: '设定{count}项',
   },
   'library.globalValue': {
-    ko: '전역 따르기: {value}',
-    en: 'Follow global, {value}',
-    ja: '全体に従う：{value}',
-    zh: '使用全局设置，{value}',
+    ko: '전체 기본값 따르기: {value}',
+    en: 'Follow global default, {value}',
+    ja: '全体の既定値に従う：{value}',
+    zh: '使用全局默认值，{value}',
   },
   'library.unavailableValue': {
     ko: '사용 불가: {value}',
@@ -2232,10 +2190,10 @@ export const messages = {
     zh: '用户备注与更正{imported, select, yes {，导入的记忆} other {}} {count, number}项',
   },
   'library.noteAttribution': {
-    ko: '{imported, select, yes {가져온 기억: {origin}, } other {}}작성자: {author}, {linked, select, yes {원문에 연결된 메모} other {첫 장면 전 메모}}',
-    en: '{imported, select, yes {Imported memory: {origin}, } other {}}Author: {author}, {linked, select, yes {Note linked to original} other {Note before first scene}}',
-    ja: '{imported, select, yes {インポートした記憶：{origin}、} other {}}作成者：{author}、{linked, select, yes {原文に関連付けたメモ} other {最初の場面より前のメモ}}',
-    zh: '{imported, select, yes {导入的记忆：{origin}，} other {}}作者：{author}，{linked, select, yes {关联原文的备注} other {首个场景前的备注}}',
+    ko: '{imported, select, yes {가져온 기억: {origin}, } other {}}{linked, select, yes {원문에 연결된 메모} other {첫 장면 전 메모}}',
+    en: '{imported, select, yes {Imported memory: {origin}, } other {}}{linked, select, yes {Note linked to original} other {Note before first scene}}',
+    ja: '{imported, select, yes {インポートした記憶：{origin}、} other {}}{linked, select, yes {原文に関連付けたメモ} other {最初の場面より前のメモ}}',
+    zh: '{imported, select, yes {导入的记忆：{origin}，} other {}}{linked, select, yes {关联原文的备注} other {首个场景前的备注}}',
   },
   'library.termNumber': {
     ko: '표기 {number, number}',

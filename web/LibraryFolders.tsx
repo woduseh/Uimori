@@ -11,6 +11,7 @@ import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
+import { IconButton } from './IconButton.js';
 import {
   CheckIcon,
   CloseIcon,
@@ -181,7 +182,8 @@ export function LibraryFolders({
     setTitle(folder?.title ?? '');
     setEdit({ folder, revision: organization.revision });
   }
-  function folderActions(folder: LibraryFolder) {
+  const newFolderButton = useRef<HTMLButtonElement>(null);
+  function folderActions(folder: LibraryFolder, afterDelete?: () => void) {
     return (
       <>
         <div className="action-menu-group">
@@ -216,7 +218,10 @@ export function LibraryFolders({
               onError(message);
               void reload();
             }}
-            onDeleted={reload}
+            onDeleted={async () => {
+              await reload();
+              afterDelete?.();
+            }}
           />
         </div>
       </>
@@ -336,18 +341,19 @@ export function LibraryFolders({
               </>
             )}
           </nav>
-          <LibraryItemMenu title={t('library.manageFolders')}>
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy || !organization}
-              onClick={() => openEdit(null)}
-            >
-              <FolderAddIcon size={18} aria-hidden="true" />
-              {t('library.newFolder')}
-            </button>
-            {selectedFolder && folderActions(selectedFolder)}
-          </LibraryItemMenu>
+          <IconButton
+            ref={newFolderButton}
+            icon={FolderAddIcon}
+            label={t('library.newFolder')}
+            className="secondary"
+            disabled={busy || !organization}
+            onClick={() => openEdit(null)}
+          />
+          {selectedFolder && (
+            <LibraryItemMenu title={t('library.folderMenu', { v0: selectedFolder.title })}>
+              {folderActions(selectedFolder, () => newFolderButton.current?.focus())}
+            </LibraryItemMenu>
+          )}
         </>
       )}
       <LibraryFolderCoverDialog

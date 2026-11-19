@@ -75,7 +75,9 @@ test('CHATREC01 shared profile drafts survive reorganized memory and image secti
     name: '이 채팅의 창작 프롬프트',
     exact: true,
   });
-  await expect(prompt.locator('option').first()).toHaveText(`전역 따르기: ${workspace.main.title}`);
+  await expect(prompt.locator('option').first()).toHaveText(
+    `전체 기본값 따르기: ${workspace.main.title}`
+  );
   const inherited = dialog
     .locator('.settings-inherited')
     .filter({ hasText: '전체 채팅 설정에서 사용하는 프롬프트' });
@@ -144,8 +146,9 @@ test('CHATREC02 variable rows preserve empty strings, raw drafts, conflicts and 
     },
   });
   expect(concurrent.ok(), await concurrent.text()).toBe(true);
-  // The refresh reports the conflict before a stale write is allowed; do not click a disabled save.
-  await dialog.getByRole('button', { name: /다시 불러오기/, exact: false }).click();
+  // Re-entering reads again and reports the conflict before a stale write is allowed.
+  await selectChatSettingsSection(page, '사용 자료');
+  await selectChatSettingsSection(page, '카드 변수');
   await expect(
     dialog.getByText('변수 저장본이나 현재 원문이 바뀌었어요.', { exact: true })
   ).toBeVisible();
@@ -197,13 +200,11 @@ test('CHATREC02 variable rows preserve empty strings, raw drafts, conflicts and 
     await expect(dialog.locator('.chat-variable-readbacks pre').first()).toContainText(
       '"trust": ""'
     );
-    const refresh = dialog.getByRole('button', { name: '다시 불러오기', exact: true });
-    await expect(refresh).toBeEnabled();
     holdReads = true;
-    await refresh.click();
+    await selectChatSettingsSection(page, '사용 자료');
+    await selectChatSettingsSection(page, '카드 변수');
     await expect.poll(() => readStarted).toBe(true);
     // A delayed read must not block replaying the already-preserved operation.
-    await expect(refresh).toBeDisabled();
     await expect(confirm).toBeEnabled();
     await confirm.click();
     await expect(

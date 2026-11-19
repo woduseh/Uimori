@@ -127,31 +127,29 @@ export function useIllustrationLayout({
   return {
     header: items.length ? (
       <>
-        {cuts.length > 0 && (
+        {cuts.length > 1 && (
           <div className="illustration-toolbar" aria-label={t('visuals.m097')}>
             <span>{t('visuals.cutCount', { count: cuts.length })}</span>
-            {cuts.length > 1 && (
-              <button
-                type="button"
-                className="quiet"
-                onClick={() => {
-                  const value = !allCollapsed;
-                  setChoices((old) => ({
-                    ...old,
-                    ...Object.fromEntries(cuts.map((cut) => [cut.key, value])),
-                  }));
-                  for (const cut of cuts) {
-                    try {
-                      localStorage.setItem(collapseKey(cut.key), String(value));
-                    } catch {
-                      /* Optional preference. */
-                    }
+            <button
+              type="button"
+              className="quiet"
+              onClick={() => {
+                const value = !allCollapsed;
+                setChoices((old) => ({
+                  ...old,
+                  ...Object.fromEntries(cuts.map((cut) => [cut.key, value])),
+                }));
+                for (const cut of cuts) {
+                  try {
+                    localStorage.setItem(collapseKey(cut.key), String(value));
+                  } catch {
+                    /* Optional preference. */
                   }
-                }}
-              >
-                {allCollapsed ? t('visuals.m100') : t('visuals.m101')}
-              </button>
-            )}
+                }
+              }}
+            >
+              {allCollapsed ? t('visuals.m100') : t('visuals.m101')}
+            </button>
           </div>
         )}
         {tasks.map((job) => (
@@ -452,7 +450,6 @@ function IllustrationCard({
     };
   }, [detailOpen, job.id, job.status, job.updatedAt]);
   const imagesId = `illustration-images-${cut.key}`;
-  const label = hero ? t('visuals.m102') : t('visuals.m098');
   return (
     <article
       ref={element}
@@ -464,7 +461,7 @@ function IllustrationCard({
     >
       <div className="illustration-head">
         <span className="illustration-title">
-          <strong>{label}</strong>
+          {hero && <strong>{t('visuals.m102')}</strong>}
           {stale && <small>{t('visuals.m123')}</small>}
           {collapsed && <span>{job.target?.focus || picture?.images[0]?.caption}</span>}
         </span>
@@ -551,23 +548,19 @@ function IllustrationCard({
             role={active ? 'status' : 'alert'}
           >
             {active && <RunningIcon size={16} aria-hidden="true" className="activity-spinner" />}
-            {t('visuals.renderStatus', {
-              preserved: !!picture,
-              message: active
-                ? job.status === 'queued'
-                  ? t('visuals.m134')
-                  : job.diagnostic?.stage === 'content-check'
-                    ? t('visuals.m135')
-                    : job.diagnostic?.stage === 'prompt'
-                      ? t('visuals.m136')
-                      : job.diagnostic?.stage === 'store'
-                        ? t('visuals.m137')
-                        : job.diagnostic?.stage === 'reconcile'
-                          ? t('visuals.m138')
-                          : t('visuals.m139')
-                : illustrationErrorMessage(job.error),
-            })}
-            {!active && job.error && <small> {job.error}</small>}
+            {active
+              ? job.status === 'queued'
+                ? t('visuals.m134')
+                : job.diagnostic?.stage === 'content-check'
+                  ? t('visuals.m135')
+                  : job.diagnostic?.stage === 'prompt'
+                    ? t('visuals.m136')
+                    : job.diagnostic?.stage === 'store'
+                      ? t('visuals.m137')
+                      : job.diagnostic?.stage === 'reconcile'
+                        ? t('visuals.m138')
+                        : t('visuals.m139')
+              : illustrationErrorMessage(job.error)}
           </p>
           <TaskButtons job={job} busy={busy} act={act} onRedraw={openRedraw} />
         </div>
@@ -665,6 +658,7 @@ function IllustrationCard({
                 attempt: detail.attempt,
               })}
             </p>
+            {detail.error && <p>{t('shared.errorCode', { code: detail.error })}</p>}
             {detail.modelTitle && (
               <p className="ui-meta-row">
                 <span>

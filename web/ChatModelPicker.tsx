@@ -96,9 +96,9 @@ export function ChatModelPicker({
       onClose={onClose}
       className="chat-model-picker-dialog"
     >
-      <p className="muted chat-model-picker-scope">
-        {t(purpose === 'helper' ? 'helpers.modelPickerScope' : 'main.modelPickerScope')}
-      </p>
+      {purpose === 'helper' && (
+        <p className="muted chat-model-picker-scope">{t('helpers.modelPickerScope')}</p>
+      )}
       {onRetry ? (
         <LoadingState
           presentation="inline"

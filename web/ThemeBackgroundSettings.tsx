@@ -53,6 +53,7 @@ export function ThemeBackgroundSettings({
   const locked = useRef(false);
   const [baseline, setBaseline] = useState(JSON.stringify(selected ?? inherited));
   const dirty = JSON.stringify(draft) !== baseline;
+  const inheriting = scope !== 'global' && !selected;
   useEffect(() => {
     if (!dirty && !busy) {
       setDraft(selected ?? inherited);
@@ -127,9 +128,7 @@ export function ThemeBackgroundSettings({
       <div className="theme-dimension-heading">
         <div>
           <h3 id="theme-background-heading">{t('settings.outerBackground')}</h3>
-          <small role="status">
-            {dirty ? t('settings.backgroundDraft') : t('settings.backgroundSaved')}
-          </small>
+          <small role="status">{dirty && t('shared.unsaved')}</small>
         </div>
         {scope !== 'global' && (
           <button
@@ -140,7 +139,7 @@ export function ThemeBackgroundSettings({
           </button>
         )}
       </div>
-      {scope !== 'global' && !selected && <p className="theme-inherited">{t('visuals.m005')}</p>}
+      {inheriting && <p className="theme-inherited">{t('visuals.m005')}</p>}
       {draft.imageHash && (
         <div
           className="theme-background-preview"
@@ -148,7 +147,9 @@ export function ThemeBackgroundSettings({
           style={backgroundStyle(draft)}
         />
       )}
-      {!draft.imageHash && <p className="theme-inherited">{t('settings.noBackground')}</p>}
+      {!draft.imageHash && !inheriting && (
+        <p className="theme-inherited">{t('settings.noBackground')}</p>
+      )}
       <fieldset className="theme-background-controls" disabled={disabled || busy || state.loading}>
         <label className="settings-row theme-background-file">
           <span className="settings-row-copy">
@@ -165,41 +166,47 @@ export function ThemeBackgroundSettings({
             }}
           />
         </label>
-        <div className="theme-background-sliders" role="group" aria-label={t('visuals.m009')}>
-          <label>
-            {t('visuals.blur', { value: formatNumber(draft.blur) })}
-            <input
-              aria-label={t('visuals.m011')}
-              type="range"
-              min="0"
-              max="30"
-              value={draft.blur}
-              onChange={(event) => setDraft({ ...draft, blur: Number(event.target.value) })}
-            />
-          </label>
-          <label>
-            {t('visuals.lightOverlay', { value: formatNumber(draft.lightOverlay) })}
-            <input
-              aria-label={t('visuals.m013')}
-              type="range"
-              min="0"
-              max="100"
-              value={draft.lightOverlay}
-              onChange={(event) => setDraft({ ...draft, lightOverlay: Number(event.target.value) })}
-            />
-          </label>
-          <label>
-            {t('visuals.darkOverlay', { value: formatNumber(draft.darkOverlay) })}
-            <input
-              aria-label={t('visuals.m015')}
-              type="range"
-              min="0"
-              max="100"
-              value={draft.darkOverlay}
-              onChange={(event) => setDraft({ ...draft, darkOverlay: Number(event.target.value) })}
-            />
-          </label>
-        </div>
+        {draft.imageHash && (
+          <div className="theme-background-sliders" role="group" aria-label={t('visuals.m009')}>
+            <label>
+              {t('visuals.blur', { value: formatNumber(draft.blur) })}
+              <input
+                aria-label={t('visuals.m011')}
+                type="range"
+                min="0"
+                max="30"
+                value={draft.blur}
+                onChange={(event) => setDraft({ ...draft, blur: Number(event.target.value) })}
+              />
+            </label>
+            <label>
+              {t('visuals.lightOverlay', { value: formatNumber(draft.lightOverlay) })}
+              <input
+                aria-label={t('visuals.m013')}
+                type="range"
+                min="0"
+                max="100"
+                value={draft.lightOverlay}
+                onChange={(event) =>
+                  setDraft({ ...draft, lightOverlay: Number(event.target.value) })
+                }
+              />
+            </label>
+            <label>
+              {t('visuals.darkOverlay', { value: formatNumber(draft.darkOverlay) })}
+              <input
+                aria-label={t('visuals.m015')}
+                type="range"
+                min="0"
+                max="100"
+                value={draft.darkOverlay}
+                onChange={(event) =>
+                  setDraft({ ...draft, darkOverlay: Number(event.target.value) })
+                }
+              />
+            </label>
+          </div>
+        )}
       </fieldset>
       <div className="theme-toolbar theme-background-actions">
         <SaveButton

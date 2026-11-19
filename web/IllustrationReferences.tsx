@@ -5,12 +5,13 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { ImagePlus, Pencil, RotateCcw, Trash2, Unlink } from 'lucide-react';
 import {
   inheritIllustrationProfiles,
   illustrationProfileNameKey,
 } from '../core/illustration-profiles.js';
 import { IconButton } from './IconButton.js';
+import { ImageChoiceDialog } from './ImageChoiceDialog.js';
 import type {
   IllustrationCharacterProfile,
   IllustrationReferenceRole,
@@ -30,6 +31,7 @@ type Candidate = {
   role: IllustrationReferenceRole | null;
 };
 type Loaded = IllustrationReferences & { candidates: Candidate[] };
+const REFERENCE_LIMIT = 8;
 const rolesOf = (value: Loaded): Record<string, IllustrationReferenceRole | ''> =>
   Object.fromEntries([
     ...value.references.map((item) => [item.ref, item.role]),
@@ -61,6 +63,7 @@ export function IllustrationReferencesEditor({
   const [loadError, setLoadError] = useState('');
   const [conflict, setConflict] = useState(false);
   const [reviewConflict, setReviewConflict] = useState(false);
+  const [picking, setPicking] = useState<string | null>(null);
   const lock = useRef(false);
   const loadEpoch = useRef(0);
   const load = useCallback(async () => {
@@ -131,6 +134,8 @@ export function IllustrationReferencesEditor({
   const profiles = inheritIllustrationProfiles(loaded.defaultCharacterProfiles, chatProfiles);
   const linked = new Set(profiles.flatMap((item) => item.referenceRef ?? []));
   const used = new Set([...selected.map((item) => item.ref), ...linked]);
+  const full = (ref: string) => !used.has(ref) && used.size >= REFERENCE_LIMIT;
+  const pickingProfile = chatProfiles.find((item) => item.id === picking);
   const markDirty = () => {
     dirtyDraft.current = true;
     setDirty(true);
@@ -316,49 +321,44 @@ export function IllustrationReferencesEditor({
                 </>
               )}
               {(!inherited || profile.referenceRef) && (
-                <label className="settings-row illustration-profile-reference">
+                <div className="settings-row illustration-profile-reference">
                   <span className="settings-row-copy">{t('visuals.characterReference')}</span>
                   <span className="settings-row-control">
-                    {image && <img src={image.url} alt={image.title} loading="lazy" />}
                     {inherited ? (
-                      <span>
-                        {image?.title ??
-                          t(
-                            profile.referenceRef
-                              ? 'visuals.unavailableCharacterReference'
-                              : 'visuals.noCharacterReference'
-                          )}
-                      </span>
+                      image && <img src={image.url} alt={image.title} loading="lazy" />
                     ) : (
-                      <select
-                        aria-label={t('visuals.characterReference')}
-                        value={profile.referenceRef ?? ''}
-                        disabled={saving}
-                        onChange={(event) => {
-                          const ref = event.target.value;
-                          editProfile(profile.id, { referenceRef: ref || undefined });
-                        }}
+                      <button
+                        type="button"
+                        className="secondary illustration-reference-picker"
+                        aria-label={t('visuals.chooseReferenceImage')}
+                        disabled={saving || !loaded.candidates.length}
+                        onClick={() => setPicking(profile.id)}
                       >
-                        <option value="">{t('visuals.noCharacterReference')}</option>
-                        {profile.referenceRef &&
-                          !loaded.candidates.some((item) => item.ref === profile.referenceRef) && (
-                            <option value={profile.referenceRef}>
-                              {t('visuals.unavailableCharacterReference')}
-                            </option>
-                          )}
-                        {loaded.candidates.map((item) => (
-                          <option
-                            key={item.ref}
-                            value={item.ref}
-                            disabled={!used.has(item.ref) && used.size >= 8}
-                          >
-                            {item.title}
-                          </option>
-                        ))}
-                      </select>
+                        {image ? (
+                          <img src={image.url} alt={image.title} loading="lazy" />
+                        ) : (
+                          <ImagePlus size={20} aria-hidden="true" />
+                        )}
+                      </button>
+                    )}
+                    <span>
+                      {image?.title ??
+                        t(
+                          profile.referenceRef
+                            ? 'visuals.unavailableCharacterReference'
+                            : 'visuals.noCharacterReference'
+                        )}
+                    </span>
+                    {!inherited && profile.referenceRef && (
+                      <IconButton
+                        icon={Unlink}
+                        label={t('visuals.unlinkReferenceImage')}
+                        disabled={saving}
+                        onClick={() => editProfile(profile.id, { referenceRef: undefined })}
+                      />
                     )}
                   </span>
-                </label>
+                </div>
               )}
             </fieldset>
           );
@@ -378,8 +378,27 @@ export function IllustrationReferencesEditor({
           {t('visuals.addCharacterProfile')}
         </button>
       </div>
+      <ImageChoiceDialog
+        open={!!pickingProfile}
+        images={loaded.candidates.map((item) => ({
+          id: item.ref,
+          title: item.title,
+          url: item.url,
+          disabled: full(item.ref),
+        }))}
+        selectedId={pickingProfile?.referenceRef}
+        onChoose={(ref) => {
+          if (pickingProfile) editProfile(pickingProfile.id, { referenceRef: ref });
+        }}
+        onClose={() => setPicking(null)}
+      />
       {(loaded.candidates.length > 0 || unavailable.length > 0) && (
-        <h5>{t('visuals.referenceImages')}</h5>
+        <div className="illustration-reference-heading">
+          <h5>{t('visuals.referenceImages')}</h5>
+          <small>
+            {t('visuals.referenceSelectionCount', { count: used.size, limit: REFERENCE_LIMIT })}
+          </small>
+        </div>
       )}
       {unavailable.map((item, index) => (
         <label className="settings-row" key={item.ref}>
@@ -416,7 +435,7 @@ export function IllustrationReferencesEditor({
             <select
               aria-label={t('visuals.m036', { v0: item.title })}
               value={linked.has(item.ref) ? 'character' : (roles[item.ref] ?? '')}
-              disabled={saving || linked.has(item.ref) || (!used.has(item.ref) && used.size >= 8)}
+              disabled={saving || linked.has(item.ref) || full(item.ref)}
               onChange={(event) => {
                 setRoles({
                   ...roles,

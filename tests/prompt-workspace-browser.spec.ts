@@ -412,10 +412,6 @@ test('PWS05 summary length controls save independently and survive reload on mob
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '역할별 모델');
   let models = page.getByRole('region', { name: '역할별 모델 설정' });
-  await models
-    .locator('summary')
-    .filter({ hasText: /^보조 작업/ })
-    .click();
   const conversation = models.getByLabel('세션 요약 길이', { exact: true });
   const helper = models.getByLabel('도우미 요약 길이', { exact: true });
   await expect(conversation).toHaveValue('auto');
@@ -436,10 +432,6 @@ test('PWS05 summary length controls save independently and survive reload on mob
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '역할별 모델');
   models = page.getByRole('region', { name: '역할별 모델 설정' });
-  await models
-    .locator('summary')
-    .filter({ hasText: /^보조 작업/ })
-    .click();
   await expect(models.getByLabel('세션 요약 길이', { exact: true })).toHaveValue('16384');
   await expect(models.getByLabel('도우미 요약 길이', { exact: true })).toHaveValue('2048');
 });

@@ -32,15 +32,17 @@ export function InstallApp() {
           </button>
         ) : null}
       </div>
-      <details className="settings-install-help">
-        <summary>{t('outside.installHelp')}</summary>
-        <p className="muted">{t('outside.installDescription')}</p>
-        {!state.installed && !state.available && (
-          <p className="muted">
-            {isSecureContext ? t('outside.browserInstall') : t('outside.secureInstall')}
-          </p>
-        )}
-      </details>
+      {!state.installed && (
+        <details className="settings-install-help">
+          <summary>{t('outside.installHelp')}</summary>
+          <p className="muted">{t('outside.installDescription')}</p>
+          {!state.available && (
+            <p className="muted">
+              {isSecureContext ? t('outside.browserInstall') : t('outside.secureInstall')}
+            </p>
+          )}
+        </details>
+      )}
       {state.error && <NoticeBanner tone="error">{translateMessage(state.error)}</NoticeBanner>}
     </section>
   );

@@ -124,7 +124,7 @@ for (const width of WIDTHS) {
       const intent = form.getByRole('textbox', { name: '이번 회차의 사건과 목적', exact: true });
       await intent.pressSequentially('대화를 길게 나누되 관계를 급하게 진전시키지 않아요.');
       await expect(intent).toBeFocused();
-      await form.getByRole('button', { name: '초안을 보관하고 닫기' }).click();
+      await form.getByRole('button', { name: '닫기', exact: true }).click();
       await panel.getByRole('button', { name: '직접 추가', exact: true }).click();
       await expect(form.getByRole('textbox', { name: '이름', exact: true })).toHaveValue(
         '한 회차에서 시작'
@@ -188,12 +188,10 @@ for (const width of WIDTHS) {
       await panel.getByRole('button', { name: '이번 플롯의 입력 컨텍스트 보기' }).click();
       await expect(panel.locator('.outline-brief')).toContainText('감춰진 이름과 되찾는 선택');
       expect(await sourceCount(request, chat.id)).toBe(0);
-      await panel.getByRole('button', { name: '이 단위 집필', exact: true }).click();
+      await panel.getByRole('button', { name: '집필하기', exact: true }).click();
       const additional = panel.getByLabel('이번 추가 지시와 멈출 지점 (선택)', { exact: true });
       await expect(additional).toHaveValue('');
-      const previous = panel
-        .locator('details')
-        .filter({ hasText: '이전 집필 요청 초안 (읽기 및 복사)' });
+      const previous = panel.locator('details').filter({ hasText: '이전 집필 요청' });
       await previous.locator('summary').click();
       await expect(previous.getByRole('textbox')).toHaveValue(oldDraft);
       await expect(previous.getByRole('textbox')).toHaveAttribute('readonly');
@@ -239,7 +237,7 @@ for (const width of WIDTHS) {
       ).json();
       const episode = initial.nodes.find((node) => node.title === '1화 · 열람권의 대가')!;
       await panel
-        .locator('.outline-intent-card')
+        .locator('.outline-primary-actions')
         .getByRole('button', { name: '편집', exact: true })
         .click();
       const input = panel.getByRole('textbox', { name: '이번 회차의 사건과 목적', exact: true });
@@ -285,7 +283,7 @@ for (const width of WIDTHS) {
       let panel = await open(page, chat.id, width);
       await choose(page, '1화 · 열람권의 대가', width);
       await panel
-        .locator('.outline-intent-card')
+        .locator('.outline-primary-actions')
         .getByRole('button', { name: '편집', exact: true })
         .click();
       await panel
@@ -332,7 +330,7 @@ for (const width of WIDTHS) {
       });
       let panel = await open(page, chat.id, width);
       await choose(page, '1화 · 열람권의 대가', width);
-      await panel.getByRole('button', { name: '이 단위 집필', exact: true }).click();
+      await panel.getByRole('button', { name: '집필하기', exact: true }).click();
       await panel.getByRole('button', { name: '집필 시작', exact: true }).click();
       await expect(panel.getByRole('button', { name: '요청 결과 확인' })).toBeVisible();
       await expect.poll(() => sourceCount(request, chat.id)).toBe(1);
@@ -449,8 +447,11 @@ for (const width of WIDTHS) {
         expect(config.ok(), await config.text()).toBe(true);
         let panel = await open(page, chat.id, width);
         await choose(page, '1화 · 열람권의 대가', width);
-        await panel.getByRole('button', { name: '이 단위 집필', exact: true }).click();
-        await expect(panel.getByRole('region', { name: '현재 플롯', exact: true })).toContainText(
+        await panel.getByRole('button', { name: '집필하기', exact: true }).click();
+        await expect(panel.locator('.outline-intent-card')).toContainText(
+          '두 사람이 처음으로 조건부 협력을 시작해요.'
+        );
+        await expect(panel.locator('.outline-writing-card')).not.toContainText(
           '두 사람이 처음으로 조건부 협력을 시작해요.'
         );
         await expect(

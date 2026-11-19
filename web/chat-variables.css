@@ -4,12 +4,6 @@
   padding-top: 0;
   min-width: 0;
 }
-.chat-variable-heading {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-}
 .chat-variable-toolbar {
   display: flex;
   align-items: end;
@@ -112,8 +106,4 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) 44px;
     gap: 8px;
   }
-}
-
-.chat-variable-heading {
-  flex-wrap: wrap;
 }

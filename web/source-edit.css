@@ -131,9 +131,3 @@
 .request-message.request-context-disabled {
   opacity: 0.55;
 }
-
-.scene-context-notice {
-  margin: 6px 0 10px;
-  font-size: var(--font-small);
-  color: var(--muted);
-}

@@ -11,9 +11,9 @@ const rejectedOptionLabels: Record<RejectedOption, string> = {
   serviceTier: 'errors.option.serviceTier',
   cache: 'errors.option.cache',
   structuredOutput: 'errors.option.structuredOutput',
-  verbosity: 'Verbosity',
-  reasoningMode: 'Reasoning Mode',
-  reasoningContext: 'Reasoning Context',
+  verbosity: 'providers.verbosity',
+  reasoningMode: 'providers.reasoningMode',
+  reasoningContext: 'providers.reasoningContext',
   model: 'errors.option.model',
   tools: 'errors.option.tools',
   input: 'errors.option.input',
@@ -21,7 +21,7 @@ const rejectedOptionLabels: Record<RejectedOption, string> = {
 export function rejectionMessage(rejection: ProviderRejection): string {
   const names = [
     ...rejection.options.map((option) =>
-      rejectedOptionLabels[option].startsWith('errors.')
+      /^(errors|providers)\./.test(rejectedOptionLabels[option])
         ? t(rejectedOptionLabels[option])
         : rejectedOptionLabels[option]
     ),

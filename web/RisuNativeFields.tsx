@@ -417,6 +417,7 @@ export function RisuNativeFields({
               onRemove={(i) =>
                 writeGreetings(greetings.length === 1 ? [''] : greetings.filter((_, n) => n !== i))
               }
+              isEmpty={(i) => !greetings[i]?.trim()}
             >
               {(i) => (
                 <label>

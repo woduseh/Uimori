@@ -6,8 +6,18 @@ export const messages = {
     zh: '字体文件不得超过 20 MiB。',
   },
   'fonts.title': { ko: '글꼴', en: 'Fonts', ja: 'フォント', zh: '字体' },
-  'fonts.app': { ko: '앱 글꼴', en: 'App font', ja: 'アプリのフォント', zh: '应用字体' },
-  'fonts.reader': { ko: '본문 글꼴', en: 'Reading font', ja: '本文のフォント', zh: '正文字体' },
+  'fonts.app': {
+    ko: '앱 등록 글꼴',
+    en: 'Registered app font',
+    ja: 'アプリの登録フォント',
+    zh: '应用自定义字体',
+  },
+  'fonts.reader': {
+    ko: '본문 등록 글꼴',
+    en: 'Registered reading font',
+    ja: '本文の登録フォント',
+    zh: '正文自定义字体',
+  },
   'fonts.default': { ko: '기본 글꼴', en: 'Default font', ja: '標準フォント', zh: '默认字体' },
   'fonts.file': { ko: '글꼴 파일', en: 'Font file', ja: 'フォントファイル', zh: '字体文件' },
   'fonts.name': { ko: '글꼴 이름', en: 'Font name', ja: 'フォント名', zh: '字体名称' },
@@ -25,6 +35,7 @@ export const messages = {
     zh: '{target}预览',
   },
   'fonts.manage': { ko: '글꼴 관리', en: 'Manage fonts', ja: 'フォント管理', zh: '管理字体' },
+  'fonts.add': { ko: '글꼴 추가', en: 'Add font', ja: 'フォントを追加', zh: '添加字体' },
   'fonts.delete': {
     ko: '{title} 글꼴 삭제',
     en: 'Delete font {title}',
@@ -37,12 +48,6 @@ export const messages = {
     en: 'Delete “{title}”? Any selection using it returns to the default font.',
     ja: '「{title}」を削除しますか？使用中の設定は標準フォントに戻ります。',
     zh: '要删除“{title}”吗？正在使用此字体的设置会恢复默认字体。',
-  },
-  'fonts.empty': {
-    ko: '등록한 글꼴이 없어요.',
-    en: 'No registered fonts.',
-    ja: '登録済みのフォントはありません。',
-    zh: '尚未注册字体。',
   },
   'fonts.saved': {
     ko: '글꼴 설정을 적용했어요.',

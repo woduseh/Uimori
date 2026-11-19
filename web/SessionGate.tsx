@@ -67,7 +67,6 @@ export function SessionGate({ children }: { children: ReactNode }) {
   if (session && (!session.required || session.authenticated)) return <>{children}</>;
   return (
     <main className="login">
-      <LanguageSelect />
       <a className="wordmark" href="/">
         Uimori
       </a>
@@ -116,7 +115,9 @@ export function SessionGate({ children }: { children: ReactNode }) {
               onChange={(event) => setToken(event.target.value)}
             />
           </label>
-          <button disabled={busy}>{t('outside.connect')}</button>
+          <button className="primary" disabled={busy}>
+            {t('outside.connect')}
+          </button>
         </form>
       )}
       {!session && !!error && (
@@ -124,6 +125,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
           {t('outside.reconnect')}
         </button>
       )}
+      <LanguageSelect />
     </main>
   );
 }

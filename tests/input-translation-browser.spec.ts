@@ -448,7 +448,7 @@ test('ICOPY full stored input is copied, not transformed or collapsed text, even
     const source = page.getByTestId('source').first();
     await expect(source.getByTestId('source-request')).toHaveText('DISPLAY_ONLY_TEXT_NOT_FOR_COPY');
     await source.getByLabel('요청 및 컨텍스트 메뉴', { exact: true }).click();
-    const edit = source.getByRole('button', { name: '컨텍스트용 요청 수정', exact: true });
+    const edit = source.getByRole('button', { name: '요청 수정', exact: true });
     await expect(edit).toBeDisabled();
     const before = await detail(request, chat.id);
     const copy = source.getByRole('button', { name: '요청 복사', exact: true });

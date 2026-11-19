@@ -33,6 +33,12 @@ import { Dialog } from './Dialog.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import './settings-actions.css';
 
+const judgmentProviderNames: Record<string, string> = {
+  typesafe: 'TypeSafe AI / JEV',
+  openai: 'OpenAI Decisions',
+  gemini: 'Gemini Decisions',
+};
+
 export function ModelWorkspaceEditor({
   library,
   onDirtyChange,
@@ -127,24 +133,31 @@ export function ModelWorkspaceEditor({
   const retryProviderRefusal =
     draft.translationPolicy.retryProviderRefusal ??
     draft.translationPolicy.judgment.enabled !== false;
+  const translationJudgmentEnabled = draft.translationPolicy.judgment.enabled !== false;
+  const invalidMainThreshold =
+    !Number.isFinite(draft.mainJudgmentThreshold) ||
+    (draft.mainJudgmentThreshold ?? 0.9) <= 0.5 ||
+    (draft.mainJudgmentThreshold ?? 0.9) > 1;
+  const invalidTranslationThreshold =
+    !Number.isFinite(draft.translationPolicy.judgment.threshold) ||
+    draft.translationPolicy.judgment.threshold <= 0.5 ||
+    draft.translationPolicy.judgment.threshold > 1;
+  const invalidRetries =
+    !Number.isInteger(draft.translationPolicy.maxRetries) ||
+    draft.translationPolicy.maxRetries < 0 ||
+    draft.translationPolicy.maxRetries > 5;
   const invalid =
     invalidHelperTaskTimeout ||
     invalidPreviousSceneTokens ||
     (judgmentEdited &&
       judgment.provider !== 'typesafe' &&
       (!judgmentConnection || !judgment.modelId.trim())) ||
-    !Number.isFinite(draft.mainJudgmentThreshold) ||
-    (draft.mainJudgmentThreshold ?? 0.9) <= 0.5 ||
-    (draft.mainJudgmentThreshold ?? 0.9) > 1 ||
-    !Number.isInteger(draft.translationPolicy.maxRetries) ||
-    draft.translationPolicy.maxRetries < 0 ||
-    draft.translationPolicy.maxRetries > 5 ||
+    invalidMainThreshold ||
+    invalidRetries ||
     !Number.isInteger(draft.translationPolicy.maxCalls) ||
     draft.translationPolicy.maxCalls < 2 ||
     draft.translationPolicy.maxCalls > 64 ||
-    !Number.isFinite(draft.translationPolicy.judgment.threshold) ||
-    draft.translationPolicy.judgment.threshold <= 0.5 ||
-    draft.translationPolicy.judgment.threshold > 1;
+    invalidTranslationThreshold;
   async function save() {
     if (!draft || lock.current || invalid) return false;
     if (conflict) {
@@ -275,15 +288,11 @@ export function ModelWorkspaceEditor({
       </div>
     );
   };
-  const configuredSummary = (values: Array<ModelRef | null | undefined>) => {
-    const configured = values.filter(Boolean).length;
-    if (configured === 0) return t('settings.m10');
-    if (configured === values.length) return t('settings.m11', { v0: configured });
-    return t('settings.m12', { v0: configured, v1: values.length });
-  };
+  const judgmentProviderName = compatible
+    ? t('settings.judgmentCompatible')
+    : judgmentProviderNames[judgment.provider];
   const enabledJudgments =
-    Number(draft.mainJudgmentEnabled === true) +
-    Number(draft.translationPolicy.judgment.enabled !== false);
+    Number(draft.mainJudgmentEnabled === true) + Number(translationJudgmentEnabled);
   return (
     <section aria-label={t('settings.m13')} className="settings-section model-workspace-settings">
       <fieldset disabled={busy} className="control-grid model-workspace-controls">
@@ -311,18 +320,8 @@ export function ModelWorkspaceEditor({
             )}
           </div>
         </fieldset>
-        <details className="settings-group full model-secondary-settings">
-          <summary className="settings-group-heading">
-            {t('settings.m19')}
-            <small>
-              {configuredSummary([
-                draft.helperModel,
-                draft.contextModel,
-                draft.titleModel,
-                draft.scriptModel,
-              ])}
-            </small>
-          </summary>
+        <fieldset className="settings-group full model-primary-settings">
+          <legend>{t('settings.m19')}</legend>
           <div className="settings-group-body">
             {selector('helper', t('settings.m20'), draft.helperModel ?? null, (ref) =>
               change({ ...draft, helperModel: ref })
@@ -332,16 +331,18 @@ export function ModelWorkspaceEditor({
                 <label htmlFor={`${id}-helper-task-timeout`}>
                   {t('settings.helperTaskTimeout')}
                 </label>
-                <small id={`${id}-helper-task-timeout-hint`}>
-                  {invalidHelperTaskTimeout
-                    ? t('settings.helperTaskTimeoutRange', { max: MAX_HELPER_TASK_TIMEOUT_MINUTES })
-                    : t('settings.helperTaskTimeoutHint')}
-                </small>
+                {invalidHelperTaskTimeout && (
+                  <small id={`${id}-helper-task-timeout-hint`}>
+                    {t('settings.helperTaskTimeoutRange', { max: MAX_HELPER_TASK_TIMEOUT_MINUTES })}
+                  </small>
+                )}
               </div>
               <div className="settings-row-control">
                 <input
                   id={`${id}-helper-task-timeout`}
-                  aria-describedby={`${id}-helper-task-timeout-hint`}
+                  aria-describedby={
+                    invalidHelperTaskTimeout ? `${id}-helper-task-timeout-hint` : undefined
+                  }
                   aria-invalid={invalidHelperTaskTimeout || undefined}
                   type="number"
                   min={1}
@@ -400,143 +401,6 @@ export function ModelWorkspaceEditor({
             )}
             {selector('script', t('settings.m34'), draft.scriptModel ?? null, (ref) =>
               change({ ...draft, scriptModel: ref })
-            )}
-          </div>
-        </details>
-        <fieldset className="settings-group full">
-          <legend className="sr-only">{t('settings.judgmentProvider')}</legend>
-          <div className="settings-group-body">
-            <div className="settings-row">
-              <div className="settings-row-copy">
-                <label htmlFor={`${id}-judgment-provider`}>{t('settings.judgmentProvider')}</label>
-              </div>
-              <div className="settings-row-control">
-                <select
-                  id={`${id}-judgment-provider`}
-                  value={compatible ? 'compatible' : judgment.provider}
-                  onChange={(event) => {
-                    const provider = event.target.value;
-                    if (provider === 'typesafe') changeJudgment(DEFAULT_JUDGMENT_SELECTION);
-                    else if (provider === 'openai' || provider === 'gemini')
-                      changeJudgment({
-                        provider,
-                        connectionId: '',
-                        modelId: OFFICIAL_JUDGMENT_MODELS[provider],
-                        images: false,
-                      });
-                    else
-                      changeJudgment({
-                        provider: 'openai-compatible',
-                        connectionId: '',
-                        modelId: '',
-                        images: false,
-                      });
-                  }}
-                >
-                  <option value="typesafe">TypeSafe AI / JEV</option>
-                  <option value="openai">OpenAI Decisions</option>
-                  <option value="gemini">Gemini Decisions</option>
-                  <option value="compatible">{t('settings.judgmentCompatible')}</option>
-                </select>
-              </div>
-            </div>
-            {judgment.provider !== 'typesafe' && (
-              <>
-                <div className="settings-row">
-                  <div className="settings-row-copy">
-                    <label htmlFor={`${id}-judgment-connection`}>
-                      {t('settings.judgmentConnection')}
-                    </label>
-                    {judgmentConnections.length === 0 && (
-                      <small>{t('settings.judgmentConnectionRequired')}</small>
-                    )}
-                  </div>
-                  <div className="settings-row-control">
-                    <select
-                      id={`${id}-judgment-connection`}
-                      value={judgment.connectionId}
-                      onChange={(event) =>
-                        changeJudgment({ ...judgment, connectionId: event.target.value })
-                      }
-                    >
-                      <option value="">{t('settings.judgmentConnectionPlaceholder')}</option>
-                      {judgment.connectionId && !judgmentConnection && (
-                        <option value={judgment.connectionId} disabled>
-                          {t('settings.judgmentUnavailable')}
-                        </option>
-                      )}
-                      {judgmentConnections.map((connection) => (
-                        <option key={connection.id} value={connection.id}>
-                          {connection.title}
-                        </option>
-                      ))}
-                    </select>
-                    {judgmentConnections.length === 0 && (
-                      <button type="button" className="secondary" onClick={onManage}>
-                        <SettingsIcon size={18} aria-hidden="true" />
-                        {t('settings.m18')}
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {compatible && (
-                  <div className="settings-row">
-                    <div className="settings-row-copy">
-                      <label htmlFor={`${id}-judgment-protocol`}>
-                        {t('settings.judgmentProtocol')}
-                      </label>
-                    </div>
-                    <div className="settings-row-control">
-                      <select
-                        id={`${id}-judgment-protocol`}
-                        value={judgment.provider}
-                        onChange={(event) =>
-                          changeJudgment({
-                            ...judgment,
-                            provider:
-                              event.target.value === 'typesafe-compatible'
-                                ? 'typesafe-compatible'
-                                : 'openai-compatible',
-                          })
-                        }
-                      >
-                        <option value="openai-compatible">OpenAI Decisions</option>
-                        <option value="typesafe-compatible">TypeSafe System One</option>
-                      </select>
-                    </div>
-                  </div>
-                )}
-                <div className="settings-row">
-                  <div className="settings-row-copy">
-                    <label htmlFor={`${id}-judgment-model`}>{t('settings.judgmentModelId')}</label>
-                  </div>
-                  <div className="settings-row-control">
-                    <input
-                      id={`${id}-judgment-model`}
-                      value={judgment.modelId}
-                      readOnly={!compatible}
-                      maxLength={200}
-                      onChange={(event) =>
-                        changeJudgment({ ...judgment, modelId: event.target.value })
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="settings-row">
-                  <div className="settings-row-copy">
-                    <label htmlFor={`${id}-judgment-images`}>{t('settings.judgmentImages')}</label>
-                  </div>
-                  <div className="settings-row-control">
-                    <Switch
-                      id={`${id}-judgment-images`}
-                      checked={judgment.images}
-                      onChange={(event) =>
-                        changeJudgment({ ...judgment, images: event.target.checked })
-                      }
-                    />
-                  </div>
-                </div>
-              </>
             )}
           </div>
         </fieldset>
@@ -641,32 +505,34 @@ export function ModelWorkspaceEditor({
                     }
                   />
                 </div>
-                <div className="refusal-field-row">
-                  <label htmlFor="main-refusal-threshold">{t('settings.m52')}</label>
-                  <input
-                    id="main-refusal-threshold"
-                    aria-label={t('settings.m53')}
-                    type="number"
-                    min="0.51"
-                    max="1"
-                    step="0.01"
-                    value={
-                      Number.isFinite(draft.mainJudgmentThreshold)
-                        ? draft.mainJudgmentThreshold
-                        : ''
-                    }
-                    onChange={(event) =>
-                      change({ ...draft, mainJudgmentThreshold: event.target.valueAsNumber })
-                    }
-                  />
-                </div>
+                {(draft.mainJudgmentEnabled === true || invalidMainThreshold) && (
+                  <div className="refusal-field-row">
+                    <label htmlFor="main-refusal-threshold">{t('settings.m52')}</label>
+                    <input
+                      id="main-refusal-threshold"
+                      aria-label={t('settings.m53')}
+                      type="number"
+                      min="0.51"
+                      max="1"
+                      step="0.01"
+                      value={
+                        Number.isFinite(draft.mainJudgmentThreshold)
+                          ? draft.mainJudgmentThreshold
+                          : ''
+                      }
+                      onChange={(event) =>
+                        change({ ...draft, mainJudgmentThreshold: event.target.valueAsNumber })
+                      }
+                    />
+                  </div>
+                )}
               </section>
               <section aria-label={t('settings.m55')} className="refusal-role">
                 <div className="refusal-role-heading">
                   <h5>{t('settings.m37')}</h5>
                   <Switch
                     aria-label={t('settings.m56')}
-                    checked={draft.translationPolicy.judgment.enabled !== false}
+                    checked={translationJudgmentEnabled}
                     onChange={(event) =>
                       change({
                         ...draft,
@@ -682,34 +548,36 @@ export function ModelWorkspaceEditor({
                     }
                   />
                 </div>
-                <div className="refusal-field-row">
-                  <label htmlFor="translation-refusal-threshold">{t('settings.m52')}</label>
-                  <input
-                    id="translation-refusal-threshold"
-                    aria-label={t('settings.m57')}
-                    type="number"
-                    min="0.51"
-                    max="1"
-                    step="0.01"
-                    value={
-                      Number.isFinite(draft.translationPolicy.judgment.threshold)
-                        ? draft.translationPolicy.judgment.threshold
-                        : ''
-                    }
-                    onChange={(event) =>
-                      change({
-                        ...draft,
-                        translationPolicy: {
-                          ...draft.translationPolicy,
-                          judgment: {
-                            ...draft.translationPolicy.judgment,
-                            threshold: event.target.valueAsNumber,
+                {(translationJudgmentEnabled || invalidTranslationThreshold) && (
+                  <div className="refusal-field-row">
+                    <label htmlFor="translation-refusal-threshold">{t('settings.m52')}</label>
+                    <input
+                      id="translation-refusal-threshold"
+                      aria-label={t('settings.m57')}
+                      type="number"
+                      min="0.51"
+                      max="1"
+                      step="0.01"
+                      value={
+                        Number.isFinite(draft.translationPolicy.judgment.threshold)
+                          ? draft.translationPolicy.judgment.threshold
+                          : ''
+                      }
+                      onChange={(event) =>
+                        change({
+                          ...draft,
+                          translationPolicy: {
+                            ...draft.translationPolicy,
+                            judgment: {
+                              ...draft.translationPolicy.judgment,
+                              threshold: event.target.valueAsNumber,
+                            },
                           },
-                        },
-                      })
-                    }
-                  />
-                </div>
+                        })
+                      }
+                    />
+                  </div>
+                )}
                 <div className="refusal-role-heading">
                   <label htmlFor="translation-provider-refusal-retry">
                     {t('settings.translationProviderRefusalRetry')}
@@ -728,33 +596,175 @@ export function ModelWorkspaceEditor({
                     }
                   />
                 </div>
-                <div className="refusal-field-row">
-                  <label htmlFor="translation-refusal-retries">{t('settings.m58')}</label>
-                  <input
-                    id="translation-refusal-retries"
-                    aria-label={t('settings.m59')}
-                    type="number"
-                    min={0}
-                    max={5}
-                    step={1}
-                    value={
-                      Number.isFinite(draft.translationPolicy.maxRetries)
-                        ? draft.translationPolicy.maxRetries
-                        : ''
-                    }
-                    onChange={(event) =>
-                      change({
-                        ...draft,
-                        translationPolicy: {
-                          ...draft.translationPolicy,
-                          maxRetries: event.target.valueAsNumber,
-                        },
-                      })
-                    }
-                  />
-                </div>
+                {(translationJudgmentEnabled || retryProviderRefusal || invalidRetries) && (
+                  <div className="refusal-field-row">
+                    <label htmlFor="translation-refusal-retries">{t('settings.m58')}</label>
+                    <input
+                      id="translation-refusal-retries"
+                      aria-label={t('settings.m59')}
+                      type="number"
+                      min={0}
+                      max={5}
+                      step={1}
+                      value={
+                        Number.isFinite(draft.translationPolicy.maxRetries)
+                          ? draft.translationPolicy.maxRetries
+                          : ''
+                      }
+                      onChange={(event) =>
+                        change({
+                          ...draft,
+                          translationPolicy: {
+                            ...draft.translationPolicy,
+                            maxRetries: event.target.valueAsNumber,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                )}
               </section>
             </section>
+          </div>
+        </details>
+        <details className="settings-group full model-secondary-settings">
+          <summary className="settings-group-heading">
+            {t('settings.judgmentProvider')}
+            <small>{judgmentProviderName}</small>
+          </summary>
+          <div className="settings-group-body">
+            <div className="settings-row">
+              <div className="settings-row-copy">
+                <label htmlFor={`${id}-judgment-provider`}>{t('settings.judgmentProvider')}</label>
+              </div>
+              <div className="settings-row-control">
+                <select
+                  id={`${id}-judgment-provider`}
+                  value={compatible ? 'compatible' : judgment.provider}
+                  onChange={(event) => {
+                    const provider = event.target.value;
+                    if (provider === 'typesafe') changeJudgment(DEFAULT_JUDGMENT_SELECTION);
+                    else if (provider === 'openai' || provider === 'gemini')
+                      changeJudgment({
+                        provider,
+                        connectionId: '',
+                        modelId: OFFICIAL_JUDGMENT_MODELS[provider],
+                        images: false,
+                      });
+                    else
+                      changeJudgment({
+                        provider: 'openai-compatible',
+                        connectionId: '',
+                        modelId: '',
+                        images: false,
+                      });
+                  }}
+                >
+                  <option value="typesafe">{judgmentProviderNames.typesafe}</option>
+                  <option value="openai">{judgmentProviderNames.openai}</option>
+                  <option value="gemini">{judgmentProviderNames.gemini}</option>
+                  <option value="compatible">{t('settings.judgmentCompatible')}</option>
+                </select>
+              </div>
+            </div>
+            {judgment.provider !== 'typesafe' && (
+              <>
+                <div className="settings-row">
+                  <div className="settings-row-copy">
+                    <label htmlFor={`${id}-judgment-connection`}>
+                      {t('settings.judgmentConnection')}
+                    </label>
+                    {judgmentConnections.length === 0 && (
+                      <small>{t('settings.judgmentConnectionRequired')}</small>
+                    )}
+                  </div>
+                  <div className="settings-row-control">
+                    <select
+                      id={`${id}-judgment-connection`}
+                      value={judgment.connectionId}
+                      onChange={(event) =>
+                        changeJudgment({ ...judgment, connectionId: event.target.value })
+                      }
+                    >
+                      <option value="">{t('settings.judgmentConnectionPlaceholder')}</option>
+                      {judgment.connectionId && !judgmentConnection && (
+                        <option value={judgment.connectionId} disabled>
+                          {t('settings.judgmentUnavailable')}
+                        </option>
+                      )}
+                      {judgmentConnections.map((connection) => (
+                        <option key={connection.id} value={connection.id}>
+                          {connection.title}
+                        </option>
+                      ))}
+                    </select>
+                    {judgmentConnections.length === 0 && (
+                      <button type="button" className="secondary" onClick={onManage}>
+                        <SettingsIcon size={18} aria-hidden="true" />
+                        {t('settings.m18')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {compatible && (
+                  <div className="settings-row">
+                    <div className="settings-row-copy">
+                      <label htmlFor={`${id}-judgment-protocol`}>
+                        {t('settings.judgmentProtocol')}
+                      </label>
+                    </div>
+                    <div className="settings-row-control">
+                      <select
+                        id={`${id}-judgment-protocol`}
+                        value={judgment.provider}
+                        onChange={(event) =>
+                          changeJudgment({
+                            ...judgment,
+                            provider:
+                              event.target.value === 'typesafe-compatible'
+                                ? 'typesafe-compatible'
+                                : 'openai-compatible',
+                          })
+                        }
+                      >
+                        <option value="openai-compatible">OpenAI Decisions</option>
+                        <option value="typesafe-compatible">TypeSafe System One</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+                <div className="settings-row">
+                  <div className="settings-row-copy">
+                    <label htmlFor={`${id}-judgment-model`}>{t('settings.judgmentModelId')}</label>
+                  </div>
+                  <div className="settings-row-control">
+                    <input
+                      id={`${id}-judgment-model`}
+                      value={judgment.modelId}
+                      readOnly={!compatible}
+                      maxLength={200}
+                      onChange={(event) =>
+                        changeJudgment({ ...judgment, modelId: event.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="settings-row">
+                  <div className="settings-row-copy">
+                    <label htmlFor={`${id}-judgment-images`}>{t('settings.judgmentImages')}</label>
+                  </div>
+                  <div className="settings-row-control">
+                    <Switch
+                      id={`${id}-judgment-images`}
+                      checked={judgment.images}
+                      onChange={(event) =>
+                        changeJudgment({ ...judgment, images: event.target.checked })
+                      }
+                    />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </details>
         <div className="form-actions settings-save-actions full">

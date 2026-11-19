@@ -4,18 +4,7 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import {
-  Plus,
-  Upload,
-  Download,
-  Copy,
-  Trash2,
-  RefreshCw,
-  Check,
-  Pencil,
-  RotateCcw,
-  X,
-} from 'lucide-react';
+import { Plus, Upload, Download, Copy, Trash2, Check, Pencil, RotateCcw, X } from 'lucide-react';
 import {
   emptyIllustrationPreset,
   illustrationPresetDefinition,
@@ -189,11 +178,7 @@ export function IllustrationPresetSettings({
       if (cause instanceof Error && /^COMFYUI_WORKFLOW_|^ComfyUI 워크플로:/u.test(cause.message)) {
         setWorkflowError(message);
         requestAnimationFrame(() => {
-          const field =
-            editor.current?.querySelector<HTMLTextAreaElement>('[data-workflow-editor]');
-          const details = field?.closest('details');
-          if (details instanceof HTMLDetailsElement) details.open = true;
-          field?.focus();
+          editor.current?.querySelector<HTMLTextAreaElement>('[data-workflow-editor]')?.focus();
         });
       }
       return false;
@@ -300,7 +285,7 @@ export function IllustrationPresetSettings({
   const codexConnection =
     model && library.connections.find((item) => item.id === model.connectionId);
   const readiness = !environment
-    ? t('visualpanels.openTheDefaultGenerationEnvironmentToCheck')
+    ? ''
     : !modelReady
       ? t('visualpanels.setupNeededSelectAModelAndEnable')
       : !promptModelReady
@@ -332,429 +317,392 @@ export function IllustrationPresetSettings({
       className="illustration-preset-settings illustration-settings"
       aria-label={t('visualpanels.illustrationPresets')}
     >
-      <section
-        className="settings-card illustration-current-summary illustration-preset-current"
-        aria-label={t('visualpanels.currentIllustrationSettings')}
-      >
-        <h3>{t('visualpanels.currentIllustrationSettings')}</h3>
-        <p className="ui-meta-row">
-          <span>
-            {scope.chatId
-              ? t('visualpanels.currentChat')
-              : scope.botId
-                ? t('visualpanels.currentBot')
-                : t('visualpanels.workspaceDefault')}
-          </span>
-          <strong>
-            {effective.id.startsWith('builtin:')
-              ? translateMessage(effective.title)
-              : effective.title}
-          </strong>
-        </p>
-        <p>
-          {t('visualpanels.generator', {
-            v0: effective.generator === 'comfyui' ? 'ComfyUI' : 'Codex',
-          })}
-        </p>
-        <p className="ui-meta-row">
-          <span>
-            {effective.generator === 'comfyui'
-              ? t('visualpanels.promptModel')
-              : t('visualpanels.illustrationModel')}
-          </span>
-          <span>
-            {model?.title ??
-              (environment ? t('visualpanels.noModelSelected') : t('visualpanels.checking'))}
-          </span>
-        </p>
-        {effective.generator === 'codex' && (
-          <p className="ui-meta-row">
-            <span>{t('visualpanels.promptModel')}</span>
-            <span>{promptModel?.title ?? t('visualpanels.noModelSelected')}</span>
-          </p>
-        )}
-        {readiness && <p role="status">{readiness}</p>}
-      </section>
-      <details className="illustration-preset-disclosure">
-        <summary>{t('visualpanels.managePresetsAndScopes')}</summary>
-        <div className="illustration-preset-heading">
-          <div className="illustration-preset-list-actions">
-            <button
-              className="primary"
-              aria-label={t('visualpanels.newIllustrationPreset')}
-              disabled={busy || dirty}
-              onClick={() => edit()}
-            >
-              <Plus size={16} aria-hidden="true" /> {t('visualpanels.newPreset')}{' '}
-            </button>
-            <button
-              aria-label={t('visualpanels.importPreset')}
-              disabled={busy || dirty}
-              onClick={() => input.current?.click()}
-            >
-              <Upload size={16} aria-hidden="true" /> {t('visualpanels.import')}{' '}
-            </button>
-          </div>
-        </div>
-        <div className="illustration-preset-toolbar settings-group-body">
-          <div className="settings-row">
-            <div className="settings-row-copy">
-              <span>{t('visualpanels.scope')}</span>
-            </div>
-            <div className="settings-row-control">
-              <select
-                aria-label={t('visualpanels.illustrationPresetScope')}
-                value={target}
-                disabled={busy || dirty}
-                onChange={(event) => setTarget(event.target.value as typeof target)}
-              >
-                <option value="global">{t('visualpanels.workspaceDefault')}</option>
-                {scope.botId && <option value="bot">{t('visualpanels.currentBotDefault')}</option>}
-                {scope.chatId && <option value="chat">{t('visualpanels.thisChatOnly')}</option>}
-              </select>
-              {target !== 'global' && (
-                <button disabled={busy || dirty || !selectedId} onClick={() => void choose(null)}>
-                  <RotateCcw size={16} aria-hidden="true" />{' '}
-                  {t('visualpanels.inheritParentSettings')}{' '}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-        {(error || loadError) && (
-          <NoticeBanner tone="error">{translateMessage(error || loadError)}</NoticeBanner>
-        )}
-        {loadError && (
-          <button onClick={() => void refresh()}>
-            <RefreshCw size={16} aria-hidden="true" /> {t('visualpanels.reload')}{' '}
+      <div className="illustration-preset-heading">
+        <h3>{t('visualpanels.managePresetsAndScopes')}</h3>
+        <div className="illustration-preset-list-actions">
+          <button
+            className="primary"
+            aria-label={t('visualpanels.newIllustrationPreset')}
+            disabled={busy || dirty}
+            onClick={() => edit()}
+          >
+            <Plus size={16} aria-hidden="true" /> {t('visualpanels.newPreset')}{' '}
           </button>
-        )}
-        <TransientNotice message={notice} />
-        {importNotice && <NoticeBanner>{translateMessage(importNotice)}</NoticeBanner>}
-        <div
-          className="illustration-preset-grid"
-          aria-label={t('visualpanels.savedIllustrationPresets')}
-        >
-          {catalog.presets.map((preset) => (
-            <article
-              className={`illustration-preset-card${selectedId === preset.id ? ' selected' : ''}`}
-              key={preset.id}
+          <button
+            aria-label={t('visualpanels.importPreset')}
+            disabled={busy || dirty}
+            onClick={() => input.current?.click()}
+          >
+            <Upload size={16} aria-hidden="true" /> {t('visualpanels.import')}{' '}
+          </button>
+        </div>
+      </div>
+      <div className="illustration-preset-toolbar settings-group-body">
+        <div className="settings-row">
+          <div className="settings-row-copy">
+            <span>{t('visualpanels.scope')}</span>
+            {effective.id !== selectedId && (
+              <small className="illustration-preset-effective">
+                {t('visualpanels.effectivePreset', {
+                  v0: effective.id.startsWith('builtin:')
+                    ? translateMessage(effective.title)
+                    : effective.title,
+                })}
+              </small>
+            )}
+          </div>
+          <div className="settings-row-control">
+            <select
+              aria-label={t('visualpanels.illustrationPresetScope')}
+              value={target}
+              disabled={busy || dirty}
+              onChange={(event) => setTarget(event.target.value as typeof target)}
             >
-              <button
-                className="illustration-preset-apply"
-                aria-label={t('visualpanels.applyIllustrationPreset', {
+              <option value="global">{t('visualpanels.workspaceDefault')}</option>
+              {scope.botId && <option value="bot">{t('visualpanels.currentBotDefault')}</option>}
+              {scope.chatId && <option value="chat">{t('visualpanels.thisChatOnly')}</option>}
+            </select>
+            {target !== 'global' && (
+              <button disabled={busy || dirty || !selectedId} onClick={() => void choose(null)}>
+                <RotateCcw size={16} aria-hidden="true" /> {t(
+                  'visualpanels.inheritParentSettings'
+                )}{' '}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+      {readiness && <NoticeBanner>{readiness}</NoticeBanner>}
+      {(error || loadError) && (
+        <NoticeBanner
+          tone="error"
+          actions={
+            loadError ? (
+              <button type="button" className="secondary" onClick={() => void refresh()}>
+                {t('shared.retry')}
+              </button>
+            ) : undefined
+          }
+        >
+          {translateMessage(error || loadError)}
+        </NoticeBanner>
+      )}
+      <TransientNotice message={notice} />
+      {importNotice && <NoticeBanner>{translateMessage(importNotice)}</NoticeBanner>}
+      <div
+        className="illustration-preset-grid"
+        aria-label={t('visualpanels.savedIllustrationPresets')}
+      >
+        {catalog.presets.map((preset) => (
+          <article
+            className={`illustration-preset-card${selectedId === preset.id ? ' selected' : ''}`}
+            key={preset.id}
+          >
+            <button
+              className="illustration-preset-apply"
+              aria-label={t('visualpanels.applyIllustrationPreset', {
+                v0: preset.id.startsWith('builtin:')
+                  ? translateMessage(preset.title)
+                  : preset.title,
+              })}
+              aria-pressed={selectedId === preset.id}
+              disabled={busy || dirty}
+              onClick={() => void choose(preset.id)}
+            >
+              <div className="illustration-preset-title">
+                <strong>
+                  {preset.id.startsWith('builtin:') ? translateMessage(preset.title) : preset.title}
+                </strong>
+                {selectedId === preset.id && (
+                  <span className="illustration-preset-selected">
+                    <Check size={14} aria-hidden="true" /> {t('visualpanels.selected')}{' '}
+                  </span>
+                )}
+              </div>
+              {(preset.id.startsWith('builtin:') || preset.description) && (
+                <span>
+                  {preset.id.startsWith('builtin:')
+                    ? t('visualpanels.drawsAccordingToTheSceneAndCharacters')
+                    : preset.description}
+                </span>
+              )}
+              <small>
+                {preset.generator === 'codex'
+                  ? t('visualpanels.codexSharedIllustrationModel')
+                  : preset.comfyui.workflow.trim()
+                    ? t('visualpanels.comfyuiWorkflowIncluded')
+                    : t('visualpanels.comfyuiWorkflowSetupNeeded')}
+              </small>
+            </button>
+            <div className="illustration-preset-actions">
+              <IconButton
+                className="secondary"
+                disabled={busy || dirty}
+                size={18}
+                label={t('visualpanels.editIllustrationPreset', {
                   v0: preset.id.startsWith('builtin:')
                     ? translateMessage(preset.title)
                     : preset.title,
                 })}
-                aria-pressed={selectedId === preset.id}
-                disabled={busy || dirty}
-                onClick={() => void choose(preset.id)}
+                title={
+                  preset.id.startsWith('builtin:')
+                    ? t('visualpanels.duplicateAndEditIllustrationPreset', {
+                        v0: translateMessage(preset.title),
+                      })
+                    : undefined
+                }
+                icon={preset.id.startsWith('builtin:') ? Copy : Pencil}
+                onClick={() => edit(preset)}
+              />
+              <ActionMenu
+                label={t('visualpanels.presetMenu', {
+                  v0: preset.id.startsWith('builtin:')
+                    ? translateMessage(preset.title)
+                    : preset.title,
+                })}
+                viewport
               >
-                <div className="illustration-preset-title">
-                  <strong>
-                    {preset.id.startsWith('builtin:')
-                      ? translateMessage(preset.title)
-                      : preset.title}
-                  </strong>
-                  {selectedId === preset.id && (
-                    <span className="illustration-preset-selected">
-                      <Check size={14} aria-hidden="true" /> {t('visualpanels.selected')}{' '}
-                    </span>
-                  )}
-                </div>
-                {(preset.id.startsWith('builtin:') || preset.description) && (
-                  <span>
-                    {preset.id.startsWith('builtin:')
-                      ? t('visualpanels.drawsAccordingToTheSceneAndCharacters')
-                      : preset.description}
-                  </span>
-                )}
-                <small>
-                  {preset.generator === 'codex'
-                    ? t('visualpanels.codexSharedIllustrationModel')
-                    : preset.comfyui.workflow.trim()
-                      ? t('visualpanels.comfyuiWorkflowIncluded')
-                      : t('visualpanels.comfyuiWorkflowSetupNeeded')}
-                </small>
-              </button>
-              <div className="illustration-preset-actions">
-                <IconButton
-                  className="secondary"
-                  disabled={busy || dirty}
-                  size={18}
-                  label={t('visualpanels.editIllustrationPreset', {
-                    v0: preset.id.startsWith('builtin:')
-                      ? translateMessage(preset.title)
-                      : preset.title,
-                  })}
-                  title={
-                    preset.id.startsWith('builtin:')
-                      ? t('visualpanels.duplicateAndEditIllustrationPreset', {
-                          v0: translateMessage(preset.title),
-                        })
-                      : undefined
-                  }
-                  icon={preset.id.startsWith('builtin:') ? Copy : Pencil}
-                  onClick={() => edit(preset)}
-                />
-                <ActionMenu
-                  label={t('visualpanels.presetMenu', {
-                    v0: preset.id.startsWith('builtin:')
-                      ? translateMessage(preset.title)
-                      : preset.title,
-                  })}
-                  viewport
-                >
-                  <div className="action-menu-group">
-                    {!preset.id.startsWith('builtin:') && (
-                      <button
-                        disabled={busy || dirty}
-                        aria-label={t('visualpanels.duplicateIllustrationPreset', {
-                          v0: preset.id.startsWith('builtin:')
-                            ? translateMessage(preset.title)
-                            : preset.title,
-                        })}
-                        onClick={() => edit(preset, true)}
-                      >
-                        <Copy size={16} aria-hidden="true" /> {t('visualpanels.duplicate2')}{' '}
-                      </button>
-                    )}
+                <div className="action-menu-group">
+                  {!preset.id.startsWith('builtin:') && (
                     <button
-                      disabled={busy}
-                      aria-label={t('visualpanels.exportIllustrationPreset', {
+                      disabled={busy || dirty}
+                      aria-label={t('visualpanels.duplicateIllustrationPreset', {
+                        v0: preset.id.startsWith('builtin:')
+                          ? translateMessage(preset.title)
+                          : preset.title,
+                      })}
+                      onClick={() => edit(preset, true)}
+                    >
+                      <Copy size={16} aria-hidden="true" /> {t('visualpanels.duplicate2')}{' '}
+                    </button>
+                  )}
+                  <button
+                    disabled={busy}
+                    aria-label={t('visualpanels.exportIllustrationPreset', {
+                      v0: preset.id.startsWith('builtin:')
+                        ? translateMessage(preset.title)
+                        : preset.title,
+                    })}
+                    onClick={() => {
+                      void action(async () =>
+                        saveDownload(
+                          `${preset.title}.uimori-illustration.json`,
+                          illustrationPresetFile(preset)
+                        )
+                      );
+                    }}
+                  >
+                    <Download size={16} aria-hidden="true" /> {t('visualpanels.export2')}{' '}
+                  </button>
+                </div>
+                {!preset.id.startsWith('builtin:') && (
+                  <div className="action-menu-group">
+                    <button
+                      disabled={busy || dirty}
+                      className="danger"
+                      aria-label={t('visualpanels.deleteIllustrationPreset', {
                         v0: preset.id.startsWith('builtin:')
                           ? translateMessage(preset.title)
                           : preset.title,
                       })}
                       onClick={() => {
-                        void action(async () =>
-                          saveDownload(
-                            `${preset.title}.uimori-illustration.json`,
-                            illustrationPresetFile(preset)
-                          )
-                        );
+                        setError('');
+                        setDeleting(preset);
                       }}
                     >
-                      <Download size={16} aria-hidden="true" /> {t('visualpanels.export2')}{' '}
+                      <Trash2 size={16} aria-hidden="true" /> {t('visualpanels.delete2')}{' '}
                     </button>
                   </div>
-                  {!preset.id.startsWith('builtin:') && (
-                    <div className="action-menu-group">
-                      <button
-                        disabled={busy || dirty}
-                        className="danger"
-                        aria-label={t('visualpanels.deleteIllustrationPreset', {
-                          v0: preset.id.startsWith('builtin:')
-                            ? translateMessage(preset.title)
-                            : preset.title,
-                        })}
-                        onClick={() => {
-                          setError('');
-                          setDeleting(preset);
-                        }}
-                      >
-                        <Trash2 size={16} aria-hidden="true" /> {t('visualpanels.delete2')}{' '}
-                      </button>
-                    </div>
-                  )}
-                </ActionMenu>
-              </div>
-            </article>
-          ))}
-        </div>
-        <input
-          ref={input}
-          type="file"
-          accept=".json"
-          hidden
-          aria-label={t('visualpanels.illustrationPresetFile')}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = '';
-            if (file) void importFile(file);
-          }}
-        />
-        {draft && (
-          <section
-            ref={editor}
-            className="settings-group illustration-preset-editor"
-            aria-label={t('visualpanels.illustrationPresetEditor')}
-          >
-            <div className="illustration-preset-heading">
-              <h4>{draft.id ? t('visualpanels.editPreset') : t('visualpanels.createPreset')}</h4>
-              {dirty && <small>{t('visualpanels.unsavedChanges')}</small>}
-            </div>
-            {(conflict || deleted) && (
-              <NoticeBanner tone="error">
-                {t('visualpanels.yourEditsArePreservedSaveACopy', {
-                  v0: deleted
-                    ? t('visualpanels.thisPresetWasDeletedElsewhere')
-                    : t('visualpanels.theSavedPresetChangedElsewhere'),
-                })}
-              </NoticeBanner>
-            )}
-            <fieldset
-              className="control-grid settings-group-body illustration-preset-editor-body"
-              disabled={busy}
-            >
-              <label className="full">
-                {t('visualpanels.presetName')}{' '}
-                <input
-                  aria-label={t('visualpanels.illustrationPresetName')}
-                  value={draft.model.title}
-                  maxLength={100}
-                  onChange={(event) => patch({ title: event.target.value })}
-                />
-              </label>
-              <label className="full">
-                {t('visualpanels.descriptionOptional')}{' '}
-                <input
-                  aria-label={t('visualpanels.illustrationPresetDescription')}
-                  value={draft.model.description}
-                  maxLength={2000}
-                  onChange={(event) => patch({ description: event.target.value })}
-                />
-              </label>
-              <label className="full">
-                {t('visualpanels.generator2')}{' '}
-                <select
-                  aria-label={t('visualpanels.presetIllustrationGenerator')}
-                  value={draft.model.generator}
-                  onChange={(event) =>
-                    patch({
-                      generator: event.target.value as IllustrationPresetGenerator,
-                    })
-                  }
-                >
-                  <option value="codex">
-                    {t('visualpanels.codexImageGenerationWithAChatgptSubscription')}
-                  </option>
-                  <option value="comfyui">{t('visualpanels.comfyuiRemotePcApi')}</option>
-                </select>
-              </label>
-              <label className="full">
-                {t('visualpanels.illustrationInstructions')}{' '}
-                <textarea
-                  aria-label={t('visualpanels.illustrationStyleInstructions')}
-                  className="illustration-style-guidance"
-                  rows={8}
-                  maxLength={SOURCE_TEXT_MAX_CHARS}
-                  value={draft.model.styleGuidance}
-                  placeholder={t('visualpanels.exampleCalmColorsSoftLightCleanLinework')}
-                  onChange={(event) => patch({ styleGuidance: event.target.value })}
-                />
-              </label>
-              <details className="full illustration-preset-disclosure">
-                <summary>{t('visualpanels.writingExamples')}</summary>
-                <div className="illustration-preset-help">
-                  <pre>{t('visualpanels.keyFeaturesCalmColorsSoftDirectionalLighting', {})}</pre>
-                  <p>
-                    <strong>{t('visualpanels.animaExample')}</strong>{' '}
-                  </p>
-                  <pre>{t('visualpanels.whenWritingPromptsForAnimaInComfyui', {})}</pre>
-                </div>
-              </details>
-              {(draft.model.generator === 'comfyui' || workflowError) && (
-                <details className="full illustration-preset-disclosure">
-                  <summary>
-                    {t('visualpanels.comfyuiSettings')}{' '}
-                    <small>
-                      {draft.model.comfyui.workflow.trim()
-                        ? t('settings.workflowEntered')
-                        : t('visualpanels.noWorkflow')}
-                    </small>
-                  </summary>
-                  <fieldset className="control-grid">
-                    <label className="full">
-                      {t('visualpanels.additionalNegativeGuidance')}{' '}
-                      <textarea
-                        aria-label={t('visualpanels.comfyuiNegativePromptInstructions')}
-                        rows={3}
-                        maxLength={SOURCE_TEXT_MAX_CHARS}
-                        value={draft.model.comfyui.negativeGuidance}
-                        onChange={(event) =>
-                          patch({
-                            comfyui: {
-                              ...draft.model.comfyui,
-                              negativeGuidance: event.target.value,
-                            },
-                          })
-                        }
-                      />
-                    </label>
-                    <label className="full">
-                      {t('visualpanels.workflowJsonApiFormat')}{' '}
-                      <textarea
-                        aria-label={t('visualpanels.comfyuiWorkflowJson')}
-                        data-workflow-editor
-                        aria-invalid={workflowError ? true : undefined}
-                        aria-describedby={workflowError ? `${editorId}-workflow-error` : undefined}
-                        rows={10}
-                        maxLength={ILLUSTRATION_WORKFLOW_MAX_CHARS}
-                        value={draft.model.comfyui.workflow}
-                        placeholder={t('visualpanels.apiFormatJsonExportedFromComfyui')}
-                        onChange={(event) => {
-                          setWorkflowError('');
-                          patch({
-                            comfyui: {
-                              ...draft.model.comfyui,
-                              workflow: event.target.value,
-                            },
-                          });
-                        }}
-                      />
-                      {workflowError && (
-                        <small id={`${editorId}-workflow-error`} className="error">
-                          {translateMessage(workflowError)}
-                        </small>
-                      )}
-                    </label>
-                    <details className="full">
-                      <summary>{t('visualpanels.workflowAuthoringAndSharingHelp')}</summary>
-                      <p>
-                        {t('visualpanels.inStringInputsBecomesTheImageDescription', {
-                          v0: '{{prompt}}',
-                          v1: '{{negative}}',
-                          v2: '{{seed}}',
-                        })}
-                      </p>
-                      <p>{t('visualpanels.theReceivingComfyuiNeedsTheSameModels')}</p>
-                    </details>
-                  </fieldset>
-                </details>
-              )}
-              <div className="illustration-preset-actions illustration-preset-editor-actions full">
-                <SaveButton
-                  type="button"
-                  label={t('visualpanels.savePreset')}
-                  aria-busy={operation === 'save'}
-                  disabled={!dirty || conflict || deleted}
-                  onClick={() => void save()}
-                />
-                {draft.id && (
-                  <button
-                    className="illustration-preset-copy-save"
-                    aria-label={t('visualpanels.saveAsCopy')}
-                    title={t('visualpanels.saveAsCopy')}
-                    onClick={() => void save(true)}
-                  >
-                    <Copy size={16} aria-hidden="true" /> {t('visualpanels.saveCopy')}{' '}
-                  </button>
                 )}
-                <IconButton
-                  label={t('visualpanels.closeEditor')}
-                  icon={X}
-                  onClick={() => {
-                    if (dirty) setDiscard(true);
-                    else setDraft(null);
-                  }}
-                />
+              </ActionMenu>
+            </div>
+          </article>
+        ))}
+      </div>
+      <input
+        ref={input}
+        type="file"
+        accept=".json"
+        hidden
+        aria-label={t('visualpanels.illustrationPresetFile')}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file) void importFile(file);
+        }}
+      />
+      {draft && (
+        <section
+          ref={editor}
+          className="settings-group illustration-preset-editor"
+          aria-label={t('visualpanels.illustrationPresetEditor')}
+        >
+          <div className="illustration-preset-heading">
+            <h4>{draft.id ? t('visualpanels.editPreset') : t('visualpanels.createPreset')}</h4>
+            {dirty && <small>{t('visualpanels.unsavedChanges')}</small>}
+          </div>
+          {(conflict || deleted) && (
+            <NoticeBanner tone="error">
+              {t('visualpanels.yourEditsArePreservedSaveACopy', {
+                v0: deleted
+                  ? t('visualpanels.thisPresetWasDeletedElsewhere')
+                  : t('visualpanels.theSavedPresetChangedElsewhere'),
+              })}
+            </NoticeBanner>
+          )}
+          <fieldset
+            className="control-grid settings-group-body illustration-preset-editor-body"
+            disabled={busy}
+          >
+            <label className="full">
+              {t('visualpanels.presetName')}{' '}
+              <input
+                aria-label={t('visualpanels.illustrationPresetName')}
+                value={draft.model.title}
+                maxLength={100}
+                onChange={(event) => patch({ title: event.target.value })}
+              />
+            </label>
+            <label className="full">
+              {t('visualpanels.descriptionOptional')}{' '}
+              <input
+                aria-label={t('visualpanels.illustrationPresetDescription')}
+                value={draft.model.description}
+                maxLength={2000}
+                onChange={(event) => patch({ description: event.target.value })}
+              />
+            </label>
+            <label className="full">
+              {t('visualpanels.generator2')}{' '}
+              <select
+                aria-label={t('visualpanels.presetIllustrationGenerator')}
+                value={draft.model.generator}
+                onChange={(event) =>
+                  patch({
+                    generator: event.target.value as IllustrationPresetGenerator,
+                  })
+                }
+              >
+                <option value="codex">
+                  {t('visualpanels.codexImageGenerationWithAChatgptSubscription')}
+                </option>
+                <option value="comfyui">{t('visualpanels.comfyuiRemotePcApi')}</option>
+              </select>
+            </label>
+            <label className="full">
+              {t('visualpanels.illustrationInstructions')}{' '}
+              <textarea
+                aria-label={t('visualpanels.illustrationStyleInstructions')}
+                className="illustration-style-guidance"
+                rows={8}
+                maxLength={SOURCE_TEXT_MAX_CHARS}
+                value={draft.model.styleGuidance}
+                placeholder={t('visualpanels.exampleCalmColorsSoftLightCleanLinework')}
+                onChange={(event) => patch({ styleGuidance: event.target.value })}
+              />
+            </label>
+            <details className="full illustration-preset-disclosure">
+              <summary>{t('visualpanels.writingExamples')}</summary>
+              <div className="illustration-preset-help">
+                <pre>{t('visualpanels.keyFeaturesCalmColorsSoftDirectionalLighting', {})}</pre>
+                <p>
+                  <strong>{t('visualpanels.animaExample')}</strong>{' '}
+                </p>
+                <pre>{t('visualpanels.whenWritingPromptsForAnimaInComfyui', {})}</pre>
               </div>
-            </fieldset>
-          </section>
-        )}
-      </details>
+            </details>
+            {(draft.model.generator === 'comfyui' || workflowError) && (
+              <fieldset
+                className="full control-grid illustration-preset-comfyui"
+                aria-label={t('visualpanels.comfyuiSettings')}
+              >
+                <label className="full">
+                  {t('visualpanels.additionalNegativeGuidance')}{' '}
+                  <textarea
+                    aria-label={t('visualpanels.comfyuiNegativePromptInstructions')}
+                    rows={3}
+                    maxLength={SOURCE_TEXT_MAX_CHARS}
+                    value={draft.model.comfyui.negativeGuidance}
+                    onChange={(event) =>
+                      patch({
+                        comfyui: {
+                          ...draft.model.comfyui,
+                          negativeGuidance: event.target.value,
+                        },
+                      })
+                    }
+                  />
+                </label>
+                <label className="full">
+                  {t('visualpanels.workflowJsonApiFormat')}{' '}
+                  <textarea
+                    aria-label={t('visualpanels.comfyuiWorkflowJson')}
+                    data-workflow-editor
+                    aria-invalid={workflowError ? true : undefined}
+                    aria-describedby={workflowError ? `${editorId}-workflow-error` : undefined}
+                    rows={10}
+                    maxLength={ILLUSTRATION_WORKFLOW_MAX_CHARS}
+                    value={draft.model.comfyui.workflow}
+                    placeholder={t('visualpanels.apiFormatJsonExportedFromComfyui')}
+                    onChange={(event) => {
+                      setWorkflowError('');
+                      patch({
+                        comfyui: {
+                          ...draft.model.comfyui,
+                          workflow: event.target.value,
+                        },
+                      });
+                    }}
+                  />
+                  {workflowError && (
+                    <small id={`${editorId}-workflow-error`} className="error">
+                      {translateMessage(workflowError)}
+                    </small>
+                  )}
+                </label>
+                <details className="full">
+                  <summary>{t('visualpanels.workflowAuthoringAndSharingHelp')}</summary>
+                  <p>
+                    {t('visualpanels.inStringInputsBecomesTheImageDescription', {
+                      v0: '{{prompt}}',
+                      v1: '{{negative}}',
+                      v2: '{{seed}}',
+                    })}
+                  </p>
+                  <p>{t('visualpanels.theReceivingComfyuiNeedsTheSameModels')}</p>
+                </details>
+              </fieldset>
+            )}
+            <div className="illustration-preset-actions illustration-preset-editor-actions full">
+              <SaveButton
+                type="button"
+                label={t('visualpanels.savePreset')}
+                aria-busy={operation === 'save'}
+                disabled={!dirty || conflict || deleted}
+                onClick={() => void save()}
+              />
+              {draft.id && (
+                <button
+                  className="illustration-preset-copy-save"
+                  aria-label={t('visualpanels.saveAsCopy')}
+                  title={t('visualpanels.saveAsCopy')}
+                  onClick={() => void save(true)}
+                >
+                  <Copy size={16} aria-hidden="true" /> {t('visualpanels.saveCopy')}{' '}
+                </button>
+              )}
+              <IconButton
+                label={t('visualpanels.closeEditor')}
+                icon={X}
+                onClick={() => {
+                  if (dirty) setDiscard(true);
+                  else setDraft(null);
+                }}
+              />
+            </div>
+          </fieldset>
+        </section>
+      )}
       <SaveConflictDialog
         open={saveConflict}
         title={t('visualpanels.reviewSavedIllustrationPreset')}

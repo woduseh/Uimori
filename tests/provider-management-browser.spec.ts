@@ -284,7 +284,6 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
   await expect(
     conflictDialog.getByRole('button', { name: '현재 입력 유지', exact: true })
   ).toBeFocused();
-  await conflictDialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
   await expect(conflictDialog.getByLabel('현재 저장본')).toContainText(changed.title);
   await expect(conflictDialog.getByLabel('현재 저장본')).not.toContainText(title + ' 내 초안');
   await conflictDialog.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
@@ -838,7 +837,7 @@ const providerOptionCases = [
     modelId: 'gpt-5.6-sol',
     choices: {
       '추론 강도': 'none',
-      Verbosity: 'high',
+      '응답 길이': 'high',
       '서비스 등급': 'flex',
       '캐시 방식': 'automatic',
       '캐시 유지 시간': '30m',
@@ -872,7 +871,7 @@ const providerOptionCases = [
       cacheTtl: '5m',
     },
     absent: ['reasoningEffort'],
-    hidden: ['Verbosity'],
+    hidden: ['응답 길이'],
   },
 ];
 for (const [index, item] of providerOptionCases.entries()) {
@@ -914,16 +913,12 @@ for (const [index, item] of providerOptionCases.entries()) {
       await form.getByRole('button', { name: '고급', exact: true }).click();
       // Fable documents adaptive thinking only; disabling stays selectable as an unverified value.
       const mode = form.getByLabel('사고 모드', { exact: true });
-      await expect(mode.locator('optgroup[label="문서로 확인한 값"] option')).toHaveText([
-        '적응형 (adaptive)',
-      ]);
-      await expect(mode.locator('optgroup[label="문서로 확인한 값"] option')).toHaveAttribute(
+      await expect(mode.locator('optgroup[label="권장"] option')).toHaveText(['적응형']);
+      await expect(mode.locator('optgroup[label="권장"] option')).toHaveAttribute(
         'value',
         'adaptive'
       );
-      await expect(
-        mode.locator('optgroup[label="미확인 값 (프로바이더가 판단)"] option[value="disabled"]')
-      ).toHaveCount(1);
+      await expect(mode.locator('optgroup[label="기타"] option[value="disabled"]')).toHaveCount(1);
       await form.getByLabel('이 모델 프리셋에 평가 도구 사용').check();
       await expect(
         form.getByLabel('평가 컨텍스트 제공').locator('option[value="preloaded"]')
@@ -992,7 +987,7 @@ test('PMUI12 changing provider clears unrepresentable options, keeps common fiel
   const strength = form.getByLabel('추론 강도', { exact: true });
   await strength.selectOption('none');
   await form.getByRole('button', { name: '고급', exact: true }).click();
-  await form.getByLabel('Verbosity', { exact: true }).selectOption('low');
+  await form.getByLabel('응답 길이', { exact: true }).selectOption('low');
   // A new protocol discards only fields it cannot send, retaining the common draft values.
   await form.getByRole('button', { name: '기본', exact: true }).click();
   await form.getByLabel('프로바이더', { exact: true }).selectOption(`${anthropic.id}`);
@@ -1003,13 +998,13 @@ test('PMUI12 changing provider clears unrepresentable options, keeps common fiel
   await expect(form.getByLabel('모델 프리셋 이름')).toHaveValue(title);
   await expect(form.getByLabel('최대 출력 토큰')).toHaveValue('8192');
   await form.getByRole('button', { name: '고급', exact: true }).click();
-  await expect(form.getByLabel('Verbosity', { exact: true })).toHaveCount(0);
+  await expect(form.getByLabel('응답 길이', { exact: true })).toHaveCount(0);
   await form.getByRole('button', { name: '기본', exact: true }).click();
   await form.getByLabel('프로바이더', { exact: true }).selectOption(`${connection.id}`);
   await form.getByLabel('모델 ID', { exact: true }).fill('gpt-5.6-sol');
   await strength.selectOption('none');
   await form.getByRole('button', { name: '고급', exact: true }).click();
-  await form.getByLabel('Verbosity', { exact: true }).selectOption('low');
+  await form.getByLabel('응답 길이', { exact: true }).selectOption('low');
   await form.getByRole('button', { name: '기본', exact: true }).click();
   await form.getByLabel('모델 ID', { exact: true }).fill('synthetic-future-model');
   // Unknown model support is not a reason to discard or block a protocol-representable value.
@@ -1031,7 +1026,7 @@ test('PMUI12 changing provider clears unrepresentable options, keeps common fiel
   await form.getByRole('button', { name: 'Temperature 지정 해제', exact: true }).click();
   await expect(form.getByLabel('Temperature', { exact: true })).toHaveValue('');
   await expect(strength).toHaveValue('none');
-  await expect(form.getByLabel('Verbosity', { exact: true })).toHaveValue('low');
+  await expect(form.getByLabel('응답 길이', { exact: true })).toHaveValue('low');
   await expect(form.getByLabel('캐시 유지 시간', { exact: true })).toHaveValue('30m');
   await expect(form.getByLabel('캐시 유지 시간', { exact: true })).toHaveAttribute(
     'aria-invalid',
@@ -1118,8 +1113,9 @@ test('PMUI13 response tests are explicit and late results stay with the original
   expect(posts).toEqual([]);
   await revealProviderDiagnostics(page, a.title);
   const button = page.getByRole('button', { name: a.title + ' 응답 테스트', exact: true });
+  const result = page.getByRole('region', { name: a.title + ' 응답 테스트 결과', exact: true });
   await button.click();
-  await expect(button).toBeDisabled();
+  await expect(result).toContainText('응답 확인 중…');
   await requested;
   expect(posts).toHaveLength(1);
   expect(posts[0]).toMatchObject({ expectedRevision: a.revision });
@@ -1132,7 +1128,6 @@ test('PMUI13 response tests are explicit and late results stay with the original
   await expect(form).not.toContainText('A_ONLY_OK');
   await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
   await page.getByLabel('프로바이더와 모델 검색').fill(a.title);
-  const result = page.getByRole('region', { name: a.title + ' 응답 테스트 결과', exact: true });
   await expect(result).toContainText('응답에 성공했어요.');
   await expect(result).not.toContainText('A_ONLY_OK');
   await expect(result).not.toContainText('124 ms');
@@ -1188,10 +1183,12 @@ test('PMUI14 an uncertain response test reuses its key until an explicit new tes
   await expect(result.getByRole('alert')).toContainText('실행 결과를 확인하지 못했어요.');
   await result.getByText('오류 상세', { exact: true }).click();
   await expect(result.locator('details p')).not.toBeEmpty();
+  await revealProviderDiagnostics(page, title);
   await button.click();
   await expect(result).toContainText('응답에 성공했어요.');
   expect(keys).toHaveLength(2);
   expect(keys[1]).toBe(keys[0]);
+  await revealProviderDiagnostics(page, title);
   await button.click();
   await expect.poll(() => keys.length).toBe(3);
   expect(keys[2]).not.toBe(keys[1]);
@@ -1276,11 +1273,9 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
     pending = false,
     available = true;
   const mutations: string[] = [];
-  let statusGate: Promise<void> | undefined;
   await page.route('**/api/agent-runtimes/codex**', async (route) => {
     const request = route.request(),
       path = new URL(request.url()).pathname;
-    if (request.method() === 'GET') await statusGate;
     if (request.method() !== 'GET') mutations.push(`${request.method()} ${path}`);
     if (path.endsWith('/login/cancel')) pending = false;
     else if (path.endsWith('/login')) pending = true;
@@ -1332,18 +1327,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await selectSettingsSection(page, 'Codex 연결');
   const panel = page.getByRole('region', { name: 'Codex 에이전트 연결' });
   await expect(panel).toContainText('로그인 필요');
-  const refresh = panel.getByRole('button', { name: 'Codex 상태 다시 확인' });
-  let releaseStatus!: () => void;
-  statusGate = new Promise<void>((resolve) => {
-    releaseStatus = resolve;
-  });
-  await refresh.click();
-  await expect(refresh).toBeDisabled();
-  await expect(refresh).toHaveAttribute('aria-busy', 'true');
-  releaseStatus();
-  statusGate = undefined;
-  await expect(refresh).toBeEnabled();
-  await expect(refresh).toHaveAttribute('aria-busy', 'false');
+  await expect(panel.getByRole('button', { name: 'Codex 상태 다시 확인' })).toHaveCount(0);
   expect(mutations).toEqual([]);
   await panel.getByRole('button', { name: 'ChatGPT로 로그인', exact: true }).click();
   await expect(panel.getByRole('link', { name: '로그인 페이지 열기' })).toHaveAttribute(
@@ -1351,12 +1335,19 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
     'https://auth.openai.com/codex/device'
   );
   await expect(panel).toContainText('ABCD-1234');
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await panel.getByRole('button', { name: '로그인 코드 복사', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: '로그인 코드를 복사했어요.' })
+  ).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('ABCD-1234');
   await panel.getByRole('button', { name: '로그인 취소', exact: true }).click();
   await expect(panel.getByRole('region', { name: 'Codex 로그인 코드' })).toBeHidden();
   await panel.getByRole('button', { name: 'ChatGPT로 로그인', exact: true }).click();
   authenticated = true;
   pending = false;
-  await panel.getByRole('button', { name: 'Codex 상태 다시 확인' }).click();
+  await selectSettingsSection(page, '앱 정보');
+  await selectSettingsSection(page, 'Codex 연결');
   await expect(panel).toContainText('연결됨');
   const subscription = panel.getByRole('region', { name: 'Codex 구독 상태' });
   await expect(subscription).toContainText('ChatGPT Plus');
@@ -1405,7 +1396,8 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await panel.getByRole('button', { name: '연결 해제', exact: true }).click();
   await expect(panel).toContainText('로그인 필요');
   available = false;
-  await panel.getByRole('button', { name: 'Codex 상태 다시 확인' }).click();
+  await selectSettingsSection(page, '앱 정보');
+  await selectSettingsSection(page, 'Codex 연결');
   await expect(panel).toContainText('서버 설정 필요');
   await expect(panel.getByText('서버에서 Codex 연결 기능을 활성화해 주세요.')).toBeVisible();
   await expect(panel.getByRole('alert')).toHaveCount(0);

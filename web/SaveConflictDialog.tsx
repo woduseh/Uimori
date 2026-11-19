@@ -1,5 +1,5 @@
 import { t, translateMessage, useI18n, message as uiMessage } from './i18n.js';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -30,24 +30,17 @@ export function SaveConflictDialog({
   const [loading, setLoading] = useState(false);
   const version = useRef(0);
   const keepInput = useRef<HTMLButtonElement>(null);
+  const reader = useRef(readSaved);
   useEffect(() => {
-    version.current++;
-    setFields(null);
-    setError('');
-    setLoading(false);
-    const focus = open ? requestAnimationFrame(() => keepInput.current?.focus()) : null;
-    return () => {
-      version.current++;
-      if (focus !== null) cancelAnimationFrame(focus);
-    };
-  }, [open]);
-  async function review() {
+    reader.current = readSaved;
+  });
+  const review = useCallback(async () => {
     const request = ++version.current;
     setLoading(true);
     setFields(null);
     setError('');
     try {
-      const saved = await readSaved();
+      const saved = await reader.current();
       if (request === version.current) setFields(() => saved);
     } catch (caught) {
       if (request === version.current)
@@ -55,7 +48,20 @@ export function SaveConflictDialog({
     } finally {
       if (request === version.current) setLoading(false);
     }
-  }
+  }, []);
+  useEffect(() => {
+    version.current++;
+    setFields(null);
+    setError('');
+    setLoading(false);
+    if (!open) return;
+    const focus = requestAnimationFrame(() => keepInput.current?.focus());
+    void review();
+    return () => {
+      version.current++;
+      cancelAnimationFrame(focus);
+    };
+  }, [open, review]);
   const savedReview = typeof fields === 'function' ? fields() : fields;
   const reviewActions = savedReview && !Array.isArray(savedReview) ? savedReview.actions : null;
   const reviewContent = (
@@ -92,15 +98,11 @@ export function SaveConflictDialog({
     >
       {reviewActions ? <div className="saved-review-content">{reviewContent}</div> : reviewContent}
       <div className="form-actions">
-        <button
-          type="button"
-          className="secondary"
-          disabled={loading}
-          aria-busy={loading}
-          onClick={() => void review()}
-        >
-          {loading ? t('shared.reviewBusy') : t('shared.reviewSaved')}
-        </button>
+        {error && !loading && (
+          <button type="button" className="secondary" onClick={() => void review()}>
+            {t('shared.retry')}
+          </button>
+        )}
         {savedReview && onAcceptSaved && (
           <button
             type="button"

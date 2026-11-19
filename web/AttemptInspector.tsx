@@ -205,7 +205,13 @@ function CacheUsage({ attempt }: { attempt: Attempt }) {
   );
 }
 
-export function RequestLoreView({ lore }: { lore?: RequestLore | null }) {
+export function RequestLoreView({
+  lore,
+  heading = true,
+}: {
+  lore?: RequestLore | null;
+  heading?: boolean;
+}) {
   useI18n();
   const confirmed = lore?.entries.filter((entry) => entry.delivery !== 'unverified') ?? [];
   const uncertain = lore?.entries.filter((entry) => entry.delivery === 'unverified') ?? [];
@@ -214,7 +220,7 @@ export function RequestLoreView({ lore }: { lore?: RequestLore | null }) {
       className="lore-context-result attempt-lore"
       aria-label={t('visualpanels.loreIncludedInRequest')}
     >
-      <h4>{t('visualpanels.includedLore', { count: confirmed.length })}</h4>
+      {heading && <h4>{t('visualpanels.includedLore', { count: confirmed.length })}</h4>}
       {!lore ? (
         <p className="muted">{t('visualpanels.thereIsNoLoreInclusionRecordFor')}</p>
       ) : (

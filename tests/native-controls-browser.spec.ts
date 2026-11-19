@@ -117,8 +117,8 @@ test('NATIVE 412 long uploaded font option stays inside the viewport and persist
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '테마와 색상');
     const fonts = page.getByRole('region', { name: '글꼴', exact: true });
-    const reader = fonts.getByRole('combobox', { name: '본문 글꼴', exact: true });
-    const app = fonts.getByRole('combobox', { name: '앱 글꼴', exact: true });
+    const reader = fonts.getByRole('combobox', { name: '본문 등록 글꼴', exact: true });
+    const app = fonts.getByRole('combobox', { name: '앱 등록 글꼴', exact: true });
     const originalApp = await app.inputValue();
     const noOverflow = async () => {
       for (const surface of [

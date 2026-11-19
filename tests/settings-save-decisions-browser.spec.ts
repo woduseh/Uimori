@@ -218,7 +218,7 @@ for (const width of visualReview ? [360, 412] : [360]) {
       .filter({ hasText: /^고급 실행 설정$/ })
       .click();
     const calls = runtime.getByLabel('작업당 모델 호출 한도', { exact: true });
-    const reload = runtime.getByRole('button', { name: '변경 취소', exact: true });
+    const reload = dialog.getByRole('button', { name: '변경 취소', exact: true });
     const confirmation = page.getByRole('alertdialog', {
       name: '생성 설정 변경 취소',
       exact: true,
@@ -388,7 +388,6 @@ test('DECISION settings role model conflict review keeps the editable draft and 
   expect(changed.ok(), await changed.text()).toBe(true);
   await editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
   const dialog = page.getByRole('alertdialog', { name: '역할별 모델 저장본 확인', exact: true });
-  await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
   const row = dialog
     .getByLabel('현재 저장본')
     .locator('.settings-row')
@@ -516,7 +515,6 @@ test('DECISION settings chat prompt option conflict review preserves local value
   expect(remote.ok(), await remote.text()).toBe(true);
   const remoteRevision = ((await remote.json()) as ChatOptionState).revision;
   const save = panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true });
-  await save.click();
   const dialog = page.getByRole('alertdialog', { name: '채팅 옵션 저장본 확인', exact: true });
   {
     let failReview = true;
@@ -525,9 +523,10 @@ test('DECISION settings chat prompt option conflict review preserves local value
         return route.fulfill({ status: 503, json: { error: 'Synthetic option review failure' } });
       await route.continue();
     });
-    const writesBeforeRead = optionWrites.length;
-    await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
+    await save.click();
     await expect(dialog.getByRole('alert')).toContainText('(503)');
+    const writesBeforeRead = optionWrites.length;
+    await expect(dialog.getByRole('button', { name: '다시 시도', exact: true })).toBeVisible();
     await expect(dialog.getByLabel('현재 저장본')).toHaveCount(0);
     await expect(
       dialog.getByRole('button', { name: '입력 유지하고 계속 편집', exact: true })
@@ -540,7 +539,6 @@ test('DECISION settings chat prompt option conflict review preserves local value
     await expect(dialog).toBeVisible();
     expect(optionWrites).toHaveLength(writesBeforeRead);
   }
-  await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
   await expect(dialog.getByLabel('현재 저장본')).toContainText('다른 창의 저장 문체');
   await expect(dialog).toHaveCSS('opacity', '1');
   await page.screenshot({ path: test.info().outputPath('option-review-chat-412.png') });
@@ -558,7 +556,6 @@ test('DECISION settings chat prompt option conflict review preserves local value
     0
   );
   await save.click();
-  await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
   await dialog.getByRole('button', { name: '입력 유지하고 계속 편집', exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(field).toHaveValue('보존할 내 문체');

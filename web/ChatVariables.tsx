@@ -1,12 +1,12 @@
 import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
-import { IconButton } from './IconButton.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { SaveButton } from './SaveButton.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatVariableState } from '../core/chat-variables.js';
 import { api, ApiError, definiteRejection } from './api.js';
-import { RefreshIcon, SearchIcon, ResetIcon } from './ui-icons.js';
+import { SearchIcon, ResetIcon } from './ui-icons.js';
 import './chat-variables.css';
 
 type VariableView = ChatVariableState & {
@@ -30,6 +30,7 @@ type Draft = {
 };
 type Props = {
   chatId: string;
+  active?: boolean;
   refreshKey?: unknown;
   onChange?: () => void;
 };
@@ -90,7 +91,7 @@ function rememberDraft(key: string, value: Draft | null) {
 
 /** Chat overrides are an explicit user edit. Background refreshes only update the
  * comparison base; they never adopt, discard, or replay the draft. */
-export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
+export function ChatVariables({ chatId, active = true, refreshKey, onChange }: Props) {
   useI18n();
   const storageKey = `uimori:chat-variable-draft:${chatId}`;
   const [view, setView] = useState<VariableView | null>(null);
@@ -98,6 +99,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [readFailed, setReadFailed] = useState(false);
   const [notice, setNotice] = useState('');
   const [raw, setRaw] = useState(false);
   const [query, setQuery] = useState('');
@@ -115,10 +117,13 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
       if (alive.current && readEpoch.current === epoch) {
         setView(next);
         setError('');
+        setReadFailed(false);
       }
     } catch (cause) {
-      if (alive.current && readEpoch.current === epoch)
+      if (alive.current && readEpoch.current === epoch) {
         setError(cause instanceof Error ? cause.message : uiMessage('chatsettings.m158'));
+        setReadFailed(true);
+      }
     } finally {
       if (alive.current && readEpoch.current === epoch) setLoading(false);
     }
@@ -132,8 +137,8 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
   }, []);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Story refreshes reload server state without replacing a local draft.
   useEffect(() => {
-    void load();
-  }, [load, refreshKey]);
+    if (active) void load();
+  }, [active, load, refreshKey]);
 
   function updateDraft(text: string) {
     if (!view) return;
@@ -250,16 +255,6 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
 
   return (
     <section className="chat-variables" aria-label={t('chatsettings.m164')}>
-      <header className="chat-variable-heading">
-        <IconButton
-          type="button"
-          className="ghost"
-          icon={RefreshIcon}
-          label={t('chatsettings.m168')}
-          disabled={loading || busy}
-          onClick={() => void load()}
-        />
-      </header>
       {loading && <LoadingState presentation="placeholder" label={t('chatsettings.m170')} />}
       {view?.pending && <p role="status">{t('chatsettings.m171')}</p>}
       {view?.variableDefaultsError && (
@@ -293,9 +288,23 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
       {hasUncertainSave && <p role="status">{t('chatsettings.m175')}</p>}
       <TransientNotice message={notice} />
       {error && (
-        <p role="alert" className="error">
+        <NoticeBanner
+          tone="error"
+          actions={
+            readFailed ? (
+              <button
+                type="button"
+                className="secondary"
+                disabled={loading || busy}
+                onClick={() => void load()}
+              >
+                {t('shared.retry')}
+              </button>
+            ) : undefined
+          }
+        >
           {translateMessage(error)}
-        </p>
+        </NoticeBanner>
       )}
       <form
         className="chat-variable-editor"

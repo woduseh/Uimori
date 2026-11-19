@@ -24,7 +24,7 @@ export function LastSceneLore({
           detail.sourceRevision === null ? (
             <p>{t('library.noCompletedScenesYet')}</p>
           ) : (
-            <RequestLoreView lore={detail.lore} />
+            <RequestLoreView lore={detail.lore} heading={false} />
           )
         }
       </LazyDiagnostics>

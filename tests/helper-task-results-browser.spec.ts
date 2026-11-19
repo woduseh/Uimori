@@ -202,8 +202,11 @@ test('HRESULT-STORYUI setting results identify changes and open generation setti
     }
     await target.click();
     const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-    await expect(dialog.getByRole('switch', { name: '이야기 UI', exact: true })).toBeVisible();
-    await expect(dialog.getByLabel('이야기 UI 스타일')).toBeVisible();
+    const storyUi = dialog.getByRole('switch', { name: '이야기 UI', exact: true });
+    await expect(storyUi).toBeVisible();
+    await expect(dialog.getByLabel('이야기 UI 스타일')).toHaveCount(
+      (await storyUi.isChecked()) ? 1 : 0
+    );
   }
   await page.screenshot({ path: info.outputPath('story-ui-setting-destination.png') });
   projection.results[0].targets = [

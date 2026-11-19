@@ -19,7 +19,7 @@
 .settings-group-heading p {
   margin-top: 4px;
   color: var(--muted);
-  font-size: var(--font-body);
+  font-size: var(--font-small);
   line-height: 1.5;
 }
 .settings-group-body {
@@ -56,7 +56,7 @@
 .settings-row-copy small {
   margin: 0;
   color: var(--muted);
-  font-size: var(--font-body);
+  font-size: var(--font-small);
   line-height: 1.5;
 }
 .settings-row-control {

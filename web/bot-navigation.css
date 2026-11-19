@@ -152,8 +152,7 @@
 @media (hover: hover) {
   .bot-folder-heading:hover,
   .bot-branch-heading:hover,
-  .bot-tree-folder-heading:hover,
-  .bot-tree-section-heading:hover {
+  .bot-tree-folder-heading:hover {
     background: var(--nav-item-hover);
   }
 }

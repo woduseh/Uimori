@@ -28,7 +28,6 @@
   justify-content: space-between;
 }
 .illustration-preset-heading > div {
-  flex: 1;
   min-width: 0;
 }
 .illustration-preset-grid {
@@ -108,15 +107,6 @@
   width: 210px;
   max-width: 100%;
 }
-.illustration-preset-current {
-  overflow-wrap: anywhere;
-  color: var(--muted);
-  font-size: var(--font-body);
-}
-.illustration-preset-current strong {
-  color: var(--text);
-  font-weight: 500;
-}
 .illustration-preset-title {
   display: flex;
   align-items: baseline;
@@ -148,14 +138,6 @@
 }
 .illustration-preset-card .illustration-preset-actions > button {
   background: transparent;
-}
-@media (max-width: 600px) {
-  .illustration-preset-heading {
-    align-items: flex-start;
-  }
-  .illustration-preset-heading > div:first-child {
-    flex-basis: 100%;
-  }
 }
 
 .illustration-preset-editor-body {
@@ -208,13 +190,4 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font: inherit;
-}
-
-.illustration-current-summary {
-  display: grid;
-  gap: 8px;
-  padding: 16px;
-}
-.illustration-preset-settings > .illustration-preset-disclosure > :not(summary) {
-  margin-top: 16px;
 }

@@ -1,6 +1,5 @@
 import { useI18n, translateMessage, formatDate, message as uiMessage } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
-import type { StoryDetail } from '../core/story.js';
 import {
   defaultStoryGuideConfig,
   STORY_GUIDE_LIMITS,
@@ -8,21 +7,15 @@ import {
   type StoryGuideDetail,
 } from '../core/story-guide.js';
 import { api, ApiError } from './api.js';
-import { AuthorNotesEditor } from './AuthorNotesEditor.js';
 import { SelectionCheckbox, Switch } from './BooleanControls.js';
 import { LoadingState } from './LoadingState.js';
 import { Prose, safeProseLink } from './Prose.js';
 import { SaveButton } from './SaveButton.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { TransientNotice } from './TransientNotice.js';
-import {
-  useSettingsSaveGroup,
-  useSettingsSaveHandler,
-  type SettingsSaveRegistration,
-} from './useSettingsSaveHandler.js';
+import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import './story-guide.css';
 
-const saveSections = ['notes'] as const;
 type Props = {
   chatId: string;
   headRevision: string | null;
@@ -54,14 +47,12 @@ function StoryGuideEditor({
 }: Props) {
   const { t } = useI18n();
   const [loaded, setLoaded] = useState<StoryGuideDetail | null>(null);
-  const [story, setStory] = useState<StoryDetail | null>(null);
   const [draft, setDraft] = useState(defaultStoryGuideConfig);
   const [draftRevision, setDraftRevision] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState<boolean | null>(null);
   const baseline = useRef(draft);
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
-  const [notesDirty, setNotesDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [error, setError] = useState('');
@@ -71,7 +62,6 @@ function StoryGuideEditor({
   const alive = useRef(true);
   const loadSequence = useRef(0);
   const readRequest = useRef<AbortController | null>(null);
-  const saveGroup = useSettingsSaveGroup(saveSections);
   const base = `/chats/${encodeURIComponent(chatId)}`;
 
   useEffect(() => {
@@ -83,8 +73,8 @@ function StoryGuideEditor({
     };
   }, [onDirtyChange]);
   useEffect(() => {
-    onDirtyChange(dirty || notesDirty || saving);
-  }, [dirty, notesDirty, saving, onDirtyChange]);
+    onDirtyChange(dirty || saving);
+  }, [dirty, saving, onDirtyChange]);
 
   function report(caught: unknown) {
     const text =
@@ -107,13 +97,14 @@ function StoryGuideEditor({
     const controller = new AbortController();
     readRequest.current = controller;
     try {
-      const [value, notes] = await Promise.all([
-        api<StoryGuideDetail>(`${base}/story-guide`, undefined, 'GET', controller.signal),
-        api<StoryDetail>(`${base}/story`, undefined, 'GET', controller.signal),
-      ]);
+      const value = await api<StoryGuideDetail>(
+        `${base}/story-guide`,
+        undefined,
+        'GET',
+        controller.signal
+      );
       if (!alive.current || controller.signal.aborted || sequence !== loadSequence.current) return;
       setLoaded(value);
-      setStory(notes);
       setSettingsOpen((open) => open ?? value.revision === 0);
       if (!dirtyRef.current && !savingRef.current) acceptSaved(value);
     } catch (caught) {
@@ -167,10 +158,7 @@ function StoryGuideEditor({
       if (alive.current) setSaving(false);
     }
   }
-  useSettingsSaveHandler(onSaveHandlerChange, async () => {
-    if (!(await save())) return false;
-    return saveGroup.save({ notes: notesDirty });
-  });
+  useSettingsSaveHandler(onSaveHandlerChange, save);
 
   if (!loaded)
     return (
@@ -357,25 +345,6 @@ function StoryGuideEditor({
             {t('prompts.uiAskHelper2')}
           </button>
         </div>
-      )}
-      {story && (
-        <AuthorNotesEditor
-          headRevision={headRevision}
-          notes={story.notes}
-          revision={story.notesRevision}
-          disabled={busy}
-          onSave={async (command) => {
-            await api(`${base}/notes`, command);
-          }}
-          onRefresh={async () => {
-            await load();
-            if (!alive.current) return;
-            onChanged();
-          }}
-          onError={onError}
-          onDirtyChange={setNotesDirty}
-          onSaveHandlerChange={saveGroup.registrations.notes}
-        />
       )}
       <SaveConflictDialog
         open={conflictOpen}

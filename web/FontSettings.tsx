@@ -111,6 +111,7 @@ export function FontSettings({
     }, message('fonts.saved'));
   }
   const catalog = state.catalog;
+  const hasFonts = !!catalog?.fonts.length;
   return (
     <section className="font-settings" aria-label={t('fonts.title')}>
       <h3 id={`${id}-heading`}>{t('fonts.title')}</h3>
@@ -145,146 +146,149 @@ export function FontSettings({
         </NoticeBanner>
       )}
       {disabled && <NoticeBanner>{t('fonts.disabled')}</NoticeBanner>}
-      <div className="font-settings-choices">
-        <label htmlFor={`${id}-app`}>
-          {t('fonts.app')}
-          <select
-            id={`${id}-app`}
-            disabled={busy || !catalog}
-            value={catalog?.preferences.appFontId ?? ''}
-            onChange={(event) =>
-              select(event.target.value || null, catalog!.preferences.readerFontId, 'app')
-            }
-          >
-            <option value="">{t('fonts.default')}</option>
-            {catalog?.fonts.map((font) => (
-              <option key={font.id} value={font.id}>
-                {font.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label htmlFor={`${id}-reader`}>
-          {t('fonts.reader')}
-          <select
-            id={`${id}-reader`}
-            disabled={busy || !catalog}
-            value={catalog?.preferences.readerFontId ?? ''}
-            onChange={(event) =>
-              select(catalog!.preferences.appFontId, event.target.value || null, 'reader')
-            }
-          >
-            <option value="">{t('fonts.default')}</option>
-            {catalog?.fonts.map((font) => (
-              <option key={font.id} value={font.id}>
-                {font.title}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <div className="font-settings-preview">
-        <span className="muted">
-          {t('fonts.preview', {
-            target: t(previewTarget === 'app' ? 'fonts.app' : 'fonts.reader'),
-          })}
-        </span>
-        <p
-          className="font-preview"
-          style={{
-            fontFamily:
-              previewTarget === 'app' ? 'var(--app-font-family)' : 'var(--reading-font-family)',
-          }}
-        >
-          {readingSample}
-        </p>
-        <small className="muted">{readingSampleCredit}</small>
-      </div>
-      <div className="form-actions">
-        <button
-          type="button"
-          className="secondary"
-          disabled={
-            busy ||
-            !catalog ||
-            (!catalog.preferences.appFontId && !catalog.preferences.readerFontId)
-          }
-          onClick={() => select(null, null)}
-        >
-          {t('fonts.restore')}
-        </button>
-      </div>
-      <details ref={management} className="font-management">
-        <summary>{t('fonts.manage')}</summary>
-        <form
-          ref={form}
-          className="font-upload"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void upload();
-          }}
-        >
-          <label htmlFor={`${id}-file`}>
-            {t('fonts.file')}
-            <input
-              id={`${id}-file`}
-              ref={input}
-              type="file"
-              required
-              accept=".ttf,.otf,.woff,.woff2"
-              disabled={busy}
-              onChange={(event) => {
-                const selected = event.target.files?.[0] ?? null;
-                setFile(selected);
-                if (selected) setTitle(selected.name.replace(/\.(ttf|otf|woff2?)$/i, ''));
-              }}
-            />
-          </label>
-          <label htmlFor={`${id}-name`}>
-            {t('fonts.name')}
-            <input
-              id={`${id}-name`}
-              ref={nameInput}
-              required
-              maxLength={200}
-              value={title}
-              disabled={busy}
-              onChange={(event) => setTitle(event.target.value)}
-            />
-          </label>
-          <div className="form-actions">
-            <SaveButton
-              label={t('fonts.registerLabel')}
-              text={t('fonts.register')}
-              disabled={busy || !file || !title.trim()}
-              aria-busy={busy}
-            />
+      {hasFonts && (
+        <>
+          <div className="font-settings-choices">
+            <label htmlFor={`${id}-app`}>
+              {t('fonts.app')}
+              <select
+                id={`${id}-app`}
+                disabled={busy || !catalog}
+                value={catalog?.preferences.appFontId ?? ''}
+                onChange={(event) =>
+                  select(event.target.value || null, catalog!.preferences.readerFontId, 'app')
+                }
+              >
+                <option value="">{t('fonts.default')}</option>
+                {catalog?.fonts.map((font) => (
+                  <option key={font.id} value={font.id}>
+                    {font.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label htmlFor={`${id}-reader`}>
+              {t('fonts.reader')}
+              <select
+                id={`${id}-reader`}
+                disabled={busy || !catalog}
+                value={catalog?.preferences.readerFontId ?? ''}
+                onChange={(event) =>
+                  select(catalog!.preferences.appFontId, event.target.value || null, 'reader')
+                }
+              >
+                <option value="">{t('fonts.default')}</option>
+                {catalog?.fonts.map((font) => (
+                  <option key={font.id} value={font.id}>
+                    {font.title}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-        </form>
-        {!!catalog?.fonts.length && (
-          <ul className="font-list">
-            {catalog.fonts.map((font) => (
-              <li key={font.id}>
-                <div>
-                  <strong>{font.title}</strong>
-                  <small>
-                    {font.format.toUpperCase()}, {Math.ceil(font.byteLength / 1024)} KB
-                  </small>
-                </div>
-                <IconButton
-                  label={t('fonts.delete', { title: font.title })}
-                  icon={DeleteIcon}
-                  disabled={busy}
-                  onClick={() => setDeleting(font)}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-        {!state.loading && catalog?.fonts.length === 0 && (
-          <p className="muted">{t('fonts.empty')}</p>
-        )}
-      </details>
+          <div className="font-settings-preview">
+            <span className="muted">
+              {t('fonts.preview', {
+                target: t(previewTarget === 'app' ? 'fonts.app' : 'fonts.reader'),
+              })}
+            </span>
+            <p
+              className="font-preview"
+              style={{
+                fontFamily:
+                  previewTarget === 'app' ? 'var(--app-font-family)' : 'var(--reading-font-family)',
+              }}
+            >
+              {readingSample}
+            </p>
+            <small className="muted">{readingSampleCredit}</small>
+          </div>
+          <div className="form-actions">
+            <button
+              type="button"
+              className="secondary"
+              disabled={
+                busy ||
+                !catalog ||
+                (!catalog.preferences.appFontId && !catalog.preferences.readerFontId)
+              }
+              onClick={() => select(null, null)}
+            >
+              {t('fonts.restore')}
+            </button>
+          </div>
+        </>
+      )}
+      {catalog && (
+        <details ref={management} className="font-management">
+          <summary>{hasFonts ? t('fonts.manage') : t('fonts.add')}</summary>
+          <form
+            ref={form}
+            className="font-upload"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void upload();
+            }}
+          >
+            <label htmlFor={`${id}-file`}>
+              {t('fonts.file')}
+              <input
+                id={`${id}-file`}
+                ref={input}
+                type="file"
+                required
+                accept=".ttf,.otf,.woff,.woff2"
+                disabled={busy}
+                onChange={(event) => {
+                  const selected = event.target.files?.[0] ?? null;
+                  setFile(selected);
+                  if (selected) setTitle(selected.name.replace(/\.(ttf|otf|woff2?)$/i, ''));
+                }}
+              />
+            </label>
+            <label htmlFor={`${id}-name`}>
+              {t('fonts.name')}
+              <input
+                id={`${id}-name`}
+                ref={nameInput}
+                required
+                maxLength={200}
+                value={title}
+                disabled={busy}
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            </label>
+            <div className="form-actions">
+              <SaveButton
+                label={t('fonts.registerLabel')}
+                text={t('fonts.register')}
+                disabled={busy || !file || !title.trim()}
+                aria-busy={busy}
+              />
+            </div>
+          </form>
+          {hasFonts && (
+            <ul className="font-list">
+              {catalog.fonts.map((font) => (
+                <li key={font.id}>
+                  <div>
+                    <strong>{font.title}</strong>
+                    <small>
+                      {font.format.toUpperCase()}, {Math.ceil(font.byteLength / 1024)} KB
+                    </small>
+                  </div>
+                  <IconButton
+                    label={t('fonts.delete', { title: font.title })}
+                    icon={DeleteIcon}
+                    disabled={busy}
+                    onClick={() => setDeleting(font)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </details>
+      )}
       <Dialog
         open={!!deleting}
         title={t('fonts.deleteTitle')}

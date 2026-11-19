@@ -67,7 +67,7 @@ for (const width of [360]) {
     await expect(
       page.getByRole('button', { name: '다음 요청 미리보기', exact: true })
     ).toBeEnabled();
-    await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+    await page.keyboard.press('Escape');
     const removeBounds = await page
       .getByRole('button', { name: 'reference.png 제거', exact: true })
       .boundingBox();

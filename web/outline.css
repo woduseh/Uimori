@@ -694,18 +694,3 @@
   color: var(--accent-ink);
   border-color: var(--accent);
 }
-
-.outline-writing-plan {
-  margin-bottom: 16px;
-  padding: 10px 14px;
-  border-radius: var(--radius-control);
-  border: var(--hairline) solid var(--line);
-  background: var(--panel);
-}
-.outline-writing-plan .prose {
-  font-size: var(--font-body);
-  line-height: 1.85;
-}
-.outline-writing-plan .prose > :last-child {
-  margin-bottom: 0;
-}

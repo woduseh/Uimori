@@ -107,11 +107,6 @@ test('prepared review reuses final transformed bytes and response-loss receipt a
   const store = fixture();
   const input = await source();
   const preview = await prepareStoredRisuImport(store.path, { source: input });
-  const originalFileNotice = preview.findings.find(
-    (finding) => finding.code === 'source-file-not-retained'
-  );
-  expect(originalFileNotice?.level).toBe('info');
-  expect(originalFileNotice?.message).not.toMatch(/24\s*MiB|넘어/u);
   const prepared = readPreparedRisuImport(store.path, preview.preparedId!);
   expect(preview.summary.images).toBe(2);
   expect(prepared.images).toHaveLength(1);

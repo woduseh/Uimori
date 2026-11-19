@@ -45,7 +45,8 @@ export function ComposerMore({
     ].find((node) => !node.matches(':disabled') && node.checkVisibility());
     (first ?? choice.current)?.focus();
     const outside = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
+      if (event.target === root.current || !root.current?.contains(event.target as Node))
+        setOpen(false);
     };
     document.addEventListener('pointerdown', outside);
     return () => document.removeEventListener('pointerdown', outside);

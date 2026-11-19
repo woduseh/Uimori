@@ -24,12 +24,6 @@ export const messages = {
     ja: 'アシスタントの作業制限時間（分）',
     zh: '助手任务超时（分钟）',
   },
-  'settings.helperTaskTimeoutHint': {
-    ko: '작업 전체의 제한 시간이에요. 저장 후 새 요청부터 적용돼요.',
-    en: 'Covers the entire task. Applies to new requests after saving.',
-    ja: '作業全体の上限です。保存後の新しいリクエストから適用されます。',
-    zh: '限制整个任务的用时。保存后对新请求生效。',
-  },
   'settings.helperTaskTimeoutRange': {
     ko: '1~{max} 사이의 정수를 입력해 주세요.',
     en: 'Enter a whole number from 1 to {max}.',
@@ -191,24 +185,6 @@ export const messages = {
     en: 'Edit the selected model for {v0}',
     ja: '{v0}の選択モデルを編集',
     zh: '编辑{v0}的所选模型',
-  },
-  'settings.m10': {
-    ko: '모두 미지정',
-    en: 'None assigned',
-    ja: 'すべて未設定',
-    zh: '均未指定',
-  },
-  'settings.m11': {
-    ko: '{v0}개 설정됨',
-    en: '{v0} configured',
-    ja: '{v0}個設定済み',
-    zh: '已设置{v0}项',
-  },
-  'settings.m12': {
-    ko: '{v0}/{v1}개 설정됨',
-    en: '{v0}/{v1} configured',
-    ja: '{v0}/{v1}個設定済み',
-    zh: '已设置{v0}/{v1}项',
   },
   'settings.m13': {
     ko: '역할별 모델 설정',
@@ -575,12 +551,6 @@ export const messages = {
     en: 'Translate automatically after generation',
     ja: '本文生成後に自動翻訳',
     zh: '生成正文后自动翻译',
-  },
-  'settings.m87': {
-    ko: '현재 전체 기본값:',
-    en: 'Current global default:',
-    ja: '現在の全体既定値：',
-    zh: '当前全局默认值：',
   },
   'settings.m88': {
     ko: '전체 기본값 따르기',
@@ -1061,12 +1031,6 @@ export const messages = {
     en: 'Does not share the full prompt or permission to edit options.',
     ja: 'プロンプト全体やオプションの編集権限は共有しません。',
     zh: '不传递完整提示词或选项修改权限。',
-  },
-  'settings.m175': {
-    ko: '호출 한도',
-    en: 'Call limit',
-    ja: '呼び出し上限',
-    zh: '调用上限',
   },
   'settings.m176': {
     ko: '전체 추가 호출',
@@ -1632,12 +1596,6 @@ export const messages = {
     ja: 'コンテキスト要約',
     zh: '上下文摘要',
   },
-  'settings.m277': {
-    ko: '새로고침',
-    en: 'Refresh',
-    ja: '更新',
-    zh: '刷新',
-  },
   'settings.m278': {
     ko: '컨텍스트를 불러오는 중이에요…',
     en: 'Loading context…',
@@ -1872,12 +1830,6 @@ export const messages = {
     ja: '翻訳{v0}回、拒否検出{v1}/2',
     zh: '翻译{v0}次，拒绝检测{v1}/2',
   },
-  'settings.flow2': {
-    ko: '현재 전체 기본값: {v0}',
-    en: 'Current global default: {v0}',
-    ja: '現在の全体既定値：{v0}',
-    zh: '当前全局默认值：{v0}',
-  },
   'settings.flow3': {
     ko: '{v0} 협업 상세에서 확인할 수 있어요.',
     en: '{v0} Available in collaboration details.',
@@ -1895,12 +1847,6 @@ export const messages = {
     en: '{v0} / 6 agents',
     ja: '{v0} / 6人',
     zh: '{v0} / 6个',
-  },
-  'settings.flow6': {
-    ko: '전체 추가 호출 {v0}회',
-    en: 'Total extra calls: {v0}',
-    ja: '追加呼び出し合計{v0}回',
-    zh: '额外调用总数{v0}次',
   },
   'settings.flow7': {
     ko: '{v0}개',
@@ -2030,18 +1976,6 @@ export const messages = {
     ja: '本文の外側の背景',
     zh: '正文外背景',
   },
-  'settings.backgroundDraft': {
-    ko: '미저장 변경 (저장 후 적용)',
-    en: 'Unsaved changes (apply after saving)',
-    ja: '未保存の変更（保存後に適用）',
-    zh: '未保存的更改（保存后应用）',
-  },
-  'settings.backgroundSaved': {
-    ko: '저장 후 적용',
-    en: 'Applied after saving',
-    ja: '保存後に適用',
-    zh: '保存后应用',
-  },
   'settings.noBackground': {
     ko: '배경 이미지 없음',
     en: 'No background image',
@@ -2102,5 +2036,4 @@ export const messages = {
     ja: '{title}、{source}を継承',
     zh: '{title}，继承自{source}',
   },
-  'settings.workflowEntered': { ko: '입력됨', en: 'Entered', ja: '入力済み', zh: '已输入' },
 } as const;

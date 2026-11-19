@@ -374,7 +374,6 @@ export function ResourceEditorStatus({
                 : t('shared.notRegistered')}
         </span>
       )}
-      {state.dirty && state.recovery === 'saved' && <small>{t('shared.recoverySaved')}</small>}
       {state.creationPending && !state.saving && (
         <small role="alert">{t('shared.resourceCreationUncertain')}</small>
       )}

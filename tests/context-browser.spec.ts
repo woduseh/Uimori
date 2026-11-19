@@ -16,6 +16,10 @@ async function read<T>(request: APIRequestContext, path: string): Promise<T> {
   expect(response.ok(), await response.text()).toBe(true);
   return response.json();
 }
+async function reenterMemory(page: Page) {
+  await selectChatSettingsSection(page, '생성 설정');
+  await selectChatSettingsSection(page, '기억과 메모');
+}
 async function create(page: Page, title: string) {
   // Summary edits measure the selected main input budget; these tests never send a provider call.
   // Keep the summary workflow independent of the size of the bundled writing prompt.
@@ -125,7 +129,7 @@ test('CTXUI02 concurrent summary and note changes preserve local drafts and requ
   await panel.getByRole('button', { name: '직접 요약 작성', exact: true }).click();
   await panel.getByLabel('편집할 컨텍스트 요약').fill('내 요약 초안');
   await saveSummary(request, chat.id, '다른 창에서 저장한 요약');
-  await panel.getByRole('button', { name: '새로고침', exact: true }).click();
+  await reenterMemory(page);
   await expect(panel.getByTestId('context-summary-text')).toHaveText('다른 창에서 저장한 요약');
   await expect(panel.getByLabel('편집할 컨텍스트 요약')).toHaveValue('내 요약 초안');
   await expect(panel.getByRole('button', { name: '요약 저장', exact: true })).toBeDisabled();
@@ -149,7 +153,7 @@ test('CTXUI02 concurrent summary and note changes preserve local drafts and requ
     },
   });
   expect(added.ok(), await added.text()).toBe(true);
-  await panel.getByRole('button', { name: '새로고침', exact: true }).click();
+  await reenterMemory(page);
   await expect(notes.getByText('다른 창의 메모', { exact: true })).toBeVisible();
   await expect(notes.getByLabel('메모와 정정 내용')).toHaveValue('내 메모 초안');
   await expect(notes.getByRole('button', { name: '새 메모 저장', exact: true })).toBeEnabled();
@@ -164,7 +168,6 @@ test('CTXUI02 concurrent summary and note changes preserve local drafts and requ
   await noteConflict.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
   await expect(notes.getByLabel('메모와 정정 내용')).toHaveValue('내 메모 초안');
   await notes.getByRole('button', { name: '저장 충돌 확인', exact: true }).click();
-  await noteConflict.getByRole('button', { name: '저장본 확인', exact: true }).click();
   await expect(noteConflict.getByText('다른 창의 메모', { exact: true })).toBeVisible();
   await noteConflict.getByRole('button', { name: '저장본 확인 완료', exact: true }).click();
   await notes.getByRole('button', { name: '새 메모 저장', exact: true }).click();
@@ -185,7 +188,7 @@ test('CTXUI03 manual no-op preserves a summary and exposes cancellable running-j
 }) => {
   const { chat, panel } = await create(page, 'CTXUI03 합성 압축 상태');
   await saveSummary(request, chat.id, '보존할 요약');
-  await panel.getByRole('button', { name: '새로고침', exact: true }).click();
+  await reenterMemory(page);
   await expect(panel.getByTestId('context-summary-text')).toHaveText('보존할 요약');
   await panel.getByRole('button', { name: '컨텍스트 압축', exact: true }).click();
   await expect(panel.getByText('압축할 구간이 없어요.', { exact: true })).toBeVisible();
@@ -216,7 +219,7 @@ test('CTXUI03 manual no-op preserves a summary and exposes cancellable running-j
     job.status = 'cancelled';
     await route.fulfill({ json: job });
   });
-  await panel.getByRole('button', { name: '새로고침', exact: true }).click();
+  await reenterMemory(page);
   await expect.poll(() => contextReads).toBeGreaterThan(0);
   await expect(panel.getByRole('button', { name: '압축 취소', exact: true })).toBeEnabled();
   await panel.getByRole('button', { name: '압축 취소', exact: true }).click();

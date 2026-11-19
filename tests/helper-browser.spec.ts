@@ -609,7 +609,7 @@ test('HELPMESSAGE conflict review preserves request and response drafts in older
       .click();
     await page
       .getByRole('button', {
-        name: role === 'user' ? '컨텍스트용 요청 수정' : '응답 수정',
+        name: role === 'user' ? '요청 수정' : '응답 수정',
         exact: true,
       })
       .click();
@@ -627,7 +627,6 @@ test('HELPMESSAGE conflict review preserves request and response drafts in older
     await article.getByRole('button', { name: '입력 저장', exact: true }).click();
     const dialog = page.locator('dialog[role="alertdialog"][open]');
     await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
     await expect(dialog.getByText(saved.text, { exact: true })).toBeVisible();
     const reviewedRevision = view.conversation.revision;
     const beforeLanguageChange = state.messageMutations.length;
@@ -805,7 +804,7 @@ test('HELPSTEER adds instructions to the active task once after a lost acknowled
     .getByRole('button', { name: '접수 확인 및 재시도' })
     .click();
   await expect(panel.locator('.helper-outbox')).toHaveCount(0);
-  expect(state.steerPosts).toHaveLength(2);
+  await expect.poll(() => state.steerPosts.length).toBe(2);
   expect(state.steerPosts[1]).toEqual(state.steerPosts[0]);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('');
   await expect(stop).toBeVisible();
@@ -1287,22 +1286,22 @@ test('HELPUI11 an IndexedDB write failure retains the exact request for explicit
   await input.fill('보관에 실패한 첫 요청');
   await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
   await expect(panel.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
-  await expect(page.getByRole('dialog', { name: '도우미 요청 보관' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: '도우미 요청 임시 저장' })).toHaveCount(0);
   expect(state.posts).toHaveLength(0);
   await input.fill('보내는 동안 남길 새 입력');
   await panel.getByRole('button', { name: '도우미 이전 요청 확인', exact: true }).click();
-  const decision = page.getByRole('dialog', { name: '도우미 요청 보관', exact: true });
+  const decision = page.getByRole('dialog', { name: '도우미 요청 임시 저장', exact: true });
   await expect(decision).toContainText('보내지 않았어요');
   await decision.getByRole('button', { name: '닫기', exact: true }).last().click();
   expect(state.posts).toHaveLength(0);
   await expect(input).toHaveValue('보내는 동안 남길 새 입력');
   await panel.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
-  await decision.getByRole('button', { name: '다시 보관하고 보내기' }).click();
+  await decision.getByRole('button', { name: '다시 임시 저장하고 보내기' }).click();
   await expect(decision).toBeHidden();
   await expect(panel.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeEnabled();
   expect(state.posts).toHaveLength(0);
   await panel.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
-  await decision.getByRole('button', { name: '보관 없이 보내기' }).click();
+  await decision.getByRole('button', { name: '임시 저장 없이 보내기' }).click();
   await expect.poll(() => state.posts.length).toBe(1);
   expect(state.posts[0].text).toBe('보관에 실패한 첫 요청');
   await expect(input).toHaveValue('보내는 동안 남길 새 입력');
@@ -1702,7 +1701,7 @@ test('HELPUI05 explicitly retries a saved edited request, preserves composer and
   await expect(details.getByText('모델: 이전 시도의 도우미 모델', { exact: true })).toBeVisible();
   await panel.getByLabel('도우미에게 요청').fill('새 요청 작성 중');
   await panel.getByLabel('요청 및 컨텍스트 메뉴', { exact: true }).click();
-  await page.getByRole('button', { name: '컨텍스트용 요청 수정', exact: true }).click();
+  await page.getByRole('button', { name: '요청 수정', exact: true }).click();
   await panel.getByLabel('요청 수정 내용').fill('고친 요청');
   await panel.getByRole('button', { name: '입력 저장', exact: true }).click();
   await expect(panel.getByTestId('source-request')).toHaveText('고친 요청');
@@ -2098,9 +2097,10 @@ test('HELPUNDO latest edit confirms once and reconciles a lost response', async 
   state.loseUndo();
   await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
   await expect(dialog).toBeHidden();
-  await expect(panel.getByRole('region', { name: '도우미 최근 자료 수정' })).toContainText(
-    '수정 되돌림'
-  );
+  await expect(
+    page.getByRole('status').filter({ hasText: '하린의 인물 설정 수정을 되돌렸어요.' })
+  ).toBeVisible();
+  await expect(panel.getByRole('region', { name: '도우미 최근 자료 수정' })).toHaveCount(0);
   expect(state.undoPosts).toEqual([{ editSeq: 37 }]);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('계속 보관할 다음 요청');
   await expect(undo).toHaveCount(0);
@@ -2185,7 +2185,8 @@ test('HELPUNDO grouped edit shows all titles and blocks its dirty target and a c
   view.lastResourceEdit.canUndo = false;
   view.lastResourceEdit.reason = '최근 수정 이후 자료가 변경되어 되돌릴 수 없어요.';
   await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
-  await expect(undo).toBeDisabled();
+  await expect(undo).toHaveCount(0);
+  await expect(panel.getByRole('alert')).toContainText('(409)');
   await expect(draft).toHaveValue(bot.title);
   expect(state.undoPosts).toEqual([{ editSeq: 41 }]);
   expect((await (await request.get(`/api/content/${bot.id}`)).json()).title).toBe(bot.title);

@@ -147,7 +147,7 @@ export async function openProviderMenu(page: Page, kind: '모델' | '프로바�
     await menu.click();
 }
 export async function revealProviderDiagnostics(page: Page, title: string) {
-  await revealProviderModel(page, title);
+  await openProviderMenu(page, '모델', title);
   const card = page.getByRole('article', { name: `${title} 모델`, exact: true });
   await expect(card.getByText('진단과 상세', { exact: true })).toHaveCount(0);
   await expect(

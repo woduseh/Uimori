@@ -267,7 +267,13 @@ for (const width of [360]) {
     const profile = references.locator('.illustration-character-profile').first();
     await profile.getByLabel('이름', { exact: true }).fill('미라');
     await profile.getByRole('textbox', { name: '외형', exact: true }).fill('짧은 은발과 초록 눈');
-    await profile.getByLabel('참고 이미지 (선택)').selectOption(asset.id);
+    await expect(references.getByText('1 / 8 선택', { exact: true })).toBeVisible();
+    await profile.getByRole('button', { name: '참조 이미지 선택', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: '참조 이미지 선택', exact: true })
+      .getByRole('button', { name: '미라 초상', exact: true })
+      .click();
+    await expect(profile.getByText('미라 초상', { exact: true })).toBeVisible();
     await expect(role).toHaveValue('character');
     await expect(role).toBeDisabled();
     await references.getByRole('button', { name: '삽화 참고 저장' }).click();
@@ -278,7 +284,7 @@ for (const width of [360]) {
       { name: '미라', appearance: '짧은 은발과 초록 눈', referenceRef: asset.id },
     ]);
     await page.screenshot({ path: info.outputPath(`character-profiles-${width}.png`) });
-    await profile.getByLabel('참고 이미지 (선택)').selectOption('');
+    await profile.getByRole('button', { name: '이미지 연결 해제', exact: true }).click();
     await expect(role).toHaveValue('style');
     await expect(role).toBeEnabled();
     await profile.getByRole('textbox', { name: '외형', exact: true }).fill('초안: 짧은 은발');
@@ -305,7 +311,6 @@ for (const width of [360]) {
     await references.getByRole('button', { name: '삽화 참고 저장' }).click();
     const conflict = page.getByRole('alertdialog', { name: '삽화 참고 저장본 확인' });
     await expect(conflict).toBeVisible();
-    await conflict.getByRole('button', { name: '저장본 확인', exact: true }).click();
     await expect(conflict).toContainText('다른 창에서 바뀐 외형');
     await conflict.getByRole('button', { name: '초안으로 계속' }).click();
     await expect(profile.getByRole('textbox', { name: '외형', exact: true })).toHaveValue(
@@ -451,8 +456,11 @@ test('ILUI01 scene menu requests an illustration, shows the stored image, retrie
   expect(failing.ok()).toBeTruthy();
   const failedCard = page.locator(byStatus('failed'));
   await expect(failedCard).toHaveCount(1);
-  await expect(failedCard).toContainText('모의 실패예요');
-  await expect(failedCard).toContainText('FIXTURE_FAILURE');
+  await expect(failedCard.getByRole('alert')).toHaveText('모의 실패예요.');
+  await failedCard.getByLabel('삽화 작업 메뉴', { exact: true }).click();
+  await failedCard.getByRole('button', { name: '생성 상세', exact: true }).click();
+  await expect(detailDialog).toContainText('오류 코드: FIXTURE_FAILURE');
+  await page.keyboard.press('Escape');
   await expect(failedCard.getByRole('button', { name: /다시 요청/u })).toHaveAttribute(
     'title',
     /사용량이 추가/u
@@ -791,14 +799,6 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
   await page.goto('/');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '삽화');
-  {
-    const management = page.getByText('생성 환경', { exact: true });
-    if ((await management.locator('..').getAttribute('open')) === null) await management.click();
-  }
-  {
-    const management = page.getByText('프리셋', { exact: true });
-    if ((await management.locator('..').getAttribute('open')) === null) await management.click();
-  }
   const section = page.getByRole('region', { name: '삽화 설정', exact: true });
   await expect(section).toBeVisible();
   const generator = section.getByLabel('테스트 삽화 생성기', { exact: true });
@@ -836,7 +836,6 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
   await expect(
     conflictDialog.getByRole('button', { name: '현재 입력 유지', exact: true })
   ).toBeFocused();
-  await conflictDialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
   await expect(conflictDialog.getByLabel('현재 저장본')).toContainText('자동 재시도 횟수');
   await expect(conflictDialog.getByLabel('현재 저장본')).toContainText('3');
   expect(await conflictDialog.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
@@ -959,7 +958,7 @@ test('ILUI delete confirmation translates only app-owned titles and preserves th
       entry.method() === 'DELETE' &&
       new URL(entry.url()).pathname === `/api/illustrations/${renderId}`
   );
-  await confirmation.getByRole('button', { name: 'Delete permanently', exact: true }).click();
+  await confirmation.getByRole('button', { name: 'Delete illustration', exact: true }).click();
   expect((await deleting).postDataJSON()).toEqual({});
   // The deletion refreshes the reader; let that intercepted read finish before the page closes.
   await page.unrouteAll({ behavior: 'wait' });
@@ -1152,10 +1151,6 @@ test('ILUI06 Codex settings persist model selections and optional prompt refinem
     await page.goto(`/?chat=${chat.id}`);
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '삽화');
-    for (const label of ['생성 환경', '프리셋']) {
-      const management = page.getByText(label, { exact: true });
-      if ((await management.locator('..').getAttribute('open')) === null) await management.click();
-    }
   };
   await openSettings();
   const section = page.getByRole('region', { name: '삽화 설정', exact: true });
@@ -1164,7 +1159,7 @@ test('ILUI06 Codex settings persist model selections and optional prompt refinem
   await expect(prompt).toHaveValue('');
   await expect(refine).not.toBeChecked();
   await expect(prompt.locator('option[value=""]')).toHaveText('모델 미지정');
-  await expect(page.locator('.illustration-preset-current')).toContainText('프롬프트 모델을 선택');
+  await expect(page.locator('.illustration-preset-settings')).toContainText('프롬프트 모델을 선택');
   await prompt.selectOption(models[1].id);
   await refine.focus();
   await refine.press('Space');
@@ -1200,7 +1195,7 @@ test('ILUI06 Codex settings persist model selections and optional prompt refinem
     await request.get('/api/illustration-settings')
   ).json()) as IllustrationSettings;
   expect(shared.codex).toEqual({ ...baseline.codex, promptModel: models[0] });
-  await expect(page.locator('.illustration-preset-current')).not.toContainText(
+  await expect(page.locator('.illustration-preset-settings')).not.toContainText(
     '프롬프트 모델을 선택'
   );
   expect(generationRequests).toEqual([]);

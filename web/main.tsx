@@ -654,12 +654,22 @@ function App() {
       <span>
         {t('main.modelChip', {
           model: compact ? mainShortDescription : mainDescription,
-          pinned: String(!!(pinned?.mainModel || pinned?.mainPromptPresetId)),
           prompt: String(promptAvailable),
         })}
       </span>
     </button>
   );
+  const chatContext = !s.bot?.title
+    ? ''
+    : s.bot.title !== s.detail?.chat.title
+      ? t('main.botPersona', {
+          bot: s.bot.title,
+          persona: s.persona?.title ?? '',
+          hasPersona: String(!!s.persona),
+        })
+      : s.persona
+        ? t('main.persona', { persona: s.persona.title })
+        : '';
   const composerStatus = [
     s.pendingRequest && !s.submitting.includes(s.viewKey) ? t('main.m020') : '',
     s.cancelling ? t('main.m021') : '',
@@ -980,6 +990,7 @@ function App() {
       libraryError={s.libraryError}
       quickActions={quickActions}
       onSearch={searchWorkspace}
+      onNewChat={startNewStory}
       onNewHelper={newHelperSession}
       collapsed={collapsed}
       onToggleCollapse={toggleNavigation}
@@ -1189,20 +1200,12 @@ function App() {
                   <ChevronDown size={14} aria-hidden="true" className="header-title-caret" />
                 )}
               </h1>
-              {(s.bot?.title || (compact && !focus && scenePosition?.scope === s.viewKey)) && (
+              {(chatContext || (compact && !focus && scenePosition?.scope === s.viewKey)) && (
                 <small className="header-reading-context">
                   {compact && !focus && scenePosition?.scope === s.viewKey && (
                     <span className="header-scene-position">{scenePosition.label}</span>
                   )}
-                  {s.bot?.title && (
-                    <span className="header-chat-context">
-                      {t('main.botPersona', {
-                        bot: s.bot.title,
-                        persona: s.persona?.title ?? '',
-                        hasPersona: String(!!s.persona),
-                      })}
-                    </span>
-                  )}
+                  {chatContext && <span className="header-chat-context">{chatContext}</span>}
                 </small>
               )}
               {compact && !focus && s.selected && sceneCount > 0 && (
@@ -1573,7 +1576,10 @@ function App() {
                   ) : (
                     <>
                       {(s.profileAsset ||
-                        (s.sources.length > 0 && s.attachmentsReady && s.bot)) && (
+                        (s.sources.length > 0 &&
+                          s.attachmentsReady &&
+                          s.bot &&
+                          contentPortraitUrl(s.bot))) && (
                         <div
                           className="story-context"
                           data-fallback={s.profileAsset ? undefined : true}
@@ -1606,7 +1612,7 @@ function App() {
                         )}
                       {!s.sources.length && !s.visibleRuns.length && !s.active && (
                         <div className="first-scene">
-                          {s.bot && (
+                          {s.bot && contentPortraitUrl(s.bot) && (
                             <ContentAvatar
                               content={s.bot}
                               className="first-scene-avatar"
@@ -2708,7 +2714,7 @@ function App() {
           panel === 'navigation' ? (
             <NavigationQuickActions
               onSearch={openWorkspaceSearch}
-              onLibrary={showLibrary}
+              onNewChat={startNewStory}
               helperWorkspace={helperWorkspaceOpen}
               onNewHelper={createHelperSession}
             />

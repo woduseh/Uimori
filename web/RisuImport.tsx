@@ -47,12 +47,6 @@ function importFindingMessage(finding: RisuImportPreview['findings'][number]): s
       return t('transfer.finding.disabled-lore');
     case 'creator-notes-truncated':
       return t('transfer.finding.creator-notes-truncated');
-    case 'native-lore-model':
-      return t('transfer.finding.native-lore-model');
-    case 'source-file-not-retained':
-      return t('transfer.finding.source-file-not-retained');
-    case 'native-risu':
-      return t('transfer.finding.native-risu');
     case 'native-model-calls':
       return t('transfer.finding.native-model-calls');
     case 'native-variable-projection':
@@ -116,15 +110,6 @@ export function RisuImport({
   const unsupported = preview?.findings.some((finding) => finding.level === 'unsupported');
   const locked = busy || uncertain || !!result;
   const ready = !!source && !!preview && (uncertain || !unsupported || allowPartial);
-  const selectedKind = preview?.kind ?? kind;
-  const kindLabel =
-    selectedKind === 'module'
-      ? t('transfer.m003')
-      : selectedKind === 'persona'
-        ? t('transfer.m004')
-        : selectedKind === 'bot'
-          ? t('transfer.m005')
-          : t('transfer.m006');
 
   function selectionChanged() {
     submission.current = null;
@@ -374,28 +359,19 @@ export function RisuImport({
             />
             {preview && <span className="risu-import-change">{t('transfer.m020')}</span>}
           </label>
-          <details className="risu-import-processing">
-            <summary>
-              {preview
-                ? t('transfer.importTypeChange', { kind: preview.kind })
-                : t('transfer.d005', { v0: kindLabel })}
-            </summary>
-            <div>
-              <label>
-                {preview ? t('transfer.m023') : t('transfer.m024')}
-                <select
-                  value={kind}
-                  disabled={locked}
-                  onChange={(event) => void changeKind(event.target.value as RisuImportKind | '')}
-                >
-                  <option value="">{t('transfer.m006')}</option>
-                  <option value="bot">{t('transfer.m005')}</option>
-                  <option value="persona">{t('transfer.m004')}</option>
-                  <option value="module">{t('transfer.m003')}</option>
-                </select>
-              </label>
-            </div>
-          </details>
+          <label className="risu-import-processing">
+            {preview ? t('transfer.m023') : t('transfer.m024')}
+            <select
+              value={kind}
+              disabled={locked}
+              onChange={(event) => void changeKind(event.target.value as RisuImportKind | '')}
+            >
+              <option value="">{t('transfer.m006')}</option>
+              <option value="bot">{t('transfer.m005')}</option>
+              <option value="persona">{t('transfer.m004')}</option>
+              <option value="module">{t('transfer.m003')}</option>
+            </select>
+          </label>
           {preview && (
             <>
               <div className="risu-import-summary risu-import-hero">

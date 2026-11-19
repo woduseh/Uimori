@@ -2,6 +2,7 @@ import { ScrollStrip } from './ScrollStrip.js';
 import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { SettingsIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
@@ -51,6 +52,7 @@ export function ProfileEditor({
   onError,
   onDirtyChange,
   onSaveHandlerChange,
+  onDiscardHandlerChange,
   onGlobalSettings,
   initialTab = 'characters',
   activeTab,
@@ -67,6 +69,7 @@ export function ProfileEditor({
   onError: (error: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
+  onDiscardHandlerChange?: SettingsSaveRegistration;
   onGlobalSettings: (section: 'models' | 'prompts') => void;
   initialTab?: ProfileSection;
   activeTab?: ProfileSection;
@@ -130,11 +133,25 @@ export function ProfileEditor({
       api<ChatProfile>(`/chats/${profile.chatId}/profile`, profileBody(value), 'PUT')
     );
   });
+  useSettingsSaveHandler(onDiscardHandlerChange, async () => {
+    if (saving) return false;
+    discardChanges();
+    return true;
+  });
   const change = (next: ChatProfile) => {
     setValue(next);
     setDirty(true);
     setStatus('');
   };
+  function discardChanges() {
+    setValue(profile);
+    setDirty(false);
+    setLorePending(false);
+    setLoreResetVersion((version) => version + 1);
+    setError('');
+    setStatus(uiMessage('library.latestSettingsLoaded'));
+    onError('');
+  }
   async function save(work: () => Promise<ChatProfile>, message = t('library.chatSettingsSaved')) {
     if (lorePending) {
       setError(uiMessage('library.checkTheNumbersInLoreSettingsBefore'));
@@ -183,6 +200,12 @@ export function ProfileEditor({
     !!selectedModel && isModelSelectable(selectedModel, library.models, library.connections);
   const modelChoices = library.models.filter((item) =>
     isModelSelectable(item, library.models, library.connections)
+  );
+  const globalModelSettingsAction = (
+    <button type="button" className="secondary" onClick={() => onGlobalSettings('models')}>
+      <SettingsIcon size={18} aria-hidden="true" />
+      {t('library.globalModelSettings')}
+    </button>
   );
   return (
     <section
@@ -346,23 +369,15 @@ export function ProfileEditor({
                   </select>
                 </label>
               </div>
-              {!modelAvailable && workspace && (
-                <p className="error" role="alert">
+              {!modelAvailable && workspace ? (
+                <NoticeBanner tone="error" actions={globalModelSettingsAction}>
                   {!selectedModelId
-                    ? t('library.noStoryModelIsSelectedSavedManuscripts')
+                    ? t('library.noStoryModelCannotGenerate')
                     : t('library.theSelectedStoryModelIsUnavailableChoose')}
-                </p>
+                </NoticeBanner>
+              ) : (
+                <div className="form-actions">{globalModelSettingsAction}</div>
               )}
-              <div className="form-actions">
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => onGlobalSettings('models')}
-                >
-                  <SettingsIcon size={18} aria-hidden="true" />
-                  {t('library.globalModelSettings')}
-                </button>
-              </div>
             </div>
             <div hidden={tab !== 'prompts'} className="chat-profile-prompt-options settings-group">
               <div className="settings-group-body">
@@ -487,20 +502,7 @@ export function ProfileEditor({
           hidden={hideSaveActions || (tab !== 'characters' && !dirty && !lorePending)}
         >
           {(dirty || lorePending) && (
-            <button
-              type="button"
-              className="secondary"
-              disabled={saving}
-              onClick={() => {
-                setValue(profile);
-                setDirty(false);
-                setLorePending(false);
-                setLoreResetVersion((version) => version + 1);
-                setError('');
-                setStatus(uiMessage('library.latestSettingsLoaded'));
-                onError('');
-              }}
-            >
+            <button type="button" className="secondary" disabled={saving} onClick={discardChanges}>
               {t('library.discardChanges')}
             </button>
           )}

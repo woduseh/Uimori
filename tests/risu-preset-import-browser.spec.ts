@@ -268,7 +268,7 @@ test('RISUPRESETUI03 display projection keeps the original edit value and cancel
   const source = page.getByTestId('source').first();
   await expect(source.getByTestId('source-request')).toHaveText('화면 요청');
   await source.getByLabel('요청 및 컨텍스트 메뉴', { exact: true }).click();
-  await source.getByRole('button', { name: '컨텍스트용 요청 수정', exact: true }).click();
+  await source.getByRole('button', { name: '요청 수정', exact: true }).click();
   await expect(source.getByLabel('요청 수정 내용', { exact: true })).toHaveValue('원래 요청');
   await source.getByRole('button', { name: '요청 편집 취소', exact: true }).click();
   await expect(source.getByTestId('source-request')).toHaveText('화면 요청');

@@ -178,56 +178,51 @@ export function PaletteSettings({
           });
         }}
       />
-      <details>
-        <summary>{t('palettes.manage')}</summary>
-        <div className="palette-management-list">
-          {palettes.map((palette) => (
-            <div className="palette-management-row" key={palette.id}>
-              <span>{'revision' in palette ? palette.title : translateMessage(palette.title)}</span>
-              <div className="theme-library-actions">
-                {'revision' in palette && (
-                  <button
-                    disabled={busy || disabled}
-                    aria-label={t('palettes.actionEdit', { title: palette.title })}
-                    onClick={() => edit(palette)}
-                  >
-                    {t('palettes.edit')}
-                  </button>
-                )}
+      <div className="palette-management-list">
+        {palettes.map((palette) => (
+          <div className="palette-management-row" key={palette.id}>
+            <span>{'revision' in palette ? palette.title : translateMessage(palette.title)}</span>
+            <div className="theme-library-actions">
+              {'revision' in palette && (
                 <button
                   disabled={busy || disabled}
-                  aria-label={t('palettes.actionClone', {
-                    title: 'revision' in palette ? palette.title : translateMessage(palette.title),
-                  })}
-                  onClick={() => edit(palette, true)}
+                  aria-label={t('palettes.actionEdit', { title: palette.title })}
+                  onClick={() => edit(palette)}
                 >
-                  {t('palettes.clone')}
+                  {t('palettes.edit')}
                 </button>
+              )}
+              <button
+                disabled={busy || disabled}
+                aria-label={t('palettes.actionClone', {
+                  title: 'revision' in palette ? palette.title : translateMessage(palette.title),
+                })}
+                onClick={() => edit(palette, true)}
+              >
+                {t('palettes.clone')}
+              </button>
+              <button
+                disabled={busy}
+                aria-label={t('palettes.actionExport', {
+                  title: 'revision' in palette ? palette.title : translateMessage(palette.title),
+                })}
+                onClick={() => saveDownload(`${palette.title}.palette.json`, paletteFile(palette))}
+              >
+                {t('palettes.export')}
+              </button>
+              {'revision' in palette && (
                 <button
-                  disabled={busy}
-                  aria-label={t('palettes.actionExport', {
-                    title: 'revision' in palette ? palette.title : translateMessage(palette.title),
-                  })}
-                  onClick={() =>
-                    saveDownload(`${palette.title}.palette.json`, paletteFile(palette))
-                  }
+                  disabled={busy || disabled || dirty}
+                  aria-label={t('palettes.actionDelete', { title: palette.title })}
+                  onClick={() => setDeleting(palette)}
                 >
-                  {t('palettes.export')}
+                  {t('palettes.delete')}
                 </button>
-                {'revision' in palette && (
-                  <button
-                    disabled={busy || disabled || dirty}
-                    aria-label={t('palettes.actionDelete', { title: palette.title })}
-                    onClick={() => setDeleting(palette)}
-                  >
-                    {t('palettes.delete')}
-                  </button>
-                )}
-              </div>
+              )}
             </div>
-          ))}
-        </div>
-      </details>
+          </div>
+        ))}
+      </div>
       {error && (
         <NoticeBanner
           tone="error"

@@ -176,7 +176,6 @@ export function PackageStartPicker({
               disabled={busy || uncertain || disabled}
               onChange={(event) => {
                 setSelected(event.target.value);
-                setExpanded(false);
                 setError('');
               }}
             >
@@ -190,8 +189,8 @@ export function PackageStartPicker({
           </label>
           {selected && (
             <details
-              key={selected}
               className="package-start-preview"
+              open={expanded}
               onToggle={(event) => setExpanded(event.currentTarget.open)}
             >
               <summary>{t('library.preview')}</summary>

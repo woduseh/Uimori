@@ -1103,6 +1103,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       <TurnStatus
         key={`${task.id}:${active(task) ? 'active' : 'settled'}`}
         tone={tone(task)}
+        quiet={task.status === 'completed'}
         text={
           (task.id === summarized?.id ? activityLabel : undefined) ??
           t(statusLabel[task.status] ?? task.status)

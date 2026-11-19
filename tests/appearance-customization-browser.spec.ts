@@ -9,6 +9,8 @@ async function openAppearance(page: Page, url = '/') {
   await selectSettingsSection(page, '테마와 색상');
   const advanced = page.locator('.theme-advanced:not([open]) > summary');
   if (await advanced.isVisible()) await advanced.click();
+  const palettes = page.locator('.palette-advanced:not([open]) > summary');
+  if (await palettes.isVisible()) await palettes.click();
 }
 async function appearanceMode(page: Page, mode: 'light' | 'dark') {
   await selectSettingsSection(page, '일반');
@@ -67,7 +69,6 @@ for (const width of [412]) {
     const row = manager
       .locator('.palette-management-row')
       .filter({ has: page.getByText(title, { exact: true }) });
-    await manager.locator('details > summary').click();
     const downloadPromise = page.waitForEvent('download');
     await row.getByRole('button', { name: `${title} 내보내기`, exact: true }).click();
     const download = await downloadPromise;
@@ -96,7 +97,6 @@ for (const width of [412]) {
     await page.screenshot({ path: info.outputPath(`custom-palette-${width}.png`), fullPage: true });
     await page.getByRole('button', { name: '기본 테마 적용', exact: true }).click();
     await page.getByRole('button', { name: '팔레트 기본값으로', exact: true }).click();
-    await manager.locator('details > summary').click();
     for (const name of [title, `${title} imported`]) {
       const saved = manager
         .locator('.palette-management-row')
@@ -122,13 +122,15 @@ test('APPEARANCE uploaded font loads, applies independently, persists, recovers 
   const fonts = page.getByRole('region', { name: '글꼴', exact: true });
   const name = `Synthetic acceptance ${randomUUID()}`;
   const management = fonts.locator('.font-management');
-  const manage = fonts.getByText('글꼴 관리', { exact: true });
+  const manage = management.locator(':scope > summary');
   const preview = fonts.locator('.font-preview');
   const previewFamily = () => preview.evaluate((element) => getComputedStyle(element).fontFamily);
   await expect(management).not.toHaveAttribute('open');
-  await expect(fonts.getByRole('combobox')).toHaveCount(2);
-  await expect(fonts.getByText('본문 글꼴 미리보기', { exact: true })).toBeVisible();
-  await expect(preview).toBeVisible();
+  if (!(await (await request.get('/api/fonts')).json()).fonts.length) {
+    await expect(manage).toHaveText('글꼴 추가');
+    await expect(fonts.getByRole('combobox')).toHaveCount(0);
+    await expect(preview).toHaveCount(0);
+  }
   await manage.click();
   await fonts.getByLabel('글꼴 이름', { exact: true }).fill(name);
   await manage.click();
@@ -157,9 +159,10 @@ test('APPEARANCE uploaded font loads, applies independently, persists, recovers 
   await expect(fonts.getByLabel('라이선스 (선택)', { exact: true })).toHaveCount(0);
   await expect(fonts.getByLabel('출처 주소 (선택)', { exact: true })).toHaveCount(0);
   await fonts.getByRole('button', { name: '글꼴 등록', exact: true }).click();
-  const app = fonts.getByRole('combobox', { name: '앱 글꼴', exact: true });
-  const reader = fonts.getByRole('combobox', { name: '본문 글꼴', exact: true });
+  const app = fonts.getByRole('combobox', { name: '앱 등록 글꼴', exact: true });
+  const reader = fonts.getByRole('combobox', { name: '본문 등록 글꼴', exact: true });
   await expect(app.locator('option').filter({ hasText: name })).toHaveCount(1);
+  await expect(manage).toHaveText('글꼴 관리');
   await expect(app).toHaveValue('');
   await expect(reader).toHaveValue('');
   expect(await previewFamily()).not.toContain('uimori-font-');
@@ -187,7 +190,7 @@ test('APPEARANCE uploaded font loads, applies independently, persists, recovers 
   });
   await page.unroute('**/api/font-preferences');
   await app.selectOption(font.id);
-  await expect(fonts.getByText('앱 글꼴 미리보기', { exact: true })).toBeVisible();
+  await expect(fonts.getByText('앱 등록 글꼴 미리보기', { exact: true })).toBeVisible();
   await expect.poll(() => cssVariable(page, '--app-font-family')).toContain('uimori-font-');
   await expect.poll(previewFamily).toContain('uimori-font-');
   expect(await cssVariable(page, '--reading-font-family')).toBe(originalReader);
@@ -201,7 +204,7 @@ test('APPEARANCE uploaded font loads, applies independently, persists, recovers 
     )
     .toBe(true);
   await reader.selectOption(font.id);
-  await expect(fonts.getByText('본문 글꼴 미리보기', { exact: true })).toBeVisible();
+  await expect(fonts.getByText('본문 등록 글꼴 미리보기', { exact: true })).toBeVisible();
   await expect.poll(() => cssVariable(page, '--reading-font-family')).toContain('uimori-font-');
   await app.selectOption('');
   await expect.poll(() => cssVariable(page, '--app-font-family')).not.toContain('uimori-font-');
@@ -212,7 +215,7 @@ test('APPEARANCE uploaded font loads, applies independently, persists, recovers 
   await expect(app).toHaveValue(font.id);
   await expect(reader).toHaveValue(font.id);
   await expect(management).not.toHaveAttribute('open');
-  await expect(fonts.getByText('본문 글꼴 미리보기', { exact: true })).toBeVisible();
+  await expect(fonts.getByText('본문 등록 글꼴 미리보기', { exact: true })).toBeVisible();
   await expect.poll(previewFamily).toContain('uimori-font-');
   await expect.poll(() => cssVariable(page, '--app-font-family')).toContain('uimori-font-');
   await expect.poll(() => cssVariable(page, '--reading-font-family')).toContain('uimori-font-');
@@ -244,9 +247,20 @@ test('APPEARANCE uploaded font loads, applies independently, persists, recovers 
     .getByRole('dialog', { name: '글꼴 삭제', exact: true })
     .getByRole('button', { name: '글꼴 삭제', exact: true })
     .click();
-  await expect(app).toHaveValue('');
-  await expect(reader).toHaveValue('');
+  await expect
+    .poll(async () =>
+      (await (await request.get('/api/fonts')).json()).fonts.some(
+        (entry: { id: string }) => entry.id === font.id
+      )
+    )
+    .toBe(false);
   const after = await (await request.get('/api/fonts')).json();
-  expect(after.fonts.some((entry: { id: string }) => entry.id === font.id)).toBe(false);
   expect(after.preferences).toMatchObject({ appFontId: null, readerFontId: null });
+  if (after.fonts.length) {
+    await expect(app).toHaveValue('');
+    await expect(reader).toHaveValue('');
+  } else {
+    await expect(app).toHaveCount(0);
+    await expect(manage).toHaveText('글꼴 추가');
+  }
 });

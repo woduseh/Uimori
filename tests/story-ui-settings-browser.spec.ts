@@ -18,8 +18,9 @@ test('STORYUI settings persist independently through the real chat settings dial
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   const toggle = dialog.getByRole('switch', { name: '이야기 UI', exact: true });
   await expect(toggle).not.toBeChecked();
-  await expect(dialog.getByLabel('이야기 UI 스타일')).toHaveValue('auto');
+  await expect(dialog.getByLabel('이야기 UI 스타일')).toHaveCount(0);
   await toggle.check();
+  await expect(dialog.getByLabel('이야기 UI 스타일')).toHaveValue('auto');
   await dialog.getByLabel('이야기 UI 스타일').selectOption('east-asian');
   await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
   await expect
