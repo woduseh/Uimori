@@ -238,6 +238,7 @@ CSS 작성 시 안정적으로 참조할 수 있는 데이터 속성은 다음�
 [data-uimori-part="request-persona"] /* 요청 오른쪽 페르소나 */
 [data-uimori-body-scroll]           /* 선택형 내부 스크롤 본문 */
 [data-uimori-part="portrait-group"] /* 봇·페르소나 이미지 묶음 */
+[data-uimori-part="request-portrait-group"] /* 요청 옆 페르소나 이미지 묶음 */
 [data-uimori-part="bot-portrait"]
 [data-uimori-part="persona-portrait"]
 ```
