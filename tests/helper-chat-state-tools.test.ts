@@ -218,7 +218,7 @@ const completed: transport.ProviderResult = {
   usage: { inputTokens: 10, outputTokens: 4, costUsd: null, raw: null, priceRevision: null },
   opaqueState: null,
 };
-const update = (id: string, args: Record<string, unknown>): transport.ProviderResult => ({
+const update = (id: string, args: Record<string, transport.Json>): transport.ProviderResult => ({
   ...structuredClone(completed),
   status: 'tool_calls',
   toolCalls: [

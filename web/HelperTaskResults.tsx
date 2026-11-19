@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BookOpen, Check, Clock3, FileText, Image, Palette, Settings2 } from 'lucide-react';
+import {
+  BookOpen,
+  Check,
+  Clock3,
+  FileText,
+  Image,
+  Languages,
+  Palette,
+  PenLine,
+  Settings2,
+} from 'lucide-react';
 import type {
   HelperStatus,
   HelperTaskAttemptUsage,
@@ -74,13 +84,23 @@ const targetIcons = {
   'illustration-preset': Image,
   illustration: Image,
   settings: Settings2,
+  chat: PenLine,
+  translation: Languages,
 };
-const illustrationOutcomes: Record<string, string> = {
+const workOutcomes: Record<string, string> = {
   'illustration.generate': 'helperResults.illustrationQueued',
   'illustration.cut.redraw': 'helperResults.illustrationRedrawQueued',
   'illustration.cuts.place': 'helperResults.illustrationPlaced',
   'illustration.continuity.save': 'helperResults.illustrationContinuitySaved',
+  'scene.request': 'helperResults.sceneQueued',
+  'scene.translate': 'helperResults.translationQueued',
 };
+const queuedOperations = new Set([
+  'illustration.generate',
+  'illustration.cut.redraw',
+  'scene.request',
+  'scene.translate',
+]);
 const active = (status: HelperStatus) => status === 'running' || status === 'queued';
 
 type ResultsRead = {
@@ -204,8 +224,11 @@ function ResultTarget({
     : !globalSetting && settingLabel
       ? t(settingLabel)
       : undefined;
-  const outcome = target.kind === 'illustration' ? illustrationOutcomes[operation] : undefined;
-  const queued = operation === 'illustration.generate' || operation === 'illustration.cut.redraw';
+  const outcome =
+    target.kind === 'illustration' || target.kind === 'chat' || target.kind === 'translation'
+      ? workOutcomes[operation]
+      : undefined;
+  const queued = queuedOperations.has(operation);
   const content = (
     <>
       <Icon size={16} aria-hidden="true" />

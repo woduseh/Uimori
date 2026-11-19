@@ -359,6 +359,18 @@ export const messages = {
     ja: 'Vertexロケーション',
     zh: 'Vertex 位置',
   },
+  'helperResults.sceneQueued': {
+    ko: '장면 요청됨',
+    en: 'Scene requested',
+    ja: 'シーンを依頼済み',
+    zh: '场景已请求',
+  },
+  'helperResults.translationQueued': {
+    ko: '번역 요청됨',
+    en: 'Translation requested',
+    ja: '翻訳を依頼済み',
+    zh: '翻译已请求',
+  },
   'helperResults.chatVariables': {
     ko: '카드 변수',
     en: 'Card variables',

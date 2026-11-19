@@ -166,7 +166,13 @@ export type HelperEvent = {
   data: unknown;
 };
 export type HelperTaskResultTarget = {
-  kind: import('./resource-editing.js').ResourceKind | 'settings' | 'illustration';
+  /** chat is a requested next scene of chat id; translation is a requested translation of scene id. */
+  kind:
+    | import('./resource-editing.js').ResourceKind
+    | 'settings'
+    | 'illustration'
+    | 'chat'
+    | 'translation';
   id: string;
   /** Scene destinations include their owning chat; other result kinds do not need it. */
   chatId?: string;

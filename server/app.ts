@@ -43,6 +43,7 @@ import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import { Store } from './store.js';
 import { readTranslationSelection, readStoredRunSnapshot, runResponse } from './run-projections.js';
+import { composerRunSnapshot } from './composer-run.js';
 import { ChatTitleService } from './chat-title.js';
 import { HelperRuntime, helperWritingSnapshot } from './helper-runtime.js';
 import { invokeTaskTool } from './helper-task-tools.js';
@@ -415,6 +416,19 @@ export async function createApp(options: AppOptions): Promise<App> {
       connectionTests,
       sceneUpdated,
       chatChanged: publish,
+      story: {
+        requireRunModel: requireRequestModel,
+        requireTranslationModel: requireJobModel,
+        started: (work) => {
+          if ('run' in work) {
+            publish(work.run.chatId);
+            execute(work.run.id);
+          } else {
+            publish(work.job.chatId);
+            pumpJobs();
+          }
+        },
+      },
       illustrationsUpdated: (chatId, queued) => {
         publish(chatId);
         if (queued) pumpIllustrations();
@@ -1304,18 +1318,7 @@ export async function createApp(options: AppOptions): Promise<App> {
         if (prior) return { run: prior, created: false };
         storeRequestImages(store, prepared);
         return store.createRunInTransaction(request.params.id, command, (chat) => {
-          const profile = store.product.snapshot(chat.id);
-          const snapshot = {
-            chatId: chat.id,
-            parentRevision: chat.headRevision,
-            settingsRevision: chat.settingsRevision,
-            settings: chat.settings,
-            request: command.request,
-            ...(prepared.images.length ? { requestImages: prepared.images } : {}),
-            history: store.history(chat.headRevision),
-            resources: store.product.resources(chat.id, profile),
-            ...(profile ? { profile } : {}),
-          } satisfies RunSnapshot;
+          const snapshot = composerRunSnapshot(store, chat, command.request, prepared.images);
           requireRequestModel(snapshot);
           return snapshot;
         });

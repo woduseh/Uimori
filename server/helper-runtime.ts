@@ -46,6 +46,11 @@ import {
   updateHelperChatVariables,
 } from './helper-chat-state-tools.js';
 import {
+  HELPER_STORY_TOOLS,
+  requestHelperStory,
+  type HelperStoryEffects,
+} from './helper-story-tools.js';
+import {
   compareVertexLocations,
   isVertexLocationTool,
   readVertexLocations,
@@ -63,7 +68,7 @@ import { readResource } from './resource-service.js';
 import { editableResource } from '../core/resource-editing.js';
 import { createHash } from 'node:crypto';
 import type { HelperEditor, HelperTask, HelperSelection } from '../core/helper.js';
-import type { RunSnapshot, ToolEvent, Usage } from '../core/types.js';
+import type { Job, Run, RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import { workspaceModelRef, type ModelSnapshot } from '../core/product.js';
 import {
   contextBudgetForModel,
@@ -768,6 +773,10 @@ export type HelperServices = {
   sceneUpdated?: (sourceId: string) => void;
   /** Notifies open readers of a committed chat-level change, such as its variables. */
   chatChanged?: (chatId: string) => void;
+  /** Model checks for requested work, and the queue wake-up once its reservation committed. */
+  story?: HelperStoryEffects & {
+    started: (work: { run: Run } | { job: Job }) => void;
+  };
   illustrationsUpdated?: (chatId: string, queued: boolean) => void;
   task?: (
     task: HelperTask,
@@ -2720,6 +2729,35 @@ export class HelperRuntime {
           updateHelperChatVariables(this.store, this.workspace, task, receiptId, scope.chatId, args)
       );
       if (result.changed) this.options.services?.chatChanged?.(scope.chatId);
+      return result;
+    }
+    if (HELPER_STORY_TOOLS.some((tool) => tool.name === name)) {
+      if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
+      const service = this.options.services?.story;
+      if (!service) throw new HttpError(400, 'STORY_REQUEST_UNAVAILABLE');
+      this.workspace.assertRunning(task.id);
+      const receiptId = `${task.id}:${operationId}`;
+      let started: ReturnType<typeof requestHelperStory>['started'];
+      const result = this.workspace.operation(
+        task.id,
+        receiptId,
+        { name, args, chatId: scope.chatId },
+        () => {
+          const outcome = requestHelperStory(
+            this.store,
+            this.workspace,
+            task,
+            receiptId,
+            scope.chatId,
+            name,
+            args,
+            service
+          );
+          started = outcome.started;
+          return outcome.result;
+        }
+      );
+      if (started) service.started(started);
       return result;
     }
     if (name === 'chat.read') {

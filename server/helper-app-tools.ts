@@ -11,6 +11,7 @@ import { HELPER_TASK_TOOLS } from './helper-task-tools.js';
 import { HELPER_DATA_TOOLS } from './helper-data-tools.js';
 import { HELPER_SCENE_TOOLS } from './helper-scene-tools.js';
 import { HELPER_CHAT_STATE_TOOLS } from './helper-chat-state-tools.js';
+import { HELPER_STORY_TOOLS } from './helper-story-tools.js';
 import { HELPER_IMAGE_TOOLS } from './helper-image-tools.js';
 import { HELPER_ILLUSTRATION_TOOLS } from './helper-illustration-workflow.js';
 import { helperOptionTools } from './chat-options.js';
@@ -77,6 +78,7 @@ const TOOLS: ProviderTool[] = [
   ...HELPER_TASK_TOOLS,
   ...HELPER_SCENE_TOOLS,
   ...HELPER_CHAT_STATE_TOOLS,
+  ...HELPER_STORY_TOOLS,
   ...HELPER_IMAGE_TOOLS,
   ...HELPER_ILLUSTRATION_TOOLS,
   {
@@ -509,6 +511,7 @@ const chatToolNames = new Set([
   ...HELPER_ILLUSTRATION_TOOLS.map((tool) => tool.name),
   ...HELPER_SCENE_TOOLS.map((tool) => tool.name),
   ...HELPER_CHAT_STATE_TOOLS.map((tool) => tool.name),
+  ...HELPER_STORY_TOOLS.map((tool) => tool.name),
   'outline.read',
   'outline.write',
   'context.read',
@@ -627,7 +630,10 @@ export const HELPER_OPERATION_AREAS: readonly (readonly [area: string, purpose: 
     'chat',
     'chat list, scene index, title, fork, chat-only lore, next request preview and Risu variables',
   ],
-  ['scene', 'saved story scenes, their translations and the lore used to write them'],
+  [
+    'scene',
+    'saved story scenes, their translations, the lore used to write them, and requests for the next scene or a translation',
+  ],
   ['story', 'frozen story history of this task'],
   ['knowledge', 'frozen writing references of this task'],
   ['skills', 'writing guidance'],
@@ -748,6 +754,8 @@ const discoveryTerms: Record<string, string> = {
   'chat.preview':
     'prompt request assembled debug why ignored missing check context token limit 프롬프트 미리보기',
   'scene.lore': 'lorebook entries used delivered activated last scene why missing 로어',
+  'scene.request': 'write continue next scene send composer run generate story 다음 장면 써줘 요청',
+  'scene.translate': 'translate retranslate translation again 번역 재번역',
   'chat.variables.read': 'risu variable state value getvar flag affection 변수',
   'chat.variables.update': 'risu variable state value setvar change fix flag affection 변수',
   'illustration.profiles.read': 'local override 채팅 외형 프로필',

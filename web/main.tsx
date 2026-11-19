@@ -835,6 +835,12 @@ function App() {
         if (!chatId) throw new Error(uiMessage('helperResults.openFailed'));
         s.openTarget({ chatId, sourceId: target.id, representation: 'original' });
         setPanel('');
+      } else if (target.kind === 'translation' && target.chatId) {
+        s.openTarget({ chatId: target.chatId, sourceId: target.id, representation: 'translation' });
+        setPanel('');
+      } else if (target.kind === 'chat') {
+        if (s.selected !== target.id || s.destination !== 'story') s.select(target.id);
+        setPanel('');
       } else if (target.kind === 'settings' && target.setting?.startsWith('newChat.')) {
         setSettingsTab('general');
         setPanel('settings');
