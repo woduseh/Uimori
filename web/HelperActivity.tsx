@@ -4,7 +4,7 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { useCallback, useEffect, useState } from 'react';
 import type { HelperActivity as Activity } from '../core/helper-activity.js';
 import type { HelperStatus } from '../core/helper.js';
-import { api } from './api.js';
+import { api, labels } from './api.js';
 import { helperActivityStages } from './helper-activity.js';
 import { requestFileError } from './request-file-errors.js';
 import { statusGlyph } from './TurnStatus.js';
@@ -150,7 +150,7 @@ export function HelperActivityDetails({
                     {stage.events.map((event) => (
                       <li key={event.seq} className="ui-meta-row">
                         <code>{event.name ?? event.kind}</code>
-                        {event.status && <span>{event.status}</span>}
+                        {event.status && <span>{labels[event.status] ?? event.status}</span>}
                         {event.purpose && <span>{event.purpose}</span>}
                         {event.applied !== undefined && (
                           <span>{event.applied ? t('helpers.m124') : t('helpers.m125')}</span>

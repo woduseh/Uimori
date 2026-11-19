@@ -379,6 +379,18 @@ test('catalog checker rejects duplicate and missing keys, malformed ICU and wron
   }
 });
 
+test('inherited settings are called defaults in every locale, not global or whole-app values', () => {
+  const offenders = Object.entries(messages).flatMap(([key, values]) => [
+    ...(/전역|전체 기본값|작업실 기본/u.test(values.ko) ? [`${key}/ko: ${values.ko}`] : []),
+    ...(/\bglobal (default|settings?|models?|prompts?|role|writing|story|translation|assistant|context|script|title|lore)\b/iu.test(
+      values.en
+    )
+      ? [`${key}/en: ${values.en}`]
+      : []),
+  ]);
+  expect(offenders, 'Use 기본값/default, or name the settings destination').toEqual([]);
+});
+
 test('all catalog locales parse ICU and accept the same named arguments', () => {
   function argumentsOf(pattern: string, locale: string) {
     const args = new Set<string>();

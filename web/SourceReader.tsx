@@ -1719,9 +1719,9 @@ function SourceReaderContent({
                 )}
                 <div className="inspector">
                   <dl>
-                    <dt>source revision</dt>
+                    <dt>{t('reader.sourceRevision')}</dt>
                     <dd>{source.id}</dd>
-                    <dt>parent revision</dt>
+                    <dt>{t('reader.parentRevision')}</dt>
                     <dd>{source.parentRevision || t('reader.start')}</dd>
                     <dt>SHA-256</dt>
                     <dd>{source.hash}</dd>

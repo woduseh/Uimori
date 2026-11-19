@@ -201,7 +201,10 @@ export function NativeRisuPresetEditor({
   }
   function add() {
     update({
-      promptTemplate: [...items, { type: 'plain', role: 'system', text: '', name: '새 프롬프트' }],
+      promptTemplate: [
+        ...items,
+        { type: 'plain', role: 'system', text: '', name: t('prompts.uiNewPrompt') },
+      ],
     });
     setSelected(items.length);
     setQuery('');

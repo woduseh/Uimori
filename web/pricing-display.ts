@@ -75,3 +75,13 @@ export function pricingNote(note: string): string {
     return t('providers.manualPricingReference');
   return estimateNotes[note] ?? (/^[A-Z][A-Z0-9_]+$/.test(note) ? t('providers.m531') : note);
 }
+const serviceTierNames: Record<string, string> = {
+  flex: 'Flex',
+  standard: 'Standard',
+  auto: 'Auto',
+  default: 'Default',
+  priority: 'Priority',
+  standard_only: 'Standard',
+  batch: 'Batch',
+};
+export const serviceTierLabel = (value: string) => serviceTierNames[value] ?? value;

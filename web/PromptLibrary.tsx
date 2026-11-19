@@ -392,7 +392,7 @@ export function PromptLibrary({
           kind: 'prompt-preset',
           sourceId: item.id,
           expectedSourceRevision: item.revision,
-          title: `${item.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')} 사본`,
+          title: `${item.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')}${t('shared.copySuffix')}`,
         }
       );
       const copy = result.saved as PromptPreset;

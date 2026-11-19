@@ -89,7 +89,7 @@ export function PaletteSettings({
         ? {
             title:
               ('revision' in palette ? palette.title : translateMessage(palette.title)) +
-              (copy ? t('palettes.copySuffix') : ''),
+              (copy ? t('shared.copySuffix') : ''),
             description: palette.description,
             colors: palette.colors,
           }

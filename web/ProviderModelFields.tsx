@@ -1,6 +1,7 @@
 import { t, useI18n, translateMessage, formatNumber } from './i18n.js';
 import { ToggleRow } from './ToggleRow.js';
 import { ModelPricingEditor } from './ModelPricingEditor.js';
+import { serviceTierLabel } from './pricing-display.js';
 import { AddIcon, CloseIcon } from './ui-icons.js';
 import { useEffect, useRef } from 'react';
 import { isGeminiProtocol, type Connection, type VertexRequestTier } from '../core/product.js';
@@ -70,15 +71,6 @@ const geminiThresholdLabels: Record<GeminiSafetyThreshold, string> = {
     return t('providers.m172');
   },
 };
-const tierLabels: Record<string, string> = {
-  flex: 'Flex',
-  standard: 'Standard',
-  auto: 'Auto',
-  default: 'Default',
-  priority: 'Priority',
-  standard_only: 'Standard',
-};
-const tierLabel = (value: string) => tierLabels[value] ?? value;
 const strengthLabels: Record<string, string> = {
   get none() {
     return t('providers.m173');
@@ -117,6 +109,22 @@ const strengthLabels: Record<string, string> = {
 const strengthLabel = (value: string) => strengthLabels[value] ?? value;
 const modeLabel = (value: string) =>
   value === 'adaptive' ? t('providers.m180') : value === 'disabled' ? t('providers.m181') : value;
+const cacheModeLabel = (mode: string) =>
+  mode === 'disabled'
+    ? t('providers.m247')
+    : mode === 'explicit'
+      ? t('providers.m248')
+      : mode === 'automatic'
+        ? t('providers.m249')
+        : mode;
+const cacheTtlLabel = (ttl: string) =>
+  ttl === '5m'
+    ? t('providers.m250')
+    : ttl === '30m'
+      ? t('providers.m251')
+      : ttl === '1h'
+        ? t('providers.m252')
+        : ttl;
 const UNDOCUMENTED = () => t('providers.m182');
 const evaluationMetadataLabels: Record<EvaluationMetadataProfile, string> = {
   openai: 'OpenAI',
@@ -408,7 +416,13 @@ export function ProviderModelFields({
             value.tokenizer)
           : field === 'providerOptions'
             ? t('providers.m198')
-            : value[field],
+            : field === 'thinkingMode'
+              ? modeLabel(value[field])
+              : field === 'cacheMode'
+                ? cacheModeLabel(value[field])
+                : field === 'cacheTtl'
+                  ? cacheTtlLabel(value[field])
+                  : value[field],
       reset: () => update({ [field]: '' }),
     }));
   if (value.structuredOutput !== 'default')
@@ -534,15 +548,15 @@ export function ProviderModelFields({
                   : undefined
             }
             onChange={(serviceTier) => update({ serviceTier })}
-            format={tierLabel}
+            format={serviceTierLabel}
             validationError={forcedServiceTierError(value, connection, forcedVertexTier)}
           />
         )}
         {vertex && forcedVertexTier && (
           <p className="muted full">
             {t('providers.m563', {
-              value0: tierLabel(forcedVertexTier),
-              value1: tierLabel(forcedVertexTier),
+              value0: serviceTierLabel(forcedVertexTier),
+              value1: serviceTierLabel(forcedVertexTier),
             })}
           </p>
         )}
@@ -723,6 +737,7 @@ export function ProviderModelFields({
               <option value="on">{t('providers.m200')}</option>
               <option value="off">{t('providers.m201')}</option>
             </select>
+            <small className="muted">{t('providers.m620')}</small>
           </label>
         )}
         {protocol && !sends('structuredOutput') && value.structuredOutput !== 'default' && (
@@ -824,15 +839,7 @@ export function ProviderModelFields({
               vocabulary={sends('cacheMode') ? PROTOCOL_OPTION_VALUES.cacheMode : []}
               onChange={(cacheMode) => update({ cacheMode })}
               defaultLabel={t('providers.m246')}
-              format={(mode) =>
-                mode === 'disabled'
-                  ? t('providers.m247')
-                  : mode === 'explicit'
-                    ? t('providers.m248')
-                    : mode === 'automatic'
-                      ? t('providers.m249')
-                      : mode
-              }
+              format={cacheModeLabel}
             />
             <ModelOptionSelect
               label={t('providers.m196')}
@@ -847,15 +854,7 @@ export function ProviderModelFields({
               }
               onChange={(cacheTtl) => update({ cacheTtl })}
               defaultLabel={t('providers.m236')}
-              format={(ttl) =>
-                ttl === '5m'
-                  ? t('providers.m250')
-                  : ttl === '30m'
-                    ? t('providers.m251')
-                    : ttl === '1h'
-                      ? t('providers.m252')
-                      : ttl
-              }
+              format={cacheTtlLabel}
               invalidMessage={!cacheTtlAvailable ? t('providers.m253') : undefined}
             />
           </fieldset>

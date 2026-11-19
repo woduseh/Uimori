@@ -306,10 +306,10 @@ export const messages = {
     zh: '当前助手模型：{v0}',
   },
   'helpers.m050': {
-    ko: '도우미 전역 모델 설정',
-    en: 'Global assistant model settings',
-    ja: 'アシスタントの全体モデル設定',
-    zh: '助手全局模型设置',
+    ko: '도우미 모델 설정',
+    en: 'Assistant model settings',
+    ja: 'アシスタントのモデル設定',
+    zh: '助手模型设置',
   },
   'helpers.m051': {
     ko: '도우미 말투',

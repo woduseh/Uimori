@@ -77,6 +77,12 @@ export const messages = {
     ja: 'キャンセル',
     zh: '取消',
   },
+  'shared.copySuffix': {
+    ko: ' 사본',
+    en: ' copy',
+    ja: 'のコピー',
+    zh: ' 副本',
+  },
   'shared.deleting': {
     ko: '삭제 중…',
     en: 'Deleting…',

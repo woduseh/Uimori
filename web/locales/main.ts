@@ -672,10 +672,10 @@ export const messages = {
     zh: '重新保存初始设置',
   },
   'main.m097': {
-    ko: '전역 모델 설정',
-    en: 'Global models',
-    ja: '共通モデル設定',
-    zh: '全局模型设置',
+    ko: '역할별 모델',
+    en: 'Models by role',
+    ja: '役割別モデル',
+    zh: '按角色设置模型',
   },
   'main.m098': {
     ko: '원본 채팅으로 돌아가기',
@@ -714,10 +714,10 @@ export const messages = {
     zh: '固定的正文模型不可用。',
   },
   'main.m104': {
-    ko: '사용 가능한 전역 본문 모델을 선택해 주세요.',
-    en: 'Select an available global writing model.',
-    ja: '利用できる共通の本文モデルを選択してください。',
-    zh: '请选择可用的全局正文模型。',
+    ko: '사용 가능한 기본 본문 모델을 선택해 주세요.',
+    en: 'Select an available default writing model.',
+    ja: '利用できる既定の本文モデルを選択してください。',
+    zh: '请选择可用的默认正文模型。',
   },
   'main.m105': {
     ko: '참고 이미지를 복구할지 선택해 주세요.',
@@ -1074,13 +1074,13 @@ export const messages = {
     zh: '从保存的位置继续阅读',
   },
   'main.story0': {
-    ko: '입력 초안을 복구하지 못했어요. 브라우저 저장 공간을 확인해 주세요.',
+    ko: '요청 초안을 복구하지 못했어요. 브라우저 저장 공간을 확인해 주세요.',
     en: 'Could not restore the draft. Check browser storage.',
     ja: '下書きを復元できませんでした。ブラウザーの保存領域を確認してください。',
     zh: '无法恢复草稿。请检查浏览器存储空间。',
   },
   'main.story1': {
-    ko: '입력 초안을 기기에 저장하지 못했어요. 화면을 닫기 전에 전송하거나 파일을 보관해 주세요.',
+    ko: '요청 초안을 기기에 저장하지 못했어요. 화면을 닫기 전에 전송하거나 파일을 보관해 주세요.',
     en: 'Could not save the draft on this device. Submit it or keep a file before closing this page.',
     ja: '下書きを端末に保存できませんでした。画面を閉じる前に送信するかファイルで保管してください。',
     zh: '无法在此设备上保存草稿。关闭页面前请提交或保存为文件。',

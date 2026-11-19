@@ -236,7 +236,7 @@ export function applyHelperSettingsMutation(
               setting.startsWith('global.') || setting.startsWith('newChat.') ? 'global' : chatId!,
             title:
               setting.startsWith('global.') || setting.startsWith('newChat.')
-                ? '공통 설정'
+                ? '기본값'
                 : store.chat(chatId!).title,
             revision: result.revision,
             setting,

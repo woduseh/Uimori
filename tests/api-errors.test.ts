@@ -174,8 +174,8 @@ test('API errors keep Korean message and stable codes in another UI language', a
   expect(translateMessage(result.message)).toBe(result.displayMessage);
   const required = await rejected(409, 'MODEL_REQUIRED:translation-refusal');
   expect(required.code).toBe('MODEL_REQUIRED:translation-refusal');
-  expect(required.message).toBe('전역 모델 설정에서 번역 거절 판정 모델을 선택해 주세요.');
-  expect(required.displayMessage).not.toContain('전역 모델 설정');
+  expect(required.message).toBe('설정 > 역할별 모델에서 번역 거절 판정 모델을 선택해 주세요.');
+  expect(required.displayMessage).not.toContain('역할별 모델');
 });
 
 test('retained manuscript translation errors retranslate scene labels after locale changes', async () => {

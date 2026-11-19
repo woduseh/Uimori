@@ -67,7 +67,7 @@ for (const width of [MOBILE_WIDTH]) {
     await source.getByRole('button', { name: '번역 생성', exact: true }).click();
     const error = source.locator('.source-action-error');
     await expect(error).toContainText('요청을 처리할 수 없어요. (400)');
-    const action = error.getByRole('button', { name: '전역 모델 설정' });
+    const action = error.getByRole('button', { name: '역할별 모델' });
     const container = await error.boundingBox(),
       button = await action.boundingBox();
     expect(container!.x + container!.width - button!.x - button!.width).toBeLessThanOrEqual(24);

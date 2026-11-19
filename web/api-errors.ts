@@ -190,7 +190,7 @@ const roles: Record<string, string> = {
   illustration: '삽화',
 };
 const unavailable =
-  '선택한 모델 또는 프로바이더를 사용할 수 없어요. 전역 모델 설정에서 역할별 모델을 확인하고 모델과 프로바이더 관리에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.';
+  '선택한 모델 또는 프로바이더를 사용할 수 없어요. 설정 > 역할별 모델과 설정 > 프로바이더와 모델에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.';
 
 /** Preserve recognized local codes, never an arbitrary server/provider error or code suffix. */
 export function apiErrorDiagnostic(
@@ -256,7 +256,7 @@ export function apiErrorDiagnostic(
     if (required && Object.hasOwn(roles, required))
       return {
         code,
-        message: `전역 모델 설정에서 ${roles[required]} 모델을 선택해 주세요.`,
+        message: `설정 > 역할별 모델에서 ${roles[required]} 모델을 선택해 주세요.`,
       };
     const unavailableRole = /^MODEL_UNAVAILABLE:([a-z-]+):/.exec(code)?.[1];
     if (unavailableRole && Object.hasOwn(roles, unavailableRole))
@@ -264,7 +264,7 @@ export function apiErrorDiagnostic(
         code: `MODEL_UNAVAILABLE:${unavailableRole}`,
         message:
           unavailableRole === 'main'
-            ? '본문 모델 또는 프로바이더를 사용할 수 없어요. 채팅 설정의 고정 모델과 전역 모델 설정, 모델과 프로바이더의 활성 상태와 인증을 확인해 주세요.'
+            ? '본문 모델 또는 프로바이더를 사용할 수 없어요. 채팅 설정의 고정 모델, 설정 > 역할별 모델, 프로바이더의 활성 상태와 인증을 확인해 주세요.'
             : unavailable,
       };
     if (settingErrors.has(code)) return { code: 'MODEL_UNAVAILABLE', message: unavailable };

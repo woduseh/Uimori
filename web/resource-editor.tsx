@@ -58,7 +58,8 @@ function context(session: ResourceEditorSession | null): ActiveEditorContext | n
     kind: session.options.kind,
     targetId: state.document.targetId,
     revision: state.document.baseRevision,
-    title: 'title' in state.local.model ? state.local.model.title : '현재 프롬프트',
+    title:
+      'title' in state.local.model ? state.local.model.title : t('prompts.uiCurrentPromptPreset'),
     editorKey: session.editorKey,
     dirty: state.dirty,
     model: state.local.model,

@@ -166,7 +166,9 @@ export function IllustrationPresetSettings({
     let model: IllustrationPresetDefinition;
     try {
       model = validateIllustrationPreset(
-        asCopy ? { ...draft.model, title: `${draft.model.title.slice(0, 97)} 사본` } : draft.model
+        asCopy
+          ? { ...draft.model, title: `${draft.model.title.slice(0, 97)}${t('shared.copySuffix')}` }
+          : draft.model
       );
     } catch (cause) {
       const message = messageOf(cause);
@@ -208,7 +210,7 @@ export function IllustrationPresetSettings({
     const model = preset
       ? structuredClone(illustrationPresetDefinition(preset))
       : emptyIllustrationPreset();
-    if (preset && isCopy) model.title = `${model.title.slice(0, 97)} 사본`;
+    if (preset && isCopy) model.title = `${model.title.slice(0, 97)}${t('shared.copySuffix')}`;
     setDraft({
       id: preset && !isCopy ? preset.id : null,
       revision: preset && !isCopy ? preset.revision : undefined,

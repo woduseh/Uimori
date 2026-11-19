@@ -55,10 +55,10 @@ export const messages = {
     zh: '删除提供商',
   },
   'providers.m4': {
-    ko: '이 프로바이더와 소속 모델을 목록에서 제거하고 현재 전역 역할 선택을 해제해요. 이후 호출은 차단되며 서버 인증 파일과 과거 실행 기록은 유지돼요.',
-    en: 'Remove this provider and its models from the list and clear their current global role assignments. Future calls will be blocked. Server credentials and previous run history will be retained.',
-    ja: 'このプロバイダーと所属モデルを一覧から削除し、現在のグローバル役割の選択を解除します。以後の呼び出しはブロックされます。サーバーの認証ファイルと過去の実行履歴は保持されます。',
-    zh: '从列表中移除此提供商及其模型，并清除当前全局角色选择。之后的调用将被阻止，服务器认证文件和历史运行记录会保留。',
+    ko: '이 프로바이더와 소속 모델을 목록에서 제거하고 역할별 모델의 현재 선택을 해제해요. 이후 호출은 차단되며 서버 인증 파일과 과거 실행 기록은 유지돼요.',
+    en: 'Remove this provider and its models from the list and clear their current selections in Models by role. Future calls will be blocked. Server credentials and previous run history will be retained.',
+    ja: 'このプロバイダーと所属モデルを一覧から削除し、役割別モデルの現在の選択を解除します。以後の呼び出しはブロックされます。サーバーの認証ファイルと過去の実行履歴は保持されます。',
+    zh: '从列表中移除此提供商及其模型，并清除按角色设置模型中的当前选择。之后的调用将被阻止，服务器认证文件和历史运行记录会保留。',
   },
   'providers.m5': {
     ko: '모델 삭제',
@@ -67,10 +67,10 @@ export const messages = {
     zh: '删除模型',
   },
   'providers.m6': {
-    ko: '삭제하면 전역 역할 설정에서 해제되고, 이 모델을 쓰던 보조 에이전트도 해제돼요. 과거 실행 기록의 모델 정보는 유지돼요.',
-    en: 'Deleting clears the current global role assignment and disables writing assistants using this model. Model settings saved in previous runs will be retained.',
-    ja: '削除すると現在のグローバル役割の選択が解除され、このモデルを使う執筆アシスタントが無効になります。過去の実行に保存されたモデル設定は保持されます。',
-    zh: '删除后会清除当前全局角色选择，并关闭使用此模型的写作助手。历史运行中保存的模型设置会保留。',
+    ko: '삭제하면 역할별 모델에서 해제되고, 이 모델을 쓰던 보조 에이전트도 해제돼요. 과거 실행 기록의 모델 정보는 유지돼요.',
+    en: 'Deleting clears it from Models by role and disables writing assistants using this model. Model settings saved in previous runs will be retained.',
+    ja: '削除すると役割別モデルから解除され、このモデルを使う執筆アシスタントが無効になります。過去の実行に保存されたモデル設定は保持されます。',
+    zh: '删除后会从按角色设置模型中清除，并关闭使用此模型的写作助手。历史运行中保存的模型设置会保留。',
   },
   'providers.m7': {
     ko: '목록 조회 실패',
@@ -1141,10 +1141,10 @@ export const messages = {
     zh: '上下文和时间限制',
   },
   'providers.m230': {
-    ko: '앱 기본값',
-    en: 'App default',
-    ja: 'アプリの既定値',
-    zh: '应用默认值',
+    ko: '기본값',
+    en: 'Default',
+    ja: '既定値',
+    zh: '默认值',
   },
   'providers.m234': {
     ko: '생성 옵션',
@@ -3085,10 +3085,10 @@ export const messages = {
     zh: '需要认证的测试服务器请输入 API 密钥。',
   },
   'providers.m612': {
-    ko: 'Gemini 모델 연결, Gemini Enterprise Agent Platform의 global 프로젝트 endpoint를 사용해요.',
-    en: 'Gemini model connection, uses a global project endpoint on Gemini Enterprise Agent Platform.',
-    ja: 'Geminiモデル接続、Gemini Enterprise Agent Platformのglobalプロジェクトエンドポイントを使用します。',
-    zh: 'Gemini 模型连接，使用 Gemini Enterprise Agent Platform 的 global 项目 endpoint。',
+    ko: 'Gemini 모델에 연결해요. 위치를 global로 두면 Google이 처리 위치를 정해요.',
+    en: 'Connects Gemini models. With the global location, Google chooses where requests run.',
+    ja: 'Geminiモデルに接続します。場所をglobalにするとGoogleが処理場所を決めます。',
+    zh: '连接 Gemini 模型。位置设为 global 时，由 Google 决定处理位置。',
   },
   'providers.m613': {
     ko: '등록한 Vertex 인증으로 Google Model Garden의 Gemini 목록을 조회할 수 있어요. 목록과 실제 모델 사용 권한은 Google Cloud 설정을 따라요.',
@@ -3145,16 +3145,10 @@ export const messages = {
     zh: '使用官方 API 基础地址和 API 密钥认证。',
   },
   'providers.m622': {
-    ko: 'Claude Opus 5의 Output Effort와 Thinking을 모델별 조합에 맞게 사용해요.',
-    en: 'Use Claude Opus 5 Output Effort and Thinking in combinations supported by each model.',
-    ja: 'Claude Opus 5のOutput EffortとThinkingを各モデルに対応した組み合わせで使用します。',
-    zh: '根据各模型支持的组合使用 Claude Opus 5 的 Output Effort 和 Thinking。',
-  },
-  'providers.m623': {
-    ko: '번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 JSON 형식으로 요청해요. 기본값은 일반 텍스트예요.',
-    en: 'Structured translation requests JSON containing source identifiers and translated text. Plain text is the default.',
-    ja: '翻訳の構造化出力を有効にすると、原文の識別情報と翻訳文をJSON形式で要求します。既定値はプレーンテキストです。',
-    zh: '启用翻译结构化输出后，会以 JSON 格式请求原文标识信息和译文。默认为纯文本。',
+    ko: 'Claude Opus 5의 추론 강도와 사고 모드를 모델이 지원하는 조합으로 사용해요.',
+    en: 'Uses Claude Opus 5 reasoning strength and thinking mode in combinations each model supports.',
+    ja: 'Claude Opus 5の推論強度と思考モードを、モデルが対応する組み合わせで使います。',
+    zh: '按模型支持的组合使用 Claude Opus 5 的推理强度和思考模式。',
   },
   'providers.m624': {
     ko: '모델 기본값을 선택하면 해당 설정을 보내지 않아요.',
@@ -3167,12 +3161,6 @@ export const messages = {
     en: 'Uses Chat Completions at the official Vercel API base URL.',
     ja: 'Vercel公式APIのベースURLでChat Completions形式を使用します。',
     zh: '在 Vercel 官方 API 基础地址使用 Chat Completions 格式。',
-  },
-  'providers.m626': {
-    ko: '번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 JSON 형식으로 요청해요. 기본값은 일반 텍스트예요.',
-    en: 'Structured translation requests JSON containing source identifiers and translated text. Plain text is the default.',
-    ja: '翻訳の構造化出力を有効にすると、原文の識別情報と翻訳文をJSON形式で要求します。既定値はプレーンテキストです。',
-    zh: '启用翻译结构化输出后，会以 JSON 格式请求原文标识信息和译文。默认为纯文本。',
   },
   'providers.m627': {
     ko: '모델 계열을 선택하면 OpenAI, Anthropic, Google, DeepSeek, xAI 계열의 생성 옵션을 같은 게이트웨이에서 사용할 수 있어요. providerOptions는 추가 라우팅이나 새 프로바이더 옵션용이에요.',
@@ -3217,10 +3205,10 @@ export const messages = {
     zh: '需要认证的提供商请输入 API 密钥。',
   },
   'providers.m634': {
-    ko: 'Chat Completions 지원 여부는 프로바이더에서 확인해 주세요. 번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 JSON 형식으로 요청해요.',
-    en: 'Verify Chat Completions support with the provider. Structured translation requests JSON containing source identifiers and translated text.',
-    ja: 'Chat Completionsへの対応はプロバイダーで確認してください。翻訳の構造化出力を有効にすると、原文の識別情報と翻訳文をJSON形式で要求します。',
-    zh: '请向提供商确认是否支持 Chat Completions。启用翻译结构化输出后，会以 JSON 格式请求原文标识信息和译文。',
+    ko: 'Chat Completions 지원 여부는 프로바이더에서 확인해 주세요.',
+    en: 'Verify Chat Completions support with the provider.',
+    ja: 'Chat Completionsへの対応はプロバイダーで確認してください。',
+    zh: '请向提供商确认是否支持 Chat Completions。',
   },
   'providers.m635': {
     ko: 'GPT-4o, 4.1, 5 및 o 계열의 공개 인코딩',

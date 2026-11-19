@@ -40,9 +40,7 @@ for (const width of [412]) {
     const save = dialog.getByRole('button', { name: '채팅 설정 저장', exact: true });
     await expect(save).toHaveCount(1);
     await expect(dialog.getByRole('button', { name: '설정 저장', exact: true })).toHaveCount(0);
-    await dialog
-      .getByLabel('Risu 작가 노트', { exact: true })
-      .fill('두 설정을 함께 저장하는 작가 노트');
+    await dialog.getByLabel('작가 노트', { exact: true }).fill('두 설정을 함께 저장하는 작가 노트');
     await dialog.getByText('고급 실행 설정', { exact: true }).click();
     const calls = dialog.getByLabel('작업당 모델 호출 한도', { exact: true });
     await calls.fill('0');
@@ -68,7 +66,7 @@ for (const width of [412]) {
       await expect(save).toBeDisabled();
       await expect(save).toHaveAttribute('aria-busy', 'true');
       await expect(calls).toBeDisabled();
-      await expect(dialog.getByLabel('Risu 작가 노트', { exact: true })).toBeDisabled();
+      await expect(dialog.getByLabel('작가 노트', { exact: true })).toBeDisabled();
       await save.evaluate((element: HTMLButtonElement) => element.click());
       expect(writes).toEqual(['profile', 'settings']);
     } finally {

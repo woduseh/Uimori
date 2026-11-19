@@ -474,10 +474,10 @@ export const messages = {
     zh: '小计仅累加已知费用，总估算费用仍未知。',
   },
   'reader.globalModelSettings': {
-    ko: '전역 모델 설정',
-    en: 'Global model settings',
-    ja: '全体のモデル設定',
-    zh: '全局模型设置',
+    ko: '역할별 모델',
+    en: 'Models by role',
+    ja: '役割別モデル',
+    zh: '按角色设置模型',
   },
   'reader.couldNotSaveYourEditsArePreserved': {
     ko: '저장하지 못했어요.',
@@ -1654,6 +1654,18 @@ export const messages = {
     en: 'Save response',
     ja: '応答を保存',
     zh: '保存回复',
+  },
+  'reader.sourceRevision': {
+    ko: '수정 번호',
+    en: 'Revision',
+    ja: 'リビジョン',
+    zh: '修订号',
+  },
+  'reader.parentRevision': {
+    ko: '이전 수정 번호',
+    en: 'Previous revision',
+    ja: '前のリビジョン',
+    zh: '上一修订号',
   },
   'reader.saveInput': {
     ko: '입력 저장',

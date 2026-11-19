@@ -289,7 +289,7 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
   ).toContainText('미확인');
   await usage
     .locator('summary')
-    .filter({ hasText: /본문\s*priced-fixture\s*completed/ })
+    .filter({ hasText: /본문\s*priced-fixture\s*완료/ })
     .click();
   const tokenUsage = usage.getByRole('definition');
   await expect(tokenUsage.filter({ hasText: /^1,500 토큰$/ })).toBeVisible();
@@ -338,7 +338,7 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
   await expect(pricing).toContainText('직접 입력 요금');
   await usage
     .locator('summary')
-    .filter({ hasText: /본문\s*unpriced-fixture\s*completed/ })
+    .filter({ hasText: /본문\s*unpriced-fixture\s*완료/ })
     .click();
   const unavailable = usage.getByRole('region', { name: '호출 추정 비용' }).last();
   const unknownTokens = usage.getByLabel('호출 토큰 사용량').last();

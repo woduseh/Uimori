@@ -72,7 +72,7 @@ test('I18N09 saving an author note keeps completion expiry and saved content acr
   await expect(page.getByTestId('source')).toHaveCount(1);
   await openChatSettings(page);
   await selectChatSettingsSection(page, '생성 설정');
-  const note = page.getByLabel('Risu 작가 노트', { exact: true });
+  const note = page.getByLabel('작가 노트', { exact: true });
   const value = '저장한 작가 노트 / author note 日本語 中文';
   await note.fill(value);
   await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
@@ -97,7 +97,7 @@ test('I18N09 saving an author note keeps completion expiry and saved content acr
   expect(after.profile?.authorNote).toBe(value);
   expect(after.sources).toEqual(detail.sources);
   expect(after.jobs).toEqual(detail.jobs);
-  await expect(page.getByLabel('Risu作家ノート', { exact: true })).toHaveValue(value);
+  await expect(page.getByLabel('作家ノート', { exact: true })).toHaveValue(value);
 });
 
 test('I18N07 a restarted service worker reads persisted UI locale for a synthetic push', async ({

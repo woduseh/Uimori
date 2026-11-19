@@ -1,5 +1,6 @@
 import { t, useI18n, translateMessage, formatNumber, formatDate } from './i18n.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
+import { labels } from './api.js';
 import { useState } from 'react';
 import type { Attempt } from '../core/product.js';
 import type { Run } from '../core/types.js';
@@ -365,7 +366,7 @@ function AttemptTable({
               <span className="ui-meta-row">
                 <span>{translateMessage(roleLabels[summary.role])}</span>
                 <span>{summary.modelId}</span>
-                <span>{summary.status}</span>
+                <span>{labels[summary.status] ?? summary.status}</span>
               </span>
               <small className="attempt-token-summary">
                 {t('visualpanels.inputOutput', {

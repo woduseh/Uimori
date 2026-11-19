@@ -487,7 +487,7 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
   return store.transaction(() => {
     const prior = promptWorkspace(store);
     if (prior.revision !== number(input.expectedRevision, 'model workspace revision'))
-      throw new HttpError(409, '전역 설정이 변경됐어요. 새로고침한 뒤 저장해 주세요.');
+      throw new HttpError(409, '설정이 다른 곳에서 바뀌었어요. 새로고침한 뒤 저장해 주세요.');
     const next = validatePromptWorkspace({
       ...prior,
       ...(Object.hasOwn(input, 'judgment') ? { judgment: input.judgment } : {}),

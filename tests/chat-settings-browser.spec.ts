@@ -120,14 +120,14 @@ test('SETTINGSLOCATION mobile opens the remembered available section and explici
   await expect(selector).toHaveValue('characters');
   await expect(dialog.getByRole('heading', { name: '사용 자료', exact: true })).toBeVisible();
   await selector.selectOption('prompts');
-  await expect(dialog.getByLabel('Risu 작가 노트', { exact: true })).toBeVisible();
+  await expect(dialog.getByLabel('작가 노트', { exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   dialog = await openSettings(page);
   await expect(dialog.getByRole('combobox', { name: '설정 영역 선택', exact: true })).toHaveValue(
     'prompts'
   );
   await expect(dialog.getByRole('heading', { name: '생성 설정', exact: true })).toBeVisible();
-  await dialog.getByRole('button', { name: '전역 모델 설정', exact: true }).click();
+  await dialog.getByRole('button', { name: '역할별 모델', exact: true }).click();
   const global = page.getByRole('dialog', { name: '설정', exact: true });
   await expect(global.getByRole('combobox', { name: '설정 영역 선택', exact: true })).toHaveValue(
     'models'
@@ -159,7 +159,7 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
     dialog.getByRole('checkbox', { name: '본문에서 페르소나 참조', exact: true })
   ).toHaveCount(0);
   await selectChatSettingsSection(page, '생성 설정');
-  await expect(dialog.getByRole('button', { name: '전역 모델 설정', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '역할별 모델', exact: true })).toBeVisible();
   await selectChatSettingsSection(page, '이미지');
   const image = dialog.getByRole('combobox', { name: '이미지 배치 담당', exact: true });
   await expect(dialog.getByLabel('번역 이미지 자동 배치', { exact: true })).toHaveCount(0);
@@ -463,7 +463,7 @@ test('CSUI04 quick persona and chat settings share persisted attachments and non
     await selectChatSettingsSection(page, '생성 설정');
     const alert = dialog.getByRole('alert');
     await expect(alert).toContainText('선택한 본문 모델을 사용할 수 없어');
-    const repair = dialog.getByRole('button', { name: '전역 모델 설정', exact: true });
+    const repair = dialog.getByRole('button', { name: '역할별 모델', exact: true });
     // Model controls follow automatic translation in this scrollable settings section.
     // Center the control rather than leaving its border clipped at the scrollport edge.
     await repair.evaluate((node) => node.scrollIntoView({ block: 'center' }));
@@ -567,7 +567,7 @@ test('CSUI08 automatic translation toggle persists per chat and reopens without 
   };
   let choice = dialog.getByRole('combobox', { name: '본문 생성 후 자동 번역', exact: true });
   await expect(choice.locator('option[value="inherit"]')).toHaveText(
-    `전체 기본값 따르기: ${globalDefault.autoTranslate ? '켜짐' : '꺼짐'}`
+    `기본값 따르기: ${globalDefault.autoTranslate ? '켜짐' : '꺼짐'}`
   );
   await expect(choice).toHaveValue('inherit');
   await choice.selectOption('on');

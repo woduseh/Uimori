@@ -61,7 +61,7 @@ test(`INTREG01 new-chat model detour restores draft and explicit new flow resets
   const opening = dialog.getByLabel('첫 메시지 선택', { exact: true });
   await opening.selectOption('');
   for (const dismissal of ['close', 'back']) {
-    await dialog.getByRole('button', { name: '전역 모델 설정', exact: true }).click();
+    await dialog.getByRole('button', { name: '역할별 모델', exact: true }).click();
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
     await expect(settings.locator('.app-settings-panel')).toBeVisible();
     if (dismissal === 'close')

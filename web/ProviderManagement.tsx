@@ -385,7 +385,7 @@ export function ConnectionEditor({
     }
     const next = {
       ...connectionDraft(item),
-      ...(copy ? { title: item.title + ' 복사', enabled: false } : {}),
+      ...(copy ? { title: item.title + t('shared.copySuffix'), enabled: false } : {}),
     };
     dispatchDraft({ type: 'connection.open', value: next, editing: copy ? undefined : item, copy });
     setError('');
@@ -405,7 +405,7 @@ export function ConnectionEditor({
     }
     const next = {
       ...modelDraft(item),
-      ...(copy ? { title: item.title + ' 복사' } : {}),
+      ...(copy ? { title: item.title + t('shared.copySuffix') } : {}),
     };
     dispatchDraft({ type: 'model.open', value: next, editing: copy ? undefined : item, copy });
     setModelSection('basic');

@@ -233,7 +233,7 @@ export function ThemeSettings({
     if (storyOnly) model.storyUi = { baseStyle: 'default', css: '' };
     storyUiDraft.current = model.storyUi;
     const isCopy = copy || !!theme?.id.startsWith('builtin:');
-    if (theme && isCopy) model.title += ' 사본';
+    if (theme && isCopy) model.title += t('shared.copySuffix');
     setDraft({
       id: theme && !isCopy ? theme.id : null,
       revision: theme && !isCopy ? theme.revision : undefined,

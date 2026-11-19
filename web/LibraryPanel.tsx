@@ -446,7 +446,7 @@ export function LibraryPanel({
             kind: 'content',
             sourceId: full.id,
             expectedSourceRevision: full.revision,
-            title: `${full.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')} 사본`,
+            title: `${full.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')}${t('shared.copySuffix')}`,
           }
         );
         const copy = result.saved as Content;
@@ -1454,13 +1454,13 @@ function ContentEditor({
         : await session.save(
             {
               kind: copyKind ?? value.kind,
-              title: copying ? value.title + ' 사본' : value.title,
+              title: copying ? value.title + t('shared.copySuffix') : value.title,
               description: value.description,
               text: value.text,
               loading: value.loading,
               relatedIds: [],
               package: copying
-                ? withNativeContentTitle(packageSnapshot(), value.title + ' 사본')
+                ? withNativeContentTitle(packageSnapshot(), value.title + t('shared.copySuffix'))
                 : packageSnapshot(),
             } satisfies ContentEditModel,
             { copy: copying }

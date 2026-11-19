@@ -103,7 +103,7 @@ describe('lore context UI boundaries', () => {
       };
     const before = structuredClone(snapshot),
       html = renderToStaticMarkup(createElement(LoreContextDiagnostics, { snapshot, reset: true }));
-    expect(html).toContain(`UTF-16 5–${5 + text.length}`);
+    expect(html).toContain(`UTF-16 5~${5 + text.length}`);
     expect(html).toContain('처음 읽은 원문 source-one');
     expect(html).toContain('Run run-one');
     expect(html).toContain('4자');
@@ -128,7 +128,7 @@ describe('lore context UI boundaries', () => {
       maxSelectedTokens: 5000,
       maxInputTokens: 28000,
     });
-    expect(() => parseLorePolicyDraft({ ...draft, threshold: '1.1' })).toThrow('0–1');
+    expect(() => parseLorePolicyDraft({ ...draft, threshold: '1.1' })).toThrow('0~1');
     expect(() => parseLorePolicyDraft({ ...draft, maxInputTokens: '262001' })).toThrow('262,000');
     expect(() => parseLorePolicyDraft({ ...draft, maxSelectedTokens: '' })).toThrow('입력');
   });

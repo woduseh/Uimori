@@ -76,11 +76,11 @@ test('CHATREC01 shared profile drafts survive reorganized memory and image secti
     exact: true,
   });
   await expect(prompt.locator('option').first()).toHaveText(
-    `전체 기본값 따르기: ${workspace.main.title}`
+    `기본값 따르기: ${workspace.main.title}`
   );
   const inherited = dialog
     .locator('.settings-inherited')
-    .filter({ hasText: '전체 채팅 설정에서 사용하는 프롬프트' });
+    .filter({ hasText: '기본값에서 사용하는 프롬프트' });
   await expect(inherited.locator('dd')).toHaveText(workspace.translation.title);
   await selectChatSettingsSection(page, '기억과 메모');
   await expect(dialog.getByLabel('조회 로어 토큰 한도', { exact: true })).toHaveValue('');

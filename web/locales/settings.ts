@@ -235,10 +235,10 @@ export const messages = {
     zh: '上下文摘要模型',
   },
   'settings.m24': {
-    ko: '세션 요약 길이',
-    en: 'Session summary length',
-    ja: 'セッション要約の長さ',
-    zh: '会话摘要长度',
+    ko: '채팅 요약 길이',
+    en: 'Chat summary length',
+    ja: 'チャット要約の長さ',
+    zh: '聊天摘要长度',
   },
   'settings.m25': {
     ko: '도우미 요약 길이',
@@ -493,10 +493,10 @@ export const messages = {
     zh: '关',
   },
   'settings.m75': {
-    ko: '전역 설정이 바뀌었어요.',
-    en: 'Global settings changed.',
-    ja: '全体設定が変更されました。',
-    zh: '全局设置已更改。',
+    ko: '역할별 모델 설정이 바뀌었어요.',
+    en: 'Models by role changed.',
+    ja: '役割別モデルの設定が変更されました。',
+    zh: '按角色设置模型已更改。',
   },
   'settings.m76': {
     ko: '초안은 유지했어요.',
@@ -553,10 +553,10 @@ export const messages = {
     zh: '生成正文后自动翻译',
   },
   'settings.m88': {
-    ko: '전체 기본값 따르기',
-    en: 'Follow global default',
-    ja: '全体の既定値に従う',
-    zh: '使用全局默认值',
+    ko: '기본값 따르기',
+    en: 'Follow default',
+    ja: '既定値に従う',
+    zh: '使用默认值',
   },
   'settings.m89': {
     ko: '이 채팅에서 켜기',
@@ -631,10 +631,10 @@ export const messages = {
     zh: '无法加载自动翻译默认值。',
   },
   'settings.m102': {
-    ko: '전체 자동 번역 기본값',
-    en: 'Global automatic translation default',
-    ja: '全体の自動翻訳既定値',
-    zh: '全局自动翻译默认值',
+    ko: '자동 번역 기본값',
+    en: 'Automatic translation default',
+    ja: '自動翻訳の既定値',
+    zh: '自动翻译默认值',
   },
   'settings.m103': {
     ko: '다시 불러오기',
@@ -853,7 +853,7 @@ export const messages = {
     zh: '写作前',
   },
   'settings.m141': {
-    ko: '메인이 필요할 때',
+    ko: '본문 모델이 필요할 때',
     en: 'When the writing model needs help',
     ja: '本文モデルが必要なとき',
     zh: '正文模型需要时',
@@ -1225,7 +1225,7 @@ export const messages = {
     zh: '固定资料词元上限',
   },
   'settings.m209': {
-    ko: '{v0}: {v1}–{v2} 사이의 정수를 입력해 주세요.',
+    ko: '{v0}: {v1}~{v2} 사이의 정수를 입력해 주세요.',
     en: 'Enter an integer between {v1} and {v2} for {v0}.',
     ja: '{v0}: {v1}～{v2}の整数を入力してください。',
     zh: '{v0}：请输入 {v1} 至 {v2} 之间的整数。',
@@ -1237,7 +1237,7 @@ export const messages = {
     zh: '请输入相关性阈值和词元上限。',
   },
   'settings.m211': {
-    ko: '관련성 기준은 0–1 사이로 입력해 주세요.',
+    ko: '관련성 기준은 0~1 사이로 입력해 주세요.',
     en: 'Enter a relevance threshold between 0 and 1.',
     ja: '関連性基準は0～1で入力してください。',
     zh: '相关性阈值请输入 0 至 1。',
@@ -1255,10 +1255,10 @@ export const messages = {
     zh: '判定输入词元上限',
   },
   'settings.m214': {
-    ko: '전역 기본값 적용',
-    en: 'Apply global defaults',
-    ja: '全体の既定値を適用',
-    zh: '应用全局默认值',
+    ko: '기본값 적용',
+    en: 'Apply defaults',
+    ja: '既定値を適用',
+    zh: '应用默认值',
   },
   'settings.m216': {
     ko: '미리보기를 구성하지 못했어요. 고정 자료 예산과 저장된 자료와 프롬프트를 확인해 주세요. ({v0})',
@@ -1327,7 +1327,7 @@ export const messages = {
     zh: '相关性阈值',
   },
   'settings.m227': {
-    ko: '0–1, 높일수록 관련성이 높은 로어만 포함해요.',
+    ko: '0~1, 높일수록 관련성이 높은 로어만 포함해요.',
     en: '0–1; higher values include only more relevant lore.',
     ja: '0～1。高いほど関連性の高いロアのみ含みます。',
     zh: '0至1，越高则仅包含相关性更高的设定。',
@@ -1927,7 +1927,7 @@ export const messages = {
     zh: '保留设定和读取来源，{v0}片段',
   },
   'settings.flow20': {
-    ko: 'v{v0}, UTF-16 {v1}–{v2}, {v3}자',
+    ko: 'v{v0}, UTF-16 {v1}~{v2}, {v3}자',
     en: 'v{v0}, UTF-16 {v1}–{v2}, {v3} characters',
     ja: 'v{v0}、UTF-16 {v1}–{v2}、{v3}文字',
     zh: 'v{v0}，UTF-16 {v1}–{v2}，{v3}字符',

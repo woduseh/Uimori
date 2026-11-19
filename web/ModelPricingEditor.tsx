@@ -3,7 +3,7 @@ import type { Connection, ModelPreset, VertexRequestTier } from '../core/product
 import type { PricingSnapshot } from '../core/pricing-types.js';
 import { resolveModelPricing, validateModelPricing } from '../core/model-pricing.js';
 import { ToggleRow } from './ToggleRow.js';
-import { formatUsd, pricingRateLabels, pricingNote } from './pricing-display.js';
+import { formatUsd, pricingRateLabels, pricingNote, serviceTierLabel } from './pricing-display.js';
 import {
   pricingDraft,
   pricingPayload,
@@ -33,7 +33,7 @@ function PricingSummary({
       <p className="ui-meta-row">
         <span>
           {context === 'attempt' ? t('providers.m475') : t('providers.m476')}:{' '}
-          <strong>{snapshot.serviceTier}</strong>
+          <strong>{serviceTierLabel(snapshot.serviceTier)}</strong>
         </span>
         <span>
           {snapshot.source === 'manual'

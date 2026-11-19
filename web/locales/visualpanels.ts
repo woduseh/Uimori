@@ -294,10 +294,10 @@ export const messages = {
     zh: '主题应用范围',
   },
   'visualpanels.workspaceDefault': {
-    ko: '작업실 기본',
-    en: 'Workspace default',
-    ja: 'ワークスペースの既定',
-    zh: '工作室默认',
+    ko: '기본값',
+    en: 'Default',
+    ja: '既定値',
+    zh: '默认值',
   },
   'visualpanels.currentBotDefault': {
     ko: '현재 봇의 기본',
@@ -1146,10 +1146,10 @@ export const messages = {
     zh: '删除插图预设',
   },
   'visualpanels.deletePresetBotsAndChatsUsingIt': {
-    ko: '‘{v0}’ 프리셋을 삭제해요. 이 항목을 선택한 봇과 채팅은 상위 설정을 따르고, 작업실 기본이었다면 기본 프리셋으로 돌아가요.',
-    en: 'Delete preset ‘{v0}’. Bots and chats using it will follow higher-level settings, and if it was the workspace default, it will revert to the built-in preset.',
-    ja: 'プリセット「{v0}」を削除します。これを選択していたボットとチャットは上位設定に従い、ワークスペースの既定だった場合は組み込みプリセットに戻ります。',
-    zh: '删除预设“{v0}”。选择此预设的机器人与聊天将遵循上级设置；若此前为工作室默认项，则恢复为内置预设。',
+    ko: '‘{v0}’ 프리셋을 삭제해요. 이 항목을 선택한 봇과 채팅은 상위 설정을 따르고, 기본값이었다면 내장 프리셋으로 돌아가요.',
+    en: 'Delete preset ‘{v0}’. Bots and chats using it will follow higher-level settings, and if it was the default, it will revert to the built-in preset.',
+    ja: 'プリセット「{v0}」を削除します。これを選択していたボットとチャットは上位設定に従い、既定値だった場合は組み込みプリセットに戻ります。',
+    zh: '删除预设“{v0}”。选择此预设的机器人与聊天将遵循上级设置；若此前为默认项，则恢复为内置预设。',
   },
   'visualpanels.presetDeleted': {
     ko: '프리셋을 삭제했어요.',

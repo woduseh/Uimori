@@ -690,10 +690,10 @@ export const messages = {
     zh: '无法处理请求。({status})',
   },
   'errors.modelRequired': {
-    ko: '전역 모델 설정에서 {role, select, main {본문} translation {번역} translationRefusal {번역 거절 판정} status {이전 보조 작업} image {이미지 배치} context {컨텍스트 압축} helper {도우미} illustration {삽화} other {모델}} 모델을 선택해 주세요.',
-    en: 'Select the {role, select, main {main} translation {translation} translationRefusal {translation refusal judgment} status {legacy auxiliary} image {image placement} context {context compaction} helper {assistant} illustration {illustration} other {required}} model in global model settings.',
-    ja: '全体モデル設定で{role, select, main {本文} translation {翻訳} translationRefusal {翻訳拒否判定} status {旧補助作業} image {画像配置} context {コンテキスト圧縮} helper {アシスタント} illustration {挿絵} other {対象}}モデルを選んでください。',
-    zh: '请在全局模型设置中选择{role, select, main {正文} translation {翻译} translationRefusal {翻译拒绝判定} status {旧辅助任务} image {图片排布} context {上下文压缩} helper {助手} illustration {插图} other {所需}}模型。',
+    ko: '설정 > 역할별 모델에서 {role, select, main {본문} translation {번역} translationRefusal {번역 거절 판정} status {이전 보조 작업} image {이미지 배치} context {컨텍스트 압축} helper {도우미} illustration {삽화} other {모델}} 모델을 선택해 주세요.',
+    en: 'Select the {role, select, main {main} translation {translation} translationRefusal {translation refusal judgment} status {legacy auxiliary} image {image placement} context {context compaction} helper {assistant} illustration {illustration} other {required}} model in Settings > Models by role.',
+    ja: '設定 > 役割別モデルで{role, select, main {本文} translation {翻訳} translationRefusal {翻訳拒否判定} status {旧補助作業} image {画像配置} context {コンテキスト圧縮} helper {アシスタント} illustration {挿絵} other {対象}}モデルを選んでください。',
+    zh: '请在设置 > 按角色设置模型中选择{role, select, main {正文} translation {翻译} translationRefusal {翻译拒绝判定} status {旧辅助任务} image {图片排布} context {上下文压缩} helper {助手} illustration {插图} other {所需}}模型。',
   },
   'errors.firstMessage': {
     ko: '첫 메시지',
@@ -720,10 +720,10 @@ export const messages = {
     zh: '尚未指定{role, select, main {正文} other {翻译}}模型。',
   },
   'errors.auxiliaryModelAction': {
-    ko: '전역 모델 설정에서 {role, select, main {본문} other {번역}} 모델을 선택하고 저장한 뒤 새 작업을 요청해 주세요.',
-    en: 'Select and save the {role, select, main {main} other {translation}} model in global model settings, then request a new task.',
-    ja: '全体モデル設定で{role, select, main {本文} other {翻訳}}モデルを選択して保存し、新たに作業を依頼してください。',
-    zh: '请在全局模型设置中选择并保存{role, select, main {正文} other {翻译}}模型，再发起新任务。',
+    ko: '설정 > 역할별 모델에서 {role, select, main {본문} other {번역}} 모델을 선택하고 저장한 뒤 새 작업을 요청해 주세요.',
+    en: 'Select and save the {role, select, main {main} other {translation}} model in Settings > Models by role, then request a new task.',
+    ja: '設定 > 役割別モデルで{role, select, main {本文} other {翻訳}}モデルを選択して保存し、新たに作業を依頼してください。',
+    zh: '请在设置 > 按角色设置模型中选择并保存{role, select, main {正文} other {翻译}}模型，再发起新任务。',
   },
   'errors.judgmentJev': {
     ko: '판단을 완료하지 못했어요. 연결을 확인해 주세요.',
@@ -1380,9 +1380,9 @@ export const messages = {
     zh: '请检查任务详情与连接。',
   },
   'errors.auxiliaryModelDetails': {
-    ko: '{role, select, main {본문} other {번역}} 모델이 지정되지 않았어요. 전역 모델 설정을 확인해 주세요.',
-    en: 'The {role, select, main {main} other {translation}} model is not specified. Check global model settings.',
-    ja: '{role, select, main {本文} other {翻訳}}モデルが指定されていません。全体モデル設定を確認してください。',
-    zh: '尚未指定{role, select, main {正文} other {翻译}}模型。请检查全局模型设置。',
+    ko: '{role, select, main {본문} other {번역}} 모델이 지정되지 않았어요. 설정 > 역할별 모델을 확인해 주세요.',
+    en: 'The {role, select, main {main} other {translation}} model is not specified. Check Settings > Models by role.',
+    ja: '{role, select, main {本文} other {翻訳}}モデルが指定されていません。設定 > 役割別モデルを確認してください。',
+    zh: '尚未指定{role, select, main {正文} other {翻译}}模型。请检查设置 > 按角色设置模型。',
   },
 };

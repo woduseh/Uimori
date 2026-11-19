@@ -137,12 +137,6 @@ export const messages = {
     ja: '「{title}」を削除しますか？使用中の選択は既定の色に戻ります。',
     zh: '删除“{title}”？使用它的选择将恢复默认颜色。',
   },
-  'palettes.copySuffix': {
-    ko: ' 사본',
-    en: ' copy',
-    ja: 'のコピー',
-    zh: ' 副本',
-  },
   'palettes.defaultName': {
     ko: '새 팔레트',
     en: 'New palette',

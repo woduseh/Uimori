@@ -272,7 +272,7 @@ export function NativeRisuRegexEditor({
                         ...value.slice(0, index + 1),
                         {
                           ...structuredClone(entry),
-                          comment: `${regexText(entry.comment) || '정규식'} 사본`,
+                          comment: `${regexText(entry.comment) || '정규식'}${t('shared.copySuffix')}`,
                         },
                         ...value.slice(index + 1),
                       ])

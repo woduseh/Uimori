@@ -195,7 +195,7 @@ test('NSUI09 a deleted default discovered after library refresh requires an expl
     await expect(dialog.getByText('Harbor greets', { exact: false })).toHaveCount(0);
     await expect(dialog.getByText('미리보기', { exact: true })).toBeVisible();
     await dialog.getByLabel('첫 메시지 선택').selectOption('');
-    await expect(dialog.getByRole('button', { name: '전역 모델 설정', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: '역할별 모델', exact: true })).toBeVisible();
     await expect(dialog.getByLabel('시작 본문 모델', { exact: true })).toHaveCount(0);
     const options = dialog.locator('.new-story-options');
     await expect(options).not.toHaveAttribute('open');
@@ -431,7 +431,7 @@ test('NSQ02 multiple greetings require a choice and missing models retain the re
   await setCurrentModels(request, { main: null, translation: null });
   await page.reload();
   await openQuickChat(page, single.bot);
-  await expect(dialog.getByRole('button', { name: '전역 모델 설정', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '역할별 모델', exact: true })).toBeVisible();
   await expect(dialog.getByRole('button', { name: '채팅 만들기', exact: true })).toBeEnabled();
   expect(admissions).toEqual([]);
 });
@@ -768,7 +768,7 @@ test('NSQ05 an uncertain chat admission stops automatic and manual resubmission'
       );
       releaseRead();
       await failed;
-      const settings = dialog.getByLabel('새 채팅에 사용할 전역 설정', { exact: true });
+      const settings = dialog.getByLabel('새 채팅의 기본값', { exact: true });
       if (visualReview)
         await page.screenshot({
           path: info.outputPath(`audit2-new-chat-workspace-failed-${width}.png`),

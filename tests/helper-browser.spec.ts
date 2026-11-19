@@ -571,7 +571,7 @@ test('HELPMESSAGE a failed answer save retains the exact draft across reload and
   await page.getByRole('button', { name: '응답 수정', exact: true }).click();
   await answer.getByLabel('응답 수정', { exact: true }).fill(draft);
   state.failNextMessageMutation();
-  await answer.getByRole('button', { name: '입력 저장', exact: true }).click();
+  await answer.getByRole('button', { name: '응답 저장', exact: true }).click();
   await expect(panel.getByRole('alert')).toContainText('서버 작업을 완료하지 못했어요. (503)');
   await expect(answer.getByLabel('응답 수정', { exact: true })).toHaveValue(draft);
   expect(saved.text).not.toBe(draft);
@@ -617,6 +617,7 @@ test('HELPMESSAGE conflict review preserves request and response drafts in older
       exact: true,
     });
     const draft = `작성 중인 ${role} 초안`;
+    const saveLabel = role === 'user' ? '입력 저장' : '응답 저장';
     await input.fill(draft);
     saved.text = `다른 화면에서 저장한 ${role}`;
     view.conversation.revision++;
@@ -624,7 +625,7 @@ test('HELPMESSAGE conflict review preserves request and response drafts in older
       revision: view.conversation.revision,
       updatedMessage: { id: saved.id, text: saved.text },
     });
-    await article.getByRole('button', { name: '입력 저장', exact: true }).click();
+    await article.getByRole('button', { name: saveLabel, exact: true }).click();
     const dialog = page.locator('dialog[role="alertdialog"][open]');
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText(saved.text, { exact: true })).toBeVisible();
@@ -647,7 +648,7 @@ test('HELPMESSAGE conflict review preserves request and response drafts in older
     await dialog.getByRole('button', { name: '입력 유지하고 계속 편집', exact: true }).click();
     await expect(input).toHaveValue(draft);
     expect(saved.text).not.toBe(draft);
-    await article.getByRole('button', { name: '입력 저장', exact: true }).click();
+    await article.getByRole('button', { name: saveLabel, exact: true }).click();
     await expect(input).toHaveCount(0);
     expect(state.messageMutations.at(-1)?.expectedRevision).toBe(reviewedRevision);
     expect(saved.text).toBe(draft);
@@ -699,7 +700,7 @@ test('HELPMESSAGE local edit does not skip an unseen older message change', asyn
   await article.getByLabel('메시지 메뉴', { exact: true }).click();
   await page.getByRole('button', { name: '응답 수정', exact: true }).click();
   await article.getByLabel('응답 수정', { exact: true }).fill('현재 화면에서 수정한 응답');
-  await article.getByRole('button', { name: '입력 저장', exact: true }).click();
+  await article.getByRole('button', { name: '응답 저장', exact: true }).click();
   await expect(article.locator('.helper-prose')).toHaveText('현재 화면에서 수정한 응답');
   await expect(oldArticle.locator('.helper-prose')).not.toHaveText(old.text);
   releaseEvents();
@@ -865,7 +866,7 @@ test('HELPUI12 helper settings event refreshes an open model editor without repl
   expect(changed.ok()).toBe(true);
   state.emit('settings.updated');
 
-  await expect(editor.getByRole('alert')).toContainText('전역 설정이 바뀌었어요.', {
+  await expect(editor.getByRole('alert')).toContainText('역할별 모델 설정이 바뀌었어요.', {
     timeout: 15000,
   });
   await expect(draft).toHaveValue('9');
@@ -926,7 +927,7 @@ test('HELPMODEL rejected and uncertain helper changes require an explicit reread
     if (writes === 1)
       return route.fulfill({
         status: 409,
-        json: { error: '전역 설정이 변경됐어요. 새로고침한 뒤 저장해 주세요.' },
+        json: { error: '설정이 다른 곳에서 바뀌었어요. 새로고침한 뒤 저장해 주세요.' },
       });
     await route.fetch();
     await route.abort('failed');

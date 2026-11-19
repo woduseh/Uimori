@@ -53,7 +53,7 @@ test('READERREC initial reader loading becomes a recoverable error without losin
     await expect(skeleton).toBeVisible();
     await expect(skeleton).toHaveAttribute('aria-hidden', 'true');
     await expect(skeleton.locator('.reader-loading-skeleton-paragraph span')).toHaveCount(7);
-    await expect(page.getByText('사용 가능한 전역 본문 모델을 선택해 주세요.')).toHaveCount(0);
+    await expect(page.getByText('사용 가능한 기본 본문 모델을 선택해 주세요.')).toHaveCount(0);
     const spinner = loading.locator('svg');
     await expect(spinner).toHaveCSS('animation-name', 'activity-spin');
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -133,10 +133,10 @@ test('READERREC missing model warning waits for reader and model lookup to finis
     await expect(
       page.getByRole('button', { name: /현재 본문 모델: 본문 모델을 확인하고 있어요/ })
     ).toBeVisible();
-    await expect(page.getByText('사용 가능한 전역 본문 모델을 선택해 주세요.')).toHaveCount(0);
+    await expect(page.getByText('사용 가능한 기본 본문 모델을 선택해 주세요.')).toHaveCount(0);
     await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeDisabled();
     releaseLibrary();
-    await expect(page.getByText('사용 가능한 전역 본문 모델을 선택해 주세요.')).toBeVisible();
+    await expect(page.getByText('사용 가능한 기본 본문 모델을 선택해 주세요.')).toBeVisible();
     await expect(
       page.getByRole('button', { name: '현재 본문 모델: 본문 모델을 선택해 주세요' })
     ).toBeVisible();
@@ -161,7 +161,7 @@ test('READERREC a failed model-settings read offers retry instead of a missing-m
     await expect(page.getByTestId('source')).toHaveCount(1);
     const error = page.getByRole('alert').filter({ hasText: '모델 설정을 확인하지 못했어요.' });
     await expect(error).toBeVisible();
-    await expect(page.getByText('사용 가능한 전역 본문 모델을 선택해 주세요.')).toHaveCount(0);
+    await expect(page.getByText('사용 가능한 기본 본문 모델을 선택해 주세요.')).toHaveCount(0);
     await error.getByRole('button', { name: '다시 불러오기' }).click();
     await expect(error).toHaveCount(0);
   } finally {

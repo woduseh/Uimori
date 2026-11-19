@@ -245,7 +245,7 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
   await page.getByLabel('프로바이더와 모델 검색').fill(title);
   await openProviderMenu(page, '프로바이더', title);
   await page.getByRole('button', { name: title + ' 프로바이더 복제', exact: true }).click();
-  await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title + ' 복사');
+  await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title + ' 사본');
   await expect(form.getByLabel('이 프로바이더 사용')).not.toBeChecked();
   await expect(form.getByLabel('API 키')).toHaveValue('');
   expect(
@@ -253,10 +253,10 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
   ).toHaveLength(1);
   await form.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
   await expect(
-    page.getByRole('status').filter({ hasText: title + ' 복사 프로바이더 등록됨' })
+    page.getByRole('status').filter({ hasText: title + ' 사본 프로바이더 등록됨' })
   ).toBeVisible();
   const copied = (await library(request)).connections.find(
-    (item) => item.title === title + ' 복사'
+    (item) => item.title === title + ' 사본'
   )!;
   expect(copied.id).not.toBe(original.id);
   expect(copied.enabled).toBe(false);
@@ -374,7 +374,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   });
   await openProviderMenu(page, '모델', changed.title);
   await page.getByRole('button', { name: changed.title + ' 모델 복제', exact: true }).click();
-  await expect(form.getByLabel('모델 프리셋 이름')).toHaveValue(changed.title + ' 복사');
+  await expect(form.getByLabel('모델 프리셋 이름')).toHaveValue(changed.title + ' 사본');
   expect(
     (await library(request)).models.filter((item) => item.title.startsWith(title))
   ).toHaveLength(1);
@@ -386,7 +386,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
     )
     .toBe(2);
   const copied = (await library(request)).models.find(
-    (item) => item.title === changed.title + ' 복사'
+    (item) => item.title === changed.title + ' 사본'
   )!;
   expect(copied.id).not.toBe(original.id);
   expect(copied).toMatchObject({
@@ -1394,6 +1394,10 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   });
   await selectSettingsSection(page, 'Codex 연결');
   await panel.getByRole('button', { name: '연결 해제', exact: true }).click();
+  await page
+    .getByRole('alertdialog', { name: 'Codex 연결을 해제할까요?', exact: true })
+    .getByRole('button', { name: '연결 해제', exact: true })
+    .click();
   await expect(panel).toContainText('로그인 필요');
   available = false;
   await selectSettingsSection(page, '앱 정보');
