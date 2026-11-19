@@ -11,7 +11,7 @@ Uimori is a personal creative-writing web app for reading long manuscripts and c
 
 > **Current version `v0.13.1` · DB schema 15**
 >
-> This patch adds library folder covers, improves helper interactions and translation illustration placement, and reduces reader and translation overhead. See the [release notes](docs/releases/v0.13.1.md) and [update guide](docs/UPDATES.md).
+> This patch adds library folder covers, improves helper interactions and translation illustration placement, strengthens story UI error recovery, and reduces reader and translation overhead. See the [release notes](docs/releases/v0.13.1.md) and [update guide](docs/UPDATES.md).
 
 > [!NOTE]
 > The detailed guides under `docs/` are written in Korean. The app interface itself supports English.
@@ -49,7 +49,7 @@ Notes:
 4. **Translate**: Select **Generate translation** on a manuscript to start translating. Open saved translations with **View translation**, and request failed ones again with **Retry translation**.
    - Switching views of a saved translation and saving source or translation edits do not call a model.
 
-> **JEV (optional)**: Choosing **TypeSafe AI** when adding a provider registers **JEV** in the model list. JEV handles refusal checks for text and translations and lore relevance; existing image placement uses either the writing model or JEV. Only features that use JEV need its key. New workspaces start with refusal checks off for both writing and translation.
+> **Judgment provider and JEV (optional)**: Refusal checks for text and translations, lore relevance, image placement and pre-generation checks share one judgment provider, chosen under **Settings → Models by role → Judgment provider**. The default is **TypeSafe AI / JEV**; choosing **TypeSafe AI** when adding a provider registers JEV in the model list, and OpenAI, Gemini or compatible APIs can be selected instead. Existing image placement uses either the writing model or the judgment model. Only features that use the judgment provider need its key. New workspaces start with refusal checks off for both writing and translation.
 
 Choose the interface language in **Settings → General → Interface language**: Korean, English, Japanese or Simplified Chinese. The choice is stored in the browser and does not change manuscripts, saved translations, or the target language of generation and translation. See [language settings and scope](docs/I18N.md).
 

@@ -45,7 +45,7 @@ Modified MIT를 따라요. 각 원저작권과 라이선스 고지를 함께 배
 
 ## UI message formatting
 
-The browser uses `intl-messageformat` 12.1.4 from [FormatJS](https://github.com/formatjs/formatjs)
+The browser uses `intl-messageformat` 12.2.0 from [FormatJS](https://github.com/formatjs/formatjs)
 under BSD-3-Clause, without modifying its source. Its copyright and license are preserved in
 [intl-messageformat-LICENSE.md](third_party/formatjs/intl-messageformat-LICENSE.md).
 Its `@formatjs/fast-memoize`, `@formatjs/icu-messageformat-parser`, and
@@ -60,7 +60,7 @@ Its `@formatjs/fast-memoize`, `@formatjs/icu-messageformat-parser`, and
 
 ## Web Push delivery dependencies
 
-Optional browser completion notifications use `web-push` 3.6.7
+Optional browser completion notifications use `web-push` 4.0.0
 (<https://github.com/web-push-libs/web-push>), distributed under the **Mozilla
 Public License 2.0 (MPL-2.0)**, without modifying that package's source. Its
 license and notices remain in the installed package. HTTP delivery uses the runtime's standard fetch; Uimori no longer directly

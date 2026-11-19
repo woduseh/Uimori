@@ -62,7 +62,7 @@ Tailscale 기기 이름은 `sudo tailscale set --hostname=<새이름>`으로 바
 
 ## 배포 확인과 운영
 
-- 인증서 경고 없이 HTTPS로 열리고, 로그인 전 `/api/library`와 `/api/export`가 401인지 확인해요.
+- 인증서 경고 없이 HTTPS로 열리고, 로그인 전 `/api/library`와 `/api/prompt-workspace`가 401인지 확인해요.
 - 허용하지 않은 Host·Origin이 거절되고, 로그인·저장·실시간 갱신이 작동하는지 확인해요. 앱은 원래 공개 Host·Origin을 검사하므로 프록시에서 이 값을 임의로 바꾸지 않아요.
 - `4310`이 loopback에서만 수신하는지, 기존 다른 서비스의 접속 설정이 유지되는지 확인해요.
 - 재시작 후 접속과 저장 내용이 유지되는지 확인하고 SQLite 백업은 별도로 보관해요. 서버 재시작만으로 기존 로그인 세션이 해제되지는 않아요.

@@ -3,7 +3,7 @@
 | Responsibility | Entry points | Current contract |
 | --- | --- | --- |
 | New-chat generation defaults and per-chat call limits | `core/chat-settings.ts`, `server/chat-generation-defaults.ts`, `server/store.ts`, `web/ChatGenerationDefaults.tsx`, `web/RuntimeSettings.tsx` | [Context limits](CONTEXT-LIMITS.md#새-채팅-생성-기본값) |
-| UI language, retained messages and localized display formats | `web/i18n.ts`, `web/LanguageSelect.tsx`, `web/locales/`, `web/api-errors.ts`, `web/pwa.ts`, `web/public/sw.js` | [UI language](I18N.md) |
+| UI language, retained messages and localized display formats | `web/i18n.ts`, `web/LanguageSelect.tsx`, `web/locales/`, `vite.config.ts` (per-language catalog chunks), `web/api-errors.ts`, `web/pwa.ts`, `web/public/sw.js` | [UI language](I18N.md) |
 | Composition, writing briefs and source-linked review | `core/outline.ts`, `server/outline-read.ts`, `server/outline-store.ts`, `server/outline-routes.ts`, `web/OutlinePanel.tsx` | [Outline workspace](OUTLINE.md) |
 | Optional automatic original-work reference and helper Q&A context | `core/story-guide.ts`, `server/story-guide-store.ts`, `server/story-guide-runtime.ts`, `server/story-guide-routes.ts`, `server/helper-context.ts`, `web/StoryGuidePanel.tsx` | [Original-work reference](STORY-GUIDE.md) |
 | Resource editing and local recovery | `web/resource-editor-session.ts`, `web/resource-editor.tsx`, `server/resource-service.ts`, `server/resource-routes.ts` | [Editing](EDITING.md) |
@@ -43,7 +43,7 @@
 | Automatic translation and final request notifications | `server/auto-translation-defaults.ts`, `web/AutoTranslationDefaults.tsx`, `server/store.ts`, `server/source-editing.ts`, `server/push-events.ts`, `server/push-service.ts`, `web/RuntimeSettings.tsx`, `web/PushSettings.tsx`, `web/public/sw.js` | [PWA and push](PWA.md) |
 | Bot translation guides | `core/translation-guide.ts`, `server/translation-guide.ts`, `web/TranslationGuideEditor.tsx` | [Translation guides](TRANSLATION-GUIDES.md) |
 
-Theme resources and selection: `core/themes.ts`, `server/themes.ts`, `web/ThemeContext.tsx`, `web/ThemeSettings.tsx`, `web/ThemeFrame.tsx`. [Authoring and usage](THEME-AUTHORING.md).
+Theme resources and selection: `core/themes.ts`, `server/themes.ts`, `web/ThemeContext.tsx`, `web/ThemeSettings.tsx`, `web/ThemeFrame.tsx`. Theme-owned fonts and images: `server/theme-assets.ts`, `core/builtin-theme-assets.ts`, `web/theme-assets.ts`, `web/ThemeAssetEditor.tsx`. [Authoring and usage](THEME-AUTHORING.md).
 Standalone palettes and uploaded fonts: `core/theme-palettes.ts`, `core/fonts.ts`, `server/fonts.ts`, `web/PaletteSettings.tsx`, `web/FontContext.tsx`, `web/FontSettings.tsx`. Helper registration and selection: `server/helper-presentation-tools.ts`.
 
 Operational failures remain in task status, provider error details and execution inputs. `server/execution-diagnostics.ts`, `server/product-store.ts` and `server/helper-task-tools.ts` own bounded retained tool traces, provider attempt timing and opt-in paged diagnosis; there is no separate anonymous diagnostic-report generator. See [Troubleshooting](DIAGNOSTICS.md).

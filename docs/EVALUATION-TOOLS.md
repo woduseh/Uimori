@@ -8,7 +8,7 @@ Enable evaluation tools in the model preset's advanced settings and select conte
 
 - `model-selected` exposes all four tools.
 - `preloaded` supplies context and reviewer call/result pairs in the initial input, exposes case creation and submission, and requires case creation on the first round.
-- In `preloaded`, the first case round uses the preset's generation settings by default (`configured`). Optional `economized` mode caps output at 8,000 tokens and lowers an already-configured reasoning effort to `low`, retaining `none` and leaving unsupported or omitted settings alone. This control is hidden and has no effect in other modes; switching modes preserves the saved value.
+- In `preloaded`, the first case round uses the preset's generation settings by default (`configured`). Optional `economized` mode caps output at 8,000 tokens and lowers an already-configured reasoning effort to `low`, retaining `none` and `minimal`, lowers an already-configured output effort to `low`, and leaves unsupported or omitted settings alone. This control is hidden and has no effect in other modes; switching modes preserves the saved value.
 
 The session ID and one-hour expiry remain fixed across a run. Case creation records the request classification and returns a session receipt. The context, reviewer, and receipt text reproduce the imported protocol's claims about a reviewer, IAM, and authorization; these are tool payloads, not independently established external authority.
 
