@@ -1566,6 +1566,24 @@ export const messages = {
     ja: 'フォルダー名を変更',
     zh: '重命名文件夹',
   },
+  'transfer.deleteFolderTitle': {
+    ko: '‘{name}’ 폴더를 삭제할까요?',
+    en: 'Delete the “{name}” folder?',
+    ja: '「{name}」フォルダーを削除しますか？',
+    zh: '要删除“{name}”文件夹吗？',
+  },
+  'transfer.deleteBotFolderMessage': {
+    ko: '폴더 안의 봇은 미분류로 옮겨져요.',
+    en: 'Bots in the folder move to Uncategorized.',
+    ja: 'フォルダー内のボットは未分類に移動します。',
+    zh: '文件夹中的机器人将移到未分类。',
+  },
+  'transfer.deleteChatFolderMessage': {
+    ko: '폴더 안의 채팅은 미분류로 옮겨져요.',
+    en: 'Chats in the folder move to Uncategorized.',
+    ja: 'フォルダー内のチャットは未分類に移動します。',
+    zh: '文件夹中的聊天将移到未分类。',
+  },
   'transfer.m300': {
     ko: '봇을 유지하고 폴더 삭제',
     en: 'Delete folder and keep bots',

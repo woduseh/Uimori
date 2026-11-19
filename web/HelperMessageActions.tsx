@@ -31,6 +31,7 @@ export function HelperDeleteActions({
         <button
           key={scope}
           type="button"
+          className="danger"
           disabled={disabled || busy}
           aria-haspopup="dialog"
           onClick={() => {

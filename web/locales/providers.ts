@@ -2280,6 +2280,18 @@ export const messages = {
     ja: 'ログインをキャンセル',
     zh: '取消登录',
   },
+  'providers.codexDisconnectTitle': {
+    ko: 'Codex 연결을 해제할까요?',
+    en: 'Disconnect Codex?',
+    ja: 'Codex の接続を解除しますか？',
+    zh: '要断开 Codex 吗？',
+  },
+  'providers.codexDisconnectMessage': {
+    ko: '서버에 저장된 Codex 인증이 지워져요. 다시 쓰려면 로그인해야 해요.',
+    en: 'The Codex sign-in stored on the server is removed. Sign in again to use it.',
+    ja: 'サーバーに保存された Codex の認証が消去されます。再び使うにはログインが必要です。',
+    zh: '服务器上保存的 Codex 登录信息将被删除。再次使用需要重新登录。',
+  },
   'providers.m462': {
     ko: '연결 해제',
     en: 'Disconnect',

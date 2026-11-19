@@ -1,0 +1,47 @@
+import { t, useI18n } from './i18n.js';
+import { Dialog } from './Dialog.js';
+import { CloseIcon } from './ui-icons.js';
+import './deletion.css';
+
+export function ConfirmDialog({
+  open,
+  title,
+  message,
+  action,
+  busy = false,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  title: string;
+  message: string;
+  action: string;
+  busy?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  useI18n();
+  return (
+    <Dialog
+      open={open}
+      title={title}
+      variant="confirmation"
+      role="alertdialog"
+      className="delete-dialog"
+      onClose={() => {
+        if (!busy) onCancel();
+      }}
+    >
+      <p>{message}</p>
+      <div className="form-actions">
+        <button type="button" className="secondary" disabled={busy} onClick={onCancel}>
+          <CloseIcon size={18} aria-hidden="true" />
+          {t('shared.cancel')}
+        </button>
+        <button type="button" className="delete-button" disabled={busy} onClick={onConfirm}>
+          {action}
+        </button>
+      </div>
+    </Dialog>
+  );
+}

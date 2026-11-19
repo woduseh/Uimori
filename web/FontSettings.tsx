@@ -14,6 +14,7 @@ import './fonts.css';
 import { MAX_FONT_BYTES } from '../core/fonts.js';
 import { LoadingState } from './LoadingState.js';
 import { readingSample, readingSampleCredit } from './reading-sample.js';
+import './deletion.css';
 export function FontSettings({
   onDirtyChange,
   onSaveHandlerChange,
@@ -293,6 +294,8 @@ export function FontSettings({
         open={!!deleting}
         title={t('fonts.deleteTitle')}
         variant="confirmation"
+        role="alertdialog"
+        className="delete-dialog"
         onClose={() => {
           if (!busy) setDeleting(null);
         }}
@@ -309,6 +312,7 @@ export function FontSettings({
           </button>
           <button
             type="button"
+            className="delete-button"
             disabled={busy}
             onClick={() => {
               if (!deleting) return;

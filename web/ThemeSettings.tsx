@@ -41,6 +41,7 @@ import { themeTemplate, ThemeFrame } from './ThemeFrame.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { Dialog } from './Dialog.js';
+import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import './themes.css';
@@ -123,6 +124,13 @@ export function ThemeSettings({
     backgroundSave.current = handler;
   }, []);
   const dirty = !!draft && JSON.stringify(draft.model) !== baseline;
+  const [closingDraft, setClosingDraft] = useState(false);
+  function closeDraft() {
+    setClosingDraft(false);
+    setDraft(null);
+    setPreview(null);
+    setError('');
+  }
   const { setPreview } = state;
   useEffect(() => {
     onDirtyChange?.(dirty || backgroundDirty || paletteDirty || fontDirty);
@@ -946,15 +954,24 @@ export function ThemeSettings({
                 label={t('visualpanels.cancelEditing')}
                 icon={CloseIcon}
                 disabled={busy || backgroundDirty || paletteDirty}
-                onClick={() => {
-                  setDraft(null);
-                  setPreview(null);
-                  setError('');
-                }}
+                onClick={() => (dirty ? setClosingDraft(true) : closeDraft())}
               />
             </div>
           </section>
         )}
+        <Dialog
+          open={closingDraft}
+          title={t('settings.m97')}
+          variant="confirmation"
+          onClose={() => setClosingDraft(false)}
+        >
+          <DraftDiscardActions
+            open={closingDraft}
+            onContinue={() => setClosingDraft(false)}
+            onDiscard={closeDraft}
+            discardLabel={t('visualpanels.discardChangesAndClose')}
+          />
+        </Dialog>
         {importNotice && <p role="status">{translateMessage(importNotice)}</p>}
         <p className="theme-help">
           {t('visualpanels.themeRecoveryHelp', {

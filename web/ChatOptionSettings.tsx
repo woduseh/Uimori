@@ -26,6 +26,7 @@ import {
   type OptionScope,
 } from './chat-option-draft.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
+import { ConfirmDialog } from './ConfirmDialog.js';
 
 type Values = Record<string, PromptValue>;
 type Props = {
@@ -55,6 +56,7 @@ export function ChatOptionSettings(props: Props) {
   const [latest, setLatest] = useState<ChatOptionState | null>(null);
   const [draft, setDraft] = useState<OptionDraft>({});
   const [scope, setScope] = useState<OptionScope>('fixed');
+  const [clearingFixed, setClearingFixed] = useState(false);
   const { fixed, oneoff } = base ? optionDraftValues(base, draft) : { fixed: {}, oneoff: {} };
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -338,11 +340,22 @@ export function ChatOptionSettings(props: Props) {
                 type="button"
                 className="secondary chat-options-reset"
                 disabled={blocked}
-                onClick={() => submit('fixed', 'fixed', { binding: base.binding, values: {} })}
+                onClick={() => setClearingFixed(true)}
               >
                 {t('chatsettings.m126')}
               </button>
             )}
+          <ConfirmDialog
+            open={clearingFixed}
+            title={t('chatsettings.clearFixedOptionsTitle')}
+            message={t('chatsettings.clearFixedOptionsMessage')}
+            action={t('chatsettings.m126')}
+            onCancel={() => setClearingFixed(false)}
+            onConfirm={() => {
+              setClearingFixed(false);
+              submit('fixed', 'fixed', { binding: base.binding, values: {} });
+            }}
+          />
         </fieldset>
         {displayState.pending.length > 0 && (
           <section aria-label={t('chatsettings.m130')} className="chat-options-pending">

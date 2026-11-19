@@ -4,6 +4,7 @@ import type { IllustrationAppearanceProfile } from '../core/illustration-profile
 import type { PackageImage } from '../core/package-images.js';
 import { IconButton } from './IconButton.js';
 import { ImageChoiceDialog } from './ImageChoiceDialog.js';
+import { NativeDeleteDialog } from './NativeDeleteDialog.js';
 import { t, useI18n } from './i18n.js';
 import './illustration-appearance.css';
 
@@ -18,6 +19,8 @@ export function IllustrationAppearanceEditor({
 }) {
   useI18n();
   const [picking, setPicking] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<IllustrationAppearanceProfile | null>(null);
+  const remove = (id: string) => onChange(value.filter((item) => item.id !== id));
   const edit = (id: string, change: Partial<IllustrationAppearanceProfile>) =>
     onChange(value.map((profile) => (profile.id === id ? { ...profile, ...change } : profile)));
   const selected = value.find((profile) => profile.id === picking);
@@ -80,7 +83,11 @@ export function IllustrationAppearanceEditor({
             <IconButton
               icon={Trash2}
               label={t('visuals.removeCharacterProfile')}
-              onClick={() => onChange(value.filter((item) => item.id !== profile.id))}
+              onClick={() =>
+                profile.name.trim() || profile.appearance.trim() || profile.referenceImageId
+                  ? setRemoving(profile)
+                  : remove(profile.id)
+              }
             />
           </div>
         );
@@ -107,6 +114,15 @@ export function IllustrationAppearanceEditor({
           if (selected) edit(selected.id, { referenceImageId: id });
         }}
         onClose={() => setPicking(null)}
+      />
+      <NativeDeleteDialog
+        target={removing ? removing.name.trim() || t('visuals.characterName') : null}
+        action={t('visuals.removeCharacterProfile')}
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => {
+          if (removing) remove(removing.id);
+          setRemoving(null);
+        }}
       />
     </section>
   );

@@ -731,6 +731,18 @@ export const messages = {
     ja: '個別指定したオプションだけをこのチャットに適用します。残りは使用中の創作プロンプトの初期設定に従います。',
     zh: '仅覆盖的选项应用于此聊天，其余沿用所用创作提示词的默认设置。',
   },
+  'chatsettings.clearFixedOptionsTitle': {
+    ko: '고정 옵션을 모두 해제할까요?',
+    en: 'Clear all fixed options?',
+    ja: '固定オプションをすべて解除しますか？',
+    zh: '要清除全部固定选项吗？',
+  },
+  'chatsettings.clearFixedOptionsMessage': {
+    ko: '이 채팅에 고정한 값이 지워지고 기본값을 따라요.',
+    en: 'Values fixed for this chat are removed and the defaults apply.',
+    ja: 'このチャットに固定した値は消え、既定値に従います。',
+    zh: '为此聊天固定的值将被清除，并改用默认值。',
+  },
   'chatsettings.m126': {
     ko: '고정 옵션 모두 해제',
     en: 'Clear all fixed options',

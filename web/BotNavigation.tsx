@@ -3,6 +3,7 @@ import { LoadingState } from './LoadingState.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
 import { Dialog } from './Dialog.js';
+import { ConfirmDialog } from './ConfirmDialog.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -777,6 +778,7 @@ function FolderSettings({
   const [base, setBase] = useState(folder);
   const [edited, setEdited] = useState({ title: false, persona: false });
   const [discarding, setDiscarding] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const dirty = edited.title || edited.persona;
   const conflicted = folder.revision > base.revision;
   const [selectedContent, setSelectedContent] = useState<Content | null>(null);
@@ -918,12 +920,22 @@ function FolderSettings({
         type="button"
         className="bot-folder-release secondary"
         disabled={busy}
-        onClick={() => {
-          void onRemove();
-        }}
+        onClick={() => setRemoving(true)}
       >
         {t('transfer.m272')}
       </button>
+      <ConfirmDialog
+        open={removing}
+        title={t('transfer.deleteFolderTitle', { name: folder.title })}
+        message={t('transfer.deleteChatFolderMessage')}
+        action={t('transfer.m272')}
+        busy={busy}
+        onCancel={() => setRemoving(false)}
+        onConfirm={() => {
+          setRemoving(false);
+          void onRemove();
+        }}
+      />
       <Dialog
         open={discarding}
         title={t('transfer.m273')}

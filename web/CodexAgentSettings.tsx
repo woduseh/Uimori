@@ -10,6 +10,7 @@ import { CheckIcon, CopyIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
+import { ConfirmDialog } from './ConfirmDialog.js';
 import { TransientNotice } from './TransientNotice.js';
 import './codex-agent-settings.css';
 import { useEffect, useRef, useState } from 'react';
@@ -111,7 +112,8 @@ export function CodexAgentSettings({
     [error, setError] = useState(''),
     [refresh, setRefresh] = useState(0),
     [copied, setCopied] = useState(false),
-    [copyError, setCopyError] = useState('');
+    [copyError, setCopyError] = useState(''),
+    [disconnecting, setDisconnecting] = useState(false);
   const version = useRef(0),
     locked = useRef(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Explicit refresh restarts polling and its login deadline.
@@ -366,13 +368,23 @@ export function CodexAgentSettings({
                 type="button"
                 className="secondary"
                 disabled={busy}
-                onClick={() => {
-                  void action('/agent-runtimes/codex/session', 'DELETE');
-                }}
+                onClick={() => setDisconnecting(true)}
               >
                 {t('providers.m462')}
               </button>
             )}
+            <ConfirmDialog
+              open={disconnecting}
+              title={t('providers.codexDisconnectTitle')}
+              message={t('providers.codexDisconnectMessage')}
+              action={t('providers.m462')}
+              busy={busy}
+              onCancel={() => setDisconnecting(false)}
+              onConfirm={() => {
+                setDisconnecting(false);
+                void action('/agent-runtimes/codex/session', 'DELETE');
+              }}
+            />
           </div>
         </>
       )}

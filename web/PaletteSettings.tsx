@@ -17,6 +17,7 @@ import { Dialog } from './Dialog.js';
 import { CheckIcon } from './ui-icons.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import './palettes.css';
+import './deletion.css';
 
 type Draft = { id: string | null; revision?: number; model: PaletteDefinition };
 export function PaletteSettings({
@@ -346,13 +347,22 @@ export function PaletteSettings({
           if (!busy) setDeleting(null);
         }}
         variant="confirmation"
+        role="alertdialog"
+        className="delete-dialog"
       >
         <p>{t('palettes.deleteHelp', { title: deleting?.title ?? '' })}</p>
-        <div className="theme-library-actions">
-          <button disabled={busy} onClick={() => setDeleting(null)}>
-            {t('palettes.close')}
+        <div className="form-actions">
+          <button
+            type="button"
+            className="secondary"
+            disabled={busy}
+            onClick={() => setDeleting(null)}
+          >
+            {t('shared.cancel')}
           </button>
           <button
+            type="button"
+            className="delete-button"
             disabled={busy}
             onClick={() =>
               void run(async () => {

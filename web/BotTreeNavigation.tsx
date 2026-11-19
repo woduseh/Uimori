@@ -11,6 +11,7 @@ import {
 import { BotBranch, type Props } from './BotNavigation.js';
 import { ActionMenu } from './ActionMenu.js';
 import { Dialog } from './Dialog.js';
+import { ConfirmDialog } from './ConfirmDialog.js';
 import { IconButton } from './IconButton.js';
 import {
   AddIcon,
@@ -159,6 +160,7 @@ export const BotNavigation = memo(function BotNavigation(
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
   const [coverFolderId, setCoverFolderId] = useState<string | null>(null);
+  const [removingFolder, setRemovingFolder] = useState<LibraryFolder | null>(null);
   const [error, setError] = useState('');
   const lock = useRef(false);
   const dragEntry = useRef<{ entry: Entry; revision: number } | null>(null);
@@ -728,9 +730,7 @@ export const BotNavigation = memo(function BotNavigation(
                             <div className="action-menu-group">
                               <button
                                 disabled={busy}
-                                onClick={() =>
-                                  void mutate(`/library/folders/${entry.folder!.id}`, {}, 'DELETE')
-                                }
+                                onClick={() => setRemovingFolder(entry.folder!)}
                               >
                                 {t('transfer.m300')}
                               </button>
@@ -779,6 +779,19 @@ export const BotNavigation = memo(function BotNavigation(
           </div>
         </>
       )}
+      <ConfirmDialog
+        open={removingFolder !== null}
+        title={t('transfer.deleteFolderTitle', { name: removingFolder?.title ?? '' })}
+        message={t('transfer.deleteBotFolderMessage')}
+        action={t('transfer.m300')}
+        busy={busy}
+        onCancel={() => setRemovingFolder(null)}
+        onConfirm={() => {
+          const folder = removingFolder!;
+          setRemovingFolder(null);
+          void mutate(`/library/folders/${folder.id}`, {}, 'DELETE');
+        }}
+      />
       <LibraryFolderCoverDialog
         folder={coverFolder}
         portraits={coverFolder ? folderPortraits(coverFolder.id) : undefined}
