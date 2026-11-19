@@ -1553,6 +1553,12 @@ export const messages = {
     ja: 'ブックマークを追加、メモを編集',
     zh: '已添加书签，编辑笔记',
   },
+  'reader.bookmarkAdded': {
+    ko: '책갈피를 추가했어요.',
+    en: 'Bookmark added.',
+    ja: 'ブックマークを追加しました。',
+    zh: '已添加书签。',
+  },
   'reader.addBookmark': {
     ko: '책갈피 추가',
     en: 'Add bookmark',

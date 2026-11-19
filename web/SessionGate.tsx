@@ -1,6 +1,6 @@
 import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LanguageSelect } from './LanguageSelect.js';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import {
@@ -12,6 +12,8 @@ import {
 } from './api.js';
 
 type Session = { required: boolean; authenticated: boolean; maintenance?: MaintenanceStatus };
+
+export const SessionRequiredContext = createContext(false);
 
 export function SessionGate({ children }: { children: ReactNode }) {
   const { t } = useI18n();
@@ -64,7 +66,12 @@ export function SessionGate({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', visible);
     };
   }, []);
-  if (session && (!session.required || session.authenticated)) return <>{children}</>;
+  if (session && (!session.required || session.authenticated))
+    return (
+      <SessionRequiredContext.Provider value={session.required}>
+        {children}
+      </SessionRequiredContext.Provider>
+    );
   return (
     <main className="login">
       <a className="wordmark" href="/">
@@ -92,11 +99,14 @@ export function SessionGate({ children }: { children: ReactNode }) {
               rememberMaintenance(next.maintenance);
               setSession(next);
             } catch (error) {
-              setToken('');
+              const rejected = error instanceof ApiError && error.status === 401;
+              if (rejected) setToken('');
               setError(
-                error instanceof ApiError && error.status === 429
-                  ? uiMessage('outside.tooManyConnections')
-                  : uiMessage('outside.checkToken')
+                rejected
+                  ? uiMessage('outside.checkToken')
+                  : error instanceof ApiError && error.status === 429
+                    ? uiMessage('outside.tooManyConnections')
+                    : (error as Error).message
               );
             } finally {
               signingIn.current = false;
@@ -110,13 +120,14 @@ export function SessionGate({ children }: { children: ReactNode }) {
               aria-label={t('outside.token')}
               type="password"
               autoComplete="off"
+              autoFocus
               required
               value={token}
               onChange={(event) => setToken(event.target.value)}
             />
           </label>
           <button className="primary" disabled={busy}>
-            {t('outside.connect')}
+            {busy ? t('shared.working') : t('outside.connect')}
           </button>
         </form>
       )}

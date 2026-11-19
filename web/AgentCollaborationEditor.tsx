@@ -128,8 +128,9 @@ export function AgentCollaborationEditor({
         <button
           type="button"
           className="secondary ac-disclosure"
-          aria-expanded={expanded}
+          aria-expanded={expanded && collaboration.enabled}
           aria-controls={`${id}-content`}
+          disabled={!collaboration.enabled}
           onClick={() => onExpandedChange(!expanded)}
         >
           <ExpandIcon size={16} aria-hidden="true" />
@@ -138,7 +139,10 @@ export function AgentCollaborationEditor({
         <label className="ac-check ac-enable">
           <Switch
             checked={collaboration.enabled}
-            onChange={(event) => update({ enabled: event.target.checked })}
+            onChange={(event) => {
+              update({ enabled: event.target.checked });
+              if (event.target.checked) onExpandedChange(true);
+            }}
           />
           <span className="sr-only">{t('settings.m135')}</span>
         </label>
@@ -148,10 +152,16 @@ export function AgentCollaborationEditor({
           {t('settings.flow3', { v0: translateMessage(issue) })}
         </p>
       )}
-      <div id={`${id}-content`} hidden={!expanded}>
+      <div id={`${id}-content`} hidden={!expanded || !collaboration.enabled}>
         <div className="ac-content">
           {collaboration.enabled && (
             <div className="ac-settings">
+              <div className="ac-heading">
+                <h4>{t('settings.m162')}</h4>
+                <span className="muted">
+                  {t('settings.flow5', { v0: collaboration.agents.length })}
+                </span>
+              </div>
               <div className="ac-agents">
                 {collaboration.agents.map((agent, index) => {
                   const agentLabel = t('settings.m128', { v0: index + 1 });
@@ -309,12 +319,6 @@ export function AgentCollaborationEditor({
                 })}
               </div>
               <div className="ac-add">
-                <div className="ac-heading">
-                  <h4>{t('settings.m162')}</h4>
-                  <span className="muted">
-                    {t('settings.flow5', { v0: collaboration.agents.length })}
-                  </span>
-                </div>
                 <button
                   type="button"
                   className="secondary ac-add-trigger"
@@ -361,7 +365,10 @@ export function AgentCollaborationEditor({
                   type="button"
                   className="secondary"
                   disabled={!controls.length && !missingControls.length}
-                  onClick={() => setControlDialog(true)}
+                  onClick={() => {
+                    setControlGroup(collaboration.sharedControls.length ? 'selected' : 'all');
+                    setControlDialog(true);
+                  }}
                 >
                   <EditIcon size={18} aria-hidden="true" />
                   {t('settings.m171')}

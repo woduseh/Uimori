@@ -1,7 +1,7 @@
 import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { BookmarkPlus, Pencil } from 'lucide-react';
+import { BookmarkCheck, BookmarkPlus, Pencil } from 'lucide-react';
 import type { Bookmark } from '../core/reading-state.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { Dialog } from './Dialog.js';
@@ -9,6 +9,7 @@ import { DeleteButton } from './DeleteButton.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
+import { TransientNotice } from './TransientNotice.js';
 import { api } from './api.js';
 import './bookmarks.css';
 
@@ -157,6 +158,7 @@ export function BookmarkButton({
 }) {
   useI18n();
   const [saved, setSaved] = useState<Bookmark | null>(null);
+  const [notice, setNotice] = useState('');
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -183,11 +185,13 @@ export function BookmarkButton({
     }
     setBusy(true);
     setError('');
+    setNotice('');
     try {
       setSaved(
         await api<Bookmark>(`/chats/${pending.current.target.chatId}/bookmarks`, pending.current)
       );
       pending.current = null;
+      setNotice(uiMessage('reader.bookmarkAdded'));
     } catch (caught) {
       setError((caught as Error).message);
     } finally {
@@ -198,12 +202,13 @@ export function BookmarkButton({
     <>
       <IconButton
         label={saved ? t('reader.bookmarkAddedEditNote') : t('reader.addBookmark')}
-        icon={BookmarkPlus}
+        icon={saved ? BookmarkCheck : BookmarkPlus}
         size={18}
         className="scene-action"
         disabled={disabled || busy}
         onClick={() => void add()}
       />
+      <TransientNotice message={notice} />
       {error && (
         <span role="alert" className="error">
           {translateMessage(error)}

@@ -67,10 +67,6 @@
 .request-edit-buttons {
   flex-shrink: 0;
 }
-.request-edit-buttons > button[type="submit"] {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
 @media (hover: none), (pointer: coarse), (max-width: 600px) {
   .request-message-actions {
     opacity: 1;

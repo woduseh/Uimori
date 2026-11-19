@@ -47,7 +47,7 @@ export function DraftDiscardActions({
         </button>
         <button
           type="button"
-          className="draft-continue"
+          className={onSave ? 'secondary' : 'primary'}
           ref={continueButton}
           disabled={disabled || saving}
           onClick={onContinue}

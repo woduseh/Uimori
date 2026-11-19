@@ -671,7 +671,7 @@ export function NewStory({
                 const item = activeModules.find((item) => refValue(item) === key);
                 return (
                   <div className="new-story-module" key={key}>
-                    <ContentAvatar content={item} title={t('transfer.m346')} />
+                    <ContentAvatar content={item} />
                     <span>{item?.title ?? t('transfer.m347')}</span>
                     <button
                       type="button"
@@ -718,7 +718,7 @@ export function NewStory({
         {error && (
           <p className="error" role="alert">
             {translateMessage(error)}
-            {created.current && t('transfer.m352')}
+            {created.current && ` ${t('transfer.m352')}`}
           </p>
         )}
       </div>

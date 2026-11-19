@@ -187,7 +187,7 @@ const AppSettingsPanel = deferredPanel(
 const TasksPanel = deferredPanel('작업 현황', async () => ({
   default: (await import('./WorkspacePanels.js')).TasksPanel,
 }));
-const OutlinePanel = deferredPanel('계층형 플롯', async () => ({
+const OutlinePanel = deferredPanel('플롯', async () => ({
   default: (await import('./OutlinePanel.js')).OutlinePanel,
 }));
 
@@ -384,6 +384,9 @@ function App() {
   const optionsButton = useRef<HTMLButtonElement>(null);
   const requestImageInput = useRef<HTMLInputElement>(null);
   const [panel, setPanel] = useState<Panel>('');
+  const [outlineTarget, setOutlineTarget] = useState<{ nodeId: string; epoch: number } | null>(
+    null
+  );
   useEffect(() => {
     if (panel !== 'settings') setStoryUiThemeTarget(undefined);
   }, [panel]);
@@ -1983,7 +1986,10 @@ function App() {
                   key={`outline-focus:${s.selected}`}
                   chatId={s.selected}
                   headRevision={s.detail?.chat.headRevision}
-                  onOpen={() => setPanel('outline')}
+                  onOpen={(nodeId) => {
+                    setOutlineTarget({ nodeId, epoch: Date.now() });
+                    setPanel('outline');
+                  }}
                 />
                 <ActivityStatus
                   key={s.viewKey}
@@ -2870,6 +2876,7 @@ function App() {
           <OutlinePanel
             key={s.detail?.chat.id}
             state={s}
+            target={outlineTarget}
             onClose={() => setPanel('')}
             helperVisible={helperOpen}
             onToggleHelper={() => {

@@ -29,6 +29,11 @@
 .settings-desktop-panels > summary {
   font-weight: 500;
 }
+.settings-desktop-panels > h4 {
+  margin: 16px 0 0;
+  font-size: var(--font-body);
+  font-weight: 500;
+}
 .settings-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 44%);

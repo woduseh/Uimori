@@ -33,6 +33,13 @@
 .ui-icon-button:not(:hover, :focus-visible) > .ui-tooltip {
   visibility: hidden;
 }
+/* Touch browsers leave :hover on the tapped point, which can land on a control that a panel
+   opens underneath the finger. */
+@media (hover: none) {
+  .ui-icon-button:not(:focus-visible) > .ui-tooltip {
+    visibility: hidden;
+  }
+}
 .app-dialog > .dialog-header > .ui-icon-button:last-child > .ui-tooltip {
   position-area: block-start;
   position-try-fallbacks: --dialog-tooltip-side, flip-block, flip-inline;

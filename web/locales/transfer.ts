@@ -1830,12 +1830,6 @@ export const messages = {
     ja: '併用するモジュール',
     zh: '一同使用的模块',
   },
-  'transfer.m346': {
-    ko: '모듈 확인 중',
-    en: 'Reviewing module',
-    ja: 'モジュールを確認中',
-    zh: '正在检查模块',
-  },
   'transfer.m347': {
     ko: '모듈 확인 중…',
     en: 'Reviewing module…',

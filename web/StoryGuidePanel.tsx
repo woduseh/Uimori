@@ -278,8 +278,9 @@ function StoryGuideEditor({
             <p className="muted ui-meta-row">
               <span>{formatDate(loaded.brief.createdAt)}</span>
               <span>{loaded.brief.modelTitle}</span>
-              {loaded.brief.configRevision !== loaded.revision &&
-                t('prompts.uiBriefCreatedWithPreviousSettings')}
+              {loaded.brief.configRevision !== loaded.revision && (
+                <span>{t('prompts.uiBriefCreatedWithPreviousSettings')}</span>
+              )}
             </p>
             <div className="story-guide-result" aria-label={t('prompts.uiLastWritingBriefContent')}>
               <Prose text={loaded.brief.text} />

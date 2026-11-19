@@ -226,6 +226,7 @@ export function RequestMessage({
                         : t('reader.sendEditedRequest')
                 }
                 type="submit"
+                className="primary"
                 disabled={busy || (!onConfirm && (disabled || (!draft.trim() && !images?.length)))}
               />
             </div>

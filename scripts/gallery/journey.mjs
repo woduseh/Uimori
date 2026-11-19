@@ -40,7 +40,15 @@ export const journeys = [
       {
         id: 'new-chat',
         title: '새 채팅 대화상자',
-        actions: [{ click: { role: 'button', name: '$bot.main.title 새 채팅' } }],
+        actions: [
+          {
+            click: {
+              role: 'button',
+              name: '$bot.main.title 새 채팅',
+              within: { testid: 'library-panel' },
+            },
+          },
+        ],
         ready: { role: 'dialog', name: '새 채팅' },
       },
       {

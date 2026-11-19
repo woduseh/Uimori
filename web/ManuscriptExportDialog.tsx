@@ -26,7 +26,9 @@ export function ManuscriptExportDialog({
   const [to, setTo] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [reload, setReload] = useState(0);
   const active = useRef(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: A retry explicitly re-issues a read.
   useEffect(() => {
     const generation = ++active.current;
     if (!open) return;
@@ -56,7 +58,7 @@ export function ManuscriptExportDialog({
       controller.abort();
       active.current++;
     };
-  }, [open, chatId]);
+  }, [open, chatId, reload]);
   async function download() {
     if (!metadata || busy) return;
     const generation = active.current;
@@ -126,7 +128,9 @@ export function ManuscriptExportDialog({
               <select
                 value={from}
                 onChange={(event) => {
-                  setFrom(Number(event.target.value));
+                  const next = Number(event.target.value);
+                  setFrom(next);
+                  if (next > to) setTo(next);
                   setError('');
                 }}
               >
@@ -144,7 +148,9 @@ export function ManuscriptExportDialog({
               <select
                 value={to}
                 onChange={(event) => {
-                  setTo(Number(event.target.value));
+                  const next = Number(event.target.value);
+                  setTo(next);
+                  if (next < from) setFrom(next);
                   setError('');
                 }}
               >
@@ -168,6 +174,7 @@ export function ManuscriptExportDialog({
           loading={!error}
           error={translateMessage(error)}
           label={t('transfer.m204')}
+          onRetry={() => setReload((value) => value + 1)}
         />
       )}
       {metadata && !metadata.scenes.length && <p role="status">{t('transfer.m205')}</p>}
@@ -183,7 +190,7 @@ export function ManuscriptExportDialog({
         <button
           type="button"
           className="primary"
-          disabled={busy || !metadata?.scenes.length || (range && from > to)}
+          disabled={busy || !metadata?.scenes.length}
           onClick={() => void download()}
         >
           {busy ? t('transfer.m207') : t('transfer.m208')}

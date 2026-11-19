@@ -15,7 +15,7 @@ import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { IconButton } from './IconButton.js';
-import { CheckIcon, DeleteIcon, ImagesIcon, SearchIcon } from './ui-icons.js';
+import { CheckIcon, CloseIcon, DeleteIcon, ImagesIcon, SearchIcon } from './ui-icons.js';
 import './content-picker.css';
 import './native-risu-assets.css';
 import './deletion.css';
@@ -202,7 +202,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
                 key={image.id}
                 className={`secondary native-assets-tile${image.id === selected ? ' is-selected' : ''}`}
                 aria-pressed={image.id === selected}
-                onClick={() => setSelected(image.id)}
+                onClick={() => setSelected(image.id === selected ? '' : image.id)}
               >
                 <img src={`/api/package-image-blobs/${image.blobHash}`} alt="" loading="lazy" />
                 <span>{image.title}</span>
@@ -289,6 +289,12 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
                 icon={DeleteIcon}
                 disabled={busy}
                 onClick={() => setRemoving(active.id)}
+              />
+              <IconButton
+                label={t('shared.close', { title: active.title })}
+                icon={CloseIcon}
+                className="secondary"
+                onClick={() => setSelected('')}
               />
             </div>
           </aside>

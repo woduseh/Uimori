@@ -209,9 +209,16 @@ export function PushSettings() {
               disabled={busy || (!enabled && permission === 'denied')}
               onChange={(event) => void (event.target.checked ? enable() : disable())}
             />
-            {!enabled && permission === 'denied' && (
-              <button type="button" disabled={busy} onClick={recheck}>
-                <RefreshCw size={16} aria-hidden="true" /> {t('outside.checkPermission')}
+            {permission !== 'granted' && (enabled || permission === 'denied') && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={permission === 'denied' ? recheck : () => void enable()}
+              >
+                <RefreshCw size={16} aria-hidden="true" />
+                {permission === 'denied'
+                  ? t('outside.checkPermission')
+                  : t('outside.reconnectPush')}
               </button>
             )}
           </div>
@@ -239,18 +246,6 @@ export function PushSettings() {
             ))}
           </div>
           <div className="settings-service-actions">
-            {permission !== 'granted' && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={permission === 'denied' ? recheck : () => void enable()}
-              >
-                <RefreshCw size={16} aria-hidden="true" />
-                {permission === 'denied'
-                  ? t('outside.checkPermission')
-                  : t('outside.reconnectPush')}
-              </button>
-            )}
             <button
               type="button"
               disabled={busy || permission !== 'granted'}

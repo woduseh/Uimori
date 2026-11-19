@@ -7,7 +7,8 @@ import {
   type ThemeAssetKind,
 } from '../core/themes.js';
 import { IconButton } from './IconButton.js';
-import { t, useI18n } from './i18n.js';
+import { t, useI18n, message as uiMessage } from './i18n.js';
+import { TransientNotice } from './TransientNotice.js';
 import { readImportSource } from './import-source.js';
 import { themeAssetUrl, themeFontFamily, uploadThemeAsset } from './theme-assets.js';
 import './theme-asset-editor.css';
@@ -27,6 +28,17 @@ export function ThemeAssetEditor({
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [inputKey, setInputKey] = useState(0);
+  const [notice, setNotice] = useState('');
+  async function copy(variable: string) {
+    setNotice('');
+    try {
+      await navigator.clipboard.writeText(variable);
+      onError('');
+      setNotice(uiMessage('themeAssets.copied'));
+    } catch {
+      onError(uiMessage('helpers.m130'));
+    }
+  }
   const validName = /^[a-z][a-z0-9-]{0,31}$/u.test(name);
   async function add() {
     if (!file || !validName) return;
@@ -77,7 +89,7 @@ export function ThemeAssetEditor({
                 <IconButton
                   icon={Copy}
                   label={t('themeAssets.copy', { variable })}
-                  onClick={() => void navigator.clipboard?.writeText(variable)}
+                  onClick={() => void copy(variable)}
                 />
                 <IconButton
                   icon={Trash2}
@@ -132,6 +144,7 @@ export function ThemeAssetEditor({
           <Plus size={18} aria-hidden="true" /> {t('themeAssets.add')}
         </button>
       </div>
+      <TransientNotice message={notice} />
     </section>
   );
 }

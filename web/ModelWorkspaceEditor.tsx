@@ -142,6 +142,10 @@ export function ModelWorkspaceEditor({
     !Number.isFinite(draft.translationPolicy.judgment.threshold) ||
     draft.translationPolicy.judgment.threshold <= 0.5 ||
     draft.translationPolicy.judgment.threshold > 1;
+  const invalidMaxCalls =
+    !Number.isInteger(draft.translationPolicy.maxCalls) ||
+    draft.translationPolicy.maxCalls < 2 ||
+    draft.translationPolicy.maxCalls > 64;
   const invalidRetries =
     !Number.isInteger(draft.translationPolicy.maxRetries) ||
     draft.translationPolicy.maxRetries < 0 ||
@@ -154,9 +158,7 @@ export function ModelWorkspaceEditor({
       (!judgmentConnection || !judgment.modelId.trim())) ||
     invalidMainThreshold ||
     invalidRetries ||
-    !Number.isInteger(draft.translationPolicy.maxCalls) ||
-    draft.translationPolicy.maxCalls < 2 ||
-    draft.translationPolicy.maxCalls > 64 ||
+    invalidMaxCalls ||
     invalidTranslationThreshold;
   async function save() {
     if (!draft || lock.current || invalid) return false;
@@ -471,6 +473,7 @@ export function ModelWorkspaceEditor({
                 <input
                   id="translation-call-limit"
                   aria-label={t('settings.m46')}
+                  aria-invalid={invalidMaxCalls || undefined}
                   type="number"
                   min={2}
                   max={64}
@@ -511,6 +514,7 @@ export function ModelWorkspaceEditor({
                     <input
                       id="main-refusal-threshold"
                       aria-label={t('settings.m53')}
+                      aria-invalid={invalidMainThreshold || undefined}
                       type="number"
                       min="0.51"
                       max="1"
@@ -554,6 +558,7 @@ export function ModelWorkspaceEditor({
                     <input
                       id="translation-refusal-threshold"
                       aria-label={t('settings.m57')}
+                      aria-invalid={invalidTranslationThreshold || undefined}
                       type="number"
                       min="0.51"
                       max="1"
@@ -602,6 +607,7 @@ export function ModelWorkspaceEditor({
                     <input
                       id="translation-refusal-retries"
                       aria-label={t('settings.m59')}
+                      aria-invalid={invalidRetries || undefined}
                       type="number"
                       min={0}
                       max={5}
@@ -819,7 +825,18 @@ export function ModelWorkspaceEditor({
           const modelName = (ref: ModelRef | null | undefined) =>
             library.models.find((model) => model.id === ref?.id)?.title ??
             (ref ? t('settings.m38') : t('settings.m68'));
+          const savedJudgment = value.judgment ?? DEFAULT_JUDGMENT_SELECTION;
           return () => [
+            { label: t('settings.m4'), value: modelName(value.routes.main) },
+            { label: t('settings.m16'), value: modelName(value.routes.translation) },
+            {
+              label: t('settings.judgmentProvider'),
+              value:
+                savedJudgment.provider === 'openai-compatible' ||
+                savedJudgment.provider === 'typesafe-compatible'
+                  ? t('settings.judgmentCompatible')
+                  : judgmentProviderNames[savedJudgment.provider],
+            },
             { label: t('settings.m69'), value: modelName(value.titleModel) },
             { label: t('settings.m20'), value: modelName(value.helperModel) },
             { label: t('settings.m70'), value: modelName(value.contextModel) },

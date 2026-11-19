@@ -31,7 +31,6 @@ import {
   themeDefinition,
   validateTheme,
   type Theme,
-  type ThemeColorKey,
   type ThemeDefinition,
   type ThemeCatalog,
 } from '../core/themes.js';
@@ -55,18 +54,6 @@ import { ThemeAssetEditor } from './ThemeAssetEditor.js';
 import { adoptThemeFile, exportThemeFile } from './theme-assets.js';
 
 type Draft = { id: string | null; revision?: number; model: ThemeDefinition };
-const labels: Partial<Record<ThemeColorKey, string>> = {
-  bg: '바탕',
-  nav: '사이드바',
-  panel: '패널',
-  surface: '표면',
-  text: '본문',
-  muted: '보조 글자',
-  accent: '강조',
-  'accent-ink': '강조 위 글자',
-  line: '구분선',
-  user: '요청 배경',
-};
 function paletteTitle(palette?: { title: string; revision?: number }) {
   return palette
     ? palette.revision === undefined
@@ -852,7 +839,7 @@ export function ThemeSettings({
               <div className="theme-colors">
                 {THEME_COLOR_KEYS.map((key) => (
                   <label key={key}>
-                    <span>{translateMessage(labels[key] ?? key)}</span>
+                    <span>{t(`palettes.color.${key}`)}</span>
                     <div>
                       <input
                         type="color"
@@ -861,7 +848,7 @@ export function ThemeSettings({
                             mode === 'light'
                               ? t('visualpanels.lightColors')
                               : t('visualpanels.darkColors'),
-                          v1: translateMessage(labels[key] ?? key),
+                          v1: t(`palettes.color.${key}`),
                         })}
                         value={colorInputValue(
                           draft.model.colors[mode][key] ?? baselineThemeColors[mode][key]
@@ -883,7 +870,7 @@ export function ThemeSettings({
                             mode === 'light'
                               ? t('visualpanels.lightColors')
                               : t('visualpanels.darkColors'),
-                          v1: translateMessage(labels[key] ?? key),
+                          v1: t(`palettes.color.${key}`),
                         })}
                         disabled={!draft.model.colors[mode][key]}
                         onClick={() => {

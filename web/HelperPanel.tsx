@@ -2051,12 +2051,11 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                 </div>
               )}
               {displayEditor && !currentResource && (
-                <details className="helper-context-chip helper-editor">
-                  <summary>
+                <div className="helper-context-chip helper-editor helper-editor-draft">
+                  <span className="helper-chip-label">
                     {t('helpers.m317', { title: displayEditor.title || t('helpers.m085') })}
-                  </summary>
-                  <pre>{JSON.stringify(displayEditor.model, null, 2)}</pre>
-                </details>
+                  </span>
+                </div>
               )}
               {selectedOutline && (
                 <div className="helper-context-chip helper-outline-selection">

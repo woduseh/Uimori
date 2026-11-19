@@ -43,7 +43,7 @@ export function ChatActionMenu({
         {onCopyChat && (
           <button type="button" disabled={copying} onClick={() => onCopyChat(chat.id)}>
             {copying ? (
-              <LoaderCircle size={18} aria-hidden="true" />
+              <LoaderCircle size={18} className="activity-spinner" aria-hidden="true" />
             ) : (
               <Copy size={18} aria-hidden="true" />
             )}

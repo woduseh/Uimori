@@ -115,12 +115,14 @@ const rejected = (error: unknown) =>
 
 export function OutlinePanel({
   state,
+  target,
   onClose,
   onHelp,
   helperVisible,
   onToggleHelper,
 }: {
   state: StoryState;
+  target: { nodeId: string; epoch: number } | null;
   onClose: () => void;
   onHelp: (request: OutlineHelperRequest) => void;
   helperVisible: boolean;
@@ -206,6 +208,28 @@ export function OutlinePanel({
   useEffect(() => {
     if (!adding && !editing && !helperVisible) heading.current?.focus({ preventScroll: true });
   }, [adding, editing, helperVisible]);
+  const handledTarget = useRef(0);
+  useEffect(() => {
+    if (!outline || !target || handledTarget.current === target.epoch) return;
+    const node = outline.nodes.find((item) => item.id === target.nodeId);
+    if (!node) return;
+    handledTarget.current = target.epoch;
+    const ancestors: string[] = [];
+    for (let parent = node.parentId; parent; ) {
+      ancestors.push(parent);
+      parent = outline.nodes.find((item) => item.id === parent)?.parentId ?? null;
+    }
+    if (ancestors.some((id) => folded.includes(id))) {
+      const next = folded.filter((id) => !ancestors.includes(id));
+      setFolded(next);
+      try {
+        retain(`${prefix}:folded`, next);
+      } catch {
+        /* Folding stays in memory. */
+      }
+    }
+    if (selectedId !== node.id) choose(node.id);
+  });
   function choose(id: string) {
     briefGeneration.current++;
     setSelectedId(id);
@@ -243,16 +267,16 @@ export function OutlinePanel({
     briefGeneration.current++;
     const level = parent ? OUTLINE_LEVELS[OUTLINE_LEVELS.indexOf(parent.level) + 1] : 'episode';
     if (!level) return;
-    setDraft(
-      stored(`${prefix}:new`, {
-        title: '',
-        intent: '',
-        level,
-        parentId: parent?.id ?? null,
-        relatedIds: [],
-        fixed: false,
-      } satisfies Draft)
-    );
+    const fresh: Draft = {
+      title: '',
+      intent: '',
+      level,
+      parentId: parent?.id ?? null,
+      relatedIds: [],
+      fixed: false,
+    };
+    const saved = stored<Draft>(`${prefix}:new`, fresh);
+    setDraft(saved.parentId === fresh.parentId && saved.level === fresh.level ? saved : fresh);
     setAdding(true);
     setEditing(false);
     setWriting(false);
@@ -655,7 +679,7 @@ export function OutlinePanel({
           </div>
           <p className="outline-eyebrow">{t('prompts.uiNoOutlineYet')}</p>
           <div className="outline-welcome-actions">
-            <button type="button" onClick={() => help('compose', null)}>
+            <button type="button" className="primary" onClick={() => help('compose', null)}>
               <Sparkles size={18} />
               {t('prompts.uiStartOutliningWithHelper')}
             </button>
@@ -869,6 +893,13 @@ export function OutlinePanel({
                       className="secondary"
                       disabled={busy}
                       onClick={() => {
+                        if (adding) {
+                          try {
+                            retain(`${prefix}:new`, null);
+                          } catch {
+                            /* The draft only stays in this tab. */
+                          }
+                        }
                         setAdding(false);
                         setEditing(false);
                         setDraft(null);
@@ -876,7 +907,11 @@ export function OutlinePanel({
                     >
                       {t('prompts.uiClose')}
                     </button>
-                    <button type="submit" disabled={disabled || !draft.title.trim()}>
+                    <button
+                      type="submit"
+                      className="primary"
+                      disabled={disabled || !draft.title.trim()}
+                    >
                       {' '}
                       {adding ? t('prompts.uiAdd') : t('prompts.uiSave')}
                     </button>
@@ -1027,6 +1062,7 @@ export function OutlinePanel({
                     {outlineWritable(selected.level) && (
                       <button
                         type="button"
+                        className="primary"
                         disabled={disabled || !!state.active}
                         onClick={() => void prepareWriting()}
                       >
@@ -1152,7 +1188,11 @@ export function OutlinePanel({
                         >
                           {t('prompts.contextToggle', { expanded: previewing })}
                         </button>
-                        <button type="submit" disabled={disabled || !!state.active}>
+                        <button
+                          type="submit"
+                          className="primary"
+                          disabled={disabled || !!state.active}
+                        >
                           {t('prompts.uiStartWriting')}
                         </button>
                       </div>
@@ -1162,39 +1202,59 @@ export function OutlinePanel({
                     <button
                       type="button"
                       className="outline-preview-link"
-                      onClick={() => void prepareWriting(true)}
+                      aria-expanded={previewing}
+                      onClick={() =>
+                        previewing ? setPreviewing(false) : void prepareWriting(true)
+                      }
                     >
                       <BookOpen size={15} />
-                      {t('prompts.uiViewOutlineInputContext')}
+                      {previewing
+                        ? t('prompts.contextToggle', { expanded: true })
+                        : t('prompts.uiViewOutlineInputContext')}
                     </button>
                   )}
                   {previewing && brief && (
                     <section className="outline-brief">
                       <h4>{t('prompts.uiOutlinesIncludedInThisRequest')}</h4>
-                      {[
-                        [t('prompts.uiParentOutlinesAndCurrentItem'), brief.outline.path],
-                        [t('prompts.uiChildEvents'), brief.outline.children],
-                        [t('prompts.uiRelatedPlans'), brief.outline.related ?? []],
+                      {(
                         [
-                          t('prompts.outlineNeighborUnits'),
-                          [brief.outline.neighbors?.previous, brief.outline.neighbors?.next].filter(
-                            (node) => !!node
-                          ),
-                        ],
-                      ].map(([title, items]) => (
-                        <div key={title as string}>
-                          <h5>{title as string}</h5>
-                          {(items as OutlineSnapshot['path']).map((node) => (
-                            <details key={node.id}>
-                              <summary>
-                                {node.title}
-                                {node.fixed ? t('prompts.uiKeepCondition2') : ''}
-                              </summary>
-                              <p>{node.intent || t('prompts.uiNoContentYet')}</p>
-                            </details>
-                          ))}
-                        </div>
-                      ))}
+                          [t('prompts.uiParentOutlinesAndCurrentItem'), brief.outline.path],
+                          [t('prompts.uiChildEvents'), brief.outline.children],
+                          [t('prompts.uiRelatedPlans'), brief.outline.related ?? []],
+                          [
+                            t('prompts.outlineNeighborUnits'),
+                            [
+                              brief.outline.neighbors?.previous && {
+                                ...brief.outline.neighbors.previous,
+                                title: t('prompts.outlinePreviousUnit', {
+                                  title: brief.outline.neighbors.previous.title,
+                                }),
+                              },
+                              brief.outline.neighbors?.next && {
+                                ...brief.outline.neighbors.next,
+                                title: t('prompts.outlineNextUnit', {
+                                  title: brief.outline.neighbors.next.title,
+                                }),
+                              },
+                            ].filter((node) => !!node),
+                          ],
+                        ] as [string, OutlineSnapshot['path']][]
+                      )
+                        .filter(([, items]) => items.length > 0)
+                        .map(([title, items]) => (
+                          <div key={title}>
+                            <h5>{title}</h5>
+                            {items.map((node) => (
+                              <details key={node.id}>
+                                <summary>
+                                  {node.title}
+                                  {node.fixed ? t('prompts.uiKeepCondition2') : ''}
+                                </summary>
+                                <p>{node.intent || t('prompts.uiNoContentYet')}</p>
+                              </details>
+                            ))}
+                          </div>
+                        ))}
                       <p>
                         {t('prompts.actualSources', {
                           count: formatNumber(brief.outline.sources?.length ?? 0),

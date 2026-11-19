@@ -163,26 +163,28 @@ export function SceneDeleteDialog({
       }}
     >
       <p>{t('chatmanage.deleteHelp')}</p>
-      <fieldset disabled={busy || !!pending} className="scene-delete-scopes">
-        <label>
-          <input
-            type="radio"
-            name={`delete-${sourceId}`}
-            checked={scope === 'only'}
-            onChange={() => setScope('only')}
-          />
-          {t('chatmanage.only')}
-        </label>
-        <label>
-          <input
-            type="radio"
-            name={`delete-${sourceId}`}
-            checked={scope === 'following'}
-            onChange={() => setScope('following')}
-          />
-          {t('chatmanage.following', { count: impact?.followingCount ?? 0 })}
-        </label>
-      </fieldset>
+      {!(impact && impact.followingCount <= 1) && (
+        <fieldset disabled={busy || !!pending} className="scene-delete-scopes">
+          <label>
+            <input
+              type="radio"
+              name={`delete-${sourceId}`}
+              checked={scope === 'only'}
+              onChange={() => setScope('only')}
+            />
+            {t('chatmanage.only')}
+          </label>
+          <label>
+            <input
+              type="radio"
+              name={`delete-${sourceId}`}
+              checked={scope === 'following'}
+              onChange={() => setScope('following')}
+            />
+            {t('chatmanage.following', { count: impact?.followingCount ?? 0 })}
+          </label>
+        </fieldset>
+      )}
       <p className="muted">{t('chatmanage.memoryHelp')}</p>
       {scope === 'only' && (impact?.followingCount ?? 0) > 1 && (
         <p className="muted">{t('chatmanage.variablesHelp')}</p>

@@ -205,7 +205,9 @@
 .bot-navigation-modes > button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  min-width: var(--control-h);
   min-height: var(--control-h);
   padding: 0 12px;
   border-radius: var(--radius-control);

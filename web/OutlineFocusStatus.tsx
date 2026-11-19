@@ -13,7 +13,7 @@ export function OutlineFocusStatus({
 }: {
   chatId: string;
   headRevision: string | null | undefined;
-  onOpen: () => void;
+  onOpen: (nodeId: string) => void;
 }) {
   const { t } = useI18n();
   const [focus, setFocus] = useState<OutlineFocus>(null);
@@ -63,7 +63,7 @@ export function OutlineFocusStatus({
         type="button"
         className="link-button"
         aria-label={t('prompts.outlineOpenFocus', { title: focus.title })}
-        onClick={onOpen}
+        onClick={() => onOpen(focus.nodeId)}
       >
         {t(`prompts.level.${focus.level}`)} {focus.title}
       </button>

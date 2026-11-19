@@ -257,12 +257,6 @@
   font-size: var(--font-small);
   color: var(--text);
 }
-details.helper-context-chip {
-  display: block;
-}
-details.helper-context-chip[open] {
-  flex-basis: 100%;
-}
 .helper-chip-badge {
   font-weight: 600;
   color: var(--accent-text);
@@ -755,7 +749,6 @@ details.helper-context-chip[open] {
   display: none;
 }
 .helper-context-chip details pre,
-details.helper-context-chip pre,
 .helper-selection details p {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

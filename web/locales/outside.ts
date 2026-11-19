@@ -83,18 +83,6 @@ export const messages = {
     ja: 'Uimoriをインストール',
     zh: '安装 Uimori',
   },
-  'outside.installHelp': {
-    ko: '설치 안내',
-    en: 'Installation help',
-    ja: 'インストールの案内',
-    zh: '安装说明',
-  },
-  'outside.installDescription': {
-    ko: '홈 화면에서 앱처럼 열어요. 서버 연결이 필요해요.',
-    en: 'Open it like an app from your home screen. A server connection is required.',
-    ja: 'ホーム画面からアプリとして開けます。サーバーへの接続が必要です。',
-    zh: '可从主屏幕像应用一样打开。需要连接服务器。',
-  },
   'outside.browserInstall': {
     ko: '브라우저 메뉴에서 앱 설치 또는 홈 화면에 추가를 선택해 주세요.',
     en: 'Choose Install app or Add to home screen from your browser menu.',

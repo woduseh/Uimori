@@ -600,6 +600,12 @@
     display: flex;
   }
 }
+@media (min-width: 761px) and (max-width: 1023px) {
+  .outline-workspace-shell,
+  .app-shell.sidebar-collapsed .outline-workspace-shell {
+    left: 0;
+  }
+}
 @media (max-width: 760px) {
   .outline-workspace-shell,
   .app-shell.sidebar-collapsed .outline-workspace-shell {
@@ -709,12 +715,4 @@
 }
 .outline-intent-card :is(h1, h2, h3, h4):first-child {
   margin-top: 0;
-}
-.outline-primary-actions > button:not(.secondary),
-.outline-writing-card button[type="submit"],
-.outline-welcome-actions > button:not(.secondary),
-.outline-form button[type="submit"] {
-  background: var(--accent);
-  color: var(--accent-ink);
-  border-color: var(--accent);
 }

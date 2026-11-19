@@ -27,7 +27,8 @@ import './recovery-settings.css';
 import './settings-layout.css';
 import { IllustrationSettingsEditor } from './IllustrationSettingsEditor.js';
 import { LoreContextDefaultsEditor } from './LoreContextDefaultsEditor.js';
-import { Fragment, useEffect, useId, useRef, useState } from 'react';
+import { Fragment, useContext, useEffect, useId, useRef, useState } from 'react';
+import { SessionRequiredContext } from './SessionGate.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
 import { useCompactLayout } from './useCompactLayout.js';
@@ -279,7 +280,7 @@ function getSettingsGroupLabels(): Record<SettingsGroup, string> {
   };
 }
 
-function getSettingsCategories(): SettingsCategory[] {
+function getSettingsCategories(sessionRequired: boolean): SettingsCategory[] {
   return [
     {
       key: 'general',
@@ -303,7 +304,9 @@ function getSettingsCategories(): SettingsCategory[] {
           anchor: 'reading',
         },
         { label: t('chatsettings.m21'), terms: t('chatsettings.m22'), anchor: 'services' },
-        { label: t('chatsettings.m23'), terms: t('chatsettings.m24'), anchor: 'session' },
+        ...(sessionRequired
+          ? [{ label: t('chatsettings.m23'), terms: t('chatsettings.m24'), anchor: 'session' }]
+          : []),
       ],
     },
     {
@@ -429,7 +432,8 @@ export function AppSettingsPanel({
   onEditPrompt?: (presetId?: string) => void;
 }) {
   useI18n();
-  const settingsCategories = getSettingsCategories();
+  const sessionRequired = useContext(SessionRequiredContext);
+  const settingsCategories = getSettingsCategories(sessionRequired);
   const settingsGroupLabels = getSettingsGroupLabels();
   const librarySettingsSubjects = getLibrarySettingsSubjects();
   const [signingOut, setSigningOut] = useState(false);
@@ -594,6 +598,53 @@ export function AppSettingsPanel({
         if (target && target !== 'panel') destination?.scrollIntoView({ block: 'start' });
       });
   }
+  const desktopPanelRows = (
+    <div className="settings-group-body">
+      <label className="settings-row">
+        <span className="settings-row-copy">
+          <strong>{t('chatsettings.m67')}</strong>
+        </span>
+        <select
+          aria-label={t('chatsettings.m67')}
+          value={sidebarWidth}
+          onChange={(event) => setSidebarWidth(Number(event.target.value))}
+        >
+          <option value={248}>{t('chatsettings.m69')}</option>
+          <option value={320}>{t('chatsettings.m70')}</option>
+          <option value={400}>{t('chatsettings.m71')}</option>
+        </select>
+      </label>
+      <label className="settings-row">
+        <span className="settings-row-copy">
+          <strong>{t('workspace.helperWidth')}</strong>
+        </span>
+        <select
+          aria-label={t('workspace.helperWidth')}
+          value={helperSidebarWidth}
+          onChange={(event) => setHelperSidebarWidth(Number(event.target.value))}
+        >
+          <option value={248}>{t('chatsettings.m69')}</option>
+          <option value={320}>{t('chatsettings.m70')}</option>
+          <option value={400}>{t('chatsettings.m71')}</option>
+        </select>
+      </label>
+      <label className="settings-row">
+        <span className="settings-row-copy">
+          <strong>{t('settings.utilityPanelWidth')}</strong>
+        </span>
+        <select
+          aria-label={t('settings.utilityPanelWidth')}
+          value={panelWidth}
+          onChange={(event) => setPanelWidth(Number(event.target.value))}
+        >
+          <option value={360}>{t('chatsettings.m74')}</option>
+          <option value={384}>{t('chatsettings.m69')}</option>
+          <option value={480}>{t('chatsettings.m70')}</option>
+          <option value={560}>{t('chatsettings.m71')}</option>
+        </select>
+      </label>
+    </div>
+  );
   return (
     <Dialog
       open
@@ -810,56 +861,17 @@ export function AppSettingsPanel({
                           </span>
                         </label>
                       </div>
-                      <details className="settings-desktop-panels" open={!compact}>
-                        <summary>{t('settings.desktopPanels')}</summary>
-                        <div className="settings-group-body">
-                          <label className="settings-row">
-                            <span className="settings-row-copy">
-                              <strong>{t('chatsettings.m67')}</strong>
-                            </span>
-                            <select
-                              aria-label={t('chatsettings.m67')}
-                              value={sidebarWidth}
-                              onChange={(event) => setSidebarWidth(Number(event.target.value))}
-                            >
-                              <option value={248}>{t('chatsettings.m69')}</option>
-                              <option value={320}>{t('chatsettings.m70')}</option>
-                              <option value={400}>{t('chatsettings.m71')}</option>
-                            </select>
-                          </label>
-                          <label className="settings-row">
-                            <span className="settings-row-copy">
-                              <strong>{t('workspace.helperWidth')}</strong>
-                            </span>
-                            <select
-                              aria-label={t('workspace.helperWidth')}
-                              value={helperSidebarWidth}
-                              onChange={(event) =>
-                                setHelperSidebarWidth(Number(event.target.value))
-                              }
-                            >
-                              <option value={248}>{t('chatsettings.m69')}</option>
-                              <option value={320}>{t('chatsettings.m70')}</option>
-                              <option value={400}>{t('chatsettings.m71')}</option>
-                            </select>
-                          </label>
-                          <label className="settings-row">
-                            <span className="settings-row-copy">
-                              <strong>{t('settings.utilityPanelWidth')}</strong>
-                            </span>
-                            <select
-                              aria-label={t('settings.utilityPanelWidth')}
-                              value={panelWidth}
-                              onChange={(event) => setPanelWidth(Number(event.target.value))}
-                            >
-                              <option value={360}>{t('chatsettings.m74')}</option>
-                              <option value={384}>{t('chatsettings.m69')}</option>
-                              <option value={480}>{t('chatsettings.m70')}</option>
-                              <option value={560}>{t('chatsettings.m71')}</option>
-                            </select>
-                          </label>
+                      {compact ? (
+                        <details className="settings-desktop-panels">
+                          <summary>{t('settings.desktopPanels')}</summary>
+                          {desktopPanelRows}
+                        </details>
+                      ) : (
+                        <div className="settings-desktop-panels">
+                          <h4>{t('settings.desktopPanels')}</h4>
+                          {desktopPanelRows}
                         </div>
-                      </details>
+                      )}
                     </section>
                   )}
                   {key === 'general' && (
@@ -985,7 +997,7 @@ export function AppSettingsPanel({
                       />
                     </>
                   )}
-                  {key === 'general' && (
+                  {key === 'general' && sessionRequired && (
                     <section
                       id={`${id}-general-session`}
                       tabIndex={-1}

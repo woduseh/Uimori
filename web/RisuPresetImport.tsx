@@ -151,7 +151,19 @@ export function RisuPresetImport({
           label={t('transfer.m068')}
           className="secondary"
           icon={UploadIcon}
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            if (result) {
+              setResult(null);
+              setSource(null);
+              setPreview(null);
+              setAllowPartial(false);
+              setError('');
+              setNotice('');
+              submission.current = null;
+              requestKey.current = null;
+            }
+            setOpen(true);
+          }}
         />
       )}
       <Dialog

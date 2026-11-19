@@ -417,7 +417,7 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
           <button
             type="button"
             className="secondary"
-            disabled={!view || busy || hasUncertainSave}
+            disabled={!view || busy || hasUncertainSave || !dirty}
             onClick={() => {
               if (!view) return;
               setDraft(null);

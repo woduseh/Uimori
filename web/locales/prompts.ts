@@ -1170,10 +1170,10 @@ export const messages = {
     zh: '上次写作参考文',
   },
   'prompts.uiBriefCreatedWithPreviousSettings': {
-    ko: ', 이전 설정으로 만든 참고문',
-    en: ', Brief created with previous settings',
-    ja: '、以前の設定で作成した参考文',
-    zh: '，使用旧设置生成的参考文',
+    ko: '이전 설정으로 만든 참고문',
+    en: 'Brief created with previous settings',
+    ja: '以前の設定で作成した参考文',
+    zh: '使用旧设置生成的参考文',
   },
   'prompts.uiLastWritingBriefContent': {
     ko: '마지막 집필 참고문 내용',
@@ -1641,6 +1641,12 @@ export const messages = {
     en: '{count} of {total} written',
     ja: '{total}件中{count}件を執筆',
     zh: '{total}个中已写{count}个',
+  },
+  'prompts.outlinePreviousUnit': {
+    ko: '이전: {title}',
+    en: 'Previous: {title}',
+    ja: '前へ: {title}',
+    zh: '上一个：{title}',
   },
   'prompts.outlineNextUnit': {
     ko: '다음: {title}',

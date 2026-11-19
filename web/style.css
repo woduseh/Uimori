@@ -1059,7 +1059,7 @@ input[type="checkbox"] {
   display: flex;
   gap: 0;
   border: var(--hairline) solid var(--line);
-  border-radius: calc(var(--radius-control) + 3px);
+  border-radius: var(--radius-panel);
   padding: 4px;
   background: var(--nav);
 }
@@ -1959,7 +1959,7 @@ input[type="checkbox"] {
 @media (hover: hover) {
   .settings-navigation-list > button:hover,
   .settings-search-results > button:hover {
-    background: var(--panel);
+    background: var(--hover);
     color: var(--text);
   }
 }

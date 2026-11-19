@@ -553,6 +553,11 @@ function SourceReaderContent({
   };
   const [pending, setPending] = useState('');
   const [actionError, setActionError] = useState('');
+  const [actionErrorSource, setActionErrorSource] = useState('');
+  const reportActionError = (message: string) => {
+    setActionErrorSource('');
+    setActionError(message);
+  };
   const translationLoading = pending === 'translation' || !!(translation && activeJob(translation));
   const validTranslation =
     displayTranslation?.result?.sourceRevision === source.id &&
@@ -735,7 +740,7 @@ function SourceReaderContent({
       : plainDocument.inlineAnchors,
     defaultCollapsed: illustrationsCollapsed,
     refresh,
-    onError: setActionError,
+    onError: reportActionError,
   });
   const [illustrationDialog, setIllustrationDialog] = useState(false);
   const [retryDialog, setRetryDialog] = useState(false);
@@ -805,12 +810,16 @@ function SourceReaderContent({
     requestPending.current = true;
     setPending(name);
     setActionError('');
+    setActionErrorSource('');
     try {
       await operation();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : uiMessage('reader.couldNotCompleteTheRequest');
-      if (mounted.current) setActionError(message);
+      if (mounted.current) {
+        setActionErrorSource(name);
+        setActionError(message);
+      }
     } finally {
       requestPending.current = false;
       setPending('');
@@ -1178,7 +1187,7 @@ function SourceReaderContent({
                         <span>{labels[job.status]}</span>
                       </span>
                       {job.error && <AuxiliaryError error={job.error} />}
-                      <JobActions job={job} refresh={refresh} onError={setActionError} compact />
+                      <JobActions job={job} refresh={refresh} onError={reportActionError} compact />
                     </div>
                   ))
                 : jobs.length > 0 && (
@@ -1702,7 +1711,7 @@ function SourceReaderContent({
                         key={job.id}
                         job={job}
                         refresh={refresh}
-                        onError={setActionError}
+                        onError={reportActionError}
                         hideText={job.kind === 'translation'}
                       />
                     ))}
@@ -1753,11 +1762,12 @@ function SourceReaderContent({
         {actionError && (
           <p className="error source-action-error" role="alert">
             {translateMessage(actionError)}
-            {onModelSettings && (
-              <button type="button" className="secondary" onClick={onModelSettings}>
-                {t('reader.globalModelSettings')}
-              </button>
-            )}
+            {onModelSettings &&
+              (actionErrorSource === 'retry' || actionErrorSource === 'translation') && (
+                <button type="button" className="secondary" onClick={onModelSettings}>
+                  {t('reader.globalModelSettings')}
+                </button>
+              )}
           </p>
         )}
       </ThemeFrame>
@@ -1972,7 +1982,7 @@ function TextEditor({
         />
         <IconButton
           icon={Save}
-          className="source-edit-save"
+          className="primary"
           label={saving ? t('reader.saving') : t('reader.saveValue', { v0: title })}
           type="submit"
           disabled={saving || !draft.text.trim()}

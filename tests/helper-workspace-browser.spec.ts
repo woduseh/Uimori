@@ -324,7 +324,7 @@ test('HSPACE05 a contextual reopen attaches the editor after an independent work
     .first()
     .click();
   await expect(panel.getByLabel('도우미 대화 선택', { exact: true })).toHaveValue(session.id);
-  await expect(panel.locator('details.helper-editor')).toHaveCount(0);
+  await expect(panel.locator('.helper-editor-draft')).toHaveCount(0);
   await panel.getByRole('button', { name: '서재', exact: true }).click();
   await expect(panel).toBeHidden();
   await page
@@ -334,7 +334,7 @@ test('HSPACE05 a contextual reopen attaches the editor after an independent work
   await expect(panel).not.toHaveClass(/helper-expanded/u);
   const input = panel.getByLabel('도우미에게 요청', { exact: true });
   await expect(input).toBeEnabled();
-  await expect(panel.locator('details.helper-editor > summary')).toHaveText(
+  await expect(panel.locator('.helper-editor-draft .helper-chip-label')).toHaveText(
     '편집 중: 연결할 현재 편집 내용'
   );
   await input.fill('현재 편집 내용을 확인해 주세요');
@@ -877,16 +877,12 @@ test('HSPACE02 expanding a resource helper preserves its unsaved editor', async 
     .getByRole('region', { name: '자료 상세', exact: true })
     .getByRole('button', { name: '도우미 열기', exact: true })
     .click();
-  const context = panel.locator('details.helper-editor');
-  await expect(context.locator(':scope > summary')).toHaveText(
-    '편집 중: 돌아온 뒤 다시 고친 인물 이름'
-  );
-  await context.locator(':scope > summary').click();
-  await expect(context.locator('pre')).toContainText('돌아온 뒤 다시 고친 인물 이름');
+  const context = panel.locator('.helper-editor-draft .helper-chip-label');
+  await expect(context).toHaveText('편집 중: 돌아온 뒤 다시 고친 인물 이름');
   await expect(input).toHaveValue('이 자료를 검토하려고 남긴 도우미 초안');
   await panel.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
   await expect(panel).toHaveClass(/helper-expanded/u);
-  const expandedTitle = await context.locator(':scope > summary').textContent();
+  const expandedTitle = await context.textContent();
   const admission = page.waitForRequest(
     (request) =>
       request.method() === 'POST' &&

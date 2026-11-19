@@ -182,6 +182,8 @@ export function ConnectionEditor({
     baseline: modelBaseline,
     started: modelStarted,
   } = drafts.model;
+  const connectionDirty = connectionStarted && JSON.stringify(connection) !== connectionBaseline;
+  const modelDirty = modelStarted && JSON.stringify(model) !== modelBaseline;
   const setConnection = (update: SetStateAction<ConnectionDraft>) =>
     dispatchDraft({ type: 'connection.change', update });
   const setModel = (update: SetStateAction<ModelDraft>) =>
@@ -191,11 +193,7 @@ export function ConnectionEditor({
   const [discard, setDiscard] = useState<{ kind: 'connection' | 'model'; proceed: () => void }>();
   const [saveConflict, setSaveConflict] = useState<'connection' | 'model' | null>(null);
   function replaceDraft(kind: 'connection' | 'model', proceed: () => void) {
-    const dirty =
-      kind === 'connection'
-        ? connectionStarted && JSON.stringify(connection) !== connectionBaseline
-        : modelStarted && JSON.stringify(model) !== modelBaseline;
-    if (dirty) setDiscard({ kind, proceed });
+    if (kind === 'connection' ? connectionDirty : modelDirty) setDiscard({ kind, proceed });
     else proceed();
   }
   const [uploadingCredential, setUploadingCredential] = useState(false);
@@ -233,11 +231,7 @@ export function ConnectionEditor({
     [error, setError] = useState('');
   const operationBusy = operation !== null;
   const busy = operationBusy || uploadingCredential || jevBusy;
-  const dirty =
-    busy ||
-    jevDirty ||
-    (connectionStarted && JSON.stringify(connection) !== connectionBaseline) ||
-    (modelStarted && JSON.stringify(model) !== modelBaseline);
+  const dirty = busy || jevDirty || connectionDirty || modelDirty;
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
@@ -400,7 +394,7 @@ export function ConnectionEditor({
     navigate('connection');
   }
   async function showModel(item: ModelPreset, copy = false, approved = false) {
-    if (!approved && modelStarted && JSON.stringify(model) !== modelBaseline) {
+    if (!approved && modelDirty) {
       setDiscard({
         kind: 'model',
         proceed: () => {
@@ -735,14 +729,8 @@ export function ConnectionEditor({
   }
   const savePending = async (): Promise<boolean> => {
     if (busy) return false;
-    if (
-      connectionStarted &&
-      JSON.stringify(connection) !== connectionBaseline &&
-      !(await submitConnection(true))
-    )
-      return false;
-    if (modelStarted && JSON.stringify(model) !== modelBaseline && !(await submitModel(true)))
-      return false;
+    if (connectionDirty && !(await submitConnection(true))) return false;
+    if (modelDirty && !(await submitModel(true))) return false;
     if (jevDirty && !(await jevSave.current?.())) return false;
     return true;
   };
@@ -1053,7 +1041,7 @@ export function ConnectionEditor({
               {t('providers.m74')}
             </button>
           )}
-          {screen === 'connections' && connectionStarted && (
+          {screen === 'connections' && connectionDirty && (
             <button
               type="button"
               className="provider-resume secondary"
@@ -1063,7 +1051,7 @@ export function ConnectionEditor({
               {t('providers.m537', { value0: connection.title || t('providers.m76') })}
             </button>
           )}
-          {screen === 'models' && modelStarted && (
+          {screen === 'models' && modelDirty && (
             <button
               type="button"
               className="provider-resume secondary"
