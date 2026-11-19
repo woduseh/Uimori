@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Locator, test } from '@playwright/test';
 import { createServer, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import { visualReview } from './fixtures/visual-review.js';
@@ -485,6 +485,26 @@ root = Column([
 </a2ui>`,
 ];
 
+/** Relation labels and node names of a graph whose boxes overlap, as "a / b" pairs. */
+const labelOverlaps = (graph: Locator) =>
+  graph.evaluate((figure) => {
+    const boxes = [
+      ...figure.querySelectorAll('.story-ui-graph-relation, .story-ui-graph-caption'),
+    ].map((element) => ({ text: element.textContent, box: element.getBoundingClientRect() }));
+    return boxes.flatMap((a, index) =>
+      boxes
+        .slice(index + 1)
+        .filter(
+          (b) =>
+            a.box.left < b.box.right - 1 &&
+            b.box.left < a.box.right - 1 &&
+            a.box.top < b.box.bottom - 1 &&
+            b.box.top < a.box.bottom - 1
+        )
+        .map((b) => `${a.text} / ${b.text}`)
+    );
+  });
+
 test('composed media render with their own shells in both schemes', async ({ page }, info) => {
   const { normalizeStoryUiOutput, storyUiPrompt } = await import('../server/story-ui.js');
   const { parseStoryUi } = await import('../core/story-ui.js');
@@ -568,24 +588,7 @@ test('composed media render with their own shells in both schemes', async ({ pag
   await expect(ring.locator('.sr-only')).toContainText('한서윤 → 나: 짝사랑');
   // No relation label sits on another label or on a node's name, including a pair of
   // opposite edges between the same two people.
-  const overlaps = await ring.evaluate((figure) => {
-    const boxes = [
-      ...figure.querySelectorAll('.story-ui-graph-relation, .story-ui-graph-caption'),
-    ].map((element) => ({ text: element.textContent, box: element.getBoundingClientRect() }));
-    return boxes.flatMap((a, index) =>
-      boxes
-        .slice(index + 1)
-        .filter(
-          (b) =>
-            a.box.left < b.box.right - 1 &&
-            b.box.left < a.box.right - 1 &&
-            a.box.top < b.box.bottom - 1 &&
-            b.box.top < a.box.bottom - 1
-        )
-        .map((b) => `${a.text} / ${b.text}`)
-    );
-  });
-  expect(overlaps).toEqual([]);
+  expect(await labelOverlaps(ring)).toEqual([]);
   // A tree reads downward: each layer sits below the one it grows from.
   const tree = page.locator('.story-ui-graph[data-layout="tree"]');
   const top = (name: string) =>
@@ -686,6 +689,11 @@ test('composed media render with their own shells in both schemes', async ({ pag
     );
     const preset = page.locator('#preset');
     await expect(preset.locator('.story-ui')).toHaveCount(sample.length);
+    // A preset may enlarge a label with its own border or spacing; the layout must still hold.
+    expect(
+      await labelOverlaps(preset.locator('.story-ui-graph[data-layout="ring"]')),
+      style
+    ).toEqual([]);
     for (const theme of ['light', 'dark']) {
       await page.evaluate((value) => {
         document.documentElement.dataset.theme = value;

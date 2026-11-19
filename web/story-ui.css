@@ -2980,7 +2980,8 @@
     display: flex;
     gap: 2px;
   }
-  .story-ui .story-ui-calendar-date li {
+  /* Outranks every preset's entry chip: on a narrow screen an entry is only a dot. */
+  .story-ui .story-ui-calendar-grid > .story-ui-calendar-date > ul > li {
     inline-size: 0.55em;
     block-size: 0.55em;
     padding: 0;
@@ -5869,6 +5870,1237 @@
 .story-ui[data-story-ui-style="pop"] .story-ui-hero {
   border: 3px solid var(--story-ink);
   box-shadow: 5px 5px 0 var(--story-accent);
+}
+
+/* Graph, Map and Calendar under each preset. Each carries its preset's own marks: the disc
+   takes its portrait treatment, a relation its badge, a date cell its panel, and "today" or
+   the focus node its strongest accent. State rules repeat here because a preset rule that
+   restyles every disc, token or date would otherwise outrank the base state rules. */
+
+/* east-asian: a woodblock page. Square plates with a double rule, a vermilion seal for the
+   focus, ledger cells divided by ink rules. */
+.story-ui[data-story-ui-style="east-asian"] .story-ui-graph-node > .story-ui-avatar {
+  color: var(--story-ink);
+  background: var(--story-surface);
+  border: 1.5px solid var(--story-ink);
+  border-radius: 0;
+  outline: 1px solid var(--story-ink);
+  outline-offset: 2px;
+  box-shadow: none;
+  font-weight: 700;
+}
+.story-ui[data-story-ui-style="east-asian"]
+  .story-ui-graph-node[data-state="current"]
+  > .story-ui-avatar {
+  color: var(--story-accent-ink);
+  background: var(--story-seal);
+  border-color: var(--story-seal);
+  border-radius: 4px;
+  outline-color: var(--story-seal);
+  rotate: -3deg;
+}
+.story-ui[data-story-ui-style="east-asian"]
+  .story-ui-graph-node[data-state="unknown"]
+  > .story-ui-avatar {
+  border-style: dashed;
+  outline: 0;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-graph-caption {
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-graph-label {
+  letter-spacing: 0.12em;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-graph-relation {
+  color: var(--story-ink);
+  border: 1px solid currentColor;
+  border-radius: 0;
+  letter-spacing: 0.1em;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-graph-relation[data-tone] {
+  color: var(--story-tone);
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-graph-edge > path {
+  stroke-width: 1.4;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-map-ground {
+  border: 3px double var(--story-ink);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-map-area {
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-map-token {
+  color: var(--story-tone);
+  background: var(--story-surface);
+  border: 1.5px solid var(--story-tone);
+  border-radius: 3px;
+  box-shadow: none;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-map-token[data-state="current"] {
+  color: var(--story-accent-ink);
+  background: var(--story-seal);
+  border-color: var(--story-seal);
+  rotate: -4deg;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-map-token[data-state="down"] {
+  color: var(--story-muted);
+  border-color: var(--story-muted);
+  border-style: dashed;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-calendar-grid {
+  gap: 0;
+  border-block-end: 1px solid var(--story-ink);
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-calendar-weekday {
+  border-block-end: 1px solid var(--story-ink);
+  letter-spacing: 0.2em;
+}
+.story-ui[data-story-ui-style="east-asian"] :is(.story-ui-calendar-date, .story-ui-calendar-blank) {
+  background: none;
+  border-inline-end: 1px solid color-mix(in srgb, var(--story-ink) 30%, transparent);
+  border-block-end: 1px solid color-mix(in srgb, var(--story-ink) 30%, transparent);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-calendar-date[data-current] {
+  background: none;
+  box-shadow: none;
+}
+.story-ui[data-story-ui-style="east-asian"]
+  .story-ui-calendar-date[data-current]
+  > .story-ui-calendar-number {
+  color: var(--story-accent-ink);
+  background: var(--story-seal);
+  border-radius: 3px;
+  rotate: -4deg;
+}
+.story-ui[data-story-ui-style="east-asian"] .story-ui-calendar-date li {
+  background: none;
+  border-radius: 0;
+}
+
+/* fantasy: an illuminated chronicle. Gold rings, rubricated initials, ribbons for relations,
+   parchment with a dotted survey grid. */
+.story-ui[data-story-ui-style="fantasy"] .story-ui-graph-node > .story-ui-avatar {
+  color: var(--story-rubric);
+  background: var(--story-surface);
+  box-shadow:
+    0 0 0 2px var(--story-paper),
+    0 0 0 3.5px var(--story-gold),
+    0 0 0 5.5px var(--story-paper),
+    0 0 0 6.5px color-mix(in srgb, var(--story-gold) 60%, transparent);
+  font-family: var(--story-display);
+}
+.story-ui[data-story-ui-style="fantasy"]
+  .story-ui-graph-node[data-state="current"]
+  > .story-ui-avatar {
+  box-shadow:
+    0 0 0 2px var(--story-paper),
+    0 0 0 4px var(--story-rubric),
+    0 0 0 6px var(--story-paper),
+    0 0 0 7.5px var(--story-gold),
+    0 0 14px 6px color-mix(in srgb, var(--story-gold) 35%, transparent);
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-graph-caption {
+  border-radius: 2px;
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-graph-label {
+  padding-block-end: 0.1em;
+  border-block-end: 1px solid;
+  border-image: var(--story-fade);
+  font-family: var(--story-display);
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-graph-relation {
+  padding-inline: 0.9em;
+  color: var(--story-ink);
+  background: color-mix(in srgb, var(--story-gold) 22%, var(--story-surface));
+  border: 0;
+  border-radius: 0;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 0.45em) 50%, 100% 100%, 0 100%, 0.45em 50%);
+  font-style: italic;
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-graph-relation[data-tone] {
+  color: var(--story-tone);
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-graph-edge:not([data-tone]) {
+  --story-tone: color-mix(in srgb, var(--story-gold) 80%, transparent);
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-map-ground {
+  background:
+    radial-gradient(
+      circle at 0 0,
+      color-mix(in srgb, var(--story-gold) 55%, transparent) 1.2px,
+      transparent 1.6px
+    )
+    0 0 / var(--story-map-cell) var(--story-map-cell),
+    var(--story-surface);
+  border: 1px solid var(--story-gold);
+  border-radius: 2px;
+  box-shadow:
+    inset 0 0 0 3px var(--story-surface),
+    inset 0 0 0 4px color-mix(in srgb, var(--story-gold) 50%, transparent);
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-map-area-label {
+  font-family: var(--story-display);
+  font-style: italic;
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-map-token {
+  border: 2px solid var(--story-gold);
+  box-shadow: 0 1px 3px #00000059;
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-map-token[data-state="current"] {
+  box-shadow:
+    0 0 0 2px var(--story-paper),
+    0 0 0 3.5px var(--story-rubric);
+}
+.story-ui[data-story-ui-style="fantasy"] :is(.story-ui-calendar-date, .story-ui-calendar-blank) {
+  background: none;
+  border-block-start: 1px solid color-mix(in srgb, var(--story-gold) 55%, transparent);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-calendar-date[data-current] {
+  background: color-mix(in srgb, var(--story-gold) 12%, transparent);
+  box-shadow: none;
+}
+.story-ui[data-story-ui-style="fantasy"]
+  .story-ui-calendar-date[data-current]
+  > .story-ui-calendar-number {
+  padding: 0;
+  color: var(--story-rubric);
+  background: none;
+  font-family: var(--story-display);
+  font-size: 1.5em;
+  line-height: 1;
+}
+.story-ui[data-story-ui-style="fantasy"] .story-ui-calendar-date li {
+  background: none;
+  border-inline-start-color: var(--story-gold);
+  font-style: italic;
+}
+
+/* modern: glass over color. Lit edges, soft lift, pills and large light numerals. */
+.story-ui[data-story-ui-style="modern"] .story-ui-graph-node > .story-ui-avatar {
+  border: 1px solid var(--story-border);
+  box-shadow:
+    var(--story-shine),
+    var(--story-lift),
+    0 0 0 3px color-mix(in srgb, var(--story-tone) 45%, transparent);
+}
+.story-ui[data-story-ui-style="modern"]
+  .story-ui-graph-node[data-state="current"]
+  > .story-ui-avatar {
+  color: var(--story-accent-ink);
+  background: var(--story-accent);
+  box-shadow:
+    var(--story-shine),
+    0 10px 26px -10px var(--story-accent);
+}
+.story-ui[data-story-ui-style="modern"] :is(.story-ui-graph-caption, .story-ui-graph-relation) {
+  background: var(--story-surface);
+  border: 1px solid var(--story-border);
+  border-radius: 999px;
+  box-shadow: var(--story-shine), var(--story-lift);
+  backdrop-filter: blur(10px);
+}
+.story-ui[data-story-ui-style="modern"] .story-ui-graph-caption {
+  padding-inline: 0.7em;
+}
+.story-ui[data-story-ui-style="modern"] .story-ui-map-ground {
+  background:
+    linear-gradient(to right, var(--story-hair) 1px, transparent 1px) 0 0 / var(--story-map-cell)
+    var(--story-map-cell),
+    linear-gradient(to bottom, var(--story-hair) 1px, transparent 1px) 0 0 / var(--story-map-cell)
+    var(--story-map-cell),
+    var(--story-surface);
+  border-color: var(--story-border);
+  border-radius: 14px;
+  box-shadow: var(--story-shine), var(--story-lift);
+}
+.story-ui[data-story-ui-style="modern"] .story-ui-map-area {
+  border-radius: 10px;
+}
+.story-ui[data-story-ui-style="modern"] .story-ui-map-token {
+  border-width: 1.5px;
+  box-shadow:
+    var(--story-shine),
+    0 6px 14px -6px var(--story-tone);
+}
+.story-ui[data-story-ui-style="modern"] .story-ui-calendar-grid {
+  gap: 5px;
+}
+.story-ui[data-story-ui-style="modern"] :is(.story-ui-calendar-date, .story-ui-calendar-blank) {
+  border-radius: 12px;
+}
+.story-ui[data-story-ui-style="modern"] .story-ui-calendar-date {
+  background: var(--story-surface);
+  box-shadow: var(--story-shine);
+}
+.story-ui[data-story-ui-style="modern"] .story-ui-calendar-number {
+  font-size: 1.15em;
+  font-weight: 300;
+}
+.story-ui[data-story-ui-style="modern"] .story-ui-calendar-date[data-current] {
+  background: var(--story-surface);
+  box-shadow:
+    var(--story-shine),
+    0 10px 24px -14px var(--story-accent);
+}
+.story-ui[data-story-ui-style="modern"]
+  .story-ui-calendar-date[data-current]
+  > .story-ui-calendar-number {
+  font-weight: 600;
+}
+.story-ui[data-story-ui-style="modern"] .story-ui-calendar-date li {
+  border: 0;
+  border-radius: 999px;
+}
+
+/* period: printed matter. Halftone-gray portraits in ruled frames, rubber stamps, ledgers. */
+.story-ui[data-story-ui-style="period"] .story-ui-graph-node > .story-ui-avatar {
+  color: var(--story-ink);
+  background: var(--story-surface);
+  border: 2px solid var(--story-ink);
+  border-radius: 0;
+  box-shadow:
+    0 0 0 3px var(--story-paper),
+    0 0 0 4px var(--story-ink);
+  font-family: var(--story-display);
+}
+.story-ui[data-story-ui-style="period"] .story-ui-graph-node > .story-ui-avatar > img {
+  filter: grayscale(1) contrast(1.15) sepia(0.25);
+}
+.story-ui[data-story-ui-style="period"]
+  .story-ui-graph-node[data-state="current"]
+  > .story-ui-avatar {
+  border-width: 3px;
+  box-shadow:
+    0 0 0 3px var(--story-paper),
+    0 0 0 5px var(--story-accent-text);
+}
+.story-ui[data-story-ui-style="period"] .story-ui-graph-caption {
+  border-block: 1px solid var(--story-ink);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-graph-label {
+  letter-spacing: 0.1em;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-graph-relation {
+  color: var(--story-accent-text);
+  border: 3px double currentColor;
+  border-radius: 2px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  rotate: -3deg;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-graph-relation[data-tone] {
+  color: var(--story-tone);
+}
+.story-ui[data-story-ui-style="period"] .story-ui-graph-edge:not([data-tone]) {
+  --story-tone: var(--story-ink);
+}
+.story-ui[data-story-ui-style="period"] .story-ui-graph-edge > path {
+  stroke-width: 1.3;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-map-ground {
+  border: 3px solid var(--story-ink);
+  border-radius: 0;
+  box-shadow:
+    inset 0 0 0 2px var(--story-surface),
+    inset 0 0 0 3px var(--story-ink);
+}
+.story-ui[data-story-ui-style="period"] .story-ui-map-area {
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-map-area-label {
+  letter-spacing: 0.1em;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-map-token {
+  border: 3px double var(--story-paper);
+  border-radius: 2px;
+  box-shadow: none;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-calendar-grid {
+  gap: 0;
+  border: 2px solid var(--story-ink);
+}
+.story-ui[data-story-ui-style="period"] .story-ui-calendar-weekday {
+  border-block-end: 2px solid var(--story-ink);
+  letter-spacing: 0.14em;
+}
+.story-ui[data-story-ui-style="period"] :is(.story-ui-calendar-date, .story-ui-calendar-blank) {
+  background: none;
+  border-inline-end: 1px solid color-mix(in srgb, var(--story-ink) 35%, transparent);
+  border-block-end: 1px solid color-mix(in srgb, var(--story-ink) 35%, transparent);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-calendar-date[data-current] {
+  background: none;
+  box-shadow: none;
+}
+.story-ui[data-story-ui-style="period"]
+  .story-ui-calendar-date[data-current]
+  > .story-ui-calendar-number {
+  min-inline-size: 1.9em;
+  padding: 0.15em 0.2em;
+  color: var(--story-accent-text);
+  background: none;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  rotate: -10deg;
+}
+.story-ui[data-story-ui-style="period"] .story-ui-calendar-date li {
+  background: none;
+  border-radius: 0;
+}
+
+/* blue-archive: bright geometric panels, sky-blue rims and the yellow selection line. */
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-graph-node > .story-ui-avatar {
+  color: var(--story-ba-navy);
+  background: var(--story-surface);
+  box-shadow:
+    0 0 0 2px var(--story-surface),
+    0 0 0 4px var(--story-accent),
+    0 3px 8px 2px #1b2a4a33;
+  font-style: italic;
+  font-weight: 800;
+}
+.story-ui[data-story-ui-style="blue-archive"]
+  .story-ui-graph-node[data-state="current"]
+  > .story-ui-avatar {
+  box-shadow:
+    0 0 0 2px var(--story-surface),
+    0 0 0 5px var(--story-ba-yellow),
+    0 3px 10px 3px #1b2a4a40;
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-graph-caption {
+  background: var(--story-surface);
+  border-radius: 4px;
+  box-shadow: 0 1px 3px #1b2a4a33;
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-graph-label {
+  color: var(--story-ba-navy);
+  font-style: italic;
+  font-weight: 800;
+}
+.story-ui[data-story-ui-style="blue-archive"]
+  .story-ui-graph-node[data-state="current"]
+  .story-ui-graph-label {
+  color: var(--story-ba-navy);
+  box-shadow: inset 0 -0.3em 0 var(--story-ba-yellow);
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-graph-relation {
+  color: var(--story-accent-text);
+  background: var(--story-surface);
+  border: 1px solid var(--story-accent);
+  border-radius: 4px;
+  font-style: italic;
+  font-weight: 800;
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-graph-edge:not([data-tone]) {
+  --story-tone: color-mix(in srgb, var(--story-accent-text) 60%, transparent);
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-map-ground {
+  background:
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--story-accent) 40%, transparent) 1px,
+      transparent 1px
+    )
+    0 0 / var(--story-map-cell) var(--story-map-cell),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--story-accent) 40%, transparent) 1px,
+      transparent 1px
+    )
+    0 0 / var(--story-map-cell) var(--story-map-cell),
+    var(--story-surface);
+  border-color: var(--story-accent);
+  border-radius: 6px;
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-map-area-label {
+  font-style: italic;
+  font-weight: 800;
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-map-token[data-state="current"] {
+  box-shadow:
+    0 0 0 2px var(--story-surface),
+    0 0 0 4px var(--story-ba-yellow);
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-calendar-weekday {
+  color: var(--story-ba-navy);
+  font-style: italic;
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-calendar-date {
+  background: var(--story-surface);
+  border-radius: 6px;
+  box-shadow: 0 1px 3px #1b2a4a26;
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-calendar-date[data-current] {
+  background: var(--story-surface);
+  box-shadow:
+    0 1px 3px #1b2a4a26,
+    inset 0 -4px 0 var(--story-ba-yellow);
+}
+.story-ui[data-story-ui-style="blue-archive"]
+  .story-ui-calendar-date[data-current]
+  > .story-ui-calendar-number {
+  color: var(--story-accent-ink);
+  border-radius: 4px;
+  font-style: italic;
+}
+.story-ui[data-story-ui-style="blue-archive"] .story-ui-calendar-date li {
+  border-radius: 3px;
+  font-style: italic;
+}
+
+/* idol: broadcast graphics. Foil rims, slanted hot plates, stickers, oversized italic dates. */
+.story-ui[data-story-ui-style="idol"] .story-ui-graph-node > .story-ui-avatar {
+  background:
+    linear-gradient(var(--story-surface), var(--story-surface)) padding-box,
+    var(--story-foil) border-box;
+  border: 3px solid transparent;
+  box-shadow: 0 2px 8px -2px #00000040;
+}
+.story-ui[data-story-ui-style="idol"]
+  .story-ui-graph-node[data-state="current"]
+  > .story-ui-avatar {
+  color: var(--story-accent-ink);
+  background:
+    linear-gradient(var(--story-accent), var(--story-accent)) padding-box,
+    var(--story-foil) border-box;
+  border-width: 4px;
+  box-shadow: 0 4px 14px -2px var(--story-accent);
+}
+.story-ui[data-story-ui-style="idol"]
+  .story-ui-graph-node[data-state="unknown"]
+  > .story-ui-avatar {
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      color-mix(in srgb, var(--story-ink) 7%, transparent) 0 4px,
+      transparent 4px 8px
+    )
+    padding-box,
+    linear-gradient(var(--story-surface), var(--story-surface)) padding-box,
+    var(--story-foil) border-box;
+}
+.story-ui[data-story-ui-style="idol"] .story-ui-graph-caption {
+  padding-inline: 0.75em;
+  background: var(--story-ink);
+  border-radius: 0;
+  clip-path: polygon(0.45em 0, 100% 0, calc(100% - 0.45em) 100%, 0 100%);
+  font-style: italic;
+}
+.story-ui[data-story-ui-style="idol"] .story-ui-graph-label {
+  color: var(--story-paper);
+  font-weight: 900;
+}
+.story-ui[data-story-ui-style="idol"] .story-ui-graph-text {
+  color: color-mix(in srgb, var(--story-paper) 75%, transparent);
+}
+.story-ui[data-story-ui-style="idol"]
+  .story-ui-graph-node[data-state="current"]
+  .story-ui-graph-caption {
+  background: var(--story-accent);
+}
+.story-ui[data-story-ui-style="idol"]
+  .story-ui-graph-node[data-state="current"]
+  .story-ui-graph-label {
+  color: var(--story-accent-ink);
+}
+.story-ui[data-story-ui-style="idol"] .story-ui-graph-relation {
+  color: var(--story-paper);
+  background: var(--story-tone);
+  border: 2px solid var(--story-paper);
+  box-shadow: 0 1px 3px #00000040;
+  font-weight: 800;
+  rotate: -3deg;
+}
+.story-ui[data-story-ui-style="idol"] .story-ui-graph-relation:not([data-tone]) {
+  --story-tone: var(--story-accent);
+}
+.story-ui[data-story-ui-style="idol"] .story-ui-graph-edge:not([data-tone]) {
+  --story-tone: color-mix(in srgb, var(--story-accent) 55%, transparent);
+}
+.story-ui[data-story-ui-style="idol"] .story-ui-map-ground {
+  border: 3px solid;
+  border-image: var(--story-foil) 1;
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="idol"] .story-ui-map-token {
+  border-width: 2.5px;
+  box-shadow: 0 2px 5px -1px #00000059;
+  rotate: -6deg;
+}
+.story-ui[data-story-ui-style="idol"] .story-ui-map-token[data-state="current"] {
+  box-shadow:
+    0 0 0 2px var(--story-paper),
+    0 0 0 4px var(--story-accent);
+}
+.story-ui[data-story-ui-style="idol"] .story-ui-calendar-weekday {
+  font-style: italic;
+  font-weight: 900;
+}
+.story-ui[data-story-ui-style="idol"] .story-ui-calendar-date {
+  background: var(--story-surface);
+  border-radius: 10px;
+}
+.story-ui[data-story-ui-style="idol"] .story-ui-calendar-date[data-current] {
+  background:
+    linear-gradient(var(--story-surface), var(--story-surface)) padding-box,
+    var(--story-foil) border-box;
+  border: 3px solid transparent;
+  box-shadow: none;
+}
+.story-ui[data-story-ui-style="idol"]
+  .story-ui-calendar-date[data-current]
+  > .story-ui-calendar-number {
+  padding: 0;
+  color: var(--story-accent);
+  background: none;
+  font-size: 1.7em;
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1;
+  rotate: -6deg;
+  text-shadow: 0.06em 0.06em 0 color-mix(in srgb, var(--story-accent) 30%, transparent);
+}
+.story-ui[data-story-ui-style="idol"] .story-ui-calendar-date li {
+  color: var(--story-paper);
+  background: var(--story-tone);
+  border: 0;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+/* neon: night city. Cut corners, cyan lines that glow, signal yellow for the focus. */
+.story-ui[data-story-ui-style="neon"] .story-ui-graph-canvas > svg {
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--story-accent-text) 70%, transparent));
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-graph-edge:not([data-tone]) {
+  --story-tone: color-mix(in srgb, var(--story-accent-text) 75%, transparent);
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-graph-node {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--story-tone) 60%, transparent));
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-graph-node:not([data-tone]) {
+  --story-tone: var(--story-accent-text);
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-graph-node > .story-ui-avatar {
+  color: var(--story-tone);
+  background:
+    linear-gradient(var(--story-surface), var(--story-surface)) padding-box,
+    var(--story-tone) border-box;
+  border: 2px solid transparent;
+  border-radius: 0;
+  box-shadow: none;
+  clip-path: polygon(28% 0, 100% 0, 100% 72%, 72% 100%, 0 100%, 0 28%);
+  font-family: var(--story-tech);
+}
+.story-ui[data-story-ui-style="neon"]
+  .story-ui-graph-node[data-state="current"]
+  > .story-ui-avatar {
+  color: var(--story-accent-ink);
+  background: var(--story-accent);
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-graph-node[data-state="current"] {
+  --story-tone: var(--story-accent);
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-graph-caption {
+  background: color-mix(in srgb, var(--story-paper) 90%, transparent);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-graph-label {
+  font-family: var(--story-tech);
+  letter-spacing: 0.06em;
+}
+.story-ui[data-story-ui-style="neon"]
+  .story-ui-graph-node[data-state="current"]
+  .story-ui-graph-label {
+  color: var(--story-accent);
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-graph-relation {
+  color: var(--story-accent-text);
+  border: 1px solid currentColor;
+  border-radius: 0;
+  clip-path: polygon(
+    0.4em 0,
+    100% 0,
+    100% calc(100% - 0.4em),
+    calc(100% - 0.4em) 100%,
+    0 100%,
+    0 0.4em
+  );
+  font-family: var(--story-tech);
+  letter-spacing: 0.08em;
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-graph-relation[data-tone] {
+  color: var(--story-tone);
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-map-ground {
+  background:
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--story-accent-text) 22%, transparent) 1px,
+      transparent 1px
+    )
+    0 0 / var(--story-map-cell) var(--story-map-cell),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--story-accent-text) 22%, transparent) 1px,
+      transparent 1px
+    )
+    0 0 / var(--story-map-cell) var(--story-map-cell),
+    var(--story-paper);
+  border: 1px solid var(--story-accent-text);
+  border-radius: 0;
+  box-shadow: 0 0 12px -2px color-mix(in srgb, var(--story-accent-text) 55%, transparent);
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-map-coord {
+  color: var(--story-accent-text);
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-map-area {
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-map-token {
+  color: var(--story-tone);
+  background: color-mix(in srgb, var(--story-tone) 18%, var(--story-paper));
+  border: 1.5px solid var(--story-tone);
+  border-radius: 0;
+  box-shadow: 0 0 8px -1px var(--story-tone);
+  clip-path: polygon(30% 0, 100% 0, 100% 70%, 70% 100%, 0 100%, 0 30%);
+  font-family: var(--story-tech);
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-map-token[data-state="current"] {
+  color: var(--story-accent-ink);
+  background: var(--story-accent);
+  border-color: var(--story-accent);
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-map-token[data-state="down"] {
+  color: var(--story-muted);
+  background: none;
+  border-color: var(--story-muted);
+  border-style: dashed;
+  box-shadow: none;
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-calendar-weekday {
+  font-family: var(--story-tech);
+  letter-spacing: 0.1em;
+}
+.story-ui[data-story-ui-style="neon"] :is(.story-ui-calendar-date, .story-ui-calendar-blank) {
+  border-radius: 0;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 0.6em), calc(100% - 0.6em) 100%, 0 100%);
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-calendar-date {
+  background: color-mix(in srgb, var(--story-accent-text) 6%, var(--story-surface));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--story-accent-text) 35%, transparent);
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-calendar-date[data-current] {
+  background: color-mix(in srgb, var(--story-accent) 10%, var(--story-surface));
+  box-shadow: inset 0 0 0 1.5px var(--story-accent);
+}
+.story-ui[data-story-ui-style="neon"]
+  .story-ui-calendar-date[data-current]
+  > .story-ui-calendar-number {
+  border-radius: 0;
+  font-family: var(--story-tech);
+}
+.story-ui[data-story-ui-style="neon"] .story-ui-calendar-date li {
+  border-radius: 0;
+}
+
+/* horror: almost no ink. Thin rings, no boxes, gray portraits, and red kept for danger. */
+.story-ui[data-story-ui-style="horror"] .story-ui-graph-node > .story-ui-avatar {
+  color: var(--story-muted);
+  background: var(--story-paper);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--story-ink) 45%, transparent);
+  font-weight: 300;
+}
+.story-ui[data-story-ui-style="horror"]
+  .story-ui-graph-node[data-tone="danger"]
+  > .story-ui-avatar {
+  box-shadow: 0 0 0 1px var(--story-blood);
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-graph-node > .story-ui-avatar > img {
+  filter: grayscale(1) contrast(1.2) brightness(0.85);
+}
+.story-ui[data-story-ui-style="horror"]
+  .story-ui-graph-node[data-state="current"]
+  > .story-ui-avatar {
+  color: var(--story-ink);
+  box-shadow:
+    0 0 0 1px var(--story-ink),
+    0 0 0 5px var(--story-paper),
+    0 0 0 6px color-mix(in srgb, var(--story-ink) 30%, transparent);
+}
+.story-ui[data-story-ui-style="horror"] :is(.story-ui-graph-caption, .story-ui-graph-relation) {
+  background: none;
+  border: 0;
+  text-shadow:
+    0 0 3px var(--story-paper),
+    0 0 3px var(--story-paper),
+    0 0 6px var(--story-paper);
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-graph-label {
+  font-weight: 400;
+  letter-spacing: 0.14em;
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-graph-relation {
+  font-weight: 400;
+  letter-spacing: 0.14em;
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-graph-relation:not([data-tone="danger"]) {
+  color: var(--story-muted);
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-graph-edge:not([data-tone="danger"]) {
+  --story-tone: color-mix(in srgb, var(--story-ink) 32%, transparent);
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-graph-edge > path {
+  stroke-width: 1;
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-map-ground {
+  background:
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--story-ink) 7%, transparent) 1px,
+      transparent 1px
+    )
+    0 0 / var(--story-map-cell) var(--story-map-cell),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--story-ink) 7%, transparent) 1px,
+      transparent 1px
+    )
+    0 0 / var(--story-map-cell) var(--story-map-cell),
+    var(--story-paper);
+  border: 0;
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-map-area:not([data-tone="danger"]) {
+  --story-tone: var(--story-muted);
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-map-area {
+  background: none;
+  border: 1px dashed color-mix(in srgb, var(--story-tone) 60%, transparent);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-map-area[data-terrain="hidden"] {
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, #000 70%, transparent),
+    color-mix(in srgb, #000 92%, transparent)
+  );
+  border: 0;
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-map-area-label {
+  font-weight: 400;
+  letter-spacing: 0.12em;
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-map-token {
+  color: var(--story-ink);
+  background: var(--story-paper);
+  border: 1px solid color-mix(in srgb, var(--story-ink) 60%, transparent);
+  box-shadow: none;
+  font-weight: 400;
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-map-token[data-tone="danger"] {
+  color: var(--story-paper);
+  background: var(--story-blood);
+  border-color: var(--story-blood);
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-map-token[data-state="current"] {
+  box-shadow:
+    0 0 0 3px var(--story-paper),
+    0 0 0 4px color-mix(in srgb, var(--story-ink) 45%, transparent);
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-calendar-weekday {
+  font-weight: 400;
+  letter-spacing: 0.16em;
+}
+.story-ui[data-story-ui-style="horror"] :is(.story-ui-calendar-date, .story-ui-calendar-blank) {
+  background: none;
+  border-block-start: 1px solid color-mix(in srgb, var(--story-ink) 14%, transparent);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-calendar-number {
+  font-weight: 300;
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-calendar-weekday[data-weekend],
+.story-ui[data-story-ui-style="horror"]
+  .story-ui-calendar-date[data-weekend]
+  > .story-ui-calendar-number {
+  color: var(--story-muted);
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-calendar-date[data-current] {
+  background: none;
+  box-shadow: none;
+}
+.story-ui[data-story-ui-style="horror"]
+  .story-ui-calendar-date[data-current]
+  > .story-ui-calendar-number {
+  color: var(--story-ink);
+  background: none;
+  border-radius: 0;
+  box-shadow: inset 0 -1px 0 var(--story-ink);
+  font-weight: 400;
+}
+.story-ui[data-story-ui-style="horror"]
+  :is(.story-ui-calendar-date li, .story-ui-calendar-agenda > li):not([data-tone="danger"]) {
+  --story-tone: var(--story-muted);
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-calendar-date li {
+  color: var(--story-muted);
+  background: none;
+  border-inline-start-width: 1px;
+  border-radius: 0;
+  font-weight: 400;
+}
+.story-ui[data-story-ui-style="horror"] .story-ui-calendar-date li[data-tone="danger"] {
+  color: var(--story-danger);
+}
+
+/* tactical: a field report. Bracketed plates, tags in square brackets, map symbols: friendly
+   units square, hostile ones diamond. */
+.story-ui[data-story-ui-style="tactical"] .story-ui-graph-node > .story-ui-avatar {
+  color: var(--story-ink);
+  background:
+    var(--story-bracket) top left / 0.55em 1.5px,
+    var(--story-bracket) top left / 1.5px 0.55em,
+    var(--story-bracket) top right / 0.55em 1.5px,
+    var(--story-bracket) top right / 1.5px 0.55em,
+    var(--story-bracket) bottom left / 0.55em 1.5px,
+    var(--story-bracket) bottom left / 1.5px 0.55em,
+    var(--story-bracket) bottom right / 0.55em 1.5px,
+    var(--story-bracket) bottom right / 1.5px 0.55em,
+    color-mix(in srgb, var(--story-tone) 14%, var(--story-surface));
+  background-repeat: no-repeat;
+  border-radius: 0;
+  box-shadow: none;
+  font-family: var(--story-tech);
+}
+.story-ui[data-story-ui-style="tactical"]
+  .story-ui-graph-node[data-state="current"]
+  > .story-ui-avatar {
+  color: var(--story-accent-ink);
+  background-color: var(--story-accent);
+  outline: 1.5px solid var(--story-accent);
+  outline-offset: 3px;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-graph-caption {
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-graph-label {
+  font-family: var(--story-tech);
+  letter-spacing: 0.06em;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-graph-relation {
+  color: var(--story-ink);
+  border: 0;
+  border-inline: 1.5px solid currentColor;
+  border-radius: 0;
+  font-family: var(--story-tech);
+  letter-spacing: 0.06em;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-graph-relation[data-tone] {
+  color: var(--story-tone);
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-graph-edge:not([data-tone]) {
+  --story-tone: color-mix(in srgb, var(--story-ink) 60%, transparent);
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-graph-edge[data-line="dashed"] > path {
+  stroke-dasharray: 10 4 2 4;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-map-ground {
+  border: 1.5px solid var(--story-ink);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-map-coord {
+  color: var(--story-ink);
+  font-weight: 700;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-map-area {
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-map-area[data-tone="danger"] {
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--story-danger) 22%, transparent) 0 4px,
+    transparent 4px 9px
+  );
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-map-area-label {
+  font-family: var(--story-tech);
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-map-token {
+  color: var(--story-tone);
+  background: color-mix(in srgb, var(--story-tone) 16%, var(--story-surface));
+  border: 2px solid var(--story-tone);
+  border-radius: 0;
+  box-shadow: none;
+  font-family: var(--story-tech);
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-map-token[data-tone="danger"] {
+  rotate: 45deg;
+  scale: 0.85;
+}
+.story-ui[data-story-ui-style="tactical"]
+  .story-ui-map-token[data-tone="danger"]
+  > :is(span, .story-ui-icon) {
+  rotate: -45deg;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-map-token[data-state="current"] {
+  outline: 1.5px solid var(--story-tone);
+  outline-offset: 2px;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-calendar-weekday {
+  font-family: var(--story-tech);
+  letter-spacing: 0.1em;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-calendar-date {
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--story-ink) 30%, transparent);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-calendar-number {
+  font-family: var(--story-tech);
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-calendar-date[data-current] {
+  background:
+    repeating-linear-gradient(-45deg, var(--story-caution) 0 5px, var(--story-ink) 5px 10px) top /
+    100% 5px no-repeat,
+    color-mix(in srgb, var(--story-accent) 10%, transparent);
+  border: 1.5px solid var(--story-ink);
+  box-shadow: none;
+}
+.story-ui[data-story-ui-style="tactical"]
+  .story-ui-calendar-date[data-current]
+  > .story-ui-calendar-number {
+  margin-block-start: 0.35em;
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="tactical"] .story-ui-calendar-date li {
+  border-radius: 0;
+  font-family: var(--story-tech);
+}
+
+/* romance: a decorated diary. Polaroids, highlighter, washi tape and stickers. */
+.story-ui[data-story-ui-style="romance"] .story-ui-graph-node > .story-ui-avatar {
+  padding: 3px 3px 8px;
+  background: light-dark(#ffffff, #f3e9e6);
+  border-radius: 2px;
+  box-shadow: 0 2px 6px -2px #00000066;
+  rotate: -3deg;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-graph-node:nth-child(even) > .story-ui-avatar {
+  rotate: 2.5deg;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-graph-node > .story-ui-avatar > img {
+  border-radius: 1px;
+}
+.story-ui[data-story-ui-style="romance"]
+  .story-ui-graph-node[data-state="current"]
+  > .story-ui-avatar {
+  box-shadow:
+    0 2px 6px -2px #00000066,
+    0 0 0 3px color-mix(in srgb, var(--story-accent) 45%, transparent);
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-graph-caption {
+  border-radius: var(--story-wobble);
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-graph-label {
+  background: var(--story-marker);
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-graph-relation {
+  padding-inline: 0.8em;
+  color: var(--story-ink);
+  background:
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--story-surface) 35%, transparent) 0 0.3em,
+      transparent 0.3em 0.6em
+    ),
+    color-mix(in srgb, var(--story-tone) 26%, var(--story-surface));
+  border: 0;
+  border-radius: 0;
+  clip-path: polygon(0 8%, 4% 0, 100% 4%, 97% 30%, 100% 55%, 96% 100%, 3% 94%, 0 70%, 3% 45%);
+  rotate: -2deg;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-graph-relation:not([data-tone]) {
+  --story-tone: var(--story-accent);
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-graph-edge:not([data-tone]) {
+  --story-tone: color-mix(in srgb, var(--story-accent-text) 50%, transparent);
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-map-ground {
+  background:
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--story-accent) 16%, transparent) 1px,
+      transparent 1px
+    )
+    0 0 / calc(var(--story-map-cell) / 2) calc(var(--story-map-cell) / 2),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--story-accent) 16%, transparent) 1px,
+      transparent 1px
+    )
+    0 0 / calc(var(--story-map-cell) / 2) calc(var(--story-map-cell) / 2),
+    var(--story-surface);
+  border: 1px solid var(--story-border);
+  border-radius: 10px;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-map-area {
+  border-style: dashed;
+  border-radius: 8px;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-map-token {
+  border: 2.5px solid light-dark(#ffffff, #f3e9e6);
+  box-shadow: 0 2px 4px -1px #00000059;
+  rotate: -5deg;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-calendar-date {
+  position: relative;
+  background: var(--story-surface);
+  border-radius: var(--story-wobble);
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-calendar-date[data-current] {
+  background: var(--story-surface);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--story-accent) 60%, transparent);
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-calendar-date[data-current]::before {
+  position: absolute;
+  inset-block-start: -0.35em;
+  inset-inline: 18% 18%;
+  block-size: 0.7em;
+  background:
+    repeating-linear-gradient(90deg, #ffffff66 0 0.3em, transparent 0.3em 0.6em), #f2b5c2d9;
+  content: "";
+  rotate: -4deg;
+}
+.story-ui[data-story-ui-style="romance"]
+  .story-ui-calendar-date[data-current]
+  > .story-ui-calendar-number {
+  color: var(--story-accent-text);
+  background: none;
+  font-size: 1.1em;
+}
+.story-ui[data-story-ui-style="romance"] .story-ui-calendar-date li {
+  background: linear-gradient(
+    transparent 40%,
+    color-mix(in srgb, var(--story-tone) 35%, transparent) 40% 92%,
+    transparent 92%
+  );
+  border: 0;
+  border-radius: 0;
+}
+
+/* pop: comic panels. Heavy outlines, hard shadows, slanted black plates, one hot color. */
+.story-ui[data-story-ui-style="pop"] .story-ui-graph-node > .story-ui-avatar {
+  color: var(--story-ink);
+  background: var(--story-surface);
+  border: 3px solid var(--story-ink);
+  box-shadow: 3px 3px 0 var(--story-ink);
+  font-style: italic;
+  font-weight: 900;
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-graph-node[data-state="current"] > .story-ui-avatar {
+  color: var(--story-paper);
+  background: var(--story-accent);
+  box-shadow: 4px 4px 0 var(--story-ink);
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-graph-caption {
+  padding-inline: 0.75em;
+  background: var(--story-ink);
+  border-radius: 0;
+  clip-path: polygon(0.4em 0, 100% 0, calc(100% - 0.4em) 100%, 0 100%);
+  font-style: italic;
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-graph-label {
+  color: var(--story-paper);
+  font-weight: 900;
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-graph-text {
+  color: color-mix(in srgb, var(--story-paper) 78%, transparent);
+}
+.story-ui[data-story-ui-style="pop"]
+  .story-ui-graph-node[data-state="current"]
+  .story-ui-graph-label {
+  color: var(--story-paper);
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-graph-relation {
+  color: var(--story-ink);
+  background: var(--story-surface);
+  border: 2px solid var(--story-ink);
+  border-radius: 0;
+  box-shadow: 2px 2px 0 var(--story-ink);
+  font-style: italic;
+  font-weight: 900;
+  rotate: -3deg;
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-graph-relation[data-tone] {
+  color: var(--story-tone);
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-graph-edge:not([data-tone]) {
+  --story-tone: var(--story-ink);
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-graph-edge > path {
+  stroke-width: 2.6;
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-map-ground {
+  border: 3px solid var(--story-ink);
+  border-radius: 0;
+  box-shadow: 4px 4px 0 var(--story-ink);
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-map-area {
+  border: 2px solid var(--story-ink);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-map-area[data-terrain="water"] {
+  border-color: var(--story-ink);
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-map-token {
+  border: 2.5px solid var(--story-ink);
+  box-shadow: 2px 2px 0 var(--story-ink);
+  font-style: italic;
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-map-token[data-state="current"] {
+  box-shadow:
+    2px 2px 0 var(--story-ink),
+    0 0 0 4px var(--story-accent);
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-calendar-grid {
+  gap: 4px;
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-calendar-weekday {
+  font-style: italic;
+  font-weight: 900;
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-calendar-date {
+  background: var(--story-surface);
+  border: 2px solid var(--story-ink);
+  border-radius: 0;
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-calendar-number {
+  font-style: italic;
+  font-weight: 900;
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-calendar-date[data-current] {
+  background: var(--story-accent);
+  box-shadow: 3px 3px 0 var(--story-ink);
+  rotate: -1.5deg;
+}
+.story-ui[data-story-ui-style="pop"]
+  .story-ui-calendar-date[data-current]
+  > .story-ui-calendar-number {
+  color: var(--story-paper);
+  background: none;
+  font-size: 1.2em;
+}
+.story-ui[data-story-ui-style="pop"] .story-ui-calendar-date li {
+  background: var(--story-surface);
+  border: 1.5px solid var(--story-ink);
+  border-radius: 0;
+  font-style: italic;
 }
 
 @media (prefers-reduced-motion: reduce) {
