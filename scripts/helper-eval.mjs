@@ -90,7 +90,6 @@ async function configuration() {
         inputTokenLimit: 32768,
         temperature: null,
       },
-      limits: { helperCalls: 8, totalCalls: 10 },
       maxRequests: 40,
     };
   if (!values.config)
@@ -116,8 +115,10 @@ async function configuration() {
       throw new Error('Only realtime execution is supported.');
   }
   integer(config.maxRequests, 'maxRequests');
-  integer(config.limits?.totalCalls, 'limits.totalCalls', 2, 100);
-  integer(config.limits?.helperCalls, 'limits.helperCalls', 1, config.limits.totalCalls);
+  if ('limits' in config)
+    throw new Error(
+      'limits is not supported: helper tasks use the fixed host call policy. Bound the suite with maxRequests.'
+    );
   return config;
 }
 
@@ -199,7 +200,6 @@ async function main() {
       apiKeyEnv: config.apiKeyEnv,
       model: config.model,
       contextModel: config.contextModel ?? config.model,
-      limits: config.limits,
       maxRequests: config.maxRequests,
     },
     budget: {
@@ -299,10 +299,7 @@ async function main() {
           track: (promise) => work.push(promise),
           streams: new ResponseStreamStore(store),
         });
-        let conversation = runtime.workspace.open({ kind: 'library', workId: 'helper-eval' });
-        conversation = runtime.workspace.update(conversation.id, conversation.revision, {
-          limits: { ...config.limits },
-        });
+        const conversation = runtime.workspace.open({ kind: 'library', workId: 'helper-eval' });
         const before = snapshot(store);
         let turn = 0;
         let round = 0;
