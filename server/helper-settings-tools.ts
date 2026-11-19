@@ -1,4 +1,8 @@
 import { HELPER_PRICING_TOOLS, invokeHelperPricingTool } from './helper-pricing-tools.js';
+import {
+  HELPER_MODEL_PARAMETER_TOOLS,
+  invokeHelperModelParameterTool,
+} from './helper-model-parameter-tools.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import type { Settings } from '../core/types.js';
 import {
@@ -44,8 +48,16 @@ const settings = [
   'newChat.storyUiStyle',
 ] as const;
 
+/** Settings writes whose receipts and compact results commit inside workspace.operation. */
+export const HELPER_SETTINGS_MUTATIONS = new Set([
+  'settings.update',
+  'model.pricing.update',
+  'model.parameters.update',
+]);
+
 export const HELPER_SETTINGS_TOOLS: ProviderTool[] = [
   ...HELPER_PRICING_TOOLS,
+  ...HELPER_MODEL_PARAMETER_TOOLS,
   {
     name: 'model.list',
     description:
@@ -189,6 +201,26 @@ export function applyHelperSettingsMutation(
     });
     return result;
   }
+  if (name === 'model.parameters.update') {
+    const result = invokeHelperModelParameterTool(store, name, args);
+    recordHelperTaskResult(workspace, task, {
+      receiptId,
+      operation: name,
+      requestedTargets: 1,
+      targets: result.changed
+        ? [
+            {
+              kind: 'settings',
+              id: result.modelId,
+              title: result.title,
+              revision: result.revision,
+              setting: 'model.parameters',
+            },
+          ]
+        : [],
+    });
+    return result;
+  }
   const setting = text(args.setting, 'setting', 100);
   const before = settingValue(store, setting, chatId);
   const beforeLabel = selectionLabel(store, setting, before);
@@ -231,6 +263,8 @@ export function invokeHelperSettingsTool(
   chatId?: string
 ): unknown {
   if (name.startsWith('model.pricing.')) return invokeHelperPricingTool(store, name, value);
+  if (name.startsWith('model.parameters.'))
+    return invokeHelperModelParameterTool(store, name, value);
   const args = record(value);
   if (name === 'model.list') {
     fields(args, []);

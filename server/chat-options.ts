@@ -15,6 +15,7 @@ import type { HelperTask } from '../core/helper.js';
 import type { CurrentPrompt, ProfileSnapshot } from '../core/product.js';
 import { resolveControlValues, type PromptControl, type RisuPrompt } from '../core/risu-prompt.js';
 import type { ProviderTool, Json } from '../core/transport.js';
+import { recordHelperTaskResult } from './helper-task-results.js';
 import { HelperWorkspace } from './helper-workspace.js';
 import { chatPromptWorkspace } from './prompt-workspace.js';
 import { fields, HttpError, isSha256Hex, number, record, text } from './request-validation.js';
@@ -307,38 +308,46 @@ const str: Json = { type: 'string' };
 export function helperOptionState({ program, ...state }: ChatOptionState) {
   return { ...state, definitions: state.controls ?? promptControls(program) };
 }
+const optionValuesInput = (values: string): Json =>
+  schema(
+    {
+      expectedRevision: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Revision from options.read.',
+      },
+      binding: {
+        type: 'object',
+        description: 'The binding object exactly as returned by options.read.',
+        properties: { owner: str, definitionHash: str },
+        required: ['owner', 'definitionHash'],
+        additionalProperties: false,
+      },
+      values: { type: 'object', description: values },
+    },
+    ['expectedRevision', 'binding', 'values']
+  );
 export const helperOptionTools: ProviderTool[] = [
   {
     name: 'options.read',
     description:
-      'Read the writing options of a chat: the option definitions of its prompt preset, the values fixed globally or for the chat, any values staged for the next request only, and conflicts between them. It returns the binding and the revision that options.oneoff needs. The prompt text itself is not included.',
+      'Read the writing options of a chat: the option definitions of its prompt preset, the values fixed globally or for the chat, any values staged for the next request only, and conflicts between them. It returns the binding and the revision that options.oneoff and options.fix need. The prompt text itself is not included.',
     inputSchema: schema({}),
   },
   {
     name: 'options.oneoff',
     description:
       'Stage writing option values for the next request of a chat only, without changing its saved options. Use it when the user wants one upcoming reply written differently, for example longer or in another style. Take the option keys, allowed values, binding and revision from options.read.',
-    inputSchema: schema(
-      {
-        expectedRevision: {
-          type: 'integer',
-          minimum: 0,
-          description: 'Revision from options.read.',
-        },
-        binding: {
-          type: 'object',
-          description: 'The binding object exactly as returned by options.read.',
-          properties: { owner: str, definitionHash: str },
-          required: ['owner', 'definitionHash'],
-          additionalProperties: false,
-        },
-        values: {
-          type: 'object',
-          description:
-            'Option keys and their values for the next request, using the definitions from options.read.',
-        },
-      },
-      ['expectedRevision', 'binding', 'values']
+    inputSchema: optionValuesInput(
+      'Option keys and their values for the next request, using the definitions from options.read.'
+    ),
+  },
+  {
+    name: 'options.fix',
+    description:
+      "Save the writing option values of a chat, used by every later request of that chat until changed. Use it when the user wants the chat written differently from now on; for one reply use options.oneoff. values replaces the chat's fixed values: an option you leave out is no longer fixed and follows the prompt preset's global value, so copy fixedValues from options.read for the options to keep. An empty object removes every chat-fixed value. Take the option keys, allowed values, binding and revision from options.read.",
+    inputSchema: optionValuesInput(
+      'All option keys to fix for this chat and their values, using the definitions from options.read.'
     ),
   },
 ];
@@ -356,9 +365,32 @@ export function invokeHelperOptions(
     fields(record(value), []);
     return helperOptionState(service.get(scope.chatId));
   }
-  if (name !== 'options.oneoff') throw new HttpError(400, 'Unknown option tool');
-  new HelperWorkspace(store).assertRunning(task.id);
-  return helperOptionState(service.stage(scope.chatId, { ...record(value), operationId }, task.id));
+  const workspace = new HelperWorkspace(store);
+  workspace.assertRunning(task.id);
+  const body = { ...record(value), operationId };
+  if (name === 'options.oneoff')
+    return helperOptionState(service.stage(scope.chatId, body, task.id));
+  if (name !== 'options.fix') throw new HttpError(400, 'Unknown option tool');
+  const before = service.get(scope.chatId).revision;
+  const state = service.fixed(scope.chatId, body, task.id);
+  recordHelperTaskResult(workspace, task, {
+    receiptId: `${task.id}:${operationId}`,
+    operation: name,
+    requestedTargets: 1,
+    targets:
+      state.revision === before
+        ? []
+        : [
+            {
+              kind: 'settings',
+              id: scope.chatId,
+              title: store.chat(scope.chatId).title,
+              revision: state.revision,
+              setting: 'chat.options',
+            },
+          ],
+  });
+  return helperOptionState(state);
 }
 
 export function chatOptionRoutes(app: FastifyInstance, store: Store): void {

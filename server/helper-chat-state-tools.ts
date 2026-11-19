@@ -2,6 +2,11 @@ import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { CHAT_VARIABLE_LIMITS, validateChatVariableValues } from '../core/chat-variables.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import {
+  normalizeStoryGuideConfig,
+  STORY_GUIDE_LIMITS,
+  type StoryGuideConfig,
+} from '../core/story-guide.js';
 import type { HelperTask } from '../core/helper.js';
 import type { LogicalMessage } from '../core/risu-prompt.js';
 import { countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
@@ -11,6 +16,7 @@ import { readChatVariables, writeChatVariables } from './chat-variables.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { sceneRequestLore } from './request-lore.js';
+import { sceneTitle, setSceneTitle } from './scene-titles.js';
 import { inspectNextRequest } from './request-preview.js';
 import { fields, HttpError, isSha256Hex, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
@@ -155,6 +161,69 @@ export const HELPER_CHAT_STATE_TOOLS: ProviderTool[] = [
         },
       },
       ['expectedRevision', 'expectedSourceHash']
+    ),
+  },
+  {
+    name: 'scene.title',
+    description:
+      'Name a saved scene of the chat, or clear its name with an empty title. The name labels the scene in the scene list and navigator only; it is not sent to the writer. Take expectedTitle from the title that chat.read returns for that scene, or an empty string when it has none; the change is refused when the name changed since that read.',
+    inputSchema: schema(
+      {
+        sourceId: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 100,
+          description: 'Scene id from chat.read.',
+        },
+        title: { type: 'string', maxLength: 200, description: 'New scene name; empty clears it.' },
+        expectedTitle: {
+          type: 'string',
+          maxLength: 200,
+          description: 'Current name from chat.read, empty when the scene has none.',
+        },
+      },
+      ['sourceId', 'title', 'expectedTitle']
+    ),
+  },
+  {
+    name: 'chat.guide.update',
+    description:
+      'Change the original-work reference settings of a chat: whether the automatic reference step runs before writing, the work and edition, the reader position and spoiler limit, supplied reference text, whether canon events are followed, and whether the step may search the web. Read the current settings and revision from storyGuide in context.read. changes names only the settings to change; the others keep their values. It affects later requests only.',
+    inputSchema: schema(
+      {
+        expectedRevision: {
+          type: 'integer',
+          minimum: 0,
+          description: 'storyGuide.revision from context.read.',
+        },
+        changes: {
+          type: 'object',
+          additionalProperties: false,
+          minProperties: 1,
+          properties: {
+            enabled: { type: 'boolean', description: 'Run the automatic reference step.' },
+            work: {
+              type: 'string',
+              maxLength: STORY_GUIDE_LIMITS.work,
+              description: 'Original work and edition.',
+            },
+            position: {
+              type: 'string',
+              maxLength: STORY_GUIDE_LIMITS.position,
+              description: 'Where the reader is in the original work and the spoiler limit.',
+            },
+            reference: {
+              type: 'string',
+              maxLength: STORY_GUIDE_LIMITS.reference,
+              description: 'Reference text the user supplies about the work.',
+            },
+            followCanon: { type: 'boolean', description: 'Consider canon events.' },
+            webSearch: { type: 'boolean', description: 'Allow the step to search the web.' },
+          },
+          description: 'Only the settings to change.',
+        },
+      },
+      ['expectedRevision', 'changes']
     ),
   },
 ];
@@ -423,16 +492,109 @@ export async function readHelperChatState(
   throw new HttpError(400, 'UNKNOWN_CHAT_STATE_TOOL');
 }
 
-/** Called inside workspace.operation so the variable write, its receipt and result commit together. */
-export function updateHelperChatVariables(
+type ResultTask = Pick<HelperTask, 'id' | 'conversationId'>;
+
+/** Called inside workspace.operation so the write, its receipt and its result commit together. */
+export function applyHelperChatState(
   store: Store,
   workspace: HelperWorkspace,
-  task: Pick<HelperTask, 'id' | 'conversationId'>,
+  task: ResultTask,
   receiptId: string,
   chatId: string,
+  name: string,
   value: unknown
-) {
+): { changed: boolean } & Record<string, unknown> {
   const args = record(value);
+  if (name === 'chat.variables.update')
+    return updateChatVariables(store, workspace, task, receiptId, chatId, args);
+  if (name === 'scene.title') return nameScene(store, workspace, task, receiptId, chatId, args);
+  if (name === 'chat.guide.update')
+    return updateStoryGuide(store, workspace, task, receiptId, chatId, args);
+  throw new HttpError(400, 'UNKNOWN_CHAT_STATE_TOOL');
+}
+
+function nameScene(
+  store: Store,
+  workspace: HelperWorkspace,
+  task: ResultTask,
+  receiptId: string,
+  chatId: string,
+  args: Record<string, unknown>
+) {
+  fields(args, ['sourceId', 'title', 'expectedTitle']);
+  const sourceId = text(args.sourceId, 'source ID', 100);
+  const chat = store.chat(chatId);
+  if (!store.history(chat.headRevision).some((item) => item.revision === sourceId))
+    throw new HttpError(404, 'SCENE_NOT_IN_CHAT: Find the scene id with chat.read.');
+  const before = sceneTitle(store, sourceId);
+  const saved = setSceneTitle(store, sourceId, {
+    title: args.title,
+    expectedTitle: args.expectedTitle,
+  });
+  const changed = saved.title !== before;
+  recordHelperTaskResult(workspace, task, {
+    receiptId,
+    operation: 'scene.title',
+    requestedTargets: 1,
+    targets: changed
+      ? [{ kind: 'scene', id: sourceId, chatId, title: saved.title || chat.title, revision: 1 }]
+      : [],
+  });
+  return { changed, sourceId, title: saved.title };
+}
+
+function updateStoryGuide(
+  store: Store,
+  workspace: HelperWorkspace,
+  task: ResultTask,
+  receiptId: string,
+  chatId: string,
+  args: Record<string, unknown>
+) {
+  fields(args, ['expectedRevision', 'changes']);
+  const expectedRevision = number(args.expectedRevision, 'story guide revision', 0);
+  const changes = record(args.changes);
+  fields(changes, ['enabled', 'work', 'position', 'reference', 'followCanon', 'webSearch']);
+  if (!Object.keys(changes).length) throw new HttpError(400, 'Pass at least one change');
+  const current = store.storyGuide.get(chatId);
+  let config: StoryGuideConfig;
+  try {
+    config = normalizeStoryGuideConfig({ ...current.config, ...changes });
+  } catch {
+    throw new HttpError(
+      400,
+      `STORY_GUIDE_INVALID: enabled, followCanon and webSearch are booleans; work, position and reference are text of at most ${STORY_GUIDE_LIMITS.work}, ${STORY_GUIDE_LIMITS.position} and ${STORY_GUIDE_LIMITS.reference} characters.`
+    );
+  }
+  const saved = store.storyGuide.update(chatId, { expectedRevision, config });
+  const changed = saved.revision !== current.revision;
+  recordHelperTaskResult(workspace, task, {
+    receiptId,
+    operation: 'chat.guide.update',
+    requestedTargets: 1,
+    targets: changed
+      ? [
+          {
+            kind: 'settings',
+            id: chatId,
+            title: store.chat(chatId).title,
+            revision: saved.revision,
+            setting: 'chat.storyGuide',
+          },
+        ]
+      : [],
+  });
+  return { changed, revision: saved.revision, config: saved.config };
+}
+
+function updateChatVariables(
+  store: Store,
+  workspace: HelperWorkspace,
+  task: ResultTask,
+  receiptId: string,
+  chatId: string,
+  args: Record<string, unknown>
+) {
   fields(args, ['expectedRevision', 'expectedSourceHash', 'set', 'unset']);
   const expectedRevision = number(
     args.expectedRevision,

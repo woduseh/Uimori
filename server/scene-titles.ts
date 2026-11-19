@@ -12,6 +12,14 @@ export function sceneTitles(store: Store, chatId: string): Map<string, string> {
   );
 }
 
+/** The saved name of one scene, empty when it has none; forked chats share their ancestors' names. */
+export function sceneTitle(store: Store, sourceId: string): string {
+  return String(
+    store.db.prepare('SELECT value FROM app_metadata WHERE key=?').get(`source-title:${sourceId}`)
+      ?.value ?? ''
+  );
+}
+
 /** A scene can link several plans; prefer its smallest unit, then the earliest association. */
 export function outlineSceneTitles(store: Store, chatId: string): Map<string, string> {
   const titles = new Map<string, string>();
@@ -38,9 +46,7 @@ export function setSceneTitle(store: Store, sourceId: string, value: unknown) {
   return store.transaction(() => {
     const source = store.sourceMetadata(sourceId);
     const key = `source-title:${sourceId}`;
-    const current = String(
-      store.db.prepare('SELECT value FROM app_metadata WHERE key=?').get(key)?.value ?? ''
-    );
+    const current = sceneTitle(store, sourceId);
     if (current !== expected && current !== title)
       throw new HttpError(409, '장면 이름이 바뀌었어요. 목록을 다시 열어 확인해 주세요.');
     if (title)

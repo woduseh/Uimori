@@ -103,7 +103,7 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'chat.read',
     description:
-      'Read the scene index of a chat: its current head and, in story order, the id (sourceId), visible sceneNumber, original length and enabled state of each scene. Use it to find the sourceId of a scene before reading or editing it. Scene numbers count the enabled scenes from 1, starting with any introduction, and a hidden scene has sceneNumber null. includePreview adds the opening of each original, about 60 tokens. Follow nextOffset for more scenes. The text of a scene comes from scene.read.',
+      'Read the scene index of a chat: its current head and, in story order, the id (sourceId), visible sceneNumber, original length, enabled state and saved name (title, when it has one) of each scene. Use it to find the sourceId of a scene before reading or editing it. Scene numbers count the enabled scenes from 1, starting with any introduction, and a hidden scene has sceneNumber null. includePreview adds the opening of each original, about 60 tokens. Follow nextOffset for more scenes. The text of a scene comes from scene.read.',
     inputSchema: schema({
       chatId: itemId,
       includePreview: {
@@ -537,6 +537,7 @@ const readNames = new Set([
   'usage.read',
   'model.list',
   'model.pricing.read',
+  'model.parameters.read',
   'vertex.location.read',
   'task.inspect',
   'task.list',
@@ -628,11 +629,11 @@ export const HELPER_OPERATION_AREAS: readonly (readonly [area: string, purpose: 
   ['resource', 'saved bots, personas, modules, prompt presets and themes'],
   [
     'chat',
-    'chat list, scene index, title, fork, chat-only lore, next request preview and Risu variables',
+    'chat list, scene index, title, fork, chat-only lore, next request preview, Risu variables and original-work reference settings',
   ],
   [
     'scene',
-    'saved story scenes, their translations, the lore used to write them, and requests for the next scene or a translation',
+    'saved story scenes, their names and translations, the lore used to write them, and requests for the next scene or a translation',
   ],
   ['story', 'frozen story history of this task'],
   ['knowledge', 'frozen writing references of this task'],
@@ -645,7 +646,7 @@ export const HELPER_OPERATION_AREAS: readonly (readonly [area: string, purpose: 
   ['artifact', 'hypothetical scenes'],
   ['db', 'read-only SQL'],
   ['settings', 'models, prompts and chat settings'],
-  ['model', 'saved models and pricing'],
+  ['model', 'saved models, their generation parameters and pricing'],
   ['vertex', 'Google Vertex AI request locations'],
   ['usage', 'cost and tokens'],
   ['task', 'runs and background jobs'],
@@ -758,6 +759,11 @@ const discoveryTerms: Record<string, string> = {
   'scene.translate': 'translate retranslate translation again 번역 재번역',
   'chat.variables.read': 'risu variable state value getvar flag affection 변수',
   'chat.variables.update': 'risu variable state value setvar change fix flag affection 변수',
+  'options.fix': 'save keep always from now on writing option permanently 옵션 고정',
+  'scene.title': 'name rename label scene chapter title 장면 이름 제목',
+  'chat.guide.update': 'original work canon spoiler reference settings story guide 원작 참고',
+  'model.parameters.update':
+    'temperature max output tokens reasoning effort thinking verbosity top p 온도 파라미터',
   'illustration.profiles.read': 'local override 채팅 외형 프로필',
   'illustration.profiles.save': 'local override 채팅 외형 프로필',
 };

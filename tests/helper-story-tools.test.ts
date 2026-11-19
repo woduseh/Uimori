@@ -7,12 +7,14 @@ import type { Content } from '../core/product.js';
 import * as transport from '../core/transport.js';
 import type { Chat, Job, Run } from '../core/types.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
-import { HelperRuntime } from '../server/helper-runtime.js';
-import { readHelperTaskResults } from '../server/helper-task-results.js';
-import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
-import { ResponseStreamStore } from '../server/response-stream.js';
 import { Store } from '../server/store.js';
 import { fixtureBotInput } from './fixtures/chat.js';
+import {
+  helperCall,
+  helperDone,
+  runScriptedChatHelper,
+  selectFixtureModels,
+} from './fixtures/scripted-helper.js';
 
 const owned: { store: Store; directory: string }[] = [];
 afterEach(() => {
@@ -24,25 +26,6 @@ afterEach(() => {
       throw new Error('Unsafe cleanup');
     rmSync(directory, { recursive: true, force: true });
   }
-});
-
-const completed: transport.ProviderResult = {
-  status: 'completed',
-  text: '요청했어요.',
-  toolCalls: [],
-  refusal: null,
-  error: null,
-  usage: { inputTokens: 10, outputTokens: 4, costUsd: null, raw: null, priceRevision: null },
-  opaqueState: null,
-};
-const call = (
-  id: string,
-  name: string,
-  args: Record<string, transport.Json>
-): transport.ProviderResult => ({
-  ...structuredClone(completed),
-  status: 'tool_calls',
-  toolCalls: [{ id, name: 'app.call', arguments: { name, arguments: args } }],
 });
 
 async function runHelper(steps: (chat: Chat) => transport.ProviderResult[]) {
@@ -62,78 +45,16 @@ async function runHelper(steps: (chat: Chat) => transport.ProviderResult[]) {
       entries: [{ request: 'Arrive.', text: 'The harbor bell rang once.', translation: null }],
     },
   }).chat;
-  const connection = store.product.connection({
-    title: 'Synthetic connection',
-    protocol: 'fixture-sse-v1',
-    endpoint: 'http://127.0.0.1:9',
-    enabled: true,
-  });
-  const model = store.product.model({
-    title: 'Synthetic model',
-    connectionId: connection.id,
-    modelId: 'fixture',
-    temperature: null,
-    maxOutputTokens: 1024,
-  });
-  const selected = modelWorkspace(store);
-  updateModelWorkspace(store, {
-    expectedRevision: selected.revision,
-    routes: { main: { id: model.id }, translation: { id: model.id } },
-    translationPolicy: selected.translationPolicy,
-    helperModel: { id: model.id },
-  });
-  const scripted = steps(store.chat(chat.id));
-  let step = 0;
-  vi.spyOn(transport, 'executeProvider').mockImplementation(async (target, request, options) => {
-    transport.validateConnection(target);
-    options.beforeTurn?.();
-    await options.onWire?.({
-      connectionId: target.id,
-      protocol: target.protocol,
-      role: request.role,
-      modelId: request.modelId,
-      method: 'POST',
-      url: target.endpoint,
-      headers: {},
-      body: request as unknown as transport.Json,
-      bodySha256: 'synthetic',
-      stablePrefixSha256: 'synthetic',
-    });
-    return structuredClone(scripted[step++] ?? completed);
-  });
+  selectFixtureModels(store);
   const started: ({ run: Run } | { job: Job })[] = [];
-  const work: Promise<void>[] = [];
-  const runtime = new HelperRuntime(store, {
-    owner: 'story-tools-test',
-    signal: new AbortController().signal,
-    track: (promise) => work.push(promise),
-    streams: new ResponseStreamStore(store),
-    services: {
-      story: {
-        requireRunModel: () => {},
-        requireTranslationModel: () => {},
-        started: (item) => started.push(item),
-      },
+  const run = await runScriptedChatHelper(store, chat.id, steps(store.chat(chat.id)), {
+    story: {
+      requireRunModel: () => {},
+      requireTranslationModel: () => {},
+      started: (item) => started.push(item),
     },
   });
-  const conversation = runtime.workspace.open({ kind: 'chat', chatId: chat.id });
-  const task = runtime.enqueue(conversation.id, randomUUID(), '다음 장면 써줘');
-  await Promise.all(work);
-  expect(runtime.workspace.task(task.id).status).toBe('completed');
-  const events = runtime.workspace.events(conversation.id);
-  const finished = (callId: string) =>
-    events.find(
-      (event) =>
-        event.kind === 'tool.finished' &&
-        (event.data as { callId?: string } | null)?.callId === callId
-    )?.data as Record<string, unknown>;
-  return {
-    store,
-    chat: store.chat(chat.id),
-    started,
-    finished,
-    results: readHelperTaskResults(store, task.id).results,
-  };
+  return { ...run, store, chat: store.chat(chat.id), started };
 }
 
 test('scene.request queues one composer run and refuses a second request or a stale head', async () => {
@@ -146,10 +67,10 @@ test('scene.request queues one composer run and refuses a second request or a st
       expectedSettingsRevision: chat.settingsRevision,
     };
     return [
-      call('stale', 'scene.request', { ...args, expectedSettingsRevision: 99 }),
-      call('first', 'scene.request', args),
-      call('busy', 'scene.request', { ...args, request: 'Another scene.' }),
-      completed,
+      helperCall('stale', 'scene.request', { ...args, expectedSettingsRevision: 99 }),
+      helperCall('first', 'scene.request', args),
+      helperCall('busy', 'scene.request', { ...args, request: 'Another scene.' }),
+      helperDone,
     ];
   });
   const runs = f.store.db.prepare('SELECT id,status FROM runs WHERE chat_id=?').all(f.chat.id);
@@ -176,10 +97,10 @@ test('scene.translate starts one translation, reuses it while pending and stays 
   const f = await runHelper((chat) => {
     sourceId = chat.headRevision!;
     return [
-      call('translate', 'scene.translate', { sourceId }),
-      call('again', 'scene.translate', { sourceId, retranslate: true }),
-      call('outside', 'scene.translate', { sourceId: 'missing-scene' }),
-      completed,
+      helperCall('translate', 'scene.translate', { sourceId }),
+      helperCall('again', 'scene.translate', { sourceId, retranslate: true }),
+      helperCall('outside', 'scene.translate', { sourceId: 'missing-scene' }),
+      helperDone,
     ];
   });
   const jobs = f.store.db

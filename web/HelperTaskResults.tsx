@@ -75,6 +75,9 @@ const settingsLabels: Record<string, string> = {
   'model.pricing': 'helperResults.modelPricing',
   'vertex.location': 'helperResults.vertexLocation',
   'chat.variables': 'helperResults.chatVariables',
+  'chat.options': 'helperResults.chatOptions',
+  'chat.storyGuide': 'helperResults.storyGuide',
+  'model.parameters': 'helperResults.modelParameters',
 };
 const targetIcons = {
   content: BookOpen,
@@ -86,6 +89,7 @@ const targetIcons = {
   settings: Settings2,
   chat: PenLine,
   translation: Languages,
+  scene: BookOpen,
 };
 const workOutcomes: Record<string, string> = {
   'illustration.generate': 'helperResults.illustrationQueued',
@@ -94,6 +98,7 @@ const workOutcomes: Record<string, string> = {
   'illustration.continuity.save': 'helperResults.illustrationContinuitySaved',
   'scene.request': 'helperResults.sceneQueued',
   'scene.translate': 'helperResults.translationQueued',
+  'scene.title': 'helperResults.sceneNamed',
 };
 const queuedOperations = new Set([
   'illustration.generate',
@@ -225,7 +230,10 @@ function ResultTarget({
       ? t(settingLabel)
       : undefined;
   const outcome =
-    target.kind === 'illustration' || target.kind === 'chat' || target.kind === 'translation'
+    target.kind === 'illustration' ||
+    target.kind === 'chat' ||
+    target.kind === 'translation' ||
+    target.kind === 'scene'
       ? workOutcomes[operation]
       : undefined;
   const queued = queuedOperations.has(operation);

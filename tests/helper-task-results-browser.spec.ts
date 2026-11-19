@@ -351,6 +351,136 @@ test('HRESULT-ILLUSTRATION queued and placed results open their scene and refere
   await expect(composer).toHaveValue('계속 쓸 원고 요청 초안');
 });
 
+test('HRESULT-STORY scene, translation, scene name and card variable results open their chat destinations', async ({
+  page,
+  request,
+}) => {
+  const { chat, task } = await seed(request);
+  const created = await postFixtureChat(request, { data: { title: '요청 결과 목적지' } });
+  expect(created.ok()).toBe(true);
+  const destination = (await created.json()) as Chat;
+  const before = (await (await request.get(`/api/chats/${destination.id}`)).json()) as ChatDetail;
+  const started = await request.post(`/api/chats/${destination.id}/runs`, {
+    data: {
+      request: '번역할 장면',
+      expectedRevision: before.chat.headRevision,
+      expectedSettingsRevision: before.chat.settingsRevision,
+      idempotencyKey: randomUUID(),
+    },
+  });
+  expect(started.ok(), await started.text()).toBe(true);
+  const run = (await started.json()) as { id: string };
+  await expect
+    .poll(async () => {
+      const current = (await (
+        await request.get(`/api/chats/${destination.id}`)
+      ).json()) as ChatDetail;
+      return current.runs.find((item) => item.id === run.id)?.status;
+    })
+    .toBe('completed');
+  const detail = (await (await request.get(`/api/chats/${destination.id}`)).json()) as ChatDetail;
+  const sourceId = detail.sources.find((source) => source.runId === run.id)!.id;
+  const projection: HelperTaskResultsView = {
+    taskId: task.id,
+    status: 'completed',
+    results: [
+      {
+        eventSeq: 1,
+        receiptId: 'scene-request',
+        operation: 'scene.request',
+        requestedTargets: 1,
+        changedTargets: 1,
+        targets: [{ kind: 'chat', id: destination.id, title: destination.title, revision: 1 }],
+      },
+      {
+        eventSeq: 2,
+        receiptId: 'scene-translate',
+        operation: 'scene.translate',
+        requestedTargets: 1,
+        changedTargets: 1,
+        targets: [
+          {
+            kind: 'translation',
+            id: sourceId,
+            chatId: destination.id,
+            title: destination.title,
+            revision: 1,
+          },
+        ],
+      },
+      {
+        eventSeq: 4,
+        receiptId: 'scene-title',
+        operation: 'scene.title',
+        requestedTargets: 1,
+        changedTargets: 1,
+        targets: [
+          { kind: 'scene', id: sourceId, chatId: destination.id, title: '종소리', revision: 1 },
+        ],
+      },
+      {
+        eventSeq: 3,
+        receiptId: 'variables',
+        operation: 'chat.variables.update',
+        requestedTargets: 1,
+        changedTargets: 1,
+        targets: [
+          {
+            kind: 'settings',
+            id: destination.id,
+            title: destination.title,
+            revision: 1,
+            setting: 'chat.variables',
+          },
+        ],
+      },
+    ],
+    unrecordedOperations: 0,
+    usage: { toolExecutions: 4, latestInputEstimate: null, attempts: [] },
+  };
+  await page.route(`**/api/helper/tasks/${task.id}/results`, (route) =>
+    route.fulfill({ json: projection })
+  );
+  const results = page
+    .locator(`.helper-message.assistant[data-task-id="${task.id}"]`)
+    .getByTestId('helper-task-results');
+  const target = (outcome: string) =>
+    results.getByRole('button', { name: `${destination.title} 열기`, exact: true }).filter({
+      hasText: outcome,
+    });
+  const location = () => {
+    const params = new URL(page.url()).searchParams;
+    return [params.get('chat'), params.get('source'), params.get('mode')];
+  };
+
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  await expect(target('장면 요청됨')).toHaveAttribute('aria-description', '장면 요청됨');
+  await expect(target('번역 요청됨')).toHaveAttribute('aria-description', '번역 요청됨');
+  await target('장면 요청됨').click();
+  await expect.poll(() => location()[0]).toBe(destination.id);
+
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  await target('번역 요청됨').click();
+  await expect.poll(location).toEqual([destination.id, sourceId, 'translation']);
+
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  const named = results.getByRole('button', { name: '종소리 열기', exact: true });
+  await expect(named).toHaveAttribute('aria-description', '장면 이름 저장됨');
+  await named.click();
+  await expect.poll(location).toEqual([destination.id, sourceId, 'original']);
+
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  await results
+    .getByRole('button', { name: `${destination.title} 카드 변수 열기`, exact: true })
+    .click();
+  const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+  await expect(dialog.getByRole('region', { name: '카드 변수 편집', exact: true })).toBeVisible();
+});
+
 test('an appearance result opens both saved characters in the chat image settings', async ({
   page,
   request,

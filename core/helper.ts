@@ -166,13 +166,14 @@ export type HelperEvent = {
   data: unknown;
 };
 export type HelperTaskResultTarget = {
-  /** chat is a requested next scene of chat id; translation is a requested translation of scene id. */
+  /** chat is a requested next scene of chat id; translation and scene name scene id in chatId. */
   kind:
     | import('./resource-editing.js').ResourceKind
     | 'settings'
     | 'illustration'
     | 'chat'
-    | 'translation';
+    | 'translation'
+    | 'scene';
   id: string;
   /** Scene destinations include their owning chat; other result kinds do not need it. */
   chatId?: string;

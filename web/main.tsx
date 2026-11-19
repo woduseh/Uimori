@@ -829,7 +829,7 @@ function App() {
         setLibraryTab('prompts');
         setPromptToEdit(target.id);
         s.showLibrary();
-      } else if (target.kind === 'illustration') {
+      } else if (target.kind === 'illustration' || target.kind === 'scene') {
         const chatId =
           target.chatId ?? s.detail?.sources.find((source) => source.id === target.id)?.chatId;
         if (!chatId) throw new Error(uiMessage('helperResults.openFailed'));
@@ -856,11 +856,13 @@ function App() {
             ? 'images'
             : target.setting === 'chat.variables'
               ? 'packages'
-              : target.setting === 'chat.maxCalls' ||
-                  target.setting === 'chat.storyUi' ||
-                  target.setting === 'chat.storyUiStyle'
-                ? 'runtime'
-                : 'prompts'
+              : target.setting === 'chat.storyGuide'
+                ? 'guide'
+                : target.setting === 'chat.maxCalls' ||
+                    target.setting === 'chat.storyUi' ||
+                    target.setting === 'chat.storyUiStyle'
+                  ? 'runtime'
+                  : 'prompts'
         );
         setPanel('story');
       } else {
@@ -871,7 +873,9 @@ function App() {
               ? 'illustrations'
               : target.kind === 'prompt-workspace'
                 ? 'prompts'
-                : target.setting === 'model.pricing' || target.setting === 'vertex.location'
+                : target.setting === 'model.pricing' ||
+                    target.setting === 'model.parameters' ||
+                    target.setting === 'vertex.location'
                   ? 'connections'
                   : 'models'
         );
@@ -885,6 +889,9 @@ function App() {
       (target.kind === 'content' ||
         target.kind === 'prompt-preset' ||
         target.kind === 'illustration' ||
+        target.kind === 'scene' ||
+        target.kind === 'translation' ||
+        target.kind === 'chat' ||
         (target.kind === 'settings' && target.setting?.startsWith('chat.')))
     )
       setPendingNavigation(() => () => void go().catch((error) => s.setError(error.message)));

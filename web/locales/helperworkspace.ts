@@ -371,6 +371,30 @@ export const messages = {
     ja: '翻訳を依頼済み',
     zh: '翻译已请求',
   },
+  'helperResults.sceneNamed': {
+    ko: '장면 이름 저장됨',
+    en: 'Scene name saved',
+    ja: 'シーン名を保存済み',
+    zh: '场景名称已保存',
+  },
+  'helperResults.chatOptions': {
+    ko: '창작 옵션',
+    en: 'Writing options',
+    ja: '創作オプション',
+    zh: '创作选项',
+  },
+  'helperResults.storyGuide': {
+    ko: '원작 참고',
+    en: 'Canon reference',
+    ja: '原作参照',
+    zh: '原作参考',
+  },
+  'helperResults.modelParameters': {
+    ko: '모델 생성 설정',
+    en: 'Model generation settings',
+    ja: 'モデル生成設定',
+    zh: '模型生成设置',
+  },
   'helperResults.chatVariables': {
     ko: '카드 변수',
     en: 'Card variables',

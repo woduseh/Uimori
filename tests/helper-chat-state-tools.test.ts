@@ -4,17 +4,14 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { Content } from '../core/product.js';
-import * as transport from '../core/transport.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
 import { readChatVariables, writeChatVariables } from '../server/chat-variables.js';
 import { readHelperChatState } from '../server/helper-chat-state-tools.js';
-import { HelperRuntime } from '../server/helper-runtime.js';
-import { readHelperTaskResults } from '../server/helper-task-results.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
-import { ResponseStreamStore } from '../server/response-stream.js';
 import * as nativeRuntime from '../server/risu-native-runtime.js';
 import { Store } from '../server/store.js';
 import { fixtureBotInput } from './fixtures/chat.js';
+import { helperCall, helperDone, runScriptedChatHelper } from './fixtures/scripted-helper.js';
 
 const owned: { store: Store; directory: string }[] = [];
 afterEach(async () => {
@@ -209,23 +206,6 @@ test('chat.variables.read merges defaults with chat values and pages one long va
   ).rejects.toMatchObject({ statusCode: 404 });
 });
 
-const completed: transport.ProviderResult = {
-  status: 'completed',
-  text: '변수를 고쳤어요.',
-  toolCalls: [],
-  refusal: null,
-  error: null,
-  usage: { inputTokens: 10, outputTokens: 4, costUsd: null, raw: null, priceRevision: null },
-  opaqueState: null,
-};
-const update = (id: string, args: Record<string, transport.Json>): transport.ProviderResult => ({
-  ...structuredClone(completed),
-  status: 'tool_calls',
-  toolCalls: [
-    { id, name: 'app.call', arguments: { name: 'chat.variables.update', arguments: args } },
-  ],
-});
-
 test('chat.variables.update merges changes with a receipt and rejects a stale read', async () => {
   const { store, chat } = fixture();
   const sourceHash = store.source(chat.headRevision!).hash;
@@ -235,54 +215,31 @@ test('chat.variables.update merges changes with a receipt and rejects a stale re
     idempotencyKey: randomUUID(),
     values: { mood: 'tense', quest: 'started' },
   });
-  const steps = [
-    update('merge', {
-      expectedRevision: 1,
-      expectedSourceHash: sourceHash,
-      set: { score: '5' },
-      unset: ['mood'],
-    }),
-    update('stale', { expectedRevision: 1, expectedSourceHash: sourceHash, set: { score: '6' } }),
-    update('same', { expectedRevision: 2, expectedSourceHash: sourceHash, set: { score: '5' } }),
-    completed,
-  ];
-  let step = 0;
-  vi.spyOn(transport, 'executeProvider').mockImplementation(
-    async (connection, request, options) => {
-      transport.validateConnection(connection);
-      options.beforeTurn?.();
-      await options.onWire?.({
-        connectionId: connection.id,
-        protocol: connection.protocol,
-        role: request.role,
-        modelId: request.modelId,
-        method: 'POST',
-        url: connection.endpoint,
-        headers: {},
-        body: request as unknown as transport.Json,
-        bodySha256: 'synthetic',
-        stablePrefixSha256: 'synthetic',
-      });
-      return structuredClone(steps[step++] ?? completed);
-    }
-  );
-  const work: Promise<void>[] = [];
   const chatChanged = vi.fn();
-  const runtime = new HelperRuntime(store, {
-    owner: 'chat-state-test',
-    signal: new AbortController().signal,
-    track: (promise) => work.push(promise),
-    streams: new ResponseStreamStore(store),
-    services: { chatChanged },
-  });
-  const conversation = runtime.workspace.open({ kind: 'chat', chatId: chat.id });
-  const task = runtime.enqueue(
-    conversation.id,
-    randomUUID(),
-    '점수를 5로 바꾸고 기분은 기본값으로'
+  const { finished, results } = await runScriptedChatHelper(
+    store,
+    chat.id,
+    [
+      helperCall('merge', 'chat.variables.update', {
+        expectedRevision: 1,
+        expectedSourceHash: sourceHash,
+        set: { score: '5' },
+        unset: ['mood'],
+      }),
+      helperCall('stale', 'chat.variables.update', {
+        expectedRevision: 1,
+        expectedSourceHash: sourceHash,
+        set: { score: '6' },
+      }),
+      helperCall('same', 'chat.variables.update', {
+        expectedRevision: 2,
+        expectedSourceHash: sourceHash,
+        set: { score: '5' },
+      }),
+      helperDone,
+    ],
+    { chatChanged }
   );
-  await Promise.all(work);
-  expect(runtime.workspace.task(task.id).status).toBe('completed');
 
   expect(readChatVariables(store, chat.id)).toEqual({
     revision: 2,
@@ -290,20 +247,12 @@ test('chat.variables.update merges changes with a receipt and rejects a stale re
   });
   expect(chatChanged).toHaveBeenCalledTimes(1);
   expect(chatChanged).toHaveBeenCalledWith(chat.id);
-  const events = runtime.workspace.events(conversation.id);
-  const finished = (callId: string) =>
-    events.find(
-      (event) =>
-        event.kind === 'tool.finished' &&
-        (event.data as { callId?: string } | null)?.callId === callId
-    )?.data as Record<string, unknown>;
   expect(finished('merge')).toMatchObject({ denied: false });
   expect(finished('stale')).toMatchObject({
     denied: true,
     errorCode: 'CHAT_VARIABLE_REVISION_CONFLICT',
   });
   expect(finished('same')).toMatchObject({ denied: false });
-  const results = readHelperTaskResults(store, task.id).results;
   expect(results.map((item) => [item.operation, item.changedTargets])).toEqual([
     ['chat.variables.update', 1],
     ['chat.variables.update', 0],

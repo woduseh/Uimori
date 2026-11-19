@@ -1,0 +1,101 @@
+import { randomUUID } from 'node:crypto';
+import { expect, vi } from 'vitest';
+import * as transport from '../../core/transport.js';
+import { HelperRuntime, type HelperServices } from '../../server/helper-runtime.js';
+import { readHelperTaskResults } from '../../server/helper-task-results.js';
+import { modelWorkspace, updateModelWorkspace } from '../../server/prompt-workspace.js';
+import { ResponseStreamStore } from '../../server/response-stream.js';
+import type { Store } from '../../server/store.js';
+
+export const helperDone: transport.ProviderResult = {
+  status: 'completed',
+  text: '완료했어요.',
+  toolCalls: [],
+  refusal: null,
+  error: null,
+  usage: { inputTokens: 10, outputTokens: 4, costUsd: null, raw: null, priceRevision: null },
+  opaqueState: null,
+};
+
+/** One provider turn that calls an app operation through the app.call gateway. */
+export const helperCall = (
+  id: string,
+  name: string,
+  args: Record<string, transport.Json>
+): transport.ProviderResult => ({
+  ...structuredClone(helperDone),
+  status: 'tool_calls',
+  toolCalls: [{ id, name: 'app.call', arguments: { name, arguments: args } }],
+});
+
+/** A synthetic fixture-protocol model selected for the main, translation and helper roles. */
+export function selectFixtureModels(store: Store) {
+  const connection = store.product.connection({
+    title: 'Synthetic connection',
+    protocol: 'fixture-sse-v1',
+    endpoint: 'http://127.0.0.1:9',
+    enabled: true,
+  });
+  const model = store.product.model({
+    title: 'Synthetic model',
+    connectionId: connection.id,
+    modelId: 'fixture',
+    temperature: null,
+    maxOutputTokens: 1024,
+  });
+  const selected = modelWorkspace(store);
+  updateModelWorkspace(store, {
+    expectedRevision: selected.revision,
+    routes: { main: { id: model.id }, translation: { id: model.id } },
+    translationPolicy: selected.translationPolicy,
+    helperModel: { id: model.id },
+  });
+  return model;
+}
+
+/** Run one chat helper task whose provider turns are scripted; transport and storage stay real. */
+export async function runScriptedChatHelper(
+  store: Store,
+  chatId: string,
+  steps: transport.ProviderResult[],
+  services: HelperServices = {}
+) {
+  let step = 0;
+  vi.spyOn(transport, 'executeProvider').mockImplementation(async (target, request, options) => {
+    transport.validateConnection(target);
+    options.beforeTurn?.();
+    await options.onWire?.({
+      connectionId: target.id,
+      protocol: target.protocol,
+      role: request.role,
+      modelId: request.modelId,
+      method: 'POST',
+      url: target.endpoint,
+      headers: {},
+      body: request as unknown as transport.Json,
+      bodySha256: 'synthetic',
+      stablePrefixSha256: 'synthetic',
+    });
+    return structuredClone(steps[step++] ?? helperDone);
+  });
+  const work: Promise<void>[] = [];
+  const runtime = new HelperRuntime(store, {
+    owner: 'scripted-helper-test',
+    signal: new AbortController().signal,
+    track: (promise) => work.push(promise),
+    streams: new ResponseStreamStore(store),
+    services,
+  });
+  const conversation = runtime.workspace.open({ kind: 'chat', chatId });
+  const task = runtime.enqueue(conversation.id, randomUUID(), 'Scripted helper request');
+  await Promise.all(work);
+  expect(runtime.workspace.task(task.id).status).toBe('completed');
+  const events = runtime.workspace.events(conversation.id);
+  const finished = (callId: string) =>
+    events.find(
+      (event) =>
+        event.kind === 'tool.finished' &&
+        (event.data as { callId?: string } | null)?.callId === callId
+    )?.data as Record<string, unknown>;
+  return { finished, results: readHelperTaskResults(store, task.id).results };
+}

@@ -36,14 +36,16 @@ import { HelperResourcePatchError } from './helper-resource-patch-error.js';
 import { HelperResourceBatchError } from './helper-resource-batch.js';
 import {
   HELPER_SETTINGS_TOOLS,
+  HELPER_SETTINGS_MUTATIONS,
   invokeHelperSettingsTool,
   applyHelperSettingsMutation,
 } from './helper-settings-tools.js';
 import { HELPER_SCENE_TOOLS, invokeHelperSceneTool } from './helper-scene-tools.js';
+import { sceneTitle } from './scene-titles.js';
 import {
   HELPER_CHAT_STATE_TOOLS,
   readHelperChatState,
-  updateHelperChatVariables,
+  applyHelperChatState,
 } from './helper-chat-state-tools.js';
 import {
   HELPER_STORY_TOOLS,
@@ -2566,8 +2568,8 @@ export class HelperRuntime {
       return result;
     }
     if (HELPER_SETTINGS_TOOLS.some((tool) => tool.name === name)) {
-      if (name.startsWith('model.pricing.') && args.chatId !== undefined)
-        throw new HttpError(400, 'Model pricing does not accept a chat ID');
+      if (name.startsWith('model.') && args.chatId !== undefined)
+        throw new HttpError(400, 'Model settings do not accept a chat ID');
       const chatId =
         args.chatId === undefined
           ? task.snapshot.scope.kind === 'chat'
@@ -2576,7 +2578,7 @@ export class HelperRuntime {
           : text(args.chatId, 'chat ID', 100);
       const { chatId: _chatId, ...body } = args;
       const invoke = () =>
-        name === 'settings.update' || name === 'model.pricing.update'
+        HELPER_SETTINGS_MUTATIONS.has(name)
           ? applyHelperSettingsMutation(
               this.store,
               this.workspace,
@@ -2587,7 +2589,7 @@ export class HelperRuntime {
               chatId
             )
           : invokeHelperSettingsTool(this.store, name, body, chatId);
-      if (name !== 'settings.update' && name !== 'model.pricing.update') return invoke();
+      if (!HELPER_SETTINGS_MUTATIONS.has(name)) return invoke();
       const result = this.workspace.operation(
         task.id,
         `${task.id}:${operationId}`,
@@ -2717,7 +2719,7 @@ export class HelperRuntime {
     }
     if (HELPER_CHAT_STATE_TOOLS.some((tool) => tool.name === name)) {
       if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
-      if (name !== 'chat.variables.update')
+      if (helperToolTraits(name).readOnly)
         return readHelperChatState(this.store, scope.chatId, name, args);
       this.workspace.assertRunning(task.id);
       const receiptId = `${task.id}:${operationId}`;
@@ -2726,7 +2728,15 @@ export class HelperRuntime {
         receiptId,
         { name, args, chatId: scope.chatId },
         () =>
-          updateHelperChatVariables(this.store, this.workspace, task, receiptId, scope.chatId, args)
+          applyHelperChatState(
+            this.store,
+            this.workspace,
+            task,
+            receiptId,
+            scope.chatId,
+            name,
+            args
+          )
       );
       if (result.changed) this.options.services?.chatChanged?.(scope.chatId);
       return result;
@@ -2782,6 +2792,9 @@ export class HelperRuntime {
           sceneNumber: sceneEnabled ? sceneNumber : null,
           sceneEnabled,
           originalLength: item.text.length,
+          ...(sceneTitle(this.store, item.revision)
+            ? { title: sceneTitle(this.store, item.revision) }
+            : {}),
           ...(args.includePreview ? { preview: textTokenExcerpt(item.text, 60).text } : {}),
         };
       });
