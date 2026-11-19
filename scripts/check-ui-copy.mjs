@@ -259,8 +259,9 @@ function localeMessages(root) {
   const messages = Object.create(null),
     errors = [];
   if (!existsSync(directory)) return { messages, errors };
+  const skipFiles = new Set(['index.ts', 'ko.ts', 'en.ts', 'ja.ts', 'zh.ts']);
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if (!entry.isFile() || !entry.name.endsWith('.ts') || entry.name === 'index.ts') continue;
+    if (!entry.isFile() || !entry.name.endsWith('.ts') || skipFiles.has(entry.name)) continue;
     const file = relative(root, resolve(directory, entry.name)).replaceAll('\\', '/');
     try {
       const ast = parse(readFileSync(resolve(directory, entry.name), 'utf8'), {

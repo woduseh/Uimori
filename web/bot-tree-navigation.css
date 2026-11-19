@@ -5,6 +5,9 @@
   gap: 2px;
   padding: 0 0 16px;
 }
+.navigation-dialog .bot-navigation .brand {
+  display: none;
+}
 .bot-navigation .brand > span {
   flex: 1;
   min-width: 0;

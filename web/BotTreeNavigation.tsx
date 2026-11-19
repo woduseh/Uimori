@@ -496,7 +496,11 @@ export const BotNavigation = memo(function BotNavigation(
           />
         </nav>
         <IconButton
-          label={props.helperExpanded ? t('helpers.m262') : t('transfer.d024', { v0: unreadChats })}
+          label={
+            props.helperExpanded
+              ? t('helperNavigation.activity')
+              : t('transfer.d024', { v0: unreadChats })
+          }
           icon={Inbox}
           onClick={() => {
             if (props.helperExpanded) props.onHelperActivity?.();

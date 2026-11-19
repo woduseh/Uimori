@@ -239,9 +239,9 @@ export const screens = [
   },
   {
     id: 'outline',
-    title: '계층형 플롯',
+    title: '플롯',
     url: chat,
-    enter: [{ menu: 'chat' }, { click: { role: 'button', name: '계층형 플롯', within: inMenu } }],
+    enter: [{ menu: 'chat' }, { click: { role: 'button', name: '플롯', within: inMenu } }],
     ready: { css: 'section.outline-panel' },
   },
   {

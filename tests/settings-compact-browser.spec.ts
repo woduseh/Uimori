@@ -280,7 +280,7 @@ test('SCUISEARCH settings search opens real destinations without losing an unsav
     await search.fill('글자 크기');
     await dialog
       .locator('.settings-search-results')
-      .getByRole('button', { name: /원고 읽기/ })
+      .getByRole('button', { name: /읽기 설정/ })
       .click();
     await expect(dialog.locator('.settings-page[data-settings-section="general"]')).toBeVisible();
     await expect(dialog.locator('[id$="-general-reading"]')).toBeFocused();

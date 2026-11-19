@@ -1027,10 +1027,10 @@ export const messages = {
     zh: '选择场景范围',
   },
   'transfer.m200': {
-    ko: '첫 메시지',
-    en: 'First message',
-    ja: '最初のメッセージ',
-    zh: '首条消息',
+    ko: '시작 장면',
+    en: 'Start scene',
+    ja: '開始シーン',
+    zh: '起始场景',
   },
   'transfer.m201': {
     ko: '끝 장면',

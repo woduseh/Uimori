@@ -1632,10 +1632,10 @@ export const messages = {
     zh: '已保存{count}项更改，但未能完成回复。',
   },
   'helpers.m314': {
-    ko: ', 실행 요청 {count}회',
-    en: ', Execution requests: {count}',
-    ja: '、実行リクエスト{count}回',
-    zh: '，执行请求{count}次',
+    ko: '실행 요청 {count}회',
+    en: 'Execution requests: {count}',
+    ja: '実行リクエスト{count}回',
+    zh: '执行请求{count}次',
   },
   'helpers.m315': {
     ko: '저장한 변경 {count}건, {labels}',

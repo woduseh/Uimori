@@ -82,7 +82,7 @@
 }
 .illustration-preset-editor-actions {
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
 }
 .illustration-preset-editor-actions > button {
   flex: none;
@@ -93,7 +93,7 @@
 }
 .illustration-preset-editor-actions > .illustration-preset-copy-save {
   gap: 6px;
-  padding-inline: 8px;
+  padding-inline: 12px;
 }
 
 .illustration-preset-list-actions {

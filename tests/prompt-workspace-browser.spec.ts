@@ -126,7 +126,7 @@ test(
         async () => (await (await request.get('/api/prompt-workspace')).json()).translation.presetId
       )
       .toBe(preset.id);
-    await editor.locator('summary').filter({ hasText: '창작 옵션' }).click();
+    await editor.locator('summary').filter({ hasText: '번역 옵션' }).click();
     await editor.locator('.prompt-option-group > summary').first().click();
     const tone = editor.getByLabel('PWS 번역 문체', { exact: true });
     await expect(tone).toHaveValue('저장 기본값');
@@ -188,7 +188,7 @@ test(
     expect(
       (await (await request.get('/api/prompt-workspace')).json()).translation.values.tone
     ).toBe('직접 수정');
-    await editor.locator('summary').filter({ hasText: '창작 옵션' }).click();
+    await editor.locator('summary').filter({ hasText: '번역 옵션' }).click();
     await expect(editor.getByRole('button', { name: '최신 저장본 적용', exact: true })).toHaveCount(
       0
     );

@@ -501,7 +501,7 @@ export function ProfileEditor({
                 onError('');
               }}
             >
-              {t('library.reloadAttachmentSettings')}
+              {t('library.discardChanges')}
             </button>
           )}
           {(saving || dirty || lorePending) && (

@@ -52,6 +52,21 @@ export function ProviderModelForm({
   useI18n();
   const { value: model, editing: editingModel, copy: modelCopy, baseline: modelBaseline } = draft;
   const chosen = modelConnections.find((connection) => connection.id === model.connectionRef);
+  const staleModel =
+    !!editingModel &&
+    models.find((item) => item.id === editingModel.id)?.revision !== editingModel.revision;
+  const reloadButton = editingModel && (
+    <button
+      type="button"
+      className="secondary"
+      disabled={busy}
+      onClick={() => {
+        onReload();
+      }}
+    >
+      {t('providers.m280')}
+    </button>
+  );
   return (
     <form
       hidden={hidden}
@@ -66,35 +81,21 @@ export function ProviderModelForm({
     >
       <h3 className="full">
         {editingModel ? t('providers.m276') : modelCopy ? t('providers.m277') : t('providers.m278')}
-        {(!editingModel || JSON.stringify(model) !== modelBaseline) && (
-          <small className="provider-heading-status">
-            {editingModel ? t('settings.unsavedItem') : t('settings.newItem')}
-          </small>
+        {editingModel && JSON.stringify(model) !== modelBaseline && (
+          <small className="provider-heading-status">{t('settings.unsavedItem')}</small>
         )}
       </h3>
-      {editingModel &&
-        (conflict ||
-          models.find((item) => item.id === editingModel.id)?.revision !==
-            editingModel.revision) && (
-          <div className="provider-draft-note full">
-            {models.find((item) => item.id === editingModel.id)?.revision !==
-              editingModel.revision && <p>{t('providers.m279')}</p>}
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy}
-              onClick={() => {
-                onReload();
-              }}
-            >
-              {t('providers.m280')}
-            </button>
-          </div>
-        )}
-      {conflict && (
-        <NoticeBanner tone="error" className="full">
+      {conflict ? (
+        <NoticeBanner tone="error" className="full" actions={reloadButton}>
           {t('providers.m282')}
         </NoticeBanner>
+      ) : (
+        staleModel && (
+          <div className="provider-draft-note full">
+            <p>{t('providers.m279')}</p>
+            {reloadButton}
+          </div>
+        )
       )}
       <div className="provider-model-tabs full" aria-label={t('providers.m283')}>
         {(['basic', 'advanced'] as const).map((section, index) => (

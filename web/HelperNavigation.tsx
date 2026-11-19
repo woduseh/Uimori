@@ -347,7 +347,7 @@ export function HelperNavigation(props: Props) {
           type="button"
           aria-pressed={view.mode === 'activity'}
           aria-label={t('helperNavigation.activityCount', { count: props.unread.length })}
-          title={t('helpers.m262')}
+          title={t('helperNavigation.activity')}
           onClick={() => setView((old) => ({ ...old, mode: 'activity' }))}
         >
           <Inbox size={19} aria-hidden="true" />
@@ -540,7 +540,7 @@ export function HelperNavigation(props: Props) {
               storageKey={sectionStorage}
               label={t('helperNavigation.recent')}
               total={lists.recent.length}
-              empty={t('helpers.m271')}
+              empty={t('helperNavigation.noRecent')}
             >
               {(limit) =>
                 groupRecentDates(lists.recent.slice(0, limit), helperSessionActivityAt).map(

@@ -13,7 +13,7 @@ export const messages = {
     zh: '不限',
   },
   'settings.translationProviderRefusalRetry': {
-    ko: '공급자가 거절하면 재시도',
+    ko: '프로바이더가 거절하면 재시도',
     en: 'Retry when the provider reports a refusal',
     ja: 'プロバイダーが拒否を返したら再試行',
     zh: '提供商明确拒绝时重试',
@@ -235,10 +235,10 @@ export const messages = {
     zh: '没有可用模型',
   },
   'settings.m18': {
-    ko: '프로바이더와 모델 설정',
-    en: 'Provider and model settings',
-    ja: 'プロバイダーとモデル設定',
-    zh: '提供商和模型设置',
+    ko: '프로바이더와 모델',
+    en: 'Providers and models',
+    ja: 'プロバイダーとモデル',
+    zh: '提供商与模型',
   },
   'settings.m19': {
     ko: '보조 작업',

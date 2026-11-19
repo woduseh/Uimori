@@ -832,7 +832,7 @@ export function ModelWorkspaceEditor({
       {choices.length > 0 && (
         <button type="button" className="secondary" onClick={onManage}>
           <SettingsIcon size={18} aria-hidden="true" />
-          {t('settings.m77')}{' '}
+          {t('settings.m18')}
         </button>
       )}
     </section>

@@ -232,7 +232,7 @@ test('LIBUI02 mobile folder deletion refreshes another page and stale moves requ
   await panel.getByRole('button', { name: `${folder.title} 폴더 삭제`, exact: true }).click();
   const confirm = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
   await expect(confirm).toContainText('미분류');
-  await confirm.getByRole('button', { name: '영구 삭제', exact: true }).click();
+  await confirm.getByRole('button', { name: '폴더 삭제', exact: true }).click();
   await expect(confirm).toBeHidden();
   const folderMenu = panel.locator('details.action-menu:has(> summary[aria-label="폴더 관리"])');
   await expect(folderMenu).not.toHaveAttribute('open');
@@ -881,7 +881,7 @@ test('LIBUI04 role selection creates a chat with the selected persona and module
     await panel.getByRole('button', { name: `${folder.title} 폴더 삭제`, exact: true }).click();
     const confirm = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
     await expect(confirm).toContainText('미분류');
-    await confirm.getByRole('button', { name: '영구 삭제', exact: true }).click();
+    await confirm.getByRole('button', { name: '폴더 삭제', exact: true }).click();
     await expect(confirm).toBeHidden();
     await expect(
       panel.getByRole('button', { name: `${filed.title} 상세 보기`, exact: true })

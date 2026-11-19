@@ -162,7 +162,7 @@ export const messages = {
     zh: '任务状态',
   },
   'main.m007': {
-    ko: '계층형 플롯',
+    ko: '플롯',
     en: 'Outline',
     ja: 'アウトライン',
     zh: '大纲',
@@ -520,18 +520,6 @@ export const messages = {
     en: 'Branch to new chat',
     ja: '新しいチャットに分岐',
     zh: '分支到新聊天',
-  },
-  'main.m068': {
-    ko: '현재 채팅의 마지막 장면에서 분기해 새 채팅으로 이어가요',
-    en: 'Branch from the latest scene into a new chat',
-    ja: '現在のチャットの最後のシーンから分岐して新しいチャットで続けます',
-    zh: '从当前聊天的最后场景分支到新聊天继续',
-  },
-  'main.m069': {
-    ko: '여기까지 새 채팅으로 분기',
-    en: 'Branch to new chat from here',
-    ja: 'ここまでを新しいチャットに分岐',
-    zh: '到此为止分支到新聊天',
   },
   'main.m070': {
     ko: '읽기 설정',

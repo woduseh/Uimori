@@ -148,21 +148,18 @@
 }
 .theme-editor-actions {
   justify-content: flex-end;
-  flex-wrap: nowrap;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .theme-editor-actions > button {
   flex: none;
-  padding-inline: 6px;
+  padding-inline: 12px;
   white-space: nowrap;
 }
-.theme-editor-actions > .settings-save-button,
 .theme-editor-actions > .ui-icon-button {
   width: var(--control-h);
   min-width: var(--control-h);
   padding: 0;
-}
-.theme-editor-actions > .ui-icon-button {
   background: transparent;
   color: var(--muted);
 }

@@ -98,6 +98,18 @@ export const messages = {
     zh: '助手导航',
   },
   'helperNavigation.explore': { ko: '탐색', en: 'Explore', ja: '探索', zh: '浏览' },
+  'helperNavigation.activity': {
+    ko: '도우미 활동',
+    en: 'Assistant activity',
+    ja: 'アシスタント活動',
+    zh: '助手动态',
+  },
+  'helperNavigation.noRecent': {
+    ko: '최근 대화가 없어요.',
+    en: 'No recent conversations.',
+    ja: '最近の会話はありません。',
+    zh: '暂无最近对话。',
+  },
   'helperNavigation.activityCount': {
     ko: '미확인 활동 {count}개',
     en: '{count, plural, one {# unread activity} other {# unread activities}}',

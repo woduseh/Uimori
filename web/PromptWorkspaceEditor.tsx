@@ -241,7 +241,11 @@ export function PromptWorkspaceEditor({
           <details className="pc-composer-fold settings-group">
             <summary className="settings-group-heading">
               <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
-              <strong>{t('prompts.uiWritingOptions')}</strong>
+              <strong>
+                {role === 'translation'
+                  ? t('prompts.uiTranslationOptions')
+                  : t('prompts.uiWritingOptions')}
+              </strong>
               <small>
                 {comboValue === 'default'
                   ? t('prompts.uiDefault')

@@ -27,10 +27,10 @@ async function content(request: APIRequestContext, kind = 'bot') {
   expect(response.ok()).toBe(true);
   return response.json() as Promise<Content>;
 }
-async function confirm(page: Page) {
+async function confirm(page: Page, buttonName = '삭제') {
   await page
     .getByRole('alertdialog', { name: '삭제 확인', exact: true })
-    .getByRole('button', { name: '영구 삭제', exact: true })
+    .getByRole('button', { name: buttonName, exact: true })
     .click();
 }
 async function library(page: Page, tab: string) {
@@ -157,7 +157,7 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
   await openPromptActions(panel);
   await panel.getByRole('button', { name: `${prompt.title} 프롬프트 삭제`, exact: true }).click();
-  await confirm(page);
+  await confirm(page, '프롬프트 삭제');
   const selectedPrompt = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
   await expect(selectedPrompt.getByRole('alert')).toContainText('다른 프롬프트를 선택한 뒤');
   await selectedPrompt.getByRole('button', { name: '취소', exact: true }).click();
@@ -173,7 +173,7 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
   await panel.getByRole('button', { name: `${prompt.title} 프롬프트 편집`, exact: true }).click();
   await openPromptActions(panel);
   await panel.getByRole('button', { name: `${prompt.title} 프롬프트 삭제`, exact: true }).click();
-  await confirm(page);
+  await confirm(page, '프롬프트 삭제');
   await expect(
     panel.getByRole('button', { name: `${prompt.title} 프롬프트 삭제`, exact: true })
   ).toHaveCount(0);
@@ -206,7 +206,7 @@ test('DEL03 deleting selected chat clears reader and URL while preserving anothe
   await nav.locator(`[data-chat-id="${chat.id}"]`).hover();
   await nav.getByLabel(`${chat.title} 채팅 메뉴`, { exact: true }).click();
   await nav.getByRole('button', { name: `${chat.title} 채팅 삭제`, exact: true }).click();
-  await confirm(page);
+  await confirm(page, '영구 삭제');
   await expect(nav.getByRole('button', { name: chat.title, exact: true })).toHaveCount(0);
   await expect(page).not.toHaveURL(new RegExp(chat.id));
   expect((await request.get(`/api/chats/${chat.id}`)).status()).toBe(404);
@@ -261,7 +261,7 @@ test('DEL05 model is deleted before its connection and settings lists stay curre
   await expect(editor).toBeVisible();
   await openProviderMenu(page, '모델', model.title);
   await editor.getByRole('button', { name: `${model.title} 모델 삭제`, exact: true }).click();
-  await confirm(page);
+  await confirm(page, '모델 삭제');
   await expect(editor).toBeVisible();
   await expect
     .poll(async () => (await (await request.get('/api/model-workspace')).json()).routes.main)
@@ -277,7 +277,7 @@ test('DEL05 model is deleted before its connection and settings lists stay curre
   await editor
     .getByRole('button', { name: `${connection.title} 프로바이더 삭제`, exact: true })
     .click();
-  await confirm(page);
+  await confirm(page, '프로바이더 삭제');
   await expect(
     editor.getByRole('button', { name: `${connection.title} 프로바이더 삭제`, exact: true })
   ).toHaveCount(0);

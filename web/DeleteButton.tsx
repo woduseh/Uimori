@@ -11,6 +11,7 @@ type Props = {
   revision?: number;
   title: string | MessageReference;
   label?: string;
+  confirmLabel?: string;
   description?: string;
   disabled?: boolean;
   iconOnly?: boolean;
@@ -25,6 +26,7 @@ export function DeleteButton({
   revision,
   title,
   label = '삭제',
+  confirmLabel,
   description = '목록에서 삭제해요. 과거 채팅과 실행에서 사용한 내용은 유지돼요.',
   disabled,
   iconOnly = false,
@@ -127,7 +129,7 @@ export function DeleteButton({
             disabled={busy}
             onClick={() => void remove()}
           >
-            {busy ? t('shared.deleting') : t('shared.deletePermanently')}
+            {busy ? t('shared.deleting') : translateMessage(confirmLabel ?? label)}
           </button>
         </div>
       </Dialog>

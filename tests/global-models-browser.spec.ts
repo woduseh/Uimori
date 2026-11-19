@@ -110,7 +110,7 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     const translationLimit = editor.getByLabel('번역 작업 호출 한도', { exact: true });
     const translationContext = editor.getByLabel('번역 참고 범위', { exact: true });
     const previousSceneLimit = editor.getByLabel('이전 두 장면의 참고 토큰 한도');
-    const retryProvider = editor.getByRole('switch', { name: '공급자가 거절하면 재시도' });
+    const retryProvider = editor.getByRole('switch', { name: '프로바이더가 거절하면 재시도' });
     await expect(translationLimit).toBeVisible();
     await expect(translationContext).toHaveValue('full');
     await expect(previousSceneLimit).toHaveValue('');
@@ -459,7 +459,7 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     ).toBeVisible();
     // Generation owns one save action; profile reload remains in the material settings.
     await selectChatSettingsSection(page, '사용 자료');
-    await settings.getByRole('button', { name: '사용 자료 다시 불러오기', exact: true }).click();
+    await settings.getByRole('button', { name: '변경 취소', exact: true }).click();
     await selectChatSettingsSection(page, '생성 설정');
     await expect(promptSelect).toHaveValue('');
     await promptSelect.selectOption(preset.id);
@@ -671,9 +671,7 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '역할별 모델');
     const roles = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
-    await expect(
-      roles.getByRole('button', { name: '프로바이더와 모델 설정', exact: true })
-    ).toHaveCount(0);
+    await expect(roles.locator('.model-setup-prompt')).toHaveCount(0);
     const main = roles.getByLabel('본문 모델', { exact: true });
     const translation = roles.getByLabel('번역 모델', { exact: true });
     await main.selectOption(second.id);
@@ -784,13 +782,15 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '역할별 모델');
     const roles = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
-    const setup = roles.getByRole('button', { name: '프로바이더와 모델 설정', exact: true });
+    const setup = roles
+      .locator('.model-setup-prompt')
+      .getByRole('button', { name: '프로바이더와 모델', exact: true });
     await expect(roles.getByLabel('본문 모델', { exact: true })).toBeInViewport();
     await expect(setup).toBeInViewport();
     await expect(roles.getByText('사용 가능한 모델 없음', { exact: true })).toBeVisible();
-    await expect(
-      roles.getByRole('button', { name: '모델과 프로바이더 관리', exact: true })
-    ).toHaveCount(0);
+    await expect(roles.getByRole('button', { name: '프로바이더와 모델', exact: true })).toHaveCount(
+      1
+    );
     if (visualReview) {
       for (const colorScheme of ['light', 'dark'] as const) {
         await page.emulateMedia({ colorScheme });

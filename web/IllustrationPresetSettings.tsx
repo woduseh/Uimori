@@ -727,9 +727,7 @@ export function IllustrationPresetSettings({
               <div className="illustration-preset-actions illustration-preset-editor-actions full">
                 <SaveButton
                   type="button"
-                  className="ui-icon-button"
                   label={t('visualpanels.savePreset')}
-                  text=""
                   aria-busy={operation === 'save'}
                   disabled={!dirty || conflict || deleted}
                   onClick={() => void save()}

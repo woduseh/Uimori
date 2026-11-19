@@ -99,7 +99,11 @@ export function ThemeSettings({
   const [draft, setDraft] = useState<Draft | null>(null);
   const storyUiDraft = useRef<ThemeDefinition['storyUi']>(undefined);
   const [baseline, setBaseline] = useState('');
-  const [mode, setMode] = useState<'light' | 'dark'>('light');
+  const [mode, setMode] = useState<'light' | 'dark'>(() =>
+    typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark'
+      ? 'dark'
+      : 'light'
+  );
   const [scope, setScope] = useState<'global' | 'bot' | 'chat'>('global');
   const [operation, setOperation] = useState<'save' | 'other' | null>(null);
   const busy = operation !== null;
@@ -930,7 +934,6 @@ export function ThemeSettings({
               <SaveButton
                 type="button"
                 label={t('visualpanels.saveTheme')}
-                text=""
                 aria-busy={operation === 'save'}
                 disabled={busy || !dirty}
                 onClick={() => void save()}

@@ -438,10 +438,10 @@ export const messages = {
     zh: 'Enter 换行，Ctrl/Cmd+Enter 发送。',
   },
   'chatsettings.m67': {
-    ko: '좌측 사이드바 폭',
-    en: 'Left sidebar width',
-    ja: '左サイドバーの幅',
-    zh: '左侧栏宽度',
+    ko: '채팅 사이드바 폭',
+    en: 'Chat sidebar width',
+    ja: 'チャットサイドバーの幅',
+    zh: '聊天侧边栏宽度',
   },
   'chatsettings.m68': {
     ko: '데스크톱에서 펼친 사이드바에 적용돼요.',
@@ -1240,5 +1240,11 @@ export const messages = {
     en: 'Images',
     ja: '画像',
     zh: '图片',
+  },
+  'chatsettings.readingSettings': {
+    ko: '읽기 설정',
+    en: 'Reading settings',
+    ja: '読書設定',
+    zh: '阅读设置',
   },
 };

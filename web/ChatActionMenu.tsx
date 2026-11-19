@@ -61,6 +61,7 @@ export function ChatActionMenu({
           preparePath={`/chats/${encodeURIComponent(chat.id)}/deletion-impact`}
           title={chat.title}
           label={t('transfer.m240')}
+          confirmLabel={t('shared.deletePermanently')}
           disabled={disabled}
           description={t('transfer.m241')}
           onError={onError}

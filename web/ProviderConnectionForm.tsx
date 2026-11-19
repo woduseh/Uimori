@@ -78,6 +78,22 @@ export function ProviderConnectionForm({
       : connection.protocol === 'fixture-sse-v1'
         ? t('providers.m128')
         : t('providers.m129');
+  const staleConnection =
+    !!editingConnection &&
+    connections.find((item) => item.id === editingConnection.id)?.revision !==
+      editingConnection.revision;
+  const reloadButton = editingConnection && (
+    <button
+      type="button"
+      className="secondary"
+      disabled={busy}
+      onClick={() => {
+        onReload();
+      }}
+    >
+      {t('providers.m136')}
+    </button>
+  );
   return (
     <form
       hidden={hidden}
@@ -95,35 +111,21 @@ export function ProviderConnectionForm({
           : connectionCopy
             ? t('providers.m132')
             : t('providers.m133')}
-        {(!editingConnection || JSON.stringify(connection) !== connectionBaseline) && (
-          <small className="provider-heading-status">
-            {editingConnection ? t('settings.unsavedItem') : t('settings.newItem')}
-          </small>
+        {editingConnection && JSON.stringify(connection) !== connectionBaseline && (
+          <small className="provider-heading-status">{t('settings.unsavedItem')}</small>
         )}
       </h3>
-      {editingConnection &&
-        (conflict ||
-          connections.find((item) => item.id === editingConnection.id)?.revision !==
-            editingConnection.revision) && (
-          <div className="provider-draft-note full">
-            {connections.find((item) => item.id === editingConnection.id)?.revision !==
-              editingConnection.revision && <p>{t('providers.m135')}</p>}
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy}
-              onClick={() => {
-                onReload();
-              }}
-            >
-              {t('providers.m136')}
-            </button>
-          </div>
-        )}
-      {conflict && (
-        <NoticeBanner tone="error" className="full">
+      {conflict ? (
+        <NoticeBanner tone="error" className="full" actions={reloadButton}>
           {t('providers.m138')}
         </NoticeBanner>
+      ) : (
+        staleConnection && (
+          <div className="provider-draft-note full">
+            <p>{t('providers.m135')}</p>
+            {reloadButton}
+          </div>
+        )
       )}
       <fieldset className="editor-fields full provider-connection-fields" disabled={busy}>
         <label>
@@ -276,12 +278,6 @@ export function ProviderConnectionForm({
         />
         <details className="provider-definition full">
           <summary>{t('providers.m153')}</summary>
-          <dl>
-            <dt>{t('providers.m154')}</dt>
-            <dd>{definition.auth}</dd>
-            <dt>{t('providers.m155')}</dt>
-            <dd>{definition.catalog === 'remote' ? t('providers.m156') : t('providers.m157')}</dd>
-          </dl>
           <ul>
             {definition.limitations.map((item) => (
               <li key={item}>{translateMessage(item)}</li>

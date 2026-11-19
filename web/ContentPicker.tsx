@@ -130,9 +130,9 @@ export function ContentPicker({
         <strong title={content.title}>{content.title}</strong>
         {content.description && <small>{content.description}</small>}
         {(all || pinned) && (
-          <small className="content-picker-meta">
-            {all && t(roleTitleKeys[libraryCategory(library, content)])}
-            {pinned ? t('library.currentSelectionV', { v0: content.revision }) : ''}
+          <small className="content-picker-meta ui-meta-row">
+            {all && <span>{t(roleTitleKeys[libraryCategory(library, content)])}</span>}
+            {pinned && <span>{t('library.currentSelection')}</span>}
           </small>
         )}
       </span>
@@ -228,7 +228,7 @@ export function ContentPicker({
             </span>
           </label>
           <label>
-            <span className="content-picker-filter-label">{t('library.folders')}</span>
+            <span className="sr-only">{t('library.folders')}</span>
             <select
               aria-label={t('library.folders2', { v0: label })}
               value={activeFolder}
@@ -249,9 +249,12 @@ export function ContentPicker({
             </select>
           </label>
         </div>
-        <p className="muted content-picker-count" role="status">
-          {t('library.candidateCount', { count: candidates.length })}
-        </p>
+        {candidates.length > 0 &&
+          (!!needle || activeFolder !== 'all' || candidates.length > visibleCount) && (
+            <p className="muted content-picker-count" role="status">
+              {t('library.candidateCount', { count: candidates.length })}
+            </p>
+          )}
         <div className="content-picker-results" ref={list} onKeyDown={moveFocus}>
           {allowNone && (
             <button

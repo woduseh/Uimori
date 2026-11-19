@@ -271,6 +271,10 @@ test('directory scan resolves actual locale dictionaries and reports review inve
       join(directory, 'web', 'locales', 'sample.ts'),
       `export const messages = { 'sample.copy': { ko: '${help}', en: '${help}', ja: '例', zh: '例' } };`
     );
+    writeFileSync(
+      join(directory, 'web', 'locales', 'ko.ts'),
+      "import { catalog } from './index.js';\nexport default catalog('ko');\n"
+    );
     const result = scanDirectory(directory);
     assert.equal(result.status, 'complete');
     assert.equal(result.files, 1);

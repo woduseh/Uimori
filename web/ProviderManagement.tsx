@@ -1294,7 +1294,7 @@ export function ConnectionEditor({
                         onClick={() => statusConnection(item)}
                       >
                         <PowerIcon size={18} aria-hidden="true" />{' '}
-                        {item.enabled ? t('providers.m101') : t('providers.m106')}
+                        {item.enabled ? t('providers.deactivate') : t('providers.m106')}
                       </button>
                       {(testMode || item.protocol !== 'fixture-sse-v1') && (
                         <button
@@ -1415,7 +1415,9 @@ export function ConnectionEditor({
                                 onClick={() => statusModel(item)}
                               >
                                 <PowerIcon size={18} aria-hidden="true" />{' '}
-                                {item.enabled === false ? t('providers.m106') : t('providers.m101')}
+                                {item.enabled === false
+                                  ? t('providers.m106')
+                                  : t('providers.deactivate')}
                               </button>
                               <button
                                 type="button"

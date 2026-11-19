@@ -22,7 +22,6 @@ import {
 import type { PromptCompilation } from '../core/risu-prompt.js';
 import { api } from './api.js';
 import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
-import { IconButton } from './IconButton.js';
 import './lore-context.css';
 import './settings-layout.css';
 import { DEFAULT_JEV_JUDGMENT } from '../core/judgment.js';
@@ -35,7 +34,7 @@ const tokenFields = (locale = getLocale()) =>
       label: formatMessage('settings.m204', locale),
       min: 0,
       max: 200_000,
-      unit: t('settings.m205'),
+      unit: formatMessage('settings.m205', locale),
     },
     {
       key: 'maxRetainedEntries',
@@ -43,7 +42,7 @@ const tokenFields = (locale = getLocale()) =>
       label: formatMessage('settings.m206', locale),
       min: 0,
       max: 256,
-      unit: t('settings.m207'),
+      unit: formatMessage('settings.m207', locale),
     },
     {
       key: 'maxPinnedTokens',
@@ -51,7 +50,7 @@ const tokenFields = (locale = getLocale()) =>
       label: formatMessage('settings.m208', locale),
       min: 1,
       max: 1_000_000,
-      unit: t('settings.m205'),
+      unit: formatMessage('settings.m205', locale),
     },
   ] as const;
 type PolicyDraft = {
@@ -279,7 +278,10 @@ export function LoreContextPolicyEditor({
           <div className="lore-context-policy-grid">
             {tokenFields().map((field) => (
               <label key={field.key}>
-                {field.label}
+                <span className="lore-context-field-copy">
+                  <span>{field.label}</span>
+                  <span className="lore-context-unit muted">{field.unit}</span>
+                </span>
                 <input
                   aria-label={field.label}
                   inputMode="numeric"
@@ -329,21 +331,23 @@ export function LoreContextPolicyEditor({
             </label>
           </div>
           <div className="lore-context-actions settings-form-footer">
-            <IconButton
-              icon={RotateCcw}
-              label={resetLabel}
+            <button
+              type="button"
               className="secondary"
               disabled={!defaults}
               onClick={() => {
                 if (defaults) change(draftOf(defaults));
               }}
-            />
+            >
+              <RotateCcw size={16} aria-hidden="true" />
+              {resetLabel}
+            </button>
           </div>
         </details>
       </div>
       {validation && (
         <p className="error" role="alert">
-          {t('settings.flow12', { v0: translateMessage(validation) })}
+          {translateMessage(validation)}
         </p>
       )}
       {(validation || footerAction) && (

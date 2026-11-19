@@ -255,7 +255,7 @@ test('HELPHANDOFF02 a newer outline handoff wins over an earlier delayed source 
     await expect(f.panel).toBeHidden();
     const chatMenu = page.locator('.chat-menu');
     await chatMenu.getByLabel('채팅 메뉴').click();
-    await chatMenu.getByRole('button', { name: '계층형 플롯', exact: true }).click();
+    await chatMenu.getByRole('button', { name: '플롯', exact: true }).click();
     const outline = page.locator('.outline-panel');
     await expect(outline).toBeVisible();
     await outline

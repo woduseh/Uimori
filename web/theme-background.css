@@ -71,17 +71,12 @@ html[data-theme="dark"] .theme-background-preview::after {
   max-width: 100%;
 }
 .theme-background-actions {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
 }
 .theme-background-actions > button {
   flex: none;
-}
-.theme-background-actions > .settings-save-button {
-  width: var(--control-h);
-  min-width: var(--control-h);
-  padding: 0;
 }
 .theme-background-actions > .theme-background-reset {
   background: transparent;

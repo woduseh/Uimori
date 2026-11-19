@@ -165,9 +165,12 @@
 .illustration-reference-options select {
   width: 100%;
 }
-.illustration-references > h5,
+.illustration-references h5 {
+  margin: 0;
+  font-size: var(--font-body);
+  font-weight: 600;
+}
 .illustration-references > p,
-.illustration-character-profiles > h5,
 .illustration-character-profiles > p {
   margin: 0;
 }

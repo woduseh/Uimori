@@ -325,7 +325,7 @@ test(`BMCONF03 bookmark deletion cancellation, stale revision and busy guard pre
   });
   expect(changed.ok()).toBe(true);
   const latest = (await changed.json()) as Bookmark;
-  await confirmation.getByRole('button', { name: '영구 삭제', exact: true }).click();
+  await confirmation.getByRole('button', { name: '삭제', exact: true }).click();
   await expect(confirmation.getByRole('alert')).toContainText('책갈피가 변경됐어요');
   expect(await savedBookmarks(request, chat.id)).toEqual([latest]);
   await confirmation.getByRole('button', { name: '취소', exact: true }).click();
@@ -348,7 +348,7 @@ test(`BMCONF03 bookmark deletion cancellation, stale revision and busy guard pre
     await route.continue();
   });
   try {
-    await confirmation.getByRole('button', { name: '영구 삭제', exact: true }).click();
+    await confirmation.getByRole('button', { name: '삭제', exact: true }).click();
     await expect.poll(() => deletions.length).toBe(1);
     await expect(confirmation.getByRole('button', { name: '취소', exact: true })).toBeDisabled();
     await expect(
@@ -395,7 +395,7 @@ test('BMCONF04 a lost deletion response can be checked without repeating the del
   try {
     await list.getByRole('button', { name: `${bookmark.title} 책갈피 삭제`, exact: true }).click();
     const confirmation = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
-    await confirmation.getByRole('button', { name: '영구 삭제', exact: true }).click();
+    await confirmation.getByRole('button', { name: '삭제', exact: true }).click();
     await expect(confirmation.getByRole('alert')).toBeVisible();
     expect(deletionStatus).toBe(200);
     expect(deletions).toBe(1);

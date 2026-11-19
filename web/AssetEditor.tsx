@@ -20,9 +20,9 @@ const emptyFields = {
   allowedUse: 'both' as Asset['allowedUse'],
 };
 const imageUseLabelKeys: Record<Asset['allowedUse'], string> = {
-  both: 'library.profileAndStory',
-  profile: 'library.profile',
-  inline: 'library.story',
+  both: 'library.portraitAndStory',
+  profile: 'library.portraitOnly',
+  inline: 'library.storyOnly',
 };
 
 export function AssetEditor({
@@ -185,10 +185,10 @@ export function AssetEditor({
       >
         <fieldset className="editor-fields editor-grid" disabled={busy}>
           <label className="full">
-            {t('library.pngOrJpegImage')}
+            {t('library.imageFile')}
             <input
               ref={fileInput}
-              aria-label={t('library.pngOrJpegImage')}
+              aria-label={t('library.imageFile')}
               type="file"
               accept="image/png,image/jpeg,image/webp,image/avif,image/gif"
               required
@@ -196,7 +196,7 @@ export function AssetEditor({
             />
           </label>
           <label>
-            {t('library.imageName')}
+            {t('library.name')}
             <input
               aria-label={t('library.imageName')}
               required
@@ -206,7 +206,7 @@ export function AssetEditor({
             />
           </label>
           <label>
-            {t('library.imageDescription')}
+            {t('library.description')}
             <input
               aria-label={t('library.imageDescription')}
               required
@@ -216,7 +216,7 @@ export function AssetEditor({
             />
           </label>
           <label>
-            {t('library.imageCharacter')}
+            {t('library.character')}
             <input
               aria-label={t('library.imageCharacter')}
               value={value.actor}
@@ -224,7 +224,7 @@ export function AssetEditor({
             />
           </label>
           <label>
-            {t('library.imageOutfit')}
+            {t('library.outfit')}
             <input
               aria-label={t('library.imageOutfit')}
               value={value.outfit}
@@ -232,7 +232,7 @@ export function AssetEditor({
             />
           </label>
           <label>
-            {t('library.imageLocation')}
+            {t('library.location')}
             <input
               aria-label={t('library.imageLocation')}
               value={value.location}
@@ -240,7 +240,7 @@ export function AssetEditor({
             />
           </label>
           <label>
-            {t('library.imageUse')}
+            {t('library.use')}
             <select
               aria-label={t('library.imageUse')}
               value={value.allowedUse}

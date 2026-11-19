@@ -149,7 +149,7 @@ test('SIDENAV04 desktop width choices persist and preserve the rail, mobile draw
   await expect(sidebar).toHaveCSS('width', '248px');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '일반');
-  const width = page.getByRole('combobox', { name: '좌측 사이드바 폭', exact: true });
+  const width = page.getByRole('combobox', { name: '채팅 사이드바 폭', exact: true });
   await expect(width).toHaveValue('248');
   await width.selectOption('400');
   await expect(sidebar).toHaveCSS('width', '400px');
@@ -216,8 +216,8 @@ test('SIDENAV06 helper history width persists independently of chat sidebar and 
   const sidebar = page.locator('.sidebar');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '일반');
-  const chatWidth = page.getByRole('combobox', { name: '좌측 사이드바 폭', exact: true });
-  const helperWidth = page.getByRole('combobox', { name: '도우미 패널 너비', exact: true });
+  const chatWidth = page.getByRole('combobox', { name: '채팅 사이드바 폭', exact: true });
+  const helperWidth = page.getByRole('combobox', { name: '도우미 사이드바 폭', exact: true });
   const rightWidth = page.getByRole('combobox', { name: '우측 패널 폭', exact: true });
   await expect(helperWidth).toHaveValue('320');
   await chatWidth.selectOption('400');

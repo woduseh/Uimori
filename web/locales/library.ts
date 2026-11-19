@@ -689,11 +689,11 @@ export const messages = {
     ja: '接続できる{v0}の資料がありません。',
     zh: '没有可关联的{v0}资料。',
   },
-  'library.currentSelectionV': {
-    ko: ', 현재 선택 v{v0}',
-    en: ', Current selection v{v0}',
-    ja: '、現在の選択 v{v0}',
-    zh: '，当前选择 v{v0}',
+  'library.currentSelection': {
+    ko: '현재 선택',
+    en: 'Current selection',
+    ja: '現在の選択',
+    zh: '当前选择',
   },
   'library.selectedResourceNeedsReview': {
     ko: '선택한 자료 확인 필요',
@@ -1097,11 +1097,11 @@ export const messages = {
     ja: '最新の設定を読み込みました。',
     zh: '已加载最新设置。',
   },
-  'library.reloadAttachmentSettings': {
-    ko: '사용 자료 다시 불러오기',
-    en: 'Reload resources in use',
-    ja: '使用資料を再読込',
-    zh: '重新加载使用资料',
+  'library.discardChanges': {
+    ko: '변경 취소',
+    en: 'Discard changes',
+    ja: '変更を取り消す',
+    zh: '放弃更改',
   },
   'library.youHaveUnsavedChanges': {
     ko: '저장하지 않은 변경이 있어요.',
@@ -1120,24 +1120,6 @@ export const messages = {
     en: 'Save chat settings',
     ja: 'チャット設定を保存',
     zh: '保存聊天设置',
-  },
-  'library.profileAndStory': {
-    ko: '프로필과 본문',
-    en: 'Profile and story',
-    ja: 'プロフィールと本文',
-    zh: '简介与正文',
-  },
-  'library.profile': {
-    ko: '프로필',
-    en: 'Profile',
-    ja: 'プロフィール',
-    zh: '简介',
-  },
-  'library.story': {
-    ko: '본문',
-    en: 'Story',
-    ja: '本文',
-    zh: '正文',
   },
   'library.checkTheImageFileAndName': {
     ko: '이미지 파일과 이름을 확인해 주세요.',
@@ -1199,11 +1181,47 @@ export const messages = {
     ja: '次の画像',
     zh: '下一组图片',
   },
-  'library.pngOrJpegImage': {
-    ko: 'PNG 또는 JPEG 이미지',
-    en: 'PNG or JPEG image',
-    ja: 'PNGまたはJPEG画像',
-    zh: 'PNG或JPEG图片',
+  'library.imageFile': {
+    ko: '이미지 파일',
+    en: 'Image file',
+    ja: '画像ファイル',
+    zh: '图片文件',
+  },
+  'library.name': {
+    ko: '이름',
+    en: 'Name',
+    ja: '名前',
+    zh: '名称',
+  },
+  'library.description': {
+    ko: '설명',
+    en: 'Description',
+    ja: '説明',
+    zh: '描述',
+  },
+  'library.character': {
+    ko: '인물',
+    en: 'Character',
+    ja: '人物',
+    zh: '人物',
+  },
+  'library.outfit': {
+    ko: '의상',
+    en: 'Outfit',
+    ja: '衣装',
+    zh: '服装',
+  },
+  'library.location': {
+    ko: '장소',
+    en: 'Location',
+    ja: '場所',
+    zh: '地点',
+  },
+  'library.use': {
+    ko: '용도',
+    en: 'Use',
+    ja: '用途',
+    zh: '用途',
   },
   'library.imageName': {
     ko: '이미지 이름',

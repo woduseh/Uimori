@@ -116,8 +116,11 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   await form.getByLabel('프로바이더 프로토콜').selectOption('openai-responses-v1');
   await expect(form.getByLabel('API 기본 주소')).toHaveValue('https://api.openai.com/v1');
   await form.getByText('연결 안내', { exact: true }).click();
-  await expect(form.locator('.provider-definition')).toContainText('인증 방식');
+  await expect(form.locator('.provider-definition')).toContainText(
+    '모델별 옵션과 도구 지원은 프로바이더에 따라 달라요.'
+  );
   await expect(form.locator('.provider-definition')).not.toContainText('로컬 어댑터');
+  await expect(form.locator('.provider-definition')).not.toContainText('bearer');
   await form.getByLabel('API 기본 주소').fill('http://127.0.0.1:9/v1');
   await form.getByLabel('프로바이더 이름', { exact: true }).fill(title);
   await form.getByLabel('API 키').fill('PM_SYNTHETIC_KEY');

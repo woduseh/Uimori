@@ -66,7 +66,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     reference: 'core/codex-protocol.ts#buildCodexTurn',
     limitations: [
       '서버의 공식 Codex 실행기에 직접 로그인해 사용해요. API 키를 저장하지 않아요.',
-      '도구 실행은 Uimori가 관리해요. maxOutputTokens는 출력량을 조절하는 참고값이며, 실제 출력이 이 값을 넘을 수 있어요.',
+      '도구 실행은 Uimori가 관리해요. 최대 출력 토큰은 출력량을 조절하는 참고값이며, 실제 출력이 이 값을 넘을 수 있어요.',
       '작업 횟수와 내부 모델 호출 횟수는 별개예요.',
       'Risu 프롬프트는 메시지 역할과 순서를 담은 JSON으로 전달해요. Codex 자체 지침도 추가돼 API에 메시지를 직접 보낼 때와 역할 해석이 다를 수 있어요. 응답 시작 부분을 미리 채우는 prefill과 캐시 사용을 필수로 지정하는 옵션은 지원하지 않아요.',
     ],
@@ -83,7 +83,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     limitations: [
       '이 컴퓨터의 127.0.0.1 또는 [::1] 주소에서만 사용하는 검사용 연결이에요.',
       '모델 목록은 로컬 검사 서버에서 가져와요.',
-      '인증이 필요한 검사 서버에는 서버 환경변수 이름을 지정할 수 있어요.',
+      '인증이 필요한 검사 서버에는 API 키를 입력해 주세요.',
     ],
   }),
   definition({
@@ -155,7 +155,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     limitations: [
       '서버에서 허용한 HTTPS 주소나 이 컴퓨터의 로컬 HTTP 주소를 사용할 수 있어요.',
       '모델별 옵션과 도구 지원은 프로바이더에 따라 달라요.',
-      '번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 담는 JSON 형식을 요청해요. 형식은 Responses API의 text.format으로 지정하며, 기본값은 일반 텍스트예요.',
+      '번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 JSON 형식으로 요청해요. 기본값은 일반 텍스트예요.',
     ],
   }),
   definition({
@@ -178,9 +178,9 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     ],
     reference: 'core/anthropic-protocol.ts#encodeAnthropic',
     limitations: [
-      '공식 API 기본 주소와 x-api-key 인증을 사용해요.',
+      '공식 API 기본 주소와 API 키 인증을 사용해요.',
       'Claude Opus 5의 Output Effort와 Thinking을 모델별 조합에 맞게 사용해요.',
-      '번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 담는 JSON 형식을 요청해요. 형식은 output_config.format으로 지정하며, 기본값은 일반 텍스트예요.',
+      '번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 JSON 형식으로 요청해요. 기본값은 일반 텍스트예요.',
       '모델 기본값을 선택하면 해당 설정을 보내지 않아요.',
     ],
   }),
@@ -204,7 +204,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     reference: 'core/openai-chat-protocol.ts#encodeChat',
     limitations: [
       'Vercel의 공식 API 기본 주소에서 Chat Completions 형식을 사용해요.',
-      '번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 담는 JSON 형식을 요청해요. 형식은 response_format으로 지정하며, 기본값은 일반 텍스트예요.',
+      '번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 JSON 형식으로 요청해요. 기본값은 일반 텍스트예요.',
       '모델 계열을 선택하면 OpenAI, Anthropic, Google, DeepSeek, xAI 계열의 생성 옵션을 같은 게이트웨이에서 사용할 수 있어요. providerOptions는 추가 라우팅이나 새 프로바이더 옵션용이에요.',
     ],
   }),
@@ -234,8 +234,8 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     reference: 'core/openai-chat-protocol.ts#encodeChat',
     limitations: [
       '서버에서 허용한 HTTPS 주소나 이 컴퓨터의 로컬 HTTP 주소를 사용할 수 있어요.',
-      '인증이 필요한 프로바이더에는 서버 환경변수 이름을 지정해 주세요.',
-      'Chat Completions 지원 여부는 프로바이더에서 확인해 주세요. 번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 담는 JSON 형식을 response_format으로 요청해요.',
+      '인증이 필요한 프로바이더에는 API 키를 입력해 주세요.',
+      'Chat Completions 지원 여부는 프로바이더에서 확인해 주세요. 번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 JSON 형식으로 요청해요.',
     ],
   }),
 ]);

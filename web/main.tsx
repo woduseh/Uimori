@@ -1080,28 +1080,27 @@ function App() {
                 <option value={1040}>{t('main.m036')}</option>
               </select>
             </label>
-            <div className="reading-option-toggle">
-              <div>
-                <strong>{t('main.m037')}</strong>
-              </div>
-              <label className="check">
+            <label className="settings-row settings-row-toggle">
+              <span>{t('main.m037')}</span>
+              <span className="settings-row-control">
                 <Switch
                   aria-label={t('main.m039')}
                   data-reading-setting="navigator"
                   checked={sceneNavigatorEnabled}
                   onChange={(event) => setSceneNavigatorEnabled(event.target.checked)}
                 />
-              </label>
-            </div>
+              </span>
+            </label>
           </div>
         </section>
 
-        <section className="settings-group" aria-label={t('main.m041')}>
-          <div className="settings-group-body">
-            <label className="settings-row">
-              <span className="settings-row-copy">
-                <strong>{t('main.m042')}</strong>
-              </span>
+        <section className="settings-group reading-settings-group" aria-label={t('main.m041')}>
+          <header className="settings-group-heading">
+            <h4>{t('main.m041')}</h4>
+          </header>
+          <div className="settings-group-body reading-settings-rows">
+            <label>
+              {t('main.m042')}
               <select
                 aria-label={t('main.m042')}
                 data-reading-setting="response"
@@ -1112,10 +1111,8 @@ function App() {
                 <option value="complete">{t('main.m045')}</option>
               </select>
             </label>
-            <label className="settings-row">
-              <span className="settings-row-copy">
-                <strong>{t('main.m047')}</strong>
-              </span>
+            <label>
+              {t('main.m047')}
               <select
                 aria-label={t('main.m047')}
                 data-reading-setting="language"
@@ -1126,10 +1123,8 @@ function App() {
                 <option value="original">{t('main.m050')}</option>
               </select>
             </label>
-            <label className="settings-row">
-              <span className="settings-row-copy">
-                <strong>{t('main.m052')}</strong>
-              </span>
+            <label>
+              {t('main.m052')}
               <select
                 aria-label={t('main.m052')}
                 data-reading-setting="illustrations"
@@ -1344,7 +1339,6 @@ function App() {
                         type="button"
                         className="secondary"
                         aria-label={t('main.m067')}
-                        title={t('main.m068')}
                         disabled={
                           !s.sources.length ||
                           s.forking.some((key) => key.startsWith(`${s.selected}:`))
@@ -1355,7 +1349,7 @@ function App() {
                         }}
                       >
                         <GitFork size={18} aria-hidden="true" />
-                        {t('main.m069')}
+                        {t('main.m067')}
                       </button>
                       <button
                         type="button"
@@ -1395,6 +1389,7 @@ function App() {
                           preparePath={`/chats/${encodeURIComponent(s.selected)}/deletion-impact`}
                           title={s.detail.chat.title}
                           label={t('main.m072')}
+                          confirmLabel={t('shared.deletePermanently')}
                           description={t('main.m073')}
                           disabled={!!s.active}
                           onError={s.setError}

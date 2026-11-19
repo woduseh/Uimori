@@ -504,10 +504,10 @@ export const messages = {
     zh: '更改已自动保存。',
   },
   'prompts.uiBuiltInPromptSelected': {
-    ko: '기본 프롬프트를 선택했어요.',
-    en: 'Built-in prompt selected.',
-    ja: '標準プロンプトを選択しました。',
-    zh: '已选择内置提示词。',
+    ko: '프롬프트를 적용했어요.',
+    en: 'Prompt applied.',
+    ja: 'プロンプトを適用しました。',
+    zh: '已应用提示词。',
   },
   'prompts.uiLoadingCurrentPrompts': {
     ko: '현재 프롬프트를 불러오는 중이에요…',
@@ -544,6 +544,12 @@ export const messages = {
     en: 'Writing options',
     ja: '創作オプション',
     zh: '创作选项',
+  },
+  'prompts.uiTranslationOptions': {
+    ko: '번역 옵션',
+    en: 'Translation options',
+    ja: '翻訳オプション',
+    zh: '翻译选项',
   },
   'prompts.uiDefault': {
     ko: '기본값',
@@ -642,16 +648,16 @@ export const messages = {
     zh: '有原文',
   },
   'prompts.uiHierarchicalOutline': {
-    ko: '계층형 플롯',
-    en: 'Hierarchical outline',
-    ja: '階層構成',
-    zh: '分层大纲',
+    ko: '플롯',
+    en: 'Outline',
+    ja: '構成',
+    zh: '大纲',
   },
   'prompts.uiOutlineAndWrite': {
-    ko: '플롯과 집필',
-    en: 'Outline and write',
-    ja: '構成と執筆',
-    zh: '大纲与写作',
+    ko: '플롯',
+    en: 'Outline',
+    ja: '構成',
+    zh: '大纲',
   },
   'prompts.uiHelper': {
     ko: '도우미',
@@ -660,10 +666,10 @@ export const messages = {
     zh: '助手',
   },
   'prompts.uiCloseHierarchicalOutline': {
-    ko: '계층형 플롯 닫기',
-    en: 'Close hierarchical outline',
-    ja: '階層構成を閉じる',
-    zh: '关闭分层大纲',
+    ko: '플롯 닫기',
+    en: 'Close outline',
+    ja: '構成を閉じる',
+    zh: '关闭大纲',
   },
   'prompts.uiTheSubmissionResultIsStillUnknownYourInputIs': {
     ko: '접수 결과를 아직 확인하지 못했어요. 입력은 보관했어요.',
@@ -732,10 +738,10 @@ export const messages = {
     zh: '大纲列表',
   },
   'prompts.uiStoryOutline': {
-    ko: '이야기 플롯',
-    en: 'Story outline',
-    ja: '物語の構成',
-    zh: '故事大纲',
+    ko: '플롯',
+    en: 'Outline',
+    ja: '構成',
+    zh: '大纲',
   },
   'prompts.uiAddOutline': {
     ko: '플롯 추가',

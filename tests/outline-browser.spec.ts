@@ -69,7 +69,7 @@ async function open(page: Page, chatId: string, width: number) {
   await page.locator('.chat-menu').getByLabel('채팅 메뉴').click();
   await page
     .locator('.chat-menu .action-menu-body')
-    .getByRole('button', { name: '계층형 플롯', exact: true })
+    .getByRole('button', { name: '플롯', exact: true })
     .click();
   const panel = page.locator('.outline-panel');
   await expect(panel).toBeVisible();

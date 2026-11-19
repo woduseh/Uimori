@@ -160,7 +160,7 @@ for (const width of visualReview ? [360, 412] : [360]) {
     failRefresh = true;
     await dialog.locator('.chat-settings-image-management > summary').click();
     const assets = dialog.getByRole('region', { name: '이 이야기의 이미지', exact: true });
-    await assets.getByLabel('PNG 또는 JPEG 이미지', { exact: true }).setInputFiles({
+    await assets.getByLabel('이미지 파일', { exact: true }).setInputFiles({
       name: 'additional.png',
       mimeType: 'image/png',
       buffer: image,
@@ -293,7 +293,7 @@ for (const width of [360]) {
     await dialog.locator('.chat-settings-image-management > summary').click();
     const assets = dialog.getByRole('region', { name: '이 이야기의 이미지', exact: true });
     await assets
-      .getByLabel('PNG 또는 JPEG 이미지', { exact: true })
+      .getByLabel('이미지 파일', { exact: true })
       .setInputFiles({ name: 'new.png', mimeType: 'image/png', buffer: image });
     await assets.getByLabel('이미지 이름', { exact: true }).fill('새 참고');
     await assets.getByLabel('이미지 설명', { exact: true }).fill('새 이미지');
@@ -370,7 +370,7 @@ test('editing appearance preserves an unavailable saved reference until explicit
   await dialog.locator('.chat-settings-image-management > summary').click();
   const assets = dialog.getByRole('region', { name: '이 이야기의 이미지', exact: true });
   await assets
-    .getByLabel('PNG 또는 JPEG 이미지', { exact: true })
+    .getByLabel('이미지 파일', { exact: true })
     .setInputFiles({ name: 'refresh.png', mimeType: 'image/png', buffer: image });
   await assets.getByLabel('이미지 이름', { exact: true }).fill('새 후보');
   await assets.getByLabel('이미지 설명', { exact: true }).fill('갱신 확인');
@@ -471,7 +471,7 @@ test('ILUI01 scene menu requests an illustration, shows the stored image, retrie
     .click();
   const confirm = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
   await expect(confirm).toBeVisible();
-  await confirm.getByRole('button', { name: '영구 삭제', exact: true }).click();
+  await confirm.getByRole('button', { name: '삽화 삭제', exact: true }).click();
   await expect(page.getByTestId('illustration')).toHaveCount(1);
   expect(
     (await illustrations(request, chat.id)).filter((item) => item.task === 'render')

@@ -287,7 +287,7 @@ function getSettingsCategories(): SettingsCategory[] {
           anchor: 'generation',
         },
         {
-          label: t('chatsettings.m11'),
+          label: t('chatsettings.readingSettings'),
           terms: t('chatsettings.m20'),
           anchor: 'reading',
         },
@@ -835,7 +835,7 @@ export function AppSettingsPanel({
                       className="settings-section"
                     >
                       <h3>
-                        {t('chatsettings.m11')}
+                        {t('chatsettings.readingSettings')}
                         <span className="scope-badge">{t('chatsettings.m58')}</span>
                       </h3>
                       {readingSettings}

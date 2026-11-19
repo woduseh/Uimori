@@ -205,7 +205,6 @@ export function ThemeBackgroundSettings({
         <SaveButton
           type="button"
           label={t('visuals.m016')}
-          text=""
           aria-busy={operation === 'save'}
           disabled={disabled || busy || state.loading || !dirty}
           onClick={() => void saveValue(draft)}
