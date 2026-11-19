@@ -264,7 +264,7 @@ test('SPUI03 usage keeps no-call periods compact without hiding free or unconfir
         : [],
       kinds: totals.calls ? [{ ...totals, kind: 'writing' }] : [],
       undated: { ...empty, calls: 3, reportedUsd: 0.03 },
-      coverageSince: '2026-04-01T00:00:00Z',
+      coverageSince: '2099-04-01T00:00:00Z',
     };
     await route.fulfill({ json: data });
   });
@@ -283,7 +283,7 @@ test('SPUI03 usage keeps no-call periods compact without hiding free or unconfir
   await expect(panel.locator('summary').filter({ hasText: '일별 및 용도별 상세' })).toHaveCount(0);
   await expect(panel).toContainText('시각 미확인 3회, US$0.03는 기간 합계에서 제외했어요.');
   await expect(panel.locator('.usage-note').filter({ hasText: '상세 집계 시작' })).toHaveText(
-    '상세 집계 시작: 2026. 4. 1.'
+    '상세 집계 시작: 2099. 4. 1.'
   );
   for (const theme of ['dark', 'light']) {
     await selectSettingsSection(page, '일반');

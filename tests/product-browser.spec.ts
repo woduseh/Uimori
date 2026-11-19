@@ -356,6 +356,10 @@ test('P03 a pending creative option reset blocks only its own chat', async ({ pa
   });
   try {
     await panel.getByRole('button', { name: '고정 옵션 모두 해제', exact: true }).click();
+    await page
+      .getByRole('alertdialog', { name: '고정 옵션을 모두 해제할까요?', exact: true })
+      .getByRole('button', { name: '고정 옵션 모두 해제', exact: true })
+      .click();
     await expect(
       panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true })
     ).toHaveAttribute('aria-busy', 'true');

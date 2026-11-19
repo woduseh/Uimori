@@ -542,9 +542,7 @@ for (const viewport of viewports) {
       expect(saved.id).toBe(bot.id);
       expect(saved.revision).toBe(bot.revision + 1);
       expect(saved.package.nativeRisu.card).toMatchObject({ name: editedName, first_mes: opening });
-      await expect(editor.locator('.resource-editor-status').getByRole('status')).toHaveText(
-        '저장됨'
-      );
+      await expect(editor.locator('.resource-editor-status').getByRole('status')).toBeEmpty();
       await editorFits(page, editor, save);
       await page.screenshot({ path: info.outputPath(`bot-saved-${viewport.name}.png`) });
 

@@ -70,7 +70,7 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     const start = panel.getByRole('button', { name: '채팅 시작', exact: true });
     await expect(start).toBeEnabled();
     await expect(panel.getByRole('heading', { name: createdTitle, exact: true })).toBeVisible();
-    await expect(saveState).toHaveText('저장됨');
+    await expect(saveState).toBeEmpty();
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-saved-${width}.png`) });
     await start.click();

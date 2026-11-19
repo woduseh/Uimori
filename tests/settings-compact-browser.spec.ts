@@ -76,7 +76,7 @@ for (const colorScheme of ['dark'] as const) {
         const pane = dialog.getByRole('tabpanel');
         if (section === '일반') {
           await expect(pane.getByLabel('앱 화면 테마')).toBeVisible();
-          await expect(pane.getByRole('button', { name: '접속 해제', exact: true })).toBeVisible();
+          await expect(pane.getByRole('button', { name: '접속 해제', exact: true })).toHaveCount(0);
           await expect(dialog.getByRole('tab', { name: '접근 보안', exact: true })).toHaveCount(0);
           const sendKey = pane.getByRole('combobox', { name: '보내기 키', exact: true });
           const controlBox = (await sendKey.boundingBox())!;
@@ -381,20 +381,20 @@ test('SCUI06 global lore defaults require a successful read and preserve chat dr
     await openChatSettings(page);
     await selectChatSettingsSection(page, '기억과 메모');
     const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-    await expect(
-      dialog.getByRole('button', { name: '전역 기본값 적용', exact: true })
-    ).toBeHidden();
+    await expect(dialog.getByRole('button', { name: '기본값 적용', exact: true })).toBeHidden();
     await dialog.getByText('선별 기준과 용량', { exact: true }).click();
     const retained = dialog.getByLabel('조회 로어 토큰 한도', { exact: true });
-    const reset = dialog.getByRole('button', { name: '전역 기본값 적용', exact: true });
+    const reset = dialog.getByRole('button', { name: '기본값 적용', exact: true });
     await expect.poll(() => reads).toBe(1);
     await expect(reset).toBeDisabled();
     await retained.fill('12000');
     release();
-    await expect(dialog.getByRole('alert')).toContainText('전역 로어 기본값을 불러오지 못했어요');
+    await expect(dialog.getByRole('alert')).toContainText(
+      '로어 컨텍스트 기본값을 불러오지 못했어요'
+    );
     await expect(reset).toBeDisabled();
     await expect(retained).toHaveValue('12000');
-    await dialog.getByRole('button', { name: '전역 기본값 다시 불러오기', exact: true }).click();
+    await dialog.getByRole('button', { name: '기본값 다시 불러오기', exact: true }).click();
     await expect(reset).toBeEnabled();
     await expect(retained).toHaveValue('12000');
     await expect(dialog.getByRole('alert')).toHaveCount(0);

@@ -74,6 +74,14 @@ test('ORG01 mobile navigation groups by owner and preserves chats when a folder 
   await nav.getByRole('button', { name: `${folder.title} 폴더`, exact: true }).hover();
   await nav.getByRole('button', { name: `${folder.title} 폴더 설정`, exact: true }).click();
   await page.getByRole('button', { name: '채팅을 유지하고 폴더 삭제', exact: true }).click();
+  const confirmation = page.getByRole('alertdialog', {
+    name: `‘${folder.title}’ 폴더를 삭제할까요?`,
+    exact: true,
+  });
+  await expect(confirmation).toContainText('폴더 안의 채팅은 미분류로 옮겨져요.');
+  await confirmation
+    .getByRole('button', { name: '채팅을 유지하고 폴더 삭제', exact: true })
+    .click();
   await expect(nav.getByRole('button', { name: `${folder.title} 폴더`, exact: true })).toHaveCount(
     0
   );
@@ -199,7 +207,7 @@ const rows = (nav: Locator) => nav.locator('.bot-chat-item');
     await expect(persona).toContainText(draftPersona.title);
     const save = dialog.getByRole('button', { name: '설정 저장', exact: true });
     await expect(save).toBeDisabled();
-    await expect(dialog.getByRole('alert')).toContainText('작성한 내용은 유지했어요.');
+    await expect(dialog.getByRole('alert')).toContainText('폴더 설정이 다른 곳에서 바뀌었어요.');
     await dialog.getByText('현재 저장된 설정 보기', { exact: true }).click();
     await expect(dialog.getByRole('alert')).toContainText(concurrentPersona.title);
     if (visualReview)
@@ -288,10 +296,9 @@ const rows = (nav: Locator) => nav.locator('.bot-chat-item');
     // The live conflict notice changes the mobile dialog's height. Wait for that update before
     // clicking Save, so the test submits the retained draft after receiving the concurrent title.
     await expect(
-      menu.getByText(
-        '제목이 다른 곳에서 변경됐어요. 입력한 내용은 유지돼요. 취소하면 최신 제목을 불러와요.',
-        { exact: true }
-      )
+      menu.getByText('제목이 다른 곳에서 변경됐어요. 취소하면 최신 제목을 불러와요.', {
+        exact: true,
+      })
     ).toBeVisible();
     const rejectedSave = page.waitForResponse(
       (response) =>

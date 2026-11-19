@@ -478,7 +478,7 @@ test('PWUI05 app installation is explicit, registers a cache-free worker and nev
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '일반');
   const panel = page.getByRole('region', { name: '앱 설치', exact: true });
-  await expect(panel).toContainText('서버 연결이 필요');
+  await expect(panel).toContainText('브라우저 메뉴에서 앱 설치');
   await page.evaluate(() => {
     const event = new Event('beforeinstallprompt', { cancelable: true });
     Object.assign(event, {
@@ -490,6 +490,7 @@ test('PWUI05 app installation is explicit, registers a cache-free worker and nev
     dispatchEvent(event);
   });
   await expect(panel.getByRole('button', { name: 'Uimori 설치', exact: true })).toBeVisible();
+  await expect(panel).not.toContainText('브라우저 메뉴');
   expect(await page.evaluate(() => Reflect.get(window, 'installCalls'))).toBe(0);
   await panel.getByRole('button', { name: 'Uimori 설치', exact: true }).click();
   expect(await page.evaluate(() => Reflect.get(window, 'installCalls'))).toBe(1);

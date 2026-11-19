@@ -101,7 +101,7 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     });
     const mainThreshold = editor.getByLabel('본문 거절 확신 기준', { exact: true });
     await expect(behaviorSummary).toBeVisible();
-    await expect(behaviorSummary).toContainText('번역 16회, 거절 감지 2/2');
+    await expect(behaviorSummary).toContainText('번역 호출 한도 16회, 거절 감지 2/2');
     await expect(mainThreshold).toBeHidden();
     await expect(editor.getByLabel('번역 거절 확신 기준', { exact: true })).toBeHidden();
     await behaviorSummary.click();

@@ -126,9 +126,10 @@ for (const width of WIDTHS) {
       await expect(intent).toBeFocused();
       await form.getByRole('button', { name: '닫기', exact: true }).click();
       await panel.getByRole('button', { name: '직접 추가', exact: true }).click();
-      await expect(form.getByRole('textbox', { name: '이름', exact: true })).toHaveValue(
-        '한 회차에서 시작'
-      );
+      await form.getByRole('combobox', { name: '수준', exact: true }).selectOption('episode');
+      await expect(form.getByRole('textbox', { name: '이름', exact: true })).toHaveValue('');
+      await expect(intent).toHaveValue('');
+      await form.getByRole('textbox', { name: '이름', exact: true }).fill('한 회차에서 시작');
       await form.getByRole('button', { name: '추가', exact: true }).click();
       await expect(panel.locator('.outline-detail-heading h3')).toHaveText('한 회차에서 시작');
       const saved: OutlineDetail = await (

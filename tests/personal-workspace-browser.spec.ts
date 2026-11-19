@@ -150,7 +150,8 @@ test('PERSONAL images retain native alias while display metadata and WebP persis
     page.getByLabel('Risu 이미지 목록', { exact: true }).getByRole('button')
   ).toHaveCount(0);
   await search.fill('script_alias');
-  await page.getByLabel('Risu 이미지 목록', { exact: true }).getByRole('button').first().click();
+  const uploaded = page.getByLabel('Risu 이미지 목록', { exact: true }).getByRole('button').first();
+  await expect(uploaded).toHaveAttribute('aria-pressed', 'true');
   await page.getByLabel('이미지 이름', { exact: true }).fill('우산을 든 유나');
   await page.getByLabel('이미지 설명', { exact: true }).fill('비 오는 하굣길, 투명 우산과 미소');
   await page

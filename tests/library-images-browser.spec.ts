@@ -224,10 +224,9 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
     .getByRole('button')
     .filter({ has: page.locator(`img[src="/api/package-image-blobs/${originalHash.hash}"]`) })
     .click();
-  const portraitHint = library.getByText(
-    '이름과 설명은 이미지 선택에 사용해요. 본문용으로 지정하면 자동 배치 후보에 포함돼요. 현재 대표 이미지는 ‘본문 전용’으로 바꿀 수 없어요.',
-    { exact: true }
-  );
+  const portraitHint = library.getByText('현재 대표 이미지는 ‘본문 전용’으로 바꿀 수 없어요.', {
+    exact: true,
+  });
   await expect(portraitHint).toBeVisible();
   await library
     .getByLabel('Risu 이미지 목록', { exact: true })

@@ -157,7 +157,7 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
     const saved = (await response.json()).saved as PromptPreset;
     presets.push(saved);
     expect(saved.title).toBe(title);
-    await expect(saveState).toHaveText('저장됨');
+    await expect(saveState).toBeEmpty();
     const persisted = await request.get(
       `/api/revisions/prompt-preset/${saved.id}/${saved.revision}`
     );
@@ -200,7 +200,7 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
   await page.getByLabel('프롬프트 검색', { exact: true }).fill(restoredTitle);
   await page.getByRole('button', { name: `${restoredTitle} 프롬프트 편집`, exact: true }).click();
   await expect(editor.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(restoredTitle);
-  await expect(editor.locator('.resource-editor-status').getByRole('status')).toHaveText('저장됨');
+  await expect(editor.locator('.resource-editor-status').getByRole('status')).toBeEmpty();
   await native.getByRole('tab', { name: '정규식', exact: true }).click();
   await native.getByText('고급 JSON 편집', { exact: true }).click();
   await expect(regex).toHaveValue('[]');

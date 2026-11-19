@@ -87,9 +87,7 @@ test('AUDIT2 helper deletion clears a recovered read error and keeps a rejected 
       await page.screenshot({ path: info.outputPath('helper-deletion-read-failed-412.png') });
     releaseRecovery();
     await expect.poll(() => successfulReads).toBeGreaterThan(0);
-    await expect(dialog).toContainText(
-      '이 도우미 대화를 삭제해요. 진행 중인 작업은 먼저 중지해 주세요.'
-    );
+    await expect(dialog).toContainText('‘새 도우미 대화’ 대화를 삭제해요.');
     await expect(dialog.getByRole('alert')).toHaveCount(0);
     await expect(remove).toBeEnabled();
     expect(deleteRequests).toBe(0);
@@ -158,9 +156,7 @@ test('HSESSION01 sessions retain their own drafts after switching and reload, re
   for (const dismissal of ['continue', 'Escape', 'backdrop'] as const) {
     await panel.getByLabel('도우미 대화 관리', { exact: true }).click();
     await panel.getByRole('button', { name: '대화 삭제', exact: true }).click();
-    await expect(deletion).toContainText(
-      '이 도우미 대화를 삭제해요. 진행 중인 작업은 먼저 중지해 주세요.'
-    );
+    await expect(deletion).toContainText('‘다른 결말 검토’ 대화를 삭제해요.');
     const cancel = deletion.getByRole('button', { name: '계속 사용', exact: true });
     const remove = deletion.getByRole('button', { name: '대화 영구 삭제', exact: true });
     await expect(remove).toBeEnabled();
