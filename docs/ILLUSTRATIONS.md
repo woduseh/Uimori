@@ -28,10 +28,11 @@
 ### 3. NovelAI 생성 환경 설정
 
 1. NovelAI → 설정 → 계정에서 **Persistent API 토큰**을 발급해 **NovelAI 생성 환경**의 토큰 칸에 붙여 넣고 저장해요. 토큰은 서버의 비밀 저장소에만 남고 설정 응답·작업 입력·프리셋 파일에는 들어가지 않아요. 칸을 비워 두면 저장된 토큰을 유지하고, **저장된 토큰 삭제**를 누른 뒤 저장해야 지워져요.
-2. **NovelAI 연결 확인**은 `GET /user/subscription`으로 구독 등급만 읽어요. 이미지는 만들지 않아요.
+2. **NovelAI 연결·잔여량 확인**은 `GET /user/subscription`으로 구독 등급, 잔여 Anlas, V5 사용량 게이지를 읽어요. 이미지는 만들지 않아요. Anlas는 응답의 `trainingStepsLeft.fixedTrainingStepsLeft`(구독분)와 `purchasedTrainingSteps`(구매분)의 합으로 보여줘요. 공식 스키마는 두 필드의 의미를 설명하지 않고 이 해석은 커뮤니티 클라이언트를 따른 것이라, 처음 쓸 때 NovelAI 화면의 잔액과 맞는지 확인해 주세요. V5 게이지는 `usage.percent`를 남은 비율로, `timeUntilNextPercent`를 1%가 회복되기까지 남은 시간으로 보여줘요.
 3. **모델 ID**(기본 `nai-diffusion-5-full`), **프롬프트 모델**, 크기, 스텝, 프롬프트 가이던스, 샘플러를 골라요. 프롬프트 모델이 장면을 읽고 NovelAI용 태그 프롬프트와 제외 프롬프트를 써요.
 4. Opus 구독의 무료 생성은 한 번에 한 장, 28스텝 이하, Normal 크기 조건이에요([구독 안내](https://docs.novelai.net/en/subscription)). 문서가 Normal 크기를 정의하지 않아서, 화면은 28스텝을 넘거나 면적이 1024×1024를 넘으면 Anlas가 소모될 수 있다고 표시해요. V5는 무료 조건이어도 별도의 Opus 사용량 게이지를 써요.
-5. NovelAI API 설명은 모든 생성 요청이 사람의 동작으로 시작돼야 한다고 요구해요([API 스키마](https://image.novelai.net/docs/doc.json)). 그래서 NovelAI 작업은 자동 재시도를 0회로 고정해요. 자동 생성은 사용자가 켠 경우에만, 사용자가 보낸 메시지의 응답에서 실행돼요.
+5. **캐릭터 참조**(Precise Reference)를 켜면 채팅의 **캐릭터 디자인** 참고 이미지를 예약 시점에 고정하고, 프롬프트 모델이 그 컷에 보이는 인물의 참조 번호만 골라 보내요. 참조 1장마다 생성할 때 5 Anlas가 추가되고 Opus 무료 생성에도 붙어요([Precise Reference 안내](https://docs.novelai.net/en/image/precisereference)). 문서상 V4.5 전용이라 다른 모델에서는 켜져 있어도 참조를 고정하지 않아요. 지원 모델 판단은 `core/novelai-settings.ts`의 `novelAISupportsCharacterReference` 하나에 모여 있어요. 그림체 참고 이미지는 보내지 않아요.
+6. NovelAI API 설명은 모든 생성 요청이 사람의 동작으로 시작돼야 한다고 요구해요([API 스키마](https://image.novelai.net/docs/doc.json)). 그래서 NovelAI 작업은 자동 재시도를 0회로 고정해요. 자동 생성은 사용자가 켠 경우에만, 사용자가 보낸 메시지의 응답에서 실행돼요.
 
 ## 자동 생성과 수동 요청
 
@@ -221,7 +222,8 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 
 ### NovelAI 경로 기술 계약
 
-- **요청**: 계획 모델 호출 → 컷마다 `POST https://image.novelai.net/ai/generate-image` 한 번. 본문은 `input`, `model`, `action: "generate"`, `parameters`이고, 장면 프롬프트는 `v4_prompt.caption.base_caption`, 제외 프롬프트는 `negative_prompt`와 `v4_negative_prompt.caption.base_caption`에 넣어요. 참조 이미지는 아직 보내지 않아요.
+- **요청**: 계획 모델 호출 → 컷마다 `POST https://image.novelai.net/ai/generate-image` 한 번. 본문은 `input`, `model`, `action: "generate"`, `parameters`이고, 장면 프롬프트는 `v4_prompt.caption.base_caption`, 제외 프롬프트는 `negative_prompt`와 `v4_negative_prompt.caption.base_caption`에 넣어요.
+- **캐릭터 참조**: 고른 참조마다 이미지를 1024×1536, 1536×1024, 1472×1472 중 비율이 가장 가까운 캔버스에 검은 여백으로 맞춘 PNG로 `director_reference_images`에 넣어요. 설명은 `character`, 정보 추출은 1, 강도는 0.6, 보조 강도는 0이에요. 강도 값은 에셋 메이드의 기본값을 따랐고 화면에서 바꿀 수는 없어요. 프롬프트 모델이 고르지 않았거나 고정 목록에 없는 번호는 보내지 않고, 보낸 장수는 진단의 `novelai.references`에 남아요.
 - **인물별 캡션**: `characters`를 같은 순서로 `v4_prompt`와 `v4_negative_prompt`의 `char_captions`에 넣어요. 인물은 최대 6명(V4/V4.5 한도)이고, 넘는 항목은 뒤에서부터 버려요. 모든 인물에 위치가 있을 때만 `use_coords`를 켜고, 일부만 있으면 위치를 모두 비워 NovelAI가 배치하게 해요. 위치는 0.1~0.9로 제한하고, V4/V4.5 모델은 5×5 격자(0.1, 0.3, 0.5, 0.7, 0.9)에, V5는 0.01 단위로 맞춰요. 계획 단계의 공유 인물 외형(`visualCanon`)은 프롬프트 모델 입력으로만 쓰고, 다른 생성기와 달리 장면 프롬프트 뒤에 붙이지 않아요. 붙이면 인물별로 나눈 특징이 다른 인물에게 번지기 때문이에요. 생성 상세에서 인물별 캡션과 위치를 볼 수 있어요. 인증은 `Authorization: Bearer <Persistent API 토큰>`이고 리다이렉트는 따라가지 않아요.
 - **응답**: ZIP 안의 첫 이미지(또는 이미지 본문 자체)를 실제 이미지 서명으로 검증해 공통 WebP 저장 경로로 보내요. 사용한 시드는 진단의 `novelai.seed`에 남아요.
 - **실패 코드**: `NOVELAI_TOKEN_MISSING`(토큰 없음, 요청 안 보냄), `NOVELAI_UNAUTHORIZED`(401/403), `NOVELAI_ANLAS_INSUFFICIENT`(402), `NOVELAI_BUSY`(429, 같은 계정의 다른 생성), `NOVELAI_REQUEST_REJECTED`(그 밖의 4xx, 모델 ID·크기 확인), `NOVELAI_UNREACHABLE`(연결 전 실패), `NOVELAI_RESULT_UNCERTAIN`(전송 후 시간 초과·연결 끊김·5xx), `NOVELAI_RESPONSE_INVALID`, `NOVELAI_IMAGE_INVALID`. 진단에는 HTTP 상태와 최대 300자의 NovelAI 메시지만 남겨요.
@@ -266,7 +268,7 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
   - `tests/illustration-storyboard.test.ts`: 컷 계획 원자성, 중복 실행 방지, 재생성 중 기존본 유지, 번역 위치 연결 검증
   - `tests/illustration-runner.test.ts`: 번역 위치 연결의 판단 모델 선택, `none`, 키 미설정 시 기존 경로, 전송 후 실패
   - `tests/comfyui-client.test.ts`, `tests/codex-image.test.ts`: 각 생성기 클라이언트 및 가상 응답 계약 검증
-  - `tests/novelai-illustration.test.ts`: NovelAI 요청 본문·인물별 캡션과 좌표 맞춤·상태 코드 분류, 토큰 저장 경계, 자동 재시도 0회와 수동 재요청의 프롬프트 재사용 검증 (`fetch` 가로채기, 실제 NovelAI 호출 없음)
+  - `tests/novelai-illustration.test.ts`: NovelAI 요청 본문·인물별 캡션과 좌표 맞춤·캐릭터 참조 선택과 캔버스 맞춤·잔여 Anlas와 V5 게이지 해석·상태 코드 분류, 토큰 저장 경계, 자동 재시도 0회와 수동 재요청의 프롬프트 재사용 검증 (`fetch` 가로채기, 실제 NovelAI 호출 없음)
   - `tests/illustration-*.test.ts`: 저장, 실행 큐, API 엔드포인트 계약 검증
 - **통합 검증 명령어**: `npm run verify:illustration`
   - 대표/문단 배치, 접기 상태 보존, 생성 중 다음 채팅 전송, 재요청, 삭제, 충돌 처리, 새로고침 후 표시 복원을 검증해요.

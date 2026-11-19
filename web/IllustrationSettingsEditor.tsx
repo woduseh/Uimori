@@ -17,8 +17,11 @@ import { RefreshIcon } from './ui-icons.js';
 import type { Library, ModelRef } from '../core/product.js';
 import type { IllustrationSettingsView } from '../core/illustration.js';
 import {
+  NOVELAI_REFERENCE_ANLAS,
   NOVELAI_SAMPLERS,
+  novelAISupportsCharacterReference,
   novelAIUsesAnlas,
+  type NovelAIAccount,
   type NovelAISampler,
 } from '../core/novelai-settings.js';
 import { ILLUSTRATION_MAX_PER_SOURCE } from '../core/illustration-cuts.js';
@@ -43,9 +46,7 @@ const NOVELAI_SIZES = [
   { width: 1216, height: 832, label: 'visuals.novelaiSizeLandscape' },
   { width: 1024, height: 1024, label: 'visuals.novelaiSizeSquare' },
 ] as const;
-type NovelAITestResult =
-  | { ok: true; tier: string | null; active: boolean }
-  | { ok: false; code: string };
+type NovelAITestResult = ({ ok: true } & NovelAIAccount) | { ok: false; code: string };
 const validCutLimit = (value: number) =>
   Number.isInteger(value) && value >= 1 && value <= ILLUSTRATION_MAX_PER_SOURCE;
 // An empty or invalid limit is an edit in progress. Preserve its dependent counts.
@@ -117,6 +118,7 @@ function IllustrationEnvironmentEditor({
   useSettingsSaveHandler(onSaveHandlerChange, async () => (!draft ? false : save()));
   const refinementDescription = useId();
   const tokenDescription = useId();
+  const referenceDescription = useId();
   if (!draft)
     return (
       <LoadingState
@@ -320,7 +322,7 @@ function IllustrationEnvironmentEditor({
     setNovelaiTesting(true);
     setNovelaiTest(null);
     try {
-      const result = await api<{ tier: string | null; active: boolean }>(
+      const result = await api<NovelAIAccount>(
         '/illustration-settings/novelai/test',
         typeof token === 'string' && token.trim() ? { token: token.trim() } : {}
       );
@@ -674,6 +676,25 @@ function IllustrationEnvironmentEditor({
                     : `${illustrationErrorMessage(novelaiTest.code)} (${novelaiTest.code})`}
                 </span>
               )}
+              {novelaiTest?.ok && novelaiTest.anlas && (
+                <span className="illustration-test-result">
+                  {t('visuals.novelaiAnlasBalance', {
+                    total: novelaiTest.anlas.subscription + novelaiTest.anlas.purchased,
+                    subscription: novelaiTest.anlas.subscription,
+                    purchased: novelaiTest.anlas.purchased,
+                  })}
+                </span>
+              )}
+              {novelaiTest?.ok && novelaiTest.usage && (
+                <span className="illustration-test-result">
+                  {t('visuals.novelaiUsageBar', { percent: novelaiTest.usage.percent })}
+                  {novelaiTest.usage.percent < 100 && novelaiTest.usage.secondsUntilNextPercent > 0
+                    ? ` · ${t('visuals.novelaiUsageRefill', {
+                        minutes: Math.ceil(novelaiTest.usage.secondsUntilNextPercent / 60),
+                      })}`
+                    : ''}
+                </span>
+              )}
             </div>
             <label className="settings-row">
               <span className="settings-row-copy">{t('visuals.novelaiModel')}</span>
@@ -751,6 +772,26 @@ function IllustrationEnvironmentEditor({
             {novelAIUsesAnlas(draft.novelai) && (
               <NoticeBanner className="full">{t('visuals.novelaiAnlasWarning')}</NoticeBanner>
             )}
+            <label className="settings-row settings-row-toggle">
+              <span className="settings-row-copy">
+                <span>{t('visuals.novelaiCharacterReference')}</span>
+                <small id={referenceDescription}>
+                  {novelAISupportsCharacterReference(draft.novelai.model.trim())
+                    ? t('visuals.novelaiCharacterReferenceDescription', {
+                        anlas: NOVELAI_REFERENCE_ANLAS,
+                      })
+                    : t('visuals.novelaiCharacterReferenceUnsupported')}
+                </small>
+              </span>
+              <span className="settings-row-control">
+                <Switch
+                  aria-label={t('visuals.novelaiCharacterReference')}
+                  aria-describedby={referenceDescription}
+                  checked={draft.novelai.characterReference}
+                  onChange={(event) => novelai({ characterReference: event.target.checked })}
+                />
+              </span>
+            </label>
             {numberField(
               t('visuals.m079'),
               draft.novelai.timeoutMs / 1000,

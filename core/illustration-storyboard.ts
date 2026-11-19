@@ -11,7 +11,7 @@ import {
   ILLUSTRATION_PROMPT_FIELDS,
   CODEX_ILLUSTRATION_PROMPT_FIELDS,
   NOVELAI_ILLUSTRATION_PROMPT_FIELDS,
-  parseNovelAICharacters,
+  parseNovelAIPromptFields,
   illustrationReferenceLabels,
   IllustrationError,
   type IllustrationPrompt,
@@ -104,7 +104,7 @@ function storyboardContract(mode: IllustrationPromptMode, selected: boolean): st
     mode === 'codex'
       ? ',"prompt":{"prompt":string,"caption":string}'
       : mode === 'novelai'
-        ? ',"prompt":{"prompt":string,"negativePrompt":string,"characters"?:[{"prompt":string,"negativePrompt":string,"position"?:{"x":number,"y":number}}],"caption":string}'
+        ? ',"prompt":{"prompt":string,"negativePrompt":string,"characters"?:[{"prompt":string,"negativePrompt":string,"position"?:{"x":number,"y":number}}],"references"?:number[],"caption":string}'
         : negativePromptMode(mode)
           ? ',"prompt":{"prompt":string,"negativePrompt":string,"caption":string}'
           : '';
@@ -204,7 +204,8 @@ export function storyboardRequest(
         ...(negativePromptMode(options.promptMode)
           ? { negativeGuidance: scene.negativeGuidance }
           : {}),
-        ...(options.promptMode === 'codex'
+        ...(options.promptMode === 'codex' ||
+        (options.promptMode === 'novelai' && scene.references?.length)
           ? { attachedReferences: illustrationReferenceLabels(scene.references ?? []) }
           : {}),
         characterNotes: {
@@ -305,10 +306,10 @@ export function parseStoryboard(
       if (!fields || (negativePromptMode(promptMode) && typeof fields.negativePrompt !== 'string'))
         throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID', true);
       const promptText = required(fields.prompt);
-      let characters: IllustrationPrompt['characters'];
+      let novelai: Pick<IllustrationPrompt, 'characters' | 'references'> = {};
       if (promptMode === 'novelai')
         try {
-          characters = parseNovelAICharacters(fields.characters);
+          novelai = parseNovelAIPromptFields(fields);
         } catch {
           throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID', true);
         }
@@ -318,7 +319,7 @@ export function parseStoryboard(
           ? (fields.negativePrompt as string).trim()
           : '',
         caption: required(fields.caption),
-        ...(characters ? { characters } : {}),
+        ...novelai,
       };
     }
     return {

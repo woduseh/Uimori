@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
+import sharp from 'sharp';
 import type { Connection, ModelPreset } from '../core/product.js';
 import {
   defaultIllustrationSettings,
@@ -23,6 +24,7 @@ import {
   NOVELAI_CREDENTIAL_ID,
   projectIllustration,
   retryIllustration,
+  updateIllustrationReferences,
   updateIllustrationSettings,
 } from '../server/illustrations.js';
 import { CredentialStore } from '../server/credentials.js';
@@ -211,7 +213,7 @@ describe('NovelAI image client', () => {
         })),
       ],
     });
-    const plan = parseIllustrationPlan(reply, false, { characters: true });
+    const plan = parseIllustrationPlan(reply, false, { novelai: true });
     expect(plan.kind === 'generate' && plan.prompt.characters).toHaveLength(6);
     expect(plan.kind === 'generate' && plan.prompt.characters?.[0]).toEqual({
       prompt: 'girl, extra 0',
@@ -222,7 +224,7 @@ describe('NovelAI image client', () => {
       ...prompt,
       characters: [{ prompt: 'girl', position: { x: 0.2, y: 0.5 } }, { prompt: 'boy' }],
     });
-    const mixed = parseIllustrationPlan(partial, false, { characters: true });
+    const mixed = parseIllustrationPlan(partial, false, { novelai: true });
     expect(mixed.kind === 'generate' && mixed.prompt.characters).toEqual([
       { prompt: 'girl', negativePrompt: '' },
       { prompt: 'boy', negativePrompt: '' },
@@ -235,25 +237,38 @@ describe('NovelAI image client', () => {
     );
     expect(() =>
       parseIllustrationPlan(JSON.stringify({ ...prompt, characters: [{}] }), false, {
-        characters: true,
+        novelai: true,
       })
     ).toThrow('ILLUSTRATION_PROMPT_INVALID');
   });
 
-  test('reports the subscription tier for the connection check', async () => {
-    const sent = novelAI(() => Response.json({ tier: 3, active: true, perks: {} }));
-    expect(await novelAISubscription(options())).toEqual({ tier: 'Opus', active: true });
+  test('reports tier, Anlas balances and the V5 usage bar for the connection check', async () => {
+    const sent = novelAI(() =>
+      Response.json({
+        tier: 3,
+        active: true,
+        perks: {},
+        trainingStepsLeft: { fixedTrainingStepsLeft: 9500, purchasedTrainingSteps: 120 },
+        usage: { isNegative: false, percent: 82, purchasedPercent: 0, timeUntilNextPercent: 300 },
+      })
+    );
+    expect(await novelAISubscription(options())).toEqual({
+      tier: 'Opus',
+      active: true,
+      anlas: { subscription: 9500, purchased: 120 },
+      usage: { percent: 82, secondsUntilNextPercent: 300 },
+    });
     expect(sent[0].url).toBe(`${NOVELAI_ORIGIN}/user/subscription`);
   });
 });
 
 describe('NovelAI illustration settings and jobs', () => {
-  async function promptModel(store: Store) {
+  async function promptModel(store: Store, extra: Record<string, unknown> = {}) {
     const provider = await loopbackProvider(async (_request, response) => {
       await writeSse(response, [
         {
           type: 'text_delta',
-          delta: JSON.stringify({ ...prompt, characters, caption: '강 위의 등불' }),
+          delta: JSON.stringify({ ...prompt, characters, caption: '강 위의 등불', ...extra }),
         },
         { type: 'done', reason: 'stop' },
       ]);
@@ -355,6 +370,73 @@ describe('NovelAI illustration settings and jobs', () => {
     expect(projectIllustration(store, illustrationJob(store, job.id)).images).toMatchObject([
       { mime: 'image/webp', caption: '강 위의 등불', prompt: prompt.prompt },
     ]);
+  });
+
+  test('sends only the character references the prompt model chose, on V4.5 models only', async () => {
+    const store = databases.create();
+    const { chat, source } = chatWithSource(store);
+    const asset = (title: string) =>
+      (
+        store.product.createAsset(chat.id, {
+          title,
+          mime: 'image/png',
+          base64: PNG_BASE64,
+          description: '',
+          actor: title,
+          outfit: '',
+          location: '',
+          allowedUse: 'both',
+        }) as { id: string }
+      ).id;
+    const [mira, sol] = [asset('Mira design'), asset('Sol design')];
+    updateIllustrationReferences(store, chat.id, {
+      expectedRevision: 0,
+      references: [
+        { ref: mira, role: 'character' },
+        { ref: sol, role: 'character' },
+      ],
+      characterProfiles: [],
+    });
+    const { provider, model } = await promptModel(store, { references: [2, 9] });
+    fixtureIllustrationPreset(store, { generator: 'novelai' });
+    new CredentialStore(store.db).set(NOVELAI_CREDENTIAL_ID, 'pst-saved');
+    const reserve = (novelaiModel: string) =>
+      reserveIllustration(store, source, 'manual', {
+        settings: {
+          ...novelAISettings(model.id),
+          novelai: {
+            ...render,
+            model: novelaiModel,
+            characterReference: true,
+            promptModel: { id: model.id },
+          },
+        },
+      });
+    expect(reserve('nai-diffusion-5-full').input.novelai?.references).toBeUndefined();
+    store.db.prepare("UPDATE illustration_jobs SET status='cancelled'").run();
+    const job = reserve('nai-diffusion-4-5-full');
+    expect(job.input.novelai?.references).toHaveLength(2);
+    const sent = novelAI(() => zip());
+    expect(
+      await runIllustrationJob(store, job.id, 'worker', {
+        signal: new AbortController().signal,
+        authorize: (connection: Connection) => store.product.authorize(connection),
+        onAttemptStart: () => 'attempt',
+        onAttemptFinish: () => undefined,
+        resolveNovelAIToken: () => 'pst-saved',
+      })
+    ).toMatchObject({ status: 'completed' });
+    expect(JSON.stringify(provider.requests[0])).toContain('attachedReferences');
+    const parameters = sent[0].body.parameters;
+    expect(parameters.director_reference_images).toHaveLength(1);
+    expect(parameters.director_reference_descriptions).toEqual([
+      { caption: { base_caption: 'character', char_captions: [] }, legacy_uc: false },
+    ]);
+    const image = await sharp(
+      Buffer.from(parameters.director_reference_images[0], 'base64')
+    ).metadata();
+    expect([image.format, image.width, image.height]).toEqual(['png', 1472, 1472]);
+    expect(illustrationJob(store, job.id).diagnostic?.novelai).toMatchObject({ references: 1 });
   });
 
   test('preset files keep NovelAI negative guidance and older files default it to empty', () => {

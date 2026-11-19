@@ -82,6 +82,8 @@ export type IllustrationSettings = {
   novelai: NovelAIRenderSettings & {
     /** Text model that turns the scene into tags. Required for NovelAI. */
     promptModel: ModelRef | null;
+    /** Sends chosen character design references as Precise Reference on supported models. */
+    characterReference: boolean;
   };
 };
 /** API projection: whether a NovelAI token is saved, never the token itself. */
@@ -112,6 +114,7 @@ export function defaultIllustrationSettings(): IllustrationSettings {
       sampler: 'k_euler_ancestral',
       timeoutMs: 120_000,
       promptModel: null,
+      characterReference: false,
     },
   };
 }
@@ -196,7 +199,12 @@ export type IllustrationJobInput = {
     /** Archive restores preserve the evidence but require a new explicitly configured request. */
     disabled?: true;
   };
-  novelai?: NovelAIRenderSettings & { negativeGuidance: string; promptModel: ModelSnapshot };
+  novelai?: NovelAIRenderSettings & {
+    negativeGuidance: string;
+    promptModel: ModelSnapshot;
+    /** Character references frozen when Precise Reference was enabled for a supported model. */
+    references?: FrozenIllustrationReference[];
+  };
   /** Test-mode generator: synthetic PNG after the configured number of failures. */
   fixture?: { failures: number; delayMs: number };
 };
@@ -245,7 +253,7 @@ export type IllustrationDiagnostic = {
     statusMessages?: string[];
   };
   /** Bounded HTTP status and provider message; never the request body or credential. */
-  novelai?: { httpStatus?: number; message?: string; seed?: number };
+  novelai?: { httpStatus?: number; message?: string; seed?: number; references?: number };
   codex?: {
     usageLimit?: { limitId: string; resetsAt: number | null };
     /** Bounded plain-text caption reason, not a raw transport error. */
@@ -363,6 +371,8 @@ export type IllustrationPrompt = {
   caption: string;
   /** NovelAI only: per-character boxes beside the shared scene prompt. */
   characters?: NovelAICharacterPrompt[];
+  /** NovelAI only: 1-based attachment numbers of the character references to send. */
+  references?: number[];
 };
 export type IllustrationPlan =
   | { kind: 'skip'; reason: string }
@@ -417,9 +427,10 @@ export const NOVELAI_ILLUSTRATION_PROMPT_FIELDS = [
   `prompt: The shared scene. Start with subject counts such as 2girls, 1boy, then setting, background, composition, lighting and style, keeping the main subject in the first half. When characters are listed, leave each person's appearance and actions to their character entry.`,
   `characters: One entry per visible person, at most ${NOVELAI_MAX_CHARACTERS}, ordered left to right and top to bottom; omit it for scenes without people. Each prompt starts with girl, boy or other (no number), then that person's stable traits from the profiles, current clothing, expression, pose and action. Mark interactions with source#action on the actor, target#action on the receiver, or mutual#action on both, for example source#hug and target#hug. Each negativePrompt lists traits that must not leak onto that person, such as another character's hair color. Give every character a position {x, y} from 0.1 to 0.9 (x left to right, y top to bottom), or omit position for all of them.`,
   'negativePrompt: Combine explicit exclusions from styleGuidance and negativeGuidance into a concise list of English tags for the whole image. When only one property is unwanted, keep the subject and describe its intended appearance in prompt.',
+  'references: When attachedReferences is present, list the attachment numbers of the character design references for people visible in this image. Each reference costs the user Anlas, so omit references for absent characters and omit the field when none apply.',
 ].join('\n\n');
 export const NOVELAI_ILLUSTRATION_PROMPT_CONTRACT = [
-  'Write a NovelAI image prompt for a single illustration of the supplied story scene. When the input specifies a focus, depict that exact moment without selecting another. Otherwise pick the most visually striking, illustratable moment. Return only JSON: {"prompt": string, "negativePrompt": string, "characters"?: [{"prompt": string, "negativePrompt": string, "position"?: {"x": number, "y": number}}], "caption": string}.',
+  'Write a NovelAI image prompt for a single illustration of the supplied story scene. When the input specifies a focus, depict that exact moment without selecting another. Otherwise pick the most visually striking, illustratable moment. Return only JSON: {"prompt": string, "negativePrompt": string, "characters"?: [{"prompt": string, "negativePrompt": string, "position"?: {"x": number, "y": number}}], "references"?: number[], "caption": string}.',
   ILLUSTRATION_VISUAL_DIRECTION,
   NOVELAI_ILLUSTRATION_PROMPT_FIELDS,
   ILLUSTRATION_CAPTION_FIELD,
@@ -462,6 +473,30 @@ export function illustrationPromptRequest(
               ? null
               : excerptScene(scene.persona, ILLUSTRATION_EXCERPT_TOKENS.persona),
         },
+      },
+    },
+  };
+}
+/** NovelAI prompt preparation; reference labels let the model choose which images to send. */
+export function novelAIIllustrationPromptRequest(
+  model: ModelSnapshot,
+  scene: IllustrationScene,
+  generation: ProviderRequest['generation']
+): ProviderRequest {
+  const base = illustrationPromptRequest(
+    model,
+    scene,
+    generation,
+    NOVELAI_ILLUSTRATION_PROMPT_CONTRACT
+  );
+  if (!scene.references?.length) return base;
+  return {
+    ...base,
+    input: {
+      ...base.input,
+      source: {
+        ...(base.input.source as Record<string, Json>),
+        attachedReferences: illustrationReferenceLabels(scene.references),
       },
     },
   };
@@ -526,18 +561,28 @@ export function parseNovelAICharacters(value: unknown): NovelAICharacterPrompt[]
     ? characters
     : characters.map(({ position: _position, ...character }) => character);
 }
+/** Attachment numbers chosen by the prompt model; the runner ignores numbers it never attached. */
+export function parseNovelAIReferences(value: unknown): number[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value) || !value.every((item) => Number.isSafeInteger(item) && item >= 1))
+    throw new IllustrationError('ILLUSTRATION_PROMPT_INVALID', true);
+  const references = [...new Set(value as number[])].slice(0, NOVELAI_MAX_CHARACTERS);
+  return references.length ? references : undefined;
+}
+export function parseNovelAIPromptFields(
+  value: Record<string, unknown>
+): Pick<IllustrationPrompt, 'characters' | 'references'> {
+  const characters = parseNovelAICharacters(value.characters);
+  const references = parseNovelAIReferences(value.references);
+  return { ...(characters ? { characters } : {}), ...(references ? { references } : {}) };
+}
 /** A skip decision is only honored when the host allowed it for this run. */
 export function parseIllustrationPlan(
   text: string,
   allowSkip: boolean,
-  options: { preservePrompt?: boolean; characters?: boolean } = {}
+  options: { preservePrompt?: boolean; novelai?: boolean } = {}
 ): IllustrationPlan {
-  const plan = planOf(
-    text,
-    allowSkip,
-    options.preservePrompt ?? false,
-    options.characters ?? false
-  );
+  const plan = planOf(text, allowSkip, options.preservePrompt ?? false, options.novelai ?? false);
   return plan.skip !== undefined
     ? { kind: 'skip', reason: plan.skip }
     : { kind: 'generate', prompt: plan.prompt! };
@@ -546,7 +591,7 @@ function planOf(
   text: string,
   allowSkip: boolean,
   preservePrompt: boolean,
-  withCharacters: boolean
+  novelai: boolean
 ): { prompt?: IllustrationPrompt; skip?: string } {
   let body = text.replace(/^\uFEFF/u, '').trim();
   const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/u.exec(body);
@@ -568,13 +613,12 @@ function planOf(
   if (allowSkip && (value.decision === 'skip' || value.skip === true))
     return { skip: captionField(value.reason) || '그릴 장면이 없다고 판단했어요.' };
   const prompt = field(value.prompt, true);
-  const characters = withCharacters ? parseNovelAICharacters(value.characters) : undefined;
   return {
     prompt: {
       prompt: preservePrompt ? (value.prompt as string) : prompt,
       negativePrompt: field(value.negativePrompt, false),
       caption: captionField(value.caption),
-      ...(characters ? { characters } : {}),
+      ...(novelai ? parseNovelAIPromptFields(value) : {}),
     },
   };
 }

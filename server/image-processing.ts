@@ -150,6 +150,32 @@ export async function imageThumbnail(bytes: Buffer, width: number): Promise<Buff
 }
 
 /** Transmission-only copy. Originals and their hashes remain untouched in storage. */
+// https://image.novelai.net/docs/doc.json (2026-11-20): director_reference_images must be
+// 1024x1536, 1536x1024 or 1472x1472 with black padding to fit.
+const NOVELAI_REFERENCE_CANVASES = [
+  { width: 1024, height: 1536 },
+  { width: 1536, height: 1024 },
+  { width: 1472, height: 1472 },
+];
+export async function novelAIReferenceImage(bytes: Buffer): Promise<Buffer> {
+  const input = sharp(bytes, { limitInputPixels: MAX_PIXELS, failOn: 'error' }).rotate();
+  const metadata = await input.metadata();
+  const swapped = (metadata.orientation ?? 1) >= 5;
+  const ratio = swapped
+    ? (metadata.height ?? 1) / (metadata.width ?? 1)
+    : (metadata.width ?? 1) / (metadata.height ?? 1);
+  const canvas = NOVELAI_REFERENCE_CANVASES.reduce((best, next) =>
+    Math.abs(Math.log(next.width / next.height / ratio)) <
+    Math.abs(Math.log(best.width / best.height / ratio))
+      ? next
+      : best
+  );
+  return input
+    .resize({ ...canvas, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 1 } })
+    .flatten({ background: { r: 0, g: 0, b: 0 } })
+    .png()
+    .toBuffer();
+}
 export async function resizeIllustrationReference(bytes: Buffer, mime: string) {
   const input = sharp(bytes, { limitInputPixels: MAX_PIXELS, failOn: 'error' });
   const metadata = await input.metadata();

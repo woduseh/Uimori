@@ -12,7 +12,11 @@ import {
   ILLUSTRATION_MAX_IMAGE_BYTES,
   type IllustrationImageMime,
 } from '../core/illustration.js';
-import type { NovelAICharacterPrompt, NovelAIRenderSettings } from '../core/novelai-settings.js';
+import type {
+  NovelAIAccount,
+  NovelAICharacterPrompt,
+  NovelAIRenderSettings,
+} from '../core/novelai-settings.js';
 import { readCardZip } from './risu-card-zip.js';
 
 // https://image.novelai.net/docs/doc.json (2026-11-20): image and account paths share this host
@@ -86,9 +90,7 @@ async function send(
 }
 
 /** Account check for the settings screen. Reads metadata only; never generates. */
-export async function novelAISubscription(
-  options: NovelAIRequestOptions
-): Promise<{ tier: (typeof NOVELAI_TIERS)[number] | null; active: boolean }> {
+export async function novelAISubscription(options: NovelAIRequestOptions): Promise<NovelAIAccount> {
   const response = await send('/user/subscription', options);
   if (!response.ok) throw await rejection(response, options.signal);
   let body: unknown;
@@ -99,9 +101,27 @@ export async function novelAISubscription(
     throw new IllustrationError('NOVELAI_RESPONSE_INVALID');
   }
   if (!object(body)) throw new IllustrationError('NOVELAI_RESPONSE_INVALID');
+  const count = (value: unknown) =>
+    Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : null;
+  const steps = object(body.trainingStepsLeft) ? body.trainingStepsLeft : {};
+  const subscription = count(steps.fixedTrainingStepsLeft);
+  const purchased = count(steps.purchasedTrainingSteps);
+  const usage = object(body.usage) ? body.usage : {};
+  const percent = Number.isFinite(usage.percent) ? Number(usage.percent) : null;
   return {
     tier: Number.isInteger(body.tier) ? (NOVELAI_TIERS[Number(body.tier)] ?? null) : null,
     active: body.active === true,
+    anlas:
+      subscription === null && purchased === null
+        ? null
+        : { subscription: subscription ?? 0, purchased: purchased ?? 0 },
+    usage:
+      percent === null
+        ? null
+        : {
+            percent: usage.isNegative === true ? -Math.abs(percent) : percent,
+            secondsUntilNextPercent: count(usage.timeUntilNextPercent) ?? 0,
+          },
   };
 }
 
@@ -109,10 +129,14 @@ export type NovelAIPrompt = {
   prompt: string;
   negativePrompt: string;
   characters?: NovelAICharacterPrompt[];
+  /** Prepared Precise Reference images (PNG on a NovelAI reference canvas). */
+  referenceImages?: Buffer[];
 };
 // https://docs.novelai.net/en/image/multiplecharacters (2026-11-20): V4 and V4.5 place
 // characters on a 5x5 grid; V5 positions freely, sent at 0.01 precision.
 const GRID = [0.1, 0.3, 0.5, 0.7, 0.9];
+// Asset Maid's default; the API documents only the 0-1 range.
+const REFERENCE_STRENGTH = 0.6;
 function center(model: string, value: number): number {
   if (model.startsWith('nai-diffusion-5'))
     return Math.round(Math.min(0.9, Math.max(0.1, value)) * 100) / 100;
@@ -141,6 +165,7 @@ export function novelAIImageRequest(
   seed: number
 ) {
   const characters = prompt.characters ?? [];
+  const references = prompt.referenceImages ?? [];
   return {
     input: prompt.prompt,
     model: settings.model,
@@ -179,6 +204,18 @@ export function novelAIImageRequest(
         },
         legacy_uc: false,
       },
+      ...(references.length
+        ? {
+            director_reference_images: references.map((image) => image.toString('base64')),
+            director_reference_descriptions: references.map(() => ({
+              caption: { base_caption: 'character', char_captions: [] },
+              legacy_uc: false,
+            })),
+            director_reference_information_extracted: references.map(() => 1),
+            director_reference_strength_values: references.map(() => REFERENCE_STRENGTH),
+            director_reference_secondary_strength_values: references.map(() => 0),
+          }
+        : {}),
     },
   };
 }

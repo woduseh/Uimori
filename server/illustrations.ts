@@ -65,7 +65,7 @@ import {
 } from '../core/illustration.js';
 import { comfyUISystemStats, validateComfyBaseUrl } from './comfyui-client.js';
 import { novelAISubscription } from './novelai-client.js';
-import { NOVELAI_SAMPLERS } from '../core/novelai-settings.js';
+import { NOVELAI_SAMPLERS, novelAISupportsCharacterReference } from '../core/novelai-settings.js';
 import { CredentialStore, apiKey } from './credentials.js';
 
 export const NOVELAI_CREDENTIAL_ID = 'novelai';
@@ -150,6 +150,7 @@ export function validateIllustrationSettings(
     'sampler',
     'timeoutMs',
     'promptModel',
+    'characterReference',
   ]);
   const dimension = (value: unknown, name: string) => {
     const result = number(value, name, 64, 2048);
@@ -224,6 +225,10 @@ export function validateIllustrationSettings(
       sampler: novelai.sampler,
       timeoutMs: number(novelai.timeoutMs, 'NovelAI timeout', 10_000, 600_000),
       promptModel: modelRef(novelai.promptModel, 'NovelAI prompt model'),
+      characterReference:
+        novelai.characterReference === undefined
+          ? false
+          : boolean(novelai.characterReference, 'NovelAI character reference'),
     },
   };
 }
@@ -822,17 +827,24 @@ function frozenInput(
       throw new HttpError(409, 'ILLUSTRATION_PROMPT_MODEL_REQUIRED');
     if (!new CredentialStore(store.db).status(NOVELAI_CREDENTIAL_ID).configured)
       throw new HttpError(409, 'NOVELAI_TOKEN_MISSING');
-    const { promptModel, ...render } = settings.novelai;
+    const { promptModel, characterReference, ...render } = settings.novelai;
+    const references =
+      characterReference && novelAISupportsCharacterReference(render.model)
+        ? frozenIllustrationReferences(store, source.chatId).filter(
+            (reference) => reference.role === 'character'
+          )
+        : [];
     return {
       ...base,
-      // NovelAI requires each generation to start from a person's action, so a failure is
-      // retried only when the user asks.
+      // https://image.novelai.net/docs/doc.json: every generation must start from a person's
+      // action, so a failure is retried only when the user asks.
       maxAutoRetries: 0,
       generator: 'novelai',
       novelai: {
         ...render,
         negativeGuidance: preset.novelai.negativeGuidance,
         promptModel: store.product.modelSnapshot(promptModel.id, 'illustration'),
+        ...(references.length ? { references } : {}),
       },
     };
   }

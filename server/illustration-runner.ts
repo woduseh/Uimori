@@ -17,7 +17,11 @@ import {
 import { completeIllustrationStoryboard, completeIllustrationPlacement } from './illustrations.js';
 import type { ProviderRequest } from '../core/transport.js';
 import { createHash } from 'node:crypto';
-import { processImage, resizeIllustrationReference } from './image-processing.js';
+import {
+  novelAIReferenceImage,
+  processImage,
+  resizeIllustrationReference,
+} from './image-processing.js';
 import { readRunSnapshot, readStoredRunSnapshot } from './run-projections.js';
 import {
   executeProvider,
@@ -41,7 +45,7 @@ import {
   illustrationPromptRequest,
   IllustrationError,
   isRetryableIllustrationCode,
-  NOVELAI_ILLUSTRATION_PROMPT_CONTRACT,
+  novelAIIllustrationPromptRequest,
   parseCodexIllustrationCaption,
   parseComfyWorkflow,
   parseIllustrationPlan,
@@ -410,12 +414,9 @@ export async function runIllustrationJob(
     const codex = input.generator === 'codex';
     const request = codex
       ? codexIllustrationPromptRequest(model, context, generationFromModel(model))
-      : illustrationPromptRequest(
-          model,
-          context,
-          generationFromModel(model),
-          ...(input.generator === 'novelai' ? [NOVELAI_ILLUSTRATION_PROMPT_CONTRACT] : [])
-        );
+      : input.generator === 'novelai'
+        ? novelAIIllustrationPromptRequest(model, context, generationFromModel(model))
+        : illustrationPromptRequest(model, context, generationFromModel(model));
     const requestHash = createHash('sha256').update(JSON.stringify(request)).digest('hex');
     if (diagnostic.prompt && diagnostic.promptRequestHash === requestHash)
       return { kind: 'generate', prompt: diagnostic.prompt };
@@ -427,7 +428,7 @@ export async function runIllustrationJob(
     const plan = parseIllustrationPlan(
       await textRequest(model, request, connection),
       context.allowSkip,
-      { preservePrompt: codex, characters: input.generator === 'novelai' }
+      { preservePrompt: codex, novelai: input.generator === 'novelai' }
     );
     if (plan.kind === 'generate') {
       plan.prompt = withCanon(plan.prompt);
@@ -442,16 +443,18 @@ export async function runIllustrationJob(
     if (hooks.signal.aborted) throw new IllustrationError('ILLUSTRATION_CANCELLED');
     // Only automatic runs may decide that a scene has nothing worth drawing.
     const context = scene(source, snapshot, input, job.origin === 'automatic');
-    const labeledReferences = (input.codex?.references ?? []).map(({ title, ...reference }) => {
-      const names = input.characterProfiles
-        ?.filter((profile) => profile.referenceRef === reference.ref)
-        .map((profile) => profile.name);
-      return {
-        ...reference,
-        title,
-        label: names?.length ? `${names.join(', ')} (${title})` : title,
-      };
-    });
+    const labeledReferences = (input.codex?.references ?? input.novelai?.references ?? []).map(
+      ({ title, ...reference }) => {
+        const names = input.characterProfiles
+          ?.filter((profile) => profile.referenceRef === reference.ref)
+          .map((profile) => profile.name);
+        return {
+          ...reference,
+          title,
+          label: names?.length ? `${names.join(', ')} (${title})` : title,
+        };
+      }
+    );
     const references =
       input.generator === 'codex' && input.task !== 'placement' && input.task !== 'plan'
         ? labeledReferences.flatMap((reference) => {
@@ -473,6 +476,8 @@ export async function runIllustrationJob(
         input.task === 'plan'
           ? labeledReferences.map(({ role, label }) => ({ role, label }))
           : references.map(({ role, label }) => ({ role, label }));
+    if (input.novelai?.references?.length)
+      context.references = labeledReferences.map(({ role, label }) => ({ role, label }));
     const promptMode =
       input.generator === 'comfyui' || input.generator === 'novelai'
         ? input.generator
@@ -772,19 +777,36 @@ export async function runIllustrationJob(
       }
     } else if (input.generator === 'novelai') {
       if (!input.novelai) throw new IllustrationError('ILLUSTRATION_GENERATOR_UNCONFIGURED');
-      const { promptModel, negativeGuidance: _negativeGuidance, ...render } = input.novelai;
+      const {
+        promptModel,
+        negativeGuidance: _negativeGuidance,
+        references: _references,
+        ...render
+      } = input.novelai;
       const connection = await authorizedConnection(hooks, promptModel);
       const plan = await preparePrompt(promptModel, context, connection);
       if (plan.kind === 'skip') diagnostic.skipped = plan.reason;
       else {
         const prompt = plan.prompt;
+        const referenceImages: Buffer[] = [];
+        for (const number of prompt.references ?? []) {
+          const reference = labeledReferences[number - 1];
+          const loaded = reference && loadIllustrationReference(store, reference);
+          if (!loaded) continue;
+          hooks.signal.throwIfAborted();
+          referenceImages.push(await novelAIReferenceImage(loaded.bytes));
+        }
         diagnostic.stage = 'generate';
         await progress();
-        const rendered = await generateWithNovelAI(render, prompt, {
-          signal: hooks.signal,
-          token: () => hooks.resolveNovelAIToken?.(),
-        });
-        diagnostic.novelai = { seed: rendered.seed };
+        const rendered = await generateWithNovelAI(
+          render,
+          { ...prompt, referenceImages },
+          { signal: hooks.signal, token: () => hooks.resolveNovelAIToken?.() }
+        );
+        diagnostic.novelai = {
+          seed: rendered.seed,
+          ...(referenceImages.length ? { references: referenceImages.length } : {}),
+        };
         generated = rendered.images.map((image) => ({
           mime: image.mime,
           bytes: image.bytes,

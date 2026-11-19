@@ -1844,10 +1844,10 @@ export const messages = {
     zh: 'NovelAI 要求生成由用户发起，因此不会自动重试。失败的画面请重新请求。',
   },
   'visuals.novelaiTest': {
-    ko: 'NovelAI 연결 확인',
-    en: 'Check NovelAI connection',
-    ja: 'NovelAI接続を確認',
-    zh: '检查 NovelAI 连接',
+    ko: 'NovelAI 연결·잔여량 확인',
+    en: 'Check NovelAI connection and balance',
+    ja: 'NovelAI接続・残量を確認',
+    zh: '检查 NovelAI 连接和余量',
   },
   'visuals.novelaiTestConnected': {
     ko: '연결됨, {tier} 구독',
@@ -1914,6 +1914,42 @@ export const messages = {
     en: 'Could not read the NovelAI response.',
     ja: 'NovelAIの応答を読み取れませんでした。',
     zh: '无法读取 NovelAI 响应。',
+  },
+  'visuals.novelaiAnlasBalance': {
+    ko: 'Anlas {total, number} (구독 {subscription, number} · 구매 {purchased, number})',
+    en: '{total, number} Anlas ({subscription, number} subscription · {purchased, number} purchased)',
+    ja: 'Anlas {total, number}（サブスク {subscription, number}・購入 {purchased, number}）',
+    zh: 'Anlas {total, number}（订阅 {subscription, number} · 购买 {purchased, number}）',
+  },
+  'visuals.novelaiUsageBar': {
+    ko: 'V5 사용량 게이지 {percent}% 남음',
+    en: 'V5 usage bar {percent}% left',
+    ja: 'V5使用量ゲージ 残り{percent}%',
+    zh: 'V5 用量条剩余 {percent}%',
+  },
+  'visuals.novelaiUsageRefill': {
+    ko: '1% 회복까지 {minutes}분',
+    en: '{minutes} min until the next 1%',
+    ja: '1%回復まで{minutes}分',
+    zh: '{minutes} 分钟后恢复 1%',
+  },
+  'visuals.novelaiCharacterReference': {
+    ko: '캐릭터 참조',
+    en: 'Character reference',
+    ja: 'キャラクター参照',
+    zh: '角色参考',
+  },
+  'visuals.novelaiCharacterReferenceDescription': {
+    ko: '채팅의 캐릭터 디자인 참고 이미지 중 컷에 보이는 인물의 것만 보내요. 참조 1장마다 생성할 때 {anlas} Anlas가 들어요. Opus 무료 생성에도 붙어요.',
+    en: 'Sends only the chat’s character design references for people visible in the cut. Each reference adds {anlas} Anlas per generation, including Opus free generations.',
+    ja: 'チャットのキャラクターデザイン参考画像のうち、カットに映る人物のものだけを送ります。参照1枚ごとに生成時{anlas} Anlasかかり、Opusの無料生成にも加算されます。',
+    zh: '只发送聊天中出现在该画面里的人物的角色设计参考图。每张参考图在每次生成时额外消耗 {anlas} Anlas，Opus 免费生成也会计费。',
+  },
+  'visuals.novelaiCharacterReferenceUnsupported': {
+    ko: '지금 모델은 캐릭터 참조를 지원하지 않아 보내지 않아요. V4.5 모델에서만 적용돼요.',
+    en: 'The current model does not support character reference, so none are sent. Applies to V4.5 models only.',
+    ja: '現在のモデルはキャラクター参照に対応していないため送信しません。V4.5モデルでのみ適用されます。',
+    zh: '当前模型不支持角色参考，因此不会发送。仅适用于 V4.5 模型。',
   },
   'visuals.novelaiCharacterPrompts': {
     ko: '인물별 캡션',
