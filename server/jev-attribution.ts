@@ -21,24 +21,12 @@ export function validateTranslationJudgmentWire(
     (expectedResponse !== undefined && response !== expectedResponse)
   )
     throw new HttpError(400, 'TRANSLATION_JUDGMENT_ATTEMPT_MISMATCH');
-  const currentHash = translationJudgmentInputHash(sourceHash, response, judgment);
-  const version =
-    wire.judgment?.inputHash === currentHash
-      ? 'translation-refusal-jev-v3'
-      : 'translation-refusal-jev-v2';
-  if (
-    version === 'translation-refusal-jev-v2' &&
-    wire.judgment?.inputHash !==
-      translationJudgmentInputHash(sourceHash, response, judgment, version)
-  )
-    throw new HttpError(400, 'TRANSLATION_JUDGMENT_ATTEMPT_MISMATCH');
-  const request = translationJudgmentRequest(sourceHash, response, version);
   if (
     !matchesJudgmentWire(
       wire,
-      request,
+      translationJudgmentRequest(sourceHash, response),
       'translation-refusal',
-      translationJudgmentInputHash(sourceHash, response, judgment, version)
+      translationJudgmentInputHash(sourceHash, response, judgment)
     )
   )
     throw new HttpError(400, 'TRANSLATION_JUDGMENT_ATTEMPT_MISMATCH');

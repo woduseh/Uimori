@@ -26,7 +26,7 @@ export function matchesJudgmentWire(
       wire.method === expected.method &&
       wire.judgment?.kind === kind &&
       wire.judgment.inputHash === inputHash &&
-      (target.provider === 'typesafe' || isDeepStrictEqual(wire.headers, expected.headers)) &&
+      isDeepStrictEqual(wire.headers, expected.headers) &&
       isDeepStrictEqual(wire.body, expected.body) &&
       wire.bodySha256 === expected.bodySha256 &&
       wire.stablePrefixSha256 === expected.stablePrefixSha256

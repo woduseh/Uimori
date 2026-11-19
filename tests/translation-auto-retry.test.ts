@@ -6,7 +6,7 @@ import {
   translationJudgmentInputHash,
   translationJudgmentRequest,
 } from '../server/translation-judgment.js';
-import type { Json, WireRecord } from '../core/transport.js';
+import type { Json } from '../core/transport.js';
 import type { AuxiliaryBundle } from '../server/product-auxiliary.js';
 import { runAuxiliaryJob } from '../server/product-auxiliary.js';
 import {
@@ -123,43 +123,6 @@ describe('shared Jev translation refusal judgment', () => {
     expect(translationJudgmentRequest(sourceHash, '죄송하지만 도와드릴 수 없어요.').state).toEqual({
       response: '죄송하지만 도와드릴 수 없어요.',
     });
-    const policy = { threshold: 0.9 };
-    const version = 'translation-refusal-jev-v2';
-    const wire: WireRecord = {
-      connectionId: 'typesafe-judgment',
-      protocol: 'typesafe-systemone-v1',
-      role: 'translation',
-      modelId: 'jev-latest',
-      url: 'https://api.typesafe.ai/v1/systemone',
-      method: 'POST',
-      headers: {},
-      body: { model: 'jev-latest', ...translationJudgmentRequest(sourceHash, candidate, version) },
-      bodySha256: '167c89bd451809899729b31983fda5e64cf5a043be578368c59c9e176f86a07e',
-      stablePrefixSha256: '80edb6a27ad990a5bed25b9c9268b2cf9d5c1e395c7a2802c1f566c7b27fd190',
-      judgment: {
-        kind: 'translation-refusal',
-        inputHash: createHash('sha256')
-          .update(JSON.stringify({ version, sourceHash, response: candidate, policy }))
-          .digest('hex'),
-      },
-    };
-    expect(() =>
-      validateTranslationJudgmentWire(sourceHash, policy, wire, candidate)
-    ).not.toThrow();
-    expect(() =>
-      validateTranslationJudgmentWire(
-        sourceHash,
-        policy,
-        {
-          ...wire,
-          judgment: {
-            kind: 'translation-refusal',
-            inputHash: translationJudgmentInputHash(sourceHash, candidate, policy),
-          },
-        },
-        candidate
-      )
-    ).toThrow('TRANSLATION_JUDGMENT_ATTEMPT_MISMATCH');
   });
   test('preserves a long candidate and rejects tampered judgment receipts', async () => {
     const threshold = 0.9;
