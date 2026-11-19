@@ -9,6 +9,7 @@ import {
   type DraftImage,
   type RequestDraft,
 } from './request-image-draft.js';
+import { createComposerDraft } from './composer-draft.js';
 import {
   localReadingBlock,
   readerLocation,
@@ -33,7 +34,7 @@ import {
 } from './story-storage.js';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { subscribeAppHistory } from './app-history.js';
-import type { Chat, ReaderDetail, Run } from '../core/types.js';
+import type { Chat, ReaderDetail, RunReceipt } from '../core/types.js';
 import type { Content, CurrentPrompt, Library, PromptPreset } from '../core/product.js';
 import type { ChatOptionState } from '../core/chat-options.js';
 import type { SceneDeletionResult } from '../core/scene-deletion.js';
@@ -175,7 +176,7 @@ export function useStory() {
   const [libraryError, setLibraryError] = useState('');
   const detail = loadedDetail?.chat.id === selected ? loadedDetail : null;
   const [archivedContents, setArchivedContents] = useState<Content[]>([]);
-  const [draft, setDraft] = useState('');
+  const [composerDraft] = useState(createComposerDraft);
   const draftIdentity = useRef({ text: '', revision: 0 });
   const requestDraft = useRef<RequestDraft>({ token: '', text: '', images: [] });
   const [draftImages, setDraftImages] = useState<DraftImage[]>([]);
@@ -725,7 +726,7 @@ export function useStory() {
   useLayoutEffect(() => {
     const text = sessionStorage.getItem(draftKey) || '';
     draftIdentity.current = { text, revision: draftIdentity.current.revision + 1 };
-    setDraft(text);
+    composerDraft.write(text);
     setDraftImages([]);
     setDraftRecovery(null);
     draftRecoveryRef.current = null;
@@ -749,7 +750,7 @@ export function useStory() {
             revision: draftIdentity.current.revision + 1,
           };
           sessionStorage.setItem(draftKey, saved.text);
-          setDraft(saved.text);
+          composerDraft.write(saved.text);
           setDraftImages(saved.images);
         }
       })
@@ -769,7 +770,7 @@ export function useStory() {
       alive = false;
       cancelAnimationFrame(frame);
     };
-  }, [draftKey, setError]);
+  }, [draftKey, setError, composerDraft]);
   const rememberCursor = useCallback(() => {
     const node = input.current;
     if (node)
@@ -869,7 +870,7 @@ export function useStory() {
   function editDraft(value: string) {
     persistDraft({ ...requestDraft.current, token: crypto.randomUUID(), text: value });
     draftIdentity.current = { text: value, revision: draftIdentity.current.revision + 1 };
-    setDraft(value);
+    composerDraft.write(value);
   }
   function editLoreContextReset(value: boolean) {
     if (readCommand(commandStorageKey(selected))) return;
@@ -1025,7 +1026,7 @@ export function useStory() {
   const storyUiFollow = useRef<{ chatId: string; runId: string; epoch: number } | null>(null);
   const beginStoryUiAdmission = () => {
     const { chat: chatId, epoch, destination: target } = navigation.current;
-    return (run: Run) => {
+    return (run: RunReceipt) => {
       if (
         target !== 'story' ||
         run.chatId !== chatId ||
@@ -1173,7 +1174,7 @@ export function useStory() {
     if (
       !draftReady ||
       decoding.current ||
-      (!previous && !retryRun && !draft.trim() && !draftImages.length)
+      (!previous && !retryRun && !composerDraft.read().trim() && !draftImages.length)
     )
       return false;
     if (
@@ -1190,7 +1191,7 @@ export function useStory() {
     // An uncertain request keeps its original snapshot as well as its key.
     // A newer draft is never silently sent after recovering that earlier request.
     const payload: RunPayload = previous?.payload ?? {
-      request: editedRequest ?? retryRun?.request ?? draft,
+      request: editedRequest ?? retryRun?.request ?? composerDraft.read(),
       ...(editedRequest !== undefined ? { editedRequest: true } : {}),
       ...(retryRun
         ? {
@@ -1321,7 +1322,7 @@ export function useStory() {
     let accepted = false;
     try {
       const admitted = payload.retryOf
-        ? await api<Run>(
+        ? await api<RunReceipt>(
             `/runs/${encodeURIComponent(payload.retryOf)}/${payload.judgmentRecovery ? 'rejudge' : 'retry'}`,
             {
               idempotencyKey,
@@ -1329,7 +1330,7 @@ export function useStory() {
               ...(payload.retryMode ? { mode: payload.retryMode } : {}),
             }
           )
-        : await api<Run>(`/chats/${chat.id}/runs`, { ...payload, idempotencyKey });
+        : await api<RunReceipt>(`/chats/${chat.id}/runs`, { ...payload, idempotencyKey });
       track('accepted', admitted.id);
       accepted = true;
       clearCommand(commandKey, idempotencyKey);
@@ -1351,7 +1352,7 @@ export function useStory() {
           sessionStorage.removeItem(sentKey);
           requestDraft.current = { token: crypto.randomUUID(), text: '', images: [] };
           draftIdentity.current = { text: '', revision: draftIdentity.current.revision + 1 };
-          setDraft('');
+          composerDraft.write('');
           setDraftImages([]);
         }
       }
@@ -1801,7 +1802,7 @@ export function useStory() {
         : '',
     library,
     libraryError,
-    draft,
+    composerDraft,
     draftImages,
     draftReady,
     draftRecovery,

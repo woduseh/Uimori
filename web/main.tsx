@@ -1,4 +1,4 @@
-import { t, message as uiMessage, useI18n, translateMessage } from './i18n.js';
+import { t, message as uiMessage, useI18n, translateMessage, loadInitialLocale } from './i18n.js';
 import { imageInputSupported } from '../core/provider-image-reference.js';
 import { DraftRequestImages } from './RequestImages.js';
 import { downloadArchive } from './archive-download.js';
@@ -62,7 +62,21 @@ import {
 import type { Section as ChatSettingsSection } from './ChatSettingsPanel.js';
 import { ReaderPages } from './ReaderPages.js';
 import { SceneNavigator } from './SceneNavigator.js';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from 'react';
+import {
+  useComposerDraftEmpty,
+  useComposerDraftText,
+  type ComposerDraft,
+} from './composer-draft.js';
+import { useStableHandler } from './useStableHandler.js';
 import { createRoot } from 'react-dom/client';
 import {
   Activity,
@@ -196,9 +210,22 @@ const RAIL_WIDTH = 56;
 const MIN_CENTER_WIDTH = 768;
 const runFailed = (status: string) =>
   ['failed', 'cancelled', 'interrupted', 'refused', 'partial'].includes(status);
+function DraftComposerInput({
+  draft,
+  ...props
+}: Omit<ComponentProps<typeof ComposerInput>, 'value'> & { draft: ComposerDraft }) {
+  return <ComposerInput {...props} value={useComposerDraftText(draft)} />;
+}
+function DraftRequestPreviewDialog({
+  draft,
+  ...props
+}: Omit<ComponentProps<typeof RequestPreviewDialog>, 'request'> & { draft: ComposerDraft }) {
+  return <RequestPreviewDialog {...props} request={useComposerDraftText(draft)} />;
+}
 function App() {
-  useI18n();
+  const { locale } = useI18n();
   const s = useStory();
+  const draftEmpty = useComposerDraftEmpty(s.composerDraft);
   const { setScope: setThemeScope } = useThemes();
   const themeChatId = s.destination === 'story' ? s.selected : undefined;
   const themeBotId = themeChatId
@@ -868,67 +895,113 @@ function App() {
       setPanelSidebarExpanded(false);
     }
   };
+  const selectChat = useStableHandler(select);
+  const openSceneTarget = useStableHandler((target: ReaderTarget) => select(target.chatId, target));
+  const chooseSource = useStableHandler(s.chooseSource);
+  const chooseLatest = useStableHandler(s.chooseLatest);
+  const searchWorkspace = useStableHandler(openWorkspaceSearch);
+  const newHelperSession = useStableHandler(createHelperSession);
+  const toggleNavigation = useStableHandler(toggleSidebar);
+  const startNewStory = useStableHandler(newStory);
+  const configureNew = useStableHandler(configureNewStory);
+  const importChat = useStableHandler((bot: Content) => {
+    setPanel('');
+    setImportBot(bot);
+  });
+  const openLibrary = useStableHandler(showLibrary);
+  const copyChat = useStableHandler(s.copyChat);
+  const copyingChats = useMemo(() => s.forking.map((key) => key.split(':')[0]), [s.forking]);
+  const openAppSettings = useCallback(() => {
+    setSettingsTab(undefined);
+    setPanel('settings');
+  }, []);
+  const openTasks = useStableHandler(() => inspect(''));
+  const openHelperTask = useStableHandler(openRecentHelper);
+  const showHelperActivity = useCallback(() => helperNavigationActions.current?.activity(), []);
+  const openChatWorkspace = useStableHandler(() => {
+    const go = () => {
+      setHelperExpanded(false);
+      setWorkspacePanel(null);
+      setPanel('');
+      if (s.destination !== 'story') s.select(s.selected);
+    };
+    if (s.destination === 'library' && libraryDirty) setPendingNavigation(() => go);
+    else go();
+  });
+  const openHelperWorkspace = useStableHandler(() => {
+    if (panel === 'navigation') setPanel('');
+    helperReturnToSidecar.current = false;
+    setHelperExpanded(true);
+    setWorkspacePanel('helper');
+  });
+  const closeNavigationDrawer = useStableHandler(() => {
+    if (panel === 'navigation') setPanel('');
+  });
+  const toggleHelperExpanded = useStableHandler(() => {
+    if (!helperExpanded) helperReturnToSidecar.current = true;
+    setHelperExpanded((value) => !value);
+  });
+  const openHelperTarget = useStableHandler(openHelperResult);
+  const helperChatScope = s.destination === 'story' && !!s.selected && !!s.detail;
+  const helperPanelScope = useMemo<HelperScope>(
+    () =>
+      helperScope ??
+      (helperChatScope
+        ? { kind: 'chat', chatId: s.selected }
+        : { kind: 'library', workId: `library:${libraryTab}` }),
+    [helperScope, helperChatScope, s.selected, libraryTab]
+  );
+  const closeHelper = useCallback(() => {
+    helperResultNavigation.current++;
+    setHelperExpanded(false);
+    setWorkspacePanel((value) => (value === 'helper' ? null : value));
+  }, []);
+  const openModelSettings = useCallback(() => {
+    setSettingsTab('models');
+    setPanel('settings');
+  }, []);
   const navigation = (quickActions: boolean, collapsed = false) => (
     <BotNavigation
       libraryError={s.libraryError}
       quickActions={quickActions}
-      onSearch={openWorkspaceSearch}
-      onNewHelper={createHelperSession}
+      onSearch={searchWorkspace}
+      onNewHelper={newHelperSession}
       collapsed={collapsed}
-      onToggleCollapse={toggleSidebar}
+      onToggleCollapse={toggleNavigation}
       library={s.library}
       chats={s.chats}
       selected={s.selected}
       destination={s.destination}
       libraryTab={libraryTab}
-      onSelect={select}
-      onNew={newStory}
-      onConfigureNew={configureNewStory}
-      onImportChat={(bot) => {
-        setPanel('');
-        setImportBot(bot);
-      }}
-      onLibrary={showLibrary}
+      onSelect={selectChat}
+      onNew={startNewStory}
+      onConfigureNew={configureNew}
+      onImportChat={importChat}
+      onLibrary={openLibrary}
       onChatsChanged={s.loadChats}
-      onCopyChat={s.copyChat}
-      copyingChats={s.forking.map((key) => key.split(':')[0])}
+      onCopyChat={copyChat}
+      copyingChats={copyingChats}
       onLibraryChanged={s.retryLibrary}
       onError={s.setError}
-      onSettings={() => {
-        setSettingsTab(undefined);
-        setPanel('settings');
-      }}
-      onTasks={() => inspect('')}
-      onOpenHelperTask={openRecentHelper}
+      onSettings={openAppSettings}
+      onTasks={openTasks}
+      onOpenHelperTask={openHelperTask}
       helperOpen={helperOpen}
       helperExpanded={helperWorkspaceOpen}
-      onHelperActivity={() => helperNavigationActions.current?.activity()}
+      onHelperActivity={showHelperActivity}
       helperNavigationRef={
         (quickActions ? viewportWidth >= 768 && panel !== 'navigation' : panel === 'navigation')
           ? setHelperNavigationHost
           : undefined
       }
-      onChatWorkspace={() => {
-        const go = () => {
-          setHelperExpanded(false);
-          setWorkspacePanel(null);
-          setPanel('');
-          if (s.destination !== 'story') s.select(s.selected);
-        };
-        if (s.destination === 'library' && libraryDirty) setPendingNavigation(() => go);
-        else go();
-      }}
-      onToggleHelper={() => {
-        if (panel === 'navigation') setPanel('');
-        helperReturnToSidecar.current = false;
-        setHelperExpanded(true);
-        setWorkspacePanel('helper');
-      }}
+      onChatWorkspace={openChatWorkspace}
+      onToggleHelper={openHelperWorkspace}
       tasks={s.tasks}
     />
   );
-  const navigationControls = (
-    <>
+  // biome-ignore lint/correctness/useExhaustiveDependencies: The label follows the active locale.
+  const navigationControls = useMemo(
+    () => (
       <IconButton
         ref={navigationOpener}
         className="mobile-menu"
@@ -937,7 +1010,8 @@ function App() {
         icon={Menu}
         onClick={() => setPanel('navigation')}
       />
-    </>
+    ),
+    [locale]
   );
   const destinationHelperControl = s.destination !== 'story' && !helperOpen && (
     <IconButton
@@ -1810,9 +1884,9 @@ function App() {
                   detail={s.detail}
                   reader={s.reader}
                   target={s.readSource}
-                  onTarget={(target) => select(target.chatId, target)}
-                  onSelect={s.chooseSource}
-                  onLatest={s.chooseLatest}
+                  onTarget={openSceneTarget}
+                  onSelect={chooseSource}
+                  onLatest={chooseLatest}
                   compact={compact}
                   onLatestVisibilityChange={compact ? updateLatestPosition : undefined}
                   listOpen={sceneList}
@@ -2033,7 +2107,8 @@ function App() {
                   <label className="sr-only" htmlFor="request">
                     {t('main.m110')}
                   </label>
-                  <ComposerInput
+                  <DraftComposerInput
+                    draft={s.composerDraft}
                     inputRef={s.input}
                     disabled={!s.draftReady}
                     onPaste={(event) => {
@@ -2046,7 +2121,6 @@ function App() {
                     id="request"
                     data-uimori-part="composer-input"
                     maxLength={REQUEST_TEXT_MAX_CHARS}
-                    value={s.draft}
                     enterSend={enterSend}
                     onSelect={s.rememberCursor}
                     onChange={(event) => s.editDraft(event.target.value)}
@@ -2177,7 +2251,7 @@ function App() {
                             optionsDirty ||
                             s.profileDirty ||
                             s.quickBusy ||
-                            (!s.draft.trim() && s.requestImagePreviews.length === 0)
+                            (draftEmpty && s.requestImagePreviews.length === 0)
                           }
                           onClick={() => setChatTool({ scope: s.viewKey, kind: 'preview' })}
                         >
@@ -2207,7 +2281,7 @@ function App() {
                     <InputTranslationControls
                       translation={s.inputTranslation}
                       disabled={inputTranslationDisabled}
-                      empty={!s.draft.trim()}
+                      empty={draftEmpty}
                     />
                     {compact &&
                       sceneNavigatorEnabled &&
@@ -2256,7 +2330,7 @@ function App() {
                           !testMode &&
                           imageSupport === false &&
                           !s.pendingRequest) ||
-                        (!s.draft.trim() && !s.draftImages.length && !s.pendingRequest) ||
+                        (draftEmpty && !s.draftImages.length && !s.pendingRequest) ||
                         !s.detail ||
                         (((!testMode && !mainAvailable) || !promptAvailable) &&
                           !s.pendingRequest &&
@@ -2294,11 +2368,11 @@ function App() {
       </main>
       {s.detail && s.destination === 'story' && (
         <>
-          <RequestPreviewDialog
+          <DraftRequestPreviewDialog
             key={`request-preview:${s.selected}`}
             open={currentChatTool === 'preview'}
             chatId={s.detail.chat.id}
-            request={s.draft}
+            draft={s.composerDraft}
             requestImages={s.requestImagePreviews}
             loreContextReset={s.loreContextReset}
             refreshKey={`${s.detail.chat.headRevision}:${s.detail.chat.settingsRevision}:${s.detail.profile?.revision}:${s.detail.reader.cursor}:${s.promptWorkspace?.revision}:${s.pinnedPromptRevision}:${s.nativeInteractionRevision}`}
@@ -2376,9 +2450,7 @@ function App() {
       <HelperPanel
         navigationActions={helperNavigationActions}
         searchRequest={helperSearchRequest}
-        onSelectConversation={() => {
-          if (panel === 'navigation') setPanel('');
-        }}
+        onSelectConversation={closeNavigationDrawer}
         navigationHost={
           helperWorkspaceOpen && (panel === 'navigation' || !sidebarHidden)
             ? helperNavigationHost
@@ -2387,10 +2459,7 @@ function App() {
         ready={helperWorkspaceOpen || s.destination !== 'story' || !s.selected || !!s.detail}
         expanded={helperWorkspaceOpen}
         returnToSidecar={helperReturnToSidecar.current}
-        onToggleExpanded={() => {
-          if (!helperExpanded) helperReturnToSidecar.current = true;
-          setHelperExpanded((value) => !value);
-        }}
+        onToggleExpanded={toggleHelperExpanded}
         navigationLeading={navigationControls}
         onScopeChange={rememberHelperScope}
         returnLabel={
@@ -2398,7 +2467,7 @@ function App() {
             ? s.detail?.chat.title
             : t(libraryTab === 'prompts' ? 'transfer.m286' : 'transfer.m285')
         }
-        onOpenTarget={openHelperResult}
+        onOpenTarget={openHelperTarget}
         modal={panelModal}
         enterSend={enterSend}
         responseDisplay={responseDisplay}
@@ -2417,21 +2486,9 @@ function App() {
         resource={s.destination === 'library' && libraryTab === 'prompts' ? helperResource : null}
         onClearResource={clearHelperResource}
         outlineWorkspace={panel === 'outline'}
-        scope={
-          helperScope ??
-          (s.destination === 'story' && s.selected && s.detail
-            ? { kind: 'chat', chatId: s.selected }
-            : { kind: 'library', workId: `library:${libraryTab}` })
-        }
-        onClose={() => {
-          helperResultNavigation.current++;
-          setHelperExpanded(false);
-          setWorkspacePanel((value) => (value === 'helper' ? null : value));
-        }}
-        onModelSettings={() => {
-          setSettingsTab('models');
-          setPanel('settings');
-        }}
+        scope={helperPanelScope}
+        onClose={closeHelper}
+        onModelSettings={openModelSettings}
       />
       <CodexContentWarningDialog gate={s.codexWarning} />
       <CodexContentWarningDialog gate={s.inputTranslation.codexWarning} />
@@ -2920,15 +2977,17 @@ function App() {
   );
 }
 startPwa();
-createRoot(document.getElementById('root')!).render(
-  <SessionGate>
-    <MaintenanceBanner />
-    <ThemeProvider>
-      <FontProvider>
-        <TransientNoticeProvider>
-          <App />
-        </TransientNoticeProvider>
-      </FontProvider>
-    </ThemeProvider>
-  </SessionGate>
+void loadInitialLocale().then(() =>
+  createRoot(document.getElementById('root')!).render(
+    <SessionGate>
+      <MaintenanceBanner />
+      <ThemeProvider>
+        <FontProvider>
+          <TransientNoticeProvider>
+            <App />
+          </TransientNoticeProvider>
+        </FontProvider>
+      </ThemeProvider>
+    </SessionGate>
+  )
 );

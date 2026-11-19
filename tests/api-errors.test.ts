@@ -1,8 +1,10 @@
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeAll, expect, test, vi } from 'vitest';
 import { api, ApiError } from '../web/api.js';
 import { mainJudgmentError } from '../web/main-judgment-error.js';
-import { setLocale, translateMessage } from '../web/i18n.js';
+import { loadLocale, setLocale, translateMessage, UI_LOCALES } from '../web/i18n.js';
 import { apiErrorDiagnostic } from '../web/api-errors.js';
+
+beforeAll(() => Promise.all(UI_LOCALES.map(loadLocale)));
 
 afterEach(() => {
   vi.restoreAllMocks();

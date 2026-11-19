@@ -1,4 +1,4 @@
-import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
+import { DESKTOP_HEIGHT, DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { expect, test } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
 import { openHelper } from './ui-navigation.js';
@@ -145,4 +145,86 @@ test('shared composer shrinks nonempty drafts in main and helper without width o
   }
   expect(observerErrors).toEqual([]);
   expect((await (await request.get(`/api/chats/${chat.id}`)).json()).runs).toHaveLength(0);
+});
+
+test('shared composer typing leaves the reader, scene rail and sidebar unrendered', async ({
+  page,
+  request,
+}) => {
+  await page.addInitScript(() => {
+    const rendered: Element[] = [];
+    const firstHost = (fiber: any): Element | null => {
+      for (let node = fiber.child; node; node = node.child)
+        if (node.tag === 5) return node.stateNode;
+      return null;
+    };
+    const visit = (next: any, previous: any) => {
+      if ([0, 11, 15].includes(next.tag) && (previous === null || next.flags & 1)) {
+        const host = firstHost(next);
+        if (host) rendered.push(host);
+      }
+      if (previous !== null && next.child === previous.child) return;
+      for (let child = next.child; child; child = child.sibling)
+        visit(child, previous === null ? null : child.alternate);
+    };
+    Object.assign(window, {
+      __renderedHosts: rendered,
+      __REACT_DEVTOOLS_GLOBAL_HOOK__: {
+        supportsFiber: true,
+        renderers: new Map(),
+        inject: () => 1,
+        checkDCE: () => {},
+        onCommitFiberRoot: (_id: number, root: any) => visit(root.current, root.current.alternate),
+        onCommitFiberUnmount: () => {},
+        onPostCommitFiberRoot: () => {},
+      },
+    });
+  });
+  const created = await postFixtureChat(request, { data: { title: '입력 렌더 범위 검사' } });
+  expect(created.ok()).toBe(true);
+  const chat = await created.json();
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+  await page.goto(`/?chat=${chat.id}`);
+  const input = page.getByRole('textbox', { name: '다음 장면 요청' });
+  await input.fill('첫 장면을 열어 주세요.');
+  const received = page.waitForResponse(
+    (response) =>
+      /\/api\/chats\/[^/]+\/runs$/.test(response.url()) && response.request().method() === 'POST'
+  );
+  await page.getByRole('button', { name: '원문 생성', exact: true }).click();
+  const run = await (await received).json();
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`/api/chats/${chat.id}`)).json()).runs.find(
+          (item: { id: string }) => item.id === run.id
+        )?.status
+    )
+    .toBe('completed');
+  await expect(page.locator('[data-reader-scrollport] [data-testid="source"]')).toHaveCount(1);
+  await expect(page.locator('.scene-navigator')).toBeVisible();
+  await input.fill('다음');
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  const regions = {
+    reader: '[data-reader-scrollport]',
+    scenes: '.scene-navigator',
+    sidebar: '#workspace-sidebar',
+    composer: 'form.composer',
+  };
+  await page.evaluate(() => {
+    (window as unknown as { __renderedHosts: Element[] }).__renderedHosts.length = 0;
+  });
+  await input.pressSequentially(' 장면');
+  await expect(input).toHaveValue('다음 장면');
+  const counts = await page.evaluate((selectors) => {
+    const hosts = (window as unknown as { __renderedHosts: Element[] }).__renderedHosts;
+    return Object.fromEntries(
+      Object.entries(selectors).map(([name, selector]) => [
+        name,
+        hosts.filter((host) => host.isConnected && host.closest(selector)).length,
+      ])
+    );
+  }, regions);
+  expect(counts.composer).toBeGreaterThan(0);
+  expect({ ...counts, composer: 0 }).toEqual({ reader: 0, scenes: 0, sidebar: 0, composer: 0 });
 });

@@ -3,7 +3,7 @@ import { themeBodyScroll } from './theme-body-scroll.js';
 import { BookmarkList } from './Bookmarks.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
-import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react';
+import { memo, useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react';
 import { DownIcon, ListIcon, EditIcon } from './ui-icons.js';
 import type { ReaderDetail, ReaderNavigationItem } from '../core/types.js';
 import { Dialog } from './Dialog.js';
@@ -11,7 +11,7 @@ import { IconButton } from './IconButton.js';
 import { SceneTitleEditor } from './SceneTitleEditor.js';
 import './scene-navigator.css';
 
-export function SceneNavigator({
+export const SceneNavigator = memo(function SceneNavigator({
   detail,
   reader,
   target,
@@ -400,4 +400,4 @@ export function SceneNavigator({
       {dialog}
     </>
   );
-}
+});

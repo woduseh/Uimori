@@ -12,6 +12,7 @@ import { usageCompact } from './usage-display.js';
 import { OUTLINE_REFRESH_EVENT, type OutlineHelperRequest } from './outline-helper.js';
 import type { OutlineTarget } from '../core/outline.js';
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -345,7 +346,7 @@ function storedOutline(scope: string): SelectedOutline | null {
 }
 const selectionRequest = '선택한 원문을 검토해 주세요.';
 
-export function HelperPanel(props: Props) {
+export const HelperPanel = memo(function HelperPanel(props: Props) {
   useI18n();
   const sessions = useHelperSessions(
     props.open && props.ready !== false,
@@ -2230,4 +2231,4 @@ export function HelperPanel(props: Props) {
       </footer>
     </aside>
   );
-}
+});

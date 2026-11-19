@@ -26,7 +26,8 @@ import { messages as orphanmemory } from './orphanmemory.js';
 import { messages as helperattachments } from './helperattachments.js';
 import { messages as storyUi } from './story-ui.js';
 import { messages as themeAssets } from './theme-assets.js';
-export const messages: Record<string, { ko: string; en: string; ja: string; zh: string }> = {
+import type { UiLocale } from '../../core/ui-locale.js';
+export const messages: Record<string, Record<UiLocale, string>> = {
   ...common,
   ...errors,
   ...outside,
@@ -56,3 +57,5 @@ export const messages: Record<string, { ko: string; en: string; ja: string; zh: 
   ...storyUi,
   ...themeAssets,
 };
+export const catalog = (locale: UiLocale): Record<string, string> =>
+  Object.fromEntries(Object.entries(messages).map(([key, entry]) => [key, entry[locale]]));

@@ -1,6 +1,8 @@
-import { afterEach, expect, test } from 'vitest';
-import { setLocale } from '../web/i18n.js';
+import { afterEach, beforeAll, expect, test } from 'vitest';
+import { loadLocale, setLocale, UI_LOCALES } from '../web/i18n.js';
 import { pricingNote } from '../web/pricing-display.js';
+
+beforeAll(() => Promise.all(UI_LOCALES.map(loadLocale)));
 
 afterEach(() => setLocale('ko'));
 

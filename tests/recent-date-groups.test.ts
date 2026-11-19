@@ -1,6 +1,8 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, beforeAll, expect, test } from 'vitest';
 import { groupRecentDates, recentDateGroupLabel } from '../web/recent-date-groups.js';
-import { setLocale } from '../web/i18n.js';
+import { loadLocale, setLocale, UI_LOCALES } from '../web/i18n.js';
+
+beforeAll(() => Promise.all(UI_LOCALES.map(loadLocale)));
 
 afterEach(() => setLocale('ko'));
 

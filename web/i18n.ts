@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { IntlMessageFormat } from 'intl-messageformat';
-import { messages } from './locales/index.js';
+import ko from './locales/ko.js';
 
 import { supportedLocale, type UiLocale } from '../core/ui-locale.js';
 export { supportedLocale, UI_LOCALES, type UiLocale } from '../core/ui-locale.js';
@@ -16,17 +16,26 @@ function readLocale(): UiLocale {
     return 'ko';
   }
 }
+const catalogs: Partial<Record<UiLocale, Record<string, string>>> = { ko };
+const catalogLoaders = {
+  en: () => import('./locales/en.js'),
+  ja: () => import('./locales/ja.js'),
+  zh: () => import('./locales/zh.js'),
+};
+/** Resolves once the locale's messages are available; Korean ships with the entry chunk. */
+export async function loadLocale(locale: UiLocale): Promise<void> {
+  if (locale !== 'ko') catalogs[locale] ??= (await catalogLoaders[locale]()).default;
+}
 let current = readLocale();
+let requested = current;
 const listeners = new Set<() => void>();
 const formatted = new Map<string, { key: string; values?: MessageValues } | (() => string)>();
 const sources = new Map<string, string>();
 const normalized = (value: string) => value.replace(/\s+/gu, ' ').trim();
-for (const [key, entry] of Object.entries(messages)) {
-  for (const value of [entry.ko]) {
-    if (typeof value === 'string' && !value.includes('{')) {
-      sources.set(value, key);
-      sources.set(normalized(value), key);
-    }
+for (const [key, value] of Object.entries(ko)) {
+  if (!value.includes('{')) {
+    sources.set(value, key);
+    sources.set(normalized(value), key);
   }
 }
 const cache = new Map<string, IntlMessageFormat>();
@@ -39,6 +48,18 @@ function publish(locale: UiLocale) {
   if (typeof window !== 'undefined')
     window.dispatchEvent(new CustomEvent(localeChangedEvent, { detail: locale }));
 }
+function applyLocale(locale: UiLocale) {
+  requested = locale;
+  if (catalogs[locale]) publish(locale);
+  else
+    void loadLocale(locale).then(() => {
+      if (requested === locale) publish(locale);
+    });
+}
+/** Await before the first render; an unavailable catalog opens the app in Korean for this visit. */
+export function loadInitialLocale(): Promise<void> {
+  return loadLocale(current).catch(() => applyLocale('ko'));
+}
 /** Locale is browser presentation state. It never writes application settings or remounts editors. */
 export function setLocale(value: UiLocale): boolean {
   const next = supportedLocale(value);
@@ -48,7 +69,7 @@ export function setLocale(value: UiLocale): boolean {
   } catch {
     persisted = false;
   }
-  publish(next);
+  applyLocale(next);
   return persisted;
 }
 function subscribe(listener: () => void) {
@@ -60,13 +81,12 @@ function subscribe(listener: () => void) {
 if (typeof window !== 'undefined') {
   if (typeof document !== 'undefined') document.documentElement.lang = current;
   window.addEventListener('storage', (event) => {
-    if (event.key === UI_LANGUAGE_KEY || event.key === null) publish(readLocale());
+    if (event.key === UI_LANGUAGE_KEY || event.key === null) applyLocale(readLocale());
   });
 }
 export function formatMessage(key: string, locale: UiLocale, values?: MessageValues): string {
-  const entry = messages[key];
-  if (!entry) return key;
-  const pattern = entry[locale] ?? entry.ko;
+  if (!Object.hasOwn(ko, key)) return key;
+  const pattern = catalogs[locale]?.[key] ?? ko[key];
   const identity = `${locale}:${key}:${pattern}`;
   let formatter = cache.get(identity);
   if (!formatter) {
@@ -135,11 +155,7 @@ export function translateMessage(value: string): string {
         key: string;
         values?: Record<string, string | number | boolean | MessageReference | { uiDate: number }>;
       };
-      if (
-        !descriptor ||
-        typeof descriptor.key !== 'string' ||
-        !Object.hasOwn(messages, descriptor.key)
-      )
+      if (!descriptor || typeof descriptor.key !== 'string' || !Object.hasOwn(ko, descriptor.key))
         return value;
       const values =
         descriptor.values &&
@@ -161,8 +177,28 @@ export function translateMessage(value: string): string {
   const key = sources.get(value) ?? sources.get(normalized(value));
   return key ? t(key) : value;
 }
+const numberFormats = new Map<string, Intl.NumberFormat>();
+const dateFormats = new Map<string, Intl.DateTimeFormat>();
+function cachedFormat<Format>(
+  formats: Map<string, Format>,
+  options: object | undefined,
+  create: (locale: string) => Format
+): Format {
+  const locale = getIntlLocale();
+  const identity = `${locale}:${JSON.stringify(options)}`;
+  let format = formats.get(identity);
+  if (!format) {
+    format = create(locale);
+    formats.set(identity, format);
+  }
+  return format;
+}
 export function formatNumber(value: number, options?: Intl.NumberFormatOptions): string {
-  return new Intl.NumberFormat(getIntlLocale(), options).format(value);
+  return cachedFormat(
+    numberFormats,
+    options,
+    (locale) => new Intl.NumberFormat(locale, options)
+  ).format(value);
 }
 export function formatDate(
   value: string | number | Date,
@@ -171,12 +207,11 @@ export function formatDate(
   const date = new Date(value);
   // Legacy pending requests can have no timestamp. An absent label must not crash the reader.
   if (!Number.isFinite(date.getTime())) return '';
-  return new Intl.DateTimeFormat(
-    getIntlLocale(),
-    options ?? {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }
+  const resolved = options ?? { dateStyle: 'medium', timeStyle: 'short' };
+  return cachedFormat(
+    dateFormats,
+    resolved,
+    (locale) => new Intl.DateTimeFormat(locale, resolved)
   ).format(date);
 }
 export function useI18n() {

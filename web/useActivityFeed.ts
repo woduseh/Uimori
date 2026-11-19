@@ -34,10 +34,13 @@ export function useActivityFeed() {
         return localReceipts.get(item.chatId)!.has(item.acknowledgementKey);
       });
       const localKeys = new Set(local.map((item) => item.acknowledgementKey));
-      setFeed({
+      const visible = {
         ...next,
         items: next.items.filter((item) => !localKeys.has(item.acknowledgementKey)),
-      });
+      };
+      setFeed((current) =>
+        JSON.stringify(current) === JSON.stringify(visible) ? current : visible
+      );
       setError('');
       // Older browser receipts are safely mirrored to the server before use elsewhere.
       if (local.length) {
@@ -104,15 +107,22 @@ export function useActivityFeed() {
     const active = () => {
       if (!document.hidden) void refresh();
     };
+    let resuming: Promise<void> | null = null;
+    const resume = () => {
+      if (document.hidden || resuming) return;
+      resuming = refresh().finally(() => {
+        resuming = null;
+      });
+    };
     void poll();
-    document.addEventListener('visibilitychange', active);
-    window.addEventListener('focus', active);
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('focus', resume);
     window.addEventListener(activityChangedEvent, active);
     return () => {
       stopped = true;
       clearTimeout(timer);
-      document.removeEventListener('visibilitychange', active);
-      window.removeEventListener('focus', active);
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('focus', resume);
       window.removeEventListener(activityChangedEvent, active);
     };
   }, [refresh]);

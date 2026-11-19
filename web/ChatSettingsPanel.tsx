@@ -21,6 +21,7 @@ import { api } from './api.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { useSettingsHistory } from './useSettingsHistory.js';
 import type { StoryState } from './useStory.js';
+import { useComposerDraftText } from './composer-draft.js';
 import {
   BackIcon,
   BotIcon,
@@ -104,6 +105,7 @@ export function ChatSettingsPanel({
   onAskHelper?: (request: string) => void;
 }) {
   useI18n();
+  const draft = useComposerDraftText(state.composerDraft);
   const categories = getCategories();
   const requestedSection =
     initialSection ??
@@ -454,7 +456,7 @@ export function ChatSettingsPanel({
                 onDirtyChange={setProfileDirty}
                 onSaveHandlerChange={saveGroup.registrations.profile}
                 onGlobalSettings={(section) => requestClose(() => onGlobalSettings(section))}
-                nextRequest={state.pendingRequest ?? state.draft}
+                nextRequest={state.pendingRequest ?? draft}
                 loreContextReset={state.loreContextReset}
               />
             )}

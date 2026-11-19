@@ -19,10 +19,15 @@ beforeEach(() => {
   });
 });
 afterEach(() => vi.unstubAllGlobals());
+async function loadedI18n() {
+  const runtime = await import('../web/i18n.js');
+  await Promise.all(runtime.UI_LOCALES.map(runtime.loadLocale));
+  return runtime;
+}
 
 describe('UI locale presentation boundary', () => {
   test('renders a grouped summary count from the actual scene receipt in every language', async () => {
-    const { setLocale } = await import('../web/i18n.js');
+    const { setLocale } = await loadedI18n();
     const { SceneUsage } = await import('../web/SceneUsage.js');
     const { createElement } = await import('react');
     const { renderToStaticMarkup } = await import('react-dom/server');
@@ -50,7 +55,7 @@ describe('UI locale presentation boundary', () => {
   });
 
   test('describes restored chat and text entry counts in English', async () => {
-    const { formatMessage } = await import('../web/i18n.js');
+    const { formatMessage } = await loadedI18n();
     for (const [count, chatDescription, entryDescription] of [
       [1, 'chat “A Story”', '1 text entry'],
       [2, '2 chats', '2 text entries'],
@@ -62,7 +67,7 @@ describe('UI locale presentation boundary', () => {
   });
 
   test('keeps preformatted values verbatim in every language', async () => {
-    const { formatMessage } = await import('../web/i18n.js');
+    const { formatMessage } = await loadedI18n();
     for (const value of ['1,234', 'Unknown'])
       for (const locale of ['ko', 'en', 'ja', 'zh'] as const)
         expect(formatMessage('reader.usingValueSceneSummaries', locale, { v0: value })).toContain(
@@ -72,11 +77,11 @@ describe('UI locale presentation boundary', () => {
 
   test('Korean remains the default and unsupported stored values fall back to Korean', async () => {
     vi.stubGlobal('navigator', { language: 'en-US', languages: ['en-US', 'ja'] });
-    const initial = await import('../web/i18n.js');
+    const initial = await loadedI18n();
     expect(initial.getLocale()).toBe('ko');
     storage.set('uimori:ui-language', 'fr');
     vi.resetModules();
-    const unsupported = await import('../web/i18n.js');
+    const unsupported = await loadedI18n();
     expect(unsupported.getLocale()).toBe('ko');
     expect(unsupported.supportedLocale('en-US')).toBe('ko');
   });
@@ -85,11 +90,32 @@ describe('UI locale presentation boundary', () => {
     storage.set('uimori:reading-language', 'original');
     storage.set('uimori:input-translation-language', 'ja');
     const before = [...storage];
-    const runtime = await import('../web/i18n.js');
+    const runtime = await loadedI18n();
     expect(runtime.setLocale('en')).toBe(true);
     expect([...storage].filter(([key]) => key !== 'uimori:ui-language')).toEqual(before);
     vi.resetModules();
-    expect((await import('../web/i18n.js')).getLocale()).toBe('en');
+    expect((await loadedI18n()).getLocale()).toBe('en');
+  });
+
+  test('a language switch applies once its catalog loads and a newer choice wins', async () => {
+    const runtime = await import('../web/i18n.js');
+    expect(runtime.setLocale('ja')).toBe(true);
+    expect(runtime.getLocale()).toBe('ko');
+    await vi.waitFor(() => expect(runtime.getLocale()).toBe('ja'));
+    expect(runtime.t('common.uiLanguage')).toBe('表示言語');
+    runtime.setLocale('en');
+    runtime.setLocale('ko');
+    await runtime.loadLocale('en');
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(runtime.getLocale()).toBe('ko');
+  });
+
+  test('the stored language is available before the first render', async () => {
+    storage.set('uimori:ui-language', 'zh');
+    const runtime = await import('../web/i18n.js');
+    await runtime.loadInitialLocale();
+    expect(runtime.getLocale()).toBe('zh');
+    expect(runtime.t('common.uiLanguage')).toBe('界面语言');
   });
 
   test('blocked browser storage still permits the current session language and reports persistence failure', async () => {
@@ -101,14 +127,14 @@ describe('UI locale presentation boundary', () => {
         throw new DOMException('Blocked', 'SecurityError');
       },
     });
-    const runtime = await import('../web/i18n.js');
+    const runtime = await loadedI18n();
     expect(runtime.getLocale()).toBe('ko');
     expect(runtime.setLocale('en')).toBe(false);
     expect(runtime.getLocale()).toBe('en');
   });
 
   test('retained app notices change language while unknown messages remain verbatim', async () => {
-    const { message, setLocale, translateMessage, formatMessage } = await import('../web/i18n.js');
+    const { message, setLocale, translateMessage, formatMessage } = await loadedI18n();
     const retained = message('common.uiLanguage');
     expect(translateMessage(retained)).toBe('화면 언어');
     setLocale('en');
@@ -122,7 +148,7 @@ describe('UI locale presentation boundary', () => {
   test('all built-in layout and palette labels have translations without changing their definitions', async () => {
     const { BUILTIN_THEMES } = await import('../core/themes.js');
     const { BUILTIN_PALETTES } = await import('../core/theme-palettes.js');
-    const { setLocale, translateMessage } = await import('../web/i18n.js');
+    const { setLocale, translateMessage } = await loadedI18n();
     const definitions = JSON.stringify({ themes: BUILTIN_THEMES, palettes: BUILTIN_PALETTES });
     for (const locale of ['en', 'ja', 'zh'] as const) {
       setLocale(locale);
@@ -137,7 +163,7 @@ describe('UI locale presentation boundary', () => {
   });
 
   test('retained message identity survives identical Japanese translations and leaves literal user arguments alone', async () => {
-    const { message, messageRef, setLocale, t, translateMessage } = await import('../web/i18n.js');
+    const { message, messageRef, setLocale, t, translateMessage } = await loadedI18n();
     setLocale('ja');
     const details = message('outside.details');
     expect(translateMessage(details)).toBe('詳細');
@@ -156,10 +182,13 @@ describe('UI locale presentation boundary', () => {
   });
 
   test('a retained Date argument roundtrips as a Date for ICU formatting', async () => {
-    const { message, setLocale, translateMessage } = await import('../web/i18n.js');
-    const { messages: currentMessages } = await import('../web/locales/index.js');
-    const pattern = '{instant, date, short}';
-    currentMessages['test.dateRoundtrip'] = { ko: pattern, en: pattern, ja: pattern, zh: pattern };
+    const { message, setLocale, translateMessage } = await loadedI18n();
+    const catalogs = [
+      (await import('../web/locales/ko.js')).default,
+      (await import('../web/locales/en.js')).default,
+      (await import('../web/locales/ja.js')).default,
+    ];
+    for (const catalog of catalogs) catalog['test.dateRoundtrip'] = '{instant, date, short}';
     try {
       const retained = message('test.dateRoundtrip', { instant: new Date(2026, 0, 2, 12) });
       setLocale('en');
@@ -167,14 +196,12 @@ describe('UI locale presentation boundary', () => {
       setLocale('ja');
       expect(translateMessage(retained)).toBe('26/1/2');
     } finally {
-      Reflect.deleteProperty(currentMessages, 'test.dateRoundtrip');
+      for (const catalog of catalogs) Reflect.deleteProperty(catalog, 'test.dateRoundtrip');
     }
   });
 
   test('legacy validation errors retain their Korean message while their UI and nested notice follow locale', async () => {
-    const { legacyMessage, message, messageRef, setLocale, translateMessage } = await import(
-      '../web/i18n.js'
-    );
+    const { legacyMessage, message, messageRef, setLocale, translateMessage } = await loadedI18n();
     setLocale('en');
     const error = new Error(legacyMessage('shared.loadFailed'));
     expect(error.message).toBe('불러오지 못했어요.');
@@ -192,7 +219,7 @@ describe('UI locale presentation boundary', () => {
 
   test('ungrouped toggle errors follow the current UI language', async () => {
     const { renameToggleGroup } = await import('../web/native-toggle-document.js');
-    const { setLocale, translateMessage } = await import('../web/i18n.js');
+    const { setLocale, translateMessage } = await loadedI18n();
     setLocale('ko');
     let error: unknown;
     try {
@@ -209,7 +236,7 @@ describe('UI locale presentation boundary', () => {
   });
 
   test('external diagnostic bytes resembling a malformed message descriptor remain readable', async () => {
-    const { setLocale, translateMessage } = await import('../web/i18n.js');
+    const { setLocale, translateMessage } = await loadedI18n();
     setLocale('en');
     for (const diagnostic of [
       '\u001fui:broken-json',
@@ -220,7 +247,7 @@ describe('UI locale presentation boundary', () => {
   });
 
   test('ICU interpolates full sentences, plural branches and missing locale fallback', async () => {
-    const { formatMessage } = await import('../web/i18n.js');
+    const { formatMessage } = await loadedI18n();
     expect(formatMessage('outside.activeWork', 'en', { count: 1 })).toBe(
       'There is 1 ongoing task.'
     );
@@ -231,18 +258,18 @@ describe('UI locale presentation boundary', () => {
       '진행 중인 작업이 2개 있어요.'
     );
     expect(() => formatMessage('outside.activeWork', 'en')).toThrow();
-    const { messages: currentMessages } = await import('../web/locales/index.js');
-    const saved = currentMessages['common.uiLanguage'].ja;
-    Reflect.deleteProperty(currentMessages['common.uiLanguage'], 'ja');
+    const { default: ja } = await import('../web/locales/ja.js');
+    const saved = ja['common.uiLanguage'];
+    Reflect.deleteProperty(ja, 'common.uiLanguage');
     try {
       expect(formatMessage('common.uiLanguage', 'ja')).toBe('화면 언어');
     } finally {
-      currentMessages['common.uiLanguage'].ja = saved;
+      ja['common.uiLanguage'] = saved;
     }
   });
 
   test('numbers and dates follow UI locale without changing their values', async () => {
-    const runtime = await import('../web/i18n.js');
+    const runtime = await loadedI18n();
     const instant = new Date('2026-01-02T03:04:05Z');
     const options: Intl.DateTimeFormatOptions = {
       year: 'numeric',
@@ -259,7 +286,7 @@ describe('UI locale presentation boundary', () => {
   });
 
   test('legacy pending requests without a timestamp omit the date instead of crashing', async () => {
-    const runtime = await import('../web/i18n.js');
+    const runtime = await loadedI18n();
     for (const locale of ['ko', 'en', 'ja', 'zh'] as const) {
       runtime.setLocale(locale);
       expect(runtime.formatDate(new Date(Number.NaN))).toBe('');
@@ -268,7 +295,7 @@ describe('UI locale presentation boundary', () => {
   });
 
   test('retained job errors format the complete title and nested error after language changes', async () => {
-    const runtime = await import('../web/i18n.js');
+    const runtime = await loadedI18n();
     const notice = runtime.message('reader.jobFailure', {
       kind: 'translation',
       mode: 'original',

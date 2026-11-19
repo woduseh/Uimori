@@ -1,6 +1,6 @@
 import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
-import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { Inbox, MessageCircle, PanelLeftClose, PanelLeftOpen, Sparkles } from 'lucide-react';
 import type { Content } from '../core/product.js';
 import {
@@ -78,7 +78,7 @@ export function NavigationQuickActions({
     </div>
   );
 }
-export function BotNavigation(
+export const BotNavigation = memo(function BotNavigation(
   props: Props & {
     onLibraryChanged: () => Promise<void>;
     libraryError?: string;
@@ -854,4 +854,4 @@ export function BotNavigation(
       </div>
     </div>
   );
-}
+});
