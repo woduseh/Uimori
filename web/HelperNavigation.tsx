@@ -388,7 +388,7 @@ export function HelperNavigation(props: Props) {
             }
           >
             <option value="manual">{t('transfer.m296')}</option>
-            <option value="recent">{t('transfer.m295')}</option>
+            <option value="recent">{t('helperNavigation.sortRecent')}</option>
             <option value="name">{t('helperNavigation.sortName')}</option>
           </select>
         )}

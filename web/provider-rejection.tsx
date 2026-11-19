@@ -52,7 +52,6 @@ export function ProviderRejectionNotice({ rejection }: { rejection: ProviderReje
           <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
             {rejection.message}
           </pre>
-          <small>{t('errors.providerPrivacy')}</small>
         </details>
       )}
     </div>

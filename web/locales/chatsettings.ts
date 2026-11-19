@@ -60,10 +60,10 @@ export const messages = {
     zh: '系统与数据',
   },
   'chatsettings.m0': {
-    ko: '이야기를 열면 실행한 작업을 확인할 수 있어요.',
-    en: 'Open a story to see its tasks.',
-    ja: '物語を開くとタスクを確認できます。',
-    zh: '打开故事后可查看任务。',
+    ko: '열린 채팅이 없어요.',
+    en: 'No chat is open.',
+    ja: '開いているチャットがありません。',
+    zh: '没有打开的聊天。',
   },
   'chatsettings.m1': {
     ko: '실행 기록',
@@ -496,12 +496,6 @@ export const messages = {
     en: 'Narrow',
     ja: '狭い',
     zh: '窄',
-  },
-  'chatsettings.m75': {
-    ko: '전체',
-    en: 'Global',
-    ja: '全体',
-    zh: '全局',
   },
   'chatsettings.m76': {
     ko: '접속 세션',

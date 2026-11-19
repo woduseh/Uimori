@@ -1578,10 +1578,10 @@ export const messages = {
     zh: '正在加载书签…',
   },
   'reader.noBookmarksYetAddOneBelowAScene': {
-    ko: '아직 책갈피가 없어요. 장면 아래에서 책갈피를 추가할 수 있어요.',
-    en: 'No bookmarks yet. Add one below a scene.',
-    ja: 'まだブックマークがありません。シーンの下で追加できます。',
-    zh: '尚无书签。可在场景下方添加。',
+    ko: '아직 책갈피가 없어요.',
+    en: 'No bookmarks yet.',
+    ja: 'まだブックマークがありません。',
+    zh: '尚无书签。',
   },
   'reader.editValueBookmark': {
     ko: '{v0} 책갈피 편집',
@@ -1648,6 +1648,12 @@ export const messages = {
     en: 'Processing',
     ja: '処理中',
     zh: '处理中',
+  },
+  'reader.saveResponse': {
+    ko: '응답 저장',
+    en: 'Save response',
+    ja: '応答を保存',
+    zh: '保存回复',
   },
   'reader.saveInput': {
     ko: '입력 저장',

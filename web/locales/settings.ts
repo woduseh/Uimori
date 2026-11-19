@@ -1621,10 +1621,10 @@ export const messages = {
     zh: '，已摘要场景',
   },
   'settings.m282': {
-    ko: '아직 저장된 요약이 없어요. 원문을 그대로 사용해요.',
-    en: 'No summary saved yet. The original text is used as-is.',
-    ja: '保存済みの要約はありません。原文をそのまま使用します。',
-    zh: '尚无已保存摘要，直接使用原文。',
+    ko: '아직 저장된 요약이 없어요.',
+    en: 'No summary saved yet.',
+    ja: '保存済みの要約はありません。',
+    zh: '尚无已保存摘要。',
   },
   'settings.m283': {
     ko: '대상 장면의 최신 컨텍스트를 확인하고 있어요.',
@@ -1825,10 +1825,10 @@ export const messages = {
     zh: '，摘要{v0}次',
   },
   'settings.flow0': {
-    ko: '번역 {v0}회, 거절 감지 {v1}/2',
-    en: 'Translation: {v0} calls, refusal detection: {v1}/2',
-    ja: '翻訳{v0}回、拒否検出{v1}/2',
-    zh: '翻译{v0}次，拒绝检测{v1}/2',
+    ko: '번역 호출 한도 {v0}회, 거절 감지 {v1}/2',
+    en: 'Translation call limit: {v0}, refusal detection: {v1}/2',
+    ja: '翻訳の呼び出し上限{v0}回、拒否検出{v1}/2',
+    zh: '翻译调用上限{v0}次，拒绝检测{v1}/2',
   },
   'settings.flow3': {
     ko: '{v0} 협업 상세에서 확인할 수 있어요.',

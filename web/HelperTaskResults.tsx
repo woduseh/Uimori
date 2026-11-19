@@ -407,8 +407,12 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
           )}
           <dt>{t('helperResults.executions')}</dt>
           <dd>{formatNumber(usage.attempts.length)}</dd>
-          <dt>{t('helperResults.tools')}</dt>
-          <dd>{formatNumber(usage.toolExecutions)}</dd>
+          {usage.toolExecutions > 0 && (
+            <>
+              <dt>{t('helperResults.tools')}</dt>
+              <dd>{formatNumber(usage.toolExecutions)}</dd>
+            </>
+          )}
           {totals.internalModelCalls.reported > 0 && (
             <>
               <dt>{t('helperResults.internalCalls')}</dt>

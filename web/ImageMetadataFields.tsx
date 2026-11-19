@@ -50,7 +50,7 @@ export function ImageMetadataFields({
           </option>
         </select>
       </label>
-      {portrait && <p className="muted">{t('library.imageMetadataHint', { portrait: 'yes' })}</p>}
+      {portrait && <p className="muted">{t('library.imageMetadataHint')}</p>}
     </>
   );
 }

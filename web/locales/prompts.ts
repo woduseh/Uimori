@@ -1421,12 +1421,6 @@ export const messages = {
     ja: '{name}、編集中',
     zh: '{name}，编辑中',
   },
-  'prompts.errorKept': {
-    ko: '{error} 편집 내용은 유지했어요.',
-    en: '{error} Your edits are preserved.',
-    ja: '{error} 編集内容は保持しています。',
-    zh: '{error} 已保留编辑内容。',
-  },
   'prompts.addNamed': { ko: '{name} 추가', en: 'Add {name}', ja: '{name}を追加', zh: '添加{name}' },
   'prompts.retryNamed': {
     ko: '{name} 다시 추가',

@@ -54,7 +54,6 @@ export function AssetMetadataEditor({
           onChange={(event) => setDraft({ ...draft, description: event.target.value })}
         />
       </label>
-      <small>{t('library.savedChangesApplyToTheNextAutomatic')}</small>
       <SaveButton
         type="button"
         className="primary"

@@ -183,13 +183,15 @@ export function AuthorNotesEditor({
           {notes.map((note) => (
             <li key={note.id}>
               <p>{note.text}</p>
-              <small>
-                {t('library.noteAttribution', {
-                  imported: note.kind === 'imported-memory' ? 'yes' : 'no',
-                  origin: note.origin?.title ?? '',
-                  linked: note.atRevision ? 'yes' : 'no',
-                })}
-              </small>
+              {(note.kind === 'imported-memory' || !note.atRevision) && (
+                <small>
+                  {t('library.noteAttribution', {
+                    imported: note.kind === 'imported-memory' ? 'yes' : 'no',
+                    origin: note.origin?.title ?? '',
+                    linked: note.atRevision ? 'yes' : 'no',
+                  })}
+                </small>
+              )}
               <div className="form-actions">
                 <button
                   type="button"

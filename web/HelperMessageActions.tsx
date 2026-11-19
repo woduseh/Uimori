@@ -198,7 +198,7 @@ export function HelperResponseEditor({
             />
             <IconButton
               icon={Save}
-              label={busy ? t('reader.processing') : t('reader.saveInput')}
+              label={busy ? t('reader.processing') : t('reader.saveResponse')}
               type="submit"
               disabled={busy || disabled || !draft.trim()}
             />

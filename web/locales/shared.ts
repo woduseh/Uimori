@@ -137,12 +137,6 @@ export const messages = {
     ja: '保存済みの内容を確認できませんでした。',
     zh: '无法查看已保存版本。',
   },
-  'shared.reviewPreserves': {
-    ko: '현재 입력은 그대로 두고 저장된 내용을 확인할 수 있어요.',
-    en: 'Review the saved version while keeping your current input.',
-    ja: '現在の入力を保ったまま、保存済み内容を確認できます。',
-    zh: '可在保留当前输入的同时查看已保存内容。',
-  },
   'shared.reviewContinue': {
     ko: '저장본을 확인한 뒤 계속 편집할 수 있어요.',
     en: 'Review the saved version, then continue editing.',
@@ -412,12 +406,6 @@ export const messages = {
     en: 'Unsaved changes',
     ja: '未保存の変更',
     zh: '未保存的更改',
-  },
-  'shared.saved': {
-    ko: '저장됨',
-    en: 'Saved',
-    ja: '保存済み',
-    zh: '已保存',
   },
   'shared.notRegistered': {
     ko: '등록 전',

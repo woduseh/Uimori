@@ -333,7 +333,7 @@ export function RisuNativeFields({
       )}
       {error && (
         <p className="error" role="alert">
-          {t('native.inputPreserved', { error: translateMessage(error) })}
+          {translateMessage(error)}
         </p>
       )}
       <fieldset disabled={!!draft} className="native-panel-fields">

@@ -117,6 +117,12 @@ export const messages = {
     zh: '{count}条未读活动',
   },
   'helperNavigation.sort': { ko: '정렬', en: 'Sort', ja: '並べ替え', zh: '排序' },
+  'helperNavigation.sortRecent': {
+    ko: '최근 활동순',
+    en: 'Recent activity',
+    ja: '最近の活動順',
+    zh: '最近活动',
+  },
   'helperNavigation.sortName': { ko: '이름순', en: 'Name', ja: '名前順', zh: '名称' },
   'helperNavigation.moveUp': { ko: '위로 이동', en: 'Move up', ja: '上に移動', zh: '上移' },
   'helperNavigation.moveDown': { ko: '아래로 이동', en: 'Move down', ja: '下に移動', zh: '下移' },

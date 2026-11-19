@@ -1562,7 +1562,7 @@ function ContentEditor({
                       onClick={() => void saveContent(role)}
                     >
                       <CopyIcon size={18} aria-hidden="true" />
-                      {t('library.copyAs', { role: t(contentLabelKeys[role]) })}
+                      {t('library.copyAs', { kind: role, role: t(contentLabelKeys[role]) })}
                     </button>
                   ))}
                 {selected && (

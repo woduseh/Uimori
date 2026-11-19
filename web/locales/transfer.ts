@@ -1218,12 +1218,6 @@ export const messages = {
     ja: '残りの原稿を検索',
     zh: '搜索剩余原稿',
   },
-  'transfer.m236': {
-    ko: '검색 색인을 준비하는 중이라 저장된 본문을 직접 찾아 표시했어요.',
-    en: 'The index is being prepared. These results were checked directly against the latest saved text.',
-    ja: '索引を準備しています。最新の保存本文を直接確認した結果です。',
-    zh: '正在建立索引，这些结果是直接检查最新保存正文所得。',
-  },
   'transfer.m237': {
     ko: '변경 내용을 저장하지 못했어요.',
     en: 'Could not save changes.',
@@ -1363,10 +1357,10 @@ export const messages = {
     zh: '保存标题',
   },
   'transfer.m261': {
-    ko: '제목이 다른 곳에서 변경됐어요. 입력한 내용은 유지돼요. 취소하면 최신 제목을 불러와요.',
-    en: 'The title changed elsewhere. Your input is kept. Cancel to load the latest title.',
-    ja: 'タイトルが別の場所で変更されました。入力内容は保持しています。キャンセルすると最新のタイトルを読み込みます。',
-    zh: '标题已在其他位置更改，已保留输入内容。取消后将加载最新标题。',
+    ko: '제목이 다른 곳에서 변경됐어요. 취소하면 최신 제목을 불러와요.',
+    en: 'The title changed elsewhere. Cancel to load the latest title.',
+    ja: 'タイトルが別の場所で変更されました。キャンセルすると最新のタイトルを読み込みます。',
+    zh: '标题已在其他位置更改。取消后将加载最新标题。',
   },
   'transfer.m262': {
     ko: '선택한 자료 확인 필요',
@@ -1387,10 +1381,10 @@ export const messages = {
     zh: '文件夹名称',
   },
   'transfer.m265': {
-    ko: '폴더 설정이 다른 곳에서 바뀌었어요. 작성한 내용은 유지했어요. 최신 저장된 설정을 확인한 뒤 불러와 주세요.',
-    en: 'The folder settings changed elsewhere. Your draft is kept. Review the latest saved settings before loading them.',
-    ja: 'フォルダー設定が別の場所で変わりました。編集中の内容は保持しています。最新の保存設定を確認してから読み込んでください。',
-    zh: '文件夹设置已在其他位置更改，已保留编辑内容。请检查最新保存的设置后再加载。',
+    ko: '폴더 설정이 다른 곳에서 바뀌었어요. 최신 저장된 설정을 확인한 뒤 불러와 주세요.',
+    en: 'The folder settings changed elsewhere. Review the latest saved settings before loading them.',
+    ja: 'フォルダー設定が別の場所で変わりました。最新の保存設定を確認してから読み込んでください。',
+    zh: '文件夹设置已在其他位置更改。请检查最新保存的设置后再加载。',
   },
   'transfer.m266': {
     ko: '현재 저장된 설정 보기',
@@ -1585,10 +1579,10 @@ export const messages = {
     zh: '移到未分类',
   },
   'transfer.m302': {
-    ko: '서재에서 새 채팅을 시작해 보세요.',
-    en: 'Start a new chat from the library.',
-    ja: 'ライブラリから新しいチャットを始めてみてください。',
-    zh: '从资料库开始新聊天。',
+    ko: '아직 채팅이 없어요.',
+    en: 'No chats yet.',
+    ja: 'まだチャットがありません。',
+    zh: '还没有聊天。',
   },
   'transfer.m303': {
     ko: '봇을 불러오는 중이에요…',

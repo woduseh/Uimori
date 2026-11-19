@@ -222,7 +222,7 @@ export function NativeRisuPresetEditor({
       />
       {error && (
         <NoticeBanner className="native-editor-notice" tone="error">
-          {t('native.inputPreserved', { error: translateMessage(error) })}
+          {translateMessage(error)}
         </NoticeBanner>
       )}
       {pending && (

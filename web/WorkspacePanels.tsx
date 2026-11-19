@@ -880,10 +880,7 @@ export function AppSettingsPanel({
                       tabIndex={-1}
                       className="settings-section settings-group"
                     >
-                      <h3>
-                        {t('chatsettings.m18')}
-                        <span className="scope-badge">{t('chatsettings.m75')}</span>
-                      </h3>
+                      <h3>{t('chatsettings.m18')}</h3>
                       <AutoTranslationDefaults />
                       <ChatGenerationDefaults
                         onDirtyChange={setChatGenerationDirty}

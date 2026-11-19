@@ -577,7 +577,7 @@ function IllustrationEnvironmentEditor({
                         v1: test.system.os ?? '',
                         v2: test.devices.map((device) => device.name).join(', '),
                       })
-                    : `${illustrationErrorMessage(test.code)} (${test.code})`}
+                    : illustrationErrorMessage(test.code)}
                 </span>
               )}
             </div>
@@ -673,7 +673,7 @@ function IllustrationEnvironmentEditor({
                           tier: novelaiTest.tier ?? t('visuals.novelaiTierUnknown'),
                         })
                       : t('visuals.novelaiTestInactive')
-                    : `${illustrationErrorMessage(novelaiTest.code)} (${novelaiTest.code})`}
+                    : illustrationErrorMessage(novelaiTest.code)}
                 </span>
               )}
               {novelaiTest?.ok && novelaiTest.anlas && (

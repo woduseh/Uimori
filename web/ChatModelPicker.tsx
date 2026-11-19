@@ -112,7 +112,9 @@ export function ChatModelPicker({
       ) : null}
       {unavailable && (
         <NoticeBanner>
-          {t('main.modelPickerUnavailable', { model: current?.title ?? currentId ?? '' })}
+          {current
+            ? t('main.modelPickerUnavailable', { model: current.title })
+            : t('main.modelPickerInvalid')}
         </NoticeBanner>
       )}
       <label className="chat-model-picker-search">

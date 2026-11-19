@@ -809,12 +809,6 @@ export const messages = {
     ja: '選択中',
     zh: '已选择',
   },
-  'visualpanels.drawsAccordingToTheSceneAndCharacters': {
-    ko: '장면과 캐릭터를 따라 그려요.',
-    en: 'Draws according to the scene and characters.',
-    ja: 'シーンとキャラクターに沿って描きます。',
-    zh: '根据场景和角色绘制。',
-  },
   'visualpanels.customIllustrationPreset': {
     ko: '사용자 삽화 프리셋',
     en: 'Custom illustration preset',
@@ -930,10 +924,10 @@ export const messages = {
     zh: '已保存的预设已在其他位置更改。',
   },
   'visualpanels.yourEditsArePreservedSaveACopy': {
-    ko: '{v0} 편집 내용은 유지했어요. 사본으로 저장하거나 편집을 닫고 최신 항목을 다시 열어 주세요.',
-    en: '{v0} Your edits are preserved. Save a copy, or close the editor and reopen the latest item.',
-    ja: '{v0} 編集内容は保持しています。コピーとして保存するか、編集を閉じて最新の項目を開き直してください。',
-    zh: '{v0} 编辑内容已保留。请另存副本，或关闭编辑器后重新打开最新项目。',
+    ko: '{v0} 사본으로 저장하거나 편집을 닫고 최신 항목을 다시 열어 주세요.',
+    en: '{v0} Save a copy, or close the editor and reopen the latest item.',
+    ja: '{v0} コピーとして保存するか、編集を閉じて最新の項目を開き直してください。',
+    zh: '{v0} 请另存副本，或关闭编辑器后重新打开最新项目。',
   },
   'visualpanels.presetName': {
     ko: '프리셋 이름',
@@ -1548,10 +1542,10 @@ export const messages = {
     zh: '费用',
   },
   'visualpanels.unknownInputOutputCalls': {
-    ko: '미확인: 입력 {v0, number}, 출력 {v1, number}회',
-    en: 'Unknown: input {v0, number}, output {v1, number} calls',
-    ja: '未確認：入力 {v0, number}、出力 {v1, number}回',
-    zh: '未知：输入{v0, number}，输出{v1, number}次',
+    ko: '미확인: {v0, plural, =0 {} other {입력 #회}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {, }}}}{v1, plural, =0 {} other {출력 #회}}',
+    en: 'Unknown: {v0, plural, =0 {} other {input in # calls}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {, }}}}{v1, plural, =0 {} other {output in # calls}}',
+    ja: '未確認：{v0, plural, =0 {} other {入力 #回}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {、}}}}{v1, plural, =0 {} other {出力 #回}}',
+    zh: '未知：{v0, plural, =0 {} other {输入#次}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {，}}}}{v1, plural, =0 {} other {输出#次}}',
   },
   'visualpanels.unknownInVPluralOneOther': {
     ko: '미확인 {v0, number}회',
@@ -1662,7 +1656,7 @@ export const messages = {
     zh: '请检查开始日期和结束日期。',
   },
   'visualpanels.koreaTime': {
-    ko: '{v0} — {v1}, 한국 시간',
+    ko: '{v0} — {v1} (한국 시간)',
     en: '{v0} — {v1}, Korea time',
     ja: '{v0} — {v1}、韓国時間',
     zh: '{v0} — {v1}，韩国时间',
@@ -1828,12 +1822,6 @@ export const messages = {
     en: 'If customization breaks the display, press {shortcut} to disable the theme in this tab, or append to the address: {query}',
     ja: 'カスタマイズで画面が崩れた場合は{shortcut}キーでこのタブのテーマを無効にしてください。アドレスの末尾に次を付けても構いません: {query}',
     zh: '如果自定义导致画面异常，请按 {shortcut} 键关闭此标签页的主题。也可在地址后附加：{query}',
-  },
-  'visualpanels.preservedError': {
-    ko: '{message} 편집 내용은 유지했어요.',
-    en: '{message} Your edits are preserved.',
-    ja: '{message} 編集内容は保持しています。',
-    zh: '{message} 编辑内容已保留。',
   },
   'visualpanels.includedLore': {
     ko: '포함된 로어{count, plural, =0 {} other {, #건}}',

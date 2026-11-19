@@ -1531,7 +1531,7 @@ export const messages = {
     zh: '还原无效输入',
   },
   'native.text_3a377aba0a': {
-    ko: '적용하지 않은 원문이 있어요. 원문 보기에서 적용해 주세요.',
+    ko: '적용하지 않은 소스가 있어요. 소스 탭에서 적용해 주세요.',
     en: 'Apply pending source edits in Source view.',
     ja: '未反映のソースをソース表示で反映してください。',
     zh: '请在源码视图中应用待处理的源码编辑。',
@@ -2141,12 +2141,6 @@ export const messages = {
     en: 'Collapse {title}',
     ja: '{title}を折りたたむ',
     zh: '折叠{title}',
-  },
-  'native.inputPreserved': {
-    ko: '{error}, 입력은 유지했어요.',
-    en: '{error}, Your input is preserved.',
-    ja: '{error}、入力は保持されています。',
-    zh: '{error}，输入已保留。',
   },
   'native.blockName': {
     ko: '{number, number}번 블록 이름',

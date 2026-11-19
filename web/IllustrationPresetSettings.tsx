@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, messageRef, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -45,10 +45,6 @@ const messageOf = (error: unknown) => {
   const message = (error as Error).message;
   return /^COMFYUI_/u.test(message) ? illustrationErrorMessage(message) : message;
 };
-// Keep nested UI errors distinct from authored preset names and instructions.
-function preservedError(error: string): string {
-  return uiMessage('visualpanels.preservedError', { message: messageRef(error) });
-}
 export function IllustrationPresetSettings({
   library,
   environment,
@@ -150,7 +146,7 @@ export function IllustrationPresetSettings({
       await work();
       return true;
     } catch (cause) {
-      setError(draft ? preservedError(messageOf(cause)) : messageOf(cause));
+      setError(messageOf(cause));
       if (cause instanceof ApiError && cause.status === 409) {
         await refresh();
         if (saveAttempt) setSaveConflict(true);
@@ -174,7 +170,7 @@ export function IllustrationPresetSettings({
       );
     } catch (cause) {
       const message = messageOf(cause);
-      setError(preservedError(message));
+      setError(message);
       if (cause instanceof Error && /^COMFYUI_WORKFLOW_|^ComfyUI 워크플로:/u.test(cause.message)) {
         setWorkflowError(message);
         requestAnimationFrame(() => {
@@ -425,12 +421,8 @@ export function IllustrationPresetSettings({
                   </span>
                 )}
               </div>
-              {(preset.id.startsWith('builtin:') || preset.description) && (
-                <span>
-                  {preset.id.startsWith('builtin:')
-                    ? t('visualpanels.drawsAccordingToTheSceneAndCharacters')
-                    : preset.description}
-                </span>
+              {!preset.id.startsWith('builtin:') && preset.description && (
+                <span>{preset.description}</span>
               )}
               <small>
                 {preset.generator === 'codex'

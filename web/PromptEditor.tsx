@@ -476,7 +476,7 @@ export function PromptEditor({
         </fieldset>
         <TransientNotice message={busy ? '' : status} />
         <DismissibleError
-          message={error ? t('prompts.errorKept', { error: translateMessage(error) }) : ''}
+          message={error ? translateMessage(error) : ''}
           onDismiss={() => setError('')}
         />
       </section>

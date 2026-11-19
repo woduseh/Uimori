@@ -28,7 +28,7 @@ export function ContextSummaryStatus({ summary }: { summary: ReaderRun['contextS
             known: summary.estimatedInputTokens === null ? 'no' : 'yes',
             input: formatNumber(summary.estimatedInputTokens ?? 0),
             limit: formatNumber(summary.inputTokenLimit),
-            summarized: summary.compactedSources > 0 || summary.summaryCalls > 0 ? 'yes' : 'no',
+            summarized: summary.summaryCalls > 0 ? 'yes' : 'no',
             calls: formatNumber(summary.summaryCalls),
           })}
         </span>

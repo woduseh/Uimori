@@ -665,12 +665,7 @@ function IllustrationCard({
                 <span>{detail.modelTitle}</span>
               </p>
             )}
-            {detail.usage && (
-              <>
-                <IllustrationUsageLine usage={detail.usage} />
-                <small>{t('visuals.m150')}</small>
-              </>
-            )}
+            {detail.usage && <IllustrationUsageLine usage={detail.usage} />}
             {detail.preset && (
               <p>
                 {t('visuals.presetRevision', {

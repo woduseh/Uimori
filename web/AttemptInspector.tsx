@@ -301,7 +301,7 @@ function AttemptTable({
           v0: attempts.length,
           v1: totals.input === null ? t('visualpanels.unknown') : formatNumber(totals.input),
           v2: totals.output === null ? t('visualpanels.unknown') : formatNumber(totals.output),
-          v3: totals.cost === null ? t('visualpanels.unknown') : `$${totals.cost}`,
+          v3: totals.cost === null ? t('visualpanels.unknown') : formatUsd(totals.cost),
         })}
       </p>
       <p>
@@ -339,7 +339,7 @@ function AttemptTable({
                         ? t('visualpanels.unknown')
                         : formatNumber(total(selected, 'outputTokens')!)}
                     </td>
-                    <td>{cost === null ? t('visualpanels.unknown') : `$${cost}`}</td>
+                    <td>{cost === null ? t('visualpanels.unknown') : formatUsd(cost)}</td>
                     <td>{estimatedTotal(selected)}</td>
                   </tr>
                 );

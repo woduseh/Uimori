@@ -370,7 +370,7 @@ export function ResourceEditorStatus({
             : state.dirty
               ? t('shared.unsaved')
               : state.document.targetId
-                ? t('shared.saved')
+                ? ''
                 : t('shared.notRegistered')}
         </span>
       )}

@@ -1140,10 +1140,10 @@ export const messages = {
     zh: '正在翻译',
   },
   'helpers.m214': {
-    ko: '이미지 만드는 중',
-    en: 'Creating an image',
-    ja: '画像を作成中',
-    zh: '正在生成图片',
+    ko: '이미지 배치하는 중',
+    en: 'Placing images',
+    ja: '画像を配置中',
+    zh: '正在放置图片',
   },
   'helpers.m215': {
     ko: '삽화 만드는 중',
@@ -1690,12 +1690,6 @@ export const messages = {
     en: 'Delete the “{title}” conversation.',
     ja: '「{title}」の会話を削除します。',
     zh: '将删除“{title}”对话。',
-  },
-  'helpers.m327': {
-    ko: '이 도우미 대화를 삭제해요. 진행 중인 작업은 먼저 중지해 주세요.',
-    en: 'Delete this assistant conversation. Stop running tasks first.',
-    ja: 'このアシスタント会話を削除します。進行中のタスクを先に停止してください。',
-    zh: '删除此助手对话。请先停止正在进行的任务。',
   },
   'helpers.m328': {
     ko: '진행 중이거나 대기 중인 요청 {active}개, 종료를 기다리는 외부 요청 {unsettled}개{worker, select, true {, 작업 정리 중} other {}}',

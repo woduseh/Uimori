@@ -181,13 +181,9 @@
   overflow-wrap: anywhere;
 }
 .chat-settings-panel .chat-composition-identity small,
-.chat-settings-panel .chat-composition-count,
 .chat-settings-panel .chat-composition-persona .content-picker-label {
   color: var(--muted);
   font-size: var(--font-small);
-}
-.chat-settings-panel .chat-composition-count {
-  flex-shrink: 0;
 }
 .chat-settings-panel .chat-composition-row > p {
   margin: 0;

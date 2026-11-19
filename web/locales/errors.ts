@@ -785,12 +785,6 @@ export const messages = {
     ja: 'プロバイダーのエラー詳細',
     zh: '提供商错误详情',
   },
-  'errors.providerPrivacy': {
-    ko: '입력한 내용이 포함될 수 있으니 공유하기 전에 확인해 주세요.',
-    en: 'Check before sharing; your input may be included.',
-    ja: '入力内容が含まれる可能性があるため、共有前に確認してください。',
-    zh: '可能包含输入内容，分享前请检查。',
-  },
   'errors.option.thinking': {
     ko: '추론 강도',
     en: 'Reasoning effort',

@@ -1295,12 +1295,6 @@ export const messages = {
     ja: 'アップロードした画像の説明',
     zh: '已上传图片描述',
   },
-  'library.savedChangesApplyToTheNextAutomatic': {
-    ko: '저장하면 다음 이미지 자동 배치에 반영돼요.',
-    en: 'Saved changes apply to the next automatic image placement.',
-    ja: '保存すると次の画像自動配置から反映します。',
-    zh: '保存后从下次图片自动排布起生效。',
-  },
   'library.saveImageInformation': {
     ko: '이미지 정보 저장',
     en: 'Save image information',
@@ -2058,10 +2052,10 @@ export const messages = {
     zh: '未分类的{role}',
   },
   'library.copyAs': {
-    ko: '{role}로 사본 만들기',
-    en: 'Create a copy as {role}',
-    ja: '{role}として複製',
-    zh: '创建为{role}的副本',
+    ko: '{kind, select, bot {봇으로} other {{role}로}} 사본 만들기',
+    en: '{kind, select, other {Create a copy as {role}}}',
+    ja: '{kind, select, other {{role}として複製}}',
+    zh: '{kind, select, other {创建为{role}的副本}}',
   },
   'library.savedResource': {
     ko: '{title} 자료를 저장했어요.',
@@ -2154,10 +2148,10 @@ export const messages = {
     zh: '此聊天的图片，{count, number}张',
   },
   'library.imageMetadataHint': {
-    ko: '이름과 설명은 이미지 선택에 사용해요. 본문용으로 지정하면 자동 배치 후보에 포함돼요.{portrait, select, yes { 현재 대표 이미지는 ‘본문 전용’으로 바꿀 수 없어요.} other {}}',
-    en: 'Names and descriptions are used to select images. Images allowed in the story are candidates for automatic placement.{portrait, select, yes { The current portrait cannot be set to story only.} other {}}',
-    ja: '名前と説明は画像選択に使います。本文用として指定すると自動配置の候補に含まれます。{portrait, select, yes {現在の代表画像は「本文専用」に変更できません。} other {}}',
-    zh: '名称和描述用于选择图片。指定用于正文时会作为自动排布候选。{portrait, select, yes {当前封面无法改为“仅正文”。} other {}}',
+    ko: '현재 대표 이미지는 ‘본문 전용’으로 바꿀 수 없어요.',
+    en: 'The current portrait cannot be set to story only.',
+    ja: '現在の代表画像は「本文専用」に変更できません。',
+    zh: '当前封面无法改为“仅正文”。',
   },
   'library.moreImages': {
     ko: '이미지 더 보기 ({visible, number} / {total, number})',
@@ -2190,10 +2184,10 @@ export const messages = {
     zh: '用户备注与更正{imported, select, yes {，导入的记忆} other {}} {count, number}项',
   },
   'library.noteAttribution': {
-    ko: '{imported, select, yes {가져온 기억: {origin}, } other {}}{linked, select, yes {원문에 연결된 메모} other {첫 장면 전 메모}}',
-    en: '{imported, select, yes {Imported memory: {origin}, } other {}}{linked, select, yes {Note linked to original} other {Note before first scene}}',
-    ja: '{imported, select, yes {インポートした記憶：{origin}、} other {}}{linked, select, yes {原文に関連付けたメモ} other {最初の場面より前のメモ}}',
-    zh: '{imported, select, yes {导入的记忆：{origin}，} other {}}{linked, select, yes {关联原文的备注} other {首个场景前的备注}}',
+    ko: '{imported, select, yes {가져온 기억: {origin}{linked, select, yes {} other {, 첫 장면 전 메모}}} other {첫 장면 전 메모}}',
+    en: '{imported, select, yes {Imported memory: {origin}{linked, select, yes {} other {, Note before first scene}}} other {Note before first scene}}',
+    ja: '{imported, select, yes {インポートした記憶：{origin}{linked, select, yes {} other {、最初の場面より前のメモ}}} other {最初の場面より前のメモ}}',
+    zh: '{imported, select, yes {导入的记忆：{origin}{linked, select, yes {} other {，首个场景前的备注}}} other {首个场景前的备注}}',
   },
   'library.termNumber': {
     ko: '표기 {number, number}',

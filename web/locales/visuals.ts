@@ -931,12 +931,6 @@ export const messages = {
     ja: 'モデル',
     zh: '模型',
   },
-  'visuals.m150': {
-    ko: '이 컷을 생성할 때 사용한 호출이에요.',
-    en: 'Calls used for generating this cut.',
-    ja: 'このカットの生成で使用した呼び出しです。',
-    zh: '生成此画面所用的调用。',
-  },
   'visuals.m154': {
     ko: '차단됨 (Codex 이미지 요청 미전송)',
     en: 'Blocked (no Codex image request sent)',

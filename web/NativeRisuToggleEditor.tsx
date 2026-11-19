@@ -1050,7 +1050,7 @@ export function NativeRisuToggleEditor({
             />
           </label>
           <div className="form-actions">
-            <button type="button" onClick={() => setGroupDialog(null)}>
+            <button type="button" className="secondary" onClick={() => setGroupDialog(null)}>
               {t('native.text_19b2d19bc1')}
             </button>
             <button

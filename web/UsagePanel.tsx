@@ -435,11 +435,13 @@ export function UsagePanel({
               </details>
             </>
           )}
-          <p className="usage-note">
-            {t('visualpanels.detailedTrackingSince', {
-              v0: formatDate(new Date(current.coverageSince), { timeZone: 'Asia/Seoul' }),
-            })}
-          </p>
+          {new Date(`${current.from}T00:00:00+09:00`) < new Date(current.coverageSince) && (
+            <p className="usage-note">
+              {t('visualpanels.detailedTrackingSince', {
+                v0: formatDate(new Date(current.coverageSince), { timeZone: 'Asia/Seoul' }),
+              })}
+            </p>
+          )}
           {current.undated.calls > 0 && (
             <p className="usage-note">
               {t('visualpanels.callsWithUnknownTimeExcludedFromPeriod', {

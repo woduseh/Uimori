@@ -68,7 +68,7 @@ export function ThemeAssetEditor({
   return (
     <section className="theme-asset-editor" aria-label={t('themeAssets.title')}>
       <h4>{t('themeAssets.title')}</h4>
-      <p className="muted">{t('themeAssets.help')}</p>
+      {!assets.length && <p className="muted">{t('themeAssets.help')}</p>}
       {assets.length > 0 && (
         <ul>
           {assets.map((asset) => {

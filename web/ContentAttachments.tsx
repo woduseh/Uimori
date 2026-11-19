@@ -211,7 +211,6 @@ export function ContentAttachments({
               </div>
             </div>
           )}
-          {!pkg?.lore.length && <small className="chat-composition-count">{loreCount}</small>}
           {!automatic && !fixedBot && (
             <IconButton
               className="ghost"

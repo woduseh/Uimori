@@ -66,7 +66,6 @@ export function SaveConflictDialog({
   const reviewActions = savedReview && !Array.isArray(savedReview) ? savedReview.actions : null;
   const reviewContent = (
     <>
-      <p>{t('shared.reviewPreserves')}</p>
       {savedReview && (
         <section
           aria-label={t('shared.currentSaved')}

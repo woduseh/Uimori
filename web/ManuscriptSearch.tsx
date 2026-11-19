@@ -309,7 +309,6 @@ export function ManuscriptSearchPanel({
           {t('transfer.m235')}
         </button>
       )}
-      {result?.coverage === 'building' && <p className="muted">{t('transfer.m236')}</p>}
     </section>
   );
 }

@@ -790,11 +790,7 @@ export function HelperSessionBar(props: Props) {
         }}
       >
         <p>{t('helpers.m326', { title: deleting?.title || t('helpers.m173') })}</p>
-        {impact ? (
-          <p>{t('helpers.m327')}</p>
-        ) : (
-          !readError && <LoadingState presentation="inline" label={t('helpers.m188')} />
-        )}
+        {!impact && !readError && <LoadingState presentation="inline" label={t('helpers.m188')} />}
         {impact && !impact.canDelete && (
           <p role="status">
             {t('helpers.m328', {

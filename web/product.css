@@ -379,14 +379,3 @@
     max-width: 100%;
   }
 }
-/* Marks a setting that lives in this browser only, next to ones the workspace shares. */
-.scope-badge {
-  margin-left: 8px;
-  padding: 2px 8px;
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-small);
-  font-size: var(--font-small);
-  font-weight: 400;
-  color: var(--muted);
-  vertical-align: middle;
-}
