@@ -145,7 +145,7 @@ linuxTest(
     expect(existsSync(join(f.directory, '.exec.sock'))).toBe(true);
     const cli = JSON.stringify(resolve('runner/uimori.mjs'));
     const result = await f.shell.run(f.snapshot, randomUUID(), {
-      command: `cat current/summary.txt; node ${cli} export '{"scope":"library"}'; node ${cli} export '{"scope":"chats","id":"${chat.id}"}'; python3 -c "print('가나다🙂'*1000)"`,
+      command: `cat current/summary.txt; ${process.execPath} ${cli} export '{"scope":"library"}'; ${process.execPath} ${cli} export '{"scope":"chats","id":"${chat.id}"}'; python3 -c "print('가나다🙂'*1000)"`,
       timeoutMs: 31000,
       maxOutputBytes: 512,
     });
@@ -162,7 +162,7 @@ linuxTest(
       'Live other story'
     );
     const exported = await f.shell.run(f.snapshot, 'one-resource', {
-      command: `node ${cli} export '{"scope":"library","id":"${f.resource.id}"}'; grep -o 'Live library body' library/${f.resource.id}/resource.json`,
+      command: `${process.execPath} ${cli} export '{"scope":"library","id":"${f.resource.id}"}'; grep -o 'Live library body' library/${f.resource.id}/resource.json`,
     });
     expect(exported.output).toContain('Live library body');
   }

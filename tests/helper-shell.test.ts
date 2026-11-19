@@ -669,7 +669,7 @@ data=json.loads(p.read_text())
 data['package']['nativeRisu']['card']['creator_notes']='Updated by Linux'
 p.write_text(json.dumps(data,ensure_ascii=False)+'\\n')
 PY
-node ${resolve('runner/uimori.mjs')} apply ${file}`;
+${process.execPath} ${resolve('runner/uimori.mjs')} apply ${file}`;
     const updated = await f.shell.exec(f.task, 'write', script, 5000);
     expect(updated.exitCode).toBe(0);
     expect(updated.applied).toEqual([
@@ -711,7 +711,7 @@ linuxTest('external revision change rejects stale shell edits instead of overwri
   const result = await f.shell.exec(
     f.task,
     'stale',
-    `python3 -c "import json; p='${file}'; x=json.load(open(p)); x['package']['nativeRisu']['card']['creator_notes']='Stale'; open(p,'w').write(json.dumps(x))"; node ${resolve('runner/uimori.mjs')} apply ${file}`,
+    `python3 -c "import json; p='${file}'; x=json.load(open(p)); x['package']['nativeRisu']['card']['creator_notes']='Stale'; open(p,'w').write(json.dumps(x))"; ${process.execPath} ${resolve('runner/uimori.mjs')} apply ${file}`,
     5000
   );
   expect(result.exitCode).toBe(1);
@@ -751,7 +751,7 @@ linuxTest(
     const exported = await f.shell.exec(
       f.workspace.task(task.id),
       'export',
-      `node ${resolve('runner/uimori.mjs')} export '${JSON.stringify({ scope: 'chats', id: chat.id })}' > scratch/export.json; cat INDEX.md | head -5`,
+      `${process.execPath} ${resolve('runner/uimori.mjs')} export '${JSON.stringify({ scope: 'chats', id: chat.id })}' > scratch/export.json; cat INDEX.md | head -5`,
       5000
     );
     expect(exported.exitCode).toBe(0);
@@ -811,7 +811,7 @@ linuxTest('native Linux text edits apply to saved scenes and retain edit revisio
   const source = completedSource(f.store, chat.id, 'Initial scene narrative');
   const file = `chats/${chat.id}/scenes/${source.id}.txt`;
   prepareFiles(f, 'chats', chat.id);
-  const command = `printf '%s' 'Edited scene narrative' > ${file}; node ${resolve('runner/uimori.mjs')} apply ${file}`;
+  const command = `printf '%s' 'Edited scene narrative' > ${file}; ${process.execPath} ${resolve('runner/uimori.mjs')} apply ${file}`;
   const result = await f.shell.exec(f.task, 'scene', command, 5000);
   expect(result.exitCode).toBe(0);
   expect(result.applied).toEqual([expect.objectContaining({ path: file, changed: true })]);
@@ -866,7 +866,7 @@ linuxTest(
     const f = await fixture();
     prepareFiles(f, 'library', f.resource.id);
     const { filename, model } = fileModel(f);
-    const command = `node ${resolve('runner/uimori.mjs')} apply library/${f.resource.id}/resource.json`;
+    const command = `${process.execPath} ${resolve('runner/uimori.mjs')} apply library/${f.resource.id}/resource.json`;
     writeFileSync(filename, JSON.stringify(model));
     const unchanged = await f.shell.exec(f.task, 'format-only', command, 5000);
     expect(unchanged.exitCode).toBe(0);
@@ -897,7 +897,7 @@ linuxTest(
     const { filename, model } = fileModel(f);
     model.package.nativeRisu.card.creator_notes = 'Undo this native change';
     writeFileSync(filename, JSON.stringify(model));
-    const command = `node ${resolve('runner/uimori.mjs')} apply library/${f.resource.id}/resource.json`;
+    const command = `${process.execPath} ${resolve('runner/uimori.mjs')} apply library/${f.resource.id}/resource.json`;
     const applied = await f.shell.exec(f.task, 'save', command + '\n' + command, 5000);
     expect(applied.exitCode).toBe(0);
     expect(applied.applied).toHaveLength(1);
@@ -958,7 +958,7 @@ linuxTest(
     const saved = await f.shell.exec(
       f.task,
       'save-clone',
-      `node ${resolve('runner/uimori.mjs')} apply ${relative}`,
+      `${process.execPath} ${resolve('runner/uimori.mjs')} apply ${relative}`,
       5000
     );
     expect(saved.exitCode).toBe(0);
@@ -987,7 +987,7 @@ linuxTest(
     const manifest = join(filename, '..', 'manifest.json');
     rmSync(manifest);
     mkdirSync(manifest);
-    const command = `node ${resolve('runner/uimori.mjs')} apply library/${f.resource.id}/resource.json`;
+    const command = `${process.execPath} ${resolve('runner/uimori.mjs')} apply library/${f.resource.id}/resource.json`;
     const result = await f.shell.exec(f.task, 'save', command + '\n' + command, 5000);
     expect(result.exitCode).toBe(0);
     expect(result.applied).toEqual([
@@ -1020,7 +1020,7 @@ linuxTest('task cancellation aborts the runner before delayed file edits and app
   const pending = f.shell.exec(
     f.task,
     'cancel',
-    `touch scratch/started; sleep 0.4; printf BAD > ${file}; node ${resolve('runner/uimori.mjs')} apply ${file}`,
+    `touch scratch/started; sleep 0.4; printf BAD > ${file}; ${process.execPath} ${resolve('runner/uimori.mjs')} apply ${file}`,
     5000,
     controller.signal
   );
@@ -1043,7 +1043,7 @@ linuxTest(
   'CLI forwards JSON, files and stdin while retaining receipts outside stdout',
   async () => {
     const f = await fixture();
-    const cli = `node ${resolve('runner/uimori.mjs')}`;
+    const cli = `${process.execPath} ${resolve('runner/uimori.mjs')}`;
     const calls: { name: string; args: Record<string, unknown>; operationId: string }[] = [];
     const result = await f.shell.exec(
       f.task,
@@ -1106,7 +1106,7 @@ linuxTest(
   'CLI accepts standard flags and exact operation lookup without a schema round trip',
   async () => {
     const f = await fixture();
-    const cli = `node ${resolve('runner/uimori.mjs')}`;
+    const cli = `${process.execPath} ${resolve('runner/uimori.mjs')}`;
     const calls: { name: string; args: Record<string, unknown> }[] = [];
     const executed = await f.shell.exec(
       f.task,
@@ -1167,7 +1167,7 @@ linuxTest(
   'unknown app outcome stops later bridge writes and survives redirected output',
   async () => {
     const f = await fixture();
-    const cli = `node ${resolve('runner/uimori.mjs')}`;
+    const cli = `${process.execPath} ${resolve('runner/uimori.mjs')}`;
     const applied = { operationId: 'shell:unknown:app:1', outcome: 'succeeded' };
     prepareFiles(f, 'library', f.resource.id);
     const invoke = vi.fn(async () => ({
@@ -1209,7 +1209,7 @@ linuxTest('shell completion cancels in-flight app work and waits for its outcome
   const result = await f.shell.exec(
     f.task,
     'pending',
-    `node ${resolve('runner/uimori.mjs')} call slow '{}' > scratch/result.json &
+    `${process.execPath} ${resolve('runner/uimori.mjs')} call slow '{}' > scratch/result.json &
 while [ ! -f scratch/in-flight ]; do sleep 0.01; done`,
     5000,
     undefined,
@@ -1238,7 +1238,7 @@ linuxTest(
   async () => {
     const f = await fixture();
     const file = `library/${f.resource.id}/resource.json`;
-    const cli = `node ${resolve('runner/uimori.mjs')}`;
+    const cli = `${process.execPath} ${resolve('runner/uimori.mjs')}`;
     prepareFiles(f, 'library', f.resource.id);
     const saveExternal = (name: string) => {
       const saved = readResource(f.store, 'content', f.resource.id);
@@ -1318,7 +1318,7 @@ linuxTest(
     const chat = createFixtureChat(f.store, 'Refresh scene');
     const source = completedSource(f.store, chat.id, 'Original scene');
     const file = `chats/${chat.id}/scenes/${source.id}.txt`;
-    const cli = `node ${resolve('runner/uimori.mjs')}`;
+    const cli = `${process.execPath} ${resolve('runner/uimori.mjs')}`;
     prepareFiles(f, 'chats', chat.id);
     const filename = join(f.root, 'tasks', f.task.id, file);
     const sceneIndex = () =>
@@ -1404,7 +1404,7 @@ linuxTest(
     const chat = createFixtureChat(f.store, 'Replaced scene');
     const source = completedSource(f.store, chat.id, 'Historical original');
     const file = `chats/${chat.id}/scenes/${source.id}.txt`;
-    const cli = `node ${resolve('runner/uimori.mjs')}`;
+    const cli = `${process.execPath} ${resolve('runner/uimori.mjs')}`;
     prepareFiles(f, 'chats', chat.id);
     const taskDir = join(f.root, 'tasks', f.task.id);
     writeFileSync(join(taskDir, file), 'Preserved local draft');
