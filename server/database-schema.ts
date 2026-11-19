@@ -5,7 +5,7 @@ import { initManuscriptSearch } from './search-schema.js';
 import type { DatabaseSync } from 'node:sqlite';
 import { initDatabaseReadIndexes } from './database-performance.js';
 import { initIllustrations } from './illustrations.js';
-import { initOutline, initOutlineWorkspace } from './outline-store.js';
+import { initOutline, initOutlineFocus, initOutlineWorkspace } from './outline-store.js';
 import { initLoreContextDefaults } from './lore-context-defaults.js';
 import { initStoryGuide } from './story-guide-store.js';
 import { initRequestFilesSchema } from './request-file-storage.js';
@@ -81,6 +81,7 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
     initExecutionDiagnostics(db);
     initThemeAssets(db);
     initLibraryFolderCovers(db);
+    initOutlineFocus(db);
     pruneThemeAssets(db, 'abandoned');
     return;
   }
@@ -120,6 +121,7 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
     initReadingState(db);
     initPushSchema(db);
     initOutlineWorkspace(db);
+    initOutlineFocus(db);
     initDatabaseReadIndexes(db);
     db.exec(`PRAGMA user_version=${DATABASE_SCHEMA_VERSION}; COMMIT`);
   } catch (error) {

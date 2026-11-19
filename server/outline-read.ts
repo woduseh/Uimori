@@ -108,6 +108,11 @@ function previews(store: Store, nodes: Node[]) {
   });
 }
 
+const focusId = (store: Store, chatId: string): string | null =>
+  (store.db.prepare('SELECT node_id FROM outline_focus WHERE chat_id=?').get(chatId)?.node_id as
+    | string
+    | undefined) ?? null;
+
 function sourceReferences(store: Store, nodes: Node[]) {
   return store.db
     .prepare(`SELECT w.node_id AS nodeId,COALESCE(w.source_id,c.source_revision) AS sourceRevision,
@@ -367,6 +372,11 @@ export function readHelperOutline(
     });
     return section === 'related'
       ? fitList(nodes, () => ({ ...page(), kind: 'related' as const, items: nodes }))
-      : fitList(nodes, () => ({ ...page(), kind: 'nodes' as const, nodes }));
+      : fitList(nodes, () => ({
+          ...page(),
+          kind: 'nodes' as const,
+          ...(mode === 'overview' ? { focusId: focusId(store, chatId) } : {}),
+          nodes,
+        }));
   });
 }

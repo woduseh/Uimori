@@ -18,7 +18,7 @@ import {
 import { DEFAULT_LORE_CONTEXT, measureLoreText, type LorePlacement } from './lore-context.js';
 import { countTextTokens, textTokenExcerpt } from './text-tokens.js';
 import { isTokenizerProfileId, type TokenizerProfileId } from './tokenizer-profiles.js';
-import { OUTLINE_CONTRACT, type OutlineSnapshot } from './outline.js';
+import { outlineContract, type OutlineSnapshot } from './outline.js';
 import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
 import { PROMPT_COMPILER_VERSIONS } from './risu-prompt.js';
 import { packageImages } from './package-images.js';
@@ -311,7 +311,7 @@ export function buildMainInput(
   }
   if (snapshot.outline) {
     input.outline = structuredClone(snapshot.outline);
-    input.contract += `\n${OUTLINE_CONTRACT}`;
+    input.contract += `\n${outlineContract(snapshot.outline)}`;
   }
   // Rank bounded discovery metadata; full bodies remain reachable through the read tools.
   const visibleHistory = projectedLogicalHistory(

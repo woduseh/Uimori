@@ -11,13 +11,16 @@ import {
   OUTLINE_INTENT_MAX,
   OUTLINE_LEVELS,
   OUTLINE_LEVEL_LABELS,
+  OUTLINE_NEIGHBOR_INTENT_MAX,
   OUTLINE_TITLE_MAX,
   outlineParentAllowed,
   outlineSnapshotNode,
   outlineTree,
   outlineWritable,
   type OutlineDetail,
+  type OutlineFocus,
   type OutlineLevel,
+  type OutlineNeighbors,
   type OutlineNode,
   type OutlineProgress,
   type OutlineSnapshot,
@@ -41,25 +44,51 @@ const NODE_SELECT = `SELECT n.*,c.id AS progress_command_id,c.status AS progress
   LEFT JOIN runs r ON r.id=c.run_id`;
 const WRITINGS_SELECT = `SELECT DISTINCT w.node_id AS nodeId,s.id AS sourceRevision,
   COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash) AS sourceHash,
-  w.created_at AS createdAt
+  w.origin AS origin,w.created_at AS createdAt
   FROM outline_writings w JOIN outline_nodes n ON n.id=w.node_id
   LEFT JOIN scene_commands c ON c.id=w.command_id
   JOIN sources s ON s.id=COALESCE(w.source_id,c.source_revision)`;
+const HEAD_ANCESTRY = `WITH RECURSIVE history(id) AS (
+    SELECT head_revision FROM chats WHERE id=? AND head_revision IS NOT NULL UNION ALL
+    SELECT s.parent_revision FROM sources s JOIN history h ON s.id=h.id WHERE s.parent_revision IS NOT NULL
+  ) SELECT id FROM history`;
 /** One request's frozen input keeps a bounded amount of already-written history. */
 const WRITTEN_LIMIT = 40;
 const BATCH_LIMIT = 200;
-type OutlineSelection = { path: OutlineNode[]; children: OutlineNode[]; related: OutlineNode[] };
+const REVIEW_SEED_SOURCES = 3;
+type OutlineSelection = {
+  path: OutlineNode[];
+  children: OutlineNode[];
+  related: OutlineNode[];
+  neighbors: OutlineNeighbors;
+};
 
 /** Reuse one immutable read's lookup tables; edits build a new index from their live nodes. */
 function outlineIndex(nodes: readonly OutlineNode[]) {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const children = new Map<string, OutlineNode[]>();
+  const roots: OutlineNode[] = [];
   for (const node of nodes) {
-    if (node.parentId === null) continue;
+    if (node.parentId === null) {
+      roots.push(node);
+      continue;
+    }
     const siblings = children.get(node.parentId) ?? [];
     siblings.push(node);
     children.set(node.parentId, siblings);
   }
+  const neighbors = (node: OutlineNode): OutlineNeighbors => {
+    const peers = (node.parentId === null ? roots : (children.get(node.parentId) ?? [])).filter(
+      (item) => item.level === node.level
+    );
+    const index = peers.findIndex((item) => item.id === node.id);
+    const previous = peers[index - 1],
+      next = peers[index + 1];
+    return {
+      ...(previous ? { previous: outlineSnapshotNode(previous, OUTLINE_NEIGHBOR_INTENT_MAX) } : {}),
+      ...(next ? { next: outlineSnapshotNode(next, OUTLINE_NEIGHBOR_INTENT_MAX) } : {}),
+    };
+  };
   const selection = (id: string): OutlineSelection => {
     const path: OutlineNode[] = [];
     for (let node = byId.get(id); node; ) {
@@ -71,7 +100,8 @@ function outlineIndex(nodes: readonly OutlineNode[]) {
     const related = [...new Set([...path, ...direct].flatMap((node) => node.relatedIds ?? []))]
       .filter((ref) => !included.has(ref))
       .flatMap((ref) => (byId.get(ref) ? [byId.get(ref)!] : []));
-    return { path, children: direct, related };
+    const target = path.at(-1);
+    return { path, children: direct, related, neighbors: target ? neighbors(target) : {} };
   };
   const descendants = (id: string): OutlineNode[] => {
     const result: OutlineNode[] = [];
@@ -141,6 +171,19 @@ export function initOutlineWorkspace(db: DatabaseSync) {
   `);
 }
 
+/** Additive within schema 15 so that a rolled-back app, which ignores them, still opens the database. */
+export function initOutlineFocus(db: DatabaseSync) {
+  db.exec(`CREATE TABLE IF NOT EXISTS outline_focus (
+    chat_id TEXT PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE,
+    node_id TEXT NOT NULL REFERENCES outline_nodes(id) ON DELETE CASCADE,
+    updated_at TEXT NOT NULL)`);
+  const columns = db.prepare('PRAGMA table_info(outline_writings)').all();
+  if (!columns.some((column) => column.name === 'origin'))
+    db.exec(
+      "ALTER TABLE outline_writings ADD COLUMN origin TEXT NOT NULL DEFAULT 'planned' CHECK(origin IN ('planned','focus'))"
+    );
+}
+
 /** Retained as a receipt-origin tag for replay comparison, not two levels of edit permission. */
 export type OutlineAuthority = 'user' | 'model';
 export type OutlineOperation =
@@ -159,6 +202,7 @@ export type OutlineOperation =
       op: 'update';
       id: string;
       expectedRevision: number;
+      level?: OutlineLevel;
       title?: string;
       intent?: string;
       fixed?: boolean;
@@ -239,8 +283,18 @@ export function parseOutlineOperations(value: unknown): OutlineOperation[] {
       };
     }
     if (body.op === 'update') {
-      fields(body, ['op', 'id', 'expectedRevision', 'title', 'intent', 'fixed', 'relatedIds']);
+      fields(body, [
+        'op',
+        'id',
+        'expectedRevision',
+        'level',
+        'title',
+        'intent',
+        'fixed',
+        'relatedIds',
+      ]);
       if (
+        body.level === undefined &&
         body.title === undefined &&
         body.intent === undefined &&
         body.fixed === undefined &&
@@ -251,6 +305,7 @@ export function parseOutlineOperations(value: unknown): OutlineOperation[] {
         op: 'update' as const,
         id: text(body.id, 'outline node', 100),
         expectedRevision: number(body.expectedRevision, 'outline revision'),
+        ...(body.level === undefined ? {} : { level: level(body.level) }),
         ...(body.title === undefined
           ? {}
           : { title: text(body.title, 'outline title', OUTLINE_TITLE_MAX) }),
@@ -341,7 +396,34 @@ export class OutlineStore {
       .prepare('SELECT related_id FROM outline_links WHERE node_id=? ORDER BY position')
       .all(id)
       .map((link) => String(link.related_id));
-    return this.map(row, relatedIds, this.writings(id));
+    const current = this.headAncestry(row.chat_id);
+    return this.map(
+      row,
+      relatedIds,
+      (
+        this.db
+          .prepare(`${WRITINGS_SELECT} WHERE w.node_id=? ORDER BY w.created_at,w.id`)
+          .all(id) as Row[]
+      ).map((writing) => this.writing(writing, current))
+    );
+  }
+  private headAncestry(chatId: string): Set<string> {
+    return new Set(
+      this.db
+        .prepare(HEAD_ANCESTRY)
+        .all(chatId)
+        .map((row) => String(row.id))
+    );
+  }
+  private writing(row: Row, current: Set<string>): OutlineWriting {
+    return {
+      nodeId: row.nodeId,
+      sourceRevision: row.sourceRevision,
+      sourceHash: row.sourceHash,
+      origin: row.origin,
+      current: current.has(row.sourceRevision),
+      createdAt: row.createdAt,
+    };
   }
   nodes(chatId: string): OutlineNode[] {
     const rows = this.db.prepare(`${NODE_SELECT} WHERE n.chat_id=?`).all(chatId) as Row[];
@@ -356,11 +438,12 @@ export class OutlineStore {
       links.set(id, related);
     }
     const writings = new Map<string, OutlineWriting[]>();
+    const current = this.headAncestry(chatId);
     for (const row of this.db
       .prepare(`${WRITINGS_SELECT} WHERE n.chat_id=? ORDER BY w.created_at,w.id`)
-      .all(chatId) as OutlineWriting[]) {
+      .all(chatId) as Row[]) {
       const sources = writings.get(row.nodeId) ?? [];
-      sources.push(row);
+      sources.push(this.writing(row, current));
       writings.set(row.nodeId, sources);
     }
     return outlineTree(
@@ -369,13 +452,48 @@ export class OutlineStore {
   }
   detail(chatId: string): OutlineDetail {
     this.store.chat(chatId);
-    return { chatId, nodes: this.nodes(chatId) };
+    return { chatId, focusId: this.focusId(chatId), nodes: this.nodes(chatId) };
   }
 
-  writings(nodeId: string): OutlineWriting[] {
-    return this.db
-      .prepare(`${WRITINGS_SELECT} WHERE w.node_id=? ORDER BY w.created_at,w.id`)
-      .all(nodeId) as OutlineWriting[];
+  // -------------------------------------------------------------------------
+  // Current unit for ordinary requests
+  // -------------------------------------------------------------------------
+  private focusId(chatId: string): string | null {
+    const row = this.db.prepare('SELECT node_id FROM outline_focus WHERE chat_id=?').get(chatId);
+    return row ? String(row.node_id) : null;
+  }
+  focus(chatId: string): OutlineFocus {
+    this.store.chat(chatId);
+    const row = this.db
+      .prepare(
+        'SELECT n.id,n.level,n.title FROM outline_focus f JOIN outline_nodes n ON n.id=f.node_id WHERE f.chat_id=?'
+      )
+      .get(chatId);
+    return row
+      ? { nodeId: String(row.id), level: row.level as OutlineLevel, title: String(row.title) }
+      : null;
+  }
+  setFocus(chatId: string, value: unknown): OutlineFocus {
+    const body = record(value);
+    fields(body, ['nodeId']);
+    const nodeId = optionalId(body.nodeId, 'outline node');
+    return this.store.transaction(() => {
+      this.store.chat(chatId);
+      if (nodeId === null) this.db.prepare('DELETE FROM outline_focus WHERE chat_id=?').run(chatId);
+      else this.placeFocus(chatId, nodeId);
+      this.store.event(chatId, 'outline.updated', chatId);
+      return this.focus(chatId);
+    });
+  }
+  private placeFocus(chatId: string, nodeId: string) {
+    const node = this.db.prepare('SELECT chat_id FROM outline_nodes WHERE id=?').get(nodeId);
+    if (!node) throw new HttpError(404, '구성 항목을 찾을 수 없어요.');
+    if (node.chat_id !== chatId) throw new HttpError(400, '다른 채팅의 구성 항목이에요.');
+    this.db
+      .prepare(
+        'INSERT INTO outline_focus(chat_id,node_id,updated_at) VALUES(?,?,?) ON CONFLICT(chat_id) DO UPDATE SET node_id=excluded.node_id,updated_at=excluded.updated_at'
+      )
+      .run(chatId, nodeId, now());
   }
   private setRelated(id: string, ids: string[]) {
     const node = this.node(id);
@@ -399,16 +517,20 @@ export class OutlineStore {
       nodes = this.nodes(node.chatId);
     const index = outlineIndex(nodes);
     const selection = index.selection(id);
-    const { path, children, related } = selection;
+    const { path, children, related, neighbors } = selection;
     return {
       expectedRevision: node.revision,
       planHash: plannedHash(selection),
       outline: sealOutlineSnapshot({
         version: 1,
-        path: path.map(outlineSnapshotNode),
-        children: children.map(outlineSnapshotNode),
-        related: related.map(outlineSnapshotNode),
-        sources: index.sources(id),
+        path: path.map((item) => outlineSnapshotNode(item)),
+        children: children.map((item) => outlineSnapshotNode(item)),
+        related: related.map((item) => outlineSnapshotNode(item)),
+        neighbors,
+        sources: index
+          .sources(id)
+          .filter((source) => source.current)
+          .slice(-WRITTEN_LIMIT),
         written: [],
       }),
     };
@@ -430,6 +552,7 @@ export class OutlineStore {
     if (Number(node.revision) !== target.expectedRevision)
       throw new HttpError(409, '선택한 구성이 변경됐어요. 다시 선택해 주세요.');
     return this.store.transaction(() => {
+      const nodes = this.nodes(chatId);
       const overview = readHelperOutline(this.store, chatId, {
         mode: 'subtree',
         nodeId: target.nodeId,
@@ -443,17 +566,18 @@ export class OutlineStore {
         overview.coverage.excludedByDepth > 0 ||
         overview.nodes.some((item) => item.previewTruncated);
       if (target.purpose === 'review') {
-        const page = readHelperOutline(this.store, chatId, {
-          mode: 'detail',
-          section: 'writings',
-          nodeId: target.nodeId,
-          limit: 3,
-        });
-        if (page.kind !== 'writings' || !page.items.length)
-          throw new HttpError(409, '먼저 이 구성이나 하위 항목에 원문을 작성해 주세요.');
-        partial ||= page.nextOffset !== null;
+        const current = outlineIndex(nodes)
+          .sources(target.nodeId!)
+          .filter((source) => source.current);
+        if (!current.length)
+          throw new HttpError(
+            409,
+            '현재 분기에는 이 구성이나 하위 항목에 연결된 원문이 없어요. 먼저 원문을 작성해 주세요.'
+          );
+        const items = current.slice(-REVIEW_SEED_SOURCES);
+        partial ||= current.length > items.length;
         let remaining = Math.min(1500, Math.floor(inputTokenLimit / 8));
-        for (const ref of page.items) {
+        for (const ref of items) {
           if (!ref.sourceHash) {
             partial = true;
             continue;
@@ -461,7 +585,7 @@ export class OutlineStore {
           const source = this.store.source(ref.sourceRevision);
           const excerpt = textTokenExcerpt(
             source.text,
-            Math.floor(remaining / (page.items.length - sources.length))
+            Math.floor(remaining / (items.length - sources.length))
           );
           remaining -= excerpt.tokens;
           sources.push({
@@ -495,6 +619,19 @@ export class OutlineStore {
   private assertIdle(node: OutlineNode) {
     if (node.progress.state === 'writing')
       throw new HttpError(409, '진행 중인 원문 생성을 먼저 취소해 주세요.');
+  }
+  private assertLevelChange(chatId: string, node: OutlineNode, next: OutlineLevel) {
+    const parent = node.parentId === null ? null : this.node(node.parentId);
+    if (!outlineParentAllowed(parent?.level ?? null, next))
+      throw new HttpError(400, '상위 구성보다 작은 수준만 고를 수 있어요.');
+    const children = this.db
+      .prepare('SELECT level FROM outline_nodes WHERE chat_id=? AND parent_id=?')
+      .all(chatId, node.id)
+      .map((row) => row.level as OutlineLevel);
+    if (children.some((child) => !outlineParentAllowed(next, child)))
+      throw new HttpError(400, '하위 구성보다 큰 수준만 고를 수 있어요.');
+    if (!outlineWritable(next) && node.progress.state === 'scheduled')
+      throw new HttpError(409, '집필 예약이 있는 구성은 집필 단위가 아닌 수준으로 바꿀 수 없어요.');
   }
   private siblingPosition(chatId: string, parentId: string | null): number {
     const row = this.db
@@ -620,11 +757,14 @@ export class OutlineStore {
           throw new HttpError(409, '구성이 변경됐어요. 최신 구성을 확인한 뒤 다시 시도해 주세요.');
         if (operation.op === 'update') {
           this.assertIdle(node);
+          if (operation.level !== undefined && operation.level !== node.level)
+            this.assertLevelChange(chatId, node, operation.level);
           this.db
             .prepare(
-              'UPDATE outline_nodes SET title=?,intent=?,fixed=?,revision=revision+1,updated_at=? WHERE id=? AND revision=?'
+              'UPDATE outline_nodes SET level=?,title=?,intent=?,fixed=?,revision=revision+1,updated_at=? WHERE id=? AND revision=?'
             )
             .run(
+              operation.level ?? node.level,
               operation.title ?? node.title,
               operation.intent ?? node.intent,
               (operation.fixed ?? node.fixed) ? 1 : 0,
@@ -782,6 +922,7 @@ export class OutlineStore {
           'INSERT INTO outline_writings(id,node_id,command_id,node_revision,plan_hash,created_at) VALUES(?,?,?,?,?,?)'
         )
         .run(randomUUID(), node.id, command.id, node.revision, this.planHash(node.id), now());
+      this.placeFocus(node.chatId, node.id);
       this.store.event(node.chatId, 'outline.updated', node.chatId);
       return command;
     });
@@ -806,36 +947,72 @@ export class OutlineStore {
         409,
         '구성의 집필 예약이 취소됐어요. 최신 구성을 확인하고 다시 집필해 주세요.'
       );
-    const index = outlineIndex(nodes);
-    const selection = index.selection(target.id);
-    const { path, children, related } = selection;
+    const selection = outlineIndex(nodes).selection(target.id);
     this.db
       .prepare('UPDATE outline_writings SET node_revision=?,plan_hash=? WHERE command_id=?')
       .run(target.revision, plannedHash(selection), sceneCommandId);
+    return this.compose(nodes, target, snapshot, false);
+  }
+  freezeFocus(snapshot: RunSnapshot): OutlineSnapshot | undefined {
+    const nodeId = this.focusId(snapshot.chatId);
+    if (!nodeId) return undefined;
+    const nodes = this.nodes(snapshot.chatId);
+    const target = nodes.find((item) => item.id === nodeId);
+    return target ? this.compose(nodes, target, snapshot, true) : undefined;
+  }
+  private compose(
+    nodes: OutlineNode[],
+    target: OutlineNode,
+    snapshot: RunSnapshot,
+    focus: boolean
+  ): OutlineSnapshot {
+    const index = outlineIndex(nodes);
+    const { path, children, related, neighbors } = index.selection(target.id);
+    // The run's own ancestry, not the live head: a replacement continues from an older parent.
     const ancestry = new Set(snapshot.history.map((entry) => entry.revision));
     const written = nodes
-      .filter(
-        (item) =>
-          item.id !== target.id &&
-          item.progress.state === 'written' &&
-          item.progress.sourceRevision &&
-          ancestry.has(item.progress.sourceRevision)
-      )
-      .slice(-WRITTEN_LIMIT)
-      .map((item) => ({
-        id: item.id,
-        level: item.level,
-        title: item.title,
-        sourceRevision: item.progress.sourceRevision as string,
-      }));
+      .filter((item) => item.id !== target.id)
+      .flatMap((item) => {
+        const latest = (item.writings ?? [])
+          .filter((source) => ancestry.has(source.sourceRevision))
+          .at(-1);
+        return latest
+          ? [
+              {
+                id: item.id,
+                level: item.level,
+                title: item.title,
+                sourceRevision: latest.sourceRevision,
+              },
+            ]
+          : [];
+      })
+      .slice(-WRITTEN_LIMIT);
     return sealOutlineSnapshot({
       version: 1,
-      path: path.map(outlineSnapshotNode),
-      children: children.map(outlineSnapshotNode),
-      ...(related.length ? { related: related.map(outlineSnapshotNode) } : {}),
-      sources: index.sources(target.id).filter((source) => ancestry.has(source.sourceRevision)),
+      ...(focus ? { focus: true as const } : {}),
+      path: path.map((item) => outlineSnapshotNode(item)),
+      children: children.map((item) => outlineSnapshotNode(item)),
+      ...(related.length ? { related: related.map((item) => outlineSnapshotNode(item)) } : {}),
+      ...(neighbors.previous || neighbors.next ? { neighbors } : {}),
+      sources: index
+        .sources(target.id)
+        .filter((source) => ancestry.has(source.sourceRevision))
+        .slice(-WRITTEN_LIMIT),
       written,
     });
+  }
+  linkFocusSource(source: { id: string; chatId: string }, outline: OutlineSnapshot | undefined) {
+    const nodeId = outline?.focus ? outline.path.at(-1)?.id : undefined;
+    if (!nodeId) return;
+    const node = this.db.prepare('SELECT chat_id FROM outline_nodes WHERE id=?').get(nodeId);
+    if (!node || node.chat_id !== source.chatId) return;
+    this.db
+      .prepare(
+        "INSERT INTO outline_writings(id,node_id,source_id,origin,created_at) VALUES(?,?,?,'focus',?)"
+      )
+      .run(randomUUID(), nodeId, source.id, now());
+    this.store.event(source.chatId, 'outline.updated', source.chatId);
   }
 }
 
@@ -846,5 +1023,10 @@ export function freezeOutline(
   snapshot: RunSnapshot
 ): RunSnapshot {
   const outline = store.outline.freeze(sceneCommandId, snapshot);
+  return outline ? { ...snapshot, outline } : snapshot;
+}
+
+export function freezeOutlineFocus(store: Store, snapshot: RunSnapshot): RunSnapshot {
+  const outline = store.outline.freezeFocus(snapshot);
   return outline ? { ...snapshot, outline } : snapshot;
 }

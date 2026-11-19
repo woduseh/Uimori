@@ -41,12 +41,6 @@ export const messages = {
     ja: '続く行動と反応',
     zh: '接下来的行动与反应',
   },
-  'reader.outlineWritingHelp': {
-    ko: '작성 도움말',
-    en: 'Writing guidance',
-    ja: '記入のヒント',
-    zh: '编写提示',
-  },
   'reader.requestKeepOutlineCondition': {
     ko: '상세화할 때 유지하도록 요청',
     en: 'Ask to preserve this when elaborating',

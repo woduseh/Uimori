@@ -6,8 +6,12 @@ import {
   BookOpen,
   ChevronDown,
   ChevronRight,
+  CircleAlert,
   FileText,
+  Flag,
   GitBranch,
+  LoaderCircle,
+  Search,
   ListTree,
   Plus,
   Sparkles,
@@ -23,7 +27,8 @@ import {
 import { api, ApiError } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
-import { EditIcon } from './ui-icons.js';
+import { CloseIcon, EditIcon } from './ui-icons.js';
+import { Dialog } from './Dialog.js';
 import { DismissibleError } from './DismissibleError.js';
 import { Prose } from './Prose.js';
 import { OUTLINE_REFRESH_EVENT, type OutlineHelperRequest } from './outline-helper.js';
@@ -31,12 +36,14 @@ import {
   OUTLINE_LEVELS,
   OUTLINE_INTENT_MAX,
   OUTLINE_TITLE_MAX,
+  outlineLevelIndex,
   outlineParentAllowed,
   outlineWritable,
   type OutlineDetail,
   type OutlineLevel,
   type OutlineNode,
   type OutlineSnapshot,
+  type OutlineWriting,
 } from '../core/outline.js';
 import type { StoryState } from './useStory.js';
 import type { RunReceipt } from '../core/types.js';
@@ -93,6 +100,13 @@ const fromNode = (node: OutlineNode): Draft => ({
   relatedIds: node.relatedIds ?? [],
   fixed: node.fixed,
 });
+const currentWritings = (node: OutlineNode) =>
+  (node.writings ?? []).filter((source) => source.current);
+const uniqueSources = (list: OutlineNode[]): OutlineWriting[] => [
+  ...new Map(
+    list.flatMap((node) => node.writings ?? []).map((source) => [source.sourceRevision, source])
+  ).values(),
+];
 const rejected = (error: unknown) =>
   error instanceof ApiError &&
   error.status >= 400 &&
@@ -134,6 +148,8 @@ export function OutlinePanel({
   const [requestText, setRequestText] = useState('');
   const [previousRequest, setPreviousRequest] = useState('');
   const [previewing, setPreviewing] = useState(false);
+  const [deleting, setDeleting] = useState<OutlineNode | null>(null);
+  const [relatedQuery, setRelatedQuery] = useState('');
   const mounted = useRef(true),
     sending = useRef(false),
     loadGeneration = useRef(0);
@@ -311,6 +327,7 @@ export function OutlinePanel({
       if (!remember(null, operation.body.idempotencyKey)) return;
       if (operation.kind === 'write' && mounted.current) {
         retain(`${prefix}:additional-instruction:${operation.nodeId}`, null);
+        dispatchEvent(new Event(OUTLINE_REFRESH_EVENT));
         await state.refresh(chatId);
         if (mounted.current) onClose();
       }
@@ -389,6 +406,64 @@ export function OutlinePanel({
       )
     );
   }
+  async function changeFocus(nodeId: string | null) {
+    if (disabled) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/chats/${chatId}/outline/focus`, { nodeId }, 'PUT');
+      dispatchEvent(new Event(OUTLINE_REFRESH_EVENT));
+    } catch (cause) {
+      if (mounted.current) setError((cause as Error).message);
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  }
+  function saveDraft(current: Draft) {
+    if (adding || !selected) {
+      apply([
+        {
+          op: 'create',
+          level: current.level,
+          parentId: current.parentId,
+          title: current.title,
+          intent: current.intent,
+          relatedIds: current.relatedIds,
+        },
+      ]);
+      return;
+    }
+    const update = {
+      op: 'update',
+      id: selected.id,
+      expectedRevision: current.revision,
+      title: current.title,
+      intent: current.intent,
+      relatedIds: current.relatedIds,
+      fixed: current.fixed,
+      ...(current.level !== selected.level ? { level: current.level } : {}),
+    };
+    if (current.parentId === selected.parentId) {
+      apply([update]);
+      return;
+    }
+    const position =
+      Math.max(
+        -1,
+        ...nodes.filter((node) => node.parentId === current.parentId).map((node) => node.position)
+      ) + 1;
+    const move = { op: 'move', id: selected.id, parentId: current.parentId, position };
+    // A larger level must reach its new parent before the parent check sees it, and vice versa.
+    const moveFirst = outlineLevelIndex(current.level) < outlineLevelIndex(selected.level);
+    apply(
+      moveFirst
+        ? [
+            { ...move, expectedRevision: current.revision },
+            { ...update, expectedRevision: (current.revision ?? 0) + 1 },
+          ]
+        : [update, { ...move, expectedRevision: (current.revision ?? 0) + 1 }]
+    );
+  }
   function help(purpose: 'compose' | 'review', node: OutlineNode | null = selected) {
     onHelp({
       key: crypto.randomUUID(),
@@ -447,14 +522,42 @@ export function OutlinePanel({
                     aria-current={selectedId === node.id ? 'true' : undefined}
                     onClick={() => choose(node.id)}
                   >
-                    <span className="outline-node-kind">{t(`prompts.level.${node.level}`)}</span>
-                    <span className="outline-title">{node.title}</span>
-                    <span className="outline-node-mark">
-                      {node.fixed && <Pin size={12} aria-label={t('prompts.uiKeepCondition')} />}
-                      {!!node.writings?.length && (
-                        <FileText size={12} aria-label={t('prompts.uiHasSourceText')} />
-                      )}
+                    <span className="outline-node-head">
+                      <span className="outline-node-kind">{t(`prompts.level.${node.level}`)}</span>
+                      <span className="outline-node-mark">
+                        {progress.has(node.id) && (
+                          <small
+                            className="outline-node-progress"
+                            aria-label={t('prompts.outlineTreeProgress', progress.get(node.id)!)}
+                          >
+                            {formatNumber(progress.get(node.id)!.count)}/
+                            {formatNumber(progress.get(node.id)!.total)}
+                          </small>
+                        )}
+                        {outline?.focusId === node.id && (
+                          <Flag size={12} aria-label={t('prompts.outlineCurrentUnit')} />
+                        )}
+                        {node.fixed && <Pin size={12} aria-label={t('prompts.uiKeepCondition')} />}
+                        {node.progress.state === 'writing' ? (
+                          <LoaderCircle
+                            size={12}
+                            className="activity-spinner"
+                            aria-label={t('prompts.uiWriting2')}
+                          />
+                        ) : node.progress.state === 'failed' ? (
+                          <CircleAlert
+                            size={12}
+                            className="outline-node-alert"
+                            aria-label={t('prompts.outlineWritingFailed')}
+                          />
+                        ) : (
+                          !!currentWritings(node).length && (
+                            <FileText size={12} aria-label={t('prompts.uiHasSourceText')} />
+                          )
+                        )}
+                      </span>
                     </span>
+                    <span className="outline-title">{node.title}</span>
                   </button>
                 </div>
                 {children && !collapsed && tree(node.id, depth + 1)}
@@ -464,17 +567,35 @@ export function OutlinePanel({
       </ul>
     );
   }
-  const ownSources = selected?.writings ?? [];
+  const ownSources = selected ? currentWritings(selected) : [];
   const descendants = (id: string): OutlineNode[] =>
     nodes.filter((node) => node.parentId === id).flatMap((node) => [node, ...descendants(node.id)]);
   const lower = selected ? descendants(selected.id) : [];
-  const sources = [
-    ...new Map(
-      [...(selected ? [selected] : []), ...lower]
-        .flatMap((node) => node.writings ?? [])
-        .map((source) => [source.sourceRevision, source])
-    ).values(),
-  ];
+  const allSources = uniqueSources([...(selected ? [selected] : []), ...lower]);
+  const sources = allSources.filter((source) => source.current);
+  const writtenHere = (node: OutlineNode) =>
+    !!currentWritings(node).length ||
+    descendants(node.id).some((item) => !!currentWritings(item).length);
+  const progress = new Map<string, { count: number; total: number }>();
+  for (const node of nodes) {
+    const units = nodes.filter((item) => item.parentId === node.id && outlineWritable(item.level));
+    if (units.length && !outlineWritable(node.level))
+      progress.set(node.id, { count: units.filter(writtenHere).length, total: units.length });
+  }
+  const nextUnit =
+    selected && outlineWritable(selected.level) && sources.length
+      ? nodes
+          .slice(nodes.findIndex((node) => node.id === selected.id) + 1)
+          .find((node) => node.level === selected.level && !writtenHere(node))
+      : undefined;
+  const editingDescendants = editing && selected ? new Set(lower.map((node) => node.id)) : null;
+  const editingChildLevels =
+    editing && selected
+      ? nodes.filter((node) => node.parentId === selected.id).map((node) => node.level)
+      : [];
+  const relatedChoices = nodes
+    .filter((node) => node.id !== selectedId || adding)
+    .filter((node) => node.title.toLowerCase().includes(relatedQuery.trim().toLowerCase()));
   return (
     <section className="outline-panel" aria-label={t('prompts.uiHierarchicalOutline')}>
       <header className="outline-workspace-header">
@@ -590,32 +711,13 @@ export function OutlinePanel({
                   onSubmit={(event) => {
                     event.preventDefault();
                     if (!draft.title.trim()) return;
-                    apply([
-                      adding
-                        ? {
-                            op: 'create',
-                            level: draft.level,
-                            parentId: draft.parentId,
-                            title: draft.title,
-                            intent: draft.intent,
-                            relatedIds: draft.relatedIds,
-                          }
-                        : {
-                            op: 'update',
-                            id: selectedId,
-                            expectedRevision: draft.revision,
-                            title: draft.title,
-                            intent: draft.intent,
-                            relatedIds: draft.relatedIds,
-                            fixed: draft.fixed,
-                          },
-                    ]);
+                    saveDraft(draft);
                   }}
                 >
                   <div className="outline-section-heading">
                     <h3>{adding ? t('prompts.uiNewOutline') : selected?.title}</h3>
                   </div>
-                  {adding && (
+                  {(adding || editing) && (
                     <div className="outline-form-pair">
                       <label>
                         {t('prompts.uiLevel')}
@@ -626,11 +728,15 @@ export function OutlinePanel({
                             changeDraft({ ...draft, level: event.target.value as OutlineLevel })
                           }
                         >
-                          {OUTLINE_LEVELS.filter((level) =>
-                            outlineParentAllowed(
-                              nodes.find((node) => node.id === draft.parentId)?.level ?? null,
-                              level
-                            )
+                          {OUTLINE_LEVELS.filter(
+                            (level) =>
+                              outlineParentAllowed(
+                                nodes.find((node) => node.id === draft.parentId)?.level ?? null,
+                                level
+                              ) &&
+                              editingChildLevels.every((child) =>
+                                outlineParentAllowed(level, child)
+                              )
                           ).map((level) => (
                             <option key={level} value={level}>
                               {t(`prompts.level.${level}`)}
@@ -656,7 +762,13 @@ export function OutlinePanel({
                         >
                           <option value="">{t('prompts.uiNoneIndependentOutline')}</option>
                           {nodes
-                            .filter((node) => node.level !== 'beat')
+                            .filter((node) =>
+                              editingDescendants
+                                ? node.id !== selectedId &&
+                                  !editingDescendants.has(node.id) &&
+                                  outlineParentAllowed(node.level, draft.level)
+                                : node.level !== 'beat'
+                            )
                             .map((node) => (
                               <option key={node.id} value={node.id}>
                                 {node.title}
@@ -693,28 +805,37 @@ export function OutlinePanel({
                       {t('prompts.uiAdvancedRelatedOutlines')}
                       <small>{formatNumber(draft.relatedIds.length)}</small>
                     </summary>
-                    {nodes
-                      .filter((node) => node.id !== selectedId || adding)
-                      .map((node) => (
-                        <label key={node.id}>
-                          <SelectionCheckbox
-                            disabled={disabled}
-                            checked={draft.relatedIds.includes(node.id)}
-                            onChange={(event) =>
-                              changeDraft({
-                                ...draft,
-                                relatedIds: event.target.checked
-                                  ? [...draft.relatedIds, node.id]
-                                  : draft.relatedIds.filter((id) => id !== node.id),
-                              })
-                            }
-                          />
-                          <span>
-                            {node.title}
-                            <small>{t(`prompts.level.${node.level}`)}</small>
-                          </span>
-                        </label>
-                      ))}
+                    <label className="outline-related-search">
+                      <Search size={15} aria-hidden="true" />
+                      <input
+                        type="search"
+                        aria-label={t('prompts.outlineSearchRelated')}
+                        placeholder={t('prompts.outlineSearchRelated')}
+                        value={relatedQuery}
+                        onChange={(event) => setRelatedQuery(event.target.value)}
+                      />
+                    </label>
+                    {!relatedChoices.length && <p>{t('prompts.outlineNoSearchResults')}</p>}
+                    {relatedChoices.map((node) => (
+                      <label key={node.id}>
+                        <SelectionCheckbox
+                          disabled={disabled}
+                          checked={draft.relatedIds.includes(node.id)}
+                          onChange={(event) =>
+                            changeDraft({
+                              ...draft,
+                              relatedIds: event.target.checked
+                                ? [...draft.relatedIds, node.id]
+                                : draft.relatedIds.filter((id) => id !== node.id),
+                            })
+                          }
+                        />
+                        <span>
+                          {node.title}
+                          <small>{t(`prompts.level.${node.level}`)}</small>
+                        </span>
+                      </label>
+                    ))}
                   </details>
                   {!adding && (
                     <label className="outline-keep">
@@ -801,6 +922,18 @@ export function OutlinePanel({
                             ? t('prompts.uiRemoveKeepCondition')
                             : t('prompts.uiMarkAsKeepCondition')}
                         </button>
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={() =>
+                            void changeFocus(outline.focusId === selected.id ? null : selected.id)
+                          }
+                        >
+                          <Flag size={16} />
+                          {outline.focusId === selected.id
+                            ? t('prompts.outlineClearCurrent')
+                            : t('prompts.outlineSetCurrent')}
+                        </button>
                       </div>
                       <div className="action-menu-group">
                         <button type="button" disabled={disabled} onClick={() => moveSelected(-1)}>
@@ -816,16 +949,9 @@ export function OutlinePanel({
                         <button
                           className="danger"
                           type="button"
-                          disabled={disabled || sources.length > 0}
-                          onClick={() =>
-                            apply([
-                              {
-                                op: 'remove',
-                                id: selected.id,
-                                expectedRevision: selected.revision,
-                              },
-                            ])
-                          }
+                          aria-haspopup="dialog"
+                          disabled={disabled || allSources.length > 0}
+                          onClick={() => setDeleting(selected)}
                         >
                           <Trash2 size={16} />
                           {t('prompts.uiDeleteOutline')}
@@ -834,6 +960,12 @@ export function OutlinePanel({
                     </ActionMenu>
                   </div>
                   <div className="outline-status-line">
+                    {outline.focusId === selected.id && (
+                      <span>
+                        <Flag size={13} />
+                        {t('prompts.outlineCurrentUnit')}
+                      </span>
+                    )}
                     {selected.fixed && (
                       <span>
                         <Pin size={13} />
@@ -850,11 +982,30 @@ export function OutlinePanel({
                             ? t('prompts.uiWritingScheduled')
                             : t('prompts.uiNoSourceTextYet')}
                     </span>
+                    {(selected.progress.state === 'failed' ||
+                      selected.progress.state === 'cancelled') && (
+                      <span className="outline-status-alert">
+                        <CircleAlert size={13} />
+                        {selected.progress.state === 'failed'
+                          ? t('prompts.outlineWritingFailed')
+                          : t('prompts.outlineWritingCancelled')}
+                      </span>
+                    )}
+                    {allSources.length > sources.length && (
+                      <span>
+                        <GitBranch size={13} />
+                        {t('prompts.outlineOtherBranchSources', {
+                          count: allSources.length - sources.length,
+                        })}
+                      </span>
+                    )}
                     {lower.length > 0 && (
                       <span>
                         {t('prompts.childSources', {
                           total: formatNumber(lower.length),
-                          count: formatNumber(lower.filter((node) => node.writings?.length).length),
+                          count: formatNumber(
+                            lower.filter((node) => currentWritings(node).length).length
+                          ),
                         })}
                       </span>
                     )}
@@ -892,6 +1043,16 @@ export function OutlinePanel({
                       <ScanText size={17} />
                       {t('prompts.uiCheckAgainstSource')}
                     </button>
+                    {nextUnit && (
+                      <button
+                        type="button"
+                        className="secondary outline-next-unit"
+                        onClick={() => choose(nextUnit.id)}
+                      >
+                        {t('prompts.outlineNextUnit', { title: nextUnit.title })}
+                        <ChevronRight size={17} />
+                      </button>
+                    )}
                   </div>
                   <article className="outline-intent-card">
                     {selected.intent ? (
@@ -1014,6 +1175,12 @@ export function OutlinePanel({
                         [t('prompts.uiParentOutlinesAndCurrentItem'), brief.outline.path],
                         [t('prompts.uiChildEvents'), brief.outline.children],
                         [t('prompts.uiRelatedPlans'), brief.outline.related ?? []],
+                        [
+                          t('prompts.outlineNeighborUnits'),
+                          [brief.outline.neighbors?.previous, brief.outline.neighbors?.next].filter(
+                            (node) => !!node
+                          ),
+                        ],
                       ].map(([title, items]) => (
                         <div key={title as string}>
                           <h5>{title as string}</h5>
@@ -1070,6 +1237,39 @@ export function OutlinePanel({
           </div>
         )
       )}
+      <Dialog
+        open={!!deleting}
+        title={t('shared.deleteConfirm')}
+        variant="confirmation"
+        role="alertdialog"
+        className="delete-dialog"
+        onClose={() => setDeleting(null)}
+      >
+        <p>{t('shared.deleteQuestion', { title: deleting?.title ?? '' })}</p>
+        <p className="muted">
+          {deleting && descendants(deleting.id).length
+            ? t('prompts.outlineDeleteDescendants', { count: descendants(deleting.id).length })
+            : t('prompts.outlineDeleteIrreversible')}
+        </p>
+        <div className="form-actions">
+          <button type="button" className="secondary" onClick={() => setDeleting(null)}>
+            <CloseIcon size={18} aria-hidden="true" />
+            {t('shared.cancel')}
+          </button>
+          <button
+            type="button"
+            className="delete-button"
+            disabled={disabled}
+            onClick={() => {
+              if (!deleting) return;
+              apply([{ op: 'remove', id: deleting.id, expectedRevision: deleting.revision }]);
+              setDeleting(null);
+            }}
+          >
+            {t('prompts.uiDeleteOutline')}
+          </button>
+        </div>
+      </Dialog>
     </section>
   );
 }

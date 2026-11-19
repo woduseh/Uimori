@@ -188,15 +188,29 @@
   font-weight: 550;
   line-height: 1.45;
   overflow-wrap: anywhere;
-  padding-right: 16px;
+}
+.outline-node-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
 }
 .outline-node-mark {
-  position: absolute;
-  top: 12px;
-  right: 7px;
-  display: flex;
+  display: inline-flex;
+  align-items: center;
   gap: 4px;
+  margin-left: auto;
   color: var(--accent-text);
+}
+.outline-node-progress {
+  font-size: var(--font-small);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.outline-node-mark .outline-node-alert,
+.outline-status-line > .outline-status-alert {
+  color: var(--error);
 }
 .outline-detail {
   min-width: 0;
@@ -420,6 +434,16 @@
 .outline-reference-picker > p {
   color: var(--muted);
   font-size: var(--font-small);
+}
+.outline-reference-picker .outline-related-search {
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+.outline-reference-picker .outline-related-search input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
 }
 .outline-reference-picker label,
 .outline-form .outline-keep {

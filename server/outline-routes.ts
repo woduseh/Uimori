@@ -10,6 +10,14 @@ export function outlineRoutes(
   app.get<{ Params: { id: string } }>('/api/chats/:id/outline', async (request) =>
     store.outline.detail(request.params.id)
   );
+  app.get<{ Params: { id: string } }>('/api/chats/:id/outline/focus', async (request) =>
+    store.outline.focus(request.params.id)
+  );
+  app.put<{ Params: { id: string } }>('/api/chats/:id/outline/focus', async (request) => {
+    const focus = store.outline.setFocus(request.params.id, request.body);
+    hooks.publish(request.params.id);
+    return focus;
+  });
   app.get<{ Params: { id: string } }>('/api/outline-nodes/:id/brief', (request) =>
     store.outline.preview(request.params.id)
   );

@@ -16,7 +16,7 @@ import { modelTimeoutMs, type Connection, type ModelSnapshot } from '../core/pro
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
 import { AUTHOR_NOTE_GUIDANCE, modelAuthorNotes } from '../core/notes.js';
-import { OUTLINE_CONTRACT } from '../core/outline.js';
+import { outlineContract } from '../core/outline.js';
 import { buildMainInput, executeTool, knowledgeReadResults } from '../core/provider.js';
 import {
   executeProvider,
@@ -69,7 +69,7 @@ export function buildAgentProviderRequest(
     role: 'main',
     ...modelRequestFields(target),
     stable: {
-      contract: `${CONTRACT}\n${CONTEXT_DERIVED_GUIDANCE}\n${CONTEXT_RETRIEVAL_GUIDANCE}\n${AUTHOR_NOTE_GUIDANCE}${input.outline ? `\nFor advice about the planned writing unit: ${OUTLINE_CONTRACT}` : ''}\n\nShared instructions:\n${collaboration.sharedInstructions}\n\nAdvisor instructions:\n${agent.instructions}`,
+      contract: `${CONTRACT}\n${CONTEXT_DERIVED_GUIDANCE}\n${CONTEXT_RETRIEVAL_GUIDANCE}\n${AUTHOR_NOTE_GUIDANCE}${input.outline ? `\nFor advice about the planned writing unit: ${outlineContract(input.outline)}` : ''}\n\nShared instructions:\n${collaboration.sharedInstructions}\n\nAdvisor instructions:\n${agent.instructions}`,
       tools: structuredClone(tools),
     },
     generation: generationFromModel(target),

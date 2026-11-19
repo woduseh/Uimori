@@ -117,6 +117,10 @@ function phases() {
     calls.push('outline');
     return snapshot;
   });
+  vi.spyOn(outline, 'freezeOutlineFocus').mockImplementation((_store, snapshot) => {
+    calls.push('outline-focus');
+    return snapshot;
+  });
   vi.spyOn(prompt, 'captureLogicalHistory').mockImplementation(() => {
     calls.push('logical-history');
     return [];
@@ -170,7 +174,7 @@ test.each<{
   },
   {
     options: { purpose: 'preview-main', executionClock: () => clock },
-    expected: ['variables', 'story', 'logical-history', 'clock', 'lore'],
+    expected: ['variables', 'story', 'outline-focus', 'logical-history', 'clock', 'lore'],
   },
   {
     options: { purpose: 'preview-translation', executionClock: () => clock },

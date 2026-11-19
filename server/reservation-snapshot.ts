@@ -3,7 +3,7 @@ import { isSourceOnlyTranscript, validateSourceOnlyTranscript } from '../core/au
 import type { Store } from './store.js';
 import { ChatOptionsStore } from './chat-options.js';
 import { freezeChatOverrides } from './chat-overrides.js';
-import { freezeOutline } from './outline-store.js';
+import { freezeOutline, freezeOutlineFocus } from './outline-store.js';
 import { freezeLoreContext } from './lore-context.js';
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
 import { loreSelectionPending } from './lore-selection.js';
@@ -116,6 +116,11 @@ export function freezeReservationSnapshot(
   if (!authored) frozen = store.story.prepareRunInTransaction(frozen);
   if (reserved && options.sceneCommandId)
     frozen = freezeOutline(store, options.sceneCommandId, frozen);
+  else if (
+    (options.purpose === 'run' || options.purpose === 'preview-main') &&
+    !frozen.executionPurpose
+  )
+    frozen = freezeOutlineFocus(store, frozen);
   frozen = { ...frozen, logicalHistory: captureLogicalHistory(store, frozen) };
   if (options.purpose === 'preview-main' || options.purpose === 'preview-translation')
     frozen = { ...frozen, executionClock: options.executionClock() };

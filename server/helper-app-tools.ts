@@ -333,7 +333,7 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'outline.read',
     description:
-      'Read the plot outline (composition) of a chat in bounded pages: the tree of themes, main story, arcs, episodes and beats, each with a writing intent. mode=overview (default) lists the items with metadata and short intent previews. mode=subtree returns the items under nodeId, limited by depth. mode=detail reads one section of one item: intent (default) is the full writing brief in text pages, related lists the linked plans, and writings lists the scenes written for the item and its subtree as data.read refs. Later pages need the expectedVersion of the first page: copy nextRead unchanged, and after OUTLINE_CHANGED start that read again. Switching mode or section starts a new read with its own version. An overview preview is not the full intent; coverage.wholeField means this one response contains the entire intent, and nextOffset null means the last page. A writings reference shows where text was written, not that the plan was fulfilled.',
+      'Read the plot outline (composition) of a chat in bounded pages: the tree of themes, main story, arcs, episodes and beats, each with a writing intent. mode=overview (default) lists the items with metadata and short intent previews, and focusId names the item the story is currently in, which ordinary requests receive as orientation (null when none). mode=subtree returns the items under nodeId, limited by depth. mode=detail reads one section of one item: intent (default) is the full writing brief in text pages, related lists the linked plans, and writings lists the scenes written for the item and its subtree as data.read refs. Later pages need the expectedVersion of the first page: copy nextRead unchanged, and after OUTLINE_CHANGED start that read again. Switching mode or section starts a new read with its own version. An overview preview is not the full intent; coverage.wholeField means this one response contains the entire intent, and nextOffset null means the last page. A writings reference shows where text was written, not that the plan was fulfilled.',
     inputSchema: schema({
       mode: {
         type: 'string',
@@ -404,7 +404,8 @@ const TOOLS: ProviderTool[] = [
               level: {
                 type: 'string',
                 enum: ['theme', 'mainStory', 'arc', 'episode', 'beat'],
-                description: 'Kind of outline item.',
+                description:
+                  'create: kind of the new item. update: change the kind; it must stay smaller than its parent and larger than its children.',
               },
               title: described(str, 'Title of the item.'),
               intent: described(str, 'The writing brief of the item: what it should achieve.'),

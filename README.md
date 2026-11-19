@@ -75,7 +75,7 @@ The [self-hosting guide](docs/SELF-HOST.md) covers Docker Compose and an Nginx H
 | Guide | Covers |
 | --- | --- |
 | [Usage](docs/USAGE.md) | Per-bot chats and folders, settings search, prompts and creative presets, translation, independent chat copies, backups |
-| [Outline workspace](docs/OUTLINE.md) | Hierarchical outlines, linked plans, writing selected units and reviewing the manuscript |
+| [Outline workspace](docs/OUTLINE.md) | Hierarchical outlines, linked plans, a current unit that guides ordinary continuation, writing selected units and reviewing the manuscript |
 | [Story guide](docs/STORY-GUIDE.md) | Optional writing reference, asking the helper about the original work, notes and corrections |
 | [Library and prompts](docs/LIBRARY.md) · [Deleting items](docs/DELETION.md) | Organizing resources, folders and cover images; where deletion happens and reference protection |
 | [Risu import](docs/RISU-IMPORT.md) | Original `.charx` cards, modules and `.risup` prompts; CBS, Lua, regex and CSS execution and supported scope |

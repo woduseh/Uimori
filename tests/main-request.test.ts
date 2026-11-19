@@ -300,6 +300,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
         resources: () => [],
       },
       native: { snapshot: () => undefined },
+      outline: { freezeFocus: () => undefined },
       story: {
         prepareRunInTransaction: (value: RunSnapshot) => value,
         notes: {

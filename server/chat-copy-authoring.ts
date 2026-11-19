@@ -23,6 +23,7 @@ export function captureChatAuthoring(
     history.at(-1)?.revision ?? null
   );
   const nodes = store.outline.nodes(chatId);
+  const focus = store.outline.focus(chatId);
   return {
     outline: nodes.map(({ id, parentId, level, position, title, intent, fixed, relatedIds }) => ({
       id,
@@ -37,9 +38,18 @@ export function captureChatAuthoring(
     outlineSources: nodes.flatMap((node) =>
       (node.writings ?? []).flatMap((source) => {
         const atIndex = history.findIndex((entry) => entry.revision === source.sourceRevision);
-        return atIndex < 0 ? [] : [{ nodeId: node.id, atIndex }];
+        return atIndex < 0
+          ? []
+          : [
+              {
+                nodeId: node.id,
+                atIndex,
+                ...(source.origin === 'focus' ? { origin: 'focus' as const } : {}),
+              },
+            ];
       })
     ),
+    ...(focus ? { outlineFocusId: focus.nodeId } : {}),
     options: new ChatOptionsStore(store).get(chatId).fixedValues,
     lore: overrides.entries
       .filter((entry) => !entry.retired)
@@ -121,10 +131,13 @@ export function restoreChatAuthoring(
         !byId.has(link.nodeId) ||
         !Number.isSafeInteger(link.atIndex) ||
         link.atIndex < 0 ||
-        !history[link.atIndex]
+        !history[link.atIndex] ||
+        (link.origin !== undefined && link.origin !== 'focus')
     )
   )
     throw new HttpError(400, '구성에 연결할 원문이 없어요.');
+  if (authoring.outlineFocusId !== undefined && !byId.has(authoring.outlineFocusId))
+    throw new HttpError(400, '진행 중인 구성 항목이 없어요.');
   const at = new Date().toISOString();
   const ids = new Map(authoring.outline.map((node) => [node.id, randomUUID()]));
   for (const node of authoring.outline) {
@@ -153,8 +166,21 @@ export function restoreChatAuthoring(
         .run(ids.get(node.id)!, ids.get(relatedId)!, position);
   for (const link of sourceLinks)
     store.db
-      .prepare('INSERT INTO outline_writings(id,node_id,source_id,created_at) VALUES(?,?,?,?)')
-      .run(randomUUID(), ids.get(link.nodeId)!, history[link.atIndex].revision, at);
+      .prepare(
+        'INSERT INTO outline_writings(id,node_id,source_id,origin,created_at) VALUES(?,?,?,?,?)'
+      )
+      .run(
+        randomUUID(),
+        ids.get(link.nodeId)!,
+        history[link.atIndex].revision,
+        link.origin ?? 'planned',
+        // Associations are read in creation order; keep the story order of the copied past.
+        new Date(Date.parse(at) + link.atIndex).toISOString()
+      );
+  if (authoring.outlineFocusId !== undefined)
+    store.db
+      .prepare('INSERT INTO outline_focus(chat_id,node_id,updated_at) VALUES(?,?,?)')
+      .run(chatId, ids.get(authoring.outlineFocusId)!, at);
   const options = new ChatOptionsStore(store).get(chatId);
   const controls = options.controls ?? [];
   const values = Object.fromEntries(

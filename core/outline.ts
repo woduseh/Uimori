@@ -52,8 +52,12 @@ export type OutlineWriting = {
   sourceRevision: string;
   sourceHash: string;
   nodeId: string;
+  origin: OutlineWritingOrigin;
+  current: boolean;
   createdAt: string;
 };
+export const OUTLINE_WRITING_ORIGINS = ['planned', 'focus'] as const;
+export type OutlineWritingOrigin = (typeof OUTLINE_WRITING_ORIGINS)[number];
 /** Explicit, one-request selection; never inferred from which panel is visible. */
 export type OutlineTarget = {
   nodeId: string | null;
@@ -68,7 +72,8 @@ export type OutlineHelperContext = {
   partial: boolean;
 };
 
-export type OutlineDetail = { chatId: string; nodes: OutlineNode[] };
+export type OutlineDetail = { chatId: string; focusId: string | null; nodes: OutlineNode[] };
+export type OutlineFocus = { nodeId: string; level: OutlineLevel; title: string } | null;
 
 /** Frozen composition for one writing run: the applied upper intent and the target's own plan. */
 export type OutlineSnapshotNode = {
@@ -79,8 +84,12 @@ export type OutlineSnapshotNode = {
   fixed: boolean;
   revision: number;
 };
+export type OutlineNeighbors = { previous?: OutlineSnapshotNode; next?: OutlineSnapshotNode };
+export const OUTLINE_NEIGHBOR_INTENT_MAX = 600;
+
 export type OutlineSnapshot = {
   version: 1;
+  focus?: true;
   /** Root to target; the last entry is the unit being written. */
   path: OutlineSnapshotNode[];
   /** The target's direct children only; deeper levels stay out of one request's input. */
@@ -88,6 +97,7 @@ export type OutlineSnapshot = {
   /** Sibling units already written in this chat, so the request knows what precedes it. */
   written: { id: string; level: OutlineLevel; title: string; sourceRevision: string }[];
   related?: OutlineSnapshotNode[];
+  neighbors?: OutlineNeighbors;
   /** Actual existing source references for this unit and its descendants, never planned events. */
   sources?: OutlineWriting[];
   hash: string;
@@ -98,13 +108,25 @@ export type OutlineSnapshot = {
  * intent for later units, not something the current scene's characters know or may reveal.
  */
 export const OUTLINE_CONTRACT =
-  'outline is author-side planning, not a record of events, character knowledge or world facts. path contains upper intent and ends at this request’s target; children are smaller planned events and related contains explicitly linked plans, not extra writing targets. Write only the selected unit and the current request’s scope. Reveal information only when the current unit and viewpoint call for it; do not prematurely reveal later outcomes, but do not indefinitely conceal a revelation scheduled for this unit. sources and written reference actual prose, not proof that every intention was fulfilled: read existing prose before continuing and do not repeat completed passages. A fixed entry is a keep-condition for ordinary elaboration, not an editing lock; honor it unless the user explicitly changes that condition. Preserve the selected writing style and RP agency; do not force conflict, plot advancement, morals or theme statements into quiet scenes.';
+  'outline is author-side planning, not a record of events, character knowledge or world facts. path contains upper intent and ends at this request’s target; children are smaller planned events and related contains explicitly linked plans, not extra writing targets. Write only the selected unit and the current request’s scope. Reveal information only when the current unit and viewpoint call for it; do not prematurely reveal later outcomes, but do not indefinitely conceal a revelation scheduled for this unit. sources and written reference actual prose, not proof that every intention was fulfilled: read existing prose before continuing and do not repeat completed passages. A fixed entry is a keep-condition for ordinary elaboration, not an editing lock; honor it unless the user explicitly changes that condition. Preserve the selected writing style and RP agency; do not force conflict, plot advancement, morals or theme statements into quiet scenes. neighbors.previous and neighbors.next are the adjacent planned units, not writing targets: continue from where previous left off and stop before the events planned for next begin.';
 
-export const outlineSnapshotNode = (node: OutlineNode): OutlineSnapshotNode => ({
+export const OUTLINE_FOCUS_CONTRACT =
+  'outline.focus is true: the target is the unit the story is currently in, not a unit this request must write. The current user request decides what happens in this response; use path, children and neighbors to keep pacing, continuity and planned direction in view. Do not rush through the remaining children or move into neighbors.next unless the request leads there.';
+
+export const outlineContract = (outline: Pick<OutlineSnapshot, 'focus'>) =>
+  outline.focus ? `${OUTLINE_CONTRACT}\n${OUTLINE_FOCUS_CONTRACT}` : OUTLINE_CONTRACT;
+
+export const outlineSnapshotNode = (
+  node: OutlineNode,
+  intentMax?: number
+): OutlineSnapshotNode => ({
   id: node.id,
   level: node.level,
   title: node.title,
-  intent: node.intent,
+  intent:
+    intentMax === undefined || node.intent.length <= intentMax
+      ? node.intent
+      : `${node.intent.slice(0, intentMax)}…`,
   fixed: node.fixed,
   revision: node.revision,
 });

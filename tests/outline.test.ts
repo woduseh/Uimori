@@ -11,8 +11,8 @@ import { Store } from '../server/store.js';
 import type { HttpError } from '../server/request-validation.js';
 
 import { buildMainProviderRequest } from '../server/main-request.js';
-import { OUTLINE_CONTRACT, OUTLINE_LEVEL_LABELS } from '../core/outline.js';
-import type { RunSnapshot } from '../core/types.js';
+import { OUTLINE_CONTRACT, OUTLINE_FOCUS_CONTRACT, OUTLINE_LEVEL_LABELS } from '../core/outline.js';
+import type { RunSnapshot, Source } from '../core/types.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 
 const owned: { directory: string; store: Store }[] = [];
@@ -178,6 +178,45 @@ function reserve(store: Store, chatId: string, commandId: string, key = randomUU
         ...(profile ? { profile } : {}),
       }) satisfies RunSnapshot
   ).run;
+}
+
+/** An ordinary request from the composer, optionally replacing an earlier scene. */
+function ordinary(store: Store, chatId: string, text: string, replace?: Source) {
+  const chat = store.chat(chatId);
+  const profile = store.product.snapshot(chatId);
+  const parent = replace ? replace.parentRevision : chat.headRevision;
+  const { run } = store.createRun(
+    chatId,
+    {
+      request: '이어서 써 주세요.',
+      expectedRevision: chat.headRevision,
+      expectedSettingsRevision: chat.settingsRevision,
+      expectedProfileRevision: store.product.profile(chatId).revision,
+      idempotencyKey: randomUUID(),
+    },
+    (current) =>
+      ({
+        chatId,
+        parentRevision: parent,
+        settingsRevision: current.settingsRevision,
+        settings: current.settings,
+        request: '이어서 써 주세요.',
+        history: store.history(parent),
+        resources: store.product.resources(chatId, profile),
+        ...(profile ? { profile } : {}),
+        ...(replace
+          ? { replacement: { sourceRevision: replace.id, sourceHash: replace.hash } }
+          : {}),
+      }) satisfies RunSnapshot
+  );
+  store.startRun(run.id);
+  const source = store.completeRun(run.id, text, {
+    modelCalls: 1,
+    inputTokens: 10,
+    outputTokens: 20,
+    costUsd: null,
+  });
+  return { run: observedExecution(store, run.id), source };
 }
 
 /** Reserve and complete one run through the existing main writing path. */
@@ -914,8 +953,11 @@ describe('hierarchical composition', () => {
       intent: episode.intent,
     });
     expect(outline.children.map((item) => item.title)).toEqual(['열쇠 없는 자물쇠']);
-    // Only this unit is named; sibling episodes stay out of the frozen composition.
-    expect(JSON.stringify(outline)).not.toContain('2화 장부의 첫 장');
+    // The next episode bounds this unit as a neighbor, never as a path entry or child to write.
+    expect(outline.neighbors).toEqual({
+      next: expect.objectContaining({ title: '2화 장부의 첫 장' }),
+    });
+    expect(JSON.stringify({ ...outline, neighbors: undefined })).not.toContain('2화 장부의 첫 장');
 
     expect(outline.written).toEqual([]);
     const { request, input } = buildMainProviderRequest(
@@ -971,6 +1013,8 @@ describe('hierarchical composition', () => {
         nodeId: beat.id,
         sourceRevision: one.source.id,
         sourceHash: one.source.hash,
+        origin: 'planned',
+        current: true,
         createdAt: expect.any(String),
       },
     ]);
@@ -1133,5 +1177,167 @@ describe('hierarchical composition', () => {
         ?.n
     ).toBe(0);
     expect(store.outline.node(first.id).relatedIds).toEqual([second.id]);
+  });
+
+  test('an ordinary request continues inside the current unit, and its prose joins that unit', async () => {
+    const { captureChatCopy, restoreChatCopy } = await import('../server/chat-copy.js');
+    const store = await database();
+    const chat = chatWithMainModel(store, '진행 중 플롯');
+    compose(store, chat.id);
+    const episode = find(store, chat.id, '1화 잠긴 문');
+    expect(store.outline.focus(chat.id)).toBeNull();
+    const opening = ordinary(store, chat.id, '도서관의 아침이었다.');
+    expect(opening.run.snapshot.outline).toBeUndefined();
+
+    // Writing a unit from the plan moves the story there.
+    const planned = write(
+      store,
+      chat.id,
+      store.outline.sceneCommand(episode.id, { idempotencyKey: randomUUID() }).id,
+      '문은 잠겨 있었다.'
+    );
+    expect(store.outline.focus(chat.id)).toEqual({
+      nodeId: episode.id,
+      level: 'episode',
+      title: episode.title,
+    });
+
+    const turn = ordinary(store, chat.id, '사서는 손잡이를 다시 당겼다.');
+    const outline = turn.run.snapshot.outline;
+    if (!outline) throw new Error('Expected the current unit as orientation');
+    expect(outline.focus).toBe(true);
+    expect(outline.path.at(-1)?.id).toBe(episode.id);
+    expect(outline.neighbors?.next?.title).toBe('2화 장부의 첫 장');
+    expect(outline.sources?.map((source) => source.sourceRevision)).toEqual([planned.source.id]);
+    const { request } = buildMainProviderRequest(
+      await prepareNativeRisuReadOnly(turn.run.snapshot, 'context')
+    );
+    expect(request.stable.contract).toContain(OUTLINE_FOCUS_CONTRACT);
+
+    // The answered turn is linked to the unit without renaming the scene after it.
+    expect(
+      store.outline.node(episode.id).writings?.map(({ sourceRevision, origin }) => ({
+        sourceRevision,
+        origin,
+      }))
+    ).toEqual([
+      { sourceRevision: planned.source.id, origin: 'planned' },
+      { sourceRevision: turn.source.id, origin: 'focus' },
+    ]);
+    const { outlineSceneTitles } = await import('../server/scene-titles.js');
+    const titles = outlineSceneTitles(store, chat.id);
+    expect(titles.get(planned.source.id)).toBe(episode.title);
+    expect(titles.has(turn.source.id)).toBe(false);
+
+    // Copies keep the current unit and the origin of each association.
+    const restored = restoreChatCopy(
+      store,
+      captureChatCopy(store, chat.id, turn.source.id),
+      randomUUID(),
+      '진행 중 사본'
+    );
+    const copied = find(store, restored.id, episode.title);
+    expect(store.outline.focus(restored.id)?.nodeId).toBe(copied.id);
+    expect(copied.writings?.map((source) => source.origin)).toEqual(['planned', 'focus']);
+
+    // Clearing the current unit returns ordinary requests to free continuation.
+    expect(store.outline.setFocus(chat.id, { nodeId: null })).toBeNull();
+    expect(ordinary(store, chat.id, '바람이 불었다.').run.snapshot.outline).toBeUndefined();
+    const other = createFixtureChat(store, '다른 채팅');
+    expect(failure(() => store.outline.setFocus(other.id, { nodeId: episode.id })).statusCode).toBe(
+      400
+    );
+  });
+
+  test('source state follows the current branch while other branches stay linked', async () => {
+    const store = await database();
+    const chat = chatWithMainModel(store, '분기 원문');
+    compose(store, chat.id);
+    const beat = find(store, chat.id, '열쇠 없는 자물쇠'),
+      episode = find(store, chat.id, '1화 잠긴 문');
+    const opening = ordinary(store, chat.id, '도서관의 아침이었다.');
+    const written = write(
+      store,
+      chat.id,
+      store.outline.sceneCommand(beat.id, { idempotencyKey: randomUUID() }).id,
+      '자물쇠를 발견했다.'
+    );
+    store.outline.setFocus(chat.id, { nodeId: null });
+    // Replacing the written scene leaves it on another branch.
+    const replaced = ordinary(store, chat.id, '문 앞에 아무것도 없었다.', written.source);
+    expect(store.chat(chat.id).headRevision).toBe(replaced.source.id);
+    expect(replaced.source.parentRevision).toBe(opening.source.id);
+    expect(store.outline.node(beat.id).writings).toEqual([
+      expect.objectContaining({ sourceRevision: written.source.id, current: false }),
+    ]);
+    expect(store.outline.preview(episode.id).outline.sources).toEqual([]);
+    const review = failure(() =>
+      store.outline.helperContext(
+        chat.id,
+        {
+          nodeId: episode.id,
+          expectedRevision: store.outline.node(episode.id).revision,
+          purpose: 'review',
+        },
+        8192
+      )
+    );
+    expect(review.statusCode).toBe(409);
+  });
+
+  test('a review starts from the latest current-branch sources', async () => {
+    const store = await database();
+    const chat = chatWithMainModel(store, '최근 원문 점검');
+    compose(store, chat.id);
+    const episode = find(store, chat.id, '1화 잠긴 문');
+    const sources = ['첫째 장면', '둘째 장면', '셋째 장면', '넷째 장면'].map(
+      (text) =>
+        write(
+          store,
+          chat.id,
+          store.outline.sceneCommand(episode.id, { idempotencyKey: randomUUID() }).id,
+          text
+        ).source
+    );
+    const context = store.outline.helperContext(
+      chat.id,
+      {
+        nodeId: episode.id,
+        expectedRevision: store.outline.node(episode.id).revision,
+        purpose: 'review',
+      },
+      8192
+    );
+    expect(context.sources.map((source) => source.id)).toEqual(
+      sources.slice(-3).map((source) => source.id)
+    );
+    expect(context.partial).toBe(true);
+  });
+
+  test('editing can change a level within its parent and children', async () => {
+    const store = await database(),
+      chat = createFixtureChat(store, '수준 바꾸기');
+    compose(store, chat.id);
+    const episode = find(store, chat.id, '2화 장부의 첫 장'),
+      withChild = find(store, chat.id, '1화 잠긴 문');
+    const change = (id: string, revision: number, level: string) =>
+      store.outline.apply(
+        chat.id,
+        {
+          idempotencyKey: randomUUID(),
+          operations: [{ op: 'update', id, expectedRevision: revision, level }],
+        },
+        'user'
+      );
+    change(episode.id, episode.revision, 'beat');
+    expect(store.outline.node(episode.id)).toMatchObject({
+      level: 'beat',
+      revision: episode.revision + 1,
+    });
+    // An arc parent rejects a larger level, and a beat child rejects becoming a beat itself.
+    expect(failure(() => change(episode.id, episode.revision + 1, 'mainStory')).statusCode).toBe(
+      400
+    );
+    expect(failure(() => change(withChild.id, withChild.revision, 'beat')).statusCode).toBe(400);
   });
 });

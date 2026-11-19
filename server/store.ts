@@ -781,6 +781,7 @@ export class Store {
       !run.snapshot.nativeRisuAuthored
     ) {
       this.story.reserveSourceInTransaction(source, run);
+      this.outline.linkFocusSource(source, run.snapshot.outline);
       // Illustrations never block the source commit; reservation problems become visible jobs.
       scheduleAutomaticIllustration(this, source);
     }

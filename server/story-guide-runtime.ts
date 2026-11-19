@@ -9,7 +9,7 @@ import {
 } from '../core/helper-web-search.js';
 import { isGeminiProtocol, modelTimeoutMs } from '../core/product.js';
 import { AUTHOR_NOTE_GUIDANCE, modelAuthorNotes } from '../core/notes.js';
-import { OUTLINE_CONTRACT } from '../core/outline.js';
+import { outlineContract } from '../core/outline.js';
 import { buildMainInput, executeTool } from '../core/provider.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import type { StoryGuideBrief } from '../core/story-guide.js';
@@ -111,7 +111,7 @@ function guideRequest(snapshot: RunSnapshot): ProviderRequest {
         GUIDE_CONTRACT +
         (search ? '\n' + GUIDE_SEARCH_CONTRACT : '') +
         (input.outline
-          ? `\nApply these outline rules when advising the writer, without writing story prose: ${OUTLINE_CONTRACT}`
+          ? `\nApply these outline rules when advising the writer, without writing story prose: ${outlineContract(input.outline)}`
           : ''),
       tools: (search && isGeminiProtocol(target.connection.protocol) ? [] : MAIN_READ_TOOLS)
         .filter(

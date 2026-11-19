@@ -28,7 +28,7 @@ export function outlineSceneTitles(store: Store, chatId: string): Map<string, st
     JOIN outline_nodes n ON n.id=w.node_id
     LEFT JOIN scene_commands c ON c.id=w.command_id
     JOIN sources s ON s.id=COALESCE(w.source_id,c.source_revision)
-    WHERE s.chat_id=? AND n.chat_id=s.chat_id
+    WHERE s.chat_id=? AND n.chat_id=s.chat_id AND w.origin='planned'
     ORDER BY CASE n.level WHEN 'beat' THEN 0 WHEN 'episode' THEN 1 WHEN 'arc' THEN 2 WHEN 'mainStory' THEN 3 ELSE 4 END,
       w.created_at,w.id`)
     .all(chatId)) {

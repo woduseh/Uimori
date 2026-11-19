@@ -20,7 +20,8 @@ export type ChatCopyAuthoring = {
     'id' | 'parentId' | 'level' | 'position' | 'title' | 'intent' | 'fixed' | 'relatedIds'
   >[];
   /** Source associations, not execution status or receipts. */
-  outlineSources?: { nodeId: string; atIndex: number }[];
+  outlineSources?: { nodeId: string; atIndex: number; origin?: 'focus' }[];
+  outlineFocusId?: string;
   options: Record<string, import('./risu-prompt.js').PromptValue>;
   lore: (Omit<
     import('./chat-overrides.js').ChatLoreOverride,

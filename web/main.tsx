@@ -125,6 +125,7 @@ import {
 import { useStory } from './useStory.js';
 import { useTestMode } from './useTestMode.js';
 import { ActivityStatus } from './ActivityStatus.js';
+import { OutlineFocusStatus } from './OutlineFocusStatus.js';
 import { modelLabel } from './storyLabels.js';
 import './style.css';
 import './product.css';
@@ -1978,6 +1979,12 @@ function App() {
                     />
                   </p>
                 )}
+                <OutlineFocusStatus
+                  key={`outline-focus:${s.selected}`}
+                  chatId={s.selected}
+                  headRevision={s.detail?.chat.headRevision}
+                  onOpen={() => setPanel('outline')}
+                />
                 <ActivityStatus
                   key={s.viewKey}
                   chatId={s.selected}
