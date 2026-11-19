@@ -3,6 +3,7 @@ import type { Connection, ModelPreset } from '../core/product.js';
 import {
   defaultIllustrationSettings,
   IllustrationError,
+  parseIllustrationPlan,
   type IllustrationSettings,
 } from '../core/illustration.js';
 import {
@@ -46,7 +47,19 @@ afterEach(async () => {
 });
 const PNG = Buffer.from(PNG_BASE64, 'base64');
 const render = defaultIllustrationSettings().novelai;
-const prompt = { prompt: '1girl, lantern, river at night', negativePrompt: 'blurry' };
+const prompt = { prompt: '2girls, pier, river at night', negativePrompt: 'blurry' };
+const characters = [
+  {
+    prompt: 'girl, mira, red coat, source#hug',
+    negativePrompt: 'blue hair',
+    position: { x: 0.33, y: 0.5 },
+  },
+  {
+    prompt: 'girl, ara, blue hair, target#hug',
+    negativePrompt: 'red coat',
+    position: { x: 0.68, y: 0.5 },
+  },
+];
 type Sent = { url: string; headers: Record<string, string>; body: any };
 
 /** Intercepts NovelAI only; loopback prompt-model traffic keeps the real fetch. */
@@ -148,6 +161,85 @@ describe('NovelAI image client', () => {
     expect(sent).toHaveLength(0);
   });
 
+  test('sends character boxes with coordinates snapped to the model grid', async () => {
+    const sent = novelAI(() => zip());
+    await generateWithNovelAI(render, { ...prompt, characters }, options());
+    expect(sent[0].body.parameters.v4_prompt).toEqual({
+      caption: {
+        base_caption: prompt.prompt,
+        char_captions: [
+          { char_caption: characters[0].prompt, centers: [{ x: 0.33, y: 0.5 }] },
+          { char_caption: characters[1].prompt, centers: [{ x: 0.68, y: 0.5 }] },
+        ],
+      },
+      use_coords: true,
+      use_order: true,
+    });
+    expect(sent[0].body.parameters.v4_negative_prompt.caption.char_captions).toEqual([
+      { char_caption: 'blue hair', centers: [{ x: 0.33, y: 0.5 }] },
+      { char_caption: 'red coat', centers: [{ x: 0.68, y: 0.5 }] },
+    ]);
+    await generateWithNovelAI(
+      { ...render, model: 'nai-diffusion-4-5-full' },
+      { ...prompt, characters },
+      options()
+    );
+    expect(
+      sent[1].body.parameters.v4_prompt.caption.char_captions.map(
+        (caption: { centers: unknown[] }) => caption.centers[0]
+      )
+    ).toEqual([
+      { x: 0.3, y: 0.5 },
+      { x: 0.7, y: 0.5 },
+    ]);
+    await generateWithNovelAI(
+      render,
+      { ...prompt, characters: characters.map(({ position: _position, ...rest }) => rest) },
+      options()
+    );
+    expect(sent[2].body.parameters.v4_prompt.use_coords).toBe(false);
+  });
+
+  test('parses NovelAI character boxes only for NovelAI, capped at six with all-or-none positions', () => {
+    const reply = JSON.stringify({
+      ...prompt,
+      caption: 'c',
+      characters: [
+        ...Array.from({ length: 7 }, (_, index) => ({
+          prompt: `girl, extra ${index}`,
+          position: { x: 2, y: 0.5 },
+        })),
+      ],
+    });
+    const plan = parseIllustrationPlan(reply, false, { characters: true });
+    expect(plan.kind === 'generate' && plan.prompt.characters).toHaveLength(6);
+    expect(plan.kind === 'generate' && plan.prompt.characters?.[0]).toEqual({
+      prompt: 'girl, extra 0',
+      negativePrompt: '',
+      position: { x: 0.9, y: 0.5 },
+    });
+    const partial = JSON.stringify({
+      ...prompt,
+      characters: [{ prompt: 'girl', position: { x: 0.2, y: 0.5 } }, { prompt: 'boy' }],
+    });
+    const mixed = parseIllustrationPlan(partial, false, { characters: true });
+    expect(mixed.kind === 'generate' && mixed.prompt.characters).toEqual([
+      { prompt: 'girl', negativePrompt: '' },
+      { prompt: 'boy', negativePrompt: '' },
+    ]);
+    expect(parseIllustrationPlan(partial, false)).toMatchObject({
+      prompt: { prompt: prompt.prompt },
+    });
+    expect((parseIllustrationPlan(partial, false) as { prompt: object }).prompt).not.toHaveProperty(
+      'characters'
+    );
+    expect(() =>
+      parseIllustrationPlan(JSON.stringify({ ...prompt, characters: [{}] }), false, {
+        characters: true,
+      })
+    ).toThrow('ILLUSTRATION_PROMPT_INVALID');
+  });
+
   test('reports the subscription tier for the connection check', async () => {
     const sent = novelAI(() => Response.json({ tier: 3, active: true, perks: {} }));
     expect(await novelAISubscription(options())).toEqual({ tier: 'Opus', active: true });
@@ -159,7 +251,10 @@ describe('NovelAI illustration settings and jobs', () => {
   async function promptModel(store: Store) {
     const provider = await loopbackProvider(async (_request, response) => {
       await writeSse(response, [
-        { type: 'text_delta', delta: JSON.stringify({ ...prompt, caption: '강 위의 등불' }) },
+        {
+          type: 'text_delta',
+          delta: JSON.stringify({ ...prompt, characters, caption: '강 위의 등불' }),
+        },
         { type: 'done', reason: 'stop' },
       ]);
     });
@@ -204,7 +299,7 @@ describe('NovelAI illustration settings and jobs', () => {
     expect(illustrationSettingsView(store).novelaiTokenConfigured).toBe(false);
   });
 
-  test('freezes no automatic retries, reports an uncertain result and reuses the prompt on a manual retry', async () => {
+  test('freezes no automatic retries, keeps the shared canon out of the scene prompt and reuses the prompt on a manual retry', async () => {
     const store = databases.create();
     const { source } = chatWithSource(store);
     const { provider, model } = await promptModel(store);
@@ -224,6 +319,12 @@ describe('NovelAI illustration settings and jobs', () => {
       novelai: { model: 'nai-diffusion-5-full', negativeGuidance: 'watermark' },
     });
     expect(JSON.stringify(job.input)).not.toContain('pst-saved');
+    store.db
+      .prepare('UPDATE illustration_jobs SET input=? WHERE id=?')
+      .run(
+        JSON.stringify({ ...job.input, visualCanon: [{ name: 'Mira', appearance: 'red coat' }] }),
+        job.id
+      );
 
     let fail = true;
     const sent = novelAI(() => (fail ? new Response('', { status: 502 }) : zip()));
@@ -248,6 +349,9 @@ describe('NovelAI illustration settings and jobs', () => {
     expect(sent).toHaveLength(2);
     expect(sent[1].headers.authorization).toBe('Bearer pst-saved');
     expect(sent[1].body.parameters.v4_negative_prompt.caption.base_caption).toBe('blurry');
+    expect(sent[1].body.input).toBe(prompt.prompt);
+    expect(sent[1].body.parameters.v4_prompt.caption.char_captions).toHaveLength(2);
+    expect(illustrationJob(store, job.id).diagnostic?.prompt?.characters).toEqual(characters);
     expect(projectIllustration(store, illustrationJob(store, job.id)).images).toMatchObject([
       { mime: 'image/webp', caption: '강 위의 등불', prompt: prompt.prompt },
     ]);

@@ -17,6 +17,16 @@ export type NovelAIRenderSettings = {
   sampler: NovelAISampler;
   timeoutMs: number;
 };
+/** One character box: NovelAI conditions it separately from the shared scene prompt. */
+export type NovelAICharacterPrompt = {
+  prompt: string;
+  negativePrompt: string;
+  /** Normalized canvas center; absent leaves placement to NovelAI. */
+  position?: { x: number; y: number };
+};
+// https://docs.novelai.net/en/image/multiplecharacters (2026-11-20): V4 and V4.5 accept six
+// character prompts and V5 twenty-two; the lower limit keeps one contract for every model.
+export const NOVELAI_MAX_CHARACTERS = 6;
 // https://docs.novelai.net/en/subscription (2026-11-20): Opus generations are free up to
 // 28 steps at normal sizes; the docs do not define "normal", so this is the largest preset area.
 export const NOVELAI_FREE_MAX_STEPS = 28;

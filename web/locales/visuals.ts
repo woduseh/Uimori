@@ -1915,6 +1915,12 @@ export const messages = {
     ja: 'NovelAIの応答を読み取れませんでした。',
     zh: '无法读取 NovelAI 响应。',
   },
+  'visuals.novelaiCharacterPrompts': {
+    ko: '인물별 캡션',
+    en: 'Character prompts',
+    ja: 'キャラクター別プロンプト',
+    zh: '角色提示词',
+  },
   'visuals.novelaiImageInvalid': {
     ko: 'NovelAI 응답에 사용할 수 있는 이미지가 없어요.',
     en: 'The NovelAI response had no usable image.',

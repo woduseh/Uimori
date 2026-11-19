@@ -396,7 +396,7 @@ export async function runIllustrationJob(
     connection?: Connection
   ): Promise<IllustrationPlan> => {
     const withCanon = (prompt: import('../core/illustration.js').IllustrationPrompt) =>
-      input.visualCanon?.length
+      input.visualCanon?.length && input.generator !== 'novelai'
         ? {
             ...prompt,
             prompt: `${prompt.prompt}\n\nShared character identity (current authored profiles take priority; scene-specific changes still apply): ${JSON.stringify(input.visualCanon)}`,
@@ -427,7 +427,7 @@ export async function runIllustrationJob(
     const plan = parseIllustrationPlan(
       await textRequest(model, request, connection),
       context.allowSkip,
-      { preservePrompt: codex }
+      { preservePrompt: codex, characters: input.generator === 'novelai' }
     );
     if (plan.kind === 'generate') {
       plan.prompt = withCanon(plan.prompt);

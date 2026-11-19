@@ -708,6 +708,23 @@ function IllustrationCard({
                 {detail.diagnostic.prompt.negativePrompt && (
                   <pre>{detail.diagnostic.prompt.negativePrompt}</pre>
                 )}
+                {!!detail.diagnostic.prompt.characters?.length && (
+                  <>
+                    <h4>{t('visuals.novelaiCharacterPrompts')}</h4>
+                    {detail.diagnostic.prompt.characters.map((character, index) => (
+                      <pre key={`${index}:${character.prompt}`}>
+                        {[
+                          character.position
+                            ? `${character.prompt}  (${character.position.x}, ${character.position.y})`
+                            : character.prompt,
+                          character.negativePrompt && `− ${character.negativePrompt}`,
+                        ]
+                          .filter(Boolean)
+                          .join('\n')}
+                      </pre>
+                    ))}
+                  </>
+                )}
               </>
             )}
             {detail.diagnostic?.revisedPrompt && (

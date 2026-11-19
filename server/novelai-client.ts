@@ -12,7 +12,7 @@ import {
   ILLUSTRATION_MAX_IMAGE_BYTES,
   type IllustrationImageMime,
 } from '../core/illustration.js';
-import type { NovelAIRenderSettings } from '../core/novelai-settings.js';
+import type { NovelAICharacterPrompt, NovelAIRenderSettings } from '../core/novelai-settings.js';
 import { readCardZip } from './risu-card-zip.js';
 
 // https://image.novelai.net/docs/doc.json (2026-11-20): image and account paths share this host
@@ -105,11 +105,42 @@ export async function novelAISubscription(
   };
 }
 
+export type NovelAIPrompt = {
+  prompt: string;
+  negativePrompt: string;
+  characters?: NovelAICharacterPrompt[];
+};
+// https://docs.novelai.net/en/image/multiplecharacters (2026-11-20): V4 and V4.5 place
+// characters on a 5x5 grid; V5 positions freely, sent at 0.01 precision.
+const GRID = [0.1, 0.3, 0.5, 0.7, 0.9];
+function center(model: string, value: number): number {
+  if (model.startsWith('nai-diffusion-5'))
+    return Math.round(Math.min(0.9, Math.max(0.1, value)) * 100) / 100;
+  return GRID.reduce((best, step) =>
+    Math.abs(step - value) < Math.abs(best - value) ? step : best
+  );
+}
+function captions(
+  model: string,
+  characters: NovelAICharacterPrompt[],
+  text: 'prompt' | 'negativePrompt'
+) {
+  return characters.map((character) => ({
+    char_caption: character[text],
+    centers: [
+      character.position
+        ? { x: center(model, character.position.x), y: center(model, character.position.y) }
+        : { x: 0.5, y: 0.5 },
+    ],
+  }));
+}
+
 export function novelAIImageRequest(
   settings: NovelAIRenderSettings,
-  prompt: { prompt: string; negativePrompt: string },
+  prompt: NovelAIPrompt,
   seed: number
 ) {
+  const characters = prompt.characters ?? [];
   return {
     input: prompt.prompt,
     model: settings.model,
@@ -134,12 +165,18 @@ export function novelAIImageRequest(
       deliberate_euler_ancestral_bug: false,
       negative_prompt: prompt.negativePrompt,
       v4_prompt: {
-        caption: { base_caption: prompt.prompt, char_captions: [] },
-        use_coords: false,
+        caption: {
+          base_caption: prompt.prompt,
+          char_captions: captions(settings.model, characters, 'prompt'),
+        },
+        use_coords: characters.length > 0 && characters.every((character) => character.position),
         use_order: true,
       },
       v4_negative_prompt: {
-        caption: { base_caption: prompt.negativePrompt, char_captions: [] },
+        caption: {
+          base_caption: prompt.negativePrompt,
+          char_captions: captions(settings.model, characters, 'negativePrompt'),
+        },
         legacy_uc: false,
       },
     },
@@ -179,7 +216,7 @@ function imagesFrom(bytes: Buffer): NovelAIImage[] {
  */
 export async function generateWithNovelAI(
   settings: NovelAIRenderSettings,
-  prompt: { prompt: string; negativePrompt: string },
+  prompt: NovelAIPrompt,
   options: NovelAIRequestOptions
 ): Promise<{ images: NovelAIImage[]; seed: number }> {
   const seed = randomInt(0, 4_294_967_295);

@@ -24,7 +24,11 @@ import type { Json, ProviderRequest } from './transport.js';
 import { IMAGE_INPUT_MAX_BYTES } from './image-limits.js';
 import { contextBudgetForModel } from './context-budget.js';
 import { textTokenExcerpt } from './text-tokens.js';
-import type { NovelAIRenderSettings } from './novelai-settings.js';
+import {
+  NOVELAI_MAX_CHARACTERS,
+  type NovelAICharacterPrompt,
+  type NovelAIRenderSettings,
+} from './novelai-settings.js';
 
 /** Scene illustration generation. Independent of the existing image placement job kind. */
 export const ILLUSTRATION_GENERATORS = ['none', 'codex', 'comfyui', 'novelai', 'fixture'] as const;
@@ -353,7 +357,13 @@ const isRecord = (value: unknown): value is Record<string, Json> =>
 // ---------------------------------------------------------------------------
 // Prompt model stage (ComfyUI): scene → image prompt
 // ---------------------------------------------------------------------------
-export type IllustrationPrompt = { prompt: string; negativePrompt: string; caption: string };
+export type IllustrationPrompt = {
+  prompt: string;
+  negativePrompt: string;
+  caption: string;
+  /** NovelAI only: per-character boxes beside the shared scene prompt. */
+  characters?: NovelAICharacterPrompt[];
+};
 export type IllustrationPlan =
   | { kind: 'skip'; reason: string }
   | { kind: 'generate'; prompt: IllustrationPrompt };
@@ -400,13 +410,16 @@ export const CODEX_ILLUSTRATION_PROMPT_CONTRACT = [
   CODEX_ILLUSTRATION_PROMPT_FIELDS,
   ILLUSTRATION_CAPTION_FIELD,
 ].join('\n\n');
-// https://docs.novelai.net/en/image/tags, /en/image/strengthening-weakening (2026-11-20).
+// https://docs.novelai.net/en/image/tags, /en/image/strengthening-weakening and
+// /en/image/multiplecharacters (2026-11-20).
 export const NOVELAI_ILLUSTRATION_PROMPT_FIELDS = [
-  'prompt: Write a NovelAI prompt in English: lower-case tags separated by ", ", starting with subject counts such as 1girl or 2boys, then characters, then everything else, with the main subject in the first half. Add short natural-language sentences for actions, relationships and composition. Numeric emphasis is 1.3::tags :: and values below 1 weaken. Follow any NovelAI-specific grammar in styleGuidance and preserve its tags, names and weights verbatim.',
-  'negativePrompt: Combine explicit exclusions from styleGuidance and negativeGuidance into a concise list of English tags. When only one property is unwanted, keep the subject and describe its intended appearance in prompt.',
+  'NovelAI grammar: lower-case English tags separated by ", ", optionally followed by short natural-language sentences. Numeric emphasis is 1.3::tags :: and values below 1 weaken. Follow any NovelAI-specific grammar in styleGuidance and preserve its tags, names and weights verbatim.',
+  `prompt: The shared scene. Start with subject counts such as 2girls, 1boy, then setting, background, composition, lighting and style, keeping the main subject in the first half. When characters are listed, leave each person's appearance and actions to their character entry.`,
+  `characters: One entry per visible person, at most ${NOVELAI_MAX_CHARACTERS}, ordered left to right and top to bottom; omit it for scenes without people. Each prompt starts with girl, boy or other (no number), then that person's stable traits from the profiles, current clothing, expression, pose and action. Mark interactions with source#action on the actor, target#action on the receiver, or mutual#action on both, for example source#hug and target#hug. Each negativePrompt lists traits that must not leak onto that person, such as another character's hair color. Give every character a position {x, y} from 0.1 to 0.9 (x left to right, y top to bottom), or omit position for all of them.`,
+  'negativePrompt: Combine explicit exclusions from styleGuidance and negativeGuidance into a concise list of English tags for the whole image. When only one property is unwanted, keep the subject and describe its intended appearance in prompt.',
 ].join('\n\n');
 export const NOVELAI_ILLUSTRATION_PROMPT_CONTRACT = [
-  'Write a NovelAI image prompt for a single illustration of the supplied story scene. When the input specifies a focus, depict that exact moment without selecting another. Otherwise pick the most visually striking, illustratable moment. Return only JSON: {"prompt": string, "negativePrompt": string, "caption": string}.',
+  'Write a NovelAI image prompt for a single illustration of the supplied story scene. When the input specifies a focus, depict that exact moment without selecting another. Otherwise pick the most visually striking, illustratable moment. Return only JSON: {"prompt": string, "negativePrompt": string, "characters"?: [{"prompt": string, "negativePrompt": string, "position"?: {"x": number, "y": number}}], "caption": string}.',
   ILLUSTRATION_VISUAL_DIRECTION,
   NOVELAI_ILLUSTRATION_PROMPT_FIELDS,
   ILLUSTRATION_CAPTION_FIELD,
@@ -486,13 +499,45 @@ const field = (value: unknown, required: boolean): string => {
   return value.trim();
 };
 const captionField = (value: unknown) => Array.from(field(value, false)).slice(0, 300).join('');
+const unit = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) ? Math.min(0.9, Math.max(0.1, value)) : null;
+/**
+ * Extra boxes beyond the shared limit are dropped in order. Positions apply only when every
+ * box has one, since NovelAI either places all characters itself or follows all coordinates.
+ */
+export function parseNovelAICharacters(value: unknown): NovelAICharacterPrompt[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value)) throw new IllustrationError('ILLUSTRATION_PROMPT_INVALID', true);
+  const characters = value.slice(0, NOVELAI_MAX_CHARACTERS).map((entry) => {
+    if (!isRecord(entry)) throw new IllustrationError('ILLUSTRATION_PROMPT_INVALID', true);
+    const position = isRecord(entry.position)
+      ? { x: unit(entry.position.x), y: unit(entry.position.y) }
+      : null;
+    return {
+      prompt: field(entry.prompt, true),
+      negativePrompt: field(entry.negativePrompt, false),
+      ...(position && position.x !== null && position.y !== null
+        ? { position: { x: position.x, y: position.y } }
+        : {}),
+    };
+  });
+  if (!characters.length) return undefined;
+  return characters.every((character) => character.position)
+    ? characters
+    : characters.map(({ position: _position, ...character }) => character);
+}
 /** A skip decision is only honored when the host allowed it for this run. */
 export function parseIllustrationPlan(
   text: string,
   allowSkip: boolean,
-  options: { preservePrompt?: boolean } = {}
+  options: { preservePrompt?: boolean; characters?: boolean } = {}
 ): IllustrationPlan {
-  const plan = planOf(text, allowSkip, options.preservePrompt ?? false);
+  const plan = planOf(
+    text,
+    allowSkip,
+    options.preservePrompt ?? false,
+    options.characters ?? false
+  );
   return plan.skip !== undefined
     ? { kind: 'skip', reason: plan.skip }
     : { kind: 'generate', prompt: plan.prompt! };
@@ -500,7 +545,8 @@ export function parseIllustrationPlan(
 function planOf(
   text: string,
   allowSkip: boolean,
-  preservePrompt: boolean
+  preservePrompt: boolean,
+  withCharacters: boolean
 ): { prompt?: IllustrationPrompt; skip?: string } {
   let body = text.replace(/^\uFEFF/u, '').trim();
   const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/u.exec(body);
@@ -522,11 +568,13 @@ function planOf(
   if (allowSkip && (value.decision === 'skip' || value.skip === true))
     return { skip: captionField(value.reason) || '그릴 장면이 없다고 판단했어요.' };
   const prompt = field(value.prompt, true);
+  const characters = withCharacters ? parseNovelAICharacters(value.characters) : undefined;
   return {
     prompt: {
       prompt: preservePrompt ? (value.prompt as string) : prompt,
       negativePrompt: field(value.negativePrompt, false),
       caption: captionField(value.caption),
+      ...(characters ? { characters } : {}),
     },
   };
 }

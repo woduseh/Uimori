@@ -11,6 +11,7 @@ import {
   ILLUSTRATION_PROMPT_FIELDS,
   CODEX_ILLUSTRATION_PROMPT_FIELDS,
   NOVELAI_ILLUSTRATION_PROMPT_FIELDS,
+  parseNovelAICharacters,
   illustrationReferenceLabels,
   IllustrationError,
   type IllustrationPrompt,
@@ -102,9 +103,11 @@ function storyboardContract(mode: IllustrationPromptMode, selected: boolean): st
   const promptField =
     mode === 'codex'
       ? ',"prompt":{"prompt":string,"caption":string}'
-      : negativePromptMode(mode)
-        ? ',"prompt":{"prompt":string,"negativePrompt":string,"caption":string}'
-        : '';
+      : mode === 'novelai'
+        ? ',"prompt":{"prompt":string,"negativePrompt":string,"characters"?:[{"prompt":string,"negativePrompt":string,"position"?:{"x":number,"y":number}}],"caption":string}'
+        : negativePromptMode(mode)
+          ? ',"prompt":{"prompt":string,"negativePrompt":string,"caption":string}'
+          : '';
   const fields = `"visualBrief":string${promptField}`;
   const task = selected
     ? [
@@ -302,12 +305,20 @@ export function parseStoryboard(
       if (!fields || (negativePromptMode(promptMode) && typeof fields.negativePrompt !== 'string'))
         throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID', true);
       const promptText = required(fields.prompt);
+      let characters: IllustrationPrompt['characters'];
+      if (promptMode === 'novelai')
+        try {
+          characters = parseNovelAICharacters(fields.characters);
+        } catch {
+          throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID', true);
+        }
       prompt = {
         prompt: promptMode === 'codex' ? (fields.prompt as string) : promptText,
         negativePrompt: negativePromptMode(promptMode)
           ? (fields.negativePrompt as string).trim()
           : '',
         caption: required(fields.caption),
+        ...(characters ? { characters } : {}),
       };
     }
     return {

@@ -125,7 +125,7 @@
 
 - **Codex**: 공통 시각적 지침을 이미지 생성 도구에 전달해요. 캐릭터 참조는 외형, 스타일 참조는 화풍을 전달하는 역할을 맡아요. ComfyUI 전용 태그 문법은 제외돼요.
 - **ComfyUI**: 프롬프트 모델이 지침을 읽고 각 컷의 `{prompt, negativePrompt, caption}`을 작성해요. 워크플로의 `{{prompt}}`, `{{negative}}`, `{{seed}}` 자리에 해당 내용이 자동 치환돼요.
-- **NovelAI**: 프롬프트 모델이 같은 `{prompt, negativePrompt, caption}`을 쓰되, 계약에 NovelAI 문법을 짧게 안내해요. 소문자 태그를 `, `로 구분하고 `1girl` 같은 인원 태그를 앞에 두며, 관계와 구도는 짧은 영어 문장으로, 가중치는 `1.3::태그 ::`로 써요([태그 안내](https://docs.novelai.net/en/image/tags), [강조 안내](https://docs.novelai.net/en/image/strengthening-weakening)). 프리셋의 그림 지침에 적은 NovelAI 문법과 태그는 그대로 보존해요.
+- **NovelAI**: 프롬프트 모델이 `{prompt, negativePrompt, characters, caption}`을 써요. 계약에는 NovelAI 문법을 짧게 안내해요. 소문자 태그를 `, `로 구분하고 가중치는 `1.3::태그 ::`로 써요([태그 안내](https://docs.novelai.net/en/image/tags), [강조 안내](https://docs.novelai.net/en/image/strengthening-weakening)). 장면 공통 `prompt`에는 `2girls, 1boy` 같은 인원 태그와 배경·구도·조명·화풍을, `characters`에는 보이는 인물마다 `girl`/`boy`/`other`로 시작하는 외형·옷차림·표정·동작과 그 인물에게 번지면 안 되는 특징(인물별 제외 프롬프트)을 넣어요. 상호작용은 `source#hug`/`target#hug`/`mutual#hug`처럼 표시해요([다인물 안내](https://docs.novelai.net/en/image/multiplecharacters)). 프리셋의 그림 지침에 적은 NovelAI 문법과 태그는 그대로 보존해요.
 
 특정 체크포인트 모델의 문법이 필요하다면 그림 지침에 명시할 수 있어요. 예를 들어 [Anima 공식 모델 카드](https://huggingface.co/circlestone-labs/Anima#prompting)나 [OpenAI 이미지 프롬프팅 안내](https://developers.openai.com/api/docs/guides/image-prompting)를 참고해 다음과 같이 작성할 수 있어요.
 
@@ -221,7 +221,8 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 
 ### NovelAI 경로 기술 계약
 
-- **요청**: 계획 모델 호출 → 컷마다 `POST https://image.novelai.net/ai/generate-image` 한 번. 본문은 `input`, `model`, `action: "generate"`, `parameters`이고, 프롬프트는 `v4_prompt.caption.base_caption`, 제외 프롬프트는 `negative_prompt`와 `v4_negative_prompt.caption.base_caption`에 넣어요. 인물별 캡션(`char_captions`)과 참조 이미지는 아직 보내지 않아요. 인증은 `Authorization: Bearer <Persistent API 토큰>`이고 리다이렉트는 따라가지 않아요.
+- **요청**: 계획 모델 호출 → 컷마다 `POST https://image.novelai.net/ai/generate-image` 한 번. 본문은 `input`, `model`, `action: "generate"`, `parameters`이고, 장면 프롬프트는 `v4_prompt.caption.base_caption`, 제외 프롬프트는 `negative_prompt`와 `v4_negative_prompt.caption.base_caption`에 넣어요. 참조 이미지는 아직 보내지 않아요.
+- **인물별 캡션**: `characters`를 같은 순서로 `v4_prompt`와 `v4_negative_prompt`의 `char_captions`에 넣어요. 인물은 최대 6명(V4/V4.5 한도)이고, 넘는 항목은 뒤에서부터 버려요. 모든 인물에 위치가 있을 때만 `use_coords`를 켜고, 일부만 있으면 위치를 모두 비워 NovelAI가 배치하게 해요. 위치는 0.1~0.9로 제한하고, V4/V4.5 모델은 5×5 격자(0.1, 0.3, 0.5, 0.7, 0.9)에, V5는 0.01 단위로 맞춰요. 계획 단계의 공유 인물 외형(`visualCanon`)은 프롬프트 모델 입력으로만 쓰고, 다른 생성기와 달리 장면 프롬프트 뒤에 붙이지 않아요. 붙이면 인물별로 나눈 특징이 다른 인물에게 번지기 때문이에요. 생성 상세에서 인물별 캡션과 위치를 볼 수 있어요. 인증은 `Authorization: Bearer <Persistent API 토큰>`이고 리다이렉트는 따라가지 않아요.
 - **응답**: ZIP 안의 첫 이미지(또는 이미지 본문 자체)를 실제 이미지 서명으로 검증해 공통 WebP 저장 경로로 보내요. 사용한 시드는 진단의 `novelai.seed`에 남아요.
 - **실패 코드**: `NOVELAI_TOKEN_MISSING`(토큰 없음, 요청 안 보냄), `NOVELAI_UNAUTHORIZED`(401/403), `NOVELAI_ANLAS_INSUFFICIENT`(402), `NOVELAI_BUSY`(429, 같은 계정의 다른 생성), `NOVELAI_REQUEST_REJECTED`(그 밖의 4xx, 모델 ID·크기 확인), `NOVELAI_UNREACHABLE`(연결 전 실패), `NOVELAI_RESULT_UNCERTAIN`(전송 후 시간 초과·연결 끊김·5xx), `NOVELAI_RESPONSE_INVALID`, `NOVELAI_IMAGE_INVALID`. 진단에는 HTTP 상태와 최대 300자의 NovelAI 메시지만 남겨요.
 - **불확실한 결과**: NovelAI는 작업 ID를 돌려주지 않아 결과를 다시 조회할 수 없어요. 불확실한 실패도 **다시 요청**은 허용하며, 이때 저장된 프롬프트를 재사용해 이미지 요청만 다시 보내요. 취소하면 연결은 끊지만 NovelAI 쪽 생성은 끝까지 진행될 수 있어요.
@@ -265,7 +266,7 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
   - `tests/illustration-storyboard.test.ts`: 컷 계획 원자성, 중복 실행 방지, 재생성 중 기존본 유지, 번역 위치 연결 검증
   - `tests/illustration-runner.test.ts`: 번역 위치 연결의 판단 모델 선택, `none`, 키 미설정 시 기존 경로, 전송 후 실패
   - `tests/comfyui-client.test.ts`, `tests/codex-image.test.ts`: 각 생성기 클라이언트 및 가상 응답 계약 검증
-  - `tests/novelai-illustration.test.ts`: NovelAI 요청 본문·상태 코드 분류, 토큰 저장 경계, 자동 재시도 0회와 수동 재요청의 프롬프트 재사용 검증 (`fetch` 가로채기, 실제 NovelAI 호출 없음)
+  - `tests/novelai-illustration.test.ts`: NovelAI 요청 본문·인물별 캡션과 좌표 맞춤·상태 코드 분류, 토큰 저장 경계, 자동 재시도 0회와 수동 재요청의 프롬프트 재사용 검증 (`fetch` 가로채기, 실제 NovelAI 호출 없음)
   - `tests/illustration-*.test.ts`: 저장, 실행 큐, API 엔드포인트 계약 검증
 - **통합 검증 명령어**: `npm run verify:illustration`
   - 대표/문단 배치, 접기 상태 보존, 생성 중 다음 채팅 전송, 재요청, 삭제, 충돌 처리, 새로고침 후 표시 복원을 검증해요.
