@@ -19,6 +19,8 @@ test.each([
   ['retry a failed helper task', 'task.retry', 'library'],
   ['set global font', 'font.select', 'library'],
   ['aboveInputTokens', 'model.pricing.update', 'library'],
+  ['which region is fastest for this vertex model', 'vertex.location.compare', 'library'],
+  ['move the vertex connection to another region', 'vertex.location.update', 'library'],
   ['기본 외형', 'resource.patch', 'library'],
 ] as const)(
   'discovery returns %s candidates with the needed %s schema',

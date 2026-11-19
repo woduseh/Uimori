@@ -63,6 +63,7 @@ const settingsLabels: Record<string, string> = {
   'chat.illustrationProfiles': 'visuals.characterProfiles',
   'chat.illustrationReferences': 'visuals.m028',
   'model.pricing': 'helperResults.modelPricing',
+  'vertex.location': 'helperResults.vertexLocation',
 };
 const targetIcons = {
   content: BookOpen,

@@ -40,6 +40,14 @@ import {
   applyHelperSettingsMutation,
 } from './helper-settings-tools.js';
 import { HELPER_SCENE_TOOLS, invokeHelperSceneTool } from './helper-scene-tools.js';
+import {
+  compareVertexLocations,
+  isVertexLocationTool,
+  readVertexLocations,
+  updateVertexLocation,
+} from './helper-vertex-location-tools.js';
+import type { ConnectionTestRunner } from './provider-connection-test.js';
+import { recordHelperTaskResult } from './helper-task-results.js';
 import type {
   CodexRuntimeService,
   CodexAgentExecutionOptions,
@@ -74,6 +82,7 @@ import { shellExecutionOptions } from '../core/main-shell.js';
 import { executeTool } from '../core/provider.js';
 import {
   executeProvider,
+  ProviderContractError,
   type Json,
   type ProviderExecutionOptions,
   type ProviderRequest,
@@ -730,6 +739,7 @@ function completedReadReferences(previous: HelperReadReference[], events: ToolEv
 }
 
 export type HelperServices = {
+  connectionTests?: ConnectionTestRunner;
   sceneUpdated?: (sourceId: string) => void;
   illustrationsUpdated?: (chatId: string, queued: boolean) => void;
   task?: (
@@ -2464,6 +2474,58 @@ export class HelperRuntime {
         task.id,
         name.startsWith('font.') ? 'font.updated' : 'theme.updated',
         { presentation: true }
+      );
+      return result;
+    }
+    if (isVertexLocationTool(name)) {
+      if (name === 'vertex.location.read') return readVertexLocations(this.store, args);
+      const operationKey = `${task.id}:${operationId}`;
+      if (name === 'vertex.location.compare') {
+        const runner = this.options.services?.connectionTests;
+        if (!runner) throw new HttpError(400, 'VERTEX_LOCATION_COMPARE_UNAVAILABLE');
+        return compareVertexLocations(
+          this.store,
+          runner,
+          args,
+          operationKey,
+          () => {
+            try {
+              this.workspace.assertRunning(task.id);
+            } catch {
+              throw new ProviderContractError('HELPER_TASK_STOPPED');
+            }
+          },
+          hooks.signal
+        );
+      }
+      const result = this.workspace.operation(task.id, operationKey, { name, args }, () => {
+        const saved = updateVertexLocation(this.store, args);
+        recordHelperTaskResult(this.workspace, task, {
+          receiptId: operationKey,
+          operation: name,
+          requestedTargets: 1,
+          targets:
+            saved.previousLocation === saved.location
+              ? []
+              : [
+                  {
+                    kind: 'settings',
+                    id: saved.connectionId,
+                    title: saved.title,
+                    revision: saved.revision,
+                    setting: 'vertex.location',
+                    before: saved.previousLocation,
+                    after: saved.location,
+                  },
+                ],
+        });
+        return saved;
+      });
+      this.workspace.event(
+        task.conversationId,
+        task.id,
+        'settings.updated',
+        asJson(result) as Record<string, Json>
       );
       return result;
     }

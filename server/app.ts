@@ -71,7 +71,7 @@ import { runAuxiliaryJob } from './product-auxiliary.js';
 import { recordToolDiagnostic, startToolDiagnostic } from './execution-diagnostics.js';
 import { auxiliaryBridge } from './auxiliary-bridge.js';
 import { productRoutes } from './product-routes.js';
-import { providerConnectionTestRoutes } from './provider-connection-test.js';
+import { connectionTestRoutes, createConnectionTestRunner } from './provider-connection-test.js';
 import { storyRoutes } from './story-routes.js';
 import { sceneDeletionRoutes } from './scene-deletion.js';
 import { orphanMemoryRoutes } from './orphan-memory.js';
@@ -393,6 +393,13 @@ export async function createApp(options: AppOptions): Promise<App> {
     publish(source.chatId);
     pumpIllustrations();
   };
+  const connectionTests = createConnectionTestRunner(store, {
+    resolveCredential,
+    executeCodex,
+    signal: stopping.signal,
+    vertexRequestTier: options.vertexRequestTier,
+    track,
+  });
   const helper: HelperRuntime = new HelperRuntime(store, {
     owner: instanceId,
     testMode: options.testMode === true,
@@ -405,6 +412,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     track,
     streams,
     services: {
+      connectionTests,
       sceneUpdated,
       illustrationsUpdated: (chatId, queued) => {
         publish(chatId);
@@ -1034,14 +1042,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   });
   chatOverrideRoutes(app, new ChatOverridesStore(store), publish);
   responseStreamRoutes(app, streams, { authenticated: session.authenticated });
-  providerConnectionTestRoutes(app, store, {
-    resolveCredential,
-    executeCodex,
-    signal: stopping.signal,
-    vertexRequestTier: options.vertexRequestTier,
-    track,
-    authenticated: session.authenticated,
-  });
+  connectionTestRoutes(app, connectionTests, session.authenticated);
   agentRuntimeRoutes(app, codex);
   codexContentWarningRoutes(app, store, jevCredentials, stopping.signal);
   jevProviderRoutes(app, store, jevCredentials, {

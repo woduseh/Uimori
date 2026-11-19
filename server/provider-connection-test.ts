@@ -44,7 +44,18 @@ type TestOptions = Pick<
 > & {
   signal: AbortSignal;
   track: (work: Promise<void>) => void;
-  authenticated: (cookie?: string) => boolean;
+};
+export type ConnectionTestRunner = {
+  /**
+   * Admits a test, or returns the earlier one for the same idempotency key without sending again.
+   * `stillAuthorized` throws a ProviderContractError once the caller may no longer spend on it.
+   */
+  start(
+    modelId: string,
+    body: unknown,
+    stillAuthorized: () => void
+  ): { view: ProviderConnectionTest; done: Promise<void> };
+  get(id: string): ProviderConnectionTest;
 };
 
 /**
@@ -95,20 +106,15 @@ export class ProviderConnectionTestStore {
     const expectedRevision = number(body.expectedRevision, 'expectedRevision');
     const key = text(body.idempotencyKey, 'idempotencyKey', 200);
     const location = body.location === undefined ? undefined : text(body.location, 'location', 40);
-    const sameLocation = (row: Pick<TestRow, 'body'>) =>
-      (JSON.parse(row.body) as ProviderConnectionTest).location === location;
+    const runningKey = location === undefined ? modelId : `${modelId}#${location}`;
     return this.store.transaction(() => {
       const prior = this.store.db
         .prepare(
-          'SELECT id,model_id,model_revision,body FROM provider_connection_tests WHERE idempotency_key=?'
+          'SELECT id,model_id,model_revision FROM provider_connection_tests WHERE idempotency_key=?'
         )
         .get(key) as TestRow | undefined;
       if (prior) {
-        if (
-          prior.model_id !== modelId ||
-          prior.model_revision !== expectedRevision ||
-          !sameLocation(prior)
-        )
+        if (prior.model_id !== runningKey || prior.model_revision !== expectedRevision)
           throw new HttpError(409, 'Connection test key reused with different model or revision');
         return { view: this.get(prior.id) };
       }
@@ -118,13 +124,9 @@ export class ProviderConnectionTestStore {
       const authority = this.store.product.get<Connection>('connection', model.connectionId);
       this.store.product.authorize(authority);
       if (
-        (
-          this.store.db
-            .prepare(
-              "SELECT body FROM provider_connection_tests WHERE model_id=? AND status='running'"
-            )
-            .all(modelId) as Pick<TestRow, 'body'>[]
-        ).some(sameLocation)
+        this.store.db
+          .prepare("SELECT 1 FROM provider_connection_tests WHERE model_id=? AND status='running'")
+          .get(runningKey)
       )
         throw new HttpError(409, 'Connection test already running for this model');
       let connection = authority;
@@ -169,7 +171,7 @@ export class ProviderConnectionTestStore {
         .prepare(
           'INSERT INTO provider_connection_tests(id,idempotency_key,model_id,model_revision,status,body) VALUES(?,?,?,?,?,?)'
         )
-        .run(view.id, key, modelId, model.revision, view.status, JSON.stringify(view));
+        .run(view.id, key, runningKey, model.revision, view.status, JSON.stringify(view));
       return { view, target: { model, connection, authority, request } };
     });
   }
@@ -230,149 +232,170 @@ function safeCode(code: string | undefined): string | null {
   return code && /^[A-Z][A-Z0-9_]{0,79}$/u.test(code) ? code : code ? 'PROVIDER_ERROR' : null;
 }
 
-export function providerConnectionTestRoutes(
-  app: FastifyInstance,
+export function createConnectionTestRunner(
   store: Store,
   options: TestOptions
-) {
+): ConnectionTestRunner {
   const journal = new ProviderConnectionTestStore(store);
   journal.recover();
-  app.post<{ Params: { id: string } }>(
-    '/api/provider-management/models/:id/test',
-    async (request, reply) => {
+  return {
+    get: (id) => journal.get(id),
+    start(modelId, body, stillAuthorized) {
       if (options.signal.aborted) throw new HttpError(503, 'Server stopping');
-      const admission = journal.create(request.params.id, request.body);
-      if (admission.target) {
-        const { model, connection, authority, request: input } = admission.target;
-        const id = admission.view.id;
-        options.track(
-          (async () => {
-            const started = performance.now();
-            const timeout = AbortSignal.timeout(CONNECTION_TEST_TIMEOUT_MS);
-            const signal = AbortSignal.any([options.signal, timeout]);
-            let result: ProviderResult | undefined;
-            let attemptId: string | undefined;
-            let boundaryError: string | undefined;
-            const authorize = () => {
-              if (signal.aborted)
-                throw new ProviderContractError(
-                  options.signal.aborted ? 'SERVER_STOPPING' : 'TIMEOUT'
-                );
-              if (!options.authenticated(request.headers.cookie))
-                throw new ProviderContractError('SESSION_NOT_AUTHORIZED');
-              const current = store.product.get<ModelPreset>('model', model.id);
-              if (current.enabled === false || current.revision !== model.revision)
-                throw new ProviderContractError('CONNECTION_TEST_MODEL_CHANGED');
+      const admission = journal.create(modelId, body);
+      if (!admission.target) return { view: admission.view, done: Promise.resolve() };
+      const { model, connection, authority, request: input } = admission.target;
+      const id = admission.view.id;
+      const done = (async () => {
+        const started = performance.now();
+        const timeout = AbortSignal.timeout(CONNECTION_TEST_TIMEOUT_MS);
+        const signal = AbortSignal.any([options.signal, timeout]);
+        let result: ProviderResult | undefined;
+        let attemptId: string | undefined;
+        let boundaryError: string | undefined;
+        const authorize = () => {
+          if (signal.aborted)
+            throw new ProviderContractError(options.signal.aborted ? 'SERVER_STOPPING' : 'TIMEOUT');
+          stillAuthorized();
+          const current = store.product.get<ModelPreset>('model', model.id);
+          if (current.enabled === false || current.revision !== model.revision)
+            throw new ProviderContractError('CONNECTION_TEST_MODEL_CHANGED');
+          try {
+            store.product.authorize(authority);
+          } catch {
+            throw new ProviderContractError('CONNECTION_NOT_AUTHORIZED');
+          }
+        };
+        try {
+          authorize();
+          result = await executeProvider(transportConnection(connection), input, {
+            signal,
+            timeoutMs: CONNECTION_TEST_TIMEOUT_MS,
+            vertexRequestTier: options.vertexRequestTier,
+            resolveCredential: options.resolveCredential,
+            executeCodex: options.executeCodex,
+            beforeTurn: authorize,
+            onWire: (wire) => {
               try {
-                store.product.authorize(authority);
-              } catch {
-                throw new ProviderContractError('CONNECTION_NOT_AUTHORIZED');
+                authorize();
+                journal.sent(id);
+                attemptId = store.product.startAttempt(null, null, null, wire, {
+                  kind: 'connection-test',
+                  retainContent: false,
+                });
+                authorize();
+              } catch (error) {
+                boundaryError =
+                  error instanceof ProviderContractError
+                    ? error.code
+                    : 'CONNECTION_TEST_RECORD_FAILED';
+                throw error;
               }
-            };
-            try {
-              authorize();
-              result = await executeProvider(transportConnection(connection), input, {
-                signal,
-                timeoutMs: CONNECTION_TEST_TIMEOUT_MS,
-                vertexRequestTier: options.vertexRequestTier,
-                resolveCredential: options.resolveCredential,
-                executeCodex: options.executeCodex,
-                beforeTurn: authorize,
-                onWire: (wire) => {
-                  try {
-                    authorize();
-                    journal.sent(id);
-                    attemptId = store.product.startAttempt(null, null, null, wire, {
-                      kind: 'connection-test',
-                      retainContent: false,
-                    });
-                    authorize();
-                  } catch (error) {
-                    boundaryError =
-                      error instanceof ProviderContractError
-                        ? error.code
-                        : 'CONNECTION_TEST_RECORD_FAILED';
-                    throw error;
-                  }
-                },
-              });
-              if (boundaryError) throw new ProviderContractError(boundaryError);
-              authorize();
-              const output = result.text || result.refusal || '';
-              const rejection = providerRejection(result.error?.diagnostic);
-              journal.finish(id, {
-                estimatedCost: estimateCost(
-                  input.pricingSnapshot,
-                  result.usage,
-                  admission.view.createdAt
-                ),
-                ...(rejection ? { rejection } : {}),
-                status:
-                  result.status === 'tool_calls'
-                    ? 'error'
-                    : result.status === 'completed' && !output.trim()
-                      ? 'error'
-                      : result.status,
-                text: output.slice(0, 2000),
-                truncated: output.length > 2000,
-                latencyMs: Math.round(performance.now() - started),
-                error:
-                  result.status === 'tool_calls'
-                    ? 'CONNECTION_TEST_UNEXPECTED_TOOL'
-                    : result.status === 'completed' && !output.trim()
-                      ? 'CONNECTION_TEST_EMPTY_RESPONSE'
-                      : safeCode(result.error?.code),
-                usage: {
+            },
+          });
+          if (boundaryError) throw new ProviderContractError(boundaryError);
+          authorize();
+          const output = result.text || result.refusal || '';
+          const rejection = providerRejection(result.error?.diagnostic);
+          journal.finish(id, {
+            estimatedCost: estimateCost(
+              input.pricingSnapshot,
+              result.usage,
+              admission.view.createdAt
+            ),
+            ...(rejection ? { rejection } : {}),
+            status:
+              result.status === 'tool_calls'
+                ? 'error'
+                : result.status === 'completed' && !output.trim()
+                  ? 'error'
+                  : result.status,
+            text: output.slice(0, 2000),
+            truncated: output.length > 2000,
+            latencyMs: Math.round(performance.now() - started),
+            error:
+              result.status === 'tool_calls'
+                ? 'CONNECTION_TEST_UNEXPECTED_TOOL'
+                : result.status === 'completed' && !output.trim()
+                  ? 'CONNECTION_TEST_EMPTY_RESPONSE'
+                  : safeCode(result.error?.code),
+            usage: {
+              inputTokens: result.usage.inputTokens,
+              outputTokens: result.usage.outputTokens,
+              costUsd: result.usage.costUsd,
+            },
+          });
+        } catch (error) {
+          const code = options.signal.aborted
+            ? 'SERVER_STOPPING'
+            : timeout.aborted
+              ? 'TIMEOUT'
+              : error instanceof ProviderContractError
+                ? safeCode(error.code)
+                : 'CONNECTION_TEST_FAILED';
+          journal.finish(id, {
+            status: options.signal.aborted
+              ? 'interrupted'
+              : timeout.aborted && result?.text
+                ? 'partial'
+                : 'error',
+            text: timeout.aborted ? (result?.text.slice(0, 2000) ?? '') : '',
+            truncated: timeout.aborted && (result?.text.length ?? 0) > 2000,
+            latencyMs: Math.round(performance.now() - started),
+            error: code,
+            usage: result
+              ? {
                   inputTokens: result.usage.inputTokens,
                   outputTokens: result.usage.outputTokens,
                   costUsd: result.usage.costUsd,
-                },
-              });
-            } catch (error) {
-              const code = options.signal.aborted
-                ? 'SERVER_STOPPING'
-                : timeout.aborted
-                  ? 'TIMEOUT'
-                  : error instanceof ProviderContractError
-                    ? safeCode(error.code)
-                    : 'CONNECTION_TEST_FAILED';
-              journal.finish(id, {
-                status: options.signal.aborted
-                  ? 'interrupted'
-                  : timeout.aborted && result?.text
-                    ? 'partial'
-                    : 'error',
-                text: timeout.aborted ? (result?.text.slice(0, 2000) ?? '') : '',
-                truncated: timeout.aborted && (result?.text.length ?? 0) > 2000,
-                latencyMs: Math.round(performance.now() - started),
-                error: code,
-                usage: result
-                  ? {
-                      inputTokens: result.usage.inputTokens,
-                      outputTokens: result.usage.outputTokens,
-                      costUsd: result.usage.costUsd,
-                    }
-                  : nullUsage(),
-              });
-            } finally {
-              if (attemptId)
-                store.product.finishAttempt(
-                  attemptId,
-                  result ?? uncertainAttemptResult(signal.aborted)
-                );
-            }
-          })()
-        );
-      }
+                }
+              : nullUsage(),
+          });
+        } finally {
+          if (attemptId)
+            store.product.finishAttempt(
+              attemptId,
+              result ?? uncertainAttemptResult(signal.aborted)
+            );
+        }
+      })();
+      options.track(done);
+      return { view: admission.view, done };
+    },
+  };
+}
+
+export function connectionTestRoutes(
+  app: FastifyInstance,
+  runner: ConnectionTestRunner,
+  authenticated: (cookie?: string) => boolean
+) {
+  app.post<{ Params: { id: string } }>(
+    '/api/provider-management/models/:id/test',
+    async (request, reply) => {
+      const { view } = runner.start(request.params.id, request.body, () => {
+        if (!authenticated(request.headers.cookie))
+          throw new ProviderContractError('SESSION_NOT_AUTHORIZED');
+      });
       reply.code(202).header('Cache-Control', 'no-store');
-      return admission.view;
+      return view;
     }
   );
   app.get<{ Params: { id: string } }>(
     '/api/provider-management/tests/:id',
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
-      return journal.get(request.params.id);
+      return runner.get(request.params.id);
     }
   );
+}
+
+export function providerConnectionTestRoutes(
+  app: FastifyInstance,
+  store: Store,
+  options: TestOptions & { authenticated: (cookie?: string) => boolean }
+): ConnectionTestRunner {
+  const runner = createConnectionTestRunner(store, options);
+  connectionTestRoutes(app, runner, options.authenticated);
+  return runner;
 }

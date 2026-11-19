@@ -5,6 +5,7 @@ import { fields, record, choice, number, text, boolean, HttpError } from './requ
 import { apiKey } from './credentials.js';
 import { prepareVertexAccount, validateVertexCredential } from './vertex-credentials.js';
 import type { ProductStore } from './product-store.js';
+import { sameVertexProject } from '../core/vertex-location.js';
 
 /** Parse a provider edit; secret values stay separate from the public connection record. */
 function prepareConnection(product: ProductStore, value: unknown, id?: string) {
@@ -65,7 +66,8 @@ function prepareConnection(product: ProductStore, value: unknown, id?: string) {
   }
   const sameConnection =
     prior?.protocol === protocol &&
-    prior.endpoint === endpoint &&
+    (prior.endpoint === endpoint ||
+      (protocol === 'vertex-gemini-v1' && sameVertexProject(prior.endpoint, endpoint))) &&
     prior.credentialRef === credentialRef;
   const connection: Omit<Connection, 'id' | 'revision'> = {
     title: text(body.title, 'title', 200),

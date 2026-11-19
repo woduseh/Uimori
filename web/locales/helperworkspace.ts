@@ -353,4 +353,10 @@ export const messages = {
     ja: 'モデル料金',
     zh: '模型价格',
   },
+  'helperResults.vertexLocation': {
+    ko: 'Vertex 위치',
+    en: 'Vertex location',
+    ja: 'Vertexロケーション',
+    zh: 'Vertex 位置',
+  },
 };

@@ -462,7 +462,7 @@ describe('one-call provider connection diagnostics', () => {
     }
   );
 
-  test('a Vertex location test goes to that location with the saved credential and runs beside the default test', async () => {
+  test('Vertex location tests go to their locations with the saved credential and run beside each other', async () => {
     const { app, model: fixtureModel } = await setup();
     const saved =
       'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models';
@@ -481,16 +481,29 @@ describe('one-call provider connection diagnostics', () => {
       maxOutputTokens: 10000,
       temperature: null,
     }) as ModelPreset;
-    const fetch = vi.mocked(globalThis.fetch).mockImplementation(async () =>
-      sse({
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetch = vi.mocked(globalThis.fetch).mockImplementation(async () => {
+      await gate;
+      return sse({
         candidates: [
           { index: 0, content: { role: 'model', parts: [{ text: 'OK' }] }, finishReason: 'STOP' },
         ],
         usageMetadata: { promptTokenCount: 8, candidatesTokenCount: 1, totalTokenCount: 9 },
-      })
-    );
+      });
+    });
     const located = await post(app, model, randomUUID(), 202, { location: 'us' });
+    const elsewhere = await post(app, model, randomUUID(), 202, { location: 'eu' });
     const ordinary = await post(app, model);
+    await post(app, model, randomUUID(), 409, { location: 'us' });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+    release();
+    expect(await terminal(app, elsewhere.id)).toMatchObject({
+      status: 'completed',
+      location: 'eu',
+    });
     expect(located.location).toBe('us');
     expect(ordinary).not.toHaveProperty('location');
     expect(await terminal(app, located.id)).toMatchObject({ status: 'completed', text: 'OK' });

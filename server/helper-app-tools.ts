@@ -3,6 +3,10 @@ import type { Json, ProviderTool } from '../core/transport.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { RESOURCE_TOOLS, helperResourceOperation } from './helper-resource-tools.js';
 import { HELPER_SETTINGS_TOOLS } from './helper-settings-tools.js';
+import {
+  HELPER_VERTEX_LOCATION_TOOLS,
+  isVertexLocationTool,
+} from './helper-vertex-location-tools.js';
 import { HELPER_TASK_TOOLS } from './helper-task-tools.js';
 import { HELPER_DATA_TOOLS } from './helper-data-tools.js';
 import { HELPER_SCENE_TOOLS } from './helper-scene-tools.js';
@@ -68,6 +72,7 @@ const TOOLS: ProviderTool[] = [
   ...RESOURCE_TOOLS,
   ...HELPER_PRESENTATION_TOOLS,
   ...HELPER_SETTINGS_TOOLS,
+  ...HELPER_VERTEX_LOCATION_TOOLS,
   ...HELPER_TASK_TOOLS,
   ...HELPER_SCENE_TOOLS,
   ...HELPER_IMAGE_TOOLS,
@@ -526,6 +531,7 @@ const readNames = new Set([
   'usage.read',
   'model.list',
   'model.pricing.read',
+  'vertex.location.read',
   'task.inspect',
   'task.list',
   'app.tools',
@@ -576,6 +582,7 @@ export function helperToolTraits(name: string, args: Record<string, unknown> = {
       HELPER_PRESENTATION_TOOLS.some((tool) => tool.name === name) ||
       data ||
       HELPER_SETTINGS_TOOLS.some((tool) => tool.name === name) ||
+      isVertexLocationTool(name) ||
       name.startsWith('task.'),
     writingRead,
     writing:
@@ -624,6 +631,7 @@ export const HELPER_OPERATION_AREAS: readonly (readonly [area: string, purpose: 
   ['db', 'read-only SQL'],
   ['settings', 'models, prompts and chat settings'],
   ['model', 'saved models and pricing'],
+  ['vertex', 'Google Vertex AI request locations'],
   ['usage', 'cost and tokens'],
   ['task', 'runs and background jobs'],
   ['image', 'saved content images'],

@@ -863,7 +863,7 @@ function App() {
               ? 'illustrations'
               : target.kind === 'prompt-workspace'
                 ? 'prompts'
-                : target.setting === 'model.pricing'
+                : target.setting === 'model.pricing' || target.setting === 'vertex.location'
                   ? 'connections'
                   : 'models'
         );
