@@ -2891,6 +2891,7 @@
 }
 .story-ui .story-ui-calendar-number {
   font-size: 0.8em;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   line-height: 1.2;
@@ -6069,7 +6070,7 @@
   color: var(--story-rubric);
   background: none;
   font-family: var(--story-display);
-  font-size: 1.5em;
+  font-size: clamp(1em, 4.5cqi, 1.5em);
   line-height: 1;
 }
 .story-ui[data-story-ui-style="fantasy"] .story-ui-calendar-date li {
@@ -6136,7 +6137,7 @@
   box-shadow: var(--story-shine);
 }
 .story-ui[data-story-ui-style="modern"] .story-ui-calendar-number {
-  font-size: 1.15em;
+  font-size: clamp(0.85em, 3cqi, 1.15em);
   font-weight: 300;
 }
 .story-ui[data-story-ui-style="modern"] .story-ui-calendar-date[data-current] {
@@ -6458,7 +6459,7 @@
   padding: 0;
   color: var(--story-accent);
   background: none;
-  font-size: 1.7em;
+  font-size: clamp(1em, 5cqi, 1.7em);
   font-style: italic;
   font-weight: 900;
   line-height: 1;
@@ -7094,7 +7095,7 @@
   > .story-ui-calendar-number {
   color: var(--story-paper);
   background: none;
-  font-size: 1.2em;
+  font-size: clamp(0.9em, 3.5cqi, 1.2em);
 }
 .story-ui[data-story-ui-style="pop"] .story-ui-calendar-date li {
   background: var(--story-surface);
