@@ -9,19 +9,19 @@
 - 원문·번역을 직접 편집하고, 채팅을 독립 사본으로 복사해요.
 - 이야기 기억과 백업 기능을 제공해요.
 
-> **현재 버전 `v0.13.1` · DB 스키마 15**
+> **현재 버전 `v0.13.2` · DB 스키마 15**
 >
-> 서재 폴더 표지와 도우미 입력을 개선하고 번역 삽화 배치와 이야기 UI 오류 복구를 보완했어요. 읽기·번역 성능도 개선했어요. [릴리스 노트](docs/releases/v0.13.1.md) · [업데이트 안내](docs/UPDATES.md)
+> 사이드바에서도 폴더 표지를 바꿀 수 있고, 입력과 시작 화면을 가볍게 했어요. 원문 없이 끝난 실행의 저장 공간을 줄이고 도우미 도구 오류 복구를 개선했으며, 안내 문서를 현재 화면에 맞게 정리했어요. [릴리스 노트](docs/releases/v0.13.2.md) · [업데이트 안내](docs/UPDATES.md)
 
 ## 빠른 시작 (Windows)
 
 **준비물**: Node **26.13.0 이상 26.x**, npm, Chrome 또는 Edge. SQLite는 Node에 포함된 기능을 사용하므로 따로 설치하지 않아요.
 
-1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.13.1` 릴리스가 공개됐는지 확인해요.
+1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.13.2` 릴리스가 공개됐는지 확인해요.
 2. 소스를 받아 실행해요.
 
    ```powershell
-   git clone --branch v0.13.1 --single-branch https://github.com/woduseh/Uimori.git
+   git clone --branch v0.13.2 --single-branch https://github.com/woduseh/Uimori.git
    cd Uimori
    npm ci
    npm run dev
