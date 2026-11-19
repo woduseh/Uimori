@@ -41,6 +41,11 @@ import {
 } from './helper-settings-tools.js';
 import { HELPER_SCENE_TOOLS, invokeHelperSceneTool } from './helper-scene-tools.js';
 import {
+  HELPER_CHAT_STATE_TOOLS,
+  readHelperChatState,
+  updateHelperChatVariables,
+} from './helper-chat-state-tools.js';
+import {
   compareVertexLocations,
   isVertexLocationTool,
   readVertexLocations,
@@ -400,6 +405,26 @@ function smallerHelperRead(
           arguments: { ...args, action: 'read', limit: 5, textLimit: 2000 },
         },
       };
+    case 'chat.preview':
+    case 'chat.variables.read': {
+      const single = args.message !== undefined || args.name !== undefined;
+      return {
+        name: 'app.call',
+        arguments: {
+          name,
+          arguments: {
+            ...args,
+            ...(chatId ? { chatId } : {}),
+            ...(single ? { textLimit: 1000 } : { limit: 5 }),
+          },
+        },
+      };
+    }
+    case 'scene.lore':
+      return {
+        name: 'app.call',
+        arguments: { name, arguments: { ...args, ...(chatId ? { chatId } : {}), limit: 10 } },
+      };
     case 'data.search':
     case 'data.read':
       return {
@@ -741,6 +766,8 @@ function completedReadReferences(previous: HelperReadReference[], events: ToolEv
 export type HelperServices = {
   connectionTests?: ConnectionTestRunner;
   sceneUpdated?: (sourceId: string) => void;
+  /** Notifies open readers of a committed chat-level change, such as its variables. */
+  chatChanged?: (chatId: string) => void;
   illustrationsUpdated?: (chatId: string, queued: boolean) => void;
   task?: (
     task: HelperTask,
@@ -2677,6 +2704,22 @@ export class HelperRuntime {
         for (const id of new Set(ids))
           if (typeof id === 'string') this.options.services?.sceneUpdated?.(id);
       }
+      return result;
+    }
+    if (HELPER_CHAT_STATE_TOOLS.some((tool) => tool.name === name)) {
+      if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
+      if (name !== 'chat.variables.update')
+        return readHelperChatState(this.store, scope.chatId, name, args);
+      this.workspace.assertRunning(task.id);
+      const receiptId = `${task.id}:${operationId}`;
+      const result = this.workspace.operation(
+        task.id,
+        receiptId,
+        { name, args, chatId: scope.chatId },
+        () =>
+          updateHelperChatVariables(this.store, this.workspace, task, receiptId, scope.chatId, args)
+      );
+      if (result.changed) this.options.services?.chatChanged?.(scope.chatId);
       return result;
     }
     if (name === 'chat.read') {

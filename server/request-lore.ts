@@ -1,6 +1,7 @@
 import type { RequestLore } from '../core/request-lore.js';
 import type { Json, ProviderRequest, WireRecord } from '../core/transport.js';
 import type { RunSnapshot } from '../core/types.js';
+import type { Store } from './store.js';
 import { serializeRisuLoreSources, type RisuContextSource } from '../core/risu-context-source.js';
 import {
   loreSelectionKey,
@@ -261,4 +262,18 @@ function selectionCoverage(
     else selected += receipt.selected.length;
   }
   return { selection: { total, evaluated, selected, ...(failed ? { failed } : {}) } };
+}
+
+/** Lore evidence recorded by the writing attempt that produced a saved scene. */
+export function sceneRequestLore(
+  store: Store,
+  sourceId: string
+): { attemptId: string | null; lore: RequestLore | null } {
+  // A fork may still point at an ancestor's source. Its original invocation owns this receipt.
+  const row = store.db
+    .prepare(`SELECT a.id,json_extract(a.request,'$.requestLore') AS lore
+    FROM sources s JOIN attempts a ON a.run_id=s.run_id
+    WHERE s.id=? AND a.usage_kind='writing' AND a.job_id IS NULL ORDER BY a.rowid DESC LIMIT 1`)
+    .get(sourceId) as { id: string; lore: string | null } | undefined;
+  return { attemptId: row?.id ?? null, lore: row?.lore ? JSON.parse(row.lore) : null };
 }

@@ -10,7 +10,9 @@ import {
   type RequestImage,
   type RequestImagePreview,
 } from '../core/request-images.js';
+import type { LoreContextSnapshot } from '../core/lore-context.js';
 import type { Connection, ModelPreset, PromptPreset } from '../core/product.js';
+import type { PromptCompilation } from '../core/risu-prompt.js';
 import { tokenizerInfo } from '../core/text-tokens.js';
 import type { RunSnapshot } from '../core/types.js';
 import {
@@ -37,6 +39,26 @@ export async function previewNextRequest(
   loreContextReset = false,
   requestImages: readonly RequestImagePreview[] = []
 ): Promise<RequestPreview> {
+  return (await inspectNextRequest(store, chatId, request, loreContextReset, requestImages))
+    .preview;
+}
+
+export type NextRequestInspection = {
+  preview: RequestPreview;
+  /** The prompt the main request would carry; null without a main model or when preparation failed. */
+  compilation: PromptCompilation | null;
+  loreContext: LoreContextSnapshot | null;
+};
+
+/** The same read-only preparation as previewNextRequest, keeping the prompt it compiled. */
+export async function inspectNextRequest(
+  store: Store,
+  chatId: string,
+  request: string,
+  loreContextReset = false,
+  requestImages: readonly RequestImagePreview[] = []
+): Promise<NextRequestInspection> {
+  let compilation: PromptCompilation | null = null;
   const chat = store.chat(chatId);
   const profile = store.product.snapshot(chat.id, 'main', chat.headRevision);
   const workspace = promptWorkspace(store);
@@ -149,6 +171,7 @@ export async function previewNextRequest(
       result.tokens.tokenizerInfo = tokenizerInfo(result.tokens.tokenizer);
       if (result.tokens.tokenizerInfo.fallback) result.caveats.push('TOKENIZER_FALLBACK');
       const built = buildMainProviderRequest(snapshot);
+      compilation = built.snapshot.promptCompilation ?? null;
       // This follows the current transport choice without changing evaluation policy.
       const evaluation = target.evaluationTools;
       const measured = measureProviderRequest(built.request, target, {
@@ -180,6 +203,7 @@ export async function previewNextRequest(
     }
   } catch {
     // Author-controlled compilation errors can contain source text. Return bounded metadata only.
+    compilation = null;
     result.error = 'PREVIEW_UNAVAILABLE';
     result.caveats.push('PREVIEW_UNAVAILABLE');
   }
@@ -228,7 +252,11 @@ export async function previewNextRequest(
     result.snapshot.stale = true;
     result.caveats.push('SNAPSHOT_CHANGED');
   }
-  return result;
+  return {
+    preview: result,
+    compilation,
+    loreContext: result.error === 'PREVIEW_UNAVAILABLE' ? null : (snapshot.loreContext ?? null),
+  };
 }
 
 export function requestPreviewRoutes(app: FastifyInstance, store: Store) {

@@ -414,6 +414,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     services: {
       connectionTests,
       sceneUpdated,
+      chatChanged: publish,
       illustrationsUpdated: (chatId, queued) => {
         publish(chatId);
         if (queued) pumpIllustrations();

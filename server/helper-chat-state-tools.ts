@@ -1,0 +1,496 @@
+import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
+import { CHAT_VARIABLE_LIMITS, validateChatVariableValues } from '../core/chat-variables.js';
+import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import type { HelperTask } from '../core/helper.js';
+import type { LogicalMessage } from '../core/risu-prompt.js';
+import { countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
+import type { Json, ProviderTool } from '../core/transport.js';
+import { chatVariableView } from './chat-variable-context.js';
+import { readChatVariables, writeChatVariables } from './chat-variables.js';
+import { recordHelperTaskResult } from './helper-task-results.js';
+import type { HelperWorkspace } from './helper-workspace.js';
+import { sceneRequestLore } from './request-lore.js';
+import { inspectNextRequest } from './request-preview.js';
+import { fields, HttpError, isSha256Hex, number, record, text } from './request-validation.js';
+import type { Store } from './store.js';
+
+const schema = (properties: Record<string, Json>, required: string[] = []): Json => ({
+  type: 'object',
+  properties,
+  required,
+  additionalProperties: false,
+});
+const offset: Json = {
+  type: 'integer',
+  minimum: 0,
+  description: 'Entry offset. Pass the previous nextOffset.',
+};
+const textOffset: Json = {
+  type: 'integer',
+  minimum: 0,
+  description:
+    'Start position inside the text, in UTF-16 code units. Pass the previous nextOffset.',
+};
+const textLimit: Json = {
+  type: 'integer',
+  minimum: 1,
+  maximum: 10000,
+  description:
+    'Maximum text to return, in UTF-16 code units. Omit to read up to about 3000 tokens.',
+};
+const sha256: Json = { type: 'string', pattern: '^[a-f0-9]{64}$' };
+
+export const HELPER_CHAT_STATE_TOOLS: ProviderTool[] = [
+  {
+    name: 'chat.preview',
+    description:
+      "Preview the next main request of a chat without sending it: the model, prompt preset and persona it would use, its estimated input tokens against the model limit, whether the summary is used, the lore it would carry, prompt blocks left out and why, and the assembled prompt messages in order. Use it to find out why the writer ignored a setting or lore entry, what a prompt preset actually produces, or how close the context is to its limit. request is the user's next request; omit it for an empty one. Without message, the messages are listed in pages with role, origin (prompt, history or current), prompt block, length and opening; contains keeps only messages containing that literal text, case-insensitively. With message, that message's text is returned in pages. Native Risu scripts run read-only and start/input callbacks are skipped; caveats names what can still differ from a real request. Each call assembles the request again: pass promptHash back as expectedPromptHash while paging, so a changed chat is reported instead of mixing versions. Nothing is reserved, sent or saved.",
+    inputSchema: schema({
+      request: {
+        type: 'string',
+        maxLength: REQUEST_TEXT_MAX_CHARS,
+        description: 'The next user request to preview. Omit for an empty request.',
+      },
+      contains: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
+        description: 'List only messages that contain this literal text, ignoring case.',
+      },
+      message: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Index of one message to read, from the message list.',
+      },
+      offset: { ...(offset as object), description: 'Message list offset.' },
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 50,
+        description: 'Maximum messages per list page. Default 20.',
+      },
+      textOffset,
+      textLimit,
+      expectedPromptHash: {
+        ...(sha256 as object),
+        description: 'promptHash from an earlier page of the same preview.',
+      },
+    }),
+  },
+  {
+    name: 'scene.lore',
+    description:
+      'Show which lore entries the writer actually received when a saved scene was written: each entry title and library source, how it arrived (pinned, selected by automatic lore selection, retained from earlier scenes, or read through a tool), whether its full text, an excerpt or a summary was delivered, and the automatic selection counts. sourceId defaults to the latest scene. Imported scenes, authored first messages and scenes written before this record existed return lore:null. For the next request use chat.preview.',
+    inputSchema: schema({
+      sourceId: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 100,
+        description: 'Scene id from chat.read. Omit for the latest scene.',
+      },
+      offset,
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 200,
+        description: 'Maximum entries per page. Default 50.',
+      },
+    }),
+  },
+  {
+    name: 'chat.variables.read',
+    description:
+      'Read the Risu variables of a chat, the values that {{getvar::name}} and scripts use, such as affection or a quest flag. For each name it returns the value the next request would use, the authored default from the bot, persona, modules or prompt preset, and whether this chat overrides it. It also returns revision and sourceHash, which chat.variables.update needs, and pending while a request of the chat is queued or running. query keeps names that contain that text. Long values are cut to a preview with their full length; pass name to read one value in text pages.',
+    inputSchema: schema({
+      query: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
+        description: 'Keep variable names that contain this text, ignoring case.',
+      },
+      name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 1000,
+        description: 'Exact variable name to read in full.',
+      },
+      offset,
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 200,
+        description: 'Maximum variables per page. Default 50.',
+      },
+      textOffset,
+      textLimit,
+    }),
+  },
+  {
+    name: 'chat.variables.update',
+    description:
+      "Change Risu variables of a chat. set gives new values by name; Risu stores every value as text, so write numbers and flags as text too. unset removes this chat's value so the authored default applies again, and a variable without a default disappears. Variables you do not name keep their values. Take expectedRevision and expectedSourceHash from chat.variables.read. The change is refused while a request of the chat is queued or running, and when the story or the variables changed after that read. It affects later requests only; saved scenes are not rewritten.",
+    inputSchema: schema(
+      {
+        expectedRevision: {
+          type: 'integer',
+          minimum: 0,
+          description: 'revision from chat.variables.read.',
+        },
+        expectedSourceHash: {
+          type: ['string', 'null'],
+          pattern: '^[a-f0-9]{64}$',
+          description: 'sourceHash from chat.variables.read, null for a chat without scenes.',
+        },
+        set: {
+          type: 'object',
+          additionalProperties: { type: 'string', maxLength: CHAT_VARIABLE_LIMITS.maxValueChars },
+          description: 'Variable names and their new text values.',
+        },
+        unset: {
+          type: 'array',
+          maxItems: CHAT_VARIABLE_LIMITS.maxEntries,
+          items: { type: 'string', minLength: 1, maxLength: 1000 },
+          description: 'Variable names whose chat value is removed.',
+        },
+      },
+      ['expectedRevision', 'expectedSourceHash']
+    ),
+  },
+];
+
+const READ_TOKEN_BUDGET = 12_000;
+const MESSAGE_OPENING_CHARS = 160;
+const VALUE_PREVIEW_CHARS = 300;
+
+function boundary(value: string, at: number) {
+  return at > 0 &&
+    /[\uD800-\uDBFF]/u.test(value[at - 1] ?? '') &&
+    /[\uDC00-\uDFFF]/u.test(value[at] ?? '')
+    ? at - 1
+    : at;
+}
+
+/** One page of a long text, shrunk until the whole serialized result fits the read budget. */
+function textPage<T extends object>(
+  value: string,
+  args: Record<string, unknown>,
+  wrap: (page: object) => T
+): T {
+  const start = boundary(value, number(args.textOffset ?? 0, 'text offset', 0, value.length));
+  const limit =
+    args.textLimit === undefined
+      ? textTokenExcerpt(value.slice(start), 3000).text.length
+      : number(args.textLimit, 'text limit', 1, 10000);
+  let end = boundary(value, Math.min(value.length, start + limit));
+  if (end === start && start < value.length) end = Math.min(value.length, start + 2);
+  const page = () =>
+    wrap({
+      text: value.slice(start, end),
+      range: { start, end, unit: 'utf16-code-unit' },
+      totalChars: value.length,
+      nextOffset: end < value.length ? end : null,
+    });
+  while (end - start > 2 && countTextTokens(JSON.stringify(page())) > READ_TOKEN_BUDGET)
+    end = boundary(value, start + Math.max(2, Math.floor((end - start) / 2)));
+  return page();
+}
+
+/** A list page, shortened from its end until the serialized result fits the read budget. */
+function listPage<T, R extends object>(
+  items: readonly T[],
+  start: number,
+  limit: number,
+  wrap: (page: T[], nextOffset: number | null) => R
+): R {
+  let count = Math.min(limit, Math.max(0, items.length - start));
+  const page = () => {
+    const end = start + count;
+    return wrap(items.slice(start, end), end < items.length ? end : null);
+  };
+  while (count > 1 && countTextTokens(JSON.stringify(page())) > READ_TOKEN_BUDGET)
+    count = Math.max(1, Math.floor(count / 2));
+  return page();
+}
+
+const opening = (value: string, chars: number) =>
+  value.length <= chars ? value : `${value.slice(0, boundary(value, chars))}…`;
+
+function messageText(message: LogicalMessage): string {
+  return message.content
+    .map((part) =>
+      part.type === 'text' ? part.text : part.type === 'image' ? '[image]' : '[file]'
+    )
+    .join('');
+}
+
+async function readChatPreview(store: Store, chatId: string, args: Record<string, unknown>) {
+  fields(args, [
+    'request',
+    'contains',
+    'message',
+    'offset',
+    'limit',
+    'textOffset',
+    'textLimit',
+    'expectedPromptHash',
+  ]);
+  const request =
+    args.request === undefined ? '' : text(args.request, 'request', REQUEST_TEXT_MAX_CHARS, true);
+  const contains =
+    args.contains === undefined ? undefined : text(args.contains, 'contains', 200).toLowerCase();
+  if (args.expectedPromptHash !== undefined && !isSha256Hex(args.expectedPromptHash))
+    throw new HttpError(400, 'Invalid expectedPromptHash');
+  if (args.message !== undefined && (contains !== undefined || args.offset !== undefined))
+    throw new HttpError(400, 'message reads one message; omit contains and offset');
+  if (args.message === undefined && (args.textOffset !== undefined || args.textLimit !== undefined))
+    throw new HttpError(400, 'textOffset and textLimit need message');
+  const { preview, compilation, loreContext } = await inspectNextRequest(store, chatId, request);
+  const messages = compilation?.messages ?? [];
+  const promptHash = compilation
+    ? createHash('sha256').update(JSON.stringify(messages)).digest('hex')
+    : null;
+  if (args.expectedPromptHash !== undefined && args.expectedPromptHash !== promptHash)
+    throw new HttpError(
+      409,
+      'PREVIEW_CHANGED: The chat or its settings changed since that page. Start again from the first page.'
+    );
+  const describe = (item: LogicalMessage, index: number, body: string) => ({
+    index,
+    role: item.role,
+    origin: item.provenance.origin,
+    blockId: item.provenance.blockId,
+    ...(item.provenance.sourceRevision ? { sourceId: item.provenance.sourceRevision } : {}),
+    ...(item.completion === 'prefill' ? { prefill: true } : {}),
+    chars: body.length,
+  });
+  if (args.message !== undefined) {
+    if (!compilation) throw new HttpError(409, preview.error ?? 'PREVIEW_UNAVAILABLE');
+    const index = number(args.message, 'message index', 0, Math.max(0, messages.length - 1));
+    const item = messages[index];
+    if (!item) throw new HttpError(400, 'The preview has no messages');
+    const body = messageText(item);
+    return textPage(body, args, (page) => ({
+      promptHash,
+      ...describe(item, index, body),
+      ...page,
+    }));
+  }
+  const listed = messages
+    .map((item, index) => ({ item, index, body: messageText(item) }))
+    .filter(({ body }) => contains === undefined || body.toLowerCase().includes(contains));
+  const start = number(args.offset ?? 0, 'offset', 0);
+  const limit = number(args.limit ?? 20, 'limit', 1, 50);
+  return listPage(listed, start, limit, (page, nextOffset) => ({
+    preview: {
+      scope: preview.scope,
+      stale: preview.snapshot.stale,
+      selected: preview.selected,
+      tokens: {
+        estimatedInputTokens: preview.tokens.estimatedInputTokens,
+        inputTokenLimit: preview.tokens.inputTokenLimit,
+        utilization: preview.tokens.utilization,
+        status: preview.tokens.status,
+      },
+      summary: preview.summary,
+      error: preview.error,
+      caveats: preview.caveats,
+    },
+    promptHash,
+    ...(start === 0
+      ? {
+          lore: {
+            enabled: preview.lore.enabled,
+            pinnedEntries: preview.lore.pinnedEntries,
+            selectionPending: preview.lore.selectionPending,
+            retained: (loreContext?.entries ?? [])
+              .slice(0, 50)
+              .map((entry) => ({ id: entry.id, title: entry.title, chars: entry.text.length })),
+            retainedTotal: loreContext?.entries.length ?? 0,
+          },
+          excludedBlocks: (compilation?.trace ?? [])
+            .filter((block) => !block.included)
+            .slice(0, 50)
+            .map((block) => ({ blockId: block.blockId, reason: block.reason ?? null })),
+          warnings: (compilation?.warnings ?? []).slice(0, 20).map((item) => opening(item, 300)),
+        }
+      : {}),
+    messages: page.map(({ item, index, body }) => {
+      const at = contains === undefined ? -1 : body.toLowerCase().indexOf(contains);
+      return {
+        ...describe(item, index, body),
+        opening: opening(body, MESSAGE_OPENING_CHARS),
+        ...(at >= 0 ? { matchOffset: at } : {}),
+      };
+    }),
+    total: listed.length,
+    totalMessages: messages.length,
+    nextOffset,
+  }));
+}
+
+function readSceneLore(store: Store, chatId: string, args: Record<string, unknown>) {
+  fields(args, ['sourceId', 'offset', 'limit']);
+  const chat = store.chat(chatId);
+  const sourceId =
+    args.sourceId === undefined ? chat.headRevision : text(args.sourceId, 'source ID', 100);
+  if (!sourceId) return { sourceId: null, attemptId: null, lore: null };
+  if (!store.history(chat.headRevision).some((item) => item.revision === sourceId))
+    throw new HttpError(404, 'SCENE_NOT_IN_CHAT: Find the scene id with chat.read.');
+  const { attemptId, lore } = sceneRequestLore(store, sourceId);
+  if (!lore) return { sourceId, attemptId, lore: null };
+  const start = number(args.offset ?? 0, 'offset', 0);
+  const limit = number(args.limit ?? 50, 'limit', 1, 200);
+  return listPage(lore.entries, start, limit, (entries, nextOffset) => ({
+    sourceId,
+    attemptId,
+    status: lore.status,
+    ...(lore.selection ? { selection: lore.selection } : {}),
+    entries,
+    total: lore.entries.length,
+    nextOffset,
+  }));
+}
+
+function readHelperChatVariables(store: Store, chatId: string, args: Record<string, unknown>) {
+  fields(args, ['query', 'name', 'offset', 'limit', 'textOffset', 'textLimit']);
+  const view = chatVariableView(store, chatId);
+  const guards = {
+    revision: view.revision,
+    sourceHash: view.sourceHash,
+    pending: view.pending,
+    ...(view.variableDefaultsError ? { variableDefaultsError: view.variableDefaultsError } : {}),
+  };
+  const defaults = view.defaults as Record<string, string>;
+  const resolved = view.resolved as Record<string, string>;
+  const value = (name: string) => resolved[name] ?? view.values[name] ?? defaults[name] ?? '';
+  if (args.name !== undefined) {
+    if (args.query !== undefined || args.offset !== undefined || args.limit !== undefined)
+      throw new HttpError(400, 'name reads one variable; omit query, offset and limit');
+    const name = text(args.name, 'variable name', 1000);
+    if (!(name in resolved || name in view.values || name in defaults))
+      throw new HttpError(404, 'CHAT_VARIABLE_NOT_FOUND: List the names with chat.variables.read.');
+    return textPage(value(name), args, (page) => ({
+      ...guards,
+      name,
+      overridden: Object.hasOwn(view.values, name),
+      ...(Object.hasOwn(defaults, name) ? { defaultLength: defaults[name]!.length } : {}),
+      ...page,
+    }));
+  }
+  if (args.textOffset !== undefined || args.textLimit !== undefined)
+    throw new HttpError(400, 'textOffset and textLimit need name');
+  const query = args.query === undefined ? undefined : text(args.query, 'query', 200).toLowerCase();
+  const names = [
+    ...new Set([...Object.keys(resolved), ...Object.keys(view.values), ...Object.keys(defaults)]),
+  ]
+    .filter((name) => query === undefined || name.toLowerCase().includes(query))
+    .sort();
+  const start = number(args.offset ?? 0, 'offset', 0);
+  const limit = number(args.limit ?? 50, 'limit', 1, 200);
+  return listPage(names, start, limit, (page, nextOffset) => ({
+    ...guards,
+    variables: page.map((name) => {
+      const current = value(name);
+      const fallback = defaults[name];
+      return {
+        name,
+        value: opening(current, VALUE_PREVIEW_CHARS),
+        ...(current.length > VALUE_PREVIEW_CHARS ? { valueLength: current.length } : {}),
+        overridden: Object.hasOwn(view.values, name),
+        ...(fallback === undefined
+          ? {}
+          : fallback === current
+            ? { default: 'same' }
+            : { default: opening(fallback, VALUE_PREVIEW_CHARS) }),
+      };
+    }),
+    total: names.length,
+    nextOffset,
+  }));
+}
+
+export async function readHelperChatState(
+  store: Store,
+  chatId: string,
+  name: string,
+  value: unknown
+): Promise<unknown> {
+  const args = record(value);
+  if (name === 'chat.preview') return readChatPreview(store, chatId, args);
+  if (name === 'scene.lore') return readSceneLore(store, chatId, args);
+  if (name === 'chat.variables.read') return readHelperChatVariables(store, chatId, args);
+  throw new HttpError(400, 'UNKNOWN_CHAT_STATE_TOOL');
+}
+
+/** Called inside workspace.operation so the variable write, its receipt and result commit together. */
+export function updateHelperChatVariables(
+  store: Store,
+  workspace: HelperWorkspace,
+  task: Pick<HelperTask, 'id' | 'conversationId'>,
+  receiptId: string,
+  chatId: string,
+  value: unknown
+) {
+  const args = record(value);
+  fields(args, ['expectedRevision', 'expectedSourceHash', 'set', 'unset']);
+  const expectedRevision = number(
+    args.expectedRevision,
+    'variables revision',
+    0,
+    Number.MAX_SAFE_INTEGER - 1
+  );
+  if (args.expectedSourceHash !== null && !isSha256Hex(args.expectedSourceHash))
+    throw new HttpError(
+      400,
+      'Invalid expectedSourceHash: pass sourceHash from chat.variables.read'
+    );
+  const set = args.set === undefined ? {} : record(args.set);
+  if (args.unset !== undefined && !Array.isArray(args.unset))
+    throw new HttpError(400, 'Invalid unset: expected an array of variable names');
+  const unset = (args.unset ?? []).map((name: unknown) => text(name, 'variable name', 1000));
+  for (const [name, item] of Object.entries(set)) {
+    text(name, 'variable name', 1000);
+    if (typeof item !== 'string')
+      throw new HttpError(400, `Invalid value of ${name}: Risu variables are text`);
+  }
+  if (!Object.keys(set).length && !unset.length)
+    throw new HttpError(400, 'Pass set or unset with at least one variable');
+  const both = unset.filter((name: string) => Object.hasOwn(set, name));
+  if (both.length) throw new HttpError(400, `Both set and unset name: ${both.join(', ')}`);
+  const current = readChatVariables(store, chatId);
+  const next: Record<string, string> = { ...current.values, ...(set as Record<string, string>) };
+  for (const name of unset) delete next[name];
+  try {
+    validateChatVariableValues(next);
+  } catch {
+    throw new HttpError(
+      400,
+      `CHAT_VARIABLE_VALUES_INVALID: At most ${CHAT_VARIABLE_LIMITS.maxEntries} variables, ${CHAT_VARIABLE_LIMITS.maxValueChars} characters per value and ${CHAT_VARIABLE_LIMITS.maxTotalChars} in total.`
+    );
+  }
+  const changed = !isDeepStrictEqual(next, current.values);
+  const chat = store.chat(chatId);
+  const sourceHash = chat.headRevision ? store.source(chat.headRevision).hash : null;
+  let revision = current.revision;
+  if (changed)
+    revision = writeChatVariables(store, chatId, {
+      expectedRevision,
+      expectedSourceHash: args.expectedSourceHash as string | null,
+      idempotencyKey: `helper:${createHash('sha256').update(receiptId).digest('hex')}`,
+      values: next,
+    }).revision;
+  else if (current.revision !== expectedRevision)
+    throw new HttpError(409, 'CHAT_VARIABLE_REVISION_CONFLICT');
+  else if (sourceHash !== args.expectedSourceHash)
+    throw new HttpError(409, 'CHAT_VARIABLE_SOURCE_CONFLICT');
+  recordHelperTaskResult(workspace, task, {
+    receiptId,
+    operation: 'chat.variables.update',
+    requestedTargets: 1,
+    targets: changed
+      ? [{ kind: 'settings', id: chatId, title: chat.title, revision, setting: 'chat.variables' }]
+      : [],
+  });
+  return { changed, revision, sourceHash, set: Object.keys(set), unset };
+}

@@ -848,11 +848,13 @@ function App() {
           target.setting === 'chat.illustrationProfiles' ||
             target.setting === 'chat.illustrationReferences'
             ? 'images'
-            : target.setting === 'chat.maxCalls' ||
-                target.setting === 'chat.storyUi' ||
-                target.setting === 'chat.storyUiStyle'
-              ? 'runtime'
-              : 'prompts'
+            : target.setting === 'chat.variables'
+              ? 'packages'
+              : target.setting === 'chat.maxCalls' ||
+                  target.setting === 'chat.storyUi' ||
+                  target.setting === 'chat.storyUiStyle'
+                ? 'runtime'
+                : 'prompts'
         );
         setPanel('story');
       } else {

@@ -359,4 +359,10 @@ export const messages = {
     ja: 'Vertexロケーション',
     zh: 'Vertex 位置',
   },
+  'helperResults.chatVariables': {
+    ko: '카드 변수',
+    en: 'Card variables',
+    ja: 'カード変数',
+    zh: '卡片变量',
+  },
 };
