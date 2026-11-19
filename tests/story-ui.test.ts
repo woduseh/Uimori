@@ -115,6 +115,52 @@ root = Column([
     expect(schedule.items).toEqual([{ day: 1, title: 'Vocal lesson', time: '16:00' }]);
     expect(schedule.current).toBe(1);
   });
+  it('reads relations with their ends, translates map and calendar wording, and pins node portraits', () => {
+    const stored = normalizeStoryUiOutput(
+      `<a2ui>
+root = Column([
+  Graph([{id: "me", label: "나"}, {id: "yun", label: "한서윤", text: "소꿉친구", image: "{{img::서윤}}"}, {id: "x", label: "발신인", state: "unknown"}], [{from: "yun", to: "me", label: "짝사랑"}, {from: "x", to: "me", line: "dashed"}], "관계도", center="me"),
+  Map(4, 3, [{x: 0, y: 0, w: 2, label: "교실", terrain: "floor"}], [{x: 1, y: 2, label: "경비원", mark: "경", text: "순찰 중", tone: "danger"}], coords=true),
+  Calendar("12월", [{date: 24, title: "크리스마스 공연", time: "19:00"}], month="2026-12", days=["일", "월", "화", "수", "목", "금", "토"], current=19)
+])
+</a2ui>`,
+      (name) => ({ 서윤: '/api/assets/yun' })[name]
+    );
+    const segment = parseStoryUi(stored)[0];
+    if (segment.kind !== 'ui') throw new Error('graph, map and calendar did not validate');
+    expect(segment.imageUrls).toEqual({ 서윤: '/api/assets/yun' });
+    const wording = projectStoryUiText(stored);
+    expect(wording).toContain('한서윤 → 나: 짝사랑');
+    expect(wording).toContain('발신인 → 나');
+    for (const value of [
+      '소꿉친구',
+      '교실',
+      '경비원',
+      '순찰 중',
+      '12월',
+      '크리스마스 공연',
+      '19:00',
+    ])
+      expect(wording).toContain(value);
+    for (const value of ['yun', 'dashed', 'floor', '2026-12']) expect(wording).not.toContain(value);
+    const translation = prepareStoryUiTranslation(stored);
+    const strings: string[] = JSON.parse(
+      translation.text.replace(/<\/?UIMORI_UI_TRANSLATION_0>/g, '')
+    );
+    expect(strings).toEqual(
+      expect.arrayContaining([
+        '한서윤',
+        '짝사랑',
+        '교실',
+        '경비원',
+        '순찰 중',
+        '크리스마스 공연',
+        '일',
+      ])
+    );
+    // Ids, the token mark and the month are host-owned: translating them would break the layout.
+    for (const value of ['yun', 'me', '경', '2026-12']) expect(strings).not.toContain(value);
+  });
   it('reads composed media as wording, or as the expression a writer continues from', () => {
     const expression = `<a2ui>
 root = Frame(chat, "한서윤", kind="app", accent="amber")

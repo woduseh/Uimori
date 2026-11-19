@@ -2537,6 +2537,467 @@
   margin: 0.1em 0 0;
 }
 
+/* Graph: nodes placed by the host, joined by lines drawn under them. */
+.story-ui .story-ui-graph-scroll,
+.story-ui .story-ui-map-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.story-ui .story-ui-graph-canvas {
+  position: relative;
+  container-type: inline-size;
+  inline-size: 100%;
+  margin-inline: auto;
+}
+.story-ui .story-ui-graph-canvas > svg {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  overflow: visible;
+}
+.story-ui .story-ui-graph-edge {
+  color: var(--story-tone);
+}
+.story-ui .story-ui-graph-edge:not([data-tone]),
+.story-ui .story-ui-graph-node:not([data-tone]) {
+  --story-tone: color-mix(in srgb, var(--story-ink) 40%, transparent);
+}
+.story-ui .story-ui-graph-edge > path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.story-ui .story-ui-graph-edge[data-line="dashed"] > path {
+  stroke-dasharray: 6 5;
+}
+.story-ui .story-ui-graph-edge > polygon {
+  fill: currentColor;
+}
+.story-ui .story-ui-graph-relation {
+  position: absolute;
+  z-index: 1;
+  max-inline-size: var(--story-graph-label);
+  padding: 0.1em 0.45em;
+  overflow: hidden;
+  color: var(--story-muted);
+  background: var(--story-paper);
+  border: 1px solid var(--story-hair);
+  border-radius: 999px;
+  font-size: clamp(0.6em, 2cqi, 0.72em);
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  translate: -50% -50%;
+}
+.story-ui .story-ui-graph-relation[data-tone] {
+  color: var(--story-tone);
+  border-color: color-mix(in srgb, var(--story-tone) 45%, transparent);
+}
+.story-ui .story-ui-graph-node {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  inline-size: var(--story-graph-label);
+  text-align: center;
+  translate: -50% calc(var(--story-graph-disc) / -2);
+}
+.story-ui .story-ui-graph-node[data-caption="above"] {
+  flex-direction: column-reverse;
+  translate: -50% calc(-100% + var(--story-graph-disc) / 2);
+}
+/* A caption is backed by the paper, so a line passing under it stays out of the words. */
+.story-ui .story-ui-graph-caption {
+  display: grid;
+  justify-items: center;
+  max-inline-size: 100%;
+  padding: 0.05em 0.35em 0.1em;
+  background: color-mix(in srgb, var(--story-paper) 88%, transparent);
+  border-radius: 0.4em;
+}
+.story-ui .story-ui-graph-node > .story-ui-avatar {
+  inline-size: var(--story-graph-disc);
+  block-size: var(--story-graph-disc);
+  margin-block: 0.25em;
+  box-shadow:
+    0 0 0 2px var(--story-paper),
+    0 0 0 3.5px var(--story-tone);
+  font-size: calc(var(--story-graph-disc) * 0.4);
+}
+.story-ui .story-ui-graph-node[data-state="current"] > .story-ui-avatar {
+  box-shadow:
+    0 0 0 2px var(--story-paper),
+    0 0 0 4.5px var(--story-accent-text),
+    0 0 0 9px var(--story-soft);
+}
+.story-ui .story-ui-graph-node[data-state="unknown"] > .story-ui-avatar {
+  color: var(--story-muted);
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      color-mix(in srgb, var(--story-ink) 7%, transparent) 0 4px,
+      transparent 4px 8px
+    ),
+    var(--story-surface);
+}
+.story-ui .story-ui-graph-node[data-state="locked"] {
+  opacity: 0.5;
+  filter: grayscale(1);
+}
+/* Names shrink with the canvas down to a legible floor, so they keep to their estimated room. */
+.story-ui .story-ui-graph-label {
+  max-inline-size: 100%;
+  font-size: clamp(0.66em, 2.4cqi, 0.84em);
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.story-ui .story-ui-graph-node[data-state="current"] .story-ui-graph-label {
+  color: var(--story-accent-text);
+}
+.story-ui .story-ui-graph-text {
+  max-inline-size: 100%;
+  color: var(--story-muted);
+  font-size: clamp(0.6em, 2cqi, 0.72em);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+/* Map: a grid of squares with areas under markers. */
+.story-ui .story-ui-map-scroll {
+  container-type: inline-size;
+}
+.story-ui .story-ui-map-board {
+  --story-map-coord: 0px;
+  --story-map-cell: min(3.4em, calc((100cqi - var(--story-map-coord)) / var(--story-map-columns)));
+  display: grid;
+  grid-template-columns: repeat(var(--story-map-columns), var(--story-map-cell));
+  grid-template-rows: repeat(var(--story-map-rows), var(--story-map-cell));
+  justify-content: center;
+  min-inline-size: calc(var(--story-map-columns) * 1.5em + var(--story-map-coord));
+}
+.story-ui .story-ui-map[data-coords] .story-ui-map-board {
+  --story-map-coord: 1.4em;
+  grid-template-columns: var(--story-map-coord) repeat(
+      var(--story-map-columns),
+      var(--story-map-cell)
+    );
+  grid-template-rows: var(--story-map-coord) repeat(var(--story-map-rows), var(--story-map-cell));
+}
+.story-ui .story-ui-map-ground {
+  background:
+    linear-gradient(to right, var(--story-hair) 1px, transparent 1px) 0 0 / var(--story-map-cell)
+    var(--story-map-cell),
+    linear-gradient(to bottom, var(--story-hair) 1px, transparent 1px) 0 0 / var(--story-map-cell)
+    var(--story-map-cell),
+    color-mix(in srgb, var(--story-ink) 3%, var(--story-surface));
+  border: 1px solid var(--story-border);
+  border-radius: calc(var(--story-radius) / 2);
+}
+.story-ui .story-ui-map-coord {
+  display: grid;
+  place-items: center;
+  color: var(--story-muted);
+  font-family: var(--story-tech);
+  font-size: 0.68em;
+  font-variant-numeric: tabular-nums;
+}
+.story-ui .story-ui-map-area {
+  position: relative;
+  min-inline-size: 0;
+  margin: 2px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--story-tone) 11%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--story-tone) 55%, transparent);
+  border-radius: calc(var(--story-radius) / 3);
+}
+.story-ui .story-ui-map-area[data-terrain="wall"] {
+  margin: 0;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      color-mix(in srgb, var(--story-paper) 22%, transparent) 0 2px,
+      transparent 2px 7px
+    ),
+    color-mix(in srgb, var(--story-ink) 62%, var(--story-paper));
+  border: 0;
+  border-radius: 0;
+}
+.story-ui .story-ui-map-area[data-terrain="water"]:not([data-tone]) {
+  --story-tone: var(--story-info);
+}
+.story-ui .story-ui-map-area[data-terrain="water"] {
+  background:
+    radial-gradient(
+      circle at 50% 120%,
+      transparent 38%,
+      color-mix(in srgb, var(--story-tone) 30%, transparent) 40% 48%,
+      transparent 50%
+    )
+    0 0 / 1.1em 0.7em,
+    color-mix(in srgb, var(--story-tone) 16%, transparent);
+  border-color: transparent;
+}
+.story-ui .story-ui-map-area[data-terrain="hidden"] {
+  margin: 0;
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      color-mix(in srgb, var(--story-ink) 10%, transparent) 0 3px,
+      transparent 3px 9px
+    ),
+    color-mix(in srgb, var(--story-ink) 22%, var(--story-paper));
+  border: 0;
+  border-radius: 0;
+}
+.story-ui .story-ui-map-area-label {
+  position: absolute;
+  inset: 0.15em 0.3em auto;
+  overflow: hidden;
+  color: var(--story-tone);
+  font-size: min(0.72em, calc(var(--story-map-cell) * 0.3));
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.story-ui .story-ui-map-area[data-terrain="wall"] > .story-ui-map-area-label {
+  color: var(--story-paper);
+}
+.story-ui .story-ui-map-area[data-terrain="hidden"] > .story-ui-map-area-label {
+  color: var(--story-ink);
+}
+.story-ui .story-ui-map-cell {
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  place-content: center;
+  place-items: center;
+  gap: 1px;
+  --story-map-token: calc(var(--story-map-cell) * 0.68);
+}
+.story-ui .story-ui-map-cell:not([data-count="1"]) {
+  --story-map-token: calc(var(--story-map-cell) * 0.42);
+}
+.story-ui .story-ui-map-token {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  inline-size: var(--story-map-token, 1.7em);
+  block-size: var(--story-map-token, 1.7em);
+  overflow: hidden;
+  color: var(--story-paper);
+  background: var(--story-tone);
+  border: 2px solid var(--story-paper);
+  border-radius: 50%;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--story-ink) 30%, transparent);
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+/* The token keeps its parent's font size so its em-based size means the same as the board's. */
+.story-ui .story-ui-map-token > span {
+  font-size: calc(var(--story-map-token, 1.7em) * 0.42);
+}
+.story-ui .story-ui-map-token > .story-ui-icon {
+  inline-size: 60%;
+  block-size: 60%;
+}
+.story-ui .story-ui-map-token[data-state="current"] {
+  box-shadow:
+    0 0 0 2px var(--story-paper),
+    0 0 0 4px var(--story-tone);
+}
+.story-ui .story-ui-map-token[data-state="down"] {
+  color: var(--story-muted);
+  background: var(--story-surface);
+  border-color: var(--story-muted);
+  border-style: dashed;
+}
+.story-ui .story-ui-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35em 1em;
+  margin: 0.6em 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.84em;
+}
+.story-ui .story-ui-map-legend > li {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  min-inline-size: 0;
+}
+.story-ui .story-ui-map-legend .story-ui-map-token {
+  --story-map-token: 1.6em;
+}
+.story-ui .story-ui-map-legend-label {
+  font-weight: 650;
+}
+.story-ui .story-ui-map-legend > li[data-state="down"] > .story-ui-map-legend-label {
+  color: var(--story-muted);
+  text-decoration: line-through;
+}
+.story-ui .story-ui-map-legend-at {
+  color: var(--story-muted);
+  font-family: var(--story-tech);
+  font-size: 0.86em;
+}
+.story-ui .story-ui-map-legend-text {
+  color: var(--story-muted);
+}
+
+/* Calendar: a month of dates; on a narrow screen entries become dots over an agenda. */
+.story-ui .story-ui-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--story-calendar-columns), minmax(0, 1fr));
+  gap: 2px;
+}
+.story-ui .story-ui-calendar-weekday {
+  padding-block: 0.2em 0.35em;
+  color: var(--story-muted);
+  font-family: var(--story-display);
+  font-size: 0.74em;
+  font-weight: 750;
+  text-align: center;
+}
+.story-ui .story-ui-calendar-weekday[data-weekend="sunday"],
+.story-ui .story-ui-calendar-date[data-weekend="sunday"] > .story-ui-calendar-number {
+  color: var(--story-danger);
+}
+.story-ui .story-ui-calendar-weekday[data-weekend="saturday"],
+.story-ui .story-ui-calendar-date[data-weekend="saturday"] > .story-ui-calendar-number {
+  color: var(--story-info);
+}
+.story-ui .story-ui-calendar-date {
+  display: grid;
+  align-content: start;
+  gap: 0.15em;
+  min-inline-size: 0;
+  min-block-size: 4.4em;
+  padding: 0.3em;
+  background: color-mix(in srgb, var(--story-ink) 4%, transparent);
+  border-radius: calc(var(--story-radius) / 3);
+}
+.story-ui .story-ui-calendar-date[data-current] {
+  background: var(--story-soft);
+  box-shadow: inset 0 0 0 1.5px var(--story-accent-text);
+}
+.story-ui .story-ui-calendar-number {
+  font-size: 0.8em;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.story-ui .story-ui-calendar-date[data-current] > .story-ui-calendar-number {
+  justify-self: start;
+  min-inline-size: 1.6em;
+  padding: 0.1em 0.3em;
+  color: var(--story-accent-ink);
+  background: var(--story-accent);
+  border-radius: 999px;
+  text-align: center;
+}
+.story-ui .story-ui-calendar-date ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.story-ui .story-ui-calendar-date li {
+  min-inline-size: 0;
+  padding: 0.05em 0.3em;
+  overflow: hidden;
+  color: var(--story-ink);
+  background: color-mix(in srgb, var(--story-tone) 16%, var(--story-surface));
+  border-inline-start: 2.5px solid var(--story-tone);
+  border-radius: 3px;
+  font-size: 0.7em;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.story-ui .story-ui-calendar-blank {
+  min-block-size: 1em;
+}
+.story-ui .story-ui-calendar-agenda {
+  display: grid;
+  gap: 0.3em;
+  margin: 0.6em 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.86em;
+}
+.story-ui .story-ui-calendar-agenda:not(:has(> li[data-detail])) {
+  display: none;
+}
+.story-ui .story-ui-calendar-agenda > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15em 0.55em;
+  padding-inline-start: 0.55em;
+  border-inline-start: 3px solid var(--story-tone);
+  line-height: 1.4;
+}
+.story-ui .story-ui-calendar-agenda > li:not([data-detail]) {
+  display: none;
+}
+.story-ui .story-ui-calendar-when {
+  min-inline-size: 3.4em;
+  color: var(--story-muted);
+  font-variant-numeric: tabular-nums;
+}
+.story-ui .story-ui-calendar-when > b {
+  color: var(--story-ink);
+}
+.story-ui .story-ui-calendar-agenda time {
+  color: var(--story-muted);
+  font-variant-numeric: tabular-nums;
+}
+.story-ui .story-ui-calendar-title {
+  font-weight: 650;
+}
+.story-ui .story-ui-calendar-text {
+  flex-basis: 100%;
+  color: var(--story-muted);
+  font-size: 0.92em;
+}
+@container (inline-size < 34em) {
+  .story-ui .story-ui-calendar-date {
+    min-block-size: 2.6em;
+    justify-items: center;
+  }
+  .story-ui .story-ui-calendar-date ul {
+    display: flex;
+    gap: 2px;
+  }
+  .story-ui .story-ui-calendar-date li {
+    inline-size: 0.55em;
+    block-size: 0.55em;
+    padding: 0;
+    color: transparent;
+    background: var(--story-tone);
+    border: 0;
+    border-radius: 50%;
+  }
+  .story-ui .story-ui-calendar-agenda:not(:has(> li[data-detail])),
+  .story-ui .story-ui-calendar-agenda > li:not([data-detail]) {
+    display: flex;
+  }
+  .story-ui .story-ui-calendar-agenda {
+    display: grid;
+  }
+}
+
 /* A block styled by the model's own CSS clips whatever that CSS paints, and its motion
    yields to the reader's preference. Model CSS never carries !important. */
 .story-ui-block[data-authored] {
@@ -5205,7 +5666,10 @@
 .story-ui[data-story-ui-style="pop"] .story-ui-frame-head > .story-ui-frame-title::before {
   content: none;
 }
-.story-ui[data-story-ui-style="pop"] .story-ui-frame-head > .story-ui-frame-subtitle {
+.story-ui[data-story-ui-style="pop"]
+  .story-ui-frame[data-kind]
+  > .story-ui-frame-head
+  > .story-ui-frame-subtitle {
   margin-inline-end: 1em;
   padding: 0.05em 0.8em;
   color: var(--story-accent-ink);

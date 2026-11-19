@@ -1,5 +1,10 @@
 import { A2uiGenerator, CatalogConfig, ExpressFormatFactory } from '@a2ui/agent';
-import { storyUiCatalog, storyUiExtensions, storyUiImageKeys } from '../core/story-ui-catalog.js';
+import {
+  storyUiCatalog,
+  storyUiExtensions,
+  storyUiImageKeys,
+  storyUiNestedImageKeys,
+} from '../core/story-ui-catalog.js';
 import { storyUiStyles } from '../core/story-ui-style.js';
 import {
   encodeStoryUi,
@@ -107,7 +112,7 @@ Write A2UI Express between literal <a2ui> and </a2ui> tags on their own lines, o
 
 Initialize state with $/form/route = []. Bind a value to an absolute $/path or a list item's relative $field ($ means the item). For repeated children use _template($/items, row) and define row using relative bindings. Pass an action as Event("choose", {route: $/form/route}); use ?required or ?regex("pattern", "error text") for input checks. Call client functions by their signatures below. formatDate uses Unicode TR35 patterns; formatString interpolates \${/path}.
 
-Signatures give positional order. ? marks optional parameters. Dynamic types accept a literal, a binding or a compatible client function. Other types require the shown value. Child takes a component and ChildList takes an array of components or a template. weight is flex-grow on a direct child of Row or Column. Text body/quote and Dialogue text accept simple Markdown. ChoicePicker binds an array of strings. Schedule day/current indexes start at zero. DataTable rows follow column order.`;
+Signatures give positional order. ? marks optional parameters. Dynamic types accept a literal, a binding or a compatible client function. Other types require the shown value. Child takes a component and ChildList takes an array of components or a template. weight is flex-grow on a direct child of Row or Column. Text body/quote and Dialogue text accept simple Markdown. ChoicePicker binds an array of strings. Schedule day/current indexes start at zero. DataTable rows follow column order. Map x/y count squares from zero at the top left. Calendar dates start at 1.`;
 
 type CatalogParameter = {
   type?: string;
@@ -218,6 +223,12 @@ function pinnedImageUrls(messages: StoryUiMessage[], resolveImage: ResolveImage)
     const value = component[storyUiImageKeys[component.component]];
     if (value && typeof value === 'object') bound = true;
     else collect(value);
+    for (const [list, key] of Object.entries(storyUiNestedImageKeys)) {
+      const items = component[list];
+      if (Array.isArray(items))
+        for (const item of items)
+          if (item && typeof item === 'object') collect((item as Record<string, unknown>)[key]);
+    }
   }
   if (bound) collect(dataModel);
   const entries: [string, string][] = [];

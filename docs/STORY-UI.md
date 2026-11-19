@@ -1,6 +1,6 @@
 # 이야기 UI
 
-원고 안에 메신저 대화, 게시판과 댓글, 뉴스 기사, 위키 문서, 상태창, 조우 알림, 선택지 같은 화면을 넣을 수 있어요. 모델이 본문을 생성할 때 화면도 함께 구성하며, 등장인물이 그 화면을 마주하는 본문 위치에 놓아요.
+원고 안에 메신저 대화, 게시판과 댓글, 뉴스 기사, 위키 문서, 상태창, 관계도, 작전 지도, 달력, 조우 알림, 선택지 같은 화면을 넣을 수 있어요. 모델이 본문을 생성할 때 화면도 함께 구성하며, 등장인물이 그 화면을 마주하는 본문 위치에 놓아요.
 
 ## 켜기와 사용하기
 
@@ -48,7 +48,8 @@
 | 인물과 물건 | `Profile` (초상화·이름·소개·항목을 묶은 인물 카드), `Slot` (아이템 칸: 수량, 등급 `rarity`, 상태 `empty`·`locked`·`equipped`), `Rank` (큰 등급 도장과 별점) |
 | 대화와 게시물 | `Message`, `Post` (`post`, `article`, `comment`, 답글 중첩), `Notice` |
 | 수치와 기록 | `Stat`, `Gauge`, `Ring`, `KeyValue`, `Timeline`, `DataTable`, `BarChart`, `LineChart`, `PieChart`, `RadarChart`, `Compare` (크기 비율대로 나란히 선 실루엣이나 막대), `Combatant` (전투 상태창 한 줄: 이름, 초상화, HP·MP 같은 자원 막대, 상태 이상, 아군·적, 행동 중·방어·전투 불능) |
-| 일정과 장소 | `Schedule` (요일별 시간표), `Route` (장소를 잇는 이동 경로) |
+| 일정과 장소 | `Schedule` (요일별 시간표), `Calendar` (한 달 달력: 실제 월 `month="2026-12"`은 요일을 계산하고, 가상의 달력은 첫날 위치 `start`와 날수 `length`로 그림), `Route` (장소를 잇는 이동 경로), `Map` (위에서 본 칸 지도: 방·벽·물·미탐색 구역과 인물·유닛 표식, 좌표 머리글 `coords`, 표식 범례) |
+| 관계 | `Graph` (노드와 이름 붙은 연결선: 관계도, 수사 보드, 스킬 트리, 가계도. 배치는 모델이 아니라 Uimori가 정해요. `ring`은 원형으로 두르고 `center`의 인물을 가운데 두며, `tree`는 연결 방향을 따라 아래로 내려가요. 서로를 향한 두 선은 갈라져 그려져요.) |
 | 행동과 입력 | `Button`, `TextField`, `CheckBox`, `ChoicePicker`, `Slider`, `DateTimeInput` |
 
 `Text`, `Notice`, `Badge`, `Stat`, `Gauge`, `Ring`의 `tone`(`neutral`, `accent`, `positive`, `caution`, `danger`, `info`)은 의미에 맞는 색을 지정해요.

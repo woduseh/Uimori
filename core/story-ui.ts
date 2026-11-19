@@ -330,8 +330,18 @@ export function projectStoryUiText(text: string, mode: 'text' | 'expression' = '
         if (storyUiDisplayValues.has(String(component.component))) append(component.value);
         for (const [collection, keys] of Object.entries(storyUiNestedTextKeys)) {
           const items = component[collection];
-          if (Array.isArray(items))
-            for (const item of items) if (record(item)) for (const key of keys) append(item[key]);
+          if (collection === 'edges' || !Array.isArray(items)) continue;
+          for (const item of items) if (record(item)) for (const key of keys) append(item[key]);
+        }
+        // A relation means nothing without its ends, so each edge reads as "A → B: label".
+        if (Array.isArray(component.edges) && Array.isArray(component.nodes)) {
+          const names = new Map(
+            component.nodes.filter(record).map((node) => [node.id, String(node.label)])
+          );
+          for (const edge of component.edges.filter(record)) {
+            const ends = `${names.get(edge.from) ?? edge.from} → ${names.get(edge.to) ?? edge.to}`;
+            values.push(edge.label === undefined ? ends : `${ends}: ${edge.label}`);
+          }
         }
         for (const list of storyUiTextLists) append(component[list]);
         append(component.rows);

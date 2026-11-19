@@ -403,6 +403,68 @@ body = Column([
 ])
 </a2ui>`,
   `<a2ui>
+root = Frame(chart, "2학년 3반 관계도", "문화제 2주 전", kind="note", accent="pink")
+chart = Graph([
+  {id: "me", label: "나", text: "전학생", state: "current"},
+  {id: "yun", label: "한서윤", text: "소꿉친구 · 반장", image: "/api/assets/ray", tone: "accent"},
+  {id: "jae", label: "윤재희", text: "밴드부 보컬"},
+  {id: "do", label: "강도현", text: "학생회장", tone: "info"},
+  {id: "min", label: "서민아", text: "도서부"},
+  {id: "x", label: "익명 편지", state: "unknown"}
+], [
+  {from: "yun", to: "me", label: "짝사랑", tone: "danger"},
+  {from: "me", to: "yun", label: "소꿉친구"},
+  {from: "jae", to: "me", label: "관심"},
+  {from: "do", to: "yun", label: "라이벌", arrow: "both", tone: "caution"},
+  {from: "min", to: "jae", label: "동경", line: "dashed"},
+  {from: "x", to: "me", label: "매일 아침", line: "dashed"}
+], center="me")
+</a2ui>`,
+  `<a2ui>
+root = Frame(body, "작전 상황판", "제3구역 · 야간 침투", kind="system", accent="green")
+body = Column([
+  Map(8, 6, [
+    {x: 0, y: 0, w: 3, h: 2, label: "격납고"},
+    {x: 3, y: 0, w: 1, h: 4, terrain: "wall"},
+    {x: 5, y: 3, w: 3, h: 3, label: "미탐색", terrain: "hidden"},
+    {x: 0, y: 4, w: 3, h: 2, label: "배수로", terrain: "water"},
+    {x: 4, y: 0, w: 4, h: 2, label: "관제탑", tone: "danger"}
+  ], [
+    {x: 1, y: 1, label: "알파 1", mark: "A1", tone: "info", state: "current", text: "돌입 대기"},
+    {x: 2, y: 1, label: "알파 2", mark: "A2", tone: "info"},
+    {x: 1, y: 3, label: "저격조", icon: "visibility", tone: "positive"},
+    {x: 5, y: 1, label: "경비병", mark: "적", tone: "danger"},
+    {x: 6, y: 1, label: "경비병", mark: "적", tone: "danger"},
+    {x: 4, y: 2, label: "정찰 드론", mark: "D", state: "down", text: "격추"}
+  ], "침투 경로", coords=true),
+  Graph([
+    {id: "base", label: "기초 사격"},
+    {id: "burst", label: "점사", text: "Lv.2"},
+    {id: "cover", label: "엄폐 사격", text: "Lv.1", state: "current"},
+    {id: "snipe", label: "원거리 저격", state: "locked"},
+    {id: "suppress", label: "제압 사격", state: "locked"}
+  ], [
+    {from: "base", to: "burst"},
+    {from: "base", to: "cover"},
+    {from: "burst", to: "snipe"},
+    {from: "cover", to: "suppress"},
+    {from: "burst", to: "suppress", line: "dashed"}
+  ], "사격 기술", layout="tree")
+])
+</a2ui>`,
+  `<a2ui>
+root = Frame(body, "하츠보시 프로덕션", "사키의 12월", kind="page", accent="pink")
+body = Calendar("2026년 12월", [
+  {date: 3, title: "보컬 레슨", time: "16:00", tone: "info"},
+  {date: 10, title: "보컬 레슨", tone: "info"},
+  {date: 12, title: "잡지 촬영", time: "13:00", text: "스튜디오 B", tone: "accent"},
+  {date: 19, title: "중간 심사", time: "17:30", tone: "danger"},
+  {date: 24, title: "크리스마스 공연", time: "19:00", text: "시민회관 대극장 · 첫 센터", tone: "accent"},
+  {date: 24, title: "팬 사인회"},
+  {date: 31, title: "휴가", tone: "positive"}
+], month="2026-12", current=19)
+</a2ui>`,
+  `<a2ui>
 $/_uimori/css = r"""
 & { --story-paper: #0a0714; --story-surface: #1a1230; --story-ink: #f3e9ff; --story-muted: #b7a6d9; --story-border: #4b2f7a; --story-accent: #ff3df2; --story-accent-ink: #14041a; --story-accent-text: #ff7df7; --story-radius: 2px; color-scheme: dark; background: radial-gradient(120% 90% at 50% 0%, #2a0f4d, #0a0714 70%); border-color: #ff3df2; }
 .look-marquee { background: linear-gradient(90deg, #ff3df2, #3df2ff, #ff3df2); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: slide 4s linear infinite; text-shadow: none; }
@@ -491,6 +553,70 @@ test('composed media render with their own shells in both schemes', async ({ pag
   await expect(bar('테오 MP')).toHaveAttribute('data-tone', 'info');
   await expect(bar('타락한 사제 분노')).toHaveAttribute('data-tone', 'caution');
   await expect(page.locator('.story-ui-combatant[data-state="down"]')).toContainText('전투 불능');
+  // The center node sits in the middle, and every line ends at the rim of its discs.
+  const ring = page.locator('.story-ui-graph[data-layout="ring"]');
+  const canvas = (await ring.locator('.story-ui-graph-canvas').boundingBox())!;
+  const me = (await ring
+    .locator('.story-ui-graph-node[data-state="current"] .story-ui-avatar')
+    .boundingBox())!;
+  expect(me.x + me.width / 2).toBeCloseTo(canvas.x + canvas.width / 2, 0);
+  await expect(ring.locator('.story-ui-graph-edge')).toHaveCount(6);
+  await expect(
+    ring.locator('.story-ui-graph-node[data-state="unknown"] .story-ui-avatar')
+  ).toHaveText('?');
+  await expect(ring.locator('.story-ui-graph-node').nth(1).locator('img')).toBeVisible();
+  await expect(ring.locator('.sr-only')).toContainText('한서윤 → 나: 짝사랑');
+  // No relation label sits on another label or on a node's name, including a pair of
+  // opposite edges between the same two people.
+  const overlaps = await ring.evaluate((figure) => {
+    const boxes = [
+      ...figure.querySelectorAll('.story-ui-graph-relation, .story-ui-graph-caption'),
+    ].map((element) => ({ text: element.textContent, box: element.getBoundingClientRect() }));
+    return boxes.flatMap((a, index) =>
+      boxes
+        .slice(index + 1)
+        .filter(
+          (b) =>
+            a.box.left < b.box.right - 1 &&
+            b.box.left < a.box.right - 1 &&
+            a.box.top < b.box.bottom - 1 &&
+            b.box.top < a.box.bottom - 1
+        )
+        .map((b) => `${a.text} / ${b.text}`)
+    );
+  });
+  expect(overlaps).toEqual([]);
+  // A tree reads downward: each layer sits below the one it grows from.
+  const tree = page.locator('.story-ui-graph[data-layout="tree"]');
+  const top = (name: string) =>
+    tree
+      .locator('.story-ui-graph-node', { hasText: name })
+      .boundingBox()
+      .then((box) => box!.y);
+  expect(await top('점사')).toBeGreaterThan(await top('기초 사격'));
+  expect(await top('원거리 저격')).toBeGreaterThan(await top('점사'));
+  // Map squares stay square, areas span their squares, and markers stand on theirs.
+  const board = page.locator('.story-ui-map-board');
+  const ground = (await board.locator('.story-ui-map-ground').boundingBox())!;
+  expect(ground.width / ground.height).toBeCloseTo(8 / 6, 1);
+  const hangar = (await board.locator('.story-ui-map-area', { hasText: '격납고' }).boundingBox())!;
+  expect(hangar.width / ground.width).toBeCloseTo(3 / 8, 1);
+  const alpha = (await board.locator('.story-ui-map-token', { hasText: 'A1' }).boundingBox())!;
+  expect(alpha.x + alpha.width / 2).toBeCloseTo(ground.x + (ground.width * 1.5) / 8, -1);
+  await expect(page.locator('.story-ui-map-legend')).toContainText('A1');
+  await expect(page.locator('.story-ui-map-legend-at').first()).toHaveText('B2');
+  // December 2026 starts on a Tuesday and has 31 days; today and the busy dates are marked.
+  const calendar = page.locator('.story-ui-calendar');
+  await expect(calendar.locator('.story-ui-calendar-grid > .story-ui-calendar-blank')).toHaveCount(
+    2 + 2
+  );
+  await expect(calendar.locator('.story-ui-calendar-date')).toHaveCount(31);
+  await expect(calendar.locator('.story-ui-calendar-date[data-current]')).toContainText('19');
+  await expect(calendar.locator('.story-ui-calendar-date').nth(23).locator('li')).toHaveCount(2);
+  await expect(calendar.locator('.story-ui-calendar-date').nth(5)).toHaveAttribute(
+    'data-weekend',
+    'sunday'
+  );
   // The model's own CSS restyles its block, and only its block, without leaving the page.
   const authored = page.locator('.story-ui[data-story-ui-authored]');
   await expect(authored).toHaveCount(1);
@@ -541,6 +667,9 @@ test('composed media render with their own shells in both schemes', async ({ pag
     sources[first + 8],
     sources[first + 9],
     sources[first + 10],
+    sources[first + 11],
+    sources[first + 12],
+    sources[first + 13],
     sources[first],
   ];
   const { storyUiStyles } = await import('../core/story-ui-style.js');

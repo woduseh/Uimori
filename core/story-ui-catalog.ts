@@ -54,6 +54,9 @@ const size = z.enum(['small', 'medium', 'large']).optional();
 const iconNames = basicSchema.components.Icon.properties.name.oneOf.find(
   (option) => 'enum' in option
 )!.enum as [string, ...string[]];
+const nodeId = z.string().regex(/^[\p{L}\p{N}_-]{1,40}$/u);
+const square = z.number().int().min(0).max(15);
+const span = z.number().int().min(1).max(16).optional();
 const chartItems = z
   .array(z.object({ label, value: z.number().finite() }).strict())
   .min(1)
@@ -620,6 +623,177 @@ export const storyUiExtensions: { name: string; schema: z.ZodTypeAny; purpose?: 
       })
       .strict(),
   },
+  {
+    name: 'Graph',
+    purpose:
+      'People or things joined by labelled lines: a relationship chart, an evidence board, a skill or tech tree, a family tree, an org chart. The host places the nodes.',
+    schema: z
+      .object({
+        nodes: z
+          .array(
+            z
+              .object({
+                id: nodeId,
+                label,
+                text: label.optional(),
+                image: z.string().max(2000).optional(),
+                tone,
+                state: z.enum(['current', 'locked', 'unknown']).optional(),
+              })
+              .strict()
+          )
+          .min(2)
+          .max(16)
+          .describe(
+            'id: a short name the edges refer to. label: the name shown. text: a short line under it. image: an optional portrait. state current: the focus, such as the protagonist or the chosen skill; locked: not reached yet; unknown: identity hidden, drawn as a question mark.'
+          ),
+        edges: z
+          .array(
+            z
+              .object({
+                from: nodeId,
+                to: nodeId,
+                label: label.optional(),
+                tone,
+                arrow: z.enum(['end', 'both', 'none']).optional(),
+                line: z.enum(['solid', 'dashed']).optional(),
+              })
+              .strict()
+          )
+          .max(40)
+          .describe(
+            'from and to are node ids. label: the relation, such as "rival" or "owes money". arrow: end (default), both, or none for kinship and plain links. line dashed: suspected, one-sided or broken.'
+          ),
+        title: label.optional(),
+        layout: z
+          .enum(['ring', 'tree'])
+          .describe(
+            'ring (default): nodes around a circle, for relationships and boards. tree: rows running down along the edges from the nodes nothing points to, for skill, family and org trees.'
+          )
+          .optional(),
+        center: nodeId.describe('ring only: id of the node placed in the middle.').optional(),
+        weight,
+      })
+      .strict(),
+  },
+  {
+    name: 'Map',
+    purpose:
+      'A top-down grid of squares with areas and markers: a tactical or battle map, a dungeon floor, a building or school floor plan, a game board, a seating chart.',
+    schema: z
+      .object({
+        columns: z.number().int().min(2).max(16),
+        rows: z.number().int().min(1).max(16),
+        areas: z
+          .array(
+            z
+              .object({
+                x: square,
+                y: square,
+                w: span,
+                h: span,
+                label: label.optional(),
+                tone,
+                terrain: z.enum(['floor', 'wall', 'water', 'hidden']).optional(),
+              })
+              .strict()
+          )
+          .max(40)
+          .describe(
+            'Rectangles of squares from x,y spanning w by h (1 by default). terrain: floor (default) for a room or zone, wall for solid blocks, water, hidden for an unexplored or fogged part.'
+          )
+          .optional(),
+        markers: z
+          .array(
+            z
+              .object({
+                x: square,
+                y: square,
+                label,
+                mark: z.string().max(3).optional(),
+                icon: z.enum(iconNames).optional(),
+                text: label.optional(),
+                tone,
+                state: z.enum(['current', 'down']).optional(),
+              })
+              .strict()
+          )
+          .max(30)
+          .describe(
+            'Tokens on squares, also listed in a legend under the map. mark: up to three characters on the token instead of the initial. state current: the reader or the unit acting; down: defeated or out.'
+          )
+          .optional(),
+        title: label.optional(),
+        coords: z
+          .boolean()
+          .describe('Letter the columns and number the rows along the edges.')
+          .optional(),
+        weight,
+      })
+      .strict(),
+  },
+  {
+    name: 'Calendar',
+    purpose:
+      'A month grid with entries on their dates: an idol or tour calendar, school events, deadlines, a countdown to a D-day. Use Schedule for a single week.',
+    schema: z
+      .object({
+        title: label,
+        items: z
+          .array(
+            z
+              .object({
+                date: z.number().int().min(1).max(40),
+                title: label,
+                time: label.optional(),
+                text: z.string().max(2000).optional(),
+                tone,
+              })
+              .strict()
+          )
+          .max(60)
+          .describe('date: the day of the month, from 1.')
+          .optional(),
+        month: z
+          .string()
+          .regex(/^\d{4}-(?:0[1-9]|1[0-2])$/)
+          .describe(
+            'A real month as YYYY-MM; the host lays out its weeks from Sunday. Omit it for an invented calendar and set start and length.'
+          )
+          .optional(),
+        start: z
+          .number()
+          .int()
+          .min(0)
+          .max(9)
+          .describe('Without month: the column of day 1, from 0.')
+          .optional(),
+        length: z
+          .number()
+          .int()
+          .min(1)
+          .max(40)
+          .describe('Without month: the number of days. Defaults to 30.')
+          .optional(),
+        days: z
+          .array(label)
+          .min(1)
+          .max(10)
+          .describe(
+            "Column headings, from Sunday with a month. Without them the reader's weekday names are used."
+          )
+          .optional(),
+        current: z
+          .number()
+          .int()
+          .min(1)
+          .max(40)
+          .describe('The date to highlight as today.')
+          .optional(),
+        weight,
+      })
+      .strict(),
+  },
 ];
 
 /**
@@ -651,7 +825,13 @@ export const storyUiNestedTextKeys: Record<string, string[]> = {
   items: ['label', 'value', 'title', 'text', 'time'],
   bars: ['label', 'value', 'max'],
   effects: ['label'],
+  nodes: ['label', 'text'],
+  edges: ['label'],
+  areas: ['label'],
+  markers: ['label', 'text'],
 };
+/** Image fields inside list-valued properties, resolved and pinned like top-level ones. */
+export const storyUiNestedImageKeys: Record<string, string> = { nodes: 'image' };
 /** Components whose `value` is displayed rather than edited. */
 export const storyUiDisplayValues = new Set(['Gauge', 'Rank', 'Ring', 'Slot', 'Stat']);
 /** Properties that must name an image stored by this app. */

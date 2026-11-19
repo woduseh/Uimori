@@ -19,7 +19,7 @@ import { compileReadingMarkdown } from '../core/reading-markdown.js';
 import { storyUiCatalog, storyUiImageKeys } from '../core/story-ui-catalog.js';
 import { isStoryUiImageUrl, storyUiImageName } from '../core/story-ui.js';
 import { storyUiIcons } from './story-ui-icons.js';
-import { t } from './i18n.js';
+import { getIntlLocale, t } from './i18n.js';
 
 // Every component renders in the light DOM with `story-ui-*` class names, so the presets in
 // story-ui.css and authored themes style the same markup. The SDK supplies data binding,
@@ -1023,6 +1023,537 @@ const Route = createComponentImplementation(api('Route'), ({ props }) => (
     </ol>
   </figure>
 ));
+type GraphNode = {
+  id: string;
+  label: string;
+  text?: string;
+  image?: string;
+  tone?: string;
+  state?: string;
+};
+type GraphEdge = {
+  from: string;
+  to: string;
+  label?: string;
+  tone?: string;
+  arrow?: string;
+  line?: string;
+};
+type Point = [number, number];
+// Graph geometry is laid out in viewBox units; nodes and labels are sized from the same
+// width through container units, so line ends meet the discs at any rendered size.
+// A caption is the name and note under (or over) a disc.
+const GRAPH = { width: 600, disc: 56, label: 112, margin: 24, caption: 64, row: 170, slot: 104 };
+function placeGraph(nodes: GraphNode[], edges: GraphEdge[], tree: boolean, center?: string) {
+  const points = new Map<string, Point>();
+  // Captions on the upper half of a ring sit above their discs, clear of the lines going in.
+  const above = new Set<string>();
+  let width = GRAPH.width;
+  if (tree) {
+    const ids = new Set(nodes.map((node) => node.id));
+    const links = edges.filter((e) => e.from !== e.to && ids.has(e.from) && ids.has(e.to));
+    const depth = new Map<string, number>();
+    const pointed = new Set(links.map((edge) => edge.to));
+    const visit = (roots: string[]) => {
+      const queue = roots.filter((id) => !depth.has(id));
+      for (const id of queue) depth.set(id, 0);
+      for (let index = 0; index < queue.length; index++) {
+        const id = queue[index];
+        for (const edge of links)
+          if (edge.from === id && !depth.has(edge.to)) {
+            depth.set(edge.to, depth.get(id)! + 1);
+            queue.push(edge.to);
+          }
+      }
+    };
+    visit(nodes.filter((node) => !pointed.has(node.id)).map((node) => node.id));
+    for (const node of nodes) visit([node.id]);
+    const layers: string[][] = [];
+    for (const node of nodes) (layers[depth.get(node.id)!] ??= []).push(node.id);
+    width = Math.max(GRAPH.width, Math.max(...layers.map((layer) => layer.length)) * GRAPH.slot);
+    layers.forEach((layer, row) => {
+      // Each node sits under the average of its parents, which keeps most lines from crossing.
+      const parent = (id: string) => {
+        const xs = links
+          .filter((edge) => edge.to === id && points.has(edge.from))
+          .map((edge) => points.get(edge.from)![0]);
+        return xs.length ? xs.reduce((sum, x) => sum + x, 0) / xs.length : width / 2;
+      };
+      const ordered = row === 0 ? layer : [...layer].sort((a, b) => parent(a) - parent(b));
+      ordered.forEach((id, index) => {
+        points.set(id, [(width * (index + 0.5)) / ordered.length, row * GRAPH.row]);
+      });
+    });
+  } else {
+    const middle = nodes.some((node) => node.id === center) ? center : undefined;
+    const around = nodes.filter((node) => node.id !== middle);
+    const count = around.length;
+    const radiusX = count <= 3 && !middle ? 180 : 225;
+    const radiusY = middle ? 190 : count <= 4 ? 120 : count <= 8 ? 160 : 190;
+    // Two nodes face each other across the width; more start at the top.
+    const offset = count === 2 ? Math.PI : -Math.PI / 2;
+    around.forEach((node, index) => {
+      const angle = offset + (index * Math.PI * 2) / count;
+      if (Math.sin(angle) < -0.3 && !(count === 2 && middle)) above.add(node.id);
+      points.set(node.id, [
+        width / 2 + Math.cos(angle) * radiusX,
+        Math.sin(angle) * radiusY * (count === 2 && middle ? 0 : 1),
+      ]);
+    });
+    if (middle) points.set(middle, [width / 2, 0]);
+  }
+  const lowest = Math.min(...[...points.values()].map(([, y]) => y));
+  const top = GRAPH.margin + GRAPH.disc / 2 + (above.size ? GRAPH.caption : 0);
+  for (const point of points.values()) point[1] += top - lowest;
+  const height =
+    Math.max(...[...points.values()].map(([, y]) => y)) +
+    GRAPH.disc / 2 +
+    GRAPH.caption +
+    GRAPH.margin;
+  return { points, above, width, height };
+}
+type Box = [left: number, top: number, right: number, bottom: number];
+const overlap = (a: Box, b: Box) =>
+  Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) *
+  Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
+// Text is measured before layout from its length: CSS pixels per glyph at each label's
+// size, and viewBox units per CSS pixel at the smallest width the canvas is drawn at.
+const glyphs = (text = '') =>
+  [...text].reduce((sum, glyph) => sum + (/[\u1100-\uffdc]/u.test(glyph) ? 1 : 0.6), 0);
+const UNITS_PER_PIXEL = 1.6;
+// Spots along a line, nearest the preferred one first.
+const SPOTS = [0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65, 0.3, 0.7, 0.25, 0.75, 0.2, 0.8, 0.15, 0.85];
+const PAIRED_SPOTS = [0.32, 0.27, 0.37, 0.22, 0.42, 0.17, 0.47];
+/**
+ * Each relation label takes the first spot along its line that keeps clear of the discs,
+ * the names and the labels already placed; one of an opposite pair starts near its source.
+ */
+function placeRelations(
+  lines: { edge: GraphEdge; head: Point; control: Point; tail: Point; paired: boolean }[],
+  nodes: GraphNode[],
+  points: Map<string, Point>,
+  above: Set<string>
+): Point[] {
+  const taken: Box[] = nodes.flatMap((node) => {
+    const [x, y] = points.get(node.id)!;
+    const radius = GRAPH.disc / 2 + 4;
+    const width = Math.min(
+      GRAPH.label,
+      (Math.max(glyphs(node.label) * 13.5, glyphs(node.text) * 11.5) + 12) * UNITS_PER_PIXEL
+    );
+    const height = (node.text ? 36 : 20) * UNITS_PER_PIXEL;
+    const top = above.has(node.id) ? y - radius - height : y + radius;
+    return [
+      [x - radius, y - radius, x + radius, y + radius],
+      [x - width / 2, top, x + width / 2, top + height],
+    ];
+  });
+  return lines.map(({ edge, head, control, tail, paired }) => {
+    const spots = (paired ? PAIRED_SPOTS : SPOTS).map(
+      (at): Point => [
+        (1 - at) ** 2 * head[0] + 2 * (1 - at) * at * control[0] + at ** 2 * tail[0],
+        (1 - at) ** 2 * head[1] + 2 * (1 - at) * at * control[1] + at ** 2 * tail[1],
+      ]
+    );
+    if (!edge.label) return spots[0];
+    const width = Math.min(GRAPH.label, (glyphs(edge.label) * 11.5 + 14) * UNITS_PER_PIXEL);
+    const height = 20 * UNITS_PER_PIXEL;
+    const box = ([x, y]: Point): Box => [
+      x - width / 2,
+      y - height / 2,
+      x + width / 2,
+      y + height / 2,
+    ];
+    const cost = (spot: Point) => taken.reduce((sum, other) => sum + overlap(box(spot), other), 0);
+    const best = spots.reduce((chosen, spot) => (cost(spot) < cost(chosen) ? spot : chosen));
+    taken.push(box(best));
+    return best;
+  });
+}
+const arrowHead = (tip: Point, from: Point) => {
+  const length = Math.hypot(tip[0] - from[0], tip[1] - from[1]) || 1;
+  const [dx, dy] = [(tip[0] - from[0]) / length, (tip[1] - from[1]) / length];
+  const base: Point = [tip[0] - dx * 11, tip[1] - dy * 11];
+  return {
+    points: `${tip[0]},${tip[1]} ${base[0] - dy * 5.5},${base[1] + dx * 5.5} ${base[0] + dy * 5.5},${base[1] - dx * 5.5}`,
+    base,
+  };
+};
+function layoutGraph(nodes: GraphNode[], given: GraphEdge[], tree: boolean, center?: string) {
+  const ids = new Set(nodes.map((node) => node.id));
+  const edges = given.filter(
+    (edge) => edge.from !== edge.to && ids.has(edge.from) && ids.has(edge.to)
+  );
+  const { points, above, width, height } = placeGraph(nodes, edges, tree, center);
+  const lines = edges.map((edge) => {
+    const start = points.get(edge.from)!;
+    const end = points.get(edge.to)!;
+    const length = Math.hypot(end[0] - start[0], end[1] - start[1]) || 1;
+    // A pair of opposite edges bends apart, each to its own left, so both stay readable.
+    const paired = edges.some((other) => other.from === edge.to && other.to === edge.from);
+    const bend = paired ? 26 : 0;
+    const control: Point = [
+      (start[0] + end[0]) / 2 + ((end[1] - start[1]) / length) * bend,
+      (start[1] + end[1]) / 2 - ((end[0] - start[0]) / length) * bend,
+    ];
+    const trim = (from: Point, toward: Point): Point => {
+      const distance = Math.hypot(toward[0] - from[0], toward[1] - from[1]) || 1;
+      const gap = GRAPH.disc / 2 + 4;
+      return [
+        from[0] + ((toward[0] - from[0]) / distance) * gap,
+        from[1] + ((toward[1] - from[1]) / distance) * gap,
+      ];
+    };
+    let head = trim(start, control);
+    let tail = trim(end, control);
+    const arrow = edge.arrow ?? 'end';
+    const endHead = arrow !== 'none' ? arrowHead(tail, control) : undefined;
+    const startHead = arrow === 'both' ? arrowHead(head, control) : undefined;
+    if (endHead) tail = endHead.base;
+    if (startHead) head = startHead.base;
+    return { edge, head, tail, control, endHead, startHead, paired };
+  });
+  const middles = placeRelations(lines, nodes, points, above);
+  return { points, above, width, height, edges, lines, middles };
+}
+const Graph = createComponentImplementation(api('Graph'), ({ props }) => {
+  const urls = useContext(StoryUiImageUrls);
+  const nodes: GraphNode[] = props.nodes;
+  const { points, above, width, height, edges, lines, middles } = layoutGraph(
+    nodes,
+    props.edges,
+    props.layout === 'tree',
+    props.center
+  );
+  const names = new Map(nodes.map((node) => [node.id, node.label]));
+  const percent = (value: number, total: number) => `${(value / total) * 100}%`;
+  const units = (value: number) => `${(value / width) * 100}cqi`;
+  const image = (value?: string) => {
+    if (isStoryUiImageUrl(value)) return value;
+    const name = storyUiImageName(value);
+    return name && urls && Object.hasOwn(urls, name) ? urls[name] : undefined;
+  };
+  return (
+    <figure
+      className="story-ui-graph"
+      data-layout={props.layout ?? 'ring'}
+      style={flex(props.weight)}
+    >
+      <Caption>{props.title}</Caption>
+      <div className="story-ui-graph-scroll">
+        <div
+          className="story-ui-graph-canvas"
+          style={
+            {
+              aspectRatio: `${width} / ${height}`,
+              minInlineSize: `${Math.round(width * 0.55)}px`,
+              maxInlineSize: `${Math.round(width * 0.95)}px`,
+              '--story-graph-disc': units(GRAPH.disc),
+              '--story-graph-label': units(GRAPH.label),
+            } as CSSProperties
+          }
+        >
+          <svg viewBox={`0 0 ${width} ${height}`} aria-hidden="true" focusable="false">
+            {lines.map(({ edge, head, tail, control, endHead, startHead }, index) => (
+              <g
+                key={index}
+                className="story-ui-graph-edge"
+                data-tone={edge.tone}
+                data-line={edge.line}
+              >
+                <path
+                  d={`M${head[0]},${head[1]} Q${control[0]},${control[1]} ${tail[0]},${tail[1]}`}
+                />
+                {endHead && <polygon points={endHead.points} />}
+                {startHead && <polygon points={startHead.points} />}
+              </g>
+            ))}
+          </svg>
+          {lines.map(
+            ({ edge }, index) =>
+              edge.label && (
+                <span
+                  key={index}
+                  className="story-ui-graph-relation"
+                  data-tone={edge.tone}
+                  aria-hidden="true"
+                  style={{
+                    left: percent(middles[index][0], width),
+                    top: percent(middles[index][1], height),
+                  }}
+                >
+                  {edge.label}
+                </span>
+              )
+          )}
+          {nodes.map((node) => {
+            const [x, y] = points.get(node.id)!;
+            const unknown = node.state === 'unknown';
+            return (
+              <div
+                key={node.id}
+                className="story-ui-graph-node"
+                data-tone={node.tone}
+                data-state={node.state}
+                data-caption={above.has(node.id) ? 'above' : undefined}
+                style={{ left: percent(x, width), top: percent(y, height) }}
+              >
+                <Portrait
+                  label={unknown ? '?' : node.label}
+                  url={unknown ? undefined : image(node.image)}
+                />
+                <span className="story-ui-graph-caption">
+                  <span className="story-ui-graph-label">{node.label}</span>
+                  {node.text && <span className="story-ui-graph-text">{node.text}</span>}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {edges.length > 0 && (
+        <ul className="sr-only">
+          {edges.map((edge, index) => (
+            <li key={index}>
+              {names.get(edge.from)} → {names.get(edge.to)}
+              {edge.label && `: ${edge.label}`}
+            </li>
+          ))}
+        </ul>
+      )}
+    </figure>
+  );
+});
+type MapArea = {
+  x: number;
+  y: number;
+  w?: number;
+  h?: number;
+  label?: string;
+  tone?: string;
+  terrain?: string;
+};
+type MapMarker = {
+  x: number;
+  y: number;
+  label: string;
+  mark?: string;
+  icon?: string;
+  text?: string;
+  tone?: string;
+  state?: string;
+};
+const columnLetter = (index: number) => String.fromCharCode(65 + index);
+function MapToken({ marker }: { marker: MapMarker }) {
+  const Glyph =
+    marker.icon && Object.hasOwn(storyUiIcons, marker.icon) ? storyUiIcons[marker.icon] : undefined;
+  return (
+    <span className="story-ui-map-token" data-tone={marker.tone} data-state={marker.state}>
+      {Glyph ? (
+        <Glyph className="story-ui-icon" aria-hidden="true" focusable="false" strokeWidth={2} />
+      ) : (
+        <span>{marker.mark || [...marker.label.trim()][0]}</span>
+      )}
+    </span>
+  );
+}
+const MapBoard = createComponentImplementation(api('Map'), ({ props }) => {
+  const columns: number = props.columns;
+  const rows: number = props.rows;
+  const coords = props.coords === true;
+  const shift = coords ? 2 : 1;
+  const inside = (item: { x: number; y: number }) => item.x < columns && item.y < rows;
+  const areas = ((props.areas ?? []) as MapArea[]).filter(inside);
+  const markers = ((props.markers ?? []) as MapMarker[]).filter(inside);
+  const cells = new Map<string, MapMarker[]>();
+  for (const marker of markers) {
+    const key = `${marker.x},${marker.y}`;
+    cells.set(key, [...(cells.get(key) ?? []), marker]);
+  }
+  const place = (x: number, y: number, w = 1, h = 1): CSSProperties => ({
+    gridColumn: `${x + shift} / span ${Math.min(w, columns - x)}`,
+    gridRow: `${y + shift} / span ${Math.min(h, rows - y)}`,
+  });
+  return (
+    <figure className="story-ui-map" data-coords={coords || undefined} style={flex(props.weight)}>
+      <Caption>{props.title}</Caption>
+      <div className="story-ui-map-scroll">
+        <div
+          className="story-ui-map-board"
+          style={{ '--story-map-columns': columns, '--story-map-rows': rows } as CSSProperties}
+          aria-hidden="true"
+        >
+          <span className="story-ui-map-ground" style={place(0, 0, columns, rows)} />
+          {coords &&
+            Array.from({ length: columns }, (_, x) => (
+              <span
+                key={`c${x}`}
+                className="story-ui-map-coord"
+                style={{ gridColumn: x + 2, gridRow: 1 }}
+              >
+                {columnLetter(x)}
+              </span>
+            ))}
+          {coords &&
+            Array.from({ length: rows }, (_, y) => (
+              <span
+                key={`r${y}`}
+                className="story-ui-map-coord"
+                style={{ gridColumn: 1, gridRow: y + 2 }}
+              >
+                {y + 1}
+              </span>
+            ))}
+          {areas.map((area, index) => (
+            <span
+              key={index}
+              className="story-ui-map-area"
+              data-terrain={area.terrain ?? 'floor'}
+              data-tone={area.tone}
+              style={place(area.x, area.y, area.w, area.h)}
+            >
+              {area.label && <span className="story-ui-map-area-label">{area.label}</span>}
+            </span>
+          ))}
+          {[...cells.values()].map((group) => (
+            <span
+              key={`${group[0].x},${group[0].y}`}
+              className="story-ui-map-cell"
+              data-count={Math.min(group.length, 4)}
+              style={place(group[0].x, group[0].y)}
+            >
+              {group.map((marker, index) => (
+                <MapToken key={index} marker={marker} />
+              ))}
+            </span>
+          ))}
+        </div>
+      </div>
+      {markers.length > 0 && (
+        <ul className="story-ui-map-legend">
+          {markers.map((marker, index) => (
+            <li key={index} data-state={marker.state}>
+              <MapToken marker={marker} />
+              <span className="story-ui-map-legend-label">{marker.label}</span>
+              {coords && (
+                <span className="story-ui-map-legend-at">
+                  {columnLetter(marker.x)}
+                  {marker.y + 1}
+                </span>
+              )}
+              {marker.text && <span className="story-ui-map-legend-text">{marker.text}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {areas.some((area) => area.label) && (
+        <ul className="sr-only">
+          {areas
+            .filter((area) => area.label)
+            .map((area, index) => (
+              <li key={index}>{area.label}</li>
+            ))}
+        </ul>
+      )}
+    </figure>
+  );
+});
+type CalendarItem = { date: number; title: string; time?: string; text?: string; tone?: string };
+const WEEKEND: Record<number, string> = { 0: 'sunday', 6: 'saturday' };
+const weekdayNames = () => {
+  const format = new Intl.DateTimeFormat(getIntlLocale(), { weekday: 'short', timeZone: 'UTC' });
+  // 2023-01-01 was a Sunday.
+  return Array.from({ length: 7 }, (_, day) => format.format(Date.UTC(2023, 0, 1 + day)));
+};
+const Calendar = createComponentImplementation(api('Calendar'), ({ props }) => {
+  const month: string | undefined = props.month;
+  const given: string[] | undefined = props.days;
+  let columns = given?.length ?? 7;
+  let start: number = props.start ?? 0;
+  let length: number = props.length ?? 30;
+  if (month) {
+    const [year, number] = month.split('-').map(Number);
+    columns = 7;
+    start = new Date(Date.UTC(year, number - 1, 1)).getUTCDay();
+    length = new Date(Date.UTC(year, number, 0)).getUTCDate();
+  }
+  start = Math.min(start, columns - 1);
+  const days = given && given.length === columns ? given : columns === 7 ? weekdayNames() : [];
+  const items = ((props.items ?? []) as CalendarItem[])
+    .filter((item) => item.date <= length)
+    .sort((a, b) => a.date - b.date);
+  const weekday = (date: number) => (start + date - 1) % columns;
+  const weekend = (date: number) => (month ? WEEKEND[weekday(date)] : undefined);
+  const trailing = (columns - ((start + length) % columns)) % columns;
+  return (
+    <figure className="story-ui-calendar" style={flex(props.weight)}>
+      <Caption>{props.title}</Caption>
+      <div
+        className="story-ui-calendar-grid"
+        style={{ '--story-calendar-columns': columns } as CSSProperties}
+      >
+        {days.map((day, index) => (
+          <span
+            key={`h${index}`}
+            className="story-ui-calendar-weekday"
+            data-weekend={month ? WEEKEND[index] : undefined}
+          >
+            {day}
+          </span>
+        ))}
+        {Array.from({ length: start }, (_, index) => (
+          <span key={`b${index}`} className="story-ui-calendar-blank" />
+        ))}
+        {Array.from({ length }, (_, index) => {
+          const date = index + 1;
+          const entries = items.filter((item) => item.date === date);
+          return (
+            <div
+              key={date}
+              className="story-ui-calendar-date"
+              data-current={props.current === date || undefined}
+              data-weekend={weekend(date)}
+              data-busy={entries.length > 0 || undefined}
+            >
+              <span className="story-ui-calendar-number">{date}</span>
+              {entries.length > 0 && (
+                <ul>
+                  {entries.map((item, position) => (
+                    <li key={position} data-tone={item.tone}>
+                      {item.title}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+        {Array.from({ length: trailing }, (_, index) => (
+          <span key={`t${index}`} className="story-ui-calendar-blank" />
+        ))}
+      </div>
+      {items.length > 0 && (
+        <ol className="story-ui-calendar-agenda">
+          {items.map((item, index) => (
+            <li
+              key={index}
+              data-tone={item.tone}
+              data-detail={item.time || item.text ? true : undefined}
+            >
+              <span className="story-ui-calendar-when">
+                <b>{item.date}</b>
+                {days[weekday(item.date)] && ` ${days[weekday(item.date)]}`}
+              </span>
+              {item.time && <time>{item.time}</time>}
+              <span className="story-ui-calendar-title">{item.title}</span>
+              {item.text && <span className="story-ui-calendar-text">{item.text}</span>}
+            </li>
+          ))}
+        </ol>
+      )}
+    </figure>
+  );
+});
 const KeyValue = createComponentImplementation(api('KeyValue'), ({ props }) => (
   <figure className="story-ui-keyvalue" style={flex(props.weight)}>
     <Caption>{props.title}</Caption>
@@ -1338,6 +1869,9 @@ const implementations = new Map(
     Rank,
     Route,
     Combatant,
+    Graph,
+    MapBoard,
+    Calendar,
     Details,
     Tabs,
     Modal,
