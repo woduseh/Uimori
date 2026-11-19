@@ -103,7 +103,7 @@ for (const width of [412]) {
         .filter({ has: page.getByText(name, { exact: true }) });
       await saved.getByRole('button', { name: `${name} 팔레트 삭제`, exact: true }).click();
       await page
-        .getByRole('dialog', { name: '팔레트 삭제', exact: true })
+        .getByRole('alertdialog', { name: '팔레트 삭제', exact: true })
         .getByRole('button', { name: '팔레트 삭제', exact: true })
         .click();
       await expect(saved).toHaveCount(0);
@@ -244,7 +244,7 @@ test('APPEARANCE uploaded font loads, applies independently, persists, recovers 
   await manage.click();
   await fonts.getByRole('button', { name: `${name} 글꼴 삭제`, exact: true }).click();
   await page
-    .getByRole('dialog', { name: '글꼴 삭제', exact: true })
+    .getByRole('alertdialog', { name: '글꼴 삭제', exact: true })
     .getByRole('button', { name: '글꼴 삭제', exact: true })
     .click();
   await expect
