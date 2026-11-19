@@ -6127,7 +6127,7 @@
     0 6px 14px -6px var(--story-tone);
 }
 .story-ui[data-story-ui-style="modern"] .story-ui-calendar-grid {
-  gap: 5px;
+  gap: 4px;
 }
 .story-ui[data-story-ui-style="modern"] :is(.story-ui-calendar-date, .story-ui-calendar-blank) {
   border-radius: 12px;
@@ -6866,7 +6866,7 @@
 
 /* romance: a decorated diary. Polaroids, highlighter, washi tape and stickers. */
 .story-ui[data-story-ui-style="romance"] .story-ui-graph-node > .story-ui-avatar {
-  padding: 3px 3px 8px;
+  padding: 4px 4px 8px;
   background: light-dark(#ffffff, #f3e9e6);
   border-radius: 2px;
   box-shadow: 0 2px 6px -2px #00000066;
