@@ -483,6 +483,9 @@ root = Column([
   Column([], look="escape")
 ])
 </a2ui>`,
+  `<a2ui>
+root = Calendar("휴가 계획", [{date: 1, title: "출발"}, {date: 2, title: "해변"}, {date: 4, title: "귀가"}], length=5)
+</a2ui>`,
 ];
 
 /** Relation labels and node names of a graph whose boxes overlap, as "a / b" pairs. */
@@ -609,7 +612,7 @@ test('composed media render with their own shells in both schemes', async ({ pag
   await expect(page.locator('.story-ui-map-legend')).toContainText('A1');
   await expect(page.locator('.story-ui-map-legend-at').first()).toHaveText('B2');
   // December 2026 starts on a Tuesday and has 31 days; today and the busy dates are marked.
-  const calendar = page.locator('.story-ui-calendar');
+  const calendar = page.locator('.story-ui-calendar', { hasText: '2026년 12월' });
   await expect(calendar.locator('.story-ui-calendar-grid > .story-ui-calendar-blank')).toHaveCount(
     2 + 2
   );
@@ -620,6 +623,13 @@ test('composed media render with their own shells in both schemes', async ({ pag
     'data-weekend',
     'sunday'
   );
+  // Entries without a time or note stay in their dates on a wide screen, and on a narrow one
+  // the agenda lists them one per row.
+  const brief = page.locator('.story-ui-calendar', { hasText: '휴가 계획' });
+  await expect(brief.locator('.story-ui-calendar-agenda')).toBeHidden();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(brief.locator('.story-ui-calendar-agenda')).toHaveCSS('display', 'grid');
+  await page.setViewportSize({ width: 960, height: 900 });
   // The model's own CSS restyles its block, and only its block, without leaving the page.
   const authored = page.locator('.story-ui[data-story-ui-authored]');
   await expect(authored).toHaveCount(1);
@@ -694,6 +704,11 @@ test('composed media render with their own shells in both schemes', async ({ pag
       await labelOverlaps(preset.locator('.story-ui-graph[data-layout="ring"]')),
       style
     ).toEqual([]);
+    // A defeated unit reads as out whatever the preset does to tokens.
+    await expect(
+      preset.locator('.story-ui-map-board .story-ui-map-token[data-state="down"]'),
+      style
+    ).toHaveCSS('border-top-style', 'dashed');
     for (const theme of ['light', 'dark']) {
       await page.evaluate((value) => {
         document.documentElement.dataset.theme = value;

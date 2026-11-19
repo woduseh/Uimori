@@ -119,7 +119,7 @@ root = Column([
     const stored = normalizeStoryUiOutput(
       `<a2ui>
 root = Column([
-  Graph([{id: "me", label: "나"}, {id: "yun", label: "한서윤", text: "소꿉친구", image: "{{img::서윤}}"}, {id: "x", label: "발신인", state: "unknown"}], [{from: "yun", to: "me", label: "짝사랑"}, {from: "x", to: "me", line: "dashed"}], "관계도", center="me"),
+  Graph([{id: "me", label: "나"}, {id: "yun", label: "한서윤", text: "소꿉친구", image: "{{img::서윤}}"}, {id: "x", label: "발신인", state: "unknown"}, {id: "yun", label: "중복"}], [{from: "yun", to: "me", label: "짝사랑"}, {from: "x", to: "me", line: "dashed"}, {from: "me", to: "ghost", label: "유령"}, {from: "me", to: "me", label: "독백"}], "관계도", center="me"),
   Map(4, 3, [{x: 0, y: 0, w: 2, label: "교실", terrain: "floor"}], [{x: 1, y: 2, label: "경비원", mark: "경", text: "순찰 중", tone: "danger"}], coords=true),
   Calendar("12월", [{date: 24, title: "크리스마스 공연", time: "19:00"}], month="2026-12", days=["일", "월", "화", "수", "목", "금", "토"], current=19)
 ])
@@ -132,6 +132,12 @@ root = Column([
     const wording = projectStoryUiText(stored);
     expect(wording).toContain('한서윤 → 나: 짝사랑');
     expect(wording).toContain('발신인 → 나');
+    // Read only what the reader sees: the first of a repeated id, edges with two distinct ends.
+    for (const value of ['중복 →', '유령', '독백']) expect(wording).not.toContain(value);
+    // A calendar entry keeps its date; map sizes are layout, not wording.
+    expect(wording).toContain('2026-12');
+    expect(wording).toContain('24 19:00 크리스마스 공연');
+    expect(wording.split('\n')).not.toEqual(expect.arrayContaining(['4', '3']));
     for (const value of [
       '소꿉친구',
       '교실',
@@ -142,7 +148,7 @@ root = Column([
       '19:00',
     ])
       expect(wording).toContain(value);
-    for (const value of ['yun', 'dashed', 'floor', '2026-12']) expect(wording).not.toContain(value);
+    for (const value of ['yun', 'dashed', 'floor']) expect(wording).not.toContain(value);
     const translation = prepareStoryUiTranslation(stored);
     const strings: string[] = JSON.parse(
       translation.text.replace(/<\/?UIMORI_UI_TRANSLATION_0>/g, '')

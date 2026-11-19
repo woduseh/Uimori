@@ -1218,7 +1218,10 @@ function layoutGraph(nodes: GraphNode[], given: GraphEdge[], tree: boolean, cent
 }
 const Graph = createComponentImplementation(api('Graph'), ({ props }) => {
   const urls = useContext(StoryUiImageUrls);
-  const nodes: GraphNode[] = props.nodes;
+  // A repeated id names one node; later copies are dropped like edges to missing nodes.
+  const nodes = (props.nodes as GraphNode[]).filter(
+    (node, index, all) => all.findIndex((other) => other.id === node.id) === index
+  );
   const { points, above, width, height, edges, lines, middles } = layoutGraph(
     nodes,
     props.edges,

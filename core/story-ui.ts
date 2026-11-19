@@ -328,23 +328,35 @@ export function projectStoryUiText(text: string, mode: 'text' | 'expression' = '
       for (const component of components) {
         for (const key of projectedKeys) append(component[key]);
         if (storyUiDisplayValues.has(String(component.component))) append(component.value);
+        const calendar = component.component === 'Calendar';
         for (const [collection, keys] of Object.entries(storyUiNestedTextKeys)) {
           const items = component[collection];
-          if (collection === 'edges' || !Array.isArray(items)) continue;
-          for (const item of items) if (record(item)) for (const key of keys) append(item[key]);
+          if (collection === 'edges' || (calendar && collection === 'items')) continue;
+          if (Array.isArray(items))
+            for (const item of items) if (record(item)) for (const key of keys) append(item[key]);
+        }
+        // An entry is read with its date, or a reader of the summary loses when it happens.
+        if (calendar) {
+          append(component.month);
+          if (Array.isArray(component.items))
+            for (const item of component.items.filter(record))
+              values.push([item.date, item.time, item.title, item.text].filter(Boolean).join(' '));
         }
         // A relation means nothing without its ends, so each edge reads as "A → B: label".
+        // Only edges the reader sees are read: both ends exist and differ, first id wins.
         if (Array.isArray(component.edges) && Array.isArray(component.nodes)) {
-          const names = new Map(
-            component.nodes.filter(record).map((node) => [node.id, String(node.label)])
-          );
+          const names = new Map<unknown, string>();
+          for (const node of component.nodes.filter(record))
+            if (!names.has(node.id)) names.set(node.id, String(node.label));
           for (const edge of component.edges.filter(record)) {
-            const ends = `${names.get(edge.from) ?? edge.from} → ${names.get(edge.to) ?? edge.to}`;
+            if (edge.from === edge.to || !names.has(edge.from) || !names.has(edge.to)) continue;
+            const ends = `${names.get(edge.from)} → ${names.get(edge.to)}`;
             values.push(edge.label === undefined ? ends : `${ends}: ${edge.label}`);
           }
         }
-        for (const list of storyUiTextLists) append(component[list]);
-        append(component.rows);
+        // Lists only: Grid and Map also have numeric `columns` or `rows`, which are layout.
+        for (const list of [...storyUiTextLists, 'rows'])
+          if (Array.isArray(component[list])) append(component[list]);
       }
       return values.join('\n');
     })

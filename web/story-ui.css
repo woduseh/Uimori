@@ -2621,6 +2621,7 @@
   border-radius: 0.4em;
 }
 .story-ui .story-ui-graph-node > .story-ui-avatar {
+  position: relative;
   inline-size: var(--story-graph-disc);
   block-size: var(--story-graph-disc);
   margin-block: 0.25em;
@@ -2637,13 +2638,18 @@
 }
 .story-ui .story-ui-graph-node[data-state="unknown"] > .story-ui-avatar {
   color: var(--story-muted);
-  background:
-    repeating-linear-gradient(
-      -45deg,
-      color-mix(in srgb, var(--story-ink) 7%, transparent) 0 4px,
-      transparent 4px 8px
-    ),
-    var(--story-surface);
+}
+/* The hatching lies over the disc, so it survives any preset's own disc background. */
+.story-ui .story-ui-graph-node[data-state="unknown"] > .story-ui-avatar::after {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--story-ink) 10%, transparent) 0 4px,
+    transparent 4px 8px
+  );
+  content: "";
+  pointer-events: none;
 }
 .story-ui .story-ui-graph-node[data-state="locked"] {
   opacity: 0.5;
@@ -2991,12 +2997,11 @@
     border: 0;
     border-radius: 50%;
   }
-  .story-ui .story-ui-calendar-agenda:not(:has(> li[data-detail])),
+  .story-ui .story-ui-calendar-agenda:not(:has(> li[data-detail])) {
+    display: grid;
+  }
   .story-ui .story-ui-calendar-agenda > li:not([data-detail]) {
     display: flex;
-  }
-  .story-ui .story-ui-calendar-agenda {
-    display: grid;
   }
 }
 
@@ -5944,11 +5949,6 @@
   border-color: var(--story-seal);
   rotate: -4deg;
 }
-.story-ui[data-story-ui-style="east-asian"] .story-ui-map-token[data-state="down"] {
-  color: var(--story-muted);
-  border-color: var(--story-muted);
-  border-style: dashed;
-}
 .story-ui[data-story-ui-style="east-asian"] .story-ui-calendar-grid {
   gap: 0;
   border-block-end: 1px solid var(--story-ink);
@@ -6372,19 +6372,6 @@
   border-width: 4px;
   box-shadow: 0 4px 14px -2px var(--story-accent);
 }
-.story-ui[data-story-ui-style="idol"]
-  .story-ui-graph-node[data-state="unknown"]
-  > .story-ui-avatar {
-  background:
-    repeating-linear-gradient(
-      -45deg,
-      color-mix(in srgb, var(--story-ink) 7%, transparent) 0 4px,
-      transparent 4px 8px
-    )
-    padding-box,
-    linear-gradient(var(--story-surface), var(--story-surface)) padding-box,
-    var(--story-foil) border-box;
-}
 .story-ui[data-story-ui-style="idol"] .story-ui-graph-caption {
   padding-inline: 0.75em;
   background: var(--story-ink);
@@ -6481,7 +6468,7 @@
 .story-ui[data-story-ui-style="neon"] .story-ui-graph-edge:not([data-tone]) {
   --story-tone: color-mix(in srgb, var(--story-accent-text) 75%, transparent);
 }
-.story-ui[data-story-ui-style="neon"] .story-ui-graph-node {
+.story-ui[data-story-ui-style="neon"] .story-ui-graph-node:not([data-state="locked"]) {
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--story-tone) 60%, transparent));
 }
 .story-ui[data-story-ui-style="neon"] .story-ui-graph-node:not([data-tone]) {
@@ -6576,13 +6563,6 @@
   color: var(--story-accent-ink);
   background: var(--story-accent);
   border-color: var(--story-accent);
-}
-.story-ui[data-story-ui-style="neon"] .story-ui-map-token[data-state="down"] {
-  color: var(--story-muted);
-  background: none;
-  border-color: var(--story-muted);
-  border-style: dashed;
-  box-shadow: none;
 }
 .story-ui[data-story-ui-style="neon"] .story-ui-calendar-weekday {
   font-family: var(--story-tech);
@@ -6680,7 +6660,7 @@
 .story-ui[data-story-ui-style="horror"] .story-ui-map-area:not([data-tone="danger"]) {
   --story-tone: var(--story-muted);
 }
-.story-ui[data-story-ui-style="horror"] .story-ui-map-area {
+.story-ui[data-story-ui-style="horror"] .story-ui-map-area[data-terrain="floor"] {
   background: none;
   border: 1px dashed color-mix(in srgb, var(--story-tone) 60%, transparent);
   border-radius: 0;
@@ -7102,6 +7082,14 @@
   border: 1.5px solid var(--story-ink);
   border-radius: 0;
   font-style: italic;
+}
+/* A defeated token reads as out under every preset; it follows the presets' token rules. */
+.story-ui[data-story-ui-style] .story-ui-map-token[data-state="down"] {
+  color: var(--story-muted);
+  background: var(--story-surface);
+  border-color: var(--story-muted);
+  border-style: dashed;
+  box-shadow: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
