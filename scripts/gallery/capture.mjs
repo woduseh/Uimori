@@ -239,9 +239,6 @@ export async function captureGallery({
     } finally {
       await context.close();
     }
-    // Journeys create chats on the server, so they run after every screen is captured. A failure
-    // outside a step (a context that will not open) is recorded like a step failure so the screen
-    // evidence above is still written.
     try {
       journey = await captureJourneys({ browser, baseUrl, ids, directory, journeys, log });
     } catch (error) {

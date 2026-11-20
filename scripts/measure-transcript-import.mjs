@@ -6,7 +6,6 @@ import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
 import { assertBuild, root } from './lib.mjs';
 
-// Manual synthetic measurement. Alternate emitted runtimes are diagnostic comparisons, not gates.
 const args = process.argv.slice(2);
 if (args.some((arg) => !/^--(?:runtime|counts|label)=/.test(arg)))
   throw new Error('UNKNOWN_ARGUMENT');

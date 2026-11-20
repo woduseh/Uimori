@@ -16,7 +16,6 @@ export function localVerificationEnv(variables = {}) {
     UIMORI_PORT: '0',
     UIMORI_HOST: '127.0.0.1',
     UIMORI_TEST_MODE: '1',
-    // Undefined removes inherited configuration at spawn; an empty origin is invalid.
     UIMORI_PUBLIC_ORIGIN: undefined,
     UIMORI_ACCESS_TOKEN: '',
     UIMORI_CODEX_ENABLED: '0',
@@ -60,7 +59,6 @@ export function ownedPath(parent, target) {
 }
 export async function removeOwned(parent, target) {
   ownedPath(parent, target);
-  // Reject symlinks/junctions along the cleanup path, including its parent.
   const { lstat, realpath } = await import('node:fs/promises');
   const resolvedParent = await realpath(parent);
   const comparable = (value) => (process.platform === 'win32' ? value.toLowerCase() : value);
@@ -116,7 +114,6 @@ export async function fingerprint(sourceRoot = root, { buildOnly = false } = {})
     lineEndings: 'text CRLF normalized to LF',
   };
 }
-// Tests and verification runners identify evidence, but are not compiler inputs.
 export async function buildFingerprint(sourceRoot = root) {
   return fingerprint(sourceRoot, { buildOnly: true });
 }
@@ -276,9 +273,7 @@ export async function startServer(env, directory, children, cwd = root) {
             child.removeListener('error', fail);
             resolve(event);
           }
-        } catch {
-          /* ordinary diagnostic line */
-        }
+        } catch {}
       }
     });
   });

@@ -26,9 +26,7 @@ function fixture(t) {
   t.after(() => {
     try {
       db.close();
-    } catch {
-      /* Already closed for stopped-copy verification. */
-    }
+    } catch {}
     rmSync(root, { recursive: true, force: true });
   });
   return { root, source, db };

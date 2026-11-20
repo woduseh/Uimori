@@ -54,7 +54,6 @@ function excluded(node) {
   );
 }
 
-// JSX removes indentation, but does not insert spaces around inline elements.
 function jsxText(text) {
   const lines = text.split(/\r\n|\n|\r/u);
   const last = lines.findLastIndex((line) => /\S/u.test(line));
@@ -68,7 +67,6 @@ function jsxText(text) {
     .join('');
 }
 
-// Only literal t('key') calls are resolved. ICU parameters and computed keys stay dynamic.
 function translated(node, messages) {
   if (
     node?.type !== 'CallExpression' ||
@@ -83,7 +81,6 @@ function translated(node, messages) {
   return { text, messageKey: key, dynamic: node.arguments.length > 1 || /\{[^{}]*\}/u.test(text) };
 }
 
-/** Collect alternatives for human review, never treat them as exact visible text. */
 function translationAlternatives(node, messages, found = new Map()) {
   if (!node || typeof node !== 'object') return [...found.values()];
   const translatedChunk = translated(node, messages);
@@ -117,7 +114,6 @@ function parts(node, messages) {
   return children.some((child) => child === null) ? null : children.flat();
 }
 
-/** Deliberately local: no variable evaluation, component expansion, CSS or rendered-text scan. */
 export function scanSource(source, file = 'input.tsx', messages = {}, review = []) {
   const ast = parse(source, { sourceType: 'unambiguous', plugins: ['typescript', 'jsx'] });
   const copies = [],
@@ -182,7 +178,6 @@ export function scanSource(source, file = 'input.tsx', messages = {}, review = [
             ...(copy.messageKeys.length ? { messageKeys: copy.messageKeys } : {}),
             static: copy.static,
           });
-        // Conditional messages are reviewable, but never exactly matched as co-visible text.
         for (const child of node.children) {
           if (child.type !== 'JSXExpressionContainer') continue;
           if (translated(child.expression, messages)) continue;
@@ -247,7 +242,6 @@ export function scanSource(source, file = 'input.tsx', messages = {}, review = [
   return warnings.sort((a, b) => a.line - b.line || a.rule.localeCompare(b.rule));
 }
 
-/** Read plain locale source syntax, without executing app modules or evaluating ICU expressions. */
 function unwrapExpression(node) {
   return ['TSAsExpression', 'TSSatisfiesExpression', 'TSNonNullExpression'].includes(node?.type)
     ? unwrapExpression(node.expression)

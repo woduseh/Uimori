@@ -20,7 +20,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     !/^0+$/.test(base)
   ) {
     try {
-      // A source file renamed into docs still removes executable code.
       const files = execFileSync(
         'git',
         ['diff', '--no-renames', '--name-only', '-z', base, 'HEAD'],
@@ -31,9 +30,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         .split('\0')
         .filter(Boolean);
       docs = docsOnly(files);
-    } catch {
-      // Missing history must run the full checks, never silently skip them.
-    }
+    } catch {}
   }
   const result = `docs_only=${docs}\n`;
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, result);

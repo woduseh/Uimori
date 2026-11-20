@@ -2,7 +2,6 @@ import { readFile, writeFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { fileURLToPath } from 'node:url';
 
-// Tiny tabs use a reduced seal; the full mark keeps its thin concentric strokes.
 const tiny = await readFile(new URL('../web/public/icons/halo-tiny.svg', import.meta.url));
 const compact = await readFile(new URL('../web/public/icons/halo-small.svg', import.meta.url));
 const detailed = await readFile(new URL('../web/public/icons/halo.svg', import.meta.url));
@@ -15,10 +14,8 @@ const contents = (svg) =>
     .replace(/^[\s\S]*?<svg[^>]*>/, '')
     .replace(/<\/svg>\s*$/, '');
 
-// The navigation logo shares the compact mark, but has a transparent background.
 await writeFile(new URL('icons/halo-mark.svg', publicRoot), stripBackground(compact));
 
-// SVG favicons use the appropriate simplified seal when rendered at small dimensions.
 await writeFile(
   new URL('favicon.svg', publicRoot),
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 350 350" fill="none">
@@ -46,7 +43,6 @@ for (const [file, size, source] of [
     .toFile(fileURLToPath(new URL(file, publicRoot)));
 }
 
-// Keep the entire mark inside the maskable icon's safe area.
 const mark = await sharp(detailed, { density: 192 }).resize(400, 400).png().toBuffer();
 await sharp({ create: { width: 512, height: 512, channels: 4, background: '#14141b' } })
   .composite([{ input: mark, gravity: 'centre' }])

@@ -3,8 +3,6 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseShard, testFile } from './ci-summary.mjs';
 
-// CI machines shard the files; each machine keeps the normal isolated, serial pool.
-// Collect via Vitest itself so new files and configured exclusions need no manual list.
 try {
   if (process.argv.length !== 3) throw new Error('Use node scripts/ci-vitest.mjs 1/6');
   const shard = process.argv[2];

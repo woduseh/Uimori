@@ -69,7 +69,6 @@ export async function probeNodeChild({ spawnChild = spawn, timeoutMs = 5000 } = 
       child.stdout.on('data', (value) => {
         output = (output + value).slice(0, 1000);
       });
-      // Drain stderr without collecting inherited environment or unrelated diagnostics.
       child.stderr.resume();
       child.once('error', reject);
       child.once('close', (code, signal) => {
@@ -83,9 +82,7 @@ export async function probeNodeChild({ spawnChild = spawn, timeoutMs = 5000 } = 
         timedOut = true;
         try {
           child.kill();
-        } catch {
-          // A bounded fallback below reports failure to close the owned child.
-        }
+        } catch {}
         cleanupTimer = setTimeout(
           () =>
             reject(

@@ -4,16 +4,6 @@ import { measureScreen, metricSource } from '../../tests/fixtures/ui-metrics.ts'
 import { locatorFor, resolveUrl, runStep } from './steps.mjs';
 import { defaultMetrics, viewports } from './screens.mjs';
 
-// A journey is a sequence of steps a reader performs on the seeded fixture. Every step is
-// captured after it settles, and the clicks, fills, menu opens and key presses it needed are
-// counted so a review can see how many interactions each outcome costs at each width.
-//
-//   { id, title, actions: [<steps.mjs step>...], ready?: <locator>, urlParam?: 'chat' }
-//
-// `urlParam` waits until that query parameter differs from before the step (a new chat, a fork).
-// Journeys run after the screens, in a light theme only, and they create real chats on the
-// owned server; nothing they leave behind is reused by a screen capture.
-
 const chatMetrics = ['header-controls', 'composer-dock', ...defaultMetrics];
 const sendAction = { click: { label: '원문 생성' } };
 const inMenu = { css: 'details[open] .action-menu-body' };
@@ -156,7 +146,6 @@ export async function captureJourneys({
           let interactions = 0;
           try {
             for (const action of step.actions) {
-              // Counted as they happen so a step that fails afterwards still reports its cost.
               const count = await runStep(page, action, ids);
               interactions += count;
               run.interactions += count;

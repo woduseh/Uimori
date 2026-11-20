@@ -68,8 +68,6 @@ export async function verifyReleaseReceipt(receipt, identity, checks) {
     );
 }
 
-// Each completed check is saved before the next one. A later failure does not force
-// another full quality run when the source, runtime and successful evidence still match.
 export async function runReleaseChecks(
   { area = 'verify:browser-smoke', full = false, signal } = {},
   dependencies = {}
@@ -100,8 +98,6 @@ export async function runReleaseChecks(
   };
   const log = dependencies.log ?? console.log;
   const cli = dependencies.npmCli ?? npmCli();
-  // Preserve unstarted checks for later selection without making them mandatory.
-  // Once execution starts, failed or incomplete evidence still needs resolution.
   for (const name of new Set([...(reusable ? (cached.requested ?? []) : []), ...checks]))
     summary.checks[name] ??= { command: name, status: 'NOT_RUN' };
   await json(report, summary);
@@ -123,8 +119,6 @@ export async function runReleaseChecks(
         try {
           await buildIdentity();
         } catch {
-          // Quality/test evidence is still valid. Recreate only the missing or
-          // altered build, then verify its source and artifact identity below.
           log('BUILD missing or stale; rebuilding without repeating quality tests');
           const rebuild = await execute(process.execPath, [cli, 'run', 'build'], {
             timeoutMs: 300_000,

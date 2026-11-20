@@ -12,8 +12,6 @@ import { captureLogicalHistory } from '../dist/server/prompt-snapshot.js';
 import { nativeSourceSnapshot } from '../dist/server/risu-native-actions.js';
 import { assertBuild, root } from './lib.mjs';
 
-// Real file SQLite, synthetic complete ancestry, no provider or user database.
-// Reuse the printed --fixture directory for paired measurements on identical rows.
 const args = process.argv.slice(2);
 const longStory = args.includes('--long-story');
 const option = (name) => args[args.indexOf(name) + 1];
@@ -31,7 +29,6 @@ if (path.isAbsolute(within) || within.startsWith('..') || !within.startsWith('fi
   throw new Error('Only owned output/context-storage/fixture-* directories are accepted');
 const descriptor = path.join(directory, 'fixture.json');
 const hash = (value) => createHash('sha256').update(value).digest('hex');
-// Property ordering is not part of snapshot semantics; array/message ordering is.
 const outputHash = (value) =>
   hash(
     JSON.stringify(value, (_key, item) =>
@@ -66,7 +63,6 @@ try {
         counts,
         loreCount: bot.package.lore.length,
         loreCharsPerEntry: longStory ? 300 : 0,
-        // No binaries or invented stored asset references are needed for these paths.
         nativeAssetCount: bot.package.nativeRisu.assets.length,
         storedAssetCount: 0,
       },
@@ -197,8 +193,6 @@ try {
       captureLogicalHistory: () => captureLogicalHistory(store, snapshot),
       nativeSourceSnapshot: () => nativeSourceSnapshot(store, scenario.chatId, scenario.head),
     };
-    // Save these once so paired before/after runs validate the same full result, not
-    // a new expected value recomputed from the changed implementation.
     scenario.expectedPathHashes ??= {};
     for (const name of ['captureLogicalHistory', 'nativeSourceSnapshot']) {
       if (!scenario.expectedPathHashes[name]) {

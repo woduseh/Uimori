@@ -40,7 +40,6 @@ export function messageArguments(pattern, locale = 'ko') {
   return [...result].sort();
 }
 
-/** Includes attributes, templates, hidden/status text and module constants, unlike verify:copy. */
 export function scanI18nSource(source, file = 'input.tsx') {
   const candidates = [],
     calls = [],
@@ -170,14 +169,12 @@ export function checkI18n(root = resolve(fileURLToPath(new URL('..', import.meta
       errors.push(`${location}: unknown message ${call.key}`);
       continue;
     }
-    if (call.args === null) continue; // Forwarded argument objects require runtime coverage.
+    if (call.args === null) continue;
     try {
       const required = messageArguments(pattern);
       if (JSON.stringify(required) !== JSON.stringify(call.args))
         errors.push(`${location}: ${call.key} requires [${required}], received [${call.args}]`);
-    } catch {
-      /* Catalog syntax is reported above. */
-    }
+    } catch {}
   }
   const koreanMessages = new Set([...catalog.values()].map((entry) => entry.ko));
   const unregisteredCandidates = candidates.filter((entry) => !koreanMessages.has(entry.text));

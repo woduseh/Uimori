@@ -16,7 +16,6 @@ import { encodeResponses } from '../dist/core/openai-protocol.js';
 import { createSyntheticBot, syntheticStoryScenes } from './synthetic-story.mjs';
 import { assertBuild, fingerprint, json, root } from './lib.mjs';
 
-// Exact reusable inputs in an owned synthetic DB. No provider, user DB or elapsed-time gate.
 const directory = path.resolve(process.argv[2]);
 const label = process.argv[3] ?? 'baseline';
 assert.match(label, /^[a-z0-9-]+$/u);
@@ -69,7 +68,6 @@ const report = {
   conditions: [],
 };
 await writeFile(path.join(directory, `${label}.diff`), git('diff', 'HEAD', '--binary'));
-// Include untracked measurement source as well as the full tree fingerprint.
 await writeFile(
   path.join(directory, `${label}-runner.mjs`),
   await readFile(new URL(import.meta.url))
@@ -81,7 +79,6 @@ const summary = (samples, key) => {
   const values = samples.map((row) => row[key]).sort((a, b) => a - b);
   return { median: values[4], min: values[0], max: values.at(-1) };
 };
-// Hash logical rows, including WAL contents. Main-file bytes alone omit uncheckpointed rows.
 function databaseHash(store) {
   const digest = createHash('sha256');
   for (const { name } of store.db

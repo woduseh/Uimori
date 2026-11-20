@@ -3,9 +3,6 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { readAccessEnv, runOracleSmoke } from './oracle-smoke.mjs';
 
-/** Host-side HTTP control uses the production Host/Origin over loopback.
- * Credentials never enter command arguments, output, or a controller-side file.
- */
 export async function localRequest({
   origin,
   pathname,
@@ -138,7 +135,6 @@ export async function controlMaintenance({ action, origin, token, owner, request
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  // This CLI is staged on the host and runs in the pinned application image.
   const [action, envFile, owner, buildId, outputFile] = process.argv.slice(2);
   let access;
   try {
@@ -150,7 +146,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     console.log(JSON.stringify(result));
     if (action === 'smoke' && result.status !== 'PASS') process.exitCode = 1;
   } catch (error) {
-    // Only local status/transport diagnostics are constructed above; never print env/response bodies.
     const message = access?.token
       ? String(error.message).split(access.token).join('[redacted]')
       : error.message;

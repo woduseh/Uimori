@@ -40,7 +40,6 @@ export function assertJobResults(needs, { docsOnly = false, fullBrowser = false 
   return { status: 'PASS', coverage: docsOnly ? 'docs-only' : 'full-required', fullBrowser };
 }
 
-/** Sharding may reorder files, but must neither duplicate nor lose a collected file. */
 export function assertPartition(expected, parts) {
   if (!expected.length || new Set(expected).size !== expected.length)
     throw new Error('Empty or duplicate full test inventory');

@@ -17,7 +17,6 @@ const database = 'uimori.sqlite';
 const credentials = [`${database}.vertex-credentials`, `${database}.codex/auth.json`];
 const quote = (name) => `"${name.replaceAll('"', '""')}"`;
 
-// Discover status columns, rather than maintaining a schema-version table manifest.
 export function inspectData(directory, { integrity = false, idle = true, columns = false } = {}) {
   const db = new DatabaseSync(join(directory, database), { readOnly: true });
   try {
@@ -126,7 +125,6 @@ function copyWithOwnership(source, destination) {
   visit(source, destination);
 }
 
-// Called only after the old application stops. Keep every companion file for rollback.
 export function copyStoppedData(source, destination) {
   emptyDestination(source, destination);
   safeTree(source);
@@ -152,14 +150,10 @@ function sessionAuthority(directory) {
 }
 
 export function restoreData(source, destination) {
-  // Validate the complete backup before changing the live volume.
   inspectData(source, { integrity: true });
   safeTree(source);
   assertSeparate(source, destination);
   safeTree(destination);
-  // Maintenance still admits login/logout. A closed, idle candidate can therefore
-  // contain newer authority than its backup; restoring it would revive revoked sessions.
-  // Compare only after both applications have stopped, before changing any live files.
   if (sessionAuthority(source) !== sessionAuthority(destination))
     throw new Error(
       'Session authority changed after backup; rollback refused to preserve login/logout changes'
@@ -168,7 +162,6 @@ export function restoreData(source, destination) {
   return copyStoppedData(source, destination);
 }
 
-// Fresh retains only service-account credentials and Codex login, never Codex sessions/config.
 export function copyCredentials(source, destination) {
   emptyDestination(source, destination);
   const before = credentialDigest(source);
@@ -208,7 +201,6 @@ export async function snapshotDatabase(source, destination) {
   return inspectData(destination, { integrity: true });
 }
 
-// This write is only used on a new isolated --fresh volume after its maintenance boot.
 export function dataMaintenance(directory, closeOwner) {
   const db = new DatabaseSync(join(directory, database), { readOnly: !closeOwner });
   try {

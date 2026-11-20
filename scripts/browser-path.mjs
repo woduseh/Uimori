@@ -26,8 +26,6 @@ export function browserPath() {
       const candidate = join(directory, name);
       if (existsSync(candidate)) return candidate;
     }
-  // Deployment imports the shared utilities without needing test packages installed.
-  // Resolve Playwright only when a browser command actually asks for its managed binary.
   try {
     const browser = require('@playwright/test').chromium.executablePath();
     return existsSync(browser) ? browser : undefined;

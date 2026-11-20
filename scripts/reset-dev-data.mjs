@@ -3,8 +3,6 @@ import { existsSync, lstatSync, readdirSync, realpathSync, unlinkSync } from 'no
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// The CLI intentionally has no path or environment override. It resets only this
-// checkout's default disposable development database, never an arbitrary UIMORI_DB.
 const repository = realpathSync(fileURLToPath(new URL('../', import.meta.url)));
 const directory = join(repository, '.local');
 const database = join(directory, 'uimori.sqlite');
@@ -31,7 +29,6 @@ function checkedFile(path, missing = false) {
   if (!within || isAbsolute(within) || within.startsWith('..') || dirname(absolute) !== directory)
     throw new Error('DEV_RESET_UNSAFE_TARGET');
   if (!existsSync(absolute)) {
-    // existsSync follows links, so explicitly reject dangling symbolic links.
     try {
       lstatSync(absolute);
     } catch (error) {
@@ -68,7 +65,6 @@ try {
   if (process.argv.length !== 2)
     throw new Error('DEV_RESET_FIXED_TARGET_ONLY: npm run reset:dev accepts no arguments.');
   if (!existsSync(directory)) {
-    // A dangling .local link must not be mistaken for an absent directory.
     try {
       lstatSync(directory);
       throw new Error('DEV_RESET_UNSAFE_DIRECTORY');
@@ -82,7 +78,6 @@ try {
       .filter((name) => baseNames.test(candidateBase(name)))
       .sort();
     const targets = names.map((name) => checkedFile(join(directory, name)));
-    // Acquire the default DB's ownership protocol before deleting any file.
     acquire('uimori.sqlite');
     for (const path of targets) {
       unlinkSync(checkedFile(path));

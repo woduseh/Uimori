@@ -6,7 +6,6 @@ import path from 'node:path';
 import { isDeepStrictEqual, parseArgs } from 'node:util';
 import { root, newId, removeOwned } from './lib.mjs';
 
-// Deliberately small, opt-in behavioral sample. This is not an autonomous answer grader.
 const cases = [
   {
     id: 'short-fact',
@@ -214,7 +213,6 @@ async function main() {
     values.output ?? path.join(root, 'output/helper-evals', `${newId()}.json`)
   );
   await mkdir(path.dirname(output), { recursive: true });
-  // Refuse to replace an earlier baseline, including when the run later fails.
   await writeFile(
     output,
     JSON.stringify({ status: 'running', startedAt: report.startedAt }) + '\n',
@@ -331,7 +329,6 @@ async function main() {
         for (const request of requests) {
           round = 0;
           const task = runtime.enqueue(conversation.id, randomUUID(), request);
-          // A worker can register more tracked promises while a task runs.
           for (let cursor = 0; cursor < work.length; ) {
             const pending = work.slice(cursor);
             cursor = work.length;

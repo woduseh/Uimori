@@ -13,7 +13,6 @@ import { projectNativeRisuPackage } from '../dist/server/risu-native-projection.
 import { packagePresentationRoutes } from '../dist/server/package-presentation-routes.js';
 import { readerDetail } from '../dist/server/reader.js';
 
-// Reuse the exact synthetic databases for before/after runs. Never accept an app DB.
 const directory = path.resolve(
   process.argv[2] ?? path.join(root, 'output/benchmarks', `presentation-${newId()}`)
 );

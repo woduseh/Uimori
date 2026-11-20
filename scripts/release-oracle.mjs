@@ -208,11 +208,7 @@ export async function releaseOracle(options, dependencies = {}) {
       config.releaseRoot,
       options.runId ?? '',
     ]
-      .map(
-        (value) =>
-          // Python source is trusted repository code, not a remote user argument.
-          `'${value.replaceAll("'", "'\\''")}'`
-      )
+      .map((value) => `'${value.replaceAll("'", "'\\''")}'`)
       .join(' ');
     const result = requireSuccess(
       await execute(ssh, [...sshArgs, config.host, command], {

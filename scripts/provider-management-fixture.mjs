@@ -1,6 +1,5 @@
 import { createServer } from 'node:http';
 
-/** Owned synthetic HTTP peer for provider UI fixtures: a model list and explicit image selection. */
 export async function startProviderFixture() {
   let presentationCalls = 0,
     url = '';

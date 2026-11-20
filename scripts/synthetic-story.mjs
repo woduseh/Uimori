@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto';
 import { get_encoding } from 'tiktoken';
 import { projectNativeRisuPackage } from '../dist/server/risu-native-projection.js';
 
-/** Current native authoring format, shared by manual storage measurements. */
 export function createSyntheticBot(store, { loreCount = 0 } = {}) {
   const card = {
     name: 'Synthetic measurement bot',
@@ -64,7 +63,6 @@ const koreanParagraphs = [
   '새벽 배를 기다리는 아이는 등불의 기름이 부족하다고 걱정했다. 미라는 남은 양을 재고 교대할 사람에게 장부를 건넸다. 모든 사정이 해결된 것은 아니었지만, 적어도 누구에게 무엇을 맡겼는지는 분명해졌다.',
 ];
 
-/** Deterministic public synthetic prose; exact tokens are measured outside the timed paths. */
 export function syntheticStoryScenes(count, { longStory = false, targetTokens = 7500 } = {}) {
   const tokenizer = get_encoding('o200k_base');
   const tokens = (text) => tokenizer.encode(text, [], []).length;

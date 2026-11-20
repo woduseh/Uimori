@@ -2,8 +2,6 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { BaseSequencer, type TestSpecification } from 'vitest/node';
 
-// Historical Linux CI durations. Unknown/new files get a conservative default;
-// no CI API call, cache write, or time-dependent scheduling during a run.
 const timings = JSON.parse(
   readFileSync(new URL('./ci-vitest-timings.json', import.meta.url), 'utf8')
 );
@@ -23,7 +21,6 @@ export function balanceTestFiles(
     files: [],
     seconds: 0,
   }));
-  // Longest-processing-time first; identical names and weights get stable results.
   for (const file of [...files].sort((a, b) => {
     const diff = (seconds[b] ?? defaultSeconds) - (seconds[a] ?? defaultSeconds);
     return diff || a.localeCompare(b, 'en');

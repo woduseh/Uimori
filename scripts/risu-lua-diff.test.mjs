@@ -101,7 +101,6 @@ test('compares committed Risu Lua source and fails closed on invalid inputs', as
     ).split(/\r?\n/);
     const blob = git(repo, 'rev-parse', `${absentBlob}:${sourceFile}`);
     git(repo, 'worktree', 'add', '--quiet', '--detach', worktree, target);
-    // A promisor remote would normally let cat-file fetch the deliberately missing blob.
     git(repo, 'config', 'extensions.partialClone', 'origin');
     git(repo, 'config', 'remote.origin.promisor', 'true');
     git(repo, 'config', 'remote.origin.url', path.join(temp, 'no-such-remote'));

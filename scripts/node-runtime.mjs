@@ -1,7 +1,6 @@
 import metadata from '../package.json' with { type: 'json' };
 
 export const requiredNode = metadata.engines.node;
-// This checkout declares one stable release interval, not arbitrary semver expressions.
 const range = /^>=(\d+)\.(\d+)\.(\d+) <(\d+)$/u.exec(requiredNode);
 if (!range) throw new Error(`Unsupported package.json Node range: ${requiredNode}`);
 const [minimumMajor, minimumMinor, minimumPatch, maximumMajor] = range.slice(1).map(Number);

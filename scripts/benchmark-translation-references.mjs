@@ -10,7 +10,6 @@ import { captureTranslationReferences } from '../dist/server/translation-context
 import { createSyntheticBot } from './synthetic-story.mjs';
 import { assertBuild, fingerprint, json, root } from './lib.mjs';
 
-// Reuse only this runner's isolated fixtures; never point it at an application DB.
 const directory = path.resolve(process.argv[2]);
 const label = process.argv[3] ?? 'baseline';
 const access = process.argv[4] ?? 'all';

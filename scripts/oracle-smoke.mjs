@@ -94,7 +94,6 @@ async function responseText(response, maxBytes) {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-/** A TLS-verifying, redirect-refusing requester used by the production CLI. */
 export async function nodeHttpsRequest({
   url,
   method = 'GET',
@@ -139,7 +138,6 @@ function parseEnvValue(raw, lineNumber) {
   return value;
 }
 
-/** Read only the two access values required by the smoke from an existing private env file. */
 export async function readAccessEnv(envFile) {
   if (typeof envFile !== 'string' || !envFile) throw new Error('--env-file is required');
   let source;
@@ -256,10 +254,6 @@ function scriptAsset(html, origin) {
   return url;
 }
 
-/**
- * Run a read-only production check. The optional request dependency is for the node:test harness;
- * production callers should omit it so certificate verification stays enabled.
- */
 export async function runOracleSmoke({
   origin,
   token,
@@ -431,7 +425,6 @@ export async function runOracleSmoke({
           };
         else summary.sessionCleanup = { status: 'PASS' };
       } catch (error) {
-        // Cleanup cannot replace the observed deployment result or request a replay.
         summary.sessionCleanup = { status: 'WARN', error: sanitize(asErrorMessage(error)) };
       }
     const finished = Date.now();

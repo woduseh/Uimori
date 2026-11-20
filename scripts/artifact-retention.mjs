@@ -13,7 +13,6 @@ async function receiptProtections(repository) {
   const protectedPaths = [];
   for (const check of Object.values(receipt.checks ?? {})) {
     if (check.status !== 'PASS' || !check.log || !existsSync(check.log)) continue;
-    // The receipt owns the check log. Its JSON result links the browser/tooling report.
     if (!path.resolve(check.log).startsWith(path.resolve(directory) + path.sep)) continue;
     for (const line of (await readFile(check.log, 'utf8')).split(/\r?\n/u)) {
       const tooling = /^Tooling tests PASS\. Report: (.+)$/.exec(line);
@@ -22,9 +21,7 @@ async function receiptProtections(repository) {
         const value = JSON.parse(line);
         for (const key of ['evidence', 'report'])
           if (typeof value[key] === 'string') protectedPaths.push(path.resolve(value[key]));
-      } catch {
-        /* Human-readable progress lines do not contain report references. */
-      }
+      } catch {}
     }
   }
   return protectedPaths;
@@ -40,7 +37,6 @@ function processAlive(pid) {
   }
 }
 
-/** Return a plan by default. Delete only finished runs created by these verification tools. */
 export async function retainArtifacts({
   repository = root,
   current,
@@ -99,7 +95,6 @@ export async function retainArtifacts({
           result.candidates.push(record.target);
           if (!apply) continue;
           try {
-            // Recheck ownership immediately before removal; never kill any process.
             const owner = await readJson(path.join(record.target, 'ownership.json'));
             if (
               owner.active !== false ||

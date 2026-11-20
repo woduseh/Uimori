@@ -29,7 +29,7 @@ function lookup({ runs = [run], pages = [jobs()], jobResponse } = {}) {
       assert.equal(program, 'gh');
       if (args[0] === 'repo') return { code: 0, output: 'owner/uimori' };
       assert.equal(args[0], 'api');
-      assert.equal(args.length, 2); // Only read-only API calls, never a rerun or dispatch.
+      assert.equal(args.length, 2);
       if (args[1].includes('/workflows/'))
         return { code: 0, output: JSON.stringify({ workflow_runs: runs }) };
       if (jobResponse) return jobResponse(args);

@@ -25,7 +25,6 @@ export function parseOptions(args, { values = [], flags = [] } = {}) {
   return result;
 }
 
-// Shell text is only used for the remote POSIX command. Local tools receive argv.
 export function shellQuote(value) {
   if (typeof value !== 'string' || /[\0\r\n]/u.test(value))
     throw new Error('Invalid remote argument');
@@ -122,7 +121,6 @@ export async function runExternal(
       for (const line of lines) progress(redact(line));
       if (pending.length > 65536) pending = '';
     }
-    // Keep a useful tail even when a child prints an unexpectedly large report.
     if (output.length > 8_000_000) output = output.slice(-8_000_000);
   };
   child.stdout.on('data', append);
@@ -153,8 +151,6 @@ export async function runExternal(
   clearTimeout(timer);
   clearTimeout(fallback);
   signal?.removeEventListener('abort', abort);
-  // A failed termination must not make reporting a timeout depend on another
-  // unbounded child wait. The recorded outcome stays failed/uncertain.
   if (cleanup) {
     let cleanupTimer;
     await Promise.race([

@@ -1,6 +1,3 @@
-// Synthetic gallery data: two bots, a persona, a module, a chat with three written scenes,
-// an empty chat and a chat whose only request failed. Nothing here is private material.
-
 const prose = [
   `밤의 등대는 숨을 쉬듯 빛을 내보냈다. 미라는 계단 위에서 그 간격을 세며 하루의 기록을 마쳤다. 바람은 북서쪽에서 불어왔고 파도는 방파제를 넘지 못했다.
 
@@ -125,7 +122,6 @@ export async function seedGallery(baseUrl, { log = () => {} } = {}) {
     '비 오는 화요일의 서점, 사이드바에서 어떻게 접히는지 보기 위한 아주 긴 채팅 제목'
   );
 
-  // Best effort: an injected commit failure leaves a failed turn for the failure-card screens.
   const failed = await quietChat(bot.id, '실패한 요청이 있는 채팅');
   try {
     await call('POST', '/api/test/control', { action: 'fail-next', point: 'source-transaction' });

@@ -99,8 +99,6 @@ async function startMainProviderFixture() {
   };
 }
 
-// Keep production Host/Origin exactly as received; forwarding metadata carries
-// no authority. Streams are piped and headers flushed without body buffering.
 async function startProxy() {
   const tlsDirectory = path.join(root, 'tests', 'fixtures', 'self-host');
   const sockets = new Set(),

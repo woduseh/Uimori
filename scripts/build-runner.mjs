@@ -13,8 +13,6 @@ import {
   removeOwned,
 } from './lib.mjs';
 
-// Compile beside dist so relative source-map paths remain valid after promotion.
-// A failed compiler must never erase the last usable build.
 export async function build({
   cwd = root,
   run = command,
@@ -85,7 +83,6 @@ export async function build({
         step.error = error.message;
         step.errorCode = error.code;
         if (error.code === 'EPERM' || /spawn EPERM/u.test(error.message)) step.status = 'BLOCKED';
-        // spawn can throw before command() creates the log.
         if (!existsSync(path.join(directory, step.log)))
           await writeFile(path.join(directory, step.log), error.message + '\n');
         throw error;
@@ -133,7 +130,6 @@ export async function build({
   } finally {
     const errors = [];
     if (lock) {
-      // If promotion and rollback both failed, retain the previous build and lock for recovery.
       const recoveryRequired = movedPrevious && !promoted;
       for (const target of [candidate, ...(recoveryRequired ? [] : [previous])])
         try {

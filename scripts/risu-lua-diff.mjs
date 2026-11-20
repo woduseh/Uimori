@@ -427,7 +427,6 @@ function report(options) {
   }
   const baseRef = options.base ?? snapshotCommit;
   const targetRef = options.ref ?? 'HEAD';
-  // Resolve both names first; all subsequent reads use the immutable commits.
   const baseCommit = resolveCommit(checkout, baseRef, 'base');
   const targetCommit = resolveCommit(checkout, targetRef, 'target');
   const baseSource = sourceAt(checkout, baseCommit, 'base');

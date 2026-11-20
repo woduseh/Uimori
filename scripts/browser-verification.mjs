@@ -27,7 +27,6 @@ import {
   filesBelow,
 } from './lib.mjs';
 
-// The entry points select tests; this owns their shared evidence and cleanup contract.
 export async function runBrowserVerification({
   name,
   prefix = name,
@@ -47,7 +46,6 @@ export async function runBrowserVerification({
   const focused = options.grep !== undefined;
   if (focused) {
     new RegExp(options.grep);
-    // A focused run narrows the entry point's selection; it cannot certify the whole suite.
     grep = grep ? `(?=[\\s\\S]*(?:${grep}))(?=[\\s\\S]*(?:${options.grep}))` : options.grep;
   }
   const visualReview = options.visual || process.env.UIMORI_VISUAL_REVIEW === '1';
@@ -188,7 +186,6 @@ export async function runBrowserVerification({
     );
     const { output: _output, ...record } = result;
     summary.command = record;
-    // Preserve both the command failure and the reporter observations.
     try {
       summary.report = await readBrowserReport(reporter, since);
     } catch (error) {
@@ -270,8 +267,6 @@ export async function runBrowserVerification({
         summary.artifactScan = { status: 'FAIL', error: error.message };
       }
     }
-    // All evidence and owned-resource work is settled. End cancellation handling
-    // before fixing the terminal status so saving it cannot race a late handler.
     process.removeListener('SIGINT', onInterrupt);
     process.removeListener('SIGTERM', onTerminate);
     await Promise.all(cancellationCleanup);

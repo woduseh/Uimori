@@ -53,7 +53,6 @@ function jobFailure(jobs) {
     : null;
 }
 
-/** Read GitHub's workflow and jobs for the pinned SHA; no locally fabricated receipt. */
 export async function requireCi({ commit, branch, signal }, execute = runExternal) {
   const gh = async (args) =>
     requireSuccess(await execute('gh', args, { timeoutMs: 30_000, signal }), 'GitHub CI lookup')
@@ -69,13 +68,10 @@ export async function requireCi({ commit, branch, signal }, execute = runExterna
       `repos/${repository}/actions/workflows/quality.yml/runs?head_sha=${commit}&branch=${encodeURIComponent(branch)}&per_page=100`,
     ])
   );
-  // Select once, without falling back to an older success. Read jobs even when this run failed
-  // or is pending so the error explains every required-job problem in the current response.
   const run = latestRun(data.workflow_runs ?? [], { commit, branch });
   const workflowFailure = runFailure(run, { commit, branch });
   const jobs = [];
   try {
-    // filter=latest includes successful jobs retained by GitHub's rerun-failed-jobs action.
     for (let page = 1; ; page++) {
       const result = JSON.parse(
         await gh([

@@ -2,9 +2,6 @@ import http from 'node:http';
 import { existsSync } from 'node:fs';
 import { browserPath } from './browser-path.mjs';
 
-/** Exercise the configured executable, its shared libraries and basic text layout.
- * The synthetic page is not proof of complete font coverage or application rendering.
- */
 export async function assertBrowserRuntime({
   executablePath = browserPath(),
   url,
