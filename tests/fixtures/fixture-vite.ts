@@ -15,7 +15,7 @@ export async function startFixtureVite(include: string[]): Promise<FixtureVite> 
     cacheDir,
     plugins: [react()],
     optimizeDeps: { noDiscovery: true, include },
-    server: { host: '127.0.0.1', port: 0, watch: { ignored: ['**/output/**'] } },
+    server: { host: '127.0.0.1', port: 0, watch: null },
   });
   server.middlewares.use(async (request, response, next) => {
     if (request.url !== '/') return next();
