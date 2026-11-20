@@ -89,7 +89,7 @@ content.package.nativeRisu.module.extensions.uimori.translationGuide
 ### 서버 실행 파이프라인
 - **지침 로드와 캡슐화**: `server/translation-guide.ts`가 채팅의 고정 소속 봇에서 현재 지침을 읽어요. `server/source-editing.ts`의 번역 접수 시 `job.input.translationGuide`에 봇 ID·자료 수정 번호·이름과 지침을 담고, `resolveJobPrompt`는 이 작은 메타데이터를 해당 번역용 snapshot에만 연결해요. 실행 도중 DB를 재조회해서 지침을 바꾸지 않아요. 모든 과거 자료 저장본이나 전체 프롬프트를 재현하는 새 이력 시스템은 없어요.
 - **컨텍스트 주입**: `translationInput`은 `context.translationGuide`에 지침을 넣어요. 기존 context 슬롯과 누락 시의 호스트 보충 전달을 재사용하므로 기본 프롬프트, Hermēneía와 context 슬롯을 생략한 사용자 프리셋에서도 지침을 전달해요. 별도 glossary 슬롯에 같은 표기를 다시 넣지 않아요. 번역 원칙 설명은 기존 번역 역할의 참조 정책에 연결해요.
-- **참고 범위 분리 (`contextMode`)**: 참고 범위는 전역 번역 정책의 `contextMode`로 저장하고 새 작업에 고정해요 (값이 없는 과거 정책·작업은 `full`로 해석). `source-only`에서는 CBS 평가 전에 배경 자료·카드 변수·이전 대화·메모를 제외한 번역용 입력을 만들므로, 배경 슬롯을 쓰는 프리셋도 제외한 자료를 다시 가져오지 않아요. 원문 ID·해시 등 결과 연결에 필요한 메타데이터는 유지해요. 선택한 프리셋 내용 자체나 저장된 원문·자료는 수정하지 않아요.
+- **참고 범위 분리 (`contextMode`)**: 참고 범위는 기본 번역 정책의 `contextMode`로 저장하고 새 작업에 고정해요 (값이 없는 과거 정책·작업은 `full`로 해석). `source-only`에서는 CBS 평가 전에 배경 자료·카드 변수·이전 대화·메모를 제외한 번역용 입력을 만들므로, 배경 슬롯을 쓰는 프리셋도 제외한 자료를 다시 가져오지 않아요. 원문 ID·해시 등 결과 연결에 필요한 메타데이터는 유지해요. 선택한 프리셋 내용 자체나 저장된 원문·자료는 수정하지 않아요.
 
 ### 테스트 및 검증 명령어
 ```sh
