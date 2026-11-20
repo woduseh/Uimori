@@ -1799,6 +1799,14 @@ function TextEditor({
     if (body) body.scrollTop += form.getBoundingClientRect().top - body.getBoundingClientRect().top;
     reader.scrollTop += form.getBoundingClientRect().top - reader.getBoundingClientRect().top - 12;
   }, []);
+  const appliedSelection = useRef<{ start: number; end: number } | null>(null);
+  useLayoutEffect(() => {
+    const range = appliedSelection.current;
+    appliedSelection.current = null;
+    if (!range) return;
+    input.current?.focus({ preventScroll: true });
+    input.current?.setSelectionRange(range.start, range.end);
+  });
   const title = role === 'original' ? t('reader.original') : t('reader.translation');
   const conflict = draft.expectedSourceHash !== source.hash || draft.expectedRevision !== revision;
   const persist = (next: Draft) => {
@@ -1902,11 +1910,8 @@ function TextEditor({
           expectedSourceHash={draft.expectedSourceHash}
           disabled={saving || conflict}
           onApply={(text, start, end) => {
+            appliedSelection.current = { start, end };
             persist({ ...draft, text });
-            requestAnimationFrame(() => {
-              input.current?.focus({ preventScroll: true });
-              input.current?.setSelectionRange(start, end);
-            });
           }}
         />
       )}
