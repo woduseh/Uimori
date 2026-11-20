@@ -1399,11 +1399,13 @@ for (const width of [MOBILE_WIDTH]) {
       await page.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
       await page.getByRole('button', { name: '편집', exact: true }).click();
       const navigation = page.getByLabel('자료 편집 영역', { exact: true });
-      const titles = await navigation.locator('button').allTextContents();
-      const appearanceIndex = titles.indexOf('기본 인물 외형');
-      expect(appearanceIndex).toBeGreaterThan(0);
-      expect(titles[appearanceIndex - 1]).toBe('번역 지침');
-      expect(titles[appearanceIndex + 1]).toBe('고급 설정');
+      await expect
+        .poll(async () => {
+          const titles = await navigation.locator('button').allTextContents();
+          const index = titles.indexOf('기본 인물 외형');
+          return index > 0 ? titles.slice(index - 1, index + 2) : titles;
+        })
+        .toEqual(['번역 지침', '기본 인물 외형', '고급 설정']);
       await selectPackageSection(page, '기본 정보');
       await expect(page.getByRole('button', { name: '인물 추가', exact: true })).toBeHidden();
       await selectPackageSection(page, '기본 인물 외형');

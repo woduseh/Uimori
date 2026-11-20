@@ -32,19 +32,32 @@ export function ActionMenu({
     return () => media.removeEventListener('change', update);
   }, [open]);
   useLayoutEffect(() => {
-    if (!open || (!viewport && !sheet)) return;
+    const node = ref.current;
+    const summary = node?.querySelector<HTMLElement>(':scope > summary');
+    if (!open || !viewport || sheet || !node || !summary) return;
+    const dismiss = () => {
+      if (!node.open || node.querySelector('dialog[open]')) return;
+      const focused = node.contains(document.activeElement);
+      node.open = false;
+      if (focused) summary.focus({ preventScroll: true });
+    };
+    const opened = summary.getBoundingClientRect();
     const scroll = (event: Event) => {
-      const node = ref.current;
+      const current = summary.getBoundingClientRect();
       if (
-        node &&
         event.target instanceof Node &&
         event.target.contains(node) &&
-        !node.querySelector('dialog[open]')
+        (Math.abs(current.top - opened.top) >= 1 || Math.abs(current.left - opened.left) >= 1)
       )
-        node.open = false;
+        dismiss();
     };
-    if (!sheet) document.addEventListener('scroll', scroll, true);
+    const hidden = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) dismiss();
+    });
+    hidden.observe(summary);
+    document.addEventListener('scroll', scroll, true);
     return () => {
+      hidden.disconnect();
       document.removeEventListener('scroll', scroll, true);
     };
   }, [open, viewport, sheet]);

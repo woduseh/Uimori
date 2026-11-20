@@ -21,17 +21,18 @@ export async function navigationAction(page: Page, name: string, botTitle?: stri
   }
   const nav = await visibleNavigation(page);
   if (name === '새 채팅' || name === '새 이야기' || name === '설정 후 새 채팅') {
+    if (!botTitle)
+      throw new Error(
+        `navigationAction(page, '${name}') needs the bot title: the first library bot depends on files that ran earlier on the same server.`
+      );
     await navigationAction(page, '서재');
     const library = page.getByTestId('library-panel');
     await library.getByRole('tab', { name: '봇', exact: true }).click();
-    if (botTitle) await library.getByLabel('서재 검색', { exact: true }).fill(botTitle);
+    await library.getByLabel('서재 검색', { exact: true }).fill(botTitle);
     const item = library
       .locator('.library-list-item, .library-card')
       .filter({
-        has: page.getByRole('button', {
-          name: botTitle ? `${botTitle} 새 채팅` : / 새 채팅$/,
-          exact: true,
-        }),
+        has: page.getByRole('button', { name: `${botTitle} 새 채팅`, exact: true }),
       })
       .first();
     await item.getByLabel(/ 메뉴$/).click();
@@ -284,6 +285,12 @@ export async function openChatSettings(page: Page) {
 }
 function compactLayout(page: Page) {
   return (page.viewportSize()?.width ?? MOBILE_WIDTH) <= 760;
+}
+export async function resizeViewport(page: Page, size: { width: number; height: number }) {
+  await page.setViewportSize(size);
+  await expect(page.locator('#workspace-sidebar [data-testid="bot-navigation"]')).toHaveCount(
+    compactLayout(page) ? 0 : 1
+  );
 }
 export async function openHelper(page: Page) {
   await expect

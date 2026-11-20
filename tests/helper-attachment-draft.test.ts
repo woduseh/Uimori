@@ -169,6 +169,30 @@ test('deleting a conversation removes its retained local blobs', async () => {
   expect((await drafts.freezeHelperAttachments('first', model)).files).toBeUndefined();
 });
 
+test('a file dropped while an earlier image is still being added joins the same draft', async () => {
+  const drafts = await import('../web/helper-attachment-draft.js');
+  let finish!: (bitmap: { width: number; height: number; close: () => void }) => void;
+  vi.stubGlobal(
+    'createImageBitmap',
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+  );
+  await drafts.loadHelperAttachments('first');
+  const pasting = drafts.addHelperAttachmentFiles(
+    'first',
+    [new File(['synthetic image'], '붙여넣은 이미지.png', { type: 'image/png' })],
+    model
+  );
+  const dropping = drafts.addHelperAttachmentFiles('first', [document()], model);
+  finish({ width: 64, height: 48, close: () => {} });
+  await Promise.all([pasting, dropping]);
+  const saved = state.disk.get(key('first'))!;
+  expect(saved.images.map((item) => item.name)).toEqual(['붙여넣은 이미지.png']);
+  expect(saved.files.map((item) => item.name)).toEqual(['참고 자료.txt']);
+});
+
 test('an image decoded after conversation deletion cannot recreate its saved draft', async () => {
   const drafts = await import('../web/helper-attachment-draft.js');
   let finish!: (bitmap: { width: number; height: number; close: () => void }) => void;
