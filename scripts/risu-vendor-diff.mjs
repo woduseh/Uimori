@@ -1,8 +1,4 @@
 #!/usr/bin/env node
-// Report-only comparison between the RisuAI snapshot manifest and a local RisuAI checkout.
-// It never edits the snapshot; whether to adopt an upstream change stays a human decision.
-//
-//   node scripts/risu-vendor-diff.mjs --risu /path/to/RisuAI [--ref HEAD] [--snapshot third_party/risuai/cad8595a]
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -15,7 +11,9 @@ const risu = args.get('--risu');
 const ref = args.get('--ref') ?? 'HEAD';
 const snapshot = args.get('--snapshot') ?? 'third_party/risuai/cad8595a';
 if (!risu || !existsSync(join(risu, '.git'))) {
-  console.error('usage: node scripts/risu-vendor-diff.mjs --risu <RisuAI checkout> [--ref HEAD]');
+  console.error(
+    'usage: node scripts/risu-vendor-diff.mjs --risu <RisuAI checkout> [--ref HEAD] [--snapshot third_party/risuai/cad8595a]'
+  );
   process.exit(2);
 }
 const manifest = JSON.parse(readFileSync(join(snapshot, 'SNAPSHOT.json'), 'utf8'));

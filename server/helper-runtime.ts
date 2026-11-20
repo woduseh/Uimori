@@ -1403,7 +1403,10 @@ export class HelperRuntime {
           output = execution.result;
           denied = execution.denied ?? false;
           errorKind = execution.errorKind;
-          // rg and grep exit with 1 for no match, so a nonzero exit is still ordinary shell output.
+          // https://www.gnu.org/software/grep/manual/grep.html#Exit-Status (2026-11-20): grep exits
+          // with 1 if no lines were selected and 2 if an error occurred.
+          // https://github.com/BurntSushi/ripgrep/blob/cff2849fd49557c2184a3b2858469a2bfbe20753/crates/core/flags/doc/template.rg.1#L124-L140 (2026-11-20):
+          // rg exits with 1 when no match was found and no error occurred.
           if (
             call.name === 'data.exec' &&
             !denied &&

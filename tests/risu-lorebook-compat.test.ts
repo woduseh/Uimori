@@ -10,9 +10,12 @@ import type {
   loreBook,
 } from '../third_party/risuai/cad8595a/types.js';
 
-// Pins the snapshotted RisuAI lorebook normalization. Every expected string here was derived by reading
-// RisuAI at cad8595a (src/ts/characterCards.ts:1038-1143 and src/ts/process/lorebook.svelte.ts:300-515)
-// and @risuai/ccardlib 0.4.2's decorator parser, not by running RisuAI.
+// https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/characterCards.ts#L1038-L1143 (2026-11-20):
+// convertCharbook;
+// https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/process/lorebook.svelte.ts#L300-L515 (2026-11-20):
+// the decorator switch passed to the parser in
+// https://cdn.jsdelivr.net/npm/@risuai/ccardlib@0.4.2/dist/index.js (2026-11-20).
+// Every expected string here was derived by reading these sources, not by running RisuAI.
 
 function entry(partial: Partial<charBookEntry> = {}): charBookEntry {
   return {
@@ -130,7 +133,7 @@ describe('convertCharbook: extension migration', () => {
     expect(converted.secondkey).toBe('x, y');
   });
 
-  test('migrates directives in Risu order and reads them back as active lore settings', () => {
+  test('migrates directives in Risu order, keeps selectiveLogic as the only migrated extension, and reads them back as active lore settings', () => {
     const converted = convertOne({
       keys: ['alpha'],
       secondary_keys: ['x', 'y'],
@@ -160,7 +163,6 @@ describe('convertCharbook: extension migration', () => {
         'Body text',
       ].join('\n')
     );
-    // selectiveLogic is the one migrated key Risu does not delete.
     expect(converted.extentions).toEqual({ selectiveLogic: 3, risu_case_sensitive: false });
 
     const result = interpretLoreDecorators(converted.content);

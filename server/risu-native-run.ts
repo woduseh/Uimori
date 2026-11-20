@@ -111,7 +111,9 @@ export async function prepareNativeRisuRun(
     if (result.effects.stopChat) throw new Error('RISU_NATIVE_STOP_SENDING');
     return result;
   };
-  // Risu's input trigger runs before the new user message enters chat.message.
+  // https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/lib/ChatScreens/DefaultChatScreen.svelte#L186-L196 (2026-11-20):
+  // Risu runs the `input` trigger on the current chat, then pushes the user message, processed by
+  // the `editinput` scripts, onto it.
   await invoke('input');
   const input = await invoke('editInput', snapshot.request);
   const edited = await processNativeRisuText({

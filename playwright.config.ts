@@ -17,7 +17,6 @@ export default defineConfig({
   use: {
     baseURL: process.env.UIMORI_BASE_URL,
     headless: true,
-    // Every verified server is a loopback address; a system PAC proxy must not intercept it.
     launchOptions: { executablePath, args: ['--no-proxy-server'] },
     viewport: { width: MOBILE_WIDTH, height: 844 },
     trace: 'retain-on-failure',

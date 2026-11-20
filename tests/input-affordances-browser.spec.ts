@@ -34,8 +34,7 @@ test('INPUTUI01 native search clear restores reading controls and keeps focus wi
     await search.fill('글자 크기');
     await expect(results.getByRole('button', { name: '본문 크기', exact: true })).toBeVisible();
     await dialog.screenshot({ path: info.outputPath(`native-search-${colorScheme}.png`) });
-    // The UA clear affordance is not a DOM node: hit its actual trailing input area.
-    const point = await search.evaluate((node) => {
+    const nativeClearButton = await search.evaluate((node) => {
       const rect = node.getBoundingClientRect();
       const style = getComputedStyle(node);
       return {
@@ -47,7 +46,7 @@ test('INPUTUI01 native search clear restores reading controls and keeps focus wi
         y: rect.top + rect.height / 2,
       };
     });
-    await page.mouse.click(point.x, point.y);
+    await page.mouse.click(nativeClearButton.x, nativeClearButton.y);
     await expect(search).toHaveValue('');
     await expect(search).toBeFocused();
     await expect(results).toHaveCount(0);

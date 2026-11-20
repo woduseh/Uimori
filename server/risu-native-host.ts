@@ -73,7 +73,9 @@ export function createNativeRisuHost(
     if (!['LLM', 'axLLM', 'simpleLLM'].includes(method))
       throw new Error(`RISU_NATIVE_API_UNSUPPORTED:${method}`);
     const args = record(raw);
-    // Risu's JSON parser treats absent/non-object options as an empty object.
+    // https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/process/scriptings.ts#L472-L483 (2026-11-20):
+    // parseLuaOptions returns {} for an empty options string, a parsed value that is not an
+    // object, or invalid JSON.
     const options = args.options && typeof args.options === 'object' ? args.options : {};
     let mode: ScriptMode | undefined;
     if (method === 'axLLM') {

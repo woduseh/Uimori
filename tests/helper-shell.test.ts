@@ -34,8 +34,7 @@ import {
 import { helperResourceOperation } from '../server/helper-resource-tools.js';
 import type { Content } from '../core/product.js';
 
-// Linux runner uses Unix sockets, which the Windows CI worker cannot create.
-const linuxTest = process.platform === 'win32' ? test.skip : test;
+const posixTest = process.platform === 'win32' ? test.skip : test;
 
 const owned: { dir: string; store: Store; shell: HelperShell; child: ChildProcess }[] = [];
 afterEach(() => {
@@ -618,7 +617,7 @@ test('on-demand exports reject unregistered files without claiming them', async 
   }
 });
 
-linuxTest('on-demand exports reject symlinked directories', async () => {
+posixTest('on-demand exports reject symlinked directories', async () => {
   const f = workspaceFixture();
   try {
     const other = f.store.product.content(fixtureBotInput('Symlink fixture', 'Body'));
@@ -643,7 +642,7 @@ linuxTest('on-demand exports reject symlinked directories', async () => {
   }
 });
 
-linuxTest(
+posixTest(
   'shell finds resources and applies canonical changes through existing saves',
   async () => {
     const f = await fixture();
@@ -693,7 +692,7 @@ ${process.execPath} ${resolve('runner/uimori.mjs')} apply ${file}`;
   }
 );
 
-linuxTest('external revision change rejects stale shell edits instead of overwriting', async () => {
+posixTest('external revision change rejects stale shell edits instead of overwriting', async () => {
   const f = await fixture();
   const file = `library/${f.resource.id}/resource.json`;
   prepareFiles(f, 'library', f.resource.id);
@@ -725,7 +724,7 @@ linuxTest('external revision change rejects stale shell edits instead of overwri
   );
 });
 
-linuxTest(
+posixTest(
   'workspace guide and frozen current scene index distinguish live saved changes',
   async () => {
     const f = await fixture();
@@ -803,7 +802,7 @@ linuxTest(
   }
 );
 
-linuxTest('native Linux text edits apply to saved scenes and retain edit revisions', async () => {
+posixTest('native Linux text edits apply to saved scenes and retain edit revisions', async () => {
   const f = await fixture();
   const chat = createFixtureChat(f.store, 'Shell scene');
   const source = completedSource(f.store, chat.id, 'Initial scene narrative');
@@ -858,7 +857,7 @@ function appMutation(
   f.shell.refreshAfterMutation(f.task.id, name, args, result);
   return result as { id: string; revision: number };
 }
-linuxTest(
+posixTest(
   'JSON formatting is a no-op and derived-only edits preserve DB, undo and local input',
   async () => {
     const f = await fixture();
@@ -887,7 +886,7 @@ linuxTest(
     ).toBe(0);
   }
 );
-linuxTest(
+posixTest(
   'native apply uses existing helper undo and a repeated apply does not save twice',
   async () => {
     const f = await fixture();
@@ -911,7 +910,7 @@ linuxTest(
     );
   }
 );
-linuxTest(
+posixTest(
   'app mutations refresh clean files and catalog clones without overwriting dirty files',
   async () => {
     const f = await fixture();
@@ -974,7 +973,7 @@ linuxTest(
   }
 );
 
-linuxTest(
+posixTest(
   'committed apply remains successful when metadata refresh fails and retry is a no-op',
   async () => {
     const f = await fixture();
@@ -1010,7 +1009,7 @@ linuxTest(
     ).toBe(1);
   }
 );
-linuxTest('task cancellation aborts the runner before delayed file edits and apply', async () => {
+posixTest('task cancellation aborts the runner before delayed file edits and apply', async () => {
   const f = await fixture();
   const controller = new AbortController();
   const file = `library/${f.resource.id}/resource.json`;
@@ -1037,7 +1036,7 @@ linuxTest('task cancellation aborts the runner before delayed file edits and app
   ).toBe(0);
 });
 
-linuxTest(
+posixTest(
   'CLI forwards JSON, files and stdin while retaining receipts outside stdout',
   async () => {
     const f = await fixture();
@@ -1100,7 +1099,7 @@ cat scratch/denied.json`,
   }
 );
 
-linuxTest(
+posixTest(
   'CLI accepts standard flags and exact operation lookup without a schema round trip',
   async () => {
     const f = await fixture();
@@ -1161,7 +1160,7 @@ cat scratch/read.json`,
   }
 );
 
-linuxTest(
+posixTest(
   'unknown app outcome stops later bridge writes and survives redirected output',
   async () => {
     const f = await fixture();
@@ -1200,7 +1199,7 @@ true`,
   }
 );
 
-linuxTest('shell completion cancels in-flight app work and waits for its outcome', async () => {
+posixTest('shell completion cancels in-flight app work and waits for its outcome', async () => {
   const f = await fixture();
   const taskDir = join(f.root, 'tasks', f.task.id);
   let cancelled = false;
@@ -1231,7 +1230,7 @@ while [ ! -f scratch/in-flight ]; do sleep 0.01; done`,
   expect(result.applied).toEqual([{ operationId: 'shell:pending:app:1', outcome: 'succeeded' }]);
 });
 
-linuxTest(
+posixTest(
   'refresh updates clean resources and reconciles dirty drafts through a separate editable latest file',
   async () => {
     const f = await fixture();
@@ -1309,7 +1308,7 @@ linuxTest(
   }
 );
 
-linuxTest(
+posixTest(
   'refresh preserves a dirty scene and applies the reconciled latest revision',
   async () => {
     const f = await fixture();
@@ -1369,7 +1368,7 @@ linuxTest(
   }
 );
 
-linuxTest('runner responses preserve UTF-8 characters split across HTTP chunks', async () => {
+posixTest('runner responses preserve UTF-8 characters split across HTTP chunks', async () => {
   const f = await fixture();
   const exited = once(f.child, 'exit');
   f.child.kill('SIGTERM');
@@ -1395,7 +1394,7 @@ linuxTest('runner responses preserve UTF-8 characters split across HTTP chunks',
   }
 });
 
-linuxTest(
+posixTest(
   'replaced scenes reject stale files and refresh copies without changing history',
   async () => {
     const f = await fixture();

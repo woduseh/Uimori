@@ -415,7 +415,8 @@ async function run() {
     LuaLibraries.Math,
   ])
     global.loadLibrary(library);
-  // wasmoon 1.16.0's loadLibrary(UTF8) accidentally opens string; call Lua directly.
+  // https://unpkg.com/wasmoon@1.16.0/dist/index.js (2026-11-20): line 475, loadLibrary's
+  // LuaLibraries.UTF8 case calls luaopen_string instead of luaopen_utf8.
   lua.luaopen_utf8(global.address);
   lua.lua_setglobal(global.address, 'utf8');
   const thread = global.newThread();

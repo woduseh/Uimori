@@ -112,8 +112,9 @@ function imported(store: Store, data = card(), module?: Record<string, unknown>)
   return store.product.content(body) as Content;
 }
 
-// CCv3 assets: omitted assets imply icon/main/ccdefault; an explicit empty list does not.
-// https://github.com/kwaroran/character-card-spec-v3/blob/f3a86af019fbd99f788f7a1155f399655b34ab35/SPEC_V3.md#assets
+// https://github.com/kwaroran/character-card-spec-v3/blob/f3a86af019fbd99f788f7a1155f399655b34ab35/SPEC_V3.md#assets (2026-11-20):
+// assets is an array or undefined; only when it is undefined MUST an app behave as if it were
+// [{ type: 'icon', uri: 'ccdefault:', name: 'main', ext: 'png' }].
 test.each([false, true])(
   'PNG cover survives preparation, storage and CHARX export with explicit empty assets=%s',
   async (emptyAssets) => {
@@ -170,7 +171,8 @@ test.each([false, true])(
   }
 );
 
-// CCv3 PNG attachment identifiers are paths, not just RisuAI's generated numeric keys.
+// https://github.com/kwaroran/character-card-spec-v3/blob/f3a86af019fbd99f788f7a1155f399655b34ab35/SPEC_V3.md#pngapng (2026-11-20):
+// extra PNG/APNG assets are tEXt chunks named `chara-ext-asset_:{path}` holding base64 data, addressed as `__asset:{path}`.
 test.each([false, true])(
   'named PNG attachment paths preserve bytes through CHARX export or reject duplicate keys=%s',
   async (duplicate) => {
@@ -417,7 +419,8 @@ test('large imported images export and reimport within the same ZIP and module b
   const small = await sharp({ create: { width: 1, height: 1, channels: 3, background: '#123456' } })
     .webp()
     .toBuffer();
-  // Unknown RIFF chunks are valid WebP and stay intact when already-encoded assets are stored.
+  // https://developers.google.com/speed/webp/docs/riff_container#unknown_chunks (2026-11-20):
+  // readers SHOULD ignore unknown chunks and writers SHOULD preserve them in their original order.
   const images = [1, 2].map((fill) => {
     const chunk = Buffer.alloc(8),
       padding = Buffer.alloc(33 * 1024 * 1024, fill);

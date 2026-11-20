@@ -381,8 +381,6 @@ export function codexEnvironment(
   };
 }
 
-// Codex CLI 0.153+ accepts environments:[], which removes the environment tools that a
-// read-only sandbox would still expose (host files and auth.json).
 export const CODEX_RUNTIME_CONFIG = {
   forced_login_method: 'chatgpt',
   cli_auth_credentials_store: 'file',
@@ -1359,6 +1357,9 @@ export class CodexRuntime implements CodexRuntimeService {
               approvalPolicy: 'never',
               approvalsReviewer: 'user',
               sandbox: 'read-only',
+              // https://github.com/openai/codex/blob/rust-v0.153.0/codex-rs/app-server-protocol/src/protocol/v2/thread.rs#L129-L137
+              // (2026-11-20): an empty thread/start environments list disables environment
+              // access for turns that do not provide a turn override.
               environments: [],
               selectedCapabilityRoots: [],
               ...(plan.baseInstructions ? { baseInstructions: plan.baseInstructions } : {}),

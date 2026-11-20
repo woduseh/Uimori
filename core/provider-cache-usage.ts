@@ -45,7 +45,8 @@ export function providerCacheUsage(
     };
   if (protocol === 'vertex-gemini-v1' || protocol === 'google-gemini-v1')
     return {
-      // Gemini's proto3 scalar defaults to zero when omitted from valid usage metadata.
+      // https://protobuf.dev/programming-guides/json/#presence (2026-11-20): a field without
+      // presence that holds its default value, such as an integer 0, is omitted from JSON.
       readTokens:
         !Object.hasOwn(raw, 'cachedContentTokenCount') && token(raw.promptTokenCount) !== null
           ? 0

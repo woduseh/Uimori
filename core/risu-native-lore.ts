@@ -58,7 +58,10 @@ export function placeNativeRisuLore(
         : position.mode === 'depth'
           ? position.depth
           : conversation.length - position.depth;
-    // Array.splice's negative-index behavior is the upstream native contract.
+    // https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/process/index.svelte.ts#L1188-L1195 (2026-11-20):
+    // Risu inserts an @@depth entry at `depth` and an @@reverse_depth entry at
+    // `chats.length - depth` with an unclamped `chats.splice(index, 0, chat)`, so a negative
+    // index counts back from the end.
     const index =
       raw < 0 ? Math.max(conversation.length + raw, 0) : Math.min(raw, conversation.length);
     const next = conversation[index],
@@ -74,7 +77,11 @@ export function placeNativeRisuLore(
     const id = insert(entry, boundary);
     if (position.mode !== 'lore') conversation.splice(index, 0, id);
   }
-  // Risu places @@end / @@depth 0 after the prompt, assistant entries after user/system entries.
+  // https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/process/index.svelte.ts#L582-L611 (2026-11-20):
+  // Risu appends depth-0 lore to postEverything, user and system entries first and assistant
+  // entries after them, since an assistant entry is the prefill.
+  // https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/process/lorebook.svelte.ts#L302-L305 (2026-11-20):
+  // `@@end` sets an entry to depth 0.
   for (const entry of [
     ...end.filter((entry) => entry.nativeRisuPosition!.role !== 'assistant'),
     ...end.filter((entry) => entry.nativeRisuPosition!.role === 'assistant'),

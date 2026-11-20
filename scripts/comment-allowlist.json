@@ -1,0 +1,77 @@
+[
+  {
+    "file": "web/ManuscriptSearch.tsx",
+    "comment": "Chromium's search input otherwise consumes Escape just to clear text, leaving the modal open and the underlying navigation inert.",
+    "system": "Chromium search input"
+  },
+  {
+    "file": "web/story-ui.css",
+    "comment": "The A2UI SDK wraps every component in a display: contents host element, so a rule that relates one component to its parent component crosses that host with \"> * >\".",
+    "system": "A2UI SDK"
+  },
+  {
+    "file": "web/tooltip.css",
+    "comment": "Chrome also shows interest when script moves focus, such as a panel focusing its close button after a pointer click; only hover and keyboard focus should reveal the hint.",
+    "system": "Chrome interest invokers"
+  },
+  {
+    "file": "core/vertex-protocol.ts",
+    "comment": "Vertex rejects a tool-response turn when appended text follows functionResponse.",
+    "system": "Vertex AI generateContent"
+  },
+  {
+    "file": "server/backup-service.ts",
+    "comment": "Windows does not support opening/fsync'ing directories like Unix does.",
+    "system": "Windows file system"
+  },
+  {
+    "file": "server/helper-runtime.ts",
+    "comment": "SQLite uses ERR_SQLITE_ERROR for both user mistakes and authorization failures.",
+    "system": "node:sqlite"
+  },
+  {
+    "file": "server/product-routes.ts",
+    "comment": "Fastify resolves percent-encoded paths before hooks, while request.url stays raw. Authenticate the matched route so /%61pi/export cannot skip API protection.",
+    "system": "Fastify routing"
+  },
+  {
+    "file": "server/risu-import-assets.ts",
+    "comment": "Some cards retain a .png asset name after converting its bytes to WebP.",
+    "system": "RisuAI character cards"
+  },
+  {
+    "file": "server/risu-lua-worker.ts",
+    "comment": "wasmoon 1.16.0 does not expose Emscripten instantiate options, and its shipped memory section declares 256 initial / 32768 maximum pages.",
+    "system": "wasmoon 1.16.0"
+  },
+  {
+    "file": "scripts/test-tooling.mjs",
+    "comment": "Node 26 counts an empty module as a passing test named after the file.",
+    "system": "Node test runner"
+  },
+  {
+    "file": "tests/fixtures/provider-timeout-clock.mjs",
+    "comment": "Node 26 MockTimers' refresh does not repeatedly schedule Undici's fast timer. Use its supported optional-refresh fallback, only in this process.",
+    "system": "Node MockTimers; Undici"
+  },
+  {
+    "file": "tests/provider-management-browser.spec.ts",
+    "comment": "Begin the native drag before scrolling a long list to the other provider. dragTo scrolls its target while the mouse is down but before this first movement.",
+    "system": "Playwright"
+  },
+  {
+    "file": "tests/risu-message-surface-browser.spec.ts",
+    "comment": "Playwright's actionability checks call form.getAttribute directly, so add this deliberately clobbering field after the real keyboard/click steps.",
+    "system": "Playwright"
+  },
+  {
+    "file": "tests/self-host-browser.spec.ts",
+    "comment": "Playwright traces all contexts created through its browser fixture.",
+    "system": "Playwright"
+  },
+  {
+    "file": "core/openai-chat-protocol.ts",
+    "comment": "Gateway assistant parts can be silently omitted; send their text as one string.",
+    "system": "OpenAI-compatible gateways"
+  }
+]

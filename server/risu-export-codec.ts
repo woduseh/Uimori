@@ -1,6 +1,6 @@
 import { createCipheriv, createHash } from 'node:crypto';
-import { createRequire } from 'node:module';
 import { crc32, deflateRawSync, gzipSync } from 'node:zlib';
+import { pack } from 'msgpackr/index-no-eval';
 import {
   RISU_IMPORT_MAX_BYTES,
   RISU_IMPORT_MAX_ENTRY_BYTES,
@@ -12,10 +12,6 @@ import {
 import { encodeRPack } from './compat/risu/rpack.js';
 import { HttpError } from './request-validation.js';
 
-const { pack } = createRequire(import.meta.url)('msgpackr/index-no-eval') as Pick<
-  typeof import('msgpackr'),
-  'pack'
->;
 export const exportLimit = (size: number, maximum = RISU_IMPORT_MAX_UPLOAD_BYTES) => {
   if (size > maximum) throw new HttpError(413, 'RISU_EXPORT_TOO_LARGE');
 };
@@ -117,7 +113,10 @@ export function writeRisuZip(files: Map<string, Buffer>): Buffer {
   exportLimit(offset + directory.length + end.length);
   return Buffer.concat([...local, directory, end]);
 }
-/** RisuAI/RisuToki module envelope: magic, RPack JSON, length-prefixed RPack assets, terminator. */
+// https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/process/modules.ts#L61-L122 (2026-11-20):
+// Risu writes a module as magic byte 111 and version byte 0, the RPack-encoded
+// `{ module, type: 'risuModule' }` JSON after a 4-byte length, each asset as byte 1 plus a
+// 4-byte length and its RPack bytes, then a 0 byte.
 export function writeEmbeddedRisuModule(module: Record<string, unknown>, assets: Buffer[]): Buffer {
   const json = exportJson({ type: 'risuModule', module });
   exportLimit(7 + json.length + assets.reduce((sum, bytes) => sum + 5 + bytes.length, 0));
@@ -134,7 +133,11 @@ export function writeEmbeddedRisuModule(module: Record<string, unknown>, assets:
     Buffer.from([0]),
   ]);
 }
-/** Risu's fixed-key AES-GCM is a file-format codec, not encryption for private storage. */
+// https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/storage/database.svelte.ts#L2308-L2318 (2026-11-20):
+// Risu's .risup export is RPack(compressSync(msgpack({ presetVersion: 2, type: 'preset',
+// preset }))), where `preset` is the msgpack preset encrypted with the constant key 'risupreset'.
+// https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/util.ts#L378-L401 (2026-11-20):
+// encryptBuffer uses AES-GCM with the SHA-256 of that key string and a zero 12-byte IV.
 export function writeRisuPreset(preset: Record<string, unknown>): Buffer {
   exportLimit(Buffer.byteLength(JSON.stringify(preset)), RISU_IMPORT_MAX_BYTES);
   const cipher = createCipheriv(

@@ -68,7 +68,6 @@ export function ActivityNotifications({
       if (version === sequence.current) setLoading(false);
     }
   }
-  // Each opening starts a fresh history read. Late reads cannot affect another chat or opening.
   // biome-ignore lint/correctness/useExhaustiveDependencies: load is scoped by chatId and guarded by sequence.
   useEffect(() => {
     if (open) {

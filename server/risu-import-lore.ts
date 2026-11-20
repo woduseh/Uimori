@@ -68,16 +68,17 @@ function reportedDecorators(decorators: LoreDecorators) {
   for (const decorator of Object.keys(DECORATOR_NOTICES) as (keyof LoreDecorators)[]) {
     const notice = DECORATOR_NOTICES[decorator];
     if (notice === null || !carries(decorators[decorator])) continue;
-    // `@@end` writes depth through the upstream local the two share, so that value is that
-    // decorator's own doing rather than a line the entry carried.
+    // https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/process/lorebook.svelte.ts#L302-L354 (2026-11-20):
+    // `@@end` sets the same `pos` and `depth` locals as `@@depth`, to 'depth' and 0.
     if (decorator === 'depth' && decorators.end && decorators.depth === 0) continue;
     found.push({ decorator, notice });
   }
   return found;
 }
 
-// Risu's conversion writes back onto each entry and deletes the keys it migrates from its
-// `extensions`, so it receives copies.
+// https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/characterCards.ts#L1058-L1119 (2026-11-20):
+// convertCharbook assigns `use_regex` and `selective` on each entry it is given and deletes the
+// keys it migrates from that entry's `extensions` object.
 function convertedLorebook(book: Record<string, unknown>, entries: RisuCardLoreEntry[]) {
   const strings = (value: unknown) =>
     Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
@@ -88,7 +89,9 @@ function convertedLorebook(book: Record<string, unknown>, entries: RisuCardLoreE
     loreExt: undefined,
     charbook: {
       extensions: { ...object(book.extensions) },
-      // Risu derives the book settings only when the file supplied all three of them.
+      // https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/characterCards.ts#L1045-L1054 (2026-11-20):
+      // convertCharbook builds the book settings only when recursive_scanning, scan_depth and
+      // token_budget are all present (neither null nor undefined).
       scan_depth: number(book.scan_depth),
       token_budget: number(book.token_budget),
       recursive_scanning:
@@ -196,7 +199,9 @@ export function importRisuLore({
       );
     }
     for (const found of parsed.unknown) unknown.add(found.slice(0, MAX_UNKNOWN_DECORATOR_LENGTH));
-    // Risu reads a decorator only in the leading block, so a later `@@` line stays in the body.
+    // https://github.com/kwaroran/ccardlib/blob/e9a4b49e9e2f551866b62e20d307b00241378244/src/decorators.ts#L7-L38 (2026-11-20):
+    // parseDecorators stops at the first line that does not start with `@@` and returns that line
+    // and everything after it, later `@@` lines included, as the body.
     if (content.split('\n').some((line) => line.trim().startsWith('@@')))
       findings.add(
         'lore-decorator-position',

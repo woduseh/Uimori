@@ -32,9 +32,8 @@ export function decisionAuthorization(target: JudgmentTarget, key: string): Reco
     : { authorization: `Bearer ${key}` };
 }
 
-// REST contracts checked 2026-11-17:
-// https://developers.openai.com/api/reference/resources/decisions/methods/create
-// https://aistudio.google.com/docs/decisions-api
+// https://developers.openai.com/api/reference/resources/decisions/methods/create and
+// https://aistudio.google.com/docs/decisions-api (2026-11-17): the request limits checked below.
 export function prepareDecisionRequest(
   request: JudgmentRequest,
   target: JudgmentTarget
@@ -68,7 +67,8 @@ export function prepareDecisionRequest(
   for (const [reference, asset] of Object.entries(request.assets ?? {})) {
     if (!reference || !asset.data_base64) requestInvalid();
     const mime = `image/${asset.format}`;
-    // Gemini concatenates adjacent text blocks without separators.
+    // https://aistudio.google.com/docs/decisions-api (2026-11-20): Gemini concatenates adjacent
+    // text blocks in input without a separator.
     parts.push(
       textPart(imageLabel + reference),
       gemini

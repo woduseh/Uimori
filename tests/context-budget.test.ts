@@ -272,7 +272,6 @@ describe('offline host context budget', () => {
       estimator: 'model-local-v1',
       tokenizer: 'openai-cl100k',
     });
-    // The JSON-quoted sample has 21 cl100k tokens versus 13 o200k tokens.
     expect(estimateContextTokens('안녕하세요. 오늘은 바다를 바라봐요.', local)).toBe(24);
     expect(estimateContextTokens('안녕하세요. 오늘은 바다를 바라봐요.', legacy)).toBe(15);
     for (const invalid of [

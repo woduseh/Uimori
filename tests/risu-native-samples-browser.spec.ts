@@ -489,7 +489,9 @@ test.describe('actual local native Risu cards', () => {
         .getByText('NATIVE_ACCEPTANCE_RESPONSE', { exact: false });
       await expect(renderedResponse).toBeVisible();
       await settledFrame(page, 'last');
-      // Authored animations may never satisfy Playwright's actionability stability check.
+      // https://playwright.dev/docs/actionability#stable (2026-11-20): an element is stable when it
+      // keeps the same bounding box for at least two consecutive animation frames, and
+      // locator.scrollIntoViewIfNeeded() waits for that check.
       await page
         .locator('.risu-message-surface')
         .last()

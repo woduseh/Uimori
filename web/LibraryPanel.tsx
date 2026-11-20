@@ -279,7 +279,6 @@ export function LibraryPanel({
   }, [initialTab]);
   const externalList = useRef(listRequest);
   const handledContent = useRef<string | null>(null);
-  // Explicit result navigation is admitted by the app's existing unsaved-editor guard.
   // biome-ignore lint/correctness/useExhaustiveDependencies: explicit identity owns the read, not editor renders
   useEffect(() => {
     if (!initialContentId) {

@@ -42,8 +42,6 @@ export function TransientNoticeProvider({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => {
     const node = host.current!;
-    // A manual, non-modal popover remains visible above native settings dialogs without
-    // taking focus or making the manuscript inert.
     if (notices.length) {
       if (node.matches(':popover-open')) node.hidePopover();
       node.showPopover();

@@ -142,7 +142,8 @@ const capabilities: readonly ModelCapability[] = [
     maxOutputTokens: 65_536,
     temperature: false,
     topP: false,
-    // Neither Carbon page documents stop sequences or the Agent Platform service tiers.
+    // https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-carbon (2026-11-20):
+    // the guide documents neither stop sequences nor service tiers.
     stopSequences: false,
     thinkingLevels: ['LOW', 'MEDIUM', 'HIGH'],
     defaultThinkingLevel: 'MEDIUM',
@@ -228,7 +229,8 @@ const capabilities: readonly ModelCapability[] = [
   ...(['fable', 'mythos'] as const).map(
     (line): ModelCapability => ({
       id: `claude-${line}-5-2`,
-      // Mythos 5.2 is the same model for organizations verified by Anthropic.
+      // https://platform.claude.com/docs/en/models/mythos-5-2/overview (2026-11-20): Claude Mythos
+      // 5.2 is the same model as Claude Fable 5.2, available only to verified organizations.
       name: `Claude ${line === 'fable' ? 'Fable' : 'Mythos'} 5.2`,
       releasedAt: '2026-11-09',
       protocol: 'anthropic-messages-v1',

@@ -265,14 +265,19 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
       }
     }
   );
-  // DeepSeek documents both interruption reasons. Its usage normally accompanies the
-  // finish chunk; compatible Chat streams may instead send a following usage-only chunk.
+  // https://api-docs.deepseek.com/api/create-chat-completion/ (2026-11-20): finish_reason is
+  // insufficient_system_resource or aborted for an interrupted generation.
   test.each([
-    { reason: 'insufficient_system_resource', text: '보존할 초안 🌊', trailingUsage: true },
-    { reason: 'aborted', text: '', trailingUsage: false },
+    {
+      reason: 'insufficient_system_resource',
+      text: '보존할 초안 🌊',
+      usageChunk: 'trailing usage-only',
+    },
+    { reason: 'aborted', text: '', usageChunk: 'finish' },
   ])(
-    'DeepSeek records $reason with text=$text and consumes final usage without exposing unfinished tools',
-    async ({ reason, text, trailingUsage }) => {
+    'DeepSeek records $reason with text=$text and consumes usage from the $usageChunk chunk without exposing unfinished tools',
+    async ({ reason, text, usageChunk }) => {
+      const trailingUsage = usageChunk === 'trailing usage-only';
       const variant = variants.find((item) => item.protocol === 'deepseek-chat-v1')!;
       const usage = { prompt_tokens: 9, completion_tokens: 3, total_tokens: 12 };
       const response = stream(

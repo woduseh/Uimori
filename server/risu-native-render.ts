@@ -52,7 +52,9 @@ const assetNames = new Set([
 const localAssetUrl = /^\/api\/(?:package-image-blobs|assets)\/[A-Za-z0-9_.-]+$/u;
 const assetMaxDifference = 4;
 
-/** Risu's trimmer removes known extensions, then separator characters (not all whitespace). */
+// https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/parser/parser.svelte.ts#L653-L662 (2026-11-20):
+// Risu's trimmer strips one of these media extensions, trims, then deletes the characters
+// matched by `/[_ -.]/g`; other whitespace such as tabs stays.
 function normalizedAssetName(value: string): string {
   let name = value.toLocaleLowerCase();
   for (const extension of [
@@ -74,7 +76,9 @@ function normalizedAssetName(value: string): string {
   return name.trim().replace(/[_ .-]/gu, '');
 }
 
-/** Same UTF-16 Levenshtein distance as Risu, bounded to the only accepted distance band. */
+// https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/parser/parser.svelte.ts#L599-L651 (2026-11-20):
+// getClosestMatch keeps the asset with the smallest getDistance, a Levenshtein distance over
+// UTF-16 code units (`charAt`), and rejects it when that distance exceeds assetMaxDifference.
 function assetDistance(a: string, b: string, limit: number): number {
   const outside = limit + 1;
   if (Math.abs(a.length - b.length) > limit) return outside;
@@ -161,7 +165,9 @@ function assets(text: string, resolve: (name: string) => string | undefined, iss
   );
 }
 
-/** Runs only inside the bounded worker. Based on Risu ParseMarkdown/processScriptFull ordering. */
+// https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/process/scripts.ts#L133-L341 (2026-11-20):
+// processScriptFull runs risuChatParser on the text, then applies the regex scripts of the given
+// mode sorted by descending `<order N>`, running risuChatParser again on each replacement.
 export function processNativeRisuTextInWorker(input: NativeRisuTextInput): NativeRisuTextResult {
   if (input.text.length > 2_000_000) throw new Error('RISU_NATIVE_TEXT_LIMIT');
   const context = {

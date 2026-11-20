@@ -1,6 +1,9 @@
 import { Agent } from 'undici';
 
-// Node fetch otherwise inherits Undici's 300-second header/body idle limits.
+// https://github.com/nodejs/undici/blob/416f9e3224ddb448390afbeaf31a0d73739c7a0b/docs/docs/api/Agent.md#class-agent (2026-11-20):
+// Agent is the default dispatcher for fetch when none is supplied.
+// https://github.com/nodejs/undici/blob/416f9e3224ddb448390afbeaf31a0d73739c7a0b/docs/docs/api/Client.md#new-clienturl-options (2026-11-20):
+// headersTimeout and bodyTimeout default to 300e3 ms, and 0 disables them.
 const providerDispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
 
 export function providerFetchOptions(

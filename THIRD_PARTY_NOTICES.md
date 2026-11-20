@@ -105,3 +105,7 @@ SOFTWARE.
 - 변경: 2026-11-18, 글리프를 빼거나 바꾸지 않고 fontTools로 WOFF2 형식만 바꿔 [third_party/theme-assets](third_party/theme-assets)에 두었어요. 내장 레이아웃의 장식 글자와 제목에 쓰며, 글꼴 자체를 따로 판매하거나 이름을 바꾸지 않아요. 도현과 개구는 원본부터 자주 쓰는 한글(2,350~2,437자)만 담고 있어서, 없는 글자는 테마 CSS의 다음 글꼴로 그려요.
 - 같은 폴더의 `letter-*.webp`, `scrap-*.webp`, `cinema-*.webp`, `classic-*.webp`는 Uimori가 직접 그린 장식 이미지로 프로젝트 라이선스를 따라요.
 
+
+## 테스트 글꼴 픽스처
+
+`tests/fixtures/appearance-synthetic.ttf`는 Uimori가 직접 만든 1KB 글꼴로, 삼각형과 공백 글리프만 담고 있어요. 시스템 글꼴을 재배포하지 않고 Chromium의 실제 글꼴 디코더를 시험하려고 둔 파일이며, CC0 1.0으로 공개해요.

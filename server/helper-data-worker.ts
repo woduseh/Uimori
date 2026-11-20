@@ -5,7 +5,6 @@ import type { HelperTaskSnapshot } from '../core/helper.js';
 import protectedFields from './helper-native-protected-fields.json' with { type: 'json' };
 import resourcePathPolicy from './helper-resource-path-policy.json' with { type: 'json' };
 
-// Node builtins and JSON keep this entry runnable under Node's TS stripping in tests.
 export type DataScope = 'current' | 'library' | 'chats' | 'editor' | 'conversation';
 export type DataRef = {
   scope: DataScope;
@@ -632,7 +631,6 @@ function* matchingExcerpts(
         ...excerpt(doc, field, text, start, end, ref, stringValue),
         matchRange: { start: hit.index, end: hit.index + hit[0].length },
       };
-      // Advancing by code point also terminates zero-width Unicode expressions at a surrogate pair.
       const next =
         hit.index + Math.max(hit[0].length, (text.codePointAt(hit.index) ?? 0) > 0xffff ? 2 : 1);
       position = Math.max(end, next);

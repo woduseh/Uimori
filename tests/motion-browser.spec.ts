@@ -22,7 +22,8 @@ async function expectHairline(surface: Locator) {
   });
   expect(Number.parseFloat(border.token)).toBe(0.5);
   expect(border.style).toBe('solid');
-  // Chromium rounds a half CSS pixel to a device pixel at DPR 1.
+  // https://drafts.csswg.org/css-values-4/#snap-as-a-line-width (2026-11-20): a border width greater
+  // than zero but less than 1 device pixel rounds to 1 device pixel.
   expect(border.width).toBeGreaterThanOrEqual(0.5);
   expect(border.width).toBeLessThanOrEqual(1);
 }

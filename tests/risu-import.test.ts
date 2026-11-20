@@ -274,7 +274,8 @@ test('module lorebook keys, secondary keys and mode remain in authoritative Risu
           {
             id: 'docks',
             comment: 'Docks',
-            // Risu keeps `useRegex` only for a key written as a regex literal.
+            // https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/characterCards.ts#L1061-L1063 (2026-11-20):
+            // use_regex is reset to false unless the first key starts with `/`.
             key: '/harbor/i',
             useRegex: true,
             content: 'The docks are loud.',
@@ -406,7 +407,7 @@ test('imported opening identity tokens stay native until the opening runtime eva
   expect(store.sourceOriginal(saved.chat!.headRevision!).text).toBe(value.data.first_mes);
 });
 
-test('card imports preserve all lore and cannot move it into the first chat notes', async () => {
+test('card imports preserve all lore, trimmed like the Risu decorator reader, and cannot move it into the first chat notes', async () => {
   const store = database(),
     app = Fastify();
   risuImportRoutes(app, store);
@@ -448,7 +449,6 @@ test('card imports preserve all lore and cannot move it into the first chat note
     expect(resources.find((item) => item.id.endsWith(':body'))?.text).toBe(
       '{{char}} explores an imaginary planet.'
     );
-    // Risu's decorator reader trims an entry's body, blank lines around it included.
     expect(resources.find((item) => item.id.endsWith(':lore:lore-1'))?.text).toBe(
       'Earlier travel with {{user}}.'
     );
@@ -742,13 +742,14 @@ const migratedEntry = () => ({
   secondary_keys: ['storm'],
   selective: true,
   insertion_order: 100,
-  // Risu reads position 4 as "at depth" and the role as an index into system/user/assistant.
+  // https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/characterCards.ts#L1073-L1078 (2026-11-20):
+  // position 4 with numeric depth and role becomes `@@depth <depth>` and `@@role <[system, user, assistant][role]>`.
   extensions: { position: 4, depth: 3, role: 2, selectiveLogic: 1 },
   constant: false,
   enabled: true,
 });
 
-test('lore directives decide activation and never reach the model as prose', () => {
+test('lore directives decide activation by exact-case name and never reach the model as prose', () => {
   const value = card();
   const entries = [
     {
@@ -790,12 +791,9 @@ test('lore directives decide activation and never reach the model as prose', () 
   expect(lore['Always on']).toMatchObject({ enabled: true, loading: 'pinned' });
   expect(lore['Always on'].text).toBe('The harbor is busy.');
   expect(lore.Plain.text).toBe('No directive here.');
-  // Risu's decorator names are case-sensitive, so an uppercase line is a decorator it does not know:
-  // the line leaves the body without deciding anything.
   expect(lore['Upper directive']).toMatchObject({ loading: 'discoverable' });
   expect(lore['Upper directive'].text).toBe('The market opens.');
   expect(lore['Late directive'].text).toBe('Opening line.\n@@depth 2\nMore text.');
-  // The body and the `@@` lines are the ones Risu's own conversion produces for the same entry.
   const converted = convertCharbook({
     lorebook: [],
     loresettings: undefined,

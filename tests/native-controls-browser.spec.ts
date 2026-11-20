@@ -4,7 +4,6 @@ import { navigationAction, selectSettingsSection } from './ui-navigation.js';
 
 async function expectReadableOption(option: Locator) {
   const ratio = await option.evaluate((element) => {
-    // Canvas resolves CSS Color 4 values as well as ordinary rgb()/hex colors.
     const context = document.createElement('canvas').getContext('2d')!;
     const rgba = (color: string) => {
       context.clearRect(0, 0, 1, 1);

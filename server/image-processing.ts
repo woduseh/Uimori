@@ -6,7 +6,9 @@ import { IMAGE_INPUT_MAX_BYTES } from '../core/image-limits.js';
 export const MAX_IMAGE_INPUT_BYTES = IMAGE_INPUT_MAX_BYTES;
 const MAX_PIXELS = 64 * 1024 * 1024;
 const MAX_FRAMES = 500;
-/** Sharp runs on libuv's four default threads; one stays free for request file I/O. */
+// https://sharp.pixelplumbing.com/performance#parallelism-and-concurrency (2026-11-20): libuv's
+// UV_THREADPOOL_SIZE, default 4, caps how many images sharp processes in parallel.
+// Three slots leave one thread for file I/O.
 export const IMAGE_PROCESSING_SLOTS = 3;
 let active = 0;
 const waiting: (() => void)[] = [];

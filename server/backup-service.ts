@@ -47,7 +47,8 @@ async function syncDirectory(path: string) {
   }
 }
 async function syncFile(path: string) {
-  // Windows requires a writable file handle for FlushFileBuffers/fsync semantics.
+  // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers#parameters (2026-11-20):
+  // the handle passed to FlushFileBuffers must have the GENERIC_WRITE access right.
   const handle = await open(path, 'r+');
   try {
     await handle.sync();

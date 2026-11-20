@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
 import { sourceImports } from './fixtures/source-imports.js';
 
-// The RisuAI snapshot is GPL-3.0 code kept behind a compat layer.
 const root = fileURLToPath(new URL('../', import.meta.url));
 const SNAPSHOT_ROOT = 'third_party/risuai';
 const COMPAT_LAYER = 'server/compat/risu';

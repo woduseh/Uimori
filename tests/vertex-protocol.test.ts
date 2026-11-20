@@ -427,7 +427,6 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     const second = start(secondInput);
     const secondBody = bodyObject(second.body);
     expect(secondBody.contents[1]).toEqual({ role: 'model', parts });
-    // Gemini tool replies must end the user turn, not be followed by another text part.
     expect(secondBody.contents[2].parts).toEqual([
       { text: secondInput.continuationInput },
       {

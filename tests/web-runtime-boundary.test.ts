@@ -4,8 +4,6 @@ import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
 import { sourceFiles, sourceImports } from './fixtures/source-imports.js';
 
-// Vite bundles everything a `web/` module loads at runtime, including dynamic imports, while
-// type checks and unit tests run on Node, where Node builtins resolve.
 const root = fileURLToPath(new URL('../', import.meta.url));
 const nodeOnlyModules = new Set(['core/local-tokenizers.ts']);
 

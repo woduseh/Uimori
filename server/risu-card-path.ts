@@ -163,7 +163,8 @@ function readCardPng(
   const outer = record(document),
     card = record(outer.data);
   if (outer.spec !== 'chara_card_v3') throw new HttpError(400, 'RISU_IMPORT_V3_REQUIRED');
-  // CCv3 defines an implicit cover icon only when assets is omitted, not when it is empty.
+  // https://github.com/kwaroran/character-card-spec-v3/blob/f3a86af019fbd99f788f7a1155f399655b34ab35/SPEC_V3.md#assets (2026-11-20):
+  // only an undefined assets field MUST behave as [{ type: 'icon', uri: 'ccdefault:', name: 'main', ext: 'png' }].
   if (card.assets === undefined)
     card.assets = [{ type: 'icon', name: 'main', uri: 'ccdefault:', ext: 'png' }];
   if (Array.isArray(card.assets))
