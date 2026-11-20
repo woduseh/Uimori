@@ -236,6 +236,7 @@ Google AI Studio 및 Google Cloud Vertex AI 직접 연결 모델은 **고급 →
 - **Vercel Chat 변환**: 이전 assistant 메시지의 텍스트 조각들을 순서대로 합쳐 하나의 문자열로 전송해요.
 - **OpenAI Responses 변환**: 수동 대화 이력을 assistant를 포함하여 `input_text` 조각들로 구성하고 조각별 캐시 기준점을 유지해요. 도구 후속 요청에서는 프로바이더가 실제로 반환한 메시지·사고·도구 호출 항목을 원래 형식과 식별자로 이어 보내요.
 - **Gemini 대화 및 도구 처리**: 도구 호출 후 이어지는 요청은 모델의 원본 응답과 사고 서명을 보존하고, 동일한 사용자 턴 안의 추가 제어 텍스트를 도구 결과(`functionResponse`) 앞에 배치해 Vertex 엔드포인트 거절 문제를 방지해요 (Claude·OpenAI·Codex 요청 형식은 변경하지 않음).
+- **Gemini 중간 system 변환**: Gemini 모델 ID(`gemini-…`와 `google/gemini-…` 같은 게이트웨이 ID)로 보내는 요청에서 선두가 아닌 system 메시지는 전송할 때만 user로 바꾸고 `GEMINI_MID_SYSTEM_TO_USER` 진단을 남겨요. 원래 프롬프트는 바꾸지 않아요. 직접 연결은 Gemini API·Vertex AI 레퍼런스가 `contents`에 user와 model 역할만 허용해서 적용하고, 게이트웨이 연결은 확인된 지원 사례가 없어 같은 규칙을 보수적으로 적용해요. 판단 기준은 [모델별 capability](../core/model-capabilities.ts)의 `acceptsMidConversationSystem`이에요.
 - **Anthropic 메시지 보정**: `user → 연속 system → user` 형태의 프롬프트 전송 시, system 블록 끝에 짧은 가상 completed assistant 응답을 전송용으로 한 번 추가해요. 원래 프롬프트 및 실행 스냅샷의 역할·순서·본문·캐시 기준점은 옮기지 않으며 요청 미리보기 진단에만 기록돼요. 도구 후속 요청은 저장된 메시지를 그대로 재생하므로 보조 응답을 중복 추가하지 않아요.
 - **DeepSeek 오류 처리**: `insufficient_system_resource` 또는 `aborted`로 응답이 종료된 경우 수신된 본문과 최종 사용량을 보존하고 미완료로 기록해요. 불완전한 도구 호출은 실행하지 않으며 자동 재요청하지 않아요. 원격 중단 사유는 지원하지 않는 응답 형식과 구분해 실행 기록에 남겨요.
 

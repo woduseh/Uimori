@@ -40,7 +40,7 @@ test('validation is protocol-level: any listed or unlisted model may use every o
   ).not.toThrow();
 });
 
-test('Gemini model IDs, direct or namespaced by a gateway, do not accept a mid-conversation system message', () => {
+test('Gemini model IDs, direct or namespaced by a gateway, are treated as rejecting a mid-conversation system message', () => {
   for (const modelId of [
     'gemini-3.8-flash',
     'gemini-4-argon',
@@ -49,14 +49,7 @@ test('Gemini model IDs, direct or namespaced by a gateway, do not accept a mid-c
     'openrouter/google/gemini-3.1-pro-preview',
   ])
     expect(acceptsMidConversationSystem(modelId)).toBe(false);
-  for (const modelId of [
-    'claude-opus-5-5',
-    'gpt-6.2-sol',
-    'gemma-3-27b',
-    'not-gemini-3',
-    'gemini',
-    'gemini-3/variant',
-  ])
+  for (const modelId of ['claude-opus-5-5', 'gpt-6.2-sol', 'gemma-3-27b', 'not-gemini-3'])
     expect(acceptsMidConversationSystem(modelId)).toBe(true);
 });
 

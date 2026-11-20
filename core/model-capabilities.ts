@@ -312,19 +312,16 @@ const capabilities: readonly ModelCapability[] = [
     ],
   },
 ];
-type WireRule = Readonly<{ modelId: RegExp; reviewedAt: string; sources: readonly string[] }>;
-const midConversationSystemRejections: readonly WireRule[] = [
-  {
-    modelId: /(?:^|\/)gemini-[^/]+$/iu,
-    reviewedAt: '2026-11-20',
-    sources: [
-      'https://aistudio.google.com/api-reference/generate-content',
-      'https://docs.cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference',
-    ],
-  },
-];
+const geminiMidConversationSystemRule = {
+  modelId: /(?:^|\/)gemini-[^/]+$/iu,
+  reviewedAt: '2026-11-20',
+  sources: [
+    'https://aistudio.google.com/api-reference/generate-content',
+    'https://docs.cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference',
+  ],
+} as const;
 export function acceptsMidConversationSystem(modelId: string): boolean {
-  return !midConversationSystemRejections.some((rule) => rule.modelId.test(modelId));
+  return !geminiMidConversationSystemRule.modelId.test(modelId);
 }
 export function supportedModels(protocol: ProviderProtocol): readonly ModelCapability[] {
   if (protocol === 'google-gemini-v1')
