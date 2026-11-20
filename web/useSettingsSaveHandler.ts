@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef } from 'react';
 export type SettingsSaveHandler = () => Promise<boolean>;
 export type SettingsSaveRegistration = (handler: SettingsSaveHandler | null) => void;
 
-/** Expose the current editor operation without capturing an outdated draft. */
 export function useSettingsSaveHandler(
   register: SettingsSaveRegistration | undefined,
   save: SettingsSaveHandler
@@ -16,7 +15,6 @@ export function useSettingsSaveHandler(
   }, [register]);
 }
 
-/** Keep child save registrations stable while each editor exposes its latest draft. */
 export function useSettingsSaveGroup(keys: readonly string[]) {
   const handlers = useRef<Record<string, SettingsSaveHandler | null>>({});
   const registrations = useMemo(

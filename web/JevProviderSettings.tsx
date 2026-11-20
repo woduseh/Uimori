@@ -100,7 +100,6 @@ export function JevProviderSettings({
   }, []);
 
   useEffect(() => {
-    // Incrementing this token retries the read without replacing the key draft.
     void refresh;
     if (!active) return;
     const controller = new AbortController();
@@ -112,7 +111,6 @@ export function JevProviderSettings({
         setStatus(next);
         setSettingsError('');
         setConflict(false);
-        // A status refresh must not replace a possibly submitted test with an older receipt.
         if (!attemptRef.current) {
           setTest(next.latestTest);
           setTestError('');
@@ -230,7 +228,6 @@ export function JevProviderSettings({
     attemptRef.current = next;
     setAttempt(next);
     try {
-      // Recover a known receipt with GET; recover an uncertain submission with the original key.
       const result =
         test?.status === 'running'
           ? await api<ProviderConnectionTest>(

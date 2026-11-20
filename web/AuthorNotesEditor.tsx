@@ -29,7 +29,6 @@ type NoteDraft = {
   origin?: ImportedMemoryOrigin;
 };
 
-/** User-authored instructions remain separate from derived summaries and fictional events. */
 export function AuthorNotesEditor({
   headRevision,
   notes,

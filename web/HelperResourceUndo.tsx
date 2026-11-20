@@ -15,7 +15,6 @@ const hasUnsavedEditResource = (edit: HelperResourceEdit) =>
     hasUnsavedResourceEditor(resource.kind, resource.id)
   );
 
-/** The server owns the saved edit and its revision; this control only selects its receipt. */
 export function HelperResourceUndo({
   conversationId,
   edit,
@@ -78,7 +77,6 @@ export function HelperResourceUndo({
       );
       accepted = result.undone === true;
       if (!accepted) throw new Error(uiMessage('helpers.m153'));
-      // Notify other saved-resource owners even if this conversation was switched meanwhile.
       window.dispatchEvent(new Event('uimori-helper-updated'));
       if (resources.some((resource) => resource.kind === 'theme'))
         window.dispatchEvent(new Event('uimori-themes-changed'));
@@ -92,7 +90,6 @@ export function HelperResourceUndo({
       if (alive.current)
         setError(cause instanceof Error ? cause.message : uiMessage('helpers.m153'));
     } finally {
-      // A lost response is reconciled by a read, never by automatically posting again.
       try {
         await refresh();
       } catch {

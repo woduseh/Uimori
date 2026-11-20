@@ -5,7 +5,6 @@ import { sessionRequiredEvent } from './api.js';
 
 export const maxPackageImages = RISU_ASSET_MAX;
 
-/** Shared authoring upload: server validates immutable image bytes; callers own draft attachment. */
 export async function uploadPackageImage(
   file: File,
   signal: AbortSignal,

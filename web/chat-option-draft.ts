@@ -5,7 +5,6 @@ import { t } from './i18n.js';
 export type OptionScope = 'fixed' | 'oneoff';
 export type OptionDraft = Record<string, { value: PromptValue } | { inherit: true }>;
 
-/** Review actual edit intent once, independently of the currently displayed scope. */
 export function reviewOptionDraft(
   base: ChatOptionState,
   draft: OptionDraft,
@@ -24,7 +23,6 @@ export function reviewOptionDraft(
   }[] = [];
   const retained: OptionDraft = {};
   const retainedUnsets: string[] = [];
-  // Preserve the review's unset-before-value order and existing scope keys.
   for (const [id, edit] of Object.entries(draft)) {
     if ('value' in edit) continue;
     const previous = oldControls.find((control) => control.id === id);
@@ -74,7 +72,6 @@ export function reviewOptionDraft(
   return { draft: retained, discarded };
 }
 
-/** One set of edits can target either scope without turning saved fixed values into edits. */
 export function optionDraftValues(base: ChatOptionState, draft: OptionDraft) {
   const fixed = { ...base.fixedValues };
   const oneoff: OptionValues = {};
@@ -87,7 +84,6 @@ export function optionDraftValues(base: ChatOptionState, draft: OptionDraft) {
       const control = (base.controls ?? promptControls(base.program)).find(
         (item) => item.id === id
       );
-      // A one-off cannot unset the saved fixed value. Reserve the same effective default explicitly.
       oneoff[id] =
         base.globalValues[id] ?? control?.default ?? (control?.type === 'text' ? '' : '0');
     }

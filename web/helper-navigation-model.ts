@@ -33,7 +33,6 @@ export function readHelperNavigationView(): HelperNavigationView {
 export const helperSessionActivityAt = (session: HelperSession) =>
   session.lastActivityAt ?? session.updatedAt ?? session.createdAt;
 
-/** Search and tree ownership are independent: every conversation has exactly one tree location. */
 export function helperNavigationLists(
   sessions: HelperSession[],
   projects: HelperProject[],
@@ -89,7 +88,6 @@ export function helperNavigationLists(
   };
 }
 
-/** Reorder only the destination siblings, retaining remembered positions elsewhere. */
 export function helperNavigationOrder(
   current: string[],
   siblings: string[],

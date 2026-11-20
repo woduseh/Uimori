@@ -117,9 +117,6 @@ export function usePackagePresentation(
   ]);
   if (!enabled || result?.sourceIdentity !== sourceIdentity) return;
   if (result.identity === identity) return { ...result, pending: result.key !== key };
-  // Keep the last rendered original for this same message while its new projection loads.
-  // A hash/translation change must not replace a long reading surface with a short spinner.
-  // Native actions stay disabled until the new source projection has been validated.
   return {
     ...result,
     pending: true,

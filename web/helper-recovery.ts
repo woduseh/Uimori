@@ -2,7 +2,6 @@ import { message as uiMessage } from './i18n.js';
 import { deleteRecoveryIfModel, readRecovery, writeRecovery } from './editor-recovery.js';
 import { deleteHelperAttachmentRecovery } from './helper-attachment-draft.js';
 
-// Keep the latest text across panel unmounts. The existing editor database owns disk storage.
 const values = new Map<string, string | null>();
 const writes = new Map<string, Promise<void>>();
 const failedWrites = new Set<string>();
@@ -32,7 +31,6 @@ export function cachedHelperRecovery(key: string): string | null | undefined {
   return values.get(key);
 }
 
-/** Read once per key; a user edit made during hydration always wins. */
 export async function loadHelperRecovery(key: string): Promise<string | null> {
   if (values.has(key)) return values.get(key) ?? null;
   let stored: Awaited<ReturnType<typeof readRecovery<string>>>;
@@ -46,7 +44,6 @@ export async function loadHelperRecovery(key: string): Promise<string | null> {
   return stored?.model ?? null;
 }
 
-/** Resolve every owner before editing any part of a conversation's recovered draft. */
 export async function loadHelperSessionRecovery(id: string): Promise<void> {
   await Promise.all(
     ['helper-input', 'helper-outbox', 'helper-selection', 'helper-outline'].map((kind) =>
@@ -55,7 +52,6 @@ export async function loadHelperSessionRecovery(id: string): Promise<void> {
   );
 }
 
-/** Memory updates first; callers needing durable admission await the transaction. */
 export function writeHelperRecovery(key: string, value: string | null): Promise<void> {
   values.set(key, value);
   const previous = writes.get(key) ?? Promise.resolve();
@@ -82,13 +78,11 @@ export function writeHelperRecovery(key: string, value: string | null): Promise<
   return write;
 }
 
-/** Retry the latest in-memory value; later edits remain ordered after this write. */
 export function retryHelperRecoveryWrite(key: string): Promise<void> {
   if (!values.has(key)) return Promise.reject(new Error(uiMessage('helpers.m206')));
   return writeHelperRecovery(key, values.get(key) ?? null);
 }
 
-/** Removal after admission must never erase a newer request for the same session. */
 export async function clearHelperRecoveryIf(key: string, expected: string): Promise<void> {
   if (!values.has(key)) await loadHelperRecovery(key);
   if (values.get(key) !== expected) return;
@@ -98,7 +92,6 @@ export async function clearHelperRecoveryIf(key: string, expected: string): Prom
   try {
     remaining = await deleteRecoveryIfModel(diskKey(key), expected);
   } catch (cause) {
-    // The server already accepted this exact request; do not resurrect it on panel navigation.
     if (values.get(key) === expected) {
       values.set(key, null);
       if (failedWrites.delete(key)) notifyWrites();

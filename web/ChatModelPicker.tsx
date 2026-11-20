@@ -10,7 +10,6 @@ import { modelLabel } from './storyLabels.js';
 import { CheckIcon, SearchIcon, SettingsIcon } from './ui-icons.js';
 import './chat-model-picker.css';
 
-/** The calling chat or role owner controls selection; the picker only presents choices. */
 export function ChatModelPicker({
   open,
   scopeKey,

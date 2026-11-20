@@ -5,15 +5,11 @@ import { DEFAULT_THEME_TEMPLATE, THEME_SLOTS } from '../core/themes.js';
 import { ThemeContext } from './ThemeContext.js';
 import { NoticeBanner } from './NoticeBanner.js';
 
-/** Native slot projection leaves React's body/action nodes in place, even when layouts change. */
 export function themeTemplate(html: string): DocumentFragment {
   const template = document.createElement('template');
-  // Parse as an inert fragment so leading style/script elements are not moved to a
-  // document head before sanitization can preserve them or report their removal.
   template.innerHTML = html || DEFAULT_THEME_TEMPLATE;
   const fragment = DOMPurify.sanitize(template.content, {
     RETURN_DOM_FRAGMENT: true,
-    // Names live inside this ShadowRoot, not in document named properties.
     SANITIZE_DOM: false,
     ADD_TAGS: ['slot', 'style'],
     ADD_ATTR: ['name'],
@@ -77,14 +73,12 @@ export function ThemeFrame({
       root.replaceChildren(style, template);
       setError('');
     } catch (cause) {
-      // An invalid imported layout cannot hide the reader and its recovery controls.
       style.textContent = ':host{display:block;min-width:0}slot{display:contents}';
       setHasPortrait(false);
       setHasRequestPersona(false);
       root.replaceChildren(style, themeTemplate(''));
       setError((cause as Error).message);
     }
-    // Scroll the app-owned light-DOM body so native focus, event capture and anchors still work.
     const body = host.current.querySelector<HTMLElement>('[slot="body"]');
     if (body && root.querySelector('slot[name="body"][data-uimori-body-scroll]')) {
       const previous = ['tabindex', 'role', 'aria-label'].map(
@@ -102,7 +96,6 @@ export function ThemeFrame({
         }
       };
     }
-    // React removes the host. Do not collapse live content between layout replacements.
   }, [html, css]);
   useLayoutEffect(() => {
     host.current?.querySelector('[data-uimori-body-scroll]')?.setAttribute('aria-label', bodyLabel);

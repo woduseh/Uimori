@@ -9,7 +9,6 @@ import { readReadingPosition } from './story-storage.js';
 
 function positionIdentity(position: ReadingPosition): string {
   const target = position.target;
-  // Saving the same location again changes its revision, but is not a new reading suggestion.
   return JSON.stringify([
     target.chatId,
     target.sourceId,
@@ -20,7 +19,6 @@ function positionIdentity(position: ReadingPosition): string {
   ]);
 }
 
-/** Source/paragraph identity survives viewport and font-size differences; pixels stay local. */
 export function captureReaderLocation(
   reader: HTMLElement,
   chatId: string,
@@ -53,7 +51,6 @@ export function targetAtReaderLocation(
   };
 }
 
-/** Server checkpoints are optional. Never gate the reader or move an already-open page. */
 export function useReadingSync(options: {
   chatId: string;
   reader: RefObject<HTMLDivElement | null>;
@@ -113,10 +110,7 @@ export function useReadingSync(options: {
           revision = Math.max(revision, value.own?.revision ?? 0);
           loaded = true;
           setState({ key, ...value });
-        } catch {
-          // A failed refresh does not invalidate an earlier successful read.
-          // Save failures still suspend further writes until the next reader check.
-        }
+        } catch {}
       })().finally(() => {
         loading = null;
       });
@@ -129,7 +123,6 @@ export function useReadingSync(options: {
       saving = true;
       let acceptedRevision: number | undefined;
       try {
-        // A stalled best-effort checkpoint must not hold later reading writes forever.
         const saved = await api<ReadingPosition>(
           path,
           { clientId, expectedRevision: revision, target },
@@ -140,20 +133,15 @@ export function useReadingSync(options: {
         acceptedRevision = saved.revision;
         if (alive) setState((old) => (old.key === key ? { ...old, own: saved } : old));
       } catch {
-        // Do not blindly replay an uncertain or conflicting write.
-        // Refresh the revision when the reader next opens or regains focus.
         loaded = false;
       } finally {
         saving = false;
-        // A newer location can arrive while this write is in flight. On leaving,
-        // flush it after an acknowledged write, without replaying an uncertain one.
         if (
           acceptedRevision !== undefined &&
           dirty &&
           (!alive || document.visibilityState === 'hidden')
         ) {
           if (revision > acceptedRevision) {
-            // A refresh observed another write after this acknowledgement.
             dirty = null;
           } else if (!alive && actions.current?.key === key) {
             actions.current.offer(dirty, acceptedRevision);
@@ -168,7 +156,6 @@ export function useReadingSync(options: {
       if (loaded) void save();
     };
     const offerTarget = (target: ReaderTarget, previousRevision: number) => {
-      // A newly opened visit owns any later reading activity in the same chat.
       if (!alive || touched) return;
       const ready = loading ?? (loaded ? Promise.resolve() : load());
       void ready.then(() => {
@@ -280,9 +267,7 @@ export function useReadingSync(options: {
   if (acknowledgedIdentity === undefined) {
     try {
       acknowledgedIdentity = sessionStorage.getItem(acknowledgmentKey) ?? undefined;
-    } catch {
-      // The mounted reader still remembers acknowledgments when session storage is unavailable.
-    }
+    } catch {}
   }
   const resume =
     candidate && positionIdentity(candidate) !== acknowledgedIdentity ? candidate : null;
@@ -292,9 +277,7 @@ export function useReadingSync(options: {
     acknowledged.current.set(key, identity);
     try {
       sessionStorage.setItem(acknowledgmentKey, identity);
-    } catch {
-      // Reading and local position preservation never depend on optional session storage.
-    }
+    } catch {}
     setState((old) => ({ ...old }));
   };
   return {

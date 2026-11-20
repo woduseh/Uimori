@@ -160,7 +160,6 @@ export function ProviderModelForm({
             onRefresh={onCatalog}
             onChoose={(item) =>
               onChange((current) => {
-                // Picking from the list is an explicit choice: published limits prefill and stay editable.
                 const hints = chosen ? modelHints(chosen, item.id, current.modelFamily) : undefined;
                 return {
                   ...current,

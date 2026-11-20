@@ -2,7 +2,6 @@ import { t, formatDate, formatNumber, getLocale } from './i18n.js';
 import type { UsageReport, UsageTotals } from '../core/usage-report.js';
 
 export const usageNumber = (value: number) => formatNumber(value);
-// Korean keeps the established K/M token notation; other locales use their own compact units.
 export const usageCompact = (value: number) =>
   value < 10_000
     ? usageNumber(value)
@@ -63,7 +62,6 @@ export type UsageBucket = {
   unknown: number;
   partial: number;
 };
-/** Bounded, equal calendar bins: gaps are missing records, never a claim of free usage. */
 export function usageBuckets(report: Pick<UsageReport, 'from' | 'to' | 'days'>): {
   step: number;
   buckets: UsageBucket[];

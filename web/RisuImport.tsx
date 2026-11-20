@@ -28,7 +28,6 @@ import { IconButton } from './IconButton.js';
 import { CheckIcon, UploadIcon } from './ui-icons.js';
 import './risu-import.css';
 
-/** Findings are host diagnostics; card text, names, and scripts never pass through this formatter. */
 function importFindingMessage(finding: RisuImportPreview['findings'][number]): string {
   switch (finding.code) {
     case 'asset-unavailable':
@@ -72,12 +71,10 @@ function importFindingMessage(finding: RisuImportPreview['findings'][number]): s
   return translateMessage(finding.message);
 }
 
-/** Always-on lore stays pinned; optional lore is selected by JEV. */
 function loreLoadingLabel(entry: RisuImportPreview['lore'][number]): string {
   return entry.loading === 'pinned' ? t('transfer.m001') : t('transfer.m002');
 }
 
-/** Ordinary close retains the review; explicit discard clears only an unapplied, certain draft. */
 export function RisuImport({
   showTrigger = true,
   defaultKind = '',
@@ -305,9 +302,7 @@ export function RisuImport({
       void api('/risu-imports/discard', {
         ...(preparedId ? { preparedId } : {}),
         ...(uploadId ? { uploadId } : {}),
-      }).catch(() => {
-        // Local discard is complete; expiry cleanup handles an unreachable server or locked files.
-      });
+      }).catch(() => {});
   }
 
   return (
@@ -318,8 +313,6 @@ export function RisuImport({
           className="secondary"
           icon={UploadIcon}
           onClick={() => {
-            // A confirmed import is finished; reopening starts the next one. An uncertain
-            // outcome keeps its draft so the same request can be retried.
             if (result && !active.current) clearImport();
             else if (!source && !active.current) setKind(defaultKind);
             setOpen(true);

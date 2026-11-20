@@ -51,7 +51,6 @@ export function BotChatImportDialog({
         throw new Error(
           '이 파일은 선택한 봇을 다른 역할의 자료로도 사용해요. 역할을 유지하려면 데이터 관리의 개별 채팅 가져오기를 이용해 주세요.'
         );
-      // The confirmation explicitly chooses this bot; other authored attachment roles stay intact.
       transcript = validateChatTranscript({
         ...transcript,
         packageAttachments: [

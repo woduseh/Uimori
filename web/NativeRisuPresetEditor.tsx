@@ -127,10 +127,8 @@ export function NativeRisuPresetEditor({
   }
   function update(patch: Record<string, unknown>, part?: string) {
     try {
-      // Controls are read during render, so a malformed declaration stays in its field buffer.
       if (Object.hasOwn(patch, 'customPromptTemplateToggle'))
         nativeRisuToggleItems(text(patch.customPromptTemplateToggle));
-      // The form owns these fields. Whole-program validation stays at JSON apply/save.
       onChange({
         ...program,
         nativeRisuPreset: { ...program.nativeRisuPreset, preset: { ...source, ...patch } },

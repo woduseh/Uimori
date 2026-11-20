@@ -10,7 +10,6 @@ import {
 
 const ComposerGrowth = createContext<(grown: boolean) => void>(() => {});
 
-/** Shared layout and keyboard contract for main and helper conversations. */
 export function ChatComposer({ className = '', children, ...props }: ComponentProps<'form'>) {
   const [grown, setGrown] = useState(false);
   return (
@@ -37,8 +36,6 @@ export function ComposerInput({ inputRef, enterSend, onSend, value, ...props }: 
     const node = ref.current;
     if (!node) return;
     const resize = () => {
-      // Measure the one-row layout before choosing a shape. The grown layout is wider;
-      // measuring only that width would alternate shapes for a borderline draft.
       const form = node.closest('form.composer');
       const wasGrown = form?.classList.contains('grown');
       if (wasGrown) form?.classList.remove('grown');
@@ -51,13 +48,11 @@ export function ComposerInput({ inputRef, enterSend, onSend, value, ...props }: 
           Number.parseFloat(style.paddingBottom)
       );
       const grown = !!value && (String(value).includes('\n') || node.scrollHeight > single + 1);
-      // Restore React's current class synchronously, before paint or observer delivery.
       if (wasGrown) form?.classList.add('grown');
       setGrown(grown);
       node.style.height = `${Math.min(node.scrollHeight, 180)}px`;
     };
     resize();
-    // Observe width only: resizing our own height must not schedule another resize.
     let previousWidth = node.getBoundingClientRect().width;
     const observer = new ResizeObserver(() => {
       const width = node.getBoundingClientRect().width;

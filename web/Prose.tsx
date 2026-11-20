@@ -17,7 +17,6 @@ export { safeProseLink } from '../core/reading-markdown.js';
 export { PlainProse } from './PlainProse.js';
 const emptyBlocks: readonly ReadingBlock[] = [];
 
-/** React owns the hosts and portals; the decorator exclusively owns their prose descendants. */
 export const Prose = memo(function Prose({
   text,
   reading,

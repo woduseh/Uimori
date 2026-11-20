@@ -11,7 +11,6 @@ import './content-picker.css';
 const folderCoverUrl = (hash: string) => `/api/package-image-blobs/${hash}`;
 const blobHash = (url: string) => /\/api\/package-image-blobs\/([a-f0-9]{64})$/u.exec(url)?.[1];
 
-/** A chosen image fills the cover; otherwise up to four portraits from the folder stand in. */
 export function LibraryFolderCover({
   coverImageHash,
   portraits = [],
@@ -39,7 +38,6 @@ export function LibraryFolderCover({
   );
 }
 
-/** Each choice applies at once; the owner saves it and reports whether the save succeeded. */
 export function LibraryFolderCoverDialog({
   folder,
   portraits = [],

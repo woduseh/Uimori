@@ -56,8 +56,6 @@ export type Props = {
   tasks: number;
 };
 const reference = (value: { id: string; revision: number }) => `${value.id}@${value.revision}`;
-/** A menu item that opens a dialog closes its ⋯ and refocuses it first, so the dialog's focus
- *  restore lands on the still-visible summary instead of a hidden item. */
 function openFromMenu(event: MouseEvent<HTMLButtonElement>, run: () => void) {
   const menu = event.currentTarget.closest('details');
   if (menu) {
@@ -120,9 +118,7 @@ export function BotBranch(
   useEffect(() => {
     try {
       localStorage.setItem(`uimori.chat-folders.${botId}`, JSON.stringify(collapsed));
-    } catch {
-      /* Optional navigation storage. */
-    }
+    } catch {}
   }, [botId, collapsed]);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{
@@ -208,14 +204,11 @@ export function BotBranch(
       const message = reason instanceof Error ? reason.message : retainedMessage('transfer.m237');
       onError(message);
       if (owner === currentBot.current) setError(message);
-      // Refresh revisions after a conflict, retaining the user's editable form values.
       try {
         const value = await api<ChatFolder[]>(`/bots/${encodeURIComponent(owner)}/folders`);
         if (owner === currentBot.current && version === epoch.current) setFolders(value);
         await onChatsChanged();
-      } catch {
-        /* The original error remains visible. */
-      }
+      } catch {}
     } finally {
       operation.current = false;
       setBusy(false);
@@ -314,11 +307,8 @@ export function BotBranch(
     const key = `${botId}:${folderId ?? ''}`;
     const limit = visibleCount[key] ?? 5;
     const initial = items.slice(0, limit);
-    // Keep the selected chat accessible even if it lies beyond the displayed page.
     const selectedItem =
       destination === 'story' ? items.find((chat) => chat.id === selected) : undefined;
-    // A selected chat beyond the first page is a shortcut, not part of the visible
-    // sortable page. Keep it separate at the top so its actual position is not implied.
     const shown =
       selectedItem && !initial.includes(selectedItem) ? [selectedItem, ...initial] : initial;
     return (
@@ -415,8 +405,6 @@ export function BotBranch(
       </div>
     );
   }
-  // The blank space after a truncated list means "after the visible rows", not
-  // "append after every hidden chat". Individual row drops already use full indices.
   function firstHiddenId(folderId: string | null) {
     const key = `${botId}:${folderId ?? ''}`;
     const limit = visibleCount[key] ?? 5;
@@ -799,9 +787,7 @@ function FolderSettings({
             );
           }
         })
-        .catch(() => {
-          /* Keep the missing selection visible until the user explicitly replaces it. */
-        });
+        .catch(() => {});
     return () => {
       current = false;
     };
@@ -810,8 +796,6 @@ function FolderSettings({
     if (folder.revision <= base.revision || busy) return;
     if (!edited.title) setTitle(folder.title);
     if (!edited.persona) setPersona(folder.defaultPersona ? reference(folder.defaultPersona) : '');
-    // A draft still belongs to the revision the user started editing. A conflict refresh
-    // may update untouched fields, but cannot quietly authorize overwriting newer settings.
     if (!dirty) setBase(folder);
   }, [folder, base.revision, busy, edited.title, edited.persona, dirty]);
   function loadLatest() {

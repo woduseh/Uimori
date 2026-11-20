@@ -39,7 +39,6 @@ import './settings-layout.css';
 import './illustrations.css';
 
 type Draft = IllustrationSettingsView;
-/** undefined keeps the saved token, a string replaces it and null removes it on save. */
 type TokenChange = string | null | undefined;
 const NOVELAI_SIZES = [
   { width: 832, height: 1216, label: 'visuals.novelaiSizePortrait' },
@@ -49,7 +48,6 @@ const NOVELAI_SIZES = [
 type NovelAITestResult = ({ ok: true } & NovelAIAccount) | { ok: false; code: string };
 const validCutLimit = (value: number) =>
   Number.isInteger(value) && value >= 1 && value <= ILLUSTRATION_MAX_PER_SOURCE;
-// An empty or invalid limit is an edit in progress. Preserve its dependent counts.
 const clampToCutLimit = (count: number, limit: number) =>
   validCutLimit(limit) ? Math.min(count, limit) : count;
 type TestResult =
@@ -60,7 +58,6 @@ type TestResult =
     }
   | { ok: false; code: string; nodeErrors?: unknown };
 
-/** Global illustration settings. Frozen into each job at reservation; running jobs keep their copy. */
 function IllustrationEnvironmentEditor({
   library,
   activeGenerator,
@@ -334,9 +331,7 @@ function IllustrationEnvironmentEditor({
           code?: string;
         };
         if (typeof parsed.code === 'string') code = parsed.code;
-      } catch {
-        // A non-JSON failure is reported as unreachable.
-      }
+      } catch {}
       setNovelaiTest({ ok: false, code });
     } finally {
       setNovelaiTesting(false);

@@ -73,7 +73,6 @@ export function PushSettings() {
     setNotice('');
     setWarning('');
     try {
-      // Invoke the permission UI in this user gesture, before a network round-trip.
       const granted =
         Notification.permission === 'default'
           ? await Notification.requestPermission()
@@ -126,7 +125,6 @@ export function PushSettings() {
     setNotice('');
     setWarning('');
     try {
-      // Stop server sends first. Browser-side unsubscribe failure must not restore server consent.
       const saved = await api<PushInfo>(
         '/push/subscription',
         { clientId, expectedRevision: info.device.revision },

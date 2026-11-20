@@ -13,7 +13,6 @@ function AvatarImage({ url, initial }: { url: string; initial: string }) {
   );
 }
 
-/** Resolves only the supplied revision; a missing portrait never triggers a latest-version read. */
 export function ContentAvatar({
   content,
   title,

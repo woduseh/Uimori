@@ -352,7 +352,6 @@ export function ConnectionEditor({
     setRefreshWarning('');
     try {
       await work();
-      // The command has completed. A failed read must not ask the caller to repeat it.
       try {
         await reload();
       } catch (caught) {
@@ -528,9 +527,7 @@ export function ConnectionEditor({
           setJevPosition(index);
           try {
             localStorage.setItem('uimori-jev-display-position', String(index));
-          } catch {
-            /* Session choice stays usable. */
-          }
+          } catch {}
         }
       } else {
         const model = library.models.find((item) => item.id === id);

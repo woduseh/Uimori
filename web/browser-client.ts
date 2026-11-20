@@ -1,4 +1,3 @@
-/** Shared device identity, not authentication. Keep the existing key across upgrades. */
 let fallback: string | undefined;
 export function browserClientId(): string {
   try {

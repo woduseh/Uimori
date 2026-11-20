@@ -9,11 +9,8 @@ function saveCategoryPreference(
 ) {
   try {
     const current = JSON.parse(localStorage.getItem(key) ?? '{}');
-    // These keys are shared by the library and prompts; update only the current category.
     localStorage.setItem(key, JSON.stringify({ ...current, [category]: value }));
-  } catch {
-    /* Keep this session's choice in a restricted browser. */
-  }
+  } catch {}
 }
 
 export function saveLibrarySort(category: LibraryCategory, sort: LibrarySort) {

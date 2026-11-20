@@ -1,4 +1,3 @@
-/** Page-level entry points sit with the create action, not in a band of their own. */
 .prompt-library-actions {
   display: flex;
   flex-wrap: wrap;
@@ -70,7 +69,6 @@
 }
 
 @media (max-width: 760px) {
-  /* Keep prompt controls on the same two-row rhythm as the normal library. */
   .prompt-library .library-toolbar > .prompt-library-actions {
     order: 0;
     flex: none;

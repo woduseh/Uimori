@@ -1,7 +1,6 @@
 import { t } from './i18n.js';
 import { messages } from './locales/errors.js';
 
-/** Only local attachment codes can select a translated error. */
 export const requestFileErrors: Record<string, string> = Object.fromEntries(
   Object.entries(messages)
     .filter(([key]) => /^errors\.(?:REQUEST_FILES?_|FILE_)/u.test(key))

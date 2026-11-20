@@ -1,4 +1,3 @@
-/* Brand, quick actions and destinations are stable before the independently scrolling tree. */
 .bot-navigation .brand {
   display: flex;
   align-items: center;
@@ -35,7 +34,6 @@
   gap: 4px;
   margin: 0;
 }
-/* Navigation selection uses the same understated fill as the current chat. */
 .bot-navigation .nav-button[aria-current="page"],
 .bot-navigation .nav-button[aria-current="page"]:hover:not(:disabled) {
   background: var(--nav-item-selected);
@@ -46,7 +44,6 @@
   align-items: center;
   gap: 2px;
 }
-/* In the drawer the row is the dialog header; the hidden "탐색" title leaves room for the close button. */
 .navigation-dialog > .dialog-header > .navigation-quick-actions {
   flex: 1;
 }

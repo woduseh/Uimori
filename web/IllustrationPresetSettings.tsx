@@ -102,9 +102,7 @@ export function IllustrationPresetSettings({
     if (notify) {
       try {
         localStorage.setItem(changedKey, `${Date.now()}:${Math.random()}`);
-      } catch {
-        /* Saving is already durable on the server. */
-      }
+      } catch {}
     }
   }, []);
   useEffect(() => {

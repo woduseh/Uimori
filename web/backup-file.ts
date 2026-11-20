@@ -16,7 +16,6 @@ const invalid = (): never => {
 };
 const decoder = new TextDecoder();
 
-/** Inspect only the format. Existing preparation endpoints validate the complete selected backup. */
 export async function inspectBackupFile(file: File): Promise<BackupFileContents> {
   const signature = new Uint8Array(await file.slice(0, 16).arrayBuffer());
   if (decoder.decode(signature) === 'SQLite format 3\0') return { kind: 'database' };

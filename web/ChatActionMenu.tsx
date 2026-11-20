@@ -18,7 +18,6 @@ type ChatActions = {
   onError: (message: string) => void;
 };
 
-/** Both navigation views keep the same chat actions and confirmation boundaries. */
 export function ChatActionMenu({
   chat,
   disabled = false,
@@ -126,8 +125,6 @@ function ChatTitleEditor({
   const lock = useRef(false);
   const observedTitleRevision = useRef(chat.titleRevision ?? 0);
   const dirty = draft !== baseTitle;
-  // Background refreshes may publish an automatic title while the user is typing.
-  // Only adopt it when there is no manual draft to preserve.
   useEffect(() => {
     const changed = observedTitleRevision.current !== (chat.titleRevision ?? 0);
     observedTitleRevision.current = chat.titleRevision ?? 0;

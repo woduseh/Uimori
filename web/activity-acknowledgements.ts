@@ -1,4 +1,3 @@
-/** Browser-local notification metadata, never a change to the underlying job. */
 const prefix = 'uimori:activity-acknowledged:v1:';
 const maximumIdentityLength = 1024;
 const scopePrefix = (scope: string) => `${prefix}${JSON.stringify(scope)}:`;
@@ -25,19 +24,14 @@ export function readAcknowledgements(scope: string): string[] {
       const identity = key.slice(scoped.length);
       if (validIdentity(identity)) keys.add(identity);
     }
-  } catch {
-    // Available legacy confirmations can still protect the current view.
-  }
+  } catch {}
   try {
     const saved: unknown = JSON.parse(sessionStorage.getItem(legacyKey(scope)) ?? '[]');
     if (Array.isArray(saved)) for (const key of saved) if (validIdentity(key)) keys.add(key);
-  } catch {
-    // Optional legacy storage must not prevent reading durable confirmations.
-  }
+  } catch {}
   return [...keys];
 }
 
-/** Independent event keys avoid lost confirmations when two tabs write concurrently. */
 export function saveAcknowledgements(scope: string, identities: string[]): boolean {
   try {
     if (scope.length > 256) return false;
@@ -60,8 +54,6 @@ export function migrateAcknowledgements(scope: string): boolean {
   if (!saveAcknowledgements(scope, keys)) return false;
   try {
     sessionStorage.removeItem(legacyKey(scope));
-  } catch {
-    // The persistent copy is already saved; retaining the legacy copy is harmless.
-  }
+  } catch {}
   return true;
 }

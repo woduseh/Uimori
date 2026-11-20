@@ -30,7 +30,6 @@ const toolScopes = (): { id: AgentDefinition['tools'][number]; label: string }[]
 const inRange = (value: number, min: number, max: number) =>
   Number.isSafeInteger(value) && value >= min && value <= max;
 
-/** Disabled settings may remain unfinished without blocking the surrounding prompt save. */
 export function agentCollaborationIssue(
   value: AgentCollaboration | undefined,
   controls: PromptControl[]

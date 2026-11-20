@@ -1,7 +1,6 @@
 import type { Chat } from '../core/types.js';
 import { api, ApiError, definiteRejection } from './api.js';
 
-/** Persist admission identity before sending; UI locks belong to the calling view. */
 export async function requestChatFork(chatId: string, sourceId: string | null): Promise<Chat> {
   const key = `fork-command:${chatId}:${sourceId}`;
   const storage = sessionStorage;
@@ -12,10 +11,7 @@ export async function requestChatFork(chatId: string, sourceId: string | null): 
   const clear = () => {
     try {
       if (storage.getItem(key) === idempotencyKey) storage.removeItem(key);
-    } catch {
-      // Cleanup cannot change an accepted response or mask the original request error.
-      // Retaining the key is safe: a later retry resolves the same admission.
-    }
+    } catch {}
   };
   let next: Chat;
   try {

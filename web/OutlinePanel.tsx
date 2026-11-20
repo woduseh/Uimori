@@ -194,7 +194,6 @@ export function OutlinePanel({
       removeEventListener('focus', refresh);
     };
   }, [load]);
-  // Refresh writer changes and helper results when the outline is visible again.
   const cursor = state.detail?.reader.cursor;
   useEffect(() => {
     if (cursor !== undefined && !helperVisible) void load();
@@ -224,9 +223,7 @@ export function OutlinePanel({
       setFolded(next);
       try {
         retain(`${prefix}:folded`, next);
-      } catch {
-        /* Folding stays in memory. */
-      }
+      } catch {}
     }
     if (selectedId !== node.id) choose(node.id);
   });
@@ -235,9 +232,7 @@ export function OutlinePanel({
     setSelectedId(id);
     try {
       retain(`${prefix}:selected`, id);
-    } catch {
-      /* Selection stays in memory. */
-    }
+    } catch {}
     setEditing(false);
     setAdding(false);
     setDraft(null);
@@ -477,7 +472,6 @@ export function OutlinePanel({
         ...nodes.filter((node) => node.parentId === current.parentId).map((node) => node.position)
       ) + 1;
     const move = { op: 'move', id: selected.id, parentId: current.parentId, position };
-    // A larger level must reach its new parent before the parent check sees it, and vice versa.
     const moveFirst = outlineLevelIndex(current.level) < outlineLevelIndex(selected.level);
     apply(
       moveFirst
@@ -530,9 +524,7 @@ export function OutlinePanel({
                         setFolded(next);
                         try {
                           retain(`${prefix}:folded`, next);
-                        } catch {
-                          /* Folding stays in memory. */
-                        }
+                        } catch {}
                       }}
                     >
                       {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
@@ -896,9 +888,7 @@ export function OutlinePanel({
                         if (adding) {
                           try {
                             retain(`${prefix}:new`, null);
-                          } catch {
-                            /* The draft only stays in this tab. */
-                          }
+                          } catch {}
                         }
                         setAdding(false);
                         setEditing(false);

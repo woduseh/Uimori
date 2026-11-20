@@ -13,7 +13,6 @@ import { TransientNotice } from './TransientNotice.js';
 import { api } from './api.js';
 import './bookmarks.css';
 
-/** Registers reader edits with the existing editing boundary. */
 export const ReaderEditingContext = createContext<(id: string, editing: boolean) => void>(() => {});
 function useBookmarkEditing(id: string, editing: boolean) {
   const register = useContext(ReaderEditingContext);
@@ -80,7 +79,6 @@ function BookmarkEditor({
   }
   return (
     <>
-      {/* Close the nested confirmation first on unmount, then restore the editor opener. */}
       <Dialog
         open={discard}
         title={t('reader.unsavedBookmarkEdits')}
@@ -107,9 +105,7 @@ function BookmarkEditor({
             event.preventDefault();
             try {
               await save();
-            } catch {
-              // save keeps the error and unsaved input in the editor.
-            }
+            } catch {}
           }}
         >
           <fieldset disabled={busy}>
@@ -169,7 +165,6 @@ export function BookmarkButton({
     target: ReaderTarget;
     quote: string;
   } | null>(null);
-  // The same creation ID survives a lost response; retrying must not create another bookmark.
   const [boundaryId] = useState(() => `bookmark-save:${crypto.randomUUID()}`);
   useBookmarkEditing(boundaryId, busy);
   async function add() {

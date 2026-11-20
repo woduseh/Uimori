@@ -18,7 +18,6 @@ class PanelErrorBoundary extends Component<
   }
 }
 
-/** Create once at module scope so loading cannot change a mounted panel's identity. */
 export function deferredPanel<Props extends object>(
   label: string,
   loader: () => Promise<{ default: ComponentType<Props> }>,

@@ -1,4 +1,3 @@
-/** Only an explicitly marked theme body participates in nested reader scrolling. */
 export const THEME_BODY_SCROLL_SELECTOR = '[data-uimori-body-scroll][slot="body"]';
 
 export function themeBodyScroll(element: HTMLElement | null): HTMLElement | null {
@@ -22,7 +21,6 @@ export function readingScrollport(element: HTMLElement | null): HTMLElement | nu
   return null;
 }
 
-/** Find the passage actually visible through both the scene body and outer reader. */
 export function readerLocation(reader: HTMLElement, article?: HTMLElement) {
   const outer = reader.getBoundingClientRect();
   const scenes = article
@@ -37,8 +35,6 @@ export function readerLocation(reader: HTMLElement, article?: HTMLElement) {
   if (!source) return null;
   const scrollport = themeBodyScroll(source) ?? reader;
   const viewport = scrollport.getBoundingClientRect();
-  // An explicit scene action may remain visible after its whole body scrolls out
-  // of the outer viewport. Bookmark that body's own passage, not its clipped tail.
   const clippedBody =
     article &&
     scrollport !== reader &&

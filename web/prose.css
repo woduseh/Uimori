@@ -56,7 +56,6 @@
   background: var(--accent-soft);
 }
 
-/* Geometry markers preserve canonical anchors without breaking Markdown containers. */
 .reading-markdown {
   position: relative;
 }

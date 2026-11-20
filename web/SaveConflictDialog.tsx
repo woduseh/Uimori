@@ -10,7 +10,6 @@ export type SavedSettingField = { label: string; value: string };
 type SavedReview = SavedSettingField[] | { content: ReactNode; actions?: ReactNode };
 type SavedReviewSource = SavedReview | (() => SavedReview);
 
-/** Reviewing the saved version never changes the editable draft or its revision. */
 export function SaveConflictDialog({
   open,
   title,

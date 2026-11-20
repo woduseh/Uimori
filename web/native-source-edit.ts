@@ -13,7 +13,6 @@ const object = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 
-/** Parse only when Save or form preview is requested; incomplete JSON remains in the input. */
 export function editNativeSource(
   native: RisuContentSource,
   part: NativeSourcePart,

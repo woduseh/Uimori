@@ -4,7 +4,6 @@ import { RunningIcon } from './ui-icons.js';
 import './loading-state.css';
 import './activity-status.css';
 
-/** Fast reads stay quiet; slow reads and failures use the same recovery surface. */
 export function LoadingState({
   error = '',
   loading = !error,

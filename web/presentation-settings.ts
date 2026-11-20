@@ -1,4 +1,3 @@
-/** Optional browser presentation only; recovery data keeps its own storage contract. */
 export function readPresentationSetting(key: string): string | null {
   try {
     return localStorage.getItem(key);
@@ -10,9 +9,7 @@ export function readPresentationSetting(key: string): string | null {
 export function writePresentationSetting(key: string, value: string) {
   try {
     localStorage.setItem(key, value);
-  } catch {
-    // The current session still uses the chosen presentation.
-  }
+  } catch {}
 }
 
 export function readPresentationChoice<T extends string | number>(

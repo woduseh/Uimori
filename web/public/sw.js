@@ -1,5 +1,3 @@
-// No fetch handler, CacheStorage, background sync or deferred authoring. Worker updates
-// follow the browser lifecycle and never force-refresh a page containing a user's draft.
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
@@ -140,7 +138,6 @@ function localeStore(action, locale) {
 }
 self.addEventListener('message', (event) => {
   if (event.data?.type !== 'uimori:ui-language' || !validLocale(event.data.locale)) return;
-  // Only same-origin app clients may change presentation; no task state is written.
   if (!event.source?.url || new URL(event.source.url).origin !== self.location.origin) return;
   localeWrites = localeWrites.then(() => localeStore('write', event.data.locale)).catch(() => {});
   event.waitUntil(localeWrites);
@@ -163,9 +160,7 @@ self.addEventListener('push', (event) => {
   let payload;
   try {
     payload = event.data?.json();
-  } catch {
-    /* Unsupported data never becomes executable markup or a URL. */
-  }
+  } catch {}
   event.waitUntil(
     (async () => {
       const catalog = notificationCatalogs[await notificationLocale()];
@@ -209,8 +204,6 @@ self.addEventListener('notificationclick', (event) => {
       );
       const existing = candidates.find((client) => client.focused) ?? candidates[0];
       if (existing) {
-        // Let the existing application's unsaved-edit navigation guard decide. Never navigate()
-        // or reload a client, and never take an arbitrary external URL from a push payload.
         if (target) existing.postMessage({ type: 'uimori:notification-open', payload: target });
         await existing.focus();
       } else await self.clients.openWindow(url.href);

@@ -25,7 +25,6 @@ import { IconButton } from './IconButton.js';
 import { CheckIcon, UploadIcon } from './ui-icons.js';
 import './risu-import.css';
 
-/** Parse only the complete host diagnostic contract; embedded card values remain verbatim. */
 function presetFindingMessage(finding: RisuPresetImportPreview['findings'][number]): string {
   switch (finding.code) {
     case 'RISU_PRESET_HOST_MEMORY':
@@ -51,7 +50,6 @@ function presetFindingMessage(finding: RisuPresetImportPreview['findings'][numbe
   return translateMessage(finding.message);
 }
 
-/** Closing the dialog retains the reviewed file and exact uncertain submission. */
 export function RisuPresetImport({
   showTrigger = true,
   reload,

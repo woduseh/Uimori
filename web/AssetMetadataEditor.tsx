@@ -5,7 +5,6 @@ import { api } from './api.js';
 import { SaveButton } from './SaveButton.js';
 import { NoticeBanner } from './NoticeBanner.js';
 
-/** Small local form: changing metadata never uploads or recompresses an image. */
 export function AssetMetadataEditor({
   asset,
   onSaved,
@@ -19,7 +18,6 @@ export function AssetMetadataEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
-    // Refresh pristine fields, while an edited draft keeps its original CAS revision.
     if (
       busy ||
       asset.revision <= accepted.current.revision ||

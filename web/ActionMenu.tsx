@@ -3,7 +3,6 @@ import type { LucideIcon } from 'lucide-react';
 import { MoreIcon } from './ui-icons.js';
 import './ui-controls.css';
 
-/** Below this width menus open as bottom sheets instead of anchored popovers (ui-controls.css). */
 export const SHEET_MEDIA = '(max-width: 600px)';
 
 export function ActionMenu({
@@ -24,8 +23,6 @@ export function ActionMenu({
   const ref = useRef<HTMLDetailsElement>(null);
   const [open, setOpen] = useState(false);
   const [sheet, setSheet] = useState(false);
-  // Narrow screens open every menu as a bottom sheet (CSS): a popover anchored to its trigger has
-  // no room above or below once it holds more than a few rows, and gets clipped by the header.
   useLayoutEffect(() => {
     if (!open) return;
     const media = matchMedia(SHEET_MEDIA);
@@ -46,17 +43,14 @@ export function ActionMenu({
       )
         node.open = false;
     };
-    // Close only when scrolling can move the trigger; other panels scroll independently. A sheet
-    // is pinned to the viewport and only closes by pointer, Escape or blur.
     if (!sheet) document.addEventListener('scroll', scroll, true);
     return () => {
       document.removeEventListener('scroll', scroll, true);
     };
   }, [open, viewport, sheet]);
   useEffect(() => {
-    // Reads the native open state: the details toggle event is asynchronous, so a tap right
-    // after opening must still dismiss. The sheet's scrim is the details' own ::before, so a tap
-    // on it reports the details itself.
+    // The details toggle event fires asynchronously (HTML Living Standard, the details element),
+    // so a tap right after opening must still dismiss.
     const dismiss = (event: PointerEvent) => {
       const node = ref.current;
       if (
@@ -71,8 +65,6 @@ export function ActionMenu({
     return () => document.removeEventListener('pointerdown', dismiss);
   }, []);
   useEffect(() => {
-    // A dialog opened from an item (delete confirmation, picker) finishes the choice when it
-    // closes, whichever way: the menu closes with it and focus returns to the trigger.
     const node = ref.current;
     if (!node) return;
     const finish = () => {
@@ -93,8 +85,8 @@ export function ActionMenu({
       activeDialogs.delete(event.target);
       finish();
     };
-    // A successful deletion can unmount its dialog before the asynchronous native close event
-    // bubbles through this menu. Only track dialogs owned by this menu, excluding nested menus.
+    // A dialog's close event fires asynchronously, so a successful deletion can unmount its
+    // dialog before the event bubbles through this menu.
     const observer = new MutationObserver(() => {
       const removed = [...activeDialogs].some((dialog) => !node.contains(dialog));
       const currentDialogs = ownedDialogs();
@@ -114,8 +106,6 @@ export function ActionMenu({
       node.removeEventListener('close', closed, true);
     };
   }, []);
-  // A dialog *inside* the menu (confirmation, picker) owns its own controls; the menu itself may
-  // sit inside a dialog such as the navigation drawer, which must not count.
   const insideNestedDialog = (element: Element) => {
     const dialog = element.closest('dialog');
     return !!dialog && !!ref.current?.contains(dialog);
@@ -134,7 +124,6 @@ export function ActionMenu({
       onToggle={(event) => setOpen(event.currentTarget.open)}
       onKeyDown={(event) => {
         if (event.key !== 'Escape' || !event.currentTarget.open) return;
-        // An inner native dialog owns Escape, including when this menu is itself in a dialog.
         const targetDialog = (event.target as Element).closest('dialog[open]');
         if (targetDialog && targetDialog !== event.currentTarget.closest('dialog[open]')) return;
         event.stopPropagation();
@@ -158,8 +147,6 @@ export function ActionMenu({
       <div
         className="action-menu-body"
         onClick={(event) => {
-          // Choosing an item closes the menu, unless the item opens something inside it (a
-          // confirmation dialog, a picker). The check runs after the item's own handler committed.
           const item = (event.target as Element).closest('button');
           if (
             !item ||

@@ -89,8 +89,6 @@ function rememberDraft(key: string, value: Draft | null) {
   else sessionStorage.removeItem(key);
 }
 
-/** Chat overrides are an explicit user edit. Background refreshes only update the
- * comparison base; they never adopt, discard, or replay the draft. */
 export function ChatVariables({ chatId, active = true, refreshKey, onChange }: Props) {
   useI18n();
   const storageKey = `uimori:chat-variable-draft:${chatId}`;
@@ -197,9 +195,7 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
       setDraft(null);
       try {
         rememberDraft(storageKey, null);
-      } catch {
-        /* The committed response is authoritative even when local cleanup is unavailable. */
-      }
+      } catch {}
       setNotice(uiMessage('chatsettings.m162'));
       onChange?.();
     } catch (cause) {
@@ -214,9 +210,7 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
         setDraft(rejected);
         try {
           rememberDraft(storageKey, rejected);
-        } catch {
-          /* The in-memory draft remains available. */
-        }
+        } catch {}
       }
       if (cause instanceof ApiError && cause.status === 409) await load();
     } finally {
@@ -405,7 +399,6 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
               value={text}
               disabled={!view || loading || busy || Boolean(view?.pending) || hasUncertainSave}
               onChange={(event) => {
-                // A recovered invalid buffer also opens JSON. Keep that mode while it becomes valid.
                 setRaw(true);
                 updateDraft(event.target.value);
               }}
@@ -423,9 +416,7 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
               setDraft(null);
               try {
                 rememberDraft(storageKey, null);
-              } catch {
-                /* The in-memory draft was explicitly reset. */
-              }
+              } catch {}
               setError('');
               setNotice(uiMessage('chatsettings.m188'));
             }}

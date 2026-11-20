@@ -23,13 +23,10 @@ function storedDraft(key: string, raw: string): Draft {
       typeof value.text === 'string'
     )
       return { key, revision: Number(value.revision), text: value.text };
-  } catch {
-    // An unrecognized legacy buffer remains readable and copyable without rewriting it.
-  }
+  } catch {}
   return { key, revision: null, text: raw };
 }
 
-/** Retired artifacts keep their exact message reference, saved revisions and device drafts readable. */
 export function HelperArtifactCard({
   id,
   revision,

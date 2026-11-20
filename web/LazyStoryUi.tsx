@@ -4,7 +4,6 @@ import { t } from './i18n.js';
 
 const Surface = lazy(() => import('./StoryUi.js').then((module) => ({ default: module.StoryUi })));
 
-/** The SDK renderer requires HTMLElement; ordinary readers and SSR never load it eagerly. */
 export function StoryUi(props: ComponentProps<typeof Surface>) {
   return (
     <Suspense

@@ -1,4 +1,3 @@
-/** Only navigation identifiers belong here; editor contents keep their existing owners. */
 export function readSettingsLocation(key: string, available: readonly string[], fallback: string) {
   try {
     const saved = localStorage.getItem(key);
@@ -11,7 +10,5 @@ export function readSettingsLocation(key: string, available: readonly string[], 
 export function rememberSettingsLocation(key: string, section: string) {
   try {
     localStorage.setItem(key, section);
-  } catch {
-    // Navigation remains usable when browser storage is unavailable.
-  }
+  } catch {}
 }

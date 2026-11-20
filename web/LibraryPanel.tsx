@@ -143,9 +143,7 @@ function savedViews(): Record<PrimaryLibraryTab, ViewMode> {
     >;
     for (const { id } of libraryTabs)
       if (stored[id] === 'cards' || stored[id] === 'list') defaults[id] = stored[id];
-  } catch {
-    /* A restricted browser still has sensible defaults. */
-  }
+  } catch {}
   return defaults;
 }
 function savedCardRatios(): Record<PrimaryLibraryTab, CardRatio> {
@@ -161,9 +159,7 @@ function savedCardRatios(): Record<PrimaryLibraryTab, CardRatio> {
     >;
     for (const { id } of libraryTabs)
       if (cardRatios.includes(stored[id] as CardRatio)) defaults[id] = stored[id] as CardRatio;
-  } catch {
-    /* A restricted browser still has sensible defaults. */
-  }
+  } catch {}
   return defaults;
 }
 function savedSorts(): Record<PrimaryLibraryTab, SortMode> {
@@ -180,9 +176,7 @@ function savedSorts(): Record<PrimaryLibraryTab, SortMode> {
     for (const { id } of libraryTabs)
       if (stored[id] === 'name' || stored[id] === 'name-desc' || stored[id] === 'manual')
         defaults[id] = stored[id];
-  } catch {
-    /* A restricted browser still has sensible defaults. */
-  }
+  } catch {}
   return defaults;
 }
 function savedManualOrders(): Record<PrimaryLibraryTab, string[]> {
@@ -194,9 +188,7 @@ function savedManualOrders(): Record<PrimaryLibraryTab, string[]> {
     for (const { id } of libraryTabs)
       if (Array.isArray(stored[id]))
         defaults[id] = stored[id].filter((value): value is string => typeof value === 'string');
-  } catch {
-    /* A restricted browser still has sensible defaults. */
-  }
+  } catch {}
   return defaults;
 }
 export function LibraryPanel({
@@ -226,7 +218,6 @@ export function LibraryPanel({
   onConfigureStartStory?: (bot: Content) => void;
   onUseContent?: (content: Content, role: PrimaryLibraryTab) => void;
   initialTab?: PrimaryLibraryTab;
-  /** Bumped when the navigation entry is chosen, so the same tab still returns to its list. */
   listRequest?: number;
   initialContentId?: string | null;
   onInitialContentHandled?: (id: string) => void;
@@ -271,8 +262,6 @@ export function LibraryPanel({
   latestLibrary.current = library;
   const externalTab = useRef(initialTab);
   const organizer = useLibraryOrganization(library, reload, onError);
-  // The list and detail share a scrollport. A newly opened resource must start at its heading,
-  // not at the list position retained by the browser.
   useLayoutEffect(() => {
     if (detail || editing)
       panelRef.current?.closest<HTMLElement>('.destination-scroll')?.scrollTo({ top: 0 });
@@ -324,7 +313,6 @@ export function LibraryPanel({
   useEffect(() => {
     if (externalList.current === listRequest) return;
     externalList.current = listRequest;
-    // `navigate` returns early when the list is already showing and asks to keep an unsaved draft.
     navigate(initialTab);
   }, [listRequest]);
   useEffect(() => {
@@ -546,7 +534,6 @@ export function LibraryPanel({
     );
   }
   const categoryEmpty = !!library && categoryItems.length === 0 && !query;
-  // Root and unclassified views show folders instead of an empty state while filed items exist.
   const emptyState =
     filtered.length === 0 &&
     !((folder === 'all' || folder === 'unclassified') && !query.trim() && categoryItems.length > 0);
@@ -555,9 +542,7 @@ export function LibraryPanel({
     setViews(next);
     try {
       localStorage.setItem('uimori-library-views', JSON.stringify(next));
-    } catch {
-      /* Keep this session's choice. */
-    }
+    } catch {}
   }
   function setSort(mode: SortMode) {
     const next = { ...sortByTab, [tab]: mode };
@@ -649,9 +634,7 @@ export function LibraryPanel({
     setCardRatioByTab(next);
     try {
       localStorage.setItem('uimori-library-card-ratios', JSON.stringify(next));
-    } catch {
-      /* Keep this session's choice. */
-    }
+    } catch {}
   }
   function itemMenu(item: Content) {
     const manualIndex = filtered.findIndex((entry) => entry.id === item.id);
@@ -1478,8 +1461,6 @@ function ContentEditor({
           ]);
         }
       }
-      // The durable save is complete. A list refresh must not keep the editor locked
-      // or turn an acknowledged save into an apparent failed/retryable write.
       void Promise.resolve()
         .then(reload)
         .catch(() => {

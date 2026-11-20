@@ -32,9 +32,7 @@ function remember(key: string, value: string | null) {
   try {
     if (value === null) localStorage.removeItem(key);
     else localStorage.setItem(key, value);
-  } catch {
-    // Selection remains available in the current window.
-  }
+  } catch {}
 }
 type HelperCreationRequest = { scope: HelperScope; requestKey: string; projectId?: string | null };
 export function forgetHelperSession(conversation: HelperConversation) {
@@ -50,7 +48,6 @@ export function selectedHelperSession(scope: HelperScope) {
   return read(`uimori:helper-session-scope:${JSON.stringify(scope)}`);
 }
 
-/** Session selection belongs to the chat; drafts and event cursors belong to each session. */
 export function useHelperSessions(
   open: boolean,
   scope: HelperScope,
@@ -71,8 +68,6 @@ export function useHelperSessions(
   const selectionVersions = useRef(new Map<string, number>());
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
-  // The scope each selection was made under. A selection survives until the reader moves to
-  // another chat; after that the panel resolves the session belonging to the chat on screen.
   const selectionScopes = useRef(new Map<string, string>());
   const viewedScope = useRef(scopeKey);
   viewedScope.current = scopeKey;

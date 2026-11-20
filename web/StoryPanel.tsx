@@ -21,7 +21,6 @@ type PanelProps = {
   onAskHelper?: (request: string) => void;
 };
 const id = encodeURIComponent;
-/** Ignore saved-note reads that return after navigation or unmount. */
 function useScope(key: string) {
   const scope = useRef({ key, alive: true, generation: 0 });
   if (scope.current.key !== key) {

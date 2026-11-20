@@ -30,9 +30,7 @@ type Props = {
   refresh: () => Promise<void>;
   onError: (message: string) => void;
   children?: ReactNode;
-  /** Scene number and badges rendered before the status glyph. */
   leading?: ReactNode;
-  /** Badges shown after the status glyph, such as a manual-translation marker. */
   badges?: ReactNode;
 };
 
@@ -67,7 +65,6 @@ function TurnActivityContent({
   const visibleRevision = useRef(revision);
   if (open) visibleRevision.current = revision;
   const [now, setNow] = useState(Date.now);
-  // The reader owns current-source/hash projection. Image views have independent latest slots.
   const currentJobs = [
     ...new Map(
       jobs
@@ -90,7 +87,6 @@ function TurnActivityContent({
       item.kind !== 'status' &&
       (item.kind === 'main' ? item.id === run.id : !!source && item.sourceRevision === source.id)
   );
-  // Illustrations attach to the response text; the reader strip owns their actions.
   const illustrations = allIllustrations.filter(
     (item) => source && item.sourceRevision === source.id && item.sourceHash === source.hash
   );
@@ -156,7 +152,6 @@ function TurnActivityContent({
   const uncertain = !connected && running;
   const hasIssue = attention(run.status) || entries.some((item) => attention(item.status));
   const tone = uncertain ? 'uncertain' : hasIssue ? 'issue' : running ? 'running' : 'done';
-  // A finished response shows only the check; its text stays for assistive technology.
   const quiet = tone === 'done' && !!source;
   const text = uncertain ? t('helpers.m252') : summary || t('helpers.m253');
   if (authored && !entries.length)

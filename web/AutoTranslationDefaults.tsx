@@ -6,7 +6,6 @@ import { Switch } from './BooleanControls.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 
-/** Unlike device-only reading preferences, translation jobs use the saved server choice. */
 export function AutoTranslationDefaults() {
   useI18n();
   const [defaults, setDefaults] = useState<Defaults | null>(null);
@@ -38,7 +37,6 @@ export function AutoTranslationDefaults() {
     if (!defaults || saving) return;
     setSaving(true);
     setError('');
-    // Show the chosen state immediately; a rejected write restores the saved choice.
     setDefaults({ ...defaults, autoTranslate });
     try {
       setDefaults(

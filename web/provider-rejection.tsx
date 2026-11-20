@@ -1,7 +1,6 @@
 import { t, useI18n } from './i18n.js';
 import type { ProviderRejection, RejectedOption } from '../core/provider-rejection.js';
 
-/** User-facing names for the option groups a provider can reject. */
 const rejectedOptionLabels: Record<RejectedOption, string> = {
   thinking: 'errors.option.thinking',
   temperature: 'Temperature',
@@ -33,7 +32,6 @@ export function rejectionMessage(rejection: ProviderRejection): string {
       ? t('errors.rejectionDetails')
       : t('errors.rejectionUnspecified');
 }
-/** The provider's verdict on saved options; the app never rewrites the option on its own. */
 export function ProviderRejectionNotice({ rejection }: { rejection: ProviderRejection }) {
   useI18n();
   const optionNamed = rejection.options.some((option) => option !== 'input');

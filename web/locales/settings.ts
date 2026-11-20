@@ -1,4 +1,3 @@
-/** Settings UI only. User data and model inputs are never translated here. */
 export const messages = {
   'settings.translationPreviousSceneTokens': {
     ko: '이전 두 장면의 참고 토큰 한도',

@@ -54,7 +54,6 @@ export function FontSettings({
       return true;
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : message('fonts.failed'));
-      // A failed or uncertain write is only read back, never repeated automatically.
       void state.refresh();
       return false;
     } finally {

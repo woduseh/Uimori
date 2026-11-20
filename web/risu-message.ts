@@ -9,14 +9,12 @@ export type PreparedRisuMessage = {
 };
 export const risuActionKey = (kind: string, name: string) => JSON.stringify([kind, name]);
 
-/** Trusted personal-card HTML, with the existing no-author-JavaScript contract preserved. */
 export function prepareRisuMessage(html: string, css = ''): PreparedRisuMessage {
   if (html.length > 4_000_000 || css.length > 2_000_000)
     throw new Error('RISU_NATIVE_MESSAGE_LIMIT');
   const template = document.createElement('template');
   template.innerHTML = `<div>${html}</div>`;
   const styles = new Map<string, string>();
-  // Keep CSS text out of both the sanitizer and a second HTML parse (notably SVG data URLs).
   for (const node of template.content.querySelectorAll('style')) {
     const key = crypto.randomUUID();
     const placeholder = document.createElement('span');
@@ -36,7 +34,6 @@ export function prepareRisuMessage(html: string, css = ''): PreparedRisuMessage 
     ],
     ALLOW_DATA_ATTR: true,
     ALLOW_ARIA_ATTR: true,
-    // IDs live in this message's ShadowRoot, not in the application's named-property scope.
     SANITIZE_DOM: false,
     FORBID_TAGS: ['script', 'iframe', 'frame', 'object', 'embed', 'base', 'meta', 'link'],
     FORBID_ATTR: ['srcdoc', 'formaction', 'action', 'autofocus', 'nonce'],
@@ -52,8 +49,6 @@ export function prepareRisuMessage(html: string, css = ''): PreparedRisuMessage 
     style.textContent = value.replaceAll('<', '\\3C ');
     node.replaceWith(style);
   }
-  // A Markdown paragraph nested inside an authored HTML panel is still author-owned.
-  // Only the known Markdown containers between a marker and the message root are admitted.
   for (const node of template.content.querySelectorAll('[data-uimori-prose]')) {
     let parent = node.parentElement;
     while (
@@ -75,7 +70,6 @@ export function prepareRisuMessage(html: string, css = ''): PreparedRisuMessage 
   }
   const actions = new Set<string>();
   for (const node of template.content.querySelectorAll('[risu-trigger],[risu-btn]')) {
-    // Named form controls can shadow methods on HTMLFormElement.
     const kind = Element.prototype.hasAttribute.call(node, 'risu-trigger') ? 'trigger' : 'button';
     const name =
       Element.prototype.getAttribute.call(node, kind === 'trigger' ? 'risu-trigger' : 'risu-btn') ??

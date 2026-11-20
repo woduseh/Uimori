@@ -18,7 +18,6 @@ export function LazyDiagnostics<T>({
   title: ReactNode;
   initiallyOpen?: boolean;
   disclosure?: boolean;
-  /** Kept mounted during reloads so an action's open dialog retains its state. */
   actions?: ReactNode;
   children: (value: T) => ReactNode;
 }) {

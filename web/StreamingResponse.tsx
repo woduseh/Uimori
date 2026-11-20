@@ -48,7 +48,6 @@ export function StreamingStoryText({ text, style, runId }: StreamingStoryProps) 
 
 const active = (status?: string) => status === undefined || ['queued', 'running'].includes(status);
 
-/** Mount the reader only after an explicit request to inspect an incomplete answer. */
 export function PartialResponse({ children }: { children: ReactNode }) {
   useI18n();
   const [open, setOpen] = useState(false);
@@ -68,7 +67,6 @@ type ResponseProps = {
   storyUiStyle?: StoryStyle;
 };
 
-/** Final answers belong to Source/helper messages, never to a completed transport stream. */
 export function ResponseDisplay({ mode, ...props }: ResponseProps & { mode: ResponseDisplayMode }) {
   useI18n();
   if (mode === 'stream') return <StreamingResponse {...props} />;
@@ -83,7 +81,6 @@ export function ResponseDisplay({ mode, ...props }: ResponseProps & { mode: Resp
   );
 }
 
-/** Durable cursor batches avoid an extra permanent HTTP/1 connection per visible task. */
 export function StreamingResponse({
   taskKind,
   taskId,
@@ -136,8 +133,6 @@ export function StreamingResponse({
         cursor = chunk.seq;
         added.push(chunk);
       }
-      // The parent replaces this view when its canonical message arrives. A completed
-      // stream can arrive first; keep already displayed text during that handoff.
       if (settled) buffered.push(...added);
       else if (added.length) setChunks((old) => [...old, ...added]);
       setStatus(page.status);
@@ -161,8 +156,6 @@ export function StreamingResponse({
       clearTimeout(timer);
       polling = true;
       try {
-        // Drain committed pages sequentially, then release the connection before the next poll.
-        // Unmount aborts only this read; hiding pauses later reads without losing the cursor.
         let page: ResponseStreamPage;
         do {
           page = await api<ResponseStreamPage>(

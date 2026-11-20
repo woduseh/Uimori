@@ -3,7 +3,6 @@ const scoped = (rules: string, attribute: string, id: string) =>
     :scope[${attribute}][data-story-ui-style] { ${rules} }
   }`;
 
-/** Parse first so authored braces cannot escape the surface's selector scope. */
 export function scopedStoryUiCss(css: string, id: string): string {
   if (!css.trim() || typeof CSSStyleSheet === 'undefined') return '';
   const sheet = new CSSStyleSheet();
@@ -18,11 +17,6 @@ const URL_CALL = /url\([^)]*\)/gi;
 const FETCHING = /(?:image-set|src|image|element|cross-fade)\(/i;
 const ANIMATION = /^(?:-webkit-)?animation(?:-name)?$/;
 
-/**
- * CSS written by the model for one block. Unlike a theme the user saved, it is generated
- * text: it may style the block freely, but it must not reach the network, define page-wide
- * names, or outrank the host's own guards. The block element clips what it paints.
- */
 export function modelStoryUiCss(css: string, id: string): string {
   if (!css.trim() || typeof CSSStyleSheet === 'undefined') return '';
   const sheet = new CSSStyleSheet();
@@ -40,7 +34,6 @@ export function modelStoryUiCss(css: string, id: string): string {
     }
   };
   collect(sheet.cssRules);
-  // A stored image is the only thing a declaration may load.
   const fetches = (value: string) =>
     FETCHING.test(value) || (value.match(URL_CALL) ?? []).some((url) => !STORED_IMAGE.test(url));
   const clean = (style: CSSStyleDeclaration): string => {
@@ -54,8 +47,6 @@ export function modelStoryUiCss(css: string, id: string): string {
           style.getPropertyPriority(name)
         );
     }
-    // A shorthand holding var() has no readable longhands, so the block's text is checked
-    // as a whole. !important is dropped so the host's own guards keep the last word.
     const text = style.cssText;
     return fetches(text) ? '' : text.replace(/\s*!\s*important/gi, '');
   };
@@ -79,10 +70,8 @@ export function modelStoryUiCss(css: string, id: string): string {
           rule instanceof CSSContainerRule
         )
           return `${rule.cssText.slice(0, rule.cssText.indexOf('{'))}{ ${write(rule.cssRules)} }`;
-        // Declarations written after a nested rule arrive as a rule of their own.
         if (rule.constructor.name === 'CSSNestedDeclarations')
           return clean((rule as unknown as { style: CSSStyleDeclaration }).style);
-        // @import, @font-face, @property and the rest would act on the whole page.
         return '';
       })
       .join('\n');

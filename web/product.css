@@ -57,7 +57,6 @@
   gap: 16px;
   margin: 0;
 }
-/* A group inside a group is a label, not a second card. Only the outer one draws a box. */
 .control-grid .control-grid {
   padding: 0;
   border: 0;
@@ -79,12 +78,10 @@
   flex-wrap: wrap;
   margin-top: 16px;
 }
-/* Destructive actions sit apart from the confirm pair, on the leading edge, on every screen. */
 .form-actions > .danger,
 .form-actions > .delete-control {
   margin-right: auto;
 }
-/* Destructive confirmations read as destructive. */
 .danger {
   color: var(--error);
   border-color: var(--error-line);

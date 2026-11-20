@@ -54,9 +54,6 @@ import {
 const lastWorkspaceKey = 'uimori:last-workspace';
 function semanticReaderTarget(search: string): ReaderTarget | null {
   const params = new URLSearchParams(search);
-  // A bare ?source= URL chooses the reader page and must still allow this browser's
-  // finer sessionStorage position to win on reload. Search/bookmark/push targets carry
-  // semantic location metadata through readerTargetUrl(), including an explicit mode.
   return ['mode', 'anchor', 'contentHash', 'position'].some((key) => params.has(key))
     ? readerTargetFromUrl(search)
     : null;
@@ -69,9 +66,7 @@ function initialView(restore = false) {
     try {
       const saved = JSON.parse(localStorage.getItem(lastWorkspaceKey) || 'null');
       if (saved?.destination === 'story' && typeof saved.chatId === 'string') chat = saved.chatId;
-    } catch {
-      // Storage is optional; an unavailable or invalid workspace starts in the library.
-    }
+    } catch {}
   }
   return {
     chat,
@@ -230,9 +225,7 @@ export function useStory() {
           chatId: destination === 'story' ? selected : null,
         })
       );
-    } catch {
-      // Restoring the last workspace must not be required to read or edit a chat.
-    }
+    } catch {}
   }, [destination, selected, detail]);
   useEffect(() => {
     if (initial.chat && !location.search && !location.hash)
@@ -252,7 +245,6 @@ export function useStory() {
   const navigate = useCallback((action: ReaderNavigationAction) => {
     const previous = navigation.current;
     const next = transitionReaderNavigation(previous, action);
-    // Publish intent synchronously: an HTTP response can settle before React renders again.
     navigation.current = next;
     if (next.epoch !== previous.epoch) {
       restoredView.current = '';
@@ -296,8 +288,6 @@ export function useStory() {
         )
           return false;
         if (document.hidden || navigation.current.destination !== 'story') {
-          // Explicit navigation and local actions also own reads outside the SSE scheduler.
-          // If visibility changes during one, leave a full target for the next visible screen.
           readerSync.current?.request(0, true);
           return false;
         }
@@ -323,9 +313,6 @@ export function useStory() {
         try {
           value = await api<ReaderDetail>(`/chats/${id}/reader?${params}`);
         } catch (error) {
-          // Native card actions replace an immutable suffix. An SSE refresh can arrive
-          // before the action response, while this page still names the old source.
-          // Only rebase a page we already read; invalid explicit navigation stays an error.
           if (!applicable()) return;
           if (!cached || !(error instanceof ApiError) || error.status !== 404) throw error;
           const rebasedParams = new URLSearchParams();
@@ -513,8 +500,6 @@ export function useStory() {
       refresh: (incremental) => refresh(selected, incremental),
       cursor: () => readerCache.current?.detail.reader.cursor ?? -1,
       onError: (error) => {
-        // A missing page owns its centered error; background refresh failures keep
-        // the visible manuscript and use the ordinary error outlet.
         if (readerCache.current?.key === readerQuery.current.key)
           setError(error instanceof Error ? error : String(error));
       },
@@ -532,7 +517,6 @@ export function useStory() {
       stream.onerror = () => {
         if (alive) setConnected(false);
       };
-      // Batch event bursts; refreshVersion still rejects out-of-order HTTP responses.
       stream.onmessage = (event) => {
         if (!alive || navigation.current.chat !== selected) return;
         const message = JSON.parse(event.data) as { kind: string; seq?: number; entityId?: string };
@@ -560,8 +544,6 @@ export function useStory() {
           void loadLibrary().catch((e) => {
             if (alive) setError(e);
           });
-        // Initial/reconnected streams carry a current cursor, not the entire event log.
-        // Refresh after subscribing so writes between the initial HTTP read and SSE cannot be missed.
         sync.request(message.seq ?? 0, message.kind === 'snapshot');
       };
       return stream;
@@ -598,7 +580,6 @@ export function useStory() {
     const epoch = view.epoch;
     if (selected && destination === 'story') {
       restoredView.current = '';
-      // A repeated selection needs a fresh read, but can keep its already displayed page.
       if (readerCache.current?.key !== readerQuery.current.key) setDetail(null);
       if (document.hidden) {
         readerSync.current?.request(0, true);
@@ -964,8 +945,6 @@ export function useStory() {
       } else {
         const article = saved?.source ? document.getElementById(`source-${saved.source}`) : null;
         if (saved?.anchor && article && node.contains(article)) {
-          // Reuse the existing navigation owner while async native presentations acquire height.
-          // Any user scroll/input immediately releases it, just like an explicit scene jump.
           holdNavigationPosition(node, {
             kind: 'source',
             element: article,
@@ -1074,7 +1053,6 @@ export function useStory() {
         navigation.current.epoch === reportEpoch &&
         navigation.current.destination === 'story';
       try {
-        // A late acknowledgement must not undo a newer reader selection, including A → B → A.
         if (current() && result.chatId === chatId) {
           chooseSource(result.headRevision ?? '', true);
           reportEpoch = navigation.current.epoch;
@@ -1095,9 +1073,7 @@ export function useStory() {
     setReaderTarget({ ...target });
     try {
       sessionStorage.setItem(`reader-mode:${target.sourceId}`, target.representation);
-    } catch {
-      /* Optional view cache. */
-    }
+    } catch {}
     if (replace) history.replaceState(null, '', readerTargetUrl(target));
     else history.pushState(null, '', readerTargetUrl(target));
     navigate({
@@ -1168,7 +1144,6 @@ export function useStory() {
     const sentEpoch = navigation.current.epoch;
     const commandKey = commandStorageKey(chat.id);
     const previous = readCommand(commandKey);
-    // Recovering an uncertain admission reuses its key even if SSE already shows a running run.
     if ((!previous && activeRun()) || (retryRunId && (reuseBlocked || !canReuseRun(retryRunId))))
       return false;
     if (
@@ -1188,8 +1163,6 @@ export function useStory() {
         (requestDraft.current.text === previous.payload.request ? requestDraft.current.token : ''))
       : requestDraft.current.token;
     const sentImages = requestDraft.current.images;
-    // An uncertain request keeps its original snapshot as well as its key.
-    // A newer draft is never silently sent after recovering that earlier request.
     const payload: RunPayload = previous?.payload ?? {
       request: editedRequest ?? retryRun?.request ?? composerDraft.read(),
       ...(editedRequest !== undefined ? { editedRequest: true } : {}),
@@ -1288,8 +1261,6 @@ export function useStory() {
         );
         return false;
       }
-      // Legacy text-only drafts have no stored generation until their first edit.
-      // Publish it before admission so all cleanup can use the same token owner.
       if (!preserveDraft) rememberRequestDraft(sentKey, requestDraft.current);
       sessionStorage.setItem(
         commandKey,
@@ -1384,7 +1355,6 @@ export function useStory() {
       if (currentView.current === sentView)
         setError(error instanceof Error ? error : '요청이 접수됐는지 확인하지 못했어요.');
     }
-    // Failure to refresh an accepted run must not turn it into a pending command.
     try {
       await refresh(chat.id);
     } catch {
@@ -1398,7 +1368,6 @@ export function useStory() {
   }
   const forkLocks = useRef(new Set<string>());
   const [forking, setForking] = useState<string[]>([]);
-  // The chat a fork was copied from, shown until the reader leaves the new chat or dismisses it.
   const [forkOrigin, setForkOrigin] = useState<{
     id: string;
     title: string;
@@ -1408,7 +1377,6 @@ export function useStory() {
     const chatId = selected;
     const epoch = navigation.current.epoch;
     const lock = `${chatId}:${sourceId}`;
-    // The reader contains only the current page; the server verifies source ownership and ancestry.
     if (!detail || detail.chat.id !== chatId || !sourceId || forkLocks.current.has(lock)) return;
     forkLocks.current.add(lock);
     setForking([...forkLocks.current]);
@@ -1491,7 +1459,6 @@ export function useStory() {
     loadedPin?.id === pinnedPromptId && loadedPin?.revision === pinnedMetadata?.revision
       ? loadedPin
       : null;
-  // Only the selected pin is loaded in full. A missing pin never falls back to global settings.
   const currentPrompt: CurrentPrompt | undefined = pinnedPromptId
     ? pinnedPrompt
       ? {
@@ -1539,8 +1506,6 @@ export function useStory() {
           },
           'PUT'
         );
-        // Admission is known after the acknowledged write. A failed read must not invite
-        // another write, and a response for an old chat must not close a new chat's picker.
         if (navigation.current.chat !== chatId || navigation.current.epoch !== epoch) return false;
         try {
           const refreshed = await refresh(chatId);
@@ -1672,7 +1637,6 @@ export function useStory() {
       {}
     );
     if (navigation.current.chat !== chatId || navigation.current.epoch !== epoch) return;
-    // Apply only the acknowledged presentation change; pre-ack reads cannot resurrect it.
     refreshVersion.current++;
     const cached = readerCache.current;
     if (cached?.key === readerQuery.current.key && cached.detail.chat.id === accepted.chatId) {
@@ -1690,7 +1654,6 @@ export function useStory() {
       setDetail(next);
     }
     setNotice(uiMessage('shared.dismissedFromReader'));
-    // A refresh failure belongs to the reader's existing retry state, not this completed write.
     void refresh(chatId).catch(() => undefined);
   }
   async function cancelActive() {
@@ -1704,7 +1667,6 @@ export function useStory() {
       await api(`/runs/${runId}/cancel`, {});
       await refresh(chatId);
     } catch (caught) {
-      // Cancellation belongs to the initiating reader, even after A → B → A navigation.
       if (navigation.current.chat === chatId && navigation.current.epoch === epoch)
         setError(caught instanceof Error ? caught : '원문 생성을 취소하지 못했어요.');
     } finally {
@@ -1763,7 +1725,6 @@ export function useStory() {
     : 0;
   const pendingProfile = !!selected && !!sessionStorage.getItem(`pending-profile:${selected}`);
   const trackedRequest = requestActivities[viewKey];
-  // Settled runs may leave the bounded activity projection. Do not resurrect their admission indicator.
   const settledOutsideActivity =
     trackedRequest?.status === 'accepted' &&
     (!detail ||
@@ -1790,7 +1751,6 @@ export function useStory() {
     chats,
     selected,
     readSource,
-    // Do not mount provisional sources before the selected page is loaded.
     detail: readerCache.current?.key === readerQuery.current.key ? detail : null,
     readerLoading:
       readerLoad.key === readerQuery.current.key &&

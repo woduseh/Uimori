@@ -1,5 +1,3 @@
-// The same action or concept keeps its icon across desktop and mobile.
-// Named exports let lazy panels import only the icons they use.
 export {
   BookOpen as LibraryIcon,
   FileText as PromptIcon,

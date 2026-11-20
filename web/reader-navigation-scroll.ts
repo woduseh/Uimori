@@ -12,7 +12,6 @@ export type ReaderNavigationPosition =
       bodyTop?: number;
     };
 
-/** Keep an explicit navigation target through asynchronous layout, until the user takes over. */
 export function retainReaderNavigation(
   node: HTMLElement,
   position: ReaderNavigationPosition,
@@ -26,7 +25,6 @@ export function retainReaderNavigation(
   let appliedBodyTop = 0;
   const previousAnchor = node.style.getPropertyValue('overflow-anchor');
   const previousPriority = node.style.getPropertyPriority('overflow-anchor');
-  // Explicit positioning and the browser's automatic scroll anchoring must not compete.
   node.style.setProperty('overflow-anchor', 'none');
   const movedExternally = () => {
     const clamped = Math.min(appliedTop, Math.max(0, node.scrollHeight - node.clientHeight));
@@ -57,8 +55,6 @@ export function retainReaderNavigation(
     frame = 0;
     if (stopped) return;
     if (!isCurrent() || !node.isConnected) return stop();
-    // Scroll events arrive asynchronously. Check ownership again before a queued resize
-    // can overwrite direct scrollbar, accessibility, or another reader control's position.
     if (movedExternally()) return stop();
     if (position.kind === 'end') {
       const last = [
@@ -77,7 +73,6 @@ export function retainReaderNavigation(
           )
         : position.element;
       const target = anchored ?? (position.fallbackToSource ? position.element : undefined);
-      // A saved anchor can arrive after the surrounding article during native HTML projection.
       if (!target) return;
       body = target.closest<HTMLElement>(THEME_BODY_SCROLL_SELECTOR);
       if (body) {
@@ -96,7 +91,6 @@ export function retainReaderNavigation(
           node.getBoundingClientRect().top -
           (position.offset ?? 0) +
           (anchored ? (position.ratio ?? 0) : 0) * target.getBoundingClientRect().height;
-        // A scene jump starts its passage; restoring an action button must not reset it.
         if (target.matches('[data-source-id][data-representation]')) {
           body = themeBodyScroll(target);
           if (body) body.scrollTop = 0;
@@ -127,8 +121,6 @@ export function retainReaderNavigation(
       (!body || Math.abs(body.scrollTop - appliedBodyTop) <= 1)
     )
       return;
-    // Direct scrollbar/accessibility scrolling also yields ownership. A layout clamp is
-    // different: resize will apply the target again using the new available height.
     if (movedExternally()) stop();
     else schedule();
   };

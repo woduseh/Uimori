@@ -35,7 +35,6 @@ function blobBase64(blob: Blob): Promise<string> {
   });
 }
 
-/** Uploads a theme file's bytes and points its manifest at the stored copies. */
 export async function adoptThemeFile(theme: ThemeDefinition, files: ThemeAssetFile[]) {
   const stored = new Map<string, string>();
   for (const file of files) {
@@ -68,7 +67,6 @@ export function themeFontFamily(hash: string): string {
   return `uimori-theme-${hash.slice(0, 24)}`;
 }
 
-/** Faces stay registered across theme switches, so previews and toggles never re-download. */
 function registerFont(hash: string) {
   if (faces.has(hash)) return;
   const face = new FontFace(themeFontFamily(hash), `url("${themeAssetUrl(hash)}")`, {

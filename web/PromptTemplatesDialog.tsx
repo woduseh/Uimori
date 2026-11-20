@@ -69,7 +69,6 @@ export function PromptTemplatesDialog({
     setFailure(null);
     try {
       const preset = await onAdd(template.id);
-      // Closing this picker does not cancel a save already requested, or replace another editor.
       if (preset && current.current.open) current.current.onAdded(preset);
     } catch (error) {
       const message = (error as Error).message;

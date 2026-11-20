@@ -25,9 +25,7 @@ export function OutlineFocusStatus({
     try {
       const value = await api<OutlineFocus>(`/chats/${chatId}/outline/focus`);
       if (current === generation.current) setFocus(value);
-    } catch {
-      /* The next scene or outline change reads again. */
-    }
+    } catch {}
   }, [chatId]);
   useEffect(() => {
     const refresh = () => void load();

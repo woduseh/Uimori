@@ -10,7 +10,6 @@
   text-align: center;
   overflow-wrap: anywhere;
 }
-/* The destination or panel supplies available height; stand-alone dialogs retain a quiet body. */
 .loading-state-region {
   flex: 1;
   min-height: min(50dvh, 360px);

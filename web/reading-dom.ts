@@ -13,7 +13,6 @@ function paragraphText(paragraph: Element): { text: string; parts: TextPart[] } 
     if (node.nodeType === Node.TEXT_NODE) {
       const start = text.length;
       const value = node.textContent ?? '';
-      // Markdown emits <br> followed by a formatting newline. It is one visible break, not two.
       text +=
         node.previousSibling instanceof Element && node.previousSibling.tagName === 'BR'
           ? value.replace(/^\r?\n/u, (newline) => ' '.repeat(newline.length))
@@ -36,7 +35,6 @@ function paragraphText(paragraph: Element): { text: string; parts: TextPart[] } 
     }
   };
   for (const child of paragraph.childNodes) visit(child);
-  // Preserve offsets while keeping unresolved CBS, anchors and literal URLs out of pairing.
   const mask = (value: string) => '\u0000'.repeat(value.length);
   const templateEnd = text.lastIndexOf('}}') + 2;
   if (templateEnd > 1)
@@ -48,7 +46,6 @@ function paragraphText(paragraph: Element): { text: string; parts: TextPart[] } 
   return { text, parts };
 }
 
-/** Decorate only renderer-marked prose; never rebuild authored controls or inline elements. */
 export function createReadingDecorator(content: HTMLElement) {
   const owned: HTMLElement[] = [];
   let previous = '';
@@ -76,7 +73,6 @@ export function createReadingDecorator(content: HTMLElement) {
       clear();
       if (!hasReadingQuotes(settings)) return;
       for (const paragraph of content.querySelectorAll('[data-uimori-prose]')) {
-        // The marker is emitted from Markdown tokens, not guessed from arbitrary <p> tags.
         if (paragraph.closest(protectedElements)) continue;
         const { text, parts } = paragraphText(paragraph);
         const quotes = scanReadingQuotes(text, settings);
@@ -134,7 +130,6 @@ export function createReadingDecorator(content: HTMLElement) {
           const fragment = render(part.start, part.end, quotes);
           if (changed) {
             if (part.node instanceof Element) {
-              // The ruby was moved into the fragment. Put its wrapper at the old location.
               placeholder.replaceWith(fragment);
             } else part.node.replaceWith(fragment);
           } else if (part.node instanceof Element) placeholder.replaceWith(fragment);

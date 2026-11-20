@@ -11,7 +11,6 @@ const kindLabels: Record<ChatActivityCount['kind'], string> = {
   illustration: 'helpers.m220',
 };
 
-/** The inbox already queries running jobs; reuse its snapshot for the bot tree and rail. */
 export function chatActivitySummaries(
   rows: ChatActivityCount[]
 ): Record<string, ChatActivitySummary> {

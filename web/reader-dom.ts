@@ -1,4 +1,4 @@
-/** Node.contains() does not cross a shadow boundary. Follow only actual open hosts. */
+// Node.contains() does not cross a shadow boundary.
 export function readerContains(container: HTMLElement, node: Node | null): boolean {
   while (node) {
     if (container.contains(node)) return true;
@@ -22,7 +22,6 @@ export function selectedReaderText(container: HTMLElement | null): string {
     : '';
 }
 
-/** Paragraph elements survive reading-decoration updates and make useful scroll anchors. */
 export function readingPositionElements(container: HTMLElement): HTMLElement[] {
   const elements: HTMLElement[] = [];
   for (const block of container.querySelectorAll<HTMLElement>(

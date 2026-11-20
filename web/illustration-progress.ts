@@ -17,7 +17,6 @@ export const illustrationTaskNames = {
   },
 };
 
-/** A render retry is still one cut. Planning and translation alignment never count as pictures. */
 export function illustrationProgress(items: Illustration[]) {
   const plan = items.findLast((item) => item.task === 'plan');
   const placement = items.findLast((item) => item.task === 'placement');

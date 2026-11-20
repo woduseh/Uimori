@@ -68,7 +68,6 @@ function rememberControls(previous: ReturnType<typeof authoredControls>, focused
     for (const saved of snapshots) {
       const { key } = saved;
       const replacement = next.get(key);
-      // Authored value changes take priority, even within the same display revision.
       if (!replacement || replacement.defaults !== saved.defaults) continue;
       const old = saved.node;
       const node = replacement.node;
@@ -105,7 +104,6 @@ function rememberControls(previous: ReturnType<typeof authoredControls>, focused
   };
 }
 
-/** A single message tree. Updates never re-parse HTML just to change reading or action state. */
 export function mountRisuMessageSurface(
   host: HTMLElement,
   initial: PreparedRisuMessage,
@@ -184,13 +182,11 @@ export function mountRisuMessageSurface(
         setDisabled();
         onState({ busy: false, issue: '봇의 선택을 반영하지 못했어요. 다시 시도해 주세요.' });
       });
-    // Success remains locked until the server's new source/variable revision arrives.
   };
   const click = (event: Event) => {
     const node = event.target instanceof Element ? event.target : null;
     const target = node ? Element.prototype.closest.call(node, '[risu-trigger],[risu-btn]') : null;
     if (!target || !content.contains(target)) return;
-    // An explicit trigger/button takes precedence over a surrounding form submission.
     event.preventDefault();
     event.stopPropagation();
     const kind = Element.prototype.hasAttribute.call(target, 'risu-trigger') ? 'trigger' : 'button';
@@ -206,7 +202,6 @@ export function mountRisuMessageSurface(
   const submit = (event: Event) => {
     const form = event.target;
     if (!(form instanceof HTMLFormElement) || !content.contains(form)) return;
-    // Even an unmarked form must never navigate or upload to an external endpoint.
     event.preventDefault();
     event.stopPropagation();
     const name = Element.prototype.getAttribute.call(form, 'risu-form') ?? '';
@@ -215,7 +210,6 @@ export function mountRisuMessageSurface(
     const data: Record<string, string | string[]> = Object.create(null);
     for (const [key, value] of new FormData(form, submitter)) {
       if (typeof value !== 'string') {
-        // An unselected file input contributes an empty File in FormData.
         if (!value.name) continue;
         onState({
           busy: false,
@@ -296,7 +290,6 @@ export function mountRisuMessageSurface(
       generation++;
       root.removeEventListener('click', click, true);
       root.removeEventListener('submit', submit, true);
-      // The host owns the DOM lifetime; a content refresh replaces it atomically.
     },
   };
 }

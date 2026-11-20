@@ -50,7 +50,6 @@ function pause(signal: AbortSignal): Promise<void> {
   });
 }
 
-/** Results are keyed by the settings token at test start, independent of filtered cards and open forms. */
 export function useProviderModelTests() {
   useI18n();
   const [records, setRecords] = useState<Record<string, TestDisplay>>({});
@@ -73,7 +72,6 @@ export function useProviderModelTests() {
     const previous = current.current[key],
       controller = new AbortController();
     controllers.current.set(key, controller);
-    // An uncertain or cancelled wait is recovered with the same key; a finished test starts a new explicit test.
     const recovery = previous?.error !== undefined || previous?.cancelled === true;
     const idempotencyKey = recovery ? previous.idempotencyKey : crypto.randomUUID();
     let result = recovery ? previous.result : undefined;
@@ -129,7 +127,6 @@ export function useProviderModelTests() {
       if (controllers.current.get(key) === controller) controllers.current.delete(key);
     }
   }
-  /** Stops waiting for the model's location comparison; requests already sent still finish. */
   function cancel(model: ModelPreset) {
     const prefix = `${testKey(model)}#`;
     for (const [key, controller] of controllers.current) {
@@ -311,14 +308,12 @@ function LocationResults({
 type TestProps = {
   model: ModelPreset;
   records: Record<string, TestDisplay>;
-  /** The saved location of the model's Vertex connection; absent for other providers. */
   vertexLocation?: string;
   available: boolean;
   busy: boolean;
   onStart: (model: ModelPreset, location?: string) => Promise<void>;
 };
 
-/** Menu items of a model card; results appear beside the card only after a test ran. */
 export function ProviderModelTestActions({
   model,
   records,

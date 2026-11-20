@@ -31,10 +31,8 @@ export const SceneNavigator = memo(function SceneNavigator({
   onSelect: (id: string) => void;
   onTarget?: (target: ReaderTarget) => void;
   onLatest: () => void;
-  /** Compact widths keep the scene dialog here and surface jump visibility to the composer. */
   compact?: boolean;
   onLatestVisibilityChange?: (visible: boolean) => void;
-  /** One list state survives switches between the header opener and desktop rail. */
   listOpen: boolean;
   onListOpenChange: (open: boolean) => void;
   onCurrentLabel?: (label: string) => void;
@@ -70,15 +68,11 @@ export const SceneNavigator = memo(function SceneNavigator({
       const bodyDistance = lastBody
         ? lastBody.scrollHeight - lastBody.clientHeight - lastBody.scrollTop
         : 0;
-      // Keep the mobile jump control quiet near the end. Small font/layout changes
-      // should not make it linger when the reader is effectively at the latest text.
       setAwayFromBottom(
         distance > Math.max(120, node.clientHeight * 0.14) ||
           bodyDistance > Math.max(24, (lastBody?.clientHeight ?? 0) * 0.08)
       );
       const top = node.getBoundingClientRect().top + 32;
-      // At the physical end, the last source is the scene being read even when the
-      // page layout leaves a sliver of the previous source visible.
       const visible =
         distance <= 2
           ? sources.at(-1)
@@ -99,7 +93,6 @@ export const SceneNavigator = memo(function SceneNavigator({
       resize.disconnect();
       node.removeEventListener('scroll', schedule, true);
     };
-    // Observe the mounted page again when paging replaces its source elements.
   }, [reader, orderKey]);
   useEffect(() => {
     const node = reader.current?.parentElement;
@@ -188,7 +181,6 @@ export const SceneNavigator = memo(function SceneNavigator({
       title={t('reader.sceneList')}
       onClose={() => setOpen(false)}
       onAfterClose={() => {
-        // Resizing can replace the original opener while the native dialog stays open.
         (compact ? compactListOpener?.current : railListOpener.current)?.focus({
           preventScroll: true,
         });

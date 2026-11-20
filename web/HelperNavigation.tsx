@@ -77,9 +77,7 @@ export function HelperNavigation(props: Props) {
   useEffect(() => {
     try {
       localStorage.setItem(helperNavigationStorageKey, JSON.stringify(view));
-    } catch {
-      /* Navigation preferences remain available for this window. */
-    }
+    } catch {}
   }, [view]);
   useEffect(() => {
     const id = props.focusProject;

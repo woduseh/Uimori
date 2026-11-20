@@ -31,7 +31,6 @@ export function subscribeAppHistory(listener: Listener) {
     release();
   };
 }
-/** Modal handling runs before route subscribers, regardless of lazy panel mount order. */
 export function interceptAppHistory(handler: Interceptor) {
   interceptors.push(handler);
   attach();

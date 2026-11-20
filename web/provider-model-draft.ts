@@ -1,6 +1,5 @@
 import { formatNumber, formatMessage, registerMessage, type MessageValues } from './i18n.js';
 
-// Validation callers retain canonical error strings; only presentation follows UI language.
 function validationMessage(key: string, values?: MessageValues): string {
   const raw = formatMessage(key, 'ko', values);
   registerMessage(raw, key, values);
@@ -226,7 +225,6 @@ export function modelDraft(value: ModelPreset): ModelDraft {
     pricing: pricingDraft(value.pricing),
   };
 }
-/** Switching an option profile clears only controls the new profile cannot represent. */
 function supportedDraft(draft: ModelDraft, connection: Connection): ModelDraft {
   const family = effectiveModelFamily(connection.protocol, draft.modelId, draft.modelFamily);
   const keys = modelFamilyOptionKeys(connection.protocol, family);

@@ -1,7 +1,6 @@
 import { t, formatMessage, type UiLocale } from './i18n.js';
 import type { Illustration } from '../core/illustration.js';
 
-/** Error codes stay stable identifiers; remote provider messages are never shown verbatim. */
 const messages: Record<string, string> = {
   ILLUSTRATION_GENERATOR_UNCONFIGURED: 'visuals.m176',
   ILLUSTRATION_CODEX_CONTENT_BLOCKED: 'visuals.m177',
@@ -120,7 +119,6 @@ export const illustrationRetryable = (
     (item.diagnostic?.comfyui?.submission === 'uncertain' ||
       (!!item.diagnostic?.comfyui?.promptId && item.diagnostic.comfyui.submission !== 'finished'))
   );
-/** An accepted remote prompt can be re-read without rendering again. */
 export const illustrationReconcilable = (
   item: Pick<Illustration, 'status' | 'generator' | 'diagnostic'>
 ) => item.generator === 'comfyui' && !!item.diagnostic?.comfyui?.promptId && terminalFailure(item);

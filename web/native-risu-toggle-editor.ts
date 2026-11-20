@@ -13,7 +13,6 @@ export type NativeToggleDefinition = {
   type: NativeToggleType;
   key: string;
   label: string;
-  /** Comma-separated native options, including deliberately empty options. */
   options: string;
 };
 export type NativeToggleLine = {
@@ -22,7 +21,6 @@ export type NativeToggleLine = {
   definition: NativeToggleDefinition | null;
 };
 
-/** Only expose grammar we can edit without interpreting away unknown fields. */
 function definition(raw: string): NativeToggleDefinition | null {
   const parts = raw.split('=');
   if (parts.length < 2 || parts.length > 4) return null;

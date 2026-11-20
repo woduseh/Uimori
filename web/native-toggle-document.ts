@@ -26,7 +26,6 @@ export type ToggleDocumentGroup = {
 };
 const controls = new Set<NativeToggleType>(['toggle', 'select', 'text', 'textarea']);
 
-/** A read-only projection: simply opening a view must never serialize the source. */
 export function parseToggleDocument(source: string) {
   const lines = parseNativeToggleLines(source);
   const root: ToggleDocumentGroup = {
@@ -211,7 +210,6 @@ export function moveToggleItem(source: string, index: number, delta: -1 | 1) {
   const doc = structural(source);
   const item = itemOf(doc, index);
   const group = doc.groups.find((entry) => entry.items.includes(item));
-  // Blank rows remain in the source, but are not displayed as movable UI items.
   const visibleItems = group?.items.filter((entry) => entry.raw.trim() || entry === item) ?? [];
   const other = visibleItems[visibleItems.indexOf(item) + delta];
   return other ? finish(source, swap(doc.lines, item, other)) : source;

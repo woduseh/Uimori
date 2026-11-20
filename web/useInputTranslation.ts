@@ -24,18 +24,14 @@ function readOriginal(key: string): Original | null {
   try {
     const value = JSON.parse(sessionStorage.getItem(originalKey(key)) ?? 'null');
     if (value && typeof value.id === 'string' && typeof value.text === 'string') return value;
-  } catch {
-    // Recovery is optional; a failed storage read does not replace the input.
-  }
+  } catch {}
   return null;
 }
 function saveOriginal(key: string, value: Original | null) {
   try {
     if (value) sessionStorage.setItem(originalKey(key), JSON.stringify(value));
     else sessionStorage.removeItem(originalKey(key));
-  } catch {
-    // The active editor still holds the undo text when session storage is unavailable.
-  }
+  } catch {}
 }
 function initialLanguage(): InputTranslationLanguage {
   try {
@@ -163,9 +159,7 @@ export function useInputTranslation(options: Options) {
     setLanguage(next.code);
     try {
       localStorage.setItem(languageKey, next.code);
-    } catch {
-      // Language selection remains usable without persistent preferences.
-    }
+    } catch {}
   }
   function restore() {
     const value = originalRef.current.value;
@@ -180,12 +174,10 @@ export function useInputTranslation(options: Options) {
   }
   function applyCandidate() {
     if (!candidate || !current.current.available()) return;
-    // Undo recovers the input this explicit replacement displaces, not an older stale draft.
     remember(current.current.readDraft().text);
     current.current.writeDraft(candidate.text);
     setCandidate(null);
   }
-  /** Invalidate a late result at send intent, but keep undo through failed/uncertain admission. */
   function beginSend() {
     cancel();
     setCandidate(null);

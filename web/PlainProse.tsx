@@ -4,7 +4,6 @@ import type { ReadabilitySettings } from './reading-preferences.js';
 import { hasReadingQuotes, scanReadingQuotes, type ReadingQuote } from './reading-quotes.js';
 import './prose.css';
 
-/** Index each complete delimiter run once, including unmatched runs kept literal. */
 function backtickSpans(text: string) {
   const runs = [...text.matchAll(/`+/gu)];
   const next = new Map<number, number>();
@@ -27,7 +26,6 @@ type IndexedInline = {
   node: ReactNode;
 };
 
-/** Index literal text while keeping protected spans atomic. */
 function indexInline(nodes: ReactNode[]): { nodes: IndexedInline[]; text: string } {
   const parts: string[] = [];
   let offset = 0;
@@ -47,7 +45,6 @@ function indexInline(nodes: ReactNode[]): { nodes: IndexedInline[]; text: string
 
 function sliceInline(nodes: IndexedInline[], start: number, end: number): ReactNode[] {
   if (start >= end) return [];
-  // A quote-heavy paragraph must not rescan all earlier inline nodes per quote.
   let low = 0;
   let high = nodes.length;
   while (low < high) {
@@ -106,7 +103,6 @@ function applyReading(nodes: ReactNode[], settings: ReadabilitySettings): ReactN
 }
 
 const fencePattern = /^ {0,3}(`{3,}|~{3,})([\s\S]*)$/u;
-/** Literal helper/stream content keeps its whitespace and never acquires Markdown semantics. */
 function literalFence(text: string, offset: number): string | undefined {
   if (offset && text[offset - 1] !== '\n') return;
   let lineEnd = text.indexOf('\n', offset);
@@ -127,8 +123,6 @@ function literalFence(text: string, offset: number): string | undefined {
 
 function literalNodes(text: string): ReactNode[] {
   const nodes: ReactNode[] = [];
-  // Successful protected spans advance past their closer. Checking the last
-  // closer first also bounds repeated unfinished openers to one linear pass.
   const lastRubyClose = text.lastIndexOf('</ruby>');
   const lastTemplateClose = text.lastIndexOf('}}');
   const lastTagClose = text.lastIndexOf('>');

@@ -150,7 +150,6 @@
   display: none;
 }
 
-/* Search results keep the input and dialog in place while the list gets shorter. */
 .app-dialog.reading-settings-dialog {
   height: var(--dialog-max-height);
 }

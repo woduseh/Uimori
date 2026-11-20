@@ -32,7 +32,6 @@ function savedCollapse(id: string): boolean | undefined {
   }
 }
 
-/** Only reading nodes are returned; original and translated text remain untouched. */
 export function useIllustrationLayout({
   sourceId,
   sourceHash,
@@ -66,9 +65,7 @@ export function useIllustrationLayout({
     if (persist) {
       try {
         localStorage.setItem(collapseKey(id), String(value));
-      } catch {
-        /* Reading still works. */
-      }
+      } catch {}
     }
   };
   const hero = cuts.find((cut) => !cut.stale && cut.job.display?.hero);
@@ -142,9 +139,7 @@ export function useIllustrationLayout({
                 for (const cut of cuts) {
                   try {
                     localStorage.setItem(collapseKey(cut.key), String(value));
-                  } catch {
-                    /* Optional preference. */
-                  }
+                  } catch {}
                 }
               }}
             >
@@ -418,8 +413,6 @@ function IllustrationCard({
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<IllustrationDetail | null>(null);
   const [detailError, setDetailError] = useState('');
-  // Decide before inserting the first image. An image completed above the viewport must not
-  // expand behind the reader's back. This automatic fold is transient, not a saved preference.
   useLayoutEffect(() => {
     if (ready || !picture?.images.length) return;
     const node = element.current;

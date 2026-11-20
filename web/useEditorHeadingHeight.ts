@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
 
-/** Native editor tabs follow the actual header; its CSS minimum stays independent. */
 export function useEditorHeadingHeight(ready: boolean) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {

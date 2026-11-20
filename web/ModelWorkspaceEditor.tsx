@@ -69,7 +69,6 @@ export function ModelWorkspaceEditor({
   const { canSelect, choices } = useModelSelection(library.models, library.connections);
   useEffect(() => {
     if (workspace && !dirty && !busy)
-      // A successful explicit read must not be replaced by an older shared snapshot.
       setDraft((current) =>
         current && current.revision > workspace.revision
           ? current
@@ -194,7 +193,6 @@ export function ModelWorkspaceEditor({
         setJudgmentEdited(false);
         setDirty(false);
         setMessage(uiMessage('settings.m1'));
-        // The canonical write result completes saving; the shared read owns its own errors.
         void refresh();
         return true;
       })

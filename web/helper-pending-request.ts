@@ -14,7 +14,6 @@ export function pendingHelperRequest<T>(
 ): PendingHelperRequest<T> {
   const local = () => localStorage;
   const session = () => sessionStorage;
-  // A tab's pending fallback remains authoritative even if local storage later recovers.
   for (const getStorage of [session, local]) {
     try {
       const storage = getStorage();
@@ -22,9 +21,7 @@ export function pendingHelperRequest<T>(
       if (raw === null) continue;
       const value: unknown = JSON.parse(raw);
       if (valid(value)) return { request: value, storage, raw, recovered: true };
-    } catch {
-      // Try the other storage.
-    }
+    } catch {}
   }
   const request = create();
   const raw = JSON.stringify(request);
@@ -34,9 +31,7 @@ export function pendingHelperRequest<T>(
       const storage = getStorage();
       storage.setItem(key, raw);
       return { request, storage, raw, recovered: false };
-    } catch {
-      // Do not send without retaining the exact request for a retry.
-    }
+    } catch {}
   }
   throw new Error(uiMessage('helpers.m209'));
 }
@@ -47,7 +42,5 @@ export function clearPendingHelperRequest(
 ) {
   try {
     if (pending && pending.storage.getItem(key) === pending.raw) pending.storage.removeItem(key);
-  } catch {
-    // Cleanup failure does not undo an acknowledged operation.
-  }
+  } catch {}
 }

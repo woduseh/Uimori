@@ -1,6 +1,5 @@
 import { t } from './i18n.js';
 
-/** Exact local codes only; untrusted provider error text is never rendered as instructions. */
 export const requestImageErrors: Record<string, string> = {
   REQUEST_IMAGE_COUNT_INVALID: '참고 이미지는 최대 8장까지 첨부할 수 있어요.',
   REQUEST_IMAGE_UPLOAD_INVALID: '첨부 이미지 업로드를 확인해 주세요. 파일을 다시 첨부할 수 있어요.',

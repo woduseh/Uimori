@@ -24,7 +24,6 @@ export class PendingStoryProfileConflict extends Error {
   }
 }
 
-/** Discard only the exact conflicted intent the user reviewed. */
 export function acceptSavedStoryProfile(chatId: string, savedIntent: string) {
   const key = pendingKey(chatId);
   if (sessionStorage.getItem(key) !== savedIntent)
@@ -128,8 +127,6 @@ async function applyPendingStoryProfile(chatId: string) {
   }
   const current = await api<ChatProfile>(`/chats/${chatId}/profile`);
   if (sessionStorage.getItem(key) !== raw) throw new Error(uiMessage('main.pendingProfileChanged'));
-  // New chats start at revision 1. Older pending records did not store their base:
-  // only revision 1 is safe to write; later matching attachments can be observed as saved.
   const base = intent.profileBaseRevision ?? 1;
   const sameAttachments =
     intent.packageAttachments === undefined ||
@@ -159,8 +156,6 @@ async function applyPendingStoryProfile(chatId: string) {
       throw new Error(uiMessage('main.pendingProfileChanged'));
   }
   if (intent.packageStart) {
-    // Record the accepted profile revision before starting. A lost start response retries
-    // the identical command, without another profile write or another initial action.
     intent.packageStart.expectedProfileRevision = saved.revision;
     savePendingStoryProfile(chatId, intent);
     raw = sessionStorage.getItem(key);

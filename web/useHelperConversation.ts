@@ -62,7 +62,6 @@ function messageChange(view: View, event: HelperEvent): HelperMessageMutation {
   };
 }
 
-/** Retains the current and recent conversations across panel hides; idle reads use event cursors. */
 export function useHelperConversation(
   open: boolean,
   conversationId: string | null,
@@ -110,10 +109,7 @@ export function useHelperConversation(
       if (!previous) return;
       const next = applyMessageChange(previous, change);
       if (next === previous) return;
-      // An acknowledged local write is only one change, not proof that preceding events
-      // were read. Keep that replay boundary until polling catches up in sequence.
       if (!replayed) next.conversation.historyRevision = previous.conversation.historyRevision;
-      // A response started before this mutation cannot restore the old text or deleted rows.
       versions.current.set(key, ++requestVersion.current);
       write(key, next);
     },
@@ -122,7 +118,6 @@ export function useHelperConversation(
   const refresh = useCallback(
     async (conversation: Pick<HelperConversation, 'id'>) => {
       const key = conversation.id;
-      // Global request identities cannot be reused after a view has been evicted and reopened.
       const version = ++requestVersion.current;
       versions.current.set(key, version);
       try {
@@ -140,15 +135,12 @@ export function useHelperConversation(
           lastResourceEdit: HelperResourceEdit | null;
         }>(`/helper/conversations/${id(key)}/view`);
         if (!alive.current || versions.current.get(key) !== version) return;
-        // The first view starts at now. Later views must not skip effects arriving between polls.
         if (!cursors.current.has(key)) cursors.current.set(key, eventCursor);
         let previous = cache.current.get(key);
         if (
           (latestConversation.historyRevision ?? 0) < (previous?.conversation.historyRevision ?? 0)
         )
           return;
-        // Explicit refreshes can precede event polling. Replay only message changes so older
-        // loaded pages stay current without discarding their reading position or task records.
         if (
           previous &&
           (latestConversation.historyRevision ?? 0) > (previous.conversation.historyRevision ?? 0)
@@ -238,7 +230,6 @@ export function useHelperConversation(
           if (event.kind === 'font.updated')
             window.dispatchEvent(new Event('uimori-fonts-changed'));
           cursor = event.seq;
-          // Diagnostics advance the cursor without reloading unchanged conversation text.
           if (!diagnosticEvent(event.kind)) changed = true;
           if (
             /^task\.(completed|failed|cancelled|interrupted)$/u.test(event.kind) ||
@@ -273,7 +264,6 @@ export function useHelperConversation(
           ?.tasks.some((task) => ['queued', 'running'].includes(task.status));
       try {
         if (!initialized) {
-          // A retained cursor owns side effects as well as text: catch up after a hidden panel.
           if (cursors.current.has(conversationId)) await events();
           if (disposed || document.hidden) return;
           await refresh({ id: conversationId });

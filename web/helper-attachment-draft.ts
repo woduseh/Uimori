@@ -74,7 +74,6 @@ function acceptedTokens(id: string): string[] {
   return JSON.parse(sessionStorage.getItem(acceptedKey(id)) ?? '[]') as string[];
 }
 
-/** A conversation has one live owner across sidecar/full workspace remounts. */
 export async function loadHelperAttachments(id: string): Promise<void> {
   const owner = entry(id);
   if (owner.snapshot.ready) return;
@@ -95,8 +94,6 @@ export async function loadHelperAttachments(id: string): Promise<void> {
           error: '',
         });
       } else if (draft && latestToken && latestToken !== draft.token) {
-        // Text identity was published before a failed Blob write. Retain its newer owner
-        // across reload so an old request acknowledgement cannot clear the new input.
         await persist(id, { ...draft, token: latestToken });
         publish(owner, { ready: true, error: message('helperAttachments.recoveredOlder') });
       } else
@@ -134,7 +131,6 @@ function persist(id: string, draft: HelperAttachmentDraft): Promise<void> {
   return write;
 }
 
-/** Text changes also advance attachment identity, including identical text retyped later. */
 export function touchHelperAttachments(id: string) {
   const owner = entry(id);
   if (!owner.snapshot.ready) return;
@@ -170,7 +166,6 @@ export function helperAttachmentError(
   return '';
 }
 
-/** Immutable upload references are stored in the outbox and reused on uncertain admission. */
 export async function freezeHelperAttachments(
   id: string,
   model: AttachmentModel | null
@@ -185,8 +180,6 @@ export async function freezeHelperAttachments(
   try {
     await owner.write;
   } catch (error) {
-    // With no blobs to lose, the pending request can still reach the existing
-    // outbox decision. Its frozen token protects newer input from a late reply.
     if (draft.images.length || draft.files.length) throw error;
   }
   const frozen: FrozenHelperAttachments = { draftToken: draft.token };
@@ -205,7 +198,6 @@ export async function freezeHelperAttachments(
   return frozen;
 }
 
-/** A late acknowledgement clears only the exact frozen draft, including its saved blobs. */
 export async function acceptHelperAttachments(id: string, token: string): Promise<boolean> {
   const owner = entry(id);
   const accepted = [...new Set([...acceptedTokens(id), token])];

@@ -28,8 +28,6 @@
 .library-page-loading > .loading-state {
   flex: 1;
 }
-/* During a resource's initial read, the editor has not mounted its header yet.
-   Fill the scrollport so the status is centered instead of appearing at its top. */
 .library-page-editing:has(.resource-editor-status-loading) {
   min-height: 100%;
   padding-bottom: 0;
@@ -469,7 +467,6 @@
     color: var(--error);
   }
 }
-/* Tool row: folders, search, visible view choices and secondary list options. */
 .library-toolbar {
   display: flex;
   align-items: center;
@@ -891,7 +888,6 @@
   .library-page .library-workspace {
     gap: 8px;
   }
-  /* Compact widths: folders and creation first; search and view controls next. */
   .library-page .library-toolbar {
     flex-wrap: wrap;
   }
@@ -1047,8 +1043,6 @@
 .library-folder-open > svg {
   flex-shrink: 0;
 }
-/* Up to four portraits from the folder stand in for the generic folder icon. */
-/* The card's text column rule below also matches the cover span. */
 .library-folder-open > .library-folder-cover {
   gap: 2px;
 }

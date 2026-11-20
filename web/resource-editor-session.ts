@@ -31,9 +31,7 @@ export type EditorState = {
   ready: boolean;
   dirty: boolean;
   saving: boolean;
-  /** The frozen creation must be confirmed before a new save intent can begin. */
   creationPending: boolean;
-  /** New edits can autosave; recovered input waits for an explicit save. */
   autosavePending: boolean;
   error: string;
   conflict: boolean;
@@ -51,12 +49,10 @@ function editorTabScope(): string {
     sessionStorage.setItem(key, next);
     return next;
   } catch {
-    // A storage-restricted tab still saves, but cannot recover an unknown result after reload.
     return crypto.randomUUID();
   }
 }
 
-/** The sole owner of a resource's editable model, raw input, baseline and save state. */
 export class ResourceEditorSession {
   private state: EditorState;
   private readonly listeners = new Set<() => void>();
@@ -147,8 +143,6 @@ export class ResourceEditorSession {
       try {
         const saved = this.options.targetId ? await api<SavedResource>(this.path()) : null;
         if (this.disposed || load !== this.loadVersion) return;
-        // Stay uneditable until recovery is read. Closing during this read must not
-        // delete a buffer that this session has never loaded.
         let recovered: RecoveryBuffer<ResourceModel> | undefined;
         let recoveryFailed = false;
         try {
@@ -282,7 +276,6 @@ export class ResourceEditorSession {
       throw new Error(legacyMessage('shared.syntaxError'));
     return model;
   }
-  /** Capture the exact editable document before the caller's first asynchronous step. */
   captureForHelper() {
     const state = this.state;
     if (!state.ready) return null;
@@ -341,7 +334,6 @@ export class ResourceEditorSession {
     );
     await this.queueRecovery(true);
   }
-  /** Read a comparison copy without adopting it or changing local recovery input. */
   async readSaved() {
     const id = this.state.document.targetId;
     if (!id) return null;
@@ -363,8 +355,6 @@ export class ResourceEditorSession {
     const previousCreation = this.pendingCreation;
     let prepared: ResourceModel;
     try {
-      // A pending creation already has frozen, validated input. Confirm its admission
-      // without parsing newer unsaved fields that may still be incomplete.
       prepared = previousCreation?.model ?? this.prepared(this.state.local.model);
     } catch (error) {
       this.emit({ error: (error as Error).message });
@@ -385,7 +375,6 @@ export class ResourceEditorSession {
     let admitted = false;
     let persisted = false;
     try {
-      // A separate, tab-owned outbox cannot overwrite another tab's unsaved editor buffer.
       if (creation) {
         await writeRecovery(this.creationKey, {
           token: creation.key,
@@ -407,8 +396,6 @@ export class ResourceEditorSession {
       const targetId =
         this.options.kind === 'prompt-workspace' ? 'current' : (result.saved as { id: string }).id;
       const savedModel = editableResource(this.options.kind, result.saved);
-      // All user-created resources start at revision 1. Old compact receipts store only
-      // the ID, so a later revision on replay also detects changes for existing receipts.
       const changedAfterCreation = !!creation && !result.created && result.saved.revision > 1;
       if (
         generation === this.generation &&
@@ -431,7 +418,6 @@ export class ResourceEditorSession {
         });
       }
       if (creation) await deleteRecoveryIfToken(this.creationKey, creation.key).catch(() => {});
-      // Finish old-key cleanup before storing edits under a newly created/copied resource.
       if (previousKey !== this.editorKey) await this.queueRecovery(true, previousKey);
       await this.queueRecovery();
       this.notifySaved();
@@ -487,8 +473,6 @@ export class ResourceEditorSession {
     this.loadVersion++;
     clearTimeout(this.timer);
     if (this.state.ready) {
-      // Only pending edits/reverts need a close-time flush. A failed initial read
-      // is not permission to erase an existing recovery buffer.
       if (this.state.dirty || this.state.recovery === 'pending') void this.queueRecovery();
     } else this.opening = null;
   }
@@ -498,8 +482,6 @@ export class ResourceEditorSession {
       window.dispatchEvent(new Event('prompt-workspace-changed'));
     try {
       localStorage.setItem(libraryChangedKey, String(Date.now()));
-    } catch {
-      /* Resource is already saved. */
-    }
+    } catch {}
   }
 }

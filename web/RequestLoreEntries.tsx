@@ -15,7 +15,6 @@ const deliveryLabels = {
   unverified: 'visualpanels.inclusionUnconfirmed',
 } as const;
 
-/** Groups describe how material reached this saved request, not today's library state. */
 export function RequestLoreEntries({ entries }: { entries: RequestLore['entries'] }) {
   useI18n();
   const groups = new Map<string, RequestLore['entries']>();

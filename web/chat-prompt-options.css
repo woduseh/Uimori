@@ -98,8 +98,6 @@
 .chat-option-value .pc-control-values {
   padding: 0 0 6px;
 }
-/* Option rows: the name and the value read as a sentence, and one control switches
-   between following the wider setting and setting a value for this chat. */
 .chat-option-group {
   border-bottom: var(--hairline) solid var(--line);
 }
@@ -294,8 +292,6 @@
   }
 }
 
-/* A row that still follows the wider setting stays one line tall, switch or not;
-   the option's own help appears once the row is set for this chat. */
 .chat-option-choice[data-scoped="false"] .chat-option-value .toggle-row small {
   display: none;
 }

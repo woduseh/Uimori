@@ -130,9 +130,7 @@ export function HelperResponseEditor({
     try {
       if (value === undefined) sessionStorage.removeItem(key);
       else sessionStorage.setItem(key, value);
-    } catch {
-      /* The in-memory draft still works. */
-    }
+    } catch {}
   };
   const open = () => {
     try {

@@ -92,7 +92,6 @@
   text-wrap: pretty;
 }
 
-/* Answer actions start under the answer's own text edge, away from the next request bubble. */
 .helper-response-actions {
   display: flex;
   justify-content: flex-start;
@@ -579,7 +578,6 @@
   flex-wrap: wrap;
 }
 
-/* The docked helper reads as one conversation surface instead of stacked boxes. */
 .helper-prose > :first-child,
 .helper-prose > .reading-markdown > .reading-markdown-content > :first-child {
   margin-top: 0;
@@ -595,7 +593,6 @@
 .helper-prose pre {
   margin: 0 0 0.9em;
 }
-/* The copy control floats in the code block's corner instead of adding an empty header row. */
 .helper-code-toolbar {
   position: relative;
   z-index: 1;
@@ -781,8 +778,6 @@
   }
 }
 
-/* An empty conversation starts from the middle of the surface instead of a blank page above a
-   docked composer; phones keep the composer within thumb reach. */
 @media (min-width: 761px) {
   .helper-panel:has(.helper-thread-empty:empty, .helper-thread-empty > .helper-start:only-child)
     > :is(.helper-messages, .helper-composer) {
@@ -834,7 +829,6 @@
   word-break: keep-all;
 }
 
-/* A turn's status and usage read as one quiet row; an opened disclosure takes the full width. */
 .helper-turn-meta {
   display: flex;
   flex-wrap: wrap;
@@ -883,7 +877,6 @@
   padding: 0;
   align-content: center;
 }
-/* A pointer reveals request actions beside the bubble, so hidden actions leave no blank row. */
 @media (hover: hover) and (pointer: fine) and (min-width: 601px) {
   .helper-message.request .request-message-wrap:not(:has(> form)) {
     display: grid;

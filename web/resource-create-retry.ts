@@ -1,7 +1,6 @@
 import { api, ApiError, definiteRejection } from './api.js';
 import { legacyMessage } from './i18n.js';
 
-/** Persist one clone intent until admission is known; a second deliberate clone gets a fresh key. */
 export async function cloneWithReceipt<T>(
   storageKey: string,
   input: {

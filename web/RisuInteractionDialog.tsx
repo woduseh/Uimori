@@ -57,7 +57,6 @@ export function RisuInteractionDialog({
             current?.id === result.interactions[0]?.id ? current : result.interactions[0]
           );
       } catch {
-        // Only a failed read retries. An idle card needs no polling or new SSE connection.
         if (active && !document.hidden)
           timer = setTimeout(() => void load(), Math.min(10000, 1000 * 2 ** failures++));
       } finally {
@@ -74,7 +73,6 @@ export function RisuInteractionDialog({
       void load();
     };
     reload.current = wake;
-    // A late read of the answered prompt must not reopen it.
     invalidate.current = () => version++;
     setItem(undefined);
     void load();

@@ -95,7 +95,6 @@ export function PromptEditor({
   const { t } = useI18n();
   const [role, setRole] = useState<PromptRole>(initialRole);
   const [localPresets, setLocalPresets] = useState<PromptPreset[]>([]);
-  // Tabs retain session owners, never copies of their models or dirty flags.
   const [selectedSessions, setSelectedSessions] = useState<
     Record<PromptRole, ResourceEditorSession>
   >(
@@ -212,7 +211,6 @@ export function PromptEditor({
         accepted,
       ]);
       setStatus(uiMessage('prompts.uiPromptSaved'));
-      // Placement is a separate write; neither it nor a list read can undo this save.
       setPlacing(true);
       const warnings: (() => string)[] = [];
       try {

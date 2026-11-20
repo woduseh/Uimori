@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { downloadArchive } from './archive-download.js';
 import { DownloadIcon } from './ui-icons.js';
 
-/** Portable user data includes dependent modules and image metadata, never provider credentials. */
 export function ResourceExportButton({
   kind,
   id,

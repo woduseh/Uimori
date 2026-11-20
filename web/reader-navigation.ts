@@ -12,9 +12,6 @@ export type ReaderNavigationAction =
   | { kind: 'chat-deleted' }
   | { kind: 'rebase-source'; source: string };
 
-/** User navigation changes intent even for A -> B -> A or a repeated source selection.
- * Server reconciliation changes the address, not the reader's intent.
- */
 export function transitionReaderNavigation(
   current: ReaderNavigation,
   action: ReaderNavigationAction

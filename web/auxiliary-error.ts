@@ -6,7 +6,6 @@ type AuxiliaryErrorDiagnostic = {
   action: string;
 };
 
-// Only exact local codes may reach the UI. Never echo remote text or an unknown code.
 const diagnostics = new Map<string, Omit<AuxiliaryErrorDiagnostic, 'code'>>();
 const define = (codes: string[], message: string, action: string) => {
   for (const code of codes) diagnostics.set(code, { message, action });
@@ -216,7 +215,6 @@ export function auxiliaryErrorDiagnostic(error: unknown): AuxiliaryErrorDiagnost
   };
 }
 
-/** Complete message for surfaces that show diagnosis and recovery together. */
 export function auxiliaryErrorMessage(error: unknown): string {
   const role =
     typeof error === 'string' ? /^MODEL_REQUIRED:(main|translation)$/.exec(error)?.[1] : undefined;

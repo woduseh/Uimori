@@ -5,7 +5,6 @@ export const regexRecord = (value: unknown): value is RisuRegexRecord =>
 
 export const regexText = (value: unknown) => (typeof value === 'string' ? value : '');
 
-/** Native in/out own execution. Keep existing editor aliases aligned only when that field changes. */
 export function patchNativeRegex(entry: RisuRegexRecord, patch: RisuRegexRecord) {
   const next = { ...entry, ...patch };
   if (Object.hasOwn(patch, 'in') && Object.hasOwn(entry, 'find')) next.find = patch.in;
@@ -25,7 +24,6 @@ export function readNativeRegexFlags(flag: string) {
   return { flags, actions, order };
 }
 
-/** Edit only the selected character outside tags, preserving unknown native flag extensions. */
 export function toggleNativeRegexFlag(flag: string, key: string) {
   if (!readNativeRegexFlags(flag).flags.includes(key)) return flag + key;
   return flag

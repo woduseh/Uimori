@@ -119,7 +119,6 @@
   flex-wrap: wrap;
 }
 
-/* Excluded scenes remain readable and recoverable. */
 .source.scene-context-muted [data-uimori-part="body"] {
   opacity: 0.64;
 }

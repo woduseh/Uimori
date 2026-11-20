@@ -29,8 +29,6 @@ export function hasReadingQuotes(settings: ReadabilitySettings): boolean {
 const openPairs = new Map<string, (typeof QUOTE_PAIRS)[number]>(
   QUOTE_PAIRS.map((pair) => [pair.open, pair])
 );
-// Contraction/possessive heuristics apply to Latin words, not Korean particles
-// attached to a closing quote (for example, '약속'이라는 or ‘생각’이라고).
 const word = /[\p{Script=Latin}\p{N}_]/u;
 
 function needsBoundary(text: string, offset: number, direction: -1 | 1): boolean {
@@ -39,7 +37,6 @@ function needsBoundary(text: string, offset: number, direction: -1 | 1): boolean
     const char = text[offset];
     if (char === '\n') {
       newlines++;
-      // A real blank line already gives the quote its own paragraph. A single line break does not.
       if (newlines >= 2) return false;
     } else if (char !== '\r' && char !== ' ' && char !== '\t') {
       return true;
@@ -49,12 +46,6 @@ function needsBoundary(text: string, offset: number, direction: -1 | 1): boolean
   return false;
 }
 
-/**
- * A linear, display-only pairing pass. Callers replace protected render nodes
- * with a single sentinel, so markup attributes and code never become quotes.
- * Unfinished nesting stays literal. Excessive nesting ends the pass safely;
- * already completed top-level quotes remain available to the renderer.
- */
 export function scanReadingQuotes(text: string, settings: ReadabilitySettings): ReadingQuote[] {
   const quotes: ReadingQuote[] = [];
   if (!hasReadingQuotes(settings)) return quotes;
@@ -85,8 +76,6 @@ export function scanReadingQuotes(text: string, settings: ReadabilitySettings): 
       if (parent) parent.children.push(quote);
       else {
         const previous = quotes.at(-1);
-        // Two neighboring quotes share one inserted line break. Keeping both
-        // would turn preserved spaces into an extra line under pre-wrap.
         if (
           previous?.breakAfter &&
           quote.breakBefore &&
@@ -98,7 +87,6 @@ export function scanReadingQuotes(text: string, settings: ReadabilitySettings): 
       continue;
     }
     const pair = openPairs.get(char);
-    // A trailing straight apostrophe in James' or writers' is not an opener.
     if (!pair || (char === "'" && previousIsWord)) continue;
     if (stack.length >= 32) break;
     stack.push({ start: offset, id: pair.id, close: pair.close, children: [] });

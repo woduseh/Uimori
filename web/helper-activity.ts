@@ -41,7 +41,6 @@ const finishedAttemptState = (status?: string): Stage['state'] =>
       ? 'stopped'
       : 'issue';
 
-/** Only observed starts and finishes become stages; a finished tool is never called running. */
 export function helperActivityStages(activity: HelperActivity): Stage[] {
   const stages: Stage[] = [];
   const attempts = new Map<string, Stage>();
@@ -75,7 +74,6 @@ export function helperActivityStages(activity: HelperActivity): Stage[] {
               ? 'completed'
               : 'recorded';
     const previous = stages.at(-1);
-    // Only adjacent successful lookups share a heading. Mutations remain individually visible.
     if (
       event.kind === 'tool.finished' &&
       state === 'completed' &&

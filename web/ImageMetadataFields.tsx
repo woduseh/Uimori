@@ -1,7 +1,6 @@
 import { t, useI18n } from './i18n.js';
 import type { PackageImage } from '../core/package-images.js';
 
-/** Display metadata is independent of image bytes and native script aliases. */
 export function ImageMetadataFields({
   image,
   onChange,

@@ -92,7 +92,6 @@ export function ContentPicker({
       : t('library.noResourcesAreAvailableToAttach', { v0: t(roleTitleKeys[role]) });
   function moveFocus(event: KeyboardEvent<HTMLElement>) {
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-    // Search text editing keeps its Home/End behavior; arrows enter the result list.
     if (event.target instanceof HTMLInputElement && ['Home', 'End'].includes(event.key)) return;
     const choices = [
       ...(list.current?.querySelectorAll<HTMLButtonElement>(

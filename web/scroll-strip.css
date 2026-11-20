@@ -30,8 +30,6 @@
     scroll-behavior: auto;
   }
 }
-/* Touch scrolls the row directly. A chevron stays, disabled, while the pointer is still on it at
-   the end, so a repeated click cannot land on whatever lies underneath. */
 .scroll-strip-button {
   display: none;
   position: absolute;

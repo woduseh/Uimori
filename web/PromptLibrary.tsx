@@ -54,18 +54,14 @@ function savedPromptSort(): PromptSort {
   try {
     const value = JSON.parse(localStorage.getItem('uimori-library-sorts') ?? '{}').prompts;
     if (value === 'name' || value === 'name-desc' || value === 'manual') return value;
-  } catch {
-    /* Keep a sensible default in restricted browsers. */
-  }
+  } catch {}
   return 'name';
 }
 function savedPromptOrder(): string[] {
   try {
     const value = JSON.parse(localStorage.getItem('uimori-library-manual-orders') ?? '{}').prompts;
     if (Array.isArray(value)) return value.filter((id): id is string => typeof id === 'string');
-  } catch {
-    /* Keep a sensible default in restricted browsers. */
-  }
+  } catch {}
   return [];
 }
 
@@ -94,7 +90,6 @@ export function PromptLibrary({
   onEditorOpened: () => void;
   initialPresetId?: string | null;
   onInitialPresetHandled?: () => void;
-  /** Bumped when the navigation entry is chosen, so an open editor returns to the list. */
   listRequest?: number;
 }) {
   const { t, locale } = useI18n();
@@ -113,7 +108,6 @@ export function PromptLibrary({
   );
   const pendingEditing = useRef<typeof editing>(null);
   useEffect(() => {
-    // A card-pinned saved reference must never mask a newly opened editor draft.
     if (editing) onEditorOpened();
   }, [editing, onEditorOpened]);
   const handledPreset = useRef<string | null>(null);
@@ -358,7 +352,6 @@ export function PromptLibrary({
     if (externalList.current === listRequest) return;
     externalList.current = listRequest;
     cancelOpening();
-    // `changeEditing` keeps the existing unsaved-draft confirmation.
     if (editing) close();
   }, [listRequest]);
   async function placeCreated(
@@ -367,7 +360,6 @@ export function PromptLibrary({
     creationOrganizationRevision?: number | null
   ) {
     if (!created || folder === 'all' || folder === 'unclassified') return;
-    // An old receipt has no creation-time token; never overwrite a later move.
     if (creationOrganizationRevision === null)
       throw new Error(uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder'));
     const revision =
@@ -449,7 +441,6 @@ export function PromptLibrary({
         program: template.program,
         values: template.values,
       });
-      // Creation is complete. A later placement/reload failure must not offer another POST.
       try {
         await placeCreated(created, true);
       } catch (error) {

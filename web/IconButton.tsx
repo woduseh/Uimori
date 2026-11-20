@@ -38,7 +38,6 @@ export function IconButton({
           popover="hint"
           role="tooltip"
           onClick={(event) => {
-            // Keep the hoverable text from activating its owning button.
             event.preventDefault();
             event.stopPropagation();
           }}

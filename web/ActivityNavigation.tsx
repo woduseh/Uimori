@@ -73,7 +73,6 @@ export function ActivityNavigation({
     info.kinds.add(labels[task.kind] ?? t('helpers.m224'));
     running.set(task.chatId, info);
   }
-  // The recent-chat index is for navigation, not an inbox: never exclude busy or unread chats.
   const recent = chats.toSorted(
     (a, b) =>
       (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? '') || b.id.localeCompare(a.id)

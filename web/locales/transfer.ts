@@ -1,4 +1,3 @@
-/** App-owned transfer, navigation, and new-chat presentation only. */
 export const messages = {
   'transfer.defaultChatTitle': {
     ko: '{bot}의 채팅',

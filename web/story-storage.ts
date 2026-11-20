@@ -10,7 +10,6 @@ export type ReadingPosition = {
   top: number;
 };
 
-/** Optional view caches never prevent opening the saved conversation. */
 function optionalCache(key: string, persistent = false): Record<string, unknown> | null {
   try {
     const storage = persistent ? localStorage : sessionStorage;
@@ -30,28 +29,20 @@ export function writeViewCache(key: `reading:${string}` | `cursor:${string}`, va
       localStorage.setItem(key, serialized);
       try {
         sessionStorage.removeItem(key);
-      } catch {
-        // A leftover legacy position cannot override the persistent one.
-      }
+      } catch {}
       return;
-    } catch {
-      // Keep the previous durable location when persistent writes fail.
-    }
+    } catch {}
   }
   try {
     sessionStorage.setItem(key, serialized);
-  } catch {
-    // Optional reading and cursor caches must not block navigation.
-  }
+  } catch {}
 }
 
 export function clearReadingPosition(key: `reading:${string}`) {
   for (const persistent of [true, false]) {
     try {
       (persistent ? localStorage : sessionStorage).removeItem(key);
-    } catch {
-      // Cache invalidation must not block navigation.
-    }
+    } catch {}
   }
 }
 
@@ -73,15 +64,11 @@ export function readReadingPosition(key: string): ReadingPosition | null {
   const inSession = validReadingPosition(optionalCache(key));
   const persistent = validReadingPosition(optionalCache(key, true));
   if (!inSession) return persistent;
-  // The tab-local fallback may be newer than the last durable position.
-  // Migrate older tab-only positions if no durable position exists.
   if (!persistent) {
     try {
       localStorage.setItem(key, JSON.stringify(inSession));
       sessionStorage.removeItem(key);
-    } catch {
-      // The tab-local position still works if migration is unavailable.
-    }
+    } catch {}
   }
   return inSession;
 }

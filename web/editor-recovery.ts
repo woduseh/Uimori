@@ -1,6 +1,5 @@
 import { message as uiMessage } from './i18n.js';
 export type RecoveryBuffer<T> = {
-  /** Unique per write; optional for buffers saved by older app versions. */
   token?: string;
   revision: number | null;
   model: T;
@@ -8,7 +7,6 @@ export type RecoveryBuffer<T> = {
 };
 let database: Promise<IDBDatabase> | undefined;
 
-/** One latest unsaved buffer per editor on this device. No journal, versions, or network sync. */
 export function openRecoveryDatabase(): Promise<IDBDatabase> {
   database ??= new Promise((resolve, reject) => {
     const request = indexedDB.open('uimori-editor-recovery', 1);
@@ -49,7 +47,6 @@ export async function writeRecovery<T>(key: string, value?: RecoveryBuffer<T>): 
   });
 }
 
-/** Copy a cloned tab's buffers once, before that tab starts editing independently. */
 export async function copyRecoveryPrefix(fromPrefix: string, toPrefix: string): Promise<void> {
   const db = await openRecoveryDatabase();
   return new Promise((resolve, reject) => {
@@ -91,12 +88,10 @@ async function deleteRecoveryIf<T>(
   });
 }
 
-/** Cleanup only the resource buffer this session read or successfully wrote. */
 export function deleteRecoveryIfToken(key: string, token: string | undefined) {
   return deleteRecoveryIf(key, (found) => found.token === token);
 }
 
-/** Exact-value cleanup is used only for the helper's primitive text buffers. */
 export function deleteRecoveryIfModel<T>(key: string, expected: T) {
   return deleteRecoveryIf<T>(key, (found) => found.model === expected);
 }

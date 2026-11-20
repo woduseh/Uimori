@@ -181,7 +181,6 @@ export function NativeRisuToggleEditor({
   function publish(next: Snapshot, target?: 'toggles' | 'variables') {
     owned.current = next;
     onChange(next);
-    // Applying one source document must leave the other document's pending input intact.
     if (!target || target === 'toggles' || raw === value) setRaw(next.toggles);
     if (!target || target === 'variables' || rawVariables === variables)
       setRawVariables(next.variables);

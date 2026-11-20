@@ -6,14 +6,11 @@ import './settings-actions.css';
 import './activity-status.css';
 
 type Props = Omit<ComponentPropsWithRef<'button'>, 'children' | 'aria-label'> & {
-  /** Full action name including its target. Speech input and tooltips use it. */
   label: string;
-  /** Short visible action. Use an empty string only for an existing icon toolbar. */
   text?: string;
   icon?: LucideIcon;
 };
 
-/** Primary confirm action of a settings form, named fully by `label`. */
 export function SaveButton({
   label,
   text = '저장',

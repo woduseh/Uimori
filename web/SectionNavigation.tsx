@@ -9,11 +9,9 @@ type SectionNavigationItem<K extends string> = {
   icon?: LucideIcon;
   description?: string;
   panelId?: string;
-  /** Small separator label shown before the first item of each group. */
   group?: string;
 };
 
-/** The parent owns panel visibility and draft lifetime; this only navigates between sections. */
 export function SectionNavigation<K extends string>({
   label,
   items,

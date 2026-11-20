@@ -13,7 +13,6 @@ export const storyUiPreview = {
       createSurface: {
         surfaceId: 'main',
         catalogId: 'urn:uimori:story-ui:1',
-        // One of each surface an authored theme most often restyles.
         components: [
           { id: 'root', component: 'Frame', title: '오래된 정원', subtitle: '기록', child: 'body' },
           {

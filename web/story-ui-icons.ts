@@ -60,7 +60,6 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-// A2UI names remain portable; the app supplies glyphs without an external font.
 export const storyUiIcons: Readonly<Record<string, LucideIcon>> = {
   accountCircle: CircleUserRound,
   add: Plus,

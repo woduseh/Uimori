@@ -2,7 +2,6 @@ import { useRef, useState, type ReactNode } from 'react';
 import { t, useI18n } from './i18n.js';
 import { SettingsSearch, hasSettingsSearch } from './SettingsSearch.js';
 
-/** Search labels only; the existing controls keep their state and save owners. */
 export function ReadingSettingsSearch({
   searchable,
   children,

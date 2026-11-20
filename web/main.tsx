@@ -201,13 +201,11 @@ type Panel =
   | 'reading'
   | 'outline'
   | 'model';
-/* Device layout preferences share the same optional browser storage. */
 const READING_WIDTHS = [760, 880, 1040];
 const PANEL_WIDTHS = [360, 384, 480, 560];
 const SIDEBAR_WIDTH = 248;
 const SIDEBAR_WIDTHS = [SIDEBAR_WIDTH, 320, 400];
 const RAIL_WIDTH = 56;
-/* Below this the centre column stops being comfortable to read or edit in. */
 const MIN_CENTER_WIDTH = 768;
 const runFailed = (status: string) =>
   ['failed', 'cancelled', 'interrupted', 'refused', 'partial'].includes(status);
@@ -253,7 +251,6 @@ function App() {
   const testMode = useTestMode();
   const compact = useCompactLayout();
 
-  // Compact widths open the scene list from the header title; the rail owns it otherwise.
   const [sceneList, setSceneList] = useState(false);
   const sceneListOpener = useRef<HTMLButtonElement>(null);
   const [scenePosition, setScenePosition] = useState<{ scope: string; label: string } | null>(null);
@@ -269,13 +266,11 @@ function App() {
     [s.viewKey]
   );
   const sceneCount = s.detail?.reader.navigation.length ?? 0;
-  // Chat settings may open on a specific section (the failure card's 모델 설정).
   const [settingsSection, setSettingsSection] = useState<ChatSettingsSection | undefined>();
   const openChatSettings = (section?: ChatSettingsSection) => {
     setSettingsSection(section);
     setPanel('story');
   };
-  // Pending turns the reader has scrolled into view: their failure card replaces the composer notice.
   const [seenRuns, setSeenRuns] = useState<string[]>([]);
   const pendingObserver = useRef<IntersectionObserver | null>(null);
   useEffect(() => {
@@ -292,8 +287,6 @@ function App() {
     pendingObserver.current = observer;
     return () => observer.disconnect();
   }, []);
-  // A dialog opened from the chat ⋯ menu returns focus to the menu button, because the
-  // menu item that opened it is hidden again by the time the dialog closes.
   const menuReturn = useRef<HTMLElement | null>(null);
   const fromChatMenu = (event: { currentTarget: HTMLElement }) => {
     menuReturn.current =
@@ -448,7 +441,6 @@ function App() {
     () => readPresentationChoice('uimori:scene-navigator', ['true', 'false'], 'true') === 'true'
   );
   const showSceneNavigator = sceneNavigatorEnabled && !focus;
-  // Hiding visual navigation must not disable the title's scene-list shortcut.
   useEffect(() => {
     if (focus) setSceneList(false);
   }, [focus]);
@@ -491,8 +483,6 @@ function App() {
   }, []);
   const workspacePanelOpen =
     (helperOpen && !helperExpanded) || (optionsOpen && s.destination === 'story' && !!s.selected);
-  /* Dock only while the centre column keeps its minimum readable width. Collapsing
-     navigation frees the sidebar down to the icon rail, not to nothing. */
   const dockBesideSidebar = desktopSidebarWidth + panelWidth + MIN_CENTER_WIDTH;
   const dockBesideRail = RAIL_WIDTH + panelWidth + MIN_CENTER_WIDTH;
   const autoCollapseSidebar =
@@ -581,7 +571,6 @@ function App() {
     mainModel && mainConnection
       ? imageInputSupported(mainConnection.protocol, mainModel.modelId)
       : null;
-  // Both the reader and model routes must settle before an absent model is actionable.
   const modelCheckReady = !!s.detail && !!s.library && !!s.promptWorkspace;
   const mainDescription = !modelCheckReady
     ? t('main.m008')
@@ -608,8 +597,6 @@ function App() {
     : s.promptWorkspace?.helperModel
       ? t('main.m011')
       : t('main.m012');
-  // The model is a header chip at every width; narrow widths shorten the empty states so the
-  // chip leaves room for the title. The accessible name keeps the full description.
   const mainShortDescription = !modelCheckReady
     ? t('main.m013')
     : mainModel
@@ -800,8 +787,6 @@ function App() {
       if (helperWorkspaceOpen) setWorkspacePanel(null);
       setHelperExpanded(false);
       setLibraryTab(tab);
-      // Choosing the navigation entry for the section you are in returns to that section's list,
-      // even when the tab does not change. The panel keeps its own unsaved-draft protection.
       setLibraryListRequest((value) => value + 1);
       s.showLibrary();
       setPanel('');
@@ -915,7 +900,6 @@ function App() {
     setInspectedRun(id);
     setPanel('tasks');
   }
-  // The drawer shows the quick actions in its header row instead of the brand row.
   const toggleSidebar = () => {
     if (!helperWorkspaceOpen && autoCollapseSidebar && !sidebarCollapsed)
       setPanelSidebarExpanded(true);
@@ -1571,11 +1555,7 @@ function App() {
                       key={s.viewKey}
                       loading={s.readerLoading}
                       error={s.readerLoadError}
-                      onRetry={() =>
-                        void s.refresh(s.selected).catch(() => {
-                          // The selected reader owns its load failure and recovery action.
-                        })
-                      }
+                      onRetry={() => void s.refresh(s.selected).catch(() => {})}
                     />
                   ) : (
                     <>
@@ -1836,8 +1816,6 @@ function App() {
                               }
                             />
                             <div className="run-outcome">
-                              {/* Every turn, settled or not, carries the same status row as the
-                                  helper conversation; the failure card adds the recovery actions. */}
                               <TurnActivity
                                 run={run}
                                 jobs={[]}
@@ -2157,7 +2135,6 @@ function App() {
                       if (!s.active || s.pendingRequest) void submitRequest();
                     }}
                     placeholder={
-                      // A wrapping placeholder would grow the one-row composer on narrow screens.
                       compact
                         ? t('main.m111')
                         : t('main.composerPlaceholder', { key: enterSend ? 'Enter' : 'Ctrl+Enter' })
@@ -2691,7 +2668,6 @@ function App() {
             opener.focus();
             return;
           }
-          // A width change may have removed the sidebar that opened this dialog.
           const target = [
             ...document.querySelectorAll<HTMLButtonElement>(
               'button[data-global-search], button[data-navigation-menu]'
@@ -2722,7 +2698,6 @@ function App() {
         open={panel === 'navigation'}
         title={t('main.m057')}
         onClose={() => {
-          // Lazy destination loading may have replaced the native dialog's opener.
           navigationReturnFocus.current = navigationOpener.current;
           setPanel('');
         }}
@@ -2769,7 +2744,6 @@ function App() {
             }}
             onCreated={async (chat) => {
               await s.loadChats();
-              // Completing an admitted creation must not pull the user out of another task.
               if (newStoryView.current.key === newKey && newStoryView.current.active)
                 select(chat.id);
             }}

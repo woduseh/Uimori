@@ -72,7 +72,6 @@ export function ChatOptionSettings(props: Props) {
     loadedPromptRevision = useRef(props.promptRevision);
   const fixedDirty = !!base && !sameValues(fixed, base.fixedValues);
   const scopedDirty = scope === 'fixed' ? fixedDirty : Object.keys(oneoff).length > 0;
-  // An explicit one-off can equal the saved fixed value and still need preservation in fixed scope.
   const dirty = Object.keys(draft).length > 0 || !!uncertain;
   const current = useRef({ base, draft, dirty });
   current.current = { base, draft, dirty };
@@ -433,8 +432,6 @@ export function ChatOptionSettings(props: Props) {
   );
 }
 
-/* Reading an inherited value must not look like a broken form, so a row that follows
-   the wider setting shows the value as text and offers one explicit switch. */
 function getScopeWords() {
   return {
     fixed: {
@@ -486,20 +483,14 @@ function SelectiveValues({
   }
   if (definitions.length === 0) return <p className="muted">{t('chatsettings.m151')}</p>;
   const words = getScopeWords()[mode];
-  /* Same grouping rule as the prompt editor, so one option means the same thing in
-     both places. Long option sets stay navigable instead of becoming one long list. */
   const groups = new Map<string, PromptControl[]>();
   for (const control of definitions) {
-    // This Korean fallback is an existing persisted expansion identity, not displayed copy.
     const group = control.group?.trim() || '기본 설정';
     groups.set(group, [...(groups.get(group) ?? []), control]);
   }
   const row = (control: PromptControl) => {
     const selected = Object.hasOwn(values, control.id);
     const current = reconciledValues[control.id]!;
-    /* A switch already says what it will do, so flipping it is the act of setting a
-       value for this chat. Every other control keeps its value readable as text until
-       the row is explicitly switched into editing. */
     const live = control.type === 'boolean' || selected;
     return (
       <div key={control.id} className="chat-option-choice" data-scoped={String(selected)}>

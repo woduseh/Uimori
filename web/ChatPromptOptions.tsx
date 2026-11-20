@@ -18,7 +18,6 @@ type Props = {
   onBusyChange: (busy: boolean) => void;
 };
 
-/** Composer options always belong to the selected chat. Global defaults live in settings. */
 export function ChatPromptOptions(props: Props) {
   useI18n();
   const [contexts, setContexts] = useState<string[]>([]);

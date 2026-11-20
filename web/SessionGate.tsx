@@ -44,8 +44,6 @@ export function SessionGate({ children }: { children: ReactNode }) {
       }
     };
     const expired = () => {
-      // A delayed 401 may belong to a session already replaced by a new login.
-      // Confirm current authority before unmounting the workspace.
       void refresh(true);
     };
     const visible = () => {

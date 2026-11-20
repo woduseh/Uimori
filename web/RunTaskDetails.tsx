@@ -12,10 +12,6 @@ import { SceneUsage } from './SceneUsage.js';
 import { PartialResponse, StreamingResponse } from './StreamingResponse.js';
 import './run-task-details.css';
 
-/**
- * One line per attached package the 모델 선별 step decided for. The receipt records ids, so the chars
- * are summed from the run's own frozen resources rather than counted again.
- */
 function LoreSelectionStatus({ snapshot }: { snapshot: Run['snapshot'] }) {
   useI18n();
   const receipt = snapshot.loreSelection;

@@ -135,11 +135,6 @@ const evaluationMetadataLabels: Record<EvaluationMetadataProfile, string> = {
   },
 };
 
-/**
- * One select for any enumerated option. `choices` are the documented values, `vocabulary` is what
- * the encoder can send. Undocumented vocabulary values stay selectable under a separate group; a
- * value outside the vocabulary cannot be sent and blocks saving.
- */
 function ModelOptionSelect({
   label,
   value,
@@ -311,7 +306,6 @@ function StopSequence({
     </div>
   );
 }
-/** The one strength control every protocol has, stored in that protocol's native field. */
 function ThinkingSelect({
   hints,
   value,
@@ -323,7 +317,6 @@ function ThinkingSelect({
 }) {
   useI18n();
   const thinking = hints.thinking;
-  // A value kept from another connection's protocol stays visible so the user can clear it.
   const stale = (['thinkingLevel', 'reasoningEffort', 'outputEffort'] as const).filter(
     (field) => field !== thinking?.field && value[field] !== ''
   );
@@ -667,7 +660,6 @@ export function ProviderModelFields({
             </label>
           </details>
         )}
-        {/* Options the protocol cannot send stay visible while a value is set, so it can be cleared. */}
         {(hints?.thinkingModes || value.thinkingMode) && (
           <ModelOptionSelect
             label={t('providers.m194')}

@@ -42,7 +42,6 @@ export function useActivityFeed() {
         JSON.stringify(current) === JSON.stringify(visible) ? current : visible
       );
       setError('');
-      // Older browser receipts are safely mirrored to the server before use elsewhere.
       if (local.length) {
         const grouped = groupByChat(local);
         for (const [chatId, entries] of grouped)

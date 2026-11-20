@@ -256,7 +256,6 @@
   margin-top: 12px;
 }
 
-/* Finished cuts belong to the manuscript, not a diagnostic card stack. */
 .illustration-toolbar {
   display: flex;
   justify-content: space-between;
@@ -389,7 +388,6 @@
   }
 }
 
-/* App-owned cards stay in light DOM; only their positions are slotted into the message. */
 .illustration-slot {
   color: var(--text);
   font-family: var(--font-ui, var(--app-font-family, sans-serif));
@@ -475,8 +473,6 @@
   font-size: var(--font-body);
 }
 
-/* Inline illustration sheets must paint above the composer and its floating controls.
-   Scope the stacking lift to an open mobile cut menu; the normal reader stays untouched. */
 @media (max-width: 600px) {
   .reader-stage:has(.illustration-cut .action-menu[open]) {
     z-index: 25;

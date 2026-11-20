@@ -10,7 +10,6 @@ import { maxPackageImages, uploadPackageImage } from './package-image-upload.js'
 import { CheckIcon, SearchIcon } from './ui-icons.js';
 import './content-picker.css';
 
-/** Edits the current authoring draft; representative image changes are saved by the parent. */
 export function PackagePortraitEditor({
   value,
   onChange,

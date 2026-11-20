@@ -1,4 +1,3 @@
-/** App-owned provider presentation. Provider data, model IDs and request payloads retain their original values. */
 export const messages = {
   'providers.geminiJailbreak': {
     ko: 'Jailbreak',

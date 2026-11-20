@@ -59,8 +59,6 @@ export function useCodexContentWarning() {
           else settle(true);
         },
         () => {
-          // A cancelled or older request cannot settle a newer warning. Other failures
-          // stay advisory: the real request surfaces its own connection/error state.
           if (pending.current === request) settle(!controller.signal.aborted);
         }
       );

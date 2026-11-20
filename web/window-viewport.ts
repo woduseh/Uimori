@@ -14,8 +14,6 @@ function updateViewport() {
   viewport = next;
   for (const listener of listeners) listener();
 }
-// Mobile browsers change only the height when the on-screen keyboard or the address bar
-// shows or hides, so a height change alone is not a new display size.
 function onResize() {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
@@ -43,7 +41,6 @@ function snapshot() {
   return viewport;
 }
 
-/** One resize listener serves every displayed card; inactive readers do not subscribe. */
 export function useWindowViewport(enabled = true): Viewport | null {
   return useSyncExternalStore(
     enabled ? subscribe : inactiveSubscribe,

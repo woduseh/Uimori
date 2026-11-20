@@ -97,7 +97,6 @@ function codexResetLabel(resetsAt: number): { short: string; full: string } {
   };
 }
 
-/** Authentication remains in the server's dedicated official Codex runtime. */
 export function CodexAgentSettings({
   active = true,
   onOpenModels,
@@ -185,7 +184,6 @@ export function CodexAgentSettings({
       {t('providers.m423')}
     </button>
   );
-  // Only the official HTTPS verification page may be opened from runtime data.
   const verificationUrl = (() => {
     try {
       const url = new URL(status?.login?.verificationUrl ?? '');

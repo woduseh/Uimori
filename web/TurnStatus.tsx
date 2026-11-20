@@ -4,7 +4,6 @@ import { DoneIcon, IssueIcon, RunningIcon, StopIcon, UncertainIcon } from './ui-
 import './turn-activity.css';
 import './activity-status.css';
 
-/** Progress vocabulary shared by the main reader and the helper conversation. */
 export type StatusTone = 'running' | 'done' | 'cancelled' | 'issue' | 'uncertain';
 export const statusGlyph = {
   running: RunningIcon,
@@ -16,27 +15,18 @@ export const statusGlyph = {
 
 type Props = {
   tone: StatusTone;
-  /** Status sentence. It stays available to assistive technology even when `quiet`. */
   text: string;
-  /** Elapsed or measured duration; omitted when there is nothing meaningful to show. */
   elapsed?: ReactNode;
-  /** Scene number and other identity rendered before the glyph. */
   leading?: ReactNode;
-  /** Badges shown after the status text, such as a manual-translation marker. */
   badges?: ReactNode;
-  /** A settled response shows only the glyph; the sentence moves to assistive technology. */
   quiet?: boolean;
-  /** Keeps the issue colour when a connection check hides the underlying failure. */
   issue?: boolean;
-  /** Session key that restores the disclosure state after a reload. */
   storageKey?: string;
   onOpenChange?: (open: boolean) => void;
-  /** Diagnostics revealed by the disclosure. */
   children: ReactNode;
   dataProps?: Record<string, string>;
 };
 
-/** Status row with the shared glyph, sentence, duration and optional diagnostics. */
 export function TurnStatus({
   tone,
   text,
@@ -80,9 +70,7 @@ export function TurnStatus({
     onOpenChange?.(next);
     try {
       if (storageKey) sessionStorage.setItem(storageKey, next ? 'open' : 'closed');
-    } catch {
-      /* Current view still works. */
-    }
+    } catch {}
   };
   return (
     <details
@@ -90,16 +78,14 @@ export function TurnStatus({
       {...dataProps}
       open={open}
       onToggle={(event) => {
-        // Nested diagnostic disclosures must not change this response's state.
         if (event.target !== event.currentTarget) return;
         persist(event.currentTarget.open);
       }}
     >
       <summary
         onClick={(event) => {
-          // Toggle through React state instead of the native activation: the browser fires
-          // toggle asynchronously, so a reload right after closing would otherwise bring the
-          // panel back, and React's controlled attribute would double-toggle the native change.
+          // The browser fires the details toggle event asynchronously: a reload right after closing
+          // would bring the panel back, and React's controlled attribute would double-toggle it.
           event.preventDefault();
           persist(!open);
         }}

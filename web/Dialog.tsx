@@ -3,7 +3,6 @@ import { useEffect, useLayoutEffect, useId, useRef, useState, type ReactNode } f
 import { IconButton } from './IconButton.js';
 import { CloseIcon } from './ui-icons.js';
 
-/** Native modal supplies background inertness, Escape, focus containment and restoration. */
 export function Dialog({
   open,
   title,
@@ -47,7 +46,6 @@ export function Dialog({
   useLayoutEffect(() => {
     const node = ref.current!;
     return () => {
-      // Conditional panels must close before removal to restore the native opener focus.
       isOpen.current = false;
       if (node.open) node.close();
     };

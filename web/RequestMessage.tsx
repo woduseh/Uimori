@@ -35,11 +35,9 @@ export function RequestMessage({
   saveHint?: string;
   menuActions?: ReactNode;
   maxLength?: number;
-  /** Narrow widths: keep the edit action standing ('always') or show it when the bubble is tapped ('tap'). */
   compactActions?: 'always' | 'tap';
   runId: string;
   request: string;
-  /** Frozen input originally used to generate this response. */
   originalRequest?: string;
   images?: RequestImage[];
   displayText?: string;
@@ -95,9 +93,7 @@ export function RequestMessage({
     try {
       if (value === undefined) sessionStorage.removeItem(key);
       else sessionStorage.setItem(key, value);
-    } catch {
-      /* Keep editing available when browser storage is restricted. */
-    }
+    } catch {}
   };
   const editingCallback = useRef(onEditingChange);
   useLayoutEffect(() => {
@@ -238,7 +234,6 @@ export function RequestMessage({
             className={`request-message${!requestEnabled ? ' request-context-disabled' : ''}`}
             data-testid="source-request"
             onClick={() => {
-              // Narrow widths keep earlier requests quiet; tapping the bubble shows its actions.
               if (compactActions === 'tap' && matchMedia(SHEET_MEDIA).matches)
                 setRevealed((value) => !value);
             }}

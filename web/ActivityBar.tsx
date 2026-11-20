@@ -6,16 +6,11 @@ import './activity-status.css';
 
 type Props = {
   tone: StatusTone;
-  /** Issue colouring, kept separate so an unconfirmed execution can read as a problem. */
   issue: boolean;
   label: string;
-  /** Elapsed or measured duration; omitted when there is nothing meaningful to show. */
   elapsed?: ReactNode;
-  /** Tasks represented beyond the summarized one. */
   extra?: number;
-  /** Whether the control the toggle governs is open. */
   expanded: boolean;
-  /** The summary itself is hidden, so the toggle brings it back. */
   collapsed: boolean;
   toggleLabel: string;
   toggleTitle: string;
@@ -24,7 +19,6 @@ type Props = {
   testId?: string;
 };
 
-/** Compact progress row above a composer. Hiding never changes or cancels server work. */
 export function ActivityBar({
   tone,
   issue,

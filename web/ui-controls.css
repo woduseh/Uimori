@@ -36,8 +36,6 @@
     background: var(--hover);
   }
 }
-/* A closed menu keeps a layout box because its body is positioned out of flow. Nothing paints
-   there, but the box makes the menu look present to assistive checks and hit tests. */
 .action-menu:not([open]) > .action-menu-body {
   display: none;
 }
@@ -83,7 +81,6 @@
     background: var(--hover);
   }
 }
-/* `.danger` alone loses to the menu item rule, so destructive items name themselves here too. */
 :is(.action-menu-body, .action-menu-group) > .delete-control > button,
 :is(.action-menu-body, .action-menu-group) > button.danger {
   color: var(--error);
@@ -111,8 +108,6 @@
   top: auto;
   bottom: calc(100% + 4px);
 }
-/* Anchor scope keeps repeated scene menus attached to their own trigger. Geometry is native;
-   details still owns opening, dismissal and the lifetime of dialogs launched by menu items. */
 .action-menu-viewport {
   anchor-scope: --action-menu-trigger;
 }
@@ -139,7 +134,6 @@
     position-area: top span-left;
   }
 }
-/* When neither side can hold a long menu, use the available viewport and scroll its contents. */
 @position-try --action-menu-viewport {
   position-area: none;
   inset: 8px;
@@ -147,9 +141,6 @@
   align-self: center;
   justify-self: end;
 }
-/* Bottom sheet below 600px (SHEET_MEDIA in ActionMenu.tsx): a scrim behind and rows sized for
-   thumbs. The doubled class outranks per-screen popover overrides such as `.source-actions >
-   .action-menu > .action-menu-body`; desktop anchor positioning does not apply here. */
 @media (max-width: 600px) {
   .action-menu[open]::before {
     content: "";

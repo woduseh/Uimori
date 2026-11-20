@@ -45,7 +45,6 @@ function PortraitDialog({
   );
 }
 
-/** The compact bot header shares the gallery's original-image viewer. */
 export function ReaderPortraitButton({
   url,
   title,
@@ -73,7 +72,6 @@ export function ReaderPortraitButton({
   );
 }
 
-/** Stable app-owned portraits. Themes can arrange them but cannot replace their behavior. */
 export const ReaderGallery = memo(function ReaderGallery({
   bot,
   persona,

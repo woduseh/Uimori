@@ -123,7 +123,6 @@ export function PackageStartPicker({
       onClose();
       try {
         await refresh();
-        // The old trigger disappears. An empty reader returns focus to the retained draft.
         requestAnimationFrame(() => {
           const target = result.run
             ? document

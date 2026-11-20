@@ -22,7 +22,6 @@ const catalogLoaders = {
   ja: () => import('./locales/ja.js'),
   zh: () => import('./locales/zh.js'),
 };
-/** Resolves once the locale's messages are available; Korean ships with the entry chunk. */
 export async function loadLocale(locale: UiLocale): Promise<void> {
   if (locale !== 'ko') catalogs[locale] ??= (await catalogLoaders[locale]()).default;
 }
@@ -56,11 +55,9 @@ function applyLocale(locale: UiLocale) {
       if (requested === locale) publish(locale);
     });
 }
-/** Await before the first render; an unavailable catalog opens the app in Korean for this visit. */
 export function loadInitialLocale(): Promise<void> {
   return loadLocale(current).catch(() => applyLocale('ko'));
 }
-/** Locale is browser presentation state. It never writes application settings or remounts editors. */
 export function setLocale(value: UiLocale): boolean {
   const next = supportedLocale(value);
   let persisted = true;
@@ -111,8 +108,6 @@ export function t(key: string, values?: MessageValues): string {
   return formatMessage(key, current, values);
 }
 const messagePrefix = '\u001fui:';
-/** A retained UI notice carries its identity, never a translated string used as an identity.
- * This value belongs only in presentation state; domain data and wire errors stay unchanged. */
 export function message(key: string, values?: MessageValues): string {
   return (
     messagePrefix +
@@ -129,11 +124,9 @@ export function message(key: string, values?: MessageValues): string {
     })
   );
 }
-/** Mark only app-owned nested errors/notices. Names, manuscripts and other arguments stay literal. */
 export function messageRef(value: string): MessageReference {
   return { uiMessage: value };
 }
-/** Preserve a legacy wire/error string while attaching its presentation contract. */
 export function registerMessage(
   value: string,
   key: string | (() => string),
@@ -141,13 +134,11 @@ export function registerMessage(
 ): void {
   formatted.set(value, typeof key === 'function' ? key : { key, values });
 }
-/** Existing validation helpers retain their Korean Error.message contract. */
 export function legacyMessage(key: string, values?: MessageValues): string {
   const value = formatMessage(key, 'ko', values);
   registerMessage(value, key, values);
   return value;
 }
-/** Re-express retained app notices/errors; callers must not pass user-authored content. */
 export function translateMessage(value: string): string {
   if (value.startsWith(messagePrefix)) {
     try {
@@ -167,7 +158,6 @@ export function translateMessage(value: string): string {
         );
       return t(descriptor.key, values);
     } catch {
-      // An external diagnostic may contain arbitrary bytes; it is not an internal descriptor.
       return value;
     }
   }
@@ -205,7 +195,6 @@ export function formatDate(
   options?: Intl.DateTimeFormatOptions
 ): string {
   const date = new Date(value);
-  // Legacy pending requests can have no timestamp. An absent label must not crash the reader.
   if (!Number.isFinite(date.getTime())) return '';
   const resolved = options ?? { dateStyle: 'medium', timeStyle: 'short' };
   return cachedFormat(

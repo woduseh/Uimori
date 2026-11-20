@@ -1,4 +1,3 @@
-// App-owned editor messages. Imported content and stored defaults remain unchanged.
 export const messages = {
   'native.searchResultCount': {
     ko: '항목 {count, number}개',

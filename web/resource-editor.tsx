@@ -66,7 +66,6 @@ function context(session: ResourceEditorSession | null): ActiveEditorContext | n
   };
 }
 export const getActiveEditorContext = () => context(activeSession());
-/** Check every mounted editor; the focused panel may be editing a different resource. */
 export function hasUnsavedResourceEditor(kind: string, id: string) {
   return [...sessions.values()].some((session) => {
     const state = session.snapshot();
@@ -109,7 +108,6 @@ type ResourceEditorValue = {
   activate: () => void;
 };
 
-/** Subscribe to the owner; model updates never make a round trip through parent state. */
 export function useResourceEditor<Model extends ResourceModel>(session: ResourceEditorSession) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const token = useMemo(() => Symbol(session.editorKey), [session]);
@@ -258,7 +256,6 @@ export function ResourceEditorProvider({
   );
 }
 
-/** A field buffer may contain incomplete code; it is not a server document. */
 export function useBufferedEditorState<T>(
   path: string,
   initial: T | (() => T),
@@ -274,9 +271,7 @@ export function useBufferedEditorState<T>(
   if (raw !== undefined) {
     try {
       value = (typeof initialValue === 'string' ? raw : JSON.parse(raw)) as T;
-    } catch {
-      // Device-local recovery can be stale; the current model remains the fallback.
-    }
+    } catch {}
   }
   const current = useRef(value);
   current.current = value;
@@ -295,7 +290,6 @@ export function useBufferedEditorState<T>(
       return;
     const serialized = JSON.stringify(current.current);
     if (serialized !== old.signature && serialized !== signature) return;
-    // A parent/accepted-model update is not new typing. The context already owns recovery.
     if (latest.current.editor) latest.current.editor.session.setField(path, undefined);
     else setStandalone(latest.current.initialValue);
   }, [path, restore, signature, options?.syncPristineInitial]);
@@ -326,7 +320,6 @@ export function useBufferedEditorState<T>(
   return [value, update];
 }
 
-/** Input widgets prepare their own values at Save; no extra persisted draft or apply stage. */
 export function useEditorSavePreparation(
   path: string,
   prepare: (model: ResourceModel) => ResourceModel

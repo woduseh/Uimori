@@ -190,7 +190,6 @@ p.provider-draft-note:lang(ko),
     margin: 16px 0;
   }
 }
-/* Provider workspace: lists, guided connection setup, and one focused editor. */
 .connection-editor [hidden] {
   display: none !important;
 }

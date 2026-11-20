@@ -20,7 +20,6 @@ type Props = {
   onDeleted: () => Promise<void> | void;
   onError?: (message: string) => void;
 };
-/** Capture the reviewed revision before confirmation; never retry a conflicting deletion. */
 export function DeleteButton({
   path,
   revision,

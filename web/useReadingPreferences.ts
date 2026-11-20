@@ -50,7 +50,6 @@ function readingPositions(): ReadingPosition[] {
     });
 }
 
-/** Owns only browser presentation, including keeping the visible source/message in place. */
 export function useReadingPreferences(
   font: string,
   fontSize: number,
@@ -114,9 +113,7 @@ export function useReadingPreferences(
       if (event.key !== READABILITY_STORAGE_KEY && event.key !== null) return;
       try {
         if (event.storageArea === localStorage) changeLayout(() => setSettings(readPreferences()));
-      } catch {
-        // Browser storage can be disabled while this page is open.
-      }
+      } catch {}
     };
     window.addEventListener('storage', receive);
     return () => window.removeEventListener('storage', receive);

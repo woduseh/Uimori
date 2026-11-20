@@ -25,9 +25,7 @@ export function activityAcknowledgementKey(item: ReaderActivity) {
   return JSON.stringify([item.kind, item.id, item.generation, item.startedAt]);
 }
 
-/** Match a successful replacement to the exact source version; never infer across sources. */
 export function translationResolved(item: ActivityNoticeItem, items: ActivityNoticeItem[]) {
-  // Terminal uncertainty can be acknowledged explicitly, but must never be silently resolved.
   if (
     item.kind !== 'translation' ||
     item.executionUncertain ||

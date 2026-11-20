@@ -97,7 +97,6 @@ function ValueInput({
   );
 }
 
-/** Display native Risu toggle declarations; saved values do not change their structure. */
 export function PromptControlFields({
   program,
   values,

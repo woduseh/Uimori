@@ -52,7 +52,6 @@ export function StoryUi({
     themeState?.scope.botId
   );
   const theme = customTheme ?? presentation.theme?.storyUi;
-  // A root Frame is the block's own shell, so its medium and brand color style the block.
   const root = (
     segment.messages[0] as unknown as {
       createSurface: { components: { id: string; component: string; [key: string]: unknown }[] };
@@ -96,9 +95,7 @@ export function StoryUi({
     for (const change of readStoryUiDraft(draftKey)) {
       try {
         surface.dataModel.set(change.path, change.value);
-      } catch {
-        /* An invalid session draft cannot change the saved surface. */
-      }
+      } catch {}
     }
     const subscription = surface.dataModel.subscribe('/', (value) => {
       writeStoryUiDraft(draftKey, storyUiDraftChanges(initial, value));

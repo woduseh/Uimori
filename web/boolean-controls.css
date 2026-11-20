@@ -58,7 +58,6 @@
   left: 5px;
   top: 1px;
   border: solid var(--accent-ink);
-  /* This draws the check glyph, whose stroke follows the icon rather than rule scale. */
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
@@ -90,7 +89,6 @@
   min-height: var(--control-h);
 }
 @media (max-width: 760px) {
-  /* Keep the 26px track inside a 44px native input hit area. */
   :root input.ui-switch[type="checkbox"][role="switch"],
   :root input.ui-switch[type="checkbox"][role="switch"]:checked {
     height: 44px;
@@ -132,7 +130,6 @@
   }
 }
 
-/* Native high-contrast glyphs remain visible when authored fills are replaced by the OS. */
 @media (forced-colors: active) {
   :root input.ui-selection-checkbox[type="checkbox"] {
     appearance: auto;

@@ -7,7 +7,6 @@ import { TransientNotice } from './TransientNotice.js';
 import { message, t, translateMessage, useI18n } from './i18n.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 
-/** A helper-role change uses its own current model revision and never edits prompt/profile pins. */
 export function HelperModelPicker({
   open,
   library,
@@ -100,7 +99,6 @@ export function HelperModelPicker({
         },
         'PUT'
       );
-      // Acknowledgement owns success even if the following shared refresh fails.
       setAccepted((old) => (old && old.revision > value.revision ? old : value));
       if (value.revision >= latestRevision.current) {
         latestRevision.current = value.revision;
@@ -114,7 +112,6 @@ export function HelperModelPicker({
     } catch (cause) {
       if (epoch.current === owner) {
         setWriteError(cause instanceof Error ? cause.message : String(cause));
-        // A rejected or uncertain write needs a fresh read before another explicit choice.
         setNeedsRead(true);
       }
     } finally {

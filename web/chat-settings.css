@@ -48,8 +48,6 @@
   }
 }
 
-/* The chat's own override is editable; what it inherits is not. Separating them stops the two
-   from reading as one pile of lines. */
 .settings-inherited {
   margin-top: 24px;
   padding-top: 16px;
@@ -234,8 +232,6 @@
   margin-left: auto;
   color: var(--muted);
 }
-/* Chat overrides use the same groups as app settings. Scope this treatment to the
-   dialog so compact inline resource editors keep their own layout. */
 .chat-settings-panel .profile-fields,
 .chat-settings-panel .chat-runtime-fields {
   display: grid;

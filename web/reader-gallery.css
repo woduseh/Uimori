@@ -1,4 +1,3 @@
-/* Opt-in presentation hook: existing themes keep their current layout. */
 .reader-gallery {
   display: none;
 }
@@ -52,7 +51,6 @@
   border-radius: var(--radius-control);
 }
 
-/* The default layout opts in; existing custom themes retain their original context strip. */
 .story-context[data-fallback],
 .reader-bot-name {
   display: none;

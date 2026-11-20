@@ -36,7 +36,6 @@ export const DEFAULT_READABILITY: ReadabilitySettings = {
 
 export const READABILITY_STORAGE_KEY = 'uimori:readability';
 
-/** Browser preferences never enter saved prose, source anchors or model requests. */
 export function normalizeReadability(value: unknown): ReadabilitySettings {
   const input = value && typeof value === 'object' ? (value as Partial<ReadabilitySettings>) : {};
   const choice = (number: unknown, values: readonly number[]) =>

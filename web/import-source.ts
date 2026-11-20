@@ -2,7 +2,6 @@ import { legacyMessage } from './i18n.js';
 import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
 import { apiBinary } from './api.js';
 
-/** Stages a file the request body cannot carry, and keeps the small path unchanged. */
 export async function readLargeImportSource(
   file: File,
   signal?: AbortSignal
@@ -12,7 +11,6 @@ export async function readLargeImportSource(
   return { name: file.name, uploadId: staged.uploadId };
 }
 
-/** Read a chosen file once; the caller owns size limits, review, cancellation and adoption. */
 export function readImportSource(
   file: File,
   signal?: AbortSignal

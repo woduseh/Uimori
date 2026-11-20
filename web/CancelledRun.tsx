@@ -5,7 +5,6 @@ import { RequestMessage } from './RequestMessage.js';
 import { HistoryIcon, StopIcon } from './ui-icons.js';
 import './cancelled-run.css';
 
-/** A confirmed cancellation keeps its request recoverable without repeating failure diagnostics. */
 export function CancelledRun({
   run,
   disabled,

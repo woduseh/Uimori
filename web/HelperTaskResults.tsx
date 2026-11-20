@@ -36,7 +36,6 @@ const usageFields = [
   'internalModelCalls',
 ] as const;
 
-/** Unknown provider reports stay separate from reported zeroes and partial totals. */
 export function helperTaskUsageTotals(attempts: HelperTaskAttemptUsage[]) {
   return Object.fromEntries(
     usageFields.map((field) => {

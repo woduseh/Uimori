@@ -40,15 +40,10 @@
   --shade: #00000099;
   --border: var(--line);
   --reading: 18px;
-  /* Manuscript column width; the reading settings pick 760 / 880 / 1040. */
   --reading-width: 880px;
-  /* Right work slot shared by the helper and the creative options panel. */
   --panel-w: 384px;
-  /* Collapsed navigation keeps an icon rail instead of disappearing. */
   --rail-w: 56px;
-  /* Every app-level header shares one height so their bottom borders line up. */
   --header-h: 58px;
-  /* The brand block, and the rail slot that replaces it when collapsed. */
   --nav-head-h: 60px;
   --collection-w: 1280px;
   --detail-w: 1120px;
@@ -56,7 +51,6 @@
   --editor-list-w: 224px;
   --settings-w: 960px;
   --dialog-w: 480px;
-  /* Touch target floor, applied on every pointer type. */
   --control-h: 44px;
   --font-small: 12px;
   --font-body: 14px;
@@ -71,11 +65,9 @@
   --shadow-dialog:
     0 12px 32px color-mix(in srgb, var(--shade) 25%, transparent),
     0 2px 6px color-mix(in srgb, var(--shade) 12%, transparent);
-  /* Only state changes that benefit from continuity use motion. */
   --motion-fast: 250ms;
   --motion-panel: 250ms;
   --motion-ease-out: ease-out;
-  /* Lucide chevron-right, the shared disclosure marker. */
   --chevron: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>');
   --nav-w: 248px;
   --app-height: 100dvh;
@@ -189,8 +181,6 @@ button {
   }
 }
 button:disabled {
-  /* Keep each control's geometry while its accent and destructive fills become neutral.
-     Local tokens also cover buttons disabled by an enclosing fieldset. */
   --accent: var(--surface);
   --accent-ink: var(--muted);
   --accent-text: var(--muted);
@@ -224,7 +214,6 @@ select {
 textarea {
   resize: vertical;
 }
-/* Native control state stays with the form; these rules only describe that state. */
 input::placeholder,
 textarea::placeholder {
   color: var(--muted);
@@ -249,7 +238,6 @@ textarea[readonly] {
   border-color: var(--line);
   cursor: default;
 }
-/* Do not mark untouched required fields as errors on first render. */
 :is(input, textarea, select):is(:user-invalid, [aria-invalid="true"]):not(:disabled) {
   border-color: var(--error);
 }
@@ -278,8 +266,6 @@ input[type="search"]::-webkit-search-cancel-button {
     background: ButtonText;
   }
 }
-/* Keep native form state and keyboard handling; only app-owned controls opt in.
-   Authored message controls live in their own ShadowRoot. */
 @supports (appearance: base-select) {
   select:where(:not([multiple], [size])),
   select:where(:not([multiple], [size]))::picker(select) {
@@ -370,7 +356,6 @@ select:disabled {
   color: var(--muted);
   cursor: default;
 }
-/* Inherited colors keep existing thin/hidden scrollbar choices and hit areas. */
 html {
   scrollbar-color: var(--muted) transparent;
 }
@@ -494,7 +479,6 @@ meter::-webkit-meter-even-less-good-value {
     color: currentColor;
   }
 }
-/* One file picker look: the browser's own button becomes a secondary button of this app. */
 input[type="file"] {
   padding: 6px;
   cursor: pointer;
@@ -575,8 +559,6 @@ label {
   gap: 8px;
   font-size: var(--font-body);
 }
-/* One disclosure idiom: the app's chevron, rotated when open, instead of the browser triangle.
-   Controls that draw their own marker keep it by opting out just below. */
 summary {
   cursor: pointer;
   min-height: var(--control-h);
@@ -616,8 +598,6 @@ fieldset {
   padding: 0;
   border: 0;
 }
-/* An icon beside a label belongs on the label's centre line. Without this the button
-   stays an inline box and the SVG drops onto the baseline. */
 button:has(> svg) {
   display: inline-flex;
   align-items: center;
@@ -800,7 +780,6 @@ input[type="checkbox"] {
   min-width: 0;
   flex: 1;
 }
-/* Compact widths: the whole title block opens the scene list. */
 .header-title-hit {
   position: absolute;
   inset: -4px -6px;
@@ -811,7 +790,6 @@ input[type="checkbox"] {
   box-shadow: none;
   min-height: 0;
 }
-/* Paint behind the title; the overlaid hit target must not cover its text. */
 .header-title:has(.header-title-hit:focus-visible) {
   background: var(--hover);
   border-radius: var(--radius-control);
@@ -874,7 +852,6 @@ input[type="checkbox"] {
   gap: 1px;
   align-items: center;
 }
-/* The effective main model opens its global or chat-specific settings. */
 .model-chip {
   display: inline-flex;
   align-items: center;
@@ -988,8 +965,6 @@ input[type="checkbox"] {
   padding-top: 24px;
   border-top: var(--hairline) solid var(--line);
 }
-/* Keep the view toggle separate from the activity summary. Natural wrapping accommodates
-   translated labels without reserving a fixed Korean-width space over the badges. */
 .scene-header {
   display: flex;
   flex-wrap: wrap;
@@ -1003,8 +978,6 @@ input[type="checkbox"] {
   flex: 1 1 160px;
   margin: 0;
 }
-/* Keep the narrow status summary beside the view toggle while expanded diagnostics
-   occupy the full scene width, not just their flex item's width. */
 .scene-header > .turn-activity > .turn-activity-body {
   width: 100cqw;
 }
@@ -1202,7 +1175,6 @@ input[type="checkbox"] {
 .has-error {
   color: var(--error);
 }
-/* Scene footer: one row of quiet actions, then rarely used disclosures on the right. */
 .source-actions {
   position: relative;
   display: flex;
@@ -1226,8 +1198,6 @@ input[type="checkbox"] {
   position: static;
   margin-right: auto;
 }
-/* The scene menu sits at the left of the row, so its popover anchors to the row's left edge
-   and stays inside narrow viewports. */
 .source-actions > .action-menu > .action-menu-body {
   right: auto;
   left: 0;
@@ -1267,8 +1237,6 @@ input[type="checkbox"] {
     opacity: 1;
   }
 }
-/* Touch has no hover to reveal them with, and an invisible control must not stay
-   tappable. */
 @media (hover: none), (pointer: coarse) {
   .focus-reading .source-actions,
   .focus-reading .scene-header {
@@ -1302,8 +1270,6 @@ input[type="checkbox"] {
   max-width: calc(var(--reading-width) + 48px);
   margin: 0 auto;
 }
-/* Composer: one row while the draft fits, then the text takes the full width and the
-   buttons move to a row below (see the grown state). */
 .composer {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -1398,7 +1364,6 @@ input[type="checkbox"] {
   color: var(--accent-ink);
   border-color: transparent;
 }
-/* Notices only: the model lives in the header chip and the shortcut in the placeholder. */
 .composer-status {
   margin: 4px 8px 0;
   font-size: var(--font-small);
@@ -1456,7 +1421,6 @@ input[type="checkbox"] {
     --motion-panel: 0ms;
   }
 }
-/* Failed turn: one card in the prose position with the next actions. */
 .turn-failure {
   display: grid;
   gap: 8px;
@@ -1516,10 +1480,6 @@ input[type="checkbox"] {
   gap: 6px;
   padding: 4vh 0;
 }
-/* The empty chat is where the bot's portrait carries the screen, so it reads as a
-   picture rather than a list thumbnail. */
-/* The vh cap keeps the portrait from pushing the prompt below the fold on a short
-   window; on a normal one the fixed size wins. */
 .first-scene-avatar {
   --content-avatar-size: min(240px, 30vh);
   border-radius: var(--radius-panel);
@@ -1548,7 +1508,6 @@ input[type="checkbox"] {
 .focus-reading .composer-dock {
   display: none;
 }
-/* Focus reading hides the surroundings; it does not change the column width. */
 .error {
   color: var(--error);
   background: var(--error-bg);
@@ -1563,7 +1522,6 @@ input[type="checkbox"] {
   font-size: var(--font-small);
 }
 .app-dialog {
-  /* Each shell owns its size, including dialogs nested inside wide settings. */
   --dialog-size: var(--dialog-w);
   --dialog-gap: 24px;
   --dialog-max-height: min(760px, calc(var(--app-height, 100dvh) - 2 * var(--dialog-gap)));
@@ -1595,7 +1553,6 @@ input[type="checkbox"] {
 .app-dialog::backdrop {
   background: var(--shade);
 }
-/* Native dialogs open and close immediately; focus is never coupled to motion. */
 .dialog-header {
   flex: none;
   min-width: 0;
@@ -1622,7 +1579,6 @@ input[type="checkbox"] {
   padding: 24px;
   overscroll-behavior: contain;
 }
-/* All draft confirmation flows share the same shell, independent of their host panel. */
 .app-dialog.confirmation-dialog {
   --dialog-size: 620px;
 }
@@ -1791,7 +1747,6 @@ input[type="checkbox"] {
   .app-dialog {
     --dialog-gap: 16px;
   }
-  /* App navigation remains a full-screen panel, not a content modal. */
   .app-dialog.navigation-dialog {
     margin: 0;
     width: 100vw;
@@ -1875,7 +1830,6 @@ input[type="checkbox"] {
   margin-block: 16px;
 }
 
-/* Keep category navigation stable while the settings page scrolls internally. */
 .app-dialog.settings-dialog {
   --dialog-size: 1160px;
   height: var(--dialog-max-height);
@@ -1997,7 +1951,6 @@ input[type="checkbox"] {
   overscroll-behavior: contain;
 }
 
-/* Only initial reads consume the page body. Loaded forms keep their normal flow. */
 .settings-page:has(> .loading-state-region),
 .settings-page:has(> .settings-loading-region) {
   display: flex;
@@ -2116,7 +2069,6 @@ input[type="checkbox"] {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-/* A provider's verdict on saved options; the app reports it and never rewrites the option. */
 .provider-rejection {
   margin: 8px 0;
   padding: 8px 12px;
@@ -2128,7 +2080,6 @@ input[type="checkbox"] {
   color: var(--muted);
 }
 
-/* Related values remain distinct through spacing, without punctuation between them. */
 .ui-meta-row {
   display: inline-flex;
   flex-wrap: wrap;

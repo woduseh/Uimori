@@ -1,4 +1,3 @@
-/* Native interest invokers own hover, keyboard focus, Escape and the hover bridge. */
 .ui-tooltip {
   position: fixed;
   position-area: block-end;
@@ -33,8 +32,6 @@
 .ui-icon-button:not(:hover, :focus-visible) > .ui-tooltip {
   visibility: hidden;
 }
-/* Touch browsers leave :hover on the tapped point, which can land on a control that a panel
-   opens underneath the finger. */
 @media (hover: none) {
   .ui-icon-button:not(:focus-visible) > .ui-tooltip {
     visibility: hidden;

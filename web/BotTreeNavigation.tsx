@@ -56,7 +56,6 @@ function readView(): View {
     return { open: {}, sort: 'recent', order: [], mode: 'bots' };
   }
 }
-/** First row of the sidebar and the drawer: start a chat or find any chat. */
 export function NavigationQuickActions({
   onSearch,
   onNewChat,
@@ -89,7 +88,6 @@ export const BotNavigation = memo(function BotNavigation(
     onHelperActivity?: () => void;
     quickActions?: boolean;
     libraryTab?: 'bot' | 'persona' | 'module' | 'prompts';
-    /** Collapsed navigation renders an icon rail instead of the full tree. */
     collapsed?: boolean;
     onToggleCollapse?: () => void;
     helperOpen?: boolean;
@@ -207,9 +205,7 @@ export const BotNavigation = memo(function BotNavigation(
   useEffect(() => {
     try {
       localStorage.setItem(storageKey, JSON.stringify(view));
-    } catch {
-      /* Navigation remains usable without browser storage. */
-    }
+    } catch {}
   }, [view]);
   const toggle = (key: string) =>
     setView((current) => ({ ...current, open: { ...current.open, [key]: !current.open[key] } }));

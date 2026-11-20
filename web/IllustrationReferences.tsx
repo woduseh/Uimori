@@ -38,7 +38,6 @@ const rolesOf = (value: Loaded): Record<string, IllustrationReferenceRole | ''> 
     ...value.candidates.map((item) => [item.ref, item.role ?? '']),
   ]);
 
-/** Per-chat visual identities and reference roles. */
 export function IllustrationReferencesEditor({
   chatId,
   refreshKey,
@@ -92,7 +91,6 @@ export function IllustrationReferencesEditor({
   }, [chatId]);
   const refresh = useCallback(async () => {
     const value = await load();
-    // Edits made while the read was pending still own the draft.
     if (value && !dirtyDraft.current) {
       setRoles(rolesOf(value));
       setProfiles(value.chatCharacterProfiles);

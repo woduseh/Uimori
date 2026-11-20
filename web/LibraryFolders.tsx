@@ -49,7 +49,6 @@ export function useLibraryOrganization(
   useEffect(() => {
     const request = ++loadVersion.current;
     if (library?.organization) {
-      // The parent excludes stale Library responses. Archive restoration may lower this CAS token.
       setOrganization(library.organization);
       return;
     }
@@ -97,9 +96,7 @@ export function useLibraryOrganization(
         const latest = await api<LibraryOrganization>('/library/organization');
         if (refresh === loadVersion.current) setOrganization(latest);
         await reload();
-      } catch {
-        /* Preserve the original mutation error; a later reload can recover. */
-      }
+      } catch {}
       return false;
     } finally {
       lock.current = false;
@@ -147,14 +144,12 @@ export function LibraryFolders({
   onFolderDrop,
 }: {
   presentation?: 'cards' | 'breadcrumb';
-  /** Card folders follow the list/card choice made for the items below them. */
   view?: 'cards' | 'list';
   category: LibraryCategory;
   organizer: LibraryOrganizer;
   value: FolderFilter;
   onChange: (value: FolderFilter) => void;
   counts: Record<string, number>;
-  /** Portrait URLs of resources inside each folder: the automatic cover and the cover choices. */
   covers?: Record<string, string[]>;
   reload: () => Promise<void>;
   onError: (error: string) => void;

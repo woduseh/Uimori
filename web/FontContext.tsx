@@ -48,9 +48,7 @@ export function FontProvider({ children }: { children: ReactNode }) {
   const notify = useCallback(() => {
     try {
       localStorage.setItem(fontsChangedKey, `${Date.now()}:${Math.random()}`);
-    } catch {
-      /* Save already succeeded. */
-    }
+    } catch {}
     window.dispatchEvent(new CustomEvent(fontsChangedEvent, { detail: sender.current }));
   }, []);
   const refresh = useCallback(
@@ -113,8 +111,6 @@ export function FontProvider({ children }: { children: ReactNode }) {
     });
     setRuntimeError(false);
     if (!disabled && catalog) {
-      // Register lazy faces for previews. Only selected fonts are explicitly loaded;
-      // catalog refreshes retain installed faces and never interrupt visible text.
       for (const font of catalog.fonts) {
         const previous = faces.current.get(font.id);
         if (previous && previous.status !== 'error') continue;

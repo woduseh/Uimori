@@ -7,7 +7,6 @@
     min-width: 0;
     isolation: isolate;
   }
-  /* A base-layer default: authored selections and message themes still win. */
   ::selection {
     background: color-mix(in srgb, var(--accent) 24%, var(--bg));
     color: var(--text);
@@ -53,7 +52,6 @@
 [data-risu-disabled="true"] [risu-btn] {
   pointer-events: none !important;
 }
-/* Only app-marked prose wins over author-wide p/heading typography rules. */
 [data-uimori-prose] {
   font-family: var(--reading-font-family, system-ui, sans-serif) !important;
   line-height: var(--reading-line-height, 1.9) !important;

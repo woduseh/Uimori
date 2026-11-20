@@ -16,7 +16,6 @@ export function backgroundStyle(value: Background): CSSProperties {
     '--theme-background-dark': String(value.darkOverlay / 100),
   } as CSSProperties;
 }
-/** Decorative sibling of the reader, never a parent/filter of manuscript content. */
 export function ThemeBackground() {
   const { catalog, scope, disabled } = useThemes();
   const value = resolveThemeBackground(catalog.preferences, scope);

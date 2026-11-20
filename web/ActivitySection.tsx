@@ -23,7 +23,6 @@ function readExpanded(id: ActivitySectionId, storageKey: string) {
     return initialExpanded[id];
   }
 }
-/** The section keeps its shown count while folded; reopening never starts over. */
 export function ActivitySection({
   id,
   storageKey = sectionStorageKey,
@@ -51,9 +50,7 @@ export function ActivitySection({
       const saved =
         previous && typeof previous === 'object' && !Array.isArray(previous) ? previous : {};
       localStorage.setItem(storageKey, JSON.stringify({ ...saved, [id]: next }));
-    } catch {
-      // Navigation must still work when optional presentation storage is disabled.
-    }
+    } catch {}
   };
   return (
     <section className="activity-nav-section" data-activity-section={id}>

@@ -5,8 +5,6 @@
   min-height: 0;
   min-width: 0;
 }
-/* Symmetric so the manuscript centres on the same axis as the composer below it;
-   the left half is the space the absolutely positioned scene rail sits in. */
 .reader-stage.has-scenes > .reader-scrollport {
   padding-inline: 58px;
 }
@@ -202,7 +200,6 @@
   gap: 8px;
   font-size: var(--font-small);
 }
-/* The compact jump action shares the composer's existing toolbar height. */
 @media (max-width: 760px) {
   .scene-dialog .segmented button {
     min-height: var(--control-h);
@@ -217,7 +214,6 @@
     color: var(--muted);
   }
   .story-workspace:has(.composer-dock textarea:focus) .scene-latest-inline {
-    /* Keep the pointer target stationary when focus leaves the composer. */
     visibility: hidden;
     pointer-events: none;
   }

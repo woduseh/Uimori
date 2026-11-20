@@ -192,7 +192,6 @@ const roles: Record<string, string> = {
 const unavailable =
   '선택한 모델 또는 프로바이더를 사용할 수 없어요. 설정 > 역할별 모델과 설정 > 프로바이더와 모델에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.';
 
-/** Preserve recognized local codes, never an arbitrary server/provider error or code suffix. */
 export function apiErrorDiagnostic(
   error: unknown,
   status: number,
@@ -273,7 +272,6 @@ export function apiErrorDiagnostic(
         code: 'REVISION_CONFLICT',
         message: '다른 요청이 먼저 반영됐어요. 최신 내용을 확인한 뒤 다시 시도해 주세요.',
       };
-    // Deletion conflicts already carry the local server's user-facing impact explanation.
     if (status === 409 && method === 'DELETE' && error.length <= 4000)
       return { code: null, message: error };
   }
@@ -286,7 +284,6 @@ export function apiErrorDiagnostic(
   return { code: null, message: `${message} (${status})` };
 }
 
-/** Localized presentation only. The wire value, diagnostic code and legacy Korean message stay intact. */
 export function apiErrorDisplay(error: unknown, status: number, method: string): string {
   const diagnostic = apiErrorDiagnostic(error, status, method);
   const code = diagnostic.code;
@@ -309,7 +306,6 @@ export function apiErrorDisplay(error: unknown, status: number, method: string):
       Object.hasOwn(limits, code) ? { limit: limits[code] } : undefined
     );
   if (code === 'MANUSCRIPT_TRANSLATION_MISSING' && typeof error === 'string') {
-    // apiErrorDiagnostic has already checked the complete grammar, ordering and bounds.
     const [, sceneNumbers, count] = error.split(':');
     const scenes = sceneNumbers.split(',').map(Number);
     const render = () => {
@@ -352,7 +348,6 @@ export function apiErrorDisplay(error: unknown, status: number, method: string):
     return value;
   }
   if (code) return diagnostic.message;
-  // A local deletion conflict may include authored names and impact details. Preserve those bytes.
   if (status === 409 && method === 'DELETE' && typeof error === 'string' && error.length <= 4000)
     return diagnostic.message;
   return display(

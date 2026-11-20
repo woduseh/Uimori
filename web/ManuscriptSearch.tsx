@@ -41,7 +41,6 @@ export function ManuscriptSearchPanel({
   library?: Library | null;
   folders?: ChatFolder[];
   label?: string;
-  /** A containing search dialog can own one query across different result kinds. */
   query?: string;
   queryComposing?: boolean;
   hideQueryInput?: boolean;

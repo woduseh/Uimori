@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from 'react';
 
-/** Disclosure preference stays on this device; first use starts closed. */
 export function PromptOptionGroup({
   identity,
   className,
@@ -29,9 +28,7 @@ export function PromptOptionGroup({
         setOpen(next);
         try {
           localStorage.setItem(key, next ? 'open' : 'closed');
-        } catch {
-          /* Storage is optional. */
-        }
+        } catch {}
       }}
     >
       <summary>{summary}</summary>

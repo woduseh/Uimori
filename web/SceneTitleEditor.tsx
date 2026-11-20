@@ -82,9 +82,7 @@ export function SceneTitleEditor({
             event.preventDefault();
             try {
               await save();
-            } catch {
-              /* Keep the name and error for correction. */
-            }
+            } catch {}
           }}
         >
           <fieldset disabled={busy}>

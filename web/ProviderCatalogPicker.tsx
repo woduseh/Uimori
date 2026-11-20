@@ -6,7 +6,6 @@ import type { Connection } from '../core/product.js';
 import { supportedModels } from '../core/model-capabilities.js';
 
 type CatalogModel = Connection['catalog'][number];
-/** Local support metadata and cached catalog selection. Refresh alone owns network access. */
 export function ProviderCatalogPicker({
   connection,
   selectedId,

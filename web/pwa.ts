@@ -44,7 +44,6 @@ export async function promptInstall() {
   } catch {
     publish({ error: uiMessage('outside.installRetry') });
   }
-  // The appinstalled event, not a possibly accepted prompt, confirms installation.
 }
 
 let notificationConsumer: ((intent: NotificationIntent) => void) | null = null;
@@ -65,7 +64,6 @@ export function subscribeNotificationNavigation(consumer: (intent: NotificationI
   };
 }
 
-/** Presentation only: no subscription, permission request, navigation or task mutation. */
 export function syncPwaLocale(locale = getLocale()) {
   const manifest = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
   if (manifest)
@@ -86,7 +84,6 @@ export function syncPwaLocale(locale = getLocale()) {
       }
     })
     .catch(() => {});
-  // The first install may have no active worker yet.
   void navigator.serviceWorker.ready.then((registered) => send(registered.active)).catch(() => {});
 }
 
@@ -122,7 +119,6 @@ export function startPwa() {
     prompt = null;
     publish({ installed: true, available: false, error: '' });
   });
-  // Registration does not request notification permission and installs no offline fetch cache.
   const register = () => {
     void pwaRegistration().catch(() => {});
   };

@@ -1,4 +1,3 @@
-/** Events set a target; only an applied HTTP response acknowledges a full refresh. */
 export function createReaderSync(options: {
   refresh: (incremental: boolean) => Promise<boolean | undefined>;
   cursor: () => number;

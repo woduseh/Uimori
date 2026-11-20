@@ -54,9 +54,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (new URLSearchParams(location.search).get('theme-safe') === '1') {
       try {
         sessionStorage.setItem('uimori:theme-disabled', '1');
-      } catch {
-        /* The URL still recovers this page. */
-      }
+      } catch {}
       return true;
     }
     try {
@@ -71,9 +69,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (notify) {
       try {
         localStorage.setItem(themesChangedKey, `${Date.now()}:${Math.random()}`);
-      } catch {
-        /* The server save already succeeded. */
-      }
+      } catch {}
     }
     const current = ++epoch.current;
     try {
@@ -131,9 +127,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setPreview(null);
     try {
       sessionStorage.setItem('uimori:theme-disabled', value ? '1' : '0');
-    } catch {
-      /* Recovery still works for this page. */
-    }
+    } catch {}
   }, []);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {

@@ -99,12 +99,9 @@ type NativeActionCommand = {
   waiters: number;
   confirmationFailed: boolean;
 };
-// An action can replace its source before its response arrives. Retain each unconfirmed
-// command across readers; a different authored choice remains an independent user action.
 const pendingNativeActions = new Map<string, NativeActionCommand>();
 
 type ReaderMode = 'original' | 'translation';
-/** Scene header pieces the activity panel places inside its summary row. */
 type SceneHeaderSlots = { leading: ReactNode; badges: ReactNode };
 type ReaderProps = {
   portrait?: ReactNode;
@@ -114,7 +111,6 @@ type ReaderProps = {
   index: number;
   sceneNumber?: number;
   jobs: Job[];
-  /** Scene illustrations attached to this response; absent while the feature is unused. */
   illustrations?: Illustration[];
   illustrationsCollapsed?: boolean;
   assets: Asset[];
@@ -132,7 +128,6 @@ type ReaderProps = {
   onEditingChange?: (sourceId: string, editing: boolean) => void;
   request?: string;
   requestImages?: RequestImage[];
-  /** The newest scene keeps frequent reading and request actions directly available. */
   latest?: boolean;
   onCheckRequest?: () => Promise<boolean>;
   onAskHelper?: (sourceId: string, text: string) => void;
@@ -141,7 +136,6 @@ type ReaderProps = {
   packageStart?: { mode: 'authored'; title: string };
   startSelection?: PackageStartSelection;
   onStartChanged?: () => void;
-  /** Wraps the scene header in the per-response activity panel; falsy keeps a plain header. */
   activity?: (slots: SceneHeaderSlots) => ReactNode;
   hasPackages?: boolean;
   presentationRefreshKey?: string | number;
@@ -365,13 +359,10 @@ function SourceReaderContent({
       command.waiters++;
       try {
         const unchanged = await operation;
-        // A replaced reader must refresh itself before releasing its own action lock.
         if (joined) await refresh();
         if (unchanged || joined) return { unchanged: true };
       } catch (error) {
         command.confirmationFailed = true;
-        // An unknown outcome must retain its original key and captured revision on retry,
-        // even if an SSE refresh has already published the successful state.
         const terminalReceipt =
           error instanceof ApiError &&
           error.status === 409 &&
@@ -408,8 +399,6 @@ function SourceReaderContent({
     initialMode(source.id, !!displayTranslation?.result)
   );
   useEffect(() => {
-    // Re-entering a visible scene with a new deep link must emit a fresh inspection;
-    // defer until the requested original/translation representation is rendered.
     if (readerTarget?.sourceId === source.id && readerTarget.representation !== mode) return;
     const node = container.current;
     if (!node || !('IntersectionObserver' in window)) return;
@@ -435,13 +424,10 @@ function SourceReaderContent({
     translationPreviouslyAvailable.current = targetTranslationAvailable;
     if (!justCompleted || readerTarget?.sourceId === source.id) return;
     try {
-      // Honor a manual choice made while translation was running.
       if (sessionStorage.getItem(`reader-mode:${source.id}`)) return;
       if (localStorage.getItem('uimori:reading-language') === 'original') return;
       setMode('translation');
-    } catch {
-      /* Reading remains available without browser storage. */
-    }
+    } catch {}
   }, [readerTarget?.sourceId, source.id, targetTranslationAvailable]);
   useLayoutEffect(() => {
     if (appliedTarget.current === readerTarget) return;
@@ -467,8 +453,6 @@ function SourceReaderContent({
     const origin = editorOrigin.current;
     editorOrigin.current = undefined;
     if (!origin) return;
-    // The parent restores the composer when editing ends. Wait for that layout
-    // before returning to the control beside the passage the reader was viewing.
     let release: (() => void) | undefined;
     const frame = requestAnimationFrame(() => {
       const { button, scrollport, offset } = origin;
@@ -764,9 +748,7 @@ function SourceReaderContent({
       if (accepted === false || !mounted.current) return;
       try {
         sessionStorage.removeItem(rewriteKey);
-      } catch {
-        /* The accepted request remains authoritative when browser storage is unavailable. */
-      }
+      } catch {}
       setRetryDialog(false);
     });
   const [startPickerOpen, setStartPickerOpen] = useState(false);
@@ -801,9 +783,7 @@ function SourceReaderContent({
     setMode(next);
     try {
       sessionStorage.setItem(`reader-mode:${source.id}`, next);
-    } catch {
-      /* Reading is available when storage is restricted. */
-    }
+    } catch {}
   };
   const action = async (name: string, operation: () => Promise<unknown>) => {
     if (requestPending.current) return;
@@ -881,8 +861,6 @@ function SourceReaderContent({
       )}
     </>
   );
-  // Past scenes stay quiet while reading, but pending work and recovery keep their
-  // original controls visible beside the affected scene instead of inside a menu.
   const directRepresentation =
     latest ||
     pending === 'translation' ||
@@ -920,8 +898,6 @@ function SourceReaderContent({
   ) : null;
   const activityNode = activity?.({ leading, badges }) || null;
   const canRetranslate = !!translation && !activeJob(translation) && !retryable(translation.status);
-  // The menu entry names the scope, the existing translation stays until the new one lands,
-  // and the turn's task panel cancels a running translation. No extra confirmation step.
   const retranslate = () => {
     void action('translation', async () => {
       const proceed = await codexWarning.check(
@@ -1567,9 +1543,7 @@ function SourceReaderContent({
                   setRewriteText(event.target.value);
                   try {
                     sessionStorage.setItem(rewriteKey, event.target.value);
-                  } catch {
-                    /* Keep the in-memory draft. */
-                  }
+                  } catch {}
                 }}
               />
             </label>
@@ -1789,9 +1763,7 @@ function readDraft(key: string, fallback: Draft): Draft {
       typeof value.expectedSourceHash === 'string'
     )
       return value as Draft;
-  } catch {
-    /* Editing also works when browser storage is unavailable. */
-  }
+  } catch {}
   return fallback;
 }
 function TextEditor({
@@ -1828,14 +1800,11 @@ function TextEditor({
   useLayoutEffect(() => {
     const field = input.current;
     field?.focus({ preventScroll: true });
-    // Focus stays in the user-triggered update so touch keyboards can open;
-    // scrolling waits for the parent to release the composer's screen space.
     const frame = requestAnimationFrame(() => {
       const form = field?.form;
       const reader = form?.closest<HTMLElement>('[data-reader-scrollport], .reader-scrollport');
       if (!form || !reader) return;
       // scrollIntoView also moves overflow-hidden ancestors, including the app shell.
-      // Only the marked theme body and reader own this editor's scroll position.
       const body = themeBodyScroll(form);
       if (body)
         body.scrollTop += form.getBoundingClientRect().top - body.getBoundingClientRect().top;
@@ -1851,16 +1820,12 @@ function TextEditor({
     setDraft(next);
     try {
       sessionStorage.setItem(key, JSON.stringify(next));
-    } catch {
-      /* Keep the in-memory draft. */
-    }
+    } catch {}
   };
   const clear = () => {
     try {
       sessionStorage.removeItem(key);
-    } catch {
-      /* Storage may be restricted. */
-    }
+    } catch {}
   };
   const cancel = () => {
     if (busy.current) return;

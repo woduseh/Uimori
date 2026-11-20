@@ -23,7 +23,6 @@ const origins = () => ({
   model: t('settings.m272'),
 });
 
-/** Mounted across scope refreshes so a new source or event never discards a local editor. */
 export function ContextPanel({
   mode = 'full',
   chatId,

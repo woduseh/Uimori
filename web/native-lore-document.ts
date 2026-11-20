@@ -10,7 +10,6 @@ export const loreFolderKey = (entry: LoreEntry) =>
       ? entry.keys.join(', ')
       : '';
 
-/** Native folder keys are opaque. Missing parents and cycles stay visible without rewriting source. */
 export function loreParents(entries: LoreEntry[]): (number | null)[] {
   const folders = new Map<string, number>();
   entries.forEach((entry, index) => {
@@ -46,7 +45,6 @@ export function removeLoreFolder(entries: LoreEntry[], index: number): LoreEntry
 
 export type LoreDropPosition = 'before' | 'after' | 'inside' | 'root';
 
-/** Reorder or reparent one native entry without rewriting opaque folder keys or unrelated fields. */
 export function moveLoreEntry(
   entries: LoreEntry[],
   sourceIndex: number,

@@ -43,7 +43,6 @@ function CodeCopy({ text, index }: { text: string; index: number }) {
   );
 }
 
-/** Helper-only controls decorate code hosts without changing Markdown or manuscript coordinates. */
 export function HelperMessageProse({ text }: { text: string }) {
   const root = useRef<HTMLDivElement>(null);
   const [slots, setSlots] = useState<{ host: HTMLElement; text: string; language: string }[]>([]);

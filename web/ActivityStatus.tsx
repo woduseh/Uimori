@@ -28,8 +28,6 @@ function reconcileHistory(history: ReaderActivity[], current: ReaderActivity[]) 
   const live = new Map(current.map((item) => [item.id, item]));
   const next = history.flatMap((item) => {
     const updated = live.get(item.id);
-    // The reader includes every active job. A historical active snapshot cannot
-    // keep a spinner alive after the job leaves that authoritative projection.
     return updated ? [updated] : active(item.status) ? [] : [item];
   });
   return JSON.stringify(next) === JSON.stringify(history) ? history : next;
@@ -86,7 +84,6 @@ export function activityStatusLabel(item: Pick<Item, 'kind' | 'status'>) {
   return status;
 }
 
-/** Status feedback only; hiding never changes or cancels server work. */
 export function ActivityStatus({
   chatId,
   activities,
@@ -110,7 +107,6 @@ export function ActivityStatus({
   recoveryError?: string;
   onRecoverRequest: (requestId: string) => void;
   scope: string;
-  /** Pending turns whose failure card the reader has scrolled into view. */
   seenRunIds?: string[];
 }) {
   useI18n();
@@ -147,9 +143,7 @@ export function ActivityStatus({
           });
         }
       })
-      .catch(() => {
-        /* Browser-local confirmations still work offline. */
-      });
+      .catch(() => {});
     const receipt = (event: Event) => {
       const detail = (event as CustomEvent<{ chatId: string; keys: string[] }>).detail;
       if (detail?.chatId === chatId)
@@ -210,8 +204,6 @@ export function ActivityStatus({
       setAcknowledged((old) => [...new Set([...old, ...keys])]);
     }
   }, [resolvedKeys, chatId]);
-  // An older settled result belongs to its response. Keep active work and uncertain
-  // admission visible, but do not let old failures replace the current turn's result.
   const latestMainStart = items
     .filter((item) => ['main', 'request'].includes(item.kind))
     .reduce((latest, item) => Math.max(latest, Date.parse(item.startedAt) || 0), 0);
@@ -230,7 +222,6 @@ export function ActivityStatus({
       );
       for (const item of snapshot) {
         if (active(item.status)) continue;
-        // Do not replay old successful work on opening a chat. Failures remain actionable.
         const newlyFinished = active(previous?.get(item.key) ?? '');
         if (
           !next.some((notice) => notice.item.acknowledgementKey === item.acknowledgementKey) &&
@@ -253,9 +244,6 @@ export function ActivityStatus({
     setNow(time);
   }, [serialized]);
   const running = items.filter((item) => active(item.status));
-  // A retry replaces the execution it retried. Its notice carries the older generation in its
-  // acknowledgement key, so the reconciling effect above only drops it after the next paint.
-  // Filtering here keeps one activity from showing two contradictory rows in between.
   const retried = (notice: Notice) =>
     items.some(
       (item) =>
@@ -275,14 +263,12 @@ export function ActivityStatus({
       (notice.item.status === 'uncertain' ||
         (Date.parse(notice.item.startedAt) || 0) >= latestMainStart) &&
       !acknowledged.includes(notice.item.acknowledgementKey) &&
-      // Postponing this warning does not change the recoverable request.
       !(
         notice.item.kind === 'request' &&
         notice.item.status === 'uncertain' &&
         hidden.includes(notice.item.key)
       ) &&
       !(success(notice.item.status) && hidden.includes(notice.item.key)) &&
-      // The failed turn's own card is on screen; the composer row must not repeat it.
       !(
         notice.item.kind === 'main' &&
         !active(notice.item.status) &&
@@ -298,9 +284,7 @@ export function ActivityStatus({
   useEffect(() => {
     try {
       sessionStorage.setItem(`activity-hidden:${scope}`, JSON.stringify(hidden.slice(-200)));
-    } catch {
-      /* Hiding still works in this view. */
-    }
+    } catch {}
   }, [hidden, scope]);
   const candidates = [...running, ...visibleNotices.map((notice) => notice.item)];
   const expanded = candidates.filter((item) => !hidden.includes(item.key));
@@ -335,7 +319,6 @@ export function ActivityStatus({
     item && !connectionIssue
       ? elapsedLabel(item.startedAt, active(item.status) ? now : Date.parse(item.finishedAt ?? ''))
       : '';
-  // A finished task that took under a second has no meaningful duration to show.
   const elapsed =
     item &&
     !active(item.status) &&
@@ -357,7 +340,6 @@ export function ActivityStatus({
         return current && canAcknowledge(current);
       })
       .map((item) => item.acknowledgementKey);
-    // Persist this exact displayed execution before hiding it; never save a stale whole-tab snapshot.
     const saved = saveAcknowledgements(chatId, [...acknowledged, ...keys]);
     if (keys.length)
       void api(`/chats/${encodeURIComponent(chatId)}/activity-acknowledgements`, { keys })

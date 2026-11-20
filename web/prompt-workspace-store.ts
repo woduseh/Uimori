@@ -4,7 +4,6 @@ type Snapshot = Readonly<{ workspace: PromptWorkspace | null; error: string }>;
 type Session = { requested: number; controller: AbortController; flight?: Promise<void> };
 const empty: Snapshot = { workspace: null, error: '' };
 
-/** One read owner per open workspace, not one request/listener set per mounted consumer. */
 export function createPromptWorkspaceStore(options: {
   load: (signal: AbortSignal) => Promise<PromptWorkspace>;
   listen: (invalidate: () => void) => () => void;
@@ -31,14 +30,11 @@ export function createPromptWorkspaceStore(options: {
           };
         }
         if (session !== owner) return;
-        // An invalidation during a read owes another read. Never publish the superseded answer.
         if (requested !== owner.requested) continue;
         publish(next);
-        // A subscriber may invalidate synchronously while observing this result.
         if (requested === owner.requested) return;
       }
     } finally {
-      // Release before the drain resolves, so a delivery-time invalidation cannot be lost.
       owner.flight = undefined;
     }
   };
@@ -46,7 +42,6 @@ export function createPromptWorkspaceStore(options: {
     const owner = session;
     if (!owner) return Promise.resolve();
     owner.requested++;
-    // Defer starting until flight is installed; synchronous invalidations share this drain.
     owner.flight ??= Promise.resolve().then(() => drain(owner));
     return owner.flight;
   };
@@ -67,7 +62,6 @@ export function createPromptWorkspaceStore(options: {
       previous?.controller.abort();
       unlisten?.();
       unlisten = undefined;
-      // Closing the workspace/session releases both cached data and any in-flight answer.
       snapshot = empty;
     };
   };

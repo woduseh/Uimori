@@ -57,7 +57,6 @@ export function NativeRisuRegexEditor({
     ['cbs', t('native.text_7e73177899')],
     ['no_end_nl', t('native.text_9caf464827')],
   ] as const;
-  // Retain the existing preset raw-field key so unfinished JSON survives this UI upgrade.
   const formatted = useMemo(() => JSON.stringify(value, null, 2), [value]);
   const [raw, setRaw] = useBufferedEditorState(draftPath, formatted, {
     syncPristineInitial: true,

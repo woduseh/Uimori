@@ -1,4 +1,3 @@
-/* Up to four portraits from the folder, or one chosen image, stand in for the folder icon. */
 .library-folder-cover {
   display: grid;
   flex-shrink: 0;

@@ -12,12 +12,10 @@ export class ApiError extends Error {
     this.display = display;
     this.name = 'ApiError';
   }
-  /** Display follows the current UI language; message remains the legacy error contract. */
   get displayMessage(): string {
     return this.display?.() ?? this.message;
   }
 }
-/** A timeout does not establish whether the server admitted a mutation. */
 export function definiteRejection(error: unknown): boolean {
   return (
     error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 408
@@ -33,12 +31,10 @@ export type MaintenanceStatus = {
 };
 let maintenance: MaintenanceStatus | null = null;
 export const knownMaintenance = () => maintenance;
-/** The session read already carries the gate, so no screen polls while the app is open. */
 export function rememberMaintenance(next: MaintenanceStatus | undefined): void {
   if (!next) return;
   const previous = maintenance;
   maintenance = next;
-  // An open workspace is the normal answer: only a closed gate or a real change wakes a screen.
   const changed =
     next.status === 'closed' ||
     (previous !== null && (previous.status !== next.status || previous.epoch !== next.epoch));
@@ -48,7 +44,6 @@ export function rememberMaintenance(next: MaintenanceStatus | undefined): void {
 export const libraryChangedKey = 'uimori:library-change';
 export const activityChangedEvent = 'uimori-activity-changed';
 
-/** JSON requests and binary uploads share response errors, not mutation side effects. */
 async function readApiResponse<T>(
   response: Response,
   method: string,
@@ -117,9 +112,7 @@ export async function api<T>(
   ) {
     try {
       localStorage.setItem(libraryChangedKey, `${Date.now()}:${Math.random()}`);
-    } catch {
-      /* A successful save does not depend on browser storage. */
-    }
+    } catch {}
   }
   if (
     body !== undefined &&
@@ -131,7 +124,6 @@ export async function api<T>(
   return result;
 }
 
-/** Streams one chosen file as the request body, so a large container never becomes base64. */
 export async function apiBinary<T>(path: string, body: Blob, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api${path}`, {
     method: 'POST',

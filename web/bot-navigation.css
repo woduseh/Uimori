@@ -1,5 +1,4 @@
 .bot-navigation {
-  /* Local navigation tones follow the active theme without changing its public palette. */
   --nav-item-hover: var(--hover);
   --nav-item-selected: var(--surface-active);
   --nav-indent: 16px;
@@ -85,16 +84,15 @@
     background: var(--nav-item-hover);
   }
 }
-/* Keep keyboard outlines inside independently scrolling rows instead of clipping them. */
 .bot-navigation
-:is(
-  .nav-button,
-  .chat-link,
-  .bot-folder-toggle,
-  .bot-branch-toggle,
-  .icon-button,
-  .action-menu > summary
-):focus-visible {
+  :is(
+    .nav-button,
+    .chat-link,
+    .bot-folder-toggle,
+    .bot-branch-toggle,
+    .icon-button,
+    .action-menu > summary
+  ):focus-visible {
   outline-offset: -2px;
 }
 .nav-progress svg {
@@ -107,7 +105,6 @@
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
-/* Short desktop windows scroll the whole sidebar instead of squeezing the tree away. */
 @media (max-height: 600px) {
   .sidebar .bot-navigation {
     overflow-y: auto;
@@ -234,7 +231,6 @@
   gap: 1px;
   padding-left: var(--nav-indent);
 }
-/* Unfiled chats sit flat at the top without a heading or indentation. */
 .bot-folder-unfiled > .bot-chat-list {
   padding-left: 0;
 }
@@ -260,7 +256,6 @@
 .bot-chat-item.selected {
   background: var(--nav-item-selected);
 }
-/* A current-chat shortcut outside the first page is not a sortable list row. */
 .bot-chat-item.pinned {
   margin-bottom: 6px;
   box-shadow: 0 var(--hairline) 0 var(--line);
@@ -430,7 +425,6 @@
 .navigation-dialog .bot-navigation {
   min-height: 0;
 }
-/* The drawer keeps "탐색" as its accessible name only; the header shows just the close button. */
 .navigation-dialog > .dialog-header > h2 {
   position: absolute;
   width: 1px;
@@ -494,8 +488,6 @@
   height: 28px;
   border-radius: var(--radius-control);
 }
-/* The bot name gets the row. Its actions appear on hover, focus or an open menu; touch and
-   compact widths keep them visible through the rule below. */
 .bot-branch-actions {
   flex-shrink: 0;
   opacity: 0;
@@ -559,7 +551,6 @@
   -webkit-line-clamp: 1;
 }
 @media (max-width: 1023px), (hover: none), (pointer: coarse) {
-  /* Declared after the unconditional rule above so the bot row menu is reachable. */
   .bot-branch-actions {
     opacity: 1;
     pointer-events: auto;
@@ -574,7 +565,6 @@
   }
 }
 
-/* Compact progressive disclosure for large chat folders; no auto-scroll or extra network poll. */
 .bot-chat-more {
   width: calc(100% - 14px);
   margin: 4px 8px 8px;

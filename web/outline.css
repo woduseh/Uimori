@@ -699,7 +699,6 @@
   }
 }
 
-/* The underlying manuscript remains mounted, but cannot receive hidden focus. */
 .app-shell.outline-active > .story-workspace {
   visibility: hidden;
 }

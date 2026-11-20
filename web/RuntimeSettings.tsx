@@ -52,9 +52,7 @@ export function SettingsEditor({
       .then((value) => {
         if (active) setGlobalAutoTranslate(value.autoTranslate);
       })
-      .catch(() => {
-        // Failure to read a label must not block the chat's independent settings editor.
-      });
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -112,9 +110,7 @@ export function SettingsEditor({
       setDirty(false);
       setMessage(uiMessage('settings.m79'));
       onError('');
-      // Persisted; the refresh below is not an unsaved draft.
       setSaving(false);
-      // Complete the acknowledged save before its independent reader refresh.
       void onSaved().catch((error) => {
         setLocalError(uiMessage('settings.m80', { v0: messageRef((error as Error).message) }));
       });

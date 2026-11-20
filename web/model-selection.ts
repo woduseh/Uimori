@@ -15,7 +15,6 @@ export function isModelSelectable(
   );
 }
 
-/** Settings resolve by ID; the server captures immutable settings when a run starts. */
 export function useModelSelection(
   models: readonly ModelPreset[],
   connections: readonly Connection[]

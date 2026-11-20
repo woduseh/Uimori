@@ -138,12 +138,10 @@ type Props = {
   outlineWorkspace?: boolean;
   onClose: () => void;
   onModelSettings: () => void;
-  /** Current global helper model, worded like the reader's main-model chip. */
   modelDescription: string;
   modelTitle: string;
   modelRevision: number;
   library: Library | null;
-  /** The chat open in the reader, so a conversation about it can name it. */
   currentChat?: { id: string; title: string } | null;
 };
 export type HelperHandoff =
@@ -188,16 +186,13 @@ function helperTaskError(error: string | null | undefined): string {
     return t('errors.HELPER_CONTEXT_DEPENDENCY_CHANGED');
   return requestFileError(error) ?? translateMessage(error ?? '');
 }
-// The reader treats an explicit cancellation as a settled turn; the helper reads the same way.
 const attention = (task: HelperTaskView) => ['failed', 'interrupted'].includes(task.status);
 const tone = (task: HelperTaskView): StatusTone =>
   attention(task) ? 'issue' : active(task) ? 'running' : 'done';
-/** Queue wait for a task that has not started; otherwise the measured execution time. */
 function taskElapsed(task: HelperTaskView, now: number) {
   if (task.status === 'queued') return elapsedLabel(task.createdAt, now);
   if (!task.startedAt) return '';
   const measured = elapsedLabel(task.startedAt, active(task) ? now : Date.parse(task.updatedAt));
-  // A finished task that took under a second has no meaningful duration to show.
   return !active(task) && Date.parse(task.updatedAt) - Date.parse(task.startedAt) < 1000
     ? ''
     : measured;
@@ -422,7 +417,6 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   const tasks = data.current?.tasks ?? [];
   const taskMap = new Map(tasks.map((task) => [task.id, task]));
   const running = tasks.find((task) => task.status === 'running');
-  // A stored answer owns the text; the live buffer must not repeat it under the request.
   const answered = new Set(
     (data.current?.messages ?? [])
       .filter((message) => message.role === 'assistant')
@@ -472,7 +466,6 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   const [personas, setPersonas] = useState<Record<string, { text: string; revision: number }>>({});
   const [savingPersona, setSavingPersona] = useState(false);
   const compact = (props.modal ?? false) && !props.expanded;
-  // A hardware keyboard has Shift+Enter for line breaks; a touch keyboard keeps the app setting.
   const [hardwareKeyboard] = useState(
     () => matchMedia('(hover: hover) and (pointer: fine)').matches
   );
@@ -874,7 +867,6 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       owner = scopeKey;
     if (saved && (saved.scope !== owner || saved.targetConversationId !== conversation?.id))
       return false;
-    // An explicit library-card target takes precedence over another mounted editor.
     const sameScope = JSON.stringify(scope) === JSON.stringify(props.scope);
     const targeted = sameScope ? currentResource : null;
     let captured: ReturnType<typeof captureActiveEditorContext> = null;
@@ -1493,9 +1485,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                               `/helper/conversations/${conversation.id}`
                             )
                           );
-                        } catch {
-                          /* Keep the local settings draft. */
-                        }
+                        } catch {}
                       }
                     })
                     .finally(() => setSavingPersona(false));

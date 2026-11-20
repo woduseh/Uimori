@@ -21,9 +21,6 @@ import { isStoryUiImageUrl, storyUiImageName } from '../core/story-ui.js';
 import { storyUiIcons } from './story-ui-icons.js';
 import { getIntlLocale, t } from './i18n.js';
 
-// Every component renders in the light DOM with `story-ui-*` class names, so the presets in
-// story-ui.css and authored themes style the same markup. The SDK supplies data binding,
-// validation and actions; none of its own elements or styles are used.
 const api = (name: string) => storyUiCatalog.components.get(name)!;
 export const StoryUiImageUrls = createContext<Record<string, string> | undefined>(undefined);
 const createComponentImplementation: typeof implement = (component, render) =>
@@ -79,7 +76,6 @@ const ALIGN: Record<string, string> = {
   end: 'flex-end',
   stretch: 'stretch',
 };
-/** Charts and gauges show figures the way a reader writes them: grouped, without float noise. */
 const figure = (value: number) =>
   Number.isFinite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '';
 
@@ -126,7 +122,6 @@ const Text = createComponentImplementation(api('Text'), ({ props }) => {
   return <p {...shared}>{text}</p>;
 });
 const Icon = createComponentImplementation(api('Icon'), ({ props, context }) => {
-  // The SDK's generic binder leaves Icon's enum/SVG/binding union unresolved.
   const [name, setName] = useState<unknown>(() =>
     context.dataContext.resolveDynamicValue(props.name)
   );
@@ -861,7 +856,6 @@ const Compare = createComponentImplementation(api('Compare'), ({ props }) => {
                 {bar ? (
                   <span className="story-ui-compare-mark" style={{ blockSize: size }} />
                 ) : (
-                  // One silhouette scaled as a whole, so a small figure keeps its proportions.
                   <svg
                     className="story-ui-compare-mark"
                     viewBox="0 0 20 60"
@@ -968,7 +962,6 @@ const Combatant = createComponentImplementation(api('Combatant'), ({ props }) =>
         </p>
         {(props.bars as Bar[]).map((bar, index) => {
           const ratio = Math.min(1, Math.max(0, bar.value / bar.max));
-          // The first bar is the one a fight is read by, so it warns as it empties.
           const tone =
             bar.tone ??
             (index > 0 ? 'info' : ratio > 0.5 ? 'positive' : ratio > 0.2 ? 'caution' : 'danger');
@@ -1040,13 +1033,9 @@ type GraphEdge = {
   line?: string;
 };
 type Point = [number, number];
-// Graph geometry is laid out in viewBox units; nodes and labels are sized from the same
-// width through container units, so line ends meet the discs at any rendered size.
-// A caption is the name and note under (or over) a disc.
 const GRAPH = { width: 600, disc: 56, label: 112, margin: 24, caption: 64, row: 170, slot: 104 };
 function placeGraph(nodes: GraphNode[], edges: GraphEdge[], tree: boolean, center?: string) {
   const points = new Map<string, Point>();
-  // Captions on the upper half of a ring sit above their discs, clear of the lines going in.
   const above = new Set<string>();
   let width = GRAPH.width;
   if (tree) {
@@ -1072,7 +1061,6 @@ function placeGraph(nodes: GraphNode[], edges: GraphEdge[], tree: boolean, cente
     for (const node of nodes) (layers[depth.get(node.id)!] ??= []).push(node.id);
     width = Math.max(GRAPH.width, Math.max(...layers.map((layer) => layer.length)) * GRAPH.slot);
     layers.forEach((layer, row) => {
-      // Each node sits under the average of its parents, which keeps most lines from crossing.
       const parent = (id: string) => {
         const xs = links
           .filter((edge) => edge.to === id && points.has(edge.from))
@@ -1090,7 +1078,6 @@ function placeGraph(nodes: GraphNode[], edges: GraphEdge[], tree: boolean, cente
     const count = around.length;
     const radiusX = count <= 3 && !middle ? 180 : 225;
     const radiusY = middle ? 190 : count <= 4 ? 120 : count <= 8 ? 160 : 190;
-    // Two nodes face each other across the width; more start at the top.
     const offset = count === 2 ? Math.PI : -Math.PI / 2;
     around.forEach((node, index) => {
       const angle = offset + (index * Math.PI * 2) / count;
@@ -1116,18 +1103,11 @@ type Box = [left: number, top: number, right: number, bottom: number];
 const overlap = (a: Box, b: Box) =>
   Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) *
   Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
-// Text is measured before layout from its length: CSS pixels per glyph at each label's
-// size, and viewBox units per CSS pixel at the smallest width the canvas is drawn at.
 const glyphs = (text = '') =>
   [...text].reduce((sum, glyph) => sum + (/[\u1100-\uffdc]/u.test(glyph) ? 1 : 0.6), 0);
 const UNITS_PER_PIXEL = 1.6;
-// Spots along a line, nearest the preferred one first.
 const SPOTS = [0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65, 0.3, 0.7, 0.25, 0.75, 0.2, 0.8, 0.15, 0.85];
 const PAIRED_SPOTS = [0.32, 0.27, 0.37, 0.22, 0.42, 0.17, 0.47];
-/**
- * Each relation label takes the first spot along its line that keeps clear of the discs,
- * the names and the labels already placed; one of an opposite pair starts near its source.
- */
 function placeRelations(
   lines: { edge: GraphEdge; head: Point; control: Point; tail: Point; paired: boolean }[],
   nodes: GraphNode[],
@@ -1189,7 +1169,6 @@ function layoutGraph(nodes: GraphNode[], given: GraphEdge[], tree: boolean, cent
     const start = points.get(edge.from)!;
     const end = points.get(edge.to)!;
     const length = Math.hypot(end[0] - start[0], end[1] - start[1]) || 1;
-    // A pair of opposite edges bends apart, each to its own left, so both stay readable.
     const paired = edges.some((other) => other.from === edge.to && other.to === edge.from);
     const bend = paired ? 26 : 0;
     const control: Point = [
@@ -1218,7 +1197,6 @@ function layoutGraph(nodes: GraphNode[], given: GraphEdge[], tree: boolean, cent
 }
 const Graph = createComponentImplementation(api('Graph'), ({ props }) => {
   const urls = useContext(StoryUiImageUrls);
-  // A repeated id names one node; later copies are dropped like edges to missing nodes.
   const nodes = (props.nodes as GraphNode[]).filter(
     (node, index, all) => all.findIndex((other) => other.id === node.id) === index
   );
@@ -1465,7 +1443,6 @@ type CalendarItem = { date: number; title: string; time?: string; text?: string;
 const WEEKEND: Record<number, string> = { 0: 'sunday', 6: 'saturday' };
 const weekdayNames = () => {
   const format = new Intl.DateTimeFormat(getIntlLocale(), { weekday: 'short', timeZone: 'UTC' });
-  // 2023-01-01 was a Sunday.
   return Array.from({ length: 7 }, (_, day) => format.format(Date.UTC(2023, 0, 1 + day)));
 };
 const Calendar = createComponentImplementation(api('Calendar'), ({ props }) => {
@@ -1595,7 +1572,6 @@ const Timeline = createComponentImplementation(api('Timeline'), ({ props }) => (
 ));
 const DataTable = createComponentImplementation(api('DataTable'), ({ props }) => {
   const rows: string[][] = props.rows;
-  // A column of figures aligns to the end, heading included.
   const numeric = (props.columns as string[]).map((_, column) => {
     const cells = rows.map((row) => row[column]?.trim()).filter(Boolean);
     return (

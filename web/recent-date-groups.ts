@@ -2,11 +2,9 @@ import { formatDate, t } from './i18n.js';
 
 export type RecentDateGroup<T> = { key: string; date?: Date; items: T[] };
 const day = 86_400_000;
-// Comparing calendar dates rather than elapsed hours keeps yesterday correct across DST.
 const calendarDay = (date: Date) =>
   Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / day;
 
-/** Input order and item identity are retained; callers own sorting and pagination. */
 export function groupRecentDates<T>(
   items: T[],
   timestamp: (item: T) => string | undefined,

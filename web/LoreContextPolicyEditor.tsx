@@ -231,9 +231,7 @@ export function LoreContextPolicyEditor({
     setError('');
     try {
       onChange(parseLorePolicyDraft(next));
-    } catch {
-      /* Preserve incomplete numeric input until it is valid. */
-    }
+    } catch {}
   }
   async function showPreview() {
     if (!policy || !chatId) return;

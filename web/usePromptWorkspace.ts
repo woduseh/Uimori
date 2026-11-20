@@ -10,7 +10,6 @@ const store = createPromptWorkspaceStore({
       if (event.key === libraryChangedKey) reload();
     };
     addEventListener('prompt-workspace-changed', reload);
-    // Library-scope helper changes have no selected chat stream to forward this update.
     addEventListener('uimori-helper-updated', reload);
     addEventListener('focus', reload);
     addEventListener('storage', storage);

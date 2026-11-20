@@ -7,7 +7,6 @@ import type { SceneDeletionImpact, SceneDeletionResult } from '../core/scene-del
 
 type Pending = { impact: SceneDeletionImpact; scope: 'only' | 'following'; idempotencyKey: string };
 
-/** Existing per-scene records also make a deleted scene recoverable after a reload. */
 export function pendingSceneDeletions(chatId: string): string[] {
   if (!chatId) return [];
   const prefix = `scene-delete:${chatId}:`;
@@ -24,7 +23,6 @@ export function pendingSceneDeletions(chatId: string): string[] {
   }
 }
 
-/** Mounted by the reader workspace, not by a scene that the delete may remove. */
 export function SceneDeleteDialog({
   chatId,
   sourceId,
@@ -112,7 +110,6 @@ export function SceneDeleteDialog({
         callbacks.current.onPendingChange();
         return;
       }
-      // Persist the exact admission before sending, including across dialog re-entry.
       sessionStorage.setItem(storageKey, raw);
       setPending({ command, raw });
       callbacks.current.onPendingChange();
@@ -128,9 +125,7 @@ export function SceneDeleteDialog({
       } else if (!pending && definiteRejection(cause)) {
         try {
           clearOwnRecord();
-        } catch {
-          // A retained admission can still be checked with its original identity.
-        }
+        } catch {}
         if (mounted.current) {
           callbacks.current.onError((cause as Error).message);
           callbacks.current.onClose();
@@ -147,7 +142,6 @@ export function SceneDeleteDialog({
       if (mounted.current) callbacks.current.onError((cause as Error).message);
     }
     if (mounted.current) callbacks.current.onClose();
-    // A refresh failure does not turn an acknowledged delete into an uncertain write.
     await onDeleted(accepted);
   }
 

@@ -1,7 +1,6 @@
 import { message as retainedMessage } from './i18n.js';
 import { ApiError, sessionRequiredEvent } from './api.js';
 
-/** Blob downloads never parse a large binary archive into a JSON/base64 string. */
 export async function downloadArchive(path: string, name: string, body?: unknown) {
   const response = await fetch(
     `/api${path}`,

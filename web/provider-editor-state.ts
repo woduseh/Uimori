@@ -85,7 +85,6 @@ type Action =
   | { type: 'model.deleted'; id: string }
   | { type: 'conflict'; kind: ProviderEditorState['conflict'] };
 
-/** Two independent in-memory drafts. Navigation never discards either one or persists secrets. */
 export function providerEditorReducer(
   state: ProviderEditorState,
   action: Action

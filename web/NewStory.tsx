@@ -325,8 +325,6 @@ export function NewStory({
       const chat = created.current;
       if (selection.profile) {
         if (!profileRecorded.current) {
-          // Persist the intent before the next request so even a failed profile GET
-          // leaves the new chat blocked until its original choices are saved.
           savePendingStoryProfile(chat.id, {
             ...selection.profile,
             profileBaseRevision: defaultProfile(chat.id).revision,
@@ -423,7 +421,6 @@ export function NewStory({
     !!workspaceError ||
     (!!workspace && !mainAvailable) ||
     !!openingError;
-  // Switching to configuration or recovering a failed read always requires an explicit create.
   useEffect(() => {
     if (showForm) setConfigure(true);
   }, [showForm]);
@@ -449,8 +446,6 @@ export function NewStory({
       submitted.current
     )
       return;
-    // Defer admission until mount/selection effects have settled. Cleanup cancels an
-    // unstarted create on close, changed selection, or StrictMode's effect replay.
     const timer = window.setTimeout(() => void create(), 0);
     return () => window.clearTimeout(timer);
   });

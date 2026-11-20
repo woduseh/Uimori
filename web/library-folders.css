@@ -4,7 +4,6 @@
 .library-workspace-content {
   min-width: 0;
 }
-/* Folder chooser: one dropdown plus a manage menu, the same at every width. */
 .library-folders {
   display: flex;
   flex: 0 0 auto;

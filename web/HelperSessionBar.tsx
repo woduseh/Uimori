@@ -744,9 +744,7 @@ export function HelperSessionBar(props: Props) {
                         `/helper/conversations/${encodeURIComponent(rename.id)}`
                       )
                     );
-                  } catch {
-                    /* Preserve the local name. */
-                  }
+                  } catch {}
                 }
               })
               .finally(() => setWorking(false));
