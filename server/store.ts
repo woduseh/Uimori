@@ -8,11 +8,7 @@ import { pruneSourceEdits, pruneTranslationHistory } from './text-retention.js';
 import { retainCompletedLore } from './lore-retention-state.js';
 import { verifiedRunLoreReads } from './lore-context.js';
 import { captureNativeMessageChanges } from './native-message-changes.js';
-import {
-  releaseCompletedRunInputs,
-  releaseCompletedJobInputs,
-  releaseEndedRunSnapshots,
-} from './execution-retention.js';
+import { releaseCompletedRunInputs, releaseCompletedJobInputs } from './execution-retention.js';
 import { recordToolDiagnostic } from './execution-diagnostics.js';
 import { upgradeStoredShapes } from './stored-shape-upgrades.js';
 import { retryRun as retryPersonalRun } from './run-retry.js';
@@ -1135,7 +1131,6 @@ export class Store {
   recover(): string[] {
     const resumed: string[] = [];
     this.transaction(() => {
-      releaseEndedRunSnapshots(this.db, (id) => this.releaseEndedRunInTransaction(id));
       for (const run of this.db
         .prepare("SELECT id,chat_id AS chatId FROM runs WHERE status IN ('queued','running')")
         .all() as { id: string; chatId: string }[]) {

@@ -239,15 +239,14 @@ function selectionCoverage(
   request: ProviderRequest
 ): Pick<RequestLore, 'selection'> {
   const receipts = snapshot.loreSelection?.entries;
-  if (request.role !== 'main' || !receipts?.length || receipts.some((item) => !item.coverage))
-    return {};
+  if (request.role !== 'main' || !receipts?.length) return {};
   let total = 0,
     evaluated = 0,
     selected = 0,
     failed = 0;
   for (const receipt of receipts) {
-    total += receipt.coverage!.total;
-    evaluated += receipt.coverage!.evaluated;
+    total += receipt.coverage.total;
+    evaluated += receipt.coverage.evaluated;
     if (receipt.error !== undefined) failed++;
     else selected += receipt.selected.length;
   }

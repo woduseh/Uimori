@@ -610,12 +610,14 @@ test('a helper retry replaces only one failed task and makes the old task inelig
   ])
     f.workspace.event(conversation.id, previous.id, 'tool.finished', event);
   expect(f.invoke('task.inspect', 'helper', previous.id)).toMatchObject({
-    diagnostics: { toolResultSizes: { calls: 2, timedCalls: 2, elapsedMs: 35, queueMs: 4 } },
+    diagnostics: { toolResultSizes: { calls: 2, elapsedMs: 35, queueMs: 4 } },
   });
   f.workspace.event(conversation.id, previous.id, 'tool.finished', {
     name: 'data.read',
     originalResultChars: 120,
     providedResultChars: 100,
+    elapsedMs: 5,
+    queueMs: 1,
   });
   expect(f.invoke('task.inspect', 'helper', previous.id)).toMatchObject({
     status: 'failed',
@@ -634,25 +636,22 @@ test('a helper retry replaces only one failed task and makes the old task inelig
         calls: 3,
         originalChars: 12720,
         providedChars: 1700,
-        timedCalls: 2,
-        elapsedMs: null,
-        queueMs: null,
+        elapsedMs: 40,
+        queueMs: 5,
         byTool: [
           {
             name: 'data.read',
             calls: 2,
             originalChars: 12120,
             providedChars: 1100,
-            timedCalls: 1,
-            elapsedMs: null,
-            queueMs: null,
+            elapsedMs: 40,
+            queueMs: 5,
           },
           {
             name: 'task.inspect',
             calls: 1,
             originalChars: 600,
             providedChars: 600,
-            timedCalls: 1,
             elapsedMs: 0,
             queueMs: 0,
           },

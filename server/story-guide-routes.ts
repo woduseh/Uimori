@@ -10,10 +10,8 @@ export function storyGuideRoutes(
 ) {
   const detail = (chatId: string): StoryGuideDetail => {
     const state = store.storyGuide.get(chatId);
-    const writerIncludesGuide = `a.job_id IS NULL AND a.usage_kind='writing' AND (
-      json_extract(a.request,'$.requestReceipt.storyGuide.status')='included' OR
-      (json_type(a.request,'$.requestReceipt.storyGuide') IS NULL AND r.status='completed')
-    )`;
+    const writerIncludesGuide = `a.job_id IS NULL AND a.usage_kind='writing' AND
+      json_extract(a.request,'$.requestReceipt.storyGuide.status')='included'`;
     const last = store.db
       .prepare(
         `SELECT r.status,COALESCE(json_extract(r.snapshot,'$.storyGuideReceipt'),

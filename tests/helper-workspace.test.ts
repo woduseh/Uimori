@@ -16,7 +16,6 @@ import { editableResource } from '../core/resource-editing.js';
 import { readResource, saveResource } from '../server/resource-service.js';
 import * as transport from '../core/transport.js';
 import {
-  HELPER_TASK_LIMITS,
   HELPER_TOOL_CALL_GRACE,
   HELPER_TOOL_CALL_LIMIT,
   type HelperTaskSnapshot,
@@ -637,7 +636,7 @@ test('helper results retain actual batch targets and safe settings outcomes afte
   }
 });
 
-test('task result usage preserves reported native token detail, unknown internal calls and older receipt gaps', () => {
+test('task result usage preserves reported native token detail, unknown internal calls and unrecorded operations', () => {
   const f = fixture();
   const task = f.workspace.enqueue(f.conversation.id, 'usage-result', '사용량 확인', snapshot(f));
   f.workspace.start(task.id, 'usage-owner');
@@ -673,8 +672,11 @@ test('task result usage preserves reported native token detail, unknown internal
     },
   });
   f.workspace.operation(task.id, 'old-receipt', {}, () => ({ old: 'PRIVATE_RESULT' }));
-  f.workspace.event(f.conversation.id, task.id, 'tool.finished', { name: 'legacy-tool' });
-  f.workspace.event(f.conversation.id, task.id, 'input.measured', { estimatedInputTokens: 321 });
+  f.workspace.event(f.conversation.id, task.id, 'tool.finished', { name: 'unreported-tool' });
+  f.workspace.event(f.conversation.id, task.id, 'input.measured', {
+    estimatedInputTokens: 321,
+    inputTokenLimit: 64_000,
+  });
   f.workspace.finish(task.id, 'usage-owner', 1, 'completed', '완료', null);
   const view = readHelperTaskResults(f.store, task.id);
   expect(view.results).toEqual([]);
@@ -696,7 +698,7 @@ test('task result usage preserves reported native token detail, unknown internal
     toolExecutions: 1,
     latestInputTokens: null,
     latestInputEstimate: 321,
-    latestInputLimit: null,
+    latestInputLimit: 64_000,
   });
   expect(JSON.stringify(view)).not.toContain('PRIVATE_');
   expect(JSON.stringify(view)).not.toContain('private-endpoint');
@@ -746,35 +748,6 @@ test.each([
     expect(usage.attempts[0].inputTokens).toBe(647_519);
   }
 );
-
-test.each([
-  [64_000, 64_000],
-  [undefined, null],
-  ['64000', null],
-])('legacy input measurements use only a valid frozen budget %s', (inputTokenLimit, expected) => {
-  const f = fixture(128_000);
-  const frozen = snapshot(f);
-  const legacy = {
-    ...frozen,
-    model: { ...frozen.model, inputTokenLimit },
-  } as HelperTaskSnapshot;
-  const task = f.workspace.enqueue(f.conversation.id, 'legacy-input-budget', '사용량 확인', legacy);
-  expect(readHelperTaskResults(f.store, task.id).usage.latestInputLimit).toBeNull();
-  f.workspace.event(f.conversation.id, task.id, 'input.measured', { estimatedInputTokens: 999 });
-  f.workspace.event(f.conversation.id, task.id, 'input.measured', { estimatedInputTokens: 321 });
-  expect(readHelperTaskResults(f.store, task.id).usage).toMatchObject({
-    latestInputEstimate: 321,
-    latestInputLimit: expected,
-  });
-  f.workspace.event(f.conversation.id, task.id, 'input.measured', {
-    estimatedInputTokens: 123,
-    inputTokenLimit: 32_000,
-  });
-  expect(readHelperTaskResults(f.store, task.id).usage).toMatchObject({
-    latestInputEstimate: 123,
-    latestInputLimit: 32_000,
-  });
-});
 
 test('resource creation, undo, clone and deletion outcomes retain identities without extending undo or surviving rollback', () => {
   const f = fixture();
@@ -899,41 +872,6 @@ test('helper requests expose only remaining host calls at each boundary', async 
     webSearch: { supported: false, mode: 'unavailable' },
     currentDateUtc: new Date().toISOString().slice(0, 10),
   });
-});
-
-test('legacy helper limits remain readable without rewriting stored conversation or task bytes', () => {
-  const f = fixture();
-  const limits = '{"totalCalls":24, "helperCalls":12, "artifacts":7}';
-  f.store.db
-    .prepare('UPDATE helper_conversations SET limits=? WHERE id=?')
-    .run(limits, f.conversation.id);
-  expect(f.workspace.conversation(f.conversation.id).limits).toEqual({
-    totalCalls: 24,
-    helperCalls: 12,
-  });
-  const task = f.workspace.enqueue(f.conversation.id, 'legacy-limits', 'Read legacy', snapshot(f));
-  const legacySnapshot = JSON.stringify({ ...task.snapshot, limits: JSON.parse(limits) });
-  f.store.db.prepare('UPDATE helper_tasks SET snapshot=? WHERE id=?').run(legacySnapshot, task.id);
-  expect(f.workspace.task(task.id).snapshot.limits).toEqual({ totalCalls: 24, helperCalls: 12 });
-  expect(
-    f.store.db.prepare('SELECT limits FROM helper_conversations WHERE id=?').get(f.conversation.id)
-      ?.limits
-  ).toBe(limits);
-  expect(
-    f.store.db.prepare('SELECT snapshot FROM helper_tasks WHERE id=?').get(task.id)?.snapshot
-  ).toBe(legacySnapshot);
-  const admitted = f.runtime.enqueue(
-    f.conversation.id,
-    'current-policy',
-    'Use current policy',
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    false
-  );
-  expect(admitted.snapshot.limits).toEqual(HELPER_TASK_LIMITS);
-  expect(f.workspace.task(task.id).snapshot.limits).toEqual({ totalCalls: 24, helperCalls: 12 });
 });
 
 test.each(['provider', 'native'] as const)(

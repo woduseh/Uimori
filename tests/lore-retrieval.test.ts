@@ -414,6 +414,7 @@ test('reuses a frozen older selection receipt without another paid judgment', as
         selected: ['fact'],
         omitted: [],
         model: 'jev-latest',
+        coverage: { total: 1, evaluated: 1 },
       },
     ],
   };

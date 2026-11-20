@@ -131,15 +131,18 @@ test.each(['off', 'failed'] as const)(
         method: 'POST' as const,
         url: 'http://127.0.0.1:9',
         headers: {},
-        body: { text: 'The writer request has no guide text.' },
+        body: {
+          text:
+            result.brief && !writerInput
+              ? result.brief.text
+              : 'The writer request has no guide text.',
+        },
         bodySha256: 'a'.repeat(64),
         stablePrefixSha256: 'b'.repeat(64),
       };
       const attempt = f.store.product.startAttempt(f.chat.id, run.id, null, {
         ...wire,
-        ...(writerInput
-          ? { requestReceipt: requestReceipt(f.store.run(run.id).snapshot, wire) }
-          : {}),
+        requestReceipt: requestReceipt(f.store.run(run.id).snapshot, wire),
       });
       f.store.product.finishAttempt(attempt, {
         status: 'completed',

@@ -838,10 +838,7 @@ export class OutlineStore {
           : 'Write the selected outline unit.';
     const matchesStoredRequest = (stored: string) =>
       (body.request === undefined && body.additionalInstruction === undefined) ||
-      request === stored ||
-      (body.request === undefined &&
-        !additionalInstruction.trim() &&
-        stored === '선택한 구성에 따라 이 단위를 집필해 주세요.');
+      request === stored;
     const key = text(body.idempotencyKey, 'command key', 120);
     return this.store.transaction(() => {
       const node = this.node(id);

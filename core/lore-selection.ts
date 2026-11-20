@@ -14,7 +14,7 @@ export type LoreSelectionEntry = {
   judgment?: import('./judgment.js').JevJudgmentReceipt;
   model?: string;
   partial?: 'catalog';
-  coverage?: { total: number; evaluated: number };
+  coverage: { total: number; evaluated: number };
   error?: string;
 };
 export type LoreSelectionReceipt = { version: 1; entries: LoreSelectionEntry[] };

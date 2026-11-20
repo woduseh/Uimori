@@ -32,18 +32,6 @@ export function releaseCompletedRunInputs(db: DatabaseSync, runId: string): void
   if (run) pruneSourceEdits(db, { chatId: String(run.chatId) });
 }
 
-const ENDED_RUN_SNAPSHOTS_RELEASED = 'ended-run-snapshots-released';
-
-export function releaseEndedRunSnapshots(db: DatabaseSync, release: (runId: string) => void): void {
-  if (db.prepare('SELECT 1 FROM app_metadata WHERE key=?').get(ENDED_RUN_SNAPSHOTS_RELEASED))
-    return;
-  for (const row of db
-    .prepare("SELECT id FROM runs WHERE status NOT IN ('queued','running','completed')")
-    .all())
-    release(String(row.id));
-  db.prepare('INSERT INTO app_metadata VALUES(?,?)').run(ENDED_RUN_SNAPSHOTS_RELEASED, '1');
-}
-
 export function releaseCompletedJobInputs(db: DatabaseSync, jobId: string): void {
   db.prepare(`UPDATE jobs SET input=json_remove(input,'$.initial','$.inputs','$.toolEvents',
     '$.failureDiagnostic','$.judgmentRecovery') WHERE id=? AND status='completed' AND json_valid(input)`).run(

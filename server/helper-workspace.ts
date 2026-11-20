@@ -15,7 +15,6 @@ import type {
   HelperTaskSnapshot,
   HelperStatus,
   HelperInstruction,
-  HelperLimits,
 } from '../core/helper.js';
 import { HELPER_TASK_LIMITS } from '../core/helper.js';
 import { UI_HELPER_PERSONA } from '../core/helper-persona.js';
@@ -38,10 +37,6 @@ const json = JSON.stringify;
 const now = () => new Date().toISOString();
 const emptyUsage = (): Usage => ({ modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
 
-function currentLimits(value: HelperLimits): HelperLimits {
-  return { totalCalls: value.totalCalls, helperCalls: value.helperCalls };
-}
-
 function conversationData(row: Row): HelperConversation {
   return {
     id: row.id,
@@ -50,7 +45,7 @@ function conversationData(row: Row): HelperConversation {
     revision: row.revision,
     historyRevision: Number(row.history_revision ?? 0),
     persona: row.persona,
-    limits: currentLimits(JSON.parse(row.limits)),
+    limits: JSON.parse(row.limits),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     projectId: row.group_id == null ? null : String(row.group_id),
@@ -662,11 +657,9 @@ export class HelperWorkspace {
             .get(id)?.n ?? 0
         )
       : 0;
-    const snapshot = JSON.parse(row.snapshot) as HelperTaskSnapshot;
-    if (snapshot.limits) snapshot.limits = currentLimits(snapshot.limits);
     return {
       ...taskData(row, completedEffects),
-      snapshot,
+      snapshot: JSON.parse(row.snapshot) as HelperTaskSnapshot,
       instructions: this.instructions(id),
     };
   }

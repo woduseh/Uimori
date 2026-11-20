@@ -129,6 +129,7 @@ test('conditional native positions use frozen lore selection and pinned budgets 
         budget: 1000,
         selected: ['lore-1'],
         omitted: [],
+        coverage: { total: 1, evaluated: 1 },
       },
     ],
   };

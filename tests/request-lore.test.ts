@@ -102,6 +102,7 @@ test('JEV-selected lore is distinct from always-pinned lore and attachment roles
         selected: ['harbor'],
         omitted: [{ id: 'omitted', reason: 'irrelevant' }],
         model: 'jev-latest',
+        coverage: { total: 2, evaluated: 2 },
       },
     ],
   };
@@ -116,6 +117,7 @@ test('JEV-selected lore is distinct from always-pinned lore and attachment roles
   );
   expect(requestLore(fixed, actualRequest, sent, { pinned: input.pinnedSources! })).toEqual({
     status: 'complete',
+    selection: { total: 2, evaluated: 2, selected: 1 },
     entries: [
       {
         id: 'package:card:bot:lore:always',
@@ -207,7 +209,7 @@ test('failed selection preserves candidate totals and excludes abandoned selecte
   });
 });
 
-test('coverage is absent for unknown legacy totals and attempts that do not perform story selection', () => {
+test('coverage is absent for attempts that do not perform story selection', () => {
   const fixed = snapshot([]);
   const entry: LoreSelectionEntry = {
     key: 'card@1:bot',
@@ -217,17 +219,11 @@ test('coverage is absent for unknown legacy totals and attempts that do not perf
     omitted: [],
     coverage: { total: 10, evaluated: 3 },
   };
-  for (const entries of [
-    [],
-    [{ ...entry, coverage: undefined }],
-    [entry, { ...entry, key: 'legacy@1:module', coverage: undefined }],
-  ]) {
-    fixed.loreSelection = { version: 1, entries };
-    expect(requestLore(fixed, request(), wire(), { pinned: [] })).toEqual({
-      status: 'complete',
-      entries: [],
-    });
-  }
+  fixed.loreSelection = { version: 1, entries: [] };
+  expect(requestLore(fixed, request(), wire(), { pinned: [] })).toEqual({
+    status: 'complete',
+    entries: [],
+  });
   fixed.loreSelection = { version: 1, entries: [entry] };
   expect(requestLore(fixed, request(), wire(), { pinned: [], sourceOnly: true })).toEqual({
     status: 'complete',

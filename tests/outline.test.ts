@@ -564,16 +564,6 @@ describe('hierarchical composition', () => {
     expect(
       store.outline.sceneCommand(episode.id, { idempotencyKey: key, request: generated.request })
     ).toEqual(generated);
-    const legacyRequest = '선택한 구성에 따라 이 단위를 집필해 주세요.';
-    store.db
-      .prepare('UPDATE scene_commands SET request=? WHERE id=?')
-      .run(legacyRequest, generated.id);
-    for (const idempotencyKey of [key, randomUUID()]) {
-      expect(
-        store.outline.sceneCommand(episode.id, { idempotencyKey, additionalInstruction: '' })
-          .request
-      ).toBe(legacyRequest);
-    }
     const next = find(store, chat.id, '2화 장부의 첫 장');
     const request = '명시한 집필 요청\n'.repeat(2500) + '요청의 끝';
     const explicit = { idempotencyKey: randomUUID(), request };
