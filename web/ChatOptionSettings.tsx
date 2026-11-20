@@ -344,18 +344,18 @@ export function ChatOptionSettings(props: Props) {
                 {t('chatsettings.m126')}
               </button>
             )}
-          <ConfirmDialog
-            open={clearingFixed}
-            title={t('chatsettings.clearFixedOptionsTitle')}
-            message={t('chatsettings.clearFixedOptionsMessage')}
-            action={t('chatsettings.m126')}
-            onCancel={() => setClearingFixed(false)}
-            onConfirm={() => {
-              setClearingFixed(false);
-              submit('fixed', 'fixed', { binding: base.binding, values: {} });
-            }}
-          />
         </fieldset>
+        <ConfirmDialog
+          open={clearingFixed}
+          title={t('chatsettings.clearFixedOptionsTitle')}
+          message={t('chatsettings.clearFixedOptionsMessage')}
+          action={t('chatsettings.m126')}
+          onCancel={() => setClearingFixed(false)}
+          onConfirm={() => {
+            setClearingFixed(false);
+            submit('fixed', 'fixed', { binding: base.binding, values: {} });
+          }}
+        />
         {displayState.pending.length > 0 && (
           <section aria-label={t('chatsettings.m130')} className="chat-options-pending">
             <h3>{t('chatsettings.m130')}</h3>

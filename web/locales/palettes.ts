@@ -1,10 +1,4 @@
 export const messages = {
-  'palettes.manage': {
-    ko: '팔레트 관리',
-    en: 'Manage palettes',
-    ja: 'パレット管理',
-    zh: '管理调色板',
-  },
   'palettes.create': {
     ko: '새 팔레트',
     en: 'New palette',

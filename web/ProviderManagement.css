@@ -199,7 +199,7 @@ p.provider-draft-note:lang(ko),
 }
 .provider-workspace-heading > p {
   margin: 0 0 16px;
-  font-size: var(--font-body);
+  font-size: var(--font-small);
   line-height: 1.7;
 }
 .provider-workspace-navigation {

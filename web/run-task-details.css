@@ -37,6 +37,16 @@
 .execution-record[open] > summary {
   border-bottom: var(--hairline) solid var(--line);
 }
+.run-input-details > .scene-usage:not([open]),
+.run-input-details > .inspector:not([open]) {
+  border-color: transparent;
+  background: transparent;
+}
+.run-input-details > .scene-usage:not([open]) > summary,
+.run-input-details > .inspector:not([open]) > summary {
+  min-height: var(--control-h);
+  padding-inline: 0;
+}
 .run-input-details > .scene-usage > summary:focus-visible,
 .run-input-details > .inspector > summary:focus-visible,
 .execution-record > summary:focus-visible {

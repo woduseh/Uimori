@@ -9,8 +9,6 @@ async function openAppearance(page: Page, url = '/') {
   await selectSettingsSection(page, '테마와 색상');
   const advanced = page.locator('.theme-advanced:not([open]) > summary');
   if (await advanced.isVisible()) await advanced.click();
-  const palettes = page.locator('.palette-advanced:not([open]) > summary');
-  if (await palettes.isVisible()) await palettes.click();
 }
 async function appearanceMode(page: Page, mode: 'light' | 'dark') {
   await selectSettingsSection(page, '일반');
@@ -37,7 +35,7 @@ for (const width of [412]) {
     const memo = sample.getByLabel('테마 예문 메모', { exact: true });
     await memo.fill('Authored memo survives custom palette changes');
     await memo.evaluate((element) => element.setAttribute('data-acceptance-node', 'original'));
-    const manager = page.getByRole('region', { name: '팔레트 관리', exact: true });
+    const manager = page.getByRole('region', { name: '색상 팔레트', exact: true });
     const title = `Acceptance palette ${width} ${randomUUID()}`;
     await manager.getByRole('button', { name: '새 팔레트', exact: true }).click();
     const lightMode = manager.getByRole('button', { name: '밝게', exact: true });
@@ -66,11 +64,9 @@ for (const width of [412]) {
     await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:letter');
     await expect(memo).toHaveValue('Authored memo survives custom palette changes');
     await expect(memo).toHaveAttribute('data-acceptance-node', 'original');
-    const row = manager
-      .locator('.palette-management-row')
-      .filter({ has: page.getByText(title, { exact: true }) });
+    await manager.getByLabel(`${title} 관리`, { exact: true }).click();
     const downloadPromise = page.waitForEvent('download');
-    await row.getByRole('button', { name: `${title} 내보내기`, exact: true }).click();
+    await manager.getByRole('button', { name: `${title} 내보내기`, exact: true }).click();
     const download = await downloadPromise;
     const exported = await readFile((await download.path())!);
     const file = JSON.parse(exported.toString());
@@ -98,10 +94,9 @@ for (const width of [412]) {
     await page.getByRole('button', { name: '기본 테마 적용', exact: true }).click();
     await page.getByRole('button', { name: '팔레트 기본값으로', exact: true }).click();
     for (const name of [title, `${title} imported`]) {
-      const saved = manager
-        .locator('.palette-management-row')
-        .filter({ has: page.getByText(name, { exact: true }) });
-      await saved.getByRole('button', { name: `${name} 팔레트 삭제`, exact: true }).click();
+      const saved = manager.getByRole('button', { name: `${name} 팔레트 적용`, exact: true });
+      await manager.getByLabel(`${name} 관리`, { exact: true }).click();
+      await manager.getByRole('button', { name: `${name} 팔레트 삭제`, exact: true }).click();
       await page
         .getByRole('alertdialog', { name: '팔레트 삭제', exact: true })
         .getByRole('button', { name: '팔레트 삭제', exact: true })
