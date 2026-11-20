@@ -730,7 +730,7 @@ test('LOADUI05 context summary status shows in mobile reader and run details wit
     if (stage === 'pending' || stage === 'failed')
       projected.push({
         ...base,
-        id: `${base.id}-context-status-fixture`,
+        id: `${base.id}-context-status-${stage}`,
         request: 'Synthetic context status preview',
         status: stage === 'pending' ? 'running' : 'failed',
         sourceRevision: null,
@@ -747,7 +747,7 @@ test('LOADUI05 context summary status shows in mobile reader and run details wit
     if (stage === 'pending' || stage === 'failed')
       body.reader.pendingRunIds = [
         ...(body.reader.pendingRunIds ?? []),
-        `${source.runId}-context-status-fixture`,
+        `${source.runId}-context-status-${stage}`,
       ];
     await route.fulfill({ response, json: body });
   });
