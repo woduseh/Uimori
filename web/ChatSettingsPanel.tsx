@@ -426,22 +426,6 @@ export function ChatSettingsPanel({
             hidden={!isProfile(active) || !showingDetail}
             tabIndex={0}
           >
-            {visited.includes('prompts') && detail && (
-              <div hidden={profileTab !== 'prompts'}>
-                <SettingsEditor
-                  chat={detail.chat}
-                  onSaved={() => state.refresh(state.selected)}
-                  onError={state.setError}
-                  hideHeading
-                  hideSaveActions
-                  disabled={savingPage}
-                  onSaveRequest={() => void saveGeneration()}
-                  onDirtyChange={setRuntimeDirty}
-                  onSaveHandlerChange={saveGroup.registrations.runtime}
-                  onDiscardHandlerChange={discardGroup.registrations.runtime}
-                />
-              </div>
-            )}
             {detail?.profile && library && (
               <ProfileEditor
                 profile={detail.profile}
@@ -459,6 +443,24 @@ export function ChatSettingsPanel({
                 onGlobalSettings={(section) => requestClose(() => onGlobalSettings(section))}
                 nextRequest={state.pendingRequest ?? draft}
                 loreContextReset={state.loreContextReset}
+                generationSettings={
+                  visited.includes('prompts') && (
+                    <div hidden={profileTab !== 'prompts'}>
+                      <SettingsEditor
+                        chat={detail.chat}
+                        onSaved={() => state.refresh(state.selected)}
+                        onError={state.setError}
+                        hideHeading
+                        hideSaveActions
+                        disabled={savingPage}
+                        onSaveRequest={() => void saveGeneration()}
+                        onDirtyChange={setRuntimeDirty}
+                        onSaveHandlerChange={saveGroup.registrations.runtime}
+                        onDiscardHandlerChange={discardGroup.registrations.runtime}
+                      />
+                    </div>
+                  )
+                }
               />
             )}
             {profileTab === 'prompts' && (
