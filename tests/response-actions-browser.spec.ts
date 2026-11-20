@@ -5,7 +5,7 @@ import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type { Bookmark } from '../core/reading-state.js';
 import type { ResponseStreamPage } from '../core/response-stream.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { openSourceActions } from './ui-navigation.js';
+import { openSourceActions, resizeViewport } from './ui-navigation.js';
 
 async function detail(request: APIRequestContext, chatId: string): Promise<ChatDetail> {
   const response = await request.get(`/api/chats/${chatId}`);
@@ -227,7 +227,7 @@ test('RACOM07 cancelled request dismissal waits for acknowledgement, recovers tr
     pending.locator('.partial-response, .streaming-response, .chat-retry-failure')
   ).toHaveCount(0);
   for (const width of [412, 1440]) {
-    await page.setViewportSize({ width, height: 900 });
+    await resizeViewport(page, { width, height: 900 });
     await actions.scrollIntoViewIfNeeded();
     await noHorizontalOverflow(page, pending);
     for (const button of await actions.getByRole('button').all())
