@@ -337,7 +337,11 @@ function App() {
   const [editingSources, setEditingSources] = useState<string[]>([]);
   const onSourceEditing = useCallback((sourceId: string, editing: boolean) => {
     setEditingSources((current) =>
-      editing ? [...new Set([...current, sourceId])] : current.filter((id) => id !== sourceId)
+      editing === current.includes(sourceId)
+        ? current
+        : editing
+          ? [...current, sourceId]
+          : current.filter((id) => id !== sourceId)
     );
   }, []);
   const sourceEditing = editingSources.length > 0;

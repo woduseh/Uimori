@@ -453,33 +453,26 @@ function SourceReaderContent({
     const origin = editorOrigin.current;
     editorOrigin.current = undefined;
     if (!origin) return;
-    let release: (() => void) | undefined;
-    const frame = requestAnimationFrame(() => {
-      const { button, scrollport, offset } = origin;
-      if (!button.isConnected || !scrollport.isConnected) return;
-      let focused = false;
-      release = retainReaderNavigation(
-        scrollport,
-        {
-          kind: 'source',
-          element: button,
-          ...(origin.body?.isConnected ? { bodyTop: origin.bodyTop } : {}),
-          offset: Math.max(
-            0,
-            Math.min(offset, scrollport.clientHeight - button.getBoundingClientRect().height - 8)
-          ),
-        },
-        () => button.isConnected && scrollport.isConnected,
-        () => {
-          if (!focused) button.focus({ preventScroll: true });
-          focused = true;
-        }
-      );
-    });
-    return () => {
-      cancelAnimationFrame(frame);
-      release?.();
-    };
+    const { button, scrollport, offset } = origin;
+    if (!button.isConnected || !scrollport.isConnected) return;
+    let focused = false;
+    return retainReaderNavigation(
+      scrollport,
+      {
+        kind: 'source',
+        element: button,
+        ...(origin.body?.isConnected ? { bodyTop: origin.bodyTop } : {}),
+        offset: Math.max(
+          0,
+          Math.min(offset, scrollport.clientHeight - button.getBoundingClientRect().height - 8)
+        ),
+      },
+      () => button.isConnected && scrollport.isConnected,
+      () => {
+        if (!focused) button.focus({ preventScroll: true });
+        focused = true;
+      }
+    );
   }, [editor]);
   const openEditor = (role: ReaderMode, button: HTMLButtonElement) => {
     const menu = button.closest<HTMLDetailsElement>('.action-menu');
@@ -495,10 +488,12 @@ function SourceReaderContent({
         }
       : undefined;
     if (menu) menu.open = false;
+    onEditingChange?.(source.id, true);
     setEditor(role);
   };
   const closeEditor = () => {
     restoreEditor.current = true;
+    onEditingChange?.(source.id, false);
     setEditor(null);
   };
   const context = source.sceneContext;
@@ -1800,18 +1795,13 @@ function TextEditor({
   useLayoutEffect(() => {
     const field = input.current;
     field?.focus({ preventScroll: true });
-    const frame = requestAnimationFrame(() => {
-      const form = field?.form;
-      const reader = form?.closest<HTMLElement>('[data-reader-scrollport], .reader-scrollport');
-      if (!form || !reader) return;
-      // scrollIntoView also moves overflow-hidden ancestors, including the app shell.
-      const body = themeBodyScroll(form);
-      if (body)
-        body.scrollTop += form.getBoundingClientRect().top - body.getBoundingClientRect().top;
-      reader.scrollTop +=
-        form.getBoundingClientRect().top - reader.getBoundingClientRect().top - 12;
-    });
-    return () => cancelAnimationFrame(frame);
+    const form = field?.form;
+    const reader = form?.closest<HTMLElement>('[data-reader-scrollport], .reader-scrollport');
+    if (!form || !reader) return;
+    // scrollIntoView also moves overflow-hidden ancestors, including the app shell.
+    const body = themeBodyScroll(form);
+    if (body) body.scrollTop += form.getBoundingClientRect().top - body.getBoundingClientRect().top;
+    reader.scrollTop += form.getBoundingClientRect().top - reader.getBoundingClientRect().top - 12;
   }, []);
   const title = role === 'original' ? t('reader.original') : t('reader.translation');
   const conflict = draft.expectedSourceHash !== source.hash || draft.expectedRevision !== revision;
