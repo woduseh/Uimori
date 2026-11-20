@@ -35,7 +35,6 @@ const asJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Js
 const emptyUsage = (): Usage => ({ modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
 const CONTRACT = `You advise the main writer on the assigned question, using your advisor instructions and the available context. Offer the judgments, interpretations, alternatives or short illustrative fragments that help answer it, in whatever form and depth make the advice useful, and say which evidence or assumption a material claim rests on. Distinguish established source facts and character beliefs from inference and proposed fiction. Your tools are read-only: advice does not save fiction, change canonical state or draw randomness, and the main writer decides what to use and writes the final prose. When consultationContext is present, its references are completed exchanges selected from this run: earlier advice is another advisor's proposal, read results keep their source and error boundaries, and a draft is uncommitted writing to examine. Weigh the evidence, disagreements, failures and truncation; repeated opinions are not independent confirmation. Only the provided draft and references are available to you, not the writer's other working drafts.`;
 
-/** Uses the same source projection as the main writer, without copying its authored prompt. */
 export function buildAgentProviderRequest(
   snapshot: RunSnapshot,
   agent: AgentDefinition,
@@ -100,7 +99,6 @@ export function buildAgentProviderRequest(
   };
 }
 
-/** Distinct question/context pairs share run and advisor budgets; identical pairs reuse outcomes. */
 export function createAgentCollaboration(
   snapshot: RunSnapshot,
   hooks: MainHooks,
@@ -311,7 +309,6 @@ export function createAgentCollaboration(
     };
     while (true) {
       if (signal.aborted) return finish('cancelled', 'CANCELLED');
-      // A pending writer needs its next request; a running native writer already owns its turn.
       if (
         (spentByAgent.get(agent.id) ?? 0) >= agent.maxCalls ||
         spentCalls >= config.maxCalls ||
@@ -420,9 +417,7 @@ export function createAgentCollaboration(
           }
           try {
             await hooks.onAttemptFinish(attempt, uncertainAttemptResult(signal.aborted));
-          } catch {
-            // Preserve the original execution failure if diagnostic settlement also fails.
-          }
+          } catch {}
         }
         throw error;
       }
@@ -449,7 +444,6 @@ export function createAgentCollaboration(
               result.refusal ?? result.error?.code ?? `ADVISOR_${result.status.toUpperCase()}`
             );
       const ids = new Set(results.map((event) => event.callId));
-      // Validate the entire turn before reading anything. A returned tool name cannot grant access.
       for (const call of result.toolCalls) {
         if (ids.has(call.id)) return finish('unavailable', 'ADVISOR_DUPLICATE_TOOL_ID');
         ids.add(call.id);

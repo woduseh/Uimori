@@ -89,8 +89,6 @@ export function encryptedPushRequest(
     contentEncoding: 'aes128gcm',
   });
 }
-/** Web Push owns encryption/signing; the standard HTTP client owns DNS, TLS and sockets.
- * The caller's absolute AbortSignal also cancels DNS/connection setup, unlike an idle timeout. */
 export const sendWebPush: PushSender = async (subscription, payload, keys, origin, ttl, signal) => {
   signal.throwIfAborted();
   const details = encryptedPushRequest(subscription, payload, keys, origin, ttl);
@@ -103,7 +101,6 @@ export const sendWebPush: PushSender = async (subscription, payload, keys, origi
     redirect: 'error',
     signal,
   });
-  // No provider body is needed or retained, including for errors. Close it immediately.
   await response.body?.cancel();
   const raw = response.headers.get('retry-after');
   const delay = raw

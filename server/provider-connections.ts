@@ -7,7 +7,6 @@ import { prepareVertexAccount, validateVertexCredential } from './vertex-credent
 import type { ProductStore } from './product-store.js';
 import { sameVertexProject } from '../core/vertex-location.js';
 
-/** Parse a provider edit; secret values stay separate from the public connection record. */
 function prepareConnection(product: ProductStore, value: unknown, id?: string) {
   const body = record(value);
   fields(body, [
@@ -99,7 +98,6 @@ export function saveConnection(product: ProductStore, value: unknown, id?: strin
     );
     for (const write of prepared.writes)
       product.store.credentials.set(write.reference, write.value);
-    // A removed connection key must not survive as an orphan secret in DB backups.
     const previousCredential = previous?.credentialRef;
     if (previousCredential?.startsWith('API_')) {
       const referenced = product.db

@@ -68,13 +68,10 @@ export function storySubmissionEnabled(snapshot: RunSnapshot): boolean {
     snapshot.promptCompilation?.execution?.storySubmission === true
   );
 }
-/** Shared by the real runner and no-call preview; no credentials, fetch, attempts or source writes. */
 export function buildMainProviderRequest(
   snapshot: RunSnapshot,
   options: {
-    /** The live runner opts in only when it owns a workspace; previews use installed capability. */
     shell?: boolean;
-    /** Per-request suppression after an add-on error; never changes the frozen Run. */
     results?: readonly ToolEvent[];
     opaqueState?: Json;
     evaluation?: {
@@ -83,7 +80,6 @@ export function buildMainProviderRequest(
       toolChoice?: string;
     };
     agentBootstrap?: readonly ToolEvent[];
-    /** Completed work carried as reference data after host compaction, never native tool history. */
     completedToolHistory?: readonly ToolEvent[];
   } = {}
 ): { snapshot: RunSnapshot; input: MainInput; request: ProviderRequest } {
@@ -169,7 +165,6 @@ export function buildMainProviderRequest(
   if (evaluation)
     contract +=
       '\nThe selected evaluation tool set is scoped to this model preset and this run. Complete this run by calling eval_submit_artifact alone with the finished artifact in content and userFacingNotice as separate metadata. Ordinary final text does not complete the run.';
-  // Listed entries are summaries, so reading the relevant ones is the expected path, not an option.
   if (
     input.tools.includes('knowledge.read') &&
     input.catalog.some((item) => item.loading !== 'pinned')
@@ -204,8 +199,6 @@ export function buildMainProviderRequest(
     : undefined;
   if (continuation) {
     contract += '\n' + CONTEXT_CONTINUATION_GUIDANCE;
-    // Structured prompts carry this after the current request. Adding it to their separate
-    // host-context envelope would also duplicate that entire envelope in native system data.
     if (!fixed.promptCompilation)
       providerInput.source = {
         ...(providerInput.source as Record<string, Json>),
@@ -258,8 +251,6 @@ export function buildMainProviderRequest(
     const id = 'native.request-continuation';
     if (request.prompt.messages.some((message) => message.id === id))
       throw new ProviderContractError('NATIVE_HOST_CONTINUATION_COLLISION');
-    // Completed work happened after the original request. Keep authored message order and
-    // make that chronology explicit at the end of the fresh window, without replaying a tool.
     request.prompt = {
       ...request.prompt,
       messages: [
@@ -328,7 +319,6 @@ export function encodeMainPreview(
   };
 }
 
-/** Measure the provider request using its protocol-specific encoding. */
 export function measureProviderRequest(
   request: ProviderRequest,
   target: ModelPreset & { connection: Connection },

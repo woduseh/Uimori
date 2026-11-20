@@ -40,7 +40,6 @@ const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(va
 type ImageJudgmentSettings = Pick<JevSettings, 'images' | 'longContext'>;
 export const imageJudgmentInputHash = (request: JudgmentRequest) =>
   digest({ version: IMAGE_SELECTION_VERSION, request });
-/** The plan owns sampled blocks, frozen metadata and model IDs for the whole paid call. */
 function prepareImageJudgment(
   source: AuxiliarySource,
   assets: readonly AssetEntry[],
@@ -123,7 +122,6 @@ function prepareImageJudgment(
     jevRequestBudget(modelRequest(request)).requestTokens;
   const fits = (request: JudgmentRequest) =>
     jevRequestFits(modelRequest(request), null, settings.longContext);
-  // Small catalogs retain semantic choice over every usable image, with no retrieval loss.
   if (
     eligible.length < JEV_CHOICE_OPTION_LIMIT &&
     (!vision || eligible.length <= IMAGE_JUDGMENT_LIMITS.candidatesPerBlock)
@@ -161,7 +159,6 @@ function prepareImageJudgment(
   const included = new Set<string>();
   const metadataCost = new Map<string, number>();
   const admissions: { block: number; id: string }[] = [];
-  // Cached record costs avoid repeatedly tokenizing a growing catalog. The final body is checked below.
   const additionCost = (id: string) => {
     let cost = metadataCost.get(id);
     if (cost === undefined) {
@@ -179,7 +176,6 @@ function prepareImageJudgment(
   };
   const canInclude = (id: string) =>
     !vision || included.has(id) || included.size < IMAGE_JUDGMENT_LIMITS.candidatesPerBlock;
-  // Reserve an affordable first candidate before any paragraph consumes spare depth.
   const firstChoiceBudget = (inputTokens - tokenEstimate) / blocks.length;
   for (let i = 0; i < blocks.length; i++) {
     for (const id of rankings[i]) {
@@ -190,8 +186,6 @@ function prepareImageJudgment(
       break;
     }
   }
-  // A paragraph may have no candidate within its initial share. Use remaining
-  // coverage budget for its cheapest candidate before adding depth elsewhere.
   for (let i = 0; i < blocks.length; i++) {
     if (selected[i].length) continue;
     let cheapest: { id: string; cost: number } | undefined;
@@ -240,7 +234,6 @@ function assetMetadata(asset: AssetEntry) {
     uses: asset.uses,
   };
 }
-/** Host-bound identity remains separate from the smaller, semantic model projection. */
 export function imageJudgmentRequest(
   source: AuxiliarySource,
   assets: readonly AssetEntry[],
@@ -249,7 +242,6 @@ export function imageJudgmentRequest(
 ): JudgmentRequest | null {
   return prepareImageJudgment(source, assets, guidance, settings)?.request ?? null;
 }
-/** Integrity fields bind the host receipt; they do not help the model choose an illustration. */
 function modelRequest(request: JudgmentRequest): JudgmentRequest {
   const { sourceHash: _sourceHash, assets, ...state } = request.state as Record<string, Json>;
   return {
@@ -266,7 +258,6 @@ function providerRequest(request: JudgmentRequest, target?: JudgmentTarget): Jud
   const projected = modelRequest(request);
   if (!target || target.provider === 'typesafe' || target.provider === 'typesafe-compatible')
     return projected;
-  // A paragraph with only "none" needs no model decision. Decisions APIs require two options.
   return {
     ...projected,
     questions: Object.fromEntries(
@@ -276,7 +267,6 @@ function providerRequest(request: JudgmentRequest, target?: JudgmentTarget): Jud
     ),
   };
 }
-/** Picture bytes are the only part taken from the wire; everything else is rebuilt from the job. */
 function expectedImageRequest(
   source: AuxiliarySource,
   assets: readonly AssetEntry[],

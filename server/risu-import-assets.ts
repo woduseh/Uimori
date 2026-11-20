@@ -28,11 +28,6 @@ export function importRisuAssets(
   input: AssetInput & { preparedAssets?: undefined }
 ): AssetResult<NativeTransferFile['images'][number]>;
 
-/**
- * Reads the images stored inside the file. Nothing is fetched: an asset that names a file the
- * container does not hold stays with the original. The asset URLs map every reference form Risu
- * text uses to the package image that replaces it.
- */
 export function importRisuAssets({
   card,
   kind,
@@ -58,7 +53,6 @@ export function importRisuAssets({
   const assetUrls = new Map<string, string>();
   let portraitImageId: string | undefined;
   let portraitPriority = -1;
-  // A package image carries no role field, so a typed asset keeps only its bytes and its name.
   let typedAsset = false;
   const included = new Set<string>();
   const assets = Array.isArray(card.assets) ? card.assets : [];
@@ -144,7 +138,6 @@ export function importRisuAssets({
     });
     if (asset.type === 'emotion' || asset.type === 'background') typedAsset = true;
     // CCv3 icon/main owns the portrait even when later backgrounds or other assets are named main.
-    // Without an icon, retain the existing first-image / named-main fallback for cards.
     const priority = asset.type === 'icon' ? (name === 'main' ? 2 : 1) : 0;
     if (
       (kind !== 'module' || asset.type === 'icon') &&

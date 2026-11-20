@@ -50,7 +50,6 @@ export function productRoutes(
     publish: (chatId: string) => void;
     onAuthChanged?: () => void;
     onChatDeleted?: (chatId: string) => void;
-    /** The maintenance gate travels with the session read, so no surface polls for it. */
     maintenance?: () => MaintenanceStatus;
   }
 ) {

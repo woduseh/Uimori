@@ -10,7 +10,6 @@ import { nativeExampleMessages } from '../core/risu-native-messages.js';
 import { nativeRisuFieldKey } from '../core/risu-native-execution.js';
 import { risuImageHandoffText } from '../core/risu-image-handoff.js';
 
-/** Authored examples keep their source and prepared text; they are not conversation history. */
 export function nativeCharacterExamples(
   snapshot: RunSnapshot,
   packages: readonly ResolvedPackage[] = compiledPackages(snapshot, 'main')
@@ -43,7 +42,6 @@ export function nativeCharacterExamples(
   };
 }
 
-/** The same fixed host slots determine both CBS evaluation and message composition. */
 export function nativePromptSlots(
   snapshot: RunSnapshot,
   input: MainInput = buildMainInput(snapshot)

@@ -36,7 +36,6 @@ export function mapCopiedMessageTexts(
   }
 }
 
-/** Local identity mapping touches authored messages only; it never reconstructs old model inputs. */
 export function restoreCopiedMessages(
   store: Store,
   states: readonly CopiedMessageState[],

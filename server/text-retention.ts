@@ -2,7 +2,6 @@ import type { DatabaseSync } from 'node:sqlite';
 import { retainPrunedTranslation } from './translation-context.js';
 import { imageDataHashes, queueImageCleanup } from './unused-data.js';
 
-/** Exact captured hashes still needed by unfinished/retryable work, not all completed history. */
 function pinnedSourceHashes(db: DatabaseSync): Set<string> {
   const hashes = new Set<string>();
   for (const sql of [
@@ -28,7 +27,6 @@ function pinnedSourceHashes(db: DatabaseSync): Set<string> {
   return hashes;
 }
 
-/** The authored original remains a message identity; edits retain two versions and actual captures. */
 export function pruneSourceEdits(
   db: DatabaseSync,
   scope?: { sourceId: string } | { chatId: string }
@@ -53,7 +51,6 @@ export function pruneSourceEdits(
     }
 }
 
-/** Keep current/previous successful text, active retries and image targets; keep billing metadata separately. */
 export function pruneTranslationHistory(db: DatabaseSync, sourceId: string): void {
   const jobs = db
     .prepare(`SELECT j.id,j.status,j.revision,r.result FROM jobs j LEFT JOIN job_results r ON r.job_id=j.id
@@ -89,7 +86,6 @@ export function pruneTranslationHistory(db: DatabaseSync, sourceId: string): voi
       queueImageCleanup(db, imageDataHashes(row.result));
     }
     db.prepare('DELETE FROM job_results WHERE job_id=?').run(id);
-    // A billed call remains as compact execution metadata. Manual edit-only rows have no such use.
     if (db.prepare('SELECT 1 FROM attempts WHERE job_id=? LIMIT 1').get(id))
       db.prepare('UPDATE jobs SET input=NULL WHERE id=?').run(id);
     else db.prepare('DELETE FROM jobs WHERE id=?').run(id);

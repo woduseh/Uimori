@@ -16,7 +16,6 @@ import { projectRisuImageHandoff, risuImageHandoffText } from '../core/risu-imag
 import { packageIdentityFromProfile } from '../core/package-identity.js';
 import { nativeExampleMessages } from '../core/risu-native-messages.js';
 
-/** Text scripts may reorder/exclude turns, but cannot reassign their authored images. */
 export function validateNativeImageMessageIdentity(
   snapshot: RunSnapshot,
   messages: NativeRisuMessage[]
@@ -85,7 +84,6 @@ export const nativeRisuPending = (snapshot: RunSnapshot) =>
     !!snapshot.profile?.promptPresets?.main?.program.nativeRisuPreset) &&
   !snapshot.nativeRisuExecution;
 
-/** Async authored code runs once outside storage transactions. Compilers consume this receipt. */
 export async function prepareNativeRisuRun(
   snapshot: RunSnapshot,
   options: NativeRisuExecutionOptions & { preview?: boolean } = {}
@@ -102,7 +100,6 @@ export async function prepareNativeRisuRun(
   const issues: string[] = [];
   if (options.preview) issues.push('RISU_NATIVE_PREVIEW_CALLBACKS_DEFERRED');
   const invoke = async (event: 'input' | 'editInput' | 'start', text?: string) => {
-    // Preview evaluates fields/regex against copies, without paid or stateful callbacks.
     if (options.preview) return { text };
     const result = await executeRisuNative(
       { ...context, variables, messages, event, ...(text !== undefined ? { text } : {}) },

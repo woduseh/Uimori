@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { RunSnapshot } from '../core/types.js';
 
-/** Summary meaning follows authored input, not workspace bookkeeping or unrelated role settings. */
 export function contextDependencyKey(snapshot: RunSnapshot): string {
   const main = snapshot.profile?.promptPresets?.main;
   const reference = snapshot.profile?.prompts?.main;

@@ -1,4 +1,3 @@
-/** Static agent-facing data guide, compiled with the server and shipped in the runtime image. */
 export const HELPER_SHELL_GUIDE = `# Uimori data guide
 
 This guide explains what Uimori's data *means*. For workspace paths and save commands, start with \`INDEX.md\`. For exact live operation arguments, use \`uimori tools <operation>\` (or \`app.tools\`). Use familiar flags such as \`uimori tools --query appearance\` or \`uimori call resource.read --kind content --id <id>\`; complex nested inputs use \`--input <file|->\`. The saved resources and current tool schemas take precedence over examples here.

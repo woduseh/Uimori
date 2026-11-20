@@ -14,7 +14,6 @@ import { judgmentSelection } from './prompt-workspace.js';
 import type { Store } from './store.js';
 import { HttpError } from './request-validation.js';
 
-/** Capture one execution's selection. Resolve secrets only immediately before dispatch. */
 export function judgmentRuntime(
   store: Store,
   legacyCredential?: JudgmentHooks['credential']
@@ -30,7 +29,6 @@ export function judgmentRuntime(
     connection = store.product.get<Connection>('connection', selection.connectionId);
   } catch (error) {
     if (!(error instanceof HttpError) || error.statusCode !== 404) throw error;
-    // A deleted selection must fail when used, without preventing unrelated writing work.
   }
   const captured = connection;
   const suffix = selection.provider === 'typesafe-compatible' ? 'systemone' : 'decisions';
@@ -57,7 +55,6 @@ export function judgmentRuntime(
   };
 }
 
-/** A runtime-selected provider cannot substitute a different connection in its receipt. */
 export function assertJudgmentRuntimeWire(
   wire: WireRecord,
   runtime: Pick<JudgmentHooks, 'target'>

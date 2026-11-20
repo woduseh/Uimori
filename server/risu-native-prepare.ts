@@ -7,7 +7,6 @@ type PreparationInput = Pick<NativeRisuTextInput, 'native' | 'context'> & {
   greeting?: string;
 };
 
-/** One clone of the full context, with the original field/message variable-write order. */
 export function prepareNativeRisuTextInWorker(input: PreparationInput) {
   let variables = { ...input.context.variables };
   const issues: string[] = [];

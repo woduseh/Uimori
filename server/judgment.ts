@@ -23,14 +23,12 @@ export const DEFAULT_JUDGMENT_TARGET = {
   modelId: JEV_MODEL,
   endpoint: JEV_ENDPOINT,
 } as const satisfies JudgmentTarget;
-// https://docs.typesafe.ai/models (2026-09-20). Host estimates use o200k_base,
-// not a guaranteed provider tokenizer; explicit provider budget failures also remain fatal.
+// https://docs.typesafe.ai/models (2026-09-20).
 export const JEV_REQUEST_TOKEN_LIMIT = 64_000;
 export const JEV_STATE_QUESTION_TOKEN_LIMIT = 32_000;
 export const JEV_LONG_CONTEXT_TOKEN_LIMIT = 262_000;
 // https://docs.typesafe.ai/api (2026-10-08): maximum options per Choice.
 export const JEV_CHOICE_OPTION_LIMIT = 255;
-/** Text estimates only: the provider reports image tokens after evaluation. */
 export function jevRequestBudget(request: JudgmentRequest) {
   const state = estimateContextTokens(request.state);
   const questions = Object.values(request.questions).map((question) =>
@@ -111,7 +109,6 @@ export type JudgmentHooks = {
   signal: AbortSignal;
   onAttemptStart: (wire: WireRecord) => string | Promise<string>;
   onAttemptFinish: (id: string, result: ProviderResult) => void | Promise<void>;
-  /** Only the server supplies this. It is neither serialized nor accepted from a card. */
   credential?: () => string | undefined | Promise<string | undefined>;
   fetch?: typeof fetch;
   timeoutMs?: number;
@@ -143,9 +140,7 @@ const emptyUsage = (): ProviderResult['usage'] => ({
   priceRevision: null,
 });
 
-/** Official typed API contract: https://docs.typesafe.ai/api (checked 2026-09-19).
- * One attempt, no automatic retry. A cancelled/uncertain paid call remains a recorded terminal.
- */
+// https://docs.typesafe.ai/api (2026-09-19).
 async function executeJudgmentAttempt(
   request: JudgmentRequest,
   inputHash: string,
@@ -226,9 +221,7 @@ async function executeJudgmentAttempt(
           payload.error_type ??
           object(payload.error).error_type ??
           object(payload.detail).error_type;
-      } catch {
-        // Non-JSON provider errors retain their HTTP status.
-      }
+      } catch {}
       throw new JudgmentError(
         errorType === 'max_tokens_exceeded' ? 'JEV_INPUT_BUDGET' : `JEV_HTTP_${response.status}`
       );

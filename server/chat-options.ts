@@ -43,7 +43,6 @@ export function optionBinding(
     definitionHash: hash(controls),
   };
 }
-/** The binding a frozen profile implies; its owner was recorded from the workspace at freeze time. */
 function frozenOptionBinding(profile: ProfileSnapshot): OptionBinding | undefined {
   const preset = profile.promptPresets?.main;
   if (!preset || profile.promptOptionOwner === undefined) return undefined;
@@ -183,7 +182,6 @@ export class ChatOptionsStore {
           prior.chat_id !== chatId
         )
           conflict('옵션 요청 키가 다른 작업에 사용됐어요.');
-        // A retry acknowledges the earlier write without reapplying it or showing stale settings.
         return this.get(chatId);
       }
       const state = this.get(chatId);
@@ -304,7 +302,6 @@ const schema = (properties: Record<string, Json>, required: string[] = []): Json
   additionalProperties: false,
 });
 const str: Json = { type: 'string' };
-/** Model option decisions need definitions and receipts, not the unrelated prompt body. */
 export function helperOptionState({ program, ...state }: ChatOptionState) {
   return { ...state, definitions: state.controls ?? promptControls(program) };
 }

@@ -1,6 +1,5 @@
 import { Worker } from 'node:worker_threads';
 
-// The source resolver is only for uncompiled development/tests. Production resolves built .js.
 const bootstrap = String.raw`
 const { parentPort, workerData } = require('node:worker_threads');
 const { registerHooks } = require('node:module');
@@ -37,7 +36,6 @@ function startWorker(module: URL, method: string, input: unknown, session = fals
   });
 }
 
-/** Only trusted host module names enter here; authored content is structured workerData. */
 export function runNativeRisuWorker<T>(
   module: URL,
   method: string,
@@ -73,11 +71,6 @@ export function runNativeRisuWorker<T>(
   });
 }
 
-/**
- * One request owns one lazy, serial worker. Stateless trusted render/CBS methods use sessions;
- * Lua VMs and other one-shot execution remain isolated. Always close in a caller's finally.
- * Results are never cached and no worker survives its owning request. Each call keeps its budget.
- */
 export function createNativeRisuWorkerSession<Input, Result>(
   module: URL,
   method: string,
@@ -107,7 +100,6 @@ export function createNativeRisuWorkerSession<Input, Result>(
     return closing;
   };
   const fail = (error: Error) => {
-    // A pending call receives the failure; close() also observes a failed termination.
     void stop(error).catch(() => {});
   };
   const abort = () => fail(new Error('CANCELLED'));
@@ -116,7 +108,6 @@ export function createNativeRisuWorkerSession<Input, Result>(
   return {
     run(input: Input): Promise<Result> {
       if (stopped) return Promise.reject(stopped);
-      // No queue: the caller must preserve authored evaluation ordering.
       if (pending) return Promise.reject(new Error('RISU_NATIVE_WORKER_BUSY'));
       return new Promise<Result>((resolve, reject) => {
         pending = {

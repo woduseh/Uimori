@@ -6,7 +6,6 @@ type ReferencingProfile = { chatId: string; title: string; roles: string[] };
 export type ManagementImpact = {
   kind: 'connection' | 'model';
   id: string;
-  /** Current global role references; every chat uses these on its next request. */
   globalRoles: string[];
   profileCount: number;
   modelCount: number;
@@ -14,7 +13,6 @@ export type ManagementImpact = {
   effects: { editing: string; disabling: string };
 };
 
-/** Read only reference metadata; never load run snapshots, source text or model inputs. */
 export function managementImpact(
   store: ProductStore,
   kind: 'connection' | 'model',

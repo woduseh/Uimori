@@ -176,7 +176,6 @@ type HelperImageRead = Awaited<
   >
 >;
 type CollectImage = (read: HelperImageRead) => void;
-/** Keep complete recent turns; an oversized turn belongs wholly to the summary. */
 function recentHelperHistory(
   history: HelperTask['snapshot']['history'],
   tokenLimit: number,
@@ -241,7 +240,6 @@ ${CONTEXT_DERIVED_GUIDANCE}
 ${CONTEXT_RETRIEVAL_GUIDANCE}
 Write the final reply for a reader who has not seen your tool calls. Lead with the outcome, say what was saved and what is only proposed, and name any decision or conflict left to the user. Refer to things by their titles rather than internal IDs, revisions or receipts unless the user needs them. Give the detail the request calls for and no more.`;
 
-/** Command outcome is independent of denial; failed output remains ordinary read evidence. */
 function shellFailed(result: unknown) {
   if (!result || typeof result !== 'object') return false;
   const shell = result as { timedOut?: unknown; error?: unknown; exitCode?: unknown };
@@ -252,7 +250,6 @@ function shellFailed(result: unknown) {
   );
 }
 
-/** Unknown, denied and mutating exchanges keep their exact arguments and results. */
 function helperRead(event: ToolEvent) {
   const name = event.name === 'app.call' ? event.args.name : event.name;
   const args =
@@ -271,7 +268,6 @@ function helperRead(event: ToolEvent) {
   );
 }
 
-/** Retry the same unread range. Successful writes never pass through this helper. */
 function smallerHelperRead(
   name: string,
   args: Record<string, unknown>,
@@ -457,7 +453,6 @@ function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
   const status =
     error instanceof HttpError || error instanceof RisuContentError ? error.statusCode : undefined;
   // SQLite uses ERR_SQLITE_ERROR for both user mistakes and authorization failures.
-  // Classify only this proven SQL authoring error, and only for the read-only query tool.
   const unknownSqlColumn =
     readOnly && toolName === 'db.query' && /^no such column: [^\r\n]+$/u.test(message);
   const code = unknownSqlColumn
@@ -682,7 +677,6 @@ const READ_METADATA_GROUPS = new Set([
   'scope',
   'previewRange',
 ]);
-/** Project only returned provenance and ranges; never retain body prose or infer unread coverage. */
 function helperReadMetadata(value: unknown): Json | undefined {
   if (value === null) return null;
   if (Array.isArray(value))
@@ -743,7 +737,6 @@ function completedReadReferences(previous: HelperReadReference[], events: ToolEv
   const references = events.filter(helperRead).map((event): HelperReadReference => {
     const name = event.name === 'app.call' ? event.args.name : event.name;
     const args = event.name === 'app.call' ? record(event.args.arguments) : event.args;
-    // A schema or a small exact editing field is useful working input, not prose to summarize away.
     const exact =
       retainedSchema(event) ||
       ((name === 'resource.read' || name === 'editor.read') &&
@@ -773,9 +766,7 @@ function completedReadReferences(previous: HelperReadReference[], events: ToolEv
 export type HelperServices = {
   connectionTests?: ConnectionTestRunner;
   sceneUpdated?: (sourceId: string) => void;
-  /** Notifies open readers of a committed chat-level change, such as its variables. */
   chatChanged?: (chatId: string) => void;
-  /** Model checks for requested work, and the queue wake-up once its reservation committed. */
   story?: HelperStoryEffects & {
     started: (work: { run: Run } | { job: Job }) => void;
   };
@@ -808,7 +799,6 @@ type Options = Pick<
   owner: string;
 };
 
-/** Reserve the actual story context for helper reads and ordinary app operations. */
 export function helperWritingSnapshot(store: Store, chatId: string): RunSnapshot {
   const chat = store.chat(chatId),
     profile = store.product.snapshot(chatId, 'inspect', chat.headRevision);
@@ -850,7 +840,6 @@ export class HelperRuntime {
     this.workspace = new HelperWorkspace(store);
     this.shell = new HelperShell(store, this.workspace, options.services?.sceneUpdated);
   }
-  /** Resolve staging outside SQLite, but bind retries before consulting expiring staged bytes. */
   async enqueueWithAttachments(
     conversationId: string,
     requestKey: string,
@@ -903,8 +892,6 @@ export class HelperRuntime {
         start
       );
     const preparedImages = await prepareRequestImages(this.store, images);
-    // Another admission can finish while image preparation yields, then release
-    // the same staged file. Recheck the durable key before reading file staging.
     if (
       this.workspace.existing(
         conversationId,
@@ -1116,7 +1103,6 @@ export class HelperRuntime {
       for (const instruction of this.workspace.instructions(id)) {
         if (state.closed || this.workspace.taskState(id).status !== 'running') break;
         if (instruction.status !== 'pending') continue;
-        // An interrupted RPC must never cause an automatic second steering submission.
         this.workspace.instructionStatus(id, instruction.id, 'unconfirmed');
         try {
           await state.send(instruction.text);
@@ -1225,9 +1211,7 @@ export class HelperRuntime {
         .finally(() => {
           try {
             this.shell.cleanup(id);
-          } catch {
-            // A shell-created file must not block subsequent helper tasks.
-          }
+          } catch {}
           this.controllers.delete(id);
           this.pump();
         })
@@ -1279,7 +1263,6 @@ export class HelperRuntime {
     let providerPaused = false;
     let completedToolHistory: ToolEvent[] = [];
     let completedReads: HelperReadReference[] = [];
-    // Task-local transmission copies never enter authored messages, SQLite or shell stdout.
     const imageReads = new Map<string, HelperImageRead[]>();
     const withToolImages = (request: ProviderRequest): ProviderRequest => {
       const events = [
@@ -1378,8 +1361,6 @@ export class HelperRuntime {
             elapsedMs: 0,
             finishedAt: new Date().toISOString(),
           };
-        // HTTP corrections enter the next model request. Checking each tool also
-        // stops later writes when the instruction arrives during an earlier read.
         if (
           task.snapshot.model.connection.protocol !== 'codex-app-server-v1' &&
           this.workspace.instructions(id).some((item) => item.status === 'pending')
@@ -1422,9 +1403,7 @@ export class HelperRuntime {
           output = execution.result;
           denied = execution.denied ?? false;
           errorKind = execution.errorKind;
-          // A nonzero exit is still ordinary shell output (rg/grep use 1 for no match).
-          // Keep it as read evidence with its images; only native Codex receives a
-          // failed status. A failure after confirmed saves must not be replayed.
+          // rg and grep exit with 1 for no match, so a nonzero exit is still ordinary shell output.
           if (
             call.name === 'data.exec' &&
             !denied &&
@@ -1446,8 +1425,6 @@ export class HelperRuntime {
         } catch (error) {
           toolSignal.throwIfAborted();
           denied = true;
-          // A failed shell command may already have committed through apply.
-          // Successful shell reads can still be compacted by helperRead.
           const readOnly =
             call.name !== 'data.exec' &&
             helperRead({
@@ -1459,8 +1436,6 @@ export class HelperRuntime {
             });
           output = helperToolError(error, readOnly, call.name);
           if ((output as { recoverable: boolean }).recoverable) errorKind = 'recoverable';
-          // Unexpected write failures may follow a committed effect. Stop this task;
-          // the existing receipt/status path decides whether another attempt is safe.
           if (!readOnly && (output as { outcome: string }).outcome === 'unknown')
             fatalError = error;
         }
@@ -1482,12 +1457,10 @@ export class HelperRuntime {
       const readConcurrency = Math.min(4, availableParallelism());
       for (let index = 0; index < calls.length; ) {
         const group = [calls[index++]];
-        // Only the isolated read-only data workers overlap. Every other tool is an ordering barrier.
         while (isDataRead(group[0]) && index < calls.length && isDataRead(calls[index]))
           group.push(calls[index++]);
         const completed: Awaited<ReturnType<typeof executeCall>>[] = [];
         let next = 0;
-        // A finished reader takes the next call immediately, without waiting for its slower sibling.
         const workers = await Promise.allSettled(
           Array.from({ length: Math.min(readConcurrency, group.length) }, async () => {
             while (next < group.length) {
@@ -1497,7 +1470,6 @@ export class HelperRuntime {
             }
           })
         );
-        // Drain active reads on cancellation before leaving the group or crossing a write boundary.
         const failed = workers.find((worker) => worker.status === 'rejected');
         if (failed?.status === 'rejected') throw failed.reason;
         for (const completion of completed) {
@@ -1516,10 +1488,6 @@ export class HelperRuntime {
           };
           const originalResultChars = JSON.stringify(event.result).length;
           if (helperRead(event)) {
-            // A shell script is input, not read output; only its result uses the read budget.
-            // Keep completed evidence for the existing compaction path. Only a
-            // single result beyond this model's entire input capacity is narrowed;
-            // fixed and accumulated context pass the complete-request admission.
             const budget = contextBudgetForModel(task.snapshot.model);
             if (
               estimateContextTokens(call.name === 'data.exec' ? event.result : event, budget) >
@@ -1655,14 +1623,9 @@ export class HelperRuntime {
         }
         let estimate = estimateRequest(request);
         const inputLimit = budget.inputTokenLimit;
-        // A shell call can both read images and save data. Preserve its exact write receipt,
-        // while still giving the summarizer the visual evidence before starting a new segment.
         const pendingImageReads = results.flatMap((event) => imageReads.get(event.callId) ?? []);
         const hasSummaryInput =
           history.length || previousSummary || results.some(helperRead) || pendingImageReads.length;
-        // A new call ID or write receipt alone is not new reading material. After either
-        // adoption or fallback, retry the soft trigger only for new data; a hard crossing
-        // must be reconsidered because the original request can no longer be sent.
         const shouldCompact =
           !providerPaused &&
           estimate > inputLimit * 0.85 &&
@@ -1703,8 +1666,6 @@ export class HelperRuntime {
           lastCompactedReadRevision = readRevision;
           const needsSummary =
             older.length || previousSummary || results.some(helperRead) || pendingImageReads.length;
-          // A provider continuation can overflow even when all history and receipts
-          // still fit exactly. Restart that segment without a summary call.
           if (needsSummary || estimate > inputLimit) {
             let summary: { text: string; usage: Usage } | undefined;
             if (needsSummary) {
@@ -1788,7 +1749,6 @@ export class HelperRuntime {
             } else if (estimate > inputLimit) throw new Error('HELPER_COMPACTION_NO_PROGRESS');
           }
         }
-        // The last call the budget allows reports the work instead of failing on the next round.
         finalCall =
           helperCalls + 1 >= task.snapshot.limits.helperCalls ||
           this.workspace.taskState(id).usage.modelCalls + 1 >= task.snapshot.limits.totalCalls ||
@@ -1798,8 +1758,6 @@ export class HelperRuntime {
         else {
           request.input.controls = this.remainingBudget(task, helperCalls, finalCall);
           request = withNativeHostContext(request);
-          // Native media prompts contain the original task and host controls too.
-          // Freeze them with this segment; steering travels only through the delta.
           segmentInput = {
             controls: request.input.controls,
             task: request.input.task,
@@ -1874,7 +1832,6 @@ export class HelperRuntime {
               Math.round(performance.now() - queuedAt)
             );
             const images = imageReads.get(event.callId)?.map((read) => read.resolved);
-            // Codex owns replay after this callback; only external HTTP rounds need the cache.
             imageReads.delete(event.callId);
             return {
               success:
@@ -1950,8 +1907,6 @@ export class HelperRuntime {
               : 'MODEL_CALL_BUDGET_EXHAUSTED'
           );
         opaqueState = result.opaqueState ?? undefined;
-        // Native Codex owns its tool history. Only the external provider loop
-        // needs a second copy and read-change tracking for host compaction.
         const completed = await executeCalls(result.toolCalls);
         results.push(...completed);
         for (const event of completed) {
@@ -2030,7 +1985,6 @@ export class HelperRuntime {
           history: asJson(history),
           source: asJson({
             webSearch: helperWebSearchCapability(target.connection.protocol),
-            // Source participates in provider continuation binding, so keep this task's date fixed.
             currentDateUtc: task.createdAt.slice(0, 10),
             summary: {
               kind: 'derived-helper-summary',
@@ -2181,9 +2135,7 @@ export class HelperRuntime {
       if (attempt) {
         try {
           await hooks.onAttemptFinish(attempt, uncertainAttemptResult(hooks.signal.aborted));
-        } catch {
-          // Preserve the original execution failure if diagnostic settlement also fails.
-        }
+        } catch {}
       }
       throw error;
     }
@@ -2246,8 +2198,6 @@ export class HelperRuntime {
             source: asJson({ originalRequest: task.request, previousSummary: summary, part }),
           },
         };
-        // The first summary call must actually see the files being compacted. A JSON
-        // descriptor is not evidence of their contents; later calls carry its derived summary.
         const attachmentHistory =
           calls === 1
             ? history
@@ -2328,7 +2278,6 @@ export class HelperRuntime {
     };
   }
 
-  /** The same scope, edit and save rules apply to native app.call and shell CLI calls. */
   private async invokeOperation(
     task: HelperTask,
     name: string,
@@ -2377,9 +2326,7 @@ export class HelperRuntime {
     if (!traits.readOnly && name !== 'data.exec') {
       try {
         this.shell.refreshAfterMutation(task.id, name, toolArgs, result);
-      } catch {
-        // A projection refresh cannot convert a committed save into a failed write.
-      }
+      } catch {}
     }
     const denied =
       name === 'outline.read' && !!result && typeof result === 'object' && 'error' in result;
@@ -2413,8 +2360,6 @@ export class HelperRuntime {
         ...(!readOnly && result.outcome === 'unknown' ? { fatalError: error } : {}),
       };
     }
-    // Shell stdout may be redirected or lost. Preserve confirmed effects independently.
-    // Only durable helper records supply receipt IDs; a successful result alone does not.
     const receiptId = `${task.id}:${operationId}`;
     const receipt = this.store.db
       .prepare('SELECT 1 FROM helper_operations WHERE task_id=? AND id=?')
@@ -2779,7 +2724,6 @@ export class HelperRuntime {
       const limit = number(args.limit ?? 50, 'limit', 1, 100);
       const chat = this.store.chat(scope.chatId);
       const history = this.store.history(chat.headRevision);
-      // Keep visible numbering stable while avoiding preview work for unseen pages.
       let sceneNumber = history
         .slice(0, offset)
         .filter((item) => item.sceneContext?.sceneEnabled !== false).length;
@@ -2916,7 +2860,6 @@ export class HelperRuntime {
         totalChars: value.length,
         nextOffset: end < value.length ? end : null,
       });
-      // Include escaped source and metadata in the model-facing token budget.
       while (countTextTokens(JSON.stringify(page())) > 12_000)
         end = boundary(start + Math.max(2, Math.floor((end - start) / 2)));
       return page();

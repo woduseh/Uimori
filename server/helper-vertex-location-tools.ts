@@ -149,10 +149,6 @@ async function settled(
   return current;
 }
 
-/**
- * A replayed helper operation reuses each location's idempotency key, so the journal returns the
- * earlier test instead of sending another billed request.
- */
 export async function compareVertexLocations(
   store: Store,
   runner: ConnectionTestRunner,
@@ -230,7 +226,6 @@ export async function compareVertexLocations(
   };
 }
 
-/** Runs inside the helper operation transaction, so the receipt and the save commit together. */
 export function updateVertexLocation(store: Store, value: unknown) {
   const args = record(value);
   fields(args, ['connectionId', 'location', 'expectedRevision']);

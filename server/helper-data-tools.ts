@@ -182,8 +182,7 @@ export const HELPER_DATA_TOOLS: ProviderTool[] = [
   },
 ];
 
-/** A short-lived OS process can terminate even while SQLite is executing native code.
- * No server transaction, file mirror, new dependency or persistent worker is needed. */
+// A short-lived OS process can be terminated even while SQLite is executing native code.
 export function runDataProcess(
   input: DataOperation,
   signal?: AbortSignal,
@@ -256,7 +255,6 @@ export function invokeDataTool(
   );
 }
 
-/** Uses the existing timeout- and memory-bounded read-only data process. */
 export function invokeSceneRegexSearch(
   store: Store,
   chatId: string,

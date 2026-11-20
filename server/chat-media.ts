@@ -32,7 +32,6 @@ export function rewriteTranscriptMedia(
   };
 }
 
-/** A copied message points at immutable media bytes, not another chat's mutable asset row. */
 export function independentTranscriptMedia(
   store: Store,
   transcript: ChatTranscript

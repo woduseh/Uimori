@@ -10,7 +10,6 @@ export type ToolDiagnosticOwner =
   | { kind: 'job'; id: string; generation: number; owner: string; origin: 'translation' }
   | { kind: 'illustration'; id: string; generation: number; owner: string; origin: 'illustration' };
 
-/** Small diagnostic records are separate from receipts used to resume provider execution. */
 export function initExecutionDiagnostics(db: DatabaseSync) {
   db.exec(`CREATE TABLE IF NOT EXISTS execution_tool_diagnostics (
     seq INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,7 +30,6 @@ function callHash(callId: string) {
   return createHash('sha256').update(callId).digest('hex');
 }
 
-/** Begin before host execution. A start without a finish never implies an effect. */
 export function startToolDiagnostic(
   db: DatabaseSync,
   owner: ToolDiagnosticOwner,
@@ -70,7 +68,6 @@ export function startToolDiagnostic(
 
 function argumentDiagnostic(name: string, args: Record<string, unknown>) {
   const original = helperArgumentDiagnostic(args as Json);
-  // A complete authored submission or draft belongs in its owning artifact, not a second log.
   if (name === 'story.submit' || name === 'eval_submit_artifact')
     return { ...original, argsPreview: '[authored submission withheld]', argsRedacted: true };
   if (name === 'agents.consult' && ('draft' in args || 'question' in args)) {
@@ -84,7 +81,6 @@ function argumentDiagnostic(name: string, args: Record<string, unknown>) {
   return original;
 }
 
-/** Persist only bounded/redacted arguments and numeric output metadata, never output text. */
 export function recordToolDiagnostic(
   db: DatabaseSync,
   owner: ToolDiagnosticOwner,
@@ -96,8 +92,6 @@ export function recordToolDiagnostic(
     event.result && typeof event.result === 'object' && !Array.isArray(event.result)
       ? (event.result as Record<string, unknown>)
       : {};
-  // A context-limited shell result keeps execution metadata under `execution` while
-  // withholding stdout. Preserve that metadata without copying its output or guidance.
   const nestedShell =
     event.name === 'data.exec'
       ? helperResultDiagnostic(event.name, output.execution).shell

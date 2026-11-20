@@ -5,7 +5,6 @@ import type { Json } from '../core/transport.js';
 const ARGUMENT_PREVIEW_CHARS = 1024;
 const PREVIEW_TRUNCATION = '\n... [arguments truncated] ...\n';
 
-/** Diagnostic text is bounded and never changes the arguments sent to a tool. */
 export function helperArgumentDiagnostic(args: Json) {
   let original: string;
   try {
@@ -47,7 +46,6 @@ export function helperArgumentDiagnostic(args: Json) {
   try {
     safe = JSON.stringify(redactText(redactDiagnosticJson(args)));
   } catch {
-    // A deeply nested valid argument must not fail its tool solely in diagnostics.
     return {
       ...identity,
       argsPreview: '[argument preview unavailable]',
@@ -71,7 +69,6 @@ export function helperArgumentDiagnostic(args: Json) {
   };
 }
 
-/** Keep outcome metadata, never result text or arbitrary error messages. */
 export function helperResultDiagnostic(name: string, output: unknown) {
   const value =
     output && typeof output === 'object' && !Array.isArray(output)

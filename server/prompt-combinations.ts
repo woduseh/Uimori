@@ -5,7 +5,6 @@ import { promptControls, resolveEditablePromptValues } from '../core/risu-prompt
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
-/** Repair updates the retained combination identity, guarded by both revisions. */
 export function promptCombinationRoutes(
   app: FastifyInstance,
   store: Store,

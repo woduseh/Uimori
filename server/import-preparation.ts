@@ -4,7 +4,6 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 let preparation: symbol | undefined;
 
-/** Automatic deletion must not follow a staging root or parent outside the actual DB directory. */
 export function ownedImportStagingRoot(dbPath: string, root: string): boolean {
   try {
     const owner = dirname(realpathSync(dbPath));
@@ -27,7 +26,6 @@ export function ownedImportStagingRoot(dbPath: string, root: string): boolean {
     }
     return true;
   } catch {
-    // A missing or inaccessible root is never a safe automatic deletion target.
     return false;
   }
 }
@@ -36,7 +34,6 @@ export function checkImportPreparation(signal?: AbortSignal): void {
   if (signal?.aborted) throw new HttpError(499, 'RISU_IMPORT_CANCELLED');
 }
 
-/** Risu and native archives share one process memory budget; busy requests never queue. */
 export function acquireImportPreparation(signal?: AbortSignal): () => void {
   checkImportPreparation(signal);
   if (preparation) throw new HttpError(409, 'RISU_IMPORT_BUSY');

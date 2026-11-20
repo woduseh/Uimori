@@ -1,6 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-/** Query indexes are independent of format admission. Extra indexes do not invalidate user databases. */
 export function initDatabaseReadIndexes(db: DatabaseSync): void {
   for (const [name, columns] of [
     ['model_inputs_run_seq', 'model_inputs(run_id,seq)'],

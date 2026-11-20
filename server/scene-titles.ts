@@ -12,7 +12,6 @@ export function sceneTitles(store: Store, chatId: string): Map<string, string> {
   );
 }
 
-/** The saved name of one scene, empty when it has none; forked chats share their ancestors' names. */
 export function sceneTitle(store: Store, sourceId: string): string {
   return String(
     store.db.prepare('SELECT value FROM app_metadata WHERE key=?').get(`source-title:${sourceId}`)
@@ -20,7 +19,6 @@ export function sceneTitle(store: Store, sourceId: string): string {
   );
 }
 
-/** A scene can link several plans; prefer its smallest unit, then the earliest association. */
 export function outlineSceneTitles(store: Store, chatId: string): Map<string, string> {
   const titles = new Map<string, string>();
   for (const row of store.db

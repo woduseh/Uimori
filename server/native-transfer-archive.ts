@@ -89,7 +89,6 @@ function preparedPath(store: Store, id: string) {
   return join(archiveDirectory(store), id);
 }
 
-/** Cleanup cannot turn a committed import into a failed response; TTL pruning retries failures. */
 export function deletePreparedArchive(store: Store, id: string): void {
   const directory = preparedPath(store, id);
   if (activeArchives.has(directory) || !ownedImportStagingRoot(store.path, archiveDirectory(store)))
@@ -98,12 +97,9 @@ export function deletePreparedArchive(store: Store, id: string): void {
     const info = lstatSync(directory);
     if (info.isDirectory() && !info.isSymbolicLink())
       rmSync(directory, { recursive: true, force: true });
-  } catch {
-    /* The next expiry prune retries. */
-  }
+  } catch {}
 }
 
-/** A separate read snapshot keeps bytes alive while the HTTP stream yields to other requests. */
 export function exportNativeArchive(
   store: Store,
   resources: PreparedNativeTransferFile,
@@ -199,13 +195,10 @@ export function prunePreparedArchives(store: Store) {
         info.mtimeMs < Date.now() - UPLOAD_MAX_AGE_MS
       )
         rmSync(path, { recursive: true, force: true });
-    } catch {
-      // Another request or a temporary filesystem error can be retried on the next sweep.
-    }
+    } catch {}
   }
 }
 
-/** The uploaded archive is read by ranges, then images are validated one at a time before review. */
 export async function prepareNativeArchive(
   store: Store,
   uploadId: string,
@@ -351,7 +344,6 @@ export async function prepareNativeArchive(
           entry.text = rewrite(entry.text);
           if (entry.translation !== null) entry.translation = rewrite(entry.translation);
         }
-        // Message state is metadata; rewriting only the image URLs preserves its other fields.
         if (copy.state.messages)
           copy.state.messages = JSON.parse(rewrite(JSON.stringify(copy.state.messages)));
         for (const image of copy.illustrations) {
@@ -429,9 +421,7 @@ export async function prepareNativeArchive(
       if (completed) {
         try {
           deleteUpload(store.path, uploadId);
-        } catch {
-          /* Upload expiry cleanup retries. */
-        }
+        } catch {}
       }
     }
   }
@@ -479,7 +469,6 @@ export function readPreparedArchive(
     bundleDigest(result.manifest) !== digest
   )
     throw new HttpError(409, '가져올 자료가 변경됐어요. 다시 확인해 주세요.');
-  // No caller-provided absolute path crosses the registration boundary.
   result.images = result.images.map((image) => ({
     ...image,
     path: join(directory, `${image.hash}.bin`),
@@ -509,7 +498,6 @@ export function nativeTransferArchiveRoutes(
       key = `archive:${text(body.idempotencyKey, 'import request', 100)}`;
     const command = bundleDigest({ id, digest, modelBindings: body.modelBindings ?? [] });
     const result = store.transaction(() => {
-      // A completed request is recoverable even after its temporary files expire.
       const prior = readImportReceipt<NativeTransferReceipt>(store, key, command);
       if (prior) return { ...prior, created: false };
       const prepared = readPreparedArchive(store, id, digest, 'resources');

@@ -1,7 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-/** Only invalidation belongs to manuscript transactions. Expensive normalization is deferred;
- * searches overlay dirty sources, so a stale index never hides a just-saved edit. */
 export function initManuscriptSearch(db: DatabaseSync) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS search_documents(

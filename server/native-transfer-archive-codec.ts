@@ -13,7 +13,6 @@ const invalid = (): never => {
   throw new HttpError(400, '자료 백업 파일을 확인해 주세요.');
 };
 
-/** Stored ZIP members: image bytes are already compressed, so recompression only wastes CPU. */
 export function nativeArchiveStream(
   entries: Iterable<{ name: string; read: () => Buffer }>
 ): Readable {
@@ -64,7 +63,6 @@ export function nativeArchiveStream(
   );
 }
 
-/** Our archive deliberately accepts only bounded stored entries, not arbitrary ZIP compression. */
 export function readNativeArchive(size: number, read: (offset: number, length: number) => Buffer) {
   if (size < 22 || size > NATIVE_ARCHIVE_MAX_BYTES) invalid();
   const end = read(size - 22, 22);

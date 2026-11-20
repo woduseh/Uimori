@@ -66,7 +66,6 @@ function checkedBackup(value: unknown, binary = false): ChatBackup {
   return body as ChatBackup;
 }
 
-/** Images stay binary in a portable archive, including displayed illustrations and authored media. */
 export function exportChatBackupArchive(store: Store, chatId: string) {
   const chat = store.chat(chatId),
     copy = captureChatCopy(store, chatId, undefined, true);
@@ -90,7 +89,6 @@ export function exportChatBackupArchive(store: Store, chatId: string) {
   });
 }
 
-/** All conversion completed before preview; the synchronous restore remains one atomic transaction. */
 export function importPreparedChatBackup(
   store: Store,
   prepared: PreparedArchive,
@@ -265,7 +263,6 @@ export async function importChatBackup(store: Store, value: unknown): Promise<Ch
     copies.push(copy);
   }
   return store.transaction(() => {
-    // Image conversion yields; another request may have finished while it was running.
     const concurrent = previous();
     if (concurrent) return concurrent;
     const receipt = importResourceBundle(store, {

@@ -12,7 +12,6 @@ import { ChatOverridesStore } from './chat-overrides.js';
 import { choice, fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
-/** Lost anchors are review candidates, never permission to erase authored memory. */
 export class OrphanMemory {
   readonly store: Store;
   constructor(store: Store) {
@@ -141,7 +140,6 @@ export class OrphanMemory {
           ...selected.override,
           id,
           revision: expectedLoreRevision + 1,
-          // Retiring lost history must not mask a surviving override for this selector.
           atSource: action === 'retire' ? selected.override.atSource : current.headRevision,
           atHash: action === 'retire' ? selected.override.atHash : atHash,
           retired: action === 'retire',

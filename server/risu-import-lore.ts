@@ -10,7 +10,6 @@ import {
 import { object, string, type RisuCard, type RisuCardLoreEntry } from './risu-import-card.js';
 import type { RisuImportFindings } from './risu-import-findings.js';
 
-/** Source rules stay in the Risu document; only pinned/disabled and placement are host policy. */
 type DecoratorNotice = 'position' | 'activation';
 const DECORATOR_NOTICES = {
   end: 'position',
@@ -57,17 +56,13 @@ const NOTICES = {
       `로어의 \`@@${decorator}\` 규칙은 원본에 보존해요. 선택적 로어는 JEV 관련성 판단과 작문 모델의 조회로 제공해요.`,
   },
 };
-/** Unknown names come from the file, so the notice lists a bounded number of bounded names. */
 const MAX_UNKNOWN_DECORATORS = 20;
 const MAX_UNKNOWN_DECORATOR_LENGTH = 40;
-/** The preview shows the keys so the import screen can name what turns an entry on. */
 const MAX_PREVIEW_KEY_CHARS = 200;
 
-/** An absent decorator reads back as `null`, `false` or `[]`; anything else a line wrote. */
 const carries = (value: LoreDecorators[keyof LoreDecorators]) =>
   Array.isArray(value) ? value.length > 0 : value !== null && value !== false;
 
-/** Source decorators that are not implemented by the host placement projection. */
 function reportedDecorators(decorators: LoreDecorators) {
   const found: { decorator: string; notice: DecoratorNotice }[] = [];
   for (const decorator of Object.keys(DECORATOR_NOTICES) as (keyof LoreDecorators)[]) {
@@ -81,14 +76,8 @@ function reportedDecorators(decorators: LoreDecorators) {
   return found;
 }
 
-/**
- * The card's lorebook as Risu normalizes it on import: the entry `extensions` another frontend wrote
- * (position/depth/role, selectiveLogic with secondary keys, probability, delay, match_whole_words)
- * become the `@@` lines Risu reads. The host derives enabled state and placement from those lines.
- *
- * The entries handed over are copies, because the conversion writes back onto the entry and deletes
- * the keys it migrates from its `extensions`, and the card has to stay as the file wrote it.
- */
+// Risu's conversion writes back onto each entry and deletes the keys it migrates from its
+// `extensions`, so it receives copies.
 function convertedLorebook(book: Record<string, unknown>, entries: RisuCardLoreEntry[]) {
   const strings = (value: unknown) =>
     Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
@@ -121,10 +110,6 @@ function convertedLorebook(book: Record<string, unknown>, entries: RisuCardLoreE
   });
 }
 
-/**
- * Reads the card's lorebook. Every entry appears in the preview, while only active entries reach
- * the runtime projection. Import never moves card lore into a chat's user notes.
- */
 export function importRisuLore({
   card,
   findings,
@@ -181,9 +166,7 @@ export function importRisuLore({
           }
         : undefined;
     const content = parsed.body;
-    // Risu never sends an entry it never activates; that content belongs to the material's own use.
     const executable = parsed.decorators.dont_activate;
-    // Folder records organize native lore; even a preserved body or @@activate is not prompt lore.
     const enabled = entry.mode !== 'folder' && entry.enabled !== false && !executable;
     const loading =
       entry.constant === true || parsed.decorators.activate

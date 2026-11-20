@@ -9,7 +9,6 @@ import { moduleLoreEntries } from './risu-module-json.js';
 import { importRisuVariableDefaults } from './risu-variable-defaults.js';
 import { text } from './request-validation.js';
 
-/** The raw card/module is authoritative. This projection is shared by import and editing. */
 export function projectNativeRisuPackage(
   base: RisuContent,
   kind: ContentKind,

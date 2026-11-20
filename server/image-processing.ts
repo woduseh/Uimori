@@ -19,7 +19,6 @@ export type ProcessedImage = {
   height: number;
 };
 
-/** All intake conversions share the same bounded memory/CPU slots. */
 export async function withImageProcessing<T>(work: () => Promise<T>): Promise<T> {
   if (active >= IMAGE_PROCESSING_SLOTS) await new Promise<void>((resolve) => waiting.push(resolve));
   else active++;
@@ -34,11 +33,6 @@ export async function withImageProcessing<T>(work: () => Promise<T>): Promise<T>
 
 const WEBP_FRAME_CHUNKS = new Set(['VP8 ', 'VP8L']);
 
-/**
- * Stored WebP keeps its original bytes, so intake checks the container instead of decoding
- * every frame: chunk sizes must fit the declared RIFF length and every frame needs image data.
- * This rejects truncated files; damage inside a frame's pixel data is stored as received.
- */
 function assertWebpStructure(bytes: Buffer): void {
   const fail = () => {
     throw new Error('WEBP_STRUCTURE_INVALID');
@@ -58,7 +52,6 @@ function assertWebpStructure(bytes: Buffer): void {
       const size = bytes.readUInt32LE(offset + 4);
       if (offset + 8 + size > limit) fail();
       found.push({ id: bytes.toString('ascii', offset, offset + 4), offset, size });
-      // Chunks are padded to even sizes; a final odd chunk may omit its pad byte.
       offset += 8 + size + (size % 2);
     }
     return found;
@@ -69,14 +62,12 @@ function assertWebpStructure(bytes: Buffer): void {
     list.some((chunk) => WEBP_FRAME_CHUNKS.has(chunk.id) && chunk.size > 0);
   if (frames.length) {
     for (const frame of frames) {
-      // An ANMF payload starts with 16 bytes of frame placement before its own chunks.
       if (frame.size < 16) fail();
       if (!hasImage(chunks(frame.offset + 24, frame.offset + 8 + frame.size))) fail();
     }
   } else if (!hasImage(top)) fail();
 }
 
-/** Intake only. Renames, reads and restores of existing WebP data never re-encode the image. */
 export async function processImage(bytes: Buffer): Promise<ProcessedImage> {
   if (!bytes.length || bytes.length > MAX_IMAGE_INPUT_BYTES)
     throw new HttpError(400, '이미지는 64MiB 이하 파일을 사용해 주세요.');
@@ -149,7 +140,6 @@ export async function imageThumbnail(bytes: Buffer, width: number): Promise<Buff
   );
 }
 
-/** Transmission-only copy. Originals and their hashes remain untouched in storage. */
 // https://image.novelai.net/docs/doc.json (2026-11-20): director_reference_images must be
 // 1024x1536, 1536x1024 or 1472x1472 with black padding to fit.
 const NOVELAI_REFERENCE_CANVASES = [

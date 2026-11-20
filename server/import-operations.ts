@@ -1,7 +1,6 @@
 import type { Store } from './store.js';
 import { HttpError } from './request-validation.js';
 
-// These receipts carry durable target identity; general resource imports remain bounded.
 const retainedPrefixes = ['retry:', 'transcript:', 'resource:', 'chat:', 'risu-result:'] as const;
 const boundedReceipt = retainedPrefixes.map(() => 'key NOT LIKE ?').join(' AND ');
 const retainedPatterns = retainedPrefixes.map((prefix) => `${prefix}%`);

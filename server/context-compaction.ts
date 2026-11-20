@@ -36,7 +36,6 @@ export type ContextCompactionHooks = MainHooks & {
   reason?: 'automatic' | 'manual';
   priorities?: string;
   reserveCalls?: number;
-  /** Space for optional data prepared after compaction; never makes fixed input infeasible. */
   reserveInputTokens?: number;
 };
 export class ContextCompactionError extends Error {
@@ -152,7 +151,6 @@ function utf16End(text: string, start: number, size: number): number {
   return end;
 }
 
-/** Prepare a transmit-only projection. Source text, logical roles, and frozen model settings remain untouched. */
 export async function prepareInputContext(
   snapshot: RunSnapshot,
   hooks: ContextCompactionHooks,
@@ -232,8 +230,6 @@ export async function prepareInputContext(
       );
       const summaryModel = hooks.summaryModel ?? fixed.profile?.contextModel;
       const ordinaryInputTokens = measureInput(projected()).estimatedInputTokens;
-      // An optional addition must not introduce a new paid summary dependency for
-      // a writer input that already fits. Required compaction still reserves its space.
       if (
         ordinaryInputTokens <= limit * CONTEXT_COMPACTION_TRIGGER_RATIO ||
         !summaryModel ||
@@ -258,10 +254,7 @@ export async function prepareInputContext(
         usage: structuredClone(usage),
       };
     }
-    // This private projection is adopted only after successful compaction. Failed or
-    // cancelled work cannot reset the successful turn's durable lore state.
     if (fixed.loreContext) fixed.loreContext = resetCompactedLore(fixed.loreContext);
-    // Measuring the fixed input is only a feasibility check; this empty-history projection is never returned or sent.
     const fixedEstimate =
       measureInput(withContextProjection(fixed, allRefs, plan.summary)).estimatedInputTokens +
       reservedInputTokens;
@@ -269,8 +262,6 @@ export async function prepareInputContext(
     const target = structuredClone(hooks.summaryModel ?? fixed.profile?.contextModel);
     if (!target) fail('MODEL_REQUIRED:context');
     if (target.enabled === false) fail('CONTEXT_SUMMARY_MODEL_DISABLED');
-    // This empty-summary projection is measured only; originals and the complete previous
-    // summary still go to the provider. A soft target leaves room below its hard output cap.
     const fixedWithoutSummary = plan.summary
       ? measureInput(withContextProjection(fixed, allRefs, null)).estimatedInputTokens +
         reservedInputTokens
@@ -287,7 +278,6 @@ export async function prepareInputContext(
       generation: generationFromModel(target),
       fixedInputTokens: fixedWithoutSummary,
     });
-    // The target is guidance, not a fit claim: measure the actual merged projection below.
     const summaryLimit = contextBudgetForModel(target).inputTokenLimit * SUMMARY_INPUT_RATIO;
     const fits = (summary: string | null, fragments: Fragment[]) => {
       try {
@@ -468,12 +458,9 @@ export async function prepareInputContext(
         if (estimate <= limit * CONTEXT_COMPACTION_TRIGGER_RATIO) break;
         fail('CONTEXT_FIXED_INPUT_TOO_LARGE');
       }
-      // Prefer keeping two complete exchanges; include one of them only if earlier exchanges cannot make the input fit.
       const candidates = remaining.slice(0, Math.max(1, remaining.length - 2));
       const batch: SourceUnit[] = [];
       if (hooks.reason === 'manual') {
-        // Manual scope already fixes the prefix. Fit the summary batch once instead of
-        // re-rendering the full writing prompt for every candidate source.
         let low = 0,
           high = candidates.length;
         if (fits(plan.summary, wholeFragments(candidates))) low = high;
@@ -545,7 +532,6 @@ export async function prepareInputContext(
             break;
           }
           stagedSummary = await summarize(stagedSummary, fragments);
-          // A partial source's staged summary is not a reusable checkpoint. Its original pair stays selected until every fragment succeeds.
           await progress();
         }
         nextSummary = stagedSummary!;

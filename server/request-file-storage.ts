@@ -4,7 +4,6 @@ import { HttpError } from './request-validation.js';
 
 export type StoredRequestFile = { hash: string; bytes: Buffer };
 
-/** File bytes are content addressed. Names and MIME types belong to their owning message. */
 export function initRequestFilesSchema(db: DatabaseSync): void {
   db.exec(`CREATE TABLE IF NOT EXISTS attachment_blobs (
     hash TEXT PRIMARY KEY,bytes BLOB NOT NULL

@@ -36,7 +36,6 @@ export function jevProviderRoutes(
     authenticated: (cookie?: string) => boolean;
   }
 ) {
-  // The shared connection-test routes recover running diagnostics once on server startup.
   const journal = new ProviderConnectionTestStore(store);
   const status = (): JevProviderStatus => {
     const latest = store.db

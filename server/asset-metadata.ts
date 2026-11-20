@@ -2,7 +2,6 @@ import type { Store } from './store.js';
 import type { Asset } from '../core/product.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 
-/** Names used by the reader and JEV are independent of immutable image bytes. */
 export function updateAssetMetadata(
   store: Store,
   chatId: string,

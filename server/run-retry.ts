@@ -7,7 +7,6 @@ import { HttpError, text } from './request-validation.js';
 import { forkChat } from './chat-fork.js';
 import type { Store, Run } from './store.js';
 
-/** Current-resource retry; explicit last-response replacement defers head changes until commit. */
 export function retryRun(
   store: Store,
   runId: string,

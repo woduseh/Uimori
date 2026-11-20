@@ -1,7 +1,6 @@
 import type { RunSnapshot } from '../core/types.js';
 import type { Store } from './store.js';
 
-/** Completed messages retain identity and display metadata, not a replay of every past prompt/body. */
 export function settleSnapshot(snapshot: RunSnapshot): RunSnapshot {
   const profile = snapshot.profile;
   return {
@@ -51,7 +50,6 @@ export function settleSnapshot(snapshot: RunSnapshot): RunSnapshot {
   };
 }
 
-/** A run that ended without a source keeps its outcome; a retry rebuilds context from current sources. */
 export function releaseEndedSnapshot(snapshot: RunSnapshot): RunSnapshot {
   return {
     ...settleSnapshot(snapshot),
@@ -66,7 +64,6 @@ export function releaseEndedSnapshot(snapshot: RunSnapshot): RunSnapshot {
   };
 }
 
-/** An explicit full-context read reconstructs user data from messages and today's library. */
 export function executionSnapshot(store: Store, snapshot: RunSnapshot): RunSnapshot {
   if (!snapshot.settled) return snapshot;
   const { settled: _settled, ...saved } = snapshot;

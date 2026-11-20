@@ -127,7 +127,6 @@ export class ProductStore {
   get db() {
     return this.store.db;
   }
-  /** Joins Store's single transaction for a new, empty database. */
   initFresh() {
     this.db.exec(`
         CREATE TABLE versions (kind TEXT NOT NULL,id TEXT NOT NULL,revision INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(kind,id));
@@ -158,7 +157,6 @@ export class ProductStore {
     contents: Pick<Content, 'id' | 'revision' | 'title' | 'kind'>[];
     prompts: Pick<PromptPreset, 'id' | 'revision' | 'title' | 'role'>[];
   } {
-    // Keep large package bodies and prompt programs inside SQLite for metadata-only reads.
     const statement = this.db.prepare(`
       SELECT json_extract(v.body,'$.id') AS id,
         json_extract(v.body,'$.revision') AS revision,
@@ -213,9 +211,7 @@ export class ProductStore {
   save(kind: string, value: Row, id?: string, expected?: number) {
     return this.store.transaction(() => this.saveInTransaction(kind, value, id, expected));
   }
-  /** Caller owns the transaction. */
   saveInTransaction(kind: string, value: Row, id?: string, expected?: number, createId?: string) {
-    // Server-owned import identities are never update IDs or accepted from ordinary edit bodies.
     if (
       createId &&
       (id ||
@@ -318,7 +314,6 @@ export class ProductStore {
       try {
         assertRisuContentSource(raw.nativeRisu);
       } catch (error) {
-        // Native source validation is pure; report rejected input before any persistence begins.
         throw new HttpError(
           400,
           error instanceof Error ? error.message : 'PACKAGE_NATIVE_RISU_INVALID'
@@ -332,8 +327,6 @@ export class ProductStore {
       );
       packageInput = { ...rest, ...(handoff ? { imageHandoff: handoff } : {}) };
     }
-    // Validate external input without copying it. Projection reads that input; the final
-    // save validates and detaches the projected package after assigning its identity.
     assertRisuContent(packageInput);
     const pkg = projectNativeRisuPackage(packageInput, kind).pkg;
     return (inTransaction ? this.saveInTransaction : this.save).call(
@@ -467,7 +460,7 @@ export class ProductStore {
       'maxOutputTokens',
       'temperature',
       ...modelOptionKeys,
-      'contextTools', // Accepted from older clients; never saved.
+      'contextTools',
       'enabled',
       'displayOrder',
       'pricing',
@@ -528,7 +521,6 @@ export class ProductStore {
     const prepared = this.prepareModel(value, id);
     return this.save('model', prepared.value, id, prepared.expectedRevision);
   }
-  /** Presentation-only ordering must not revise model generation settings or credentials. */
   moveModel(id: string, value: unknown) {
     return this.moveProviderSetting('model', id, value);
   }
@@ -704,14 +696,12 @@ export class ProductStore {
     headRevision: string | null = this.store.chat(chatId).headRevision
   ): ProfileSnapshot {
     const { optionAdjustments: _notices, ...p } = this.profile(chatId);
-    // Auxiliary jobs keep their global prompt; an unavailable main pin must not prevent translation.
     const workspace = (() => {
       if (requiredRole !== 'main' && requiredRole !== 'inspect')
         return chatPromptWorkspace(this.store, { mainModel: p.pinned?.mainModel });
       try {
         return chatPromptWorkspace(this.store, p.pinned);
       } catch (error) {
-        // An unavailable writing preset blocks new writing, not existing prose or translation.
         if (
           requiredRole !== 'inspect' ||
           !(error instanceof HttpError) ||
@@ -740,7 +730,6 @@ export class ProductStore {
       try {
         contextModel = this.modelSnapshot(contextRef.id, undefined, false);
       } catch (error) {
-        // Other work remains available; the context-dependent call reports the missing target.
         if (!(error instanceof HttpError) || ![403, 404, 409].includes(error.statusCode))
           throw error;
       }
@@ -751,7 +740,6 @@ export class ProductStore {
       try {
         scriptModel = this.modelSnapshot(scriptRef.id, undefined, false);
       } catch (error) {
-        // An unavailable add-on model must not prevent reservation of the user's prose.
         if (!(error instanceof HttpError) || ![403, 404, 409].includes(error.statusCode))
           throw error;
       }
@@ -781,8 +769,6 @@ export class ProductStore {
         ? { collaborationModels }
         : {}),
     };
-    // Freeze today's supported Risu fields for new work, without rewriting library versions or
-    // the source-time packages held by completed runs and backup receipts.
     if (profile.packages)
       profile.packages = profile.packages.map(
         (pkg) =>
@@ -802,8 +788,6 @@ export class ProductStore {
   }
   resolveJobPrompt(snapshot: RunSnapshot, input: unknown): RunSnapshot {
     const resolved = structuredClone(snapshot);
-    // Explicit null freezes the absence of a guide as well as a populated one. Old jobs do not
-    // silently adopt newly edited metadata at worker start or during judgment-only recovery.
     if (
       input &&
       typeof input === 'object' &&
@@ -973,7 +957,6 @@ export class ProductStore {
       request?.pricingSnapshot,
       result.usage,
       request?.pricingStartedAt ?? '',
-      // Batch reports its execution tier; frozen rates remain standard before the discount below.
       anthropicBatch &&
         reportedTier === 'batch' &&
         request?.pricingSnapshot?.serviceTier !== 'batch'
@@ -1119,7 +1102,6 @@ export class ProductStore {
     return this.insertAsset(chatId, image.mime, image.hash, b, image);
   }
 
-  /** Link a verified illustration blob to the chat without fetching or re-encoding its pixels. */
   reuseIllustrationAsset(chatId: string, image: { hash: string; mime: string; caption: string }) {
     const row = this.db
       .prepare(`SELECT body FROM assets a WHERE chat_id=? AND hash=?
@@ -1179,7 +1161,6 @@ export class ProductStore {
           (connectionOrder.get(b.connectionId) ?? Number.MAX_SAFE_INTEGER) ||
         compareModelDisplayOrder(a, b)
     );
-    // Project inside SQLite so large bodies never cross into JS for list requests.
     const contents = summary
       ? (
           this.db
@@ -1220,7 +1201,6 @@ function currentRef(product: ProductStore, kind: string, reference: ContentRef):
   if (!current) throw new HttpError(404, `${kind} revision not found`);
   return { id: current.id, revision: current.revision };
 }
-/** Pure current-settings projection. Frozen Run/source profiles never pass through this path. */
 function currentProfile(product: ProductStore, saved: ChatProfile): ChatProfile {
   const { imageTranslation: _retiredTranslationOwner, ...current } = saved;
   const result = {

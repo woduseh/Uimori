@@ -27,7 +27,6 @@ function jsonl(path: string, values: unknown[]) {
   );
 }
 
-/** Read-only app projection; commands may freely change their disposable workspace. */
 export class MainShell {
   readonly root = resolve(process.env.UIMORI_SHELL_ROOT ?? '/helper-workspaces');
   readonly directory: string;
@@ -46,7 +45,6 @@ export class MainShell {
 
   private prepare(snapshot: RunSnapshot) {
     const ready = join(this.directory, '.main-ready');
-    // Batch/resumed runs retain scratch files and the original admitted snapshot.
     if (existsSync(ready)) return;
     mkdirSync(join(this.directory, 'scratch'), { recursive: true });
     const resources = roleResources(snapshot);

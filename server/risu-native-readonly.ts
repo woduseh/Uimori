@@ -21,7 +21,6 @@ export function nativeRisuSnapshotNeedsRefresh(snapshot: RunSnapshot): boolean {
   });
 }
 
-/** A fresh request uses the frozen authored source, never current library revisions or old output. */
 export function supportedNativeRisuSnapshot(snapshot: RunSnapshot): RunSnapshot {
   const input = structuredClone(snapshot);
   if (input.profile?.packages)
@@ -46,9 +45,6 @@ export function supportedNativeRisuSnapshot(snapshot: RunSnapshot): RunSnapshot 
   return input;
 }
 
-/** Pure input projection for an independent artifact or manual context operation.
- * CBS/regex writes remain in this copy; Lua/V2 callbacks, persistent VMs and paid hosts are absent.
- */
 export async function prepareNativeRisuReadOnly(
   snapshot: RunSnapshot,
   purpose: 'artifact' | 'context' | 'auxiliary'

@@ -195,7 +195,6 @@ function query(db: DatabaseSync, args: Record<string, unknown>) {
     throw new Error(
       'DATA_SQL_PARAMS_INVALID: params must be an array of at most 50 null, finite number or string (at most 12000 characters) values'
     );
-  // Native SQLite authorizer, not a SQL keyword denylist. The connection itself is read-only too.
   const columns: Record<string, readonly string[]> = {
     versions: ['kind', 'id', 'revision', 'body'],
     library_hidden: ['kind', 'id'],
@@ -233,7 +232,6 @@ function query(db: DatabaseSync, args: Record<string, unknown>) {
       return constants.SQLITE_OK;
     return constants.SQLITE_DENY;
   });
-  // A subquery permits one SELECT/CTE, not a second statement or a mutation hidden after it.
   const wrapped = `SELECT * FROM (${sql}\n) LIMIT ${limit + 1}`;
   const statement = db.prepare(wrapped);
   if (statement.sourceSQL !== wrapped) throw new Error('DATA_SINGLE_QUERY_REQUIRED');
@@ -292,8 +290,6 @@ function* documents(
   const ids = strings('ids', args.ids, 50);
   const accepts = (id: string) => !ids.length || ids.includes(id);
   if (scope === 'conversation') {
-    // Runtime reserves helperHistory before this request, excluding superseded retries and
-    // later queued requests. Follow its IDs even after the model's context is compacted.
     const rows = db
       .prepare(
         `SELECT COALESCE(m.id,s.id) AS id,COALESCE(m.role,s.role) AS role,
@@ -428,8 +424,6 @@ function* documents(
       kinds.length ? `kind IN (${kinds.map(() => '?').join(',')})` : '',
     ].filter(Boolean);
     const queryTerms = fold(string('query', args.query)).trim().split(/\s+/u).filter(Boolean);
-    // A title/ID filter should not transfer unrelated authored documents into this process.
-    // Keep the unfiltered traversal as one query instead of adding a lookup per document.
     const document =
       queryTerms.length && !metadataOnly
         ? db.prepare('SELECT document FROM agent_resources WHERE kind=? AND id=?')
@@ -469,7 +463,6 @@ function* documents(
   }
   const chatId = args.chatId === undefined ? undefined : string('chatId', args.chatId);
   const messages = chatId ? `(${chatMessagesSql(true)})` : 'agent_messages';
-  // Scope ancestry at its seed; filter source IDs after numbering the entire selected history.
   const condition = ids.length ? `WHERE m.id IN (${ids.map(() => '?').join(',')})` : '';
   const rows = db
     .prepare(
@@ -505,7 +498,6 @@ function editTarget(doc: Document, field: string, stringValue: boolean) {
         ? 'content'
         : undefined;
   if (!kind) return undefined;
-  // Search fields omit the native content prefix; limits apply to the complete patch path.
   const path = kind === 'content' ? `/package/nativeRisu${field}` : field;
   if (
     !path.startsWith('/') ||
@@ -532,7 +524,6 @@ function editTarget(doc: Document, field: string, stringValue: boolean) {
     path,
   };
 }
-// Adjust only surrogate boundaries, never normalize source text or invent offsets.
 function boundary(text: string, offset: number) {
   return offset > 0 &&
     offset < text.length &&
@@ -578,7 +569,6 @@ const fieldPriority = (path: string) =>
         : 2;
 const selectedPath = (field: string, paths: string[]) =>
   !paths.length || paths.some((path) => field === path || field.startsWith(`${path}/`));
-/** Each page contains distinct matching windows, including later hits in the same long field. */
 function* matchingExcerpts(
   doc: Document,
   expressions: RegExp[],
@@ -627,7 +617,6 @@ function* matchingExcerpts(
         .sort((a, b) => a.index - b.index);
       const hit = found[0];
       if (!hit) break;
-      // Document discovery needs only existence, not a discarded hash, excerpt or line count.
       if (documentsOnly) {
         yield null;
         return;
@@ -866,7 +855,6 @@ function read(
   );
   return page;
 }
-/** Isolated, read-only regex search across the exact live editable sources of one chat. */
 function sceneRegex(db: DatabaseSync, args: Record<string, unknown>) {
   only(args, [
     'chatId',
@@ -1017,7 +1005,6 @@ function sceneRegex(db: DatabaseSync, args: Record<string, unknown>) {
         const match = expression.exec(content);
         if (!match) break;
         if (!match[0].length) {
-          // Ignore zero-width matches; they cannot be supplied as safe literal patches.
           expression.lastIndex = match.index + (content.codePointAt(match.index)! > 0xffff ? 2 : 1);
           continue;
         }
@@ -1043,7 +1030,6 @@ function sceneRegex(db: DatabaseSync, args: Record<string, unknown>) {
             afterEnd++;
           const before = content.slice(beforeStart, start);
           const after = content.slice(end, afterEnd);
-          // Truncate only at a Unicode code point boundary; never expose a lone surrogate.
           let previewEnd = Math.min(match[0].length, 1000);
           if (
             previewEnd < match[0].length &&
@@ -1114,7 +1100,6 @@ function sceneRegex(db: DatabaseSync, args: Record<string, unknown>) {
 function runDataOperation(input: DataOperation): unknown {
   const db = new DatabaseSync(input.path, { readOnly: true, allowExtension: false });
   try {
-    // This limit is process-local; arbitrary SQL allocation cannot exhaust the application process.
     db.exec('PRAGMA hard_heap_limit=134217728; PRAGMA busy_timeout=500; BEGIN');
     installViews(db);
     db.exec('PRAGMA query_only=ON');
@@ -1155,7 +1140,6 @@ function runDataOperation(input: DataOperation): unknown {
     }
     if (input.name === 'data.search')
       return search(db, snapshot, { ...input.args, scope: scopes[0] });
-    // All refs share this read transaction; keep source reuse within this one request.
     const sources = new Map<string, ReadSource>();
     const items: unknown[] = [];
     let size = 0;

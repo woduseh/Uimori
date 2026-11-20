@@ -5,7 +5,6 @@ import type { RunSnapshot, Source } from '../core/types.js';
 import { captureLogicalHistory } from './prompt-snapshot.js';
 import type { Store } from './store.js';
 
-/** Retain Lua-authored results while releasing the large execution input. */
 export function captureNativeMessageChanges(
   store: Store,
   snapshot: RunSnapshot,

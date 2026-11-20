@@ -9,7 +9,6 @@ import { resolvePackageProfile } from './package-features.js';
 import type { Store } from './store.js';
 import { HttpError } from './request-validation.js';
 
-/** Copy current user-authored plans/settings, not tasks, grants or execution receipts. */
 export function captureChatAuthoring(
   store: Store,
   chatId: string,
@@ -174,7 +173,6 @@ export function restoreChatAuthoring(
         ids.get(link.nodeId)!,
         history[link.atIndex].revision,
         link.origin ?? 'planned',
-        // Associations are read in creation order; keep the story order of the copied past.
         new Date(Date.parse(at) + link.atIndex).toISOString()
       );
   if (authoring.outlineFocusId !== undefined)

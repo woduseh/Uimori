@@ -29,7 +29,6 @@ import {
   prepareNativeRisuReadOnly,
 } from './risu-native-readonly.js';
 
-/** A read-only preview, including unsaved draft blocks. No provider call or Run is created. */
 export function promptRoutes(app: FastifyInstance, store: Store) {
   requestPreviewRoutes(app, store);
   app.get('/api/prompt-templates', async () => builtinPromptTemplates());
@@ -113,8 +112,6 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
         role === 'translation' ? currentBotTranslationGuide(store, chat.id) : undefined;
       let compilation: ReturnType<typeof compileRisuPrompt>;
       if (role === 'translation') {
-        // Existing originals use their frozen source-time context, exactly as a job does.
-        // An empty conversation has only explicit preview data; nothing is persisted.
         const source = chat.headRevision
           ? store.source(chat.headRevision)
           : {
@@ -248,7 +245,6 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
       return {
         compilation,
         provider,
-        // Custom presets may omit the context slot; the real request includes its fallback.
         ...(translationGuide !== undefined ? { translationGuide } : {}),
         ...(snapshot.loreContext ? { loreContext: snapshot.loreContext } : {}),
         ...(previewSource ? { previewSource } : {}),

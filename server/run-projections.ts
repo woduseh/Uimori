@@ -4,7 +4,6 @@ import type { Run, RunReceipt, RunSnapshot } from '../core/types.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 
-/** Read live execution state without hydrating the snapshot or diagnostic histories. */
 export function readRunStatus(store: Pick<Store, 'db'>, id: string): Run['status'] {
   const row = store.db.prepare('SELECT status FROM runs WHERE id=?').get(id) as
     | { status: Run['status'] }
@@ -13,7 +12,6 @@ export function readRunStatus(store: Pick<Store, 'db'>, id: string): Run['status
   return row.status;
 }
 
-/** Ownership and live state without hydrating the snapshot or diagnostic histories. */
 export function readRunState(
   store: Pick<Store, 'db'>,
   id: string
@@ -35,7 +33,6 @@ export function runResponse(prefer: unknown, run: Run): Run | RunReceipt {
   return receipt;
 }
 
-/** Explicitly decode a run snapshot. Ordinary SQL reads have no hidden transformations. */
 export function readStoredRunSnapshot(store: Pick<Store, 'db'>, id: string): RunSnapshot {
   const row = store.db.prepare('SELECT snapshot FROM runs WHERE id=?').get(id) as
     | { snapshot: string }
@@ -44,7 +41,6 @@ export function readStoredRunSnapshot(store: Pick<Store, 'db'>, id: string): Run
   return JSON.parse(row.snapshot) as RunSnapshot;
 }
 
-/** Rebuild full current context only when explicitly requested. */
 export function readRunSnapshot(store: Store, id: string): RunSnapshot {
   return executionSnapshot(store, readStoredRunSnapshot(store, id));
 }

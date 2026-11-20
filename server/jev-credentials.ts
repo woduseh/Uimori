@@ -1,7 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { CredentialStore, apiKey } from './credentials.js';
 
-/** JEV uses the same SQLite secret store as other API-key providers. */
 export class JevCredentialStore {
   private readonly keys: CredentialStore;
   constructor(db: DatabaseSync) {

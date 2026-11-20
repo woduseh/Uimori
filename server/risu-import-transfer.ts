@@ -14,10 +14,6 @@ import {
 import { string, type RisuCard, type RisuCardInput } from './risu-import-card.js';
 import type { RisuImportFindings } from './risu-import-findings.js';
 
-/**
- * Assembles the transfer file the import applies and the preview the import screen shows. The
- * digest covers everything the reader agreed to, so a file or a finding that changed invalidates it.
- */
 type TransferInput = {
   input: Pick<RisuCardInput, 'hash' | 'source' | 'kind'> & { format: RisuImportPreview['format'] };
   card: RisuCard;
@@ -42,7 +38,6 @@ export function buildRisuTransfer({
   findings,
   prepared = false,
 }: {
-  /** Every reader that reaches this builder: a character card or a module. */
   input: Pick<RisuCardInput, 'hash' | 'source' | 'kind'> & {
     format: RisuImportPreview['format'];
   };
@@ -68,7 +63,6 @@ export function buildRisuTransfer({
           kind,
           title,
           description: pkg.description,
-          // The orchestrator fills in the body, starts and images before the file is assembled.
           text: pkg.body!,
           loading: 'pinned',
           relatedIds: [],

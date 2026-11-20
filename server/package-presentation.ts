@@ -16,8 +16,6 @@ export type PackagePresentationSource = {
   text: string;
   translation?: { text: string; sourceRevision: string; sourceHash: string };
 };
-/** Render the selected source against the caller's current authored context. */
-/** Each render call's budget, including the request's first worker start and module load. */
 const PRESENTATION_RENDER_TIMEOUT_MS = 10_000;
 
 export async function buildPackagePresentation(
@@ -28,7 +26,6 @@ export async function buildPackagePresentation(
     nativeMessageIndex?: number;
     nativeDisplayText?: string;
     nativeTranslationText?: string;
-    /** One immutable source may own additional script-authored user/character messages. */
     nativeMessages?: {
       text: string;
       index: number;
@@ -171,8 +168,6 @@ export async function buildPackagePresentation(
       const primary = messages.findIndex((message) => message.primary);
       let translation: ReturnType<typeof combine> | undefined;
       if (source.translation && primary !== -1) {
-        // A translation and its image anchors belong only to the stored canonical source body.
-        // Extra script messages retain their original content in either reading mode.
         const translated = [...parts];
         translated[primary] = await display(
           options.nativeTranslationText ?? source.translation.text,

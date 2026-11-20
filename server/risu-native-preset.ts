@@ -100,7 +100,6 @@ export async function prepareNativeRisuPreset(snapshot: RunSnapshot): Promise<Ru
   projectNativeRisuPresetProgram(next, preset!.program);
   return next;
 }
-/** Replay only projects frozen output; neither CBS nor provider work is repeated. */
 export function projectNativeRisuPresetProgram(
   snapshot: RunSnapshot,
   program: RisuPrompt
@@ -130,7 +129,6 @@ export function projectNativeRisuPresetProgram(
   });
 }
 
-/** Translation evaluates its own source and controls without changing card state or the stored preset. */
 export async function prepareNativeRisuTranslationPrompt(
   snapshot: RunSnapshot
 ): Promise<RunSnapshot> {

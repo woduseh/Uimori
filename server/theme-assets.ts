@@ -12,7 +12,6 @@ import { HttpError, fields, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
 const MAX_STORED_BYTES = 200 * 1024 * 1024;
-/** Uploaded but never saved bytes survive a day, so an open editor keeps its draft. */
 const ABANDONED_AFTER_MS = 24 * 60 * 60 * 1000;
 
 export function initThemeAssets(db: DatabaseSync) {
@@ -68,7 +67,6 @@ export async function storeThemeAsset(
   return { hash, kind, mime, byteLength: bytes.length };
 }
 
-/** Built-in theme files ship with the app (the Docker image copies third_party). */
 const builtinRoot = resolve('third_party/theme-assets');
 const builtinBytes = new Map<string, Buffer>();
 function builtinThemeAsset(hash: string) {
@@ -94,7 +92,6 @@ export function readThemeAsset(db: DatabaseSync, hash: string) {
   };
 }
 
-/** A saved copy of a built-in theme takes its own copy of the built-in bytes. */
 export function assertThemeAssetsStored(db: DatabaseSync, assets: ThemeAsset[] = []) {
   const read = db.prepare('SELECT kind FROM theme_assets WHERE hash=?');
   const copy = db.prepare(
@@ -122,7 +119,6 @@ export function themeAssetHashes(body: unknown): string[] {
     : [];
 }
 
-/** Saved themes and their one undo copy own their bytes; other rows are removed. */
 export function pruneThemeAssets(db: DatabaseSync, candidates: Iterable<string> | 'abandoned') {
   const referenced = new Set<string>();
   for (const row of db.prepare("SELECT body FROM versions WHERE kind='theme'").all())

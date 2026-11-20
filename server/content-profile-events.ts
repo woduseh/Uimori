@@ -1,6 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-/** Invalidate only chats whose next request can observe the edited resource. */
 export function recordContentProfileEvents(db: DatabaseSync, kind: string, id: string): void {
   const at = new Date().toISOString();
   if (kind === 'prompt-preset') {

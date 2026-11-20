@@ -11,7 +11,6 @@ import type { NativeTransferFile } from '../core/native-transfer.js';
 import type { PreparedNativeTransferFile } from '../core/native-transfer-validation.js';
 import type { RisuImportPreview } from '../core/risu-import.js';
 
-/** Preserve Risu documents; build only the projections the existing library and chat store need. */
 export function analyzeNativeRisuImport(input: RisuCardInput): {
   file: NativeTransferFile;
   preview: RisuImportPreview;

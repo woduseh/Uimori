@@ -85,7 +85,6 @@ export type HelperShellAppResult = {
   fatalError?: unknown;
   applied?: unknown[];
 };
-/** CLI flags are typed from the canonical tool schema, not a second field-name registry. */
 function typedShellFlags(name: string, flags: unknown): Record<string, unknown> {
   const definition = (name === 'app.tools' ? HELPER_GATEWAY_TOOLS : HELPER_APP_TOOLS).find(
     (tool) => tool.name === name
@@ -151,7 +150,6 @@ function json(path: string, value: unknown) {
   write(path, JSON.stringify(value, null, 2) + '\n');
 }
 
-/** Never follow workspace symlinks or claim a file made outside this export. */
 function workspacePath(base: string, file: string) {
   const path = resolve(base, file);
   const rel = relative(base, path);
@@ -227,7 +225,6 @@ function assertExistingWorkspaceFile(base: string, file: string) {
   }
   throw new HttpError(409, 'SHELL_EXPORT_PATH_CONFLICT');
 }
-/** A transport failure cannot undo saves whose receipts already committed. */
 export class HelperShellExecutionError extends Error {
   readonly applied: unknown[];
   constructor(message: string, applied: unknown[]) {
@@ -248,7 +245,6 @@ class ShellRevisionConflict extends HttpError {
     };
   }
 }
-/** Compact paths from actual saved values, never another copy of the manuscript. */
 function changedPaths(before: unknown, after: unknown) {
   const paths: string[] = [];
   const visit = (a: unknown, b: unknown, path: string) => {
@@ -273,7 +269,6 @@ function changedPaths(before: unknown, after: unknown) {
   visit(before, after, '');
   return { paths: paths.slice(0, 20), truncated: paths.length > 20 };
 }
-/** The only bridge between an ordinary Linux workspace and Uimori's saved resources. */
 export class HelperShell {
   private readonly root = resolve(process.env.UIMORI_SHELL_ROOT ?? '/helper-workspaces');
   private bridge?: Server;
@@ -360,7 +355,6 @@ export class HelperShell {
     if (createOnly) for (const [name] of output) assertNewWorkspaceFile(directory, name);
     for (const [index, [name, body]] of output.entries()) {
       writeWorkspaceFile(directory, name, body, createOnly);
-      // Existing refreshes may have committed even if a secondary projection fails.
       if (!createOnly && index === 0) files.set(file, target);
     }
     if (createOnly) files.set(file, target);
@@ -527,7 +521,6 @@ export class HelperShell {
     const output: [string, string][] = [];
     const targets: [string, Extract<FileTarget, { kind: 'scene' }>][] = [];
     const scenes: ReturnType<typeof this.sceneIndexEntry>[] = [];
-    // Read-only copies of the translation the Reader shows; scene.patch owns translation saves.
     const translations: { sourceId: string; file: string; originalSha256: string }[] = [];
     let sceneNumber = 0;
     for (const item of history) {
@@ -660,7 +653,6 @@ export class HelperShell {
       input.flagArguments === undefined
         ? record(input.arguments ?? {})
         : typedShellFlags(name, input.flagArguments);
-    // Leave room for helper:<task UUID>: in existing 120-character save keys.
     const operationId = `shell:${toolId.slice(0, 48)}:app:${++execution.sequence}`;
     const pending = execution.invoke(name, args, operationId, execution.controller.signal);
     execution.pending.add(pending);
@@ -889,7 +881,6 @@ export class HelperShell {
           );
           const saved = readResource(this.store, target.resourceKind, target.id);
           const after = editableResource(target.resourceKind, saved);
-          // The package revision is assigned by the save, not an authored content change.
           const comparable =
             target.resourceKind === 'content'
               ? {
@@ -925,7 +916,6 @@ export class HelperShell {
         });
         return { ...savedResult, receiptId: operationId };
       });
-    // Record commit before fallible filesystem refresh or post-commit notifications.
     const applied: Record<string, unknown> = { path: rel, ...result };
     const receipts = this.applied.get(`${taskId}:${toolId}`);
     if (!receipts?.some((item) => (item as { receiptId?: string }).receiptId === operationId))
@@ -971,7 +961,6 @@ export class HelperShell {
     return applied;
   }
 
-  /** Keep the local projection current after an independent app.call save. */
   refreshAfterMutation(
     taskId: string,
     name: string,
@@ -1010,7 +999,6 @@ export class HelperShell {
       for (const [file, existing] of targets) {
         if (file === refreshedPath) continue;
         const path = join(this.taskDir(taskId), file);
-        // Keep dirty drafts and their original revision until explicitly reconciled.
         if (existing && existsSync(path) && sha(readFileSync(path, 'utf8')) !== existing.hash)
           continue;
         if (!existing && existsSync(path)) continue;
@@ -1060,7 +1048,6 @@ export class HelperShell {
       failed = true;
       failure = error;
     } finally {
-      // Keep completed projections indexed even if a later source could not be refreshed.
       for (const chatId of updatedChats) {
         try {
           this.writeSceneIndex(taskId, chatId, task.files);
@@ -1108,7 +1095,6 @@ export class HelperShell {
       } catch (error) {
         failure = error;
       } finally {
-        // A completed, timed out, or disconnected shell owns no further app work.
         controller.abort();
         await Promise.allSettled([...execution.pending]);
       }

@@ -15,7 +15,6 @@ import {
   type IllustrationImageMime,
 } from '../core/illustration.js';
 
-/** ComfyUI usually runs on another PC; the server, never the browser, talks to it. */
 export type ComfyUIConnection = { baseUrl: string; authorizationEnv: string; disabled?: true };
 export type ComfyUIRequestOptions = {
   signal: AbortSignal;
@@ -103,8 +102,6 @@ async function send(
   options.signal.throwIfAborted();
   await init.beforeSend?.();
   try {
-    // Like the provider adapters, never follow a redirect: the approved base URL is the only target
-    // and the Authorization header must not travel to another origin.
     return await fetch(
       url,
       providerFetchOptions({
@@ -121,7 +118,6 @@ async function send(
       error instanceof Error ? (error.cause as { message?: unknown } | undefined) : undefined;
     if (/redirect/iu.test(String(cause?.message ?? (error instanceof Error ? error.message : ''))))
       throw new IllustrationError('COMFYUI_REDIRECT_REFUSED');
-    // Only connect/DNS failures prove that a POST never reached the server.
     const preconnect = [
       'ECONNREFUSED',
       'ENOTFOUND',
@@ -153,7 +149,6 @@ async function readJson(response: Response, signal: AbortSignal): Promise<unknow
     });
   }
 }
-/** Node ids, node class names and bounded error messages from the user's own ComfyUI. */
 function nodeErrors(value: unknown): ComfyDiagnostic['nodeErrors'] {
   if (!object(value)) return undefined;
   const result: NonNullable<ComfyDiagnostic['nodeErrors']> = [];
@@ -214,7 +209,6 @@ const sleep = (ms: number, signal: AbortSignal) =>
     signal.addEventListener('abort', abort, { once: true });
   });
 
-/** Connectivity check for the settings screen. Reads metadata only; never queues work. */
 export async function comfyUISystemStats(
   connection: ComfyUIConnection,
   options: ComfyUIRequestOptions
@@ -273,23 +267,19 @@ export async function cancelComfyUIPrompt(
     void stop.body?.cancel().catch(() => undefined);
     if (![404, 405].includes(stop.status)) return result;
   } catch {
-    // Uncertain support/response is not permission to interrupt a shared queue.
     return result;
   }
   try {
     const removed = await send(connection, options, 'queue', { body: { delete: [promptId] } });
     result.removed = removed.ok;
     void removed.body?.cancel().catch(() => undefined);
-  } catch {
-    /* Same. */
-  }
+  } catch {}
   return result;
 }
 export type ComfyUIResult =
   | { state: 'pending' }
   | { state: 'error'; statusMessages: string[] }
   | { state: 'completed'; images: ComfyUIImage[] };
-/** One read of an accepted prompt: never resubmits, so it doubles as the reconcile path. */
 export async function fetchComfyUIResult(
   connection: ComfyUIConnection,
   promptId: string,
@@ -352,10 +342,6 @@ export async function fetchComfyUIResult(
   return { state: 'completed', images };
 }
 
-/**
- * POST /prompt, poll GET /history/{id}, fetch GET /view. An explicit abort cancels our prompt;
- * a timeout leaves the remote render alone and reports the prompt_id for a later reconcile.
- */
 export async function generateWithComfyUI(
   connection: ComfyUIConnection,
   workflow: ComfyWorkflow,

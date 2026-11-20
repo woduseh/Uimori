@@ -4,7 +4,6 @@ import { resolveTemplateVariableContext } from '../core/template-variables.js';
 import { chatVariablesPending, readChatVariables } from './chat-variables.js';
 import type { Store } from './store.js';
 
-/** Live projection; persisted Run profiles never call this on resume. */
 export function chatVariableProfile(
   store: Store,
   chatId: string,
@@ -17,7 +16,6 @@ export function chatVariableProfile(
   return result;
 }
 
-/** Chat overrides with the authored defaults they replace and the values a request would resolve. */
 export function chatVariableView(store: Store, chatId: string, saved?: ChatVariableState) {
   const chat = store.chat(chatId);
   const state = saved ?? readChatVariables(store, chatId);

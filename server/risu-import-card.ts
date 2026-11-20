@@ -1,16 +1,10 @@
 import type { CharacterCardV3, CharacterCardV3Asset, LorebookEntry } from './compat/risu/types.js';
 import type { readCharacterCard, readCharacterCardPath } from './character-card-file.js';
 
-/** The parsed card and the identity of the file it came from, as the reader hands it over. */
 export type RisuCardInput =
   | ReturnType<typeof readCharacterCard>
   | Awaited<ReturnType<typeof readCharacterCardPath>>;
 
-/**
- * A card as the importer reads it: every spec field optional and every other field still readable,
- * because a real file may omit, mistype or extend any of them. The readers below keep that
- * tolerance, so a wrong type reads as empty instead of failing the import.
- */
 export type RisuCard = Partial<CharacterCardV3['data']> & Record<string, unknown>;
 export type RisuCardAsset = Partial<CharacterCardV3Asset> & Record<string, unknown>;
 export type RisuCardLoreEntry = Partial<LorebookEntry> & Record<string, unknown>;

@@ -36,7 +36,6 @@ const chatTables = [
   'runs',
 ];
 
-/** Describe the selected chat. Unrelated diagnostic events cannot invalidate its deletion. */
 export function chatDeletionImpact(store: Store, chatId: string) {
   store.chat(chatId);
   return {

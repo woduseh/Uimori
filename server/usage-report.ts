@@ -45,7 +45,6 @@ export function usageReport(
   value: unknown,
   breakdowns: readonly Breakdown[]
 ): SelectedUsageReport;
-/** A single attempt remains a billable attempt; summary reads need no grouped queries or rows. */
 export function usageReport(
   store: Store,
   value: unknown,

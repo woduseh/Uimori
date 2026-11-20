@@ -29,7 +29,6 @@ import {
   type OutlineTarget,
 } from '../core/outline.js';
 
-/** Seal what was actually frozen, so a later read can tell the applied composition apart. */
 const sealOutlineSnapshot = (outline: Omit<OutlineSnapshot, 'hash'>): OutlineSnapshot => ({
   ...outline,
   hash: createHash('sha256').update(JSON.stringify(outline)).digest('hex'),
@@ -52,7 +51,6 @@ const HEAD_ANCESTRY = `WITH RECURSIVE history(id) AS (
     SELECT head_revision FROM chats WHERE id=? AND head_revision IS NOT NULL UNION ALL
     SELECT s.parent_revision FROM sources s JOIN history h ON s.id=h.id WHERE s.parent_revision IS NOT NULL
   ) SELECT id FROM history`;
-/** One request's frozen input keeps a bounded amount of already-written history. */
 const WRITTEN_LIMIT = 40;
 const BATCH_LIMIT = 200;
 const REVIEW_SEED_SOURCES = 3;
@@ -63,7 +61,6 @@ type OutlineSelection = {
   neighbors: OutlineNeighbors;
 };
 
-/** Reuse one immutable read's lookup tables; edits build a new index from their live nodes. */
 function outlineIndex(nodes: readonly OutlineNode[]) {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const children = new Map<string, OutlineNode[]>();
@@ -128,7 +125,6 @@ function outlineSources(nodes: readonly OutlineNode[]): OutlineWriting[] {
   return [...unique.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
-/** Binding a command changes revision/progress, but not the plan the request was written for. */
 function plannedContent(selection: OutlineSelection) {
   const content = (node: OutlineNode) => [node.id, node.level, node.title, node.intent, node.fixed];
   return JSON.stringify({
@@ -141,7 +137,6 @@ function plannedContent(selection: OutlineSelection) {
 const plannedHash = (selection: OutlineSelection) =>
   createHash('sha256').update(plannedContent(selection)).digest('hex');
 
-/** Create current tables during fresh database initialization. */
 export function initOutline(db: DatabaseSync) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS outline_nodes (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), parent_id TEXT REFERENCES outline_nodes(id), level TEXT NOT NULL, position INTEGER NOT NULL, title TEXT NOT NULL, intent TEXT NOT NULL, fixed INTEGER NOT NULL DEFAULT 0, revision INTEGER NOT NULL, command_id TEXT REFERENCES scene_commands(id), request_key TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(chat_id,request_key));
@@ -150,7 +145,6 @@ export function initOutline(db: DatabaseSync) {
   `);
 }
 
-/** Small plan references and source links; no duplicated manuscript or completed input archive. */
 export function initOutlineWorkspace(db: DatabaseSync) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS outline_links (
@@ -171,7 +165,6 @@ export function initOutlineWorkspace(db: DatabaseSync) {
   `);
 }
 
-/** Additive within schema 15 so that a rolled-back app, which ignores them, still opens the database. */
 export function initOutlineFocus(db: DatabaseSync) {
   db.exec(`CREATE TABLE IF NOT EXISTS outline_focus (
     chat_id TEXT PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE,
@@ -184,7 +177,6 @@ export function initOutlineFocus(db: DatabaseSync) {
     );
 }
 
-/** Retained as a receipt-origin tag for replay comparison, not two levels of edit permission. */
 export type OutlineAuthority = 'user' | 'model';
 export type OutlineOperation =
   | {
@@ -340,7 +332,6 @@ export function parseOutlineOperations(value: unknown): OutlineOperation[] {
   });
 }
 
-/** Composition is owned by one chat, exactly like the scene commands it schedules. */
 export class OutlineStore {
   readonly store: Store;
   constructor(store: Store) {
@@ -455,9 +446,6 @@ export class OutlineStore {
     return { chatId, focusId: this.focusId(chatId), nodes: this.nodes(chatId) };
   }
 
-  // -------------------------------------------------------------------------
-  // Current unit for ordinary requests
-  // -------------------------------------------------------------------------
   private focusId(chatId: string): string | null {
     const row = this.db.prepare('SELECT node_id FROM outline_focus WHERE chat_id=?').get(chatId);
     return row ? String(row.node_id) : null;
@@ -605,17 +593,12 @@ export class OutlineStore {
         partial,
         brief: {
           ...overview,
-          // These enter different query scopes. Only continuations reuse a page's version.
           detailRead: outlineNextRead(chatId, { mode: 'detail', nodeId: target.nodeId! }),
           subtreeRead: outlineNextRead(chatId, { mode: 'subtree', nodeId: target.nodeId! }),
         },
       };
     });
   }
-  // -------------------------------------------------------------------------
-  // Writing composition
-  // -------------------------------------------------------------------------
-  /** Accepted writers keep their frozen inputs; do not edit their own active unit. */
   private assertIdle(node: OutlineNode) {
     if (node.progress.state === 'writing')
       throw new HttpError(409, '진행 중인 원문 생성을 먼저 취소해 주세요.');
@@ -651,7 +634,6 @@ export class OutlineStore {
       return { detail: this.detail(chatId), created };
     });
   }
-  /** Small, deterministic receipt for host tools; browser callers keep their detail response. */
   applyReceipt(chatId: string, value: unknown, authority: OutlineAuthority) {
     return this.store.transaction(() => {
       const body = record(value);
@@ -815,7 +797,6 @@ export class OutlineStore {
       if (before) {
         const after = outlineIndex(this.nodes(chatId));
         for (const item of pending) {
-          // Explicit node removal already deletes its unexecuted command.
           const current = after.selection(item.id);
           if (
             current.path.length &&
@@ -834,10 +815,6 @@ export class OutlineStore {
     });
   }
 
-  // -------------------------------------------------------------------------
-  // Writing the story from composition
-  // -------------------------------------------------------------------------
-  /** Bind one composition unit to a scene command on the existing main writing path. */
   sceneCommand(id: string, value: unknown) {
     const body = record(value);
     fields(body, [
@@ -862,7 +839,6 @@ export class OutlineStore {
     const matchesStoredRequest = (stored: string) =>
       (body.request === undefined && body.additionalInstruction === undefined) ||
       request === stored ||
-      // A client can replay an empty instruction for an existing pre-English reservation.
       (body.request === undefined &&
         !additionalInstruction.trim() &&
         stored === '선택한 구성에 따라 이 단위를 집필해 주세요.');
@@ -927,10 +903,6 @@ export class OutlineStore {
       return command;
     });
   }
-  /**
-   * Freeze the applied composition for one run. Only the path to the written unit, its direct
-   * children and units already written inside this run's own ancestry enter the input.
-   */
   freeze(sceneCommandId: string, snapshot: RunSnapshot): OutlineSnapshot | undefined {
     const row = this.db
       .prepare(
@@ -968,7 +940,6 @@ export class OutlineStore {
   ): OutlineSnapshot {
     const index = outlineIndex(nodes);
     const { path, children, related, neighbors } = index.selection(target.id);
-    // The run's own ancestry, not the live head: a replacement continues from an older parent.
     const ancestry = new Set(snapshot.history.map((entry) => entry.revision));
     const written = nodes
       .filter((item) => item.id !== target.id)
@@ -1016,7 +987,6 @@ export class OutlineStore {
   }
 }
 
-/** Freeze composition at reservation time so the run keeps the intent it was scheduled with. */
 export function freezeOutline(
   store: Store,
   sceneCommandId: string,

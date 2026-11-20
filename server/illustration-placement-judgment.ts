@@ -45,10 +45,6 @@ export function illustrationPlacementJudgmentRequest(
   };
 }
 
-/**
- * Resolves to null when no request was sent because judgment cannot take this input, so the
- * caller may use the prompt model. A dispatched request that fails is thrown, never replaced.
- */
 export async function judgeIllustrationPlacement(
   source: Source,
   translation: Source,

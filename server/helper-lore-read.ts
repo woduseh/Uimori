@@ -25,7 +25,6 @@ function textPage(value: string, offset: number, limit: number) {
   };
 }
 
-/** Model-facing pages only; the UI and override save service retain their full models. */
 export function readHelperChatLore(store: Store, chatId: string, args: Record<string, unknown>) {
   const current = new ChatOverridesStore(store).get(chatId);
   const head = {

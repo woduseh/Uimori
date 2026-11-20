@@ -1,7 +1,3 @@
-/**
- * Provider setting archive rows and frozen model snapshots. Kept apart from `product-store.ts` so
- * story, helper and package archives can validate models without importing the store.
- */
 import { validateModelPricing, validatePricingSnapshot } from '../core/model-pricing.js';
 import {
   GENERATION_KEYS,
@@ -146,7 +142,6 @@ export function validateModelGeneration(value: Row, protocol?: Connection['proto
   }
 }
 
-/** Connection and model archive rows; execution snapshots reuse the same checks. */
 export function validateProviderSettingVersion(row: Row): void {
   const body = archiveVersionBody(row);
   text(body.title, 'title', 200);
@@ -253,7 +248,6 @@ export function validateProviderSettingVersion(row: Row): void {
       'maxOutputTokens',
       'temperature',
       ...modelOptionKeys,
-      // Read archived settings without restoring retired execution options.
       'contextTools',
       'pdfInput',
       'enabled',
@@ -274,7 +268,6 @@ export function validateProviderSettingVersion(row: Row): void {
     validateModelMetadata(body);
   } else throw new HttpError(400, 'Invalid archive version kind');
 }
-/** Execution snapshots are self-contained evidence, independent of later setting edits. */
 export function validateModelSnapshot(value: unknown): ModelSnapshot {
   const snapshot = record(value),
     { connection: rawConnection, pricingSnapshot, ...model } = snapshot,

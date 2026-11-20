@@ -10,8 +10,6 @@ export function storyGuideRoutes(
 ) {
   const detail = (chatId: string): StoryGuideDetail => {
     const state = store.storyGuide.get(chatId);
-    // Older completed runs have no inclusion receipt; keep their historical
-    // display when a writer attempt exists, without treating a guide call as one.
     const writerIncludesGuide = `a.job_id IS NULL AND a.usage_kind='writing' AND (
       json_extract(a.request,'$.requestReceipt.storyGuide.status')='included' OR
       (json_type(a.request,'$.requestReceipt.storyGuide') IS NULL AND r.status='completed')
@@ -38,8 +36,6 @@ export function storyGuideRoutes(
       .get(chatId);
     return {
       ...state,
-      // A settings edit during generation may reject cache publication, while the
-      // run still owns its advice. A newer run without a guide must not hide it.
       brief: lastWithBrief
         ? (JSON.parse(String(lastWithBrief.brief)) as StoryGuideDetail['brief'])
         : null,

@@ -7,7 +7,6 @@ export const RUN_READER_DISMISSAL_PREFIX = 'reader-dismissed-run:v1:';
 export const readerRunDismissalKey = (chatId: string, runId: string) =>
   `${RUN_READER_DISMISSAL_PREFIX}${chatId}:${runId}`;
 
-/** Reader presentation only: execution records and their retry receipts stay intact. */
 export function dismissReaderRun(store: Store, runId: string) {
   return store.transaction(() => {
     const run = store.db

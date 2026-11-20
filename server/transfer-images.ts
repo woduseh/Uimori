@@ -1,7 +1,6 @@
 import type { NativeTransferFile } from '../core/native-transfer.js';
 import { processImage } from './image-processing.js';
 
-/** Convert each distinct input once before a DB transaction. Native logical asset aliases stay stable. */
 export async function convertTransferImages(file: NativeTransferFile) {
   const mapped = new Map<string, NativeTransferFile['images'][number]>();
   for (const image of file.images) {
@@ -35,7 +34,6 @@ export async function convertTransferImages(file: NativeTransferFile) {
     });
     return copy;
   });
-  // Containers and original unconverted image copies are not persistent app data.
   return {
     file: {
       format: file.format,

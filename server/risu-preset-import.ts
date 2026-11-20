@@ -53,7 +53,6 @@ function analyze(value: unknown) {
   return { file, transfer, preview };
 }
 
-/** Decode and review without persisting a prompt, changing models, or running authored code. */
 export function prepareRisuPresetImport(value: unknown): RisuPresetImportPreview {
   const body = record(value);
   fields(body, ['source']);

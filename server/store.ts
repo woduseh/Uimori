@@ -97,7 +97,6 @@ type Row = Record<string, any>;
 const json = (value: unknown) => JSON.stringify(value);
 const parse = (value: any) => (value === null ? null : JSON.parse(String(value)));
 const now = () => new Date().toISOString();
-/** One server owns this file DB. No transaction spans provider or browser I/O. */
 export class Store {
   readonly db: DatabaseSync;
   readonly product: ProductStore;
@@ -116,8 +115,7 @@ export class Store {
     this.path = existsSync(path)
       ? realpathSync(path)
       : join(realpathSync(dirname(path)), basename(path));
-    // A separate empty SQLite file is an OS-released lifetime mutex. Story-data
-    // writes use the short transactions below; they never wait on provider I/O.
+    // The OS releases a lock on this separate empty SQLite file when the process exits.
     this.ownership = new DatabaseSync(`${this.path}.owner.sqlite`);
     try {
       this.ownership.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE;');
@@ -172,7 +170,6 @@ export class Store {
         initResponseStreams(this.db);
       });
       initializePromptWorkspaceReferences(this);
-      // The maintenance row belongs to every boot, not only to a fresh database.
       initializeActivityFeed(this);
       initMaintenance(this);
     } catch (error) {
@@ -214,7 +211,6 @@ export class Store {
       this.db
         .prepare('INSERT INTO events(chat_id,kind,entity_id,at) VALUES(?,?,?,?)')
         .run(chatId, kind, entityId, at);
-      // Completion and its delivery intent share the caller's transaction, or a small standalone one.
       enqueueTerminalNotification(this.db, chatId, kind, entityId, at);
     };
     if (this.db.isTransaction) write();
@@ -295,7 +291,6 @@ export class Store {
           '채팅 제목이 다른 곳에서 변경됐어요. 취소 후 최신 제목을 확인해 주세요.'
         );
       this.db.prepare('UPDATE chats SET title=? WHERE id=?').run(title, id);
-      // Even saving the same text records manual intent and prevents an automatic overwrite.
       this.event(id, 'chat.title.manual', id);
       return this.chat(id);
     });
@@ -303,8 +298,6 @@ export class Store {
   history(head: string | null): RunSnapshot['history'] {
     const history: RunSnapshot['history'] = [];
     const seen = new Set<string>();
-    // Execution history needs exact text/hash/policy, not Reader blocks or translation jobs.
-    // Keep source integrity checks while projecting the latest edit in one read per ancestor.
     const read =
       this.db.prepare(`SELECT s.id,s.chat_id AS chatId,s.parent_revision AS parentRevision,
       s.text,s.hash,e.text AS editedText,e.hash AS editedHash,
@@ -394,7 +387,6 @@ export class Store {
   ): { run: Run; created: boolean } {
     return this.transaction(() => this.createRunInTransaction(chatId, command, snapshot));
   }
-  /** Early intake check; reservation repeats it inside the transaction after async conversion. */
   assertRunAdmission(chatId: string, command: Parameters<Store['createRun']>[1]): Chat {
     const chat = this.chat(chatId);
     if (chat.headRevision !== command.expectedRevision)
@@ -419,7 +411,6 @@ export class Store {
       throw new HttpError(409, 'A run already owns this head');
     return chat;
   }
-  /** Admission recovery must precede access to consumed or expired staged files. */
   findRunByCommand(chatId: string, command: Parameters<Store['createRun']>[1]): Run | undefined {
     const prior = this.db
       .prepare('SELECT id,command FROM runs WHERE chat_id=? AND request_key=?')
@@ -449,7 +440,6 @@ export class Store {
       ...(command.storyUiAction ? { storyUiAction: command.storyUiAction } : {}),
     });
   }
-  /** Joins the host's transaction when an authored opening and its source commit together. */
   createRunInTransaction(
     chatId: string,
     command: Parameters<Store['createRun']>[1],
@@ -466,7 +456,6 @@ export class Store {
     const captured = snapshot(chat);
     const base = {
       ...captured,
-      // Resolve inheritance once, inside the reservation transaction. Running jobs stay frozen.
       settings: {
         ...captured.settings,
         autoTranslate:
@@ -483,7 +472,6 @@ export class Store {
       ...(command.loreContextReset ? { loreContextReset: true } : {}),
       executionClock: { iso: time, unix: Math.floor(Date.parse(time) / 1000) },
     };
-    // Authored openings and transcript imports commit their exact text; nothing is prepared for a model.
     const authored =
       base.packageStart?.mode === 'authored' ||
       base.transcriptImport !== undefined ||
@@ -543,8 +531,6 @@ export class Store {
     const row = this.db.prepare('SELECT * FROM runs WHERE id=?').get(id) as Row | undefined;
     if (!row) throw new HttpError(404, 'Run not found');
     const snapshot = parse(row.snapshot) as RunSnapshot;
-    // Until aggregate settlement, count durable attempts rather than prepared main inputs.
-    // Extension/context calls have no model_inputs row; title generation is a separate task.
     const calls = row.usage
       ? undefined
       : (this.db
@@ -655,7 +641,6 @@ export class Store {
       return this.releaseEndedRunInTransaction(id);
     });
   }
-  /** Only a preserved response awaiting judgment can replay this run's own frozen input. */
   releaseEndedRunInTransaction(id: string): Run {
     const run = this.run(id);
     if (
@@ -671,8 +656,6 @@ export class Store {
   settleCancelledUsage(id: string, usage: Usage): Run {
     return this.transaction(() => {
       const run = readRunState(this, id);
-      // A cancel endpoint may finish the run before the in-flight attempt returns.
-      // Fill that missing aggregate once without changing status, source, or prior usage.
       const changed = this.db
         .prepare(
           "UPDATE runs SET usage=?,updated_at=? WHERE id=? AND status='cancelled' AND usage IS NULL"
@@ -685,7 +668,6 @@ export class Store {
   completeRun(id: string, text: string, usage: Usage, controls?: Controls): Source {
     return this.transaction(() => this.completeRunInTransaction(id, text, usage, controls));
   }
-  /** Provider completion and authored openings share source/chat CAS and source hashing. */
   completeRunInTransaction(id: string, text: string, usage: Usage, controls?: Controls): Source {
     const run = this.run(id);
     if (run.status !== 'running') throw new HttpError(409, 'Run no longer owns completion');
@@ -755,7 +737,6 @@ export class Store {
             OR EXISTS (SELECT 1 FROM json_each(c.plan,'$.recentSourceRevisions') item WHERE item.value=?)
           ))`)
         .run(source.chatId, replacement.sourceRevision, replacement.sourceRevision);
-      // Revoke only unfinished work for the displaced source. Completed artifacts remain history.
       for (const table of ['jobs', 'illustration_jobs']) {
         const cancelled = this.db
           .prepare(
@@ -782,7 +763,6 @@ export class Store {
     ) {
       this.story.reserveSourceInTransaction(source, run);
       this.outline.linkFocusSource(source, run.snapshot.outline);
-      // Illustrations never block the source commit; reservation problems become visible jobs.
       scheduleAutomaticIllustration(this, source);
     }
     checkpointChatVariablesInTransaction(this, source.id, source.chatId);
@@ -801,7 +781,6 @@ export class Store {
       !run.snapshot.executionPurpose
     ) {
       try {
-        // The nested savepoint keeps a failed translation reservation from losing the source.
         translationPlacesImages = !!translationImageSelection(
           requestTranslation(this, source.id, false, undefined, id)
         );
@@ -867,7 +846,6 @@ export class Store {
     releaseCompletedRunInputs(this.db, id);
     return source;
   }
-  /** Stored references without Reader blocks. Text integrity belongs to history/source reads. */
   sourceMetadata(id: string): Pick<Source, 'id' | 'chatId' | 'runId' | 'hash'> {
     const row = this.db
       .prepare(`SELECT s.id,s.chat_id AS chatId,s.run_id AS runId,
@@ -1174,7 +1152,6 @@ export class Store {
         this.releaseEndedRunInTransaction(run.id);
         this.event(run.chatId, 'run.interrupted', run.id);
       }
-      // Retired commentary jobs retain their receipts but can never resume provider work.
       this.db
         .prepare(
           "UPDATE jobs SET status='interrupted',generation=generation+1,owner=NULL,error='SCENE_COMMENTARY_RETIRED',updated_at=? WHERE kind='status' AND status IN ('queued','running')"
@@ -1189,9 +1166,6 @@ export class Store {
           this.job(row.id).input
         );
         const input = this.job(row.id).input;
-        // Image placement uses JEV, not a profile model. The attempt is recorded
-        // before sending, so any real attempt may have reached the provider.
-        // Attempts are not associated with a generation; be conservative on retries.
         const live =
           row.kind === 'image'
             ? !!this.db
@@ -1206,8 +1180,6 @@ export class Store {
             now(),
             row.id
           );
-        // An interrupted automatic translation is the terminal outcome the reader was awaiting.
-        // Ordinary queued jobs still resume without an extra notification.
         if (
           live &&
           row.kind === 'translation' &&

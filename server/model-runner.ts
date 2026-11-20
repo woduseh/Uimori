@@ -42,21 +42,17 @@ export type MainResult = {
   usage: Usage;
 };
 export type MainHooks = {
-  /** Optional Linux workspace owned by this main Run, shared by HTTP and native tool dispatch. */
   executeShell?: (
     snapshot: RunSnapshot,
     action: { callId: string; name: string; args: Record<string, unknown> },
     signal: AbortSignal
   ) => Promise<ToolEvent>;
-  /** Explicit deterministic behavior for the no-model test path only. */
   fixture?: FixtureGeneration;
   prepareRequest?: (request: ProviderRequest, usage: Usage) => Promise<ProviderRequest>;
   initialUsage?: Usage;
-  /** Calls owned by the host after the writer completes (for example response judgment). */
   reserveCalls?: number;
   executeAnthropicBatch?: import('../core/transport.js').ProviderExecutionOptions['executeAnthropicBatch'];
   executeCodex?: import('../core/transport.js').ProviderExecutionOptions['executeCodex'];
-  /** Native Codex advisor execution for main writing Runs. */
   executeCodexAgent?: import('./codex-runtime.js').CodexRuntimeService['executeAgent'];
   resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
   resolveImage?: import('../core/transport.js').ProviderExecutionOptions['resolveImage'];
@@ -67,15 +63,12 @@ export type MainHooks = {
     origin?: 'story-guide'
   ) => void | Promise<void>;
   onToolEvent: (event: ToolEvent, timing?: ToolEventTiming) => void | Promise<void>;
-  /** Diagnostic-only reads that must never become replay receipts. */
   onToolDiagnostic?: (
     event: ToolEvent,
     timing?: ToolEventTiming,
     origin?: 'story-guide'
   ) => void | Promise<void>;
-  /** Durable tool receipts used only when resuming a recoverable Batch Run. */
   replayToolEvents?: readonly ToolEvent[];
-  /** Stable reservation identity for evaluation tool receipts during Batch recovery. */
   evaluationRunId?: string;
   timeoutMs?: number;
   vertexRequestTier?: 'standard' | 'flex';
@@ -88,7 +81,6 @@ export type MainHooks = {
   ) => void | Promise<void>;
 };
 
-/** Carries accounting out of fatal host failures without exposing the host exception to guests. */
 export class ModelRunError extends Error {
   readonly usage: Usage;
   constructor(cause: unknown, usage: Usage) {
@@ -105,7 +97,6 @@ function addUsage(total: Usage, result: ProviderResult) {
   }
 }
 
-/** One server-owned main run. A transport error/partial/refusal is terminal, never an implicit retry. */
 export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<MainResult> {
   const fixed = attachMainHostContext(structuredClone(snapshot));
   if (hooks.reserveCalls) fixed.settings.maxCalls -= hooks.reserveCalls;
@@ -134,8 +125,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   );
   let opaqueState: Json | undefined;
   let continuationPrompt: ProviderRequest['prompt'];
-  // Shared by all results from one model response; the other half of measured
-  // headroom remains for model output and protocol wrapping. Admission still owns safety.
   let readHeadroomTokens = 0;
   const readTokens = (event: ToolEvent) => estimateContextTokens(event, fixed.contextPlan?.budget);
   const executeMainTool = async (
@@ -219,8 +208,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   } catch (error) {
     throw new ModelRunError(error, structuredClone(usage));
   }
-  // Explicit cross-advisor references outlive provider compaction. Keep the
-  // original completed receipts separate from the mutable projection sent to the main model.
   const advisorContext = new Map(
     (collaboration?.bootstrap ?? []).map((event) => [event.callId, structuredClone(event)])
   );
@@ -235,7 +222,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       if (result.toolCalls.length !== 1 || result.toolCalls[0].name !== 'eval_submit_artifact')
         return fail('MODEL_CALL_BUDGET_EXHAUSTED');
     }
-    // Validate the whole turn before executing: repeated IDs cannot alias earlier tool results.
     const callIds = new Set(
       [...results, ...(collaboration?.bootstrap ?? [])].map((event) => event.callId)
     );
@@ -318,8 +304,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         result.error
       )
         return fail('INVALID_EVALUATION_ARTIFACT');
-      // Old submitted Batches may already have a durable refusal-retry receipt.
-      // Replay that result without reinstating the retired prose classifier.
       const terminalCall = evaluationTerminals[0];
       const savedTerminal = replayEvents.get(JSON.stringify([terminalCall.id, terminalCall.name]));
       if (
@@ -399,7 +383,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     opaqueState = result.opaqueState;
     for (const [callIndex, call] of result.toolCalls.entries()) {
       if (signal.aborted) return fail('CANCELLED');
-      // Transport only decodes. Exact frozen bindings separate state actions from read permissions.
       const action = { callId: call.id, name: call.name, args: call.arguments };
       const saved = takeReplay(call.id, call.name);
       const started = performance.now();
@@ -433,7 +416,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       results.push(event);
       if (collaboration && (event.name === 'agents.consult' || contextReadNames.has(event.name)))
         advisorContext.set(event.callId, structuredClone(event));
-      // Persist each real result immediately. Recovery reuses the durable receipt instead.
       if (!saved)
         await hooks.onToolEvent(structuredClone(event), {
           elapsedMs: performance.now() - started,
@@ -467,7 +449,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       authorized.protocol !== target.connection.protocol
     )
       return fail('CONNECTION_NOT_AUTHORIZED');
-    // The economized evaluation bootstrap remains a single old-style low-effort request.
     const economizedBootstrap =
       evaluation?.options.contextMode === 'preloaded' &&
       evaluation.options.approvalReasoningMode === 'economized' &&
@@ -500,9 +481,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         ...(history.length ? { completedToolHistory: history } : {}),
       });
     };
-    // Continuation preflight must use the prompt actually sent after editRequest.
-    // Do not execute authored callbacks for estimates; the next real send is still
-    // prepared once and validated against the provider's continuation binding.
     const measure = (request: ProviderRequest) =>
       measureProviderRequest(
         request.opaqueState != null ? { ...request, prompt: continuationPrompt } : request,
@@ -524,11 +502,8 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
             const projected = build(projection).request;
             return measure(projected);
           });
-          // Completed work becomes ordinary host reference data, not unsigned native tool calls.
           const candidate = build(compacted);
           const after = measure(candidate.request);
-          // 85% is a soft trigger, not a second admission limit. Keep a valid original
-          // continuation when summarization fails to reduce it; never admit an oversized body.
           const applied = after < before && after <= inputLimit;
           await hooks.onToolEvent(
             {
@@ -547,18 +522,15 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
             { elapsedMs: performance.now() - started }
           );
           if (applied) {
-            // Discard opaque continuation only after adopting the replacement history.
             opaqueState = undefined;
             results.length = 0;
             completedToolHistory = compacted;
             lastUnhelpfulRead = undefined;
             built = candidate;
           } else {
-            // The same reads must not repeatedly spend summary calls after unrelated writes.
             lastUnhelpfulRead = latestRead;
             if (before > inputLimit) return fail('CONTEXT_TOOL_COMPACTION_NO_PROGRESS');
           }
-          // Compaction can take several provider calls; refresh main authorization afterwards.
           authorized = await hooks.authorize(structuredClone(target.connection));
           if (
             !authorized.enabled ||
@@ -582,8 +554,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         throw new ModelRunError(error, structuredClone(usage));
       }
     }
-    // Native request hooks may themselves call a model. Recheck the reserved host budget
-    // after those calls, before sending a writer request that could not be judged.
     if (usage.modelCalls >= maxCalls) return fail('MODEL_CALL_BUDGET_EXHAUSTED');
     if (evaluation && request.generation) {
       const configured = request.generation;
@@ -642,7 +612,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           },
           resumeAttemptId
         );
-        // Persistence completes before fetch. A crash leaves an uncertain attempt, not a queued replay.
         usage.modelCalls++;
         mainCalls++;
         return attemptId;
@@ -722,7 +691,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           })
         : await executeProvider(transportConnection(authorized), request, execution);
     } catch (error) {
-      // A native-input rejection (for example prefill) must keep its existing actionable code.
       if (attemptId === undefined && error instanceof ProviderContractError)
         return fail(error.code);
       if (attemptId !== undefined) {
@@ -730,16 +698,12 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         addUsage(usage, uncertain);
         try {
           await hooks.onAttemptFinish(attemptId, uncertain);
-        } catch {
-          // Preserve the original execution failure if diagnostic settlement also fails.
-        }
+        } catch {}
       }
       throw new ModelRunError(error, structuredClone(usage));
     }
     await pendingTools;
     if (attemptId !== undefined) {
-      // The attempt is saved before tool authorization. Preserve actual arguments only in a
-      // successful ToolEvent; a rejected operation must not leak them through this earlier copy.
       const diagnostic = evaluation ? evaluation.diagnosticResult(result) : structuredClone(result);
       await hooks.onAttemptFinish(attemptId, diagnostic);
     }
@@ -770,9 +734,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
             'The command already ran. Its output was not supplied. Read a smaller range from outputFile, or finish writing with the evidence already available; do not repeat the original command.',
         },
       };
-      // HTTP continuations carry all paired results in our next request. Reserve
-      // correction space for pending calls before accepting this stdout. Native
-      // Codex owns its internal tool loop and does not use this request projection.
       const pending = remainingCalls.map((call) => ({
         ...limited,
         callId: call.id,

@@ -68,7 +68,6 @@ type RunExecutorDependencies = {
   afterSource: (runId: string) => void;
 };
 
-/** Owns one run's preparation, model execution and atomic completion; no HTTP routing. */
 export function createRunExecutor({
   store,
   controls,
@@ -104,7 +103,6 @@ export function createRunExecutor({
           !!run.snapshot.profile?.models.main &&
           run.snapshot.profile.models.main.connection.protocol !== 'fixture-sse-v1';
         let response: ReturnType<ResponseStreamStore['createWriter']> | undefined;
-        // This Run's own calls only. Reusing a candidate's prepared state does not recharge it.
         let priorUsage: Usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
         try {
           if (!store.startRun(id)) return;
@@ -310,7 +308,6 @@ export function createRunExecutor({
               throw new Error('CONTEXT_DEPENDENCIES_CHANGED');
           };
           hooks.initialUsage = structuredClone(priorUsage);
-          // Keep the reserved input fixed; preparation advances one execution snapshot.
           let executionSnapshot = run.snapshot;
           if (executionSnapshot.storyGuide?.config.enabled) {
             executionSnapshot = {
@@ -430,8 +427,6 @@ export function createRunExecutor({
               });
               executionSnapshot = prepared.snapshot;
             }
-            // Judge once after actual compaction has reset its private retained projection.
-            // A carried receipt belongs only to a retry/candidate, never to a fresh turn.
             if (loreSelectionPending(executionSnapshot)) {
               assertCurrent();
               const selection = await prepareLoreSelection(executionSnapshot, hooks, {
@@ -443,8 +438,6 @@ export function createRunExecutor({
               executionSnapshot = { ...selection.snapshot };
               delete executionSnapshot.promptCompilation;
               if (executionSnapshot.contextPlan) {
-                // Measure the exact serialized reference wrappers as well as their bodies.
-                // Trim only new admission; retained JEV lore never loses an LRU contest.
                 let measured = measureMainContext(executionSnapshot);
                 while (
                   measured.estimatedInputTokens >
@@ -456,7 +449,6 @@ export function createRunExecutor({
                   if (!entry) throw new Error('CONTEXT_FIXED_INPUT_TOO_LARGE');
                   const removed = entry.selected.pop()!;
                   entry.omitted.push({ id: removed, reason: 'budget' });
-                  // Recompute the receipt's body-only accounting from the actual scoped resources.
                   if (entry.judgment)
                     entry.judgment.selectedTokens = selectedLoreReceiptTokens(
                       executionSnapshot,
@@ -526,8 +518,6 @@ export function createRunExecutor({
               });
               publish(run.chatId);
             }
-            // Native preparation invalidates the old compilation even when a fixture has no
-            // model/context plan. Persist the exact prepared prompt before any writer input.
             if (!executionSnapshot.promptCompilation) {
               executionSnapshot = {
                 ...executionSnapshot,
@@ -549,7 +539,6 @@ export function createRunExecutor({
           }
           response.flush();
           if (controller.signal.aborted) {
-            // Cancellation owns the terminal state; late provider usage is accounting only.
             store.settleCancelledUsage(id, result.usage);
             publish(run.chatId);
             return;
@@ -565,8 +554,6 @@ export function createRunExecutor({
             publish(run.chatId);
             return;
           }
-          // Response hooks compute outside the source transaction; only verified state receipts
-          // are adopted with the unchanged main text. Keep provider accounting on fatal host errors.
           priorUsage = structuredClone(result.usage);
           store.stageRunOutput(id, result.text);
           if (judgeResponse) {
@@ -602,7 +589,6 @@ export function createRunExecutor({
                 await hooks.onAttemptFinish(attempt, outcome);
               },
             });
-            // A resolved verdict must not make later output-hook interruption rejudgable.
             store.db
               .prepare(
                 "UPDATE runs SET snapshot=json_remove(snapshot,'$.mainJudgmentPending') WHERE id=?"

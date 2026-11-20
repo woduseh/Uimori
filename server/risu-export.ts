@@ -47,13 +47,11 @@ function filename(title: string, suffix: string) {
   }.${suffix}`;
 }
 
-/** Serialize the edited native source and the current image blobs, never the import receipt. */
 export function exportRisuContent(product: ProductStore, content: Content): RisuExport {
   const standalone =
     content.kind === 'module' && !Object.keys(content.package.nativeRisu.card).length;
   if (standalone && !content.package.nativeRisu.module)
     throw new HttpError(409, 'RISU_EXPORT_MODULE_UNSUPPORTED');
-  // Linked resources keep their own Risu identities and are exported individually.
   const pkg = structuredClone(content.package);
   if (!standalone && !Object.keys(pkg.nativeRisu.card).length)
     throw new HttpError(409, 'RISU_EXPORT_MODULE_UNSUPPORTED');
@@ -120,7 +118,6 @@ export function exportRisuContent(product: ProductStore, content: Content): Risu
       if (!match) return failAsset();
       add(asset.uri.replace(/^(?:embeded|embedded):\/\//iu, ''), imageBytes(match.imageId).bytes);
     } else if (!/^(?:https?:\/\/|data:)/iu.test(asset.uri)) {
-      // Host-local paths and missing embedded payloads cannot become portable references.
       return failAsset();
     }
     return asset;
@@ -140,7 +137,6 @@ export function exportRisuContent(product: ProductStore, content: Content): Risu
       moduleImageIds.add(match.imageId);
       return imageBytes(match.imageId).bytes;
     });
-    // module.icon is inline data in the Risu format; preserve edits to its stored image as well.
     const icon = native.assets.find(
       (item) =>
         /^embeded:\/\/(?:__risu_module__\/)?module-assets\//u.test(item.uri) &&
@@ -176,7 +172,6 @@ export function exportRisuContent(product: ProductStore, content: Content): Risu
     }
     files.set('module.risum', writeEmbeddedRisuModule(module, bytes));
   }
-  // New host images have no imported URI yet. Give them stable archive names while keeping authored names.
   for (const image of pkg.images ?? []) {
     if (consumed.has(image.id)) continue;
     const path = `assets/uimori/${image.id}.${extension(image)}`;
@@ -222,7 +217,6 @@ export function exportRisuPrompt(preset: PromptPreset): RisuExport {
   const native = structuredClone(preset.program.nativeRisuPreset);
   stripDeprecatedRisuPresetFields(native.preset);
   validateNativeRisuPreset(native);
-  // Models/connections are host settings. The saved authored preset already excludes them.
   native.preset.name = preset.title;
   delete native.preset.openAIKey;
   delete native.preset.proxyKey;

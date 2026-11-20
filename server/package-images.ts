@@ -93,7 +93,6 @@ export function putImageBlob(product: ProductStore, value: unknown): PackageImag
   };
   return putValidatedImageBlob(product, blob);
 }
-/** Caller has decoded and hash-validated this blob; import callers own the outer transaction. */
 export function putValidatedImageBlob(
   product: ProductStore,
   blob: PackageImageBlob
@@ -153,7 +152,6 @@ export function imageJobInput(
     },
   };
 }
-/** A worker can only read the catalog fixed when the source/job was reserved. */
 export function imageCatalog(input: unknown): AssetEntry[] {
   const raw = record(input);
   const catalog = record(raw.imageCatalog);
@@ -185,7 +183,6 @@ const readerAssets = (chatId: string, entries: AssetEntry[]): Asset[] =>
     allowedUse: entry.uses.length === 2 ? 'both' : entry.uses[0],
     url: entry.url,
   }));
-/** Project only displayed references; a large authoring catalog never reaches the Reader. */
 export function readerImageAssets(store: Store, chatId: string, sourceIds?: string[]): Asset[] {
   if (sourceIds && !sourceIds.length) return [];
   const restriction = sourceIds
@@ -203,7 +200,6 @@ export function readerImageAssets(store: Store, chatId: string, sourceIds?: stri
   const entries = rows.map((row) => JSON.parse(row.body) as AssetEntry);
   return readerAssets(chatId, entries);
 }
-/** A selected chat asset is already in the base list; keep one exact version. */
 export function mergedReaderAssets(store: Store, chatId: string, sourceIds?: string[]): Asset[] {
   const assets = [
     ...store.product.assets(chatId, true),

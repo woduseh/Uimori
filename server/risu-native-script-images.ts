@@ -16,7 +16,6 @@ import type { Store } from './store.js';
 
 export class NativeScriptImageError extends Error {}
 
-/** Only images already owned by the frozen run can be resolved; no path or URL is fetched. */
 export async function nativeScriptImages(
   store: Store,
   snapshot: RunSnapshot,

@@ -6,7 +6,6 @@ import type { Store } from './store.js';
 
 const snapshots = new WeakMap<Store, Promise<void>>();
 
-/** Both retained snapshots and downloads use SQLite's consistent online backup. */
 export async function createDatabaseSnapshot(store: Store, path: string) {
   const prior = snapshots.get(store) ?? Promise.resolve();
   const current = prior
@@ -22,7 +21,6 @@ export async function createDatabaseSnapshot(store: Store, path: string) {
   }
 }
 
-/** SQLite produces a consistent snapshot; HTTP streams it without loading the DB into a Buffer. */
 export async function databaseBackupStream(store: Store) {
   const path = `${store.path}.backup-${randomUUID()}.sqlite`;
   try {

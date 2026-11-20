@@ -58,7 +58,6 @@ export function validateNativeScriptAttempt(snapshot: RunSnapshot, wire: WireRec
     throw new HttpError(400, 'RISU_NATIVE_ATTEMPT_MODEL');
 }
 
-/** Script prompts are preserved; credentials, model identities, budgets and attempts stay host-owned. */
 export function createNativeRisuHost(
   store: Store,
   runId: string,
@@ -85,8 +84,6 @@ export function createNativeRisuHost(
         return { success: false, result: `Error: RISU_NATIVE_MODEL_MODE_UNSUPPORTED:${requested}` };
       mode = requested as ScriptMode;
     }
-    // Every current provider transport streams internally; the Lua result is returned only
-    // after collection. Explicit false cannot be honored by that transport.
     if (options.streaming !== undefined && options.streaming !== true)
       return { success: false, result: 'Error: RISU_NATIVE_NONSTREAMING_UNSUPPORTED' };
     if (usage.modelCalls >= snapshot.settings.maxCalls - reserveCalls)
@@ -192,9 +189,7 @@ export function createNativeRisuHost(
         usage.inputTokens = usage.outputTokens = usage.costUsd = null;
         try {
           store.product.finishAttempt(attemptId, uncertainAttemptResult(signal.aborted));
-        } catch {
-          // Preserve the original execution failure if diagnostic settlement also fails.
-        }
+        } catch {}
       }
       throw error;
     }

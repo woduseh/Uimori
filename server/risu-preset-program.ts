@@ -5,7 +5,6 @@ import {
 } from '../core/risu-native-preset.js';
 import type { RisuPresetProgramImport } from '../core/risu-preset.js';
 
-/** RISUP prompt source is authoritative. CBS and regex are preserved, never translated to an AST. */
 export function importRisuPresetProgram(value: unknown): RisuPresetProgramImport {
   const native = nativeRisuPresetSource(value);
   const program = validateRisuPrompt(createNativeRisuPresetProgram(native));

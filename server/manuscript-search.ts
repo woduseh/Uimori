@@ -153,9 +153,7 @@ export class ManuscriptSearch {
     const tick = async () => {
       try {
         await this.refreshBatch();
-      } catch {
-        /* Dirty sources remain queryable; retry indexing later. */
-      }
+      } catch {}
       if (!this.closed) {
         this.timer = setTimeout(() => void tick(), 1000);
         this.timer.unref();

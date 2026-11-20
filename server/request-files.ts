@@ -51,7 +51,6 @@ const isoMedia = (bytes: Buffer) =>
   bytes.length >= 12 && bytes.subarray(4, 8).toString('ascii') === 'ftyp';
 const ebml = (bytes: Buffer) => bytes.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
 
-/** Validate format signatures without decoding, extracting or changing authored binary bytes. */
 function assertBinaryFormat(bytes: Buffer, name: string, mime: string): void {
   const extension = name.slice(name.lastIndexOf('.') + 1).toLowerCase();
   let valid = false;
@@ -116,7 +115,6 @@ function assertBinaryFormat(bytes: Buffer, name: string, mime: string): void {
 
 export type PreparedRequestFiles = { files: RequestFile[]; blobs: StoredRequestFile[] };
 
-/** No unowned permanent bytes are written before the owning task is admitted. */
 export function prepareRequestFiles(
   store: Pick<Store, 'path'>,
   uploads: readonly RequestFileUpload[]
@@ -158,7 +156,6 @@ export function prepareRequestFiles(
   return { files, blobs: [...blobs.values()] };
 }
 
-/** Must join the transaction that reserves the owning task and message. */
 export function storeRequestFiles(store: Pick<Store, 'db'>, prepared: PreparedRequestFiles): void {
   for (const blob of prepared.blobs) storeRequestFileBlob(store.db, blob);
 }
@@ -170,9 +167,7 @@ export function releaseRequestFileUploads(
   for (const upload of uploads) {
     try {
       deleteUpload(store.path, upload.uploadId);
-    } catch {
-      /* Staging expiry retries cleanup without changing an accepted task's outcome. */
-    }
+    } catch {}
   }
 }
 

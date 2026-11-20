@@ -45,7 +45,6 @@ export function nativeRisuMessages(snapshot: RunSnapshot): NativeRisuMessage[] {
     : snapshot.history.map((entry) => ({ role: 'char', data: entry.text }));
 }
 
-/** Names and persona text always come from the reserved profile, including chat overrides. */
 export function nativeRisuPromptContext(snapshot: RunSnapshot) {
   const identity = packageIdentityFromProfile(snapshot.profile!);
   const personas =
@@ -66,7 +65,6 @@ export function nativeRisuPromptContext(snapshot: RunSnapshot) {
   };
 }
 
-/** Each invocation receives its own character, modules, variables and asset namespace. */
 export function nativeRisuContext(snapshot: RunSnapshot) {
   const entries = nativeRisuPackages(snapshot);
   const bot = entries.find((entry) => entry.attachment.role === 'bot') ?? entries[0];

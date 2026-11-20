@@ -42,7 +42,6 @@ export function illustrationPresetCatalog(store: Store): IllustrationPresetCatal
     preferences: illustrationPresetPreferences(store),
   };
 }
-/** Fetch only the selected recipe, not every potentially large workflow in the catalogue. */
 export function effectiveIllustrationPreset(store: Store, chatId: string): IllustrationPreset {
   const chat = store.chat(chatId);
   for (const id of illustrationPresetIds(illustrationPresetPreferences(store), {

@@ -48,7 +48,6 @@ const settings = [
   'newChat.storyUiStyle',
 ] as const;
 
-/** Settings writes whose receipts and compact results commit inside workspace.operation. */
 export const HELPER_SETTINGS_MUTATIONS = new Set([
   'settings.update',
   'model.pricing.update',
@@ -165,7 +164,6 @@ function selectionLabel(store: Store, setting: string, value: string | number | 
   }
 }
 
-/** Called inside workspace.operation so the compact result and receipt commit together. */
 export function applyHelperSettingsMutation(
   store: Store,
   workspace: HelperWorkspace,
@@ -255,7 +253,6 @@ export function applyHelperSettingsMutation(
   return result;
 }
 
-/** The caller owns helper operation receipts and resolves optional chatId to this scope. */
 export function invokeHelperSettingsTool(
   store: Store,
   name: string,

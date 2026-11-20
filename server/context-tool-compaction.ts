@@ -18,7 +18,6 @@ import { measureProviderRequest } from './main-request.js';
 import type { MainHooks } from './model-runner.js';
 import { uncertainAttemptResult } from './usage-accounting.js';
 
-/** Only completed reads may be replaced. Mutation receipts and advisor outputs stay exact. */
 const READ_TOOLS = new Set<string>([
   ...STORY_READ_NAMES,
   'knowledge.search',
@@ -33,7 +32,6 @@ const record = (value: unknown): Record<string, unknown> | undefined =>
     ? (value as Record<string, unknown>)
     : undefined;
 
-/** Carry only metadata actually returned by a host read, never a claim that its question is solved. */
 function returnedReadMetadata(event: ToolEvent): Json | undefined {
   const result = record(event.result);
   if (!result) return undefined;
@@ -82,7 +80,6 @@ function returnedReadMetadata(event: ToolEvent): Json | undefined {
   return undefined;
 }
 
-/** A transient, source-attributed summary for this run, never a canonical checkpoint. */
 export async function compactToolReads(
   snapshot: RunSnapshot,
   events: ToolEvent[],
@@ -95,7 +92,6 @@ export async function compactToolReads(
   const target = snapshot.profile?.contextModel;
   if (!target || target.enabled === false) throw new Error('MODEL_REQUIRED:context');
   const last = reads.at(-1)!;
-  // Exact retrieval arguments survive model summarization, including earlier segment references.
   const references = Array.from(
     new Map(
       reads
@@ -131,8 +127,6 @@ export async function compactToolReads(
       event === last ? [compacted] : compactableRead(event) ? [] : [event]
     );
   };
-  // Size the exact fresh host projection, including retained metadata and mutation receipts.
-  // The caller still measures and admits the completed candidate after generation.
   const fixedInputTokens = estimateProjectedInputTokens(project(''));
   let remaining = JSON.stringify(reads),
     summary = '';
@@ -223,9 +217,7 @@ export async function compactToolReads(
         usage.inputTokens = usage.outputTokens = usage.costUsd = null;
         try {
           await hooks.onAttemptFinish(attempt, uncertainAttemptResult(hooks.signal.aborted));
-        } catch {
-          // Preserve the original execution failure if diagnostic settlement also fails.
-        }
+        } catch {}
       }
       throw error;
     }

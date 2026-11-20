@@ -240,7 +240,6 @@ function boundary(value: string, at: number) {
     : at;
 }
 
-/** One page of a long text, shrunk until the whole serialized result fits the read budget. */
 function textPage<T extends object>(
   value: string,
   args: Record<string, unknown>,
@@ -265,7 +264,6 @@ function textPage<T extends object>(
   return page();
 }
 
-/** A list page, shortened from its end until the serialized result fits the read budget. */
 function listPage<T, R extends object>(
   items: readonly T[],
   start: number,
@@ -494,7 +492,6 @@ export async function readHelperChatState(
 
 type ResultTask = Pick<HelperTask, 'id' | 'conversationId'>;
 
-/** Called inside workspace.operation so the write, its receipt and its result commit together. */
 export function applyHelperChatState(
   store: Store,
   workspace: HelperWorkspace,

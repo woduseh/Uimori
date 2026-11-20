@@ -12,7 +12,6 @@ export class AccessSessionRateLimitError extends HttpError {
   }
 }
 
-/** No server-side expiry. Restart retains sessions; logout or an access-token change revokes them. */
 export class AccessSessions {
   readonly required: boolean;
   private readonly authority: Buffer;
@@ -45,7 +44,6 @@ export class AccessSessions {
     return value && isSha256Hex(value) ? value : undefined;
   }
 
-  /** Host-only authority for attached capabilities such as Push subscriptions. */
   sessionHash(cookie?: string): string | null {
     const token = this.token(cookie);
     if (!token) return null;

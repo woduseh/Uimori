@@ -26,7 +26,6 @@ type Options = Pick<
   'resolveCredential' | 'executeCodex' | 'vertexRequestTier'
 > & { signal: AbortSignal; track: (work: Promise<void>) => void };
 
-/** One proposal call: the browser owns the draft and existing source saving owns the write. */
 export function selectionRevisionRoutes(app: FastifyInstance, store: Store, options: Options) {
   app.post<{ Params: { id: string } }>(
     '/api/sources/:id/selection-revision',

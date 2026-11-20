@@ -29,7 +29,6 @@ const restoredAnchor = (
   return block && hash(block.text) === position.textHash ? block.anchor : undefined;
 };
 
-/** Capture the displayed result, including the old successful image during a new render. */
 export function captureIllustrations(
   store: Store,
   history: { revision: string }[],
@@ -50,8 +49,6 @@ export function captureIllustrations(
         row,
         target: row.target ? (JSON.parse(String(row.target)) as IllustrationTarget) : undefined,
       }));
-    // A stale layout may already have been replaced after a manuscript edit. In that
-    // case the Reader shows the most recent successful render for each cut.
     const visible = new Map<string, string>();
     for (const { row, target } of rows) {
       visible.set(target?.id ?? String(row.id), String(row.id));
@@ -116,7 +113,6 @@ export function captureIllustrations(
   return result;
 }
 
-/** Portable anchors describe text, not an old source UUID. Unverifiable positions stay supplemental. */
 export function restoreIllustrations(
   store: Store,
   history: { revision: string }[],

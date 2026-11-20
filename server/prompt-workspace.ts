@@ -248,13 +248,10 @@ export function judgmentSelection(store: Store): JudgmentSelection {
   return validateJudgmentSelection(savedWorkspace(store).judgment);
 }
 
-/** Upgrade copied/anonymous bodies at boot, before accepting read-only requests. */
 export function initializePromptWorkspaceReferences(store: Store): void {
   const saved = savedWorkspace(store);
   if (!roles.some((role) => 'program' in saved[role])) return;
   store.transaction(() => {
-    // Validate the complete old configuration before writing. A bad route/policy
-    // must leave its bytes and every preserved preset unchanged.
     validatePromptWorkspace({
       ...saved,
       ...Object.fromEntries(
@@ -301,7 +298,6 @@ export function initializePromptWorkspaceReferences(store: Store): void {
             )
           : current.values);
       saved[role] = { presetId: source.id, values: structuredClone(explicit) };
-      // Anonymous-slot combinations belong to the preserved preset after migration.
       for (const combo of store.product.all('prompt-combination') as SavedPromptCombination[]) {
         if (combo.role !== role || combo.owner?.kind !== 'workspace' || combo.owner.role !== role)
           continue;
@@ -343,7 +339,6 @@ function resolveSelection(
   };
 }
 
-/** Persist selections and explicit values only; the API projects the latest preset body. */
 export function savePromptWorkspace(store: Store, workspace: PromptWorkspace): void {
   const saved = {
     ...workspace,
@@ -379,7 +374,6 @@ export function promptWorkspace(store: Store): PromptWorkspace {
   };
 }
 
-/** Reader/profile metadata does not need authored prompt programs. */
 export function currentModelRoutes(store: Store): ModelWorkspace['routes'] {
   const row = store.db
     .prepare(
@@ -393,7 +387,6 @@ export function currentModelRoutes(store: Store): ModelWorkspace['routes'] {
 
 type ChatPromptWorkspace = PromptWorkspace & { pinnedMainPreset?: ContentRef };
 
-/** Resolve live chat selections without changing the global working copy or historical runs. */
 export function chatPromptWorkspace(
   store: Store,
   pinned: ChatProfile['pinned']
@@ -440,7 +433,6 @@ function validateTitleModel(value: unknown): ModelWorkspace['titleModel'] {
 }
 function validateModelRoutes(value: unknown): ModelWorkspace['routes'] {
   const input = record(value);
-  // Old saved workspaces can still contain the retired scene-commentary route.
   fields(input, ['main', 'translation', 'status']);
   return Object.fromEntries(
     Object.keys(emptyModelRoutes()).map((role) => {
@@ -594,8 +586,6 @@ export function updatePromptWorkspace(
             (!isDeepStrictEqual(incoming.program, prior[role].program) ||
               incoming.title !== prior[role].title)
           ) {
-            // Older clients can still author through this endpoint. Save the source itself,
-            // never recreate a second current-body authority.
             store.product.promptPreset(
               {
                 title: incoming.title,
@@ -651,7 +641,6 @@ export function updatePromptWorkspace(
   return inTransaction ? apply() : store.transaction(apply);
 }
 
-/** IDs here identify a working slot and revision, not a retained preset dependency. */
 export function freezeCurrentPrompts(
   workspace: ChatPromptWorkspace
 ): Pick<

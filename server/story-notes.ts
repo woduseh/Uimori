@@ -69,7 +69,6 @@ export class StoryNotes {
   canonHash(scope: SourceScope): string {
     return sourceHash(JSON.stringify(this.entries(scope).sort((a, b) => a.id.localeCompare(b.id))));
   }
-  /** A replacement/retirement is anchored at the current chat head. */
   write(chatId: string, value: unknown): { note: AuthorNote; revision: number } {
     const body = record(value);
     fields(body, [

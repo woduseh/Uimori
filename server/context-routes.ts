@@ -10,7 +10,6 @@ export type ContextRouteHooks = {
   snapshot: (chatId: string) => RunSnapshot | Promise<RunSnapshot>;
   execute: (job: ContextJob, signal: AbortSignal) => Promise<RunSnapshot>;
 };
-/** Standalone user operations; provider execution is injected by the application owner. */
 export function contextRoutes(app: FastifyInstance, store: Store, hooks: ContextRouteHooks) {
   const active = new Map<string, AbortController>();
   const publicJob = ({ snapshot: _snapshot, ...job }: ContextJob) => job;

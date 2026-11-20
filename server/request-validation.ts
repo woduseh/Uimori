@@ -65,10 +65,8 @@ export function archiveList(value: unknown, maximum = 300): any[] {
     throw new HttpError(400, `Invalid archive list: expected an array of at most ${maximum} items`);
   return value;
 }
-/** Archives record every hash as a lowercase sha256 digest. */
 export const isSha256Hex = (value: unknown): value is string =>
   typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);
-/** An archive row's parsed body, checked against the row identity every archive kind shares. */
 export function archiveVersionBody(row: Record<string, any>): Record<string, any> {
   const body = record(parse(row.body));
   archiveId(row.id);

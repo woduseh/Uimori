@@ -17,7 +17,6 @@ import { promptWorkspace } from './prompt-workspace.js';
 import type { Store } from './store.js';
 import { textTokenExcerpt } from '../core/text-tokens.js';
 
-// Titles need only a small preview, independent of the stored manuscript's length.
 export const TITLE_EXCERPT_TOKENS = { request: 1000, source: 3000 } as const;
 
 type Options = Pick<
@@ -36,7 +35,6 @@ type TitleSource = {
   sourceRevision: string;
 };
 
-/** Optional one-shot helper. Its journal survives restarts; failures never replay. */
 export class ChatTitleService {
   private active = new Map<string, AbortController>();
   private readonly store: Store;
@@ -69,7 +67,6 @@ export class ChatTitleService {
         .get(runId) as (TitleSource & { startMode: string | null }) | undefined;
       if (!run || run.startMode === 'authored') return;
       const chatId = run.chatId;
-      // Older enrollment events stored the chat ID and used Korean titles.
       const enrollment = this.store.db
         .prepare(
           "SELECT entity_id FROM events WHERE chat_id=? AND kind='chat.title.eligible' ORDER BY seq LIMIT 1"
@@ -94,9 +91,7 @@ export class ChatTitleService {
           if (this.active.get(chatId) === controller) this.active.delete(chatId);
         })
       );
-    } catch {
-      // A title must never turn a successful source into a failed main execution.
-    }
+    } catch {}
   }
   resumeDeferred() {
     const rows = this.store.db
@@ -203,9 +198,7 @@ export class ChatTitleService {
             opaqueState: null,
           });
         this.store.event(chatId, 'chat.title.failed', runId);
-      } catch {
-        /* Deleting a chat also removes its helper state. */
-      }
+      } catch {}
     }
   }
 }

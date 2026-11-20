@@ -54,7 +54,6 @@ export type StoryGuideHooks = Pick<
 export type StoryGuideOptions = {
   cachedBrief?: StoryGuideBrief | null;
   runId?: string;
-  /** Calls still needed after the guide, including the writer and response judgment. */
   reserveCalls?: number;
 };
 export type StoryGuideResult = {
@@ -72,12 +71,10 @@ export class StoryGuideCancelledError extends Error {
   }
 }
 
-/** Reserve before conversation compaction; the actual brief is measured again before writing. */
 export function storyGuideReservedTokens(snapshot: RunSnapshot): number {
   return snapshot.storyGuide?.config.enabled ? GUIDE_RESERVE_TOKENS : 0;
 }
 
-/** No prior guide, authored prompt, or original/rendered duplicate enters this projection. */
 function guideRequest(snapshot: RunSnapshot): ProviderRequest {
   const target = snapshot.profile!.models.main!;
   const input = buildMainInput(snapshot);
@@ -119,8 +116,6 @@ function guideRequest(snapshot: RunSnapshot): ProviderRequest {
         )
         .map((tool) => structuredClone(tool)),
     },
-    // Keep the model's generation budget, which may also cover reasoning. The visible
-    // brief has its own small limit and is the only part reserved in the writer input.
     generation: generationFromModel(target),
     contextBudget: contextBudgetForModel(target),
     input: {
@@ -168,7 +163,6 @@ function fingerprint(snapshot: RunSnapshot, request: ProviderRequest): string {
     .digest('hex');
 }
 
-/** Apply only this execution's result and rebuild its host context without repeating native effects. */
 export function applyStoryGuide(snapshot: RunSnapshot, result: StoryGuideResult): RunSnapshot {
   if (!snapshot.storyGuide) return snapshot;
   const fixed = { ...snapshot, storyGuide: { ...snapshot.storyGuide } };
@@ -192,7 +186,6 @@ export function applyStoryGuide(snapshot: RunSnapshot, result: StoryGuideResult)
   return measured.snapshot;
 }
 
-/** One normal call, with one optional read continuation. Provider errors never reuse stale advice. */
 export async function prepareStoryGuide(
   snapshot: RunSnapshot,
   hooks: StoryGuideHooks,

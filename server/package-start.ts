@@ -58,7 +58,6 @@ export function validatePackageStartCommand(value: unknown): PackageStartCommand
   };
 }
 
-/** Only an untouched opening can change without reinterpreting later conversation or card actions. */
 export function canChangePackageStart(store: Store, chatId: string): boolean {
   return !!store.db
     .prepare(
@@ -115,7 +114,6 @@ function clearPackageStart(store: Store, chatId: string, command: PackageStartCo
     store.db
       .prepare('UPDATE context_heads SET revision=revision+1,checkpoint_id=NULL WHERE chat_id=?')
       .run(chatId);
-    // Detach the opening, retaining authored edits and completed artifacts as history.
     for (const table of ['jobs', 'illustration_jobs']) {
       const jobs = store.db
         .prepare(
@@ -150,7 +148,6 @@ export function createPackageStart(
   chatId: string,
   value: unknown
 ): { run: Run | null; created: boolean };
-/** Confirm a Risu greeting atomically without making a model request. */
 export function createPackageStart(
   store: Store,
   chatId: string,
@@ -181,8 +178,6 @@ export function createPackageStart(
       | undefined;
     let request: string;
     if (prior) {
-      // A lost response reuses the already frozen dynamic request. Store still compares every
-      // other canonical command field before returning the prior Run.
       request = text(record(JSON.parse(prior.command)).request, 'request', REQUEST_TEXT_MAX_CHARS);
     } else {
       const content = store.product.get<Content>(
@@ -209,8 +204,6 @@ export function createPackageStart(
       prepared = { profile, selected };
       request = `[작성된 도입문] ${selected.title}`;
     }
-    // Store applies the shared run/authored reservation phases after this callback's
-    // optional initial action, inside the same transaction as an authored source commit.
     const result = store.createRunInTransaction(
       chatId,
       {
@@ -223,7 +216,6 @@ export function createPackageStart(
         packageStart: ref,
       },
       (chat) => {
-        // Check after idempotency lookup. A lost successful response may replay even after the head advanced.
         if (command.expectedRevision) {
           if (!canChangePackageStart(store, chatId))
             throw new HttpError(409, 'PACKAGE_START_CONVERSATION_STARTED');
@@ -258,7 +250,6 @@ export function createPackageStart(
       }
     );
     if (!result.created || result.run.snapshot.packageStart?.mode !== 'authored') return result;
-    // No queue worker can observe an authored Run before its exact source commits.
     store.db
       .prepare("UPDATE runs SET status='running' WHERE id=? AND status='queued'")
       .run(result.run.id);

@@ -6,7 +6,6 @@ import { executeRisuNative } from './risu-native-runtime.js';
 import { renderNativeRisuMessage } from './risu-native-render.js';
 import { readDisplayViewport } from './display-viewport.js';
 
-/** Read-only preview: a fresh Lua VM, copied variables, no chat, no model/interaction host. */
 export async function nativeRisuPreview(
   store: Store,
   id: string,

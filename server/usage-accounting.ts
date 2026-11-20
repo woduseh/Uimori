@@ -43,7 +43,6 @@ export function helperUsageKind(purpose: string, wire?: Pick<WireRecord, 'role'>
   return 'helper';
 }
 
-/** No prompt, text, URLs, keys, reasoning, or authored notes are required for numeric accounting. */
 export function usageOnlyWire(wire: Partial<WireRecord>): Partial<WireRecord> {
   const pricing = wire.pricingSnapshot;
   return {
@@ -52,8 +51,6 @@ export function usageOnlyWire(wire: Partial<WireRecord>): Partial<WireRecord> {
     modelId: wire.modelId,
     pricingStartedAt: wire.pricingStartedAt,
     executionMode: wire.executionMode,
-    // Scene/chat deletion reconstructs the running request without this marker. A late result
-    // may then settle numeric usage, but cannot restore even a content-free error code.
     diagnosticRetention: 'safe-code-v1',
     ...(wire.judgment ? { judgment: { kind: wire.judgment.kind } } : {}),
     ...(pricing ? { pricingSnapshot: { ...pricing, sourceUrl: undefined, notes: [] } } : {}),
@@ -89,12 +86,8 @@ export function uncertainAttemptResult(cancelled = false): ProviderResult {
   };
 }
 
-/** Detach before deleting content parents. A late result may still settle numeric usage, but
- * usage_detached prevents finishAttempt from restoring any deleted/private request or output. */
 export function detachAttemptUsage(db: DatabaseSync, ids: string[]) {
   if (!ids.length) return;
-  // SQLite discards payloads in place. Do not materialize megabytes of text in JS just
-  // to retain a handful of numbers. A running request needs only its frozen pricing.
   db.prepare(`UPDATE attempts SET chat_id=NULL,run_id=NULL,job_id=NULL,usage_detached=1,
     request=CASE WHEN status='running' AND json_valid(request) THEN
       json_object('protocol',json_extract(request,'$.protocol'),'role',role,'modelId',model_id,

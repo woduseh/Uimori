@@ -17,7 +17,6 @@ import { runResponse } from './run-projections.js';
 
 type ActionCommand = Omit<StoryUiAction, 'roll'>;
 
-/** The manuscript shows authored labels and input, not transport or execution instructions. */
 function actionRequest(source: string, action: StoryUiAction): string {
   const block = parseStoryUi(source).find(
     (part) => part.kind === 'ui' && part.id === action.blockId

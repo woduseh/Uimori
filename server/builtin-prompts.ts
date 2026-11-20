@@ -32,12 +32,10 @@ const templates = [
   },
 ] as const;
 
-/** Opening the catalog returns metadata without loading full programs into the browser. */
 export function builtinPromptTemplates() {
   return structuredClone(templates);
 }
 
-/** Each selection is an independent editable copy. The bundled definitions stay unchanged. */
 export function builtinPromptTemplate(id: string) {
   const metadata = templates.find((template) => template.id === id);
   if (!metadata) return undefined;
@@ -62,7 +60,6 @@ export function builtinPromptTemplate(id: string) {
   };
 }
 
-/** Used only when creating a fresh workspace, never to rewrite saved working copies. */
 export function builtinCurrentPrompt(role: PromptRole): CurrentPrompt {
   const { title, program, values } = builtinPromptTemplate(
     role === 'main' ? 'pheme' : 'hermeneia'

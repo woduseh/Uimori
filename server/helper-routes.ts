@@ -116,7 +116,6 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
   );
   app.get<{ Params: { id: string } }>('/api/helper/conversations/:id/view', (request) => {
     const id = request.params.id;
-    // Capture the cursor before reading: a concurrent external write is replayed, never skipped.
     const eventCursor = store.latestEventSequence(id);
     return {
       eventCursor,

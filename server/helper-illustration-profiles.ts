@@ -138,7 +138,6 @@ function editedProfile(args: Record<string, unknown>, previous?: IllustrationCha
   return profile;
 }
 
-/** All edits share one reference revision and one helper operation receipt. */
 export function saveIllustrationProfiles(
   store: Store,
   chatId: string,

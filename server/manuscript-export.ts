@@ -6,7 +6,6 @@ import type { Store } from './store.js';
 import { choice, fields, HttpError, number, record } from './request-validation.js';
 import { successfulTranslation } from './translation-artifacts.js';
 
-/** Follow the active branch without loading source bodies or execution snapshots. */
 function manuscriptScenes(store: Store, chatId: string, head: string | null) {
   const read =
     store.db.prepare(`SELECT s.id,s.chat_id AS chatId,s.parent_revision AS parentRevision,
@@ -47,7 +46,6 @@ export function manuscriptExportMetadata(store: Store, chatId: string): Manuscri
   };
 }
 
-/** Reading export only: no requests, notes, model calls or stored-data changes. */
 export function exportManuscript(
   store: Store,
   chatId: string,

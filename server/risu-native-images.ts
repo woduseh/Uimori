@@ -53,8 +53,6 @@ async function imageGuidanceByPackage(
     }
   }
   if (!selections.length) return result;
-  // Evaluate each original field before extracting its selected ranges. Otherwise an outer CBS
-  // condition (e.g. the two age routes in Harper) is lost when its inner section is moved.
   const parsed = await evaluateNativeRisuFields({
     native: context.native,
     fields,
@@ -86,7 +84,6 @@ export async function nativeImageGuidance(snapshot: RunSnapshot): Promise<string
   return [...(await imageGuidanceByPackage(snapshot)).values()].join('\n\n');
 }
 
-/** Inserts only validated annotations into a display copy. Source text/hash never change. */
 export async function nativeImageDisplayText(
   store: Store,
   snapshot: RunSnapshot,
@@ -209,8 +206,6 @@ export async function nativeImageDisplayText(
       );
       if (alias) tag = `{{img::${alias}}}`;
     }
-    // Chat-level images and package images without a usable native alias still have an exact,
-    // host-validated URL. Markdown keeps them in the normal Risu message without inventing syntax.
     if (!tag && annotation.presentationIntent === 'inline') tag = `![](${asset.url})`;
     if (!tag) continue;
     if (displayedProse.includes(tag)) continue;
@@ -218,8 +213,6 @@ export async function nativeImageDisplayText(
     const before = /before (?:the )?paragraph|문단.*앞/iu.test(instructions);
     inserts.push({ offset: before ? block.start : block.end, text: `\n\n${tag}\n\n`, order });
   }
-  // Anchors still belong to the exact stored target. Remove authored catalog tags after insertion
-  // by projecting each original text segment, so deleting a tag never shifts a saved anchor.
   let text = '';
   let cursor = 0;
   for (const entry of inserts.sort((a, b) => a.offset - b.offset || a.order - b.order)) {

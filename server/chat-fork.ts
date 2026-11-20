@@ -8,8 +8,6 @@ function legacyReceiptCopyTitle(title: string): string {
 }
 
 function numberedCopyTitle(store: Store, title: string): string {
-  // Match suffix runs once from left to right; an end-anchored repetition can
-  // repeatedly rescan long titles that contain suffixes inside their text.
   const base =
     title.replace(/(?: · (?:새 이야기|사본 [1-9]\d*)| \(사본(?: [1-9]\d*)?\))+/gu, (run, offset) =>
       offset + run.length === title.length ? '' : run
@@ -32,7 +30,6 @@ function numberedCopyTitle(store: Store, title: string): string {
   return base + suffix;
 }
 
-/** A fork is a new chat with copied user data, not a shared execution/snapshot graph. */
 export function forkChat(store: Store, chatId: string, value: unknown): Chat {
   const body = record(value);
   fields(body, ['fromRevision', 'title', 'idempotencyKey']);
@@ -71,9 +68,6 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
         throw new HttpError(410, 'CHAT_COPY_REMOVED');
       return store.chat(saved.chatId);
     }
-    // Earlier receipts recorded the original selection in the fork event. Use it
-    // when its title also identifies the original command; otherwise validate by
-    // the older transcript digest below before recording the new command receipt.
     if (saved) {
       const event = store.db
         .prepare(

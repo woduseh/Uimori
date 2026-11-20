@@ -115,8 +115,6 @@ export function selectTheme(store: Store, input: unknown): ThemePreferences {
     )
       throw new HttpError(400, '지원하지 않는 팔레트예요.');
   }
-  // Old clients may still submit a retired palette-only preset. Keep layout and palette
-  // dimensions independent: the layout alias must not overwrite an existing palette choice.
   const themeId =
     selectedId === 'builtin:midnight' || selectedId === 'builtin:blossom'
       ? DEFAULT_THEME_ID

@@ -97,7 +97,6 @@ export const HELPER_PRICING_TOOLS: ProviderTool[] = [
   },
 ];
 
-/** Narrow model-price boundary; the helper never receives a writable model body or a credential. */
 export function invokeHelperPricingTool(store: Store, name: string, value: unknown): unknown {
   const args = record(value);
   if (!['model.pricing.read', 'model.pricing.update'].includes(name))

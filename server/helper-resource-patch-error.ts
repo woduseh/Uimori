@@ -19,7 +19,6 @@ export type HelperResourcePatchFailure = {
   matchCount?: number;
 };
 
-/** A rejected proposal has no saved effects; details identify the change to revise. */
 export class HelperResourcePatchError extends HttpError {
   readonly details: HelperResourcePatchFailure;
   constructor(statusCode: number, message: string, details: HelperResourcePatchFailure) {

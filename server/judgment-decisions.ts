@@ -17,7 +17,6 @@ function decodeText(text: string): Json {
   }
 }
 
-// Preserve plain prose and disambiguate literal strings that also parse as JSON.
 function encodeText(value: Json): string {
   if (typeof value === 'string' && value && decodeText(value) === value) return value;
   return JSON.stringify(value);
@@ -321,7 +320,6 @@ export function parseDecisionResponse(
       probabilities[key] = Number(value);
       sum += probabilities[key];
     }
-    // Providers round published probabilities. A small tolerance also permits ties at that precision.
     if (Math.abs(sum - 1) > 0.01 + Number.EPSILON) invalid();
     choices[name] = {
       choice: answer.choice as string,

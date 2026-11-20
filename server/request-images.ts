@@ -36,7 +36,6 @@ export function requestImageUploads(value: unknown): RequestImageUpload[] {
 
 export type PreparedRequestImages = { images: RequestImage[]; blobs: StoredImage[] };
 
-/** Conversion happens before admission. No draft or unowned image is written to SQLite. */
 export async function prepareRequestImages(
   store: Pick<Store, 'path'>,
   uploads: readonly RequestImageUpload[]
@@ -60,7 +59,6 @@ export async function prepareRequestImages(
           throw new HttpError(400, 'REQUEST_IMAGE_FORMAT_INVALID');
         if (!meta.width || !meta.height || meta.width > 16383 || meta.height > 16383)
           throw new HttpError(400, 'REQUEST_IMAGE_DIMENSIONS_INVALID');
-        // The authored copy preserves decoded pixels; provider limits never alter this copy.
         const stored = await source
           .rotate()
           .webp({ lossless: true, effort: 4 })
@@ -78,7 +76,6 @@ export async function prepareRequestImages(
             .resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true })
             .webp({ quality: 90, alphaQuality: 100 })
             .toBuffer({ resolveWithObject: true });
-        // Keep a firm transport bound even for high-entropy or highly transparent inputs.
         while (input.data.length > MAX_INPUT_BYTES) {
           const edge = Math.max(
             1,
@@ -108,7 +105,6 @@ export async function prepareRequestImages(
   return { images, blobs: [...blobs.values()] };
 }
 
-/** Must join the same transaction that reserves the owning run. */
 export function storeRequestImages(
   store: Pick<Store, 'db'>,
   prepared: PreparedRequestImages
@@ -116,7 +112,6 @@ export function storeRequestImages(
   for (const blob of prepared.blobs) storeImage(store.db, blob);
 }
 
-/** Cleanup cannot turn an accepted request into a rejected one. Staging also has expiry cleanup. */
 export function releaseRequestImageUploads(
   store: Pick<Store, 'path'>,
   uploads: readonly RequestImageUpload[]
@@ -124,9 +119,7 @@ export function releaseRequestImageUploads(
   for (const upload of uploads) {
     try {
       deleteUpload(store.path, upload.uploadId);
-    } catch {
-      /* A later staging prune retries. */
-    }
+    } catch {}
   }
 }
 

@@ -1,4 +1,3 @@
-/** Risu API bridge executed inside the existing JSON-only Lua worker sandbox. */
 export const RISU_NATIVE_LUA_PRELUDE = String.raw`
 local __json, __snapshot, __input, __host = api.json, api.snapshot, api.input, api.host.call
 local __history = api.history

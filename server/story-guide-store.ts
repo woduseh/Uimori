@@ -9,7 +9,6 @@ import type { RunSnapshot } from '../core/types.js';
 import { fields, HttpError, number, record } from './request-validation.js';
 import type { Store } from './store.js';
 
-/** Additive within the current personal format; existing chats need no eager rows. */
 export function initStoryGuide(db: DatabaseSync): void {
   db.exec(`CREATE TABLE IF NOT EXISTS chat_story_guides(
     chat_id TEXT PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE,
@@ -58,7 +57,6 @@ export class StoryGuideStore {
     });
   }
 
-  /** Only a still-current writer may publish the last automatically generated brief. */
   saveBrief(chatId: string, brief: StoryGuideBrief): boolean {
     if (!brief.runId) return false;
     return this.store.transaction(() => {

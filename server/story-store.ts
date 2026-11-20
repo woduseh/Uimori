@@ -8,7 +8,6 @@ import { StoryNotes } from './story-notes.js';
 import { readRunState, readRunStatus } from './run-projections.js';
 
 type Row = Record<string, any>;
-/** User notes and explicit scene commands; authored card variables belong to the Risu runtime. */
 export class StoryStore {
   readonly notes: StoryNotes;
   readonly store: Store;

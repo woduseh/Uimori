@@ -158,7 +158,6 @@ type TaskView = {
       unknownInputCalls: number;
       unknownOutputCalls: number;
       unknownCostCalls: number;
-      /** A native turn can hide several model calls; null is unknown, never one call. */
       internalModelCalls: number | null;
       unknownInternalModelCallAttempts: number;
     }[];
@@ -247,7 +246,6 @@ function helperDiagnostics(store: Store, id: string): NonNullable<TaskView['diag
     originalChars: Number(item.original_chars),
     providedChars: Number(item.provided_chars),
     timedCalls: Number(item.timed_calls),
-    // Legacy events have no timing; an incomplete sum must not look like the full duration.
     elapsedMs: item.timed_calls === item.calls ? Number(item.elapsed_ms) : null,
     queueMs: item.queued_calls === item.calls ? Number(item.queue_ms) : null,
   }));
@@ -290,7 +288,6 @@ const object = (value: unknown): Record<string, any> =>
 const tokenCount = (value: unknown): number | null =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
 
-/** Native items remain in raw usage; inspection returns only bounded counts by type and outcome. */
 function nativeActivitySummary(raw: Record<string, any>) {
   if (
     !raw.nativeActivity ||
@@ -332,7 +329,6 @@ function nativeActivitySummary(raw: Record<string, any>) {
   };
 }
 
-/** Details are opt-in so they never enlarge routine model prompts. */
 function recordedDiagnostics(
   store: Store,
   kind: Kind,
@@ -397,8 +393,6 @@ function recordedDiagnostics(
   let toolTotal: number;
   let toolItems: Record<string, unknown>[];
   if (kind === 'helper') {
-    // A start is not an outcome; a missing finish remains explicitly unknown. Older finished
-    // events without a corresponding start are still visible without fabricating arguments.
     const pairs = `WITH pairs AS (
       SELECT s.seq,s.data AS started,(SELECT f.seq FROM helper_events f
         WHERE f.task_id=s.task_id AND f.kind='tool.finished' AND f.seq>s.seq
@@ -543,7 +537,6 @@ type CommittedEffect = {
   createdAt: string;
 };
 
-/** Receipts establish commit; retained event metadata only supplies optional attribution. */
 function inspectCommittedEffects(store: Store, taskId: string, offset: number) {
   const total = Number(
     store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(taskId)
@@ -561,8 +554,6 @@ function inspectCommittedEffects(store: Store, taskId: string, offset: number) {
   }));
   const pending = new Map(items.map((item) => [item.receiptId, item]));
   if (pending.size) {
-    // Never load results or infer a save from a successful/streamed event. Old pruned events
-    // still retain callId/name; an interrupted save may legitimately have no event at all.
     for (const event of store.db
       .prepare(`SELECT json_extract(data,'$.name') AS tool,
       json_extract(data,'$.callId') AS callId FROM helper_events WHERE task_id=? AND kind='tool.finished'
@@ -571,8 +562,6 @@ function inspectCommittedEffects(store: Store, taskId: string, offset: number) {
       const callId = String(event.callId);
       const operationId = helperCallOperationId(taskId, callId);
       const exactReceiptId = `${taskId}:${operationId}`;
-      // One data.exec call can apply several files. Native receipts extend the same
-      // host-owned call identity with file/revision/content, never with result claims.
       const shellPrefix = `${taskId}:shell:${operationId}:`;
       const appPrefix = `${taskId}:shell:${operationId.slice(0, 48)}:app:`;
       for (const [receiptId, item] of pending) {

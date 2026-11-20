@@ -3,7 +3,6 @@ import { isIP } from 'node:net';
 export type NetworkPolicy = { publicOrigin?: string; publicHost?: string };
 const loopbackNames = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
-/** One configured browser origin, independent of untrusted forwarding headers. */
 export function networkPolicy(options: {
   publicOrigin?: string;
   accessToken?: string;
@@ -65,7 +64,6 @@ export type BrowserRequest = {
   headers: { host?: string; origin?: string; 'sec-fetch-site'?: string };
 };
 
-/** Return a fixed, non-sensitive error; the app converts it to HTTP 403. */
 export function deniedBrowserRequest(
   policy: NetworkPolicy,
   request: BrowserRequest

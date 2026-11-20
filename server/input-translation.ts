@@ -30,7 +30,6 @@ type Options = Pick<
   'resolveCredential' | 'executeCodex' | 'vertexRequestTier'
 > & { signal: AbortSignal; track: (work: Promise<void>) => void };
 
-/** One explicit, cancellable call. No fake source, job, agent, draft journal or story mutation. */
 export function inputTranslationRoutes(app: FastifyInstance, store: Store, options: Options) {
   app.post<{ Params: { id: string } }>(
     '/api/chats/:id/input-translation',
@@ -120,7 +119,6 @@ export function inputTranslationRoutes(app: FastifyInstance, store: Store, optio
           throw error;
         }
       })();
-      // Integrate shutdown/maintenance accounting without persisting either version of the draft.
       options.track(
         work.then(
           () => {},

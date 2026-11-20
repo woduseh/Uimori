@@ -8,7 +8,6 @@ export type CodexProcessErrorCode =
   | 'CODEX_REQUEST_FAILED'
   | 'CODEX_TIMEOUT'
   | 'CODEX_CANCELLED';
-/** Never include provider errors, stderr, request parameters, or auth data. */
 export class CodexProcessError extends Error {
   readonly code: CodexProcessErrorCode;
   constructor(code: CodexProcessErrorCode) {
@@ -24,9 +23,7 @@ export interface CodexProcessOptions {
   env: NodeJS.ProcessEnv;
   timeoutMs?: number;
   experimentalApi?: boolean;
-  /** Incoming JSON line budget; image results can carry base64. */
   maxLineBytes?: number;
-  /** Outgoing buffered JSON budget; selected references can exceed one result image. */
   maxWriteBytes?: number;
 }
 type Pending = { resolve(value: unknown): void; reject(error: Error): void; cleanup(): void };
@@ -48,7 +45,6 @@ type DynamicToolHandler = {
 const MAX_LINE_BYTES = 8 * 1024 * 1024;
 const MAX_PENDING = 64;
 
-/** One official app-server stdio session; never restarts or replays a request. */
 export class CodexProcess {
   private child?: ChildProcessWithoutNullStreams;
   private starting?: Promise<void>;
@@ -99,7 +95,6 @@ export class CodexProcess {
       this.child.stdout.on('end', () => {
         if (this.buffer.length) this.fail('CODEX_PROTOCOL_ERROR');
       });
-      // Drain without retaining, logging, or forwarding potentially sensitive stderr.
       this.child.stderr.on('error', () => {});
       this.child.stderr.resume();
       await this.request('initialize', {
@@ -160,7 +155,6 @@ export class CodexProcess {
       this.notifications.delete(listener);
     };
   }
-  /** A task-scoped allowlist, never a generic server-request or environment-tool handler. */
   onDynamicToolCall(handler: DynamicToolHandler): () => void {
     if (this.dynamicTools) throw new CodexProcessError('CODEX_REQUEST_FAILED');
     this.dynamicTools = handler;
@@ -244,7 +238,6 @@ export class CodexProcess {
             void Promise.resolve()
               .then(() => handler.handle(call as DynamicToolRequest))
               .then((result) => {
-                // Closing or unsubscribing invalidates results from already-running host work.
                 if (!this.closed && this.dynamicTools === handler) this.write({ id, result });
               })
               .catch(() => {
@@ -258,7 +251,6 @@ export class CodexProcess {
             return;
           }
         }
-        // No approvals, shell, filesystem, credentials, or unregistered tools are granted here.
         this.write({
           id: record.id,
           error: { code: -32601, message: 'Client request not supported' },
@@ -272,16 +264,14 @@ export class CodexProcess {
         for (const listener of this.notifications) {
           try {
             listener(record.method, record.params);
-          } catch {
-            /* Consumer failure is not provider data. */
-          }
+          } catch {}
         }
       return;
     }
     if (typeof record.id !== 'number' || 'result' in record === 'error' in record)
       throw new Error();
     const item = this.pending.get(record.id);
-    if (!item) return; // Timed-out/cancelled requests can still finish; never replay them.
+    if (!item) return;
     this.pending.delete(record.id);
     item.cleanup();
     if ('error' in record) item.reject(new CodexProcessError('CODEX_REQUEST_FAILED'));

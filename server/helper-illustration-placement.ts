@@ -188,7 +188,6 @@ export function placeIllustrationCuts(store: Store, chatId: string, args: Record
           displayedJobId: job.id,
           placedTarget: target,
         };
-        // Preserve other verified translated positions; this moment must be aligned anew.
         if (
           current.translation &&
           (old?.startAnchor !== target.startAnchor ||

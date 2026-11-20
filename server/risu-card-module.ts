@@ -8,7 +8,6 @@ import { decodeRPack } from './compat/risu/rpack.js';
 import { record } from './request-validation.js';
 import { invalidCard, type CardRangeReader } from './risu-card-zip.js';
 
-/** RISUM length records permit indexing each attachment without loading the whole module. */
 export function readCardModule(size: number, read: CardRangeReader) {
   let cursor = 0,
     expanded = 0;

@@ -114,8 +114,6 @@ export class PushService {
       )
         throw new HttpError(409, 'PUSH_SETTINGS_CHANGED');
       const now = new Date(this.now()).toISOString();
-      // A browser endpoint is a capability obtained after explicit browser consent. Rebinding
-      // it after re-login keeps one recipient, not duplicate sends to the same browser.
       const previous = this.store.db
         .prepare('SELECT id FROM push_subscriptions WHERE endpoint=?')
         .get(subscription.endpoint);
@@ -278,7 +276,6 @@ export class PushService {
         status = result.status;
         retryAfter = result.retryAfterSeconds ?? 0;
       } catch {
-        /* Subscription URLs, keys, response bodies and transport errors never enter user logs. */
       } finally {
         this.active.delete(String(row.subscription_id));
       }

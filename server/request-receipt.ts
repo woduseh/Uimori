@@ -2,7 +2,6 @@ import type { ContextReceipt } from '../core/scene-usage.js';
 import type { Json, WireRecord } from '../core/transport.js';
 import type { RunSnapshot } from '../core/types.js';
 
-/** Encoders own serialization. Inspect their final string leaves without re-running authored code. */
 function containsText(value: Json, text: string): boolean {
   if (typeof value === 'string')
     return value.includes(text) || value.includes(JSON.stringify(text).slice(1, -1));
@@ -12,7 +11,6 @@ function containsText(value: Json, text: string): boolean {
     : false;
 }
 
-/** Capture only the prepared invocation's small facts. No library reads, raw text or new effects. */
 export function requestReceipt(
   snapshot: RunSnapshot,
   wire: Pick<WireRecord, 'body' | 'modelId'>

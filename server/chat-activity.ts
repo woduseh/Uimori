@@ -1,7 +1,6 @@
 import type { ChatActivityCount } from '../core/chat-activity.js';
 import type { Store } from './store.js';
 
-/** One grouped read for all chats, including work outside the selected reader page. */
 export function chatActivities(store: Store): ChatActivityCount[] {
   return store.db
     .prepare(`WITH active AS (

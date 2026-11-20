@@ -62,7 +62,6 @@ function fileReader(path: string) {
   };
 }
 
-/** Read only the PNG's metadata and attachment chunks; its cover excludes transport chunks. */
 function readCardPng(
   size: number,
   read: CardRangeReader,
@@ -103,7 +102,6 @@ function readCardPng(
       if (key.startsWith('chara-ext-asset_')) {
         if (!assetKey || ++assetCount > RISU_IMPORT_MAX_ASSETS || attachmentPaths.has(assetKey))
           return invalidCard();
-        // The authored identifier is a lookup key; only our counter becomes a filesystem path.
         output = base64File(join(directory, `png-${assetCount}.bin`));
       }
       try {

@@ -1,7 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { HttpError } from './request-validation.js';
 
-/** Server-only values. Public resource records carry references, never secret contents. */
 export class CredentialStore {
   private readonly db: DatabaseSync;
   constructor(db: DatabaseSync) {

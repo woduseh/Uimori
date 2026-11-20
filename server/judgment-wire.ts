@@ -3,7 +3,6 @@ import type { JudgmentRequest } from '../core/judgment.js';
 import type { WireRecord } from '../core/transport.js';
 import { buildJudgmentWire, targetFromJudgmentWire } from './judgment.js';
 
-/** Rebuild the original protocol, never reinterpret an old receipt using today's settings. */
 export function matchesJudgmentWire(
   wire: WireRecord,
   request: JudgmentRequest,

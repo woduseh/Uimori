@@ -5,8 +5,6 @@ import type { ProviderTool } from '../core/transport.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
-// Membership is frozen when the range is chosen. Editing a scene keeps its note;
-// a replacement scene or a later continuation does not inherit an unrelated outfit.
 type RangeNote = { id: string; text: string; sourceIds: string[] };
 type State = { revision: number; notes: RangeNote[] };
 const key = (chatId: string) => 'illustration-continuity:' + chatId;
@@ -129,7 +127,6 @@ export function saveIllustrationContinuity(
     const current = new Map(state.notes.map((note) => [note.id, note]));
     const seen = new Set<string>();
     const changedNotes: { sourceId: string; title: string }[] = [];
-    // Only IDs are needed to resolve a range, including long manuscripts.
     const chain = store.db
       .prepare(`WITH RECURSIVE chain(id,parent,depth) AS (
       SELECT id,parent_revision,0 FROM sources WHERE id=? AND chat_id=?

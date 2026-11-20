@@ -19,7 +19,6 @@ export function illustrationPresentation(
   if (!row) return null;
   const value = JSON.parse(String(row.value)) as IllustrationPresentation;
   if (!sourceHash || value.sourceHash === sourceHash) return value;
-  // An edit may restore a text hash with verified placements from an earlier revision.
   if (
     Object.values(value.detached ?? {}).some((entry) => entry.sourceHash === sourceHash) &&
     store.source(sourceId).hash === sourceHash
@@ -91,7 +90,6 @@ export function illustrationDisplay(
       : {}),
   };
 }
-/** A late result may be saved as history, but cannot replace a newer request's selection. */
 export function selectCompletedIllustration(
   store: Store,
   sourceId: string,
@@ -139,7 +137,6 @@ export function changeIllustrationHero(
     return value;
   });
 }
-/** All attempts of a cut are removed together, across its explicitly updated placements. */
 export function forgetIllustrationTarget(store: Store, sourceId: string, targetId: string): void {
   const value = illustrationPresentation(store, sourceId);
   if (!value || (!value.targets[targetId] && !value.detached?.[targetId])) return;

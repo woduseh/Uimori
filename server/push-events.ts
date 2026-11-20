@@ -10,8 +10,6 @@ type Target = {
   auto_enabled?: number;
 };
 
-/** Called only while recording a real event, in the same database transaction.
- * It never scans old events, starts model work, or sends over the network. */
 export function enqueueTerminalNotification(
   db: DatabaseSync,
   chatId: string,
@@ -43,7 +41,6 @@ export function enqueueTerminalNotification(
       EXISTS(SELECT 1 FROM attempts a WHERE a.run_id=r.id AND a.is_synthetic=0) AS eligible
       FROM runs r WHERE r.id=? AND r.chat_id=?`)
       .get(entityId, chatId) as Target | undefined;
-    // A generated source with an automatic translation has one user-visible outcome.
     if (status === 'completed' && target?.auto_enabled) return;
   } else if (family === 'job') {
     prefix = 'translation';

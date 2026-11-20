@@ -8,7 +8,6 @@ const object = (value: unknown): Record<string, unknown> =>
 const strings = (value: unknown) =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 
-/** Card lore enters Risu's database through convertCharbook; module lore is already in that form. */
 export function nativeRisuReadableLore(
   native: RisuContentSource,
   entries = nativeRisuLore(native),

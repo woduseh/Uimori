@@ -27,7 +27,6 @@ const tokens = (value: unknown): number | null => {
   return number !== null && Number.isSafeInteger(number) ? number : null;
 };
 
-/** This projection reads confirmed event records, never guesses outcomes from streamed tool text. */
 export function readHelperTaskResults(store: Store, taskId: string): HelperTaskResultsView {
   const task = store.db
     .prepare(`SELECT status,json_extract(snapshot,'$.model.inputTokenLimit') AS input_limit

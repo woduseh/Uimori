@@ -251,8 +251,6 @@ export function helperSceneSource(
   id: string,
   ancestry?: ReadonlySet<string>
 ) {
-  // Fork ancestry can contain another chat's originals: those are readable through story
-  // tools, but direct editing must never mutate the fork's shared parent.
   const inAncestry = ancestry
     ? ancestry.has(id)
     : store.history(store.chat(chatId).headRevision).some((item) => item.revision === id);
@@ -349,7 +347,6 @@ function page(
     throw new HttpError(400, 'Text offset splits a Unicode character');
   let end = Math.min(offset + limit, content.length);
   if (splitsPair(content, end)) end = end === offset + 1 ? end + 1 : end - 1;
-  // Reserve room for guards and provenance; control characters can expand sixfold in JSON.
   while (countTextTokens(JSON.stringify(content.slice(offset, end))) > 9_000) {
     end = offset + Math.floor((end - offset) / 2);
     if (splitsPair(content, end)) end--;
@@ -470,7 +467,6 @@ function sceneSearch(current: ReturnType<typeof snapshot>, args: Record<string, 
   };
 }
 
-/** The ancestry is enumerated once, not once per candidate scene. No index or cache is needed. */
 function searchChatScenes(store: Store, chatId: string, args: Record<string, unknown>) {
   const raw = args.patterns;
   if (!Array.isArray(raw) || raw.length < 1 || raw.length > 8)
@@ -490,7 +486,6 @@ function searchChatScenes(store: Store, chatId: string, args: Record<string, unk
       (includeDisabled || entry.sceneContext?.sceneEnabled !== false) &&
       store.source(entry.revision).chatId === chatId
   );
-  // Capture every eligible scene's source/translation identity so continuations never mix versions.
   const snapshots = candidates.flatMap((entry) => {
     try {
       return [snapshot(store, chatId, { sourceId: entry.revision, target }, false, true)];
@@ -675,7 +670,6 @@ export function invokeHelperSceneTool(
         seen.add(id);
         return item;
       });
-      // Each item uses the exact single-scene path inside the outer transaction.
       const results = items.map((item, index) => {
         try {
           const { chatId: _itemChatId, ...patch } = item;
@@ -766,7 +760,6 @@ export function invokeHelperSceneTool(
         chatId,
         name
       );
-      // target is implicit for this original-only tool, so its nextRead must remain schema-valid.
       if (paged.nextRead)
         delete (paged.nextRead.arguments.arguments as Record<string, unknown>).target;
       return { chatId, editTarget, versionRevision: version.revision, ...paged };
@@ -786,8 +779,6 @@ export function invokeHelperSceneTool(
       if (!retained) throw new HttpError(404, 'Original version is no longer retained');
       content = retained.text;
     } else content = replacement(current.content, args);
-    // Validate both snapshots before either edit occurs. A saved source changes the
-    // dependency hash, so translation must be reauthored against the new hash atomically.
     let translationEdit: { content: string; changed: boolean; revision: number } | undefined;
     if (name === 'scene.patch' && args.translation !== undefined) {
       if (current.target !== 'original')

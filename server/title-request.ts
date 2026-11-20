@@ -9,7 +9,6 @@ import { contextBudgetForModel } from '../core/context-budget.js';
 import { resolveTokenizerProfile } from '../core/tokenizer-profiles.js';
 import { resolveModelPricing } from '../core/model-pricing.js';
 
-/** Title policy is independent of connection probes; neither mutates the saved model. */
 export function titleRequest(
   model: ModelPreset,
   connection: Connection,

@@ -1,7 +1,6 @@
 import sharp from 'sharp';
 import { JevError, type JevRequest } from './jev-judgment.js';
 
-/** A small, upright still for judgment; the stored original is never rewritten. */
 export async function prepareJevImage(
   bytes: Uint8Array
 ): Promise<NonNullable<JevRequest['assets']>[string]> {

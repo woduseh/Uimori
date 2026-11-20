@@ -9,7 +9,6 @@ const ackPrefix = (chatId: string) => `activity-feed:ack:v1:${chatId}:`;
 const identityKey = (chatId: string, identity: string) =>
   `${ackPrefix(chatId)}${createHash('sha256').update(identity).digest('hex')}`;
 
-/** Schema-15-compatible independent receipts; browser acknowledgement never changes a job. */
 export function acknowledgedActivities(store: Store, chatId: string): string[] {
   store.chat(chatId);
   return (
@@ -60,14 +59,12 @@ function description(row: OutcomeRow): string {
   return `${name} 실패 (확인 필요)`;
 }
 
-/** Startup marker: past successful work stays read, even if the app is opened later. */
 export function initializeActivityFeed(store: Store): void {
   store.db
     .prepare('INSERT OR IGNORE INTO app_metadata(key,value) VALUES(?,?)')
     .run(baselineKey, new Date().toISOString());
 }
 
-/** Metadata-only all-chat projection; does not require any push subscriptions. */
 export function activityFeed(store: Store): ActivityFeed {
   initializeActivityFeed(store);
   const baseline = String(
@@ -125,8 +122,6 @@ export function activityFeed(store: Store): ActivityFeed {
       canAcknowledge: true,
     });
   }
-  // One task = one recent entry. Do not join tool events or original task input:
-  // a completed edit can still be committed when the final assistant answer fails.
   const helperRows = store.db
     .prepare(`
     SELECT t.id,t.conversation_id AS conversationId,c.chat_id AS chatId,

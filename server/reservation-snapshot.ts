@@ -28,12 +28,6 @@ export type ReservationPurpose =
     }
   | { purpose: 'resume-state' };
 
-/**
- * Synchronous reservation phases. Callers own profile/model selection, clock, CAS,
- * transactions and persistence. Run/authored callers must already own the transaction.
- * Helper callers freeze chat options before building their profile-derived resources.
- * Preview compilation and resumed-state dependency validation remain with their callers.
- */
 export function freezeReservationSnapshot(
   store: Store,
   base: RunSnapshot,
@@ -57,8 +51,6 @@ export function freezeReservationSnapshot(
   )
     throw new Error('RESERVATION_AUTHORSHIP_MISMATCH');
 
-  // A native card action already executed in an isolated worker. Adopting its authored
-  // messages must not execute the card again or prepare a story-model request.
   if (base.nativeRisuAuthored) return base;
 
   if (authored && isSourceOnlyTranscript(base)) {
@@ -78,8 +70,6 @@ export function freezeReservationSnapshot(
   }
   if (base.profile && !translationPreview) {
     base = { ...base, profile: chatVariableProfile(store, base.chatId, base.profile) };
-    // Changing an authored opening does not rewind explicit user variable settings.
-    // Its admission excludes native actions and generated conversation.
     if (base.replacement && base.packageStart?.mode !== 'authored') {
       const live = readChatVariables(store, base.chatId);
       const checkpoint = base.parentRevision
@@ -87,7 +77,6 @@ export function freezeReservationSnapshot(
             .prepare('SELECT body FROM chat_variable_outputs WHERE source_id=?')
             .get(base.parentRevision)
         : undefined;
-      // Historical values seed this request, while the live revision still owns completion CAS.
       base.profile!.variableState = {
         revision: live.revision,
         values: checkpoint
@@ -124,8 +113,6 @@ export function freezeReservationSnapshot(
   frozen = { ...frozen, logicalHistory: captureLogicalHistory(store, frozen) };
   if (options.purpose === 'preview-main' || options.purpose === 'preview-translation')
     frozen = { ...frozen, executionClock: options.executionClock() };
-  // The model selection needs a provider call, which a reservation transaction must not make, so a
-  // snapshot that still owes one reserves uncompiled and the worker compiles after the answer lands.
   if (
     options.purpose === 'run' &&
     (nativeRisuPending(frozen) || nativeRisuPresetPending(frozen) || loreSelectionPending(frozen))

@@ -92,7 +92,6 @@ function cleanChanges(
     ...(changes.order ? { order: changes.order.filter((id) => !refersToDeleted(id, ids)) } : {}),
   };
 }
-/** Explicit scene deletion changes the current manuscript, never other independent chats. */
 export function deleteScenes(
   store: Store,
   chatId: string,
@@ -177,8 +176,6 @@ export function deleteScenes(
     const runIds = new Set(
       sources.filter((row) => ids.has(String(row.id))).map((row) => String(row.run_id))
     );
-    // Completed descendants no longer retain their old full snapshot. Their tool arguments
-    // may still mention the deleted scene, so discard only diagnostics that could depend on it.
     const dependsOnDeleted = (revision: string | null) => {
       while (revision) {
         if (ids.has(revision)) return true;
@@ -243,9 +240,6 @@ export function deleteScenes(
           attemptIds.add(String(attempt.id));
       }
     }
-    // Completed helper snapshots no longer identify their source scenes. Tool arguments may
-    // still contain a deleted passage, so remove previews throughout this chat's tasks while
-    // retaining call identity, timing and outcome metadata.
     store.db
       .prepare(`UPDATE helper_events SET data=json_set(data,
         '$.argsPreview','[arguments removed after scene deletion]','$.argsRedacted',json('true'))
@@ -287,7 +281,6 @@ export function deleteScenes(
       .run(headRevision, chatId);
     store.db.prepare('UPDATE context_heads SET revision=revision+1 WHERE chat_id=?').run(chatId);
     store.db.prepare('DELETE FROM chat_lore_state WHERE chat_id=?').run(chatId);
-    // Captured context requests cannot rerun with removed manuscript text.
     store.db
       .prepare(
         "UPDATE context_jobs SET snapshot=NULL,error=CASE WHEN status='completed' THEN error ELSE '삭제된 장면을 포함한 요청이에요. 새 요약을 요청해 주세요.' END WHERE chat_id=?"

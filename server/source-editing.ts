@@ -13,7 +13,6 @@ import type { Store, Source, Job } from './store.js';
 import { SOURCE_TEXT_MAX_CHARS, TRANSLATION_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import type { SourceVersions } from '../core/source-versions.js';
 
-/** Expose the original and the two retained edits; task-pinned older edits are not a version archive. */
 export function sourceVersions(store: Store, id: string): SourceVersions {
   const source = store.source(id);
   const original = store.db
@@ -46,7 +45,6 @@ export function latestTranslation(store: Store, id: string): Job | null {
   return row ? store.job(row.id) : null;
 }
 
-/** Preserve a complete candidate before JEV without making it a completed translation. */
 export function stageTranslationJudgment(
   store: Store,
   id: string,
@@ -83,7 +81,6 @@ export function stageTranslationJudgment(
       );
   });
 }
-/** Revoke in-flight ownership; retention separately keeps the previous usable response. */
 function stopTranslations(store: Store, sourceId: string) {
   store.db
     .prepare(
@@ -139,9 +136,7 @@ export function requestTranslation(
         try {
           validateTranslationArtifact(latest, source);
           return latest;
-        } catch {
-          /* Repair only on explicit demand. */
-        }
+        } catch {}
       }
     }
     const workspace = promptWorkspace(store);
@@ -195,7 +190,6 @@ export function requestTranslation(
     return store.job(jobId);
   });
 }
-/** One admitted recovery per failed job; replaying its request returns the same job. */
 export function rejudgeTranslation(store: Store, id: string): Job {
   return store.transaction(() => {
     const original = store.job(id);
@@ -212,7 +206,6 @@ export function rejudgeTranslation(store: Store, id: string): Job {
     )
       throw new HttpError(409, 'Translation judgment recovery unavailable');
     const time = new Date().toISOString();
-    // Judgment recovery was explicitly requested; it is not another automatic run outcome.
     const recoveryInput: Record<string, unknown> = {
       ...input,
       judgmentRecovery: { text: original.result!.text, sourceHash: source.hash },

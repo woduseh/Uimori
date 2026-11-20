@@ -8,7 +8,6 @@ import {
 } from '../core/risu-import.js';
 import { invalidCard } from './risu-card-zip.js';
 
-/** Incremental base64 decoder. Only one small encoded fragment remains between writes. */
 export function base64File(path: string) {
   const fd = openSync(path, 'wx');
   let pending = '',
@@ -54,7 +53,6 @@ export function base64File(path: string) {
   };
 }
 
-/** Tokenize strings in chunks: large data URIs never become a JSON string in memory. */
 export async function readCardJson(
   path: string,
   directory: string,

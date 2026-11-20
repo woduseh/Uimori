@@ -149,16 +149,13 @@ export type AppOptions = {
   vertexRequestTier?: 'standard' | 'flex';
   codex?: CodexRuntimeOptions;
   codexRuntime?: CodexRuntimeService;
-  /** Boots with writes closed and no worker start: a candidate only proves DB admission and reads. */
   maintenance?: boolean;
 };
 export type App = FastifyInstance & { store: Store; controls: Controls };
 type RecordBody = Record<string, unknown>;
-// Scripts only: authored card and theme HTML rely on inline styles, remote images and fonts.
 const DOCUMENT_CONTENT_SECURITY_POLICY =
   "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
 
-/** A code or a source location only: free-form messages can quote manuscript or settings data. */
 function requestFailureLabel(error: unknown): string {
   if (!(error instanceof Error)) return 'NON_ERROR';
   if (/^[A-Z][A-Z0-9_]{2,100}$/u.test(error.message)) return error.message;
@@ -242,15 +239,12 @@ export async function createApp(options: AppOptions): Promise<App> {
       },
     });
   };
-  // Only consecutive queued cuts from one frozen storyboard may share image history.
-  // Each cut still owns a separate turn, attempt and result; no positional image mapping.
   let illustrationSession: { key: string; session: CodexSession } | undefined;
   const closeIllustrationSession = async () => {
     const current = illustrationSession;
     illustrationSession = undefined;
     await current?.session.close();
   };
-  /** Illustration turns share the Codex login and the same live-connection authorization. */
   const generateCodexImage = (
     connection: Connection,
     request: CodexImageRequest,
@@ -294,7 +288,6 @@ export async function createApp(options: AppOptions): Promise<App> {
           },
         }
       );
-      // These failures happen before a turn is sent: independent rendering is safe.
       if (
         session &&
         ['CODEX_SESSION_MISMATCH', 'CODEX_SESSION_FULL'].includes(result.error?.code ?? '')
@@ -376,13 +369,10 @@ export async function createApp(options: AppOptions): Promise<App> {
     };
     void promise.then(settled, () => {
       settled();
-      // A storage/finalization failure can escape a worker's own handler. Observe
-      // it without creating an unhandled child rejection or logging manuscript data.
       process.stderr.write('BACKGROUND_TASK_FAILED\n');
     });
   };
   const streams = new ResponseStreamStore(store);
-  // Both HTTP and helper edits commit first, then stop superseded work and notify readers.
   const sceneUpdated = (sourceId: string) => {
     const source = store.source(sourceId);
     for (const [jobId, controller] of jobControllers) {
@@ -635,7 +625,6 @@ export async function createApp(options: AppOptions): Promise<App> {
     publish,
   });
 
-  // Maintenance keeps admitted work finishing but starts no new external work.
   const pumpJobs = () => {
     if (stopping.signal.aborted || !admitted()) return;
     for (const id of store.queuedJobs()) {
@@ -774,7 +763,6 @@ export async function createApp(options: AppOptions): Promise<App> {
       );
     }
   };
-  /** Illustration work never shares a queue, slot or transaction with story text jobs. */
   const pumpIllustrations = () => {
     if (stopping.signal.aborted || !admitted()) return;
     for (const id of queuedIllustrations(store)) {
@@ -864,7 +852,6 @@ export async function createApp(options: AppOptions): Promise<App> {
             if (chatId && !stopping.signal.aborted) {
               publish(chatId);
               if (queuedIllustrations(store).length) {
-                // Automatic retries back off briefly outside test mode; a manual pump is immediate.
                 const delay = requeued && !options.testMode ? Math.min(5000, attempt * 1000) : 0;
                 if (delay) setTimeout(pumpIllustrations, delay).unref();
                 else queueMicrotask(pumpIllustrations);
@@ -1631,7 +1618,6 @@ export async function createApp(options: AppOptions): Promise<App> {
     pumpIllustrations();
     titles.resumeDeferred();
   };
-  // Authentication answers first; a maintenance gate never tells an anonymous caller the state.
   maintenanceRoutes(app, store, {
     forcedClosed,
     activeWork: () => work.size + Number(backups.isActive),
@@ -1644,7 +1630,6 @@ export async function createApp(options: AppOptions): Promise<App> {
         }
       }),
   });
-  // A maintenance boot proves DB admission and reads only: it neither recovers nor starts work.
   if (!forcedClosed) {
     if (admitted()) pruneUploads(store.path);
     store.context.recover();

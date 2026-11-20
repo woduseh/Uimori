@@ -3,10 +3,6 @@ import type { DatabaseSync } from 'node:sqlite';
 type Node = { kind: string; id: string; body: unknown };
 const media = /\/api\/(assets|illustration-images|package-image-blobs)\/([A-Za-z0-9_.-]+)/gu;
 
-/** Explicit deletion collects only unreachable data, never historical evidence as a retention root.
- * Current resources, saved prose and pending/retryable work own their referenced images.
- * Called in the deletion/save transaction, not on reader requests or every model token.
- */
 export function imageDataHashes(value: unknown): string[] {
   const text = typeof value === 'string' ? value : JSON.stringify(value);
   return text?.match(/[a-f0-9]{64}/gu) ?? [];
@@ -19,7 +15,6 @@ export function queueImageCleanup(db: DatabaseSync, candidates: Iterable<string>
   for (const hash of candidates) insert.run(hash);
 }
 
-/** Worker completion/restart only revisits work explicitly deferred by a deletion or edit. */
 export function flushPendingImageCleanup(db: DatabaseSync): void {
   if (
     db.prepare('SELECT 1 FROM image_cleanup_candidates LIMIT 1').get() ||
@@ -38,9 +33,7 @@ export function pruneUnusedData(db: DatabaseSync, candidates: Iterable<string> |
     db.prepare("DELETE FROM app_metadata WHERE key='image-cleanup-needed'").run();
     return;
   }
-  // Persist the intent before any busy check: a restart or a later ordinary flush must not lose it.
   db.prepare("INSERT OR REPLACE INTO app_metadata VALUES('image-cleanup-needed','1')").run();
-  // A provider or image conversion may hold an in-memory selection not yet persisted.
   for (const table of [
     'runs',
     'jobs',
@@ -111,7 +104,6 @@ export function pruneUnusedData(db: DatabaseSync, candidates: Iterable<string> |
     } else if (Array.isArray(value)) value.forEach(scan);
     else if (value && typeof value === 'object') Object.values(value).forEach(scan);
   };
-  // Backgrounds are presentation-only metadata, but still own their uploaded image bytes.
   const themePreferences = db
     .prepare("SELECT value FROM app_metadata WHERE key='theme-preferences'")
     .get();
@@ -121,7 +113,6 @@ export function pruneUnusedData(db: DatabaseSync, candidates: Iterable<string> |
     .iterate())
     scan(JSON.parse(String(row.value)));
   for (const node of nodes.values()) if (!hidden.has(`${node.kind}:${node.id}`)) visitId(node.id);
-  // Text roots and authored JSON are kept separate from disposable execution/command logs.
   for (const [table, column] of [
     ['profiles', 'body'],
     ['prompt_workspace', 'body'],
@@ -171,7 +162,6 @@ export function pruneUnusedData(db: DatabaseSync, candidates: Iterable<string> |
     scan(JSON.parse(String(row.snapshot)));
   for (const row of db.prepare('SELECT hash FROM illustration_images').iterate())
     hashes.add(String(row.hash));
-  // Unfinished work can still resolve its pinned source and model without the library row being visible.
   for (const sql of [
     "SELECT body AS value FROM provider_connection_tests WHERE status='running'",
     'SELECT snapshot AS value FROM context_jobs WHERE snapshot IS NOT NULL',

@@ -21,9 +21,6 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
         const source = store.source(request.params.sourceId);
         if (source.chatId !== request.params.id) throw new HttpError(404, 'Source not found');
         const stored = readStoredRunSnapshot(store, source.runId);
-        // Settled runs need today's package/profile projection for display, but not a restored
-        // model context. Native display constructs the live history below; preparing the old
-        // history, resources and story here would immediately discard that work.
         const { settled, ...saved } = stored;
         const snapshot = settled
           ? {
@@ -55,7 +52,6 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
                 .filter(
                   (entry) =>
                     entry.sourceRevision === source.id &&
-                    // The reader already displays the original request, including authored groups.
                     entry.id !== `request:${source.id}` &&
                     !(own.nativeRisuAuthored && entry.role === 'user')
                 )
@@ -104,7 +100,6 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
             },
           };
         }
-        // Preserve the fallback's full context, including preset-only native rendering.
         const presentation = await buildPackagePresentation(executionSnapshot(store, stored), {
           ...source,
           ...(translation ? { translation } : {}),
@@ -118,7 +113,6 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
   );
 }
 
-/** Risu worker and script failures are fixed codes, so the reader can say which stage failed. */
 async function withRisuFailureCode<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();

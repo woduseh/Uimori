@@ -33,7 +33,6 @@ export type NativeRisuCbsContext = {
 };
 const string = (value: unknown) => (typeof value === 'string' ? value : '');
 
-/** Native CBS runs against an explicit chat view; callers decide whether its writes are committed. */
 export function createNativeRisuCbs(context: NativeRisuCbsContext) {
   const issues: string[] = [];
   let evaluator: ReturnType<typeof initializeNativeRisuCbs> | undefined;
@@ -41,8 +40,6 @@ export function createNativeRisuCbs(context: NativeRisuCbsContext) {
     issues,
     parse(text: string, role?: 'system' | 'user' | 'assistant'): string {
       if (text.length > EXECUTION_INPUT_MAX_CHARS) throw new Error('RISU_NATIVE_TEXT_LIMIT');
-      // Most history is literal prose. Defer the detached card/database view as well as
-      // parsing; otherwise every plain message still clones the entire card and lore.
       if (!/[{}#]|<(?:user|char|bot)>/iu.test(text)) return text;
       evaluator ??= initializeNativeRisuCbs(context, issues);
       return evaluator.parse(text, role);
@@ -221,7 +218,6 @@ export function evaluateNativeRisuFields(input: {
   );
 }
 
-/** One invocation reuses transport only; the worker creates a fresh CBS evaluator for each call. */
 export function createNativeRisuCbsSession(signal?: AbortSignal) {
   const createWorker = () =>
     createNativeRisuWorkerSession<
@@ -241,7 +237,6 @@ export function createNativeRisuCbsSession(signal?: AbortSignal) {
     async evaluate(text: string, context: NativeRisuCbsContext): Promise<string> {
       if (closed) throw new Error('RISU_NATIVE_WORKER_CLOSED');
       if (signal?.aborted) throw new Error('CANCELLED');
-      // A rejected overlapping call must not close the worker owned by the first call.
       if (evaluating) throw new Error('RISU_NATIVE_WORKER_BUSY');
       const current = (worker ??= createWorker());
       evaluating = true;
@@ -256,7 +251,6 @@ export function createNativeRisuCbsSession(signal?: AbortSignal) {
           });
         return result.text;
       } catch (error) {
-        // Lua may catch this error. Only a later, distinct call gets a fresh worker.
         try {
           await current.close();
         } finally {

@@ -8,7 +8,6 @@ export type FailurePoint =
   | 'state'
   | 'illustration';
 
-/** Explicit deterministic controls. Never registered outside UIMORI_TEST_MODE. */
 export class Controls {
   fixture: FixtureGeneration = {};
   readonly held = new Set<Barrier>();

@@ -23,7 +23,6 @@ import { readRunSnapshot, readRunStatus, readStoredRunSnapshot } from './run-pro
 const zeroUsage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
-/** An action can replace a scene while preserving its reader identity. */
 export function nativeSourceIdentity(sourceId: string, snapshot: RunSnapshot): string {
   return snapshot.nativeRisuAuthored?.sourceIdentity ?? sourceId;
 }
@@ -85,7 +84,6 @@ function groupMessages(messages: NativeRisuMessage[]): NativeRisuMessage[][] {
   if (pending.length) groups.push(pending);
   return groups;
 }
-/** Current chat context; the source package revision remains the one the reader rendered. */
 export function nativeSourceSnapshot(
   store: Store,
   chatId: string,
@@ -109,16 +107,11 @@ export function nativeSourceSnapshot(
     history,
     parentRevision: chat.headRevision,
   };
-  // Reading a later button uses live chat variables, not those captured before generation.
   delete snapshot.nativeRisuExecution;
   snapshot.logicalHistory = captureLogicalHistory(store, snapshot);
   return { source, snapshot, variables: readChatVariables(store, chatId) };
 }
 
-/**
- * Reserve before executing. A lost HTTP response or a restart never replays an uncertain script.
- * Changed messages get new source identities.
- */
 export async function applyNativeRisuAction(
   store: Store,
   chatId: string,
@@ -183,8 +176,6 @@ export async function applyNativeRisuAction(
     return { created: false, runId: run.id };
   }
   const captured = nativeSourceSnapshot(store, chatId, sourceId);
-  // Only newly reserved actions use today's model selections. Keep the source's
-  // packages, Lua, and prompt projection, including those in older full snapshots.
   const current = store.product.snapshot(chatId, 'inspect', captured.snapshot.parentRevision);
   const profile = captured.snapshot.profile;
   if (profile) {
@@ -257,7 +248,6 @@ export async function applyNativeRisuAction(
       }
     );
     validateChatVariableValues(result.variables);
-    // Actions have no newly submitted current-input; their attachments belong to history.
     validateNativeImageMessageIdentity(
       { ...captured.snapshot, requestImages: undefined },
       result.messages
@@ -284,8 +274,6 @@ export async function applyNativeRisuAction(
         if (message.role === 'char') sourceIndex++;
         return sameSource;
       });
-    // FirstMessage is outside Risu's message array. A variables-only opening action
-    // checkpoints a new greeting source while its runtime chat remains empty.
     const greetingOnly = !next.length;
     if (greetingOnly) next.push([{ role: 'char', data: greeting?.text ?? '' }]);
     let first = 0;
@@ -296,8 +284,6 @@ export async function applyNativeRisuAction(
     )
       first++;
     first = Math.min(first, next.length - 1);
-    // Output callbacks may insert/delete messages within one immutable source. Only reuse
-    // a stored prefix when its boundaries still match the runtime message groups.
     if (!aligned) first = 0;
     const retained = greetingOnly
       ? null
@@ -344,7 +330,6 @@ export async function applyNativeRisuAction(
       check();
       if (readRunStatus(store, reserved.id) !== 'running')
         throw new HttpError(409, 'RISU_NATIVE_ACTION_CANCELLED');
-      // The atomic rewind is immediately followed by copy-on-write source commits.
       store.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(retained, chatId);
       let head = retained;
       let lastRunId = reserved.id;
@@ -398,8 +383,6 @@ export async function applyNativeRisuAction(
           id = added.run.id;
           store.startRun(id);
         }
-        // Last checkpoint carries the action's final variables. Earlier sources are immutable
-        // and cannot be used to resurrect a future variable state.
         if (index === next.length - 1)
           writeChatVariablesInTransaction(store, chatId, {
             expectedRevision: expectedVariableRevision,

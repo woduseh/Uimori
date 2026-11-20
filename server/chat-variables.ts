@@ -36,7 +36,6 @@ export function validateChatVariableCommand(value: unknown): ChatVariableCommand
   };
 }
 
-/** Overrides only: reading an untouched chat does not materialize package defaults. */
 export function readChatVariables(store: Store, chatId: string): ChatVariableState {
   store.chat(chatId);
   const row = store.db
@@ -98,7 +97,6 @@ function applyChatVariablesInTransaction(
   return result;
 }
 
-/** Explicit user writes own a transaction and cannot race a reserved Run or extension. */
 export function writeChatVariables(
   store: Store,
   chatId: string,
@@ -107,7 +105,6 @@ export function writeChatVariables(
   return store.transaction(() => applyChatVariablesInTransaction(store, chatId, command, true));
 }
 
-/** Trusted host adoption joins its existing transaction, retaining CAS and replay receipts. */
 export function writeChatVariablesInTransaction(
   store: Store,
   chatId: string,
@@ -116,7 +113,6 @@ export function writeChatVariablesInTransaction(
   return applyChatVariablesInTransaction(store, chatId, command, false);
 }
 
-/** Called only while committing a new source. Existing source checkpoints are immutable. */
 export function checkpointChatVariablesInTransaction(
   store: Store,
   sourceId: string,

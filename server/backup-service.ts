@@ -24,7 +24,6 @@ const defaults: BackupSettings = {
 };
 type SavedState = Pick<BackupStatus, 'status' | 'lastSuccess' | 'error' | 'warning'>;
 
-/** A daily wall time in Korea; no cron language or host timezone dependency. */
 export function nextBackupAt(now: Date, hour: number, minute: number): string {
   const korea = new Date(now.getTime() + 9 * 60 * 60 * 1000);
   let at = Date.UTC(
@@ -49,7 +48,6 @@ async function syncDirectory(path: string) {
 }
 async function syncFile(path: string) {
   // Windows requires a writable file handle for FlushFileBuffers/fsync semantics.
-  // Snapshot durability belongs to the creator; the verification worker stays read-only.
   const handle = await open(path, 'r+');
   try {
     await handle.sync();
@@ -199,9 +197,7 @@ export class BackupService {
           Number.isFinite(Date.parse(manifest.createdAt))
         )
           result.push(manifest);
-      } catch {
-        /* Incomplete or unrelated directories are never advertised or deleted. */
-      }
+      } catch {}
     }
     return result.sort(
       (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)
@@ -282,7 +278,6 @@ export class BackupService {
       await syncDirectory(this.directory);
       this.state = { status: 'idle', lastSuccess: manifest, error: null, warning: null };
       this.save(STATE, this.state);
-      // Retention only follows a durable new success and only owns validated snapshot folders.
       try {
         for (const older of (await this.list()).slice(this.settings().retain)) {
           if (older.id !== id) await rm(join(this.directory, older.id), { recursive: true });

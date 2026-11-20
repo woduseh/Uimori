@@ -56,9 +56,7 @@ export function deletePreparedRisuImport(dbPath: string, id: string) {
     const info = lstatSync(path);
     if (info.isDirectory() && !info.isSymbolicLink())
       rmSync(path, { recursive: true, force: true });
-  } catch {
-    // A cleanup failure must not undo a successful response; expiry pruning retries it.
-  }
+  } catch {}
 }
 export function discardPreparedRisuImport(dbPath: string, id: string) {
   if (active.has(pathFor(dbPath, id))) throw new HttpError(409, 'RISU_IMPORT_BUSY');
@@ -83,7 +81,6 @@ export function readPreparedRisuImport(dbPath: string, id: string): PreparedRisu
       })
   )
     throw new HttpError(409, 'RISU_IMPORT_DRAFT_CHANGED');
-  // The manifest is server-created; derive every binary path rather than following stored paths.
   value.images = value.images.map((image) => {
     if (!/^[a-f0-9]{64}$/u.test(image.hash)) throw new HttpError(409, 'RISU_IMPORT_DRAFT_CHANGED');
     return { ...image, path: join(path, `${image.hash}.image`) };
@@ -103,13 +100,10 @@ export function prunePreparedRisuImports(dbPath: string) {
         info.mtimeMs < Date.now() - UPLOAD_MAX_AGE_MS
       )
         deletePreparedRisuImport(dbPath, id);
-    } catch {
-      // A concurrently removed or inaccessible directory can be retried later.
-    }
+    } catch {}
   }
 }
 
-/** Compatibility for clients that return only a preview digest; paths and blobs remain server-owned. */
 export function findPreparedRisuImport(
   dbPath: string,
   digest: string,
@@ -203,7 +197,6 @@ async function worker(input: unknown, signal?: AbortSignal) {
     });
   });
 }
-/** Large preparation has one accountable owner; an overlapping request cannot multiply peak memory. */
 export async function prepareStoredRisuImport(
   dbPath: string,
   value: unknown,
@@ -233,15 +226,12 @@ export async function prepareStoredRisuImport(
         signal
       );
       checkImportPreparation(signal);
-      // Publish only completed metadata. Failed/cancelled reviews keep the previous manifest.
       renameSync(join(workspace, 'manifest.next.json'), join(workspace, 'manifest.json'));
       return readPreparedRisuImport(dbPath, prior.id).preview;
     } finally {
       try {
         rmSync(join(workspace, 'manifest.next.json'), { force: true });
-      } catch {
-        // Any abandoned candidate expires with its workspace.
-      }
+      } catch {}
       active.delete(workspace);
       release();
     }

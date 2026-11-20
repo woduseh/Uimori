@@ -28,7 +28,6 @@ function itemKey(value: unknown): LibraryItemKey {
   return { kind: item.kind, id: text(item.id, 'library item ID', 100) };
 }
 
-/** Chosen folder covers sit beside the folder rows, so the schema version stays unchanged. */
 export function initLibraryFolderCovers(db: DatabaseSync) {
   db.exec(`CREATE TABLE IF NOT EXISTS library_folder_covers(
     folder_id TEXT PRIMARY KEY REFERENCES library_folders(id) ON DELETE CASCADE,
@@ -36,7 +35,6 @@ export function initLibraryFolderCovers(db: DatabaseSync) {
   )`);
 }
 
-/** Current organization is independent of immutable content revisions and execution roles. */
 export class LibraryOrganizationStore {
   readonly store: Store;
   constructor(store: Store) {
@@ -83,7 +81,6 @@ export class LibraryOrganizationStore {
       return this.snapshot();
     });
   }
-  /** Caller holds the content save/delete transaction. */
   register(kind: string, id: string, contentKind?: Content['kind']) {
     if (kind !== 'content' && kind !== 'prompt-preset') return;
     this.store.db
@@ -113,7 +110,6 @@ export class LibraryOrganizationStore {
         .run(randomUUID(), kind, title, count);
     });
   }
-  /** A replaced or removed cover is reclaimed once nothing else refers to its image. */
   private clearCover(id: string) {
     const previous = this.store.db
       .prepare('SELECT hash FROM library_folder_covers WHERE folder_id=?')

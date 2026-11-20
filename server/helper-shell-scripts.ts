@@ -1,7 +1,3 @@
-/**
- * Bundled helper workspace scripts. They are written into each task workspace as ordinary
- * files, so the helper may run, read or adapt them; they are conveniences, not app operations.
- */
 export const REPETITION_SCRIPT =
   String.raw`#!/usr/bin/env python3
 """Find phrases repeated across recent scenes of an exported chat.

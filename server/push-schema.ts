@@ -1,7 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-/** This is a notification-only delivery queue, not a second task execution system.
- * The terminal-event enqueue function owns policy, not SQL triggers. */
 export function initPushSchema(db: DatabaseSync) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS push_subscriptions(

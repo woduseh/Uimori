@@ -1,6 +1,5 @@
 import { request } from 'node:http';
 
-/** Shared UTF-8 Unix-socket transport for the existing isolated Linux runner. */
 export function shellRunnerRpc(
   socketPath: string,
   path: string,
@@ -23,7 +22,6 @@ export function shellRunnerRpc(
         let result = '';
         res.on('data', (chunk) => {
           result += chunk;
-          // A 64KB binary preview can take six JSON bytes per decoded byte.
           if (result.length > 500_000) req.destroy(new Error('SHELL_RESULT_TOO_LARGE'));
         });
         res.once('error', reject);

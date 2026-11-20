@@ -25,7 +25,6 @@ const object = (value: unknown): Record<string, unknown> | undefined =>
 const array = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 const escaped = (text: string) => JSON.stringify(text).slice(1, -1);
 
-/** Inspect string leaves only: HTTP/RPC encoders already own parsing and serialization. */
 function wireText(value: Json, result: string[] = []): string[] {
   if (typeof value === 'string') result.push(value);
   else if (Array.isArray(value)) for (const item of value) wireText(item, result);
@@ -34,7 +33,6 @@ function wireText(value: Json, result: string[] = []): string[] {
   return result;
 }
 
-/** Match the entry inside its own source block, not an equal/short body elsewhere in the request. */
 function hasLoreEntry(texts: readonly string[], item: PinnedSource): boolean {
   if (!item.risuSource?.entryId || !item.text.trim()) return false;
   const xml = serializeRisuLoreSources([item]);
@@ -57,7 +55,6 @@ function hasLoreEntry(texts: readonly string[], item: PinnedSource): boolean {
   return false;
 }
 
-/** Final wire evidence supplements known host paths; selection/catalog metadata alone proves nothing. */
 export function requestLore(
   snapshot: RunSnapshot,
   request: ProviderRequest,
@@ -69,7 +66,6 @@ export function requestLore(
   }
 ): RequestLore {
   if (options.sourceOnly) return { status: 'complete', entries: [] };
-  // Labels do not require another package compilation or token-budget calculation.
   const resources = new Map<string, LoreIdentity>();
   for (const item of [
     ...snapshot.resources.filter((entry) => entry.chatId === snapshot.chatId),
@@ -78,7 +74,6 @@ export function requestLore(
   ])
     resources.set(item.id, { ...resources.get(item.id), ...item });
   let texts: string[] | undefined;
-  // Only lore evidence needs this scan. Gemini uses objects; other adapters embed them in text.
   const evidence = () => (texts ??= [...wireText(wire.body), JSON.stringify(wire.body)]);
   const contains = (value: unknown) => {
     const text = JSON.stringify(value);
@@ -87,8 +82,6 @@ export function requestLore(
     return evidence().some((part) => part.includes(text) || part.includes(encoded));
   };
   const entries: RequestLore['entries'] = [];
-  // Both always-pinned and JEV-selected bodies share the delivery list. Keep their
-  // origin distinct using this run's frozen receipt, without recompiling packages.
   const selected = new Set<string>();
   const sourceKey = (contentId: string, role: string, entryId: string) =>
     JSON.stringify([contentId, role, entryId]);
@@ -146,8 +139,6 @@ export function requestLore(
       contains(item) || hasLoreEntry(evidence(), item) ? 'full' : 'unverified'
     );
   }
-  // Dynamic JEV bodies now travel as host reference messages rather than pinned slots.
-  // Inspect that frozen projection; do not recompile native sources just for diagnostics.
   const dynamicIds = new Set<string>();
   if (request.role === 'main')
     for (const message of request.prompt?.messages ?? []) {
@@ -243,7 +234,6 @@ export function requestLore(
   };
 }
 
-/** Old receipts cannot establish how much of the complete catalog was judged. */
 function selectionCoverage(
   snapshot: RunSnapshot,
   request: ProviderRequest
@@ -264,12 +254,10 @@ function selectionCoverage(
   return { selection: { total, evaluated, selected, ...(failed ? { failed } : {}) } };
 }
 
-/** Lore evidence recorded by the writing attempt that produced a saved scene. */
 export function sceneRequestLore(
   store: Store,
   sourceId: string
 ): { attemptId: string | null; lore: RequestLore | null } {
-  // A fork may still point at an ancestor's source. Its original invocation owns this receipt.
   const row = store.db
     .prepare(`SELECT a.id,json_extract(a.request,'$.requestLore') AS lore
     FROM sources s JOIN attempts a ON a.run_id=s.run_id

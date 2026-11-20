@@ -45,14 +45,12 @@ export async function readCharacterCardPath(
 export function readCharacterCard(
   value: unknown,
   kind?: RisuImportKind,
-  /** Reads a file the app staged for this import; a large container never enters the body. */
   readStaged?: (uploadId: string) => Buffer
 ) {
   if (kind !== undefined && kind !== 'bot' && kind !== 'persona' && kind !== 'module')
     throw new HttpError(400, 'RISU_IMPORT_KIND');
   const envelope = readImportEnvelope(value, {
     maxBytes: RISU_IMPORT_MAX_BYTES,
-    // A card declares its format in its bytes, so every name the shared rule allows is read.
     extensions: /./u,
     invalid: 'RISU_IMPORT_INVALID_FILE',
     tooLarge: 'RISU_IMPORT_TOO_LARGE',
@@ -222,8 +220,6 @@ function finishCharacterCard(
     );
     const extensions = card.extensions == null ? {} : record(card.extensions);
     const risu = extensions.risuai == null ? {} : record(extensions.risuai);
-    // This is the card's serialized script/lore section, not another attached package.
-    // Empty arrays deliberately replace inline data; only absent/null lore falls back.
     card = {
       ...card,
       assets: [...(Array.isArray(card.assets) ? card.assets : []), ...moduleAssets],

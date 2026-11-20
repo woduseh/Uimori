@@ -36,8 +36,6 @@ const client = (value: unknown) => {
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new HttpError(400, '브라우저 식별자를 확인해 주세요.');
   return id;
 };
-/** Validate ownership using only IDs. Content hashes are snapshot hints, verified by the reader;
- * a frequent progress write must not hydrate or tokenize a multi-megabyte scene. */
 export function validateReaderTarget(store: Store, chatId: string, value: unknown): ReaderTarget {
   const body = record(value);
   fields(body, [
@@ -284,14 +282,12 @@ export function restoreBookmarks(
     )
       throw new HttpError(400, '읽기 위치를 확인해 주세요.');
     let anchor: string | undefined;
-    // Original text retained exactly can preserve its paragraph after new source IDs are assigned.
     if (
       body.representation === 'original' &&
       body.contentHash === source.hash &&
       body.blockIndex !== undefined
     )
       anchor = source.blocks?.[Number(body.blockIndex)]?.anchor;
-    // Translation targets keep the snapshot hash; when no stable copied paragraph exists, resume at the scene.
     addBookmark(store, chatId, {
       id: randomUUID(),
       target: {

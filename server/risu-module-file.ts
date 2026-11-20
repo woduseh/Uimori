@@ -15,7 +15,6 @@ const object = (value: unknown): Record<string, unknown> => {
   return value as Record<string, unknown>;
 };
 
-/** Decode only a CharX embedded module in memory; never execute or resolve its contents. */
 export function readEmbeddedRisuModule(bytes: Buffer): {
   module: Record<string, unknown>;
   assets: Buffer[];

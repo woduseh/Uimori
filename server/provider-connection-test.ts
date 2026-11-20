@@ -46,10 +46,6 @@ type TestOptions = Pick<
   track: (work: Promise<void>) => void;
 };
 export type ConnectionTestRunner = {
-  /**
-   * Admits a test, or returns the earlier one for the same idempotency key without sending again.
-   * `stillAuthorized` throws a ProviderContractError once the caller may no longer spend on it.
-   */
   start(
     modelId: string,
     body: unknown,
@@ -58,11 +54,6 @@ export type ConnectionTestRunner = {
   get(id: string): ProviderConnectionTest;
 };
 
-/**
- * A fixed tiny prompt and one transport call with the preset's own options, so the provider's
- * answer is a verdict on those options. Only output size, cache and tools are trimmed; saved
- * creative controls never enter this request.
- */
 export function connectionTestRequest(model: ModelPreset, connection: Connection): ProviderRequest {
   const generation: ModelGeneration = { ...generationFromModel(model), maxOutputTokens: 256 };
   if (protocolOptionKeys(connection.protocol).includes('cacheMode')) {
@@ -176,7 +167,6 @@ export class ProviderConnectionTestStore {
     });
   }
   sent(id: string) {
-    // Persist the boundary before sending. A second transport send is prohibited even within one executor.
     const change = this.store.db
       .prepare(
         "UPDATE provider_connection_tests SET sent_at=? WHERE id=? AND status='running' AND sent_at IS NULL"

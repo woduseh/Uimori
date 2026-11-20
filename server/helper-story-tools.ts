@@ -71,7 +71,6 @@ export type HelperStoryEffects = {
   requireTranslationModel: (jobId: string) => void;
 };
 
-/** Called inside workspace.operation; started names the work to wake after that commit. */
 export function requestHelperStory(
   store: Store,
   workspace: HelperWorkspace,

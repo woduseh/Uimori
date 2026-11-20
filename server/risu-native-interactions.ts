@@ -33,7 +33,6 @@ const visible = ({ id, runId, kind, prompt, choices }: Pending): NativeInteracti
   ...(choices ? { choices } : {}),
 });
 
-/** Suspend the original invocation; answering never reruns a script or a paid model call. */
 export function requestNativeInteraction(
   store: Store,
   runId: string,

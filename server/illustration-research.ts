@@ -60,7 +60,6 @@ export const ILLUSTRATION_RESEARCH_TOOLS: ProviderTool[] = [
   },
 ];
 
-/** Native resource reader shared with helper, operating exclusively on reservation evidence. */
 export function illustrationResearch(snapshot: RunSnapshot, input: IllustrationJobInput) {
   const attachments = input.research?.attachments ?? snapshot.profile?.packageAttachments ?? [];
   const documents = (input.research?.packages ?? snapshot.profile?.packages ?? [])
@@ -142,7 +141,6 @@ export function illustrationResearch(snapshot: RunSnapshot, input: IllustrationJ
     };
     for (const document of documents) {
       walk(document.id, document.model.package.nativeRisu, '/package/nativeRisu');
-      // Legacy packages can carry description/body outside their native card.
       walk(document.id, document.model.text, '/text');
       walk(document.id, document.model.description, '/description');
     }

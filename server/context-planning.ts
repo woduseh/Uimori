@@ -10,7 +10,6 @@ import { buildMainProviderRequest, measureProviderRequest } from './main-request
 import type { Store } from './store.js';
 import type { ModelSnapshot } from '../core/product.js';
 
-/** Persist context work without replacing the immutable behavior reservation with its runtime view. */
 export function persistedContextSnapshot(
   reserved: RunSnapshot,
   prepared: RunSnapshot
@@ -113,8 +112,6 @@ export function measureMainContext(snapshot: RunSnapshot): {
     const built = buildMainProviderRequest(snapshot);
     const target = built.snapshot.profile!.models.main!;
     let estimatedInputTokens = measureProviderRequest(built.request, target).estimatedInputTokens;
-    // Shared preparation also serves helper artifacts and the economized bootstrap.
-    // Cover both Codex envelopes without persisting a transport mode in story state.
     if (target.connection.protocol === 'codex-app-server-v1')
       estimatedInputTokens = Math.max(
         estimatedInputTokens,
@@ -136,8 +133,6 @@ export function measureMainContext(snapshot: RunSnapshot): {
     throw error;
   }
 }
-/** Called on a history-free feasibility projection. Remove only retained reads,
- * so long raw conversations alone cannot evict otherwise affordable references. */
 export function fitFixedLoreContext(snapshot: RunSnapshot): RunSnapshot {
   const context = snapshot.loreContext,
     limit = snapshot.contextPlan?.budget.inputTokenLimit;
@@ -244,7 +239,6 @@ export function validateContextPlan(snapshot: RunSnapshot): void {
   )
     throw new Error('INVALID_CONTEXT_USAGE');
 }
-/** Read the captured immutable checkpoint, never reselect using today's active pointer. */
 export function previousContextPlan(store: Store, snapshot: RunSnapshot): ContextPlan | undefined {
   return store.context.previous(snapshot);
 }

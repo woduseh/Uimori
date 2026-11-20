@@ -29,7 +29,6 @@ type Writing = {
   createdAt: string;
 };
 
-/** Intent reads need one node; tree navigation needs only structural metadata, never full prose. */
 function outlineState(store: Store, chatId: string, onlyNode: string | null) {
   const chat = store.chat(chatId);
   const nodes = store.db
@@ -85,7 +84,6 @@ function metadata(node: Node) {
   };
 }
 
-/** One query for the selected page, rather than a text query per node. */
 function previews(store: Store, nodes: Node[]) {
   const rows = store.db
     .prepare(`SELECT id,length(intent) AS codePoints,substr(intent,1,160) AS preview
@@ -193,7 +191,6 @@ export function outlineNextRead(chatId: string, args: Record<string, Json>) {
   return { name: 'app.call', arguments: { name: 'outline.read', arguments: { ...args, chatId } } };
 }
 
-/** Live outline pages are bound to their selected scope, not unrelated edits elsewhere in the chat. */
 export function readHelperOutline(
   store: Store,
   chatId: string,
@@ -266,7 +263,6 @@ export function readHelperOutline(
             all.map((item) => item.node)
           )
         : [];
-    // A version belongs to this query's data: changing an unrelated sibling cannot invalidate it.
     const versionNodes =
       section === 'intent'
         ? [target!]

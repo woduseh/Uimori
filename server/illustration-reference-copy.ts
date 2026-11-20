@@ -6,7 +6,6 @@ import { fields, HttpError, record, text } from './request-validation.js';
 
 type PortableReferences = NonNullable<ChatCopyState['illustrationReferences']>;
 
-/** Referenced image bytes belong to the copy, not to the original chat's asset rows. */
 export function captureIllustrationReferences(
   store: Store,
   chatId: string,
@@ -37,7 +36,6 @@ export function captureIllustrationReferences(
   return { references, characterProfiles, images };
 }
 
-/** Imported packages get new identities; their image IDs and attachment roles stay stable. */
 export function remapIllustrationPackageReferences(
   copy: PortableReferences,
   remap: Map<string, string>
@@ -55,7 +53,6 @@ export function remapIllustrationPackageReferences(
   }));
 }
 
-/** Check archive fields before processing embedded images; full reference validation occurs on save. */
 export function checkedPortableIllustrationReferences(value: unknown): PortableReferences {
   const body = record(value);
   fields(body, ['references', 'characterProfiles', 'images']);

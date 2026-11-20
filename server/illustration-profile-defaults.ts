@@ -4,7 +4,6 @@ import { readIllustrationAppearanceProfiles } from '../core/illustration-profile
 import { resolvePackageProfile } from './package-features.js';
 import type { Store } from './store.js';
 
-/** Resolve live shared defaults once at admission; reserved jobs already freeze the result. */
 export function defaultIllustrationProfiles(
   store: Store,
   chatId: string
@@ -32,7 +31,6 @@ export function defaultIllustrationProfiles(
 }
 export { inheritIllustrationProfiles } from '../core/illustration-profiles.js';
 
-/** Retain storyboard identities on redraw while explicit current profiles remain authoritative. */
 export function redrawIllustrationCanon(
   canon: { name: string; appearance: string }[] | undefined,
   profiles: IllustrationCharacterProfile[]

@@ -2,7 +2,6 @@ import { RISU_IMPORT_MAX_ASSETS, RISU_IMPORT_MAX_LORE_ENTRIES } from '../core/ri
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { HttpError, record, text } from './request-validation.js';
 
-/** One lore mapping for extracted projects and the canonical lore in CharX containers. */
 export function moduleLoreEntries(lorebook: unknown) {
   if (!Array.isArray(lorebook) || lorebook.length > RISU_IMPORT_MAX_LORE_ENTRIES)
     throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
@@ -38,8 +37,6 @@ export function moduleLoreEntries(lorebook: unknown) {
               .map((key: string) => key.trim())
               .filter(Boolean)
           : [],
-      // Module lore is already in Risu's database shape, so its activation fields map onto the card
-      // fields the lorebook conversion reads rather than into an extension bag nothing reads back.
       secondary_keys:
         typeof entry.secondkey === 'string'
           ? entry.secondkey
@@ -59,7 +56,6 @@ export function moduleLoreEntries(lorebook: unknown) {
   });
 }
 
-/** Interpret the documented JSON envelope, independently of its binary container codec. */
 export function moduleJsonDocument(
   value: unknown,
   members = new Map<string, () => Buffer>(),

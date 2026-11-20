@@ -2,7 +2,6 @@ import { pruneSourceEdits } from './text-retention.js';
 import { pruneContextHistory } from './context-retention.js';
 import type { DatabaseSync } from 'node:sqlite';
 
-/** Keep billing and error summaries, not a second copy of every model conversation. */
 function releaseAttemptBodies(db: DatabaseSync, scope: 'run' | 'job' | 'helper', id: string): void {
   const predicate =
     scope === 'helper'
@@ -26,7 +25,6 @@ function releaseAttemptBodies(db: DatabaseSync, scope: 'run' | 'job' | 'helper',
 export function releaseCompletedRunInputs(db: DatabaseSync, runId: string): void {
   db.prepare('DELETE FROM model_inputs WHERE run_id=?').run(runId);
   db.prepare('DELETE FROM tool_events WHERE run_id=?').run(runId);
-  // Once the source is committed, the raw Batch result is duplicate story text. Keep only recovery metadata.
   db.prepare('UPDATE anthropic_batches SET result=NULL WHERE run_id=?').run(runId);
   releaseAttemptBodies(db, 'run', runId);
   pruneContextHistory(db);
@@ -36,7 +34,6 @@ export function releaseCompletedRunInputs(db: DatabaseSync, runId: string): void
 
 const ENDED_RUN_SNAPSHOTS_RELEASED = 'ended-run-snapshots-released';
 
-/** Runs that ended before this release kept their whole frozen input; release them once. */
 export function releaseEndedRunSnapshots(db: DatabaseSync, release: (runId: string) => void): void {
   if (db.prepare('SELECT 1 FROM app_metadata WHERE key=?').get(ENDED_RUN_SNAPSHOTS_RELEASED))
     return;
@@ -47,7 +44,6 @@ export function releaseEndedRunSnapshots(db: DatabaseSync, release: (runId: stri
   db.prepare('INSERT INTO app_metadata VALUES(?,?)').run(ENDED_RUN_SNAPSHOTS_RELEASED, '1');
 }
 
-/** Retain image catalogs/targets and translation settings used by display and dependent jobs. */
 export function releaseCompletedJobInputs(db: DatabaseSync, jobId: string): void {
   db.prepare(`UPDATE jobs SET input=json_remove(input,'$.initial','$.inputs','$.toolEvents',
     '$.failureDiagnostic','$.judgmentRecovery') WHERE id=? AND status='completed' AND json_valid(input)`).run(
@@ -56,7 +52,6 @@ export function releaseCompletedJobInputs(db: DatabaseSync, jobId: string): void
   releaseAttemptBodies(db, 'job', jobId);
 }
 
-/** Successful helper conversation text is in helper_messages; failed requests keep retry inputs. */
 export function releaseCompletedHelperInputs(db: DatabaseSync, taskId: string): void {
   db.prepare(`UPDATE helper_tasks SET snapshot=json_set(json_remove(snapshot,
     '$.writing','$.outline','$.editor','$.selection','$.contextModel'),'$.history',json('[]'))

@@ -39,7 +39,6 @@ function currentDependencies(store: Store, snapshot: RunSnapshot): boolean {
     return false;
   }
 }
-/** Validate the run being committed while its frozen inputs and tool receipts still exist. */
 function loreRunIsCurrent(store: Store, run: Run): boolean {
   if (
     run.status !== 'completed' ||
@@ -62,7 +61,6 @@ function loreRunIsCurrent(store: Store, run: Run): boolean {
     return false;
   }
 }
-/** Verify the current run's main reads before its tool events are released. */
 export function verifiedRunLoreReads(store: Store, run: Run): RetainedLore[] {
   if (!loreRunIsCurrent(store, run)) return [];
   const source = store.sourceOriginal(run.sourceRevision!),
@@ -122,9 +120,7 @@ export function verifiedRunLoreReads(store: Store, run: Run): RetainedLore[] {
           lastUsed: source.id,
         });
       }
-    } catch {
-      /* Invalid or failed events carry no retention authority. */
-    }
+    } catch {}
   }
   return result;
 }
@@ -151,7 +147,6 @@ function allowedEntry(
     )
   );
 }
-/** Select retained reads against this run's frozen resources and source ancestry. */
 export function selectLoreContext(
   snapshot: RunSnapshot,
   input: {
@@ -203,7 +198,6 @@ export function selectLoreContext(
   );
   const permitted = (entries: RetainedLore[]) =>
     entries.filter((entry) => {
-      // Selection admission is an execution projection, never a reason to erase earlier reads.
       const allowed =
         (!pinned.has(entry.id) || selectedIds.has(entry.id) || entry.retention === 'selection') &&
         allowedEntry(entry, resources, dependencies);
@@ -243,7 +237,6 @@ export function selectLoreContext(
   };
 }
 
-/** Read-only selection. The host freezes the returned context in the Run transaction. */
 export function freezeLoreContext(store: Store, snapshot: RunSnapshot): RunSnapshot {
   const canonHash = store.story.notes.canonHash(
     store.story.notes.scope(snapshot.chatId, snapshot.parentRevision)
@@ -262,9 +255,7 @@ export function freezeLoreContext(store: Store, snapshot: RunSnapshot): RunSnaps
         retained.sourceHash === original.hash &&
         original.hash === current.hash &&
         isDeepStrictEqual(retained.context.dependencies, loreDependencies(snapshot).slice(0, -1));
-    } catch {
-      // A missing or changed parent cannot authorize retained text.
-    }
+    } catch {}
   }
   const compacted = retained
     ? (store.context.previous(snapshot.contextPlan ? snapshot : seedContextPlan(snapshot))

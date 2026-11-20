@@ -499,7 +499,6 @@ const TOOLS: ProviderTool[] = [
     ),
   },
 ];
-/** Context selects default IDs, never a permission boundary. */
 const chatToolNames = new Set([
   'settings.read',
   'settings.update',
@@ -557,7 +556,6 @@ const readNames = new Set([
   'chat.preview',
   'chat.variables.read',
 ]);
-/** Tools whose read/write effect depends on their action argument. */
 const conditionalNames = new Set(['chat.lore', 'library.organize']);
 const writingNames = new Set([
   ...writingReadNames,
@@ -567,7 +565,6 @@ const writingNames = new Set([
   'notes.write',
 ]);
 
-/** Shared dispatch/discovery policy; conditional tools keep their action-specific effects. */
 export function helperToolTraits(name: string, args: Record<string, unknown> = {}) {
   const data = dataToolNames.has(name);
   const writingRead = writingReadNames.has(name);
@@ -579,7 +576,6 @@ export function helperToolTraits(name: string, args: Record<string, unknown> = {
   );
   return {
     readOnly,
-    /** Catalog effect; conditional tools are mixed until an action is supplied. */
     effect: (conditionalNames.has(name) && args.action === undefined
       ? 'mixed'
       : readOnly
@@ -621,10 +617,6 @@ export const HELPER_APP_TOOLS: ProviderTool[] = [
   };
 });
 
-/**
- * Operation areas in catalog order, most used first. The model sees this index with the gateway,
- * so it can name an operation without a lexical search; every registered area needs an entry.
- */
 export const HELPER_OPERATION_AREAS: readonly (readonly [area: string, purpose: string])[] = [
   ['data', 'search and read text in the library, chats, editor input and this conversation'],
   ['resource', 'saved bots, personas, modules, prompt presets and themes'],
@@ -737,7 +729,6 @@ export function helperGatewayTools(review: boolean): ProviderTool[] {
   return review ? REVIEW_GATEWAY_TOOLS : HELPER_GATEWAY_TOOLS;
 }
 
-/** Search synonyms supplement owning descriptions; they are not execution aliases. */
 const discoveryTerms: Record<string, string> = {
   'resource.read':
     'shared library inspect open view show character card bot persona module lorebook lore entry greeting system prompt preset 기본 외형 프로필 라이브러리',
@@ -773,7 +764,6 @@ const searchStopWords = new Set(
     ' '
   )
 );
-/** Split camelCase and normalize ordinary English plurals, preserving other languages. */
 function searchWords(text: string) {
   return text
     .replace(/([\p{Ll}\p{N}])(\p{Lu})/gu, '$1 $2')
@@ -789,7 +779,6 @@ function searchWords(text: string) {
     );
 }
 
-/** Index schema vocabulary, never example values or enum payloads. */
 function* schemaSearchText(schema: Json): Generator<string> {
   if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return;
   if (typeof schema.description === 'string') yield schema.description;
@@ -808,7 +797,6 @@ function* schemaSearchText(schema: Json): Generator<string> {
 }
 const searchIndex = new Map(
   HELPER_APP_TOOLS.map((tool) => {
-    // Names and explicit synonyms outweigh incidental references in usage guidance.
     const primary = searchWords(`${tool.name} ${discoveryTerms[tool.name] ?? ''}`);
     const words = [
       ...primary,
@@ -822,7 +810,6 @@ const searchIndex = new Map(
   })
 );
 
-/** BM25 over the allowed registry. Length normalization stays mild: a long description here reflects a complex operation, not an unfocused one. */
 function searchHelperTools(allowed: ProviderTool[], query: string, scope?: 'chat' | 'library') {
   const exact = HELPER_APP_TOOLS.find(
     (tool) => tool.name.toLowerCase() === query.trim().toLowerCase()
@@ -859,8 +846,6 @@ function searchHelperTools(allowed: ProviderTool[], query: string, scope?: 'chat
   }
   const applicability = (tool: ProviderTool) =>
     Number(scope !== undefined && chatToolNames.has(tool.name) === (scope === 'chat'));
-  // Preserve precise keyword combinations; partial matches remain available
-  // when ordinary intent words have no literal counterpart in the registry.
   return allowed
     .filter((tool) => scores.get(tool.name)! > 0)
     .sort(

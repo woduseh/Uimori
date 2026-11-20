@@ -64,7 +64,6 @@ export const HELPER_ILLUSTRATION_REFERENCE_TOOLS: ProviderTool[] = [
   },
 ];
 
-/** Promotion and role changes share a transaction so a rejected batch leaves no unused assets. */
 export function saveIllustrationReferenceAssignments(
   store: Store,
   chatId: string,

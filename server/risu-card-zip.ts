@@ -11,7 +11,6 @@ export const invalidCard = (): never => {
 };
 export type CardRangeReader = (offset: number, length: number) => Buffer;
 
-/** ZIP offsets are relative to the archive, including archives appended to JPEG covers. */
 export function readCardZip(fileSize: number, read: CardRangeReader): Map<string, () => Buffer> {
   const tailStart = Math.max(0, fileSize - 65_557),
     tail = read(tailStart, fileSize - tailStart);

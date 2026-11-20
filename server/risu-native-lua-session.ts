@@ -138,8 +138,6 @@ class Session {
     }
     const current = this.current;
     this.pending = true;
-    // Host operations own their deadlines (model timeout or UI cancellation).
-    // Time spent awaiting them is separate from local Lua execution and idle reuse.
     clearTimeout(this.timer);
     const operation = (async () => {
       try {
@@ -173,8 +171,6 @@ class Session {
     if (options.signal?.aborted) return Promise.reject(failure('RISU_NATIVE_ABORTED'));
     if (executing >= 8) return Promise.reject(failure('RISU_NATIVE_BUSY'));
     if (this.ownerAbort) this.ownerSignal?.removeEventListener('abort', this.ownerAbort);
-    // The owning run can still be awaiting a model while its Lua VM is idle.
-    // Its cancellation must discard those locals before another run can reuse them.
     this.owner = options.sessionOwner;
     this.ownerSignal = options.signal;
     this.ownerAbort = options.signal
@@ -250,7 +246,6 @@ export function disposeNativeRisuChatSessions(chatId: string) {
   for (const [key, session] of sessions) if (key.startsWith(`native:${chatId}:`)) session.dispose();
 }
 
-/** One sandbox per caller-owned chat/branch/revision session; invocations serialize per key. */
 export async function runNativeRisuLua(
   source: string,
   input: unknown,
@@ -263,7 +258,6 @@ export async function runNativeRisuLua(
   const fingerprint = createHash('sha256').update(source).digest('hex');
   const key = options.sessionKey;
   const run = async () => {
-    // Do not install an ownerless, idle session when admission itself fails.
     if (options.signal?.aborted) throw failure('RISU_NATIVE_ABORTED');
     if (executing >= 8) throw failure('RISU_NATIVE_BUSY');
     let session = key ? sessions.get(key) : undefined;

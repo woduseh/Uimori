@@ -9,7 +9,6 @@ type PatchItem = {
   changes: unknown[];
 };
 
-/** Adds the failing resource without discarding the single-patch diagnostic. */
 export class HelperResourceBatchError extends HttpError {
   readonly itemIndex: number;
   readonly kind: PatchItem['kind'] | undefined;
@@ -29,7 +28,6 @@ export class HelperResourceBatchError extends HttpError {
   }
 }
 
-/** Validate all identities before reading mutation snapshots or writing any batch member. */
 export function helperResourceBatchItems(rawItems: unknown): PatchItem[] {
   if (!Array.isArray(rawItems) || !rawItems.length || rawItems.length > 16)
     throw new HttpError(400, '수정할 자료는 1개부터 16개까지 지정해 주세요.');

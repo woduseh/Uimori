@@ -233,8 +233,6 @@ export function listIllustrationCuts(store: Store, chatId: string, args: Args) {
     args.sourceId === undefined
       ? undefined
       : helperSceneSource(store, chatId, text(args.sourceId, 'source ID', 100));
-  // Count cut identities first. Scenes outside the requested page need no
-  // manuscript, job recipe, diagnostics or generated-image metadata.
   const scenes = store.db
     .prepare(`WITH RECURSIVE chain(id) AS (
     SELECT ? UNION SELECT s.parent_revision FROM sources s JOIN chain ON s.id=chain.id WHERE s.parent_revision IS NOT NULL
@@ -295,7 +293,6 @@ export function listIllustrationCuts(store: Store, chatId: string, args: Args) {
   });
   return { chatId, cuts, total, nextOffset: offset + limit < total ? offset + limit : null };
 }
-/** An immutable completed variation is chat-owned. Metadata lookup never loads its pixels. */
 export function resolveIllustrationCutImage(store: Store, chatId: string, imageId: string) {
   const image = store.db
     .prepare(`SELECT i.id AS imageId,i.job_id AS jobId,j.source_revision AS sourceId,
@@ -331,7 +328,6 @@ export function inspectIllustrationCut(store: Store, chatId: string, args: Args)
   const key = row.input.target?.id ?? row.id;
   const placement = presentation?.targets[key] ?? presentation?.detached?.[key];
   const currentTarget = placement?.placedTarget ?? row.input.target;
-  // A copied picture has placement notes but no original generation recipe.
   const generator: string = row.input.generator;
   const hasRecipe = generator !== 'none';
   const variant = projected.images.find((item) => item.id === image.imageId)!;
@@ -425,7 +421,6 @@ export function redrawIllustrationCut(store: Store, chatId: string, args: Args, 
   });
 }
 
-/** The presentation's latest-job identity is the CAS owner even when no image exists. */
 function currentCut(store: Store, chatId: string, args: Args, permitStale = false) {
   const job = illustrationJob(store, text(args.expectedLatestJobId, 'latest job ID', 100));
   if (job.chatId !== chatId || (job.input.task ?? 'render') !== 'render' || !job.input.target)

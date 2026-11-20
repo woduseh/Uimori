@@ -104,12 +104,10 @@ async function judge(
     });
     return { warning: result.scores.explicitSexualContent! >= CODEX_CONTENT_WARNING_THRESHOLD };
   } catch {
-    // Interactive requests stay advisory; automatic Codex translation must await confirmation.
     return { warning: conservative };
   }
 }
 
-/** The automatic path has no user present to accept a Codex content warning. */
 export async function autoTranslationNeedsConfirmation(
   model: ModelSnapshot | undefined,
   source: string,
@@ -145,8 +143,6 @@ function mainTarget(
   const run = store.run(id);
   if (run.chatId !== chatId) throw new HttpError(404, 'Run not found');
   return {
-    // Retries intentionally use today's model selection, while their story context starts
-    // from the original run's parent revision. Keep preflight aligned with that behavior.
     model: store.product.snapshot(chatId, 'main').models.main,
     context: run.parentRevision
       ? textTokenExcerpt(store.source(run.parentRevision).text, RECENT_CONTEXT_TOKENS, {

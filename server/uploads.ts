@@ -16,7 +16,6 @@ import { HttpError } from './request-validation.js';
 import { RISU_IMPORT_MAX_UPLOAD_BYTES } from '../core/risu-import.js';
 import { ownedImportStagingRoot } from './import-preparation.js';
 
-/** A staged import file lives next to the database, never inside a request body or the archive. */
 export const UPLOAD_MAX_BYTES = RISU_IMPORT_MAX_UPLOAD_BYTES;
 export const UPLOAD_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const ID = /^[a-f0-9]{32}$/u;
@@ -29,7 +28,6 @@ function uploadPath(dbPath: string, id: string): string {
   return join(uploadDirectory(dbPath), `${id}.bin`);
 }
 
-/** Removes staged files that no import consumed, so a cancelled review leaves no copy behind. */
 export function pruneUploads(dbPath: string, maxAgeMs = UPLOAD_MAX_AGE_MS): void {
   const directory = uploadDirectory(dbPath);
   if (!ownedImportStagingRoot(dbPath, directory)) return;
@@ -41,9 +39,7 @@ export function pruneUploads(dbPath: string, maxAgeMs = UPLOAD_MAX_AGE_MS): void
       const info = lstatSync(path);
       if (info.isFile() && !info.isSymbolicLink() && info.mtimeMs < cutoff)
         rmSync(path, { force: true });
-    } catch {
-      /* A file another request is replacing stays for the next prune. */
-    }
+    } catch {}
   }
 }
 
@@ -111,7 +107,6 @@ export function deleteUpload(dbPath: string, id: string): void {
   }
 }
 
-/** Streams one import file to disk. The body never becomes a parsed value or a base64 string. */
 export function uploadRoutes(app: FastifyInstance, dbPath: string) {
   app.addContentTypeParser('application/octet-stream', (_request, payload, done) =>
     done(null, payload)

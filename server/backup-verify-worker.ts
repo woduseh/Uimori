@@ -4,7 +4,6 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 
-// Standalone worker: validation and hashing do not block model streaming or cancellation.
 const { path, maxSchema } = workerData as { path: string; maxSchema: number };
 const db = new DatabaseSync(path, { readOnly: true });
 let schema: number;

@@ -2,7 +2,6 @@ import type { Store } from './store.js';
 import { prunePreparedArchives } from './native-transfer-archive.js';
 import { prunePreparedRisuImports } from './risu-import-prepared.js';
 
-/** Expired previews are inaccessible after one day; remove their files without another import. */
 export function startImportStagingCleanup(
   store: Store,
   canRun: () => boolean = () => true
@@ -21,7 +20,6 @@ export function startImportStagingCleanup(
       try {
         prune();
       } catch {
-        // A failure in one staging root must not block startup or the other root.
         process.stderr.write('IMPORT_STAGING_CLEANUP_DEFERRED\n');
       }
     }

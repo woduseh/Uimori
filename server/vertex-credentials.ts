@@ -63,13 +63,11 @@ function validateAccount(
     throw new HttpError(400, '서비스 계정과 API 주소의 프로젝트가 달라요.');
 }
 
-/** Validate a draft without writing it; only non-secret metadata goes back to the browser. */
 export function inspectVertexAccount(value: unknown) {
   const account = inputAccount(value);
   return { projectId: account.project_id, clientEmail: account.client_email };
 }
 
-/** Normalize a draft account for validation and storage with the connection. */
 export function prepareVertexAccount(value: unknown) {
   const account = inputAccount(value);
   return {
@@ -78,7 +76,6 @@ export function prepareVertexAccount(value: unknown) {
   };
 }
 
-/** Validate a connection against the saved account or the account being committed with it. */
 export function validateVertexCredential(
   keys: CredentialStore,
   connection: Pick<ProviderConnection, 'protocol' | 'endpoint' | 'credentialRef'>,
@@ -91,7 +88,6 @@ export function validateVertexCredential(
   validateAccount(connection, accountValue(JSON.parse(saved)));
 }
 
-/** Uploaded account data belongs to the app DB; short-lived OAuth tokens stay in this adapter. */
 export class VertexCredentialStore {
   private readonly keys: CredentialStore;
   private readonly clients = new Map<string, GoogleAuth>();
@@ -109,7 +105,6 @@ export class VertexCredentialStore {
     validateVertexCredential(this.keys, connection);
   }
 
-  /** Use the same Vertex credential as generation for non-generating metadata requests. */
   async accessToken(connection: ProviderConnection, signal: AbortSignal): Promise<string> {
     if (isVertexAdcReference(connection.credentialRef)) return vertexAccessToken(signal);
     const reference = connection.credentialRef;

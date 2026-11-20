@@ -1,8 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-/** Replaced summaries have no archive purpose; protect only current heads and retryable captures.
- * Do not collect during an in-flight provider call that may still hold a captured reference.
- */
 export function pruneContextHistory(db: DatabaseSync): void {
   for (const table of ['runs', 'context_jobs', 'helper_tasks', 'helper_artifact_jobs'])
     if (db.prepare(`SELECT 1 FROM ${table} WHERE status IN ('queued','running') LIMIT 1`).get())

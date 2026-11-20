@@ -50,14 +50,11 @@ export function discardRisuImport(dbPath: string, value: unknown) {
     if (id !== undefined && (typeof id !== 'string' || !/^[a-f0-9]{32}$/u.test(id)))
       throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
   }
-  // An active prepared review owns its source upload until the worker finishes.
   if (body.preparedId !== undefined) discardPreparedRisuImport(dbPath, body.preparedId);
   if (body.uploadId !== undefined) {
     try {
       deleteUpload(dbPath, body.uploadId);
-    } catch {
-      // Closing the review succeeds; upload expiry cleanup retries a locked file.
-    }
+    } catch {}
   }
   return { discarded: true };
 }
@@ -83,7 +80,6 @@ export async function applyRisuImport(
   if (body.preparedId !== undefined && typeof body.preparedId !== 'string')
     throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
   const requestKey = text(body.idempotencyKey, 'request key', 100);
-  // A response-loss retry must not touch the already-consumed staged upload.
   const operationKey = `risu-result:${requestKey}`;
   const commandDigest = bundleDigest({
     digest: text(body.digest, 'import digest', 100),
@@ -206,13 +202,10 @@ export function risuImportRoutes(app: FastifyInstance, store: Store) {
   app.post('/api/risu-imports/apply', { bodyLimit }, async (request, reply) => {
     const result = await applyRisuImport(store, request.body, readStaged);
     const source = record(record(request.body).source);
-    // The staged file has served its purpose once the material is registered.
     if (result.receipt.created && typeof source.uploadId === 'string') {
       try {
         deleteUpload(store.path, source.uploadId);
-      } catch {
-        // The import is committed; upload expiry cleanup retries a locked file.
-      }
+      } catch {}
     }
     return reply.code(result.receipt.created ? 201 : 200).send(result);
   });

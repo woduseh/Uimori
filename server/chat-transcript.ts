@@ -15,7 +15,6 @@ import { successfulTranslation } from './translation-artifacts.js';
 import { assertRequestImages } from './request-images.js';
 import { updateSceneContext } from './scene-context.js';
 
-/** User-authored data through a selected source; no execution or database-table archive. */
 export function exportChatTranscript(
   store: Store,
   chatId: string,
@@ -80,7 +79,6 @@ export type ChatTranscriptImport = {
   skippedAttachments: (ContentRef | ContentAttachment)[];
 };
 
-/** Store complete authored messages without invoking generation, native callbacks or auxiliary jobs. */
 export function importChatTranscript(store: Store, value: unknown): ChatTranscriptImport {
   const body = record(value);
   fields(body, ['transcript', 'title', 'idempotencyKey']);
@@ -114,7 +112,6 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
     });
     const bot = attachments.find((ref) => ref.role === 'bot');
     if (!bot) throw new HttpError(400, '채팅을 이어 쓸 봇이 필요해요.');
-    // Restore the transcript's attachments without applying defaults for new chats.
     const chat = store.createChat(title, { botId: bot.id, persona: null });
     const profile = store.product.profile(chat.id);
     store.product.updateProfile(chat.id, {

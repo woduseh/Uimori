@@ -422,7 +422,6 @@ export const RESOURCE_TOOLS: ProviderTool[] = resourceTools.map((definition) => 
   return tool;
 });
 
-/** Shared resource effects: draft protection and receipts follow the same tool definition. */
 export function helperResourceOperation(
   name: string,
   args: Record<string, unknown> = {}

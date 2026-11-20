@@ -6,7 +6,6 @@ import type { HelperAttachments } from './helper-attachments.js';
 
 const attached = (value: HelperAttachments) => !!(value.images?.length || value.files?.length);
 
-/** Preserve authored turn identity and native media parts; JSON references alone are not media input. */
 export function helperAttachmentPrompt(
   request: ProviderRequest,
   history: HelperTaskSnapshot['history'],

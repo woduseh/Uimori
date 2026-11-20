@@ -267,7 +267,6 @@ export async function readHelperImage(store: Store, value: unknown, signal?: Abo
   );
 }
 
-/** Transmission bytes are ephemeral: neither originals nor converted copies are written. */
 export async function prepareHelperImage<T extends object>(
   store: Store,
   sourceHash: string,

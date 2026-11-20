@@ -5,7 +5,6 @@ import type { Store } from './store.js';
 
 const activityLimit = 80;
 
-/** Read only bounded diagnostic fields, without hydrating task snapshots or tool results. */
 export function readHelperActivity(store: Store, taskId: string): HelperActivity {
   const task = store.db
     .prepare('SELECT conversation_id,status FROM helper_tasks WHERE id=?')

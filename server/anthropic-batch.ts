@@ -113,8 +113,6 @@ export function recoverableAnthropicBatchRun(store: Store, runId: string): boole
     .prepare('SELECT 1 FROM anthropic_batches WHERE run_id=? LIMIT 1')
     .get(runId);
   if (!batch) return false;
-  // Only Batch attempts have durable remote identities. Even a completed realtime
-  // call can precede its local receipt; replaying the main loop could charge it again.
   const unsafe = store.db
     .prepare(`
       SELECT 1 FROM attempts a
@@ -218,9 +216,7 @@ export class AnthropicBatchRun {
         `${endpoint}/messages/batches/${encodeURIComponent(batchId)}/cancel`,
         providerFetchOptions({ method: 'POST', headers, signal, redirect: 'error' })
       );
-    } catch {
-      // Local cancellation owns the Run state; remote cancellation is best-effort.
-    }
+    } catch {}
   }
 
   async execute(
@@ -398,9 +394,7 @@ export class AnthropicBatchRun {
                 'x-api-key': secret,
               });
             }
-          } catch {
-            // Best-effort remote cancellation must never override the local cancellation result.
-          }
+          } catch {}
         }
         return failure('CANCELLED', 'cancelled');
       }

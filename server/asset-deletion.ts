@@ -3,7 +3,6 @@ import { HttpError, fields, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 
-/** Hide from future catalogs while retaining historical image bytes and references. */
 export function deleteChatAsset(store: Store, chatId: string, assetId: string, value: unknown) {
   fields(record(value), []);
   return store.transaction(() => {

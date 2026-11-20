@@ -13,7 +13,6 @@ import type { SceneUsageReceipt } from '../core/scene-usage.js';
 import { outlineSceneTitles, sceneTitles } from './scene-titles.js';
 import { type SceneContextRow, sceneContextFromRow } from './scene-context.js';
 
-/** The failing attempt's stored provider diagnostic, read only for 4xx failures being displayed. */
 export function attemptRejection(store: Store, column: 'run_id' | 'job_id', id: string) {
   const row = store.db
     .prepare(
@@ -28,7 +27,6 @@ export function attemptRejection(store: Store, column: 'run_id' | 'job_id', id: 
   }
 }
 
-/** Metadata only; an explicit page scope includes its older completed work as well. */
 function readerActivity(
   store: Store,
   chatId: string,
@@ -79,7 +77,6 @@ function readerActivity(
     const prefix =
       row.kind === 'main' ? 'run' : row.kind === 'illustration' ? 'illustration' : 'job';
     const time = (status: string) => eventTimes.get(`${row.id}:${prefix}.${status}`);
-    // A retry can reuse a job ID; queue time identifies that new user-visible execution.
     const startedAt = row.kind === 'main' ? row.createdAt : (time('queued') ?? row.createdAt);
     const finishedAt = ['queued', 'running'].includes(row.status)
       ? null
@@ -94,7 +91,6 @@ function readerActivity(
   });
 }
 
-/** Bounded metadata history; independent of the reader's latest thirty records. */
 export function readerActivities(
   store: Store,
   id: string,
@@ -135,10 +131,8 @@ export function readerActivities(
   };
 }
 
-/** Display summaries for an explicit task panel, or the reader's selected Run IDs. */
 export function readerRuns(store: Store, id: string, scope?: string[]) {
   store.chat(id);
-  // JSON projection happens in SQLite: do not parse quadratic history or diagnostic bodies.
   const sceneUsage = new Map(
     (
       store.db
@@ -246,7 +240,6 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
   return runs;
 }
 
-/** Read projection only. Frozen execution records remain available through detail/run APIs. */
 export function readerDetail(store: Store, id: string, query: Record<string, string | undefined>) {
   fields(record(query), ['source', 'since', 'known', 'navigationCursor']);
   const chat = store.chat(id);
@@ -302,7 +295,6 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
         ].includes(kind)
     );
   const changed = changedReaderSources(store, id, events ?? []);
-  // The caller supplies only IDs from its current page; identity is scoped again by order.
   const known = new Set((query.known ?? '').split(','));
   const sources = order
     .filter((sourceId) => !events || !known.has(sourceId) || changed.has(sourceId))
@@ -333,8 +325,6 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
         return rejection ? { ...job, rejection } : job;
       });
   });
-  // One metadata scan serves navigation and selection. Off-page execution diagnostics
-  // need not be materialized for the reader.
   const indexRows = store.db
     .prepare(`SELECT id,rowid AS admissionOrder,json_extract(command,'$.retryOf') AS retryOf,source_revision AS sourceRevision,status,
     ${
@@ -367,7 +357,6 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     start + order.length < chain.length
       ? requestOrder(byId.get(order[order.length - 1])!.runId)
       : Infinity;
-  // The complete task panel loads readerRuns independently when opened.
   const pageIds = new Set(order);
   const runs = readerRuns(
     store,
@@ -394,8 +383,6 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
       );
     })
     .map((run) => run.id);
-  // Requests label the chat's complete index without loading off-page source bodies.
-  // Authored starts have no user request; never substitute generated or hidden content.
   function buildNavigation() {
     let sceneNumber = 0;
     const titles = sceneTitles(store, id);
@@ -406,8 +393,6 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
       const request = String(source.request_text ?? run?.request ?? '')
         .replace(/\s+/gu, ' ')
         .trim();
-      // 202 UTF-16 units suffice to decide whether there are more than 100 codepoints.
-      // Avoid expanding a long request into an array only to discard all but its label.
       const characters = Array.from(request.slice(0, 202));
       const opening = run?.startMode === 'authored';
       if (!opening) sceneNumber++;

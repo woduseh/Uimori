@@ -11,7 +11,6 @@ export type EncodedImage = {
   base64: string;
 };
 
-/** Bytes have one home; titles and descriptions belong to the owning resource, not this table. */
 export function storeImage(db: DatabaseSync, image: StoredImage): void {
   db.prepare(
     'INSERT INTO image_blobs(hash,mime,bytes) VALUES(?,?,?) ON CONFLICT(hash) DO NOTHING'
@@ -28,7 +27,6 @@ export function readImage(db: DatabaseSync, hash: string): StoredImage {
   };
 }
 
-/** Base64 is only an interchange representation, never the physical storage format. */
 export function encodedImage(db: DatabaseSync, hash: string): EncodedImage {
   const image = readImage(db, hash);
   return { id: hash, revision: 1, hash, mime: image.mime, base64: image.bytes.toString('base64') };

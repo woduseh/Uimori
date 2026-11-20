@@ -23,7 +23,6 @@ const refs = (history: HelperTaskSnapshot['history']) =>
     ]),
   }));
 
-/** Model reads need the active reference once, without the UI's checkpoint and job history. */
 export function readHelperChatContext(store: Store, chatId: string) {
   const current = store.context.current(chatId),
     checkpoint = current.checkpoint;
@@ -81,7 +80,6 @@ export function helperHistory(store: Store, conversationId: string): HelperTaskS
     }));
 }
 
-/** Admission and execution must select the same exact tail of a validated checkpoint. */
 export function helperHistoryForContext(
   store: Store,
   history: HelperTaskSnapshot['history'],
@@ -122,7 +120,6 @@ export function helperContext(
   return { activeRevision: Number(row?.revision ?? 0), checkpoint };
 }
 
-/** Preview the same retry replacement that commits with the new task. */
 export function helperRequestContext(store: Store, conversationId: string, retryOf?: string) {
   const history = helperHistory(store, conversationId);
   const context = helperContext(store, conversationId, history);
@@ -180,8 +177,6 @@ export function publishHelperContext(
       dependencyKey: scopeKey,
       estimatedInputTokens,
       compacted: refs(prefix.slice(0, compactedCount)),
-      // The current request stays exact too. Its ID also binds any in-task read
-      // summary to this request, so retry cannot reuse the replaced task's work.
       recentSourceRevisions: prefix.slice(compactedCount).map((message) => message.id),
       summary,
       summaryCalls: usage.modelCalls,

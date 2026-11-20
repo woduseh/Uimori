@@ -35,7 +35,6 @@ const ref = (checkpoint: ContextCheckpoint): ContextCheckpointRef => ({
   hash: checkpoint.hash,
 });
 
-/** One immutable checkpoint format for automatic, manual and authored summaries. */
 export class ContextStore {
   readonly store: Store;
   constructor(store: Store) {
@@ -199,7 +198,6 @@ export class ContextStore {
       return { ...snapshot, contextPlan: { ...plan, checkpoint: ref(checkpoint) } };
     });
   }
-  /** Active metadata and its validated checkpoint, without loading UI history or job snapshots. */
   current(chatId: string) {
     return this.currentState(chatId, this.scope(chatId));
   }
@@ -229,7 +227,6 @@ export class ContextStore {
           ) &&
           checkpoint.plan.compacted.length <= current.history.length;
       } catch (error) {
-        // Keep saved summaries readable while the user repairs a deleted writing pin.
         if (!(error instanceof HttpError) || !error.message.startsWith('PINNED_PROMPT_UNAVAILABLE'))
           throw error;
       }

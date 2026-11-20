@@ -11,7 +11,6 @@ export type LibraryKind =
   | 'prompt-combination'
   | 'connection'
   | 'model';
-/** Public library access is separate from immutable version/snapshot lookup. */
 export function assertLibraryVisible(store: Store, kind: string, id: string) {
   if (store.db.prepare('SELECT 1 FROM library_hidden WHERE kind=? AND id=?').get(kind, id))
     throw new HttpError(404, 'Library item not found');
@@ -35,8 +34,6 @@ export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, v
         );
     }
     if (kind === 'connection') {
-      // Revoke future sends, including workers holding an earlier frozen connection.
-      // Credentials and already transmitted provider work are not deleted or replayed.
       store.db
         .prepare(`UPDATE provider_settings SET revision=revision+1,
         body=json_set(body,'$.enabled',json('false'),'$.revision',revision+1)
@@ -67,7 +64,6 @@ export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, v
       for (const agent of collaboration?.agents ?? []) {
         if (agent.model && store.product.isHidden('model', agent.model.id)) {
           agent.model = null;
-          // Deleting a selected advisor must not silently send its instructions to another model.
           collaboration!.enabled = false;
           changed = true;
           collaborationChanged = true;

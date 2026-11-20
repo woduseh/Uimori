@@ -249,7 +249,6 @@ export function readHelperResource(
     );
   if (paths === undefined) return read(args);
   const items: unknown[] = [];
-  // An individual page must also fit when enclosed by the batch response.
   const pageMaximum = maximum - countTextTokens(JSON.stringify({ items: [], nextIndex: null }));
   for (const path of paths) {
     let item: unknown;
@@ -269,7 +268,6 @@ export function readHelperResource(
   return bounded({ items, nextIndex: items.length < paths.length ? items.length : null }, maximum);
 }
 
-/** Read the admitted editor model without replacing it with a later saved revision. */
 export function readHelperEditor(editor: HelperEditor | undefined, args: JsonObject) {
   if (!editor?.model) return null;
   return readHelperModel(
@@ -457,8 +455,6 @@ export function readHelperModel(
         if (entries.length) break;
         throw new HttpError(413, '읽기 결과가 커요. 더 좁은 경로를 지정해 주세요.');
       }
-      // A single enormous block cannot fit. Return its full metadata and explicit
-      // field paths rather than dropping it or claiming its text was read.
       const omittedBodyPaths = Object.fromEntries(
         BODY_FIELDS.flatMap((field) =>
           object(item.value) && typeof item.value[field] === 'string'
@@ -649,7 +645,6 @@ export function patchHelperResource(
   if (kind === 'content' && !sourceFor(current as Content))
     throw new HttpError(400, 'native 원문이 없는 자료예요.');
   const changes = rawChanges as Change[];
-  // Bind before any mutation: duplicate or missing native IDs do not affect identity.
   const targets = changes.map((change, changeIndex) => {
     if (
       !object(change) ||
@@ -902,7 +897,6 @@ export function patchHelperResource(
         (controls ??= promptControls(preset.program)),
         inherited
       );
-      // Keep the existing combined report while also distinguishing removed values.
       resetKeys.push(...reconciled.resetKeys);
       const removedKeys = reconciled.resetKeys.filter(
         (key) => !Object.hasOwn(reconciled.values, key)

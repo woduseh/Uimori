@@ -32,7 +32,6 @@ function resourceUpdated(
       workspace.event(conversationId, taskId, `${kind}.updated`);
 }
 
-/** Runs inside the operation receipt transaction; only compact provenance survives cleanup. */
 export function applyHelperResourceMutation(
   store: Store,
   workspace: HelperWorkspace,
@@ -148,7 +147,6 @@ function undoneEdit(store: Store, conversationId: string, editSeq: number) {
   return row ? (JSON.parse(String(row.data)) as HelperResourceEdit) : null;
 }
 
-/** Select the latest edit before checking availability, never an older recoverable edit. */
 export function lastHelperResourceEdit(
   store: Store,
   workspace: HelperWorkspace,
@@ -210,7 +208,6 @@ export function undoHelperResourceEdit(
 ): HelperResourceEdit {
   return store.transaction(() => {
     workspace.conversation(conversationId);
-    // A repeated request confirms its committed result, even after a later resource edit.
     const prior = undoneEdit(store, conversationId, editSeq);
     if (prior) return prior;
     const edit = lastHelperResourceEdit(store, workspace, conversationId);

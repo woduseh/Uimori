@@ -3,16 +3,13 @@ import { fields, record, text, HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 
 export type MaintenanceState = {
-  /** `closed` blocks new user writes and new external work while reads stay available. */
   status: 'open' | 'closed';
-  /** Increments once per maintenance period, so a resumed worker can tell periods apart. */
   epoch: number;
   reason?: string;
   updatedAt: string;
 };
 type Row = Record<string, unknown> & { status: MaintenanceState['status'] };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-/** Control, sign-in, local diagnostics and stopping already-admitted work stay available. */
 const ALWAYS_ADMITTED = new Set([
   '/api/maintenance',
   '/api/session',
@@ -28,7 +25,6 @@ const ALWAYS_ADMITTED = new Set([
   '/api/helper/tasks/:id/cancel',
 ]);
 
-/** Schema initialization owns the table; each boot ensures its maintenance row exists. */
 export function initMaintenance(store: Store) {
   if (!store.db.prepare('SELECT 1 FROM maintenance WHERE id=1').get())
     store.db
@@ -46,7 +42,6 @@ export function maintenanceState(store: Store): MaintenanceState {
   };
 }
 
-/** A closed gate survives restarts: an interrupted update never reopens writes on its own. */
 export function setMaintenance(
   store: Store,
   next: { closed: boolean; reason?: string }
@@ -68,7 +63,6 @@ export function setMaintenance(
 }
 
 export type MaintenanceStatus = MaintenanceState & { forcedClosed: boolean };
-/** The public shape every surface reads: the gate plus whether a boot flag forced it. */
 export function maintenanceStatus(store: Store, forcedClosed: boolean): MaintenanceStatus {
   const current = maintenanceState(store);
   return {
@@ -79,7 +73,6 @@ export function maintenanceStatus(store: Store, forcedClosed: boolean): Maintena
   };
 }
 
-/** One admission answer for HTTP writes, worker claims and new external work. */
 export const admissionOpen = (store: Store, forcedClosed: boolean): boolean =>
   !forcedClosed && maintenanceState(store).status === 'open';
 
@@ -89,8 +82,6 @@ export function maintenanceRoutes(
   options: { forcedClosed: boolean; activeWork: () => number; onOpen?: () => void }
 ) {
   const state = () => maintenanceStatus(store, options.forcedClosed);
-  // Closing admission must also drain already admitted asynchronous HTTP writes,
-  // not only background model work. Auth/control requests are deliberately excluded.
   const writes = new Set<FastifyRequest>();
   const activeWork = () => options.activeWork() + writes.size;
   app.addHook('onRequest', async (request) => {

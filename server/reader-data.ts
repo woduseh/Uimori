@@ -2,7 +2,6 @@ import type { Store } from './store.js';
 
 type ReaderEvent = { kind: string; entityId: string };
 
-/** Resolve a replay's distinct task IDs once, rather than querying each status transition. */
 export function changedReaderSources(
   store: Pick<Store, 'db'>,
   chatId: string,
@@ -17,7 +16,6 @@ export function changedReaderSources(
     if (event.kind.startsWith('job.')) jobs.add(event.entityId);
     if (event.kind.startsWith('illustration.')) illustrations.add(event.entityId);
   }
-  // Only these trusted table names enter SQL. IDs and the chat boundary are bound parameters.
   for (const [table, ids] of [
     ['jobs', jobs],
     ['illustration_jobs', illustrations],
@@ -32,7 +30,6 @@ export function changedReaderSources(
   return changed;
 }
 
-/** Select the visible jobs before hydrating their potentially large input/diagnostic bodies. */
 export function readerJobIds(store: Pick<Store, 'db'>, sourceId: string, sourceHash: string) {
   return store.db
     .prepare(`SELECT j.id FROM jobs j
@@ -45,9 +42,6 @@ export function readerJobIds(store: Pick<Store, 'db'>, sourceId: string, sourceH
     .all(sourceId, sourceHash) as { id: string }[];
 }
 
-/** Only authored context and this source's image results invalidate native display.
- * Progress/usage/queue events still refresh activity, never the expensive presentation.
- */
 export function readerPresentationRevisions(
   store: Pick<Store, 'db'>,
   chatId: string,

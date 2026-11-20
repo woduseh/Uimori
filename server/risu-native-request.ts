@@ -10,7 +10,6 @@ export async function prepareNativeRisuRequest(
   snapshot: RunSnapshot,
   request: ProviderRequest,
   options: NativeRisuExecutionOptions & {
-    /** Position in this runMain entry; persisted positions replay without authored effects. */
     requestOrdinal?: number;
   } = {}
 ) {
@@ -62,8 +61,6 @@ export async function prepareNativeRisuRequest(
         if (previous?.content.some((part) => part.type === 'image') && message.role !== 'user')
           throw new Error('RISU_NATIVE_REQUEST_IMAGE_IDENTITY');
       }
-      // Removing an identified message is an intentional exclusion. An unidentified
-      // replacement could instead be the same message with a lost id: never guess.
       if (
         imageMessages.some((message) => !returnedIds.has(message.id)) &&
         result.request.some((message) => !message.id || !originals.has(message.id))

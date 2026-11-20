@@ -46,9 +46,7 @@ async function rejection(response: Response, signal: AbortSignal): Promise<Illus
     const body = JSON.parse((await readProviderBody(response, signal, 64_000)).toString('utf8'));
     if (object(body) && typeof body.message === 'string')
       message = Array.from(body.message.trim()).slice(0, 300).join('') || undefined;
-  } catch {
-    // The status code alone still classifies the failure.
-  }
+  } catch {}
   return new IllustrationError(statusCode(response.status), false, {
     novelai: { httpStatus: response.status, ...(message ? { message } : {}) },
   });
@@ -89,7 +87,6 @@ async function send(
   }
 }
 
-/** Account check for the settings screen. Reads metadata only; never generates. */
 export async function novelAISubscription(options: NovelAIRequestOptions): Promise<NovelAIAccount> {
   const response = await send('/user/subscription', options);
   if (!response.ok) throw await rejection(response, options.signal);
@@ -129,7 +126,6 @@ export type NovelAIPrompt = {
   prompt: string;
   negativePrompt: string;
   characters?: NovelAICharacterPrompt[];
-  /** Prepared Precise Reference images (PNG on a NovelAI reference canvas). */
   referenceImages?: Buffer[];
 };
 // https://docs.novelai.net/en/image/multiplecharacters (2026-11-20): V4 and V4.5 place
@@ -220,7 +216,6 @@ export function novelAIImageRequest(
   };
 }
 
-/** The archive holds one image per sample; observed clients also receive a bare image. */
 function imagesFrom(bytes: Buffer): NovelAIImage[] {
   const direct = detectImageMime(bytes);
   if (direct) return isValidIllustrationImage(bytes, direct) ? [{ mime: direct, bytes }] : [];

@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 
-/** A user's own composition edit is its own authority; the model path goes through the helper. */
 export function outlineRoutes(
   app: FastifyInstance,
   store: Store,

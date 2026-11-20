@@ -11,7 +11,6 @@ import type { Store } from './store.js';
 import { assertPackageImages } from './package-images.js';
 import { resolvePackageGraph } from '../core/package-graph.js';
 
-/** Live links follow IDs; a frozen closure resolves dependencies from its captured refs. */
 export function resolvePackageModules(
   product: ProductStore,
   roots: ContentAttachment[],

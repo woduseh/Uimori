@@ -15,7 +15,6 @@ import { HttpError } from './request-validation.js';
 import { bundleDigest, type PreparedBundleImage } from './resource-bundle.js';
 import type { PreparedRisuImport } from './risu-import-prepared.js';
 
-/** At most one buffer per image slot, including extraction: a large card never becomes an image array. */
 export async function prepareRisuInWorker(input: {
   path: string;
   name: string;
@@ -94,8 +93,6 @@ export async function prepareRisuInWorker(input: {
       return null;
     }
   };
-  // Validation decodes every frame and dominates large cards, so the image slots run together.
-  // Identical source bytes share one validation; results keep the card's asset order.
   const bySource = new Map<string, Promise<PreparedRisuAsset | null>>();
   const results: (PreparedRisuAsset | null)[] = new Array(entries.length);
   let next = 0;
@@ -105,7 +102,6 @@ export async function prepareRisuInWorker(input: {
       while (!failure && next < entries.length) {
         const index = next++;
         try {
-          // Container errors are not silently converted into missing-image findings.
           const bytes = entries[index].read();
           const hash = createHash('sha256').update(bytes).digest('hex');
           let pending = bySource.get(hash);

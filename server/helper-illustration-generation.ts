@@ -54,7 +54,6 @@ export const HELPER_ILLUSTRATION_GENERATION_TOOLS: ProviderTool[] = [
   },
 ];
 
-/** Reserve every affected scene in the helper operation transaction before waking the worker. */
 export function generateHelperIllustrations(
   store: Store,
   chatId: string,
@@ -66,7 +65,6 @@ export function generateHelperIllustrations(
     throw new HttpError(400, 'Select at least one illustration moment.');
   const moments = args.moments;
   return store.transaction(() => {
-    // A chapter may span many sources. Verify the live history once for the whole reservation.
     const ancestry = new Set(
       store.history(store.chat(chatId).headRevision).map((item) => item.revision)
     );

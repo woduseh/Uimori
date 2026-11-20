@@ -121,7 +121,6 @@ export const HELPER_PRESENTATION_TOOLS: ProviderTool[] = [
 export const presentationReadOnly = (name: string) =>
   name === 'font.list' || name === 'palette.list';
 
-/** Called in the helper operation transaction to preserve the applied selection and its receipt. */
 export function applyHelperPresentationMutation(
   store: Store,
   workspace: HelperWorkspace,
@@ -170,7 +169,6 @@ export function applyHelperPresentationMutation(
   return result;
 }
 
-/** Network preparation precedes the synchronous receipt transaction. */
 export async function preparePresentationTool(
   name: string,
   value: unknown,

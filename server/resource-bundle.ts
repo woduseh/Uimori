@@ -49,7 +49,6 @@ export function inspectBundle(value: unknown): NativeTransferPrepare {
   return prepareBundle(value).preview;
 }
 
-/** Capture archive metadata; image bytes are streamed separately from its read snapshot. */
 export function captureResourceBundle(
   store: Store,
   selection: { kind: 'content' | 'prompt-preset'; id: string }[]
@@ -126,13 +125,11 @@ function prepareImport(value: unknown) {
   return { body, bundle };
 }
 
-/** New identities on every intentional import; a tiny request receipt only prevents a lost HTTP response duplicating it. */
 export function importResourceBundle(store: Store, value: unknown): NativeTransferReceipt {
   const { body, bundle } = prepareImport(value);
   return applyPreparedBundle(store, body, bundle);
 }
 
-/** External input and the converted image graph each cross validation once, before any writes. */
 export async function importNormalizedResourceBundle(
   store: Store,
   value: unknown
@@ -240,7 +237,6 @@ export type PreparedBundleImage = {
   bytes: number;
 };
 
-/** Trusted staging paths only. Metadata crosses the same graph boundary as JSON bundles. */
 export function importPreparedResourceBundle(
   store: Store,
   file: PreparedNativeTransferFile,

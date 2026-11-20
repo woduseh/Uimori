@@ -77,7 +77,6 @@ const parse = (value: unknown) => (value == null ? null : JSON.parse(String(valu
 const ACTIVE: IllustrationStatus[] = ['queued', 'running'];
 const RETRYABLE_STATUSES: IllustrationStatus[] = ['failed', 'cancelled', 'interrupted'];
 
-/** Create current tables during fresh database initialization. */
 export function initIllustrations(db: DatabaseSync) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS illustration_settings (id INTEGER PRIMARY KEY CHECK(id=1), body TEXT NOT NULL);
@@ -93,9 +92,6 @@ export function initIllustrations(db: DatabaseSync) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Settings
-// ---------------------------------------------------------------------------
 function modelRef(value: unknown, name: string): ModelRef | null {
   if (value === null || value === undefined) return null;
   const ref = record(value);
@@ -240,7 +236,6 @@ export function illustrationSettings(store: Store): IllustrationSettings {
   const defaults = defaultIllustrationSettings();
   const { generator, ...environment } = saved;
   const codex = { ...defaults.codex, ...(saved.codex ?? {}) };
-  // Only pre-existing settings without the field inherit their selected Codex model.
   if (!Object.hasOwn(saved.codex ?? {}, 'promptModel')) codex.promptModel = codex.model;
   return {
     ...defaults,
@@ -253,7 +248,6 @@ export function illustrationSettings(store: Store): IllustrationSettings {
         }
       : {}),
     ...(generator === 'fixture' ? { generator } : {}),
-    // A legacy disabled generator must not suddenly enable automatic work.
     ...(generator === 'none' ? { automatic: false } : {}),
     codex,
     comfyui: { ...defaults.comfyui, ...(saved.comfyui ?? {}) },
@@ -279,8 +273,6 @@ export function updateIllustrationSettings(
   testMode = false
 ): IllustrationSettings {
   const b = record(value);
-  // Write-only: an omitted token keeps the saved one; null removes it. The read-only
-  // configured flag is accepted so a GET response can be saved back unchanged.
   const { expectedRevision, novelaiToken, novelaiTokenConfigured: _configured, ...rest } = b;
   const token = novelaiToken === undefined ? undefined : apiKey(novelaiToken);
   return store.transaction(() => {
@@ -292,7 +284,6 @@ export function updateIllustrationSettings(
       {
         ...rest,
         novelai: rest.novelai ?? prior.novelai,
-        // Preserve fields omitted by older clients.
         codex: {
           promptModel: prior.codex.promptModel,
           refinePrompt: prior.codex.refinePrompt,
@@ -312,12 +303,8 @@ export function updateIllustrationSettings(
   });
 }
 
-// ---------------------------------------------------------------------------
-// Per-chat reference images (character design / art style)
-// ---------------------------------------------------------------------------
 export function illustrationReferenceCandidates(store: Store, chatId: string): Asset[] {
   store.chat(chatId);
-  // Image candidates depend on attached packages, not on an available writing prompt/model.
   const profile = {
     chatId,
     ...resolvePackageProfile(store.product, store.product.profile(chatId)),
@@ -329,7 +316,6 @@ export function illustrationReferences(store: Store, chatId: string): Illustrati
   const row = store.db
     .prepare('SELECT revision,body FROM illustration_references WHERE chat_id=?')
     .get(chatId) as Row | undefined;
-  // Existing rows stored only the reference array; newer rows also contain authored profiles.
   const saved = row ? parse(row.body) : [];
   const defaultCharacterProfiles = defaultIllustrationProfiles(store, chatId);
   const chatCharacterProfiles = Array.isArray(saved) ? [] : (saved.characterProfiles ?? []);
@@ -365,7 +351,6 @@ export function updateIllustrationReferences(
     const prior = illustrationReferences(store, chatId);
     if (prior.revision !== number(b.expectedRevision, 'reference revision', 0))
       throw new HttpError(409, '삽화 참조 이미지가 변경됐어요. 새로고침한 뒤 저장해 주세요.');
-    // Older clients must not clear profiles they do not know about.
     const explicitOverrides = Object.hasOwn(b, 'chatCharacterProfiles');
     const rawProfiles = explicitOverrides
       ? b.chatCharacterProfiles
@@ -454,7 +439,6 @@ export function updateIllustrationReferences(
     return illustrationReferences(store, chatId);
   });
 }
-/** Resolved once at reservation; missing images are dropped rather than blocking the job. */
 export function frozenIllustrationReferences(
   store: Store,
   chatId: string
@@ -491,9 +475,6 @@ export function loadIllustrationReference(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Jobs
-// ---------------------------------------------------------------------------
 export type IllustrationJobRow = {
   id: string;
   chatId: string;
@@ -607,7 +588,6 @@ export function projectIllustration(
     updatedAt: row.updatedAt,
   };
 }
-/** Numeric attempts are loaded on demand, not with every reader refresh. */
 export function illustrationUsage(store: Store, jobIds: string[]): Usage {
   const row = store.db
     .prepare(`SELECT COUNT(*) AS modelCalls,
@@ -681,7 +661,6 @@ export function illustrationsForChat(store: Store, chatId: string): Illustration
       .all(chatId) as Row[]
   ).map((row) => projectIllustration(store, mapRow(row)));
 }
-/** Skipped automatic runs hold no image and do not consume a slot. */
 export function illustrationSlots(
   store: Store,
   sourceId: string
@@ -859,7 +838,6 @@ function frozenInput(
     };
   throw new HttpError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
 }
-/** The plan reserves its cut budget before any model call. Existing single renders remain readable. */
 export function reserveIllustrationPlan(
   store: Store,
   source: Source,
@@ -933,8 +911,6 @@ export function reserveIllustrationPlan(
     return insertIllustrationJob(store, source, origin, input);
   });
 }
-/** Exact manual moments need no full-scene storyboard model pass. Render jobs still
- * prepare their prompts and pass the normal image-content check. */
 export function reserveSelectedIllustrations(
   store: Store,
   source: Source,
@@ -1040,7 +1016,6 @@ export function illustrationTargets(
     })
     .filter((target): target is IllustrationTarget => !!target);
 }
-/** This short transaction is the only place a completed plan can create render jobs. */
 export function completeIllustrationStoryboard(
   store: Store,
   job: IllustrationJobRow,
@@ -1085,7 +1060,6 @@ export function completeIllustrationStoryboard(
       current.targets[target.id] = { latestRequestedJobId: child.id, displayedJobId: null };
       if (!current.heroTargetId && index === storyboard.heroIndex) current.heroTargetId = target.id;
     }
-    // An old plan may finish after an edit; retain its images without replacing a newer layout.
     if (store.source(source.id).hash === source.hash || previous?.sourceHash === source.hash)
       saveIllustrationPresentation(store, source.id, current);
     const result = {
@@ -1113,7 +1087,6 @@ function completeIllustrationTextJob(
   store.event(job.chatId, 'illustration.completed', job.id);
   return true;
 }
-/** Completion or explicit re-connect only, never Reader GET. Maps all targets in one text call. */
 export function scheduleIllustrationPlacement(
   store: Store,
   sourceId: string,
@@ -1157,7 +1130,6 @@ export function scheduleIllustrationPlacement(
   }
   const first = presentation.targets[targets[0].id];
   const recipe = illustrationJob(store, first.latestRequestedJobId).input;
-  // A restored chat contains results, not credentials or runnable recipes.
   if (!recipe.codex && !recipe.comfyui && !recipe.novelai && !recipe.fixture) return null;
   const { plan: _plan, target: _target, placement: _placement, ...base } = recipe;
   return insertIllustrationJob(store, source, force ? 'manual' : 'automatic', {
@@ -1284,7 +1256,6 @@ const reservationFailureCode = (error: unknown): string => {
   }
   return 'ILLUSTRATION_RESERVATION_FAILED';
 };
-/** Called inside the source commit transaction. Limits are silent; configuration errors are visible. */
 export function scheduleAutomaticIllustration(store: Store, source: Source): void {
   const settings = illustrationSettings(store);
   if (!settings.automatic) return;
@@ -1465,7 +1436,6 @@ export function failIllustration(
     return true;
   });
 }
-/** Automatic re-queue keeps the frozen input; the failure stays visible in the diagnostic. */
 export function requeueIllustration(
   store: Store,
   id: string,
@@ -1546,7 +1516,6 @@ export function retryIllustration(store: Store, id: string): Illustration {
     return projectIllustration(store, illustrationJob(store, id));
   });
 }
-/** Re-reading an accepted remote prompt is not a new render; the job briefly runs under the caller. */
 export function claimIllustrationForReconcile(
   store: Store,
   id: string,
@@ -1637,7 +1606,6 @@ function deleteIllustrationAttempts(store: Store, jobs: Row[]) {
     );
   }
 }
-/** Bumping the generation makes a late worker result fall through owner checks. */
 export function cancelIllustration(store: Store, id: string): Illustration {
   return store.transaction(() => {
     const job = illustrationJob(store, id);
@@ -1678,7 +1646,6 @@ export function removeIllustration(
     return { chatId: job.chatId, sourceRevision: job.sourceRevision };
   });
 }
-/** Server restart: running work is uncertain and is never replayed; queued work resumes. */
 export function recoverIllustrations(store: Store): void {
   store.transaction(() => {
     for (const row of store.db
@@ -1693,9 +1660,6 @@ export function recoverIllustrations(store: Store): void {
     }
   });
 }
-// ---------------------------------------------------------------------------
-// Routes
-// ---------------------------------------------------------------------------
 export function illustrationRoutes(
   app: FastifyInstance,
   store: Store,
@@ -1704,7 +1668,6 @@ export function illustrationRoutes(
     pump: () => void;
     abort: (id: string) => void;
     testMode: boolean;
-    /** Reads an accepted remote result without rendering again; provided by the app runner. */
     reconcile: (id: string) => Promise<Illustration>;
     resolveCredential?: (
       envReference: string,

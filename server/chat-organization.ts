@@ -15,7 +15,6 @@ export type ChatOrganization = {
 };
 type Row = Record<string, any>;
 
-/** Organization never rewrites execution inputs or story content. */
 export class ChatOrganizationStore {
   readonly store: Store;
   constructor(store: Store) {
@@ -100,7 +99,6 @@ export class ChatOrganizationStore {
       .get(botId, folderId) as Row;
     return row.first === null ? 0 : row.first - 1;
   }
-  /** Rank normalization changes no relative order or CAS revision of existing siblings. */
   private setPositions(ids: string[]) {
     const update = this.store.db.prepare(
       'UPDATE chat_organization SET sort_position=? WHERE chat_id=?'
@@ -194,7 +192,6 @@ export class ChatOrganizationStore {
       return { deleted: true, movedChatIds: moved };
     });
   }
-  /** Called inside the chat creation transaction. */
   create(
     chatId: string,
     selection: { botId?: string; folderId?: string | null; persona?: ContentRef | null } = {}

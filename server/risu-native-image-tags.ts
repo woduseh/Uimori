@@ -21,7 +21,6 @@ function withoutBackground(source: TagInput['native']) {
   return native;
 }
 
-/** A candidate is accepted only when the original display rules resolve it to this exact asset. */
 export function nativeImageTagInWorker(input: TagInput): string | null {
   const native = withoutBackground(input.native);
   const rules = nativeRisuRegex(native).filter(
@@ -44,8 +43,6 @@ export function nativeImageTagInWorker(input: TagInput): string | null {
       Number([...prefixes].some((prefix) => b.startsWith(prefix))) -
       Number([...prefixes].some((prefix) => a.startsWith(prefix)))
   );
-  // Older imports stored the generic src template without quotes even when the authored
-  // editdisplay rule required them. Try the quoted spelling first without migrating packages.
   const templates = [
     ...new Set(
       input.templates.flatMap((template) =>
@@ -56,8 +53,6 @@ export function nativeImageTagInWorker(input: TagInput): string | null {
     ),
   ].slice(0, 8);
   for (const candidateName of orderedNames) {
-    // A generic NPC rule may also accept outfit names (daily_smiling), but the authored format
-    // requires an NPC name (Harper_smiling). Require the character stem to occur in its guidance.
     if (
       input.guidance &&
       rules.some((rule) => rule.out.includes('getvar::')) &&
@@ -99,7 +94,6 @@ export function nativeImageTag(input: TagInput): Promise<string | null> {
 }
 
 type AuthoredTagsInput = NativeRisuRenderInput & { urls: string[] };
-/** Resolve authored aliases through their own display rules, including state-dependent outfits. */
 export function nativeCatalogImageTagsInWorker(input: AuthoredTagsInput): string[] {
   const native = withoutBackground(input.native);
   const tags = [

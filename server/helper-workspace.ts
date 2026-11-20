@@ -57,7 +57,6 @@ function conversationData(row: Row): HelperConversation {
   };
 }
 
-/** Keep the existing call identity so older durable receipts can be matched to their events. */
 export function helperCallOperationId(taskId: string, callId: string): string {
   return createHash('sha256').update(`${taskId}\0${callId}`).digest('hex');
 }
@@ -124,7 +123,6 @@ export class HelperWorkspace {
       if (scope.kind === 'chat') this.store.chat(scope.chatId);
       const key = json(scope),
         creationHash = createHash('sha256')
-          // Preserve fingerprints for pending requests created before project support.
           .update(json({ title: title ?? null, ...(projectId ? { projectId } : {}) }))
           .digest('hex');
       const old = this.store.db
@@ -519,8 +517,6 @@ export class HelperWorkspace {
         removeHelperMessageAttachments(this.store.db, deletedMessageIds);
         projection = { deletedMessageIds };
       }
-      // A checkpoint may contain edited/deleted text, including in its recent exact tail.
-      // Retain the immutable checkpoint as evidence and detach its active pointer.
       this.store.db
         .prepare(
           'UPDATE context_heads SET revision=revision+1,checkpoint_id=NULL WHERE scope_key=?'
@@ -659,7 +655,6 @@ export class HelperWorkspace {
       | Row
       | undefined;
     if (!row) throw new HttpError(404, '도우미 작업을 찾을 수 없어요.');
-    // Read receipts, never streamed tool output: the worker may stop before tool.finished.
     const completedEffects = ['failed', 'cancelled', 'interrupted'].includes(row.status)
       ? Number(
           this.store.db
@@ -675,7 +670,6 @@ export class HelperWorkspace {
       instructions: this.instructions(id),
     };
   }
-  /** Live execution counters and identity never need to hydrate the reserved manuscript. */
   taskState(
     id: string
   ): Pick<HelperTask, 'id' | 'conversationId' | 'status' | 'generation' | 'usage'> {
@@ -692,8 +686,6 @@ export class HelperWorkspace {
     };
   }
   private readTaskSummaries(predicate: string, args: string[]) {
-    // Only the selected page crosses into JS. Receipt counts share one scan instead of
-    // loading a full reservation and querying completed effects for every task.
     const rows = this.store.db
       .prepare(
         `WITH page AS (
@@ -742,7 +734,6 @@ export class HelperWorkspace {
   instructions(taskId: string): HelperInstruction[] {
     return this.readInstructions([taskId]).get(taskId) ?? [];
   }
-  /** Existing events hold the delivery receipt; the conversation keeps confirmed user input. */
   addInstruction(taskId: string, requestKey: string, text: string): HelperInstruction {
     return this.store.transaction(() => {
       const previous = this.instructions(taskId).find((item) => item.requestKey === requestKey);
@@ -823,9 +814,6 @@ export class HelperWorkspace {
           .get(conversationId, snapshot.requestGroupId);
         if (latest?.id !== previous.id)
           throw new HttpError(409, '이미 다시 시도한 요청이에요. 최신 결과를 확인해 주세요.');
-        // Retry replaces this task in helperHistory. A checkpoint depends on both
-        // summarized and exact retained messages, including its current request.
-        // Invalidate its active pointer atomically; retention owns the checkpoint.
         const retryContext = helperRequestContext(this.store, conversationId, previous.id);
         if (retryContext.invalidatesCheckpoint)
           this.store.db
@@ -873,8 +861,6 @@ export class HelperWorkspace {
           time,
           time
         );
-      // The current call receives selection separately; later turns retain it as conversation
-      // text after completed-task snapshots are released. Editing still uses the exact request.
       const message = snapshot.selection
         ? `${request}\n\nSelected passage ${snapshot.selection.sourceId} (SHA-256: ${snapshot.selection.sourceHash}):\n${snapshot.selection.text}`
         : request;

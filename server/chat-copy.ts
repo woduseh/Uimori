@@ -24,7 +24,6 @@ import { readChatVariables } from './chat-variables.js';
 import { HttpError } from './request-validation.js';
 import { sceneTitles, restoreSceneTitles } from './scene-titles.js';
 
-/** Capture user-visible state through a selected source. No future notes/variables leak into an old copy. */
 export function captureChatCopy(
   store: Store,
   chatId: string,
@@ -83,7 +82,6 @@ export function captureChatCopy(
   };
 }
 
-/** Restore plain messages, notes, variable checkpoints and images; never replay a model or script execution. */
 export function restoreChatCopy(
   store: Store,
   copy: ChatCopy,

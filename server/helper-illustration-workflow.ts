@@ -39,7 +39,6 @@ export const HELPER_ILLUSTRATION_TOOLS = [
   ...HELPER_ILLUSTRATION_PLACEMENT_TOOLS,
 ];
 
-/** Commit the change, its receipt and navigable outcomes together. Wake the queue after commit. */
 export function applyHelperIllustration(
   store: Store,
   workspace: HelperWorkspace,

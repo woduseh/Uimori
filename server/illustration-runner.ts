@@ -101,9 +101,7 @@ export type IllustrationRunnerHooks = {
   onAttemptFinish: (id: string, result: ProviderResult) => MaybePromise<void>;
   onProgress?: () => MaybePromise<void>;
   cancellationStatus?: 'cancelled' | 'interrupted';
-  /** Synthetic generator for local verification only. */
   allowFixture?: boolean;
-  /** Test-mode barrier and injected failure point; runs after the claim and before any generator. */
   gate?: () => Promise<void>;
 };
 export type IllustrationOutcome = {
@@ -189,7 +187,6 @@ const providerCode = (result: ProviderResult): string =>
       ? 'ILLUSTRATION_CANCELLED'
       : `ILLUSTRATION_PROMPT_${result.error?.code ?? 'FAILED'}`;
 
-/** Runs one queued illustration job to a terminal state or an automatic re-queue. */
 export async function runIllustrationJob(
   store: Store,
   jobId: string,
@@ -201,7 +198,6 @@ export async function runIllustrationJob(
     claimed = claimIllustration(store, jobId, owner);
   } catch (error) {
     if (!(error instanceof Error) || error.message !== 'Unknown source content hash') throw error;
-    // The frozen text is no longer readable: fail without claiming so the row stays inspectable.
     store.transaction(() => {
       const changed = store.db
         .prepare(
@@ -228,8 +224,6 @@ export async function runIllustrationJob(
     prompt: job.diagnostic?.prompt,
     promptRequestHash: job.diagnostic?.promptRequestHash,
   };
-  // New requests freeze their attached native sources at admission. Older jobs retain
-  // their original reconstruction behavior rather than reinterpreting saved inputs.
   const snapshot = input.research?.packages
     ? readStoredRunSnapshot(store, source.runId)
     : readRunSnapshot(store, source.runId);
@@ -319,7 +313,6 @@ export async function runIllustrationJob(
           input: { ...request.input, catalog: research.catalog },
         }
       : request;
-    // One normal model deadline covers the complete research loop, not a fresh timeout per read.
     const timeoutMs = modelTimeoutMs(model);
     const signal = AbortSignal.any([hooks.signal, AbortSignal.timeout(timeoutMs)]);
     const results: import('../core/transport.js').Json[] = [];
@@ -420,7 +413,6 @@ export async function runIllustrationJob(
     const requestHash = createHash('sha256').update(JSON.stringify(request)).digest('hex');
     if (diagnostic.prompt && diagnostic.promptRequestHash === requestHash)
       return { kind: 'generate', prompt: diagnostic.prompt };
-    // An old prompt cannot authorize reuse when today's reconstructed input changed.
     delete diagnostic.prompt;
     delete diagnostic.promptRequestHash;
     diagnostic.stage = 'prompt';
@@ -441,7 +433,6 @@ export async function runIllustrationJob(
     if (hooks.signal.aborted) throw new IllustrationError('ILLUSTRATION_CANCELLED');
     await hooks.gate?.();
     if (hooks.signal.aborted) throw new IllustrationError('ILLUSTRATION_CANCELLED');
-    // Only automatic runs may decide that a scene has nothing worth drawing.
     const context = scene(source, snapshot, input, job.origin === 'automatic');
     const labeledReferences = (input.codex?.references ?? input.novelai?.references ?? []).map(
       ({ title, ...reference }) => {
@@ -559,7 +550,6 @@ export async function runIllustrationJob(
       const blocks = splitSource(translation);
       let afterByTarget: Record<string, string | null>;
       if (input.generator === 'fixture' && hooks.allowFixture) {
-        // Deterministic synthetic mapping only; real translation alignment is a model result.
         const originals = splitSource(source);
         afterByTarget = Object.fromEntries(
           input.placement.targets.map((target) => [
@@ -859,10 +849,6 @@ export async function runIllustrationJob(
   }
 }
 
-/**
- * Reads the recorded ComfyUI prompt_id once. Never resubmits: a finished render is stored, an
- * errored one fails, and a still-pending one restores the job's previous terminal state.
- */
 export async function reconcileIllustrationJob(
   store: Store,
   jobId: string,

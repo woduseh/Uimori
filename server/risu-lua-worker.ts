@@ -22,7 +22,6 @@ const LIMIT_KEYS: (keyof NativeLuaWorkerLimits)[] = [
   'valueEntries',
   'luaMemoryBytes',
 ];
-/** The runtime owns every bound; this worker refuses to start rather than invent a fallback. */
 function validLimits(value: unknown): value is NativeLuaWorkerLimits {
   if (!value || typeof value !== 'object') return false;
   const limits = value as Record<string, unknown>;
@@ -32,10 +31,8 @@ function validLimits(value: unknown): value is NativeLuaWorkerLimits {
   });
 }
 
-// wasmoon 1.16.0 does not expose Emscripten instantiate options. Its shipped memory
-// section declares 256 initial / 32768 maximum pages. Restrict that declaration
-// before instantiation, solely in this fresh Worker, without changing the package.
-// A dependency with a different memory contract must be reviewed explicitly.
+// wasmoon 1.16.0 does not expose Emscripten instantiate options, and its shipped memory
+// section declares 256 initial / 32768 maximum pages.
 function fixedMemoryBinary(source: BufferSource, maximumBytes: number): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(
     source instanceof ArrayBuffer ? source : source.buffer,
@@ -107,9 +104,6 @@ async function createEngine(maximumBytes: number) {
   }
 }
 
-// Original, private Lua codec. JSON crosses the engine boundary only as strings;
-// Wasmoon's getValue/assertOk/run helpers must never inspect guest objects/errors.
-// Every bound below is interpolated from the runtime-owned limits.
 function harnessSource(limits: NativeLuaWorkerLimits) {
   return String.raw`
 local source, inputJSON, historyJSON = ...
@@ -397,22 +391,17 @@ async function run() {
     return;
   }
   const limits = input.limits;
-  // Keep Wasm bounded too, with space for the runtime outside the traced Lua allocator.
   const engine = await createEngine(limits.luaMemoryBytes + 64 * 1024 * 1024);
   const global = engine.global;
   const lua = global.lua;
   let allocatedLimit = 0;
   const invocationBudget = (bytes: number) => {
     const size = Buffer.byteLength(input.source) + bytes;
-    // JSON strings, decoded tables, full-chat copies and an encoded result coexist. Grow
-    // with the actual snapshot, retaining room for locals in this persistent VM.
     allocatedLimit = Math.max(
       allocatedLimit,
       16 * 1024 * 1024 + 6 * (size + limits.guestJsonBytes)
     );
     global.setMemoryMax(Math.min(limits.luaMemoryBytes, allocatedLimit));
-    // The private Lua codecs share this CPU counter. Charge bounded serialization
-    // headroom by input size so long history alone does not exhaust the script budget.
     return limits.cpuMs + Math.ceil(size / (1024 * 1024)) * 500;
   };
   let cpuRemaining = invocationBudget(
@@ -429,8 +418,6 @@ async function run() {
   // wasmoon 1.16.0's loadLibrary(UTF8) accidentally opens string; call Lua directly.
   lua.luaopen_utf8(global.address);
   lua.lua_setglobal(global.address, 'utf8');
-  // The engine opens JS userdata metatables internally but no instance, function,
-  // proxy, object, or global from that bridge is passed into this guest sandbox.
   const thread = global.newThread();
   let deadline = 0;
   let timedOut = false;
@@ -467,8 +454,6 @@ async function run() {
       fail('RISU_LUA_PROGRAM_FAILED');
       return;
     }
-    // Only exact primitive strings are read. No Lua tostring/metamethod, userdata,
-    // error formatting, or Wasmoon object conversion executes at this boundary.
     const stringAt = (index: number, max: number) => {
       if (
         lua.lua_type(thread.address, index) !== LuaType.String ||
@@ -515,8 +500,6 @@ async function run() {
     port.postMessage({ type: 'host-call', id, method, argsJson });
     phase('host-wait', [id]);
     const result = await response;
-    // Only the trusted host can begin another invocation in a persistent native session.
-    // Guest RPC arguments cannot change the CPU allowance.
     if (result.ok && result.resetBudget === true) {
       if (
         typeof result.json !== 'string' ||

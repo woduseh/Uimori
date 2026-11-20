@@ -5,7 +5,6 @@ import { imageDataHashes, pruneUnusedData } from './unused-data.js';
 
 export type HelperAttachments = { images?: RequestImage[]; files?: RequestFile[] };
 
-/** Normal and copied seed messages share one authored attachment owner. */
 export function helperMessageAttachments(db: DatabaseSync, messageId: string): HelperAttachments {
   const row = db
     .prepare('SELECT images,files FROM helper_message_attachments WHERE message_id=?')
@@ -33,10 +32,7 @@ export function saveHelperMessageAttachments(
   );
 }
 
-/** Execution evidence alone cannot keep deleted authored files alive. */
 export function pruneUnusedHelperFiles(db: DatabaseSync): void {
-  // Blobs and owners commit together. Unfinished snapshots below retain every
-  // admitted reference, including those held by another active conversation.
   const retained = new Set<string>();
   for (const row of db.prepare('SELECT files FROM helper_message_attachments').iterate())
     for (const file of JSON.parse(String(row.files)) as RequestFile[]) retained.add(file.hash);

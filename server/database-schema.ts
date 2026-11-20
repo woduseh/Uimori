@@ -48,7 +48,6 @@ export class DatabaseSchemaError extends Error {
   }
 }
 
-/** Reject unsupported input before WAL or schema writes. */
 export function databaseSchemaVersion(db: DatabaseSync): number {
   const version = Number(db.prepare('PRAGMA user_version').get()!.user_version);
   if (version === 0) {
@@ -69,7 +68,6 @@ export function databaseSchemaVersion(db: DatabaseSync): number {
   return version;
 }
 
-/** Initialize an empty database; existing databases must already use the current format. */
 export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () => void): void {
   const previous = databaseSchemaVersion(db);
   if (previous === DATABASE_SCHEMA_VERSION) {

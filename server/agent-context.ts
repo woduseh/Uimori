@@ -16,7 +16,6 @@ export class AgentContextError extends Error {
   }
 }
 
-/** Resolve references only against this run's completed, host-owned events. */
 export function resolveAgentContext(
   refs: unknown,
   draft: unknown,
@@ -51,11 +50,9 @@ export function resolveAgentContext(
       : {}),
   };
   const serialized = JSON.stringify(content);
-  // Preserve complete references and drafts; the provider request enforces the model token budget.
   return { hash: createHash('sha256').update(serialized).digest('hex'), ...content };
 }
 
-/** A flat lineage of selected host-produced opinions; forwarding is not new confirmation. */
 export function adviceOrigins(context?: AgentConsultationContext): AdviceOrigin[] {
   const origins = (context?.references ?? []).flatMap((event) => {
     if (event.kind !== 'advice' || event.denied) return [];

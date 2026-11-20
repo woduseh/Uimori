@@ -3,7 +3,6 @@ import { resolveControlValues } from '../core/risu-prompt.js';
 import { effectiveRisuControls } from '../core/risu-effective-controls.js';
 import type { RunSnapshot } from '../core/types.js';
 
-/** Explicitly selected controls carry their authored meaning without disclosing other options. */
 export function agentSharedOptions(snapshot: RunSnapshot) {
   const preset = snapshot.profile?.promptPresets?.main;
   if (!preset?.program.collaboration?.enabled) return [];

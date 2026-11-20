@@ -7,7 +7,6 @@ export type LoreRetentionState = {
   sourceHash: string;
   context: LoreContextSnapshot;
   reads: RetainedLore[];
-  /** Actual compacted source frontier at the successful turn, for later manual compaction. */
   compacted?: import('../core/context-plan.js').ContextPlan['compacted'];
 };
 
@@ -22,7 +21,6 @@ export function readLoreRetention(
   return row ? (JSON.parse(String(row.body)) as LoreRetentionState) : undefined;
 }
 
-/** One active state per chat; old provider packets are not needed to remember successful reads. */
 export function retainCompletedLore(
   store: Store,
   run: Run,

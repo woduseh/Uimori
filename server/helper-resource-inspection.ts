@@ -21,7 +21,6 @@ const selectionFields = [
   'includeBodies',
 ];
 
-/** Flat selections share one response budget; text pagination stays local to each result. */
 export function readHelperResources(store: Store, rawItems: unknown) {
   if (!Array.isArray(rawItems) || !rawItems.length || rawItems.length > 16)
     throw new HttpError(400, '읽을 자료와 경로를 1개에서 16개까지 지정해 주세요.');

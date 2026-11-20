@@ -82,7 +82,6 @@ function presetDocument(value: Record<string, unknown>): Record<string, unknown>
   return result;
 }
 
-/** Bound MessagePack lengths before its decoder allocates arrays or follows nested values. */
 function unpackPresetData(bytes: Buffer): unknown {
   let offset = 0,
     nodes = 0;
@@ -163,7 +162,6 @@ function binaryPreset(bytes: Buffer, rpack: boolean): Record<string, unknown> {
       decipher.final(),
     ]);
     const preset = presetDocument(record(unpackPresetData(decoded)));
-    // A preset is JSON data; reject extension objects, cycles, and excessive nesting.
     const seen = new Set<object>();
     const pending: { value: unknown; depth: number }[] = [{ value: preset, depth: 0 }];
     let nodes = 0;
@@ -187,7 +185,6 @@ function binaryPreset(bytes: Buffer, rpack: boolean): Record<string, unknown> {
   }
 }
 
-/** Read a bounded preset document without writing files or adopting model settings. */
 export function readRisuPresetFile(value: unknown): {
   preset: Record<string, unknown>;
   source: RisuImportSource;
@@ -213,7 +210,6 @@ export function readRisuPresetFile(value: unknown): {
       hash,
       format: 'risu-preset-binary',
     };
-  // The envelope already limited the name to this reader's extensions, so JSON is what is left.
   if (!/\.zip$/iu.test(name))
     return { preset: presetDocument(json(bytes)), source, hash, format: 'risu-preset-json' };
   const members = cardZip(bytes);

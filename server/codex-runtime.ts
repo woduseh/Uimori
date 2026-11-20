@@ -83,7 +83,6 @@ const tokenUsageBreakdown = (value: unknown): Record<string, number> | undefined
   return Object.keys(result).length ? result : undefined;
 };
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
-/** Bound allocation before decoding; Buffer.from alone silently accepts malformed base64. */
 function decodeIllustrationBase64(value: unknown): Buffer | undefined {
   if (
     typeof value !== 'string' ||
@@ -125,12 +124,10 @@ export type CodexRuntimeOptions = {
   enabled?: boolean;
   executable?: string;
   maxConcurrent?: number;
-  /** Host-side test injection only; never accepted in an API request or archive. */
   launch?: { command: string; args: string[]; env?: NodeJS.ProcessEnv };
 };
 export type CodexExecutionOptions = ProviderExecutionOptions;
 export type CodexAgentRequest = CodexNativeRequest;
-/** A host result either continues the turn or completes a validated final submission. */
 export type CodexToolOutcome =
   | {
       success: boolean;
@@ -144,12 +141,9 @@ export type CodexAgentExecutionOptions = CodexExecutionOptions & {
     call: { name: string; arguments: Json; callId: string },
     signal: AbortSignal
   ): Promise<CodexToolOutcome>;
-  /** Intermediate public assistant messages, separate from final-answer streaming. */
   onCommentary?: (text: string) => void | Promise<void>;
-  /** Active-turn user input; resolving confirms acceptance, never completion of the instruction. */
   onSteerReady?: (steer: (text: string) => Promise<void>) => (() => void) | undefined;
 };
-/** One illustration turn: the official image generation tool renders, Uimori stores the bytes. */
 export type CodexImageRequest = {
   modelId: string;
   contextBudget?: ContextBudget;
@@ -163,13 +157,10 @@ export type CodexImageResult = {
   status: 'completed' | 'error' | 'cancelled';
   images: { mime: IllustrationImageMime; bytes: Buffer }[];
   revisedPrompt: string | null;
-  /** Final agent message text; the caller parses the caption envelope. */
   text: string;
   usage: ProviderUsage;
   error: { code: string; usageLimit?: { limitId: string; resetsAt: number | null } } | null;
 };
-/** Explicitly owned conversation. Never share a session between users or unrelated tasks.
- * Model, instructions and tool capabilities are pinned by its first turn. Close in finally. */
 export interface CodexSession {
   execute(request: ProviderRequest, options: CodexExecutionOptions): Promise<ProviderResult>;
   executeAgent(
@@ -240,7 +231,6 @@ type TurnPlan = {
   input: Json[];
   imagePrompt?: ProviderRequest['prompt'];
   outputSchema?: Json;
-  /** Attempt record body; never carries attachment bytes or image results. */
   descriptor: Json;
   stablePrefix: string;
   config: Record<string, unknown>;
@@ -257,7 +247,6 @@ type TurnPlan = {
 type TurnOutcome =
   | { ok: true; output: string; usage: ProviderUsage }
   | { ok: false; code: string; usage: ProviderUsage };
-/** Bounded concurrent processes with a bounded, cancellable wait queue. */
 class Slots {
   occupied = 0;
   private waiters: { resolve(): void; reject(error: Error): void; cleanup(): void }[] = [];
@@ -309,7 +298,6 @@ class Slots {
   }
 }
 
-/** The command comes from server configuration, never a browser, model or saved connection. */
 export function codexExecutable(
   explicit?: string,
   env: NodeJS.ProcessEnv = process.env
@@ -360,7 +348,6 @@ export function codexExecutable(
   return undefined;
 }
 
-/** No provider/API keys or existing Codex auth/config are inherited by the agent. */
 export function codexEnvironment(
   home: string,
   work: string,
@@ -394,9 +381,8 @@ export function codexEnvironment(
   };
 }
 
-// Native search and isolated JavaScript can assist a decision. Environment tools
-// remain unavailable: read-only alone would also expose host files and auth.json.
-// CLI 0.153+ supports environments:[] to enforce that boundary independently of prompts.
+// Codex CLI 0.153+ accepts environments:[], which removes the environment tools that a
+// read-only sandbox would still expose (host files and auth.json).
 export const CODEX_RUNTIME_CONFIG = {
   forced_login_method: 'chatgpt',
   cli_auth_credentials_store: 'file',
@@ -433,7 +419,6 @@ export const CODEX_RUNTIME_CONFIG = {
 } as const;
 
 const CODEX_HELPER_CONFIG = { ...CODEX_RUNTIME_CONFIG, web_search: 'live' } as const;
-/** Illustration text decisions expose no tools. Image turns add only image generation. */
 export const CODEX_ILLUSTRATION_TEXT_CONFIG = {
   ...CODEX_RUNTIME_CONFIG,
   web_search: 'disabled',
@@ -457,7 +442,6 @@ const TEXT_ITEMS = [
   'contextCompaction',
 ] as const;
 
-/** Owns one Uimori-specific login and isolated, disposable agent turns. */
 export class CodexRuntime implements CodexRuntimeService {
   private readonly home: string;
   private work?: string;
@@ -466,8 +450,6 @@ export class CodexRuntime implements CodexRuntimeService {
   private installation?: Promise<{ command: string; args: string[] }>;
   private active = new Set<CodexProcess>();
   private readonly textSlots: Slots;
-  // Native parents keep their process while awaiting host tools. One reserved
-  // child slot lets those tools use a text model without waiting on the parent.
   private readonly childTextSlots = new Slots(1, 32);
   private readonly hostToolContext = new AsyncLocalStorage<{ active: boolean }>();
   private readonly imageSlots = new Slots(1, 8);
@@ -495,7 +477,6 @@ export class CodexRuntime implements CodexRuntimeService {
   }
   createSession(connection: ProviderConnection): CodexSession {
     assertCodexConnection(connection);
-    // Capture connection identity; mutable caller objects cannot retarget a conversation.
     const pinned = { ...connection };
     const session: SessionState = { busy: false, closed: false, history: [] };
     return {
@@ -873,7 +854,6 @@ export class CodexRuntime implements CodexRuntimeService {
       ...(request.webSearch ? { webSearch: searched } : {}),
     };
   }
-  /** One native task: Codex owns its reasoning/tool loop and receives each host result in place. */
   async executeAgent(
     connection: ProviderConnection,
     request: CodexAgentRequest,
@@ -1016,10 +996,7 @@ export class CodexRuntime implements CodexRuntimeService {
           if (method === 'item/completed' && item.type === 'imageGeneration') generated.push(item);
         },
       };
-      // This bounds text and request metadata; Codex owns the token cost of reference images/tools.
       assertContextBudget(plan.descriptor, request.contextBudget);
-      // Count every selected attachment without relaxing the incoming result-frame limit.
-      // The envelope allowance covers IDs/config and small control requests buffered with a turn.
       plan.maxWriteBytes =
         1024 * 1024 +
         Buffer.byteLength(JSON.stringify(plan.developerInstructions)) +
@@ -1072,7 +1049,6 @@ export class CodexRuntime implements CodexRuntimeService {
       text: outcome.output,
     });
   }
-  /** Prefer validated inline bytes. Only accepted files inside the real Codex home are removed. */
   private decodeGeneratedImage(
     item: Record<string, unknown>
   ): CodexImageResult['images'][number] | undefined {
@@ -1103,8 +1079,6 @@ export class CodexRuntime implements CodexRuntimeService {
       const opened = statSync(path);
       if (realpathSync(path) !== path || opened.dev !== before.dev || opened.ino !== before.ino)
         return undefined;
-      // Read through the checked descriptor and a fixed-size buffer: a growing file cannot
-      // turn an accepted stat into an unbounded readFile allocation.
       const bytes = Buffer.alloc(before.size);
       let offset = 0;
       while (offset < bytes.length) {
@@ -1128,12 +1102,9 @@ export class CodexRuntime implements CodexRuntimeService {
           current.mtimeMs === before.mtimeMs
         )
           unlinkSync(path);
-      } catch {
-        /* A replaced, moved or locked file must not discard the validated result. */
-      }
+      } catch {}
       return { mime, bytes };
     } catch {
-      /* An unreadable or out-of-home result remains an image-generation failure. */
     } finally {
       if (descriptor !== undefined) closeSync(descriptor);
     }
@@ -1202,8 +1173,6 @@ export class CodexRuntime implements CodexRuntimeService {
     const messagePhases = new Map<string, unknown>();
     const completedItems = new Set<string>();
     const itemCounts: Record<string, number> = {};
-    // Runtime-owned activities are separate from the host's dynamic-tool receipts.
-    // Keep metadata only: reasoning, plans, search contents and tool output stay out.
     type NativeActivity = {
       id: string;
       type: string;
@@ -1342,9 +1311,6 @@ export class CodexRuntime implements CodexRuntimeService {
       if (revision !== this.revision) error('CODEX_AUTH_CHANGED');
       if (session?.revision !== undefined && session.revision !== revision)
         error('CODEX_AUTH_CHANGED');
-      // Reusable processes use the existing provider wire budget so ordinary later
-      // prompts need not be shorter than the first. Larger attachment envelopes
-      // retain their original measured budget.
       const maxWriteBytes = session
         ? Math.max(plan.maxWriteBytes ?? 0, PROVIDER_REQUEST_MAX_BYTES + 1024 * 1024)
         : plan.maxWriteBytes;
@@ -1477,7 +1443,6 @@ export class CodexRuntime implements CodexRuntimeService {
               if (result.complete) {
                 if (!result.text.trim() || result.text.length > 2_000_000)
                   return error('CODEX_INVALID_OUTPUT');
-                // Detach before interrupting: never return a tool result that starts another sample.
                 submitted = result.text;
                 offTools();
                 await stopProcess();
@@ -1496,7 +1461,6 @@ export class CodexRuntime implements CodexRuntimeService {
                 success: result.success,
               };
             } catch (caught) {
-              // A thrown host operation may already have committed; never turn it into a retry hint.
               rejectTurn(caught);
               throw caught;
             } finally {
@@ -1506,7 +1470,6 @@ export class CodexRuntime implements CodexRuntimeService {
           },
         });
       }
-      // Attach the rejection handler before issuing RPC: completion may precede its reply.
       void completed.catch(() => {});
       offExit = process.onExit(() => {
         if (submitted === undefined)
@@ -1514,7 +1477,6 @@ export class CodexRuntime implements CodexRuntimeService {
       });
       offNotification = process.onNotification((method, params) => {
         if (ended) return;
-        // Keep reported usage during submission shutdown, but accept no later output or actions.
         if (submitted !== undefined && method !== 'thread/tokenUsage/updated') return;
         if (method === 'uimori/unsupportedRequest') {
           rejectTurn(new ProviderContractError('CODEX_TOOL_NOT_ALLOWED'));
@@ -1616,8 +1578,6 @@ export class CodexRuntime implements CodexRuntimeService {
                 });
             }
           }
-          // Native work and commentary are intermediate. A phase-less message is
-          // only a legacy final candidate until a later activity supersedes it.
           if (!['userMessage', 'reasoning', 'agentMessage'].includes(String(item.type)))
             legacyOutput = '';
           if (
@@ -1761,8 +1721,6 @@ export class CodexRuntime implements CodexRuntimeService {
       if (session) session.busy = false;
       if (session && !reusable) await this.closeSession(session);
       if (process && !session) {
-        // Closing the isolated process prevents a late or uncertain turn being reused.
-        // A request can already be executing upstream; it is never replayed here.
         if (interrupted) await stopProcess();
         else await process.close();
         this.active.delete(process);

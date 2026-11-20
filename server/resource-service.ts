@@ -18,7 +18,6 @@ import { pruneThemeAssets, themeAssetHashes } from './theme-assets.js';
 
 type CreationReceipt = { kind: ResourceKind; id: string; organizationRevision?: number };
 
-/** Compact, durable identities: repeated admissions never create another resource. */
 function creationReceipt(operation: 'save' | 'clone', key: string, payload: unknown) {
   const receiptKey = `resource:${operation}:${key}`;
   const digest = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
@@ -31,7 +30,6 @@ export function readResource(store: Store, kind: ResourceKind, id: string): Save
   return kind === 'prompt-workspace' ? promptWorkspace(store) : store.product.get(kind, id);
 }
 
-/** An existing receipt can prove that a removed target was created without creating it again. */
 function readCreatedResource(store: Store, receipt: CreationReceipt): SavedResource {
   if (store.product.isHidden(receipt.kind, receipt.id))
     throw new HttpError(410, 'RESOURCE_CREATION_REMOVED');
@@ -135,7 +133,6 @@ export function saveResource(
   });
 }
 
-/** Clone saved authorship, without the source's selection, history or undo state. */
 export function cloneResource(
   store: Store,
   request: {
@@ -187,7 +184,6 @@ export function cloneResource(
       if (!Object.keys(native.card).length && native.module) native.module.name = request.title;
       else native.card.name = request.title;
     } else {
-      // Preserve the authored native name unless explicitly requested.
       const preset = model as PromptEditModel;
       preset.title = request.title;
       if (request.syncNativeName) preset.program.nativeRisuPreset.preset.name = request.title;

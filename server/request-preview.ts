@@ -31,7 +31,6 @@ import { requestReceipt } from './request-receipt.js';
 import type { Store } from './store.js';
 import { storyUiThemeChoices } from './themes.js';
 
-/** Read current saved selections and estimate the existing encoder projection, without execution. */
 export async function previewNextRequest(
   store: Store,
   chatId: string,
@@ -45,12 +44,10 @@ export async function previewNextRequest(
 
 export type NextRequestInspection = {
   preview: RequestPreview;
-  /** The prompt the main request would carry; null without a main model or when preparation failed. */
   compilation: PromptCompilation | null;
   loreContext: LoreContextSnapshot | null;
 };
 
-/** The same read-only preparation as previewNextRequest, keeping the prompt it compiled. */
 export async function inspectNextRequest(
   store: Store,
   chatId: string,
@@ -141,7 +138,6 @@ export async function inspectNextRequest(
       result.caveats.push('NATIVE_CALLBACKS_DEFERRED', 'NATIVE_EDIT_REQUEST_DEFERRED');
     result.lore.selectionPending = loreSelectionPending(snapshot);
     if (result.lore.selectionPending) result.caveats.push('LORE_SELECTION_PENDING');
-    // The native preview evaluates copied CBS fields/regex and skips input/editInput/start callbacks.
     snapshot = await prepareNativeRisuRun(snapshot, { preview: true });
     snapshot = store.context.prepareRun(snapshot);
     result.snapshot.contextRevision = snapshot.contextBase!.activeRevision;
@@ -172,7 +168,6 @@ export async function inspectNextRequest(
       if (result.tokens.tokenizerInfo.fallback) result.caveats.push('TOKENIZER_FALLBACK');
       const built = buildMainProviderRequest(snapshot);
       compilation = built.snapshot.promptCompilation ?? null;
-      // This follows the current transport choice without changing evaluation policy.
       const evaluation = target.evaluationTools;
       const measured = measureProviderRequest(built.request, target, {
         codexNative:
@@ -202,13 +197,10 @@ export async function inspectNextRequest(
       ).length;
     }
   } catch {
-    // Author-controlled compilation errors can contain source text. Return bounded metadata only.
     compilation = null;
     result.error = 'PREVIEW_UNAVAILABLE';
     result.caveats.push('PREVIEW_UNAVAILABLE');
   }
-  // Native CBS/regex work awaits an isolated worker. A concurrent save must not make
-  // its earlier projection look current. Do not retry or reserve anything here.
   const current = store.chat(chat.id);
   let stale =
     current.headRevision !== chat.headRevision ||
@@ -226,8 +218,6 @@ export async function inspectNextRequest(
         JSON.stringify(snapshot.storyUiThemeChoices) !==
         JSON.stringify(storyUiThemeChoices(store, current.botId));
     stale ||= !contextSourcesMatch(store, current.headRevision, contextSourceRefs(snapshot));
-    // Live attached links follow the latest library revision, including transitive modules,
-    // without advancing the chat's stored profile revision. Read only their small metadata.
     const latestContent = store.db.prepare(
       "SELECT revision FROM versions WHERE kind='content' AND id=?"
     );
@@ -280,7 +270,6 @@ export function requestPreviewRoutes(app: FastifyInstance, store: Store) {
   );
 }
 
-/** Dimension-only projection. It never resolves bytes, stages uploads or stores these identities. */
 function previewImages(value: unknown): RequestImage[] {
   if (!Array.isArray(value) || value.length > REQUEST_IMAGE_MAX_COUNT)
     throw new HttpError(400, '참고 이미지 목록을 확인해 주세요.');

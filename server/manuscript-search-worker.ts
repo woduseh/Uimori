@@ -11,7 +11,6 @@ import type {
   SearchMatch,
 } from '../core/manuscript-search.js';
 
-// Source execution is also used in focused tests: only native/package runtime imports here.
 const input = workerData as {
   path: string;
   operation: 'index' | 'search';
@@ -65,7 +64,6 @@ function currentDocuments(sourceId: string): SearchDocument[] {
   };
   append('original', String(row.text), String(row.hash));
   if (row.request) append('request', String(row.request), hash(String(row.request)));
-  // The reader retains the previous complete translation while a newer attempt is pending/failed.
   const latest = db
     .prepare(`SELECT id,status,source_hash,revision FROM jobs WHERE source_revision=? AND kind='translation'
     ORDER BY revision DESC,created_at DESC,id DESC LIMIT 1`)
@@ -106,7 +104,6 @@ function snippet(text: string, terms: string[]): SearchMatch['snippet'] {
   const start = Math.max(0, first - 70);
   const end = Math.min(text.length, start + 260);
   const result: SearchMatch['snippet'] = start ? [{ text: '…', match: false }] : [];
-  // Case folding may change string length (e.g. dotted I). Never project its offsets into a different string.
   if (folded.length !== text.length)
     return [
       {
@@ -156,8 +153,7 @@ function search(query: ManuscriptSearchQuery): ManuscriptSearchResult {
   const params: (string | number)[] =
     query.scope === 'chat' ? [query.chatId!] : query.scope === 'bot' ? [query.botId!] : [];
   const long = terms.filter((term) => [...term].length >= 3);
-  // The trigram tokenizer folds Unicode independently. Fold verification remains authoritative;
-  // dirty rows bypass the index and are projected from the same read transaction.
+  // SQLite's trigram tokenizer folds Unicode by its own rules, so matches are verified again.
   const fts = long.length
     ? `AND (EXISTS(SELECT 1 FROM search_dirty_sources d WHERE d.source_id=v.source_id)
     OR v.source_id IN (SELECT d.source_id FROM search_fts f JOIN search_documents d ON d.id=f.rowid WHERE search_fts MATCH ?))`
@@ -236,8 +232,6 @@ try {
       .all();
     const batch: SearchIndexBatch = [];
     let bytes = 0;
-    // Bound both new FTS work and removal of old index text. One oversized scene must
-    // still progress; do not combine it with seven more large scenes in one write.
     for (const row of rows) {
       const sourceId = String(row.source_id);
       const documents = currentDocuments(sourceId);

@@ -107,7 +107,6 @@ export type AuxiliaryOutcome = {
   error: string | null;
   diagnostic?: AuxiliaryFailureDiagnostic;
 };
-/** Every mutating bridge method must check owner+generation and the source dependency. */
 export type AuxiliaryStoreBridge = {
   captureTranslationReferences?: (snapshot: RunSnapshot) => Disposable & {
     load: (id?: string) => readonly TranslationReference[];
@@ -133,7 +132,6 @@ export type AuxiliaryStoreBridge = {
   ) => MaybePromise<void>;
 };
 export type AuxiliaryJobHooks = {
-  /** Server injection for isolated transport tests; never part of persisted user settings. */
   jev?: Pick<JudgmentHooks, 'credential' | 'fetch' | 'settings' | 'readImage' | 'target'>;
   executeCodex?: import('../core/transport.js').ProviderExecutionOptions['executeCodex'];
   resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
@@ -247,7 +245,6 @@ const toolSchemas: ProviderTool[] = [
   },
 ];
 
-/** This projection uses the originating Run's frozen contents, never current revisions. */
 export function sourceTimeContext(
   snapshot: RunSnapshot,
   kind: JobKind,
@@ -277,7 +274,6 @@ export function sourceTimeContext(
     revision: profile
       ? `${profile.chatId}@${profile.revision}`
       : `${snapshot.chatId}@settings-${snapshot.settingsRevision}`,
-    // Native content is delivered once by auxiliary package context.
     bot: null,
     persona: null,
     references: [],
@@ -312,8 +308,6 @@ function providerInput(
     ? 'Translate the entire source according to the selected prompt. Return only translated text.'
     : 'Translate the entire source into Korean. Return only translated text.';
   const compilation = compileTranslationPrompt(input, snapshot, task);
-  // Omit a fallback only after its complete value was rendered by a declared slot.
-  // Inactive slots and templates that trim or otherwise omit content keep the full fallback.
   const delivered = (slot: string, value: string) =>
     !!value &&
     !!compilation?.usedSlots?.includes(slot) &&
@@ -407,7 +401,6 @@ function providerInput(
   });
 }
 
-/** Server job execution is separate from SQLite claim/finish transactions. */
 export async function runAuxiliaryJob(
   store: AuxiliaryStoreBridge,
   jobId: string,
@@ -432,7 +425,6 @@ export async function runAuxiliaryJob(
   let nativePreparationError: unknown;
   if (!bundle.judgmentRecovery && nativeRisuSnapshotNeedsRefresh(snapshot)) {
     try {
-      // This is a new operation against frozen source-time inputs. The original receipt stays intact.
       snapshot = supportedNativeRisuSnapshot(snapshot);
       snapshot = await prepareNativeRisuReadOnly(snapshot, 'auxiliary');
     } catch (error) {
@@ -482,7 +474,6 @@ export async function runAuxiliaryJob(
   let readTranslation: ReturnType<typeof translationReader> | undefined;
   const evaluation = createEvaluationToolSession(target, hooks.timeoutMs);
   let evaluationRounds = 0;
-  // Fixture annotations remain explicitly marked; live output still requires artifact validation.
   const mock =
     !bundle.judgmentRecovery &&
     job.kind !== 'image' &&
@@ -551,13 +542,10 @@ export async function runAuxiliaryJob(
       if (attemptId !== undefined) {
         try {
           await hooks.onAttemptFinish(attemptId, uncertainAttemptResult(hooks.signal.aborted));
-        } catch {
-          // Preserve the original execution failure if diagnostic settlement also fails.
-        }
+        } catch {}
       }
       throw error;
     }
-    // Keep diagnostic output and usage even when a refusal or malformed body cannot become an artifact.
     if (attemptId !== undefined)
       await hooks.onAttemptFinish(
         attemptId,
@@ -728,8 +716,6 @@ export async function runAuxiliaryJob(
               'This optional read was not supplied. Request a narrower range or finish translating the complete current source with the evidence already available.',
           },
         });
-        // Reserve a complete, paired correction result for every pending call.
-        // Protocol continuations require all results, and later denials need room too.
         const body = providerRequest(
           {
             ...next,
@@ -885,7 +871,6 @@ export async function runAuxiliaryJob(
     throw new AuxiliaryExecutionError('AUXILIARY_KIND_INVALID');
   } catch (error) {
     const code = hooks.signal.aborted ? 'AUXILIARY_CANCELLED' : safeError(error);
-    // IDs are local authored identifiers, not error messages or provider response excerpts.
     const identifier = (value: unknown) =>
       typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,128}$/.test(value) ? value : undefined;
     const outcome: AuxiliaryOutcome = {

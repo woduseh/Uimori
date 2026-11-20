@@ -6,7 +6,6 @@ import { fields, HttpError, number, record } from './request-validation.js';
 
 const KEY = 'auto-translation-defaults';
 
-/** Server-wide default; missing metadata preserves the original opt-in behavior. */
 export function autoTranslationDefaults(db: DatabaseSync): AutoTranslationDefaults {
   const row = db.prepare('SELECT value FROM app_metadata WHERE key=?').get(KEY);
   return row

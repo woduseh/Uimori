@@ -28,7 +28,6 @@ export interface NativeRisuRequestMessage {
   content: string;
 }
 export interface NativeRisuExecutionInput {
-  /** Host-resolved grants for each original card/module, before namespaces are merged. */
   effectiveTriggers?: Record<string, unknown>[];
   native: RisuContentSource;
   variables: Record<string, string>;
@@ -55,11 +54,9 @@ export interface NativeRisuExecutionInput {
   meta?: Record<string, unknown>;
   globalVariables?: Record<string, string>;
   authorNote?: string;
-  /** Chat-authored note, separate from the effective CBS note with its preset fallback. */
   chatAuthorNote?: string;
   persona?: string;
   tokenizerProfile?: TokenizerProfileId;
-  /** Ranges in the merged lore, preserving card versus module import semantics and lookup order. */
   loreSources?: { start: number; count: number; module: boolean }[];
   assetUrls?: Record<string, string>;
   viewport?: NativeRisuCbsContext['viewport'];
@@ -78,10 +75,8 @@ export interface NativeRisuExecutionResult {
 }
 export interface NativeRisuExecutionOptions {
   sessionKey?: string;
-  /** Shared across the callbacks of one run; prevents old cleanup from closing a newer VM. */
   sessionOwner?: object;
   signal?: AbortSignal;
-  /** External calls preserve Risu's method and arguments; the caller owns model selection. */
   host?: (method: string, args: unknown, signal: AbortSignal) => Promise<unknown>;
 }
 
@@ -173,7 +168,6 @@ function compare(left: string, right: string, operator: string, numericEquality:
   }
 }
 
-/** Executes original trigger records. No imported BehaviorAction representation is involved. */
 async function executeNativeRisuInvocation(
   input: NativeRisuExecutionInput,
   options: NativeRisuExecutionOptions & { sessionOwner: object },

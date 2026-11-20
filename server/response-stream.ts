@@ -37,7 +37,6 @@ type StreamIdentity = { taskKind: ResponseTaskKind; taskId: string; chatId?: str
 type StreamRow = { owner: string; status: ResponseStreamStatus };
 const keyOf = (identity: StreamIdentity) => JSON.stringify([identity.taskKind, identity.taskId]);
 
-/** Public text has its own cursor; streaming never requires reloading the whole chat. */
 export class ResponseStreamStore {
   private readonly listeners = new Map<string, Set<() => void>>();
   private readonly store: Pick<Store, 'db' | 'transaction'>;
@@ -99,7 +98,6 @@ export class ResponseStreamStore {
       try {
         listener();
       } catch {
-        // A disconnected subscriber cannot fail or cancel the server-owned provider request.
         listeners?.delete(listener);
       }
     }
@@ -115,8 +113,6 @@ export class ResponseStreamStore {
   ) {
     const owner = randomUUID();
     const timestamp = new Date().toISOString();
-    // Only the startup executor may transfer a recoverable Batch stream to a new writer.
-    // Ordinary tasks still reject duplicate writers; an old owner cannot publish or finish it.
     const resumed =
       options.resume && options.taskKind === 'main' && options.isActive()
         ? this.store.db
@@ -184,7 +180,6 @@ export class ResponseStreamStore {
           );
         return true;
       });
-      // Subscribers can only observe committed batches. Already admitted text may flush on cancel.
       if (inserted) this.publish(options);
     };
     const finish = (status: Exclude<ResponseStreamStatus, 'running'>) => {
@@ -328,7 +323,6 @@ export function responseStreamRoutes(
         do {
           page = streams.read(target.taskKind, target.taskId, after);
           blocked = !reply.raw.write(`id: ${page.cursor}\ndata: ${JSON.stringify(page)}\n\n`);
-          // write(false) still accepts this page. Resume after it, never send it twice.
           after = page.cursor;
         } while (page.hasMore && !blocked);
         if (!page.hasMore && page.status !== 'running') {

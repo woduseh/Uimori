@@ -28,13 +28,10 @@ import {
 } from '../core/context-projection.js';
 import { nativeRisuPresetPending, projectNativeRisuPresetProgram } from './risu-native-preset.js';
 
-/** Pair each exact source version with its actual user request; never infer roles from prose. */
 export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): PromptHistoryMessage[] {
   const entries = snapshot.history;
   if (!entries.length) return [];
   const sourceMessages = new Set<string>();
-  // This fold needs exact provenance, not Reader paragraph anchors or translation revisions.
-  // Keep the same original/selected-edit integrity checks without constructing those views.
   const readSource = store.db.prepare(
     'SELECT id,chat_id AS chatId,run_id AS runId,text,hash FROM sources WHERE id=?'
   );
@@ -91,9 +88,6 @@ export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): Prom
         ...output.messages.map((message, index) => {
           const existing = message.id ? prior.get(message.id) : undefined;
           const current = message.id === 'current-output';
-          // Only source text is edited by the user; requests and script-added messages
-          // keep their own Lua changes. Unchanged receipt input is a carried-forward
-          // value, which must not resurrect text already corrected earlier in this fold.
           const preserveSource =
             existing?.sourceRevision !== undefined &&
             sourceMessages.has(existing.id) &&
@@ -164,10 +158,7 @@ export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): Prom
     );
     return applyMessageChanges(accumulated, owner.messageChanges);
   }, []);
-  // User controls always win over retained native/Risu script transformations.
   const controls = new Map(entries.map((entry) => [entry.revision, entry.sceneContext]));
-  // A native Risu action may retain multiple user messages in one scene. The user edits
-  // that scene's combined request, so project it once while retaining every attachment.
   const requestImages = new Map<string, NonNullable<PromptHistoryMessage['requestImages']>>();
   for (const message of folded) {
     if (message.role !== 'user' || !message.sourceRevision) continue;
@@ -239,8 +230,6 @@ function contextFromPackages(
       },
       lastUsed: '',
     }));
-  // Hashes already exist in the input only for fixed bodies; admitted references use
-  // the same server hash as successful retention, without changing authored sources.
   for (const entry of selected) entry.hash = createHash('sha256').update(entry.text).digest('hex');
   const entries = [
     ...(snapshot.loreContext?.entries ?? []).filter(
@@ -275,7 +264,6 @@ function contextFromPackages(
       : undefined,
   };
 }
-/** Compile the current native prompt semantics for this request. */
 export function compileSnapshotPrompt(
   snapshot: RunSnapshot,
   program?: RisuPrompt,
@@ -289,7 +277,6 @@ export function compileSnapshotPrompt(
     createDefaultRisuPrompt(DEFAULT_MAIN_PROMPT);
   const selected = projectNativeRisuPresetProgram(snapshot, authored);
   const packages = compiledPackages(snapshot, 'main');
-  // Reuse only within this synchronous compilation; later requests and tool results rebuild it.
   const input = buildMainInput(snapshot, [], packages);
   const context = contextFromPackages(snapshot, packages, input);
   const promptCompilation = compileRisuPrompt(selected, {

@@ -1,7 +1,3 @@
-/**
- * Host-owned dynamic data for the main request: the JSON input boundary and the synthetic user
- * message that carries it. Shared by request building and snapshot compilation.
- */
 import { RISU_SOURCE_GUIDANCE } from '../core/risu-context-source.js';
 import { buildMainInput, pinnedSlotSources, type MainInput } from '../core/provider.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -15,7 +11,6 @@ import { storyUiHistoryMode } from '../core/context-projection.js';
 import { STORY_UI_CATALOG_ID } from '../core/story-ui-catalog.js';
 
 const json = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
-/** The history a writer reads. Search and budgeting keep using the plain-text projection. */
 function writerHistory(snapshot: RunSnapshot, input: MainInput): MainInput['history'] {
   const mode = storyUiHistoryMode(snapshot);
   if (mode === 'text') return input.history;
@@ -26,7 +21,6 @@ function writerHistory(snapshot: RunSnapshot, input: MainInput): MainInput['hist
   });
 }
 export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderRequest['input'] {
-  // Writing options belong to the selected RisuPrompt. Mock settings never cross this boundary.
   const controls: ProviderRequest['input']['controls'] = {};
   const structured = !!snapshot.promptCompilation;
   const used = new Set(snapshot.promptCompilation?.usedSlots ?? []);
@@ -110,7 +104,6 @@ export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderR
     results: json(input.results),
   };
 }
-/** Explicit dynamic data boundary. Existing user-authored roles, order and cache IDs stay unchanged. */
 export function attachMainHostContext(snapshot: RunSnapshot, input?: MainInput): RunSnapshot {
   if (!snapshot.promptCompilation) return snapshot;
   if (!PROMPT_COMPILER_VERSIONS.has(snapshot.promptCompilation.compilerVersion))

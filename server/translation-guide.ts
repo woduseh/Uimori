@@ -6,7 +6,6 @@ import {
   type BotTranslationGuide,
 } from '../core/translation-guide.js';
 
-/** Capture once at translation admission. Never combine persona/module/chat-local guides. */
 export function currentBotTranslationGuide(
   store: Store,
   chatId: string

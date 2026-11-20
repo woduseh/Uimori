@@ -12,7 +12,6 @@ import {
   type JudgmentRequest,
 } from './judgment.js';
 
-/** Check the exact text sent for this image, not the entire story. Image bytes are not inspected. */
 export async function checkCodexIllustrationContent(
   input: string,
   hooks: JudgmentHooks,
@@ -49,7 +48,6 @@ export async function checkCodexIllustrationContent(
     };
   } catch (error) {
     hooks.signal.throwIfAborted();
-    // An unavailable guard is visible, not an "allowed" decision. Never hide storage failures.
     if (!(error instanceof JudgmentError) || error.code.endsWith('_ATTEMPT_FINISH_FAILED'))
       throw error;
     return { status: 'unavailable', inputHash, code: error.code };

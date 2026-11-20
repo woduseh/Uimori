@@ -23,11 +23,6 @@ import {
   type JudgmentRequest,
 } from './judgment.js';
 
-/**
- * One shared JEV judgment batch. The step runs in the worker, after the
- * reservation froze the conversation and before the main input is measured, and never fails the Run:
- * an abandoned entry carries an `error` and decides nothing, so every lore keeps its own `loading`.
- */
 export type LoreSelectionTarget = {
   snapshot: RunSnapshot;
   attachment: ContentAttachment;
@@ -37,18 +32,12 @@ const sha256 = (value: string) => createHash('sha256').update(value, 'utf8').dig
 const emptyUsage = (): Usage => ({ modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
 const selectedLoreTokens = (entry: Candidate) =>
   entry.parts.reduce((sum, part) => sum + countTextTokens(part.text), 0);
-/** Body cost for the final host admission trim, after native/scoped projection. */
 export function selectedLoreReceiptTokens(snapshot: RunSnapshot, key: string): number {
   return compiledPackages(snapshot, 'main')
     .filter((pkg) => loreSelectionKey(pkg.attachment) === key)
     .flatMap((pkg) => pkg.selectedLore)
     .reduce((sum, resource) => sum + countTextTokens(resource.text), 0);
 }
-/**
- * Every attached package this snapshot owes a selection for, in attachment order: the ones in model
- * mode that still offer at least one discoverable entry. Preparation asks about these; archive
- * validation recomputes their input hashes and rejects any receipt key outside the set.
- */
 export function loreSelectionTargets(snapshot: RunSnapshot): LoreSelectionTarget[] {
   const profile = snapshot.profile;
   const targets: LoreSelectionTarget[] = [];
@@ -63,11 +52,6 @@ export function loreSelectionTargets(snapshot: RunSnapshot): LoreSelectionTarget
   return targets;
 }
 
-/**
- * A main `run` reservation that still owes the selection call. Authored openings and transcript
- * imports never ask, so their lore follows `loading` exactly as before; a snapshot that already
- * carries the receipt - a candidate's copy, a retry re-entering the worker - is never asked again.
- */
 export function loreSelectionPending(snapshot: RunSnapshot): boolean {
   if (snapshot.loreSelection !== undefined) return false;
   if (snapshot.packageStart?.mode === 'authored' || snapshot.transcriptImport !== undefined)
@@ -83,10 +67,6 @@ type Candidate = {
   text: string;
   parts: CandidatePart[];
 };
-/**
- * Selection still pins a lore ID across its link paths. Keep every effective resource in that
- * group: different overrides must all be judged, hashed and charged for the bodies pinning sends.
- */
 function candidateCatalog(
   target: LoreSelectionTarget,
   packages = compiledPackages(target.snapshot, 'main')
@@ -120,7 +100,6 @@ function candidateCatalog(
     .map((lore) => {
       let parts = rendered.get(lore.id);
       if (!parts) {
-        // Empty CBS output stays empty. The fallback also uses the effective metadata.
         const effective = compiled?.package.lore.find((entry) => entry.id === lore.id) ?? lore;
         parts = [
           {
@@ -159,7 +138,6 @@ function candidateCatalog(
   return { catalog };
 }
 
-/** The recent turns the model judges relevance against, cut to the limits it is told about. */
 function recentConversation(
   snapshot: RunSnapshot
 ): { role: string; text: string; truncated: boolean }[] {
@@ -186,11 +164,6 @@ function recentConversation(
   });
 }
 
-/**
- * Everything one selection reads, resolved from the reserved snapshot alone, plus the hash that binds
- * the entry to exactly these inputs. The run id is deliberately outside it, so a fork or a chat-backup
- * restore that copies the frozen receipt onto a new run id stays verifiable.
- */
 function selectionInputs(
   target: LoreSelectionTarget,
   packages?: ReturnType<typeof compiledPackages>
@@ -227,12 +200,10 @@ function selectionInputs(
   return { key: loreSelectionKey(target.attachment), payload, partial, policy, inputHash };
 }
 
-/** The frozen inputs of one attached package's catalog, recomputed without asking the model again. */
 export function loreSelectionInputHash(target: LoreSelectionTarget): string {
   return selectionInputs(target).inputHash;
 }
 
-/** One JEV request shares the conversation across all attached catalogs. */
 function jevBatchInputs(targets: LoreSelectionTarget[]) {
   const packages = compiledPackages(targets[0].snapshot, 'main');
   const originals = targets.map((target) => selectionInputs(target, packages));
@@ -258,7 +229,6 @@ function jevBatchInputs(targets: LoreSelectionTarget[]) {
       key: 'jev-batch',
       inputHash,
       partial: originals.some((input) => input.partial) ? ('catalog' as const) : undefined,
-      // The provider's question limit constrains the final shortlist, not the searchable corpus.
       payload: { ...originals[0].payload, catalog },
     },
   };
@@ -312,8 +282,6 @@ async function selectOne(
       ...(entry.description ? { description: entry.description } : {}),
       text: entry.text,
     });
-    // Each independent question sees the shared conversation and only its own candidate.
-    // Keeping the entire catalog in state would consume the per-question budget for every entry.
     const state = {
       conversation: payload.conversation,
       request: payload.request,
@@ -344,8 +312,6 @@ async function selectOne(
     const requestLimit = Math.min(policy.judgment.maxInputTokens, limits.requestTokens);
     const questionLimit = limits.questionTokens;
     const stateTokens = estimateContextTokens(state);
-    // Count each question once, then pack by addition. Full-catalog tokenization in a trimming
-    // loop makes large lorebooks quadratic and delays cancellation before dispatch.
     const questionTokens = new Map(
       eligible.map((entry) => [entry.id, estimateContextTokens(questions.get(entry.id)!)])
     );
@@ -361,7 +327,6 @@ async function selectOne(
       totalTokens <= requestLimit &&
       eligible.every(fitsQuestion)
     ) {
-      // Keep the complete, authored order when the entire catalog fits.
       catalog = eligible;
     } else {
       const search = createCandidateSearch(
@@ -384,8 +349,6 @@ async function selectOne(
       const byId = new Map(eligible.map((entry) => [entry.id, entry]));
       catalog = [];
       let available = requestLimit - stateTokens;
-      // Skip an oversized candidate so smaller relevant entries later in the ranking
-      // still receive a judgment. Unasked candidates remain uncovered, not irrelevant.
       for (const id of ids) {
         if (catalog.length >= maxQuestions || available <= 0) break;
         const entry = byId.get(id)!;
@@ -479,13 +442,6 @@ async function selectOne(
   }
 }
 
-/**
- * Select discoverable lore with a frozen receipt. JEV shares one conversation across all packages;
- * `reserveCalls` is the number of
- * calls the Run still owes outside this step - the main turn plus everything it already spent - so
- * the selection never takes the last slot. The caller persists the receipt and merges the usage so
- * the compaction step's own `reserveCalls` counts these calls.
- */
 export async function prepareLoreSelection(
   snapshot: RunSnapshot,
   hooks: MainHooks,

@@ -13,7 +13,6 @@ export type NativeRisuRenderInput = {
   text: string;
   context: Omit<NativeRisuCbsContext, 'native' | 'random'>;
   timeoutMs?: number;
-  /** Canonical source positions, supplied only for the unchanged displayed body. */
   illustrationBlocks?: { anchor: string; end: number }[];
 };
 export type NativeRisuRenderResult = {
@@ -115,15 +114,12 @@ function createAssetResolver(input: NativeRisuRenderInput): (name: string) => st
     for (const alias of aliases) exact.set(alias.toLocaleLowerCase(), url);
     candidates.push({ name: normalizedAssetName(asset.name), url });
   }
-  // Attached modules may have extension aliases not described in the active card's JSON.
-  // Keep only aliases pointing to an already admitted, stored local asset.
   const storedUrls = new Set(candidates.map((asset) => asset.url));
   for (const [name, url] of Object.entries(urls))
     if (storedUrls.has(url)) exact.set(name.toLocaleLowerCase(), url);
   const resolved = new Map<string, string | undefined>();
   return (rawName) => {
     const name = rawName.trim().toLocaleLowerCase();
-    // Some authored cards leave literal references to optional, now-removed capture groups.
     const match = exact.get(name) ?? exact.get(name.replace(/\$\d{1,2}/gu, '').trim());
     if (match) return match;
     if (resolved.has(name)) return resolved.get(name);
@@ -132,7 +128,6 @@ function createAssetResolver(input: NativeRisuRenderInput): (name: string) => st
     let distance = assetMaxDifference + 1;
     for (const asset of candidates) {
       const next = assetDistance(normalized, asset.name, distance - 1);
-      // Strictly smaller preserves original asset order when multiple names tie.
       if (next < distance) {
         closest = asset.url;
         distance = next;
@@ -144,7 +139,6 @@ function createAssetResolver(input: NativeRisuRenderInput): (name: string) => st
   };
 }
 
-/** Asset tags keep their native HTML/CSS meaning; only local imported asset URLs are resolved. */
 function assets(text: string, resolve: (name: string) => string | undefined, issues: string[]) {
   return text.replace(
     /{{(raw|path|img|image|video|audio|bgm|bg|emotion|asset|video-img|source)::([^{}]*?)}}/gims,
@@ -265,7 +259,6 @@ export function renderNativeRisuMessageInWorker(
   });
   let text = assets(processed.text, resolveAsset, issues);
   const background = assets(cbs.parse(nativeRisuBackground(input.native)), resolveAsset, issues);
-  // Styles are restored after Markdown parsing, preventing CSS content from becoming Markdown.
   const styles: string[] = [];
   const beforeStyles = text;
   const styleOffsets: { start: number; end: number; delta: number }[] = [];
@@ -309,8 +302,6 @@ export function renderNativeRisuMessageInWorker(
       }
       const opening = token.nesting === -1 ? stack.pop() : token;
       if (!opening?.map || !supported.has(opening.type)) continue;
-      // Use the outermost completed Markdown container at a shared ending position.
-      // Never put a slot directly between list items or inside a table row.
       let endLine = opening.map[1];
       while (endLine > opening.map[0] && !lines[endLine - 1]?.trim()) endLine--;
       const lastLine = lines[endLine - 1] ?? '';
@@ -336,7 +327,6 @@ export function renderNativeRisuMessageInWorker(
     (_tag, index: string) =>
       `<style>${styles[Number(index)]!.replace(/<\/(?=style)/giu, '<\\/')}</style>`
   );
-  // The message ShadowRoot contains authored selectors, IDs and @keyframes.
   html = `${background}<div class="risu-chat risu-chat-text">${html}</div>`;
   if (html.length > 4_000_000) throw new Error('RISU_NATIVE_TEXT_LIMIT');
   return {
