@@ -3,6 +3,7 @@ import { parseShard, browserCases } from './ci-summary.mjs';
 import { assertBrowserRuntime } from './browser-runtime.mjs';
 import { requiredNode, supportedNode } from './node-runtime.mjs';
 import path from 'node:path';
+import { availableParallelism, totalmem } from 'node:os';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, copyFile, readFile } from 'node:fs/promises';
 import { startProviderFixture } from './provider-management-fixture.mjs';
@@ -27,6 +28,17 @@ import {
   filesBelow,
 } from './lib.mjs';
 
+const workerMemory = 2 ** 31;
+
+export function defaultBrowserWorkers({ cpus = availableParallelism(), memory = totalmem() } = {}) {
+  return Math.max(1, Math.min(Math.floor(cpus / 2), Math.floor(memory / workerMemory)));
+}
+
+export function parseBrowserWorkers(value) {
+  if (!/^[1-9]\d?$/u.test(value ?? '')) throw new Error('Use a worker count from 1 to 99');
+  return Number(value);
+}
+
 export async function runBrowserVerification({
   name,
   prefix = name,
@@ -39,10 +51,17 @@ export async function runBrowserVerification({
   limitations = [],
 }) {
   const options = parseOptions(process.argv.slice(2), {
-    values: ['grep', 'shard'],
+    values: ['grep', 'shard', 'workers'],
     flags: ['visual'],
   });
   if (options.shard) parseShard(options.shard);
+  const requestedWorkers = options.workers ?? process.env.UIMORI_BROWSER_WORKERS;
+  const workers = Math.min(
+    requestedWorkers === undefined
+      ? defaultBrowserWorkers()
+      : parseBrowserWorkers(requestedWorkers),
+    files.length || Number.POSITIVE_INFINITY
+  );
   const focused = options.grep !== undefined;
   if (focused) {
     new RegExp(options.grep);
@@ -64,6 +83,7 @@ export async function runBrowserVerification({
     scope,
     selection: { files, grep, focused, ...(options.shard ? { shard: options.shard } : {}) },
     commit: process.env.GITHUB_SHA ?? null,
+    workers,
     visualReview,
     failures,
     cleanup: { status: 'NOT_RUN' },
@@ -116,8 +136,6 @@ export async function runBrowserVerification({
     assertNotCancelled();
     if (providerFixture) fixture = await startProviderFixture();
     const env = localVerificationEnv({
-      UIMORI_DB: path.join(runtime, 'app.sqlite'),
-      UIMORI_INSTANCE: runId,
       UIMORI_BUILD_ID: identity.buildId,
       ...(fixture ? { UIMORI_PROVIDER_FIXTURE_URL: fixture.url } : {}),
       UIMORI_ARTIFACT_DIR: directory,
@@ -130,14 +148,27 @@ export async function runBrowserVerification({
       TMP: temp,
     });
     assertNotCancelled();
-    const server = await startServer(env, directory, children);
-    env.UIMORI_BASE_URL = server.ready.url;
-    summary.server = server.ready;
-    ownership.children.push({
-      pid: server.child.pid,
-      dbPath: env.UIMORI_DB,
-      url: server.ready.url,
-    });
+    const servers = await Promise.all(
+      Array.from({ length: workers }, async (_, index) => {
+        const worker = index + 1,
+          log = path.join(directory, 'servers', String(worker));
+        await mkdir(log, { recursive: true });
+        const serverEnv = {
+          ...env,
+          UIMORI_DB: path.join(runtime, `app-${worker}.sqlite`),
+          UIMORI_INSTANCE: `${runId}-${worker}`,
+        };
+        const server = await startServer(serverEnv, log, children);
+        ownership.children.push({
+          pid: server.child.pid,
+          dbPath: serverEnv.UIMORI_DB,
+          url: server.ready.url,
+        });
+        return { worker, url: server.ready.url, db: serverEnv.UIMORI_DB, ready: server.ready };
+      })
+    );
+    summary.servers = servers.map(({ worker, ready }) => ({ worker, ...ready }));
+    env.UIMORI_BROWSER_SERVERS = JSON.stringify(servers.map(({ url, db }) => ({ url, db })));
     await json(path.join(directory, 'ownership.json'), ownership);
     assertNotCancelled();
     if (options.shard) {
