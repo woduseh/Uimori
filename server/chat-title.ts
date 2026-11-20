@@ -1,4 +1,4 @@
-import { supportedLocale, type UiLocale } from '../core/ui-locale.js';
+import { UI_LOCALES, type UiLocale } from '../core/ui-locale.js';
 import {
   modelTimeoutMs,
   workspaceModelRef,
@@ -87,7 +87,7 @@ export class ChatTitleService {
       const controller = new AbortController();
       this.active.set(chatId, controller);
       this.options.track(
-        this.generate(run, controller, supportedLocale(enrollment.entity_id)).finally(() => {
+        this.generate(run, controller, enrollment.entity_id).finally(() => {
           if (this.active.get(chatId) === controller) this.active.delete(chatId);
         })
       );
@@ -105,12 +105,15 @@ export class ChatTitleService {
       .all();
     for (const row of rows) this.afterSource(String(row.entity_id));
   }
-  private async generate(run: TitleSource, controller: AbortController, locale: UiLocale) {
+  private async generate(run: TitleSource, controller: AbortController, enrolledLocale: unknown) {
     const runId = run.id,
       chatId = run.chatId;
     let attempt: string | undefined;
     let result: ProviderResult | undefined;
     try {
+      if (!UI_LOCALES.includes(enrolledLocale as UiLocale))
+        throw new ProviderContractError('TITLE_LOCALE_INVALID');
+      const locale = enrolledLocale as UiLocale;
       const ref = workspaceModelRef(promptWorkspace(this.store), 'title');
       if (!ref) throw new ProviderContractError('TITLE_MODEL_UNSET');
       this.store.product.assertAvailable('model', ref.id);

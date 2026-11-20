@@ -5,6 +5,12 @@ export const messages = {
     ja: '以前作成したチャットのコピーは削除されました。新しいコピーを作成できます。',
     zh: '之前创建的聊天副本已被删除，您可以创建新副本。',
   },
+  'errors.CHAT_COPY_RECEIPT_UNVERIFIED': {
+    ko: '이전 복사 기록을 확인할 수 없어요. 다시 복사하면 새 사본을 만들어요.',
+    en: 'The earlier copy record could not be verified. Copying again creates a new copy.',
+    ja: '以前のコピー記録を確認できません。もう一度コピーすると新しいコピーを作成します。',
+    zh: '无法确认之前的复制记录。再次复制将创建新副本。',
+  },
   'errors.RESOURCE_CREATION_REMOVED': {
     ko: '이전에 만든 자료가 삭제됐어요. 새로 저장할 수 있어요.',
     en: 'The previously created resource was deleted. You can save it as new.',

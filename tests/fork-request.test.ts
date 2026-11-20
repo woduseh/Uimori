@@ -95,6 +95,22 @@ test('a terminal receipt for a deleted copy releases its retained key', async ()
   expect(JSON.parse(String(fetch.mock.calls[2][1]?.body)).idempotencyKey).not.toBe(previous);
 });
 
+test('an unverified copy receipt releases its retained key', async () => {
+  const { values } = storageFixture();
+  vi.spyOn(globalThis, 'fetch')
+    .mockRejectedValueOnce(new TypeError('Connection lost'))
+    .mockResolvedValueOnce(
+      Response.json({ error: 'CHAT_COPY_RECEIPT_UNVERIFIED' }, { status: 409 })
+    );
+  await expect(requestChatFork('chat', 'source')).rejects.toThrow();
+  expect(values.get(key)).toBeTruthy();
+  await expect(requestChatFork('chat', 'source')).rejects.toMatchObject({
+    status: 409,
+    code: 'CHAT_COPY_RECEIPT_UNVERIFIED',
+  });
+  expect(values.has(key)).toBe(false);
+});
+
 test('an uncertain HTTP failure retains the pending admission identity', async () => {
   const { values } = storageFixture();
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(

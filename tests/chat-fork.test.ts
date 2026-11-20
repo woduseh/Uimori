@@ -93,26 +93,24 @@ describe('independent stored-story fork without generation', () => {
     expect(store.chats()).toHaveLength(1);
   });
 
-  test('a legacy receipt without a verified command does not claim a deleted copy is resolved', async () => {
+  test('a receipt without a recorded command is rejected without creating another copy', async () => {
     const store = await database();
-    const chat = createFixtureChat(store, 'Legacy deleted copy');
+    const chat = createFixtureChat(store, 'Unverified copy');
     const original = source(store, chat.id, 'Original scene.');
-    const command = { fromRevision: original.id, idempotencyKey: 'legacy-deleted-copy' };
+    const command = { fromRevision: original.id, idempotencyKey: 'unverified-copy' };
     const copy = forkChat(store, chat.id, command);
     store.db
       .prepare(
         "UPDATE import_operations SET result=json_remove(result,'$.forkCommand') WHERE key=?"
       )
-      .run('transcript:copy:legacy-deleted-copy');
+      .run('transcript:copy:unverified-copy');
+    expect(() => forkChat(store, chat.id, command)).toThrowError(
+      expect.objectContaining({ statusCode: 409, message: 'CHAT_COPY_RECEIPT_UNVERIFIED' })
+    );
     deleteChat(store, copy.id, chatDeletionImpact(store, copy.id).request);
-    let failure: unknown;
-    try {
-      forkChat(store, chat.id, command);
-    } catch (error) {
-      failure = error;
-    }
-    expect(failure).toBeInstanceOf(Error);
-    expect(failure).not.toMatchObject({ statusCode: 410, message: 'CHAT_COPY_REMOVED' });
+    expect(() => forkChat(store, chat.id, command)).toThrowError(
+      expect.objectContaining({ statusCode: 409, message: 'CHAT_COPY_RECEIPT_UNVERIFIED' })
+    );
     expect(store.chats()).toHaveLength(1);
   });
   test('replaying a completed copy keeps its changed folder and original command, emitting no event', async () => {
@@ -139,25 +137,6 @@ describe('independent stored-story fork without generation', () => {
     expect(
       store.db.prepare('SELECT COUNT(*) AS n FROM events WHERE chat_id=?').get(copy.id)!.n
     ).toBe(events);
-  });
-
-  test('a preexisting copy receipt is recovered and upgraded using its recorded fork event', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, 'Legacy copy');
-    const original = source(store, chat.id, 'Legacy scene.');
-    const command = { fromRevision: original.id, idempotencyKey: 'old-copy-receipt' };
-    const copy = forkChat(store, chat.id, command);
-    store.db
-      .prepare(
-        "UPDATE import_operations SET result=json_remove(result,'$.forkCommand') WHERE key=?"
-      )
-      .run('transcript:copy:old-copy-receipt');
-    store.editSource(original.id, { expectedRevision: 0, text: 'Changed later.' });
-
-    expect(forkChat(store, chat.id, command).id).toBe(copy.id);
-    expect(() => forkChat(store, chat.id, { ...command, title: 'Different title' })).toThrow(
-      '다른 채팅에 같은 가져오기 ID'
-    );
   });
 
   test('numbers independent copies while repeated keys remain durable and conflicting selections are rejected', async () => {
@@ -200,23 +179,12 @@ describe('independent stored-story fork without generation', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  test('continues numbering legacy truncated copy titles while keeping the full base', async () => {
-    const store = await database();
-    const base = '가'.repeat(200);
-    const chat = createFixtureChat(store, base);
-    const suffix = ' (사본 3)';
-    createFixtureChat(store, base.slice(0, 200 - suffix.length) + suffix);
-    expect(forkChat(store, chat.id, { fromRevision: null, idempotencyKey: 'copy' }).title).toBe(
-      base + ' (사본 4)'
-    );
-  });
-
-  test.each(['Names · 새 이야기 · 새 이야기', 'Names (사본 2)'])(
+  test.each(['Names (사본) (사본 2)', 'Names (사본 2)'])(
     'copying %s continues the numbered family without stacking suffixes',
     async (title) => {
       const store = await database();
       const chat = createFixtureChat(store, title);
-      createFixtureChat(store, 'Names · 사본 3');
+      createFixtureChat(store, 'Names (사본 3)');
       const first = source(store, chat.id, 'First scene.');
       const copy = forkChat(store, chat.id, { fromRevision: first.id, idempotencyKey: 'copy' });
       expect(copy.title).toBe('Names (사본 4)');

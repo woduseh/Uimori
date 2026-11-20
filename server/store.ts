@@ -14,6 +14,7 @@ import {
   releaseEndedRunSnapshots,
 } from './execution-retention.js';
 import { recordToolDiagnostic } from './execution-diagnostics.js';
+import { upgradeStoredShapes } from './stored-shape-upgrades.js';
 import { retryRun as retryPersonalRun } from './run-retry.js';
 import { releaseEndedSnapshot, settleSnapshot } from './execution-snapshot.js';
 import { readRunSnapshot, readRunState } from './run-projections.js';
@@ -172,6 +173,7 @@ export class Store {
       initializePromptWorkspaceReferences(this);
       initializeActivityFeed(this);
       initMaintenance(this);
+      upgradeStoredShapes(this.db);
     } catch (error) {
       this.db.close();
       this.ownership.close();

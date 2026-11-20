@@ -3,31 +3,20 @@ import { createHash } from 'node:crypto';
 import { chatTitle, fields, HttpError, record, text } from './request-validation.js';
 import type { Chat, Store } from './store.js';
 
-function legacyReceiptCopyTitle(title: string): string {
-  return `${title.slice(0, 190)} (사본)`;
-}
-
 function numberedCopyTitle(store: Store, title: string): string {
   const base =
-    title.replace(/(?: · (?:새 이야기|사본 [1-9]\d*)| \(사본(?: [1-9]\d*)?\))+/gu, (run, offset) =>
+    title.replace(/(?: \(사본(?: [1-9]\d*)?\))+/gu, (run, offset) =>
       offset + run.length === title.length ? '' : run
     ) || title;
   let last = 0;
   for (const row of store.db.prepare('SELECT title FROM chats').all()) {
     const existing = String(row.title);
-    const match = existing.match(/(?: · 사본 ([1-9]\d*)| \(사본 ([1-9]\d*)\))$/u);
-    if (!match) continue;
-    const prefix = existing.slice(0, match.index);
-    const legacyMatch =
-      base.length <= 200 &&
-      existing.length === 200 &&
-      prefix === base.slice(0, 200 - match[0].length);
-    if (prefix !== base && !legacyMatch) continue;
-    const number = Number(match[1] ?? match[2]);
+    const match = existing.match(/ \(사본 ([1-9]\d*)\)$/u);
+    if (!match || existing.slice(0, match.index) !== base) continue;
+    const number = Number(match[1]);
     if (Number.isSafeInteger(number)) last = Math.max(last, number);
   }
-  const suffix = ` (사본 ${last + 1})`;
-  return base + suffix;
+  return `${base} (사본 ${last + 1})`;
 }
 
 export function forkChat(store: Store, chatId: string, value: unknown): Chat {
@@ -45,68 +34,24 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
       .prepare('SELECT result FROM import_operations WHERE key=?')
       .get(receiptKey);
     const saved = row
-      ? (JSON.parse(String(row.result)) as {
-          chatId: string;
-          automaticCopyTitle?: string;
-          forkCommand?: string;
-        })
+      ? (JSON.parse(String(row.result)) as { chatId: string; forkCommand?: string })
       : undefined;
-    const rememberCommand = () =>
-      store.db
-        .prepare(
-          "UPDATE import_operations SET result=json_set(result,'$.forkCommand',?) WHERE key=?"
-        )
-        .run(command, receiptKey);
-    const conflict = () => {
-      throw new HttpError(409, '다른 채팅에 같은 가져오기 ID가 사용됐어요.');
-    };
-    if (saved?.forkCommand) {
-      if (saved.forkCommand !== command) conflict();
-      if (typeof saved.chatId !== 'string' || !saved.chatId.trim())
-        throw new HttpError(409, '복사 기록을 확인할 수 없어요.');
+    if (saved) {
+      if (!saved.forkCommand || typeof saved.chatId !== 'string' || !saved.chatId.trim())
+        throw new HttpError(409, 'CHAT_COPY_RECEIPT_UNVERIFIED');
+      if (saved.forkCommand !== command)
+        throw new HttpError(409, '다른 채팅에 같은 가져오기 ID가 사용됐어요.');
       if (!store.db.prepare('SELECT 1 FROM chats WHERE id=?').get(saved.chatId))
         throw new HttpError(410, 'CHAT_COPY_REMOVED');
       return store.chat(saved.chatId);
     }
-    if (saved) {
-      const event = store.db
-        .prepare(
-          "SELECT entity_id FROM events WHERE chat_id=? AND kind='chat.forked' ORDER BY seq LIMIT 1"
-        )
-        .get(saved.chatId);
-      if (event) {
-        const original = JSON.parse(String(event.entity_id)) as {
-          chatId: string;
-          fromRevision: string | null;
-          title: string;
-        };
-        if (original.chatId !== chatId || original.fromRevision !== sourceId) conflict();
-        if (
-          (requestedTitle !== null && requestedTitle === original.title) ||
-          (requestedTitle === null && saved.automaticCopyTitle === original.title)
-        ) {
-          rememberCommand();
-          return store.chat(saved.chatId);
-        }
-      }
-    }
     const original = store.chat(chatId);
-    const title =
-      requestedTitle === null
-        ? saved
-          ? (saved.automaticCopyTitle ?? legacyReceiptCopyTitle(original.title))
-          : numberedCopyTitle(store, original.title)
-        : requestedTitle;
+    const title = requestedTitle ?? numberedCopyTitle(store, original.title);
     const copy = captureChatCopy(store, chatId, sourceId);
     const restored = restoreChatCopy(store, copy, `copy:${requestKey}`, title);
-    rememberCommand();
-    if (saved) return restored;
-    if (requestedTitle === null)
-      store.db
-        .prepare(
-          "UPDATE import_operations SET result=json_set(result,'$.automaticCopyTitle',?) WHERE key=?"
-        )
-        .run(title, receiptKey);
+    store.db
+      .prepare("UPDATE import_operations SET result=json_set(result,'$.forkCommand',?) WHERE key=?")
+      .run(command, receiptKey);
     if (restored.folderId !== original.folderId)
       store.organization.move(restored.id, {
         expectedRevision: restored.organizationRevision,

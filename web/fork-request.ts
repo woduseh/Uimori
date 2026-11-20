@@ -22,6 +22,9 @@ export async function requestChatFork(chatId: string, sourceId: string | null): 
   } catch (error) {
     if (
       (error instanceof ApiError && error.status === 410 && error.code === 'CHAT_COPY_REMOVED') ||
+      (error instanceof ApiError &&
+        error.status === 409 &&
+        error.code === 'CHAT_COPY_RECEIPT_UNVERIFIED') ||
       (!previous && definiteRejection(error))
     )
       clear();

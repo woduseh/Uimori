@@ -21,6 +21,8 @@ const storyUiErrors: Record<string, keyof typeof storyUiMessages> = {
 
 const messages: Record<string, string> = {
   CHAT_COPY_REMOVED: '이전에 만든 채팅 사본이 삭제됐어요. 새 사본을 만들 수 있어요.',
+  CHAT_COPY_RECEIPT_UNVERIFIED:
+    '이전 복사 기록을 확인할 수 없어요. 다시 복사하면 새 사본을 만들어요.',
   RESOURCE_CREATION_REMOVED:
     '이전에 생성된 자료가 삭제됐어요. 현재 입력을 확인한 뒤 새로 저장할 수 있어요.',
   SCENE_DELETED_RETRY_UNAVAILABLE:

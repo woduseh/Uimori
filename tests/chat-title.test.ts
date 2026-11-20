@@ -263,3 +263,19 @@ test('transport failure after the wire leaves a terminal durable attempt and nev
   expect(send).toHaveBeenCalledTimes(1);
   expect(f.store.chat(f.chat.id).title).toBe('Default title');
 });
+test('an enrollment without a supported locale fails before any title request', async () => {
+  const f = setup(),
+    send = mockSend();
+  f.store.db
+    .prepare("UPDATE events SET entity_id=? WHERE chat_id=? AND kind='chat.title.eligible'")
+    .run(f.chat.id, f.chat.id);
+  f.service.afterSource(f.run.id);
+  await Promise.all(f.work);
+  expect(send).not.toHaveBeenCalled();
+  expect(f.store.chat(f.chat.id).title).toBe('Default title');
+  expect(
+    f.store.db
+      .prepare("SELECT entity_id FROM events WHERE chat_id=? AND kind='chat.title.failed'")
+      .all(f.chat.id)
+  ).toEqual([{ entity_id: f.run.id }]);
+});
