@@ -68,11 +68,7 @@ export function RisuInteractionDialog({
           );
       } finally {
         pending = false;
-        if (requested && active && !document.hidden) {
-          requested = false;
-          clearTimeout(timer);
-          timer = setTimeout(() => void load(), 0);
-        }
+        if (requested) void load();
       }
     };
     const wake = () => {
