@@ -3,6 +3,10 @@ import { createHash } from 'node:crypto';
 import { chatTitle, fields, HttpError, record, text } from './request-validation.js';
 import type { Chat, Store } from './store.js';
 
+function legacyReceiptCopyTitle(title: string): string {
+  return `${title.slice(0, 190)} (사본)`;
+}
+
 function numberedCopyTitle(store: Store, title: string): string {
   // Match suffix runs once from left to right; an end-anchored repetition can
   // repeatedly rescan long titles that contain suffixes inside their text.
@@ -96,8 +100,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
     const title =
       requestedTitle === null
         ? saved
-          ? // Earlier receipts hashed the truncated legacy copy title.
-            (saved.automaticCopyTitle ?? `${original.title.slice(0, 190)} (사본)`)
+          ? (saved.automaticCopyTitle ?? legacyReceiptCopyTitle(original.title))
           : numberedCopyTitle(store, original.title)
         : requestedTitle;
     const copy = captureChatCopy(store, chatId, sourceId);
