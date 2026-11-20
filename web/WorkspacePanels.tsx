@@ -783,7 +783,7 @@ export function AppSettingsPanel({
           )}
         </div>
         <div className="settings-pages" hidden={!showingDetail}>
-          {settingsCategories.map(({ key, label }) => (
+          {settingsCategories.map(({ key }) => (
             <section
               className="settings-page"
               data-settings-section={key}
@@ -796,7 +796,6 @@ export function AppSettingsPanel({
             >
               {visited.includes(key) && (
                 <>
-                  {!compact && <h3 className="settings-page-title">{label}</h3>}
                   {key === 'themes' && (
                     <ThemeSettings
                       storyUiThemeTarget={storyUiThemeTarget}

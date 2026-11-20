@@ -2018,10 +2018,6 @@ input[type="checkbox"] {
 .settings-page[hidden] {
   display: none;
 }
-.settings-page-title {
-  margin: 0 0 24px;
-  font-size: var(--font-heading);
-}
 .settings-page .settings-section {
   border: 0;
   margin: 0;
@@ -2056,9 +2052,6 @@ input[type="checkbox"] {
   }
   .settings-page {
     padding: 16px 16px;
-  }
-  .settings-page-title {
-    margin-bottom: 14px;
   }
 }
 .archive-file-field {
