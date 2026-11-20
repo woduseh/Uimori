@@ -9,6 +9,10 @@
   background: var(--surface-raised);
   border-bottom: var(--hairline) solid var(--line);
 }
+:where(.app-dialog, .settings-page, form) .notice-banner {
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
+}
 .notice-banner-icon {
   flex: 0 0 auto;
   color: var(--muted);

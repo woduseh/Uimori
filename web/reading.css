@@ -82,6 +82,11 @@
   gap: 16px;
   padding-block: 16px;
 }
+.reading-settings-rows > label > small {
+  grid-column: 1 / -1;
+  font-size: var(--font-small);
+  line-height: 1.5;
+}
 .reading-settings-rows > * + *,
 .reading-spacing > label + label {
   border-top: var(--hairline) solid var(--line);

@@ -60,7 +60,7 @@
 .usage-note,
 .usage-panel small {
   color: var(--muted);
-  font-size: var(--font-body);
+  font-size: var(--font-small);
 }
 .usage-panel .usage-period-label {
   margin-top: -8px;
@@ -82,7 +82,7 @@
 .usage-cards h4 {
   color: var(--muted);
   font-weight: 500;
-  font-size: var(--font-body);
+  font-size: var(--font-small);
 }
 .usage-cards strong {
   display: block;
