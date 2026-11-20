@@ -272,10 +272,14 @@ test('worker count follows the environment override and never exceeds the select
 
 test('default worker count is bounded by half the CPUs and 2 GiB of memory per worker', () => {
   const gib = 2 ** 30;
-  expect(defaultBrowserWorkers({ cpus: 16, memory: 32 * gib })).toBe(8);
-  expect(defaultBrowserWorkers({ cpus: 16, memory: 8 * gib })).toBe(4);
-  expect(defaultBrowserWorkers({ cpus: 4, memory: 16 * gib })).toBe(2);
-  expect(defaultBrowserWorkers({ cpus: 1, memory: gib })).toBe(1);
+  expect(defaultBrowserWorkers({ cpus: 16, memory: 32 * gib, ci: false })).toBe(8);
+  expect(defaultBrowserWorkers({ cpus: 16, memory: 8 * gib, ci: false })).toBe(4);
+  expect(defaultBrowserWorkers({ cpus: 4, memory: 16 * gib, ci: false })).toBe(2);
+  expect(defaultBrowserWorkers({ cpus: 1, memory: gib, ci: false })).toBe(1);
+});
+
+test('CI runs browser files on one worker unless a count is requested', () => {
+  expect(defaultBrowserWorkers({ cpus: 4, memory: 16 * 2 ** 30, ci: true })).toBe(1);
 });
 
 test('a stale build fails before launching any browser or server', async () => {
