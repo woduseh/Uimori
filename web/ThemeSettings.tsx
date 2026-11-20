@@ -190,11 +190,6 @@ export function ThemeSettings({
       ? t('visualpanels.currentBotDefault')
       : t('visualpanels.workspaceDefault');
   const originalColors = activeLayout?.colors;
-  const selectedLegacyLayout = selectedId && getBuiltinTheme(selectedId);
-  const layouts =
-    selectedLegacyLayout && !state.catalog.themes.some((theme) => theme.id === selectedId)
-      ? [...state.catalog.themes, selectedLegacyLayout]
-      : state.catalog.themes;
   const libraryPalettes = state.catalog.palettes ?? BUILTIN_PALETTES;
   const palettes = [
     {
@@ -458,7 +453,7 @@ export function ThemeSettings({
           )}
         </div>
         <div className="theme-grid" aria-label={t('visualpanels.savedLayouts')}>
-          {layouts.map((theme) => (
+          {state.catalog.themes.map((theme) => (
             <article
               className={`theme-card ${selectedId === theme.id ? 'selected' : ''}`}
               key={theme.id}

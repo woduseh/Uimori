@@ -11,7 +11,6 @@ import {
   DEFAULT_THEME_ID,
   THEME_COLOR_KEYS,
   defaultThemePreferences,
-  normalizeThemePreferences,
   resolvePaletteId,
   emptyTheme,
   parseThemeFile,
@@ -163,7 +162,7 @@ test('built-ins cannot be edited or deleted; stale preference writes fail', () =
     })
   ).toThrow();
   expect(() => deleteTheme(store, DEFAULT_THEME_ID, 1)).toThrow();
-  selectTheme(store, { scope: 'global', themeId: 'builtin:library', expectedRevision: 0 });
+  selectTheme(store, { scope: 'global', themeId: 'builtin:letter', expectedRevision: 0 });
   expect(() =>
     selectTheme(store, { scope: 'global', themeId: DEFAULT_THEME_ID, expectedRevision: 0 })
   ).toThrow();
@@ -175,7 +174,7 @@ test('built-ins cannot be edited or deleted; stale preference writes fail', () =
       },
       { chatId: 'stale' }
     ).id
-  ).toBe('builtin:library');
+  ).toBe('builtin:letter');
 });
 test('helper uses the same save, guide, list and undo contract without changing selection', () => {
   const store = database();
@@ -633,53 +632,5 @@ describe('Independent layout and palette choices', () => {
       })
     ).toThrow();
     expect(themePreferences(store).defaultPaletteId).toBe('cream');
-  });
-
-  test('legacy palette-only presets migrate with custom color boundaries and no resource writes', () => {
-    const store = database();
-    const custom = save(store, 'Liquid Gallery');
-    const beforeCustom = readTheme(store, custom.id);
-    const legacy = {
-      revision: 7,
-      defaultThemeId: 'builtin:midnight',
-      botThemes: { forest: DEFAULT_THEME_ID, rose: 'builtin:blossom', paper: 'builtin:library' },
-      chatThemes: { custom: custom.id, gallery: 'builtin:liquid-gallery' },
-    };
-    const raw = JSON.stringify(legacy);
-    store.db
-      .prepare('INSERT INTO app_metadata(key,value) VALUES(?,?)')
-      .run('theme-preferences', raw);
-    const p = themePreferences(store);
-    expect(p).toMatchObject({
-      revision: 7,
-      defaultThemeId: DEFAULT_THEME_ID,
-      defaultPaletteId: 'midnight',
-      botThemes: { forest: DEFAULT_THEME_ID, rose: DEFAULT_THEME_ID, paper: 'builtin:library' },
-      botPalettes: { forest: 'theme', rose: 'rose', paper: 'theme' },
-      chatThemes: { custom: custom.id, gallery: 'builtin:cinematic' },
-      chatPalettes: { custom: 'theme', gallery: 'theme' },
-    });
-    expect(normalizeThemePreferences(p)).toEqual(p);
-    expect(
-      store.db.prepare('SELECT value FROM app_metadata WHERE key=?').get('theme-preferences')?.value
-    ).toBe(raw);
-    expect(resolveTheme(themeCatalog(store), { chatId: 'custom' })).toEqual(beforeCustom);
-    expect(resolveTheme(themeCatalog(store), {}).colors.light.accent).toBe('#3e63dd');
-    expect(resolveTheme(themeCatalog(store), { botId: 'rose' }).colors.light.accent).toBe(
-      '#e93d82'
-    );
-    expect(resolveTheme(themeCatalog(store), { botId: 'paper' }).templateHtml).toContain(
-      'class="paper"'
-    );
-    expect(readTheme(store, 'builtin:liquid-gallery').id).toBe('builtin:cinematic');
-    expect(readTheme(store, 'builtin:midnight').colors.light.accent).toBe('#3e63dd');
-    expect(readTheme(store, custom.id)).toEqual(beforeCustom);
-    choose(store, 'palette', 'sage');
-    const saved = themePreferences(store);
-    store.close();
-    const reopened = new Store(store.path);
-    owned.at(-1)!.store = reopened;
-    expect(themePreferences(reopened)).toEqual(saved);
-    expect(resolveTheme(themeCatalog(reopened), { chatId: 'custom' })).toEqual(beforeCustom);
   });
 });

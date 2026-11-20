@@ -122,47 +122,13 @@ export function defaultThemePreferences(): ThemePreferences {
     chatPalettes: {},
   };
 }
-const originalBuiltinThemes: Theme[] = [
-  {
-    ...emptyTheme('숲'),
-    id: DEFAULT_THEME_ID,
-    revision: 1,
-    description: '익숙한 Uimori의 차분한 초록빛',
-    colors: DEFAULT_PALETTE_COLORS,
-  },
-  {
-    ...emptyTheme('서재'),
-    id: 'builtin:library',
-    revision: 1,
-    description: '따뜻한 종이와 잉크의 온기',
-    colors: BUILTIN_PALETTES.find((item) => item.id === 'cream')!.colors,
-    templateHtml:
-      '<slot name="request"></slot><section class="paper"><header><slot name="heading"></slot></header><slot name="body"></slot><footer><slot name="actions"></slot></footer></section>',
-    templateCss:
-      '.paper { border: var(--hairline) solid var(--line); border-radius: var(--radius-panel); padding: clamp(14px, 3vw, 30px); background: var(--panel); } header { border-bottom: var(--hairline) solid var(--line); margin-bottom: 20px; } footer { margin-top: 16px; }',
-  },
-  {
-    ...emptyTheme('미드나이트'),
-    id: 'builtin:midnight',
-    revision: 1,
-    description: '청회색 바탕과 선명한 푸른 포인트',
-    colors: BUILTIN_PALETTES.find((item) => item.id === 'midnight')!.colors,
-  },
-  {
-    ...emptyTheme('벚꽃'),
-    id: 'builtin:blossom',
-    revision: 1,
-    description: '절제된 분홍빛과 부드러운 대비',
-    colors: BUILTIN_PALETTES.find((item) => item.id === 'rose')!.colors,
-  },
-];
-export const LEGACY_BUILTIN_THEMES = originalBuiltinThemes.slice(1);
 export const BUILTIN_THEMES: Theme[] = [
   {
-    ...originalBuiltinThemes[0],
-    title: '기본',
+    ...emptyTheme('기본'),
+    id: DEFAULT_THEME_ID,
     revision: 7,
     description: '군더더기 없는 기본 읽기 레이아웃',
+    colors: DEFAULT_PALETTE_COLORS,
     templateHtml:
       '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><slot name="heading"></slot><slot name="body"></slot><slot name="actions"></slot>',
     templateCss:
@@ -189,8 +155,7 @@ export const BUILTIN_THEMES: Theme[] = [
   { ...classicFrameTheme, id: 'builtin:classic-frame', revision: 4 },
 ];
 export function getBuiltinTheme(id: string): Theme | undefined {
-  const currentId = id === 'builtin:liquid-gallery' ? 'builtin:cinematic' : id;
-  return [...BUILTIN_THEMES, ...LEGACY_BUILTIN_THEMES].find((theme) => theme.id === currentId);
+  return BUILTIN_THEMES.find((theme) => theme.id === id);
 }
 export function themeDefinition(theme: Theme): ThemeDefinition {
   const { id: _id, revision: _revision, ...definition } = theme;
@@ -198,39 +163,15 @@ export function themeDefinition(theme: Theme): ThemeDefinition {
 }
 
 export function normalizeThemePreferences(value: ThemePreferences): ThemePreferences {
-  const legacy = !(
-    'defaultPaletteId' in value ||
-    'botPalettes' in value ||
-    'chatPalettes' in value
-  );
-  const p: ThemePreferences = {
+  return {
     ...value,
+    defaultPaletteId: value.defaultPaletteId ?? THEME_PALETTE_ID,
     botThemes: { ...value.botThemes },
     chatThemes: { ...value.chatThemes },
     botPalettes: { ...value.botPalettes },
     chatPalettes: { ...value.chatPalettes },
     ...(value.botStoryUiThemes && { botStoryUiThemes: { ...value.botStoryUiThemes } }),
   };
-  const migrate = (id: string, paletteId: string | undefined): [string, string | undefined] => {
-    if (id === 'builtin:liquid-gallery')
-      return ['builtin:cinematic', paletteId ?? (legacy ? THEME_PALETTE_ID : undefined)];
-    if (id === 'builtin:midnight' || id === 'builtin:blossom')
-      return [DEFAULT_THEME_ID, paletteId ?? (id === 'builtin:midnight' ? 'midnight' : 'rose')];
-    return [id, paletteId ?? (legacy ? THEME_PALETTE_ID : undefined)];
-  };
-  [p.defaultThemeId, p.defaultPaletteId] = migrate(p.defaultThemeId, p.defaultPaletteId);
-  p.defaultPaletteId ??= THEME_PALETTE_ID;
-  for (const [themes, palettes] of [
-    [p.botThemes, p.botPalettes!],
-    [p.chatThemes, p.chatPalettes!],
-  ]) {
-    for (const [targetId, id] of Object.entries(themes)) {
-      const [themeId, paletteId] = migrate(id, palettes[targetId]);
-      themes[targetId] = themeId;
-      if (paletteId !== undefined) palettes[targetId] = paletteId;
-    }
-  }
-  return p;
 }
 
 export function resolvePaletteId(catalog: ThemeCatalog, scope: ThemeScope): string {

@@ -7,7 +7,6 @@ import type { Store } from './store.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import {
   BUILTIN_THEMES,
-  LEGACY_BUILTIN_THEMES,
   getBuiltinTheme,
   normalizeThemePreferences,
   DEFAULT_THEME_ID,
@@ -115,12 +114,6 @@ export function selectTheme(store: Store, input: unknown): ThemePreferences {
     )
       throw new HttpError(400, '지원하지 않는 팔레트예요.');
   }
-  const themeId =
-    selectedId === 'builtin:midnight' || selectedId === 'builtin:blossom'
-      ? DEFAULT_THEME_ID
-      : selectedId === 'builtin:liquid-gallery'
-        ? 'builtin:cinematic'
-        : selectedId;
   const targetId = scope === 'global' ? '' : text(b.targetId, 'target ID', 100);
   if (scope === 'bot') {
     const content = store.product.get<{ kind: string }>('content', targetId);
@@ -145,10 +138,10 @@ export function selectTheme(store: Store, input: unknown): ThemePreferences {
         if (selectedId !== null) map[targetId] = selectedId;
         else delete map[targetId];
       }
-    } else if (scope === 'global') p.defaultThemeId = themeId ?? DEFAULT_THEME_ID;
+    } else if (scope === 'global') p.defaultThemeId = selectedId ?? DEFAULT_THEME_ID;
     else {
       const map = scope === 'bot' ? p.botThemes : p.chatThemes;
-      if (themeId) map[targetId] = themeId;
+      if (selectedId) map[targetId] = selectedId;
       else delete map[targetId];
     }
     return writePreferences(store, p);
@@ -285,7 +278,7 @@ export function themeRoutes(app: FastifyInstance, store: Store) {
     return deletePalette(store, request.params.id, number(b.expectedRevision, 'revision', 1));
   });
   const builtinVersion = createHash('sha256')
-    .update(JSON.stringify([BUILTIN_THEMES, LEGACY_BUILTIN_THEMES, BUILTIN_PALETTES]))
+    .update(JSON.stringify([BUILTIN_THEMES, BUILTIN_PALETTES]))
     .digest('hex');
   app.get('/api/themes', (request, reply) => {
     const versions = store.db

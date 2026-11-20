@@ -2063,18 +2063,6 @@ export const messages = {
     ja: '細い四角の枠に人物と物語を並べた端正なシーン',
     zh: '人物与故事并排置于细矩形边框内的整洁场景',
   },
-  'visualpanels.layoutLibrary': {
-    ko: '서재',
-    en: 'Library',
-    ja: '書斎',
-    zh: '书房',
-  },
-  'visualpanels.layoutCherry': {
-    ko: '벚꽃',
-    en: 'Cherry blossom',
-    ja: '桜',
-    zh: '樱花',
-  },
   'visualpanels.novelaiPersistentToken': {
     ko: 'NovelAI, Persistent API 토큰',
     en: 'NovelAI, Persistent API token',

@@ -305,22 +305,22 @@ test('THEMES rejects leading executable markup instead of silently dropping it o
   expect(await page.evaluate(() => 'themeScriptExecuted' in window)).toBe(false);
 });
 
-test('THEMES legacy layout remains selected in its scope without changing saved selections', async ({
+test('THEMES each scope shows its own selected layout without changing saved selections', async ({
   page,
   request,
 }) => {
   const botResponse = await request.post('/api/content', {
-    data: fixtureBotInput(`Legacy theme scope ${randomUUID()}`),
+    data: fixtureBotInput(`Scoped theme ${randomUUID()}`),
   });
   expect(botResponse.ok()).toBe(true);
   const bot = await botResponse.json();
   const chatResponse = await request.post('/api/chats', {
-    data: { title: 'Legacy theme scope', botId: bot.id },
+    data: { title: 'Scoped theme', botId: bot.id },
   });
   expect(chatResponse.ok()).toBe(true);
   const chat = await chatResponse.json();
   for (const selection of [
-    { scope: 'global', themeId: 'builtin:library' },
+    { scope: 'global', themeId: 'builtin:cinematic' },
     { scope: 'bot', targetId: bot.id, themeId: 'builtin:letter' },
     { scope: 'chat', targetId: chat.id, themeId: 'builtin:scrapbook' },
   ]) {
@@ -333,10 +333,10 @@ test('THEMES legacy layout remains selected in its scope without changing saved 
   const before = await (await request.get('/api/themes')).json();
   await openThemes(page, `/?chat=${chat.id}`);
   for (const [scope, title] of [
-    ['global', '서재'],
+    ['global', '시네마틱'],
     ['bot', '편지지'],
     ['chat', '스크랩북'],
-    ['global', '서재'],
+    ['global', '시네마틱'],
   ]) {
     await page.getByLabel('테마 적용 범위', { exact: true }).selectOption(scope);
     await expect(
