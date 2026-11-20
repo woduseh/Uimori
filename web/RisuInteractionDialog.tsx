@@ -2,6 +2,7 @@ import { useI18n } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import { Dialog } from './Dialog.js';
 import { api } from './api.js';
+import { nativeInteractionRetryDelay } from './poll-delays.js';
 
 type Interaction = {
   id: string;
@@ -58,14 +59,16 @@ export function RisuInteractionDialog({
           );
       } catch {
         if (active && !document.hidden)
-          timer = setTimeout(() => void load(), Math.min(10000, 1000 * 2 ** failures++));
+          timer = setTimeout(
+            () => void load(),
+            Math.min(
+              nativeInteractionRetryDelay.longest,
+              nativeInteractionRetryDelay.first * 2 ** failures++
+            )
+          );
       } finally {
         pending = false;
-        if (requested && active && !document.hidden) {
-          requested = false;
-          clearTimeout(timer);
-          timer = setTimeout(() => void load(), 0);
-        }
+        if (requested) void load();
       }
     };
     const wake = () => {

@@ -2,6 +2,7 @@ import { useI18n, message as uiMessage } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { HelperConversation, HelperScope, HelperStatus } from '../core/helper.js';
 import { activityChangedEvent, api, ApiError } from './api.js';
+import { helperPollDelay } from './poll-delays.js';
 import {
   clearPendingHelperRequest,
   pendingHelperRequest,
@@ -204,7 +205,10 @@ export function useHelperSessions(
       } finally {
         polling = false;
         if (!disposed && !document.hidden)
-          timer = setTimeout(() => void poll(), requested ? 0 : active ? 2400 : 10000);
+          timer = setTimeout(
+            () => void poll(),
+            requested ? 0 : active ? helperPollDelay.sessions.active : helperPollDelay.sessions.idle
+          );
         requested = false;
       }
     };

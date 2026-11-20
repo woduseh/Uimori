@@ -1,4 +1,7 @@
-import { expect, test, type Page, type Request } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { nativeInteractionRetryDelay } from '../web/poll-delays.js';
+import { readerRefreshDelay } from '../web/reader-sync.js';
+import { trackPageFetches } from './fixtures/page-fetches.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
 import { navigationAction } from './ui-navigation.js';
 
@@ -58,24 +61,25 @@ test('READVIS01 hidden and library readers defer SSE refreshes and restore curre
   const { chat, detail } = await createReadingChat(request, 'Reader visibility', 1);
   const source = detail.sources[0];
   await observeStream(page);
-  const pending = new Set<Request>();
-  let reads = 0;
-  page.on('request', (request) => {
-    if (new URL(request.url()).pathname === `/api/chats/${chat.id}/reader`) {
-      reads++;
-      pending.add(request);
-    }
-  });
-  page.on('requestfinished', (request) => pending.delete(request));
-  page.on('requestfailed', (request) => pending.delete(request));
+  const readerFetches = await trackPageFetches(
+    page,
+    new RegExp(`^/api/chats/${chat.id}/reader$`, 'u')
+  );
+  const readerSettled = () =>
+    expect
+      .poll(async () => {
+        await page.clock.runFor(readerRefreshDelay);
+        return readerFetches.inFlight();
+      })
+      .toBe(0);
+  await page.clock.install();
   await page.goto(`/?chat=${chat.id}&source=${source.id}&mode=original`);
   const manuscript = page.locator('.risu-message-surface');
   await expect(manuscript).toContainText('Scene 1. Mira carried a purple umbrella.');
   await expect
     .poll(() => page.evaluate(() => (window as unknown as ObservedWindow).readerVisibilityEvents))
     .toContain('snapshot');
-  await page.waitForTimeout(250);
-  await expect.poll(() => pending.size).toBe(0);
+  await readerSettled();
   const draft = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
   await draft.fill('화면을 떠나도 보존할 다음 장면 초안');
 
@@ -101,29 +105,28 @@ test('READVIS01 hidden and library readers defer SSE refreshes and restore curre
   };
 
   await hidden(page, true);
-  const hiddenReads = reads;
+  const hiddenReads = await readerFetches.count();
   await editElsewhere('원고 화면이 숨겨진 동안 다른 기기에서 저장한 본문.');
-  await page.waitForTimeout(600);
-  expect(reads).toBe(hiddenReads);
+  await page.clock.runFor(readerRefreshDelay);
+  expect(await readerFetches.count()).toBe(hiddenReads);
   await expect(manuscript).toContainText('Scene 1. Mira carried a purple umbrella.');
   await hidden(page, false);
   await expect(manuscript).toHaveText('원고 화면이 숨겨진 동안 다른 기기에서 저장한 본문.');
   await expect(draft).toHaveValue('화면을 떠나도 보존할 다음 장면 초안');
-  await expect.poll(() => pending.size).toBe(0);
+  await expect.poll(() => readerFetches.inFlight()).toBe(0);
 
   await navigationAction(page, '서재');
   await expect(page.getByTestId('library-panel')).toBeVisible();
-  const libraryReads = reads;
+  const libraryReads = await readerFetches.count();
   await editElsewhere('서재를 보는 동안 다른 기기에서 다시 저장한 본문.');
-  await page.waitForTimeout(600);
-  expect(reads).toBe(libraryReads);
+  await page.clock.runFor(readerRefreshDelay);
+  expect(await readerFetches.count()).toBe(libraryReads);
   await page.goBack();
   await expect(manuscript).toHaveText('서재를 보는 동안 다른 기기에서 다시 저장한 본문.');
   await expect(draft).toHaveValue('화면을 떠나도 보존할 다음 장면 초안');
-  expect(reads).toBeGreaterThan(libraryReads);
+  expect(await readerFetches.count()).toBeGreaterThan(libraryReads);
 
-  await page.waitForTimeout(250);
-  await expect.poll(() => pending.size).toBe(0);
+  await readerSettled();
   await navigationAction(page, '서재');
   let held = false;
   let release = () => {};
@@ -145,10 +148,10 @@ test('READVIS01 hidden and library readers defer SSE refreshes and restore curre
     await expect.poll(() => held).toBe(true);
     await hidden(page, true);
     release();
-    await expect.poll(() => pending.size).toBe(0);
-    const discardedReadCount = reads;
+    await expect.poll(() => readerFetches.inFlight()).toBe(0);
+    const discardedReadCount = await readerFetches.count();
     await hidden(page, false);
-    await expect.poll(() => reads).toBeGreaterThan(discardedReadCount);
+    await expect.poll(() => readerFetches.count()).toBeGreaterThan(discardedReadCount);
     await expect(draft).toHaveValue('화면을 떠나도 보존할 다음 장면 초안');
   } finally {
     release();
@@ -162,9 +165,13 @@ test('READVIS02 native input wakes on events without idle polling and coalesces 
   const { chat, detail } = await createReadingChat(request, 'Native input visibility', 1);
   await observeStream(page);
   let interaction: { id: string; kind: 'input'; prompt: string } | undefined;
-  let reads = 0,
-    active = 0,
+  let active = 0,
     maxActive = 0;
+  const interactionFetches = await trackPageFetches(
+    page,
+    new RegExp(`^/api/chats/${chat.id}/risu-interactions(?:/[^/]+)?$`, 'u')
+  );
+  const reads = () => interactionFetches.count('GET');
   let readGate: Promise<void> | undefined;
   let releaseRead = () => {};
   const answers: unknown[] = [];
@@ -173,7 +180,6 @@ test('READVIS02 native input wakes on events without idle polling and coalesces 
     releaseAnswer = resolve;
   });
   await page.route(`**/api/chats/${chat.id}/risu-interactions`, async (route) => {
-    reads++;
     active++;
     maxActive = Math.max(maxActive, active);
     const interactions = interaction ? [interaction] : [];
@@ -191,13 +197,14 @@ test('READVIS02 native input wakes on events without idle polling and coalesces 
     if (interaction?.id === answeredId) interaction = undefined;
     await route.fulfill({ json: { accepted: true } });
   });
+  await page.clock.install();
   await page.goto(`/?chat=${chat.id}&source=${detail.sources[0].id}&mode=original`);
   await expect(page.locator('.risu-message-surface')).toBeVisible();
-  await expect.poll(() => reads).toBeGreaterThan(0);
+  await expect.poll(reads).toBeGreaterThan(0);
   await expect.poll(() => active).toBe(0);
-  const idleReads = reads;
-  await page.waitForTimeout(1700);
-  expect(reads).toBe(idleReads);
+  const idleReads = await reads();
+  await page.clock.runFor(nativeInteractionRetryDelay.longest);
+  expect(await reads()).toBe(idleReads);
 
   readGate = new Promise<void>((resolve) => {
     releaseRead = resolve;
@@ -212,9 +219,12 @@ test('READVIS02 native input wakes on events without idle polling and coalesces 
     };
     await notifyInteraction(page);
     await notifyInteraction(page);
-    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-    await page.waitForTimeout(200);
-    expect(reads).toBe(idleReads + 1);
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event('focus'));
+      document.dispatchEvent(new Event('visibilitychange'));
+      window.dispatchEvent(new Event('focus'));
+    });
+    expect(await reads()).toBe(idleReads + 1);
     readGate = undefined;
     releaseRead();
     const dialog = page.getByRole('dialog', { name: '카드 입력', exact: true });
@@ -232,13 +242,13 @@ test('READVIS02 native input wakes on events without idle polling and coalesces 
     }
 
     await hidden(page, true);
-    const hiddenReads = reads;
+    const hiddenReads = await reads();
     await notifyInteraction(page);
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-    await page.waitForTimeout(1700);
-    expect(reads).toBe(hiddenReads);
+    await page.clock.runFor(nativeInteractionRetryDelay.longest);
+    expect(await reads()).toBe(hiddenReads);
     await hidden(page, false);
-    await expect.poll(() => reads).toBeGreaterThan(hiddenReads);
+    await expect.poll(reads).toBeGreaterThan(hiddenReads);
     await expect(input).toHaveValue('달빛 아래의 도서관');
 
     interaction = undefined;
@@ -254,7 +264,7 @@ test('READVIS02 native input wakes on events without idle polling and coalesces 
     await expect.poll(() => answers.length).toBe(1);
     await expect(confirm).toBeDisabled();
     await dialog.locator('form').dispatchEvent('submit');
-    await page.waitForTimeout(100);
+    expect(await interactionFetches.count('POST')).toBe(1);
     expect(answers).toEqual([{ answer: '달빛 아래의 도서관' }]);
     interaction = { id: 'following-input', kind: 'input', prompt: '이어지는 질문이에요.' };
     await notifyInteraction(page);

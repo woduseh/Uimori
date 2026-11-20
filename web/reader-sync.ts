@@ -1,3 +1,5 @@
+export const readerRefreshDelay = 100;
+
 export function createReaderSync(options: {
   refresh: (incremental: boolean) => Promise<boolean | undefined>;
   cursor: () => number;
@@ -43,7 +45,7 @@ export function createReaderSync(options: {
     request(cursor = 0, reconnect = false) {
       target = Math.max(target, cursor);
       if (reconnect) full++;
-      schedule(100);
+      schedule(readerRefreshDelay);
     },
     dispose() {
       disposed = true;

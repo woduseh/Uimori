@@ -145,6 +145,12 @@ for (const width of [360]) {
     await scene.getByRole('button', { name: '초안에 반영', exact: true }).click();
     const revised = `문은 열려 있었다.\n${proposal}\n바람이 지나갔다.`;
     await expect(field).toHaveValue(revised);
+    await expect(field).toBeFocused();
+    expect(
+      await field.evaluate((element: HTMLTextAreaElement) =>
+        element.value.slice(element.selectionStart, element.selectionEnd)
+      )
+    ).toBe(proposal);
     expect((await detail(request, before.chat.id)).sources[0].text).toBe(original);
     expect(
       await page.evaluate(
