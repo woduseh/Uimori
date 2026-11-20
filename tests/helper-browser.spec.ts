@@ -16,7 +16,9 @@ import type { HelperArtifactView } from '../web/HelperArtifactCard.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
 import type { ModelPreset, ModelWorkspace } from '../core/product.js';
 import { messages } from '../web/locales/index.js';
+import { helperPollDelay, longestHelperPollDelay } from '../web/poll-delays.js';
 import { postFixtureChat, fixtureBotInput } from './fixtures/chat.js';
+import { trackPageFetches } from './fixtures/page-fetches.js';
 import { navigationAction, openSourceActions, openChatMenu } from './ui-navigation.js';
 import { openHelper } from './ui-navigation.js';
 
@@ -1152,12 +1154,19 @@ test('HELPUI14 idle and hidden helper views pause reads and resume cursors, effe
 }) => {
   const chat = await create(request);
   const state = await harness(page);
+  const helperFetches = await trackPageFetches(
+    page,
+    /^\/api\/(?:helper|response-streams\/helper)\//u
+  );
+  await page.clock.install();
   await page.goto(`/?chat=${chat.id}`);
   const panel = await open(page);
   const input = panel.getByLabel('도우미에게 요청');
   const idleSessions = state.sessionReads;
   const idleEvents = state.eventReads;
-  await page.waitForTimeout(2800);
+  const idleFetches = await helperFetches.count();
+  await page.clock.runFor(helperPollDelay.sessions.active);
+  expect(await helperFetches.count()).toBe(idleFetches);
   expect(state.sessionReads).toBe(idleSessions);
   expect(state.eventReads).toBe(idleEvents);
 
@@ -1175,7 +1184,9 @@ test('HELPUI14 idle and hidden helper views pause reads and resume cursors, effe
   const clock = panel.getByTestId('helper-task-activity').locator('.activity-elapsed');
   const closedTime = await clock.textContent();
   state.progress(task, '과 두 번째 조각', 13);
-  await page.waitForTimeout(1600);
+  const closedFetches = await helperFetches.count();
+  await page.clock.runFor(longestHelperPollDelay);
+  expect(await helperFetches.count()).toBe(closedFetches);
   expect(state.streamReads.get(task.id)).toBe(closedReads);
   expect(state.eventReads).toBe(closedEvents);
   expect(await clock.textContent()).toBe(closedTime);
@@ -1193,7 +1204,9 @@ test('HELPUI14 idle and hidden helper views pause reads and resume cursors, effe
   const hiddenSessions = state.sessionReads;
   const hiddenEvents = state.eventReads;
   const hiddenTime = await clock.textContent();
-  await page.waitForTimeout(2800);
+  const hiddenFetches = await helperFetches.count();
+  await page.clock.runFor(longestHelperPollDelay);
+  expect(await helperFetches.count()).toBe(hiddenFetches);
   expect(state.streamReads.get(task.id)).toBe(hiddenReads);
   expect(state.sessionReads).toBe(hiddenSessions);
   expect(state.eventReads).toBe(hiddenEvents);

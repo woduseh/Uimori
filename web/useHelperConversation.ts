@@ -10,6 +10,7 @@ import type {
 } from '../core/helper.js';
 import { api } from './api.js';
 import { evictHelperViews } from './helper-conversation-cache.js';
+import { helperPollDelay } from './poll-delays.js';
 
 export type HelperTaskView = Omit<HelperTask, 'snapshot'> & { modelTitle: string };
 type View = {
@@ -289,7 +290,14 @@ export function useHelperConversation(
         polling = false;
         if (!disposed) setLoading(false);
         if (!disposed && !document.hidden)
-          timer = setTimeout(() => void poll(), requested ? 0 : active() ? 1200 : 10000);
+          timer = setTimeout(
+            () => void poll(),
+            requested
+              ? 0
+              : active()
+                ? helperPollDelay.conversation.active
+                : helperPollDelay.conversation.idle
+          );
         requested = false;
       }
     };
