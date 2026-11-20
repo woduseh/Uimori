@@ -45,6 +45,7 @@ type Entry = {
   listeners: Set<() => void>;
   loading?: Promise<void>;
   write?: Promise<void>;
+  adding?: Promise<void>;
 };
 const entries = new Map<string, Entry>();
 const emptyDraft = (): HelperAttachmentDraft => ({
@@ -223,15 +224,32 @@ export async function deleteHelperAttachmentRecovery(id: string): Promise<void> 
   sessionStorage.removeItem(tokenKey(id));
 }
 
-export async function addHelperAttachmentFiles(
+export function addHelperAttachmentFiles(
   id: string,
   files: File[],
   model: AttachmentModel | null
 ): Promise<void> {
   const owner = entry(id);
-  if (!id || !owner.snapshot.ready || owner.snapshot.busy || !files.length) return;
-  publish(owner, { busy: true, error: '' });
+  if (!id || !files.length) return Promise.resolve();
   const generation = owner.generation;
+  const append = () => appendHelperAttachmentFiles(owner, id, files, model, generation);
+  const added: Promise<void> = owner.adding ? owner.adding.then(append) : append();
+  owner.adding = added;
+  void added.then(() => {
+    if (owner.adding === added) owner.adding = undefined;
+  });
+  return added;
+}
+
+async function appendHelperAttachmentFiles(
+  owner: Entry,
+  id: string,
+  files: File[],
+  model: AttachmentModel | null,
+  generation: number
+): Promise<void> {
+  if (!owner.snapshot.ready || owner.generation !== generation) return;
+  publish(owner, { busy: true, error: '' });
   try {
     const images: DraftImage[] = [],
       additions: DraftFile[] = [];
