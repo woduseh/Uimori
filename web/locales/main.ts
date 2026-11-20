@@ -287,6 +287,12 @@ export const messages = {
     ja: '本文フォント',
     zh: '正文字体',
   },
+  'main.registeredReaderFont': {
+    ko: '등록 글꼴 ‘{name}’이 먼저 적용돼요. 이 선택은 그 글꼴에 없는 글자에 쓰여요.',
+    en: 'The registered font “{name}” applies first. This choice covers characters it lacks.',
+    ja: '登録フォント「{name}」が先に適用されます。この選択はそのフォントにない文字に使われます。',
+    zh: '已注册字体“{name}”优先使用。此选项用于该字体缺少的字符。',
+  },
   'main.m030': {
     ko: '기본 고딕',
     en: 'Default sans serif',

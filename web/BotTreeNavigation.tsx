@@ -720,6 +720,7 @@ export const BotNavigation = memo(function BotNavigation(
                             </div>
                             <div className="action-menu-group">
                               <button
+                                className="danger"
                                 disabled={busy}
                                 onClick={() => setRemovingFolder(entry.folder!)}
                               >

@@ -160,7 +160,7 @@
 }
 .settings-service p {
   margin-top: 6px;
-  font-size: var(--font-body);
+  font-size: var(--font-small);
 }
 .settings-service small {
   display: block;
