@@ -30,12 +30,7 @@ import {
 
 const workerMemory = 2 ** 31;
 
-export function defaultBrowserWorkers({
-  cpus = availableParallelism(),
-  memory = totalmem(),
-  ci = Boolean(process.env.CI),
-} = {}) {
-  if (ci) return 1;
+export function defaultBrowserWorkers({ cpus = availableParallelism(), memory = totalmem() } = {}) {
   return Math.max(1, Math.min(Math.floor(cpus / 2), Math.floor(memory / workerMemory)));
 }
 
