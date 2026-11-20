@@ -169,6 +169,16 @@ async function seed(request: APIRequestContext, squareBot = false) {
     },
   });
   expect(selection.ok(), await selection.text()).toBe(true);
+  const palette = await request.post('/api/themes/selection', {
+    data: {
+      dimension: 'palette',
+      scope: 'chat',
+      targetId: chat.id,
+      paletteId: 'theme',
+      expectedRevision: (await selection.json()).revision,
+    },
+  });
+  expect(palette.ok(), await palette.text()).toBe(true);
   return { chatId: chat.id, bot, persona, sourceId: source.id, themeId: theme.id };
 }
 

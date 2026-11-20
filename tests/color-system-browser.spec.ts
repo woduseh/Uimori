@@ -107,5 +107,16 @@ test('COLOR selected input language and avatar text stay readable in default and
   await selected.press('Escape');
   await expect(menu).not.toHaveAttribute('open');
   await expect(trigger).toBeFocused();
-  expect((await (await request.get('/api/themes')).json()).themes).toEqual(before.themes);
+  const after = await (await request.get('/api/themes')).json();
+  expect(after.themes).toEqual(before.themes);
+  for (const restore of [
+    { scope: 'global', themeId: before.preferences.defaultThemeId },
+    { dimension: 'palette', scope: 'global', paletteId: before.preferences.defaultPaletteId },
+  ]) {
+    const current = await (await request.get('/api/themes')).json();
+    const restored = await request.post('/api/themes/selection', {
+      data: { ...restore, expectedRevision: current.preferences.revision },
+    });
+    expect(restored.ok(), await restored.text()).toBe(true);
+  }
 });
