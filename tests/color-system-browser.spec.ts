@@ -2,6 +2,7 @@ import { expect, test, type Locator } from '@playwright/test';
 import { BUILTIN_PALETTES, DEFAULT_PALETTE_COLORS } from '../core/theme-palettes.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
+import { restoreGlobalThemeSelection } from './fixtures/theme-selection.js';
 
 async function expectReadableText(locator: Locator, description: string) {
   await expect(locator).toBeVisible();
@@ -108,4 +109,5 @@ test('COLOR selected input language and avatar text stay readable in default and
   await expect(menu).not.toHaveAttribute('open');
   await expect(trigger).toBeFocused();
   expect((await (await request.get('/api/themes')).json()).themes).toEqual(before.themes);
+  await restoreGlobalThemeSelection(request, before.preferences);
 });
