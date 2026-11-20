@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 import {
+  acceptsMidConversationSystem,
   generationFromModel,
   helperGenerationFromModel,
   protocolOptionKeys,
@@ -37,6 +38,26 @@ test('validation is protocol-level: any listed or unlisted model may use every o
       'openai-responses-v1'
     )
   ).not.toThrow();
+});
+
+test('Gemini model IDs, direct or namespaced by a gateway, do not accept a mid-conversation system message', () => {
+  for (const modelId of [
+    'gemini-3.8-flash',
+    'gemini-4-argon',
+    'gemini-2.5-pro',
+    'google/Gemini-3.8-flash',
+    'openrouter/google/gemini-3.1-pro-preview',
+  ])
+    expect(acceptsMidConversationSystem(modelId)).toBe(false);
+  for (const modelId of [
+    'claude-opus-5-5',
+    'gpt-6.2-sol',
+    'gemma-3-27b',
+    'not-gemini-3',
+    'gemini',
+    'gemini-3/variant',
+  ])
+    expect(acceptsMidConversationSystem(modelId)).toBe(true);
 });
 
 test('options the encoder cannot send and values outside the protocol vocabulary are rejected', () => {

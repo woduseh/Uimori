@@ -2,6 +2,7 @@ import { isGeminiProtocol, type ProviderProtocol } from './product.js';
 import { validateProviderPrompt, type LogicalMessage } from './risu-prompt.js';
 import type { Json, ProviderRequest } from './transport.js';
 import { ProviderContractError } from './provider-errors.js';
+import { acceptsMidConversationSystem } from './model-capabilities.js';
 import { planProviderCache } from './provider-cache.js';
 import { assertProviderImageSupport, providerImagePart } from './provider-image-reference.js';
 import { assertProviderFileSupport, providerFilePart } from './provider-file-reference.js';
@@ -91,9 +92,7 @@ export function planNativeMessages(
   const responses = protocol === 'openai-responses-v1';
   const anthropic = protocol === 'anthropic-messages-v1';
   const vertex = isGeminiProtocol(protocol);
-  // Gemini models, including namespaced gateway IDs, do not accept a system message after the
-  // conversation has started.
-  const gemini = /(?:^|\/)gemini-[^/]+$/iu.test(request.modelId);
+  const midSystemToUser = !acceptsMidConversationSystem(request.modelId);
   let leading = true;
   let cacheCount = 0;
   let capabilityVersion: NativeMessagePlan['capabilityVersion'] = 'native-wire-2026-09-07';
@@ -108,7 +107,8 @@ export function planNativeMessages(
       reject('PROMPT_COMPLETED_ASSISTANT_AT_END_UNSUPPORTED', message, index);
     const wasLeading = leading;
     if (message.role !== 'system') leading = false;
-    const role = gemini && message.role === 'system' && !wasLeading ? 'user' : message.role;
+    const role =
+      midSystemToUser && message.role === 'system' && !wasLeading ? 'user' : message.role;
     if (role !== message.role) note('GEMINI_MID_SYSTEM_TO_USER', message, index);
     if (vertex && role === 'system' && !wasLeading)
       reject('PROMPT_MID_SYSTEM_UNSUPPORTED', message, index);
