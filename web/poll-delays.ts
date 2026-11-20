@@ -7,3 +7,5 @@ export const longestHelperPollDelay = Math.max(
   helperPollDelay.conversation.idle,
   helperPollDelay.sessions.idle
 );
+
+export const nativeInteractionRetryDelay = { first: 1000, longest: 10_000 };

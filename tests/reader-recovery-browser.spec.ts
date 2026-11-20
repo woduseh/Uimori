@@ -3,6 +3,7 @@ import type { ChatDetail, Job, ReaderDetail } from '../core/types.js';
 import type { ResponseStreamPage } from '../core/response-stream.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { nativeProse } from './fixtures/native-message.js';
+import { trackPageFetches } from './fixtures/page-fetches.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
 import { navigationAction, visibleNavigation } from './ui-navigation.js';
 
@@ -301,6 +302,10 @@ for (const scenario of ['old-refresh', 'new-move'] as const) {
     const pendingRead = new Promise<void>((resolve) => {
       readStarted = resolve;
     });
+    const positionRequests = await trackPageFetches(
+      page,
+      new RegExp(`^/api/chats/${chat.id}/reading-position$`, 'u')
+    );
     let holdRead = false;
     let firstRevision: number | undefined;
     const targets: string[] = [];
@@ -390,17 +395,23 @@ for (const scenario of ['old-refresh', 'new-move'] as const) {
       await acknowledged;
       releaseRead();
       expect((await (await reload).json()).own.revision).toBe(latest.revision);
-      await page.waitForTimeout(400);
       const query = new URLSearchParams({ clientId: clientId! });
-      const current = await (await request.get(`${path}?${query}`)).json();
+      const current = async () => (await (await request.get(`${path}?${query}`)).json()).own;
       if (scenario === 'new-move') {
-        expect(current.own).toMatchObject({
+        await expect.poll(current).toMatchObject({
           revision: latest.revision + 1,
           target: { sourceId: detail.sources[3].id },
         });
         expect(targets).toEqual([detail.sources[1].id, detail.sources[3].id]);
       } else {
-        expect(current.own).toMatchObject({
+        await expect
+          .poll(
+            async () =>
+              (await positionRequests.list()).find((item) => item.method === 'PUT')?.handled
+          )
+          .toBe(true);
+        expect(await positionRequests.count('PUT')).toBe(1);
+        expect(await current()).toMatchObject({
           revision: latest.revision,
           target: { sourceId: detail.sources[0].id },
         });
