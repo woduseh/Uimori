@@ -2,7 +2,7 @@ import { useId, useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { t, useI18n, formatNumber } from './i18n.js';
 import './activity-navigation.css';
-import { readOptionalJson } from './optional-storage.js';
+import { readOptionalJson, writeOptionalStorage } from './optional-storage.js';
 
 type ActivitySectionId = 'unread' | 'running' | 'recent';
 const sectionStorageKey = 'uimori:activity-sections:v1';
@@ -11,14 +11,15 @@ const initialExpanded: Record<ActivitySectionId, boolean> = {
   running: true,
   recent: true,
 };
-function readExpanded(id: ActivitySectionId, storageKey: string) {
+function storedSections(storageKey: string): Record<string, unknown> {
   const stored = readOptionalJson('local', storageKey, null);
-  return stored &&
-    typeof stored === 'object' &&
-    !Array.isArray(stored) &&
-    typeof (stored as Record<string, unknown>)[id] === 'boolean'
-    ? (stored as Record<string, boolean>)[id]
-    : initialExpanded[id];
+  return stored && typeof stored === 'object' && !Array.isArray(stored)
+    ? (stored as Record<string, unknown>)
+    : {};
+}
+function readExpanded(id: ActivitySectionId, storageKey: string) {
+  const stored = storedSections(storageKey)[id];
+  return typeof stored === 'boolean' ? stored : initialExpanded[id];
 }
 export function ActivitySection({
   id,
@@ -42,12 +43,11 @@ export function ActivitySection({
   const toggle = () => {
     const next = !expanded;
     setExpanded(next);
-    try {
-      const previous: unknown = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
-      const saved =
-        previous && typeof previous === 'object' && !Array.isArray(previous) ? previous : {};
-      localStorage.setItem(storageKey, JSON.stringify({ ...saved, [id]: next }));
-    } catch {}
+    writeOptionalStorage(
+      'local',
+      storageKey,
+      JSON.stringify({ ...storedSections(storageKey), [id]: next })
+    );
   };
   return (
     <section className="activity-nav-section" data-activity-section={id}>
