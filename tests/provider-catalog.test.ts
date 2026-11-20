@@ -303,6 +303,6 @@ test('gateway common effort hints do not claim native Claude or Gemini option su
   expect(modelHints(gateway, 'vendor/new-model', 'google').thinking).toMatchObject({
     field: 'thinkingLevel',
     known: undefined,
-    all: ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'],
+    all: ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH', 'XHIGH'],
   });
 });
