@@ -19,7 +19,7 @@ function getRecord<T>(buffers: IDBObjectStore, key: string): Promise<T | undefin
 async function withDraftRecords<T>(
   key: string,
   mode: 'readonly' | 'readwrite',
-  use: (buffers: IDBObjectStore, previous?: StoredDraft) => T | Promise<T>
+  use: (buffers: IDBObjectStore, previous?: StoredDraft | Draft) => T | Promise<T>
 ): Promise<T> {
   const db = await openRecoveryDatabase();
   const tx = db.transaction('buffers', mode);
@@ -28,7 +28,7 @@ async function withDraftRecords<T>(
     tx.oncomplete = () => resolve();
     tx.onabort = () => reject(tx.error ?? new Error('Attachment draft transaction aborted'));
   });
-  const apply = getRecord<RecoveryBuffer<StoredDraft>>(buffers, key).then(async (prior) => {
+  const apply = getRecord<RecoveryBuffer<StoredDraft | Draft>>(buffers, key).then(async (prior) => {
     try {
       return await use(buffers, prior?.model);
     } catch (error) {
@@ -41,14 +41,14 @@ async function withDraftRecords<T>(
 }
 
 const attachmentKey = (key: string, id: string) => `${key}:attachment:${id}`;
-function attachmentIds(draft?: StoredDraft) {
-  if (!draft) return [];
+function attachmentIds(draft?: StoredDraft | Draft) {
+  if (!draft || !('imageIds' in draft)) return [];
   return 'fileIds' in draft ? [...draft.imageIds, ...draft.fileIds] : draft.imageIds;
 }
 
 export async function readAttachmentDraft<T extends Draft>(key: string): Promise<T | undefined> {
   const saved = await withDraftRecords(key, 'readonly', async (buffers, previous) => {
-    if (!previous) return previous;
+    if (!previous || 'images' in previous) return previous;
     const load = <A extends DraftImage | DraftFile>(ids: string[]) =>
       Promise.all(
         ids.map(async (id) => {
