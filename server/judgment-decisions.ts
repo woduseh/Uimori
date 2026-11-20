@@ -68,7 +68,8 @@ export function prepareDecisionRequest(
   for (const [reference, asset] of Object.entries(request.assets ?? {})) {
     if (!reference || !asset.data_base64) requestInvalid();
     const mime = `image/${asset.format}`;
-    // Gemini concatenates adjacent text blocks without separators.
+    // https://aistudio.google.com/docs/decisions-api (2026-11-20): Gemini concatenates adjacent
+    // text blocks in input without a separator.
     parts.push(
       textPart(imageLabel + reference),
       gemini
