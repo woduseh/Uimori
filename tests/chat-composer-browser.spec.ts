@@ -197,6 +197,7 @@ test('shared composer typing leaves the reader, scene rail and sidebar unrendere
     )
     .toBe('completed');
   await expect(page.locator('[data-reader-scrollport] [data-testid="source"]')).toHaveCount(1);
+  await expect(page.locator('[data-reader-scrollport] [data-testid="source-text"]')).toBeVisible();
   await expect(page.locator('.scene-navigator')).toBeVisible();
   await input.fill('다음');
   await page.evaluate(() => new Promise(requestAnimationFrame));
