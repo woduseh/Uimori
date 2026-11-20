@@ -251,7 +251,6 @@ export function TasksPanel({
 }
 
 const appSaveSections = [
-  'chatGeneration',
   'archive',
   'connection',
   'model',
@@ -458,14 +457,12 @@ export function AppSettingsPanel({
   const [themeDirty, setThemeDirty] = useState(false);
   const [illustrationDirty, setIllustrationDirty] = useState(false);
   const [loreDirty, setLoreDirty] = useState(false);
-  const [chatGenerationDirty, setChatGenerationDirty] = useState(false);
   const [discard, setDiscard] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [savingClose, setSavingClose] = useState(false);
   const saveGroup = useSettingsSaveGroup(appSaveSections);
   const [discardError, setDiscardError] = useState('');
   const dirty =
-    chatGenerationDirty ||
     connectionDirty ||
     archiveDirty ||
     modelDirty ||
@@ -881,10 +878,7 @@ export function AppSettingsPanel({
                     >
                       <h3>{t('chatsettings.m18')}</h3>
                       <AutoTranslationDefaults />
-                      <ChatGenerationDefaults
-                        onDirtyChange={setChatGenerationDirty}
-                        onSaveHandlerChange={saveGroup.registrations.chatGeneration}
-                      />
+                      <ChatGenerationDefaults />
                     </section>
                   )}
                   {key === 'general' && (
@@ -1060,7 +1054,6 @@ export function AppSettingsPanel({
           onSave={async () => {
             if (
               !(await saveGroup.save({
-                chatGeneration: chatGenerationDirty,
                 archive: archiveDirty,
                 connection: connectionDirty,
                 model: modelDirty,

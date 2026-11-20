@@ -5,47 +5,32 @@ import {
 } from '../core/chat-settings.js';
 import { api } from './api.js';
 import { Switch } from './BooleanControls.js';
-import { Dialog } from './Dialog.js';
-import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { message as uiMessage, t, translateMessage, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { SaveButton } from './SaveButton.js';
 import { StoryUiStyleSelect } from './StoryUiStyleSelect.js';
-import { TransientNotice } from './TransientNotice.js';
-import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 
-export function ChatGenerationDefaults({
-  onDirtyChange,
-  onSaveHandlerChange,
-}: {
-  onDirtyChange: (dirty: boolean) => void;
-  onSaveHandlerChange: SettingsSaveRegistration;
-}) {
+type Values = Pick<Defaults, 'maxCalls' | 'storyUi' | 'storyUiStyle'>;
+
+export function ChatGenerationDefaults() {
   useI18n();
-  const form = useRef<HTMLFormElement>(null);
-  const [value, setValue] = useState<Defaults | null>(null);
-  const [saved, setSaved] = useState<Defaults | null>(null);
+  const [defaults, setDefaults] = useState<Defaults | null>(null);
+  const [maxCallsDraft, setMaxCallsDraft] = useState('');
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
   const [reload, setReload] = useState(0);
-  const [confirmReload, setConfirmReload] = useState(false);
-  const dirty =
-    !!value &&
-    !!saved &&
-    (value.maxCalls !== saved.maxCalls ||
-      value.storyUi !== saved.storyUi ||
-      value.storyUiStyle !== saved.storyUiStyle);
+  const confirmed = useRef<Defaults | null>(null);
+  const requested = useRef<Defaults | null>(null);
+  const saves = useRef(Promise.resolve());
   // biome-ignore lint/correctness/useExhaustiveDependencies: Explicit retries reissue the read.
   useEffect(() => {
     let active = true;
     void api<Defaults>('/chat-generation-defaults')
       .then((next) => {
         if (!active) return;
-        setValue(next);
-        setSaved(next);
+        confirmed.current = requested.current = next;
+        setDefaults(next);
+        setMaxCallsDraft(String(next.maxCalls));
         setError('');
       })
       .catch((cause) => {
@@ -58,55 +43,54 @@ export function ChatGenerationDefaults({
       active = false;
     };
   }, [reload]);
-  useEffect(() => {
-    onDirtyChange(dirty || saving);
-  }, [dirty, saving, onDirtyChange]);
-  useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
-  useSettingsSaveHandler(onSaveHandlerChange, save);
-  function update<K extends 'maxCalls' | 'storyUi' | 'storyUiStyle'>(key: K, next: Defaults[K]) {
-    setValue((current) => current && { ...current, [key]: next });
-    setNotice('');
-  }
-  async function save() {
-    if (!value || saving || loading) return false;
-    if (!dirty) return true;
-    if (!form.current?.reportValidity()) return false;
-    if (
-      !Number.isInteger(value.maxCalls) ||
-      value.maxCalls < 1 ||
-      value.maxCalls > MAX_MAIN_MODEL_CALLS
-    ) {
-      setError(uiMessage('settings.m78'));
-      return false;
-    }
-    setSaving(true);
+  function change(patch: Partial<Values>) {
+    if (!requested.current) return;
+    const target = { ...requested.current, ...patch };
+    requested.current = target;
+    setDefaults(target);
     setError('');
+    saves.current = saves.current.then(() => persist(target));
+  }
+  async function persist(target: Defaults) {
+    const base = confirmed.current;
+    if (!base || requested.current !== target) return;
     try {
-      const next = await api<Defaults>(
+      const saved = await api<Defaults>(
         '/chat-generation-defaults',
         {
-          expectedRevision: value.revision,
-          maxCalls: value.maxCalls,
-          storyUi: value.storyUi,
-          storyUiStyle: value.storyUiStyle,
+          expectedRevision: base.revision,
+          maxCalls: target.maxCalls,
+          storyUi: target.storyUi,
+          storyUiStyle: target.storyUiStyle,
         },
         'PUT'
       );
-      setValue(next);
-      setSaved(next);
-      setNotice(uiMessage('settings.newChatDefaultsSaved'));
-      return true;
+      confirmed.current = saved;
+      if (requested.current === target) {
+        requested.current = saved;
+        setDefaults(saved);
+      }
     } catch (cause) {
+      requested.current = confirmed.current;
+      setDefaults(confirmed.current);
+      setMaxCallsDraft(String(base.maxCalls));
       setError((cause as Error).message);
-      return false;
-    } finally {
-      setSaving(false);
     }
   }
-  function reloadDefaults() {
+  function commitMaxCalls() {
+    if (!requested.current) return;
+    const maxCalls = Number(maxCallsDraft);
+    if (maxCalls === requested.current.maxCalls) return;
+    if (!Number.isInteger(maxCalls) || maxCalls < 1 || maxCalls > MAX_MAIN_MODEL_CALLS) {
+      setMaxCallsDraft(String(requested.current.maxCalls));
+      setError(uiMessage('settings.m78'));
+      return;
+    }
+    change({ maxCalls });
+  }
+  function retry() {
     setLoading(true);
     setReload((current) => current + 1);
-    setConfirmReload(false);
   }
   return (
     <section className="settings-group" aria-label={t('settings.newChatDefaults')}>
@@ -114,104 +98,69 @@ export function ChatGenerationDefaults({
       <LoadingState
         presentation="placeholder"
         loading={loading}
-        error={!value ? error : ''}
+        error={!defaults ? error : ''}
         label={t('settings.newChatDefaultsLoading')}
         errorLabel={t('settings.newChatDefaultsLoadFailed')}
-        onRetry={reloadDefaults}
+        onRetry={retry}
       />
-      {value && (
-        <form
-          ref={form}
-          onSubmit={(event) => {
-            event.preventDefault();
-            void save();
-          }}
-        >
-          <fieldset disabled={saving || loading}>
-            <div className="settings-group-body">
+      {defaults && (
+        <fieldset disabled={loading}>
+          <div className="settings-group-body">
+            <label className="settings-row">
+              <span className="settings-row-copy">
+                <strong>{t('settings.m92')}</strong>
+                <small>{t('settings.m93')}</small>
+              </span>
+              <input
+                aria-label={t('settings.m92')}
+                type="number"
+                min={1}
+                max={MAX_MAIN_MODEL_CALLS}
+                step={1}
+                required
+                value={maxCallsDraft}
+                onChange={(event) => setMaxCallsDraft(event.target.value)}
+                onBlur={commitMaxCalls}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitMaxCalls();
+                }}
+              />
+            </label>
+            <label className="settings-row settings-row-toggle">
+              <span className="settings-row-copy">
+                <strong>{t('storyUi.enable')}</strong>
+              </span>
+              <span className="settings-row-control">
+                <Switch
+                  aria-label={t('storyUi.enable')}
+                  checked={defaults.storyUi}
+                  onChange={(event) => change({ storyUi: event.target.checked })}
+                />
+              </span>
+            </label>
+            {defaults.storyUi && (
               <label className="settings-row">
                 <span className="settings-row-copy">
-                  <strong>{t('settings.m92')}</strong>
-                  <small>{t('settings.m93')}</small>
+                  <strong>{t('storyUi.style')}</strong>
                 </span>
-                <input
-                  aria-label={t('settings.m92')}
-                  type="number"
-                  min={1}
-                  max={MAX_MAIN_MODEL_CALLS}
-                  step={1}
-                  required
-                  value={Number.isFinite(value.maxCalls) ? value.maxCalls : ''}
-                  onChange={(event) => update('maxCalls', event.target.valueAsNumber)}
+                <StoryUiStyleSelect
+                  aria-label={t('storyUi.style')}
+                  value={defaults.storyUiStyle}
+                  onChange={(storyUiStyle) => change({ storyUiStyle })}
                 />
               </label>
-              <label className="settings-row settings-row-toggle">
-                <span className="settings-row-copy">
-                  <strong>{t('storyUi.enable')}</strong>
-                </span>
-                <span className="settings-row-control">
-                  <Switch
-                    aria-label={t('storyUi.enable')}
-                    checked={value.storyUi}
-                    onChange={(event) => update('storyUi', event.target.checked)}
-                  />
-                </span>
-              </label>
-              {value.storyUi && (
-                <label className="settings-row">
-                  <span className="settings-row-copy">
-                    <strong>{t('storyUi.style')}</strong>
-                  </span>
-                  <StoryUiStyleSelect
-                    aria-label={t('storyUi.style')}
-                    value={value.storyUiStyle}
-                    onChange={(style) => update('storyUiStyle', style)}
-                  />
-                </label>
-              )}
-            </div>
-            <div className="form-actions settings-save-actions">
-              <SaveButton
-                label={t('settings.newChatDefaultsSave')}
-                disabled={!dirty || saving}
-                aria-busy={saving}
-              />
-            </div>
-          </fieldset>
-          {error && (
-            <NoticeBanner tone="error">
-              {translateMessage(error)}{' '}
-              <button
-                type="button"
-                className="link-button"
-                disabled={saving || loading}
-                onClick={() => {
-                  if (dirty) setConfirmReload(true);
-                  else reloadDefaults();
-                }}
-              >
-                {t('settings.m103')}
-              </button>
-            </NoticeBanner>
-          )}
-          <TransientNotice message={notice} />
-        </form>
+            )}
+          </div>
+        </fieldset>
       )}
-      <Dialog
-        open={confirmReload}
-        title={t('settings.m96')}
-        variant="confirmation"
-        role="alertdialog"
-        onClose={() => setConfirmReload(false)}
-      >
-        <p>{t('settings.m97')}</p>
-        <DraftDiscardActions
-          open={confirmReload}
-          onContinue={() => setConfirmReload(false)}
-          onDiscard={reloadDefaults}
-          discardLabel={t('settings.m98')}
-        />
-      </Dialog>
+      {defaults && error && (
+        <NoticeBanner tone="error">
+          {translateMessage(error)}{' '}
+          <button type="button" className="link-button" onClick={retry}>
+            {t('settings.m103')}
+          </button>
+        </NoticeBanner>
+      )}
     </section>
   );
 }

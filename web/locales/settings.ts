@@ -59,18 +59,6 @@ export const messages = {
     ja: '新しいチャットの既定値を読み込めませんでした。',
     zh: '无法加载新聊天默认值。',
   },
-  'settings.newChatDefaultsSave': {
-    ko: '새 채팅 기본값 저장',
-    en: 'Save new chat defaults',
-    ja: '新しいチャットの既定値を保存',
-    zh: '保存新聊天默认值',
-  },
-  'settings.newChatDefaultsSaved': {
-    ko: '새 채팅 기본값을 저장했어요.',
-    en: 'New chat defaults saved.',
-    ja: '新しいチャットの既定値を保存しました。',
-    zh: '新聊天默认值已保存。',
-  },
   'settings.judgmentProvider': {
     ko: '판단 프로바이더',
     en: 'Judgment provider',
