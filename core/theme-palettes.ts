@@ -13,6 +13,34 @@ export type ThemePalette = {
 
 type NeutralScale = 'gray' | 'mauve' | 'slate' | 'sage' | 'olive' | 'sand';
 type AccentScale = 'gray' | 'grass' | 'jade' | 'bronze' | 'crimson' | 'indigo';
+type ColorScale = readonly [undefined, ...string[]];
+
+const WCAG_AA_TEXT_CONTRAST = 4.5;
+
+function relativeLuminance(hex: string) {
+  const [red, green, blue] = [1, 3, 5].map((offset) => {
+    const channel = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function contrastRatio(first: string, second: string) {
+  const [lighter, darker] = [relativeLuminance(first), relativeLuminance(second)].sort(
+    (a, b) => b - a
+  );
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function inkOn(background: string) {
+  return contrastRatio('#000000', background) >= contrastRatio('#ffffff', background)
+    ? '#000000'
+    : '#ffffff';
+}
+
+function accentTextOn(accent: ColorScale, background: string) {
+  return contrastRatio(accent[11], background) >= WCAG_AA_TEXT_CONTRAST ? accent[11] : accent[12];
+}
 
 function colors(
   mode: 'light' | 'dark',
@@ -23,9 +51,6 @@ function colors(
   const neutral = scales[neutralName];
   const accent = scales[accentName];
   const { red, jade, amber, blue } = scales;
-  // Dark gray/indigo step 10 needs a different foreground than step 9 for AA text contrast.
-  const ink =
-    accentName === 'indigo' || (accentName === 'gray' && mode === 'dark') ? '#ffffff' : '#000000';
   return {
     bg: neutral[1],
     nav: neutral[2],
@@ -42,11 +67,10 @@ function colors(
     muted: neutral[11],
     faint: neutral[11],
     accent: accent[9],
-    'accent-ink': ink,
+    'accent-ink': inkOn(accent[9]),
     'accent-hover': accent[10],
-    'accent-hover-ink': accentName === 'indigo' && mode === 'light' ? '#ffffff' : '#000000',
-    // Jade 11 on sage 2 falls just below AA for the app's small text.
-    'accent-text': accentName === 'jade' && mode === 'light' ? accent[12] : accent[11],
+    'accent-hover-ink': inkOn(accent[10]),
+    'accent-text': accentTextOn(accent, neutral[2]),
     'accent-line': accent[7],
     'accent-soft': mode === 'light' ? accent[3] : accent[4],
     user: accent[3],
