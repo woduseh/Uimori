@@ -67,6 +67,9 @@ function upgradeJobInput(input: StoredObject): StoredObject {
   return Object.hasOwn(input, 'task') ? input : { ...input, task: 'render' };
 }
 
+const presetNeedsUpgrade = (column: string) =>
+  `json_valid(${column}) AND json_type(${column})='object' AND (json_type(${column},'$.generator') IS NULL OR json_type(${column},'$.novelai') IS NULL)`;
+
 function rewriteJsonColumn(
   db: DatabaseSync,
   select: string,
@@ -86,34 +89,36 @@ export function upgradeIllustrationStoredShapes(db: DatabaseSync): void {
   if (tableExists(db, 'illustration_settings'))
     rewriteJsonColumn(
       db,
-      'SELECT id AS key,body AS value FROM illustration_settings',
+      'SELECT id AS key,body AS value FROM illustration_settings WHERE json_valid(body)',
       'UPDATE illustration_settings SET body=? WHERE id=?',
       (body) => (isObject(body) ? upgradeSettings(body) : body)
     );
   const preset = (value: unknown) => (isObject(value) ? upgradePreset(value) : value);
   rewriteJsonColumn(
     db,
-    "SELECT id AS key,body AS value FROM versions WHERE kind='illustration-preset'",
+    `SELECT id AS key,body AS value FROM versions WHERE kind='illustration-preset' AND ${presetNeedsUpgrade('body')}`,
     "UPDATE versions SET body=? WHERE kind='illustration-preset' AND id=?",
     preset
   );
   rewriteJsonColumn(
     db,
-    "SELECT id AS key,model AS value FROM resource_undo WHERE kind='illustration-preset'",
+    `SELECT id AS key,model AS value FROM resource_undo WHERE kind='illustration-preset' AND ${presetNeedsUpgrade('model')}`,
     "UPDATE resource_undo SET model=? WHERE kind='illustration-preset' AND id=?",
     preset
   );
   if (tableExists(db, 'illustration_references'))
     rewriteJsonColumn(
       db,
-      'SELECT chat_id AS key,body AS value FROM illustration_references',
+      `SELECT chat_id AS key,body AS value FROM illustration_references WHERE json_valid(body)
+        AND (json_type(body)='array' OR (json_type(body)='object' AND json_type(body,'$.characterProfiles') IS NULL))`,
       'UPDATE illustration_references SET body=? WHERE chat_id=?',
       upgradeReferences
     );
   if (tableExists(db, 'illustration_jobs'))
     rewriteJsonColumn(
       db,
-      'SELECT id AS key,input AS value FROM illustration_jobs',
+      `SELECT id AS key,input AS value FROM illustration_jobs WHERE json_valid(input)
+        AND json_type(input)='object' AND json_type(input,'$.task') IS NULL`,
       'UPDATE illustration_jobs SET input=? WHERE id=?',
       (input) => (isObject(input) ? upgradeJobInput(input) : input)
     );

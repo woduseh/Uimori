@@ -17,7 +17,7 @@ export function upgradeStoredShapes(db: DatabaseSync): void {
     for (const upgrade of upgrades) upgrade(db);
     db.exec('COMMIT');
   } catch (error) {
-    db.exec('ROLLBACK');
+    if (db.isTransaction) db.exec('ROLLBACK');
     throw error;
   }
 }

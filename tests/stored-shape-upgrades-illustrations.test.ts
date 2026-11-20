@@ -216,3 +216,33 @@ test('old illustration settings, presets, references and job inputs are complete
   reopen();
   expect(snapshot()).toEqual(upgraded);
 });
+
+test('a malformed illustration job row is left for its reader instead of stopping the store from opening', () => {
+  const path = mkdtempSync(join(tmpdir(), 'uimori-upgrade-'));
+  const file = join(path, 'story.sqlite');
+  const item: { store?: Store; path: string } = { store: new Store(file), path };
+  owned.push(item);
+  const { chat, source } = chatWithSource(item.store!);
+  const insertJob = item.store!.db.prepare(
+    `INSERT INTO illustration_jobs(id,chat_id,source_revision,source_hash,origin,status,input,created_at,updated_at)
+     VALUES(?,?,?,?,'manual','completed',?,'2026-10-01T00:00:00.000Z','2026-10-01T00:00:00.000Z')`
+  );
+  insertJob.run('malformed-job', chat.id, source.id, source.hash, '{"version":1,');
+  insertJob.run('legacy-job', chat.id, source.id, source.hash, '{"version":1,"generator":"codex"}');
+  item.store!.close();
+  item.store = new Store(file);
+  const inputs = Object.fromEntries(
+    (
+      item.store.db.prepare('SELECT id,input FROM illustration_jobs ORDER BY id').all() as {
+        id: string;
+        input: string;
+      }[]
+    ).map((row) => [row.id, row.input])
+  );
+  expect(inputs['malformed-job']).toBe('{"version":1,');
+  expect(JSON.parse(inputs['legacy-job'])).toEqual({
+    version: 1,
+    generator: 'codex',
+    task: 'render',
+  });
+});
