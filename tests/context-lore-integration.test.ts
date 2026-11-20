@@ -147,11 +147,16 @@ async function seed(
       {
         name: 'knowledge.read',
         callId: randomUUID(),
-        args: { ids: [lore.id], offset: 0, limit: Math.min(lore.text.length, 4096) },
+        args: {
+          ids: [lore.id],
+          offset: 0,
+          limit: Math.min(lore.text.length, 4096),
+          tokenLimit: 8000,
+        },
       },
       undefined,
       'main',
-      6000
+      { tokens: 16000, tokenizer: 'openai-o200k' }
     );
     expect(event.denied).toBe(false);
     expect((event.result as any).items[0].read.text).toBe(lore.text.slice(0, 4096));
@@ -452,61 +457,55 @@ describe('automatic summary and retained lore at the same input boundary', () =>
   });
 });
 
-test.each([undefined, 24000, { tokens: 16000, tokenizer: 'openai-o200k' as const }])(
-  'completion retains exact lore from a receipt with read allowance %s',
-  async (allowance) => {
-    const item = await directory();
-    const store = (item.store = new Store(join(item.directory, 'story.sqlite')));
-    const { chat, lore } = createLoreChat(store, ['A', 'B', 'C'], 100);
-    const captured = snapshot(store, chat.id);
-    let run = store.createRun(
-      chat.id,
-      {
-        request: captured.request,
-        expectedRevision: captured.parentRevision,
-        expectedSettingsRevision: captured.settingsRevision,
-        idempotencyKey: randomUUID(),
+test('completion retains exact lore from a token-budget receipt', async () => {
+  const allowance = { tokens: 16000, tokenizer: 'openai-o200k' as const };
+  const item = await directory();
+  const store = (item.store = new Store(join(item.directory, 'story.sqlite')));
+  const { chat, lore } = createLoreChat(store, ['A', 'B', 'C'], 100);
+  const captured = snapshot(store, chat.id);
+  let run = store.createRun(
+    chat.id,
+    {
+      request: captured.request,
+      expectedRevision: captured.parentRevision,
+      expectedSettingsRevision: captured.settingsRevision,
+      idempotencyKey: randomUUID(),
+    },
+    () => captured
+  ).run;
+  const prepared = compileSnapshotPrompt(
+    freezeLoreContext(store, await prepareNativeRisuRun(run.snapshot))
+  );
+  store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(JSON.stringify(prepared), run.id);
+  run = store.run(run.id);
+  store.startRun(run.id);
+  const event = executeTool(
+    run.snapshot,
+    {
+      name: 'knowledge.read',
+      callId: 'retained-batch',
+      args: {
+        ids: lore.map((entry) => entry.id),
+        limit: 4096,
+        tokenLimit: 8000,
       },
-      () => captured
-    ).run;
-    const prepared = compileSnapshotPrompt(
-      freezeLoreContext(store, await prepareNativeRisuRun(run.snapshot))
-    );
-    store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(JSON.stringify(prepared), run.id);
-    run = store.run(run.id);
-    store.startRun(run.id);
-    const event = executeTool(
-      run.snapshot,
-      {
-        name: 'knowledge.read',
-        callId: 'retained-batch',
-        args: {
-          ids: lore.map((entry) => entry.id),
-          limit: 4096,
-          ...(typeof allowance === 'object' ? { tokenLimit: 8000 } : {}),
-        },
-      },
-      undefined,
-      'main',
-      allowance ?? 6000
-    );
-    const count = allowance === undefined ? 1 : lore.length;
-    expect((event.result as any).items).toHaveLength(count);
-    if (allowance === undefined) expect(event).not.toHaveProperty('knowledgeReadChars');
-    else if (typeof allowance === 'number')
-      expect(event).toHaveProperty('knowledgeReadChars', allowance);
-    else expect(event.readBudget).toMatchObject(allowance);
-    store.tool(run.id, event);
-    const source = store.completeRun(run.id, finalText, {
-      modelCalls: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      costUsd: 0,
-    });
-    const retained = readLoreRetention(store, chat.id, source.id)!;
-    expect(retained.reads.map((entry) => ({ id: entry.id, text: entry.text }))).toEqual(
-      lore.slice(0, count).map((entry) => ({ id: entry.id, text: entry.text.slice(0, 4096) }))
-    );
-    expect(retained.reads.every((entry) => entry.origin.callId === 'retained-batch')).toBe(true);
-  }
-);
+    },
+    undefined,
+    'main',
+    allowance
+  );
+  expect((event.result as any).items).toHaveLength(lore.length);
+  expect(event.readBudget).toMatchObject(allowance);
+  store.tool(run.id, event);
+  const source = store.completeRun(run.id, finalText, {
+    modelCalls: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    costUsd: 0,
+  });
+  const retained = readLoreRetention(store, chat.id, source.id)!;
+  expect(retained.reads.map((entry) => ({ id: entry.id, text: entry.text }))).toEqual(
+    lore.map((entry) => ({ id: entry.id, text: entry.text.slice(0, 4096) }))
+  );
+  expect(retained.reads.every((entry) => entry.origin.callId === 'retained-batch')).toBe(true);
+});

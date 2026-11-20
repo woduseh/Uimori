@@ -36,10 +36,7 @@ import { combinationOwner } from '../core/prompt-combinations.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { randomUUID, createHash } from 'node:crypto';
-import {
-  readEvaluationToolOptions,
-  validateEvaluationToolOptions,
-} from '../core/evaluation-tool-config.js';
+import { validateEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import type { Store } from './store.js';
 import {
   defaultProfile,
@@ -96,13 +93,6 @@ import { validateLoreContextPolicy } from '../core/lore-context.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
-function currentModelFields<T>(kind: string, value: T): T {
-  if (kind !== 'model') return value;
-  const { contextTools: _retired, pdfInput: _retiredPdf, evaluationTools, ...model } = value as Row;
-  const evaluation =
-    evaluationTools === undefined ? undefined : readEvaluationToolOptions(evaluationTools);
-  return { ...model, ...(evaluation ? { evaluationTools: evaluation } : {}) } as T;
-}
 export const modelRef = (v: unknown): ModelRef => {
   const b = record(v);
   fields(b, ['id']);
@@ -151,7 +141,7 @@ export class ProductStore {
             : 'SELECT v.body FROM versions v WHERE kind=? AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id) ORDER BY id'
         )
         .all(kind) as Row[]
-    ).map((r) => currentModelFields(kind, parse(r.body)));
+    ).map((r) => parse(r.body));
   }
   libraryMetadata(): {
     contents: Pick<Content, 'id' | 'revision' | 'title' | 'kind'>[];
@@ -196,7 +186,7 @@ export class ProductStore {
         .get(kind, id) as Row | undefined;
       if (!row || (revision !== undefined && revision !== row.revision))
         throw new HttpError(404, 'Setting not found');
-      return currentModelFields(kind, parse(row.body));
+      return parse(row.body);
     }
     const r = (
       revision === undefined
@@ -226,7 +216,7 @@ export class ProductStore {
     const prior = id ? this.get<Row & ContentRef>(kind, id) : null;
     if (prior && prior.revision !== expected) throw new HttpError(409, 'Revision conflict');
     const result: Row & ContentRef = {
-      ...currentModelFields(kind, value),
+      ...value,
       id: id ?? createId ?? randomUUID(),
       revision: (prior?.revision ?? 0) + 1,
     };
@@ -460,13 +450,11 @@ export class ProductStore {
       'maxOutputTokens',
       'temperature',
       ...modelOptionKeys,
-      'contextTools',
       'enabled',
       'displayOrder',
       'pricing',
       'expectedRevision',
     ]);
-    if (b.contextTools !== undefined) boolean(b.contextTools);
     const expectedRevision = id ? number(b.expectedRevision, 'revision') : undefined;
     const current = id ? this.get<ModelPreset>('model', id) : undefined;
     if (current && current.revision !== expectedRevision)
@@ -956,7 +944,6 @@ export class ProductStore {
     let estimatedCost = estimateCost(
       request?.pricingSnapshot,
       result.usage,
-      request?.pricingStartedAt ?? '',
       anthropicBatch &&
         reportedTier === 'batch' &&
         request?.pricingSnapshot?.serviceTier !== 'batch'

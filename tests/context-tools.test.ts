@@ -1383,7 +1383,7 @@ test('read compaction keeps bounded knowledge page and per-item continuation met
   });
 });
 
-test('knowledge token pages preserve multilingual UTF-16 ranges, frozen receipts and legacy limits', async () => {
+test('knowledge token pages preserve multilingual UTF-16 ranges, frozen receipts', async () => {
   const fixed = await snapshot();
   fixed.resources = [
     {
@@ -1433,19 +1433,6 @@ test('knowledge token pages preserve multilingual UTF-16 ranges, frozen receipts
     offset = read.nextOffset;
   } while (offset !== null);
   expect(chunks.join('')).toBe(original);
-  const legacy = executeTool(
-    fixed,
-    {
-      callId: 'old',
-      name: 'knowledge.read',
-      args: { ids: ['unicode-lore'], offset: 0, limit: 123 },
-    },
-    undefined,
-    'main',
-    6000
-  );
-  expect(legacy).not.toHaveProperty('readBudget');
-  expect((legacy.result as any).items[0].read.text).toBe(original.slice(0, 123));
 });
 
 test('tiny token limits return a recoverable error rather than a non-progressing lore or skill page', async () => {
@@ -1508,11 +1495,4 @@ test('lore explicit UTF-16 limits preserve whole characters and cannot return an
   const prefix = executeTool(fixed, { ...action, args: { ...action.args, limit: 2 } });
   const prefixRead = (prefix.result as any).items[0].read;
   expect(prefixRead).toMatchObject({ text: 'A', range: { start: 0, end: 1 }, nextOffset: 1 });
-  fixed.resources[0].text = '😀hello';
-  const legacy = executeTool(fixed, action, undefined, 'main', 6000);
-  expect((legacy.result as any).items[0].read).toMatchObject({
-    text: '\ud83d',
-    range: { start: 0, end: 1 },
-    nextOffset: 1,
-  });
 });

@@ -41,15 +41,6 @@ const estimateNotes: Record<string, string> = {
   get INCONSISTENT_INPUT_USAGE() {
     return t('providers.m521');
   },
-  get PRICING_START_TIME_INVALID() {
-    return t('providers.m522');
-  },
-  get PRICING_SCHEDULE_INVALID() {
-    return t('providers.m523');
-  },
-  get PEAK_RATES_APPLIED() {
-    return t('providers.m524');
-  },
   get PRICING_THRESHOLD_INVALID() {
     return t('providers.m525');
   },

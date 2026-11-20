@@ -35,7 +35,6 @@ export type PricingSnapshot = {
   flexRates?: TokenRates;
   flexLongContext?: { aboveInputTokens: number; rates: TokenRates };
   longContext?: { aboveInputTokens: number; rates: TokenRates };
-  schedule?: { peakRates: TokenRates; weekdays: number[]; utcHours: [number, number][] };
   cacheTtl?: string;
   notes: string[];
 };

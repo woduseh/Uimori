@@ -288,11 +288,7 @@ export function createConnectionTestRunner(
           const output = result.text || result.refusal || '';
           const rejection = providerRejection(result.error?.diagnostic);
           journal.finish(id, {
-            estimatedCost: estimateCost(
-              input.pricingSnapshot,
-              result.usage,
-              admission.view.createdAt
-            ),
+            estimatedCost: estimateCost(input.pricingSnapshot, result.usage),
             ...(rejection ? { rejection } : {}),
             status:
               result.status === 'tool_calls'

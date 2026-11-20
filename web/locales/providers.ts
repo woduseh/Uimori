@@ -2561,24 +2561,6 @@ export const messages = {
     ja: 'プロバイダー報告の入力、キャッシュトークン数が整合しないため、その金額は未確認と表示します。',
     zh: '提供商报告的输入与缓存 token 数不一致，因此该金额显示为未确认。',
   },
-  'providers.m522': {
-    ko: '호출 시작 시각을 확인하지 못해 시간대별 요금을 계산하지 못했어요.',
-    en: 'Time-based rates could not be calculated because the call start time is unknown.',
-    ja: '呼び出し開始時刻を確認できず、時間帯別料金を計算できませんでした。',
-    zh: '无法确认调用开始时间，因此无法计算分时费率。',
-  },
-  'providers.m523': {
-    ko: '시간대별 요금 기준이 올바르지 않아 금액을 추정하지 않았어요.',
-    en: 'No estimate was calculated because the time-based pricing rules are invalid.',
-    ja: '時間帯別料金の基準が正しくないため、費用を推定しませんでした。',
-    zh: '分时费率规则无效，因此未估算金额。',
-  },
-  'providers.m524': {
-    ko: '호출 시작 시각에 해당하는 혼잡 시간대 요금을 적용했어요.',
-    en: 'Peak-period rates for the call start time were applied.',
-    ja: '呼び出し開始時刻に該当する混雑時間帯の料金を適用しました。',
-    zh: '已应用调用开始时间对应的高峰时段费率。',
-  },
   'providers.m525': {
     ko: '장문 요금의 입력 토큰 기준이 올바르지 않아 금액을 추정하지 않았어요.',
     en: 'No estimate was calculated because the long-context input token threshold is invalid.',

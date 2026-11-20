@@ -27,8 +27,6 @@ import { candidateTerms, createCandidateSearch } from './candidate-search.js';
 const ALLOWED_TOOLS = KNOWLEDGE_SKILL_TOOLS.map((tool) => tool.name);
 export const CATALOG_SUMMARY_TOKENS = 80;
 export const CATALOG_TOKENS = 6_000;
-export const KNOWLEDGE_READ_CHARS = 6_000;
-export const KNOWLEDGE_READ_MAX_CHARS = 48_000;
 export const KNOWLEDGE_READ_TOKENS = 2_000;
 export const KNOWLEDGE_READ_MAX_TOKENS = 16_000;
 export const KNOWLEDGE_ITEM_TOKENS = 2_000;
@@ -418,18 +416,16 @@ export function executeTool(
   action: ToolAction,
   signal?: AbortSignal,
   role: 'main' | 'translation' | 'image' = 'main',
-  budget?: number | ReadBudget
+  budget?: ReadBudget
 ): ToolEvent {
   checkAbort(signal);
   const profile =
-    typeof budget === 'object'
-      ? budget.tokenizer
-      : ((snapshot.contextPlan && 'tokenizer' in snapshot.contextPlan.budget
-          ? snapshot.contextPlan.budget.tokenizer
-          : undefined) ?? 'openai-o200k');
-  const legacyChars = typeof budget === 'number' ? budget : undefined;
-  const readBudget: ReadBudget =
-    typeof budget === 'object' ? budget : { tokens: KNOWLEDGE_READ_TOKENS, tokenizer: profile };
+    budget?.tokenizer ??
+    (snapshot.contextPlan && 'tokenizer' in snapshot.contextPlan.budget
+      ? snapshot.contextPlan.budget.tokenizer
+      : undefined) ??
+    'openai-o200k';
+  const readBudget: ReadBudget = budget ?? { tokens: KNOWLEDGE_READ_TOKENS, tokenizer: profile };
   if ((role === 'main' || role === 'translation') && STORY_READ_NAMES.includes(action.name))
     return executeStoryRead(snapshot, action);
   const denied = (code: string): ToolEvent => ({
@@ -478,25 +474,14 @@ export function executeTool(
 
   if (action.name === 'knowledge.read') {
     if (
-      legacyChars !== undefined
-        ? !Number.isSafeInteger(legacyChars) ||
-          legacyChars < KNOWLEDGE_READ_CHARS ||
-          legacyChars > KNOWLEDGE_READ_MAX_CHARS
-        : !Number.isSafeInteger(readBudget.tokens) ||
-          readBudget.tokens < KNOWLEDGE_READ_TOKENS ||
-          readBudget.tokens > KNOWLEDGE_READ_MAX_TOKENS ||
-          !isTokenizerProfileId(readBudget.tokenizer)
+      !Number.isSafeInteger(readBudget.tokens) ||
+      readBudget.tokens < KNOWLEDGE_READ_TOKENS ||
+      readBudget.tokens > KNOWLEDGE_READ_MAX_TOKENS ||
+      !isTokenizerProfileId(readBudget.tokenizer)
     )
       throw new Error('INVALID_KNOWLEDGE_READ_BUDGET');
     if (
-      Object.keys(args).some(
-        (key) =>
-          !(
-            legacyChars === undefined
-              ? ['ids', 'offset', 'limit', 'tokenLimit']
-              : ['ids', 'offset', 'limit']
-          ).includes(key)
-      ) ||
+      Object.keys(args).some((key) => !['ids', 'offset', 'limit', 'tokenLimit'].includes(key)) ||
       !Array.isArray(args.ids) ||
       args.ids.length < 1 ||
       args.ids.length > 16 ||
@@ -506,17 +491,11 @@ export function executeTool(
       return denied('INVALID_ARGUMENTS');
 
     const offset = pageNumber(args.offset, 0, Number.MAX_SAFE_INTEGER);
-    const limit =
-      args.limit === undefined && legacyChars === undefined
-        ? undefined
-        : pageNumber(args.limit, 4096, 4096);
+    const limit = args.limit === undefined ? undefined : pageNumber(args.limit, 4096, 4096);
     const tokenLimit = pageNumber(args.tokenLimit, KNOWLEDGE_ITEM_TOKENS, 8000);
     if (offset === null || limit === null || limit === 0 || tokenLimit === null || tokenLimit === 0)
       return denied('INVALID_ARGUMENTS');
-    const fits = () =>
-      legacyChars === undefined
-        ? countTextTokens(JSON.stringify(result()), profile) <= readBudget.tokens
-        : JSON.stringify(result()).length <= legacyChars;
+    const fits = () => countTextTokens(JSON.stringify(result()), profile) <= readBudget.tokens;
 
     const ids = args.ids;
     const frozenRanges = readBudget.ranges;
@@ -547,8 +526,7 @@ export function executeTool(
                 read: readResourceRange(
                   resource,
                   offset,
-                  legacyChars === undefined &&
-                    size > 0 &&
+                  size > 0 &&
                     /[\uD800-\uDBFF]/u.test(resource.text[offset + size - 1] ?? '') &&
                     /[\uDC00-\uDFFF]/u.test(resource.text[offset + size] ?? '')
                     ? size - 1
@@ -572,18 +550,10 @@ export function executeTool(
         throw new Error('INVALID_KNOWLEDGE_READ_BUDGET');
       const size = frozenRanges
         ? (frozenEnd ?? offset) - offset
-        : legacyChars !== undefined
-          ? limit!
-          : resource && offset <= resource.text.length
-            ? tokenReadSize(resource.text, offset, limit, tokenLimit)
-            : 0;
-      if (
-        !frozenRanges &&
-        legacyChars === undefined &&
-        resource &&
-        offset < resource.text.length &&
-        size === 0
-      )
+        : resource && offset <= resource.text.length
+          ? tokenReadSize(resource.text, offset, limit, tokenLimit)
+          : 0;
+      if (!frozenRanges && resource && offset < resource.text.length && size === 0)
         return denied('TOKEN_LIMIT_TOO_SMALL');
       items.push(entry(size));
       if (frozenRanges || fits()) continue;
@@ -598,7 +568,7 @@ export function executeTool(
         else high = middle - 1;
       }
       items[0] = entry(low);
-      if (legacyChars === undefined && !fits()) return denied('RESULT_METADATA_TOO_LARGE');
+      if (!fits()) return denied('RESULT_METADATA_TOO_LARGE');
       break;
     }
     return {
@@ -607,22 +577,16 @@ export function executeTool(
         ids: args.ids,
         offset,
         ...(limit === undefined ? {} : { limit }),
-        ...(legacyChars === undefined ? { tokenLimit } : {}),
+        tokenLimit,
       },
       denied: false,
       result: result(),
-      ...(legacyChars === undefined
-        ? {
-            readBudget: {
-              ...readBudget,
-              ranges: items.map(
-                (item) => (item as { read?: KnowledgeReadResult }).read?.range.end ?? null
-              ),
-            },
-          }
-        : legacyChars > KNOWLEDGE_READ_CHARS
-          ? { knowledgeReadChars: legacyChars }
-          : {}),
+      readBudget: {
+        ...readBudget,
+        ranges: items.map(
+          (item) => (item as { read?: KnowledgeReadResult }).read?.range.end ?? null
+        ),
+      },
     };
   }
 

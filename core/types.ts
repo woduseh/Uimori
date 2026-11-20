@@ -57,7 +57,6 @@ export type ToolEvent = {
   result: unknown;
   denied: boolean;
   errorKind?: 'recoverable';
-  knowledgeReadChars?: number;
   readBudget?: {
     tokens: number;
     tokenizer: import('./tokenizer-profiles.js').TokenizerProfileId;

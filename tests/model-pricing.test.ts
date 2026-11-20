@@ -130,7 +130,6 @@ test('strict pricing validation rejects unknown fields, missing buckets and inva
     { checkedAt: '2026-02-30' },
     { sourceUrl: 'http://unsafe.example' },
     { longContext: { aboveInputTokens: 0, rates: r } },
-    { schedule: { peakRates: r, weekdays: [1, 1], utcHours: [[1, 4]] } },
     { rates: { ...r, cacheRead: Infinity } },
   ])
     expect(() => validatePricingSnapshot({ ...valid, ...extra })).toThrow();
@@ -194,7 +193,6 @@ test('legacy official execution snapshots remain readable byte-for-value without
     checkedAt: '2026-09-09',
     serviceTier: 'default',
     rates: r,
-    schedule: { peakRates: r, weekdays: [1], utcHours: [[1, 4]] },
     notes: ['historical'],
   };
   expect(validatePricingSnapshot(legacy)).toEqual(legacy);

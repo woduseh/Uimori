@@ -114,7 +114,6 @@ export function validatePricingSnapshot(value: unknown): PricingSnapshot {
     'flexRates',
     'flexLongContext',
     'longContext',
-    'schedule',
     'cacheTtl',
     'notes',
   ]);
@@ -172,30 +171,6 @@ export function validatePricingSnapshot(value: unknown): PricingSnapshot {
       rates: rates(long.rates),
     };
     if (!result.flexRates) return fail();
-  }
-  if (Object.hasOwn(b, 'schedule')) {
-    const schedule = object(b.schedule, ['peakRates', 'weekdays', 'utcHours']);
-    if (
-      !Array.isArray(schedule.weekdays) ||
-      !schedule.weekdays.length ||
-      schedule.weekdays.length > 7 ||
-      !Array.isArray(schedule.utcHours) ||
-      !schedule.utcHours.length ||
-      schedule.utcHours.length > 24
-    )
-      return fail();
-    const weekdays = schedule.weekdays.map((day) => integer(day, 0, 6));
-    if (new Set(weekdays).size !== weekdays.length) return fail();
-    const utcHours: [number, number][] = schedule.utcHours.map((pair) => {
-      if (!Array.isArray(pair) || pair.length !== 2) return fail();
-      const start = integer(pair[0], 0, 23),
-        end = integer(pair[1], 1, 24);
-      if (start >= end) return fail();
-      return [start, end];
-    });
-    const ordered = [...utcHours].sort(([a], [b]) => a - b);
-    if (ordered.some(([start], index) => index > 0 && start < ordered[index - 1][1])) return fail();
-    result.schedule = { peakRates: rates(schedule.peakRates), weekdays, utcHours };
   }
   return result;
 }

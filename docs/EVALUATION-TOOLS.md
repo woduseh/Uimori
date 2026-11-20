@@ -22,7 +22,7 @@ Tool exchange limits are fixed, with no preset control: up to ten nonterminal ex
 
 Evaluation tools do not classify submitted prose with a refusal regex or automatically resubmit it based on wording. Semantic refusal classification belongs to the existing main and translation JEV policy and follows its configured settings. When JEV is disabled, evaluation tools do not supply a fallback refusal classifier. Provider-supplied structured refusal signals keep their existing handling.
 
-The `source-bound` mode and terminal find-and-replace corrections are retired. Reading an old saved `source-bound` preset disables evaluation tools for new execution; saving that mode as a new setting is rejected. Known legacy `maximumToolRounds`, `terminalLateCorrections`, and `outputRecovery` fields are validated and discarded when current options are read or saved. Original stored settings, archived snapshots, and receipts are not rewritten by this read normalization, and do not restore retired runtime behavior.
+The `source-bound` mode and terminal find-and-replace corrections are retired. The `source-bound` mode and the retired `maximumToolRounds`, `terminalLateCorrections`, and `outputRecovery` fields are rejected wherever evaluation options are validated. Startup removes those three fields from saved model presets without changing their revision.
 
 Truncated-output recovery is automatic and independent of the retired refusal option. It applies only to a Responses result interrupted by `max_output_tokens` with a truncated terminal JSON string containing recoverable `content`. Recovered results carry provenance. Other partial responses, ordinary text, and other tools are not treated as terminal submissions.
 

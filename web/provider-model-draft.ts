@@ -25,7 +25,6 @@ import {
 } from '../core/model-capabilities.js';
 import {
   defaultEvaluationToolOptions,
-  readEvaluationToolOptions,
   validateEvaluationToolOptions,
   type EvaluationToolOptions,
 } from '../core/evaluation-tool-config.js';
@@ -184,10 +183,6 @@ export const initialModel = (): ModelDraft => ({
   pricing: pricingDraft(),
 });
 export function modelDraft(value: ModelPreset): ModelDraft {
-  const evaluationTools =
-    value.evaluationTools === undefined
-      ? undefined
-      : readEvaluationToolOptions(value.evaluationTools);
   return {
     title: value.title,
     connectionRef: value.connectionId,
@@ -215,10 +210,10 @@ export function modelDraft(value: ModelPreset): ModelDraft {
     cacheTtl: value.cacheTtl ?? '',
     thinkingMode: value.thinkingMode ?? '',
     enabled: value.enabled !== false,
-    evaluationToolsEnabled: evaluationTools !== undefined,
+    evaluationToolsEnabled: value.evaluationTools !== undefined,
     evaluationTools: {
       ...defaultEvaluationToolOptions(),
-      ...evaluationTools,
+      ...value.evaluationTools,
     },
     providerOptions:
       value.providerOptions === undefined ? '' : JSON.stringify(value.providerOptions, null, 2),

@@ -148,51 +148,6 @@ describe('model numeric drafts', () => {
     }
   });
 
-  test('opens a retired source-bound preset with evaluation disabled and omits it on save', () => {
-    const preset = {
-      ...modelPayload(initialModel(), connection),
-      id: 'legacy-model',
-      revision: 1,
-      evaluationTools: {
-        contextMode: 'source-bound',
-        approvalReasoningMode: 'configured',
-        metadataProfile: 'deepmind',
-        maximumToolRounds: 8,
-        terminalLateCorrections: true,
-      },
-    } as unknown as ModelPreset;
-    const draft = modelDraft(preset);
-    expect(draft.evaluationToolsEnabled).toBe(false);
-    expect(draft.evaluationTools.contextMode).toBe('model-selected');
-    expect(modelDraftError(draft, connection)).toBe('');
-    expect(modelPayload(draft, connection)).not.toHaveProperty('evaluationTools');
-  });
-
-  test('keeps legacy evaluation choices while dropping retired settings from the next save', () => {
-    const contextMode = 'preloaded' as const;
-    const preset = {
-      ...modelPayload(initialModel(), connection),
-      id: 'legacy-model',
-      revision: 1,
-      evaluationTools: {
-        contextMode,
-        approvalReasoningMode: 'economized',
-        metadataProfile: 'anthropic',
-        maximumToolRounds: 3,
-        terminalLateCorrections: true,
-        outputRecovery: true,
-      },
-    } as unknown as ModelPreset;
-    const draft = modelDraft(preset);
-    expect(draft.evaluationToolsEnabled).toBe(true);
-    expect(modelDraftError(draft, connection)).toBe('');
-    expect(modelPayload(draft, connection).evaluationTools).toEqual({
-      contextMode,
-      approvalReasoningMode: 'economized',
-      metadataProfile: 'anthropic',
-    });
-  });
-
   test('automatic defaults never overwrite an explicit family, including a choice matching the old prefix', () => {
     const direct = { ...connection, protocol: 'openai-responses-v1' as const };
     const draft = selectModelConnection(initialModel(), direct);

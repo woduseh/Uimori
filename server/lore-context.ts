@@ -97,7 +97,7 @@ export function verifiedRunLoreReads(store: Store, run: Run): RetainedLore[] {
         { callId: event.callId, name: event.name, args: event.args },
         undefined,
         'main',
-        event.readBudget ?? event.knowledgeReadChars ?? 6000
+        event.readBudget
       );
       if (!isDeepStrictEqual(actual, event)) continue;
       for (const data of knowledgeReadResults(actual)) {

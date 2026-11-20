@@ -7,7 +7,7 @@ import {
   validateModelOptions,
 } from '../core/model-capabilities.js';
 import { validCredentialRef } from '../core/credential-reference.js';
-import { readEvaluationToolOptions } from '../core/evaluation-tool-config.js';
+import { validateEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import { TOKENIZER_PROFILES } from '../core/tokenizer-profiles.js';
 import { ProviderOptionsError, validateProviderOptions } from '../core/provider-options.js';
 import {
@@ -107,7 +107,7 @@ export function validateModelGeneration(value: Row, protocol?: Connection['proto
     );
   if (value.evaluationTools !== undefined)
     try {
-      readEvaluationToolOptions(value.evaluationTools);
+      validateEvaluationToolOptions(value.evaluationTools);
     } catch {
       throw new HttpError(400, 'Invalid evaluation tool options');
     }
@@ -248,8 +248,6 @@ export function validateProviderSettingVersion(row: Row): void {
       'maxOutputTokens',
       'temperature',
       ...modelOptionKeys,
-      'contextTools',
-      'pdfInput',
       'enabled',
       'displayOrder',
       'pricing',
@@ -264,7 +262,6 @@ export function validateProviderSettingVersion(row: Row): void {
         ? undefined
         : choice(body.capabilityProtocol, [...PROVIDER_PROTOCOLS], 'model protocol')
     );
-    if (body.contextTools !== undefined) boolean(body.contextTools);
     validateModelMetadata(body);
   } else throw new HttpError(400, 'Invalid archive version kind');
 }
@@ -297,11 +294,5 @@ export function validateModelSnapshot(value: unknown): ModelSnapshot {
     )
       throw new HttpError(400, 'Pricing snapshot model mismatch');
   }
-  const { contextTools: _retired, pdfInput: _retiredPdf, evaluationTools, ...current } = snapshot;
-  const evaluation =
-    evaluationTools === undefined ? undefined : readEvaluationToolOptions(evaluationTools);
-  return structuredClone({
-    ...current,
-    ...(evaluation ? { evaluationTools: evaluation } : {}),
-  }) as ModelSnapshot;
+  return structuredClone(snapshot) as ModelSnapshot;
 }

@@ -52,15 +52,7 @@ export function validateEvaluationToolOptions(value: unknown): EvaluationToolOpt
   const input = value as Record<string, unknown>;
   if (
     Object.keys(input).some(
-      (key) =>
-        ![
-          'contextMode',
-          'approvalReasoningMode',
-          'maximumToolRounds',
-          'terminalLateCorrections',
-          'outputRecovery',
-          'metadataProfile',
-        ].includes(key)
+      (key) => !['contextMode', 'approvalReasoningMode', 'metadataProfile'].includes(key)
     )
   )
     throw new Error('INVALID_EVALUATION_TOOL_OPTIONS');
@@ -73,19 +65,6 @@ export function validateEvaluationToolOptions(value: unknown): EvaluationToolOpt
     !['openai', 'anthropic', 'deepmind', 'neutral'].includes(String(input.metadataProfile))
   )
     throw new Error('INVALID_EVALUATION_TOOL_OPTIONS');
-  if (
-    Object.hasOwn(input, 'maximumToolRounds') &&
-    (!Number.isSafeInteger(input.maximumToolRounds) ||
-      Number(input.maximumToolRounds) < 0 ||
-      Number(input.maximumToolRounds) > 32)
-  )
-    throw new Error('INVALID_EVALUATION_TOOL_OPTIONS');
-  if (
-    (Object.hasOwn(input, 'terminalLateCorrections') &&
-      typeof input.terminalLateCorrections !== 'boolean') ||
-    (Object.hasOwn(input, 'outputRecovery') && typeof input.outputRecovery !== 'boolean')
-  )
-    throw new Error('INVALID_EVALUATION_TOOL_OPTIONS');
   return {
     contextMode: input.contextMode as EvaluationToolOptions['contextMode'],
     approvalReasoningMode:
@@ -94,15 +73,4 @@ export function validateEvaluationToolOptions(value: unknown): EvaluationToolOpt
       ? { metadataProfile: input.metadataProfile as EvaluationMetadataProfile }
       : {}),
   };
-}
-
-export function readEvaluationToolOptions(value: unknown): EvaluationToolOptions | undefined {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    const input = value as Record<string, unknown>;
-    if (input.contextMode === 'source-bound') {
-      validateEvaluationToolOptions({ ...input, contextMode: 'model-selected' });
-      return undefined;
-    }
-  }
-  return validateEvaluationToolOptions(value);
 }

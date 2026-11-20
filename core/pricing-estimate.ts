@@ -28,7 +28,6 @@ const unavailable = (note: string): CostEstimate => ({
 export function estimateCost(
   pricing: PricingSnapshot | undefined,
   usage: { inputTokens: number | null; outputTokens: number | null; raw: unknown },
-  startedAt: string,
   actualServiceTier?: string
 ): CostEstimate {
   if (!pricing) return unavailable('PRICING_UNAVAILABLE');
@@ -97,35 +96,6 @@ export function estimateCost(
   }
 
   let rates: TokenRates = pricing.rates;
-  if (pricing.schedule) {
-    const started = new Date(startedAt);
-    if (!Number.isFinite(started.getTime())) return unavailable('PRICING_START_TIME_INVALID');
-    const { weekdays, utcHours, peakRates } = pricing.schedule;
-    if (
-      !weekdays.every((day) => Number.isInteger(day) && day >= 0 && day <= 6) ||
-      !utcHours.every(
-        ([start, end]) =>
-          Number.isInteger(start) &&
-          Number.isInteger(end) &&
-          start >= 0 &&
-          start < 24 &&
-          end > 0 &&
-          end <= 24 &&
-          start !== end
-      )
-    )
-      return unavailable('PRICING_SCHEDULE_INVALID');
-    const hour = started.getUTCHours();
-    if (
-      weekdays.includes(started.getUTCDay()) &&
-      utcHours.some(([start, end]) =>
-        start < end ? hour >= start && hour < end : hour >= start || hour < end
-      )
-    ) {
-      rates = peakRates;
-      notes.push('PEAK_RATES_APPLIED');
-    }
-  }
   if (pricing.longContext) {
     if (count(pricing.longContext.aboveInputTokens) === null)
       return unavailable('PRICING_THRESHOLD_INVALID');

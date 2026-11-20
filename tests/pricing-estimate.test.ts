@@ -15,7 +15,6 @@ const snapshot = (
   rates: { ...rates },
   notes: [],
 });
-const started = '2026-09-09T12:00:00Z';
 const responses = {
   inputTokens: 1000,
   outputTokens: 100,
@@ -29,15 +28,11 @@ test('Gateway reported cache writes are separate from input and reads', () => {
     cache_creation_input_tokens: 100,
     prompt_tokens_details: { cached_tokens: 200, cache_write_tokens: 900 },
   };
-  const priced = estimateCost(
-    snapshot('vercel-chat-v1'),
-    {
-      inputTokens: 1000,
-      outputTokens: 100,
-      raw,
-    },
-    started
-  );
+  const priced = estimateCost(snapshot('vercel-chat-v1'), {
+    inputTokens: 1000,
+    outputTokens: 100,
+    raw,
+  });
   expect(priced.usd).toBeCloseTo(0.0026, 8);
   expect(value(priced, 'input')?.tokens).toBe(700);
   expect(value(priced, 'cacheWrite')?.tokens).toBe(100);
@@ -45,24 +40,19 @@ test('Gateway reported cache writes are separate from input and reads', () => {
 
 test('Vertex reported traffic type prevents applying a different requested tier price', () => {
   expect(
-    estimateCost(
-      snapshot('vertex-gemini-v1'),
-      {
-        inputTokens: 1000,
-        outputTokens: 100,
-        raw: { cachedContentTokenCount: 0, trafficType: 'ON_DEMAND_FLEX' },
-      },
-      started
-    )
+    estimateCost(snapshot('vertex-gemini-v1'), {
+      inputTokens: 1000,
+      outputTokens: 100,
+      raw: { cachedContentTokenCount: 0, trafficType: 'ON_DEMAND_FLEX' },
+    })
   ).toMatchObject({ status: 'unavailable', usd: null, notes: ['SERVICE_TIER_MISMATCH'] });
 });
 
 test('Responses disjoint input/cache read/cache write and normalized reasoning output', () => {
-  const result = estimateCost(
-    snapshot(),
-    { ...responses, raw: { ...responses.raw, output_tokens_details: { reasoning_tokens: 80 } } },
-    started
-  );
+  const result = estimateCost(snapshot(), {
+    ...responses,
+    raw: { ...responses.raw, output_tokens_details: { reasoning_tokens: 80 } },
+  });
   expect(result.status).toBe('estimated');
   expect(result.usd).toBeCloseTo(0.0026, 8);
   expect(value(result, 'input')?.tokens).toBe(700);
@@ -77,8 +67,7 @@ test('openai-chat-v1 uses included cache read without inventing a write charge',
       inputTokens: 1000,
       outputTokens: 100,
       raw: { prompt_tokens_details: { cached_tokens: 200 } },
-    },
-    started
+    }
   );
   expect(result.usd).toBeCloseTo(0.0025, 8);
   expect(result.lines.map((line) => line.kind)).toEqual(['input', 'cacheRead', 'output']);
@@ -86,26 +75,22 @@ test('openai-chat-v1 uses included cache read without inventing a write charge',
 
 test('google-gemini-v1 output includes thoughts and uses the supplied manual cache rate', () => {
   const protocol = 'google-gemini-v1' as const;
-  const result = estimateCost(
-    snapshot(protocol),
-    {
-      inputTokens: 1000,
-      outputTokens: 100,
-      raw: { cachedContentTokenCount: 200, candidatesTokenCount: 60, thoughtsTokenCount: 40 },
-    },
-    started
-  );
+  const result = estimateCost(snapshot(protocol), {
+    inputTokens: 1000,
+    outputTokens: 100,
+    raw: { cachedContentTokenCount: 200, candidatesTokenCount: 60, thoughtsTokenCount: 40 },
+  });
   expect(result.usd).toBeCloseTo(0.0025, 8);
   expect(value(result, 'output')?.tokens).toBe(100);
 });
 
 test('Vertex omitted zero cache scalar still prices confirmed input and output', () => {
   const raw = { promptTokenCount: 1000, candidatesTokenCount: 100, totalTokenCount: 1100 };
-  const result = estimateCost(
-    snapshot('vertex-gemini-v1'),
-    { inputTokens: 1000, outputTokens: 100, raw },
-    started
-  );
+  const result = estimateCost(snapshot('vertex-gemini-v1'), {
+    inputTokens: 1000,
+    outputTokens: 100,
+    raw,
+  });
   expect(result.status).toBe('estimated');
   expect(result.usd).toBeCloseTo(0.0028, 8);
   expect(value(result, 'input')?.tokens).toBe(1000);
@@ -120,15 +105,11 @@ test.each([
 ])('unknown cache rate with confirmed quantity $tokens preserves cost certainty', (expected) => {
   const pricing = snapshot('vertex-gemini-v1');
   pricing.rates.cacheRead = null;
-  const result = estimateCost(
-    pricing,
-    {
-      inputTokens: 1000,
-      outputTokens: 100,
-      raw: { promptTokenCount: 1000, cachedContentTokenCount: expected.tokens },
-    },
-    started
-  );
+  const result = estimateCost(pricing, {
+    inputTokens: 1000,
+    outputTokens: 100,
+    raw: { promptTokenCount: 1000, cachedContentTokenCount: expected.tokens },
+  });
   expect(result.status).toBe(expected.status);
   if (expected.usd === null) expect(result.usd).toBeNull();
   else expect(result.usd).toBeCloseTo(expected.usd, 8);
@@ -140,15 +121,11 @@ test.each([
 });
 
 test('DeepSeek cache hit tokens are a subset of normalized input', () => {
-  const result = estimateCost(
-    snapshot('deepseek-chat-v1'),
-    {
-      inputTokens: 1000,
-      outputTokens: 100,
-      raw: { prompt_cache_hit_tokens: 200, prompt_cache_miss_tokens: 800 },
-    },
-    started
-  );
+  const result = estimateCost(snapshot('deepseek-chat-v1'), {
+    inputTokens: 1000,
+    outputTokens: 100,
+    raw: { prompt_cache_hit_tokens: 200, prompt_cache_miss_tokens: 800 },
+  });
   expect(result.usd).toBeCloseTo(0.0025, 8);
 });
 
@@ -165,7 +142,7 @@ const anthropic = {
 test('Anthropic raw input excludes caches but adapter total includes both, including TTL split', () => {
   const pricing = snapshot('anthropic-messages-v1');
   pricing.rates.cacheWrite1h = 4;
-  const result = estimateCost(pricing, anthropic, started);
+  const result = estimateCost(pricing, anthropic);
   expect(result.usd).toBeCloseTo(0.00264, 8);
   expect(value(result, 'input')?.tokens).toBe(700);
   expect(value(result, 'cacheWrite')?.tokens).toBe(60);
@@ -175,11 +152,10 @@ test('Anthropic raw input excludes caches but adapter total includes both, inclu
 test('missing Anthropic cache split stays unknown, never assumes default TTL', () => {
   const pricing = snapshot('anthropic-messages-v1');
   pricing.rates.cacheWrite1h = 4;
-  const result = estimateCost(
-    pricing,
-    { ...anthropic, raw: { ...anthropic.raw, cache_creation: undefined } },
-    started
-  );
+  const result = estimateCost(pricing, {
+    ...anthropic,
+    raw: { ...anthropic.raw, cache_creation: undefined },
+  });
   expect(result.status).toBe('partial');
   expect(result.usd).toBeNull();
   expect(value(result, 'cacheWrite')?.tokens).toBeNull();
@@ -189,28 +165,20 @@ test('missing Anthropic cache split stays unknown, never assumes default TTL', (
 test('explicit total write zero establishes both zero TTL buckets', () => {
   const pricing = snapshot('anthropic-messages-v1');
   pricing.rates.cacheWrite1h = 4;
-  const result = estimateCost(
-    pricing,
-    {
-      inputTokens: 700,
-      outputTokens: 100,
-      raw: { input_tokens: 700, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
-    },
-    started
-  );
+  const result = estimateCost(pricing, {
+    inputTokens: 700,
+    outputTokens: 100,
+    raw: { input_tokens: 700, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+  });
   expect(result.status).toBe('estimated');
   expect(value(result, 'cacheWrite1h')?.tokens).toBe(0);
 });
 
 test.each([null, '200'])('missing or malformed cache count %s never becomes zero', (cached) => {
-  const result = estimateCost(
-    snapshot(),
-    {
-      ...responses,
-      raw: { input_tokens_details: { cached_tokens: cached, cache_write_tokens: 100 } },
-    },
-    started
-  );
+  const result = estimateCost(snapshot(), {
+    ...responses,
+    raw: { input_tokens_details: { cached_tokens: cached, cache_write_tokens: 100 } },
+  });
   expect(result.status).toBe('partial');
   expect(result.usd).toBeNull();
   expect(result.subtotalUsd).toBeCloseTo(0.0011, 8);
@@ -219,9 +187,9 @@ test.each([null, '200'])('missing or malformed cache count %s never becomes zero
 
 test('missing usage has no estimate; partial output absence retains only known subtotal', () => {
   expect(
-    estimateCost(snapshot(), { inputTokens: null, outputTokens: null, raw: null }, started)
+    estimateCost(snapshot(), { inputTokens: null, outputTokens: null, raw: null })
   ).toMatchObject({ status: 'unavailable', usd: null, subtotalUsd: 0 });
-  expect(estimateCost(snapshot(), { ...responses, outputTokens: null }, started)).toMatchObject({
+  expect(estimateCost(snapshot(), { ...responses, outputTokens: null })).toMatchObject({
     status: 'partial',
     usd: null,
   });
@@ -230,22 +198,21 @@ test('missing usage has no estimate; partial output absence retains only known s
 test('unknown rate remains unknown; only an explicit zero price is free', () => {
   const pricing = snapshot();
   pricing.rates.output = null;
-  expect(estimateCost(pricing, responses, started)).toMatchObject({ status: 'partial', usd: null });
+  expect(estimateCost(pricing, responses)).toMatchObject({ status: 'partial', usd: null });
   pricing.rates = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
-  expect(estimateCost(pricing, responses, started)).toMatchObject({ status: 'estimated', usd: 0 });
+  expect(estimateCost(pricing, responses)).toMatchObject({ status: 'estimated', usd: 0 });
   pricing.rates.output = -5;
-  expect(value(estimateCost(pricing, responses, started), 'output')?.rate).toBeNull();
+  expect(value(estimateCost(pricing, responses), 'output')?.rate).toBeNull();
 });
 
 test('inconsistent caches and normalized Anthropic totals cannot produce negative input costs', () => {
-  expect(estimateCost(snapshot(), { ...responses, inputTokens: 100 }, started)).toMatchObject({
+  expect(estimateCost(snapshot(), { ...responses, inputTokens: 100 })).toMatchObject({
     status: 'partial',
     usd: null,
     notes: ['INCONSISTENT_INPUT_USAGE', 'USAGE_OR_RATE_UNKNOWN'],
   });
   expect(
-    estimateCost(snapshot('anthropic-messages-v1'), { ...anthropic, inputTokens: 800 }, started)
-      .notes
+    estimateCost(snapshot('anthropic-messages-v1'), { ...anthropic, inputTokens: 800 }).notes
   ).toContain('INCONSISTENT_INPUT_USAGE');
 });
 
@@ -254,19 +221,15 @@ test.each([1000, 1001])(
   (total) => {
     const pricing = snapshot('anthropic-messages-v1');
     pricing.longContext = { aboveInputTokens: 1000, rates: { ...rates, input: 4 } };
-    const result = estimateCost(
-      pricing,
-      {
-        inputTokens: total,
-        outputTokens: 100,
-        raw: {
-          input_tokens: total - 300,
-          cache_read_input_tokens: 200,
-          cache_creation_input_tokens: 100,
-        },
+    const result = estimateCost(pricing, {
+      inputTokens: total,
+      outputTokens: 100,
+      raw: {
+        input_tokens: total - 300,
+        cache_read_input_tokens: 200,
+        cache_creation_input_tokens: 100,
       },
-      started
-    );
+    });
     expect(value(result, 'input')?.rate).toBe(total > 1000 ? 4 : 2);
   }
 );
@@ -274,56 +237,30 @@ test.each([1000, 1001])(
 test('unknown total cannot select a long-context price tier', () => {
   const pricing = snapshot();
   pricing.longContext = { aboveInputTokens: 1000, rates };
-  expect(estimateCost(pricing, { ...responses, inputTokens: null }, started)).toMatchObject({
+  expect(estimateCost(pricing, { ...responses, inputTokens: null })).toMatchObject({
     status: 'unavailable',
     usd: null,
     notes: ['CONTEXT_PRICE_TIER_UNKNOWN'],
   });
 });
 
-test.each([
-  ['2026-09-09T08:59:59Z', 2],
-  ['2026-09-09T09:00:00Z', 4],
-  ['2026-09-09T17:00:00Z', 2],
-  ['2026-09-12T10:00:00Z', 2],
-  ['2026-09-09T18:00:00+09:00', 4],
-] as const)('schedule uses UTC weekday and half-open hours: %s', (date, rate) => {
-  const pricing = snapshot();
-  pricing.schedule = {
-    peakRates: { ...rates, input: 4 },
-    weekdays: [1, 2, 3, 4, 5],
-    utcHours: [[9, 17]],
-  };
-  expect(value(estimateCost(pricing, responses, date), 'input')?.rate).toBe(rate);
-});
-
-test('invalid scheduled start date is unavailable', () => {
-  const pricing = snapshot();
-  pricing.schedule = { peakRates: rates, weekdays: [1], utcHours: [[9, 17]] };
-  expect(estimateCost(pricing, responses, 'invalid').status).toBe('unavailable');
-});
-
 test.each(['default', 'ON_DEMAND'])('standard tier alias %s is compatible', (actual) => {
-  expect(estimateCost(snapshot(), responses, started, actual).status).toBe('estimated');
+  expect(estimateCost(snapshot(), responses, actual).status).toBe('estimated');
 });
 
 test('Anthropic standard_only request accepts reported standard pricing', () => {
   const pricing = snapshot('anthropic-messages-v1');
   pricing.serviceTier = 'standard_only';
-  const result = estimateCost(
-    pricing,
-    {
-      inputTokens: 1000,
-      outputTokens: 100,
-      raw: {
-        input_tokens: 1000,
-        cache_read_input_tokens: 0,
-        cache_creation_input_tokens: 0,
-        service_tier: 'standard',
-      },
+  const result = estimateCost(pricing, {
+    inputTokens: 1000,
+    outputTokens: 100,
+    raw: {
+      input_tokens: 1000,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 0,
+      service_tier: 'standard',
     },
-    started
-  );
+  });
   expect(result.status).toBe('estimated');
   expect(result.usd).toBeCloseTo(0.0028, 8);
 });
@@ -332,8 +269,8 @@ test('Flex price requires matching actual tier, never silently switches to stand
   const pricing = snapshot();
   pricing.serviceTier = 'flex';
   pricing.standardRates = rates;
-  expect(estimateCost(pricing, responses, started, 'ON_DEMAND_FLEX').status).toBe('estimated');
-  expect(estimateCost(pricing, responses, started, 'standard')).toMatchObject({
+  expect(estimateCost(pricing, responses, 'ON_DEMAND_FLEX').status).toBe('estimated');
+  expect(estimateCost(pricing, responses, 'standard')).toMatchObject({
     status: 'unavailable',
     usd: null,
     notes: ['SERVICE_TIER_MISMATCH'],
@@ -347,9 +284,9 @@ test('snapshot estimate is deterministic and does not mutate frozen pricing or u
   Object.freeze(responses.raw.input_tokens_details);
   Object.freeze(responses.raw);
   Object.freeze(responses);
-  expect(estimateCost(pricing, responses, started)).toEqual(
-    estimateCost(structuredClone(pricing), structuredClone(responses), started)
+  expect(estimateCost(pricing, responses)).toEqual(
+    estimateCost(structuredClone(pricing), structuredClone(responses))
   );
-  expect(estimateCost(undefined, responses, started).status).toBe('unavailable');
-  expect(estimateCost(snapshot('fixture-sse-v1'), responses, started).status).toBe('unavailable');
+  expect(estimateCost(undefined, responses).status).toBe('unavailable');
+  expect(estimateCost(snapshot('fixture-sse-v1'), responses).status).toBe('unavailable');
 });
