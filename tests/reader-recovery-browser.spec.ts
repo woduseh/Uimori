@@ -407,7 +407,8 @@ for (const scenario of ['old-refresh', 'new-move'] as const) {
         await expect
           .poll(
             async () =>
-              (await positionRequests.list()).find((item) => item.method === 'PUT')?.handled
+              (await positionRequests.list()).find((item) => item.method === 'PUT')
+                ?.continuationsRan
           )
           .toBe(true);
         expect(await positionRequests.count('PUT')).toBe(1);

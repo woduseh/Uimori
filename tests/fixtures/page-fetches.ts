@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 
-type TrackedFetch = { method: string; path: string; settled: boolean; handled: boolean };
+type TrackedFetch = { method: string; path: string; settled: boolean; continuationsRan: boolean };
 type TrackedWindow = Window & { trackedFetches: TrackedFetch[] };
 
 export async function trackPageFetches(page: Page, pattern: RegExp) {
@@ -26,7 +26,7 @@ export async function trackPageFetches(page: Page, pattern: RegExp) {
         const method = (
           init?.method ?? (input instanceof Request ? input.method : 'GET')
         ).toUpperCase();
-        const entry = { method, path, settled: false, handled: false };
+        const entry = { method, path, settled: false, continuationsRan: false };
         fetches.push(entry);
         return original(input, init).then(
           (response) => {
@@ -35,7 +35,7 @@ export async function trackPageFetches(page: Page, pattern: RegExp) {
             response.json = () =>
               json().finally(() =>
                 postTask(() => {
-                  entry.handled = true;
+                  entry.continuationsRan = true;
                 })
               );
             return response;

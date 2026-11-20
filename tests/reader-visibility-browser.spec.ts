@@ -217,6 +217,8 @@ test('READVIS02 native input wakes on events without idle polling and coalesces 
       kind: 'input',
       prompt: '다음 장면의 장소를 입력해 주세요.',
     };
+    await notifyInteraction(page);
+    await notifyInteraction(page);
     await page.evaluate(() => {
       window.dispatchEvent(new Event('focus'));
       document.dispatchEvent(new Event('visibilitychange'));
