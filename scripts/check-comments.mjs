@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 
-export const checkedDirectories = ['web', 'core', 'server', 'scripts', 'tests'];
+export const checkedDirectories = ['web', 'core', 'server', 'scripts', 'tests', 'runner'];
 export const allowlistPath = 'scripts/comment-allowlist.json';
 
 const sourceExtension = /\.(?:ts|tsx|mts|cts|js|mjs|cjs|css)$/u;
@@ -14,7 +14,7 @@ const skippedDirectories = new Set(['node_modules', 'dist', 'output']);
 const directivePattern =
   /^(?:biome-ignore(?:-all|-start|-end)?\s|@ts-expect-error\b|@vitest-environment\s|@vite-ignore\b|<reference\s)/u;
 const licensePattern = /\b(?:SPDX-License-Identifier|@license|Copyright \(c\)|Copyright ©)/iu;
-const sourcePattern = /\bhttps?:\/\/\S/u;
+const sourcePattern = /^https?:\/\/\S/u;
 
 export const remedy = [
   'Delete it. Put the reason for a change in the commit body, and state an invariant in a name, a type, an assertion, or a test.',
@@ -22,13 +22,14 @@ export const remedy = [
   `or, when no public source exists, add its file, exact text, and external system to ${allowlistPath}.`,
 ].join('\n');
 
-function sourceFiles(directory) {
+function sourceFiles(directory, recursive = true) {
   if (!existsSync(directory)) return [];
   return readdirSync(directory, { withFileTypes: true })
     .sort((left, right) => (left.name < right.name ? -1 : 1))
     .flatMap((entry) => {
       const path = join(directory, entry.name);
-      if (entry.isDirectory()) return skippedDirectories.has(entry.name) ? [] : sourceFiles(path);
+      if (entry.isDirectory())
+        return recursive && !skippedDirectories.has(entry.name) ? sourceFiles(path) : [];
       return sourceExtension.test(entry.name) ? [path] : [];
     });
 }
@@ -151,7 +152,11 @@ export function commentErrors(directory = root, allowlist = readAllowlist(direct
   );
   const allowed = new Set(unused.keys());
   const errors = [];
-  for (const file of checkedDirectories.flatMap((name) => sourceFiles(join(directory, name)))) {
+  const files = [
+    ...sourceFiles(directory, false),
+    ...checkedDirectories.flatMap((name) => sourceFiles(join(directory, name))),
+  ];
+  for (const file of files) {
     const path = relative(directory, file).replaceAll('\\', '/');
     const text = readFileSync(file, 'utf8');
     let comments;

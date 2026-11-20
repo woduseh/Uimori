@@ -18,7 +18,7 @@ function withRepository(files, check) {
   }
 }
 
-test('directives, license text, and sourced comments pass while narration fails with its location', () => {
+test('directives, license text, and URL-first comments pass while narration fails with its location', () => {
   withRepository(
     {
       'core/allowed.ts': [
@@ -52,15 +52,24 @@ test('directives, license text, and sourced comments pass while narration fails 
         '// and this narration line is judged on its own.',
         'export let y = 2;',
       ].join('\n'),
+      'runner/run.mjs': [
+        '// TODO tidy this, see https://example.invalid/issue',
+        'export const z = 3;',
+        '// fetch("https://example.invalid/x")',
+      ].join('\n'),
+      'vite.config.ts': '// Root configuration files are checked too.\nexport default {};\n',
       'third_party/vendor.ts': '// Outside the checked directories.\n',
       'web/node_modules/pkg/index.js': '// Installed code is not checked.\n',
     },
     (directory) => {
       assert.deepEqual(commentErrors(directory, []), [
+        'vite.config.ts:1: // Root configuration files are checked too.',
         'web/View.tsx:4: /* The modal closes itself. */',
         'web/style.css:2: /* Section header */',
         'server/legacy.mjs:1: // @ts-ignore is not an allowed directive',
         'server/legacy.mjs:4: // and this narration line is judged on its own.',
+        'runner/run.mjs:1: // TODO tidy this, see https://example.invalid/issue',
+        'runner/run.mjs:3: // fetch("https://example.invalid/x")',
       ]);
     }
   );
