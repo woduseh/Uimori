@@ -136,6 +136,24 @@ const capabilities: readonly ModelCapability[] = [
     })
   ),
   {
+    id: 'gemini-4-neon',
+    name: 'Gemini 4 Neon',
+    protocol: 'vertex-gemini-v1',
+    maxOutputTokens: 65_536,
+    temperature: false,
+    topP: false,
+    // https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-neon (2026-11-20):
+    // the guide does not document stop sequences.
+    stopSequences: false,
+    thinkingLevels: ['LOW', 'MEDIUM', 'HIGH', 'XHIGH'],
+    defaultThinkingLevel: 'HIGH',
+    serviceTiers: ['standard', 'flex'],
+    sources: [
+      'https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-neon',
+      'https://aistudio.google.com/docs/models/gemini-4-neon',
+    ],
+  },
+  {
     id: 'gemini-4-carbon',
     name: 'Gemini 4 Carbon',
     protocol: 'vertex-gemini-v1',
@@ -372,7 +390,7 @@ const reject = (code = 'UNSUPPORTED_GENERATION_OPTIONS'): never => {
   throw new ProviderContractError(code);
 };
 export const PROTOCOL_OPTION_VALUES = {
-  thinkingLevel: ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'],
+  thinkingLevel: ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH', 'XHIGH'],
   reasoningEffort: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
   outputEffort: ['low', 'medium', 'high', 'xhigh', 'max'],
   thinkingMode: ['disabled', 'adaptive'],

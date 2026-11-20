@@ -7,6 +7,7 @@ import {
   VertexProtocolError,
 } from '../core/vertex-protocol.js';
 import type { Json, ProviderRequest, ProviderResult } from '../core/transport.js';
+import { validateModelOptions } from '../core/model-capabilities.js';
 import { TRANSLATION_FORMAT_INSTRUCTION } from '../core/provider-format.js';
 
 const request = (): ProviderRequest => ({
@@ -90,6 +91,7 @@ function translationRequest() {
 test.each([
   ['gemini-4-argon', 'ARGON'],
   ['gemini-4-carbon', 'CARBON'],
+  ['gemini-4-neon', 'NEON'],
 ])(
   '%s omits ignored sampling, rejects minimal thinking and unsupported long REST decodes',
   (modelId, code) => {
@@ -121,6 +123,23 @@ test.each([
     expect(() => encodeVertex(input)).toThrow(`${code}_LONG_DECODE_UNSUPPORTED`);
   }
 );
+
+test('gemini-4-neon sends the XHIGH thinking level on Vertex and Google AI Studio', () => {
+  const input = request();
+  input.modelId = 'gemini-4-neon';
+  const generation = {
+    maxOutputTokens: 32_768,
+    temperature: null,
+    thinkingLevel: 'XHIGH',
+  } as const;
+  input.generation = generation;
+  for (const protocol of ['vertex-gemini-v1', 'google-gemini-v1'] as const) {
+    expect(() => validateModelOptions(generation, protocol)).not.toThrow();
+    expect(bodyObject(encodeVertex(input, protocol).body).generationConfig).toMatchObject({
+      thinkingConfig: { thinkingLevel: 'XHIGH' },
+    });
+  }
+});
 
 test('google-gemini-v1 enables native search only for an explicit story guide without local tools', () => {
   const protocol = 'google-gemini-v1' as const;

@@ -28,7 +28,7 @@ export type ModelGeneration = {
   modelFamily?: ModelFamily;
   maxOutputTokens: number;
   temperature: number | null;
-  thinkingLevel?: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH';
+  thinkingLevel?: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH';
   structuredOutput?: boolean;
   reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   outputEffort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';

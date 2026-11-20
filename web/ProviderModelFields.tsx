@@ -105,6 +105,9 @@ const strengthLabels: Record<string, string> = {
   get HIGH() {
     return t('providers.m177');
   },
+  get XHIGH() {
+    return t('providers.m178');
+  },
 };
 const strengthLabel = (value: string) => strengthLabels[value] ?? value;
 const modeLabel = (value: string) =>
