@@ -1,6 +1,5 @@
 import type { Json } from './transport.js';
 
-/** Redact diagnostic copies only; wire bytes and resumable inputs stay unchanged. */
 export function redactDiagnosticJson(value: Json, secret?: string): Json {
   if (typeof value === 'string') {
     if (/^data:[^;]+;base64,/u.test(value)) return '[attachment payload withheld]';

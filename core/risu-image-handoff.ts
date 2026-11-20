@@ -28,7 +28,6 @@ export function imageHandoffSource(native: RisuContentSource, field: string): st
 const activeField = (field: string) =>
   !field.startsWith('card:') || cardFields.includes(field.slice(5) as (typeof cardFields)[number]);
 
-/** Runtime text after selected image instructions are handed to image placement. */
 export function risuImageHandoffText(pkg: RisuContent, field: string): string {
   if (!activeField(field)) return '';
   const source = imageHandoffSource(pkg.nativeRisu, field);
@@ -43,7 +42,6 @@ export function risuImageHandoffText(pkg: RisuContent, field: string): string {
     .reduce((value, range) => value.slice(0, range.start) + value.slice(range.end), source);
 }
 
-/** Recognize explicit image instruction headings, never narrative mentions of an image. */
 export function detectRisuImageHandoff(
   native: RisuContentSource,
   previous?: RisuImageHandoff
@@ -108,7 +106,6 @@ export function detectRisuImageHandoff(
         end = headings[index + 1]?.index ?? source.length;
       const selected = source.slice(start, end);
       if (!/<img[\s=]/iu.test(selected)) continue;
-      // Unbalanced CBS at the boundary cannot be moved automatically.
       const opens = [...selected.matchAll(/\{\{#(?:if|when|each|pure|func)\b/gu)].length;
       const closes = [...selected.matchAll(/\{\{\/(?:if|when|each|pure|func)\}\}/gu)].length;
       add(`card:${name}`, source, start, end, opens === closes ? 'section' : 'candidate');
@@ -173,7 +170,6 @@ export function validateRisuImageHandoff(
   return structuredClone(policy);
 }
 
-/** Host-owned projection only; original native documents and saved package remain untouched. */
 export function projectRisuImageHandoff(pkg: RisuContent, enabled: boolean): RisuContent {
   if (!enabled || !pkg.nativeRisu || !pkg.imageHandoff) return pkg;
   const native = pkg.nativeRisu;

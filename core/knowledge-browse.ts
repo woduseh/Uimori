@@ -18,12 +18,10 @@ type Group = {
 };
 const isGroup = (item: Group | Resource): item is Group => 'children' in item;
 
-/** Build the small navigation view once; its owning Run snapshot controls the lifetime. */
 export function createKnowledgeBrowser(
   resources: readonly Resource[],
   context: { chatId: string; role: string; tokenizer?: TokenizerProfileId }
 ) {
-  // Build once for this frozen corpus, without constructing a second full-body JSON copy.
   const contentHashes = new Map(resources.map((resource) => [resource.id, digest(resource.text)]));
   const stamp = createHash('sha256').update(JSON.stringify(context));
   for (const resource of resources) {

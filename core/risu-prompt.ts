@@ -1,4 +1,3 @@
-/** Risu prompt source and host-owned execution receipts; no alternate authoring language. */
 import { validateAgentCollaboration } from './agent-collaboration.js';
 import { EXECUTION_INPUT_MAX_CHARS } from './content-limits.js';
 import { validateRequestFile, type RequestFilePart } from './request-files.js';
@@ -18,7 +17,6 @@ import { nativeChatMlMessages, type NativePromptMessage } from './risu-native-me
 import { jsonStringSize } from './prompt-values.js';
 export type PromptValue = string | number | boolean | null;
 export type PromptRoleName = 'system' | 'user' | 'assistant';
-/** A UI projection of the preset's native toggle declarations, never an authored AST. */
 export type PromptControl = {
   id: string;
   nativeKey?: string;
@@ -55,7 +53,6 @@ export type LogicalMessage = {
     sourceRevision?: string;
     sourceHash?: string;
     runId?: string;
-    /** Original user/history identity, distinct from the compiled block message id. */
     sourceMessageId?: string;
   };
 };
@@ -78,7 +75,6 @@ export type PromptCompilation = {
   historyScope: 'm2-recent-or-full';
   warnings: string[];
 };
-/** sourceKind is host provenance for a directly authored start, never a provider message field. */
 export type PromptHistoryMessage = {
   id: string;
   role: 'user' | 'assistant';
@@ -135,7 +131,6 @@ function primitive(value: unknown): asserts value is PromptValue {
   )
     fail('PROMPT_INVALID_VALUE');
 }
-/** Check serialized bounds before JSON.stringify/structuredClone can allocate an oversized AST. */
 function inspectPromptData(value: unknown, limit = EXECUTION_INPUT_MAX_CHARS): void {
   const pending: { value: unknown; leave?: boolean }[] = [{ value }],
     active = new Set<object>();
@@ -189,7 +184,6 @@ function inspectPromptData(value: unknown, limit = EXECUTION_INPUT_MAX_CHARS): v
     if (size > limit) fail('PROMPT_PROGRAM_LIMIT');
   }
 }
-/** Shape validation only; owners that mutate a prompt make their own explicit copy. */
 export function validateProviderPrompt(value: unknown): asserts value is ProviderPrompt {
   inspectPromptData(value);
   const p = object(value, ['compilerVersion', 'messages', 'cachePlan', 'values']);
@@ -306,7 +300,6 @@ export function validateControlValue(control: PromptControl, value: PromptValue)
   )
     fail('PROMPT_INVALID_CONTROL_VALUE', control.id);
 }
-/** Validate frozen native-toggle UI metadata used by portable option definitions. */
 export function validateControlDefinitions(value: unknown): PromptControl[] {
   inspectPromptData(value, 200_000);
   if (!Array.isArray(value) || value.length > 150) fail('PROMPT_INVALID_CONTROLS');
@@ -388,14 +381,12 @@ export function reconcilePromptValues(
   );
   return { values: resolved, resetKeys };
 }
-/** Compose native RISUP blocks after server CBS evaluation. Slot insertion is host data plumbing. */
 export function compileRisuPrompt(
   program: RisuPrompt,
   context: {
     values?: Record<string, PromptValue>;
     slots: Record<string, string>;
     history: PromptHistoryMessage[];
-    /** Host reference data is inserted after native chat ranges and cache targets resolve. */
     references?: {
       message: PromptHistoryMessage;
       beforeMessageId?: string;

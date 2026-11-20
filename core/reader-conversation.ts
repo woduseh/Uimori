@@ -4,7 +4,6 @@ type ConversationEntry =
   | { kind: 'source'; source: Source; index: number }
   | { kind: 'pending'; run: ReaderRun };
 
-/** Retries keep their first admitted request's place in the conversation. */
 export function readerRequestOrder(
   rows: ReadonlyMap<
     string,
@@ -45,7 +44,6 @@ export function canDismissReaderRun(
   );
 }
 
-/** Only confirmed cancellations can leave the manuscript; uncertain outcomes remain visible. */
 export function isReaderPendingRun(
   run: Pick<
     ReaderRun,
@@ -56,7 +54,6 @@ export function isReaderPendingRun(
   return !(canDismissReaderRun(run) && (run.snapshot.replacement || run.readerDismissed));
 }
 
-/** Preserve source pagination and numbering, inserting attempts at their original request position. */
 export function readerConversation(sources: Source[], runs: ReaderRun[]): ConversationEntry[] {
   const byId = new Map(runs.map((run) => [run.id, run]));
   const pending = runs

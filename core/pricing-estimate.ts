@@ -25,7 +25,6 @@ const unavailable = (note: string): CostEstimate => ({
   notes: [note],
 });
 
-/** Uses frozen rates and reported counts only. It never represents a provider invoice. */
 export function estimateCost(
   pricing: PricingSnapshot | undefined,
   usage: { inputTokens: number | null; outputTokens: number | null; raw: unknown },
@@ -173,7 +172,6 @@ export function estimateCost(
   line('cacheRead', read, rates.cacheRead);
   if (responses || anthropic || chatWrites) line('cacheWrite', write, rates.cacheWrite);
   if (write1h !== undefined) line('cacheWrite1h', write1h, rates.cacheWrite1h);
-  // Normalized output already includes billable thinking/reasoning where the adapter supports it.
   line('output', count(usage.outputTokens), rates.output);
   const known = lines.filter((item) => item.usd !== null);
   const subtotalUsd = known.reduce((sum, item) => sum + item.usd!, 0);

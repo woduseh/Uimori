@@ -57,7 +57,6 @@ export function validatePackageImages(value: unknown): PackageImage[] {
   return structuredClone(value);
 }
 
-/** Only immutable, explicitly attached package revisions enter the catalog. */
 export function packageImages(
   profile: Pick<ProfileSnapshot, 'chatId' | 'packages' | 'packageAttachments'>
 ): Asset[] {

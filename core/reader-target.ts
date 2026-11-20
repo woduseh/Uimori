@@ -1,4 +1,3 @@
-/** A saved location, not pixel coordinates or a new story branch. */
 export type ReaderTarget = {
   chatId: string;
   sourceId: string;

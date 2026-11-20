@@ -2,7 +2,6 @@ import type { PromptRoleName } from './risu-prompt.js';
 
 export type NativePromptMessage = { role: PromptRoleName; text: string };
 
-/** Native example dialogue is message data, never part of the character description. */
 export function nativeExampleMessages(
   text: string,
   charName: string,
@@ -36,7 +35,6 @@ export function nativeExampleMessages(
   return result;
 }
 
-/** ChatML source remains native text; only its declared message boundaries are projected. */
 export function nativeChatMlMessages(text: string): NativePromptMessage[] {
   if (!text.trim().startsWith('<|im_start|>')) throw new Error('RISU_NATIVE_CHATML_INVALID');
   return text

@@ -22,9 +22,7 @@ export type NativeTransferOrigin = {
 };
 export type NativeTransferContent = {
   key: string;
-  /** Authored source identity and body, before destination remapping. */
   source: Omit<Content, 'coverImage' | 'hasPackage'>;
-  /** Captured effective modules in the source declaration order. */
   modules: string[];
   origin?: NativeTransferOrigin;
 };

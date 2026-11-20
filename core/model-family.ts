@@ -101,7 +101,6 @@ export function effectiveModelFamily(
   return selected || inferModelFamily(protocol, modelId);
 }
 
-/** UI choices, not an API allowlist. Direct adapters keep their actual wire vocabulary. */
 export function modelFamilyOptionKeys(
   protocol: ProviderProtocol,
   family?: ModelFamily

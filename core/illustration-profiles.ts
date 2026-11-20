@@ -1,11 +1,9 @@
 import type { IllustrationCharacterProfile } from './illustration.js';
 
-/** Portable, authored defaults in the native CCv3 data.extensions.uimori namespace. */
 export type IllustrationAppearanceProfile = Pick<
   IllustrationCharacterProfile,
   'id' | 'name' | 'appearance'
 > & {
-  /** Explicit package-local image ID; never infer a portrait's character identity. */
   referenceImageId?: string;
 };
 const object = (value: unknown): Record<string, unknown> =>
@@ -65,11 +63,9 @@ export function validateIllustrationAppearanceProfiles(
   return structuredClone(value) as IllustrationAppearanceProfile[];
 }
 
-/** Character identity matching shared by inheritance and chat editors. */
 export const illustrationProfileNameKey = (name: string): string =>
   name.trim().normalize('NFKC').toLocaleLowerCase('en-US');
 
-/** Overrides replace a whole identity by stable ID or normalized name. */
 export function inheritIllustrationProfiles(
   defaults: IllustrationCharacterProfile[],
   overrides: IllustrationCharacterProfile[]

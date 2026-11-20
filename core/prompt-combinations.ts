@@ -32,7 +32,6 @@ export function matchesPromptCombination(
   );
 }
 
-/** Management keeps obsolete definitions visible; application still requires an exact match. */
 export function ownsPromptCombination(
   item: SavedPromptCombination,
   owner: PromptCombinationOwner,
@@ -43,7 +42,6 @@ export function ownsPromptCombination(
   );
 }
 
-/** Only values whose meaning and accepted type survive a definition change are prefilled. */
 export function repairPromptCombinationValues(
   item: SavedPromptCombination,
   program: RisuPrompt

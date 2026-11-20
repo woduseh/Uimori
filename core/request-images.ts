@@ -1,15 +1,12 @@
-/** Authored user-message attachment. Bytes live in image_blobs, never in execution JSON. */
 export type RequestImage = {
   hash: string;
   mime: 'image/webp';
   name: string;
   width: number;
   height: number;
-  /** Immutable transmission copy prepared when admitted; may share the stored hash. */
   input: { hash: string; width: number; height: number };
 };
 
-/** A staged binary upload; sha256 binds admission retries even after staging is released. */
 export type RequestImageUpload = { uploadId: string; sha256: string; name: string };
 export type RequestImagePreview = Pick<RequestImage, 'name' | 'width' | 'height'>;
 
@@ -42,7 +39,6 @@ function hash(value: unknown): string {
   return value;
 }
 
-/** Untrusted archive/provider inputs share the same authored attachment shape. */
 export function validateRequestImage(value: unknown): RequestImage {
   const image = record(value, ['hash', 'mime', 'name', 'width', 'height', 'input']);
   if (

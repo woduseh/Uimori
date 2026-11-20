@@ -1,4 +1,3 @@
-/** Gemini generateContent API's configurable content-category thresholds. */
 export const GEMINI_SAFETY_CATEGORIES = [
   'HARM_CATEGORY_HARASSMENT',
   'HARM_CATEGORY_HATE_SPEECH',
@@ -15,5 +14,4 @@ export const GEMINI_SAFETY_THRESHOLDS = [
 ] as const;
 export type GeminiSafetyCategory = (typeof GEMINI_SAFETY_CATEGORIES)[number];
 export type GeminiSafetyThreshold = (typeof GEMINI_SAFETY_THRESHOLDS)[number];
-/** Omitted categories use the provider default. */
 export type GeminiSafetySettings = Partial<Record<GeminiSafetyCategory, GeminiSafetyThreshold>>;

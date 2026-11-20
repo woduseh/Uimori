@@ -1,6 +1,5 @@
 import type { RunSnapshot } from './types.js';
 
-/** No model request existed for this imported source. Its parent link owns ancestry. */
 export function isSourceOnlyTranscript(snapshot: RunSnapshot): boolean {
   return snapshot.transcriptImport?.storage === 'source-only-v1';
 }

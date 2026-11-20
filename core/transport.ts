@@ -43,7 +43,6 @@ export {
   validateRequest,
 } from './provider-request.js';
 
-/** This versioned loopback protocol is a local fixture, not a live API claim. */
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type ProviderRole = ModelRole;
 export type ProviderConnection = {
@@ -52,10 +51,6 @@ export type ProviderConnection = {
   endpoint: string;
   credentialRef?: string;
 };
-/**
- * Narrows a stored connection setting to the transport shape. Host records carry title, revision,
- * catalog and other management fields that `validateConnection` rejects as UNSUPPORTED_OPTIONS.
- */
 export function transportConnection(connection: ProviderConnection): ProviderConnection {
   return {
     id: connection.id,
@@ -66,22 +61,16 @@ export function transportConnection(connection: ProviderConnection): ProviderCon
 }
 export type ProviderTool = { name: string; description: string; inputSchema: Json };
 export type ProviderRequest = {
-  /** Explicit helper or story-guide search; never inferred for writing or evaluation. */
   webSearch?: true;
-  /** Frozen host pricing metadata; never serialized into a provider payload. */
   pricingSnapshot?: PricingSnapshot;
   role: ProviderRole;
   modelId: string;
   stable: { contract: string; tools: ProviderTool[] };
   generation?: ModelGeneration;
-  /** Immutable host input policy. Never serialized as a provider generation option. */
   contextBudget?: ContextBudget;
-  /** Host baseline used only for continuation binding when an intermediate evaluation round lowers tokens or effort. Never sent to a provider. */
   generationBinding?: ModelGeneration;
-  /** Optional provider-specific JSON; currently forwarded only by the Vercel Chat adapter. */
   providerOptions?: ProviderOptions;
   prompt?: ProviderPrompt;
-  /** Host-owned image references associated with successful tool results. */
   toolImages?: { callId: string; images: import('./request-images.js').RequestImage[] }[];
   bootstrap?: {
     callId: string;
@@ -90,7 +79,6 @@ export type ProviderRequest = {
     result: Json;
     denied: boolean;
   }[];
-  /** Host tool name to require for this round. Omit to leave provider tool selection automatic. */
   toolChoice?: string;
   input: {
     task: string;
@@ -101,7 +89,6 @@ export type ProviderRequest = {
     history?: Json;
   };
   opaqueState?: Json;
-  /** New user input appended after this round's tool results; the original request stays bound. */
   continuationInput?: string;
 };
 export type ProviderUsage = {
@@ -128,7 +115,6 @@ export type ProviderToolArgumentDiagnostic = {
 };
 export type ProviderResult = {
   webSearch?: ProviderWebSearch;
-  /** A successful hosted-search pause, resumed within the caller's existing call/time budget. */
   continuation?: 'web-search-pause';
   status: 'completed' | 'tool_calls' | 'refused' | 'partial' | 'error' | 'cancelled';
   text: string;
@@ -149,19 +135,14 @@ export type ProviderResult = {
   };
 };
 export type WireRecord = {
-  /** Invocation-time identities and final-wire summary evidence; retained without input text. */
   requestReceipt?: import('./scene-usage.js').ContextReceipt;
-  /** Small host receipt retained after request bodies are released. */
   requestContext?: import('./scene-usage.js').RequestContext;
-  /** Host-only reference delivery evidence; absent on older or unsupported attempts. */
   requestLore?: import('./request-lore.js').RequestLore;
   nativeScript?: {
     method: 'LLM' | 'axLLM' | 'simpleLLM';
     event: string;
-    /** Absent on older attempts, where axLLM always used otherAx. */
     mode?: 'otherAx' | 'memory' | 'translate';
   };
-  /** Host-only typed judgment attribution; this is not a generative provider protocol. */
   judgment?: {
     kind:
       | 'lore-selection'
@@ -175,9 +156,7 @@ export type WireRecord = {
   };
   pricingSnapshot?: PricingSnapshot;
   pricingStartedAt?: string;
-  /** Host execution policy; never serialized into a model request. */
   executionMode?: ModelExecutionMode;
-  /** Host-only attribution. Never supplied by model output or serialized to the provider. */
   agentId?: string;
   connectionId: string;
   protocol:
@@ -195,7 +174,6 @@ export type WireRecord = {
   body: Json;
   bodySha256: string;
   stablePrefixSha256: string;
-  /** Host-only wire fingerprints; not provider cache keys or observed cache hits. */
   cacheBoundaries?: ProviderCacheBoundary[];
 };
 export type CatalogModel = {
@@ -210,9 +188,7 @@ export type CatalogModel = {
   origin: 'catalog' | 'manual';
 };
 
-/** Fetch + fatal UTF-8 decoder + SSE assembler. Never retries or follows redirects. */
 export type ProviderExecutionOptions = {
-  /** Host-owned immutable image bytes; resolved only into a detached transmission copy. */
   resolveImage?: (
     image: import('./request-images.js').RequestImage,
     signal?: AbortSignal
@@ -239,7 +215,6 @@ export type ProviderExecutionOptions = {
   signal: AbortSignal;
   timeoutMs?: number;
   executionMode?: ModelExecutionMode;
-  /** Batch-only policy: server shutdown keeps remote work alive; an explicit Run cancel may cancel it. */
   cancelRemoteOnAbort?: () => boolean;
   vertexRequestTier?: VertexRequestTier;
   resolveCredential?: (
@@ -247,11 +222,8 @@ export type ProviderExecutionOptions = {
     connection?: ProviderConnection,
     signal?: AbortSignal
   ) => string | undefined | Promise<string | undefined>;
-  /** Awaited after Codex thread setup and before turn/start; never records another attempt.
-   * Synchronous callbacks may return an ignored value. */
   beforeTurn?: () => unknown;
   onWire?: (record: WireRecord, resumeAttemptId?: string) => unknown | Promise<unknown>;
-  /** Decoder-selected public answer deltas; excludes tools, reasoning and final-only envelopes. */
   onProgress?: (progress: ProviderProgress) => void | Promise<void>;
 };
 export async function executeProvider(
@@ -393,7 +365,6 @@ export async function executeProvider(
     const request = validateRequest(requestValue);
     const progress = createPublicTextProgress(request, connection.protocol, { ...options, signal });
     if (signal.aborted) return failure('CANCELLED');
-    // Stable prefix precedes dynamic controls and sources in the serialized body.
     const stablePrefix = JSON.stringify({
       protocol: connection.protocol,
       role: request.role,
@@ -596,8 +567,6 @@ export async function executeProvider(
   } finally {
     try {
       await reader?.cancel();
-    } catch {
-      /* Remote shutdown must not hide terminal evidence. */
-    }
+    } catch {}
   }
 }

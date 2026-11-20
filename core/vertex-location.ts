@@ -1,4 +1,3 @@
-/** Locations offered for selection and comparison; other well-formed regions stay valid when saved. */
 export const VERTEX_LOCATION_CHOICES = [
   'global',
   'us',
@@ -10,7 +9,6 @@ export const VERTEX_LOCATION_CHOICES = [
   'asia-northeast3',
 ] as const;
 
-/** The offered choices, then a saved location that is not one of them. */
 export function vertexLocationOptions(current: string): string[] {
   const locations: string[] = [...VERTEX_LOCATION_CHOICES];
   if (!locations.includes(current)) locations.push(current);
@@ -32,10 +30,6 @@ export function isVertexLocation(location: string): boolean {
   );
 }
 
-/**
- * Google serves `global` from the shared host, the `us`/`eu` multi-regions from their
- * regional endpoint hosts and every other region from `<region>-aiplatform.googleapis.com`.
- */
 function vertexHost(location: string): string {
   if (location === 'global') return 'aiplatform.googleapis.com';
   if (location === 'us' || location === 'eu') return `aiplatform.${location}.rep.googleapis.com`;
@@ -46,7 +40,6 @@ export function vertexModelsEndpoint(projectId: string, location: string): strin
   return `https://${vertexHost(location)}/v1/projects/${projectId}/locations/${location}/publishers/google/models`;
 }
 
-/** Only an endpoint whose host matches its location is a Vertex endpoint. */
 export function parseVertexEndpoint(value: string): VertexEndpoint | null {
   let url: URL;
   try {
@@ -64,7 +57,6 @@ export function parseVertexEndpoint(value: string): VertexEndpoint | null {
   return { projectId, location };
 }
 
-/** A credential admitted for one location of a project may serve another location of it. */
 export function sameVertexProject(saved: string, candidate: string): boolean {
   const a = parseVertexEndpoint(saved),
     b = parseVertexEndpoint(candidate);

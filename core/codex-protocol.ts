@@ -17,9 +17,7 @@ import { webSearchAllowed } from './helper-web-search.js';
 import { providerToolDescription } from './provider-tool-names.js';
 
 export const CODEX_ENDPOINT = 'codex://local';
-/** Native tools that do not require access to the Uimori host filesystem or credentials. */
 export const CODEX_BUILTIN_TOOLS = { codeMode: true, webSearch: 'cached' } as const;
-/** Illustration planning, prompt writing and alignment need no native search or code tools. */
 export const codexBuiltinTools = (role: ProviderRole, liveSearch = false) =>
   role === 'illustration'
     ? ({ codeMode: false, webSearch: 'disabled' } as const)
@@ -62,7 +60,6 @@ const outputSchema: Json = {
   },
 };
 
-/** A stateless decision turn. Uimori executes its own tools through the returned envelope. */
 export function buildCodexTurn(request: ProviderRequest): {
   baseInstructions: string;
   developerInstructions: string;
@@ -86,7 +83,6 @@ export function buildCodexTurn(request: ProviderRequest): {
   };
 }
 
-/** Shared authored input; native tools carry their schemas in dynamicTools, not twice in text. */
 function codexInput(request: ProviderRequest, native = false) {
   const prompt = request.prompt;
   if (prompt) validateProviderPrompt(prompt);
@@ -146,7 +142,6 @@ function codexInput(request: ProviderRequest, native = false) {
   };
 }
 
-/** Native input items preserve each logical turn and its part order without granting native roles. */
 function codexMessageInput(request: ProviderRequest, native = false): Json[] {
   const input = codexInput(request, native);
   if (!requestImages(request).length) return [{ type: 'text', text: JSON.stringify(input) }];
@@ -166,7 +161,6 @@ function codexMessageInput(request: ProviderRequest, native = false): Json[] {
   return items;
 }
 
-/** The complete provider input shared by planning, diagnostics and the runtime budget guard. */
 export function buildCodexDescriptor(
   request: ProviderRequest,
   built = buildCodexTurn(request)
@@ -198,12 +192,10 @@ export type CodexNativeRequest = {
   developerInstructions: string;
   text: string;
   input?: Json[];
-  /** Frozen attachment allowlist for transmission; never contains bytes. */
   prompt?: ProviderPrompt;
   tools: ProviderTool[];
 };
 
-/** Main and advisor input uses the same ordered messages and source projection as the old path. */
 export function buildCodexNativeRequest(request: ProviderRequest): CodexNativeRequest {
   return {
     role: request.role === 'helper' ? 'helper' : 'main',
@@ -221,7 +213,6 @@ export function buildCodexNativeRequest(request: ProviderRequest): CodexNativeRe
   };
 }
 
-/** One wire builder for native runtime, request previews and input-budget diagnostics. */
 export function prepareCodexNative(request: CodexNativeRequest) {
   const toolNames = new Map<string, string>();
   const tools = request.tools.map((tool) => {

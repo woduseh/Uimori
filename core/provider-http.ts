@@ -53,7 +53,6 @@ const empty = (): ProviderResult => ({
   opaqueState: null,
 });
 
-/** One user-admitted provider request. The adapters never retry, redirect or change models. */
 export async function executeNativeProvider(
   connectionValue: ProviderConnection,
   requestValue: unknown,
@@ -239,7 +238,6 @@ export async function executeNativeProvider(
       error instanceof AnthropicProtocolError ? error.toolArgumentDiagnostic : undefined
     );
   } finally {
-    // Do not wait for a remote source to acknowledge cancellation.
     void reader?.cancel().catch(() => undefined);
   }
 }

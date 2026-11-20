@@ -1,6 +1,5 @@
 import type { ThemePreferences, ThemeScope } from './themes.js';
 
-/** Independent presentation preference; never part of story/model input or theme exports. */
 export type ThemeBackground = {
   imageHash: string | null;
   blur: number;

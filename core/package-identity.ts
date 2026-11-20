@@ -10,7 +10,6 @@ export type PackageIdentityContext = {
 } & TemplateVariableContext;
 type IdentityContent = Pick<Content, 'title' | 'package'>;
 
-/** Identity substitutions read the selected data only; names never become template source. */
 export function packageIdentityFromContents(
   bot?: IdentityContent | null,
   persona?: IdentityContent | null,
@@ -25,7 +24,6 @@ export function packageIdentityFromContents(
   };
 }
 
-/** Frozen profile lookup keeps historical openings independent of later library revisions. */
 export function packageIdentityFromProfile(profile: ProfileSnapshot): PackageIdentityContext {
   const content = (role: 'bot' | 'persona'): IdentityContent | undefined => {
     const ref = profile.packageAttachments?.find((item) => item.role === role);

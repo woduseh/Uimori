@@ -26,9 +26,7 @@ import {
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 export type AuxiliarySource = { id: string; chatId: string; text: string; hash: string };
 export type VersionedText = { id: string; revision: string | number; text: string };
-/** Host projects the originating Run snapshot here, never the currently selected chat. */
 export type SourceTimeContext = {
-  /** Explicit translation choices, distinct from story/reference facts. */
   translationGuide?: BotTranslationGuide;
   packages?: ContentRoleContext;
   revision: string;
@@ -51,11 +49,9 @@ export function validateSourceIdentity(source: AuxiliarySource) {
   if (!source.id || !source.chatId || !source.text.trim() || digest(source.text) !== source.hash)
     throw new Error('SOURCE_IDENTITY_INVALID');
 }
-/** Blank-line paragraph anchors are revision-scoped and preserve exact UTF-16 offsets. */
 export function splitSource(source: AuxiliarySource): SourceBlock[] {
   validateSourceIdentity(source);
   const blocks: SourceBlock[] = [];
-  // Fenced code may itself contain blank lines, so a fence is one source block.
   const lines = source.text.match(/.*(?:\r\n|\n|\r|$)/g)?.filter(Boolean) ?? [];
   let offset = 0;
   let start: number | null = null;
@@ -182,7 +178,6 @@ const baseInput = (
     results: [] as ToolEvent[],
   };
 };
-/** The source is sent once, verbatim. The host owns identity; prose is not a schema. */
 export function translationInput(
   source: AuxiliarySource,
   context: SourceTimeContext,
@@ -253,7 +248,6 @@ export function translationInput(
     outputSchema: {},
   };
 }
-/** Unwraps the explicit provider JSON envelope while keeping source identity host-owned. */
 export function parseStructuredTranslation(source: AuxiliarySource, output: unknown): string {
   const value = parsed(output);
   only(value, ['sourceRevision', 'sourceHash', 'text']);
@@ -470,7 +464,6 @@ export async function executeAuxiliary(
   }
 }
 
-/** Explicit deterministic local adapter: validates plumbing, never semantic quality. */
 export const scriptedAuxiliary: AuxiliaryRequest = async (input) => {
   if (input.role === 'translation') return input.sourceText ?? '';
   throw new Error('JEV_JUDGMENT_REQUIRED');

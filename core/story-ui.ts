@@ -33,7 +33,6 @@ export type StoryUiSegment =
       surfaceId: string;
     };
 
-// Canonical storage includes both the <=100k expression and its compiled wire payload.
 const MAX_BLOCK = 400_000;
 const record = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
@@ -56,8 +55,6 @@ export function storyUiImageName(value: unknown): string | undefined {
 const validImageUrls = (value: unknown): value is Record<string, string> =>
   record(value) && Object.values(value).every(isStoryUiImageUrl);
 
-// Validate the source-owned surface shape. The SDK catalog owns callable functions;
-// resolved image sources are checked by the renderer.
 export function validateStoryUiMessages(value: unknown): value is StoryUiMessage[] {
   if (!Array.isArray(value) || value.length !== 1 || !record(value[0])) return false;
   const message = value[0];
@@ -172,7 +169,6 @@ function markdownCodeRanges(text: string, includeCanonical = false): Array<[numb
   return ranges;
 }
 
-// Backtick code spans may cross a line, but not a Markdown paragraph boundary.
 function inlineCodeRanges(text: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = [];
   const fences = markdownCodeRanges(text, true);
@@ -273,9 +269,7 @@ export function parseStoryUi(text: string): StoryUiSegment[] {
           });
           valid = true;
         }
-      } catch {
-        /* Invalid content stays visible. */
-      }
+      } catch {}
     }
     if (!valid) addText('invalid', start, end);
     cursor = end;
@@ -289,12 +283,6 @@ const projectedKeys = storyUiTextKeys.filter(
   (key) => key !== 'placeholder' && key !== 'description'
 );
 
-/**
- * Replace stored blocks with what a model should read. `text` keeps story-bearing values
- * only, for summaries, translation references and chats with Story UI off. `expression`
- * returns the model's own `<a2ui>` source, so a writer continuing the story sees where and
- * how earlier scenes used the interface.
- */
 export function projectStoryUiText(text: string, mode: 'text' | 'expression' = 'text'): string {
   return parseStoryUi(text)
     .map((segment) => {
@@ -335,15 +323,12 @@ export function projectStoryUiText(text: string, mode: 'text' | 'expression' = '
           if (Array.isArray(items))
             for (const item of items) if (record(item)) for (const key of keys) append(item[key]);
         }
-        // An entry is read with its date, or a reader of the summary loses when it happens.
         if (calendar) {
           append(component.month);
           if (Array.isArray(component.items))
             for (const item of component.items.filter(record))
               values.push([item.date, item.time, item.title, item.text].filter(Boolean).join(' '));
         }
-        // A relation means nothing without its ends, so each edge reads as "A → B: label".
-        // Only edges the reader sees are read: both ends exist and differ, first id wins.
         if (Array.isArray(component.edges) && Array.isArray(component.nodes)) {
           const names = new Map<unknown, string>();
           for (const node of component.nodes.filter(record))
@@ -354,7 +339,6 @@ export function projectStoryUiText(text: string, mode: 'text' | 'expression' = '
             values.push(edge.label === undefined ? ends : `${ends}: ${edge.label}`);
           }
         }
-        // Lists only: Grid and Map also have numeric `columns` or `rows`, which are layout.
         for (const list of [...storyUiTextLists, 'rows'])
           if (Array.isArray(component[list])) append(component[list]);
       }

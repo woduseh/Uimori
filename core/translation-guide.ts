@@ -1,4 +1,3 @@
-/** Bot-owned translation metadata. It is neither story canon nor a text replacement program. */
 export type TranslationGuide = {
   instructions: string;
   terms: { source: string; target: string; note?: string }[];
@@ -25,11 +24,9 @@ const object = (value: unknown): Record<string, unknown> =>
 export function translationGuideValue(card: Record<string, unknown>): unknown {
   return object(object(card.extensions).uimori).translationGuide;
 }
-/** Saved sources are validated at their native-source boundary; editor rows may be unfinished. */
 export function readTranslationGuide(card: Record<string, unknown>): TranslationGuide {
   return (translationGuideValue(card) as TranslationGuide | undefined) ?? emptyTranslationGuide();
 }
-/** Preserve all unrelated native and Uimori extensions. Validation happens on Save, not per keypress. */
 export function withTranslationGuide(
   card: Record<string, unknown>,
   guide: TranslationGuide

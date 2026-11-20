@@ -1,9 +1,5 @@
 import type { ProviderTool } from './transport.js';
 
-/**
- * Replace unsupported characters in canonical names. Noncolliding aliases are independent
- * of tool order. When aliases collide, later occurrences gain numeric suffixes.
- */
 export function providerToolNames(names: readonly string[]): string[] {
   const used = new Set<string>();
   return names.map((name) => {
@@ -15,6 +11,5 @@ export function providerToolNames(names: readonly string[]): string[] {
   });
 }
 
-/** Guidance and results cite canonical names, so an alias that differs states its mapping. */
 export const providerToolDescription = (tool: ProviderTool, wireName: string): string =>
   wireName === tool.name ? tool.description : `Host tool: ${tool.name}. ${tool.description}`;

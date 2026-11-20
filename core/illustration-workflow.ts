@@ -15,7 +15,6 @@ export const COMFY_PLACEHOLDERS = {
 const isRecord = (value: unknown): value is Record<string, Json> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
-/** Validation and substitution must inspect the same input values, never keys or metadata. */
 function mapInputStrings(value: Json, visit: (input: string) => Json): Json {
   return typeof value === 'string'
     ? visit(value)
@@ -37,7 +36,6 @@ export function parseComfyWorkflow(text: string): ComfyWorkflow {
   }
   if (!isRecord(value) || !Object.keys(value).length)
     throw new IllustrationError('COMFYUI_WORKFLOW_INVALID');
-  // The UI-format export ({nodes:[],links:[]}) cannot be queued through /prompt.
   if (Array.isArray(value.nodes) || Array.isArray(value.links))
     throw new IllustrationError('COMFYUI_WORKFLOW_UI_FORMAT');
   for (const node of Object.values(value)) {
@@ -53,7 +51,6 @@ export function parseComfyWorkflow(text: string): ComfyWorkflow {
   if (!hasPrompt) throw new IllustrationError('COMFYUI_WORKFLOW_PROMPT_PLACEHOLDER_MISSING');
   return structuredClone(value) as ComfyWorkflow;
 }
-/** Replaces placeholders inside string inputs only; node ids, class types and links stay intact. */
 export function fillComfyWorkflow(
   workflow: ComfyWorkflow,
   values: { prompt: string; negativePrompt: string; seed: number }
@@ -67,7 +64,6 @@ export function fillComfyWorkflow(
   };
   const replaceString = (input: string): Json => {
     if (input === COMFY_PLACEHOLDERS.seed) return values.seed;
-    // Only template markers are substituted; inserted prompt text stays literal.
     return input.replace(/\{\{(?:prompt|negative|seed)\}\}/gu, (marker) => replacements[marker]);
   };
   return Object.fromEntries(

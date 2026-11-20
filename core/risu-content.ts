@@ -10,9 +10,7 @@ export const CONTENT_ROLES = ['bot', 'persona', 'module'] as const;
 export type ContentRole = (typeof CONTENT_ROLES)[number];
 export type ContentTarget = 'main' | 'translation' | 'state' | 'status' | 'image';
 export type ContentAttachment = { id: string; revision: number; role: ContentRole };
-/** Chat-local package values are keyed by the exact attachment identity; a new revision starts fresh. */
 export const contentAttachmentKey = (r: ContentAttachment) => `${r.id}@${r.revision}:${r.role}`;
-/** Flat authoring folders only; folder membership does not change loading or runtime order. */
 export type RisuLoreFolder = { id: string; name: string };
 export type RisuLoreProjection = {
   id: string;
@@ -25,7 +23,6 @@ export type RisuLoreProjection = {
   loreContext?: import('./lore-context.js').LorePlacement;
   nativeRisuPosition?: import('./risu-native.js').NativeRisuLorePosition;
 };
-/** The attachment chooses a role. Identity is optional, including for a package used as a bot. */
 export type RisuContent = {
   version: 2;
   id: string;
@@ -41,7 +38,6 @@ export type RisuContent = {
   modules?: PackageModuleRef[];
   lore: RisuLoreProjection[];
   loreFolders?: RisuLoreFolder[];
-  /** Optional lore is selected by JEV or left discoverable through the writer's tools. */
   loreActivation?: { mode: 'discoverable' | 'model' };
   nativeRisu: RisuContentSource;
   imageHandoff?: RisuImageHandoff;
@@ -96,9 +92,6 @@ export function validateContentAttachment(value: unknown): ContentAttachment {
   return structuredClone(a) as ContentAttachment;
 }
 
-/** Validate a JSON content value without taking ownership of it.
- * Synchronous read-only consumers may borrow it; editors use validateRisuContent for an owned copy.
- */
 export function assertRisuContent(value: unknown): asserts value is RisuContent {
   const p = object(value, [
     'version',
@@ -248,7 +241,6 @@ export function assertRisuContent(value: unknown): asserts value is RisuContent 
   }
 }
 
-/** Preserve the detached-copy contract used by importers, editors and archive validation. */
 export function validateRisuContent(value: unknown): RisuContent {
   assertRisuContent(value);
   return structuredClone(value);

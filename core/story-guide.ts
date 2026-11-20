@@ -1,4 +1,3 @@
-/** Per-chat authoring preference. A guide is derived advice, never another story memory. */
 export type StoryGuideConfig = {
   enabled: boolean;
   work: string;
@@ -26,7 +25,6 @@ export type StoryGuideDetail = StoryGuideState & {
   latestRun?: { status: string; used: boolean; error?: string };
 };
 export type StoryGuideSnapshot = Pick<StoryGuideState, 'revision' | 'config'> & {
-  /** Only the brief selected for this execution; never treated as established story facts. */
   brief?: StoryGuideBrief;
   error?: string;
 };

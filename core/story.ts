@@ -1,6 +1,5 @@
 import type { AuthorNote } from './notes.js';
 
-/** Frozen notes about this story's events; card variables remain in the native Risu snapshot. */
 export type StorySnapshot = {
   canonHash: string;
   notes: AuthorNote[];

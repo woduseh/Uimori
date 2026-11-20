@@ -11,7 +11,6 @@ export type CompiledContentAttachment = {
   resources: Resource[];
   pinned: Resource[];
 };
-/** Host resources come from the frozen Risu projection. CBS/Lua run in the Risu runtime. */
 export function compileContentAttachment(
   value: RisuContent,
   ref: ContentAttachment,

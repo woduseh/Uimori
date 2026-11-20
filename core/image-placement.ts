@@ -3,7 +3,6 @@ import { packageImages } from './package-images.js';
 import { nativeRisuAssetNames } from './risu-native.js';
 import { parseStoryUi } from './story-ui.js';
 
-/** JEV owns catalog images in this display copy; stored prose is never rewritten. */
 export function imageOwnerDisplayText(
   text: string,
   profile: Pick<ProfileSnapshot, 'image' | 'chatId' | 'packages' | 'packageAttachments'>,

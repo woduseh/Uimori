@@ -1,4 +1,3 @@
-/** RisuToki's deprecated-save-policy plus retired Uimori preset options; source-file bytes stay intact. */
 const CARD_FIELDS = [
   'personality',
   'scenario',
@@ -29,7 +28,6 @@ const object = (value: unknown): Record<string, unknown> | undefined =>
     ? (value as Record<string, unknown>)
     : undefined;
 
-/** Takes the card payload itself, rather than its file envelope's `data` property. */
 export function stripDeprecatedRisuCardFields(card: Record<string, unknown>): void {
   for (const key of CARD_FIELDS) delete card[key];
   const extension = object(object(card.extensions)?.risuai);

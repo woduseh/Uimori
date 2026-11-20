@@ -24,13 +24,9 @@ import { PROMPT_COMPILER_VERSIONS } from './risu-prompt.js';
 import { packageImages } from './package-images.js';
 import { candidateTerms, createCandidateSearch } from './candidate-search.js';
 
-// These are host permissions, never instructions read from a content package.
 const ALLOWED_TOOLS = KNOWLEDGE_SKILL_TOOLS.map((tool) => tool.name);
-/** Per-entry summary length in the main catalog; the body stays behind the read tools. */
 export const CATALOG_SUMMARY_TOKENS = 80;
-/** Default serialized token budget for a catalog list. */
 export const CATALOG_TOKENS = 6_000;
-/** Legacy bounds retained exclusively for historical receipt verification. */
 export const KNOWLEDGE_READ_CHARS = 6_000;
 export const KNOWLEDGE_READ_MAX_CHARS = 48_000;
 export const KNOWLEDGE_READ_TOKENS = 2_000;
@@ -52,7 +48,6 @@ const scopedMetadata = (item: Resource, allowedIds: Set<string>) => ({
 });
 const summary = (text: string, profile?: TokenizerProfileId) =>
   textTokenExcerpt(text, CATALOG_SUMMARY_TOKENS, { profile, marker: '…' }).text;
-/** Discovery metadata only: identity, a short summary and the scoped relations. */
 const catalogEntry = (
   item: Resource,
   allowedIds: Set<string>,
@@ -65,14 +60,12 @@ const catalogEntry = (
     revision: item.revision,
     kind: item.kind,
     title: item.title,
-    // A pinned body already reaches the request; its summary would only repeat it.
     description: pinned && pinnedBodiesDelivered ? '' : summary(item.description, profile),
     ...(item.sourceKind ? { sourceKind: item.sourceKind } : {}),
     ...(pinned ? { loading: 'pinned' as const } : {}),
     ...(item.relatedIds ? { relatedIds: item.relatedIds.filter((id) => allowedIds.has(id)) } : {}),
   };
 };
-/** Bounded discovery metadata; callers retain the full resources behind their read tools. */
 export function resourceCatalog(
   resources: readonly Resource[],
   {
@@ -92,8 +85,6 @@ export function resourceCatalog(
     catalog.push(entry);
     if (countTextTokens(JSON.stringify(catalog), tokenizer) > CATALOG_TOKENS) {
       catalog.pop();
-      // A single impossible item must not hide every later entry. Otherwise preserve
-      // ranking priority and stop without tokenizing the entire remaining library.
       if (skipOversized && countTextTokens(JSON.stringify([entry]), tokenizer) > CATALOG_TOKENS)
         continue;
       break;
@@ -116,7 +107,6 @@ export function resourceCatalog(
 }
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const KNOWLEDGE_SEARCH_TOKENS = 6_000;
-// Frozen Run objects own their optional browse view; no persistent cache, timers or invalidation service.
 const knowledgeBrowsers = new WeakMap<
   RunSnapshot,
   Map<string, ReturnType<typeof createKnowledgeBrowser>>
@@ -162,7 +152,6 @@ export type MainInput = ModelInput & {
   outline?: OutlineSnapshot;
   catalogPage?: { total: number; listed: number; remaining: string };
 };
-/** Slot bodies and fallback suppression share this exact source selection. */
 export function pinnedSlotSources(
   input: MainInput,
   slot: string
@@ -180,7 +169,6 @@ export function pinnedSlotSources(
     return sources.filter((item) => !['bot', 'persona', 'instruction'].includes(item.kind));
   return [];
 }
-/** Fixed contract, provenance-bearing pinned content, catalog and observed reads stay separate. */
 export function buildMainInput(
   snapshot: RunSnapshot,
   results: readonly ToolEvent[] = [],
@@ -313,7 +301,6 @@ export function buildMainInput(
     input.outline = structuredClone(snapshot.outline);
     input.contract += `\n${outlineContract(snapshot.outline)}`;
   }
-  // Rank bounded discovery metadata; full bodies remain reachable through the read tools.
   const visibleHistory = projectedLogicalHistory(
     snapshot,
     selectLogicalHistory(snapshot, input.history),
@@ -350,7 +337,6 @@ export function buildMainInput(
 }
 
 function checkAbort(signal?: AbortSignal) {
-  // Abort reasons may include a caller's data. Do not echo them into a run error.
   if (signal?.aborted) throw Object.assign(new Error('Run cancelled'), { name: 'AbortError' });
 }
 
@@ -361,8 +347,6 @@ function pageNumber(value: unknown, fallback: number, maximum: number) {
   return value as number;
 }
 
-// Map normalized graphemes back to their original UTF-16 coordinates. Normalizing or
-// lowercasing a whole string can change its length, so normalized indexes alone are unsafe.
 function relevantBodyOffset(text: string, terms: readonly string[]): number | undefined {
   const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
   let normalized = '';
@@ -419,7 +403,6 @@ function readResourceRange(
     nextOffset: end < resource.text.length ? end : null,
   };
 }
-/** Callers verify the full event against executeTool before treating these as durable receipts. */
 export function knowledgeReadResults(event: ToolEvent): KnowledgeReadResult[] {
   if (event.denied || event.name !== 'knowledge.read') return [];
   const data = event.result as { items?: unknown[] };
@@ -430,7 +413,6 @@ export function knowledgeReadResults(event: ToolEvent): KnowledgeReadResult[] {
   });
 }
 
-/** Execute a reusable read action against the immutable Run's local corpus. */
 export function executeTool(
   snapshot: RunSnapshot,
   action: ToolAction,
@@ -476,7 +458,6 @@ export function executeTool(
     }
     return browse(action);
   }
-  // Scope applies before search, counts, pagination, and individual reads alike.
   const scope = roleResources(snapshot, role);
   const tokenReadSize = (
     text: string,
@@ -485,7 +466,6 @@ export function executeTool(
     tokens: number
   ) => {
     let end = limit === undefined ? text.length : Math.min(text.length, offset + limit);
-    // Check the explicit UTF-16 bound against the original text before tokenizing its slice.
     if (
       end > offset &&
       end < text.length &&
@@ -539,8 +519,6 @@ export function executeTool(
         : JSON.stringify(result()).length <= legacyChars;
 
     const ids = args.ids;
-    // Historical verification uses the delivered boundaries, not a possibly updated tokenizer.
-    // The server compares the rebuilt source/hash/text and the entire receipt before retention.
     const frozenRanges = readBudget.ranges;
     if (
       frozenRanges &&
@@ -611,7 +589,6 @@ export function executeTool(
       if (frozenRanges || fits()) continue;
       items.pop();
       if (items.length) break;
-      // Unusually escape-heavy text must still make progress within the serialized page bound.
       let low = 1;
       let high = size;
       while (low < high) {
@@ -721,7 +698,6 @@ export function executeTool(
         });
     }
     const allowedIds = new Set(scope.map((item) => item.id));
-    // Locate excerpts in the original text: lowercasing can change UTF-16 length.
     const patterns =
       action.name === 'knowledge.search'
         ? terms.map((term) => new RegExp(term.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'iu'))

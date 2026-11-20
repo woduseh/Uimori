@@ -4,7 +4,6 @@ export type TranslationPolicy = {
   maxCalls: number;
   previousSceneTokens?: number;
   retryProviderRefusal?: boolean;
-  /** Absent in older workspaces/jobs, which keep the original full context. */
   contextMode?: TranslationContextMode;
 };
 export type TranslationContextMode = 'full' | 'source-only';

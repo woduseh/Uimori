@@ -20,7 +20,6 @@ export function assertProviderRequestBytes(body: Json): void {
     throw new ProviderContractError('IMAGE_REQUEST_TOO_LARGE');
 }
 
-/** Detach image-bearing wire bodies so frozen requests and opaque replay never contain bytes. */
 export async function materializeProviderImages(
   body: Json,
   request: Pick<ProviderRequest, 'prompt' | 'toolImages'>,

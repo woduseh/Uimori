@@ -3,26 +3,16 @@ import type { Chat } from './types.js';
 import { RISU_ASSET_MAX, RISU_ZIP_MEMBERS_MAX } from './risu-limits.js';
 
 export const RISU_IMPORT_MAX_BYTES = 24 * 1024 * 1024;
-/** How many assets one container may declare, across its metadata and its stored files. */
 export const RISU_IMPORT_MAX_ASSETS = RISU_ASSET_MAX;
-/** How many lore entries one module or card lorebook may declare. */
 export const RISU_IMPORT_MAX_LORE_ENTRIES = 2000;
-/** Small containers may expand this far; larger ones also keep a bounded expansion ratio. */
 export const RISU_IMPORT_MAX_CONTAINER_BYTES = 64 * 1024 * 1024;
-/** One entry inside a container never expands past this, so no single member can be huge. */
 export const RISU_IMPORT_MAX_ENTRY_BYTES = 64 * 1024 * 1024;
-/** How many members a ZIP container may declare. */
 export const RISU_IMPORT_MAX_ZIP_MEMBERS = RISU_ZIP_MEMBERS_MAX;
-/** The card or module JSON document read out of a container stays a parseable size. */
 export const RISU_IMPORT_MAX_JSON_BYTES = 8 * 1024 * 1024;
 export type RisuImportSource = { name: string; base64: string; uploadId?: undefined };
-/** A staged upload keeps a large container out of the request body and the import receipt. */
 export type RisuImportStagedSource = { name: string; uploadId: string; base64?: undefined };
-/** Above this size the app reads a staged file and records the original's identity only. */
 export const RISU_IMPORT_MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
-/** Disk-backed preparation still bounds actual decompressed and converted bytes. */
 export const RISU_IMPORT_MAX_EXPANDED_BYTES = 1024 * 1024 * 1024;
-/** Leave room for manifest and ZIP records when one card is backed up in a 512 MiB archive. */
 export const RISU_IMPORT_MAX_PREPARED_BYTES = 448 * 1024 * 1024;
 export const risuImportExpandedLimit = (containerBytes: number): number =>
   Math.min(
@@ -36,7 +26,6 @@ export type RisuImportFinding = {
   message: string;
 };
 export type RisuImportPreview = {
-  /** The server owns this short-lived, fully checked preparation. */
   preparedId?: string;
   kind: RisuImportKind;
   digest: string;
@@ -56,7 +45,6 @@ export type RisuImportPreview = {
     text: string;
     enabled: boolean;
     loading: 'pinned' | 'discoverable';
-    /** The preserved Risu activation keys, when the entry has any, so the screen can name them. */
     keys?: string;
   }[];
   imageHandoff?: import('./risu-image-handoff.js').RisuImageHandoff;
@@ -68,7 +56,6 @@ export type RisuImportApply = {
   kind?: RisuImportKind;
   digest: string;
   imageHandoffIds?: string[];
-  /** Omission preserves the original API behavior; library-only imports set false. */
   createChat?: boolean;
   allowPartial: boolean;
   idempotencyKey: string;

@@ -1,8 +1,6 @@
 import { Agent } from 'undici';
 
 // Node fetch otherwise inherits Undici's 300-second header/body idle limits.
-// Only these admitted provider requests use this dispatcher. Their existing
-// AbortSignal still owns the total deadline and caller cancellation.
 const providerDispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
 
 export function providerFetchOptions(
@@ -13,14 +11,12 @@ export function providerFetchOptions(
 
 export class ProviderBodyLimitError extends Error {}
 
-/** Read a provider body without depending on fetch forwarding abort after headers. */
 export async function readProviderBody(
   response: Response,
   signal: AbortSignal,
   maximum = Infinity
 ): Promise<Buffer> {
   if (signal.aborted) {
-    // fetch can resolve with a body after the request was already cancelled.
     void response.body?.cancel(signal.reason).catch(() => undefined);
     signal.throwIfAborted();
   }
@@ -44,7 +40,6 @@ export async function readProviderBody(
     }
   } finally {
     signal.removeEventListener('abort', abortReader);
-    // Do not wait for a stalled source to acknowledge cancellation.
     void reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
@@ -57,7 +52,6 @@ const transportCodes = new Set([
   'UND_ERR_CONNECT_TIMEOUT',
 ]);
 
-/** Never expose remote messages, URLs, headers, bodies, stacks or arbitrary codes. */
 export function transportFailureCode(error: unknown): string {
   const seen = new Set<unknown>();
   let current = error;
@@ -73,8 +67,6 @@ export function transportFailureCode(error: unknown): string {
         return candidate.code;
       current = candidate.cause;
     }
-  } catch {
-    /* Unknown error properties are untrusted diagnostics. */
-  }
+  } catch {}
   return 'TRANSPORT_ERROR';
 }

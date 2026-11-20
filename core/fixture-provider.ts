@@ -8,18 +8,15 @@ import type {
   Usage,
 } from './types.js';
 
-/** Explicit synthetic behavior, never saved as user chat settings or sent to a provider. */
 export type FixtureGeneration = { preset?: 'calm' | 'vivid'; mode?: 'direct' | 'research' };
 
 function checkAbort(signal?: AbortSignal) {
-  // Abort reasons may include a caller's data. Do not echo them into a run error.
   if (signal?.aborted) throw Object.assign(new Error('Run cancelled'), { name: 'AbortError' });
 }
 
 type SearchResult = { items: Omit<Resource, 'text' | 'chatId'>[] };
 type ModelStep = { kind: 'tool'; action: ToolAction } | { kind: 'text'; text: string };
 
-/** A deterministic fixture provider, not a creative quality or API compatibility model. */
 function scriptedStep(input: ModelInput, options: FixtureGeneration): ModelStep {
   const research = options.mode === 'research';
   const success = input.results.filter((result) => !result.denied);
@@ -55,8 +52,6 @@ function scriptedStep(input: ModelInput, options: FixtureGeneration): ModelStep 
       ? 'Wind struck the pier in bright, salt-heavy bursts. Mira caught her coat against her wrist, the brass compass cold in her palm.'
       : 'Mira paused beside the quiet pier, resting the brass compass in her open palm. The water moved patiently below her.';
   const previous = input.history.at(-1);
-  // The fixture incorporates the actual read result and current request; it never
-  // invents evidence that a catalog entry's body was already read.
   return {
     kind: 'text',
     text: `${opening}\n\n${detail}${previous ? ' The thread of the earlier scene remained with her as she looked along the shore.' : ''}\n\nThe next scene was still open: ${input.task}\nMira waited beside the rail, leaving the next decision to her companion.`,
@@ -73,8 +68,6 @@ export async function executeFixtureMain(
   },
   options: FixtureGeneration = {}
 ): Promise<{ text: string; usage: Usage }> {
-  // Detach once so neither instrumentation nor UI settings changes can mutate
-  // this run's context or expand scope during a tool loop.
   const fixed = structuredClone(snapshot);
   const generation = { ...options };
   const results: ToolEvent[] = [];
@@ -90,7 +83,6 @@ export async function executeFixtureMain(
     }
     const input = buildMainInput(fixed, results);
     modelCalls++;
-    // This is the exact mock-provider input, copied only to prevent log-hook writes.
     await hooks.onInput(structuredClone(input));
     checkAbort(hooks.signal);
     const step = scriptedStep(input, generation);

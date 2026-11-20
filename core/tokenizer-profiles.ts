@@ -1,4 +1,3 @@
-/** Host-only choices. These never change the model or fields sent to a provider. */
 export const TOKENIZER_PROFILES = [
   {
     id: 'openai-o200k',
@@ -86,7 +85,6 @@ export function isTokenizerProfileId(value: unknown): value is TokenizerProfileI
   return TOKENIZER_PROFILES.some((profile) => profile.id === value);
 }
 
-/** Auto resolves metadata only: no vocabularies, imports, disk reads or network. */
 export function resolveTokenizerProfile(model: {
   tokenizer?: TokenizerProfileId;
   modelId: string;

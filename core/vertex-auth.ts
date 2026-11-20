@@ -3,7 +3,6 @@ import { ProviderContractError } from './provider-errors.js';
 
 const clients = new Map<string, GoogleAuth>();
 
-/** Credentials stay in this server process. The SDK is used for tokens, never model retries. */
 export async function vertexAccessToken(signal: AbortSignal): Promise<string> {
   const keyFile = process.env.GOOGLE_APPLICATION_CREDENTIALS;
   if (!keyFile) throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');

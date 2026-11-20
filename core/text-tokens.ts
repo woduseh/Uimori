@@ -3,14 +3,9 @@ import { ProviderContractError } from './provider-errors.js';
 import { localTokenizer, type TokenizerInfo } from './local-tokenizers.js';
 import { isTokenizerProfileId, type TokenizerProfileId } from './tokenizer-profiles.js';
 
-// Fixed-size keys avoid retaining sliced request strings. Cache counts, not token ID arrays.
 const TOKEN_PIECE_CACHE_LIMIT = 512;
 const tokenPieces = new Map<string, number>();
 
-/** Local o200k text estimate, without JSON quoting or a safety margin.
- * 4,096-unit boundaries bound BPE work; this is not a model-specific usage count.
- * Keep this algorithm stable for the persisted o200k_base-text-v1 lore policy.
- */
 export function countTextTokens(text: string, profile?: TokenizerProfileId): number {
   if (typeof text !== 'string') throw new ProviderContractError('INVALID_CONTEXT_INPUT');
   if (profile !== undefined && !isTokenizerProfileId(profile))
@@ -45,12 +40,10 @@ export function countTextTokens(text: string, profile?: TokenizerProfileId): num
   return tokens;
 }
 
-/** Metadata for the same local counter used by the request estimate, including fallback. */
 export function tokenizerInfo(profile?: TokenizerProfileId): TokenizerInfo {
   return localTokenizer(profile ?? 'openai-o200k').info;
 }
 
-/** A literal prefix/suffix for reference context, including any omission marker in its budget. */
 export function textTokenExcerpt(
   text: string,
   maxTokens: number,

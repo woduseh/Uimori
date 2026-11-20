@@ -15,7 +15,6 @@ import {
   type ThemePalette,
 } from './theme-palettes.js';
 
-/** Theme definitions stay in presentation storage. Story UI prompts use a separate summary. */
 export const THEME_COLOR_KEYS = [
   'bg',
   'nav',
@@ -67,12 +66,10 @@ export type ThemeDefinition = {
   templateHtml: string;
   templateCss: string;
   storyUi?: { baseStyle: StoryUiStyle; css: string };
-  /** Fonts and images the theme's CSS reaches through `--theme-font-<name>` / `--theme-image-<name>`. */
   assets?: ThemeAsset[];
 };
 export type ThemeAssetKind = 'font' | 'image';
 export type ThemeAsset = { name: string; kind: ThemeAssetKind; hash: string };
-/** Bytes carried by an exported theme file, keyed by the hash its manifest references. */
 export type ThemeAssetFile = { hash: string; kind: ThemeAssetKind; mime: string; data: string };
 export const MAX_THEME_ASSETS = 24;
 export function themeAssetVariable(asset: Pick<ThemeAsset, 'name' | 'kind'>): string {
@@ -85,7 +82,6 @@ export type ThemePreferences = {
   botThemes: Record<string, string>;
   chatThemes: Record<string, string>;
   botStoryUiThemes?: Record<string, string>;
-  /** Missing scoped selections inherit; 'theme' explicitly uses the layout's saved colors. */
   defaultPaletteId?: string;
   botPalettes?: Record<string, string>;
   chatPalettes?: Record<string, string>;
@@ -160,10 +156,6 @@ const originalBuiltinThemes: Theme[] = [
     colors: BUILTIN_PALETTES.find((item) => item.id === 'rose')!.colors,
   },
 ];
-/**
- * Palette-only presets share the default layout. The former library's distinct paper
- * structure remains readable/exportable for existing selections, but is not a picker preset.
- */
 export const LEGACY_BUILTIN_THEMES = originalBuiltinThemes.slice(1);
 export const BUILTIN_THEMES: Theme[] = [
   {
@@ -205,11 +197,6 @@ export function themeDefinition(theme: Theme): ThemeDefinition {
   return definition;
 }
 
-/**
- * Upgrade choices in memory, without deleting or rewriting any saved theme resource.
- * Old coupled choices establish color boundaries at each explicitly selected scope.
- * Once a preference write occurs the independent palette fields make this idempotent.
- */
 export function normalizeThemePreferences(value: ThemePreferences): ThemePreferences {
   const legacy = !(
     'defaultPaletteId' in value ||

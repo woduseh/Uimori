@@ -17,7 +17,6 @@ export type Bookmark = {
   createdAt: string;
   updatedAt: string;
 };
-/** Portable locations use the copied transcript order, never the originating database IDs. */
 export type PortableBookmark = {
   entry: number;
   representation: 'original' | 'translation';

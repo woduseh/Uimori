@@ -98,7 +98,6 @@ function readTurn(value: Json): VertexTurn {
   return structuredClone(value) as unknown as VertexTurn;
 }
 
-/** Encode the native REST body and its signed continuation context. */
 export function encodeVertex(
   request: ProviderRequest,
   protocol: Extract<ProviderProtocol, 'vertex-gemini-v1' | 'google-gemini-v1'> = 'vertex-gemini-v1'
@@ -125,7 +124,6 @@ export function encodeVertex(
         : undefined;
   if (gemini4 && generation?.thinkingLevel === 'MINIMAL')
     reject(`${gemini4}_THINKING_LEVEL_UNSUPPORTED`);
-  // Long decoding needs continuation_token handling, which the direct REST adapter does not yet do.
   if (gemini4 && (generation?.maxOutputTokens ?? 65_536) > 65_536)
     reject(`${gemini4}_LONG_DECODE_UNSUPPORTED`);
   const maxOutputTokens =
@@ -146,7 +144,6 @@ export function encodeVertex(
       {
         role: request.role,
         ...(request.webSearch ? { webSearch: true } : {}),
-        // Preserve existing Vertex bindings while keeping Studio continuations separate.
         ...(protocol === 'google-gemini-v1' ? { protocol } : {}),
         modelId: request.modelId,
         stable: request.stable,
@@ -221,8 +218,6 @@ export function encodeVertex(
       {
         role: 'user',
         // Vertex rejects a tool-response turn when appended text follows functionResponse.
-        // Keep the original model turn and tool result ordering intact; place fresh
-        // host controls before the function responses inside the same user turn.
         parts: [
           ...(continuationInput !== undefined ? [{ text: continuationInput }] : []),
           ...previous.pending.flatMap((call) => toolImageParts(request, call.hostId, protocol)),
@@ -398,7 +393,6 @@ function usage(raw: Json): ProviderUsage {
   ])
     token(raw[field]);
   const candidates = token(raw.candidatesTokenCount);
-  // Protobuf omits zero scalar counts. An entirely absent usage object remains unknown.
   const thoughts = token(raw.thoughtsTokenCount);
   const outputTokens =
     candidates === null && thoughts === null ? null : (candidates ?? 0) + (thoughts ?? 0);
@@ -412,7 +406,6 @@ function usage(raw: Json): ProviderUsage {
   };
 }
 
-/** Accepts decoded SSE event objects; never evaluates tools or makes a network request. */
 export class VertexDecoder {
   private readonly context: VertexTurn;
   private readonly parts: Json[] = [];
@@ -446,8 +439,6 @@ export class VertexDecoder {
     try {
       this.eventText = '';
       this.acceptEvent(copy(event));
-      // Grounding arrives separately from prose. Publish once the complete response
-      // can include its verified inline citations, rather than changing emitted text.
       if (this.context.webSearch) return;
       if (this.eventText) return { text: this.eventText, offset: this.text.length };
     } catch (error) {
@@ -457,7 +448,6 @@ export class VertexDecoder {
   }
   private acceptEvent(event: Json): void {
     if (!object(event)) reject('INVALID_VERTEX_EVENT');
-    // Trailing usage remains observable even when the same event reports a terminal error.
     if (event.usageMetadata !== undefined) this.observedUsage = usage(event.usageMetadata);
     if (event.error !== undefined) reject('VERTEX_PROVIDER_ERROR');
     if (event.promptFeedback !== undefined) {
@@ -512,7 +502,6 @@ export class VertexDecoder {
     for (const field of ['groundingChunks', 'groundingSupports', 'webSearchQueries'])
       if (metadata[field] !== undefined && !Array.isArray(metadata[field]))
         reject('INVALID_VERTEX_EVENT');
-    // Streaming chunks are incremental and support indices address the accumulated list.
     this.groundingChunks.push(...((metadata.groundingChunks as Json[] | undefined) ?? []));
     this.groundingSupports.push(...((metadata.groundingSupports as Json[] | undefined) ?? []));
     for (const query of (metadata.webSearchQueries as Json[] | undefined) ?? [])
@@ -546,8 +535,7 @@ export class VertexDecoder {
         continue;
       const segment = support.segment.text;
       const start = this.text.indexOf(segment);
-      // Native offsets are UTF-8 bytes in a Part, not JavaScript text offsets.
-      // Only an exact, unambiguous public segment can establish an inline citation.
+      // Gemini grounding offsets are UTF-8 bytes in a Part, not JavaScript text offsets.
       if (start < 0 || start !== this.text.lastIndexOf(segment)) continue;
       const end = start + segment.length;
       const chunks = support.groundingChunkIndices.flatMap((index) =>
@@ -588,7 +576,6 @@ export class VertexDecoder {
     )
       reject('INVALID_VERTEX_PART');
     const partIndex = this.parts.length;
-    // Preserve every complete original part, including signature-only and future metadata parts.
     this.parts.push(structuredClone(part));
     if (typeof part.text === 'string' && part.thought !== true) {
       this.text += part.text;
@@ -602,7 +589,6 @@ export class VertexDecoder {
       (call.willContinue !== undefined && call.willContinue !== false)
     )
       reject('VERTEX_STREAMED_TOOL_ARGUMENTS_UNSUPPORTED');
-    // Optional Struct fields can be omitted for no-argument calls; preserve the original part above.
     const args = call.args === undefined ? {} : call.args;
     if (!nonempty(call.name) || (call.id !== undefined && !nonempty(call.id)) || !object(args))
       reject('INVALID_TOOL_ARGUMENTS');
@@ -693,7 +679,6 @@ export class VertexDecoder {
   }
 }
 
-/** Diagnostic copies withhold provider reasoning while the actual request remains intact. */
 export function diagnosticVertexBody(body: Json): Json {
   if (Array.isArray(body)) return body.map(diagnosticVertexBody);
   if (!object(body)) return body;

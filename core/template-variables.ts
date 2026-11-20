@@ -3,7 +3,6 @@ import type { ProfileSnapshot } from './product.js';
 import { PromptEvaluationError } from './prompt-values.js';
 import { validateChatVariableValues, validateChatVariableState } from './chat-variables.js';
 
-/** Minimal frozen declaration view, also usable before a new chat exists. */
 export type TemplateVariableProfile = Pick<
   ProfileSnapshot,
   'packageAttachments' | 'packages' | 'variableState'
@@ -11,10 +10,8 @@ export type TemplateVariableProfile = Pick<
   promptPresets?: { main?: { program: { nativeRisuPreset: NativeRisuPreset } } };
 };
 
-/** Keys are authored data: preserve Unicode, whitespace and empty names exactly. */
 export const validateTemplateVariableDefaults = validateChatVariableValues;
 
-/** Read frozen declarations only. Attachment order wins; the main preset is the fallback. */
 export type TemplateVariableContext = {
   variables?: Record<string, string>;
   variableStateRevision?: number;
@@ -55,7 +52,6 @@ export function resolveTemplateVariableContext(
   }
   const preset = profile?.promptPresets?.main?.program.nativeRisuPreset;
   if (preset) append(nativeRisuPresetVariableDefaults(preset));
-  // Omit an empty value map when no source declares variables.
   return overflow
     ? { ...revision, variableDefaultsError: 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT' }
     : result === undefined

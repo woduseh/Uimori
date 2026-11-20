@@ -7,7 +7,6 @@ import { packageSlots } from './package-context.js';
 import { modelAuthorNotes } from './notes.js';
 import { translationSnapshot } from './translation-context.js';
 
-/** Background references never enter the source-only request's slots or fallback. */
 export function translationPromptContext(input: AuxiliaryInput) {
   return input.contextMode === 'source-only'
     ? {
@@ -18,7 +17,6 @@ export function translationPromptContext(input: AuxiliaryInput) {
     : input.context;
 }
 
-/** A translation job compiles its own frozen preset and values, never main-turn messages. */
 export function compileTranslationPrompt(
   input: AuxiliaryInput,
   snapshot: RunSnapshot,
@@ -43,7 +41,6 @@ export function compileTranslationPrompt(
     persona: input.contextMode === 'source-only' ? '' : (input.context.persona?.text ?? ''),
     lore: '',
     lorebook: '',
-    // Explicit bot terms travel once in context.translationGuide, not a second glossary path.
     glossary: '',
     notes: notes.length ? JSON.stringify(notes) : '',
     source: input.sourceText ?? JSON.stringify(input.blocks),
@@ -83,7 +80,6 @@ export function compileTranslationPrompt(
       ],
     }
   );
-  // Native chat blocks place the host's source message; the source is never interpreted as CBS.
   if (
     compilation.messages.some(
       (message) =>

@@ -4,7 +4,6 @@ export const ILLUSTRATION_MAX_PER_SOURCE = 10;
 
 export type Cut = { key: string; job: Illustration; picture?: Illustration; stale: boolean };
 
-/** A target owns one reading position, even while a newer render is pending or failed. */
 export function cutsFor(items: Illustration[], sourceHash: string): Cut[] {
   const groups = new Map<string, Illustration[]>();
   for (const item of items) {

@@ -7,12 +7,6 @@ import {
   TRANSLATION_TEXT_MAX_CHARS,
 } from './content-limits.js';
 
-/**
- * One chat's authored history as a small file: source texts in order, the request that produced
- * each, the latest translation, the user's notes and the attached package references. It carries
- * no runs, snapshots, package state, draws or attempts, so it survives schema resets that the full
- * archive does not. Import reads it as authored history of a new chat.
- */
 export const CHAT_TRANSCRIPT_FORMAT = 'uimori-chat-transcript';
 export const CHAT_TRANSCRIPT_VERSION = 2;
 export const CHAT_TRANSCRIPT_LIMITS = {
@@ -25,20 +19,15 @@ export const CHAT_TRANSCRIPT_LIMITS = {
 } as const;
 
 export type ChatTranscriptEntry = {
-  /** The user request recorded on the run that produced this source; may be empty. */
   request: string;
   requestImages?: RequestImage[];
-  /** Optional authored future-context controls; absent in older v2 transcripts. */
   sceneContext?: Omit<import('./scene-context.js').SceneContext, 'revision'>;
-  /** The source text as currently read, including the latest user edit. */
   text: string;
-  /** The latest translation whose source hash still matched, or null. */
   translation: string | null;
 };
 export type ChatTranscriptNote = {
   text: string;
   author: string;
-  /** Index into `entries` the note was anchored at; null means before any entry. */
   atIndex: number | null;
 } & (
   | { kind: 'author-note'; origin?: never }

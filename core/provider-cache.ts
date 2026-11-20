@@ -11,7 +11,6 @@ export type ProviderCachePlan = {
   automaticSuppressed?: true;
 };
 
-/** Cache policy only: the caller places authored points without rewriting content or signed turns. */
 export function planProviderCache(
   request: ProviderRequest,
   protocol: ProviderProtocol
@@ -20,8 +19,6 @@ export function planProviderCache(
   if (generation && (generation.cacheMode !== undefined || generation.cacheTtl !== undefined))
     validateModelOptions(generation, protocol);
   const mode = generation?.cacheMode;
-  // A reviewed model documents cache support; an explicit user choice is honored on any model and
-  // the provider answers if it disagrees. Unset mode on an unknown model leaves the provider default.
   const supported =
     modelCapability(protocol, request.modelId)?.cacheModes?.includes('explicit') === true ||
     mode !== undefined;
@@ -32,7 +29,6 @@ export function planProviderCache(
   const automaticSuppressed = supported && mode === 'automatic' && authoredPoints === 4;
   const automatic = mode === 'automatic' && !automaticSuppressed;
   const explicitLimit = automatic ? 3 : 4;
-  // Four authored points fill the provider limit; keep them and omit only the automatic extra.
   if (supported && mode === 'automatic' && authoredPoints > 4)
     throw new ProviderContractError('PROMPT_CACHE_LIMIT');
   const ttl: Record<string, Json> =

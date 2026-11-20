@@ -1,6 +1,5 @@
 import { SOURCE_TEXT_MAX_CHARS } from './content-limits.js';
 
-/** Risu first_mes and alternate_greetings, without another authoring language. */
 export type PackageStart = {
   id: string;
   title: string;
@@ -67,7 +66,6 @@ export function validatePackageStarts(value: unknown): PackageStart[] {
         (typeof item.description !== 'string' || item.description.length > 2000))
     )
       fail('PACKAGE_START_INVALID_TEXT');
-    // A selected greeting becomes a stored message without truncating its HTML/CSS.
     if ((item.text as string).length > SOURCE_TEXT_MAX_CHARS) fail('PACKAGE_START_TEXT_TOO_LONG');
   }
   return structuredClone(value) as PackageStart[];

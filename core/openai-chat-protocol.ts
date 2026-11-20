@@ -35,7 +35,6 @@ function vercelProviderOptions(request: ProviderRequest): Json | undefined {
   const mergeNamespace = (name: string, automatic: Record<string, Json>) => {
     if (!Object.keys(automatic).length) return;
     const current = object(base[name]) ? (base[name] as Record<string, Json>) : undefined;
-    // Explicit JSON stays authoritative over profile-derived defaults.
     base[name] = current ? { ...automatic, ...current } : automatic;
   };
   if (generation) {
@@ -62,7 +61,6 @@ function vercelProviderOptions(request: ProviderRequest): Json | undefined {
   return Object.keys(base).length ? base : undefined;
 }
 
-/** OpenAI's Chat Completions shape. Compatible servers choose their own model/capabilities. */
 export function encodeChat(
   request: ProviderRequest,
   protocol: 'openai-chat-v1' | 'vercel-chat-v1' | 'deepseek-chat-v1' = 'openai-chat-v1'
@@ -141,7 +139,6 @@ export function encodeChat(
             return part.text;
           })
           .join('');
-      // Authored history and synthetic bootstrap calls have no provider reasoning to replay.
       if (
         deepseek &&
         message.role === 'assistant' &&
@@ -254,7 +251,6 @@ export class ChatDecoder {
   }
   private extra(target: Record<string, Json>, key: string, value: Json): void {
     const previous = target[key];
-    // Opaque extension values are preserved without becoming visible prose or tool authority.
     if (previous === undefined || previous === null) target[key] = copy(value);
     else if (
       typeof previous === 'string' &&
@@ -334,7 +330,6 @@ export class ChatDecoder {
     }
     if (['insufficient_system_resource', 'aborted'].includes(this.finishReason ?? '')) {
       // DeepSeek interruptions still finish the stream with usage and [DONE].
-      // Unfinished tool deltas remain diagnostic history, never executable calls.
       this.result.status = this.result.text || this.calls.size ? 'partial' : 'error';
       this.result.error = {
         code:

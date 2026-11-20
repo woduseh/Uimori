@@ -17,7 +17,6 @@ export function nativeImageNames(pkg: RisuContent, imageId: string): string[] {
     ),
   ];
 }
-/** Unavailable/non-image authored assets remain visible as a count and are never rewritten by image edits. */
 export function unmappedNativeAssetCount(pkg: RisuContent): number {
   const native = pkg.nativeRisu;
   const imageIds = new Set(pkg.images?.map((image) => image.id));
@@ -40,7 +39,6 @@ export function unmappedNativeAssetCount(pkg: RisuContent): number {
     card + module.filter((entry) => !Array.isArray(entry) || !moduleNames.has(entry[0])).length
   );
 }
-/** Add portable metadata alongside the blob reference; a name collision never changes an existing identifier. */
 export function addNativeRisuImage(value: RisuContent, uploaded: PackageImage): RisuContent {
   if (
     (value.images?.length ?? 0) >= RISU_ASSET_MAX ||
@@ -83,7 +81,6 @@ export function addNativeRisuImage(value: RisuContent, uploaded: PackageImage): 
   next.images = [...(next.images ?? []), { ...uploaded, title: name }];
   return next;
 }
-/** Keep IDs, names, URI and extension aliases: existing CBS/HTML references must keep resolving. */
 export function replaceNativeRisuImage(
   value: RisuContent,
   imageId: string,
@@ -98,7 +95,6 @@ export function replaceNativeRisuImage(
     ),
   };
 }
-/** Remove only this known image's metadata. Authored descriptions, Lua, HTML and lore stay byte-for-byte unchanged. */
 export function removeNativeRisuImage(value: RisuContent, imageId: string): RisuContent {
   const next = structuredClone(value),
     native = next.nativeRisu;

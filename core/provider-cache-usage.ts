@@ -1,4 +1,3 @@
-/** Uses provider usage semantics; requested cache settings never imply a hit. */
 export function providerCacheUsage(
   protocol: unknown,
   value: unknown

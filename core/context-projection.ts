@@ -2,7 +2,6 @@ import type { ModelInput, RunSnapshot } from './types.js';
 import type { PromptHistoryMessage } from './risu-prompt.js';
 import { projectStoryUiText } from './story-ui.js';
 
-/** A bounded reference view of the existing checkpoint, never another memory store. */
 export function conversationSummary(snapshot: RunSnapshot) {
   const plan = snapshot.contextPlan;
   if (!plan || plan.status === 'pending' || !plan.summary) return undefined;
@@ -38,16 +37,10 @@ export function projectedLogicalHistory(
   return messages;
 }
 
-/**
- * How earlier Story UI blocks appear in a writer's history: as the `<a2ui>` source the model
- * wrote while the capability is on, so placement and composition stay visible to it, and as
- * plain wording otherwise.
- */
 export function storyUiHistoryMode(snapshot: RunSnapshot): 'text' | 'expression' {
   return snapshot.settings.storyUi ? 'expression' : 'text';
 }
 
-/** Select exactly the logical history used by the prompt before compaction projection. */
 export function selectLogicalHistory(
   snapshot: RunSnapshot,
   sourceHistory: readonly ModelInput['history'][number][],

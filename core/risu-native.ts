@@ -9,7 +9,6 @@ import {
   stripDeprecatedRisuModuleFields,
 } from './risu-deprecated-fields.js';
 
-/** Risu documents remain the authored source; package fields are UI/runtime projections. */
 export type RisuContentSource = {
   version: 1;
   card: Record<string, unknown>;
@@ -24,14 +23,12 @@ export type NativeRisuRegex = Record<string, unknown> & {
   flag?: string;
   ableFlag?: boolean;
 };
-/** Authored native lore placement, separate from Uimori's retained/background lore policy. */
 export type NativeRisuLorePosition = {
   mode: 'lore' | 'depth' | 'reverse_depth';
   depth: number;
   role: 'system' | 'user' | 'assistant';
   order: number;
 };
-/** New saves and live runtime views omit retired fields without rewriting historical records. */
 export function normalizeRisuContentSource(native: RisuContentSource): RisuContentSource {
   const result = structuredClone(native);
   stripDeprecatedRisuCardFields(result.card);
@@ -48,7 +45,6 @@ const records = (value: unknown): Record<string, unknown>[] =>
     : [];
 export const nativeRisuExtension = (native: RisuContentSource) =>
   object(object(native.card.extensions).risuai);
-/** Embedded modules replace inline scripts, including when their list is empty. */
 export function nativeRisuRegex(native: RisuContentSource): NativeRisuRegex[] {
   return records(
     native.module ? native.module.regex : nativeRisuExtension(native).customScripts
@@ -58,7 +54,6 @@ export function nativeRisuRegex(native: RisuContentSource): NativeRisuRegex[] {
   ) as NativeRisuRegex[];
 }
 export function nativeRisuTriggers(native: RisuContentSource): Record<string, unknown>[] {
-  // Embedded modules become character scripts in Risu; standalone modules own their permission.
   const lowLevelAccess =
     (Object.keys(native.card).length ? nativeRisuExtension(native) : native.module)
       ?.lowLevelAccess === true;
@@ -73,8 +68,6 @@ export function nativeRisuBackground(native: RisuContentSource): string {
   const value = nativeRisuExtension(native).backgroundHTML;
   return typeof value === 'string' ? value : '';
 }
-/** Risu card names may omit the separately serialized extension (e.g. Hinano_* + webp). */
-/** Index once per render, retaining the first matching authored entry. */
 export function nativeRisuAssetNameResolver(native: RisuContentSource) {
   const byUri = new Map<unknown, Map<unknown, Record<string, unknown>>>();
   for (const entry of records(native.card.assets)) {
@@ -112,7 +105,6 @@ function assetNames(
     ]),
   ];
 }
-/** Validate bounded JSON data without interpreting authored CBS, regex or Lua. */
 export function assertRisuContentSource(value: unknown): asserts value is RisuContentSource {
   const source = object(value);
   if (
@@ -166,7 +158,6 @@ export function assertRisuContentSource(value: unknown): asserts value is RisuCo
     throw new Error('PACKAGE_NATIVE_RISU_LIMIT');
 }
 
-/** Editors and external callers retain the detached-copy contract. */
 export function validateRisuContentSource(value: unknown): RisuContentSource {
   assertRisuContentSource(value);
   return structuredClone(value);

@@ -1,6 +1,5 @@
 import type { ChatActivityCount } from './chat-activity.js';
 
-/** Saved work outcomes, independent of Web Push subscriptions. */
 export type ActivityFeedItem = {
   chatId: string;
   acknowledgementKey: string;
@@ -13,7 +12,6 @@ export type ActivityFeedItem = {
   actionable: boolean;
   canAcknowledge: boolean;
 };
-/** Helper jobs have their own scope; a library helper does not have a chatId. */
 export type HelperRecentTask = {
   id: string;
   conversationId: string;
@@ -23,7 +21,6 @@ export type HelperRecentTask = {
   modelTitle: string | null;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
   updatedAt: string;
-  /** Receipt-backed operations, including no-op transactions. */
   committedEffects: number;
 };
 export type ActivityFeed = {

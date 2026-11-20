@@ -1,7 +1,5 @@
 import type { ProviderTool } from './transport.js';
 
-// The enclosing task deadline and cancellation bound a shell call; this only keeps the value
-// a sane timer duration (24 hours, below the 2^31-1 ms setTimeout limit).
 export const SHELL_TIMEOUT_MAX_MS = 86_400_000;
 export const SHELL_OUTPUT_DEFAULT_BYTES = 16_384;
 export const SHELL_OUTPUT_MAX_BYTES = 65_536;
@@ -28,7 +26,6 @@ export const SHELL_EXEC_PROPERTIES = {
   },
 };
 
-/** Shell lifetime remains subordinate to the enclosing model run's cancellation/deadline. */
 export function shellExecutionOptions(args: Record<string, unknown>) {
   if (typeof args.command !== 'string' || !args.command.trim() || args.command.length > 50_000)
     throw new Error('SHELL_COMMAND_INVALID');

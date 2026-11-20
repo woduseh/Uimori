@@ -11,7 +11,6 @@ export type NativeRisuPresetExecution = {
   variables: Record<string, string>;
   issues: string[];
 };
-// Input keys are accepted here; current imports and edits strip retired fields below.
 const allowed = new Set([
   'name',
   'promptTemplate',
@@ -40,13 +39,11 @@ const object = (value: unknown): Record<string, unknown> =>
     : {};
 const string = (value: unknown) => (typeof value === 'string' ? value : '');
 const reservedToggleIds = new Set(['__proto__', 'prototype', 'constructor']);
-/** Ordinary saved IDs stay stable; reserved object keys use a collision-free host alias. */
 export const nativeToggleId = (key: string) =>
   reservedToggleIds.has(key) || key.startsWith('risu-toggle:')
     ? `risu-toggle:${encodeURIComponent(key)}`
     : key;
 
-/** Keep only authored prompt data. Connections, credentials and generation settings never enter the active preset. */
 export function nativeRisuPresetSource(value: unknown): NativeRisuPreset {
   const input = object(value),
     preset: Record<string, unknown> = {};
@@ -80,7 +77,6 @@ export function validateNativeRisuPreset(value: unknown): NativeRisuPreset {
   return structuredClone(value) as NativeRisuPreset;
 }
 
-/** Read-only display projection; captions and dividers never become stored option values. */
 export type NativeRisuToggleItem =
   | { type: 'control'; control: PromptControl }
   | { type: 'caption'; label: string; group?: string }
@@ -159,7 +155,6 @@ export function nativeRisuPresetVariableDefaults(source: NativeRisuPreset): Reco
 export function createNativeRisuPresetProgram(source: NativeRisuPreset): RisuPrompt {
   return { version: 1, nativeRisuPreset: source };
 }
-/** Apply only a frozen CBS receipt to a detached native source for host composition. */
 export function evaluatedNativeRisuPreset(
   source: NativeRisuPreset,
   fields: Record<string, string>

@@ -14,7 +14,6 @@ type PositionedLore = {
   nativeRisuPosition?: NativeRisuLorePosition;
 };
 
-/** Apply authored native positions after host context; resource budgets and read scopes stay intact. */
 export function placeNativeRisuLore(
   compilation: PromptCompilation,
   resources: readonly PositionedLore[]
@@ -75,8 +74,7 @@ export function placeNativeRisuLore(
     const id = insert(entry, boundary);
     if (position.mode !== 'lore') conversation.splice(index, 0, id);
   }
-  // Native @@end / @@depth 0 follows the prompt; assistant entries follow user/system entries.
-  // Keep an already authored provider prefill last rather than changing its role or completion.
+  // Risu places @@end / @@depth 0 after the prompt, assistant entries after user/system entries.
   for (const entry of [
     ...end.filter((entry) => entry.nativeRisuPosition!.role !== 'assistant'),
     ...end.filter((entry) => entry.nativeRisuPosition!.role === 'assistant'),

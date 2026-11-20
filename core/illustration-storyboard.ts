@@ -34,7 +34,6 @@ export type IllustrationStoryboard = {
 export type IllustrationTarget = PlannedIllustration & {
   id: string;
   planId?: string;
-  /** Render order within a plan: hero first, then narrative order. */
   order: number;
 };
 export type IllustrationMoment = Pick<PlannedIllustration, 'startAnchor' | 'endAnchor' | 'focus'>;
@@ -54,11 +53,9 @@ export type IllustrationPresentation = {
     {
       latestRequestedJobId: string;
       displayedJobId: string | null;
-      /** A user-selected moment supersedes the render's original anchors for display and redraw. */
       placedTarget?: IllustrationTarget;
     }
   >;
-  /** The last explicit placement of each cut still awaiting review after an edit. */
   detached?: Record<
     string,
     {
@@ -74,7 +71,6 @@ export type IllustrationPresentation = {
     afterByTarget: Record<string, string | null>;
   };
 };
-/** Small reader projection. Recipes and prepared prompts stay in job detail. */
 export type IllustrationDisplay = {
   revision: number;
   hero: boolean;
@@ -229,9 +225,7 @@ function object(text: string): Record<string, unknown> {
     const value: unknown = JSON.parse(raw);
     if (value && typeof value === 'object' && !Array.isArray(value))
       return value as Record<string, unknown>;
-  } catch {
-    /* Report the same usable error for malformed JSON and wrong shapes. */
-  }
+  } catch {}
   throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID', true);
 }
 function required(value: unknown): string {
@@ -282,7 +276,6 @@ export function parseStoryboard(
     const entry = raw as Record<string, unknown>;
     const resolveAnchor = (value: unknown) => {
       const supplied = required(value);
-      // Existing saved requests/fixtures may still use full anchors; new wire inputs do not.
       return blocks.find((_, index) => `s${index.toString(36)}` === supplied)?.anchor ?? supplied;
     };
     const fixed = selected?.[index];
@@ -348,7 +341,6 @@ export function parseStoryboard(
   };
 }
 
-/** Fixed moment, not the entire response. This prevents the renderer choosing the climax again. */
 export function illustrationTargetText(
   source: Source,
   target: IllustrationMoment & { visualBrief?: string }

@@ -8,18 +8,12 @@ import {
 } from './model-capabilities.js';
 
 export type ThinkingField = 'thinkingLevel' | 'reasoningEffort' | 'outputEffort';
-/** Where the shown option values and limits come from. Never an execution condition. */
 export type HintSource = 'catalog' | 'reviewed' | 'none';
 export type ModelHints = {
   source: HintSource;
   capability?: ModelCapability;
   maxOutputTokens?: number;
   inputTokenLimit?: number;
-  /**
-   * The protocol's thinking-strength field, the request field it is written to, and documented
-   * values when a source names them. Through a gateway the request field is the gateway's; the
-   * gateway maps it onto the model provider's own parameter.
-   */
   thinking?: {
     field: ThinkingField;
     wire: string;
@@ -41,7 +35,6 @@ export function thinkingField(protocol: ProviderProtocol): ThinkingField | undef
         ? 'reasoningEffort'
         : undefined;
 }
-/** The request field each protocol's encoder writes the thinking strength into. */
 export function thinkingWireField(protocol: ProviderProtocol): string | undefined {
   switch (protocol) {
     case 'openai-responses-v1':
@@ -64,7 +57,6 @@ export function thinkingWireField(protocol: ProviderProtocol): string | undefine
       return undefined;
   }
 }
-/** Provider list metadata first, the reviewed table second, protocol vocabulary always. */
 export function modelHints(
   connection: Pick<Connection, 'protocol' | 'catalog'>,
   modelId: string,
@@ -109,8 +101,6 @@ export function modelHints(
                     : 'reasoning_effort'
                 : (thinkingWireField(connection.protocol) ?? field),
             gateway: ['vercel-chat-v1', 'openai-chat-v1'].includes(connection.protocol),
-            // A family template is not evidence that a particular model supports every value.
-            // Gateway catalog effort describes its common Chat field, not a native family field.
             known:
               (field === protocolField ? listed?.options?.thinking : undefined) ?? reviewedThinking,
             all: PROTOCOL_OPTION_VALUES[field],

@@ -1,4 +1,3 @@
-/** JSON data supplied by the host. No methods, prototypes, accessors or ambient IO. */
 export type RuntimeValue =
   | string
   | number
@@ -36,17 +35,12 @@ export function evaluationFail(code: string): never {
   throw new PromptEvaluationError(code);
 }
 
-/** Shared by a whole compilation, including nested maps and all message blocks. */
 export class PromptBudget {
   readonly limits: Required<PromptEvaluationLimits>;
   private steps = 0;
   private readonly started = performance.now();
   readonly timing: 'elapsed' | 'deterministic';
-  constructor(
-    input: PromptEvaluationLimits = {},
-    /** Host-only choice for reproducible stored text; data ASTs cannot select this mode. */
-    timing: 'elapsed' | 'deterministic' = 'elapsed'
-  ) {
+  constructor(input: PromptEvaluationLimits = {}, timing: 'elapsed' | 'deterministic' = 'elapsed') {
     this.timing = timing;
     this.limits = { ...caps };
     for (const key of Object.keys(input) as (keyof PromptEvaluationLimits)[]) {
@@ -75,7 +69,6 @@ export class PromptBudget {
   }
 }
 
-/** Exact JSON string size, including escaped controls and lone UTF-16 surrogates. */
 export function jsonStringSize(text: string, budget?: PromptBudget): number {
   let size = 2;
   for (let i = 0; i < text.length; i++) {
@@ -105,7 +98,6 @@ export function jsonStringSize(text: string, budget?: PromptBudget): number {
   return size;
 }
 
-/** Validate before cloning/stringifying so hostile or huge data is never materialized first. */
 export function inspectRuntimeValue(
   value: unknown,
   budget = new PromptBudget()

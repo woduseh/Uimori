@@ -30,7 +30,6 @@ import {
   type NovelAIRenderSettings,
 } from './novelai-settings.js';
 
-/** Scene illustration generation. Independent of the existing image placement job kind. */
 export const ILLUSTRATION_GENERATORS = ['none', 'codex', 'comfyui', 'novelai', 'fixture'] as const;
 export type IllustrationGenerator = (typeof ILLUSTRATION_GENERATORS)[number];
 export type ActiveIllustrationGenerator = Exclude<IllustrationGenerator, 'none'>;
@@ -41,7 +40,6 @@ export type IllustrationImageMime = (typeof ILLUSTRATION_IMAGE_MIMES)[number];
 export const ILLUSTRATION_MAX_IMAGE_BYTES = IMAGE_INPUT_MAX_BYTES;
 export { ILLUSTRATION_MAX_PER_SOURCE } from './illustration-cuts.js';
 export const ILLUSTRATION_MAX_AUTO_RETRIES = 5;
-// Bound optional model context by cost, while preserving the full authored text in storage.
 export const ILLUSTRATION_EXCERPT_TOKENS = {
   scene: 8000,
   target: 2000,
@@ -51,42 +49,31 @@ export const ILLUSTRATION_EXCERPT_TOKENS = {
 
 export type IllustrationSettings = {
   revision: number;
-  /** Legacy field; never selects a production backend. Only test fixtures use it. */
   generator?: IllustrationGenerator;
-  /** Plan illustrations after each completed generated response. */
   automatic: boolean;
-  /** Maximum distinct illustration targets kept for one response. */
   maxPerSource: number;
-  /** Missing on older settings: retain their fixed upper bound. */
   automaticCountMode?: 'fixed' | 'auto';
   automaticMinTargets?: number;
   automaticMaxTargets: number;
-  /** Automatic re-queues after a retryable failure; explicit retries are unlimited. */
   maxAutoRetries: number;
   codex: {
     model: ModelRef | null;
     useReferences: boolean;
     refinePrompt: boolean;
-    /** Text model required to plan and prepare new Codex illustrations. */
     promptModel: ModelRef | null;
   };
   comfyui: {
     baseUrl: string;
-    /** Server environment variable whose value is sent as the Authorization header. */
     authorizationEnv: string;
     timeoutMs: number;
     pollIntervalMs: number;
-    /** Text model that turns the scene into an image prompt. Required for ComfyUI. */
     promptModel: ModelRef | null;
   };
   novelai: NovelAIRenderSettings & {
-    /** Text model that turns the scene into tags. Required for NovelAI. */
     promptModel: ModelRef | null;
-    /** Sends chosen character design references as Precise Reference on supported models. */
     characterReference: boolean;
   };
 };
-/** API projection: whether a NovelAI token is saved, never the token itself. */
 export type IllustrationSettingsView = IllustrationSettings & { novelaiTokenConfigured: boolean };
 export function defaultIllustrationSettings(): IllustrationSettings {
   return {
@@ -120,7 +107,6 @@ export function defaultIllustrationSettings(): IllustrationSettings {
 }
 
 export type IllustrationReference = { ref: string; role: IllustrationReferenceRole };
-/** Chat-authored visual identity, independent of a particular scene or image. */
 export type IllustrationCharacterProfile = {
   id: string;
   name: string;
@@ -135,7 +121,6 @@ export type IllustrationReferences = {
   defaultCharacterProfiles: IllustrationCharacterProfile[];
   chatCharacterProfiles: IllustrationCharacterProfile[];
 };
-/** Resolved at reservation; the worker re-reads bytes by ref and verifies the hash. */
 export type FrozenIllustrationReference = IllustrationReference & {
   title: string;
   mime: string;
@@ -145,33 +130,24 @@ export type FrozenIllustrationReference = IllustrationReference & {
 
 export type IllustrationJobInput = {
   version: 1;
-  /** Copied stale cuts retain their last moment but have no verified anchors in the new chat. */
   unplacedMoment?: Pick<IllustrationTarget, 'focus' | 'visualBrief'>;
-  /** Captured at reservation, including text-only profiles. Missing on older jobs. */
   characterProfiles?: IllustrationCharacterProfile[];
-  /** Shared, grounded cast facts frozen by the storyboard, reused by redraws. */
   visualCanon?: { name: string; appearance: string }[];
-  /** Prior successful illustration metadata captured at reservation; no live reads on retry. */
   research?: {
     packages?: import('./risu-content.js').RisuContent[];
     attachments?: import('./risu-content.js').ContentAttachment[];
     prior: { id: string; sourceHash: string; caption: string; prompt: string }[];
   };
-  /** Chat-authored appearance notes applicable to this scene at reservation. */
   sceneAppearanceNotes?: string[];
-  /** Missing on existing single-image jobs. */
   task?: 'plan' | 'render' | 'placement';
   plan?: {
     maxTargets: number;
-    /** Present only for automatic variable-count planning. */
     minTargets?: number;
     requestKey?: string;
     existingTargets: IllustrationMoment[];
     selectedMoments?: SelectedIllustrationMoment[];
-    /** One-off manual planning direction, frozen with this reservation. */
     direction?: string;
   };
-  /** Context for a new render; retrying the render retains these exact inputs. */
   redraw?: { changeRequest: string; originalPrompt?: IllustrationPrompt; revisedPrompt?: string };
   target?: IllustrationTarget;
   placement?: IllustrationPlacementInput;
@@ -183,9 +159,7 @@ export type IllustrationJobInput = {
   codex?: {
     model: ModelSnapshot;
     references: FrozenIllustrationReference[];
-    /** Frozen at reservation. Older jobs keep the original rendering contract. */
     refinePrompt?: boolean;
-    /** Absent on jobs reserved before Codex prompt preparation was introduced. */
     promptModel?: ModelSnapshot;
   };
   comfyui?: {
@@ -196,16 +170,13 @@ export type IllustrationJobInput = {
     pollIntervalMs: number;
     negativeGuidance: string;
     promptModel: ModelSnapshot;
-    /** Archive restores preserve the evidence but require a new explicitly configured request. */
     disabled?: true;
   };
   novelai?: NovelAIRenderSettings & {
     negativeGuidance: string;
     promptModel: ModelSnapshot;
-    /** Character references frozen when Precise Reference was enabled for a supported model. */
     references?: FrozenIllustrationReference[];
   };
-  /** Test-mode generator: synthetic PNG after the configured number of failures. */
   fixture?: { failures: number; delayMs: number };
 };
 export type IllustrationStatus =
@@ -238,25 +209,20 @@ export type IllustrationDiagnostic = {
   code?: string;
   attempts: string[];
   retries: { attempt: number; code: string; at: string }[];
-  /** Automatic runs may end without an image when the planner found nothing worth drawing. */
   skipped?: string;
   prompt?: IllustrationPrompt;
-  /** Matches the complete prompt-model request, including reconstructed character notes. */
   promptRequestHash?: string;
   revisedPrompt?: string | null;
   comfyui?: {
     promptId?: string;
-    /** Whether a remote render may exist. This is persisted before the POST. */
     submission?: 'not-sent' | 'uncertain' | 'accepted' | 'rejected' | 'finished';
     httpStatus?: number;
     nodeErrors?: { nodeId: string; classType: string; messages: string[] }[];
     statusMessages?: string[];
   };
-  /** Bounded HTTP status and provider message; never the request body or credential. */
   novelai?: { httpStatus?: number; message?: string; seed?: number; references?: number };
   codex?: {
     usageLimit?: { limitId: string; resetsAt: number | null };
-    /** Bounded plain-text caption reason, not a raw transport error. */
     unavailableReason?: string;
   };
   copiedFrom?: { jobId: string; attemptIds: string[] };
@@ -275,7 +241,6 @@ export type IllustrationImage = {
 };
 export type Illustration = {
   unplacedMoment?: Pick<IllustrationTarget, 'focus' | 'visualBrief'>;
-  /** Original render hash when a saved image is displayed against a revised source. */
   generatedSourceHash?: string;
   id: string;
   task: 'plan' | 'render' | 'placement';
@@ -303,7 +268,6 @@ export type IllustrationUsageReport = {
   stages: Record<Illustration['task'], Usage>;
 };
 
-/** Shared by text and render stages: only known-safe failures may be automatically replayed. */
 const retryableCodes = new Set([
   'COMFYUI_EXECUTION_FAILED',
   'CODEX_IMAGE_NOT_GENERATED',
@@ -332,7 +296,6 @@ export function detectImageMime(bytes: Uint8Array): IllustrationImageMime | null
   return null;
 }
 
-/** Signature and byte-size validation, shared by adapters, storage and archive import. */
 export function isValidIllustrationImage(
   bytes: Uint8Array,
   mime: unknown
@@ -345,7 +308,6 @@ export function isValidIllustrationImage(
   );
 }
 
-/** Long scenes are excerpted from the end, where the newest events usually are. */
 export function excerptScene(
   text: string,
   maxTokens: number = ILLUSTRATION_EXCERPT_TOKENS.scene
@@ -356,22 +318,14 @@ export function excerptScene(
   }).text;
 }
 
-// ---------------------------------------------------------------------------
-// Shared JSON response parsing
-// ---------------------------------------------------------------------------
 const isRecord = (value: unknown): value is Record<string, Json> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
-// ---------------------------------------------------------------------------
-// Prompt model stage (ComfyUI): scene → image prompt
-// ---------------------------------------------------------------------------
 export type IllustrationPrompt = {
   prompt: string;
   negativePrompt: string;
   caption: string;
-  /** NovelAI only: per-character boxes beside the shared scene prompt. */
   characters?: NovelAICharacterPrompt[];
-  /** NovelAI only: 1-based attachment numbers of the character references to send. */
   references?: number[];
 };
 export type IllustrationPlan =
@@ -385,16 +339,13 @@ export type IllustrationScene = {
   negativeGuidance: string;
   bot: string | null;
   persona: string | null;
-  /** Automatic runs may decline; manual requests always try to draw. */
   allowSkip: boolean;
   visualCanon?: { name: string; appearance: string }[];
   targeted?: boolean;
   direction?: string;
   redraw?: IllustrationJobInput['redraw'];
-  /** Only labels and roles are shared with a separate Codex prompt model. */
   references?: readonly Pick<CodexIllustrationInputReference, 'role' | 'label'>[];
 };
-// Shared visual semantics; each backend retains its own output grammar and execution contract.
 export const ILLUSTRATION_VISUAL_DIRECTION =
   'The scene determines who is present and what happens. Use character profiles for recognizable features and scene appearance notes for temporary details such as clothing or carried objects. Use visualCanon as shared character identity across cuts; current scene facts override temporary clothing, pose, expression and location. Represent age and identity faithfully from profiles and source evidence; omit unknown traits. Follow the style guidance for this generator and use its examples as visual references.';
 
@@ -477,7 +428,6 @@ export function illustrationPromptRequest(
     },
   };
 }
-/** NovelAI prompt preparation; reference labels let the model choose which images to send. */
 export function novelAIIllustrationPromptRequest(
   model: ModelSnapshot,
   scene: IllustrationScene,
@@ -501,7 +451,6 @@ export function novelAIIllustrationPromptRequest(
     },
   };
 }
-/** Prompt preparation for Codex: image bytes remain exclusive to the image-generation turn. */
 export function codexIllustrationPromptRequest(
   model: ModelSnapshot,
   scene: IllustrationScene,
@@ -536,10 +485,6 @@ const field = (value: unknown, required: boolean): string => {
 const captionField = (value: unknown) => Array.from(field(value, false)).slice(0, 300).join('');
 const unit = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) ? Math.min(0.9, Math.max(0.1, value)) : null;
-/**
- * Extra boxes beyond the shared limit are dropped in order. Positions apply only when every
- * box has one, since NovelAI either places all characters itself or follows all coordinates.
- */
 export function parseNovelAICharacters(value: unknown): NovelAICharacterPrompt[] | undefined {
   if (value === undefined || value === null) return undefined;
   if (!Array.isArray(value)) throw new IllustrationError('ILLUSTRATION_PROMPT_INVALID', true);
@@ -561,7 +506,6 @@ export function parseNovelAICharacters(value: unknown): NovelAICharacterPrompt[]
     ? characters
     : characters.map(({ position: _position, ...character }) => character);
 }
-/** Attachment numbers chosen by the prompt model; the runner ignores numbers it never attached. */
 export function parseNovelAIReferences(value: unknown): number[] | undefined {
   if (value === undefined || value === null) return undefined;
   if (!Array.isArray(value) || !value.every((item) => Number.isSafeInteger(item) && item >= 1))
@@ -576,7 +520,6 @@ export function parseNovelAIPromptFields(
   const references = parseNovelAIReferences(value.references);
   return { ...(characters ? { characters } : {}), ...(references ? { references } : {}) };
 }
-/** A skip decision is only honored when the host allowed it for this run. */
 export function parseIllustrationPlan(
   text: string,
   allowSkip: boolean,
@@ -623,9 +566,6 @@ function planOf(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Codex image-generation turn input
-// ---------------------------------------------------------------------------
 export const CODEX_ILLUSTRATION_INSTRUCTIONS = [
   'Create exactly one illustration of the supplied story scene with the image generation tool, then return the caption JSON. When a focus is supplied, depict that exact moment and its visualBrief. Otherwise choose a visually expressive moment that fits the scene.',
   ILLUSTRATION_VISUAL_DIRECTION,
@@ -713,7 +653,6 @@ export function codexPreparedIllustrationText(
     attachedReferences: illustrationReferenceLabels(references),
   });
 }
-/** Codex may answer with the envelope, plain text, an UNAVAILABLE marker or a SKIP marker. */
 export function parseCodexIllustrationCaption(text: string): {
   caption: string;
   unavailable: boolean;
@@ -724,9 +663,7 @@ export function parseCodexIllustrationCaption(text: string): {
   try {
     const value: unknown = JSON.parse(caption);
     if (isRecord(value) && typeof value.caption === 'string') caption = value.caption.trim();
-  } catch {
-    /* Plain text captions are accepted. */
-  }
+  } catch {}
   caption = Array.from(caption).slice(0, 300).join('');
   const unavailable = /^UNAVAILABLE:/iu.test(caption);
   const skip = /^SKIP:\s*(.*)$/isu.exec(caption);

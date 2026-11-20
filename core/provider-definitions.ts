@@ -1,18 +1,14 @@
 import { JEV_PROVIDER_DEFINITION } from './jev-provider.js';
 import type { ProviderProtocol } from './product.js';
 
-/** Local adapter metadata, not a provider catalog or a grant of connection authority. */
 export type ProviderDefinition = Readonly<{
   id: ProviderProtocol;
   revision: 1;
   label: string;
-  /** Empty means the user must supply the existing adapter's endpoint. */
   endpointDefault: string;
-  /** An environment-variable name only; never a credential value. */
   credentialRefDefault: string;
   auth: 'none' | 'bearer' | 'api-key' | 'adc-or-bearer' | 'codex-login';
   catalog: 'remote' | 'agent-runtime';
-  /** Top-level model-preset options accepted by the local adapter. Model support is unknown. */
   optionKeys: readonly string[];
   source: Readonly<{ kind: 'adapter'; reference: string; checkedAt: '2026-09-07' | '2026-10-08' }>;
   modelCapabilities: Readonly<{ tools: null; structuredOutput: null }>;
@@ -243,7 +239,6 @@ export function providerDefinition(protocol: ProviderProtocol): ProviderDefiniti
   return found;
 }
 
-/** One provider chooser; judgment entries never become generative model presets. */
 export const PROVIDER_CHOICES = Object.freeze([
   ...PROVIDER_DEFINITIONS.map((provider) => ({ ...provider, kind: 'generation' as const })),
   JEV_PROVIDER_DEFINITION,

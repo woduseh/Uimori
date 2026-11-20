@@ -37,7 +37,6 @@ function tokenPrice(value: unknown): number | null {
     (typeof value !== 'string' || !/^(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value))
   )
     throw new Error('Invalid token price');
-  // Shift the decimal exponent before conversion to avoid artifacts such as 0.19999999999999998.
   const [mantissa, exponent = '0'] = String(value).split(/[eE]/);
   const parsed = Number(`${mantissa}e${Number(exponent) + 6}`);
   if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1_000_000)
@@ -99,7 +98,6 @@ function catalogVariant(raw: Record<string, unknown>): Pick<CatalogPrice, 'rates
       : {}),
   };
 }
-/** Public Gateway model metadata: token prices become USD per million, without guessing discounts. */
 export function catalogPricing(rawPricing: unknown): CatalogEntry['pricing'] | undefined {
   const raw = object(rawPricing);
   if (!raw) return undefined;
@@ -125,10 +123,6 @@ export function catalogPricing(rawPricing: unknown): CatalogEntry['pricing'] | u
   }
 }
 
-/**
- * Metadata a provider's list API publishes about one model. Only limits and option values in
- * this protocol's vocabulary are kept; the rest of the entry stays with the provider.
- */
 export function catalogEntryMetadata(
   protocol: ProviderProtocol,
   raw: Record<string, unknown>
@@ -183,7 +177,6 @@ export function catalogEntryMetadata(
   return none;
 }
 
-/** One Google Model Garden publisher entry, reduced to a Gemini model ID usable by Vertex. */
 export function vertexPublisherModelEntry(raw: Record<string, unknown>): CatalogEntry | undefined {
   const name = typeof raw.name === 'string' ? raw.name : '';
   const prefix = 'publishers/google/models/';
@@ -198,7 +191,6 @@ export function vertexPublisherModelEntry(raw: Record<string, unknown>): Catalog
   };
 }
 
-/** Gemini API models.list entry; expose only models usable by generateContent. */
 export function googleGeminiModelEntry(raw: Record<string, unknown>): CatalogEntry | undefined {
   const name = typeof raw.name === 'string' ? raw.name : '';
   if (!name.startsWith('models/')) return undefined;

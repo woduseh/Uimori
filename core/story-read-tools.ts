@@ -1,7 +1,6 @@
 import { STORY_READ_DEFAULT_TOKENS, STORY_READ_MAX_TOKENS } from './source-history.js';
 import type { ProviderTool } from './transport.js';
 
-/** Shared model-facing schemas for frozen story ancestry reads. */
 export const STORY_READ_TOOLS: ProviderTool[] = [
   {
     name: 'story.search',

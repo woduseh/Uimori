@@ -1,6 +1,5 @@
 export type Settings = {
   maxCalls: number;
-  /** Start a translation after a successful model-authored source commit. */
   autoTranslate?: boolean;
   storyUi?: boolean;
   storyUiStyle?: import('./story-ui-style.js').StoryUiStyleSetting;
@@ -19,7 +18,6 @@ export type Chat = {
   sortPosition?: number;
 };
 export type Resource = {
-  /** Navigation only; never changes pinned placement, ordering or source text. */
   loreFolder?: { id: string; name: string };
   risuSource?: import('./risu-context-source.js').RisuContextSource;
   nativeRisuPosition?: import('./risu-native.js').NativeRisuLorePosition;
@@ -59,16 +57,13 @@ export type ToolEvent = {
   result: unknown;
   denied: boolean;
   errorKind?: 'recoverable';
-  /** Host-selected page bound; absent on legacy and ordinary 6,000-character reads. */
   knowledgeReadChars?: number;
-  /** Host-selected token page budget, persisted to reproduce new read receipts. */
   readBudget?: {
     tokens: number;
     tokenizer: import('./tokenizer-profiles.js').TokenizerProfileId;
     ranges?: (number | null)[];
   };
 };
-/** Execution-only metadata, never part of a provider-visible tool receipt. */
 export type ToolEventTiming = {
   elapsedMs?: number;
   finishedAt?: string;
@@ -82,9 +77,7 @@ export type Usage = {
   costUsd: number | null;
 };
 export type RunSnapshot = {
-  /** A host-validated interaction with a source-owned UI surface. */
   storyUiAction?: import('./story-ui.js').StoryUiAction;
-  /** Appearance labels and identifiers available to the model at reservation. */
   storyUiThemeChoices?: {
     themes: {
       id: `theme:${string}`;
@@ -94,29 +87,19 @@ export type RunSnapshot = {
     }[];
     botThemeId?: `theme:${string}`;
   };
-  /** Existing image choices frozen with this writing request. */
   imageCatalog?: import('./auxiliary.js').AssetEntry[];
-  /** Authored user attachments retained after execution inputs are settled. */
   requestImages?: import('./request-images.js').RequestImage[];
   storyGuide?: import('./story-guide.js').StoryGuideSnapshot;
   storyGuideReceipt?: Pick<import('./story-guide.js').StoryGuideSnapshot, 'brief' | 'error'>;
-  /** Replace this head only on successful completion; generation starts at its parent. */
   replacement?: { sourceRevision: string; sourceHash: string };
-  /** Compact Lua-authored message edits retained after execution inputs are released. */
   messageChanges?: import('./message-changes.js').MessageChanges;
-  /** A completed message can store just display metadata instead of execution input. */
   settled?: boolean;
-  /** Scenes an ended run had read, kept after its frozen text is released so deleting one still invalidates it. */
   capturedSources?: string[];
-  /** Deleted source captures cannot be replayed through retry or judgment recovery. */
   invalidatedBySceneDeletion?: true;
   displayModelTitle?: string;
-  /** Frozen at reservation; only an explicit true enables response judgment. */
   mainJudgmentEnabled?: boolean;
   mainJudgmentThreshold?: number;
-  /** Complete response awaiting JEV; an interruption here may be explicitly rejudged. */
   mainJudgmentPending?: true;
-  /** Bounded input receipt for the host judgment of the unmodified model response. */
   mainJudgment?: {
     version: 'main-refusal-jev-v3';
     candidateHash: string;
@@ -126,9 +109,7 @@ export type RunSnapshot = {
   nativeRisuPresetProgram?: import('./risu-native-preset.js').NativeRisuPresetExecution;
   nativeRisuExecution?: import('./risu-native-execution.js').NativeRisuExecution;
   nativeRisuAuthored?: import('./risu-native-execution.js').NativeRisuAuthored;
-  /** Independent writing artifact: read-only tools and no host source/state commit. */
   executionPurpose?: 'artifact';
-  /** Frozen author-side composition for the unit this run writes; planning, never story fact. */
   outline?: import('./outline.js').OutlineSnapshot;
   contextPlan?: import('./context-plan.js').ContextPlan;
   contextBase?: import('./context-plan.js').ContextBase;
@@ -138,9 +119,7 @@ export type RunSnapshot = {
   executionClock?: { iso: string; unix: number };
   logicalHistory?: import('./risu-prompt.js').PromptHistoryMessage[];
   nativeRisuHistoryRevision?: string;
-  /** Optional, permission-bound conversation read set; never filled from today's chat on replay. */
   promptCompilation?: import('./risu-prompt.js').PromptCompilation;
-  /** Frozen model choice for the packages in model mode; a replay projects it, never reselects. */
   loreSelection?: import('./lore-selection.js').LoreSelectionReceipt;
   chatId: string;
   parentRevision: string | null;
@@ -155,11 +134,8 @@ export type RunSnapshot = {
   }[];
   resources: Resource[];
   profile?: import('./product.js').ProfileSnapshot;
-  /** Rejudge the preserved response without invoking the writer or input hooks. */
   judgmentRecovery?: true;
-  /** Translation-job metadata captured at admission, never used to construct a writing request. */
   translationGuide?: import('./translation-guide.js').BotTranslationGuide | null;
-  /** The source was read from a chat transcript file as authored history; no model was called. */
   transcriptImport?: { index: number; storage?: 'source-only-v1' };
   story?: import('./story.js').StorySnapshot;
 };
@@ -230,12 +206,10 @@ export type Job = {
     | 'interrupted';
   attempt: number;
   error: string | null;
-  /** Read-time projection of the failing attempt's provider verdict; never stored on the job. */
   rejection?: import('./provider-rejection.js').ProviderRejection;
   result: {
     mock: boolean;
     manual?: boolean;
-    /** Complete translation waiting for a refusal verdict; never a published translation. */
     judgmentPending?: true;
     imageTarget?: ImageTarget;
     text?: string;
@@ -252,7 +226,6 @@ export type Job = {
       caption?: string;
     }[];
   } | null;
-  /** Last validated translation of this exact source, retained while a new request runs/fails. */
   previousResult?: {
     jobId: string;
     revision: number;
@@ -271,15 +244,12 @@ export type ChatDetail = {
   assets?: import('./product.js').Asset[];
 };
 
-/** Reader summaries never stand in for frozen execution inputs. */
 export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
   sceneUsage?: import('./scene-usage.js').SceneUsageReceipt;
   canRejudge?: boolean;
-  /** Stable admission order of the first request in this retry chain. */
   requestOrder?: number;
   retryOf?: string | null;
   supersededBy?: string | null;
-  /** Explicitly hidden from the reader; retained in task history with all execution data. */
   readerDismissed?: boolean;
   estimatedCost?: {
     usd: number | null;
@@ -298,7 +268,6 @@ export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
   };
   modelTitle?: string;
   executionMode?: import('./product.js').ModelExecutionMode;
-  /** Read-time projection of the failing attempt's provider verdict; never stored on the run. */
   rejection?: import('./provider-rejection.js').ProviderRejection;
   packageStart?: Pick<
     import('./package-start.js').PackageStartSnapshot,
@@ -330,15 +299,11 @@ export type ReaderNavigationItem = {
 };
 
 export type ReaderDetail = Omit<ChatDetail, 'runs' | 'attempts'> & {
-  /** Current page, active runs and latest visible source-less responses; full task history is fetched separately. */
   runs: ReaderRun[];
-  /** Scene illustrations for the returned sources; older pages keep their cached entries. */
   illustrations?: import('./illustration.js').Illustration[];
   reader: {
     navigation: ReaderNavigationItem[];
-    /** A negotiated delta carries an empty array when the client already has this navigation. */
     navigationUnchanged?: boolean;
-    /** Source-less turns belonging to this page, plus active work. */
     pendingRunIds?: string[];
     activity?: ReaderActivity[];
     responseActivity?: ReaderActivity[];

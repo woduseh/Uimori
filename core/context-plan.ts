@@ -9,7 +9,6 @@ export type ContextBase = {
   checkpoint: ContextCheckpointRef | null;
 };
 
-/** A transmit projection. Original ancestry and logical messages stay immutable. */
 export type ContextPlan = {
   version: 1;
   status: 'pending' | 'ready' | 'failed';
@@ -34,7 +33,6 @@ export type ContextCheckpoint = ContextCheckpointRef & {
   activated: boolean;
 };
 export type ContextJob = {
-  /** Optional priorities for this manual compaction only; never story facts. */
   priorities?: string;
   id: string;
   chatId: string;

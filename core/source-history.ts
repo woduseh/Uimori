@@ -11,7 +11,6 @@ export type SourceHistoryItem = {
   text: string;
   contentHash?: string;
 };
-/** Exact ordered original-source ancestry, supplied by the host. */
 export type SourceScope = { chatId: string; history: readonly SourceHistoryItem[] };
 export function sourceSceneScope(scope: SourceScope) {
   const head = scope.history.at(-1);
@@ -23,7 +22,6 @@ export function sourceSceneScope(scope: SourceScope) {
   };
 }
 export const sourceHash = (text: string): string => createHash('sha256').update(text).digest('hex');
-// Source objects bound the cache lifetime; changed text is rehashed and supplied hashes are still checked.
 const validatedHashes = new WeakMap<SourceHistoryItem, { text: string; hash: string }>();
 const fail = (code: string): never => {
   throw new Error(`STORY_${code}`);
@@ -79,12 +77,9 @@ export function readStorySource(
   };
 }
 const fold = (text: string) => text.normalize('NFKC').toLocaleLowerCase('en');
-/** Whitespace-separated terms, matched case-insensitively; every term must occur in the span. */
 export function searchTerms(query: string): string[] {
   return fold(query).split(/\s+/u).filter(Boolean);
 }
-/** UTF-16 offset of the first term's first occurrence when all terms occur, otherwise -1.
- * Folding keeps offsets aligned for the common case; only exact-length folds are trusted for excerpts. */
 export function matchSourceSpan(text: string, terms: readonly string[]): number {
   if (!terms.length) return -1;
   const folded = fold(text);

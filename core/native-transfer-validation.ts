@@ -74,7 +74,6 @@ function origin(value: unknown) {
 
 export type ValidatedNativeTransfer = {
   file: NativeTransferFile;
-  /** Effective graph only. Authored source refs in file remain unchanged. */
   packages: Map<string, RisuContent>;
   persistOrder: string[];
   entries: NativeTransferPrepare['entries'];
@@ -88,11 +87,9 @@ export type PreparedNativeTransferFile = Omit<NativeTransferFile, 'images'> & {
 export type ValidatedPreparedNativeTransfer = Omit<ValidatedNativeTransfer, 'file'> & {
   file: PreparedNativeTransferFile;
 };
-/** Structural, metadata and graph validation only. No destination lookup, evaluation or writes. */
 export function validateNativeTransfer(value: unknown): ValidatedNativeTransfer {
   return validateTransfer<NativeTransferFile>(value, false);
 }
-/** Internal prepared blobs are validated by the image owner before this metadata-only boundary. */
 export function validatePreparedNativeTransfer(value: unknown): ValidatedPreparedNativeTransfer {
   return validateTransfer<PreparedNativeTransferFile>(value, true);
 }

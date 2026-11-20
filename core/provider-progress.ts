@@ -2,13 +2,10 @@ import type { ProviderProtocol } from './product.js';
 import type { ProviderExecutionOptions, ProviderRequest } from './transport.js';
 import { ProviderContractError } from './provider-errors.js';
 
-/** Public assistant prose only. Offset is the UTF-16 end offset within one provider attempt. */
 export type ProviderProgress = { text: string; offset: number };
 
-/** Validated append, or a full snapshot at a decoder reconciliation boundary. */
 export type ProviderTextUpdate = ProviderProgress | string | undefined;
 
-/** Final-submission envelopes and structured translation JSON have no safe incremental public body. */
 export function publicProgressAllowed(request: ProviderRequest, protocol: ProviderProtocol) {
   return (
     protocol !== 'codex-app-server-v1' &&
@@ -19,7 +16,6 @@ export function publicProgressAllowed(request: ProviderRequest, protocol: Provid
   );
 }
 
-/** Receives decoder-selected prose, never raw provider events or an opaque snapshot. */
 export function createPublicTextProgress(
   request: ProviderRequest,
   protocol: ProviderProtocol,

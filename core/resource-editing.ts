@@ -23,13 +23,11 @@ export type EditorContext = {
   targetId: string | null;
   revision: number | null;
   title: string;
-  /** Optional current device input, not a persistent server draft. */
   model?: ResourceModel;
 };
 export type ResourceSaveResult = {
   saved: SavedResource;
   created: boolean;
-  /** Organization CAS token immediately after this resource was first registered. */
   creationOrganizationRevision?: number;
 };
 export function editableResource(kind: ResourceKind, resource: SavedResource): ResourceModel {

@@ -22,9 +22,7 @@ export type RisuPresetDiagnostic = {
     | 'toggle_type_changed';
   severity: 'warning' | 'info';
   message: string;
-  /** JSON Pointer relative to the program, except /values for the separate selected-values input. */
   path: string;
-  /** Zero-based UTF-16 offsets, exclusive end, and one-based line in the declaration string. */
   range?: SourceRange;
   controlId?: string;
   option?: { value: string; previousLabel: string; currentLabel?: string };
@@ -35,7 +33,6 @@ type Declaration = {
   valid: boolean;
 };
 
-/** Use the execution owner's permissive declaration projection, not the stricter UI editor grammar. */
 function declaration(
   program: RisuPrompt,
   report: (diagnostic: RisuPresetDiagnostic) => void
@@ -95,9 +92,6 @@ const labelPreview = (value: string) => (value.length > 160 ? `${value.slice(0, 
 const pointerKey = (key: string) => key.replaceAll('~', '~0').replaceAll('/', '~1');
 
 /**
- * Read-only advice on native toggle declarations and saved selections. The input program's shape
- * is validated by its resource owner. This never executes CBS or returns replacement saved values.
- *
  * CBS source: RisuAI cad8595aa39620df4246f56918f0962c2aa0263a, parser/parser.svelte.ts,
  * vendored at third_party/risuai/cad8595a/cbs-parser.ts. Its evaluator accepts unmatched closing
  * names, restores incomplete tags, and reparses dynamic calls/loops. A separate brace/regex checker
@@ -117,7 +111,6 @@ export function diagnoseRisuPreset(
   const current = declaration(program, report);
   const controls = new Map(current.controls.map((control) => [control.id, control]));
   if (current.valid) {
-    // Reuse exactly the same null/default, numeric-index and removed-key rules as option application.
     for (const key of reconcilePromptValues(current.controls, values).resetKeys) {
       const known = controls.has(key);
       report({

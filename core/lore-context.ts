@@ -25,7 +25,6 @@ export const DEFAULT_LORE_CONTEXT: LoreContextPolicy = Object.freeze({
   maxPinnedTokens: 64_000,
 });
 export type LoreTokenCounter = (text: string) => number;
-/** Browser-safe policy code; only server callers supply the local WASM counter. */
 export function measureLoreText(text: string, countTokens?: LoreTokenCounter): number {
   if (!countTokens) throw new Error('LORE_TOKEN_COUNTER_REQUIRED');
   const count = countTokens(text);
@@ -67,7 +66,6 @@ export function validateLoreContextPolicy(value: unknown): LoreContextPolicy {
 }
 export type LoreDependency = { sourceRevision: string; sourceHash: string };
 export type RetainedLore = {
-  /** Successful JEV admission lasts until an explicit reset or actual compaction. */
   retention?: 'selection';
   risuSource?: import('./risu-context-source.js').RisuContextSource;
   nativeRisuPosition?: import('./risu-native.js').NativeRisuLorePosition;
@@ -79,7 +77,6 @@ export type RetainedLore = {
   end: number;
   text: string;
   origin: { sourceRevision: string; sourceHash: string; runId: string; callId: string };
-  /** Only eviction uses this field; it is never serialized into model-facing reference text. */
   lastUsed: string;
 };
 export type LoreContextSnapshot = {
@@ -97,7 +94,6 @@ export type LoreContextSnapshot = {
     reasons: string[];
   };
 };
-/** Apply only to a successful compaction projection, never to the durable state directly. */
 export function resetCompactedLore(context: LoreContextSnapshot): LoreContextSnapshot {
   return {
     ...context,
@@ -117,7 +113,6 @@ const sameResource = (
   a: Pick<RetainedLore, 'id' | 'revision' | 'hash'>,
   b: Pick<RetainedLore, 'id' | 'revision' | 'hash'>
 ) => a.id === b.id && a.revision === b.revision && a.hash === b.hash;
-/** Full-body coverage can come from several exact tool-read slices. */
 export function retainsLoreBody(
   entries: readonly RetainedLore[],
   resource: { id: string; revision: number; hash: string; text: string }
@@ -135,7 +130,6 @@ export function retainsLoreBody(
   }
   return resource.text.length === 0;
 }
-/** Preserve old slices and their positions; append only uncovered parts of new reads. */
 export function appendLoreReads(
   previous: readonly RetainedLore[],
   reads: readonly RetainedLore[],
@@ -147,7 +141,6 @@ export function appendLoreReads(
   let appendedChars = 0;
   for (const read of reads) {
     if (read.retention === 'selection') {
-      // A full admitted body subsumes older partial reads of that exact resource.
       for (let index = entries.length - 1; index >= 0; index--)
         if (sameResource(entries[index]!, read)) entries.splice(index, 1);
     }
@@ -177,7 +170,6 @@ export function appendLoreReads(
     droppedEntries = 0;
   while (entries.length > policy.maxRetainedEntries || used > limit) {
     let oldest = entries.findIndex((entry) => entry.retention !== 'selection');
-    // Previously admitted JEV lore is never silently evicted by a later tool read.
     if (oldest < 0) break;
     for (let i = oldest + 1; i < entries.length; i++)
       if (
@@ -199,7 +191,6 @@ export function appendLoreReads(
     retainedTokens: used,
   };
 }
-/** These are explicitly labelled reference messages, not replayed tool results. */
 export function loreHistory(
   history: readonly PromptHistoryMessage[],
   context?: Pick<LoreContextSnapshot, 'entries'>,
@@ -212,8 +203,6 @@ export function loreHistory(
     const key = entry.origin.sourceRevision;
     groups.set(key, [...(groups.get(key) ?? []), entry]);
   }
-  // The context planner supplies a summary separately from raw references. Carry
-  // compacted-source references after that checkpoint, never into its body.
   let carried =
     result.findIndex(
       (message) => message.id === (options.carryAfterMessageId ?? 'context-summary')
@@ -230,8 +219,6 @@ export function loreHistory(
       JSON.stringify(
         entries.map(({ lastUsed: _lastUsed, ...e }) => {
           if (e.retention !== 'selection') return e;
-          // The first delivery and later carry use identical reference bytes; turn/run
-          // provenance stays in the host receipt rather than changing the model text.
           const { origin: _origin, ...reference } = e;
           return reference;
         })

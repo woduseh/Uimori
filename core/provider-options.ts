@@ -1,8 +1,3 @@
-/**
- * JSON options passed through to a provider-specific gateway. The host keeps this separate from
- * generation options so a model preset can carry native gateway settings without pretending that
- * every provider understands them.
- */
 export type ProviderOptionValue =
   | null
   | boolean
@@ -78,7 +73,6 @@ export function validateProviderOptions(value: unknown): asserts value is Provid
   if (serialized.length > PROVIDER_OPTIONS_MAX_CHARS) fail('PROVIDER_OPTIONS_TOO_LARGE');
 }
 
-/** Empty advanced input means the Vercel request uses its normal routing policy. */
 export function parseProviderOptionsText(text: string): ProviderOptions | undefined {
   if (!text.trim()) return undefined;
   let parsed: unknown;

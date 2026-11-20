@@ -7,7 +7,6 @@ import type { ToolAction } from './provider.js';
 import { sourceHash } from './source-history.js';
 import type { TranslationContextMode } from './translation-settings.js';
 
-/** Restrict only this translation's projection, before CBS/slots or read tools see it. */
 export function translationSnapshot(
   snapshot: RunSnapshot,
   mode: TranslationContextMode
@@ -54,7 +53,6 @@ export type TranslationReference = {
   text: string;
   manual: boolean;
 };
-/** Detached wording evidence. Current source and author declarations always take precedence. */
 export function translationReader(
   snapshot: RunSnapshot,
   references: readonly TranslationReference[] | ((id?: string) => readonly TranslationReference[])

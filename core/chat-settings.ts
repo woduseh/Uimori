@@ -19,7 +19,6 @@ export const DEFAULT_CHAT_GENERATION_DEFAULTS: Readonly<ChatGenerationDefaults> 
   storyUiStyle: 'auto',
 };
 
-/** Project supported saved settings; retired fields in existing DBs/backups are ignored. */
 export function normalizeChatSettings(value: unknown): Settings {
   const input = value as Partial<Settings> | null;
   if (

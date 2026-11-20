@@ -7,7 +7,6 @@ export type LibraryFolder = {
   category: LibraryCategory;
   title: string;
   sortPosition: number;
-  /** A chosen cover image; without one the card shows portraits from the folder's resources. */
   coverImageHash: string | null;
 };
 export type LibraryPlacement = LibraryItemKey & {

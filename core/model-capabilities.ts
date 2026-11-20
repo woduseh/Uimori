@@ -23,11 +23,6 @@ export const GENERATION_KEYS = [
   'cacheMode',
   'cacheTtl',
 ] as const;
-/**
- * Reviewed per-model hints: which options a known model documents and their allowed values.
- * The UI uses them to order choices and prefill limits. Execution never requires an entry;
- * the provider's own response is the verdict for unknown models and unlisted values.
- */
 export type ModelCapability = Readonly<{
   id: string;
   name: string;
@@ -219,8 +214,6 @@ const capabilities: readonly ModelCapability[] = [
       temperature: false,
       topP: false,
       stopSequences: false,
-      // The GPT-6.2 pages reject `none` and replace `minimal` with `low`. They do not name a default
-      // effort, verbosity, reasoning mode or context, or service_tier values, so those stay unlisted.
       reasoningEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
       cacheModes: ['disabled', 'explicit', 'automatic'],
       cacheTtls: ['30m'],
@@ -351,7 +344,6 @@ export function generationFromModel(model: ModelGeneration): ModelGeneration {
     )
   ) as ModelGeneration;
 }
-/** A helper task re-sends its growing prefix on every tool step, so a reviewed Claude model caches it unless the preset chose a cache mode. */
 export function helperGenerationFromModel(
   model: ModelGeneration & { modelId: string },
   protocol: ProviderProtocol
@@ -366,7 +358,6 @@ export function helperGenerationFromModel(
 const reject = (code = 'UNSUPPORTED_GENERATION_OPTIONS'): never => {
   throw new ProviderContractError(code);
 };
-/** Values each protocol's encoder can express. A model may reject a value; the provider says so. */
 export const PROTOCOL_OPTION_VALUES = {
   thinkingLevel: ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'],
   reasoningEffort: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
@@ -383,17 +374,14 @@ const cacheTtls: Partial<
   'openai-responses-v1': ['30m'],
   'anthropic-messages-v1': ['5m', '1h'],
 };
-/** Generation option keys the protocol's encoder sends. Everything else cannot reach the provider. */
 export function protocolOptionKeys(protocol: ProviderProtocol): readonly string[] {
   return providerDefinition(protocol).optionKeys.filter((key) => key !== 'timeoutMs');
 }
-/** Cache retention values the protocol's API accepts. */
 export function protocolCacheTtls(
   protocol: ProviderProtocol
 ): readonly NonNullable<ModelGeneration['cacheTtl']>[] | undefined {
   return cacheTtls[protocol];
 }
-/** Service tiers to suggest; native Gemini tiers use each API's vocabulary. */
 export function protocolServiceTiers(protocol: ProviderProtocol): readonly string[] | undefined {
   return protocol === 'vertex-gemini-v1'
     ? ['standard', 'flex']
@@ -475,11 +463,6 @@ export function validateGenerationShape(value: unknown): asserts value is ModelG
   )
     reject();
 }
-/**
- * Protocol-level validation only: the option must be one the encoder sends and the value one it
- * can express. Model-specific support is not checked here; an unsupported combination is answered
- * by the provider and surfaced as a rejected option.
- */
 export function validateModelOptions(g: ModelGeneration, protocol: ProviderProtocol): void {
   validateGenerationShape(g);
   if (

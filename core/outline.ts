@@ -1,6 +1,5 @@
 import { REQUEST_TEXT_MAX_CHARS } from './content-limits.js';
 
-/** Author-side composition. A plan states what is intended next; it is never story fact. */
 export const OUTLINE_LEVELS = ['theme', 'mainStory', 'arc', 'episode', 'beat'] as const;
 export type OutlineLevel = (typeof OUTLINE_LEVELS)[number];
 export const OUTLINE_LEVEL_LABELS: Record<OutlineLevel, string> = {
@@ -10,7 +9,6 @@ export const OUTLINE_LEVEL_LABELS: Record<OutlineLevel, string> = {
   episode: '회차',
   beat: '작은 사건',
 };
-/** Only these levels name a unit one request writes. Wider levels stay composition-only. */
 export const OUTLINE_WRITABLE_LEVELS: readonly OutlineLevel[] = ['episode', 'beat'];
 export const outlineLevelIndex = (level: OutlineLevel) => OUTLINE_LEVELS.indexOf(level);
 export const outlineParentAllowed = (parent: OutlineLevel | null, child: OutlineLevel) =>
@@ -21,10 +19,6 @@ export const outlineWritable = (level: OutlineLevel) => OUTLINE_WRITABLE_LEVELS.
 export const OUTLINE_TITLE_MAX = 200;
 export const OUTLINE_INTENT_MAX = REQUEST_TEXT_MAX_CHARS;
 
-/**
- * Progress is derived from the bound scene command and its committed source, never stored.
- * A plan alone never counts as written.
- */
 export type OutlineProgress = {
   state: 'planned' | 'scheduled' | 'writing' | 'written' | 'failed' | 'cancelled';
   commandId: string | null;
@@ -39,7 +33,6 @@ export type OutlineNode = {
   position: number;
   title: string;
   intent: string;
-  /** Author intent to preserve during general revisions, not an absolute editing lock. */
   fixed: boolean;
   revision: number;
   progress: OutlineProgress;
@@ -58,7 +51,6 @@ export type OutlineWriting = {
 };
 export const OUTLINE_WRITING_ORIGINS = ['planned', 'focus'] as const;
 export type OutlineWritingOrigin = (typeof OUTLINE_WRITING_ORIGINS)[number];
-/** Explicit, one-request selection; never inferred from which panel is visible. */
 export type OutlineTarget = {
   nodeId: string | null;
   expectedRevision: number | null;
@@ -66,7 +58,6 @@ export type OutlineTarget = {
 };
 export type OutlineHelperContext = {
   target: OutlineTarget;
-  /** Bounded metadata/preview projection; not the writer's full frozen composition. */
   brief: import('./transport.js').Json | null;
   sources: { id: string; hash: string; start: number; end: number; total: number; text: string }[];
   partial: boolean;
@@ -75,7 +66,6 @@ export type OutlineHelperContext = {
 export type OutlineDetail = { chatId: string; focusId: string | null; nodes: OutlineNode[] };
 export type OutlineFocus = { nodeId: string; level: OutlineLevel; title: string } | null;
 
-/** Frozen composition for one writing run: the applied upper intent and the target's own plan. */
 export type OutlineSnapshotNode = {
   id: string;
   level: OutlineLevel;
@@ -90,23 +80,15 @@ export const OUTLINE_NEIGHBOR_INTENT_MAX = 600;
 export type OutlineSnapshot = {
   version: 1;
   focus?: true;
-  /** Root to target; the last entry is the unit being written. */
   path: OutlineSnapshotNode[];
-  /** The target's direct children only; deeper levels stay out of one request's input. */
   children: OutlineSnapshotNode[];
-  /** Sibling units already written in this chat, so the request knows what precedes it. */
   written: { id: string; level: OutlineLevel; title: string; sourceRevision: string }[];
   related?: OutlineSnapshotNode[];
   neighbors?: OutlineNeighbors;
-  /** Actual existing source references for this unit and its descendants, never planned events. */
   sources?: OutlineWriting[];
   hash: string;
 };
 
-/**
- * The disclosure boundary. Upper levels may name an ending or reversal; that text is the author's
- * intent for later units, not something the current scene's characters know or may reveal.
- */
 export const OUTLINE_CONTRACT =
   'outline is author-side planning, not a record of events, character knowledge or world facts. path contains upper intent and ends at this request’s target; children are smaller planned events and related contains explicitly linked plans, not extra writing targets. Write only the selected unit and the current request’s scope. Reveal information only when the current unit and viewpoint call for it; do not prematurely reveal later outcomes, but do not indefinitely conceal a revelation scheduled for this unit. sources and written reference actual prose, not proof that every intention was fulfilled: read existing prose before continuing and do not repeat completed passages. A fixed entry is a keep-condition for ordinary elaboration, not an editing lock; honor it unless the user explicitly changes that condition. Preserve the selected writing style and RP agency; do not force conflict, plot advancement, morals or theme statements into quiet scenes. neighbors.previous and neighbors.next are the adjacent planned units, not writing targets: continue from where previous left off and stop before the events planned for next begin.';
 

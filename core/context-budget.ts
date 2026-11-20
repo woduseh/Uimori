@@ -19,7 +19,6 @@ export type ContextBudget =
       tokenizer: TokenizerProfileId;
     };
 
-/** Host policy, never a provider generation parameter or an exact provider token count. */
 export function validateContextBudget(value: unknown): ContextBudget {
   if (
     !value ||
@@ -65,8 +64,6 @@ export function contextBudgetForModel(model: {
   const configured = validateContextBudget({
     inputTokenLimit:
       model.inputTokenLimit === undefined ? DEFAULT_INPUT_TOKEN_LIMIT : model.inputTokenLimit,
-    // Missing metadata belongs to a pre-tokenizer frozen snapshot. New snapshots
-    // resolve auto when captured; never reinterpret an old continuation on replay.
     ...(model.tokenizer === undefined
       ? { estimator: CONTEXT_ESTIMATOR }
       : {
@@ -77,8 +74,6 @@ export function contextBudgetForModel(model: {
   const protocol = model.connection?.protocol;
   const capability =
     protocol && model.modelId ? modelCapability(protocol, model.modelId) : undefined;
-  // These registered API families have reviewed windows. A routed/custom model or
-  // the Codex app-server runtime never inherits a native API model's window.
   const window = isGeminiProtocol(capability?.protocol)
     ? 1_048_576
     : capability?.protocol === 'anthropic-messages-v1' ||
@@ -105,16 +100,10 @@ export function contextBudgetForModel(model: {
   });
 }
 
-/** Serialized request estimate plus 10% admission headroom, never billed usage.
- * An absent budget preserves the persisted o200k_base-v1 estimate.
- * Call countTextTokens for text-only sub-budgets so quoting and margin are not
- * charged per lore entry. The final request still passes this admission check.
- */
 export function estimateContextTokens(value: unknown, budget?: ContextBudget): number {
   return estimateContextInput(value, budget).totalTokens;
 }
 
-/** Dimension-based admission allowance, not a documented model formula or billed token count. */
 export function estimateContextInput(value: unknown, budget?: ContextBudget) {
   let serialized: string | undefined;
   let imageTokens = 0;
@@ -169,7 +158,6 @@ export function estimateContextInput(value: unknown, budget?: ContextBudget) {
   };
 }
 
-/** Fail before credentials, journaling or transmission; never edit a continuation to fit. */
 export function assertContextBudget(body: unknown, budget?: ContextBudget): void {
   if (budget === undefined) return;
   const checked = validateContextBudget(budget);

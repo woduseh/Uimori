@@ -59,7 +59,6 @@ export function providerFilePart(file: RequestFile, protocol: ProviderProtocol):
 }
 const object = (value: Json): value is Record<string, Json> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
-/** Only native file-bearing slots have authority to request binary resolution. */
 export function fileSlot(
   value: Record<string, Json>
 ): { owner: Record<string, Json>; key: string; url: boolean; text?: boolean } | undefined {

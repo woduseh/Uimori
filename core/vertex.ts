@@ -30,7 +30,6 @@ const emptyResult = (): ProviderResult => ({
   opaqueState: null,
 });
 
-/** Strict SSE framing: byte boundaries, CRLF, comments and multiline data are independent of JSON. */
 export async function consumeSse(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   onData: (value: unknown) => boolean | Promise<boolean>,
@@ -84,7 +83,6 @@ export async function consumeSse(
     }
     return false;
   };
-  // A response body may outlive fetch's abort propagation; close its pending read explicitly.
   const abortReader = () => {
     void reader.cancel(signal.reason).catch(() => undefined);
   };
@@ -125,7 +123,6 @@ export async function consumeSse(
   }
 }
 
-/** One native Gemini HTTP request, using either Cloud credentials or a Studio API key. */
 export async function executeGeminiProvider(
   connectionValue: ProviderConnection,
   requestValue: unknown,
@@ -197,7 +194,6 @@ export async function executeGeminiProvider(
           );
     if (!token || /[\r\n]/u.test(token)) throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
     if (signal.aborted) return failure('CANCELLED');
-    // Catalog names are models/{id}; presets store the bare model ID.
     const modelId = vertex ? request.modelId : request.modelId.replace(/^models\//u, '');
     if (!vertex && !/^gemini-[A-Za-z0-9._-]+$/u.test(modelId))
       throw new ProviderContractError('INVALID_GEMINI_MODEL_ID');
@@ -218,7 +214,6 @@ export async function executeGeminiProvider(
     const diagnosticAuth: Record<string, string> = vertex
       ? { authorization: '[REDACTED]' }
       : { 'x-goog-api-key': '[REDACTED]' };
-    // The diagnostic view does not become the actual request. Signatures remain byte-for-byte in body.
     const diagnostic = redactDiagnosticJson(diagnosticVertexBody(prepared.body), token);
     await options.onWire?.({
       connectionId: connection.id,
@@ -237,7 +232,6 @@ export async function executeGeminiProvider(
       bodySha256: sha(body),
       stablePrefixSha256: sha(JSON.stringify(request.stable)),
     });
-    // The persisted attempt completes before generation starts.
     if (signal.aborted) return failure('CANCELLED');
     const response = await fetch(
       endpoint,
@@ -302,7 +296,6 @@ export async function executeGeminiProvider(
         : transportFailureCode(error)
     );
   } finally {
-    // Do not wait for a remote source to acknowledge cancellation.
     void reader?.cancel().catch(() => undefined);
   }
 }

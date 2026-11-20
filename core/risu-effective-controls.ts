@@ -3,7 +3,6 @@ import { nativeRisuExtension } from './risu-native.js';
 import type { ProfileSnapshot } from './product.js';
 import type { PromptControl, PromptValue, RisuPrompt } from './risu-prompt.js';
 
-/** Computed UI/runtime metadata only. The preset and attached card/module sources stay untouched. */
 export function effectiveRisuControls(
   profile: Pick<ProfileSnapshot, 'packages' | 'packageAttachments'>,
   program?: RisuPrompt

@@ -13,7 +13,6 @@ export {
   plannedFileMetadata,
 } from './provider-file-reference.js';
 
-/** Detach the outgoing body; retained plans, diagnostics and signed replay keep references. */
 export async function materializeProviderFiles(
   body: Json,
   request: Pick<ProviderRequest, 'prompt'>,
@@ -83,8 +82,6 @@ export async function materializeProviderFiles(
       slot.owner[slot.key] = payload;
       return;
     }
-    // Native tool results and ordinary reference JSON never grant attachment authority.
-    // Only message arrays and their typed content/parts are traversed.
     for (const key of ['input', 'messages', 'contents', 'content', 'parts']) {
       const item = value[key];
       if (Array.isArray(item) && value.type !== 'tool_result') await visit(item);

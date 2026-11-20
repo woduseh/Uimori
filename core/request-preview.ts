@@ -18,7 +18,6 @@ export type RequestPreviewCaveat =
 
 type Selection = { id: string; revision: number; title: string };
 
-/** Metadata about a current, read-only projection; never a saved Run or billed usage. */
 export type RequestPreview = {
   scope: 'next-request-read-only';
   snapshot: {
@@ -59,7 +58,6 @@ export type RequestPreview = {
     enabled: boolean;
     resetRequested: boolean;
     retainedEntries: number | null;
-    /** Projected pinned lore sources only, excluding bot/persona/instructions. */
     pinnedEntries: number | null;
     selectionPending: boolean;
   };
@@ -67,7 +65,6 @@ export type RequestPreview = {
     available: boolean | null;
     inUse: boolean | null;
     compactedSources: number | null;
-    /** The current estimate crosses the host's preparation threshold; no summary is created. */
     compactionPending: boolean | null;
   };
   caveats: RequestPreviewCaveat[];

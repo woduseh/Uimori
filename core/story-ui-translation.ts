@@ -28,7 +28,6 @@ const humanText = (value: unknown): value is string =>
   !/^[+-]?(?:\d[\d,.]*)(?:\s*%|\s*[a-zA-Z]+)?$/u.test(value.trim()) &&
   !/^(?:https?:\/\/|\/|\$\/)/iu.test(value.trim());
 
-/** Collect only catalog fields whose meaning is visible wording. All other wire values stay host-owned. */
 function textSlots(messages: unknown): Slot[] {
   const result: Slot[] = [];
   const add = (owner: Record<string, unknown> | unknown[], key: string | number) => {
@@ -65,8 +64,6 @@ function textSlots(messages: unknown): Slot[] {
             });
     }
   }
-  // Resolve each component in its actual template scope. A binding that also
-  // feeds an action or editable input must retain its original data value.
   const visiblePaths = new Map<string, string[]>();
   const protectedPaths = new Map<string, string[]>();
   protectedPaths.set(JSON.stringify(['_uimori']), ['_uimori']);
@@ -109,9 +106,7 @@ function textSlots(messages: unknown): Slot[] {
           dynamicExpressions(args.value);
           result.push({ owner: args, key: 'value', text: args.value, format: true });
           formatted.add(args);
-        } catch {
-          /* Invalid expressions remain untouched. */
-        }
+        } catch {}
       }
       return;
     }
@@ -198,7 +193,6 @@ function textSlots(messages: unknown): Slot[] {
   return result;
 }
 
-/** Replace each UI block with a host-owned placeholder and a list of translatable strings. */
 export function prepareStoryUiTranslation(source: string) {
   const segments = parseStoryUi(source);
   let prefix = 'UIMORI_UI_TRANSLATION';

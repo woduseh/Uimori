@@ -1,6 +1,5 @@
 import type { ProviderHttpDiagnostic } from './provider-http-error.js';
 
-/** App-level option the provider rejected, mapped from recognised wire field names. */
 export type RejectedOption =
   | 'thinking'
   | 'temperature'
@@ -21,7 +20,6 @@ export type ProviderRejection = {
   providerCode?: string;
   options: RejectedOption[];
   unmappedFields?: string[];
-  /** Owner-only detail; may include echoed request text. */
   message?: string;
 };
 const byField: Record<string, RejectedOption> = {
@@ -78,10 +76,6 @@ const inputParts = new Set([
   'systemInstruction',
   'generationConfig',
 ]);
-/**
- * A cache container claims its whole path (`prompt_cache_options.mode` is cache, not reasoning);
- * otherwise the last recognised segment decides so `reasoning.mode` defers to its leaf.
- */
 function optionOf(path: string): RejectedOption | undefined {
   const parts = path.replace(/\[\d+\]/gu, '').split('.');
   if (parts.some((part) => byField[part] === 'cache')) return 'cache';
@@ -92,7 +86,6 @@ function optionOf(path: string): RejectedOption | undefined {
   }
   return undefined;
 }
-/** Only 4xx request rejections name options; server failures and rate limits are not option verdicts. */
 export function providerRejection(
   diagnostic: ProviderHttpDiagnostic | undefined
 ): ProviderRejection | undefined {

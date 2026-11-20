@@ -10,7 +10,6 @@ export type RisuPresetFinding = {
   blockIndex?: number;
 };
 
-/** A conversion preview. Importing does not execute CBS or change model connections. */
 export type RisuPresetProgramImport = {
   title: string;
   role: 'main';

@@ -25,14 +25,12 @@ export function resolveEvaluationMetadataProfile(
   return automaticEvaluationMetadataProfile(protocol) ?? manual;
 }
 
-/** Model-preset-owned evaluation tool settings. They do not select or configure a provider. */
 export type EvaluationToolOptions = {
   contextMode: 'model-selected' | 'preloaded';
   approvalReasoningMode: 'configured' | 'economized';
   metadataProfile?: EvaluationMetadataProfile;
 };
 
-/** Nonterminal tool exchanges; a valid final submission is accepted after this limit. */
 export const EVALUATION_TOOL_ROUND_LIMIT = 10;
 
 export function defaultEvaluationToolOptions(): EvaluationToolOptions {
@@ -98,7 +96,6 @@ export function validateEvaluationToolOptions(value: unknown): EvaluationToolOpt
   };
 }
 
-/** Read old settings without restoring a retired mode or rewriting archived evidence. */
 export function readEvaluationToolOptions(value: unknown): EvaluationToolOptions | undefined {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     const input = value as Record<string, unknown>;

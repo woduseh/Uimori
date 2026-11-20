@@ -61,7 +61,6 @@ export function notificationIntent(value: unknown): NotificationIntent | null {
   };
 }
 
-/** Rechecked before dispatch as preferences may change while a notification is queued. */
 export function pushAllowed(kind: string, eventKey: string, choices: PushPreferences): boolean {
   if (kind === 'test') return true;
   if (

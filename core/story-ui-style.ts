@@ -43,10 +43,6 @@ function blockMetadata(messages: unknown, key: 'style' | 'css'): unknown {
 }
 const modelStoryUiStyle = (messages: unknown) => blockMetadata(messages, 'style');
 
-/**
- * CSS the model wrote for one block. It dresses the model's own style choice, so it applies
- * only while the chat follows that choice: an explicit style or a theme replaces it.
- */
 export function storyUiBlockCss(
   setting: StoryUiStyleSetting | undefined,
   messages: unknown,

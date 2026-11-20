@@ -1,7 +1,6 @@
 import { SOURCE_TEXT_MAX_CHARS } from './content-limits.js';
 import { parseComfyWorkflow } from './illustration-workflow.js';
 
-/** Portable generator + visual recipe. Connection details and scheduling stay local. */
 export type IllustrationPresetGenerator = 'codex' | 'comfyui' | 'novelai';
 export type IllustrationPresetDefinition = {
   title: string;
@@ -73,7 +72,6 @@ export function resolveIllustrationPreset(
   }
   return BUILTIN_ILLUSTRATION_PRESET;
 }
-/** v1 recipes had no generator. Infer once per read without rewriting saved revisions/jobs. */
 export function illustrationPresetGenerator(preset: {
   generator?: IllustrationPresetGenerator;
   comfyui: { workflow: string };
@@ -101,7 +99,6 @@ function string(value: unknown, label: string, limit: number): string {
     throw new Error(`${label}: 최대 ${limit.toLocaleString()}자의 문자열을 입력해 주세요.`);
   return value;
 }
-/** Explicit projection also strips local identities and environment fields on import/export. */
 export function validateIllustrationPreset(value: unknown): IllustrationPresetDefinition {
   const v = object(value);
   const title = string(v.title, '프리셋 이름', 100).trim();

@@ -1,7 +1,3 @@
-/**
- * Connection, request and catalog validation shared by the transport and every protocol executor.
- * Lives apart from `transport.ts` so executors can validate without importing the dispatcher.
- */
 import { GENERATION_KEYS, validateGenerationShape } from './model-capabilities.js';
 import { GEMINI_SAFETY_CATEGORIES } from './gemini-safety.js';
 import { EXECUTION_INPUT_MAX_CHARS } from './content-limits.js';
@@ -59,7 +55,6 @@ export function numeric(value: unknown, integer = false): number | null {
 }
 export const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 
-/** The owner configures a connection; protocol URL syntax is checked at this boundary. */
 export function validateConnection(value: unknown): ProviderConnection {
   keys(value, ['id', 'protocol', 'endpoint', 'credentialRef']);
   string(value.id);
@@ -78,7 +73,6 @@ export function validateConnection(value: unknown): ProviderConnection {
     return reject('INVALID_ENDPOINT');
   }
   if (url.username || url.password || url.search || url.hash) reject('INVALID_ENDPOINT');
-  // An unselected fixture protocol never becomes a generic remote proxy.
   if (
     value.protocol === 'fixture-sse-v1' &&
     (url.protocol !== 'http:' || !['127.0.0.1', '[::1]'].includes(url.hostname))
@@ -166,7 +160,6 @@ export function validateRequest(value: unknown): ProviderRequest {
     ))
       if (JSON.stringify(value.generation[key]) !== JSON.stringify(value.generationBinding[key]))
         reject('INVALID_GENERATION_BINDING');
-    // Safety categories are a map: insertion order must not change binding semantics.
     if (
       GEMINI_SAFETY_CATEGORIES.some(
         (category) =>
@@ -205,7 +198,6 @@ export function validateRequest(value: unknown): ProviderRequest {
     }
   }
   keys(value.stable, ['contract', 'tools']);
-  // An explicitly selected empty prompt is distinct from using the application default.
   if (typeof value.stable.contract !== 'string') reject('INVALID_STRING');
   if (!Array.isArray(value.stable.tools) || value.stable.tools.length > 128)
     reject('INVALID_TOOLS');
@@ -240,7 +232,6 @@ export function validateRequest(value: unknown): ProviderRequest {
     )
   )
     reject('INVALID_CONTROLS');
-  // JSON round-trip rejects circular/non-serializable application data before fetch.
   let encoded: string;
   try {
     encoded = JSON.stringify(value);
@@ -251,7 +242,6 @@ export function validateRequest(value: unknown): ProviderRequest {
   return JSON.parse(encoded) as ProviderRequest;
 }
 
-/** Parse data into fresh entries. No catalog field can mutate connection authority. */
 export function parseCatalog(value: unknown): CatalogModel[] {
   keys(value, ['models']);
   if (!Array.isArray(value.models) || value.models.length > 5000) reject('INVALID_CATALOG');

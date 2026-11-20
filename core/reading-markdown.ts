@@ -49,7 +49,6 @@ export function safeProseLink(value: string): string | undefined {
   }
 }
 
-/** Only complete, attribute-free reading markup may opt native prose into decoration. */
 function safeInlineHtml(children: Token[]): boolean {
   if (!children.some((token) => token.type === 'html_inline')) return true;
   const markup = children
@@ -88,7 +87,6 @@ function safeInlineHtml(children: Token[]): boolean {
   return stack.length === 0;
 }
 
-/** Renderer provenance: authored controls never acquire app reading behavior. */
 export function markReadingProse(
   md: InstanceType<typeof MarkdownIt>,
   tightParagraphs = false
@@ -130,10 +128,7 @@ export function createReadingMarkdown(policy: 'plain' | 'native'): InstanceType<
     linkify: false,
     typographer: false,
   });
-  // Authored indented prose/HTML is not an implicit code block in either reader.
   md.disable(['code']);
-  // Protect code pipes at the table rule's actual container boundary. A same-length
-  // sentinel preserves all token line/offset maps and never rewrites authored HTML.
   const blockRules = md.block.ruler.getRules('');
   md.block.ruler.disable(['table']);
   const withoutTables = new Set(md.block.ruler.getRules(''));
@@ -198,8 +193,6 @@ export function createReadingMarkdown(policy: 'plain' | 'native'): InstanceType<
   };
   md.renderer.rules.paragraph_close = (tokens, index, options, _env, renderer) =>
     tokens[index].hidden ? '</span>' : renderer.renderToken(tokens, index, options);
-  // Capture the builtin rule using the public enabled-rule list, preserving its
-  // reference/escape/title grammar and the exact source slice for literal images.
   const rules = md.inline.ruler.getRules('');
   md.inline.ruler.disable(['image']);
   const withoutImages = new Set(md.inline.ruler.getRules(''));
@@ -307,7 +300,6 @@ export function createReadingMarkdown(policy: 'plain' | 'native'): InstanceType<
   return md;
 }
 
-/** Display transforms may change lengths; never reuse canonical offsets after transforming. */
 export function projectReadingText(
   text: string,
   blocks: readonly ReadingBlock[],
@@ -342,7 +334,6 @@ export function compileReadingMarkdown(
     ),
   };
   const tokens = plain.parse(text, environment);
-  // markdown-it normalizes line endings, but mappings refer to line numbers, not UTF-16 bytes.
   const lines = text.match(/.*(?:\r\n|\n|\r|$)/g)?.filter(Boolean) ?? [];
   const offsets = [0];
   for (const line of lines) offsets.push(offsets.at(-1)! + line.length);

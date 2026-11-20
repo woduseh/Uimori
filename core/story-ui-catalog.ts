@@ -2,18 +2,10 @@ import { Catalog } from '@a2ui/web_core/catalog';
 import basicSchema from '../third_party/a2ui/basic-catalog-v1.json' with { type: 'json' };
 import { z } from 'zod';
 
-// Public basicCatalog.toJson() snapshot from @a2ui/web_core 0.15.0. Schema only:
-// provider context and source parsing must not initialize browser components.
 const basicCatalog = Catalog.fromJson(basicSchema);
 
 export const STORY_UI_CATALOG_ID = 'urn:uimori:story-ui:1';
 
-// Stored blocks are validated against this catalog on every read, so every change here
-// must accept what an earlier version accepted: add components and optional properties only.
-//
-// Bindable and child-reference property types are borrowed from the basic catalog's own
-// components. They carry the reference markers the SDK's compiler and binder read, and
-// importing the SDK's schema module instead would pull browser-oriented code into core.
 const borrow = (component: string, property: string) => {
   const schema: z.ZodTypeAny = (
     basicCatalog.components.get(component)!.schema as unknown as z.AnyZodObject
@@ -70,10 +62,6 @@ const chart = z
   })
   .strict();
 
-/**
- * Uimori's own components. `purpose` is the one-line description the model reads; the SDK
- * serializer keeps property descriptions but drops a component-level one.
- */
 export const storyUiExtensions: { name: string; schema: z.ZodTypeAny; purpose?: string }[] = [
   {
     name: 'Text',
@@ -796,12 +784,7 @@ export const storyUiExtensions: { name: string; schema: z.ZodTypeAny; purpose?: 
   },
 ];
 
-/**
- * Properties that hold in-world wording. Context projection and translation read these;
- * every other property (identifiers, enums, URLs, numbers) stays host-owned.
- */
 export const storyUiTextKeys = [
-  // Ordered as a reader meets them, so a projected block reads "who, when, what".
   'tag',
   'title',
   'subtitle',
@@ -818,7 +801,6 @@ export const storyUiTextKeys = [
   'placeholder',
   'description',
 ];
-/** Wording inside list-valued properties. `options[].value` is a stable identifier, not wording. */
 export const storyUiNestedTextKeys: Record<string, string[]> = {
   tabs: ['title'],
   options: ['label'],
@@ -830,11 +812,8 @@ export const storyUiNestedTextKeys: Record<string, string[]> = {
   areas: ['label'],
   markers: ['label', 'text'],
 };
-/** Image fields inside list-valued properties, resolved and pinned like top-level ones. */
 export const storyUiNestedImageKeys: Record<string, string> = { nodes: 'image' };
-/** Components whose `value` is displayed rather than edited. */
 export const storyUiDisplayValues = new Set(['Gauge', 'Rank', 'Ring', 'Slot', 'Stat']);
-/** Properties that must name an image stored by this app. */
 export const storyUiImageKeys: Record<string, string> = {
   Image: 'url',
   Avatar: 'url',
@@ -847,13 +826,8 @@ export const storyUiImageKeys: Record<string, string> = {
   Slot: 'image',
   Combatant: 'image',
 };
-/** List-valued properties whose every string is wording. `rows` holds lists of such lists. */
 export const storyUiTextLists = ['columns', 'days'];
 
-/**
- * A style hook on every component. The renderer turns each name into a `look-<name>` class
- * that the block's own CSS (`$/_uimori/css`) or an authored theme can target.
- */
 const look = z
   .string()
   .regex(/^[a-z][a-z0-9-]{0,31}(?: [a-z][a-z0-9-]{0,31}){0,3}$/)

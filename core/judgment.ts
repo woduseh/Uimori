@@ -1,4 +1,3 @@
-/** Typed judgment policy. It never selects a writing model or receives card credentials. */
 export type JevJudgmentPolicy = {
   threshold: number;
   maxSelectedTokens: number;

@@ -1,6 +1,5 @@
 import type { Job, Source } from './types.js';
 
-/** Failed classifier candidates must never replace a completed translation. */
 export function displayTranslationJob(
   source: Pick<Source, 'id' | 'hash'>,
   job?: Job

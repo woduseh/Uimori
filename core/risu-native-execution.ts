@@ -4,14 +4,12 @@ import type { ProviderPrompt } from './risu-prompt.js';
 
 export type NativeRisuMessage = { id?: string; role: 'user' | 'char'; data: string };
 
-/** Execution results, never another editable copy of the authored card. */
 export type NativeRisuExecution = {
   version: 2;
   beforeVariableRevision: number;
   variables: Record<string, string>;
   fields: Record<string, Record<string, string>>;
   request: string;
-  /** False when a start script deleted current-input; empty text alone does not imply deletion. */
   requestPresent?: boolean;
   messages: NativeRisuMessage[];
   history: PromptHistoryMessage[];
@@ -22,17 +20,14 @@ export type NativeRisuExecution = {
   output?: { text: string; variables: Record<string, string>; messages: NativeRisuMessage[] };
 };
 
-/** A card action authored these messages without asking the story model to write a turn. */
 export type NativeRisuAuthored = {
   version: 1;
   action: string;
   messages: (NativeRisuMessage & {
-    /** Attachments owned by this user message, indexed in the run's requestImages. */
     requestImageIndexes?: number[];
   })[];
   commandHash?: string;
   greeting?: boolean;
-  /** Original scene identity across action-created source replacements. */
   sourceIdentity?: string;
 };
 

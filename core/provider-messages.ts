@@ -23,7 +23,6 @@ export type NativeMessagePlan = {
 };
 export type NativeMessageMetadata = Pick<NativeMessagePlan, 'diagnostics' | 'capabilityVersion'>;
 
-/** Extra user input belongs to the continued conversation, never the original binding. */
 export function continuationInputText(request: ProviderRequest): string | undefined {
   const text = request.continuationInput;
   if (text === undefined) return;
@@ -32,7 +31,6 @@ export function continuationInputText(request: ProviderRequest): string | undefi
   return text;
 }
 
-/** Keep large reusable history/catalog ahead of the changing task, without moving data to system. */
 export function requestDataBlocks(
   input: Record<string, Json>,
   role: ProviderRequest['role']
@@ -52,14 +50,11 @@ export function requestDataBlocks(
   ];
 }
 
-/** Keep preview evidence without retaining a second copy of the planned message body. */
 export function nativeMessageMetadata(plan?: NativeMessagePlan): NativeMessageMetadata | undefined {
   return plan
     ? { diagnostics: plan.diagnostics, capabilityVersion: plan.capabilityVersion }
     : undefined;
 }
-// Official docs, retrieved 2026-09-07; exact aliases only. Dated or future names need a reviewed entry.
-/** Explicit wire capabilities. An encoding check does not claim account/model availability. */
 export function planNativeMessages(
   request: ProviderRequest,
   protocol: ProviderProtocol
@@ -96,9 +91,8 @@ export function planNativeMessages(
   const responses = protocol === 'openai-responses-v1';
   const anthropic = protocol === 'anthropic-messages-v1';
   const vertex = isGeminiProtocol(protocol);
-  // Temporary Gemini workaround, including namespaced IDs used by compatible gateways.
-  // Revisit per-model wire capabilities when a new Gemini model supports mid-system;
-  // remove this fallback for verified models without changing authored prompts.
+  // Gemini models, including namespaced gateway IDs, do not accept a system message after the
+  // conversation has started.
   const gemini = /(?:^|\/)gemini-[^/]+$/iu.test(request.modelId);
   let leading = true;
   let cacheCount = 0;
@@ -123,8 +117,6 @@ export function planNativeMessages(
       const before = prompt.messages.slice(0, index).findLast((m) => m.role !== 'system');
       if (before?.role !== 'user')
         reject('PROMPT_MID_SYSTEM_PLACEMENT_UNSUPPORTED', message, index);
-      // Complete only a system section followed by another user turn. Existing
-      // assistant boundaries and terminal system sections remain byte-for-byte intact.
       assistantBoundary = prompt.messages[index + 1]?.role === 'user';
     }
     if (
@@ -134,7 +126,6 @@ export function planNativeMessages(
       message.role !== 'system'
     )
       note('PROVIDER_COMBINES_SAME_ROLE_TURNS', message, index);
-    // Authored assistant history is input data; real provider outputs replay through opaque state.
     const parts = message.content.map(
       (part): Record<string, Json> =>
         part.type === 'image'
@@ -191,7 +182,6 @@ export function planNativeMessages(
         content: [{ type: 'text', text: 'I will continue within the active controls.' }],
       });
       note('ANTHROPIC_SYSTEM_BOUNDARY_ASSISTANT_INSERTED', message, index);
-      // Previously valid requests keep their binding version and opaque continuations.
       capabilityVersion = 'native-wire-2026-10-17';
     }
   }
@@ -199,7 +189,6 @@ export function planNativeMessages(
     throw new ProviderContractError('PROMPT_CONVERSATION_REQUIRED');
   return { messages, system, options, diagnostics, capabilityVersion };
 }
-/** The current request/history are already messages; this envelope contains reference metadata only. */
 export const NATIVE_HOST_CONTEXT_ID = 'native.host-context';
 export function nativeHostContextText(request: Pick<ProviderRequest, 'input'>): string {
   const { task: _task, history: _history, results: _results, ...context } = request.input;
@@ -208,7 +197,6 @@ export function nativeHostContextText(request: Pick<ProviderRequest, 'input'>): 
     JSON.stringify(context)
   );
 }
-/** Finalize dynamic references after request assembly, preserving authored messages and the input snapshot. */
 export function withNativeHostContext(request: ProviderRequest): ProviderRequest {
   if (!request.prompt) return request;
   const prompt = request.prompt;

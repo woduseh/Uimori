@@ -4,7 +4,6 @@ import type { RunSnapshot, Usage } from './types.js';
 import type { ContextCheckpointRef } from './context-plan.js';
 
 export const DEFAULT_HELPER_TASK_TIMEOUT_MINUTES = 60;
-// AbortSignal.timeout uses a timer capped at the signed 32-bit millisecond limit.
 export const MAX_HELPER_TASK_TIMEOUT_MINUTES = Math.floor(2_147_483_647 / 60_000);
 
 export type HelperScope = { kind: 'chat'; chatId: string } | { kind: 'library'; workId: string };
@@ -13,13 +12,11 @@ export type HelperConversation = {
   scope: HelperScope;
   title: string;
   revision: number;
-  /** Latest transcript mutation event; settings and task updates do not advance it. */
   historyRevision?: number;
   persona: string;
   limits: HelperLimits;
   createdAt: string;
   updatedAt: string;
-  /** Organization only; never changes the execution scope. */
   projectId?: string | null;
 };
 export type HelperConversationDeletion = {
@@ -33,15 +30,11 @@ export type HelperConversationDeletion = {
 export type HelperProject = { id: string; title: string; revision: number };
 export type HelperConversationSummary = HelperConversation & {
   projectId: string | null;
-  /** Present for chat conversations in the app-wide history. Scope remains unchanged. */
   chatTitle?: string;
   activity: { running: number; queued: number };
   latestEventSeq: number;
-  /** Latest completed, failed, cancelled or interrupted task result, excluding metadata. */
   latestActivityEventSeq: number;
-  /** Status of the task associated with the latest terminal activity event. */
   lastTaskStatus?: HelperStatus;
-  /** Task activity time, or creation time before the first task. */
   lastActivityAt: string;
 };
 export type HelperStatus =
@@ -52,11 +45,8 @@ export type HelperStatus =
   | 'cancelled'
   | 'interrupted';
 export type HelperLimits = { totalCalls: number; helperCalls: number };
-/** Host-visible model calls per newly admitted task; native internal requests are unobservable. */
 export const HELPER_TASK_LIMITS: Readonly<HelperLimits> = { totalCalls: 128, helperCalls: 64 };
-/** Tool callbacks are observable even when a native agent owns its internal model loop. */
 export const HELPER_TOOL_CALL_LIMIT = 256;
-/** Calls past the limit are answered without running; an agent that keeps calling is stopped. */
 export const HELPER_TOOL_CALL_GRACE = 16;
 export type HelperInstruction = {
   id: number;
@@ -65,11 +55,9 @@ export type HelperInstruction = {
   status: 'pending' | 'delivered' | 'unconfirmed' | 'not-delivered';
 };
 export type HelperEditor = EditorContext & {
-  /** Saved references are resolved once at admission; device drafts remain analysis input. */
   source?: 'saved' | 'unsaved';
 };
 export type HelperSelection = { sourceId: string; sourceHash: string; text: string };
-/** One explicitly targeted saved library item, not a persistent conversation scope. */
 export type HelperResourceRef = {
   kind: 'content' | 'prompt-preset';
   id: string;
@@ -77,18 +65,13 @@ export type HelperResourceRef = {
   title: string;
 };
 export type HelperTaskSnapshot = {
-  /** Authored attachments survive execution cleanup in the owning message too. */
   images?: import('./request-images.js').RequestImage[];
   files?: import('./request-files.js').RequestFile[];
   invalidatedBySceneDeletion?: true;
-  /** Frozen when this task is queued. */
   summaryLength?: import('./summary-length.js').SummaryLengthSettings;
-  /** Frozen when this task is queued. */
   taskTimeoutMinutes?: number;
   retryOf?: string;
-  /** Kept after input cleanup so an admission retry cannot silently change its input. */
   requestFingerprint?: string;
-  /** Small selection receipt; not a copy of the plan text. */
   outlineTarget?: import('./outline.js').OutlineTarget;
   requestGroupId?: string;
   scope: HelperScope;
@@ -117,19 +100,16 @@ export type HelperTask = {
   generation: number;
   error: string | null;
   usage: Usage;
-  /** Queue time. `startedAt` is null until the worker claims the task. */
   createdAt: string;
   startedAt: string | null;
   updatedAt: string;
   snapshot: HelperTaskSnapshot;
-  /** Successful durable writes remain visible even if the explanation fails afterward. */
   completedEffects?: { count: number; labels: string[] };
   instructions?: HelperInstruction[];
 };
 export type HelperMessage = {
   images?: import('./request-images.js').RequestImage[];
   files?: import('./request-files.js').RequestFile[];
-  /** Task outcome travels with paged messages, independently of the task-history window. */
   taskStatus?: HelperStatus;
   requestOrder?: number;
   requestGroupId?: string;
@@ -166,7 +146,6 @@ export type HelperEvent = {
   data: unknown;
 };
 export type HelperTaskResultTarget = {
-  /** chat is a requested next scene of chat id; translation and scene name scene id in chatId. */
   kind:
     | import('./resource-editing.js').ResourceKind
     | 'settings'
@@ -175,26 +154,21 @@ export type HelperTaskResultTarget = {
     | 'translation'
     | 'scene';
   id: string;
-  /** Scene destinations include their owning chat; other result kinds do not need it. */
   chatId?: string;
   title: string;
   revision: number;
   setting?: string;
-  /** Only allowlisted settings values, never resource bodies or arbitrary operation arguments. */
   before?: string | number | boolean | null;
   after?: string | number | boolean | null;
-  /** Selection titles captured with the commit; later renames do not rewrite history. */
   beforeLabel?: string | null;
   afterLabel?: string | null;
 };
-/** Compact outcome committed in the same transaction as its durable operation receipt. */
 export type HelperTaskResult = {
   eventSeq: number;
   receiptId: string;
   operation: string;
   requestedTargets: number;
   changedTargets: number;
-  /** Empty targets with changedTargets=0 confirm an observed no-op. */
   targets: HelperTaskResultTarget[];
 };
 export type HelperTaskAttemptUsage = {
@@ -206,26 +180,20 @@ export type HelperTaskAttemptUsage = {
   costUsd: number | null;
   cachedInputTokens: number | null;
   reasoningTokens: number | null;
-  /** Native turns may hide internal requests; missing provider reports remain unknown. */
   internalModelCalls: number | null;
 };
 export type HelperTaskResultsView = {
   taskId: string;
   status: HelperStatus;
   results: HelperTaskResult[];
-  /** Receipts without compact outcomes, including old and currently unsupported operations. */
   unrecordedOperations: number;
   usage: {
     attempts: HelperTaskAttemptUsage[];
     toolExecutions: number;
-    /** Latest helper request's provider-reported input, never cumulative native-turn usage. */
     latestInputTokens?: number | null;
-    /** Last recorded local estimate, not the native agent's current context utilization. */
     latestInputEstimate: number | null;
-    /** Known text/image allowance only when one or more file token costs are unmeasured. */
     knownInputEstimate?: number | null;
     unmeasuredFileCount?: number;
-    /** Input budget recorded with that estimate; older tasks may have no known limit. */
     latestInputLimit?: number | null;
   };
 };
@@ -238,7 +206,6 @@ export type HelperResourceEditResource = {
 export type HelperResourceEdit = HelperResourceEditResource & {
   editSeq: number;
   taskId: string;
-  /** A grouped receipt contains only changed resources; old single-resource events omit this. */
   resources?: HelperResourceEditResource[];
   canUndo: boolean;
   reason?: string;

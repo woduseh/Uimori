@@ -10,7 +10,6 @@ type Counter = { count: (text: string) => number; dispose?: () => void };
 type TiktokenData = { bpe_ranks: string; special_tokens: Record<string, number>; pat_str: string };
 const counters = new Map<TokenizerProfileId, Counter>();
 const unavailable = new Set<TokenizerProfileId>();
-// A writer, helper and summarizer can share their hot counters without loading every vocabulary.
 const MAX_LOADED_TOKENIZERS = 3;
 
 function asset(profile: TokenizerProfileId, name: string): unknown {
@@ -61,7 +60,6 @@ function counter(profile: TokenizerProfileId): Counter | undefined {
     try {
       selected = load(profile);
     } catch {
-      // A broken optional vocabulary cannot turn token counting into a network request.
       unavailable.add(profile);
       return undefined;
     }
@@ -82,7 +80,6 @@ export type TokenizerInfo = {
   fallback: boolean;
 };
 
-/** Returns a short-lived counter; callers must not retain it across loading another family. */
 export function localTokenizer(profile: TokenizerProfileId): {
   count: Counter['count'];
   info: TokenizerInfo;

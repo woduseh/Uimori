@@ -1,6 +1,5 @@
 import type { RisuPrompt } from './risu-prompt.js';
 import type { PromptRole } from './product.js';
-/** New prompts are native Risu sources. Host data, tools and model routing stay outside authored source. */
 export function createDefaultRisuPrompt(text: string, role: PromptRole = 'main'): RisuPrompt {
   return {
     version: 1,

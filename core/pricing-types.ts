@@ -1,6 +1,5 @@
 import type { ProviderProtocol } from './product.js';
 
-/** USD per million tokens. Null means unknown or inapplicable, never free. */
 export type TokenRates = {
   input: number | null;
   cacheRead: number | null;
@@ -10,7 +9,6 @@ export type TokenRates = {
 };
 export type ContextRates = { aboveInputTokens: number; rates: TokenRates };
 export type ModelPricing =
-  // Legacy name retained for saved settings: only connection catalog pricing is automatic.
   | { mode: 'official' }
   | {
       mode: 'manual';
@@ -23,7 +21,6 @@ export type ModelPricing =
       sourceUrl?: string;
       checkedAt?: string;
     };
-/** Host-only, frozen when a model is reserved; never a provider request parameter. */
 export type PricingSnapshot = {
   version: 1;
   protocol: ProviderProtocol;

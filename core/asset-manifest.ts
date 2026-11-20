@@ -68,7 +68,6 @@ const validFilters = (filter: { actor?: string; outfit?: string; location?: stri
     (key) => filter[key] === undefined || validText(filter[key])
   );
 
-/** Compact author-provided metadata only: no URL, filename inference, bytes or base64. */
 export function searchAssets(
   assets: readonly Asset[],
   search: AssetSearch
@@ -110,7 +109,6 @@ export function searchAssets(
   };
 }
 
-/** An exact pinned ref plus scene combination is required; omission is a normal fallback. */
 export function resolveAsset(assets: readonly Asset[], selection: AssetSelection): AssetResolution {
   const fail = (error: string): AssetResolution => ({ ok: false, fallback: 'no-image', error });
   if (

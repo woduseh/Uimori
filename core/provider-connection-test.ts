@@ -1,11 +1,9 @@
-/** Local connection diagnostics are excluded from story JSON archives. */
 export type ProviderConnectionTest = {
   id: string;
   modelId: string;
   modelRevision: number;
   providerModelId: string;
   connectionId: string;
-  /** Vertex location this test was sent to instead of the connection's own location. */
   location?: string;
   createdAt: string;
   finishedAt: string | null;
@@ -14,7 +12,6 @@ export type ProviderConnectionTest = {
   truncated: boolean;
   latencyMs: number | null;
   error: string | null;
-  /** Present when the provider rejected the request; names the app options it pointed at. */
   rejection?: import('./provider-rejection.js').ProviderRejection;
   usage: { inputTokens: number | null; outputTokens: number | null; costUsd: number | null };
   estimatedCost?: import('./pricing-types.js').CostEstimate;

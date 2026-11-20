@@ -8,7 +8,6 @@ export const DEFAULT_JEV_SETTINGS: JevSettings = {
   longContext: false,
 };
 
-/** Connection metadata only. Credentials never enter a library or story archive. */
 export type JevProviderStatus = {
   revision: number;
   configured: boolean;
@@ -20,7 +19,6 @@ export type JevProviderStatus = {
   settings: JevSettings;
 };
 
-/** Judgment models use their own transport, while sharing provider registration and model lists. */
 export const JEV_PROVIDER_DEFINITION = Object.freeze({
   id: 'typesafe-judgment' as const,
   kind: 'judgment' as const,

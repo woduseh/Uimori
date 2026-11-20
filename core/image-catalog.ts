@@ -1,6 +1,5 @@
 import type { AssetEntry } from './auxiliary.js';
 
-/** Model-visible, authored metadata only. URLs and image bytes stay with the host. */
 export type ImageMetadata = Omit<AssetEntry, 'url'>;
 export function imageMetadata(asset: ImageMetadata): ImageMetadata {
   return {

@@ -1,10 +1,8 @@
 import type { PromptHistoryMessage } from './risu-prompt.js';
 
-/** Authored message changes, not a copy of provider inputs or of the entire conversation. */
 export type MessageChanges = {
   removed: string[];
   updated: { message: PromptHistoryMessage; expectedSourceHash?: string }[];
-  /** Only recorded when a script reorders/inserts messages instead of ordinary append. */
   order?: string[];
 };
 
@@ -60,7 +58,6 @@ export function applyMessageChanges(
   );
   for (const change of changes.updated) {
     const current = entries.get(change.message.id);
-    // A later explicit user edit to the source wins over a script that saw its old text.
     if (current && change.expectedSourceHash && current.sourceHash !== change.expectedSourceHash)
       continue;
     entries.set(change.message.id, {

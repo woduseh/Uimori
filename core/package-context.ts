@@ -12,7 +12,6 @@ import { projectNativeRisuFields } from './risu-native-execution.js';
 import { projectRisuImageHandoff } from './risu-image-handoff.js';
 
 export type ResolvedPackage = CompiledContentAttachment & {
-  /** This turn's dynamically admitted bodies; fixed/native positions keep their authored path. */
   selectedLore: Resource[];
   attachment: ContentAttachment;
   package: RisuContent;
@@ -89,7 +88,6 @@ export function packageContext(
 ): ContentRoleContext | undefined {
   return packageContextFromCompiled(compiledPackages(snapshot, target));
 }
-/** Project one request's already validated packages without compiling their templates again. */
 export function packageContextFromCompiled(
   packages: readonly ResolvedPackage[]
 ): ContentRoleContext | undefined {

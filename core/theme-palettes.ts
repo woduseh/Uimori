@@ -1,7 +1,6 @@
 import type { ThemeColorKey, ThemeColors } from './themes.js';
 import { RADIX_COLOR_SCALES } from './radix-colors.js';
 
-/** The explicit theme-owned palette stops inheritance; null in the API means inherit. */
 export const THEME_PALETTE_ID = 'theme';
 export type PaletteColors = Record<ThemeColorKey, string>;
 export type ThemePalette = {
@@ -89,7 +88,6 @@ function colors(
     info: mode === 'light' ? blue[12] : blue[11],
     'info-bg': blue[3],
     'info-line': blue[7],
-    // Radix blackA8 / blackA9 overlays are independent of color mode.
     shade: mode === 'light' ? '#00000099' : '#000000b3',
   };
 }
@@ -109,7 +107,6 @@ function palette(
   };
 }
 
-/** Stable selection IDs; only built-in presentation colors change, never authored themes. */
 export const BUILTIN_PALETTES: ThemePalette[] = [
   palette('forest', '숲', '익숙한 Uimori의 차분한 초록빛', 'olive', 'grass'),
   palette('cream', '크림', '따뜻한 종이와 잉크의 온기', 'sand', 'bronze'),
@@ -119,7 +116,6 @@ export const BUILTIN_PALETTES: ThemePalette[] = [
   palette('sage', '세이지', '옅은 허브빛과 고요한 청록 포인트', 'sage', 'jade'),
 ];
 
-/** Warm paper and quiet charcoal frame the halo cream; named selections remain independent. */
 export const DEFAULT_PALETTE_COLORS: ThemePalette['colors'] = {
   light: {
     ...colors('light', 'slate', 'bronze'),

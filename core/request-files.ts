@@ -1,20 +1,17 @@
 import type { ProviderProtocol } from './product.js';
 
-/** Immutable attachment metadata. Binary data is resolved only at transmission. */
 export type RequestFile = {
   hash: string;
   name: string;
   mime: string;
   bytes: number;
   kind: 'document' | 'text' | 'audio' | 'video';
-  /** Local extracted-text token estimate, before context admission headroom; absent for unknown media. */
   tokenEstimate?: number;
 };
 export type RequestFileUpload = { uploadId: string; sha256: string; name: string };
 export type RequestFilePart = { type: 'file'; file: RequestFile };
 export type ResolvedRequestFile = { mime: string; base64: string };
 
-// Staging safety bounds; selected providers impose their own raw and serialized limits.
 export const REQUEST_FILE_MAX_COUNT = 100;
 export const REQUEST_FILE_MAX_BYTES = 100_000_000;
 export const REQUEST_FILES_MAX_BYTES = 100_000_000;
@@ -88,7 +85,6 @@ register('video', 'video/webm', 'webm');
 register('video', 'video/wmv', 'wmv');
 register('video', 'video/3gpp', '3gp 3gpp');
 
-/** Extension establishes the admitted format; browser MIME is only a fallback for known formats. */
 export function classifyRequestFile(name: string, mime?: string) {
   const extension = name.toLowerCase().split('.').at(-1) ?? '';
   const known = extensions[extension];
@@ -143,7 +139,6 @@ export function fileInputSupported(
   return fileInputUnsupportedReason(protocol, modelId, file) === undefined;
 }
 
-/** File-picker hints use the same format registry and selected-provider policy as admission. */
 export function requestFileAccept(protocol: ProviderProtocol, modelId: string): string {
   return Object.entries(extensions)
     .filter(([, file]) => fileInputSupported(protocol, modelId, file))

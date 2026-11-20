@@ -215,7 +215,6 @@ function exactEndpoint(connection: Connection, host: string, paths = ['/v1']): b
   }
 }
 
-/** User rates or prices published by this connection only. The caller freezes this result with the execution snapshot. */
 export function resolveModelPricing(
   model: Pick<ModelPreset, 'modelId' | 'serviceTier' | 'cacheTtl' | 'pricing' | 'executionMode'>,
   connection: Connection,

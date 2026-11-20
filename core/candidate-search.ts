@@ -8,7 +8,6 @@ function termCounts(text: string): Map<string, number> {
   const normalized = text.normalize('NFC').toLowerCase();
   for (const word of normalized.match(/[\p{L}\p{M}\p{N}]+/gu) ?? []) {
     add(word);
-    // Names remain discoverable inside Korean particles and unspaced Japanese sentences.
     for (const match of word.matchAll(cjk)) {
       const characters = [...match[0]];
       for (let index = 1; index < characters.length; index++) {
@@ -38,8 +37,6 @@ export function createCandidateSearch(documents: readonly CandidateSearchDocumen
     for (const term of new Set([...title.keys(), ...body.keys()])) {
       const titleCount = title.get(term) ?? 0;
       const bodyCount = body.get(term) ?? 0;
-      // Saturating frequency prevents repeated prose from overwhelming a rare detail.
-      // No body-length penalty: a long lore entry's late paragraphs are still useful.
       const score = (3 * titleCount) / (titleCount + 1) + bodyCount / (bodyCount + 1);
       const list = postings.get(term) ?? [];
       list.push({ index, score });
@@ -62,7 +59,6 @@ export function createCandidateSearch(documents: readonly CandidateSearchDocumen
       const terms = [...termCounts(query.text).keys()];
       const total = terms.reduce((sum, term) => sum + (inverseFrequency.get(term) ?? 0), 0);
       if (total === 0) continue;
-      // Each query has its own weight; a long or repetitive old scene cannot inflate it.
       const weight = query.weight / total;
       for (const term of terms) {
         for (const posting of postings.get(term) ?? []) {
@@ -70,7 +66,6 @@ export function createCandidateSearch(documents: readonly CandidateSearchDocumen
         }
       }
     }
-    // Stable sort preserves ID order for both equal matches and unmatched documents.
     return [...order]
       .filter((index) => !matchedOnly || scores[index] > 0)
       .sort((left, right) => scores[right] - scores[left])

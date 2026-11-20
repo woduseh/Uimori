@@ -1,4 +1,3 @@
-/** Data-only collaboration settings. Read scopes never grant mutation or execution tools. */
 import type { ToolEvent, Usage } from './types.js';
 
 export const AGENT_CONTEXT_REFS_MAX = 8;
@@ -9,7 +8,6 @@ export type AgentConsultationContext = {
 };
 
 export type AdviceOrigin = { agentId: string; consultationId: string };
-/** Host attribution and read receipts, not a model-asserted verdict that the advice is true. */
 export type AgentAdvice = AdviceOrigin & {
   kind: 'advice';
   title: string;
@@ -65,7 +63,6 @@ function fail(code: string): never {
   throw new AgentCollaborationError(`AGENT_COLLABORATION_${code}`);
 }
 
-/** JSON fields; imported prompts validate their object boundary before calling this. */
 function record(
   value: unknown,
   fields: readonly string[],
@@ -106,7 +103,6 @@ function agentId(value: unknown): string {
   return value;
 }
 
-/** Native control keys may contain Unicode; agent IDs keep their narrower host syntax. */
 function controlId(value: unknown): string {
   if (
     typeof value !== 'string' ||
@@ -132,7 +128,6 @@ function definition(value: unknown, enabled: boolean): AgentDefinition {
   let model: AgentDefinition['model'] = null;
   if (agent.model !== null) {
     const ref = record(agent.model, ['id']);
-    // Model IDs belong to the model registry; do not apply agent naming rules to them.
     if (
       typeof ref.id !== 'string' ||
       !ref.id.trim() ||
@@ -161,7 +156,6 @@ function definition(value: unknown, enabled: boolean): AgentDefinition {
   };
 }
 
-/** Preserve unfinished disabled settings; require executable values and references when enabled. */
 export function validateAgentCollaboration(
   value: unknown,
   controlIds?: readonly string[]
@@ -190,7 +184,6 @@ export function validateAgentCollaboration(
     enabled: input.enabled,
     sharedInstructions: text(input.sharedInstructions, 0),
     sharedControls,
-    // The total is a shared ceiling, not a sum of reserved per-agent calls.
     maxCalls: integer(input.maxCalls, input.enabled ? 1 : 0, 12),
     agents,
   };
@@ -206,7 +199,6 @@ export function createAgentCollaboration(): AgentCollaboration {
   };
 }
 
-/** Editable starting points; the host owns execution, and the main agent owns the final prose. */
 export function createAgentDefinition(
   kind: 'character' | 'lore' | 'custom',
   id: string

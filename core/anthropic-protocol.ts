@@ -128,7 +128,6 @@ function readTurn(value: Json): AnthropicTurn {
   return structuredClone(value) as unknown as AnthropicTurn;
 }
 
-/** Pure Messages API encoding. No model name implies support for every optional feature. */
 export function encodeAnthropic(request: ProviderRequest): {
   body: Json;
   context: AnthropicTurn;
@@ -314,7 +313,6 @@ export function encodeAnthropic(request: ProviderRequest): {
           {
             type: 'tool_use',
             id: item.callId,
-            // Reuse declared aliases; retired bootstrap-only tools keep their valid history names.
             name: toolNames.find((tool) => tool.name === item.name)?.wireName ?? item.name,
             input: item.args,
           },
@@ -471,7 +469,6 @@ function mergedUsage(previous: ProviderUsage, incoming: Json): ProviderUsage {
   }
   const raw = { ...old, ...incoming };
   const base = token(raw.input_tokens);
-  // Cache buckets are disjoint. Explicit null stays unknown; absent optional buckets mean no reported cache use.
   const cacheCreation =
     raw.cache_creation_input_tokens === undefined ? 0 : token(raw.cache_creation_input_tokens);
   const cacheRead =
@@ -525,7 +522,6 @@ const reasons = new Set([
   'model_context_window_exceeded',
 ]);
 
-/** Accepts parsed SSE data objects only. No tools, retries or provider requests are executed here. */
 export class AnthropicDecoder {
   private readonly context: AnthropicTurn;
   private readonly blocks: StreamBlock[] = [];
@@ -608,7 +604,6 @@ export class AnthropicDecoder {
       this.started = true;
       return;
     }
-    // The API may introduce informational event types. They cannot modify content or mark completion.
     if (
       ![
         'content_block_start',
@@ -845,7 +840,6 @@ export class AnthropicDecoder {
   private publicAppend(index: number, text: string): ProviderTextUpdate {
     if (!text) return;
     this.publicLength += text.length;
-    // A provider can still mutate an earlier open block. Reconcile that boundary in full.
     if (index < this.publicTail) return this.publicText();
     this.publicTail = index;
     return { text, offset: this.publicLength };
@@ -995,7 +989,6 @@ export class AnthropicDecoder {
   }
 }
 
-/** Decode a non-streaming Messages response through the same state machine used by SSE. */
 export function decodeAnthropicMessage(value: unknown, context: AnthropicTurn): ProviderResult {
   const message = copy(value, 'INVALID_ANTHROPIC_EVENT');
   if (
@@ -1028,7 +1021,6 @@ export function decodeAnthropicMessage(value: unknown, context: AnthropicTurn): 
   return decoder.finish();
 }
 
-/** Diagnostic copies hide reasoning and signatures while actual continuation bytes stay intact. */
 export function diagnosticAnthropicBody(value: Json): Json {
   if (Array.isArray(value)) return value.map(diagnosticAnthropicBody);
   if (!object(value)) return value;

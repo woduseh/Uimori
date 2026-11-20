@@ -63,7 +63,6 @@ function boundedSearch(
   return result();
 }
 
-/** Ordered ancestry index: position, revision/hash, size, preview and window membership. */
 function listStorySources(snapshot: RunSnapshot, offset: number, limit: number) {
   const compacted = new Set(snapshot.contextPlan?.compacted.map((ref) => ref.revision) ?? []);
   const results = snapshot.history.slice(offset, offset + limit).flatMap((item, pageIndex) => {

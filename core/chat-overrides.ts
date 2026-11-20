@@ -100,7 +100,6 @@ export function validateChatLoreSelector(value: unknown): ChatLoreSelector {
   };
 }
 
-/** Enumerate link paths separately from the canonical module closure, whose behavior still executes once. */
 export function chatPackagePaths(
   profile: Pick<ProfileSnapshot, 'packageAttachments' | 'packages'>,
   roots: ContentAttachment[]
@@ -136,7 +135,6 @@ export function chatPackagePaths(
   return result;
 }
 
-/** A separate immutable text projection. No original package or executable definition is changed. */
 export function buildChatOverrideSnapshot(
   profile: Pick<ProfileSnapshot, 'packageAttachments' | 'packages'>,
   roots: ContentAttachment[],
@@ -181,8 +179,6 @@ export function buildChatOverrideSnapshot(
         }
         lore[entry.selector.field] = entry.value;
       }
-      // A deleted entry can reference a folder or neighbor removed by the original author. The old text is
-      // preserved, while unavailable presentation links are dropped from this execution projection only.
       for (const lore of pkg.lore) {
         if (lore.folderId && !pkg.loreFolders?.some((folder) => folder.id === lore.folderId))
           delete lore.folderId;
@@ -209,7 +205,6 @@ export function buildChatOverrideSnapshot(
   };
 }
 
-/** Only lore is split when two link paths need different text; authored scripts stay canonical. */
 export function projectChatPackageCompilation(
   profile: ProfileSnapshot,
   attachment: ContentAttachment,

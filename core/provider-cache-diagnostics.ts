@@ -6,10 +6,6 @@ export type ProviderCacheBoundary = { path: string; sha256: string; bytes: numbe
 const object = (value: Json | undefined): value is Record<string, Json> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
-/** Local wire fingerprints, not provider cache keys or evidence of a cache hit.
- * All non-message settings are included conservatively. bytes counts this framed JSON projection,
- * not model tokens. Only explicit blocks emitted by the Responses/Messages encoders are reported.
- */
 export function providerCacheBoundaries(
   protocol: ProviderProtocol,
   body: Json
@@ -41,7 +37,6 @@ export function providerCacheBoundaries(
       const path = `${section}[${index}]`;
       if (object(message) && Array.isArray(message.content)) {
         const { content, ...envelope } = message;
-        // Include every message header even if its JSON key followed content in the wire body.
         yield { path, value: envelope };
         for (const [partIndex, part] of content.entries())
           yield {

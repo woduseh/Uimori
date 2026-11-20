@@ -1,4 +1,3 @@
-/** Request metadata only; never written into authored Risu documents. */
 export type RisuContextSource = {
   sourceRole: string;
   sourceName: string;
@@ -39,7 +38,6 @@ export function serializeRisuContextSource(item: SourceItem): string {
   return `<uimori_source ${attributes(item.risuSource)}>\n${item.text}\n</uimori_source>`;
 }
 
-/** Group adjacent entries only, so source grouping never reorders authored content. */
 export function serializeRisuLoreSources(items: readonly SourceItem[]): string {
   const groups: { source?: RisuContextSource; items: SourceItem[] }[] = [];
   for (const item of items) {

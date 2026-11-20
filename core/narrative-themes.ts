@@ -2,7 +2,6 @@ import type { ThemeDefinition } from './themes.js';
 import { BUILTIN_PALETTES } from './theme-palettes.js';
 import { builtinThemeAsset } from './builtin-theme-assets.js';
 
-/** Layouts consume app-owned portrait slots; exported themes never embed a character or URL. */
 const commonApp = `
 .story-workspace { container: narrative-workspace / inline-size; background: var(--bg); }
 .reader-stage > [data-uimori-part="gallery"] { display: none; }

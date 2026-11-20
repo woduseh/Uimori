@@ -19,7 +19,6 @@ export type ChatCopyAuthoring = {
     import('./outline.js').OutlineNode,
     'id' | 'parentId' | 'level' | 'position' | 'title' | 'intent' | 'fixed' | 'relatedIds'
   >[];
-  /** Source associations, not execution status or receipts. */
   outlineSources?: { nodeId: string; atIndex: number; origin?: 'focus' }[];
   outlineFocusId?: string;
   options: Record<string, import('./risu-prompt.js').PromptValue>;
@@ -29,7 +28,6 @@ export type ChatCopyAuthoring = {
   > & { atIndex: number | null })[];
 };
 export type ChatCopyState = {
-  /** Authored preferences only; derived guide results belong to the original execution. */
   storyGuide?: import('./story-guide.js').StoryGuideConfig;
   sceneTitles?: { atIndex: number; title: string }[];
   illustrationContinuity?: { scenes: number[]; text: string }[];
@@ -67,7 +65,6 @@ export type PortableIllustration = {
   height?: number;
   stale?: boolean;
   sourceHash?: string;
-  /** Unverified positions are not portable; the last visual intent is. */
   unplacedMoment?: { focus: string; visualBrief: string };
   target?: {
     focus: string;
@@ -87,7 +84,6 @@ export type ChatCopy = {
   state: ChatCopyState;
   illustrations: PortableIllustration[];
 };
-/** Each former branch is an independent chat document. No database tables or execution receipts. */
 export type ChatBackup = {
   format: typeof CHAT_BACKUP_FORMAT;
   version: typeof CHAT_BACKUP_VERSION;

@@ -14,7 +14,6 @@ export class PackageGraphError extends Error {
   readonly statusCode = 400;
 }
 
-/** Preserve declaration-order execution; persistence alone uses dependency-first order. */
 export function resolvePackageGraph(
   reader: PackageGraphReader,
   roots: ContentAttachment[],

@@ -1,6 +1,5 @@
 import { ProviderBodyLimitError, readProviderBody } from './provider-fetch.js';
 
-/** Owner-facing diagnostics may contain echoed input. Shared reports must project safe fields only. */
 export type ProviderHttpDiagnostic = {
   httpStatus: number;
   providerCode?: string | number;
@@ -22,7 +21,6 @@ const withoutControlCharacters = (value: string) =>
       return code === 9 || code === 10 || code === 13 || (code >= 32 && code !== 127);
     })
     .join('');
-// Exact request credentials are removed before truncation so a cut cannot expose a key prefix.
 function diagnosticMessage(value: unknown, secret?: string): string | undefined {
   if (typeof value !== 'string') return undefined;
   const redacted = withoutControlCharacters(
@@ -93,7 +91,6 @@ const object = (value: unknown): Record<string, unknown> | undefined =>
     ? (value as Record<string, unknown>)
     : undefined;
 
-/** A bounded read participates in the same request timeout and cancellation as fetch. */
 export async function readProviderHttpDiagnostic(
   response: Response,
   signal: AbortSignal,
@@ -164,8 +161,6 @@ export async function readProviderHttpDiagnostic(
       if (!fields.includes(value)) fields.push(value);
     };
     addField(error.param);
-    // Explicit field paths may be new provider options. In prose, only known paths are
-    // inferred: quoted allowed values such as 'low' must not be mistaken for field names.
     const inferField = (value: string) => {
       if (
         value

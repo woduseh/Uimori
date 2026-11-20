@@ -1,6 +1,5 @@
 import type { HelperStatus } from './helper.js';
 
-/** Small public records. Tool arguments, results and reserved model inputs stay private. */
 export type HelperActivityEvent = {
   seq: number;
   kind: string;

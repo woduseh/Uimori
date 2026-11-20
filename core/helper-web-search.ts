@@ -1,12 +1,10 @@
 import type { ProviderProtocol } from './product.js';
 import type { Json, ProviderRequest } from './transport.js';
 
-/** Native search evidence, never inferred from model-written URLs. */
 export type ProviderWebSearch = {
   performed: boolean;
   sources: { url: string; title: string }[];
   queries?: string[];
-  /** Provider-required suggestions markup; display only in an isolated frame. */
   searchEntryPoint?: string;
 };
 
@@ -17,7 +15,6 @@ export function webSearchAllowed(request: Pick<ProviderRequest, 'role' | 'input'
   );
 }
 
-/** Gemini grounding uses a guide-only request without local tools. */
 export function storyGuideWebSearchCapability(protocol: ProviderProtocol) {
   if (protocol === 'google-gemini-v1' || protocol === 'vertex-gemini-v1')
     return { supported: true, mode: 'provider' as const };
@@ -50,7 +47,6 @@ export function webSearchSources(citations: Json[]): ProviderWebSearch['sources'
   });
 }
 
-/** Keep a saved reference small without truncating provider-required attribution markup. */
 export function boundedWebSearch(value: ProviderWebSearch): ProviderWebSearch {
   const sources = webSearchSources(value.sources);
   if (
@@ -70,7 +66,6 @@ export function boundedWebSearch(value: ProviderWebSearch): ProviderWebSearch {
   };
 }
 
-/** This is adapter support, not a promise that a selected model/account can use search. */
 export function helperWebSearchCapability(protocol: ProviderProtocol) {
   if (protocol === 'codex-app-server-v1') return { supported: true, mode: 'live' as const };
   if (protocol === 'openai-responses-v1' || protocol === 'anthropic-messages-v1')
@@ -82,7 +77,6 @@ export function helperWebSearchCapability(protocol: ProviderProtocol) {
   };
 }
 
-/** Render provider citations without changing original content retained for continuation. */
 export function webCitationLinks(citations: Json[]): string {
   const seen = new Set<string>();
   const links: string[] = [];

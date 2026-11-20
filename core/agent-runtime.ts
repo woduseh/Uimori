@@ -1,4 +1,3 @@
-/** Public runtime metadata. No credentials, private paths or raw provider errors. */
 export type CodexRuntimeStatus = {
   available: boolean;
   authenticated: boolean;

@@ -1,6 +1,5 @@
 import type { ThemeAssetKind } from './themes.js';
 
-/** Files under third_party/theme-assets, identified by the SHA-256 of their bytes. */
 export type BuiltinThemeAssetFile = {
   hash: string;
   kind: ThemeAssetKind;

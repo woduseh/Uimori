@@ -25,7 +25,6 @@ export type ModelFamily = (typeof MODEL_FAMILIES)[number];
 export type VertexRequestTier = 'standard' | 'flex';
 export type ModelExecutionMode = 'realtime' | 'batch';
 export type ModelGeneration = {
-  /** Model-maker profile used to expose and adapt generation options. It is host metadata, not a wire field by itself. */
   modelFamily?: ModelFamily;
   maxOutputTokens: number;
   temperature: number | null;
@@ -53,7 +52,6 @@ export type ChatFolder = {
   defaultPersona: ContentRef | null;
   revision: number;
 };
-/** Live setting selection. Revision remains an internal edit-conflict token on settings, never a selectable history. */
 export type ModelRef = { id: string };
 export type Content = ContentRef & {
   coverImage?: { url: string; title: string };
@@ -83,16 +81,13 @@ export type PromptPreset = ContentRef & {
   program: import('./risu-prompt.js').RisuPrompt;
   values?: Record<string, import('./risu-prompt.js').PromptValue>;
 };
-/** Current read projection of the selected preset and explicit global option overrides. */
 export type CurrentPrompt = {
   presetId?: string;
   presetRevision?: number;
   title: string;
   program: import('./risu-prompt.js').RisuPrompt;
   values: Record<string, import('./risu-prompt.js').PromptValue>;
-  /** Explicit global overrides; values above include the current preset defaults. */
   optionValues?: Record<string, import('./risu-prompt.js').PromptValue>;
-  /** The selected preset's current saved option values. */
   defaultValues?: Record<string, import('./risu-prompt.js').PromptValue>;
 };
 export type ModelWorkspace = {
@@ -138,7 +133,6 @@ export const MODEL_ROLES = [
   'illustration',
 ] as const;
 export type ModelRole = (typeof MODEL_ROLES)[number];
-// Native scripts and illustrations have separate model routing.
 export type WorkspaceModelRole = Exclude<ModelRole, 'illustration' | 'image'>;
 export function workspaceModelRef(
   workspace: PromptWorkspace,
@@ -163,16 +157,13 @@ export type Connection = ContentRef & {
   endpoint: string;
   credentialRef?: string;
   enabled: boolean;
-  /** User-controlled provider display order; excluded from execution snapshots. */
   displayOrder?: number;
   catalog: {
     id: string;
     name: string;
     capabilities: Record<string, boolean | null>;
     priceRevision: string | null;
-    /** Limits the provider's list API published for this model; absent when it publishes none. */
     limits?: { maxOutputTokens?: number; inputTokenLimit?: number };
-    /** Option values the list API published, in this protocol's native vocabulary. */
     options?: { thinking?: string[]; thinkingModes?: string[] };
     pricing?: {
       rates: import('./pricing-types.js').TokenRates;
@@ -192,11 +183,6 @@ export type Connection = ContentRef & {
   catalogError: string | null;
   catalogUpdatedAt?: string | null;
 };
-/**
- * Connection fields that reference server-side credentials. Archives, backups and frozen
- * snapshots drop exactly these so a restored copy cannot name the origin's secrets. Keep in step
- * with the Connection type above; archive validation rejects any other connection field.
- */
 
 export type ModelPreset = ContentRef &
   ModelGeneration & {
@@ -204,17 +190,13 @@ export type ModelPreset = ContentRef &
     connectionId: string;
     modelId: string;
     inputTokenLimit?: number;
-    /** Local token accounting only; omitted presets resolve automatically for each new execution. */
     tokenizer?: import('./tokenizer-profiles.js').TokenizerProfileId;
     capabilityProtocol?: ProviderProtocol;
-    /** Host execution policy; omitted means the existing real-time provider call. */
     executionMode?: ModelExecutionMode;
     timeoutMs?: number;
     enabled?: boolean;
-    /** User-controlled display order inside a provider group. */
     displayOrder?: number;
     evaluationTools?: EvaluationToolOptions;
-    /** Optional JSON passed to Vercel AI Gateway; never used as a credential container. */
     providerOptions?: ProviderOptions;
     pricing?: import('./pricing-types.js').ModelPricing;
     source?: { kind: 'catalog' | 'manual'; catalogUpdatedAt: string | null };
@@ -224,43 +206,30 @@ export type ModelSnapshot = ModelPreset & {
   pricingSnapshot?: import('./pricing-types.js').PricingSnapshot;
 };
 export type ChatProfile = {
-  /** Optional live selections. Future main runs follow the selected IDs' latest saved contents. */
   pinned?: { mainPromptPresetId?: string; mainModel?: ModelRef };
-  /** Chat-scoped Risu author-note override. Empty/absent falls back to the preset default. */
   authorNote?: string;
-  /** Read-only notices from adapting saved options to current definitions. Never execution evidence. */
   optionAdjustments?: string[];
   loreContext?: import('./lore-context.js').LoreContextPolicy;
   chatId: string;
   revision: number;
-  /** Read-only effective selection, including a pinned main model; frozen by each execution. */
   routes: Record<TaskModelRole, ModelRef | null>;
-  /** True selects JEV placement; false selects writer-authored image tags for both languages. */
   image: boolean;
-  /** Archived input only. Current original and translation placement share image. */
   imageTranslation?: boolean;
   packageAttachments?: import('./risu-content.js').ContentAttachment[];
 };
 export type ProfileSnapshot = ChatProfile & {
-  /** Frozen summary policy for this run, independent of later global settings. */
   summaryLength?: import('./summary-length.js').SummaryLengthSettings;
-  /** Chat overrides frozen at reservation; absent in historical snapshots. */
   variableState?: import('./chat-variables.js').ChatVariableState;
   chatOptions?: import('./chat-options.js').ChatOptionResolution;
-  /** Text-only per-link projection; the original packages below remain revision-exact. */
   chatOverrides?: import('./chat-overrides.js').ChatOverrideSnapshot;
   contextModel?: ModelSnapshot;
-  /** A selected role could not be resolved at reservation; absence also supports older snapshots. */
   contextModelUnavailable?: true;
-  /** Global Lua script model resolved and frozen at reservation time. */
   scriptModel?: ModelSnapshot;
   scriptModelUnavailable?: true;
-  /** Self-contained execution evidence; never a live library dependency. */
   prompts?: Partial<Record<PromptRole, ContentRef | null>>;
   promptControls?: Record<string, import('./risu-prompt.js').ChatPromptControls>;
   promptWorkspaceRevision?: number;
   promptOptionOwner?: string;
-  /** Models resolved at reservation, keyed by the main prompt's advisor IDs. */
   collaborationModels?: Record<string, ModelSnapshot>;
   packages?: import('./risu-content.js').RisuContent[];
   models: Partial<Record<TaskRole, ModelSnapshot>>;
@@ -308,8 +277,6 @@ export type Attempt = {
   request: unknown;
   response: unknown;
 };
-// Summary lists preserve content references and metadata; their text is a placeholder.
-// Fetch current content before opening an editor; revisions still protect concurrent saves.
 export type PromptPresetSummary = Pick<PromptPreset, 'id' | 'revision' | 'title' | 'role'>;
 export type Library = {
   organization?: import('./library-organization.js').LibraryOrganization;
@@ -332,7 +299,6 @@ export const defaultProfile = (chatId: string): ChatProfile => ({
 });
 
 export const VERTEX_GEMINI_DEFAULT_TIMEOUT_MS = 300_000;
-/** Deadline for a model whose preset leaves its timeout unset; matches the provider HTTP default. */
 export const DEFAULT_MODEL_TIMEOUT_MS = 300_000;
 export function modelTimeoutMs(model: Pick<ModelPreset, 'timeoutMs'>): number {
   return model.timeoutMs ?? DEFAULT_MODEL_TIMEOUT_MS;
@@ -344,7 +310,6 @@ export function validateVertexEndpoint(value: string): string {
   return vertexModelsEndpoint(endpoint.projectId, endpoint.location);
 }
 
-/** API roots are connection settings; paths supplied by model output never change them. */
 export function validateProviderEndpoint(protocol: ProviderProtocol, value: string): string {
   if (protocol === 'codex-app-server-v1') {
     if (value !== 'codex://local') throw new Error('INVALID_CODEX_ENDPOINT');

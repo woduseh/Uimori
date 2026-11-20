@@ -1,6 +1,5 @@
 import { evaluationFail, inspectRuntimeValue, PromptBudget } from './prompt-values.js';
 
-/** Chat-owned overrides. Missing keys continue to resolve from authored defaults. */
 export interface ChatVariableState {
   revision: number;
   values: Record<string, string>;
@@ -12,7 +11,6 @@ export const CHAT_VARIABLE_LIMITS = {
   maxTotalChars: 1_000_000,
 } as const;
 
-/** Shared validation for authored defaults and stored overrides; keys are authored data. */
 export function validateChatVariableValues(value: unknown): Record<string, string> {
   inspectRuntimeValue(
     value,

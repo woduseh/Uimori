@@ -5,7 +5,6 @@ import type { ProviderProtocol } from './product.js';
 
 const IMAGE_REFERENCE = /^uimori-image:\/\/([a-f0-9]{64})\/([1-9][0-9]*)\/([1-9][0-9]*)$/u;
 
-/** Small immutable references are safe in previews, signed continuations and saved requests. */
 export function providerImageReference(image: RequestImage): string {
   return `uimori-image://${image.input.hash}/${image.input.width}/${image.input.height}`;
 }
@@ -45,7 +44,6 @@ export function requestImages(request: ImageRequest): RequestImage[] {
   ];
 }
 
-/** Unknown routed/custom models may try image input; known text-only families are rejected. */
 export function imageInputSupported(protocol: ProviderProtocol, modelId: string): boolean | null {
   if (protocol === 'fixture-sse-v1') return true;
   if (
@@ -91,7 +89,6 @@ export function providerImagePart(image: RequestImage, protocol: ProviderProtoco
 const object = (value: Json): value is Record<string, Json> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
-/** Visit native image slots only. Text and provider tool output cannot request blob resolution. */
 export function imageSlot(
   value: Record<string, Json>
 ): { owner: Record<string, Json>; key: string; url: boolean } | undefined {
@@ -112,7 +109,6 @@ export function imageSlot(
   return undefined;
 }
 
-/** Recognize a real planned image part, never a marker appearing in ordinary source text. */
 export function plannedImageMetadata(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const slot = imageSlot(value as Record<string, Json>);

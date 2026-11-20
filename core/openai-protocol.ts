@@ -278,9 +278,7 @@ function recoverTruncatedContent(value: unknown): string | undefined {
     try {
       const parsed = JSON.parse('"' + body.slice(0, body.length - trim) + '"');
       if (typeof parsed === 'string' && parsed.trim()) return parsed;
-    } catch {
-      /* trim only an incomplete JSON escape */
-    }
+    } catch {}
   }
   return undefined;
 }
@@ -307,7 +305,6 @@ function readUsage(value: Json, inputKey: string, outputKey: string): ProviderUs
     return number;
   };
   count('total_tokens');
-  // Both APIs already include reasoning tokens in output/completion_tokens; do not add them again.
   return {
     inputTokens: count(inputKey),
     outputTokens: count(outputKey),
@@ -377,7 +374,6 @@ function diagnostic(value: Json): Json {
     ])
   );
 }
-// Shared only by the two OpenAI wire protocols; neither helper performs network or host tool execution.
 export const openAIProtocol = {
   hash,
   reject,
@@ -395,7 +391,6 @@ export const openAIProtocol = {
   diagnostic,
 };
 
-/** Stateless Responses requests replay every original output item, including encrypted reasoning. */
 export function encodeResponses(request: ProviderRequest): {
   body: Json;
   context: OpenAITurn;
@@ -411,8 +406,6 @@ export function encodeResponses(request: ProviderRequest): {
       ? cache?.breakpoint
       : undefined;
   const requestLabel = 'Request data (JSON):\n';
-  // GPT-6.2 appends top-level `instructions` after `input`, outside the cacheable prefix. Its host
-  // contract leads `input` as a developer message; earlier models keep their existing wire form.
   const developerFirst = /(?:^|\/)gpt-6\.2(?:$|-)/u.test(request.modelId);
   const bootstrapInput: Json[] = [];
   for (const item of bootstrap as Record<string, Json>[]) {
@@ -445,7 +438,6 @@ export function encodeResponses(request: ProviderRequest): {
         })),
       ]
     : [
-        // A continuation replays this stored item first; it is never added a second time.
         ...(developerFirst
           ? [
               {
@@ -463,7 +455,6 @@ export function encodeResponses(request: ProviderRequest): {
                 content: [
                   ...requestDataBlocks(prepared.wireInput, request.role).flatMap(
                     (text, index, blocks) => {
-                      // Retain the existing tools/instructions anchor for small requests.
                       if (blocks.length === 1 && stableCachePoint)
                         return [
                           {
@@ -687,7 +678,6 @@ export class ResponsesDecoder {
         ids.add(call.id);
         calls.push(call);
       } else if (item.type === 'web_search_call' && this.context.webSearch) {
-        // Hosted search output remains opaque provider history, never a host tool invocation.
       } else if (item.type !== 'function_call' && item.type !== 'reasoning' && strict)
         reject('UNSUPPORTED_OUTPUT_ITEM');
     }
@@ -722,9 +712,7 @@ export class ResponsesDecoder {
     try {
       JSON.parse(item.arguments);
       return undefined;
-    } catch {
-      /* only malformed terminal JSON is eligible */
-    }
+    } catch {}
     const content = recoverTruncatedContent(item.arguments);
     if (content === undefined) return undefined;
     return {
@@ -913,7 +901,6 @@ export class ResponsesDecoder {
       (this.context.webSearch &&
         /^response\.web_search_call\.(in_progress|searching|completed)$/u.test(event.type))
     ) {
-      // Completed response.output is authoritative for opaque reasoning and annotations.
       return;
     } else reject('UNSUPPORTED_RESPONSES_EVENT');
     this.refresh(false);

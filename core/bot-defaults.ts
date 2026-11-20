@@ -6,7 +6,6 @@ export type BotPersonaDefault =
   | { mode: 'persona'; persona: ContentRef };
 export type BotDefaults = { revision: number; persona: BotPersonaDefault };
 
-/** Defaults are used only while choosing a new chat's starting persona. */
 export function newChatPersona(
   bot: BotPersonaDefault,
   folder: ContentRef | null = null,
