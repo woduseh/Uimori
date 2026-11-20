@@ -815,12 +815,6 @@ export const messages = {
     ja: '保管された編集下書き{v0}',
     zh: '已归档的编辑草稿{v0}',
   },
-  'helpers.m148': {
-    ko: '원래 저장 형식',
-    en: 'Original storage format',
-    ja: '元の保存形式',
-    zh: '原始保存格式',
-  },
   'helpers.m149': {
     ko: '수정 번호 {v0} 기준',
     en: 'Based on revision {v0}',

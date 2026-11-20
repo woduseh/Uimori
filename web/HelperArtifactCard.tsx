@@ -12,9 +12,9 @@ import { loadHelperRecovery } from './helper-recovery.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 
 export type HelperArtifactView = HelperArtifact;
-type Draft = { key: string; revision: number | null; text: string };
+type Draft = { key: string; revision: number; text: string };
 
-function storedDraft(key: string, raw: string): Draft {
+function storedDraft(key: string, raw: string): Draft | null {
   try {
     const value = JSON.parse(raw) as { revision?: unknown; text?: unknown } | null;
     if (
@@ -25,7 +25,7 @@ function storedDraft(key: string, raw: string): Draft {
     )
       return { key, revision: Number(value.revision), text: value.text };
   } catch {}
-  return { key, revision: null, text: raw };
+  return null;
 }
 
 export function HelperArtifactCard({
@@ -213,10 +213,7 @@ export function HelperArtifactCard({
               <h4>
                 {t('helpers.m321', {
                   index: formatNumber(index + 1),
-                  revision:
-                    draft.revision === null
-                      ? t('helpers.m148')
-                      : t('helpers.m149', { v0: formatNumber(draft.revision) }),
+                  revision: t('helpers.m149', { v0: formatNumber(draft.revision) }),
                 })}
               </h4>
               <div className="helper-artifact-literal">{draft.text}</div>

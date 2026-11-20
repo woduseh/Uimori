@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import {
-  readAcknowledgements,
-  saveAcknowledgements,
-  migrateAcknowledgements,
-} from '../web/activity-acknowledgements.js';
+import { readAcknowledgements, saveAcknowledgements } from '../web/activity-acknowledgements.js';
 
 function storage() {
   const data = new Map<string, string>();
@@ -23,7 +19,6 @@ function storage() {
 }
 beforeEach(() => {
   vi.stubGlobal('localStorage', storage());
-  vi.stubGlobal('sessionStorage', storage());
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -35,22 +30,13 @@ test('independent saves preserve prior confirmations and remain scoped to their 
   expect(readAcknowledgements('b')).toEqual(['execution-3']);
 });
 
-test('legacy session acknowledgements migrate before the tab session ends', () => {
-  sessionStorage.setItem('activity-acknowledged:a', JSON.stringify(['old-execution', 3]));
-  expect(migrateAcknowledgements('a')).toBe(true);
-  expect(sessionStorage.getItem('activity-acknowledged:a')).toBeNull();
-  vi.stubGlobal('sessionStorage', storage());
-  expect(readAcknowledgements('a')).toEqual(['old-execution']);
-});
-
-test('storage failure is explicit and does not discard the legacy confirmation', () => {
-  sessionStorage.setItem('activity-acknowledged:a', JSON.stringify(['old-execution']));
+test('storage failure is explicit and keeps earlier confirmations', () => {
+  expect(saveAcknowledgements('a', ['old-execution'])).toBe(true);
   vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
     throw new Error('Storage full');
   });
-  expect(migrateAcknowledgements('a')).toBe(false);
-  expect(readAcknowledgements('a')).toEqual(['old-execution']);
   expect(saveAcknowledgements('a', ['new-execution'])).toBe(false);
+  expect(readAcknowledgements('a')).toEqual(['old-execution']);
 });
 
 test('confirmations do not stop persisting after an arbitrary history count', () => {

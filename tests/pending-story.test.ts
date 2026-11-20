@@ -41,7 +41,7 @@ function fixture() {
     }
     return Response.json(profile);
   });
-  savePendingStoryProfile('chat', { packageAttachments: original });
+  savePendingStoryProfile('chat', { packageAttachments: original, profileBaseRevision: 1 });
   return {
     values,
     get puts() {
@@ -99,4 +99,15 @@ test('using saved settings discards only the exact conflict the user reviewed', 
   acceptSavedStoryProfile('chat', conflict!.savedIntent);
   expect(f.values.has('pending-profile:chat')).toBe(false);
   expect(f.profile.packageAttachments).toEqual(changed);
+});
+
+test('a pending story without a base revision asks the user instead of writing the profile', async () => {
+  const f = fixture();
+  savePendingStoryProfile('chat', { packageAttachments: changed });
+  await expect(completePendingStoryProfile('chat')).rejects.toBeInstanceOf(
+    PendingStoryProfileConflict
+  );
+  expect(f.puts).toBe(0);
+  expect(f.profile.packageAttachments).toEqual([]);
+  expect(f.values.has('pending-profile:chat')).toBe(true);
 });

@@ -15,7 +15,6 @@ import {
 import {
   readAcknowledgements,
   saveAcknowledgements,
-  migrateAcknowledgements,
   isAcknowledgementStorageKey,
 } from './activity-acknowledgements.js';
 import { api } from './api.js';
@@ -122,7 +121,7 @@ export function ActivityStatus({
   const [acknowledged, setAcknowledged] = useState<string[]>(() => readAcknowledgements(chatId));
   const [persistenceError, setPersistenceError] = useState(false);
   useEffect(() => {
-    setPersistenceError(!migrateAcknowledgements(chatId));
+    setPersistenceError(false);
     const sync = (event: StorageEvent) => {
       if (!isAcknowledgementStorageKey(chatId, event.key)) return;
       const saved = readAcknowledgements(chatId);

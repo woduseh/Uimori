@@ -195,6 +195,7 @@ test('new resources migrate ordered recovery writes to their saved ID without lo
 
 test('invalid recovered input stays local, waits for explicit save, and blocks helper capture', async () => {
   vi.mocked(readRecovery).mockResolvedValueOnce({
+    token: 'recovered',
     revision: 1,
     model,
     rawFields: { raw: '[unfinished' },
@@ -344,19 +345,6 @@ test.each(['save', 'discard', 'copy'] as const)(
     expect(reopened.snapshot()).toMatchObject({ local: { model: newer }, recovery: 'saved' });
   }
 );
-
-test('discard removes a loaded legacy recovery buffer without a token', async () => {
-  disk.set('content:one', {
-    revision: 1,
-    model: { ...model, title: 'Recovered' },
-    rawFields: {},
-  });
-  const session = editor();
-  await session.open();
-  await session.discard();
-  expect(deleteRecoveryIfToken).toHaveBeenCalledWith('content:one', undefined);
-  expect(disk.has('content:one')).toBe(false);
-});
 
 test('a clean session with no loaded buffer cannot clear another tab recovery', async () => {
   const clean = editor();

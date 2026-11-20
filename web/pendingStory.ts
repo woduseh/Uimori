@@ -125,9 +125,10 @@ async function applyPendingStoryProfile(chatId: string) {
     if (sessionStorage.getItem(key) === raw) sessionStorage.removeItem(key);
     return;
   }
+  const base = intent.profileBaseRevision;
+  if (base === undefined) throw new PendingStoryProfileConflict(raw);
   const current = await api<ChatProfile>(`/chats/${chatId}/profile`);
   if (sessionStorage.getItem(key) !== raw) throw new Error(uiMessage('main.pendingProfileChanged'));
-  const base = intent.profileBaseRevision ?? 1;
   const sameAttachments =
     intent.packageAttachments === undefined ||
     JSON.stringify((current.packageAttachments ?? []).map(({ id, role }) => [id, role])) ===
@@ -137,12 +138,6 @@ async function applyPendingStoryProfile(chatId: string) {
     if (current.revision < base || !sameAttachments) throw new PendingStoryProfileConflict(raw);
     saved = current;
   } else {
-    if (intent.profileBaseRevision === undefined) {
-      intent.profileBaseRevision = base;
-      savePendingStoryProfile(chatId, intent);
-      raw = sessionStorage.getItem(key);
-      if (raw === null) throw new Error(uiMessage('main.pendingProfileChanged'));
-    }
     saved = await api<ChatProfile>(
       `/chats/${chatId}/profile`,
       {

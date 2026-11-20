@@ -60,7 +60,7 @@ export class ResourceEditorSession {
   private opening: Promise<void> | null = null;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private recoveryWrites = Promise.resolve();
-  private readonly recoveryTokens = new Map<string, string | undefined>();
+  private readonly recoveryTokens = new Map<string, string>();
   private generation = 0;
   private pendingCreation: PendingCreation | null = null;
   private creationReadFailed = false;
@@ -173,7 +173,7 @@ export class ResourceEditorSession {
           this.options.targetId,
           saved?.revision ?? null
         );
-        if (recovered) {
+        if (recovered?.token) {
           this.recoveryTokens.set(this.editorKey, recovered.token);
           const local = {
             model: recovered.model,
@@ -217,9 +217,12 @@ export class ResourceEditorSession {
         if (value) {
           await writeRecovery(key, value);
           this.recoveryTokens.set(key, value.token);
-        } else if (this.recoveryTokens.has(key)) {
-          await deleteRecoveryIfToken(key, this.recoveryTokens.get(key));
-          this.recoveryTokens.delete(key);
+        } else {
+          const token = this.recoveryTokens.get(key);
+          if (token) {
+            await deleteRecoveryIfToken(key, token);
+            this.recoveryTokens.delete(key);
+          }
         }
       })
       .then(

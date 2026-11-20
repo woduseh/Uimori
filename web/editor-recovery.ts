@@ -88,7 +88,7 @@ async function deleteRecoveryIf<T>(
   });
 }
 
-export function deleteRecoveryIfToken(key: string, token: string | undefined) {
+export function deleteRecoveryIfToken(key: string, token: string) {
   return deleteRecoveryIf(key, (found) => found.token === token);
 }
 
