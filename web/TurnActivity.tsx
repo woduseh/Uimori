@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Job, ReaderActivity, ReaderRun, Source } from '../core/types.js';
 import { RunTaskDetails } from './RunTaskDetails.js';
 import { labels } from './api.js';
-import { elapsedLabel } from './ActivityStatus.js';
+import { ELAPSED_LABEL_REFRESH_MS, elapsedLabel } from './ActivityStatus.js';
 import type { Illustration } from '../core/illustration.js';
 import { IllustrationActivity } from './IllustrationActivity.js';
 import { illustrationProgress } from './illustration-progress.js';
@@ -120,8 +120,7 @@ function TurnActivityContent({
   const running = active(run.status) || entries.some((item) => active(item.status));
   useEffect(() => {
     if (!running) return;
-    // Same cadence as the composer status row, so the two never disagree by a second.
-    const timer = setInterval(() => setNow(Date.now()), 250);
+    const timer = setInterval(() => setNow(Date.now()), ELAPSED_LABEL_REFRESH_MS);
     return () => clearInterval(timer);
   }, [running]);
   const authored = run.packageStart?.mode === 'authored';

@@ -48,6 +48,7 @@ const doneNames: Record<string, string> = {
   illustration: 'helpers.m220',
   request: 'helpers.m221',
 };
+export const ELAPSED_LABEL_REFRESH_MS = 250;
 export function elapsedLabel(start: string, end: number) {
   const timestamp = Date.parse(start);
   if (!Number.isFinite(timestamp) || !Number.isFinite(end)) return '';
@@ -291,7 +292,7 @@ export function ActivityStatus({
   const ticking = running.length > 0 || visibleNotices.some((notice) => notice.expiresAt !== null);
   useEffect(() => {
     if (!ticking) return;
-    const timer = setInterval(() => setNow(Date.now()), 250);
+    const timer = setInterval(() => setNow(Date.now()), ELAPSED_LABEL_REFRESH_MS);
     return () => clearInterval(timer);
   }, [ticking]);
   useEffect(() => {
