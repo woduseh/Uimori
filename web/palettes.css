@@ -1,27 +1,7 @@
-.palette-editor-section {
-  margin-top: 16px;
-}
-.palette-editor-section > .theme-library-actions > button {
-  flex-basis: auto;
-}
-.palette-management-list {
-  margin: 12px 0;
-}
-.palette-management-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 0;
-}
-.palette-management-row + .palette-management-row {
-  border-top: var(--hairline) solid var(--line);
-}
 .palette-editor {
   display: grid;
   gap: 14px;
-  margin-top: 16px;
+  margin-top: 6px;
 }
 .palette-editor > label {
   display: grid;
