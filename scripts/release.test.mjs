@@ -536,7 +536,6 @@ test('inspection warnings preserve partial evidence without becoming a successfu
 });
 
 test('Oracle controller starts without installed Playwright or any node_modules', async (t) => {
-  // Outside the repository so Node cannot accidentally resolve its test dependencies.
   const isolated = await mkdtemp(path.join(tmpdir(), 'uimori-deploy-only-'));
   t.after(() => rm(isolated, { recursive: true, force: true }));
   const directory = path.join(isolated, 'scripts');

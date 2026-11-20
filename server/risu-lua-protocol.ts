@@ -1,7 +1,3 @@
-// Without a build, the runtime starts the worker from its raw `.ts` file, where Node cannot
-// resolve a sibling `./x.js` specifier. Import this module with `import type` only, and pass
-// numeric limits as data in `NativeLuaWorkerInput.limits`.
-
 export type NativeLuaWorkerPhase = 'active' | 'host-wait';
 
 export type NativeLuaWorkerResultCode =

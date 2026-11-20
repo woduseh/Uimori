@@ -189,6 +189,9 @@ export async function snapshotDatabase(source, destination) {
   inspectData(source);
   const db = new DatabaseSync(join(source, database), { readOnly: true });
   try {
+    // https://sqlite.org/backup.html#using_the_sqlite_online_backup_api (2026-11-20): a completed
+    // online backup is a bit-wise identical copy of the source database as it was when copying
+    // began.
     await backup(db, join(destination, database));
   } finally {
     db.close();
@@ -197,7 +200,6 @@ export async function snapshotDatabase(source, destination) {
     chownSync(destination, 1000, 1000);
     chownSync(join(destination, database), 1000, 1000);
   }
-  // The online backup is coherent even when SQLite uses WAL.
   return inspectData(destination, { integrity: true });
 }
 

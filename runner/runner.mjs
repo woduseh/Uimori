@@ -9,7 +9,8 @@ const root = resolve(process.env.UIMORI_SHELL_ROOT ?? '/workspace');
 const socket = join(root, '.exec.sock');
 const maxCommandLength = 50000;
 const maxToolIdLength = 150;
-// A JSON-escaped UTF-16 code unit needs up to six bytes, plus envelope fields.
+// https://www.rfc-editor.org/rfc/rfc8259#section-7 (2026-11-20): JSON escapes a UTF-16 code
+// unit as \uXXXX, six bytes.
 const maxRequestBytes = 6 * (maxCommandLength + maxToolIdLength) + 1024;
 const active = new Set();
 mkdirSync(root, { recursive: true });
@@ -38,13 +39,11 @@ function readOutput(path, max) {
     const budget = Math.floor((max - Buffer.byteLength(marker)) / 2);
     const head = new StringDecoder('utf8').write(first.subarray(0, budget));
     let tail = read(Math.max(0, size - budget), Math.min(budget, size));
-    // Do not show replacement characters just because a preview split a UTF-8 character.
     let start = 0;
     while (start < tail.length && (tail[start] & 0xc0) === 0x80) start++;
     tail = Buffer.from(tail.subarray(start).toString('utf8'));
     start = Math.max(0, tail.length - budget);
     while (start < tail.length && (tail[start] & 0xc0) === 0x80) start++;
-    // Invalid/binary output can expand during decoding; the displayed preview stays bounded.
     const boundedHead = new StringDecoder('utf8').write(Buffer.from(head).subarray(0, budget));
     return {
       output: boundedHead + marker + tail.subarray(start).toString('utf8'),
@@ -73,7 +72,6 @@ function run(args, signal) {
     mkdirSync(scratch, { recursive: true });
     const outputFile = join(scratch, `exec-${randomUUID()}.log`);
     const fd = openSync(outputFile, 'w');
-    // Mirrors SHELL_TIMEOUT_MAX_MS in core/main-shell.ts; the app's task deadline is the real bound.
     const timeoutMs = Math.min(86400000, Math.max(1000, Number(args.timeoutMs) || 10000));
     const maxOutputBytes = Math.min(65536, Math.max(256, Math.floor(Number(args.maxOutputBytes) || 16384)));
     let child;
@@ -94,7 +92,7 @@ function run(args, signal) {
     }
     const terminate = () => {
       if (child.pid) {
-        try { process.kill(-child.pid, 'SIGKILL'); } catch { /* already exited */ }
+        try { process.kill(-child.pid, 'SIGKILL'); } catch {}
       }
     };
     active.add(terminate);
@@ -110,7 +108,6 @@ function run(args, signal) {
       clearTimeout(timer);
       signal.removeEventListener('abort', terminate);
       active.delete(terminate);
-      // data.exec is synchronous: a finished shell must not leave background writers.
       terminate();
       if (spawnError) { done({ error: spawnError.message }); return; }
       let output;

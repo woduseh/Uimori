@@ -1,28 +1,8 @@
 [
   {
-    "file": "web/ActionMenu.tsx",
-    "comment": "The details toggle event fires asynchronously (HTML Living Standard, the details element), so a tap right after opening must still dismiss.",
-    "system": "HTML Living Standard: details element"
-  },
-  {
-    "file": "web/ActionMenu.tsx",
-    "comment": "A dialog's close event fires asynchronously, so a successful deletion can unmount its dialog before the event bubbles through this menu.",
-    "system": "HTML Living Standard: dialog element"
-  },
-  {
     "file": "web/ManuscriptSearch.tsx",
     "comment": "Chromium's search input otherwise consumes Escape just to clear text, leaving the modal open and the underlying navigation inert.",
     "system": "Chromium search input"
-  },
-  {
-    "file": "web/reader-dom.ts",
-    "comment": "Node.contains() does not cross a shadow boundary.",
-    "system": "DOM: Node.contains"
-  },
-  {
-    "file": "web/SourceReader.tsx",
-    "comment": "scrollIntoView also moves overflow-hidden ancestors, including the app shell.",
-    "system": "CSSOM View: scrollIntoView"
   },
   {
     "file": "web/story-ui.css",
@@ -35,94 +15,9 @@
     "system": "Chrome interest invokers"
   },
   {
-    "file": "web/TransientNotice.tsx",
-    "comment": "A manual, non-modal popover remains visible above native settings dialogs without taking focus or making the manuscript inert.",
-    "system": "HTML Living Standard: popover"
-  },
-  {
-    "file": "web/TurnStatus.tsx",
-    "comment": "The browser fires the details toggle event asynchronously: a reload right after closing would bring the panel back, and React's controlled attribute would double-toggle it.",
-    "system": "HTML Living Standard: details element; React"
-  },
-  {
-    "file": "core/local-tokenizers.ts",
-    "comment": "Requiring the lite module here also defers WebAssembly compilation until first use.",
-    "system": "tiktoken"
-  },
-  {
-    "file": "core/model-capabilities.ts",
-    "comment": "Neither Carbon page documents stop sequences or the Agent Platform service tiers.",
-    "system": "provider model documentation"
-  },
-  {
-    "file": "core/model-capabilities.ts",
-    "comment": "Mythos 5.2 is the same model for organizations verified by Anthropic.",
-    "system": "Anthropic model documentation"
-  },
-  {
-    "file": "core/openai-chat-protocol.ts",
-    "comment": "Gemini may be served through either backend; both use the same native option shape.",
-    "system": "Gemini OpenAI-compatible endpoints"
-  },
-  {
-    "file": "core/openai-chat-protocol.ts",
-    "comment": "Gateway assistant parts can be silently omitted; send their text as one string. DeepSeek requires strings for every text message role.",
-    "system": "OpenAI-compatible gateways; DeepSeek API"
-  },
-  {
-    "file": "core/openai-chat-protocol.ts",
-    "comment": "DeepSeek interruptions still finish the stream with usage and [DONE].",
-    "system": "DeepSeek API"
-  },
-  {
-    "file": "core/provider-cache-usage.ts",
-    "comment": "Gemini's proto3 scalar defaults to zero when omitted from valid usage metadata.",
-    "system": "Gemini API usage metadata (proto3)"
-  },
-  {
-    "file": "core/provider-fetch.ts",
-    "comment": "Node fetch otherwise inherits Undici's 300-second header/body idle limits.",
-    "system": "Undici"
-  },
-  {
     "file": "core/provider-messages.ts",
     "comment": "Gemini models, including namespaced gateway IDs, do not accept a system message after the conversation has started.",
     "system": "Gemini API"
-  },
-  {
-    "file": "core/risu-native-lore.ts",
-    "comment": "Array.splice's negative-index behavior is the upstream native contract.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "core/risu-native-lore.ts",
-    "comment": "Risu places @@end / @@depth 0 after the prompt, assistant entries after user/system entries.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "core/risu-preset-diagnostics.ts",
-    "comment": "CBS source: RisuAI cad8595aa39620df4246f56918f0962c2aa0263a, parser/parser.svelte.ts, vendored at third_party/risuai/cad8595a/cbs-parser.ts. Its evaluator accepts unmatched closing names, restores incomplete tags, and reparses dynamic calls/loops. A separate brace/regex checker would not be a syntax validator; importing the evaluator would execute stateful source instead.",
-    "system": "RisuAI cad8595a CBS parser"
-  },
-  {
-    "file": "core/selection-revision.ts",
-    "comment": "Textareas use UTF-16 offsets. A range must not split a Unicode surrogate pair.",
-    "system": "HTML textarea selection (UTF-16)"
-  },
-  {
-    "file": "core/text-tokens.ts",
-    "comment": "The legacy/default OpenAI counter treats special-token spellings as ordinary text. Other profiles follow their published tokenizer's literal encoding rules.",
-    "system": "OpenAI tokenizers"
-  },
-  {
-    "file": "core/vertex-protocol.ts",
-    "comment": "Google Search and function calling cannot share a generateContent request.",
-    "system": "Vertex AI generateContent"
-  },
-  {
-    "file": "core/vertex-protocol.ts",
-    "comment": "Gemini 4 models ignore sampling values, reject MINIMAL thinking and cap one streamed segment.",
-    "system": "Gemini 4 models"
   },
   {
     "file": "core/vertex-protocol.ts",
@@ -130,54 +25,9 @@
     "system": "Vertex AI generateContent"
   },
   {
-    "file": "core/vertex-protocol.ts",
-    "comment": "Gemini grounding offsets are UTF-8 bytes in a Part, not JavaScript text offsets.",
-    "system": "Gemini grounding metadata"
-  },
-  {
-    "file": "core/vertex.ts",
-    "comment": "Google's well-known variable contains an ADC file path, never a bearer token.",
-    "system": "Google Application Default Credentials"
-  },
-  {
     "file": "server/backup-service.ts",
     "comment": "Windows does not support opening/fsync'ing directories like Unix does.",
     "system": "Windows file system"
-  },
-  {
-    "file": "server/backup-service.ts",
-    "comment": "Windows requires a writable file handle for FlushFileBuffers/fsync semantics.",
-    "system": "Windows file system"
-  },
-  {
-    "file": "server/codex-runtime.ts",
-    "comment": "Codex CLI 0.153+ accepts environments:[], which removes the environment tools that a read-only sandbox would still expose (host files and auth.json).",
-    "system": "Codex CLI"
-  },
-  {
-    "file": "server/comfyui-client.ts",
-    "comment": "Uses ComfyUI's atomic per-job cancel. Older servers only dequeue this ID.",
-    "system": "ComfyUI"
-  },
-  {
-    "file": "server/helper-data-tools.ts",
-    "comment": "A short-lived OS process can be terminated even while SQLite is executing native code.",
-    "system": "SQLite; OS processes"
-  },
-  {
-    "file": "server/helper-data-worker.ts",
-    "comment": "Node builtins and JSON keep this entry runnable under Node's TS stripping in tests.",
-    "system": "Node type stripping"
-  },
-  {
-    "file": "server/helper-data-worker.ts",
-    "comment": "Advancing by code point also terminates zero-width Unicode expressions at a surrogate pair.",
-    "system": "ECMAScript Unicode regular expressions"
-  },
-  {
-    "file": "server/helper-resource-editing.ts",
-    "comment": "JSON Patch semantics: the destination index is evaluated after removal.",
-    "system": "RFC 6902 JSON Patch"
   },
   {
     "file": "server/helper-runtime.ts",
@@ -185,49 +35,9 @@
     "system": "node:sqlite"
   },
   {
-    "file": "server/helper-runtime.ts",
-    "comment": "rg and grep exit with 1 for no match, so a nonzero exit is still ordinary shell output.",
-    "system": "ripgrep; grep"
-  },
-  {
-    "file": "server/image-processing.ts",
-    "comment": "Sharp runs on libuv's four default threads; one stays free for request file I/O.",
-    "system": "sharp; libuv"
-  },
-  {
-    "file": "server/manuscript-search-worker.ts",
-    "comment": "SQLite's trigram tokenizer folds Unicode by its own rules, so matches are verified again.",
-    "system": "SQLite FTS5 trigram tokenizer"
-  },
-  {
-    "file": "server/novelai-client.ts",
-    "comment": "Asset Maid's default; the API documents only the 0-1 range.",
-    "system": "NovelAI image API"
-  },
-  {
-    "file": "server/novelai-client.ts",
-    "comment": "One POST per image. NovelAI returns no job id, so a failure after sending cannot be reconciled; it is reported as uncertain and never resubmitted automatically.",
-    "system": "NovelAI image API"
-  },
-  {
     "file": "server/product-routes.ts",
     "comment": "Fastify resolves percent-encoded paths before hooks, while request.url stays raw. Authenticate the matched route so /%61pi/export cannot skip API protection.",
     "system": "Fastify routing"
-  },
-  {
-    "file": "server/risu-card-path.ts",
-    "comment": "CCv3 defines an implicit cover icon only when assets is omitted, not when it is empty.",
-    "system": "Character Card V3 specification"
-  },
-  {
-    "file": "server/risu-export-codec.ts",
-    "comment": "RisuAI/RisuToki module envelope: magic, RPack JSON, length-prefixed RPack assets, terminator.",
-    "system": "RisuAI/RisuToki module format"
-  },
-  {
-    "file": "server/risu-export-codec.ts",
-    "comment": "Risu's fixed-key AES-GCM is a file-format codec, not encryption for private storage.",
-    "system": "RisuAI module format"
   },
   {
     "file": "server/risu-import-assets.ts",
@@ -235,119 +45,9 @@
     "system": "RisuAI character cards"
   },
   {
-    "file": "server/risu-import-assets.ts",
-    "comment": "CCv3 icon/main owns the portrait even when later backgrounds or other assets are named main.",
-    "system": "Character Card V3 specification"
-  },
-  {
-    "file": "server/risu-import-lore.ts",
-    "comment": "`@@end` writes depth through the upstream local the two share, so that value is that decorator's own doing rather than a line the entry carried.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "server/risu-import-lore.ts",
-    "comment": "Risu's conversion writes back onto each entry and deletes the keys it migrates from its `extensions`, so it receives copies.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "server/risu-import-lore.ts",
-    "comment": "Risu derives the book settings only when the file supplied all three of them.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "server/risu-import-lore.ts",
-    "comment": "Risu reads a decorator only in the leading block, so a later `@@` line stays in the body.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "server/risu-lua-protocol.ts",
-    "comment": "Without a build, the runtime starts the worker from its raw `.ts` file, where Node cannot resolve a sibling `./x.js` specifier. Import this module with `import type` only, and pass numeric limits as data in `NativeLuaWorkerInput.limits`.",
-    "system": "Node type stripping"
-  },
-  {
     "file": "server/risu-lua-worker.ts",
     "comment": "wasmoon 1.16.0 does not expose Emscripten instantiate options, and its shipped memory section declares 256 initial / 32768 maximum pages.",
     "system": "wasmoon 1.16.0"
-  },
-  {
-    "file": "server/risu-lua-worker.ts",
-    "comment": "wasmoon 1.16.0's loadLibrary(UTF8) accidentally opens string; call Lua directly.",
-    "system": "wasmoon 1.16.0"
-  },
-  {
-    "file": "server/risu-native-host.ts",
-    "comment": "Risu's JSON parser treats absent/non-object options as an empty object.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "server/risu-native-render.ts",
-    "comment": "Risu's trimmer removes known extensions, then separator characters (not all whitespace).",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "server/risu-native-render.ts",
-    "comment": "Same UTF-16 Levenshtein distance as Risu, bounded to the only accepted distance band.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "server/risu-native-render.ts",
-    "comment": "Runs only inside the bounded worker. Based on Risu ParseMarkdown/processScriptFull ordering.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "server/risu-native-run.ts",
-    "comment": "Risu's input trigger runs before the new user message enters chat.message.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "server/risu-native-runtime.ts",
-    "comment": "Upstream edit and risu-btn paths ignore trigger conditions.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "server/risu-preset-file.ts",
-    "comment": "The no-eval export ships without its own TypeScript declaration.",
-    "system": "upstream package typings"
-  },
-  {
-    "file": "server/risu-preset-file.ts",
-    "comment": "Risu's preset export uses ordinary maps; executable/record/reference extensions are not JSON.",
-    "system": "RisuAI preset export"
-  },
-  {
-    "file": "server/risu-variable-defaults.ts",
-    "comment": "Fixed Risu parseKeyValue semantics: no trimming, first pair and first duplicate win.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "server/run-projections.ts",
-    "comment": "RFC 7240 `Prefer: return=minimal`: a client that only follows the run gets its receipt, not the frozen execution input and diagnostic histories.",
-    "system": "RFC 7240"
-  },
-  {
-    "file": "server/store.ts",
-    "comment": "The OS releases a lock on this separate empty SQLite file when the process exits.",
-    "system": "SQLite; OS file locks"
-  },
-  {
-    "file": "scripts/oracle-data.mjs",
-    "comment": "The online backup is coherent even when SQLite uses WAL.",
-    "system": "SQLite online backup"
-  },
-  {
-    "file": "scripts/oracle-image-probe.mjs",
-    "comment": "Use node:http so the HTTPS-origin Host reaches the loopback server unchanged.",
-    "system": "Node http and fetch"
-  },
-  {
-    "file": "scripts/release.test.mjs",
-    "comment": "Outside the repository so Node cannot accidentally resolve its test dependencies.",
-    "system": "Node module resolution"
-  },
-  {
-    "file": "scripts/reset-dev-data.mjs",
-    "comment": "Keep mutex files in place: unlinking a lifetime mutex would let another process lock a new inode while an old owner still holds the previous one.",
-    "system": "OS file locks"
   },
   {
     "file": "scripts/test-tooling.mjs",
@@ -355,69 +55,9 @@
     "system": "Node test runner"
   },
   {
-    "file": "tests/appearance-customization-browser.spec.ts",
-    "comment": "The 1 KB TTF fixture contains only original triangle/space glyphs and is CC0. It tests Chromium's real font decoder without redistributing a system font.",
-    "system": "CC0 font fixture; Chromium"
-  },
-  {
-    "file": "tests/chat-composer-browser.spec.ts",
-    "comment": "Desktop emulation cannot raise an Android IME. Simulate the layout viewport shrinking/restoring, as requested by interactive-widget=resizes-content.",
-    "system": "Android IME; viewport interactive-widget"
-  },
-  {
-    "file": "tests/context-budget.test.ts",
-    "comment": "The JSON-quoted sample has 21 cl100k tokens versus 13 o200k tokens.",
-    "system": "tiktoken cl100k and o200k"
-  },
-  {
-    "file": "tests/fixtures/background-failure.mjs",
-    "comment": "Run the built application in a separate process: an unhandled rejection must remain observable without interfering with Vitest's own rejection handler.",
-    "system": "Vitest"
-  },
-  {
     "file": "tests/fixtures/provider-timeout-clock.mjs",
     "comment": "Node 26 MockTimers' refresh does not repeatedly schedule Undici's fast timer. Use its supported optional-refresh fallback, only in this process.",
     "system": "Node MockTimers; Undici"
-  },
-  {
-    "file": "tests/helper-shell.test.ts",
-    "comment": "Linux runner uses Unix sockets, which the Windows CI worker cannot create.",
-    "system": "Windows CI"
-  },
-  {
-    "file": "tests/input-affordances-browser.spec.ts",
-    "comment": "The UA clear affordance is not a DOM node: hit its actual trailing input area.",
-    "system": "browser user-agent controls"
-  },
-  {
-    "file": "tests/input-translation-browser.spec.ts",
-    "comment": "The Windows system clipboard exposes text line endings as CRLF.",
-    "system": "Windows clipboard"
-  },
-  {
-    "file": "tests/input-translation-browser.spec.ts",
-    "comment": "Clipboard APIs require a user gesture on some desktop browsers.",
-    "system": "Clipboard API"
-  },
-  {
-    "file": "tests/module-cycles.test.ts",
-    "comment": "Biome checks directory boundaries, not import cycles. TypeScript erases `import type` and inline `type` specifiers, so they are not runtime edges.",
-    "system": "Biome; TypeScript"
-  },
-  {
-    "file": "tests/motion-browser.spec.ts",
-    "comment": "Chromium rounds a half CSS pixel to a device pixel at DPR 1.",
-    "system": "Chromium"
-  },
-  {
-    "file": "tests/native-controls-browser.spec.ts",
-    "comment": "Canvas resolves CSS Color 4 values as well as ordinary rgb()/hex colors.",
-    "system": "Canvas; CSS Color 4"
-  },
-  {
-    "file": "tests/provider-http.test.ts",
-    "comment": "DeepSeek documents both interruption reasons. Its usage normally accompanies the finish chunk; compatible Chat streams may instead send a following usage-only chunk.",
-    "system": "DeepSeek API"
   },
   {
     "file": "tests/provider-management-browser.spec.ts",
@@ -425,79 +65,9 @@
     "system": "Playwright"
   },
   {
-    "file": "tests/risu-export.test.ts",
-    "comment": "CCv3 PNG attachment identifiers are paths, not just RisuAI's generated numeric keys.",
-    "system": "Character Card V3 specification"
-  },
-  {
-    "file": "tests/risu-export.test.ts",
-    "comment": "Unknown RIFF chunks are valid WebP and stay intact when already-encoded assets are stored.",
-    "system": "WebP RIFF container"
-  },
-  {
-    "file": "tests/risu-import.test.ts",
-    "comment": "Risu keeps `useRegex` only for a key written as a regex literal.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "tests/risu-import.test.ts",
-    "comment": "Risu's decorator reader trims an entry's body, blank lines around it included.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "tests/risu-import.test.ts",
-    "comment": "Risu reads position 4 as \"at depth\" and the role as an index into system/user/assistant.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "tests/risu-import.test.ts",
-    "comment": "Risu's decorator names are case-sensitive, so an uppercase line is a decorator it does not know: the line leaves the body without deciding anything.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "tests/risu-import.test.ts",
-    "comment": "The body and the `@@` lines are the ones Risu's own conversion produces for the same entry.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "tests/risu-lorebook-compat.test.ts",
-    "comment": "Pins the snapshotted RisuAI lorebook normalization. Every expected string here was derived by reading RisuAI at cad8595a (src/ts/characterCards.ts:1038-1143 and src/ts/process/lorebook.svelte.ts:300-515) and @risuai/ccardlib 0.4.2's decorator parser, not by running RisuAI.",
-    "system": "RisuAI cad8595a; @risuai/ccardlib 0.4.2"
-  },
-  {
-    "file": "tests/risu-lorebook-compat.test.ts",
-    "comment": "selectiveLogic is the one migrated key Risu does not delete.",
-    "system": "RisuAI upstream"
-  },
-  {
     "file": "tests/risu-message-surface-browser.spec.ts",
     "comment": "Playwright's actionability checks call form.getAttribute directly, so add this deliberately clobbering field after the real keyboard/click steps.",
     "system": "Playwright"
-  },
-  {
-    "file": "tests/risu-module-file.test.ts",
-    "comment": "Fixed vector from rpack_map.bin bytes 256..511 (first four entries and the last four); the helpers above derive the encoder from the decoder, so this is the one assertion that would notice a corrupted table.",
-    "system": "RisuAI rpack_map.bin"
-  },
-  {
-    "file": "tests/risu-native-model-host.test.ts",
-    "comment": "RisuAI cad8595a scriptings.ts maps sys -> system and bot/char -> assistant in both LLMMain and axLLMMain.",
-    "system": "RisuAI cad8595a"
-  },
-  {
-    "file": "tests/risu-native-samples-browser.spec.ts",
-    "comment": "Authored animations may never satisfy Playwright's actionability stability check.",
-    "system": "Playwright"
-  },
-  {
-    "file": "tests/risu-preset-diagnostics.test.ts",
-    "comment": "Pinned Risu supports raw/pure blocks, escapes, nested dynamic names, comments and source reparsing.",
-    "system": "RisuAI upstream"
-  },
-  {
-    "file": "tests/risu-snapshot-boundary.test.ts",
-    "comment": "The RisuAI snapshot is GPL-3.0 code kept behind a compat layer.",
-    "system": "RisuAI license (GPL-3.0)"
   },
   {
     "file": "tests/self-host-browser.spec.ts",
@@ -505,23 +75,8 @@
     "system": "Playwright"
   },
   {
-    "file": "tests/story-ui-browser.spec.ts",
-    "comment": "December 2026 starts on a Tuesday and has 31 days; today and the busy dates are marked.",
-    "system": "Gregorian calendar"
-  },
-  {
-    "file": "tests/vertex-protocol.test.ts",
-    "comment": "Gemini tool replies must end the user turn, not be followed by another text part.",
-    "system": "Gemini API"
-  },
-  {
-    "file": "tests/vertex-transport.test.ts",
-    "comment": "Model the observed native-fetch failure: its body no longer receives an aborted request signal.",
-    "system": "Undici fetch"
-  },
-  {
-    "file": "tests/web-runtime-boundary.test.ts",
-    "comment": "Vite bundles everything a `web/` module loads at runtime, including dynamic imports, while type checks and unit tests run on Node, where Node builtins resolve.",
-    "system": "Vite"
+    "file": "core/openai-chat-protocol.ts",
+    "comment": "Gateway assistant parts can be silently omitted; send their text as one string.",
+    "system": "OpenAI-compatible gateways"
   }
 ]

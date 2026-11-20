@@ -42,8 +42,6 @@ test('shared composer follows resized content viewport while preserving the draf
   const draft = '키보드가 열린 상태에서도 보존할 요청\n'.repeat(5);
   await input.fill(draft);
   await expect(page.locator('.composer-dock .composer')).toHaveClass(/grown/u);
-  // Desktop emulation cannot raise an Android IME. Simulate the layout viewport
-  // shrinking/restoring, as requested by interactive-widget=resizes-content.
   for (const height of [590, 490, 844]) {
     await page.setViewportSize({ width: MOBILE_WIDTH, height });
     await expect

@@ -109,8 +109,6 @@ export function PromptWorkspaceEditor({
     return result;
   });
 
-  // The session distinguishes new edits from recovered input and acknowledges only
-  // the model sent by a save. Later edits schedule the next save when that one finishes.
   // biome-ignore lint/correctness/useExhaustiveDependencies: each model edit restarts the autosave debounce.
   useEffect(() => {
     if (!state.autosavePending || busy || saveError || conflict) return;

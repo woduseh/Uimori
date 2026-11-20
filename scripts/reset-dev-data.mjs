@@ -83,8 +83,6 @@ try {
       unlinkSync(checkedFile(path));
       removed.push(basename(path));
     }
-    // Keep mutex files in place: unlinking a lifetime mutex would let another
-    // process lock a new inode while an old owner still holds the previous one.
     console.log(
       JSON.stringify({
         status: removed.length ? 'reset' : 'empty',

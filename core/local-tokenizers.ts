@@ -24,7 +24,6 @@ function asset(profile: TokenizerProfileId, name: string): unknown {
 
 function load(profile: TokenizerProfileId): Counter {
   if (['openai-o200k', 'openai-cl100k', 'kimi-k2', 'claude-legacy'].includes(profile)) {
-    // Requiring the lite module here also defers WebAssembly compilation until first use.
     const { Tiktoken: Encoding } = require('tiktoken/lite') as typeof import('tiktoken/lite');
     const data = (
       profile === 'openai-o200k'

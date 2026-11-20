@@ -183,7 +183,8 @@ export async function executeGeminiProvider(
     const body = JSON.stringify(wireBody);
     if (!vertex && !connection.credentialRef)
       throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
-    // Google's well-known variable contains an ADC file path, never a bearer token.
+    // https://docs.cloud.google.com/docs/authentication/application-default-credentials#GAC (2026-11-20):
+    // GOOGLE_APPLICATION_CREDENTIALS provides the location of a credential JSON file.
     const token =
       vertex && isVertexAdcReference(connection.credentialRef)
         ? await vertexAccessToken(signal)

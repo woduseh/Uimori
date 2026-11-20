@@ -137,7 +137,9 @@ export function importRisuAssets({
       allowedUse: 'both',
     });
     if (asset.type === 'emotion' || asset.type === 'background') typedAsset = true;
-    // CCv3 icon/main owns the portrait even when later backgrounds or other assets are named main.
+    // https://github.com/kwaroran/character-card-spec-v3/blob/f3a86af019fbd99f788f7a1155f399655b34ab35/SPEC_V3.md#assets (2026-11-20):
+    // an icon asset is the icon or portrait; type icon with name main MUST be the main icon, and
+    // name main on a background marks the main background.
     const priority = asset.type === 'icon' ? (name === 'main' ? 2 : 1) : 0;
     if (
       (kind !== 'module' || asset.type === 'icon') &&

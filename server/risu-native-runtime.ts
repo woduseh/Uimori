@@ -207,7 +207,9 @@ async function executeNativeRisuInvocation(
     )
       continue;
     let pass = true;
-    // Upstream edit and risu-btn paths ignore trigger conditions.
+    // https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/process/scriptings.ts#L1409-L1472 (2026-11-20):
+    // runLuaEditTrigger (the edit modes) and runLuaButtonTrigger (risu-btn) run every
+    // `triggerlua` effect without reading the trigger's conditions.
     if (
       ![
         'display',

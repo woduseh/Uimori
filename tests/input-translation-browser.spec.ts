@@ -7,7 +7,8 @@ const original = '(OOC: 미라는 아직 진실을 몰라.)\n\n*{{char}}는 기�
 const translated = '(OOC: Mira does not know the truth yet.)\n\n*{{char}} waits.*';
 const endpoint = '**/api/chats/*/input-translation';
 async function clipboardText(page: Page) {
-  // The Windows system clipboard exposes text line endings as CRLF.
+  // https://learn.microsoft.com/en-us/windows/win32/dataxchg/standard-clipboard-formats (2026-11-20):
+  // in the Windows CF_TEXT and CF_UNICODETEXT formats, each line ends with CR-LF.
   return (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, '\n');
 }
 const composer = (page: Page) => page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
@@ -134,7 +135,6 @@ async function seed(request: APIRequestContext, chat: Chat, text: string): Promi
     ).toBeNull();
     await expect(page.locator('#source-' + saved.runs[0].sourceRevision)).toBeVisible();
     const copy = page.getByRole('button', { name: '요청 복사', exact: true });
-    // Clipboard APIs require a user gesture on some desktop browsers.
     await copy.click();
     await expect(page.getByRole('button', { name: '요청 복사됨', exact: true })).toBeVisible();
     expect(await clipboardText(page)).toBe(finalText);

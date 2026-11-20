@@ -1,4 +1,5 @@
-// Node.contains() does not cross a shadow boundary.
+// https://dom.spec.whatwg.org/#dom-node-contains (2026-11-20): contains() tests for an inclusive
+// descendant, which does not cross a shadow root.
 export function readerContains(container: HTMLElement, node: Node | null): boolean {
   while (node) {
     if (container.contains(node)) return true;

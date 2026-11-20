@@ -182,7 +182,6 @@ export const HELPER_DATA_TOOLS: ProviderTool[] = [
   },
 ];
 
-// A short-lived OS process can be terminated even while SQLite is executing native code.
 export function runDataProcess(
   input: DataOperation,
   signal?: AbortSignal,

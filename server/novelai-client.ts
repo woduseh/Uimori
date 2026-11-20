@@ -131,7 +131,8 @@ export type NovelAIPrompt = {
 // https://docs.novelai.net/en/image/multiplecharacters (2026-11-20): V4 and V4.5 place
 // characters on a 5x5 grid; V5 positions freely, sent at 0.01 precision.
 const GRID = [0.1, 0.3, 0.5, 0.7, 0.9];
-// Asset Maid's default; the API documents only the 0-1 range.
+// https://image.novelai.net/docs/doc.json (2026-11-20): director_reference_strength_values
+// takes values from 0 to 1.
 const REFERENCE_STRENGTH = 0.6;
 function center(model: string, value: number): number {
   if (model.startsWith('nai-diffusion-5'))
@@ -242,10 +243,8 @@ function imagesFrom(bytes: Buffer): NovelAIImage[] {
   return images;
 }
 
-/**
- * One POST per image. NovelAI returns no job id, so a failure after sending cannot be
- * reconciled; it is reported as uncertain and never resubmitted automatically.
- */
+// https://image.novelai.net/docs/doc.json (2026-11-20): POST /ai/generate-image responds with
+// the images (image, index, seed) and no job id, and no route looks a generation up later.
 export async function generateWithNovelAI(
   settings: NovelAIRenderSettings,
   prompt: NovelAIPrompt,

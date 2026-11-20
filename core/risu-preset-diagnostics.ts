@@ -91,12 +91,9 @@ function declaration(
 const labelPreview = (value: string) => (value.length > 160 ? `${value.slice(0, 159)}…` : value);
 const pointerKey = (key: string) => key.replaceAll('~', '~0').replaceAll('/', '~1');
 
-/**
- * CBS source: RisuAI cad8595aa39620df4246f56918f0962c2aa0263a, parser/parser.svelte.ts,
- * vendored at third_party/risuai/cad8595a/cbs-parser.ts. Its evaluator accepts unmatched closing
- * names, restores incomplete tags, and reparses dynamic calls/loops. A separate brace/regex checker
- * would not be a syntax validator; importing the evaluator would execute stateful source instead.
- */
+// https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/parser/parser.svelte.ts#L1574-L1848 (2026-11-20):
+// risuChatParser closes the open block on any `{{/...}}` without comparing names, puts unclosed
+// `{{` text back at the end, and reparses `{{#each}}` output and `{{call::}}` function bodies.
 export function diagnoseRisuPreset(
   program: RisuPrompt,
   values: Record<string, PromptValue> = {},

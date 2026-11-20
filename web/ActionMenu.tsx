@@ -49,8 +49,8 @@ export function ActionMenu({
     };
   }, [open, viewport, sheet]);
   useEffect(() => {
-    // The details toggle event fires asynchronously (HTML Living Standard, the details element),
-    // so a tap right after opening must still dismiss.
+    // https://html.spec.whatwg.org/multipage/interactive-elements.html#queue-a-details-toggle-event-task (2026-11-20):
+    // a change to the details open attribute fires toggle later, from a queued element task.
     const dismiss = (event: PointerEvent) => {
       const node = ref.current;
       if (
@@ -85,8 +85,8 @@ export function ActionMenu({
       activeDialogs.delete(event.target);
       finish();
     };
-    // A dialog's close event fires asynchronously, so a successful deletion can unmount its
-    // dialog before the event bubbles through this menu.
+    // https://html.spec.whatwg.org/multipage/interactive-elements.html#close-the-dialog (2026-11-20):
+    // closing a dialog fires its close event from a queued element task.
     const observer = new MutationObserver(() => {
       const removed = [...activeDialogs].some((dialog) => !node.contains(dialog));
       const currentDialogs = ownedDialogs();

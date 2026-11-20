@@ -1,6 +1,5 @@
 export type SelectionRevisionResult = { text: string };
 
-/** Textareas use UTF-16 offsets. A range must not split a Unicode surrogate pair. */
 export function validRevisionRange(text: string, start: number, end: number): boolean {
   const splitsPair = (index: number) =>
     index > 0 &&

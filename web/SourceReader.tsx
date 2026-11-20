@@ -1804,7 +1804,10 @@ function TextEditor({
       const form = field?.form;
       const reader = form?.closest<HTMLElement>('[data-reader-scrollport], .reader-scrollport');
       if (!form || !reader) return;
-      // scrollIntoView also moves overflow-hidden ancestors, including the app shell.
+      // https://drafts.csswg.org/cssom-view/#scroll-a-target-into-view (2026-11-20): scrolling a target
+      // into view scrolls every ancestor scrolling box, innermost to outermost.
+      // https://drafts.csswg.org/css-overflow-3/#valdef-overflow-hidden (2026-11-20): an
+      // overflow: hidden box must still be scrollable programmatically.
       const body = themeBodyScroll(form);
       if (body)
         body.scrollTop += form.getBoundingClientRect().top - body.getBoundingClientRect().top;

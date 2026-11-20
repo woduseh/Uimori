@@ -1,8 +1,6 @@
 import { createApp } from '../../dist/server/app.js';
 import { randomUUID } from 'node:crypto';
 
-// Run the built application in a separate process: an unhandled rejection must
-// remain observable without interfering with Vitest's own rejection handler.
 const errors = [];
 process.on('unhandledRejection', (error) => errors.push(String(error)));
 const options = { dbPath: process.argv[2], buildId: 'background-failure', testMode: true };

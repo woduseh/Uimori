@@ -25,8 +25,6 @@ export function countTextTokens(text: string, profile?: TokenizerProfileId): num
     const key = `${profile ?? 'o200k_base-text-v1'}:${tokenizer.info.effective}:${tokenizer.info.fallback}:${createHash('sha256').update(piece, 'utf16le').digest('hex')}`;
     let count = tokenPieces.get(key);
     if (count === undefined) {
-      // The legacy/default OpenAI counter treats special-token spellings as ordinary text.
-      // Other profiles follow their published tokenizer's literal encoding rules.
       count = tokenizer.count(piece);
     } else {
       tokenPieces.delete(key);

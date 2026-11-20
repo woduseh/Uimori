@@ -11,8 +11,9 @@ afterEach(() => {
   disposeAllNativeRisuSessions();
 });
 
-// RisuAI cad8595a scriptings.ts maps sys -> system and bot/char -> assistant
-// in both LLMMain and axLLMMain.
+// https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/process/scriptings.ts#L516-L530 (2026-11-20) and
+// https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/process/scriptings.ts#L878-L892 (2026-11-20):
+// LLMMain and axLLMMain map sys to system and bot or char to assistant.
 test.each(['LLM', 'axLLM'] as const)(
   '%s preserves Risu role aliases, prompt text and order at the provider boundary',
   async (method) => {

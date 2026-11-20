@@ -745,7 +745,8 @@ export function patchHelperResource(
           )
             throw new HttpError(400, '같은 프롬프트 목록의 출발 인덱스가 필요해요.');
           const sourceIndex = Number(from.at(-1));
-          // JSON Patch semantics: the destination index is evaluated after removal.
+          // https://www.rfc-editor.org/rfc/rfc6902.html#section-4.4 (2026-11-20): "move" is
+          // functionally identical to "remove" at "from" followed immediately by "add" at "path".
           if (sourceIndex >= parent.value.length || index >= parent.value.length)
             throw new HttpError(400, '목록 인덱스를 확인해 주세요.');
           if (sourceIndex === index) continue;

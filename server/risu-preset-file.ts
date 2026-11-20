@@ -1,17 +1,11 @@
 import { createDecipheriv, createHash } from 'node:crypto';
-import { createRequire } from 'node:module';
 import { gunzipSync, inflateRawSync, inflateSync } from 'node:zlib';
+import { unpack } from 'msgpackr/index-no-eval';
 import { RISU_IMPORT_MAX_BYTES, type RisuImportSource } from '../core/risu-import.js';
 import { cardZip } from './character-card-file.js';
 import { hasControl, readImportEnvelope } from './import-envelope.js';
 import { HttpError, record } from './request-validation.js';
 import { decodeRPack } from './compat/risu/rpack.js';
-
-// The no-eval export ships without its own TypeScript declaration.
-const { unpack } = createRequire(import.meta.url)('msgpackr/index-no-eval') as Pick<
-  typeof import('msgpackr'),
-  'unpack'
->;
 
 const invalid = (): never => {
   throw new HttpError(400, 'RISU_PRESET_INVALID_FILE');
@@ -127,7 +121,11 @@ function unpackPresetData(bytes: Buffer): unknown {
       take(scalarSize);
       return;
     }
-    // Risu's preset export uses ordinary maps; executable/record/reference extensions are not JSON.
+    // https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/storage/database.svelte.ts#L2279-L2316 (2026-11-20):
+    // Risu packs the exported preset with `encode` from msgpackr/index-no-eval.
+    // https://github.com/kriszyp/msgpackr/blob/50bcdb8e312b45d9fcbd911c961d5ad31ef24019/pack.js#L1073-L1075 (2026-11-20):
+    // msgpackr 1.10.1, the version Risu pins, exports `encode` from a Packr built with
+    // `useRecords: false`, which writes objects as plain maps instead of record extensions.
     invalid();
   };
   visit(0);

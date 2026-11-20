@@ -50,7 +50,9 @@ function vercelProviderOptions(request: ProviderRequest): Json | undefined {
     });
 
     if (generation.thinkingLevel !== undefined) {
-      // Gemini may be served through either backend; both use the same native option shape.
+      // https://vercel.com/docs/ai-gateway/models-and-providers/reasoning/google (2026-11-20): Gemini
+      // is served by both Google AI and Vertex with the same thinking configuration, under
+      // providerOptions.google or providerOptions.vertex.
       for (const provider of ['google', 'vertex']) {
         mergeNamespace(provider, {
           thinkingConfig: { thinkingLevel: generation.thinkingLevel.toLowerCase() },
@@ -130,7 +132,9 @@ export function encodeChat(
     for (const message of messages) {
       if (!object(message)) continue;
       // Gateway assistant parts can be silently omitted; send their text as one string.
-      // DeepSeek requires strings for every text message role.
+
+      // https://api-docs.deepseek.com/api/create-chat-completion/ (2026-11-20): system and
+      // assistant message content is documented as a string only.
       if ((deepseek || message.role === 'assistant') && Array.isArray(message.content))
         message.content = message.content
           .map((part) => {
@@ -329,7 +333,9 @@ export class ChatDecoder {
       return;
     }
     if (['insufficient_system_resource', 'aborted'].includes(this.finishReason ?? '')) {
-      // DeepSeek interruptions still finish the stream with usage and [DONE].
+      // https://api-docs.deepseek.com/api/create-chat-completion/ (2026-11-20): finish_reason is
+      // insufficient_system_resource or aborted for an interrupted generation, and the last chunk
+      // before data: [DONE] carries the finish_reason and the request's usage.
       this.result.status = this.result.text || this.calls.size ? 'partial' : 'error';
       this.result.error = {
         code:

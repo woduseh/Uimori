@@ -282,7 +282,6 @@ describe('Vertex native wire through real local HTTP streams (no live calls)', (
             connection.endpoint + '/gemini-3.8-flash:streamGenerateContent?alt=sse'
           );
           adapterSignal = init?.signal;
-          // Model the observed native-fetch failure: its body no longer receives an aborted request signal.
           const response = await nativeFetch(local.endpoint, { ...init, signal: undefined });
           const reader = response.body!.getReader();
           vi.spyOn(response.body!, 'getReader').mockReturnValue(reader);

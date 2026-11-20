@@ -1024,7 +1024,6 @@ export function useStory() {
       }
     };
   };
-  // A later explicit navigation cancels following this particular admitted run.
   // biome-ignore lint/correctness/useExhaustiveDependencies: chooseSource acts on the current navigation after the epoch check.
   useEffect(() => {
     const follow = storyUiFollow.current;

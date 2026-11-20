@@ -111,8 +111,6 @@ for (const width of [412]) {
   });
 }
 
-// The 1 KB TTF fixture contains only original triangle/space glyphs and is CC0.
-// It tests Chromium's real font decoder without redistributing a system font.
 test('APPEARANCE uploaded font loads, applies independently, persists, recovers and deletes', async ({
   page,
   request,

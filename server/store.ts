@@ -115,7 +115,6 @@ export class Store {
     this.path = existsSync(path)
       ? realpathSync(path)
       : join(realpathSync(dirname(path)), basename(path));
-    // The OS releases a lock on this separate empty SQLite file when the process exits.
     this.ownership = new DatabaseSync(`${this.path}.owner.sqlite`);
     try {
       this.ownership.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE;');

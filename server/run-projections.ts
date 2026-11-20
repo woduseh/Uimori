@@ -23,10 +23,9 @@ export function readRunState(
   return row;
 }
 
-/**
- * RFC 7240 `Prefer: return=minimal`: a client that only follows the run gets its receipt, not
- * the frozen execution input and diagnostic histories.
- */
+// https://www.rfc-editor.org/rfc/rfc7240.html#section-4.2 (2026-11-20): `Prefer: return=minimal`
+// asks for only a minimal response to a successful request; what counts as minimal is at the
+// server's discretion.
 export function runResponse(prefer: unknown, run: Run): Run | RunReceipt {
   if (!/(?:^|[\s,;])return=minimal(?:$|[\s,;])/u.test(String(prefer ?? ''))) return run;
   const { snapshot: _snapshot, inputs: _inputs, toolEvents: _toolEvents, ...receipt } = run;

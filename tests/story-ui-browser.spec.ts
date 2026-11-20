@@ -603,7 +603,6 @@ test('composed media render with their own shells in both schemes', async ({ pag
   expect(alpha.x + alpha.width / 2).toBeCloseTo(ground.x + (ground.width * 1.5) / 8, -1);
   await expect(page.locator('.story-ui-map-legend')).toContainText('A1');
   await expect(page.locator('.story-ui-map-legend-at').first()).toHaveText('B2');
-  // December 2026 starts on a Tuesday and has 31 days; today and the busy dates are marked.
   const calendar = page.locator('.story-ui-calendar', { hasText: '2026년 12월' });
   await expect(calendar.locator('.story-ui-calendar-grid > .story-ui-calendar-blank')).toHaveCount(
     2 + 2

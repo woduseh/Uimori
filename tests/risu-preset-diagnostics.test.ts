@@ -158,8 +158,6 @@ describe('read-only native preset diagnostics', () => {
   });
 
   it('leaves CBS source untouched and explicitly excludes syntax, comparisons and variable analysis', () => {
-    // Pinned Risu supports raw/pure blocks, escapes, nested dynamic names, comments and source
-    // reparsing.
     const text = [
       '{{// {{#when::mode::tis::99}} }}',
       '{{#pure}}{{#when::mode::tis::99}}raw{{/when}}{{/pure}}',

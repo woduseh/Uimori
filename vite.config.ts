@@ -8,7 +8,6 @@ import react from '@vitejs/plugin-react';
 const brotli = promisify(brotliCompress);
 const gzipped = promisify(gzip);
 
-/** The server sends these siblings instead of compressing each response; only hashed assets get them. */
 function precompressedAssets(): Plugin {
   return {
     name: 'uimori-precompressed-assets',

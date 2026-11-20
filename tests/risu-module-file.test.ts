@@ -139,9 +139,10 @@ test('asset count, JSON bytes and individual asset bytes stay bounded in larger 
 });
 
 test('the RPack decode table matches the published map and stays a bijection', () => {
-  // Fixed vector from rpack_map.bin bytes 256..511 (first four entries and the last four); the
-  // helpers above derive the encoder from the decoder, so this is the one assertion that would
-  // notice a corrupted table.
+  // https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/rpack/rpack_js.js#L14-L15 (2026-11-20):
+  // the decode map is bytes 256..511 of
+  // https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/rpack/rpack_map.bin (2026-11-20),
+  // which starts 44 247 132 139 and ends 8 166 128 64.
   expect([...decodeRPack(Buffer.from([0, 1, 2, 3, 252, 253, 254, 255]))]).toEqual([
     44, 247, 132, 139, 8, 166, 128, 64,
   ]);

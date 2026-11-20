@@ -84,8 +84,8 @@ export function TurnStatus({
     >
       <summary
         onClick={(event) => {
-          // The browser fires the details toggle event asynchronously: a reload right after closing
-          // would bring the panel back, and React's controlled attribute would double-toggle it.
+          // https://html.spec.whatwg.org/multipage/interactive-elements.html#queue-a-details-toggle-event-task (2026-11-20):
+          // a change to the details open attribute fires toggle later, from a queued element task.
           event.preventDefault();
           persist(!open);
         }}

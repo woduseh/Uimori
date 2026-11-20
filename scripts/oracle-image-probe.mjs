@@ -41,7 +41,8 @@ export function verifyIdentity(directory, buildId, distHash) {
   return identity;
 }
 
-// Use node:http so the HTTPS-origin Host reaches the loopback server unchanged.
+// https://github.com/nodejs/undici/blob/416f9e3224ddb448390afbeaf31a0d73739c7a0b/lib/web/fetch/index.js#L1594 (2026-11-20):
+// Undici's fetch deletes a caller-supplied host header before sending the request.
 export function probeSession(url, host, timeoutMs = 500) {
   return new Promise((resolve) => {
     const finish = (ready) => {

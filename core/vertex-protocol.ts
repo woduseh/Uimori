@@ -109,13 +109,18 @@ export function encodeVertex(
       request.input.controls.purpose !== 'story-guide')
   )
     reject('INVALID_WEB_SEARCH');
-  // Google Search and function calling cannot share a generateContent request.
+  // https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/grounding/grounding-with-google-search#considerations
+  // (2026-11-20): search tools such as googleSearch cannot be combined with non-search tools such
+  // as function calling in the same generateContent request.
   if (request.webSearch && (request.stable.tools.length || request.toolChoice))
     reject('GEMINI_SEARCH_TOOL_COMBINATION_UNSUPPORTED');
   const continuationInput = continuationInputText(request);
   const generation = request.generation;
   if (generation) validateModelOptions(generation, protocol);
-  // Gemini 4 models ignore sampling values, reject MINIMAL thinking and cap one streamed segment.
+  // https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-argon#api-rules
+  // (2026-11-20): the backend ignores temperature, top_k and top_p, thinking_level MINIMAL
+  // returns HTTP 400, and one streamed segment produces up to 65,536 output tokens. The
+  // gemini-4-carbon guide states the same.
   const gemini4 =
     request.modelId === 'gemini-4-argon'
       ? 'ARGON'
@@ -535,7 +540,8 @@ export class VertexDecoder {
         continue;
       const segment = support.segment.text;
       const start = this.text.indexOf(segment);
-      // Gemini grounding offsets are UTF-8 bytes in a Part, not JavaScript text offsets.
+      // https://aistudio.google.com/api-reference/generate-content#Resource:Candidate (2026-11-20):
+      // groundingSupports segment startIndex and endIndex are measured in bytes from the Part start.
       if (start < 0 || start !== this.text.lastIndexOf(segment)) continue;
       const end = start + segment.length;
       const chunks = support.groundingChunkIndices.flatMap((index) =>

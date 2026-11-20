@@ -153,7 +153,8 @@ function search(query: ManuscriptSearchQuery): ManuscriptSearchResult {
   const params: (string | number)[] =
     query.scope === 'chat' ? [query.chatId!] : query.scope === 'bot' ? [query.botId!] : [];
   const long = terms.filter((term) => [...term].length >= 3);
-  // SQLite's trigram tokenizer folds Unicode by its own rules, so matches are verified again.
+  // https://sqlite.org/fts5.html#the_trigram_tokenizer (2026-11-20): trigram matching is case
+  // insensitive unless the case_sensitive option is set to 1.
   const fts = long.length
     ? `AND (EXISTS(SELECT 1 FROM search_dirty_sources d WHERE d.source_id=v.source_id)
     OR v.source_id IN (SELECT d.source_id FROM search_fts f JOIN search_documents d ON d.id=f.rowid WHERE search_fts MATCH ?))`

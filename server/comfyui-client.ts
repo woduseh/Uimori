@@ -245,7 +245,9 @@ export async function comfyUISystemStats(
   };
 }
 
-/** Uses ComfyUI's atomic per-job cancel. Older servers only dequeue this ID. */
+// https://github.com/comfyanonymous/ComfyUI/blob/v0.46.0/server.py#L1036-L1079 (2026-11-20):
+// POST /api/jobs/{job_id}/cancel interrupts the job only while it is still the running one,
+// dequeues it when pending, and answers {"cancelled": bool}.
 export async function cancelComfyUIPrompt(
   connection: ComfyUIConnection,
   promptId: string,

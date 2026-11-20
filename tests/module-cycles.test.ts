@@ -4,8 +4,6 @@ import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
 import { sourceFiles, sourceImports } from './fixtures/source-imports.js';
 
-// Biome checks directory boundaries, not import cycles. TypeScript erases `import type` and
-// inline `type` specifiers, so they are not runtime edges.
 const root = fileURLToPath(new URL('../', import.meta.url));
 function valueImports(file: string): string[] {
   return sourceImports(readFileSync(join(root, file), 'utf8'), file)
