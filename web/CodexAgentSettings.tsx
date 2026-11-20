@@ -16,6 +16,7 @@ import './codex-agent-settings.css';
 import { useEffect, useRef, useState } from 'react';
 import type { CodexRuntimeStatus } from '../core/agent-runtime.js';
 import { api } from './api.js';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 const runtimeErrors: Record<string, string> = {
   get CODEX_DISABLED() {
@@ -109,14 +110,12 @@ export function CodexAgentSettings({
   const [checking, setChecking] = useState(false);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
-    [refresh, setRefresh] = useState(0),
     [copied, setCopied] = useState(false),
     [copyError, setCopyError] = useState(''),
     [disconnecting, setDisconnecting] = useState(false);
   const version = useRef(0),
     locked = useRef(false);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Explicit refresh restarts polling and its login deadline.
-  useEffect(() => {
+  const refreshStatus = useRetryableEffect(() => {
     if (!active) return;
     let alive = true,
       timer: ReturnType<typeof setTimeout> | undefined;
@@ -146,7 +145,7 @@ export function CodexAgentSettings({
       alive = false;
       if (timer) clearTimeout(timer);
     };
-  }, [active, refresh]);
+  }, [active]);
   async function action(path: string, method = 'POST') {
     if (locked.current) return;
     locked.current = true;
@@ -156,7 +155,7 @@ export function CodexAgentSettings({
     setChecking(false);
     try {
       setStatus(await api<CodexRuntimeStatus>(path, {}, method));
-      setRefresh((value) => value + 1);
+      refreshStatus();
     } catch {
       setError(uiMessage('providers.m420'));
     } finally {
@@ -164,7 +163,7 @@ export function CodexAgentSettings({
       setBusy(false);
     }
   }
-  const recheck = () => setRefresh((value) => value + 1);
+  const recheck = () => refreshStatus();
   async function copyLoginCode(code: string) {
     setCopyError('');
     try {

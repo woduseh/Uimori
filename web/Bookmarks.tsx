@@ -1,6 +1,6 @@
 import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createContext, useContext, useLayoutEffect, useRef, useState } from 'react';
 import { BookmarkCheck, BookmarkPlus, Pencil } from 'lucide-react';
 import type { Bookmark } from '../core/reading-state.js';
 import type { ReaderTarget } from '../core/reader-target.js';
@@ -12,6 +12,7 @@ import { SaveButton } from './SaveButton.js';
 import { TransientNotice } from './TransientNotice.js';
 import { api } from './api.js';
 import './bookmarks.css';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 export const ReaderEditingContext = createContext<(id: string, editing: boolean) => void>(() => {});
 function useBookmarkEditing(id: string, editing: boolean) {
@@ -233,12 +234,10 @@ export function BookmarkList({
   useI18n();
   const [items, setItems] = useState<Bookmark[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [revision, setRevision] = useState(0);
   const [error, setError] = useState('');
   const [mutationFailed, setMutationFailed] = useState(false);
   const [editing, setEditing] = useState<Bookmark | null>(null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: revision is an explicit reload.
-  useEffect(() => {
+  const reloadBookmarks = useRetryableEffect(() => {
     const controller = new AbortController();
     setLoaded(false);
     setError('');
@@ -255,7 +254,7 @@ export function BookmarkList({
         if (!controller.signal.aborted) setError(caught.message);
       });
     return () => controller.abort();
-  }, [chatId, revision]);
+  }, [chatId]);
   return (
     <section className="bookmark-list" aria-label={t('reader.bookmarksInThisChat')}>
       {!loaded && !error && (
@@ -268,7 +267,7 @@ export function BookmarkList({
         </p>
       )}
       {(error || mutationFailed) && (
-        <button type="button" onClick={() => setRevision((value) => value + 1)}>
+        <button type="button" onClick={reloadBookmarks}>
           {t('reader.refreshBookmarks')}
         </button>
       )}

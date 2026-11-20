@@ -3,6 +3,7 @@ import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api } from './api.js';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 export function LazyDiagnostics<T>({
   path,
@@ -25,13 +26,12 @@ export function LazyDiagnostics<T>({
   const [open, setOpen] = useState(initiallyOpen);
   const [value, setValue] = useState<T | null>(null);
   const [error, setError] = useState('');
-  const [retry, setRetry] = useState(0);
   const expanded = !disclosure || open;
   useEffect(() => {
     setOpen(initiallyOpen);
   }, [initiallyOpen]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Revision updates and explicit retries reload diagnostics at the same path.
-  useEffect(() => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Revision updates reload diagnostics at the same path.
+  const retry = useRetryableEffect(() => {
     if (!expanded) {
       setValue(null);
       return;
@@ -49,7 +49,7 @@ export function LazyDiagnostics<T>({
     return () => {
       active = false;
     };
-  }, [path, revision, expanded, retry]);
+  }, [path, revision, expanded]);
   const content = (
     <>
       {actions && <div className="form-actions">{actions}</div>}
@@ -60,7 +60,7 @@ export function LazyDiagnostics<T>({
             loading={!error}
             error={error}
             label={t('shared.loadingDetails')}
-            onRetry={() => setRetry((value) => value + 1)}
+            onRetry={retry}
           />
         ) : (
           children(value)

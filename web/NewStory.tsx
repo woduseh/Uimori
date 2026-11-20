@@ -24,6 +24,7 @@ import type { ContentRole } from '../core/risu-content.js';
 import { CloseIcon } from './ui-icons.js';
 import { newChatPersona, type BotDefaults } from '../core/bot-defaults.js';
 import './new-story.css';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 type StorySelection = {
   title: string;
@@ -102,12 +103,10 @@ export function NewStory({
   const [defaultsBotId, setDefaultsBotId] = useState('');
   const [defaultsLibrary, setDefaultsLibrary] = useState<Library | null>(null);
   const [defaultsError, setDefaultsError] = useState('');
-  const [defaultsRetry, setDefaultsRetry] = useState(0);
   const [title, setTitle] = useState('');
   const [loadedContents, setLoadedContents] = useState<Record<string, Content>>({});
   const [packageLoading, setPackageLoading] = useState(true);
   const [packageError, setPackageError] = useState('');
-  const [packageRetry, setPackageRetry] = useState(0);
   const [resolvedPackages, setResolvedPackages] = useState<{
     selection: string;
     library: Library;
@@ -134,8 +133,7 @@ export function NewStory({
     if (initialBot && !submitted.current) setBot(refValue(initialBot));
   }, [initialBot]);
   const botId = bot ? selectedId(bot) : '';
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Explicit retry repeats the same defaults read.
-  useEffect(() => {
+  const retryDefaults = useRetryableEffect(() => {
     if (!botId || personaChosen || submitted.current) return;
     let alive = true;
     setDefaultsBotId('');
@@ -160,7 +158,7 @@ export function NewStory({
     return () => {
       alive = false;
     };
-  }, [botId, bot, personaChosen, initialFolder?.defaultPersona, library, defaultsRetry]);
+  }, [botId, bot, personaChosen, initialFolder?.defaultPersona, library]);
   const defaultsReady =
     !!submitted.current || personaChosen || (defaultsBotId === bot && defaultsLibrary === library);
   const packageSelection = JSON.stringify([bot, persona, ...modules]);
@@ -171,7 +169,7 @@ export function NewStory({
       resolvedPackages?.selection === packageSelection &&
       resolvedPackages.library === library);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Selections and library updates refresh current content; writing the cache must not restart its own load.
-  useEffect(() => {
+  const retryPackages = useRetryableEffect(() => {
     if (submitted.current) return;
     let current = true;
     const selected = [...new Set([bot, persona, ...modules].filter(Boolean))];
@@ -233,7 +231,6 @@ export function NewStory({
     initialBot,
     initialPersona,
     initialModules,
-    packageRetry,
     packageSelection,
   ]);
   function captureSelection(): StorySelection {
@@ -516,12 +513,7 @@ export function NewStory({
           <NoticeBanner
             tone="error"
             actions={
-              <button
-                type="button"
-                className="secondary"
-                disabled={locked}
-                onClick={() => setDefaultsRetry((value) => value + 1)}
-              >
+              <button type="button" className="secondary" disabled={locked} onClick={retryDefaults}>
                 {t('transfer.m338')}
               </button>
             }
@@ -601,12 +593,7 @@ export function NewStory({
           <NoticeBanner
             tone="error"
             actions={
-              <button
-                type="button"
-                className="secondary"
-                disabled={locked}
-                onClick={() => setPackageRetry((value) => value + 1)}
-              >
+              <button type="button" className="secondary" disabled={locked} onClick={retryPackages}>
                 {t('transfer.m338')}
               </button>
             }

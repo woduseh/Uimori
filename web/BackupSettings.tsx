@@ -19,6 +19,7 @@ import { SaveButton } from './SaveButton.js';
 import { Dialog } from './Dialog.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 const date = (value: string) =>
   formatDate(new Date(value), {
@@ -44,7 +45,6 @@ export function BackupSettings({
   const busy = operation !== null;
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [reload, setReload] = useState(0);
   const [confirmReload, setConfirmReload] = useState(false);
   function reloadSettings() {
     setConfirmReload(false);
@@ -52,13 +52,12 @@ export function BackupSettings({
     setMessage('');
     setDraft(null);
     setDirty(false);
-    setReload((value) => value + 1);
+    refreshStatus();
   }
   useEffect(() => {
     onDirtyChange?.(dirty || busy);
   }, [dirty, busy, onDirtyChange]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: explicit refresh restarts this bounded status read.
-  useEffect(() => {
+  const refreshStatus = useRetryableEffect(() => {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const load = async () => {
@@ -77,7 +76,7 @@ export function BackupSettings({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [reload]);
+  }, []);
   const invalid =
     !!draft &&
     (!Number.isInteger(draft.retain) ||
@@ -115,7 +114,7 @@ export function BackupSettings({
       setDraft(saved);
       setDirty(false);
       setMessage(retainedMessage('transfer.m150'));
-      setReload((value) => value + 1);
+      refreshStatus();
       return true;
     } catch (caught) {
       setError((caught as Error).message);
@@ -131,7 +130,7 @@ export function BackupSettings({
     setError('');
     try {
       await api('/backups', {});
-      setReload((value) => value + 1);
+      refreshStatus();
     } catch (caught) {
       setError((caught as Error).message);
     } finally {

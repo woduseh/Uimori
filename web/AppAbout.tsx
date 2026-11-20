@@ -1,11 +1,12 @@
 import { useI18n } from './i18n.js';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { NoticeBanner } from './NoticeBanner.js';
 import './app-about.css';
 import { api } from './api.js';
 import { ExternalLinkIcon } from './ui-icons.js';
 import license from '../LICENSE?raw';
 import notices from '../THIRD_PARTY_NOTICES.md?raw';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 type AppBuild = { version: string; buildId: string };
 
@@ -13,9 +14,7 @@ export function AppAbout() {
   const { t } = useI18n();
   const [build, setBuild] = useState<AppBuild | null>(null);
   const [error, setError] = useState(false);
-  const [refresh, setRefresh] = useState(0);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Retry explicitly starts a fresh request after a failed health lookup.
-  useEffect(() => {
+  const retry = useRetryableEffect(() => {
     let active = true;
     setError(false);
     setBuild(null);
@@ -29,7 +28,7 @@ export function AppAbout() {
     return () => {
       active = false;
     };
-  }, [refresh]);
+  }, []);
   return (
     <section className="app-about" aria-label={t('outside.aboutLabel')}>
       <div className="recovery-settings-brand">
@@ -59,11 +58,7 @@ export function AppAbout() {
           <NoticeBanner
             tone="error"
             actions={
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => setRefresh((value) => value + 1)}
-              >
+              <button type="button" className="secondary" onClick={retry}>
                 {t('outside.recheck')}
               </button>
             }

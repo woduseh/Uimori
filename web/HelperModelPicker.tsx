@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Library, ModelWorkspace } from '../core/product.js';
 import { api } from './api.js';
 import { ChatModelPicker } from './ChatModelPicker.js';
@@ -6,6 +6,7 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
 import { message, t, translateMessage, useI18n } from './i18n.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 export function HelperModelPicker({
   open,
@@ -28,7 +29,6 @@ export function HelperModelPicker({
   const [reading, setReading] = useState(false);
   const [needsRead, setNeedsRead] = useState(true);
   const [pending, setPending] = useState(false);
-  const [attempt, setAttempt] = useState(0);
   const [accepted, setAccepted] = useState<ModelWorkspace | null>(null);
   const [notice, setNotice] = useState('');
   const epoch = useRef(0);
@@ -46,8 +46,7 @@ export function HelperModelPicker({
           translationPolicy: shared.workspace.translationPolicy,
         }
       : workspace;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt explicitly rereads the current global model revision.
-  useEffect(() => {
+  const retryRead = useRetryableEffect(() => {
     if (!open) return;
     const owner = ++epoch.current;
     const controller = new AbortController();
@@ -76,7 +75,7 @@ export function HelperModelPicker({
       epoch.current++;
       controller.abort();
     };
-  }, [open, attempt]);
+  }, [open]);
   async function select(modelId: string | undefined) {
     if (!current || needsRead || reading || locked.current) return;
     if (current.helperModel?.id === modelId) {
@@ -135,7 +134,7 @@ export function HelperModelPicker({
         error={writeError || readError}
         errorLabel={writeError ? t('helpers.modelCheckAgain') : undefined}
         onRetry={() => {
-          setAttempt((value) => value + 1);
+          retryRead();
           void shared.refresh();
         }}
         onSelect={(modelId) => void select(modelId)}

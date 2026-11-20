@@ -1,13 +1,14 @@
 import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { HelperActivity as Activity } from '../core/helper-activity.js';
 import type { HelperStatus } from '../core/helper.js';
 import { api, labels } from './api.js';
 import { helperActivityStages } from './helper-activity.js';
 import { requestFileError } from './request-file-errors.js';
 import { statusGlyph } from './TurnStatus.js';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 type ActivityView = {
   taskId?: string;
@@ -24,10 +25,7 @@ export function useHelperActivity(
 ): ActivityView {
   useI18n();
   const [view, setView] = useState<ActivityView>({ data: null, error: '' });
-  const [attempt, setAttempt] = useState(0);
-  const retry = useCallback(() => setAttempt((value) => value + 1), []);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt explicitly retries the same activity read.
-  useEffect(() => {
+  const retry = useRetryableEffect(() => {
     if (!taskId || !visible) return;
     let disposed = false;
     let pending = false;
@@ -70,7 +68,7 @@ export function useHelperActivity(
       clearTimeout(timer);
       document.removeEventListener('visibilitychange', visibility);
     };
-  }, [taskId, status, visible, attempt]);
+  }, [taskId, status, visible]);
   return { ...(view.taskId === taskId ? view : { data: null, error: '' }), retry };
 }
 

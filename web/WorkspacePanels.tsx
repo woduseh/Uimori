@@ -52,6 +52,7 @@ import { ConnectionEditor } from './ProviderManagement.js';
 import { ArchivePanel } from './ArchivePanel.js';
 import { AttemptInspector } from './AttemptInspector.js';
 import { RunTaskDetails } from './RunTaskDetails.js';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 export function TasksPanel({
   state,
@@ -79,9 +80,8 @@ export function TasksPanel({
     loading: boolean;
     error: string;
   } | null>(null);
-  const [runRetry, setRunRetry] = useState(0);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Full summaries are fetched only while this panel is mounted, on chat/event changes or explicit retry.
-  useEffect(() => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Full summaries are fetched only while this panel is mounted and on chat/event changes.
+  const retryRuns = useRetryableEffect(() => {
     if (!detail) return;
     let alive = true;
     const chatId = detail.chat.id;
@@ -107,7 +107,7 @@ export function TasksPanel({
     return () => {
       alive = false;
     };
-  }, [detail?.chat.id, detail?.reader.cursor, runRetry]);
+  }, [detail?.chat.id, detail?.reader.cursor]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Job reads follow the chat and event cursor, not unrelated reader snapshot changes.
   useEffect(() => {
     let alive = true;
@@ -168,7 +168,7 @@ export function TasksPanel({
         error={listed?.error}
         label={t('chatsettings.m5')}
         errorLabel={t('chatsettings.m6')}
-        onRetry={() => setRunRetry((value) => value + 1)}
+        onRetry={retryRuns}
         retryLabel={t('chatsettings.m7')}
       />
       {allRuns && !listed?.loading && !listed?.error && !runs.length && (
