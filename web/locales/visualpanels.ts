@@ -299,6 +299,30 @@ export const messages = {
     ja: '既定値',
     zh: '默认值',
   },
+  'visualpanels.sampleStatusPanel': {
+    ko: '봇이 만든 상태창',
+    en: 'Status panel made by the bot',
+    ja: 'ボットが作ったステータス欄',
+    zh: '机器人生成的状态栏',
+  },
+  'visualpanels.sampleNote': {
+    ko: '메모',
+    en: 'Note',
+    ja: 'メモ',
+    zh: '备注',
+  },
+  'visualpanels.sampleNoteLabel': {
+    ko: '테마 예문 메모',
+    en: 'Theme sample note',
+    ja: 'テーマ例文のメモ',
+    zh: '主题示例备注',
+  },
+  'visualpanels.sampleNotePlaceholder': {
+    ko: '테마를 바꿔도 유지돼요',
+    en: 'Kept when the theme changes',
+    ja: 'テーマを変えても保持されます',
+    zh: '更换主题后仍会保留',
+  },
   'visualpanels.currentBotDefault': {
     ko: '현재 봇의 기본',
     en: 'Current bot default',

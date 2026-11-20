@@ -311,6 +311,12 @@ export const messages = {
     ja: 'アシスタントのモデル設定',
     zh: '助手模型设置',
   },
+  'helpers.reviewSelection': {
+    ko: '선택한 원문을 검토해 주세요.',
+    en: 'Please review the selected original text.',
+    ja: '選択した原文を確認してください。',
+    zh: '请审阅所选原文。',
+  },
   'helpers.m051': {
     ko: '도우미 말투',
     en: 'Assistant tone',

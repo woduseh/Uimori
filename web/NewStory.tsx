@@ -308,10 +308,7 @@ export function NewStory({
     try {
       const selection = (submitted.current ??= captureSelection());
       if (!created.current) {
-        if (uncertain.current)
-          throw new Error(
-            '채팅 생성 응답을 확인하지 못했어요. 목록을 새로 확인한 뒤 이어서 설정해 주세요. 중복 생성을 막기 위해 자동 재전송하지 않아요.'
-          );
+        if (uncertain.current) throw new Error(retainedMessage('transfer.m320'));
         uncertain.current = true;
         created.current = await api<Chat>('/chats', {
           title: selection.title,

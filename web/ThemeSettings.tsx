@@ -62,12 +62,13 @@ function paletteTitle(palette?: { title: string; revision?: number }) {
       : palette.title
     : '';
 }
-const sample = `<div class="risu-chat-text">${readingSample
-  .split('\n\n')
-  .map((paragraph) => `<p data-uimori-prose>${paragraph}</p>`)
-  .join(
-    ''
-  )}<small>${readingSampleCredit}</small></div><details><summary>봇이 만든 상태창</summary><label>메모 <input aria-label="테마 예문 메모" placeholder="테마를 바꿔도 유지돼요" /></label></details>`;
+const sample = () =>
+  `<div class="risu-chat-text">${readingSample
+    .split('\n\n')
+    .map((paragraph) => `<p data-uimori-prose>${paragraph}</p>`)
+    .join(
+      ''
+    )}<small>${readingSampleCredit}</small></div><details><summary>${t('visualpanels.sampleStatusPanel')}</summary><label>${t('visualpanels.sampleNote')} <input aria-label="${t('visualpanels.sampleNoteLabel')}" placeholder="${t('visualpanels.sampleNotePlaceholder')}" /></label></details>`;
 export function ThemeSettings({
   onDirtyChange,
   onSaveHandlerChange,
@@ -1001,7 +1002,7 @@ export function ThemeSettings({
             <span>{t('visualpanels.originalTranslation')}</span>
           </div>
           <div slot="body">
-            <RisuMessageSurface html={sample} onAction={async () => {}} disabled />
+            <RisuMessageSurface html={sample()} onAction={async () => {}} disabled />
           </div>
           <div slot="actions" className="source-actions">
             <button type="button">{t('visualpanels.bodyActionExample')}</button>

@@ -400,7 +400,7 @@ export function NativeRisuToggleEditor({
                   type="button"
                   className="ghost nt-inline-add"
                   disabled={locked}
-                  onClick={() => write(() => setOptions([...options, '새 선택지']))}
+                  onClick={() => write(() => setOptions([...options, t('native.newChoice')]))}
                 >
                   <AddIcon size={15} aria-hidden="true" />
                   {t('native.text_bd90c69a8b')}

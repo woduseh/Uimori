@@ -159,7 +159,7 @@ export function NativeRisuTriggerEditor({
             onChange([
               ...value,
               {
-                comment: '새 Lua',
+                comment: t('native.newLua'),
                 type: 'start',
                 conditions: [],
                 effect: [{ type: 'triggerlua', code: '' }],

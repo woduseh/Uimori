@@ -344,7 +344,7 @@ function storedOutline(scope: string): SelectedOutline | null {
     return null;
   }
 }
-const selectionRequest = '선택한 원문을 검토해 주세요.';
+const selectionRequest = () => t('helpers.reviewSelection');
 
 export const HelperPanel = memo(function HelperPanel(props: Props) {
   useI18n();
@@ -755,7 +755,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         setDrafts((old) => {
           if (!current()) return old;
           const previous = old[owner.id] ?? local(`uimori:helper-input:${owner.id}`) ?? '';
-          const text = selected.kind === 'selection' ? selectionRequest : selected.text;
+          const text = selected.kind === 'selection' ? selectionRequest() : selected.text;
           const next = previous.trim()
             ? selected.kind === 'draft'
               ? `${previous}\n\n${text}`
@@ -2110,7 +2110,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                     aria-label={t('helpers.m093')}
                     disabled={!hydrated[scopeKey]}
                     onClick={() => {
-                      if (draft === selectionRequest) editDraft('');
+                      if (draft === selectionRequest()) editDraft('');
                       setSelections((old) => ({ ...old, [scopeKey]: null }));
                       saveLocal(`uimori:helper-selection:${scopeKey}`, null);
                     }}

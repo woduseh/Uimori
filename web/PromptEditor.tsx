@@ -1,5 +1,6 @@
 import { ApiError } from './api.js';
 import {
+  t,
   useI18n,
   translateMessage,
   registerMessage,
@@ -40,7 +41,6 @@ import { editableResource, type PromptEditModel } from '../core/resource-editing
 import { ResourceEditorSession } from './resource-editor-session.js';
 import './prompt-editor.css';
 
-const labels: Record<PromptRole, string> = { main: '창작', translation: '번역' };
 const defaults: Record<PromptRole, string> = {
   main: DEFAULT_MAIN_PROMPT,
   translation: DEFAULT_TRANSLATION_PROMPT,
@@ -73,7 +73,7 @@ function createSession(role: PromptRole, preset?: PromptPreset | PromptPresetSum
       preset && 'program' in preset
         ? editableResource('prompt-preset', preset)
         : {
-            title: preset?.title ?? (preset === null ? '' : `${labels[role]} 사용자 프롬프트`),
+            title: preset?.title ?? (preset === null ? '' : t('prompts.userPromptTitle', { role })),
             role,
             program: createDefaultRisuPrompt(defaults[role], role),
             values: {},
