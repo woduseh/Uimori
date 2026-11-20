@@ -446,8 +446,7 @@ export function NewStory({
       submitted.current
     )
       return;
-    const timer = window.setTimeout(() => void create(), 0);
-    return () => window.clearTimeout(timer);
+    void create();
   });
   if (!showForm)
     return (
