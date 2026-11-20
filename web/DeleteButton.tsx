@@ -1,5 +1,6 @@
 import { t, translateMessage, useI18n, type MessageReference } from './i18n.js';
 import { useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { CloseIcon, DeleteIcon } from './ui-icons.js';
 import { api } from './api.js';
 import { Dialog } from './Dialog.js';
@@ -69,7 +70,7 @@ export function DeleteButton({
     setError('');
     try {
       await api(target.path, target.body, 'DELETE');
-      setTarget(null);
+      flushSync(() => setTarget(null));
       await onDeleted();
     } catch (caught) {
       const message = (caught as Error).message;
