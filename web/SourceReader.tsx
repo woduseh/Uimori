@@ -442,11 +442,7 @@ function SourceReaderContent({
   const [editor, setEditor] = useState<ReaderMode | null>(null);
   const editorOrigin = useRef<EditorOrigin | undefined>(undefined);
   const restoreEditor = useRef(false);
-  useLayoutEffect(() => {
-    if (!editor) return;
-    onEditingChange?.(source.id, true);
-    return () => onEditingChange?.(source.id, false);
-  }, [editor, onEditingChange, source.id]);
+  useLayoutEffect(() => () => onEditingChange?.(source.id, false), [onEditingChange, source.id]);
   useLayoutEffect(() => {
     if (editor || !restoreEditor.current) return;
     restoreEditor.current = false;
