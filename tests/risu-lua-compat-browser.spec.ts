@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import type { RisuImportResult } from '../core/risu-import.js';
 import { navigationAction } from './ui-navigation.js';
 
@@ -195,6 +195,16 @@ end`,
   return { chatId: imported.chat!.id, surfaces };
 }
 
+async function expectBothScenes(surfaces: Locator, counter: number) {
+  await expect(surfaces.locator('#counter')).toHaveText([`Count: ${counter}`, `Count: ${counter}`]);
+}
+async function expectBothScenesEnabled(surfaces: Locator) {
+  await expect(surfaces).toHaveCount(2);
+  await expect(surfaces.locator('.risu-message-content[data-risu-disabled="false"]')).toHaveCount(
+    2
+  );
+}
+
 test('a delayed successful action releases the replacement reader after a shared confirmation', async ({
   page,
 }) => {
@@ -214,24 +224,18 @@ test('a delayed successful action releases the replacement reader after a shared
   });
   try {
     await surfaces.last().getByRole('button', { name: '숫자 올리기', exact: true }).click();
-    await expect(surfaces.last().locator('#counter')).toHaveText('Count: 1');
-    await expect(surfaces.last().locator('.risu-message-content')).toHaveAttribute(
-      'data-risu-disabled',
-      'false'
-    );
+    await expectBothScenes(surfaces, 1);
+    await expectBothScenesEnabled(surfaces);
     await surfaces.last().getByRole('button', { name: '숫자 올리기', exact: true }).click();
     await expect(surfaces.last().locator('.risu-message-content')).toHaveAttribute(
       'data-risu-disabled',
       'true'
     );
     release();
-    await expect(surfaces.last().locator('.risu-message-content')).toHaveAttribute(
-      'data-risu-disabled',
-      'false'
-    );
+    await expectBothScenesEnabled(surfaces);
     expect(submissions).toHaveLength(1);
     await surfaces.last().getByRole('button', { name: '숫자 올리기', exact: true }).click();
-    await expect(surfaces.last().locator('#counter')).toHaveText('Count: 2');
+    await expectBothScenes(surfaces, 2);
     expect(submissions).toHaveLength(2);
     expect(submissions[1].idempotencyKey).not.toBe(submissions[0].idempotencyKey);
   } finally {
@@ -263,10 +267,10 @@ test('identical scenes retain separate uncertain actions and each replacement ca
   };
   await click('first', 503);
   await expect.poll(async () => (await values()).values.counter).toBe('1');
-  await expect(surfaces.last().locator('#counter')).toHaveText('Count: 1');
+  await expectBothScenes(surfaces, 1);
   await click('last', 503);
   await expect.poll(async () => (await values()).values.counter).toBe('2');
-  await expect(surfaces.last().locator('#counter')).toHaveText('Count: 2');
+  await expectBothScenes(surfaces, 2);
   await click('last', 200);
   await click('first', 200);
   expect(submissions).toHaveLength(4);
@@ -297,16 +301,13 @@ test('a terminal action receipt permits a new explicit attempt while a running o
     const response = page.waitForResponse((item) => item.url().endsWith('/risu-action'));
     await surfaces.last().getByRole('button', { name: '숫자 올리기', exact: true }).click();
     expect((await response).status()).toBe(status);
-    await expect(surfaces.last().locator('.risu-message-content')).toHaveAttribute(
-      'data-risu-disabled',
-      'false'
-    );
+    await expectBothScenesEnabled(surfaces);
   }
   expect(submissions).toHaveLength(3);
   expect(submissions[1]).toEqual(submissions[0]);
   expect(submissions[2]).toEqual(submissions[0]);
   await surfaces.last().getByRole('button', { name: '숫자 올리기', exact: true }).click();
-  await expect(surfaces.last().locator('#counter')).toHaveText('Count: 1');
+  await expectBothScenes(surfaces, 1);
   expect(submissions).toHaveLength(4);
   expect(submissions[3].idempotencyKey).not.toBe(submissions[0].idempotencyKey);
 });
