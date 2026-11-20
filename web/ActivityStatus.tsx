@@ -112,9 +112,10 @@ export function ActivityStatus({
 }) {
   useI18n();
   const [now, setNow] = useState(Date.now);
-  const [hidden, setHidden] = useState<string[]>(
-    () => readOptionalJson('session', `activity-hidden:${scope}`, []) as string[]
-  );
+  const [hidden, setHidden] = useState<string[]>(() => {
+    const stored = readOptionalJson('session', `activity-hidden:${scope}`, null);
+    return Array.isArray(stored) ? stored.filter((key) => typeof key === 'string') : [];
+  });
   const [notices, setNotices] = useState<Notice[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [history, setHistory] = useState<ReaderActivity[]>([]);
