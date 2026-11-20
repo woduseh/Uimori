@@ -139,7 +139,6 @@ test('real transport completes HTTP runs and invokes the automatic title helper 
   });
   const generatedTitle = '霧の港で月を待つ'.repeat(32);
   const bodies: transport.ProviderRequest[] = [];
-  // Preserve executeProvider, validation, wire journaling, encoder and SSE parser; replace I/O only.
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, options) => {
     expect(new URL(String(url)).origin).toBe('http://127.0.0.1:9');
     expect(options?.method).toBe('POST');

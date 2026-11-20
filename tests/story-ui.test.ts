@@ -25,7 +25,6 @@ describe('story UI', () => {
     expect(kinds.filter((kind) => kind === 'ui').length).toBeGreaterThanOrEqual(4);
     expect(kinds).not.toContain('invalid');
     expect(kinds).not.toContain('pending');
-    // The first example shows blocks inside a scene: prose, block, prose, block, prose.
     expect(kinds.slice(0, 5)).toEqual(['prose', 'ui', 'prose', 'ui', 'prose']);
     for (const noise of ['dummy click', 'Surface targeting', '- weight:'])
       expect(prompt).not.toContain(noise);
@@ -91,7 +90,6 @@ root = Column([
     const wording = projectStoryUiText(stored);
     for (const value of ['월', '화', '보컬 레슨', '이번 주', 'S', '응원봉', '12', '사키', '무대'])
       expect(wording).toContain(value);
-    // A battle readout is read as who, how much of what, and what afflicts them.
     for (const value of ['아리엘', '성기사', '체력', '412', '520', '중독'])
       expect(wording).toContain(value);
     expect(wording).not.toContain('active');
@@ -132,9 +130,7 @@ root = Column([
     const wording = projectStoryUiText(stored);
     expect(wording).toContain('한서윤 → 나: 짝사랑');
     expect(wording).toContain('발신인 → 나');
-    // Read only what the reader sees: the first of a repeated id, edges with two distinct ends.
     for (const value of ['중복 →', '유령', '독백']) expect(wording).not.toContain(value);
-    // A calendar entry keeps its date; map sizes are layout, not wording.
     expect(wording).toContain('2026-12');
     expect(wording).toContain('24 19:00 크리스마스 공연');
     expect(wording.split('\n')).not.toEqual(expect.arrayContaining(['4', '3']));
@@ -164,7 +160,6 @@ root = Column([
         '일',
       ])
     );
-    // Ids, the token mark and the month are host-owned: translating them would break the layout.
     for (const value of ['yun', 'me', '경', '2026-12']) expect(strings).not.toContain(value);
   });
   it('reads composed media as wording, or as the expression a writer continues from', () => {

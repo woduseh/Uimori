@@ -13,7 +13,6 @@ import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js'
 const base: ModelGeneration = { maxOutputTokens: 8192, temperature: null };
 
 test('validation is protocol-level: any listed or unlisted model may use every option its encoder sends', () => {
-  // Unlisted values on reviewed models and reviewed values on unlisted models both pass locally.
   expect(() =>
     validateModelOptions({ ...base, thinkingLevel: 'LOW' }, 'vertex-gemini-v1')
   ).not.toThrow();

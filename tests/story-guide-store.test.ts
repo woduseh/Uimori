@@ -91,7 +91,6 @@ test('current-format databases add guide storage without changing existing chats
     brief: null,
   });
   expect(fixture.store.db.prepare('SELECT count(*) AS n FROM chat_story_guides').get()!.n).toBe(0);
-  // Reopen an otherwise current database made before the additive table existed.
   fixture.store.db.exec('DROP TABLE chat_story_guides');
   fixture.store.close();
   fixture.store = new Store(join(fixture.directory, 'app.sqlite'));

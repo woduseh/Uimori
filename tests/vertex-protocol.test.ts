@@ -260,7 +260,6 @@ test('vertex-gemini-v1 serializes only selected safety filters and preserves the
   expect(() => encodeVertex(nextInput, protocol)).toThrow('VERTEX_CONTINUATION_MISMATCH');
 });
 
-// Pure recorded-object fixtures: these checks do not call a live model or assess prose quality.
 describe('Vertex 3.8 request and continuation protocol', () => {
   test('encodes contract, complete input JSON and function schemas without unsupported sampling fields', () => {
     const input = request();
@@ -424,7 +423,7 @@ describe('Vertex 3.8 request and continuation protocol', () => {
       controls: { helperCallsRemaining: 2 },
       instructions: ['설명만 해줘'],
     });
-    (secondInput.input.results as Json[]).reverse(); // Match by exact host ID, never by function name or result order.
+    (secondInput.input.results as Json[]).reverse();
     const second = start(secondInput);
     const secondBody = bodyObject(second.body);
     expect(secondBody.contents[1]).toEqual({ role: 'model', parts });

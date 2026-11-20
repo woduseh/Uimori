@@ -346,8 +346,6 @@ describe('file SQLite HTTP runtime', () => {
 
   it('F01 refuses another owner before recovery; F06 disables controls and prevents cross-origin writes', async () => {
     const { app, url, chat, directory } = await setup(false);
-    // Seed an in-flight record directly: this case tests owner recovery, not model execution.
-    // Keep the public runtime in normal mode without invoking a provider or a scripted model.
     const { run: active } = app.store.createRun(chat.id, command(chat), (current) => ({
       chatId: current.id,
       parentRevision: current.headRevision,
@@ -466,9 +464,7 @@ async function startChild(directory: string) {
             clearTimeout(timer);
             resolveReady(parsed);
           }
-        } catch {
-          /* Incomplete stdout line. */
-        }
+        } catch {}
       }
     });
     child.once('exit', (code) => {
@@ -611,7 +607,6 @@ describe('built server process boundary', () => {
       );
       const run = await api<Run>(instance.url, `/api/chats/${chat.id}/runs`, command(chat));
       for (const checkpoint of [1, 2]) {
-        // A poll proves the create acknowledgement and batch id were durably accepted.
         await until(
           async () =>
             provider.requests.some(
@@ -635,7 +630,6 @@ describe('built server process boundary', () => {
         phase = checkpoint;
         instance = await startChild(directory);
         if (checkpoint === 1) {
-          // Stop promptly on a product failure instead of hiding it behind a poll timeout.
           await until(
             async () => ({
               run: await api<Run>(instance.url, `/api/runs/${run.id}`),
@@ -746,7 +740,6 @@ describe('built server process boundary', () => {
         db.close();
       }
     })();
-    // Transfer directory cleanup to the newest process entry.
     owned.splice(owned.indexOf(first.entry), 1);
     const second = await startChild(directory);
     const recovered = await until(

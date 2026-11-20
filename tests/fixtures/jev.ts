@@ -3,7 +3,6 @@ import { modelWorkspace, updateModelWorkspace } from '../../server/prompt-worksp
 import { vi } from 'vitest';
 import { JEV_ENDPOINT } from '../../server/jev-judgment.js';
 
-/** Deterministic transport fixture. All judgment calls are intercepted before network access. */
 export function installJevFixture() {
   vi.stubEnv('TYPESAFE_API_KEY', 'synthetic-jev-test-key');
   const requests: Record<string, any>[] = [];
@@ -43,7 +42,6 @@ export function installJevFixture() {
   return requests;
 }
 
-/** Explicit app setup for scenarios that exercise the optional judgment feature. */
 export function configureJevFixture(store: Store, enabled = true) {
   store.credentials.set('jev', 'synthetic-jev-test-key');
   const current = modelWorkspace(store);

@@ -1,6 +1,5 @@
 import type { ThemeDefinition } from '../../core/themes.js';
 
-/** Retired built-in theme retained to verify imported user-theme compatibility. */
 export const liquidGallery: ThemeDefinition = {
   title: 'Liquid Gallery',
   description:

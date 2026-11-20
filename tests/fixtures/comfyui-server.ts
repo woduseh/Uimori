@@ -14,16 +14,13 @@ export type ComfyCapturedRequest = {
   body: string;
 };
 
-/** Synthetic ComfyUI HTTP surface: /system_stats, /prompt, /history/:id, /view, /queue, /interrupt. */
 export async function comfyUIFixture(
   options: {
     behavior?: ComfyBehavior;
-    /** History polls that return an empty object before the entry appears. */
     delayPolls?: number;
     imageBytes?: Buffer;
     imageCount?: number;
     authorization?: string;
-    /** Inject after accepting a prompt, or while reading its history/image response. */
     fault?: {
       path: 'prompt' | 'history' | 'view';
       kind: 'headers' | 'body' | 'disconnect' | 'http-error';
@@ -201,7 +198,6 @@ export async function comfyUIFixture(
     },
   };
 }
-/** Minimal API-format workflow with the three placeholders. */
 export const FIXTURE_WORKFLOW = JSON.stringify({
   '3': {
     class_type: 'KSampler',

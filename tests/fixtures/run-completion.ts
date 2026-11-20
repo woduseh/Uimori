@@ -11,7 +11,6 @@ type StateRow = {
   generation?: unknown;
 };
 
-/** Only for synthetic fixtures. Never serialize a run, request, response or assertion diff. */
 export async function waitForCompletedRun<T extends RunState>(
   read: () => T | Promise<T>,
   {
@@ -53,11 +52,8 @@ export async function waitForCompletedRun<T extends RunState>(
   const text = (value: unknown) => {
     if (value === null || value === undefined) return null;
     let message = value instanceof Error ? `${value.name}: ${value.message}` : String(value);
-    // Redact before truncating, so even a long fixture credential cannot leak a prefix.
     for (const secret of secrets) if (secret) message = message.split(secret).join('[redacted]');
     message = message.replace(/\bBearer\s+[^\s"']+/gi, 'Bearer [redacted]');
-    // Assertion messages can embed a whole prompt on their first line; keep the explanation,
-    // but suppress quoted values as well as actual/expected, stack and cause properties.
     if (value instanceof Error && value.name === 'AssertionError')
       message = message.replace(/(['"`])(?:\\.|(?!\1)[\s\S])*?\1/g, '[value omitted]');
     return message.split(/\r?\n/, 1)[0].slice(0, 500);

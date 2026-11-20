@@ -67,7 +67,6 @@ test(`INTREG01 new-chat model detour restores draft and explicit new flow resets
     if (dismissal === 'close')
       await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
     else {
-      // Narrow settings Back first returns to the section list.
       await page.goBack();
       if (await settings.isVisible()) await page.goBack();
     }
@@ -211,7 +210,6 @@ test(`INTREG04 cancellation error stays with initiating navigation and unlocks r
     await nav.getByRole('button', { name: second.title, exact: true }).click();
     await expect(page.locator('.header-title h1')).toHaveText(second.title);
     release();
-    // A's request has completed, but cannot write an alert into B.
     await expect
       .poll(() => page.getByRole('button', { name: '원문 생성', exact: true }).count())
       .toBe(1);

@@ -25,7 +25,6 @@ test('current schema initializes and remains readable after an extra query index
   expect(
     first.db.prepare("SELECT name FROM sqlite_schema WHERE name='execution_tool_diagnostics'").get()
   ).toBeTruthy();
-  // Existing schema-15 files created before diagnostics acquire only the new additive table.
   first.db.exec('DROP TABLE execution_tool_diagnostics');
   first.db.exec('CREATE INDEX optional_user_index ON sources(created_at)');
   first.close();

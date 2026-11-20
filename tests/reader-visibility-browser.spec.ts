@@ -5,8 +5,6 @@ import { navigationAction } from './ui-navigation.js';
 type ObservedWindow = Window & { readerVisibilityEvents: string[] };
 
 async function observeStream(page: Page) {
-  // Keep the real HTTP/SSE connection. The second case also delivers controlled
-  // interaction notifications through the same EventSource message boundary.
   await page.addInitScript(() => {
     Object.assign(window, { readerVisibilityEvents: [] });
     const Original = window.EventSource;
@@ -76,7 +74,6 @@ test('READVIS01 hidden and library readers defer SSE refreshes and restore curre
   await expect
     .poll(() => page.evaluate(() => (window as unknown as ObservedWindow).readerVisibilityEvents))
     .toContain('snapshot');
-  // Allow the initial snapshot's batched refresh to settle before measuring reads.
   await page.waitForTimeout(250);
   await expect.poll(() => pending.size).toBe(0);
   const draft = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
@@ -125,8 +122,6 @@ test('READVIS01 hidden and library readers defer SSE refreshes and restore curre
   await expect(draft).toHaveValue('화면을 떠나도 보존할 다음 장면 초안');
   expect(reads).toBeGreaterThan(libraryReads);
 
-  // A direct navigation read can also finish after hiding, without a newer SSE event.
-  // It must leave work for resume even when the prior cursor was already caught up.
   await page.waitForTimeout(250);
   await expect.poll(() => pending.size).toBe(0);
   await navigationAction(page, '서재');
@@ -181,8 +176,6 @@ test('READVIS02 native input wakes on events without idle polling and coalesces 
     reads++;
     active++;
     maxActive = Math.max(maxActive, active);
-    // Capture before the delay: a notification arriving during this read must
-    // trigger a later read, otherwise the newly pending input would be lost.
     const interactions = interaction ? [interaction] : [];
     try {
       await readGate;
@@ -203,7 +196,6 @@ test('READVIS02 native input wakes on events without idle polling and coalesces 
   await expect.poll(() => reads).toBeGreaterThan(0);
   await expect.poll(() => active).toBe(0);
   const idleReads = reads;
-  // The old 1.5-second loop would perform an otherwise unnecessary request here.
   await page.waitForTimeout(1700);
   expect(reads).toBe(idleReads);
 
@@ -249,8 +241,6 @@ test('READVIS02 native input wakes on events without idle polling and coalesces 
     await expect.poll(() => reads).toBeGreaterThan(hiddenReads);
     await expect(input).toHaveValue('달빛 아래의 도서관');
 
-    // Another device can answer while its script keeps running. The resolved event,
-    // rather than a terminal run or idle poll, must remove this now-expired prompt.
     interaction = undefined;
     await notifyInteraction(page, 'native.interaction.resolved');
     await expect(dialog).toBeHidden();
@@ -266,7 +256,6 @@ test('READVIS02 native input wakes on events without idle polling and coalesces 
     await dialog.locator('form').dispatchEvent('submit');
     await page.waitForTimeout(100);
     expect(answers).toEqual([{ answer: '달빛 아래의 도서관' }]);
-    // The next prompt may arrive before the prior answer's HTTP acknowledgement.
     interaction = { id: 'following-input', kind: 'input', prompt: '이어지는 질문이에요.' };
     await notifyInteraction(page);
     await expect(dialog).toContainText(interaction.prompt);

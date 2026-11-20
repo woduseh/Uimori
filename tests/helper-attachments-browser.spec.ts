@@ -91,8 +91,6 @@ async function messages(
   return response.json();
 }
 
-// The real API admits and stores attachments; fixture execution may end in a local connection
-// failure. These cases establish upload/admission/recovery, not live model response quality.
 test('HATT01 picker sends image and text attachments without text and restores stored metadata', async ({
   page,
   request,

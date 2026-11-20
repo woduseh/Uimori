@@ -17,7 +17,6 @@ import type { Content } from '../core/product.js';
 import type { HelperTask } from '../core/helper.js';
 import * as transport from '../core/transport.js';
 
-// A two-CPU host leaves queued reads in these scenarios, independently of the CI machine.
 vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<typeof import('node:os')>()),
   availableParallelism: () => 2,
@@ -341,8 +340,6 @@ const toolResult = (body: any, id: string) =>
     body.messages.findLast((m: any) => m.role === 'tool' && m.tool_call_id === id).content
   );
 
-// These scripted responses test transport, evidence and durable effects. They are
-// not a score of model tool choice, semantic answers or prompt-injection resistance.
 function reportMetrics(
   caseId: string,
   f: ReturnType<typeof fixture>,
@@ -422,7 +419,6 @@ const requestData = (wire: any) =>
   );
 
 test('helper keeps its task date and completes a tool continuation across UTC midnight', async () => {
-  // Keep real I/O timers while only the wall clock crosses midnight between provider calls.
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-17T23:59:59Z'));
   try {
@@ -633,7 +629,6 @@ test('independent helper data reads refill a free slot while results, budgets an
       inFlight--;
     }
   });
-  // The selected model has room for all three reads, exceeding the former 32k round cap.
   expect(countTextTokens(' token'.repeat(12_000))).toBeGreaterThan(11_000);
   expect(countTextTokens(' token'.repeat(12_000))).toBeLessThan(16_000);
   const revision = f.store.libraryOrganization.snapshot().revision;
@@ -725,7 +720,6 @@ test('independent helper data reads refill a free slot while results, budgets an
     const secondEnd = timed('tool.finished', 'second').finishedAt!;
     expect(Date.parse(firstStart)).toBeLessThanOrEqual(Date.parse(secondEnd));
     expect(Date.parse(secondStart)).toBeLessThanOrEqual(Date.parse(firstEnd));
-    // Results are published in call order even though the second reader finished first.
     expect(Date.parse(secondEnd)).toBeLessThanOrEqual(Date.parse(firstEnd));
     expect(f.store.libraryOrganization.snapshot().folders.map((folder) => folder.title)).toEqual([
       'After reads',
@@ -1118,7 +1112,6 @@ test('document discovery and an exact age excerpt patch a large bot without read
 test('gateway read compaction retains an exact completed mutation and resumes with a fresh native continuation', async () => {
   vi.stubEnv('UIMORI_SHELL_ROOT', join(tmpdir(), 'uimori-compaction-shell'));
   const f = fixture(8192);
-  // The shell is stubbed only to isolate compaction; Linux execution has its own integration tests.
   vi.spyOn(f.runtime.shell, 'exec').mockResolvedValue({
     exitCode: 0,
     signal: null,
@@ -1135,7 +1128,6 @@ test('gateway read compaction retains an exact completed mutation and resumes wi
   const evidence = f.store.product.content(
     fixtureBotInput('Large evidence', `Age: 27.\n${source}`)
   ) as Content;
-  // A theme/list discovery read and an operation can share a model round. Reads compact; writes stay exact.
   let helperCalls = 0,
     summaryCalls = 0;
   let finalRequest: any;
@@ -1293,7 +1285,6 @@ test('selected ID distinguishes same-name bots and reserved chat, live library a
     'Compare the age for the selected bot in this chat, the current saved library and my unsaved editor. Do not save.',
     editor
   );
-  // A later saved revision must not replace the task's already-reserved chat evidence.
   f.store.product.content(
     { ...fixtureBotInput('Harin', 'Age: 31'), expectedRevision: 1 },
     original.id

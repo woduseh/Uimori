@@ -15,8 +15,6 @@ import {
 import { readNativeRisuSample } from './fixtures/native-risu.js';
 import { nativeContent } from './fixtures/native-content.js';
 
-// Runtime permission fixtures exercise already-resolved scripts; canonical card/module grants are
-// tested separately before the host combines attachments.
 const effectiveFixtures = new WeakMap<RisuContentSource, Record<string, unknown>[]>();
 const native = (trigger: Record<string, unknown>[]): RisuContentSource => {
   const content: RisuContentSource = {
@@ -31,7 +29,6 @@ const native = (trigger: Record<string, unknown>[]): RisuContentSource => {
 };
 afterEach(() => disposeAllNativeRisuSessions());
 
-// Opt-in local evidence: originals are read only and never copied into the repository.
 describe.skipIf(!process.env.UIMORI_RISU_SAMPLE_ROOT)('local native CHARX button evidence', () => {
   for (const [relative, buttonNames] of [
     ['Reference/Cheongwon High School.charx', ['setLangToEnglish', 'setFirst1']],
@@ -154,7 +151,6 @@ describe('native Risu execution', () => {
       { id: 'b', role: 'user', data: 'Question' },
     ]);
 
-    // The reused VM starts each invocation from the conversation it is given, not its last edit.
     expect((await run('read', conversation.slice(0, 2))).variables).toMatchObject({
       user: 'Question',
       char: 'Opening',
@@ -209,7 +205,6 @@ describe('native Risu execution', () => {
   });
 
   it('round-trips native history containing Unicode and escaped characters', async () => {
-    // 123 paragraphs are about 7,500 o200k tokens, a long story turn.
     const text =
       '미라는 비가 그친 부두에서 오래된 장부를 펼쳤다. 선장이 약속한 날짜와 창고지기가 기억하는 날짜는 달랐다. 그녀는 어느 쪽도 지우지 않고 두 진술 옆에 물음표를 남겼다.\n\n'.repeat(
         123
@@ -359,7 +354,7 @@ describe('native Risu execution', () => {
         signal: controller.signal,
         host: async () => {
           started();
-          await gate; // The host can settle after the run has been cancelled.
+          await gate;
           return { success: true, result: 'old' };
         },
       }
@@ -374,7 +369,6 @@ describe('native Risu execution', () => {
           host: async () => ({ success: true, result: 'next' }),
         }
       );
-      // Observe both outcomes immediately even if the regression rejects next.
       const outcome = next.then(
         (value) => value,
         (error: unknown) => error
@@ -416,7 +410,6 @@ describe('native Risu execution', () => {
         });
         expect(result.variables.count).toBe('1');
         started();
-        // The run is still waiting for a model after its Lua callback has finished.
         await gate;
       } finally {
         disposeNativeRisuSession(key, oldOwner);
@@ -930,7 +923,6 @@ describe('native Risu execution', () => {
         },
       }
     );
-    // Attach immediately so a regression's watchdog rejection remains observed.
     const outcome = running.then(
       (value) => value,
       (error: unknown) => error

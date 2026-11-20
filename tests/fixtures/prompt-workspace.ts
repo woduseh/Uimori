@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
 import type { ModelWorkspace, PromptWorkspace, PromptPreset } from '../../core/product.js';
-/** Restore global working settings at the test boundary, never on chat creation. */
 export function preservePromptWorkspace() {
   let original: PromptWorkspace | undefined;
   let originalModels: ModelWorkspace | undefined;
@@ -10,8 +9,6 @@ export function preservePromptWorkspace() {
     const response = await request.get('/api/prompt-workspace');
     expect(response.ok()).toBe(true);
     let baseline = (await response.json()) as PromptWorkspace;
-    // Give anonymous fixture working copies a restorable owner through public APIs.
-    // Once established, later cases reuse that owner; user-facing PUT never gains reset authority.
     for (const role of ['main', 'translation'] as const) {
       if (baseline[role].presetId) continue;
       const saved = baseline[role];
@@ -40,20 +37,13 @@ export function preservePromptWorkspace() {
     originalModels = await (await request.get('/api/model-workspace')).json();
   });
   test.afterEach(async ({ request, page }, testInfo) => {
-    // Prompt and model settings are global to the server, and every browser spec of a run shares
-    // one server. A case that spends its whole budget must not also starve this restore: leaked
-    // controls turn into unrelated failures in later spec files, far from their cause.
     test.setTimeout(testInfo.timeout + 30_000);
-    // Drain synthetic response handlers before restoration emits fresh SSE requests. A case that
-    // timed out can leave a handler blocked on a gate it never resolves, so plain draining would
-    // hang here and everything below would be skipped. Bound the drain, then drop what is left.
     await Promise.race([
       page.unrouteAll({ behavior: 'wait' }),
       new Promise((resolve) => setTimeout(resolve, 5_000)),
     ]);
     await page.unrouteAll({ behavior: 'ignoreErrors' });
     if (!original || !originalModels) return;
-    // Prompts and models restore independently, so one failure must not skip the other.
     const failures: string[] = [];
     try {
       let current = (await (await request.get('/api/prompt-workspace')).json()) as PromptWorkspace;
@@ -108,8 +98,6 @@ export function preservePromptWorkspace() {
     }
     try {
       const modelCurrent = await (await request.get('/api/model-workspace')).json();
-      // The read model contains the writable settings plus its CAS revision. Restore the
-      // whole snapshot so a setting cannot silently leak through a partial update.
       const { revision: _revision, ...settings } = originalModels;
       const modelRestored = await request.put('/api/model-workspace', {
         data: {
@@ -118,8 +106,6 @@ export function preservePromptWorkspace() {
         },
       });
       expect(modelRestored.ok(), await modelRestored.text()).toBe(true);
-      // A successful write alone does not prove the next case will read the baseline.
-      // Restoration advances the revision; all actual settings must remain identical.
       const observed = await request.get('/api/model-workspace');
       expect(observed.ok(), await observed.text()).toBe(true);
       expect(await observed.json(), 'model settings must be restored before the next case').toEqual(

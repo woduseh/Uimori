@@ -302,7 +302,6 @@ test('HSESSION06 a lost creation response preserves the fallback key across relo
   expect(pending).not.toBeNull();
   expect(JSON.parse(pending ?? 'null')).toEqual(payloads[0]);
 
-  // Reload restores localStorage writes while preserving the pending sessionStorage request.
   await page.reload();
   await openHelper(page);
   await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
@@ -405,7 +404,6 @@ test('HSESSION08 a fallback retry keeps its own request when another tab has a p
   const pending = await page.evaluate((key) => sessionStorage.getItem(key), key);
   expect(pending).not.toBeNull();
 
-  // Resolve the storage failure, then let another tab retain its own uncertain request.
   await page.reload();
   await openHelper(page);
   await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();

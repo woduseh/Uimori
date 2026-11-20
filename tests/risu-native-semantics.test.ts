@@ -42,7 +42,6 @@ function fixture(
   card: Record<string, unknown> = {},
   preset: Record<string, unknown> = {}
 ) {
-  // Historical stored presets remain readable, but retired fields cannot execute.
   const program = validateRisuPrompt({
     version: 1,
     nativeRisuPreset: { version: 1, preset: { promptTemplate: blocks, ...preset } },

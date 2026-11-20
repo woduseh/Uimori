@@ -135,7 +135,6 @@ test('CHATREC02 variable rows preserve empty strings, raw drafts, conflicts and 
   await raw.fill('{"trust":""}');
   await dialog.getByRole('button', { name: '행 편집', exact: true }).click();
   await expect(value('trust')).toHaveValue('');
-  // A concurrent edit must not be silently overwritten by the row projection.
   const initial = await (await request.get(endpoint)).json();
   const concurrent = await request.put(endpoint, {
     data: {
@@ -146,7 +145,6 @@ test('CHATREC02 variable rows preserve empty strings, raw drafts, conflicts and 
     },
   });
   expect(concurrent.ok(), await concurrent.text()).toBe(true);
-  // Re-entering reads again and reports the conflict before a stale write is allowed.
   await selectChatSettingsSection(page, '사용 자료');
   await selectChatSettingsSection(page, '카드 변수');
   await expect(
@@ -195,8 +193,6 @@ test('CHATREC02 variable rows preserve empty strings, raw drafts, conflicts and 
     ).toBe(true);
     await confirm.focus();
     await expect(confirm).toBeFocused();
-    // The committed write emits a cursor refresh despite the lost PUT response.
-    // Let that read reach the editor before gating the explicit refresh below.
     await expect(dialog.locator('.chat-variable-readbacks pre').first()).toContainText(
       '"trust": ""'
     );
@@ -204,7 +200,6 @@ test('CHATREC02 variable rows preserve empty strings, raw drafts, conflicts and 
     await selectChatSettingsSection(page, '사용 자료');
     await selectChatSettingsSection(page, '카드 변수');
     await expect.poll(() => readStarted).toBe(true);
-    // A delayed read must not block replaying the already-preserved operation.
     await expect(confirm).toBeEnabled();
     await confirm.click();
     await expect(
@@ -217,7 +212,6 @@ test('CHATREC02 variable rows preserve empty strings, raw drafts, conflicts and 
     const final = await (await request.get(endpoint)).json();
     expect(final.values).toEqual({ trust: '' });
     expect(final.resolved.location).toBe('reading_room');
-    // The acknowledged save also ends loading owned by its now-obsolete read.
     await expect(value('trust')).toBeEnabled();
     await value('trust').fill('확인 뒤 새 초안');
     const lateRead = page.waitForResponse(

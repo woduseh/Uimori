@@ -80,8 +80,6 @@ function fixture() {
       profile: { ...defaultProfile(chat.id), models: { main: model } },
     });
   const snapshots: RunSnapshot[] = [];
-  // The rows have complete source ancestry and cumulative frozen input snapshots.
-  // No provider calls or translation jobs are needed to test checkpoint selection.
   for (let index = 0; index < 4; index++) {
     const prior = snapshot();
     snapshots.push(prior);

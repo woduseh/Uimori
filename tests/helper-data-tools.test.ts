@@ -132,7 +132,6 @@ test('conversation search recovers exact earlier dialogue with message roles and
     '말투 규칙: 존댓말을 사용해요.\n' + '긴 논의. '.repeat(300) + '\n마지막 합의: 이름은 그대로.';
   workspace.start(f.task.id, 'owner');
   workspace.finish(f.task.id, 'owner', 1, 'completed', text, null);
-  // Completed reservations release their copied history; the original dialogue remains stored.
   const history = helperHistory(f.store, f.task.conversationId);
   const current = workspace.enqueue(f.task.conversationId, 'current', '지난 합의를 찾아줘', {
     ...f.task.snapshot,
@@ -241,7 +240,6 @@ test('conversation retrieval follows effective request history without supersede
   expect(result.items.map((item: any) => item.ref.id)).toEqual(
     history.map((message) => message.id)
   );
-  // A copied reference from an excluded message cannot read around the reserved history.
   const [old] = discarded;
   const refused = await invoke('data.read', {
     refs: [

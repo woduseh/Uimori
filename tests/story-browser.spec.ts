@@ -212,7 +212,6 @@ test('S06 S07 reading preserves source text while the asset catalog does not pre
     (await detail(request, chat.id)).sources.find((item) => item.id === source.id)
   ).toMatchObject({ text: source.text, hash: source.hash });
   storedSource(source);
-  // The visible built-in profile is legitimately loaded. The five catalog-only uploads are not.
   const uploadedLoads = loads.filter((url) =>
     uploadedIds.has(decodeURIComponent(new URL(url).pathname.split('/').at(-1)!))
   );

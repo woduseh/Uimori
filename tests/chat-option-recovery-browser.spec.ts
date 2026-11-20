@@ -283,7 +283,6 @@ test('OPTIONREVIEW2 conflicted oneoff and cancel actions stay available; a lost 
   const oneoffTone = panel.getByLabel('합성 문체', { exact: true }).last();
   await oneoffTone.fill('다음 생성 문체');
   const remote = await externalFixed(request, chat, '외부 고정 메모');
-  // Focus is an existing automatic refresh trigger, including when another window wrote options.
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(panel.getByRole('alert')).toContainText(/바뀌|변경/);
   const stage = panel.getByRole('button', { name: '1회 옵션 예약', exact: true });
@@ -316,7 +315,6 @@ test('OPTIONREVIEW2 conflicted oneoff and cancel actions stay available; a lost 
     await route.fulfill({ response });
   });
   await stage.click();
-  // SSE can also report the accepted revision before this uncertain response is confirmed.
   await expect(
     panel.getByRole('alert').filter({ hasText: '반영 여부를 확인하지 못했어요' })
   ).toBeVisible();

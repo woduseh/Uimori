@@ -87,7 +87,6 @@ describe('grouped toggle document', () => {
     );
     expect(editToggleItem(source, 1, {}, '')).toBe('# unknown\r\na=A=select=,one,,');
     expect(() => editToggleItem(source, 1, {}, 'x=y')).toThrow('등호');
-    // Explicit caption keys and untouched caption bytes survive a description edit.
     const keyed = 'a=A\r\nfirst=Old=caption\nsecond=Keep=caption\r\nb=B';
     expect(editToggleItem(keyed, 0, {}, 'New\nKeep')).toBe(
       'a=A\r\nfirst=New=caption\nsecond=Keep=caption\r\nb=B'

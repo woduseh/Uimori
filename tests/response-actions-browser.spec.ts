@@ -94,7 +94,6 @@ test('RACOM04 last response retry chooses replacement or copy and preserves the 
   expect(modes).toHaveLength(0);
   await expect(oldScene).toBeVisible();
 
-  // An admitted replacement that fails before source commit leaves the original readable.
   await control('fail-next', { point: 'source-transaction' });
   await reopen();
   await dialog.getByRole('button', { name: '다시 쓰기', exact: true }).click();
@@ -176,7 +175,6 @@ test('RACOM04 last response retry chooses replacement or copy and preserves the 
   expect((await detail(request, before.chat.id)).chat.headRevision).toBe(replaced.id);
   await page.goto(`/?chat=${before.chat.id}`);
 
-  // Earlier scenes use the same review flow, with replacement unavailable.
   const first = page.locator(`[data-testid="source"][data-source-id="${before.sources[0].id}"]`);
   await openSourceActions(first);
   await first.getByRole('button', { name: '다시 쓰기', exact: true }).last().click();
@@ -330,7 +328,6 @@ test('RACOM08 cancelled request opens its specific task record and lazily recove
   const pending = page.locator(`[data-testid="pending-run"][data-run-id="${run.id}"]`);
   const partialText = '취소하기 전에 받은 공개 응답 조각이에요.';
   let streamReads = 0;
-  // Cancellation and task ownership are real; only the provider's public stream is synthetic.
   await page.route(`**/api/response-streams/main/${run.id}?*`, async (route) => {
     streamReads++;
     await route.fulfill({
@@ -394,10 +391,6 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     await page.getByLabel('다음 장면 요청', { exact: true }).fill('메뉴를 닫아도 남는 합성 초안');
     await trigger.scrollIntoViewIfNeeded();
     await expect(menu).toHaveJSProperty('open', false);
-    // Primary reader actions stay on the row; detail and cost disclosures live in the menu.
-    // The footer stays compact while each first-class reader action remains reachable.
-    // Do not freeze the exact action count: optional user-facing actions such as bookmarks
-    // can be added without changing the overflow-menu contract.
     await expect(footer.getByRole('button', { name: '본문 복사', exact: true })).toBeVisible();
     await expect(footer.getByRole('button', { name: '원문 수정', exact: true })).toBeVisible();
     await expect(footer.getByRole('button', { name: /책갈피 추가/ })).toBeVisible();
@@ -407,7 +400,6 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
       expect(box.width).toBeGreaterThanOrEqual(44);
       expect(box.height).toBeGreaterThanOrEqual(44);
     }
-    // Narrow phones may wrap the disclosures under the icon row; wider screens keep one row.
     if (visualReview)
       expect((await footer.boundingBox())!.height).toBeLessThanOrEqual(width < 400 ? 100 : 52);
     await noHorizontalOverflow(page, scene);
@@ -418,7 +410,6 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     await trigger.press('Enter');
     await expect(menu).toHaveJSProperty('open', true);
     const actions = menu.locator('.action-menu-body');
-    // Existing menu groups keep editing first, then tools, copying, details and deletion.
     await expect(actions.getByRole('button')).toHaveText([
       '번역 수정',
       '다시 쓰기',
@@ -438,8 +429,6 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(width);
     expect(menuBox.y).toBeGreaterThanOrEqual(0);
     expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(height);
-    // Up to 600px the menu is a bottom sheet (every row inside the viewport, resting on the
-    // bottom edge); wider screens keep the popover that opens above its trigger.
     if (width <= 600) {
       expect(menuBox.y + menuBox.height).toBeGreaterThanOrEqual(height - 24);
       for (const item of await actions.getByRole('button').all()) {
@@ -458,8 +447,6 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     await expect(trigger).toBeFocused();
 
     if (width === DESKTOP_WIDTH) {
-      // Keep a long menu usable with little vertical room, including both sides of the
-      // sheet breakpoint. Reopening after resize also covers native scroll dismissal.
       for (const compactWidth of [768, 600, 601]) {
         await page.setViewportSize({ width: compactWidth, height: 320 });
         await trigger.scrollIntoViewIfNeeded();
@@ -472,8 +459,6 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
         expect(box.x + box.width).toBeLessThanOrEqual(compactWidth);
         expect(box.y + box.height).toBeLessThanOrEqual(320);
         if (compactWidth === 600) expect(box.y + box.height).toBeGreaterThanOrEqual(296);
-        // Native sequential keyboard navigation must reveal every item inside the scroll
-        // surface; explicit scrollIntoView would hide a focus/scroll regression here.
         await trigger.focus();
         for (const item of await actions.getByRole('button').all()) {
           await page.keyboard.press('Tab');
@@ -489,7 +474,6 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     await openSourceActions(scene);
     const composer = page.getByLabel('다음 장면 요청', { exact: true });
     if (width <= 600) {
-      // The sheet covers the composer; a tap on the scrim above it dismisses the menu first.
       const sheet = (await actions.boundingBox())!;
       await page.mouse.click(width / 2, Math.max(8, sheet.y - 30));
       await expect(menu).toHaveJSProperty('open', false);
@@ -619,7 +603,6 @@ test('RACOM05 earlier scenes keep bookmark and menu visible while copy, editing 
     await expect(scene.getByTestId('scene-representation')).toHaveCount(0);
   }
   const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
-  // The standing bookmark still captures the selected original passage and scene identity.
   const bookmark = scene.getByRole('button', { name: '책갈피 추가', exact: true });
   await bookmark.scrollIntoViewIfNeeded();
   const quote = await scene

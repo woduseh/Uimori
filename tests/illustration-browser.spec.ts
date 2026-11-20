@@ -444,7 +444,6 @@ test('ILUI01 scene menu requests an illustration, shows the stored image, retrie
     sourceRevision: source.id,
     origin: 'manual',
   });
-  // Persisted server-side: a reload shows the same illustration without another request.
   await page.reload();
   await expect(page.getByTestId('illustration').first()).toHaveAttribute(
     'data-status',
@@ -485,7 +484,6 @@ test('ILUI01 scene menu requests an illustration, shows the stored image, retrie
     (await illustrations(request, chat.id)).filter((item) => item.task === 'render')
   ).toHaveLength(1);
   await page.screenshot({ path: info.outputPath('illustration-desktop.png') });
-  // The illustration strip never rewrote the story text.
   expect((await detail(request, chat.id)).sources[0].text).toBe(source.text);
 });
 
@@ -502,7 +500,6 @@ test('ILUI-MOBILE-SHEET illustration actions stay above mobile composer controls
   });
   await page.setViewportSize({ width: 376, height: 700 });
   await page.goto(`/?chat=${chat.id}`);
-  // A positioned composer (including mobile floating controls) must never cover the sheet.
   await page.addStyleTag({ content: '.composer-dock { position: relative; z-index: 24; }' });
   const requested = await request.post(`/api/sources/${source.id}/illustrations`, {
     data: { maxTargets: 1 },
@@ -741,7 +738,6 @@ test('ILUI-DIRECTION blocked illustration without an image opens the change requ
       )
     )
     .toBe(true);
-  // A synthetic blocked read exercises the recovery control without a paid provider rejection.
   await page.route(
     (url) => url.pathname === `/api/chats/${chat.id}/reader`,
     async (route) => {
@@ -828,7 +824,6 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
     maxAutoRetries: 2,
     revision: before.revision + 1,
   });
-  // A concurrent save elsewhere is rejected by CAS; the stale draft stays until it reloads.
   await settings(request, { maxAutoRetries: 3 });
   await limit.fill('4');
   await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
@@ -867,7 +862,6 @@ test('ILUI delete confirmation translates only app-owned titles and preserves th
   page,
   request,
 }) => {
-  // Disable automatic generation before the seeded run so earlier cases cannot fill the slots.
   await settings(request, { generator: 'fixture', automatic: false, maxPerSource: 3 });
   const { chat, source } = await seed(request);
   const requested = await request.post(`/api/sources/${source.id}/illustrations`, { data: {} });
@@ -960,7 +954,6 @@ test('ILUI delete confirmation translates only app-owned titles and preserves th
   );
   await confirmation.getByRole('button', { name: 'Delete illustration', exact: true }).click();
   expect((await deleting).postDataJSON()).toEqual({});
-  // The deletion refreshes the reader; let that intercepted read finish before the page closes.
   await page.unrouteAll({ behavior: 'wait' });
 });
 
@@ -985,7 +978,6 @@ test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planni
     maxPerSource: 4,
     maxAutoRetries: 0,
   });
-  // Visually representative synthetic image bytes + dimensions. No paid provider is contacted.
   const picture = await sharp(
     Buffer.from(
       '<svg width="800" height="450" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#425e72"/><stop offset="1" stop-color="#dfcbb1"/></linearGradient></defs><rect width="800" height="450" fill="url(#g)"/><circle cx="620" cy="105" r="48" fill="#f7e7ca"/><path d="M0 310L90 260V200H155V285H260V180H330V260H425V220H510V320H620V265H720V320H800V450H0Z" fill="#283c4a"/><text x="32" y="415" font-family="sans-serif" font-size="18" fill="white">SYNTHETIC READER FIXTURE</text></svg>'
@@ -1053,7 +1045,6 @@ test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planni
   await hero.scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath('storyboard-desktop.png') });
   const pages = page.context().pages().length;
-  // Reach the inline cut before opening its lazily loaded image.
   await firstInline.scrollIntoViewIfNeeded();
   const preview = firstInline.getByRole('button', { name: '삽화 크게 보기', exact: true });
   await preview.click();

@@ -15,7 +15,6 @@ import { fixtureBotInput, createFixtureChat } from './fixtures/chat.js';
 import { completedSource } from './fixtures/illustration.js';
 import type { Content } from '../core/product.js';
 
-// The Linux path under test uses Bash, Python and Unix sockets, not a mocked shell.
 const linuxTest = process.platform === 'linux' ? test : test.skip;
 const owned: {
   dir: string;
@@ -94,7 +93,6 @@ async function fixture(sceneUpdated?: (id: string) => void, inputTokenLimit = 27
   return { store, runtime, child, root, conversation, run };
 }
 
-// Only the paid provider is intercepted; native transport, Runner, bridge and saves are real.
 function answer(body: any, call?: { id: string; arguments: unknown }) {
   const delta = call
     ? {
@@ -250,8 +248,6 @@ linuxTest(
 linuxTest(
   'oversized shell output is narrowed from its log without replaying the command',
   async () => {
-    // Recovery is needed when the selected model cannot fit the result, not at a
-    // fixed 16k threshold in an otherwise roomy 272k context.
     const f = await fixture(undefined, 16384);
     const counter = join(f.root, 'executions');
     const command = `printf x >> ${counter}; python3 -c "print(chr(0) * 18000, end='')"`;

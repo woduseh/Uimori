@@ -110,7 +110,6 @@ test('transformed prose suppresses unplaceable images and identifies an authored
     packageStart: { mode: 'authored' as const, title: '작성된 첫 장면' },
   };
   const normal = renderToStaticMarkup(createElement(SourceReader, props));
-  // Inline image portals mount in the browser; SSR retains their safe container boundary.
   expect(normal).toContain(`data-prose-slot="${source.blocks[0].anchor}"`);
   expect(job.result?.annotations).toHaveLength(1);
   expect(normal).toContain('첫 메시지');

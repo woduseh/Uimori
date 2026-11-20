@@ -292,7 +292,6 @@ test('HTTP organization routes enforce bot scopes and CAS and reject missing own
     buildId: 'organization-fixture',
     testMode: true,
   });
-  // The app owns Store.close; the cleanup registry only owns the temporary directory.
   owned.push({ directory });
   try {
     const bot = app.store.product.content({

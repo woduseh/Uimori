@@ -165,8 +165,6 @@ test('HSPACE12 activity tabs keep unread counts until acknowledgement and includ
   const failed = await createSession(request, scope, `${title} 실패`);
   const running = await createSession(request, scope, `${title} 실행`);
   const ids = [current.id, completed.id, failed.id, running.id];
-  // Synthetic summary projections exercise navigation and local acknowledgement only.
-  // Runtime completion provenance is covered by helper-navigation.test.ts.
   await page.route('**/api/helper/conversations?kind=all', async (route) => {
     const response = await route.fetch();
     const summaries = (await response.json()) as HelperConversationSummary[];

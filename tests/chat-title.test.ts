@@ -101,7 +101,6 @@ function mockSend(before?: () => void, result = success, finish?: () => Promise<
     .spyOn(transport, 'executeProvider')
     .mockImplementation(async (connection, request, options) => {
       before?.();
-      // The mock stands in for the wire, not for the transport boundary contract.
       transport.validateConnection(connection);
       options.beforeTurn?.();
       await options.onWire?.({

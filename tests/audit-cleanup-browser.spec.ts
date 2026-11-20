@@ -58,7 +58,6 @@ for (const width of [412]) {
     });
     expect(renamed.ok(), await renamed.text()).toBe(true);
     await refreshed;
-    // Cross two painted frames so React effects from the new reader payload have run.
     await page.evaluate(
       () =>
         new Promise<void>((resolve) =>

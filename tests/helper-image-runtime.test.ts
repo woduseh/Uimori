@@ -516,8 +516,6 @@ test.each([
   const original = await savePortrait(f.store);
   const before = f.store.db.prepare('SELECT * FROM image_blobs').all();
   const readResults: unknown[] = [];
-  // Only the external shell runner is substituted. The app callback, image conversion,
-  // task-local image collection and actual HTTP request encoder remain real.
   const shell = vi
     .spyOn(f.runtime.shell, 'exec')
     .mockImplementation(async (_task, _toolId, _command, _timeoutMs, signal, invoke) => {

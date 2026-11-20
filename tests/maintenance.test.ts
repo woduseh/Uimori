@@ -40,7 +40,6 @@ test('a closed gate blocks new writes, keeps reads and cancellation, and survive
   const chat = createFixtureChat(app.store, 'Maintenance fixture');
   const opened = await app.inject({ method: 'GET', url: '/api/maintenance' });
   expect(opened.json()).toMatchObject({ status: 'open', epoch: 0, forcedClosed: false });
-  // The session read carries the same gate, so no screen polls while the app is open.
   expect((await app.inject({ method: 'GET', url: '/api/session' })).json()).toMatchObject({
     maintenance: { status: 'open', epoch: 0, forcedClosed: false },
   });
@@ -75,7 +74,6 @@ test('a closed gate blocks new writes, keeps reads and cancellation, and survive
 
   const read = await app.inject({ method: 'GET', url: `/api/chats/${chat.id}` });
   expect(read.statusCode).toBe(200);
-  // Stopping already admitted work stays possible while the gate is closed.
   const cancel = await app.inject({ method: 'POST', url: '/api/runs/missing-run/cancel' });
   expect(cancel.statusCode).not.toBe(503);
 
@@ -430,7 +428,6 @@ test('repeating the same gate change keeps one epoch and a forced maintenance bo
   );
 
   const candidate = await boot({ directory, maintenance: true });
-  // A candidate boot proves current schema admission and reads; its gate is not a user setting.
   setMaintenance(candidate.app.store, { closed: false });
   const status = await candidate.app.inject({ method: 'GET', url: '/api/maintenance' });
   expect(status.json()).toMatchObject({ status: 'closed', forcedClosed: true });

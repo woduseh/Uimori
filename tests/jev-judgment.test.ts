@@ -391,7 +391,6 @@ describe('JEV-only lore judgment and batch supplemental reads', () => {
           const body = JSON.parse(String(init?.body));
           const state = body.state;
           expect(state.request).toBe('Native edited request');
-          // This is longer than the former character cap but fits the token excerpt budget.
           expect(state.conversation[0]).toEqual({
             role: 'assistant',
             text: value.nativeRisuExecution!.history[0].text,
@@ -482,8 +481,6 @@ describe('documented JEV input admission limits', () => {
       ])
     ),
   });
-  // With the stored o200k estimator, these two adjacent question sizes cost
-  // 32,000 and 32,001 including the shared state and admission headroom.
   const lastAdmitted = 29_048;
   it.each([
     ['one oversized question', sized(lastAdmitted + 1)],

@@ -7,7 +7,6 @@ import type {
 import { renderNativeRisuMessage } from '../server/risu-native-render.js';
 import { createNativeRisuWorkerSession } from '../server/risu-native-worker.js';
 
-// Runs with the project's real Markdown/CBS dependencies, not the worker transport fixture.
 test('session rendering matches one-shot rendering as text, messages and live variables change', async () => {
   const session = createNativeRisuWorkerSession<NativeRisuRenderInput, NativeRisuRenderResult>(
     new URL('../server/risu-native-render.js', import.meta.url),

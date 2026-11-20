@@ -150,7 +150,6 @@ test('NATIVE 412 long uploaded font option stays inside the viewport and persist
     await page.screenshot({ path: info.outputPath('native-long-font-open-412.png') });
     await option.click();
     await expect(reader).toHaveValue(font.id);
-    // Saving disables both selects temporarily; pointer focus is not retained across that save.
     await expect(reader).toBeEnabled();
     await expect(app).toBeEnabled();
     await expect.poll(() => reader.evaluate((element) => element.matches(':open'))).toBe(false);

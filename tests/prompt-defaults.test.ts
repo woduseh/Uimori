@@ -104,7 +104,6 @@ describe('single prompt program defaults at real native encoder boundaries', () 
         (built.request.prompt!.messages[0].content[0] as { type: 'text'; text: string }).text
       ).toBe(custom ? 'Literal Character' : DEFAULT_MAIN_PROMPT);
     }
-    // Encoding is protocol-specific, but it does not reassemble the prompt.
     const beforeEncoding = structuredClone(request!);
     for (const protocol of protocols) {
       const target = snapshot(protocol).profile!.models.main!;
@@ -129,7 +128,6 @@ describe('single prompt program defaults at real native encoder boundaries', () 
     seed.history = [{ revision: 'main-history', text: 'MAIN HISTORY MUST NOT LEAK' }];
     const input = translationInput(source, sourceTimeContext(seed, 'translation'), seed);
     const compilation = compileTranslationPrompt(input, seed, 'Translate this chunk.')!;
-    // Match production assembly: encoders receive already-finalized user-role references.
     const request: ProviderRequest = withNativeHostContext({
       role: 'translation',
       modelId: seed.profile!.models.translation!.modelId,

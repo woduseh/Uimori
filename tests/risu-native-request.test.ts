@@ -73,7 +73,6 @@ async function prepared(
   } as unknown as RunSnapshot;
   const compiled = compileSnapshotPrompt(await prepareNativeRisuRun(snapshot));
   const p = compiled.promptCompilation!;
-  // Exercise the generic provider prefill contract independently of RISUP settings.
   if (providerPrefill)
     p.messages.push({
       id: 'provider-prefill',

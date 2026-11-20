@@ -43,7 +43,6 @@ async function database() {
   owned.push({ directory, store });
   return store;
 }
-/** A chat whose main route resolves, so a real generation request can be built without any call. */
 function chatWithMainModel(store: Store, title: string) {
   const chat = createFixtureChat(store, title);
   const connection = store.product.connection({
@@ -78,7 +77,6 @@ const failure = (act: () => unknown) => {
   throw new Error('Expected the write to be refused');
 };
 
-/** Three episodes composed from theme down to beats, with no prose written. */
 function compose(store: Store, chatId: string, key = randomUUID()) {
   return store.outline.apply(
     chatId,
@@ -151,7 +149,6 @@ const find = (store: Store, chatId: string, title: string) => {
   return node;
 };
 
-/** Reserve through the same Store boundary used by the scene-command run route. */
 function reserve(store: Store, chatId: string, commandId: string, key = randomUUID()) {
   const chat = store.chat(chatId);
   const profile = store.product.snapshot(chatId);
@@ -180,7 +177,6 @@ function reserve(store: Store, chatId: string, commandId: string, key = randomUU
   ).run;
 }
 
-/** An ordinary request from the composer, optionally replacing an earlier scene. */
 function ordinary(store: Store, chatId: string, text: string, replace?: Source) {
   const chat = store.chat(chatId);
   const profile = store.product.snapshot(chatId);
@@ -219,7 +215,6 @@ function ordinary(store: Store, chatId: string, text: string, replace?: Source) 
   return { run: observedExecution(store, run.id), source };
 }
 
-/** Reserve and complete one run through the existing main writing path. */
 function write(store: Store, chatId: string, commandId: string, text: string) {
   const run = reserve(store, chatId, commandId);
   store.startRun(run.id);
@@ -250,7 +245,6 @@ describe('hierarchical composition', () => {
     ]);
     const arc = find(store, chat.id, '지하 서고의 발견');
     expect(detail.nodes.filter((node) => node.parentId === arc.id)).toHaveLength(3);
-    // Composition alone never counts as written and never commits story text.
     expect(detail.nodes.every((node) => node.progress.state === 'planned')).toBe(true);
     expect(store.chat(chat.id).headRevision).toBe(before);
   });
@@ -525,7 +519,6 @@ describe('hierarchical composition', () => {
         })
       ).statusCode
     ).toBe(409);
-    // The same key cannot bind an identically named second unit.
     const second = store.outline.apply(
       chat.id,
       {
@@ -677,7 +670,6 @@ describe('hierarchical composition', () => {
       expect(store.db.prepare('SELECT id FROM attempts').all()).toEqual([]);
       const fresh = store.outline.sceneCommand(episode.id, { idempotencyKey: randomUUID() });
       expect(fresh.id).not.toBe(old.id);
-      // The old command stays cancelled even after a new command owns the outline node.
       expect(failure(() => reserve(store, chat.id, old.id)).statusCode).toBe(409);
       const { run } = write(store, chat.id, fresh.id, '새 계획으로 집필한 원문');
       expect(JSON.stringify(run.snapshot.outline)).toContain('예약 뒤 확정한 새로운 계획');
@@ -830,7 +822,6 @@ describe('hierarchical composition', () => {
     const command = store.outline.sceneCommand(episode.id, { idempotencyKey: randomUUID() });
     const { run, source } = write(store, chat.id, command.id, '문은 잠겨 있었다.');
     store.outline.sceneCommand(second.id, { idempotencyKey: randomUUID() });
-    // Imported source links can share an existing source with a child unit.
     store.db
       .prepare(`INSERT INTO outline_writings(id,node_id,source_id,created_at)
       VALUES(?,?,?,?)`)
@@ -953,7 +944,6 @@ describe('hierarchical composition', () => {
       intent: episode.intent,
     });
     expect(outline.children.map((item) => item.title)).toEqual(['열쇠 없는 자물쇠']);
-    // The next episode bounds this unit as a neighbor, never as a path entry or child to write.
     expect(outline.neighbors).toEqual({
       next: expect.objectContaining({ title: '2화 장부의 첫 장' }),
     });
@@ -971,7 +961,6 @@ describe('hierarchical composition', () => {
     expect(store.story.detail(chat.id).notes).toEqual([]);
     expect(store.context.detail(chat.id).checkpoint).toBeNull();
 
-    // One request writes exactly one source, and only its own unit becomes written.
     expect(store.chat(chat.id).headRevision).toBe(source.id);
     const nodes = store.outline.detail(chat.id).nodes;
     expect(nodes.find((node) => node.id === episode.id)?.progress).toMatchObject({
@@ -982,7 +971,6 @@ describe('hierarchical composition', () => {
       nodes.filter((node) => node.id !== episode.id).every((n) => n.progress.state === 'planned')
     ).toBe(true);
 
-    // An earlier written sibling enters the next unit as real, in-ancestry history.
     const second = find(store, chat.id, '2화 장부의 첫 장');
     const secondCommand = store.outline.sceneCommand(second.id, { idempotencyKey: randomUUID() });
     const next = write(store, chat.id, secondCommand.id, '장부의 첫 장을 펼쳤다.');
@@ -1046,7 +1034,6 @@ describe('hierarchical composition', () => {
       'user'
     );
     expect(store.outline.detail(chat.id).nodes.some((node) => node.id === third.id)).toBe(false);
-    // The reserved command was never run, so nothing about it is history worth keeping.
     expect(failure(() => store.story.command(command.id)).statusCode).toBe(404);
     expect(store.story.commands(chat.id)).toEqual([]);
   });
@@ -1189,7 +1176,6 @@ describe('hierarchical composition', () => {
     const opening = ordinary(store, chat.id, '도서관의 아침이었다.');
     expect(opening.run.snapshot.outline).toBeUndefined();
 
-    // Writing a unit from the plan moves the story there.
     const planned = write(
       store,
       chat.id,
@@ -1214,7 +1200,6 @@ describe('hierarchical composition', () => {
     );
     expect(request.stable.contract).toContain(OUTLINE_FOCUS_CONTRACT);
 
-    // The answered turn is linked to the unit without renaming the scene after it.
     expect(
       store.outline.node(episode.id).writings?.map(({ sourceRevision, origin }) => ({
         sourceRevision,
@@ -1229,7 +1214,6 @@ describe('hierarchical composition', () => {
     expect(titles.get(planned.source.id)).toBe(episode.title);
     expect(titles.has(turn.source.id)).toBe(false);
 
-    // Copies keep the current unit and the origin of each association.
     const restored = restoreChatCopy(
       store,
       captureChatCopy(store, chat.id, turn.source.id),
@@ -1240,7 +1224,6 @@ describe('hierarchical composition', () => {
     expect(store.outline.focus(restored.id)?.nodeId).toBe(copied.id);
     expect(copied.writings?.map((source) => source.origin)).toEqual(['planned', 'focus']);
 
-    // Clearing the current unit returns ordinary requests to free continuation.
     expect(store.outline.setFocus(chat.id, { nodeId: null })).toBeNull();
     expect(ordinary(store, chat.id, '바람이 불었다.').run.snapshot.outline).toBeUndefined();
     const other = createFixtureChat(store, '다른 채팅');
@@ -1263,7 +1246,6 @@ describe('hierarchical composition', () => {
       '자물쇠를 발견했다.'
     );
     store.outline.setFocus(chat.id, { nodeId: null });
-    // Replacing the written scene leaves it on another branch.
     const replaced = ordinary(store, chat.id, '문 앞에 아무것도 없었다.', written.source);
     expect(store.chat(chat.id).headRevision).toBe(replaced.source.id);
     expect(replaced.source.parentRevision).toBe(opening.source.id);
@@ -1334,7 +1316,6 @@ describe('hierarchical composition', () => {
       level: 'beat',
       revision: episode.revision + 1,
     });
-    // An arc parent rejects a larger level, and a beat child rejects becoming a beat itself.
     expect(failure(() => change(episode.id, episode.revision + 1, 'mainStory')).statusCode).toBe(
       400
     );

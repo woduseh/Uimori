@@ -76,7 +76,6 @@ const request = (variant: Variant): ProviderRequest => ({
     results: [],
   },
 });
-// Credentials are resolved through the connection's configured reference.
 const options = (_variant: Variant) => ({
   signal: new AbortController().signal,
 
@@ -217,7 +216,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// fetch is always replaced. No live network, provider SDK, real credential environment or paid call.
 describe('native provider HTTP boundary with synthetic fetch', () => {
   test('Responses accepts a complete JSON body with a UTF-8 BOM', async () => {
     const variant = variants[0];
@@ -653,7 +651,6 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
   test.each([
     { variant: variants[1], mode: 'cancel' },
     { variant: variants[3], mode: 'cancel' },
-    // All five adapters share the native HTTP deadline. Exercise it with a body that ignores abort.
     { variant: variants[0], mode: 'timeout' },
   ])(
     '$variant.protocol $mode interrupts a pending read and preserves observed usage',

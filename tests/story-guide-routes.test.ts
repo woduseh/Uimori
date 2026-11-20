@@ -116,8 +116,6 @@ test.each(['off', 'failed'] as const)(
       result: { brief?: StoryGuideBrief; error?: string },
       writerInput?: 'removed'
     ) => {
-      // Seed the provider outcome at the existing execution seam, then use the real
-      // completion path to keep the receipt while releasing the full input snapshot.
       f.store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(
         JSON.stringify({
           ...run.snapshot,
@@ -125,8 +123,6 @@ test.each(['off', 'failed'] as const)(
         }),
         run.id
       );
-      // This legacy-shaped writer attempt has no inclusion receipt. The completed
-      // run still provides the historical fallback for pre-receipt records.
       const wire = {
         connectionId: 'synthetic',
         protocol: 'fixture-sse-v1' as const,

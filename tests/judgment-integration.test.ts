@@ -78,7 +78,6 @@ function capture(target: Target, handle: (body: Record<string, Json>) => Respons
       fetch,
       onAttemptStart: (wire) => {
         assertJudgmentRuntimeWire(wire, { target: identity });
-        // Read back a serialized receipt, as attribution does after the run.
         wires.push(JSON.parse(JSON.stringify(wire)));
         return String(wires.length);
       },

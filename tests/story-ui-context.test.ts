@@ -23,7 +23,6 @@ test('logical history projects visible UI text without mutating the frozen snaps
   } as RunSnapshot;
   const projected = selectLogicalHistory(snapshot, snapshot.history);
   expect(projected[0].text).toBe('Opening\nHarbor bulletin');
-  // A writer with the capability on continues from its own source, so placement stays visible.
   expect(storyUiHistoryMode({ settings: {} } as RunSnapshot)).toBe('text');
   expect(storyUiHistoryMode({ settings: { storyUi: true } } as RunSnapshot)).toBe('expression');
   expect(selectLogicalHistory(snapshot, snapshot.history, 'expression')[0].text).toBe(

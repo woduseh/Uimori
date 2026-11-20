@@ -87,7 +87,6 @@ const success: transport.ProviderResult = {
   usage: { inputTokens: 10, outputTokens: 5, costUsd: null, raw: null, priceRevision: null },
   opaqueState: null,
 };
-// Intercept only the paid provider. App routing, context preparation and saves stay real.
 function provider(name: string, args: Record<string, transport.Json>, beforeSummary?: () => void) {
   let helperCalls = 0;
   return vi

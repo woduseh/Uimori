@@ -17,8 +17,6 @@ import { createFixtureChat } from './fixtures/chat.js';
 
 const owned: { store: Store; directory: string }[] = [];
 
-// Correctness checks growth at two useful scales without making hosted CI a timing gate.
-// The opt-in benchmark retains the original 100/50 records with 32 KiB payloads.
 const historicalCandidates = 40;
 const cancelledJobs = 20;
 const largeChars = 8192;
@@ -103,8 +101,6 @@ async function fixture() {
   let historyCount = 0,
     jobCount = 0;
   const read = () => readHelperChatContext(store, chat.id);
-  // Populate complete validated candidates and cancelled jobs outside all measured regions.
-  // They never activate, so the current model-visible state remains identical as history grows.
   async function addHistory(count: number, jobs: number) {
     const current = await prepareNativeRisuReadOnly(
       helperWritingSnapshot(store, chat.id),

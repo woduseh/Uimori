@@ -411,7 +411,6 @@ test('display requests supply viewport CBS to regex and Lua without changing sto
       savedTranslation = store.job(translation.id),
       savedVariables = readChatVariables(store, chatId);
     expect(projections.readStoredRunSnapshot(store, source.runId).settled).toBe(true);
-    // Display still needs today's message history, but never the model's story/resource input.
     const preparation = vi.spyOn(store.story, 'prepare'),
       resources = vi.spyOn(store.product, 'resources');
     try {
@@ -618,10 +617,7 @@ end)
   };
   setModels({ main: old, translation: old, context: old, script: old });
   setNote('이전 노트');
-  // Keep a real full source snapshot as an older persisted format; current completed runs
-  // normally compact it. This ensures the projection does not replace source-owned content.
   const sourceSnapshot = projections.readRunSnapshot(store, source.runId);
-  // A retained full snapshot may carry prior unavailable selections after the user repairs them.
   sourceSnapshot.profile!.contextModelUnavailable = true;
   sourceSnapshot.profile!.scriptModelUnavailable = true;
   store.db

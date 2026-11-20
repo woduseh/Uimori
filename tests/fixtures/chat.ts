@@ -5,7 +5,6 @@ import type { FastifyInstance } from 'fastify';
 import type { InjectOptions } from 'light-my-request';
 import type { APIRequestContext } from '@playwright/test';
 
-/** Explicit test data; never imported by the product or used to bypass required bot ownership. */
 export function fixtureBotInput(title = 'Synthetic fixture owner', body = '') {
   return {
     kind: 'bot' as const,
@@ -21,7 +20,6 @@ export function fixtureBotInput(title = 'Synthetic fixture owner', body = '') {
   };
 }
 
-/** Existing scenario tests explicitly select synthetic data through this helper. Bot admission negative tests use raw inject. */
 export async function injectWithFixtureBot(
   app: Pick<FastifyInstance, 'inject'>,
   options: InjectOptions | string
@@ -59,7 +57,6 @@ export async function injectWithFixtureBot(
   }
   return app.inject(options);
 }
-/** Browser setup explicitly supplies a synthetic owning package before creating a chat. */
 export async function postFixtureChat(
   request: APIRequestContext,
   options: Parameters<APIRequestContext['post']>[1]
@@ -81,7 +78,6 @@ export function createFixtureChat(
   return store.createChat(title, { ...organization, botId });
 }
 
-/** Explicit global-model setup; the tested profile request uses the real current API. */
 export async function setFixtureModelRoutes(
   app: Pick<FastifyInstance, 'inject'>,
   routes: Record<string, { id: string } | null>

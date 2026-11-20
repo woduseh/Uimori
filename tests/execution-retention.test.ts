@@ -173,7 +173,6 @@ describe('Completed execution payload retention', () => {
       'PRIVATE_PROVIDER_OUTPUT',
     ])
       expect(retained).not.toContain(secret);
-    // A duplicate terminal callback never overwrites the first outcome or its measured time.
     store.product.finishAttempt(attempt, {
       status: 'error',
       text: '',
@@ -285,7 +284,6 @@ describe('Completed execution payload retention', () => {
       },
       event
     );
-    // Late completion belongs to the observed start even when cancellation changed ownership.
     store.db.prepare("UPDATE jobs SET status='cancelled',owner=NULL WHERE id=?").run(jobId);
     store.db
       .prepare("UPDATE illustration_jobs SET status='cancelled',owner=NULL WHERE id=?")
@@ -530,7 +528,6 @@ describe('Completed execution payload retention', () => {
           attemptId: retained[1].id,
           lore,
         });
-        // Missing old metadata must not be filled with another scene's or today's lore.
         store.db
           .prepare('UPDATE chats SET head_revision=? WHERE id=?')
           .run(sources[0]!.id, chat.id);
@@ -545,7 +542,6 @@ describe('Completed execution payload retention', () => {
           attemptId: null,
           lore: null,
         });
-        // An older attempt stays unknown; no current-library reconstruction path runs.
         store.db
           .prepare('UPDATE attempts SET request=? WHERE id=?')
           .run(JSON.stringify({ protocol }), retained[1].id);

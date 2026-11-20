@@ -68,7 +68,6 @@ async function selectedSnapshot(
     onAttemptStart: vi.fn(() => 'local-test-attempt'),
     onAttemptFinish: vi.fn(),
   };
-  // Only the JEV HTTP boundary is synthetic. The actual tokenizer and request/selection code run.
   const send = vi.fn(async (_url: unknown, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body));
     return new Response(

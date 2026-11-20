@@ -229,7 +229,6 @@ test('app routes every agent role through Codex and keeps source results and rec
       } satisfies ProviderResult;
     },
     executeAgent: async (connection, request, options) => {
-      // Reuse this test's synthetic outcome; real native stdio is covered by codex-writing.
       const packet = JSON.parse(request.text);
       return runtime.execute(
         connection,

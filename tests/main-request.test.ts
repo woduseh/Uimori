@@ -419,7 +419,6 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       rates: { input: 2, output: 8, cacheRead: null, cacheWrite: null },
       notes: ['HOST_ONLY_PRICE_NOTE'],
     };
-    // The reserved price remains authoritative even if the saved pricing policy differs.
     target.pricing = {
       mode: 'manual',
       rates: { input: 20, output: 80, cacheRead: null, cacheWrite: null },

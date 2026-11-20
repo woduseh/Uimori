@@ -1,5 +1,3 @@
-// Synthetic stdio server for the writer -> advisor -> terminal-submission integration.
-// Scripts are test-owned JSON; this process never calls a model or reads account credentials.
 import { createInterface } from 'node:readline';
 import { appendFileSync } from 'node:fs';
 if (process.argv.includes('--version')) {

@@ -236,7 +236,6 @@ test('native writer consults a native advisor with one occupied parent slot, reu
     advisor: [read(), read(20), { text: 'Keep the observatory north of the lake.' }],
   });
   f.addAdvisor();
-  // Two actual executions remain after reserving the post-writer judgment call.
   f.hooks.reserveCalls = 1;
   const prepared = compileSnapshotPrompt(f.work);
   const initial = buildMainProviderRequest(prepared);

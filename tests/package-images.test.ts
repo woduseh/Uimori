@@ -57,7 +57,6 @@ function fixture() {
   owned.push({ directory, store, app });
   return { store, app };
 }
-// Small synthetic byte fixtures; no artwork or user files.
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNIK1/1HwAFVQKH+f6iOwAAAABJRU5ErkJggg==',
   'base64'

@@ -94,7 +94,7 @@ test.each([undefined, 5999])(
       page = read(page.nextRead.arguments.arguments);
     }
     expect(joined).toBe(expected);
-    expect(page.nextOffset).toBeNull(); // Last page, but not the whole field in this one response.
+    expect(page.nextOffset).toBeNull();
     expect(page.coverage.wholeField).toBe(false);
     expect(read({ mode: 'detail', nodeId: leaf, offset: 10 }).error).toBe(
       'OUTLINE_VERSION_REQUIRED'
@@ -116,7 +116,6 @@ test('continuations detect changes to their scope without blocking unrelated det
   );
   expect(read(detailNext).error).toBeUndefined();
   expect(read(detailNext).range.start).toBe(detail.range.end);
-  // The full overview changed; start that scope again, while the selected intent stays valid.
   const overviewNext = read({ limit: 1 }).nextRead.arguments.arguments;
 
   const other = createFixtureChat(store, '다른 구성');

@@ -394,7 +394,6 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       expect(childRequests).toBe(2);
       expect(onChildWire).toHaveBeenCalledTimes(1);
     });
-    // An unrelated call cannot borrow the reserved capacity while both parents run.
     const ordinary = runtime.execute(connection, request(), {
       signal: new AbortController().signal,
       timeoutMs: 5000,

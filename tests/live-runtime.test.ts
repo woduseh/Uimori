@@ -114,8 +114,6 @@ for (const observed of [
       recorded = resolve;
     });
     const finishAttempt = app.store.product.finishAttempt.bind(app.store.product);
-    // Real HTTP decoding and durable attempt persistence finish before this gate.
-    // Cancellation then races only the application commit, without timing sleeps.
     vi.spyOn(app.store.product, 'finishAttempt').mockImplementation(async (id, result) => {
       finishAttempt(id, result);
       recorded({ id, result });

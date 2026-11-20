@@ -132,7 +132,7 @@ test('folder navigation reaches an exact lore read after a vocabulary mismatch w
   const entry = law.items[0];
   expect(entry.id).toBe('package:world:bot:lore:rule');
   expect(entry).not.toHaveProperty('text');
-  expect(textReads).toBe(initialReads); // Descending folders must not reread every body.
+  expect(textReads).toBe(initialReads);
   const read = follow(s, entry).items[0].read;
   expect(read.text).toBe(s.profile!.packages![0].lore[0].text);
   expect(read.source.hash).toBe(entry.sourceHash);
@@ -169,7 +169,7 @@ test('same folder and entry IDs in different attachment roles and scoped overrid
   };
   const root = browse(s);
   const packages = root.items.filter((item: any) => item.type === 'package');
-  expect(packages).toHaveLength(4); // base identity, two effective link scopes, and persona
+  expect(packages).toHaveLength(4);
   expect(packages.filter((item: any) => item.sourceScope !== null)).toHaveLength(2);
   expect(new Set(packages.map((item: any) => item.nodeRef)).size).toBe(4);
   const reads: string[] = [];

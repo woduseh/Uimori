@@ -19,7 +19,6 @@ for (const width of [412]) {
     });
     expect(created.ok()).toBe(true);
     const chat = await created.json();
-    // The shipped main preset declares variables; pin an authored empty preset for this case.
     const presetResponse = await request.post('/api/prompt-presets', {
       data: { title: `검색 합성 빈 변수 프롬프트 ${width}`, role: 'main', program: nativePrompt() },
     });

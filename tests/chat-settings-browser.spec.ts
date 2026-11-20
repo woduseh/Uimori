@@ -22,7 +22,6 @@ async function prepare(
   expect(response.ok(), await response.text()).toBe(true);
   const chat = (await response.json()) as Chat;
   if (program) {
-    // Navigation fixtures own their prompt variables instead of inheriting the shipped preset.
     const created = await request.post('/api/prompt-presets', {
       data: { title: `${title} prompt`, role: 'main', program },
     });
@@ -46,7 +45,6 @@ async function prepare(
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('request', (entry) => {
     const path = new URL(entry.url()).pathname;
-    // Package resolution projects selected references without saving or calling a model.
     if (
       path.startsWith('/api/') &&
       !(entry.method() === 'POST' && path === '/api/packages/resolve') &&
@@ -248,7 +246,6 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
   const last = nav.getByRole('tab', { name: sections[sections.length - 1], exact: true });
   await expect(last).toBeFocused();
   await expect(nav.locator('[tabindex="0"]')).toHaveCount(1);
-  // Reading settings are no longer a chat settings section; the last section keeps its panel.
   await expect(dialog.getByLabel('새 원고의 기본 보기', { exact: true })).toHaveCount(0);
   await expect(
     dialog.getByRole('combobox', { name: '이미지 배치 담당', exact: true })
@@ -270,9 +267,7 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
   await openSettings(page);
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
-  // 412px opens chat settings from the chat ⋯ menu, so focus returns to that menu's trigger.
   await expect(page.locator('.chat-menu > summary')).toBeFocused();
-  // Reading settings: the dialog from the chat ⋯ menu keeps view and font; the theme is in 설정 → 일반 only.
   await openChatMenu(page);
   await page.getByRole('button', { name: '읽기 설정', exact: true }).click();
   const reading = page.getByRole('dialog', { name: '읽기 설정', exact: true });
@@ -444,7 +439,6 @@ test('CSUI04 quick persona and chat settings share persisted attachments and non
     request,
   }, info) => {
     await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-    // Missing assignments and removed model references must both retain a route to repair them.
     await page.route('**/api/prompt-workspace', async (route) => {
       const response = await route.fetch();
       const workspace = await response.json();
@@ -464,8 +458,6 @@ test('CSUI04 quick persona and chat settings share persisted attachments and non
     const alert = dialog.getByRole('alert');
     await expect(alert).toContainText('선택한 본문 모델을 사용할 수 없어');
     const repair = dialog.getByRole('button', { name: '역할별 모델', exact: true });
-    // Model controls follow automatic translation in this scrollable settings section.
-    // Center the control rather than leaving its border clipped at the scrollport edge.
     await repair.evaluate((node) => node.scrollIntoView({ block: 'center' }));
     await expect(repair).toBeInViewport({ ratio: 1 });
     await page.screenshot({ path: info.outputPath('model-resolution.png') });

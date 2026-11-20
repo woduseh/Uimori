@@ -119,7 +119,6 @@ async function clipboard(page: Page) {
   const copied: string[] = [];
   await page.exposeFunction('recordReadingClipboard', (text: string) => copied.push(text));
   await page.addInitScript(() => {
-    // Host preferences and clipboard mocks must not run inside opaque Risu card frames.
     if (window !== window.top) return;
     localStorage.setItem('uimori:reading-language', 'original');
     Object.defineProperty(navigator, 'clipboard', {
@@ -140,7 +139,6 @@ function watch(page: Page) {
     errors: string[] = [];
   page.on('request', (request) => {
     const path = new URL(request.url()).pathname;
-    // Scrolling these long examples may save the reader's location, independently of styling.
     const readingPosition =
       request.method() === 'PUT' && /^\/api\/chats\/[^/]+\/reading-position$/u.test(path);
     if (path.startsWith('/api/') && request.method() !== 'GET' && !readingPosition)
@@ -267,7 +265,6 @@ test('READUI01 native source and translation keep text and copies while shared r
     await settings.getByLabel('본문 폭', { exact: true }).selectOption('1040');
     await settings.getByLabel('인용 강조', { exact: true }).selectOption('subtle');
     await expect(otherSettings.getByLabel('인용 강조', { exact: true })).toHaveValue('subtle');
-    // Receiving the shared style must not persist this tab's older layout selections.
     await otherSettings.getByRole('switch', { name: '생각 줄바꿈', exact: true }).check();
     await expect(settings.getByRole('switch', { name: '생각 줄바꿈', exact: true })).toBeChecked();
     expect(
@@ -290,7 +287,6 @@ test('READUI01 native source and translation keep text and copies while shared r
   expect(observed).toEqual({ writes: [], errors: [] });
 });
 
-/** Read-only helper projections: no model, helper mutation or shared global fixture is involved. */
 async function helperFixture(page: Page, before: ChatDetail) {
   const time = new Date().toISOString();
   const conversation: HelperConversation = {
@@ -417,7 +413,6 @@ async function helperFixture(page: Page, before: ChatDetail) {
       json: { ...streams, chunks: streams.chunks.filter((chunk) => chunk.seq > after) },
     });
   });
-  // Seed an old device draft before mounting the archived scene; no helper write is issued.
   await page.goto(`/?chat=${before.chat.id}`);
   await page.evaluate(
     async ({ key, text }) => {
@@ -488,7 +483,6 @@ test('READUI02 helper answers, archived scenes and public streams share reading 
         await expect(quotes(text, 'dialogue').first()).toHaveAttribute('data-emphasis', 'subtle');
       }
       expect((await answer.textContent())?.trimEnd()).toBe(helperAnswerText);
-      // Even authored single-newline dialogue gains paragraph space with this option enabled.
       expect((await answer.boundingBox())!.height).toBeGreaterThan(answerHeight);
       expect(await scene.textContent()).toBe(artifactText);
       expect(await stream.textContent()).toBe(streamText);
@@ -559,7 +553,6 @@ test('READUI02 helper answers, archived scenes and public streams share reading 
     expect(observed).toEqual({ writes: [], errors: [] });
     expect(fixture.unexpected).toEqual([]);
   } finally {
-    // Stop polling before draining handlers; route completion must not race context disposal.
     await page.goto('about:blank');
     await page.unrouteAll({ behavior: 'wait' });
   }

@@ -33,12 +33,10 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
 }
 
 async function portrait(role: 'bot' | 'persona') {
-  // Optional, explicitly supplied local artwork is for private visual review only.
   const directory = process.env.UIMORI_GALLERY_DEMO_DIR;
   if (directory) return readFile(join(directory, `${role}.webp`));
   const width = 400;
   const height = role === 'bot' ? 600 : 400;
-  // Fully opaque synthetic cards, including a contrasting outer frame to expose cropping.
   return sharp(
     Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
     <rect width="100%" height="100%" fill="#394565"/>
@@ -123,7 +121,6 @@ async function seed(request: APIRequestContext, squareBot = false) {
     },
   });
   expect(settings.ok(), await settings.text()).toBe(true);
-  // Three real stored outputs; each is above 10,000 o200k_base tokens, not a fake CSS height.
   for (let index = 0; index < 3; index++) {
     current = await detail(request, chat.id);
     const started = await request.post(`/api/chats/${chat.id}/runs`, {
@@ -191,7 +188,6 @@ for (const width of [1440]) {
     });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    // Palette checks share the same long stored manuscript; behavior runs once per viewport.
     for (const mode of ['dark', 'light'] as const) {
       if (mode === 'dark') await page.goto(`/?chat=${data.chatId}`);
       else {
@@ -200,7 +196,6 @@ for (const width of [1440]) {
       }
       await expect(page.locator('html')).toHaveAttribute('data-theme', mode);
       await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', data.themeId);
-      // Default reading also labels each scene's request portraits as a gallery.
       const gallery = page.locator('aside[data-uimori-part="gallery"]');
       await expect(gallery).toHaveCount(1);
       await expect(gallery).toBeVisible();
@@ -257,7 +252,6 @@ for (const width of [1440]) {
         }),
         contentType: 'application/json',
       });
-      // Full artwork can be viewed from the fixed gallery without changing reading position.
       await scroll(900);
       const before = await reader.evaluate((node) => node.scrollTop);
       const enlarge = gallery.getByRole('button', {
@@ -279,7 +273,6 @@ for (const width of [1440]) {
       await expect(dialog).toBeHidden();
       await expect(enlarge).toBeFocused();
       expect(Math.abs((await reader.evaluate((node) => node.scrollTop)) - before)).toBeLessThan(3);
-      // Theme slots keep the standing scene menu at the top, outside the long manuscript.
       await scroll(0);
       const sceneMenu = scene.getByLabel('장면 작업 메뉴', { exact: true });
       await expect(sceneMenu).toBeVisible();
@@ -318,7 +311,6 @@ for (const width of [1440]) {
       await sourceAction(scene, '본문 복사');
       await expect.poll(() => clipboard.length).toBe(1);
       expect(clipboard[0]).toContain('마지막 문장.');
-      // A compact director memo keeps its real copy action reachable at desktop and phone widths.
       await scene.getByTestId('source-request').click();
       await scene.getByRole('button', { name: '요청 복사', exact: true }).click();
       await expect.poll(() => clipboard.at(-1)).toBe(requestText);
@@ -395,7 +387,6 @@ test('GALLERY square bot, tall persona, focus reading and failed image fallback'
   await expect(gallery).toBeHidden();
   await page.getByRole('button', { name: '집중 읽기 종료', exact: true }).click();
   await expect(gallery).toBeVisible();
-  // Intermediate sizes must collapse the gallery before squeezing the manuscript.
   for (const width of [768, 1024, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await expect.poll(async () => (await gallery.boundingBox())!.height).toBeLessThan(100);
@@ -417,7 +408,6 @@ test('GALLERY square bot, tall persona, focus reading and failed image fallback'
   );
 });
 
-// Opt-in measurements extend the existing synthetic browser runner, without timing gates.
 if (process.env.UIMORI_BENCHMARK === '1')
   for (const sceneCount of [8, 30]) {
     test(`PERF ${sceneCount} long manuscript reentry, past pages and saved translation switches`, async ({

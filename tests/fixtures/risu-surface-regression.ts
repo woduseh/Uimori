@@ -20,7 +20,6 @@ const settings = (values: Partial<ReadabilitySettings> = {}): ReadabilitySetting
   ...values,
 });
 
-/** Shared by the repository's Playwright test and the offline browser evidence runner. */
 export async function runSurfaceRegressions(mount: HTMLElement): Promise<string[]> {
   const passed: string[] = [];
   const cleanup: (() => void)[] = [];

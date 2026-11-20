@@ -10,12 +10,10 @@ import { openHelper } from './ui-navigation.js';
 
 test.setTimeout(60000);
 
-/** Persist a real conversation and completed answer through a local synthetic SSE provider. */
 async function seed(request: APIRequestContext, profiles?: { name: string; appearance: string }[]) {
   let sendProfiles = !!profiles;
   const provider = createServer(async (incoming, response) => {
     for await (const _chunk of incoming) {
-      // Drain the input; this fixture does not claim model-quality or live-provider coverage.
     }
     response.writeHead(200, { 'content-type': 'text/event-stream' });
     const events = sendProfiles
@@ -550,7 +548,6 @@ test('HRESULT02 actual results retain partial usage and recover from refresh/ope
   });
   expect(created.ok(), await created.text()).toBe(true);
   const content = (await created.json()) as Content;
-  // Only the new result projection is synthetic; admission, saved messages and navigation are real.
   const projection: HelperTaskResultsView = {
     taskId: task.id,
     status: 'completed',

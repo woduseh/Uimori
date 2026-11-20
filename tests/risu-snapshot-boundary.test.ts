@@ -4,9 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
 import { sourceImports } from './fixtures/source-imports.js';
 
-// The RisuAI snapshot is GPL-3.0 code kept behind a compat layer. These rules keep it that way:
-// snapshot code never reaches into Uimori, and Uimori reaches the snapshot only through
-// server/compat/risu or the native CBS adapter. Tests may import the snapshot to pin its behavior.
+// The RisuAI snapshot is GPL-3.0 code kept behind a compat layer.
 const root = fileURLToPath(new URL('../', import.meta.url));
 const SNAPSHOT_ROOT = 'third_party/risuai';
 const COMPAT_LAYER = 'server/compat/risu';

@@ -36,7 +36,6 @@ async function getLibrary(request: APIRequestContext): Promise<Library> {
   return response.json();
 }
 async function createChat(page: Page, title: string): Promise<Chat> {
-  // The API fixture keeps this test focused on settings; UI03 covers bot-first creation.
   const response = await postFixtureChat(page.request, { data: { title } });
   expect(response.ok()).toBeTruthy();
   const chat = (await response.json()) as Chat;
@@ -181,7 +180,6 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   expect((await savedContent).package?.nativeRisu.card.description).toBe(
     'Mira is a synthetic harbor keeper. Her compass is silver in this revision.'
   );
-  // Compact editors hide global navigation until the user returns to the library list.
   await library.getByRole('button', { name: '서재 목록', exact: true }).click();
   await expect(library.getByLabel('서재 검색', { exact: true })).toBeVisible();
   await selectStoredChat(page, chat);
@@ -230,8 +228,6 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     detail: '1',
     coNarration: '0',
   });
-  // Admission captures current content and prompt values. Completed records retain
-  // attachment identity without rebuilding full content from today's library.
   expect(saved.snapshot.profile?.packages).toBeUndefined();
   expect(saved.snapshot.profile?.promptPresets).toBeUndefined();
   expect(saved.snapshot.promptCompilation).toBeUndefined();
@@ -451,7 +447,6 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   expect((await request.get(`/api/revisions/connection/${connection.id}/1`)).ok()).toBe(false);
   await openDetails(page, 'profile-editor');
   await selectCurrentSettingsSection(page, '역할별 모델');
-  // A model saved against a disabled connection is excluded from a new role selection.
   for (const roleLabel of ['본문 모델', '번역 모델'])
     for (const model of modelRefs) {
       await expect(
@@ -483,7 +478,6 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
     enabled: true,
     credentialRef: connection.credentialRef,
   });
-  // Activating the current connection makes its existing model IDs selectable immediately.
   const activatedModels = (await getLibrary(request)).models;
   for (const model of modelRefs)
     expect(activatedModels.find((item) => item.id === model.id)).toEqual(model);
@@ -517,7 +511,6 @@ test('P09 copying a scene creates an independent chat and keeps each tab draft',
   request,
 }, info) => {
   const chat = await createChat(page, `합성 P09-${Date.now()}`);
-  // A capped scene body exposes focus-driven reader resizing while returning from another tab.
   const catalog = await (await request.get('/api/themes')).json();
   const selectedTheme = await request.post('/api/themes/selection', {
     data: {

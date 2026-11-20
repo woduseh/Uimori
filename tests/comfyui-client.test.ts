@@ -127,7 +127,6 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
       },
       cancel,
     });
-    // Deliberately ignore fetch's signal: the consumer must interrupt this body.
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const path = new URL(String(input)).pathname;
       requests.push(path);
@@ -150,7 +149,6 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
     );
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      // Bound a regression without leaving a mocked fetch or stalled stream behind.
       const error = await Promise.race([
         pending,
         new Promise<null>((resolve) => {
@@ -169,9 +167,7 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
       acknowledgeCancellation!();
       try {
         controller!.close();
-      } catch {
-        /* The deadline normally closes the stream first. */
-      }
+      } catch {}
       await pending.catch(() => undefined);
       fetch.mockRestore();
     }
@@ -427,7 +423,6 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
     );
     expect(timeout).toMatchObject({ code: 'COMFYUI_TIMEOUT', retryable: false });
     expect(timeout.diagnostic.comfyui?.promptId).toBe(hanging.prompts[0].id);
-    // A timeout never touches the remote queue: the render may still finish and be reconciled.
     expect(hanging.requests.some((request) => ['/queue', '/interrupt'].includes(request.url))).toBe(
       false
     );
@@ -474,7 +469,6 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
     expect(tail).toEqual([`POST /api/jobs/${hanging.prompts[0].id}/cancel`, 'POST /queue']);
     expect(hanging.requests.some((request) => request.url === '/interrupt')).toBe(false);
     expect(JSON.parse(hanging.requests.at(-1)!.body)).toEqual({ delete: [hanging.prompts[0].id] });
-    // A finished prompt that is no longer running is only removed from the queue, never interrupted.
     const idle = await fixture({ delayPolls: 0 });
     await generateWithComfyUI({ baseUrl: idle.origin, authorizationEnv: '' }, workflow(), {
       signal: signal(),

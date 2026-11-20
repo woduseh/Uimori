@@ -1,6 +1,5 @@
 import { crc32, deflateRawSync } from 'node:zlib';
 
-// An independent ZIP fixture can also encode entries the app would reject on export.
 export function zip(files: [string, Buffer, (0 | 8)?][]) {
   const locals: Buffer[] = [],
     central: Buffer[] = [];

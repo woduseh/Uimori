@@ -11,7 +11,6 @@ function deferred<T>() {
   });
   return { promise, resolve, reject };
 }
-// The store treats the server payload as opaque; these tests exercise ownership, not validation.
 const workspace = (revision: number) => ({ revision }) as PromptWorkspace;
 function setup() {
   const reads: (ReturnType<typeof deferred<PromptWorkspace>> & { signal: AbortSignal })[] = [];

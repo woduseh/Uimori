@@ -385,7 +385,6 @@ test('ZIP stores encoded image bytes while compressing authored JSON', async () 
   const small = await sharp({ create: { width: 1, height: 1, channels: 3, background: '#123456' } })
     .webp()
     .toBuffer();
-  // A valid, compressible RIFF metadata chunk exposes accidental image recompression.
   const chunk = Buffer.alloc(8),
     padding = Buffer.alloc(8192, 1);
   chunk.write('JUNK');
@@ -555,7 +554,6 @@ test.each([false, true])(
     }
     expect(saved).toEqual(before);
     expect(store.product.get<Content>('content', dependency.id)).toEqual(linkedBefore);
-    // Exporting an individual resource never resolves or mutates its external links.
     saved.package.modules = [{ id: 'missing-linked-resource', revision: 1 }];
     expect(exportRisuContent(store.product, saved).bytes).toEqual(exported.bytes);
   }
@@ -595,7 +593,6 @@ test('saving and exporting a historical RISUP silently removes retired execution
     promptSettings: { utilOverride: false },
   };
   expect(saved.program.nativeRisuPreset.preset).toEqual(clean);
-  // Export must also normalize already-saved history, even without a new save first.
   const historical = structuredClone(saved);
   historical.program.nativeRisuPreset.preset = structuredClone(preset);
   const output = exportRisuPrompt(historical);

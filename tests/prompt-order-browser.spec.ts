@@ -60,7 +60,6 @@ for (const width of [MOBILE_WIDTH]) {
       folderIds.push(state.folders.find((folder) => folder.title === title)!.id);
     }
     const ids = presets.map((preset) => preset.id);
-    // Keep the real organization mutations while removing unrelated shared-runner list entries.
     await page.route(/\/api\/library(?:\?|$)/, async (route) => {
       const upstream = await route.fetch();
       const library = (await upstream.json()) as Library;
@@ -103,7 +102,6 @@ for (const width of [MOBILE_WIDTH]) {
       await page.keyboard.press('Escape');
     }
     await expect.poll(displayedIds).toEqual([ids[1], ids[0], ids[2]]);
-    // Library and prompt categories share preference records. Saving one must retain the other.
     await navigationAction(page, '봇');
     const libraryPanel = page.getByTestId('library-panel');
     const libraryOptions = libraryPanel.getByLabel('목록 관리', { exact: true });

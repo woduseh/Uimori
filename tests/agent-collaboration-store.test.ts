@@ -220,8 +220,6 @@ test('reservation freezes each advisor and prompt; later current settings apply 
 
 test('advisors share explicit instructions and selected options without copying the authored main prompt', async () => {
   const f = fixture(),
-    // This request-builder unit uses empty history; compile it after the reservation boundary.
-    // Queued runs intentionally leave compilation pending until the context planner runs.
     snapshot = compileSnapshotPrompt({ ...f.capture().snapshot, contextPlan: undefined });
   const agent = snapshot.profile!.promptPresets!.main!.program.collaboration!.agents[0];
   const request = buildAgentProviderRequest(

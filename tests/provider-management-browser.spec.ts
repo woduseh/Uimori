@@ -135,7 +135,6 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   expect(connection).toBeTruthy();
   expect(JSON.stringify(connection)).not.toContain('PM_SYNTHETIC_KEY');
   await expect(modelForm.getByLabel('프로바이더', { exact: true })).toHaveValue(`${connection.id}`);
-  // Only the UI's error handling is mocked; no outbound catalog request is sent.
   await page.route(`**/api/connections/${connection.id}/catalog`, (route) =>
     route.fulfill({
       status: 200,
@@ -526,7 +525,6 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
       },
     ];
     let catalogRequests = 0;
-    // The real catalog route saves before reloading the library; mirror that read view without contacting a provider.
     await page.route(`**/api/connections/${connection.id}/catalog`, (route) => {
       catalogRequests++;
       const snapshot = {
@@ -635,7 +633,6 @@ test('PMUI08 Vertex JSON draft is validated and saved with the connection', asyn
     await expect(form.getByLabel('모델 목록 API 키', { exact: true })).toHaveCount(0);
     expect(uploads).toBe(0);
   }
-  // Fresh synthetic RSA material exercises real isolated database storage; no OAuth or Vertex call is needed.
   const { privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
     privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
@@ -784,7 +781,6 @@ test('PMUI09 invalid hidden model fields receive focus and a reversible disable 
   await expect(form.getByLabel('최대 출력 토큰')).toBeFocused();
   expect(modelWrites).toBe(0);
   await form.getByLabel('최대 출력 토큰').fill('4096');
-  // An unsendable combination hidden in the other tab still receives focus with its tab opened.
   await form.getByRole('button', { name: '고급', exact: true }).click();
   await form.getByLabel('캐시 방식', { exact: true }).selectOption('automatic');
   await form.getByLabel('캐시 유지 시간', { exact: true }).selectOption('1h');
@@ -911,7 +907,6 @@ for (const [index, item] of providerOptionCases.entries()) {
       );
     if (item.modelId === 'claude-fable-5-1') {
       await form.getByRole('button', { name: '고급', exact: true }).click();
-      // Fable documents adaptive thinking only; disabling stays selectable as an unverified value.
       const mode = form.getByLabel('사고 모드', { exact: true });
       await expect(mode.locator('optgroup[label="권장"] option')).toHaveText(['적응형']);
       await expect(mode.locator('optgroup[label="권장"] option')).toHaveAttribute(
@@ -988,7 +983,6 @@ test('PMUI12 changing provider clears unrepresentable options, keeps common fiel
   await strength.selectOption('none');
   await form.getByRole('button', { name: '고급', exact: true }).click();
   await form.getByLabel('응답 길이', { exact: true }).selectOption('low');
-  // A new protocol discards only fields it cannot send, retaining the common draft values.
   await form.getByRole('button', { name: '기본', exact: true }).click();
   await form.getByLabel('프로바이더', { exact: true }).selectOption(`${anthropic.id}`);
   await expect(
@@ -1007,7 +1001,6 @@ test('PMUI12 changing provider clears unrepresentable options, keeps common fiel
   await form.getByLabel('응답 길이', { exact: true }).selectOption('low');
   await form.getByRole('button', { name: '기본', exact: true }).click();
   await form.getByLabel('모델 ID', { exact: true }).fill('synthetic-future-model');
-  // Unknown model support is not a reason to discard or block a protocol-representable value.
   await expect(strength).toHaveValue('none');
   await expect(strength.locator('option[value="none"]')).toBeEnabled();
   expect(await strength.evaluate((node) => (node as HTMLSelectElement).checkValidity())).toBe(true);

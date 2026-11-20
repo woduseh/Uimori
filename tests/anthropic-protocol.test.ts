@@ -121,7 +121,6 @@ function translationRequest() {
   return { input };
 }
 
-// Synthetic protocol objects only: no SDK, credentials, network requests or model-quality claims.
 describe('Anthropic Messages request and opaque continuation', () => {
   test('decodes a non-streaming Batch message through the native continuation decoder', () => {
     const encoded = encodeAnthropic(request());
@@ -254,7 +253,6 @@ describe('Anthropic Messages request and opaque continuation', () => {
     expect(() => encodeAnthropic(next)).toThrow('ANTHROPIC_CONTINUATION_MISMATCH');
   });
 
-  // Fable 5.2 answers a changed prefix with a 400, so each round must only append.
   test.each(['claude-fable-5-1', 'claude-fable-5-2'])(
     '%s preserves the exact system, tools, message prefix and signed thinking across tool rounds',
     (modelId) => {
@@ -295,7 +293,6 @@ describe('Anthropic Messages request and opaque continuation', () => {
         if (mutation === 'history') changed.input.history = [];
         expect(() => encodeAnthropic(changed)).toThrow('ANTHROPIC_CONTINUATION_MISMATCH');
       }
-      // A later round with extra host input still sends the earlier rounds as an unchanged prefix.
       begin(second.decoder);
       block(second.decoder, 0, { ...thinking, signature: 'SECOND_SIGNATURE' });
       block(second.decoder, 1, toolPart('call-2'));

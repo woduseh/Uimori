@@ -107,7 +107,6 @@ for (const [label, viewport] of [
     await page.setViewportSize(viewport);
     await page.goto(`/?chat=${before.chat.id}`);
     const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
-    // Editing the current view starts from the footer button; the menu holds the other editor.
     const trigger = scene.getByRole('button', { name: '원문 수정', exact: true });
     const field = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
     const sourceBody = scene.getByTestId('source-text').locator('.risu-message-content');
@@ -125,8 +124,6 @@ for (const [label, viewport] of [
       .toBe(true);
 
     await trigger.scrollIntoViewIfNeeded();
-    // Native layout and the compact latest row can settle during click actionability.
-    // Compare against the position where the user actually starts editing.
     await trigger.evaluate((element) => {
       element.addEventListener(
         'pointerdown',
@@ -346,7 +343,6 @@ for (const [width, height, mode] of [[320, 640, 'dark']] as const) {
     await body.evaluate((node) => {
       node.scrollTop = (node.scrollHeight - node.clientHeight) * 0.6;
     });
-    // Start from a genuinely visible action, without asking Playwright to scroll app ancestors.
     await trigger.evaluate((button) => {
       const reader = button.closest<HTMLElement>('[data-reader-scrollport]')!;
       reader.scrollTop +=

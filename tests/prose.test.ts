@@ -4,7 +4,6 @@ import { describe, expect, test } from 'vitest';
 import { Prose, safeProseLink } from '../web/Prose.js';
 import { webCitationLinks } from '../core/helper-web-search.js';
 
-// Compare semantic HTML independently of app-owned provenance/geometry and host wrappers.
 const render = (text: string) =>
   renderToStaticMarkup(createElement(Prose, { text }))
     .replace(

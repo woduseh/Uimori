@@ -75,8 +75,6 @@ async function harness(
       writes.push(request.method() + ' ' + request.url());
   });
   await page.clock.install({ time: baseTime });
-  // Keep the real reader and chat HTTP endpoints; only inject activity projections
-  // and deterministic SSE wakeups. No provider request is made by these controls.
   await page.addInitScript(() => {
     class SyntheticStream {
       onopen: (() => void) | null = null;
@@ -354,8 +352,6 @@ test('ACTUI06 old notification pages, bulk confirmation and execution identity s
   await expect(dialog.locator('[data-activity-id="older-failure-11"]')).toBeVisible();
   await dialog.getByRole('button', { name: '모두 확인', exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath('activity-notifications-mobile.png') });
-  // Bulk acknowledges only the displayed snapshot, even when later SSE events
-  // append work to the open dialog. It never mutates persisted job records.
   await dialog.getByRole('button', { name: '모두 확인', exact: true }).click();
   await expect(rows).toHaveCount(0);
   await state.set([
@@ -386,8 +382,6 @@ test('ACTUI06 old notification pages, bulk confirmation and execution identity s
   await expect(rows).toHaveCount(1);
   await dialog.getByRole('button', { name: '이전 작업 더 보기', exact: true }).click();
   await expect(rows).toHaveCount(1);
-  // A retry may retain its job id and timestamp: generation alone must make its
-  // new failure visible rather than inheriting the previous acknowledgment.
   const retried = { ...recent[0], generation: 2 };
   await state.set([retried, ...recent.slice(1), running, uncertain]);
   await expect(dialog.locator('[data-activity-id="recent-failure-0"]')).toBeVisible();
@@ -533,8 +527,6 @@ test('ACTUI08 history cannot retain vanished active jobs or revive a previous ge
   await expect(rows).toHaveCount(2);
   await expect.poll(() => state.historyReads.length).toBe(1);
   await expect(dialog.getByText('이전 작업을 불러오는 중이에요…', { exact: true })).toHaveCount(0);
-  // The reader contains every active job. Removal from its projection must win
-  // over an earlier history response, including while the dialog stays open.
   await state.set([failed]);
   await expect(dialog.locator('[data-activity-id="vanishing-running"]')).toHaveCount(0);
   await expect(rows).toHaveCount(1);
@@ -550,7 +542,6 @@ test('ACTUI08 history cannot retain vanished active jobs or revive a previous ge
   };
   await state.set([failed, interrupted]);
   await expect(rows).toHaveCount(2);
-  // Reopen to cache the old interruption, then replace it with a newer execution.
   await page.keyboard.press('Escape');
   await expect(dialog).not.toBeVisible();
   await page.getByRole('button', { name: '작업 상세 보기', exact: true }).click();
@@ -593,7 +584,6 @@ test('ACTUI09 confirmations survive a fresh browser session while new executions
   const dialog = page.getByRole('dialog', { name: '작업 알림', exact: true });
   await dialog.getByRole('button', { name: '모두 확인', exact: true }).click();
   await expect(dialog.getByTestId('activity-notice')).toHaveCount(0);
-  // A fresh context restores cookies/localStorage but no tab sessionStorage.
   const storageState = await page.context().storageState();
   await page.close();
   const context = await browser.newContext({ storageState });
@@ -684,7 +674,6 @@ test('ACTUI16 recent chats use saved activity dates', async ({ page, request }, 
     expect(response.ok()).toBe(true);
     chats.push((await response.json()) as Chat);
   }
-  // The selected chat also refreshes from the real reader endpoint with today's activity date.
   const now = new Date();
   const previousDay = new Date(now);
   previousDay.setDate(previousDay.getDate() - 1);

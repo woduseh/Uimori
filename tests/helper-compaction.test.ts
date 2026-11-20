@@ -187,7 +187,6 @@ async function fixture(options: { vertex?: boolean; fixed?: boolean; reviewOnly?
   vi.spyOn(resourceTools, 'invokeResourceTool').mockImplementation((_store, name, args) => {
     if (name === 'resource.read' || name === 'resource.readMany')
       return structuredClone(f.readValue);
-    // Match resource.save's revision check; do not invent a model-owned idempotency API.
     const current = store.product.content(
       { ...fixtureBotInput('Saved exactly once'), expectedRevision: args.expectedRevision },
       saved.id
@@ -201,7 +200,6 @@ async function fixture(options: { vertex?: boolean; fixed?: boolean; reviewOnly?
     };
   });
   if (options.fixed !== false) {
-    // Calibrate from the real request builder. No tokenizer mock or provider call is used.
     const calibration = script(f, () => structuredClone(success));
     expect((await f.run()).status).toBe('completed');
     const measured = estimateContextTokens(
@@ -305,7 +303,6 @@ test('large-model helper preserves repeated exact evidence while below the conte
         tool('large-evidence', 'resource.read', { kind: 'content', id: 'large-evidence' })
       );
     if (helperCalls === 2) {
-      // Both initial inspection and later reasoning retain the original evidence.
       expect(events(request).some((event) => event.callId === 'large-evidence')).toBe(true);
       expect(continuation(request)).toBeUndefined();
       return tools(tool('invalid-catalog', 'app.tools', { names: [] }));
@@ -517,8 +514,6 @@ test.each([false, true])(
 
 test('helper compaction resumes completed library reads and exact writes within the same task', async () => {
   const f = await fixture({ fixed: false });
-  // Keep metadata-only discovery below the soft trigger as the real tool catalog grows.
-  // Keep the read under the tool-result cap while letting ordinary helper history cross its context budget.
   f.updateModel(f.helperModel.id, { inputTokenLimit: 8192 });
   const librarySource = Array.from({ length: 3_000 }, (_, index) =>
     index.toString(36).padStart(4, '0')
@@ -533,7 +528,6 @@ test('helper compaction resumes completed library reads and exact writes within 
       expect(request.input.task).not.toBe(f.request);
       expect(request.input.source).toMatchObject({ originalRequest: f.request });
       expect(request.stable.contract).not.toContain(CONTEXT_CONTINUATION_GUIDANCE);
-      // An old model plan must not become the host's record of pending work.
       return summarized(
         'The relevant evidence was checked. Next: save the draft and read the library.'
       );
@@ -702,7 +696,6 @@ test('completed read references retain returned ranges and revisions while allow
       return tools(tool('read-one', 'resource.read', { kind: 'content', id: 'read-evidence' }));
     if (helperCalls === 2) {
       expect(continuation(request)?.completedReads).toHaveLength(1);
-      // Exact wording can still be reread with the same args after compaction.
       return tools(tool('quote-reread', 'resource.read', { kind: 'content', id: 'read-evidence' }));
     }
     if (helperCalls === 3) {
@@ -1043,7 +1036,6 @@ test('small helper compaction stays above 85%, preserves exact writes, and waits
         denied: false,
       }),
     ]);
-    // A new call ID is a new operation; an old revision cannot overwrite the saved resource.
     if (helperCalls === 5)
       return tools(
         tool('stale-save', 'resource.save', {
@@ -1277,8 +1269,6 @@ test.each(['current failed task', 'earlier completed task'] as const)(
     seed.spy.mockRestore();
     f.readValue = {
       revision: 1,
-      // A single read must fit the selected model; accumulated context triggers
-      // compaction, whose checkpoint is the subject of the retry assertions.
       text: Array.from({ length: 1_600 }, (_, index) => index.toString(36).padStart(4, '0')).join(
         ' '
       ),

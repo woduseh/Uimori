@@ -75,8 +75,6 @@ test.beforeEach(async ({ page, request }) => {
   await removeKey(request);
   await resetJudgmentSettings(request);
   await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
-  // A browser spec must never submit this endpoint to the server: doing so could call JEV.
-  // Response tests register a more specific later handler and fulfill synthetic receipts.
   await page.route('**/api/provider-management/jev/test', (route) =>
     route.abort('blockedbyclient')
   );

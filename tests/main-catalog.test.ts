@@ -117,7 +117,6 @@ test('the request contract asks for a read only while the catalog lists a discov
 
 test('knowledge search points directly to an exact late body match without changing metadata-only hits or scope', () => {
   const phrase = 'Lantern password is amber.';
-  // Lowercasing this prefix expands its UTF-16 length; offsets must address the original.
   const original = 'İ'.repeat(20_000) + '😀'.repeat(10_000) + phrase + ' End of reference.';
   const resource = lore(1, { text: original });
   const metadataOnly = lore(2, { title: 'Lantern amber index', text: 'No body match.' });

@@ -3,7 +3,6 @@ import type { AssetEntry } from '../../core/auxiliary.js';
 
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 
-// Synthetic artwork for explicitly selected local test fixtures only.
 const artwork: Record<string, string> = {
   'mira-profile':
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240"><rect width="240" height="240" rx="32" fill="#203b51"/><circle cx="120" cy="95" r="42" fill="#d9b78d"/><path d="M45 240v-24a75 75 0 0 1 150 0v24" fill="#688fad"/><path d="M77 85a44 44 0 0 1 86 0l-20-24-30 16z" fill="#44343c"/><circle cx="104" cy="100" r="3"/><circle cx="136" cy="100" r="3"/></svg>',

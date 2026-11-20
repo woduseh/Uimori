@@ -207,7 +207,6 @@ test('judgment uses the finalized derived summary and visible recent turns witho
     { revision: 'old', text: 'COMPACTED_CANARY' },
     { revision: 'recent', text: 'RECENT_CANARY' },
   ];
-  // Reuse the established context-plan shape; JEV consumes it as reference data.
   input = {
     ...input,
     contextPlan: {

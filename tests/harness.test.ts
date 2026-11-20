@@ -5,8 +5,6 @@ import { spawnSync } from 'node:child_process';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { listenAddress, networkPolicy } from '../server/network-policy.js';
 
-// Exercise the real reporter, artifact files and cleanup paths while replacing
-// process/browser launch and build inputs with deterministic fault boundaries.
 vi.mock('../scripts/artifact-retention.mjs', () => ({ retainArtifacts: vi.fn() }));
 vi.mock('../scripts/browser-runtime.mjs', () => ({ assertBrowserRuntime: vi.fn() }));
 vi.mock('../scripts/lib.mjs', async (importOriginal) => ({

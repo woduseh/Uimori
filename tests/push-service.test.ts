@@ -105,7 +105,6 @@ function start(store: Store, chatId: string) {
 }
 function complete(store: Store, chatId: string) {
   const run = start(store, chatId);
-  // A local, deterministic receipt stands in for a completed provider call; never contacts a model.
   const id = store.product.startAttempt(chatId, run.id, null, {
     connectionId: 'synthetic-provider',
     modelId: 'synthetic-model',
@@ -278,7 +277,6 @@ test('transient failures retry the same event a bounded number, while expiration
   f.advance(31_000);
   await f.service.tick();
   expect(requests).toBe(2);
-  // Test notifications have short TTL; they expire rather than arriving stale much later.
   f.advance(121_000);
   await f.service.tick();
   expect(requests).toBe(2);

@@ -15,7 +15,6 @@ function copiedMessageTexts(messages: readonly CopiedMessageState[]): string[] {
   ]);
 }
 
-/** Include bytes referenced by authored Markdown/HTML even when they are not part of the bot. */
 function transcriptImages(store: Store, transcripts: readonly ChatTranscript[]) {
   const hashes = new Set<string>();
   for (const transcript of transcripts)
@@ -31,7 +30,6 @@ function transcriptImages(store: Store, transcripts: readonly ChatTranscript[]) 
   return [...hashes].map((hash) => encodedImage(store.db, hash));
 }
 
-/** Test-only v1 JSON input, never a product output path or deprecated HTTP API. */
 export function legacyResourceBundleFixture(
   store: Store,
   items: { kind: 'content' | 'prompt-preset'; id: string }[]
@@ -43,7 +41,6 @@ export function legacyResourceBundleFixture(
   };
 }
 
-/** Internal copy state stays supported; these fixtures exercise its old JSON envelope. */
 export function legacyChatBackupFixture(store: Store, chatId: string): ChatBackup {
   const copy = captureChatCopy(store, chatId);
   const items = [
@@ -84,7 +81,6 @@ export function legacyChatBackupFixture(store: Store, chatId: string): ChatBacku
   };
 }
 
-/** Small explicit legacy file for browser import tests, independent of any backup exporter. */
 export function legacyChatBackupWithBot(
   bot: Content,
   settings: Settings,

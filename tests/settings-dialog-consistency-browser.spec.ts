@@ -133,7 +133,6 @@ for (const width of [412]) {
       ).toBe(true);
     }
 
-    // A failed request remains a reviewable confirmation, and a deliberate retry deletes once.
     await page.route(`**/api/themes/${theme.id}`, (route) =>
       route.fulfill({ status: 503, json: { error: 'Synthetic theme delete failure' } })
     );
@@ -236,7 +235,6 @@ for (const width of [412]) {
       expect(restored.ok(), await restored.text()).toBe(true);
     }
 
-    // Summary budgeting uses a local fixture model; no generation or external request is made.
     await createPromptChoice(request, `Save emphasis ${width}`);
     const connectionResponse = await request.post('/api/connections', {
       data: {

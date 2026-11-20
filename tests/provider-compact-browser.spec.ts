@@ -15,7 +15,6 @@ const connection: Connection = {
   catalogError: null,
 };
 
-// Only the library read is projected. No saved settings or external provider requests are needed.
 async function projectLibrary(
   page: Page,
   value: { connections: Connection[]; models: ModelPreset[] }

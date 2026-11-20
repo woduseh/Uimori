@@ -346,7 +346,6 @@ async function terminalState<T extends { status: string }>(
   expect(events.status).toBe(200);
   const reader = events.body!.getReader();
   try {
-    // Subscribe first: the initial snapshot also wakes us if the work already finished.
     while (!(await reader.read()).done) {
       const state = await read();
       if (state && !['queued', 'running'].includes(state.status)) return state;

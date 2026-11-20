@@ -178,7 +178,6 @@ function decoded(bodyText: string) {
     if (text) {
       const packet = JSON.parse(text.slice(text.indexOf(marker) + marker.length)) as Packet;
       if (packet.source.sourceRevision) {
-        // Translation data now lives in the authored slots; metadata retains source identity.
         const texts = parts.flatMap((part) => (typeof part.text === 'string' ? [part.text] : []));
         expect(packet.source).not.toHaveProperty('text');
         expect(packet.source).not.toHaveProperty('context');
@@ -315,7 +314,6 @@ const runDone = (state: Awaited<ReturnType<typeof fixture>>, runId: string) =>
     }),
   });
 
-// Actual createApp orchestration and file SQLite, with only the native Vertex fetch redirected locally.
 test('Vertex generation, translation and independent rewrite survive SQLite restart without replaying calls', async () => {
   let writes = 0;
   const sourceText = 'The keeper watched the tide. '.repeat(180);

@@ -13,7 +13,6 @@ export function sourceFiles(root: string, directory: string): string[] {
   });
 }
 
-/** Literal references; lazy imports are boundaries, but not eager cycle edges. */
 export function sourceImports(source: string, file = 'input.ts') {
   const result: { specifier: string; runtime: boolean; eager: boolean }[] = [];
   const ast = parse(source, {

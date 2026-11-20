@@ -49,7 +49,6 @@ const variants = [
 type Variant = (typeof variants)[number];
 const pick = (...protocols: Variant['protocol'][]) =>
   variants.filter((variant) => protocols.includes(variant.protocol));
-// Vercel and the fixture share the Chat codec; native continuation differs per protocol.
 const nativeVariants = pick(
   'openai-responses-v1',
   'openai-chat-v1',

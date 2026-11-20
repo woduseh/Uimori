@@ -132,7 +132,6 @@ describe('JEV-only existing image placement', () => {
     expect(metadata).toMatchObject({ format: 'jpeg', width: 512, height: 512 });
     expect(metadata.orientation).toBeUndefined();
     expect(metadata.isProgressive).toBe(false);
-    // EXIF 6 rotates the portrait to landscape, leaving white padding above it.
     const { data, info } = await sharp(decoded).raw().toBuffer({ resolveWithObject: true });
     const rgb = (x: number, y: number) => [
       ...data.subarray(
@@ -180,7 +179,6 @@ describe('JEV-only existing image placement', () => {
       expect(tail).toBeDefined();
       return typedResponse(body, tail.id);
     });
-    // App settings include a storage revision; only model-facing opt-ins belong in the receipt.
     const settings = { revision: 7, images: true, longContext: false };
     const result = await judgeImagePlacement(source, catalog, '', {
       settings,

@@ -11,7 +11,6 @@ test('RISUPRESETUI01 preserves a reviewed file and exact uncertain submission th
   page,
   request,
 }, info) => {
-  // The response fault is synthetic; conversion semantics are covered separately.
   const title = `RISUPRESETUI01 ${Date.now()}`;
   const response = await request.post('/api/prompt-presets', {
     data: {
@@ -207,7 +206,6 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   const regex = [{ in: '원래', out: '전송', type: 'editinput', ableFlag: true, flag: 'g' }];
   await composer.getByLabel('Risu 정규식 JSON', { exact: true }).fill(JSON.stringify(regex));
   const savePreset = page.getByRole('button', { name: '프롬프트 저장', exact: true });
-  // Valid raw JSON is included in the ordinary save; no extra apply stage is required.
   await expect(savePreset).toBeEnabled();
   await savePreset.click();
   await expect(page.getByText('프롬프트를 저장했어요.', { exact: true })).toBeVisible();
@@ -254,7 +252,6 @@ test('RISUPRESETUI03 display projection keeps the original edit value and cancel
       return detail.runs.find((item) => item.id === run.id)?.status;
     })
     .toBe('completed');
-  // Synthetic presentation isolates the UI contract; server transformation has separate coverage.
   await page.route(/\/api\/chats\/[^/]+\/sources\/[^/]+\/presentation(?:\?|$)/u, async (route) => {
     const result = await (await route.fetch()).json();
     await route.fulfill({

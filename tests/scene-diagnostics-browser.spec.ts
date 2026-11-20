@@ -197,7 +197,6 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
     expect(
       await read<SceneUsageDetail>(request, `/attempts/${attempt.id}/scene-detail`)
     ).toMatchObject({ lore: included.lore, cache: null });
-    // Today's model title must not rewrite the completed invocation receipt.
     await body(
       await request.put(`/api/model-presets/${model.id}`, {
         data: {
@@ -281,8 +280,6 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       await activity.locator(':scope > summary').click();
       page.off('request', captureDetail);
 
-      // Rendering proof only: the automatic-selection summary is an API fixture,
-      // while the source, token and pinned-lore persistence above use the real app.
       const detailPath = `**/api/attempts/${attempt.id}/scene-detail`;
       const readerPath = `**/api/chats/${chat.id}/reader?*`;
       const richEntries: RequestLore['entries'] = [
@@ -415,7 +412,6 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       await page.screenshot({ path: info.outputPath(`scene-lore-rich-${width}.png`) });
       await lore.getByRole('button', { name: '마지막 장면의 로어 닫기', exact: true }).click();
       await page.unroute(lorePath);
-      // TurnActivity restores its open state on reload. Close it before the next width.
       await activity.locator(':scope > summary').click();
       await expect(activity).not.toHaveAttribute('open', '');
       await page.unroute(detailPath);

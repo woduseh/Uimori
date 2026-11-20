@@ -46,14 +46,11 @@ test('translation failures show safe causes while retired status jobs stay hidde
       error: 'AUXILIARY_PROVIDER_HTTP_401',
     },
   ];
-  // Only projected failure data and action responses are synthetic. Backend admission
-  // and snapshot integrity are covered separately in prompt-settings.test.ts.
   const readerResponse = await request.get(`/api/chats/${chat.id}/reader?source=${source.id}`);
   expect(readerResponse.ok()).toBe(true);
   const reader: ReaderDetail = await readerResponse.json();
   try {
     await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
-      // The reader is unchanged in this case; avoid leaving fetches pending at route teardown.
       await route.fulfill({ json: { ...reader, jobs } });
     });
     await page.goto(`/?chat=${chat.id}`);
@@ -149,7 +146,6 @@ test('AUXREC translation failure retries from the reader without changing the so
   try {
     await retry.click();
     await expect(retry).toBeDisabled();
-    // A repeated activation while admission is pending must not create another request.
     await retry.dispatchEvent('click');
     expect(retryRequests).toBe(1);
     release();

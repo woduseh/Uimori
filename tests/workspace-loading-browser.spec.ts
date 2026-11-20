@@ -35,7 +35,6 @@ for (const width of [412]) {
         const box = (await loading.boundingBox())!;
         const body = (await page.locator('.destination-scroll').boundingBox())!;
         expect(Math.abs(box.x + box.width / 2 - body.x - body.width / 2)).toBeLessThan(2);
-        // The header and bottom padding account for the small vertical offset.
         expect(Math.abs(box.y + box.height / 2 - body.y - body.height / 2)).toBeLessThan(64);
         await page.screenshot({ path: info.outputPath(`workspace-loading-${width}.png`) });
         release();

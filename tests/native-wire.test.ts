@@ -13,7 +13,6 @@ import type { LogicalMessage, ProviderPrompt } from '../core/risu-prompt.js';
 import type { Json, ProviderRequest, ProviderResult } from '../core/transport.js';
 import { planNativeMessages } from '../core/provider-messages.js';
 import { providerCacheBoundaries } from '../core/provider-cache-diagnostics.js';
-// Captured from adfaad60 before the conditional Anthropic boundary mapping.
 import legacyAnthropicTurn from './fixtures/anthropic-native-legacy-turn.json' with {
   type: 'json',
 };

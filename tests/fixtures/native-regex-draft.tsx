@@ -14,7 +14,6 @@ export function mount() {
     const [restoreVersion, setRestoreVersion] = useState(0);
     const [pending, setPending] = useState(false);
     const [replacement, setReplacement] = useState(0);
-    // Exercise the real draft context/buffer hook while keeping persistence outside this UI test.
     const provider = {
       state: { local: { rawFields }, restoreVersion },
       session: {

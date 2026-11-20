@@ -52,7 +52,6 @@ describe('convertCharbook: book level', () => {
       recursiveScanning: true,
       fullWordMatching: true,
     });
-    // loreExt is the book's own extensions object, assigned unconditionally.
     expect(converted.loreExt).toBe(source.extensions);
   });
 
@@ -126,7 +125,6 @@ describe('convertCharbook: extension migration', () => {
       extensions: { selectiveLogic: logic },
     });
 
-    // Each secondary key is prepended in turn, so the last key ends up on the first line.
     expect(converted.content).toBe(content);
     expect(converted.selective).toBe(selective);
     expect(converted.secondkey).toBe('x, y');
@@ -209,7 +207,6 @@ describe('interpretLoreDecorators: block and body', () => {
     expect(interpretLoreDecorators('@@role user\n@@@role assistant\nBody').decorators.role).toBe(
       'user'
     );
-    // @@@end is rewritten to @@end before the fallback test, so it always runs.
     expect(interpretLoreDecorators('@@role user\n@@@end\nBody').decorators.end).toBe(true);
   });
 

@@ -44,7 +44,6 @@ async function database() {
   owned.push({ directory, store });
   return store;
 }
-/** A completed turn the normal way: run → running → source, with synthetic usage. */
 function turn(store: Store, chatId: string, request: string, value: string) {
   const chat = store.chat(chatId);
   const profile = store.product.snapshot(chatId);
@@ -384,7 +383,6 @@ describe('chat transcript export and import', () => {
     expect(partial.entries).toEqual([
       { request: 'Open the story', text: edited.text, translation: '고친 첫 장면.' },
     ]);
-    // The first note captured the old text hash; the new note belongs to a later scene.
     expect(partial.notes).toEqual([]);
     expect(exportChatTranscript(store, chat.id).notes).toEqual([
       { text: 'A note for the second scene.', author: 'user', atIndex: 1, kind: 'author-note' },
@@ -495,7 +493,6 @@ describe('chat transcript export and import', () => {
         .get(id)
     ).toEqual({ n: 0 });
 
-    // The imported chat reads back as the same transcript and still forks like any chat.
     const again = exportChatTranscript(store, id);
     expect({ ...again, exportedAt: transcript.exportedAt, title: transcript.title }).toEqual(
       transcript
@@ -519,7 +516,6 @@ describe('chat transcript export and import', () => {
       saveImportReceipt(store, `resource-${index}`, 'digest', { index });
     const replay = importChatTranscript(store, { transcript, idempotencyKey: 'same-key' });
     expect(replay).toEqual({ chat: first.chat, created: false, skippedAttachments: [] });
-    // The original and one imported copy; the replay created nothing.
     expect(store.chats().filter((item) => item.title === 'Original story')).toHaveLength(2);
 
     const withUnknown = {
@@ -671,7 +667,6 @@ test('the transcript routes download the file and create the chat over HTTP', as
     expect(rejected.json().error).toBe('CHAT_TRANSCRIPT_INVALID_FORMAT');
   } finally {
     await app.close();
-    // The directory is this test's own mkdtemp result under the owned prefix.
     await rm(directory, { recursive: true, force: true });
   }
 });

@@ -10,7 +10,6 @@ async function finishShortSearch(dialog: Locator, match?: Locator) {
   const search = dialog.getByRole('button', { name: '검색', exact: true });
   const more = dialog.getByRole('button', { name: '남은 원고 검색', exact: true });
   await expect(search).toBeEnabled();
-  // Workspace fixtures can exceed one short-query scan. An empty page is not a final miss.
   while ((await more.isVisible()) && (!match || !(await match.isVisible()))) {
     await more.click();
     await expect(search).toBeEnabled();
@@ -52,7 +51,6 @@ test('PWUI01 search uses the saved translation and opens its exact scene on desk
       expect((await filter.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       filterRows.push((await filter.boundingBox())!.y);
     }
-    // Global search has no scope picker; its three filters use the whole row.
     expect(Math.max(...filterRows) - Math.min(...filterRows)).toBeLessThanOrEqual(1);
     await expect(dialog.getByRole('checkbox')).toHaveCount(0);
     await dialog.getByRole('button', { name: '요청', exact: true }).click();
@@ -240,7 +238,6 @@ test('PWUI03 real scene navigation syncs to another device without gating its ma
     .toBe(detail.sources[5].id);
   const clientId = await page.evaluate(() => localStorage.getItem('uimori:reading-client'));
   const path = `/api/chats/${chat.id}/reading-position?${new URLSearchParams({ clientId: clientId! })}`;
-  // Observe a real UI write; never seed the checkpoint with a preparatory PUT.
   await expect
     .poll(async () => (await (await request.get(path)).json()).own?.target.sourceId)
     .toBe(detail.sources[5].id);
@@ -259,7 +256,6 @@ test('PWUI03 real scene navigation syncs to another device without gating its ma
     });
     const phone = await second.newPage();
     await phone.goto(`/?chat=${chat.id}`);
-    // A deliberately unresolved position API cannot prevent source loading.
     await expect(phone.locator('[data-testid="source"]').first()).toBeVisible();
     const before = phone.url();
     release();

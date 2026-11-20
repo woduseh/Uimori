@@ -117,7 +117,6 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
   request,
 }) => {
   test.setTimeout(60_000);
-  // The run uses the local scripted fixture; monetary payloads below are presentation fixtures.
   const created = await postFixtureChat(request, { data: { title: 'PRICECOST01 합성 비용 화면' } });
   expect(created.ok(), await created.text()).toBe(true);
   const chat = (await created.json()) as Chat;

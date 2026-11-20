@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 // RisuAI cad8595a scriptings.ts maps sys -> system and bot/char -> assistant
-// in both LLMMain and axLLMMain. Capture the serialized HTTP body, after our host adapts it.
+// in both LLMMain and axLLMMain.
 test.each(['LLM', 'axLLM'] as const)(
   '%s preserves Risu role aliases, prompt text and order at the provider boundary',
   async (method) => {

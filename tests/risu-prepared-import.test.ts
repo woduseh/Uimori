@@ -349,7 +349,6 @@ test('abort terminates an active worker before cleanup and concurrent preparatio
   await expect(prepareStoredRisuImport(store.path, { source: input })).rejects.toThrow(
     'RISU_IMPORT_BUSY'
   );
-  // The process memory budget also covers native archives from a different database.
   await expect(prepareNativeArchive(other, 'a'.repeat(32), 'resources')).rejects.toThrow(
     'RISU_IMPORT_BUSY'
   );
@@ -399,7 +398,6 @@ test('parallel image preparation keeps card order and validates repeated bytes o
         .toBuffer()
     )
   );
-  // More assets than image slots, with repeats of earlier members and of earlier bytes.
   const members = ['a', 'b', 'a', 'c', 'd', 'b', 'e', 'copy-of-c'];
   const bytesFor = (member: string) => pngs['abcde'.indexOf(member === 'copy-of-c' ? 'c' : member)];
   const card = {

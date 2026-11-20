@@ -108,7 +108,6 @@ async function capture(value: AuxiliaryBundle) {
 const occurrences = (value: unknown, marker: string) =>
   JSON.stringify(value).split(marker).length - 1;
 
-// The local fixture serializes the raw host request too; it is not an LLM wire encoder.
 const deliveryProtocols = PROVIDER_PROTOCOLS.filter((protocol) => protocol !== 'fixture-sse-v1');
 
 function encodedBody(request: ProviderRequest, value: AuxiliaryBundle, protocol: ProviderProtocol) {
@@ -132,7 +131,6 @@ test('authored translation assembles frozen source, references and notes once', 
     sourceRevision: value.source.id,
     sourceHash: value.source.hash,
   });
-  // The request retains receipt metadata; each wire must deliver the assembled content once.
   for (const protocol of deliveryProtocols) {
     const body = encodedBody(request, value, protocol);
     for (const marker of [

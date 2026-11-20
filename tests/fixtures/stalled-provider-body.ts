@@ -1,4 +1,3 @@
-/** A response whose body stops after its first bytes and ignores fetch's abort signal. */
 export function stalledProviderBody(contentType = 'application/json') {
   let source!: ReadableStreamDefaultController<Uint8Array>;
   let reading!: () => void;
@@ -17,7 +16,6 @@ export function stalledProviderBody(contentType = 'application/json') {
     },
     cancel() {
       cancellations++;
-      // A remote cancellation acknowledgement can itself remain pending.
       return new Promise<void>((resolve) => {
         acknowledgeCancel = resolve;
       });
@@ -35,15 +33,12 @@ export function stalledProviderBody(contentType = 'application/json') {
     release() {
       try {
         source.close();
-      } catch {
-        // The reader may already have been cancelled or failed.
-      }
+      } catch {}
       acknowledgeCancel?.();
     },
   };
 }
 
-/** Keep a broken cancellation test bounded, even if the underlying read never completes. */
 export async function settleWithin<T>(work: Promise<T>, milliseconds = 800): Promise<T | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {

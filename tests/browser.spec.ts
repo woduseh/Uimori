@@ -57,7 +57,6 @@ async function storySettings(page: Page) {
 }
 async function openWork(page: Page) {
   await closeDialog(page);
-  // The sidebar lists tasks only while something runs; the chat ⋯ menu always has the panel.
   await page.locator('.chat-menu').getByLabel('채팅 메뉴').click();
   await page.getByRole('button', { name: '작업 현황', exact: true }).click();
 }
@@ -95,7 +94,6 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
   const bPage = await other.newPage();
   bPage.on('pageerror', (e) => errors.push(e.message));
   const base = process.env.UIMORI_BASE_URL!;
-  // A new independent context needs the same explicit server URL, no shared browser storage.
   await bPage.goto(base);
   try {
     const a = await newChat(page, '합성 A · 등대');
@@ -124,7 +122,6 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     );
     await control(request, 'fixture', {});
     expect(aRun.id).not.toBe(bRun.id);
-    // Keep the second tab's unsaved settings intact for the later revision conflict.
     const aWorkTab = await context.newPage();
     aWorkTab.on('pageerror', (error) => errors.push(error.message));
     try {
@@ -139,7 +136,6 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     await expect(
       aSecondTab.getByRole('spinbutton', { name: '작업당 모델 호출 한도', exact: true })
     ).toHaveValue('6');
-    // Duplicate identical HTTP command uses the exact browser-submitted body/key.
     const command = commands.get(aRun.id)!;
     expect(command).toMatchObject({
       request: '(OOC: Write a quiet lighthouse scene.) SYNTHETIC_A',
@@ -157,7 +153,6 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
       data: { ...command, idempotencyKey: 'other-request' },
     });
     expect(conflict.status()).toBe(409);
-    // A changed setting while held must not alter the existing run snapshot.
     await storySettings(page);
     await page.getByRole('spinbutton', { name: '작업당 모델 호출 한도', exact: true }).fill('6');
     await page.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
@@ -185,7 +180,6 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     const bDone = await detail(request, b.id);
     expect(aDone.sources).toHaveLength(1);
     expect(bDone.sources).toHaveLength(1);
-    // Completed requests keep their authored command, not an archive of compiled model input.
     expect(aDone.runs[0].snapshot.request).toContain('SYNTHETIC_A');
     expect(bDone.runs[0].snapshot.request).toContain('SYNTHETIC_B');
     expect(aDone.runs[0].snapshot.request).not.toContain('SYNTHETIC_B');
@@ -196,7 +190,6 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     expect(
       aDone.jobs.every((j) => j.sourceRevision === aSource.id && j.status !== 'completed')
     ).toBeTruthy();
-    // Original source is already readable while the translation worker remains held.
     await closeDialog(aSecondTab);
     await sourceDetails(aSecondTab);
     await expectSourceRaw(aSecondTab, aSource.text);
@@ -205,7 +198,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     await expect(aSecondTab.getByTestId('source').getByTestId('job-translation')).toContainText(
       '한국어 번역'
     );
-    await aSecondTab.goto(`/?chat=${b.id}`); // same context's tab changes its own view only
+    await aSecondTab.goto(`/?chat=${b.id}`);
     await expect(aSecondTab.getByRole('heading', { name: b.title, exact: true })).toBeVisible();
     expect((await detail(request, a.id)).jobs.some((job) => job.kind === 'status')).toBe(false);
     expect(
@@ -241,7 +234,6 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     expect(stale.status()).toBe(409);
     if (visualReview)
       await returned.screenshot({ path: testInfo.outputPath('mobile-source.png'), fullPage: true });
-    // Independent file connection, not a mocked API, verifies storage and logical uniqueness.
     const db = new DatabaseSync(process.env.UIMORI_DB!, { readOnly: true });
     try {
       expect(db.prepare('SELECT count(*) AS n FROM runs WHERE chat_id=?').get(a.id)?.n).toBe(1);
@@ -249,7 +241,6 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
         text: aSource.text,
         hash: createHash('sha256').update(aSource.text).digest('hex'),
       });
-      // Only the explicitly requested translation produces a result; status work is retired.
       expect(
         db
           .prepare(
@@ -323,7 +314,6 @@ test('F05 failed auxiliary result retries independently while a later source is 
   )!;
   expect(retriedJob.id).not.toBe(failedJob.id);
   expect(retriedJob.revision).toBe(failedJob.revision! + 1);
-  // Concurrent retry deliveries join the active new job for the original source.
   const repeated = await Promise.all([
     request.post(`/api/jobs/${failedJob.id}/retry`, { data: {} }),
     request.post(`/api/jobs/${failedJob.id}/retry`, { data: {} }),
@@ -368,8 +358,6 @@ test('F03 F05 an older real HTTP response cannot hide a newly committed source',
   request,
 }) => {
   const chat = await newChat(page, '합성 · 역순 응답');
-  // End the old document's SSE first: otherwise its last refresh can be
-  // intercepted and then cancelled by navigation, so no delayed response arrives.
   await page.goto('about:blank');
   const pending = new Set<Request>();
   const readerPath = `/api/chats/${chat.id}/reader`;
@@ -429,7 +417,6 @@ test('F03 F05 an older real HTTP response cannot hide a newly committed source',
     await sourceDetails(page);
     await expect(page.getByTestId('source').getByTestId('job-translation')).toContainText('완료');
     await expect.poll(() => pending.size).toBe(1);
-    // Deliver the stale network response after latest source/job events have ended.
     const delivered = page.waitForResponse((r) => r.headers()['x-m0-delayed'] === 'true');
     release();
     await (await delivered).finished();
@@ -446,8 +433,6 @@ test('F03 F05 an older real HTTP response cannot hide a newly committed source',
     await expect(page.getByTestId('source').getByTestId('job-translation')).toContainText('완료');
   } finally {
     release();
-    // On timeout the runner can already have closed the page. Preserve the
-    // original assertion instead of masking it with a cleanup target-closed error.
     if (!page.isClosed())
       await page.unrouteAll({ behavior: 'ignoreErrors' }).catch((error) => {
         if (!page.isClosed()) throw error;

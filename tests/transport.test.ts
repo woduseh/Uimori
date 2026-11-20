@@ -744,7 +744,6 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
       catalogError: null,
       catalogUpdatedAt: null,
     };
-    // Management fields make an otherwise valid stored setting unusable at the transport boundary.
     expect(() => validateConnection(stored)).toThrow('UNSUPPORTED_OPTIONS');
     const narrowed = transportConnection(stored);
     expect(narrowed).toEqual({
@@ -988,7 +987,6 @@ test('native CBS prompt stays frozen across tools after the caller changes its p
   expect(server.requests).toHaveLength(2);
   for (const captured of server.requests) {
     const wire = JSON.parse(captured.body);
-    // Authored text stays literal; evidence and retrieval policies belong to the host contract.
     expect(wire.stable.contract).toBe(
       '\n' +
         CONTEXT_DERIVED_GUIDANCE +

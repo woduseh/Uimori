@@ -165,7 +165,6 @@ export function mountPreset(
   );
 }
 
-/** Stored blocks rendered against the app's own tokens, for composition and design review. */
 export async function mountGallery(
   element: HTMLElement,
   sources: string[],

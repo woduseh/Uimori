@@ -56,7 +56,6 @@ function nativeResponse(request) {
     method: 'thread/tokenUsage/updated',
     params: { threadId, turnId, tokenUsage: { total } },
   });
-  // Repeated totals are a snapshot, not another charge/model-call.
   send({
     method: 'thread/tokenUsage/updated',
     params: { threadId, turnId, tokenUsage: { total } },
@@ -418,7 +417,6 @@ input.on('line', (line) => {
             },
           },
         });
-      // Image generation modes emit the official imageGeneration item before the caption message.
       if (mode.startsWith('image')) {
         const png =
           process.env.UIMORI_CODEX_FIXTURE_IMAGE ??

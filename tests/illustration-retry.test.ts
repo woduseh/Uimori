@@ -127,7 +127,6 @@ function result(code: string): ProviderResult {
     opaqueState: null,
   };
 }
-// Provider errors share one retry policy; each stage parses a different response format.
 test.each([
   ['plan', 'TIMEOUT'],
   ['plan', 'CODEX_BUSY'],
@@ -319,7 +318,6 @@ test('metadata-only workflows fail before either a prompt call or a Comfy submis
   const workflow = JSON.parse(FIXTURE_WORKFLOW);
   workflow['6'].inputs.text = 'old fixed prompt';
   workflow['6']._meta = { title: '{{prompt}}' };
-  // A frozen legacy recipe can predate the stricter preset validation.
   input.comfyui!.workflow = JSON.stringify(workflow);
   store.db
     .prepare('UPDATE illustration_jobs SET input=? WHERE id=?')

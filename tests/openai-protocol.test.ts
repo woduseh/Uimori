@@ -641,7 +641,6 @@ describe('native Responses pure protocol (no live calls)', () => {
         role: 'developer',
         content: [{ type: 'input_text', text: earlier.instructions }],
       });
-      // Bootstrap history, request text and the stable cache anchor follow in their earlier form.
       expect(wire.input.slice(1)).toEqual(earlier.input);
       expect(wire.input.at(-1).content[0]).toEqual({
         type: 'input_text',

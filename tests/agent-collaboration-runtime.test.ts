@@ -416,7 +416,7 @@ test('host, collaboration and per-advisor budgets bound real requests while rese
         }
       },
       {
-        maxCalls: scenario.host + 1, // Reserve the mandatory final JEV judgment as well.
+        maxCalls: scenario.host + 1,
         collaboration: collaboration({
           maxCalls: scenario.shared,
           agents: [

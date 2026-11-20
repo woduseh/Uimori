@@ -114,7 +114,6 @@ test('failed identity writes followed by reload cannot let an old receipt erase 
   const sent = await drafts.freezeHelperAttachments('first', model);
   state.writeFails = true;
   drafts.touchHelperAttachments('first');
-  // Let the real queued persistence attempt settle before simulating a new page module.
   await expect(drafts.freezeHelperAttachments('first', model)).rejects.toThrow('disk unavailable');
   vi.resetModules();
   state.writeFails = false;

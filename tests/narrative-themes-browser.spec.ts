@@ -70,8 +70,6 @@ async function makeContent(
   const height = shape === 'tall' ? 600 : 400;
   let image: { hash: string; mime: PackageImage['mime'] } | undefined;
   if (shape !== 'missing') {
-    // Opaque synthetic art is stored through the real asset API, never an external provider.
-    // The outer border makes unintended cover-cropping visible in review screenshots.
     const directory = process.env.UIMORI_NARRATIVE_DEMO_DIR;
     const bytes = directory
       ? await readFile(join(directory, shape === 'tall' ? 'bot.webp' : 'persona.webp'))
@@ -216,8 +214,6 @@ async function noHorizontalOverflow(page: Page, scene: Locator) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );
-  // Decorative tape/bookmarks may intentionally overdraw a frame. Check the actual
-  // scrollport and prose, not the decoration's local paint bounds.
   const metrics = await scene.evaluate((node) => {
     const scrollport = node.closest<HTMLElement>('[data-reader-scrollport]');
     const body = node.querySelector<HTMLElement>('[slot="body"]');
@@ -237,7 +233,6 @@ async function imageLoaded(image: Locator) {
     .toBeGreaterThan(0);
 }
 
-// Each layout runs once; the width/mode combinations rotate so both widths and modes stay covered.
 const readerCases = [
   ['cinematic', 412, 'dark'],
   ['letter', 1440, 'light'],
@@ -334,7 +329,6 @@ for (const [layout, width, mode] of readerCases) {
         expect(portraitBox.y + portraitBox.height).toBeLessThanOrEqual(bodyBox.y);
       }
     }
-    // The projected body stays intact; the theme-owned wrapper owns the inner scroll.
     expect(
       await source.evaluate((node) => node.scrollHeight <= (node as HTMLElement).clientHeight + 1)
     ).toBe(true);
@@ -342,7 +336,6 @@ for (const [layout, width, mode] of readerCases) {
       const manuscript = await scene.locator('.manuscript').boundingBox();
       const composer = await page.locator('.composer-dock').boundingBox();
       expect(manuscript!.y + manuscript!.height).toBeLessThanOrEqual(composer!.y + 1);
-      // Expanded receipts use the outer reader without hiding the scene actions.
       const activityDisclosure = scene.getByTestId('turn-activity').locator(':scope > summary');
       await activityDisclosure.click();
       const usage = scene.getByTestId('scene-usage');
@@ -463,7 +456,6 @@ for (const [layout, width, mode] of readerCases) {
     await page.keyboard.press('Escape');
     await expect(source).toContainText(endMarker);
 
-    // Wheel scrolling stays inside the scene body while its portrait and actions stay put.
     await reader.evaluate((node) => {
       node.scrollTop = 0;
     });
@@ -507,7 +499,6 @@ for (const [layout, width, mode] of readerCases) {
   });
 }
 
-// Palette and portrait-fallback behavior is layout-independent; one layout represents each.
 {
   const layout: Layout = 'cinematic';
   test(`NARRATIVE ${layout}: every palette preserves layout nodes, text and reading state`, async ({
@@ -939,7 +930,6 @@ test('BACKGROUND upload, independent scopes, overlays, clear and reload', async 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );
-  // Restore workspace defaults for unrelated browser scenarios in the same fixture server.
   const final = await (await request.get('/api/themes')).json();
   expect(
     (
@@ -1014,7 +1004,6 @@ test('BACKGROUND pending upload discard and dirty save-close preserve scope owne
   ).toBe(true);
 });
 
-/** The app height follows visualViewport resize events, which can arrive after innerHeight. */
 async function resizeApp(page: Page, width: number, height: number) {
   await page.setViewportSize({ width, height });
   await expect
@@ -1050,7 +1039,6 @@ for (const layout of ['letter'] as const) {
       }
     }
     await resizeApp(page, 412, 700);
-    // A short translation uses its content height, rather than stretching to the cap.
     const originalHeight = await bodyScroll.evaluate((node) => node.clientHeight);
     await sourceAction(scene, '번역 보기');
     await expect(scene.getByTestId('translation-text')).toContainText('After the rain');
@@ -1071,7 +1059,6 @@ for (const layout of ['letter'] as const) {
     expect(expandedBody).toBeGreaterThanOrEqual(200);
     expect(expandedBody).toBeLessThan(compactBody - 20);
     await noHorizontalOverflow(page, scene);
-    // Even in the smallest reader, page scrolling still reaches portrait, title and actions.
     const portrait = gallery.getByRole('button', {
       name: '린 메이화 대표 이미지 확대',
       exact: true,
@@ -1101,7 +1088,6 @@ for (const layout of ['letter'] as const) {
       );
       await page.reload();
       await expect(scene.getByTestId('source-text')).toContainText(endMarker);
-      // The scene-list shortcut is independent from the visual navigator setting.
       await expect(page.locator('.header-title-hit')).toHaveCount(1);
       await page.setViewportSize({ width: 412, height: 700 });
       await reader.evaluate((node) => {
@@ -1162,7 +1148,6 @@ for (const layout of ['letter'] as const) {
     await bodyScroll.scrollIntoViewIfNeeded();
     await page.screenshot({ path: info.outputPath(`${layout}-1440x900.png`) });
 
-    // The same height/containment rules do not leak into the plain-page layout.
     await select(request, { themeId: 'builtin:forest', targetId: data.chatId });
     await page.reload();
     await expect(page.locator('[data-uimori-body-scroll]')).toHaveCount(0);

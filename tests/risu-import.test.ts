@@ -264,8 +264,6 @@ test('module JSON registers a reusable module without a bot, chat or memory', as
 
 test('module lorebook keys, secondary keys and mode remain in authoritative Risu source', async () => {
   const store = database();
-  // Module lore is already in Risu's database shape, so these fields are the entry's own, not
-  // extensions another frontend wrote.
   const source = {
     ...sourceOf({
       type: 'risuModule',
@@ -664,7 +662,6 @@ test('a container beyond the inline limit is staged on disk, imported, and never
   uploadRoutes(app, store.path);
   risuImportRoutes(app, store);
   try {
-    // A stored member crosses the inline limit. Together the two members expand beyond 64 MiB.
     const container = zip([
       ['card.json', Buffer.from(JSON.stringify(card()))],
       ['assets/first.bin', Buffer.alloc(25 * 1024 * 1024), 0],
@@ -676,7 +673,6 @@ test('a container beyond the inline limit is staged on disk, imported, and never
       url: '/api/risu-imports/prepare',
       payload: { source: { name: 'huge.charx', base64: container.toString('base64') } },
     });
-    // The inline route refuses it before any parse; the staged route is the only way in.
     expect(inline.statusCode).toBe(413);
 
     const uploaded = await app.inject({
@@ -716,7 +712,6 @@ test('a container beyond the inline limit is staged on disk, imported, and never
     const content = store.product.get<Content>('content', receipt.items[0].id);
     expect(content.title).toBe('Synthetic Pilot');
     expect(content.package!.nativeRisu!.sourceHash).toBe(sha256);
-    // The registered material carries no copy of the original container.
 
     expect(existsSync(join(uploadDirectory(store.path), `${uploadId}.bin`))).toBe(false);
     expect(
@@ -740,7 +735,6 @@ test('an oversized ZIP member is rejected even in a small compressed container',
   expect(() => cardZip(bytes)).toThrow('RISU_IMPORT_INVALID_FILE');
 });
 
-// An entry another frontend wrote as CCv3 `extensions`, which Risu migrates into `@@` lines on import.
 const migratedEntry = () => ({
   name: 'Migrated',
   content: 'Migrated body.',
@@ -792,7 +786,6 @@ test('lore directives decide activation and never reach the model as prose', () 
     },
   });
   const lore = Object.fromEntries(preview.lore.map((item) => [item.title, item]));
-  // The material's own data stays out of the imported prompt material.
   expect(lore['Engine data']).toMatchObject({ enabled: false, text: '{"boards":["news"]}' });
   expect(lore['Always on']).toMatchObject({ enabled: true, loading: 'pinned' });
   expect(lore['Always on'].text).toBe('The harbor is busy.');
@@ -816,20 +809,16 @@ test('lore directives decide activation and never reach the model as prose', () 
     'Migrated body.',
   ]);
   expect(lore.Migrated.text).toBe(converted.at(-1));
-  // The keys travel with the entry so the import screen can say what turns it on.
   expect(lore.Migrated.keys).toBe('harbor');
   expect(lore.Plain.keys).toBeUndefined();
   const levels = Object.fromEntries(
     preview.findings.map((finding) => [finding.code, finding.level])
   );
   expect(levels['lore-not-activated']).toBe('warning');
-  // The keyword rules are carried now, so neither notice about dropping them is raised any more.
   expect(levels).not.toHaveProperty('lore-discovery');
   expect(levels).not.toHaveProperty('lore-rules');
   expect(levels['lore-decorator-position']).toBe('unsupported');
-  // One finding per decorator the lorebook carries, instead of one aggregate notice for all of them.
   expect(levels).not.toHaveProperty('lore-decorators');
-  // Native depth/role placement and supported activation decorators no longer carry loss findings.
   expect(levels).not.toHaveProperty('lore-decorator:depth');
   expect(levels).not.toHaveProperty('lore-decorator:role');
   expect(levels['lore-decorator:exclude_keys_all']).toBe('info');
@@ -842,7 +831,6 @@ test('lore directives decide activation and never reach the model as prose', () 
   expect(unknown?.message).toContain('@@Depth');
 });
 
-// Every surface the card carries and the import does not reproduce has to reach the reader.
 const SURFACE_CODES = [
   'view-screen',
   'emotion-assets',
@@ -900,7 +888,6 @@ test('card metadata and typed assets remain in native source without conversion 
     preview.findings.map((finding) => [finding.code, finding.level])
   );
   for (const code of SURFACE_CODES) expect(levels).not.toHaveProperty(code);
-  // The settings that now have their own notice no longer fall into the generic bucket.
   expect(levels['extension-settings']).toBeUndefined();
   const saved = await applyRisuImport(store, {
     source,
@@ -915,7 +902,6 @@ test('card metadata and typed assets remain in native source without conversion 
   delete expectedCard.nickname;
   delete expectedCard.extensions.risuai.license;
   expect(bot.package!.nativeRisu!.card).toEqual(expectedCard);
-  // Image projections link storage; the source keeps their authored roles and extension fields.
   expect(bot.package!.images!.map((image) => image.title)).toEqual(['main', 'happy']);
 
   const plain = sourceOf(card());
@@ -927,7 +913,6 @@ test('card metadata and typed assets remain in native source without conversion 
     allowPartial: false,
     idempotencyKey: 'plain-card',
   });
-  // A card without creator notes keeps the generated line naming the file it came from.
   expect(
     store.product.get<Content>('content', plainSaved.receipt.items[0].id).description
   ).toContain('synthetic-card.json');

@@ -263,7 +263,6 @@ test(`BMCONF02 bookmark save conflicts and in-flight dismissal never lose a draf
     await page.mouse.click(5, 5);
     await expect(confirmation).toBeVisible();
     await expect(editor).toBeVisible();
-    // A second submit in the same pending save must also be rejected by the save lock.
     await editor.locator('form').evaluate((form: HTMLFormElement) => {
       form.requestSubmit();
       form.requestSubmit();

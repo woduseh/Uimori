@@ -4,10 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
 import { sourceFiles, sourceImports } from './fixtures/source-imports.js';
 
-// Value-import cycles between `core/` and `server/` modules. Biome checks directory boundaries,
-// not cycles, so this keeps the ones removed on 2026-09-10 (decision 6) from returning.
-// Static `import`/`export ... from` statements only; `import type` and inline `type` specifiers
-// are erased at runtime and are not edges here.
+// Biome checks directory boundaries, not import cycles. TypeScript erases `import type` and
+// inline `type` specifiers, so they are not runtime edges.
 const root = fileURLToPath(new URL('../', import.meta.url));
 function valueImports(file: string): string[] {
   return sourceImports(readFileSync(join(root, file), 'utf8'), file)

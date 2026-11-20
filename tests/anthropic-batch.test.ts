@@ -316,8 +316,6 @@ describe('Anthropic Batch execution', () => {
       )
     ).toMatchObject({ custom_id: 'attempt-1', result: { type: 'succeeded' } });
 
-    // Completed realtime context/advisor/native calls may still lack a durable
-    // replay receipt. Their completion alone must not authorize another paid call.
     for (const role of ['context', 'main']) {
       db.prepare('INSERT OR REPLACE INTO attempts VALUES(?,?,?,?)').run(
         'realtime-attempt',

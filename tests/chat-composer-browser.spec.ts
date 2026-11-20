@@ -52,7 +52,6 @@ test('shared composer follows resized content viewport while preserving the draf
           const shell = document.querySelector('.app-shell')!.getBoundingClientRect();
           const dock = document.querySelector('.composer-dock')!.getBoundingClientRect();
           const input = document.querySelector<HTMLTextAreaElement>('#request')!;
-          // Matching the dock to a wrongly shortened shell would miss the blank gap.
           return Math.max(
             Math.abs(shell.bottom - window.innerHeight),
             Math.abs(dock.bottom - window.innerHeight),
@@ -126,8 +125,6 @@ test('shared composer shrinks nonempty drafts in main and helper without width o
       )
       .toBeLessThanOrEqual(1);
     await expect(input).toHaveValue('짧은 요청');
-    // A draft that first wraps at the narrow one-row width must keep its chosen shape,
-    // even if it fits in one line after the action controls move below it.
     for (let length = 8; length <= 120; length += 4) {
       await input.fill('가'.repeat(length));
       const states = await form.evaluate(async (node) => {

@@ -78,7 +78,6 @@ async function openPrompt(page: Page, preset: PromptPreset) {
       definitions.getByRole('heading', { name: '이름을 바꾼 초안', exact: true })
     ).toBeVisible();
 
-    // Deletion keeps an explicit destructive action while retaining draft-only changes.
     const confirmation = page.getByRole('alertdialog', { name: '그룹 삭제', exact: true });
     await groupMenu.click();
     await definitions.getByRole('button', { name: '그룹 삭제', exact: true }).click();
@@ -108,7 +107,6 @@ async function openPrompt(page: Page, preset: PromptPreset) {
     ).json()) as PromptPreset;
     expect(stored.program.nativeRisuPreset.preset.customPromptTemplateToggle).toBe(original);
 
-    // Retain another approved group and prove only the parent Save persists the final draft.
     await definitions.getByRole('button', { name: '편집', exact: true }).click();
     await add.click();
     await addDialog.getByLabel('그룹 이름', { exact: true }).fill('저장할 그룹');

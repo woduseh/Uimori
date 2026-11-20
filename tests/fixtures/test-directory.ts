@@ -2,7 +2,6 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 
-/** Own only the temporary directory; each test still closes its Store or App first. */
 export function createTestDirectory(prefix: string) {
   const directory = mkdtempSync(join(tmpdir(), prefix));
   return {

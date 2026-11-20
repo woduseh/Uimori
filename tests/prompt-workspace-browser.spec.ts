@@ -37,7 +37,6 @@ test(
     await group.locator('summary').click();
     await panel.getByRole('button', { name: '합성 문체 개별 지정', exact: true }).click();
     await panel.getByLabel('합성 문체', { exact: true }).fill('간결하게');
-    // Switching docked panels must preserve unapplied options without leaving both open.
     await page.setViewportSize({ width: 1440, height: 900 });
     await openHelper(page);
     await expect(page.locator('#helper-panel')).toBeVisible();

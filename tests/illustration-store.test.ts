@@ -583,7 +583,6 @@ describe('illustration storage on the current schema', () => {
     expect(http(() => removeIllustration(store, again.id)).message).toBe('ILLUSTRATION_ACTIVE');
     const cancelled = cancelIllustration(store, again.id);
     expect(cancelled).toMatchObject({ status: 'cancelled', error: 'ILLUSTRATION_CANCELLED' });
-    // The worker finishing after cancellation neither stores images nor changes the state.
     expect(
       completeIllustration(
         store,

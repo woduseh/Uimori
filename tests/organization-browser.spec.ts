@@ -5,15 +5,12 @@ import type { Content } from '../core/product.js';
 import type { Chat } from '../core/types.js';
 import { visibleNavigation } from './ui-navigation.js';
 
-/** A bot row shows its actions on hover, the same way the chat rows below it do. */
 async function revealBotActions(scope: Locator, title?: string) {
   const heading = scope.locator('.bot-branch-heading');
   await (title ? heading.filter({ hasText: title }) : heading).first().hover();
 }
-/** The bot row keeps its name; chat search now lives in that row's management menu. */
 async function openBotChatSearch(nav: Locator, title: string) {
   await revealBotActions(nav, title);
-  // The menu opener is the details summary, so it answers to its label rather than a button role.
   await nav.getByLabel(`${title} 관리`, { exact: true }).click();
   await nav.getByRole('button', { name: '채팅 검색', exact: true }).click();
 }
@@ -64,7 +61,6 @@ test('ORG01 mobile navigation groups by owner and preserves chats when a folder 
   const chatRow = branchA.locator(`.bot-chat-item[data-chat-id="${first.id}"]`);
   const folderHeader = branchA.getByRole('button', { name: `${folder.title} 폴더`, exact: true });
   await expect(chatRow).toHaveAttribute('draggable', 'true');
-  // Keep both ends of the gesture in view when many other bots fill the drawer.
   await branchA.scrollIntoViewIfNeeded();
   await chatRow.dragTo(folderHeader, { scroll: 'none', sourcePosition: { x: 20, y: 12 } });
   await expect
@@ -168,7 +164,6 @@ const rows = (nav: Locator) => nav.locator('.bot-chat-item');
       name: `${folder.title} 기본 페르소나`,
       exact: true,
     });
-    // Other cases share this library; the new persona may be beyond the first 50 choices.
     await picker.getByRole('searchbox').fill(draftPersona.title);
     await picker.locator('[data-content-choice]').filter({ hasText: draftPersona.title }).click();
     const changed = await request.patch(`/api/bots/${owner.id}/folders/${folder.id}`, {
@@ -293,8 +288,6 @@ const rows = (nav: Locator) => nav.locator('.bot-chat-item');
       data: { title: concurrent, expectedTitleRevision: chat.titleRevision ?? 0 },
     });
     expect(changed.ok()).toBe(true);
-    // The live conflict notice changes the mobile dialog's height. Wait for that update before
-    // clicking Save, so the test submits the retained draft after receiving the concurrent title.
     await expect(
       menu.getByText('제목이 다른 곳에서 변경됐어요. 취소하면 최신 제목을 불러와요.', {
         exact: true,
@@ -344,9 +337,7 @@ test('ORG02 desktop compact rows support drag ordering, folder drops, collapse a
   const nav = page.getByTestId('bot-navigation').filter({ visible: true });
   const branch = nav.locator(`[data-bot-id="${owner.id}"]`);
   const folderHeader = branch.getByRole('button', { name: `${folder.title} 폴더`, exact: true });
-  // The first folder load briefly replaces the rows with a loading indicator.
   await expect(folderHeader).toBeVisible();
-  // Read the actual initial order so the gesture checks position independently of creation defaults.
   const readOrder = () =>
     rows(branch).evaluateAll((elements) =>
       elements.map((element) => element.getAttribute('data-chat-id'))
@@ -503,7 +494,6 @@ test('ORG04 unselected chat and collapsed folder display compact pending activit
     const emptyFolder = (await emptyResponse.json()).folders.find(
       (item: { title: string }) => item.title === emptyTitle
     );
-    // Keep this navigation assertion independent of bots created by other browser cases.
     await page.route(/\/api\/library(?:\?|$)/, async (route) => {
       const response = await route.fetch();
       const library = await response.json();
@@ -563,7 +553,6 @@ test('ORG04 unselected chat and collapsed folder display compact pending activit
           .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-bot-id')))
       )
       .toEqual(manualOrder);
-    // Empty folders remain usable destinations, and folder ordering is shared with the library.
     await nav.locator('.bot-tree-section-heading').hover();
     await nav.getByLabel('봇 목록 메뉴', { exact: true }).click();
     await nav.getByLabel('봇 정렬 기준', { exact: true }).selectOption('recent');
@@ -626,7 +615,6 @@ test('ORG04 unselected chat and collapsed folder display compact pending activit
     const b = await navigationFixture(request);
     await page.goto(`/?chat=${a.chats[0].id}`);
     await visibleNavigation(page);
-    // The drawer carries the row in its header, the sidebar in its brand row; one is visible at a time.
     const search = page
       .getByRole('button', { name: '전체 채팅 검색', exact: true })
       .filter({ visible: true });

@@ -15,8 +15,6 @@ function latch() {
 }
 
 const compact = { width: 412, height: 915 };
-// Compact editor headers expose local list navigation only. Global navigation is
-// a desktop sidebar action, so it runs on the wide viewport.
 const flows = [
   { flow: 'content-list', viewport: compact },
   { flow: 'prompt-list', viewport: compact },

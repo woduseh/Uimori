@@ -543,7 +543,6 @@ test('DECISION settings chat prompt option conflict review preserves local value
   await expect(dialog.getByLabel('현재 저장본')).not.toContainText('보존할 내 문체');
   await dialog.getByRole('button', { name: '채팅 옵션 저장본 확인 닫기', exact: true }).click();
   await expect(field).toHaveValue('보존할 내 문체');
-  // Reviewing or dismissing a conflict cannot silently grant a newer CAS revision.
   await save.click();
   await expect(dialog).toBeVisible();
   await dialog.press('Escape');

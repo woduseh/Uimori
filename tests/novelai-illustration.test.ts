@@ -64,7 +64,6 @@ const characters = [
 ];
 type Sent = { url: string; headers: Record<string, string>; body: any };
 
-/** Intercepts NovelAI only; loopback prompt-model traffic keeps the real fetch. */
 function novelAI(respond: (sent: Sent) => Response | Promise<Response>) {
   const sent: Sent[] = [];
   const original = globalThis.fetch;
@@ -297,7 +296,6 @@ describe('NovelAI illustration settings and jobs', () => {
 
   test('stores the token only in the credential table; omission keeps it and null removes it', () => {
     const store = databases.create();
-    // A GET response, including its read-only token flag, can be saved back unchanged.
     const save = (extra: Record<string, unknown>) => {
       const { revision, ...view } = illustrationSettingsView(store);
       return updateIllustrationSettings(store, { ...view, expectedRevision: revision, ...extra });

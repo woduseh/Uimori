@@ -63,7 +63,6 @@ async function revealListOptions(panel: Locator) {
   if (!(await summary.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
     await summary.click();
 }
-/** Content and prompts share one folder control: a breadcrumb back to 전체 and folder cards. */
 async function chooseFolder(panel: Locator, title: string) {
   await panel
     .getByRole('navigation', { name: '현재 폴더', exact: true })
@@ -304,7 +303,6 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
   await move.getByLabel('이동할 폴더').selectOption(folder.id);
   await move.getByRole('button', { name: '이동', exact: true }).click();
   await expect(move).toBeHidden();
-  // Folder cards are the way into a folder, and a search spans every folder, so clear it first.
   await panel.getByLabel('프롬프트 검색', { exact: true }).fill('');
   await chooseFolder(panel, folder.title);
   await panel.getByRole('button', { name: `${prefix} 프롬프트 편집`, exact: true }).click();
@@ -767,7 +765,6 @@ test('LIBUI04 role selection creates a chat with the selected persona and module
     .getByTestId('library-panel')
     .getByRole('button', { name: `${persona.title} 상세 보기`, exact: true })
     .click();
-  // Other roles live in the detail's ⋯ menu; the primary action is the item's own category.
   await page
     .getByTestId('library-panel')
     .getByLabel(`${persona.title} 메뉴`, { exact: true })
@@ -907,8 +904,6 @@ test('LIBUI08 manual order persists and a bot card can be dropped into a folder'
   expect(response.ok()).toBe(true);
   state = await response.json();
   const folder = state.folders.find((entry) => entry.title === `${prefix} Folder`)!;
-  // Keep the source card and destination folder within one representative viewport. Other cases in
-  // this shared runner deliberately leave many folders and materials behind.
   await page.route(/\/api\/library(?:\?|$)/, async (route) => {
     const upstream = await route.fetch();
     const current = (await upstream.json()) as Library;
@@ -1028,7 +1023,6 @@ test('SAVEPERF saved bot unlocks before library refresh and retains success on r
     await editor.getByRole('button', { name: '변경사항 저장', exact: true }).click();
     expect((await savedResponse).ok()).toBe(true);
     await refreshRequested;
-    // The GET is still held. An awaited reload would leave this button disabled.
     await expect(editor.getByRole('button', { name: '변경사항 저장', exact: true })).toBeEnabled();
     const saved = await (await request.get(`/api/content/${content.id}`)).json();
     expect(saved.title).toBe(updated);
@@ -1037,7 +1031,6 @@ test('SAVEPERF saved bot unlocks before library refresh and retains success on r
       hasText: `${updated} 자료를 저장했어요.`,
     });
     await expect(completion).toBeVisible();
-    // Completion expires independently; a failed follow-up read still needs review.
     release();
     const warning = editor.getByRole('status', { name: '저장 후 확인할 사항', exact: true });
     await expect(warning).toContainText(`${updated} 저장됨, 서재 목록을 갱신하지 못했어요.`);

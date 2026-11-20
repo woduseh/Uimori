@@ -96,7 +96,6 @@ test('the encrypted standard HTTP adapter preserves status, bounded retries and 
       .intercept({ path: '/fcm/send/synthetic-capability', method: 'POST' })
       .reply(302, '', { headers: { location: 'https://untrusted.invalid/' } });
     await expect(send()).rejects.toThrow();
-    // Header delivery stalls; the caller's absolute cancellation still stops the request.
     pool
       .intercept({ path: '/fcm/send/synthetic-capability', method: 'POST' })
       .reply(201, '')

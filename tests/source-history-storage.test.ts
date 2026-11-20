@@ -72,8 +72,6 @@ test('logical history recovers authored images from a persisted native output re
     input: { hash: 'b'.repeat(64), width: 900, height: 600 },
   };
   const owner = store.run(source.runId).snapshot;
-  // Synthetic persisted execution receipt: this boundary reads attachment ownership,
-  // not image blobs or the native runtime that created the receipt.
   store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(
     JSON.stringify({
       ...owner,
@@ -146,7 +144,6 @@ test.each(['original-hash', 'edit-blank'])(
         .prepare('UPDATE source_edits SET text=?,hash=? WHERE source_id=?')
         .run('  ', blankHash, source.id);
     } else {
-      // Original identity must still be checked even when a valid latest edit exists.
       store.editSource(source.id, { expectedRevision: 0, text: 'Edited' });
       store.db
         .prepare('UPDATE sources SET text=?,hash=? WHERE id=?')

@@ -9,7 +9,6 @@ import type {
   AuxiliaryJobHooks,
 } from '../../server/product-auxiliary.js';
 import type { ProviderRequest, ProviderResult, WireRecord } from '../../core/transport.js';
-/** Decode only observed starter slots or the complete Hermēneía source/context block. */
 export function translationFixtureRenderedSlot(
   texts: readonly string[],
   slot: 'source' | 'context'
@@ -21,8 +20,6 @@ export function translationFixtureRenderedSlot(
       values.push(text.slice(prefix.length));
       continue;
     }
-    // Context and notes slots are single-line JSON. Match the closing envelope so
-    // literal source delimiters and source whitespace remain part of the source.
     const authored = text.match(
       /(?:^|\n)<Sample_Text>\n([\s\S]*)\n<\/Sample_Text>\n\n<Additional_Information>\n\ncontext:\n([^\n]*)\nnotes:\n[^\n]*\n<\/Additional_Information>$/
     );
@@ -33,7 +30,6 @@ export function translationFixtureRenderedSlot(
   return values[0];
 }
 
-/** Read observed wire data; never invent text missing from either request layout. */
 export function translationFixtureSlot(request: ProviderRequest, slot: 'source' | 'context') {
   const fallback = request.input.source as Record<string, unknown>;
   if (slot === 'source' && typeof fallback.text === 'string') return fallback.text;

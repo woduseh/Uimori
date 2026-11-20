@@ -127,7 +127,7 @@ test('planning atomically reserves cuts, prioritizes the hero and cannot fan out
   );
   await runIllustrationJob(store, plan.id, 'worker', hooks(store));
   const cuts = queuedIllustrations(store).map((id) => illustrationJob(store, id));
-  expect(cuts).toHaveLength(2); // no forced quota for a two-moment scene
+  expect(cuts).toHaveLength(2);
   expect(cuts[0].input.target?.endAnchor).toBe(splitSource(source)[1].anchor);
   expect(illustrationSlots(store, source.id).total).toBe(2);
   for (const cut of cuts) await runIllustrationJob(store, cut.id, 'worker', hooks(store));
@@ -369,7 +369,6 @@ test('regeneration keeps the old picture, failed siblings are independent and co
     layout.revision,
     illustrationJob(store, cuts[1]).input.target!.id
   );
-  // One workflow can return multiple images of one target; portable copies keep that grouping.
   const image = store.db.prepare('SELECT * FROM illustration_images WHERE job_id=?').get(redo.id)!;
   store.db
     .prepare(
@@ -377,7 +376,7 @@ test('regeneration keeps the old picture, failed siblings are independent and co
     )
     .run('second-variant', image.id);
   const copy = captureChatCopy(store, chat.id);
-  expect(copy.illustrations).toHaveLength(3); // old replaced result is not exported
+  expect(copy.illustrations).toHaveLength(3);
   const restored = restoreChatCopy(store, copy, 'portable-copy');
   const restoredSource = store.source(restored.headRevision!);
   const restoredCuts = illustrationsForSources(store, [restoredSource.id]);
@@ -390,7 +389,7 @@ test('regeneration keeps the old picture, failed siblings are independent and co
     ).toBe(true);
     expect(splitSource(source).some((block) => block.anchor === cut.target?.endAnchor)).toBe(false);
   }
-  expect(queuedIllustrations(store)).toEqual([]); // no imported generation replay
+  expect(queuedIllustrations(store)).toEqual([]);
   removeIllustration(store, redo.id);
   expect(
     illustrationsForSources(store, [source.id]).filter(
@@ -621,7 +620,7 @@ test('translation completion schedules once, keeps old mapping from overwriting 
     await runIllustrationJob(store, id, 'worker', hooks(store));
   const mapping = illustrationPresentation(store, source.id)!.translation!;
   expect(mapping.target.textHash).toBe(next.translationLayout!.textHash);
-  expect(Object.values(mapping.afterByTarget)).toContain(null); // merged paragraph cannot be guessed by synthetic index
+  expect(Object.values(mapping.afterByTarget)).toContain(null);
   const copy = captureChatCopy(store, chat.id);
   const restored = restoreChatCopy(store, copy, 'translated-copy');
   const restoredSource = store.source(restored.headRevision!);

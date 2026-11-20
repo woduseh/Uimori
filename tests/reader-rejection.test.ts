@@ -108,7 +108,6 @@ test('a 4xx main run carries the rejected options read from its stored attempt; 
     options: ['thinking', 'temperature', 'input'],
   });
   expect(detail.runs.find((run) => run.id === timedOut.id)).not.toHaveProperty('rejection');
-  // The projection is read-time only: nothing about the verdict is written to the run row.
   expect(
     JSON.stringify(store.db.prepare('SELECT * FROM runs WHERE id=?').get(rejected.id))
   ).not.toContain('unsupported_parameter');

@@ -15,7 +15,6 @@ export function enableTranslationJudgment(store: Store) {
   });
 }
 
-/** Existing synthetic scenarios explicitly install their requested global routes before editing chat data. */
 export function updateTestProfile(
   product: ProductStore,
   chatId: string,

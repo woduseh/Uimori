@@ -51,7 +51,6 @@ test('new conversation creation atomically assigns its project and retries its e
     });
     expect(created.statusCode).toBe(200);
     expect(created.json()).toMatchObject({ projectId: project.id, scope: f.scope, revision: 1 });
-    // Retrying after an unobserved response returns the committed conversation and membership.
     const retried = await app.inject({
       method: 'POST',
       url: '/api/helper/conversations/new',
@@ -65,7 +64,6 @@ test('new conversation creation atomically assigns its project and retries its e
       payload: { ...payload, projectId: null },
     });
     expect(changed.statusCode).toBe(409);
-    // A later explicit move is preserved when the original creation request is replayed.
     f.workspace.moveGroup(created.json().id, 1, null);
     expect(
       (await app.inject({ method: 'POST', url: '/api/helper/conversations/new', payload })).json()

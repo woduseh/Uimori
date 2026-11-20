@@ -31,7 +31,6 @@ type View = {
   lastResourceEdit?: HelperResourceEdit | null;
 };
 
-/** UI projections only. Runtime/SQLite ownership and actual provider streaming have separate tests. */
 async function harness(page: Page, seedCount = 0) {
   const views = new Map<string, View>();
   const receipts = new Map<string, HelperTaskView>();
@@ -723,7 +722,6 @@ test('HELPMESSAGE pair and following deletion discard loaded older messages whil
   await panel.getByRole('button', { name: '이전 메시지 불러오기', exact: true }).click();
   await expect(panel.locator('.helper-message')).toHaveCount(110);
   const oldAnswer = panel.locator(`[data-message-id="${removedPair[1]}"]`);
-  // A second client edits a message outside the latest 100-row view projection.
   const changed = view.messages[5];
   changed.text = '다른 화면에서 고친 이전 응답';
   view.conversation.revision++;
@@ -1159,7 +1157,6 @@ test('HELPUI14 idle and hidden helper views pause reads and resume cursors, effe
   const input = panel.getByLabel('도우미에게 요청');
   const idleSessions = state.sessionReads;
   const idleEvents = state.eventReads;
-  // The former 1.2/2.4-second idle loops both fired within this window.
   await page.waitForTimeout(2800);
   expect(state.sessionReads).toBe(idleSessions);
   expect(state.eventReads).toBe(idleEvents);
@@ -1329,7 +1326,6 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
     await expect.poll(() => state.heldStreams.has(first.id)).toBe(true);
     const streamReads = state.streamReads.get(first.id),
       eventReads = state.eventReads;
-    // An independent helper refresh advances while one deliberately slow response read is pending.
     await expect.poll(() => state.eventReads).toBeGreaterThanOrEqual(eventReads + 2);
     expect(state.streamReads.get(first.id)).toBe(streamReads);
     expect(state.maxPendingStreams.get(first.id)).toBe(1);
@@ -1351,7 +1347,6 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
     'context.segment',
   ])
     state.emit(kind);
-  // Consume the diagnostic page and a later poll, so a pending reload cannot pass unnoticed.
   await expect.poll(() => state.eventReads).toBeGreaterThanOrEqual(eventsBeforeDiagnostics + 2);
   expect(state.viewReads).toBe(viewsBeforeDiagnostics);
   await expect(panel.locator('.streaming-text')).toHaveText(`실제 공개 조각${continuation}`);
@@ -1484,7 +1479,6 @@ test('HELPUI03 archived artifact revisions and device drafts remain readable wit
     kind: 'artifact.saved',
     data: null,
   });
-  // This external change arrives while idle: allow the 10-second list poll and its follow-up reads.
   await expect(panel.getByRole('region', { name: '보관된 가정 장면' })).toBeVisible({
     timeout: 15000,
   });
@@ -1537,7 +1531,6 @@ test('HELPUI03 archived artifact revisions and device drafts remain readable wit
   await expect(panel.locator('[data-testid="helper-task-record"]')).toHaveCount(55);
   await panel.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
 
-  // A fresh page must recover device drafts even when every saved-artifact read fails.
   await page.route(`**/api/helper/artifacts/${artifact.id}**`, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     return route.fulfill({ status: 503, json: { error: 'SYNTHETIC_ARCHIVE_READ_FAILURE' } });
@@ -1635,7 +1628,6 @@ test('HELPUI04 selected source is frozen in the request and a terminal missing s
   ).sources;
   await page.goto(`/?chat=${chat.id}`);
   const article = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
-  // A session deleted in another window must not break the source-to-helper entry point.
   await page.evaluate((chatId) => {
     const scope = { kind: 'chat', chatId };
     localStorage.setItem(
@@ -1999,7 +1991,6 @@ test('DISPLAY helper complete mode skips public reads across tools, toggles and 
   await expect.poll(() => state.eventReads).toBeGreaterThanOrEqual(reloadedEvents + 2);
   expect(state.streamReads.get(task.id)).toBe(reads);
   expect(state.posts).toHaveLength(1);
-  // Transport completion alone is not the completed helper tool loop/message.
   state.streams.get(task.id)!.status = 'completed';
   state.emit('attempt.finished');
   await expect.poll(() => state.viewReads).toBeGreaterThan(1);
@@ -2033,7 +2024,6 @@ test('DISPLAY helper incomplete saved answers stay collapsed and committed chang
     createdAt: new Date().toISOString(),
   });
   state.emit('task.failed');
-  // Read the seeded terminal projection directly instead of racing the idle 10-second poll.
   await page.reload();
   await open(page);
   await expect(panel.getByTestId('helper-completed-effects')).toContainText(
@@ -2176,7 +2166,6 @@ test('HELPUNDO grouped edit shows all titles and blocks its dirty target and a c
   ).toBeVisible();
   expect(state.undoPosts).toHaveLength(0);
   await expect(draft).toHaveValue('지키려는 미저장 입력');
-  // Restoring the local value only removes the local guard; the server still owns the revision check.
   await draft.fill(bot.title);
   await expect(undo).toBeEnabled();
   await undo.click();

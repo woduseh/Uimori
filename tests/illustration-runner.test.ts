@@ -849,7 +849,6 @@ describe('illustration runner through a prompt model and remote ComfyUI', () => 
     }
     expect(illustrationJob(store, job.id).diagnostic?.prompt).toEqual(prompt);
 
-    // Older saved jobs retain a prompt for display, but have no request fingerprint.
     const legacy = illustrationJob(store, job.id).diagnostic!;
     delete legacy.promptRequestHash;
     store.db
@@ -1171,7 +1170,6 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
     expect(skipped.diagnostic?.skipped).toBe('대화만 이어지는 장면');
     expect(comfy.prompts).toHaveLength(0);
     expect(JSON.parse(provider.requests[0].body).input.source.allowSkip).toBe(true);
-    // A skipped run keeps the slot free and a manual request still has to produce a prompt.
     const manual = reserveIllustration(store, store.source(source.id), 'manual', { settings });
     expect(await runIllustrationJob(store, manual.id, 'worker', observed.options)).toEqual({
       status: 'requeued',
@@ -1229,8 +1227,6 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
     const timeoutMs = 5000;
     const deadline = new AbortController();
     const realTimeout = AbortSignal.timeout.bind(AbortSignal);
-    // Expire only this deadline after the accepted remote ID is persisted. HTTP
-    // scheduling must not decide whether this tests acceptance or submission loss.
     const timeout = vi
       .spyOn(AbortSignal, 'timeout')
       .mockImplementation((milliseconds) =>
@@ -1519,7 +1515,6 @@ test.each(['complete', 'context-limit'] as const)(
   'illustration research uses frozen native sources over multiple read-only rounds: %s',
   async (mode) => {
     const store = databases.create();
-    // Exceed the 10,000-character read page and leave the identifying detail on its last page.
     const description =
       'Unrelated archive material. '.repeat(1200) + '\nMira has emerald eyes and a silver braid.';
     const bot = store.product.content(fixtureBotInput('Frozen Mira', description)) as Content;
@@ -1537,7 +1532,6 @@ test.each(['complete', 'context-limit'] as const)(
           'illustration.sources.read',
         ]);
         expect(captured.body).not.toContain('LIVE REPLACEMENT');
-        // The initial request carries a short catalog, never the whole native lore.
         if (!round) expect(captured.body.length).toBeLessThan(description.length / 2);
         else {
           expect(body.opaqueState).toBe(`research-${round - 1}`);

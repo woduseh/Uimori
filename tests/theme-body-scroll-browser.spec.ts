@@ -109,7 +109,6 @@ test('reading capture uses the visible inner anchor instead of clipped earlier p
       node.getBoundingClientRect().top;
     document.getElementById('target-body')!.scrollTop = 320;
   });
-  // The earlier block still has geometry inside the reader but is clipped by the body.
   const clipped = await page.locator('#target-block-2').evaluate((node) => ({
     blockBottom: node.getBoundingClientRect().bottom,
     readerTop: document.getElementById('reader')!.getBoundingClientRect().top,
@@ -129,7 +128,6 @@ test('reading capture uses the visible inner anchor instead of clipped earlier p
     expect(location.offsetRatio).toBeGreaterThanOrEqual(0);
     expect(location.offsetRatio).toBeLessThan(1);
   }
-  // Explicit action/edit capture must retain this scene's passage even when only its footer is visible.
   await page.locator('#reader').evaluate((reader) => {
     reader.scrollTop +=
       document.getElementById('target-action')!.getBoundingClientRect().top -
@@ -203,7 +201,6 @@ test('between scenes the local position keeps the next paragraph anchor', async 
 });
 
 async function settleLayout(page: Page) {
-  // ResizeObserver, queued navigation and captured scroll events each get a rendering cycle.
   await page.evaluate(async () => {
     for (let index = 0; index < 3; index++)
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -259,7 +256,6 @@ test('action restoration retains bodyTop after late growth and yields to direct 
   page,
 }) => {
   await mount(page);
-  // The editor can return before the full passage has regained its projected height.
   await page.locator('#target-body > p').evaluateAll((nodes) => {
     for (const node of nodes) (node as HTMLElement).style.height = '20px';
   });
@@ -285,7 +281,6 @@ test('action restoration retains bodyTop after late growth and yields to direct 
     );
   expect(actionOffset).toBe(200);
 
-  // Change the geometry and direct reading position in one task, before its scroll event fires.
   await page.locator('#target-body').evaluate((node) => {
     document.getElementById('target-block-0')!.style.height = '160px';
     node.scrollTop = 160;

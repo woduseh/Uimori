@@ -25,7 +25,6 @@ test('READERREC initial reader loading becomes a recoverable error without losin
   let failed = true;
   await page.addInitScript((id) => {
     sessionStorage.setItem(`draft:${id}`, '본문 재조회 중에도 남을 초안');
-    // Isolate initial loading and the explicit retry from unrelated SSE wakeups.
     Object.defineProperty(window, 'EventSource', {
       value: class {
         close() {}
@@ -70,7 +69,6 @@ test('READERREC initial reader loading becomes a recoverable error without losin
     const error = page.getByRole('alert').filter({ hasText: '본문을 불러오지 못했어요.' });
     await expect(error).toBeVisible();
     await expect(error).toContainText('서버 작업을 완료하지 못했어요. (503)');
-    // Errors remain centered in the reader; only active loading aligns to the top.
     await expect(page.locator('.reader-awaiting')).toHaveCSS('justify-content', 'center');
     const centerDelta = await page.locator('.reader-awaiting').evaluate((reader) => {
       const alert = reader.querySelector('[role="alert"]')!;
@@ -310,7 +308,6 @@ for (const scenario of ['old-refresh', 'new-move'] as const) {
       if (route.request().method() !== 'PUT') return route.continue();
       targets.push(route.request().postDataJSON().target.sourceId);
       if (targets.length !== 1) return route.continue();
-      // The server commits this write; only its response to this tab is delayed.
       const response = await route.fetch();
       expect(response.ok()).toBe(true);
       firstRevision = (await response.json()).revision;
@@ -393,7 +390,6 @@ for (const scenario of ['old-refresh', 'new-move'] as const) {
       await acknowledged;
       releaseRead();
       expect((await (await reload).json()).own.revision).toBe(latest.revision);
-      // Allow the old visit's post-acknowledgement continuation to enqueue any stale PUT.
       await page.waitForTimeout(400);
       const query = new URLSearchParams({ clientId: clientId! });
       const current = await (await request.get(`${path}?${query}`)).json();
@@ -759,7 +755,6 @@ test('NOTICELOAD response waits are centered and keep streamed text until the sa
     streamReads = 0,
     cursor = 1000000;
   const text = '먼저 도착한 응답은 저장본을 기다리는 동안에도 남아요.';
-  // The source is really saved. Only its delayed reader projection and public stream are controlled.
   await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
     const url = new URL(route.request().url());
     url.searchParams.delete('since');
@@ -977,7 +972,6 @@ test('NOTICELOAD translation admission and active jobs wait centrally while fail
     expect(submissions).toBe(1);
     job = { ...job!, status: 'running' };
     await page.reload();
-    // Without a completed translation, reopening starts with the saved original.
     await expect(nativeProse(scene)).toContainText(text);
     await expect(waiting).toHaveCount(0);
     await scene.getByRole('button', { name: '번역 보기', exact: true }).click();
@@ -985,8 +979,6 @@ test('NOTICELOAD translation admission and active jobs wait centrally while fail
     expect(submissions).toBe(1);
     await page.screenshot({ path: info.outputPath('reader-translation-waiting.png') });
     job = { ...job, status: 'failed', error: 'AUXILIARY_PROVIDER_TIMEOUT' };
-    // Deliver failure while the translation view is open; reopening a failed view
-    // instead starts with the original, and its translation button admits a new retry.
     const failedRead = page.waitForResponse(
       (item) => item.url().includes(`/chats/${chat.id}/reader?`) && item.ok()
     );

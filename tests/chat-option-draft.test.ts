@@ -39,7 +39,6 @@ test('both scopes keep the same edits while preserving untouched fixed values', 
 test('clearing a fixed override keeps its displayed prompt default in oneoff scope and its unset intent on return', () => {
   const draft = editOptionDraft(base, {}, 'fixed', {});
   expect(optionDraftValues(base, draft)).toEqual({ fixed: {}, oneoff: { tone: '기본 문체' } });
-  // An edit to a different field must not turn the removed fixed override into a pinned default.
   const edited = editOptionDraft(base, draft, 'oneoff', { tone: '기본 문체', note: '이번 메모' });
   expect(optionDraftValues(base, edited)).toEqual({
     fixed: { note: '이번 메모' },

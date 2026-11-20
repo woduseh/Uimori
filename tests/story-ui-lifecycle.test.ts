@@ -42,7 +42,6 @@ test('real run commit freezes UI and preserves it through copy, export/import an
     ...created.settings,
     storyUi: true,
   });
-  // The deterministic fixture echoes the request inside its response, crossing the real executor.
   const expression =
     '<a2ui>root = Column([Text("A preserved notice"), Button(Text("Reply"), action=Event("reply", {topic: "harbor"}))])</a2ui>';
   const admitted = await app.inject({

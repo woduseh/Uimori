@@ -79,7 +79,6 @@ test('library folders and cross-category moves preserve exact content revisions,
     expect(libraryCategory(library, bot)).toBe('module');
     expect(libraryFolderOf(library, key(bot))).toBe(destination.id);
   }
-  // Actual package roles are independent of both immutable kind and current folder category.
   const roleChat = store.createChat('Persona used as bot', { botId: persona.id });
   expect(store.product.profile(roleChat.id).packageAttachments).toEqual([
     { id: persona.id, revision: persona.revision, role: 'bot' },
@@ -177,7 +176,6 @@ test('HTTP routes share one organization revision and reject hidden or unknown f
     payload?: Record<string, unknown>
   ) => built.inject({ method, url, ...(payload ? { payload } : {}) });
   try {
-    // Initialization also places the current default prompt presets in the library.
     const initial = built.store.libraryOrganization.snapshot();
     expect((await inject('GET', '/api/library/organization')).json()).toEqual(initial);
     expect(

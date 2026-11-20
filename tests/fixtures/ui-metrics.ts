@@ -3,7 +3,6 @@ import type { Page } from '@playwright/test';
 
 const DESKTOP_WIDTH = viewportWidths.desktop;
 
-/** Screen measurements and usability checks documented in the gallery reference. */
 export const metricSource = 'docs/UI-GALLERY.md#metrics';
 
 export const metricNames = [
@@ -21,15 +20,12 @@ export type MetricResult = {
   metric: MetricName | InventoryName;
   value: number | boolean | null;
   target: string;
-  /** `null` means recorded at this width but not scored there. */
   pass: boolean | null;
   detail?: unknown;
 };
 
-/** Mirrors `useCompactLayout` so a spec and the gallery agree on which targets apply. */
 export const isCompactWidth = (width: number) => width <= 760;
 
-// Runs inside the page, so it must not reference anything outside its own body.
 function measureInPage({ names, compact }: { names: readonly string[]; compact: boolean }) {
   const visible = (element: Element) => {
     const box = element.getBoundingClientRect();
@@ -147,7 +143,6 @@ function measureInPage({ names, compact }: { names: readonly string[]; compact: 
   return results;
 }
 
-// Also runs inside the page.
 function inventoryInPage() {
   const fontSizes = new Set<string>();
   const radii = new Set<string>();
@@ -165,12 +160,8 @@ function inventoryInPage() {
   for (const sheet of document.styleSheets) {
     try {
       walk(sheet.cssRules);
-    } catch {
-      /* cross-origin sheet; the app ships none */
-    }
+    } catch {}
   }
-  // Radius "kinds" count scalar lengths only: composite values split into components, and the
-  // three shapes (square 0, circle 50%, pill >= 999px) are listed separately.
   const scalars = new Set<string>();
   const shapes = new Set<string>();
   for (const declared of radii)
@@ -200,7 +191,6 @@ function inventoryInPage() {
   return results;
 }
 
-/** Measures the current screen. `compact` defaults to the page's viewport width. */
 export async function measureScreen(
   page: Page,
   names: readonly MetricName[],
@@ -210,7 +200,6 @@ export async function measureScreen(
   return page.evaluate(measureInPage, { names, compact });
 }
 
-/** Counts declared `font-size` and `border-radius` values across the loaded stylesheets. */
 export async function styleInventory(page: Page): Promise<MetricResult[]> {
   return page.evaluate(inventoryInPage);
 }

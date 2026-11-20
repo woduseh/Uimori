@@ -22,7 +22,6 @@ const enabled: ReadabilitySettings = {
   dialogueBreaks: true,
 };
 
-/** Exercises the actual DOM owner, not a second server-rendered implementation. */
 export async function runReadingRegressions(mount: HTMLElement) {
   const root = createRoot(mount);
   const passed: string[] = [];

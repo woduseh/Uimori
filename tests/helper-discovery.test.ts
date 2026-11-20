@@ -5,7 +5,6 @@ import {
   helperToolTraits,
 } from '../server/helper-app-tools.js';
 
-// Keyword-retrieval oracles, not autonomous model choices or execution-quality scores.
 test.each([
   ['rename this chat', 'chat.rename', 'chat'],
   ['find saved chats by title', 'chat.list', 'library'],

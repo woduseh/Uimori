@@ -5,11 +5,6 @@ export type ExecutionObservation = Pick<Run, 'snapshot' | 'inputs' | 'toolEvents
 const observations = new WeakMap<Store, Map<string, ExecutionObservation>>();
 const attempts = new WeakMap<Store, Map<string, ReturnType<Store['product']['attempts']>>>();
 
-/**
- * Capture what a synthetic run actually executed before its end releases the frozen input and,
- * on success, its diagnostic inputs. This is test-only memory, not a historical storage mode or an API mock.
- * Tests about durable state must read store.run()/readStoredRunSnapshot() instead.
- */
 export function observeExecutions(store: Store): void {
   if (observations.has(store)) return;
   const captured = new Map<string, ExecutionObservation>();
@@ -35,7 +30,6 @@ export function observeExecutions(store: Store): void {
   });
 }
 
-/** Status, output identity and usage come from storage; request details are observed at execution. */
 export function observedExecution(store: Store, id: string): Run {
   const run = store.run(id);
   return { ...run, ...observations.get(store)?.get(id) };

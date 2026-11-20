@@ -69,7 +69,7 @@ test('a stalled SSE subscriber pauses reads, resumes after its accepted cursor a
     return { raw, data, queued };
   };
   const slow = await connect(true);
-  expect(reads).toEqual([0, 0]); // preflight plus just one accepted page
+  expect(reads).toEqual([0, 0]);
   expect(slow.raw.writableLength).toBeLessThan(1500);
   const before = reads.length;
   for (const listener of listeners) listener();

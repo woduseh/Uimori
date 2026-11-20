@@ -1,4 +1,3 @@
-// Standalone process keeps virtual HTTP timers out of other provider tests.
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { setImmediate as nextTurn } from 'node:timers/promises';
@@ -28,7 +27,6 @@ assert.equal(getGlobalDispatcher(), globalDispatcher);
 assert.equal(fixedInit.signal, controller.signal);
 const server = createServer(async (request, response) => {
   for await (const _chunk of request) {
-    /* Fully consume this synthetic request. */
   }
   assert.equal(request.headers.authorization, `Bearer ${secret}`);
   seen.push(request.url);

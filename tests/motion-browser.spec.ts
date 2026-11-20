@@ -2,7 +2,6 @@ import { test, expect, type Locator } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
 import { openChatMenu } from './ui-navigation.js';
 
-// Keep a replayable artifact of the real interactions, not just a final static frame.
 test.use({ video: 'on' });
 
 async function settled(surface: Locator) {
@@ -28,9 +27,6 @@ async function expectHairline(surface: Locator) {
   expect(border.width).toBeLessThanOrEqual(1);
 }
 
-// Risks: decorative motion returning, clipped sheets, lingering transforms,
-// delayed close and lost focus/drafts after immediate re-open.
-// Each width runs once; together they cover both motion preferences.
 for (const [width, motion] of [
   [412, 'no-preference'],
   [1440, 'reduce'],
@@ -50,7 +46,6 @@ for (const [width, motion] of [
     await page.goto(`/?chat=${chat.id}`);
     const composer = page.getByLabel('다음 장면 요청', { exact: true });
     await composer.fill('조작부를 열고 닫아도 남아야 하는 초안');
-    // Observe browser-produced events without replacing app state or shortening durations.
     await page.evaluate(() => {
       document.addEventListener('animationstart', (event) => {
         const node = event.target;
@@ -112,7 +107,6 @@ for (const [width, motion] of [
       const target = (await toggle.boundingBox())!;
       expect(target.width).toBeGreaterThanOrEqual(44);
       expect(target.height).toBeGreaterThanOrEqual(44);
-      // The space above and below the visual track must also toggle the native input.
       await toggle.click({ position: { x: target.width / 2, y: 2 } });
       await expect(toggle).toBeChecked({ checked: !original });
       await toggle.click({ position: { x: target.width / 2, y: target.height - 2 } });
@@ -132,7 +126,6 @@ for (const [width, motion] of [
     await expect(dialog).toBeHidden();
     await expect(trigger).toBeFocused();
 
-    // Immediate dismissal and re-entry must preserve the setting and opener focus.
     await openReading();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();

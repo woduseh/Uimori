@@ -186,7 +186,6 @@ test('openai-responses-v1 keeps cache fingerprints in HTTP diagnostics and leave
 test('Batch emits fingerprints before submission without changing its payload hash', async () => {
   const input = request('anthropic-messages-v1');
   const { stream: _stream, ...params } = record(encodeAnthropic(input).body);
-  // Stop at the real onWire boundary; no database writes or provider calls are needed.
   const store = { db: { prepare: () => ({ get: () => undefined }) } } as unknown as Store;
   const fetch = vi.fn();
   vi.stubGlobal('fetch', fetch);

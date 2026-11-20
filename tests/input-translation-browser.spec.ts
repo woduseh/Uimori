@@ -7,8 +7,7 @@ const original = '(OOC: 미라는 아직 진실을 몰라.)\n\n*{{char}}는 기�
 const translated = '(OOC: Mira does not know the truth yet.)\n\n*{{char}} waits.*';
 const endpoint = '**/api/chats/*/input-translation';
 async function clipboardText(page: Page) {
-  // The Windows system clipboard exposes text line endings as CRLF. Persisted request
-  // equality is asserted separately, so normalize only this OS boundary for comparison.
+  // The Windows system clipboard exposes text line endings as CRLF.
   return (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, '\n');
 }
 const composer = (page: Page) => page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
@@ -133,11 +132,9 @@ async function seed(request: APIRequestContext, chat: Chat, text: string): Promi
     expect(
       await page.evaluate((id) => sessionStorage.getItem(`input-translation:draft:${id}`), chat.id)
     ).toBeNull();
-    // API completion can precede the SSE render that adds the final request actions.
     await expect(page.locator('#source-' + saved.runs[0].sourceRevision)).toBeVisible();
     const copy = page.getByRole('button', { name: '요청 복사', exact: true });
-    // Clipboard APIs are user-gesture sensitive on some desktop browsers. A real click
-    // proves the product copy path; keyboard button semantics are covered by native button behavior.
+    // Clipboard APIs require a user gesture on some desktop browsers.
     await copy.click();
     await expect(page.getByRole('button', { name: '요청 복사됨', exact: true })).toBeVisible();
     expect(await clipboardText(page)).toBe(finalText);

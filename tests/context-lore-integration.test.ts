@@ -187,9 +187,6 @@ async function lorePressureBudget(store: Store, chatId: string) {
       withContextProjection(projected, includeHistory ? [] : contextSourceRefs(projected), null)
     ).estimatedInputTokens;
   };
-  // A is newest; B then C must be evicted. Place the budget between measured costs:
-  // all fixed references trigger eviction, two cannot meet its target, and one plus
-  // the actual conversation fits below that target without a summary call.
   const allFixed = measure(references, false);
   const twoFixed = measure([references[0], references[2]], false);
   const oneWithHistory = measure([references[0]], true);
@@ -263,7 +260,6 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
     }));
   await app.ready();
   observeExecutions(app.store);
-  // Reference pressure is measured against the same short synthetic instructions.
   updatePromptWorkspace(app.store, {
     expectedRevision: modelWorkspace(app.store).revision,
     main: {
@@ -304,8 +300,6 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
     connectionId: connection.id,
     modelId: 'synthetic-context-lore',
     maxOutputTokens: 8192,
-    // The history-pressure case needs compaction; the lore-pressure case derives
-    // its budget from the complete measured request below.
     inputTokenLimit: 10_000,
     temperature: null,
   }) as ModelPreset;
@@ -475,7 +469,6 @@ test.each([undefined, 24000, { tokens: 16000, tokenizer: 'openai-o200k' as const
       },
       () => captured
     ).run;
-    // Reservation captures the current chat-variable revision before native preparation.
     const prepared = compileSnapshotPrompt(
       freezeLoreContext(store, await prepareNativeRisuRun(run.snapshot))
     );

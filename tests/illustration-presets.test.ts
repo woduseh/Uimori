@@ -284,7 +284,6 @@ test('ComfyUI freezes the selected workflow with the global environment, and aut
   }).saved as IllustrationPreset;
   choose(store, local.id, 'chat', chat.id);
   const second = completedSource(store, chat.id, 'A different scene.');
-  // The source commit already reserved automatically; it must fail visibly rather than silently reuse another workflow.
   const automatic = store.db
     .prepare('SELECT id FROM illustration_jobs WHERE source_revision=?')
     .get(second.id)!;
@@ -413,7 +412,7 @@ test('legacy recipes infer their generator without rewriting stored versions and
     expect(raw).not.toHaveProperty('generator');
     const file = illustrationPresetFile({ ...legacy, generator: 'codex' });
     expect(file.version).toBe(2);
-    expect(parseIllustrationPresetFile(file).generator).toBe('codex'); // workflow presence does not override v2
+    expect(parseIllustrationPresetFile(file).generator).toBe('codex');
     expect(() => parseIllustrationPresetFile({ ...file, preset: legacy })).toThrow('생성기');
     expect(() =>
       parseIllustrationPresetFile({ ...file, preset: { ...legacy, generator: 'unknown' } })
@@ -466,7 +465,6 @@ test('preset selection chooses its shared environment without changing global se
   expect(illustrationJob(store, original.id).input).toEqual(original.input);
   expect(original.input.preset?.id).toBe(codex.id);
   expect(next.input.preset?.id).toBe(comfy.id);
-  // An old disabled environment remains disabled for automatic work, but cannot choose a backend.
   store.db
     .prepare('UPDATE illustration_settings SET body=? WHERE id=1')
     .run(JSON.stringify({ ...environment, generator: 'none', automatic: true }));

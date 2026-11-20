@@ -29,7 +29,6 @@ async function editorFits(page: Page, editor: Locator, save: Locator, formMaxWid
   expect(await editor.evaluate((node) => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(
     1
   );
-  // Do not scroll the action into view: the editor must keep its primary action reachable.
   await expect(save).toBeInViewport({ ratio: 1 });
   expect(
     await save.evaluate((node) => {
@@ -154,7 +153,6 @@ for (const viewport of viewports) {
         else await definitions.getByRole('button', { name: new RegExp(`^${label}`) }).click();
       };
 
-      // Preview values are local UI state and must not dirty either persisted document.
       await previewView.click();
       await definitions.getByLabel('짧은 입력', { exact: true }).fill('미리보기 전용');
       await definitions.getByLabel('시점', { exact: true }).selectOption({ label: '3인칭' });
@@ -189,7 +187,6 @@ for (const viewport of viewports) {
       await raw.fill(declarations);
       await editView.click();
 
-      // Basic-variable strings and the untouched toggle source survive view switches byte-for-byte.
       await definitions.getByRole('button', { name: '기본 변수', exact: true }).click();
       await expect(definitions.getByLabel('변수 1 키', { exact: true })).toHaveValue('number');
       await expect(definitions.getByLabel('number 기본값', { exact: true })).toHaveValue('001');
@@ -214,7 +211,6 @@ for (const viewport of viewports) {
       await expect(raw).toHaveValue(declarations);
       await editView.click();
 
-      // Search includes captions, and an unknown line stays represented instead of being dropped.
       const search = definitions.getByLabel('이름, 키, 설명 검색', { exact: true });
       await search.fill('시점을 골라요.');
       await expect(
@@ -224,7 +220,6 @@ for (const viewport of viewports) {
       await expect(definitions.getByText('unknown source line', { exact: true })).toBeVisible();
       await search.fill('');
 
-      // Inline edits update the shared source; undo and redo restore the exact field value.
       await definitions.getByRole('button', { name: '짧은 입력 편집', exact: true }).click();
       const displayName = definitions.getByLabel('표시 이름', { exact: true });
       await displayName.fill('이름 입력');
@@ -290,7 +285,6 @@ for (const viewport of viewports) {
         path: info.outputPath(`native-toggle-editor-${viewport.name}.png`),
       });
 
-      // Both valid raw documents survive tab switches and are included in the ordinary save.
       await rawView.click();
       raw = definitions.getByLabel('토글 정의 소스', { exact: true });
       const editedSource = await raw.inputValue();
@@ -366,7 +360,6 @@ for (const viewport of viewports) {
         mes_example: example,
         unknown_active: { preserved: true },
       });
-      // Submit obsolete fields too: the end-to-end save/export path must exclude them.
       Object.assign(pkg.nativeRisu.card, {
         personality: 'Obsolete personality',
         scenario: 'Obsolete scenario',
@@ -517,7 +510,6 @@ for (const viewport of viewports) {
       await advancedWorkspaceFits(page, editor);
       await page.screenshot({ path: info.outputPath(`bot-advanced-regex-${viewport.name}.png`) });
 
-      // An unapplied source document remains byte-for-byte intact while visiting other advanced panes.
       await advancedNav.getByRole('button', { name: 'JSON 소스', exact: true }).click();
       const raw = editor.getByLabel('Risu 원문 JSON', { exact: true });
       const pendingRaw = '{"unfinished":';

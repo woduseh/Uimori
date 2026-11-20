@@ -17,7 +17,6 @@ export const helperDone: transport.ProviderResult = {
   opaqueState: null,
 };
 
-/** One provider turn that calls an app operation through the app.call gateway. */
 export const helperCall = (
   id: string,
   name: string,
@@ -28,7 +27,6 @@ export const helperCall = (
   toolCalls: [{ id, name: 'app.call', arguments: { name, arguments: args } }],
 });
 
-/** A synthetic fixture-protocol model selected for the main, translation and helper roles. */
 export function selectFixtureModels(store: Store) {
   const connection = store.product.connection({
     title: 'Synthetic connection',
@@ -53,7 +51,6 @@ export function selectFixtureModels(store: Store) {
   return model;
 }
 
-/** Run one chat helper task whose provider turns are scripted; transport and storage stay real. */
 export async function runScriptedChatHelper(
   store: Store,
   chatId: string,

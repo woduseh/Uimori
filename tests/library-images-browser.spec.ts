@@ -241,11 +241,9 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
   const removed = await save(page, library, reused);
   const completion = page.locator('.transient-notice').filter({ hasText: original.title });
   await expect(completion.first()).toBeVisible();
-  // Reopening the editor must not stack identical messages from consecutive saves.
   expect(await completion.count()).toBe(1);
   expect(removed.package!.images).toHaveLength(1);
   expect(removed.package!.portraitImageId).toBe('inline');
-  // Only the current resource and its one-level undo are retained.
   const current = await (await request.get(`/api/content/${removed.id}`)).json();
   expect(current.package).toEqual(removed.package);
 });

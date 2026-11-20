@@ -280,7 +280,6 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
           })
         ).ok()
       ).toBe(true);
-      // A raw API update represents another device: no localStorage or same-page save event.
       await expect(page.getByRole('button', { name: /^현재 본문 모델:/ })).toContainText(
         `GMUI ${width} B`
       );
@@ -322,7 +321,6 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
       for (const run of reserved) await request.post(`/api/runs/${run.id}/cancel`);
       await request.post('/api/test/control', { data: { action: 'release', barrier: 'run' } });
     }
-    // Inject only the failure projection to check recovery navigation without a provider call.
     await page.route(`**/api/chats/${existing.id}/reader?*`, async (route) => {
       const response = await route.fetch();
       const body = (await response.json()) as ReaderDetail;
@@ -433,7 +431,6 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await discard.getByRole('button', { name: '계속 편집', exact: true }).click();
     await expect(promptSelect).toHaveValue(preset.id);
 
-    // A second device writes while this editor has a draft. The old revision must not overwrite it.
     const concurrent = (await detail(request, chat.id)).profile!;
     expect(
       (
@@ -457,7 +454,6 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
         hasText: '채팅 설정이 바뀌었어요. 최신 설정을 확인한 뒤 다시 저장해 주세요.',
       })
     ).toBeVisible();
-    // Generation owns one save action; profile reload remains in the material settings.
     await selectChatSettingsSection(page, '사용 자료');
     await settings.getByRole('button', { name: '변경 취소', exact: true }).click();
     await selectChatSettingsSection(page, '생성 설정');
@@ -478,7 +474,6 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
         mainModel: { id: pinnedModel.id },
       });
     expect((await detail(request, chat.id)).profile?.image).toBe(!concurrent.image);
-    // Pinning shows in the select itself rather than in a line repeating it underneath.
     await expect(modelSelect.locator('option:checked')).toContainText(pinnedModel.title);
     await settings.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
     await expect(settings).toBeHidden();
@@ -689,7 +684,6 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await selectSettingsSection(page, '역할별 모델');
     await expect(main).toHaveValue(second.id);
     expect((await models(request)).routes).toEqual(savedRoutes);
-    // Reopening the same model must not reload over its unsaved editor draft.
     await roles.getByRole('button', { name: '본문 모델의 선택 모델 편집', exact: true }).click();
     await expect(form.getByLabel('모델 프리셋 이름', { exact: true })).toHaveValue(renamed);
     const guard = page.getByRole('alertdialog', { name: '편집 중인 초안 확인', exact: true });
@@ -711,7 +705,6 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     expect((await updated.json()).title).toBe(renamed);
     expect((await models(request)).routes).toEqual(savedRoutes);
 
-    // Registering another preset keeps role assignments and their independent drafts.
     await form.getByRole('button', { name: '모델 편집 끝내기', exact: true }).click();
     const providers = page.getByTestId('connection-editor');
     await providers.getByRole('button', { name: '새 모델 입력', exact: true }).click();
@@ -772,7 +765,6 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
       models: [(await modelResponse.json()) as ModelPreset],
       connections: [connection],
     };
-    // Isolate the visible choices without deleting the shared server's other fixtures.
     await page.route('**/api/library?view=summary', (route) =>
       route.fulfill({ json: unavailable })
     );

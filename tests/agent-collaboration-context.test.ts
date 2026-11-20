@@ -518,7 +518,7 @@ test('cached and forwarded advice retains original identity, read ranges and fla
   );
   const run = await observedCompletion(state, (await state.start()).id);
   expect(run.status).toBe('completed');
-  expect(aCalls).toBe(2); // The repeated question reuses the original opinion, not another model call.
+  expect(aCalls).toBe(2);
   const results = consults(run).map((event) => event.result);
   expect(results.map((result) => result.consultationId)).toEqual([
     'a-original',

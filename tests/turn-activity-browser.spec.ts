@@ -91,8 +91,6 @@ async function harness(
     if (/\/api\/runs\/[^/?]+$/.test(request.url()) && request.method() === 'GET')
       runReads.push(request.url());
   });
-  // Real HTTP-seeded runs and reader payloads; control only the projected state
-  // and SSE wakeups to exercise failure/progress without a live provider call.
   await page.addInitScript(() => {
     class SyntheticStream {
       onopen: (() => void) | null = null;
@@ -190,8 +188,6 @@ for (const width of [MOBILE_WIDTH]) {
     const run = seeded.runs[0]!;
     const attemptId = `task-history-display-${run.id}`;
     const sceneReads: string[] = [];
-    // Rendering proof only: the durable run/source use the real app; known usage
-    // and additional history states are controlled reader projections, not executions.
     await page.route(`**/api/chats/${seeded.chat.id}/reader-runs`, async (route) => {
       const response = await route.fetch();
       expect(response.ok()).toBeTruthy();
@@ -463,7 +459,6 @@ test('TURNUI04 expanded pending run preserves disclosure when its source arrives
     body.runs = body.runs.map((item) =>
       item.id === run.id ? { ...item, sourceRevision: null, status: 'running', error: null } : item
     );
-    // The reader lists a source-less attempt only while it is an admitted pending run.
     body.reader.pendingRunIds = [run.id];
     body.reader.responseActivity = [];
     body.reader.activity = [];
@@ -510,7 +505,6 @@ test(`TURNUI03 failed response without source keeps inline diagnostics readable 
     body.reader.total = 0;
     body.reader.latest = null;
     body.reader.activeJobs = 0;
-    // The reader lists a source-less attempt only while it is an admitted pending run.
     body.reader.pendingRunIds = [run.id];
   });
   const pending = page.getByTestId('pending-run');
@@ -525,7 +519,6 @@ test(`TURNUI03 failed response without source keeps inline diagnostics readable 
   const bounds = await panel.boundingBox();
   expect(bounds).not.toBeNull();
   expect(bounds!.x).toBeGreaterThanOrEqual(0);
-  // Same bound as the other mobile panels: inside the viewport, with no scroll of its own.
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(MOBILE_WIDTH);
   expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
     true

@@ -42,7 +42,6 @@ async function setup() {
   owned.push({ close: () => app.close(), directory });
   return app;
 }
-/** Store-level projection cases need no HTTP server. */
 async function storeOnly() {
   const directory = await mkdtemp(join(tmpdir(), 'uimori-reader-tests-'));
   const store = new Store(join(directory, 'reader.sqlite'));
@@ -82,9 +81,6 @@ function source(store: Store, chatId: string, text = 'Synthetic paragraph.') {
   });
 }
 function readerSourceBatch(store: Store, chatId: string, count: number) {
-  // This scale case checks persisted reader projection, not prompt compilation.
-  // Seed typed run snapshots once per source, retaining their complete ancestry;
-  // source hashing, chat head updates and auxiliary reservations still use the host.
   const chat = store.chat(chatId),
     history: RunSnapshot['history'] = store.history(chat.headRevision);
   const insert = store.db.prepare(
@@ -92,7 +88,6 @@ function readerSourceBatch(store: Store, chatId: string, count: number) {
   );
   return store.transaction(() =>
     Array.from({ length: count }, (_, index) => {
-      // Give this ordered fixture distinct timestamps; same-millisecond UUID ties are unordered.
       const runId = randomUUID(),
         time = new Date(Date.UTC(2020, 0, 1) + index).toISOString(),
         parentRevision = history.at(-1)?.revision ?? null;
@@ -593,7 +588,6 @@ test('activity times stay stable and translation resolution uses same source has
   store.settings(chat.id, chat.settingsRevision, { ...chat.settings });
   const item = source(store, chat.id);
   store.requestTranslation(item.id);
-  // Completion time ignores subsequent usage updates; a retry restarts the job's queue time.
   const before = readerDetail(store, chat.id, {}).reader.activity.find((a) => a.id === item.runId)!;
   store.db
     .prepare('UPDATE runs SET updated_at=? WHERE id=?')

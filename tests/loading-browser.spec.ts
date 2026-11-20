@@ -95,7 +95,6 @@ test('LOADUI08 task history loads on demand and preserves off-page reading, insp
   const panel = page.getByRole('dialog', { name: '작업 현황', exact: true });
   await expect(panel.getByText('작업 목록을 불러오는 중이에요…', { exact: true })).toBeVisible();
   releaseHistory();
-  // The shared API client intentionally hides arbitrary server 5xx diagnostics.
   await expect(panel.getByRole('alert')).toContainText('서버 작업을 완료하지 못했어요. (503)');
   await panel.getByRole('button', { name: '작업 목록 다시 불러오기', exact: true }).click();
   await expect(panel.getByTestId('run')).toHaveCount(8);
@@ -155,9 +154,6 @@ test('LOADUI06 scene navigator respects focus and visibility settings across des
   const writes: string[] = [];
   page.on('request', (request) => {
     const path = new URL(request.url()).pathname;
-    // Scene navigation now persists a device reading checkpoint. This case still owns
-    // the stronger contract that navigation/focus controls never mutate authored or
-    // execution data.
     if (
       path.includes('/api/') &&
       !path.endsWith('/reading-position') &&
@@ -227,7 +223,6 @@ test('LOADUI06 scene navigator respects focus and visibility settings across des
   await page.keyboard.press('Escape');
 
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-  // Compact widths use the existing header opener without a floating mini navigator.
   await expect(navigator).toHaveCount(0);
   const opener = page.locator('.header-title').getByRole('button', {
     name: '장면 목록 열기',
@@ -257,7 +252,6 @@ test('LOADUI06 scene navigator respects focus and visibility settings across des
   await settledNativeSources(page, ids.slice(10));
   await expect.poll(distance).toBeLessThanOrEqual(2);
   await expect(latest).toHaveCount(0);
-  // The latest scene is longer than the viewport: its top still needs a return button.
   await article(page, ids[11]).evaluate((node) => {
     const viewport = node.closest<HTMLElement>('[data-reader-scrollport]')!;
     viewport.scrollTop += node.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
@@ -294,8 +288,6 @@ test('LOADUI09 newer chat list wins over a late empty response without clearing 
     await held;
     await route.fulfill({ json: [] });
   });
-  // A synthetic deletion notification requests a second list while the first is held.
-  // The real current list still owns this chat, so it must remain selected.
   await page.route(`**/api/chats/${seeded.chat.id}/events`, (route) =>
     route.fulfill({ contentType: 'text/event-stream', body: 'data: {"kind":"chat.deleted"}\n\n' })
   );
@@ -311,7 +303,6 @@ test('LOADUI09 newer chat list wins over a late empty response without clearing 
     );
     release();
     await finished;
-    // A browser frame barrier observes React's commit after the stale response is delivered.
     await page.evaluate(
       () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
     );
@@ -447,8 +438,6 @@ test('LOADUI01 bounded pages, previous/next, deep links and reload preserve read
   await expect(articles(page)).toHaveCount(5);
   await expect(reader).toBeVisible();
   await settledNativeSources(page, ids.slice(5, 10));
-  // Reenter through the real sidebar with no explicit source in the URL. Resolving
-  // the saved chat must not briefly mount and transform the first page.
   await page.locator(`[data-chat-id="${empty.id}"] .chat-link`).click();
   await expect(
     page.getByRole('heading', { name: '첫 장면을 들려주세요.', exact: true })
@@ -519,7 +508,6 @@ test('LOADUI02 same-source tabs keep CAS drafts and isolate another chat, manual
   ]);
   for (const tab of [page, second]) {
     await expect(article(tab, source.id)).toBeVisible();
-    // The toolbar pencil edits the current view; opening the ⋯ sheet first would cover it at 412px.
     await article(tab, source.id).getByRole('button', { name: '원문 수정', exact: true }).click();
   }
   await second.getByLabel('원문 수정 내용').fill('Stale tab draft must survive.');
@@ -651,7 +639,6 @@ test('LOADUI04 offline edits reappear on reconnect and connected SSE sends only 
   await expect(article(page, first.id).getByTestId('source-text')).not.toContainText(
     'Source changed while browser was offline.'
   );
-  // onopen only means the transport is connected; wait for its full reader catch-up too.
   const catchUpResponse = page.waitForResponse(async (response) => {
     const url = new URL(response.url());
     if (
@@ -764,8 +751,6 @@ test('LOADUI05 context summary status shows in mobile reader and run details wit
       ];
     await route.fulfill({ response, json: body });
   });
-  // The failure detail action opens the durable run inspector, whose summaries
-  // are fetched separately from the visible reader projection.
   await page.route(`**/api/chats/${seeded.chat.id}/reader-runs`, async (route) => {
     const response = await route.fetch();
     const runs = (await response.json()) as ReaderRun[];
@@ -790,7 +775,6 @@ test('LOADUI05 context summary status shows in mobile reader and run details wit
   );
 
   stage = 'failed';
-  // The earlier stage opened this response's diagnostics; the reader restores that per session.
   await page.evaluate(() => {
     for (const key of Object.keys(sessionStorage))
       if (key.startsWith('turn-activity:')) sessionStorage.removeItem(key);
@@ -829,8 +813,6 @@ test('LOADUI11 mobile long-story navigation reads persisted off-page bodies with
   page,
   request,
 }, info) => {
-  // Import real saved bodies through the public transcript API. No provider calls are
-  // needed to seed a story larger than both the 5-body reader and 60-scene list pages.
   const ownerResponse = await postFixtureChat(request, {
     data: { title: `Long story owner ${Date.now()}` },
   });
@@ -922,16 +904,12 @@ test('LOADUI11 mobile long-story navigation reads persisted off-page bodies with
   await expect(opener).toBeFocused();
   expect(Math.abs((await reader.evaluate((node) => node.scrollTop)) - readingTop)).toBeLessThan(3);
 
-  // The jump action shares the composer's toolbar instead of reserving its own
-  // row or covering the manuscript. It remains reachable while reading off-page.
   await expect(latest).toBeVisible();
   await page.getByLabel('다음 장면 요청').focus();
   await expect(latest).toBeHidden();
   await opener.focus();
   await expect(latest).toBeVisible();
 
-  // One local synthetic completion exercises real save + SSE refresh. Reading an
-  // earlier page must not follow it or replace the source route with the new end.
   const beforeRun = await detail(request, chat.id);
   const runResponse = await request.post(`/api/chats/${chat.id}/runs`, {
     data: {

@@ -270,7 +270,6 @@ test('PWUI06 push consent is explicit, preferences are acknowledged before chang
   await expect(enabled).not.toBeChecked();
   expect(await page.evaluate(() => Reflect.get(window, 'pushPermissionCalls'))).toBe(0);
   expect(prepareCalls).toBe(0);
-  // Consent changes only after the subscription is acknowledged by the server.
   await enabled.click();
   await expect(enabled).toBeChecked();
   expect(await page.evaluate(() => Reflect.get(window, 'pushPermissionCalls'))).toBe(1);

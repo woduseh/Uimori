@@ -2,7 +2,6 @@ import type { Store } from '../../server/store.js';
 import type { HelperWorkspace } from '../../server/helper-workspace.js';
 import type { SynchronousResult } from '../../server/synchronous-transaction.js';
 
-/** A generic caller can forward an already synchronous callback without losing T. */
 export function forwardSynchronousOperation<T>(
   store: Store,
   workspace: HelperWorkspace,
@@ -11,7 +10,6 @@ export function forwardSynchronousOperation<T>(
   return store.transaction<T>(() => workspace.operation<T>('task', 'operation', {}, apply));
 }
 
-/** Compiler-only contract; these calls never execute against a database. */
 export function synchronousTransactionTypeContract(
   store: Store,
   workspace: HelperWorkspace,

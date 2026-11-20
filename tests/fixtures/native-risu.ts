@@ -4,7 +4,6 @@ import type { RisuContentSource } from '../../core/risu-native.js';
 import { readCharacterCard } from '../../server/character-card-file.js';
 import { importRisuVariableDefaults } from '../../server/risu-variable-defaults.js';
 
-/** Opt-in sample reader: keeps originals read-only and never exports authored text or image bytes. */
 export function readNativeRisuSample(path: string): {
   native: RisuContentSource;
   variables: Record<string, string>;

@@ -225,7 +225,6 @@ describe('provider settings, catalogs and archive contracts', () => {
     expect(model).not.toHaveProperty('contextTools');
     await request(app, '/model-presets', modelBody(connection, { contextTools: 'yes' }), 400);
 
-    // Existing SQLite and portable archive bodies may still carry the old option.
     const legacy = { ...model, contextTools: true };
     validateProviderSettingVersion({
       kind: 'model',

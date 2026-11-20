@@ -114,14 +114,12 @@ test('asset count, JSON bytes and individual asset bytes stay bounded in larger 
   expectInvalid(
     file({ assets: [...metadata, ['excess', '', 'png']] }, [...assets, Buffer.alloc(0)])
   );
-  // Valid JSON padding proves the byte limit itself rejects the file, not invalid JSON.
   const json = Buffer.from(JSON.stringify({ type: 'risuModule', module: {} }));
   const maximumJson = Buffer.alloc(8 * 1024 * 1024, 32);
   json.copy(maximumJson);
   expect(readEmbeddedRisuModule(container(maximumJson))).toEqual({ module: {}, assets: [] });
   expectInvalid(container(Buffer.concat([maximumJson, Buffer.from(' ')])));
 
-  // One valid maximum-sized asset makes the whole container exceed the former 64 MiB cap.
   const prefix = file({ assets: [['large', '', 'bin']] }).subarray(0, -1);
   const assetBytes = 64 * 1024 * 1024;
   const encodedZero = encodeRPack(Buffer.from([0]))[0];
@@ -135,7 +133,6 @@ test('asset count, JSON bytes and individual asset bytes stay bounded in larger 
   expect(decoded.assets[0].length).toBe(assetBytes);
   expect(decoded.assets[0].equals(Buffer.alloc(assetBytes))).toBe(true);
 
-  // A valid extra payload byte crosses the retained per-asset boundary, not the file budget.
   const oversized = Buffer.concat([large.subarray(0, -1), Buffer.from([encodedZero, 0])]);
   oversized.writeUInt32LE(assetBytes + 1, prefix.length + 1);
   expectInvalid(oversized);

@@ -23,7 +23,6 @@ import {
   MOBILE_HEIGHT,
 } from './fixtures/browser-viewports.js';
 
-// Explicit local opt-in. Original cards stay outside the repository and are never modified.
 const sampleRoot = process.env.UIMORI_RISU_SAMPLE_ROOT;
 const diagnostic = process.env.UIMORI_RISU_SAMPLE_DIAGNOSTIC === '1';
 const presetPath = process.env.UIMORI_RISU_SAMPLE_PRESET;
@@ -383,7 +382,6 @@ test.describe('actual local native Risu cards', () => {
         ]) {
           await openPanel();
           const languageButton = panel.locator(`[risu-trigger="${language.action}"]`);
-          // The authored panel deliberately scrolls within its max-height viewport.
           await languageButton.evaluate((element) => element.scrollIntoView({ block: 'nearest' }));
           await clickAuthored(page, language.action, '.settings-side-panel-cw');
           expect(readChatVariables(app.store, chat.id).values.lang).toBe(language.value);
@@ -492,7 +490,6 @@ test.describe('actual local native Risu cards', () => {
       await expect(renderedResponse).toBeVisible();
       await settledFrame(page, 'last');
       // Authored animations may never satisfy Playwright's actionability stability check.
-      // Scroll the outer reader and the native message directly, then verify visibility.
       await page
         .locator('.risu-message-surface')
         .last()
@@ -502,8 +499,6 @@ test.describe('actual local native Risu cards', () => {
       if (visualReview)
         await page.screenshot({ path: info.outputPath(`${sample.id}-response.png`) });
       expect(readChatVariables(app.store, fork.id).values).toMatchObject(sample.alternate);
-      // This fixture intercepts external assets for deterministic local execution.
-      // The personal-card renderer no longer promises iframe-level network isolation.
       await info.attach('intercepted-external-origins', {
         body: JSON.stringify([...new Set(externalRequests)]),
         contentType: 'application/json',

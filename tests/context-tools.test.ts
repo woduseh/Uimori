@@ -52,7 +52,6 @@ const model = (): ModelSnapshot => ({
     catalogError: null,
   },
 });
-/** A frozen main run input whose context plan is already prepared, as app.ts hands it to runMain. */
 async function snapshot(): Promise<RunSnapshot> {
   const target = model();
   const history = chapters.map((text, index) => ({
@@ -144,7 +143,6 @@ async function oversizedSnapshot(): Promise<RunSnapshot> {
     workingSummary
   );
 }
-/** Leave a measured 14% margin around fixed instructions, independent of tokenizer fixture drift. */
 async function fixedHeavySnapshot(vertex = false): Promise<RunSnapshot> {
   const fixed = await oversizedSnapshot(),
     target = fixed.profile!.models.main!,
@@ -546,7 +544,6 @@ describe('host read compaction and provider continuation inside one main run', (
     fixed.contextPlan!.budget.inputTokenLimit = limit;
     delete fixed.promptCompilation;
     const original = structuredClone(fixed);
-    // A previously completed mutation is data here, never an executable main tool.
     const receipt: ToolEvent = {
       callId: 'exact-write-receipt',
       name: 'context.write',
@@ -998,7 +995,6 @@ describe('host read compaction and provider continuation inside one main run', (
     fixed.contextPlan!.budget.inputTokenLimit = 16384;
     fixed.profile!.contextModel!.inputTokenLimit = 65536;
     const original = structuredClone(fixed);
-    // Historical receipts remain valid data after the model-facing tool is retired.
     const receipts: ToolEvent[] = Array.from({ length: 9 }, (_, i) => ({
       callId: `write-${i}`,
       name: 'context.write',
@@ -1152,7 +1148,6 @@ describe('host read compaction and provider continuation inside one main run', (
         ],
       },
     };
-    // A subsequent compaction carries prior receipts too, without changing the saved snapshot.
     for (const events of [[read], [receipt, read]]) {
       const { request } = buildMainProviderRequest(fixed, { completedToolHistory: events });
       const response = encodeResponses({ ...request, modelId: 'gpt-5.6' }).body as Record<
@@ -1426,7 +1421,6 @@ test('knowledge token pages preserve multilingual UTF-16 ranges, frozen receipts
         event.readBudget
       )
     ).toEqual(event);
-    // Frozen ranges remain exact even if the local tokenizer configuration changes later.
     const rechecked = executeTool(
       fixed,
       { callId: event.callId, name: event.name, args: event.args },
@@ -1510,12 +1504,10 @@ test('lore explicit UTF-16 limits preserve whole characters and cannot return an
   const read = (resumed.result as any).items[0].read;
   expect(read).toMatchObject({ text: '😀', range: { start: 0, end: 2 }, nextOffset: 2 });
 
-  // A nonempty prefix still returns the available whole characters before the limit.
   fixed.resources[0].text = 'A😀hello';
   const prefix = executeTool(fixed, { ...action, args: { ...action.args, limit: 2 } });
   const prefixRead = (prefix.result as any).items[0].read;
   expect(prefixRead).toMatchObject({ text: 'A', range: { start: 0, end: 1 }, nextOffset: 1 });
-  // Historical character receipts preserve their original UTF-16 slices exactly.
   fixed.resources[0].text = '😀hello';
   const legacy = executeTool(fixed, action, undefined, 'main', 6000);
   expect((legacy.result as any).items[0].read).toMatchObject({

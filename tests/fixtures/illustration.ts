@@ -24,7 +24,6 @@ import {
 } from '../../server/illustrations.js';
 import { HttpError } from '../../server/request-validation.js';
 
-/** Legacy single-render jobs keep renderer/retry coverage; production now reserves storyboards. */
 export function reserveIllustration(
   store: Store,
   source: Source,
@@ -44,7 +43,6 @@ export function reserveIllustration(
     maxTargets: 1,
   });
   const { task: _task, plan: _plan, research: _research, ...input } = job.input;
-  // A legacy image turn predates the separate prompt-model snapshot.
   if (legacyCodex && input.codex) delete input.codex.promptModel;
   store.db
     .prepare('UPDATE illustration_jobs SET input=? WHERE id=?')
@@ -52,7 +50,6 @@ export function reserveIllustration(
   return illustrationJob(store, job.id);
 }
 
-/** Illustration tests own a temporary SQLite file under the resolved temp root. */
 export function illustrationDatabases(prefix: string) {
   const owned: { directory: string; store: Store }[] = [];
   const root = realpathSync(tmpdir());
@@ -67,9 +64,7 @@ export function illustrationDatabases(prefix: string) {
       for (const { directory, store } of owned.splice(0)) {
         try {
           store.close();
-        } catch {
-          /* Already closed by the test. */
-        }
+        } catch {}
         const path = resolve(directory),
           rel = relative(root, path);
         if (isAbsolute(rel) || rel.startsWith('..') || !rel.startsWith(prefix))
@@ -79,7 +74,6 @@ export function illustrationDatabases(prefix: string) {
     },
   };
 }
-/** One completed scripted response so a source exists for illustration reservations. */
 export function completedSource(
   store: Store,
   chatId: string,

@@ -4,7 +4,6 @@ import type { Chat, ChatDetail } from '../core/types.js';
 import type { OutlineDetail } from '../core/outline.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
-// Each case runs at one representative width; narrow and desktop paths are both exercised.
 const WIDTHS = [390, 1440] as const;
 const COMPOSITION = [
   {
@@ -402,8 +401,6 @@ for (const width of WIDTHS) {
     }, info) => {
       const chat = await seed(request, width);
       const previous = await (await request.get('/api/model-workspace')).json();
-      // Unlike the main test-mode writer, the helper requires an explicitly selected model.
-      // Reuse the existing loopback transport peer; no product-only fixture path is introduced.
       const peer = await loopbackProvider((wire, response) => {
         const input = JSON.parse(wire.body);
         const source = input.input.source.outline.sources[0];

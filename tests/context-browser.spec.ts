@@ -21,8 +21,6 @@ async function reenterMemory(page: Page) {
   await selectChatSettingsSection(page, '기억과 메모');
 }
 async function create(page: Page, title: string) {
-  // Summary edits measure the selected main input budget; these tests never send a provider call.
-  // Keep the summary workflow independent of the size of the bundled writing prompt.
   const prompts = await read<PromptWorkspace>(page.request, '/prompt-workspace');
   const configured = await page.request.put('/api/prompt-workspace', {
     data: {
@@ -157,7 +155,6 @@ test('CTXUI02 concurrent summary and note changes preserve local drafts and requ
   await expect(notes.getByText('다른 창의 메모', { exact: true })).toBeVisible();
   await expect(notes.getByLabel('메모와 정정 내용')).toHaveValue('내 메모 초안');
   await expect(notes.getByRole('button', { name: '새 메모 저장', exact: true })).toBeEnabled();
-  // A mobile section-back changes visibility only, preserving text and its conflict state.
   await page.getByRole('button', { name: '채팅 설정 목록으로', exact: true }).click();
   await selectChatSettingsSection(page, '생성 설정');
   await selectChatSettingsSection(page, '기억과 메모');
@@ -196,7 +193,6 @@ test('CTXUI03 manual no-op preserves a summary and exposes cancellable running-j
   expect(actual.jobs[0]).toMatchObject({ status: 'completed', noop: true });
   expect(actual.checkpoint?.plan.summary).toBe('보존할 요약');
   expect(await read<unknown[]>(request, `/chats/${chat.id}/attempts`)).toEqual([]);
-  // Cancellation interaction is a UI projection; durable cancellation is covered by ContextStore tests.
   const job = {
     ...actual.jobs[0],
     id: 'synthetic-running-context',

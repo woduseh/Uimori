@@ -53,7 +53,6 @@ test('NSUI09 a deleted default discovered after library refresh requires an expl
       })
     ).ok()
   ).toBe(true);
-  // APIRequestContext does not notify the page; focus uses the actual library refresh path.
   const refreshed = page.waitForResponse((response) =>
     response.url().endsWith(`/api/bots/${bot.id}/defaults`)
   );
@@ -471,7 +470,6 @@ test('NSQ03 closing while defaults load cancels unstarted admission; failed defa
     await failed;
     await expect(dialog).toBeHidden();
     expect(admissions).toEqual([]);
-    // A new failed read exposes the editable form; successful retry never resumes admission itself.
     await page.route(`**/api/bots/${bot.id}/defaults`, (route) =>
       route.fulfill({ status: 503, json: { error: 'QUICK_DEFAULTS_READ_FAILED' } })
     );
@@ -633,7 +631,6 @@ test('NSQ05 an uncertain chat admission stops automatic and manual resubmission'
   await page.route('**/api/chats', async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
     admissions++;
-    // The server admitted this chat, but its success response never reached the caller.
     const response = await route.fetch();
     expect(response.ok()).toBe(true);
     await route.abort('failed');
@@ -739,7 +736,6 @@ test('NSQ05 an uncertain chat admission stops automatic and manual resubmission'
     const reading = new Promise<void>((resolve) => {
       readStarted = resolve;
     });
-    // The app and new-chat dialog share the initial workspace read.
     await page.route('**/api/prompt-workspace', async (route) => {
       if (route.request().method() !== 'GET' || !failRead) return route.continue();
       failRead = false;
@@ -928,7 +924,6 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
   });
   expect(saved.ok()).toBe(true);
   const bot = (await saved.json()) as Content;
-  // The browser harness supplies its deterministic writer when no provider is selected.
   await setCurrentModels(request, { main: null, translation: null });
   const mainRequests: string[] = [];
   page.on('request', (item) => {
@@ -1100,8 +1095,6 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
     await picker.getByLabel('첫 메시지 선택').selectOption({ label: '첫 메시지 없이 시작' });
     await page.screenshot({ path: info.outputPath('empty-opening-picker-' + width + '.png') });
     const commands: Record<string, unknown>[] = [];
-    // Keep reader delivery pending so SSE cannot remove the picker
-    // before the lost-response retry is exercised.
     let releaseReader!: () => void;
     const readerDelivery = new Promise<void>((resolve) => {
       releaseReader = resolve;

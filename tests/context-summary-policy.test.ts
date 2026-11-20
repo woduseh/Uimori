@@ -87,7 +87,6 @@ describe('summary goals and provider output headroom', () => {
         fixedInputTokens: 7900,
         generation,
       });
-      // One token is still only guidance; the caller rejects an infeasible fixed input.
       expect(policy.targetSummaryTokens).toBe(purpose === 'conversation' ? 1 : 100);
       expect(policy.generation).toEqual({ ...original, maxOutputTokens: 4096 });
       expect(generation).toEqual(original);

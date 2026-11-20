@@ -193,7 +193,6 @@ function definition(request: transport.ProviderRequest, name: string) {
 }
 
 test('resource.read preserves requested pages when the selected model has room for the complete round', async () => {
-  // Seven 10,000-character reads cross the former 32k round cap; each also has a next page.
   const prose = '한글漢字 설정 記録 경계 '.repeat(800);
   const f = await fixture('library', prose);
   const args = {
@@ -617,8 +616,6 @@ test('helper read events retain recoverable argument and missing-scene errors', 
       errorKind: 'recoverable',
       result: { retryMode: 'correct_arguments', outcome: 'unchanged' },
     });
-    // The fixture protocol has no Anthropic continuation. Its supported bootstrap
-    // envelope still checks that these exact host events carry the native error flag.
     const encoded = encodeAnthropic({
       ...request,
       input: { ...request.input, results: [] },

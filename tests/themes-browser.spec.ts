@@ -391,7 +391,6 @@ test('THEMES bot/chat inheritance, cross-tab refresh and theme settings keyboard
   await expectPalette(page, 'sage');
   await expectPalette(other, 'sage');
   await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:letter');
-  // An explicit original-colors choice stops palette inheritance only.
   await page.getByRole('button', { name: '레이아웃 원래 색상 팔레트 적용', exact: true }).click();
   await expectPalette(page, 'cream');
   await expectPalette(other, 'cream');
@@ -401,7 +400,6 @@ test('THEMES bot/chat inheritance, cross-tab refresh and theme settings keyboard
   await page.getByRole('button', { name: '레이아웃 상위 설정 따르기', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:forest');
   await expect(other.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:forest');
-  // Saving notifies the other tab even if the saving tab's follow-up catalog read fails.
   await page.route('**/api/themes', (route) => route.fulfill({ status: 503, body: 'unavailable' }));
   await page.getByRole('button', { name: '스크랩북 테마 적용', exact: true }).click();
   await expect(other.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:scrapbook');
@@ -530,7 +528,6 @@ test('THEMES palette selections lock duplicate actions and refresh conflicts wit
     },
   });
   expect(changed.ok()).toBe(true);
-  // APIRequestContext does not fire a browser storage/focus notification: this page is stale.
   await page.getByRole('button', { name: '세이지 팔레트 적용', exact: true }).click();
   await expect(page.getByRole('alert')).toBeVisible();
   await expect(page.getByRole('button', { name: '로즈 팔레트 적용', exact: true })).toHaveAttribute(

@@ -17,7 +17,6 @@ import {
   type NativeRisuExecutionInput,
 } from '../server/risu-native-runtime.js';
 
-// Explicit opt-in only. Assertions expose booleans/counts, never private source or script text.
 const paths: string[] = JSON.parse(process.env.UIMORI_RISU_LOCAL_CARDS ?? '[]');
 const presetPath = process.env.UIMORI_RISU_SAMPLE_PRESET;
 afterEach(disposeAllNativeRisuSessions);

@@ -54,7 +54,6 @@ test('selected main preset role cannot change or poison workspace reads', async 
   expect(await workspace(app)).toEqual(selected);
   expect((await read(app, '/model-workspace')).revision).toBe(selected.revision);
   expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(beforeChanges);
-  // The user can follow the error's recovery instruction and then change the unused preset role.
   await apply(app, app.store.product.get<PromptPreset>('prompt-preset', initial[role].presetId!));
   const revised = await request<PromptPreset>(
     app,

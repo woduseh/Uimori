@@ -56,7 +56,6 @@ async function create(request: APIRequestContext, title: string) {
         await route.fulfill({ status: 409, json: { error: 'Temporary confirmation failure' } });
       } else await route.continue();
     });
-    // A selected bot that already has another authored role must not be silently removed.
     await dialog.getByLabel('본문 JSON 파일').setInputFiles({
       name: 'role-collision.json',
       mimeType: 'application/json',
@@ -113,14 +112,12 @@ async function create(request: APIRequestContext, title: string) {
     await expect(notice).toContainText(`‘${result.chat.title}’ 채팅을 만들고 대화를 가져왔어요.`);
     const imported = await (await request.get(`/api/chats/${result.chat.id}`)).json();
     expect(imported.sources.map((item: { text: string }) => item.text)).toEqual(['원본 장면']);
-    // The shortcut opens the common backup screen after the selected transcript is resolved.
     await expect(openBackups).toBeEnabled();
     await openBackups.click();
     await expect(dialog).toBeHidden();
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
     const backupPanel = settings.getByRole('region', { name: '백업 파일 가져오기', exact: true });
     await expect(backupPanel).toBeVisible();
-    // A backup restores its own independent bot copy, never the preselected bot.
     const backupRequests: unknown[] = [];
     let restoredBotId = '';
     await page.route('**/api/chats/import-backup', async (route) => {
@@ -165,7 +162,6 @@ async function create(request: APIRequestContext, title: string) {
     expect(backupRequests).toHaveLength(2);
     expect(backupRequests[1]).toEqual(backupRequests[0]);
     await expect(backupPanel.getByRole('status')).toContainText('복원했어요');
-    // Import acknowledgement precedes the list/reader refresh owned by this operation.
     await expect(backupPanel.getByLabel('백업 파일 선택')).toBeEnabled();
     await page.keyboard.press('Escape');
     await expect(settings).toBeHidden();

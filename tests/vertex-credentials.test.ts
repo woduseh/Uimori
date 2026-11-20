@@ -200,7 +200,6 @@ test('validating a draft and failing to save never persists its service account'
     expect(app.store.product.all('connection')).toEqual([]);
   }
 
-  // Simulate a credential write failure after the connection row has been prepared.
   app.store.db.exec(`CREATE TEMP TRIGGER fail_vertex_write BEFORE INSERT ON credentials
     WHEN NEW.id GLOB 'UIMORI_PROVIDER_VERTEX_FILE_*'
     BEGIN SELECT RAISE(ABORT, 'simulated credential write failure'); END`);

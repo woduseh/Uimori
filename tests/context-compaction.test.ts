@@ -355,7 +355,6 @@ describe('input context projection and durable summary calls', () => {
       source.contextPlan!.budget.inputTokenLimit = consumerLimit;
       const original = structuredClone(source),
         log = observed({ reason: 'manual' });
-      // This fixed provider response exercises host policy, not semantic summary quality.
       vi.mocked(fetch).mockImplementation(async () => completed('SYNTHETIC_COMPLETE_SUMMARY'));
       const result = await prepareInputContext(source, log.hooks);
       expect(result.snapshot.contextPlan!.status).toBe('ready');
@@ -431,8 +430,6 @@ describe('input context projection and durable summary calls', () => {
   );
 
   test('summarizes older Korean exchanges with user wishes intact and keeps the latest exchanges that fit', async () => {
-    // The two latest exchanges are shorter so that both fit an 8,192-token window beside the
-    // writer's tool definitions. With six full-size scenes only the newest one is retained.
     const scenes = Array.from(
       { length: 6 },
       (_, index) => `장면 ${index}.\n${paragraph.repeat(index < 4 ? 70 : 50)}`
@@ -554,7 +551,6 @@ describe('input context projection and durable summary calls', () => {
     const originals = [structuredClone(first), structuredClone(expanded)],
       log = observed({ reason: 'manual' }),
       mergedSummary = 'FIXTURE_SUMMARY: Darcy → Elizabeth [scene 1]; witness=Mira; code=Q7x-α9.';
-    // A canned response proves transmission and checkpoint invariants only, not fidelity of a model.
     vi.mocked(fetch).mockImplementation(async () => completed(mergedSummary));
     const initial = await prepareInputContext(first, log.hooks),
       previous = structuredClone(initial.snapshot.contextPlan!),

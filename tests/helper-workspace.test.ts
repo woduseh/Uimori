@@ -165,7 +165,6 @@ test('a native turn abort reaches pending helper context work and prevents its l
   stopNative();
   await Promise.all(f.work);
   releaseLateResult();
-  // Cancellation escapes the tool callback rather than becoming a recoverable result.
   await expect(pendingTool).rejects.toThrow('Native turn timed out');
 
   expect(f.controller.signal.aborted).toBe(false);
@@ -339,7 +338,6 @@ function mockSend(
   return vi
     .spyOn(transport, 'executeProvider')
     .mockImplementation(async (connection, request, options) => {
-      // The mock stands in for the wire, not for the transport boundary contract.
       transport.validateConnection(connection);
       options.beforeTurn?.();
       await options.onWire?.({
@@ -942,7 +940,6 @@ test.each(['provider', 'native'] as const)(
   'helper %s execution answers calls past 256 host tool callbacks without running them, then stops',
   async (execution) => {
     const f = fixture();
-    // The limit is checked on a live connection. Sync its WAL at checkpoints instead of per event.
     f.store.db.exec('PRAGMA synchronous=NORMAL');
     const calls = Array.from({ length: HELPER_TOOL_CALL_LIMIT }, (_, index) => ({
       id: `callback-${index}`,
@@ -999,13 +996,11 @@ test.each(['provider', 'native'] as const)(
               options.signal
             )
           ).rejects.toThrow('HELPER_TOOL_CALL_BUDGET_EXHAUSTED');
-          // A late native completion cannot convert the host guard into success.
           return structuredClone(success);
         },
       });
     } else {
       mockSend((request, _options, index) => {
-        // The round after the limit is the final call; a model that still asks for tools fails.
         expect(request.input.controls).toMatchObject(index === 0 ? {} : { finalCall: true });
         return {
           ...structuredClone(success),
@@ -1964,7 +1959,6 @@ test('selected prose appears once in the current request and survives into the n
 
 test('the helper message route preserves full-length Korean requests and selected source text', async () => {
   const f = fixture();
-  // This check reserves real SQLite work without dispatching a model request.
   f.controller.abort();
   const { source } = chatWithSource(f.store);
   const selectedText = '가'.repeat(REQUEST_TEXT_MAX_CHARS - 1) + '끝';

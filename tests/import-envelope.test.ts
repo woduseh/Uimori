@@ -46,7 +46,6 @@ test('only the exact field set of the offered form is read', () => {
     { ...inline(), b: 1 },
   ])
     refuses(value, 400, expect.stringMatching(/^Unknown request field: /u));
-  // A missing half of the form is the reader's own refusal, not an unknown field.
   refuses({}, 400, options.invalid);
   refuses({ name: 'sample.json' }, 400, options.invalid);
   refuses({ base64: payload.toString('base64') }, 400, options.invalid);
@@ -98,7 +97,6 @@ test('the body must re-encode to exactly the bytes that were sent', () => {
 });
 
 test('an oversized body answers with the caller limit code, whether or not it decodes', () => {
-  // 65 bytes still encode within the pre-check length; 67 bytes do not.
   for (const size of [options.maxBytes + 1, options.maxBytes + 3])
     refuses(inline(Buffer.alloc(size, 0x61)), 413, options.tooLarge);
   expect(
@@ -107,7 +105,6 @@ test('an oversized body answers with the caller limit code, whether or not it de
 });
 
 test('card and preset readers reject oversized inline files with HTTP 413', () => {
-  // Encode exactly one byte above the limit without allocating the decoded file.
   const size = RISU_IMPORT_MAX_BYTES + 1;
   const oversized = 'AAAA'.repeat(Math.floor(size / 3)) + Buffer.alloc(size % 3).toString('base64');
   const tooLarge = (call: () => unknown, message: string) =>
@@ -134,7 +131,6 @@ test('the card reader now refuses the path-like file names the preset reader alr
     expect(() => readCharacterCard({ name, base64: card })).toThrowError(
       expect.objectContaining({ statusCode: 400, message: 'RISU_IMPORT_INVALID_FILE' })
     );
-  // The card's format still comes from its bytes, so any other extension stays readable.
   expect(readCharacterCard({ name: 'card.txt', base64: card }).card.name).toBe('Sample');
 });
 
@@ -155,10 +151,8 @@ test('the staged form is read only when the caller offers a staged reader', () =
     source: { name: 'sample.json', uploadId },
   });
   expect(reads).toEqual([uploadId]);
-  // The inline form still works, and it never touches the staged file.
   expect(readImportEnvelope(inline(), staged)).toMatchObject({ source: inline(), bytes: payload });
   expect(reads).toEqual([uploadId]);
-  // A staged file obeys the upload route's limit, not the inline one, but still holds a format.
   const large = Buffer.alloc(options.maxBytes + 1, 0x61);
   expect(
     readImportEnvelope({ name: 'sample.json', uploadId }, { ...staged, staged: () => large }).bytes
@@ -181,7 +175,6 @@ test('the staged form is read only when the caller offers a staged reader', () =
       message: expect.stringMatching(/^Unknown request field: base64;/u),
     })
   );
-  // Without a reader the staged form is not part of the field set at all.
   refuses(
     { name: 'sample.json', uploadId },
     400,

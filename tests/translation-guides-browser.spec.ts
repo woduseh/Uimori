@@ -68,7 +68,6 @@ for (const width of [412]) {
     });
     const editor = page.getByRole('region', { name: '봇 번역 지침 편집기', exact: true });
     expect(await editor.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
-    // The regular resource recovery buffer must preserve unfinished term rows, not discard them.
     await page.getByRole('button', { name: '표기 추가', exact: true }).click();
     await page.getByLabel('표기 2 원문', { exact: true }).fill('Mira');
     await expect
@@ -97,7 +96,6 @@ for (const width of [412]) {
     await page.getByRole('button', { name: '편집 취소', exact: true }).click();
     await selectPackageSection(page, '번역 지침');
     await expect(page.getByLabel('표기 2 원문', { exact: true })).toHaveCount(0);
-    // Raw source edits and GUI edits use exactly the same canonical field.
     await selectPackageSection(page, '고급 설정');
     await page.getByRole('button', { name: 'JSON 소스', exact: true }).click();
     await page.getByLabel('Risu 원문 편집 대상', { exact: true }).selectOption('card');

@@ -502,7 +502,6 @@ test('successful request repeats with current settings in an independent chat an
       values: {},
     },
   });
-  // Ordinary imports retain only their own recent receipts, never retry/fork identities.
   for (let index = 0; index < 300; index++)
     saveImportReceipt(store, `resource-${index}`, 'digest', { index });
   expect(readImportReceipt(store, 'resource-0', 'digest')).toBeUndefined();

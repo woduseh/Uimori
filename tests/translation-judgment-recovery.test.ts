@@ -41,8 +41,6 @@ async function api(app: App, url: string, payload?: unknown) {
   return response.json();
 }
 
-// Real HTTP admission/worker/SQLite; native translation uses loopback SSE and JEV is intercepted.
-// A SQLite backup captures a hard-stop boundary before any graceful shutdown cleanup executes.
 test.each(['SQLite crash snapshot', 'graceful server shutdown'])(
   'a completed translation survives %s during judgment and explicit recovery calls only JEV',
   async (stop) => {

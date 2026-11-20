@@ -94,7 +94,6 @@ async function fixture(
     try {
       expect(captured.url).toBe('/v1/responses');
       expect(captured.headers.authorization).toBe(`Bearer ${bearer}`);
-      // The externally observed request must already have a durable running attempt.
       const attempts = app.store.product
         .attempts(chat.id)
         .filter(

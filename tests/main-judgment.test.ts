@@ -210,7 +210,6 @@ async function fixture(
       };
     },
     executeAgent: async (connection, request, options) => {
-      // Reuse this test's synthetic outcome; real native stdio is covered by codex-writing.
       const packet = JSON.parse(request.text);
       return runtime.execute(
         connection,

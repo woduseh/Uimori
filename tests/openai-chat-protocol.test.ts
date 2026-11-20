@@ -204,7 +204,6 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
       tool_calls: [expect.objectContaining({ id: 'bootstrap-1' })],
     });
     expect(input).toEqual(original);
-    // Direct OpenAI Chat permits authored content parts and keeps its existing encoding.
     expect(record(encodeChat(input).body).messages.at(-2).content).toEqual(
       input.prompt.messages[0].content
     );

@@ -351,7 +351,6 @@ describe('one-call provider connection diagnostics', () => {
         options: { signal?: AbortSignal; timeoutMs?: number } = {}
       ): Promise<T> {
         const response = await original.call(this, method, params, options);
-        // Hold the real synthetic stdio thread response, after durable onWire and before turn/start.
         if (method === 'thread/start') {
           waiting = true;
           await gate;
@@ -570,7 +569,6 @@ describe('one-call provider connection diagnostics', () => {
         };
         const request = connectionTestRequest(model, connection);
         expect(request.generation).toMatchObject({ maxOutputTokens: 256, temperature: null });
-        // A reviewed entry lists service tiers only when its sources document them.
         expect(request.generation?.serviceTier).toBe(model.serviceTier);
         expect(request.stable.tools).toEqual([]);
         if (cap.reasoningEfforts)
@@ -583,7 +581,6 @@ describe('one-call provider connection diagnostics', () => {
         }
       }
     }
-    // An unlisted model on an official connection is testable; the provider gives the verdict.
     const unlisted = connectionTestRequest(
       {
         id: 'm',

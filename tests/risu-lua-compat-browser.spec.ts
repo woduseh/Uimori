@@ -105,11 +105,8 @@ end`,
     );
     const variables = async () => (await request.get(`/api/chats/${chatId}/variables`)).json();
     expect((await variables()).values.submissions).toBe('1');
-    // An unconfirmed form must not prevent a different authored choice from running.
     await surface.getByRole('button', { name: '선택 요소 기억', exact: true }).click();
     await expect(surface.locator('#remembered')).toHaveText('요소: 카드-버튼');
-    // The successful server state may arrive over SSE despite the lost HTTP response.
-    // Retrying must reuse the captured revision and key instead of executing the form again.
     await surface.getByRole('textbox', { name: '닉네임' }).fill('별을 읽는 재연');
     await surface.getByRole('checkbox', { name: '독서', exact: true }).check();
     await surface.getByRole('checkbox', { name: '산책', exact: true }).check();
@@ -217,7 +214,6 @@ test('a delayed successful action releases the replacement reader after a shared
   });
   try {
     await surfaces.last().getByRole('button', { name: '숫자 올리기', exact: true }).click();
-    // The server commits and publishes before its first HTTP response is delivered.
     await expect(surfaces.last().locator('#counter')).toHaveText('Count: 1');
     await expect(surfaces.last().locator('.risu-message-content')).toHaveAttribute(
       'data-risu-disabled',

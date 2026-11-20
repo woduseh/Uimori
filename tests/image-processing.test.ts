@@ -98,11 +98,9 @@ test('WebP intake preserves animated bytes and checks the container of every fra
     offset += 8 + size + (size % 2);
   }
   expect(original.toString('ascii', lastFrame + 24, lastFrame + 28)).toBe('VP8 ');
-  // Pixel damage inside an intact container is stored as received, not decoded at intake.
   const repainted = Buffer.from(original);
   repainted.fill(255, lastFrame + 42, lastFrame + 8 + repainted.readUInt32LE(lastFrame + 4));
   expect((await processImage(repainted)).bytes).toBe(repainted);
-  // A frame whose image chunk overruns its frame is rejected.
   const overrun = Buffer.from(original);
   overrun.writeUInt32LE(overrun.readUInt32LE(lastFrame + 28) + 64, lastFrame + 28);
   await expect(processImage(overrun)).rejects.toThrow('이미지를 읽거나 WebP로 변환하지 못했어요.');

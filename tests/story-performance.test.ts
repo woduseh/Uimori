@@ -100,8 +100,6 @@ function source(store: Store, chatId: string, text: string) {
   });
 }
 function addArchived(store: Store, chatId: string, start: number, end: number) {
-  // These are complete, off-ancestry storage fixtures, not an assertion about an archive UI operation.
-  // Bulk seeding is outside the measured region; each real SQLite row preserves chat/source/run references.
   const time = new Date(0).toISOString();
   const profile = store.product.snapshot(chatId);
   const snapshot: RunSnapshot = {
@@ -484,8 +482,6 @@ test('S07 archive/lore/asset growth preserves active context and S05 200k source
     if (dimension === 'assetCount') expect(large.output.input).toEqual(small.output.input);
     evidence.push({ dimension, baseline: small.evidence, larger: large.evidence });
   }
-  // Functional dimensions above always run. Timing/environment artifacts are opt-in,
-  // because no latency threshold is part of this regression contract.
   if (!benchmark) return;
   const environment = {
     node: process.version,

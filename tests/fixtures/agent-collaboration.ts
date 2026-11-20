@@ -142,7 +142,6 @@ export async function fixture(
     try {
       expect(captured.url).toBe('/v1/responses');
       expect(captured.headers.authorization).toBe(`Bearer ${bearer}`);
-      // This runs in the actual HTTP server, after bytes arrive, not in a mocked transport hook.
       const attempts = app.store.product
         .attempts(chat.id)
         .filter((attempt) => (attempt.request as WireRecord).protocol !== 'typesafe-systemone-v1');
@@ -382,7 +381,6 @@ export const message = (text: string): Json => ({
   content: [{ type: 'output_text', text }],
 });
 export async function send(target: ServerResponse, output: Json[], status = 'completed') {
-  // Transport tests cover byte fragmentation; these cases exercise collaboration policy.
   await writeSse(target, [
     {
       type: `response.${status}`,

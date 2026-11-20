@@ -15,7 +15,6 @@ type Schema = {
 };
 const runFile = promisify(execFile);
 
-// Explicit, non-model preflight for the operator's installed official CLI.
 test.skipIf(process.env.UIMORI_CODEX_PREFLIGHT !== '1')(
   'installed Codex initializes without authentication and exposes the native tool protocol',
   async () => {

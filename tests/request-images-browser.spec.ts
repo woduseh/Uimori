@@ -44,7 +44,6 @@ for (const width of [360]) {
     const choosingFile = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: '참고 이미지 첨부', exact: true }).click();
     await (await choosingFile).setFiles(await image());
-    // Close the narrow-screen options popover at its owner; it can overlap the composer.
     await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
     await expect(thumbnails(page)).toHaveCount(1);
     await page.reload();
@@ -193,7 +192,6 @@ test('RIMAGE failed IndexedDB writes retain latest text and offer the previous a
   await composer(page).fill('처음 텍스트');
   await page.getByLabel('참고 이미지 파일', { exact: true }).setInputFiles(await image());
   await expect(thumbnails(page)).toHaveCount(1);
-  // Await the real stored tuple before making later storage writes unavailable.
   await expect
     .poll(() =>
       page.evaluate(async (id) => {
@@ -225,7 +223,6 @@ test('RIMAGE failed IndexedDB writes retain latest text and offer the previous a
   await expect(composer(page)).toHaveValue('저장 실패 직전의 최신 텍스트');
   await expect(thumbnails(page)).toHaveCount(0);
   await expect(page.getByRole('button', { name: '이전 첨부 복구', exact: true })).toBeVisible();
-  // Typing while deciding must not overwrite the only durable copy of earlier images.
   await composer(page).fill('선택하는 동안 다시 고친 최신 텍스트');
   await page.reload();
   await expect(composer(page)).toHaveValue('선택하는 동안 다시 고친 최신 텍스트');
@@ -332,8 +329,6 @@ test('RIMAGE late acceptance in another chat preserves an edited-then-reverted d
     await expect(thumbnails(page)).toHaveCount(1);
     await send(page).click();
     await ready;
-    // Newer text still reaches sessionStorage, while the durable tuple stays at the sent token.
-    // Cleanup uses delete(), which remains available after these failed put() calls.
     await page.evaluate(() => {
       const put = IDBObjectStore.prototype.put;
       IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
@@ -353,7 +348,6 @@ test('RIMAGE late acceptance in another chat preserves an edited-then-reverted d
     }, second.id);
     await expect(composer(page)).toHaveValue('');
     release();
-    // Observe completed cleanup before returning, rather than racing the late response.
     await expect
       .poll(() =>
         page.evaluate(async (id) => {
@@ -457,7 +451,6 @@ test('RIMAGE accepted request never reappears after IndexedDB cleanup fails', as
   await open(page, chat);
   await page.getByLabel('참고 이미지 파일', { exact: true }).setInputFiles(await image());
   await expect(thumbnails(page)).toHaveCount(1);
-  // A read after the queued write observes the saved Blob; subsequent cleanup is denied.
   await page.evaluate(async (id) => {
     const db = await new Promise<IDBDatabase>((resolve) => {
       const request = indexedDB.open('uimori-editor-recovery', 1);
@@ -493,7 +486,6 @@ test('RIMAGE expired unaccepted upload keeps the pending command until the user 
 }) => {
   const chat = await createChat(request);
   const attachment = await image();
-  // A valid receipt whose staged bytes are no longer present on the server.
   await page.route(
     '**/api/uploads',
     (route) =>
@@ -646,7 +638,6 @@ test('RIMAGE opener tabs inherit the initial draft and then preserve their own i
     .setInputFiles(await image('first.png'));
   await expect(thumbnails(page)).toHaveCount(1);
   const firstTab = await page.evaluate(() => sessionStorage.getItem('uimori:request-draft-tab'));
-  // A same-origin opener copies sessionStorage, including its draft namespace UUID.
   const opened = page.waitForEvent('popup');
   await page.evaluate((id) => {
     window.open('/?chat=' + id, '_blank');

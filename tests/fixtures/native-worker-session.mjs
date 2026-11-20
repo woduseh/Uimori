@@ -4,9 +4,7 @@ export async function evaluate(input) {
   if (input?.fail) throw new Error('fixture failure');
   if (input?.exit) process.exit(7);
   if (input?.spin) {
-    for (;;) {
-      /* Only in a disposable test worker; the host must terminate this. */
-    }
+    for (;;) {}
   }
   if (input?.delay) await new Promise((resolve) => setTimeout(resolve, input.delay));
   const copy = structuredClone(input);

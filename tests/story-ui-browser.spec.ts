@@ -488,7 +488,6 @@ root = Calendar("휴가 계획", [{date: 1, title: "출발"}, {date: 2, title: "
 </a2ui>`,
 ];
 
-/** Relation labels and node names of a graph whose boxes overlap, as "a / b" pairs. */
 const labelOverlaps = (graph: Locator) =>
   graph.evaluate((figure) => {
     const boxes = [
@@ -557,7 +556,6 @@ test('composed media render with their own shells in both schemes', async ({ pag
   const base = await page.locator('.story-ui-stack img').boundingBox();
   expect(overlay!.y).toBeGreaterThan(base!.y);
   expect(overlay!.y + overlay!.height).toBeLessThanOrEqual(base!.y + base!.height);
-  // A figure keeps its proportions, so heights compare as the values do.
   const figures = page.locator('.story-ui-compare[data-shape="figure"] svg');
   const small = await figures.nth(0).boundingBox();
   const tall = await figures.nth(2).boundingBox();
@@ -568,7 +566,6 @@ test('composed media render with their own shells in both schemes', async ({ pag
     '화'
   );
   await expect(page.locator('.story-ui-slot[data-state="equipped"]')).toContainText('장착');
-  // The first bar warns as it empties; a named tone or a later bar does not.
   const bar = (name: string) => page.getByRole('meter', { name, exact: true }).locator('xpath=..');
   await expect(bar('아리엘 HP')).toHaveAttribute('data-tone', 'positive');
   await expect(bar('테오 HP')).toHaveAttribute('data-tone', 'caution');
@@ -576,7 +573,6 @@ test('composed media render with their own shells in both schemes', async ({ pag
   await expect(bar('테오 MP')).toHaveAttribute('data-tone', 'info');
   await expect(bar('타락한 사제 분노')).toHaveAttribute('data-tone', 'caution');
   await expect(page.locator('.story-ui-combatant[data-state="down"]')).toContainText('전투 불능');
-  // The center node sits in the middle, and every line ends at the rim of its discs.
   const ring = page.locator('.story-ui-graph[data-layout="ring"]');
   const canvas = (await ring.locator('.story-ui-graph-canvas').boundingBox())!;
   const me = (await ring
@@ -589,10 +585,7 @@ test('composed media render with their own shells in both schemes', async ({ pag
   ).toHaveText('?');
   await expect(ring.locator('.story-ui-graph-node').nth(1).locator('img')).toBeVisible();
   await expect(ring.locator('.sr-only')).toContainText('한서윤 → 나: 짝사랑');
-  // No relation label sits on another label or on a node's name, including a pair of
-  // opposite edges between the same two people.
   expect(await labelOverlaps(ring)).toEqual([]);
-  // A tree reads downward: each layer sits below the one it grows from.
   const tree = page.locator('.story-ui-graph[data-layout="tree"]');
   const top = (name: string) =>
     tree
@@ -601,7 +594,6 @@ test('composed media render with their own shells in both schemes', async ({ pag
       .then((box) => box!.y);
   expect(await top('점사')).toBeGreaterThan(await top('기초 사격'));
   expect(await top('원거리 저격')).toBeGreaterThan(await top('점사'));
-  // Map squares stay square, areas span their squares, and markers stand on theirs.
   const board = page.locator('.story-ui-map-board');
   const ground = (await board.locator('.story-ui-map-ground').boundingBox())!;
   expect(ground.width / ground.height).toBeCloseTo(8 / 6, 1);
@@ -623,14 +615,11 @@ test('composed media render with their own shells in both schemes', async ({ pag
     'data-weekend',
     'sunday'
   );
-  // Entries without a time or note stay in their dates on a wide screen, and on a narrow one
-  // the agenda lists them one per row.
   const brief = page.locator('.story-ui-calendar', { hasText: '휴가 계획' });
   await expect(brief.locator('.story-ui-calendar-agenda')).toBeHidden();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(brief.locator('.story-ui-calendar-agenda')).toHaveCSS('display', 'grid');
   await page.setViewportSize({ width: 960, height: 900 });
-  // The model's own CSS restyles its block, and only its block, without leaving the page.
   const authored = page.locator('.story-ui[data-story-ui-authored]');
   await expect(authored).toHaveCount(1);
   await expect(authored).toHaveCSS('color', 'rgb(243, 233, 255)');
@@ -650,9 +639,7 @@ test('composed media render with their own shells in both schemes', async ({ pag
   expect(escaped!.x).toBeGreaterThanOrEqual(host!.x - 200);
   expect(remoteRequests).toEqual([]);
   if (!visualReview) return;
-  // Every block is captured under every preset in both schemes.
   test.setTimeout(180_000);
-  // A theme switch must not be captured halfway through a color transition.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const capture = async (name: string) => {
     for (let index = 0; index < sources.length; index++)
@@ -668,7 +655,6 @@ test('composed media render with their own shells in both schemes', async ({ pag
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await capture('mobile');
-  // The same blocks under every preset, light then dark.
   await page.setViewportSize({ width: 960, height: 900 });
   const first = taught.length;
   const sample = [
@@ -699,12 +685,10 @@ test('composed media render with their own shells in both schemes', async ({ pag
     );
     const preset = page.locator('#preset');
     await expect(preset.locator('.story-ui')).toHaveCount(sample.length);
-    // A preset may enlarge a label with its own border or spacing; the layout must still hold.
     expect(
       await labelOverlaps(preset.locator('.story-ui-graph[data-layout="ring"]')),
       style
     ).toEqual([]);
-    // A defeated unit reads as out whatever the preset does to tokens.
     await expect(
       preset.locator('.story-ui-map-board .story-ui-map-token[data-state="down"]'),
       style

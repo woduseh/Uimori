@@ -167,7 +167,6 @@ describe('Vertex native wire through real local HTTP streams (no live calls)', (
           name: 'knowledge.read',
         });
         expect(JSON.stringify(last.parts[0].functionResponse)).toContain('Copper flame');
-        // Two data lines form one JSON event; individual data lines are not complete JSON.
         response.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8' });
         response.write(
           ': keepalive\r\ndata: {"candidates":[\r\ndata: {"index":0,"content":{"role":"model","parts":[{"text":"등대의 불빛이 바다를 비췄다."}]},"finishReason":"STOP"}]}\r\n\r\n'
@@ -270,7 +269,7 @@ describe('Vertex native wire through real local HTTP streams (no live calls)', (
         }) + sse({ usageMetadata: usage });
       const local = await redirectedFixture((_captured, response) => {
         response.writeHead(200, { 'content-type': 'text/event-stream' });
-        response.write(payload); // STOP may arrive before the stream and its late usage have finished.
+        response.write(payload);
       });
       let deliveredBytes = 0;
       let readPending = false;

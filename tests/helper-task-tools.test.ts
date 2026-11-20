@@ -784,7 +784,6 @@ test('a failed helper receipt rolls back a run retry before any main provider ca
   }
 });
 
-// Legacy host identity: keep matching events written before receipt inspection existed.
 const receiptForCall = (taskId: string, callId: string) =>
   `${taskId}:${createHash('sha256').update(`${taskId}\0${callId}`).digest('hex')}`;
 
@@ -827,7 +826,6 @@ test('helper inspection confirms durable effects even after a lost tool response
     denied: false,
     result: { text: 'PRIVATE_BODY' },
   });
-  // Commit succeeded but the worker stopped before publishing tool.finished.
   const orphanId = receiptForCall(task.id, 'lost-response');
   f.workspace.operation(task.id, orphanId, { name: 'chat.rename' }, () =>
     f.store.renameChat(chat.id, '실제로 저장된 최종 제목', first.titleRevision ?? 0)
@@ -881,7 +879,6 @@ test('one shell call attributes multiple native receipts without guessing orphan
   f.workspace.event(task.conversationId, task.id, 'tool.finished', {
     name: 'data.exec',
     callId: 'native-edit',
-    // Payload claims cannot attribute the other call's durable effect.
     result: { receiptId: receipts[2], outcome: 'committed' },
   });
   const expected = {

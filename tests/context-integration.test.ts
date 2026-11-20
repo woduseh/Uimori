@@ -89,7 +89,6 @@ async function setup(options: { count?: number; short?: boolean } = {}) {
   }));
   await app.ready();
   observeExecutions(app.store);
-  // Keep these compression boundaries on the same short synthetic instructions.
   updatePromptWorkspace(app.store, {
     expectedRevision: modelWorkspace(app.store).revision,
     main: {
@@ -235,7 +234,6 @@ describe('automatic input summaries through real App and file SQLite', () => {
       sources.slice(plan.compacted.length).map((source) => source.id)
     );
     expect(plan.recentSourceRevisions).toContain(sources.at(-1)!.id);
-    // Two recent sources are preferred, not mandatory when they exceed the target budget.
     if (plan.recentSourceRevisions.length < 2) {
       const twoRecent = withContextProjection(
         run.snapshot,

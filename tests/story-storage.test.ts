@@ -41,7 +41,6 @@ test('reading position persists across tabs while draft cursor stays in the sess
   expect(session.getItem('reading:chat')).toBeNull();
   expect(local.getItem('cursor:draft')).toBeNull();
   expect(readDraftCursor('cursor:draft')).toEqual({ start: 2, end: 4 });
-  // A fresh tab has a new sessionStorage but shares the same persistent reading location.
   vi.stubGlobal('sessionStorage', memoryStorage());
   expect(readReadingPosition('reading:chat')).toEqual(position);
 });

@@ -179,7 +179,6 @@ describe('Saved text and dependent image retention', () => {
         '2026-09-22',
         '2026-09-22'
       );
-    // Simulate completed generated translations: direct editing intentionally invalidates old image targets.
     for (let revision = 2; revision <= 8; revision++) {
       const id = `translation-${revision}`;
       store.db
@@ -219,7 +218,6 @@ describe('Image references across copies and editing', () => {
       mime: image.mime,
       base64: image.bytes.toString('base64'),
     });
-    // An unrelated image still being attached in another editor is not collected.
     const staged = await processImage(
       await sharp({ create: { width: 10, height: 10, channels: 3, background: '#105070' } })
         .png()

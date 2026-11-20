@@ -119,7 +119,6 @@ describe('read-only native preset diagnostics', () => {
     ]);
     expect({ previous, current }).toEqual(before);
     expect(diagnoseRisuPreset(previous, { mode: '1' }, previous).diagnostics).toEqual([]);
-    // Authored extra CR characters stay part of the compared label.
     const crBefore = program('mode=Mode=select=A\r\n');
     const crAfter = program('mode=Mode=select=A\r\r\n');
     expect(diagnoseRisuPreset(crAfter, {}, crBefore).diagnostics).toMatchObject([
@@ -160,7 +159,7 @@ describe('read-only native preset diagnostics', () => {
 
   it('leaves CBS source untouched and explicitly excludes syntax, comparisons and variable analysis', () => {
     // Pinned Risu supports raw/pure blocks, escapes, nested dynamic names, comments and source
-    // reparsing. None of these are evidence of an invalid declaration or selected option.
+    // reparsing.
     const text = [
       '{{// {{#when::mode::tis::99}} }}',
       '{{#pure}}{{#when::mode::tis::99}}raw{{/when}}{{/pure}}',

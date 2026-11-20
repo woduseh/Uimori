@@ -2,7 +2,6 @@ import { selectedReaderText } from '../../web/reader-dom.js';
 import { prepareRisuMessage } from '../../web/risu-message.js';
 import { mountRisuMessageSurface } from '../../web/risu-message-surface.js';
 
-/** Real composed selections must remain scoped to the owning reader. */
 export function runSurfaceCleanupRegressions(mount: HTMLElement): string[] {
   const article = document.createElement('section');
   const host = document.createElement('div');

@@ -105,7 +105,6 @@ for (const width of [412]) {
       )
       .toBe(true);
     await page.reload();
-    // Navigation state need not persist; the resource's per-device input does.
     if (!(await page.getByLabel('Risu 자료 이름', { exact: true }).isVisible()))
       await openEditor(page, saved.title);
     await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(
@@ -550,7 +549,6 @@ for (const width of [412]) {
     await page.route('**/api/native-transfers/apply-archive', async (route) => {
       bodies.push(route.request().postDataJSON());
       if (bodies.length !== 1) return route.continue();
-      // The server commits and stores its receipt; only the browser-facing response is lost.
       const accepted = await route.fetch();
       expect(accepted.ok(), await accepted.text()).toBe(true);
       receipt = await accepted.json();

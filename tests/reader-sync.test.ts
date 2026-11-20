@@ -97,7 +97,6 @@ test('a hidden reader retains event and reconnect targets without reads or retry
   expect(refresh.mock.calls).toEqual([[false]]);
   sync.setActive(false);
   sync.request(13, true);
-  // The request that was already underway cannot acknowledge a later reconnect.
   complete(true);
   await vi.advanceTimersByTimeAsync(60000);
   expect(refresh).toHaveBeenCalledTimes(1);

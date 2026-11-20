@@ -4,7 +4,6 @@ export function nativeProse(container: Locator) {
   return container.locator('.risu-message-surface .risu-chat-text');
 }
 
-/** Wait for the rendered message, not an iframe resize handshake. */
 export async function waitForNativeLayout(container: Locator) {
   const surface = container.locator('.risu-message-surface');
   const content = surface.locator('.risu-message-content');

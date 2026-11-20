@@ -90,7 +90,6 @@ test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DES
       await page.setViewportSize({ width, height: 320 });
       const header = dialog.locator(':scope > .dialog-header');
       const body = dialog.locator(':scope > .dialog-body');
-      // The visualViewport resize handler may update dialog sizing after setViewportSize returns.
       await expect
         .poll(
           async () => {
@@ -254,7 +253,6 @@ test('BPTUI02 template retry, dialog focus and duplicate clicks preserve a singl
         new URL(response.url()).pathname === '/api/prompt-presets' &&
         response.request().method() === 'POST'
     );
-    // Dispatch both clicks before React can disable the button, exercising the synchronous lock.
     await dialog
       .getByRole('button', { name: 'Phēmē RP 다시 추가', exact: true })
       .evaluate((node) => {

@@ -55,7 +55,6 @@ const distanceToEnd = (page: Page) =>
     .locator('#reader')
     .evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop);
 async function settleLayout(page: Page) {
-  // ResizeObserver, the navigation RAF, then its scroll event all get a rendering cycle.
   await page.evaluate(async () => {
     for (let index = 0; index < 3; index++)
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -76,7 +75,6 @@ test('explicit source navigation follows late geometry until wheel reading takes
     node.style.height = '360px';
   });
   await expect.poll(() => targetOffset(page)).toBe(0);
-  // Actual wheel input outside the native message cancels even if no further scrolling is possible.
   await page.getByRole('button', { name: 'Go to source', exact: true }).hover();
   await page.mouse.wheel(0, -80);
   const before = await page.locator('#reader').evaluate((node) => node.scrollTop);
@@ -102,7 +100,6 @@ test('late native message growth follows end navigation and composed keys releas
     .poll(() => page.locator('.risu-message-surface').evaluate((node) => node.clientHeight))
     .toBeGreaterThan(1300);
   await expect.poll(() => distanceToEnd(page)).toBeLessThanOrEqual(1);
-  // Focus without pointer input or parent scrolling, then produce a real composed key event.
   await native
     .locator('#native-focus-button')
     .evaluate((node) => (node as HTMLElement).focus({ preventScroll: true }));
@@ -123,7 +120,6 @@ test('a queued resize from a stale navigation epoch cannot move the new reading 
   await mount(page);
   await page.getByRole('button', { name: 'Go to end', exact: true }).click();
   await expect.poll(() => distanceToEnd(page)).toBeLessThanOrEqual(1);
-  // Programmatic click avoids the input-cancellation path: the epoch guard must stand alone.
   await page
     .getByRole('button', { name: 'Change navigation epoch', exact: true })
     .evaluate((node) => (node as HTMLButtonElement).click());
@@ -238,8 +234,6 @@ test('scene search keeps one query when switching between scene list and manuscr
   await expect(dialog.getByText('일치하는 장면이 없어요.', { exact: true })).toBeVisible();
 });
 
-// One JS task reproduces A -> B -> A before React can commit a different query.
-// The reader must reject the old response by intent, not by comparing URL fields alone.
 for (const action of ['same-chat', 'A-B-A'] as const) {
   test(`READERNAV initial loading recovers after ${action} navigation`, async ({
     page,
@@ -262,8 +256,6 @@ for (const action of ['same-chat', 'A-B-A'] as const) {
     });
     await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
       reads++;
-      // The SSE snapshot may start another initial read before navigation. Keep every
-      // pre-navigation response pending so the real loading surface remains observable.
       if (recovering) return route.continue();
       const response = await route.fetch();
       const body = await response.json();
@@ -294,7 +286,6 @@ for (const action of ['same-chat', 'A-B-A'] as const) {
           { first: chat.id, second: other.id }
         );
       }
-      // Recover before the superseded HTTP request settles, without an SSE event or reload.
       const title = page.locator('.workspace-header').getByText(chat.title, { exact: true });
       await expect(title).toBeVisible();
       await expect.poll(() => reads).toBeGreaterThan(initialReads);

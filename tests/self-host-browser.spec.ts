@@ -51,8 +51,6 @@ async function step<T>(name: string, run: () => Promise<T>): Promise<T> {
   return test.step(name, run, { timeout: 20_000 });
 }
 
-// This suite needs the authenticated HTTPS fixture and must contribute neither
-// skipped tests nor false evidence to ordinary loopback browser regressions.
 if (process.env.UIMORI_SELF_HOST_BROWSER === '1')
   test.use({
     ignoreHTTPSErrors: true,
@@ -361,9 +359,6 @@ if (process.env.UIMORI_SELF_HOST_BROWSER === '1')
         await expect(phone.getByTestId('source')).toHaveCount(2);
       });
       await step('revoke mobile session while UI is open', async () => {
-        // Fill while still authenticated. After revocation the gate can remove the
-        // composer between awaits; waiting for actionability there used to consume
-        // the entire test timeout. The conditional click below is one DOM task.
         await phone
           .getByLabel('다음 장면 요청', { exact: true })
           .fill('SYNTHETIC_EXPIRED_SESSION_MUST_NOT_GENERATE');
@@ -378,7 +373,6 @@ if (process.env.UIMORI_SELF_HOST_BROWSER === '1')
           ).status()
         ).toBe(200);
         await phone.evaluate(() => {
-          // The send control is icon-only; its accessible label owns the action name.
           document.querySelector<HTMLButtonElement>('button[aria-label="원문 생성"]')?.click();
         });
         await expect(

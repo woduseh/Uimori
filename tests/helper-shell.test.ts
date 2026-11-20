@@ -113,7 +113,6 @@ function prepareFiles(
   scope: 'library' | 'chats',
   id: string
 ) {
-  // These cases exercise the subsequent shell command. The runtime suite covers CLI export.
   (f.shell as unknown as { exportTask(task: typeof f.task): void }).exportTask(f.task);
   exportData(f.shell, f.task.id, scope, id);
 }
@@ -232,7 +231,6 @@ const python3 = (() => {
       expect(readFileSync(join(base, translations[0].file), 'utf8')).toBe(ko[0]);
       expect(readFileSync(join(base, 'INDEX.md'), 'utf8')).toContain('tools/repetition.py');
 
-      // A locally edited original makes its exported translation stale for the script.
       writeFileSync(
         join(base, `chats/${chat.id}/scenes/${sources[2].id}.txt`),
         lines[2] + ' Edited.'

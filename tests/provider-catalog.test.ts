@@ -239,7 +239,6 @@ test('hints prefer list metadata, fall back to the reviewed table, and always ca
     known: undefined,
     all: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
   });
-  // Gateways infer the model maker and expose that family's native controls.
   expect(
     modelHints(connection('vercel-chat-v1'), 'anthropic/claude-opus-5').thinking
   ).toMatchObject({

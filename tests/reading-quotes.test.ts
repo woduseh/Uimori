@@ -167,9 +167,6 @@ describe('literal reading styles', () => {
     ];
     const started = performance.now();
     for (const text of samples) expect(renderedText(render(text))).toBe(text);
-    // This generous budget guards synchronous UI stalls from rescanning every
-    // suffix. Linear parsing and server rendering of all samples is subsecond
-    // locally; the former repeated-ruby scan alone takes many seconds.
     expect(performance.now() - started).toBeLessThan(5_000);
   });
 });

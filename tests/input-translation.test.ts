@@ -118,8 +118,6 @@ function mockSend(result = success) {
     });
 }
 function databaseState(app: App) {
-  // The only new persistence is a content-free usage receipt. Story, draft and all other
-  // authored-content tables remain unchanged; the receipt is explicitly checked.
   const attempts = app.store.db.prepare('SELECT * FROM attempts').all();
   for (const attempt of attempts) {
     expect(attempt).toMatchObject({
@@ -141,8 +139,6 @@ function databaseState(app: App) {
     expect(JSON.stringify(attempt)).not.toContain(payload.text);
     expect(JSON.stringify(attempt)).not.toContain(success.text);
   }
-  // Protect authored content and execution ownership, not unrelated derived caches or
-  // optional device metadata. Receipt privacy is checked above.
   return ['chats', 'sources', 'source_edits', 'runs', 'jobs', 'job_results'].map((name) => [
     name,
     app.store.db.prepare(`SELECT * FROM "${name}"`).all(),
@@ -215,7 +211,6 @@ test('a long draft and its translation keep their full text without extra model 
 test('a maximum-size draft with no translation model returns the model requirement without dispatch', async () => {
   const f = await setup(false);
   const send = mockSend();
-  // JSON escapes each null character to six bytes: the former 4 MiB body cap failed first.
   const response = await f.post({ ...payload, text: '\0'.repeat(REQUEST_TEXT_MAX_CHARS) });
   expect(response.statusCode, response.body).toBe(409);
   expect(response.json()).toEqual({ error: 'MODEL_REQUIRED:translation' });
@@ -285,7 +280,6 @@ test('server shutdown cancels a pending input translation instead of leaving pro
     return { ...success, status: 'cancelled', text: '' };
   });
   const pending = f.post(payload);
-  // light-my-request starts its request when the thenable is consumed.
   const response = Promise.resolve(pending);
   await ready;
   await f.app.close();

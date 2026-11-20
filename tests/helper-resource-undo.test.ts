@@ -350,7 +350,6 @@ test('runtime edits stay undoable after input cleanup and duplicate POST confirm
   expect(response.json()).toMatchObject({ ...edit, canUndo: false, undone: true });
   const restored = readResource(f.store, 'content', content.id);
   expect(restored).toMatchObject({ title: '원래 제목', revision: 3 });
-  // A dropped response retry must not undo a subsequent user's save or toggle the old version.
   saveResource(f.store, {
     kind: 'content',
     id: content.id,

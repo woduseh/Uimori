@@ -326,13 +326,11 @@ test('RSURFACE viewport projections retain local controls and action locks until
   await presentation.getByRole('button', { name: 'One', exact: true }).click();
   await expect(page.getByLabel('Action calls')).toHaveText('1');
 
-  // A height-only change, as from an on-screen keyboard, is not a new display size.
   const settledRequests = requests.length;
   await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT + 60 });
   await page.clock.fastForward(1000);
   expect(requests).toHaveLength(settledRequests);
 
-  // A CSS-only projection keeps the actual input node and the successful action lock.
   const draftNode = await draft.elementHandle();
   heldWidthText = MOBILE_WIDTH;
   await page.setViewportSize({ width: MOBILE_WIDTH + 2, height: MOBILE_HEIGHT + 60 });
@@ -355,7 +353,6 @@ test('RSURFACE viewport projections retain local controls and action locks until
     .evaluate((button: HTMLButtonElement) => button.click());
   await expect(page.getByLabel('Action calls')).toHaveText('1');
 
-  // An authored default change wins over a stale local value even at the same revision.
   heldWidthText = undefined;
   draftDefault = 'Updated authored default';
   await page.setViewportSize({ width: MOBILE_WIDTH + 1, height: MOBILE_HEIGHT });
@@ -364,7 +361,6 @@ test('RSURFACE viewport projections retain local controls and action locks until
   await expect(notes).toHaveValue('Unsaved card notes');
   await expect(panelToggle).toBeChecked();
 
-  // A real native revision starts a fresh card state and allows its next action.
   nativeRevision = 1;
   draftDefault = 'New native draft';
   await page.getByRole('button', { name: 'Refresh native revision', exact: true }).click();

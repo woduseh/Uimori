@@ -500,7 +500,6 @@ test.each(['missing-scene', 'budget'] as const)(
         return;
       }
       if (mode === 'budget') {
-        // Large but fitting evidence no longer fails at the old 96KB byte cap.
         expect(wire.input.results).toHaveLength(7);
         expect(Buffer.byteLength(JSON.stringify(wire.input.results), 'utf8')).toBeGreaterThan(
           96000

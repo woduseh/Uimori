@@ -15,14 +15,12 @@ export async function navigationAction(page: Page, name: string, botTitle?: stri
   const dialog = page.getByRole('dialog').filter({ visible: true });
   if (await dialog.count()) await page.keyboard.press('Escape');
   if (name === '작업 현황') {
-    // The sidebar shows tasks only while something runs; the chat ⋯ menu always has the panel.
     await openChatMenu(page);
     await page.getByRole('button', { name: '작업 현황', exact: true }).click();
     return;
   }
   const nav = await visibleNavigation(page);
   if (name === '새 채팅' || name === '새 이야기' || name === '설정 후 새 채팅') {
-    // Bots without chats intentionally live only in the library. Use that shared entry point.
     await navigationAction(page, '서재');
     const library = page.getByTestId('library-panel');
     await library.getByRole('tab', { name: '봇', exact: true }).click();
@@ -36,7 +34,6 @@ export async function navigationAction(page: Page, name: string, botTitle?: stri
         }),
       })
       .first();
-    // Form-oriented tests explicitly configure the chat; the main action may start immediately.
     await item.getByLabel(/ 메뉴$/).click();
     await item.getByRole('button', { name: '설정 후 새 채팅', exact: true }).click();
     return;
@@ -97,7 +94,6 @@ export async function openSourceActions(source: Locator) {
     await menu.click();
   return menu;
 }
-/** Earlier scenes keep representation choices in their menu; the latest scene keeps its toolbar. */
 export async function sourceAction(source: Locator, name: string) {
   const button = source.getByRole('button', { name, exact: true });
   if (!(await button.isVisible())) await openSourceActions(source);
@@ -120,7 +116,6 @@ export async function startProviderConnection(page: Page) {
   }
   await expect(editor.getByRole('region', { name: '프로바이더 선택', exact: true })).toBeVisible();
 }
-/** Open the owning provider group before targeting a model in a collapsed list. */
 export async function revealProviderModel(page: Page, title: string) {
   const card = page.getByRole('article', {
     name: `${title} 모델`,
@@ -271,10 +266,7 @@ export async function selectCurrentSettingsSection(
   await navigationAction(page, '설정');
   await selectSettingsSection(page, name);
 }
-/** Chat settings: a header button on wide widths, the first chat ⋯ item on compact widths. */
 export async function openChatSettings(page: Page) {
-  // Decided by the viewport like `useCompactLayout` (760px), so a just-resized page does not
-  // race the header re-render; the click itself waits for the chosen control to appear.
   if (compactLayout(page)) {
     const menu = await openChatMenu(page);
     await menu.getByRole('button', { name: '채팅 설정', exact: true }).click();
@@ -293,10 +285,7 @@ export async function openChatSettings(page: Page) {
 function compactLayout(page: Page) {
   return (page.viewportSize()?.width ?? MOBILE_WIDTH) <= 760;
 }
-/** The helper: a header button on wide widths, a chat ⋯ item on compact widths. */
 export async function openHelper(page: Page) {
-  // After reload, wait for the actual entry point before choosing the compact/header path.
-  // A count() while the chat header is still loading would select a nonexistent desktop button.
   await expect
     .poll(
       async () =>
@@ -307,14 +296,11 @@ export async function openHelper(page: Page) {
           .count())
     )
     .toBeGreaterThan(0);
-  // Compact chat screens keep the helper in the chat ⋯ menu; every other screen has the header icon.
   if (compactLayout(page) && (await page.locator('.workspace-header .chat-menu').count())) {
     const menu = await openChatMenu(page);
     await menu.getByRole('button', { name: '도우미 열기', exact: true }).click();
     return;
   }
-  // The chat keeps the icon in its own header; the library and prompts put it at the
-  // right edge of their page header. `first` skips the transient loading header.
   await page
     .locator('.workspace-header, .library-heading')
     .getByRole('button', { name: '도우미 열기', exact: true })

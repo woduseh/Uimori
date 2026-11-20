@@ -123,7 +123,7 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
   const malicious =
     '\n\n<script>globalThis.__uimoriExecuted=true</script>\n\n<img src=x onerror="globalThis.__uimoriExecuted=true">\n\n<ruby>物語<rt>이야기</rt></ruby>\n\n`asset:synthetic_fixed`\n\n[unsafe](javascript:alert(1))';
   const chat = await seed(request, `합성 UI reader ${Date.now()}`, longPrompt + malicious, 3);
-  await prepareTranslations(request, chat.id); // This case measures cached view changes, not initial demand.
+  await prepareTranslations(request, chat.id);
   const before = await data(request, chat.id);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -310,14 +310,12 @@ test('UI08 UI12 native dialog focus, composition, URL and draft selection stay l
 }) => {
   const chat = await seed(request, `합성 UI keyboard ${Date.now()}`, 'Synthetic quiet harbor.');
   await page.goto(`/?chat=${chat.id}`);
-  // 412px: chat settings is the first chat ⋯ item; focus returns to the menu trigger on close.
   const menu = await openChatMenu(page);
   const settings = menu.getByRole('button', { name: '채팅 설정', exact: true });
   await settings.focus();
   await settings.press('Enter');
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await expect(dialog).toBeVisible();
-  // Common-dialog coverage owns focus wrapping; this case owns IME and caret persistence.
   await expect(dialog.getByRole('region', { name: '채팅 설정 내용', exact: true })).toBeVisible();
   await expect
     .poll(() =>
@@ -726,7 +724,6 @@ test('UI07 UI12 late accepted fork cannot navigate after A B A or replace the cu
     await openSourceActions(page.getByTestId('source'));
     await page.getByRole('button', { name: '이 장면까지 새 채팅으로 분기', exact: true }).click();
     const fork = await acceptedChat;
-    // The list is named after its own bot so several expanded bots stay distinguishable.
     const list = page.getByRole('navigation', { name: chatListName });
     await list.getByRole('button').filter({ hasText: other.title }).click();
     await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(other.id);
@@ -981,7 +978,6 @@ test('UI03 UI12 failed starting profile read survives reload and recovers frozen
   expect(botResponse.ok()).toBeTruthy();
   const bot = (await botResponse.json()) as Content;
   const choice = await createPromptChoice(request, title);
-  // An enabled synthetic connection permits a new role selection; this recovery test never starts a Run.
   const connectionResponse = await request.post('/api/connections', {
     data: {
       title: `${title} synthetic fixture`,
@@ -1036,7 +1032,6 @@ test('UI03 UI12 failed starting profile read survives reload and recovers frozen
   await close(page);
   const original = (await data(request, chat.id)).profile!;
   const currentModels = await setCurrentModels(request, { main: { id: model.id } });
-  // Competing updates preserve permanent bot ownership while changing unrelated settings.
   const update = await request.put(`/api/chats/${chat.id}/profile`, {
     data: {
       expectedRevision: original.revision,
@@ -1063,7 +1058,6 @@ test('UI03 UI12 failed starting profile read survives reload and recovers frozen
   });
   expect(restored.profile!.routes).toEqual(currentModels.routes);
   expect(restored.profile!.image).toBe(true);
-  // The competing save already recorded the intended attachments.
   expect(restored.profile!.revision).toBe((await update.json()).revision);
   expect(restored.runs).toHaveLength(0);
   expect(restored.attempts).toHaveLength(0);
@@ -1117,7 +1111,6 @@ test('UI03 starting without a model explains setup and creates a chat without ex
     const health = await response.json();
     await route.fulfill({ response, json: { ...health, testMode: false } });
   });
-  // Keep this empty-model UI fixture independent of models saved by earlier browser cases.
   await page.route(/\/api\/library(?:\?|$)/, async (route) => {
     const response = await route.fetch();
     const library = await response.json();
@@ -1172,7 +1165,6 @@ test('UI03 UI12 global model choices survive chat creation and disabled connecti
   const title = `UI global models ${Date.now()}`;
   const { connection, models } = await startingModels(request, title);
   const workspace = await setCurrentModels(request, { main: models[0], translation: models[1] });
-  // Exercise normal admission UI while retaining the local synthetic server.
   await page.route('**/api/health', async (route) => {
     const response = await route.fetch();
     const health = await response.json();
@@ -1407,7 +1399,6 @@ test('UI18 translation is requested only by first view click, never by restore, 
     .filter({ hasText: chat.title })
     .click();
   await expect(page.getByTestId('source-text')).toBeVisible();
-  // A real settings event exercises SSE refresh, including legacy translation=false.
   const before = await data(request, chat.id);
   const changed = await request.patch(`/api/chats/${chat.id}/settings`, {
     data: {
@@ -1496,7 +1487,6 @@ test('UI18 source and translation edits keep the current manuscript and feed fut
   expect(
     changed.jobs.filter((job) => job.kind === 'translation' && job.sourceRevision === source.id)
   ).toHaveLength(0);
-  // Editing a translation immediately after a source edit uses the hidden slot's CAS value.
   await openSourceActions(scene);
   await scene.getByRole('button', { name: '번역 수정', exact: true }).click();
   const manual = '  직접 고친 번역 {{literal_user}}\n\n사용자가 선택한 문장.\n  ';
@@ -1535,8 +1525,6 @@ test('UI18 source and translation edits keep the current manuscript and feed fut
   await expect(scene.getByRole('combobox')).toHaveCount(0);
   await expect(scene.getByText('번역 버전', { exact: true })).toHaveCount(0);
   await expect(scene.getByRole('button', { name: '다시 번역', exact: true })).toHaveCount(0);
-  // Completed snapshots intentionally discard historical bodies. Inspect the frozen
-  // next input while execution is held, rather than depending on retired retention.
   await request.post('/api/test/control', { data: { action: 'hold', barrier: 'run' } });
   try {
     await page.getByLabel('다음 장면 요청').fill('SYNTHETIC_FUTURE_AFTER_EDIT');
@@ -1561,13 +1549,10 @@ test('UI18 source and translation edits keep the current manuscript and feed fut
   ).toEqual(original.runs.map((run) => run.id));
 });
 
-// Without a translation the pencil in the scene tool row already edits the source; the ⋯ menu
-// only holds the other side, and on 412px an open menu is a sheet that covers the row.
 async function openSourceEditor(tab: Page) {
   const source = tab.getByTestId('source');
   await waitForNativeLayout(source.getByTestId('source-text'));
   const edit = source.locator('.scene-action[aria-label="원문 수정"]');
-  // A reader refresh can remount the toolbar; its transient absence does not mean menu mode.
   await expect(edit).toBeVisible();
   await edit.click();
   await expect(source.getByLabel('원문 수정 내용', { exact: true })).toBeVisible();
@@ -1672,7 +1657,6 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
           (await data(request, chat.id)).jobs.find((job) => job.kind === 'translation')?.status
       )
       .toBe('running');
-    // Refreshing the second tab receives the active slot before opening its editor.
     await second.reload();
     await openSourceActions(second.getByTestId('source'));
     await second.getByRole('button', { name: '번역 수정', exact: true }).click();
@@ -1721,7 +1705,6 @@ test('UI common dialogs stay centered with mobile margins, internal scrolling an
     await page.goto(`/?chat=${chat.id}`);
     const centered = async (dialog: Locator) => {
       await expect(dialog).toBeVisible();
-      // Lazy content can replace the dialog for one frame while loading.
       let measured = await dialog.boundingBox();
       await expect
         .poll(async () => {
@@ -1752,7 +1735,6 @@ test('UI common dialogs stay centered with mobile margins, internal scrolling an
       else await openChatSettings(page);
       const dialog = page.getByRole('dialog', { name: title, exact: true });
       await expect(dialog).toBeVisible();
-      // Loaded owners must replace their placeholders before checking final geometry and focus.
       if (title === '채팅 설정') await expect(dialog.locator('.chat-settings-panel')).toBeVisible();
       if (title === '작업 현황') await expect(dialog.getByTestId('usage-inspector')).toBeVisible();
       await centered(dialog);
@@ -1771,8 +1753,6 @@ test('UI common dialogs stay centered with mobile margins, internal scrolling an
         });
       await page.keyboard.press('Escape');
       await expect(dialog).not.toBeVisible();
-      // Tasks (every width) and chat settings (412px) open from the chat ⋯ menu, so focus
-      // returns to the menu button afterwards; the wide header button gets its own focus back.
       if (title === '작업 현황') {
         if (width === DESKTOP_WIDTH)
           await expect(page.locator('.chat-menu > summary')).toBeFocused();
@@ -1954,7 +1934,6 @@ test('UI chat settings close right after saving does not warn while the refresh 
   await runtime.getByText('고급 실행 설정', { exact: true }).click();
   const maxCalls = (await data(request, chat.id)).chat.settings.maxCalls === 6 ? 7 : 6;
   await runtime.getByLabel('작업당 모델 호출 한도', { exact: true }).fill(String(maxCalls));
-  // Hold the post-save reader refresh so the close arrives while it is still in flight.
   let release!: () => void;
   const held = new Promise<void>((resolve) => {
     release = resolve;

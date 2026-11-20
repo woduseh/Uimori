@@ -102,7 +102,6 @@ test('REQUESTPREVIEW current composer settings are estimated without generation 
     await page.getByRole('button', { name: '다음 요청 미리보기', exact: true }).click();
     await expect(page.getByTestId('request-preview')).toContainText('이번 요청에서 조회 로어 제외');
     expect(requests.at(-1)?.loreContextReset).toBe(true);
-    // Only failed or stale reads need a manual retry; retry never generates text.
     let state: 'failed' | 'unavailable' | 'stale' | 'ready' = 'failed';
     await page.route('**/api/chats/' + chat.id + '/request-preview', async (route) => {
       if (state === 'failed')
@@ -168,7 +167,6 @@ test('REQUESTPREVIEW closing a pending preview preserves the draft and ignores i
         expect(response.ok()).toBe(true);
         fetched();
         await gate;
-        // The browser may already have aborted the closed dialog's request.
         await route.fulfill({ response }).catch(() => {});
       }
     );
