@@ -45,6 +45,7 @@ async function expectShell(page: Page, dialog: Locator, preferredWidth: number) 
 }
 
 async function expectPrimary(button: Locator, cancel?: Locator) {
+  await button.page().mouse.move(0, 0);
   const colors = await button.evaluate((node) => {
     const actual = getComputedStyle(node);
     const expected = document.createElement('span').style;

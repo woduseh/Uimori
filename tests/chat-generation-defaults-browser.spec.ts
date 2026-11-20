@@ -8,7 +8,7 @@ import {
 } from './ui-navigation.js';
 import type { ChatGenerationDefaults } from '../core/chat-settings.js';
 
-test('new chat defaults save in general settings and do not update existing chats', async ({
+test('new chat defaults save immediately in general settings and do not update existing chats', async ({
   page,
   request,
 }) => {
@@ -25,18 +25,22 @@ test('new chat defaults save in general settings and do not update existing chat
     const section = page.getByRole('region', { name: '새 채팅 기본값', exact: true });
     const limit = section.getByRole('spinbutton');
     await expect(limit).toHaveAttribute('max', '128');
-    const save = section.getByRole('button', { name: '새 채팅 기본값 저장', exact: true });
-    await limit.fill(String(baseline.maxCalls === 1 ? 2 : 1));
-    await expect(save).toBeEnabled();
-    await limit.fill(String(baseline.maxCalls));
-    await expect(save).toBeDisabled();
+    await expect(section.getByRole('button')).toHaveCount(0);
+    await limit.fill('0');
+    await limit.press('Enter');
+    await expect(
+      section.getByText('작업당 모델 호출 한도는 1~128 사이의 정수로 입력해 주세요.')
+    ).toBeVisible();
+    await expect(limit).toHaveValue(String(baseline.maxCalls));
     await limit.fill('128');
+    await limit.press('Enter');
+    await expect.poll(async () => (await read()).maxCalls).toBe(128);
     await section.getByRole('switch', { name: '이야기 UI', exact: true }).check();
+    await expect.poll(async () => (await read()).storyUi).toBe(true);
     await section
       .getByRole('combobox', { name: '이야기 UI 스타일', exact: true })
       .selectOption('blue-archive');
-    await section.getByRole('button', { name: '새 채팅 기본값 저장', exact: true }).click();
-    await expect.poll(async () => (await read()).maxCalls).toBe(128);
+    await expect.poll(async () => (await read()).storyUiStyle).toBe('blue-archive');
     const created = await (
       await postFixtureChat(request, { data: { title: 'New default scope' } })
     ).json();
@@ -54,8 +58,8 @@ test('new chat defaults save in general settings and do not update existing chat
     await expect(limit).toHaveValue('128');
     await limit.fill('1');
     await section.getByRole('switch', { name: '이야기 UI', exact: true }).uncheck();
-    await section.getByRole('button', { name: '새 채팅 기본값 저장', exact: true }).click();
     await expect.poll(async () => (await read()).maxCalls).toBe(1);
+    await expect.poll(async () => (await read()).storyUi).toBe(false);
     expect((await (await request.get(`/api/chats/${created.id}`)).json()).chat.settings).toEqual(
       created.settings
     );
