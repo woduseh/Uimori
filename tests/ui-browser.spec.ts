@@ -84,8 +84,9 @@ async function close(page: Page) {
   if (await page.getByRole('dialog').filter({ visible: true }).count())
     await page.keyboard.press('Escape');
 }
+let navigationBotTitle = '';
 async function nav(page: Page, name: string) {
-  await navigationAction(page, name);
+  await navigationAction(page, name, navigationBotTitle);
 }
 const longPrompt =
   'SYNTHETIC_UI_LONG\n\n# 황혼의 부두\n\n> 조용한 약속을 기다려요.\n\n**미라**와 여행자는 편지를 열지 않았다.\n\n' +
@@ -102,10 +103,11 @@ test.afterEach(async ({ request }) => {
   }
 });
 test.beforeEach(async ({ request }) => {
+  navigationBotTitle = `UI navigation bot ${crypto.randomUUID()}`;
   const response = await request.post('/api/content', {
     data: {
       kind: 'bot',
-      title: `UI navigation bot ${Date.now()}`,
+      title: navigationBotTitle,
       description: 'Synthetic navigation fixture',
       text: 'Synthetic keeper.',
       loading: 'pinned',

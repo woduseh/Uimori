@@ -8,7 +8,7 @@ import type {
   PromptWorkspace,
 } from '../core/product.js';
 import type { Chat, ChatDetail, ReaderDetail, Run } from '../core/types.js';
-import { postFixtureChat } from './fixtures/chat.js';
+import { fixtureBotInput, postFixtureChat } from './fixtures/chat.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { visualReview } from './fixtures/visual-review.js';
 import {
@@ -343,7 +343,7 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await page.screenshot({ path: info.outputPath(`main-refusal-settings-${width}.png`) });
     await page.keyboard.press('Escape');
     await page.goto(`/?chat=${other.id}`);
-    await navigationAction(page, '새 채팅');
+    await navigationAction(page, '새 채팅', fixtureBotInput().title);
     const create = page.getByRole('dialog', { name: '새 채팅', exact: true });
     await expect(create.getByLabel('시작 본문 모델')).toHaveCount(0);
     await expect(create.getByLabel('시작 번역 모델')).toHaveCount(0);
