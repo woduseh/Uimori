@@ -9,19 +9,19 @@
 - 원문·번역을 직접 편집하고, 채팅을 독립 사본으로 복사해요.
 - 이야기 기억과 백업 기능을 제공해요.
 
-> **현재 버전 `v0.13.4` · DB 스키마 15**
+> **현재 버전 `v0.14.0` · DB 스키마 15**
 >
-> 진행 중 플롯이 일반 이어쓰기에도 반영되고, 플롯 화면에서 진척과 다음 항목을 보여 줘요. Vertex AI 위치 선택, 도우미의 새 작업, 화면 문구 정리도 함께 들어갔어요. [릴리스 노트](docs/releases/v0.13.4.md) · [업데이트 안내](docs/UPDATES.md)
+> 장면 삽화를 NovelAI로 그릴 수 있고, Gemini 4 Neon과 xhigh 사고 수준을 고를 수 있어요. UI 검토를 반영해 용어를 통일하고 문구를 줄였으며, 지우는 동작은 한 번 확인해요. 예전 저장 형식은 처음 시작할 때 한 번 고쳐 쓰고 그 뒤로는 읽지 않아요. [릴리스 노트](docs/releases/v0.14.0.md) · [업데이트 안내](docs/UPDATES.md)
 
 ## 빠른 시작 (Windows)
 
 **준비물**: Node **26.13.0 이상 26.x**, npm, Chrome 또는 Edge. SQLite는 Node에 포함된 기능을 사용하므로 따로 설치하지 않아요.
 
-1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.13.4` 릴리스가 공개됐는지 확인해요.
+1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.14.0` 릴리스가 공개됐는지 확인해요.
 2. 소스를 받아 실행해요.
 
    ```powershell
-   git clone --branch v0.13.4 --single-branch https://github.com/woduseh/Uimori.git
+   git clone --branch v0.14.0 --single-branch https://github.com/woduseh/Uimori.git
    cd Uimori
    npm ci
    npm run dev
