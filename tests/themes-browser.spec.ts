@@ -6,6 +6,7 @@ import { DEFAULT_THEME_TEMPLATE, emptyTheme, themeFile } from '../core/themes.js
 import { BUILTIN_PALETTES } from '../core/theme-palettes.js';
 import { navigationAction, selectSettingsSection } from './ui-navigation.js';
 import { restoreGlobalBackground, setGlobalBackgroundImage } from './fixtures/theme-background.js';
+import { restoreGlobalThemeSelection } from './fixtures/theme-selection.js';
 
 async function expectPalette(page: Page, id: string, mode: 'light' | 'dark' = 'light') {
   const palette = BUILTIN_PALETTES.find((entry) => entry.id === id)!;
@@ -493,6 +494,7 @@ test('THEMES palette selections lock duplicate actions and refresh conflicts wit
   page,
   request,
 }) => {
+  const baseline = (await (await request.get('/api/themes')).json()).preferences;
   await openThemes(page);
   await page.getByRole('button', { name: '기본 테마 적용', exact: true }).click();
   await page.getByRole('button', { name: '새 커스텀 테마', exact: true }).click();
@@ -541,4 +543,5 @@ test('THEMES palette selections lock duplicate actions and refresh conflicts wit
   ).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('alert')).toHaveCount(0);
   await page.getByRole('button', { name: '편집 취소', exact: true }).click();
+  await restoreGlobalThemeSelection(request, baseline);
 });

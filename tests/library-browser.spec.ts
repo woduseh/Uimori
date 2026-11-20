@@ -982,6 +982,9 @@ test('LIBUI08 manual order persists and a bot card can be dropped into a folder'
     panel.getByRole('button', { name: `${folder.title} 폴더 열기`, exact: true })
   ).toBeVisible();
   await page.reload();
+  await expect(
+    panel.getByRole('button', { name: `${folder.title} 폴더 열기`, exact: true })
+  ).toBeVisible();
   await expect(panel.locator('.library-empty')).toHaveCount(0);
 });
 

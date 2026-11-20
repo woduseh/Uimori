@@ -1,33 +1,14 @@
 import { expect, test } from '@playwright/test';
-import { createServer, type ViteDevServer } from 'vite';
-import react from '@vitejs/plugin-react';
+import { startFixtureVite, type FixtureVite } from './fixtures/fixture-vite.js';
 
-let server: ViteDevServer;
+let vite: FixtureVite;
 let origin: string;
 test.beforeAll(async () => {
-  server = await createServer({
-    configFile: false,
-    root: process.cwd(),
-    appType: 'custom',
-    plugins: [react()],
-    optimizeDeps: { noDiscovery: true, include: ['react', 'react-dom/client', 'markdown-it'] },
-    server: { host: '127.0.0.1', port: 0, watch: { ignored: ['**/output/**'] } },
-  });
-  server.middlewares.use(async (request, response, next) => {
-    if (request.url !== '/') return next();
-    response.setHeader('Content-Type', 'text/html');
-    response.end(
-      await server.transformIndexHtml(
-        '/',
-        '<!doctype html><html><body><main id="mount"></main></body></html>'
-      )
-    );
-  });
-  await server.listen();
-  origin = server.resolvedUrls!.local[0]!;
+  vite = await startFixtureVite(['react', 'react-dom/client', 'markdown-it']);
+  origin = vite.origin;
 });
 test.afterAll(async () => {
-  await server?.close();
+  await vite?.close();
 });
 
 test('HCODE01 helper copies each complete code block without changing manuscript prose', async ({

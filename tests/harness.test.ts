@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { listenAddress, networkPolicy } from '../server/network-policy.js';
@@ -27,7 +27,7 @@ const libraryUrl = new URL('../scripts/lib.mjs', import.meta.url).href;
 const runnerUrl = new URL('../scripts/browser-verification.mjs', import.meta.url).href;
 const lib = await import(libraryUrl);
 const realLib: typeof lib = await vi.importActual('../scripts/lib.mjs');
-const { runBrowserVerification } = await import(runnerUrl);
+const { runBrowserVerification, defaultBrowserWorkers } = await import(runnerUrl);
 const directories = new Set<string>();
 const originalArgv = process.argv;
 const originalExitCode = process.exitCode;
@@ -63,6 +63,7 @@ beforeEach(() => {
   vi.mocked(retainArtifacts).mockResolvedValue({ status: 'PASS', removed: [] });
   vi.mocked(assertBrowserRuntime).mockResolvedValue({ name: 'synthetic' });
   vi.stubEnv('UIMORI_VISUAL_REVIEW', '0');
+  vi.stubEnv('UIMORI_BROWSER_WORKERS', '1');
   lib.browserPath.mockReturnValue(process.execPath);
   lib.killOwned.mockResolvedValue({ exited: true });
   lib.artifactScan.mockImplementation(realLib.artifactScan);
@@ -72,7 +73,8 @@ beforeEach(() => {
       await writeFile(env.UIMORI_DB!, 'synthetic DB evidence');
       const child = { pid: 12345, exitCode: 0, signalCode: null };
       children.add(child);
-      return { child, ready: { url: 'http://127.0.0.1:1', dbPath: env.UIMORI_DB } };
+      const port = /app-(\d+)\.sqlite$/u.exec(env.UIMORI_DB!)![1];
+      return { child, ready: { url: `http://127.0.0.1:${port}`, dbPath: env.UIMORI_DB } };
     }
   );
   lib.command.mockImplementation(
@@ -230,9 +232,50 @@ test('passing assertions cannot hide a command timeout', async () => {
   expect(summary.report.passed).toBe(1);
   expect(summary.status).toBe('FAIL');
   expect(summary.cleanup.status).toBe('PASS');
-  expect(await readFile(path.join(directory, 'evidence-db', 'app.sqlite'), 'utf8')).toBe(
+  expect(await readFile(path.join(directory, 'evidence-db', 'app-1.sqlite'), 'utf8')).toBe(
     'synthetic DB evidence'
   );
+});
+
+test('each Playwright worker gets its own server and database, kept as evidence on failure', async () => {
+  process.argv.push('--workers', '3');
+  commandFailure.code = 1;
+  const { directory, summary } = await run();
+  expect(summary.workers).toBe(3);
+  const started: Record<string, string>[] = lib.startServer.mock.calls.map(
+    ([env]: [Record<string, string>]) => env
+  );
+  expect(new Set(started.map((env) => env.UIMORI_DB)).size).toBe(3);
+  expect(new Set(started.map((env) => env.UIMORI_INSTANCE)).size).toBe(3);
+  const handed = JSON.parse(lib.command.mock.calls[0][1].env.UIMORI_BROWSER_SERVERS);
+  expect(handed).toEqual(
+    summary.servers.map((server: { url: string; dbPath: string }) => ({
+      url: server.url,
+      db: server.dbPath,
+    }))
+  );
+  expect(new Set(handed.map((server: { url: string }) => server.url)).size).toBe(3);
+  expect((await readdir(path.join(directory, 'evidence-db'))).sort()).toEqual([
+    'app-1.sqlite',
+    'app-2.sqlite',
+    'app-3.sqlite',
+  ]);
+  expect(summary.cleanup).toMatchObject({ status: 'PASS', runtimeRemoved: true });
+});
+
+test('worker count follows the environment override and never exceeds the selected files', async () => {
+  vi.stubEnv('UIMORI_BROWSER_WORKERS', '4');
+  const { summary } = await run({ files: ['tests/a-browser.spec.ts', 'tests/b-browser.spec.ts'] });
+  expect(summary.workers).toBe(2);
+  expect(lib.startServer).toHaveBeenCalledTimes(2);
+});
+
+test('default worker count is bounded by half the CPUs and 2 GiB of memory per worker', () => {
+  const gib = 2 ** 30;
+  expect(defaultBrowserWorkers({ cpus: 16, memory: 32 * gib })).toBe(8);
+  expect(defaultBrowserWorkers({ cpus: 16, memory: 8 * gib })).toBe(4);
+  expect(defaultBrowserWorkers({ cpus: 4, memory: 16 * gib })).toBe(2);
+  expect(defaultBrowserWorkers({ cpus: 1, memory: gib })).toBe(1);
 });
 
 test('a stale build fails before launching any browser or server', async () => {
@@ -267,7 +310,14 @@ test('focused visual checks narrow the existing selection and record their actua
 });
 
 test('invalid browser options and shards fail before launching a server', async () => {
-  for (const args of [['--grep', '['], ['--unknown'], ['--shard', '0/4'], ['--shard', 'bad']]) {
+  for (const args of [
+    ['--grep', '['],
+    ['--unknown'],
+    ['--shard', '0/4'],
+    ['--shard', 'bad'],
+    ['--workers', '0'],
+    ['--workers', 'many'],
+  ]) {
     process.argv = [...originalArgv.slice(0, 2), ...args];
     await expect(run(), args.join(' ')).rejects.toThrow();
   }
