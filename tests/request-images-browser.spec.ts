@@ -44,7 +44,10 @@ for (const width of [360]) {
     const choosingFile = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: '참고 이미지 첨부', exact: true }).click();
     await (await choosingFile).setFiles(await image());
-    await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+    await expect(page.getByRole('button', { name: '입력창 더보기', exact: true })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
     await expect(thumbnails(page)).toHaveCount(1);
     await page.reload();
     await expect(composer(page)).toHaveValue('이미지의 옷차림을 참고해 줘.');

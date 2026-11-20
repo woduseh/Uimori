@@ -2168,6 +2168,7 @@ function App() {
                       <button
                         type="button"
                         className="secondary"
+                        data-closes-composer-menu
                         disabled={
                           !s.draftReady || s.imagesDecoding || s.submitting.includes(s.viewKey)
                         }
