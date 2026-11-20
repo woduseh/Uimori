@@ -75,7 +75,7 @@ import {
   ProviderModelTestActions,
   useProviderModelTests,
 } from './ProviderModelTest.js';
-import { parseVertexEndpoint } from '../core/vertex-location.js';
+import { parseVertexEndpoint, vertexModelsEndpoint } from '../core/vertex-location.js';
 import { JevProviderSettings } from './JevProviderSettings.js';
 import { useTestMode } from './useTestMode.js';
 import './ProviderManagement.css';
@@ -471,6 +471,24 @@ export function ConnectionEditor({
       expectedRevision: item.revision,
     };
     void perform(() => saveConnection(body, item.id, false));
+  }
+  const testAvailable = (item: ModelPreset) =>
+    item.enabled !== false &&
+    library.connections.some(
+      (connection) => connection.id === item.connectionId && connection.enabled
+    );
+  function moveVertexLocation(item: ModelPreset, location: string) {
+    const target = library.connections.find((candidate) => candidate.id === item.connectionId);
+    const endpoint = target && parseVertexEndpoint(target.endpoint);
+    if (!target || !endpoint) return;
+    const body = {
+      ...connectionPayload({
+        ...connectionDraft(target),
+        endpoint: vertexModelsEndpoint(endpoint.projectId, location),
+      }),
+      expectedRevision: target.revision,
+    };
+    void perform(() => saveConnection(body, target.id, false));
   }
   function editableModelBody(item: ModelPreset, changes: Record<string, unknown> = {}) {
     const { id: _id, revision, source: _source, capabilityProtocol: _protocol, ...body } = item;
@@ -1378,13 +1396,7 @@ export function ConnectionEditor({
                                   library.connections,
                                   item.connectionId
                                 )}
-                                available={
-                                  item.enabled !== false &&
-                                  library.connections.some(
-                                    (connection) =>
-                                      connection.id === item.connectionId && connection.enabled
-                                  )
-                                }
+                                available={testAvailable(item)}
                                 busy={busy}
                                 onStart={modelTests.start}
                               />
@@ -1398,7 +1410,12 @@ export function ConnectionEditor({
                         model={item}
                         records={modelTests.records}
                         vertexLocation={vertexLocationOf(library.connections, item.connectionId)}
+                        available={testAvailable(item)}
+                        busy={busy}
+                        onStart={modelTests.start}
+                        onCancel={modelTests.cancel}
                         onDismiss={modelTests.dismiss}
+                        onChangeLocation={moveVertexLocation}
                       />
                     </article>
                   ))}

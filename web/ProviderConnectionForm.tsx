@@ -11,7 +11,7 @@ import { VertexCredentialUpload } from './VertexCredentialUpload.js';
 import type { ProviderEditorState, ConnectionDraft } from './provider-editor-state.js';
 import {
   parseVertexEndpoint,
-  VERTEX_LOCATION_CHOICES,
+  vertexLocationOptions,
   vertexModelsEndpoint,
 } from '../core/vertex-location.js';
 import { vertexLocationLabel } from './vertex-location-label.js';
@@ -68,8 +68,6 @@ export function ProviderConnectionForm({
   const codex = connection.protocol === 'codex-app-server-v1';
   const vertex = connection.protocol === 'vertex-gemini-v1';
   const { projectId: vertexProjectId, location: vertexLocation } = vertexParts(connection.endpoint);
-  const vertexLocations: string[] = [...VERTEX_LOCATION_CHOICES];
-  if (!vertexLocations.includes(vertexLocation)) vertexLocations.push(vertexLocation);
   const definition = providerDefinition(connection.protocol);
   const endpointLabel = codex
     ? t('providers.m126')
@@ -217,7 +215,7 @@ export function ProviderConnectionForm({
                 })
               }
             >
-              {vertexLocations.map((location) => (
+              {vertexLocationOptions(vertexLocation).map((location) => (
                 <option key={location} value={location}>
                   {vertexLocationLabel(location)}
                 </option>

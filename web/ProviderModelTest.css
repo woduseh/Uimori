@@ -55,9 +55,13 @@
 .provider-location-results li {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
   gap: 4px 12px;
   padding-block: 6px;
+}
+.provider-location-results:focus-visible {
+  outline-offset: 4px;
 }
 .provider-location-results li + li {
   border-top: var(--hairline) solid var(--line);
@@ -74,6 +78,27 @@
   color: var(--accent-text);
 }
 .provider-location-outcome {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 12px;
+  min-width: 0;
+  margin-left: auto;
   color: var(--muted);
   overflow-wrap: anywhere;
+}
+.provider-location-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.provider-menu-item-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.provider-menu-item-text small {
+  font-size: var(--font-small);
+  line-height: 1.6;
+  color: var(--muted);
 }

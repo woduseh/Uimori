@@ -10,6 +10,13 @@ export const VERTEX_LOCATION_CHOICES = [
   'asia-northeast3',
 ] as const;
 
+/** The offered choices, then a saved location that is not one of them. */
+export function vertexLocationOptions(current: string): string[] {
+  const locations: string[] = [...VERTEX_LOCATION_CHOICES];
+  if (!locations.includes(current)) locations.push(current);
+  return locations;
+}
+
 const PROJECT = /^(?:[a-z][a-z0-9-]{4,28}[a-z0-9]|[0-9]+)$/u;
 const REGION = /^[a-z]+(?:-[a-z]+)+[0-9]{1,2}$/u;
 const PATH = /^\/v1\/projects\/([^/]+)\/locations\/([^/]+)\/publishers\/google\/models\/?$/u;
