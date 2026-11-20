@@ -1728,10 +1728,10 @@ export const messages = {
     zh: '无记录',
   },
   'visualpanels.unknownPartialEstimateInCalls': {
-    ko: '미확인 {v0}, 부분 추정 {v1}회',
-    en: 'Unknown {v0}, Partial estimate in {v1} calls',
-    ja: '未確認 {v0}、部分推定 {v1}回',
-    zh: '未知{v0}，{v1}次部分估算',
+    ko: '{v0, plural, =0 {} other {미확인 #회}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {, }}}}{v1, plural, =0 {} other {부분 추정 #회}}',
+    en: '{v0, plural, =0 {} other {Unknown in # calls}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {, }}}}{v1, plural, =0 {} other {partial estimate in # calls}}',
+    ja: '{v0, plural, =0 {} other {未確認 #回}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {、}}}}{v1, plural, =0 {} other {部分推定 #回}}',
+    zh: '{v0, plural, =0 {} other {未知#次}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {，}}}}{v1, plural, =0 {} other {部分估算#次}}',
   },
   'visualpanels.usageCalls': {
     ko: '사용량 호출',
