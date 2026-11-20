@@ -3,7 +3,8 @@ import { TransientNotice } from './TransientNotice.js';
 import { baselineThemeColors, colorInputValue } from './theme-color-input.js';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Check } from 'lucide-react';
-import { PaletteSettings } from './PaletteSettings.js';
+import { PaletteEditor, usePaletteLibrary } from './PaletteSettings.js';
+import { paletteFile } from '../core/palette-files.js';
 import { FontSettings } from './FontSettings.js';
 import { ThemeBackgroundSettings } from './ThemeBackgroundSettings.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -14,6 +15,7 @@ import {
   UploadIcon,
   DownloadIcon,
   CopyIcon,
+  EditIcon,
   DeleteIcon,
   DisplayIcon,
   ResetIcon,
@@ -109,11 +111,9 @@ export function ThemeSettings({
   const input = useRef<HTMLInputElement>(null);
   const management = useRef<HTMLDetailsElement>(null);
   const locked = useRef(false);
-  const [paletteDirty, setPaletteDirty] = useState(false);
-  const paletteSave = useRef<(() => Promise<boolean>) | null>(null);
-  const registerPaletteSave = useCallback((handler: (() => Promise<boolean>) | null) => {
-    paletteSave.current = handler;
-  }, []);
+  const paletteInput = useRef<HTMLInputElement>(null);
+  const paletteLibrary = usePaletteLibrary();
+  const paletteDirty = paletteLibrary.dirty;
   const [backgroundDirty, setBackgroundDirty] = useState(false);
   const [fontDirty, setFontDirty] = useState(false);
   const fontSave = useRef<(() => Promise<boolean>) | null>(null);
@@ -195,6 +195,7 @@ export function ThemeSettings({
     selectedLegacyLayout && !state.catalog.themes.some((theme) => theme.id === selectedId)
       ? [...state.catalog.themes, selectedLegacyLayout]
       : state.catalog.themes;
+  const libraryPalettes = state.catalog.palettes ?? BUILTIN_PALETTES;
   const palettes = [
     {
       id: THEME_PALETTE_ID,
@@ -202,8 +203,9 @@ export function ThemeSettings({
       description: '',
       colors: originalColors ?? { light: {}, dark: {} },
     },
-    ...(state.catalog.palettes ?? BUILTIN_PALETTES),
+    ...libraryPalettes,
   ];
+  const paletteActionsDisabled = paletteLibrary.busy || busy || backgroundDirty || dirty;
   async function action(work: () => Promise<void>, saveAttempt = false) {
     if (locked.current) return;
     locked.current = true;
@@ -252,7 +254,7 @@ export function ThemeSettings({
   }
   async function save(): Promise<boolean> {
     if (fontDirty && !(await fontSave.current?.())) return false;
-    if (paletteDirty && !(await paletteSave.current?.())) return false;
+    if (paletteDirty && !(await paletteLibrary.save())) return false;
     if (backgroundDirty && !(await backgroundSave.current?.())) return false;
     if (!draft || locked.current) return !draft;
     let saved = false;
@@ -607,56 +609,147 @@ export function ThemeSettings({
               </small>
             )}
           </div>
-          <button
-            disabled={
-              busy ||
-              backgroundDirty ||
-              paletteDirty ||
-              state.loading ||
-              (scope === 'global' ? selectedPaletteId === THEME_PALETTE_ID : !selectedPaletteId)
-            }
-            onClick={() => choosePalette(null)}
-          >
-            {scope === 'global'
-              ? t('visualpanels.resetPaletteToDefault')
-              : t('visualpanels.inheritPalette')}
-          </button>
+          <div className="theme-dimension-actions">
+            <button
+              disabled={
+                busy ||
+                backgroundDirty ||
+                paletteDirty ||
+                state.loading ||
+                (scope === 'global' ? selectedPaletteId === THEME_PALETTE_ID : !selectedPaletteId)
+              }
+              onClick={() => choosePalette(null)}
+            >
+              {scope === 'global'
+                ? t('visualpanels.resetPaletteToDefault')
+                : t('visualpanels.inheritPalette')}
+            </button>
+            <IconButton
+              label={t('palettes.create')}
+              icon={AddIcon}
+              disabled={paletteActionsDisabled}
+              onClick={() => paletteLibrary.edit()}
+            />
+            <IconButton
+              label={t('palettes.import')}
+              icon={UploadIcon}
+              disabled={paletteActionsDisabled || paletteDirty}
+              onClick={() => paletteInput.current?.click()}
+            />
+            <input
+              ref={paletteInput}
+              aria-label={t('palettes.import')}
+              hidden
+              type="file"
+              accept=".json,application/json"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                event.currentTarget.value = '';
+                if (file) paletteLibrary.importFile(file);
+              }}
+            />
+          </div>
         </div>
         <div className="theme-palette-grid" aria-label={t('visualpanels.selectColorPalette')}>
           {palettes.map((palette) => {
             const colors = { ...baselineThemeColors[mode], ...palette.colors[mode] };
+            const libraryPalette = libraryPalettes.find((entry) => entry.id === palette.id);
             return (
-              <button
-                key={palette.id}
-                className={`theme-palette-card ${selectedPaletteId === palette.id ? 'selected' : ''}`}
-                aria-label={t('visualpanels.applyPalette', {
-                  v0: paletteTitle(palette),
-                })}
-                aria-describedby={palette.description ? `${id}-palette-${palette.id}` : undefined}
-                aria-pressed={selectedPaletteId === palette.id}
-                disabled={busy || backgroundDirty || paletteDirty || state.loading}
-                onClick={() => choosePalette(palette.id)}
-              >
-                <span className="theme-palette-swatches" aria-hidden="true">
-                  {(['bg', 'panel', 'accent', 'text'] as const).map((key) => (
-                    <span key={key} style={{ background: colors[key] }} />
-                  ))}
-                </span>
-                <strong className="theme-choice-title">
-                  <span>{paletteTitle(palette)}</span>
-                  {selectedPaletteId === palette.id && <Check size={18} aria-hidden="true" />}
-                </strong>
-                {palette.description && (
-                  <span id={`${id}-palette-${palette.id}`} className="sr-only">
-                    {'revision' in palette
-                      ? palette.description
-                      : translateMessage(palette.description)}
+              <article className="theme-palette-item" key={palette.id}>
+                <button
+                  className={`theme-palette-card ${selectedPaletteId === palette.id ? 'selected' : ''}`}
+                  aria-label={t('visualpanels.applyPalette', {
+                    v0: paletteTitle(palette),
+                  })}
+                  aria-describedby={palette.description ? `${id}-palette-${palette.id}` : undefined}
+                  aria-pressed={selectedPaletteId === palette.id}
+                  disabled={busy || backgroundDirty || paletteDirty || state.loading}
+                  onClick={() => choosePalette(palette.id)}
+                >
+                  <span className="theme-palette-swatches" aria-hidden="true">
+                    {(['bg', 'panel', 'accent', 'text'] as const).map((key) => (
+                      <span key={key} style={{ background: colors[key] }} />
+                    ))}
                   </span>
+                  <strong className="theme-choice-title">
+                    <span>{paletteTitle(palette)}</span>
+                    {selectedPaletteId === palette.id && <Check size={18} aria-hidden="true" />}
+                  </strong>
+                  {palette.description && (
+                    <span id={`${id}-palette-${palette.id}`} className="sr-only">
+                      {'revision' in palette
+                        ? palette.description
+                        : translateMessage(palette.description)}
+                    </span>
+                  )}
+                </button>
+                {libraryPalette && (
+                  <ActionMenu
+                    label={t('visualpanels.manage', { v0: paletteTitle(libraryPalette) })}
+                    className="theme-palette-menu"
+                    viewport
+                  >
+                    <div className="action-menu-group">
+                      {'revision' in libraryPalette && (
+                        <button
+                          aria-label={t('palettes.actionEdit', { title: libraryPalette.title })}
+                          disabled={paletteActionsDisabled}
+                          onClick={() => paletteLibrary.edit(libraryPalette)}
+                        >
+                          <EditIcon size={18} aria-hidden="true" /> {t('palettes.edit')}
+                        </button>
+                      )}
+                      <button
+                        aria-label={t('palettes.actionClone', {
+                          title: paletteTitle(libraryPalette),
+                        })}
+                        disabled={paletteActionsDisabled}
+                        onClick={() => paletteLibrary.edit(libraryPalette, true)}
+                      >
+                        <CopyIcon size={18} aria-hidden="true" /> {t('palettes.clone')}
+                      </button>
+                    </div>
+                    <div className="action-menu-group">
+                      <button
+                        aria-label={t('palettes.actionExport', {
+                          title: paletteTitle(libraryPalette),
+                        })}
+                        disabled={paletteLibrary.busy}
+                        onClick={() =>
+                          saveDownload(
+                            `${libraryPalette.title}.palette.json`,
+                            paletteFile(libraryPalette)
+                          )
+                        }
+                      >
+                        <DownloadIcon size={18} aria-hidden="true" /> {t('palettes.export')}
+                      </button>
+                    </div>
+                    {'revision' in libraryPalette && (
+                      <div className="action-menu-group">
+                        <button
+                          className="danger"
+                          aria-label={t('palettes.actionDelete', { title: libraryPalette.title })}
+                          disabled={paletteActionsDisabled || paletteDirty}
+                          onClick={(event) => {
+                            event.currentTarget
+                              .closest('details')
+                              ?.querySelector('summary')
+                              ?.focus();
+                            paletteLibrary.setDeleting(libraryPalette);
+                          }}
+                        >
+                          <DeleteIcon size={18} aria-hidden="true" /> {t('palettes.delete')}
+                        </button>
+                      </div>
+                    )}
+                  </ActionMenu>
                 )}
-              </button>
+              </article>
             );
           })}
         </div>
+        <PaletteEditor library={paletteLibrary} disabled={busy || backgroundDirty || dirty} />
       </section>
       {(scope === 'bot' || storyUiThemeTarget) && storyUiBotId && (
         <section className="theme-dimension" aria-labelledby="story-ui-default-heading">
@@ -980,15 +1073,6 @@ export function ThemeSettings({
             query: '?theme-safe=1',
           })}
         </p>
-      </details>
-      <details className="palette-advanced">
-        <summary>{t('palettes.manage')}</summary>
-        <PaletteSettings
-          active={active}
-          disabled={busy || backgroundDirty || dirty}
-          onDirtyChange={setPaletteDirty}
-          onSaveHandlerChange={registerPaletteSave}
-        />
       </details>
       {state.preview && (
         <p role="status">{t('visualpanels.previewingAnUnsavedThemeMovingToAnother')}</p>

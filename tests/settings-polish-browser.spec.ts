@@ -349,7 +349,7 @@ test('SPUI03 usage keeps no-call periods compact without hiding free or unconfir
     }
     if (next === 'unconfirmed') {
       await expect(panel.getByRole('region', { name: '사용 비용', exact: true })).toContainText(
-        '미확인 1, 부분 추정 1회'
+        '미확인 1회, 부분 추정 1회'
       );
       await expect(panel.locator('.usage-chart-caption')).toContainText('부분 추정 1회');
       await expect(panel.locator('.usage-chart-caption')).toContainText('미확인 1회');

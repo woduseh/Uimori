@@ -296,8 +296,8 @@ export function UsagePanel({
               {(current.totals.unknownCostCalls > 0 || current.totals.partialCalls > 0) && (
                 <small className="usage-incomplete">
                   {t('visualpanels.unknownPartialEstimateInCalls', {
-                    v0: usageNumber(current.totals.unknownCostCalls),
-                    v1: usageNumber(current.totals.partialCalls),
+                    v0: current.totals.unknownCostCalls,
+                    v1: current.totals.partialCalls,
                   })}
                 </small>
               )}

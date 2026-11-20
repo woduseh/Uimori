@@ -1044,6 +1044,9 @@ function App() {
     />
   );
   function renderReadingSettings(onStartFocus?: () => void) {
+    const registeredReaderFont = fonts.catalog?.fonts.find(
+      (item) => item.id === fonts.catalog?.preferences.readerFontId
+    );
     return (
       <ReadingSettingsSearch searchable={!!onStartFocus}>
         <section className="settings-group reading-settings-group" aria-label={t('main.m028')}>
@@ -1062,6 +1065,11 @@ function App() {
                 <option value="sans">{t('main.m030')}</option>
                 <option value="serif">{t('main.m031')}</option>
               </select>
+              {registeredReaderFont && (
+                <small className="muted">
+                  {t('main.registeredReaderFont', { name: registeredReaderFont.title })}
+                </small>
+              )}
             </label>
             <label>
               {t('main.m032')}
