@@ -6,7 +6,7 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { SettingsIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ChatProfile, Library } from '../core/product.js';
 import type { ExternalJudgmentProvider } from '../core/judgment-settings.js';
 import { api } from './api.js';
@@ -62,6 +62,7 @@ export function ProfileEditor({
   disabled = false,
   nextRequest = '',
   loreContextReset = false,
+  generationSettings,
 }: {
   profile: ChatProfile;
   library: Library;
@@ -79,6 +80,7 @@ export function ProfileEditor({
   disabled?: boolean;
   nextRequest?: string;
   loreContextReset?: boolean;
+  generationSettings?: ReactNode;
 }) {
   useI18n();
   const form = useRef<HTMLFormElement>(null);
@@ -430,57 +432,6 @@ export function ProfileEditor({
                 </label>
               </div>
             </div>
-            <div hidden={tab !== 'prompts'} className="settings-inherited settings-group">
-              <h4 className="settings-group-heading">
-                {t('library.modelsUsedByGlobalChatSettings')}
-              </h4>
-              <dl className="settings-group-body">
-                <div>
-                  <dt>{t('library.translation')}</dt>
-                  <dd>
-                    {library.models.find(
-                      (item) => item.id === workspace?.modelRoutes.translation?.id
-                    )?.title ??
-                      (workspace
-                        ? workspace.modelRoutes.translation?.id
-                          ? t('library.unavailableRegisteredModelNotFound')
-                          : t('library.noModelSelected')
-                        : t('library.loading'))}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('library.judgmentModel')}</dt>
-                  <dd>
-                    {!workspace
-                      ? t('library.loading')
-                      : judgment && judgment.provider !== 'typesafe'
-                        ? `${judgmentProviderLabels[judgment.provider]} (${judgment.modelId})`
-                        : 'JEV'}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-            <div hidden={tab !== 'prompts'} className="settings-inherited settings-group">
-              <h4 className="settings-group-heading">
-                {t('library.promptsUsedByGlobalChatSettings')}
-              </h4>
-              <dl className="settings-group-body">
-                <div>
-                  <dt>{t('library.translation')}</dt>
-                  <dd>{workspace?.translation.title ?? t('library.loading')}</dd>
-                </div>
-              </dl>
-              <div className="form-actions">
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => onGlobalSettings('prompts')}
-                >
-                  <SettingsIcon size={18} aria-hidden="true" />
-                  {t('library.globalPromptSettings')}
-                </button>
-              </div>
-            </div>
           </fieldset>
         </div>
         {profile.revision > value.revision && dirty && (
@@ -515,6 +466,49 @@ export function ProfileEditor({
         </div>
         <TransientNotice message={hideSaveActions ? '' : status} />
       </form>
+      {generationSettings}
+      <div hidden={tab !== 'prompts'} className="settings-inherited settings-group">
+        <h4 className="settings-group-heading">{t('library.modelsUsedByGlobalChatSettings')}</h4>
+        <dl className="settings-group-body">
+          <div>
+            <dt>{t('library.translation')}</dt>
+            <dd>
+              {library.models.find((item) => item.id === workspace?.modelRoutes.translation?.id)
+                ?.title ??
+                (workspace
+                  ? workspace.modelRoutes.translation?.id
+                    ? t('library.unavailableRegisteredModelNotFound')
+                    : t('library.noModelSelected')
+                  : t('library.loading'))}
+            </dd>
+          </div>
+          <div>
+            <dt>{t('library.judgmentModel')}</dt>
+            <dd>
+              {!workspace
+                ? t('library.loading')
+                : judgment && judgment.provider !== 'typesafe'
+                  ? `${judgmentProviderLabels[judgment.provider]} (${judgment.modelId})`
+                  : 'JEV'}
+            </dd>
+          </div>
+        </dl>
+      </div>
+      <div hidden={tab !== 'prompts'} className="settings-inherited settings-group">
+        <h4 className="settings-group-heading">{t('library.promptsUsedByGlobalChatSettings')}</h4>
+        <dl className="settings-group-body">
+          <div>
+            <dt>{t('library.translation')}</dt>
+            <dd>{workspace?.translation.title ?? t('library.loading')}</dd>
+          </div>
+        </dl>
+        <div className="form-actions">
+          <button type="button" className="secondary" onClick={() => onGlobalSettings('prompts')}>
+            <SettingsIcon size={18} aria-hidden="true" />
+            {t('library.globalPromptSettings')}
+          </button>
+        </div>
+      </div>
     </section>
   );
 }

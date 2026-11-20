@@ -39,8 +39,6 @@ const saveSections = ['story', 'guide', 'profile', 'image', 'reference', 'runtim
 const generationSections = ['profile', 'runtime'] as const;
 
 export type Section = ProfileSection | 'story' | 'guide' | 'images' | 'runtime' | 'packages';
-// Two groups: the basics every chat needs, then the advanced automation sections.
-// Reading settings live in their own dialog (chat ⋯ menu), not here.
 function getCategories() {
   return [
     {
@@ -100,7 +98,6 @@ export function ChatSettingsPanel({
 }: {
   state: StoryState;
   onClose: () => void;
-  /** Explicit destinations override the remembered section. */
   initialSection?: Section;
   onGlobalSettings: (section: 'models' | 'prompts') => void;
   onOpenHelper: () => void;
@@ -242,7 +239,6 @@ export function ChatSettingsPanel({
   }
   async function saveGeneration() {
     if (savingPageRef.current || savingClose) return;
-    // Validate both native forms before the first independent write.
     for (const form of root.current?.querySelectorAll<HTMLFormElement>(
       '.settings form, .profile-editor form'
     ) ?? [])
@@ -307,9 +303,7 @@ export function ChatSettingsPanel({
     let hasDraft = false;
     try {
       hasDraft = sessionStorage.getItem(`uimori:chat-variable-draft:${state.selected}`) !== null;
-    } catch {
-      // The server-owned feature checks still work when browser draft storage is unavailable.
-    }
+    } catch {}
     void Promise.allSettled([
       api<{
         values: Record<string, string>;
@@ -426,22 +420,6 @@ export function ChatSettingsPanel({
             hidden={!isProfile(active) || !showingDetail}
             tabIndex={0}
           >
-            {visited.includes('prompts') && detail && (
-              <div hidden={profileTab !== 'prompts'}>
-                <SettingsEditor
-                  chat={detail.chat}
-                  onSaved={() => state.refresh(state.selected)}
-                  onError={state.setError}
-                  hideHeading
-                  hideSaveActions
-                  disabled={savingPage}
-                  onSaveRequest={() => void saveGeneration()}
-                  onDirtyChange={setRuntimeDirty}
-                  onSaveHandlerChange={saveGroup.registrations.runtime}
-                  onDiscardHandlerChange={discardGroup.registrations.runtime}
-                />
-              </div>
-            )}
             {detail?.profile && library && (
               <ProfileEditor
                 profile={detail.profile}
@@ -459,6 +437,24 @@ export function ChatSettingsPanel({
                 onGlobalSettings={(section) => requestClose(() => onGlobalSettings(section))}
                 nextRequest={state.pendingRequest ?? draft}
                 loreContextReset={state.loreContextReset}
+                generationSettings={
+                  visited.includes('prompts') && (
+                    <div hidden={profileTab !== 'prompts'}>
+                      <SettingsEditor
+                        chat={detail.chat}
+                        onSaved={() => state.refresh(state.selected)}
+                        onError={state.setError}
+                        hideHeading
+                        hideSaveActions
+                        disabled={savingPage}
+                        onSaveRequest={() => void saveGeneration()}
+                        onDirtyChange={setRuntimeDirty}
+                        onSaveHandlerChange={saveGroup.registrations.runtime}
+                        onDiscardHandlerChange={discardGroup.registrations.runtime}
+                      />
+                    </div>
+                  )
+                }
               />
             )}
             {profileTab === 'prompts' && (

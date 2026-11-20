@@ -1,5 +1,5 @@
-import { validatePalette, parsePaletteFile, paletteFile } from '../core/palette-files.js';
-import { useEffect, useRef, useState } from 'react';
+import { validatePalette, parsePaletteFile } from '../core/palette-files.js';
+import { useRef, useState } from 'react';
 import { t, useI18n, message, translateMessage } from './i18n.js';
 import { THEME_COLOR_KEYS, resolveTheme } from '../core/themes.js';
 import {
@@ -9,56 +9,29 @@ import {
   type ThemePalette,
 } from '../core/theme-palettes.js';
 import { useThemes } from './ThemeContext.js';
-import { api, ApiError, saveDownload } from './api.js';
+import { api, ApiError } from './api.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
 import { SaveButton } from './SaveButton.js';
 import { Dialog } from './Dialog.js';
 import { CheckIcon } from './ui-icons.js';
-import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import './palettes.css';
 import './deletion.css';
 
 type Draft = { id: string | null; revision?: number; model: PaletteDefinition };
-export function PaletteSettings({
-  onDirtyChange,
-  onSaveHandlerChange,
-  active = true,
-  disabled = false,
-}: {
-  onDirtyChange?: (dirty: boolean) => void;
-  onSaveHandlerChange?: SettingsSaveRegistration;
-  active?: boolean;
-  disabled?: boolean;
-}) {
-  useI18n();
+export type PaletteLibrary = ReturnType<typeof usePaletteLibrary>;
+
+export function usePaletteLibrary() {
   const state = useThemes();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [baseline, setBaseline] = useState('');
-  const [mode, setMode] = useState<'light' | 'dark'>('light');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [deleting, setDeleting] = useState<Palette | null>(null);
-  const [discarding, setDiscarding] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
   const lock = useRef(false);
   const dirty = !!draft && JSON.stringify(draft.model) !== baseline;
-  const palettes = state.catalog.palettes ?? BUILTIN_PALETTES;
-  useEffect(() => {
-    onDirtyChange?.(dirty);
-  }, [dirty, onDirtyChange]);
-  useEffect(
-    () => () => {
-      state.setPreview(null);
-      onDirtyChange?.(false);
-    },
-    [state.setPreview, onDirtyChange]
-  );
-  useEffect(() => {
-    if (!active) state.setPreview(null);
-  }, [active, state.setPreview]);
   async function run(work: () => Promise<void>) {
     if (lock.current) return;
     lock.current = true;
@@ -105,6 +78,15 @@ export function PaletteSettings({
     setConflict(false);
     state.setPreview(null);
   }
+  function importFile(file: File) {
+    void run(async () => {
+      if (file.size > 1024 * 1024) throw new Error(message('palettes.fileTooLarge'));
+      const model = parsePaletteFile(JSON.parse(await file.text()));
+      setDraft({ id: null, model });
+      setBaseline('');
+      state.setPreview(null);
+    });
+  }
   async function save() {
     if (!dirty) return true;
     let saved = false;
@@ -126,7 +108,60 @@ export function PaletteSettings({
     });
     return saved;
   }
-  useSettingsSaveHandler(onSaveHandlerChange, save);
+  function deleteConfirmed() {
+    void run(async () => {
+      if (!deleting) return;
+      await api(
+        `/palettes/${encodeURIComponent(deleting.id)}`,
+        { expectedRevision: deleting.revision },
+        'DELETE'
+      );
+      if (draft?.id === deleting.id) {
+        setDraft(null);
+        state.setPreview(null);
+      }
+      setDeleting(null);
+      await state.refresh(true);
+    });
+  }
+  function saveAsNew() {
+    if (!draft) return;
+    setDraft({ ...draft, id: null, revision: undefined });
+    setBaseline('');
+    setConflict(false);
+    setError('');
+  }
+  return {
+    draft,
+    setDraft,
+    dirty,
+    busy,
+    error,
+    setError,
+    notice,
+    conflict,
+    deleting,
+    setDeleting,
+    edit,
+    importFile,
+    save,
+    deleteConfirmed,
+    saveAsNew,
+  };
+}
+
+export function PaletteEditor({
+  library,
+  disabled = false,
+}: {
+  library: PaletteLibrary;
+  disabled?: boolean;
+}) {
+  useI18n();
+  const state = useThemes();
+  const { draft, setDraft, dirty, busy, error, deleting, setDeleting } = library;
+  const [mode, setMode] = useState<'light' | 'dark'>('light');
+  const [discarding, setDiscarding] = useState(false);
   function setColor(key: (typeof THEME_COLOR_KEYS)[number], value: string) {
     setDraft((current) => {
       if (!current) return current;
@@ -147,97 +182,17 @@ export function PaletteSettings({
           colors: validatePalette(draft.model).colors,
         });
     } catch (cause) {
-      setError((cause as Error).message);
+      library.setError((cause as Error).message);
     }
   }
   return (
-    <section className="palette-editor-section" aria-label={t('palettes.manage')}>
-      <div className="theme-library-actions">
-        <button disabled={busy || disabled} onClick={() => edit()}>
-          {t('palettes.create')}
-        </button>
-        <button disabled={busy || disabled || dirty} onClick={() => input.current?.click()}>
-          {t('palettes.import')}
-        </button>
-      </div>
-      <input
-        ref={input}
-        aria-label={t('palettes.import')}
-        hidden
-        type="file"
-        accept=".json,application/json"
-        onChange={(event) => {
-          const file = event.currentTarget.files?.[0];
-          event.currentTarget.value = '';
-          if (!file) return;
-          void run(async () => {
-            if (file.size > 1024 * 1024) throw new Error(message('palettes.fileTooLarge'));
-            const model = parsePaletteFile(JSON.parse(await file.text()));
-            setDraft({ id: null, model });
-            setBaseline('');
-            state.setPreview(null);
-          });
-        }}
-      />
-      <div className="palette-management-list">
-        {palettes.map((palette) => (
-          <div className="palette-management-row" key={palette.id}>
-            <span>{'revision' in palette ? palette.title : translateMessage(palette.title)}</span>
-            <div className="theme-library-actions">
-              {'revision' in palette && (
-                <button
-                  disabled={busy || disabled}
-                  aria-label={t('palettes.actionEdit', { title: palette.title })}
-                  onClick={() => edit(palette)}
-                >
-                  {t('palettes.edit')}
-                </button>
-              )}
-              <button
-                disabled={busy || disabled}
-                aria-label={t('palettes.actionClone', {
-                  title: 'revision' in palette ? palette.title : translateMessage(palette.title),
-                })}
-                onClick={() => edit(palette, true)}
-              >
-                {t('palettes.clone')}
-              </button>
-              <button
-                disabled={busy}
-                aria-label={t('palettes.actionExport', {
-                  title: 'revision' in palette ? palette.title : translateMessage(palette.title),
-                })}
-                onClick={() => saveDownload(`${palette.title}.palette.json`, paletteFile(palette))}
-              >
-                {t('palettes.export')}
-              </button>
-              {'revision' in palette && (
-                <button
-                  disabled={busy || disabled || dirty}
-                  aria-label={t('palettes.actionDelete', { title: palette.title })}
-                  onClick={() => setDeleting(palette)}
-                >
-                  {t('palettes.delete')}
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+    <>
       {error && (
         <NoticeBanner
           tone="error"
           actions={
-            conflict && draft ? (
-              <button
-                disabled={busy}
-                onClick={() => {
-                  setDraft({ ...draft, id: null, revision: undefined });
-                  setBaseline('');
-                  setConflict(false);
-                  setError('');
-                }}
-              >
+            library.conflict && draft ? (
+              <button disabled={busy} onClick={library.saveAsNew}>
                 {t('palettes.saveAsNew')}
               </button>
             ) : undefined
@@ -246,7 +201,7 @@ export function PaletteSettings({
           {translateMessage(error)}
         </NoticeBanner>
       )}
-      <TransientNotice message={notice} />
+      <TransientNotice message={library.notice} />
       {draft && (
         <div className="palette-editor">
           <label>
@@ -307,7 +262,7 @@ export function PaletteSettings({
               label={t('palettes.save')}
               disabled={!dirty || disabled}
               aria-busy={busy}
-              onClick={() => void save()}
+              onClick={() => void library.save()}
             />
             <button
               disabled={busy}
@@ -364,27 +319,12 @@ export function PaletteSettings({
             type="button"
             className="delete-button"
             disabled={busy}
-            onClick={() =>
-              void run(async () => {
-                if (!deleting) return;
-                await api(
-                  `/palettes/${encodeURIComponent(deleting.id)}`,
-                  { expectedRevision: deleting.revision },
-                  'DELETE'
-                );
-                if (draft?.id === deleting.id) {
-                  setDraft(null);
-                  state.setPreview(null);
-                }
-                setDeleting(null);
-                await state.refresh(true);
-              })
-            }
+            onClick={library.deleteConfirmed}
           >
             {t('palettes.delete')}
           </button>
         </div>
       </Dialog>
-    </section>
+    </>
   );
 }
