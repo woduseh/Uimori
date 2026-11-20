@@ -50,6 +50,7 @@ import {
   retainReaderNavigation,
   type ReaderNavigationPosition,
 } from './reader-navigation-scroll.js';
+import { readOptionalJson, writeOptionalStorage } from './optional-storage.js';
 
 const lastWorkspaceKey = 'uimori:last-workspace';
 function semanticReaderTarget(search: string): ReaderTarget | null {
@@ -63,10 +64,11 @@ function initialView(restore = false) {
   const params = new URLSearchParams(location.search);
   let chat = params.get('chat') || '';
   if (restore && !location.search && !location.hash) {
-    try {
-      const saved = JSON.parse(localStorage.getItem(lastWorkspaceKey) || 'null');
-      if (saved?.destination === 'story' && typeof saved.chatId === 'string') chat = saved.chatId;
-    } catch {}
+    const saved = readOptionalJson('local', lastWorkspaceKey, null) as {
+      destination?: unknown;
+      chatId?: unknown;
+    } | null;
+    if (saved?.destination === 'story' && typeof saved.chatId === 'string') chat = saved.chatId;
   }
   return {
     chat,
@@ -217,15 +219,14 @@ export function useStory() {
   const codexWarning = useCodexContentWarning();
   useEffect(() => {
     if (destination === 'story' && (!selected || !detail)) return;
-    try {
-      localStorage.setItem(
-        lastWorkspaceKey,
-        JSON.stringify({
-          destination,
-          chatId: destination === 'story' ? selected : null,
-        })
-      );
-    } catch {}
+    writeOptionalStorage(
+      'local',
+      lastWorkspaceKey,
+      JSON.stringify({
+        destination,
+        chatId: destination === 'story' ? selected : null,
+      })
+    );
   }, [destination, selected, detail]);
   useEffect(() => {
     if (initial.chat && !location.search && !location.hash)
@@ -1071,9 +1072,7 @@ export function useStory() {
     savePosition();
     rememberCursor();
     setReaderTarget({ ...target });
-    try {
-      sessionStorage.setItem(`reader-mode:${target.sourceId}`, target.representation);
-    } catch {}
+    writeOptionalStorage('session', `reader-mode:${target.sourceId}`, target.representation);
     if (replace) history.replaceState(null, '', readerTargetUrl(target));
     else history.pushState(null, '', readerTargetUrl(target));
     navigate({

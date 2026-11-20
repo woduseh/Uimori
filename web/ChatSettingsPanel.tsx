@@ -34,6 +34,7 @@ import {
 } from './ui-icons.js';
 import './chat-settings.css';
 import './settings-layout.css';
+import { readOptionalStorage } from './optional-storage.js';
 
 const saveSections = ['story', 'guide', 'profile', 'image', 'reference', 'runtime'] as const;
 const generationSections = ['profile', 'runtime'] as const;
@@ -304,12 +305,8 @@ export function ChatSettingsPanel({
       setPackageFeatures(null);
     }
     void packageAvailabilityKey;
-    let hasDraft = false;
-    try {
-      hasDraft = sessionStorage.getItem(`uimori:chat-variable-draft:${state.selected}`) !== null;
-    } catch {
-      // The server-owned feature checks still work when browser draft storage is unavailable.
-    }
+    const hasDraft =
+      readOptionalStorage('session', `uimori:chat-variable-draft:${state.selected}`) !== null;
     void Promise.allSettled([
       api<{
         values: Record<string, string>;

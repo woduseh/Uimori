@@ -109,6 +109,7 @@ import {
 } from './helper-recovery.js';
 import './helper.css';
 import './settings-layout.css';
+import { readOptionalStorage } from './optional-storage.js';
 
 type Props = {
   enterSend: boolean;
@@ -239,11 +240,7 @@ const statusLabel: Record<string, string> = {
 const activityKey = (task: HelperTaskView) =>
   `helper-task-activity:${task.conversationId}:${task.id}${active(task) ? '' : ':settled'}`;
 function savedActivityOpen(task: HelperTaskView) {
-  try {
-    return sessionStorage.getItem(activityKey(task)) === 'open';
-  } catch {
-    return false;
-  }
+  return readOptionalStorage('session', activityKey(task)) === 'open';
 }
 
 function HelperResponseActions({ text }: { text: string }) {

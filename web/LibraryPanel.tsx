@@ -88,6 +88,7 @@ import {
   saveLibraryManualOrder,
   type LibrarySort,
 } from './library-list-preferences.js';
+import { readOptionalJson, writeOptionalStorage } from './optional-storage.js';
 
 const contentLabelKeys: Record<ContentKind, string> = {
   bot: 'library.bot',
@@ -130,20 +131,18 @@ type ViewMode = 'cards' | 'list';
 type SortMode = LibrarySort;
 type CardRatio = '1:1' | '2:3' | '3:4' | '9:16';
 const cardRatios: CardRatio[] = ['1:1', '2:3', '3:4', '9:16'];
+function storedByTab(key: string) {
+  return (readOptionalJson('local', key, null) ?? {}) as Record<string, unknown>;
+}
 function savedViews(): Record<PrimaryLibraryTab, ViewMode> {
   const defaults: Record<PrimaryLibraryTab, ViewMode> = {
     bot: 'cards',
     persona: 'cards',
     module: 'list',
   };
-  try {
-    const stored = JSON.parse(localStorage.getItem('uimori-library-views') ?? '{}') as Record<
-      string,
-      unknown
-    >;
-    for (const { id } of libraryTabs)
-      if (stored[id] === 'cards' || stored[id] === 'list') defaults[id] = stored[id];
-  } catch {}
+  const stored = storedByTab('uimori-library-views');
+  for (const { id } of libraryTabs)
+    if (stored[id] === 'cards' || stored[id] === 'list') defaults[id] = stored[id];
   return defaults;
 }
 function savedCardRatios(): Record<PrimaryLibraryTab, CardRatio> {
@@ -152,14 +151,9 @@ function savedCardRatios(): Record<PrimaryLibraryTab, CardRatio> {
     persona: '1:1',
     module: '1:1',
   };
-  try {
-    const stored = JSON.parse(localStorage.getItem('uimori-library-card-ratios') ?? '{}') as Record<
-      string,
-      unknown
-    >;
-    for (const { id } of libraryTabs)
-      if (cardRatios.includes(stored[id] as CardRatio)) defaults[id] = stored[id] as CardRatio;
-  } catch {}
+  const stored = storedByTab('uimori-library-card-ratios');
+  for (const { id } of libraryTabs)
+    if (cardRatios.includes(stored[id] as CardRatio)) defaults[id] = stored[id] as CardRatio;
   return defaults;
 }
 function savedSorts(): Record<PrimaryLibraryTab, SortMode> {
@@ -168,27 +162,18 @@ function savedSorts(): Record<PrimaryLibraryTab, SortMode> {
     persona: 'name',
     module: 'name',
   };
-  try {
-    const stored = JSON.parse(localStorage.getItem('uimori-library-sorts') ?? '{}') as Record<
-      string,
-      unknown
-    >;
-    for (const { id } of libraryTabs)
-      if (stored[id] === 'name' || stored[id] === 'name-desc' || stored[id] === 'manual')
-        defaults[id] = stored[id];
-  } catch {}
+  const stored = storedByTab('uimori-library-sorts');
+  for (const { id } of libraryTabs)
+    if (stored[id] === 'name' || stored[id] === 'name-desc' || stored[id] === 'manual')
+      defaults[id] = stored[id];
   return defaults;
 }
 function savedManualOrders(): Record<PrimaryLibraryTab, string[]> {
   const defaults: Record<PrimaryLibraryTab, string[]> = { bot: [], persona: [], module: [] };
-  try {
-    const stored = JSON.parse(
-      localStorage.getItem('uimori-library-manual-orders') ?? '{}'
-    ) as Record<string, unknown>;
-    for (const { id } of libraryTabs)
-      if (Array.isArray(stored[id]))
-        defaults[id] = stored[id].filter((value): value is string => typeof value === 'string');
-  } catch {}
+  const stored = storedByTab('uimori-library-manual-orders');
+  for (const { id } of libraryTabs)
+    if (Array.isArray(stored[id]))
+      defaults[id] = stored[id].filter((value): value is string => typeof value === 'string');
   return defaults;
 }
 export function LibraryPanel({
@@ -540,9 +525,7 @@ export function LibraryPanel({
   function setView(mode: ViewMode) {
     const next = { ...views, [tab]: mode };
     setViews(next);
-    try {
-      localStorage.setItem('uimori-library-views', JSON.stringify(next));
-    } catch {}
+    writeOptionalStorage('local', 'uimori-library-views', JSON.stringify(next));
   }
   function setSort(mode: SortMode) {
     const next = { ...sortByTab, [tab]: mode };
@@ -632,9 +615,7 @@ export function LibraryPanel({
   function setCardRatio(ratio: CardRatio) {
     const next = { ...cardRatioByTab, [tab]: ratio };
     setCardRatioByTab(next);
-    try {
-      localStorage.setItem('uimori-library-card-ratios', JSON.stringify(next));
-    } catch {}
+    writeOptionalStorage('local', 'uimori-library-card-ratios', JSON.stringify(next));
   }
   function itemMenu(item: Content) {
     const manualIndex = filtered.findIndex((entry) => entry.id === item.id);

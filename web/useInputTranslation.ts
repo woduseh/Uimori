@@ -6,6 +6,12 @@ import {
 } from '../core/input-translation.js';
 import { api } from './api.js';
 import { useCodexContentWarning } from './useCodexContentWarning.js';
+import {
+  readOptionalJson,
+  readOptionalStorage,
+  removeOptionalStorage,
+  writeOptionalStorage,
+} from './optional-storage.js';
 
 type DraftIdentity = { key: string; epoch: number; revision: number; text: string };
 type Original = { id: string; text: string };
@@ -21,24 +27,17 @@ type Options = {
 const languageKey = 'uimori:input-translation-language';
 const originalKey = (key: string) => `input-translation:${key}`;
 function readOriginal(key: string): Original | null {
-  try {
-    const value = JSON.parse(sessionStorage.getItem(originalKey(key)) ?? 'null');
-    if (value && typeof value.id === 'string' && typeof value.text === 'string') return value;
-  } catch {}
+  const value = readOptionalJson('session', originalKey(key), null) as Partial<Original> | null;
+  if (value && typeof value.id === 'string' && typeof value.text === 'string')
+    return value as Original;
   return null;
 }
 function saveOriginal(key: string, value: Original | null) {
-  try {
-    if (value) sessionStorage.setItem(originalKey(key), JSON.stringify(value));
-    else sessionStorage.removeItem(originalKey(key));
-  } catch {}
+  if (value) writeOptionalStorage('session', originalKey(key), JSON.stringify(value));
+  else removeOptionalStorage('session', originalKey(key));
 }
 function initialLanguage(): InputTranslationLanguage {
-  try {
-    return inputTranslationLanguage(localStorage.getItem(languageKey))?.code ?? 'en';
-  } catch {
-    return 'en';
-  }
+  return inputTranslationLanguage(readOptionalStorage('local', languageKey))?.code ?? 'en';
 }
 
 export function useInputTranslation(options: Options) {
@@ -157,9 +156,7 @@ export function useInputTranslation(options: Options) {
     setCandidate(null);
     setError('');
     setLanguage(next.code);
-    try {
-      localStorage.setItem(languageKey, next.code);
-    } catch {}
+    writeOptionalStorage('local', languageKey, next.code);
   }
   function restore() {
     const value = originalRef.current.value;

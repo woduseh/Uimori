@@ -2,6 +2,7 @@ import { useId, useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { t, useI18n, formatNumber } from './i18n.js';
 import './activity-navigation.css';
+import { readOptionalJson } from './optional-storage.js';
 
 type ActivitySectionId = 'unread' | 'running' | 'recent';
 const sectionStorageKey = 'uimori:activity-sections:v1';
@@ -11,17 +12,13 @@ const initialExpanded: Record<ActivitySectionId, boolean> = {
   recent: true,
 };
 function readExpanded(id: ActivitySectionId, storageKey: string) {
-  try {
-    const stored: unknown = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
-    return stored &&
-      typeof stored === 'object' &&
-      !Array.isArray(stored) &&
-      typeof (stored as Record<string, unknown>)[id] === 'boolean'
-      ? (stored as Record<string, boolean>)[id]
-      : initialExpanded[id];
-  } catch {
-    return initialExpanded[id];
-  }
+  const stored = readOptionalJson('local', storageKey, null);
+  return stored &&
+    typeof stored === 'object' &&
+    !Array.isArray(stored) &&
+    typeof (stored as Record<string, unknown>)[id] === 'boolean'
+    ? (stored as Record<string, boolean>)[id]
+    : initialExpanded[id];
 }
 export function ActivitySection({
   id,

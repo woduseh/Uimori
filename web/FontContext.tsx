@@ -11,6 +11,7 @@ import { api } from './api.js';
 import { useThemes } from './ThemeContext.js';
 
 import { fontFamily, type FontCatalog } from '../core/fonts.js';
+import { writeOptionalStorage } from './optional-storage.js';
 export {
   fontFamily,
   type FontAsset,
@@ -46,9 +47,7 @@ export function FontProvider({ children }: { children: ReactNode }) {
   const faces = useRef(new Map<string, FontFace>());
   const sender = useRef({});
   const notify = useCallback(() => {
-    try {
-      localStorage.setItem(fontsChangedKey, `${Date.now()}:${Math.random()}`);
-    } catch {}
+    writeOptionalStorage('local', fontsChangedKey, `${Date.now()}:${Math.random()}`);
     window.dispatchEvent(new CustomEvent(fontsChangedEvent, { detail: sender.current }));
   }, []);
   const refresh = useCallback(

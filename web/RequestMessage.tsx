@@ -7,6 +7,11 @@ import { ArrowUp, Check, Copy, Eye, EyeOff, Pencil, RefreshCw, Save, X } from 'l
 import { IconButton } from './IconButton.js';
 import { ActionMenu, SHEET_MEDIA } from './ActionMenu.js';
 import './request-message.css';
+import {
+  readOptionalStorage,
+  removeOptionalStorage,
+  writeOptionalStorage,
+} from './optional-storage.js';
 
 export function RequestMessage({
   runId,
@@ -90,10 +95,8 @@ export function RequestMessage({
   const input = useRef<HTMLTextAreaElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const saveDraft = (value?: string) => {
-    try {
-      if (value === undefined) sessionStorage.removeItem(key);
-      else sessionStorage.setItem(key, value);
-    } catch {}
+    if (value === undefined) removeOptionalStorage('session', key);
+    else writeOptionalStorage('session', key, value);
   };
   const editingCallback = useRef(onEditingChange);
   useLayoutEffect(() => {
@@ -113,11 +116,7 @@ export function RequestMessage({
     requestAnimationFrame(() => trigger.current?.focus({ preventScroll: true }));
   };
   const openEditor = () => {
-    try {
-      setDraft(sessionStorage.getItem(key) ?? request);
-    } catch {
-      setDraft(request);
-    }
+    setDraft(readOptionalStorage('session', key) ?? request);
     setEditing(true);
   };
   return (

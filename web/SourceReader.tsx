@@ -84,6 +84,12 @@ import { SourceVersions } from './SourceVersions.js';
 import { RequestMessage } from './RequestMessage.js';
 import { StoredRequestImages } from './RequestImages.js';
 import { SelectionRevision } from './SelectionRevision.js';
+import {
+  readOptionalJson,
+  readOptionalStorage,
+  removeOptionalStorage,
+  writeOptionalStorage,
+} from './optional-storage.js';
 
 type NativeActionReceipt = {
   created: boolean;
@@ -154,13 +160,9 @@ type EditorOrigin = {
 
 function preferredMode(hasTranslation: boolean): ReaderMode {
   if (!hasTranslation) return 'original';
-  try {
-    return localStorage.getItem('uimori:reading-language') === 'original'
-      ? 'original'
-      : 'translation';
-  } catch {
-    return 'translation';
-  }
+  return readOptionalStorage('local', 'uimori:reading-language') === 'original'
+    ? 'original'
+    : 'translation';
 }
 function initialMode(sourceId: string, hasTranslation: boolean): ReaderMode {
   if (!hasTranslation) return 'original';
@@ -735,20 +737,14 @@ function SourceReaderContent({
   }, [retryDialog]);
   const rewriteKey = `request-edit:${source.runId}`;
   const openRewrite = () => {
-    try {
-      setRewriteText(sessionStorage.getItem(rewriteKey) ?? effectiveRequest);
-    } catch {
-      setRewriteText(effectiveRequest);
-    }
+    setRewriteText(readOptionalStorage('session', rewriteKey) ?? effectiveRequest);
     setRetryDialog(true);
   };
   const rewrite = (mode: 'replace' | 'copy') =>
     void action('retry', async () => {
       const accepted = onCheckRequest ? await onCheckRequest() : await onRetry?.(mode, rewriteText);
       if (accepted === false || !mounted.current) return;
-      try {
-        sessionStorage.removeItem(rewriteKey);
-      } catch {}
+      removeOptionalStorage('session', rewriteKey);
       setRetryDialog(false);
     });
   const [startPickerOpen, setStartPickerOpen] = useState(false);
@@ -781,9 +777,7 @@ function SourceReaderContent({
     if (next === mode) return;
     restoreAnchor.current = currentAnchor(container.current);
     setMode(next);
-    try {
-      sessionStorage.setItem(`reader-mode:${source.id}`, next);
-    } catch {}
+    writeOptionalStorage('session', `reader-mode:${source.id}`, next);
   };
   const action = async (name: string, operation: () => Promise<unknown>) => {
     if (requestPending.current) return;
@@ -1541,9 +1535,7 @@ function SourceReaderContent({
                 disabled={!!pending || !!onCheckRequest}
                 onChange={(event) => {
                   setRewriteText(event.target.value);
-                  try {
-                    sessionStorage.setItem(rewriteKey, event.target.value);
-                  } catch {}
+                  writeOptionalStorage('session', rewriteKey, event.target.value);
                 }}
               />
             </label>
@@ -1754,16 +1746,14 @@ function draftKey(sourceId: string, role: ReaderMode) {
   return `uimori:text-draft:${sourceId}:${role}`;
 }
 function readDraft(key: string, fallback: Draft): Draft {
-  try {
-    const value = JSON.parse(sessionStorage.getItem(key) ?? 'null') as Partial<Draft> | null;
-    if (
-      value &&
-      typeof value.text === 'string' &&
-      Number.isInteger(value.expectedRevision) &&
-      typeof value.expectedSourceHash === 'string'
-    )
-      return value as Draft;
-  } catch {}
+  const value = readOptionalJson('session', key, null) as Partial<Draft> | null;
+  if (
+    value &&
+    typeof value.text === 'string' &&
+    Number.isInteger(value.expectedRevision) &&
+    typeof value.expectedSourceHash === 'string'
+  )
+    return value as Draft;
   return fallback;
 }
 function TextEditor({
@@ -1818,15 +1808,9 @@ function TextEditor({
   const persist = (next: Draft) => {
     draftVersion.current++;
     setDraft(next);
-    try {
-      sessionStorage.setItem(key, JSON.stringify(next));
-    } catch {}
+    writeOptionalStorage('session', key, JSON.stringify(next));
   };
-  const clear = () => {
-    try {
-      sessionStorage.removeItem(key);
-    } catch {}
-  };
+  const clear = () => removeOptionalStorage('session', key);
   const cancel = () => {
     if (busy.current) return;
     clear();

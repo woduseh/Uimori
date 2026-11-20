@@ -1,3 +1,5 @@
+import { readOptionalJson, removeOptionalStorage } from './optional-storage.js';
+
 const prefix = 'uimori:activity-acknowledged:v1:';
 const maximumIdentityLength = 1024;
 const scopePrefix = (scope: string) => `${prefix}${JSON.stringify(scope)}:`;
@@ -25,10 +27,8 @@ export function readAcknowledgements(scope: string): string[] {
       if (validIdentity(identity)) keys.add(identity);
     }
   } catch {}
-  try {
-    const saved: unknown = JSON.parse(sessionStorage.getItem(legacyKey(scope)) ?? '[]');
-    if (Array.isArray(saved)) for (const key of saved) if (validIdentity(key)) keys.add(key);
-  } catch {}
+  const saved = readOptionalJson('session', legacyKey(scope), []);
+  if (Array.isArray(saved)) for (const key of saved) if (validIdentity(key)) keys.add(key);
   return [...keys];
 }
 
@@ -52,8 +52,6 @@ export function migrateAcknowledgements(scope: string): boolean {
   const keys = readAcknowledgements(scope);
   if (!keys.length) return true;
   if (!saveAcknowledgements(scope, keys)) return false;
-  try {
-    sessionStorage.removeItem(legacyKey(scope));
-  } catch {}
+  removeOptionalStorage('session', legacyKey(scope));
   return true;
 }

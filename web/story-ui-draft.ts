@@ -1,3 +1,9 @@
+import {
+  readOptionalJson,
+  removeOptionalStorage,
+  writeOptionalStorage,
+} from './optional-storage.js';
+
 type Change = { path: string; value: unknown };
 
 export function storyUiDraftChanges(before: unknown, after: unknown, path = ''): Change[] {
@@ -21,25 +27,19 @@ export function storyUiDraftChanges(before: unknown, after: unknown, path = ''):
 }
 
 export function readStoryUiDraft(key: string): Change[] {
-  try {
-    const stored = JSON.parse(sessionStorage.getItem(key) ?? '[]');
-    return Array.isArray(stored)
-      ? stored.filter(
-          (item) =>
-            item &&
-            typeof item.path === 'string' &&
-            item.path.startsWith('/') &&
-            Object.hasOwn(item, 'value')
-        )
-      : [];
-  } catch {
-    return [];
-  }
+  const stored = readOptionalJson('session', key, []);
+  return Array.isArray(stored)
+    ? stored.filter(
+        (item) =>
+          item &&
+          typeof item.path === 'string' &&
+          item.path.startsWith('/') &&
+          Object.hasOwn(item, 'value')
+      )
+    : [];
 }
 
 export function writeStoryUiDraft(key: string, changes: Change[]) {
-  try {
-    if (changes.length) sessionStorage.setItem(key, JSON.stringify(changes));
-    else sessionStorage.removeItem(key);
-  } catch {}
+  if (changes.length) writeOptionalStorage('session', key, JSON.stringify(changes));
+  else removeOptionalStorage('session', key);
 }

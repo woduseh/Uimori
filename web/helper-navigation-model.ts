@@ -1,5 +1,6 @@
 import type { HelperProject } from '../core/helper.js';
 import type { HelperSession } from './useHelperSessions.js';
+import { readOptionalJson } from './optional-storage.js';
 
 export type HelperNavigationView = {
   mode: 'projects' | 'activity';
@@ -9,26 +10,24 @@ export type HelperNavigationView = {
 };
 export const helperNavigationStorageKey = 'uimori:helper-navigation:v1';
 export function readHelperNavigationView(): HelperNavigationView {
-  try {
-    const value = JSON.parse(localStorage.getItem(helperNavigationStorageKey) ?? 'null');
-    return {
-      mode: value?.mode === 'activity' ? 'activity' : 'projects',
-      sort: value?.sort === 'manual' || value?.sort === 'name' ? value.sort : 'recent',
-      order: Array.isArray(value?.order)
-        ? value.order.filter((key: unknown) => typeof key === 'string')
-        : [],
-      collapsed:
-        value?.collapsed && typeof value.collapsed === 'object' && !Array.isArray(value.collapsed)
-          ? (Object.fromEntries(
-              Object.entries(value.collapsed).filter(
-                ([, expanded]) => typeof expanded === 'boolean'
-              )
-            ) as Record<string, boolean>)
-          : {},
-    };
-  } catch {
-    return { mode: 'projects', sort: 'recent', order: [], collapsed: {} };
-  }
+  const value = readOptionalJson(
+    'local',
+    helperNavigationStorageKey,
+    null
+  ) as Partial<HelperNavigationView> | null;
+  return {
+    mode: value?.mode === 'activity' ? 'activity' : 'projects',
+    sort: value?.sort === 'manual' || value?.sort === 'name' ? value.sort : 'recent',
+    order: Array.isArray(value?.order)
+      ? value.order.filter((key: unknown) => typeof key === 'string')
+      : [],
+    collapsed:
+      value?.collapsed && typeof value.collapsed === 'object' && !Array.isArray(value.collapsed)
+        ? (Object.fromEntries(
+            Object.entries(value.collapsed).filter(([, expanded]) => typeof expanded === 'boolean')
+          ) as Record<string, boolean>)
+        : {},
+  };
 }
 export const helperSessionActivityAt = (session: HelperSession) =>
   session.lastActivityAt ?? session.updatedAt ?? session.createdAt;

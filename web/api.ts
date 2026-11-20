@@ -1,5 +1,6 @@
 import { apiErrorDiagnostic, apiErrorDisplay } from './api-errors.js';
 import { t } from './i18n.js';
+import { writeOptionalStorage } from './optional-storage.js';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -110,9 +111,7 @@ export async function api<T>(
         path
       ))
   ) {
-    try {
-      localStorage.setItem(libraryChangedKey, `${Date.now()}:${Math.random()}`);
-    } catch {}
+    writeOptionalStorage('local', libraryChangedKey, `${Date.now()}:${Math.random()}`);
   }
   if (
     body !== undefined &&

@@ -20,16 +20,13 @@ import {
 } from './illustration-labels.js';
 import './illustrations.css';
 import './activity-status.css';
+import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
 
 type Actions = { refresh: () => Promise<void>; onError: (message: string) => void };
 const collapseKey = (id: string) => `uimori:illustration-collapsed:${id}`;
 function savedCollapse(id: string): boolean | undefined {
-  try {
-    const value = localStorage.getItem(collapseKey(id));
-    return value === null ? undefined : value === 'true';
-  } catch {
-    return undefined;
-  }
+  const value = readOptionalStorage('local', collapseKey(id));
+  return value === null ? undefined : value === 'true';
 }
 
 export function useIllustrationLayout({
@@ -62,11 +59,7 @@ export function useIllustrationLayout({
   const collapsed = (id: string) => choices[id] ?? savedCollapse(id) ?? defaultCollapsed;
   const setCollapsed = (id: string, value: boolean, persist = true) => {
     setChoices((old) => ({ ...old, [id]: value }));
-    if (persist) {
-      try {
-        localStorage.setItem(collapseKey(id), String(value));
-      } catch {}
-    }
+    if (persist) writeOptionalStorage('local', collapseKey(id), String(value));
   };
   const hero = cuts.find((cut) => !cut.stale && cut.job.display?.hero);
   const after = (cut: Cut) => {
@@ -136,11 +129,8 @@ export function useIllustrationLayout({
                   ...old,
                   ...Object.fromEntries(cuts.map((cut) => [cut.key, value])),
                 }));
-                for (const cut of cuts) {
-                  try {
-                    localStorage.setItem(collapseKey(cut.key), String(value));
-                  } catch {}
-                }
+                for (const cut of cuts)
+                  writeOptionalStorage('local', collapseKey(cut.key), String(value));
               }}
             >
               {allCollapsed ? t('visuals.m100') : t('visuals.m101')}

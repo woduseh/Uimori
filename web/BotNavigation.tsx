@@ -33,6 +33,7 @@ import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
 import { BotDefaultPersona } from './BotDefaultPersona.js';
 import './bot-navigation.css';
+import { readOptionalJson, writeOptionalStorage } from './optional-storage.js';
 
 export type { ChatFolder } from '../core/product.js';
 type LibraryDestination = 'bot' | 'persona' | 'module' | 'prompts';
@@ -104,21 +105,13 @@ export function BotBranch(
   const [menuId, setMenuId] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState<Record<string, number>>({});
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
-    try {
-      const value: unknown = JSON.parse(
-        localStorage.getItem(`uimori.chat-folders.${botId}`) ?? '{}'
-      );
-      return value && typeof value === 'object' && !Array.isArray(value)
-        ? Object.fromEntries(Object.entries(value).filter(([, flag]) => typeof flag === 'boolean'))
-        : {};
-    } catch {
-      return {};
-    }
+    const value = readOptionalJson('local', `uimori.chat-folders.${botId}`, {});
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value).filter(([, flag]) => typeof flag === 'boolean'))
+      : {};
   });
   useEffect(() => {
-    try {
-      localStorage.setItem(`uimori.chat-folders.${botId}`, JSON.stringify(collapsed));
-    } catch {}
+    writeOptionalStorage('local', `uimori.chat-folders.${botId}`, JSON.stringify(collapsed));
   }, [botId, collapsed]);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{

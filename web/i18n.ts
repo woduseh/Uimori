@@ -3,6 +3,7 @@ import { IntlMessageFormat } from 'intl-messageformat';
 import ko from './locales/ko.js';
 
 import { supportedLocale, type UiLocale } from '../core/ui-locale.js';
+import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
 export { supportedLocale, UI_LOCALES, type UiLocale } from '../core/ui-locale.js';
 export type MessageReference = { readonly uiMessage: string };
 export type MessageValues = Record<string, string | number | boolean | Date | MessageReference>;
@@ -10,11 +11,7 @@ export const UI_LANGUAGE_KEY = 'uimori:ui-language';
 export const localeChangedEvent = 'uimori:ui-language-changed';
 const intlLocales = { ko: 'ko-KR', en: 'en-US', ja: 'ja-JP', zh: 'zh-CN' };
 function readLocale(): UiLocale {
-  try {
-    return supportedLocale(localStorage.getItem(UI_LANGUAGE_KEY));
-  } catch {
-    return 'ko';
-  }
+  return supportedLocale(readOptionalStorage('local', UI_LANGUAGE_KEY));
 }
 const catalogs: Partial<Record<UiLocale, Record<string, string>>> = { ko };
 const catalogLoaders = {
@@ -60,12 +57,7 @@ export function loadInitialLocale(): Promise<void> {
 }
 export function setLocale(value: UiLocale): boolean {
   const next = supportedLocale(value);
-  let persisted = true;
-  try {
-    localStorage.setItem(UI_LANGUAGE_KEY, next);
-  } catch {
-    persisted = false;
-  }
+  const persisted = writeOptionalStorage('local', UI_LANGUAGE_KEY, next);
   applyLocale(next);
   return persisted;
 }
