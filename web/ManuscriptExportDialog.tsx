@@ -1,6 +1,6 @@
 import { t, useI18n, translateMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type {
   ManuscriptExportMetadata,
   ManuscriptExportMode,
@@ -8,6 +8,7 @@ import type {
 } from '../core/manuscript-export.js';
 import { api } from './api.js';
 import { Dialog } from './Dialog.js';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 export function ManuscriptExportDialog({
   open,
@@ -26,10 +27,8 @@ export function ManuscriptExportDialog({
   const [to, setTo] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [reload, setReload] = useState(0);
   const active = useRef(0);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: A retry explicitly re-issues a read.
-  useEffect(() => {
+  const retryRead = useRetryableEffect(() => {
     const generation = ++active.current;
     if (!open) return;
     const controller = new AbortController();
@@ -58,7 +57,7 @@ export function ManuscriptExportDialog({
       controller.abort();
       active.current++;
     };
-  }, [open, chatId, reload]);
+  }, [open, chatId]);
   async function download() {
     if (!metadata || busy) return;
     const generation = active.current;
@@ -174,7 +173,7 @@ export function ManuscriptExportDialog({
           loading={!error}
           error={translateMessage(error)}
           label={t('transfer.m204')}
-          onRetry={() => setReload((value) => value + 1)}
+          onRetry={retryRead}
         />
       )}
       {metadata && !metadata.scenes.length && <p role="status">{t('transfer.m205')}</p>}

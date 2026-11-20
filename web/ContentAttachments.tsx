@@ -16,6 +16,7 @@ import { ContentPicker } from './ContentPicker.js';
 import { IconButton } from './IconButton.js';
 import { CloseIcon, LoreIcon } from './ui-icons.js';
 import './package-authoring.css';
+import { useRetryableEffect } from './useRetryableEffect.js';
 const keyOf = (ref: ContentAttachment) => `${ref.id}@${ref.revision}:${ref.role}`;
 const refValue = (ref: { id: string; revision: number }) => `${ref.id}@${ref.revision}`;
 type ResolvedPackages = {
@@ -44,8 +45,7 @@ export function ContentAttachments({
     viewKey = requestKey(profile.chatId, attachments);
   const [resolved, setResolved] = useState<{ key: string; value: ResolvedPackages } | null>(null),
     [busy, setBusy] = useState(false),
-    [loadError, setLoadError] = useState(''),
-    [reload, setReload] = useState(0);
+    [loadError, setLoadError] = useState('');
   const latest = useRef({ profile, onChange, onError, viewKey, library });
   latest.current = { profile, onChange, onError, viewKey, library };
   const version = useRef(0),
@@ -56,8 +56,8 @@ export function ContentAttachments({
     onPendingChange?.(changing);
   }, [changing, onPendingChange]);
   useEffect(() => () => onPendingChange?.(false), [onPendingChange]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: viewKey includes all attachments and the chat; reload retries without reacting to array identity.
-  useEffect(() => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: viewKey includes all attachments and the chat, so the read does not react to array identity.
+  const retryResolve = useRetryableEffect(() => {
     const request = ++version.current;
     setLoadError('');
     if (cache.current?.key === viewKey) {
@@ -87,7 +87,7 @@ export function ContentAttachments({
     return () => {
       if (version.current === request) version.current++;
     };
-  }, [viewKey, reload]);
+  }, [viewKey]);
   useEffect(
     () => () => {
       version.current++;
@@ -276,7 +276,7 @@ export function ContentAttachments({
             disabled={busy}
             onClick={() => {
               cache.current = null;
-              setReload((value) => value + 1);
+              retryResolve();
             }}
           >
             {t('library.checkPackageAttachmentsAgain')}

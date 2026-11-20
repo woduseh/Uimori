@@ -30,6 +30,7 @@ import {
 } from './helper-navigation-model.js';
 import './bot-tree-navigation.css';
 import './helper-session-navigation.css';
+import { writeOptionalStorage } from './optional-storage.js';
 
 type Props = {
   sessions: HelperSession[];
@@ -75,9 +76,7 @@ export function HelperNavigation(props: Props) {
     if (props.activityRequest) setView((old) => ({ ...old, mode: 'activity' }));
   }, [props.activityRequest]);
   useEffect(() => {
-    try {
-      localStorage.setItem(helperNavigationStorageKey, JSON.stringify(view));
-    } catch {}
+    writeOptionalStorage('local', helperNavigationStorageKey, JSON.stringify(view));
   }, [view]);
   useEffect(() => {
     const id = props.focusProject;

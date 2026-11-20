@@ -1,13 +1,14 @@
 import { useI18n, translateMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { PromptPreset, PromptRole } from '../core/product.js';
 import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import { AddIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import './prompt-templates.css';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 type PromptTemplateSummary = {
   id: string;
@@ -35,7 +36,6 @@ export function PromptTemplatesDialog({
   const { t } = useI18n();
   const [templates, setTemplates] = useState<PromptTemplateSummary[] | null>(null);
   const [loadError, setLoadError] = useState('');
-  const [loadAttempt, setLoadAttempt] = useState(0);
   const [adding, setAdding] = useState<PromptTemplateSummary | null>(null);
   const [failure, setFailure] = useState<{
     template: PromptTemplateSummary;
@@ -44,8 +44,7 @@ export function PromptTemplatesDialog({
   const lock = useRef(false);
   const current = useRef({ open, onAdded, onError });
   current.current = { open, onAdded, onError };
-  // biome-ignore lint/correctness/useExhaustiveDependencies: An explicit retry refreshes the same catalog while the dialog stays open.
-  useEffect(() => {
+  const retryLoad = useRetryableEffect(() => {
     if (!open) return;
     let active = true;
     setTemplates(null);
@@ -61,7 +60,7 @@ export function PromptTemplatesDialog({
     return () => {
       active = false;
     };
-  }, [open, loadAttempt]);
+  }, [open]);
   async function add(template: PromptTemplateSummary) {
     if (lock.current || busy) return;
     lock.current = true;
@@ -94,7 +93,7 @@ export function PromptTemplatesDialog({
           error={translateMessage(loadError)}
           errorLabel={t('prompts.uiUnableToLoadBuiltInPrompts')}
           label={t('prompts.uiLoadingBuiltInPrompts')}
-          onRetry={() => setLoadAttempt((n) => n + 1)}
+          onRetry={retryLoad}
         />
       ) : (
         <ul className="prompt-template-list" aria-label={t('prompts.uiBuiltInPromptList')}>

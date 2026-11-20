@@ -14,6 +14,7 @@ import { SaveButton } from './SaveButton.js';
 import { StoryUiStyleSelect } from './StoryUiStyleSelect.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 export function ChatGenerationDefaults({
   onDirtyChange,
@@ -30,7 +31,6 @@ export function ChatGenerationDefaults({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [reload, setReload] = useState(0);
   const [confirmReload, setConfirmReload] = useState(false);
   const dirty =
     !!value &&
@@ -38,8 +38,7 @@ export function ChatGenerationDefaults({
     (value.maxCalls !== saved.maxCalls ||
       value.storyUi !== saved.storyUi ||
       value.storyUiStyle !== saved.storyUiStyle);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Explicit retries reissue the read.
-  useEffect(() => {
+  const retryRead = useRetryableEffect(() => {
     let active = true;
     void api<Defaults>('/chat-generation-defaults')
       .then((next) => {
@@ -57,7 +56,7 @@ export function ChatGenerationDefaults({
     return () => {
       active = false;
     };
-  }, [reload]);
+  }, []);
   useEffect(() => {
     onDirtyChange(dirty || saving);
   }, [dirty, saving, onDirtyChange]);
@@ -105,7 +104,7 @@ export function ChatGenerationDefaults({
   }
   function reloadDefaults() {
     setLoading(true);
-    setReload((current) => current + 1);
+    retryRead();
     setConfirmReload(false);
   }
   return (

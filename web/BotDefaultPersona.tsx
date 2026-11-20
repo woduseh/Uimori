@@ -1,7 +1,7 @@
 import { t, useI18n, translateMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { BotDefaults, BotPersonaDefault } from '../core/bot-defaults.js';
 import type { Content, Library } from '../core/product.js';
 import { api } from './api.js';
@@ -9,6 +9,7 @@ import { ContentPicker } from './ContentPicker.js';
 import { Dialog } from './Dialog.js';
 import { refValue } from './content-ref.js';
 import { SaveButton } from './SaveButton.js';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 export function BotDefaultPersona({
   bot,
@@ -25,11 +26,9 @@ export function BotDefaultPersona({
   const [personaId, setPersonaId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [loadAttempt, setLoadAttempt] = useState(0);
   const lock = useRef(false);
   const path = `/bots/${encodeURIComponent(bot.id)}/defaults`;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: An explicit retry repeats the initial read while the dialog stays open.
-  useEffect(() => {
+  const retryLoad = useRetryableEffect(() => {
     let alive = true;
     setError('');
     void api<BotDefaults>(path)
@@ -45,7 +44,7 @@ export function BotDefaultPersona({
     return () => {
       alive = false;
     };
-  }, [path, loadAttempt]);
+  }, [path]);
   const selected = library.contents.find((item) => item.id === personaId);
   async function save() {
     if (!saved || lock.current || (mode === 'persona' && !selected)) return;
@@ -95,7 +94,7 @@ export function BotDefaultPersona({
             error={translateMessage(error)}
             errorLabel={t('library.couldNotLoadTheDefaultPersona')}
             label={t('library.loadingDefaults')}
-            onRetry={() => setLoadAttempt((attempt) => attempt + 1)}
+            onRetry={retryLoad}
           />
         )}
         <label>

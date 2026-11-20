@@ -50,6 +50,21 @@
       "a11y": {
         "preset": "none"
       },
+      "correctness": {
+        "useExhaustiveDependencies": {
+          "level": "on",
+          "options": {
+            "hooks": [
+              {
+                "name": "useRetryableEffect",
+                "closureIndex": 0,
+                "dependenciesIndex": 1,
+                "stableResult": true
+              }
+            ]
+          }
+        }
+      },
       "suspicious": {
         "noExplicitAny": "off",
         "noAssignInExpressions": "off",

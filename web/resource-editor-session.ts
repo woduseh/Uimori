@@ -14,6 +14,7 @@ import {
   type RecoveryBuffer,
 } from './editor-recovery.js';
 import { sameEditorValue } from './editor-values.js';
+import { writeOptionalStorage } from './optional-storage.js';
 
 export type EditorBuffer = {
   model: ResourceModel;
@@ -480,8 +481,6 @@ export class ResourceEditorSession {
     window.dispatchEvent(new Event('uimori-resource-saved'));
     if (this.options.kind !== 'content')
       window.dispatchEvent(new Event('prompt-workspace-changed'));
-    try {
-      localStorage.setItem(libraryChangedKey, String(Date.now()));
-    } catch {}
+    writeOptionalStorage('local', libraryChangedKey, String(Date.now()));
   }
 }

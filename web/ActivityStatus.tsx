@@ -21,6 +21,7 @@ import {
 import { api } from './api.js';
 import { activityReceiptEvent } from './useActivityFeed.js';
 import './activity-status.css';
+import { readOptionalJson, writeOptionalStorage } from './optional-storage.js';
 
 type Notice = { item: Item; expiresAt: number | null };
 
@@ -112,11 +113,8 @@ export function ActivityStatus({
   useI18n();
   const [now, setNow] = useState(Date.now);
   const [hidden, setHidden] = useState<string[]>(() => {
-    try {
-      return JSON.parse(sessionStorage.getItem(`activity-hidden:${scope}`) ?? '[]');
-    } catch {
-      return [];
-    }
+    const stored = readOptionalJson('session', `activity-hidden:${scope}`, null);
+    return Array.isArray(stored) ? stored.filter((key) => typeof key === 'string') : [];
   });
   const [notices, setNotices] = useState<Notice[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -282,9 +280,7 @@ export function ActivityStatus({
     return () => clearInterval(timer);
   }, [ticking]);
   useEffect(() => {
-    try {
-      sessionStorage.setItem(`activity-hidden:${scope}`, JSON.stringify(hidden.slice(-200)));
-    } catch {}
+    writeOptionalStorage('session', `activity-hidden:${scope}`, JSON.stringify(hidden.slice(-200)));
   }, [hidden, scope]);
   const candidates = [...running, ...visibleNotices.map((notice) => notice.item)];
   const expanded = candidates.filter((item) => !hidden.includes(item.key));

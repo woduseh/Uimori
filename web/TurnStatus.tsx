@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { DoneIcon, IssueIcon, RunningIcon, StopIcon, UncertainIcon } from './ui-icons.js';
 import './turn-activity.css';
 import './activity-status.css';
+import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
 
 export type StatusTone = 'running' | 'done' | 'cancelled' | 'issue' | 'uncertain';
 export const statusGlyph = {
@@ -41,13 +42,9 @@ export function TurnStatus({
   dataProps,
 }: Props) {
   useI18n();
-  const [open, setOpen] = useState(() => {
-    try {
-      return !!storageKey && sessionStorage.getItem(storageKey) === 'open';
-    } catch {
-      return false;
-    }
-  });
+  const [open, setOpen] = useState(
+    () => !!storageKey && readOptionalStorage('session', storageKey) === 'open'
+  );
   const [visited, setVisited] = useState(open);
   const Glyph = statusGlyph[tone];
   const className = `turn-activity${issue ? ' turn-activity-issue' : ''}`;
@@ -68,9 +65,7 @@ export function TurnStatus({
     setOpen(next);
     if (next) setVisited(true);
     onOpenChange?.(next);
-    try {
-      if (storageKey) sessionStorage.setItem(storageKey, next ? 'open' : 'closed');
-    } catch {}
+    if (storageKey) writeOptionalStorage('session', storageKey, next ? 'open' : 'closed');
   };
   return (
     <details

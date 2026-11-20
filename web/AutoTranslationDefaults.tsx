@@ -1,10 +1,11 @@
 import { t, translateMessage, useI18n } from './i18n.js';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { AutoTranslationDefaults as Defaults } from '../core/chat-settings.js';
 import { api } from './api.js';
 import { Switch } from './BooleanControls.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 export function AutoTranslationDefaults() {
   useI18n();
@@ -12,9 +13,7 @@ export function AutoTranslationDefaults() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [reload, setReload] = useState(0);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: A retry explicitly re-issues a read.
-  useEffect(() => {
+  const retry = useRetryableEffect(() => {
     let alive = true;
     void api<Defaults>('/auto-translation-defaults')
       .then((value) => {
@@ -32,7 +31,7 @@ export function AutoTranslationDefaults() {
     return () => {
       alive = false;
     };
-  }, [reload]);
+  }, []);
   async function change(autoTranslate: boolean) {
     if (!defaults || saving) return;
     setSaving(true);
@@ -63,7 +62,7 @@ export function AutoTranslationDefaults() {
         errorLabel={t('settings.m100')}
         onRetry={() => {
           setLoading(true);
-          setReload((value) => value + 1);
+          retry();
         }}
       />
       {defaults && (
@@ -90,7 +89,7 @@ export function AutoTranslationDefaults() {
             disabled={saving}
             onClick={() => {
               setLoading(true);
-              setReload((value) => value + 1);
+              retry();
             }}
           >
             {t('settings.m103')}

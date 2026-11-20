@@ -5,12 +5,13 @@ import { LoadingState } from './LoadingState.js';
 import { SelectionCheckbox, Switch } from './BooleanControls.js';
 import { RunningIcon } from './ui-icons.js';
 import './push-settings.css';
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { RefreshCw, Send } from 'lucide-react';
 import { DEFAULT_PUSH_PREFERENCES, type PushInfo, type PushPreferences } from '../core/push.js';
 import { api } from './api.js';
 import { pwaRegistration } from './pwa.js';
 import { browserClientId } from './browser-client.js';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 function applicationKey(value: string): Uint8Array<ArrayBuffer> {
   const base64 = value.replaceAll('-', '+').replaceAll('_', '/');
@@ -35,7 +36,6 @@ export function PushSettings() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [warning, setWarning] = useState('');
-  const [refresh, setRefresh] = useState(0);
   const supported =
     isSecureContext &&
     'Notification' in window &&
@@ -44,8 +44,7 @@ export function PushSettings() {
   const [permission, setPermission] = useState<NotificationPermission>(() =>
     supported ? Notification.permission : 'default'
   );
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refresh is an explicit read after an uncertain save; it never re-subscribes or requests permission.
-  useEffect(() => {
+  const recheck = useRetryableEffect(() => {
     const controller = new AbortController();
     setError('');
     void api<PushInfo>(
@@ -65,7 +64,7 @@ export function PushSettings() {
       });
     if (supported) setPermission(Notification.permission);
     return () => controller.abort();
-  }, [clientId, refresh, supported]);
+  }, [clientId, supported]);
   async function enable() {
     if (!supported || busy || !info?.available) return;
     setBusy(true);
@@ -187,7 +186,6 @@ export function PushSettings() {
   }
   const enabled = !!info?.device;
   const available = supported && info?.available;
-  const recheck = () => setRefresh((value) => value + 1);
   return (
     <section className="settings-service push-settings" aria-label={t('outside.pushTitle')}>
       <div className="settings-service-row">

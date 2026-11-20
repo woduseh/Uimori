@@ -17,6 +17,7 @@ import {
   validUsageRange,
 } from './usage-display.js';
 import './usage-report.css';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 type Row = UsageTotals & { id: string; label: string; detail?: string };
 function TotalsTable({ rows, label }: { rows: Row[]; label: string }) {
@@ -106,7 +107,6 @@ export function UsagePanel({
   const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'calendar' | 'custom'>(
     'calendar'
   );
-  const [refresh, setRefresh] = useState(0);
   const [report, setReport] = useState<UsageReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<{ query: string; message: string } | null>(null);
@@ -121,8 +121,7 @@ export function UsagePanel({
     return () => clearTimeout(timer);
   }, [period, draft, range.from, range.to]);
   const query = new URLSearchParams(range).toString();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: explicit retry repeats the same read.
-  useEffect(() => {
+  const retry = useRetryableEffect(() => {
     if (!active) return;
     const controller = new AbortController();
     setBusy(true);
@@ -143,7 +142,7 @@ export function UsagePanel({
       controller.abort();
       setBusy(false);
     };
-  }, [active, query, refresh]);
+  }, [active, query]);
   function choose(kind: Exclude<typeof period, 'custom'>) {
     const next = usagePeriod(kind);
     setPeriod(kind);
@@ -152,7 +151,6 @@ export function UsagePanel({
   }
   const current = report?.from === range.from && report.to === range.to ? report : null;
   const error = failure?.query === query ? failure.message : '';
-  const retry = () => setRefresh((value) => value + 1);
   const invalid = period === 'custom' && !validUsageRange(draft);
   const exports = (group: string) =>
     `/api/usage/export?${new URLSearchParams({ ...range, group })}`;

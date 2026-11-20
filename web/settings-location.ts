@@ -1,14 +1,10 @@
+import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
+
 export function readSettingsLocation(key: string, available: readonly string[], fallback: string) {
-  try {
-    const saved = localStorage.getItem(key);
-    return saved && available.includes(saved) ? saved : fallback;
-  } catch {
-    return fallback;
-  }
+  const saved = readOptionalStorage('local', key);
+  return saved && available.includes(saved) ? saved : fallback;
 }
 
 export function rememberSettingsLocation(key: string, section: string) {
-  try {
-    localStorage.setItem(key, section);
-  } catch {}
+  writeOptionalStorage('local', key, section);
 }

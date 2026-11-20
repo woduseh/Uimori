@@ -80,6 +80,7 @@ import { JevProviderSettings } from './JevProviderSettings.js';
 import { useTestMode } from './useTestMode.js';
 import './ProviderManagement.css';
 import './settings-actions.css';
+import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
 
 const versionRef = (item: { id: string; revision: number }) => `${item.id}@${item.revision}`;
 function vertexLocationOf(connections: Connection[], connectionId: string): string | undefined {
@@ -124,13 +125,9 @@ export function ConnectionEditor({
     };
   }, []);
   const [query, setQuery] = useState('');
-  const [jevPosition, setJevPosition] = useState(() => {
-    try {
-      return Math.max(0, Number(localStorage.getItem('uimori-jev-display-position')) || 0);
-    } catch {
-      return 0;
-    }
-  });
+  const [jevPosition, setJevPosition] = useState(() =>
+    Math.max(0, Number(readOptionalStorage('local', 'uimori-jev-display-position')) || 0)
+  );
   const dragged = useRef<{ kind: 'connection' | 'model'; id: string } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [screen, setScreen] = useState<
@@ -525,9 +522,7 @@ export function ConnectionEditor({
         if (hasJev) {
           const index = next.indexOf(JEV_PROVIDER_DEFINITION.id);
           setJevPosition(index);
-          try {
-            localStorage.setItem('uimori-jev-display-position', String(index));
-          } catch {}
+          writeOptionalStorage('local', 'uimori-jev-display-position', String(index));
         }
       } else {
         const model = library.models.find((item) => item.id === id);

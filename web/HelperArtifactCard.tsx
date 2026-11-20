@@ -2,13 +2,14 @@ import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Copy } from 'lucide-react';
 import type { HelperArtifact } from '../core/helper.js';
 import { api } from './api.js';
 import { IconButton } from './IconButton.js';
 import { PlainProse } from './Prose.js';
 import { loadHelperRecovery } from './helper-recovery.js';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 export type HelperArtifactView = HelperArtifact;
 type Draft = { key: string; revision: number | null; text: string };
@@ -46,11 +47,9 @@ export function HelperArtifactCard({
   const [draftError, setDraftError] = useState('');
   const [copyError, setCopyError] = useState('');
   const [message, setMessage] = useState('');
-  const [reload, setReload] = useState(0);
   const path = `/helper/artifacts/${encodeURIComponent(id)}`;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reload is an explicit retry of this read.
-  useEffect(() => {
+  const retryLatestRevision = useRetryableEffect(() => {
     let current = true;
     setHistoryError('');
     void api<HelperArtifactView>(path)
@@ -63,10 +62,9 @@ export function HelperArtifactCard({
     return () => {
       current = false;
     };
-  }, [path, reload]);
+  }, [path]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reload is an explicit retry of this read.
-  useEffect(() => {
+  const retryArtifact = useRetryableEffect(() => {
     let current = true;
     setArtifact(undefined);
     setReadError('');
@@ -80,10 +78,9 @@ export function HelperArtifactCard({
     return () => {
       current = false;
     };
-  }, [path, selectedRevision, reload]);
+  }, [path, selectedRevision]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reload is an explicit retry of this read.
-  useEffect(() => {
+  const retryDrafts = useRetryableEffect(() => {
     let current = true;
     const prefix = `helper-artifact-draft:${id}:`;
     async function readDrafts() {
@@ -121,7 +118,7 @@ export function HelperArtifactCard({
     return () => {
       current = false;
     };
-  }, [id, revision, conversationId, reload]);
+  }, [id, revision, conversationId]);
 
   async function copy(text: string) {
     setCopyError('');
@@ -135,7 +132,11 @@ export function HelperArtifactCard({
   }
   const selected =
     artifact?.id === id && artifact.revision === selectedRevision ? artifact : undefined;
-  const retry = () => setReload((value) => value + 1);
+  const retry = () => {
+    retryLatestRevision();
+    retryArtifact();
+    retryDrafts();
+  };
   return (
     <section className="helper-artifact" aria-label={t('helpers.m131')}>
       <header>

@@ -109,6 +109,8 @@ import {
 } from './helper-recovery.js';
 import './helper.css';
 import './settings-layout.css';
+import { readOptionalStorage } from './optional-storage.js';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 type Props = {
   enterSend: boolean;
@@ -239,11 +241,7 @@ const statusLabel: Record<string, string> = {
 const activityKey = (task: HelperTaskView) =>
   `helper-task-activity:${task.conversationId}:${task.id}${active(task) ? '' : ':settled'}`;
 function savedActivityOpen(task: HelperTaskView) {
-  try {
-    return sessionStorage.getItem(activityKey(task)) === 'open';
-  } catch {
-    return false;
-  }
+  return readOptionalStorage('session', activityKey(task)) === 'open';
 }
 
 function HelperResponseActions({ text }: { text: string }) {
@@ -431,7 +429,6 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   }, [scopeKey, props.open]);
   const [hydrated, setHydrated] = useState<Record<string, boolean>>({});
   const [recoveryReadFailed, setRecoveryReadFailed] = useState<Record<string, boolean>>({});
-  const [recoveryAttempt, setRecoveryAttempt] = useState(0);
   useSyncExternalStore(subscribeHelperRecovery, helperRecoveryRevision);
   const [outlineSelections, setOutlineSelections] = useState<
     Record<string, SelectedOutline | null>
@@ -645,8 +642,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     setModelRequired((old) => ({ ...old, [scopeKey]: false }));
     setErrors((old) => ({ ...old, [scopeKey]: message }));
   };
-  // biome-ignore lint/correctness/useExhaustiveDependencies: recoveryAttempt explicitly retries the same conversation read.
-  useEffect(() => {
+  const retryRecoveryRead = useRetryableEffect(() => {
     if (!scopeKey) return;
     let disposed = false;
     const restore = async () => {
@@ -678,7 +674,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     return () => {
       disposed = true;
     };
-  }, [scopeKey, recoveryAttempt]);
+  }, [scopeKey]);
   const editDraft = useCallback(
     (text: string) => {
       if (!scopeKey || !hydrated[scopeKey]) return;
@@ -692,8 +688,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     setOutboxes((old) => ({ ...old, [key]: value }));
   };
   const selectSession = sessions.select;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Explicit recovery retry resumes this same handoff.
-  useEffect(() => {
+  const retryHandoff = useRetryableEffect(() => {
     const selected = props.handoff;
     if (!selected || appliedHandoff.current === selected.key) return;
     let disposed = false;
@@ -769,7 +764,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     return () => {
       disposed = true;
     };
-  }, [props.handoff, props.handoffEpoch, selectSession, recoveryAttempt]);
+  }, [props.handoff, props.handoffEpoch, selectSession]);
   const taskStamp = tasks.map((task) => `${task.id}:${task.status}`).join('|');
   useEffect(() => {
     dispatchEvent(new CustomEvent(OUTLINE_REFRESH_EVENT, { detail: taskStamp }));
@@ -1956,7 +1951,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                     type="button"
                     className="secondary"
                     onClick={() => {
-                      setRecoveryAttempt((old) => old + 1);
+                      retryRecoveryRead();
+                      retryHandoff();
                       void attachments.retry();
                     }}
                   >

@@ -34,6 +34,7 @@ import { illustrationErrorMessage, illustrationGeneratorLabels } from './illustr
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import './illustration-presets.css';
 import './settings-layout.css';
+import { writeOptionalStorage } from './optional-storage.js';
 
 type Draft = {
   id: string | null;
@@ -99,11 +100,7 @@ export function IllustrationPresetSettings({
     } catch (cause) {
       if (alive.current && version === epoch.current) setLoadError(messageOf(cause));
     }
-    if (notify) {
-      try {
-        localStorage.setItem(changedKey, `${Date.now()}:${Math.random()}`);
-      } catch {}
-    }
+    if (notify) writeOptionalStorage('local', changedKey, `${Date.now()}:${Math.random()}`);
   }, []);
   useEffect(() => {
     alive.current = true;

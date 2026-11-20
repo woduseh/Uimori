@@ -7,6 +7,11 @@ import {
   pendingHelperRequest,
   type PendingHelperRequest,
 } from './helper-pending-request.js';
+import {
+  readOptionalStorage,
+  removeOptionalStorage,
+  writeOptionalStorage,
+} from './optional-storage.js';
 
 export type HelperSession = HelperConversation & {
   title?: string;
@@ -22,17 +27,11 @@ export type HelperSession = HelperConversation & {
 const helperGroupKey = (scope: HelperScope) =>
   scope.kind === 'chat' ? `chat:${scope.chatId}` : 'library';
 function read(key: string) {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
+  return readOptionalStorage('local', key);
 }
 function remember(key: string, value: string | null) {
-  try {
-    if (value === null) localStorage.removeItem(key);
-    else localStorage.setItem(key, value);
-  } catch {}
+  if (value === null) removeOptionalStorage('local', key);
+  else writeOptionalStorage('local', key, value);
 }
 type HelperCreationRequest = { scope: HelperScope; requestKey: string; projectId?: string | null };
 export function forgetHelperSession(conversation: HelperConversation) {

@@ -22,6 +22,7 @@ import {
 import { api } from './api.js';
 import { updateMessageTheme } from './theme-message-style.js';
 import { applyThemeAssets } from './theme-assets.js';
+import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
 
 export const themesChangedKey = 'uimori:themes-changed';
 const initial: ThemeCatalog = { themes: BUILTIN_THEMES, preferences: defaultThemePreferences() };
@@ -52,25 +53,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState('');
   const [disabled, setDisabledState] = useState(() => {
     if (new URLSearchParams(location.search).get('theme-safe') === '1') {
-      try {
-        sessionStorage.setItem('uimori:theme-disabled', '1');
-      } catch {}
+      writeOptionalStorage('session', 'uimori:theme-disabled', '1');
       return true;
     }
-    try {
-      return sessionStorage.getItem('uimori:theme-disabled') === '1';
-    } catch {
-      return false;
-    }
+    return readOptionalStorage('session', 'uimori:theme-disabled') === '1';
   });
   const alive = useRef(true);
   const epoch = useRef(0);
   const refresh = useCallback(async (notify = false) => {
-    if (notify) {
-      try {
-        localStorage.setItem(themesChangedKey, `${Date.now()}:${Math.random()}`);
-      } catch {}
-    }
+    if (notify) writeOptionalStorage('local', themesChangedKey, `${Date.now()}:${Math.random()}`);
     const current = ++epoch.current;
     try {
       const next = await api<ThemeCatalog>('/themes');
@@ -125,9 +116,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setDisabled = useCallback((value: boolean) => {
     setDisabledState(value);
     setPreview(null);
-    try {
-      sessionStorage.setItem('uimori:theme-disabled', value ? '1' : '0');
-    } catch {}
+    writeOptionalStorage('session', 'uimori:theme-disabled', value ? '1' : '0');
   }, []);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {

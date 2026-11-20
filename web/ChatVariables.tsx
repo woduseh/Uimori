@@ -8,6 +8,7 @@ import type { ChatVariableState } from '../core/chat-variables.js';
 import { api, ApiError, definiteRejection } from './api.js';
 import { SearchIcon, ResetIcon } from './ui-icons.js';
 import './chat-variables.css';
+import { readOptionalJson } from './optional-storage.js';
 
 type VariableView = ChatVariableState & {
   defaults: Record<string, string>;
@@ -50,38 +51,33 @@ function parseValues(text: string): Record<string, string> | null {
   }
 }
 function readDraft(key: string): Draft | null {
-  if (typeof sessionStorage === 'undefined') return null;
-  try {
-    const value = JSON.parse(sessionStorage.getItem(key) ?? 'null') as Partial<Draft> | null;
-    if (
-      !value ||
-      typeof value.text !== 'string' ||
-      !Number.isSafeInteger(value.revision) ||
-      !(value.sourceHash === null || typeof value.sourceHash === 'string')
-    )
-      return null;
-    const draft: Draft = {
-      text: value.text,
-      revision: value.revision as number,
-      sourceHash: value.sourceHash,
-    };
-    const pending = value.pending;
-    const pendingValues = pending && stringMap(pending.values);
-    const draftValues = parseValues(value.text);
-    if (
-      pending &&
-      typeof pending.idempotencyKey === 'string' &&
-      Number.isSafeInteger(pending.expectedRevision) &&
-      (pending.expectedSourceHash === null || typeof pending.expectedSourceHash === 'string') &&
-      pendingValues &&
-      draftValues &&
-      JSON.stringify(pendingValues) === JSON.stringify(draftValues)
-    )
-      draft.pending = pending;
-    return draft;
-  } catch {
+  const value = readOptionalJson('session', key, null) as Partial<Draft> | null;
+  if (
+    !value ||
+    typeof value.text !== 'string' ||
+    !Number.isSafeInteger(value.revision) ||
+    !(value.sourceHash === null || typeof value.sourceHash === 'string')
+  )
     return null;
-  }
+  const draft: Draft = {
+    text: value.text,
+    revision: value.revision as number,
+    sourceHash: value.sourceHash,
+  };
+  const pending = value.pending;
+  const pendingValues = pending && stringMap(pending.values);
+  const draftValues = parseValues(value.text);
+  if (
+    pending &&
+    typeof pending.idempotencyKey === 'string' &&
+    Number.isSafeInteger(pending.expectedRevision) &&
+    (pending.expectedSourceHash === null || typeof pending.expectedSourceHash === 'string') &&
+    pendingValues &&
+    draftValues &&
+    JSON.stringify(pendingValues) === JSON.stringify(draftValues)
+  )
+    draft.pending = pending;
+  return draft;
 }
 function rememberDraft(key: string, value: Draft | null) {
   if (typeof sessionStorage === 'undefined') throw new Error('SESSION_STORAGE_UNAVAILABLE');

@@ -22,6 +22,7 @@ import {
 } from './attachment-draft-storage.js';
 import { message } from './i18n.js';
 import { requestDraftKey, type DraftImage } from './request-image-draft.js';
+import { writeOptionalStorage } from './optional-storage.js';
 
 export type DraftFile = {
   id: string;
@@ -114,12 +115,7 @@ export async function loadHelperAttachments(id: string): Promise<void> {
 }
 function persist(id: string, draft: HelperAttachmentDraft): Promise<void> {
   const owner = entry(id);
-  let remembered = true;
-  try {
-    sessionStorage.setItem(tokenKey(id), draft.token);
-  } catch {
-    remembered = false;
-  }
+  const remembered = writeOptionalStorage('session', tokenKey(id), draft.token);
   publish(owner, { draft, error: remembered ? '' : message('helperAttachments.saveFailed') });
   const write = (owner.write ?? Promise.resolve())
     .catch(() => {})

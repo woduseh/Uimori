@@ -11,6 +11,7 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { RisuStartPreview } from './RisuStartPreview.js';
 import { SaveButton } from './SaveButton.js';
 import './package-start-picker.css';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 export type PackageStartSelection = PackageStartRef & {
   expectedSettingsRevision: number;
@@ -46,7 +47,6 @@ export function PackageStartPicker({
   useI18n();
   const [content, setContent] = useState<Content | null>(null);
   const [readError, setReadError] = useState('');
-  const [readAttempt, setReadAttempt] = useState(0);
   const [selected, setSelected] = useState(selection.startId);
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -71,8 +71,7 @@ export function PackageStartPicker({
       mounted.current = false;
     };
   }, []);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: An explicit failed-read retry repeats the same pinned selection.
-  useEffect(() => {
+  const retryRead = useRetryableEffect(() => {
     if (!open) return;
     const controller = new AbortController();
     setReadError('');
@@ -93,7 +92,7 @@ export function PackageStartPicker({
       }
     );
     return () => controller.abort();
-  }, [open, selection.packageId, selection.packageRevision, readAttempt]);
+  }, [open, selection.packageId, selection.packageRevision]);
   const starts = content?.package?.starts ?? [];
   async function apply() {
     if (submitting.current || disabled) return;
@@ -164,7 +163,7 @@ export function PackageStartPicker({
           label={t('library.loadingOpenings')}
           error={readError}
           errorLabel={t('library.couldNotLoadOpenings')}
-          onRetry={() => setReadAttempt((value) => value + 1)}
+          onRetry={retryRead}
         />
       ) : (
         <>

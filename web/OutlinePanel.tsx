@@ -49,6 +49,7 @@ import type { StoryState } from './useStory.js';
 import type { RunReceipt } from '../core/types.js';
 import type { SceneCommand } from '../core/story.js';
 import './outline.css';
+import { readOptionalJson } from './optional-storage.js';
 
 type Draft = {
   title: string;
@@ -81,11 +82,7 @@ type Pending =
       };
     };
 function stored<T>(key: string, fallback: T): T {
-  try {
-    return JSON.parse(sessionStorage.getItem(key) ?? 'null') ?? fallback;
-  } catch {
-    return fallback;
-  }
+  return (readOptionalJson('session', key, null) ?? fallback) as T;
 }
 function retain(key: string, value: unknown) {
   if (value === null) sessionStorage.removeItem(key);

@@ -8,6 +8,7 @@ import type { Illustration } from '../core/illustration.js';
 import { IllustrationActivity } from './IllustrationActivity.js';
 import { illustrationProgress } from './illustration-progress.js';
 import { TurnStatus } from './TurnStatus.js';
+import { readOptionalStorage } from './optional-storage.js';
 
 const active = (status: string) => ['queued', 'running'].includes(status);
 const attention = (status: string) =>
@@ -55,13 +56,7 @@ function TurnActivityContent({
 }: Props) {
   useI18n();
   const storageKey = `turn-activity:${run.chatId}:${run.id}`;
-  const [open, setOpen] = useState(() => {
-    try {
-      return sessionStorage.getItem(storageKey) === 'open';
-    } catch {
-      return false;
-    }
-  });
+  const [open, setOpen] = useState(() => readOptionalStorage('session', storageKey) === 'open');
   const visibleRevision = useRef(revision);
   if (open) visibleRevision.current = revision;
   const [now, setNow] = useState(Date.now);

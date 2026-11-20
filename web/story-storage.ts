@@ -1,3 +1,9 @@
+import {
+  readOptionalJson,
+  removeOptionalStorage,
+  writeOptionalStorage,
+} from './optional-storage.js';
+
 export function commandStorageKey(chatId: string) {
   return `command:${chatId}`;
 }
@@ -11,39 +17,24 @@ export type ReadingPosition = {
 };
 
 function optionalCache(key: string, persistent = false): Record<string, unknown> | null {
-  try {
-    const storage = persistent ? localStorage : sessionStorage;
-    const value: unknown = JSON.parse(storage.getItem(key) || 'null');
-    return value && typeof value === 'object' && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : null;
-  } catch {
-    return null;
-  }
+  const value = readOptionalJson(persistent ? 'local' : 'session', key, null);
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 export function writeViewCache(key: `reading:${string}` | `cursor:${string}`, value: object) {
   const serialized = JSON.stringify(value);
-  if (key.startsWith('reading:')) {
-    try {
-      localStorage.setItem(key, serialized);
-      try {
-        sessionStorage.removeItem(key);
-      } catch {}
-      return;
-    } catch {}
+  if (key.startsWith('reading:') && writeOptionalStorage('local', key, serialized)) {
+    removeOptionalStorage('session', key);
+    return;
   }
-  try {
-    sessionStorage.setItem(key, serialized);
-  } catch {}
+  writeOptionalStorage('session', key, serialized);
 }
 
 export function clearReadingPosition(key: `reading:${string}`) {
-  for (const persistent of [true, false]) {
-    try {
-      (persistent ? localStorage : sessionStorage).removeItem(key);
-    } catch {}
-  }
+  removeOptionalStorage('local', key);
+  removeOptionalStorage('session', key);
 }
 
 function validReadingPosition(value: Record<string, unknown> | null): ReadingPosition | null {
@@ -64,12 +55,8 @@ export function readReadingPosition(key: string): ReadingPosition | null {
   const inSession = validReadingPosition(optionalCache(key));
   const persistent = validReadingPosition(optionalCache(key, true));
   if (!inSession) return persistent;
-  if (!persistent) {
-    try {
-      localStorage.setItem(key, JSON.stringify(inSession));
-      sessionStorage.removeItem(key);
-    } catch {}
-  }
+  if (!persistent && writeOptionalStorage('local', key, JSON.stringify(inSession)))
+    removeOptionalStorage('session', key);
   return inSession;
 }
 

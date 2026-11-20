@@ -1,15 +1,11 @@
+import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
+
 export function readPresentationSetting(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
+  return readOptionalStorage('local', key);
 }
 
 export function writePresentationSetting(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {}
+  writeOptionalStorage('local', key, value);
 }
 
 export function readPresentationChoice<T extends string | number>(

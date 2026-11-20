@@ -18,6 +18,7 @@ import { LoreContextPolicyEditor } from './LoreContextPolicyEditor.js';
 import type { LoreContextDefaults, LoreContextPolicy } from '../core/lore-context.js';
 import './library.css';
 import './settings-actions.css';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 export type ProfileSection = 'characters' | 'prompts' | 'models' | 'story' | 'images';
 const judgmentProviderLabels: Record<ExternalJudgmentProvider, string> = {
@@ -93,15 +94,13 @@ export function ProfileEditor({
     [loreResetVersion, setLoreResetVersion] = useState(0);
   const [loreDefaults, setLoreDefaults] = useState<LoreContextPolicy | null>(null);
   const [loreDefaultsError, setLoreDefaultsError] = useState(false);
-  const [loreDefaultsRequest, setLoreDefaultsRequest] = useState(0);
   const [saving, setSaving] = useState(false);
   const [localTab, setTab] = useState<ProfileSection>(initialTab);
   const selectedTab = activeTab ?? localTab;
   const tab = selectedTab === 'models' ? 'prompts' : selectedTab;
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
-  // biome-ignore lint/correctness/useExhaustiveDependencies: An explicit retry starts a new read and invalidates the previous effect's response.
-  useEffect(() => {
+  const retryLoreDefaults = useRetryableEffect(() => {
     let active = true;
     setLoreDefaultsError(false);
     void api<LoreContextDefaults>('/lore-context-defaults')
@@ -114,7 +113,7 @@ export function ProfileEditor({
     return () => {
       active = false;
     };
-  }, [loreDefaultsRequest]);
+  }, []);
   useEffect(() => {
     if (!dirty && !lorePending)
       setValue((current) =>
@@ -304,11 +303,7 @@ export function ProfileEditor({
                     <p className="error" role="alert">
                       {t('library.couldNotLoadGlobalLoreDefaultsYou')}
                     </p>
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() => setLoreDefaultsRequest((current) => current + 1)}
-                    >
+                    <button type="button" className="secondary" onClick={retryLoreDefaults}>
                       {t('library.reloadGlobalDefaults')}
                     </button>
                   </div>

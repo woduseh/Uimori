@@ -6,6 +6,11 @@ import { IconButton } from './IconButton.js';
 import { HelperMessageProse } from './HelperMessageProse.js';
 import { t, useI18n } from './i18n.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import {
+  readOptionalStorage,
+  removeOptionalStorage,
+  writeOptionalStorage,
+} from './optional-storage.js';
 
 export type HelperDeleteScope = 'pair' | 'following';
 
@@ -127,17 +132,11 @@ export function HelperResponseEditor({
   };
   const key = `helper-response-edit:${id}`;
   const persist = (value?: string) => {
-    try {
-      if (value === undefined) sessionStorage.removeItem(key);
-      else sessionStorage.setItem(key, value);
-    } catch {}
+    if (value === undefined) removeOptionalStorage('session', key);
+    else writeOptionalStorage('session', key, value);
   };
   const open = () => {
-    try {
-      setDraft(sessionStorage.getItem(key) ?? text);
-    } catch {
-      setDraft(text);
-    }
+    setDraft(readOptionalStorage('session', key) ?? text);
     onEditingChange(true);
     setEditing(true);
   };

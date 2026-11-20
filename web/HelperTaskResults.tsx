@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   BookOpen,
   Check,
@@ -25,6 +25,7 @@ import { usageCompact, usageUsd } from './usage-display.js';
 import './helper-task-results.css';
 import './scene-usage.css';
 import './run-task-details.css';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 type RecordedAmount = { value: number; reported: number; unknown: number };
 const usageFields = [
@@ -116,10 +117,7 @@ type ResultsRead = {
 
 function useTaskResults(taskId: string, status: HelperStatus, visible: boolean) {
   const [view, setView] = useState<ResultsRead | null>(null);
-  const [attempt, setAttempt] = useState(0);
-  const retry = useCallback(() => setAttempt((value) => value + 1), []);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt explicitly retries the same result read.
-  useEffect(() => {
+  const retry = useRetryableEffect(() => {
     if (!visible) return;
     const controller = new AbortController();
     let pending = false;
@@ -169,7 +167,7 @@ function useTaskResults(taskId: string, status: HelperStatus, visible: boolean) 
       clearTimeout(timer);
       document.removeEventListener('visibilitychange', visibilityChanged);
     };
-  }, [taskId, status, visible, attempt]);
+  }, [taskId, status, visible]);
   return {
     ...(view?.taskId === taskId ? view : { data: null, reading: visible, failed: false }),
     retry,

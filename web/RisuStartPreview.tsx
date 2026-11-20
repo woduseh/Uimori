@@ -1,10 +1,11 @@
 import { useI18n, translateMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { Content } from '../core/product.js';
 import { api } from './api.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
 import { useWindowViewport } from './window-viewport.js';
+import { useRetryableEffect } from './useRetryableEffect.js';
 
 export function RisuStartPreview({
   content,
@@ -27,10 +28,8 @@ export function RisuStartPreview({
   } | null>(null);
   const [failure, setFailure] = useState<{ identity: string; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [readAttempt, setReadAttempt] = useState(0);
   const error = failure?.identity === identity ? failure.message : '';
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Explicit retry repeats the same selected opening read.
-  useEffect(() => {
+  const retryPreview = useRetryableEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     const query = new URLSearchParams({
@@ -62,7 +61,7 @@ export function RisuStartPreview({
     return () => {
       controller.abort();
     };
-  }, [content.id, content.revision, startId, userName, identity, viewport, readAttempt]);
+  }, [content.id, content.revision, startId, userName, identity, viewport]);
   if (!preview || preview.identity !== identity || error)
     return (
       <LoadingState
@@ -73,7 +72,7 @@ export function RisuStartPreview({
         label={t('native.text_f7b0125b0b')}
         onRetry={() => {
           setLoading(true);
-          setReadAttempt((attempt) => attempt + 1);
+          retryPreview();
         }}
       />
     );

@@ -32,6 +32,7 @@ import { ActivityNavigation } from './ActivityNavigation.js';
 import { LibraryFolderCover, LibraryFolderCoverDialog } from './LibraryFolderCover.js';
 import { contentPortraitUrl } from './content-portrait.js';
 import './bot-tree-navigation.css';
+import { readOptionalJson, writeOptionalStorage } from './optional-storage.js';
 
 export type { ChatFolder } from '../core/product.js';
 type View = {
@@ -42,19 +43,15 @@ type View = {
 };
 const storageKey = 'uimori.bot-tree.v1';
 function readView(): View {
-  try {
-    const value = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
-    return {
-      open: value?.open && typeof value.open === 'object' ? value.open : {},
-      mode: value?.mode === 'activity' ? 'activity' : 'bots',
-      sort: value?.sort === 'manual' ? 'manual' : 'recent',
-      order: Array.isArray(value?.order)
-        ? value.order.filter((id: unknown) => typeof id === 'string')
-        : [],
-    };
-  } catch {
-    return { open: {}, sort: 'recent', order: [], mode: 'bots' };
-  }
+  const value = readOptionalJson('local', storageKey, null) as Partial<View> | null;
+  return {
+    open: value?.open && typeof value.open === 'object' ? value.open : {},
+    mode: value?.mode === 'activity' ? 'activity' : 'bots',
+    sort: value?.sort === 'manual' ? 'manual' : 'recent',
+    order: Array.isArray(value?.order)
+      ? value.order.filter((id: unknown) => typeof id === 'string')
+      : [],
+  };
 }
 export function NavigationQuickActions({
   onSearch,
@@ -203,9 +200,7 @@ export const BotNavigation = memo(function BotNavigation(
       }));
   }, [selected, owner, ownerFolder]);
   useEffect(() => {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(view));
-    } catch {}
+    writeOptionalStorage('local', storageKey, JSON.stringify(view));
   }, [view]);
   const toggle = (key: string) =>
     setView((current) => ({ ...current, open: { ...current.open, [key]: !current.open[key] } }));

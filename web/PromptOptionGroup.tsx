@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
 
 export function PromptOptionGroup({
   identity,
@@ -12,13 +13,7 @@ export function PromptOptionGroup({
   children: ReactNode;
 }) {
   const key = `uimori:prompt-option-group:${identity}`;
-  const [open, setOpen] = useState(() => {
-    try {
-      return localStorage.getItem(key) === 'open';
-    } catch {
-      return false;
-    }
-  });
+  const [open, setOpen] = useState(() => readOptionalStorage('local', key) === 'open');
   return (
     <details
       className={className}
@@ -26,9 +21,7 @@ export function PromptOptionGroup({
       onToggle={(event) => {
         const next = event.currentTarget.open;
         setOpen(next);
-        try {
-          localStorage.setItem(key, next ? 'open' : 'closed');
-        } catch {}
+        writeOptionalStorage('local', key, next ? 'open' : 'closed');
       }}
     >
       <summary>{summary}</summary>
