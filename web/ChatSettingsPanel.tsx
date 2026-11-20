@@ -426,11 +426,6 @@ export function ChatSettingsPanel({
             hidden={!isProfile(active) || !showingDetail}
             tabIndex={0}
           >
-            {!compact && (
-              <h3 className="settings-page-title">
-                {categories.find((item) => item.id === profileTab)!.title}
-              </h3>
-            )}
             {visited.includes('prompts') && detail && (
               <div hidden={profileTab !== 'prompts'}>
                 <SettingsEditor
@@ -542,7 +537,7 @@ export function ChatSettingsPanel({
           </section>
           {categories
             .filter((item) => !isProfile(item.id))
-            .map(({ id: section, title: label }) => (
+            .map(({ id: section }) => (
               <section
                 key={section}
                 className="settings-page"
@@ -554,7 +549,6 @@ export function ChatSettingsPanel({
               >
                 {visited.includes(section) && detail && library && (
                   <>
-                    {!compact && <h3 className="settings-page-title">{label}</h3>}
                     {section === 'guide' && (
                       <StoryGuidePanel
                         chatId={state.selected}

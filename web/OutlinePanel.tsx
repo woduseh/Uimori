@@ -493,13 +493,13 @@ export function OutlinePanel({
       key: crypto.randomUUID(),
       scope: { kind: 'chat', chatId },
       target: { nodeId: node?.id ?? null, expectedRevision: node?.revision ?? null, purpose },
-      title: node?.title ?? '새 이야기 플롯',
+      title: node?.title ?? t('prompts.outlineNewStoryTitle'),
       text:
         purpose === 'review'
-          ? '선택한 현재 플롯과 연결된 원문을 비교해 주세요. 반영된 내용, 근거가 약한 부분, 차이와 수정 방향을 원문 근거로 알려 주세요. 아직 수정하지 마세요.'
+          ? t('prompts.outlineReviewRequest')
           : node
-            ? '선택한 플롯의 방향과 유지할 조건을 보존하면서 필요한 하위 사건을 상세화해 주세요. 기존 원문은 바꾸지 말고 플롯만 저장해 주세요.'
-            : '이 채팅의 작품과 현재 요청에 맞게 플롯을 시작해 주세요. 먼 부분은 큰 방향을 정하고 가까운 회차부터 상세화해 주세요. 본문은 아직 쓰지 마세요.',
+            ? t('prompts.outlineElaborateRequest')
+            : t('prompts.outlineStartRequest'),
     });
   }
   function tree(parentId: string | null, depth = 0): React.ReactNode {

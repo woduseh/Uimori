@@ -159,7 +159,7 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 ### 데이터베이스 스키마와 메타데이터
 
 - **테이블 구성**:
-  - `illustration_settings`: 전역 실행 환경 및 정책
+  - `illustration_settings`: 앱 전체 실행 환경과 정책
   - `illustration_references`: 채팅별 참조 이미지 및 인물 외형 설정
   - `illustration_jobs`: 비동기 작업 큐 및 실행 상태
   - `illustration_images`: 생성된 이미지 BLOB 참조 및 메타데이터
@@ -234,7 +234,7 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 
 | 경로 | 메서드 | 설명 |
 | --- | --- | --- |
-| `/api/illustration-settings` | `GET` / `PUT` | 전역 실행 환경 및 정책. `PUT`은 `expectedRevision` CAS를 사용해요. 응답의 `novelaiTokenConfigured`는 토큰 저장 여부만 알려 주고, `PUT`의 쓰기 전용 `novelaiToken`은 문자열이면 교체, `null`이면 삭제, 생략하면 유지해요. |
+| `/api/illustration-settings` | `GET` / `PUT` | 앱 전체 실행 환경과 정책. `PUT`은 `expectedRevision` CAS를 사용해요. 응답의 `novelaiTokenConfigured`는 토큰 저장 여부만 알려 주고, `PUT`의 쓰기 전용 `novelaiToken`은 문자열이면 교체, `null`이면 삭제, 생략하면 유지해요. |
 | `/api/illustration-presets` | `GET` | 내장 및 저장된 프리셋 목록과 범위별 선택 상태를 반환해요. |
 | `/api/resources/save` | `POST` | 프리셋 저장 (`kind: 'illustration-preset'`). `expectedRevision` 지원. |
 | `/api/resources/illustration-preset/:id` | `GET` | 프리셋 단일 항목을 조회해요. |

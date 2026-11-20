@@ -102,7 +102,7 @@ export function NativeRisuRegexEditor({
               : t('native.text_f07553a49b'),
           }))}
           onAdd={() =>
-            write([...value, { comment: '새 정규식', type: 'editinput', in: '', out: '' }])
+            write([...value, { comment: t('native.newRegex'), type: 'editinput', in: '', out: '' }])
           }
           onMove={(index, delta) => {
             const next = [...value];
@@ -272,7 +272,7 @@ export function NativeRisuRegexEditor({
                         ...value.slice(0, index + 1),
                         {
                           ...structuredClone(entry),
-                          comment: `${regexText(entry.comment) || '정규식'}${t('shared.copySuffix')}`,
+                          comment: `${regexText(entry.comment) || t('native.regexFallbackName')}${t('shared.copySuffix')}`,
                         },
                         ...value.slice(index + 1),
                       ])

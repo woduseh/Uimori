@@ -263,6 +263,36 @@ export const messages = {
     ja: '新しいプロンプト',
     zh: '新提示词',
   },
+  'prompts.userPromptTitle': {
+    ko: '{role, select, main {창작} other {번역}} 사용자 프롬프트',
+    en: '{role, select, main {Writing} other {Translation}} user prompt',
+    ja: '{role, select, main {創作} other {翻訳}}ユーザープロンプト',
+    zh: '{role, select, main {创作} other {翻译}}用户提示词',
+  },
+  'prompts.outlineNewStoryTitle': {
+    ko: '새 이야기 플롯',
+    en: 'New story outline',
+    ja: '新しい物語の構成',
+    zh: '新故事大纲',
+  },
+  'prompts.outlineReviewRequest': {
+    ko: '선택한 현재 플롯과 연결된 원문을 비교해 주세요. 반영된 내용, 근거가 약한 부분, 차이와 수정 방향을 원문 근거로 알려 주세요. 아직 수정하지 마세요.',
+    en: 'Compare the selected outline with its linked original text. Using the text as evidence, report what is reflected, what is weakly supported, the differences and how to revise. Do not change anything yet.',
+    ja: '選択した現在の構成と連結された原文を比較してください。反映された内容、根拠の弱い部分、違いと修正の方向を原文を根拠に教えてください。まだ修正しないでください。',
+    zh: '请比较所选的当前大纲与关联原文。以原文为依据，说明已体现的内容、依据薄弱之处、差异和修改方向。暂时不要修改。',
+  },
+  'prompts.outlineElaborateRequest': {
+    ko: '선택한 플롯의 방향과 유지할 조건을 보존하면서 필요한 하위 사건을 상세화해 주세요. 기존 원문은 바꾸지 말고 플롯만 저장해 주세요.',
+    en: 'Elaborate the needed child events while keeping the selected outline’s direction and conditions. Do not change existing text; save only the outline.',
+    ja: '選択した構成の方向と維持する条件を保ちながら、必要な下位の出来事を詳しくしてください。既存の原文は変えず、構成だけを保存してください。',
+    zh: '在保留所选大纲方向和需保持的条件的前提下，细化所需的子事件。不要修改现有原文，只保存大纲。',
+  },
+  'prompts.outlineStartRequest': {
+    ko: '이 채팅의 작품과 현재 요청에 맞게 플롯을 시작해 주세요. 먼 부분은 큰 방향을 정하고 가까운 회차부터 상세화해 주세요. 본문은 아직 쓰지 마세요.',
+    en: 'Start an outline that fits this chat’s work and the current request. Set the broad direction for distant parts and detail the nearest episodes first. Do not write the story yet.',
+    ja: 'このチャットの作品と現在のリクエストに合わせて構成を始めてください。遠い部分は大きな方向を決め、近い回から詳しくしてください。本文はまだ書かないでください。',
+    zh: '请根据此聊天的作品和当前请求开始大纲。远处部分先定大方向，从最近的章节开始细化。暂时不要写正文。',
+  },
   'prompts.uiPromptSelectionActions': {
     ko: '프롬프트 선택 작업',
     en: 'Prompt selection actions',

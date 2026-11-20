@@ -3438,4 +3438,34 @@ export const messages = {
     ja: '25秒以内に応答がありませんでした',
     zh: '25 秒内未响应',
   },
+  'providers.vertexCompareCancelled': {
+    ko: '확인을 취소했어요',
+    en: 'Check cancelled',
+    ja: '確認をキャンセルしました',
+    zh: '已取消检查',
+  },
+  'providers.vertexCompareCancel': {
+    ko: '{value0} 위치별 응답 비교 취소',
+    en: 'Cancel location comparison for {value0}',
+    ja: '{value0} のロケーション別比較をキャンセル',
+    zh: '取消 {value0} 的按位置比较',
+  },
+  'providers.vertexCompareRetry': {
+    ko: '{value0} 다시 시도',
+    en: 'Retry {value0}',
+    ja: '{value0} を再試行',
+    zh: '重试 {value0}',
+  },
+  'providers.vertexUseLocation': {
+    ko: '이 위치로 변경',
+    en: 'Use this location',
+    ja: 'このロケーションに変更',
+    zh: '改用此位置',
+  },
+  'providers.vertexUseLocationNamed': {
+    ko: '이 위치로 변경: {value0}',
+    en: 'Use this location: {value0}',
+    ja: 'このロケーションに変更: {value0}',
+    zh: '改用此位置：{value0}',
+  },
 };

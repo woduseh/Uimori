@@ -1,6 +1,6 @@
 # 본문 생성과 번역
 
-모델과 프롬프트의 선택은 [전역 설정](GLOBAL-MODELS.md), Risu 평가 순서는 [프롬프트 실행](PROMPT-RUNTIME.md), 저장되는 데이터의 수명은 [실행 입력](EXECUTION.md)을 참고해요.
+모델과 프롬프트의 선택은 [역할별 모델과 현재 프롬프트](GLOBAL-MODELS.md), Risu 평가 순서는 [프롬프트 실행](PROMPT-RUNTIME.md), 저장되는 데이터의 수명은 [실행 입력](EXECUTION.md)을 참고해요.
 
 ## 요청과 완료
 

@@ -43,7 +43,7 @@ Notes:
 1. **Create a chat**: In **Library → Bot**, create or choose a bot and select **New chat as bot**. You can also pick a bot in the left navigation and select **New chat**.
    - A bot is required, and a chat's bot cannot be changed after creation.
    - Persona, prompt and creative preset are optional.
-2. **Add models**: In **Settings → Providers and models**, register a provider and models, then assign them to global roles. Enter API keys directly in the app.
+2. **Add models**: In **Settings → Providers and models**, register a provider and models, then assign them in **Models by role**. Enter API keys directly in the app.
    - You can create chats or use a written opening without a model. Roles that run a model, such as text generation and translation, need one.
 3. **Request a scene**: Send a scene request from the input box at the bottom. The default send key is Ctrl/Cmd+Enter.
 4. **Translate**: Select **Generate translation** on a manuscript to start translating. Open saved translations with **View translation**, and request failed ones again with **Retry translation**.

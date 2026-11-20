@@ -1296,6 +1296,30 @@ export const messages = {
     ja: 'ソース',
     zh: '源码',
   },
+  'native.newRegex': {
+    ko: '새 정규식',
+    en: 'New regex',
+    ja: '新しい正規表現',
+    zh: '新正则',
+  },
+  'native.regexFallbackName': {
+    ko: '정규식',
+    en: 'Regex',
+    ja: '正規表現',
+    zh: '正则',
+  },
+  'native.newChoice': {
+    ko: '새 선택지',
+    en: 'New choice',
+    ja: '新しい選択肢',
+    zh: '新选项',
+  },
+  'native.newLua': {
+    ko: '새 Lua',
+    en: 'New Lua',
+    ja: '新しい Lua',
+    zh: '新 Lua',
+  },
   'native.text_0de1511afe': {
     ko: '위로 이동',
     en: 'Move up',
