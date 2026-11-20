@@ -16,8 +16,8 @@ import { tmpdir } from 'node:os';
 import { CodexRuntime, type CodexImageRequest } from '../server/codex-runtime.js';
 import type { ProviderRequest, WireRecord } from '../core/transport.js';
 import {
-  CODEX_ILLUSTRATION_INSTRUCTIONS,
   CODEX_ILLUSTRATION_OUTPUT_SCHEMA,
+  CODEX_PREPARED_ILLUSTRATION_INSTRUCTIONS,
   ILLUSTRATION_MAX_IMAGE_BYTES,
 } from '../core/illustration.js';
 import { PNG_BASE64 } from './fixtures/illustration.js';
@@ -33,7 +33,7 @@ const connection = {
 const request = (references: CodexImageRequest['references'] = []): CodexImageRequest => ({
   modelId: 'gpt-5.4',
   reasoningEffort: 'low',
-  developerInstructions: CODEX_ILLUSTRATION_INSTRUCTIONS,
+  developerInstructions: CODEX_PREPARED_ILLUSTRATION_INSTRUCTIONS,
   text: JSON.stringify({ scene: 'A lantern swings above the river.' }),
   outputSchema: CODEX_ILLUSTRATION_OUTPUT_SCHEMA,
   references,

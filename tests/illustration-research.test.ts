@@ -85,13 +85,14 @@ test('shared cast survives distinct cuts and redraw without changing scene-speci
     endAnchor: block.anchor,
     focus: block.text,
     visualBrief: index ? 'Mira takes off her coat' : 'Mira in a red coat',
+    prompt: { prompt: `Cut ${index}`, negativePrompt: '', caption: `Caption ${index}` },
   }));
   const visualCanon = [{ name: 'Mira', appearance: 'Green eyes and silver braid' }];
   const board = parseStoryboard(
     JSON.stringify({ heroIndex: 0, targets, visualCanon }),
     splitSource(source),
     2,
-    'none',
+    'codex',
     false
   );
   const claimed = claimIllustration(store, plan.id, 'test')!;
@@ -114,7 +115,7 @@ test('shared cast survives distinct cuts and redraw without changing scene-speci
       JSON.stringify({ heroIndex: 0, targets }),
       splitSource(source),
       2,
-      'none',
+      'codex',
       false
     )
   ).toEqual({ heroIndex: 0, targets });

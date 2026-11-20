@@ -250,7 +250,7 @@ test('ComfyUI freezes the selected workflow with the global environment, and aut
     temperature: null,
   });
   const runtime = fixtureSettings({
-    generator: 'comfyui',
+    generator: undefined,
     automatic: true,
     maxAutoRetries: 4,
     comfyui: {
@@ -390,26 +390,19 @@ test('HTTP catalogue, resource save, selection, export and deletion honor separa
   });
 });
 
-test('legacy recipes infer their generator without rewriting stored versions and v2 keeps the explicit choice', () => {
-  const store = databases.create();
+test('v1 preset files infer their generator and v2 files keep the explicit choice', () => {
   for (const workflow of ['', FIXTURE_WORKFLOW]) {
     const { generator: _generator, ...legacy } = {
       ...emptyIllustrationPreset('Legacy'),
       comfyui: { workflow, negativeGuidance: '' },
     };
-    const saved = store.product.save('illustration-preset', legacy) as IllustrationPreset;
-    const raw = store.product.get('illustration-preset', saved.id);
-    const expected = workflow ? 'comfyui' : 'codex';
-    expect(readIllustrationPreset(store, saved.id).generator).toBe(expected);
     expect(
       parseIllustrationPresetFile({
         format: 'uimori-illustration-preset',
         version: 1,
         preset: legacy,
       }).generator
-    ).toBe(expected);
-    expect(store.product.get('illustration-preset', saved.id)).toEqual(raw);
-    expect(raw).not.toHaveProperty('generator');
+    ).toBe(workflow ? 'comfyui' : 'codex');
     const file = illustrationPresetFile({ ...legacy, generator: 'codex' });
     expect(file.version).toBe(2);
     expect(parseIllustrationPresetFile(file).generator).toBe('codex');
@@ -465,9 +458,4 @@ test('preset selection chooses its shared environment without changing global se
   expect(illustrationJob(store, original.id).input).toEqual(original.input);
   expect(original.input.preset?.id).toBe(codex.id);
   expect(next.input.preset?.id).toBe(comfy.id);
-  store.db
-    .prepare('UPDATE illustration_settings SET body=? WHERE id=1')
-    .run(JSON.stringify({ ...environment, generator: 'none', automatic: true }));
-  expect(illustrationSettings(store).automatic).toBe(false);
-  expect(illustrationSettings(store)).not.toHaveProperty('generator');
 });

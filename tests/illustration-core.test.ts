@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
-  codexIllustrationText,
+  codexPreparedIllustrationText,
   detectImageMime,
   excerptScene,
   fillComfyWorkflow,
@@ -218,19 +218,10 @@ describe('prompt model output and Codex caption parsing', () => {
     expect(source.scene.endsWith('마지막 장면')).toBe(true);
   });
   test('the Codex input text labels references by role without carrying bytes', () => {
-    const text = codexIllustrationText(
-      {
-        text: 'Scene',
-        styleGuidance: 'ink',
-        bot: null,
-        persona: null,
-        allowSkip: true,
-      },
-      [
-        { role: 'character', label: 'Mira' },
-        { role: 'style', label: 'Sketchbook' },
-      ]
-    );
+    const text = codexPreparedIllustrationText('Scene', [
+      { role: 'character', label: 'Mira' },
+      { role: 'style', label: 'Sketchbook' },
+    ]);
     const parsed = JSON.parse(text) as { attachedReferences: { role: string; label: string }[] };
     expect(parsed.attachedReferences).toEqual([
       { attachment: 1, role: 'character design reference', label: 'Mira' },

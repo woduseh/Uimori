@@ -154,7 +154,7 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 - **작업 펌프 구조**: 하나의 삽화 펌프 안에서 텍스트 작업 1개와 렌더 작업 1개를 독립적으로 병행 실행해요. 같은 계획의 대표 컷부터 순서대로 렌더를 진행하며, 본문 작성 슬롯이나 사용자 입력 상태를 잠그지 않아요.
 - **중복 방지 잠금**: 한 응답 내에서 장면 전체의 컷을 고르는 계획 작업은 1개만 진행돼요 (`ILLUSTRATION_PLAN_ACTIVE`). 다른 컷의 렌더는 독립 예약할 수 있지만 동일한 컷의 중복 실행은 방지돼요 (`ILLUSTRATION_ACTIVE`).
 - **상태 머신**: `queued → running → completed | failed | cancelled | interrupted`. 사용자가 작업을 취소하면 `generation` 카운터를 증가시켜 지연 도착한 결과를 폐기해요. 서버가 재시작되면 실행 중이던 작업은 `interrupted`로 변경되며 자동 재실행하지 않아요 (`queued` 작업은 재개).
-- **작업 단위**: `illustration_jobs.input.task`는 `plan`, `render`, `placement`로 나뉘며, 이전 버전의 레거시 입력은 단일 `render`로 취급해요.
+- **작업 단위**: `illustration_jobs.input.task`는 `plan`, `render`, `placement`로 나뉘어요.
 
 ### 데이터베이스 스키마와 메타데이터
 
@@ -205,7 +205,7 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 
 ### Codex 이미지 요청의 사전 판정
 
-이미지 생성 직전에 Codex로 보낼 텍스트(프롬프트 모델이 작성한 프롬프트 또는 예약된 장면 자료, 참조 이미지 라벨)를 판단 프로바이더(기본 TypeSafe AI / JEV)로 사전 검사해요. 다듬기를 켠 경우에도 사전 판정의 범위는 이미지 턴에 보내는 텍스트까지예요.
+이미지 생성 직전에 Codex로 보낼 텍스트(프롬프트 모델이 작성한 프롬프트와 참조 이미지 라벨)를 판단 프로바이더(기본 TypeSafe AI / JEV)로 사전 검사해요. 다듬기를 켠 경우에도 사전 판정의 범위는 이미지 턴에 보내는 텍스트까지예요.
 
 - **판정 기준**: 컷을 묘사한 텍스트에 노골적인 성적 묘사가 필요한지 여부를 `noul` 지표로 판정하며, 점수가 0.9 이상이면 해당 컷의 이미지 요청을 보내지 않고 차단해요. (일반적인 로맨스나 키스, 비노골적인 연출은 일괄 차단 대상이 아니에요.)
 - **차단 처리**: `ILLUSTRATION_CODEX_CONTENT_BLOCKED` 오류로 기록되며 자동 재시도 및 동일 입력 수동 재시도를 차단해요. 다른 컷의 작업이나 본문·번역 작업, 기존 성공 이미지는 정상적으로 유지돼요.
@@ -264,7 +264,7 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 - **단위 및 계약 테스트**:
   - `tests/illustration-research.test.ts`: 고정 native 자료 읽기와 공통 cast 검증
   - `tests/illustration-profiles.test.ts`: 인물 기본 외형 상속 및 CHARX 왕복 보존 검증
-  - `tests/illustration-presets.test.ts`: 범위별 선택, 직전 저장 되돌리기, 기존 설정 호환, 고정 작업 입력 검증
+  - `tests/illustration-presets.test.ts`: 범위별 선택, 직전 저장 되돌리기, v1 파일 생성기 인식, 고정 작업 입력 검증
   - `tests/illustration-storyboard.test.ts`: 컷 계획 원자성, 중복 실행 방지, 재생성 중 기존본 유지, 번역 위치 연결 검증
   - `tests/illustration-runner.test.ts`: 번역 위치 연결의 판단 모델 선택, `none`, 키 미설정 시 기존 경로, 전송 후 실패
   - `tests/comfyui-client.test.ts`, `tests/codex-image.test.ts`: 각 생성기 클라이언트 및 가상 응답 계약 검증

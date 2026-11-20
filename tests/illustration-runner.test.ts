@@ -21,7 +21,10 @@ import {
   updateIllustrationSettings,
   updateIllustrationReferences,
   scheduleIllustrationPlacement,
+  type IllustrationJobRow,
 } from '../server/illustrations.js';
+import { splitSource } from '../core/auxiliary.js';
+import type { IllustrationTarget } from '../core/illustration-storyboard.js';
 import { illustrationPresentation } from '../server/illustration-presentation.js';
 import type { Store } from '../server/store.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
@@ -49,13 +52,16 @@ test.each(['TIMEOUT', 'throw'] as const)(
     const store = databases.create();
     const { source } = chatWithSource(store);
     const model = codexModel(store);
-    const job = reserveIllustration(store, source, 'manual', {
-      settings: fixtureSettings({
-        generator: 'codex',
-        maxAutoRetries: 5,
-        codex: { model: { id: model.id } },
-      }),
-    });
+    const job = withPreparedPrompt(
+      store,
+      reserveIllustration(store, source, 'manual', {
+        settings: fixtureSettings({
+          generator: undefined,
+          maxAutoRetries: 5,
+          codex: { model: { id: model.id }, promptModel: { id: model.id } },
+        }),
+      })
+    );
     const observed = hooks(store, {
       generateCodexImage: async (connection, request, options) => {
         await options.onWire({
@@ -100,6 +106,48 @@ test.each(['TIMEOUT', 'throw'] as const)(
     expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toBeNull();
   }
 );
+test('a Codex job input without a prompt model fails explicitly before any dispatch', async () => {
+  const store = databases.create();
+  const { source } = chatWithSource(store);
+  const model = codexModel(store);
+  const job = withPreparedPrompt(
+    store,
+    reserveIllustration(store, source, 'manual', {
+      settings: fixtureSettings({
+        generator: undefined,
+        codex: { model: { id: model.id }, promptModel: { id: model.id } },
+      }),
+    })
+  );
+  const { promptModel: _promptModel, ...codex } = job.input.codex!;
+  store.db
+    .prepare('UPDATE illustration_jobs SET input=? WHERE id=?')
+    .run(JSON.stringify({ ...job.input, codex }), job.id);
+  const generate = vi.fn<NonNullable<IllustrationRunnerHooks['generateCodexImage']>>();
+  const observed = hooks(store, { generateCodexImage: generate });
+  expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toMatchObject({
+    status: 'failed',
+    code: 'ILLUSTRATION_PROMPT_MODEL_REQUIRED',
+  });
+  expect(generate).not.toHaveBeenCalled();
+  expect(observed.wires).toHaveLength(0);
+});
+function withPreparedPrompt(store: Store, job: IllustrationJobRow) {
+  const [block] = splitSource(store.source(job.sourceRevision));
+  const target: IllustrationTarget = {
+    id: `target-${job.id}`,
+    order: 0,
+    startAnchor: block.anchor,
+    endAnchor: block.anchor,
+    focus: block.text,
+    visualBrief: block.text,
+    prompt: { prompt: 'A lantern above the river.', negativePrompt: '', caption: '등불' },
+  };
+  store.db
+    .prepare('UPDATE illustration_jobs SET input=? WHERE id=?')
+    .run(JSON.stringify({ ...job.input, target }), job.id);
+  return illustrationJob(store, job.id);
+}
 function hooks(store: Store, extra: Partial<IllustrationRunnerHooks> = {}) {
   const wires: WireRecord[] = [];
   const finishes: { id: string; result: ProviderResult }[] = [];
@@ -240,7 +288,7 @@ describe('illustration runner through the Codex image turn', () => {
     const { provider, model } = await promptModel(store, () => 'invalid prompt JSON');
     const job = reserveIllustration(store, source, 'manual', {
       settings: fixtureSettings({
-        generator: 'codex',
+        generator: undefined,
         maxAutoRetries: 0,
         codex: { model: { id: imageModel.id }, promptModel: { id: model.id } },
       }),
@@ -258,118 +306,20 @@ describe('illustration runner through the Codex image turn', () => {
     expect(store.source(source.id).text).toBe(source.text);
   });
 
-  test('sends the scene, guidance and role-labeled references, records the attempt and stores the caption', async () => {
-    const store = databases.create();
-    const { chat, source } = chatWithSource(store);
-    const asset = store.product.createAsset(chat.id, {
-      title: 'Mira design',
-      mime: 'image/png',
-      base64: PNG_BASE64,
-      description: '',
-      actor: 'Mira',
-      outfit: '',
-      location: '',
-      allowedUse: 'both',
-    }) as { id: string };
-    updateIllustrationReferences(store, chat.id, {
-      expectedRevision: 0,
-      references: [{ ref: asset.id, role: 'character' }],
-    });
-    const model = codexModel(store);
-    fixtureIllustrationPreset(store, { styleGuidance: 'watercolor' });
-    const job = reserveIllustration(store, source, 'manual', {
-      settings: fixtureSettings({
-        generator: 'codex',
-
-        codex: { model: { id: model.id }, useReferences: true },
-      }),
-    });
-    expect(job.input.codex?.promptModel).toBeUndefined();
-    const captured: { connection: Connection; request: CodexImageRequest }[] = [];
-    const observed = hooks(store, {
-      generateCodexImage: async (connection, request, options) => {
-        captured.push({ connection, request });
-        await options.onWire({
-          connectionId: connection.id,
-          protocol: connection.protocol,
-          role: 'illustration',
-          modelId: request.modelId,
-          method: 'RPC',
-          url: 'codex://local',
-          headers: {},
-          body: { method: 'turn/start' },
-          bodySha256: 'a'.repeat(64),
-          stablePrefixSha256: 'b'.repeat(64),
-        });
-        const result: CodexImageResult = {
-          status: 'completed',
-          images: [{ mime: 'image/png', bytes: PNG }],
-          revisedPrompt: 'A watercolor lantern above the river.',
-          text: '{"caption":"강 위의 등불"}',
-          usage: {
-            inputTokens: 12,
-            outputTokens: 3,
-            costUsd: null,
-            raw: null,
-            priceRevision: null,
-          },
-          error: null,
-        };
-        return result;
-      },
-    });
-    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
-      status: 'completed',
-      code: null,
-      images: 1,
-    });
-    expect(captured).toHaveLength(1);
-    expect(captured[0].connection.protocol).toBe('codex-app-server-v1');
-    expect(captured[0].request.modelId).toBe('gpt-5.4');
-    expect(captured[0].request.reasoningEffort).toBe('low');
-    expect(captured[0].request.references).toEqual([{ mime: 'image/png', base64: PNG_BASE64 }]);
-    const text = JSON.parse(captured[0].request.text) as {
-      scene: string;
-      styleGuidance: string;
-      attachedReferences: unknown[];
-    };
-    expect(text.scene).toBe(source.text);
-    expect(text.styleGuidance).toBe('watercolor');
-    expect(text.attachedReferences).toEqual([
-      { attachment: 1, role: 'character design reference', label: 'Mira design' },
-    ]);
-    expect(observed.wires).toHaveLength(1);
-    expect(observed.finishes).toEqual([
-      {
-        id: 'attempt-1',
-        result: expect.objectContaining({
-          status: 'completed',
-          usage: expect.objectContaining({ inputTokens: 12 }),
-        }),
-      },
-    ]);
-    const item = projectIllustration(store, illustrationJob(store, job.id));
-    expect(item.images[0]).toMatchObject({
-      caption: '강 위의 등불',
-      revisedPrompt: 'A watercolor lantern above the river.',
-    });
-    expect(item.diagnostic).toMatchObject({
-      stage: 'store',
-      attempts: ['attempt-1'],
-      revisedPrompt: 'A watercolor lantern above the river.',
-    });
-  });
   test('usage limits fail immediately without an automatic retry', async () => {
     const store = databases.create();
     const { source } = chatWithSource(store);
     const model = codexModel(store);
     const settings = fixtureSettings({
-      generator: 'codex',
+      generator: undefined,
       maxAutoRetries: 1,
       maxPerSource: 4,
-      codex: { model: { id: model.id }, useReferences: false },
+      codex: { model: { id: model.id }, promptModel: { id: model.id }, useReferences: false },
     });
-    const limited = reserveIllustration(store, source, 'manual', { settings });
+    const limited = withPreparedPrompt(
+      store,
+      reserveIllustration(store, source, 'manual', { settings })
+    );
     const failure = (
       code: string,
       usageLimit?: { limitId: string; resetsAt: number | null }
@@ -411,7 +361,7 @@ test('selecting Codex as the prompt model still plans first and renders from the
   const plan = reserveIllustrationPlan(store, source, 'manual', {
     maxTargets: 1,
     settings: fixtureSettings({
-      generator: 'codex',
+      generator: undefined,
       codex: { model: { id: model.id }, promptModel: { id: model.id } },
     }),
   });
@@ -514,7 +464,7 @@ test('one separate Codex planning call prepares every cut and passes each prompt
     direction: '  등불을 든 미라와 고요한 부두를 각각 그려 주세요.  ',
     requestKey: 'manual-directed-plan',
     settings: fixtureSettings({
-      generator: 'codex',
+      generator: undefined,
       codex: { model: { id: imageModel.id }, promptModel: { id: model.id } },
     }),
   });
@@ -605,7 +555,7 @@ test('Codex redraw uses the new refinement setting and retries keep the draft an
     );
   });
   const { revision, ...body } = fixtureSettings({
-    generator: 'codex',
+    generator: undefined,
     maxAutoRetries: 0,
     codex: { model: { id: imageModel.id }, promptModel: { id: model.id } },
   });
@@ -739,7 +689,7 @@ test('a requested redraw from ComfyUI carries the last successful prompt into Co
     });
   selectGenerator(originalGenerator);
   const { revision, ...settings } = fixtureSettings({
-    generator: 'codex',
+    generator: undefined,
     codex: { model: { id: imageModel.id }, promptModel: { id: model.id } },
     comfyui: {
       baseUrl: comfy.origin,
@@ -810,7 +760,7 @@ describe('illustration runner through a prompt model and remote ComfyUI', () => 
     cleanups.push(comfy.close);
     fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
     const settings = fixtureSettings({
-      generator: 'comfyui',
+      generator: undefined,
       maxAutoRetries: 1,
       comfyui: {
         baseUrl: comfy.origin,
@@ -873,7 +823,7 @@ describe('illustration runner through a prompt model and remote ComfyUI', () => 
     fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
     const job = reserveIllustration(store, source, 'manual', {
       settings: fixtureSettings({
-        generator: 'comfyui',
+        generator: undefined,
         maxAutoRetries: 2,
         comfyui: {
           baseUrl: comfy.origin,
@@ -924,7 +874,7 @@ describe('illustration runner through a prompt model and remote ComfyUI', () => 
     });
     const job = reserveIllustration(store, source, 'manual', {
       settings: fixtureSettings({
-        generator: 'comfyui',
+        generator: undefined,
 
         maxAutoRetries: 5,
         comfyui: {
@@ -965,7 +915,7 @@ describe('illustration runner through a prompt model and remote ComfyUI', () => 
     });
     const job = reserveIllustration(store, source, 'manual', {
       settings: fixtureSettings({
-        generator: 'comfyui',
+        generator: undefined,
 
         comfyui: {
           baseUrl: comfy.origin,
@@ -1023,7 +973,7 @@ describe('illustration runner through a prompt model and remote ComfyUI', () => 
     fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
     const base = (baseUrl: string) =>
       fixtureSettings({
-        generator: 'comfyui',
+        generator: undefined,
         maxAutoRetries: 1,
         maxPerSource: 6,
         comfyui: {
@@ -1101,7 +1051,7 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
     fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
     const job = reserveIllustration(store, source, 'manual', {
       settings: fixtureSettings({
-        generator: 'comfyui',
+        generator: undefined,
         maxAutoRetries: 3,
         comfyui: {
           baseUrl: comfy.origin,
@@ -1147,7 +1097,7 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
     cleanups.push(comfy.close);
     fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
     const settings = fixtureSettings({
-      generator: 'comfyui',
+      generator: undefined,
       automatic: true,
       maxPerSource: 2,
       comfyui: {
@@ -1188,33 +1138,6 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
     ]);
     expect(store.chat(chat.id)).toBeTruthy();
   });
-  test('an automatic Codex run may answer SKIP instead of drawing', async () => {
-    const store = databases.create();
-    const { source } = chatWithSource(store);
-    const model = codexModel(store);
-    const job = reserveIllustration(store, source, 'automatic', {
-      settings: fixtureSettings({
-        generator: 'codex',
-        codex: { model: { id: model.id }, useReferences: false },
-      }),
-    });
-    const observed = hooks(store, {
-      generateCodexImage: async () => ({
-        status: 'error',
-        images: [],
-        revisedPrompt: null,
-        text: '{"caption":"SKIP: 시각적 변화가 없는 장면"}',
-        usage: { inputTokens: 5, outputTokens: 2, costUsd: null, raw: null, priceRevision: null },
-        error: { code: 'CODEX_IMAGE_NOT_GENERATED' },
-      }),
-    });
-    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
-      status: 'skipped',
-      code: null,
-      images: 0,
-    });
-    expect(illustrationJob(store, job.id).diagnostic?.skipped).toBe('시각적 변화가 없는 장면');
-  });
   test('a ComfyUI timeout keeps the prompt_id, never re-renders, and reconcile stores the late result', async () => {
     const store = databases.create();
     const { source } = chatWithSource(store);
@@ -1234,7 +1157,7 @@ describe('skip decisions and reconcile of accepted remote prompts', () => {
       );
     const job = reserveIllustration(store, source, 'manual', {
       settings: fixtureSettings({
-        generator: 'comfyui',
+        generator: undefined,
         maxAutoRetries: 2,
         comfyui: {
           baseUrl: comfy.origin,
@@ -1292,13 +1215,16 @@ test.each(['blocked', 'missing-key', 'unavailable', 'cancelled'] as const)(
     const store = databases.create();
     const { source, chat } = chatWithSource(store);
     const model = codexModel(store);
-    const job = reserveIllustration(store, source, 'manual', {
-      settings: fixtureSettings({
-        generator: 'codex',
-        maxAutoRetries: 5,
-        codex: { model: { id: model.id } },
-      }),
-    });
+    const job = withPreparedPrompt(
+      store,
+      reserveIllustration(store, source, 'manual', {
+        settings: fixtureSettings({
+          generator: undefined,
+          maxAutoRetries: 5,
+          codex: { model: { id: model.id }, promptModel: { id: model.id } },
+        }),
+      })
+    );
     const controller = new AbortController();
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
       if (mode === 'cancelled') controller.abort();
@@ -1364,7 +1290,7 @@ test.each(['paragraph', 'none', 'missing-key', 'unavailable'] as const)(
     const plan = reserveIllustrationPlan(store, source, 'manual', {
       maxTargets: 1,
       settings: fixtureSettings({
-        generator: 'codex',
+        generator: undefined,
         codex: { model: { id: model.id }, promptModel: { id: model.id } },
       }),
     });
@@ -1469,13 +1395,16 @@ test('a safe Codex retry reuses only its identical successful JEV check', async 
   const store = databases.create();
   const { source } = chatWithSource(store);
   const model = codexModel(store);
-  const job = reserveIllustration(store, source, 'manual', {
-    settings: fixtureSettings({
-      generator: 'codex',
-      maxAutoRetries: 1,
-      codex: { model: { id: model.id } },
-    }),
-  });
+  const job = withPreparedPrompt(
+    store,
+    reserveIllustration(store, source, 'manual', {
+      settings: fixtureSettings({
+        generator: undefined,
+        maxAutoRetries: 1,
+        codex: { model: { id: model.id }, promptModel: { id: model.id } },
+      }),
+    })
+  );
   const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
     Response.json({
       model: 'jev-latest',
@@ -1614,7 +1543,7 @@ test.each(['complete', 'context-limit'] as const)(
     const plan = reserveIllustrationPlan(store, source, 'manual', {
       maxTargets: 1,
       settings: fixtureSettings({
-        generator: 'codex',
+        generator: undefined,
         maxAutoRetries: 0,
         codex: { model: { id: imageModel.id }, promptModel: { id: model.id } },
       }),

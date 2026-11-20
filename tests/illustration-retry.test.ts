@@ -56,7 +56,7 @@ function setup(stage: 'plan' | 'placement' | 'prompt' | 'image') {
     temperature: null,
   });
   const settings = fixtureSettings({
-    generator: stage === 'prompt' ? 'comfyui' : 'codex',
+    generator: undefined,
     maxAutoRetries: 5,
     codex: { model: { id: model.id }, promptModel: { id: model.id } },
     comfyui: { baseUrl: 'http://127.0.0.1:1', promptModel: { id: model.id } },
@@ -187,7 +187,7 @@ test('a manually selected cut sends only its exact passage to prompt preparation
     temperature: null,
   });
   const settings = fixtureSettings({
-    generator: 'codex',
+    generator: undefined,
     codex: { model: { id: model.id }, promptModel: { id: model.id } },
   });
   const first = splitSource(source)[0];

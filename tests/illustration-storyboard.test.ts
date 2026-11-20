@@ -741,7 +741,7 @@ test('compact wire aliases preserve every source paragraph and round-trip to can
     model,
     scene,
     source,
-    { maxTargets: 2, existingTargets: [], generator: 'codex', promptMode: 'none' },
+    { maxTargets: 2, existingTargets: [], generator: 'codex', promptMode: 'codex' },
     undefined
   );
   const input = request.input.source as { blocks: [string, string][] };
@@ -755,12 +755,18 @@ test('compact wire aliases preserve every source paragraph and round-trip to can
     JSON.stringify({
       heroIndex: 0,
       targets: [
-        { startAnchor: 's0', endAnchor: 's1', focus: 'A lantern', visualBrief: 'Mira on the pier' },
+        {
+          startAnchor: 's0',
+          endAnchor: 's1',
+          focus: 'A lantern',
+          visualBrief: 'Mira on the pier',
+          prompt: { prompt: 'Mira on the pier', caption: 'A lantern' },
+        },
       ],
     }),
     blocks,
     2,
-    'none',
+    'codex',
     false
   );
   expect(result.targets[0]).toMatchObject({
@@ -917,8 +923,8 @@ test('a wide render target retains its brief and final event while bounding only
 
 test('variable count respects its minimum and allows zero only when configured', () => {
   const empty = JSON.stringify({ heroIndex: null, targets: [], skipReason: 'No visual moment.' });
-  expect(parseStoryboard(empty, [], 10, 'none', true, [], undefined, 0).targets).toEqual([]);
-  expect(() => parseStoryboard(empty, [], 10, 'none', true, [], undefined, 1)).toThrow(
+  expect(parseStoryboard(empty, [], 10, 'codex', true, [], undefined, 0).targets).toEqual([]);
+  expect(() => parseStoryboard(empty, [], 10, 'codex', true, [], undefined, 1)).toThrow(
     'ILLUSTRATION_STORYBOARD_INVALID'
   );
 });

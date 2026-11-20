@@ -34,19 +34,15 @@ export function reserveIllustration(
   const slots = illustrationSlots(store, source.id);
   if (slots.active > 0) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
   if (slots.total >= settings.maxPerSource) throw new HttpError(409, 'ILLUSTRATION_LIMIT_REACHED');
-  const legacyCodex = settings.codex.model !== null && settings.codex.promptModel === null;
   const job = reserveIllustrationPlan(store, source, origin, {
     ...options,
-    settings: legacyCodex
-      ? { ...settings, codex: { ...settings.codex, promptModel: settings.codex.model } }
-      : settings,
+    settings,
     maxTargets: 1,
   });
-  const { task: _task, plan: _plan, research: _research, ...input } = job.input;
-  if (legacyCodex && input.codex) delete input.codex.promptModel;
+  const { plan: _plan, research: _research, ...input } = job.input;
   store.db
     .prepare('UPDATE illustration_jobs SET input=? WHERE id=?')
-    .run(JSON.stringify(input), job.id);
+    .run(JSON.stringify({ ...input, task: 'render' }), job.id);
   return illustrationJob(store, job.id);
 }
 

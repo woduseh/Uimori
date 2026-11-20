@@ -43,7 +43,6 @@ import { resolvePackageProfile } from './package-features.js';
 import type { Asset, Connection, ModelPreset, ModelRef } from '../core/product.js';
 import {
   defaultIllustrationSettings,
-  ILLUSTRATION_GENERATORS,
   ILLUSTRATION_MAX_AUTO_RETRIES,
   ILLUSTRATION_MAX_PER_SOURCE,
   ILLUSTRATION_REFERENCE_ROLES,
@@ -53,6 +52,7 @@ import {
   type FrozenIllustrationReference,
   type Illustration,
   type IllustrationCharacterProfile,
+  type IllustrationCodexInput,
   type IllustrationDiagnostic,
   type IllustrationImage,
   type IllustrationImageMime,
@@ -123,7 +123,7 @@ export function validateIllustrationSettings(
     'comfyui',
     'novelai',
   ]);
-  if (b.generator !== undefined && !ILLUSTRATION_GENERATORS.includes(b.generator))
+  if (b.generator !== undefined && b.generator !== 'fixture')
     throw new HttpError(400, 'Invalid generator');
   if (b.generator === 'fixture' && !options.testMode)
     throw new HttpError(400, 'Fixture generator requires test mode');
@@ -135,8 +135,7 @@ export function validateIllustrationSettings(
   const authorizationEnv = text(comfyui.authorizationEnv, 'ComfyUI credential env', 128, true);
   if (authorizationEnv && !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(authorizationEnv))
     throw new HttpError(400, 'Invalid ComfyUI credential env');
-  const novelai =
-    b.novelai === undefined ? defaultIllustrationSettings().novelai : record(b.novelai);
+  const novelai = record(b.novelai);
   fields(novelai, [
     'model',
     'width',
@@ -165,17 +164,17 @@ export function validateIllustrationSettings(
   const novelaiModel = text(novelai.model, 'NovelAI model', 100).trim();
   if (!/^[a-z0-9][a-z0-9._-]*$/u.test(novelaiModel))
     throw new HttpError(400, 'Invalid NovelAI model');
-  const automaticCountMode = b.automaticCountMode ?? 'fixed';
+  const automaticCountMode = b.automaticCountMode;
   if (!['fixed', 'auto'].includes(automaticCountMode))
     throw new HttpError(400, 'Invalid automaticCountMode');
   const automaticMaxTargets = number(
-    b.automaticMaxTargets ?? 1,
+    b.automaticMaxTargets,
     'automaticMaxTargets',
     1,
     ILLUSTRATION_MAX_PER_SOURCE
   );
   const automaticMinTargets = number(
-    b.automaticMinTargets ?? 0,
+    b.automaticMinTargets,
     'automaticMinTargets',
     0,
     automaticMaxTargets
@@ -184,9 +183,7 @@ export function validateIllustrationSettings(
     revision: options.revision,
     automaticCountMode,
     automaticMinTargets,
-    ...(options.testMode && ['fixture', 'none'].includes(b.generator)
-      ? { generator: b.generator }
-      : {}),
+    ...(b.generator === 'fixture' ? { generator: 'fixture' as const } : {}),
     automatic: boolean(b.automatic, 'automatic'),
     automaticMaxTargets,
     maxPerSource: number(b.maxPerSource, 'maxPerSource', 1, ILLUSTRATION_MAX_PER_SOURCE),
@@ -221,10 +218,7 @@ export function validateIllustrationSettings(
       sampler: novelai.sampler,
       timeoutMs: number(novelai.timeoutMs, 'NovelAI timeout', 10_000, 600_000),
       promptModel: modelRef(novelai.promptModel, 'NovelAI prompt model'),
-      characterReference:
-        novelai.characterReference === undefined
-          ? false
-          : boolean(novelai.characterReference, 'NovelAI character reference'),
+      characterReference: boolean(novelai.characterReference, 'NovelAI character reference'),
     },
   };
 }
@@ -232,27 +226,7 @@ export function illustrationSettings(store: Store): IllustrationSettings {
   const row = store.db.prepare('SELECT body FROM illustration_settings WHERE id=1').get() as
     | Row
     | undefined;
-  const saved = row ? (parse(row.body) as Partial<IllustrationSettings>) : {};
-  const defaults = defaultIllustrationSettings();
-  const { generator, ...environment } = saved;
-  const codex = { ...defaults.codex, ...(saved.codex ?? {}) };
-  if (!Object.hasOwn(saved.codex ?? {}, 'promptModel')) codex.promptModel = codex.model;
-  return {
-    ...defaults,
-    ...environment,
-    ...(row && !saved.automaticCountMode
-      ? {
-          automaticCountMode: 'fixed' as const,
-          automaticMinTargets: 0,
-          automaticMaxTargets: saved.automaticMaxTargets ?? 1,
-        }
-      : {}),
-    ...(generator === 'fixture' ? { generator } : {}),
-    ...(generator === 'none' ? { automatic: false } : {}),
-    codex,
-    comfyui: { ...defaults.comfyui, ...(saved.comfyui ?? {}) },
-    novelai: { ...defaults.novelai, ...(saved.novelai ?? {}) },
-  };
+  return row ? (parse(row.body) as IllustrationSettings) : defaultIllustrationSettings();
 }
 export function illustrationSettingsView(store: Store): IllustrationSettingsView {
   return {
@@ -279,19 +253,7 @@ export function updateIllustrationSettings(
     const prior = illustrationSettings(store);
     if (prior.revision !== number(expectedRevision, 'illustration settings revision'))
       throw new HttpError(409, '삽화 설정이 변경됐어요. 새로고침한 뒤 저장해 주세요.');
-    const suppliedCodex = record(rest.codex);
-    const next = validateIllustrationSettings(
-      {
-        ...rest,
-        novelai: rest.novelai ?? prior.novelai,
-        codex: {
-          promptModel: prior.codex.promptModel,
-          refinePrompt: prior.codex.refinePrompt,
-          ...suppliedCodex,
-        },
-      },
-      { revision: prior.revision + 1, testMode }
-    );
+    const next = validateIllustrationSettings(rest, { revision: prior.revision + 1, testMode });
     assertModelSelection(store.product, next.codex.model, prior.codex.model);
     assertCodexModel(store, next.codex.model);
     assertModelSelection(store.product, next.codex.promptModel, prior.codex.promptModel);
@@ -316,13 +278,15 @@ export function illustrationReferences(store: Store, chatId: string): Illustrati
   const row = store.db
     .prepare('SELECT revision,body FROM illustration_references WHERE chat_id=?')
     .get(chatId) as Row | undefined;
-  const saved = row ? parse(row.body) : [];
+  const saved: Pick<IllustrationReferences, 'references' | 'characterProfiles'> = row
+    ? parse(row.body)
+    : { references: [], characterProfiles: [] };
   const defaultCharacterProfiles = defaultIllustrationProfiles(store, chatId);
-  const chatCharacterProfiles = Array.isArray(saved) ? [] : (saved.characterProfiles ?? []);
+  const chatCharacterProfiles = saved.characterProfiles;
   return {
     chatId,
     revision: row ? Number(row.revision) : 0,
-    references: Array.isArray(saved) ? saved : saved.references,
+    references: saved.references,
     defaultCharacterProfiles,
     chatCharacterProfiles,
     characterProfiles: inheritIllustrationProfiles(defaultCharacterProfiles, chatCharacterProfiles),
@@ -552,7 +516,7 @@ export function projectIllustration(
     (placedTarget && presentation ? presentation.sourceHash : row.sourceHash);
   return {
     id: row.id,
-    task: row.input.task ?? 'render',
+    task: row.input.task,
     ...(target
       ? {
           target: {
@@ -604,7 +568,7 @@ export function illustrationUsage(store: Store, jobIds: string[]): Usage {
 export function sourceIllustrationUsage(store: Store, sourceId: string): IllustrationUsageReport {
   const source = store.source(sourceId);
   const jobs = store.db
-    .prepare(`SELECT id,COALESCE(json_extract(input,'$.task'),'render') AS task
+    .prepare(`SELECT id,json_extract(input,'$.task') AS task
     FROM illustration_jobs WHERE source_revision=? AND source_hash=?`)
     .all(source.id, source.hash) as { id: string; task: Illustration['task'] }[];
   return {
@@ -707,14 +671,12 @@ function frozenInput(
   source: Source,
   settings: IllustrationSettings,
   options: ReserveOptions
-): IllustrationJobInput {
+): Omit<IllustrationJobInput, 'task'> {
   const preset = effectiveIllustrationPreset(store, source.chatId);
   if (settings.generator === 'fixture' && !options.testMode)
     throw new HttpError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
   const generator =
     options.testMode && settings.generator === 'fixture' ? 'fixture' : preset.generator;
-  if (options.testMode && settings.generator === 'none')
-    throw new HttpError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
   const characterProfiles = illustrationReferences(store, source.chatId).characterProfiles;
   const scopedNotes = sceneAppearanceNotes(store, source.chatId, source.id);
   const prior = store.db
@@ -770,7 +732,7 @@ function frozenInput(
         references: settings.codex.useReferences
           ? frozenIllustrationReferences(store, source.chatId)
           : [],
-      },
+      } satisfies IllustrationCodexInput,
     };
   }
   if (generator === 'comfyui') {
@@ -898,7 +860,7 @@ export function reserveIllustrationPlan(
       plan: {
         maxTargets,
         ...(origin === 'automatic' && settings.automaticCountMode === 'auto'
-          ? { minTargets: Math.min(maxTargets, settings.automaticMinTargets ?? 0) }
+          ? { minTargets: Math.min(maxTargets, settings.automaticMinTargets) }
           : {}),
         existingTargets,
         ...(selectedMoments ? { selectedMoments } : {}),
@@ -1555,7 +1517,7 @@ function assertNoActiveIllustrationTarget(store: Store, job: IllustrationJobRow)
   const target = job.input.target?.id;
   const collision = store.db
     .prepare(`SELECT 1 FROM illustration_jobs WHERE source_revision=? AND source_hash=? AND status IN ('queued','running')
-    AND id!=? AND ${target ? "json_extract(input,'$.target.id')=?" : "COALESCE(json_extract(input,'$.task'),'render')!='placement'"} LIMIT 1`)
+    AND id!=? AND ${target ? "json_extract(input,'$.target.id')=?" : "json_extract(input,'$.task')!='placement'"} LIMIT 1`)
     .get(job.sourceRevision, job.sourceHash, job.id, ...(target ? [target] : []));
   if (collision) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
 }

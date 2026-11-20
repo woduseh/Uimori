@@ -72,19 +72,6 @@ export function resolveIllustrationPreset(
   }
   return BUILTIN_ILLUSTRATION_PRESET;
 }
-export function illustrationPresetGenerator(preset: {
-  generator?: IllustrationPresetGenerator;
-  comfyui: { workflow: string };
-}): IllustrationPresetGenerator {
-  return preset.generator ?? (preset.comfyui.workflow.trim() ? 'comfyui' : 'codex');
-}
-export function normalizeIllustrationPreset(preset: IllustrationPreset): IllustrationPreset {
-  return {
-    ...preset,
-    generator: illustrationPresetGenerator(preset),
-    novelai: preset.novelai ?? { negativeGuidance: '' },
-  };
-}
 export function illustrationPresetStamp(preset: IllustrationPreset): IllustrationPresetStamp {
   return { id: preset.id, revision: preset.revision, title: preset.title };
 }
@@ -128,7 +115,7 @@ export function validateIllustrationPreset(value: unknown): IllustrationPresetDe
 export function illustrationPresetDefinition(
   preset: IllustrationPreset
 ): IllustrationPresetDefinition {
-  const { id: _id, revision: _revision, ...definition } = normalizeIllustrationPreset(preset);
+  const { id: _id, revision: _revision, ...definition } = preset;
   return definition;
 }
 export function illustrationPresetFile(preset: IllustrationPresetDefinition) {

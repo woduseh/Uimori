@@ -205,9 +205,9 @@ function IllustrationEnvironmentEditor({
   const valid =
     validCutLimit(draft.maxPerSource) &&
     validCutLimit(draft.automaticMaxTargets) &&
-    Number.isInteger(draft.automaticMinTargets ?? 0) &&
-    (draft.automaticMinTargets ?? 0) >= 0 &&
-    (draft.automaticMinTargets ?? 0) <= draft.automaticMaxTargets &&
+    Number.isInteger(draft.automaticMinTargets) &&
+    draft.automaticMinTargets >= 0 &&
+    draft.automaticMinTargets <= draft.automaticMaxTargets &&
     Number.isInteger(draft.maxAutoRetries) &&
     draft.maxAutoRetries >= 0 &&
     draft.maxAutoRetries <= 5 &&
@@ -397,7 +397,7 @@ function IllustrationEnvironmentEditor({
               change({
                 ...draft,
                 maxPerSource: value,
-                automaticMinTargets: clampToCutLimit(draft.automaticMinTargets ?? 0, value),
+                automaticMinTargets: clampToCutLimit(draft.automaticMinTargets, value),
                 automaticMaxTargets: clampToCutLimit(draft.automaticMaxTargets, value),
               }),
             1
@@ -408,7 +408,7 @@ function IllustrationEnvironmentEditor({
                 <span className="settings-row-copy">{t('visuals.countMode')}</span>
                 <span className="settings-row-control">
                   <select
-                    value={draft.automaticCountMode ?? 'fixed'}
+                    value={draft.automaticCountMode}
                     onChange={(event) =>
                       change({
                         ...draft,
@@ -424,7 +424,7 @@ function IllustrationEnvironmentEditor({
               {draft.automaticCountMode === 'auto' &&
                 numberField(
                   t('visuals.countMin'),
-                  draft.automaticMinTargets ?? 0,
+                  draft.automaticMinTargets,
                   0,
                   draft.automaticMaxTargets,
                   (value) => change({ ...draft, automaticMinTargets: value })
@@ -438,7 +438,7 @@ function IllustrationEnvironmentEditor({
                   change({
                     ...draft,
                     automaticMaxTargets: value,
-                    automaticMinTargets: clampToCutLimit(draft.automaticMinTargets ?? 0, value),
+                    automaticMinTargets: clampToCutLimit(draft.automaticMinTargets, value),
                   })
               )}
             </>
@@ -834,7 +834,7 @@ function IllustrationEnvironmentEditor({
                   ? t('visuals.countAuto')
                   : t('visuals.countFixed'),
             },
-            { label: t('visuals.countMin'), value: String(value.automaticMinTargets ?? 0) },
+            { label: t('visuals.countMin'), value: String(value.automaticMinTargets) },
             { label: t('visuals.m084'), value: String(value.automaticMaxTargets) },
             { label: t('visuals.m085'), value: String(value.maxAutoRetries) },
             { label: t('visuals.m070'), value: value.comfyui.baseUrl },

@@ -425,7 +425,7 @@ describe('illustration API in test mode with the synthetic generator', () => {
     const comfy = await comfyUIFixture();
     item.close = comfy.close;
     const accepted = await settings({
-      generator: 'comfyui',
+      generator: undefined,
       comfyui: { ...body.comfyui, baseUrl: `${comfy.origin}/` },
     });
     expect(accepted.comfyui.baseUrl).toBe(comfy.origin);
@@ -616,7 +616,7 @@ test('consecutive storyboard cuts reuse a session, preserve successful cuts and 
     temperature: null,
   });
   await settings({
-    generator: 'codex',
+    generator: undefined,
     maxPerSource: 3,
     maxAutoRetries: 0,
     codex: {

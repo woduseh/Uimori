@@ -34,12 +34,10 @@ import { contextBudgetForModel } from '../core/context-budget.js';
 import { modelTimeoutMs, type Connection, type ModelSnapshot } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import {
-  CODEX_ILLUSTRATION_INSTRUCTIONS,
   CODEX_ILLUSTRATION_OUTPUT_SCHEMA,
   CODEX_PREPARED_ILLUSTRATION_INSTRUCTIONS,
   CODEX_REFINE_ILLUSTRATION_INSTRUCTIONS,
   codexIllustrationPromptRequest,
-  codexIllustrationText,
   codexPreparedIllustrationText,
   fillComfyWorkflow,
   illustrationPromptRequest,
@@ -462,19 +460,13 @@ export async function runIllustrationJob(
               : [];
           })
         : [];
-    if (input.codex?.promptModel)
+    if (input.codex)
       context.references =
         input.task === 'plan'
           ? labeledReferences.map(({ role, label }) => ({ role, label }))
           : references.map(({ role, label }) => ({ role, label }));
     if (input.novelai?.references?.length)
       context.references = labeledReferences.map(({ role, label }) => ({ role, label }));
-    const promptMode =
-      input.generator === 'comfyui' || input.generator === 'novelai'
-        ? input.generator
-        : input.generator === 'codex' && input.codex?.promptModel
-          ? 'codex'
-          : 'none';
     if (input.task === 'plan') {
       if (!input.plan) throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID');
       diagnostic.stage = 'planning';
@@ -504,12 +496,13 @@ export async function runIllustrationJob(
           ...(!targets.length ? { skipReason: '새로운 시각적 순간이 없어요.' } : {}),
         };
       } else {
+        if (input.generator === 'codex' && !input.codex?.promptModel)
+          throw new IllustrationError('ILLUSTRATION_PROMPT_MODEL_REQUIRED');
         const model =
-          input.comfyui?.promptModel ??
-          input.novelai?.promptModel ??
-          input.codex?.promptModel ??
-          input.codex?.model;
-        if (!model) throw new IllustrationError('ILLUSTRATION_MODEL_REQUIRED');
+          input.comfyui?.promptModel ?? input.novelai?.promptModel ?? input.codex?.promptModel;
+        if (!model || input.generator === 'fixture')
+          throw new IllustrationError('ILLUSTRATION_MODEL_REQUIRED');
+        const promptMode = input.generator;
         const request = storyboardRequest(
           model,
           context,
@@ -614,30 +607,29 @@ export async function runIllustrationJob(
     } else if (input.generator === 'codex') {
       if (!input.codex || !hooks.generateCodexImage)
         throw new IllustrationError('ILLUSTRATION_GENERATOR_UNCONFIGURED');
+      if (!input.codex.promptModel)
+        throw new IllustrationError('ILLUSTRATION_PROMPT_MODEL_REQUIRED');
       const model = input.codex.model;
-      let preparedPrompt: IllustrationPlan | undefined;
-      if (input.codex.promptModel) {
-        preparedPrompt = await preparePrompt(input.codex.promptModel, context);
-        if (preparedPrompt.kind === 'skip') diagnostic.skipped = preparedPrompt.reason;
+      const preparedPrompt = await preparePrompt(input.codex.promptModel, context);
+      if (preparedPrompt.kind === 'skip') {
+        diagnostic.skipped = preparedPrompt.reason;
+        return await finish([]);
       }
-      if (preparedPrompt?.kind === 'skip') return await finish([]);
-      const draft = preparedPrompt?.prompt;
+      const draft = preparedPrompt.prompt;
       const refinePrompt = input.codex.refinePrompt === true;
       const connection = await authorizedConnection(hooks, model);
-      const imageText = draft
-        ? codexPreparedIllustrationText(
-            draft.prompt,
-            references,
-            refinePrompt
-              ? {
-                  caption: draft.caption,
-                  styleGuidance: context.styleGuidance,
-                  moment: input.target,
-                  changeRequest: input.redraw?.changeRequest,
-                }
-              : undefined
-          )
-        : codexIllustrationText(context, references);
+      const imageText = codexPreparedIllustrationText(
+        draft.prompt,
+        references,
+        refinePrompt
+          ? {
+              caption: draft.caption,
+              styleGuidance: context.styleGuidance,
+              moment: input.target,
+              changeRequest: input.redraw?.changeRequest,
+            }
+          : undefined
+      );
       diagnostic.stage = 'content-check';
       await progress();
       diagnostic.contentCheck = await checkCodexIllustrationContent(
@@ -671,11 +663,9 @@ export async function runIllustrationJob(
               modelId: model.modelId,
               contextBudget: contextBudgetForModel(model),
               reasoningEffort: model.reasoningEffort,
-              developerInstructions: !draft
-                ? CODEX_ILLUSTRATION_INSTRUCTIONS
-                : refinePrompt
-                  ? CODEX_REFINE_ILLUSTRATION_INSTRUCTIONS
-                  : CODEX_PREPARED_ILLUSTRATION_INSTRUCTIONS,
+              developerInstructions: refinePrompt
+                ? CODEX_REFINE_ILLUSTRATION_INSTRUCTIONS
+                : CODEX_PREPARED_ILLUSTRATION_INSTRUCTIONS,
               text: imageText,
               outputSchema: CODEX_ILLUSTRATION_OUTPUT_SCHEMA,
               references: imageReferences,
@@ -696,9 +686,7 @@ export async function runIllustrationJob(
       if (result.error?.usageLimit) diagnostic.codex = { usageLimit: result.error.usageLimit };
       if (result.status === 'cancelled') throw new IllustrationError('ILLUSTRATION_CANCELLED');
       const caption = parseCodexIllustrationCaption(result.text);
-      if (context.allowSkip && caption.skipped !== null && !result.images.length)
-        diagnostic.skipped = caption.skipped;
-      else if (caption.unavailable && !result.images.length) {
+      if (caption.unavailable && !result.images.length) {
         diagnostic.codex = {
           ...diagnostic.codex,
           unavailableReason: caption.unavailableReason,
@@ -713,12 +701,8 @@ export async function runIllustrationJob(
       generated = result.images.map((image) => ({
         mime: image.mime,
         bytes: image.bytes,
-        caption: draft
-          ? (refinePrompt && renderedCaption) || draft.caption
-          : caption.unavailable
-            ? ''
-            : caption.caption,
-        ...(draft ? { prompt: draft.prompt } : {}),
+        caption: (refinePrompt && renderedCaption) || draft.caption,
+        prompt: draft.prompt,
         ...(result.revisedPrompt ? { revisedPrompt: result.revisedPrompt } : {}),
       }));
     } else if (input.generator === 'comfyui') {

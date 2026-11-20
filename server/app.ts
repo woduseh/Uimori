@@ -767,8 +767,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     if (stopping.signal.aborted || !admitted()) return;
     for (const id of queuedIllustrations(store)) {
       if (illustrationControllers.has(id)) continue;
-      const kind =
-        (illustrationJob(store, id).input.task ?? 'render') === 'render' ? 'render' : 'text';
+      const kind = illustrationJob(store, id).input.task === 'render' ? 'render' : 'text';
       if ([...illustrationControllers.values()].some((active) => active.lane === kind)) continue;
       const controller = new AbortController();
       illustrationControllers.set(id, { controller, lane: kind });

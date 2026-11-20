@@ -92,7 +92,7 @@ export function illustrationTargetSet(targets: IllustrationTarget[]): {
   };
 }
 
-export type IllustrationPromptMode = 'none' | 'comfyui' | 'novelai' | 'codex';
+export type IllustrationPromptMode = 'comfyui' | 'novelai' | 'codex';
 const negativePromptMode = (mode: IllustrationPromptMode) =>
   mode === 'comfyui' || mode === 'novelai';
 function storyboardContract(mode: IllustrationPromptMode, selected: boolean): string {
@@ -101,9 +101,7 @@ function storyboardContract(mode: IllustrationPromptMode, selected: boolean): st
       ? ',"prompt":{"prompt":string,"caption":string}'
       : mode === 'novelai'
         ? ',"prompt":{"prompt":string,"negativePrompt":string,"characters"?:[{"prompt":string,"negativePrompt":string,"position"?:{"x":number,"y":number}}],"references"?:number[],"caption":string}'
-        : negativePromptMode(mode)
-          ? ',"prompt":{"prompt":string,"negativePrompt":string,"caption":string}'
-          : '';
+        : ',"prompt":{"prompt":string,"negativePrompt":string,"caption":string}';
   const fields = `"visualBrief":string${promptField}`;
   const task = selected
     ? [
@@ -117,21 +115,15 @@ function storyboardContract(mode: IllustrationPromptMode, selected: boolean): st
       ];
   return [
     ...task,
-    mode === 'none'
-      ? 'visualBrief gives the renderer a complete visual description of that instant.'
-      : 'visualBrief records the subjects, action and defining visual facts that must survive a redraw. Put the full rendering description in prompt.',
+    'visualBrief records the subjects, action and defining visual facts that must survive a redraw. Put the full rendering description in prompt.',
     'Include a shared top-level visualCanon array of {name, appearance} with source-backed stable visible traits of recurring characters. Apply it consistently across cuts.',
     ILLUSTRATION_VISUAL_DIRECTION,
-    ...(mode === 'none'
-      ? []
-      : [
-          'Write each caption as a brief sentence in the scene language. Keep overlays, watermarks and speech bubbles out of the illustration.',
-          mode === 'codex'
-            ? CODEX_ILLUSTRATION_PROMPT_FIELDS
-            : mode === 'novelai'
-              ? NOVELAI_ILLUSTRATION_PROMPT_FIELDS
-              : ILLUSTRATION_PROMPT_FIELDS,
-        ]),
+    'Write each caption as a brief sentence in the scene language. Keep overlays, watermarks and speech bubbles out of the illustration.',
+    mode === 'codex'
+      ? CODEX_ILLUSTRATION_PROMPT_FIELDS
+      : mode === 'novelai'
+        ? NOVELAI_ILLUSTRATION_PROMPT_FIELDS
+        : ILLUSTRATION_PROMPT_FIELDS,
   ].join('\n\n');
 }
 export function storyboardRequest(
@@ -293,34 +285,31 @@ export function parseStoryboard(
       throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID', true);
     previous = end;
     seen.add(endAnchor);
-    let prompt: IllustrationPrompt | undefined;
-    if (promptMode !== 'none') {
-      const fields = entry.prompt as Record<string, unknown> | undefined;
-      if (!fields || (negativePromptMode(promptMode) && typeof fields.negativePrompt !== 'string'))
+    const fields = entry.prompt as Record<string, unknown> | undefined;
+    if (!fields || (negativePromptMode(promptMode) && typeof fields.negativePrompt !== 'string'))
+      throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID', true);
+    const promptText = required(fields.prompt);
+    let novelai: Pick<IllustrationPrompt, 'characters' | 'references'> = {};
+    if (promptMode === 'novelai')
+      try {
+        novelai = parseNovelAIPromptFields(fields);
+      } catch {
         throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID', true);
-      const promptText = required(fields.prompt);
-      let novelai: Pick<IllustrationPrompt, 'characters' | 'references'> = {};
-      if (promptMode === 'novelai')
-        try {
-          novelai = parseNovelAIPromptFields(fields);
-        } catch {
-          throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID', true);
-        }
-      prompt = {
-        prompt: promptMode === 'codex' ? (fields.prompt as string) : promptText,
-        negativePrompt: negativePromptMode(promptMode)
-          ? (fields.negativePrompt as string).trim()
-          : '',
-        caption: required(fields.caption),
-        ...novelai,
-      };
-    }
+      }
+    const prompt: IllustrationPrompt = {
+      prompt: promptMode === 'codex' ? (fields.prompt as string) : promptText,
+      negativePrompt: negativePromptMode(promptMode)
+        ? (fields.negativePrompt as string).trim()
+        : '',
+      caption: required(fields.caption),
+      ...novelai,
+    };
     return {
       startAnchor,
       endAnchor,
       focus: fixed?.focus ?? required(entry.focus),
       visualBrief: required(entry.visualBrief),
-      ...(prompt ? { prompt } : {}),
+      prompt,
     };
   });
   let visualCanon: IllustrationStoryboard['visualCanon'];

@@ -423,7 +423,7 @@ export function redrawIllustrationCut(store: Store, chatId: string, args: Args, 
 
 function currentCut(store: Store, chatId: string, args: Args, permitStale = false) {
   const job = illustrationJob(store, text(args.expectedLatestJobId, 'latest job ID', 100));
-  if (job.chatId !== chatId || (job.input.task ?? 'render') !== 'render' || !job.input.target)
+  if (job.chatId !== chatId || job.input.task !== 'render' || !job.input.target)
     throw new HttpError(404, 'ILLUSTRATION_TARGET_UNAVAILABLE');
   const source = helperSceneSource(store, chatId, job.sourceRevision);
   if (

@@ -231,7 +231,7 @@ describe('illustration storage on the current schema', () => {
     expect(illustrationSettings(store)).toEqual(saved);
     const comfy = {
       ...body,
-      generator: 'comfyui' as const,
+      generator: undefined,
       comfyui: { ...body.comfyui, baseUrl: 'http://10.0.0.5:8188/' },
     };
     expect(
@@ -277,8 +277,8 @@ describe('illustration storage on the current schema', () => {
           {
             expectedRevision: 3,
             ...body,
-            generator: 'codex',
-            codex: { model: { id: text.id }, useReferences: true },
+            generator: undefined,
+            codex: { ...body.codex, model: { id: text.id } },
           },
           true
         )
@@ -290,8 +290,8 @@ describe('illustration storage on the current schema', () => {
       {
         expectedRevision: 3,
         ...body,
-        generator: 'codex',
-        codex: { model: { id: codex.id }, useReferences: false },
+        generator: undefined,
+        codex: { ...body.codex, model: { id: codex.id }, useReferences: false },
       },
       true
     );
@@ -301,11 +301,12 @@ describe('illustration storage on the current schema', () => {
       useReferences: false,
       refinePrompt: false,
     });
-    expect(
-      http(() =>
-        updateIllustrationSettings(store, { expectedRevision: 4, ...body, extra: 1 }, true)
-      ).statusCode
-    ).toBe(400);
+    for (const change of [{ extra: 1 }, { generator: 'none' }, { generator: 'codex' }])
+      expect(
+        http(() =>
+          updateIllustrationSettings(store, { expectedRevision: 4, ...body, ...change }, true)
+        ).statusCode
+      ).toBe(400);
   });
   test('the required Codex prompt model persists separately and is frozen with the reserved job', () => {
     const store = databases.create();
@@ -325,25 +326,15 @@ describe('illustration storage on the current schema', () => {
       temperature: null,
     }) as ModelPreset;
     const { revision, ...body } = fixtureSettings({
-      generator: 'codex',
+      generator: undefined,
       codex: {
         model: { id: imageModel.id },
         promptModel: { id: promptModel.id },
         refinePrompt: true,
       },
     });
-    let saved = updateIllustrationSettings(store, { expectedRevision: revision, ...body }, true);
+    const saved = updateIllustrationSettings(store, { expectedRevision: revision, ...body }, true);
     expect(illustrationSettings(store).codex).toEqual(saved.codex);
-    expect(saved.codex.promptModel).toEqual({ id: promptModel.id });
-    saved = updateIllustrationSettings(
-      store,
-      {
-        expectedRevision: saved.revision,
-        ...body,
-        codex: { model: { id: imageModel.id }, useReferences: body.codex.useReferences },
-      },
-      true
-    );
     expect(saved.codex.promptModel).toEqual({ id: promptModel.id });
     const job = reserveIllustration(store, source, 'manual');
     expect(saved.codex.refinePrompt).toBe(true);
@@ -388,37 +379,6 @@ describe('illustration storage on the current schema', () => {
     expect(sameCodex.input.codex?.promptModel?.modelId).toBe('gpt-5.4');
     expect(sameCodex.input.codex?.model.modelId).toBe('gpt-5.4');
   });
-  test('legacy settings initialize the prompt selection from Codex while explicit empty selections remain unconfigured', () => {
-    const store = databases.create();
-    expect(illustrationSettings(store).codex.promptModel).toBeNull();
-    const imageModel = codexModel(store);
-    const base = fixtureSettings();
-    const legacyCodex = { model: { id: imageModel.id }, useReferences: true };
-    store.db
-      .prepare('UPDATE illustration_settings SET body=? WHERE id=1')
-      .run(JSON.stringify({ ...base, generator: 'codex', codex: legacyCodex }));
-    const migrated = illustrationSettings(store);
-    expect(migrated.codex.promptModel).toEqual({ id: imageModel.id });
-    const { revision, ...body } = migrated;
-    const saved = updateIllustrationSettings(
-      store,
-      { expectedRevision: revision, ...body, codex: legacyCodex },
-      true
-    );
-    expect(saved.codex.promptModel).toEqual({ id: imageModel.id });
-    const empty = updateIllustrationSettings(
-      store,
-      { expectedRevision: saved.revision, ...body, codex: { ...legacyCodex, promptModel: null } },
-      true
-    );
-    expect(illustrationSettings(store).codex.promptModel).toBeNull();
-    const oldClientSave = updateIllustrationSettings(
-      store,
-      { expectedRevision: empty.revision, ...body, codex: legacyCodex },
-      true
-    );
-    expect(oldClientSave.codex.promptModel).toBeNull();
-  });
   test('reservation freezes the generator, allows one active job per response and enforces the per-response limit', () => {
     const store = databases.create();
     const { source } = chatWithSource(store);
@@ -443,6 +403,7 @@ describe('illustration storage on the current schema', () => {
     expect(first.input).toEqual({
       preset: { id: preset.id, revision: preset.revision, title: preset.title },
       version: 1,
+      task: 'render',
       generator: 'fixture',
       settingsRevision: 1,
       styleGuidance: 'ink',
@@ -499,8 +460,8 @@ describe('illustration storage on the current schema', () => {
       {
         expectedRevision: 2,
         ...body,
-        generator: 'codex',
-        codex: { model: null, useReferences: true },
+        generator: undefined,
+        codex: { ...body.codex, model: null },
       },
       true
     );
@@ -518,8 +479,8 @@ describe('illustration storage on the current schema', () => {
       {
         expectedRevision: 3,
         ...body,
-        generator: 'codex',
-        codex: { model: { id: codex.id }, promptModel: { id: codex.id }, useReferences: true },
+        generator: undefined,
+        codex: { ...body.codex, model: { id: codex.id }, promptModel: { id: codex.id } },
       },
       true
     );
@@ -527,11 +488,7 @@ describe('illustration storage on the current schema', () => {
     const job = illustrationJob(store, illustrationsForSources(store, [frozen.id])[0].id);
     expect(job.input.codex?.model.modelId).toBe('gpt-5.4');
     expect(job.input.codex?.model.connection.protocol).toBe('codex-app-server-v1');
-    updateIllustrationSettings(
-      store,
-      { expectedRevision: 4, ...body, generator: 'none', automatic: true },
-      true
-    );
+    updateIllustrationSettings(store, { expectedRevision: 4, ...body, automatic: false }, true);
     const disabled = completedSource(store, chat.id, 'Fifth scene.');
     expect(illustrationsForSources(store, [disabled.id])).toEqual([]);
   });
@@ -680,8 +637,8 @@ describe('illustration storage on the current schema', () => {
     const codex = codexModel(store);
     const job = reserveIllustration(store, source, 'manual', {
       settings: fixtureSettings({
-        generator: 'codex',
-        codex: { model: { id: codex.id }, useReferences: true },
+        generator: undefined,
+        codex: { model: { id: codex.id }, promptModel: { id: codex.id }, useReferences: true },
       }),
     });
     expect(job.input.codex?.references).toEqual(frozen);
@@ -691,8 +648,8 @@ describe('illustration storage on the current schema', () => {
       'manual',
       {
         settings: fixtureSettings({
-          generator: 'codex',
-          codex: { model: { id: codex.id }, useReferences: false },
+          generator: undefined,
+          codex: { model: { id: codex.id }, promptModel: { id: codex.id }, useReferences: false },
         }),
       }
     );
@@ -727,8 +684,8 @@ describe('illustration storage on the current schema', () => {
     const codex = codexModel(store);
     const job = reserveIllustration(store, source, 'manual', {
       settings: fixtureSettings({
-        generator: 'codex',
-        codex: { model: { id: codex.id }, useReferences: true },
+        generator: undefined,
+        codex: { model: { id: codex.id }, promptModel: { id: codex.id }, useReferences: true },
       }),
     });
     const changed = updateIllustrationReferences(store, chat.id, {
@@ -823,7 +780,7 @@ describe('illustration storage on the current schema', () => {
   });
 });
 
-test('new automatic count defaults and legacy fixed settings preserve their respective policies', () => {
+test('new automatic count defaults to auto and fixed mode sends no minimum', () => {
   const store = databases.create();
   expect(illustrationSettings(store)).toMatchObject({
     automaticCountMode: 'auto',
@@ -840,17 +797,8 @@ test('new automatic count defaults and legacy fixed settings preserve their resp
   });
   expect(automatic.input.plan).toMatchObject({ minTargets: 0, maxTargets: 10 });
   cancelIllustration(store, automatic.id);
-  const { automaticCountMode: _mode, automaticMinTargets: _minimum, ...legacy } = current;
-  store.db
-    .prepare('UPDATE illustration_settings SET body=? WHERE id=1')
-    .run(JSON.stringify({ ...legacy, automaticMaxTargets: 3, maxPerSource: 4 }));
-  expect(illustrationSettings(store)).toMatchObject({
-    automaticCountMode: 'fixed',
-    automaticMaxTargets: 3,
-    maxPerSource: 4,
-  });
   const fixed = reserveIllustrationPlan(store, source, 'automatic', {
-    settings: { ...illustrationSettings(store), generator: 'fixture' },
+    settings: { ...current, automaticCountMode: 'fixed', generator: 'fixture' },
     testMode: true,
     maxTargets: 3,
   });

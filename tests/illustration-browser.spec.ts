@@ -790,7 +790,7 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
   request,
 }, info) => {
   await seed(request);
-  const before = await settings(request, { generator: 'none', maxPerSource: 2 });
+  const before = await settings(request, { generator: undefined, maxPerSource: 2 });
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto('/');
   await navigationAction(page, '설정');
@@ -1129,7 +1129,7 @@ test('ILUI06 Codex settings persist model selections and optional prompt refinem
     await request.get('/api/illustration-settings')
   ).json()) as IllustrationSettings;
   const baseline = await settings(request, {
-    generator: 'none',
+    generator: undefined,
     codex: { ...current.codex, model: models[0], promptModel: null, refinePrompt: false },
   });
   const generationRequests: string[] = [];
