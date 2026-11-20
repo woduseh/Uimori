@@ -1,5 +1,5 @@
 const menuLabels = { chat: '채팅 메뉴', scene: '장면 작업 메뉴', app: '앱 메뉴' };
-const kinds = ['click', 'fill', 'select', 'menu', 'press', 'visible', 'wait'];
+const kinds = ['click', 'fill', 'select', 'menu', 'press', 'visible'];
 const interactive = new Set(['click', 'fill', 'select', 'menu', 'press']);
 
 function substitute(value, ids) {
@@ -34,8 +34,7 @@ export async function runStep(page, step, ids) {
   if (step.when && step.when !== (isCompact(page) ? 'compact' : 'wide')) return 0;
   const kind = kinds.find((key) => key in step);
   const counts = interactive.has(kind) ? 1 : 0;
-  if (kind === 'wait') await page.waitForTimeout(step.wait);
-  else if (step.press) await page.keyboard.press(step.press);
+  if (step.press) await page.keyboard.press(step.press);
   else if (step.visible)
     await locatorFor(page, step.visible, ids).waitFor({ state: 'visible', timeout: 15_000 });
   else if (step.fill) {
@@ -48,19 +47,14 @@ export async function runStep(page, step, ids) {
     await locatorFor(page, step.click, ids).click();
   } else if (step.menu) {
     const label = menuLabels[step.menu] ?? substitute(step.menu, ids);
-    const summary = page.getByLabel(label, { exact: true });
-    const target = step.which === 'last' ? summary.last() : summary.first();
-    for (let attempt = 0; ; attempt++) {
-      try {
-        await target.waitFor({ state: 'attached', timeout: 10_000 });
-        await target.scrollIntoViewIfNeeded();
-        await target.hover({ force: true });
-        if (!(await target.evaluate((node) => node.closest('details')?.open))) await target.click();
-        break;
-      } catch (error) {
-        if (attempt >= 2 || !/not attached|detached/iu.test(error.message)) throw error;
-      }
-    }
+    const summaries = page.getByLabel(label, { exact: true });
+    const summary = step.which === 'last' ? summaries.last() : summaries.first();
+    const row = summary.locator(
+      'xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " bot-row-actions ")]/..'
+    );
+    await summary.waitFor({ state: 'attached', timeout: 10_000 });
+    if (await row.count()) await row.hover();
+    if ((await summary.locator('xpath=..').getAttribute('open')) === null) await summary.click();
     await page.locator('details[open] .action-menu-body').first().waitFor();
   } else throw new Error(`Unknown step ${JSON.stringify(step)}`);
   return counts;
