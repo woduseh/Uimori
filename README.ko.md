@@ -9,19 +9,19 @@
 - 원문·번역을 직접 편집하고, 채팅을 독립 사본으로 복사해요.
 - 이야기 기억과 백업 기능을 제공해요.
 
-> **현재 버전 `v0.14.1` · DB 스키마 15**
+> **현재 버전 `v0.15.0` · DB 스키마 15**
 >
-> 도우미 첨부 파일 연속 추가 누락, 작업 메뉴 닫힘과 삭제 확인 뒤 포커스 이동, 도우미 도구 설명 5곳을 바로잡았어요. [릴리스 노트](docs/releases/v0.14.1.md) · [업데이트 안내](docs/UPDATES.md)
+> 도우미가 바꾼 내용을 카드로 보고 되돌릴 수 있고, 도우미의 삭제와 일괄 수정은 먼저 확인을 받아요. 함께 쓰는 오른쪽 패널, 키보드 단축키와 명령 팔레트, 선택 구절 제자리 다듬기, 다음 요청 예약이 생겼어요. [릴리스 노트](docs/releases/v0.15.0.md) · [업데이트 안내](docs/UPDATES.md)
 
 ## 빠른 시작 (Windows)
 
 **준비물**: Node **26.13.0 이상 26.x**, npm, Chrome 또는 Edge. SQLite는 Node에 포함된 기능을 사용하므로 따로 설치하지 않아요.
 
-1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.14.1` 릴리스가 공개됐는지 확인해요.
+1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.15.0` 릴리스가 공개됐는지 확인해요.
 2. 소스를 받아 실행해요.
 
    ```powershell
-   git clone --branch v0.14.1 --single-branch https://github.com/woduseh/Uimori.git
+   git clone --branch v0.15.0 --single-branch https://github.com/woduseh/Uimori.git
    cd Uimori
    npm ci
    npm run dev
