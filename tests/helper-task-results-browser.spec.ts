@@ -1387,4 +1387,24 @@ test('HUSAGE01 the composer shows the latest context estimate, its parts and the
   await expect(page.locator('#helper-panel .helper-context-usage > summary')).toContainText(
     '컨텍스트 미확인'
   );
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => localStorage.setItem('uimori:panel-width', '360'));
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  const unknown = page.locator('#helper-panel .helper-context-usage > summary');
+  await expect(unknown).toHaveAccessibleName('컨텍스트 사용량: 컨텍스트 미확인');
+  await expect(unknown.locator('.helper-context-usage-icon')).toBeVisible();
+  await expect(unknown.locator('.helper-context-usage-text')).toBeHidden();
+  const centers = await page
+    .locator('#helper-panel .helper-composer :is(.quick-controls > *, .send-button)')
+    .evaluateAll((nodes) =>
+      nodes
+        .filter((node) => node.checkVisibility())
+        .map((node) => {
+          const rect = node.getBoundingClientRect();
+          return rect.top + rect.height / 2;
+        })
+    );
+  expect(Math.max(...centers) - Math.min(...centers)).toBeLessThanOrEqual(2);
+  await page.screenshot({ path: info.outputPath('context-usage-unknown-narrow-panel.png') });
 });
