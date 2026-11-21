@@ -7,6 +7,8 @@ import { trackPageFetches } from './fixtures/page-fetches.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
 import { navigationAction, visibleNavigation } from './ui-navigation.js';
 
+test.use({ reducedMotion: 'no-preference' });
+
 test('READERREC initial reader loading becomes a recoverable error without losing the draft', async ({
   page,
   request,

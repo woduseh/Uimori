@@ -1,6 +1,9 @@
 import { expect, type Locator, test } from '@playwright/test';
 import { startFixtureVite, type FixtureVite } from './fixtures/fixture-vite.js';
 import { visualReview } from './fixtures/visual-review.js';
+
+test.use({ reducedMotion: 'no-preference' });
+
 let vite: FixtureVite;
 let origin: string;
 test.beforeAll(async () => {

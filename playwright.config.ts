@@ -27,6 +27,7 @@ export default defineConfig({
     headless: true,
     launchOptions: { executablePath, args: ['--no-proxy-server'] },
     viewport: { width: MOBILE_WIDTH, height: 844 },
+    reducedMotion: 'reduce',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },

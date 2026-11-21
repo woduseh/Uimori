@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { navigationAction, visibleNavigation, selectSettingsSection } from './ui-navigation.js';
 
+test.use({ reducedMotion: 'no-preference' });
+
 for (const width of [412]) {
   for (const destination of ['서재', '프롬프트']) {
     test(`WORKLOAD ${destination} ${width} delayed loading becomes an error and explicit retry recovers`, async ({
