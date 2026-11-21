@@ -11,6 +11,17 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.helper-context-usage-icon {
+  display: none;
+}
+@container helper-composer (max-width: 400px) {
+  .helper-context-usage-summary[data-unknown] .helper-context-usage-icon {
+    display: block;
+  }
+  .helper-context-usage-summary[data-unknown] .helper-context-usage-text {
+    display: none;
+  }
+}
 .helper-context-usage-bar {
   position: relative;
   display: block;

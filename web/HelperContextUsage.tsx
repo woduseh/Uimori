@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { Gauge } from 'lucide-react';
 import {
   HELPER_COMPACTION_INPUT_RATIO,
   type HelperInputParts,
@@ -33,6 +34,7 @@ export function HelperContextUsage({ usage }: { usage: HelperTaskResultsView['us
         : share >= HELPER_COMPACTION_INPUT_RATIO
           ? 'near'
           : undefined;
+  const unknown = estimate === null && !(native && reported !== null);
   const text =
     estimate !== null
       ? t('helperUsage.summary', { count: usageCompact(estimate) })
@@ -56,8 +58,13 @@ export function HelperContextUsage({ usage }: { usage: HelperTaskResultsView['us
       viewport
       label={label}
       summary={
-        <span className="helper-context-usage-summary" data-level={level}>
-          <span>{text}</span>
+        <span
+          className="helper-context-usage-summary"
+          data-level={level}
+          data-unknown={unknown || undefined}
+        >
+          {unknown && <Gauge size={16} aria-hidden="true" className="helper-context-usage-icon" />}
+          <span className="helper-context-usage-text">{text}</span>
           {share !== null && (
             <span
               className="helper-context-usage-bar"

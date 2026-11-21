@@ -241,6 +241,7 @@
   margin-top: 12px;
 }
 .helper-composer {
+  container: helper-composer / inline-size;
   flex-shrink: 0;
   padding: 8px 14px max(8px, env(safe-area-inset-bottom));
 }
@@ -250,6 +251,12 @@
   flex-wrap: wrap;
   gap: 4px;
   min-width: 0;
+}
+.helper-composer .quick-controls:not(:has(.helper-steer, .helper-queue)) {
+  flex-wrap: nowrap;
+}
+.helper-composer .quick-controls > :not(.helper-model-chip) {
+  flex-shrink: 0;
 }
 .helper-composer .helper-request-composer,
 .helper-composer .helper-request-composer.grown {
@@ -626,6 +633,7 @@
   padding-top: calc(var(--control-h) + 8px);
 }
 .helper-composer .helper-model-chip {
+  margin: 0;
   border-color: transparent;
   background: transparent;
   border-radius: var(--radius-control);
