@@ -1079,6 +1079,24 @@ export const messages = {
     ja: '作業スペースのコマンド実行',
     zh: '执行工作区命令',
   },
+  'helpers.activityReadScenes': {
+    ko: '장면 {count}개',
+    en: '{count, plural, one {# scene} other {# scenes}}',
+    ja: '場面 {count}件',
+    zh: '{count} 个场景',
+  },
+  'helpers.activityReadResources': {
+    ko: '자료 {count}개',
+    en: '{count, plural, one {# resource} other {# resources}}',
+    ja: '資料 {count}件',
+    zh: '{count} 份资料',
+  },
+  'helpers.activityReadLookups': {
+    ko: '조회 {count}회',
+    en: '{count, plural, one {# lookup} other {# lookups}}',
+    ja: '照会 {count}回',
+    zh: '查询 {count} 次',
+  },
   'helpers.activityTargetScene': {
     ko: '이름 없는 장면',
     en: 'Untitled scene',

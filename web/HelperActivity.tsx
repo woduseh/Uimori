@@ -6,6 +6,11 @@ import type { HelperActivity as Activity } from '../core/helper-activity.js';
 import type { HelperStatus } from '../core/helper.js';
 import { api, labels } from './api.js';
 import { helperActivityStages } from './helper-activity.js';
+import {
+  groupHelperActivity,
+  type HelperActivityStage,
+  type HelperActivityState,
+} from './helper-activity-groups.js';
 import { requestFileError } from './request-file-errors.js';
 import { statusGlyph } from './TurnStatus.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
@@ -80,6 +85,75 @@ const stateLabels = {
   recorded: 'helpers.m117',
 };
 
+function StageGlyph({ state }: { state: HelperActivityState }) {
+  const Glyph =
+    statusGlyph[
+      state === 'running'
+        ? 'running'
+        : state === 'issue'
+          ? 'issue'
+          : state === 'stopped'
+            ? 'cancelled'
+            : 'done'
+    ];
+  return (
+    <Glyph
+      size={14}
+      aria-hidden="true"
+      className={state === 'running' ? 'activity-spinner' : undefined}
+    />
+  );
+}
+
+function StageRow({ stage }: { stage: HelperActivityStage }) {
+  const toolCount = stage.events.filter((event) => event.kind === 'tool.finished').length;
+  return (
+    <li data-state={stage.state}>
+      <details className="helper-activity-stage">
+        <summary className="helper-activity-stage-head">
+          <StageGlyph state={stage.state} />
+          <span>{stage.label}</span>
+          {stage.target && <small>{stage.target}</small>}
+          <span className="sr-only">{t(stateLabels[stage.state])}</span>
+          {toolCount > 1 && (
+            <small>
+              {t('helperConversation.executions', {
+                count: formatNumber(toolCount),
+              })}
+            </small>
+          )}
+        </summary>
+        <ul className="helper-activity-records">
+          {stage.events.map((event) => (
+            <li key={event.seq} className="ui-meta-row">
+              <code>{event.name ?? event.kind}</code>
+              {event.status && <span>{labels[event.status] ?? event.status}</span>}
+              {event.purpose && <span>{event.purpose}</span>}
+              {event.applied !== undefined && (
+                <span>{event.applied ? t('helpers.m124') : t('helpers.m125')}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </details>
+      {stage.events.map((event) =>
+        event.error || event.denied ? (
+          <NoticeBanner tone="error" key={event.seq}>
+            {event.name ? `${event.name}: ` : ''}
+            {requestFileError(event.error) ??
+              (event.error ? translateMessage(event.error) : t('helpers.m126'))}
+          </NoticeBanner>
+        ) : event.text ? (
+          <p key={event.seq}>
+            {event.text}
+            {event.textTruncated ? t('helpers.m127') : ''}
+          </p>
+        ) : null
+      )}
+    </li>
+  );
+}
+
 export function HelperActivityDetails({
   taskId,
   status,
@@ -113,68 +187,49 @@ export function HelperActivityDetails({
       {data && !data.events.length && <p className="muted">{t('helpers.m122')}</p>}
       {data && (
         <ol className="helper-activity-stages">
-          {helperActivityStages({ ...data, status }).map((stage) => {
-            const toolCount = stage.events.filter((event) => event.kind === 'tool.finished').length;
-            const Glyph =
-              statusGlyph[
-                stage.state === 'running'
-                  ? 'running'
-                  : stage.state === 'issue'
-                    ? 'issue'
-                    : stage.state === 'stopped'
-                      ? 'cancelled'
-                      : 'done'
-              ];
-            return (
-              <li key={stage.id} data-state={stage.state}>
-                <details className="helper-activity-stage">
+          {groupHelperActivity(helperActivityStages({ ...data, status })).map((row) =>
+            row.kind === 'stage' ? (
+              <StageRow key={row.stage.id} stage={row.stage} />
+            ) : (
+              <li key={`reads:${row.id}`} data-state={row.state}>
+                <details className="helper-activity-stage helper-activity-reads">
                   <summary className="helper-activity-stage-head">
-                    <Glyph
-                      size={14}
-                      aria-hidden="true"
-                      className={stage.state === 'running' ? 'activity-spinner' : undefined}
-                    />
-                    <span>{stage.label}</span>
-                    {stage.target && <small>{stage.target}</small>}
-                    <span className="sr-only">{t(stateLabels[stage.state])}</span>
-                    {toolCount > 1 && (
-                      <small>
-                        {t('helperConversation.executions', {
-                          count: formatNumber(toolCount),
-                        })}
-                      </small>
-                    )}
+                    <StageGlyph state={row.state} />
+                    <span>{t('helpers.m199')}</span>
+                    <span className="helper-activity-read-summary">
+                      {row.summary.scenes > 0 && (
+                        <small>
+                          {t('helpers.activityReadScenes', { count: row.summary.scenes })}
+                        </small>
+                      )}
+                      {row.summary.resources > 0 && (
+                        <small>
+                          {t('helpers.activityReadResources', { count: row.summary.resources })}
+                        </small>
+                      )}
+                      {row.summary.lookups > 0 && (
+                        <small>
+                          {t('helpers.activityReadLookups', { count: row.summary.lookups })}
+                        </small>
+                      )}
+                    </span>
+                    <span className="sr-only">{t(stateLabels[row.state])}</span>
                   </summary>
-                  <ul className="helper-activity-records">
-                    {stage.events.map((event) => (
-                      <li key={event.seq} className="ui-meta-row">
-                        <code>{event.name ?? event.kind}</code>
-                        {event.status && <span>{labels[event.status] ?? event.status}</span>}
-                        {event.purpose && <span>{event.purpose}</span>}
-                        {event.applied !== undefined && (
-                          <span>{event.applied ? t('helpers.m124') : t('helpers.m125')}</span>
-                        )}
+                  <ol className="helper-activity-read-calls">
+                    {row.stages.map((stage) => (
+                      <li key={stage.id} data-state={stage.state}>
+                        <StageGlyph state={stage.state} />
+                        <span>{stage.label}</span>
+                        {stage.target && <small>{stage.target}</small>}
+                        <code>{stage.events.at(-1)?.name}</code>
+                        <span className="sr-only">{t(stateLabels[stage.state])}</span>
                       </li>
                     ))}
-                  </ul>
+                  </ol>
                 </details>
-                {stage.events.map((event) =>
-                  event.error || event.denied ? (
-                    <NoticeBanner tone="error" key={event.seq}>
-                      {event.name ? `${event.name}: ` : ''}
-                      {requestFileError(event.error) ??
-                        (event.error ? translateMessage(event.error) : t('helpers.m126'))}
-                    </NoticeBanner>
-                  ) : event.text ? (
-                    <p key={event.seq}>
-                      {event.text}
-                      {event.textTruncated ? t('helpers.m127') : ''}
-                    </p>
-                  ) : null
-                )}
               </li>
-            );
-          })}
+            )
+          )}
         </ol>
       )}
     </>

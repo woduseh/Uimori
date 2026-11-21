@@ -157,6 +157,38 @@
 .helper-activity-stage-head > svg {
   flex-shrink: 0;
 }
+.helper-activity-read-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-weight: 400;
+}
+.helper-activity-read-calls {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 6px 0;
+  padding: 0 0 0 12px;
+  border-left: var(--hairline) solid var(--line);
+}
+.helper-activity-read-calls > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.helper-activity-read-calls > li > svg {
+  flex-shrink: 0;
+}
+.helper-activity-read-calls small,
+.helper-activity-read-calls code {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.helper-activity-read-calls > li[data-state="running"] {
+  color: var(--accent-text);
+}
 .helper-current-activity-details {
   max-height: min(28dvh, 260px);
   overflow: auto;

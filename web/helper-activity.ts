@@ -1,14 +1,7 @@
 import { formatNumber, t } from './i18n.js';
 import type { HelperActivity, HelperActivityEvent } from '../core/helper-activity.js';
+import { isHelperReadTool, type HelperActivityStage as Stage } from './helper-activity-groups.js';
 
-type Stage = {
-  id: number;
-  kind: string;
-  label: string;
-  target?: string;
-  state: 'running' | 'completed' | 'issue' | 'stopped' | 'recorded';
-  events: HelperActivityEvent[];
-};
 const change = 'helpers.m196';
 const read = 'helpers.m199';
 const sceneEdit = 'helpers.activitySceneEdit';
@@ -36,9 +29,6 @@ const toolKinds: Record<string, string> = {
   'scene.title': sceneEdit,
   'scene.request': 'helpers.activitySceneRequest',
   'scene.translate': 'helpers.activitySceneTranslate',
-  'scene.versions': read,
-  'scene.lore': read,
-  'scene.regex': read,
   'illustration.generate': illustrationDraw,
   'illustration.cut.redraw': illustrationDraw,
   'illustration.cut.revise': illustrationDraw,
@@ -48,10 +38,7 @@ const toolKinds: Record<string, string> = {
   'data.exec': 'helpers.activityShell',
 };
 function toolKind(name = '') {
-  return (
-    toolKinds[name] ??
-    (/\.(read|list|search|inspect|guide|tools)$/u.test(name) ? read : 'helpers.m200')
-  );
+  return toolKinds[name] ?? (isHelperReadTool(name) ? read : 'helpers.m200');
 }
 function targetLabel(target: HelperActivityEvent['target']) {
   if (!target) return undefined;
@@ -93,20 +80,6 @@ export function helperActivityStages(activity: HelperActivity): Stage[] {
           event.error || event.denied || ['failed', 'refused'].includes(event.status ?? '')
             ? 'issue'
             : 'completed';
-        const index = stages.indexOf(stage);
-        const previous = stages[index - 1];
-        if (
-          index === stages.length - 1 &&
-          stage.state === 'completed' &&
-          stage.kind === read &&
-          previous?.kind === read &&
-          previous.state === 'completed' &&
-          previous.events.every((item) => item.kind === 'tool.finished')
-        ) {
-          previous.events.push(event);
-          previous.target = undefined;
-          stages.pop();
-        }
         continue;
       }
     }
@@ -130,30 +103,18 @@ export function helperActivityStages(activity: HelperActivity): Stage[] {
             : event.kind === 'tool.finished'
               ? 'completed'
               : 'recorded';
-    const previous = stages.at(-1);
-    if (
-      event.kind === 'tool.finished' &&
-      state === 'completed' &&
-      kind === read &&
-      previous?.kind === kind &&
-      previous.state === state &&
-      previous.events.every((item) => item.kind === 'tool.finished')
-    ) {
-      previous.events.push(event);
-      previous.target = undefined;
-    } else {
-      const stage: Stage = {
-        id: event.seq,
-        kind,
-        label: t(kind),
-        target: targetLabel(event.target),
-        state,
-        events: [event],
-      };
-      stages.push(stage);
-      if (event.kind === 'attempt.started' && event.attemptId) attempts.set(event.attemptId, stage);
-      if (event.kind === 'tool.started' && event.callId) tools.set(event.callId, stage);
-    }
+    const stage: Stage = {
+      id: event.seq,
+      kind,
+      label: t(kind),
+      target: targetLabel(event.target),
+      ...(event.target ? { subject: event.target } : {}),
+      state,
+      events: [event],
+    };
+    stages.push(stage);
+    if (event.kind === 'attempt.started' && event.attemptId) attempts.set(event.attemptId, stage);
+    if (event.kind === 'tool.started' && event.callId) tools.set(event.callId, stage);
   }
   if (!['running', 'queued'].includes(activity.status))
     for (const stage of stages) if (stage.state === 'running') stage.state = 'stopped';

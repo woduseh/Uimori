@@ -403,6 +403,7 @@ async function harness(page: Page, seedCount = 0) {
             taskId: task.id,
             status: task.status,
             results: [],
+            changes: [],
             unrecordedOperations: 0,
             usage: { attempts: [], toolExecutions: 0, latestInputEstimate: null },
           },
@@ -2339,4 +2340,68 @@ test('HELPACTIVITY observed stages retain tool errors and cancellation', async (
   await expect(
     activity.getByText('resource.patch: EDITOR_SAVE_REQUIRED', { exact: true })
   ).toBeVisible();
+});
+
+test('HELPACTIVITY-READS consecutive reads fold into one row that expands to each call', async ({
+  page,
+  request,
+}, info) => {
+  const chat = await create(request),
+    state = await harness(page);
+  for (const [width, height, colorScheme] of [
+    [1440, 900, 'light'],
+    [1440, 900, 'dark'],
+    [412, 915, 'light'],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await page.goto(`/?chat=${chat.id}`);
+    const panel = await open(page);
+    if (!state.posts.length) {
+      await panel.getByLabel('도우미에게 요청').fill('장면과 자료를 읽고 고쳐 주세요');
+      await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+      await expect.poll(() => state.posts.length).toBe(1);
+    }
+    const task = state.current().tasks[0];
+    const read = (seq: number, name: string, target?: HelperActivityEvent['target']) => [
+      { seq, kind: 'tool.started', callId: `c${seq}`, name, ...(target ? { target } : {}) },
+      { seq: seq + 1, kind: 'tool.finished', callId: `c${seq}`, name, denied: false },
+    ];
+    state.activity(task, [
+      { seq: 1, kind: 'attempt.started', attemptId: 'helper', purpose: 'helper' },
+      { seq: 2, kind: 'attempt.finished', attemptId: 'helper', status: 'tool_calls' },
+      ...read(3, 'scene.read', { kind: 'scene', title: '등대의 밤' }),
+      ...read(5, 'scene.read', { kind: 'scene', title: '폭풍 전야' }),
+      ...read(7, 'resource.read', { kind: 'content', title: '등대지기 미라' }),
+      ...read(9, 'data.search'),
+      {
+        seq: 11,
+        kind: 'tool.started',
+        callId: 'c11',
+        name: 'resource.patch',
+        target: { kind: 'content', title: '등대지기 미라' },
+      },
+    ]);
+    const current = panel.locator('.helper-current-activity-details');
+    const group = current.locator('.helper-activity-reads');
+    await expect(group).toHaveCount(1);
+    const summary = group.locator(':scope > summary');
+    await expect(summary).toContainText('자료 확인');
+    await expect(summary).toContainText('장면 2개');
+    await expect(summary).toContainText('자료 1개');
+    await expect(summary).toContainText('조회 1회');
+    await expect(group).not.toHaveAttribute('open');
+    await expect(
+      current.locator('.helper-activity-stages > li[data-state="running"]')
+    ).toContainText('등대지기 미라');
+    await summary.click();
+    await expect(group).toHaveAttribute('open');
+    const calls = group.locator('.helper-activity-read-calls > li');
+    await expect(calls).toHaveCount(4);
+    await expect(calls.nth(0)).toContainText('등대의 밤');
+    await expect(calls.nth(3).locator('code')).toHaveText('data.search');
+    await page.screenshot({
+      path: info.outputPath(`grouped-reads-${width}-${colorScheme}.png`),
+    });
+  }
 });

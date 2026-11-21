@@ -126,7 +126,7 @@ test.each([
   }
 });
 
-test('helper stages group reads, keep edits separate and report observed progress', () => {
+test('helper stages keep each call apart and report observed progress', () => {
   const activity: HelperActivity = {
     taskId: 'task',
     status: 'running',
@@ -146,7 +146,8 @@ test('helper stages group reads, keep edits separate and report observed progres
   expect(stages.flatMap((stage) => stage.events)).toEqual(activity.events);
   expect(stages).toMatchObject([
     { state: 'completed', events: [{ seq: 1 }, { seq: 2 }] },
-    { state: 'completed', events: [{ seq: 3 }, { seq: 4 }] },
+    { state: 'completed', events: [{ seq: 3 }] },
+    { state: 'completed', events: [{ seq: 4 }] },
     { state: 'completed', events: [{ seq: 5 }] },
     { state: 'completed', events: [{ seq: 6 }] },
     { state: 'issue', events: [{ error: 'CONFLICT' }] },
