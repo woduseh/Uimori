@@ -65,6 +65,7 @@ import { ReaderPages } from './ReaderPages.js';
 import { SceneNavigator } from './SceneNavigator.js';
 import {
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -113,7 +114,10 @@ import { SourceReader } from './SourceReader.js';
 import { pendingSceneDeletions, SceneDeleteDialog } from './SceneDeleteAction.js';
 import type { SceneDeletionResult } from '../core/scene-deletion.js';
 import { TurnActivity } from './TurnActivity.js';
-import { SessionGate } from './SessionGate.js';
+import { SessionGate, SessionRequiredContext } from './SessionGate.js';
+import { CommandPalette, type PaletteEntry } from './CommandPalette.js';
+import { getSettingsCategories } from './settings-categories.js';
+import { libraryCategory } from '../core/library-organization.js';
 import { MaintenanceBanner } from './MaintenanceBanner.js';
 import { Dialog } from './Dialog.js';
 import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
@@ -1008,6 +1012,110 @@ function App() {
   useShortcut('settings.open', openAppSettings);
   useShortcut('search.open', () => searchFromKeyboard());
   useShortcut('editor.save', () => true);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const composerFocusChat = useRef<string | null>(null);
+  const openedChat = s.destination === 'story' ? s.detail?.chat.id : undefined;
+  useEffect(() => {
+    if (!openedChat || composerFocusChat.current !== openedChat) return;
+    composerFocusChat.current = null;
+    s.input.current?.focus({ preventScroll: true });
+  }, [openedChat, s.input]);
+  useShortcut('palette.open', () => setPaletteOpen(true), { active: !compact });
+  const sessionRequired = useContext(SessionRequiredContext);
+  function paletteEntries(): PaletteEntry[] {
+    const library = s.library;
+    const story = s.destination === 'story' && !!s.selected && !helperWorkspaceOpen;
+    const commands: PaletteEntry[] = [
+      { id: 'new-chat', group: 'commands', label: t('main.m004'), run: () => newStory() },
+      { id: 'library', group: 'commands', label: t('library.library'), run: () => showLibrary() },
+      ...(helperOpen
+        ? []
+        : [
+            {
+              id: 'helper',
+              group: 'commands' as const,
+              label: t('main.m027'),
+              run: () => setWorkspacePanel('helper'),
+            },
+          ]),
+      ...(story && s.detail
+        ? [
+            {
+              id: 'outline',
+              group: 'commands' as const,
+              label: t('palette.openOutline'),
+              run: () => setPanel('outline'),
+            },
+          ]
+        : []),
+      ...(story
+        ? [
+            {
+              id: 'focus',
+              group: 'commands' as const,
+              label: focus ? t('main.m060') : t('main.m071'),
+              run: () => setFocus(!focus),
+            },
+          ]
+        : []),
+    ];
+    const chats = s.chats
+      .toSorted((a, b) => (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? ''))
+      .map<PaletteEntry>((chat) => ({
+        id: `chat:${chat.id}`,
+        group: 'chats',
+        label: chat.title,
+        detail: library?.contents.find((item) => item.id === chat.botId)?.title,
+        run: () => {
+          composerFocusChat.current = chat.id;
+          select(chat.id);
+        },
+      }));
+    const openResource = (target: HelperTaskResultTarget) => () =>
+      void openHelperResult(target).catch((error) => s.setError(error.message));
+    const resourceKinds = {
+      bot: t('library.bot'),
+      persona: t('library.persona'),
+      module: t('library.module'),
+    };
+    const resources: PaletteEntry[] = [
+      ...(library?.contents ?? []).map<PaletteEntry>((content) => ({
+        id: `content:${content.id}`,
+        group: 'resources',
+        label: content.title,
+        detail: resourceKinds[libraryCategory(library!, content)],
+        run: openResource({
+          kind: 'content',
+          id: content.id,
+          title: content.title,
+          revision: content.revision,
+        }),
+      })),
+      ...(library?.promptPresets ?? []).map<PaletteEntry>((preset) => ({
+        id: `prompt:${preset.id}`,
+        group: 'resources',
+        label: preset.title,
+        detail: t('library.prompts'),
+        run: openResource({
+          kind: 'prompt-preset',
+          id: preset.id,
+          title: preset.title,
+          revision: preset.revision,
+        }),
+      })),
+    ];
+    const settings = getSettingsCategories(sessionRequired).map<PaletteEntry>((category) => ({
+      id: `settings:${category.key}`,
+      group: 'settings',
+      label: category.label,
+      terms: [category.terms, ...(category.destinations ?? []).map((item) => item.label)].join(' '),
+      run: () => {
+        setSettingsTab(category.key);
+        setPanel('settings');
+      },
+    }));
+    return [...commands, ...chats, ...resources, ...settings];
+  }
   useShortcut('run.stop', () => void s.cancelActive(), {
     ready: () =>
       s.destination === 'story' &&
@@ -2718,6 +2826,12 @@ function App() {
           discardLabel={t('main.m142')}
         />
       </Dialog>
+      <CommandPalette
+        open={paletteOpen}
+        entries={paletteOpen ? paletteEntries() : []}
+        onClose={() => setPaletteOpen(false)}
+        onSearch={searchFromKeyboard}
+      />
       <Dialog
         open={searchingChats}
         title={t('main.m143')}

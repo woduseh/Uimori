@@ -232,3 +232,69 @@ test('SHORTCUT05 turning shortcuts off keeps only the Escape behaviour that exis
     await request.post('/api/test/control', { data: { action: 'release', barrier: 'run' } });
   }
 });
+
+test('SHORTCUT06 the command palette opens a chat, a settings section and manuscript search by keyboard', async ({
+  page,
+  request,
+}) => {
+  const suffix = Date.now();
+  const { chat } = await createReadingChat(request, `팔레트 출발 ${suffix}`, 1);
+  const { chat: other } = await createReadingChat(request, `팔레트 도착 ${suffix}`, 1);
+  await page.goto(`/?chat=${chat.id}`);
+  const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
+  const palette = page.getByRole('dialog', { name: '명령 팔레트', exact: true });
+  const query = palette.getByRole('textbox', { name: '채팅, 서재 자료, 설정, 명령 찾기' });
+  await composer.click();
+
+  await page.keyboard.press('Control+K');
+  await expect(palette).toBeVisible();
+  await expect(query).toBeFocused();
+  await page.screenshot({ path: test.info().outputPath('palette.png') });
+  await page.keyboard.press('Escape');
+  await expect(palette).toBeHidden();
+  await expect(composer).toBeFocused();
+
+  await page.keyboard.press('Control+K');
+  await page.keyboard.type(other.title);
+  const focusedChoice = () =>
+    page.evaluate(() => document.activeElement?.querySelector('span')?.textContent);
+  for (let step = 0; step < 6 && (await focusedChoice()) !== other.title; step++)
+    await page.keyboard.press('ArrowDown');
+  expect(await focusedChoice()).toBe(other.title);
+  await page.keyboard.press('Enter');
+  await expect(palette).toBeHidden();
+  await expect(page.locator('.header-title h1')).toHaveText(other.title);
+  await expect(composer).toBeFocused();
+
+  await page.keyboard.press('Control+K');
+  await page.keyboard.type('데이터 관리');
+  await page.keyboard.press('ArrowDown');
+  await expect(palette.getByRole('button', { name: '데이터 관리', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  const settings = page.getByRole('dialog', { name: '설정', exact: true });
+  await expect(settings).toBeVisible();
+  await expect(settings.getByRole('tab', { name: '데이터 관리', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await page.keyboard.press('Escape');
+  await expect(settings).toBeHidden();
+  await expect(composer).toBeFocused();
+
+  await page.keyboard.press('Control+K');
+  await page.keyboard.type('보라색 우산');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('End');
+  await expect(
+    palette.getByRole('button', { name: '원고에서 “보라색 우산” 찾기', exact: true })
+  ).toBeFocused();
+  await page.keyboard.press('Enter');
+  const search = page.getByRole('dialog', { name: '전체 채팅 검색', exact: true });
+  await expect(search.getByRole('searchbox', { name: '전체 채팅 검색', exact: true })).toHaveValue(
+    '보라색 우산'
+  );
+  await expect(search.getByRole('heading', { name: '본문 검색 결과', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(search).toBeHidden();
+  await expect(composer).toBeFocused();
+});

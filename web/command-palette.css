@@ -1,0 +1,65 @@
+.app-dialog.command-palette-dialog {
+  --dialog-size: 640px;
+}
+.command-palette-dialog > .dialog-body {
+  display: grid;
+  gap: 12px;
+  padding: 16px 24px 24px;
+}
+.command-palette-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.command-palette-field > svg {
+  position: absolute;
+  left: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.command-palette-field > input {
+  width: 100%;
+  min-width: 0;
+  padding-left: 37px;
+}
+.command-palette-results {
+  display: grid;
+  gap: 12px;
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+}
+.command-palette-results > section {
+  display: grid;
+  min-width: 0;
+}
+.command-palette-results h3 {
+  margin: 0;
+  padding: 4px 12px;
+  color: var(--muted);
+  font-size: var(--font-small);
+  font-weight: 600;
+}
+.command-palette-choice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.6fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  white-space: normal;
+}
+.command-palette-choice > span,
+.command-palette-choice > small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.command-palette-choice > small {
+  justify-self: end;
+  color: var(--muted);
+}
