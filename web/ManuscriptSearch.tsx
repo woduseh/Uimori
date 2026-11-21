@@ -14,7 +14,8 @@ import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import './manuscript-search.css';
 
-const shortQueryScripts = /[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+const shortQueryScripts =
+  /[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
 
 function automaticSearchLength(query: string) {
   return shortQueryScripts.test(query) ? 2 : 3;
