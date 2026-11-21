@@ -20,6 +20,12 @@ const names: Record<string, string> = {
   illustration: 'helpers.m220',
 };
 
+const phaseLabels = {
+  context: 'helpers.runPhaseContext',
+  lore: 'helpers.runPhaseLore',
+  'story-guide': 'helpers.runPhaseStoryGuide',
+} as const;
+
 type Props = {
   run: ReaderRun;
   source?: Source;
@@ -119,9 +125,11 @@ function TurnActivityContent({
     run.packageStart?.mode === 'authored'
       ? t('helpers.m249')
       : run.status === 'running'
-        ? run.executionMode === 'batch'
-          ? t('helpers.m250')
-          : t('helpers.m212')
+        ? run.phase && run.phase !== 'writing'
+          ? t(phaseLabels[run.phase])
+          : run.executionMode === 'batch'
+            ? t('helpers.m250')
+            : t('helpers.m212')
         : t('helpers.m251', { v0: labels[run.status] ?? run.status });
   const important = entries.filter((item) => item.status !== 'completed');
   const summary = [

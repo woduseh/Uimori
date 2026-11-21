@@ -1133,6 +1133,24 @@ export const messages = {
     ja: '場面を執筆中',
     zh: '正在编写场景',
   },
+  'helpers.runPhaseContext': {
+    ko: '컨텍스트를 정리하는 중',
+    en: 'Preparing the context',
+    ja: 'コンテキストを整理中',
+    zh: '正在整理上下文',
+  },
+  'helpers.runPhaseLore': {
+    ko: '로어를 고르는 중',
+    en: 'Selecting lore',
+    ja: 'ロアを選定中',
+    zh: '正在筛选设定',
+  },
+  'helpers.runPhaseStoryGuide': {
+    ko: '원작을 참고하는 중',
+    en: 'Consulting the source work',
+    ja: '原作を参照中',
+    zh: '正在参考原作',
+  },
   'helpers.m213': {
     ko: '번역하는 중',
     en: 'Translating',

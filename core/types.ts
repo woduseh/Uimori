@@ -243,7 +243,9 @@ export type ChatDetail = {
   assets?: import('./product.js').Asset[];
 };
 
+export type RunPhase = 'context' | 'lore' | 'story-guide' | 'writing';
 export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
+  phase?: RunPhase;
   sceneUsage?: import('./scene-usage.js').SceneUsageReceipt;
   canRejudge?: boolean;
   requestOrder?: number;

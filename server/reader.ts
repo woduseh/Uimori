@@ -9,6 +9,8 @@ import { changedReaderSources, readerJobIds, readerPresentationRevisions } from 
 import { providerRejection } from '../core/provider-rejection.js';
 import { isReaderPendingRun, readerRequestOrder } from '../core/reader-conversation.js';
 import { RUN_READER_DISMISSAL_PREFIX } from './run-reader-state.js';
+import { runPhase } from './run-phase.js';
+import { readStoredRunSnapshot } from './run-projections.js';
 import type { SceneUsageReceipt } from '../core/scene-usage.js';
 import { outlineSceneTitles, sceneTitles } from './scene-titles.js';
 import { type SceneContextRow, sceneContextFromRow } from './scene-context.js';
@@ -214,6 +216,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     })[]
   ).map((row) => ({
     ...row,
+    ...(row.status === 'running' && { phase: runPhase(readStoredRunSnapshot(store, row.id)) }),
     canRejudge: !!row.canRejudge,
     readerDismissed: !!row.readerDismissed,
     executionMode: row.executionMode ?? undefined,

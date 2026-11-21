@@ -587,6 +587,18 @@ test('DISPLAY main complete mode waits for the canonical source across refresh a
   const state = await harness(page, seeded.chat.id, (body) => pendingDisplay(body, 'running'));
   const pending = page.getByTestId('pending-run');
   await expect(pending.getByTestId('turn-activity')).toContainText('장면을 쓰는 중');
+  for (const [phase, label] of [
+    ['context', '컨텍스트를 정리하는 중'],
+    ['lore', '로어를 고르는 중'],
+    ['story-guide', '원작을 참고하는 중'],
+    ['writing', '장면을 쓰는 중'],
+  ] as const) {
+    await state.set((body) => {
+      pendingDisplay(body, 'running');
+      body.runs[0].phase = phase;
+    });
+    await expect(pending.getByTestId('turn-activity')).toContainText(label);
+  }
   await expect(page.getByRole('button', { name: '원문 생성 취소', exact: true })).toBeVisible();
   await expect(pending.locator('.streaming-response')).toHaveCount(0);
   expect(reads).toBe(0);

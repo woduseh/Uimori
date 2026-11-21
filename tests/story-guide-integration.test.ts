@@ -29,10 +29,13 @@ const guideConfig = {
 test('automatic guide reads frozen evidence and reaches the actual writer HTTP request without becoming story prose', async () => {
   const advice = 'GUIDE_ONLY: Keep the sister relationship undisclosed in the visitor viewpoint.';
   const prose = 'The visitor followed the keeper toward the harbor.';
+  const phases: (string | undefined)[] = [];
   const state = await fixture(
     async (body, target, number) => {
       const input = packet(body);
       expect(body.model).toBe(state.mainModel.modelId);
+      const reader = (await state.app.inject(`/api/chats/${state.chat.id}/reader`)).json();
+      phases.push(reader.runs.find((item: Run) => item.status === 'running')?.phase);
       if (number <= 2) {
         expect(input.controls.purpose).toBe('story-guide');
         expect(input.source.config).toEqual(guideConfig);
@@ -73,6 +76,7 @@ test('automatic guide reads frozen evidence and reaches the actual writer HTTP r
   expect(run.status).toBe('completed');
   expect(run.usage).toEqual({ modelCalls: 4, inputTokens: 28, outputTokens: 12, costUsd: null });
   expect(state.provider.requests).toHaveLength(3);
+  expect(phases).toEqual(['story-guide', 'story-guide', 'writing']);
   expect((await state.detail()).sources.map((source) => source.text)).toEqual([prose]);
   expect(state.app.store.storyGuide.get(state.chat.id).brief).toBeNull();
   const detail = (await state.app.inject(`/api/chats/${state.chat.id}/story-guide`)).json();
