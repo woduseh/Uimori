@@ -1416,6 +1416,25 @@ input[type="checkbox"] {
   text-decoration: underline;
   box-shadow: none;
 }
+.next-request-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 6px;
+}
+.next-request-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.next-request-menu > summary {
+  width: auto;
+  padding-inline: 8px;
+  color: var(--muted);
+  font-size: var(--font-small);
+  white-space: nowrap;
+}
 .fork-notice-close {
   width: 32px;
   min-width: 32px;
@@ -1771,6 +1790,21 @@ input[type="checkbox"] {
   }
   .composer-dock:has(.composer[hidden]) {
     padding: 0;
+  }
+  .composer-context {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+  }
+  .composer-context > .activity-status {
+    flex: 1 1 auto;
+  }
+  .composer-context > .next-request-status {
+    order: 1;
+    flex: none;
+    margin-left: auto;
+    margin-bottom: 6px;
   }
   .composer {
     padding: 4px;

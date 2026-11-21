@@ -138,7 +138,7 @@ import {
 import { useStory } from './useStory.js';
 import { useTestMode } from './useTestMode.js';
 import { ActivityStatus } from './ActivityStatus.js';
-import { OutlineFocusStatus } from './OutlineFocusStatus.js';
+import { NextRequestStatus } from './NextRequestStatus.js';
 import { focusSidePanelTab, SidePanelTabs } from './SidePanelTabs.js';
 import { SidePanelResizer } from './SidePanelResizer.js';
 import {
@@ -2314,38 +2314,43 @@ function App() {
                     />
                   </p>
                 )}
-                <OutlineFocusStatus
-                  key={`outline-focus:${s.selected}`}
-                  chatId={s.selected}
-                  headRevision={s.detail?.chat.headRevision}
-                  onOpen={(nodeId) => openOutlineWorkspace(nodeId)}
-                />
-                <ActivityStatus
-                  key={s.viewKey}
-                  chatId={s.selected}
-                  scope={s.viewKey}
-                  activities={s.detail?.reader.activity ?? []}
-                  request={s.requestActivity}
-                  connected={s.connected}
-                  onDetails={() => inspect('')}
-                  recoveryRequestId={
-                    s.pendingRequest && s.requestActivity?.status === 'uncertain'
-                      ? s.requestActivity.id
-                      : undefined
-                  }
-                  recoveryBusy={s.submitting.includes(s.viewKey)}
-                  recoveryError={s.error}
-                  onRecoverRequest={(requestId) => {
-                    if (
-                      s.pendingRequest &&
-                      s.requestActivity?.status === 'uncertain' &&
-                      s.requestActivity.id === requestId &&
-                      !s.submitting.includes(s.viewKey)
-                    )
-                      void generate();
-                  }}
-                  seenRunIds={seenRuns}
-                />
+                <div className="composer-context">
+                  <NextRequestStatus
+                    key={`next-request:${s.selected}`}
+                    chatId={s.selected}
+                    refreshKey={`${s.detail?.chat.headRevision}:${s.detail?.chat.settingsRevision}:${s.detail?.reader.cursor}`}
+                    compact={compact}
+                    onOpenOutline={(nodeId) => openOutlineWorkspace(nodeId)}
+                    onOpenOptions={() => showSidePanel('options')}
+                    onOpenStoryGuide={() => openChatSettings('guide')}
+                  />
+                  <ActivityStatus
+                    key={s.viewKey}
+                    chatId={s.selected}
+                    scope={s.viewKey}
+                    activities={s.detail?.reader.activity ?? []}
+                    request={s.requestActivity}
+                    connected={s.connected}
+                    onDetails={() => inspect('')}
+                    recoveryRequestId={
+                      s.pendingRequest && s.requestActivity?.status === 'uncertain'
+                        ? s.requestActivity.id
+                        : undefined
+                    }
+                    recoveryBusy={s.submitting.includes(s.viewKey)}
+                    recoveryError={s.error}
+                    onRecoverRequest={(requestId) => {
+                      if (
+                        s.pendingRequest &&
+                        s.requestActivity?.status === 'uncertain' &&
+                        s.requestActivity.id === requestId &&
+                        !s.submitting.includes(s.viewKey)
+                      )
+                        void generate();
+                    }}
+                    seenRunIds={seenRuns}
+                  />
+                </div>
                 {!sourceEditing &&
                   !s.pendingRequest &&
                   !!s.detail &&

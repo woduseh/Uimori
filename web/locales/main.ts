@@ -1247,4 +1247,34 @@ export const messages = {
     ja: '例：舞台、登場人物、起こってほしい出来事',
     zh: '例如：背景、人物，以及希望发生的事件',
   },
+  'main.nextRequestLabel': {
+    ko: '다음 요청에 적용',
+    en: 'Applies to the next request',
+    ja: '次のリクエストに適用',
+    zh: '应用于下一次请求',
+  },
+  'main.nextRequestOptions': {
+    ko: '1회 옵션 예약',
+    en: 'One-time options scheduled',
+    ja: '1回オプションの予約',
+    zh: '已预约单次选项',
+  },
+  'main.nextRequestGuide': {
+    ko: '원작 참고',
+    en: 'Canon reference',
+    ja: '原作参照',
+    zh: '原作参考',
+  },
+  'main.nextRequestCount': {
+    ko: '다음 요청 {count}',
+    en: 'Next request {count}',
+    ja: '次のリクエスト {count}',
+    zh: '下一次请求 {count}',
+  },
+  'main.nextRequestMenu': {
+    ko: '다음 요청에 적용할 상태 {count}개',
+    en: '{count} settings apply to the next request',
+    ja: '次のリクエストに適用される状態 {count}件',
+    zh: '下一次请求将应用 {count} 项状态',
+  },
 };
