@@ -78,17 +78,6 @@
 
 원본의 Wave 1을 0단계에서 4단계로 나눴어요. 각 단계의 항목은 서로 독립이면 따로 커밋해요.
 
-### 1단계. 유실 방지와 전송 키
-
-- 원고 편집기에서 `Esc`를 누르면 변경이 있을 때 폐기 확인을 보여 줘요. 변경이 없으면 지금처럼 닫아요. 취소 버튼의 동작은 그대로 둬요.
-- 선택 구절 퇴고 입력창의 `Esc`는 퇴고 패널만 닫고(요청 중이면 요청 취소) 편집기로 전파하지 않아요. 지금은 [SelectionRevision.tsx](../../web/SelectionRevision.tsx)에 키 처리가 없어서 [SourceReader.tsx](../../web/SourceReader.tsx)의 편집기 form이 받아 장면 초안을 지워요.
-- 요청 편집기([RequestMessage.tsx](../../web/RequestMessage.tsx))의 `Esc`가 같은 유실을 일으키는지 확인하고, 그렇다면 같은 규칙을 적용해요.
-- 도우미 입력창이 데스크톱에서 설정을 무시하고 `Enter`로 전송하는 부분([HelperPanel.tsx](../../web/HelperPanel.tsx)의 `hardwareKeyboard`)을 없애고 앱 설정을 따르게 해요. macOS에서는 `Cmd` 표기를 써요. 한글 조합 가드는 [ChatComposer.tsx](../../web/ChatComposer.tsx)의 것을 함께 써요.
-- 도우미 입력창의 정지 버튼 위치를 고정해요. 지금은 실행 중에 글자를 치면 정지 버튼이 오른쪽 주 버튼 자리에서 왼쪽 도구 줄로 옮겨 가고, 그 자리에 대기 요청 버튼이 들어와요.
-- [HelperResourceUndo.tsx](../../web/HelperResourceUndo.tsx)에서 도달하지 않는 분기만 정리해요. 되돌릴 수 있을 때만 바를 보이는 동작은 2026-11-19 커밋 `1208b41d`의 결정이고 [EDITING](../EDITING.md)에 적혀 있으므로 바꾸지 않아요. 되돌릴 수 없는 사유 표시는 7단계에서 턴 롤백과 함께 정해요.
-
-완료 기준: 변경이 있는 편집기에서 `Esc`를 누르고 폐기를 취소하면 초안과 세션 보관본이 남아요. 퇴고 입력창에서 `Esc`를 눌러도 장면 초안이 남아요. 도우미 실행 중에 입력창이 비어 있든 글이 있든 정지 버튼이 같은 자리에 있어요. 설정이 수정키 전송일 때 데스크톱 도우미에서 `Enter`는 줄바꿈이고, 한글 조합 중 `Enter`는 전송하지 않아요. 전송 키를 설명하는 사용자 문서가 맞춰져 있어요.
-
 ### 2단계. 스트리밍 코어
 
 - [StreamingResponse.tsx](../../web/StreamingResponse.tsx)의 300ms 폴링을 기존 SSE 엔드포인트(`/api/response-streams/:taskKind/:taskId/events`)를 읽는 `fetch` 스트림으로 바꿔요. 커서 이어받기, 탭이 숨겨졌을 때 연결 해제, 오프셋 검증은 지금 동작을 유지해요.
