@@ -72,7 +72,7 @@ export function getSettingsCategories(sessionRequired: boolean): SettingsCategor
       label: t('chatsettings.m27'),
       icon: ModelIcon,
       group: 'generation',
-      terms: `${t('chatsettings.m28')} ${t('settings.helperTaskTimeout')}`,
+      terms: `${t('chatsettings.m28')} ${t('settings.helperTaskTimeout')} ${t('settings.helperConfirmPaidGeneration')}`,
     },
     {
       key: 'prompts',

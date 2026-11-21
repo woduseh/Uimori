@@ -68,6 +68,7 @@ import type { ResponseDisplayMode } from './presentation-settings.js';
 import { HelperArtifactCard } from './HelperArtifactCard.js';
 import { HelperTaskResults } from './HelperTaskResults.js';
 import { HelperPlanCard } from './HelperPlanCard.js';
+import type { HelperConfirmationGrant, HelperConfirmationTarget } from './HelperConfirmations.js';
 import { HelperContextUsage } from './HelperContextUsage.js';
 import {
   HelperDeleteActions,
@@ -183,6 +184,7 @@ type Outbox = Partial<FrozenHelperAttachments> & {
   selection?: HelperSelection;
   outline?: OutlineTarget;
   mode?: 'plan';
+  confirmations?: string[];
 };
 const active = (task: HelperTaskView) => task.status === 'queued' || task.status === 'running';
 const starterKeys: Record<HelperScope['kind'], string[]> = {
@@ -452,6 +454,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     }));
   };
   useShortcut('helper.mode', toggleMode, { scope: panel, active: props.open });
+  const [grants, setGrants] = useState<Record<string, HelperConfirmationGrant[]>>({});
+  const grantList = grants[scopeKey] ?? [];
   const answered = new Set(
     (data.current?.messages ?? [])
       .filter((message) => message.role === 'assistant')
@@ -939,6 +943,9 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           ...(!steerTaskId && selection ? { selection } : {}),
           ...(!steerTaskId && selectedOutline ? { outline: selectedOutline.target } : {}),
           ...(!steerTaskId && modes[owner] === 'plan' ? { mode: 'plan' as const } : {}),
+          ...(!steerTaskId && grants[owner]?.length
+            ? { confirmations: grants[owner].map((grant) => grant.id) }
+            : {}),
         };
       }
       setOutbox(owner, request);
@@ -966,10 +973,18 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           ...(request.images?.length ? { images: request.images } : {}),
           ...(request.files?.length ? { files: request.files } : {}),
           ...(request.mode && !request.steerTaskId ? { mode: request.mode } : {}),
+          ...(request.confirmations?.length && !request.steerTaskId
+            ? { confirmations: request.confirmations }
+            : {}),
         }
       );
       setOutbox(owner, null);
       setUnpersisted((old) => ({ ...old, [owner]: false }));
+      if (request.confirmations?.length)
+        setGrants((old) => ({
+          ...old,
+          [owner]: (old[owner] ?? []).filter((grant) => !request.confirmations?.includes(grant.id)),
+        }));
       void clearHelperRecoveryIf(`helper-outbox:${owner}`, JSON.stringify(request)).catch(() => {});
       const sameDraft =
         !request.draftToken || helperAttachmentDraftMatches(owner, request.draftToken);
@@ -1112,6 +1127,27 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     };
     return send(request);
   }
+  function confirmHeld(grant: HelperConfirmationGrant) {
+    if (!scopeKey) return;
+    setGrants((old) => ({
+      ...old,
+      [scopeKey]: [...(old[scopeKey] ?? []).filter((item) => item.id !== grant.id), grant],
+    }));
+    editDraft(draft.trim() ? `${draft}\n\n${grant.text}` : grant.text);
+    input.current?.focus();
+  }
+  const nameTarget = (target: HelperConfirmationTarget) => {
+    if (target.kind === 'chat')
+      return target.id === props.currentChat?.id
+        ? props.currentChat.title
+        : t('helperConfirm.chat');
+    if (target.kind === 'scene') return t('helperConfirm.scene');
+    const found =
+      target.kind === 'prompt-preset'
+        ? props.library?.promptPresets?.find((preset) => preset.id === target.id)
+        : props.library?.contents.find((content) => content.id === target.id);
+    return found?.title ?? target.id;
+  };
   async function carryOutPlan() {
     if (!conversation || outbox) return;
     setModes((old) => ({ ...old, [scopeKey]: 'apply' }));
@@ -1711,6 +1747,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                         !pending.length && (
                           <button
                             type="button"
+                            className="primary"
                             disabled={messageDisabled || !hydrated[scopeKey]}
                             onClick={() => void carryOutPlan()}
                           >
@@ -1744,6 +1781,11 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                         onOpenTarget={props.onOpenTarget}
                         onOpenChange={props.onOpenChange}
                         rollbackUnavailable={pending.length > 0}
+                        confirmation={{
+                          nameTarget,
+                          pending: grantList.map((grant) => grant.id),
+                          onConfirm: task.id === latestTaskId ? confirmHeld : undefined,
+                        }}
                       />
                       {taskStatus(task)}
                     </div>
@@ -2085,7 +2127,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           {(currentResource ||
             (displayEditor && !currentResource) ||
             selectedOutline ||
-            selection) && (
+            selection ||
+            grantList.length > 0) && (
             <div className="composer-request-chips helper-context-chips">
               {currentResource && JSON.stringify(scope) === JSON.stringify(props.scope) && (
                 <div className="helper-context-chip helper-editor">
@@ -2151,6 +2194,26 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                   </button>
                 </div>
               )}
+              {grantList.map((grant) => (
+                <div key={grant.id} className="helper-context-chip helper-confirmation-chip">
+                  <span className="helper-chip-label">
+                    {t('helperConfirm.chip', { operation: grant.operation })}
+                  </span>
+                  <button
+                    type="button"
+                    className="helper-chip-dismiss"
+                    aria-label={t('helperConfirm.removeChip', { operation: grant.operation })}
+                    onClick={() =>
+                      setGrants((old) => ({
+                        ...old,
+                        [scopeKey]: (old[scopeKey] ?? []).filter((item) => item.id !== grant.id),
+                      }))
+                    }
+                  >
+                    <X size={14} aria-hidden="true" />
+                  </button>
+                </div>
+              ))}
               {selection && (
                 <div className="helper-context-chip helper-selection">
                   <details>

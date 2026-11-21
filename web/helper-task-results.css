@@ -314,3 +314,52 @@ button.helper-result-target:hover {
     align-content: center;
   }
 }
+.helper-confirmations {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.helper-confirmation {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
+}
+.helper-confirmation[data-state="open"] {
+  border-color: var(--accent-line);
+}
+.helper-confirmation-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--font-body);
+}
+.helper-confirmation-title > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.helper-confirmation-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+.helper-confirmation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.helper-confirmation-actions > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

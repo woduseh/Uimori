@@ -74,6 +74,7 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
             routes: { main: null, translation: null, status: null },
             mainJudgmentEnabled: true,
             mainJudgmentThreshold: 0.9,
+            helperConfirmPaidGeneration: false,
             translationPolicy: { judgment: { threshold: 0.9 }, maxRetries: 1, maxCalls: 16 },
           },
         })
@@ -132,6 +133,9 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await helperTimeout.fill('0');
     await expect(saveModels).toBeDisabled();
     await helperTimeout.fill('90');
+    const paidConfirmation = editor.getByRole('switch', { name: '유료 생성 전에 확인' });
+    await expect(paidConfirmation).not.toBeChecked();
+    await paidConfirmation.check();
     await previousSceneLimit.fill('32769');
     await expect(saveModels).toBeDisabled();
     await previousSceneLimit.fill('1024');
@@ -152,6 +156,7 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await expect.poll(async () => (await models(request)).routes.main?.id).toBe(ids[0]);
     const selected = await models(request);
     expect(selected.helperTaskTimeoutMinutes).toBe(90);
+    expect(selected.helperConfirmPaidGeneration).toBe(true);
     expect(selected.titleModel).toEqual({ id: ids[0] });
     expect(selected.scriptModel).toEqual({ id: ids[0] });
     expect(selected.mainJudgmentEnabled).toBe(false);
@@ -168,6 +173,7 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '역할별 모델');
     await expect(helperTimeout).toHaveValue('90');
+    await expect(paidConfirmation).toBeChecked();
     if (visualReview) {
       for (const reviewWidth of [width, MOBILE_WIDTH]) {
         await page.setViewportSize({ width: reviewWidth, height: 900 });

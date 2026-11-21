@@ -2577,6 +2577,94 @@ test('HPLAN02 Alt+M switches the request mode only while focus is in the helper'
   await expect(modeChip).toHaveAccessibleName('요청 방식: 바로 적용');
 });
 
+test('HCONFIRM01 held operations are confirmed with an editable request, declined without one, or expired', async ({
+  page,
+  request,
+}, info) => {
+  const title = `삭제를 기다리는 봇 ${randomUUID()}`;
+  const created = await request.post('/api/content', { data: fixtureBotInput(title) });
+  expect(created.ok()).toBe(true);
+  const bot = await created.json();
+  const chat = await create(request),
+    state = await harness(page, 1);
+  await page.goto(`/?chat=${chat.id}`);
+  await open(page);
+  const task = state.current().tasks[0];
+  const held = (
+    id: string,
+    operation: string,
+    reason: 'delete' | 'bulk' | 'paid',
+    targets: { kind: string; id: string }[],
+    grantable = true
+  ) => ({
+    id,
+    taskId: task.id,
+    operation,
+    reason,
+    chatId: chat.id,
+    targets,
+    grantedBy: null,
+    grantable,
+  });
+  state.results.set(task.id, {
+    confirmations: [
+      held('delete-bot', 'resource.delete', 'delete', [{ kind: 'content', id: bot.id }]),
+      held('paid-scene', 'scene.request', 'paid', [{ kind: 'chat', id: chat.id }]),
+      held('old-bulk', 'resource.patchMany', 'bulk', [{ kind: 'content', id: bot.id }], false),
+    ],
+  });
+  const cards = () => page.locator('#helper-panel .helper-confirmation');
+  for (const [width, height] of [
+    [1440, 900],
+    [412, 915],
+  ] as const)
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width, height });
+      await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+      await page.goto(`/?chat=${chat.id}`);
+      await open(page);
+      await expect(cards()).toHaveCount(3);
+      await page.screenshot({
+        path: info.outputPath(`confirmation-cards-${width}-${colorScheme}.png`),
+      });
+    }
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  const deletion = cards().filter({ hasText: '자료 삭제' });
+  await expect(deletion).toContainText(title);
+  await expect(deletion).toContainText('지운 자료는 되돌릴 수 없어서 먼저 확인해요.');
+  const expired = cards().filter({ hasText: '여러 자료 한꺼번에 수정' });
+  await expect(expired).toContainText('더 이상 확인할 수 없어요.');
+  await expect(expired.getByRole('button')).toHaveCount(0);
+
+  const paid = cards().filter({ hasText: '다음 장면 요청' });
+  await expect(paid).toContainText(chat.title);
+  await paid.getByRole('button', { name: '다음 장면 요청 거절', exact: true }).click();
+  await expect(cards()).toHaveCount(2);
+  await page.reload();
+  await open(page);
+  await expect(cards()).toHaveCount(2);
+  expect(state.posts).toHaveLength(0);
+
+  await deletion.getByRole('button', { name: '자료 삭제 확인', exact: true }).click();
+  const input = panel.getByLabel('도우미에게 요청');
+  const confirmedText = `보류한 작업을 확인했어요. 자료 삭제: ${title}. 그대로 진행해 주세요.`;
+  await expect(input).toHaveValue(confirmedText);
+  await expect(input).toBeFocused();
+  await expect(panel.locator('.helper-confirmation-chip')).toHaveText('확인: 자료 삭제');
+  await expect(deletion).toContainText('입력창에서 요청을 보내면 진행해요.');
+  await expect(deletion.getByRole('button')).toHaveCount(0);
+  expect(state.posts).toHaveLength(0);
+  await input.press('End');
+  await input.pressSequentially(' 끝나면 서재 목록도 정리해 주세요.');
+  await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await expect.poll(() => state.posts.length).toBe(1);
+  expect(state.posts[0].confirmations).toEqual(['delete-bot']);
+  expect(state.posts[0].text).toBe(`${confirmedText} 끝나면 서재 목록도 정리해 주세요.`);
+  await expect(panel.locator('.helper-confirmation-chip')).toHaveCount(0);
+});
+
 test('HELPACTIVITY observed stages retain tool errors and cancellation', async ({
   page,
   request,

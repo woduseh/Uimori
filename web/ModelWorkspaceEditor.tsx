@@ -79,6 +79,7 @@ export function ModelWorkspaceEditor({
               titleModel: workspace.titleModel ?? null,
               helperModel: workspace.helperModel ?? null,
               helperTaskTimeoutMinutes: workspace.helperTaskTimeoutMinutes,
+              helperConfirmPaidGeneration: workspace.helperConfirmPaidGeneration === true,
               contextModel: workspace.contextModel ?? null,
               scriptModel: workspace.scriptModel ?? null,
               routes: workspace.modelRoutes,
@@ -181,6 +182,7 @@ export function ModelWorkspaceEditor({
         titleModel: draft.titleModel ?? null,
         helperModel: draft.helperModel ?? null,
         helperTaskTimeoutMinutes,
+        helperConfirmPaidGeneration: draft.helperConfirmPaidGeneration === true,
         contextModel: draft.contextModel ?? null,
         summaryLength: draft.summaryLength ?? DEFAULT_SUMMARY_LENGTH,
         scriptModel: draft.scriptModel ?? null,
@@ -350,6 +352,23 @@ export function ModelWorkspaceEditor({
                   value={Number.isNaN(helperTaskTimeoutMinutes) ? '' : helperTaskTimeoutMinutes}
                   onChange={(event) =>
                     change({ ...draft, helperTaskTimeoutMinutes: event.target.valueAsNumber })
+                  }
+                />
+              </div>
+            </div>
+            <div className="settings-row">
+              <div className="settings-row-copy">
+                <label htmlFor={`${id}-helper-paid-confirmation`}>
+                  {t('settings.helperConfirmPaidGeneration')}
+                </label>
+                <small>{t('settings.helperConfirmPaidGenerationHint')}</small>
+              </div>
+              <div className="settings-row-control">
+                <Switch
+                  id={`${id}-helper-paid-confirmation`}
+                  checked={draft.helperConfirmPaidGeneration === true}
+                  onChange={(event) =>
+                    change({ ...draft, helperConfirmPaidGeneration: event.target.checked })
                   }
                 />
               </div>

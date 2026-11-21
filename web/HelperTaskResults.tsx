@@ -20,6 +20,11 @@ import type {
 import { api } from './api.js';
 import { HelperChangeCard } from './HelperChangeCard.js';
 import { rollbackCovers, useHelperRollback } from './HelperTaskRollback.js';
+import {
+  HelperConfirmations,
+  type HelperConfirmationGrant,
+  type HelperConfirmationTarget,
+} from './HelperConfirmations.js';
 import { settingsLabels } from './helper-change-location.js';
 import { isStoryUiStyle } from '../core/story-ui-style.js';
 import { formatNumber, t, useI18n } from './i18n.js';
@@ -493,6 +498,7 @@ export function HelperTaskResults({
   onOpenChange,
   onUsage,
   rollbackUnavailable = false,
+  confirmation,
 }: {
   taskId: string;
   status: HelperStatus;
@@ -502,6 +508,11 @@ export function HelperTaskResults({
   onOpenChange?: (change: HelperChange) => Promise<void> | void;
   onUsage?: (taskId: string, usage: HelperTaskResultsView['usage']) => void;
   rollbackUnavailable?: boolean;
+  confirmation?: {
+    nameTarget: (target: HelperConfirmationTarget) => string;
+    pending: readonly string[];
+    onConfirm?: (grant: HelperConfirmationGrant) => void;
+  };
 }) {
   useI18n();
   const [sentinel, shown] = useSeen<HTMLSpanElement>(eager);
@@ -527,6 +538,9 @@ export function HelperTaskResults({
       {!shown && <span ref={sentinel} className="helper-results-sentinel" aria-hidden="true" />}
       {data && changes && (
         <>
+          {confirmation && (data.confirmations ?? []).length > 0 && (
+            <HelperConfirmations confirmations={data.confirmations} {...confirmation} />
+          )}
           <ul className="helper-result-list">
             {changes.map((change, index) => (
               <li key={`change:${change.domain}:${change.targetId}:${index}`}>
