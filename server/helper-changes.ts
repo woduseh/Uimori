@@ -413,6 +413,40 @@ function sceneNumber(store: Store, chatId: string, sourceId: string): number | n
   return null;
 }
 
+export function helperTargetHash(target: HelperChangeTarget, value: unknown) {
+  if (target.domain === 'notes')
+    return helperStateHash(
+      (value as NoteState).map((note) => JSON.stringify([note.kind, note.text])).sort()
+    );
+  if (target.domain !== 'outline') return helperStateHash(value);
+  const nodes = value as OutlineState;
+  const paths = new Map<string, number[]>();
+  const path = (id: string, seen = new Set<string>()): number[] => {
+    const known = paths.get(id);
+    if (known) return known;
+    const node = nodes.find((item) => item.id === id);
+    if (!node || seen.has(id)) return [];
+    seen.add(id);
+    const found = [...(node.parentId ? path(node.parentId, seen) : []), node.position];
+    paths.set(id, found);
+    return found;
+  };
+  return helperStateHash(
+    nodes
+      .map((node) =>
+        JSON.stringify([
+          path(node.id),
+          node.level,
+          node.title,
+          node.intent,
+          node.fixed,
+          (node.relatedIds ?? []).map((id) => path(id)).sort(),
+        ])
+      )
+      .sort()
+  );
+}
+
 export function helperResourceHash(kind: ResourceKind, saved: SavedResource) {
   return helperStateHash(authoredView(kind, editableResource(kind, saved)));
 }
@@ -621,8 +655,8 @@ export function withHelperChange<T>(
     target.domain === 'scene' ? target.sourceId : null,
     {
       before: before.value,
-      beforeHash: helperStateHash(before.value),
-      afterHash: helperStateHash(after.value),
+      beforeHash: helperTargetHash(target, before.value),
+      afterHash: helperTargetHash(target, after.value),
     },
     (baseline) =>
       target.domain === 'scene'

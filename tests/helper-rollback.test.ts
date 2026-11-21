@@ -427,6 +427,38 @@ test('an image a baseline references survives cleanup, comes back with rollback 
   expect(f.store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(hash)).toBeUndefined();
 });
 
+test('an earlier task restores a note after a later task was rolled back, though the note has a new id', () => {
+  const f = fixture();
+  const first = f.store.story.notes.write(f.chat.id, {
+    text: '처음 메모',
+    author: 'Synthetic author',
+    expectedRevision: 0,
+    expectedHeadRevision: f.store.chat(f.chat.id).headRevision,
+    idempotencyKey: 'note-seed',
+  }).note;
+  const edit = (task: HelperTask, replacesId: string, text: string) =>
+    f.tracked(task, { domain: 'notes', chatId: f.chat.id }, () =>
+      f.store.story.notes.write(f.chat.id, {
+        text,
+        replacesId,
+        author: '사용자 도우미 요청',
+        expectedRevision: f.store.story.notes.revision(f.chat.id),
+        expectedHeadRevision: f.store.chat(f.chat.id).headRevision,
+        idempotencyKey: randomUUID(),
+      })
+    ) as { note: { id: string } };
+  const earlier = f.begin();
+  const middle = edit(earlier, first.id, '앞 작업 메모').note;
+  f.finish(earlier);
+  const later = f.begin();
+  edit(later, middle.id, '뒤 작업 메모');
+  f.finish(later);
+  expect(f.rollBack(later).units).toMatchObject([{ status: 'restored' }]);
+  expect(noteShape(f.store, f.chat.id)).toEqual(['author-note\n앞 작업 메모']);
+  expect(f.rollBack(earlier).units).toMatchObject([{ status: 'restored' }]);
+  expect(noteShape(f.store, f.chat.id)).toEqual(['author-note\n처음 메모']);
+});
+
 test('rolling back one target leaves the other targets of the task as they are', () => {
   const f = fixture();
   const [first, second] = f.scenes;

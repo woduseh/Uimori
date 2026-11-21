@@ -12,6 +12,7 @@ import {
   captureHelperTarget,
   helperResourceHash,
   helperStateHash,
+  helperTargetHash,
   type HelperChangeTarget,
   type NoteState,
   type OutlineState,
@@ -88,7 +89,7 @@ function currentHash(store: Store, row: Row) {
     const { kind, id } = resourceKey(row);
     return helperResourceHash(kind, readResource(store, kind, id));
   }
-  return helperStateHash(captureHelperTarget(store, target(row)!).value);
+  return helperTargetHash(target(row)!, captureHelperTarget(store, target(row)!).value);
 }
 
 function covered(unit: Unit) {
