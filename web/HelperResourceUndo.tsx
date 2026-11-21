@@ -58,7 +58,7 @@ export function HelperResourceUndo({
       : edit.title;
   const undone = restored || !!edit.undone;
   const reason = dirty ? t('helpers.m152') : edit.reason;
-  const unavailable = disabled || busy || dirty || !edit.canUndo || !!undone;
+  const unavailable = disabled || busy || dirty;
   async function undo() {
     if (unavailable || locked.current) return;
     if (hasUnsavedEditResource(edit)) {
