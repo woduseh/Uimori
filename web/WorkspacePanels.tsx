@@ -389,7 +389,7 @@ export function AppSettingsPanel({
       else document.getElementById(`${id}-${active}-tab`)?.focus();
     });
   }
-  const closeHistory = useSettingsHistory(() => {
+  const closeHistory = useSettingsHistory((samePage) => {
     if (savingClose) return true;
     const nested = root.current
       ?.closest('dialog')
@@ -398,7 +398,7 @@ export function AppSettingsPanel({
       nested.dispatchEvent(new Event('cancel', { cancelable: true }));
       return true;
     }
-    if (backFromSettingsDetail(root.current)) return true;
+    if (samePage && backFromSettingsDetail(root.current)) return true;
     if (compact && detail) {
       backToList();
       return true;

@@ -1505,14 +1505,18 @@ test('PMDRILL a provider detail replaces the list, returns focus and scroll, and
   await page.keyboard.press('Escape');
   await expect(detail).toBeHidden();
   await expect(opener).toBeFocused();
-  expect(
-    Math.abs((await scroller.evaluate((node) => node.scrollTop)) - listScroll)
-  ).toBeLessThanOrEqual(1);
   const resume = page.getByRole('button', {
     name: `프로바이더 편집 이어 하기: ${target.title} 초안`,
     exact: true,
   });
   await expect(resume).toBeVisible();
+  const returned = await scroller.evaluate((node) => node.scrollTop);
+  expect(returned).toBeGreaterThanOrEqual(listScroll - 1);
+  expect(returned).toBeLessThanOrEqual(listScroll + (await resume.boundingBox())!.height + 24);
+  const view = (await scroller.boundingBox())!;
+  const row = (await opener.boundingBox())!;
+  expect(row.y).toBeGreaterThanOrEqual(view.y - 1);
+  expect(row.y + row.height).toBeLessThanOrEqual(view.y + view.height + 1);
 
   const guard = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
   await page.keyboard.press('Escape');

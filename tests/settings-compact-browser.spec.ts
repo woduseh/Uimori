@@ -444,6 +444,8 @@ test('SCUI02 settings back, resize and close preserve provider and chat drafts u
     .getByLabel('프로바이더 이름', { exact: true });
   await name.fill('아직 저장하지 않은 합성 연결');
   await page.goBack();
+  await expect(name).toBeHidden();
+  await page.goBack();
   const dialog = page.getByRole('dialog', { name: '설정', exact: true });
   await expect(dialog.locator('.settings-navigation')).toBeVisible();
   await expect(
@@ -457,6 +459,12 @@ test('SCUI02 settings back, resize and close preserve provider and chat drafts u
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: '계속 편집', exact: true }).click();
   await selectSettingsSection(page, '프로바이더와 모델');
+  await dialog
+    .getByRole('button', {
+      name: '프로바이더 편집 이어 하기: 아직 저장하지 않은 합성 연결',
+      exact: true,
+    })
+    .click();
   await expect(name).toHaveValue('아직 저장하지 않은 합성 연결');
   await name.focus();
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });

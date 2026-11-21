@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { interceptAppHistory } from './app-history.js';
 
-export function useSettingsHistory(onBack: () => boolean, onClose: () => void) {
+export function useSettingsHistory(onBack: (samePage: boolean) => boolean, onClose: () => void) {
   const handlers = useRef({ onBack, onClose });
   handlers.current = { onBack, onClose };
   const close = useRef(() => onClose());
@@ -16,7 +16,7 @@ export function useSettingsHistory(onBack: () => boolean, onClose: () => void) {
     const pop = () => {
       if (owns()) return true;
       const samePage = location.href === url;
-      const keep = !closing && handlers.current.onBack();
+      const keep = !closing && handlers.current.onBack(samePage);
       if (keep) {
         if (!samePage) history.pushState(base, '', url);
         enter();
