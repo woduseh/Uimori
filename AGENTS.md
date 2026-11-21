@@ -34,3 +34,5 @@ Read only the references needed for the task:
 - [UIMORI-MOTION](.agents/skills/uimori-motion/SKILL.md): read when implementing or reviewing motion in app-owned UI controls.
 
 Update the owning document when behavior changes. Keep plans and execution history out of standing instructions.
+
+Documents record what the code cannot state. A user guide describes behavior for a reader who does not read the code. Agent-facing text, such as a `구현 참고` section, the technical part of [HELPER-TOOLS](docs/HELPER-TOOLS.md) or [TOOL-CONTRACTS](docs/TOOL-CONTRACTS.md), names the files that define and test a contract and keeps only what those files do not carry: reasons, ownership constraints, boundaries between features and deliberate omissions. It does not restate tool descriptions, schemas, limits or tested behavior. Remove a statement as duplicated only after finding the description, schema field or test that carries it, and correct a document that contradicts the code.
