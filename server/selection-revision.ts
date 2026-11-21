@@ -1,5 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import { REQUEST_TEXT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import { createHash } from 'node:crypto';
+import {
+  REQUEST_TEXT_MAX_CHARS,
+  SOURCE_TEXT_MAX_CHARS,
+  TRANSLATION_TEXT_MAX_CHARS,
+} from '../core/content-limits.js';
 import { modelTimeoutMs, workspaceModelRef } from '../core/product.js';
 import { modelRequestFields } from '../core/model-request-fields.js';
 import { generationFromModel } from '../core/model-capabilities.js';
@@ -19,6 +24,7 @@ import {
 import { uncertainAttemptResult } from './usage-accounting.js';
 import { promptWorkspace } from './prompt-workspace.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
+import { shownTranslationChanged } from './source-editing.js';
 import type { Store } from './store.js';
 
 type Options = Pick<
@@ -33,14 +39,20 @@ export function selectionRevisionRoutes(app: FastifyInstance, store: Store, opti
     async (request, reply): Promise<SelectionRevisionResult> => {
       const body = record(request.body);
       fields(body, [
+        'target',
         'draft',
         'start',
         'end',
         'instruction',
         'expectedSourceHash',
         'expectedRevision',
+        'expectedTextHash',
       ]);
-      const draft = text(body.draft, 'revision draft', SOURCE_TEXT_MAX_CHARS);
+      if (body.target !== undefined && body.target !== 'source' && body.target !== 'translation')
+        throw new HttpError(400, 'Invalid revision target');
+      const translation = body.target === 'translation';
+      const limit = translation ? TRANSLATION_TEXT_MAX_CHARS : SOURCE_TEXT_MAX_CHARS;
+      const draft = text(body.draft, 'revision draft', limit);
       const instruction = text(body.instruction, 'revision instruction', REQUEST_TEXT_MAX_CHARS);
       const start = number(body.start, 'selection start', 0, draft.length);
       const end = number(body.end, 'selection end', 1, draft.length);
@@ -48,11 +60,31 @@ export function selectionRevisionRoutes(app: FastifyInstance, store: Store, opti
         throw new HttpError(400, 'SELECTION_REVISION_RANGE_INVALID');
       const expectedHash = text(body.expectedSourceHash, 'source hash', 64);
       const expectedRevision = number(body.expectedRevision, 'source revision', 0);
+      const expectedTextHash = translation
+        ? text(body.expectedTextHash, 'translation hash', 64)
+        : undefined;
+      if (
+        expectedTextHash !== undefined &&
+        createHash('sha256').update(draft).digest('hex') !== expectedTextHash
+      )
+        throw new HttpError(409, 'SELECTION_REVISION_TRANSLATION_STALE');
       const source = store.source(request.params.id);
       const checkSource = () => {
         const current = store.source(source.id);
-        if (current.hash !== expectedHash || (current.editRevision ?? 0) !== expectedRevision)
+        if (
+          current.hash !== expectedHash ||
+          (!translation && (current.editRevision ?? 0) !== expectedRevision)
+        )
           throw new HttpError(409, 'SELECTION_REVISION_STALE');
+        if (
+          translation &&
+          shownTranslationChanged(store, source.id, {
+            sourceHash: expectedHash,
+            revision: expectedRevision,
+            textHash: expectedTextHash,
+          })
+        )
+          throw new HttpError(409, 'SELECTION_REVISION_TRANSLATION_STALE');
       };
       checkSource();
       const selected = workspaceModelRef(promptWorkspace(store), 'helper');
@@ -112,7 +144,7 @@ export function selectionRevisionRoutes(app: FastifyInstance, store: Store, opti
             throw new HttpError(422, 'SELECTION_REVISION_REFUSED');
           if (result.status !== 'completed' || result.toolCalls.length || !result.text.trim())
             throw new HttpError(502, 'SELECTION_REVISION_FAILED');
-          if (draft.length - (end - start) + result.text.length > SOURCE_TEXT_MAX_CHARS)
+          if (draft.length - (end - start) + result.text.length > limit)
             throw new HttpError(422, 'SELECTION_REVISION_TOO_LONG');
           return { text: result.text };
         } catch (error) {

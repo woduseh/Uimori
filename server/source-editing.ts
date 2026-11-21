@@ -12,6 +12,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Store, Source, Job } from './store.js';
 import { SOURCE_TEXT_MAX_CHARS, TRANSLATION_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import type { SourceVersions } from '../core/source-versions.js';
+import { displayTranslationJob } from '../core/translation-display.js';
 
 export function sourceVersions(store: Store, id: string): SourceVersions {
   const source = store.source(id);
@@ -243,16 +244,37 @@ export function translationRecovery(input: unknown, sourceHash: string): string 
   return text(recovery.text, 'translation recovery', TRANSLATION_TEXT_MAX_CHARS);
 }
 
+export type ShownTranslation = { sourceHash: string; revision: number; textHash?: string };
+export function shownTranslationChanged(
+  store: Store,
+  id: string,
+  expected: ShownTranslation
+): boolean {
+  const source = store.source(id);
+  const latest = latestTranslation(store, id);
+  if (source.hash !== expected.sourceHash || (latest?.revision ?? 0) !== expected.revision)
+    return true;
+  if (expected.textHash === undefined) return false;
+  const shown = latest ? displayTranslationJob(source, latest)?.result?.text : undefined;
+  return (
+    shown === undefined || createHash('sha256').update(shown).digest('hex') !== expected.textHash
+  );
+}
 export function editTranslation(store: Store, id: string, value: unknown): Job {
   const b = record(value);
-  fields(b, ['text', 'expectedRevision', 'expectedSourceHash']);
+  fields(b, ['text', 'expectedRevision', 'expectedSourceHash', 'expectedTextHash']);
   const content = text(b.text, 'translation', 2e6);
-  const expected = number(b.expectedRevision, 'translation revision', 0);
-  text(b.expectedSourceHash, 'source hash', 64);
+  const expected: ShownTranslation = {
+    revision: number(b.expectedRevision, 'translation revision', 0),
+    sourceHash: text(b.expectedSourceHash, 'source hash', 64),
+    ...(b.expectedTextHash === undefined
+      ? {}
+      : { textHash: text(b.expectedTextHash, 'translation hash', 64) }),
+  };
   return store.transaction(() => {
     const source = store.source(id);
     const latest = latestTranslation(store, id);
-    if (source.hash !== b.expectedSourceHash || (latest?.revision ?? 0) !== expected)
+    if (shownTranslationChanged(store, id, expected))
       throw new HttpError(409, 'Translation revision conflict');
     stopTranslations(store, id);
     invalidateTranslationImages(store, id);

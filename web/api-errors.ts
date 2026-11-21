@@ -57,6 +57,7 @@ const messages: Record<string, string> = {
   INPUT_TRANSLATION_LANGUAGE_INVALID: '입력 번역 언어를 다시 선택해 주세요.',
   SELECTION_REVISION_RANGE_INVALID: '원문에서 퇴고할 구절을 다시 선택해 주세요.',
   SELECTION_REVISION_STALE: '저장된 원문이 바뀌었어요. 초안을 확인한 뒤 다시 요청해 주세요.',
+  SELECTION_REVISION_TRANSLATION_STALE: '저장된 번역이 바뀌었어요. 구절을 다시 선택해 주세요.',
   SELECTION_REVISION_TIMEOUT:
     '퇴고 제안이 제한 시간 안에 끝나지 않았어요. 다시 요청하면 새 모델 호출이 발생해요.',
   SELECTION_REVISION_CANCELLED: '퇴고 제안 요청이 중단됐어요.',

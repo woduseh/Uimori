@@ -899,7 +899,12 @@ export class Store {
   }
   editTranslation(
     id: string,
-    value: { text: string; expectedRevision: number; expectedSourceHash: string }
+    value: {
+      text: string;
+      expectedRevision: number;
+      expectedSourceHash: string;
+      expectedTextHash?: string;
+    }
   ): Job {
     const job = editTranslation(this, id, value);
     scheduleIllustrationPlacement(this, id);

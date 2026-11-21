@@ -2,11 +2,12 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import * as transport from '../core/transport.js';
 import { validRevisionRange } from '../core/selection-revision.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { createApp, type App } from '../server/app.js';
+import { latestTranslation, requestTranslation } from '../server/source-editing.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { fixtureBotInput } from './fixtures/chat.js';
@@ -36,7 +37,7 @@ const success: transport.ProviderResult = {
   usage: { inputTokens: 10, outputTokens: 20, costUsd: null, raw: null, priceRevision: null },
   opaqueState: null,
 };
-async function setup(withModel = true, timeoutMs?: number) {
+async function setup(withModel = true, timeoutMs?: number, translation: string | null = null) {
   const path = mkdtempSync(join(tmpdir(), 'uimori-selection-revision-'));
   const app = await createApp({
     dbPath: join(path, 'app.sqlite'),
@@ -59,7 +60,7 @@ async function setup(withModel = true, timeoutMs?: number) {
         {
           request: 'First scene',
           text: '아침이었다.\n\n미라는 슬펐다.\n\n그는 떠났다.',
-          translation: null,
+          translation,
         },
       ],
     },
@@ -281,4 +282,85 @@ test('shutdown cancels the single pending proposal and keeps the source', async 
   await f.app.close();
   expect(cancelled).toBe(true);
   expect((await pending).statusCode).toBe(408);
+});
+
+const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
+const translated = '아침이 밝았다.\n\n미라는 울었다.\n\n그가 떠났다.';
+function translationPayload(f: Awaited<ReturnType<typeof setup>>) {
+  const job = latestTranslation(f.store, f.source.id)!;
+  const text = job.result!.text!;
+  const start = text.indexOf('미라는 울었다.');
+  return {
+    job,
+    body: {
+      target: 'translation',
+      draft: text,
+      start,
+      end: start + '미라는 울었다.'.length,
+      instruction: '더 담담하게.',
+      expectedSourceHash: f.source.hash,
+      expectedRevision: job.revision!,
+      expectedTextHash: sha256(text),
+    },
+  };
+}
+
+test('a translation passage is revised against the shown translation without storing anything', async () => {
+  const f = await setup(true, undefined, translated);
+  const { body } = translationPayload(f);
+  const before = authoredState(f.app);
+  const send = mockSend();
+  const response = await f.post(body);
+  expect(response.statusCode, response.body).toBe(200);
+  expect(response.json()).toEqual({ text: success.text });
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(send.mock.calls[0][1].input.task)).toMatchObject({
+    selectedPassage: '미라는 울었다.',
+    surroundingDraft: { before: '아침이 밝았다.\n\n', after: '\n\n그가 떠났다.' },
+  });
+  expect(authoredState(f.app)).toEqual(before);
+});
+
+test('a changed translation is rejected before a call and after the response; a foreign draft never sends', async () => {
+  const f = await setup(true, undefined, translated);
+  const { body } = translationPayload(f);
+  const send = mockSend(success, () => {
+    f.store.editTranslation(f.source.id, {
+      text: '다른 창에서 고친 번역.',
+      expectedRevision: body.expectedRevision,
+      expectedSourceHash: f.source.hash,
+    });
+  });
+  const late = await f.post(body);
+  expect(late.statusCode).toBe(409);
+  expect(late.json()).toEqual({ error: 'SELECTION_REVISION_TRANSLATION_STALE' });
+  expect((await f.post(body)).statusCode).toBe(409);
+  expect(send).toHaveBeenCalledTimes(1);
+  const current = translationPayload(f).body;
+  const foreign = await f.post({ ...current, start: 0, end: 2, draft: `${current.draft} ` });
+  expect(foreign.statusCode).toBe(409);
+  expect(send).toHaveBeenCalledTimes(1);
+});
+
+test('saving a translation checks the shown text hash and cancels a running retranslation', async () => {
+  const f = await setup(true, undefined, translated);
+  const shown = latestTranslation(f.store, f.source.id)!;
+  const running = requestTranslation(f.store, f.source.id, true);
+  expect(running.status).toBe('queued');
+  const put = (payload: object) =>
+    f.app.inject({ method: 'PUT', url: `/api/sources/${f.source.id}/translation`, payload });
+  const base = {
+    text: translated.replace('미라는 울었다.', '미라는 고개를 숙였다.'),
+    expectedRevision: running.revision!,
+    expectedSourceHash: f.source.hash,
+  };
+  const wrong = await put({ ...base, expectedTextHash: sha256('다른 번역') });
+  expect(wrong.statusCode).toBe(409);
+  expect(f.store.job(running.id).status).toBe('queued');
+  expect(latestTranslation(f.store, f.source.id)!.id).toBe(running.id);
+  const saved = await put({ ...base, expectedTextHash: sha256(shown.result!.text!) });
+  expect(saved.statusCode, saved.body).toBe(200);
+  expect(f.store.job(running.id).status).toBe('cancelled');
+  expect(latestTranslation(f.store, f.source.id)!.result!.text).toBe(base.text);
+  expect((await put({ ...base, expectedTextHash: sha256(base.text) })).statusCode).toBe(409);
 });

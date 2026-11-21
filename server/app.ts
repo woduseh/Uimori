@@ -1474,7 +1474,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     { bodyLimit: 8 * 1024 * 1024 },
     async (request) => {
       const body: RecordBody = record(request.body);
-      fields(body, ['text', 'expectedRevision', 'expectedSourceHash']);
+      fields(body, ['text', 'expectedRevision', 'expectedSourceHash', 'expectedTextHash']);
       const job = store.editTranslation(request.params.id, {
         text: text(body.text, 'translation text', 2_000_000),
         expectedRevision: number(
@@ -1484,6 +1484,9 @@ export async function createApp(options: AppOptions): Promise<App> {
           Number.MAX_SAFE_INTEGER
         ),
         expectedSourceHash: text(body.expectedSourceHash, 'source hash', 64),
+        ...(body.expectedTextHash === undefined
+          ? {}
+          : { expectedTextHash: text(body.expectedTextHash, 'translation hash', 64) }),
       });
       sceneUpdated(job.sourceRevision);
       return job;

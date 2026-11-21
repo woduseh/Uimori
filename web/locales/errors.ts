@@ -221,6 +221,12 @@ export const messages = {
     ja: '保存済みの原文が変わりました。下書きを確認してから再度依頼してください。',
     zh: '已保存的原文已更改。请检查草稿后重新请求。',
   },
+  'errors.SELECTION_REVISION_TRANSLATION_STALE': {
+    ko: '저장된 번역이 바뀌었어요. 구절을 다시 선택해 주세요.',
+    en: 'The saved translation changed. Select the passage again.',
+    ja: '保存済みの翻訳が変わりました。箇所を選び直してください。',
+    zh: '已保存的译文已更改。请重新选择段落。',
+  },
   'errors.SELECTION_REVISION_TIMEOUT': {
     ko: '퇴고 제안이 제한 시간 안에 끝나지 않았어요. 다시 요청하면 새 모델 호출이 발생해요.',
     en: 'Revision suggestions timed out. Requesting again will make a new model call.',
