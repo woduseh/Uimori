@@ -81,11 +81,19 @@ for (const [width, height] of [
       height: Math.round(Math.min(820, height * 0.88)),
     };
     const expectLarge = async (dialog: Locator) => {
-      await expect(dialog).toBeVisible();
-      const box = (await dialog.boundingBox())!;
-      expect(Math.abs(box.width - expected.width)).toBeLessThanOrEqual(1);
-      expect(Math.abs(box.height - expected.height)).toBeLessThanOrEqual(1);
-      expect(Math.abs(box.x + box.width / 2 - width / 2)).toBeLessThanOrEqual(1);
+      await expect(dialog.locator('.settings-navigation')).toBeVisible();
+      await expect
+        .poll(async () => {
+          const box = await dialog.boundingBox();
+          return (
+            box && [
+              Math.round(box.width),
+              Math.round(box.height),
+              Math.round(box.x * 2 + box.width),
+            ]
+          );
+        })
+        .toEqual([expected.width, expected.height, width]);
     };
     await page.goto('/');
     await navigationAction(page, '설정');
