@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { ArrowUp, Check, Copy, Eye, EyeOff, Pencil, RefreshCw, Save, X } from 'lucide-react';
 import { IconButton } from './IconButton.js';
+import { ConfirmDialog } from './ConfirmDialog.js';
 import { ActionMenu, SHEET_MEDIA } from './ActionMenu.js';
 import './request-message.css';
 import {
@@ -65,6 +66,7 @@ export function RequestMessage({
   const [revealed, setRevealed] = useState(false);
   const [draft, setDraft] = useState(request);
   const [busy, setBusy] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied' | 'failed'>('idle');
   const copyVersion = useRef(0);
   // biome-ignore lint/correctness/useExhaustiveDependencies: A different stored request invalidates clipboard completion and its feedback.
@@ -147,10 +149,13 @@ export function RequestMessage({
             }
           }}
           onKeyDown={(event) => {
+            if (event.target instanceof Element && event.target.closest('dialog')) return;
             if (event.key === 'Escape' && !event.nativeEvent.isComposing && event.keyCode !== 229) {
               event.preventDefault();
               event.stopPropagation();
-              close();
+              if (lock.current) return;
+              if (!onConfirm && draft !== request) setDiscardOpen(true);
+              else close();
             }
           }}
         >
@@ -226,6 +231,20 @@ export function RequestMessage({
               />
             </div>
           </div>
+          <ConfirmDialog
+            open={discardOpen}
+            title={t('reader.cancelRequestEditing')}
+            message={t('reader.discardTheUnsavedTextEdits')}
+            action={t('reader.discardEditsAndClose')}
+            onCancel={() => {
+              setDiscardOpen(false);
+              input.current?.focus({ preventScroll: true });
+            }}
+            onConfirm={() => {
+              setDiscardOpen(false);
+              close();
+            }}
+          />
         </form>
       ) : (
         <>

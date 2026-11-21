@@ -88,7 +88,18 @@ for (const width of [MOBILE_WIDTH]) {
     await source.getByLabel('요청 및 컨텍스트 메뉴', { exact: true }).click();
     await source.getByRole('button', { name: '요청 수정', exact: true }).click();
     await expect(source.getByText('이후 생성 컨텍스트에 반영해요.', { exact: true })).toBeVisible();
-    await page.getByRole('textbox', { name: '요청 수정 내용' }).fill('저장된 수정 입력');
+    const field = page.getByRole('textbox', { name: '요청 수정 내용' });
+    await field.fill('Esc 뒤에도 남을 입력');
+    await page.keyboard.press('Escape');
+    const discard = page.getByRole('alertdialog', { name: '요청 편집 취소', exact: true });
+    await discard.getByRole('button', { name: '취소', exact: true }).click();
+    await expect(discard).toBeHidden();
+    await expect(field).toHaveValue('Esc 뒤에도 남을 입력');
+    await expect(field).toBeFocused();
+    expect(
+      await page.evaluate((id) => sessionStorage.getItem(`request-context-edit:${id}`), run.id)
+    ).toBe('Esc 뒤에도 남을 입력');
+    await field.fill('저장된 수정 입력');
     await page.getByRole('button', { name: '입력 저장' }).click();
     await expect(message).toContainText('저장된 수정 입력');
     await source.getByText('수정 전 입력 보기').click();
