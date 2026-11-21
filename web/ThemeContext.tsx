@@ -23,6 +23,7 @@ import { api } from './api.js';
 import { updateMessageTheme } from './theme-message-style.js';
 import { applyThemeAssets } from './theme-assets.js';
 import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
+import { useShortcut } from './shortcuts.js';
 
 export const themesChangedKey = 'uimori:themes-changed';
 const initial: ThemeCatalog = { themes: BUILTIN_THEMES, preferences: defaultThemePreferences() };
@@ -118,16 +119,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setPreview(null);
     writeOptionalStorage('session', 'uimori:theme-disabled', value ? '1' : '0');
   }, []);
-  useEffect(() => {
-    const key = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.code === 'Period' && !event.isComposing) {
-        event.preventDefault();
-        setDisabled(!disabled);
-      }
-    };
-    window.addEventListener('keydown', key, true);
-    return () => window.removeEventListener('keydown', key, true);
-  }, [disabled, setDisabled]);
+  useShortcut('theme.safeMode', () => setDisabled(!disabled));
   const active = useMemo(
     () =>
       disabled

@@ -8,9 +8,11 @@ import {
   type RefObject,
 } from 'react';
 
+export const isApplePlatform = () => /^(Mac|iPhone|iPad)/.test(navigator.platform);
+
 export function sendKeyLabel(enterSend: boolean) {
   if (enterSend) return 'Enter';
-  return /^(Mac|iPhone|iPad)/.test(navigator.platform) ? 'Cmd+Enter' : 'Ctrl+Enter';
+  return isApplePlatform() ? 'Cmd+Enter' : 'Ctrl+Enter';
 }
 
 const ComposerGrowth = createContext<(grown: boolean) => void>(() => {});

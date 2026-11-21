@@ -62,6 +62,12 @@ export function TransientNoticeProvider({ children }: { children: ReactNode }) {
   );
 }
 
+export function useTransientNotice() {
+  const id = useId();
+  const show = useContext(NoticeContext);
+  return useCallback((message: string) => show({ id, message }), [id, show]);
+}
+
 export function TransientNotice({ message }: { message: string }) {
   useI18n();
   const id = useId();
