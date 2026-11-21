@@ -52,3 +52,49 @@ export function editableResource(kind: ResourceKind, resource: SavedResource): R
   const { id: _id, revision: _revision, ...model } = resource as PromptPreset;
   return model;
 }
+
+export function nativeExtensionPath(segments: string[], field: string): boolean {
+  return (
+    segments.length === 6 &&
+    segments[0] === 'package' &&
+    segments[1] === 'nativeRisu' &&
+    ['card', 'module'].includes(segments[2]!) &&
+    segments[3] === 'extensions' &&
+    segments[4] === 'uimori' &&
+    segments[5] === field
+  );
+}
+export function resourceListKind(segments: string[]): 'lore' | 'terms' | 'prompt' | null {
+  if (
+    segments.length === 4 &&
+    segments[0] === 'program' &&
+    segments[1] === 'nativeRisuPreset' &&
+    segments[2] === 'preset' &&
+    segments[3] === 'promptTemplate'
+  )
+    return 'prompt';
+  if (
+    segments.length === 7 &&
+    nativeExtensionPath(segments.slice(0, -1), 'translationGuide') &&
+    segments[6] === 'terms'
+  )
+    return 'terms';
+  if (
+    segments.length === 4 &&
+    segments[0] === 'package' &&
+    segments[1] === 'nativeRisu' &&
+    segments[2] === 'module' &&
+    segments[3] === 'lorebook'
+  )
+    return 'lore';
+  if (
+    segments.length === 5 &&
+    segments[0] === 'package' &&
+    segments[1] === 'nativeRisu' &&
+    segments[2] === 'card' &&
+    segments[3] === 'character_book' &&
+    segments[4] === 'entries'
+  )
+    return 'lore';
+  return null;
+}

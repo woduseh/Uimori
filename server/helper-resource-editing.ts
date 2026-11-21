@@ -3,6 +3,8 @@ import { countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
 import { isDeepStrictEqual } from 'node:util';
 import {
   editableResource,
+  nativeExtensionPath,
+  resourceListKind,
   type PromptEditModel,
   type ResourceKind,
   type ResourceModel,
@@ -436,7 +438,7 @@ export function readHelperModel(
       ...(previousCurrentRevision === undefined &&
       inputOrigin === undefined &&
       Array.isArray(value) &&
-      listPath(segments) &&
+      resourceListKind(segments) &&
       object(item.value)
         ? { target: joined(path, key) }
         : {}),
@@ -493,50 +495,6 @@ function scalar(value: unknown): boolean {
 function allowedValue(value: unknown): boolean {
   return scalar(value) || (Array.isArray(value) && value.every(scalar));
 }
-function extensionPath(segments: string[], field: string): boolean {
-  return (
-    segments.length === 6 &&
-    segments[0] === 'package' &&
-    segments[1] === 'nativeRisu' &&
-    ['card', 'module'].includes(segments[2]!) &&
-    segments[3] === 'extensions' &&
-    segments[4] === 'uimori' &&
-    segments[5] === field
-  );
-}
-function guidePath(segments: string[]): boolean {
-  return extensionPath(segments, 'translationGuide');
-}
-function listPath(segments: string[]): 'lore' | 'terms' | 'prompt' | null {
-  if (
-    segments.length === 4 &&
-    segments[0] === 'program' &&
-    segments[1] === 'nativeRisuPreset' &&
-    segments[2] === 'preset' &&
-    segments[3] === 'promptTemplate'
-  )
-    return 'prompt';
-  if (segments.length === 7 && guidePath(segments.slice(0, -1)) && segments[6] === 'terms')
-    return 'terms';
-  if (
-    segments.length === 4 &&
-    segments[0] === 'package' &&
-    segments[1] === 'nativeRisu' &&
-    segments[2] === 'module' &&
-    segments[3] === 'lorebook'
-  )
-    return 'lore';
-  if (
-    segments.length === 5 &&
-    segments[0] === 'package' &&
-    segments[1] === 'nativeRisu' &&
-    segments[2] === 'card' &&
-    segments[3] === 'character_book' &&
-    segments[4] === 'entries'
-  )
-    return 'lore';
-  return null;
-}
 function patchFailure(
   changeIndex: number,
   change: unknown,
@@ -576,7 +534,7 @@ function bindTarget(model: ResourceModel, kind: ResourceKind, change: Change): B
     throw new HttpError(400, '대상 참조는 필드 수정 또는 항목 삭제에만 사용할 수 있어요.');
   const segments = parts(change.target);
   const list = segments.slice(0, -1);
-  const listKind = listPath(list);
+  const listKind = resourceListKind(list);
   if (
     !listKind ||
     kind === 'theme' ||
@@ -757,7 +715,7 @@ export function patchHelperResource(
         if (!/^(0|[1-9]\d*)$/u.test(segments.at(-1)!))
           throw new HttpError(400, '목록 항목의 인덱스가 필요해요.');
         const parentSegments = segments.slice(0, -1);
-        const list = listPath(parentSegments);
+        const list = resourceListKind(parentSegments);
         if (!list || (kind === 'prompt-preset' ? list !== 'prompt' : list === 'prompt'))
           throw new HttpError(400, '로어, 번역 표기 또는 프롬프트 블록 목록만 수정할 수 있어요.');
         if (change.op === 'move' && list !== 'prompt')
@@ -815,7 +773,8 @@ export function patchHelperResource(
       if (
         kind === 'content' &&
         change.op === 'set' &&
-        (guidePath(segments) || extensionPath(segments, 'illustrationProfiles'))
+        (nativeExtensionPath(segments, 'translationGuide') ||
+          nativeExtensionPath(segments, 'illustrationProfiles'))
       ) {
         const field = segments[5]!;
         if (field === 'illustrationProfiles') validateIllustrationAppearanceProfiles(change.value);

@@ -335,6 +335,20 @@ export function diffText(
   return { mode, unit, added, removed, hunks: result };
 }
 
+export function alignSequences(
+  before: readonly string[],
+  after: readonly string[],
+  limits: TextDiffLimits = TEXT_DIFF_LIMITS
+): ('equal' | 'insert' | 'delete')[] | null {
+  const now = limits.now ?? (() => performance.now());
+  try {
+    return diffTokens(before, after, limits.maxEdits, now() + limits.timeoutMs, now);
+  } catch (error) {
+    if (error instanceof DiffTimeout) return null;
+    throw error;
+  }
+}
+
 export function applyTextDiff(before: string, hunks: readonly TextDiffHunk[]): string {
   let result = '';
   let cursor = 0;

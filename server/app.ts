@@ -134,6 +134,7 @@ import type { CodexImageRequest, CodexImageResult, CodexSession } from './codex-
 
 import { PROVIDER_PROTOCOLS } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
+import { withHelperChange } from './helper-changes.js';
 
 export type AppOptions = {
   dbPath: string;
@@ -530,11 +531,13 @@ export async function createApp(options: AppOptions): Promise<App> {
             `${task.id}:${operationId}`,
             { name, args },
             () =>
-              store.story.notes.write(scope.chatId, {
-                ...record(args.body),
-                ...base,
-                author: '사용자 도우미 요청',
-              })
+              withHelperChange(store, task, { domain: 'notes', chatId: scope.chatId }, () =>
+                store.story.notes.write(scope.chatId, {
+                  ...record(args.body),
+                  ...base,
+                  author: '사용자 도우미 요청',
+                })
+              )
           );
         const snapshot = await prepareNativeRisuReadOnly(
           helperWritingSnapshot(store, scope.chatId),

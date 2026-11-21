@@ -5,6 +5,7 @@ import { isStoryUiThemeSetting } from '../core/story-ui-style.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { Store } from './store.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
+import { forgetHelperResourceChanges } from './helper-changes.js';
 import {
   BUILTIN_THEMES,
   getBuiltinTheme,
@@ -206,6 +207,7 @@ export function deleteTheme(store: Store, id: string, expectedRevision: number) 
     writePreferences(store, p);
     store.db.prepare('DELETE FROM versions WHERE kind=? AND id=?').run('theme', id);
     store.db.prepare('DELETE FROM resource_undo WHERE kind=? AND id=?').run('theme', id);
+    forgetHelperResourceChanges(store.db, 'theme', id);
     pruneThemeAssets(store.db, owned);
     return { deleted: id };
   });

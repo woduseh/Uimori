@@ -24,6 +24,7 @@ import {
 import type { Content } from '../core/product.js';
 import { readResource } from './resource-service.js';
 import { applyHelperResourceMutation } from './helper-resource-undo.js';
+import { withHelperChange } from './helper-changes.js';
 import { helperSceneSource } from './helper-scene-tools.js';
 import { HELPER_SHELL_GUIDE } from './helper-shell-guide.js';
 import { REPETITION_SCRIPT } from './helper-shell-scripts.js';
@@ -857,10 +858,13 @@ export class HelperShell {
       this.workspace.operation(taskId, operationId, input, () => {
         let savedResult: { id: string; revision: number } & Record<string, unknown>;
         if (target.kind === 'scene') {
-          const saved = this.store.editSource(target.id, {
-            text: content,
-            expectedRevision: target.revision,
-          });
+          const saved = withHelperChange(
+            this.store,
+            task.task,
+            { domain: 'scene', chatId: target.chatId, sourceId: target.id, field: 'original' },
+            () =>
+              this.store.editSource(target.id, { text: content, expectedRevision: target.revision })
+          );
           savedResult = {
             changed: true,
             id: target.id,

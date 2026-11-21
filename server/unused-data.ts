@@ -124,6 +124,7 @@ export function pruneUnusedData(db: DatabaseSync, candidates: Iterable<string> |
     ['illustration_references', 'body'],
     ['job_results', 'result'],
     ['jobs', 'input'],
+    ['helper_changes', 'baseline'],
   ]) {
     for (const row of db.prepare(`SELECT ${column} AS value FROM ${table}`).iterate())
       if (typeof row.value === 'string') scan(JSON.parse(row.value));

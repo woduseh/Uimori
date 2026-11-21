@@ -4,6 +4,8 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../server/store.js';
+import { HelperWorkspace } from '../server/helper-workspace.js';
+import { createFixtureChat } from './fixtures/chat.js';
 import {
   DATABASE_SCHEMA_VERSION,
   databaseSchemaVersion,
@@ -48,6 +50,24 @@ test('current schema initializes and remains readable after an extra query index
     next.close();
   }
 });
+test('an existing database without the helper change record opens with its data and gains the table', () => {
+  const path = file(),
+    first = new Store(path);
+  const chat = createFixtureChat(first, 'Existing chat');
+  const conversation = new HelperWorkspace(first).open({ kind: 'chat', chatId: chat.id });
+  first.db.exec('DROP TABLE helper_changes');
+  first.close();
+  const next = new Store(path);
+  try {
+    expect(databaseSchemaVersion(next.db)).toBe(DATABASE_SCHEMA_VERSION);
+    expect(next.chat(chat.id).title).toBe('Existing chat');
+    expect(new HelperWorkspace(next).conversation(conversation.id).id).toBe(conversation.id);
+    expect(next.db.prepare('SELECT COUNT(*) AS n FROM helper_changes').get()).toEqual({ n: 0 });
+  } finally {
+    next.close();
+  }
+});
+
 test.each([DATABASE_SCHEMA_VERSION - 1, DATABASE_SCHEMA_VERSION + 1])(
   'unsupported schema %s is refused before changing source bytes',
   (version) => {

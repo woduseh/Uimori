@@ -26,6 +26,7 @@ import { completedSource } from './fixtures/illustration.js';
 import { editableResource, type ContentEditModel } from '../core/resource-editing.js';
 import { readResource, saveResource } from '../server/resource-service.js';
 import { retryRun } from '../server/run-retry.js';
+import { readHelperTaskResults } from '../server/helper-task-results.js';
 import {
   applyHelperResourceMutation,
   lastHelperResourceEdit,
@@ -427,6 +428,43 @@ test('portable apply retains its content-bound receipt and does not save twice',
         .prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?')
         .get(f.task.id)?.n
     ).toBe(1);
+  } finally {
+    f.shell.close();
+    f.store.close();
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test('a scene saved by apply is recorded as the net change of its task', () => {
+  const f = workspaceFixture();
+  try {
+    const chat = createFixtureChat(f.store, 'Shell change record');
+    const source = completedSource(f.store, chat.id, '그는 다리를 건넜다.\n');
+    prepareFiles(f, 'chats', chat.id);
+    const relative = `chats/${chat.id}/scenes/${source.id}.txt`;
+    writeFileSync(join(f.root, 'tasks', f.task.id, relative), '그는 강을 건넜다.\n');
+    const internals = f.shell as unknown as {
+      active: Map<string, unknown>;
+      applied: Map<string, unknown[]>;
+      apply: (taskId: string, toolId: string, path: string) => { changed: boolean };
+    };
+    internals.active.set(`${f.task.id}:scene-apply`, {
+      controller: new AbortController(),
+      sequence: 0,
+      pending: new Set(),
+    });
+    internals.applied.set(`${f.task.id}:scene-apply`, []);
+    expect(internals.apply(f.task.id, 'scene-apply', relative)).toMatchObject({ changed: true });
+    expect(readHelperTaskResults(f.store, f.task.id).changes).toMatchObject([
+      {
+        domain: 'scene',
+        targetId: `${source.id}:original`,
+        location: '장면 1 · 원문',
+        action: 'update',
+        diff: { added: 1, removed: 1 },
+        anchor: { sourceId: source.id, field: 'original', paragraph: 0 },
+      },
+    ]);
   } finally {
     f.shell.close();
     f.store.close();

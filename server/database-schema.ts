@@ -12,6 +12,7 @@ import { initRequestFilesSchema } from './request-file-storage.js';
 import { initExecutionDiagnostics } from './execution-diagnostics.js';
 import { initThemeAssets, pruneThemeAssets } from './theme-assets.js';
 import { initLibraryFolderCovers } from './library-organization.js';
+import { initHelperChanges, pruneHelperChanges } from './helper-changes.js';
 
 export const DATABASE_SCHEMA_VERSION = 15;
 const FORMAT = 'uimori-personal-v1';
@@ -80,6 +81,8 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
     initThemeAssets(db);
     initLibraryFolderCovers(db);
     initOutlineFocus(db);
+    initHelperChanges(db);
+    pruneHelperChanges(db);
     pruneThemeAssets(db, 'abandoned');
     return;
   }
@@ -87,6 +90,7 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
     db.exec('BEGIN IMMEDIATE');
     initializeFresh();
     initHelperSeeds(db);
+    initHelperChanges(db);
     initRequestFilesSchema(db);
     initStoryGuide(db);
     initSceneContext(db);

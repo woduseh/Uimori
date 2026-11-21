@@ -116,7 +116,7 @@ Outside these operations:
 
 ## Conversation history and task results
 
-`GET /api/helper/conversations` and `GET /api/helper/tasks/:id/results` are registered in `server/helper-routes.ts`; the results view is built in `server/helper-task-results.ts` with the shape `HelperTaskResultsView` in `core/helper.ts`. `tests/helper-workspace.test.ts` enforces the list's scope filters and deletion ownership and, for results, the recorded targets, no-op outcomes, rollback, survival of payload cleanup, usage fields and withheld private data. This section records only what those files do not state.
+`GET /api/helper/conversations` and `GET /api/helper/tasks/:id/results` are registered in `server/helper-routes.ts`; the results view is built in `server/helper-task-results.ts` with the shape `HelperTaskResultsView` in `core/helper.ts`. Its `changes` come from the change record in `server/helper-changes.ts`, diffed by `core/text-diff.ts`. `tests/helper-workspace.test.ts` enforces the list's scope filters and deletion ownership and, for results, the recorded targets, no-op outcomes, rollback, survival of payload cleanup, usage fields and withheld private data. `tests/helper-changes.test.ts` enforces the net change per task, retried and failed operations, the deletion and retention paths and asset cleanup, `tests/helper-shell.test.ts` the scene saved by `uimori apply`, and `tests/text-diff.test.ts` the diff and its limits. This section records only what those files do not state.
 
 Behavior the response types leave out:
 
@@ -124,16 +124,23 @@ Behavior the response types leave out:
 - An outcome confirms a commit that happened, not the target's current state. For `scene.request` and `scene.translate` it confirms that the work was queued, not that it finished.
 - `usage.toolExecutions` counts recorded `tool.finished` events, so a callback interrupted before it finished is not counted.
 - `usage.latestInputEstimate` is the last stored local estimate. It is not a percentage and says nothing about a native agent's current context.
+- A change entry is the net difference between a target's state when the task first touched it and its state after the task's last write to it, however many calls wrote it. It is not the target's current state: a later user edit does not change the entry. A target whose net change is empty has no entry.
+- Library resources, scene originals, translations and titles, the outline and author notes carry a diff. Settings (`chat.options`, `chat.variables`, `chat.storyGuide`, model, theme and global settings) and chat-only lore carry only the action and target. Illustration, scene request and translation request operations record no change entry; their outcome stays in `results`.
+- A resource entry compares the authored native source, images, kind, loading and related items, not the projections regenerated from them, and list items (lore, prompt blocks, translation terms) are aligned by content, so removing one entry does not show every later entry as changed.
+- An entry whose text was removed has `textRemoved` and no `location`, `diff` or `anchor`: `deleted` after the scene or resource was deleted, `expired` outside the retention in [도우미 변경 기록](DELETION.md#도우미-변경-기록). A target the task deleted is listed without an anchor.
+- One response carries at most 200,000 characters of diff text; later diffs come back as omitted for size.
 
 Constraints on changing these routes:
 
-- Record an outcome inside the `operation` callback of `server/helper-workspace.ts` so that it commits or rolls back with its mutation and receipt.
+- Record an outcome inside the `operation` callback of `server/helper-workspace.ts` so that it commits or rolls back with its mutation and receipt. The same holds for a change entry, which also makes a replayed operation record nothing twice.
+- Every helper save of a recorded domain goes through `server/helper-changes.ts`: `withHelperChange` around scene, scene title, outline and note saves, `recordHelperResourceChange` from `applyHelperResourceMutation`, and `recordHelperAction` for action-only entries, which `recordHelperTaskResult` calls for settings targets. The `uimori apply` scene save wraps its direct `store.editSource` in `withHelperChange` as well. A new save path for these domains uses them instead of writing `helper_changes`.
+- The stored baseline is the full pre-change state (the editable resource model, scene text, outline nodes, note list) for a later turn rollback. A deletion path that removes a target must also call the matching `forgetHelper*Changes`.
 - The results view exposes no resource bodies, pricing notes or source URLs, connection data, request bodies, arbitrary tool arguments, endpoint credentials or raw provider usage payloads.
 - `kind=all` only lists: it creates and migrates nothing.
 
 Outside these routes:
 
-- Full historical diffs and a second undo history. Resource undo and draft protection keep their own contracts.
+- A second undo history. Nothing restores from a change baseline yet; resource undo and draft protection keep their own contracts.
 
 ## Linux data workspace
 

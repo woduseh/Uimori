@@ -7,6 +7,8 @@ import { latestTranslation, sourceVersions } from './source-editing.js';
 import { HttpError, choice, fields, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import { matchHelperText, type HelperTextNormalization } from './helper-resource-editing.js';
+import { withHelperChange } from './helper-changes.js';
+import type { HelperTask } from '../core/helper.js';
 
 const schema = (properties: Record<string, Json>, required: string[] = []): Json => ({
   type: 'object',
@@ -622,7 +624,8 @@ export function invokeHelperSceneTool(
   store: Store,
   chatId: string,
   name: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  task?: Pick<HelperTask, 'id' | 'conversationId'>
 ): unknown {
   return store.transaction(() => {
     const original = name === 'scene.versions' || name === 'scene.restore';
@@ -670,7 +673,7 @@ export function invokeHelperSceneTool(
       const results = items.map((item, index) => {
         try {
           const { chatId: _itemChatId, ...patch } = item;
-          return invokeHelperSceneTool(store, chatId, 'scene.patch', patch);
+          return invokeHelperSceneTool(store, chatId, 'scene.patch', patch, task);
         } catch (error) {
           throw new HttpError(
             error instanceof HttpError ? error.statusCode : 500,
@@ -806,29 +809,37 @@ export function invokeHelperSceneTool(
     const changed = content !== current.content;
     let savedRevision = editTarget.expectedRevision;
     let sourceHash = source.hash;
+    const tracked = <T>(field: 'original' | 'translation', save: () => T) =>
+      withHelperChange(store, task, { domain: 'scene', chatId, sourceId: source.id, field }, save);
     if (changed && current.target === 'original') {
-      const saved = store.editSource(source.id, {
-        text: content,
-        expectedRevision: editTarget.expectedRevision,
-      });
+      const saved = tracked('original', () =>
+        store.editSource(source.id, {
+          text: content,
+          expectedRevision: editTarget.expectedRevision,
+        })
+      );
       savedRevision = saved.editRevision ?? 0;
       sourceHash = saved.hash;
     } else if (changed && !translationEdit) {
       savedRevision =
-        store.editTranslation(source.id, {
-          text: content,
-          expectedRevision: editTarget.expectedRevision,
-          expectedSourceHash: source.hash,
-        }).revision ?? 0;
+        tracked('translation', () =>
+          store.editTranslation(source.id, {
+            text: content,
+            expectedRevision: editTarget.expectedRevision,
+            expectedSourceHash: source.hash,
+          })
+        ).revision ?? 0;
     }
     let translationRevision: number | undefined;
     if (translationEdit && (changed || translationEdit.changed)) {
       translationRevision =
-        store.editTranslation(source.id, {
-          text: translationEdit.content,
-          expectedRevision: translationEdit.revision,
-          expectedSourceHash: sourceHash,
-        }).revision ?? 0;
+        tracked('translation', () =>
+          store.editTranslation(source.id, {
+            text: translationEdit.content,
+            expectedRevision: translationEdit.revision,
+            expectedSourceHash: sourceHash,
+          })
+        ).revision ?? 0;
     }
     return {
       changed: changed || translationEdit?.changed === true,

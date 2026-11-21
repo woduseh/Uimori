@@ -8,6 +8,7 @@ import { providerCacheUsage } from '../core/provider-cache-usage.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
+import { readHelperChanges, recordHelperAction } from './helper-changes.js';
 
 export function recordHelperTaskResult(
   workspace: HelperWorkspace,
@@ -18,6 +19,22 @@ export function recordHelperTaskResult(
     ...result,
     changedTargets: result.targets.length,
   });
+  for (const target of result.targets) {
+    if (target.kind !== 'settings' || !target.setting) continue;
+    const chatId = target.setting.startsWith('chat.') ? target.id : null;
+    recordHelperAction(workspace.store, task, {
+      domain: 'settings',
+      targetId: `${target.setting}:${target.id}`,
+      chatId,
+      title: target.title,
+      location: target.setting,
+      action: 'update',
+      anchor: { domain: 'settings', id: target.id, chatId, setting: target.setting },
+      ...(target.before !== undefined && target.after !== undefined
+        ? { value: { before: target.before, after: target.after } }
+        : {}),
+    });
+  }
 }
 
 const numeric = (value: unknown): number | null =>
@@ -93,6 +110,7 @@ export function readHelperTaskResults(store: Store, taskId: string): HelperTaskR
     taskId,
     status: task.status as HelperStatus,
     results,
+    changes: readHelperChanges(store.db, taskId),
     unrecordedOperations: Number(unknown?.n ?? 0),
     usage: {
       attempts,

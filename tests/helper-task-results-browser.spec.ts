@@ -181,6 +181,7 @@ test('HRESULT-STORYUI setting results identify changes and open generation setti
         ],
       },
     ],
+    changes: [],
     unrecordedOperations: 0,
     usage: { toolExecutions: 2, attempts: [], latestInputEstimate: null },
   };
@@ -318,6 +319,7 @@ test('HRESULT-ILLUSTRATION queued and placed results open their scene and refere
         ],
       },
     ],
+    changes: [],
     unrecordedOperations: 0,
     usage: { toolExecutions: 5, latestInputEstimate: null, attempts: [] },
   };
@@ -441,6 +443,7 @@ test('HRESULT-STORY scene, translation, scene name and card variable results ope
         ],
       },
     ],
+    changes: [],
     unrecordedOperations: 0,
     usage: { toolExecutions: 4, latestInputEstimate: null, attempts: [] },
   };
@@ -598,6 +601,7 @@ test('HRESULT02 actual results retain partial usage and recover from refresh/ope
         ],
       },
     ],
+    changes: [],
     unrecordedOperations: 0,
     usage: {
       toolExecutions: 7,

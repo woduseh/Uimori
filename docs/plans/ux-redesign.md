@@ -37,18 +37,17 @@
 
 - 장면 삭제는 그 채팅의 도우미 이벤트에서 인자 미리보기를 지우고 작업 스냅샷을 비워요([scene-deletion.ts](../../server/scene-deletion.ts)). 채팅 삭제와 도우미 대화 삭제는 [chat-deletion.ts](../../server/chat-deletion.ts)와 [helper-workspace.ts](../../server/helper-workspace.ts)가 맡아요.
 - 도우미 작업이 끝나면 `releaseCompletedHelperInputs`가 도구 결과와 작업 스냅샷의 본문을 비워요([execution-retention.ts](../../server/execution-retention.ts)). 그래서 diff를 도구 결과나 작업 스냅샷에 얹어 둘 수 없어요. 자기 저장 위치와 수명을 가져야 해요.
-- 새로 만드는 변경 기록과 체크포인트는 장면 삭제, 채팅 삭제, 도우미 대화 삭제, 자료 삭제에서 함께 지워져야 해요. 이 네 경로 각각에 "삭제 뒤 본문이 남지 않는다"는 테스트를 둬요.
+- 변경 기록(`helper_changes`)은 6단계에서 이 네 경로와 보관 범위를 갖췄어요([DELETION](../DELETION.md#도우미-변경-기록)). 7단계의 체크포인트는 그 `baseline`을 쓰거나, 따로 둔다면 같은 네 경로에 "삭제 뒤 본문이 남지 않는다"는 테스트를 둬요.
 - 자료를 삭제하면 그 자료의 체크포인트도 바로 지워요. 삭제는 턴 롤백으로 되돌릴 수 없고, 그래서 삭제 앞의 승인 단계가 의미를 가져요.
 - 체크포인트 수명은 대화당 최근 15턴, 30일이에요. [DELETION](../DELETION.md)과 [DATA-MIGRATIONS](../DATA-MIGRATIONS.md)에 이 보관 범위를 적어요.
 - 진행 표시에 쓰는 대상 이름은 구조화된 대상(종류, ID, 제목)에서 만들어요. 인자 미리보기 문자열을 그대로 보여 주지 않아요.
 
 ### 도우미 변경 추적과 롤백
 
-- 변경 기록과 체크포인트는 도구 실행기뿐 아니라 `uimori apply` 셸의 장면 직접 저장 경로([helper-shell.ts](../../server/helper-shell.ts)의 `store.editSource` 호출)도 거쳐야 해요.
-- 체크포인트가 참조하는 이미지와 글꼴을 미사용 자료 정리([unused-data.ts](../../server/unused-data.ts), [theme-assets.ts](../../server/theme-assets.ts))의 보존 대상에 넣어요. 지금 두 파일이 되돌리기용 저장본으로 읽는 곳은 `resource_undo`뿐이에요.
+- 체크포인트도 변경 기록처럼 `uimori apply` 셸의 장면 직접 저장 경로를 거쳐야 해요. 변경 기록은 [helper-changes.ts](../../server/helper-changes.ts)의 `withHelperChange`로 그 경로를 덮어요.
+- 미사용 자료 정리([unused-data.ts](../../server/unused-data.ts), [theme-assets.ts](../../server/theme-assets.ts))는 `resource_undo`와 변경 기록의 `baseline`이 참조하는 이미지와 글꼴을 남겨요. 체크포인트를 따로 두면 그것도 보존 대상에 넣어요.
 - 원문과 번역을 함께 바꾼 턴을 되돌릴 때는 원문을 먼저 복원하고, 새 원문 해시를 기준으로 직전 번역을 다시 저장해요. 번역 삽화 배치는 복원되지 않는다는 점을 화면에 알려요.
 - 턴 롤백이 생기면 도우미 되돌리기의 경로는 그것 하나예요. 지금의 "마지막 자료 수정 되돌리기" 바는 턴 롤백으로 대체해요. 편집기의 직전 저장 되돌리기는 사용자 저장용으로 그대로 둬요.
-- 패치 매칭은 정확 일치, 줄바꿈 차이 허용, 줄 끝 공백 무시의 세 단계까지만 넓혀요. 따옴표와 대시를 바꿔 맞추는 단계는 문체를 조용히 바꾸므로 넣지 않아요. [helper-resource-editing.ts](../../server/helper-resource-editing.ts)의 기존 대상 결정 로직을 재사용하고, `data.search`가 돌려주는 경로만 패치가 받는 형식으로 맞춰요.
 - 열린 편집기의 미저장 입력은 [resource-editor-session.ts](../../web/resource-editor-session.ts)가 단독으로 소유해요. 도우미는 그 입력에 직접 쓰지 않아요.
 
 ### 읽기 모드 퇴고
@@ -80,14 +79,12 @@
 
 ### 6단계. 도우미 변경 가시화
 
-- 턴 단위 순변경 기록: 한 턴에서 같은 대상을 여러 번 고쳐도 턴 시작 대비 변경 하나로 남겨요. 저장 위치와 수명은 위 "삭제와 보존" 절을 따라요.
 - 인라인 diff 카드: 산문(원문, 번역, 로어 본문, 개요)은 어절 단위, JSON과 정규식과 프롬프트 구조는 줄 단위로 보여 줘요. diff 계산에 크기와 시간 상한을 두고, 넘으면 생략했다고 표시해요.
 - 읽기와 검색 호출은 한 줄로 묶고, 변경은 항목별 카드로 보여 줘요.
 - 카드의 열기 동작은 도우미를 닫지 않고 해당 항목으로 이동해요.
-- 패치 매칭 세 단계와 `data.search` 경로 맞춤을 넣어요.
 - 도우미 입력창 근처에 컨텍스트 사용량을 보여 줘요. 서버가 이미 요청마다 구성 요소별 추정치(`componentEstimates`)를 계산하는데 클라이언트는 쓰지 않아요. 로컬 추정값이므로 추정이라고 표시하고, 누르면 구성 요소별 내역을 보여 줘요.
 
-완료 기준: 셸의 장면 저장 경로로 바꾼 것도 기록에 나와요. 장면, 채팅, 도우미 대화, 자료를 삭제한 뒤 기록에 본문이 남지 않아요(테스트 네 개). 원고의 곡선 따옴표가 패치 뒤에도 그대로예요.
+서버의 순변경 기록과 diff는 작업 결과 응답(`HelperTaskResultsView.changes`)에 들어 있어요. 항목의 모양은 [core/helper.ts](../../core/helper.ts)의 `HelperChange`, 의미는 [HELPER-TOOLS](../HELPER-TOOLS.md#conversation-history-and-task-results)에 있어요.
 
 ### 7단계. 턴 롤백과 계획 모드
 
@@ -181,8 +178,6 @@
 - 플롯을 열면 본문 작업 공간이 `visibility: hidden`이 돼요.
 - 도우미 읽음 상태는 브라우저 `localStorage`에 있어요.
 - 채팅당 실행 중인 생성은 하나로 제한돼요(`one_active_run_per_chat`).
-- `uimori apply`는 장면을 `store.editSource`로 직접 저장하고, 자료만 공통 변경 경로를 거쳐요.
-- 미사용 자료 정리가 되돌리기용 저장본으로 읽는 곳은 `resource_undo`뿐이에요.
 - 메인 리더에는 하단 추적 스크롤이 없고, 도우미 패널에는 있어요.
 
 원본과 다르게 확인된 것은 두 가지예요. 되돌리기 바가 사유 없이 사라지는 것은 버그가 아니라 최근의 결정이었고, 0.5px 테두리가 100% 배율에서 사라진다는 전제는 Chromium에서 맞지 않아요.

@@ -13,6 +13,7 @@ import { HttpError } from './request-validation.js';
 import { readResource, undoResource } from './resource-service.js';
 import type { Store } from './store.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
+import { recordHelperResourceChange } from './helper-changes.js';
 
 type EditRecord = HelperResourceEditResource & {
   receiptId: string;
@@ -82,9 +83,11 @@ export function applyHelperResourceMutation(
         revision: existing.saved.revision,
         title: 'title' in existing.saved ? existing.saved.title : '공통 프롬프트',
       });
+      recordHelperResourceChange(store, task, existing.kind, existing.id, existing.saved, null);
       continue;
     }
     const saved = readResource(store, existing.kind, existing.id);
+    recordHelperResourceChange(store, task, existing.kind, existing.id, existing.saved, saved);
     if (
       saved.revision !== existing.saved.revision &&
       !isDeepStrictEqual(
@@ -105,6 +108,7 @@ export function applyHelperResourceMutation(
     const kind = targets[0]?.kind;
     if (kind && created.id) {
       const saved = readResource(store, kind, created.id);
+      recordHelperResourceChange(store, task, kind, created.id, null, saved);
       resources.push({
         kind,
         id: created.id,

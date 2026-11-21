@@ -125,6 +125,12 @@ export function pruneThemeAssets(db: DatabaseSync, candidates: Iterable<string> 
     for (const hash of themeAssetHashes(JSON.parse(String(row.body)))) referenced.add(hash);
   for (const row of db.prepare("SELECT model FROM resource_undo WHERE kind='theme'").all())
     for (const hash of themeAssetHashes(JSON.parse(String(row.model)))) referenced.add(hash);
+  for (const row of db
+    .prepare(
+      "SELECT baseline FROM helper_changes WHERE domain='resource' AND target_id LIKE 'theme:%' AND baseline IS NOT NULL"
+    )
+    .all())
+    for (const hash of themeAssetHashes(JSON.parse(String(row.baseline)))) referenced.add(hash);
   const remove = db.prepare('DELETE FROM theme_assets WHERE hash=?');
   const pending =
     candidates === 'abandoned'

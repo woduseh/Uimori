@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
+import { forgetHelperResourceChanges } from './helper-changes.js';
 import {
   BUILTIN_ILLUSTRATION_PRESET,
   DEFAULT_ILLUSTRATION_PRESET_ID,
@@ -118,6 +119,7 @@ export function deleteIllustrationPreset(store: Store, id: string, expectedRevis
     store.db
       .prepare('DELETE FROM resource_undo WHERE kind=? AND id=?')
       .run('illustration-preset', id);
+    forgetHelperResourceChanges(store.db, 'illustration-preset', id);
     return { deleted: id };
   });
 }

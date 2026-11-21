@@ -14,6 +14,7 @@ import { detachAttemptUsage } from './usage-accounting.js';
 import { imageDataHashes, pruneUnusedData } from './unused-data.js';
 import { readChatVariables } from './chat-variables.js';
 import { disposeNativeRisuChatSessions } from './risu-native-lua-session.js';
+import { forgetHelperSceneChanges } from './helper-changes.js';
 
 function target(store: Store, chatId: string, sourceId: string) {
   const chat = store.chat(chatId),
@@ -246,6 +247,7 @@ export function deleteScenes(
         WHERE kind='tool.started' AND json_type(data,'$.argsPreview')='text'
         AND conversation_id IN (SELECT id FROM helper_conversations WHERE chat_id=?)`)
       .run(chatId);
+    forgetHelperSceneChanges(store.db, ids);
     for (const task of store.db
       .prepare(
         'SELECT t.id,t.snapshot FROM helper_tasks t JOIN helper_conversations c ON c.id=t.conversation_id WHERE c.chat_id=?'

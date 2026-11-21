@@ -31,6 +31,7 @@ import {
 } from './helper-shell.js';
 import { invokeResourceTool, helperResourceOperation } from './helper-resource-tools.js';
 import { applyHelperResourceMutation } from './helper-resource-undo.js';
+import { recordHelperAction, withHelperChange } from './helper-changes.js';
 import { readHelperEditor } from './helper-resource-editing.js';
 import { HelperResourcePatchError } from './helper-resource-patch-error.js';
 import { HelperResourceBatchError } from './helper-resource-batch.js';
@@ -165,6 +166,7 @@ import {
 } from '../core/helper.js';
 import { helperWebSearchCapability } from '../core/helper-web-search.js';
 import { ChatOverridesStore } from './chat-overrides.js';
+import { chatLoreKey } from '../core/chat-overrides.js';
 import { ChatOptionsStore, invokeHelperOptions } from './chat-options.js';
 import { helperArgumentDiagnostic, helperResultDiagnostic } from './helper-diagnostics.js';
 import { helperActivityTarget } from '../core/helper-activity.js';
@@ -2657,7 +2659,7 @@ export class HelperRuntime {
       const invoke = () =>
         name === 'scene.search' && args.regex === true
           ? invokeSceneRegexSearch(this.store, scope.chatId, args, hooks.signal)
-          : invokeHelperSceneTool(this.store, scope.chatId, name, args);
+          : invokeHelperSceneTool(this.store, scope.chatId, name, args, task);
       if (helperToolTraits(name).readOnly) return invoke();
       const result = this.workspace.operation(
         task.id,
@@ -2779,6 +2781,15 @@ export class HelperRuntime {
           args.action === 'patch'
             ? service.patch(scope.chatId, body, task.id)
             : service.remove(scope.chatId, body, task.id);
+        recordHelperAction(this.store, task, {
+          domain: 'chat-lore',
+          targetId: chatLoreKey(saved.entry.selector),
+          chatId: scope.chatId,
+          title: this.store.chat(scope.chatId).title,
+          location: '채팅 전용 로어',
+          action: saved.entry.retired ? 'delete' : 'update',
+          anchor: { domain: 'chat-lore', chatId: scope.chatId, overrideId: saved.entry.id },
+        });
         return {
           revision: saved.revision,
           overrideId: saved.entry.id,
@@ -2824,13 +2835,15 @@ export class HelperRuntime {
         return readHelperOutline(this.store, scope.chatId, args, task.snapshot.writing);
       this.workspace.assertRunning(task.id);
       return this.workspace.operation(task.id, `${task.id}:${operationId}`, { name, args }, () =>
-        this.store.outline.applyReceipt(
-          scope.chatId,
-          {
-            operations: args.operations,
-            idempotencyKey: `helper:${task.id}:${operationId}`,
-          },
-          'user'
+        withHelperChange(this.store, task, { domain: 'outline', chatId: scope.chatId }, () =>
+          this.store.outline.applyReceipt(
+            scope.chatId,
+            {
+              operations: args.operations,
+              idempotencyKey: `helper:${task.id}:${operationId}`,
+            },
+            'user'
+          )
         )
       );
     }

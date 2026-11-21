@@ -7,6 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { pruneUnusedHelperFiles } from './helper-attachments.js';
 import { forgetChatHelperReads } from './helper-read-state.js';
+import { forgetHelperChatChanges } from './helper-changes.js';
 
 type Row = Record<string, any>;
 const chatTables = [
@@ -148,6 +149,7 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
       .prepare('DELETE FROM app_metadata WHERE key LIKE ?')
       .run(`${RUN_READER_DISMISSAL_PREFIX}${chatId}:%`);
     forgetChatHelperReads(store, chatId);
+    forgetHelperChatChanges(store.db, chatId);
     store.db.prepare('DELETE FROM chats WHERE id=?').run(chatId);
     pruneUnusedData(store.db, imageCandidates);
     pruneUnusedHelperFiles(store.db);

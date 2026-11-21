@@ -172,6 +172,43 @@ export type HelperTaskResult = {
   changedTargets: number;
   targets: HelperTaskResultTarget[];
 };
+export type HelperChangeDomain =
+  | 'resource'
+  | 'scene'
+  | 'outline'
+  | 'notes'
+  | 'settings'
+  | 'chat-lore';
+export type HelperChangeAnchor =
+  | {
+      domain: 'resource';
+      kind: import('./resource-editing.js').ResourceKind;
+      id: string;
+      path: string | null;
+      section: 'lore' | 'prompt' | 'terms' | 'field' | null;
+      index: number | null;
+    }
+  | {
+      domain: 'scene';
+      chatId: string;
+      sourceId: string;
+      field: 'original' | 'translation' | 'title';
+      paragraph: number | null;
+    }
+  | { domain: 'outline'; chatId: string; nodeId: string; field: 'title' | 'intent' | null }
+  | { domain: 'notes'; chatId: string; noteId: string }
+  | { domain: 'settings'; id: string; chatId: string | null; setting: string }
+  | { domain: 'chat-lore'; chatId: string; overrideId: string };
+export type HelperChange = {
+  domain: HelperChangeDomain;
+  targetId: string;
+  title: string;
+  location: string | null;
+  action: 'create' | 'update' | 'delete' | 'reorder';
+  diff: import('./text-diff.js').TextDiff | null;
+  anchor: HelperChangeAnchor | null;
+  textRemoved?: 'deleted' | 'expired';
+};
 export type HelperTaskAttemptUsage = {
   id: string;
   purpose: string;
@@ -187,6 +224,7 @@ export type HelperTaskResultsView = {
   taskId: string;
   status: HelperStatus;
   results: HelperTaskResult[];
+  changes: HelperChange[];
   unrecordedOperations: number;
   usage: {
     attempts: HelperTaskAttemptUsage[];

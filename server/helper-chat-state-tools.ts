@@ -14,6 +14,7 @@ import type { Json, ProviderTool } from '../core/transport.js';
 import { chatVariableView } from './chat-variable-context.js';
 import { readChatVariables, writeChatVariables } from './chat-variables.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
+import { withHelperChange } from './helper-changes.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { sceneRequestLore } from './request-lore.js';
 import { sceneTitle, setSceneTitle } from './scene-titles.js';
@@ -524,10 +525,12 @@ function nameScene(
   if (!store.history(chat.headRevision).some((item) => item.revision === sourceId))
     throw new HttpError(404, 'SCENE_NOT_IN_CHAT: Find the scene id with chat.read.');
   const before = sceneTitle(store, sourceId);
-  const saved = setSceneTitle(store, sourceId, {
-    title: args.title,
-    expectedTitle: args.expectedTitle,
-  });
+  const saved = withHelperChange(
+    store,
+    task,
+    { domain: 'scene', chatId, sourceId, field: 'title' },
+    () => setSceneTitle(store, sourceId, { title: args.title, expectedTitle: args.expectedTitle })
+  );
   const changed = saved.title !== before;
   recordHelperTaskResult(workspace, task, {
     receiptId,

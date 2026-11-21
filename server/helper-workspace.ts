@@ -30,6 +30,7 @@ import {
   pruneUnusedHelperFiles,
 } from './helper-attachments.js';
 import { imageDataHashes, pruneUnusedData } from './unused-data.js';
+import { pruneHelperChanges } from './helper-changes.js';
 import { helperRequestContext } from './helper-context.js';
 import {
   forgetHelperConversationRead,
@@ -862,6 +863,7 @@ export class HelperWorkspace {
           time,
           time
         );
+      pruneHelperChanges(this.store.db, conversationId);
       const message = snapshot.selection
         ? `${request}\n\nSelected passage ${snapshot.selection.sourceId} (SHA-256: ${snapshot.selection.sourceHash}):\n${snapshot.selection.text}`
         : request;

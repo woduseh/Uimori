@@ -4,6 +4,7 @@ import { HttpError, fields, number, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { promptWorkspace, savePromptWorkspace } from './prompt-workspace.js';
+import { forgetHelperResourceChanges } from './helper-changes.js';
 
 export type LibraryKind =
   | 'content'
@@ -94,6 +95,8 @@ export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, v
       removeIllustrationPresetScope(store, 'bot', id);
       store.db.prepare('DELETE FROM app_metadata WHERE key=?').run(`bot-defaults:${id}`);
     }
+    if (kind === 'content' || kind === 'prompt-preset')
+      forgetHelperResourceChanges(store.db, kind, id);
     store.libraryOrganization.remove(kind, id);
     pruneUnusedData(store.db);
     return { deleted: true, id };
