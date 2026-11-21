@@ -459,6 +459,34 @@ test('an earlier task restores a note after a later task was rolled back, though
   expect(noteShape(f.store, f.chat.id)).toEqual(['author-note\n처음 메모']);
 });
 
+test('a patch across three resources restores the two nobody touched and reports the edited one', () => {
+  const f = fixture();
+  const bots = ['가', '나', '다'].map(
+    (name) => f.store.product.content(fixtureBotInput(`${name} 봇`, `${name} 처음`)) as Content
+  );
+  const task = f.begin();
+  f.resource(task, 'resource.patchMany', {
+    items: bots.map((bot) => ({
+      kind: 'content',
+      id: bot.id,
+      expectedRevision: bot.revision,
+      changes: [{ op: 'set', path: '/package/nativeRisu/card/description', value: '한꺼번에' }],
+    })),
+  });
+  f.finish(task);
+  setDescription(f.store, bots[1]!.id, '사용자 수정');
+  expect(f.rollBack(task).units.map(({ unit, status }) => [unit, status])).toEqual([
+    [`resource:content:${bots[0]!.id}`, 'restored'],
+    [`resource:content:${bots[1]!.id}`, 'changed-since'],
+    [`resource:content:${bots[2]!.id}`, 'restored'],
+  ]);
+  expect(bots.map((bot) => description(f.store, bot.id))).toEqual([
+    '가 처음',
+    '사용자 수정',
+    '다 처음',
+  ]);
+});
+
 test('rolling back one target leaves the other targets of the task as they are', () => {
   const f = fixture();
   const [first, second] = f.scenes;
@@ -542,17 +570,31 @@ function runSeed(seed: number) {
   const fresh = (label: string) => `${label} ${seed}-${counter++}`;
   type Touch = { start: string; left: string; interrupted: boolean };
   const touches = new Map<string, Map<Target, Touch>>();
-  const note = (writer: string, target: Target, write: () => void) => {
-    const before = w.state(target);
+  const beforeTasks = new Map<Target, string>();
+  const userAfterTasks = new Set<Target>();
+  const note = (writer: string, targets: Target[], write: () => void) => {
+    const before = new Map(targets.map((target) => [target, w.state(target)]));
     write();
-    if (writer === 'user') return;
-    const touched = touches.get(writer) ?? new Map<Target, Touch>();
-    const touch = touched.get(target);
-    if (touch) {
-      touch.interrupted ||= touch.left !== before;
-      touch.left = w.state(target);
-    } else touched.set(target, { start: before, left: w.state(target), interrupted: false });
-    touches.set(writer, touched);
+    for (const target of targets) {
+      if (writer === 'user') {
+        if (beforeTasks.has(target) && w.state(target) !== before.get(target))
+          userAfterTasks.add(target);
+        continue;
+      }
+      if (!beforeTasks.has(target)) beforeTasks.set(target, before.get(target)!);
+      const touched = touches.get(writer) ?? new Map<Target, Touch>();
+      const touch = touched.get(target);
+      if (touch) {
+        touch.interrupted ||= touch.left !== before.get(target);
+        touch.left = w.state(target);
+      } else
+        touched.set(target, {
+          start: before.get(target)!,
+          left: w.state(target),
+          interrupted: false,
+        });
+      touches.set(writer, touched);
+    }
   };
   const visibleNotes = () =>
     captureHelperTarget(f.store, { domain: 'notes', chatId: f.chat.id }).value as {
@@ -589,11 +631,19 @@ function runSeed(seed: number) {
     if (choice < 0.75 && notes.length) return { retired: true, replacesId: pick(notes).id };
     return { text: fresh('새 메모') };
   };
+  const descriptionPatch = (id: string) => ({
+    kind: 'content',
+    id,
+    expectedRevision: readResource(f.store, 'content', id).revision,
+    changes: [
+      { op: 'set', path: '/package/nativeRisu/card/description', value: fresh('도우미 설명') },
+    ],
+  });
 
   const userEdit = () => {
     const target = pick(w.targets());
     const [kind, id] = target.split(':') as [string, string];
-    note('user', target, () => {
+    note('user', [target], () => {
       if (kind === 'res') setDescription(f.store, id, fresh('사용자 설명'));
       else if (kind === 'scene') {
         if (random() < 0.5)
@@ -614,20 +664,18 @@ function runSeed(seed: number) {
   const helperEdit = (task: HelperTask) => {
     const target = pick(w.targets());
     const [kind, id] = target.split(':') as [string, string];
-    note(task.id, target, () => {
-      if (kind === 'res')
-        f.resource(task, 'resource.patch', {
-          kind: 'content',
-          id,
-          expectedRevision: readResource(f.store, 'content', id).revision,
-          changes: [
-            {
-              op: 'set',
-              path: '/package/nativeRisu/card/description',
-              value: fresh('도우미 설명'),
-            },
-          ],
-        });
+    if (kind === 'res' && random() < 0.4) {
+      const bots = w.bots.filter(() => random() < 0.7);
+      if (bots.length < 2) bots.splice(0, bots.length, ...w.bots);
+      note(
+        task.id,
+        bots.map((bot) => `res:${bot}`),
+        () => f.resource(task, 'resource.patchMany', { items: bots.map(descriptionPatch) })
+      );
+      return;
+    }
+    note(task.id, [target], () => {
+      if (kind === 'res') f.resource(task, 'resource.patch', descriptionPatch(id));
       else if (kind === 'scene') {
         const shown = f.translation(id);
         const choice = random();
@@ -661,56 +709,84 @@ function runSeed(seed: number) {
   };
 
   const tasks: HelperTask[] = [];
-  for (let round = 1 + Math.floor(random() * 3); round > 0; round--) {
-    for (let edits = Math.floor(random() * 2); edits > 0; edits--) userEdit();
+  for (let round = 2 + Math.floor(random() * 3); round > 0; round--) {
+    if (random() < 0.5) userEdit();
     const task = f.begin();
     tasks.push(task);
     for (let steps = 1 + Math.floor(random() * 4); steps > 0; steps--)
-      if (random() < 0.25) userEdit();
+      if (random() < 0.2) userEdit();
       else helperEdit(task);
     f.finish(task);
   }
   for (let edits = Math.floor(random() * 3); edits > 0; edits--) userEdit();
 
-  const chosen = pick(tasks);
-  const before = new Map(w.targets().map((target) => [target, w.state(target)]));
-  const touched = touches.get(chosen.id) ?? new Map<Target, Touch>();
-  const changedByOthers = (target: Target) => {
-    const touch = touched.get(target);
-    return !!touch && (touch.interrupted || before.get(target) !== touch.left);
+  const unitTarget = (unit: string) =>
+    unit.startsWith('resource:content:')
+      ? `res:${unit.slice('resource:content:'.length)}`
+      : unit.startsWith('scene:')
+        ? unit
+        : `${unit.slice(0, unit.indexOf(':'))}:`;
+  const version = (target: Target) => {
+    const [kind, id] = target.split(':') as [string, string];
+    if (kind === 'res') return String(readResource(f.store, 'content', id).revision);
+    if (kind === 'scene')
+      return `${f.store.source(id).editRevision}:${latestTranslation(f.store, id)?.id}`;
+    if (kind === 'outline')
+      return JSON.stringify(f.store.outline.nodes(f.chat.id).map((node) => node.revision));
+    return String(f.store.story.notes.revision(f.chat.id));
   };
-  const unitTarget = (unit: HelperRollbackUnit) =>
-    unit.unit.startsWith('resource:content:')
-      ? `res:${unit.unit.slice('resource:content:'.length)}`
-      : unit.unit.startsWith('scene:')
-        ? unit.unit
-        : `${unit.domain}:`;
+  const rolledBack = new Set<string>();
+  const act = (task: HelperTask, unit?: string) => {
+    const label = `seed ${seed}: task ${tasks.indexOf(task)}${unit ? ` ${unit}` : ''}`;
+    const touched = touches.get(task.id) ?? new Map<Target, Touch>();
+    const selected = unit ? [unitTarget(unit)] : [...touched.keys()];
+    const states = new Map(w.targets().map((target) => [target, w.state(target)]));
+    const versions = new Map(w.targets().map((target) => [target, version(target)]));
+    const expected = new Map<Target, { status: string; state: string }>();
+    for (const target of selected) {
+      const touch = touched.get(target)!;
+      const key = `${task.id}|${target}`;
+      if (rolledBack.has(key))
+        expected.set(target, { status: 'restored', state: states.get(target)! });
+      else if (!touch.interrupted && states.get(target) === touch.left) {
+        expected.set(target, { status: 'restored', state: touch.start });
+        rolledBack.add(key);
+      } else expected.set(target, { status: 'changed-since', state: states.get(target)! });
+    }
+    const result = f.rollBack(task, unit);
+    for (const item of result.units)
+      expect(item.status, `${label}: ${item.unit}`).toBe(
+        expected.get(unitTarget(item.unit))?.status
+      );
+    for (const target of w.targets()) {
+      const wanted = expected.get(target);
+      expect(w.state(target), `${label}: ${target}`).toBe(wanted?.state ?? states.get(target));
+      if (!wanted || wanted.state === states.get(target))
+        expect(version(target), `${label}: ${target} written`).toBe(versions.get(target));
+    }
+    const settled = new Map(w.targets().map((target) => [target, version(target)]));
+    const again = f.rollBack(task, unit);
+    expect(
+      again.units.map((item) => [item.unit, item.status]),
+      `${label}: repeated`
+    ).toEqual(result.units.map((item) => [item.unit, item.status]));
+    for (const target of w.targets())
+      expect(version(target), `${label}: ${target} after repeat`).toBe(settled.get(target));
+  };
 
-  const once = f.rollBack(chosen);
-  const statuses = once.units.map((unit) => [unit.unit, unit.status]);
-  for (const unit of once.units) {
-    const target = unitTarget(unit);
-    expect(unit.status, `seed ${seed}: ${unit.unit}`).toBe(
-      changedByOthers(target) ? 'changed-since' : 'restored'
-    );
-  }
-  for (const target of w.targets()) {
-    const expected =
-      touched.has(target) && !changedByOthers(target)
-        ? touched.get(target)!.start
-        : before.get(target);
-    expect(w.state(target), `seed ${seed}: ${target}`).toBe(expected);
-  }
-  const after = new Map(w.targets().map((target) => [target, w.state(target)]));
-  const twice = f.rollBack(chosen);
-  expect(
-    twice.units.map((unit) => [unit.unit, unit.status]),
-    `seed ${seed}: second rollback`
-  ).toEqual(statuses);
-  for (const target of w.targets())
-    expect(w.state(target), `seed ${seed}: ${target} after second rollback`).toBe(
-      after.get(target)
-    );
+  if (random() < 0.4) {
+    for (const task of [...tasks].reverse()) act(task);
+    for (const [target, state] of beforeTasks)
+      if (!userAfterTasks.has(target))
+        expect(w.state(target), `seed ${seed}: ${target} after reverse pass`).toBe(state);
+  } else
+    for (let steps = 2 + Math.floor(random() * 5); steps > 0; steps--) {
+      const task = pick(tasks);
+      const units = helperRollbackView(f.store, f.workspace, task.id).units.filter((item) =>
+        w.targets().includes(unitTarget(item.unit))
+      );
+      act(task, units.length && random() < 0.5 ? pick(units).unit : undefined);
+    }
   for (const { dir, store } of owned.splice(0)) {
     store.close();
     rmSync(dir, { recursive: true, force: true });
@@ -719,7 +795,7 @@ function runSeed(seed: number) {
 
 const SEEDS = Number(process.env.UIMORI_ROLLBACK_SEEDS ?? 80);
 test(
-  'rollback after random helper and user edits restores untouched targets, keeps edited ones and is idempotent',
+  'rolling back several tasks and single units in random order after random helper and user edits keeps every invariant',
   () => {
     const start = Number(process.env.UIMORI_ROLLBACK_SEED ?? 1);
     for (let seed = start; seed < start + SEEDS; seed++) {
