@@ -146,6 +146,11 @@ Uimori의 봇·페르소나·모듈·프리셋 자료와 원고를 편집기에�
 - 열기는 `web/main.tsx`의 `openHelperChange`가 영역별로 나눠요. 자료는 `web/resource-anchor.ts`의 컨텍스트로 열린 편집기(`RisuNativeFields`, `NativeRisuPresetEditor`)에 영역과 항목을 넘기고, 편집기가 받으면 지워요. 장면은 `ReaderTarget.changedParagraph`를 `web/useStory.ts`가 블록 앵커와 비율로 바꿔 기존 읽기 위치 복원 경로로 이동해요. 표시는 `web/arrival-mark.ts`가 맡고, 본문 글자 대신 블록 앵커 요소나 편집기 영역에 테두리를 그려요. `HCHANGE03`이 확인해요.
 - 비교 화면의 추가·삭제 색은 의미 색 토큰(`--success-bg`, `--error-bg`)을 쓰고, 색만으로 구분하지 않도록 밑줄과 취소선, 줄 앞의 `+`와 `−`, 화면 낭독기용 문구를 함께 둬요. 높이 상한은 `--diff-max-h`예요.
 
+### 도우미 턴 되돌리기
+- 도우미 작업 하나가 바꾼 서재 자료, 장면 원문과 번역, 플롯, 작가 노트를 작업 전 상태로 되돌리는 경로는 `server/helper-rollback.ts` 하나예요. 계약과 사유는 [HELPER-TOOLS](HELPER-TOOLS.md#rolling-back-a-helper-task)에 있어요.
+- 되돌리기도 일반 저장과 같은 저장 함수를 지나요. 그래서 수정 번호 검사, 번역 작업 무효화, 다른 창의 갱신 알림이 사용자 저장과 같고, 되돌린 자료는 편집기의 직전 저장 되돌리기(`resource_undo`)로 다시 되돌릴 수 있어요.
+- 작업 뒤 사용자나 다른 작업이 고친 대상은 건너뛰고 사유를 돌려줘요. 열린 편집기의 미저장 입력은 서버가 모르므로, 화면이 `touches`를 보고 되돌리기 전에 막거나 확인해야 해요.
+
 ### 도우미 부분 수정 및 문자열 치환 알고리즘
 - **블록 참조 추적**: 도우미의 부분 수정은 읽었던 블록을 참조해 앞 항목 삭제·이동 뒤에도 같은 대상을 수정할 수 있어요.
 - **줄바꿈과 줄 끝 공백 허용 검색**: 자료(`resource.patch`)와 장면(`scene.patch`)의 문구 치환은 정확한 일치를 먼저 찾고, 없을 때만 CRLF/LF 줄바꿈 차이를, 그래도 없으면 줄 끝 공백과 탭 차이를 허용해요. 허용 단계는 한 곳만 맞을 때만 적용하고, 여러 곳이 맞거나 없으면 변경 위치와 원인을 반환하며 아무것도 저장하지 않아요. 따옴표와 대시 같은 문장 부호는 바꿔 맞추지 않아요. 맞춰 주면 문체가 조용히 바뀌기 때문이에요. 두 도구의 매칭은 `server/helper-resource-editing.ts`의 `matchHelperText` 하나이고, `tests/helper-resource-editing.test.ts`와 `tests/helper-scene-tools.test.ts`가 확인해요.

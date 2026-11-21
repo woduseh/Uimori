@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { isDeepStrictEqual } from 'node:util';
 import { chatLoreKey, type ChatLoreOverride } from '../core/chat-overrides.js';
@@ -33,7 +34,7 @@ export type HelperChangeTarget =
   | { domain: 'outline'; chatId: string }
   | { domain: 'notes'; chatId: string };
 type Key = { domain: HelperChange['domain']; targetId: string; chatId: string | null };
-type OutlineState = {
+export type OutlineState = {
   id: string;
   parentId: string | null;
   level: string;
@@ -41,10 +42,12 @@ type OutlineState = {
   title: string;
   intent: string;
   fixed: boolean;
+  relatedIds?: string[];
 }[];
-type NoteState = { id: string; kind: string; text: string }[];
+export type NoteState = { id: string; kind: string; text: string }[];
 type Capture = { value: unknown; label: { title: string; scene?: number | null } };
 type Json = Record<string, unknown>;
+type ChangeState = { before: unknown; beforeHash: string | null; afterHash: string | null };
 
 export function initHelperChanges(db: DatabaseSync) {
   db.exec(`CREATE TABLE IF NOT EXISTS helper_changes(
@@ -52,10 +55,38 @@ export function initHelperChanges(db: DatabaseSync) {
     domain TEXT NOT NULL,target_id TEXT NOT NULL,chat_id TEXT,source_id TEXT,
     position INTEGER NOT NULL,baseline TEXT,entries TEXT NOT NULL,
     text_removed TEXT CHECK(text_removed IN ('deleted','expired')),updated_at TEXT NOT NULL,
+    result TEXT,foreign_edit INTEGER NOT NULL DEFAULT 0,rolled_back_at TEXT,
     PRIMARY KEY(task_id,domain,target_id));
   CREATE INDEX IF NOT EXISTS helper_changes_chat ON helper_changes(chat_id);
   CREATE INDEX IF NOT EXISTS helper_changes_source ON helper_changes(source_id);`);
+  const columns = new Set(
+    db
+      .prepare('PRAGMA table_info(helper_changes)')
+      .all()
+      .map((column) => String(column.name))
+  );
+  if (!columns.has('result')) db.exec('ALTER TABLE helper_changes ADD COLUMN result TEXT');
+  if (!columns.has('foreign_edit'))
+    db.exec('ALTER TABLE helper_changes ADD COLUMN foreign_edit INTEGER NOT NULL DEFAULT 0');
+  if (!columns.has('rolled_back_at'))
+    db.exec('ALTER TABLE helper_changes ADD COLUMN rolled_back_at TEXT');
 }
+
+const canonical = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.map(canonical)
+    : plain(value)
+      ? Object.fromEntries(
+          Object.keys(value)
+            .filter((key) => value[key] !== undefined)
+            .sort()
+            .map((key) => [key, canonical(value[key])])
+        )
+      : value;
+export const helperStateHash = (value: unknown) =>
+  createHash('sha256')
+    .update(JSON.stringify(canonical(value ?? null)))
+    .digest('hex');
 
 const plain = (value: unknown): value is Json =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -84,28 +115,37 @@ function storeChange(
   task: ChangeTask,
   key: Key,
   sourceId: string | null,
-  before: unknown,
-  entries: (baseline: unknown) => HelperChange[]
+  state: ChangeState,
+  entries: ((baseline: unknown) => HelperChange[]) | 'companion'
 ) {
   const db = store.db;
   const row = db
     .prepare(
-      'SELECT baseline FROM helper_changes WHERE task_id=? AND domain=? AND target_id=? AND text_removed IS NULL'
+      'SELECT baseline,entries,result FROM helper_changes WHERE task_id=? AND domain=? AND target_id=? AND text_removed IS NULL'
     )
     .get(task.id, key.domain, key.targetId);
-  const baseline = row ? JSON.parse(String(row.baseline)) : before;
-  const list = boundDiffs(entries(baseline), TARGET_DIFF_CHARS);
+  const baseline = row ? JSON.parse(String(row.baseline)) : state.before;
+  const list =
+    entries !== 'companion'
+      ? boundDiffs(entries(baseline), TARGET_DIFF_CHARS)
+      : row
+        ? (JSON.parse(String(row.entries)) as HelperChange[])
+        : [];
+  const foreign =
+    !!row && row.result !== null && state.beforeHash !== null && row.result !== state.beforeHash;
   const time = new Date().toISOString();
-  if (!list.length)
+  if (!list.length && key.domain !== 'scene')
     db.prepare('DELETE FROM helper_changes WHERE task_id=? AND domain=? AND target_id=?').run(
       task.id,
       key.domain,
       key.targetId
     );
   else
-    db.prepare(`INSERT INTO helper_changes(task_id,domain,target_id,chat_id,source_id,position,baseline,entries,text_removed,updated_at)
-      VALUES(?,?,?,?,?,(SELECT COALESCE(MAX(position),0)+1 FROM helper_changes WHERE task_id=?),?,?,NULL,?)
+    db.prepare(`INSERT INTO helper_changes(task_id,domain,target_id,chat_id,source_id,position,baseline,entries,text_removed,updated_at,result,foreign_edit)
+      VALUES(?,?,?,?,?,(SELECT COALESCE(MAX(position),0)+1 FROM helper_changes WHERE task_id=?),?,?,NULL,?,?,?)
       ON CONFLICT(task_id,domain,target_id) DO UPDATE SET entries=excluded.entries,updated_at=excluded.updated_at,
+        result=excluded.result,
+        foreign_edit=CASE WHEN text_removed IS NULL THEN MAX(foreign_edit,excluded.foreign_edit) ELSE excluded.foreign_edit END,
         baseline=CASE WHEN text_removed IS NULL THEN baseline ELSE excluded.baseline END,text_removed=NULL`).run(
       task.id,
       key.domain,
@@ -115,7 +155,9 @@ function storeChange(
       task.id,
       JSON.stringify(baseline ?? null),
       JSON.stringify(list),
-      time
+      time,
+      state.afterHash,
+      foreign ? 1 : 0
     );
   pruneHelperChanges(db, task.conversationId);
 }
@@ -324,7 +366,7 @@ function resourceEntries(
     },
   ];
 }
-function authoredView(kind: ResourceKind, model: unknown): unknown {
+export function authoredView(kind: ResourceKind, model: unknown): unknown {
   if (kind !== 'content' || !plain(model) || !plain(model.package)) return model;
   const { kind: contentKind, loading, relatedIds } = model;
   const { nativeRisu, images } = model.package;
@@ -345,7 +387,11 @@ export function recordHelperResourceChange(
     task,
     { domain: 'resource', targetId: `${kind}:${id}`, chatId: null },
     null,
-    before && after ? editableResource(kind, before) : null,
+    {
+      before: before && after ? editableResource(kind, before) : null,
+      beforeHash: before && helperResourceHash(kind, before),
+      afterHash: after && helperResourceHash(kind, after),
+    },
     (baseline) =>
       resourceEntries(
         kind,
@@ -367,7 +413,11 @@ function sceneNumber(store: Store, chatId: string, sourceId: string): number | n
   return null;
 }
 
-function capture(store: Store, target: HelperChangeTarget): Capture {
+export function helperResourceHash(kind: ResourceKind, saved: SavedResource) {
+  return helperStateHash(authoredView(kind, editableResource(kind, saved)));
+}
+
+export function captureHelperTarget(store: Store, target: HelperChangeTarget): Capture {
   const title = store.chat(target.chatId).title;
   if (target.domain === 'scene') {
     const source = store.source(target.sourceId);
@@ -389,6 +439,7 @@ function capture(store: Store, target: HelperChangeTarget): Capture {
         title: node.title,
         intent: node.intent,
         fixed: node.fixed,
+        relatedIds: node.relatedIds ?? [],
       })) satisfies OutlineState,
       label: { title },
     };
@@ -555,23 +606,24 @@ export function withHelperChange<T>(
   mutate: () => T
 ): T {
   if (!task) return mutate();
-  const before = capture(store, target);
+  const companion: HelperChangeTarget | null =
+    target.domain === 'scene' && target.field === 'original'
+      ? { ...target, field: 'translation' }
+      : null;
+  const before = captureHelperTarget(store, target);
+  const companionBefore = companion && captureHelperTarget(store, companion);
   const result = mutate();
-  const after = capture(store, target);
-  const key: Key =
-    target.domain === 'scene'
-      ? {
-          domain: 'scene',
-          targetId: `${target.sourceId}:${target.field}`,
-          chatId: target.chatId,
-        }
-      : { domain: target.domain, targetId: target.chatId, chatId: target.chatId };
+  const after = captureHelperTarget(store, target);
   storeChange(
     store,
     task,
-    key,
+    changeKey(target),
     target.domain === 'scene' ? target.sourceId : null,
-    before.value,
+    {
+      before: before.value,
+      beforeHash: helperStateHash(before.value),
+      afterHash: helperStateHash(after.value),
+    },
     (baseline) =>
       target.domain === 'scene'
         ? sceneEntries(target, baseline, after)
@@ -590,7 +642,26 @@ export function withHelperChange<T>(
               after.value as NoteState
             )
   );
+  if (companion && companionBefore)
+    storeChange(
+      store,
+      task,
+      changeKey(companion),
+      companion.domain === 'scene' ? companion.sourceId : null,
+      {
+        before: companionBefore.value,
+        beforeHash: helperStateHash(companionBefore.value),
+        afterHash: helperStateHash(captureHelperTarget(store, companion).value),
+      },
+      'companion'
+    );
   return result;
+}
+
+function changeKey(target: HelperChangeTarget): Key {
+  return target.domain === 'scene'
+    ? { domain: 'scene', targetId: `${target.sourceId}:${target.field}`, chatId: target.chatId }
+    : { domain: target.domain, targetId: target.chatId, chatId: target.chatId };
 }
 
 export function recordHelperAction(
@@ -612,7 +683,11 @@ export function recordHelperAction(
     task,
     { domain: change.domain, targetId: change.targetId, chatId: change.chatId },
     null,
-    change.value ? { value: change.value.before } : null,
+    {
+      before: change.value ? { value: change.value.before } : null,
+      beforeHash: null,
+      afterHash: null,
+    },
     (baseline) =>
       change.value && isDeepStrictEqual(baseline, { value: change.value.after })
         ? []

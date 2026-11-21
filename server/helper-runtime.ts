@@ -32,6 +32,7 @@ import {
 import { invokeResourceTool, helperResourceOperation } from './helper-resource-tools.js';
 import { applyHelperResourceMutation } from './helper-resource-undo.js';
 import { recordHelperChatLoreChange, withHelperChange } from './helper-changes.js';
+import { helperRollbackView, rollBackHelperTask } from './helper-rollback.js';
 import { readHelperEditor } from './helper-resource-editing.js';
 import { HelperResourcePatchError } from './helper-resource-patch-error.js';
 import { HelperResourceBatchError } from './helper-resource-batch.js';
@@ -1116,6 +1117,14 @@ export class HelperRuntime {
           break;
         }
       }
+    });
+  }
+  rollbackView(taskId: string) {
+    return helperRollbackView(this.store, this.workspace, taskId);
+  }
+  rollBack(taskId: string, unit?: string) {
+    return rollBackHelperTask(this.store, this.workspace, taskId, unit, {
+      sceneUpdated: this.options.services?.sceneUpdated,
     });
   }
   deletionImpact(id: string) {

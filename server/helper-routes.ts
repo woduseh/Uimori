@@ -302,6 +302,17 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
   app.get<{ Params: { id: string } }>('/api/helper/tasks/:id/results', (request) =>
     readHelperTaskResults(runtime.store, request.params.id)
   );
+  app.get<{ Params: { id: string } }>('/api/helper/tasks/:id/rollback', (request) =>
+    runtime.rollbackView(request.params.id)
+  );
+  app.post<{ Params: { id: string } }>('/api/helper/tasks/:id/rollback', (request) => {
+    const body = record(request.body ?? {});
+    fields(body, ['unit']);
+    return runtime.rollBack(
+      request.params.id,
+      body.unit === undefined ? undefined : text(body.unit, 'rollback unit', 300)
+    );
+  });
   app.post<{ Params: { id: string } }>('/api/helper/tasks/:id/cancel', (request) =>
     publicTask(runtime.cancel(request.params.id))
   );

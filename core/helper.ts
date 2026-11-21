@@ -226,6 +226,47 @@ export type HelperChange = {
   anchor: HelperChangeAnchor | null;
   textRemoved?: 'deleted' | 'expired';
 };
+export type HelperRollbackTouch =
+  | { domain: 'resource'; kind: import('./resource-editing.js').ResourceKind; id: string }
+  | {
+      domain: 'scene';
+      chatId: string;
+      sourceId: string;
+      fields: ('original' | 'translation')[];
+    }
+  | { domain: 'outline'; chatId: string }
+  | { domain: 'notes'; chatId: string };
+export type HelperRollbackStatus =
+  | 'restorable'
+  | 'restored'
+  | 'changed-since'
+  | 'not-covered'
+  | 'text-removed'
+  | 'failed';
+export type HelperRollbackReason =
+  | 'changed-after-task'
+  | 'changed-during-task'
+  | 'created'
+  | 'deleted'
+  | 'expired'
+  | 'other-domain'
+  | 'recorded-before-rollback';
+export type HelperRollbackUnit = {
+  unit: string;
+  domain: HelperChangeDomain;
+  title: string;
+  changeTargetIds: string[];
+  status: HelperRollbackStatus;
+  reason?: HelperRollbackReason;
+  touches: HelperRollbackTouch | null;
+  notices?: 'translation-images-not-restored'[];
+  error?: string;
+};
+export type HelperRollbackView = {
+  taskId: string;
+  blocked: 'task-active' | null;
+  units: HelperRollbackUnit[];
+};
 export type HelperTaskAttemptUsage = {
   id: string;
   purpose: string;

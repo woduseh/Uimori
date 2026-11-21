@@ -68,6 +68,58 @@ test('an existing database without the helper change record opens with its data 
   }
 });
 
+test('a helper change record without the rollback columns keeps its rows and gains the columns', () => {
+  const path = file(),
+    first = new Store(path);
+  const chat = createFixtureChat(first, 'Existing chat');
+  const workspace = new HelperWorkspace(first);
+  const conversation = workspace.open({ kind: 'chat', chatId: chat.id });
+  const model = first.product.model({
+    title: 'Local test',
+    connectionId: first.product.connection({
+      title: 'Local test',
+      protocol: 'fixture-sse-v1',
+      endpoint: 'http://127.0.0.1:9',
+      enabled: true,
+    }).id,
+    modelId: 'fixture-schema',
+    temperature: null,
+    maxOutputTokens: 1024,
+  });
+  const task = workspace.enqueue(conversation.id, 'key', 'Edit', {
+    scope: conversation.scope,
+    model: first.product.modelSnapshot(model.id),
+    history: [],
+    persona: '',
+    limits: { helperCalls: 1, totalCalls: 1 },
+  });
+  first.db.exec(`DROP TABLE helper_changes;
+    CREATE TABLE helper_changes(
+      task_id TEXT NOT NULL REFERENCES helper_tasks(id) ON DELETE CASCADE,
+      domain TEXT NOT NULL,target_id TEXT NOT NULL,chat_id TEXT,source_id TEXT,
+      position INTEGER NOT NULL,baseline TEXT,entries TEXT NOT NULL,
+      text_removed TEXT CHECK(text_removed IN ('deleted','expired')),updated_at TEXT NOT NULL,
+      PRIMARY KEY(task_id,domain,target_id));`);
+  first.db
+    .prepare(
+      "INSERT INTO helper_changes(task_id,domain,target_id,chat_id,position,baseline,entries,updated_at) VALUES(?,'outline',?,?,1,'[]','[]',?)"
+    )
+    .run(task.id, chat.id, chat.id, new Date().toISOString());
+  first.close();
+  const next = new Store(path);
+  try {
+    expect(
+      next.db
+        .prepare('SELECT task_id,baseline,result,foreign_edit,rolled_back_at FROM helper_changes')
+        .all()
+    ).toEqual([
+      { task_id: task.id, baseline: '[]', result: null, foreign_edit: 0, rolled_back_at: null },
+    ]);
+  } finally {
+    next.close();
+  }
+});
+
 test.each([DATABASE_SCHEMA_VERSION - 1, DATABASE_SCHEMA_VERSION + 1])(
   'unsupported schema %s is refused before changing source bytes',
   (version) => {

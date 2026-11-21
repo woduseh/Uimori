@@ -136,13 +136,33 @@ Constraints on changing these routes:
 
 - Record an outcome inside the `operation` callback of `server/helper-workspace.ts` so that it commits or rolls back with its mutation and receipt. The same holds for a change entry, which also makes a replayed operation record nothing twice.
 - Every helper save of a recorded domain goes through `server/helper-changes.ts`: `withHelperChange` around scene, scene title, outline and note saves, `recordHelperResourceChange` from `applyHelperResourceMutation`, and `recordHelperAction` for action-only entries, which `recordHelperTaskResult` calls for settings targets. The `uimori apply` scene save wraps its direct `store.editSource` in `withHelperChange` as well. A new save path for these domains uses them instead of writing `helper_changes`.
-- The stored baseline is the full pre-change state (the editable resource model, scene text, outline nodes, note list) for a later turn rollback. A deletion path that removes a target must also call the matching `forgetHelper*Changes`.
+- The stored baseline is the full pre-change state (the editable resource model, scene text, outline nodes, note list), which [turn rollback](#rolling-back-a-helper-task) restores. A deletion path that removes a target must also call the matching `forgetHelper*Changes`.
 - The results view exposes no resource bodies, pricing notes or source URLs, connection data, request bodies, arbitrary tool arguments, endpoint credentials or raw provider usage payloads.
 - `kind=all` only lists: it creates and migrates nothing.
 
 Outside these routes:
 
-- A second undo history. Nothing restores from a change baseline yet; resource undo and draft protection keep their own contracts.
+- A second undo history. Turn rollback reads the same records; the editor's resource undo and draft protection keep their own contracts.
+
+## Rolling back a helper task
+
+`GET` and `POST /api/helper/tasks/:id/rollback` are registered in `server/helper-routes.ts` and implemented in `server/helper-rollback.ts`; the shapes are `HelperRollbackView` and `HelperRollbackUnit` in `core/helper.ts`. The state a rollback checks against is recorded by `server/helper-changes.ts` next to each change entry. `tests/helper-rollback.test.ts` enforces the restore order of a scene, the translation a source-only edit made stale, the refusal while a task runs, the statuses and reasons, single-target rollback and asset cleanup, and checks with a seeded random sequence of helper and user edits that a rollback restores every target nobody else changed, leaves the others as they are and is the same when repeated. This section records only what those files do not state.
+
+Behavior the types leave out:
+
+- A unit is one target: one resource, one scene (its original and translation together), the outline of a chat or the author notes of a chat. A scene's translation is not rolled back apart from its original, because an earlier translation belongs to the earlier original. `changeTargetIds` names the change entries a unit covers; a scene unit can also cover a hidden translation record with no entry, kept so that a source-only edit can give back the translation it made stale.
+- Covered are library resources, scene originals and translations, the outline and author notes. Scene titles, settings, chat-only lore, card variables, the original-work reference, illustrations and requested scenes or translations come back as `not-covered` with `other-domain`. A resource the task created or deleted is `not-covered` with `created` or `deleted`; deletion also removes the baseline, so a deleted resource cannot come back through rollback.
+- `changed-since` means the target differs from the state the task left (`changed-after-task`) or someone else saved it between two writes of the task (`changed-during-task`). The comparison covers the whole target, so any later edit of a chat's outline or notes blocks the rollback of that chat's outline or notes.
+- A rolled-back unit stays `restored`: repeating the request, also after a lost response, writes nothing again, even if the target was edited after the rollback.
+- `touches` names what a restore would write so the client can stop or warn before an unsaved draft is overwritten. The server cannot see unsaved editor input.
+- A scene restore saves the original first and then the earlier translation against the restored original, through the same `editSource` and `editTranslation` as the Reader. Translation illustration placement is not restored, which the unit reports as the notice `translation-images-not-restored`.
+- An outline node or a note the task deleted is created again with a new ID, and a restored note carries the author `도우미 변경 되돌리기`. A restore through the outline save is refused when a node the task created has been written since.
+
+Constraints on changing this behavior:
+
+- Restores go through the existing save paths (`saveResource`, `editSource`, `editTranslation`, `outline.applyReceipt`, `notes.write`) so that revision checks, job invalidation and events stay the same as for a normal save. Do not write the target tables directly.
+- All selected units are restored in one transaction, each in its own savepoint: a failed unit is reported `failed` and leaves nothing behind, and the other units still commit. A rollback is refused with `HELPER_TASK_ACTIVE` while a task of the conversation is queued or running.
+- A rollback cannot be cancelled once it runs; it is synchronous and short. A client that lost the response sends the same request again and reads the statuses.
 
 ## Linux data workspace
 
@@ -319,7 +339,7 @@ Constraints on changing this behavior:
 Outside the restore shortcut:
 
 - Created and deleted resources, saves that changed nothing, and an undo issued by the model.
-- Rolling back a whole task, and falling back to an older edit when the latest one cannot be restored.
+- Rolling back a whole task, which [turn rollback](#rolling-back-a-helper-task) does, and falling back to an older edit when the latest one cannot be restored. The shortcut stays until the client restores through turn rollback, and it gains no new features.
 - Saves without a `resource.edited` event. They stay editable through the resource editors, and no shortcut is reconstructed for them.
 
 ## Original-work reference and authored notes
