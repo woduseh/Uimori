@@ -73,6 +73,7 @@ import {
 } from 'lucide-react';
 import { Dialog } from './Dialog.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
+import { useUnsavedInput } from './unsaved-input.js';
 import { PackageStartPicker, type PackageStartSelection } from './PackageStartPicker.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
@@ -1764,6 +1765,11 @@ function TextEditor({
   const [saving, setSaving] = useState(false);
   const [conflictOpen, setConflictOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
+  useUnsavedInput(
+    draft.text !== savedText || saving
+      ? { domain: 'scene', sourceId: source.id, field: role }
+      : null
+  );
   const draftVersion = useRef(0);
   const [selection, setSelection] = useState({ start: 0, end: 0, version: 0 });
   const [error, setError] = useState('');

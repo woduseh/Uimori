@@ -19,6 +19,7 @@ import type {
 } from '../core/helper.js';
 import { api } from './api.js';
 import { HelperChangeCard } from './HelperChangeCard.js';
+import { rollbackCovers, useHelperRollback } from './HelperTaskRollback.js';
 import { settingsLabels } from './helper-change-location.js';
 import { isStoryUiStyle } from '../core/story-ui-style.js';
 import { formatNumber, t, useI18n } from './i18n.js';
@@ -491,6 +492,7 @@ export function HelperTaskResults({
   onOpenTarget,
   onOpenChange,
   onUsage,
+  rollbackUnavailable = false,
 }: {
   taskId: string;
   status: HelperStatus;
@@ -499,6 +501,7 @@ export function HelperTaskResults({
   onOpenTarget?: (target: HelperTaskResultTarget) => Promise<void> | void;
   onOpenChange?: (change: HelperChange) => Promise<void> | void;
   onUsage?: (taskId: string, usage: HelperTaskResultsView['usage']) => void;
+  rollbackUnavailable?: boolean;
 }) {
   useI18n();
   const [sentinel, shown] = useSeen<HTMLSpanElement>(eager);
@@ -509,6 +512,12 @@ export function HelperTaskResults({
   const changes = data?.changes.filter(
     (change) => change.domain !== 'settings' || !settingRecorded(change, data.results)
   );
+  const rollback = useHelperRollback({
+    taskId,
+    changes: data?.changes ?? [],
+    enabled: !!data && !active(data.status) && rollbackCovers(data.changes),
+    unavailable: rollbackUnavailable || active(status),
+  });
   return (
     <section
       className="helper-task-results"
@@ -521,7 +530,12 @@ export function HelperTaskResults({
           <ul className="helper-result-list">
             {changes.map((change, index) => (
               <li key={`change:${change.domain}:${change.targetId}:${index}`}>
-                <HelperChangeCard change={change} onOpen={onOpenChange} />
+                <HelperChangeCard
+                  change={change}
+                  onOpen={onOpenChange}
+                  rollback={rollback.action(change)}
+                  outcome={rollback.status(change)}
+                />
               </li>
             ))}
             {data.results.flatMap((result) =>
@@ -538,6 +552,7 @@ export function HelperTaskResults({
                 ))
             )}
           </ul>
+          {rollback.footer}
           {data.unrecordedOperations > 0 && (
             <p className="helper-result-note">
               {t('helperResults.unrecorded', { count: formatNumber(data.unrecordedOperations) })}

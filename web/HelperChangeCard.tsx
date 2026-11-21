@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react';
+import { useId, useRef, useState, type ReactNode } from 'react';
 import {
   BookMarked,
   BookOpen,
@@ -107,9 +107,13 @@ function CodeHunk({ hunk }: { hunk: TextDiffHunk }) {
 export function HelperChangeCard({
   change,
   onOpen,
+  rollback,
+  outcome,
 }: {
   change: HelperChange;
   onOpen?: (change: HelperChange) => Promise<void> | void;
+  rollback?: ReactNode;
+  outcome?: ReactNode;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -210,8 +214,10 @@ export function HelperChangeCard({
             onClick={() => void open()}
           />
         )}
+        {rollback}
       </div>
       {note && <p className="helper-result-note helper-change-note">{note}</p>}
+      {outcome}
       {hunks && (
         <div
           id={regionId}

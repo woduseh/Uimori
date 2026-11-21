@@ -1148,6 +1148,7 @@ export class HelperRuntime {
   rollBack(taskId: string, unit?: string) {
     return rollBackHelperTask(this.store, this.workspace, taskId, unit, {
       sceneUpdated: this.options.services?.sceneUpdated,
+      chatChanged: this.options.services?.chatChanged,
     });
   }
   deletionImpact(id: string) {

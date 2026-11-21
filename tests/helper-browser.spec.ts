@@ -9,6 +9,10 @@ import type {
   HelperMessageMutation,
   HelperScope,
   HelperResourceEdit,
+  HelperChange,
+  HelperRollbackUnit,
+  HelperRollbackView,
+  HelperTaskResultsView,
 } from '../core/helper.js';
 import type { HelperActivityEvent } from '../core/helper-activity.js';
 import type { ResponseStreamPage } from '../core/response-stream.js';
@@ -40,6 +44,10 @@ async function harness(page: Page, seedCount = 0) {
   const artifacts = new Map<string, HelperArtifactView[]>();
   const artifactWrites: string[] = [];
   const activities = new Map<string, HelperActivityEvent[]>();
+  const results = new Map<string, Partial<HelperTaskResultsView>>();
+  const rollbacks = new Map<string, HelperRollbackView>();
+  const rollbackPosts: { unit?: string }[] = [];
+  let onRollback: ((units: HelperRollbackUnit[]) => Promise<void>) | undefined;
   const undoPosts: { editSeq: number }[] = [];
   let loseUndo = false;
   const posts: { requestKey: string; text: string; selection?: unknown }[] = [];
@@ -374,12 +382,29 @@ async function harness(page: Page, seedCount = 0) {
       return route.fulfill({ json: view.tasks.slice(start, start + 50) });
     }
     const taskMatch =
-      /^\/api\/helper\/tasks\/([^/]+)(\/cancel|\/activity|\/steer|\/results)?$/u.exec(path);
+      /^\/api\/helper\/tasks\/([^/]+)(\/cancel|\/activity|\/steer|\/results|\/rollback)?$/u.exec(
+        path
+      );
     if (taskMatch) {
       const view = [...views.values()].find((view) =>
         view.tasks.some((task) => task.id === taskMatch[1])
       )!;
       const task = view.tasks.find((task) => task.id === taskMatch[1])!;
+      if (taskMatch[2] === '/rollback') {
+        const current = rollbacks.get(task.id) ?? { taskId: task.id, blocked: null, units: [] };
+        if (request.method() === 'GET') return route.fulfill({ json: current });
+        rollbackPosts.push(body);
+        const selected = current.units.filter(
+          (unit) => unit.status === 'restorable' && (!body.unit || unit.unit === body.unit)
+        );
+        await onRollback?.(selected);
+        const restored = selected.map((unit) => ({ ...unit, status: 'restored' as const }));
+        current.units = current.units.map(
+          (unit) => restored.find((item) => item.unit === unit.unit) ?? unit
+        );
+        rollbacks.set(task.id, current);
+        return route.fulfill({ json: { taskId: task.id, blocked: null, units: restored } });
+      }
       if (taskMatch[2] === '/steer') {
         steerPosts.push({ taskId: task.id, requestKey: body.requestKey, text: body.text });
         const instructions = (task.instructions ??= []);
@@ -405,8 +430,10 @@ async function harness(page: Page, seedCount = 0) {
             status: task.status,
             results: [],
             changes: [],
+            confirmations: [],
             unrecordedOperations: 0,
             usage: { attempts: [], toolExecutions: 0, latestInputEstimate: null },
+            ...results.get(task.id),
           },
         });
       if (taskMatch[2] === '/activity')
@@ -452,6 +479,12 @@ async function harness(page: Page, seedCount = 0) {
     },
     artifacts,
     artifactWrites,
+    results,
+    rollbacks,
+    rollbackPosts,
+    onRollback(handler: (units: HelperRollbackUnit[]) => Promise<void>) {
+      onRollback = handler;
+    },
     undoPosts,
     loseUndo: () => {
       loseUndo = true;
@@ -2276,6 +2309,310 @@ test('HELPUNDO grouped edit shows all titles and blocks its dirty target and a c
   await expect(draft).toHaveValue(bot.title);
   expect(state.undoPosts).toEqual([{ editSeq: 41 }]);
   expect((await (await request.get(`/api/content/${bot.id}`)).json()).title).toBe(bot.title);
+});
+
+const resourceChange = (id: string, title: string): HelperChange => ({
+  domain: 'resource',
+  targetId: id,
+  title,
+  location: { kind: 'resource-field', path: ['description'] },
+  action: 'update',
+  diff: null,
+  anchor: null,
+});
+const resourceUnit = (
+  id: string,
+  title: string,
+  status: HelperRollbackUnit['status'] = 'restorable',
+  reason?: HelperRollbackUnit['reason']
+): HelperRollbackUnit => ({
+  unit: `resource:content:${id}`,
+  domain: 'resource',
+  title,
+  changeTargetIds: [id],
+  status,
+  ...(reason ? { reason } : {}),
+  touches: { domain: 'resource', kind: 'content', id },
+});
+function rollbackFixture(task: HelperTaskView, chatId: string) {
+  const sceneChange = (field: 'original' | 'translation'): HelperChange => ({
+    domain: 'scene',
+    targetId: `scene-2:${field}`,
+    title: '등대지기의 밤',
+    location: { kind: 'scene', scene: 2, field },
+    action: 'update',
+    diff: null,
+    anchor: null,
+  });
+  const results: Partial<HelperTaskResultsView> = {
+    changes: [
+      resourceChange('bot-a', '하린'),
+      sceneChange('original'),
+      sceneChange('translation'),
+      resourceChange('bot-b', '서윤'),
+      {
+        domain: 'settings',
+        targetId: `chat.storyUi:${chatId}`,
+        title: '등대지기의 밤',
+        location: { kind: 'setting', setting: 'chat.storyUi' },
+        action: 'update',
+        diff: null,
+        anchor: null,
+      },
+    ],
+  };
+  const rollback: HelperRollbackView = {
+    taskId: task.id,
+    blocked: null,
+    units: [
+      resourceUnit('bot-a', '하린'),
+      {
+        unit: 'scene:scene-2',
+        domain: 'scene',
+        title: '등대지기의 밤',
+        changeTargetIds: ['scene-2:original', 'scene-2:translation'],
+        status: 'restorable',
+        touches: {
+          domain: 'scene',
+          chatId,
+          sourceId: 'scene-2',
+          fields: ['original', 'translation'],
+        },
+      },
+      resourceUnit('bot-b', '서윤', 'changed-since', 'changed-after-task'),
+      {
+        unit: `settings:chat.storyUi:${chatId}`,
+        domain: 'settings',
+        title: '등대지기의 밤',
+        changeTargetIds: [`chat.storyUi:${chatId}`],
+        status: 'not-covered',
+        reason: 'other-domain',
+        touches: null,
+      },
+    ],
+  };
+  return { results, rollback };
+}
+
+test('HROLLBACK01 a whole-task rollback restores what it can and names what it leaves', async ({
+  page,
+  request,
+}, info) => {
+  const chat = await create(request),
+    state = await harness(page, 1);
+  await page.goto(`/?chat=${chat.id}`);
+  await open(page);
+  const task = state.current().tasks[0];
+  const fixture = rollbackFixture(task, chat.id);
+  state.results.set(task.id, fixture.results);
+  state.rollbacks.set(task.id, fixture.rollback);
+  const dialog = page.getByRole('alertdialog', { name: '도우미 변경 되돌리기', exact: true });
+  for (const [width, height] of [
+    [1440, 900],
+    [412, 915],
+  ] as const)
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width, height });
+      await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+      await page.goto(`/?chat=${chat.id}`);
+      const panel = await open(page);
+      const results = panel.getByTestId('helper-task-results');
+      await expect(
+        results.locator('.helper-change', { hasText: '서윤' }).locator('.helper-rollback-status')
+      ).toHaveText('작업 뒤에 바뀌어서 되돌릴 수 없어요.');
+      await expect(
+        results.getByText(
+          '설정, 채팅 전용 로어, 장면 이름 변경은 되돌리기 대상이 아니에요. 필요하면 직접 바꿔 주세요.'
+        )
+      ).toHaveCount(1);
+      await expect(results.locator('.helper-rollback-unit')).toHaveCount(2);
+      await results.getByRole('button', { name: '이 작업의 변경 되돌리기', exact: true }).click();
+      await expect(
+        dialog.getByRole('region', { name: '되돌릴 대상' }).getByRole('listitem')
+      ).toHaveText(['하린', '등대지기의 밤, 장면 2']);
+      const kept = dialog.getByRole('region', { name: '그대로 둘 대상' }).getByRole('listitem');
+      await expect(kept).toHaveCount(2);
+      await expect(kept.nth(0)).toContainText('서윤');
+      await expect(kept.nth(0)).toContainText('작업 뒤에 바뀌어서 되돌릴 수 없어요.');
+      await expect(kept.nth(1)).toContainText('되돌리기 대상이 아니에요.');
+      await expect(dialog.getByRole('note')).toContainText('번역 삽화 배치는 되돌리지 않아요.');
+      await page.screenshot({
+        path: info.outputPath(`rollback-preview-${width}-${colorScheme}.png`),
+      });
+      await dialog.getByRole('button', { name: '취소', exact: true }).click();
+      await expect(dialog).toBeHidden();
+    }
+  expect(state.rollbackPosts).toEqual([]);
+  const panel = page.locator('#helper-panel');
+  const results = panel.getByTestId('helper-task-results');
+  await results.getByRole('button', { name: '이 작업의 변경 되돌리기', exact: true }).click();
+  await dialog.getByRole('button', { name: '변경 2개 되돌리기', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect(state.rollbackPosts).toEqual([{}]);
+  await expect(
+    page.getByRole('status').filter({ hasText: '변경 2개를 되돌렸어요.' })
+  ).toBeVisible();
+  const restored = results.locator('.helper-rollback-status[data-status="restored"]');
+  await expect(restored).toHaveCount(3);
+  await expect(
+    results.locator('.helper-change', { hasText: '서윤' }).locator('.helper-rollback-status')
+  ).toHaveText('작업 뒤에 바뀌어서 되돌릴 수 없어요.');
+  await expect(results.locator('.helper-rollback-unit')).toHaveCount(0);
+  for (const [width, height] of [
+    [1440, 900],
+    [412, 915],
+  ] as const)
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width, height });
+      await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+      await page.goto(`/?chat=${chat.id}`);
+      await open(page);
+      await expect(restored).toHaveCount(3);
+      await expect(
+        results.getByRole('button', { name: '이 작업의 변경 되돌리기', exact: true })
+      ).toHaveCount(0);
+      await page.screenshot({
+        path: info.outputPath(`rollback-cards-${width}-${colorScheme}.png`),
+      });
+    }
+});
+
+test('HROLLBACK02 one card rolls back alone and actions wait for a running task', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page, 1);
+  await page.goto(`/?chat=${chat.id}`);
+  await open(page);
+  const first = state.current().tasks[0];
+  const fixture = rollbackFixture(first, chat.id);
+  state.results.set(first.id, fixture.results);
+  state.rollbacks.set(first.id, fixture.rollback);
+  await page.reload();
+  const panel = await open(page);
+  const results = panel.locator(
+    `.helper-message.assistant[data-task-id="${first.id}"] [data-testid="helper-task-results"]`
+  );
+  await results.getByRole('button', { name: '하린 되돌리기', exact: true }).click();
+  const dialog = page.getByRole('alertdialog', { name: '도우미 변경 되돌리기', exact: true });
+  await expect(dialog).toContainText('이 대상을 작업 전 상태로 되돌려요.');
+  await expect(
+    dialog.getByRole('region', { name: '되돌릴 대상' }).getByRole('listitem')
+  ).toHaveText(['하린']);
+  await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect(state.rollbackPosts).toEqual([{ unit: 'resource:content:bot-a' }]);
+  await expect(
+    results.locator('.helper-change', { hasText: '하린' }).locator('.helper-rollback-status')
+  ).toHaveText('되돌렸어요');
+  const scene = results.getByRole('button', {
+    name: '등대지기의 밤, 장면 2 되돌리기',
+    exact: true,
+  });
+  await expect(scene).toBeEnabled();
+  await panel.getByLabel('도우미에게 요청').fill('다음 작업');
+  await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await expect.poll(() => state.posts.length).toBe(1);
+  await expect(scene).toBeDisabled();
+  await expect(results.getByText('도우미 작업이 끝나면 되돌릴 수 있어요.')).toBeVisible();
+  state.complete(state.current().tasks[0]);
+  await expect(scene).toBeEnabled();
+  await expect(results.getByText('도우미 작업이 끝나면 되돌릴 수 있어요.')).toHaveCount(0);
+  expect(state.rollbackPosts).toHaveLength(1);
+});
+
+test('HROLLBACK03 an unsaved editor draft blocks its unit and a clean editor shows the restored content', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+  const original = `되돌릴 봇 ${randomUUID()}`;
+  const created = await request.post('/api/content', {
+    data: fixtureBotInput(original, 'Original source.'),
+  });
+  expect(created.ok()).toBe(true);
+  const bot = await created.json();
+  const changedTitle = `${original} 도우미 수정`;
+  const changed = await request.put(`/api/content/${bot.id}`, {
+    data: { ...fixtureBotInput(changedTitle, 'Original source.'), expectedRevision: bot.revision },
+  });
+  expect(changed.ok(), await changed.text()).toBe(true);
+  const saved = await changed.json();
+  const state = await harness(page, 1);
+  const openEditor = async () => {
+    await page.goto('/');
+    await navigationAction(page, '서재');
+    await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(changedTitle);
+    await page.getByRole('button', { name: `${changedTitle} 상세 보기`, exact: true }).click();
+    await page.getByRole('button', { name: '편집', exact: true }).click();
+    await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
+  };
+  const openEditorHelper = async () => {
+    await page
+      .getByRole('region', { name: '자료 상세', exact: true })
+      .getByRole('button', { name: '도우미 열기', exact: true })
+      .click();
+    const panel = page.locator('#helper-panel');
+    await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
+    return panel;
+  };
+  await openEditor();
+  await openEditorHelper();
+  const task = state.current().tasks[0];
+  state.results.set(task.id, {
+    changes: [resourceChange(bot.id, changedTitle), resourceChange('bot-other', '다른 자료')],
+  });
+  state.rollbacks.set(task.id, {
+    taskId: task.id,
+    blocked: null,
+    units: [resourceUnit(bot.id, changedTitle), resourceUnit('bot-other', '다른 자료')],
+  });
+  state.onRollback(async (units) => {
+    if (!units.some((unit) => unit.changeTargetIds.includes(bot.id))) return;
+    const restored = await request.put(`/api/content/${bot.id}`, {
+      data: {
+        ...fixtureBotInput(original, 'Original source.'),
+        expectedRevision: saved.revision,
+      },
+    });
+    expect(restored.ok(), await restored.text()).toBe(true);
+  });
+  await openEditor();
+  const draft = page.getByLabel('Risu 자료 이름', { exact: true });
+  await draft.fill('지키려는 미저장 입력');
+  const panel = await openEditorHelper();
+  const results = panel.getByTestId('helper-task-results');
+  const card = results.locator('.helper-change', { hasText: changedTitle });
+  await expect(card.locator('.helper-rollback-status')).toHaveText(
+    '열린 편집기에 저장하지 않은 입력이 있어 되돌리지 않아요. 저장하거나 취소한 뒤 되돌려 주세요.'
+  );
+  await expect(
+    results.getByRole('button', { name: `${changedTitle} 되돌리기`, exact: true })
+  ).toBeDisabled();
+  await results.getByRole('button', { name: '이 작업의 변경 되돌리기', exact: true }).click();
+  const dialog = page.getByRole('alertdialog', { name: '도우미 변경 되돌리기', exact: true });
+  await expect(
+    dialog.getByRole('region', { name: '되돌릴 대상' }).getByRole('listitem')
+  ).toHaveText(['다른 자료']);
+  await expect(
+    dialog.getByRole('region', { name: '그대로 둘 대상' }).getByRole('listitem')
+  ).toContainText(changedTitle);
+  await dialog.getByRole('button', { name: '변경 1개 되돌리기', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect(state.rollbackPosts).toEqual([{ unit: 'resource:content:bot-other' }]);
+  await expect(draft).toHaveValue('지키려는 미저장 입력');
+  expect((await (await request.get(`/api/content/${bot.id}`)).json()).title).toBe(changedTitle);
+
+  await draft.fill(changedTitle);
+  const action = results.getByRole('button', { name: `${changedTitle} 되돌리기`, exact: true });
+  await expect(action).toBeEnabled();
+  await action.click();
+  await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect(state.rollbackPosts).toHaveLength(2);
+  await expect(draft).toHaveValue(original);
+  await expect(card.locator('.helper-rollback-status')).toHaveText('되돌렸어요');
 });
 
 test('HELPACTIVITY observed stages retain tool errors and cancellation', async ({

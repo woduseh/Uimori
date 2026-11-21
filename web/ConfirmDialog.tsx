@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { t, useI18n } from './i18n.js';
 import { Dialog } from './Dialog.js';
 import { CloseIcon } from './ui-icons.js';
@@ -9,6 +10,8 @@ export function ConfirmDialog({
   message,
   action,
   busy = false,
+  disabled = false,
+  children,
   onCancel,
   onConfirm,
 }: {
@@ -17,6 +20,8 @@ export function ConfirmDialog({
   message: string;
   action: string;
   busy?: boolean;
+  disabled?: boolean;
+  children?: ReactNode;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -33,12 +38,18 @@ export function ConfirmDialog({
       }}
     >
       <p>{message}</p>
+      {children}
       <div className="form-actions">
         <button type="button" className="secondary" disabled={busy} onClick={onCancel}>
           <CloseIcon size={18} aria-hidden="true" />
           {t('shared.cancel')}
         </button>
-        <button type="button" className="delete-button" disabled={busy} onClick={onConfirm}>
+        <button
+          type="button"
+          className="delete-button"
+          disabled={busy || disabled}
+          onClick={onConfirm}
+        >
           {action}
         </button>
       </div>

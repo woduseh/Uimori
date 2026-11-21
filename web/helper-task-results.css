@@ -253,6 +253,52 @@ button.helper-result-target:hover {
   margin-block: 6px;
   border-top: var(--hairline) dashed var(--line);
 }
+.helper-rollback-status {
+  padding-inline-start: calc(2px + 16px + 8px);
+  padding-block-end: 6px;
+}
+.helper-rollback-status[data-status="restored"] {
+  padding-inline-start: 2px;
+  gap: 8px;
+}
+.helper-rollback-status[data-status="restored"] > svg {
+  color: var(--success);
+}
+.helper-rollback-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.helper-rollback-row > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.helper-rollback-preview {
+  display: grid;
+  gap: 12px;
+}
+.helper-rollback-preview p {
+  margin: 0;
+}
+.helper-rollback-preview h3 {
+  margin: 0 0 4px;
+  font-size: var(--font-body);
+}
+.helper-rollback-preview ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-inline-start: 20px;
+}
+.helper-rollback-preview li {
+  overflow-wrap: anywhere;
+}
+.helper-rollback-preview li > small {
+  display: block;
+  color: var(--muted);
+}
 @media (max-width: 760px) {
   .helper-change-head > .helper-change-open {
     width: var(--control-h);

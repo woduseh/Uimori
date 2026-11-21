@@ -10,6 +10,7 @@ import type { ContextDetail, ContextJob as StoredContextJob } from '../core/cont
 import type { AuthorNote } from '../core/notes.js';
 import { AuthorNotesEditor } from './AuthorNotesEditor.js';
 import { api, ApiError } from './api.js';
+import { useUnsavedInput } from './unsaved-input.js';
 import './context.css';
 
 type ContextJob = Omit<StoredContextJob, 'snapshot'>;
@@ -96,6 +97,7 @@ export function ContextPanel({
   useEffect(() => {
     onDirtyChange(draft !== null || notesDirty || busy);
   }, [draft, notesDirty, busy, onDirtyChange]);
+  useUnsavedInput(notesDirty ? { domain: 'notes', chatId } : null);
   function report(caught: unknown) {
     const text = caught instanceof Error ? caught.message : t('settings.m273');
     setError(text);

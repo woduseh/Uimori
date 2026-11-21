@@ -37,7 +37,10 @@ type Row = {
 };
 type Unit = { unit: string; domain: HelperChangeDomain; rows: Row[] };
 type Assessment = { status: HelperRollbackStatus; reason?: HelperRollbackReason };
-type Effects = { sceneUpdated?: (sourceId: string) => void };
+type Effects = {
+  sceneUpdated?: (sourceId: string) => void;
+  chatChanged?: (chatId: string) => void;
+};
 type Notice = NonNullable<HelperRollbackUnit['notices']>[number];
 
 const ROLLBACK_AUTHOR = '도우미 변경 되돌리기';
@@ -367,6 +370,7 @@ export function rollBackHelperTask(
   effects: Effects = {}
 ): HelperRollbackView {
   const restoredScenes = new Set<string>();
+  const changedChats = new Set<string>();
   const view = store.transaction((): HelperRollbackView => {
     const task = workspace.taskState(taskId);
     if (activeTask(store, task.conversationId)) throw new HttpError(409, 'HELPER_TASK_ACTIVE');
@@ -408,6 +412,8 @@ export function rollBackHelperTask(
       }
       if (unit.domain === 'resource') resourceKinds.add(resourceKey(unit.rows[0]!).kind);
       if (unit.domain === 'scene') restoredScenes.add(unit.rows[0]!.source_id!);
+      if (unit.domain === 'outline' || unit.domain === 'notes')
+        changedChats.add(unit.rows[0]!.chat_id!);
       return [
         {
           ...describe(store, unit, { status: 'restored' }),
@@ -427,5 +433,6 @@ export function rollBackHelperTask(
     return { taskId, blocked: null, units };
   });
   for (const sourceId of restoredScenes) effects.sceneUpdated?.(sourceId);
+  for (const chatId of changedChats) effects.chatChanged?.(chatId);
   return view;
 }

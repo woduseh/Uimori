@@ -1690,6 +1690,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                         onUsage={task.id === latestTaskId ? reportUsage : undefined}
                         onOpenTarget={props.onOpenTarget}
                         onOpenChange={props.onOpenChange}
+                        rollbackUnavailable={pending.length > 0}
                       />
                       {taskStatus(task)}
                     </div>

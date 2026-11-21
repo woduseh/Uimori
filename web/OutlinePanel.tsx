@@ -51,6 +51,7 @@ import type { RunReceipt } from '../core/types.js';
 import type { SceneCommand } from '../core/story.js';
 import './outline.css';
 import { readOptionalJson } from './optional-storage.js';
+import { useUnsavedInput } from './unsaved-input.js';
 
 type Draft = {
   title: string;
@@ -168,6 +169,11 @@ export function OutlinePanel({
   currentSelection.current = selectedId;
   const disabled = busy || !!pending;
   const draftKey = adding ? `${prefix}:new` : `${prefix}:draft:${selectedId}`;
+  const unsaved =
+    !!draft &&
+    ((adding && !!(draft.title.trim() || draft.intent.trim())) ||
+      (editing && !!selected && JSON.stringify(draft) !== JSON.stringify(fromNode(selected))));
+  useUnsavedInput(unsaved && chatId ? { domain: 'outline', chatId } : null);
   const load = useCallback(async () => {
     if (!chatId) return;
     const generation = ++loadGeneration.current;
