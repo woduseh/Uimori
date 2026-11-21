@@ -128,7 +128,6 @@
 
 | 단계 | T3 Code의 위치 | 참고할 점 |
 | --- | --- | --- |
-| 5. 사이드카 폭 조절 | `apps/web/src/hooks/useResizableWidth.ts`, `apps/web/src/hooks/useResizeDrag.ts` | 끄는 동안에는 CSS 변수만 바꾸고 저장은 놓을 때 한 번 해요. 읽을 때 범위를 다시 맞추고, 저장소가 막히면 메모리 값으로 동작해요. |
 | 6. 도구 활동 묶음 | `packages/client-runtime/src/work-log/presentation.ts`의 `toolGroupAction`, `summarizeToolGroup` | 도구를 읽기, 편집, 명령, 검색 같은 몇 가지 종류로 나누고 연속된 호출을 요약 한 줄로 접는 일을 React와 분리된 순수 모듈에서 해요. |
 | 6. 변경 diff | `apps/web/src/components/DiffPanel.tsx`, `apps/web/src/components/chat/ChangedFilesTree.tsx`, `packages/contracts/src/checkpointDiff.ts` | 파일별 접힘 상태를 따로 두고 펼칠 때 내용을 읽어요. 출력에 크기 상한을 두고 잘렸다는 표식을 남겨요. 줄 단위 diff만 있어서 어절 단위 산문 diff는 참고할 것이 없어요. |
 | 6. 컨텍스트 사용량 | `apps/web/src/components/chat/ThreadDetailsUsage.tsx`, `packages/client-runtime/src/state/contextWindow.ts` | 막대에 자동 압축 기준점을 눈금으로 표시하고 80%와 90%에서 색을 바꿔요. |
