@@ -33,6 +33,7 @@ import { invokeResourceTool, helperResourceOperation } from './helper-resource-t
 import { applyHelperResourceMutation } from './helper-resource-undo.js';
 import { recordHelperChatLoreChange, withHelperChange } from './helper-changes.js';
 import { helperRollbackView, rollBackHelperTask } from './helper-rollback.js';
+import { helperConfirmationGate, resolveHelperConfirmations } from './helper-confirmations.js';
 import { readHelperEditor } from './helper-resource-editing.js';
 import { HelperResourcePatchError } from './helper-resource-patch-error.js';
 import { HelperResourceBatchError } from './helper-resource-batch.js';
@@ -220,7 +221,7 @@ type HelperAttachmentAdmission = HelperAttachments & {
   preparedImages?: PreparedRequestImages;
   preparedFiles?: PreparedRequestFiles;
 };
-export type HelperRequestOptions = { mode?: HelperMode };
+export type HelperRequestOptions = { mode?: HelperMode; confirmations?: string[] };
 
 function retryRequest(workspace: HelperWorkspace, request: string, retryOf?: string): string {
   if (!retryOf || request !== workspace.task(retryOf).request) return request;
@@ -237,7 +238,7 @@ const PLAN_MODE_GUIDANCE =
   'This request is in plan mode: produce a plan, not changes. Read whatever you need, but do not save, create, delete, select, request generation or change settings; the host refuses every operation that writes. Reply with a concrete, ordered plan that names each target and the change you would make, and the questions the owner must settle. Carrying out the plan is a separate request.';
 const FINAL_CALL_GUIDANCE =
   'The call budget allows only this response. Do not call tools. Reply to the user with what you completed, which changes were saved, any change whose outcome is uncertain, and what remains to do.';
-const CONTRACT = `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation. Apply, select, cancel or retry only when requested. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. ${AUTHOR_NOTE_GUIDANCE}
+const CONTRACT = `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation. Apply, select, cancel or retry only when requested. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. A CONFIRMATION_REQUIRED result means the host held the call for the owner: do not repeat it in this task, and say in your reply what needs confirmation. A request whose source lists confirmedCalls carries the owner's confirmation; make each such call with exactly the listed arguments when the request still wants it. ${AUTHOR_NOTE_GUIDANCE}
 Choose and combine the tools suited to the task: app operations, data.exec for workspace search and transformation, or shell workspace files described in INDEX.md. Reuse known schemas and successful results; use app.tools only for unfamiliar operations or arguments. Group independent work when useful, and use returned revisions and receipts directly instead of rereading only to confirm success. Distinguish live saved resources, frozen chat history and unsaved editor input. Base visual claims on inspected pixels.
 Edit saved targets using their recorded revisions and preserve unrelated fields. For workspace-file edits, use uimori apply to save; for app operations, follow their own save contracts. Reconcile conflicts against the latest version and report changes from successful receipts. If the target has an unsaved editor draft, ask the user to save it first. For translation guides, preserve established terms and distinguish proposed choices from authored facts.
 For a bot’s Story UI appearance, use theme.guide and read the bot’s authored content. In a chat, writing.packages identifies the owning bot by role=bot. Saving a theme creates it; when the user requests application, use theme.select with dimension=storyUi for the bot or settings.update for an explicit chat choice.
@@ -963,6 +964,10 @@ export class HelperRuntime {
     if (retryOf && !outlineTarget)
       outlineTarget = this.workspace.task(retryOf).snapshot.outlineTarget;
     const mode = options.mode ?? (retryOf ? this.workspace.task(retryOf).mode : 'apply');
+    const inherited = retryOf ? this.workspace.task(retryOf).snapshot.confirmations : undefined;
+    const confirmations = [
+      ...new Set(options.confirmations ?? inherited?.map((call) => call.id) ?? []),
+    ].sort();
     const requestFingerprint = createHash('sha256')
       .update(
         JSON.stringify({
@@ -972,6 +977,7 @@ export class HelperRuntime {
           selection,
           outlineTarget,
           ...(mode === 'plan' ? { mode } : {}),
+          ...(confirmations.length ? { confirmations } : {}),
           ...(admission?.receipt ? { attachments: admission.receipt } : {}),
         })
       )
@@ -1071,9 +1077,13 @@ export class HelperRuntime {
           editor = { ...editor, source, model: editableResource(editor.kind, saved) };
         } else editor = structuredClone({ ...editor, source });
       }
+      const confirmedCalls =
+        inherited ?? resolveHelperConfirmations(this.store, conversationId, confirmations);
       const queued = this.workspace.enqueue(conversationId, requestKey, request, {
         requestFingerprint,
         ...(mode === 'plan' ? { mode } : {}),
+        ...(confirmedCalls.length ? { confirmations: confirmedCalls } : {}),
+        ...(workspace.helperConfirmPaidGeneration ? { confirmPaidGeneration: true as const } : {}),
         ...(admission?.images?.length ? { images: structuredClone(admission.images) } : {}),
         ...(admission?.files?.length ? { files: structuredClone(admission.files) } : {}),
         ...(retryOf ? { retryOf } : {}),
@@ -2022,6 +2032,15 @@ export class HelperRuntime {
           source: asJson({
             webSearch: helperWebSearchCapability(target.connection.protocol),
             currentDateUtc: task.createdAt.slice(0, 10),
+            ...(task.snapshot.confirmations?.length
+              ? {
+                  confirmedCalls: task.snapshot.confirmations.map((call) => ({
+                    name: call.operation,
+                    arguments: call.arguments,
+                    ...(call.chatId ? { chatId: call.chatId } : {}),
+                  })),
+                }
+              : {}),
             summary: {
               kind: 'derived-helper-summary',
               text: summary,
@@ -2352,6 +2371,15 @@ export class HelperRuntime {
         409,
         'EDITOR_SAVE_REQUIRED: Save the editor draft before editing this resource.'
       );
+    const confirmation = helperConfirmationGate(
+      this.store,
+      this.workspace,
+      targeted,
+      name,
+      toolArgs,
+      `${task.id}:${operationId}`
+    );
+    if (confirmation) return { result: confirmation, denied: true };
     if (targeted.snapshot.writing && traits.writingRead) {
       const read = executeTool(
         targeted.snapshot.writing,

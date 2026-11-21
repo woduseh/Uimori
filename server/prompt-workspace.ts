@@ -168,6 +168,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     'titleModel',
     'helperModel',
     'helperTaskTimeoutMinutes',
+    'helperConfirmPaidGeneration',
     'contextModel',
     'scriptModel',
     'summaryLength',
@@ -186,6 +187,11 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
   }
   if (b.mainJudgmentEnabled !== undefined && typeof b.mainJudgmentEnabled !== 'boolean')
     throw new HttpError(400, 'MAIN_JUDGMENT_ENABLED_INVALID');
+  if (
+    b.helperConfirmPaidGeneration !== undefined &&
+    typeof b.helperConfirmPaidGeneration !== 'boolean'
+  )
+    throw new HttpError(400, 'HELPER_CONFIRM_PAID_GENERATION_INVALID');
   return {
     judgment: validateJudgmentSelection(b.judgment),
     mainJudgmentThreshold: mainJudgmentThreshold(b.mainJudgmentThreshold),
@@ -197,6 +203,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     titleModel: validateTitleModel(b.titleModel ?? null),
     helperModel: validateTitleModel(b.helperModel ?? null),
     helperTaskTimeoutMinutes: validateHelperTaskTimeoutMinutes(b.helperTaskTimeoutMinutes),
+    ...(b.helperConfirmPaidGeneration === true ? { helperConfirmPaidGeneration: true } : {}),
     contextModel: validateTitleModel(b.contextModel ?? null),
     scriptModel: validateTitleModel(b.scriptModel ?? null),
     modelRoutes: validateModelRoutes(
@@ -454,6 +461,7 @@ export function modelWorkspace(store: Store): ModelWorkspace {
     titleModel: workspaceModelRef(current, 'title'),
     helperModel: workspaceModelRef(current, 'helper'),
     helperTaskTimeoutMinutes: current.helperTaskTimeoutMinutes,
+    helperConfirmPaidGeneration: current.helperConfirmPaidGeneration === true,
     contextModel: workspaceModelRef(current, 'context'),
     scriptModel: workspaceModelRef(current, 'script'),
     routes: current.modelRoutes,
@@ -472,6 +480,7 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
     'titleModel',
     'helperModel',
     'helperTaskTimeoutMinutes',
+    'helperConfirmPaidGeneration',
     'contextModel',
     'scriptModel',
     'summaryLength',
@@ -492,6 +501,9 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
       helperTaskTimeoutMinutes: Object.hasOwn(input, 'helperTaskTimeoutMinutes')
         ? input.helperTaskTimeoutMinutes
         : prior.helperTaskTimeoutMinutes,
+      helperConfirmPaidGeneration: Object.hasOwn(input, 'helperConfirmPaidGeneration')
+        ? input.helperConfirmPaidGeneration
+        : prior.helperConfirmPaidGeneration,
       contextModel: Object.hasOwn(input, 'contextModel')
         ? validateTitleModel(input.contextModel)
         : (prior.contextModel ?? null),

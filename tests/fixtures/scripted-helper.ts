@@ -110,6 +110,7 @@ export async function runScriptedChatHelper(
   const finished = (callId: string) =>
     events.find(
       (event) =>
+        event.taskId === task.id &&
         event.kind === 'tool.finished' &&
         (event.data as { callId?: string } | null)?.callId === callId
     )?.data as Record<string, unknown>;

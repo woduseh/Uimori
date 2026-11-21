@@ -229,9 +229,19 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
         'images',
         'files',
         'mode',
+        'confirmations',
       ]);
       if (body.mode !== undefined && body.mode !== 'apply' && body.mode !== 'plan')
         throw new HttpError(400, 'Invalid helper mode');
+      if (
+        body.confirmations !== undefined &&
+        (!Array.isArray(body.confirmations) || body.confirmations.length > 16)
+      )
+        throw new HttpError(400, 'Invalid helper confirmations');
+      const confirmations =
+        body.confirmations === undefined
+          ? undefined
+          : (body.confirmations as unknown[]).map((id) => text(id, 'confirmation ID', 64));
       let outline: OutlineTarget | undefined;
       if (body.outline !== undefined) {
         const selected = record(body.outline);
@@ -293,7 +303,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
           outline,
           { images: requestImageUploads(body.images), files: requestFileUploads(body.files) },
           true,
-          { mode: body.mode }
+          { mode: body.mode, confirmations }
         )
       );
     }

@@ -198,6 +198,7 @@ test('HRESULT-STORYUI setting results identify changes and open generation setti
       },
     ],
     changes: [],
+    confirmations: [],
     unrecordedOperations: 0,
     usage: { toolExecutions: 2, attempts: [], latestInputEstimate: null },
   };
@@ -336,6 +337,7 @@ test('HRESULT-ILLUSTRATION queued and placed results open their scene and refere
       },
     ],
     changes: [],
+    confirmations: [],
     unrecordedOperations: 0,
     usage: { toolExecutions: 5, latestInputEstimate: null, attempts: [] },
   };
@@ -460,6 +462,7 @@ test('HRESULT-STORY scene, translation, scene name and card variable results ope
       },
     ],
     changes: [],
+    confirmations: [],
     unrecordedOperations: 0,
     usage: { toolExecutions: 4, latestInputEstimate: null, attempts: [] },
   };
@@ -618,6 +621,7 @@ test('HRESULT02 actual results retain partial usage and recover from refresh/ope
       },
     ],
     changes: [],
+    confirmations: [],
     unrecordedOperations: 0,
     usage: {
       toolExecutions: 7,
@@ -942,6 +946,7 @@ function changeProjection(taskId: string, chatId: string): HelperTaskResultsView
         anchor: null,
       },
     ],
+    confirmations: [],
     unrecordedOperations: 0,
     usage: { toolExecutions: 5, attempts: [], latestInputEstimate: null },
   };
@@ -1229,6 +1234,7 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
         },
       },
     ],
+    confirmations: [],
     unrecordedOperations: 0,
     usage: { toolExecutions: 2, attempts: [], latestInputEstimate: null },
   };
@@ -1325,6 +1331,7 @@ test('HUSAGE01 the composer shows the latest context estimate, its parts and the
         status: 'completed',
         results: [],
         changes: [],
+        confirmations: [],
         unrecordedOperations: 0,
         usage,
       } satisfies HelperTaskResultsView,

@@ -9,6 +9,7 @@ import type { HelperWorkspace } from './helper-workspace.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 import { readHelperChanges, recordHelperAction } from './helper-changes.js';
+import { readHelperConfirmations } from './helper-confirmations.js';
 
 export function recordHelperTaskResult(
   workspace: HelperWorkspace,
@@ -117,6 +118,7 @@ export function readHelperTaskResults(store: Store, taskId: string): HelperTaskR
     status: task.status as HelperStatus,
     results,
     changes: readHelperChanges(store.db, taskId),
+    confirmations: readHelperConfirmations(store, taskId),
     unrecordedOperations: Number(unknown?.n ?? 0),
     usage: {
       attempts,

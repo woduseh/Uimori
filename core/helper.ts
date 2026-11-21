@@ -67,8 +67,27 @@ export type HelperResourceRef = {
   title: string;
 };
 export type HelperMode = 'apply' | 'plan';
+export type HelperConfirmationReason = 'delete' | 'bulk' | 'paid';
+export type HelperConfirmation = {
+  id: string;
+  taskId: string;
+  operation: string;
+  reason: HelperConfirmationReason;
+  chatId: string | null;
+  targets: { kind: string; id: string }[];
+  grantedBy: string | null;
+  grantable: boolean;
+};
+export type HelperConfirmedCall = {
+  id: string;
+  operation: string;
+  chatId: string | null;
+  arguments: Record<string, unknown>;
+};
 export type HelperTaskSnapshot = {
   mode?: 'plan';
+  confirmations?: HelperConfirmedCall[];
+  confirmPaidGeneration?: true;
   images?: import('./request-images.js').RequestImage[];
   files?: import('./request-files.js').RequestFile[];
   invalidatedBySceneDeletion?: true;
@@ -286,6 +305,7 @@ export type HelperTaskResultsView = {
   status: HelperStatus;
   results: HelperTaskResult[];
   changes: HelperChange[];
+  confirmations: HelperConfirmation[];
   unrecordedOperations: number;
   usage: {
     attempts: HelperTaskAttemptUsage[];

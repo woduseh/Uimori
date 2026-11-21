@@ -172,6 +172,17 @@ A helper request sent with `mode: "plan"` (`POST /api/helper/conversations/:id/m
 - Discovery still lists the operations that write, so a plan can name the operation and arguments it would use.
 - Carrying out a plan is an ordinary request that refers to it. The server keeps no link between the plan and the request that runs it, and a retry keeps the mode of the task it retries.
 
+## Confirmation before destructive or bulk operations
+
+`server/helper-confirmations.ts` decides which calls need the owner's confirmation, holds them, and resolves the confirmations a later request grants; `invokeOperation` in `server/helper-runtime.ts` asks it before dispatch. A held call returns `CONFIRMATION_REQUIRED` with the `confirmation` it needs and is recorded as a `confirmation.required` event; the results view lists them as `confirmations` (`HelperConfirmation` in `core/helper.ts`), and a message grants them with `confirmations: [id]`. `helperConfirmPaidGeneration` in the model workspace (`server/prompt-workspace.ts`) turns on confirmation for `scene.request` and `scene.translate`. `tests/helper-confirmation.test.ts` enforces the defaults, the setting, that a grant runs only the call with the same arguments, only once, and after a restart, and that only the latest task's confirmations can be granted. This section records only what those files do not state.
+
+- The runtime cannot pause a tool call for an answer: an HTTP provider loop and a native Codex turn both expect the result. So a held call is refused without effect, the task finishes its turn, and the owner's next request carries the grant. Everything is in the database (the event, the task snapshot and a `confirmation.used` event), so a reload or a restart loses nothing, and declining is just a request without the grant.
+- A confirmation is bound to the conversation, the chat the call acts on, the operation and its exact arguments, revision guards included. A grant is consumed when the confirmed call is dispatched, even if the save then fails, and a replay of the same call identity does not consume it twice.
+- The granted request lists the confirmed calls in `source.confirmedCalls`, because the next task does not see the earlier tool calls and must repeat the arguments exactly.
+- Only a confirmation required by the conversation's latest task can be granted (`CONFIRMATION_UNAVAILABLE` otherwise), so a grant never revives an old request. A retry keeps the grants of the task it retries.
+- By default resource deletion and a `resource.patchMany` over three or more resources are held; the threshold is `HELPER_BULK_CONFIRMATION_RESOURCES`. The setting is copied into the task at admission, like the task timeout, and the helper's own `settings.update` cannot change it.
+- The results view does not expose the held call's arguments.
+
 ## Linux data workspace
 
 `data.exec` is defined in `server/helper-data-tools.ts`, with its input schema in `core/main-shell.ts`. The contract the model receives is that description and schema together with the text the workspace gives it: `INDEX.md` (written by `server/helper-shell.ts`), `GUIDE.md` (`server/helper-shell-guide.ts`), the `uimori --help` usage (`runner/uimori.mjs`) and the help of the bundled `tools/repetition.py` (`server/helper-shell-scripts.ts`). They state the workspace layout, on-demand export, apply and refresh, CLI syntax, limits and results. `tests/helper-shell.test.ts`, `tests/helper-shell-runtime.test.ts`, `tests/helper-runner.test.ts` and `tests/helper-cli.test.ts` enforce that contract, including receipts, revision conflicts, unknown outcomes and the termination of child processes. This section records only what those files do not state.
@@ -386,6 +397,7 @@ Constraints on changing these operations:
 - `scene.request` builds its run from `composerRunSnapshot` in `server/composer-run.ts` and reserves it through `store.createRunInTransaction`, so it shares the composer's snapshot and its head, settings, busy-chat and main-model checks. `scene.translate` calls the reader's `requestTranslation`. Neither adds a path of its own.
 - The reservation, the helper receipt and the result target commit in one transaction, and the run's idempotency key is derived from that receipt. Work starts only after the commit and only when this call created it, so a replayed receipt never executes it again.
 - A chat whose run is already queued or running returns `SCENE_REQUEST_BUSY` before the conflict checks, so the helper reports it instead of sending the request again.
+- With `helperConfirmPaidGeneration` on, both operations first wait for the owner's [confirmation](#confirmation-before-destructive-or-bulk-operations).
 
 Outside these operations:
 
