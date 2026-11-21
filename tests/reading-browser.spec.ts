@@ -395,6 +395,7 @@ async function helperFixture(page: Page, before: ChatDetail) {
             taskId: resultsTask.id,
             status: resultsTask.status,
             results: [],
+            changes: [],
             unrecordedOperations: 0,
             usage: { attempts: [], toolExecutions: 0, latestInputEstimate: null },
           },
