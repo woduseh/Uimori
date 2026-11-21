@@ -1,7 +1,13 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { isDeepStrictEqual } from 'node:util';
 import { chatLoreKey, type ChatLoreOverride } from '../core/chat-overrides.js';
-import type { HelperChange, HelperChangeAnchor, HelperTask } from '../core/helper.js';
+import type {
+  HelperChange,
+  HelperChangeAnchor,
+  HelperChangeListSection,
+  HelperChangeLocation,
+  HelperTask,
+} from '../core/helper.js';
 import {
   editableResource,
   resourceListKind,
@@ -117,22 +123,30 @@ function storeChange(
 function resourceTitle(saved: SavedResource) {
   return 'title' in saved ? String(saved.title) : '공통 프롬프트';
 }
-const SECTION_LABELS = { lore: '로어북', prompt: '프롬프트 블록', terms: '번역 표기' } as const;
 const BODY_FIELDS = { lore: 'content', prompt: 'text', terms: 'target' } as const;
-function itemName(section: keyof typeof SECTION_LABELS, item: unknown, index: number): string {
-  if (plain(item)) {
-    const candidates =
-      section === 'lore'
-        ? [item.comment, item.name, item.key, item.keys]
-        : section === 'prompt'
-          ? [item.name, item.type]
-          : [item.source];
-    for (const candidate of candidates) {
-      const value = Array.isArray(candidate) ? candidate[0] : candidate;
-      if (typeof value === 'string' && value.trim()) return shortName(value.trim());
+type ListItem = Extract<HelperChangeLocation, { kind: 'resource-list' }>['item'] & {};
+function listItem(section: HelperChangeListSection, item: unknown, index: number): ListItem {
+  const named: ListItem = { name: null, index };
+  if (!plain(item)) return named;
+  const candidates =
+    section === 'lore'
+      ? [item.comment, item.name, item.key, item.keys]
+      : section === 'prompt'
+        ? [item.name]
+        : [item.source];
+  for (const candidate of candidates) {
+    const value = Array.isArray(candidate) ? candidate[0] : candidate;
+    if (typeof value === 'string' && value.trim()) {
+      named.name = shortName(value.trim());
+      break;
     }
   }
-  return `#${index + 1}`;
+  if (section === 'prompt' && typeof item.type === 'string' && item.type) named.type = item.type;
+  return named;
+}
+function itemName(section: HelperChangeListSection, item: unknown, index: number): string {
+  const { name, type } = listItem(section, item, index);
+  return name ?? type ?? `#${index + 1}`;
 }
 function diffMode(path: string, before: unknown, after: unknown): TextDiffMode {
   if (typeof before !== 'string' && before !== undefined) return 'code';
@@ -145,14 +159,7 @@ function diffMode(path: string, before: unknown, after: unknown): TextDiffMode {
     return 'code';
   return /^\s*[{[<]/u.test(String(after ?? before)) ? 'code' : 'prose';
 }
-function fieldLabel(path: string) {
-  return path
-    .replace(/^\/package\/nativeRisu\/(?:card|module)(?=\/|$)/u, '')
-    .split('/')
-    .filter(Boolean)
-    .map(decode)
-    .join('/');
-}
+const segments = (path: string) => path.split('/').filter(Boolean).map(decode);
 
 function resourceEntries(
   kind: ResourceKind,
@@ -169,7 +176,7 @@ function resourceEntries(
   ): HelperChangeAnchor => ({ domain: 'resource', kind, id, path, section, index });
   const push = (
     action: HelperChange['action'],
-    location: string | null,
+    location: HelperChangeLocation | null,
     diff: TextDiff | null,
     at: HelperChangeAnchor | null
   ) =>
@@ -183,14 +190,26 @@ function resourceEntries(
     push('delete', null, null, null);
     return entries;
   }
-  type Item = { section: 'lore' | 'prompt' | 'terms'; index: number; labels: string[] };
+  type Item = { section: HelperChangeListSection; index: number; list: string; value: unknown };
+  const listLocation = (
+    path: string,
+    section: HelperChangeListSection,
+    item: { value: unknown; index: number } | null,
+    field = ''
+  ): HelperChangeLocation => ({
+    kind: 'resource-list',
+    path: segments(path),
+    section,
+    item: item && listItem(section, item.value, item.index),
+    field: segments(field),
+  });
   const body = (section: Item['section'], item: unknown) =>
     plain(item) && typeof item[BODY_FIELDS[section]] === 'string'
       ? String(item[BODY_FIELDS[section]])
       : null;
   const walk = (a: unknown, b: unknown, path: string, item: Item | null, relative: string) => {
     if (isDeepStrictEqual(a, b)) return;
-    const section = resourceListKind(path.slice(1).split('/').map(decode));
+    const section = resourceListKind(segments(path));
     if (
       section &&
       (Array.isArray(a) || a == null) &&
@@ -208,9 +227,9 @@ function resourceEntries(
       return;
     }
     const mode = diffMode(path, a, b);
-    const location = item
-      ? [...item.labels, fieldLabel(relative)].filter(Boolean).join(' › ')
-      : fieldLabel(path);
+    const location: HelperChangeLocation = item
+      ? listLocation(item.list, item.section, item, relative)
+      : { kind: 'resource-field', path: segments(path) };
     push(
       a === undefined ? 'create' : b === undefined ? 'delete' : 'update',
       location,
@@ -219,18 +238,27 @@ function resourceEntries(
     );
   };
   const list = (a: unknown[], b: unknown[], path: string, section: Item['section']) => {
-    const label = SECTION_LABELS[section];
     const keysA = a.map((item) => JSON.stringify(item));
     const keysB = b.map((item) => JSON.stringify(item));
     if (keysA.length === keysB.length && isDeepStrictEqual(keysA.toSorted(), keysB.toSorted())) {
       const names = (items: unknown[]) =>
         items.map((item, index) => `${itemName(section, item, index)}\n`).join('');
-      push('reorder', label, diffText(names(a), names(b), 'code'), anchor(path, section, null));
+      push(
+        'reorder',
+        listLocation(path, section, null),
+        diffText(names(a), names(b), 'code'),
+        anchor(path, section, null)
+      );
       return;
     }
     const script = alignSequences(keysA, keysB);
     if (!script) {
-      push('update', label, diffText(textOf(a), textOf(b), 'code'), anchor(path, section, null));
+      push(
+        'update',
+        listLocation(path, section, null),
+        diffText(textOf(a), textOf(b), 'code'),
+        anchor(path, section, null)
+      );
       return;
     }
     let x = 0;
@@ -256,7 +284,7 @@ function resourceEntries(
           a[removed[pair]!],
           b[at],
           `${path}/${at}`,
-          { section, index: at, labels: [label, itemName(section, b[at], at)] },
+          { section, index: at, list: path, value: b[at] },
           ''
         );
       }
@@ -264,7 +292,7 @@ function resourceEntries(
         const text = body(section, a[at]);
         push(
           'delete',
-          `${label} › ${itemName(section, a[at], at)}`,
+          listLocation(path, section, { value: a[at], index: at }),
           text === null ? null : diffText(text, '', 'prose'),
           anchor(path, section, null)
         );
@@ -273,7 +301,7 @@ function resourceEntries(
         const text = body(section, b[at]);
         push(
           'create',
-          `${label} › ${itemName(section, b[at], at)}`,
+          listLocation(path, section, { value: b[at], index: at }),
           text === null ? null : diffText('', text, 'prose'),
           anchor(`${path}/${at}`, section, at)
         );
@@ -289,7 +317,7 @@ function resourceEntries(
       domain: 'resource',
       targetId: id,
       title,
-      location: `그 밖의 변경 ${rest}곳`,
+      location: { kind: 'resource-more', count: rest },
       action: 'update',
       diff: null,
       anchor: anchor(null, null, null),
@@ -382,13 +410,12 @@ function sceneEntries(
   const current = typeof after.value === 'string' ? after.value : null;
   if (before === current) return [];
   const diff = diffText(before ?? '', current ?? '', 'prose');
-  const field = { original: '원문', translation: '번역', title: '제목' }[target.field];
   return [
     {
       domain: 'scene',
       targetId: `${target.sourceId}:${target.field}`,
       title: after.label.title,
-      location: `${after.label.scene ? `장면 ${after.label.scene}` : '비활성 장면'} · ${field}`,
+      location: { kind: 'scene', scene: after.label.scene ?? null, field: target.field },
       action: before === null ? 'create' : current === null ? 'delete' : 'update',
       diff,
       anchor: {
@@ -422,7 +449,7 @@ function outlineEntries(
       domain: 'outline',
       targetId: chatId,
       title,
-      location: `${node.level} · ${shortName(node.title)}${field ? ` · ${field}` : ''}`,
+      location: { kind: 'outline', level: node.level, title: shortName(node.title), field },
       action,
       diff,
       anchor: present ? { domain: 'outline', chatId, nodeId: node.id, field } : null,
@@ -482,8 +509,11 @@ function noteEntries(
   );
   const entries: HelperChange[] = [];
   const matched = new Set<string>();
-  const label = (note: NoteState[number]) =>
-    `${note.kind === 'author-note' ? '작가 노트' : note.kind} · ${shortName(note.text.replace(/\s+/gu, ' ').trim())}`;
+  const label = (note: NoteState[number]): HelperChangeLocation => ({
+    kind: 'note',
+    noteKind: note.kind,
+    text: shortName(note.text.replace(/\s+/gu, ' ').trim()),
+  });
   for (const note of after) {
     let origin: string | undefined = note.id;
     const seen = new Set<string>();
@@ -571,7 +601,7 @@ export function recordHelperAction(
     targetId: string;
     chatId: string | null;
     title: string;
-    location: string;
+    location: HelperChangeLocation;
     action: HelperChange['action'];
     anchor: HelperChangeAnchor;
     value?: { before: unknown; after: unknown };
@@ -612,7 +642,7 @@ export function recordHelperChatLoreChange(
     targetId: chatLoreKey(saved.selector),
     chatId,
     title: store.chat(chatId).title,
-    location: '채팅 전용 로어',
+    location: { kind: 'chat-lore' },
     action: saved.retired ? 'delete' : 'update',
     anchor: { domain: 'chat-lore', chatId, overrideId: saved.id },
     value: {

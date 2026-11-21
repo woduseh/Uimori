@@ -27,7 +27,7 @@ export function recordHelperTaskResult(
       targetId: `${target.setting}:${target.id}`,
       chatId,
       title: target.title,
-      location: target.setting,
+      location: { kind: 'setting', setting: target.setting },
       action: 'update',
       anchor: { domain: 'settings', id: target.id, chatId, setting: target.setting },
       ...(target.before !== undefined && target.after !== undefined

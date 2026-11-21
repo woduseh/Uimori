@@ -39,6 +39,11 @@ import { NativeRisuAssetsEditor } from './NativeRisuAssetsEditor.js';
 import { NativeRisuRegexEditor } from './NativeRisuRegexEditor.js';
 import { NativeRisuTriggerEditor } from './NativeRisuTriggerEditor.js';
 import { SectionNavigation } from './SectionNavigation.js';
+import {
+  contentSection,
+  type ContentAdvancedTab,
+  type ContentSection,
+} from './resource-sections.js';
 import './native-editor.css';
 
 const object = (value: unknown): Record<string, unknown> =>
@@ -47,35 +52,12 @@ const object = (value: unknown): Record<string, unknown> =>
     : {};
 const string = (value: unknown) => (typeof value === 'string' ? value : '');
 type SourcePart = 'greetings' | 'lore' | 'regex' | 'triggers' | 'card' | 'module';
-type Section =
-  | 'basic'
-  | 'greetings'
-  | 'lore'
-  | 'assets'
-  | 'translation'
-  | 'appearances'
-  | 'advanced'
-  | 'creator';
-type Advanced = 'instructions' | 'variables' | 'display' | 'scripts' | 'modules' | 'source';
+type Section = ContentSection;
+type Advanced = ContentAdvancedTab;
 
 function anchorSection(anchor: ResourceAnchor): { section: Section; advanced?: Advanced } {
-  const path = anchor.path ?? '';
-  const has = (pattern: RegExp) => pattern.test(path);
-  if (anchor.section === 'lore' || has(/\/(character_book|lorebook)(\/|$)/u))
-    return { section: 'lore' };
-  if (has(/\/(first_mes|alternate_greetings)(\/|$)/u)) return { section: 'greetings' };
-  if (has(/\/uimori\/translationGuide(\/|$)/u)) return { section: 'translation' };
-  if (has(/\/uimori\/illustrationProfiles(\/|$)/u)) return { section: 'appearances' };
-  if (has(/^\/package\/images(\/|$)|\/(assets|emotions)(\/|$)/u)) return { section: 'assets' };
-  if (has(/\/(creator_notes|creator|character_version)(\/|$)/u)) return { section: 'creator' };
-  if (has(/\/(customScripts|triggerscript|regex|trigger|lua)(\/|$)/u))
-    return { section: 'advanced', advanced: 'scripts' };
-  if (has(/\/(backgroundHTML|css)(\/|$)/u)) return { section: 'advanced', advanced: 'display' };
-  if (has(/\/(defaultVariables|customModuleToggle)(\/|$)/u))
-    return { section: 'advanced', advanced: 'variables' };
-  if (has(/\/(system_prompt|post_history_instructions|depth_prompt)(\/|$)/u))
-    return { section: 'advanced', advanced: 'instructions' };
-  return { section: 'basic' };
+  if (anchor.section === 'lore') return { section: 'lore' };
+  return contentSection(anchor.path ?? '') ?? { section: 'basic' };
 }
 
 export function RisuNativeFields({

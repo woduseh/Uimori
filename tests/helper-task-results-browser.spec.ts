@@ -800,7 +800,7 @@ function changeProjection(taskId: string, chatId: string): HelperTaskResultsView
         domain: 'scene',
         targetId: 'scene-source:original',
         title: '등대지기의 밤',
-        location: '장면 3 · 원문',
+        location: { kind: 'scene', scene: 3, field: 'original' },
         action: 'update',
         diff: {
           mode: 'prose',
@@ -835,7 +835,10 @@ function changeProjection(taskId: string, chatId: string): HelperTaskResultsView
         domain: 'resource',
         targetId: 'regex-bot',
         title: '정규식 봇',
-        location: 'extensions/risuai/customScripts',
+        location: {
+          kind: 'resource-field',
+          path: ['package', 'nativeRisu', 'card', 'extensions', 'risuai', 'customScripts'],
+        },
         action: 'update',
         diff: {
           mode: 'code',
@@ -868,7 +871,10 @@ function changeProjection(taskId: string, chatId: string): HelperTaskResultsView
         domain: 'resource',
         targetId: 'large-bot',
         title: '긴 설명 봇',
-        location: 'description',
+        location: {
+          kind: 'resource-field',
+          path: ['package', 'nativeRisu', 'card', 'description'],
+        },
         action: 'update',
         diff: { mode: 'prose', unit: 'word', omitted: 'size' },
         anchor: {
@@ -879,6 +885,42 @@ function changeProjection(taskId: string, chatId: string): HelperTaskResultsView
           section: 'field',
           index: null,
         },
+      },
+      {
+        domain: 'resource',
+        targetId: 'lore-bot',
+        title: '항구 봇',
+        location: {
+          kind: 'resource-list',
+          path: ['package', 'nativeRisu', 'card', 'character_book', 'entries'],
+          section: 'lore',
+          item: { name: '폭풍의 항구 (Storm)', index: 2 },
+          field: ['content'],
+        },
+        action: 'create',
+        diff: null,
+        anchor: null,
+      },
+      {
+        domain: 'resource',
+        targetId: 'custom-bot',
+        title: '사용자 필드 봇',
+        location: {
+          kind: 'resource-field',
+          path: ['package', 'nativeRisu', 'card', 'extensions', 'customField'],
+        },
+        action: 'update',
+        diff: null,
+        anchor: null,
+      },
+      {
+        domain: 'resource',
+        targetId: 'legacy-bot',
+        title: '예전 봇',
+        location: '로어북 › 등대',
+        action: 'update',
+        diff: null,
+        anchor: null,
       },
       {
         domain: 'scene',
@@ -939,7 +981,7 @@ test('HCHANGE01 change cards show marked words, code lines and the states withou
           results.getByRole('button', { name: `${title} 열기`, exact: true })
         ).toHaveCount(0);
       await expect(
-        results.getByRole('button', { name: '등대지기의 밤 장면 3 · 원문 열기', exact: true })
+        results.getByRole('button', { name: '등대지기의 밤, 장면 3, 원문 열기', exact: true })
       ).toBeVisible();
       const label = `${width}-${colorScheme}`;
       await page.screenshot({ path: info.outputPath(`change-cards-${label}.png`) });
@@ -982,6 +1024,58 @@ test('HCHANGE01 change cards show marked words, code lines and the states withou
         await page.screenshot({ path: info.outputPath('change-diffs-expanded-workspace.png') });
       }
     }
+  }
+});
+
+test('HCHANGE04 change locations follow the UI language and keep authored names', async ({
+  page,
+  request,
+}, info) => {
+  const { chat, task } = await seed(request);
+  await page.route(`**/api/helper/tasks/${task.id}/results`, (route) =>
+    route.fulfill({ json: changeProjection(task.id, chat.id) })
+  );
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  const results = page
+    .locator(`.helper-message.assistant[data-task-id="${task.id}"]`)
+    .getByTestId('helper-task-results');
+  const location = (title: string) =>
+    results.locator('.helper-change', { hasText: title }).locator('.helper-change-location > *');
+  const expected = {
+    ko: {
+      scene: ['장면 3', '원문'],
+      regex: ['고급 설정', 'Lua, 트리거, 정규식'],
+      description: ['기본 정보', '카드 설명'],
+      lore: ['로어북', '폭풍의 항구 (Storm)', '로어 본문'],
+    },
+    en: {
+      scene: ['Scene 3', 'Original'],
+      regex: ['Advanced settings', 'Lua, triggers and regex'],
+      description: ['Basic information', 'Card description'],
+      lore: ['Lorebook', '폭풍의 항구 (Storm)', 'Lore text'],
+    },
+  };
+  for (const locale of ['ko', 'en'] as const) {
+    if (locale !== 'ko')
+      await page.evaluate((value) => {
+        localStorage.setItem('uimori:ui-language', value);
+        dispatchEvent(new StorageEvent('storage', { key: 'uimori:ui-language', newValue: value }));
+      }, locale);
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    const parts = expected[locale];
+    await expect(location('등대지기의 밤')).toHaveText(parts.scene);
+    await expect(location('정규식 봇')).toHaveText(parts.regex);
+    await expect(location('긴 설명 봇')).toHaveText(parts.description);
+    await expect(location('항구 봇')).toHaveText(parts.lore);
+    await expect(location('예전 봇')).toHaveText(['로어북 › 등대']);
+    await expect(results.locator('.helper-change-location code')).toHaveText([
+      'extensions/customField',
+    ]);
+    for (const text of await results.locator('.helper-change-location').allTextContents())
+      expect(text).not.toContain('·');
+    await page.screenshot({ path: info.outputPath(`change-locations-${locale}.png`) });
   }
 });
 
@@ -1070,7 +1164,7 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
         domain: 'scene',
         targetId: `${source.id}:original`,
         title: chat.title,
-        location: '장면 1 · 원문',
+        location: { kind: 'scene', scene: 1, field: 'original' },
         action: 'update',
         diff: {
           mode: 'prose',
@@ -1101,7 +1195,13 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
         domain: 'resource',
         targetId: content.id,
         title: content.title,
-        location: '로어북 › 폭풍',
+        location: {
+          kind: 'resource-list',
+          path: ['package', 'nativeRisu', 'card', 'character_book', 'entries'],
+          section: 'lore',
+          item: { name: '폭풍', index: 0 },
+          field: ['content'],
+        },
         action: 'update',
         diff: {
           mode: 'prose',
@@ -1141,7 +1241,7 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
   const helper = page.locator('#helper-panel');
   const results = helper.getByTestId('helper-task-results');
   await results
-    .getByRole('button', { name: `${chat.title} 장면 1 · 원문 열기`, exact: true })
+    .getByRole('button', { name: `${chat.title}, 장면 1, 원문 열기`, exact: true })
     .click();
   await expect.poll(() => new URL(page.url()).searchParams.get('source')).toBe(source.id);
   const marked = page.locator(`[data-source-id="${source.id}"] .arrival-mark`);
@@ -1156,7 +1256,7 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
 
   await helper.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
   await results
-    .getByRole('button', { name: `${content.title} 로어북 › 폭풍 열기`, exact: true })
+    .getByRole('button', { name: `${content.title}, 로어북, 폭풍, 로어 본문 열기`, exact: true })
     .click();
   const library = page.getByTestId('library-panel');
   await expect(library.getByRole('tab', { name: '로어북', exact: true })).toHaveAttribute(
@@ -1177,7 +1277,7 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
   await name.fill('저장하지 않은 이름');
   await helper.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
   await results
-    .getByRole('button', { name: `${content.title} 로어북 › 폭풍 열기`, exact: true })
+    .getByRole('button', { name: `${content.title}, 로어북, 폭풍, 로어 본문 열기`, exact: true })
     .click();
   await expect(library.getByRole('button', { name: '폭풍', exact: true })).toHaveAttribute(
     'aria-current',
@@ -1190,7 +1290,7 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
   expect(await landing.evaluate((node) => getComputedStyle(node).animationName)).toBe('none');
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await results
-    .getByRole('button', { name: `${content.title} 로어북 › 폭풍 열기`, exact: true })
+    .getByRole('button', { name: `${content.title}, 로어북, 폭풍, 로어 본문 열기`, exact: true })
     .click();
   await expect(landing).toHaveClass(/arrival-mark/);
   expect(await landing.evaluate((node) => getComputedStyle(node).animationName)).toBe(

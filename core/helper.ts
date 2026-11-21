@@ -200,11 +200,27 @@ export type HelperChangeAnchor =
   | { domain: 'notes'; chatId: string; noteId: string }
   | { domain: 'settings'; id: string; chatId: string | null; setting: string }
   | { domain: 'chat-lore'; chatId: string; overrideId: string };
+export type HelperChangeListSection = 'lore' | 'prompt' | 'terms';
+export type HelperChangeLocation =
+  | { kind: 'scene'; scene: number | null; field: 'original' | 'translation' | 'title' }
+  | { kind: 'resource-field'; path: string[] }
+  | {
+      kind: 'resource-list';
+      path: string[];
+      section: HelperChangeListSection;
+      item: { name: string | null; type?: string; index: number } | null;
+      field: string[];
+    }
+  | { kind: 'resource-more'; count: number }
+  | { kind: 'outline'; level: string; title: string; field: 'title' | 'intent' | null }
+  | { kind: 'note'; noteKind: string; text: string }
+  | { kind: 'setting'; setting: string }
+  | { kind: 'chat-lore' };
 export type HelperChange = {
   domain: HelperChangeDomain;
   targetId: string;
   title: string;
-  location: string | null;
+  location: HelperChangeLocation | string | null;
   action: 'create' | 'update' | 'delete' | 'reorder';
   diff: import('./text-diff.js').TextDiff | null;
   anchor: HelperChangeAnchor | null;

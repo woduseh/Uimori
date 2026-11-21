@@ -157,6 +157,19 @@ button.helper-result-target:hover {
 .helper-change-removed {
   color: var(--error);
 }
+.helper-change-location {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.helper-change-location > * + *::before {
+  content: "/" / "";
+  margin-inline: 6px;
+  color: var(--faint);
+}
+.helper-change-location > code {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+}
 .helper-change-action {
   flex-shrink: 0;
   margin-inline-start: auto;

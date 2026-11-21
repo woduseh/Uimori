@@ -459,7 +459,7 @@ test('a scene saved by apply is recorded as the net change of its task', () => {
       {
         domain: 'scene',
         targetId: `${source.id}:original`,
-        location: '장면 1 · 원문',
+        location: { kind: 'scene', scene: 1, field: 'original' },
         action: 'update',
         diff: { added: 1, removed: 1 },
         anchor: { sourceId: source.id, field: 'original', paragraph: 0 },

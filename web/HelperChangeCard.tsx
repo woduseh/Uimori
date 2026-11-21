@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { HelperChange } from '../core/helper.js';
 import type { TextDiffHunk } from '../core/text-diff.js';
+import { helperChangeLocationParts } from './helper-change-location.js';
 import { formatNumber, t } from './i18n.js';
 import { IconButton } from './IconButton.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -126,7 +127,8 @@ export function HelperChangeCard({
       ? t(diff.omitted === 'size' ? 'helperChanges.omittedSize' : 'helperChanges.omittedTime')
       : '';
   const action = actionLabels[change.action];
-  const name = change.location ? `${change.title} ${change.location}` : change.title;
+  const location = change.location ? helperChangeLocationParts(change.location) : [];
+  const name = [change.title, ...location.map((part) => part.text)].join(', ');
   const openable = !!onOpen && !!change.anchor && !change.textRemoved;
   async function open() {
     if (!onOpen || pending.current) return;
@@ -147,7 +149,17 @@ export function HelperChangeCard({
       <Icon size={16} aria-hidden="true" />
       <span className="helper-result-identity">
         <span>{change.title}</span>
-        {change.location && <small>{change.location}</small>}
+        {location.length > 0 && (
+          <small className="helper-change-location">
+            {location.map((part, index) =>
+              part.identifier ? (
+                <code key={index}>{part.text}</code>
+              ) : (
+                <span key={index}>{part.text}</span>
+              )
+            )}
+          </small>
+        )}
       </span>
       {hunks && (hunks.added > 0 || hunks.removed > 0) && (
         <span className="helper-change-stats">

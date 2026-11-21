@@ -19,6 +19,7 @@ import type {
 } from '../core/helper.js';
 import { api } from './api.js';
 import { HelperChangeCard } from './HelperChangeCard.js';
+import { settingsLabels } from './helper-change-location.js';
 import { isStoryUiStyle } from '../core/story-ui-style.js';
 import { formatNumber, t, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
@@ -56,31 +57,6 @@ export function helperTaskUsageTotals(attempts: HelperTaskAttemptUsage[]) {
   ) as Record<(typeof usageFields)[number], RecordedAmount>;
 }
 
-const settingsLabels: Record<string, string> = {
-  'global.mainModel': 'helperResults.globalMainModel',
-  'global.translationModel': 'helperResults.globalTranslationModel',
-  'global.helperModel': 'helperResults.globalHelperModel',
-  'global.contextModel': 'helperResults.globalContextModel',
-  'global.scriptModel': 'helperResults.globalScriptModel',
-  'global.titleModel': 'helperResults.globalTitleModel',
-  'chat.mainModel': 'helperResults.chatMainModel',
-  'chat.mainPromptPreset': 'helperResults.chatMainPromptPreset',
-  'chat.maxCalls': 'helperResults.chatMaxCalls',
-  'chat.storyUi': 'storyUi.enable',
-  'chat.storyUiStyle': 'storyUi.style',
-  'newChat.maxCalls': 'settings.m92',
-  'newChat.storyUi': 'storyUi.enable',
-  'newChat.storyUiStyle': 'storyUi.style',
-  'bot.storyUiTheme': 'storyUi.botDefault',
-  'chat.illustrationProfiles': 'visuals.characterProfiles',
-  'chat.illustrationReferences': 'visuals.m028',
-  'model.pricing': 'helperResults.modelPricing',
-  'vertex.location': 'helperResults.vertexLocation',
-  'chat.variables': 'helperResults.chatVariables',
-  'chat.options': 'helperResults.chatOptions',
-  'chat.storyGuide': 'helperResults.storyGuide',
-  'model.parameters': 'helperResults.modelParameters',
-};
 const targetIcons = {
   content: BookOpen,
   'prompt-preset': FileText,

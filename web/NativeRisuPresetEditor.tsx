@@ -22,6 +22,7 @@ import {
   useEditorSavePreparation,
 } from './resource-editor.js';
 import { SectionNavigation } from './SectionNavigation.js';
+import { presetSection, promptBlockTypeLabels, type PresetSection } from './resource-sections.js';
 import { IconButton } from './IconButton.js';
 import { NativeDeleteDialog } from './NativeDeleteDialog.js';
 import { AddIcon, UpIcon, DownIcon, DeleteIcon, DragHandleIcon } from './ui-icons.js';
@@ -35,7 +36,7 @@ const blockRole = (block: Record<string, unknown>) => {
   return role === 'bot' ? 'assistant' : role;
 };
 
-type Section = 'blocks' | 'options' | 'variables' | 'regex' | 'collaboration';
+type Section = PresetSection;
 type BlockDropTarget = { index: number; position: 'before' | 'after' };
 
 export function NativeRisuPresetEditor({
@@ -58,17 +59,7 @@ export function NativeRisuPresetEditor({
   metadata?: ReactNode;
 }) {
   const { t } = useI18n();
-  const blockTypes: Record<string, string> = {
-    plain: t('native.text_87c554df93'),
-    description: t('native.text_4c515a8bac'),
-    persona: t('native.text_789c237f0d'),
-    lorebook: t('native.text_5ce4911d95'),
-    chat: t('native.text_c0a10149c3'),
-    authornote: t('native.text_ec0f0b70df'),
-    postEverything: t('native.text_bc212cb334'),
-    cache: t('native.text_33ff59f35d'),
-    chatML: 'ChatML',
-  };
+  const blockTypes = promptBlockTypeLabels();
   const source = program.nativeRisuPreset.preset;
   const id = useId();
   const [section, setSection] = useState<Section>('blocks');
@@ -121,13 +112,8 @@ export function NativeRisuPresetEditor({
       ? [{ id: 'collaboration' as const, title: t('native.text_780d3f6ed3') }]
       : []),
   ];
-  const anchorSection = (target: ResourceAnchor): Section => {
-    const path = target.path ?? '';
-    if (target.section === 'prompt' || /\/promptTemplate(\/|$)/u.test(path)) return 'blocks';
-    if (/\/(regex|customScripts)(\/|$)/u.test(path)) return 'regex';
-    if (/\/(defaultVariables|customPromptTemplateToggle)(\/|$)/u.test(path)) return 'variables';
-    return 'options';
-  };
+  const anchorSection = (target: ResourceAnchor): Section =>
+    target.section === 'prompt' ? 'blocks' : (presetSection(target.path ?? '') ?? 'options');
   useAnchorArrival(
     anchor,
     (target) => {

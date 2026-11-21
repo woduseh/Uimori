@@ -155,6 +155,24 @@ export const messages = {
     ja: '削除された行',
     zh: '删除的行',
   },
+  'helperChanges.excludedScene': {
+    ko: '제외된 장면',
+    en: 'Excluded scene',
+    ja: '除外したシーン',
+    zh: '已排除的场景',
+  },
+  'helperChanges.moreChanges': {
+    ko: '그 밖의 변경 {count, number}곳',
+    en: '{count, plural, one {# more change} other {# more changes}}',
+    ja: 'その他の変更 {count, number}か所',
+    zh: '其他 {count, number} 处更改',
+  },
+  'helperChanges.chatLore': {
+    ko: '채팅 전용 로어',
+    en: 'Chat-only lore',
+    ja: 'チャット専用ロア',
+    zh: '聊天专用设定',
+  },
   'helperChanges.created': {
     ko: '새로 만듦',
     en: 'Created',

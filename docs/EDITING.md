@@ -141,7 +141,7 @@ Uimori의 봇·페르소나·모듈·프리셋 자료와 원고를 편집기에�
 - **사본 및 백업 연동**: 채팅 사본/백업과 transcript v2의 선택적 `sceneContext` 필드에서도 이 상태를 보존해요. 기존 transcript v2에는 해당 필드가 없어도 모두 활성 상태로 읽어요. 원본 실행 기록이나 명시적으로 요청한 보존 장면의 편집/조회는 별개의 기능이에요.
 
 ### 도우미 변경 카드 (`HelperChangeCard`)
-- 카드는 `web/HelperChangeCard.tsx`, 목록과 읽기 시점은 `web/HelperTaskResults.tsx`가 맡고, 항목의 뜻은 [HELPER-TOOLS](HELPER-TOOLS.md#conversation-history-and-task-results)에 있어요. `tests/helper-task-results-browser.spec.ts`의 `HCHANGE01`과 `HCHANGE02`가 표시와 읽기 시점을 확인해요.
+- 카드는 `web/HelperChangeCard.tsx`, 목록과 읽기 시점은 `web/HelperTaskResults.tsx`가 맡고, 항목의 뜻은 [HELPER-TOOLS](HELPER-TOOLS.md#conversation-history-and-task-results)에 있어요. `tests/helper-task-results-browser.spec.ts`의 `HCHANGE01`과 `HCHANGE02`가 표시와 읽기 시점을, `HCHANGE04`가 화면 언어를 따르는 위치 표시를 확인해요.
 - 결과 줄(`results`)과 변경 카드(`changes`)는 한 목록이에요. 변경 기록이 있는 자료와 장면 이름의 결과 줄은 숨기고, 설정은 이전 값과 새 값을 담은 결과 줄을 남기고 같은 대상의 변경 카드를 숨겨요. 변경 기록이 생기기 전의 작업은 결과 줄만 가지므로 그대로 보여요.
 - 열기는 `web/main.tsx`의 `openHelperChange`가 영역별로 나눠요. 자료는 `web/resource-anchor.ts`의 컨텍스트로 열린 편집기(`RisuNativeFields`, `NativeRisuPresetEditor`)에 영역과 항목을 넘기고, 편집기가 받으면 지워요. 장면은 `ReaderTarget.changedParagraph`를 `web/useStory.ts`가 블록 앵커와 비율로 바꿔 기존 읽기 위치 복원 경로로 이동해요. 표시는 `web/arrival-mark.ts`가 맡고, 본문 글자 대신 블록 앵커 요소나 편집기 영역에 테두리를 그려요. `HCHANGE03`이 확인해요.
 - 비교 화면의 추가·삭제 색은 의미 색 토큰(`--success-bg`, `--error-bg`)을 쓰고, 색만으로 구분하지 않도록 밑줄과 취소선, 줄 앞의 `+`와 `−`, 화면 낭독기용 문구를 함께 둬요. 높이 상한은 `--diff-max-h`예요.

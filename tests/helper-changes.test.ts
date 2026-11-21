@@ -161,8 +161,12 @@ test('several edits of one scene and one resource in a task leave one net change
 
   const changes = f.changes(task);
   expect(changes.map((change) => [change.domain, change.location, change.action])).toEqual([
-    ['scene', '장면 1 · 원문', 'update'],
-    ['resource', 'description', 'update'],
+    ['scene', { kind: 'scene', scene: 1, field: 'original' }, 'update'],
+    [
+      'resource',
+      { kind: 'resource-field', path: ['package', 'nativeRisu', 'card', 'description'] },
+      'update',
+    ],
   ]);
   const sceneDiff = hunksOf(changes[0]!);
   expect(sceneDiff).toMatchObject({ mode: 'prose', added: 2, removed: 2 });
@@ -220,9 +224,19 @@ test('lore entries, scene titles and created resources get their own entries', (
   );
   const changes = f.changes(task);
   expect(changes.map((change) => [change.domain, change.action, change.location])).toEqual([
-    ['resource', 'create', '로어북 › 마을'],
+    [
+      'resource',
+      'create',
+      {
+        kind: 'resource-list',
+        path: lore.slice(1).split('/'),
+        section: 'lore',
+        item: { name: '마을', index: 0 },
+        field: [],
+      },
+    ],
     ['resource', 'create', null],
-    ['scene', 'create', '장면 2 · 제목'],
+    ['scene', 'create', { kind: 'scene', scene: 2, field: 'title' }],
   ]);
   expect(changes[0]!.anchor).toEqual({
     domain: 'resource',
@@ -234,6 +248,71 @@ test('lore entries, scene titles and created resources get their own entries', (
   });
   expect(changes[1]).toMatchObject({ targetId: created.id, title: '새 봇', diff: null });
   expect(inserted.revision).toBeGreaterThan(bot.revision);
+});
+
+test('a translation, a lore entry field and a regex script have structured locations', () => {
+  const f = fixture();
+  const lore = '/package/nativeRisu/card/character_book/entries';
+  const scripts = '/package/nativeRisu/card/extensions/risuai/customScripts';
+  const bot = f.store.product.content({
+    ...fixtureBotInput('정규식 봇', '설명'),
+    package: nativeContent(
+      {
+        name: '정규식 봇',
+        description: '설명',
+        extensions: {
+          risuai: {
+            customScripts: [{ comment: '꾸밈', in: 'a', out: 'b', type: 'editdisplay' }],
+          },
+        },
+      },
+      { id: 'fixture-owner' }
+    ),
+  });
+  const seed = f.begin();
+  const seeded = f.resource(seed, 'resource.patch', {
+    kind: 'content',
+    id: bot.id,
+    expectedRevision: bot.revision,
+    changes: [
+      {
+        op: 'insert',
+        path: `${lore}/0`,
+        value: { comment: '항구', keys: ['항구'], content: '배' },
+      },
+    ],
+  });
+  f.workspace.finish(seed.id, 'changes-fixture', 1, 'completed', '', null);
+  f.store.editTranslation(f.first.id, {
+    text: 'He crossed the bridge.',
+    expectedRevision: 0,
+    expectedSourceHash: f.first.hash,
+  });
+  const task = f.begin();
+  f.scene(task, 'scene.patch', {
+    ...f.read(f.first.id, 'translation'),
+    changes: [{ oldText: 'bridge', newText: 'river' }],
+  });
+  f.resource(task, 'resource.patch', {
+    kind: 'content',
+    id: bot.id,
+    expectedRevision: seeded.revision,
+    changes: [
+      { op: 'replaceText', path: `${lore}/0/content`, oldText: '배', newText: '큰 배' },
+      { op: 'replaceText', path: `${scripts}/0/out`, oldText: 'b', newText: 'c' },
+    ],
+  });
+  expect(f.changes(task).map((change) => change.location)).toEqual([
+    { kind: 'scene', scene: 1, field: 'translation' },
+    { kind: 'resource-field', path: scripts.slice(1).split('/') },
+    {
+      kind: 'resource-list',
+      path: lore.slice(1).split('/'),
+      section: 'lore',
+      item: { name: '항구', index: 0 },
+      field: ['content'],
+    },
+  ]);
 });
 
 test('a retried operation records once and a failed or cancelled task keeps only committed changes', () => {
@@ -475,9 +554,9 @@ test('outline and author notes record node and note changes, and a deleted targe
   });
   const changes = f.changes(task);
   expect(changes.map((change) => [change.domain, change.action, change.location])).toEqual([
-    ['outline', 'update', 'arc · 1부 · intent'],
-    ['outline', 'create', 'arc · 2부'],
-    ['notes', 'update', '작가 노트 · 그는 강을 두려워한다.'],
+    ['outline', 'update', { kind: 'outline', level: 'arc', title: '1부', field: 'intent' }],
+    ['outline', 'create', { kind: 'outline', level: 'arc', title: '2부', field: null }],
+    ['notes', 'update', { kind: 'note', noteKind: 'author-note', text: '그는 강을 두려워한다.' }],
     ['resource', 'delete', null],
   ]);
   expect(changes[0]!.anchor).toEqual({
