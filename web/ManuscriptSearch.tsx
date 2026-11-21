@@ -14,6 +14,12 @@ import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import './manuscript-search.css';
 
+const shortQueryScripts = /[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+
+function automaticSearchLength(query: string) {
+  return shortQueryScripts.test(query) ? 2 : 3;
+}
+
 const searchLabels = (): Record<SearchKind, string> => ({
   original: t('transfer.m195'),
   translation: t('transfer.m209'),
@@ -102,7 +108,7 @@ export function ManuscriptSearchPanel({
     setTitleLimit(query.trim() ? 5 : 30);
     setError('');
     setBusy(false);
-    if (composing || [...query.trim()].length < 3) return;
+    if (composing || [...query.trim()].length < automaticSearchLength(query)) return;
     const timer = setTimeout(() => void execute.current(), 300);
     return () => {
       clearTimeout(timer);

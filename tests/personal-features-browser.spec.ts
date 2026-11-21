@@ -63,7 +63,9 @@ test('PWUI01 search uses the saved translation and opens its exact scene on desk
       'false'
     );
     await dialog.getByLabel('전체 채팅 검색', { exact: true }).fill('미카');
-    await dialog.getByRole('button', { name: '검색', exact: true }).click();
+    await expect(
+      dialog.getByRole('heading', { name: '본문 검색 결과', exact: true })
+    ).toBeVisible();
     await finishShortSearch(dialog);
     await expect(dialog.getByText('일치하는 원고가 없어요.', { exact: true })).toBeVisible();
     await expect(search).toHaveValue('미카');
