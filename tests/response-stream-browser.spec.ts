@@ -83,6 +83,19 @@ async function streamingWriter(request: APIRequestContext) {
   const chat = await body<Chat>(
     await postFixtureChat(request, { data: { title: `Streaming chat ${randomUUID()}` } })
   );
+  const themes = await body<{ preferences: { revision: number } }>(
+    await request.get('/api/themes')
+  );
+  await body(
+    await request.post('/api/themes/selection', {
+      data: {
+        themeId: 'builtin:forest',
+        targetId: chat.id,
+        scope: 'chat',
+        expectedRevision: themes.preferences.revision,
+      },
+    })
+  );
   return { peer, writer, chat };
 }
 

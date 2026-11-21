@@ -9,6 +9,7 @@ import type { PackageImage } from '../core/package-images.js';
 import type { ChatDetail } from '../core/types.js';
 import { BUILTIN_PALETTES } from '../core/theme-palettes.js';
 import { nativeContent } from './fixtures/native-content.js';
+import { restoreGlobalThemeSelection } from './fixtures/theme-selection.js';
 import {
   navigationAction,
   openChatMenu,
@@ -638,35 +639,44 @@ for (const [layout, width, mode] of readerCases) {
 for (const width of [412]) {
   test(`NARRATIVE ${width}: frames without portrait content use the full manuscript`, async ({
     page,
+    request,
   }, info) => {
-    await page.setViewportSize({ width, height: 1000 });
-    await page.goto('/');
-    await navigationAction(page, '설정');
-    await selectSettingsSection(page, '테마와 색상');
-    {
-      const advanced = page.locator('.theme-advanced:not([open]) > summary');
-      if (await advanced.isVisible()) await advanced.click();
-    }
-    await page.getByText('현재 테마로 예문 보기', { exact: true }).click();
-    const sample = page.locator('.theme-sample');
-    const frame = sample.locator('[data-uimori-part="scene-frame"]');
-    for (const [layout, title] of [
-      ['cinematic', '시네마틱'],
-      ['letter', '편지지'],
-      ['scrapbook', '스크랩북'],
-      ['classic-frame', '클래식 프레임'],
-    ] as const) {
-      await page.getByRole('button', { name: `${title} 테마 적용`, exact: true }).click();
-      await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', `builtin:${layout}`);
-      await expect(frame.locator('[data-uimori-part="scene-portraits"]')).toHaveCount(0);
-      await expect(frame.locator('.portrait')).toBeHidden();
-      await expect(frame.locator('.manuscript')).toHaveCSS('display', 'block');
-      await expect(sample.getByText('첫 번째 장면', { exact: true })).toBeVisible();
-      const body = frame.locator('[slot="body"]');
-      expect((await body.boundingBox())!.width).toBeGreaterThan(100);
-      await noHorizontalOverflow(page, frame);
-      await sample.scrollIntoViewIfNeeded();
-      await sample.screenshot({ path: info.outputPath(`${layout}-no-portrait-${width}.png`) });
+    const baseline = (await (await request.get('/api/themes')).json()).preferences;
+    try {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto('/');
+      await navigationAction(page, '설정');
+      await selectSettingsSection(page, '테마와 색상');
+      {
+        const advanced = page.locator('.theme-advanced:not([open]) > summary');
+        if (await advanced.isVisible()) await advanced.click();
+      }
+      await page.getByText('현재 테마로 예문 보기', { exact: true }).click();
+      const sample = page.locator('.theme-sample');
+      const frame = sample.locator('[data-uimori-part="scene-frame"]');
+      for (const [layout, title] of [
+        ['cinematic', '시네마틱'],
+        ['letter', '편지지'],
+        ['scrapbook', '스크랩북'],
+        ['classic-frame', '클래식 프레임'],
+      ] as const) {
+        await page.getByRole('button', { name: `${title} 테마 적용`, exact: true }).click();
+        await expect(page.locator('html')).toHaveAttribute(
+          'data-uimori-theme',
+          `builtin:${layout}`
+        );
+        await expect(frame.locator('[data-uimori-part="scene-portraits"]')).toHaveCount(0);
+        await expect(frame.locator('.portrait')).toBeHidden();
+        await expect(frame.locator('.manuscript')).toHaveCSS('display', 'block');
+        await expect(sample.getByText('첫 번째 장면', { exact: true })).toBeVisible();
+        const body = frame.locator('[slot="body"]');
+        expect((await body.boundingBox())!.width).toBeGreaterThan(100);
+        await noHorizontalOverflow(page, frame);
+        await sample.scrollIntoViewIfNeeded();
+        await sample.screenshot({ path: info.outputPath(`${layout}-no-portrait-${width}.png`) });
+      }
+    } finally {
+      await restoreGlobalThemeSelection(request, baseline);
     }
   });
 }
