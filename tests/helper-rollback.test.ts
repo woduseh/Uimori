@@ -2,10 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import type { HelperRollbackUnit, HelperTask } from '../core/helper.js';
 import type { Content } from '../core/product.js';
 import { editableResource, type ResourceModel } from '../core/resource-editing.js';
+import * as transport from '../core/transport.js';
+import { createApp } from '../server/app.js';
 import {
   HELPER_CHANGE_RETENTION,
   captureHelperTarget,
@@ -26,6 +28,7 @@ import { Store } from '../server/store.js';
 import { pruneUnusedData } from '../server/unused-data.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { completedSource } from './fixtures/illustration.js';
+import { helperCall, helperDone, selectFixtureModels } from './fixtures/scripted-helper.js';
 
 const owned: { dir: string; store: Store }[] = [];
 afterEach(() => {
@@ -697,3 +700,70 @@ test(
   },
   Math.max(60_000, SEEDS * 1000)
 );
+
+test('the rollback routes preview and restore a task that ran through the app', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-helper-rollback-'));
+  const app = await createApp({
+    dbPath: join(directory, 'app.sqlite'),
+    buildId: 'helper-rollback',
+    testMode: true,
+  });
+  try {
+    selectFixtureModels(app.store);
+    const chat = createFixtureChat(app.store, '경로 채팅');
+    const source = completedSource(app.store, chat.id, '처음 원문이에요.\n');
+    let round = 0;
+    vi.spyOn(transport, 'executeProvider').mockImplementation(async (_target, request, options) => {
+      options.beforeTurn?.();
+      const step = round++;
+      if (step === 0)
+        return helperCall('read', 'scene.read', { sourceId: source.id, target: 'original' });
+      if (step === 1) {
+        const read = (request.input.results as unknown as { callId: string; result: any }[]).find(
+          (item) => item.callId === 'read'
+        )!.result;
+        return helperCall('patch', 'scene.patch', {
+          ...read.editTarget,
+          text: '고친 원문이에요.\n',
+        });
+      }
+      return structuredClone(helperDone);
+    });
+    const conversation = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/helper/conversations',
+        payload: { scope: { kind: 'chat', chatId: chat.id } },
+      })
+    ).json<{ id: string }>();
+    const task = (
+      await app.inject({
+        method: 'POST',
+        url: `/api/helper/conversations/${conversation.id}/messages`,
+        payload: { requestKey: randomUUID(), text: '원문을 고쳐 줘' },
+      })
+    ).json<HelperTask>();
+    const workspace = new HelperWorkspace(app.store);
+    await vi.waitFor(() => expect(workspace.task(task.id).status).toBe('completed'));
+    expect(app.store.source(source.id).text).toBe('고친 원문이에요.\n');
+    const preview = await app.inject({
+      method: 'GET',
+      url: `/api/helper/tasks/${task.id}/rollback`,
+    });
+    expect(preview.json()).toMatchObject({
+      blocked: null,
+      units: [{ unit: `scene:${source.id}`, status: 'restorable' }],
+    });
+    const restored = await app.inject({
+      method: 'POST',
+      url: `/api/helper/tasks/${task.id}/rollback`,
+      payload: { unit: `scene:${source.id}` },
+    });
+    expect(restored.json()).toMatchObject({ units: [{ status: 'restored' }] });
+    expect(app.store.source(source.id).text).toBe('처음 원문이에요.\n');
+  } finally {
+    vi.restoreAllMocks();
+    await app.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
