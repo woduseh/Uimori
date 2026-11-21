@@ -203,7 +203,7 @@ jobs:
       - run: npm run build
       - name: Install managed Chromium
         run: |
-          npx playwright install --with-deps --no-shell chromium
+          npx playwright install --no-shell chromium
           node --input-type=module -e "import { appendFileSync } from 'node:fs'; import { chromium } from '@playwright/test'; appendFileSync(process.env.GITHUB_ENV, 'UIMORI_BROWSER_PATH=' + chromium.executablePath() + '\n');"
       - run: npm run verify:browser -- --shard ${{ matrix.shard }}/3
         env:
