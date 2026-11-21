@@ -163,6 +163,7 @@ import {
   HELPER_TASK_LIMITS,
   HELPER_TOOL_CALL_GRACE,
   HELPER_TOOL_CALL_LIMIT,
+  HELPER_COMPACTION_INPUT_RATIO,
 } from '../core/helper.js';
 import { helperWebSearchCapability } from '../core/helper-web-search.js';
 import { ChatOverridesStore } from './chat-overrides.js';
@@ -1640,7 +1641,7 @@ export class HelperRuntime {
           history.length || previousSummary || results.some(helperRead) || pendingImageReads.length;
         const shouldCompact =
           !providerPaused &&
-          estimate > inputLimit * 0.85 &&
+          estimate > inputLimit * HELPER_COMPACTION_INPUT_RATIO &&
           (readRevision !== lastCompactedReadRevision || estimate > inputLimit);
         if (shouldCompact && (hasSummaryInput || estimate > inputLimit)) {
           const preserved = [

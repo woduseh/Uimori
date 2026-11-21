@@ -102,10 +102,16 @@ export function readHelperTaskResults(store: Store, taskId: string): HelperTaskR
     .prepare(`SELECT json_extract(data,'$.estimatedInputTokens') AS tokens,
       json_extract(data,'$.knownInputTokens') AS known_tokens,
       json_extract(data,'$.unmeasuredFileCount') AS unmeasured_files,
-      json_extract(data,'$.inputTokenLimit') AS input_limit FROM helper_events
+      json_extract(data,'$.inputTokenLimit') AS input_limit,
+      json_extract(data,'$.componentEstimates') AS parts,
+      json_extract(data,'$.execution') AS execution FROM helper_events
       WHERE task_id=? AND kind='input.measured' ORDER BY seq DESC LIMIT 1`)
     .get(taskId);
   const inputLimit = tokens(measured?.input_limit);
+  const parts = measured?.parts
+    ? (JSON.parse(String(measured.parts)) as Record<string, unknown>)
+    : null;
+  const execution = measured?.execution;
   return {
     taskId,
     status: task.status as HelperStatus,
@@ -124,6 +130,17 @@ export function readHelperTaskResults(store: Store, taskId: string): HelperTaskR
           }
         : {}),
       latestInputLimit: inputLimit !== null && inputLimit > 0 ? inputLimit : null,
+      latestInputParts: parts
+        ? {
+            instructions: tokens(parts.instructions),
+            toolSchemas: tokens(parts.toolSchemas),
+            history: tokens(parts.history),
+            source: tokens(parts.source),
+            toolResults: tokens(parts.toolResults),
+          }
+        : null,
+      latestInputExecution:
+        execution === 'codex-native' || execution === 'provider-tool-loop' ? execution : null,
     },
   };
 }

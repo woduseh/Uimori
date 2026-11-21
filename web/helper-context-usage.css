@@ -1,0 +1,84 @@
+.helper-context-usage > summary {
+  width: auto;
+  padding-inline: 8px;
+  color: var(--muted);
+  font-size: var(--font-small);
+}
+.helper-context-usage-summary {
+  display: grid;
+  gap: 4px;
+  justify-items: stretch;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.helper-context-usage-bar {
+  position: relative;
+  display: block;
+  height: 4px;
+  border-radius: var(--radius-small);
+  background: var(--surface-active);
+  overflow: hidden;
+}
+.helper-context-usage-bar::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: calc(var(--usage-share) * 100%);
+  background: var(--accent);
+}
+.helper-context-usage-bar::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--usage-threshold) * 100%);
+  width: 2px;
+  background: var(--text);
+}
+.helper-context-usage-summary[data-level="near"] {
+  color: var(--warning);
+}
+.helper-context-usage-summary[data-level="near"] .helper-context-usage-bar::before {
+  background: var(--warning-line);
+}
+.helper-context-usage-summary[data-level="over"] {
+  color: var(--error);
+}
+.helper-context-usage-summary[data-level="over"] .helper-context-usage-bar::before {
+  background: var(--error-solid);
+}
+.helper-context-usage > .action-menu-body {
+  min-width: 240px;
+}
+.helper-context-usage-body {
+  display: grid;
+  gap: 8px;
+  padding: 6px;
+  font-size: var(--font-small);
+}
+.helper-context-usage-body dl {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+.helper-context-usage-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.helper-context-usage-row dt {
+  color: var(--muted);
+}
+.helper-context-usage-row dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.helper-context-usage-total {
+  padding-top: 4px;
+  border-top: var(--hairline) solid var(--line);
+  font-weight: 600;
+}
+.helper-context-usage-body p {
+  margin: 0;
+  color: var(--muted);
+}

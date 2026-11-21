@@ -622,6 +622,14 @@ test('helper results retain actual batch targets and safe settings outcomes afte
     expect(view.usage.attempts).toHaveLength(3);
     expect(view.usage.latestInputEstimate).toBeGreaterThan(0);
     expect(view.usage.latestInputLimit).toBe(64_000);
+    expect(view.usage.latestInputExecution).toBe('provider-tool-loop');
+    expect(view.usage.latestInputParts).toEqual({
+      instructions: expect.any(Number),
+      toolSchemas: expect.any(Number),
+      history: expect.any(Number),
+      source: expect.any(Number),
+      toolResults: expect.any(Number),
+    });
     expect(response.body).not.toContain('PRIVATE_RESOURCE_BODY');
     expect(response.body).not.toContain('127.0.0.1');
     expect(
@@ -699,6 +707,8 @@ test('task result usage preserves reported native token detail, unknown internal
     latestInputTokens: null,
     latestInputEstimate: 321,
     latestInputLimit: 64_000,
+    latestInputParts: null,
+    latestInputExecution: null,
   });
   expect(JSON.stringify(view)).not.toContain('PRIVATE_');
   expect(JSON.stringify(view)).not.toContain('private-endpoint');

@@ -12,7 +12,9 @@ export function ActionMenu({
   icon: Icon = MoreIcon,
   placement = 'bottom',
   viewport = false,
+  summary,
 }: {
+  summary?: ReactNode;
   label: string;
   children: ReactNode;
   className?: string;
@@ -154,7 +156,7 @@ export function ActionMenu({
       }}
     >
       <summary aria-label={label} title={label}>
-        <Icon size={20} aria-hidden="true" />
+        {summary ?? <Icon size={20} aria-hidden="true" />}
         <span className="sr-only">{label}</span>
       </summary>
       <div

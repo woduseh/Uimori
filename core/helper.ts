@@ -48,6 +48,7 @@ export type HelperStatus =
 export type HelperLimits = { totalCalls: number; helperCalls: number };
 export const HELPER_TASK_LIMITS: Readonly<HelperLimits> = { totalCalls: 128, helperCalls: 64 };
 export const HELPER_TOOL_CALL_LIMIT = 256;
+export const HELPER_COMPACTION_INPUT_RATIO = 0.85;
 export const HELPER_TOOL_CALL_GRACE = 16;
 export type HelperInstruction = {
   id: number;
@@ -234,7 +235,16 @@ export type HelperTaskResultsView = {
     knownInputEstimate?: number | null;
     unmeasuredFileCount?: number;
     latestInputLimit?: number | null;
+    latestInputParts?: HelperInputParts | null;
+    latestInputExecution?: 'provider-tool-loop' | 'codex-native' | null;
   };
+};
+export type HelperInputParts = {
+  instructions: number | null;
+  toolSchemas: number | null;
+  history: number | null;
+  source: number | null;
+  toolResults: number | null;
 };
 export type HelperResourceEditResource = {
   kind: import('./resource-editing.js').ResourceKind;

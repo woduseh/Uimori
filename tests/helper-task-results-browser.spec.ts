@@ -1198,3 +1198,86 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
   );
   await expect(landing).not.toHaveClass(/arrival-mark/, { timeout: 5000 });
 });
+
+test('HUSAGE01 the composer shows the latest context estimate, its parts and the compaction mark', async ({
+  page,
+  request,
+}, info) => {
+  const { chat, task } = await seed(request);
+  const usage: HelperTaskResultsView['usage'] = {
+    toolExecutions: 3,
+    attempts: [],
+    latestInputEstimate: 240_000,
+    latestInputLimit: 272_000,
+    latestInputExecution: 'provider-tool-loop',
+    latestInputParts: {
+      instructions: 6_100,
+      toolSchemas: 14_200,
+      history: 180_000,
+      source: 30_000,
+      toolResults: null,
+    },
+  };
+  await page.route(`**/api/helper/tasks/${task.id}/results`, (route) =>
+    route.fulfill({
+      json: {
+        taskId: task.id,
+        status: 'completed',
+        results: [],
+        changes: [],
+        unrecordedOperations: 0,
+        usage,
+      } satisfies HelperTaskResultsView,
+    })
+  );
+  for (const [width, height, colorScheme] of [
+    [1440, 900, 'light'],
+    [1440, 900, 'dark'],
+    [412, 915, 'light'],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await page.goto(`/?chat=${chat.id}`);
+    await openHelper(page);
+    const helper = page.locator('#helper-panel');
+    const meter = helper.locator('.helper-context-usage > summary');
+    await expect(meter).toContainText('컨텍스트 약');
+    await expect(meter).toHaveAttribute(
+      'aria-label',
+      '컨텍스트 사용량: 추정 240,000 / 예산 272,000 토큰'
+    );
+    await expect(meter.locator('[data-level="near"]')).toHaveCount(1);
+    await meter.click();
+    const body = helper.locator('.helper-context-usage-body').filter({ visible: true });
+    for (const [label, value] of [
+      ['지시문', '6,100'],
+      ['도구 설명', '14,200'],
+      ['대화', '180,000'],
+      ['원문과 자료', '30,000'],
+      ['도구 결과', '미확인'],
+      ['합계 (추정)', '240,000'],
+      ['입력 예산', '272,000'],
+      ['자동 정리 기준', '231,200'],
+    ])
+      await expect(
+        body.locator('.helper-context-usage-row').filter({ hasText: label }).locator('dd')
+      ).toHaveText(value);
+    await page.screenshot({ path: info.outputPath(`context-usage-${width}-${colorScheme}.png`) });
+    await page.keyboard.press('Escape');
+  }
+  usage.latestInputExecution = 'codex-native';
+  usage.latestInputTokens = 90_040;
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  const native = page.locator('#helper-panel .helper-context-usage > summary');
+  await expect(native).not.toContainText('약');
+  await expect(native.locator('.helper-context-usage-bar')).toHaveCount(0);
+  usage.latestInputExecution = 'provider-tool-loop';
+  usage.latestInputTokens = null;
+  usage.latestInputEstimate = null;
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  await expect(page.locator('#helper-panel .helper-context-usage > summary')).toContainText(
+    '컨텍스트 미확인'
+  );
+});

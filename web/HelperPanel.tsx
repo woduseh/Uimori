@@ -63,6 +63,7 @@ import { PartialResponse, ResponseDisplay } from './StreamingResponse.js';
 import type { ResponseDisplayMode } from './presentation-settings.js';
 import { HelperArtifactCard } from './HelperArtifactCard.js';
 import { HelperTaskResults } from './HelperTaskResults.js';
+import { HelperContextUsage } from './HelperContextUsage.js';
 import {
   HelperDeleteActions,
   HelperResponseEditor,
@@ -419,6 +420,16 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   const tasks = data.current?.tasks ?? [];
   const taskMap = new Map(tasks.map((task) => [task.id, task]));
   const latestTaskId = messages.findLast((message) => taskMap.has(message.taskId))?.taskId;
+  const [latestUsage, setLatestUsage] = useState<{
+    taskId: string;
+    usage: import('../core/helper.js').HelperTaskResultsView['usage'];
+  } | null>(null);
+  const reportUsage = useCallback(
+    (taskId: string, usage: import('../core/helper.js').HelperTaskResultsView['usage']) =>
+      setLatestUsage({ taskId, usage }),
+    []
+  );
+  const shownUsage = latestUsage && latestUsage.taskId === latestTaskId ? latestUsage.usage : null;
   const running = tasks.find((task) => task.status === 'running');
   const panel = useRef<HTMLElement>(null);
   useShortcut('run.stop', () => running && void cancel(running), {
@@ -1676,6 +1687,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                         status={task.status}
                         visible={props.open}
                         eager={task.id === latestTaskId}
+                        onUsage={task.id === latestTaskId ? reportUsage : undefined}
                         onOpenTarget={props.onOpenTarget}
                         onOpenChange={props.onOpenChange}
                       />
@@ -2159,6 +2171,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               addFiles={attachments.addFiles}
             />
             {modelChip}
+            {shownUsage && <HelperContextUsage usage={shownUsage} />}
             <IconButton
               label={t('helpers.m106')}
               icon={History}
