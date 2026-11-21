@@ -403,3 +403,32 @@ export function compileReadingMarkdown(
     chunks.push(plain.renderer.render(tokens.slice(chunkStart), plain.options, environment));
   return { html: chunks.join(''), inlineAnchors };
 }
+
+const fenceOpening = /^ {0,3}(`{3,}|~{3,})(.*)$/u;
+const fenceClosing = /^ {0,3}(`{3,}|~{3,})[\t ]*$/u;
+export function splitCompletedParagraphs(text: string): { complete: string; pending: string } {
+  let fence: string | undefined;
+  let storyUi = false;
+  let boundary = 0;
+  let offset = 0;
+  for (const line of text.split(/(?<=\n)/u)) {
+    offset += line.length;
+    const content = line.replace(/\r?\n$/u, '');
+    if (fence) {
+      const closing = content.match(fenceClosing)?.[1];
+      if (closing?.[0] === fence[0] && closing.length >= fence.length) fence = undefined;
+      continue;
+    }
+    const opening = content.match(fenceOpening);
+    if (opening && !(opening[1][0] === '`' && opening[2].includes('`'))) {
+      fence = opening[1];
+      continue;
+    }
+    const opened = content.lastIndexOf('<a2ui>');
+    const closed = content.lastIndexOf('</a2ui>');
+    if (opened > closed) storyUi = true;
+    else if (closed >= 0) storyUi = false;
+    if (!storyUi && line.endsWith('\n') && !content.trim()) boundary = offset;
+  }
+  return { complete: text.slice(0, boundary), pending: text.slice(boundary) };
+}

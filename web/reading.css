@@ -53,7 +53,7 @@
   flex: 1 1 200px;
 }
 [data-reading-paragraph-spacing="custom"] .helper-prose,
-[data-reading-paragraph-spacing="custom"] .streaming-text {
+[data-reading-paragraph-spacing="custom"] .streaming-pending {
   white-space: normal;
 }
 [data-reading-paragraph-spacing="custom"] .reading-plain-paragraph {

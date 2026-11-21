@@ -130,7 +130,8 @@
   - `web/reading-quotes.ts`: 문장 부호 짝맞춤 및 역할 분석
   - `web/reading-dom.ts`: 완료 본문 DOM 장식 및 인용 스타일링
   - `web/reading-prose.css`: 공통 인용 및 타이포그래피 스타일
-  - `web/PlainProse.tsx`: 스트리밍 중 보호 토큰 및 문자 그대로 표시 처리
+  - `web/PlainProse.tsx`: 스트리밍 중 아직 쓰는 마지막 문단의 보호 토큰 및 문자 그대로 표시 처리
+- **생성 중 문단 표시**: 생성 중인 글은 빈 줄로 끝난 앞부분을 완성 본문과 같은 컴파일러로 렌더하고(본편은 `Prose`, 도우미는 완성 답변과 같은 `HelperMessageProse`), 쓰는 중인 마지막 문단만 같은 글꼴의 일반 글로 둬요. 닫히지 않은 코드 펜스나 `<a2ui>` 블록 안의 빈 줄은 문단 끝으로 치지 않아요(`splitCompletedParagraphs`, `tests/prose.test.ts`). 봇 채팅의 완성 본문은 서버의 Risu 렌더러가 장면 테마 틀 안에 그리므로 글꼴과 줄 폭은 같지만(`tests/response-stream-browser.spec.ts`), 완료 순간 장면 틀과 Risu 문단 여백 차이만큼 세로 위치가 바뀔 수 있어요.
   - `web/reader-dom.ts`: Shadow DOM 내 선택 영역 및 읽기 좌표 연결
 - **안전한 Markdown 규격**: 속성 없는 HTML 중 루비 문자(`ruby`, `rb`, `rt`, `rp`), 밑줄(`u`), 위/아래 첨자(`sup`, `sub`), 형광펜 강조(`mark`), 작은 글씨(`small`), 단순 서식(`b`, `i`, `s`), 줄바꿈(`br`)만 제한적으로 렌더링해요. 그 외의 모든 임의 HTML 태그나 속성이 포함된 태그는 문자 그대로 이스케이프하여 노출해요. 삽화는 완결된 Markdown 컨테이너 뒤에만 넣고, 목록·표 중간처럼 안전한 경계가 없는 기존 이미지와 삽화는 본문 아래에 표시해요.
 - **Geometry Marker와 스크롤 복원**: 표시 변환을 거친 본문과 실제 렌더링된 DOM 엘리먼트 사이의 좌표를 임시 geometry marker로 연결해요. 이 마커는 사용자 텍스트 선택, 클릭, 접근성 트리, 레이아웃에 일절 참여하지 않으며 창 크기나 폰트가 변경될 때 재계산돼요.

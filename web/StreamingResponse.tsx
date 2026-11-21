@@ -7,7 +7,9 @@ import type {
   ResponseTaskKind,
 } from '../core/response-stream.js';
 import { api, apiEvents, ApiError } from './api.js';
-import { PlainProse } from './Prose.js';
+import { PlainProse, Prose } from './Prose.js';
+import { HelperMessageProse } from './HelperMessageProse.js';
+import { splitCompletedParagraphs } from '../core/reading-markdown.js';
 import { LoadingState } from './LoadingState.js';
 import { parseStoryUi } from '../core/story-ui.js';
 import { StoryUi } from './LazyStoryUi.js';
@@ -30,12 +32,57 @@ function StreamingStoryBlock({ text, style, runId }: StreamingStoryProps) {
   return part?.kind === 'ui' ? <StoryUi segment={part} style={style} /> : null;
 }
 
-export function StreamingStoryText({ text, style, runId }: StreamingStoryProps) {
+function streamingParagraphs(text: string, finished: boolean) {
+  return finished ? { complete: text, pending: '' } : splitCompletedParagraphs(text);
+}
+
+function PendingParagraph({ text }: { text: string }) {
+  return text ? (
+    <p className="streaming-pending">
+      <PlainProse text={text} />
+    </p>
+  ) : null;
+}
+
+function StreamingProse({ text, finished }: { text: string; finished: boolean }) {
+  const { complete, pending } = streamingParagraphs(text, finished);
   return (
     <>
-      {parseStoryUi(text).map((part) =>
+      {complete && <Prose text={complete} />}
+      <PendingParagraph text={pending} />
+    </>
+  );
+}
+
+function StreamingHelperText({ text, finished }: { text: string; finished: boolean }) {
+  const { complete, pending } = streamingParagraphs(text, finished);
+  return (
+    <HelperMessageProse text={complete}>
+      <PendingParagraph text={pending} />
+    </HelperMessageProse>
+  );
+}
+
+export function StreamingStoryText({
+  text,
+  style,
+  runId,
+  finished = false,
+}: StreamingStoryProps & { finished?: boolean }) {
+  const parts = parseStoryUi(text);
+  return (
+    <>
+      {parts.map((part, index) =>
         part.kind === 'prose' ? (
-          <PlainProse key={part.id} text={part.text.replace(/<(?:a(?:2(?:u(?:i)?)?)?)?$/u, '')} />
+          index === parts.length - 1 ? (
+            <StreamingProse
+              key={part.id}
+              text={part.text.replace(/<(?:a(?:2(?:u(?:i)?)?)?)?$/u, '')}
+              finished={finished}
+            />
+          ) : (
+            <Prose key={part.id} text={part.text} />
+          )
         ) : part.kind === 'ui' ? (
           <StoryUi key={part.id} segment={part} style={style} />
         ) : part.kind === 'invalid' && part.text.startsWith('<a2ui>') ? (
@@ -316,15 +363,23 @@ export function StreamingResponse({
           <small>{t('reader.partialResponseReceived')}</small>
         )
       )}
-      {[...parts].map(([key, value]) => (
-        <div className="streaming-text" key={key}>
-          {taskKind === 'main' ? (
-            <StreamingStoryText text={value} style={storyUiStyle} runId={taskId} />
-          ) : (
-            <PlainProse text={value} />
-          )}
-        </div>
-      ))}
+      {[...parts].map(([key, value], index) => {
+        const finished = status !== 'running' || index < parts.size - 1;
+        return taskKind === 'main' ? (
+          <div className="streaming-text prose" key={key}>
+            <StreamingStoryText
+              text={value}
+              style={storyUiStyle}
+              runId={taskId}
+              finished={finished}
+            />
+          </div>
+        ) : (
+          <div className="streaming-text" key={key}>
+            <StreamingHelperText text={value} finished={finished} />
+          </div>
+        );
+      })}
     </div>
   );
 }

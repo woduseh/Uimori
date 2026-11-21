@@ -106,9 +106,11 @@
 }
 
 .streaming-text {
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
-  line-height: var(--reading-line-height, 1.7);
+  color: var(--text);
+}
+.streaming-pending {
+  white-space: pre-wrap;
 }
 .helper-task {
   font-size: var(--font-body);

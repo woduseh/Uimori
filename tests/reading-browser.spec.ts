@@ -466,6 +466,14 @@ test('READUI02 helper answers, archived scenes and public streams share reading 
       const answerHeight = (await answer.boundingBox())!.height;
       await expect(scene).toHaveText(artifactText);
       await expect(stream).toHaveText(streamText);
+      const typography = (target: Locator) =>
+        target.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return [style.fontFamily, style.fontSize, style.lineHeight, style.color];
+        });
+      expect(await typography(stream.locator('.streaming-pending'))).toEqual(
+        await typography(answer.locator('p').first())
+      );
       await expect(panel.locator('.reading-quote-break')).toHaveCount(0);
       await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
       await expect(panel).toBeHidden();

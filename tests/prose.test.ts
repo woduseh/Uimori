@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, test } from 'vitest';
 import { Prose, safeProseLink } from '../web/Prose.js';
+import { splitCompletedParagraphs } from '../core/reading-markdown.js';
 import { webCitationLinks } from '../core/helper-web-search.js';
 
 const render = (text: string) =>
@@ -204,5 +205,27 @@ describe('safe prose rendering', () => {
     );
     expect(html.match(/<p>/gu)).toHaveLength(300);
     expect(html).not.toContain('<x-state');
+  });
+});
+
+describe('streaming paragraph completion', () => {
+  test('keeps only the paragraph still being written outside the compiled prefix', () => {
+    expect(splitCompletedParagraphs('첫 문단.\n\n둘째 문')).toEqual({
+      complete: '첫 문단.\n\n',
+      pending: '둘째 문',
+    });
+    expect(splitCompletedParagraphs('한 줄\n이어진 줄')).toEqual({
+      complete: '',
+      pending: '한 줄\n이어진 줄',
+    });
+  });
+
+  test('does not complete paragraphs inside an unclosed code fence or story UI block', () => {
+    const fenced = '앞 문단.\n\n```js\nconst a = 1;\n\nconst b = 2;\n';
+    expect(splitCompletedParagraphs(fenced).complete).toBe('앞 문단.\n\n');
+    expect(splitCompletedParagraphs(`${fenced}\`\`\`\n\n뒤`).complete).toBe(`${fenced}\`\`\`\n\n`);
+    const story = '앞 문단.\n\n<a2ui>\n{"a":1}\n\n{"b":2}';
+    expect(splitCompletedParagraphs(story).complete).toBe('앞 문단.\n\n');
+    expect(splitCompletedParagraphs(`${story}\n</a2ui>\n\n뒤`).pending).toBe('뒤');
   });
 });

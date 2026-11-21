@@ -171,3 +171,54 @@ test('STREAMLIVE hiding the tab releases the main stream and resuming continues 
     await peer.close();
   }
 });
+
+const paragraphGeometry = (page: Page, selector: string) =>
+  page
+    .locator(selector)
+    .first()
+    .evaluate((element) => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return {
+        text: element.textContent,
+        height: rect.height,
+        left: rect.left,
+        width: rect.width,
+        font: [style.fontFamily, style.fontSize, style.fontWeight, style.lineHeight, style.color],
+      };
+    });
+
+test('STREAMRENDER completed paragraphs stream with the compiler, font and line width of the finished text', async ({
+  page,
+  request,
+}) => {
+  const { peer, writer, chat } = await streamingWriter(request);
+  try {
+    const run = await startRun(request, chat, '두 문단으로 써 주세요.');
+    await page.goto(`/?chat=${chat.id}`);
+    const pending = page.locator(`[data-testid="pending-run"][data-run-id="${run.id}"]`);
+    const live = await writer;
+    const first = '미라는 **등대** 계단을 올랐다.';
+    live.write(`${first}\n\n바람이 창을`);
+    const streamed = pending.locator('.streaming-text p');
+    await expect(streamed).toHaveCount(2);
+    await expect(streamed.first().locator('strong')).toHaveText('등대');
+    await expect(pending.locator('.streaming-pending')).toHaveText('바람이 창을');
+    await settle(page);
+    const before = await paragraphGeometry(page, '[data-testid="pending-run"] .streaming-text p');
+    const pendingFont = await paragraphGeometry(
+      page,
+      '[data-testid="pending-run"] .streaming-pending'
+    );
+    expect(pendingFont.font).toEqual(before.font);
+    live.write(' 두드렸다.');
+    live.finish();
+    await expect(pending).toHaveCount(0);
+    await expect(page.getByTestId('source-text').locator('p')).toHaveCount(2);
+    await settle(page);
+    const after = await paragraphGeometry(page, '[data-testid="source-text"] p');
+    expect(after).toEqual(before);
+  } finally {
+    await peer.close();
+  }
+});

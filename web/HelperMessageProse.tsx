@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Copy } from 'lucide-react';
 import { IconButton } from './IconButton.js';
@@ -43,7 +43,7 @@ function CodeCopy({ text, index }: { text: string; index: number }) {
   );
 }
 
-export function HelperMessageProse({ text }: { text: string }) {
+export function HelperMessageProse({ text, children }: { text: string; children?: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
   const [slots, setSlots] = useState<{ host: HTMLElement; text: string; language: string }[]>([]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: A new answer replaces Prose's compiled DOM.
@@ -67,6 +67,7 @@ export function HelperMessageProse({ text }: { text: string }) {
   return (
     <div ref={root} className="helper-prose">
       <Prose text={text} />
+      {children}
       {slots.map((slot, index) =>
         createPortal(
           <>
