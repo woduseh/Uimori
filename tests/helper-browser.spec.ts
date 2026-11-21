@@ -852,7 +852,7 @@ test('HELPSENDKEY desktop helper composer follows the app send-key setting and n
   await page.goto(`/?chat=${chat.id}`);
   let panel = await open(page);
   let input = panel.getByLabel('도우미에게 요청');
-  await expect(input).toHaveAttribute('placeholder', '도우미에게 요청하기');
+  await expect(input).toHaveAttribute('placeholder', '도우미에게 요청하기 (Ctrl+Enter 보내기)');
   await input.fill('첫 줄');
   await input.press('Enter');
   await expect(input).toHaveValue('첫 줄\n');

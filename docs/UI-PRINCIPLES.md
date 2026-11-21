@@ -90,7 +90,7 @@ Screen notes that no feature document or test states:
 
 ### Composers and helper results
 
-- The main and helper composers follow one app send-key setting: by default `Enter` inserts a newline and `Ctrl/Cmd+Enter` sends. Korean composition never sends. A placeholder names the send key only when `Enter` sends.
+- The main and helper composers follow one app send-key setting: by default `Enter` inserts a newline and `Ctrl/Cmd+Enter` sends. Korean composition never sends. Outside compact layouts, both placeholders name the current send key, with `Cmd` on Apple platforms.
 - Helper results identify confirmed changed targets and open their current destination; deleted targets remain recorded without an open action. A locally measured input is labelled as an estimate, and its budget meter may appear in the usage disclosure or near the composer. Missing values remain unknown. Review and undo of helper changes follow [EDITING](EDITING.md).
 
 ### Theme and authored content

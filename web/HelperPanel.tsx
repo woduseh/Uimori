@@ -57,7 +57,7 @@ import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { elapsedLabel } from './ActivityStatus.js';
 import { TurnStatus, type StatusTone } from './TurnStatus.js';
 import { ActivityBar } from './ActivityBar.js';
-import { ChatComposer, ComposerInput } from './ChatComposer.js';
+import { ChatComposer, ComposerInput, sendKeyLabel } from './ChatComposer.js';
 import { IconButton } from './IconButton.js';
 import { PartialResponse, ResponseDisplay } from './StreamingResponse.js';
 import type { ResponseDisplayMode } from './presentation-settings.js';
@@ -2121,9 +2121,9 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               props.ready === false || !conversation || !hydrated[scopeKey] || !attachments.ready
             }
             placeholder={
-              props.enterSend && !compact
-                ? t('helpers.requestPlaceholder', { key: 'Enter' })
-                : t('helpers.m104')
+              compact
+                ? t('helpers.m104')
+                : t('helpers.requestPlaceholder', { key: sendKeyLabel(props.enterSend) })
             }
             maxLength={REQUEST_TEXT_MAX_CHARS}
             onChange={(event) => editDraft(event.target.value)}
