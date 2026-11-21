@@ -14,7 +14,6 @@ import type {
   Run,
 } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { fulfillResponseEvents } from './fixtures/response-events.js';
 
 test.setTimeout(60000);
 
@@ -565,24 +564,26 @@ test('DISPLAY main complete mode waits for the canonical source across refresh a
       localStorage.setItem('uimori:response-display', 'complete');
   });
   let reads = 0;
-  await page.route(`**/api/response-streams/main/${run.id}/events?*`, async (route) => {
+  await page.route(`**/api/response-streams/main/${run.id}?*`, async (route) => {
     reads++;
-    await fulfillResponseEvents(route, {
-      taskKind: 'main',
-      taskId: run.id,
-      status: 'completed',
-      cursor: 1,
-      hasMore: false,
-      chunks: [
-        {
-          seq: 1,
-          segment: 0,
-          attemptId: 'public',
-          text: '후처리 전 공개 응답',
-          offset: '후처리 전 공개 응답'.length,
-        },
-      ],
-    } satisfies ResponseStreamPage);
+    await route.fulfill({
+      json: {
+        taskKind: 'main',
+        taskId: run.id,
+        status: 'completed',
+        cursor: 1,
+        hasMore: false,
+        chunks: [
+          {
+            seq: 1,
+            segment: 0,
+            attemptId: 'public',
+            text: '후처리 전 공개 응답',
+            offset: '후처리 전 공개 응답'.length,
+          },
+        ],
+      } satisfies ResponseStreamPage,
+    });
   });
   const state = await harness(page, seeded.chat.id, (body) => pendingDisplay(body, 'running'));
   const pending = page.getByTestId('pending-run');

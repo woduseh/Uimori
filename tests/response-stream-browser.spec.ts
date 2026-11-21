@@ -99,10 +99,10 @@ async function startRun(request: APIRequestContext, chat: Chat, text: string) {
   );
 }
 
-function trackEventStreams(page: Page, runId: string) {
+function trackStreamReads(page: Page, runId: string) {
   const open = new Set<unknown>();
   const cursors: string[] = [];
-  const matches = (url: string) => url.includes(`/api/response-streams/main/${runId}/events`);
+  const matches = (url: string) => url.includes(`/api/response-streams/main/${runId}?`);
   page.on('request', (item) => {
     if (!matches(item.url())) return;
     open.add(item);
@@ -127,14 +127,14 @@ const settle = (page: Page) =>
       )
   );
 
-test('STREAMLIVE hiding the tab releases the main stream and resuming continues from its cursor', async ({
+test('STREAMLIVE hiding the tab pauses main stream reads and resuming continues from its cursor', async ({
   page,
   request,
 }) => {
   const { peer, writer, chat } = await streamingWriter(request);
   try {
     const run = await startRun(request, chat, '등대 장면을 이어 써 주세요.');
-    const streams = trackEventStreams(page, run.id);
+    const streams = trackStreamReads(page, run.id);
     await page.goto(`/?chat=${chat.id}`);
     const pending = page.locator(`[data-testid="pending-run"][data-run-id="${run.id}"]`);
     const live = await writer;
@@ -143,14 +143,13 @@ test('STREAMLIVE hiding the tab releases the main stream and resuming continues 
     const third = ' 불빛이 바다를 갈랐다.';
     live.write(first);
     await expect(pending.locator('.streaming-text')).toHaveText(first);
-    await expect.poll(streams.open).toBe(1);
 
     await setHidden(page, true);
     await expect.poll(streams.open).toBe(0);
-    const reconnects = streams.cursors.length;
+    const reads = streams.cursors.length;
     live.write(second);
-    await page.waitForTimeout(400);
-    expect(streams.cursors).toHaveLength(reconnects);
+    await page.waitForTimeout(700);
+    expect(streams.cursors).toHaveLength(reads);
     await expect(pending.locator('.streaming-text')).toHaveText(first);
 
     await setHidden(page, false);

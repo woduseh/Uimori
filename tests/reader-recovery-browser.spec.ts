@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { ChatDetail, Job, ReaderDetail } from '../core/types.js';
-import { pageAfter, serveResponseEvents } from './fixtures/response-events.js';
+import type { ResponseStreamPage } from '../core/response-stream.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { nativeProse } from './fixtures/native-message.js';
 import { trackPageFetches } from './fixtures/page-fetches.js';
@@ -792,23 +792,22 @@ test('NOTICELOAD response waits are centered and keep streamed text until the sa
     body.reader.cursor = cursor;
     await route.fulfill({ response, json: body });
   });
-  await page.route(`**/api/response-streams/main/${run.id}/events?*`, async (route) => {
+  await page.route(`**/api/response-streams/main/${run.id}?*`, async (route) => {
     streamReads++;
-    await serveResponseEvents(route, (after) =>
-      pageAfter(
-        {
-          taskKind: 'main',
-          taskId: run.id,
-          status: completed ? 'completed' : 'running',
-          cursor: 0,
-          hasMore: false,
-          chunks: publicText
+    const after = Number(new URL(route.request().url()).searchParams.get('after') ?? 0);
+    await route.fulfill({
+      json: {
+        taskKind: 'main',
+        taskId: run.id,
+        status: completed ? 'completed' : 'running',
+        cursor: publicText ? 1 : 0,
+        hasMore: false,
+        chunks:
+          publicText && after === 0
             ? [{ seq: 1, segment: 0, attemptId: 'public', text, offset: text.length }]
             : [],
-        },
-        after
-      )
-    );
+      } satisfies ResponseStreamPage,
+    });
   });
   const refresh = async () => {
     cursor++;
