@@ -75,16 +75,22 @@ type Part = { text: string; changed: boolean; applied: string[] };
 async function open(page: Page, chatId: string, sourceId: string, plain = false) {
   if (plain)
     await page.route('**/sources/*/presentation?*', async (route) => {
-      const native = await (await route.fetch()).json();
+      const native = await route
+        .fetch()
+        .then((response) => response.json())
+        .catch(() => null);
+      if (!native) return route.abort().catch(() => undefined);
       const part = (value?: Part) => value && { text: value.text, changed: false, applied: [] };
-      await route.fulfill({
-        json: {
-          ...native,
-          format: 'plain-text',
-          original: part(native.original),
-          translation: part(native.translation),
-        },
-      });
+      await route
+        .fulfill({
+          json: {
+            ...native,
+            format: 'plain-text',
+            original: part(native.original),
+            translation: part(native.translation),
+          },
+        })
+        .catch(() => undefined);
     });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`/?chat=${chatId}`);
