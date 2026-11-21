@@ -86,6 +86,8 @@ import { SourceVersions } from './SourceVersions.js';
 import { RequestMessage } from './RequestMessage.js';
 import { StoredRequestImages } from './RequestImages.js';
 import { SelectionRevision } from './SelectionRevision.js';
+import { ReaderSelectionTools, type ReaderRevisionTarget } from './ReaderSelectionTools.js';
+import type { SelectionRevisionTarget } from './useSelectionRevision.js';
 import { useShortcut } from './shortcuts.js';
 import {
   readOptionalJson,
@@ -152,7 +154,13 @@ type ReaderProps = {
   beginStoryUiAdmission?: () => (run: RunReceipt) => void;
   storyUiStyle?: import('../core/story-ui-style.js').StoryUiStyleSetting;
 };
-type AnchorPosition = { anchors: string[]; top: number; scrollport: HTMLElement };
+type AnchorPosition = {
+  anchors: string[];
+  index: number;
+  top: number;
+  scrollport: HTMLElement;
+  count: number;
+};
 type EditorOrigin = {
   button: HTMLElement;
   scrollport: HTMLElement;
@@ -182,28 +190,36 @@ function currentAnchor(container: HTMLElement | null): AnchorPosition | undefine
   if (!container || !outer) return;
   if (!themeBodyScroll(container)) {
     const viewport = outer.getBoundingClientRect();
-    const nearest = [...container.querySelectorAll<HTMLElement>('[data-block-anchor]')].find(
-      (element) => {
-        const rect = element.getBoundingClientRect();
-        return rect.bottom > viewport.top && rect.top < viewport.bottom;
-      }
-    );
+    const elements = [...container.querySelectorAll<HTMLElement>('[data-block-anchor]')];
+    const index = elements.findIndex((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.bottom > viewport.top && rect.top < viewport.bottom;
+    });
+    const nearest = elements[index];
     return nearest
       ? {
           anchors: nearest.dataset.blockAnchor!.split(' '),
+          index,
+          count: elements.length,
           top: nearest.getBoundingClientRect().top,
           scrollport: outer,
         }
       : undefined;
   }
   const location = readerLocation(outer, container);
+  const elements = [...container.querySelectorAll('[data-block-anchor]')];
   return location?.block
     ? {
         anchors: location.block.dataset.blockAnchor!.split(' '),
+        index: elements.indexOf(location.block),
+        count: elements.length,
         top: location.block.getBoundingClientRect().top,
         scrollport: location.scrollport,
       }
     : undefined;
+}
+function translationEditRevision(source: Source, translation?: Job) {
+  return translation?.revision ?? source.translationRevision ?? (translation ? 1 : 0);
 }
 const retryable = (status: string) =>
   ['failed', 'cancelled', 'partial', 'interrupted'].includes(status);
@@ -747,13 +763,15 @@ function SourceReaderContent({
     const previous = restoreAnchor.current;
     restoreAnchor.current = undefined;
     if (!previous) return;
-    const target = [
+    const elements = [
       ...(container.current?.querySelectorAll<HTMLElement>('[data-block-anchor]') ?? []),
-    ].find((element) =>
-      element.dataset.blockAnchor?.split(' ').some((anchor) => previous.anchors.includes(anchor))
-    );
+    ];
+    const target =
+      elements.find((element) =>
+        element.dataset.blockAnchor?.split(' ').some((anchor) => previous.anchors.includes(anchor))
+      ) ?? (elements.length === previous.count ? elements[previous.index] : undefined);
     if (target) previous.scrollport.scrollTop += target.getBoundingClientRect().top - previous.top;
-  }, [mode, source.hash]);
+  }, [mode, source.hash, displayTranslation?.translationLayout?.textHash]);
 
   const switchMode = (next: ReaderMode) => {
     if (next === mode) return;
@@ -890,6 +908,61 @@ function SourceReaderContent({
   const otherEditor: ReaderMode = mode === 'translation' ? 'original' : 'translation';
   const editorLabel = (role: ReaderMode) =>
     role === 'translation' ? t('reader.editTranslation') : t('reader.editOriginal');
+  const readingContent = useRef<HTMLDivElement>(null);
+  const bookmark = useRef<{ add: () => void }>(null);
+  const sourceVersion = `${source.hash}:${source.editRevision ?? 0}`;
+  const shownTranslationHash = displayTranslation?.translationLayout?.textHash;
+  const revisionTarget: ReaderRevisionTarget | null =
+    mode === 'original'
+      ? {
+          representation: 'original',
+          text: source.text,
+          request: { expectedSourceHash: source.hash, expectedRevision: source.editRevision ?? 0 },
+          parts: { source: sourceVersion, translation: '' },
+        }
+      : typeof validTranslation?.text === 'string' && shownTranslationHash
+        ? {
+            representation: 'translation',
+            text: validTranslation.text,
+            request: {
+              target: 'translation',
+              expectedSourceHash: source.hash,
+              expectedRevision: translationEditRevision(source, translation),
+              expectedTextHash: shownTranslationHash,
+            },
+            parts: {
+              source: sourceVersion,
+              translation: `${translationEditRevision(source, translation)}:${shownTranslationHash}`,
+            },
+          }
+        : null;
+  const applyRevision = async (request: SelectionRevisionTarget, text: string) => {
+    const position = currentAnchor(container.current);
+    try {
+      if (request.target === 'translation')
+        await api(
+          `/sources/${source.id}/translation`,
+          {
+            text,
+            expectedRevision: request.expectedRevision,
+            expectedSourceHash: request.expectedSourceHash,
+            expectedTextHash: request.expectedTextHash,
+          },
+          'PUT'
+        );
+      else
+        await api(
+          `/sources/${source.id}/text`,
+          { text, expectedRevision: request.expectedRevision },
+          'PUT'
+        );
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) await refresh();
+      throw error;
+    }
+    restoreAnchor.current = position;
+    await refresh();
+  };
   const copyCurrent = () =>
     void action('copy', async () => {
       const text = mode === 'translation' ? (validTranslation?.text ?? '') : source.text;
@@ -978,7 +1051,12 @@ function SourceReaderContent({
               }}
             />
           )}
-          <div hidden={!!editor} className="source-reading-content">
+          <div
+            ref={readingContent}
+            hidden={!!editor}
+            className="source-reading-content"
+            tabIndex={-1}
+          >
             {illustrationLayout.header}
             {validTranslation && translationLoading && mode === 'translation' && (
               <LoadingState
@@ -1119,6 +1197,16 @@ function SourceReaderContent({
             )}
             {illustrationLayout.footer}
           </div>
+          <ReaderSelectionTools
+            body={readingContent}
+            chatId={source.chatId}
+            sourceId={source.id}
+            enabled={!editor}
+            revision={revisionTarget}
+            onAskHelper={onAskHelper ? (text) => onAskHelper(source.id, text) : undefined}
+            onBookmark={() => bookmark.current?.add()}
+            onApply={applyRevision}
+          />
           {presentation?.error && (
             <p className="error" role="alert">
               {translateMessage(presentation.error)}
@@ -1176,6 +1264,7 @@ function SourceReaderContent({
             </>
           )}
           <BookmarkButton
+            handle={bookmark}
             title={
               sceneNumber
                 ? t('reader.sceneValue', { v0: formatNumber(sceneNumber) })
@@ -1756,9 +1845,7 @@ function TextEditor({
   const displayed = displayTranslationJob(source, translation);
   const savedText = role === 'original' ? source.text : (displayed?.result?.text ?? '');
   const revision =
-    role === 'original'
-      ? (source.editRevision ?? 0)
-      : (translation?.revision ?? source.translationRevision ?? (translation ? 1 : 0));
+    role === 'original' ? (source.editRevision ?? 0) : translationEditRevision(source, translation);
   const [draft, setDraft] = useState(() =>
     readDraft(key, { text: savedText, expectedRevision: revision, expectedSourceHash: source.hash })
   );

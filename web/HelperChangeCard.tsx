@@ -20,6 +20,7 @@ import { helperChangeLocationParts } from './helper-change-location.js';
 import { formatNumber, t } from './i18n.js';
 import { IconButton } from './IconButton.js';
 import { NoticeBanner } from './NoticeBanner.js';
+import { ProseHunk } from './ProseDiff.js';
 
 const resourceIcons = {
   content: BookOpen,
@@ -54,28 +55,6 @@ function lines(text: string) {
   const parts = text.split('\n');
   if (parts.at(-1) === '') parts.pop();
   return parts;
-}
-
-function ProseHunk({ hunk }: { hunk: TextDiffHunk }) {
-  return (
-    <p className="helper-diff-prose">
-      {hunk.segments.map((segment, index) =>
-        segment.op === 'equal' ? (
-          <span key={index}>{segment.text}</span>
-        ) : segment.op === 'insert' ? (
-          <ins key={index}>
-            <span className="sr-only">{t('helperChanges.inserted')} </span>
-            {segment.text}
-          </ins>
-        ) : (
-          <del key={index}>
-            <span className="sr-only">{t('helperChanges.removed')} </span>
-            {segment.text}
-          </del>
-        )
-      )}
-    </p>
-  );
 }
 
 function CodeHunk({ hunk }: { hunk: TextDiffHunk }) {

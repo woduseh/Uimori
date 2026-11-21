@@ -197,30 +197,6 @@ button.helper-result-target:hover {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: calc(var(--focus-ring-width) * -1);
 }
-.helper-diff-prose {
-  margin: 0;
-  font-size: var(--font-body);
-  line-height: 1.7;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.helper-diff-prose ins,
-.helper-diff-prose del {
-  border-radius: var(--radius-small);
-  color: var(--text);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-}
-.helper-diff-prose ins {
-  background: var(--success-bg);
-  text-decoration-line: underline;
-  text-decoration-color: var(--success);
-}
-.helper-diff-prose del {
-  background: var(--error-bg);
-  text-decoration-line: line-through;
-  text-decoration-color: var(--error);
-}
 .helper-diff-code {
   font-family: var(--mono, ui-monospace, SFMono-Regular, Consolas, monospace);
   font-size: var(--font-small);

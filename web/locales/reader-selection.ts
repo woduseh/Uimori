@@ -1,0 +1,80 @@
+export const messages = {
+  'readerSelection.toolbar': {
+    ko: '선택한 글',
+    en: 'Selected text',
+    ja: '選択したテキスト',
+    zh: '所选文本',
+  },
+  'readerSelection.refine': {
+    ko: '다듬기',
+    en: 'Refine',
+    ja: '整える',
+    zh: '润色',
+  },
+  'readerSelection.bookmark': {
+    ko: '책갈피',
+    en: 'Bookmark',
+    ja: 'しおり',
+    zh: '书签',
+  },
+  'readerSelection.copy': {
+    ko: '복사',
+    en: 'Copy',
+    ja: 'コピー',
+    zh: '复制',
+  },
+  'readerSelection.refineTitle': {
+    ko: '선택한 글 다듬기',
+    en: 'Refine selected text',
+    ja: '選択したテキストを整える',
+    zh: '润色所选文本',
+  },
+  'readerSelection.instruction': {
+    ko: '다듬을 방향',
+    en: 'How to refine',
+    ja: '整える方向',
+    zh: '润色方向',
+  },
+  'readerSelection.diff': {
+    ko: '선택한 글과 제안 비교',
+    en: 'Selected text compared with the suggestion',
+    ja: '選択したテキストと提案の比較',
+    zh: '所选文本与建议的对比',
+  },
+  'readerSelection.apply': {
+    ko: '적용',
+    en: 'Apply',
+    ja: '適用',
+    zh: '应用',
+  },
+  'readerSelection.close': {
+    ko: '닫기',
+    en: 'Close',
+    ja: '閉じる',
+    zh: '关闭',
+  },
+  'readerSelection.translationEffects': {
+    ko: '적용하면 번역을 바로 저장해요. 진행 중인 재번역은 취소되고, 번역에 맞춘 삽화 배치는 다시 해야 해요.',
+    en: 'Applying saves the translation right away. A running retranslation is cancelled, and image placement for the translation has to be done again.',
+    ja: '適用すると翻訳をすぐに保存します。進行中の再翻訳は取り消され、翻訳に合わせた挿絵の配置はやり直しになります。',
+    zh: '应用后会立即保存译文。正在进行的重新翻译会被取消，译文的插图位置需要重新安排。',
+  },
+  'readerSelection.sourceChanged': {
+    ko: '그사이 원문이 바뀌어서 이 제안은 적용할 수 없어요. 저장하지 않았고 제안은 남겨 두었어요.',
+    en: 'The original changed in the meantime, so this suggestion cannot be applied. Nothing was saved, and the suggestion stays here.',
+    ja: 'その間に原文が変わったため、この提案は適用できません。保存はしておらず、提案はそのまま残しています。',
+    zh: '原文在此期间已更改，无法应用此建议。未保存任何内容，建议仍保留在这里。',
+  },
+  'readerSelection.translationChanged': {
+    ko: '그사이 번역이 바뀌어서 이 제안은 적용할 수 없어요. 저장하지 않았고 제안은 남겨 두었어요.',
+    en: 'The translation changed in the meantime, so this suggestion cannot be applied. Nothing was saved, and the suggestion stays here.',
+    ja: 'その間に翻訳が変わったため、この提案は適用できません。保存はしておらず、提案はそのまま残しています。',
+    zh: '译文在此期间已更改，无法应用此建议。未保存任何内容，建议仍保留在这里。',
+  },
+  'readerSelection.savedChanged': {
+    ko: '그사이 저장본이 바뀌어서 저장하지 않았어요. 제안은 남겨 두었어요.',
+    en: 'The saved text changed in the meantime, so nothing was saved. The suggestion stays here.',
+    ja: 'その間に保存済みのテキストが変わったため、保存しませんでした。提案はそのまま残しています。',
+    zh: '已保存的文本在此期间已更改，因此未保存。建议仍保留在这里。',
+  },
+};

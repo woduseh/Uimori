@@ -1,0 +1,24 @@
+.helper-diff-prose {
+  margin: 0;
+  font-size: var(--font-body);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.helper-diff-prose ins,
+.helper-diff-prose del {
+  border-radius: var(--radius-small);
+  color: var(--text);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.helper-diff-prose ins {
+  background: var(--success-bg);
+  text-decoration-line: underline;
+  text-decoration-color: var(--success);
+}
+.helper-diff-prose del {
+  background: var(--error-bg);
+  text-decoration-line: line-through;
+  text-decoration-color: var(--error);
+}

@@ -11,5 +11,6 @@ await runBrowserVerification({
     'tests/settings-dialog-consistency-browser.spec.ts',
     'tests/settings-search-browser.spec.ts',
     'tests/input-affordances-browser.spec.ts',
+    'tests/reader-selection-browser.spec.ts',
   ],
 });

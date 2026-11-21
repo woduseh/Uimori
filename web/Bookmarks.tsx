@@ -1,6 +1,14 @@
 import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
-import { createContext, useContext, useLayoutEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type Ref,
+} from 'react';
 import { BookmarkCheck, BookmarkPlus, Pencil } from 'lucide-react';
 import type { Bookmark } from '../core/reading-state.js';
 import type { ReaderTarget } from '../core/reader-target.js';
@@ -148,10 +156,12 @@ export function BookmarkButton({
   capture,
   title,
   disabled,
+  handle,
 }: {
   capture: () => { target: ReaderTarget; quote: string } | null;
   title: string;
   disabled?: boolean;
+  handle?: Ref<{ add: () => void }>;
 }) {
   useI18n();
   const [saved, setSaved] = useState<Bookmark | null>(null);
@@ -168,6 +178,7 @@ export function BookmarkButton({
   } | null>(null);
   const [boundaryId] = useState(() => `bookmark-save:${crypto.randomUUID()}`);
   useBookmarkEditing(boundaryId, busy);
+  useImperativeHandle(handle, () => ({ add: () => void add() }));
   async function add() {
     if (busy || disabled) return;
     if (saved) {
