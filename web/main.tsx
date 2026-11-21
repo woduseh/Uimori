@@ -25,7 +25,7 @@ import { DismissibleError } from './DismissibleError.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice, TransientNoticeProvider } from './TransientNotice.js';
 import { ReaderLoadingState } from './ReaderLoadingState.js';
-import { ChatComposer, ComposerInput } from './ChatComposer.js';
+import { ChatComposer, ComposerInput, sendKeyLabel } from './ChatComposer.js';
 import { InputTranslationControls, InputTranslationFeedback } from './InputTranslation.js';
 import { ComposerMore, LoreResetChip } from './ComposerMore.js';
 import { ChatContextDialog } from './ChatContextDialog.js';
@@ -2149,7 +2149,7 @@ function App() {
                     placeholder={
                       compact
                         ? t('main.m111')
-                        : t('main.composerPlaceholder', { key: enterSend ? 'Enter' : 'Ctrl+Enter' })
+                        : t('main.composerPlaceholder', { key: sendKeyLabel(enterSend) })
                     }
                   />
                   <div className="quick-controls">
@@ -2348,7 +2348,7 @@ function App() {
                       title={
                         s.pendingRequest
                           ? t('main.m132')
-                          : t('main.sendShortcut', { key: enterSend ? 'Enter' : 'Ctrl+Enter' })
+                          : t('main.sendShortcut', { key: sendKeyLabel(enterSend) })
                       }
                       disabled={
                         optionsBusy ||

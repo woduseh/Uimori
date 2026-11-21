@@ -836,6 +836,45 @@ test('HELPSTEER adds instructions to the active task once after a lost acknowled
   expect(task.status).toBe('running');
 });
 
+test('HELPSENDKEY desktop helper composer follows the app send-key setting and never sends during composition', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page);
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  await page.goto(`/?chat=${chat.id}`);
+  let panel = await open(page);
+  let input = panel.getByLabel('도우미에게 요청');
+  await expect(input).toHaveAttribute('placeholder', '도우미에게 요청하기');
+  await input.fill('첫 줄');
+  await input.press('Enter');
+  await expect(input).toHaveValue('첫 줄\n');
+  expect(state.posts).toHaveLength(0);
+  await input.press('Control+Enter');
+  await expect(input).toHaveValue('');
+  expect(state.posts.map((post) => post.text)).toEqual(['첫 줄\n']);
+
+  await page.evaluate(() => localStorage.setItem('uimori:enter-send', 'true'));
+  await page.reload();
+  panel = await open(page);
+  input = panel.getByLabel('도우미에게 요청');
+  await expect(input).toHaveAttribute('placeholder', '도우미에게 요청하기 (Enter 보내기)');
+  await input.fill('한글 조합 중');
+  await input.dispatchEvent('compositionstart');
+  await input.press('Enter');
+  await input.dispatchEvent('compositionend');
+  await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true });
+  await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 229 });
+  await expect(input).toHaveValue('한글 조합 중\n');
+  expect(state.posts).toHaveLength(1);
+  await input.press('Shift+Enter');
+  await expect(input).toHaveValue('한글 조합 중\n\n');
+  await input.press('Enter');
+  await expect(input).toHaveValue('');
+  expect(state.posts.map((post) => post.text)).toEqual(['첫 줄\n', '한글 조합 중\n\n']);
+});
+
 test('HELPUI12 helper settings event refreshes an open model editor without replacing its draft', async ({
   page,
   request,

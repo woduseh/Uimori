@@ -224,3 +224,24 @@ test('shared composer typing leaves the reader, scene rail and sidebar unrendere
   expect(counts.composer).toBeGreaterThan(0);
   expect({ ...counts, composer: 0 }).toEqual({ reader: 0, scenes: 0, sidebar: 0, composer: 0 });
 });
+
+test('main composer names the macOS modifier in its send-key labels', async ({ page, request }) => {
+  const created = await postFixtureChat(request, { data: { title: 'macOS 전송 키 표기 검사' } });
+  expect(created.ok()).toBe(true);
+  const chat = await created.json();
+  await page.addInitScript(() =>
+    Object.defineProperty(Navigator.prototype, 'platform', { get: () => 'MacIntel' })
+  );
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+  await page.goto(`/?chat=${chat.id}`);
+  const input = page.getByRole('textbox', { name: '다음 장면 요청' });
+  await expect(input).toHaveAttribute(
+    'placeholder',
+    '다음 장면 요청을 입력하세요… (Cmd+Enter 보내기)'
+  );
+  await input.fill('맥 표기 확인');
+  await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toHaveAttribute(
+    'title',
+    '보내기 (Cmd+Enter)'
+  );
+});

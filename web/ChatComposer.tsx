@@ -8,6 +8,11 @@ import {
   type RefObject,
 } from 'react';
 
+export function sendKeyLabel(enterSend: boolean) {
+  if (enterSend) return 'Enter';
+  return /^(Mac|iPhone|iPad)/.test(navigator.platform) ? 'Cmd+Enter' : 'Ctrl+Enter';
+}
+
 const ComposerGrowth = createContext<(grown: boolean) => void>(() => {});
 
 export function ChatComposer({ className = '', children, ...props }: ComponentProps<'form'>) {

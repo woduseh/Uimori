@@ -463,10 +463,6 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   const [personas, setPersonas] = useState<Record<string, { text: string; revision: number }>>({});
   const [savingPersona, setSavingPersona] = useState(false);
   const compact = (props.modal ?? false) && !props.expanded;
-  const [hardwareKeyboard] = useState(
-    () => matchMedia('(hover: hover) and (pointer: fine)').matches
-  );
-  const enterSend = props.enterSend || hardwareKeyboard;
   const [frozenEditors, setFrozenEditors] = useState<
     Record<string, ReturnType<typeof captureActiveEditorContext>>
   >({});
@@ -2109,14 +2105,14 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           )}
           <ComposerInput
             inputRef={input}
-            enterSend={enterSend}
+            enterSend={props.enterSend}
             aria-label={t('helpers.m103')}
             value={draft}
             disabled={
               props.ready === false || !conversation || !hydrated[scopeKey] || !attachments.ready
             }
             placeholder={
-              hardwareKeyboard && !compact
+              props.enterSend && !compact
                 ? t('helpers.requestPlaceholder', { key: 'Enter' })
                 : t('helpers.m104')
             }
