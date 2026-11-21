@@ -258,7 +258,7 @@
 }
 .bot-chat-item.pinned {
   margin-bottom: 6px;
-  box-shadow: 0 var(--hairline) 0 var(--line);
+  box-shadow: 0 var(--hairline-shadow) 0 var(--line);
 }
 .bot-chat-item .chat-link {
   display: flex;

@@ -80,10 +80,10 @@
   border-radius: var(--radius-control);
 }
 .tree-drop-before {
-  box-shadow: 0 calc(-1 * var(--hairline)) 0 var(--accent);
+  box-shadow: 0 calc(-1 * var(--hairline-shadow)) 0 var(--accent);
 }
 .tree-drop-after {
-  box-shadow: 0 var(--hairline) 0 var(--accent);
+  box-shadow: 0 var(--hairline-shadow) 0 var(--accent);
 }
 .bot-tree-unfiled-drop {
   padding: 12px;

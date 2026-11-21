@@ -57,6 +57,7 @@
   --font-heading: 16px;
   --font-title: 18px;
   --hairline: 0.5px;
+  --hairline-shadow: var(--hairline);
   --focus-ring-width: 2px;
   --radius-small: 4px;
   --radius-control: 6px;
@@ -1422,6 +1423,11 @@ input[type="checkbox"] {
 }
 .run-outcome button {
   justify-self: start;
+}
+@media (resolution < 2x) {
+  :root {
+    --hairline-shadow: 1px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   :root {
