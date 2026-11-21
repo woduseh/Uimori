@@ -92,12 +92,23 @@ for (const [width, height] of [
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
     await expectLarge(settings);
     await selectSettingsSection(page, '테마와 색상');
+    const preview = settings.getByRole('region', { name: '현재 테마로 예문 보기', exact: true });
+    const controls = settings.locator('.theme-settings-controls');
+    await expect(preview.locator('[data-uimori-part="scene-frame"]')).toBeVisible();
+    expect((await preview.boundingBox())!.x).toBeGreaterThan(
+      (await controls.boundingBox())!.x + (await controls.boundingBox())!.width
+    );
     {
       const advanced = page.locator('.theme-advanced:not([open]) > summary');
       if (await advanced.isVisible()) await advanced.click();
     }
     await settings.getByRole('button', { name: '새 커스텀 테마', exact: true }).click();
     await settings.getByLabel('테마 이름', { exact: true }).fill(`Large shell ${width}`);
+    await settings.locator('.theme-colors').scrollIntoViewIfNeeded();
+    const scroller = (await settings.locator('.settings-page:not([hidden])').boundingBox())!;
+    const pinned = (await preview.boundingBox())!;
+    expect(pinned.y).toBeGreaterThanOrEqual(scroller.y - 1);
+    expect(pinned.y + pinned.height).toBeLessThanOrEqual(scroller.y + scroller.height + 1);
     await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
     const guard = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
     await expectShell(page, guard, 620);
@@ -128,6 +139,7 @@ for (const width of [412]) {
     }
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
     await expectShell(page, settings, 1160);
+    await expect(settings.locator('details.theme-sample')).toHaveCount(1);
     const title = `Dialog consistency theme ${width}`;
     await page.getByRole('button', { name: '새 커스텀 테마', exact: true }).click();
     await page.getByLabel('테마 이름', { exact: true }).fill(title);

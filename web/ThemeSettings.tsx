@@ -1,7 +1,7 @@
 import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { baselineThemeColors, colorInputValue } from './theme-color-input.js';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Check } from 'lucide-react';
 import { PaletteEditor, usePaletteLibrary } from './PaletteSettings.js';
 import { paletteFile } from '../core/palette-files.js';
@@ -57,6 +57,7 @@ import { ThemeAssetEditor } from './ThemeAssetEditor.js';
 import { adoptThemeFile, exportThemeFile } from './theme-assets.js';
 
 type Draft = { id: string | null; revision?: number; model: ThemeDefinition };
+const previewBesideMinWidth = 860;
 function paletteTitle(palette?: { title: string; revision?: number }) {
   return palette
     ? palette.revision === undefined
@@ -103,6 +104,16 @@ export function ThemeSettings({
   const [importNotice, setImportNotice] = useState('');
   const [deleting, setDeleting] = useState<Theme | null>(null);
   const deleteCancel = useRef<HTMLButtonElement>(null);
+  const root = useRef<HTMLElement>(null);
+  const [previewBeside, setPreviewBeside] = useState(false);
+  useLayoutEffect(() => {
+    const node = root.current!;
+    const observer = new ResizeObserver(() => {
+      if (node.clientWidth > 0) setPreviewBeside(node.clientWidth >= previewBesideMinWidth);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => {
     if (!deleting) return;
     const frame = requestAnimationFrame(() => deleteCancel.current?.focus());
@@ -352,8 +363,27 @@ export function ThemeSettings({
       setImportNotice(uiMessage('visualpanels.importedAsANewThemeReviewAnd'));
     });
   }
+  const themeSample = (
+    <ThemeFrame>
+      <div slot="request">{t('visualpanels.startAStoryInAQuietLibrary')}</div>
+      <div slot="heading" className="scene-header">
+        <strong>{t('visualpanels.firstScene')}</strong>
+        <span>{t('visualpanels.originalTranslation')}</span>
+      </div>
+      <div slot="body">
+        <RisuMessageSurface html={sample()} onAction={async () => {}} disabled />
+      </div>
+      <div slot="actions" className="source-actions">
+        <button type="button">{t('visualpanels.bodyActionExample')}</button>
+      </div>
+    </ThemeFrame>
+  );
   return (
-    <section className="theme-settings" aria-label={t('visualpanels.themesAndColors')}>
+    <section
+      ref={root}
+      className={`theme-settings${previewBeside ? ' theme-settings-beside' : ''}`}
+      aria-label={t('visualpanels.themesAndColors')}
+    >
       <SaveConflictDialog
         open={saveConflict}
         title={t('visualpanels.reviewSavedTheme')}
@@ -370,724 +400,726 @@ export function ThemeSettings({
           ];
         }}
       />
-      {state.disabled && (
-        <p role="status" className="theme-recovery">
-          {t('visualpanels.customThemesAreTemporarilyDisabledInThis')}{' '}
-          <button onClick={() => state.setDisabled(false)}>
-            {t('visualpanels.enableThemesAgain')}
-          </button>
-        </p>
-      )}
-      {state.error && (
-        <NoticeBanner
-          tone="error"
-          actions={
-            <button type="button" className="secondary" onClick={() => void state.refresh()}>
-              {t('visualpanels.reload')}
+      <div className="theme-settings-controls">
+        {state.disabled && (
+          <p role="status" className="theme-recovery">
+            {t('visualpanels.customThemesAreTemporarilyDisabledInThis')}{' '}
+            <button onClick={() => state.setDisabled(false)}>
+              {t('visualpanels.enableThemesAgain')}
             </button>
-          }
-        >
-          {translateMessage(state.error)}
-        </NoticeBanner>
-      )}
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
-      <TransientNotice message={notice} />
-      <div className="theme-toolbar theme-control-bar">
-        <label>
-          {t('visualpanels.scope')}{' '}
-          <select
-            aria-label={t('visualpanels.themeScope')}
-            value={scope}
-            disabled={busy || backgroundDirty || paletteDirty}
-            onChange={(e) => setScope(e.target.value as typeof scope)}
+          </p>
+        )}
+        {state.error && (
+          <NoticeBanner
+            tone="error"
+            actions={
+              <button type="button" className="secondary" onClick={() => void state.refresh()}>
+                {t('visualpanels.reload')}
+              </button>
+            }
           >
-            <option value="global">{t('visualpanels.workspaceDefault')}</option>
-            {state.scope.botId && (
-              <option value="bot">{t('visualpanels.currentBotDefault')}</option>
-            )}
-            {state.scope.chatId && <option value="chat">{t('visualpanels.thisChatOnly')}</option>}
-          </select>
-        </label>
-        <label>
-          {t('visualpanels.previewColors')}{' '}
-          <select
-            aria-label={t('visualpanels.themeColorPreview')}
-            value={mode}
-            onChange={(e) => setMode(e.target.value as typeof mode)}
-          >
-            <option value="light">{t('visualpanels.lightColors')}</option>
-            <option value="dark">{t('visualpanels.darkColors')}</option>
-          </select>
-        </label>
-        <span className="theme-current">
-          {t('visualpanels.currentDisplay', {
-            v0: state.active.id.startsWith('builtin:')
-              ? translateMessage(state.active.title)
-              : state.active.title,
-            v1: state.preview ? t('visualpanels.previewColors') : activePaletteTitle,
-          })}
-        </span>
-      </div>
-      <section className="theme-dimension" aria-labelledby="theme-layout-heading">
-        <div className="theme-dimension-heading">
-          <div>
-            <h3 id="theme-layout-heading">{t('visualpanels.layout')}</h3>
-            {layoutSource && (
-              <small>
-                {t('settings.inheritedThemeSelection', {
-                  title: activeLayout?.id.startsWith('builtin:')
-                    ? translateMessage(activeLayout.title)
-                    : (activeLayout?.title ?? ''),
-                  source: layoutSource,
-                })}
-              </small>
+            {translateMessage(state.error)}
+          </NoticeBanner>
+        )}
+        {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+        <TransientNotice message={notice} />
+        <div className="theme-toolbar theme-control-bar">
+          <label>
+            {t('visualpanels.scope')}{' '}
+            <select
+              aria-label={t('visualpanels.themeScope')}
+              value={scope}
+              disabled={busy || backgroundDirty || paletteDirty}
+              onChange={(e) => setScope(e.target.value as typeof scope)}
+            >
+              <option value="global">{t('visualpanels.workspaceDefault')}</option>
+              {state.scope.botId && (
+                <option value="bot">{t('visualpanels.currentBotDefault')}</option>
+              )}
+              {state.scope.chatId && <option value="chat">{t('visualpanels.thisChatOnly')}</option>}
+            </select>
+          </label>
+          <label>
+            {t('visualpanels.previewColors')}{' '}
+            <select
+              aria-label={t('visualpanels.themeColorPreview')}
+              value={mode}
+              onChange={(e) => setMode(e.target.value as typeof mode)}
+            >
+              <option value="light">{t('visualpanels.lightColors')}</option>
+              <option value="dark">{t('visualpanels.darkColors')}</option>
+            </select>
+          </label>
+          <span className="theme-current">
+            {t('visualpanels.currentDisplay', {
+              v0: state.active.id.startsWith('builtin:')
+                ? translateMessage(state.active.title)
+                : state.active.title,
+              v1: state.preview ? t('visualpanels.previewColors') : activePaletteTitle,
+            })}
+          </span>
+        </div>
+        <section className="theme-dimension" aria-labelledby="theme-layout-heading">
+          <div className="theme-dimension-heading">
+            <div>
+              <h3 id="theme-layout-heading">{t('visualpanels.layout')}</h3>
+              {layoutSource && (
+                <small>
+                  {t('settings.inheritedThemeSelection', {
+                    title: activeLayout?.id.startsWith('builtin:')
+                      ? translateMessage(activeLayout.title)
+                      : (activeLayout?.title ?? ''),
+                    source: layoutSource,
+                  })}
+                </small>
+              )}
+            </div>
+            {scope !== 'global' && (
+              <button
+                disabled={busy || backgroundDirty || paletteDirty || state.loading || !selectedId}
+                onClick={() => choose(null)}
+              >
+                {t('visualpanels.inheritLayout')}
+              </button>
             )}
           </div>
-          {scope !== 'global' && (
-            <button
-              disabled={busy || backgroundDirty || paletteDirty || state.loading || !selectedId}
-              onClick={() => choose(null)}
-            >
-              {t('visualpanels.inheritLayout')}
-            </button>
-          )}
-        </div>
-        <div className="theme-grid" aria-label={t('visualpanels.savedLayouts')}>
-          {state.catalog.themes.map((theme) => (
-            <article
-              className={`theme-card ${selectedId === theme.id ? 'selected' : ''}`}
-              key={theme.id}
-            >
-              <button
-                className="theme-card-apply"
-                aria-label={t('visualpanels.applyTheme', {
-                  v0: theme.id.startsWith('builtin:') ? translateMessage(theme.title) : theme.title,
-                })}
-                aria-pressed={selectedId === theme.id}
-                disabled={busy || backgroundDirty || paletteDirty || state.loading}
-                onClick={() => choose(theme.id)}
+          <div className="theme-grid" aria-label={t('visualpanels.savedLayouts')}>
+            {state.catalog.themes.map((theme) => (
+              <article
+                className={`theme-card ${selectedId === theme.id ? 'selected' : ''}`}
+                key={theme.id}
               >
-                <span
-                  className="theme-swatch"
-                  data-layout={theme.id}
-                  aria-hidden="true"
-                  style={{
-                    background: theme.colors[mode].bg ?? baselineThemeColors[mode].bg,
-                    color: theme.colors[mode].text ?? baselineThemeColors[mode].text,
-                  }}
+                <button
+                  className="theme-card-apply"
+                  aria-label={t('visualpanels.applyTheme', {
+                    v0: theme.id.startsWith('builtin:')
+                      ? translateMessage(theme.title)
+                      : theme.title,
+                  })}
+                  aria-pressed={selectedId === theme.id}
+                  disabled={busy || backgroundDirty || paletteDirty || state.loading}
+                  onClick={() => choose(theme.id)}
                 >
                   <span
-                    className="theme-swatch-nav"
+                    className="theme-swatch"
+                    data-layout={theme.id}
+                    aria-hidden="true"
                     style={{
-                      background: theme.colors[mode].nav ?? baselineThemeColors[mode].nav,
+                      background: theme.colors[mode].bg ?? baselineThemeColors[mode].bg,
+                      color: theme.colors[mode].text ?? baselineThemeColors[mode].text,
                     }}
-                  />
-                  <span className="theme-swatch-page">
-                    <span>Aa</span>
-                    <i />
-                    <i />
-                    <b
+                  >
+                    <span
+                      className="theme-swatch-nav"
                       style={{
-                        background: theme.colors[mode].accent ?? baselineThemeColors[mode].accent,
+                        background: theme.colors[mode].nav ?? baselineThemeColors[mode].nav,
                       }}
                     />
-                  </span>
-                </span>
-                <strong className="theme-choice-title">
-                  <span>
-                    {theme.id.startsWith('builtin:') ? translateMessage(theme.title) : theme.title}
-                  </span>
-                  {selectedId === theme.id && <Check size={18} aria-hidden="true" />}
-                </strong>
-                {theme.description && theme.id !== DEFAULT_THEME_ID && (
-                  <small>
-                    {theme.id.startsWith('builtin:')
-                      ? translateMessage(theme.description)
-                      : theme.description}
-                  </small>
-                )}
-              </button>
-              <div className="theme-card-actions">
-                <button
-                  aria-label={
-                    theme.id.startsWith('builtin:')
-                      ? t('visualpanels.duplicateAndCustomize')
-                      : t('visualpanels.edit')
-                  }
-                  title={
-                    theme.id.startsWith('builtin:')
-                      ? t('visualpanels.duplicateAndCustomize')
-                      : t('visualpanels.edit')
-                  }
-                  disabled={busy || backgroundDirty || paletteDirty}
-                  onClick={() => edit(theme)}
-                >
-                  {theme.id.startsWith('builtin:')
-                    ? t('visualpanels.customize')
-                    : t('visualpanels.edit')}
-                </button>
-                <IconButton
-                  label={t('visualpanels.export', {
-                    v0: theme.id.startsWith('builtin:')
-                      ? translateMessage(theme.title)
-                      : theme.title,
-                  })}
-                  icon={DownloadIcon}
-                  onClick={() =>
-                    void action(async () =>
-                      saveDownload(
-                        `${theme.title}.uimori-theme.json`,
-                        await exportThemeFile(themeDefinition(theme))
-                      )
-                    )
-                  }
-                />
-              </div>
-              {!theme.id.startsWith('builtin:') && (
-                <ActionMenu
-                  label={t('visualpanels.manage', {
-                    v0: theme.id.startsWith('builtin:')
-                      ? translateMessage(theme.title)
-                      : theme.title,
-                  })}
-                  className="theme-card-menu"
-                  viewport
-                >
-                  <div className="action-menu-group">
-                    <button
-                      aria-label={t('visualpanels.duplicate', {
-                        v0: theme.id.startsWith('builtin:')
-                          ? translateMessage(theme.title)
-                          : theme.title,
-                      })}
-                      disabled={busy || backgroundDirty || paletteDirty}
-                      onClick={() => edit(theme, true)}
-                    >
-                      <CopyIcon size={18} aria-hidden="true" /> {t(
-                        'visualpanels.duplicateAndEdit'
-                      )}{' '}
-                    </button>
-                  </div>
-                  <div className="action-menu-group">
-                    <button
-                      className="danger"
-                      aria-label={t('visualpanels.delete', {
-                        v0: theme.id.startsWith('builtin:')
-                          ? translateMessage(theme.title)
-                          : theme.title,
-                      })}
-                      disabled={busy || dirty}
-                      onClick={(event) => {
-                        event.currentTarget.closest('details')?.querySelector('summary')?.focus();
-                        setDeleting(theme);
-                      }}
-                    >
-                      <DeleteIcon size={18} aria-hidden="true" /> {t('visualpanels.delete2')}{' '}
-                    </button>
-                  </div>
-                </ActionMenu>
-              )}
-            </article>
-          ))}
-        </div>
-      </section>
-      <section className="theme-dimension" aria-labelledby="theme-palette-heading">
-        <div className="theme-dimension-heading">
-          <div>
-            <h3 id="theme-palette-heading">{t('visualpanels.colorPalette')}</h3>
-            {paletteSource && (
-              <small>
-                {t('settings.inheritedThemeSelection', {
-                  title: editedPaletteTitle,
-                  source: paletteSource,
-                })}
-              </small>
-            )}
-          </div>
-          <div className="theme-dimension-actions">
-            <button
-              disabled={
-                busy ||
-                backgroundDirty ||
-                paletteDirty ||
-                state.loading ||
-                (scope === 'global' ? selectedPaletteId === THEME_PALETTE_ID : !selectedPaletteId)
-              }
-              onClick={() => choosePalette(null)}
-            >
-              {scope === 'global'
-                ? t('visualpanels.resetPaletteToDefault')
-                : t('visualpanels.inheritPalette')}
-            </button>
-            <IconButton
-              label={t('palettes.create')}
-              icon={AddIcon}
-              disabled={paletteActionsDisabled}
-              onClick={() => paletteLibrary.edit()}
-            />
-            <IconButton
-              label={t('palettes.import')}
-              icon={UploadIcon}
-              disabled={paletteActionsDisabled || paletteDirty}
-              onClick={() => paletteInput.current?.click()}
-            />
-            <input
-              ref={paletteInput}
-              aria-label={t('palettes.import')}
-              hidden
-              type="file"
-              accept=".json,application/json"
-              onChange={(event) => {
-                const file = event.currentTarget.files?.[0];
-                event.currentTarget.value = '';
-                if (file) paletteLibrary.importFile(file);
-              }}
-            />
-          </div>
-        </div>
-        <div className="theme-palette-grid" aria-label={t('visualpanels.selectColorPalette')}>
-          {palettes.map((palette) => {
-            const colors = { ...baselineThemeColors[mode], ...palette.colors[mode] };
-            const libraryPalette = libraryPalettes.find((entry) => entry.id === palette.id);
-            return (
-              <article className="theme-palette-item" key={palette.id}>
-                <button
-                  className={`theme-palette-card ${selectedPaletteId === palette.id ? 'selected' : ''}`}
-                  aria-label={t('visualpanels.applyPalette', {
-                    v0: paletteTitle(palette),
-                  })}
-                  aria-describedby={palette.description ? `${id}-palette-${palette.id}` : undefined}
-                  aria-pressed={selectedPaletteId === palette.id}
-                  disabled={busy || backgroundDirty || paletteDirty || state.loading}
-                  onClick={() => choosePalette(palette.id)}
-                >
-                  <span className="theme-palette-swatches" aria-hidden="true">
-                    {(['bg', 'panel', 'accent', 'text'] as const).map((key) => (
-                      <span key={key} style={{ background: colors[key] }} />
-                    ))}
+                    <span className="theme-swatch-page">
+                      <span>Aa</span>
+                      <i />
+                      <i />
+                      <b
+                        style={{
+                          background: theme.colors[mode].accent ?? baselineThemeColors[mode].accent,
+                        }}
+                      />
+                    </span>
                   </span>
                   <strong className="theme-choice-title">
-                    <span>{paletteTitle(palette)}</span>
-                    {selectedPaletteId === palette.id && <Check size={18} aria-hidden="true" />}
-                  </strong>
-                  {palette.description && (
-                    <span id={`${id}-palette-${palette.id}`} className="sr-only">
-                      {'revision' in palette
-                        ? palette.description
-                        : translateMessage(palette.description)}
+                    <span>
+                      {theme.id.startsWith('builtin:')
+                        ? translateMessage(theme.title)
+                        : theme.title}
                     </span>
+                    {selectedId === theme.id && <Check size={18} aria-hidden="true" />}
+                  </strong>
+                  {theme.description && theme.id !== DEFAULT_THEME_ID && (
+                    <small>
+                      {theme.id.startsWith('builtin:')
+                        ? translateMessage(theme.description)
+                        : theme.description}
+                    </small>
                   )}
                 </button>
-                {libraryPalette && (
+                <div className="theme-card-actions">
+                  <button
+                    aria-label={
+                      theme.id.startsWith('builtin:')
+                        ? t('visualpanels.duplicateAndCustomize')
+                        : t('visualpanels.edit')
+                    }
+                    title={
+                      theme.id.startsWith('builtin:')
+                        ? t('visualpanels.duplicateAndCustomize')
+                        : t('visualpanels.edit')
+                    }
+                    disabled={busy || backgroundDirty || paletteDirty}
+                    onClick={() => edit(theme)}
+                  >
+                    {theme.id.startsWith('builtin:')
+                      ? t('visualpanels.customize')
+                      : t('visualpanels.edit')}
+                  </button>
+                  <IconButton
+                    label={t('visualpanels.export', {
+                      v0: theme.id.startsWith('builtin:')
+                        ? translateMessage(theme.title)
+                        : theme.title,
+                    })}
+                    icon={DownloadIcon}
+                    onClick={() =>
+                      void action(async () =>
+                        saveDownload(
+                          `${theme.title}.uimori-theme.json`,
+                          await exportThemeFile(themeDefinition(theme))
+                        )
+                      )
+                    }
+                  />
+                </div>
+                {!theme.id.startsWith('builtin:') && (
                   <ActionMenu
-                    label={t('visualpanels.manage', { v0: paletteTitle(libraryPalette) })}
-                    className="theme-palette-menu"
+                    label={t('visualpanels.manage', {
+                      v0: theme.id.startsWith('builtin:')
+                        ? translateMessage(theme.title)
+                        : theme.title,
+                    })}
+                    className="theme-card-menu"
                     viewport
                   >
                     <div className="action-menu-group">
-                      {'revision' in libraryPalette && (
-                        <button
-                          aria-label={t('palettes.actionEdit', { title: libraryPalette.title })}
-                          disabled={paletteActionsDisabled}
-                          onClick={() => paletteLibrary.edit(libraryPalette)}
-                        >
-                          <EditIcon size={18} aria-hidden="true" /> {t('palettes.edit')}
-                        </button>
-                      )}
                       <button
-                        aria-label={t('palettes.actionClone', {
-                          title: paletteTitle(libraryPalette),
+                        aria-label={t('visualpanels.duplicate', {
+                          v0: theme.id.startsWith('builtin:')
+                            ? translateMessage(theme.title)
+                            : theme.title,
                         })}
-                        disabled={paletteActionsDisabled}
-                        onClick={() => paletteLibrary.edit(libraryPalette, true)}
+                        disabled={busy || backgroundDirty || paletteDirty}
+                        onClick={() => edit(theme, true)}
                       >
-                        <CopyIcon size={18} aria-hidden="true" /> {t('palettes.clone')}
+                        <CopyIcon size={18} aria-hidden="true" />{' '}
+                        {t('visualpanels.duplicateAndEdit')}{' '}
                       </button>
                     </div>
                     <div className="action-menu-group">
                       <button
-                        aria-label={t('palettes.actionExport', {
-                          title: paletteTitle(libraryPalette),
+                        className="danger"
+                        aria-label={t('visualpanels.delete', {
+                          v0: theme.id.startsWith('builtin:')
+                            ? translateMessage(theme.title)
+                            : theme.title,
                         })}
-                        disabled={paletteLibrary.busy}
-                        onClick={() =>
-                          saveDownload(
-                            `${libraryPalette.title}.palette.json`,
-                            paletteFile(libraryPalette)
-                          )
-                        }
+                        disabled={busy || dirty}
+                        onClick={(event) => {
+                          event.currentTarget.closest('details')?.querySelector('summary')?.focus();
+                          setDeleting(theme);
+                        }}
                       >
-                        <DownloadIcon size={18} aria-hidden="true" /> {t('palettes.export')}
+                        <DeleteIcon size={18} aria-hidden="true" /> {t('visualpanels.delete2')}{' '}
                       </button>
                     </div>
-                    {'revision' in libraryPalette && (
-                      <div className="action-menu-group">
-                        <button
-                          className="danger"
-                          aria-label={t('palettes.actionDelete', { title: libraryPalette.title })}
-                          disabled={paletteActionsDisabled || paletteDirty}
-                          onClick={(event) => {
-                            event.currentTarget
-                              .closest('details')
-                              ?.querySelector('summary')
-                              ?.focus();
-                            paletteLibrary.setDeleting(libraryPalette);
-                          }}
-                        >
-                          <DeleteIcon size={18} aria-hidden="true" /> {t('palettes.delete')}
-                        </button>
-                      </div>
-                    )}
                   </ActionMenu>
                 )}
               </article>
-            );
-          })}
-        </div>
-        <PaletteEditor library={paletteLibrary} disabled={busy || backgroundDirty || dirty} />
-      </section>
-      {(scope === 'bot' || storyUiThemeTarget) && storyUiBotId && (
-        <section className="theme-dimension" aria-labelledby="story-ui-default-heading">
+            ))}
+          </div>
+        </section>
+        <section className="theme-dimension" aria-labelledby="theme-palette-heading">
           <div className="theme-dimension-heading">
             <div>
-              <h3 id="story-ui-default-heading">{t('storyUi.botDefault')}</h3>
-              {storyUiThemeTarget && <p>{storyUiThemeTarget.title}</p>}
+              <h3 id="theme-palette-heading">{t('visualpanels.colorPalette')}</h3>
+              {paletteSource && (
+                <small>
+                  {t('settings.inheritedThemeSelection', {
+                    title: editedPaletteTitle,
+                    source: paletteSource,
+                  })}
+                </small>
+              )}
             </div>
-            <button
-              type="button"
-              disabled={busy || backgroundDirty || paletteDirty}
-              onClick={() => {
-                if (edit(undefined, false, true))
-                  requestAnimationFrame(() =>
-                    management.current?.scrollIntoView({ block: 'start' })
-                  );
-              }}
-            >
-              <AddIcon size={16} aria-hidden="true" /> {t('storyUi.newTheme')}
-            </button>
-            <select
-              aria-label={t('storyUi.botDefault')}
-              value={p.botStoryUiThemes?.[storyUiBotId] ?? ''}
-              disabled={busy || state.loading}
-              onChange={(event) => chooseStoryUi(event.target.value || null)}
-            >
-              <option value="">{t('storyUi.modelStyle')}</option>
-              {p.botStoryUiThemes?.[storyUiBotId] &&
-                !state.catalog.themes.some(
-                  (theme) => theme.id === p.botStoryUiThemes?.[storyUiBotId] && theme.storyUi
-                ) && (
-                  <option value={p.botStoryUiThemes[storyUiBotId]}>
-                    {t('storyUi.unavailableTheme')}
-                  </option>
-                )}
-              {state.catalog.themes
-                .filter((theme) => theme.storyUi)
-                .map((theme) => (
-                  <option key={theme.id} value={theme.id}>
-                    {theme.title}
-                  </option>
-                ))}
-            </select>
-          </div>
-        </section>
-      )}
-      <FontSettings onDirtyChange={setFontDirty} onSaveHandlerChange={registerFontSave} />
-      <ThemeBackgroundSettings
-        key={`${scope}:${scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : ''}`}
-        scope={scope}
-        disabled={busy || paletteDirty}
-        targetId={
-          scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : undefined
-        }
-        onDirtyChange={setBackgroundDirty}
-        onSaveHandlerChange={registerBackgroundSave}
-      />
-      <details className="theme-advanced" ref={management}>
-        <summary>{t('visualpanels.manageThemes')}</summary>
-        <section className="theme-library-tools">
-          <div className="theme-library-actions">
-            <button
-              className="primary"
-              disabled={busy || backgroundDirty || paletteDirty}
-              onClick={() => edit()}
-            >
-              <AddIcon size={16} aria-hidden="true" /> {t('visualpanels.newCustomTheme')}{' '}
-            </button>
-            <button
-              className="secondary"
-              disabled={busy || backgroundDirty || paletteDirty}
-              onClick={() => input.current?.click()}
-            >
-              <UploadIcon size={16} aria-hidden="true" /> {t('visualpanels.importTheme')}{' '}
-            </button>
-            <input
-              ref={input}
-              type="file"
-              accept=".json"
-              hidden
-              aria-label={t('visualpanels.themeFile')}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                e.target.value = '';
-                if (f) void importFile(f);
-              }}
-            />
-          </div>
-        </section>
-        {draft && (
-          <section className="theme-editor" aria-label={t('visualpanels.customThemeEditor')}>
-            <div className="theme-editor-heading">
-              <h3>{draft.id ? t('visualpanels.editTheme') : t('visualpanels.createTheme')}</h3>
-              <span className="muted">
-                {dirty ? t('visualpanels.unsavedChanges') : t('visualpanels.saved')}
-              </span>
-            </div>
-            <fieldset disabled={busy || backgroundDirty || paletteDirty}>
-              <label>
-                {t('visualpanels.themeName')}{' '}
-                <input
-                  aria-label={t('visualpanels.themeName')}
-                  value={draft.model.title}
-                  maxLength={100}
-                  onChange={(e) => patch({ title: e.target.value })}
-                />
-              </label>
-              <label>
-                {t('visualpanels.description')}{' '}
-                <input
-                  aria-label={t('visualpanels.themeDescription')}
-                  value={draft.model.description}
-                  onChange={(e) => patch({ description: e.target.value })}
-                />
-              </label>
-              <div className="theme-code">
-                <label className="theme-story-ui-toggle">
-                  <span>{t('storyUi.includeTheme')}</span>
-                  <Switch
-                    checked={!!draft.model.storyUi}
-                    onChange={(event) => {
-                      if (event.target.checked)
-                        patch({
-                          storyUi: storyUiDraft.current ?? { baseStyle: 'default', css: '' },
-                        });
-                      else {
-                        storyUiDraft.current = draft.model.storyUi;
-                        patch({ storyUi: undefined });
-                      }
-                    }}
-                  />
-                </label>
-                {draft.model.storyUi && (
-                  <>
-                    <label>
-                      {t('storyUi.baseStyle')}
-                      <select
-                        aria-label={t('storyUi.baseStyle')}
-                        value={draft.model.storyUi.baseStyle}
-                        onChange={(event) =>
-                          patch({
-                            storyUi: {
-                              ...draft.model.storyUi!,
-                              baseStyle: event.target.value as StoryUiStyle,
-                            },
-                          })
-                        }
-                      >
-                        {storyUiStyles.map((style) => (
-                          <option key={style} value={style}>
-                            {t(`storyUi.style.${style}`)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      {t('storyUi.customCss')}
-                      <textarea
-                        aria-label={t('storyUi.customCss')}
-                        rows={7}
-                        placeholder={
-                          '& { --story-paper: #f8f2e4; }\n.story-ui-tabs button { border-radius: 6px; }'
-                        }
-                        spellCheck={false}
-                        value={draft.model.storyUi.css}
-                        onChange={(event) =>
-                          patch({ storyUi: { ...draft.model.storyUi!, css: event.target.value } })
-                        }
-                      />
-                    </label>
-                    <div className="theme-story-ui-preview">
-                      <strong>{t('storyUi.preview')}</strong>
-                      <StoryUi segment={storyUiPreview} customTheme={draft.model.storyUi} />
-                    </div>
-                  </>
-                )}
-              </div>
-              <label className="theme-color-mode">
-                {t('settings.editColors')}
-                <select
-                  aria-label={t('settings.editColors')}
-                  value={mode}
-                  onChange={(event) => setMode(event.target.value as typeof mode)}
-                >
-                  <option value="light">{t('visualpanels.lightColors')}</option>
-                  <option value="dark">{t('visualpanels.darkColors')}</option>
-                </select>
-              </label>
-              <div className="theme-colors">
-                {THEME_COLOR_KEYS.map((key) => (
-                  <label key={key}>
-                    <span>{t(`palettes.color.${key}`)}</span>
-                    <div>
-                      <input
-                        type="color"
-                        aria-label={t('visualpanels.color', {
-                          v0:
-                            mode === 'light'
-                              ? t('visualpanels.lightColors')
-                              : t('visualpanels.darkColors'),
-                          v1: t(`palettes.color.${key}`),
-                        })}
-                        value={colorInputValue(
-                          draft.model.colors[mode][key] ?? baselineThemeColors[mode][key]
-                        )}
-                        onChange={(e) =>
-                          patch({
-                            colors: {
-                              ...draft.model.colors,
-                              [mode]: { ...draft.model.colors[mode], [key]: e.target.value },
-                            },
-                          })
-                        }
-                      />
-                      <IconButton
-                        icon={ResetIcon}
-                        title={t('visualpanels.resetToDefaultColor')}
-                        label={t('visualpanels.resetToDefaultColor2', {
-                          v0:
-                            mode === 'light'
-                              ? t('visualpanels.lightColors')
-                              : t('visualpanels.darkColors'),
-                          v1: t(`palettes.color.${key}`),
-                        })}
-                        disabled={!draft.model.colors[mode][key]}
-                        onClick={() => {
-                          const colors = { ...draft.model.colors[mode] };
-                          delete colors[key];
-                          patch({ colors: { ...draft.model.colors, [mode]: colors } });
-                        }}
-                      />
-                    </div>
-                  </label>
-                ))}
-              </div>
-              <ThemeAssetEditor
-                assets={draft.model.assets ?? []}
-                onChange={(assets) => patch({ assets: assets.length ? assets : undefined })}
-                onError={setError}
-              />
-              <details className="theme-code">
-                <summary>{t('visualpanels.editCssAndHtmlDirectly')}</summary>
-                {(
-                  [
-                    ['appCss', t('visualpanels.appCss')],
-                    ['messageCss', t('visualpanels.bodyCss')],
-                    ['templateHtml', t('visualpanels.layoutHtml')],
-                    ['templateCss', t('visualpanels.layoutCss')],
-                  ] as const
-                ).map(([key, label]) => (
-                  <label key={key}>
-                    {label}
-                    <textarea
-                      aria-label={label}
-                      rows={7}
-                      spellCheck={false}
-                      value={draft.model[key]}
-                      onChange={(e) => patch({ [key]: e.target.value })}
-                    />
-                  </label>
-                ))}
-              </details>
-            </fieldset>
-            <div className="theme-toolbar theme-editor-actions">
-              <SaveButton
-                type="button"
-                label={t('visualpanels.saveTheme')}
-                aria-busy={operation === 'save'}
-                disabled={busy || !dirty}
-                onClick={() => void save()}
-              />
+            <div className="theme-dimension-actions">
               <button
+                disabled={
+                  busy ||
+                  backgroundDirty ||
+                  paletteDirty ||
+                  state.loading ||
+                  (scope === 'global' ? selectedPaletteId === THEME_PALETTE_ID : !selectedPaletteId)
+                }
+                onClick={() => choosePalette(null)}
+              >
+                {scope === 'global'
+                  ? t('visualpanels.resetPaletteToDefault')
+                  : t('visualpanels.inheritPalette')}
+              </button>
+              <IconButton
+                label={t('palettes.create')}
+                icon={AddIcon}
+                disabled={paletteActionsDisabled}
+                onClick={() => paletteLibrary.edit()}
+              />
+              <IconButton
+                label={t('palettes.import')}
+                icon={UploadIcon}
+                disabled={paletteActionsDisabled || paletteDirty}
+                onClick={() => paletteInput.current?.click()}
+              />
+              <input
+                ref={paletteInput}
+                aria-label={t('palettes.import')}
+                hidden
+                type="file"
+                accept=".json,application/json"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = '';
+                  if (file) paletteLibrary.importFile(file);
+                }}
+              />
+            </div>
+          </div>
+          <div className="theme-palette-grid" aria-label={t('visualpanels.selectColorPalette')}>
+            {palettes.map((palette) => {
+              const colors = { ...baselineThemeColors[mode], ...palette.colors[mode] };
+              const libraryPalette = libraryPalettes.find((entry) => entry.id === palette.id);
+              return (
+                <article className="theme-palette-item" key={palette.id}>
+                  <button
+                    className={`theme-palette-card ${selectedPaletteId === palette.id ? 'selected' : ''}`}
+                    aria-label={t('visualpanels.applyPalette', {
+                      v0: paletteTitle(palette),
+                    })}
+                    aria-describedby={
+                      palette.description ? `${id}-palette-${palette.id}` : undefined
+                    }
+                    aria-pressed={selectedPaletteId === palette.id}
+                    disabled={busy || backgroundDirty || paletteDirty || state.loading}
+                    onClick={() => choosePalette(palette.id)}
+                  >
+                    <span className="theme-palette-swatches" aria-hidden="true">
+                      {(['bg', 'panel', 'accent', 'text'] as const).map((key) => (
+                        <span key={key} style={{ background: colors[key] }} />
+                      ))}
+                    </span>
+                    <strong className="theme-choice-title">
+                      <span>{paletteTitle(palette)}</span>
+                      {selectedPaletteId === palette.id && <Check size={18} aria-hidden="true" />}
+                    </strong>
+                    {palette.description && (
+                      <span id={`${id}-palette-${palette.id}`} className="sr-only">
+                        {'revision' in palette
+                          ? palette.description
+                          : translateMessage(palette.description)}
+                      </span>
+                    )}
+                  </button>
+                  {libraryPalette && (
+                    <ActionMenu
+                      label={t('visualpanels.manage', { v0: paletteTitle(libraryPalette) })}
+                      className="theme-palette-menu"
+                      viewport
+                    >
+                      <div className="action-menu-group">
+                        {'revision' in libraryPalette && (
+                          <button
+                            aria-label={t('palettes.actionEdit', { title: libraryPalette.title })}
+                            disabled={paletteActionsDisabled}
+                            onClick={() => paletteLibrary.edit(libraryPalette)}
+                          >
+                            <EditIcon size={18} aria-hidden="true" /> {t('palettes.edit')}
+                          </button>
+                        )}
+                        <button
+                          aria-label={t('palettes.actionClone', {
+                            title: paletteTitle(libraryPalette),
+                          })}
+                          disabled={paletteActionsDisabled}
+                          onClick={() => paletteLibrary.edit(libraryPalette, true)}
+                        >
+                          <CopyIcon size={18} aria-hidden="true" /> {t('palettes.clone')}
+                        </button>
+                      </div>
+                      <div className="action-menu-group">
+                        <button
+                          aria-label={t('palettes.actionExport', {
+                            title: paletteTitle(libraryPalette),
+                          })}
+                          disabled={paletteLibrary.busy}
+                          onClick={() =>
+                            saveDownload(
+                              `${libraryPalette.title}.palette.json`,
+                              paletteFile(libraryPalette)
+                            )
+                          }
+                        >
+                          <DownloadIcon size={18} aria-hidden="true" /> {t('palettes.export')}
+                        </button>
+                      </div>
+                      {'revision' in libraryPalette && (
+                        <div className="action-menu-group">
+                          <button
+                            className="danger"
+                            aria-label={t('palettes.actionDelete', { title: libraryPalette.title })}
+                            disabled={paletteActionsDisabled || paletteDirty}
+                            onClick={(event) => {
+                              event.currentTarget
+                                .closest('details')
+                                ?.querySelector('summary')
+                                ?.focus();
+                              paletteLibrary.setDeleting(libraryPalette);
+                            }}
+                          >
+                            <DeleteIcon size={18} aria-hidden="true" /> {t('palettes.delete')}
+                          </button>
+                        </div>
+                      )}
+                    </ActionMenu>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+          <PaletteEditor library={paletteLibrary} disabled={busy || backgroundDirty || dirty} />
+        </section>
+        {(scope === 'bot' || storyUiThemeTarget) && storyUiBotId && (
+          <section className="theme-dimension" aria-labelledby="story-ui-default-heading">
+            <div className="theme-dimension-heading">
+              <div>
+                <h3 id="story-ui-default-heading">{t('storyUi.botDefault')}</h3>
+                {storyUiThemeTarget && <p>{storyUiThemeTarget.title}</p>}
+              </div>
+              <button
+                type="button"
                 disabled={busy || backgroundDirty || paletteDirty}
                 onClick={() => {
-                  try {
-                    const t = validateTheme(draft.model);
-                    themeTemplate(t.templateHtml);
-                    state.setDisabled(false);
-                    setPreview(t);
-                    setError('');
-                  } catch (cause) {
-                    setError((cause as Error).message);
-                  }
+                  if (edit(undefined, false, true))
+                    requestAnimationFrame(() =>
+                      management.current?.scrollIntoView({ block: 'start' })
+                    );
                 }}
               >
-                <DisplayIcon size={18} aria-hidden="true" /> {t('visualpanels.applyPreview')}{' '}
+                <AddIcon size={16} aria-hidden="true" /> {t('storyUi.newTheme')}
               </button>
-              {state.preview && (
-                <IconButton
-                  label={t('visualpanels.endPreview')}
-                  icon={StopIcon}
-                  onClick={() => setPreview(null)}
-                />
-              )}
-              <IconButton
-                label={t('visualpanels.cancelEditing')}
-                icon={CloseIcon}
-                disabled={busy || backgroundDirty || paletteDirty}
-                onClick={() => (dirty ? setClosingDraft(true) : closeDraft())}
-              />
+              <select
+                aria-label={t('storyUi.botDefault')}
+                value={p.botStoryUiThemes?.[storyUiBotId] ?? ''}
+                disabled={busy || state.loading}
+                onChange={(event) => chooseStoryUi(event.target.value || null)}
+              >
+                <option value="">{t('storyUi.modelStyle')}</option>
+                {p.botStoryUiThemes?.[storyUiBotId] &&
+                  !state.catalog.themes.some(
+                    (theme) => theme.id === p.botStoryUiThemes?.[storyUiBotId] && theme.storyUi
+                  ) && (
+                    <option value={p.botStoryUiThemes[storyUiBotId]}>
+                      {t('storyUi.unavailableTheme')}
+                    </option>
+                  )}
+                {state.catalog.themes
+                  .filter((theme) => theme.storyUi)
+                  .map((theme) => (
+                    <option key={theme.id} value={theme.id}>
+                      {theme.title}
+                    </option>
+                  ))}
+              </select>
             </div>
           </section>
         )}
-        <Dialog
-          open={closingDraft}
-          title={t('settings.m97')}
-          variant="confirmation"
-          onClose={() => setClosingDraft(false)}
-        >
-          <DraftDiscardActions
+        <FontSettings onDirtyChange={setFontDirty} onSaveHandlerChange={registerFontSave} />
+        <ThemeBackgroundSettings
+          key={`${scope}:${scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : ''}`}
+          scope={scope}
+          disabled={busy || paletteDirty}
+          targetId={
+            scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : undefined
+          }
+          onDirtyChange={setBackgroundDirty}
+          onSaveHandlerChange={registerBackgroundSave}
+        />
+        <details className="theme-advanced" ref={management}>
+          <summary>{t('visualpanels.manageThemes')}</summary>
+          <section className="theme-library-tools">
+            <div className="theme-library-actions">
+              <button
+                className="primary"
+                disabled={busy || backgroundDirty || paletteDirty}
+                onClick={() => edit()}
+              >
+                <AddIcon size={16} aria-hidden="true" /> {t('visualpanels.newCustomTheme')}{' '}
+              </button>
+              <button
+                className="secondary"
+                disabled={busy || backgroundDirty || paletteDirty}
+                onClick={() => input.current?.click()}
+              >
+                <UploadIcon size={16} aria-hidden="true" /> {t('visualpanels.importTheme')}{' '}
+              </button>
+              <input
+                ref={input}
+                type="file"
+                accept=".json"
+                hidden
+                aria-label={t('visualpanels.themeFile')}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (f) void importFile(f);
+                }}
+              />
+            </div>
+          </section>
+          {draft && (
+            <section className="theme-editor" aria-label={t('visualpanels.customThemeEditor')}>
+              <div className="theme-editor-heading">
+                <h3>{draft.id ? t('visualpanels.editTheme') : t('visualpanels.createTheme')}</h3>
+                <span className="muted">
+                  {dirty ? t('visualpanels.unsavedChanges') : t('visualpanels.saved')}
+                </span>
+              </div>
+              <fieldset disabled={busy || backgroundDirty || paletteDirty}>
+                <label>
+                  {t('visualpanels.themeName')}{' '}
+                  <input
+                    aria-label={t('visualpanels.themeName')}
+                    value={draft.model.title}
+                    maxLength={100}
+                    onChange={(e) => patch({ title: e.target.value })}
+                  />
+                </label>
+                <label>
+                  {t('visualpanels.description')}{' '}
+                  <input
+                    aria-label={t('visualpanels.themeDescription')}
+                    value={draft.model.description}
+                    onChange={(e) => patch({ description: e.target.value })}
+                  />
+                </label>
+                <div className="theme-code">
+                  <label className="theme-story-ui-toggle">
+                    <span>{t('storyUi.includeTheme')}</span>
+                    <Switch
+                      checked={!!draft.model.storyUi}
+                      onChange={(event) => {
+                        if (event.target.checked)
+                          patch({
+                            storyUi: storyUiDraft.current ?? { baseStyle: 'default', css: '' },
+                          });
+                        else {
+                          storyUiDraft.current = draft.model.storyUi;
+                          patch({ storyUi: undefined });
+                        }
+                      }}
+                    />
+                  </label>
+                  {draft.model.storyUi && (
+                    <>
+                      <label>
+                        {t('storyUi.baseStyle')}
+                        <select
+                          aria-label={t('storyUi.baseStyle')}
+                          value={draft.model.storyUi.baseStyle}
+                          onChange={(event) =>
+                            patch({
+                              storyUi: {
+                                ...draft.model.storyUi!,
+                                baseStyle: event.target.value as StoryUiStyle,
+                              },
+                            })
+                          }
+                        >
+                          {storyUiStyles.map((style) => (
+                            <option key={style} value={style}>
+                              {t(`storyUi.style.${style}`)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        {t('storyUi.customCss')}
+                        <textarea
+                          aria-label={t('storyUi.customCss')}
+                          rows={7}
+                          placeholder={
+                            '& { --story-paper: #f8f2e4; }\n.story-ui-tabs button { border-radius: 6px; }'
+                          }
+                          spellCheck={false}
+                          value={draft.model.storyUi.css}
+                          onChange={(event) =>
+                            patch({ storyUi: { ...draft.model.storyUi!, css: event.target.value } })
+                          }
+                        />
+                      </label>
+                      <div className="theme-story-ui-preview">
+                        <strong>{t('storyUi.preview')}</strong>
+                        <StoryUi segment={storyUiPreview} customTheme={draft.model.storyUi} />
+                      </div>
+                    </>
+                  )}
+                </div>
+                <label className="theme-color-mode">
+                  {t('settings.editColors')}
+                  <select
+                    aria-label={t('settings.editColors')}
+                    value={mode}
+                    onChange={(event) => setMode(event.target.value as typeof mode)}
+                  >
+                    <option value="light">{t('visualpanels.lightColors')}</option>
+                    <option value="dark">{t('visualpanels.darkColors')}</option>
+                  </select>
+                </label>
+                <div className="theme-colors">
+                  {THEME_COLOR_KEYS.map((key) => (
+                    <label key={key}>
+                      <span>{t(`palettes.color.${key}`)}</span>
+                      <div>
+                        <input
+                          type="color"
+                          aria-label={t('visualpanels.color', {
+                            v0:
+                              mode === 'light'
+                                ? t('visualpanels.lightColors')
+                                : t('visualpanels.darkColors'),
+                            v1: t(`palettes.color.${key}`),
+                          })}
+                          value={colorInputValue(
+                            draft.model.colors[mode][key] ?? baselineThemeColors[mode][key]
+                          )}
+                          onChange={(e) =>
+                            patch({
+                              colors: {
+                                ...draft.model.colors,
+                                [mode]: { ...draft.model.colors[mode], [key]: e.target.value },
+                              },
+                            })
+                          }
+                        />
+                        <IconButton
+                          icon={ResetIcon}
+                          title={t('visualpanels.resetToDefaultColor')}
+                          label={t('visualpanels.resetToDefaultColor2', {
+                            v0:
+                              mode === 'light'
+                                ? t('visualpanels.lightColors')
+                                : t('visualpanels.darkColors'),
+                            v1: t(`palettes.color.${key}`),
+                          })}
+                          disabled={!draft.model.colors[mode][key]}
+                          onClick={() => {
+                            const colors = { ...draft.model.colors[mode] };
+                            delete colors[key];
+                            patch({ colors: { ...draft.model.colors, [mode]: colors } });
+                          }}
+                        />
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                <ThemeAssetEditor
+                  assets={draft.model.assets ?? []}
+                  onChange={(assets) => patch({ assets: assets.length ? assets : undefined })}
+                  onError={setError}
+                />
+                <details className="theme-code">
+                  <summary>{t('visualpanels.editCssAndHtmlDirectly')}</summary>
+                  {(
+                    [
+                      ['appCss', t('visualpanels.appCss')],
+                      ['messageCss', t('visualpanels.bodyCss')],
+                      ['templateHtml', t('visualpanels.layoutHtml')],
+                      ['templateCss', t('visualpanels.layoutCss')],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={key}>
+                      {label}
+                      <textarea
+                        aria-label={label}
+                        rows={7}
+                        spellCheck={false}
+                        value={draft.model[key]}
+                        onChange={(e) => patch({ [key]: e.target.value })}
+                      />
+                    </label>
+                  ))}
+                </details>
+              </fieldset>
+              <div className="theme-toolbar theme-editor-actions">
+                <SaveButton
+                  type="button"
+                  label={t('visualpanels.saveTheme')}
+                  aria-busy={operation === 'save'}
+                  disabled={busy || !dirty}
+                  onClick={() => void save()}
+                />
+                <button
+                  disabled={busy || backgroundDirty || paletteDirty}
+                  onClick={() => {
+                    try {
+                      const t = validateTheme(draft.model);
+                      themeTemplate(t.templateHtml);
+                      state.setDisabled(false);
+                      setPreview(t);
+                      setError('');
+                    } catch (cause) {
+                      setError((cause as Error).message);
+                    }
+                  }}
+                >
+                  <DisplayIcon size={18} aria-hidden="true" /> {t('visualpanels.applyPreview')}{' '}
+                </button>
+                {state.preview && (
+                  <IconButton
+                    label={t('visualpanels.endPreview')}
+                    icon={StopIcon}
+                    onClick={() => setPreview(null)}
+                  />
+                )}
+                <IconButton
+                  label={t('visualpanels.cancelEditing')}
+                  icon={CloseIcon}
+                  disabled={busy || backgroundDirty || paletteDirty}
+                  onClick={() => (dirty ? setClosingDraft(true) : closeDraft())}
+                />
+              </div>
+            </section>
+          )}
+          <Dialog
             open={closingDraft}
-            onContinue={() => setClosingDraft(false)}
-            onDiscard={closeDraft}
-            discardLabel={t('visualpanels.discardChangesAndClose')}
-          />
-        </Dialog>
-        {importNotice && <p role="status">{translateMessage(importNotice)}</p>}
-        <p className="theme-help">
-          {t('visualpanels.themeRecoveryHelp', {
-            shortcut: 'Ctrl/Cmd + .',
-            query: '?theme-safe=1',
-          })}
-        </p>
-      </details>
-      {state.preview && (
-        <p role="status">{t('visualpanels.previewingAnUnsavedThemeMovingToAnother')}</p>
+            title={t('settings.m97')}
+            variant="confirmation"
+            onClose={() => setClosingDraft(false)}
+          >
+            <DraftDiscardActions
+              open={closingDraft}
+              onContinue={() => setClosingDraft(false)}
+              onDiscard={closeDraft}
+              discardLabel={t('visualpanels.discardChangesAndClose')}
+            />
+          </Dialog>
+          {importNotice && <p role="status">{translateMessage(importNotice)}</p>}
+          <p className="theme-help">
+            {t('visualpanels.themeRecoveryHelp', {
+              shortcut: 'Ctrl/Cmd + .',
+              query: '?theme-safe=1',
+            })}
+          </p>
+        </details>
+        {state.preview && (
+          <p role="status">{t('visualpanels.previewingAnUnsavedThemeMovingToAnother')}</p>
+        )}
+      </div>
+      {previewBeside ? (
+        <section className="theme-sample theme-preview" aria-labelledby={`${id}-preview`}>
+          <h3 id={`${id}-preview`}>{t('visualpanels.previewSampleWithCurrentTheme')}</h3>
+          {themeSample}
+        </section>
+      ) : (
+        <details className="theme-sample">
+          <summary>{t('visualpanels.previewSampleWithCurrentTheme')}</summary>
+          {themeSample}
+        </details>
       )}
-      <details className="theme-sample">
-        <summary>{t('visualpanels.previewSampleWithCurrentTheme')}</summary>
-        <ThemeFrame>
-          <div slot="request">{t('visualpanels.startAStoryInAQuietLibrary')}</div>
-          <div slot="heading" className="scene-header">
-            <strong>{t('visualpanels.firstScene')}</strong>
-            <span>{t('visualpanels.originalTranslation')}</span>
-          </div>
-          <div slot="body">
-            <RisuMessageSurface html={sample()} onAction={async () => {}} disabled />
-          </div>
-          <div slot="actions" className="source-actions">
-            <button type="button">{t('visualpanels.bodyActionExample')}</button>
-          </div>
-        </ThemeFrame>
-      </details>
       <Dialog
         open={!!deleting}
         title={t('visualpanels.deleteTheme')}

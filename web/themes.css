@@ -8,6 +8,30 @@
 .theme-settings p {
   margin-bottom: 0;
 }
+.theme-settings-controls {
+  container-type: inline-size;
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.theme-settings-beside {
+  grid-template-columns: minmax(0, 1fr) var(--theme-preview-w);
+  align-items: start;
+}
+.theme-settings-beside > .theme-preview {
+  position: sticky;
+  top: 0;
+  display: grid;
+  gap: 12px;
+  max-height: var(--settings-page-visible-h);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-block: 0;
+}
+.theme-preview > h3 {
+  margin: 0;
+  font-size: var(--font-body);
+}
 .theme-toolbar {
   display: flex;
   align-items: end;

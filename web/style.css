@@ -52,6 +52,9 @@
   --settings-w: 960px;
   --settings-dialog-w: min(1180px, 92vw);
   --settings-dialog-h: min(820px, calc(var(--app-height, 100dvh) * 0.88));
+  --theme-preview-w: 360px;
+  --dialog-header-h: 56px;
+  --settings-page-padding: 28px;
   --dialog-w: 480px;
   --control-h: 44px;
   --font-small: 12px;
@@ -1598,7 +1601,7 @@ input[type="checkbox"] {
 .dialog-header {
   flex: none;
   min-width: 0;
-  min-height: 56px;
+  min-height: var(--dialog-header-h);
   padding: 10px 16px 10px 24px;
   display: flex;
   align-items: center;
@@ -1802,8 +1805,8 @@ input[type="checkbox"] {
     max-height: 100dvh;
   }
   .dialog-header {
-    height: 56px;
-    min-height: 56px;
+    height: var(--dialog-header-h);
+    min-height: var(--dialog-header-h);
     padding: 6px 14px 6px 20px;
   }
   .dialog-body {
@@ -1873,6 +1876,12 @@ input[type="checkbox"] {
 }
 
 .app-dialog.settings-dialog {
+  --settings-page-visible-h: calc(
+    var(--dialog-max-height) -
+    var(--dialog-header-h) -
+    2 *
+    var(--settings-page-padding)
+  );
   height: var(--dialog-max-height);
 }
 @media (min-width: 761px) {
@@ -1996,7 +2005,7 @@ input[type="checkbox"] {
 .settings-page {
   flex: 1;
   min-width: 0;
-  padding: 28px 32px;
+  padding: var(--settings-page-padding) 32px;
   overflow: auto;
   overscroll-behavior: contain;
 }
