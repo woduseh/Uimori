@@ -326,23 +326,3 @@ export type HelperInputParts = {
   source: number | null;
   toolResults: number | null;
 };
-export type HelperResourceEditResource = {
-  kind: import('./resource-editing.js').ResourceKind;
-  id: string;
-  revision: number;
-  title: string;
-};
-export type HelperResourceEdit = HelperResourceEditResource & {
-  editSeq: number;
-  taskId: string;
-  resources?: HelperResourceEditResource[];
-  canUndo: boolean;
-  reason?: string;
-  undone?: boolean;
-};
-
-export function helperResourceEditResources(
-  edit: HelperResourceEdit
-): readonly HelperResourceEditResource[] {
-  return edit.resources?.length ? edit.resources : [edit];
-}

@@ -26,10 +26,7 @@ import { HELPER_PERSONA_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/conten
 import { UI_HELPER_PERSONA } from '../web/helper-persona.js';
 import { chatWithSource } from './fixtures/illustration.js';
 import { readHelperTaskResults } from '../server/helper-task-results.js';
-import {
-  applyHelperResourceMutation,
-  lastHelperResourceEdit,
-} from '../server/helper-resource-undo.js';
+import { applyHelperResourceMutation } from '../server/helper-resource-mutation.js';
 import { helperResourceOperation } from '../server/helper-resource-tools.js';
 
 const owned: { store: Store; path: string }[] = [];
@@ -786,7 +783,6 @@ test('resource creation, undo, clone and deletion outcomes retain identities wit
     ) as { id: string; revision: number };
   };
   const created = apply('resource.save', { kind: 'content', model: fixtureBotInput('새 자료') });
-  expect(lastHelperResourceEdit(f.store, f.workspace, f.conversation.id)).toBeNull();
   const changed = apply('resource.patch', {
     kind: 'content',
     id: created.id,

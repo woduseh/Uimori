@@ -23,7 +23,7 @@ import {
 } from '../core/resource-editing.js';
 import type { Content } from '../core/product.js';
 import { readResource } from './resource-service.js';
-import { applyHelperResourceMutation } from './helper-resource-undo.js';
+import { applyHelperResourceMutation } from './helper-resource-mutation.js';
 import { withHelperChange } from './helper-changes.js';
 import { helperSceneSource } from './helper-scene-tools.js';
 import { HELPER_SHELL_GUIDE } from './helper-shell-guide.js';

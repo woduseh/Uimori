@@ -30,7 +30,7 @@ import {
   type HelperShellAppResult,
 } from './helper-shell.js';
 import { invokeResourceTool, helperResourceOperation } from './helper-resource-tools.js';
-import { applyHelperResourceMutation } from './helper-resource-undo.js';
+import { applyHelperResourceMutation } from './helper-resource-mutation.js';
 import { recordHelperChatLoreChange, withHelperChange } from './helper-changes.js';
 import { helperRollbackView, rollBackHelperTask } from './helper-rollback.js';
 import { helperConfirmationGate, resolveHelperConfirmations } from './helper-confirmations.js';

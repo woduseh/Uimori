@@ -5,7 +5,6 @@ import type {
   HelperEvent,
   HelperMessage,
   HelperMessageMutation,
-  HelperResourceEdit,
   HelperTask,
 } from '../core/helper.js';
 import { api } from './api.js';
@@ -17,7 +16,6 @@ type View = {
   conversation: HelperConversation;
   messages: HelperMessage[];
   tasks: HelperTaskView[];
-  lastResourceEdit: HelperResourceEdit | null;
   hasOlderMessages: boolean;
   hasOlderTasks: boolean;
 };
@@ -127,13 +125,11 @@ export function useHelperConversation(
           tasks,
           conversation: latestConversation,
           eventCursor,
-          lastResourceEdit,
         } = await api<{
           messages: HelperMessage[];
           tasks: HelperTaskView[];
           conversation: HelperConversation;
           eventCursor: number;
-          lastResourceEdit: HelperResourceEdit | null;
         }>(`/helper/conversations/${id(key)}/view`);
         if (!alive.current || versions.current.get(key) !== version) return;
         if (!cursors.current.has(key)) cursors.current.set(key, eventCursor);
@@ -186,7 +182,6 @@ export function useHelperConversation(
             ...messages,
           ],
           tasks: [...tasks, ...(previous?.tasks ?? []).filter((task) => !taskIds.has(task.id))],
-          lastResourceEdit: lastResourceEdit ?? null,
           hasOlderMessages: messages.length === 100 && (previous?.hasOlderMessages ?? true),
           hasOlderTasks: tasks.length === 50 && (previous?.hasOlderTasks ?? true),
         });
@@ -235,8 +230,7 @@ export function useHelperConversation(
           if (
             /^task\.(completed|failed|cancelled|interrupted)$/u.test(event.kind) ||
             event.kind === 'artifact.saved' ||
-            event.kind === 'settings.updated' ||
-            event.kind === 'resource.edit.undone'
+            event.kind === 'settings.updated'
           )
             notify = true;
         }

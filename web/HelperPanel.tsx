@@ -69,7 +69,6 @@ import {
   HelperResponseEditor,
   type HelperDeleteScope,
 } from './HelperMessageActions.js';
-import { HelperResourceUndo } from './HelperResourceUndo.js';
 import { useHelperConversation, type HelperTaskView } from './useHelperConversation.js';
 import { interceptAppHistory } from './app-history.js';
 import {
@@ -1927,15 +1926,6 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               </div>
             )}
           </>
-        )}
-        {conversation && data.current?.lastResourceEdit && (
-          <HelperResourceUndo
-            key={`${conversation.id}:${data.current.lastResourceEdit.editSeq}`}
-            conversationId={conversation.id}
-            edit={data.current.lastResourceEdit}
-            disabled={props.ready === false || tasks.some(active) || busy || !!outbox}
-            refresh={() => data.refresh(conversation)}
-          />
         )}
         {outbox && !busy && (
           <div className="helper-outbox" role="status">

@@ -25,7 +25,7 @@ Uimori의 도우미는 대화와 서재에서 창작과 설정을 보조하는 �
 - **미저장 편집기 초안 보호**: 기기 편집기에 아직 저장되지 않은 초안(dirty draft)이 열려 있는 자료는 도우미가 수정할 수 없어요. 사용자가 편집기에서 먼저 저장해야 도우미를 통한 수정이 가능해요.
 - **읽기 전용 조회와 격리된 작업 공간**: SQL 조회와 정규식 검색은 읽기 전용 연결로, 짧은 시간 제한 안에서만 실행돼요. Linux runner에는 앱 데이터베이스, 앱 환경 변수, 자격 증명이 연결되지 않고 전용 작업 공간 볼륨만 공유해요. 인터넷에는 앱과 분리된 전용 네트워크로 나갈 수 있어서 스크립트가 자료나 패키지를 내려받을 수 있지만, 작업 공간의 원고도 외부로 보낼 수 있다는 점은 알아 두세요.
 - **영수증 기반 추적과 불확실한 재실행 방지**: 도우미의 저장은 트랜잭션 내에서 고유 영수증(`receiptId`)을 남겨요. 응답이 중간에 끊겨도 완료된 저장은 기록에 남으며, 불확실한 외부 쓰기나 실패한 작업을 자동으로 재실행하지 않아요.
-- **작업 중 지침 추가와 직전 수정 되돌리기**: 작업 진행 중에는 **현재 작업에 추가**로 새 지침을 보낼 수 있고, 자료가 잘못 수정되었을 때는 **마지막 자료 수정 되돌리기**로 직전 저장본을 복원할 수 있어요.
+- **작업 중 지침 추가와 작업 되돌리기**: 작업 진행 중에는 **현재 작업에 추가**로 새 지침을 보낼 수 있고, 작업이 끝난 뒤 답변 아래의 변경 카드에서 그 작업이 바꾼 서재 자료, 장면, 플롯, 작가 노트를 작업 전 상태로 되돌릴 수 있어요. [도우미 변경 되돌리기](EDITING.md#도우미-변경-되돌리기)
 
 ## 관련 문서
 
@@ -286,7 +286,7 @@ Outside these operations:
 
 ## Discovering and executing app operations
 
-The gateways `app.tools` and `app.call`, the operation index and the discovery ranking are defined in `server/helper-app-tools.ts`, together with the chat, chat-lore, library-folder, context, outline, notes and artifact operations. The `resource.*`, `theme.list`, `theme.guide`, `illustration-preset.*`, `preset.validate` and `image.update-metadata` operations are defined in `server/helper-resource-tools.ts`. The descriptions and input schemas in those two files are the contract the model receives: arguments, limits, paging, guards and what each result is for. `server/helper-runtime.ts` dispatches the operations and classifies their errors. `tests/helper-discovery.test.ts`, `tests/helper-tool-contracts.test.ts`, `tests/helper-resource-editing.test.ts`, `tests/helper-resource-inspection.test.ts`, `tests/helper-resource-undo.test.ts`, `tests/resource-clone.test.ts`, `tests/helper-lore-read.test.ts`, `tests/risu-preset-diagnostics.test.ts` and `tests/helper-compaction.test.ts` enforce that contract, including patch failure details, all-or-nothing saves, receipts, error recovery modes and what compaction keeps exact. This section records only what those files do not state. The outline operations are covered in [도우미 도구 계약](OUTLINE.md#도우미-도구-계약-outlineread-outlinewrite) and the theme operations in [도우미 도구 호출 계약](THEME-AUTHORING.md#도우미-도구-호출-계약).
+The gateways `app.tools` and `app.call`, the operation index and the discovery ranking are defined in `server/helper-app-tools.ts`, together with the chat, chat-lore, library-folder, context, outline, notes and artifact operations. The `resource.*`, `theme.list`, `theme.guide`, `illustration-preset.*`, `preset.validate` and `image.update-metadata` operations are defined in `server/helper-resource-tools.ts`. The descriptions and input schemas in those two files are the contract the model receives: arguments, limits, paging, guards and what each result is for. `server/helper-runtime.ts` dispatches the operations and classifies their errors. `tests/helper-discovery.test.ts`, `tests/helper-tool-contracts.test.ts`, `tests/helper-resource-editing.test.ts`, `tests/helper-resource-inspection.test.ts`, `tests/helper-resource-mutation.test.ts`, `tests/resource-clone.test.ts`, `tests/helper-lore-read.test.ts`, `tests/risu-preset-diagnostics.test.ts` and `tests/helper-compaction.test.ts` enforce that contract, including patch failure details, all-or-nothing saves, receipts, error recovery modes and what compaction keeps exact. This section records only what those files do not state. The outline operations are covered in [도우미 도구 계약](OUTLINE.md#도우미-도구-계약-outlineread-outlinewrite) and the theme operations in [도우미 도구 호출 계약](THEME-AUTHORING.md#도우미-도구-호출-계약).
 
 Behavior the descriptions leave out:
 
@@ -335,9 +335,9 @@ Outside these operations:
 
 seed 대화문은 역할·본문·첨부만 담아요. 이전 모델 시도·사용량·도구 실행·변경 영수증은 옮기지 않으므로 다시 실행하지 않고, 이어지는 작업은 필요한 자료의 현재 저장 상태를 새로 읽어요.
 
-## Activity and restoring the last resource edit
+## Activity and additions to a running task
 
-An addition to a running task (**현재 작업에 추가**) is `steer` in `server/helper-runtime.ts`, the call limits are the constants in `core/helper.ts`, the activity view is `server/helper-activity.ts`, and **마지막 자료 수정 되돌리기** is `server/helper-resource-undo.ts` with `web/HelperResourceUndo.tsx`. `tests/helper-workspace.test.ts`, `tests/helper-activity.test.ts`, `tests/helper-resource-undo.test.ts` and `tests/helper-browser.spec.ts` enforce how an addition is delivered, the limits, the bounded activity projection and when an edit can be restored. The limit values are listed in [실행 한도와 주요 정책 요약](CODEX.md#실행-한도와-주요-정책-요약), and the rules for restoring a batch in [도우미 서재 자료 편집과 일괄 처리](EDITING.md#도우미-서재-자료-편집과-일괄-처리). This section records only what those files do not state.
+An addition to a running task (**현재 작업에 추가**) is `steer` in `server/helper-runtime.ts`, the call limits are the constants in `core/helper.ts` and the activity view is `server/helper-activity.ts`. `tests/helper-workspace.test.ts`, `tests/helper-activity.test.ts` and `tests/helper-browser.spec.ts` enforce how an addition is delivered, the limits and the bounded activity projection. The limit values are listed in [실행 한도와 주요 정책 요약](CODEX.md#실행-한도와-주요-정책-요약). Undoing what a task changed is [turn rollback](#rolling-back-a-helper-task). This section records only what those files do not state.
 
 What the recorded states mean:
 
@@ -351,15 +351,6 @@ Constraints on changing this behavior:
 - On HTTP providers an addition does not interrupt a tool that is already running; only calls that have not started are skipped.
 - Pending and unconfirmed additions are never replayed, neither automatically nor by a retry. A retry of the unchanged request carries the delivered additions.
 - Call limits are an internal policy, not a conversation setting. A task runs under the limits and the timeout captured in its snapshot at admission, and its deadline is timed from the start of execution.
-- `applyHelperResourceMutation` is the only writer of the `resource.edited` event that the shortcut reads. `app.call` resource saves and native `uimori apply` both pass through it and must keep doing so.
-- The unsaved-editor block is a check of the editors mounted in the open app. The server does not see unsaved input, so other devices are protected by revision checks alone.
-- A view refresh that fails after a confirmed restore is reported as a refresh failure, not as a failed restore.
-
-Outside the restore shortcut:
-
-- Created and deleted resources, saves that changed nothing, and an undo issued by the model.
-- Rolling back a whole task, which [turn rollback](#rolling-back-a-helper-task) does, and falling back to an older edit when the latest one cannot be restored. The shortcut stays until the client restores through turn rollback, and it gains no new features.
-- Saves without a `resource.edited` event. They stay editable through the resource editors, and no shortcut is reconstructed for them.
 
 ## Original-work reference and authored notes
 

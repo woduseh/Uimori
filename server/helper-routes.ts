@@ -2,7 +2,6 @@ import type { OutlineTarget } from '../core/outline.js';
 import type { FastifyInstance } from 'fastify';
 import type { HelperScope, HelperEditor } from '../core/helper.js';
 import type { HelperRuntime } from './helper-runtime.js';
-import { lastHelperResourceEdit, undoHelperResourceEdit } from './helper-resource-undo.js';
 import { readHelperActivity } from './helper-activity.js';
 import { readHelperTaskResults } from './helper-task-results.js';
 import { markHelperConversationRead } from './helper-read-state.js';
@@ -123,18 +122,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
       conversation: store.conversation(id),
       messages: store.messages(id),
       tasks: store.taskSummaries(id),
-      lastResourceEdit: lastHelperResourceEdit(runtime.store, store, id),
     };
-  });
-  app.post<{ Params: { id: string } }>('/api/helper/conversations/:id/undo-resource', (request) => {
-    const body = record(request.body);
-    fields(body, ['editSeq']);
-    return undoHelperResourceEdit(
-      runtime.store,
-      store,
-      request.params.id,
-      number(body.editSeq, 'resource edit sequence', 1, Number.MAX_SAFE_INTEGER)
-    );
   });
   app.patch<{ Params: { id: string } }>('/api/helper/conversations/:id', (request) => {
     const body = record(request.body);

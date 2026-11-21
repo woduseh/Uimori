@@ -27,11 +27,8 @@ import { editableResource, type ContentEditModel } from '../core/resource-editin
 import { readResource, saveResource } from '../server/resource-service.js';
 import { retryRun } from '../server/run-retry.js';
 import { readHelperTaskResults } from '../server/helper-task-results.js';
-import {
-  applyHelperResourceMutation,
-  lastHelperResourceEdit,
-  undoHelperResourceEdit,
-} from '../server/helper-resource-undo.js';
+import { applyHelperResourceMutation } from '../server/helper-resource-mutation.js';
+import { rollBackHelperTask } from '../server/helper-rollback.js';
 import { helperResourceOperation } from '../server/helper-resource-tools.js';
 import type { Content } from '../core/product.js';
 
@@ -925,7 +922,7 @@ posixTest(
   }
 );
 posixTest(
-  'native apply uses existing helper undo and a repeated apply does not save twice',
+  'native apply records a change that turn rollback restores and a repeated apply does not save twice',
   async () => {
     const f = await fixture();
     prepareFiles(f, 'library', f.resource.id);
@@ -939,10 +936,9 @@ posixTest(
     expect(JSON.parse(applied.output.trim().split('\n').at(-1)!).changed).toBe(false);
     const task = f.workspace.task(f.task.id);
     f.workspace.finish(task.id, 'shell-fixture', task.generation, 'completed', 'Saved', null);
-    const edit = lastHelperResourceEdit(f.store, f.workspace, task.conversationId)!;
-    expect(edit.canUndo).toBe(true);
-    expect(edit.id).toBe(f.resource.id);
-    undoHelperResourceEdit(f.store, f.workspace, task.conversationId, edit.editSeq);
+    expect(rollBackHelperTask(f.store, f.workspace, task.id, undefined).units).toMatchObject([
+      { status: 'restored', touches: { domain: 'resource', id: f.resource.id } },
+    ]);
     expect((readResource(f.store, 'content', f.resource.id) as Content).description).toBe(
       f.resource.description
     );

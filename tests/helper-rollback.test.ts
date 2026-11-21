@@ -15,7 +15,7 @@ import {
   pruneHelperChanges,
   withHelperChange,
 } from '../server/helper-changes.js';
-import { applyHelperResourceMutation } from '../server/helper-resource-undo.js';
+import { applyHelperResourceMutation } from '../server/helper-resource-mutation.js';
 import { helperResourceOperation } from '../server/helper-resource-tools.js';
 import { helperRollbackView, rollBackHelperTask } from '../server/helper-rollback.js';
 import { invokeHelperSceneTool } from '../server/helper-scene-tools.js';

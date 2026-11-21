@@ -96,7 +96,7 @@
     "tests/helper-recovery.test.ts": 0.2,
     "tests/helper-resource-editing.test.ts": 3.4,
     "tests/helper-resource-inspection.test.ts": 0.5,
-    "tests/helper-resource-undo.test.ts": 1.6,
+    "tests/helper-resource-mutation.test.ts": 1.6,
     "tests/helper-runner.test.ts": 7.9,
     "tests/helper-save-receipts.test.ts": 2.3,
     "tests/helper-scene-runtime.test.ts": 2.7,

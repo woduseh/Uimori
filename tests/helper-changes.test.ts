@@ -19,7 +19,7 @@ import {
   withHelperChange,
 } from '../server/helper-changes.js';
 import { pruneThemeAssets } from '../server/theme-assets.js';
-import { applyHelperResourceMutation } from '../server/helper-resource-undo.js';
+import { applyHelperResourceMutation } from '../server/helper-resource-mutation.js';
 import { helperResourceOperation } from '../server/helper-resource-tools.js';
 import { invokeHelperSceneTool } from '../server/helper-scene-tools.js';
 import { readHelperTaskResults } from '../server/helper-task-results.js';

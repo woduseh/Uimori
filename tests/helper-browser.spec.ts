@@ -8,7 +8,6 @@ import type {
   HelperMessage,
   HelperMessageMutation,
   HelperScope,
-  HelperResourceEdit,
   HelperChange,
   HelperRollbackUnit,
   HelperRollbackView,
@@ -34,7 +33,6 @@ type View = {
   messages: HelperMessage[];
   tasks: HelperTaskView[];
   events: HelperEvent[];
-  lastResourceEdit?: HelperResourceEdit | null;
 };
 
 async function harness(page: Page, seedCount = 0) {
@@ -48,8 +46,7 @@ async function harness(page: Page, seedCount = 0) {
   const rollbacks = new Map<string, HelperRollbackView>();
   const rollbackPosts: { unit?: string }[] = [];
   let onRollback: ((units: HelperRollbackUnit[]) => Promise<void>) | undefined;
-  const undoPosts: { editSeq: number }[] = [];
-  let loseUndo = false;
+  let loseRollback = false;
   const posts: { requestKey: string; text: string; selection?: unknown }[] = [];
   const steerPosts: { taskId: string; requestKey: string; text: string }[] = [];
   const messageMutations: {
@@ -275,9 +272,7 @@ async function harness(page: Page, seedCount = 0) {
       return route.fulfill({ json: mutation });
     }
     const conversationMatch =
-      /^\/api\/helper\/conversations\/([^/]+)(?:\/(view|messages|tasks|events|undo-resource))?$/u.exec(
-        path
-      );
+      /^\/api\/helper\/conversations\/([^/]+)(?:\/(view|messages|tasks|events))?$/u.exec(path);
     if (conversationMatch) {
       const view = views.get(conversationMatch[1]);
       if (!view)
@@ -295,21 +290,6 @@ async function harness(page: Page, seedCount = 0) {
         return route.fulfill({ json: view.conversation });
       }
       if (!kind) return route.fulfill({ json: view.conversation });
-      if (kind === 'undo-resource') {
-        undoPosts.push(body);
-        const edit = view.lastResourceEdit;
-        if (!edit || edit.editSeq !== body.editSeq || !edit.canUndo)
-          return route.fulfill({
-            status: 409,
-            json: { error: '최근 저장 이후 자료가 변경됐어요.' },
-          });
-        view.lastResourceEdit = { ...edit, canUndo: false, undone: true };
-        if (loseUndo) {
-          loseUndo = false;
-          return route.abort('failed');
-        }
-        return route.fulfill({ json: view.lastResourceEdit });
-      }
       if (kind === 'view') {
         viewReads++;
         return route.fulfill({
@@ -321,7 +301,6 @@ async function harness(page: Page, seedCount = 0) {
             })),
             tasks: view.tasks.slice(0, 50),
             eventCursor: view.events.at(-1)?.seq ?? 0,
-            lastResourceEdit: view.lastResourceEdit ?? null,
           },
         });
       }
@@ -403,6 +382,10 @@ async function harness(page: Page, seedCount = 0) {
           (unit) => restored.find((item) => item.unit === unit.unit) ?? unit
         );
         rollbacks.set(task.id, current);
+        if (loseRollback) {
+          loseRollback = false;
+          return route.abort('failed');
+        }
         return route.fulfill({ json: { taskId: task.id, blocked: null, units: restored } });
       }
       if (taskMatch[2] === '/steer') {
@@ -485,9 +468,8 @@ async function harness(page: Page, seedCount = 0) {
     onRollback(handler: (units: HelperRollbackUnit[]) => Promise<void>) {
       onRollback = handler;
     },
-    undoPosts,
-    loseUndo: () => {
-      loseUndo = true;
+    loseRollback: () => {
+      loseRollback = true;
     },
     activity: (task: HelperTaskView, events: HelperActivityEvent[]) =>
       activities.set(task.id, events),
@@ -2185,132 +2167,6 @@ test('DISPLAY helper incomplete saved answers stay collapsed and committed chang
   expect(state.streamReads.get(task.id)).toBe(1);
 });
 
-test('HELPUNDO latest edit confirms once and reconciles a lost response', async ({
-  page,
-  request,
-}) => {
-  const chat = await create(request),
-    state = await harness(page, 1);
-  await page.goto(`/?chat=${chat.id}`);
-  let panel = await open(page);
-  const view = state.current();
-  view.lastResourceEdit = {
-    editSeq: 37,
-    taskId: view.tasks[0].id,
-    kind: 'content',
-    id: 'saved-bot',
-    revision: 2,
-    title: '하린의 인물 설정',
-    canUndo: true,
-  };
-  await page.reload();
-  panel = await open(page);
-  await panel.getByLabel('도우미에게 요청').fill('계속 보관할 다음 요청');
-  const undo = panel.getByRole('button', { name: '마지막 자료 수정 되돌리기' });
-  await undo.click();
-  const dialog = page.getByRole('dialog', { name: '자료 수정 되돌리기', exact: true });
-  await expect(dialog).toContainText('하린의 인물 설정');
-  await dialog.getByRole('button', { name: '취소', exact: true }).click();
-  await expect(undo).toBeFocused();
-  expect(state.undoPosts).toHaveLength(0);
-  await undo.click();
-  state.loseUndo();
-  await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await expect(
-    page.getByRole('status').filter({ hasText: '하린의 인물 설정 수정을 되돌렸어요.' })
-  ).toBeVisible();
-  await expect(panel.getByRole('region', { name: '도우미 최근 자료 수정' })).toHaveCount(0);
-  expect(state.undoPosts).toEqual([{ editSeq: 37 }]);
-  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('계속 보관할 다음 요청');
-  await expect(undo).toHaveCount(0);
-  await expect(panel.getByRole('alert')).toHaveCount(0);
-});
-
-test('HELPUNDO grouped edit shows all titles and blocks its dirty target and a changed saved revision without losing its draft', async ({
-  page,
-  request,
-}) => {
-  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
-  const response = await request.post('/api/content', {
-    data: fixtureBotInput(`Undo draft ${randomUUID()}`, 'Original source.'),
-  });
-  expect(response.ok()).toBe(true);
-  const bot = await response.json();
-  const state = await harness(page, 1);
-  const openEditor = async () => {
-    await page.goto('/');
-    await navigationAction(page, '서재');
-    await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(bot.title);
-    await page.getByRole('button', { name: `${bot.title} 상세 보기`, exact: true }).click();
-    await page.getByRole('button', { name: '편집', exact: true }).click();
-    await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
-  };
-  const openEditorHelper = async () => {
-    await page
-      .getByRole('region', { name: '자료 상세', exact: true })
-      .getByRole('button', { name: '도우미 열기', exact: true })
-      .click();
-    const panel = page.locator('#helper-panel');
-    await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
-    await expect(panel.getByText('대화를 불러오는 중이에요…', { exact: true })).toHaveCount(0);
-    return panel;
-  };
-  await openEditor();
-  await openEditorHelper();
-  const view = state.current();
-  const edited = {
-    kind: 'content' as const,
-    id: bot.id,
-    revision: bot.revision,
-    title: bot.title,
-  };
-  const first = {
-    kind: 'content' as const,
-    id: 'first-batch-resource',
-    revision: 2,
-    title: '함께 수정한 첫 자료',
-  };
-  view.lastResourceEdit = {
-    ...first,
-    editSeq: 41,
-    taskId: view.tasks[0].id,
-    canUndo: true,
-    resources: [first, edited],
-  };
-  await openEditor();
-  const draft = page.getByLabel('Risu 자료 이름', { exact: true });
-  await draft.fill('지키려는 미저장 입력');
-  const panel = await openEditorHelper();
-  const undo = panel.getByRole('button', { name: '마지막 자료 수정 되돌리기' });
-  await expect(panel.getByRole('region', { name: '도우미 최근 자료 수정' })).toContainText(
-    '함께 수정한 첫 자료 외 1개'
-  );
-  await expect(undo).toBeDisabled();
-  await expect(
-    panel
-      .getByRole('region', { name: '도우미 최근 자료 수정' })
-      .locator('small')
-      .filter({ hasText: '이 자료의 편집을 저장하거나 취소한 뒤 되돌려 주세요.' })
-  ).toBeVisible();
-  expect(state.undoPosts).toHaveLength(0);
-  await expect(draft).toHaveValue('지키려는 미저장 입력');
-  await draft.fill(bot.title);
-  await expect(undo).toBeEnabled();
-  await undo.click();
-  const dialog = page.getByRole('dialog', { name: '자료 수정 되돌리기', exact: true });
-  await expect(dialog).toContainText('자료 2개');
-  await expect(dialog.getByRole('listitem')).toHaveText([first.title, bot.title]);
-  view.lastResourceEdit.canUndo = false;
-  view.lastResourceEdit.reason = '최근 수정 이후 자료가 변경되어 되돌릴 수 없어요.';
-  await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
-  await expect(undo).toHaveCount(0);
-  await expect(panel.getByRole('alert')).toContainText('(409)');
-  await expect(draft).toHaveValue(bot.title);
-  expect(state.undoPosts).toEqual([{ editSeq: 41 }]);
-  expect((await (await request.get(`/api/content/${bot.id}`)).json()).title).toBe(bot.title);
-});
-
 const resourceChange = (id: string, title: string): HelperChange => ({
   domain: 'resource',
   targetId: id,
@@ -2520,6 +2376,26 @@ test('HROLLBACK02 one card rolls back alone and actions wait for a running task'
   await expect(scene).toBeEnabled();
   await expect(results.getByText('도우미 작업이 끝나면 되돌릴 수 있어요.')).toHaveCount(0);
   expect(state.rollbackPosts).toHaveLength(1);
+
+  state.loseRollback();
+  await scene.click();
+  await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  const unknown = results
+    .getByRole('alert')
+    .filter({ hasText: '되돌리기 결과를 확인하지 못했어요.' });
+  await expect(unknown).toBeVisible();
+  await expect(scene).toBeDisabled();
+  expect(state.rollbackPosts).toHaveLength(2);
+  await unknown.getByRole('button', { name: '결과 확인', exact: true }).click();
+  await expect(unknown).toHaveCount(0);
+  await expect(
+    results
+      .locator('.helper-change', { hasText: '원문' })
+      .locator('.helper-rollback-status[data-status="restored"]')
+  ).toBeVisible();
+  await expect(scene).toHaveCount(0);
+  expect(state.rollbackPosts).toHaveLength(2);
 });
 
 test('HROLLBACK03 an unsaved editor draft blocks its unit and a clean editor shows the restored content', async ({

@@ -3,18 +3,14 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import Fastify from 'fastify';
 import { afterEach, expect, test, vi } from 'vitest';
-import { helperResourceEditResources, type HelperTask } from '../core/helper.js';
+import type { HelperTask } from '../core/helper.js';
 import type { PromptPreset } from '../core/product.js';
 import { editableResource } from '../core/resource-editing.js';
 import { emptyTheme } from '../core/themes.js';
 import * as transport from '../core/transport.js';
 import { HelperResourceBatchError, patchHelperResources } from '../server/helper-resource-batch.js';
 import { helperResourceOperation } from '../server/helper-resource-tools.js';
-import {
-  applyHelperResourceMutation,
-  lastHelperResourceEdit,
-  undoHelperResourceEdit,
-} from '../server/helper-resource-undo.js';
+import { applyHelperResourceMutation } from '../server/helper-resource-mutation.js';
 import { helperRoutes } from '../server/helper-routes.js';
 import { HelperRuntime } from '../server/helper-runtime.js';
 import { putImageBlob } from '../server/package-images.js';
@@ -39,7 +35,11 @@ afterEach(async () => {
     await f.app.close();
     f.store.close();
     const inside = relative(tmpdir(), f.path);
-    if (isAbsolute(inside) || inside.startsWith('..') || !inside.startsWith('uimori-helper-undo-'))
+    if (
+      isAbsolute(inside) ||
+      inside.startsWith('..') ||
+      !inside.startsWith('uimori-helper-mutation-')
+    )
       throw new Error('Unsafe cleanup');
     rmSync(f.path, { recursive: true, force: true });
   }
@@ -47,7 +47,7 @@ afterEach(async () => {
 });
 
 function fixture() {
-  const path = mkdtempSync(join(tmpdir(), 'uimori-helper-undo-'));
+  const path = mkdtempSync(join(tmpdir(), 'uimori-helper-mutation-'));
   const store = new Store(join(path, 'test.sqlite'));
   const connection = store.product.connection({
     title: 'Synthetic helper',
@@ -124,7 +124,6 @@ function mutate(
 function finish(f: Fixture, task: HelperTask) {
   expect(f.workspace.finish(task.id, 'test-owner', 1, 'completed', '완료했어요.', null)).toBe(true);
 }
-const lastEdit = (f: Fixture) => lastHelperResourceEdit(f.store, f.workspace, f.conversation.id);
 const patchTitle = (id: string, expectedRevision: number, title: string) => ({
   kind: 'content',
   id,
@@ -182,7 +181,7 @@ function providerMutation(name: string, args: Record<string, unknown>, failAfter
   );
 }
 
-test('a repeated clone receipt creates one copy and a structural patch undoes only that copy', () => {
+test('a repeated clone receipt creates one copy and the model undo restores only that copy', () => {
   const f = fixture();
   const source = f.store.product.promptPreset({
     title: 'Version 1',
@@ -220,7 +219,6 @@ test('a repeated clone receipt creates one copy and a structural patch undoes on
   expect(
     (f.store.product.all('prompt-preset') as PromptPreset[]).map((preset) => preset.id).sort()
   ).toEqual([...presetsBefore, copy.id].sort());
-  expect(lastEdit(f)).toBeNull();
   expect(
     f.workspace.events(f.conversation.id).filter((event) => event.kind === 'resource.updated')
   ).toHaveLength(1);
@@ -240,10 +238,14 @@ test('a repeated clone receipt creates one copy and a structural patch undoes on
     },
     'patch-copy'
   );
+  mutate(
+    f,
+    task,
+    'resource.undo',
+    { kind: 'prompt-preset', id: copy.id, expectedRevision: 2 },
+    'undo-copy'
+  );
   finish(f, task);
-  const edit = lastEdit(f)!;
-  expect(edit).toMatchObject({ kind: 'prompt-preset', id: copy.id, revision: 2, canUndo: true });
-  undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, edit.editSeq);
   const restored = readResource(f.store, 'prompt-preset', copy.id);
   expect(restored.revision).toBe(3);
   expect(editableResource('prompt-preset', restored)).toEqual(
@@ -304,71 +306,12 @@ test('runtime cloning uses saved source while an unsaved editor remains analysis
   });
   expect(draft.program).toEqual(nativePrompt('Unsaved draft body'));
   expect(readResource(f.store, 'prompt-preset', source.id)).toEqual(source);
-  expect(lastEdit(f)).toBeNull();
   expect(
     f.workspace.events(f.conversation.id).filter((event) => event.kind === 'resource.updated')
   ).toHaveLength(1);
 });
 
-test('runtime edits stay undoable after input cleanup and duplicate POST confirms without another write', async () => {
-  const f = fixture();
-  const content = f.store.product.content(fixtureBotInput('원래 제목', '원본 보존'));
-  providerMutation('resource.patch', patchTitle(content.id, content.revision, '고친 제목'));
-  const task = f.runtime.enqueue(f.conversation.id, 'runtime-edit', '제목을 고쳐줘');
-  await Promise.all(f.work);
-  expect(f.workspace.task(task.id).status).toBe('completed');
-  const event = f.workspace
-    .events(f.conversation.id)
-    .find((item) => item.kind === 'resource.edited')!;
-  expect(event.data).toMatchObject({ id: content.id, revision: 2, title: '고친 제목' });
-  expect(JSON.stringify(event.data)).not.toContain('원본 보존');
-  const receiptId = (event.data as { receiptId: string }).receiptId;
-  expect(
-    JSON.parse(
-      String(
-        f.store.db.prepare('SELECT result FROM helper_operations WHERE id=?').get(receiptId)?.result
-      )
-    )
-  ).toEqual({ detailsOmitted: true });
-  const view = await f.app.inject(`/api/helper/conversations/${f.conversation.id}/view`);
-  const edit = view.json().lastResourceEdit;
-  expect(edit).toMatchObject({
-    editSeq: event.seq,
-    taskId: task.id,
-    id: content.id,
-    canUndo: true,
-  });
-  const post = (payload: object) =>
-    f.app.inject({
-      method: 'POST',
-      url: `/api/helper/conversations/${f.conversation.id}/undo-resource`,
-      payload,
-    });
-  expect((await post({ editSeq: edit.editSeq, id: 'arbitrary-target' })).statusCode).toBe(400);
-  const response = await post({ editSeq: edit.editSeq });
-  expect(response.statusCode, response.body).toBe(200);
-  expect(response.json()).toMatchObject({ ...edit, canUndo: false, undone: true });
-  const restored = readResource(f.store, 'content', content.id);
-  expect(restored).toMatchObject({ title: '원래 제목', revision: 3 });
-  saveResource(f.store, {
-    kind: 'content',
-    id: content.id,
-    expectedRevision: 3,
-    model: fixtureBotInput('사용자 후속 제목', '원본 보존'),
-  });
-  const duplicate = await post({ editSeq: edit.editSeq });
-  expect(duplicate.json()).toEqual(response.json());
-  expect(readResource(f.store, 'content', content.id)).toMatchObject({
-    revision: 4,
-    title: '사용자 후속 제목',
-  });
-  expect(lastEdit(f)).toEqual(response.json());
-  expect(
-    f.workspace.events(f.conversation.id).filter((item) => item.kind === 'resource.edit.undone')
-  ).toHaveLength(1);
-});
-
-test('failed explanation keeps theme save recoverable and refresh events survive undo', async () => {
+test('failed explanation keeps the theme save and its refresh events', async () => {
   const kind = 'theme' as const;
   const f = fixture();
   const model = emptyTheme('원래 설정');
@@ -390,124 +333,10 @@ test('failed explanation keeps theme save recoverable and refresh events survive
     status: 'failed',
     completedEffects: { count: 1 },
   });
-  const edit = lastEdit(f)!;
-  expect(edit).toMatchObject({ kind, id: saved.id, canUndo: true });
-  undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, edit.editSeq);
-  expect(readResource(f.store, kind, saved.id)).toMatchObject({ title: '원래 설정' });
+  expect(readResource(f.store, kind, saved.id)).toMatchObject({ title: '변경한 설정' });
   const kinds = f.workspace.events(f.conversation.id).map((event) => event.kind);
-  expect(kinds.filter((value) => value === `${kind}.updated`)).toHaveLength(2);
-  expect(kinds.filter((value) => value === 'resource.updated')).toHaveLength(2);
-});
-
-test.each(['external-save', 'deleted', 'running'] as const)(
-  'latest edit stays selected and undo rechecks %s',
-  (blocker) => {
-    const f = fixture();
-    const task = runningTask(f);
-    const contents = ['처음 자료', '최근 자료'].map((title) =>
-      f.store.product.content(fixtureBotInput(title))
-    );
-    for (const content of contents)
-      mutate(
-        f,
-        task,
-        'resource.patch',
-        patchTitle(content.id, content.revision, `${content.title} 수정`),
-        content.id
-      );
-    finish(f, task);
-    const edit = lastEdit(f)!;
-    const content = contents[1];
-    expect(edit).toMatchObject({ id: content.id, canUndo: true });
-    if (blocker === 'external-save') {
-      const saved = readResource(f.store, 'content', content.id);
-      saveResource(f.store, {
-        kind: 'content',
-        id: content.id,
-        expectedRevision: saved.revision,
-        model: { ...editableResource('content', saved), description: '다른 창 수정' },
-      });
-    } else if (blocker === 'deleted') {
-      const deleting = runningTask(f, 'delete');
-      mutate(
-        f,
-        deleting,
-        'resource.delete',
-        { kind: 'content', id: content.id, expectedRevision: edit.revision },
-        'delete'
-      );
-      finish(f, deleting);
-    } else runningTask(f, 'new-task');
-    expect(lastEdit(f)).toMatchObject({
-      editSeq: edit.editSeq,
-      id: content.id,
-      canUndo: false,
-      reason: expect.any(String),
-    });
-    expect(() =>
-      undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, edit.editSeq)
-    ).toThrow();
-    const firstSeq = f.workspace
-      .events(f.conversation.id)
-      .find((event) => event.kind === 'resource.edited')!.seq;
-    expect(() => undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, firstSeq)).toThrow(
-      '최근 수정이 바뀌었어요'
-    );
-    expect(readResource(f.store, 'content', contents[0].id)).toMatchObject({
-      title: '처음 자료 수정',
-      revision: 2,
-    });
-  }
-);
-
-test('new resources, unchanged writes and resource undo never become another recoverable edit', () => {
-  const f = fixture();
-  const task = runningTask(f);
-  const created = mutate(
-    f,
-    task,
-    'resource.save',
-    { kind: 'theme', model: emptyTheme('새 테마') },
-    'create'
-  ) as { id: string; revision: number };
-  expect(lastEdit(f)).toBeNull();
-  const before = readResource(f.store, 'theme', created.id);
-  mutate(
-    f,
-    task,
-    'resource.save',
-    {
-      kind: 'theme',
-      id: created.id,
-      expectedRevision: before.revision,
-      model: editableResource('theme', before),
-    },
-    'noop-save'
-  );
-  expect(lastEdit(f)).toBeNull();
-  const content = f.store.product.content(fixtureBotInput('제목'));
-  mutate(f, task, 'resource.patch', patchTitle(content.id, content.revision, '제목'), 'noop-patch');
-  expect(lastEdit(f)).toBeNull();
-  mutate(
-    f,
-    task,
-    'resource.patch',
-    patchTitle(content.id, content.revision, '새 제목'),
-    'real-edit'
-  );
-  const editSeq = lastEdit(f)!.editSeq;
-  mutate(
-    f,
-    task,
-    'resource.undo',
-    { kind: 'content', id: content.id, expectedRevision: 2 },
-    'tool-undo'
-  );
-  finish(f, task);
-  expect(lastEdit(f)).toMatchObject({ editSeq, canUndo: false });
-  expect(
-    f.workspace.events(f.conversation.id).filter((event) => event.kind === 'resource.edited')
-  ).toHaveLength(1);
+  expect(kinds.filter((value) => value === `${kind}.updated`)).toHaveLength(1);
+  expect(kinds.filter((value) => value === 'resource.updated')).toHaveLength(1);
 });
 
 test('image metadata restores prior metadata without changing image bytes', () => {
@@ -543,10 +372,14 @@ test('image metadata restores prior metadata without changing image bytes', () =
     },
     'image'
   );
+  mutate(
+    f,
+    task,
+    'resource.undo',
+    { kind: 'content', id: content.id, expectedRevision: 2 },
+    'undo-image'
+  );
   finish(f, task);
-  const edit = lastEdit(f)!;
-  expect(edit).toMatchObject({ id: content.id, canUndo: true });
-  undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, edit.editSeq);
   expect(readResource(f.store, 'content', content.id)).toMatchObject({
     package: {
       images: [
@@ -556,7 +389,7 @@ test('image metadata restores prior metadata without changing image bytes', () =
   });
 });
 
-test('edit and undo writes roll back with their durable provenance receipt', () => {
+test('an edit rolls back with its durable provenance receipt', () => {
   const f = fixture();
   const task = runningTask(f);
   const content = f.store.product.content(fixtureBotInput('원래 제목'));
@@ -569,30 +402,11 @@ test('edit and undo writes roll back with their durable provenance receipt', () 
     title: '원래 제목',
     revision: 1,
   });
-  expect(lastEdit(f)).toBeNull();
   f.store.db.exec('DROP TRIGGER reject_operation');
   mutate(f, task, 'resource.patch', patchTitle(content.id, 1, '새 제목'), 'atomic-edit');
   const count = f.workspace.events(f.conversation.id).length;
   mutate(f, task, 'resource.patch', patchTitle(content.id, 1, '새 제목'), 'atomic-edit');
   expect(f.workspace.events(f.conversation.id)).toHaveLength(count);
-  finish(f, task);
-  const edit = lastEdit(f)!;
-  f.store.db.exec(`CREATE TRIGGER reject_undo BEFORE INSERT ON helper_events
-    WHEN NEW.kind='resource.edit.undone' BEGIN SELECT RAISE(ABORT, 'undo receipt failed'); END`);
-  expect(() =>
-    undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, edit.editSeq)
-  ).toThrow('undo receipt failed');
-  expect(readResource(f.store, 'content', content.id)).toMatchObject({
-    title: '새 제목',
-    revision: 2,
-  });
-  expect(lastEdit(f)).toMatchObject({ canUndo: true });
-  f.store.db.exec('DROP TRIGGER reject_undo');
-  undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, edit.editSeq);
-  expect(readResource(f.store, 'content', content.id)).toMatchObject({
-    title: '원래 제목',
-    revision: 3,
-  });
 });
 
 test.each(['stale', 'duplicate'] as const)(
@@ -635,7 +449,6 @@ test.each(['stale', 'duplicate'] as const)(
       previousUndo
     );
     expect(f.store.db.prepare('SELECT * FROM helper_operations').all()).toHaveLength(0);
-    expect(lastEdit(f)).toBeNull();
     expect(
       f.workspace.events(f.conversation.id).filter((event) => event.kind.startsWith('resource.'))
     ).toHaveLength(0);
@@ -671,12 +484,11 @@ test('batch boundaries reject invalid count and targets before storing any resou
   expect(f.store.db.prepare('SELECT * FROM resource_undo').all()).toHaveLength(0);
 });
 
-test('mixed batch tracks only changed members in one receipt and undo restores all once', () => {
+test('mixed batch reports every member and keeps bodies out of its result', () => {
   const f = fixture();
   const content = f.store.product.content(
     fixtureBotInput('자료 원본', '본문은 기록에 남기지 않음')
   );
-  const contentBefore = readResource(f.store, 'content', content.id);
   const preset = f.store.product.promptPreset({
     title: '프리셋 원본',
     role: 'main',
@@ -709,58 +521,10 @@ test('mixed batch tracks only changed members in one receipt and undo restores a
     { kind: 'content', id: unchanged.id, revision: 1, changedPaths: [] },
   ]);
   expect(mutate(f, task, 'resource.patchMany', args, 'batch')).toEqual(result);
-  const events = f.workspace
-    .events(f.conversation.id)
-    .filter((event) => event.kind === 'resource.edited');
-  expect(events).toHaveLength(1);
-  expect(events[0].data).toMatchObject({
-    receiptId: 'batch',
-    resources: [
-      { kind: 'content', id: content.id, revision: 2, title: '자료 변경' },
-      { kind: 'prompt-preset', id: preset.id, revision: 2, title: '프리셋 변경' },
-    ],
-  });
-  expect(JSON.stringify(events[0].data)).not.toContain('본문은 기록에 남기지 않음');
   expect(JSON.stringify(result)).not.toContain('본문은 기록에 남기지 않음');
-  finish(f, task);
-  const edit = lastEdit(f)!;
-  expect(edit.canUndo).toBe(true);
-  expect(helperResourceEditResources(edit)).toHaveLength(2);
-  const undone = undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, edit.editSeq);
-  for (const [kind, id, original] of [
-    ['content', content.id, contentBefore],
-    ['prompt-preset', preset.id, preset],
-  ] as const) {
-    const restored = readResource(f.store, kind, id);
-    expect(restored.revision).toBe(3);
-    const expected = editableResource(kind, original);
-    expect(editableResource(kind, restored)).toEqual(
-      'package' in expected
-        ? { ...expected, package: { ...expected.package, revision: 3 } }
-        : expected
-    );
-  }
-  expect(readResource(f.store, 'content', unchanged.id)).toEqual(unchanged);
-  saveResource(f.store, {
-    kind: 'prompt-preset',
-    id: preset.id,
-    expectedRevision: 3,
-    model: { ...editableResource('prompt-preset', preset), title: '사용자 후속 저장' },
-  });
-  expect(undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, edit.editSeq)).toEqual(
-    undone
-  );
-  expect(readResource(f.store, 'prompt-preset', preset.id)).toMatchObject({
-    revision: 4,
-    title: '사용자 후속 저장',
-  });
-  expect(readResource(f.store, 'content', content.id).revision).toBe(3);
-  expect(
-    f.workspace.events(f.conversation.id).filter((event) => event.kind === 'resource.edit.undone')
-  ).toHaveLength(1);
 });
 
-test('an unchanged batch creates no resource event and a one-change batch uses the legacy receipt shape', () => {
+test('an unchanged batch records no resource event', () => {
   const f = fixture();
   const contents = ['첫 자료', '둘째 자료'].map((title) =>
     f.store.product.content(fixtureBotInput(title))
@@ -768,72 +532,12 @@ test('an unchanged batch creates no resource event and a one-change batch uses t
   const task = runningTask(f);
   const items = contents.map((content) => patchTitle(content.id, 1, content.title));
   mutate(f, task, 'resource.patchMany', { items }, 'no-changes');
-  expect(lastEdit(f)).toBeNull();
   expect(
     f.workspace.events(f.conversation.id).filter((event) => event.kind.startsWith('resource.'))
   ).toHaveLength(0);
-  items[1] = patchTitle(contents[1].id, 1, '둘째 변경');
-  mutate(f, task, 'resource.patchMany', { items }, 'one-change');
-  finish(f, task);
-  const edit = lastEdit(f)!;
-  expect(edit).toMatchObject({ id: contents[1].id, revision: 2, canUndo: true });
-  expect(edit.resources).toBeUndefined();
-  expect(helperResourceEditResources(edit)).toEqual([edit]);
-  undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, edit.editSeq);
-  expect(readResource(f.store, 'content', contents[0].id)).toEqual(contents[0]);
-  expect(readResource(f.store, 'content', contents[1].id)).toMatchObject({
-    title: '둘째 자료',
-    revision: 3,
-  });
 });
 
-test.each(['newer-save', 'missing-undo'] as const)(
-  'a batch member with %s blocks the entire undo',
-  (blocker) => {
-    const f = fixture();
-    const contents = ['첫 자료', '둘째 자료'].map((title) =>
-      f.store.product.content(fixtureBotInput(title))
-    );
-    const task = runningTask(f);
-    mutate(
-      f,
-      task,
-      'resource.patchMany',
-      {
-        items: contents.map((content) => patchTitle(content.id, 1, `${content.title} 변경`)),
-      },
-      'batch'
-    );
-    finish(f, task);
-    const edit = lastEdit(f)!;
-    expect(edit.canUndo).toBe(true);
-    if (blocker === 'newer-save')
-      saveResource(f.store, {
-        kind: 'content',
-        id: contents[1].id,
-        expectedRevision: 2,
-        model: fixtureBotInput('후속 사용자 저장'),
-      });
-    else
-      f.store.db
-        .prepare('DELETE FROM resource_undo WHERE kind=? AND id=?')
-        .run('content', contents[1].id);
-    expect(lastEdit(f)).toMatchObject({ editSeq: edit.editSeq, canUndo: false });
-    expect(() =>
-      undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, edit.editSeq)
-    ).toThrow('자료가 변경되어');
-    expect(readResource(f.store, 'content', contents[0].id)).toMatchObject({
-      title: '첫 자료 변경',
-      revision: 2,
-    });
-    expect(readResource(f.store, 'content', contents[1].id)).toMatchObject({
-      title: blocker === 'newer-save' ? '후속 사용자 저장' : '둘째 자료 변경',
-      revision: blocker === 'newer-save' ? 3 : 2,
-    });
-  }
-);
-
-test('batch save and undo roll back every member if their durable receipt fails', () => {
+test('batch save rolls back every member if its durable receipt fails', () => {
   const f = fixture();
   const contents = ['첫 자료', '둘째 자료'].map((title) =>
     f.store.product.content(fixtureBotInput(title))
@@ -849,28 +553,12 @@ test('batch save and undo roll back every member if their durable receipt fails'
   );
   for (const content of contents)
     expect(readResource(f.store, 'content', content.id)).toEqual(content);
-  expect(lastEdit(f)).toBeNull();
   f.store.db.exec('DROP TRIGGER reject_batch_operation');
   mutate(f, task, 'resource.patchMany', args, 'batch');
-  finish(f, task);
-  const edit = lastEdit(f)!;
-  f.store.db.exec(`CREATE TRIGGER reject_batch_undo BEFORE INSERT ON helper_events
-    WHEN NEW.kind='resource.edit.undone' BEGIN SELECT RAISE(ABORT, 'undo receipt failed'); END`);
-  expect(() =>
-    undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, edit.editSeq)
-  ).toThrow('undo receipt failed');
   for (const content of contents)
     expect(readResource(f.store, 'content', content.id)).toMatchObject({
       title: `${content.title} 변경`,
       revision: 2,
-    });
-  expect(lastEdit(f)).toMatchObject({ canUndo: true });
-  f.store.db.exec('DROP TRIGGER reject_batch_undo');
-  undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, edit.editSeq);
-  for (const content of contents)
-    expect(readResource(f.store, 'content', content.id)).toMatchObject({
-      title: content.title,
-      revision: 3,
     });
 });
 
@@ -905,6 +593,5 @@ test('runtime blocks the whole batch when its second target has an unsaved edito
   ]);
   for (const content of contents)
     expect(readResource(f.store, 'content', content.id)).toEqual(content);
-  expect(lastEdit(f)).toBeNull();
   expect(f.store.db.prepare('SELECT * FROM helper_operations').all()).toHaveLength(0);
 });
