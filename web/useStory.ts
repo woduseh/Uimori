@@ -16,7 +16,14 @@ import {
   THEME_BODY_SCROLL_SELECTOR,
 } from './theme-body-scroll.js';
 import { captureReaderLocation, targetAtReaderLocation, useReadingSync } from './useReadingSync.js';
-import { readerTargetFromUrl, readerTargetUrl, type ReaderTarget } from '../core/reader-target.js';
+import {
+  paragraphPosition,
+  readerTargetFromUrl,
+  readerTargetUrl,
+  type ReaderTarget,
+} from '../core/reader-target.js';
+import { displayTranslationJob, latestTranslation } from '../core/translation-display.js';
+import { markArrivalWhenShown } from './arrival-mark.js';
 import { canDismissReaderRun, readerConversation } from '../core/reader-conversation.js';
 import { createReaderSync } from './reader-sync.js';
 import {
@@ -155,6 +162,19 @@ function clearCommand(key: string, id: string) {
 }
 
 type Position = ReadingPosition;
+function changedParagraphPosition(detail: ReaderDetail, target: ReaderTarget, paragraph: number) {
+  const source = detail.sources.find((item) => item.id === target.sourceId);
+  if (!source) return null;
+  if (target.representation === 'original')
+    return source.blocks?.length ? paragraphPosition(source.text, source.blocks, paragraph) : null;
+  const job = displayTranslationJob(source, latestTranslation(source, detail.jobs));
+  const text = job?.result?.text;
+  const blocks = job?.translationLayout?.blocks;
+  return typeof text === 'string' && blocks?.length
+    ? paragraphPosition(text, blocks, paragraph)
+    : null;
+}
+
 export function useStory() {
   useI18n();
   const {
@@ -238,6 +258,7 @@ export function useStory() {
   const currentDraftKey = useRef('');
   const refreshVersion = useRef(0);
   const restoredView = useRef('');
+  const arrival = useRef<AbortController | null>(null);
   const cancelNavigationScroll = useRef<(() => void) | null>(null);
   const latestIntent = useRef<{ epoch: number; source: string } | null>(null);
   const readerQuery = useRef({ chat: '', source: '', key: '', epoch: 0 });
@@ -929,18 +950,41 @@ export function useStory() {
         const element = document.getElementById(`source-${readSource}`)!;
         const validHash =
           !readerTarget.contentHash || element.dataset.contentHash === readerTarget.contentHash;
+        const changed =
+          readerTarget.changedParagraph != null
+            ? changedParagraphPosition(detail, readerTarget, readerTarget.changedParagraph)
+            : null;
+        const anchor = readerTarget.blockAnchor ?? changed?.anchor;
         holdNavigationPosition(node, {
           kind: 'source',
           element,
-          ...(validHash && readerTarget.blockAnchor
-            ? {
-                anchor: readerTarget.blockAnchor,
-                ratio: readerTarget.offsetRatio ?? 0,
-                fallbackToSource: true,
-              }
+          ...(validHash && anchor
+            ? readerTarget.blockAnchor
+              ? { anchor, ratio: readerTarget.offsetRatio ?? 0, fallbackToSource: true }
+              : { anchor, ratio: changed?.ratio, share: changed?.share, fallbackToSource: true }
             : {}),
         });
         if (!validHash) setNotice('본문이 바뀌어 해당 장면의 시작으로 이동했어요.');
+        if (readerTarget.changedParagraph !== undefined) {
+          arrival.current?.abort();
+          arrival.current = new AbortController();
+          const source = readSource;
+          markArrivalWhenShown(
+            () =>
+              changed
+                ? (document.getElementById(`block-${source}-${changed.anchor}`) ??
+                  document
+                    .getElementById(`source-${source}`)
+                    ?.querySelector(`[data-block-anchor~="${CSS.escape(changed.anchor)}"]`) ??
+                  null)
+                : document.getElementById(`source-${source}`),
+            arrival.current.signal,
+            false
+          );
+          setReaderTarget((current) =>
+            current === readerTarget ? { ...current, changedParagraph: undefined } : current
+          );
+        }
       } else if (sourceTarget && node.contains(sourceTarget)) {
         holdNavigationPosition(node, { kind: 'source', element: sourceTarget });
       } else {

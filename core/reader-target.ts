@@ -5,7 +5,31 @@ export type ReaderTarget = {
   contentHash?: string;
   blockAnchor?: string;
   offsetRatio?: number;
+  changedParagraph?: number | null;
 };
+
+export function paragraphPosition(
+  text: string,
+  blocks: readonly { anchor: string; start: number; end: number }[],
+  paragraph: number
+): { anchor: string; ratio: number; share: number } | null {
+  let offset = 0;
+  for (let line = 0; line < paragraph; line++) {
+    const next = text.indexOf('\n', offset);
+    if (next < 0) return null;
+    offset = next + 1;
+  }
+  const block =
+    blocks.find((item) => offset >= item.start && offset < item.end) ??
+    blocks.find((item) => item.start >= offset);
+  if (!block) return null;
+  const length = block.end - block.start;
+  return {
+    anchor: block.anchor,
+    ratio: length > 0 ? Math.min(1, Math.max(0, (offset - block.start) / length)) : 0,
+    share: text.length > 0 ? offset / text.length : 0,
+  };
+}
 
 export function readerTargetUrl(target: ReaderTarget): string {
   const params = new URLSearchParams({

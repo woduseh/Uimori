@@ -63,20 +63,29 @@ export function NativeRisuLoreEditor({
   moduleLore,
   onChange,
   selectionControl,
+  focus = null,
 }: {
   entries: LoreEntry[];
   moduleLore: boolean;
   onChange: (entries: LoreEntry[]) => void;
   selectionControl: ReactNode;
+  focus?: { index: number; epoch: number } | null;
 }) {
   const { t } = useI18n();
   const loreTitle = (entry: LoreEntry) =>
     loreText(entry.comment ?? entry.name) || t('native.unnamedLore');
 
-  const [selected, setSelected] = useState(0);
+  const [selected, setSelected] = useState(focus?.index ?? 0);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState('');
   const [showList, setShowList] = useState(false);
+  const focused = useRef(focus?.epoch);
+  useEffect(() => {
+    if (!focus || focused.current === focus.epoch) return;
+    focused.current = focus.epoch;
+    setSelected(focus.index);
+    setShowList(false);
+  }, [focus]);
   const [deleting, setDeleting] = useState<number | null>(null);
   const [dragged, setDragged] = useState<number | null>(null);
   const draggedRef = useRef<number | null>(null);

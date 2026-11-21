@@ -1,0 +1,19 @@
+.arrival-mark {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-small);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .arrival-mark {
+    animation: arrival-mark var(--motion-mark) var(--motion-ease-out) forwards;
+  }
+}
+@keyframes arrival-mark {
+  0%,
+  50% {
+    outline-color: var(--focus-ring);
+  }
+  100% {
+    outline-color: transparent;
+  }
+}

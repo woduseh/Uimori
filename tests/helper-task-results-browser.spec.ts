@@ -10,6 +10,7 @@ import type { Content, ModelWorkspace } from '../core/product.js';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
 import { postFixtureChat, fixtureBotInput } from './fixtures/chat.js';
+import { nativeContent } from './fixtures/native-content.js';
 import { navigationAction, openHelper } from './ui-navigation.js';
 import { DESKTOP_HEIGHT, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 
@@ -1010,4 +1011,190 @@ test('HCHANGE02 earlier task results load when their answer comes into view', as
   await first.scrollIntoViewIfNeeded();
   await expect(first.getByTestId('helper-task-results').locator('summary')).toBeVisible();
   expect(reads.get(task.id)).toBe(1);
+});
+
+test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps the helper beside it', async ({
+  page,
+  request,
+}, info) => {
+  const { chat, task } = await seed(request);
+  const before = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+  const started = await request.post(`/api/chats/${chat.id}/runs`, {
+    data: {
+      request: '긴 장면',
+      expectedRevision: before.chat.headRevision,
+      expectedSettingsRevision: before.chat.settingsRevision,
+      idempotencyKey: randomUUID(),
+    },
+  });
+  expect(started.ok(), await started.text()).toBe(true);
+  const run = (await started.json()) as { id: string };
+  await expect
+    .poll(async () => {
+      const current = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+      return current.runs.find((item) => item.id === run.id)?.status;
+    })
+    .toBe('completed');
+  const generated = ((await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail)
+    .sources[0]!;
+  const paragraphs = Array.from(
+    { length: 40 },
+    (_, index) => `문단 ${index + 1}: 등대지기는 젖은 계단을 하나씩 올라 불을 살폈다.`
+  );
+  const edited = await request.put(`/api/sources/${generated.id}/text`, {
+    data: { text: paragraphs.join('\n\n'), expectedRevision: generated.editRevision ?? 0 },
+  });
+  expect(edited.ok(), await edited.text()).toBe(true);
+  const source = (await edited.json()) as ChatDetail['sources'][number];
+  const bot = fixtureBotInput('로어 이동 봇', '설명');
+  bot.package = nativeContent({
+    name: '로어 이동 봇',
+    description: '설명',
+    character_book: {
+      entries: ['항구', '등대', '폭풍'].map((name) => ({
+        keys: [name],
+        comment: name,
+        content: `${name}에 관한 설명`,
+      })),
+    },
+  });
+  const created = await request.post('/api/content', { data: bot });
+  expect(created.ok(), await created.text()).toBe(true);
+  const content = (await created.json()) as Content;
+  const projection: HelperTaskResultsView = {
+    taskId: task.id,
+    status: 'completed',
+    results: [],
+    changes: [
+      {
+        domain: 'scene',
+        targetId: `${source.id}:original`,
+        title: chat.title,
+        location: '장면 1 · 원문',
+        action: 'update',
+        diff: {
+          mode: 'prose',
+          unit: 'word',
+          added: 1,
+          removed: 1,
+          hunks: [
+            {
+              beforeOffset: 0,
+              afterOffset: 0,
+              segments: [
+                { op: 'equal', text: '문단 31: ' },
+                { op: 'delete', text: '마른' },
+                { op: 'insert', text: '젖은' },
+              ],
+            },
+          ],
+        },
+        anchor: {
+          domain: 'scene',
+          chatId: chat.id,
+          sourceId: source.id,
+          field: 'original',
+          paragraph: 60,
+        },
+      },
+      {
+        domain: 'resource',
+        targetId: content.id,
+        title: content.title,
+        location: '로어북 › 폭풍',
+        action: 'update',
+        diff: {
+          mode: 'prose',
+          unit: 'word',
+          added: 1,
+          removed: 0,
+          hunks: [
+            {
+              beforeOffset: 0,
+              afterOffset: 0,
+              segments: [
+                { op: 'equal', text: '폭풍에 관한 ' },
+                { op: 'insert', text: '설명' },
+              ],
+            },
+          ],
+        },
+        anchor: {
+          domain: 'resource',
+          kind: 'content',
+          id: content.id,
+          path: '/package/nativeRisu/card/character_book/entries/2/content',
+          section: 'lore',
+          index: 2,
+        },
+      },
+    ],
+    unrecordedOperations: 0,
+    usage: { toolExecutions: 2, attempts: [], latestInputEstimate: null },
+  };
+  await page.route(`**/api/helper/tasks/${task.id}/results`, (route) =>
+    route.fulfill({ json: projection })
+  );
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  const helper = page.locator('#helper-panel');
+  const results = helper.getByTestId('helper-task-results');
+  await results
+    .getByRole('button', { name: `${chat.title} 장면 1 · 원문 열기`, exact: true })
+    .click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('source')).toBe(source.id);
+  const marked = page.locator(`[data-source-id="${source.id}"] .arrival-mark`);
+  await expect(marked).toHaveCount(1);
+  const target = page
+    .locator(`[data-source-id="${source.id}"]`)
+    .getByText('문단 31: 등대지기는', { exact: false });
+  await expect(target).toBeInViewport();
+  await expect(helper).toBeVisible();
+  await expect(helper.getByRole('button', { name: '도우미 크게 보기', exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath('open-scene-from-side-panel.png') });
+
+  await helper.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
+  await results
+    .getByRole('button', { name: `${content.title} 로어북 › 폭풍 열기`, exact: true })
+    .click();
+  const library = page.getByTestId('library-panel');
+  await expect(library.getByRole('tab', { name: '로어북', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await expect(library.getByRole('button', { name: '폭풍', exact: true })).toHaveAttribute(
+    'aria-current',
+    'true'
+  );
+  await expect(library.locator('.nl-detail.arrival-mark')).toBeVisible();
+  await expect(helper).toBeVisible();
+  await expect(helper.getByRole('button', { name: '도우미 크게 보기', exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath('open-lore-from-expanded-workspace.png') });
+
+  await library.getByRole('tab', { name: '기본 정보', exact: true }).click();
+  const name = library.getByRole('textbox', { name: 'Risu 자료 이름', exact: true });
+  await name.fill('저장하지 않은 이름');
+  await helper.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
+  await results
+    .getByRole('button', { name: `${content.title} 로어북 › 폭풍 열기`, exact: true })
+    .click();
+  await expect(library.getByRole('button', { name: '폭풍', exact: true })).toHaveAttribute(
+    'aria-current',
+    'true'
+  );
+  await expect(helper.getByRole('button', { name: '도우미 크게 보기', exact: true })).toBeVisible();
+  await library.getByRole('tab', { name: '기본 정보', exact: true }).click();
+  await expect(name).toHaveValue('저장하지 않은 이름');
+  const landing = library.locator('.nl-detail');
+  expect(await landing.evaluate((node) => getComputedStyle(node).animationName)).toBe('none');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await results
+    .getByRole('button', { name: `${content.title} 로어북 › 폭풍 열기`, exact: true })
+    .click();
+  await expect(landing).toHaveClass(/arrival-mark/);
+  expect(await landing.evaluate((node) => getComputedStyle(node).animationName)).toBe(
+    'arrival-mark'
+  );
+  await expect(landing).not.toHaveClass(/arrival-mark/, { timeout: 5000 });
 });

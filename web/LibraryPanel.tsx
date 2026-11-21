@@ -14,6 +14,7 @@ import { DismissibleError } from './DismissibleError.js';
 import { TransientNotice } from './TransientNotice.js';
 import { SaveButton } from './SaveButton.js';
 import { RisuNativeFields } from './RisuNativeFields.js';
+import { useResourceAnchor } from './resource-anchor.js';
 import { RisuExportButton } from './RisuExportButton.js';
 import { IconButton } from './IconButton.js';
 import { useEditorHeadingHeight } from './useEditorHeadingHeight.js';
@@ -187,6 +188,7 @@ export function LibraryPanel({
   initialTab = 'bot',
   listRequest = 0,
   initialContentId,
+  initialContentEdit = false,
   onInitialContentHandled,
   onTabChange,
   onDirtyChange,
@@ -205,6 +207,7 @@ export function LibraryPanel({
   initialTab?: PrimaryLibraryTab;
   listRequest?: number;
   initialContentId?: string | null;
+  initialContentEdit?: boolean;
   onInitialContentHandled?: (id: string) => void;
   onTabChange?: (tab: PrimaryLibraryTab) => void;
   onDirtyChange?: (dirty: boolean) => void;
@@ -290,7 +293,9 @@ export function LibraryPanel({
     const item = library.contents.find((value) => value.id === initialContentId);
     if (item) {
       setTab(item.kind === 'persona' || item.kind === 'module' ? item.kind : 'bot');
-      void openContent(item).finally(() => onInitialContentHandled?.(initialContentId));
+      void openContent(item, initialContentEdit ? 'edit' : 'detail').finally(() =>
+        onInitialContentHandled?.(initialContentId)
+      );
     } else onInitialContentHandled?.(initialContentId);
   }, [initialContentId, library, onInitialContentHandled]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Only an explicit request leaves a detail view.
@@ -1368,6 +1373,7 @@ function ContentEditor({
   const shared = useResourceEditor<ContentEditModel>(session);
   const { model: value, setModel: setValue, state } = shared;
   const { document, dirty } = state;
+  const anchor = useResourceAnchor('content', document.targetId);
   const selected = document.targetId
     ? {
         ...(document.baseModel as ContentEditModel),
@@ -1579,6 +1585,7 @@ function ContentEditor({
         >
           <fieldset className="editor-fields full" disabled={editorUnavailable}>
             <RisuNativeFields
+              anchor={anchor}
               value={value.package}
               onChange={(pkg) =>
                 setValue((current) => ({ ...current, title: pkg.title, package: pkg }))

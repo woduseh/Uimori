@@ -7,6 +7,7 @@ export type ReaderNavigationPosition =
       anchor?: string;
       offset?: number;
       ratio?: number;
+      share?: number;
       fallbackToSource?: boolean;
       outerTop?: number;
       bodyTop?: number;
@@ -74,6 +75,10 @@ export function retainReaderNavigation(
         : position.element;
       const target = anchored ?? (position.fallbackToSource ? position.element : undefined);
       if (!target) return;
+      const ratio =
+        position.share !== undefined && (anchored?.dataset.blockAnchor?.split(' ').length ?? 0) > 1
+          ? position.share
+          : (position.ratio ?? 0);
       body = target.closest<HTMLElement>(THEME_BODY_SCROLL_SELECTOR);
       if (body) {
         const source = body.closest<HTMLElement>('[data-source-id][data-representation]');
@@ -84,13 +89,13 @@ export function retainReaderNavigation(
           target.getBoundingClientRect().top -
           body.getBoundingClientRect().top -
           (position.offset ?? 0) +
-          (position.ratio ?? 0) * target.getBoundingClientRect().height;
+          ratio * target.getBoundingClientRect().height;
       } else {
         node.scrollTop +=
           target.getBoundingClientRect().top -
           node.getBoundingClientRect().top -
           (position.offset ?? 0) +
-          (anchored ? (position.ratio ?? 0) : 0) * target.getBoundingClientRect().height;
+          (anchored ? ratio : 0) * target.getBoundingClientRect().height;
         if (target.matches('[data-source-id][data-representation]')) {
           body = themeBodyScroll(target);
           if (body) body.scrollTop = 0;

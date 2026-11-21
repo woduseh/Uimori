@@ -3,6 +3,7 @@ import { imageInputSupported } from '../core/provider-image-reference.js';
 import { DraftRequestImages } from './RequestImages.js';
 import { downloadArchive } from './archive-download.js';
 import { ReaderEditingContext } from './Bookmarks.js';
+import { ResourceAnchorContext, type ResourceAnchor } from './resource-anchor.js';
 import type { NotificationIntent } from '../core/push.js';
 import { startPwa, subscribeNotificationNavigation } from './pwa.js';
 import type { ReaderTarget } from '../core/reader-target.js';
@@ -351,8 +352,18 @@ function App() {
   const [helperNavigationHost, setHelperNavigationHost] = useState<HTMLDivElement | null>(null);
   const helperNavigationActions = useRef<{ create: () => void; activity: () => void } | null>(null);
   const [helperSearchRequest, setHelperSearchRequest] = useState(0);
-  const [contentToOpen, setContentToOpen] = useState<string | null>(null);
+  const [contentToOpen, setContentToOpen] = useState<{ id: string; edit: boolean } | null>(null);
+  const [resourceAnchor, setResourceAnchor] = useState<ResourceAnchor | null>(null);
+  const consumeResourceAnchor = useCallback(
+    (epoch: number) => setResourceAnchor((current) => (current?.epoch === epoch ? null : current)),
+    []
+  );
+  const resourceAnchorRequest = useMemo(
+    () => ({ anchor: resourceAnchor, consume: consumeResourceAnchor }),
+    [resourceAnchor, consumeResourceAnchor]
+  );
   const helperResultNavigation = useRef(0);
+  const helperAnchorEpoch = useRef(0);
   const [helperNavigation, setHelperNavigation] = useState<{
     conversationId: string;
     taskId: string;
@@ -870,82 +881,94 @@ function App() {
     else if (role === 'persona') newStory(undefined, undefined, content);
     else setModuleToUse(content);
   }
-  async function openHelperResult(target: HelperTaskResultTarget) {
+  async function openResultDestination(
+    navigation: number,
+    target: HelperTaskResultTarget,
+    edit: boolean
+  ) {
+    if (target.kind === 'content') {
+      const content = await api<Content>(`/content/${encodeURIComponent(target.id)}`);
+      await s.loadLibrary();
+      if (navigation !== helperResultNavigation.current) return;
+      setLibraryTab(content.kind === 'persona' || content.kind === 'module' ? content.kind : 'bot');
+      setContentToOpen({ id: content.id, edit });
+      s.showLibrary();
+    } else if (target.kind === 'prompt-preset') {
+      await s.loadLibrary();
+      if (navigation !== helperResultNavigation.current) return;
+      setLibraryTab('prompts');
+      setPromptToEdit(target.id);
+      s.showLibrary();
+    } else if (target.kind === 'illustration' || target.kind === 'scene') {
+      const chatId =
+        target.chatId ?? s.detail?.sources.find((source) => source.id === target.id)?.chatId;
+      if (!chatId) throw new Error(uiMessage('helperResults.openFailed'));
+      s.openTarget({ chatId, sourceId: target.id, representation: 'original' });
+      setPanel('');
+    } else if (target.kind === 'translation' && target.chatId) {
+      s.openTarget({ chatId: target.chatId, sourceId: target.id, representation: 'translation' });
+      setPanel('');
+    } else if (target.kind === 'chat') {
+      if (s.selected !== target.id || s.destination !== 'story') s.select(target.id);
+      setPanel('');
+    } else if (target.kind === 'settings' && target.setting?.startsWith('newChat.')) {
+      setSettingsTab('general');
+      setPanel('settings');
+    } else if (target.kind === 'settings' && target.setting === 'bot.storyUiTheme') {
+      setStoryUiThemeTarget({ botId: target.id, title: target.title });
+      setSettingsTab('themes');
+      setPanel('settings');
+    } else if (target.kind === 'settings' && target.setting?.startsWith('chat.')) {
+      if (s.selected !== target.id || s.destination !== 'story') s.select(target.id);
+      setSettingsSection(
+        target.setting === 'chat.illustrationProfiles' ||
+          target.setting === 'chat.illustrationReferences'
+          ? 'images'
+          : target.setting === 'chat.variables'
+            ? 'packages'
+            : target.setting === 'chat.storyGuide'
+              ? 'guide'
+              : target.setting === 'chat.maxCalls' ||
+                  target.setting === 'chat.storyUi' ||
+                  target.setting === 'chat.storyUiStyle'
+                ? 'runtime'
+                : 'prompts'
+      );
+      setPanel('story');
+    } else {
+      setSettingsTab(
+        target.kind === 'theme'
+          ? 'themes'
+          : target.kind === 'illustration-preset'
+            ? 'illustrations'
+            : target.kind === 'prompt-workspace'
+              ? 'prompts'
+              : target.setting === 'model.pricing' ||
+                  target.setting === 'model.parameters' ||
+                  target.setting === 'vertex.location'
+                ? 'connections'
+                : 'models'
+      );
+      setPanel('settings');
+    }
+    setHelperExpanded(false);
+  }
+  async function openHelperResult(target: HelperTaskResultTarget, anchor?: ResourceAnchor) {
     const navigation = ++helperResultNavigation.current;
     const editor = getActiveEditorContext();
     if (editor?.kind === target.kind && editor.targetId === target.id) {
+      if (anchor) setResourceAnchor(anchor);
       setHelperExpanded(false);
       return;
     }
     const go = async () => {
-      if (target.kind === 'content') {
-        const content = await api<Content>(`/content/${encodeURIComponent(target.id)}`);
-        await s.loadLibrary();
-        if (navigation !== helperResultNavigation.current) return;
-        setLibraryTab(
-          content.kind === 'persona' || content.kind === 'module' ? content.kind : 'bot'
-        );
-        setContentToOpen(content.id);
-        s.showLibrary();
-      } else if (target.kind === 'prompt-preset') {
-        await s.loadLibrary();
-        if (navigation !== helperResultNavigation.current) return;
-        setLibraryTab('prompts');
-        setPromptToEdit(target.id);
-        s.showLibrary();
-      } else if (target.kind === 'illustration' || target.kind === 'scene') {
-        const chatId =
-          target.chatId ?? s.detail?.sources.find((source) => source.id === target.id)?.chatId;
-        if (!chatId) throw new Error(uiMessage('helperResults.openFailed'));
-        s.openTarget({ chatId, sourceId: target.id, representation: 'original' });
-        setPanel('');
-      } else if (target.kind === 'translation' && target.chatId) {
-        s.openTarget({ chatId: target.chatId, sourceId: target.id, representation: 'translation' });
-        setPanel('');
-      } else if (target.kind === 'chat') {
-        if (s.selected !== target.id || s.destination !== 'story') s.select(target.id);
-        setPanel('');
-      } else if (target.kind === 'settings' && target.setting?.startsWith('newChat.')) {
-        setSettingsTab('general');
-        setPanel('settings');
-      } else if (target.kind === 'settings' && target.setting === 'bot.storyUiTheme') {
-        setStoryUiThemeTarget({ botId: target.id, title: target.title });
-        setSettingsTab('themes');
-        setPanel('settings');
-      } else if (target.kind === 'settings' && target.setting?.startsWith('chat.')) {
-        if (s.selected !== target.id || s.destination !== 'story') s.select(target.id);
-        setSettingsSection(
-          target.setting === 'chat.illustrationProfiles' ||
-            target.setting === 'chat.illustrationReferences'
-            ? 'images'
-            : target.setting === 'chat.variables'
-              ? 'packages'
-              : target.setting === 'chat.storyGuide'
-                ? 'guide'
-                : target.setting === 'chat.maxCalls' ||
-                    target.setting === 'chat.storyUi' ||
-                    target.setting === 'chat.storyUiStyle'
-                  ? 'runtime'
-                  : 'prompts'
-        );
-        setPanel('story');
-      } else {
-        setSettingsTab(
-          target.kind === 'theme'
-            ? 'themes'
-            : target.kind === 'illustration-preset'
-              ? 'illustrations'
-              : target.kind === 'prompt-workspace'
-                ? 'prompts'
-                : target.setting === 'model.pricing' ||
-                    target.setting === 'model.parameters' ||
-                    target.setting === 'vertex.location'
-                  ? 'connections'
-                  : 'models'
-        );
-        setPanel('settings');
+      if (anchor) setResourceAnchor(anchor);
+      try {
+        await openResultDestination(navigation, target, !!anchor);
+      } catch (error) {
+        if (anchor) consumeResourceAnchor(anchor.epoch);
+        throw error;
       }
-      setHelperExpanded(false);
     };
     if (
       libraryDirty &&
@@ -965,15 +988,39 @@ function App() {
     const anchor = change.anchor;
     if (!anchor) return;
     const base = { title: change.title, revision: 0 };
-    if (anchor.domain === 'resource')
-      return openHelperResult({ ...base, kind: anchor.kind, id: anchor.id });
-    if (anchor.domain === 'scene')
-      return openHelperResult({
-        ...base,
-        kind: anchor.field === 'translation' ? 'translation' : 'scene',
-        id: anchor.sourceId,
-        chatId: anchor.chatId,
-      });
+    if (anchor.domain === 'resource') {
+      return openHelperResult(
+        { ...base, kind: anchor.kind, id: anchor.id },
+        { ...anchor, epoch: ++helperAnchorEpoch.current }
+      );
+    }
+    if (anchor.domain === 'scene') {
+      const go = () => {
+        helperResultNavigation.current++;
+        s.openTarget({
+          chatId: anchor.chatId,
+          sourceId: anchor.sourceId,
+          representation: anchor.field === 'translation' ? 'translation' : 'original',
+          changedParagraph: anchor.field === 'title' ? null : anchor.paragraph,
+        });
+        setPanel('');
+        setHelperExpanded(false);
+      };
+      if (libraryDirty && s.destination === 'library') setPendingNavigation(() => go);
+      else go();
+      return;
+    }
+    if (anchor.domain === 'outline') {
+      const go = () => {
+        helperResultNavigation.current++;
+        if (s.selected !== anchor.chatId || s.destination !== 'story') s.select(anchor.chatId);
+        setHelperExpanded(false);
+        openOutlineWorkspace(anchor.nodeId);
+      };
+      if (libraryDirty && s.destination === 'library') setPendingNavigation(() => go);
+      else go();
+      return;
+    }
     if (anchor.domain === 'settings')
       return openHelperResult({
         ...base,
@@ -981,7 +1028,15 @@ function App() {
         id: anchor.id,
         setting: anchor.setting,
       });
-    return openHelperResult({ ...base, kind: 'chat', id: anchor.chatId });
+    const go = () => {
+      helperResultNavigation.current++;
+      if (s.selected !== anchor.chatId || s.destination !== 'story') s.select(anchor.chatId);
+      setSettingsSection(anchor.domain === 'notes' ? 'story' : 'packages');
+      setPanel('story');
+      setHelperExpanded(false);
+    };
+    if (libraryDirty && s.destination === 'library') setPendingNavigation(() => go);
+    else go();
   }
   function inspect(id: string) {
     setInspectedRun(id);
@@ -1785,9 +1840,10 @@ function App() {
                 onContinueChat={select}
                 initialTab={libraryTab}
                 listRequest={libraryListRequest}
-                initialContentId={contentToOpen}
+                initialContentId={contentToOpen?.id}
+                initialContentEdit={contentToOpen?.edit}
                 onInitialContentHandled={(id) =>
-                  setContentToOpen((current) => (current === id ? null : current))
+                  setContentToOpen((current) => (current?.id === id ? null : current))
                 }
                 onTabChange={setLibraryTab}
                 onDirtyChange={setLibraryDirty}
@@ -3282,7 +3338,9 @@ function App() {
   return (
     <ReadingPreferencesContext value={reading.settings}>
       <TransientNotice message={s.notice} />
-      <ReaderEditingContext value={onSourceEditing}>{workspace}</ReaderEditingContext>
+      <ReaderEditingContext value={onSourceEditing}>
+        <ResourceAnchorContext value={resourceAnchorRequest}>{workspace}</ResourceAnchorContext>
+      </ReaderEditingContext>
       {sceneDeletion && (
         <SceneDeleteDialog
           key={`${sceneDeletion.chatId}:${sceneDeletion.sourceId}`}

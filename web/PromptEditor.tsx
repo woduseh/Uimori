@@ -17,6 +17,7 @@ import { CopyIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NativeRisuPresetEditor } from './NativeRisuPresetEditor.js';
+import { useResourceAnchor } from './resource-anchor.js';
 import { RisuExportButton } from './RisuExportButton.js';
 import type {
   ContentRef,
@@ -112,6 +113,7 @@ export function PromptEditor({
   const session = selectedSessions[role];
   const shared = useResourceEditor<PromptEditModel>(session);
   const { model, state, setModel } = shared;
+  const anchor = useResourceAnchor('prompt-preset', state.document.targetId);
   const editorHeading = useEditorHeadingHeight(state.ready);
   const base: PromptPreset | null = state.document.targetId
     ? {
@@ -443,6 +445,7 @@ export function PromptEditor({
           <fieldset className="prompt-composer-frame">
             <NativeRisuPresetEditor
               key={`${role}:${session.options.editorKey}`}
+              anchor={anchor}
               program={draft.program}
               metadata={initialPreset !== undefined ? metadata : undefined}
               values={model.values}

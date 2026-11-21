@@ -16,7 +16,7 @@ import { captureReaderLocation } from './useReadingSync.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ThemeFrame } from './ThemeFrame.js';
 import { canRejudgeTranslation } from '../core/translation-recovery.js';
-import { displayTranslationJob } from '../core/translation-display.js';
+import { displayTranslationJob, latestTranslation } from '../core/translation-display.js';
 import { resolveInlineImage, IMAGE_POSITION_UNAVAILABLE } from './image-placement.js';
 import {
   Fragment,
@@ -233,18 +233,6 @@ function storyUiBlocks(text: string) {
   return parseStoryUi(text).filter((part) => part.kind !== 'prose');
 }
 
-function latestTranslation(source: Source, jobs: Job[]) {
-  return jobs
-    .filter(
-      (job) =>
-        job.kind === 'translation' &&
-        job.sourceRevision === source.id &&
-        job.sourceHash === source.hash &&
-        job.status !== 'stale'
-    )
-    .sort((a, b) => (b.revision ?? 1) - (a.revision ?? 1))
-    .at(0);
-}
 function SourceReaderContent({
   portrait,
   requestPersona,

@@ -9,6 +9,11 @@ import { readTranslationGuide, withTranslationGuide } from '../core/translation-
 import { editNativeSource, resourceWithNativeSource } from './native-source-edit.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useId, useState } from 'react';
+import {
+  useAnchorArrival,
+  type ResourceAnchor,
+  type ResourceAnchorRequest,
+} from './resource-anchor.js';
 import type { RisuContent } from '../core/risu-content.js';
 import { detectRisuImageHandoff } from '../core/risu-image-handoff.js';
 import {
@@ -53,16 +58,38 @@ type Section =
   | 'creator';
 type Advanced = 'instructions' | 'variables' | 'display' | 'scripts' | 'modules' | 'source';
 
+function anchorSection(anchor: ResourceAnchor): { section: Section; advanced?: Advanced } {
+  const path = anchor.path ?? '';
+  const has = (pattern: RegExp) => pattern.test(path);
+  if (anchor.section === 'lore' || has(/\/(character_book|lorebook)(\/|$)/u))
+    return { section: 'lore' };
+  if (has(/\/(first_mes|alternate_greetings)(\/|$)/u)) return { section: 'greetings' };
+  if (has(/\/uimori\/translationGuide(\/|$)/u)) return { section: 'translation' };
+  if (has(/\/uimori\/illustrationProfiles(\/|$)/u)) return { section: 'appearances' };
+  if (has(/^\/package\/images(\/|$)|\/(assets|emotions)(\/|$)/u)) return { section: 'assets' };
+  if (has(/\/(creator_notes|creator|character_version)(\/|$)/u)) return { section: 'creator' };
+  if (has(/\/(customScripts|triggerscript|regex|trigger|lua)(\/|$)/u))
+    return { section: 'advanced', advanced: 'scripts' };
+  if (has(/\/(backgroundHTML|css)(\/|$)/u)) return { section: 'advanced', advanced: 'display' };
+  if (has(/\/(defaultVariables|customModuleToggle)(\/|$)/u))
+    return { section: 'advanced', advanced: 'variables' };
+  if (has(/\/(system_prompt|post_history_instructions|depth_prompt)(\/|$)/u))
+    return { section: 'advanced', advanced: 'instructions' };
+  return { section: 'basic' };
+}
+
 export function RisuNativeFields({
   value,
   onChange,
   onDraftChange,
   onPortraitBusy,
+  anchor = null,
 }: {
   value: RisuContent;
   onChange: (value: RisuContent) => void;
   onDraftChange?: (dirty: boolean) => void;
   onPortraitBusy: (busy: boolean) => void;
+  anchor?: ResourceAnchorRequest | null;
 }) {
   const { t } = useI18n();
 
@@ -86,6 +113,30 @@ export function RisuNativeFields({
   const id = useId();
   const [section, setSection] = useState<Section>('basic');
   const [advanced, setAdvanced] = useState<Advanced>('instructions');
+  const requested = anchor?.anchor ?? null;
+  const loreFocus =
+    requested && anchorSection(requested).section === 'lore' && requested.index !== null
+      ? { index: requested.index, epoch: requested.epoch }
+      : null;
+  const anchoredSection = (target: ResourceAnchor) => {
+    const wanted = anchorSection(target).section;
+    return sections.some((item) => item.id === wanted) ? wanted : 'basic';
+  };
+  useAnchorArrival(
+    anchor,
+    (target) => {
+      const section = anchoredSection(target);
+      const panel = document.getElementById(`${id}-${section}-panel`);
+      return section === 'lore' && target.index !== null
+        ? (panel?.querySelector('.nl-detail') ?? null)
+        : panel;
+    },
+    (target) => {
+      setSection(anchoredSection(target));
+      const advanced = anchorSection(target).advanced;
+      if (advanced) setAdvanced(advanced);
+    }
+  );
   const activeAdvanced = advancedTabs.some((tab) => tab.id === advanced)
     ? advanced
     : advancedTabs[0]!.id;
@@ -438,6 +489,7 @@ export function RisuNativeFields({
         )}
         <div {...panel('lore')}>
           <NativeRisuLoreEditor
+            focus={loreFocus}
             entries={lore}
             moduleLore={moduleLore}
             onChange={writeLore}

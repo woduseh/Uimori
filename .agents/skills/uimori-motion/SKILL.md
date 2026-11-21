@@ -18,6 +18,7 @@ Paths below are relative to the repository root. The motion tokens (`--motion-fa
 | Transient notice | `web/TransientNotice.tsx`, `web/notices.css` | Each notice fades and rises 8px over `--motion-overlay`; removal is immediate. |
 | Button and row hover | `web/style.css`, navigation row styles | Background, border and text colours ease over `--motion-fast`; story UI keeps its own transitions. |
 | On/off switch | `web/BooleanControls.tsx`, `web/boolean-controls.css` | Animates the existing thumb and colors with `--motion-fast`, without bounce or a mount-time entrance. |
+| Navigation landing mark | `web/arrival-mark.ts`, `web/arrival-mark.css` | An outline on the block anchor or editor region a navigation landed on fades over `--motion-mark`; under reduced motion it stays static until the next pointer or key press. It never animates manuscript text or layout. |
 
 Read `docs/THEME-AUTHORING.md` only if the change touches the theme boundary.
 

@@ -3,6 +3,11 @@ import type { ResourceModel } from '../core/resource-editing.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useId, useState, type DragEvent, type ReactNode } from 'react';
 import {
+  useAnchorArrival,
+  type ResourceAnchor,
+  type ResourceAnchorRequest,
+} from './resource-anchor.js';
+import {
   createNativeRisuPresetProgram,
   nativeRisuPresetSource,
   nativeRisuToggleItems,
@@ -41,7 +46,9 @@ export function NativeRisuPresetEditor({
   onValuesChange,
   collaboration,
   metadata,
+  anchor = null,
 }: {
+  anchor?: ResourceAnchorRequest | null;
   program: RisuPrompt;
   onChange: (program: RisuPrompt) => void;
   onPendingDraftChange?: (pending: boolean) => void;
@@ -114,6 +121,30 @@ export function NativeRisuPresetEditor({
       ? [{ id: 'collaboration' as const, title: t('native.text_780d3f6ed3') }]
       : []),
   ];
+  const anchorSection = (target: ResourceAnchor): Section => {
+    const path = target.path ?? '';
+    if (target.section === 'prompt' || /\/promptTemplate(\/|$)/u.test(path)) return 'blocks';
+    if (/\/(regex|customScripts)(\/|$)/u.test(path)) return 'regex';
+    if (/\/(defaultVariables|customPromptTemplateToggle)(\/|$)/u.test(path)) return 'variables';
+    return 'options';
+  };
+  useAnchorArrival(
+    anchor,
+    (target) => {
+      const panel = document.getElementById(`${id}-${anchorSection(target)}-panel`);
+      return target.index !== null && anchorSection(target) === 'blocks'
+        ? (panel?.querySelector('.native-item-detail') ?? null)
+        : panel;
+    },
+    (target) => {
+      const next = anchorSection(target);
+      setSection(next);
+      if (next === 'blocks' && target.index !== null) {
+        setSelected(target.index);
+        setQuery('');
+      }
+    }
+  );
   const panel = (key: Section) => ({
     id: id + '-' + key + '-panel',
     role: 'tabpanel' as const,

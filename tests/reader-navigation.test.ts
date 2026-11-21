@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { paragraphPosition } from '../core/reader-target.js';
 import {
   transitionReaderNavigation as move,
   type ReaderNavigation,
@@ -67,4 +68,20 @@ test('same-source clicks still supersede pending navigation', () => {
   const next = move(original, { kind: 'source', source: original.source });
   expect(next.source).toBe(original.source);
   expect(next.epoch).toBe(original.epoch + 1);
+});
+
+test('a changed paragraph resolves to its block and its share of the whole text', () => {
+  const text = '첫 문단이에요.\n\n둘째 문단이에요.\n\n셋째 문단이에요.';
+  const blocks = [
+    { anchor: 'a', start: 0, end: 9 },
+    { anchor: 'b', start: 10, end: 20 },
+    { anchor: 'c', start: 21, end: text.length },
+  ];
+  expect(paragraphPosition(text, blocks, 2)).toEqual({
+    anchor: 'b',
+    ratio: 0,
+    share: 10 / text.length,
+  });
+  expect(paragraphPosition(text, blocks, 1)).toMatchObject({ anchor: 'b' });
+  expect(paragraphPosition(text, blocks, 9)).toBeNull();
 });
