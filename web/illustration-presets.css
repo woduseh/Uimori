@@ -59,6 +59,10 @@
   color: var(--text);
   overflow-wrap: anywhere;
 }
+.illustration-preset-card .illustration-preset-apply:focus-visible {
+  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+  outline-offset: calc(-1 * var(--focus-ring-width));
+}
 .illustration-preset-apply > span {
   display: -webkit-box;
   -webkit-line-clamp: 2;

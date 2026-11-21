@@ -57,6 +57,7 @@
   --font-heading: 16px;
   --font-title: 18px;
   --hairline: 0.5px;
+  --focus-ring-width: 2px;
   --radius-small: 4px;
   --radius-control: 6px;
   --radius-panel: 10px;
@@ -333,7 +334,7 @@ input[type="search"]::-webkit-search-cancel-button {
     color: var(--accent-text);
   }
   select:where(:not([multiple], [size])) option:focus-visible {
-    outline: var(--hairline) solid var(--focus-ring);
+    outline: var(--focus-ring-width) solid var(--focus-ring);
     outline-offset: -2px;
     background: var(--hover);
   }
@@ -518,8 +519,13 @@ textarea:focus-visible,
 select:focus-visible,
 a:focus-visible,
 summary:focus-visible {
-  outline: var(--hairline) solid var(--focus-ring);
+  outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: 3px;
+}
+.header-title-hit:focus-visible,
+.settings-page:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: calc(-1 * var(--focus-ring-width));
 }
 h1,
 h2,

@@ -234,7 +234,7 @@
   cursor: pointer;
 }
 .package-portrait-upload:focus-within {
-  outline: var(--hairline) solid var(--focus-ring);
+  outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: 2px;
 }
 .package-portrait-upload.is-disabled {

@@ -18,7 +18,7 @@
   display: none;
 }
 .turn-activity > summary:focus-visible {
-  outline: var(--hairline) solid var(--focus-ring);
+  outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: 3px;
   border-radius: var(--radius-control);
 }

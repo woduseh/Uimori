@@ -50,7 +50,7 @@
 .run-input-details > .scene-usage > summary:focus-visible,
 .run-input-details > .inspector > summary:focus-visible,
 .execution-record > summary:focus-visible {
-  outline: var(--hairline) solid var(--focus-ring);
+  outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: 2px;
   border-radius: var(--radius-control);
 }

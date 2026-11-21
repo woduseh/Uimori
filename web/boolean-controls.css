@@ -71,7 +71,7 @@
 }
 :root input.ui-switch:focus-visible,
 :root input.ui-selection-checkbox:focus-visible {
-  outline: var(--hairline) solid var(--focus-ring);
+  outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: 3px;
 }
 :root input.ui-switch:disabled,

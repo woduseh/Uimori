@@ -207,7 +207,7 @@ info, info-bg, info-line, shade
 - **어두운 모드 패널**: 모달과 도우미/창작 옵션 패널은 `panel`을 사용하고, 원고 바탕은 `bg`를 유지해요.
 - **비활성 버튼**: 버튼 안의 강조/삭제 색상 변수를 `surface`, `muted`, `line`으로 전환하며 기존 흐림과 크기를 유지해요 (앱 조작부에만 적용되며 테마 색상이나 봇 작성 Shadow DOM은 건드리지 않아요).
 - **표준 치수 토큰**:
-  - 글자 크기: `--font-small`(12px), `--font-body`(14px), `--font-heading`(16px), 경계선: `--hairline`(0.5px)
+  - 글자 크기: `--font-small`(12px), `--font-body`(14px), `--font-heading`(16px), 경계선: `--hairline`(0.5px), 키보드 포커스 외곽선: `--focus-ring-width`(2px)
   - 곡률: `--radius-small`(4px), `--radius-control`(6px), `--radius-panel`(10px) (중첩된 표면은 안쪽 여백만큼 곡률을 줄여요)
 
 ### 세 가지 스타일 영역

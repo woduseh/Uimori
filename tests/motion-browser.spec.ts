@@ -117,11 +117,7 @@ for (const [width, motion] of [
     await page.keyboard.press('Space');
     await expect(toggle).toBeChecked({ checked: !original });
     await expect(toggle).toHaveCSS('outline-style', 'solid');
-    const focusWidth = await toggle.evaluate((node) =>
-      Number.parseFloat(getComputedStyle(node).outlineWidth)
-    );
-    expect(focusWidth).toBeGreaterThanOrEqual(0.5);
-    expect(focusWidth).toBeLessThanOrEqual(1);
+    await expect(toggle).toHaveCSS('outline-width', '2px');
     await page.screenshot({ path: info.outputPath('reading-switch.png') });
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
