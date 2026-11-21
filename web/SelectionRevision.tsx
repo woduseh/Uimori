@@ -37,6 +37,8 @@ export function SelectionRevision(props: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const pending = useRef<AbortController | null>(null);
+  const opener = useRef<HTMLButtonElement>(null);
+  const focusOpener = useRef(false);
   const codexWarning = useCodexContentWarning();
   useLayoutEffect(
     () => () => {
@@ -45,6 +47,11 @@ export function SelectionRevision(props: Props) {
     },
     []
   );
+  useLayoutEffect(() => {
+    if (captured || !focusOpener.current) return;
+    focusOpener.current = false;
+    opener.current?.focus({ preventScroll: true });
+  }, [captured]);
 
   function matches(value: Captured) {
     const latest = current.current;
@@ -124,10 +131,23 @@ export function SelectionRevision(props: Props) {
     }
   }
   return (
-    <section className="selection-revision" aria-label={t('reader.reviseSelectedPassage')}>
+    <section
+      className="selection-revision"
+      aria-label={t('reader.reviseSelectedPassage')}
+      onKeyDown={(event) => {
+        if (!captured || event.key !== 'Escape') return;
+        if (event.target instanceof Element && event.target.closest('dialog')) return;
+        if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+        event.preventDefault();
+        event.stopPropagation();
+        focusOpener.current = true;
+        close();
+      }}
+    >
       {!captured ? (
         <>
           <button
+            ref={opener}
             type="button"
             className="secondary"
             disabled={

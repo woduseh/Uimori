@@ -287,3 +287,61 @@ test('SREV cancelling a pending preflight allows immediate retry and ignores the
     released.release();
   }
 });
+
+test('SREV Escape closes only the revision panel, cancels its request and keeps the scene draft', async ({
+  page,
+  request,
+}) => {
+  const before = await seed(request);
+  const source = before.sources[0];
+  const started = gate(),
+    released = gate();
+  let aborted = false;
+  page.on('requestfailed', (failed) => {
+    if (failed.url().endsWith('/selection-revision')) aborted = true;
+  });
+  await page.route(endpoint, async (route) => {
+    started.release();
+    await released.promise;
+    await route.fulfill({ json: { text: proposal } }).catch(() => undefined);
+  });
+  try {
+    await page.goto(`/?chat=${before.chat.id}`);
+    await page.getByRole('button', { name: '원문 수정', exact: true }).click();
+    const field = page.getByRole('textbox', { name: '원문 수정 내용', exact: true });
+    const draft = `${original}\n저장하지 않은 문장.`;
+    await field.fill(draft);
+    await choose(field);
+    const open = page.getByRole('button', { name: '선택 구절 퇴고', exact: true });
+    const instruction = page.getByRole('textbox', { name: '퇴고 요청', exact: true });
+    await open.click();
+    await instruction.fill('감정을 행동으로 보여줘.');
+    await instruction.press('Escape');
+    await expect(instruction).toHaveCount(0);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect(open).toBeFocused();
+    await expect(field).toHaveValue(draft);
+
+    await open.click();
+    await instruction.fill('감정을 행동으로 보여줘.');
+    await page.getByRole('button', { name: '퇴고 제안 받기', exact: true }).click();
+    await started.promise;
+    await page.getByRole('button', { name: '퇴고 요청 취소', exact: true }).press('Escape');
+    await expect(instruction).toHaveCount(0);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect.poll(() => aborted).toBe(true);
+    released.release();
+    await expect(page.getByTestId('selection-revision-proposal')).toHaveCount(0);
+    await expect(field).toHaveValue(draft);
+    expect(
+      await page.evaluate(
+        (id) =>
+          JSON.parse(sessionStorage.getItem(`uimori:text-draft:${id}:original`) ?? 'null')?.text,
+        source.id
+      )
+    ).toBe(draft);
+    expect((await detail(request, before.chat.id)).sources[0].text).toBe(original);
+  } finally {
+    released.release();
+  }
+});
