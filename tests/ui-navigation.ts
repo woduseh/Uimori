@@ -293,14 +293,13 @@ export async function resizeViewport(page: Page, size: { width: number; height: 
   );
 }
 export async function openHelper(page: Page) {
+  const opener = page
+    .locator('.workspace-header, .library-heading')
+    .getByRole('button', { name: /^도우미( 열기)?$/u });
   await expect
     .poll(
       async () =>
-        (await page.locator('.workspace-header .chat-menu').count()) +
-        (await page
-          .locator('.workspace-header, .library-heading')
-          .getByRole('button', { name: '도우미 열기', exact: true })
-          .count())
+        (await page.locator('.workspace-header .chat-menu').count()) + (await opener.count())
     )
     .toBeGreaterThan(0);
   if (compactLayout(page) && (await page.locator('.workspace-header .chat-menu').count())) {
@@ -308,9 +307,5 @@ export async function openHelper(page: Page) {
     await menu.getByRole('button', { name: '도우미 열기', exact: true }).click();
     return;
   }
-  await page
-    .locator('.workspace-header, .library-heading')
-    .getByRole('button', { name: '도우미 열기', exact: true })
-    .first()
-    .click();
+  await opener.first().click();
 }

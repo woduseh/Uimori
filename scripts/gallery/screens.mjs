@@ -151,7 +151,7 @@ export const screens = [
     steps: [
       { menu: 'chat', when: 'compact' },
       { click: { role: 'button', name: '도우미 열기', within: inMenu }, when: 'compact' },
-      { click: { role: 'button', name: '도우미 열기', within: inHeader }, when: 'wide' },
+      { click: { role: 'button', name: '도우미', within: inHeader }, when: 'wide' },
       { visible: { css: '#helper-panel' } },
     ],
   },

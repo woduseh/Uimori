@@ -18,6 +18,7 @@ import {
   PenLine,
   ScanText,
   Link2,
+  Maximize2,
   X,
   Pin,
   Trash2,
@@ -113,14 +114,20 @@ const rejected = (error: unknown) =>
 export function OutlinePanel({
   state,
   target,
+  layout,
+  visible,
   onClose,
+  onExpand,
   onHelp,
   helperVisible,
   onToggleHelper,
 }: {
   state: StoryState;
   target: { nodeId: string; epoch: number } | null;
+  layout: 'workspace' | 'sidecar';
+  visible: boolean;
   onClose: () => void;
+  onExpand: () => void;
   onHelp: (request: OutlineHelperRequest) => void;
   helperVisible: boolean;
   onToggleHelper: () => void;
@@ -179,8 +186,10 @@ export function OutlinePanel({
     }
   }, [chatId]);
   useEffect(() => {
+    heading.current?.focus({ preventScroll: layout === 'sidecar' });
+  }, [layout]);
+  useEffect(() => {
     mounted.current = true;
-    heading.current?.focus();
     const refresh = () => void load();
     addEventListener(OUTLINE_REFRESH_EVENT, refresh);
     addEventListener('focus', refresh);
@@ -193,8 +202,8 @@ export function OutlinePanel({
   }, [load]);
   const cursor = state.detail?.reader.cursor;
   useEffect(() => {
-    if (cursor !== undefined && !helperVisible) void load();
-  }, [cursor, helperVisible, load]);
+    if (cursor !== undefined && visible && !helperVisible) void load();
+  }, [cursor, visible, helperVisible, load]);
   useEffect(() => {
     if (!outline || (selectedId && outline.nodes.some((node) => node.id === selectedId))) return;
     setSelectedId(
@@ -345,7 +354,12 @@ export function OutlinePanel({
         retain(`${prefix}:additional-instruction:${operation.nodeId}`, null);
         dispatchEvent(new Event(OUTLINE_REFRESH_EVENT));
         await state.refresh(chatId);
-        if (mounted.current) onClose();
+        if (mounted.current && layout === 'workspace') onClose();
+        else if (mounted.current) {
+          setWriting(false);
+          setBrief(null);
+          setRequestText('');
+        }
       }
     } catch (cause) {
       if (!recovered && rejected(cause)) {
@@ -610,7 +624,10 @@ export function OutlinePanel({
     .filter((node) => node.id !== selectedId || adding)
     .filter((node) => node.title.toLowerCase().includes(relatedQuery.trim().toLowerCase()));
   return (
-    <section className="outline-panel" aria-label={t('prompts.uiHierarchicalOutline')}>
+    <section
+      className={`outline-panel outline-panel-${layout}`}
+      aria-label={t('prompts.uiHierarchicalOutline')}
+    >
       <header className="outline-workspace-header">
         <div className="outline-workspace-title">
           <ListTree size={21} />
@@ -618,18 +635,28 @@ export function OutlinePanel({
             <h2 ref={heading} tabIndex={-1}>
               {t('prompts.uiOutlineAndWrite')}
             </h2>
-            <p>{state.detail?.chat.title}</p>
+            {layout === 'workspace' && <p>{state.detail?.chat.title}</p>}
           </div>
         </div>
         <div className="outline-header-actions">
-          <IconButton
-            icon={Sparkles}
-            size={18}
-            label={t('prompts.uiHelper')}
-            className={`secondary outline-helper-toggle ${helperVisible ? 'is-active' : ''}`}
-            onClick={onToggleHelper}
-          />
-          <IconButton label={t('prompts.uiCloseHierarchicalOutline')} icon={X} onClick={onClose} />
+          {layout === 'sidecar' ? (
+            <IconButton label={t('workspace.expandOutline')} icon={Maximize2} onClick={onExpand} />
+          ) : (
+            <>
+              <IconButton
+                icon={Sparkles}
+                size={18}
+                label={t('prompts.uiHelper')}
+                className={`secondary outline-helper-toggle ${helperVisible ? 'is-active' : ''}`}
+                onClick={onToggleHelper}
+              />
+              <IconButton
+                label={t('prompts.uiCloseHierarchicalOutline')}
+                icon={X}
+                onClick={onClose}
+              />
+            </>
+          )}
         </div>
       </header>
       {outline && (
@@ -1264,7 +1291,7 @@ export function OutlinePanel({
                           className="outline-source"
                           onClick={() => {
                             state.chooseSource(source.sourceRevision);
-                            onClose();
+                            if (layout === 'workspace') onClose();
                           }}
                         >
                           <FileText size={16} />

@@ -48,6 +48,18 @@ export const messages = {
     ja: 'アシスタントサイドバーの幅',
     zh: '助手侧边栏宽度',
   },
+  'workspace.sidePanel': {
+    ko: '우측 패널',
+    en: 'Right panel',
+    ja: '右パネル',
+    zh: '右侧面板',
+  },
+  'workspace.expandOutline': {
+    ko: '플롯 크게 보기',
+    en: 'Expand outline',
+    ja: 'アウトラインを広げる',
+    zh: '展开大纲',
+  },
   'helpers.settings': {
     ko: '도우미 설정',
     en: 'Assistant settings',

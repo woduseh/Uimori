@@ -1153,6 +1153,42 @@ test('HELPUI01 helper panel preserves separate input, reading position, tone dra
   await expect(tone).toHaveValue(originalTone);
 });
 
+test('HELPUI18 switching right panel tabs keeps the helper draft and reading position', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request);
+  await harness(page, 20);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  const input = panel.getByLabel('도우미에게 요청');
+  await input.fill('탭을 오가도 남는 도우미 초안');
+  const list = panel.locator('.helper-messages');
+  await list.evaluate((node) => {
+    node.scrollTop = 400;
+  });
+  const before = await list.evaluate((node) => node.scrollTop);
+  expect(before).toBeGreaterThan(0);
+  const outlineTab = panel.getByRole('tab', { name: '플롯', exact: true });
+  await outlineTab.click();
+  await expect(panel).toBeHidden();
+  const outline = page.locator('#outline-panel');
+  await expect(outline.getByRole('tab', { name: '플롯', exact: true })).toBeFocused();
+  await expect(outline.getByRole('tab', { name: '플롯', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await outline.getByRole('tab', { name: '플롯', exact: true }).press('ArrowLeft');
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole('tab', { name: '도우미', exact: true })).toBeFocused();
+  await expect(input).toHaveValue('탭을 오가도 남는 도우미 초안');
+  await expect.poll(() => list.evaluate((node) => node.scrollTop)).toBe(before);
+  await expect(
+    page.locator('.workspace-header').getByRole('button', { name: '도우미', exact: true })
+  ).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('HELPUI17 Back clears owned tone dialogs while retaining each session draft', async ({
   page,
   request,

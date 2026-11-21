@@ -1951,12 +1951,6 @@ export const messages = {
     ja: 'デスクトップパネル',
     zh: '桌面面板',
   },
-  'settings.utilityPanelWidth': {
-    ko: '우측 패널 폭',
-    en: 'Right panel width',
-    ja: '右パネルの幅',
-    zh: '右侧面板宽度',
-  },
   'settings.outerBackground': {
     ko: '본문 바깥 배경',
     en: 'Background outside the manuscript',

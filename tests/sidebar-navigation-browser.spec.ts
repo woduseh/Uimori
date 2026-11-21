@@ -206,7 +206,7 @@ test('SIDENAV04 desktop width choices persist and preserve the rail, mobile draw
   await expect(sidebar).toHaveCSS('width', '248px');
 });
 
-test('SIDENAV06 helper history width persists independently of chat sidebar and right panel widths', async ({
+test('SIDENAV06 helper history width persists independently of the chat sidebar width', async ({
   page,
   request,
 }) => {
@@ -218,11 +218,9 @@ test('SIDENAV06 helper history width persists independently of chat sidebar and 
   await selectSettingsSection(page, '일반');
   const chatWidth = page.getByRole('combobox', { name: '채팅 사이드바 폭', exact: true });
   const helperWidth = page.getByRole('combobox', { name: '도우미 사이드바 폭', exact: true });
-  const rightWidth = page.getByRole('combobox', { name: '우측 패널 폭', exact: true });
   await expect(helperWidth).toHaveValue('320');
   await chatWidth.selectOption('400');
   await helperWidth.selectOption('248');
-  await rightWidth.selectOption('480');
   await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await expect(sidebar).toHaveCSS('width', '400px');
   await navigationAction(page, '도우미');
@@ -232,7 +230,6 @@ test('SIDENAV06 helper history width persists independently of chat sidebar and 
   await selectSettingsSection(page, '일반');
   await helperWidth.selectOption('320');
   await expect(chatWidth).toHaveValue('400');
-  await expect(rightWidth).toHaveValue('480');
   await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await expect(sidebar).toHaveCSS('width', '320px');
   await sidebar.getByRole('button', { name: '좌측 패널 접기', exact: true }).click();
@@ -253,7 +250,7 @@ test('SIDENAV06 helper history width persists independently of chat sidebar and 
   await selectSettingsSection(page, '일반');
   await expect(chatWidth).toHaveValue('400');
   await expect(helperWidth).toHaveValue('320');
-  await expect(rightWidth).toHaveValue('480');
+  await expect(page.getByRole('combobox', { name: '우측 패널 폭', exact: true })).toHaveCount(0);
 });
 
 test('SIDENAV05 closing navigation restores the current opener after lazy library replacement', async ({

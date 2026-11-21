@@ -71,6 +71,7 @@ import {
   useRef,
   useState,
   type ComponentProps,
+  type CSSProperties,
   type ReactNode,
 } from 'react';
 import {
@@ -132,10 +133,22 @@ import { useStory } from './useStory.js';
 import { useTestMode } from './useTestMode.js';
 import { ActivityStatus } from './ActivityStatus.js';
 import { OutlineFocusStatus } from './OutlineFocusStatus.js';
+import { focusSidePanelTab, SidePanelTabs } from './SidePanelTabs.js';
+import { SidePanelResizer } from './SidePanelResizer.js';
+import {
+  fitSidePanelWidth,
+  MIN_CENTER_WIDTH,
+  readSidePanelWidth,
+  SIDE_PANEL_MAX_WIDTH,
+  sidePanelMinimumWidth,
+  writeSidePanelWidth,
+  type SidePanelTab,
+} from './side-panel.js';
 import { modelLabel } from './storyLabels.js';
 import './style.css';
 import './product.css';
 import './sidebar.css';
+import './side-panel.css';
 
 function workspaceFallback(title: string, navigation: ReactNode, content: ReactNode) {
   return (
@@ -208,11 +221,9 @@ type Panel =
   | 'outline'
   | 'model';
 const READING_WIDTHS = [760, 880, 1040];
-const PANEL_WIDTHS = [360, 384, 480, 560];
 const SIDEBAR_WIDTH = 248;
 const SIDEBAR_WIDTHS = [SIDEBAR_WIDTH, 320, 400];
 const RAIL_WIDTH = 56;
-const MIN_CENTER_WIDTH = 768;
 const runFailed = (status: string) =>
   ['failed', 'cancelled', 'interrupted', 'refused', 'partial'].includes(status);
 function DraftComposerInput({
@@ -319,7 +330,11 @@ function App() {
   const [promptToEdit, setPromptToEdit] = useState<string | null>(null);
   const [helperResource, setHelperResource] = useState<HelperResourceRef | null>(null);
   const clearHelperResource = useCallback(() => setHelperResource(null), []);
-  const [workspacePanel, setWorkspacePanel] = useState<'options' | 'helper' | null>(null);
+  const [workspacePanel, setWorkspacePanel] = useState<SidePanelTab | null>(null);
+  const lastSidePanelTab = useRef<SidePanelTab>('helper');
+  useEffect(() => {
+    if (workspacePanel) lastSidePanelTab.current = workspacePanel;
+  }, [workspacePanel]);
   const [helperExpanded, setHelperExpanded] = useState(false);
   const [helperScope, setHelperScope] = useState<HelperScope | null>(null);
   const rememberHelperScope = useCallback((next: HelperScope) => {
@@ -495,9 +510,7 @@ function App() {
   const [readingWidth, setReadingWidth] = useState(() =>
     readPresentationChoice('uimori:reading-width', READING_WIDTHS, 880)
   );
-  const [panelWidth, setPanelWidth] = useState(() =>
-    readPresentationChoice('uimori:panel-width', PANEL_WIDTHS, 384)
-  );
+  const [panelWidth, setPanelWidth] = useState(readSidePanelWidth);
   const [sidebarWidth, setSidebarWidth] = useState(() =>
     readPresentationChoice('uimori:sidebar-width', SIDEBAR_WIDTHS, SIDEBAR_WIDTH)
   );
@@ -513,10 +526,22 @@ function App() {
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
   }, []);
+  const storyPanels = s.destination === 'story' && !!s.selected;
+  const optionsVisible = optionsOpen && storyPanels;
+  const roomBesideRail = viewportWidth - RAIL_WIDTH - MIN_CENTER_WIDTH;
+  const outlineSidecarAvailable = !compact && roomBesideRail >= sidePanelMinimumWidth('outline');
+  const outlineSidecarVisible =
+    workspacePanel === 'outline' &&
+    storyPanels &&
+    !!s.detail &&
+    outlineSidecarAvailable &&
+    panel !== 'outline';
   const workspacePanelOpen =
-    (helperOpen && !helperExpanded) || (optionsOpen && s.destination === 'story' && !!s.selected);
-  const dockBesideSidebar = desktopSidebarWidth + panelWidth + MIN_CENTER_WIDTH;
-  const dockBesideRail = RAIL_WIDTH + panelWidth + MIN_CENTER_WIDTH;
+    (helperOpen && !helperExpanded) || optionsVisible || outlineSidecarVisible;
+  const panelMinimum = sidePanelMinimumWidth(outlineSidecarVisible ? 'outline' : 'helper');
+  const shownPanelWidth = fitSidePanelWidth(panelWidth, panelMinimum, roomBesideRail);
+  const dockBesideSidebar = desktopSidebarWidth + shownPanelWidth + MIN_CENTER_WIDTH;
+  const dockBesideRail = RAIL_WIDTH + shownPanelWidth + MIN_CENTER_WIDTH;
   const autoCollapseSidebar =
     workspacePanelOpen &&
     viewportWidth >= dockBesideRail &&
@@ -525,6 +550,12 @@ function App() {
   const sidebarHidden = sidebarCollapsed || (!helperWorkspaceOpen && autoCollapseSidebar);
   const panelModal =
     viewportWidth < dockBesideRail || (!sidebarHidden && viewportWidth < dockBesideSidebar);
+  const shownNavigationWidth =
+    focus && !helperWorkspaceOpen ? 0 : sidebarHidden ? RAIL_WIDTH : desktopSidebarWidth;
+  const panelMaximum = Math.min(
+    SIDE_PANEL_MAX_WIDTH,
+    Math.max(panelMinimum, viewportWidth - shownNavigationWidth - MIN_CENTER_WIDTH)
+  );
   useEffect(() => {
     if (!workspacePanelOpen) setPanelSidebarExpanded(false);
   }, [workspacePanelOpen]);
@@ -731,10 +762,7 @@ function App() {
   useEffect(() => {
     writePresentationSetting('uimori:helper-sidebar-width', String(helperSidebarWidth));
   }, [helperSidebarWidth]);
-  useEffect(() => {
-    document.documentElement.style.setProperty('--panel-w', `${panelWidth}px`);
-    writePresentationSetting('uimori:panel-width', String(panelWidth));
-  }, [panelWidth]);
+  useEffect(() => writeSidePanelWidth(panelWidth), [panelWidth]);
   useEffect(() => {
     const viewport = visualViewport;
     const update = () =>
@@ -1001,13 +1029,73 @@ function App() {
     setHelperExpanded(false);
     setWorkspacePanel((value) => (value === 'helper' ? null : value));
   }, []);
+  const outlineReturnToSidecar = useRef(false);
+  const [outlineChat, setOutlineChat] = useState<string | null>(null);
+  const shownOutlineChat =
+    panel === 'outline' || outlineSidecarVisible ? (s.detail?.chat.id ?? null) : null;
+  useEffect(() => {
+    if (shownOutlineChat) setOutlineChat(shownOutlineChat);
+  }, [shownOutlineChat]);
+  const outlineWorkspaceWasOpen = useRef(false);
+  useEffect(() => {
+    const left = outlineWorkspaceWasOpen.current && panel !== 'outline';
+    outlineWorkspaceWasOpen.current = panel === 'outline';
+    if (left && !outlineSidecarVisible) setOutlineChat(null);
+  }, [panel, outlineSidecarVisible]);
+  const openOutlineWorkspace = (nodeId?: string) => {
+    if (nodeId) setOutlineTarget({ nodeId, epoch: Date.now() });
+    outlineReturnToSidecar.current = workspacePanel === 'outline';
+    if (workspacePanel === 'outline') setWorkspacePanel(null);
+    setPanel('outline');
+  };
+  const closeOutlineWorkspace = () => {
+    setPanel('');
+    if (outlineReturnToSidecar.current && outlineSidecarAvailable) setWorkspacePanel('outline');
+    outlineReturnToSidecar.current = false;
+  };
+  const sidePanelTabs: SidePanelTab[] | null =
+    !compact && storyPanels && !helperExpanded && panel !== 'outline'
+      ? [
+          'helper',
+          ...(s.detail && outlineSidecarAvailable ? (['outline'] as const) : []),
+          ...(hasCreativeOptions || optionsOpen ? (['options'] as const) : []),
+        ]
+      : null;
+  const sidePanelTabsShown = !!sidePanelTabs && sidePanelTabs.length > 1;
+  const availableSidePanelTab = (tab: SidePanelTab): SidePanelTab =>
+    tab === 'helper' || (sidePanelTabsShown && sidePanelTabs?.includes(tab)) ? tab : 'helper';
+  const showSidePanel = (tab: SidePanelTab) => {
+    setWorkspacePanel(tab);
+    requestAnimationFrame(() => focusSidePanelTab(tab));
+  };
+  useEffect(() => {
+    if (workspacePanel !== 'outline' || outlineSidecarAvailable) return;
+    setWorkspacePanel(null);
+    if (panel === '' && storyPanels && s.detail) {
+      outlineReturnToSidecar.current = false;
+      setPanel('outline');
+    }
+  }, [workspacePanel, outlineSidecarAvailable, panel, storyPanels, s.detail]);
+  const renderSidePanelTabs = (closeLabel: string) =>
+    sidePanelTabsShown && sidePanelTabs && workspacePanel
+      ? (close: () => void) => (
+          <SidePanelTabs
+            tabs={sidePanelTabs}
+            active={workspacePanel}
+            closeLabel={closeLabel}
+            onSelect={showSidePanel}
+            onClose={close}
+          />
+        )
+      : undefined;
   useShortcut('navigation.toggle', () => {
     if (!compact) toggleSidebar();
     else setPanel('navigation');
   });
   useShortcut('rightPanel.toggle', () => {
     if (helperOpen) closeHelper();
-    else setWorkspacePanel('helper');
+    else if (optionsVisible || outlineSidecarVisible) setWorkspacePanel(null);
+    else showSidePanel(availableSidePanelTab(lastSidePanelTab.current));
   });
   useShortcut('settings.open', openAppSettings);
   useShortcut('search.open', () => searchFromKeyboard());
@@ -1044,7 +1132,7 @@ function App() {
               id: 'outline',
               group: 'commands' as const,
               label: t('palette.openOutline'),
-              run: () => setPanel('outline'),
+              run: () => openOutlineWorkspace(),
             },
           ]
         : []),
@@ -1326,7 +1414,8 @@ function App() {
   }
   const workspace = (
     <div
-      className={`app-shell ${panel === 'outline' ? 'outline-active' : ''} ${focus && !helperWorkspaceOpen ? 'focus-reading' : ''} ${sidebarHidden ? 'sidebar-collapsed' : ''} ${optionsOpen && s.destination === 'story' && s.selected ? 'options-open' : ''} ${helperOpen ? 'helper-open' : ''} ${helperWorkspaceOpen ? 'helper-expanded' : ''} ${workspacePanelOpen ? (panelModal ? 'panel-overlay' : 'panel-docked') : ''}`}
+      className={`app-shell ${panel === 'outline' ? 'outline-active' : ''} ${focus && !helperWorkspaceOpen ? 'focus-reading' : ''} ${sidebarHidden ? 'sidebar-collapsed' : ''} ${optionsVisible ? 'options-open' : ''} ${helperOpen ? 'helper-open' : ''} ${helperWorkspaceOpen ? 'helper-expanded' : ''} ${workspacePanelOpen ? (panelModal ? 'panel-overlay' : 'panel-docked') : ''}`}
+      style={{ '--panel-w': `${shownPanelWidth}px` } as CSSProperties}
     >
       {importBot && (
         <BotChatImportDialog
@@ -1377,15 +1466,28 @@ function App() {
               {s.selected && s.destination === 'story' && (
                 <>
                   {mainModelChip}
-                  {!compact && !helperOpen && (
+                  {!compact && (
                     <IconButton
-                      label={t('main.m027')}
+                      label={t('main.m062')}
                       icon={HelperIcon}
-                      aria-expanded={false}
+                      aria-pressed={helperOpen}
                       aria-controls="helper-panel"
-                      onClick={() => {
-                        setWorkspacePanel('helper');
-                      }}
+                      onClick={() => (helperOpen ? closeHelper() : showSidePanel('helper'))}
+                    />
+                  )}
+                  {!compact && s.detail && (
+                    <IconButton
+                      label={t('main.m007')}
+                      icon={ListTree}
+                      aria-pressed={outlineSidecarVisible}
+                      aria-controls="outline-panel"
+                      onClick={() =>
+                        outlineSidecarVisible
+                          ? setWorkspacePanel(null)
+                          : outlineSidecarAvailable
+                            ? showSidePanel('outline')
+                            : openOutlineWorkspace()
+                      }
                     />
                   )}
                   {focus && (
@@ -1480,7 +1582,7 @@ function App() {
                           className="secondary"
                           onClick={(event) => {
                             fromChatMenu(event);
-                            setPanel('outline');
+                            openOutlineWorkspace();
                           }}
                         >
                           <ListTree size={18} aria-hidden="true" />
@@ -2132,10 +2234,7 @@ function App() {
                   key={`outline-focus:${s.selected}`}
                   chatId={s.selected}
                   headRevision={s.detail?.chat.headRevision}
-                  onOpen={(nodeId) => {
-                    setOutlineTarget({ nodeId, epoch: Date.now() });
-                    setPanel('outline');
-                  }}
+                  onOpen={(nodeId) => openOutlineWorkspace(nodeId)}
                 />
                 <ActivityStatus
                   key={s.viewKey}
@@ -2405,11 +2504,9 @@ function App() {
                               aria-expanded={optionsOpen}
                               aria-controls="chat-prompt-options"
                               disabled={!s.detail}
-                              onClick={() => {
-                                setWorkspacePanel((value) =>
-                                  value === 'options' ? null : 'options'
-                                );
-                              }}
+                              onClick={() =>
+                                optionsOpen ? setWorkspacePanel(null) : showSidePanel('options')
+                              }
                             >
                               <SlidersHorizontal size={18} aria-hidden="true" />
                               {t('main.writingOptions', { dirty: String(optionsDirty) })}
@@ -2610,7 +2707,8 @@ function App() {
       <ChatPromptOptions
         modal={panelModal}
         chatId={s.selected || undefined}
-        open={optionsOpen && s.destination === 'story' && !!s.selected}
+        open={optionsVisible}
+        tabs={renderSidePanelTabs(t('chatsettings.m156'))}
         workspace={s.promptWorkspace}
         promptRevision={`${s.detail?.profile?.revision ?? 0}:${s.pinnedPromptRevision ?? 0}`}
         disabled={
@@ -2671,10 +2769,22 @@ function App() {
         resource={s.destination === 'library' && libraryTab === 'prompts' ? helperResource : null}
         onClearResource={clearHelperResource}
         outlineWorkspace={panel === 'outline'}
+        tabs={helperExpanded ? undefined : renderSidePanelTabs(t('helpers.m045'))}
         scope={helperPanelScope}
         onClose={closeHelper}
         onModelSettings={openModelSettings}
       />
+      {workspacePanelOpen && !panelModal && (
+        <SidePanelResizer
+          width={shownPanelWidth}
+          minimum={panelMinimum}
+          maximum={panelMaximum}
+          controls={
+            helperOpen ? 'helper-panel' : optionsVisible ? 'chat-prompt-options' : 'outline-panel'
+          }
+          onResize={setPanelWidth}
+        />
+      )}
       <CodexContentWarningDialog gate={s.codexWarning} />
       <CodexContentWarningDialog gate={s.inputTranslation.codexWarning} />
       <Dialog
@@ -3020,40 +3130,50 @@ function App() {
           }}
         />
       )}
-      {panel === 'outline' && (
-        <div
-          className="outline-workspace-shell"
-          hidden={helperOpen && panelModal}
-          onKeyDown={(event) => {
-            if (
-              event.key === 'Escape' &&
-              !(event.target as Element).closest('details[open],dialog[open]')
-            ) {
-              event.preventDefault();
-              setPanel('');
-            }
-          }}
-        >
-          <OutlinePanel
-            key={s.detail?.chat.id}
-            state={s}
-            target={outlineTarget}
-            onClose={() => setPanel('')}
-            helperVisible={helperOpen}
-            onToggleHelper={() => {
-              setWorkspacePanel((value) => (value === 'helper' ? null : 'helper'));
+      {s.detail &&
+        (panel === 'outline' || outlineSidecarVisible || outlineChat === s.detail.chat.id) && (
+          <div
+            id="outline-panel"
+            className={panel === 'outline' ? 'outline-workspace-shell' : 'outline-sidecar'}
+            hidden={panel === 'outline' ? helperOpen && panelModal : !outlineSidecarVisible}
+            onKeyDown={(event) => {
+              if (
+                event.key === 'Escape' &&
+                !(event.target as Element).closest('details[open],dialog[open]')
+              ) {
+                event.preventDefault();
+                if (panel === 'outline') closeOutlineWorkspace();
+                else setWorkspacePanel(null);
+              }
             }}
-            onHelp={(request) => {
-              setHelperHandoff({
-                ...request,
-                kind: 'outline',
-                epoch: ++helperHandoffEpoch.current,
-              });
-              setWorkspacePanel('helper');
-            }}
-          />
-        </div>
-      )}
+          >
+            {panel !== 'outline' &&
+              renderSidePanelTabs(t('prompts.uiCloseHierarchicalOutline'))?.(() =>
+                setWorkspacePanel(null)
+              )}
+            <OutlinePanel
+              key={s.detail.chat.id}
+              state={s}
+              target={outlineTarget}
+              layout={panel === 'outline' ? 'workspace' : 'sidecar'}
+              visible={panel === 'outline' || outlineSidecarVisible}
+              onClose={closeOutlineWorkspace}
+              onExpand={() => openOutlineWorkspace()}
+              helperVisible={panel === 'outline' && helperOpen}
+              onToggleHelper={() => {
+                setWorkspacePanel((value) => (value === 'helper' ? null : 'helper'));
+              }}
+              onHelp={(request) => {
+                setHelperHandoff({
+                  ...request,
+                  kind: 'outline',
+                  epoch: ++helperHandoffEpoch.current,
+                });
+                setWorkspacePanel('helper');
+              }}
+            />
+          </div>
+        )}
 
       <Dialog
         scopeKey={s.selected}
@@ -3121,8 +3241,6 @@ function App() {
           setTheme={setTheme}
           enterSend={enterSend}
           setEnterSend={setEnterSend}
-          panelWidth={panelWidth}
-          setPanelWidth={setPanelWidth}
           sidebarWidth={sidebarWidth}
           setSidebarWidth={setSidebarWidth}
           helperSidebarWidth={helperSidebarWidth}

@@ -140,6 +140,7 @@ type Props = {
   handoff?: HelperHandoff;
   handoffEpoch: MutableRefObject<number>;
   outlineWorkspace?: boolean;
+  tabs?: (close: () => void) => ReactNode;
   onClose: () => void;
   onModelSettings: () => void;
   modelDescription: string;
@@ -1261,6 +1262,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         }
       }}
     >
+      {props.tabs?.(() => closePanel.current())}
       <header className="helper-header">
         {props.navigationLeading}
         <h2 className="sr-only">
@@ -1338,7 +1340,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
             }}
           />
         )}
-        {!props.expanded && (
+        {!props.expanded && !props.tabs && (
           <IconButton
             ref={closeButton}
             icon={X}

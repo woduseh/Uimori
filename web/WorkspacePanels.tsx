@@ -272,8 +272,6 @@ export function AppSettingsPanel({
   setTheme,
   enterSend,
   setEnterSend,
-  panelWidth,
-  setPanelWidth,
   sidebarWidth,
   setSidebarWidth,
   helperSidebarWidth,
@@ -289,8 +287,6 @@ export function AppSettingsPanel({
   setTheme: (theme: 'system' | 'dark' | 'light') => void;
   enterSend: boolean;
   setEnterSend: (value: boolean) => void;
-  panelWidth: number;
-  setPanelWidth: (value: number) => void;
   sidebarWidth: number;
   setSidebarWidth: (value: number) => void;
   helperSidebarWidth: number;
@@ -501,21 +497,6 @@ export function AppSettingsPanel({
           <option value={248}>{t('chatsettings.m69')}</option>
           <option value={320}>{t('chatsettings.m70')}</option>
           <option value={400}>{t('chatsettings.m71')}</option>
-        </select>
-      </label>
-      <label className="settings-row">
-        <span className="settings-row-copy">
-          <strong>{t('settings.utilityPanelWidth')}</strong>
-        </span>
-        <select
-          aria-label={t('settings.utilityPanelWidth')}
-          value={panelWidth}
-          onChange={(event) => setPanelWidth(Number(event.target.value))}
-        >
-          <option value={360}>{t('chatsettings.m74')}</option>
-          <option value={384}>{t('chatsettings.m69')}</option>
-          <option value={480}>{t('chatsettings.m70')}</option>
-          <option value={560}>{t('chatsettings.m71')}</option>
         </select>
       </label>
     </div>

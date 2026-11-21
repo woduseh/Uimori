@@ -485,18 +485,6 @@ export const messages = {
     ja: '右パネルの幅',
     zh: '右侧面板宽度',
   },
-  'chatsettings.m73': {
-    ko: '공간이 부족하면 패널이 원고 위에 겹쳐 열려요.',
-    en: 'Panels overlap the manuscript when space is limited.',
-    ja: 'スペースが足りない場合は原稿の上に重ねて開きます。',
-    zh: '空间不足时面板会覆盖在原稿上方。',
-  },
-  'chatsettings.m74': {
-    ko: '좁게',
-    en: 'Narrow',
-    ja: '狭い',
-    zh: '窄',
-  },
   'chatsettings.m76': {
     ko: '접속 세션',
     en: 'Access session',

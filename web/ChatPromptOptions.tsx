@@ -1,5 +1,5 @@
 import { t, useI18n } from './i18n.js';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { IconButton } from './IconButton.js';
 import { CloseIcon } from './ui-icons.js';
 import type { PromptWorkspace } from '../core/product.js';
@@ -13,6 +13,7 @@ type Props = {
   promptRevision?: string;
   disabled: boolean;
   chatId?: string;
+  tabs?: (close: () => void) => ReactNode;
   onClose: () => void;
   onDirtyChange: (dirty: boolean) => void;
   onBusyChange: (busy: boolean) => void;
@@ -90,15 +91,19 @@ export function ChatPromptOptions(props: Props) {
         }
       }}
     >
-      <header className="chat-options-header">
-        <h2>{t('chatsettings.m154')}</h2>
-        <IconButton
-          ref={closeButton}
-          label={t('chatsettings.m156')}
-          icon={CloseIcon}
-          onClick={props.onClose}
-        />
-      </header>
+      {props.tabs ? (
+        props.tabs(props.onClose)
+      ) : (
+        <header className="chat-options-header">
+          <h2>{t('chatsettings.m154')}</h2>
+          <IconButton
+            ref={closeButton}
+            label={t('chatsettings.m156')}
+            icon={CloseIcon}
+            onClick={props.onClose}
+          />
+        </header>
+      )}
       {contexts.map((chatId) => (
         <ChatScopeEditor
           key={chatId}
