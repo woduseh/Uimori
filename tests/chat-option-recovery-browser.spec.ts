@@ -189,6 +189,9 @@ test('OPTIONREVIEW1 failed reads expose retry; one shared draft survives scope c
     },
   });
   expect(changed.ok(), await changed.text()).toBe(true);
+  await expect(
+    panel.getByText('옵션이 바뀌었어요. 변경 내용을 확인해 주세요.', { exact: true })
+  ).toBeVisible();
   const writes: unknown[] = [];
   page.on('request', (entry) => {
     if (entry.method() === 'POST' && entry.url().includes(`/chats/${chat.id}/options/`))
