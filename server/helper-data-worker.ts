@@ -85,17 +85,23 @@ function* fields(value: unknown, path = ''): Generator<[string, string, boolean]
       yield* fields(child, `${path}/${pointer(key)}`);
   }
 }
+const nativeDocument = (title: unknown, card: unknown, module: unknown) => ({
+  title,
+  package: { nativeRisu: { card: card ?? {}, ...(module ? { module } : {}) } },
+});
+const editingPath = (path: string) =>
+  path.replace(/^\/(card|module)(?=\/|$)/u, '/package/nativeRisu/$1');
 function authored(model: Record<string, any>): Record<string, unknown> {
   const native = model.package?.nativeRisu;
-  if (native)
-    return {
-      title: model.title ?? model.package.title,
-      card: native.card ?? {},
-      ...(native.module ? { module: native.module } : {}),
-    };
+  if (native) return nativeDocument(model.title ?? model.package.title, native.card, native.module);
   return model.program
     ? { title: model.title, program: model.program, values: model.values }
     : model;
+}
+function libraryFields(kind: string, title: unknown, document: Record<string, unknown>) {
+  return kind === 'prompt'
+    ? { title, ...document }
+    : nativeDocument(title, document.card, document.module);
 }
 function chatMessagesSql(scoped: boolean) {
   return `WITH RECURSIVE ancestry(chat_id,head_revision,id,depth) AS (
@@ -450,12 +456,11 @@ function* documents(
         metadata: { category: String(row.category) },
         fields: metadataOnly
           ? { title: row.title }
-          : {
-              title: row.title,
-              ...JSON.parse(
-                String(document ? document.get(row.kind, row.id)?.document : row.document)
-              ),
-            },
+          : libraryFields(
+              String(row.kind),
+              row.title,
+              JSON.parse(String(document ? document.get(row.kind, row.id)?.document : row.document))
+            ),
       };
     }
     return;
@@ -493,11 +498,12 @@ function editTarget(doc: Document, field: string, stringValue: boolean) {
       rule.endsWith('/') ? field.startsWith(rule) : field === rule
     )
       ? 'prompt-preset'
-      : ['bot', 'persona', 'module'].includes(doc.kind) && /^\/(?:card|module)\//u.test(field)
+      : ['bot', 'persona', 'module'].includes(doc.kind) &&
+          /^\/package\/nativeRisu\/(?:card|module)\//u.test(field)
         ? 'content'
         : undefined;
   if (!kind) return undefined;
-  const path = kind === 'content' ? `/package/nativeRisu${field}` : field;
+  const path = field;
   if (
     !path.startsWith('/') ||
     path.length > resourcePathPolicy.maxLength ||
@@ -559,11 +565,15 @@ function excerpt(
   };
 }
 const fieldPriority = (path: string) =>
-  /^\/(?:card|module)\/(?:description|personality|scenario)(?:\/|$)/u.test(path)
+  /^\/package\/nativeRisu\/(?:card|module)\/(?:description|personality|scenario)(?:\/|$)/u.test(
+    path
+  )
     ? 0
-    : /^\/(?:card\/character_book\/entries|module\/lorebook)(?:\/|$)/u.test(path)
+    : /^\/package\/nativeRisu\/(?:card\/character_book\/entries|module\/lorebook)(?:\/|$)/u.test(
+          path
+        )
       ? 1
-      : /^\/(?:card|module)\/(?:extensions|assets)(?:\/|$)/u.test(path)
+      : /^\/package\/nativeRisu\/(?:card|module)\/(?:extensions|assets)(?:\/|$)/u.test(path)
         ? 3
         : 2;
 const selectedPath = (field: string, paths: string[]) =>
@@ -663,7 +673,7 @@ function search(db: DatabaseSync, snapshot: DataSnapshot, args: Record<string, u
   const output = oneOf('output', args.output, 'matches', ['matches', 'documents']);
   const patterns = strings('patterns', args.patterns, 8);
   if (patterns.some((p) => !p.trim())) throw new Error('DATA_EMPTY_PATTERN');
-  const paths = strings('paths', args.paths, 16);
+  const paths = strings('paths', args.paths, 16).map(editingPath);
   if (
     paths.some(
       (path) =>
@@ -802,8 +812,9 @@ function read(
     sources.set(key, source);
   }
   const { doc, fields: all } = source;
-  const selected = all.find(([path]) => path === ref.field);
-  const text = ref.field === '' ? JSON.stringify(doc.fields) : selected?.[1];
+  const field = editingPath(ref.field);
+  const selected = all.find(([path]) => path === field);
+  const text = field === '' ? JSON.stringify(doc.fields) : selected?.[1];
   if (text === undefined) throw new Error('DATA_FIELD_UNAVAILABLE');
   if (doc.revision !== ref.revision || sha(text) !== ref.hash)
     throw new Error('DATA_SOURCE_CHANGED: search again for the current reference');
@@ -844,7 +855,7 @@ function read(
   const limit = cap('limit', args.limit, 4000, 10_000, 1);
   const { ref: _ref, ...page } = excerpt(
     doc,
-    ref.field,
+    field,
     text,
     offset,
     Math.min(text.length, offset + limit),

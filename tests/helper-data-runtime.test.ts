@@ -1353,7 +1353,7 @@ test('a middle lore answer reaches the helper through search pagination and exac
       );
     }
     const hit = toolResult(wire, 'middle-hit').items[0];
-    expect(hit.ref.field).toBe('/card/character_book/entries/0/content');
+    expect(hit.ref.field).toBe('/package/nativeRisu/card/character_book/entries/0/content');
     expect(hit.matchRange.start).toBe(lore.indexOf(sentence));
     if (round === 2)
       return answer(

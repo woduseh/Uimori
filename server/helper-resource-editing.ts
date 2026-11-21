@@ -605,23 +605,65 @@ function targetPath(model: ResourceModel, target: BoundTarget, relative: string)
   if (index < 0) throw new HttpError(409, '앞선 변경에서 대상 항목이 삭제되거나 교체됐어요.');
   return [...target.list, String(index), ...parts(relative)].reduce(joined, '');
 }
-function textMatches(value: string, needle: string): { first: number; count: number } {
-  const first = value.indexOf(needle);
-  let count = 0;
-  for (let index = first; index >= 0; index = value.indexOf(needle, index + 1)) count++;
-  return { first, count };
+export type HelperTextNormalization = 'crlf-lf' | 'line-end-whitespace';
+export type HelperTextMatch =
+  | { ranges: { start: number; end: number }[]; normalization?: HelperTextNormalization }
+  | { ranges?: undefined; count: number };
+const NORMALIZATIONS: readonly HelperTextNormalization[] = ['crlf-lf', 'line-end-whitespace'];
+function exactMatches(value: string, needle: string): number[] {
+  const starts: number[] = [];
+  for (let index = value.indexOf(needle); index >= 0; index = value.indexOf(needle, index + 1))
+    starts.push(index);
+  return starts;
 }
-function normalizedText(value: string): { text: string; offsets: number[] } {
+function normalizedText(value: string, level: HelperTextNormalization) {
   let text = '';
-  const offsets = [0];
+  const starts: number[] = [];
+  const ends: number[] = [];
   for (let index = 0; index < value.length; ) {
+    if (level === 'line-end-whitespace' && (value[index] === ' ' || value[index] === '\t')) {
+      let end = index;
+      while (value[end] === ' ' || value[end] === '\t') end++;
+      if (value[end] === '\n' || (value[end] === '\r' && value[end + 1] === '\n')) {
+        index = end;
+        continue;
+      }
+    }
     if (value[index] === '\r' && value[index + 1] === '\n') {
       text += '\n';
+      starts.push(index);
+      ends.push(index + 2);
       index += 2;
-    } else text += value[index++]!;
-    offsets.push(index);
+      continue;
+    }
+    text += value[index];
+    starts.push(index);
+    ends.push(++index);
   }
-  return { text, offsets };
+  return { text, starts, ends };
+}
+export function matchHelperText(value: string, needle: string, expectedCount = 1): HelperTextMatch {
+  const exact = exactMatches(value, needle);
+  if (exact.length === expectedCount)
+    return { ranges: exact.map((start) => ({ start, end: start + needle.length })) };
+  if (exact.length || expectedCount !== 1 || !needle.includes('\n')) return { count: exact.length };
+  for (const level of NORMALIZATIONS) {
+    const normalized = normalizedText(value, level);
+    const target = normalizedText(needle, level).text;
+    const found = exactMatches(normalized.text, target);
+    if (found.length > 1) return { count: found.length };
+    if (found.length === 1)
+      return {
+        ranges: [
+          {
+            start: normalized.starts[found[0]!]!,
+            end: normalized.ends[found[0]! + target.length - 1]!,
+          },
+        ],
+        normalization: level,
+      };
+  }
+  return { count: 0 };
 }
 export function patchHelperResource(
   store: Store,
@@ -669,7 +711,8 @@ export function patchHelperResource(
     }
   });
   const changedPaths: string[] = [];
-  const matches: { changeIndex: number; path: string; normalization: 'crlf-lf' }[] = [];
+  const matches: { changeIndex: number; path: string; normalization: HelperTextNormalization }[] =
+    [];
   const explicitValues = new Map<string, number>();
   for (const [changeIndex, input] of changes.entries()) {
     let path = input.path;
@@ -826,28 +869,19 @@ export function patchHelperResource(
           typeof change.newText !== 'string'
         )
           throw new HttpError(400, '문자열과 찾을 문구가 필요해요.');
-        let { first, count } = textMatches(target.value, change.oldText);
-        let end = first + change.oldText.length;
-        if (count === 0 && change.oldText.includes('\n')) {
-          const normalized = normalizedText(target.value);
-          const needle = change.oldText.replaceAll('\r\n', '\n');
-          const equivalent = textMatches(normalized.text, needle);
-          count = equivalent.count;
-          if (count === 1) {
-            first = normalized.offsets[equivalent.first]!;
-            end = normalized.offsets[equivalent.first + needle.length]!;
-            matches.push({ changeIndex, path: change.path, normalization: 'crlf-lf' });
-          }
-        }
-        if (count !== 1)
+        const match = matchHelperText(target.value, change.oldText);
+        if (!match.ranges)
           patchFailure(
             changeIndex,
             input,
             new HttpError(409, '문구가 정확히 한 번 나타나야 해요.'),
-            count === 0 ? 'text_not_found' : 'text_ambiguous',
-            count
+            match.count === 0 ? 'text_not_found' : 'text_ambiguous',
+            match.count
           );
-        const next = target.value.slice(0, first) + change.newText + target.value.slice(end);
+        const [{ start, end }] = match.ranges as [{ start: number; end: number }];
+        if (match.normalization)
+          matches.push({ changeIndex, path: change.path, normalization: match.normalization });
+        const next = target.value.slice(0, start) + change.newText + target.value.slice(end);
         if (next !== target.value) {
           (target.parent as JsonObject)[segments.at(-1)!] = next;
           changedPaths.push(change.path);

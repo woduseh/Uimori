@@ -6,6 +6,7 @@ import { displayTranslationJob } from '../core/translation-display.js';
 import { latestTranslation, sourceVersions } from './source-editing.js';
 import { HttpError, choice, fields, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
+import { matchHelperText, type HelperTextNormalization } from './helper-resource-editing.js';
 
 const schema = (properties: Record<string, Json>, required: string[] = []): Json => ({
   type: 'object',
@@ -582,14 +583,17 @@ function searchChatScenes(store: Store, chatId: string, args: Record<string, unk
   };
 }
 
+type SceneTextMatch = { changeIndex: number; normalization: HelperTextNormalization };
 function replacement(content: string, args: Record<string, unknown>) {
   if ((args.text === undefined) === (args.changes === undefined))
     throw new HttpError(400, 'Supply either complete text or literal changes');
-  if (args.text !== undefined) return text(args.text, 'scene text', SOURCE_TEXT_MAX_CHARS);
+  const normalizations: SceneTextMatch[] = [];
+  if (args.text !== undefined)
+    return { content: text(args.text, 'scene text', SOURCE_TEXT_MAX_CHARS), normalizations };
   if (!Array.isArray(args.changes) || args.changes.length < 1 || args.changes.length > 100)
     throw new HttpError(400, 'Invalid scene changes');
   const changes = args.changes
-    .flatMap((value) => {
+    .flatMap((value, changeIndex) => {
       const change = record(value);
       fields(change, ['oldText', 'newText', 'expectedCount']);
       const oldText = text(change.oldText, 'old text', SOURCE_TEXT_MAX_CHARS, true);
@@ -599,18 +603,11 @@ function replacement(content: string, args: Record<string, unknown>) {
         change.expectedCount === undefined
           ? 1
           : number(change.expectedCount, 'expected count', 1, 100000);
-      const matches: { start: number; end: number; newText: string }[] = [];
-      for (
-        let start = content.indexOf(oldText);
-        start !== -1;
-        start = content.indexOf(oldText, start + 1)
-      ) {
-        matches.push({ start, end: start + oldText.length, newText });
-        if (matches.length > expectedCount) break;
-      }
-      if (matches.length !== expectedCount)
-        throw new HttpError(409, 'Scene replacement count mismatch');
-      return matches;
+      const match = matchHelperText(content, oldText, expectedCount);
+      if (!match.ranges) throw new HttpError(409, 'Scene replacement count mismatch');
+      if (match.normalization)
+        normalizations.push({ changeIndex, normalization: match.normalization });
+      return match.ranges.map((range) => ({ ...range, newText }));
     })
     .sort((a, b) => a.start - b.start);
   if (changes.some((item, index) => index > 0 && item.start < changes[index - 1]!.end))
@@ -618,7 +615,7 @@ function replacement(content: string, args: Record<string, unknown>) {
   let result = content;
   for (const change of changes.toReversed())
     result = result.slice(0, change.start) + change.newText + result.slice(change.end);
-  return text(result, 'scene text', SOURCE_TEXT_MAX_CHARS);
+  return { content: text(result, 'scene text', SOURCE_TEXT_MAX_CHARS), normalizations };
 }
 
 export function invokeHelperSceneTool(
@@ -771,6 +768,7 @@ export function invokeHelperSceneTool(
     )
       throw new HttpError(409, 'Scene text changed; read the current scene again');
     let content: string;
+    let matches: SceneTextMatch[] = [];
     if (name === 'scene.restore') {
       const version = number(args.versionRevision, 'version revision', 0);
       const retained = sourceVersions(store, source.id).versions.find(
@@ -778,8 +776,10 @@ export function invokeHelperSceneTool(
       );
       if (!retained) throw new HttpError(404, 'Original version is no longer retained');
       content = retained.text;
-    } else content = replacement(current.content, args);
-    let translationEdit: { content: string; changed: boolean; revision: number } | undefined;
+    } else ({ content, normalizations: matches } = replacement(current.content, args));
+    let translationEdit:
+      | { content: string; changed: boolean; revision: number; matches: SceneTextMatch[] }
+      | undefined;
     if (name === 'scene.patch' && args.translation !== undefined) {
       if (current.target !== 'original')
         throw new HttpError(400, 'Translation co-edit requires original target');
@@ -795,11 +795,12 @@ export function invokeHelperSceneTool(
       checkGuards(patch, translated.editTarget, true);
       if (patch.expectedTextHash !== translated.editTarget.expectedTextHash)
         throw new HttpError(409, 'Scene translation changed; read it again');
-      const translatedContent = replacement(translated.content, patch);
+      const replaced = replacement(translated.content, patch);
       translationEdit = {
-        content: translatedContent,
-        changed: translatedContent !== translated.content,
+        content: replaced.content,
+        changed: replaced.content !== translated.content,
         revision: translated.editTarget.expectedRevision,
+        matches: replaced.normalizations,
       };
     }
     const changed = content !== current.content;
@@ -838,6 +839,8 @@ export function invokeHelperSceneTool(
       sourceHash,
       translationInvalidated: changed && current.target === 'original' && !translationEdit,
       ...(translationRevision !== undefined ? { translationRevision } : {}),
+      ...(matches.length ? { matches } : {}),
+      ...(translationEdit?.matches.length ? { translationMatches: translationEdit.matches } : {}),
       editTarget: {
         ...editTarget,
         expectedRevision: savedRevision,

@@ -272,7 +272,12 @@ test('grep returns authored excerpts once, supports two-character Korean queries
   const hit = result.items[0];
   expect(hit.text).toContain('나이: 27세');
   expect(hit.origin).toBe('live-library-original');
-  expect(hit.ref).toMatchObject({ id: b.id, kind: 'bot', field: '/card/description', revision: 1 });
+  expect(hit.ref).toMatchObject({
+    id: b.id,
+    kind: 'bot',
+    field: '/package/nativeRisu/card/description',
+    revision: 1,
+  });
   expect(hit.ref.hash).toBe(hash(b.package.nativeRisu.card.description as string));
   expect(hit.editTarget).toEqual({
     kind: 'content',
@@ -324,7 +329,7 @@ test('document and field searches filter, page and bound repeated background HTM
     limit: 20,
     context: 150,
   });
-  expect(broad.items[0].ref.field).toBe('/card/description');
+  expect(broad.items[0].ref.field).toBe('/package/nativeRisu/card/description');
   expect(JSON.stringify(broad).length).toBeLessThanOrEqual(8_000);
   expect(broad.complete).toBe(false);
   expect(broad.nextOffset).toBeGreaterThan(0);
@@ -332,9 +337,11 @@ test('document and field searches filter, page and bound repeated background HTM
     scope: 'library',
     ids: [saved.id],
     patterns: ['Hinano'],
-    paths: ['/card/description'],
+    paths: ['/package/nativeRisu/card/description'],
   });
-  expect(narrow.items.map((item: any) => item.ref.field)).toEqual(['/card/description']);
+  expect(narrow.items.map((item: any) => item.ref.field)).toEqual([
+    '/package/nativeRisu/card/description',
+  ]);
   expect(narrow.complete).toBe(true);
   const numberHit = await f.invoke('data.search', {
     scope: 'library',
@@ -342,7 +349,7 @@ test('document and field searches filter, page and bound repeated background HTM
     patterns: ['14'],
     paths: ['/card/ageNumber'],
   });
-  expect(numberHit.items[0].ref.field).toBe('/card/ageNumber');
+  expect(numberHit.items[0].ref.field).toBe('/package/nativeRisu/card/ageNumber');
   expect(numberHit.items[0].editTarget).toBeUndefined();
   const htmlOnly = await f.invoke('data.search', {
     scope: 'library',
@@ -351,7 +358,7 @@ test('document and field searches filter, page and bound repeated background HTM
     paths: ['/card/extensions'],
     limit: 1,
   });
-  expect(htmlOnly.items[0].ref.field).toContain('/card/extensions/');
+  expect(htmlOnly.items[0].ref.field).toContain('/package/nativeRisu/card/extensions/');
   expect(htmlOnly.complete).toBe(false);
   await expect(f.invoke('data.search', { paths: ['card/description'] })).rejects.toThrow(
     'DATA_PATH_INVALID'
@@ -402,11 +409,12 @@ test('module string excerpts can be patched while protected native paths remain 
   expect(protectedRead.editTarget).toBeUndefined();
 
   const { path, ...target } = hit.editTarget;
+  expect(hit.ref.field).toBe(path);
   invokeResourceTool(f.store, 'resource.patch', {
     ...target,
     changes: [
       {
-        path,
+        path: hit.ref.field,
         op: 'replaceText',
         oldText: 'west harbor',
         newText: 'north harbor',
@@ -876,7 +884,9 @@ test('cancellation stops the isolated process and zero-width regex/surrogate rea
   const f = fixture();
   const b = bot(f, '😀 나이: 27세\n끝');
   const found = await f.invoke('data.search', { ids: [b.id], patterns: ['^'], regex: true });
-  expect(found.items.filter((item: any) => item.ref.field === '/card/description')).toHaveLength(1);
+  expect(
+    found.items.filter((item: any) => item.ref.field === '/package/nativeRisu/card/description')
+  ).toHaveLength(1);
   expect(found.complete).toBe(true);
   const ref: DataRef = (await f.invoke('data.search', { ids: [b.id], patterns: ['나이'] })).items[0]
     .ref;

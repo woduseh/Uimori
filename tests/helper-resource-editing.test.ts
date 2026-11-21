@@ -1285,6 +1285,64 @@ test('replaceText prefers exact matches and maps unique CRLF equivalents to orig
   ]);
 });
 
+test('replaceText ignores line-end whitespace only for one unique match and leaves quotes as stored', () => {
+  const quoted = '“그래요,” 그녀가 말했다. ‘정말?’ — 잠시 뒤';
+  const { store, preset, target } = presetFixture([
+    { type: 'plain', text: `${quoted}\r\n첫 줄  \r\n둘째 줄\t\n끝` },
+    { type: 'plain', text: 'a \nb / a\t\nb' },
+  ]);
+  const blocks = () =>
+    store.product.get<any>('prompt-preset', preset.id).program.nativeRisuPreset.preset
+      .promptTemplate;
+  const ambiguous = () =>
+    call(store, 'resource.patch', {
+      ...target,
+      expectedRevision: preset.revision,
+      changes: [
+        { op: 'replaceText', path: `${presetBlocksPath}/1/text`, oldText: 'a\nb', newText: 'x' },
+      ],
+    });
+  expect(ambiguous).toThrow(
+    expect.objectContaining({
+      details: expect.objectContaining({ reason: 'text_ambiguous', matchCount: 2 }),
+    })
+  );
+  expect(blocks()[1].text).toBe('a \nb / a\t\nb');
+  const result = call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: preset.revision,
+    changes: [
+      {
+        op: 'replaceText',
+        path: `${presetBlocksPath}/0/text`,
+        oldText: '첫 줄\n둘째 줄',
+        newText: '고친 줄\n둘째 줄',
+      },
+    ],
+  });
+  expect(result.matches).toEqual([
+    { changeIndex: 0, path: `${presetBlocksPath}/0/text`, normalization: 'line-end-whitespace' },
+  ]);
+  expect(blocks()[0].text).toBe(`${quoted}\r\n고친 줄\n둘째 줄\t\n끝`);
+  expect(blocks()[0].text.startsWith(quoted)).toBe(true);
+  expect(() =>
+    call(store, 'resource.patch', {
+      ...target,
+      expectedRevision: result.revision,
+      changes: [
+        {
+          op: 'replaceText',
+          path: `${presetBlocksPath}/0/text`,
+          oldText: '"그래요," 그녀가',
+          newText: '그녀가',
+        },
+      ],
+    })
+  ).toThrow(
+    expect.objectContaining({ details: expect.objectContaining({ reason: 'text_not_found' }) })
+  );
+});
+
 test('whole-model validation does not blame an unrelated last change', () => {
   const { store, preset, target } = presetFixture([{ type: 'plain', text: 'Keep' }]);
   let caught: unknown;

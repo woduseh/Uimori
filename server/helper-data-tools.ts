@@ -70,7 +70,7 @@ export const HELPER_DATA_TOOLS: ProviderTool[] = [
           maxItems: 16,
           items: str,
           description:
-            'Limit the search to these JSON Pointer fields or their children, for example /card/description. Omit to search every authored field, including HTML and scripts.',
+            'Limit the search to these JSON Pointer fields or their children, in the path form resource.patch uses, for example /package/nativeRisu/card/description. Omit to search every authored field, including HTML and scripts.',
         },
         match: {
           type: 'string',

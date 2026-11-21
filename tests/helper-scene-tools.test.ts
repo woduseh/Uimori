@@ -116,6 +116,34 @@ test('literal scene changes save once and fail atomically for ambiguous, overlap
   });
 });
 
+test('scene changes tolerate CRLF and line-end whitespace once and keep curved quotes byte-identical', () => {
+  const text = '“가지 마,” 그가 말했다.  \r\n‘알았어’ — 그녀가 답했다.\r\n다음 줄 \n다음 줄\t\n끝';
+  const { store, source, call, read } = fixture(text);
+  const editTarget = read().editTarget;
+  expect(() =>
+    call('scene.patch', { ...editTarget, changes: [{ oldText: '다음 줄\n', newText: 'x\n' }] })
+  ).toThrow(/count mismatch/);
+  expect(() =>
+    call('scene.patch', {
+      ...editTarget,
+      changes: [{ oldText: '다음 줄\n', newText: 'x\n', expectedCount: 2 }],
+    })
+  ).toThrow(/count mismatch/);
+  expect(store.source(source.id).text).toBe(text);
+  const result = call('scene.patch', {
+    ...editTarget,
+    changes: [{ oldText: '말했다.\n‘알았어’', newText: '외쳤다.\n‘알았어’' }],
+  });
+  expect(result).toMatchObject({
+    changed: true,
+    matches: [{ changeIndex: 0, normalization: 'line-end-whitespace' }],
+  });
+  const saved = store.source(source.id).text;
+  expect(saved).toBe(text.replace('말했다.  \r\n‘알았어’', '외쳤다.\n‘알았어’'));
+  expect(saved.slice(0, saved.indexOf('그가'))).toBe('“가지 마,” ');
+  expect(saved).toContain('‘알았어’ — 그녀가');
+});
+
 test('exact-count replacements are atomic and reject overlap, mismatch and stale guards', () => {
   const { store, source, call, read } = fixture('Chihiro-han, my lord! Chihiro-han, my lord!');
   const editTarget = read().editTarget;
