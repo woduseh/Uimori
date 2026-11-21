@@ -1,7 +1,32 @@
-import type { HelperActivity, HelperActivityEvent } from '../core/helper-activity.js';
+import type {
+  HelperActivity,
+  HelperActivityEvent,
+  HelperActivityTarget,
+  HelperActivityTargetRef,
+} from '../core/helper-activity.js';
 import type { HelperStatus } from '../core/helper.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
+import { sceneTitle } from './scene-titles.js';
+
+function resolveTarget(store: Store, value: unknown): HelperActivityTarget | undefined {
+  if (typeof value !== 'string') return undefined;
+  const ref = JSON.parse(value) as HelperActivityTargetRef;
+  if ('count' in ref) return Number.isSafeInteger(ref.count) ? { count: ref.count } : undefined;
+  if (typeof ref.kind !== 'string' || typeof ref.id !== 'string') return undefined;
+  if (ref.kind === 'scene') {
+    if (!store.db.prepare('SELECT 1 FROM sources WHERE id=?').get(ref.id)) return undefined;
+    const title = sceneTitle(store, ref.id);
+    return title ? { kind: 'scene', title } : { kind: 'scene' };
+  }
+  const row = store.db
+    .prepare(
+      `SELECT json_extract(body,'$.title') AS title FROM versions v WHERE kind=? AND id=?
+       AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id)`
+    )
+    .get(ref.kind, ref.id);
+  return typeof row?.title === 'string' ? { kind: ref.kind, title: row.title } : undefined;
+}
 
 const activityLimit = 80;
 
@@ -26,9 +51,11 @@ export function readHelperActivity(store: Store, taskId: string): HelperActivity
         ),1,500) AS error,
         substr(json_extract(data,'$.text'),1,1000) AS text,
         length(json_extract(data,'$.text'))>1000 AS text_truncated,
-        json_extract(data,'$.applied') AS applied
+        json_extract(data,'$.applied') AS applied,
+        json_extract(data,'$.callId') AS call_id,
+        CASE WHEN kind='tool.started' THEN json_extract(data,'$.target') END AS target
        FROM helper_events WHERE conversation_id=? AND task_id=?
-         AND kind IN ('attempt.started','attempt.finished','tool.finished','progress','context.compaction')
+         AND kind IN ('attempt.started','attempt.finished','tool.started','tool.finished','progress','context.compaction')
        ORDER BY seq DESC LIMIT ?`
     )
     .all(task.conversation_id, taskId, activityLimit + 1);
@@ -53,6 +80,8 @@ export function readHelperActivity(store: Store, taskId: string): HelperActivity
           text: string(row.text),
           textTruncated: row.text_truncated ? true : undefined,
           applied: row.applied == null ? undefined : Boolean(row.applied),
+          callId: string(row.call_id),
+          target: resolveTarget(store, row.target),
         })
       ),
   };

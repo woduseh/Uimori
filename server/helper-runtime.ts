@@ -167,6 +167,7 @@ import { helperWebSearchCapability } from '../core/helper-web-search.js';
 import { ChatOverridesStore } from './chat-overrides.js';
 import { ChatOptionsStore, invokeHelperOptions } from './chat-options.js';
 import { helperArgumentDiagnostic, helperResultDiagnostic } from './helper-diagnostics.js';
+import { helperActivityTarget } from '../core/helper-activity.js';
 
 const asJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 const MAX_EXACT_HELPER_READ_TOKENS = 2_000;
@@ -1330,12 +1331,19 @@ export class HelperRuntime {
         toolSignal.throwIfAborted();
         const args = helperArgumentDiagnostic(wireCall.arguments);
         const startedAt = new Date().toISOString();
+        const gateway = wireCall.name === 'app.call' && typeof wireCall.arguments.name === 'string';
+        const inner = wireCall.arguments.arguments;
+        const target = helperActivityTarget(
+          gateway
+            ? inner && typeof inner === 'object' && !Array.isArray(inner)
+              ? (inner as Record<string, unknown>)
+              : {}
+            : wireCall.arguments
+        );
         this.workspace.event(task.conversationId, id, 'tool.started', {
           callId: wireCall.id,
-          name:
-            wireCall.name === 'app.call' && typeof wireCall.arguments.name === 'string'
-              ? wireCall.arguments.name
-              : wireCall.name,
+          name: gateway ? (wireCall.arguments.name as string) : wireCall.name,
+          ...(target && { target }),
           startedAt,
           queueMs,
           ...args,

@@ -7,6 +7,8 @@ import { releaseCompletedHelperInputs } from '../server/execution-retention.js';
 import { Store } from '../server/store.js';
 import { helperActivityStages, helperActivitySummary } from '../web/helper-activity.js';
 import { createTestDirectory } from './fixtures/test-directory.js';
+import { fixtureBotInput } from './fixtures/chat.js';
+import type { Content } from '../core/product.js';
 
 test('helper activity projects bounded diagnostics and keeps denied tools visible after retention', () => {
   const directory = createTestDirectory('uimori-helper-activity-');
@@ -159,5 +161,84 @@ test('helper stages group reads, keep edits separate and report observed progres
     expect(helperActivitySummary(settled)).toBeUndefined();
     expect(helperActivityStages(settled).some((stage) => stage.state === 'running')).toBe(false);
     expect(helperActivityStages(settled).find((stage) => stage.state === 'issue')).toBeDefined();
+  }
+});
+
+test('live tool starts carry a resolved target and never the argument preview, before or after retention', () => {
+  const directory = createTestDirectory('uimori-helper-activity-');
+  const store = new Store(join(directory.directory, 'app.sqlite'));
+  try {
+    const workspace = new HelperWorkspace(store);
+    const conversation = workspace.open({ kind: 'library', workId: 'activity-target' });
+    const connection = store.product.connection({
+      title: 'Synthetic activity',
+      protocol: 'fixture-sse-v1',
+      endpoint: 'http://127.0.0.1:9',
+      enabled: true,
+    });
+    const model = store.product.model({
+      title: 'Synthetic activity',
+      connectionId: connection.id,
+      modelId: 'fixture-helper',
+      temperature: null,
+      maxOutputTokens: 1024,
+    });
+    const bot = store.product.content(fixtureBotInput('등대지기 미라')) as Content;
+    const task = workspace.enqueue(conversation.id, 'activity', '자료 확인', {
+      scope: conversation.scope,
+      model: store.product.modelSnapshot(model.id),
+      history: [],
+      persona: '',
+      limits: { totalCalls: 24, helperCalls: 12 },
+    });
+    const started = (callId: string, name: string, target: unknown) =>
+      workspace.event(conversation.id, task.id, 'tool.started', {
+        callId,
+        name,
+        target,
+        argsPreview: `PRIVATE_ARGS_${callId}`,
+      });
+    started('read', 'resource.read', { kind: 'content', id: bot.id });
+    workspace.event(conversation.id, task.id, 'tool.finished', {
+      callId: 'read',
+      name: 'resource.read',
+      denied: false,
+      result: { text: 'PRIVATE_RESULT' },
+    });
+    started('scene', 'scene.patch', { kind: 'scene', id: 'deleted-scene' });
+    started('many', 'resource.patchMany', { count: 3 });
+    const live = readHelperActivity(store, task.id);
+    expect(live.events.find((event) => event.callId === 'read')).toMatchObject({
+      kind: 'tool.started',
+      target: { kind: 'content', title: '등대지기 미라' },
+    });
+    expect(
+      live.events.find((event) => event.callId === 'scene' && event.kind === 'tool.started')?.target
+    ).toBeUndefined();
+    expect(JSON.stringify(live)).not.toContain('PRIVATE_');
+    expect(helperActivityStages(live)).toMatchObject([
+      {
+        label: '자료 확인',
+        target: '등대지기 미라',
+        state: 'completed',
+        events: [{ kind: 'tool.finished' }],
+      },
+      { label: '장면 수정', target: undefined, state: 'running' },
+      { label: '자료 및 설정 변경', target: '대상 3개', state: 'running' },
+    ]);
+
+    store.db.prepare("UPDATE helper_tasks SET status='completed' WHERE id=?").run(task.id);
+    releaseCompletedHelperInputs(store.db, task.id);
+    const finished = readHelperActivity(store, task.id);
+    expect(JSON.stringify(finished)).not.toContain('PRIVATE_');
+    expect(finished.events.every((event) => !('argsPreview' in event))).toBe(true);
+    expect(helperActivityStages(finished)).toMatchObject([
+      { target: '등대지기 미라', state: 'completed' },
+      { state: 'stopped' },
+      { state: 'stopped' },
+    ]);
+  } finally {
+    store.close();
+    directory.remove();
   }
 });

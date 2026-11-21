@@ -135,6 +135,7 @@ export function HelperActivityDetails({
                       className={stage.state === 'running' ? 'activity-spinner' : undefined}
                     />
                     <span>{stage.label}</span>
+                    {stage.target && <small>{stage.target}</small>}
                     <span className="sr-only">{t(stateLabels[stage.state])}</span>
                     {toolCount > 1 && (
                       <small>
