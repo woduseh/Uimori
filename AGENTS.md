@@ -2,20 +2,23 @@
 
 Uimori is a single-user, self-hosted creative-writing app. Favor simple, maintainable solutions, long-form reading usability, and preservation of user data.
 
-Carry implementation requests through to a working result, appropriate verification, and local commits within the authorized scope. Make routine decisions independently and use approvals that apply to the current task. Ask only when missing input or authorization materially changes the outcome; continue independent work meanwhile.
+Carry an implementation request through to a working result, verification that fits the change, and a local commit. Make routine, reversible decisions yourself, state the assumptions behind them, and keep going. Ask only when missing input or authorization would materially change the outcome, and continue independent work while you wait.
+
+Commit finished, verified work locally without asking. Other agent sessions may share this checkout, so commit only the files you changed, naming their paths, and leave other staged or unstaged changes as they are. Get the user's go-ahead before a push, a pull request, a release, or a deployment. Do not ask again for a go-ahead the user already gave for the same action.
 
 ## Design judgment
 
-Optimize for correct behavior, local reasoning, and low maintenance and operating costs. Choose the smallest cohesive change that solves the requested problem, and justify new infrastructure against this single-user, self-hosted app's actual needs.
+Optimize for correct behavior, local reasoning, and low maintenance and operating costs. Choose the smallest cohesive change that solves the requested problem at its cause. Reuse the logic the codebase already has, and where the change touches duplicated code, consolidate it instead of adding a parallel path. Preserve the behavior that callers and stored user data rely on. Justify new infrastructure against this single-user, self-hosted app's actual needs.
 
 Keep business rules and state ownership clear. Keep provider and storage details out of unrelated application policies and UI code. For asynchronous provider and storage operations, account for cancellation, late responses, duplicate effects, and unknown outcomes; preserve user data, credentials, and necessary access boundaries.
 
-Use [DEVELOPMENT](docs/DEVELOPMENT.md) for verification rather than duplicating its procedures here. Briefly explain material design decisions and tradeoffs, and distinguish verified behavior from remaining uncertainty.
+Use [DEVELOPMENT](docs/DEVELOPMENT.md) to choose verification rather than duplicating its procedures here. In the report, explain material design decisions and tradeoffs, name any change beyond the request, and distinguish verified behavior from remaining uncertainty.
 
 ## Delegation
 
-- When collaboration tools are available, proactively delegate substantial, clearly scoped work that can proceed independently and improve speed or quality. Handle small or tightly coupled work directly.
-- Give each worker a clear outcome, relevant context, ownership boundaries, and expected verification. Avoid overlapping concurrent edits.
+Work directly by default. Delegate when the work splits into substantial pieces that can proceed independently without editing the same files, and the parallel speed or the independent check is worth the cost of briefing a worker and verifying its result.
+
+- Give each worker a clear outcome, relevant context, ownership boundaries, and expected verification.
 - The coordinating agent owns cross-cutting decisions, integration, and final acceptance. Continue non-overlapping work while workers run. Inspect their changes and evidence, reuse checks that still apply, and verify integration where needed.
 
 ## References

@@ -107,8 +107,6 @@ Detailed editor behavior is in [LIBRARY](LIBRARY.md#저장과-취소); helper se
 
 Chat option editing refreshes automatically when idle and preserves drafts when settings change elsewhere. Keep read retries next to read failures; do not expose separate manual refresh/rebase controls. Saving, reserving or cancelling with a conflict opens the existing saved-version review, which reads the saved version as it opens and keeps retry beside a failed read. Closing the review changes no input or revision. Only an explicit choice adopts the reviewed state, either retaining compatible local edits or discarding drafts. Name excluded inputs before the choice, preserve unrelated saved edits, and require a separate save/reservation afterward. Unknown write outcomes keep the original operation for acknowledgement.
 
-## Korean terminology
-
 Chat and assistant switch the central workspace within one shared navigation shell. Preserve the user's collapsed navigation choice; only a contextual side panel may temporarily collapse navigation when the manuscript needs room. Main assistant navigation replaces the chat list with user-created projects and recent conversations. Projects organize conversations explicitly, never infer membership from tools or edited resources, and never change execution scope. Removing a project keeps its conversations. Both assistant presentations share settings dialogs, composer behavior and usage disclosures; a dialog's draft/discard action belongs to the conversation that opened it.
 
 Both workspaces use exploration and activity tabs in the same navigation position. Assistant exploration shows each conversation once under its project or the unfiled group; activity shows unread outcomes, ongoing work and chronological recent conversations. Indentation establishes project ownership without repeating the parent name on each row. Metadata edits do not create unread work. Manual ordering is a browser preference and offers menu actions as well as dragging; moving project membership remains a server operation. Creating a conversation inside a project admits both together. Keep common new/search actions in the desktop navigation header and preserve their active-workspace meaning in the collapsed rail and mobile drawer.
@@ -116,6 +114,8 @@ Both workspaces use exploration and activity tabs in the same navigation positio
 Settings navigation shows destination names only. Keep current values and unsaved-change feedback in the owning settings content; preserve the existing save/discard guards. Font previews follow the selected app or manuscript target; font registration and deletion stay in a collapsible management area without losing input. Show unlinked-memory review only when records exist, with its count before expansion and read errors outside the disclosure.
 
 Group mixed-purpose action menus by task, with common editing actions first, supporting information later, and destructive actions separated at the end. Use short headings for long menus; compact menus can use dividers alone. Keep homogeneous choice lists ungrouped. Conditional actions must not leave empty groups, and nested export/delete controls retain the same mobile touch height as other items.
+
+## Korean terminology
 
 Use the same terms in visible copy, accessible names and user documentation.
 

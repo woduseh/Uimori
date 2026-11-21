@@ -27,6 +27,13 @@ state or changing the manuscript. Preserve the existing state owner, native
 and dismissal. Menus and dialogs open and close immediately; avoid exit timers,
 extra closing states or wrappers introduced solely for animation.
 
+Immediate opening is the convention adopted in `docs/UI-PRINCIPLES.md`, so the
+switch is currently the only animated control in the table. When the user asks
+for entrance or exit motion on a dialog, menu or sheet, that request changes the
+convention: implement it within the constraints below, and update
+UI-PRINCIPLES, the table above and the motion paragraph in
+`docs/DEVELOPMENT.md` in the same change.
+
 - Keep modal geometry and anchored menu placement stable, including
   viewport-positioned descendants and small screens. Mobile sheets retain their
   existing layout and dismissal behavior.
@@ -64,6 +71,6 @@ Inspired by Jakub Antalik's [Transitions.dev](https://transitions.dev/skill). Th
 
 Reviewed upstream snapshot `e2d5551656e4d3274e075d1cbd9a95af50f53225`:
 
-- [Anchored dropdown](https://github.com/Jakubantalik/transitions.dev/blob/e2d5551656e4d3274e075d1cbd9a95af50f53225/skills/transitions-dev/05-menu-dropdown.md): use trigger-aware origin, not its replacement state machine.
+- [Anchored dropdown](https://github.com/Jakubantalik/transitions.dev/blob/e2d5551656e4d3274e075d1cbd9a95af50f53225/skills/transitions-dev/05-menu-dropdown.md): a reference for trigger-aware origin if menu entrance motion is adopted; do not use its replacement state machine.
 - [Modal](https://github.com/Jakubantalik/transitions.dev/blob/e2d5551656e4d3274e075d1cbd9a95af50f53225/skills/transitions-dev/06-modal.md): use its native modal and focus considerations, not its entrance or delayed close.
 - [Toggle](https://github.com/Jakubantalik/transitions.dev/blob/e2d5551656e4d3274e075d1cbd9a95af50f53225/skills/transitions-dev/27-toggle.md): use thumb travel and color feedback, not overshoot or initialization state.
