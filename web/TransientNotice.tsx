@@ -21,16 +21,18 @@ export function TransientNoticeProvider({ children }: { children: ReactNode }) {
   const host = useRef<HTMLDivElement>(null);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const show = useCallback((notice: Notice) => {
-    clearTimeout(timers.current.get(notice.id));
-    setNotices((old) => [
-      ...old.filter((item) => item.id !== notice.id && item.message !== notice.message),
-      notice,
-    ]);
+    clearTimeout(timers.current.get(notice.message));
+    setNotices((old) => {
+      const kept = old.filter((item) => item.id !== notice.id || item.message === notice.message);
+      return kept.some((item) => item.message === notice.message)
+        ? kept.map((item) => (item.message === notice.message ? notice : item))
+        : [...kept, notice];
+    });
     timers.current.set(
-      notice.id,
+      notice.message,
       setTimeout(() => {
-        timers.current.delete(notice.id);
-        setNotices((old) => old.filter((item) => item.id !== notice.id));
+        timers.current.delete(notice.message);
+        setNotices((old) => old.filter((item) => item.message !== notice.message));
       }, 4000)
     );
   }, []);
@@ -52,7 +54,7 @@ export function TransientNoticeProvider({ children }: { children: ReactNode }) {
       {children}
       <div ref={host} popover="manual" className="transient-notices" aria-live="polite">
         {notices.map((notice) => (
-          <div className="transient-notice" role="status" key={notice.id}>
+          <div className="transient-notice" role="status" key={notice.message}>
             <CheckIcon size={18} aria-hidden="true" />
             <span>{translateMessage(notice.message)}</span>
           </div>

@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
+import { createReadingChat } from './fixtures/personal-workspace.js';
 import { openChatMenu, openHelper } from './ui-navigation.js';
 
 async function chat(request: APIRequestContext, title: string) {
@@ -75,6 +76,46 @@ test('NOTICE01 feedback follows a growing draft and keeps focus until it expires
   await expect(notice).toHaveCount(0);
   await expect(input).toBeFocused();
   expect(calls).toBe(2);
+});
+
+test('NOTICE03 an identical message renews the visible notice without entering again', async ({
+  page,
+  request,
+}) => {
+  await page.clock.install();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { chat } = await createReadingChat(request, `알림 갱신 ${crypto.randomUUID()}`, 2);
+  await page.goto(`/?chat=${chat.id}`);
+  await page.evaluate(() => {
+    document.addEventListener('transitionrun', (event) => {
+      const node = event.target;
+      if (
+        node instanceof HTMLElement &&
+        node.matches('.transient-notice') &&
+        event.propertyName === 'opacity'
+      )
+        document.body.dataset.noticeEntrances = String(
+          Number(document.body.dataset.noticeEntrances ?? 0) + 1
+        );
+    });
+  });
+  const add = page.getByRole('button', { name: '책갈피 추가', exact: true });
+  await expect(add).toHaveCount(2);
+  const notice = page.locator('.transient-notice');
+  await add.first().click();
+  await expect(notice).toHaveText('책갈피를 추가했어요.');
+  await expect(page.locator('body')).toHaveAttribute('data-notice-entrances', '1');
+  await expect(notice).toHaveCSS('opacity', '1');
+  await page.clock.runFor(3000);
+  await add.first().click();
+  await expect(add).toHaveCount(0);
+  await page.clock.runFor(3000);
+  await expect(notice).toHaveCount(1);
+  await expect(notice).toHaveCSS('opacity', '1');
+  expect(await page.locator('body').getAttribute('data-notice-entrances')).toBe('1');
+  await page.clock.runFor(1100);
+  await expect(notice).toHaveCount(0);
 });
 
 test('NOTICE02 modal, mobile helper, and docked helper keep notices accessible', async ({
