@@ -919,6 +919,24 @@ function changeProjection(taskId: string, chatId: string): HelperTaskResultsView
       },
       {
         domain: 'resource',
+        targetId: 'story-theme',
+        title: '등대 테마',
+        location: { kind: 'resource-field', path: ['storyUi', 'css'] },
+        action: 'update',
+        diff: null,
+        anchor: null,
+      },
+      {
+        domain: 'resource',
+        targetId: 'harbor-preset',
+        title: '항구 삽화',
+        location: { kind: 'resource-field', path: ['description'] },
+        action: 'update',
+        diff: null,
+        anchor: null,
+      },
+      {
+        domain: 'resource',
         targetId: 'legacy-bot',
         title: '예전 봇',
         location: '로어북 › 등대',
@@ -1054,12 +1072,16 @@ test('HCHANGE04 change locations follow the UI language and keep authored names'
       regex: ['고급 설정', 'Lua, 트리거, 정규식'],
       description: ['기본 정보', '카드 설명'],
       lore: ['로어북', '폭풍의 항구 (Storm)', '로어 본문'],
+      storyUi: ['이야기 UI CSS'],
+      topLevel: ['설명'],
     },
     en: {
       scene: ['Scene 3', 'Original'],
       regex: ['Advanced settings', 'Lua, triggers and regex'],
       description: ['Basic information', 'Card description'],
       lore: ['Lorebook', '폭풍의 항구 (Storm)', 'Lore text'],
+      storyUi: ['Story UI CSS'],
+      topLevel: ['Description'],
     },
   };
   for (const locale of ['ko', 'en'] as const) {
@@ -1074,6 +1096,8 @@ test('HCHANGE04 change locations follow the UI language and keep authored names'
     await expect(location('정규식 봇')).toHaveText(parts.regex);
     await expect(location('긴 설명 봇')).toHaveText(parts.description);
     await expect(location('항구 봇')).toHaveText(parts.lore);
+    await expect(location('등대 테마')).toHaveText(parts.storyUi);
+    await expect(location('항구 삽화')).toHaveText(parts.topLevel);
     await expect(location('예전 봇')).toHaveText(['로어북 › 등대']);
     await expect(results.locator('.helper-change-location code')).toHaveText([
       'extensions/customField',

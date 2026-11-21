@@ -100,6 +100,14 @@ const presetSections: Record<PresetSection, string> = {
   regex: 'native.text_fc7e4f6228',
   collaboration: 'native.text_780d3f6ed3',
 };
+const topLevelFields: Record<string, string> = {
+  title: 'visualpanels.name',
+  description: 'visualpanels.description',
+};
+const storyUiFields: Record<string, string> = {
+  baseStyle: 'storyUi.baseStyle',
+  css: 'storyUi.customCss',
+};
 const NATIVE_PREFIX =
   /^\/(?:package\/nativeRisu\/(?:card|module)|program\/nativeRisuPreset\/preset)(?=\/|$)/u;
 
@@ -123,6 +131,10 @@ function resourceField(path: string[]): LocationPart[] {
             : 'native.text_08117feaa5'
       ),
     ];
+  const [head, field, ...rest] = path;
+  if (head && field === undefined && topLevelFields[head]) return [label(topLevelFields[head])];
+  if (head === 'storyUi' && field && !rest.length && storyUiFields[field])
+    return [label(storyUiFields[field])];
   const relative = pointer.replace(NATIVE_PREFIX, '').split('/').filter(Boolean);
   if (pointer.startsWith('/program/nativeRisuPreset/')) {
     const section = presetSection(pointer);
