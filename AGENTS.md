@@ -4,11 +4,11 @@ Uimori is a single-user, self-hosted creative-writing app. Favor simple, maintai
 
 Carry an implementation request through to a working result, verification that fits the change, and a local commit. Make routine, reversible decisions yourself, state the assumptions behind them, and keep going. Ask only when missing input or authorization would materially change the outcome, and continue independent work while you wait.
 
-Commit finished, verified work locally without asking. Other agent sessions may share this checkout, so commit only the files you changed, naming their paths, and leave other staged or unstaged changes as they are. Get the user's go-ahead before a push, a pull request, a release, or a deployment. Do not ask again for a go-ahead the user already gave for the same action.
+Commit finished, verified work locally without asking. Get the user's go-ahead before a push, a pull request, a release, or a deployment. Do not ask again for a go-ahead the user already gave for the same action.
 
 ## Design judgment
 
-Optimize for correct behavior, local reasoning, and low maintenance and operating costs. Choose the smallest cohesive change that solves the requested problem at its cause. Reuse the logic the codebase already has, and where the change touches duplicated code, consolidate it instead of adding a parallel path. Preserve the behavior that callers and stored user data rely on. Justify new infrastructure against this single-user, self-hosted app's actual needs.
+Optimize for correct behavior, local reasoning, and low maintenance and operating costs. Let the cause of a problem decide the size of the change: fix it where it originates and update the affected callers, even when that takes a refactor. Reuse the logic the codebase already has, and in the area you change, consolidate duplicated code and fix related problems instead of adding a parallel path. Preserve the behavior that callers and stored user data rely on. Justify new infrastructure against this single-user, self-hosted app's actual needs.
 
 Keep business rules and state ownership clear. Keep provider and storage details out of unrelated application policies and UI code. For asynchronous provider and storage operations, account for cancellation, late responses, duplicate effects, and unknown outcomes; preserve user data, credentials, and necessary access boundaries.
 
