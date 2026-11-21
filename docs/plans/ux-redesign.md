@@ -77,19 +77,6 @@
 
 원본의 Wave 1을 0단계에서 4단계로 나눴어요. 각 단계의 항목은 서로 독립이면 따로 커밋해요.
 
-### 7단계. 턴 롤백과 계획 모드
-
-서버 쪽(턴 롤백 API, 계획 모드, 확인 대기와 허가)은 끝났어요. 계약은 [HELPER-TOOLS](../HELPER-TOOLS.md#rolling-back-a-helper-task)의 세 절(턴 롤백, 계획 모드, 확인)에 있어요. 남은 것은 화면이에요.
-
-- 작업 결과에 되돌리기를 넣어요. `GET /api/helper/tasks/:id/rollback`의 단위를 변경 카드에 `changeTargetIds`로 이어 붙이고, 작업 전체와 카드 하나를 되돌릴 수 있게 해요. 대상이 아닌 도메인(채팅 로어, 변수, 설정, 장면 이름, 만들거나 지운 자료)은 대상이 아니라고 밝혀요. `touches`에 걸린 열린 편집기에 미저장 입력이 있으면 되돌리기 전에 막거나 확인해요.
-- 턴 롤백이 막히거나 일부만 되는 경우 그 사유(`status`, `reason`, 번역 삽화 배치 안내)를 보여 줘요. 1단계에서 미룬 사유 표시를 여기서 정해요.
-- 되돌리기가 화면에 들어가면 입력창 위의 "마지막 자료 수정 되돌리기" 바(`web/HelperResourceUndo.tsx`, `web/HelperPanel.tsx`의 사용처, `web/useHelperConversation.ts`의 `lastResourceEdit`와 `resource.edit.undone` 처리)를 지우고, 그다음 서버의 `undo-resource` 경로, 대화 보기의 `lastResourceEdit`, `server/helper-resource-undo.ts`의 `lastHelperResourceEdit`·`undoHelperResourceEdit`와 `resource.edited` 이벤트 기록, `core/helper.ts`의 `HelperResourceEdit` 형식과 `helperResourceEditResources`를 지워요. 이 이벤트는 그 바만 읽어요. 편집기의 직전 저장 되돌리기(`resource_undo`, `/api/resources/:kind/:id/undo`)와 모델의 `resource.undo`는 남겨요.
-- 계획 모드: 입력창에서 요청의 `mode`를 고르고, 계획 작업(`mode: "plan"`)의 답을 계획 카드로 보여 주고, 카드에서 그 계획을 실행하는 일반 요청으로 넘어가요.
-- 도우미 모드 단축키 `Alt+M`을 단축키 표([shortcut-bindings.ts](../../web/shortcut-bindings.ts))에 더해요. 3단계에서는 모드가 없어서 넣지 않았어요.
-- 확인: 작업 결과의 `confirmations` 중 `grantable`인 것을 확인과 거절로 보여 주고, 확인하면 다음 요청에 `confirmations`로 실어 보내요. 거절은 허가 없이 보내는 요청이에요. 설정의 도우미 영역에 유료 생성 확인(`helperConfirmPaidGeneration`) 토글을 넣어요.
-
-남은 검사: 열린 편집기의 미저장 입력과 되돌리기의 상호작용은 브라우저 테스트로 봐요. 서버 저장 경로의 속성 검사와 자산 정리 테스트는 `tests/helper-rollback.test.ts`에 있어요.
-
 ### 8단계. 읽기 모드 퇴고와 메인 상태 표시
 
 - 본문 선택 작업 막대(다듬기, 도우미에게 묻기, 책갈피, 복사)와 그 자리 퇴고를 넣어요. 위 "읽기 모드 퇴고" 불변식을 따라요.
@@ -117,8 +104,6 @@
 
 | 단계 | T3 Code의 위치 | 참고할 점 |
 | --- | --- | --- |
-| 7. 롤백과 되감기 | `apps/server/src/orchestration-v2/CheckpointRollbackService.ts`, `CheckpointRestoreSafety.ts`, `apps/web/src/components/chat/useTimelineRewind.ts` | 대화를 되감는 것과 파일을 복원하는 것을 서로 다른 선택으로 둬요. 안전하게 복원할 수 없으면 거절하고 대화만 되감는 길을 안내해요. 실행 중에는 되돌리기를 막아요. 저장 방식은 git이라 우리와 달라요. |
-| 7. 승인과 계획 모드 | `packages/contracts/src/providerPolicy.ts`, `apps/web/src/components/chat/ProposedPlanCard.tsx`, `apps/web/src/components/chat/ComposerPendingApprovalActions.tsx` | 승인 답을 수락, 이번 대화 동안 수락, 거절, 취소로 나눠요. 긴 계획 카드는 접어요. 쓰기 차단은 프로바이더에 맡기고 있어서, 서버에서 쓰기 도구를 막는 우리 방식의 참고는 아니에요. |
 | 8과 9. 실행 중 입력창 | `apps/web/src/components/chat/ComposerPrimaryActions.tsx`, `QueuedRunsControl.tsx`, `useComposerSend.ts` | 정지 직후 같은 자리에 들어오는 버튼이 잠깐 클릭을 받지 않게 해서, 정지를 연타해도 다시 시작되지 않아요. 후속 입력의 기본 동작(대기 또는 현재 작업에 추가)을 설정으로 두고 수정키로 한 번만 반대로 보내요. |
 | 9. 대상 지정 | 저장소 문서 폴더의 `internals/composer-context-references.md` | 본문에는 링크 형태의 참조만 두고, 참조가 가리키는 내용은 메시지에 딸린 기록으로 따로 보관해요. |
 
