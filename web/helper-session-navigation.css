@@ -4,89 +4,36 @@
   min-height: 0;
   height: 100%;
   min-width: 0;
-  gap: 8px;
 }
-.helper-navigation-modes {
+.helper-navigation > .bot-navigation-header {
   flex: none;
-  margin: 0;
 }
-.helper-navigation-tools {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.helper-navigation-tools > input {
-  flex: 1;
+.helper-navigation-search {
+  flex: none;
+  width: 100%;
   min-width: 0;
-}
-.helper-navigation-sort {
-  flex: 0 1 auto;
-  width: auto;
-  min-width: 0;
-  max-width: 40%;
+  margin-bottom: 8px;
 }
 .helper-navigation-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
 }
 .helper-navigation-tree {
   padding: 0 0 24px;
 }
-.helper-nav-project-heading {
-  display: flex;
-  align-items: center;
-}
-.helper-nav-heading {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 36px;
-  padding: 8px 8px;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-  border-radius: var(--radius-control);
-}
-.helper-nav-heading > svg {
-  flex: none;
-  color: var(--muted);
-}
-.helper-nav-heading span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--font-body);
-  font-weight: 600;
-}
-.helper-nav-row {
-  border-radius: var(--radius-control);
-}
 .helper-nav-row[draggable="true"] {
   cursor: grab;
 }
-.helper-nav-row > .activity-nav-link {
-  min-height: 44px;
-}
-.helper-nav-row:has([aria-current="page"]) {
-  background: var(--nav-item-selected);
-}
-.helper-nav-row > .activity-nav-link > svg:last-child:not(:first-child) {
-  color: var(--accent-text);
-}
-.helper-nav-project-heading > .action-menu,
-.helper-nav-row > .helper-nav-acknowledge {
-  flex: none;
-}
-.helper-nav-project-heading > .action-menu > summary {
-  width: 32px;
-  min-height: 36px;
-  padding: 4px;
-  color: var(--muted);
+.helper-nav-project-contents {
+  display: grid;
+  gap: 1px;
 }
 .helper-nav-unfiled {
+  display: grid;
+  gap: 1px;
   min-height: 8px;
 }
 .helper-navigation-tree > .bot-tree-folder + .helper-nav-unfiled:has(.helper-nav-row) {
@@ -98,30 +45,8 @@
   padding-top: 0;
 }
 @media (max-width: 760px), (pointer: coarse) {
-  .helper-nav-heading,
   .helper-navigation .activity-nav-heading,
-  .helper-navigation .activity-nav-more,
-  .helper-navigation-modes > button,
-  .helper-nav-project-heading > .action-menu > summary,
-  .helper-nav-row > .action-menu > summary,
-  .helper-nav-row > .helper-nav-acknowledge {
+  .helper-navigation .activity-nav-more {
     min-height: 44px;
-  }
-  .helper-nav-project-heading > .action-menu > summary,
-  .helper-nav-row > .action-menu > summary,
-  .helper-nav-row > .helper-nav-acknowledge {
-    min-width: 44px;
-  }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .helper-nav-row,
-  .helper-nav-heading {
-    transition: background-color var(--motion-fast) var(--motion-ease-out);
-  }
-}
-@media (hover: hover) {
-  .helper-nav-row:hover,
-  .helper-nav-heading:hover {
-    background: var(--hover);
   }
 }

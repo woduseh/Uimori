@@ -117,6 +117,12 @@ export const messages = {
     zh: '{count}条未读活动',
   },
   'helperNavigation.sort': { ko: '정렬', en: 'Sort', ja: '並べ替え', zh: '排序' },
+  'helperNavigation.listActions': {
+    ko: '대화 목록 메뉴',
+    en: 'Conversation list menu',
+    ja: '会話リストのメニュー',
+    zh: '对话列表菜单',
+  },
   'helperNavigation.sortRecent': {
     ko: '최근 활동순',
     en: 'Recent activity',
