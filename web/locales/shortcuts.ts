@@ -11,4 +11,16 @@ export const messages = {
     ja: '{key}キーをもう一度押すとアシスタントの作業をキャンセルします。',
     zh: '再按一次 {key} 键即可取消助手任务。',
   },
+  'shortcuts.setting': {
+    ko: '키보드 단축키',
+    en: 'Keyboard shortcuts',
+    ja: 'キーボードショートカット',
+    zh: '键盘快捷键',
+  },
+  'shortcuts.settingHint': {
+    ko: '꺼도 테마 안전 모드({key})는 동작해요.',
+    en: 'Theme safe mode ({key}) still works when this is off.',
+    ja: 'オフにしてもテーマのセーフモード（{key}）は使えます。',
+    zh: '关闭后主题安全模式（{key}）仍可使用。',
+  },
 } as const;

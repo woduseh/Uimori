@@ -30,6 +30,8 @@ import { LoreContextDefaultsEditor } from './LoreContextDefaultsEditor.js';
 import { Fragment, useContext, useEffect, useId, useRef, useState } from 'react';
 import { SessionRequiredContext } from './SessionGate.js';
 import { Dialog } from './Dialog.js';
+import { Switch } from './BooleanControls.js';
+import { setShortcutsEnabled, shortcutLabel, useShortcutsEnabled } from './shortcuts.js';
 import { IconButton } from './IconButton.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { useSettingsHistory } from './useSettingsHistory.js';
@@ -289,7 +291,7 @@ function getSettingsCategories(sessionRequired: boolean): SettingsCategory[] {
       destinations: [
         {
           label: t('chatsettings.m16'),
-          terms: t('chatsettings.m17'),
+          terms: `${t('chatsettings.m17')} ${t('shortcuts.setting')}`,
           anchor: 'display',
         },
         {
@@ -436,6 +438,7 @@ export function AppSettingsPanel({
   const settingsGroupLabels = getSettingsGroupLabels();
   const librarySettingsSubjects = getLibrarySettingsSubjects();
   const [signingOut, setSigningOut] = useState(false);
+  const shortcutsEnabled = useShortcutsEnabled();
   const startTab =
     initialTab && settingsCategories.some((item) => item.key === initialTab)
       ? initialTab
@@ -854,6 +857,23 @@ export function AppSettingsPanel({
                               <option value="enter">Enter</option>
                               <option value="modifier">Ctrl / Cmd + Enter</option>
                             </select>
+                          </span>
+                        </label>
+                        <label className="settings-row settings-row-toggle">
+                          <span className="settings-row-copy">
+                            <strong>{t('shortcuts.setting')}</strong>
+                            <small>
+                              {t('shortcuts.settingHint', {
+                                key: shortcutLabel('theme.safeMode'),
+                              })}
+                            </small>
+                          </span>
+                          <span className="settings-row-control">
+                            <Switch
+                              aria-label={t('shortcuts.setting')}
+                              checked={shortcutsEnabled}
+                              onChange={(event) => setShortcutsEnabled(event.target.checked)}
+                            />
                           </span>
                         </label>
                       </div>

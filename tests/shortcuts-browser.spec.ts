@@ -171,3 +171,64 @@ test('SHORTCUT04 Escape twice cancels the running generation and a lone or post-
   }
   await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeVisible();
 });
+
+test('SHORTCUT05 turning shortcuts off keeps only the Escape behaviour that existed before', async ({
+  page,
+  request,
+}) => {
+  const { chat } = await createReadingChat(request, `단축키 끄기 ${Date.now()}`, 1);
+  await page.goto(`/?chat=${chat.id}`);
+  const shell = page.locator('.app-shell');
+  await page.getByRole('textbox', { name: '다음 장면 요청', exact: true }).click();
+  await page.keyboard.press('Control+Comma');
+  const settings = page.getByRole('dialog', { name: '설정', exact: true });
+  const toggle = settings.getByRole('switch', { name: '키보드 단축키', exact: true });
+  await expect(toggle).toBeChecked();
+  await toggle.uncheck();
+  expect(await page.evaluate(() => localStorage.getItem('uimori:shortcuts'))).toBe('false');
+  await page.keyboard.press('Escape');
+  await expect(settings).toBeHidden();
+
+  await request.post('/api/test/control', { data: { action: 'hold', barrier: 'run' } });
+  let cancels = 0;
+  await page.route('**/api/runs/*/cancel', async (route) => {
+    cancels++;
+    await route.fulfill({ response: await route.fetch() });
+  });
+  try {
+    await page.reload();
+    const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
+    await composer.fill('끈 상태의 요청');
+    await page.getByRole('button', { name: '원문 생성', exact: true }).click();
+    await expect(page.getByRole('button', { name: '원문 생성 취소', exact: true })).toBeVisible();
+    await composer.click();
+    for (const key of ['Control+B', 'Control+K', 'Control+Backslash', 'Control+Shift+F'])
+      await page.keyboard.press(key);
+    await expect(shell).not.toHaveClass(/sidebar-collapsed/);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    expect(cancels).toBe(0);
+    await expect(page.locator('.transient-notice')).toHaveCount(0);
+
+    const scene = page.getByTestId('source').first();
+    await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
+    const editor = scene.locator('.source-text-editor textarea');
+    await editor.fill('버릴지 물어야 하는 초안');
+    await page.keyboard.press('Escape');
+    const discard = page.getByRole('alertdialog');
+    await expect(discard).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(discard).toBeHidden();
+    await expect(editor).toHaveValue('버릴지 물어야 하는 초안');
+
+    const safeMode = () => page.evaluate(() => sessionStorage.getItem('uimori:theme-disabled'));
+    await page.keyboard.press('Control+Period');
+    await expect.poll(safeMode).toBe('1');
+    await page.keyboard.press('Control+Period');
+    await expect.poll(safeMode).toBe('0');
+  } finally {
+    await request.post('/api/test/control', { data: { action: 'release', barrier: 'run' } });
+  }
+});
