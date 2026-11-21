@@ -7,7 +7,7 @@
 }
 .helper-results-sentinel {
   display: block;
-  min-height: 1px;
+  height: 0;
 }
 .helper-result-list {
   list-style: none;
