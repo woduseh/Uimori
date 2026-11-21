@@ -385,3 +385,78 @@ test('RSEL06 the bar is reachable by keyboard and absent in editors', async ({ p
   await page.waitForTimeout(100);
   await expect(bar).toHaveCount(0);
 });
+
+test('RSEL07 a translation arriving after the reader scrolled shows a badge instead of switching', async ({
+  page,
+  request,
+}, info) => {
+  const { chatId, source } = await seed(request, { theme: 'builtin:letter' });
+  const scene = await open(page, chatId, source.id);
+  await expect(scene).toHaveAttribute('data-representation', 'original');
+  await scene.hover();
+  await page.mouse.wheel(0, 200);
+  const saved = await request.put(`/api/sources/${source.id}/translation`, {
+    data: { text: translated, expectedRevision: 0, expectedSourceHash: source.hash },
+  });
+  expect(saved.ok(), await saved.text()).toBe(true);
+  const badge = scene.getByRole('button', { name: '번역이 준비됐어요. 번역 보기', exact: true });
+  await expect(badge).toBeVisible();
+  await expect(scene).toHaveAttribute('data-representation', 'original');
+  await badge.scrollIntoViewIfNeeded();
+  await shot(page, info, 'reader-translation-badge-light');
+  await badge.click();
+  await expect(scene).toHaveAttribute('data-representation', 'translation');
+  await expect(badge).toHaveCount(0);
+});
+
+test('RSEL08 a translation arriving while the reader is still switches and keeps the position', async ({
+  page,
+  request,
+}) => {
+  const { chatId, source } = await seed(request);
+  const scene = await open(page, chatId, source.id, true);
+  const reader = page.locator('[data-reader-scrollport]');
+  await scene.evaluate((node) => {
+    const target = [...node.querySelectorAll<HTMLElement>('[data-block-anchor]')][6];
+    const scrollport = node.closest<HTMLElement>('[data-reader-scrollport]')!;
+    scrollport.scrollTop +=
+      target.getBoundingClientRect().top - scrollport.getBoundingClientRect().top;
+  });
+  const anchor = await reader.evaluate((node) => node.scrollTop);
+  const saved = await request.put(`/api/sources/${source.id}/translation`, {
+    data: { text: translated, expectedRevision: 0, expectedSourceHash: source.hash },
+  });
+  expect(saved.ok(), await saved.text()).toBe(true);
+  await expect(scene).toHaveAttribute('data-representation', 'translation');
+  await expect(scene.getByRole('button', { name: '번역이 준비됐어요. 번역 보기' })).toHaveCount(0);
+  const top = await scene.evaluate((node) => {
+    const target = [...node.querySelectorAll<HTMLElement>('[data-block-anchor]')][6];
+    const scrollport = node.closest<HTMLElement>('[data-reader-scrollport]')!;
+    return target.getBoundingClientRect().top - scrollport.getBoundingClientRect().top;
+  });
+  expect(Math.abs(top)).toBeLessThanOrEqual(24);
+  expect(Math.abs((await reader.evaluate((node) => node.scrollTop)) - anchor)).toBeLessThan(400);
+});
+
+test('RSEL09 an explicit choice of the original is not overridden by an arriving translation', async ({
+  page,
+  request,
+}) => {
+  const { chatId, source } = await seed(request);
+  await page.route(`**/api/sources/${source.id}/translation`, (route) =>
+    route.request().method() === 'POST' ? route.fulfill({ json: {} }) : route.fallback()
+  );
+  const scene = await open(page, chatId, source.id);
+  await scene.getByRole('button', { name: '번역 생성', exact: true }).click();
+  await expect(scene).toHaveAttribute('data-representation', 'translation');
+  await scene.getByRole('button', { name: '원문 보기', exact: true }).click();
+  await expect(scene).toHaveAttribute('data-representation', 'original');
+  const saved = await request.put(`/api/sources/${source.id}/translation`, {
+    data: { text: translated, expectedRevision: 0, expectedSourceHash: source.hash },
+  });
+  expect(saved.ok(), await saved.text()).toBe(true);
+  await expect(scene.getByRole('button', { name: '번역 보기', exact: true })).toBeVisible();
+  await page.waitForTimeout(300);
+  await expect(scene).toHaveAttribute('data-representation', 'original');
+  await expect(scene.getByRole('button', { name: '번역이 준비됐어요. 번역 보기' })).toHaveCount(0);
+});

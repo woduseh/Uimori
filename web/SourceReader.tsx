@@ -221,6 +221,8 @@ function currentAnchor(container: HTMLElement | null): AnchorPosition | undefine
 function translationEditRevision(source: Source, translation?: Job) {
   return translation?.revision ?? source.translationRevision ?? (translation ? 1 : 0);
 }
+const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
+const EDITABLE = 'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
 const retryable = (status: string) =>
   ['failed', 'cancelled', 'partial', 'interrupted'].includes(status);
 const activeJob = (job: Job) => job.status === 'queued' || job.status === 'running';
@@ -291,8 +293,10 @@ function SourceReaderContent({
   storyUiStyle,
 }: ReaderProps) {
   useI18n();
+  const interacted = useRef(false);
   const onRequestEditing = useCallback(
     (editing: boolean) => {
+      if (editing) interacted.current = true;
       onEditingChange?.(`${source.id}:request`, editing);
     },
     [onEditingChange, source.id]
@@ -428,6 +432,8 @@ function SourceReaderContent({
   const appliedTarget = useRef<ReaderTarget | undefined>(undefined);
   const targetTranslationAvailable = !!displayTranslation?.result;
   const translationPreviouslyAvailable = useRef(targetTranslationAvailable);
+  const [translationReady, setTranslationReady] = useState(false);
+  const sceneVisible = useRef(false);
   useEffect(() => {
     const justCompleted = !translationPreviouslyAvailable.current && targetTranslationAvailable;
     translationPreviouslyAvailable.current = targetTranslationAvailable;
@@ -435,9 +441,63 @@ function SourceReaderContent({
     try {
       if (sessionStorage.getItem(`reader-mode:${source.id}`)) return;
       if (localStorage.getItem('uimori:reading-language') === 'original') return;
-      setMode('translation');
-    } catch {}
+    } catch {
+      return;
+    }
+    if (sceneVisible.current && interacted.current) {
+      setTranslationReady(true);
+      return;
+    }
+    restoreAnchor.current = currentAnchor(container.current);
+    setMode('translation');
   }, [readerTarget?.sourceId, source.id, targetTranslationAvailable]);
+  const translationActive = !!translation && activeJob(translation);
+  useEffect(() => {
+    if (translationActive) interacted.current = false;
+  }, [translationActive]);
+  useEffect(() => {
+    const node = container.current;
+    const scrollport = node?.closest<HTMLElement>('[data-reader-scrollport]');
+    if (!node || !scrollport) return;
+    const visibility = new IntersectionObserver(
+      ([entry]) => {
+        sceneVisible.current = entry.isIntersecting;
+      },
+      { root: scrollport }
+    );
+    visibility.observe(node);
+    const mark = () => {
+      if (sceneVisible.current) interacted.current = true;
+    };
+    const key = (event: KeyboardEvent) => {
+      if (
+        SCROLL_KEYS.has(event.key) &&
+        !(event.target instanceof Element && event.target.closest(EDITABLE))
+      )
+        mark();
+    };
+    const scrollbar = (event: PointerEvent) => {
+      if (event.target === scrollport || event.target === themeBodyScroll(node)) mark();
+    };
+    const selected = () => {
+      const selection = getSelection();
+      if (selection && !selection.isCollapsed && node.contains(selection.anchorNode))
+        interacted.current = true;
+    };
+    scrollport.addEventListener('wheel', mark, { passive: true });
+    scrollport.addEventListener('touchmove', mark, { passive: true });
+    scrollport.addEventListener('keydown', key);
+    scrollport.addEventListener('pointerdown', scrollbar);
+    document.addEventListener('selectionchange', selected);
+    return () => {
+      visibility.disconnect();
+      scrollport.removeEventListener('wheel', mark);
+      scrollport.removeEventListener('touchmove', mark);
+      scrollport.removeEventListener('keydown', key);
+      scrollport.removeEventListener('pointerdown', scrollbar);
+      document.removeEventListener('selectionchange', selected);
+    };
+  }, []);
   useLayoutEffect(() => {
     if (appliedTarget.current === readerTarget) return;
     appliedTarget.current = readerTarget;
@@ -449,6 +509,9 @@ function SourceReaderContent({
       );
   }, [readerTarget, source.id, targetTranslationAvailable]);
   const [editor, setEditor] = useState<ReaderMode | null>(null);
+  useEffect(() => {
+    if (editor) interacted.current = true;
+  }, [editor]);
   const editorOrigin = useRef<EditorOrigin | undefined>(undefined);
   const restoreEditor = useRef(false);
   useLayoutEffect(() => () => onEditingChange?.(source.id, false), [onEditingChange, source.id]);
@@ -774,6 +837,7 @@ function SourceReaderContent({
   }, [mode, source.hash, displayTranslation?.translationLayout?.textHash]);
 
   const switchMode = (next: ReaderMode) => {
+    setTranslationReady(false);
     if (next === mode) return;
     restoreAnchor.current = currentAnchor(container.current);
     setMode(next);
@@ -852,6 +916,17 @@ function SourceReaderContent({
       {!sceneEnabled && <span className="scene-badge">{t('reader.excludedFromContext')}</span>}
       {validTranslation?.manual && mode === 'translation' && (
         <span className="scene-badge">{t('reader.manuallyEditedTranslation')}</span>
+      )}
+      {translationReady && mode === 'original' && validTranslation && (
+        <button
+          type="button"
+          className="scene-badge scene-badge-action"
+          aria-label={t('readerTranslation.readyAction')}
+          onClick={() => switchMode('translation')}
+        >
+          <Languages size={14} aria-hidden="true" />
+          {t('readerTranslation.ready')}
+        </button>
       )}
     </>
   );

@@ -77,4 +77,16 @@ export const messages = {
     ja: 'その間に保存済みのテキストが変わったため、保存しませんでした。提案はそのまま残しています。',
     zh: '已保存的文本在此期间已更改，因此未保存。建议仍保留在这里。',
   },
+  'readerTranslation.ready': {
+    ko: '번역이 준비됐어요',
+    en: 'Translation ready',
+    ja: '翻訳ができました',
+    zh: '译文已就绪',
+  },
+  'readerTranslation.readyAction': {
+    ko: '번역이 준비됐어요. 번역 보기',
+    en: 'Translation ready. View translation',
+    ja: '翻訳ができました。翻訳を表示',
+    zh: '译文已就绪。查看译文',
+  },
 };

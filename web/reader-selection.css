@@ -109,3 +109,19 @@
     transition: none;
   }
 }
+.scene-badge-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 0;
+  background: transparent;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: var(--font-small);
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .scene-badge-action:hover {
+    background: var(--hover);
+  }
+}
