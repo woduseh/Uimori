@@ -57,7 +57,11 @@ import {
   retainReaderNavigation,
   type ReaderNavigationPosition,
 } from './reader-navigation-scroll.js';
-import { readOptionalJson, writeOptionalStorage } from './optional-storage.js';
+import {
+  readOptionalJson,
+  removeOptionalStorage,
+  writeOptionalStorage,
+} from './optional-storage.js';
 
 const lastWorkspaceKey = 'uimori:last-workspace';
 function semanticReaderTarget(search: string): ReaderTarget | null {
@@ -160,6 +164,41 @@ function readCommand(key: string): { record: PendingCommand; payload: RunPayload
 function clearCommand(key: string, id: string) {
   if (readCommand(key)?.record.id === id) sessionStorage.removeItem(key);
 }
+export type QueuedRequest = {
+  id: string;
+  chatId: string;
+  text: string;
+  loreContextReset: boolean;
+  runId: string;
+  settingsRevision: number;
+  optionsRevision: number;
+};
+export type QueuedReturnReason =
+  | 'reload'
+  | 'left'
+  | 'incomplete'
+  | 'unknown'
+  | 'settings'
+  | 'options'
+  | 'blocked'
+  | 'confirmation'
+  | 'rejected';
+type QueuedHandoff = {
+  text: string;
+  loreContextReset: boolean;
+  state: 'waiting' | 'confirmation' | 'committed' | 'rejected';
+};
+type ParkedQueue = { text: string; loreContextReset: boolean; reason?: QueuedReturnReason };
+const queuedRequestKey = (chatId: string) => `queued-request:${chatId}`;
+function readParkedQueue(chatId: string): ParkedQueue | null {
+  const value = readOptionalJson('session', queuedRequestKey(chatId), null) as ParkedQueue | null;
+  return value && typeof value.text === 'string' && typeof value.loreContextReset === 'boolean'
+    ? value
+    : null;
+}
+function parkQueue(chatId: string, value: ParkedQueue) {
+  writeOptionalStorage('session', queuedRequestKey(chatId), JSON.stringify(value));
+}
 
 type Position = ReadingPosition;
 function changedParagraphPosition(detail: ReaderDetail, target: ReaderTarget, paragraph: number) {
@@ -232,6 +271,13 @@ export function useStory() {
   const cancelLocks = useRef(new Set<string>());
   const [cancelling, setCancelling] = useState<string[]>([]);
   const [requestActivities, setRequestActivities] = useState<Record<string, RequestActivity>>({});
+  const [queuedRequest, setQueuedRequest] = useState<QueuedRequest | null>(null);
+  const queuedRef = useRef<QueuedRequest | null>(null);
+  const [queueNotice, setQueueNotice] = useState<{ chatId: string; message: string } | null>(null);
+  const queueActions = useRef({
+    restoreParked: (_chatId: string) => {},
+    leave: (_chatId: string, _destination: string) => {},
+  });
   const [connected, setConnected] = useState(false);
   const [nativeInteractionRevision, setNativeInteractionRevision] = useState(0);
   const [profileDirty, setProfileDirty] = useState(false);
@@ -761,7 +807,9 @@ export function useStory() {
         if (alive) setError('입력 초안을 복구하지 못했어요. 브라우저 저장 공간을 확인해 주세요.');
       })
       .finally(() => {
-        if (alive) setDraftReady(true);
+        if (!alive) return;
+        setDraftReady(true);
+        queueActions.current.restoreParked(draftKey.slice('draft:'.length));
       });
     setLoreResetDraft(sessionStorage.getItem(`lore-reset:${draftKey}`) === 'true');
     const cursor = readDraftCursor(`cursor:${draftKey}`);
@@ -1169,7 +1217,8 @@ export function useStory() {
     retryRunId?: string,
     editedRequest?: string,
     judgmentRecovery = false,
-    retryMode?: 'replace' | 'copy'
+    retryMode?: 'replace' | 'copy',
+    queued?: QueuedHandoff
   ): Promise<boolean> {
     if (
       !detail ||
@@ -1186,12 +1235,13 @@ export function useStory() {
     const sentEpoch = navigation.current.epoch;
     const commandKey = commandStorageKey(chat.id);
     const previous = readCommand(commandKey);
+    if (queued && previous) return false;
     if ((!previous && activeRun()) || (retryRunId && (reuseBlocked || !canReuseRun(retryRunId))))
       return false;
     if (
       !draftReady ||
       decoding.current ||
-      (!previous && !retryRun && !composerDraft.read().trim() && !draftImages.length)
+      (!previous && !retryRun && !queued && !composerDraft.read().trim() && !draftImages.length)
     )
       return false;
     if (
@@ -1200,13 +1250,17 @@ export function useStory() {
       !retryRun?.snapshot.requestImages?.length
     )
       return false;
-    const sentDraftToken = previous
-      ? (previous.record.draftToken ??
-        (requestDraft.current.text === previous.payload.request ? requestDraft.current.token : ''))
-      : requestDraft.current.token;
-    const sentImages = requestDraft.current.images;
+    const sentDraftToken = queued
+      ? ''
+      : previous
+        ? (previous.record.draftToken ??
+          (requestDraft.current.text === previous.payload.request
+            ? requestDraft.current.token
+            : ''))
+        : requestDraft.current.token;
+    const sentImages = queued ? [] : requestDraft.current.images;
     const payload: RunPayload = previous?.payload ?? {
-      request: editedRequest ?? retryRun?.request ?? composerDraft.read(),
+      request: editedRequest ?? retryRun?.request ?? queued?.text ?? composerDraft.read(),
       ...(editedRequest !== undefined ? { editedRequest: true } : {}),
       ...(retryRun
         ? {
@@ -1215,46 +1269,58 @@ export function useStory() {
             ...(judgmentRecovery ? { judgmentRecovery: true as const } : {}),
           }
         : {}),
-      ...((retryRun ? retryRun.snapshot.loreContextReset : loreResetDraft)
+      ...((
+        retryRun
+          ? retryRun.snapshot.loreContextReset
+          : queued
+            ? queued.loreContextReset
+            : loreResetDraft
+      )
         ? { loreContextReset: true }
         : {}),
       expectedRevision: chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
       ...(detail.profile ? { expectedProfileRevision: detail.profile.revision } : {}),
     };
-    const sentTranslationId = inputTranslation.beginSend();
+    const sentTranslationId = queued ? undefined : inputTranslation.beginSend();
     if (!previous && !payload.judgmentRecovery) {
-      const proceed = await codexWarning.check(
-        `/chats/${chat.id}/codex-content-preflight`,
-        {
-          role: 'main',
-          text: payload.request,
-          ...((payload.requestImages?.length ??
-          retryRun?.snapshot.requestImages?.length ??
-          sentImages.length)
-            ? {
-                imageCount:
-                  payload.requestImages?.length ??
-                  retryRun?.snapshot.requestImages?.length ??
-                  sentImages.length,
-              }
-            : {}),
-          ...(payload.retryOf ? { retryRunId: payload.retryOf } : {}),
-        },
-        'main'
-      );
-      if (!proceed) return false;
+      const preflightPath = `/chats/${chat.id}/codex-content-preflight`;
+      const preflight = {
+        role: 'main',
+        text: payload.request,
+        ...((payload.requestImages?.length ??
+        retryRun?.snapshot.requestImages?.length ??
+        sentImages.length)
+          ? {
+              imageCount:
+                payload.requestImages?.length ??
+                retryRun?.snapshot.requestImages?.length ??
+                sentImages.length,
+            }
+          : {}),
+        ...(payload.retryOf ? { retryRunId: payload.retryOf } : {}),
+      };
+      if (queued) {
+        if (await codexWarning.needsConfirmation(preflightPath, preflight)) {
+          queued.state = 'confirmation';
+          return false;
+        }
+      } else if (!(await codexWarning.check(preflightPath, preflight, 'main'))) return false;
+      const draftChanged =
+        !retryRun &&
+        !queued &&
+        (requestDraft.current.token !== sentDraftToken ||
+          draftIdentity.current.text !== payload.request ||
+          loreResetDraftRef.current !== (payload.loreContextReset === true));
       if (
         currentView.current !== sentView ||
-        navigation.current.epoch !== sentEpoch ||
-        (!retryRun && requestDraft.current.token !== sentDraftToken) ||
-        (!retryRun && draftIdentity.current.text !== payload.request) ||
-        (!retryRun && loreResetDraftRef.current !== (payload.loreContextReset === true))
+        (!queued && navigation.current.epoch !== sentEpoch) ||
+        draftChanged
       )
         return false;
     }
     if (submitLocks.current.has(sentView)) return false;
-    const preserveDraft = !!retryRun || previous?.record.preserveDraft === true;
+    const preserveDraft = !!retryRun || !!queued || previous?.record.preserveDraft === true;
     const idempotencyKey = previous?.record.id ?? crypto.randomUUID();
     const startedAt = previous?.record.startedAt ?? new Date().toISOString();
     const track = (
@@ -1314,6 +1380,10 @@ export function useStory() {
           ...(preserveDraft ? { preserveDraft: true } : {}),
         })
       );
+      if (queued) {
+        removeOptionalStorage('session', queuedRequestKey(chat.id));
+        queued.state = 'committed';
+      }
     } catch (cause) {
       submitLocks.current.delete(sentView);
       setSubmitting([...submitLocks.current]);
@@ -1394,6 +1464,7 @@ export function useStory() {
         !!previous && error instanceof ApiError && [404, 409].includes(error.status)
       );
       if (!unresolved) clearCommand(commandKey, idempotencyKey);
+      if (!unresolved && queued) queued.state = 'rejected';
       if (currentView.current === sentView)
         setError(error instanceof Error ? error : '요청이 접수됐는지 확인하지 못했어요.');
     }
@@ -1717,6 +1788,163 @@ export function useStory() {
     }
   }
 
+  function returnQueueToDraft(
+    chatId: string,
+    queue: Pick<ParkedQueue, 'text' | 'loreContextReset'>,
+    reason: QueuedReturnReason | null
+  ) {
+    if (currentDraftKey.current !== `draft:${chatId}`) {
+      parkQueue(chatId, {
+        text: queue.text,
+        loreContextReset: queue.loreContextReset,
+        ...(reason ? { reason } : {}),
+      });
+      return;
+    }
+    const current = composerDraft.read();
+    editDraft(current.trim() ? `${queue.text}\n\n${current}` : queue.text);
+    if (queue.loreContextReset) editLoreContextReset(true);
+    removeOptionalStorage('session', queuedRequestKey(chatId));
+    setQueueNotice(reason ? { chatId, message: `main.queueReturned.${reason}` } : null);
+  }
+  function takeQueue() {
+    const queue = queuedRef.current;
+    queuedRef.current = null;
+    setQueuedRequest(null);
+    return queue;
+  }
+  queueActions.current = {
+    restoreParked: (chatId) => {
+      if (queuedRef.current?.chatId === chatId) return;
+      const parked = readParkedQueue(chatId);
+      if (parked) returnQueueToDraft(chatId, parked, parked.reason ?? 'reload');
+    },
+    leave: (chatId, target) => {
+      const queue = queuedRef.current;
+      if (!queue || (queue.chatId === chatId && target === 'story')) return;
+      takeQueue();
+      returnQueueToDraft(queue.chatId, queue, 'left');
+    },
+  };
+  useEffect(() => {
+    queueActions.current.leave(selected, destination);
+  }, [selected, destination]);
+  const queueing = useRef(false);
+  async function queueRequest() {
+    const run = activeRun();
+    if (
+      !detail ||
+      detail.chat.id !== selected ||
+      !run ||
+      !draftReady ||
+      decoding.current ||
+      queueing.current ||
+      submitLocks.current.has(viewKey) ||
+      readCommand(commandStorageKey(selected))
+    )
+      return false;
+    if (queuedRef.current) {
+      setQueueNotice({ chatId: selected, message: 'main.queueExists' });
+      return false;
+    }
+    if (requestDraft.current.images.length) {
+      setQueueNotice({ chatId: selected, message: 'main.queueImages' });
+      return false;
+    }
+    const text = composerDraft.read();
+    if (!text.trim()) return false;
+    const chatId = selected;
+    const token = requestDraft.current.token;
+    const loreContextReset = loreResetDraft;
+    queueing.current = true;
+    let optionsRevision: number;
+    try {
+      optionsRevision = (await api<ChatOptionState>(`/chats/${encodeURIComponent(chatId)}/options`))
+        .revision;
+    } catch {
+      setQueueNotice({ chatId, message: 'main.queueUnchecked' });
+      return false;
+    } finally {
+      queueing.current = false;
+    }
+    if (
+      navigation.current.chat !== chatId ||
+      requestDraft.current.token !== token ||
+      loreResetDraftRef.current !== loreContextReset ||
+      queuedRef.current
+    )
+      return false;
+    const queue: QueuedRequest = {
+      id: crypto.randomUUID(),
+      chatId,
+      text,
+      loreContextReset,
+      runId: run.id,
+      settingsRevision: detail.chat.settingsRevision,
+      optionsRevision,
+    };
+    inputTranslation.accepted(draftKey, inputTranslation.beginSend());
+    parkQueue(chatId, { text, loreContextReset });
+    editDraft('');
+    if (loreContextReset) editLoreContextReset(false);
+    queuedRef.current = queue;
+    setQueuedRequest(queue);
+    setQueueNotice(null);
+    return true;
+  }
+  function cancelQueuedRequest() {
+    const queue = takeQueue();
+    if (queue) returnQueueToDraft(queue.chatId, queue, null);
+  }
+  const latestGenerate = useRef(generate);
+  latestGenerate.current = generate;
+  async function sendQueuedRequest(blocked: boolean) {
+    const queue = takeQueue();
+    if (!queue) return;
+    const giveBack = (reason: QueuedReturnReason) =>
+      returnQueueToDraft(queue.chatId, queue, reason);
+    const here = () =>
+      navigation.current.chat === queue.chatId && navigation.current.destination === 'story';
+    if (!here()) return giveBack('left');
+    let status: string;
+    try {
+      status = (await api<{ status: string }>(`/runs/${encodeURIComponent(queue.runId)}`)).status;
+    } catch {
+      return giveBack('unknown');
+    }
+    if (status !== 'completed') return giveBack('incomplete');
+    if (blocked) return giveBack('blocked');
+    const chat = readerCache.current?.detail.chat;
+    if (!here() || chat?.id !== queue.chatId) return giveBack('left');
+    if (chat.settingsRevision !== queue.settingsRevision) return giveBack('settings');
+    let options: ChatOptionState;
+    try {
+      options = await api<ChatOptionState>(`/chats/${encodeURIComponent(queue.chatId)}/options`);
+    } catch {
+      return giveBack('unknown');
+    }
+    if (options.revision !== queue.optionsRevision) return giveBack('options');
+    if (!here()) return giveBack('left');
+    const handoff: QueuedHandoff = {
+      text: queue.text,
+      loreContextReset: queue.loreContextReset,
+      state: 'waiting',
+    };
+    const accepted = await latestGenerate.current(undefined, undefined, false, undefined, handoff);
+    if (handoff.state === 'committed') {
+      if (accepted && navigation.current.chat === queue.chatId)
+        setNotice(uiMessage('main.queueSent'));
+      return;
+    }
+    giveBack(
+      handoff.state === 'rejected'
+        ? 'rejected'
+        : handoff.state === 'confirmation'
+          ? 'confirmation'
+          : 'blocked'
+    );
+  }
+
   const allContents = [...(library?.contents ?? []), ...archivedContents];
   const attachmentsReady =
     !!detail?.profile &&
@@ -1841,6 +2069,12 @@ export function useStory() {
     submitting,
     attachmentsReady,
     pendingRequest,
+    queuedRequest: queuedRequest?.chatId === selected ? queuedRequest : null,
+    queueRequest,
+    cancelQueuedRequest,
+    sendQueuedRequest,
+    queueNotice: queueNotice?.chatId === selected ? queueNotice.message : null,
+    dismissQueueNotice: () => setQueueNotice(null),
     pendingEditedRunId,
     forgetPendingRequest,
     loreContextReset,

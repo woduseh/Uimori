@@ -97,6 +97,7 @@ import {
   Eye,
   GitFork,
   ImagePlus,
+  ListEnd,
   ListTree,
   Maximize,
   Menu,
@@ -423,6 +424,8 @@ function App() {
       s.submitting.includes(s.viewKey)
     )
       return false;
+    if (s.active && !s.pendingProfile && !s.pendingRequest && !checkingEditedRequest)
+      return s.queueRequest();
     if (s.pendingProfile || s.pendingRequest) {
       setProfileSaveError('');
       setProfileConflict(null);
@@ -740,6 +743,35 @@ function App() {
       : s.persona
         ? t('main.persona', { persona: s.persona.title })
         : '';
+  const [pageVisible, setPageVisible] = useState(() => !document.hidden);
+  useEffect(() => {
+    const update = () => setPageVisible(!document.hidden);
+    document.addEventListener('visibilitychange', update);
+    return () => document.removeEventListener('visibilitychange', update);
+  }, []);
+  const queuedRunEnded =
+    !!s.queuedRequest &&
+    s.detail?.chat.id === s.queuedRequest.chatId &&
+    s.active?.id !== s.queuedRequest.runId;
+  const queueBlocked =
+    optionsBusy ||
+    optionsDirty ||
+    sourceEditing ||
+    s.profileDirty ||
+    s.quickBusy ||
+    s.pendingProfile ||
+    !!s.pendingRequest ||
+    !!currentRequestDecision ||
+    s.submitting.includes(s.viewKey) ||
+    !!s.codexWarning.warning ||
+    !s.draftReady ||
+    !!s.draftRecovery ||
+    (!testMode && !mainAvailable) ||
+    !promptAvailable;
+  const sendQueuedRequest = s.sendQueuedRequest;
+  useEffect(() => {
+    if (queuedRunEnded && pageVisible) void sendQueuedRequest(queueBlocked);
+  }, [queuedRunEnded, pageVisible, queueBlocked, sendQueuedRequest]);
   const composerStatus = [
     s.pendingRequest && !s.submitting.includes(s.viewKey) ? t('main.m020') : '',
     s.cancelling ? t('main.m021') : '',
@@ -2418,6 +2450,32 @@ function App() {
                     </button>
                   </div>
                 )}
+                {s.queueNotice && !sourceEditing && (
+                  <p className="composer-status fork-notice queue-notice" role="status">
+                    <span>{t(s.queueNotice)}</span>
+                    <IconButton
+                      label={t('main.m099')}
+                      icon={X}
+                      size={14}
+                      className="fork-notice-close"
+                      onClick={s.dismissQueueNotice}
+                    />
+                  </p>
+                )}
+                {s.queuedRequest && !sourceEditing && (
+                  <div className="queued-request" role="group" aria-label={t('main.queuedTitle')}>
+                    <ListEnd size={14} aria-hidden="true" />
+                    <span className="queued-request-label">{t('main.queuedTitle')}</span>
+                    <span className="queued-request-text">{s.queuedRequest.text}</span>
+                    <IconButton
+                      label={t('main.queuedCancel')}
+                      icon={X}
+                      size={14}
+                      className="fork-notice-close"
+                      onClick={s.cancelQueuedRequest}
+                    />
+                  </div>
+                )}
                 <ChatComposer
                   hidden={sourceEditing}
                   onSubmit={(event) => {
@@ -2488,7 +2546,7 @@ function App() {
                     onSelect={s.rememberCursor}
                     onChange={(event) => s.editDraft(event.target.value)}
                     onSend={() => {
-                      if (!s.active || s.pendingRequest) void submitRequest();
+                      void submitRequest();
                     }}
                     placeholder={
                       compact
@@ -2670,18 +2728,36 @@ function App() {
                       )}
                   </div>
                   {s.active && !s.pendingRequest ? (
-                    <button
-                      key="cancel"
-                      type="button"
-                      className="send-button"
-                      aria-label={s.cancelling ? t('main.m127') : t('main.m128')}
-                      title={s.cancelling ? t('main.m021') : t('main.m129')}
-                      disabled={s.cancelling}
-                      aria-busy={s.cancelling}
-                      onClick={() => void s.cancelActive()}
-                    >
-                      <Square size={18} />
-                    </button>
+                    <div className="send-actions">
+                      {!draftEmpty && !s.queuedRequest && (
+                        <button
+                          key="queue"
+                          className="send-button queue-button"
+                          aria-label={t('main.queueButton')}
+                          title={t('main.queueButton')}
+                          disabled={
+                            optionsBusy ||
+                            s.submitting.includes(s.viewKey) ||
+                            !s.draftReady ||
+                            s.imagesDecoding
+                          }
+                        >
+                          <ListEnd size={18} />
+                        </button>
+                      )}
+                      <button
+                        key="cancel"
+                        type="button"
+                        className="send-button"
+                        aria-label={s.cancelling ? t('main.m127') : t('main.m128')}
+                        title={s.cancelling ? t('main.m021') : t('main.m129')}
+                        disabled={s.cancelling}
+                        aria-busy={s.cancelling}
+                        onClick={() => void s.cancelActive()}
+                      >
+                        <Square size={18} />
+                      </button>
+                    </div>
                   ) : (
                     <button
                       key="send"

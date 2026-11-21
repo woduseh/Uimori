@@ -65,9 +65,18 @@ export function useCodexContentWarning() {
     });
   }
 
+  async function needsConfirmation(path: string, body: unknown): Promise<boolean> {
+    try {
+      return (await api<CodexContentPreflightResult>(path, body, 'POST')).warning;
+    } catch {
+      return false;
+    }
+  }
+
   return {
     warning,
     check,
+    needsConfirmation,
     continueRequest: () => settle(true),
     cancelRequest: () => settle(false),
   };
