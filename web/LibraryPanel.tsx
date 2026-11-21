@@ -1461,10 +1461,11 @@ function ContentEditor({
       setPlacing(false);
     }
   }
+  const saveButton = useRef<HTMLButtonElement>(null);
   useEditorSaveCommand(shared.session, () => saveContent());
   if (!state.ready) return <ResourceEditorStatus value={shared} />;
   return (
-    <ResourceEditorProvider value={shared}>
+    <ResourceEditorProvider value={shared} saveButton={saveButton}>
       <section
         className="library-detail library-content-editor"
         aria-label={t('library.resourceDetails')}
@@ -1483,6 +1484,7 @@ function ContentEditor({
           <div className="library-detail-actions">
             <ResourceEditorActions value={shared} hideSyncError />
             <SaveButton
+              ref={saveButton}
               type={state.creationPending ? 'button' : 'submit'}
               form={formId}
               className="primary native-editor-save"

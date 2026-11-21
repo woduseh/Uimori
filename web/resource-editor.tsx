@@ -14,6 +14,7 @@ import {
   useSyncExternalStore,
   type Dispatch,
   type ReactNode,
+  type RefObject,
   type SetStateAction,
 } from 'react';
 import type { EditorContext, ResourceModel } from '../core/resource-editing.js';
@@ -94,14 +95,14 @@ export function useEditorSaveCommand(session: ResourceEditorSession, save: () =>
     };
   }, [session]);
 }
-function saveEditor(session: ResourceEditorSession | null) {
+export const saveActiveEditor = () => {
+  const session = activeSession();
   if (session?.snapshot().conflict && !session.snapshot().creationPending) {
     requestResourceConflictReview(session);
     return Promise.resolve(false);
   }
   return (session && saveCommands.get(session)?.()) || Promise.resolve(false);
-}
-export const saveActiveEditor = () => saveEditor(activeSession());
+};
 
 type ResourceEditorValue = {
   session: ResourceEditorSession;
@@ -215,16 +216,19 @@ function SavedResourcePreview({ model }: { model: ResourceModel }) {
 }
 export function ResourceEditorProvider({
   value,
+  saveButton,
   children,
 }: {
   value: ResourceEditorValue;
+  saveButton?: RefObject<HTMLButtonElement | null>;
   children: ReactNode;
 }) {
   useI18n();
   const [reviewOpen, setReviewOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
-  useShortcut('editor.save', () => void saveEditor(value.session).catch(() => {}), {
+  useShortcut('editor.save', () => saveButton?.current?.click(), {
     scope: root,
+    active: !!saveButton,
   });
   useEffect(() => {
     const review = (event: Event) => {

@@ -98,7 +98,8 @@ export function RequestMessage({
   const input = useRef<HTMLTextAreaElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const editor = useRef<HTMLFormElement>(null);
-  useShortcut('editor.save', () => editor.current?.requestSubmit(), {
+  const saveButton = useRef<HTMLButtonElement>(null);
+  useShortcut('editor.save', () => saveButton.current?.click(), {
     scope: editor,
     active: editing && !!onSave && !onConfirm,
   });
@@ -232,6 +233,7 @@ export function RequestMessage({
                         ? t('reader.saveInput')
                         : t('reader.sendEditedRequest')
                 }
+                ref={saveButton}
                 type="submit"
                 className="primary"
                 disabled={busy || (!onConfirm && (disabled || (!draft.trim() && !images?.length)))}

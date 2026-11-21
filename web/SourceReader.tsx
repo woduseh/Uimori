@@ -1782,7 +1782,8 @@ function TextEditor({
   const busy = useRef(false);
   const input = useRef<HTMLTextAreaElement>(null);
   const form = useRef<HTMLFormElement>(null);
-  useShortcut('editor.save', () => form.current?.requestSubmit(), { scope: form });
+  const saveButton = useRef<HTMLButtonElement>(null);
+  useShortcut('editor.save', () => saveButton.current?.click(), { scope: form });
   useLayoutEffect(() => {
     const field = input.current;
     field?.focus({ preventScroll: true });
@@ -1932,6 +1933,7 @@ function TextEditor({
           onClick={cancel}
         />
         <IconButton
+          ref={saveButton}
           icon={Save}
           className="primary"
           label={saving ? t('reader.saving') : t('reader.saveValue', { v0: title })}

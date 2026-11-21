@@ -260,6 +260,7 @@ export function PromptEditor({
       setPlacing(false);
     }
   }
+  const saveButton = useRef<HTMLButtonElement>(null);
   useEditorSaveCommand(session, () => {
     if (
       [...cache.current.values()].some(
@@ -274,6 +275,7 @@ export function PromptEditor({
     <div className="prompt-save-actions">
       <div className="prompt-save-buttons">
         <SaveButton
+          ref={saveButton}
           type="button"
           label={t(state.creationPending ? 'main.m130' : 'prompts.uiSavePreset')}
           text={state.creationPending ? t('main.m130') : undefined}
@@ -410,7 +412,7 @@ export function PromptEditor({
     </div>
   );
   return (
-    <ResourceEditorProvider value={shared}>
+    <ResourceEditorProvider value={shared} saveButton={saveButton}>
       <section
         className="prompt-editor"
         data-testid="prompt-editor"

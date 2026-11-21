@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { DESKTOP_HEIGHT, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
+import { isResourceSaveRequest } from './fixtures/resource-save.js';
+import { navigationAction } from './ui-navigation.js';
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
@@ -111,6 +113,9 @@ test('SHORTCUT03 Ctrl+S saves the focused source editor and nothing else', async
   const scene = page.getByTestId('source');
   await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
   const editor = scene.locator('.source-text-editor textarea');
+  await editor.fill('');
+  await page.keyboard.press('Control+S');
+  await expect(editor).toBeVisible();
   await editor.fill('단축키로 저장한 원문.');
   await page.keyboard.press('Control+S');
   await expect(editor).toHaveCount(0);
@@ -297,4 +302,39 @@ test('SHORTCUT06 the command palette opens a chat, a settings section and manusc
   await page.keyboard.press('Escape');
   await expect(search).toBeHidden();
   await expect(composer).toBeFocused();
+});
+
+test('SHORTCUT07 Ctrl+S in the prompt editor shows what clicking save shows while another role has a draft', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await navigationAction(page, '프롬프트');
+  await page.getByRole('button', { name: '새 프롬프트', exact: true }).first().click();
+  const editor = page.getByTestId('prompt-editor');
+  const title = editor.getByLabel('프롬프트 이름', { exact: true });
+  const role = editor.getByLabel('프롬프트 역할', { exact: true });
+  const suffix = Date.now();
+  await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await title.fill(`단축키 집필 ${suffix}`);
+  await role.selectOption('translation');
+  await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await title.fill(`단축키 번역 ${suffix}`);
+  const saves: string[] = [];
+  page.on('request', (value) => {
+    if (isResourceSaveRequest(value)) saves.push(value.url());
+  });
+  const saved = page.locator('.transient-notice', { hasText: '프롬프트를 저장했어요.' });
+
+  await title.click();
+  await page.keyboard.press('Control+S');
+  await expect(saved).toBeVisible();
+  await expect.poll(() => saves.length).toBe(1);
+
+  await role.selectOption('main');
+  await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await expect(title).toHaveValue(`단축키 집필 ${suffix}`);
+  await expect(saved).toBeHidden();
+  await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
+  await expect(saved).toBeVisible();
+  await expect.poll(() => saves.length).toBe(2);
 });
