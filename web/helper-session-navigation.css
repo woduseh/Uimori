@@ -97,7 +97,7 @@
 .helper-activity-navigation {
   padding-top: 0;
 }
-@media (max-width: 767px), (pointer: coarse) {
+@media (max-width: 760px), (pointer: coarse) {
   .helper-nav-heading,
   .helper-navigation .activity-nav-heading,
   .helper-navigation .activity-nav-more,

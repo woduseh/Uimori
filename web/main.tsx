@@ -423,7 +423,7 @@ function App() {
   };
   const openWorkspaceSearch = () => {
     if (!helperWorkspaceOpen) return openChatSearch();
-    if (viewportWidth < 768) setPanel('navigation');
+    if (compact) setPanel('navigation');
     else setSidebarCollapsed(false);
     setHelperSearchRequest((value) => value + 1);
   };
@@ -1002,7 +1002,7 @@ function App() {
     setWorkspacePanel((value) => (value === 'helper' ? null : value));
   }, []);
   useShortcut('navigation.toggle', () => {
-    if (viewportWidth >= 768) toggleSidebar();
+    if (!compact) toggleSidebar();
     else setPanel('navigation');
   });
   useShortcut('rightPanel.toggle', () => {
@@ -1162,7 +1162,7 @@ function App() {
       helperExpanded={helperWorkspaceOpen}
       onHelperActivity={showHelperActivity}
       helperNavigationRef={
-        (quickActions ? viewportWidth >= 768 && panel !== 'navigation' : panel === 'navigation')
+        (quickActions ? !compact && panel !== 'navigation' : panel === 'navigation')
           ? setHelperNavigationHost
           : undefined
       }

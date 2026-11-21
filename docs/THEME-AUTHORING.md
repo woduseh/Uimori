@@ -245,6 +245,7 @@ CSS 작성 시 안정적으로 참조할 수 있는 데이터 속성은 다음�
 ```
 
 - 테마 상태 셀렉터: `html[data-theme="light"|"dark"]`는 명암 모드, `html[data-uimori-theme]`는 실제 테마 ID예요. 저장 ID에 디자인을 하드코딩하지 마세요. 내부 클래스도 앱 CSS에서 사용할 수 있지만 공식 표식보다 변경에 민감해요.
+- 화면 폭: 앱은 화면 폭 760px 이하에서 좁은 레이아웃(사이드바 대신 메뉴 버튼, 전체 폭 패널)으로, 600px 이하에서 메뉴를 바텀시트로 바꿔요. 내장 레이아웃도 `@media (max-width: 760px)`를 써요. 테마의 `@media`를 이 값에 맞추면 앱과 같은 폭에서 함께 바뀌어요.
 - Risu 본문 내부 셀렉터: `.risu-message-content`, `.risu-chat-text`, `[data-uimori-prose]`를 활용할 수 있어요 (`body`나 `html` 선택자를 메시지 문서로 재해석하지 않아요).
 - 이전 사용자 테마 호환성을 위해 Reader 공통 영역의 `[data-uimori-part="gallery"]`도 유지돼요 (기본은 숨김 상태이며 테마에서 표시 가능).
 

@@ -296,7 +296,7 @@
   color: var(--text);
   background: var(--panel);
 }
-@media (max-width: 767px), (pointer: coarse) {
+@media (max-width: 760px), (pointer: coarse) {
   .helper-context-chip:has(> .helper-chip-dismiss) {
     padding-block: 0;
     padding-inline-end: 0;
@@ -564,7 +564,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
-@media (max-width: 767px) {
+@media (max-width: 760px) {
   .panel-overlay > .helper-panel {
     width: 100vw;
     border-left: 0;
@@ -740,7 +740,7 @@
 .helper-has-navigation .helper-session-picker {
   display: none;
 }
-@media (max-width: 767px) {
+@media (max-width: 760px) {
   .helper-has-navigation .helper-session-title {
     display: none;
   }

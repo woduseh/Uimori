@@ -377,7 +377,7 @@
 .illustration-task svg {
   flex: none;
 }
-@media (max-width: 767px), (pointer: coarse) {
+@media (max-width: 760px), (pointer: coarse) {
   .illustration-toolbar button,
   .illustration-actions button,
   .illustration-actions .quiet,
