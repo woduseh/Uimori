@@ -31,6 +31,11 @@ import {
 } from './helper-attachments.js';
 import { imageDataHashes, pruneUnusedData } from './unused-data.js';
 import { helperRequestContext } from './helper-context.js';
+import {
+  forgetHelperConversationRead,
+  HELPER_ACTIVITY_EVENT_KINDS,
+  HELPER_READ_PREFIX,
+} from './helper-read-state.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
@@ -327,9 +332,10 @@ export class HelperWorkspace {
             'queued',COALESCE(SUM(status='queued'),0)) FROM helper_tasks WHERE conversation_id=c.id) AS activity,
           (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id) AS latest_seq,
           (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id
-            AND kind IN ('task.completed','task.failed','task.cancelled','task.interrupted')) AS latest_activity_seq,
+            AND kind IN ${HELPER_ACTIVITY_EVENT_KINDS}) AS latest_activity_seq,
+          COALESCE((SELECT CAST(value AS INTEGER) FROM app_metadata WHERE key=? || c.id),0) AS read_activity_seq,
           (SELECT t.status FROM helper_events e JOIN helper_tasks t ON t.id=e.task_id
-            WHERE e.conversation_id=c.id AND e.kind IN ('task.completed','task.failed','task.cancelled','task.interrupted')
+            WHERE e.conversation_id=c.id AND e.kind IN ${HELPER_ACTIVITY_EVENT_KINDS}
             ORDER BY e.seq DESC LIMIT 1) AS last_task_status,
           COALESCE((SELECT MAX(updated_at) FROM helper_tasks WHERE conversation_id=c.id),c.created_at) AS last_activity_at,
           (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id AND kind='messages.changed') AS history_revision
@@ -338,7 +344,7 @@ export class HelperWorkspace {
         WHERE ${scope.kind === 'all' ? '1' : scope.kind === 'library' ? 'c.chat_id IS NULL' : 'c.chat_id=?'}
         ORDER BY last_activity_at DESC,c.rowid DESC`
       )
-      .all(...(scope.kind === 'chat' ? [scope.chatId] : []));
+      .all(HELPER_READ_PREFIX, ...(scope.kind === 'chat' ? [scope.chatId] : []));
     return rows.map((row) => ({
       ...conversationData(row),
       projectId: row.group_id === null ? null : String(row.group_id),
@@ -348,6 +354,7 @@ export class HelperWorkspace {
       activity: JSON.parse(String(row.activity)),
       latestEventSeq: Number(row.latest_seq),
       latestActivityEventSeq: Number(row.latest_activity_seq),
+      readActivityEventSeq: Number(row.read_activity_seq),
       ...(row.last_task_status ? { lastTaskStatus: row.last_task_status as HelperStatus } : {}),
       lastActivityAt: String(row.last_activity_at),
     }));
@@ -434,6 +441,7 @@ export class HelperWorkspace {
         .all(id)
         .map((row) => String(row.attempt_id));
       detachAttemptUsage(this.store.db, attemptIds);
+      forgetHelperConversationRead(this.store, id);
       this.store.db.prepare('DELETE FROM helper_conversations WHERE id=?').run(id);
       pruneUnusedData(this.store.db, attachmentImages);
       pruneUnusedHelperFiles(this.store.db);

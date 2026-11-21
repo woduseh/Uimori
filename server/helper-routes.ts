@@ -5,6 +5,7 @@ import type { HelperRuntime } from './helper-runtime.js';
 import { lastHelperResourceEdit, undoHelperResourceEdit } from './helper-resource-undo.js';
 import { readHelperActivity } from './helper-activity.js';
 import { readHelperTaskResults } from './helper-task-results.js';
+import { markHelperConversationRead } from './helper-read-state.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import { HELPER_PERSONA_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { requestImageUploads } from './request-images.js';
@@ -149,6 +150,15 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
           ? {}
           : { persona: text(body.persona, 'helper persona', HELPER_PERSONA_MAX_CHARS, true) }),
       }
+    );
+  });
+  app.post<{ Params: { id: string } }>('/api/helper/conversations/:id/read', (request) => {
+    const body = record(request.body);
+    fields(body, ['activityEventSeq']);
+    return markHelperConversationRead(
+      runtime.store,
+      request.params.id,
+      number(body.activityEventSeq, 'activity event sequence', 0, Number.MAX_SAFE_INTEGER)
     );
   });
   app.get<{ Params: { id: string } }>('/api/helper/conversations/:id/deletion', (request) =>

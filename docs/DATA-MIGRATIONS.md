@@ -107,4 +107,5 @@ Uimori 개인 작업실 데이터베이스의 현재 스키마 버전, 보관 �
 - **메타데이터 키 규약 (`app_metadata`)**:
   - `source-title:<sourceId>`: 선택적인 장면 이름 저장
   - `illustration-presentation:<sourceId>`: 문단 삽화의 대표/표시 선택 및 번역 위치 보관
+  - `helper-read:v1:<conversationId>`: 도우미 대화에서 확인한 마지막 작업 결과 이벤트 순번. 새 키라서 기존 DB를 바꾸지 않고, 이전 앱은 이 키를 읽지 않아요.
 - **도우미 호출 한도 인터페이스**: `HelperLimits`는 `totalCalls`와 `helperCalls` 두 필드만 사용하며, 폐기된 `artifacts` 필드는 제외돼요.

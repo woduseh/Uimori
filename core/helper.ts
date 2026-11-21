@@ -34,6 +34,7 @@ export type HelperConversationSummary = HelperConversation & {
   activity: { running: number; queued: number };
   latestEventSeq: number;
   latestActivityEventSeq: number;
+  readActivityEventSeq: number;
   lastTaskStatus?: HelperStatus;
   lastActivityAt: string;
 };

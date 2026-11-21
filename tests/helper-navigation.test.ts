@@ -1,14 +1,18 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import Fastify from 'fastify';
 import { afterEach, expect, test } from 'vitest';
-import type { HelperTaskSnapshot } from '../core/helper.js';
+import type { HelperScope, HelperTaskSnapshot } from '../core/helper.js';
+import type { Content } from '../core/product.js';
+import { chatDeletionImpact, deleteChat } from '../server/chat-deletion.js';
+import { markHelperConversationRead } from '../server/helper-read-state.js';
 import { helperRoutes } from '../server/helper-routes.js';
 import type { HelperRuntime } from '../server/helper-runtime.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { Store } from '../server/store.js';
+import { fixtureBotInput } from './fixtures/chat.js';
 
 const owned: { store: Store; path: string }[] = [];
 afterEach(() => {
@@ -27,6 +31,32 @@ function fixture() {
   const workspace = new HelperWorkspace(store);
   const scope = { kind: 'library', workId: 'workspace' } as const;
   return { store, workspace, scope };
+}
+function finishTask(f: ReturnType<typeof fixture>, conversationId: string, scope: HelperScope) {
+  const connection = f.store.product.connection({
+    title: 'Synthetic',
+    protocol: 'fixture-sse-v1',
+    endpoint: 'http://127.0.0.1:9',
+    enabled: true,
+  });
+  const model = f.store.product.model({
+    title: 'Synthetic',
+    connectionId: connection.id,
+    modelId: 'fixture',
+    temperature: null,
+    maxOutputTokens: 128,
+  });
+  const task = f.workspace.enqueue(conversationId, randomUUID(), '요청', {
+    scope,
+    model: f.store.product.modelSnapshot(model.id),
+    history: [],
+    persona: '',
+    limits: { totalCalls: 24, helperCalls: 12 },
+  });
+  f.workspace.start(task.id, 'owner');
+  f.workspace.finish(task.id, 'owner', 1, 'completed', '답변', null);
+  return f.workspace.list({ kind: 'all' }).find((item) => item.id === conversationId)!
+    .latestActivityEventSeq;
 }
 
 test('new conversation creation atomically assigns its project and retries its exact receipt', async () => {
@@ -181,3 +211,79 @@ test.each(['failed', 'cancelled', 'interrupted'] as const)(
     expect(f.workspace.list({ kind: 'all' })[0].lastTaskStatus).toBe(status);
   }
 );
+
+test('read state only moves forward, survives reopening and is removed with its conversation or chat', async () => {
+  const f = fixture();
+  const app = Fastify();
+  helperRoutes(app, { workspace: f.workspace, store: f.store } as HelperRuntime);
+  const read = async (id: string, activityEventSeq: number) => {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/helper/conversations/${id}/read`,
+      payload: { activityEventSeq },
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    return response.json().readActivityEventSeq as number;
+  };
+  const summary = (id: string) => f.workspace.list({ kind: 'all' }).find((item) => item.id === id);
+  try {
+    const conversation = f.workspace.create(f.scope, 'read');
+    expect(summary(conversation.id)?.readActivityEventSeq).toBe(0);
+    const first = finishTask(f, conversation.id, f.scope);
+    expect(await read(conversation.id, first + 1000)).toBe(first);
+    const second = finishTask(f, conversation.id, f.scope);
+    expect(await read(conversation.id, second)).toBe(second);
+    expect(await read(conversation.id, first)).toBe(second);
+    expect(await read(conversation.id, 0)).toBe(second);
+    f.workspace.update(conversation.id, f.workspace.conversation(conversation.id).revision, {
+      title: '제목 수정',
+    });
+    expect(summary(conversation.id)).toMatchObject({
+      latestActivityEventSeq: second,
+      readActivityEventSeq: second,
+    });
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/helper/conversations/missing/read',
+          payload: { activityEventSeq: 1 },
+        })
+      ).statusCode
+    ).toBe(404);
+
+    const { path } = owned.at(-1)!;
+    f.store.close();
+    owned.pop();
+    const reopened = new Store(join(path, 'story.sqlite'));
+    owned.push({ store: reopened, path });
+    const workspace = new HelperWorkspace(reopened);
+    expect(
+      workspace.list({ kind: 'all' }).find((item) => item.id === conversation.id)
+        ?.readActivityEventSeq
+    ).toBe(second);
+    const key = `helper-read:v1:${conversation.id}`;
+    const stored = () => reopened.db.prepare('SELECT 1 FROM app_metadata WHERE key=?').get(key);
+    expect(stored()).toBeTruthy();
+    workspace.delete(conversation.id, workspace.deletionImpact(conversation.id).request);
+    expect(stored()).toBeUndefined();
+
+    const bot = reopened.product.content(fixtureBotInput('Read owner')) as Content;
+    const chat = reopened.createChat('Read chat', { botId: bot.id });
+    const chatScope = { kind: 'chat', chatId: chat.id } as const;
+    const chatConversation = workspace.open(chatScope);
+    const chatFixture = { store: reopened, workspace, scope: f.scope };
+    const chatSequence = finishTask(chatFixture, chatConversation.id, chatScope);
+    expect(markHelperConversationRead(reopened, chatConversation.id, chatSequence)).toEqual({
+      readActivityEventSeq: chatSequence,
+    });
+    const chatKey = `helper-read:v1:${chatConversation.id}`;
+    expect(reopened.db.prepare('SELECT 1 FROM app_metadata WHERE key=?').get(chatKey)).toBeTruthy();
+    deleteChat(reopened, chat.id, chatDeletionImpact(reopened, chat.id).request);
+    expect(
+      reopened.db.prepare('SELECT 1 FROM app_metadata WHERE key=?').get(chatKey)
+    ).toBeUndefined();
+  } finally {
+    await app.close();
+  }
+});

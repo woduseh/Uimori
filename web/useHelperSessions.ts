@@ -20,6 +20,7 @@ export type HelperSession = HelperConversation & {
   activity?: { running: number; queued: number };
   latestEventSeq?: number;
   latestActivityEventSeq?: number;
+  readActivityEventSeq?: number;
   lastTaskStatus?: HelperStatus;
   lastActivityAt?: string;
   chatTitle?: string;
@@ -34,6 +35,8 @@ function remember(key: string, value: string | null) {
   if (value === null) removeOptionalStorage('local', key);
   else writeOptionalStorage('local', key, value);
 }
+const localReadKey = (id: string) => `uimori:helper-seen:${id}`;
+const localRead = (id: string) => Number(read(localReadKey(id)) ?? 0);
 type HelperCreationRequest = { scope: HelperScope; requestKey: string; projectId?: string | null };
 export function forgetHelperSession(conversation: HelperConversation) {
   for (const key of [
@@ -42,7 +45,7 @@ export function forgetHelperSession(conversation: HelperConversation) {
     `uimori:helper-session-scope:${JSON.stringify(conversation.scope)}`,
   ])
     if (read(key) === conversation.id) remember(key, null);
-  remember(`uimori:helper-seen:${conversation.id}`, null);
+  remember(localReadKey(conversation.id), null);
 }
 export function selectedHelperSession(scope: HelperScope) {
   return read(`uimori:helper-session-scope:${JSON.stringify(scope)}`);
@@ -87,22 +90,64 @@ export function useHelperSessions(
   const currentId = carriedSession?.id ?? selected[group] ?? null;
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
-  const acknowledge = useCallback((ids?: string[]) => {
-    const values = sessionsRef.current.filter((item) => !ids || ids.includes(item.id));
-    setSeen((old) => {
-      const next = { ...old };
-      for (const item of values) {
-        const sequence = Math.max(
-          item.latestActivityEventSeq ?? 0,
-          old[item.id] ?? 0,
-          Number(read(`uimori:helper-seen:${item.id}`) ?? 0)
-        );
-        remember(`uimori:helper-seen:${item.id}`, String(sequence));
-        next[item.id] = sequence;
-      }
-      return next;
-    });
+  const confirmedReads = useRef(new Map<string, number>());
+  const readWrites = useRef(new Map<string, number>());
+  const mergedLocalReads = useRef(new Set<string>());
+  const raiseSeen = useCallback((id: string, sequence: number) => {
+    setSeen((old) => ((old[id] ?? 0) >= sequence ? old : { ...old, [id]: sequence }));
   }, []);
+  const saveRead = useCallback(
+    (id: string, sequence: number) => {
+      if ((readWrites.current.get(id) ?? 0) >= sequence) return;
+      readWrites.current.set(id, sequence);
+      api<{ readActivityEventSeq: number }>(
+        `/helper/conversations/${encodeURIComponent(id)}/read`,
+        { activityEventSeq: sequence }
+      )
+        .then((result) => {
+          confirmedReads.current.set(
+            id,
+            Math.max(confirmedReads.current.get(id) ?? 0, result.readActivityEventSeq)
+          );
+          if (localRead(id) <= result.readActivityEventSeq) remember(localReadKey(id), null);
+          if (alive.current) raiseSeen(id, result.readActivityEventSeq);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (readWrites.current.get(id) === sequence) readWrites.current.delete(id);
+        });
+    },
+    [raiseSeen]
+  );
+  const acknowledge = useCallback(
+    (ids?: string[]) => {
+      for (const item of sessionsRef.current.filter((item) => !ids || ids.includes(item.id))) {
+        const known = Math.max(
+          item.readActivityEventSeq ?? 0,
+          confirmedReads.current.get(item.id) ?? 0
+        );
+        const sequence = Math.max(item.latestActivityEventSeq ?? 0, localRead(item.id), known);
+        raiseSeen(item.id, sequence);
+        if (sequence <= known) continue;
+        remember(localReadKey(item.id), String(sequence));
+        saveRead(item.id, sequence);
+      }
+    },
+    [raiseSeen, saveRead]
+  );
+  const mergeLocalReads = useCallback(
+    (values: HelperSession[]) => {
+      for (const item of values) {
+        if (mergedLocalReads.current.has(item.id)) continue;
+        mergedLocalReads.current.add(item.id);
+        const local = localRead(item.id);
+        if (!local) continue;
+        if (local > (item.readActivityEventSeq ?? 0)) saveRead(item.id, local);
+        else remember(localReadKey(item.id), null);
+      }
+    },
+    [saveRead]
+  );
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -152,6 +197,7 @@ export function useHelperSessions(
     if (!alive.current || versions.current.get(group) !== version) return;
     const active = values.some((session) => session.activity?.running || session.activity?.queued);
     setLists((old) => ({ ...old, [group]: values }));
+    mergeLocalReads(values);
     if (carried) return active;
     const moved =
       selectionScopes.current.has(group) && selectionScopes.current.get(group) !== scopeKey;
@@ -178,7 +224,7 @@ export function useHelperSessions(
         }));
     }
     return active;
-  }, [group, scopeKey, select, expanded, carried]);
+  }, [group, scopeKey, select, expanded, carried, mergeLocalReads]);
   useEffect(() => {
     if (!open) return;
     let disposed = false;
@@ -236,7 +282,7 @@ export function useHelperSessions(
     .filter(
       (item) =>
         (item.latestActivityEventSeq ?? 0) >
-        (seen[item.id] ?? Number(read(`uimori:helper-seen:${item.id}`) ?? 0))
+        Math.max(item.readActivityEventSeq ?? 0, seen[item.id] ?? 0, localRead(item.id))
     )
     .map((item) => item.id);
   const create = async (projectId?: string | null) => {

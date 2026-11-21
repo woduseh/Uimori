@@ -1,12 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { expect, test, type APIRequestContext, type Locator } from '@playwright/test';
-import type { HelperConversation, HelperTaskResultsView } from '../core/helper.js';
+import type {
+  HelperConversation,
+  HelperConversationSummary,
+  HelperTaskResultsView,
+} from '../core/helper.js';
 import type { Content, ModelWorkspace } from '../core/product.js';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
 import { postFixtureChat, fixtureBotInput } from './fixtures/chat.js';
-import { openHelper } from './ui-navigation.js';
+import { navigationAction, openHelper } from './ui-navigation.js';
+import { DESKTOP_HEIGHT, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 
 test.setTimeout(60000);
 
@@ -697,4 +702,70 @@ test('HRESULT02 actual results retain partial usage and recover from refresh/ope
   }
   await expect(results.getByRole('alert')).toContainText('결과를 열지 못했어요.');
   await expect(saved).toBeEnabled();
+});
+
+test('HREAD01 a helper result read in one browser, or read earlier on this browser, is read in another', async ({
+  page,
+  browser,
+  request,
+}, info) => {
+  const acknowledged = (await seed(request)).conversation;
+  const remembered = (await seed(request)).conversation;
+  const summaries = async () =>
+    (await (
+      await request.get('/api/helper/conversations?kind=all')
+    ).json()) as HelperConversationSummary[];
+  const latest = async (id: string) => (await summaries()).find((item) => item.id === id)!;
+  const rememberedSequence = (await latest(remembered.id)).latestActivityEventSeq;
+  const other = await browser.newContext({
+    viewport: { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT },
+    reducedMotion: 'reduce',
+  });
+  try {
+    const second = await other.newPage();
+    const unreadIn = async (target: typeof page) => {
+      await navigationAction(target, '도우미');
+      const history = target.getByRole('navigation', { name: '도우미 대화', exact: true });
+      await history.getByRole('button', { name: /^미확인 활동/ }).click();
+      return history.locator('[data-activity-section="unread"]');
+    };
+    await second.goto('/');
+    const secondUnread = await unreadIn(second);
+    for (const id of [acknowledged.id, remembered.id])
+      await expect(secondUnread.locator(`[data-conversation-id="${id}"]`)).toBeVisible();
+
+    await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+    await page.addInitScript(
+      ([id, sequence]) => localStorage.setItem(`uimori:helper-seen:${id}`, sequence),
+      [remembered.id, String(rememberedSequence)] as const
+    );
+    await page.goto('/');
+    const firstUnread = await unreadIn(page);
+    await expect(firstUnread.locator(`[data-conversation-id="${remembered.id}"]`)).toHaveCount(0);
+    await expect
+      .poll(async () => (await latest(remembered.id)).readActivityEventSeq)
+      .toBe(rememberedSequence);
+    await expect
+      .poll(() =>
+        page.evaluate((id) => localStorage.getItem(`uimori:helper-seen:${id}`), remembered.id)
+      )
+      .toBeNull();
+    await firstUnread
+      .locator(`[data-conversation-id="${acknowledged.id}"]`)
+      .getByRole('button', { name: /활동 확인$/ })
+      .click();
+    await expect
+      .poll(async () => {
+        const item = await latest(acknowledged.id);
+        return item.readActivityEventSeq === item.latestActivityEventSeq;
+      })
+      .toBe(true);
+
+    await second.evaluate(() => window.dispatchEvent(new Event('focus')));
+    for (const id of [acknowledged.id, remembered.id])
+      await expect(secondUnread.locator(`[data-conversation-id="${id}"]`)).toHaveCount(0);
+    await second.screenshot({ path: info.outputPath('helper-read-in-second-browser.png') });
+  } finally {
+    await other.close();
+  }
 });
