@@ -35,7 +35,7 @@ export const HELPER_ILLUSTRATION_PROFILE_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.profiles.save',
     description:
-      "Create or edit character appearance profiles for the illustrations of a chat, several at once. Describe what is visible: take the traits from the source text and reference images, or follow the user's brief for an original design. An entry with name and appearance and no profileId creates a profile; an entry with profileId edits one, and fields left out keep their values. referenceRef links a character image for generation and null removes the link; a linked image is active immediately, so illustration.references.save is not needed for it. Every entry is validated before anything is saved. The result includes effectiveReferences, so no reread is needed to confirm the save. The shared defaults of a bot or persona are edited with resource.patch instead.",
+      "Create or edit character appearance profiles for the illustrations of a chat, several at once. Describe what is visible: take the traits from the source text and reference images, or follow the user's brief for an original design. An entry with profileId edits that profile, and fields left out keep their values. An entry without profileId is matched by name: it edits the profile that already has that name, including one inherited from the bot or persona, and creates a profile from name and appearance only when no profile has it. referenceRef links a character image for generation and null removes the link; a linked image is active immediately, so illustration.references.save is not needed for it. Every entry is validated before anything is saved. The result includes effectiveReferences, so no reread is needed to confirm the save. The shared defaults of a bot or persona are edited with resource.patch instead.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -56,7 +56,8 @@ export const HELPER_ILLUSTRATION_PROFILE_TOOLS: ProviderTool[] = [
                 type: 'string',
                 minLength: 1,
                 maxLength: 100,
-                description: 'Id of the profile to edit. Omit to create a new profile.',
+                description:
+                  'Id of the profile to edit. Omit to match by name, which edits a profile with that name or creates one.',
               },
               name: {
                 type: 'string',

@@ -166,7 +166,7 @@ export const HELPER_CHAT_STATE_TOOLS: ProviderTool[] = [
   {
     name: 'scene.title',
     description:
-      'Name a saved scene of the chat, or clear its name with an empty title. The name labels the scene in the scene list and navigator only; it is not sent to the writer. Take expectedTitle from the title that chat.read returns for that scene, or an empty string when it has none; the change is refused when the name changed since that read.',
+      'Name a saved scene of the chat, or clear its name with an empty title. The name labels the scene in the scene list and navigator only; it is not sent to the writer. Take expectedTitle from the title that chat.read returns for that scene, or an empty string when it has none; the change is refused when the name changed since that read, unless the scene already has the requested name.',
     inputSchema: schema(
       {
         sourceId: {

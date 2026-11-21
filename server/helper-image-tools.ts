@@ -58,7 +58,7 @@ export const HELPER_IMAGE_TOOLS: ProviderTool[] = [
   {
     name: 'image.read',
     description:
-      'Look at one saved image of a bot, persona or module. The image arrives as actual image input, so use it before describing or judging what a picture shows. Start with the default thumbnail and ask for mode=full only when fine detail matters. An animated image is shown as its first frame. The saved original is never changed. A model without image input gets an unsupported-image result instead.',
+      'Look at one saved image of a bot, persona or module. The image arrives as actual image input, so use it before describing or judging what a picture shows. Start with the default thumbnail and ask for mode=full only when fine detail matters. An animated image is shown as its first frame. The saved original is never changed. A model known to lack image input gets an unsupported-image result instead.',
     inputSchema: {
       type: 'object',
       properties: {
