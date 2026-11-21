@@ -132,6 +132,7 @@ type Props = {
   onOpenTarget?: (
     target: import('../core/helper.js').HelperTaskResultTarget
   ) => void | Promise<void>;
+  onOpenChange?: (change: import('../core/helper.js').HelperChange) => void | Promise<void>;
   onScopeChange?: (scope: HelperScope) => void;
   ready?: boolean;
   scope: HelperScope;
@@ -417,6 +418,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     );
   const tasks = data.current?.tasks ?? [];
   const taskMap = new Map(tasks.map((task) => [task.id, task]));
+  const latestTaskId = messages.findLast((message) => taskMap.has(message.taskId))?.taskId;
   const running = tasks.find((task) => task.status === 'running');
   const panel = useRef<HTMLElement>(null);
   useShortcut('run.stop', () => running && void cancel(running), {
@@ -1673,7 +1675,9 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                         taskId={task.id}
                         status={task.status}
                         visible={props.open}
+                        eager={task.id === latestTaskId}
                         onOpenTarget={props.onOpenTarget}
+                        onOpenChange={props.onOpenChange}
                       />
                       {taskStatus(task)}
                     </div>

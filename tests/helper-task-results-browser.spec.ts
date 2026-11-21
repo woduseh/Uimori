@@ -15,7 +15,11 @@ import { DESKTOP_HEIGHT, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 
 test.setTimeout(60000);
 
-async function seed(request: APIRequestContext, profiles?: { name: string; appearance: string }[]) {
+async function seed(
+  request: APIRequestContext,
+  profiles?: { name: string; appearance: string }[],
+  followUps = 0
+) {
   let sendProfiles = !!profiles;
   const provider = createServer(async (incoming, response) => {
     for await (const _chunk of incoming) {
@@ -104,14 +108,25 @@ async function seed(request: APIRequestContext, profiles?: { name: string; appea
     });
     expect(admitted.ok(), await admitted.text()).toBe(true);
     const task = (await admitted.json()) as HelperTaskView;
-    await expect
-      .poll(async () => {
-        const current = await request.get(`/api/helper/tasks/${task.id}`);
-        expect(current.ok()).toBe(true);
-        return ((await current.json()) as HelperTaskView).status;
-      })
-      .toBe('completed');
-    return { chat, task, conversation };
+    const completed = async (id: string) =>
+      expect
+        .poll(async () => {
+          const current = await request.get(`/api/helper/tasks/${id}`);
+          expect(current.ok()).toBe(true);
+          return ((await current.json()) as HelperTaskView).status;
+        })
+        .toBe('completed');
+    await completed(task.id);
+    const later: HelperTaskView[] = [];
+    for (let index = 0; index < followUps; index++) {
+      const next = await request.post(`/api/helper/conversations/${conversation.id}/messages`, {
+        data: { requestKey: randomUUID(), text: `이어지는 요청 ${index + 1}` },
+      });
+      expect(next.ok(), await next.text()).toBe(true);
+      later.push((await next.json()) as HelperTaskView);
+      await completed(later.at(-1)!.id);
+    }
+    return { chat, task, conversation, later };
   } finally {
     try {
       if (selected) {
@@ -772,4 +787,227 @@ test('HREAD01 a helper result read in one browser, or read earlier on this brows
   } finally {
     await other.close();
   }
+});
+
+function changeProjection(taskId: string, chatId: string): HelperTaskResultsView {
+  return {
+    taskId,
+    status: 'completed',
+    results: [],
+    changes: [
+      {
+        domain: 'scene',
+        targetId: 'scene-source:original',
+        title: '등대지기의 밤',
+        location: '장면 3 · 원문',
+        action: 'update',
+        diff: {
+          mode: 'prose',
+          unit: 'word',
+          added: 2,
+          removed: 2,
+          hunks: [
+            {
+              beforeOffset: 0,
+              afterOffset: 0,
+              segments: [
+                { op: 'equal', text: '그는 등불을 들고 ' },
+                { op: 'delete', text: '다리를' },
+                { op: 'insert', text: '강을' },
+                { op: 'equal', text: ' 천천히 ' },
+                { op: 'delete', text: '건넜다.' },
+                { op: 'insert', text: '헤엄쳤다.' },
+                { op: 'equal', text: '\n바람이 차가웠다.' },
+              ],
+            },
+          ],
+        },
+        anchor: {
+          domain: 'scene',
+          chatId,
+          sourceId: 'scene-source',
+          field: 'original',
+          paragraph: 0,
+        },
+      },
+      {
+        domain: 'resource',
+        targetId: 'regex-bot',
+        title: '정규식 봇',
+        location: 'extensions/risuai/customScripts',
+        action: 'update',
+        diff: {
+          mode: 'code',
+          unit: 'line',
+          added: 1,
+          removed: 1,
+          hunks: [
+            {
+              beforeOffset: 10,
+              afterOffset: 10,
+              segments: [
+                { op: 'equal', text: '  {\n' },
+                { op: 'delete', text: '    "in": "foo",\n' },
+                { op: 'insert', text: '    "in": "bar",\n' },
+                { op: 'equal', text: '  }\n' },
+              ],
+            },
+          ],
+        },
+        anchor: {
+          domain: 'resource',
+          kind: 'content',
+          id: 'regex-bot',
+          path: '/package/nativeRisu/card/extensions/risuai/customScripts',
+          section: 'field',
+          index: null,
+        },
+      },
+      {
+        domain: 'resource',
+        targetId: 'large-bot',
+        title: '긴 설명 봇',
+        location: 'description',
+        action: 'update',
+        diff: { mode: 'prose', unit: 'word', omitted: 'size' },
+        anchor: {
+          domain: 'resource',
+          kind: 'content',
+          id: 'large-bot',
+          path: '/package/nativeRisu/card/description',
+          section: 'field',
+          index: null,
+        },
+      },
+      {
+        domain: 'scene',
+        targetId: 'removed-source:original',
+        title: '지운 장면',
+        location: null,
+        action: 'update',
+        diff: null,
+        anchor: null,
+        textRemoved: 'deleted',
+      },
+      {
+        domain: 'resource',
+        targetId: 'gone-bot',
+        title: '삭제한 봇',
+        location: null,
+        action: 'delete',
+        diff: null,
+        anchor: null,
+      },
+    ],
+    unrecordedOperations: 0,
+    usage: { toolExecutions: 5, attempts: [], latestInputEstimate: null },
+  };
+}
+
+test('HCHANGE01 change cards show marked words, code lines and the states without a diff', async ({
+  page,
+  request,
+}, info) => {
+  const { chat, task } = await seed(request);
+  await page.route(`**/api/helper/tasks/${task.id}/results`, (route) =>
+    route.fulfill({ json: changeProjection(task.id, chat.id) })
+  );
+  for (const [width, height] of [
+    [412, 915],
+    [1440, 900],
+  ] as const) {
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width, height });
+      await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+      await page.goto(`/?chat=${chat.id}`);
+      await openHelper(page);
+      const results = page
+        .locator(`.helper-message.assistant[data-task-id="${task.id}"]`)
+        .getByTestId('helper-task-results');
+      const prose = results.locator('.helper-change-toggle', { hasText: '등대지기의 밤' });
+      await expect(prose).toHaveAttribute('aria-expanded', 'false');
+      await expect(prose).toContainText('+2');
+      await expect(prose).toContainText('−2');
+      await expect(prose).toContainText('단어 2개 추가, 2개 삭제');
+      await expect(results.getByRole('region', { name: /등대지기의 밤/ })).toBeHidden();
+      await expect(results.getByText('바뀐 내용이 너무 커서 비교를 생략했어요.')).toBeVisible();
+      await expect(results.getByText('대상이 삭제되어 바뀐 내용을 지웠어요.')).toBeVisible();
+      await expect(results.getByText('삭제됨', { exact: true })).toBeVisible();
+      for (const title of ['삭제한 봇', '지운 장면'])
+        await expect(
+          results.getByRole('button', { name: `${title} 열기`, exact: true })
+        ).toHaveCount(0);
+      await expect(
+        results.getByRole('button', { name: '등대지기의 밤 장면 3 · 원문 열기', exact: true })
+      ).toBeVisible();
+      const label = `${width}-${colorScheme}`;
+      await page.screenshot({ path: info.outputPath(`change-cards-${label}.png`) });
+      await prose.click();
+      await expect(prose).toHaveAttribute('aria-expanded', 'true');
+      const paragraph = results.getByRole('region', { name: /등대지기의 밤/ }).locator('p');
+      await expect(paragraph).toHaveCount(1);
+      await expect(paragraph.locator('del')).toHaveText([
+        '삭제된 부분 다리를',
+        '삭제된 부분 건넜다.',
+      ]);
+      await expect(paragraph.locator('ins')).toHaveText([
+        '추가된 부분 강을',
+        '추가된 부분 헤엄쳤다.',
+      ]);
+      await expect(paragraph).toContainText('그는 등불을 들고');
+      const decoration = (selector: string) =>
+        paragraph
+          .locator(selector)
+          .first()
+          .evaluate((node) => getComputedStyle(node).textDecorationLine);
+      expect(await decoration('del')).toContain('line-through');
+      expect(await decoration('ins')).toContain('underline');
+      await results.locator('.helper-change-toggle', { hasText: '정규식 봇' }).click();
+      const code = results.getByRole('region', { name: /정규식 봇/ });
+      await expect(code.locator('.helper-diff-line')).toHaveCount(4);
+      await expect(code.locator('.helper-diff-line[data-op="delete"] code')).toHaveText(
+        '    "in": "foo",'
+      );
+      const inserted = code.locator('.helper-diff-line[data-op="insert"]');
+      await expect(inserted.locator('code')).toHaveText('    "in": "bar",');
+      await expect(inserted.locator('.helper-diff-gutter')).toHaveText('+');
+      await page.screenshot({ path: info.outputPath(`change-diffs-${label}.png`) });
+      if (width === 1440 && colorScheme === 'light') {
+        await page
+          .locator('#helper-panel')
+          .getByRole('button', { name: '도우미 크게 보기', exact: true })
+          .click();
+        await expect(results.getByRole('region', { name: /등대지기의 밤/ })).toBeVisible();
+        await page.screenshot({ path: info.outputPath('change-diffs-expanded-workspace.png') });
+      }
+    }
+  }
+});
+
+test('HCHANGE02 earlier task results load when their answer comes into view', async ({
+  page,
+  request,
+}) => {
+  const { chat, task, later } = await seed(request, undefined, 7);
+  const reads = new Map<string, number>();
+  page.on('request', (sent) => {
+    const match = /\/api\/helper\/tasks\/([^/]+)\/results$/u.exec(new URL(sent.url()).pathname);
+    if (match) reads.set(match[1]!, (reads.get(match[1]!) ?? 0) + 1);
+  });
+  await page.setViewportSize({ width: 412, height: 600 });
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  const latest = later.at(-1)!;
+  await expect(
+    page
+      .locator(`.helper-message.assistant[data-task-id="${latest.id}"]`)
+      .getByTestId('helper-task-results')
+      .locator('summary')
+  ).toBeVisible();
+  await expect.poll(() => reads.get(latest.id) ?? 0).toBeGreaterThan(0);
+  expect(reads.get(task.id) ?? 0).toBe(0);
+  const first = page.locator(`.helper-message.assistant[data-task-id="${task.id}"]`);
+  await first.scrollIntoViewIfNeeded();
+  await expect(first.getByTestId('helper-task-results').locator('summary')).toBeVisible();
+  expect(reads.get(task.id)).toBe(1);
 });

@@ -44,7 +44,12 @@ import { HelperPanel, type HelperHandoff } from './HelperPanel.js';
 import { api } from './api.js';
 import { selectedHelperSession } from './useHelperSessions.js';
 import type { HelperRecentTask } from '../core/activity-feed.js';
-import type { HelperScope, HelperResourceRef, HelperTaskResultTarget } from '../core/helper.js';
+import type {
+  HelperChange,
+  HelperScope,
+  HelperResourceRef,
+  HelperTaskResultTarget,
+} from '../core/helper.js';
 import { ResponseDisplay } from './StreamingResponse.js';
 import { CancelledRun } from './CancelledRun.js';
 import { canDismissReaderRun } from '../core/reader-conversation.js';
@@ -956,6 +961,28 @@ function App() {
       setPendingNavigation(() => () => void go().catch((error) => s.setError(error.message)));
     else await go();
   }
+  async function openHelperChange(change: HelperChange) {
+    const anchor = change.anchor;
+    if (!anchor) return;
+    const base = { title: change.title, revision: 0 };
+    if (anchor.domain === 'resource')
+      return openHelperResult({ ...base, kind: anchor.kind, id: anchor.id });
+    if (anchor.domain === 'scene')
+      return openHelperResult({
+        ...base,
+        kind: anchor.field === 'translation' ? 'translation' : 'scene',
+        id: anchor.sourceId,
+        chatId: anchor.chatId,
+      });
+    if (anchor.domain === 'settings')
+      return openHelperResult({
+        ...base,
+        kind: 'settings',
+        id: anchor.id,
+        setting: anchor.setting,
+      });
+    return openHelperResult({ ...base, kind: 'chat', id: anchor.chatId });
+  }
   function inspect(id: string) {
     setInspectedRun(id);
     setPanel('tasks');
@@ -1015,6 +1042,7 @@ function App() {
     setHelperExpanded((value) => !value);
   });
   const openHelperTarget = useStableHandler(openHelperResult);
+  const openHelperChangeTarget = useStableHandler(openHelperChange);
   const helperChatScope = s.destination === 'story' && !!s.selected && !!s.detail;
   const helperPanelScope = useMemo<HelperScope>(
     () =>
@@ -2751,6 +2779,7 @@ function App() {
             : t(libraryTab === 'prompts' ? 'transfer.m286' : 'transfer.m285')
         }
         onOpenTarget={openHelperTarget}
+        onOpenChange={openHelperChangeTarget}
         modal={panelModal}
         enterSend={enterSend}
         responseDisplay={responseDisplay}

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   BookOpen,
   Check,
@@ -11,12 +11,14 @@ import {
   Settings2,
 } from 'lucide-react';
 import type {
+  HelperChange,
   HelperStatus,
   HelperTaskAttemptUsage,
   HelperTaskResultTarget,
   HelperTaskResultsView,
 } from '../core/helper.js';
 import { api } from './api.js';
+import { HelperChangeCard } from './HelperChangeCard.js';
 import { isStoryUiStyle } from '../core/story-ui-style.js';
 import { formatNumber, t, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
@@ -107,6 +109,56 @@ const queuedOperations = new Set([
   'scene.translate',
 ]);
 const active = (status: HelperStatus) => status === 'running' || status === 'queued';
+const resourceKinds = new Set<HelperTaskResultTarget['kind']>([
+  'content',
+  'prompt-preset',
+  'prompt-workspace',
+  'theme',
+  'illustration-preset',
+]);
+
+function recordedByChange(
+  target: HelperTaskResultTarget,
+  operation: string,
+  changes: readonly HelperChange[]
+) {
+  if (resourceKinds.has(target.kind))
+    return changes.some((change) => change.domain === 'resource' && change.targetId === target.id);
+  if (operation === 'scene.title')
+    return changes.some(
+      (change) => change.domain === 'scene' && change.targetId === `${target.id}:title`
+    );
+  return false;
+}
+
+function settingRecorded(change: HelperChange, results: HelperTaskResultsView['results']) {
+  return results.some((result) =>
+    result.targets.some(
+      (target) => target.kind === 'settings' && `${target.setting}:${target.id}` === change.targetId
+    )
+  );
+}
+
+function useSeen<T extends Element>(eager: boolean) {
+  const ref = useRef<T>(null);
+  const [seen, setSeen] = useState(eager);
+  useEffect(() => {
+    if (eager) setSeen(true);
+  }, [eager]);
+  useEffect(() => {
+    const node = ref.current;
+    if (seen || !node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setSeen(true);
+      },
+      { rootMargin: '50% 0px' }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [seen]);
+  return [ref, seen || eager] as const;
+}
 
 type ResultsRead = {
   taskId: string;
@@ -459,34 +511,55 @@ export function HelperTaskResults({
   taskId,
   status,
   visible = true,
+  eager = false,
   onOpenTarget,
+  onOpenChange,
+  onUsage,
 }: {
   taskId: string;
   status: HelperStatus;
   visible?: boolean;
+  eager?: boolean;
   onOpenTarget?: (target: HelperTaskResultTarget) => Promise<void> | void;
+  onOpenChange?: (change: HelperChange) => Promise<void> | void;
+  onUsage?: (taskId: string, usage: HelperTaskResultsView['usage']) => void;
 }) {
   useI18n();
-  const { data, reading, failed, retry } = useTaskResults(taskId, status, visible);
+  const [sentinel, shown] = useSeen<HTMLSpanElement>(eager);
+  const { data, reading, failed, retry } = useTaskResults(taskId, status, visible && shown);
+  useEffect(() => {
+    if (data) onUsage?.(taskId, data.usage);
+  }, [data, taskId, onUsage]);
+  const changes = data?.changes.filter(
+    (change) => change.domain !== 'settings' || !settingRecorded(change, data.results)
+  );
   return (
     <section
       className="helper-task-results"
       aria-label={t('helperResults.title')}
       data-testid="helper-task-results"
     >
-      {data && (
+      {!shown && <span ref={sentinel} className="helper-results-sentinel" aria-hidden="true" />}
+      {data && changes && (
         <>
           <ul className="helper-result-list">
+            {changes.map((change, index) => (
+              <li key={`change:${change.domain}:${change.targetId}:${index}`}>
+                <HelperChangeCard change={change} onOpen={onOpenChange} />
+              </li>
+            ))}
             {data.results.flatMap((result) =>
-              result.targets.map((target, index) => (
-                <li key={`${result.eventSeq}:${target.kind}:${target.id}:${index}`}>
-                  <ResultTarget
-                    target={target}
-                    operation={result.operation}
-                    onOpen={onOpenTarget}
-                  />
-                </li>
-              ))
+              result.targets
+                .filter((target) => !recordedByChange(target, result.operation, data.changes))
+                .map((target, index) => (
+                  <li key={`${result.eventSeq}:${target.kind}:${target.id}:${index}`}>
+                    <ResultTarget
+                      target={target}
+                      operation={result.operation}
+                      onOpen={onOpenTarget}
+                    />
+                  </li>
+                ))
             )}
           </ul>
           {data.unrecordedOperations > 0 && (
@@ -499,7 +572,7 @@ export function HelperTaskResults({
       )}
       <LoadingState
         presentation="inline"
-        loading={reading}
+        loading={reading && shown}
         error={failed ? t(data ? 'helperResults.refreshFailed' : 'helperResults.loadFailed') : ''}
         errorLabel={t('helperResults.title')}
         label={t('helperResults.loading')}
