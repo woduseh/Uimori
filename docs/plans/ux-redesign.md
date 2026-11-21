@@ -79,15 +79,16 @@
 
 ### 7단계. 턴 롤백과 계획 모드
 
-- 세 도메인의 턴 체크포인트와 턴 롤백, 항목별 되돌리기를 넣어요. 다른 도메인(채팅 로어, 변수, 설정 등)은 대상이 아니라고 화면에 밝혀요.
-- 계획 모드: 쓰기 도구를 서버에서 막고 계획만 받아요. 계획 카드에서 실행으로 넘어가요.
+서버 쪽(턴 롤백 API, 계획 모드, 확인 대기와 허가)은 끝났어요. 계약은 [HELPER-TOOLS](../HELPER-TOOLS.md#rolling-back-a-helper-task)의 세 절(턴 롤백, 계획 모드, 확인)에 있어요. 남은 것은 화면이에요.
+
+- 작업 결과에 되돌리기를 넣어요. `GET /api/helper/tasks/:id/rollback`의 단위를 변경 카드에 `changeTargetIds`로 이어 붙이고, 작업 전체와 카드 하나를 되돌릴 수 있게 해요. 대상이 아닌 도메인(채팅 로어, 변수, 설정, 장면 이름, 만들거나 지운 자료)은 대상이 아니라고 밝혀요. `touches`에 걸린 열린 편집기에 미저장 입력이 있으면 되돌리기 전에 막거나 확인해요.
+- 턴 롤백이 막히거나 일부만 되는 경우 그 사유(`status`, `reason`, 번역 삽화 배치 안내)를 보여 줘요. 1단계에서 미룬 사유 표시를 여기서 정해요.
+- 되돌리기가 화면에 들어가면 입력창 위의 "마지막 자료 수정 되돌리기" 바(`web/HelperResourceUndo.tsx`, `web/HelperPanel.tsx`의 사용처, `web/useHelperConversation.ts`의 `lastResourceEdit`와 `resource.edit.undone` 처리)를 지우고, 그다음 서버의 `undo-resource` 경로, 대화 보기의 `lastResourceEdit`, `server/helper-resource-undo.ts`의 `lastHelperResourceEdit`·`undoHelperResourceEdit`와 `resource.edited` 이벤트 기록, `core/helper.ts`의 `HelperResourceEdit` 형식과 `helperResourceEditResources`를 지워요. 이 이벤트는 그 바만 읽어요. 편집기의 직전 저장 되돌리기(`resource_undo`, `/api/resources/:kind/:id/undo`)와 모델의 `resource.undo`는 남겨요.
+- 계획 모드: 입력창에서 요청의 `mode`를 고르고, 계획 작업(`mode: "plan"`)의 답을 계획 카드로 보여 주고, 카드에서 그 계획을 실행하는 일반 요청으로 넘어가요.
 - 도우미 모드 단축키 `Alt+M`을 단축키 표([shortcut-bindings.ts](../../web/shortcut-bindings.ts))에 더해요. 3단계에서는 모드가 없어서 넣지 않았어요.
-- 승인: 자료 삭제와 여러 자료 일괄 수정(3건 이상)은 기본으로 확인을 받아요. 유료 생성(`scene.request`, `scene.translate`) 확인은 기본으로 꺼 두고 설정으로 켜요.
-- 턴 롤백이 막히거나 일부만 되는 경우 그 사유를 보여 줘요. 1단계에서 미룬 사유 표시를 여기서 정해요.
+- 확인: 작업 결과의 `confirmations` 중 `grantable`인 것을 확인과 거절로 보여 주고, 확인하면 다음 요청에 `confirmations`로 실어 보내요. 거절은 허가 없이 보내는 요청이에요. 설정의 도우미 영역에 유료 생성 확인(`helperConfirmPaidGeneration`) 토글을 넣어요.
 
-불변식과 검사: 임의의 도구 호출 순서 뒤에 턴을 롤백하면 대상의 상태가 턴 시작 때와 같아요. 그 사이 사용자가 고친 대상은 바꾸지 않고 빼며 사유를 알려요. 롤백을 두 번 해도 한 번 한 것과 같아요. 이 세 가지는 경우의 수가 많아서 예시 테스트 대신 속성 기반 테스트로 확인해요. 저장소에 그 도구가 아직 없으므로 도입을 먼저 제안해요. 이 검사는 서버 저장 경로를 대상으로 하고, 열린 편집기의 미저장 입력과의 상호작용은 따로 브라우저 테스트로 봐요.
-
-완료 기준: 위 속성 검사와 자산 정리 테스트(체크포인트가 참조하는 이미지가 정리되지 않음)가 통과해요. [EDITING](../EDITING.md)과 [HELPER-TOOLS](../HELPER-TOOLS.md)가 새 되돌리기 경계를 설명해요.
+남은 검사: 열린 편집기의 미저장 입력과 되돌리기의 상호작용은 브라우저 테스트로 봐요. 서버 저장 경로의 속성 검사와 자산 정리 테스트는 `tests/helper-rollback.test.ts`에 있어요.
 
 ### 8단계. 읽기 모드 퇴고와 메인 상태 표시
 
