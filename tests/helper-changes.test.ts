@@ -6,12 +6,16 @@ import { afterEach, expect, test } from 'vitest';
 import type { HelperChange, HelperTask } from '../core/helper.js';
 import type { Content } from '../core/product.js';
 import { applyTextDiff } from '../core/text-diff.js';
+import { chatOverrideHash } from '../core/chat-overrides.js';
+import { ChatOverridesStore } from '../server/chat-overrides.js';
+import { nativeContent } from './fixtures/native-content.js';
 import { deleteChat } from '../server/chat-deletion.js';
 import { applyHelperChatState } from '../server/helper-chat-state-tools.js';
 import {
   HELPER_CHANGE_RETENTION,
   forgetHelperResourceChanges,
   pruneHelperChanges,
+  recordHelperChatLoreChange,
   withHelperChange,
 } from '../server/helper-changes.js';
 import { pruneThemeAssets } from '../server/theme-assets.js';
@@ -513,4 +517,49 @@ test('theme asset cleanup keeps fonts and images a recorded theme baseline refer
   forgetHelperResourceChanges(f.store.db, 'theme', 'custom');
   pruneThemeAssets(f.store.db, [hash]);
   expect(f.store.db.prepare('SELECT 1 FROM theme_assets WHERE hash=?').get(hash)).toBeUndefined();
+});
+
+test('a chat lore patch that leaves the effective text unchanged records nothing', () => {
+  const f = fixture();
+  const model = fixtureBotInput('로어 채팅 봇', '설명');
+  model.package = nativeContent({
+    name: '로어 채팅 봇',
+    description: '설명',
+    character_book: {
+      entries: [{ keys: ['마을'], comment: '마을', content: '조용한 마을', constant: true }],
+    },
+  });
+  const bot = f.store.product.content(model) as Content;
+  const chat = createFixtureChat(f.store, '로어 채팅', { botId: bot.id });
+  const service = new ChatOverridesStore(f.store);
+  const selector = { id: bot.id, role: 'bot', modulePath: [], loreId: 'lore-0', field: 'text' };
+  const task = f.begin();
+  const patch = (value: string) => {
+    const state = service.get(chat.id);
+    const attachment = state.attachments[0]!;
+    const body = {
+      selector,
+      value,
+      expectedRevision: state.revision,
+      expectedHeadRevision: state.headRevision,
+      expectedProfileRevision: state.profileRevision,
+      expectedPackageRevision: attachment.packageRevision,
+      expectedFieldHash: chatOverrideHash(attachment.lore[0]!.text),
+      operationId: randomUUID(),
+    };
+    f.workspace.operation(task.id, `${task.id}:${body.operationId}`, { body }, () => {
+      const prior = service.current(chat.id, selector);
+      const saved = service.patch(chat.id, body, task.id);
+      recordHelperChatLoreChange(f.store, task, chat.id, prior, saved.entry);
+      return saved;
+    });
+  };
+  patch('조용한 마을');
+  expect(f.changes(task)).toEqual([]);
+  patch('시끄러운 마을');
+  expect(f.changes(task).map((change) => [change.domain, change.action])).toEqual([
+    ['chat-lore', 'update'],
+  ]);
+  patch('조용한 마을');
+  expect(f.changes(task)).toEqual([]);
 });

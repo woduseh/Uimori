@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { isDeepStrictEqual } from 'node:util';
+import { chatLoreKey, type ChatLoreOverride } from '../core/chat-overrides.js';
 import type { HelperChange, HelperChangeAnchor, HelperTask } from '../core/helper.js';
 import {
   editableResource,
@@ -597,6 +598,28 @@ export function recordHelperAction(
             },
           ]
   );
+}
+
+export function recordHelperChatLoreChange(
+  store: Store,
+  task: ChangeTask,
+  chatId: string,
+  prior: ChatLoreOverride | undefined,
+  saved: ChatLoreOverride
+) {
+  recordHelperAction(store, task, {
+    domain: 'chat-lore',
+    targetId: chatLoreKey(saved.selector),
+    chatId,
+    title: store.chat(chatId).title,
+    location: '채팅 전용 로어',
+    action: saved.retired ? 'delete' : 'update',
+    anchor: { domain: 'chat-lore', chatId, overrideId: saved.id },
+    value: {
+      before: prior && !prior.retired ? prior.value : saved.baseValue,
+      after: saved.retired ? saved.baseValue : saved.value,
+    },
+  });
 }
 
 function redact(db: DatabaseSync, where: string, values: string[], reason: 'deleted' | 'expired') {

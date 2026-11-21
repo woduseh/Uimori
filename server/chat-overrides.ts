@@ -119,6 +119,12 @@ export class ChatOverridesStore {
       conflicts: [...snapshot.conflicts, ...scoped.conflicts],
     };
   }
+  current(chatId: string, selector: unknown): ChatLoreOverride | undefined {
+    const key = chatLoreKey(validateChatLoreSelector(selector));
+    return this.scoped(chatId, this.store.chat(chatId).headRevision).entries.find(
+      (entry) => chatLoreKey(entry.selector) === key
+    );
+  }
   patch(chatId: string, value: unknown, requestId: string): ChatOverrideResult {
     return this.write('patch', chatId, value, requestId);
   }
