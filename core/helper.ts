@@ -66,7 +66,9 @@ export type HelperResourceRef = {
   revision: number;
   title: string;
 };
+export type HelperMode = 'apply' | 'plan';
 export type HelperTaskSnapshot = {
+  mode?: 'plan';
   images?: import('./request-images.js').RequestImage[];
   files?: import('./request-files.js').RequestFile[];
   invalidatedBySceneDeletion?: true;
@@ -98,6 +100,7 @@ export type HelperTask = {
   id: string;
   conversationId: string;
   request: string;
+  mode: HelperMode;
   status: HelperStatus;
   generation: number;
   error: string | null;

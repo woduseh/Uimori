@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { expect, vi } from 'vitest';
 import * as transport from '../../core/transport.js';
-import { HelperRuntime, type HelperServices } from '../../server/helper-runtime.js';
+import {
+  HelperRuntime,
+  type HelperRequestOptions,
+  type HelperServices,
+} from '../../server/helper-runtime.js';
 import { readHelperTaskResults } from '../../server/helper-task-results.js';
 import { modelWorkspace, updateModelWorkspace } from '../../server/prompt-workspace.js';
 import { ResponseStreamStore } from '../../server/response-stream.js';
@@ -55,9 +59,11 @@ export async function runScriptedChatHelper(
   store: Store,
   chatId: string,
   steps: transport.ProviderResult[],
-  services: HelperServices = {}
+  services: HelperServices = {},
+  options: HelperRequestOptions & { request?: string } = {}
 ) {
   let step = 0;
+  const requests: transport.ProviderRequest[] = [];
   vi.spyOn(transport, 'executeProvider').mockImplementation(async (target, request, options) => {
     transport.validateConnection(target);
     options.beforeTurn?.();
@@ -73,6 +79,7 @@ export async function runScriptedChatHelper(
       bodySha256: 'synthetic',
       stablePrefixSha256: 'synthetic',
     });
+    requests.push(request);
     return structuredClone(steps[step++] ?? helperDone);
   });
   const work: Promise<void>[] = [];
@@ -84,7 +91,19 @@ export async function runScriptedChatHelper(
     services,
   });
   const conversation = runtime.workspace.open({ kind: 'chat', chatId });
-  const task = runtime.enqueue(conversation.id, randomUUID(), 'Scripted helper request');
+  const { request = 'Scripted helper request', ...requestOptions } = options;
+  const task = runtime.enqueue(
+    conversation.id,
+    randomUUID(),
+    request,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    true,
+    undefined,
+    requestOptions
+  );
   await Promise.all(work);
   expect(runtime.workspace.task(task.id).status).toBe('completed');
   const events = runtime.workspace.events(conversation.id);
@@ -94,5 +113,11 @@ export async function runScriptedChatHelper(
         event.kind === 'tool.finished' &&
         (event.data as { callId?: string } | null)?.callId === callId
     )?.data as Record<string, unknown>;
-  return { finished, results: readHelperTaskResults(store, task.id).results };
+  return {
+    finished,
+    results: readHelperTaskResults(store, task.id).results,
+    requests,
+    runtime,
+    task: runtime.workspace.task(task.id),
+  };
 }

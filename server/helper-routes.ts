@@ -228,7 +228,10 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
         'outline',
         'images',
         'files',
+        'mode',
       ]);
+      if (body.mode !== undefined && body.mode !== 'apply' && body.mode !== 'plan')
+        throw new HttpError(400, 'Invalid helper mode');
       let outline: OutlineTarget | undefined;
       if (body.outline !== undefined) {
         const selected = record(body.outline);
@@ -288,7 +291,9 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
               })(),
           body.retryOf === undefined ? undefined : text(body.retryOf, 'retry task ID', 100),
           outline,
-          { images: requestImageUploads(body.images), files: requestFileUploads(body.files) }
+          { images: requestImageUploads(body.images), files: requestFileUploads(body.files) },
+          true,
+          { mode: body.mode }
         )
       );
     }

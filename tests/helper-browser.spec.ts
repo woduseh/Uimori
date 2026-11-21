@@ -94,6 +94,7 @@ async function harness(page: Page, seedCount = 0) {
       id: randomUUID(),
       conversationId: view.conversation.id,
       request: text,
+      mode: 'apply',
       modelTitle: '예약 당시 도우미 모델',
       status,
       generation: status === 'queued' ? 0 : 1,

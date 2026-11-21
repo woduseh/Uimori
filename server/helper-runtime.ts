@@ -71,7 +71,7 @@ import { HELPER_BASE_INSTRUCTIONS, buildCodexNativeRequest } from '../core/codex
 import { readResource } from './resource-service.js';
 import { editableResource } from '../core/resource-editing.js';
 import { createHash } from 'node:crypto';
-import type { HelperEditor, HelperTask, HelperSelection } from '../core/helper.js';
+import type { HelperEditor, HelperMode, HelperTask, HelperSelection } from '../core/helper.js';
 import type { Job, Run, RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import { workspaceModelRef, type ModelSnapshot } from '../core/product.js';
 import {
@@ -138,7 +138,7 @@ import { imageInputSupported } from '../core/provider-image-reference.js';
 import { withNativeHostContext } from '../core/provider-messages.js';
 import type { HelperAttachments } from './helper-attachments.js';
 import { measureProviderRequest } from './main-request.js';
-import { HelperWorkspace, helperCallOperationId } from './helper-workspace.js';
+import { HelperWorkspace, PLAN_MODE_READ_ONLY, helperCallOperationId } from './helper-workspace.js';
 import { forkChat } from './chat-fork.js';
 import { readIllustrationProfiles } from './helper-illustration-profiles.js';
 import { applyHelperIllustration } from './helper-illustration-workflow.js';
@@ -220,6 +220,7 @@ type HelperAttachmentAdmission = HelperAttachments & {
   preparedImages?: PreparedRequestImages;
   preparedFiles?: PreparedRequestFiles;
 };
+export type HelperRequestOptions = { mode?: HelperMode };
 
 function retryRequest(workspace: HelperWorkspace, request: string, retryOf?: string): string {
   if (!retryOf || request !== workspace.task(retryOf).request) return request;
@@ -232,6 +233,8 @@ function retryRequest(workspace: HelperWorkspace, request: string, retryOf?: str
   ].join('\n\n');
 }
 
+const PLAN_MODE_GUIDANCE =
+  'This request is in plan mode: produce a plan, not changes. Read whatever you need, but do not save, create, delete, select, request generation or change settings; the host refuses every operation that writes. Reply with a concrete, ordered plan that names each target and the change you would make, and the questions the owner must settle. Carrying out the plan is a separate request.';
 const FINAL_CALL_GUIDANCE =
   'The call budget allows only this response. Do not call tools. Reply to the user with what you completed, which changes were saved, any change whose outcome is uncertain, and what remains to do.';
 const CONTRACT = `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation. Apply, select, cancel or retry only when requested. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. ${AUTHOR_NOTE_GUIDANCE}
@@ -853,7 +856,8 @@ export class HelperRuntime {
     retryOf?: string,
     outlineTarget?: OutlineTarget,
     uploads: { images?: RequestImageUpload[]; files?: RequestFileUpload[] } = {},
-    start = true
+    start = true,
+    options: HelperRequestOptions = {}
   ) {
     const images = uploads.images ?? [],
       files = uploads.files ?? [];
@@ -881,7 +885,8 @@ export class HelperRuntime {
         retryOf,
         outlineTarget,
         start,
-        { receipt }
+        { receipt },
+        options
       );
     if (retryOf && receipt) throw new HttpError(409, 'HELPER_RETRY_ATTACHMENTS_CHANGED');
     if (!receipt)
@@ -893,7 +898,9 @@ export class HelperRuntime {
         selection,
         retryOf,
         outlineTarget,
-        start
+        start,
+        undefined,
+        options
       );
     const preparedImages = await prepareRequestImages(this.store, images);
     if (
@@ -913,7 +920,8 @@ export class HelperRuntime {
         retryOf,
         outlineTarget,
         start,
-        { receipt }
+        { receipt },
+        options
       );
     const preparedFiles = prepareRequestFiles(this.store, files);
     const task = this.enqueue(
@@ -931,7 +939,8 @@ export class HelperRuntime {
         files: preparedFiles.files,
         preparedImages,
         preparedFiles,
-      }
+      },
+      options
     );
     releaseRequestImageUploads(this.store, images);
     releaseRequestFileUploads(this.store, files);
@@ -947,11 +956,13 @@ export class HelperRuntime {
     retryOf?: string,
     outlineTarget?: OutlineTarget,
     start = true,
-    admission?: HelperAttachmentAdmission
+    admission?: HelperAttachmentAdmission,
+    options: HelperRequestOptions = {}
   ) {
     request = retryRequest(this.workspace, request, retryOf);
     if (retryOf && !outlineTarget)
       outlineTarget = this.workspace.task(retryOf).snapshot.outlineTarget;
+    const mode = options.mode ?? (retryOf ? this.workspace.task(retryOf).mode : 'apply');
     const requestFingerprint = createHash('sha256')
       .update(
         JSON.stringify({
@@ -960,6 +971,7 @@ export class HelperRuntime {
           editor,
           selection,
           outlineTarget,
+          ...(mode === 'plan' ? { mode } : {}),
           ...(admission?.receipt ? { attachments: admission.receipt } : {}),
         })
       )
@@ -1061,6 +1073,7 @@ export class HelperRuntime {
       }
       const queued = this.workspace.enqueue(conversationId, requestKey, request, {
         requestFingerprint,
+        ...(mode === 'plan' ? { mode } : {}),
         ...(admission?.images?.length ? { images: structuredClone(admission.images) } : {}),
         ...(admission?.files?.length ? { files: structuredClone(admission.files) } : {}),
         ...(retryOf ? { retryOf } : {}),
@@ -1993,6 +2006,7 @@ export class HelperRuntime {
             (task.snapshot.outline?.target.purpose === 'review'
               ? '\n' + OUTLINE_REVIEW_GUIDANCE
               : '') +
+            (task.snapshot.mode === 'plan' ? '\n' + PLAN_MODE_GUIDANCE : '') +
             (task.snapshot.persona
               ? `\nVoice for your replies to the user. It shapes explanations and conversation only; saved drafts, artifacts, lore, notes, summaries, prompts, translations, code and tool arguments keep the style their own task requires:\n${task.snapshot.persona}`
               : ''),
@@ -2313,6 +2327,8 @@ export class HelperRuntime {
     if (task.snapshot.outline?.target.purpose === 'review' && !helperToolTraits(name).reviewAllowed)
       throw new HttpError(403, 'OUTLINE_REVIEW_READ_ONLY');
     const traits = helperToolTraits(name, args);
+    if (task.snapshot.mode === 'plan' && !traits.readOnly)
+      throw new HttpError(403, PLAN_MODE_READ_ONLY);
     const targeted =
       !traits.direct && args.chatId !== undefined
         ? this.targetTask(task, args, traits.writing)

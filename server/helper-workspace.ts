@@ -62,11 +62,15 @@ export function helperCallOperationId(taskId: string, callId: string): string {
   return createHash('sha256').update(`${taskId}\0${callId}`).digest('hex');
 }
 
+export const PLAN_MODE_READ_ONLY =
+  'PLAN_MODE_READ_ONLY: This request asks for a plan, so operations that save or start work are refused. Finish the plan instead.';
+
 function taskData(row: Row, completedEffects = 0): Omit<HelperTask, 'snapshot'> {
   return {
     id: row.id,
     conversationId: row.conversation_id,
     request: row.request,
+    mode: row.mode === 'plan' ? 'plan' : 'apply',
     status: row.status,
     generation: row.generation,
     error: row.error,
@@ -666,9 +670,10 @@ export class HelperWorkspace {
             .get(id)?.n ?? 0
         )
       : 0;
+    const snapshot = JSON.parse(row.snapshot) as HelperTaskSnapshot;
     return {
-      ...taskData(row, completedEffects),
-      snapshot: JSON.parse(row.snapshot) as HelperTaskSnapshot,
+      ...taskData({ ...row, mode: snapshot.mode }, completedEffects),
+      snapshot,
       instructions: this.instructions(id),
     };
   }
@@ -693,7 +698,8 @@ export class HelperWorkspace {
         `WITH page AS (
           SELECT t.rowid AS task_order,t.id,t.conversation_id,t.request,t.status,t.generation,
             t.error,t.usage,t.created_at,t.started_at,t.updated_at,
-            json_extract(t.snapshot,'$.model.title') AS model_title
+            json_extract(t.snapshot,'$.model.title') AS model_title,
+            json_extract(t.snapshot,'$.mode') AS mode
           FROM helper_tasks t WHERE ${predicate} ORDER BY t.rowid DESC LIMIT 50
         ), effects AS (
           SELECT task_id,COUNT(*) AS count FROM helper_operations
@@ -929,8 +935,9 @@ export class HelperWorkspace {
       const prior = this.operationResult<SynchronousResult<T>>(taskId, operationId, input);
       if (prior !== undefined) return prior;
       const hash = createHash('sha256').update(json(input)).digest('hex');
-      if (this.task(taskId).status !== 'running')
-        throw new HttpError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
+      const task = this.task(taskId);
+      if (task.status !== 'running') throw new HttpError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
+      if (task.snapshot.mode === 'plan') throw new HttpError(403, PLAN_MODE_READ_ONLY);
       const result = apply();
       this.store.db
         .prepare('INSERT INTO helper_operations VALUES(?,?,?,?,?)')

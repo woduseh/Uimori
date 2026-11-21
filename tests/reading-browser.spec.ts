@@ -304,6 +304,7 @@ async function helperFixture(page: Page, before: ChatDetail) {
     id: randomUUID(),
     conversationId: conversation.id,
     request: helperRequest,
+    mode: 'apply' as const,
     status: status as HelperTaskView['status'],
     modelTitle: '“상태 카드의 모델 이름”',
     generation: 1,

@@ -164,6 +164,14 @@ Constraints on changing this behavior:
 - All selected units are restored in one transaction, each in its own savepoint: a failed unit is reported `failed` and leaves nothing behind, and the other units still commit. A rollback is refused with `HELPER_TASK_ACTIVE` while a task of the conversation is queued or running.
 - A rollback cannot be cancelled once it runs; it is synchronous and short. A client that lost the response sends the same request again and reads the statuses.
 
+## Plan mode
+
+A helper request sent with `mode: "plan"` (`POST /api/helper/conversations/:id/messages` in `server/helper-routes.ts`) is stored in the task snapshot, and every task view carries `mode`. The plan instruction is `PLAN_MODE_GUIDANCE` in `server/helper-runtime.ts`; `invokeOperation` refuses an operation that `helperToolTraits` does not classify as read-only with `PLAN_MODE_READ_ONLY`, and `operation` in `server/helper-workspace.ts` refuses to write a receipt for a plan task. `tests/helper-plan-mode.test.ts` enforces both refusals, the reviewed list of read operations, and the mode in the task list and under a reused request key. This section records only what those files do not state.
+
+- The refusal uses the classification that decides whether the dispatcher records a receipt and a change, so there is one list. The receipt refusal is the backstop for a save that does not pass the tool gate, such as `uimori apply` inside `data.exec`; a plan task therefore records no change and has nothing to roll back.
+- Discovery still lists the operations that write, so a plan can name the operation and arguments it would use.
+- Carrying out a plan is an ordinary request that refers to it. The server keeps no link between the plan and the request that runs it, and a retry keeps the mode of the task it retries.
+
 ## Linux data workspace
 
 `data.exec` is defined in `server/helper-data-tools.ts`, with its input schema in `core/main-shell.ts`. The contract the model receives is that description and schema together with the text the workspace gives it: `INDEX.md` (written by `server/helper-shell.ts`), `GUIDE.md` (`server/helper-shell-guide.ts`), the `uimori --help` usage (`runner/uimori.mjs`) and the help of the bundled `tools/repetition.py` (`server/helper-shell-scripts.ts`). They state the workspace layout, on-demand export, apply and refresh, CLI syntax, limits and results. `tests/helper-shell.test.ts`, `tests/helper-shell-runtime.test.ts`, `tests/helper-runner.test.ts` and `tests/helper-cli.test.ts` enforce that contract, including receipts, revision conflicts, unknown outcomes and the termination of child processes. This section records only what those files do not state.
@@ -282,7 +290,7 @@ Behavior the descriptions leave out:
 
 Constraints on changing these operations:
 
-- `helperToolTraits` in `server/helper-app-tools.ts` is the one policy for read or write classification, outline-review availability and writing-snapshot needs. Metadata reads, renames, lore operations and outline navigation stay out of its `writing` set, so an explicit `chatId` does not prepare a snapshot they would not use.
+- `helperToolTraits` in `server/helper-app-tools.ts` is the one policy for read or write classification, outline-review availability, [plan mode](#plan-mode) refusal and writing-snapshot needs. Metadata reads, renames, lore operations and outline navigation stay out of its `writing` set, so an explicit `chatId` does not prepare a snapshot they would not use.
 - Each definition in `server/helper-resource-tools.ts` declares whether the operation reads or mutates and which resources a mutation targets. Draft protection, operation receipts, undo tracking and resource update events all use that declaration; a new resource mutation declares its targets there instead of in a second list. The declaration is stripped from the schema the model receives.
 - Resource operations add no save path. Revision checks, final validation, regenerated projections and the single retained undo belong to `saveResource` in `server/resource-service.ts`, which the editor also uses, and `resource.clone` shares `cloneResource` with `POST /api/resources/clone` and library list copies. See [동시성 제어와 멱등성 보장](EDITING.md#동시성-제어와-멱등성-보장).
 - The `editTarget` hints of `data.search` and `data.read` and the validation of `resource.patch` read the same `server/helper-native-protected-fields.json` and `server/helper-resource-path-policy.json`: protected field names, preset paths and JSON Pointer limits. Change them together. The limits apply to the full editing path, including the native-content prefix.
