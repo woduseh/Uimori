@@ -72,6 +72,7 @@ import {
   X,
 } from 'lucide-react';
 import { Dialog } from './Dialog.js';
+import { ConfirmDialog } from './ConfirmDialog.js';
 import { PackageStartPicker, type PackageStartSelection } from './PackageStartPicker.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
@@ -1773,6 +1774,7 @@ function TextEditor({
   );
   const [saving, setSaving] = useState(false);
   const [conflictOpen, setConflictOpen] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
   const draftVersion = useRef(0);
   const [selection, setSelection] = useState({ start: 0, end: 0, version: 0 });
   const [error, setError] = useState('');
@@ -1822,7 +1824,9 @@ function TextEditor({
           return;
         event.preventDefault();
         event.stopPropagation();
-        cancel();
+        if (busy.current) return;
+        if (draft.text === savedText) cancel();
+        else setDiscardOpen(true);
       }}
       onSubmit={async (event) => {
         event.preventDefault();
@@ -1931,6 +1935,20 @@ function TextEditor({
           disabled={saving || !draft.text.trim()}
         />
       </div>
+      <ConfirmDialog
+        open={discardOpen}
+        title={t('reader.cancelEditing')}
+        message={t('reader.discardTheUnsavedTextEdits')}
+        action={t('reader.discardEditsAndClose')}
+        onCancel={() => {
+          setDiscardOpen(false);
+          input.current?.focus({ preventScroll: true });
+        }}
+        onConfirm={() => {
+          setDiscardOpen(false);
+          cancel();
+        }}
+      />
       <SaveConflictDialog
         open={conflictOpen}
         title={t('reader.valueSaveConflict', { v0: title })}

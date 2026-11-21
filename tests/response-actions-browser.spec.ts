@@ -565,6 +565,10 @@ test('RACOM05 earlier scenes keep bookmark and menu visible while copy, editing 
     await expect(original).toHaveValue(source.text);
     await original.fill('취소할 원문 수정');
     await page.keyboard.press('Escape');
+    await page
+      .getByRole('alertdialog', { name: '편집 취소', exact: true })
+      .getByRole('button', { name: '초안 버리고 닫기', exact: true })
+      .click();
     await expect(original).toHaveCount(0);
     await expect(opener).toBeFocused();
     await openSourceActions(scene);

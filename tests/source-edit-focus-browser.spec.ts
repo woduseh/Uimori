@@ -143,8 +143,21 @@ for (const [label, viewport] of [
     await expect(scene.getByTestId('source-text')).toBeHidden();
     await insideReader(field);
     await field.fill('A cancelled synthetic edit.');
+    const draftKey = `uimori:text-draft:${source.id}:original`;
+    const sessionDraft = () =>
+      page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) ?? 'null')?.text, draftKey);
+    const discard = page.getByRole('alertdialog', { name: '편집 취소', exact: true });
     await page.keyboard.press('Escape');
+    await expect(discard).toBeVisible();
+    await discard.getByRole('button', { name: '취소', exact: true }).click();
+    await expect(discard).toBeHidden();
+    await expect(field).toHaveValue('A cancelled synthetic edit.');
+    await expect(field).toBeFocused();
+    expect(await sessionDraft()).toBe('A cancelled synthetic edit.');
+    await page.keyboard.press('Escape');
+    await discard.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
     await expect(field).toHaveCount(0);
+    expect(await sessionDraft()).toBeUndefined();
     await expect(sourceBody).toHaveAttribute('data-edit-focus-probe', 'preserved');
     await expect(trigger).toBeFocused();
     await insideReader(trigger);
@@ -187,7 +200,6 @@ for (const [label, viewport] of [
     await expect(translation).toBeFocused();
     await expect(scene.getByTestId('source-text')).toBeHidden();
     await insideReader(translation);
-    await translation.fill('저장 버튼 배치를 확인하는 합성 번역이에요.');
     const translationSave = scene.getByRole('button', { name: '번역 저장', exact: true });
     const translationCancel = scene.getByRole('button', { name: '편집 취소', exact: true });
     for (const button of [translationSave, translationCancel]) {
@@ -381,8 +393,13 @@ for (const [width, height, mode] of [[320, 640, 'dark']] as const) {
       await field.fill(`${translation}\n\nA temporary revision.`);
       if (visualReview && action === 'Escape')
         await page.screenshot({ path: info.outputPath(`cinematic-editor-${width}.png`) });
-      if (action === 'Escape') await page.keyboard.press('Escape');
-      else
+      if (action === 'Escape') {
+        await page.keyboard.press('Escape');
+        await page
+          .getByRole('alertdialog', { name: '편집 취소', exact: true })
+          .getByRole('button', { name: '초안 버리고 닫기', exact: true })
+          .click();
+      } else
         await scene
           .getByRole('button', {
             name: action === 'cancel' ? '편집 취소' : '번역 저장',

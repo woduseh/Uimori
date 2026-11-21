@@ -875,6 +875,12 @@ export const messages = {
     ja: '保存していないシーン名を破棄しますか？',
     zh: '要放弃未保存的场景名称吗？',
   },
+  'reader.discardTheUnsavedTextEdits': {
+    ko: '저장하지 않은 편집 내용을 버릴까요?',
+    en: 'Discard the unsaved edits?',
+    ja: '保存していない編集内容を破棄しますか？',
+    zh: '要放弃未保存的编辑内容吗？',
+  },
   'reader.discardEditsAndClose': {
     ko: '초안 버리고 닫기',
     en: 'Discard edits and close',

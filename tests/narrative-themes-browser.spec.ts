@@ -441,6 +441,10 @@ for (const [layout, width, mode] of readerCases) {
     await expect(editor).toHaveValue(data.text);
     await editor.fill('Unsaved narrative edit');
     await page.keyboard.press('Escape');
+    await page
+      .getByRole('alertdialog', { name: '편집 취소', exact: true })
+      .getByRole('button', { name: '초안 버리고 닫기', exact: true })
+      .click();
     await expect(editor).toHaveCount(0);
     await expect(sceneMenu).toBeFocused();
     await expect(source).toContainText(endMarker);
