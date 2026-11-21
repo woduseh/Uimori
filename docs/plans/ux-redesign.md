@@ -78,17 +78,6 @@
 
 원본의 Wave 1을 0단계에서 4단계로 나눴어요. 각 단계의 항목은 서로 독립이면 따로 커밋해요.
 
-### 3단계. 단축키와 팔레트
-
-- 단축키는 등록 방식으로 만들어요. 동작 ID와 기본 키를 한 표에 두고(9단계의 재바인딩이 이 표만 바꾸면 되게), 동작을 가진 컴포넌트가 자기 처리기를 등록하고, 전역 처리기는 이미 처리된 이벤트, 열린 다이얼로그와 메뉴, 한글 조합 중에는 움직이지 않아요. 중앙의 한 함수가 각 화면 내부에 손을 넣는 구조는 피해요.
-- 프리셋: `Cmd/Ctrl+K` 팔레트, `Cmd/Ctrl+B` 왼쪽 사이드바, `Cmd/Ctrl+\` 오른쪽 사이드카, `Cmd/Ctrl+,` 설정, `Cmd/Ctrl+S` 저장, `Cmd/Ctrl+Shift+F` 원고 검색, `Alt+M` 도우미 모드. 브라우저의 `Cmd/Ctrl+F`는 건드리지 않아요.
-- 생성 중단은 `Esc` 두 번이에요. 첫 번째에 안내를 보이고, 다이얼로그나 메뉴를 닫은 직후 1.5초 동안은 세지 않아요.
-- 전역 켜기와 끄기 설정을 둬요.
-- 팔레트는 이동과 명령만 다뤄요(채팅, 서재 자료, 설정 구역, 플롯과 도우미 열기). 원고 본문 검색은 기존 원고 검색으로 넘겨요. 터치 화면용 진입점은 만들지 않아요.
-- 원고 검색의 자동 조회를 한글, 한자, 가나가 들어간 검색어는 두 글자부터 하게 해요. 지금의 세 글자 기준은 색인이 trigram이라서예요. 두 글자 검색은 색인 없이 200장면 구간을 차례로 읽는 기존 경로를 타므로, 300ms 지연과 이전 요청 취소를 그대로 쓰고 [MANUSCRIPT-SEARCH](../MANUSCRIPT-SEARCH.md)의 설명을 맞춰요.
-
-완료 기준: 각 단축키가 글 입력을 방해하지 않아요. 기존 `Esc` 처리(메뉴, 다이얼로그, 장면 탐색기, 요청 편집기)가 그대로 동작해요. 두 글자 한글 검색어가 입력을 멈춘 뒤 자동으로 조회되고, 장면이 많은 채팅에서 입력이 끊기지 않아요.
-
 ### 4단계. 시각 마감
 
 - 0단계의 모션 토큰을 다이얼로그, 메뉴, 토스트, 호버에 적용해요. CSS만으로 구현하고(`@starting-style`과 개별 전환 속성), 닫힘 타이머나 애니메이션용 React 상태를 두지 않아요.
@@ -126,6 +115,7 @@
 
 - 세 도메인의 턴 체크포인트와 턴 롤백, 항목별 되돌리기를 넣어요. 다른 도메인(채팅 로어, 변수, 설정 등)은 대상이 아니라고 화면에 밝혀요.
 - 계획 모드: 쓰기 도구를 서버에서 막고 계획만 받아요. 계획 카드에서 실행으로 넘어가요.
+- 도우미 모드 단축키 `Alt+M`을 단축키 표([shortcut-bindings.ts](../../web/shortcut-bindings.ts))에 더해요. 3단계에서는 모드가 없어서 넣지 않았어요.
 - 승인: 자료 삭제와 여러 자료 일괄 수정(3건 이상)은 기본으로 확인을 받아요. 유료 생성(`scene.request`, `scene.translate`) 확인은 기본으로 꺼 두고 설정으로 켜요.
 - 턴 롤백이 막히거나 일부만 되는 경우 그 사유를 보여 줘요. 1단계에서 미룬 사유 표시를 여기서 정해요.
 
@@ -160,7 +150,6 @@
 
 | 단계 | T3 Code의 위치 | 참고할 점 |
 | --- | --- | --- |
-| 3. 단축키와 팔레트 | `packages/shared/src/keybindings.ts`의 `DEFAULT_KEYBINDINGS`, `apps/web/src/keybindings.ts`, `apps/web/src/components/chat/useChatShortcuts.ts`, `apps/web/src/components/CommandPalette.logic.ts` | 단축키를 키, 명령, 적용 조건(`when`)의 표로 두고 뒤 규칙이 앞 규칙을 이겨요. 창 전체에 리스너 하나를 두고, 처리기가 거짓을 돌려주면 처리하지 않은 것으로 보고 이벤트를 흘려보내요. |
 | 5. 사이드카 폭 조절 | `apps/web/src/hooks/useResizableWidth.ts`, `apps/web/src/hooks/useResizeDrag.ts` | 끄는 동안에는 CSS 변수만 바꾸고 저장은 놓을 때 한 번 해요. 읽을 때 범위를 다시 맞추고, 저장소가 막히면 메모리 값으로 동작해요. |
 | 6. 도구 활동 묶음 | `packages/client-runtime/src/work-log/presentation.ts`의 `toolGroupAction`, `summarizeToolGroup` | 도구를 읽기, 편집, 명령, 검색 같은 몇 가지 종류로 나누고 연속된 호출을 요약 한 줄로 접는 일을 React와 분리된 순수 모듈에서 해요. |
 | 6. 변경 diff | `apps/web/src/components/DiffPanel.tsx`, `apps/web/src/components/chat/ChangedFilesTree.tsx`, `packages/contracts/src/checkpointDiff.ts` | 파일별 접힘 상태를 따로 두고 펼칠 때 내용을 읽어요. 출력에 크기 상한을 두고 잘렸다는 표식을 남겨요. 줄 단위 diff만 있어서 어절 단위 산문 diff는 참고할 것이 없어요. |

@@ -37,6 +37,7 @@
 | All-chat activity inbox and receipts | `server/activity-feed.ts`, `web/useActivityFeed.ts`, `web/ActivityNavigation.tsx`, `web/BotTreeNavigation.tsx`, `web/ActivityStatus.tsx` | [PWA and activity notifications](PWA.md) |
 | Notices and execution feedback | `web/NoticeBanner.tsx`, `web/TransientNotice.tsx`, `web/DismissibleError.tsx` | [UI principles](UI-PRINCIPLES.md) |
 | Per-response status line and expandable task detail | `web/TurnActivity.tsx`, `web/TurnStatus.tsx`, `web/turn-activity.css`, `tests/turn-activity-browser.spec.ts` | [Turn activity](TURN-ACTIVITY.md) |
+| Keyboard shortcuts and command palette | `web/shortcut-bindings.ts` (action table, resolution), `web/shortcuts.tsx` (registration, window listener, on/off setting), `web/CommandPalette.tsx`, `tests/shortcut-bindings.test.ts`, `tests/shortcuts-browser.spec.ts` | [Usage](USAGE.md#키보드-단축키) |
 | Workspace, bot, and manuscript search UI | `web/ManuscriptSearch.tsx`, `web/BotTreeNavigation.tsx`, `web/BotNavigation.tsx` | [Manuscript search](MANUSCRIPT-SEARCH.md), [UI principles](UI-PRINCIPLES.md) |
 | Rewrite requests and copy/replace choice, plus scene context controls | `server/scene-context.ts`, `server/prompt-snapshot.ts`, `core/story-context.ts`, `web/RequestMessage.tsx`, `web/SourceReader.tsx` | [Editing](EDITING.md) |
 | Retained manuscript comparison and scene names | `web/SourceVersions.tsx`, `web/SceneTitleEditor.tsx`, `server/source-editing.ts`, `server/scene-titles.ts` | [Editing](EDITING.md), [Reading state](READING-STATE.md) |
