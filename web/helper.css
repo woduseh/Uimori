@@ -877,3 +877,49 @@
     justify-self: end;
   }
 }
+.helper-composer .helper-mode-chip {
+  gap: 4px;
+  min-width: var(--control-h);
+  margin: 0;
+  padding-inline: 8px;
+  flex-shrink: 0;
+}
+.helper-composer .helper-mode-chip[data-mode="plan"] {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.helper-plan {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
+}
+.helper-plan-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-small);
+  font-weight: 600;
+}
+.helper-plan-body[data-expanded="false"] .helper-prose {
+  max-height: var(--diff-max-h);
+  overflow: hidden;
+}
+.helper-plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.helper-plan-actions > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.helper-plan-toggle[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}

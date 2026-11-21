@@ -29,6 +29,10 @@ export const shortcutActions = {
     when: { ...outsideOverlay, insideOverlay: true },
   },
   'search.open': { key: { code: 'KeyF', mod: true, shift: true }, when: outsideOverlay },
+  'helper.mode': {
+    key: { code: 'KeyM', alt: true },
+    when: { ...outsideOverlay, insideOverlay: true },
+  },
   'run.stop': {
     key: { code: 'Escape' },
     when: { ...outsideOverlay, quietAfterOverlayMs: 1500, confirmByRepeat: true },

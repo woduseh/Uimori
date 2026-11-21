@@ -32,7 +32,10 @@ import {
   Maximize2,
   Minimize2,
   ChevronDown,
+  ListChecks,
   MessageCircle,
+  PenLine,
+  Play,
 } from 'lucide-react';
 import { SettingsIcon, CloseIcon, LibraryIcon } from './ui-icons.js';
 import type { Library } from '../core/product.js';
@@ -40,6 +43,7 @@ import type {
   HelperConversation,
   HelperMessageMutation,
   HelperEditor,
+  HelperMode,
   HelperResourceRef,
   HelperScope,
   HelperSelection,
@@ -63,6 +67,7 @@ import { PartialResponse, ResponseDisplay } from './StreamingResponse.js';
 import type { ResponseDisplayMode } from './presentation-settings.js';
 import { HelperArtifactCard } from './HelperArtifactCard.js';
 import { HelperTaskResults } from './HelperTaskResults.js';
+import { HelperPlanCard } from './HelperPlanCard.js';
 import { HelperContextUsage } from './HelperContextUsage.js';
 import {
   HelperDeleteActions,
@@ -177,6 +182,7 @@ type Outbox = Partial<FrozenHelperAttachments> & {
   editor?: HelperEditor;
   selection?: HelperSelection;
   outline?: OutlineTarget;
+  mode?: 'plan';
 };
 const active = (task: HelperTaskView) => task.status === 'queued' || task.status === 'running';
 const starterKeys: Record<HelperScope['kind'], string[]> = {
@@ -436,6 +442,16 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     ready: () => !!running,
     confirmNotice: uiMessage('shortcuts.cancelHelperAgain', { key: shortcutLabel('run.stop') }),
   });
+  const [modes, setModes] = useState<Record<string, HelperMode>>({});
+  const mode = modes[scopeKey] ?? 'apply';
+  const toggleMode = () => {
+    if (!scopeKey || document.activeElement?.closest('dialog')) return false;
+    setModes((old) => ({
+      ...old,
+      [scopeKey]: (old[scopeKey] ?? 'apply') === 'plan' ? 'apply' : 'plan',
+    }));
+  };
+  useShortcut('helper.mode', toggleMode, { scope: panel, active: props.open });
   const answered = new Set(
     (data.current?.messages ?? [])
       .filter((message) => message.role === 'assistant')
@@ -922,6 +938,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               : {}),
           ...(!steerTaskId && selection ? { selection } : {}),
           ...(!steerTaskId && selectedOutline ? { outline: selectedOutline.target } : {}),
+          ...(!steerTaskId && modes[owner] === 'plan' ? { mode: 'plan' as const } : {}),
         };
       }
       setOutbox(owner, request);
@@ -948,6 +965,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           ...(request.outline ? { outline: request.outline } : {}),
           ...(request.images?.length ? { images: request.images } : {}),
           ...(request.files?.length ? { files: request.files } : {}),
+          ...(request.mode && !request.steerTaskId ? { mode: request.mode } : {}),
         }
       );
       setOutbox(owner, null);
@@ -1094,6 +1112,16 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     };
     return send(request);
   }
+  async function carryOutPlan() {
+    if (!conversation || outbox) return;
+    setModes((old) => ({ ...old, [scopeKey]: 'apply' }));
+    await send({
+      requestKey: crypto.randomUUID(),
+      text: t('helperPlan.carryOutRequest'),
+      scope: scopeKey,
+      targetConversationId: conversation.id,
+    });
+  }
   const taskStatus = (task: HelperTaskView) => (
     <div className="helper-task" data-task-id={task.id}>
       <TurnStatus
@@ -1112,10 +1140,17 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           )
         }
         badges={
-          task.id === summarized?.id && pending.length > 1 ? (
-            <span className="activity-count">
-              {t('helpers.m329', { count: formatNumber(pending.length - 1) })}
-            </span>
+          task.mode === 'plan' || (task.id === summarized?.id && pending.length > 1) ? (
+            <>
+              {task.mode === 'plan' && (
+                <span className="activity-count helper-plan-badge">{t('helperPlan.title')}</span>
+              )}
+              {task.id === summarized?.id && pending.length > 1 && (
+                <span className="activity-count">
+                  {t('helpers.m329', { count: formatNumber(pending.length - 1) })}
+                </span>
+              )}
+            </>
           ) : undefined
         }
         storageKey={activityKey(task)}
@@ -1668,6 +1703,25 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                     status && !['queued', 'running'].includes(status) ? (
                       <PartialResponse>{response}</PartialResponse>
                     ) : null
+                  ) : task?.mode === 'plan' && message.role === 'assistant' ? (
+                    <HelperPlanCard
+                      action={
+                        task.status === 'completed' &&
+                        task.id === latestTaskId &&
+                        !pending.length && (
+                          <button
+                            type="button"
+                            disabled={messageDisabled || !hydrated[scopeKey]}
+                            onClick={() => void carryOutPlan()}
+                          >
+                            <Play size={16} aria-hidden="true" />
+                            {t('helperPlan.carryOut')}
+                          </button>
+                        )
+                      }
+                    >
+                      {response}
+                    </HelperPlanCard>
                   ) : (
                     response
                   )}
@@ -2162,6 +2216,24 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               addFiles={attachments.addFiles}
             />
             {modelChip}
+            <button
+              type="button"
+              className="model-chip secondary helper-model-chip helper-mode-chip"
+              data-mode={mode}
+              aria-label={t('helperPlan.modeLabel', {
+                mode: t(mode === 'plan' ? 'helperPlan.plan' : 'helperPlan.apply'),
+              })}
+              title={t('helperPlan.modeHint', { key: shortcutLabel('helper.mode') })}
+              disabled={!conversation}
+              onClick={toggleMode}
+            >
+              {mode === 'plan' ? (
+                <ListChecks size={16} aria-hidden="true" />
+              ) : (
+                <PenLine size={16} aria-hidden="true" />
+              )}
+              {mode === 'plan' && <span>{t('helperPlan.planShort')}</span>}
+            </button>
             {shownUsage && <HelperContextUsage usage={shownUsage} />}
             <IconButton
               label={t('helpers.m106')}

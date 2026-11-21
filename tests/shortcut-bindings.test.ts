@@ -34,6 +34,7 @@ test('default bindings resolve with Ctrl or Cmd and exact Shift and Alt state', 
   expect(resolve(press('Comma', { metaKey: true }))).toBe('settings.open');
   expect(resolve(press('KeyS', { ctrlKey: true }))).toBe('editor.save');
   expect(resolve(press('KeyF', { ctrlKey: true, shiftKey: true }))).toBe('search.open');
+  expect(resolve(press('KeyM', { altKey: true }))).toBe('helper.mode');
   expect(resolve(press('Escape'))).toBe('run.stop');
   expect(resolve(press('Period', { ctrlKey: true }))).toBe('theme.safeMode');
 
@@ -42,6 +43,8 @@ test('default bindings resolve with Ctrl or Cmd and exact Shift and Alt state', 
   expect(resolve(press('KeyK', { ctrlKey: true, shiftKey: true }))).toBeNull();
   expect(resolve(press('KeyS', { ctrlKey: true, altKey: true }))).toBeNull();
   expect(resolve(press('Escape', { shiftKey: true }))).toBeNull();
+  expect(resolve(press('KeyM'))).toBeNull();
+  expect(resolve(press('KeyM', { ctrlKey: true, altKey: true }))).toBeNull();
 });
 
 test('handled events and IME composition never resolve', () => {
@@ -59,6 +62,7 @@ test('an open dialog or menu keeps only the actions that apply inside it', () =>
   expect(resolve(press('KeyB', { ctrlKey: true }), overlay)).toBeNull();
   expect(resolve(press('Escape'), overlay)).toBeNull();
   expect(resolve(press('KeyS', { ctrlKey: true }), overlay)).toBe('editor.save');
+  expect(resolve(press('KeyM', { altKey: true }), overlay)).toBe('helper.mode');
   expect(resolve(press('Period', { ctrlKey: true }), overlay)).toBe('theme.safeMode');
 });
 
@@ -92,4 +96,6 @@ test('labels name Cmd on Apple platforms and Ctrl elsewhere', () => {
   expect(shortcutKeyLabel(bindings['search.open'], true)).toBe('Cmd+Shift+F');
   expect(shortcutKeyLabel(bindings['rightPanel.toggle'], false)).toBe('Ctrl+\\');
   expect(shortcutKeyLabel(bindings['run.stop'], false)).toBe('Esc');
+  expect(shortcutKeyLabel(bindings['helper.mode'], false)).toBe('Alt+M');
+  expect(shortcutKeyLabel(bindings['helper.mode'], true)).toBe('Option+M');
 });

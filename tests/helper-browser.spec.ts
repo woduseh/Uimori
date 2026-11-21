@@ -47,7 +47,13 @@ async function harness(page: Page, seedCount = 0) {
   const rollbackPosts: { unit?: string }[] = [];
   let onRollback: ((units: HelperRollbackUnit[]) => Promise<void>) | undefined;
   let loseRollback = false;
-  const posts: { requestKey: string; text: string; selection?: unknown }[] = [];
+  const posts: {
+    requestKey: string;
+    text: string;
+    selection?: unknown;
+    mode?: string;
+    confirmations?: string[];
+  }[] = [];
   const steerPosts: { taskId: string; requestKey: string; text: string }[] = [];
   const messageMutations: {
     messageId: string;
@@ -323,6 +329,7 @@ async function harness(page: Page, seedCount = 0) {
             view.tasks.some((task) => task.status === 'running') ? 'queued' : 'running'
           );
         if (!previous) {
+          task.mode = body.mode ?? 'apply';
           if (body.retryOf) {
             const old = view.messages.find((message) => message.taskId === body.retryOf)!;
             const group = old.requestGroupId ?? old.taskId;
@@ -2489,6 +2496,85 @@ test('HROLLBACK03 an unsaved editor draft blocks its unit and a clean editor sho
   expect(state.rollbackPosts).toHaveLength(2);
   await expect(draft).toHaveValue(original);
   await expect(card.locator('.helper-rollback-status')).toHaveText('되돌렸어요');
+});
+
+test('HPLAN01 plan mode sends a plan request, shows a bounded plan and carries it out', async ({
+  page,
+  request,
+}, info) => {
+  const chat = await create(request),
+    state = await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  const modeChip = panel.locator('.helper-mode-chip');
+  await expect(modeChip).toHaveAccessibleName('요청 방식: 바로 적용');
+  await modeChip.click();
+  await expect(modeChip).toHaveAccessibleName('요청 방식: 계획만');
+  await panel.getByLabel('도우미에게 요청').fill('등장인물 소개를 다시 정리할 계획을 세워 주세요');
+  await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await expect.poll(() => state.posts.length).toBe(1);
+  expect(state.posts[0].mode).toBe('plan');
+  const task = state.current().tasks[0];
+  const row = panel.locator(`.helper-task[data-task-id="${task.id}"]`);
+  await expect(row.locator('.helper-plan-badge')).toHaveText('계획');
+  state.complete(task);
+  state.current().messages.at(-1)!.text = Array.from(
+    { length: 24 },
+    (_, index) => `${index + 1}. 인물 ${index + 1}의 소개 문단을 읽고 말투와 관계를 정리해요.`
+  ).join('\n');
+  const plan = panel.getByTestId('helper-plan');
+  await expect(plan).toBeVisible();
+  const toggle = plan.getByRole('button', { name: '계획 모두 보기', exact: true });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  const prose = plan.locator('.helper-prose');
+  const collapsed = await prose.evaluate((node) => node.clientHeight);
+  expect(await prose.evaluate((node) => node.scrollHeight)).toBeGreaterThan(collapsed);
+  for (const [width, height] of [
+    [1440, 900],
+    [412, 915],
+  ] as const)
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width, height });
+      await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+      await plan.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: info.outputPath(`plan-card-${width}-${colorScheme}.png`) });
+    }
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  await toggle.click();
+  await expect(plan.getByRole('button', { name: '계획 접기', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'true'
+  );
+  expect(await prose.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeLessThan(2);
+  await plan.getByRole('button', { name: '이 계획대로 진행', exact: true }).click();
+  await expect.poll(() => state.posts.length).toBe(2);
+  expect(state.posts[1].text).toBe('위 계획대로 진행해 주세요.');
+  expect(state.posts[1].mode).toBeUndefined();
+  await expect(modeChip).toHaveAccessibleName('요청 방식: 바로 적용');
+  await expect(plan.getByRole('button', { name: '이 계획대로 진행', exact: true })).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath('mode-apply-desktop-dark.png') });
+});
+
+test('HPLAN02 Alt+M switches the request mode only while focus is in the helper', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  const chat = await create(request);
+  await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  const modeChip = panel.locator('.helper-mode-chip');
+  const input = panel.getByLabel('도우미에게 요청');
+  await input.fill('초안');
+  await input.press('Alt+KeyM');
+  await expect(modeChip).toHaveAccessibleName('요청 방식: 계획만');
+  await expect(input).toHaveValue('초안');
+  await input.press('Alt+KeyM');
+  await expect(modeChip).toHaveAccessibleName('요청 방식: 바로 적용');
+  await page.getByLabel('다음 장면 요청').focus();
+  await page.keyboard.press('Alt+KeyM');
+  await expect(modeChip).toHaveAccessibleName('요청 방식: 바로 적용');
 });
 
 test('HELPACTIVITY observed stages retain tool errors and cancellation', async ({

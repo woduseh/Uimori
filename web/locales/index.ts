@@ -28,6 +28,7 @@ import { messages as storyUi } from './story-ui.js';
 import { messages as themeAssets } from './theme-assets.js';
 import { messages as shortcuts } from './shortcuts.js';
 import { messages as helperRollback } from './helper-rollback.js';
+import { messages as helperPlan } from './helper-plan.js';
 import type { UiLocale } from '../../core/ui-locale.js';
 export const messages: Record<string, Record<UiLocale, string>> = {
   ...common,
@@ -60,6 +61,7 @@ export const messages: Record<string, Record<UiLocale, string>> = {
   ...themeAssets,
   ...shortcuts,
   ...helperRollback,
+  ...helperPlan,
 };
 export const catalog = (locale: UiLocale): Record<string, string> =>
   Object.fromEntries(Object.entries(messages).map(([key, entry]) => [key, entry[locale]]));
