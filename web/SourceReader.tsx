@@ -85,6 +85,7 @@ import { SourceVersions } from './SourceVersions.js';
 import { RequestMessage } from './RequestMessage.js';
 import { StoredRequestImages } from './RequestImages.js';
 import { SelectionRevision } from './SelectionRevision.js';
+import { useShortcut } from './shortcuts.js';
 import {
   readOptionalJson,
   readOptionalStorage,
@@ -1780,6 +1781,8 @@ function TextEditor({
   const [error, setError] = useState('');
   const busy = useRef(false);
   const input = useRef<HTMLTextAreaElement>(null);
+  const form = useRef<HTMLFormElement>(null);
+  useShortcut('editor.save', () => form.current?.requestSubmit(), { scope: form });
   useLayoutEffect(() => {
     const field = input.current;
     field?.focus({ preventScroll: true });
@@ -1817,6 +1820,7 @@ function TextEditor({
   };
   return (
     <form
+      ref={form}
       className="source-text-editor"
       onKeyDown={(event) => {
         if (event.target instanceof Element && event.target.closest('dialog')) return;

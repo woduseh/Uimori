@@ -37,6 +37,8 @@ export function ManuscriptSearchPanel({
   query: suppliedQuery,
   queryComposing = false,
   hideQueryInput = false,
+  initialQuery = '',
+  autoFocus = false,
   formId,
   onNavigate,
   onChat,
@@ -51,13 +53,15 @@ export function ManuscriptSearchPanel({
   query?: string;
   queryComposing?: boolean;
   hideQueryInput?: boolean;
+  initialQuery?: string;
+  autoFocus?: boolean;
   formId?: string;
   onNavigate: (target: ReaderTarget) => void;
   onChat?: (id: string) => void;
 }) {
   useI18n();
   const labels = searchLabels();
-  const [localQuery, setQuery] = useState('');
+  const [localQuery, setQuery] = useState(initialQuery);
   const query = suppliedQuery ?? localQuery;
   const [titleLimit, setTitleLimit] = useState(30);
   const [scope, setScope] = useState(initialScope);
@@ -144,6 +148,9 @@ export function ManuscriptSearchPanel({
               <input
                 type="search"
                 aria-label={label}
+                ref={(node) => {
+                  if (autoFocus) node?.setAttribute('autofocus', '');
+                }}
                 placeholder={t('transfer.m213')}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}

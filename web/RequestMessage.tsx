@@ -7,6 +7,7 @@ import { ArrowUp, Check, Copy, Eye, EyeOff, Pencil, RefreshCw, Save, X } from 'l
 import { IconButton } from './IconButton.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { ActionMenu, SHEET_MEDIA } from './ActionMenu.js';
+import { useShortcut } from './shortcuts.js';
 import './request-message.css';
 import {
   readOptionalStorage,
@@ -96,6 +97,11 @@ export function RequestMessage({
   const lock = useRef(false);
   const input = useRef<HTMLTextAreaElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const editor = useRef<HTMLFormElement>(null);
+  useShortcut('editor.save', () => editor.current?.requestSubmit(), {
+    scope: editor,
+    active: editing && !!onSave && !onConfirm,
+  });
   const saveDraft = (value?: string) => {
     if (value === undefined) removeOptionalStorage('session', key);
     else writeOptionalStorage('session', key, value);
@@ -127,6 +133,7 @@ export function RequestMessage({
     >
       {editing ? (
         <form
+          ref={editor}
           className="request-message request-message-editor"
           onSubmit={async (event) => {
             event.preventDefault();

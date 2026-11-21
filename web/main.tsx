@@ -24,7 +24,7 @@ import { combinationOwner, matchesPromptCombination } from '../core/prompt-combi
 import { DismissibleError } from './DismissibleError.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice, TransientNoticeProvider } from './TransientNotice.js';
-import { ShortcutKeys } from './shortcuts.js';
+import { ShortcutKeys, useShortcut } from './shortcuts.js';
 import { ReaderLoadingState } from './ReaderLoadingState.js';
 import { ChatComposer, ComposerInput, sendKeyLabel } from './ChatComposer.js';
 import { InputTranslationControls, InputTranslationFeedback } from './InputTranslation.js';
@@ -406,10 +406,16 @@ function App() {
     if (panel !== 'settings') setStoryUiThemeTarget(undefined);
   }, [panel]);
   const [searchingChats, setSearchingChats] = useState(false);
+  const [keyboardSearch, setKeyboardSearch] = useState<{ query: string } | null>(null);
   const searchOpener = useRef<HTMLElement | null>(null);
   const openChatSearch = () => {
     searchOpener.current = document.activeElement as HTMLElement | null;
+    setKeyboardSearch(null);
     setSearchingChats(true);
+  };
+  const searchFromKeyboard = (query = '') => {
+    openChatSearch();
+    setKeyboardSearch({ query });
   };
   const openWorkspaceSearch = () => {
     if (!helperWorkspaceOpen) return openChatSearch();
@@ -991,6 +997,17 @@ function App() {
     setHelperExpanded(false);
     setWorkspacePanel((value) => (value === 'helper' ? null : value));
   }, []);
+  useShortcut('navigation.toggle', () => {
+    if (viewportWidth >= 768) toggleSidebar();
+    else setPanel('navigation');
+  });
+  useShortcut('rightPanel.toggle', () => {
+    if (helperOpen) closeHelper();
+    else setWorkspacePanel('helper');
+  });
+  useShortcut('settings.open', openAppSettings);
+  useShortcut('search.open', () => searchFromKeyboard());
+  useShortcut('editor.save', () => true);
   const openModelSettings = useCallback(() => {
     setSettingsTab('models');
     setPanel('settings');
@@ -2714,6 +2731,8 @@ function App() {
           <ManuscriptSearchPanel
             data-global-search
             label={t('main.m143')}
+            initialQuery={keyboardSearch?.query}
+            autoFocus={!!keyboardSearch}
             chats={s.chats}
             library={s.library}
             onChat={(id) => {

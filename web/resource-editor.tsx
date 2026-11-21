@@ -20,6 +20,7 @@ import type { EditorContext, ResourceModel } from '../core/resource-editing.js';
 import type { RisuPrompt } from '../core/risu-prompt.js';
 import type { ResourceEditorSession, EditorState } from './resource-editor-session.js';
 import { libraryChangedKey } from './api.js';
+import { useShortcut } from './shortcuts.js';
 import './resource-editor.css';
 
 const sessions = new Map<symbol, ResourceEditorSession>();
@@ -93,14 +94,14 @@ export function useEditorSaveCommand(session: ResourceEditorSession, save: () =>
     };
   }, [session]);
 }
-export const saveActiveEditor = () => {
-  const session = activeSession();
+function saveEditor(session: ResourceEditorSession | null) {
   if (session?.snapshot().conflict && !session.snapshot().creationPending) {
     requestResourceConflictReview(session);
     return Promise.resolve(false);
   }
   return (session && saveCommands.get(session)?.()) || Promise.resolve(false);
-};
+}
+export const saveActiveEditor = () => saveEditor(activeSession());
 
 type ResourceEditorValue = {
   session: ResourceEditorSession;
@@ -221,6 +222,10 @@ export function ResourceEditorProvider({
 }) {
   useI18n();
   const [reviewOpen, setReviewOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useShortcut('editor.save', () => void saveEditor(value.session).catch(() => {}), {
+    scope: root,
+  });
   useEffect(() => {
     const review = (event: Event) => {
       if ((event as CustomEvent<ResourceEditorSession>).detail === value.session)
@@ -231,7 +236,7 @@ export function ResourceEditorProvider({
   }, [value.session]);
   return (
     <EditorContextValue.Provider value={value}>
-      <div className="resource-editor" onFocusCapture={value.activate}>
+      <div ref={root} className="resource-editor" onFocusCapture={value.activate}>
         {children}
         <SaveConflictDialog
           open={reviewOpen}
