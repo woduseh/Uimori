@@ -45,7 +45,9 @@ test('SHORTCUT01 default bindings move between the sidebar, helper, settings and
   await page.keyboard.press('Control+Shift+F');
   const search = page.getByRole('dialog', { name: '전체 채팅 검색', exact: true });
   await expect(search).toBeVisible();
-  await expect(search.getByRole('searchbox', { name: '전체 채팅 검색', exact: true })).toBeFocused();
+  await expect(
+    search.getByRole('searchbox', { name: '전체 채팅 검색', exact: true })
+  ).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(search).toBeHidden();
 });
@@ -116,4 +118,56 @@ test('SHORTCUT03 Ctrl+S saves the focused source editor and nothing else', async
   expect(saves).toEqual([`/api/sources/${detail.sources[0].id}/text`]);
   const saved = await (await request.get(`/api/chats/${chat.id}`)).json();
   expect(saved.sources[0].text).toBe('단축키로 저장한 원문.');
+});
+
+test('SHORTCUT04 Escape twice cancels the running generation and a lone or post-dialog Escape does not', async ({
+  page,
+  request,
+}) => {
+  const { chat } = await createReadingChat(request, `단축키 중단 ${Date.now()}`, 1);
+  await request.post('/api/test/control', { data: { action: 'hold', barrier: 'run' } });
+  let cancels = 0;
+  await page.route('**/api/runs/*/cancel', async (route) => {
+    cancels++;
+    await route.fulfill({ response: await route.fetch() });
+  });
+  try {
+    await page.goto(`/?chat=${chat.id}`);
+    const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
+    await composer.fill('멈출 장면 요청');
+    await page.getByRole('button', { name: '원문 생성', exact: true }).click();
+    const cancel = page.getByRole('button', { name: '원문 생성 취소', exact: true });
+    await expect(cancel).toBeVisible();
+    const notice = page.locator('.transient-notice', {
+      hasText: 'Esc 키를 한 번 더 누르면 원문 생성을 취소해요.',
+    });
+
+    await composer.click();
+    await page.keyboard.press('Escape');
+    await expect(notice).toBeVisible();
+    await page.waitForTimeout(2100);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    expect(cancels).toBe(0);
+    await expect(cancel).toBeVisible();
+    await page.waitForTimeout(2100);
+
+    await page.keyboard.press('Control+Comma');
+    const settings = page.getByRole('dialog', { name: '설정', exact: true });
+    await expect(settings).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(settings).toBeHidden();
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    expect(cancels).toBe(0);
+
+    await page.waitForTimeout(1500);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await expect.poll(() => cancels).toBe(1);
+  } finally {
+    await request.post('/api/test/control', { data: { action: 'release', barrier: 'run' } });
+  }
+  await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeVisible();
 });

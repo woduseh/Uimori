@@ -112,6 +112,7 @@ import './settings-layout.css';
 import { readOptionalStorage } from './optional-storage.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 import { useBottomFollow } from './useBottomFollow.js';
+import { shortcutLabel, useShortcut } from './shortcuts.js';
 
 type Props = {
   enterSend: boolean;
@@ -416,6 +417,12 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   const tasks = data.current?.tasks ?? [];
   const taskMap = new Map(tasks.map((task) => [task.id, task]));
   const running = tasks.find((task) => task.status === 'running');
+  const panel = useRef<HTMLElement>(null);
+  useShortcut('run.stop', () => running && void cancel(running), {
+    scope: panel,
+    ready: () => !!running,
+    confirmNotice: uiMessage('shortcuts.cancelHelperAgain', { key: shortcutLabel('run.stop') }),
+  });
   const answered = new Set(
     (data.current?.messages ?? [])
       .filter((message) => message.role === 'assistant')
@@ -1223,6 +1230,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     (!draft.trim() && !attachments.hasAttachments && !outbox);
   return (
     <aside
+      ref={panel}
       id="helper-panel"
       className={`helper-panel${props.expanded ? ' helper-expanded' : ''}${props.expanded && props.navigationHost ? ' helper-has-navigation' : ''}`}
       hidden={!props.open}

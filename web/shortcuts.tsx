@@ -95,6 +95,7 @@ export function ShortcutKeys() {
   useEffect(() => {
     let overlayClosedAt = Number.NEGATIVE_INFINITY;
     let armed: { entry: Entry; at: number } | null = null;
+    const own = new WeakSet<Event>();
     const overlayClosed = () => {
       overlayClosedAt = performance.now();
       armed = null;
@@ -107,8 +108,14 @@ export function ShortcutKeys() {
       if (target instanceof HTMLDetailsElement && target.matches('.action-menu') && !target.open)
         overlayClosed();
     };
+    const watch = (event: Event) => {
+      if (keyboardOverlayOpen()) overlayClosed();
+      else if (event instanceof KeyboardEvent && event.key === 'Escape')
+        setTimeout(() => {
+          if (event.defaultPrevented && !own.has(event)) overlayClosed();
+        });
+    };
     const keydown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented && event.key === 'Escape') overlayClosed();
       const now = performance.now();
       const action = resolveShortcut(readShortcutBindings(), event, {
         enabled,
@@ -122,6 +129,7 @@ export function ShortcutKeys() {
       const registration = entry.current;
       if (shortcutActions[action].when.confirmByRepeat) {
         if (registration.ready && !registration.ready()) return;
+        own.add(event);
         event.preventDefault();
         if (armed?.entry === entry && now - armed.at <= repeatWindowMs) {
           armed = null;
@@ -135,10 +143,14 @@ export function ShortcutKeys() {
       if (registration.run() === false) return;
       event.preventDefault();
     };
+    window.addEventListener('keydown', watch, true);
+    window.addEventListener('pointerdown', watch, true);
     window.addEventListener('keydown', keydown);
     document.addEventListener('close', closed, true);
     document.addEventListener('toggle', toggled, true);
     return () => {
+      window.removeEventListener('keydown', watch, true);
+      window.removeEventListener('pointerdown', watch, true);
       window.removeEventListener('keydown', keydown);
       document.removeEventListener('close', closed, true);
       document.removeEventListener('toggle', toggled, true);
