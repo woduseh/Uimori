@@ -77,15 +77,6 @@
 
 원본의 Wave 1을 0단계에서 4단계로 나눴어요. 각 단계의 항목은 서로 독립이면 따로 커밋해요.
 
-### 6단계. 도우미 변경 가시화
-
-- 인라인 diff 카드: 산문(원문, 번역, 로어 본문, 개요)은 어절 단위, JSON과 정규식과 프롬프트 구조는 줄 단위로 보여 줘요. diff 계산에 크기와 시간 상한을 두고, 넘으면 생략했다고 표시해요.
-- 읽기와 검색 호출은 한 줄로 묶고, 변경은 항목별 카드로 보여 줘요.
-- 카드의 열기 동작은 도우미를 닫지 않고 해당 항목으로 이동해요.
-- 도우미 입력창 근처에 컨텍스트 사용량을 보여 줘요. 서버가 이미 요청마다 구성 요소별 추정치(`componentEstimates`)를 계산하는데 클라이언트는 쓰지 않아요. 로컬 추정값이므로 추정이라고 표시하고, 누르면 구성 요소별 내역을 보여 줘요.
-
-서버의 순변경 기록과 diff는 작업 결과 응답(`HelperTaskResultsView.changes`)에 들어 있어요. 항목의 모양은 [core/helper.ts](../../core/helper.ts)의 `HelperChange`, 의미는 [HELPER-TOOLS](../HELPER-TOOLS.md#conversation-history-and-task-results)에 있어요.
-
 ### 7단계. 턴 롤백과 계획 모드
 
 - 세 도메인의 턴 체크포인트와 턴 롤백, 항목별 되돌리기를 넣어요. 다른 도메인(채팅 로어, 변수, 설정 등)은 대상이 아니라고 화면에 밝혀요.
@@ -125,9 +116,6 @@
 
 | 단계 | T3 Code의 위치 | 참고할 점 |
 | --- | --- | --- |
-| 6. 도구 활동 묶음 | `packages/client-runtime/src/work-log/presentation.ts`의 `toolGroupAction`, `summarizeToolGroup` | 도구를 읽기, 편집, 명령, 검색 같은 몇 가지 종류로 나누고 연속된 호출을 요약 한 줄로 접는 일을 React와 분리된 순수 모듈에서 해요. |
-| 6. 변경 diff | `apps/web/src/components/DiffPanel.tsx`, `apps/web/src/components/chat/ChangedFilesTree.tsx`, `packages/contracts/src/checkpointDiff.ts` | 파일별 접힘 상태를 따로 두고 펼칠 때 내용을 읽어요. 출력에 크기 상한을 두고 잘렸다는 표식을 남겨요. 줄 단위 diff만 있어서 어절 단위 산문 diff는 참고할 것이 없어요. |
-| 6. 컨텍스트 사용량 | `apps/web/src/components/chat/ThreadDetailsUsage.tsx`, `packages/client-runtime/src/state/contextWindow.ts` | 막대에 자동 압축 기준점을 눈금으로 표시하고 80%와 90%에서 색을 바꿔요. |
 | 7. 롤백과 되감기 | `apps/server/src/orchestration-v2/CheckpointRollbackService.ts`, `CheckpointRestoreSafety.ts`, `apps/web/src/components/chat/useTimelineRewind.ts` | 대화를 되감는 것과 파일을 복원하는 것을 서로 다른 선택으로 둬요. 안전하게 복원할 수 없으면 거절하고 대화만 되감는 길을 안내해요. 실행 중에는 되돌리기를 막아요. 저장 방식은 git이라 우리와 달라요. |
 | 7. 승인과 계획 모드 | `packages/contracts/src/providerPolicy.ts`, `apps/web/src/components/chat/ProposedPlanCard.tsx`, `apps/web/src/components/chat/ComposerPendingApprovalActions.tsx` | 승인 답을 수락, 이번 대화 동안 수락, 거절, 취소로 나눠요. 긴 계획 카드는 접어요. 쓰기 차단은 프로바이더에 맡기고 있어서, 서버에서 쓰기 도구를 막는 우리 방식의 참고는 아니에요. |
 | 8과 9. 실행 중 입력창 | `apps/web/src/components/chat/ComposerPrimaryActions.tsx`, `QueuedRunsControl.tsx`, `useComposerSend.ts` | 정지 직후 같은 자리에 들어오는 버튼이 잠깐 클릭을 받지 않게 해서, 정지를 연타해도 다시 시작되지 않아요. 후속 입력의 기본 동작(대기 또는 현재 작업에 추가)을 설정으로 두고 수정키로 한 번만 반대로 보내요. |
