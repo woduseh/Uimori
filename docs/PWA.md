@@ -9,7 +9,6 @@ Uimori를 브라우저에서 PWA(Progressive Web App)로 설치하는 방법과 
 ### 기기별 설치 방법
 - **설정 화면에서 설치**: **설정 → 일반 → 앱과 알림 → 앱 설치**로 이동해요. Chromium 기반 브라우저가 설치 이벤트를 제공한 경우에만 앱 안에 실제 설치 버튼이 활성화돼요.
 - **브라우저 메뉴에서 설치**: 브라우저 주소창이나 더보기 메뉴의 **앱 설치** 또는 **홈 화면에 추가**를 눌러 설치할 수 있어요.
-- **iPhone 및 iPad (iOS/iPadOS Safari)**: Safari 하단의 공유 버튼을 누르고 **홈 화면에 추가**를 선택한 후 생성된 홈 화면 아이콘으로 접속해요.
 - **설치 취소 시**: 설치 대화상자를 취소하더라도 앱이 권한을 강제로 다시 요청하지 않아요. 지원되지 않는 환경에서는 같은 영역의 **설치 안내**를 펼쳐 상세 방법을 확인할 수 있어요. 이미 설치된 앱에서는 설치 안내를 표시하지 않아요. PWA 등록 자체는 알림 권한을 요청하지 않아요.
 
 ### 설치 앱의 동작 특성과 주의사항
@@ -135,4 +134,4 @@ npm run verify:personal-features
 npm run verify:push
 ```
 
-- **공식 참조 링크**: [MDN PWA 설치 조건](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable), [명시적 설치 UI 가이드](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/How_to/Trigger_install_prompt), [WebKit 홈 화면 Web Push 안내](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/), [Web Push 암호화 라이브러리](https://github.com/web-push-libs/web-push), [Mozilla Push 서비스 사양](https://mozilla-push-service.readthedocs.io/en/latest/http.html).
+- **공식 참조 링크**: [MDN PWA 설치 조건](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable), [명시적 설치 UI 가이드](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/How_to/Trigger_install_prompt), [Web Push 암호화 라이브러리](https://github.com/web-push-libs/web-push), [Mozilla Push 서비스 사양](https://mozilla-push-service.readthedocs.io/en/latest/http.html).
