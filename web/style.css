@@ -50,6 +50,8 @@
   --form-w: 800px;
   --editor-list-w: 224px;
   --settings-w: 960px;
+  --settings-dialog-w: min(1180px, 92vw);
+  --settings-dialog-h: min(820px, calc(var(--app-height, 100dvh) * 0.88));
   --dialog-w: 480px;
   --control-h: 44px;
   --font-small: 12px;
@@ -1871,8 +1873,16 @@ input[type="checkbox"] {
 }
 
 .app-dialog.settings-dialog {
-  --dialog-size: 1160px;
   height: var(--dialog-max-height);
+}
+@media (min-width: 761px) {
+  .app-dialog.settings-dialog {
+    --dialog-size: var(--settings-dialog-w);
+    --dialog-max-height: min(
+      var(--settings-dialog-h),
+      calc(var(--app-height, 100dvh) - 2 * var(--dialog-gap))
+    );
+  }
 }
 .settings-dialog > .dialog-body {
   display: flex;

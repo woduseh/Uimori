@@ -67,6 +67,52 @@ async function expectPrimary(button: Locator, cancel?: Locator) {
   }
 }
 
+for (const [width, height] of [
+  [1440, 900],
+  [2560, 1440],
+] as const) {
+  test(`SDC02 ${width} settings dialogs take the large desktop shell and a nested confirmation keeps its own`, async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width, height });
+    const expected = {
+      width: Math.round(Math.min(1180, width * 0.92)),
+      height: Math.round(Math.min(820, height * 0.88)),
+    };
+    const expectLarge = async (dialog: Locator) => {
+      await expect(dialog).toBeVisible();
+      const box = (await dialog.boundingBox())!;
+      expect(Math.abs(box.width - expected.width)).toBeLessThanOrEqual(1);
+      expect(Math.abs(box.height - expected.height)).toBeLessThanOrEqual(1);
+      expect(Math.abs(box.x + box.width / 2 - width / 2)).toBeLessThanOrEqual(1);
+    };
+    await page.goto('/');
+    await navigationAction(page, '설정');
+    const settings = page.getByRole('dialog', { name: '설정', exact: true });
+    await expectLarge(settings);
+    await selectSettingsSection(page, '테마와 색상');
+    {
+      const advanced = page.locator('.theme-advanced:not([open]) > summary');
+      if (await advanced.isVisible()) await advanced.click();
+    }
+    await settings.getByRole('button', { name: '새 커스텀 테마', exact: true }).click();
+    await settings.getByLabel('테마 이름', { exact: true }).fill(`Large shell ${width}`);
+    await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
+    const guard = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
+    await expectShell(page, guard, 620);
+    expect((await guard.boundingBox())!.height).toBeLessThan(expected.height);
+    await guard.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
+    await expect(settings).toBeHidden();
+
+    const created = await postFixtureChat(request, { data: { title: `Large shell ${width}` } });
+    expect(created.ok(), await created.text()).toBe(true);
+    await page.goto(`/?chat=${(await created.json()).id}`);
+    await openChatSettings(page);
+    await expectLarge(page.getByRole('dialog', { name: '채팅 설정', exact: true }));
+  });
+}
+
 for (const width of [412]) {
   test(`SDC01 ${width} theme deletion is compact, safely focused and cancellable before confirmation`, async ({
     page,
