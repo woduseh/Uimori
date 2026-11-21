@@ -19,6 +19,13 @@ import { messages } from '../web/locales/index.js';
 import { helperPollDelay, longestHelperPollDelay } from '../web/poll-delays.js';
 import { postFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { trackPageFetches } from './fixtures/page-fetches.js';
+import {
+  fulfillResponseEvents,
+  hasNews,
+  isResponseEvents,
+  pageAfter,
+  responseStreamCursor,
+} from './fixtures/response-events.js';
 import { navigationAction, openSourceActions, openChatMenu } from './ui-navigation.js';
 import { openHelper } from './ui-navigation.js';
 
@@ -63,7 +70,7 @@ async function harness(page: Page, seedCount = 0) {
     eventReads = 0,
     viewReads = 0,
     sessionReads = 0,
-    eventStreamReads = 0;
+    batchStreamReads = 0;
   const event = (view: View, task: HelperTaskView, kind: string) =>
     view.events.push({
       seq: ++nextSeq,
@@ -114,32 +121,39 @@ async function harness(page: Page, seedCount = 0) {
     });
   });
   await page.route('**/api/response-streams/helper/**', async (route) => {
-    const url = new URL(route.request().url()),
-      taskId = url.pathname.split('/')[4];
-    if (url.pathname.endsWith('/events')) {
-      eventStreamReads++;
-      return route.fulfill({ status: 400, json: { error: 'UI must use cursor HTTP batches' } });
-    }
+    const taskId = new URL(route.request().url()).pathname.split('/')[4];
+    const live = isResponseEvents(route);
+    if (!live) batchStreamReads++;
     streamReads.set(taskId, (streamReads.get(taskId) ?? 0) + 1);
-    const after = Number(url.searchParams.get('after') ?? 0);
+    const after = responseStreamCursor(route);
     streamCursors.set(taskId, [...(streamCursors.get(taskId) ?? []), after]);
     const pending = (pendingStreams.get(taskId) ?? 0) + 1;
     pendingStreams.set(taskId, pending);
     maxPendingStreams.set(taskId, Math.max(maxPendingStreams.get(taskId) ?? 0, pending));
     try {
-      const hold = streamHolds.get(taskId);
-      if (hold) {
-        streamHolds.delete(taskId);
-        heldStreams.add(taskId);
-        await hold;
-        heldStreams.delete(taskId);
+      const read = () => {
+        const value = streams.get(taskId);
+        return value && pageAfter(value, after);
+      };
+      const deadline = Date.now() + 5000;
+      for (;;) {
+        const hold = streamHolds.get(taskId);
+        if (hold) {
+          streamHolds.delete(taskId);
+          heldStreams.add(taskId);
+          await hold;
+          heldStreams.delete(taskId);
+        }
+        const value = read();
+        if (!live || !value || hasNews(value) || Date.now() > deadline) break;
+        if (route.request().failure()) return;
+        await new Promise((resolve) => setTimeout(resolve, 25));
       }
-      const value = streams.get(taskId);
+      const value = read();
       if (!value)
         return await route.fulfill({ status: 404, json: { error: 'Response stream not found' } });
-      return await route.fulfill({
-        json: { ...value, chunks: value.chunks.filter((chunk) => chunk.seq > after) },
-      });
+      if (live) return await fulfillResponseEvents(route, value);
+      return await route.fulfill({ json: value });
     } finally {
       pendingStreams.set(taskId, (pendingStreams.get(taskId) ?? 1) - 1);
     }
@@ -470,8 +484,8 @@ async function harness(page: Page, seedCount = 0) {
     get sessionReads() {
       return sessionReads;
     },
-    get eventStreamReads() {
-      return eventStreamReads;
+    get batchStreamReads() {
+      return batchStreamReads;
     },
     holdNextStream(taskId: string) {
       let release = () => {};
@@ -1394,7 +1408,7 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
   state.progress(first, continuation, 8 + continuation.length);
   await expect(panel.locator('.streaming-text')).toHaveText(`실제 공개 조각${continuation}`);
   expect(state.streamCursors.get(first.id)?.some((cursor) => cursor > 0)).toBe(true);
-  expect(state.eventStreamReads).toBe(0);
+  expect(state.batchStreamReads).toBe(0);
   const viewsBeforeDiagnostics = state.viewReads,
     eventsBeforeDiagnostics = state.eventReads;
   for (const kind of [
@@ -1453,7 +1467,7 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
     completedStreamReads = state.streamReads.get(first.id);
   await expect.poll(() => state.eventReads).toBeGreaterThanOrEqual(reads + 2);
   expect(state.streamReads.get(first.id)).toBe(completedStreamReads);
-  expect(state.eventStreamReads).toBe(0);
+  expect(state.batchStreamReads).toBe(0);
   expect(
     await page.evaluate(() => (window as unknown as { helperUpdates: number }).helperUpdates)
   ).toBe(1);
@@ -1951,8 +1965,7 @@ test('HELPUI07 keeps the displayed response until the delayed final message arri
   const delayed = new Promise<void>((resolve) => {
     release = resolve;
   });
-  let held = false,
-    completedSeen = false;
+  let held = false;
   await page.route('**/api/helper/**', async (route) => {
     if (
       route.request().method() === 'GET' &&
@@ -1963,22 +1976,10 @@ test('HELPUI07 keeps the displayed response until the delayed final message arri
     }
     await route.fallback();
   });
-  await page.route(`**/api/response-streams/helper/${task.id}?*`, async (route) => {
-    completedSeen = true;
-    await route.fulfill({
-      json: {
-        taskKind: 'helper',
-        taskId: task.id,
-        status: 'completed',
-        chunks: [],
-        cursor: Number(new URL(route.request().url()).searchParams.get('after') ?? 0),
-        hasMore: false,
-      },
-    });
-  });
   state.complete(task);
   try {
-    await expect.poll(() => held && completedSeen).toBe(true);
+    await expect(panel.locator('.streaming-response')).toHaveAttribute('data-status', 'completed');
+    await expect.poll(() => held).toBe(true);
     await page.evaluate(
       () =>
         new Promise<void>((resolve) =>

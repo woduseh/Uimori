@@ -6,6 +6,7 @@ import type { ResponseStreamPage } from '../core/response-stream.js';
 import type { HelperArtifactView } from '../web/HelperArtifactCard.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
 import { postFixtureChat } from './fixtures/chat.js';
+import { pageAfter, serveResponseEvents } from './fixtures/response-events.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { waitForNativeLayout } from './fixtures/native-message.js';
 import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
@@ -407,12 +408,9 @@ async function helperFixture(page: Page, before: ChatDetail) {
       json: { error: 'Unexpected readability fixture request' },
     });
   });
-  await page.route(`**/api/response-streams/helper/${tasks[0].id}?*`, async (route) => {
-    const after = Number(new URL(route.request().url()).searchParams.get('after') ?? 0);
-    return route.fulfill({
-      json: { ...streams, chunks: streams.chunks.filter((chunk) => chunk.seq > after) },
-    });
-  });
+  await page.route(`**/api/response-streams/helper/${tasks[0].id}/events?*`, (route) =>
+    serveResponseEvents(route, (after) => pageAfter(streams, after))
+  );
   await page.goto(`/?chat=${before.chat.id}`);
   await page.evaluate(
     async ({ key, text }) => {

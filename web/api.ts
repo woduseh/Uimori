@@ -51,6 +51,14 @@ async function readApiResponse<T>(
   notifySession = true
 ): Promise<T> {
   if (response.ok) return (await response.json()) as T;
+  return rejectApiResponse(response, method, notifySession);
+}
+
+async function rejectApiResponse(
+  response: Response,
+  method: string,
+  notifySession = true
+): Promise<never> {
   if (response.status === 401 && notifySession && typeof window !== 'undefined')
     window.dispatchEvent(new Event(sessionRequiredEvent));
   const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
@@ -121,6 +129,36 @@ export async function api<T>(
   )
     dispatchEvent(new Event('prompt-workspace-changed'));
   return result;
+}
+
+export async function* apiEvents(path: string, signal: AbortSignal): AsyncGenerator<string> {
+  const response = await fetch(`/api${path}`, {
+    signal,
+    headers: { Accept: 'text/event-stream' },
+  });
+  if (!response.ok) await rejectApiResponse(response, 'GET');
+  if (!response.body) return;
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = '';
+  let data: string[] = [];
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      const lines = (buffer + value).split('\n');
+      buffer = lines.pop()!;
+      for (const raw of lines) {
+        const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
+        if (!line) {
+          if (data.length) yield data.join('\n');
+          data = [];
+        } else if (line.startsWith('data:'))
+          data.push(line.slice(line.startsWith('data: ') ? 6 : 5));
+      }
+    }
+  } finally {
+    void reader.cancel().catch(() => {});
+  }
 }
 
 export async function apiBinary<T>(path: string, body: Blob, signal?: AbortSignal): Promise<T> {

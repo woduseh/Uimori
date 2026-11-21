@@ -6,7 +6,7 @@ import type {
   ResponseStreamPage,
   ResponseTaskKind,
 } from '../core/response-stream.js';
-import { api, ApiError } from './api.js';
+import { api, apiEvents, ApiError } from './api.js';
 import { PlainProse } from './Prose.js';
 import { LoadingState } from './LoadingState.js';
 import { parseStoryUi } from '../core/story-ui.js';
@@ -107,17 +107,19 @@ export function StreamingResponse({
     const buffered: ResponseChunk[] = [];
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined,
+      connection: AbortController | undefined,
+      readingSettled = settled,
       closed = false,
       terminal = false,
-      polling = false,
       cursor = 0,
       failures = 0;
     const offsets = new Map<string, number>();
     const base = `/response-streams/${taskKind}/${encodeURIComponent(taskId)}`;
     const receive = (page: ResponseStreamPage) => {
-      if (closed || terminal) return;
+      if (closed || terminal) return false;
       if (page.taskKind !== taskKind || page.taskId !== taskId || !Array.isArray(page.chunks))
         throw new Error('RESPONSE_STREAM_IDENTITY_MISMATCH');
+      const previousCursor = cursor;
       const added: ResponseChunk[] = [];
       for (const chunk of page.chunks) {
         if (chunk.seq <= cursor) continue;
@@ -133,6 +135,8 @@ export function StreamingResponse({
         cursor = chunk.seq;
         added.push(chunk);
       }
+      if (page.hasMore && cursor === previousCursor)
+        throw new Error('RESPONSE_STREAM_CURSOR_STALLED');
       if (settled) buffered.push(...added);
       else if (added.length) setChunks((old) => [...old, ...added]);
       setStatus(page.status);
@@ -144,17 +148,85 @@ export function StreamingResponse({
         setLoaded(true);
         clearTimeout(timer);
       }
+      return cursor !== previousCursor || terminal;
     };
+    const readable = () => !closed && !terminal && shown.current && !document.hidden;
     const retry = () => {
-      if (closed || terminal || !shown.current || document.hidden) return;
+      if (!readable()) return;
       setDisconnected(true);
       clearTimeout(timer);
-      timer = setTimeout(() => void poll(), Math.min(10000, 1200 * 2 ** Math.min(failures++, 3)));
+      timer = setTimeout(connect, Math.min(10000, 1200 * 2 ** Math.min(failures++, 3)));
     };
-    const poll = async () => {
-      if (closed || terminal || polling || !shown.current || document.hidden) return;
+    const fail = async (error: unknown) => {
+      if (closed) return;
+      if (error instanceof ApiError && [401, 403].includes(error.status)) {
+        terminal = true;
+        setDisconnected(true);
+        return;
+      }
+      if (error instanceof ApiError && error.status === 404) {
+        let task = currentTaskStatus.current;
+        if (task === undefined) {
+          try {
+            task = (
+              await api<{ status: string }>(
+                taskKind === 'main'
+                  ? `/runs/${encodeURIComponent(taskId)}`
+                  : `/helper/tasks/${encodeURIComponent(taskId)}`,
+                undefined,
+                'GET',
+                controller.signal
+              )
+            ).status;
+          } catch (cause) {
+            if (cause instanceof ApiError && [401, 403, 404].includes(cause.status))
+              task = 'missing';
+          }
+        }
+        if (closed) return;
+        if (!active(task)) {
+          terminal = true;
+          setStatus(task!);
+          setLoaded(true);
+          return;
+        }
+      } else if (error instanceof Error && error.message.startsWith('RESPONSE_STREAM_')) {
+        terminal = true;
+        setDisconnected(true);
+        return;
+      }
+      retry();
+    };
+    function connect() {
+      if (connection || readingSettled || !readable()) return;
       clearTimeout(timer);
-      polling = true;
+      const attempt = new AbortController();
+      connection = attempt;
+      void (async () => {
+        let progressed = false;
+        try {
+          for await (const data of apiEvents(`${base}/events?after=${cursor}`, attempt.signal)) {
+            if (receive(JSON.parse(data) as ResponseStreamPage)) progressed = true;
+            if (terminal) break;
+          }
+          if (attempt.signal.aborted) return;
+          connection = undefined;
+          if (progressed) connect();
+          else retry();
+        } catch (error) {
+          if (attempt.signal.aborted) return;
+          connection = undefined;
+          await fail(error);
+        } finally {
+          if (connection === attempt) connection = undefined;
+        }
+      })();
+    }
+    const release = () => {
+      connection?.abort();
+      connection = undefined;
+    };
+    const readSettled = async () => {
       try {
         let page: ResponseStreamPage;
         do {
@@ -165,67 +237,32 @@ export function StreamingResponse({
             controller.signal
           );
           if (closed) return;
-          const previousCursor = cursor;
           receive(page);
-          if (page.hasMore && cursor === previousCursor)
-            throw new Error('RESPONSE_STREAM_CURSOR_STALLED');
-        } while (!terminal && page.hasMore && shown.current && !document.hidden);
-        if (closed || terminal || !shown.current || document.hidden) return;
-        timer = setTimeout(() => void poll(), 300);
+        } while (!terminal && page.hasMore);
+        readingSettled = false;
+        connect();
       } catch (error) {
-        if (closed) return;
-        if (error instanceof ApiError && [401, 403].includes(error.status)) {
-          terminal = true;
-          setDisconnected(true);
-          return;
-        }
-        if (error instanceof ApiError && error.status === 404) {
-          let task = currentTaskStatus.current;
-          if (task === undefined) {
-            try {
-              task = (
-                await api<{ status: string }>(
-                  taskKind === 'main'
-                    ? `/runs/${encodeURIComponent(taskId)}`
-                    : `/helper/tasks/${encodeURIComponent(taskId)}`,
-                  undefined,
-                  'GET',
-                  controller.signal
-                )
-              ).status;
-            } catch (cause) {
-              if (cause instanceof ApiError && [401, 403, 404].includes(cause.status))
-                task = 'missing';
-            }
-          }
-          if (closed) return;
-          if (!active(task)) {
-            terminal = true;
-            setStatus(task!);
-            setLoaded(true);
-            return;
-          }
-        } else if (error instanceof Error && error.message.startsWith('RESPONSE_STREAM_')) {
-          terminal = true;
-          setDisconnected(true);
-          return;
-        }
-        retry();
-      } finally {
-        polling = false;
+        readingSettled = false;
+        await fail(error);
       }
     };
     const resume = () => {
+      if (!shown.current || document.hidden) {
+        release();
+        return;
+      }
       clearTimeout(timer);
-      void poll();
+      connect();
     };
     wake.current = resume;
-    void poll();
+    if (settled) void readSettled();
+    else connect();
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('focus', resume);
     return () => {
       closed = true;
       controller.abort();
+      release();
       clearTimeout(timer);
       document.removeEventListener('visibilitychange', resume);
       window.removeEventListener('focus', resume);
