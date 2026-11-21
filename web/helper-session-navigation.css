@@ -113,6 +113,12 @@
     min-width: 44px;
   }
 }
+@media (prefers-reduced-motion: no-preference) {
+  .helper-nav-row,
+  .helper-nav-heading {
+    transition: background-color var(--motion-fast) var(--motion-ease-out);
+  }
+}
 @media (hover: hover) {
   .helper-nav-row:hover,
   .helper-nav-heading:hover {

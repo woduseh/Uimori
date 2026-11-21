@@ -4,6 +4,21 @@ import { openChatMenu } from './ui-navigation.js';
 
 test.use({ video: 'on' });
 
+async function entered(surface: Locator, motion: 'no-preference' | 'reduce') {
+  await settled(surface);
+  if (motion === 'reduce') await expect(surface).not.toHaveAttribute('data-entrances');
+  else await expect(surface).toHaveAttribute('data-entrances');
+  const transition = await surface.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return { duration: style.transitionDuration, easing: style.transitionTimingFunction };
+  });
+  if (motion === 'reduce') expect(transition.duration).toBe('0s');
+  else {
+    expect(transition.duration).toBe('0.15s, 0.15s');
+    expect(transition.easing).toBe('ease-out, ease-out');
+  }
+}
+
 async function settled(surface: Locator) {
   await expect(surface).toHaveCSS('animation-name', 'none');
   await expect.poll(() => surface.evaluate((node) => node.getAnimations().length)).toBe(0);
@@ -51,14 +66,24 @@ for (const [width, motion] of [
       document.addEventListener('animationstart', (event) => {
         const node = event.target;
         if (node instanceof HTMLElement && node.matches('.app-dialog, .action-menu-body'))
-          node.dataset.motionStarts = String(Number(node.dataset.motionStarts ?? 0) + 1);
+          node.dataset.animations = String(Number(node.dataset.animations ?? 0) + 1);
+      });
+      document.addEventListener('transitionrun', (event) => {
+        const node = event.target;
+        if (
+          node instanceof HTMLElement &&
+          !event.pseudoElement &&
+          event.propertyName === 'opacity' &&
+          node.matches('.app-dialog, .action-menu-body')
+        )
+          node.dataset.entrances = String(Number(node.dataset.entrances ?? 0) + 1);
       });
     });
     const trigger = page.locator('.chat-menu > summary');
     const menu = await openChatMenu(page);
     await expect(menu).toBeVisible();
-    await settled(menu);
-    await expect(menu).not.toHaveAttribute('data-motion-starts');
+    await entered(menu, motion);
+    await expect(menu).not.toHaveAttribute('data-animations');
     await expectHairline(menu);
     await expect(menu.getByRole('button', { name: '읽기 설정', exact: true })).toHaveCSS(
       'font-size',
@@ -74,6 +99,10 @@ for (const [width, motion] of [
     await page.keyboard.press('Escape');
     await expect(menu).toBeHidden();
     await expect(trigger).toBeFocused();
+    await trigger.click();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await expect(trigger).toBeFocused();
 
     const openReading = async () => {
       const actions = await openChatMenu(page);
@@ -82,8 +111,8 @@ for (const [width, motion] of [
     await openReading();
     const dialog = page.getByRole('dialog', { name: '읽기 설정', exact: true });
     await expect(dialog).toBeVisible();
-    await settled(dialog);
-    await expect(dialog).not.toHaveAttribute('data-motion-starts');
+    await entered(dialog, motion);
+    await expect(dialog).not.toHaveAttribute('data-animations');
     await expectHairline(dialog);
     await expect(dialog.getByRole('heading', { name: '읽기 설정', exact: true })).toHaveCSS(
       'font-size',
@@ -130,8 +159,8 @@ for (const [width, motion] of [
     await openReading();
     await expect(toggle).toBeChecked({ checked: !original });
     await settled(dialog);
-    await expect(dialog).not.toHaveAttribute('data-motion-starts');
-    await expect(menu).not.toHaveAttribute('data-motion-starts');
+    await expect(dialog).not.toHaveAttribute('data-animations');
+    await expect(menu).not.toHaveAttribute('data-animations');
     await toggle.setChecked(original);
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();

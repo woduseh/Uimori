@@ -12,9 +12,11 @@ Paths below are relative to the repository root. The motion tokens (`--motion-fa
 
 | Surface | Component / CSS | Pattern |
 | --- | --- | --- |
-| Native modal | `web/Dialog.tsx`, `web/style.css` | Opens and closes immediately today. Entrance motion may use `--motion-overlay` with `opacity` and a transform that ends at `transform: none`; nothing may keep `transform` or `will-change` on the dialog at rest, because it contains `position: fixed` menus. |
-| Anchored action menu | `web/ActionMenu.tsx`, `web/ui-controls.css` | Opens immediately today. Entrance motion may use `--motion-overlay`; preserve actual viewport placement and immediate dismissal. |
-| Mobile action sheet | Same menu owners | Opens immediately today. Entrance motion may use `--motion-overlay`; keep the existing `SHEET_MEDIA` breakpoint, scrim and dismissal. |
+| Native modal | `web/Dialog.tsx`, `web/style.css` | Fades and rises 8px with its backdrop over `--motion-overlay` through `@starting-style`, ending at `transform: none`; closes immediately. Nothing may keep `transform` or `will-change` on the dialog at rest, because it contains `position: fixed` menus. |
+| Anchored action menu | `web/ActionMenu.tsx`, `web/ui-controls.css` | Fades and moves 4px from its trigger side over `--motion-overlay`; placement is unchanged at rest and dismissal is immediate. |
+| Mobile action sheet | Same menu owners | Rises 16px with a fading scrim over `--motion-overlay` at the `SHEET_MEDIA` breakpoint; dismissal is immediate. |
+| Transient notice | `web/TransientNotice.tsx`, `web/notices.css` | Each notice fades and rises 8px over `--motion-overlay`; removal is immediate. |
+| Button and row hover | `web/style.css`, navigation row styles | Background, border and text colours ease over `--motion-fast`; story UI keeps its own transitions. |
 | On/off switch | `web/BooleanControls.tsx`, `web/boolean-controls.css` | Animates the existing thumb and colors with `--motion-fast`, without bounce or a mount-time entrance. |
 
 Read `docs/THEME-AUTHORING.md` only if the change touches the theme boundary.
@@ -28,11 +30,9 @@ and dismissal. Implement entrance motion in CSS alone; avoid exit timers, extra
 closing states, animation-driven React state or wrappers introduced solely for
 animation.
 
-The switch is currently the only animated control in the table. Entrance motion
-on a dialog, menu, sheet or notice is allowed within the tokens and constraints
-here; when you add it, update the table above, the browser assertions in
-`tests/motion-browser.spec.ts` and the motion paragraph in `docs/DEVELOPMENT.md`
-in the same change.
+When motion on a surface in the table changes, update the table, the browser
+assertions in `tests/motion-browser.spec.ts` and the motion paragraph in
+`docs/DEVELOPMENT.md` in the same change.
 
 - Keep modal geometry and anchored menu placement stable, including
   viewport-positioned descendants and small screens. A dialog ends its entrance

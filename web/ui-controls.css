@@ -134,6 +134,26 @@
     position-area: top span-left;
   }
 }
+@media (prefers-reduced-motion: no-preference) {
+  .action-menu > .action-menu-body,
+  .action-menu::before {
+    transition:
+      opacity var(--motion-overlay) var(--motion-ease-out),
+      transform var(--motion-overlay) var(--motion-ease-out);
+  }
+  @starting-style {
+    .action-menu[open] > .action-menu-body {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    .action-menu-up[open] > .action-menu-body {
+      transform: translateY(4px);
+    }
+    .action-menu[open]::before {
+      opacity: 0;
+    }
+  }
+}
 @position-try --action-menu-viewport {
   position-area: none;
   inset: 8px;
@@ -179,5 +199,12 @@
     > .delete-control
     > button {
     min-height: 48px;
+  }
+}
+@media (max-width: 600px) and (prefers-reduced-motion: no-preference) {
+  @starting-style {
+    .action-menu[open] > .action-menu-body.action-menu-body {
+      transform: translateY(16px);
+    }
   }
 }

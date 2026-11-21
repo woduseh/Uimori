@@ -184,6 +184,14 @@ button {
     border-color: transparent;
   }
 }
+@media (prefers-reduced-motion: no-preference) {
+  :where(button:not(.story-ui *), .action-menu > summary) {
+    transition:
+      background-color var(--motion-fast) var(--motion-ease-out),
+      border-color var(--motion-fast) var(--motion-ease-out),
+      color var(--motion-fast) var(--motion-ease-out);
+  }
+}
 button:disabled {
   --accent: var(--surface);
   --accent-ink: var(--muted);
@@ -1567,6 +1575,23 @@ input[type="checkbox"] {
 }
 .app-dialog::backdrop {
   background: var(--shade);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .app-dialog[open],
+  .app-dialog[open]::backdrop {
+    transition:
+      opacity var(--motion-overlay) var(--motion-ease-out),
+      transform var(--motion-overlay) var(--motion-ease-out);
+  }
+  @starting-style {
+    .app-dialog[open] {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    .app-dialog[open]::backdrop {
+      opacity: 0;
+    }
+  }
 }
 .dialog-header {
   flex: none;

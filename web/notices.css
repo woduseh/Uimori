@@ -96,6 +96,19 @@ body:has(.app-shell.helper-open:is(.panel-overlay, .helper-expanded)):not(:has(d
   box-shadow: var(--shadow-float);
   overflow-wrap: anywhere;
 }
+@media (prefers-reduced-motion: no-preference) {
+  .transient-notice {
+    transition:
+      opacity var(--motion-overlay) var(--motion-ease-out),
+      transform var(--motion-overlay) var(--motion-ease-out);
+  }
+  @starting-style {
+    .transient-notice {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+}
 .transient-notice:lang(ko) {
   word-break: keep-all;
 }

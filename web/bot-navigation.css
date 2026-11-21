@@ -180,6 +180,12 @@
   .bot-branch-toggle > svg {
     transition: transform var(--motion-fast) var(--motion-ease-out);
   }
+  .bot-chat-item,
+  .bot-folder-heading,
+  .bot-branch-heading,
+  .bot-tree-folder-heading {
+    transition: background-color var(--motion-fast) var(--motion-ease-out);
+  }
 }
 .bot-folder-toggle .expanded {
   transform: rotate(90deg);
