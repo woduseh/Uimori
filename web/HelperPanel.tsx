@@ -1219,6 +1219,15 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       </span>
     </button>
   );
+  const submitDisabled =
+    props.ready === false ||
+    !hydrated[scopeKey] ||
+    busy ||
+    data.loading ||
+    !attachments.ready ||
+    attachments.busy ||
+    !conversation ||
+    (!draft.trim() && !attachments.hasAttachments && !outbox);
   return (
     <aside
       id="helper-panel"
@@ -2166,14 +2175,19 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               </button>
             )}
             {running && (draft.trim() || attachments.hasAttachments || outbox) && (
-              <IconButton
-                label={t('helpers.m031')}
-                icon={Square}
-                onClick={() => void cancel(running)}
-              />
+              <button
+                type="submit"
+                className="secondary helper-queue"
+                aria-label={outbox ? t('helpers.m109') : t('helpers.queueRequest')}
+                title={outbox ? t('helpers.m096') : t('helpers.queueRequest')}
+                disabled={submitDisabled}
+              >
+                <ArrowUp size={18} aria-hidden="true" />
+                {!outbox && t('helpers.queueRequest')}
+              </button>
             )}
           </div>
-          {running && !draft.trim() && !attachments.hasAttachments && !outbox ? (
+          {running ? (
             <button
               className="send-button"
               type="button"
@@ -2186,27 +2200,11 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
             <button
               className="send-button"
               type="submit"
-              aria-label={
-                outbox ? t('helpers.m109') : running ? t('helpers.queueRequest') : t('helpers.m110')
-              }
-              title={
-                outbox ? t('helpers.m096') : running ? t('helpers.queueRequest') : t('helpers.m110')
-              }
-              disabled={
-                props.ready === false ||
-                !hydrated[scopeKey] ||
-                busy ||
-                data.loading ||
-                !attachments.ready ||
-                attachments.busy ||
-                !conversation ||
-                (!draft.trim() && !attachments.hasAttachments && !outbox)
-              }
+              aria-label={outbox ? t('helpers.m109') : t('helpers.m110')}
+              title={outbox ? t('helpers.m096') : t('helpers.m110')}
+              disabled={submitDisabled}
             >
               <ArrowUp size={20} />
-              {running && !outbox && (
-                <span className="helper-queue-label">{t('helpers.queueRequest')}</span>
-              )}
             </button>
           )}
         </ChatComposer>

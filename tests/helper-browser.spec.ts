@@ -785,13 +785,19 @@ test('HELPSTEER adds instructions to the active task once after a lost acknowled
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('');
   const task = state.current().tasks[0];
   const instructionText = '우선 설명문만 살펴봐 주세요';
-  await panel.getByLabel('도우미에게 요청').fill(instructionText);
   const stop = panel.locator('.helper-composer').getByRole('button', {
     name: '진행 중인 도우미 작업 취소',
     exact: true,
   });
   await expect(stop).toBeVisible();
+  const emptyDraftStop = await stop.boundingBox();
+  await expect(panel.getByRole('button', { name: '다음 요청', exact: true })).toHaveCount(0);
+  await panel.getByLabel('도우미에게 요청').fill(instructionText);
+  await expect(stop).toHaveCount(1);
   await expect(stop).toBeEnabled();
+  expect(await stop.boundingBox()).toEqual(emptyDraftStop);
+  await expect(panel.getByRole('button', { name: '다음 요청', exact: true })).toBeVisible();
+  await expect(panel.getByRole('button', { name: '현재 작업에 추가', exact: true })).toBeVisible();
   state.loseNext();
   await panel.getByRole('button', { name: '현재 작업에 추가', exact: true }).click();
   await expect(panel.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();

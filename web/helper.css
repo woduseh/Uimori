@@ -697,9 +697,13 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.helper-steer {
+.helper-steer,
+.helper-queue {
   font-size: var(--font-small);
   white-space: nowrap;
+}
+.helper-composer .helper-request-composer > .send-button {
+  align-self: end;
 }
 
 .helper-response-actions {
@@ -751,15 +755,6 @@
   overflow-wrap: anywhere;
   max-height: 240px;
   overflow: auto;
-}
-.helper-queue-label {
-  font-size: var(--font-small);
-  white-space: nowrap;
-}
-.helper-composer .send-button:has(.helper-queue-label) {
-  width: auto;
-  padding-inline: 10px;
-  gap: 4px;
 }
 @media (max-width: 600px) {
   .helper-expanded .helper-messages {
