@@ -87,7 +87,7 @@ for (const [width, motion] of [
     await expectHairline(dialog);
     await expect(dialog.getByRole('heading', { name: '읽기 설정', exact: true })).toHaveCSS(
       'font-size',
-      '16px'
+      '18px'
     );
     const toggle = dialog.getByRole('switch', { name: '대사 줄바꿈', exact: true });
     await toggle.scrollIntoViewIfNeeded();

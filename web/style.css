@@ -825,7 +825,7 @@ input[type="checkbox"] {
   justify-content: center;
 }
 .header-title h1 {
-  font-size: var(--font-heading);
+  font-size: var(--font-title);
   line-height: 1.5;
   margin: 0;
   font-weight: 650;
@@ -1471,7 +1471,7 @@ input[type="checkbox"] {
   margin-bottom: 16px;
 }
 .empty-state h2 {
-  font-size: var(--font-heading);
+  font-size: var(--font-title);
 }
 .empty-state p {
   font-size: var(--font-body);
@@ -1495,7 +1495,7 @@ input[type="checkbox"] {
   margin-bottom: 24px;
 }
 .first-scene h2 {
-  font-size: var(--font-heading);
+  font-size: var(--font-title);
   margin: 0;
 }
 .first-scene p {
@@ -1573,7 +1573,7 @@ input[type="checkbox"] {
   border-bottom: var(--hairline) solid var(--line);
 }
 .dialog-header h2 {
-  font-size: var(--font-heading);
+  font-size: var(--font-title);
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -1633,6 +1633,9 @@ input[type="checkbox"] {
   margin: 8vh auto;
   max-width: 540px;
   padding: 24px;
+}
+.login > h1 {
+  font-size: var(--font-title);
 }
 .login > .wordmark {
   display: inline-block;
@@ -1769,9 +1772,6 @@ input[type="checkbox"] {
     height: 56px;
     min-height: 56px;
     padding: 6px 14px 6px 20px;
-  }
-  .dialog-header h2 {
-    font-size: var(--font-heading);
   }
   .dialog-body {
     padding: 20px 16px;

@@ -50,7 +50,7 @@
   min-height: 0;
 }
 .library-heading h1 {
-  font-size: var(--font-heading);
+  font-size: var(--font-title);
   letter-spacing: -0.04em;
   margin: 0;
   min-width: 0;
@@ -194,7 +194,7 @@
   text-align: center;
 }
 .library-empty h2 {
-  font-size: var(--font-heading);
+  font-size: var(--font-title);
   letter-spacing: -0.035em;
 }
 .library-empty p {
@@ -326,9 +326,6 @@
   .library-heading {
     gap: 12px;
     margin-bottom: 12px;
-  }
-  .library-heading h1 {
-    font-size: var(--font-heading);
   }
   .library-heading p {
     font-size: var(--font-small);
