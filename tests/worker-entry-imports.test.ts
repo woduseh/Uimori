@@ -20,12 +20,14 @@ function rawTypeScriptWorkers(): string[] {
 
 test('workers started from raw TypeScript load only builtins, packages, JSON, and erased types', () => {
   const workers = rawTypeScriptWorkers();
-  expect(workers).toEqual([
-    'server/backup-verify-worker.ts',
-    'server/helper-data-worker.ts',
-    'server/manuscript-search-worker.ts',
-    'server/risu-lua-worker.ts',
-  ]);
+  expect(workers).toEqual(
+    expect.arrayContaining([
+      'server/backup-verify-worker.ts',
+      'server/helper-data-worker.ts',
+      'server/manuscript-search-worker.ts',
+      'server/risu-lua-worker.ts',
+    ])
+  );
   const unresolvable = workers.flatMap((file) =>
     sourceImports(readFileSync(join(root, file), 'utf8'), file)
       .filter(

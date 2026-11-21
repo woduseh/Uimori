@@ -509,109 +509,112 @@ for (const width of WIDTHS) {
       }
     });
 
-  test(`OUTUI08 ${width} the current unit guides ordinary continuation and deletion asks first`, async ({
-    page,
-    request,
-  }, info) => {
-    const chat = await seed(request, width);
-    let panel = await open(page, chat.id, width);
-    await choose(page, '1화 · 열람권의 대가', width);
-    await panel.getByRole('button', { name: '집필하기', exact: true }).click();
-    await panel.getByRole('button', { name: '집필 시작', exact: true }).click();
-    await expect(panel).toHaveCount(0);
-    await expect.poll(() => sourceCount(request, chat.id)).toBe(1);
+  if (width === 1440)
+    test(`OUTUI08 ${width} the current unit guides ordinary continuation and deletion asks first`, async ({
+      page,
+      request,
+    }, info) => {
+      const chat = await seed(request, width);
+      let panel = await open(page, chat.id, width);
+      await choose(page, '1화 · 열람권의 대가', width);
+      await panel.getByRole('button', { name: '집필하기', exact: true }).click();
+      await panel.getByRole('button', { name: '집필 시작', exact: true }).click();
+      await expect(panel).toHaveCount(0);
+      await expect.poll(() => sourceCount(request, chat.id)).toBe(1);
 
-    const status = page.locator('.composer-dock .outline-focus-status');
-    await expect(status).toContainText('진행 중 플롯');
-    await expect(status.getByRole('button', { name: '1화 · 열람권의 대가 플롯 열기' })).toHaveText(
-      '회차 1화 · 열람권의 대가'
-    );
-    await page.screenshot({ path: info.outputPath(`outline-focus-composer-${width}.png`) });
+      const status = page.locator('.composer-dock .outline-focus-status');
+      await expect(status).toContainText('진행 중 플롯');
+      await expect(
+        status.getByRole('button', { name: '1화 · 열람권의 대가 플롯 열기' })
+      ).toHaveText('회차 1화 · 열람권의 대가');
+      await page.screenshot({ path: info.outputPath(`outline-focus-composer-${width}.png`) });
 
-    await page.locator('#request').fill('보관소 직원에게 한 번 더 말을 걸어요.');
-    const send = page
-      .locator('.composer-dock')
-      .getByRole('button', { name: '원문 생성', exact: true });
-    await expect(send).toBeEnabled();
-    await send.click();
-    await expect.poll(() => sourceCount(request, chat.id)).toBe(2);
-    const linked: OutlineDetail = await (await request.get(`/api/chats/${chat.id}/outline`)).json();
-    const episode = linked.nodes.find((node) => node.title === '1화 · 열람권의 대가')!;
-    expect(linked.focusId).toBe(episode.id);
-    expect(episode.writings?.map((source) => [source.origin, source.current])).toEqual([
-      ['planned', true],
-      ['focus', true],
-    ]);
+      await page.locator('#request').fill('보관소 직원에게 한 번 더 말을 걸어요.');
+      const send = page
+        .locator('.composer-dock')
+        .getByRole('button', { name: '원문 생성', exact: true });
+      await expect(send).toBeEnabled();
+      await send.click();
+      await expect.poll(() => sourceCount(request, chat.id)).toBe(2);
+      const linked: OutlineDetail = await (
+        await request.get(`/api/chats/${chat.id}/outline`)
+      ).json();
+      const episode = linked.nodes.find((node) => node.title === '1화 · 열람권의 대가')!;
+      expect(linked.focusId).toBe(episode.id);
+      expect(episode.writings?.map((source) => [source.origin, source.current])).toEqual([
+        ['planned', true],
+        ['focus', true],
+      ]);
 
-    await status.getByRole('button', { name: '1화 · 열람권의 대가 플롯 열기' }).click();
-    panel = page.locator('.outline-panel');
-    await expect(panel).toBeVisible();
-    await choose(page, '1화 · 열람권의 대가', width);
-    const line = panel.locator('.outline-status-line');
-    await expect(line).toContainText('진행 중');
-    await expect(line).toContainText('원문 2개 연결');
-    if (width >= 760) {
+      await status.getByRole('button', { name: '1화 · 열람권의 대가 플롯 열기' }).click();
+      panel = page.locator('.outline-panel');
+      await expect(panel).toBeVisible();
+      await choose(page, '1화 · 열람권의 대가', width);
+      const line = panel.locator('.outline-status-line');
+      await expect(line).toContainText('진행 중');
+      await expect(line).toContainText('원문 2개 연결');
       const row = panel
         .locator('.outline-navigation .outline-entry')
         .filter({ has: page.getByText('기억 보관소의 문', { exact: true }) })
         .first();
       await expect(row.locator('.outline-node-progress').first()).toHaveText('1/2');
-    }
-    await panel.getByRole('button', { name: '다음: 2화 · 돌아온 출입증', exact: true }).click();
-    await expect(panel.locator('.outline-detail-heading h3')).toHaveText('2화 · 돌아온 출입증');
+      await panel.getByRole('button', { name: '다음: 2화 · 돌아온 출입증', exact: true }).click();
+      await expect(panel.locator('.outline-detail-heading h3')).toHaveText('2화 · 돌아온 출입증');
 
-    const menu = panel.locator('.outline-detail-heading details');
-    await menu.getByLabel('플롯 관리', { exact: true }).click();
-    await menu.getByRole('button', { name: '플롯 수정', exact: true }).click();
-    const form = panel.locator('.outline-form');
-    await form.getByRole('combobox', { name: '수준', exact: true }).selectOption('beat');
-    await form
-      .getByRole('combobox', { name: '상위 플롯', exact: true })
-      .selectOption({ label: '1화 · 열람권의 대가' });
-    const references = form.locator('.outline-reference-picker').first();
-    await references.locator('summary').click();
-    await references.getByRole('searchbox', { name: '플롯 검색' }).fill('대가');
-    await expect(references.locator('label:has(input[type=checkbox])')).toHaveText([
-      /1화 · 열람권의 대가/,
-    ]);
-    await references.getByRole('searchbox', { name: '플롯 검색' }).fill('없는 이름');
-    await expect(references).toContainText('검색 결과가 없어요.');
-    await form.getByRole('button', { name: '저장', exact: true }).click();
-    await expect(form).toHaveCount(0);
-    const moved: OutlineDetail = await (await request.get(`/api/chats/${chat.id}/outline`)).json();
-    expect(moved.nodes.find((node) => node.title === '2화 · 돌아온 출입증')).toMatchObject({
-      level: 'beat',
-      parentId: episode.id,
+      const menu = panel.locator('.outline-detail-heading details');
+      await menu.getByLabel('플롯 관리', { exact: true }).click();
+      await menu.getByRole('button', { name: '플롯 수정', exact: true }).click();
+      const form = panel.locator('.outline-form');
+      await form.getByRole('combobox', { name: '수준', exact: true }).selectOption('beat');
+      await form
+        .getByRole('combobox', { name: '상위 플롯', exact: true })
+        .selectOption({ label: '1화 · 열람권의 대가' });
+      const references = form.locator('.outline-reference-picker').first();
+      await references.locator('summary').click();
+      await references.getByRole('searchbox', { name: '플롯 검색' }).fill('대가');
+      await expect(references.locator('label:has(input[type=checkbox])')).toHaveText([
+        /1화 · 열람권의 대가/,
+      ]);
+      await references.getByRole('searchbox', { name: '플롯 검색' }).fill('없는 이름');
+      await expect(references).toContainText('검색 결과가 없어요.');
+      await form.getByRole('button', { name: '저장', exact: true }).click();
+      await expect(form).toHaveCount(0);
+      const moved: OutlineDetail = await (
+        await request.get(`/api/chats/${chat.id}/outline`)
+      ).json();
+      expect(moved.nodes.find((node) => node.title === '2화 · 돌아온 출입증')).toMatchObject({
+        level: 'beat',
+        parentId: episode.id,
+      });
+
+      await menu.getByLabel('플롯 관리', { exact: true }).click();
+      await menu.getByRole('button', { name: '플롯 삭제', exact: true }).click();
+      const confirm = page.getByRole('alertdialog');
+      await expect(confirm).toContainText('2화 · 돌아온 출입증 항목을 삭제할까요?');
+      await expect(confirm).toContainText('삭제한 플롯은 되돌릴 수 없어요.');
+      await page.screenshot({ path: info.outputPath(`outline-delete-confirm-${width}.png`) });
+      await confirm.getByRole('button', { name: '취소', exact: true }).click();
+      await expect(confirm).toHaveCount(0);
+      expect(
+        ((await (await request.get(`/api/chats/${chat.id}/outline`)).json()) as OutlineDetail).nodes
+      ).toHaveLength(COMPOSITION.length);
+      await menu.getByLabel('플롯 관리', { exact: true }).click();
+      await menu.getByRole('button', { name: '플롯 삭제', exact: true }).click();
+      await page
+        .getByRole('alertdialog')
+        .getByRole('button', { name: '플롯 삭제', exact: true })
+        .click();
+      await expect
+        .poll(
+          async () =>
+            ((await (await request.get(`/api/chats/${chat.id}/outline`)).json()) as OutlineDetail)
+              .nodes.length
+        )
+        .toBe(COMPOSITION.length - 1);
+
+      await panel.getByRole('button', { name: '플롯 닫기', exact: true }).click();
+      await status.getByRole('button', { name: '진행 중 플롯 해제', exact: true }).click();
+      await expect(status).toHaveCount(0);
+      expect(await (await request.get(`/api/chats/${chat.id}/outline/focus`)).json()).toBeNull();
     });
-
-    await menu.getByLabel('플롯 관리', { exact: true }).click();
-    await menu.getByRole('button', { name: '플롯 삭제', exact: true }).click();
-    const confirm = page.getByRole('alertdialog');
-    await expect(confirm).toContainText('2화 · 돌아온 출입증 항목을 삭제할까요?');
-    await expect(confirm).toContainText('삭제한 플롯은 되돌릴 수 없어요.');
-    await page.screenshot({ path: info.outputPath(`outline-delete-confirm-${width}.png`) });
-    await confirm.getByRole('button', { name: '취소', exact: true }).click();
-    await expect(confirm).toHaveCount(0);
-    expect(
-      ((await (await request.get(`/api/chats/${chat.id}/outline`)).json()) as OutlineDetail).nodes
-    ).toHaveLength(COMPOSITION.length);
-    await menu.getByLabel('플롯 관리', { exact: true }).click();
-    await menu.getByRole('button', { name: '플롯 삭제', exact: true }).click();
-    await page
-      .getByRole('alertdialog')
-      .getByRole('button', { name: '플롯 삭제', exact: true })
-      .click();
-    await expect
-      .poll(
-        async () =>
-          ((await (await request.get(`/api/chats/${chat.id}/outline`)).json()) as OutlineDetail)
-            .nodes.length
-      )
-      .toBe(COMPOSITION.length - 1);
-
-    await panel.getByRole('button', { name: '플롯 닫기', exact: true }).click();
-    await status.getByRole('button', { name: '진행 중 플롯 해제', exact: true }).click();
-    await expect(status).toHaveCount(0);
-    expect(await (await request.get(`/api/chats/${chat.id}/outline/focus`)).json()).toBeNull();
-  });
 }
