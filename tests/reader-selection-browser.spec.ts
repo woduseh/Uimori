@@ -55,18 +55,16 @@ async function seed(
   });
   expect(response.ok(), await response.text()).toBe(true);
   const chat = (await response.json()).chat;
-  if (options.theme) {
-    const catalog = await (await request.get('/api/themes')).json();
-    const selection = await request.post('/api/themes/selection', {
-      data: {
-        themeId: options.theme,
-        targetId: chat.id,
-        scope: 'chat',
-        expectedRevision: catalog.preferences.revision,
-      },
-    });
-    expect(selection.ok(), await selection.text()).toBe(true);
-  }
+  const catalog = await (await request.get('/api/themes')).json();
+  const selection = await request.post('/api/themes/selection', {
+    data: {
+      themeId: options.theme ?? 'builtin:forest',
+      targetId: chat.id,
+      scope: 'chat',
+      expectedRevision: catalog.preferences.revision,
+    },
+  });
+  expect(selection.ok(), await selection.text()).toBe(true);
   const current = await detail(request, chat.id);
   return { chatId: chat.id as string, source: current.sources[0] };
 }
