@@ -165,6 +165,22 @@
 - 도우미 대화의 수동 컨텍스트 압축: 지금은 자동 압축만 있고 수동으로 부르는 경로가 서버에 없어요. 6단계의 사용량 표시를 써 본 뒤 필요하면 넣어요.
 - 첫 실행 안내: 프로바이더, 모델, 봇이 비어 있을 때의 진행 안내예요. 빈 작업실에서 지금 무엇이 보이는지는 이번 검토에서 확인하지 못했으므로 그것부터 확인해요.
 
+## 참고 구현
+
+저장소 옆 폴더에 체크아웃된 두 프로젝트를 설계 참고로 써요. OpenAI Codex(`codex-rs`)와 T3 Code(MIT)예요. 가져올 것은 데이터 모양과 설계 선택이고, 코드나 의존성은 옮기지 않아요. T3 Code는 Effect, `react-markdown`, 가상 목록 위에 지어져 있어서 뼈대가 달라요. 아래 경로는 T3 Code 체크아웃 기준이고 2026-11-21에 발췌해 읽은 것이니, 쓰기 전에 해당 파일을 다시 확인해요.
+
+| 단계 | T3 Code의 위치 | 참고할 점 |
+| --- | --- | --- |
+| 3. 단축키와 팔레트 | `packages/shared/src/keybindings.ts`의 `DEFAULT_KEYBINDINGS`, `apps/web/src/keybindings.ts`, `apps/web/src/components/chat/useChatShortcuts.ts`, `apps/web/src/components/CommandPalette.logic.ts` | 단축키를 키, 명령, 적용 조건(`when`)의 표로 두고 뒤 규칙이 앞 규칙을 이겨요. 창 전체에 리스너 하나를 두고, 처리기가 거짓을 돌려주면 처리하지 않은 것으로 보고 이벤트를 흘려보내요. |
+| 5. 사이드카 폭 조절 | `apps/web/src/hooks/useResizableWidth.ts`, `apps/web/src/hooks/useResizeDrag.ts` | 끄는 동안에는 CSS 변수만 바꾸고 저장은 놓을 때 한 번 해요. 읽을 때 범위를 다시 맞추고, 저장소가 막히면 메모리 값으로 동작해요. |
+| 6. 도구 활동 묶음 | `packages/client-runtime/src/work-log/presentation.ts`의 `toolGroupAction`, `summarizeToolGroup` | 도구를 읽기, 편집, 명령, 검색 같은 몇 가지 종류로 나누고 연속된 호출을 요약 한 줄로 접는 일을 React와 분리된 순수 모듈에서 해요. |
+| 6. 변경 diff | `apps/web/src/components/DiffPanel.tsx`, `apps/web/src/components/chat/ChangedFilesTree.tsx`, `packages/contracts/src/checkpointDiff.ts` | 파일별 접힘 상태를 따로 두고 펼칠 때 내용을 읽어요. 출력에 크기 상한을 두고 잘렸다는 표식을 남겨요. 줄 단위 diff만 있어서 어절 단위 산문 diff는 참고할 것이 없어요. |
+| 6. 컨텍스트 사용량 | `apps/web/src/components/chat/ThreadDetailsUsage.tsx`, `packages/client-runtime/src/state/contextWindow.ts` | 막대에 자동 압축 기준점을 눈금으로 표시하고 80%와 90%에서 색을 바꿔요. |
+| 7. 롤백과 되감기 | `apps/server/src/orchestration-v2/CheckpointRollbackService.ts`, `CheckpointRestoreSafety.ts`, `apps/web/src/components/chat/useTimelineRewind.ts` | 대화를 되감는 것과 파일을 복원하는 것을 서로 다른 선택으로 둬요. 안전하게 복원할 수 없으면 거절하고 대화만 되감는 길을 안내해요. 실행 중에는 되돌리기를 막아요. 저장 방식은 git이라 우리와 달라요. |
+| 7. 승인과 계획 모드 | `packages/contracts/src/providerPolicy.ts`, `apps/web/src/components/chat/ProposedPlanCard.tsx`, `apps/web/src/components/chat/ComposerPendingApprovalActions.tsx` | 승인 답을 수락, 이번 대화 동안 수락, 거절, 취소로 나눠요. 긴 계획 카드는 접어요. 쓰기 차단은 프로바이더에 맡기고 있어서, 서버에서 쓰기 도구를 막는 우리 방식의 참고는 아니에요. |
+| 8과 9. 실행 중 입력창 | `apps/web/src/components/chat/ComposerPrimaryActions.tsx`, `QueuedRunsControl.tsx`, `useComposerSend.ts` | 정지 직후 같은 자리에 들어오는 버튼이 잠깐 클릭을 받지 않게 해서, 정지를 연타해도 다시 시작되지 않아요. 후속 입력의 기본 동작(대기 또는 현재 작업에 추가)을 설정으로 두고 수정키로 한 번만 반대로 보내요. |
+| 9. 대상 지정 | 저장소 문서 폴더의 `internals/composer-context-references.md` | 본문에는 링크 형태의 참조만 두고, 참조가 가리키는 내용은 메시지에 딸린 기록으로 따로 보관해요. |
+
 ## 제외한 항목
 
 | 항목 | 이유 |
