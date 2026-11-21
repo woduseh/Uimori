@@ -7,7 +7,7 @@ import { promptControls } from '../core/risu-prompt.js';
 import { ExpandIcon, EditIcon, SaveIcon, CloseIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { Library, PromptRole, PromptWorkspace } from '../core/product.js';
 import type { WorkspaceEditModel } from '../core/resource-editing.js';
 import {
@@ -22,7 +22,7 @@ import { ResourceEditorSession } from './resource-editor-session.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { ActionMenu } from './ActionMenu.js';
 import { PromptCombinationManager } from './PromptCombinationManager.js';
-import { Dialog } from './Dialog.js';
+import { SettingsDetail } from './SettingsDetail.js';
 import {
   ResourceEditorProvider,
   ResourceEditorStatus,
@@ -61,6 +61,9 @@ export function PromptWorkspaceEditor({
   const [manageCombinations, setManageCombinations] = useState(false);
   const [comboError, setComboError] = useState('');
   const [selectedCombo, setSelectedCombo] = useState('');
+  const combinationToolbar = useRef<HTMLDivElement>(null);
+  const returnToCombinationMenu = () =>
+    combinationToolbar.current?.querySelector<HTMLElement>('.action-menu > summary');
   const [session] = useState(
     () =>
       new ResourceEditorSession({
@@ -180,6 +183,7 @@ export function PromptWorkspaceEditor({
       <section
         aria-label={t('prompts.uiCurrentPromptSettings')}
         className="prompt-editor prompt-current-settings"
+        hidden={comboOpen || manageCombinations}
       >
         {showRecovery && <ResourceEditorActions value={shared} hideSyncError />}
         <div className="prompt-editor-fields">
@@ -254,7 +258,7 @@ export function PromptWorkspaceEditor({
             </summary>
             {promptControls(current.program).length || ownedCombinations.length ? (
               <div className="settings-group-body prompt-current-options">
-                <div className="prompt-combination-toolbar">
+                <div className="prompt-combination-toolbar" ref={combinationToolbar}>
                   <label>
                     {t('prompts.uiOptionCombination')}
                     <select
@@ -355,70 +359,72 @@ export function PromptWorkspaceEditor({
           </p>
         )}
         <TransientNotice message={busy || dirty ? '' : message} />
-        <PromptCombinationManager
-          open={manageCombinations}
-          onClose={() => setManageCombinations(false)}
-          current={current}
-          role={role}
-          workspaceRevision={state.document.baseRevision ?? 0}
-          combinations={library.promptCombinations ?? []}
-          reload={reload}
-        />
-        <Dialog
-          open={comboOpen}
-          title={t('prompts.uiSaveOptionCombination')}
-          onClose={() => {
-            if (!savingCombo) setComboOpen(false);
-          }}
-        >
-          <label>
-            {t('prompts.uiCombinationName')}
-            <input
-              aria-label={t('prompts.uiCombinationName')}
-              value={comboName}
-              maxLength={200}
-              disabled={savingCombo}
-              onChange={(event) => setComboName(event.target.value)}
-            />
-          </label>
-          {comboError && <NoticeBanner tone="error">{comboError}</NoticeBanner>}
-          <div className="form-actions">
-            <button
-              type="button"
-              className="secondary"
-              disabled={savingCombo}
-              onClick={() => setComboOpen(false)}
-            >
-              <CloseIcon size={18} aria-hidden="true" />
-              {t('prompts.uiCancel')}
-            </button>
-            <SaveButton
-              type="button"
-              className="primary"
-              label={t('prompts.uiSaveOptionCombination')}
-              aria-busy={savingCombo}
-              disabled={!comboName.trim() || savingCombo}
-              onClick={async () => {
-                setSavingCombo(true);
-                try {
-                  await api('/prompt-combinations', {
-                    title: comboName.trim(),
-                    role,
-                    values: current.values,
-                    workspaceRevision: state.document.baseRevision,
-                  });
-                  await reload?.();
-                  setComboOpen(false);
-                } catch (caught) {
-                  setComboError((caught as Error).message);
-                } finally {
-                  setSavingCombo(false);
-                }
-              }}
-            />
-          </div>
-        </Dialog>
       </section>
+      <PromptCombinationManager
+        open={manageCombinations}
+        sectionLabel={t('chatsettings.m29')}
+        returnFocus={returnToCombinationMenu}
+        onClose={() => setManageCombinations(false)}
+        current={current}
+        role={role}
+        workspaceRevision={state.document.baseRevision ?? 0}
+        combinations={library.promptCombinations ?? []}
+        reload={reload}
+      />
+      <SettingsDetail
+        open={comboOpen}
+        location={[t('chatsettings.m29'), t('prompts.uiSaveOptionCombination')]}
+        backDisabled={savingCombo}
+        returnFocus={returnToCombinationMenu}
+        onBack={() => setComboOpen(false)}
+      >
+        <label>
+          {t('prompts.uiCombinationName')}
+          <input
+            aria-label={t('prompts.uiCombinationName')}
+            value={comboName}
+            maxLength={200}
+            disabled={savingCombo}
+            onChange={(event) => setComboName(event.target.value)}
+          />
+        </label>
+        {comboError && <NoticeBanner tone="error">{comboError}</NoticeBanner>}
+        <div className="form-actions">
+          <button
+            type="button"
+            className="secondary"
+            disabled={savingCombo}
+            onClick={() => setComboOpen(false)}
+          >
+            <CloseIcon size={18} aria-hidden="true" />
+            {t('prompts.uiCancel')}
+          </button>
+          <SaveButton
+            type="button"
+            className="primary"
+            label={t('prompts.uiSaveOptionCombination')}
+            aria-busy={savingCombo}
+            disabled={!comboName.trim() || savingCombo}
+            onClick={async () => {
+              setSavingCombo(true);
+              try {
+                await api('/prompt-combinations', {
+                  title: comboName.trim(),
+                  role,
+                  values: current.values,
+                  workspaceRevision: state.document.baseRevision,
+                });
+                await reload?.();
+                setComboOpen(false);
+              } catch (caught) {
+                setComboError((caught as Error).message);
+              } finally {
+                setSavingCombo(false);
+              }
+            }}
+          />
+        </div>
+      </SettingsDetail>
     </ResourceEditorProvider>
   );
 }

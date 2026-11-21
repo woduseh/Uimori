@@ -425,12 +425,6 @@ export const messages = {
     ja: '使用するモデルを登録しましょう',
     zh: '添加要使用的模型',
   },
-  'providers.m82': {
-    ko: '목록으로',
-    en: 'Back to list',
-    ja: '一覧に戻る',
-    zh: '返回列表',
-  },
   'providers.m83': {
     ko: '빠른 프로바이더 설정 진행',
     en: 'Quick provider setup progress',

@@ -153,10 +153,19 @@ test(
           .click();
       };
       await openCombination();
-      const combo = page.getByRole('dialog', { name: '옵션 프리셋 저장', exact: true });
+      const combo = page.getByRole('region', {
+        name: '현재 프롬프트 / 옵션 프리셋 저장',
+        exact: true,
+      });
       await combo.getByLabel('옵션 프리셋 이름', { exact: true }).fill('취소할 조합');
       await combo.getByRole('button', { name: '취소', exact: true }).click();
       await expect(combo).toBeHidden();
+      await openCombination();
+      await expect(combo).toBeFocused();
+      await expect(editor).toBeHidden();
+      await page.keyboard.press('Escape');
+      await expect(combo).toBeHidden();
+      await expect(editor.getByLabel('옵션 프리셋 메뉴', { exact: true })).toBeFocused();
       await openCombination();
       const title = `PWS 조합 ${width} ${crypto.randomUUID()}`;
       await combo.getByLabel('옵션 프리셋 이름', { exact: true }).fill(title);
@@ -276,7 +285,10 @@ test(
     ).not.toContainText(['보존할 조합']);
     await editor.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
     await page.getByRole('button', { name: '옵션 프리셋 관리', exact: true }).click();
-    const manager = page.getByRole('dialog', { name: '옵션 프리셋 관리', exact: true });
+    const manager = page.getByRole('region', {
+      name: '현재 프롬프트 / 옵션 프리셋 관리',
+      exact: true,
+    });
     await expect(manager).toContainText('보존할 조합');
     await expect(manager).toContainText('적용 불가');
     await manager.getByRole('button', { name: '옵션 수정', exact: true }).click();

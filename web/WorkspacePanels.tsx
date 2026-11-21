@@ -42,7 +42,8 @@ import { HelperIcon, BackIcon, LibraryIcon } from './ui-icons.js';
 import type { Job, ReaderRun } from '../core/types.js';
 import type { StoryState } from './useStory.js';
 import { api } from './api.js';
-import { ConnectionEditor } from './ProviderManagement.js';
+import { ConnectionEditor, type ProviderDetailRequest } from './ProviderManagement.js';
+import { backFromSettingsDetail } from './SettingsDetail.js';
 import { ArchivePanel } from './ArchivePanel.js';
 import { AttemptInspector } from './AttemptInspector.js';
 import { RunTaskDetails } from './RunTaskDetails.js';
@@ -315,7 +316,7 @@ export function AppSettingsPanel({
         );
   const [active, setActive] = useState(startTab);
   const [visited, setVisited] = useState([startTab]);
-  const [modelToEdit, setModelToEdit] = useState<string | null>(null);
+  const [providerDetail, setProviderDetail] = useState<ProviderDetailRequest | null>(null);
   const [search, setSearch] = useState('');
   const compact = useCompactLayout();
   const [detail, setDetail] = useState(true);
@@ -351,7 +352,13 @@ export function AppSettingsPanel({
   const wasCompact = useRef(compact);
   const id = useId();
   const query = searchText(search).replace(/[\/·-]/g, '');
-  const results: { key: string; label: string; section: string; anchor?: string }[] = query
+  const results: {
+    key: string;
+    label: string;
+    section: string;
+    anchor?: string;
+    detail?: 'providers';
+  }[] = query
     ? settingsCategories.flatMap((category) => {
         if (matchesSearch(`${category.label} ${category.terms ?? ''}`, search))
           return [{ key: category.key, label: category.label, section: '' }];
@@ -364,6 +371,7 @@ export function AppSettingsPanel({
             label: destination.label,
             section: category.label,
             anchor: destination.anchor,
+            detail: destination.detail,
           }));
       })
     : [];
@@ -390,6 +398,7 @@ export function AppSettingsPanel({
       nested.dispatchEvent(new Event('cancel', { cancelable: true }));
       return true;
     }
+    if (backFromSettingsDetail(root.current)) return true;
     if (compact && detail) {
       backToList();
       return true;
@@ -627,12 +636,13 @@ export function AppSettingsPanel({
           {query && (
             <div className="settings-search-results" aria-label={t('chatsettings.m56')}>
               {results.length ? (
-                results.map(({ key, label, section, anchor }) => (
+                results.map(({ key, label, section, anchor, detail }) => (
                   <button
                     type="button"
                     key={`${key}-${label}`}
                     onClick={() => {
-                      select(key, anchor ?? 'panel');
+                      if (detail) setProviderDetail({ kind: detail });
+                      select(key, detail ? undefined : (anchor ?? 'panel'));
                       setSearch('');
                     }}
                   >
@@ -802,7 +812,7 @@ export function AppSettingsPanel({
                       onSaveHandlerChange={saveGroup.registrations.model}
                       onManage={() => select('connections')}
                       onEditModel={(modelId) => {
-                        setModelToEdit(modelId);
+                        setProviderDetail({ kind: 'model', id: modelId });
                         select('connections');
                       }}
                     />
@@ -826,8 +836,8 @@ export function AppSettingsPanel({
                           onError={state.setError}
                           onDirtyChange={setConnectionDirty}
                           onSaveHandlerChange={saveGroup.registrations.connection}
-                          modelToEdit={modelToEdit}
-                          onModelEditHandled={() => setModelToEdit(null)}
+                          detailRequest={providerDetail}
+                          onDetailRequestHandled={() => setProviderDetail(null)}
                         />
                       )}
                     </div>

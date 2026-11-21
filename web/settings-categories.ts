@@ -12,7 +12,7 @@ import {
   SettingsIcon,
 } from './ui-icons.js';
 
-type SettingsDestination = { label: string; terms: string; anchor?: string };
+type SettingsDestination = { label: string; terms: string; anchor?: string; detail?: 'providers' };
 export type SettingsGroup = 'display' | 'generation' | 'system';
 type SettingsCategory = {
   key: string;
@@ -87,6 +87,7 @@ export function getSettingsCategories(sessionRequired: boolean): SettingsCategor
       icon: ConnectionIcon,
       group: 'generation',
       terms: t('chatsettings.m32'),
+      destinations: [{ label: t('providers.m72'), terms: t('providers.m70'), detail: 'providers' }],
     },
     {
       key: 'lore',

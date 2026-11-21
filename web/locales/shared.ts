@@ -35,6 +35,12 @@ export const messages = {
     ja: '再読み込み',
     zh: '重新加载',
   },
+  'shared.backToList': {
+    ko: '목록으로',
+    en: 'Back to list',
+    ja: '一覧に戻る',
+    zh: '返回列表',
+  },
   'shared.close': {
     ko: '{title} 닫기',
     en: 'Close {title}',

@@ -27,6 +27,7 @@ import {
 } from '../core/jev-provider.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { Dialog } from './Dialog.js';
+import { SettingsDetail } from './SettingsDetail.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import {
   useEffect,
@@ -41,7 +42,6 @@ import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import {
   AddIcon,
-  BackIcon,
   ConnectionIcon,
   CopyIcon,
   DownIcon,
@@ -88,6 +88,9 @@ function vertexLocationOf(connections: Connection[], connectionId: string): stri
   if (connection?.protocol !== 'vertex-gemini-v1') return undefined;
   return parseVertexEndpoint(connection.endpoint)?.location;
 }
+export type ProviderDetailRequest = { kind: 'model'; id: string } | { kind: 'providers' };
+type ProviderScreen = 'models' | 'connections' | 'providers' | 'connection' | 'model' | 'jev';
+const detailScreens: ProviderScreen[] = ['providers', 'connection', 'model', 'jev'];
 const matches = (query: string, ...values: (string | undefined)[]) =>
   !query || values.some((value) => value?.toLocaleLowerCase().includes(query));
 
@@ -97,16 +100,16 @@ export function ConnectionEditor({
   onError,
   onDirtyChange,
   onSaveHandlerChange,
-  modelToEdit,
-  onModelEditHandled,
+  detailRequest,
+  onDetailRequestHandled,
 }: {
   library: Library;
   reload: () => Promise<void>;
   onError: (error: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
-  modelToEdit?: string | null;
-  onModelEditHandled?: () => void;
+  detailRequest?: ProviderDetailRequest | null;
+  onDetailRequestHandled?: () => void;
 }) {
   useI18n();
   const testMode = useTestMode();
@@ -130,18 +133,17 @@ export function ConnectionEditor({
   );
   const dragged = useRef<{ kind: 'connection' | 'model'; id: string } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
-  const [screen, setScreen] = useState<
-    'models' | 'connections' | 'providers' | 'connection' | 'model' | 'jev'
-  >('models');
+  const [screen, setScreen] = useState<ProviderScreen>('models');
   const [modelSection, setModelSection] = useState<'basic' | 'advanced'>('basic');
   const [expandedModelGroups, setExpandedModelGroups] = useState<Set<string>>(() => new Set());
   const heading = useRef<HTMLDivElement>(null);
   const returnItem = useRef<{ screen: 'models' | 'connections'; id: string } | undefined>(
     undefined
   );
-  function navigate(next: typeof screen) {
+  function navigate(next: ProviderScreen) {
     setDiscard(undefined);
     setScreen(next);
+    if (detailScreens.includes(next)) return;
     requestAnimationFrame(() => {
       const selected = returnItem.current;
       const target =
@@ -746,25 +748,39 @@ export function ConnectionEditor({
   };
   useSettingsSaveHandler(onSaveHandlerChange, savePending);
 
-  const handledModel = useRef<string | null>(null);
+  const handledRequest = useRef<ProviderDetailRequest | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: A navigation request reads the current draft once; later draft or library edits must not reopen the editor.
   useEffect(() => {
-    if (!modelToEdit) {
-      handledModel.current = null;
+    if (!detailRequest) {
+      handledRequest.current = null;
       return;
     }
-    if (busy || handledModel.current === modelToEdit) return;
-    handledModel.current = modelToEdit;
-    onModelEditHandled?.();
-    const target = library.models.find((item) => item.id === modelToEdit);
+    if (busy || handledRequest.current === detailRequest) return;
+    handledRequest.current = detailRequest;
+    onDetailRequestHandled?.();
+    if (detailRequest.kind === 'providers') {
+      newConnection();
+      return;
+    }
+    const target = library.models.find((item) => item.id === detailRequest.id);
     if (!target) {
       setError(uiMessage('providers.m21'));
       return;
     }
     if (editingModel?.id === target.id) navigate('model');
     else void showModel(target);
-  }, [modelToEdit, busy]);
+  }, [detailRequest, busy]);
 
+  const detailTitle =
+    screen === 'providers'
+      ? t('providers.m72')
+      : screen === 'jev'
+        ? JEV_PROVIDER_DEFINITION.label
+        : screen === 'connection'
+          ? (editingConnection?.title ??
+            (drafts.connection.copy ? t('providers.m132') : t('providers.m133')))
+          : (editingModel?.title ??
+            (drafts.model.copy ? t('providers.m277') : t('providers.m278')));
   const jevConnectionRow = jevMatches ? (
     <article
       key={JEV_PROVIDER_DEFINITION.id}
@@ -1096,75 +1112,6 @@ export function ConnectionEditor({
             )}
         </>
       )}
-      {(screen === 'providers' || screen === 'jev') && (
-        <div className="provider-editor-heading">
-          <IconButton
-            className="secondary"
-            icon={BackIcon}
-            size={18}
-            label={t('providers.m82')}
-            disabled={busy}
-            onClick={() => navigate(screen === 'jev' ? jevReturn : 'connections')}
-          />
-        </div>
-      )}
-      {screen === 'providers' && (
-        <section className="provider-selection" aria-label={t('providers.m87')}>
-          <div className="provider-template-grid">
-            {PROVIDER_CHOICES.filter((item) => item.id !== 'fixture-sse-v1').map((item) => (
-              <button
-                type="button"
-                className="secondary provider-template"
-                key={item.id}
-                disabled={busy}
-                onClick={() => (item.kind === 'judgment' ? openJev() : startProvider(item.id))}
-              >
-                <span className="provider-template-icon">
-                  <ConnectionIcon size={20} />
-                </span>
-                <strong>{translateMessage(item.label)}</strong>
-                <small>
-                  {item.kind === 'judgment'
-                    ? t('providers.m90')
-                    : item.id === 'codex-app-server-v1'
-                      ? t('providers.m91')
-                      : item.id === 'vertex-gemini-v1'
-                        ? t('providers.m92')
-                        : item.id === 'google-gemini-v1'
-                          ? t('providers.m93')
-                          : item.id === 'openai-chat-v1'
-                            ? t('providers.m94')
-                            : t('providers.m90')}
-                </small>
-                <ForwardIcon size={16} />
-              </button>
-            ))}
-          </div>
-          {testMode && (
-            <details className="provider-test-template">
-              <summary>{t('providers.m95')}</summary>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => startProvider('fixture-sse-v1')}
-              >
-                {t('providers.m96')}
-              </button>
-            </details>
-          )}
-        </section>
-      )}
-      <JevProviderSettings
-        onSaveHandlerChange={(handler) => {
-          jevSave.current = handler;
-        }}
-        active={screen === 'jev'}
-        view={jevReturn === 'models' ? 'model' : 'connection'}
-        onConnectionOpen={() => openJev('connections')}
-        onDirtyChange={setJevDirty}
-        onBusyChange={setJevBusy}
-        onStatusChange={setJevStatus}
-      />
       <section hidden={screen !== 'connections'} aria-label={t('providers.m97')}>
         <div className="connection-list provider-saved-list settings-group-body">
           {providerIds.map((id) => {
@@ -1425,48 +1372,115 @@ export function ConnectionEditor({
           )}
         </div>
       </section>
-      <ProviderConnectionForm
-        testMode={testMode}
-        hidden={screen !== 'connection'}
-        draft={drafts.connection}
-        connections={library.connections}
-        conflict={conflict === 'connection'}
-        busy={busy}
-        saving={operation === 'connection-save'}
-        operationBusy={operationBusy}
-        formRef={connectionForm}
-        onChange={setConnection}
-        onUploadBusy={setUploadingCredential}
-        onSubmit={submitConnection}
-        onReload={() => {
-          void perform(() => latest('connection'), 'connection');
-        }}
-        onDone={() => navigate('connections')}
-        deleteAction={editingConnection && deleteConnection(editingConnection)}
-      />
-      <ProviderModelForm
-        hidden={screen !== 'model'}
-        draft={drafts.model}
-        models={library.models}
-        modelConnections={library.connections}
-        conflict={conflict === 'model'}
-        busy={busy}
-        saving={operation === 'model-save'}
-        forcedVertexTier={forcedVertexTier}
-        modelSection={modelSection}
-        onSectionChange={setModelSection}
-        formRef={modelForm}
-        onChange={setModel}
-        onSubmit={submitModel}
-        onReload={() => {
-          void perform(() => latest('model'), 'model');
-        }}
-        onDone={() => navigate('models')}
-        onCatalog={(item) => {
-          void perform(() => catalog(item));
-        }}
-        deleteAction={editingModel && deleteModel(editingModel, true)}
-      />
+      <SettingsDetail
+        open={detailScreens.includes(screen)}
+        detailKey={screen}
+        location={[t('chatsettings.m31'), detailTitle]}
+        backDisabled={busy}
+        onBack={() =>
+          navigate(screen === 'jev' ? jevReturn : screen === 'model' ? 'models' : 'connections')
+        }
+      >
+        {screen === 'providers' && (
+          <section className="provider-selection" aria-label={t('providers.m87')}>
+            <div className="provider-template-grid">
+              {PROVIDER_CHOICES.filter((item) => item.id !== 'fixture-sse-v1').map((item) => (
+                <button
+                  type="button"
+                  className="secondary provider-template"
+                  key={item.id}
+                  disabled={busy}
+                  onClick={() => (item.kind === 'judgment' ? openJev() : startProvider(item.id))}
+                >
+                  <span className="provider-template-icon">
+                    <ConnectionIcon size={20} />
+                  </span>
+                  <strong>{translateMessage(item.label)}</strong>
+                  <small>
+                    {item.kind === 'judgment'
+                      ? t('providers.m90')
+                      : item.id === 'codex-app-server-v1'
+                        ? t('providers.m91')
+                        : item.id === 'vertex-gemini-v1'
+                          ? t('providers.m92')
+                          : item.id === 'google-gemini-v1'
+                            ? t('providers.m93')
+                            : item.id === 'openai-chat-v1'
+                              ? t('providers.m94')
+                              : t('providers.m90')}
+                  </small>
+                  <ForwardIcon size={16} />
+                </button>
+              ))}
+            </div>
+            {testMode && (
+              <details className="provider-test-template">
+                <summary>{t('providers.m95')}</summary>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => startProvider('fixture-sse-v1')}
+                >
+                  {t('providers.m96')}
+                </button>
+              </details>
+            )}
+          </section>
+        )}
+        <JevProviderSettings
+          onSaveHandlerChange={(handler) => {
+            jevSave.current = handler;
+          }}
+          active={screen === 'jev'}
+          view={jevReturn === 'models' ? 'model' : 'connection'}
+          onConnectionOpen={() => openJev('connections')}
+          onDirtyChange={setJevDirty}
+          onBusyChange={setJevBusy}
+          onStatusChange={setJevStatus}
+        />
+        <ProviderConnectionForm
+          testMode={testMode}
+          hidden={screen !== 'connection'}
+          draft={drafts.connection}
+          connections={library.connections}
+          conflict={conflict === 'connection'}
+          busy={busy}
+          saving={operation === 'connection-save'}
+          operationBusy={operationBusy}
+          formRef={connectionForm}
+          onChange={setConnection}
+          onUploadBusy={setUploadingCredential}
+          onSubmit={submitConnection}
+          onReload={() => {
+            void perform(() => latest('connection'), 'connection');
+          }}
+          onDone={() => navigate('connections')}
+          deleteAction={editingConnection && deleteConnection(editingConnection)}
+        />
+        <ProviderModelForm
+          hidden={screen !== 'model'}
+          draft={drafts.model}
+          models={library.models}
+          modelConnections={library.connections}
+          conflict={conflict === 'model'}
+          busy={busy}
+          saving={operation === 'model-save'}
+          forcedVertexTier={forcedVertexTier}
+          modelSection={modelSection}
+          onSectionChange={setModelSection}
+          formRef={modelForm}
+          onChange={setModel}
+          onSubmit={submitModel}
+          onReload={() => {
+            void perform(() => latest('model'), 'model');
+          }}
+          onDone={() => navigate('models')}
+          onCatalog={(item) => {
+            void perform(() => catalog(item));
+          }}
+          deleteAction={editingModel && deleteModel(editingModel, true)}
+        />
+      </SettingsDetail>
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
       <TransientNotice message={message} />
       {refreshWarning && <NoticeBanner>{translateMessage(refreshWarning)}</NoticeBanner>}

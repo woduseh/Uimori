@@ -1454,6 +1454,83 @@ test('PMLEAVE provider draft switch saves before replacement and applies reversi
   ).toBeVisible();
 });
 
+test('PMDRILL a provider detail replaces the list, returns focus and scroll, and leaves through the same guard', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  const title = 'PMDRILL ' + Date.now();
+  const created: Connection[] = [];
+  for (let index = 0; index < 20; index++)
+    created.push(
+      await api<Connection>(
+        request,
+        '/connections',
+        connectionInput(`${title} ${String(index).padStart(2, '0')}`)
+      )
+    );
+  const target = created.at(-1)!;
+  await settings(page);
+  const dialog = page.getByRole('dialog', { name: '설정', exact: true });
+  const scroller = dialog.locator('.settings-page:not([hidden])');
+  await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
+  await page.getByLabel('프로바이더와 모델 검색').fill(title);
+  const opener = page.getByRole('button', { name: target.title + ' 프로바이더 수정', exact: true });
+  await opener.scrollIntoViewIfNeeded();
+  const listScroll = await scroller.evaluate((node) => node.scrollTop);
+  expect(listScroll).toBeGreaterThan(0);
+  await opener.click();
+  const detail = dialog.getByRole('region', {
+    name: `프로바이더와 모델 / ${target.title}`,
+    exact: true,
+  });
+  await expect(detail).toBeFocused();
+  await expect(detail.locator('.settings-detail-location > span')).toHaveText([
+    '프로바이더와 모델',
+    target.title,
+  ]);
+  await expect(opener).toBeHidden();
+  expect(await scroller.evaluate((node) => node.scrollTop)).toBe(0);
+  const form = detail.getByRole('form', { name: '프로바이더 편집 양식' });
+  const name = form.getByLabel('프로바이더 이름', { exact: true });
+  await name.fill(target.title + ' 초안');
+
+  await form.getByRole('button', { name: target.title + ' 프로바이더 삭제', exact: true }).click();
+  const remove = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
+  await expect(remove).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(remove).toBeHidden();
+  await expect(detail).toBeVisible();
+  await name.focus();
+  await page.keyboard.press('Escape');
+  await expect(detail).toBeHidden();
+  await expect(opener).toBeFocused();
+  expect(
+    Math.abs((await scroller.evaluate((node) => node.scrollTop)) - listScroll)
+  ).toBeLessThanOrEqual(1);
+  const resume = page.getByRole('button', {
+    name: `프로바이더 편집 이어 하기: ${target.title} 초안`,
+    exact: true,
+  });
+  await expect(resume).toBeVisible();
+
+  const guard = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
+  await page.keyboard.press('Escape');
+  await expect(guard).toBeVisible();
+  await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
+  await expect(guard).toBeHidden();
+  await resume.click();
+  await expect(detail).toBeFocused();
+  await expect(name).toHaveValue(target.title + ' 초안');
+  await dialog.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await expect(guard).toBeVisible();
+  await guard.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect((await library(request)).connections.find((item) => item.id === target.id)).toEqual(
+    target
+  );
+});
+
 test('SAVEACK saving both provider drafts stops on a failed write but continues after failed summary reads', async ({
   page,
   request,
@@ -1499,6 +1576,8 @@ test('SAVEACK saving both provider drafts stops on a failed write but continues 
     route.fulfill({ status: 503, json: { error: 'Synthetic summary failure' } })
   );
 
+  await page.keyboard.press('Escape');
+  await expect(connectionForm).toBeHidden();
   await page.keyboard.press('Escape');
   const guard = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
   await guard.getByRole('button', { name: '저장하고 닫기', exact: true }).click();

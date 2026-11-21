@@ -164,3 +164,36 @@ for (const width of [412]) {
     await expect(global.getByRole('searchbox', { name: '설정 검색', exact: true })).toBeVisible();
   });
 }
+
+for (const width of [412, 1440]) {
+  test(`SCUISEARCHDETAIL search opens the add-provider detail and Escape or back returns to the provider list at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/');
+    await navigationAction(page, '설정');
+    const dialog = page.getByRole('dialog', { name: '설정', exact: true });
+    if (width <= 760)
+      await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
+    const search = dialog.getByRole('searchbox', { name: '설정 검색', exact: true });
+    await search.fill('프로바이더 추가');
+    const result = dialog
+      .locator('.settings-search-results')
+      .getByRole('button', { name: /^프로바이더 추가/ });
+    await expect(result).toContainText('프로바이더와 모델');
+    await result.click();
+    const detail = dialog.getByRole('region', {
+      name: '프로바이더와 모델 / 프로바이더 추가',
+      exact: true,
+    });
+    await expect(detail).toBeFocused();
+    await expect(
+      detail.getByRole('region', { name: '프로바이더 선택', exact: true })
+    ).toBeVisible();
+    if (width <= 760) await page.goBack();
+    else await page.keyboard.press('Escape');
+    await expect(detail).toBeHidden();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByTestId('connection-editor')).toBeVisible();
+  });
+}
