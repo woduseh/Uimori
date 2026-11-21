@@ -8,14 +8,14 @@ Polish the controls around the manuscript, not the manuscript itself. Work withi
 
 ## Read only the relevant owner
 
-Paths below are relative to the repository root. Timing and easing values live in `web/style.css`; read them rather than copying a second token table into instructions.
+Paths below are relative to the repository root. The motion tokens (`--motion-fast`, `--motion-panel`, `--motion-overlay`, `--motion-ease-out`) live in `web/style.css`, and their roles are listed in `docs/UI-PRINCIPLES.md`; read them there rather than copying values into instructions. A duration or easing the tokens do not cover enters as a new token, not as a literal value or a range.
 
 | Surface | Component / CSS | Pattern |
 | --- | --- | --- |
-| Native modal | `web/Dialog.tsx`, `web/style.css` | Open and close immediately. Avoid transforming the dialog: it can contain viewport-positioned menus. |
-| Anchored action menu | `web/ActionMenu.tsx`, `web/ui-controls.css` | Open without an entrance effect. Preserve actual viewport placement and immediate dismissal. |
-| Mobile action sheet | Same menu owners | Open without travel or scale. Keep the existing `SHEET_MEDIA` breakpoint and scrim. |
-| On/off switch | `web/BooleanControls.tsx`, `web/boolean-controls.css` | Animate the existing thumb and colors, without bounce or a mount-time entrance. |
+| Native modal | `web/Dialog.tsx`, `web/style.css` | Opens and closes immediately today. Entrance motion may use `--motion-overlay` with `opacity` and a transform that ends at `transform: none`; nothing may keep `transform` or `will-change` on the dialog at rest, because it contains `position: fixed` menus. |
+| Anchored action menu | `web/ActionMenu.tsx`, `web/ui-controls.css` | Opens immediately today. Entrance motion may use `--motion-overlay`; preserve actual viewport placement and immediate dismissal. |
+| Mobile action sheet | Same menu owners | Opens immediately today. Entrance motion may use `--motion-overlay`; keep the existing `SHEET_MEDIA` breakpoint, scrim and dismissal. |
+| On/off switch | `web/BooleanControls.tsx`, `web/boolean-controls.css` | Animates the existing thumb and colors with `--motion-fast`, without bounce or a mount-time entrance. |
 
 Read `docs/THEME-AUTHORING.md` only if the change touches the theme boundary.
 
@@ -24,27 +24,27 @@ Read `docs/THEME-AUTHORING.md` only if the change touches the theme boundary.
 Motion should make controls feel responsive without delaying actions, obscuring
 state or changing the manuscript. Preserve the existing state owner, native
 `showModal()` / `close()`, `details[open]`, checkbox semantics, focus behavior
-and dismissal. Menus and dialogs open and close immediately; avoid exit timers,
-extra closing states or wrappers introduced solely for animation.
+and dismissal. Implement entrance motion in CSS alone; avoid exit timers, extra
+closing states, animation-driven React state or wrappers introduced solely for
+animation.
 
-Immediate opening is the convention adopted in `docs/UI-PRINCIPLES.md`, so the
-switch is currently the only animated control in the table. When the user asks
-for entrance or exit motion on a dialog, menu or sheet, that request changes the
-convention: implement it within the constraints below, and update
-UI-PRINCIPLES, the table above and the motion paragraph in
-`docs/DEVELOPMENT.md` in the same change.
+The switch is currently the only animated control in the table. Entrance motion
+on a dialog, menu, sheet or notice is allowed within the tokens and constraints
+here; when you add it, update the table above, the browser assertions in
+`tests/motion-browser.spec.ts` and the motion paragraph in `docs/DEVELOPMENT.md`
+in the same change.
 
 - Keep modal geometry and anchored menu placement stable, including
-  viewport-positioned descendants and small screens. Mobile sheets retain their
-  existing layout and dismissal behavior.
-- Animate switch thumbs and colors only where helpful. Use specific transition
-  properties and existing easing/timing tokens; avoid `transition: all`,
-  permanent `will-change`, blur, bounce, per-item stagger and animation-driven
-  React renders.
+  viewport-positioned descendants and small screens. A dialog ends its entrance
+  at `transform: none` and never keeps `transform` or `will-change` at rest.
+  Mobile sheets retain their existing layout and dismissal behavior.
+- Animate compositor-friendly properties (`opacity`, `transform`) first, with
+  specific transition properties and the motion tokens; avoid `transition: all`,
+  permanent `will-change`, blur, bounce and per-item stagger.
 - Respect `prefers-reduced-motion`: new motion belongs behind
   `no-preference`, while base controls remain visible and usable.
-- Do not animate source/translation text, rebuild Risu/Shadow DOM content or
-  broadly override author CSS. Preserve existing sidebar transitions, skeletons and activity indicators
+- Do not shift the manuscript layout, animate source/translation text, rebuild
+  Risu/Shadow DOM content or broadly override author CSS. Preserve existing sidebar transitions, skeletons and activity indicators
   unless they are in scope. Keep the existing theme and component contracts.
 
 ## Verification
@@ -72,5 +72,5 @@ Inspired by Jakub Antalik's [Transitions.dev](https://transitions.dev/skill). Th
 Reviewed upstream snapshot `e2d5551656e4d3274e075d1cbd9a95af50f53225`:
 
 - [Anchored dropdown](https://github.com/Jakubantalik/transitions.dev/blob/e2d5551656e4d3274e075d1cbd9a95af50f53225/skills/transitions-dev/05-menu-dropdown.md): a reference for trigger-aware origin if menu entrance motion is adopted; do not use its replacement state machine.
-- [Modal](https://github.com/Jakubantalik/transitions.dev/blob/e2d5551656e4d3274e075d1cbd9a95af50f53225/skills/transitions-dev/06-modal.md): use its native modal and focus considerations, not its entrance or delayed close.
+- [Modal](https://github.com/Jakubantalik/transitions.dev/blob/e2d5551656e4d3274e075d1cbd9a95af50f53225/skills/transitions-dev/06-modal.md): use its native modal and focus considerations, not its delayed close; any entrance follows the transform constraint above.
 - [Toggle](https://github.com/Jakubantalik/transitions.dev/blob/e2d5551656e4d3274e075d1cbd9a95af50f53225/skills/transitions-dev/27-toggle.md): use thumb travel and color feedback, not overshoot or initialization state.
