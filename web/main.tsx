@@ -77,6 +77,7 @@ import {
   type ComposerDraft,
 } from './composer-draft.js';
 import { useStableHandler } from './useStableHandler.js';
+import { useBottomFollow } from './useBottomFollow.js';
 import { createRoot } from 'react-dom/client';
 import {
   Activity,
@@ -224,6 +225,22 @@ function DraftRequestPreviewDialog({
 function App() {
   const { locale } = useI18n();
   const s = useStory();
+  const readerContent = useRef<HTMLElement>(null);
+  const readerFollow = useBottomFollow(
+    s.reader,
+    readerContent,
+    !!s.active || s.submitting.includes(s.viewKey),
+    false
+  );
+  const generate: typeof s.generate = (...args) => {
+    readerFollow.follow();
+    return s.generate(...args);
+  };
+  const readerFollowing = readerFollow.following;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Changing the chat ends following the previous chat.
+  useEffect(() => {
+    readerFollowing.current = false;
+  }, [s.viewKey]);
   const draftEmpty = useComposerDraftEmpty(s.composerDraft);
   const { setScope: setThemeScope } = useThemes();
   const themeChatId = s.destination === 'story' ? s.selected : undefined;
@@ -376,7 +393,7 @@ function App() {
       setRequestDecision({ scope: s.viewKey, kind: s.pendingProfile ? 'profile' : 'admission' });
       return false;
     }
-    return s.generate();
+    return generate();
   };
   const optionsButton = useRef<HTMLButtonElement>(null);
   const requestImageInput = useRef<HTMLInputElement>(null);
@@ -1547,8 +1564,14 @@ function App() {
               {s.detail?.chat.id === s.selected && s.attachmentsReady && s.bot && (
                 <ReaderGallery key={`gallery:${s.viewKey}`} bot={s.bot} persona={s.persona} />
               )}
-              <div ref={s.reader} className="reader-scrollport" data-reader-scrollport>
+              <div
+                ref={s.reader}
+                className="reader-scrollport"
+                data-reader-scrollport
+                onScroll={readerFollow.onScroll}
+              >
                 <section
+                  ref={readerContent}
                   className={`reader${s.selected && !s.detail ? ' reader-awaiting' : ''}`}
                   aria-label={t('main.m085')}
                   aria-busy={!!s.selected && !s.detail && s.readerLoading}
@@ -1717,7 +1740,7 @@ function App() {
                               }
                               onRetry={
                                 s.canReuseRun(source.runId)
-                                  ? (mode, text) => s.generate(source.runId, text, false, mode)
+                                  ? (mode, text) => generate(source.runId, text, false, mode)
                                   : undefined
                               }
                               retryCanReplace={source.id === s.detail!.chat.headRevision}
@@ -1780,12 +1803,10 @@ function App() {
                               run={run}
                               disabled={s.reuseBlocked || optionsBusy}
                               onRetry={
-                                s.canReuseRun(run.id) ? () => void s.generate(run.id) : undefined
+                                s.canReuseRun(run.id) ? () => void generate(run.id) : undefined
                               }
                               onSubmit={
-                                s.canReuseRun(run.id)
-                                  ? (text) => s.generate(run.id, text)
-                                  : undefined
+                                s.canReuseRun(run.id) ? (text) => generate(run.id, text) : undefined
                               }
                               onConfirm={
                                 s.pendingEditedRunId === run.id
@@ -1817,9 +1838,7 @@ function App() {
                               disabled={s.reuseBlocked || optionsBusy}
                               editHint={t('main.m094')}
                               onSubmit={
-                                s.canReuseRun(run.id)
-                                  ? (text) => s.generate(run.id, text)
-                                  : undefined
+                                s.canReuseRun(run.id) ? (text) => generate(run.id, text) : undefined
                               }
                               onConfirm={
                                 s.pendingEditedRunId === run.id
@@ -1849,7 +1868,7 @@ function App() {
                                   onRejudge={
                                     run.canRejudge && s.canReuseRun(run.id)
                                       ? () => {
-                                          void s.generate(run.id, undefined, true);
+                                          void generate(run.id, undefined, true);
                                         }
                                       : undefined
                                   }
@@ -1859,7 +1878,7 @@ function App() {
                                   onRetry={
                                     s.canReuseRun(run.id)
                                       ? () => {
-                                          void s.generate(run.id);
+                                          void generate(run.id);
                                         }
                                       : undefined
                                   }
@@ -2003,7 +2022,7 @@ function App() {
                       s.requestActivity.id === requestId &&
                       !s.submitting.includes(s.viewKey)
                     )
-                      void s.generate();
+                      void generate();
                   }}
                   seenRunIds={seenRuns}
                 />
@@ -2610,7 +2629,7 @@ function App() {
               <button
                 onClick={() => {
                   setRequestDecision(null);
-                  void s.generate();
+                  void generate();
                 }}
               >
                 {t('main.m139')}

@@ -222,3 +222,50 @@ test('STREAMRENDER completed paragraphs stream with the compiler, font and line 
     await peer.close();
   }
 });
+
+test('STREAMFOLLOW the reader follows a sent request, stops when scrolled up and resumes at the bottom', async ({
+  page,
+  request,
+}) => {
+  const { peer, writer, chat } = await streamingWriter(request);
+  try {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto(`/?chat=${chat.id}`);
+    await page.locator('[data-uimori-part="composer-input"]').fill('긴 장면을 써 주세요.');
+    await page.getByRole('button', { name: '원문 생성', exact: true }).click();
+    const live = await writer;
+    const scrollport = page.locator('[data-reader-scrollport]');
+    const distance = () =>
+      scrollport.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight);
+    const paragraph = (index: number) =>
+      `${index}번째 문단이에요. 등대의 불빛이 파도 위를 천천히 건너가며 항구의 밤을 밝혔다.\n\n`;
+    let index = 0;
+    const write = async (count: number) => {
+      for (let end = index + count; index < end; index++) live.write(paragraph(index));
+      await expect(page.getByTestId('pending-run').locator('.streaming-text')).toContainText(
+        `${index - 1}번째 문단`
+      );
+      await settle(page);
+    };
+    await write(30);
+    await expect.poll(distance).toBeLessThan(2);
+    await scrollport.evaluate((node) => {
+      node.scrollTop -= 400;
+    });
+    await settle(page);
+    const released = await scrollport.evaluate((node) => node.scrollTop);
+    await write(5);
+    expect(await scrollport.evaluate((node) => node.scrollTop)).toBe(released);
+    expect(await distance()).toBeGreaterThan(400);
+    await scrollport.evaluate((node) => {
+      node.scrollTop = node.scrollHeight;
+    });
+    await settle(page);
+    await write(5);
+    await expect.poll(distance).toBeLessThan(2);
+    live.finish();
+    await expect(page.getByTestId('pending-run')).toHaveCount(0);
+  } finally {
+    await peer.close();
+  }
+});

@@ -111,6 +111,7 @@ import './helper.css';
 import './settings-layout.css';
 import { readOptionalStorage } from './optional-storage.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
+import { useBottomFollow } from './useBottomFollow.js';
 
 type Props = {
   enterSend: boolean;
@@ -551,7 +552,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   const scroll = useRef<HTMLDivElement>(null),
     content = useRef<HTMLDivElement>(null);
   const positions = useRef(new Map<string, { top: number; following: boolean }>());
-  const following = useRef(true),
+  const bottom = useBottomFollow(scroll, content, props.open, true);
+  const following = bottom.following,
     displayedScope = useRef('');
   const prepend = useRef<{ scope: string; height: number; top: number } | null>(null);
   const editRevisions = useRef(new Map<string, number>());
@@ -828,16 +830,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       prepend.current = null;
     } else if (following.current) node.scrollTop = node.scrollHeight;
     else node.scrollTop = positions.current.get(scopeKey)?.top ?? node.scrollTop;
-  }, [props.open, scopeKey, data.current]);
-  useEffect(() => {
-    if (!props.open || !content.current) return;
-    const observer = new ResizeObserver(() => {
-      if (following.current && scroll.current)
-        scroll.current.scrollTop = scroll.current.scrollHeight;
-    });
-    observer.observe(content.current);
-    return () => observer.disconnect();
-  }, [props.open]);
+  }, [props.open, scopeKey, data.current, following]);
   async function send(
     saved?: Outbox,
     withoutStorage = false,
@@ -1524,7 +1517,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         onScroll={() => {
           const node = scroll.current;
           if (node) {
-            following.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
+            bottom.onScroll();
             positions.current.set(scopeKey, { top: node.scrollTop, following: following.current });
           }
         }}
