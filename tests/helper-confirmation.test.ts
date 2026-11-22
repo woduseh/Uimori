@@ -177,6 +177,48 @@ test('a grant survives a restart, runs the exact call once and rejects other arg
   ]);
 });
 
+test('a call held again after an earlier grant can be confirmed again', async () => {
+  const f = fixture();
+  const [one, two, three] = f.bots as [Content, Content, Content];
+  const stale = (bot: Content, title: string) => ({ ...f.patch(bot, title), expectedRevision: 99 });
+  const call = () =>
+    helperCall('patch', 'resource.patchMany', {
+      items: [stale(one, '1'), stale(two, '2'), stale(three, '3')],
+    });
+  const first = await runScriptedChatHelper(f.store(), f.chat.id, [call(), helperDone]);
+  const [confirmation] = readHelperTaskResults(f.store(), first.task.id).confirmations;
+  const granted = await runScriptedChatHelper(
+    f.store(),
+    f.chat.id,
+    [call(), helperDone],
+    {},
+    { request: '바꿔 줘', confirmations: [confirmation!.id] }
+  );
+  expect(granted.finished('patch')).toMatchObject({ errorCode: 'SOURCE_CONFLICT' });
+  const again = await runScriptedChatHelper(f.store(), f.chat.id, [call(), helperDone]);
+  expect(again.finished('patch')).toMatchObject({ errorCode: 'CONFIRMATION_REQUIRED' });
+  expect(readHelperTaskResults(f.store(), again.task.id).confirmations).toMatchObject([
+    { id: confirmation!.id, taskId: again.task.id, grantedBy: null, grantable: true },
+  ]);
+  expect(readHelperTaskResults(f.store(), first.task.id).confirmations).toMatchObject([
+    { grantedBy: granted.task.id, grantable: false },
+  ]);
+  const regranted = await runScriptedChatHelper(
+    f.store(),
+    f.chat.id,
+    [call(), helperDone],
+    {},
+    { request: '다시 바꿔 줘', confirmations: [confirmation!.id] }
+  );
+  expect(regranted.finished('patch')).toMatchObject({ errorCode: 'SOURCE_CONFLICT' });
+  expect(readHelperTaskResults(f.store(), again.task.id).confirmations).toMatchObject([
+    { grantedBy: regranted.task.id, grantable: false },
+  ]);
+  expect(readHelperTaskResults(f.store(), first.task.id).confirmations).toMatchObject([
+    { grantedBy: granted.task.id },
+  ]);
+});
+
 test('only a confirmation from the latest task can be granted, and declining needs no call', async () => {
   const f = fixture();
   const [one] = f.bots as [Content];

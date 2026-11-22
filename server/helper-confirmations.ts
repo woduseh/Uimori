@@ -143,14 +143,17 @@ export function resolveHelperConfirmations(
 }
 
 export function readHelperConfirmations(store: Store, taskId: string): HelperConfirmation[] {
-  const task = store.db.prepare('SELECT conversation_id FROM helper_tasks WHERE id=?').get(taskId);
+  const task = store.db
+    .prepare('SELECT rowid, conversation_id FROM helper_tasks WHERE id=?')
+    .get(taskId);
   if (!task) return [];
   const latest = store.db
     .prepare('SELECT id FROM helper_tasks WHERE conversation_id=? ORDER BY rowid DESC LIMIT 1')
     .get(task.conversation_id)?.id;
   const granted = store.db.prepare(
     `SELECT t.id FROM helper_tasks t, json_each(t.snapshot,'$.confirmations') item
-     WHERE t.conversation_id=? AND json_extract(item.value,'$.id')=? ORDER BY t.rowid LIMIT 1`
+     WHERE t.conversation_id=? AND t.rowid>? AND json_extract(item.value,'$.id')=?
+     ORDER BY t.rowid LIMIT 1`
   );
   return store.db
     .prepare(
@@ -159,7 +162,7 @@ export function readHelperConfirmations(store: Store, taskId: string): HelperCon
     .all(taskId)
     .map((row) => {
       const { arguments: _arguments, ...recorded } = JSON.parse(String(row.data)) as Recorded;
-      const grantedBy = granted.get(task.conversation_id, recorded.id)?.id;
+      const grantedBy = granted.get(task.conversation_id, task.rowid, recorded.id)?.id;
       return {
         ...recorded,
         grantedBy: grantedBy === undefined ? null : String(grantedBy),

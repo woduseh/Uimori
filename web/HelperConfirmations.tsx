@@ -18,7 +18,8 @@ const reasons: Record<HelperConfirmation['reason'], string> = {
   bulk: 'helperConfirm.reasonBulk',
   paid: 'helperConfirm.reasonPaid',
 };
-const declinedKey = (id: string) => `uimori:helper-confirmation-declined:${id}`;
+const declinedKey = ({ taskId, id }: Pick<HelperConfirmation, 'taskId' | 'id'>) =>
+  `uimori:helper-confirmation-declined:${taskId}:${id}`;
 
 export const confirmationOperation = (confirmation: Pick<HelperConfirmation, 'operation'>) =>
   operations[confirmation.operation]
@@ -39,8 +40,8 @@ export function HelperConfirmations({
   const [declined, setDeclined] = useState<readonly string[]>([]);
   const shown = confirmations.filter(
     (confirmation) =>
-      !declined.includes(confirmation.id) &&
-      !(confirmation.grantable && readOptionalStorage('local', declinedKey(confirmation.id)))
+      !declined.includes(declinedKey(confirmation)) &&
+      !(confirmation.grantable && readOptionalStorage('local', declinedKey(confirmation)))
   );
   if (!shown.length) return null;
   return (
@@ -95,8 +96,8 @@ export function HelperConfirmations({
                   className="secondary"
                   aria-label={t('helperConfirm.declineLabel', { operation })}
                   onClick={() => {
-                    writeOptionalStorage('local', declinedKey(confirmation.id), '1');
-                    setDeclined((old) => [...old, confirmation.id]);
+                    writeOptionalStorage('local', declinedKey(confirmation), '1');
+                    setDeclined((old) => [...old, declinedKey(confirmation)]);
                   }}
                 >
                   <X size={16} aria-hidden="true" />

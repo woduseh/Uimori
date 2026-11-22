@@ -2665,6 +2665,46 @@ test('HCONFIRM01 held operations are confirmed with an editable request, decline
   await expect(panel.locator('.helper-confirmation-chip')).toHaveCount(0);
 });
 
+test('HCONFIRM02 declining a held call does not hide the same call held again in a later task', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  const chat = await create(request),
+    state = await harness(page, 1);
+  await page.goto(`/?chat=${chat.id}`);
+  await open(page);
+  const earlier = state.current().tasks[0];
+  const held = (taskId: string, grantable: boolean) => ({
+    id: 'same-call',
+    taskId,
+    operation: 'scene.request',
+    reason: 'paid' as const,
+    chatId: chat.id,
+    targets: [{ kind: 'chat', id: chat.id }],
+    grantedBy: null,
+    grantable,
+  });
+  state.results.set(earlier.id, { confirmations: [held(earlier.id, true)] });
+  await page.reload();
+  const panel = await open(page);
+  const cards = () => panel.locator('.helper-confirmation');
+  await cards().getByRole('button', { name: '다음 장면 요청 거절', exact: true }).click();
+  await expect(cards()).toHaveCount(0);
+  await panel.getByLabel('도우미에게 요청').fill('다음 장면을 써 주세요');
+  await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await expect.poll(() => state.posts.length).toBe(1);
+  const later = state.current().tasks[0];
+  state.results.set(earlier.id, { confirmations: [held(earlier.id, false)] });
+  state.results.set(later.id, { confirmations: [held(later.id, true)] });
+  await state.complete(later);
+  await page.reload();
+  await open(page);
+  await expect(
+    cards().getByRole('button', { name: '다음 장면 요청 확인', exact: true })
+  ).toBeVisible();
+});
+
 test('HELPACTIVITY observed stages retain tool errors and cancellation', async ({
   page,
   request,

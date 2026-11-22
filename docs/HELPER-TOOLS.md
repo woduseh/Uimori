@@ -181,6 +181,7 @@ A helper request sent with `mode: "plan"` (`POST /api/helper/conversations/:id/m
 - A confirmation is bound to the conversation, the chat the call acts on, the operation and its exact arguments, revision guards included. A grant is consumed when the confirmed call is dispatched, even if the save then fails, and a replay of the same call identity does not consume it twice.
 - The granted request lists the confirmed calls in `source.confirmedCalls`, because the next task does not see the earlier tool calls and must repeat the arguments exactly.
 - Only a confirmation required by the conversation's latest task can be granted (`CONFIRMATION_UNAVAILABLE` otherwise), so a grant never revives an old request. A retry keeps the grants of the task it retries.
+- The same call identity can be held again in a later task, for example after a granted call failed. Each holding task is answered on its own: its `grantedBy` names only a task after it, so an earlier grant neither marks the new hold as granted nor hides it, and the client keys a decline by task and confirmation.
 - By default resource deletion and a `resource.patchMany` over three or more resources are held; the threshold is `HELPER_BULK_CONFIRMATION_RESOURCES`. The setting is copied into the task at admission, like the task timeout, and the helper's own `settings.update` cannot change it.
 - The results view does not expose the held call's arguments.
 
