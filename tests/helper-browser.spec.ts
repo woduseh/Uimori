@@ -2589,6 +2589,8 @@ test('HPLAN01 plan mode sends a plan request, shows a bounded plan and carries i
       await plan.scrollIntoViewIfNeeded();
       await page.screenshot({ path: info.outputPath(`plan-card-${width}-${colorScheme}.png`) });
     }
+  const fade = () => prose.evaluate((node) => getComputedStyle(node).maskImage);
+  expect(await fade()).toContain('gradient');
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   await toggle.click();
   await expect(plan.getByRole('button', { name: '계획 접기', exact: true })).toHaveAttribute(
@@ -2596,6 +2598,7 @@ test('HPLAN01 plan mode sends a plan request, shows a bounded plan and carries i
     'true'
   );
   expect(await prose.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeLessThan(2);
+  expect(await fade()).toBe('none');
   await plan.getByRole('button', { name: '이 계획대로 진행', exact: true }).click();
   await expect.poll(() => state.posts.length).toBe(2);
   expect(state.posts[1].text).toBe('위 계획대로 진행해 주세요.');

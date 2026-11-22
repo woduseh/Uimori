@@ -917,6 +917,9 @@
   max-height: var(--diff-max-h);
   overflow: hidden;
 }
+.helper-plan-body[data-overflowing="true"] .helper-prose {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 3lh), transparent);
+}
 .helper-plan-actions {
   display: flex;
   flex-wrap: wrap;

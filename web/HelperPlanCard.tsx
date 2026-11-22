@@ -23,7 +23,13 @@ export function HelperPlanCard({ children, action }: { children: ReactNode; acti
         <ListChecks size={16} aria-hidden="true" />
         <span>{t('helperPlan.title')}</span>
       </p>
-      <div ref={body} id={bodyId} className="helper-plan-body" data-expanded={expanded}>
+      <div
+        ref={body}
+        id={bodyId}
+        className="helper-plan-body"
+        data-expanded={expanded}
+        data-overflowing={overflowing && !expanded}
+      >
         {children}
       </div>
       {(overflowing || action) && (
