@@ -29,7 +29,19 @@ import { Fragment, useContext, useEffect, useId, useRef, useState } from 'react'
 import { SessionRequiredContext } from './SessionGate.js';
 import { Dialog } from './Dialog.js';
 import { Switch } from './BooleanControls.js';
-import { setShortcutsEnabled, shortcutLabel, useShortcutsEnabled } from './shortcuts.js';
+import {
+  setShortcutsEnabled,
+  useShortcutBindings,
+  useShortcutLabel,
+  useShortcutsEnabled,
+} from './shortcuts.js';
+import {
+  defaultShortcutBindings,
+  sameShortcutKey,
+  shortcutActionIds,
+  shortcutActions,
+} from './shortcut-bindings.js';
+import { ShortcutSettings } from './ShortcutSettings.js';
 import { IconButton } from './IconButton.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { useSettingsHistory } from './useSettingsHistory.js';
@@ -43,7 +55,7 @@ import type { Job, ReaderRun } from '../core/types.js';
 import type { StoryState } from './useStory.js';
 import { api } from './api.js';
 import { ConnectionEditor, type ProviderDetailRequest } from './ProviderManagement.js';
-import { backFromSettingsDetail, openSettingsDetail } from './SettingsDetail.js';
+import { backFromSettingsDetail, openSettingsDetail, SettingsDetail } from './SettingsDetail.js';
 import { ArchivePanel } from './ArchivePanel.js';
 import { AttemptInspector } from './AttemptInspector.js';
 import { RunTaskDetails } from './RunTaskDetails.js';
@@ -302,6 +314,14 @@ export function AppSettingsPanel({
   const librarySettingsSubjects = getLibrarySettingsSubjects();
   const [signingOut, setSigningOut] = useState(false);
   const shortcutsEnabled = useShortcutsEnabled();
+  const shortcutBindings = useShortcutBindings();
+  const safeModeKey = useShortcutLabel('theme.safeMode');
+  const defaultShortcuts = defaultShortcutBindings();
+  const customShortcutCount = shortcutActionIds.filter(
+    (action) =>
+      shortcutActions[action].when.rebindable &&
+      !sameShortcutKey(shortcutBindings[action], defaultShortcuts[action])
+  ).length;
   const startTab =
     initialTab && settingsCategories.some((item) => item.key === initialTab)
       ? initialTab
@@ -313,6 +333,7 @@ export function AppSettingsPanel({
   const [active, setActive] = useState(startTab);
   const [visited, setVisited] = useState([startTab]);
   const [providerDetail, setProviderDetail] = useState<ProviderDetailRequest | null>(null);
+  const [shortcutDetail, setShortcutDetail] = useState(false);
   const [search, setSearch] = useState('');
   const compact = useCompactLayout();
   const [detail, setDetail] = useState(true);
@@ -366,7 +387,7 @@ export function AppSettingsPanel({
     label: string;
     section: string;
     anchor?: string;
-    detail?: 'providers';
+    detail?: 'providers' | 'shortcuts';
   }[] = query
     ? settingsCategories.flatMap((category) => {
         if (matchesSearch(`${category.label} ${category.terms ?? ''}`, search))
@@ -461,6 +482,7 @@ export function AppSettingsPanel({
   }
   function select(key: string, target?: string) {
     rememberPosition();
+    setShortcutDetail(false);
     setActive(key);
     setDetail(true);
     setVisited((previous) => (previous.includes(key) ? previous : [...previous, key]));
@@ -641,8 +663,9 @@ export function AppSettingsPanel({
                     type="button"
                     key={`${key}-${label}`}
                     onClick={() => {
-                      if (detail) setProviderDetail({ kind: detail });
+                      if (detail === 'providers') setProviderDetail({ kind: detail });
                       select(key, detail ? undefined : (anchor ?? 'panel'));
+                      if (detail === 'shortcuts') setShortcutDetail(true);
                       setSearch('');
                     }}
                   >
@@ -692,10 +715,20 @@ export function AppSettingsPanel({
                     />
                   )}
                   {key === 'general' && (
+                    <SettingsDetail
+                      open={shortcutDetail}
+                      location={[t('chatsettings.m15'), t('shortcuts.customize')]}
+                      onBack={() => setShortcutDetail(false)}
+                    >
+                      {shortcutDetail && <ShortcutSettings />}
+                    </SettingsDetail>
+                  )}
+                  {key === 'general' && (
                     <section
                       id={`${id}-general-display`}
                       tabIndex={-1}
                       className="settings-section settings-group"
+                      hidden={shortcutDetail}
                     >
                       <h3>{t('chatsettings.m16')}</h3>
                       <div className="settings-group-body">
@@ -740,7 +773,7 @@ export function AppSettingsPanel({
                             <strong>{t('shortcuts.setting')}</strong>
                             <small>
                               {t('shortcuts.settingHint', {
-                                key: shortcutLabel('theme.safeMode'),
+                                key: safeModeKey,
                               })}
                             </small>
                           </span>
@@ -752,6 +785,26 @@ export function AppSettingsPanel({
                             />
                           </span>
                         </label>
+                        <div className="settings-row">
+                          <span className="settings-row-copy">
+                            <strong>{t('shortcuts.customize')}</strong>
+                            <small>{t('shortcuts.customizeHint')}</small>
+                          </span>
+                          <span className="settings-row-control">
+                            {customShortcutCount > 0 && (
+                              <small className="muted">
+                                {t('shortcuts.customCount', { count: customShortcutCount })}
+                              </small>
+                            )}
+                            <button
+                              type="button"
+                              className="secondary"
+                              onClick={() => setShortcutDetail(true)}
+                            >
+                              {t('shortcuts.change')}
+                            </button>
+                          </span>
+                        </div>
                       </div>
                       {compact ? (
                         <details className="settings-desktop-panels">
@@ -771,6 +824,7 @@ export function AppSettingsPanel({
                       id={`${id}-general-generation`}
                       tabIndex={-1}
                       className="settings-section settings-group"
+                      hidden={shortcutDetail}
                     >
                       <h3>{t('chatsettings.m18')}</h3>
                       <AutoTranslationDefaults />
@@ -782,6 +836,7 @@ export function AppSettingsPanel({
                       id={`${id}-general-reading`}
                       tabIndex={-1}
                       className="settings-section"
+                      hidden={shortcutDetail}
                     >
                       <h3>{t('chatsettings.readingSettings')}</h3>
                       {readingSettings}
@@ -793,6 +848,7 @@ export function AppSettingsPanel({
                       tabIndex={-1}
                       className="settings-section settings-services"
                       aria-label={t('chatsettings.m21')}
+                      hidden={shortcutDetail}
                     >
                       <h3>{t('chatsettings.m21')}</h3>
                       <InstallApp />
@@ -888,6 +944,7 @@ export function AppSettingsPanel({
                       id={`${id}-general-session`}
                       tabIndex={-1}
                       className="settings-section"
+                      hidden={shortcutDetail}
                     >
                       <h3>{t('chatsettings.m76')}</h3>
                       <div className="settings-row">

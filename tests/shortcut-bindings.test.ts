@@ -1,8 +1,14 @@
 import { expect, test } from 'vitest';
 import {
+  defaultShortcutBindings,
+  isBrowserReservedShortcut,
+  parseShortcutOverrides,
   readShortcutBindings,
   resolveShortcut,
+  serializeShortcutOverrides,
+  shortcutKeyFromEvent,
   shortcutKeyLabel,
+  validateShortcutBinding,
   type ShortcutEvent,
   type ShortcutState,
 } from '../web/shortcut-bindings.js';
@@ -98,4 +104,89 @@ test('labels name Cmd on Apple platforms and Ctrl elsewhere', () => {
   expect(shortcutKeyLabel(bindings['run.stop'], false)).toBe('Esc');
   expect(shortcutKeyLabel(bindings['helper.mode'], false)).toBe('Alt+M');
   expect(shortcutKeyLabel(bindings['helper.mode'], true)).toBe('Option+M');
+});
+
+test('validation rejects fixed actions, browser-reserved combos, bare keys and conflicts', () => {
+  const defaults = defaultShortcutBindings();
+  expect(validateShortcutBinding('theme.safeMode', { code: 'KeyU', mod: true }, defaults)).toEqual({
+    ok: false,
+    reason: 'fixed',
+  });
+  expect(isBrowserReservedShortcut({ code: 'KeyW', mod: true })).toBe(true);
+  expect(isBrowserReservedShortcut({ code: 'KeyT', mod: true })).toBe(true);
+  expect(isBrowserReservedShortcut({ code: 'KeyF', mod: true })).toBe(true);
+  expect(isBrowserReservedShortcut({ code: 'KeyF', mod: true, shift: true })).toBe(false);
+  expect(
+    validateShortcutBinding('navigation.toggle', { code: 'KeyW', mod: true }, defaults)
+  ).toEqual({
+    ok: false,
+    reason: 'browser-reserved',
+  });
+  expect(validateShortcutBinding('navigation.toggle', { code: 'KeyB' }, defaults)).toEqual({
+    ok: false,
+    reason: 'modifier-required',
+  });
+  expect(validateShortcutBinding('navigation.toggle', { code: 'F8' }, defaults)).toEqual({
+    ok: true,
+  });
+  expect(validateShortcutBinding('run.stop', { code: 'Escape' }, defaults)).toEqual({ ok: true });
+  expect(
+    validateShortcutBinding('navigation.toggle', { code: 'KeyK', mod: true }, defaults)
+  ).toEqual({
+    ok: false,
+    reason: 'conflict',
+    conflictWith: 'palette.open',
+  });
+  expect(
+    validateShortcutBinding('navigation.toggle', { code: 'KeyB', alt: true }, defaults)
+  ).toEqual({ ok: true });
+});
+
+test('shortcutKeyFromEvent normalizes keyboard events and ignores lone modifiers', () => {
+  expect(shortcutKeyFromEvent(press('ControlLeft', { ctrlKey: true }))).toBeNull();
+  expect(shortcutKeyFromEvent(press('KeyB', { altKey: true }))).toEqual({
+    code: 'KeyB',
+    alt: true,
+  });
+  expect(shortcutKeyFromEvent(press('KeyP', { metaKey: true, shiftKey: true }))).toEqual({
+    code: 'KeyP',
+    mod: true,
+    shift: true,
+  });
+});
+
+test('parseShortcutOverrides tolerates corrupt storage, drops invalid keys and preserves valid swaps', () => {
+  const defaults = defaultShortcutBindings();
+  expect(parseShortcutOverrides(null)).toEqual(defaults);
+  expect(parseShortcutOverrides('{bad json')).toEqual(defaults);
+
+  const parsed = parseShortcutOverrides(
+    JSON.stringify({
+      'theme.safeMode': { code: 'KeyU', mod: true },
+      'navigation.toggle': { code: 'KeyW', mod: true },
+      'rightPanel.toggle': { code: 'KeyJ', alt: true },
+    })
+  );
+  expect(parsed['theme.safeMode']).toEqual(defaults['theme.safeMode']);
+  expect(parsed['navigation.toggle']).toEqual(defaults['navigation.toggle']);
+  expect(parsed['rightPanel.toggle']).toEqual({ code: 'KeyJ', alt: true });
+
+  const swapped = parseShortcutOverrides(
+    JSON.stringify({
+      'palette.open': defaults['navigation.toggle'],
+      'navigation.toggle': defaults['palette.open'],
+    })
+  );
+  expect(swapped['palette.open']).toEqual(defaults['navigation.toggle']);
+  expect(swapped['navigation.toggle']).toEqual(defaults['palette.open']);
+
+  expect(serializeShortcutOverrides(defaults)).toBe('');
+  const serialized = serializeShortcutOverrides({
+    ...defaults,
+    'navigation.toggle': { code: 'KeyB', alt: true },
+  });
+  expect(parseShortcutOverrides(serialized)['navigation.toggle']).toEqual({
+    code: 'KeyB',
+    alt: true,
+  });
 });

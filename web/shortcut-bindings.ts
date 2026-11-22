@@ -10,6 +10,7 @@ export type ShortcutCondition = {
   ignoresSetting: boolean;
   quietAfterOverlayMs: number;
   confirmByRepeat: boolean;
+  rebindable: boolean;
 };
 
 const outsideOverlay: ShortcutCondition = {
@@ -17,6 +18,7 @@ const outsideOverlay: ShortcutCondition = {
   ignoresSetting: false,
   quietAfterOverlayMs: 0,
   confirmByRepeat: false,
+  rebindable: true,
 };
 
 export const shortcutActions = {
@@ -39,7 +41,7 @@ export const shortcutActions = {
   },
   'theme.safeMode': {
     key: { code: 'Period', mod: true },
-    when: { ...outsideOverlay, insideOverlay: true, ignoresSetting: true },
+    when: { ...outsideOverlay, insideOverlay: true, ignoresSetting: true, rebindable: false },
   },
 } satisfies Record<string, { key: ShortcutKey; when: ShortcutCondition }>;
 
@@ -48,10 +50,203 @@ export type ShortcutBindings = Record<ShortcutAction, ShortcutKey>;
 
 export const shortcutActionIds = Object.keys(shortcutActions) as ShortcutAction[];
 
-export function readShortcutBindings(): ShortcutBindings {
+export function defaultShortcutBindings(): ShortcutBindings {
   return Object.fromEntries(
-    shortcutActionIds.map((action) => [action, shortcutActions[action].key])
+    shortcutActionIds.map((action) => [action, { ...shortcutActions[action].key }])
   ) as ShortcutBindings;
+}
+
+export function normalizeShortcutKey(key: ShortcutKey): ShortcutKey {
+  return {
+    code: key.code,
+    ...(key.mod ? { mod: true } : {}),
+    ...(key.shift ? { shift: true } : {}),
+    ...(key.alt ? { alt: true } : {}),
+  };
+}
+
+export function sameShortcutKey(a: ShortcutKey, b: ShortcutKey) {
+  return a.code === b.code && !!a.mod === !!b.mod && !!a.shift === !!b.shift && !!a.alt === !!b.alt;
+}
+
+const MODIFIER_CODES = new Set([
+  'ControlLeft',
+  'ControlRight',
+  'ShiftLeft',
+  'ShiftRight',
+  'AltLeft',
+  'AltRight',
+  'MetaLeft',
+  'MetaRight',
+  'OSLeft',
+  'OSRight',
+  'CapsLock',
+  'NumLock',
+  'ScrollLock',
+  'Fn',
+  'FnLock',
+  'ContextMenu',
+]);
+
+export function isModifierCode(code: string) {
+  return MODIFIER_CODES.has(code);
+}
+
+const MOD_ONLY_RESERVED = new Set([
+  'KeyA',
+  'KeyC',
+  'KeyF',
+  'KeyH',
+  'KeyJ',
+  'KeyL',
+  'KeyN',
+  'KeyQ',
+  'KeyR',
+  'KeyT',
+  'KeyV',
+  'KeyW',
+  'KeyX',
+  'KeyZ',
+  'Tab',
+  'F4',
+  'F5',
+  'Digit0',
+  'Digit1',
+  'Digit2',
+  'Digit3',
+  'Digit4',
+  'Digit5',
+  'Digit6',
+  'Digit7',
+  'Digit8',
+  'Digit9',
+  'Equal',
+  'Minus',
+  'NumpadAdd',
+  'NumpadSubtract',
+  'Numpad0',
+]);
+
+const MOD_SHIFT_RESERVED = new Set([
+  'KeyT',
+  'KeyW',
+  'KeyN',
+  'KeyR',
+  'KeyI',
+  'KeyJ',
+  'KeyC',
+  'Tab',
+  'Delete',
+]);
+
+const ALT_ONLY_RESERVED = new Set(['Tab', 'F4', 'ArrowLeft', 'ArrowRight', 'Home']);
+const BARE_RESERVED = new Set(['F5', 'F11', 'F12']);
+const FUNCTION_KEY = /^F(?:[1-9]|1[0-2])$/u;
+
+export function isBrowserReservedShortcut(key: ShortcutKey) {
+  const mod = !!key.mod;
+  const shift = !!key.shift;
+  const alt = !!key.alt;
+  if (mod && !alt && !shift) return MOD_ONLY_RESERVED.has(key.code);
+  if (mod && shift && !alt) return MOD_SHIFT_RESERVED.has(key.code);
+  if (!mod && alt && !shift) return ALT_ONLY_RESERVED.has(key.code);
+  if (!mod && !alt && !shift) return BARE_RESERVED.has(key.code);
+  return false;
+}
+
+export type ShortcutValidation =
+  | { ok: true }
+  | { ok: false; reason: 'fixed' | 'modifier-only' | 'modifier-required' | 'browser-reserved' }
+  | { ok: false; reason: 'conflict'; conflictWith: ShortcutAction };
+
+export function validateShortcutBinding(
+  action: ShortcutAction,
+  rawKey: ShortcutKey,
+  bindings: ShortcutBindings
+): ShortcutValidation {
+  if (!shortcutActions[action].when.rebindable) return { ok: false, reason: 'fixed' };
+  const key = normalizeShortcutKey(rawKey);
+  if (!key.code || isModifierCode(key.code)) return { ok: false, reason: 'modifier-only' };
+  if (!key.mod && !key.alt && key.code !== 'Escape' && !FUNCTION_KEY.test(key.code))
+    return { ok: false, reason: 'modifier-required' };
+  if (isBrowserReservedShortcut(key)) return { ok: false, reason: 'browser-reserved' };
+  for (const other of shortcutActionIds) {
+    if (other !== action && sameShortcutKey(bindings[other], key))
+      return { ok: false, reason: 'conflict', conflictWith: other };
+  }
+  return { ok: true };
+}
+
+export function shortcutKeyFromEvent(
+  event: Pick<ShortcutEvent, 'code' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey'>
+): ShortcutKey | null {
+  if (!event.code || isModifierCode(event.code)) return null;
+  return normalizeShortcutKey({
+    code: event.code,
+    mod: event.ctrlKey || event.metaKey,
+    shift: event.shiftKey,
+    alt: event.altKey,
+  });
+}
+
+function validStoredKey(value: unknown): ShortcutKey | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.code !== 'string' || !record.code || record.code.length > 32) return null;
+  for (const flag of ['mod', 'shift', 'alt'])
+    if (record[flag] !== undefined && typeof record[flag] !== 'boolean') return null;
+  return normalizeShortcutKey({
+    code: record.code,
+    mod: record.mod as boolean | undefined,
+    shift: record.shift as boolean | undefined,
+    alt: record.alt as boolean | undefined,
+  });
+}
+
+export function parseShortcutOverrides(raw: string | null): ShortcutBindings {
+  const defaults = defaultShortcutBindings();
+  if (!raw) return defaults;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return defaults;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return defaults;
+  const input = parsed as Record<string, unknown>;
+  const candidate: ShortcutBindings = { ...defaults };
+  const overridden = new Set<ShortcutAction>();
+  for (const action of shortcutActionIds) {
+    if (!shortcutActions[action].when.rebindable || !Object.hasOwn(input, action)) continue;
+    const key = validStoredKey(input[action]);
+    if (!key) continue;
+    if (!key.mod && !key.alt && key.code !== 'Escape' && !FUNCTION_KEY.test(key.code)) continue;
+    if (isModifierCode(key.code) || isBrowserReservedShortcut(key)) continue;
+    candidate[action] = key;
+    overridden.add(action);
+  }
+  for (const action of overridden) {
+    const collides = shortcutActionIds.some(
+      (other) => other !== action && sameShortcutKey(candidate[other], candidate[action])
+    );
+    if (collides) candidate[action] = defaults[action];
+  }
+  return candidate;
+}
+
+export function serializeShortcutOverrides(bindings: ShortcutBindings): string {
+  const defaults = defaultShortcutBindings();
+  const overrides: Partial<ShortcutBindings> = {};
+  for (const action of shortcutActionIds) {
+    if (!shortcutActions[action].when.rebindable) continue;
+    const current = normalizeShortcutKey(bindings[action]);
+    if (!sameShortcutKey(current, defaults[action])) overrides[action] = current;
+  }
+  return Object.keys(overrides).length ? JSON.stringify(overrides) : '';
+}
+
+export function readShortcutBindings(raw?: string | null): ShortcutBindings {
+  return raw === undefined ? defaultShortcutBindings() : parseShortcutOverrides(raw);
 }
 
 export type ShortcutEvent = {
@@ -98,9 +293,26 @@ export function resolveShortcut(
 
 const keyLabels: Record<string, string> = {
   Backslash: '\\',
+  Slash: '/',
   Comma: ',',
   Period: '.',
+  Semicolon: ';',
+  Quote: "'",
+  BracketLeft: '[',
+  BracketRight: ']',
+  Minus: '-',
+  Equal: '=',
+  Backquote: '`',
   Escape: 'Esc',
+  Space: 'Space',
+  Enter: 'Enter',
+  Tab: 'Tab',
+  Backspace: 'Backspace',
+  Delete: 'Delete',
+  ArrowUp: '↑',
+  ArrowDown: '↓',
+  ArrowLeft: '←',
+  ArrowRight: '→',
 };
 
 export function shortcutKeyLabel(key: ShortcutKey, apple: boolean) {

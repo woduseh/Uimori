@@ -119,7 +119,7 @@ import './settings-layout.css';
 import { readOptionalStorage } from './optional-storage.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 import { useBottomFollow } from './useBottomFollow.js';
-import { shortcutLabel, useShortcut } from './shortcuts.js';
+import { useShortcut, useShortcutLabel } from './shortcuts.js';
 
 type Props = {
   enterSend: boolean;
@@ -439,11 +439,13 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   );
   const shownUsage = latestUsage && latestUsage.taskId === latestTaskId ? latestUsage.usage : null;
   const running = tasks.find((task) => task.status === 'running');
+  const stopShortcutLabel = useShortcutLabel('run.stop');
+  const helperModeShortcutLabel = useShortcutLabel('helper.mode');
   const panel = useRef<HTMLElement>(null);
   useShortcut('run.stop', () => running && void cancel(running), {
     scope: panel,
     ready: () => !!running,
-    confirmNotice: uiMessage('shortcuts.cancelHelperAgain', { key: shortcutLabel('run.stop') }),
+    confirmNotice: uiMessage('shortcuts.cancelHelperAgain', { key: stopShortcutLabel }),
   });
   const [modes, setModes] = useState<Record<string, HelperMode>>({});
   const mode = modes[scopeKey] ?? 'apply';
@@ -2288,7 +2290,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               aria-label={t('helperPlan.modeLabel', {
                 mode: t(mode === 'plan' ? 'helperPlan.plan' : 'helperPlan.apply'),
               })}
-              title={t('helperPlan.modeHint', { key: shortcutLabel('helper.mode') })}
+              title={t('helperPlan.modeHint', { key: helperModeShortcutLabel })}
               disabled={!conversation}
               onClick={toggleMode}
             >

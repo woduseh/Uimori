@@ -1,0 +1,64 @@
+.shortcut-settings {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.shortcut-settings-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-small);
+  line-height: 1.5;
+}
+.shortcut-settings-list {
+  display: grid;
+  min-width: 0;
+}
+.shortcut-settings-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+}
+.shortcut-settings-controls {
+  flex-wrap: nowrap;
+}
+.shortcut-key-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 2px 8px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--font-small);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.shortcut-key-pill[data-recording] {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.shortcut-settings-error {
+  color: var(--error);
+}
+.shortcut-reset-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.shortcut-settings-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+}
+@container (max-width: 520px) {
+  .shortcut-settings-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .shortcut-settings-controls {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}

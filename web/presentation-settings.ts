@@ -1,4 +1,8 @@
-import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
+import {
+  readOptionalStorage,
+  removeOptionalStorage,
+  writeOptionalStorage,
+} from './optional-storage.js';
 
 export function readPresentationSetting(key: string): string | null {
   return readOptionalStorage('local', key);
@@ -6,6 +10,10 @@ export function readPresentationSetting(key: string): string | null {
 
 export function writePresentationSetting(key: string, value: string) {
   writeOptionalStorage('local', key, value);
+}
+
+export function removePresentationSetting(key: string) {
+  removeOptionalStorage('local', key);
 }
 
 export function readPresentationChoice<T extends string | number>(

@@ -1,12 +1,26 @@
 import { useEffect, useRef, useSyncExternalStore, type RefObject } from 'react';
 import { isApplePlatform } from './ChatComposer.js';
-import { readPresentationChoice, writePresentationSetting } from './presentation-settings.js';
 import {
-  readShortcutBindings,
+  readPresentationChoice,
+  readPresentationSetting,
+  removePresentationSetting,
+  writePresentationSetting,
+} from './presentation-settings.js';
+import {
+  defaultShortcutBindings,
+  normalizeShortcutKey,
+  parseShortcutOverrides,
   resolveShortcut,
+  sameShortcutKey,
+  serializeShortcutOverrides,
+  shortcutActionIds,
   shortcutActions,
   shortcutKeyLabel,
+  validateShortcutBinding,
   type ShortcutAction,
+  type ShortcutBindings,
+  type ShortcutKey,
+  type ShortcutValidation,
 } from './shortcut-bindings.js';
 import { useTransientNotice } from './TransientNotice.js';
 
@@ -22,8 +36,18 @@ const registrations = new Map<ShortcutAction, Set<Entry>>();
 const repeatWindowMs = 2000;
 
 const enabledKey = 'uimori:shortcuts';
+const bindingsKey = 'uimori:shortcut-bindings';
 const enabledListeners = new Set<() => void>();
+const bindingListeners = new Set<() => void>();
 let enabled = readPresentationChoice(enabledKey, ['true', 'false'], 'true') === 'true';
+let currentBindings: ShortcutBindings = parseShortcutOverrides(
+  readPresentationSetting(bindingsKey)
+);
+let capturingCount = 0;
+
+function notifyBindingListeners() {
+  for (const listener of bindingListeners) listener();
+}
 
 export function setShortcutsEnabled(value: boolean) {
   enabled = value;
@@ -41,8 +65,77 @@ export function useShortcutsEnabled() {
   );
 }
 
+export function useShortcutBindings() {
+  return useSyncExternalStore(
+    (listener) => {
+      bindingListeners.add(listener);
+      return () => bindingListeners.delete(listener);
+    },
+    () => currentBindings
+  );
+}
+
+function saveBindings(next: ShortcutBindings) {
+  currentBindings = next;
+  const serialized = serializeShortcutOverrides(next);
+  if (serialized) writePresentationSetting(bindingsKey, serialized);
+  else removePresentationSetting(bindingsKey);
+  notifyBindingListeners();
+}
+
+export function setShortcutBinding(action: ShortcutAction, key: ShortcutKey): ShortcutValidation {
+  const result = validateShortcutBinding(action, key, currentBindings);
+  if (!result.ok) return result;
+  saveBindings({ ...currentBindings, [action]: normalizeShortcutKey(key) });
+  return result;
+}
+
+export function resetShortcutBinding(action: ShortcutAction) {
+  if (!shortcutActions[action].when.rebindable) return;
+  const defaults = defaultShortcutBindings();
+  const next = { ...currentBindings };
+  const visited = new Set<ShortcutAction>();
+  let current: ShortcutAction | null = action;
+  while (current && !visited.has(current)) {
+    const activeAction: ShortcutAction = current;
+    visited.add(activeAction);
+    const target: ShortcutKey = defaults[activeAction];
+    const conflict: ShortcutAction | undefined = shortcutActionIds.find(
+      (other) => other !== activeAction && sameShortcutKey(next[other], target)
+    );
+    next[activeAction] = target;
+    current = conflict ?? null;
+  }
+  saveBindings(next);
+}
+
+export function resetAllShortcutBindings() {
+  saveBindings(defaultShortcutBindings());
+}
+
+export function setShortcutCapturing(active: boolean) {
+  capturingCount = Math.max(0, capturingCount + (active ? 1 : -1));
+}
+
 export function shortcutLabel(action: ShortcutAction) {
-  return shortcutKeyLabel(readShortcutBindings()[action], isApplePlatform());
+  return shortcutKeyLabel(currentBindings[action], isApplePlatform());
+}
+
+export function useShortcutLabel(action: ShortcutAction) {
+  const bindings = useShortcutBindings();
+  return shortcutKeyLabel(bindings[action], isApplePlatform());
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === enabledKey) {
+      enabled = readPresentationChoice(enabledKey, ['true', 'false'], 'true') === 'true';
+      for (const listener of enabledListeners) listener();
+    } else if (event.key === bindingsKey) {
+      currentBindings = parseShortcutOverrides(readPresentationSetting(bindingsKey));
+      notifyBindingListeners();
+    }
+  });
 }
 
 export function useShortcut(
@@ -116,8 +209,9 @@ export function ShortcutKeys() {
         });
     };
     const keydown = (event: KeyboardEvent) => {
+      if (capturingCount > 0) return;
       const now = performance.now();
-      const action = resolveShortcut(readShortcutBindings(), event, {
+      const action = resolveShortcut(currentBindings, event, {
         enabled,
         overlayOpen: keyboardOverlayOpen(),
         sinceOverlayClosedMs: now - overlayClosedAt,

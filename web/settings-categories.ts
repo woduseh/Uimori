@@ -12,7 +12,12 @@ import {
   SettingsIcon,
 } from './ui-icons.js';
 
-type SettingsDestination = { label: string; terms: string; anchor?: string; detail?: 'providers' };
+type SettingsDestination = {
+  label: string;
+  terms: string;
+  anchor?: string;
+  detail?: 'providers' | 'shortcuts';
+};
 export type SettingsGroup = 'display' | 'generation' | 'system';
 type SettingsCategory = {
   key: string;
@@ -43,6 +48,11 @@ export function getSettingsCategories(sessionRequired: boolean): SettingsCategor
           label: t('chatsettings.m16'),
           terms: `${t('chatsettings.m17')} ${t('shortcuts.setting')}`,
           anchor: 'display',
+        },
+        {
+          label: t('shortcuts.customize'),
+          terms: `${t('shortcuts.setting')} ${t('shortcuts.customizeHint')}`,
+          detail: 'shortcuts',
         },
         {
           label: t('chatsettings.m18'),

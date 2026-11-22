@@ -25,7 +25,7 @@ import { combinationOwner, matchesPromptCombination } from '../core/prompt-combi
 import { DismissibleError } from './DismissibleError.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice, TransientNoticeProvider } from './TransientNotice.js';
-import { ShortcutKeys, shortcutLabel, useShortcut } from './shortcuts.js';
+import { ShortcutKeys, useShortcut, useShortcutLabel } from './shortcuts.js';
 import { ReaderLoadingState } from './ReaderLoadingState.js';
 import { ChatComposer, ComposerInput, sendKeyLabel } from './ChatComposer.js';
 import { InputTranslationControls, InputTranslationFeedback } from './InputTranslation.js';
@@ -1324,6 +1324,7 @@ function App() {
     }));
     return [...commands, ...chats, ...resources, ...settings];
   }
+  const stopShortcutLabel = useShortcutLabel('run.stop');
   useShortcut('run.stop', () => void s.cancelActive(), {
     ready: () =>
       s.destination === 'story' &&
@@ -1332,7 +1333,7 @@ function App() {
       !s.pendingRequest &&
       !s.cancelling,
     confirmNotice: uiMessage('shortcuts.cancelGenerationAgain', {
-      key: shortcutLabel('run.stop'),
+      key: stopShortcutLabel,
     }),
   });
   const openModelSettings = useCallback(() => {
