@@ -108,7 +108,7 @@ export function useHelperRollback({
     if (!enabled) return;
     addEventListener('uimori-helper-updated', retry);
     return () => removeEventListener('uimori-helper-updated', retry);
-  }, [enabled, retry]);
+  }, [enabled]);
   const wasUnavailable = useRef(unavailable);
   useEffect(() => {
     if (wasUnavailable.current && !unavailable) retry();
