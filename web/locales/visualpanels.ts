@@ -141,13 +141,13 @@ export const messages = {
     ko: '기본 팔레트를 바꿨어요. 현재 채팅은 별도로 지정한 팔레트를 사용해요.',
     en: 'Default palette changed. This chat uses its own palette.',
     ja: '既定のパレットを変更しました。このチャットは個別のパレットを使います。',
-    zh: '默认配色已更改，当前聊天使用单独设置的配色。',
+    zh: '默认调色板已更改，当前聊天使用单独设置的调色板。',
   },
   'visualpanels.paletteSelectionSaved': {
     ko: '팔레트 선택을 저장했어요.',
     en: 'Palette selection saved.',
     ja: 'パレットの選択を保存しました。',
-    zh: '配色选择已保存。',
+    zh: '调色板选择已保存。',
   },
   'visualpanels.saveOrCancelTheThemeYouAre': {
     ko: '편집 중인 테마를 저장하거나 취소한 뒤 가져와 주세요.',
@@ -273,7 +273,7 @@ export const messages = {
     ko: '레이아웃, 팔레트, 배경을 조합하거나 테마 파일을 가져와 편집해요.',
     en: 'Combine layouts, palettes, and backgrounds, or import and edit theme files.',
     ja: 'レイアウト、パレット、背景を組み合わせるか、テーマファイルを読み込んで編集します。',
-    zh: '组合布局、配色与背景，或导入并编辑主题文件。',
+    zh: '组合布局、调色板与背景，或导入并编辑主题文件。',
   },
   'visualpanels.scope': {
     ko: '적용 범위',
@@ -447,37 +447,37 @@ export const messages = {
     ko: '색상 팔레트',
     en: 'Color palette',
     ja: 'カラーパレット',
-    zh: '配色方案',
+    zh: '颜色调色板',
   },
   'visualpanels.resetPaletteToDefault': {
     ko: '팔레트 기본값으로',
     en: 'Reset palette to default',
     ja: '既定のパレットに戻す',
-    zh: '恢复默认配色',
+    zh: '恢复默认调色板',
   },
   'visualpanels.inheritPalette': {
     ko: '팔레트 상위 설정 따르기',
     en: 'Inherit palette',
     ja: '上位のパレット設定に従う',
-    zh: '继承上级配色设置',
+    zh: '继承上级调色板设置',
   },
   'visualpanels.thisScopeInheritsItsPalette': {
     ko: '이 범위의 팔레트는 상위 설정을 따라요.',
     en: 'This scope inherits its palette.',
     ja: 'この範囲のパレットは上位設定に従います。',
-    zh: '此范围的配色继承上级设置。',
+    zh: '此范围的调色板继承上级设置。',
   },
   'visualpanels.selectColorPalette': {
     ko: '색상 팔레트 선택',
     en: 'Select color palette',
     ja: 'カラーパレットを選択',
-    zh: '选择配色方案',
+    zh: '选择颜色调色板',
   },
   'visualpanels.applyPalette': {
     ko: '{v0} 팔레트 적용',
     en: 'Apply {v0} palette',
     ja: '{v0}パレットを適用',
-    zh: '应用{v0}配色',
+    zh: '应用{v0}调色板',
   },
   'visualpanels.manageThemes': {
     ko: '테마 관리',
@@ -1209,7 +1209,7 @@ export const messages = {
     ko: '이미지 배치',
     en: 'Image placement',
     ja: '画像配置',
-    zh: '图像放置',
+    zh: '图片排布',
   },
   'visualpanels.cardScript': {
     ko: '카드 스크립트',
@@ -1261,7 +1261,7 @@ export const messages = {
   },
   'visualpanels.knownSubtotalIncludesUnknownItemsInCalls': {
     ko: '확인된 금액 합계 {v0}, 미확인 항목 {v1, number}회 포함',
-    en: 'Known subtotal {v0}, Includes unknown items in {v1, number} calls',
+    en: 'Known subtotal {v0}, includes unknown items in {v1, plural, one {# call} other {# calls}}',
     ja: '確認済みの小計 {v0}、{v1, number}回の未確認項目を含む',
     zh: '已知小计{v0}，含{v1, number}次调用的未知项目',
   },
@@ -1292,7 +1292,7 @@ export const messages = {
   'visualpanels.fixedServiceTierPriceChecked': {
     ko: '호출에 고정된 등급: {v0}, 요금 기준일: {v1}',
     en: 'Fixed service tier: {v0}, Price checked: {v1}',
-    ja: '呼び出しに固定された等級：{v0}、料金確認日：{v1}',
+    ja: '呼び出しに固定されたサービス階層：{v0}、料金確認日：{v1}',
     zh: '调用固定等级：{v0}，费率确认日期：{v1}',
   },
   'visualpanels.manuallyEnteredPrice': {
@@ -1477,7 +1477,7 @@ export const messages = {
   },
   'visualpanels.sendAttemptsInputOutputTokensProviderReported': {
     ko: '전송 시도 {v0, number}회, 입력 {v1} / 출력 {v2} 토큰, 프로바이더 보고 비용 {v3}',
-    en: '{v0, number} send attempts, Input {v1} / Output {v2} tokens, Provider-reported cost {v3}',
+    en: '{v0, plural, one {# send attempt} other {# send attempts}}, Input {v1} / Output {v2} tokens, Provider-reported cost {v3}',
     ja: '送信試行 {v0, number}回、入力 {v1} / 出力 {v2}トークン、プロバイダー報告費用 {v3}',
     zh: '发送尝试{v0, number}次，输入{v1} / 输出{v2} token，提供商报告费用{v3}',
   },
@@ -1525,7 +1525,7 @@ export const messages = {
   },
   'visualpanels.retainedGenerationsCompletedRefusedPartial': {
     ko: '보관된 본문 생성 기록 {v0, number}개, 완료 {v1, number}개, 거절 {v2, number}개, 부분 생성 {v3, number}개',
-    en: '{v0, number} retained generations, Completed {v1, number}, Refused {v2, number}, Partial {v3, number}',
+    en: '{v0, plural, one {# retained generation} other {# retained generations}}, Completed {v1, number}, Refused {v2, number}, Partial {v3, number}',
     ja: '保存済み本文生成 {v0, number}件、完了 {v1, number}件、拒否 {v2, number}件、部分生成 {v3, number}件',
     zh: '保留的正文生成记录{v0, number}条，完成{v1, number}条，拒绝{v2, number}条，部分生成{v3, number}条',
   },
@@ -1567,7 +1567,7 @@ export const messages = {
   },
   'visualpanels.unknownInputOutputCalls': {
     ko: '미확인: {v0, plural, =0 {} other {입력 #회}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {, }}}}{v1, plural, =0 {} other {출력 #회}}',
-    en: 'Unknown: {v0, plural, =0 {} other {input in # calls}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {, }}}}{v1, plural, =0 {} other {output in # calls}}',
+    en: 'Unknown: {v0, plural, =0 {} one {input in # call} other {input in # calls}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {, }}}}{v1, plural, =0 {} one {output in # call} other {output in # calls}}',
     ja: '未確認：{v0, plural, =0 {} other {入力 #回}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {、}}}}{v1, plural, =0 {} other {出力 #回}}',
     zh: '未知：{v0, plural, =0 {} other {输入#次}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {，}}}}{v1, plural, =0 {} other {输出#次}}',
   },
@@ -1729,7 +1729,7 @@ export const messages = {
   },
   'visualpanels.unknownPartialEstimateInCalls': {
     ko: '{v0, plural, =0 {} other {미확인 #회}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {, }}}}{v1, plural, =0 {} other {부분 추정 #회}}',
-    en: '{v0, plural, =0 {} other {Unknown in # calls}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {, }}}}{v1, plural, =0 {} other {partial estimate in # calls}}',
+    en: '{v0, plural, =0 {} one {Unknown in # call} other {Unknown in # calls}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {, }}}}{v1, plural, =0 {} one {partial estimate in # call} other {partial estimate in # calls}}',
     ja: '{v0, plural, =0 {} other {未確認 #回}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {、}}}}{v1, plural, =0 {} other {部分推定 #回}}',
     zh: '{v0, plural, =0 {} other {未知#次}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {，}}}}{v1, plural, =0 {} other {部分估算#次}}',
   },
@@ -1777,7 +1777,7 @@ export const messages = {
   },
   'visualpanels.calls2': {
     ko: '{v0}, {v1, number}회',
-    en: '{v0}, {v1, number} calls',
+    en: '{v0}, {v1, plural, one {# call} other {# calls}}',
     ja: '{v0}、{v1, number}回',
     zh: '{v0}，{v1, number}次',
   },
@@ -1837,12 +1837,12 @@ export const messages = {
   },
   'visualpanels.callsWithUnknownTimeExcludedFromPeriod': {
     ko: '시각 미확인 {v0, number}회, {v1}는 기간 합계에서 제외했어요.',
-    en: '{v0, number} calls with unknown time, {v1} excluded from period totals.',
+    en: '{v0, plural, one {# call} other {# calls}} with unknown time, {v1} excluded from period totals.',
     ja: '時刻未確認の{v0, number}回、{v1}は期間合計から除外しました。',
     zh: '时间未知的{v0, number}次调用，{v1}已从期间合计中排除。',
   },
   'visualpanels.themeRecoveryHelp': {
-    ko: '꾸미다가 화면이 깨지면 {shortcut} 키로 이 탭의 테마를 끄세요. 주소 뒤에 다음을 붙여도 돼요: {query}',
+    ko: '꾸미다가 화면이 깨지면 {shortcut} 키로 이 탭의 테마를 꺼 주세요. 주소 뒤에 다음을 붙여도 돼요: {query}',
     en: 'If customization breaks the display, press {shortcut} to disable the theme in this tab, or append to the address: {query}',
     ja: 'カスタマイズで画面が崩れた場合は{shortcut}キーでこのタブのテーマを無効にしてください。アドレスの末尾に次を付けても構いません: {query}',
     zh: '如果自定义导致画面异常，请按 {shortcut} 键关闭此标签页的主题。也可在地址后附加：{query}',

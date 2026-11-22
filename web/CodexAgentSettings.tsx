@@ -1,11 +1,4 @@
-import {
-  t,
-  useI18n,
-  translateMessage,
-  formatNumber,
-  formatDate,
-  message as uiMessage,
-} from './i18n.js';
+import { t, useI18n, translateMessage, formatDate, message as uiMessage } from './i18n.js';
 import { CheckIcon, CopyIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
@@ -312,9 +305,7 @@ export function CodexAgentSettings({
                         ? t('providers.m457')
                         : status.credits.balance !== null
                           ? t('providers.m590', {
-                              value0: formatNumber(status.credits.balance, {
-                                maximumFractionDigits: 0,
-                              }),
+                              value0: Math.round(status.credits.balance),
                             })
                           : status.credits.hasCredits
                             ? t('providers.m458')

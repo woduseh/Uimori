@@ -49,7 +49,7 @@ export const messages = {
   },
   'helpers.modelPickerManage': {
     ko: '역할별 모델 설정',
-    en: 'Role model settings',
+    en: 'Models by role settings',
     ja: '役割別モデル設定',
     zh: '按角色设置模型',
   },
@@ -175,7 +175,7 @@ export const messages = {
   },
   'helpers.m014': {
     ko: '선택한 원문과 도우미 대화의 채팅이 달라요.',
-    en: 'The selected source text and assistant conversation belong to different chats.',
+    en: 'The selected original text and assistant conversation belong to different chats.',
     ja: '選択した原文とアシスタントの会話が別のチャットに属しています。',
     zh: '所选原文与助手对话属于不同的聊天。',
   },
@@ -193,7 +193,7 @@ export const messages = {
   },
   'helpers.m017': {
     ko: '선택한 원문은 {v0}자까지 보낼 수 있어요.',
-    en: 'Selected source text can contain up to {v0} characters.',
+    en: 'Selected original text can contain up to {v0} characters.',
     ja: '選択した原文は{v0}文字まで送信できます。',
     zh: '选中的原文最多可包含 {v0} 个字符。',
   },
@@ -752,19 +752,19 @@ export const messages = {
   'helpers.m131': {
     ko: '보관된 가정 장면',
     en: 'Archived hypothetical scene',
-    ja: '保管された仮定の場面',
+    ja: '保管された仮定のシーン',
     zh: '已归档的假设场景',
   },
   'helpers.m132': {
     ko: '수정 번호',
     en: 'Revision',
-    ja: '改訂番号',
+    ja: 'リビジョン',
     zh: '修订号',
   },
   'helpers.m133': {
     ko: '가정 장면 수정 번호',
     en: 'Hypothetical scene revision',
-    ja: '仮定の場面の改訂番号',
+    ja: '仮定のシーンのリビジョン',
     zh: '假设场景修订号',
   },
   'helpers.m134': {
@@ -788,25 +788,25 @@ export const messages = {
   'helpers.m139': {
     ko: '장면 요청',
     en: 'Scene request',
-    ja: '場面の依頼',
+    ja: 'シーンの依頼',
     zh: '场景请求',
   },
   'helpers.m140': {
     ko: '가정 장면 요청 복사',
     en: 'Copy hypothetical scene request',
-    ja: '仮定の場面の依頼をコピー',
+    ja: '仮定のシーンの依頼をコピー',
     zh: '复制假设场景请求',
   },
   'helpers.m141': {
     ko: '가정 장면 복사',
     en: 'Copy hypothetical scene',
-    ja: '仮定の場面をコピー',
+    ja: '仮定のシーンをコピー',
     zh: '复制假设场景',
   },
   'helpers.m142': {
     ko: '가정 장면을 불러오는 중이에요…',
     en: 'Loading hypothetical scene…',
-    ja: '仮定の場面を読み込み中…',
+    ja: '仮定のシーンを読み込み中…',
     zh: '正在加载假设场景…',
   },
   'helpers.m146': {
@@ -818,13 +818,13 @@ export const messages = {
   'helpers.m149': {
     ko: '수정 번호 {v0} 기준',
     en: 'Based on revision {v0}',
-    ja: '改訂番号{v0}時点',
+    ja: 'リビジョン{v0}時点',
     zh: '基于修订号{v0}',
   },
   'helpers.m150': {
     ko: '가정 장면 초안 복사',
     en: 'Copy hypothetical scene draft',
-    ja: '仮定の場面の下書きをコピー',
+    ja: '仮定のシーンの下書きをコピー',
     zh: '复制假设场景草稿',
   },
   'helpers.m165': {
@@ -950,7 +950,7 @@ export const messages = {
   'helpers.m193': {
     ko: '진행 중인 작업과 대기 작업 중지',
     en: 'Stop running and queued tasks',
-    ja: '進行中または待機中の作業を停止',
+    ja: '進行中と待機中の作業を停止',
     zh: '停止进行中与排队中的任务',
   },
   'helpers.m194': {
@@ -968,19 +968,19 @@ export const messages = {
   'helpers.activitySceneEdit': {
     ko: '장면 수정',
     en: 'Editing scenes',
-    ja: '場面の修正',
+    ja: 'シーンの修正',
     zh: '修改场景',
   },
   'helpers.activitySceneRequest': {
     ko: '장면 생성 요청',
     en: 'Requesting a scene',
-    ja: '場面生成の依頼',
+    ja: 'シーン生成の依頼',
     zh: '请求生成场景',
   },
   'helpers.activitySceneTranslate': {
     ko: '장면 번역 요청',
     en: 'Requesting a translation',
-    ja: '場面翻訳の依頼',
+    ja: 'シーン翻訳の依頼',
     zh: '请求翻译场景',
   },
   'helpers.activityIllustrationDraw': {
@@ -1004,7 +1004,7 @@ export const messages = {
   'helpers.activityReadScenes': {
     ko: '장면 {count, number}개',
     en: '{count, plural, one {# scene} other {# scenes}}',
-    ja: '場面 {count, number}件',
+    ja: 'シーン {count, number}件',
     zh: '{count, number} 个场景',
   },
   'helpers.activityReadResources': {
@@ -1022,7 +1022,7 @@ export const messages = {
   'helpers.activityTargetScene': {
     ko: '이름 없는 장면',
     en: 'Untitled scene',
-    ja: '名前のない場面',
+    ja: '名前のないシーン',
     zh: '未命名场景',
   },
   'helpers.activityTargetCount': {
@@ -1046,7 +1046,7 @@ export const messages = {
   'helpers.m198': {
     ko: '가정 장면 작성',
     en: 'Writing a hypothetical scene',
-    ja: '仮定の場面の作成',
+    ja: '仮定のシーンの作成',
     zh: '编写假设场景',
   },
   'helpers.m199': {
@@ -1118,7 +1118,7 @@ export const messages = {
   'helpers.m212': {
     ko: '장면을 쓰는 중',
     en: 'Writing a scene',
-    ja: '場面を執筆中',
+    ja: 'シーンを執筆中',
     zh: '正在编写场景',
   },
   'helpers.runPhaseContext': {
@@ -1159,7 +1159,7 @@ export const messages = {
   },
   'helpers.m216': {
     ko: '본문',
-    en: 'Main text',
+    en: 'Writing',
     ja: '本文',
     zh: '正文',
   },
@@ -1351,7 +1351,7 @@ export const messages = {
   },
   'helpers.m251': {
     ko: '본문 {v0}',
-    en: 'Main text {v0}',
+    en: 'Writing {v0}',
     ja: '本文{v0}',
     zh: '正文{v0}',
   },
@@ -1484,7 +1484,7 @@ export const messages = {
   'helpers.m288': {
     ko: '장면 생성',
     en: 'Scene generation',
-    ja: '場面の生成',
+    ja: 'シーンの生成',
     zh: '场景生成',
   },
   'helpers.m289': {
@@ -1567,7 +1567,7 @@ export const messages = {
   },
   'helpers.m305': {
     ko: '원문 생성',
-    en: 'Source text generation',
+    en: 'Original text generation',
     ja: '原文の生成',
     zh: '原文生成',
   },
@@ -1607,6 +1607,12 @@ export const messages = {
     ja: '実行リクエスト{calls}回、出力{output}トークン',
     zh: '执行请求{calls}次，输出{output}词元',
   },
+  'helpers.m311Unknown': {
+    ko: '실행 요청 {calls}회, 출력 미확인',
+    en: 'Execution requests: {calls}, Output: unknown',
+    ja: '実行リクエスト{calls}回、出力未確認',
+    zh: '执行请求{calls}次，输出未知',
+  },
   'helpers.m312': {
     ko: '저장한 작업: {labels}',
     en: 'Saved work: {labels}',
@@ -1644,10 +1650,10 @@ export const messages = {
     zh: '正在编辑：{title}',
   },
   'helpers.m318': {
-    ko: '선택한 원문: {count}자',
-    en: 'Selected source text: {count} characters',
-    ja: '選択した原文：{count}文字',
-    zh: '所选原文：{count}个字符',
+    ko: '선택한 원문: {count, number}자',
+    en: 'Selected original text: {count, plural, one {# character} other {# characters}}',
+    ja: '選択した原文：{count, number}文字',
+    zh: '所选原文：{count, number}个字符',
   },
   'helpers.m319': {
     ko: '수정 이력을 확인하지 못했어요. {error}',
@@ -1736,14 +1742,14 @@ export const messages = {
   'helpers.m336': {
     ko: '{kind, select, summary {대화 내용 정리 중이에요} whatif {가정 장면 작성 중이에요} other {도우미가 요청을 처리하고 있어요}}',
     en: '{kind, select, summary {Summarizing the conversation} whatif {Writing a hypothetical scene} other {The assistant is processing the request}}',
-    ja: '{kind, select, summary {会話内容を整理中} whatif {仮定の場面を作成中} other {アシスタントが依頼を処理中}}',
+    ja: '{kind, select, summary {会話内容を整理中} whatif {仮定のシーンを作成中} other {アシスタントが依頼を処理中}}',
     zh: '{kind, select, summary {正在整理对话内容} whatif {正在编写假设场景} other {助手正在处理请求}}',
   },
   'helpers.m337': {
     ko: '{mode, select, translation {번역 이미지 배치} other {원문 이미지 배치}}',
     en: '{mode, select, translation {Translation image placement} other {Original image placement}}',
     ja: '{mode, select, translation {翻訳の画像配置} other {原文の画像配置}}',
-    zh: '{mode, select, translation {译文图片配置} other {原文图片配置}}',
+    zh: '{mode, select, translation {译文图片排布} other {原文图片排布}}',
   },
   'helpers.m338': {
     ko: '{name} {status}',

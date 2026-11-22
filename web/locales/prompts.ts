@@ -691,7 +691,7 @@ export const messages = {
   },
   'prompts.uiHasSourceText': {
     ko: '원문 있음',
-    en: 'Has source text',
+    en: 'Has original text',
     ja: '原文あり',
     zh: '有原文',
   },
@@ -931,7 +931,7 @@ export const messages = {
   },
   'prompts.uiNoSourceTextYet': {
     ko: '아직 원문이 없어요',
-    en: 'No source text yet',
+    en: 'No original text yet',
     ja: '原文はまだありません',
     zh: '还没有原文',
   },
@@ -955,7 +955,7 @@ export const messages = {
   },
   'prompts.uiCheckAgainstSource': {
     ko: '원문과 점검',
-    en: 'Check against source',
+    en: 'Check against original',
     ja: '原文と照合',
     zh: '对照原文检查',
   },
@@ -1063,7 +1063,7 @@ export const messages = {
   },
   'prompts.uiLinkedSourceText': {
     ko: '연결된 원문',
-    en: 'Linked source text',
+    en: 'Linked original text',
     ja: '関連づけた原文',
     zh: '关联原文',
   },
@@ -1514,15 +1514,15 @@ export const messages = {
   },
   'prompts.sourceCount': {
     ko: '원문 {count, plural, other {#개 연결}}',
-    en: '{count, plural, one {# source linked} other {# sources linked}}',
+    en: '{count, plural, one {# original linked} other {# originals linked}}',
     ja: '原文{count, plural, other {#件を関連づけ}}',
     zh: '已关联{count, plural, other {#份原文}}',
   },
   'prompts.childSources': {
-    ko: '하위 {total}개 중 {count}개에 원문 연결',
-    en: 'Source text linked to {count} of {total} children',
-    ja: '下位{total}件中{count}件に原文を関連づけ',
-    zh: '{total}个下级中有{count}个已关联原文',
+    ko: '하위 {total, number}개 중 {count, number}개에 원문 연결',
+    en: 'Original text linked to {count, number} of {total, plural, one {# child} other {# children}}',
+    ja: '下位{total, number}件中{count, number}件に原文を関連づけ',
+    zh: '{total, number}个下级中有{count, number}个已关联原文',
   },
   'prompts.contextToggle': {
     ko: '입력 컨텍스트 {expanded, select, true {접기} other {미리보기}}',
@@ -1532,7 +1532,7 @@ export const messages = {
   },
   'prompts.actualSources': {
     ko: '연결된 원문 {count}개, 아직 쓰지 않은 플롯은 예정된 계획으로만 전달해요.',
-    en: 'Linked source scenes: {count}; unwritten outline items are passed only as planned direction.',
+    en: 'Linked original scenes: {count}; unwritten outline items are passed only as planned direction.',
     ja: '関連づけた原文 {count}件、未執筆の構成は予定としてのみ伝えます。',
     zh: '已关联原文 {count} 个，未撰写的大纲仅作为计划方向传递。',
   },
@@ -1674,7 +1674,7 @@ export const messages = {
   },
   'prompts.outlineOtherBranchSources': {
     ko: '다른 분기 원문 {count, plural, other {#개}}',
-    en: '{count, plural, one {# source} other {# sources}} on other branches',
+    en: '{count, plural, one {# original} other {# originals}} on other branches',
     ja: '別の分岐の原文{count, plural, other {#件}}',
     zh: '其他分支原文{count, plural, other {#份}}',
   },
@@ -1705,8 +1705,8 @@ export const messages = {
   'prompts.outlineSearchRelated': {
     ko: '플롯 검색',
     en: 'Search outline',
-    ja: 'プロットを検索',
-    zh: '搜索情节',
+    ja: '構成を検索',
+    zh: '搜索大纲',
   },
   'prompts.outlineNoSearchResults': {
     ko: '검색 결과가 없어요.',
@@ -1723,25 +1723,25 @@ export const messages = {
   'prompts.outlineDeleteIrreversible': {
     ko: '삭제한 플롯은 되돌릴 수 없어요.',
     en: 'A deleted outline item cannot be restored.',
-    ja: '削除したプロットは元に戻せません。',
-    zh: '删除的情节无法恢复。',
+    ja: '削除した構成は元に戻せません。',
+    zh: '删除的大纲无法恢复。',
   },
   'prompts.outlineFocusNotice': {
     ko: '진행 중 플롯',
     en: 'Current outline',
-    ja: '進行中のプロット',
-    zh: '进行中的情节',
+    ja: '進行中の構成',
+    zh: '进行中的大纲',
   },
   'prompts.outlineOpenFocus': {
     ko: '{title} 플롯 열기',
     en: 'Open outline item {title}',
-    ja: 'プロット{title}を開く',
-    zh: '打开情节{title}',
+    ja: '構成{title}を開く',
+    zh: '打开大纲{title}',
   },
   'prompts.outlineClearFocusAccessible': {
     ko: '진행 중 플롯 해제',
     en: 'Clear the current outline item',
-    ja: '進行中のプロットを解除',
-    zh: '取消进行中的情节',
+    ja: '進行中の構成を解除',
+    zh: '取消进行中的大纲',
   },
 } as const;

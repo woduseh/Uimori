@@ -27,7 +27,7 @@ export const messages = {
     ko: 'JSON 소스',
     en: 'Source JSON',
     ja: 'ソースJSON',
-    zh: '原始 JSON',
+    zh: '源码 JSON',
   },
   'native.backgroundHtmlCss': {
     ko: '배경 HTML과 CSS',
@@ -819,7 +819,7 @@ export const messages = {
     ko: '이 블록은 실행하지 않아요. 기억은 채팅의 기억과 메모 설정에서 관리해요.',
     en: 'This block does not run. Manage memory in the chat’s Memory and notes settings.',
     ja: 'このブロックは実行されません。記憶はチャットの記憶とメモ設定で管理します。',
-    zh: '此块不会执行，记忆请在聊天的记忆与笔记设置中管理。',
+    zh: '此块不会执行，记忆请在聊天的记忆与备注设置中管理。',
   },
   'native.text_29efb69b57': {
     ko: '종류',
@@ -908,7 +908,7 @@ export const messages = {
   'native.text_7c70beb221': {
     ko: '전체 일치',
     en: 'Global matching',
-    ja: 'すべて一致',
+    ja: 'すべての一致',
     zh: '全局匹配',
   },
   'native.text_0c871722d6': {
@@ -2229,7 +2229,7 @@ export const messages = {
     ko: '실행 미지원 플래그: {flags}',
     en: 'Unsupported execution flags: {flags}',
     ja: '実行未対応のフラグ: {flags}',
-    zh: '不支持执行的标志: {flags}',
+    zh: '不支持执行的标志：{flags}',
   },
   'native.optionNumber': {
     ko: '선택지 {number, number}',

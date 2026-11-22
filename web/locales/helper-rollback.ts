@@ -62,7 +62,7 @@ export const messages = {
   'helperRollback.imagesNotice': {
     ko: '번역 삽화 배치는 되돌리지 않아요. 번역을 되돌린 장면은 삽화를 다시 배치해야 할 수 있어요.',
     en: 'Illustration placement in translations is not restored. Scenes whose translation is restored may need their illustrations placed again.',
-    ja: '翻訳の挿絵配置は元に戻りません。翻訳を元に戻した場面は挿絵を配置し直す必要がある場合があります。',
+    ja: '翻訳の挿絵配置は元に戻りません。翻訳を元に戻したシーンは挿絵を配置し直す必要がある場合があります。',
     zh: '译文中的插图位置不会恢复。恢复了译文的场景可能需要重新放置插图。',
   },
   'helperRollback.imagesKept': {
@@ -182,7 +182,7 @@ export const messages = {
   'helperRollback.uncovered': {
     ko: '설정, 채팅 전용 로어, 장면 이름 변경은 되돌리기 대상이 아니에요. 필요하면 직접 바꿔 주세요.',
     en: 'Changes to settings, chat-only lore and scene names are not rolled back. Change them directly if needed.',
-    ja: '設定、チャット専用ロア、場面名の変更は元に戻す対象ではありません。必要なら直接変更してください。',
+    ja: '設定、チャット専用ロア、シーン名の変更は元に戻す対象ではありません。必要なら直接変更してください。',
     zh: '设置、聊天专用设定和场景名称的更改不在撤销范围内。如有需要请直接修改。',
   },
   'helperRollback.outline': {
@@ -195,6 +195,6 @@ export const messages = {
     ko: '작가 노트',
     en: 'Author notes',
     ja: '作者ノート',
-    zh: '作者笔记',
+    zh: '作者备注',
   },
 };

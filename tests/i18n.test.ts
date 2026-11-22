@@ -412,3 +412,56 @@ test('all catalog locales parse ICU and accept the same named arguments', () => 
     }
   }
 });
+
+test('singular English count messages and terminology invariants hold across locales', async () => {
+  const { formatMessage } = await loadedI18n();
+  expect(formatMessage('helperConversation.unmeasuredFiles', 'en', { count: 1 })).toBe(
+    '1 unmeasured file'
+  );
+  expect(formatMessage('helperConversation.executions', 'en', { count: 1 })).toBe('1 call');
+  expect(formatMessage('helperResults.unrecorded', 'en', { count: 1 })).toBe(
+    '1 operation without detailed results'
+  );
+  expect(formatMessage('helpers.m318', 'en', { count: 1 })).toBe(
+    'Selected original text: 1 character'
+  );
+  expect(formatMessage('prompts.childSources', 'en', { count: 1, total: 1 })).toBe(
+    'Original text linked to 1 of 1 child'
+  );
+  expect(
+    formatMessage('reader.knownSubtotalValueIncludesValueUnpricedCalls', 'en', {
+      v0: '$0.10',
+      v1: 1,
+    })
+  ).toBe('Known subtotal $0.10, includes 1 unpriced call');
+  expect(formatMessage('reader.valueEntries', 'en', { v0: 1 })).toBe('1 entry');
+  expect(formatMessage('settings.flow16', 'en', { v0: 1 })).toBe('1 character');
+  expect(formatMessage('settings.flow17', 'en', { v0: 1 })).toBe('1 item');
+  expect(formatMessage('settings.flow20', 'en', { v0: 2, v1: 0, v2: 1, v3: 1 })).toBe(
+    'v2, UTF-16 0–1, 1 character'
+  );
+  expect(formatMessage('providers.m590', 'en', { value0: 1 })).toBe('1 credit');
+  expect(formatMessage('visuals.m252', 'en', { v0: 1 })).toBe('1 cut without a position');
+  expect(formatMessage('visuals.m258', 'en', { v0: 1 })).toBe(
+    '1 illustration without a translation position'
+  );
+  expect(formatMessage('visuals.progressRender', 'en', { completed: 1, total: 1, failed: 0 })).toBe(
+    '1/1 cut completed'
+  );
+  expect(formatMessage('visualpanels.unknownInputOutputCalls', 'en', { v0: 1, v1: 1 })).toBe(
+    'Unknown: input in 1 call, output in 1 call'
+  );
+  expect(formatMessage('visualpanels.unknownPartialEstimateInCalls', 'en', { v0: 1, v1: 1 })).toBe(
+    'Unknown in 1 call, partial estimate in 1 call'
+  );
+
+  const roleModelOffenders = Object.entries(messages)
+    .filter(([, values]) => /\brole model\b/iu.test(values.en))
+    .map(([key, values]) => `${key}: ${values.en}`);
+  expect(roleModelOffenders).toEqual([]);
+
+  const koMiddleDotOffenders = Object.entries(messages)
+    .filter(([, values]) => values.ko.includes('·'))
+    .map(([key, values]) => `${key}: ${values.ko}`);
+  expect(koMiddleDotOffenders).toEqual([]);
+});

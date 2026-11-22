@@ -1418,13 +1418,14 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         <div className="helper-task-meta ui-meta-row">
           <span>{t('helpers.m310', { model: task.modelTitle ?? t('helpers.m026') })}</span>
           <span>
-            {t('helpers.m311', {
-              calls: formatNumber(task.usage.modelCalls),
-              output:
-                task.usage.outputTokens == null
-                  ? t('helpers.m026')
-                  : usageCompact(task.usage.outputTokens),
-            })}
+            {task.usage.outputTokens == null
+              ? t('helpers.m311Unknown', {
+                  calls: formatNumber(task.usage.modelCalls),
+                })
+              : t('helpers.m311', {
+                  calls: formatNumber(task.usage.modelCalls),
+                  output: usageCompact(task.usage.outputTokens),
+                })}
           </span>
         </div>
         {task.error && <p className="error">{helperTaskError(task.error)}</p>}
@@ -2603,9 +2604,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               {selection && (
                 <div className="helper-context-chip helper-selection">
                   <details>
-                    <summary>
-                      {t('helpers.m318', { count: formatNumber(selection.text.length) })}
-                    </summary>
+                    <summary>{t('helpers.m318', { count: selection.text.length })}</summary>
                     <p>{selection.text}</p>
                   </details>
                   <button

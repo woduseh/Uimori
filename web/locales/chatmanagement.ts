@@ -49,7 +49,7 @@ export const messages = {
     ko: '연결된 기억은 삭제하지 않고 다음 생성에서만 제외해요. 기억과 메모에서 정리할 수 있어요.',
     en: 'Linked memories are kept but excluded from generation. Review them in Memory and notes.',
     ja: '関連する記憶は保管し、生成から除外します。「記憶とメモ」で整理できます。',
-    zh: '关联记忆会保留，但不用于生成。可在“记忆与笔记”中整理。',
+    zh: '关联记忆会保留，但不用于生成。可在“记忆与备注”中整理。',
   },
   'chatmanage.variablesHelp': {
     ko: '중간 장면 하나만 삭제하면 이후 장면과 현재 카드 변수는 유지돼요.',

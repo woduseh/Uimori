@@ -433,9 +433,9 @@ export const messages = {
   },
   'errors.NATIVE_TRANSFER_MODEL_BINDINGS_REQUIRED': {
     ko: '프롬프트의 보조 에이전트 모델을 모두 연결한 뒤 가져와 주세요.',
-    en: 'Connect all auxiliary models in the prompt before importing.',
-    ja: 'プロンプトの補助モデルをすべて接続してから取り込んでください。',
-    zh: '请连接提示词的全部辅助模型后再导入。',
+    en: 'Connect all supporting agent models in the prompt before importing.',
+    ja: 'プロンプトの補助エージェントモデルをすべて接続してから取り込んでください。',
+    zh: '请连接提示词的全部辅助智能体模型后再导入。',
   },
   'errors.NATIVE_TRANSFER_DRAFT_CHANGED': {
     ko: '확인한 파일 내용이 달라졌어요. 파일을 다시 선택해 내용을 확인해 주세요.',
@@ -643,13 +643,13 @@ export const messages = {
   },
   'errors.IMAGE_INPUT_UNSUPPORTED_MODEL': {
     ko: '선택한 모델은 이미지 입력을 지원하지 않아요. 본문 모델을 바꿔 주세요.',
-    en: 'The selected model does not support image input. Change the main model.',
+    en: 'The selected model does not support image input. Change the writing model.',
     ja: '選択したモデルは画像入力に対応していません。本文モデルを変更してください。',
     zh: '所选模型不支持图片输入。请更换正文模型。',
   },
   'errors.IMAGE_INPUT_UNSUPPORTED_PROTOCOL': {
     ko: '선택한 프로바이더로는 이미지를 전달할 수 없어요. 본문 모델의 프로바이더를 바꿔 주세요.',
-    en: 'The selected provider cannot send images. Change the story model provider.',
+    en: 'The selected provider cannot send images. Change the writing model provider.',
     ja: '選択したプロバイダーでは画像を送れません。本文モデルのプロバイダーを変更してください。',
     zh: '所选提供商无法发送图片。请更换正文模型的提供商。',
   },
@@ -703,7 +703,7 @@ export const messages = {
   },
   'errors.mainUnavailable': {
     ko: '본문 모델이나 프로바이더를 사용할 수 없어요. 설정을 확인해 주세요.',
-    en: 'The main model or provider is unavailable. Check your settings.',
+    en: 'The writing model or provider is unavailable. Check your settings.',
     ja: '本文モデルまたはプロバイダーを使用できません。設定を確認してください。',
     zh: '正文模型或提供商不可用。请检查设置。',
   },
@@ -739,7 +739,7 @@ export const messages = {
   },
   'errors.modelRequired': {
     ko: '설정 > 역할별 모델에서 {role, select, main {본문} translation {번역} translationRefusal {번역 거절 판정} status {이전 보조 작업} image {이미지 배치} context {컨텍스트 압축} helper {도우미} illustration {삽화} other {모델}} 모델을 선택해 주세요.',
-    en: 'Select the {role, select, main {main} translation {translation} translationRefusal {translation refusal judgment} status {legacy auxiliary} image {image placement} context {context compaction} helper {assistant} illustration {illustration} other {required}} model in Settings > Models by role.',
+    en: 'Select the {role, select, main {writing} translation {translation} translationRefusal {translation refusal judgment} status {legacy auxiliary} image {image placement} context {context compaction} helper {assistant} illustration {illustration} other {required}} model in Settings > Models by role.',
     ja: '設定 > 役割別モデルで{role, select, main {本文} translation {翻訳} translationRefusal {翻訳拒否判定} status {旧補助作業} image {画像配置} context {コンテキスト圧縮} helper {アシスタント} illustration {挿絵} other {対象}}モデルを選んでください。',
     zh: '请在设置 > 按角色设置模型中选择{role, select, main {正文} translation {翻译} translationRefusal {翻译拒绝判定} status {旧辅助任务} image {图片排布} context {上下文压缩} helper {助手} illustration {插图} other {所需}}模型。',
   },
@@ -763,13 +763,13 @@ export const messages = {
   },
   'errors.auxiliaryModelRequired': {
     ko: '{role, select, main {본문} other {번역}} 모델이 지정되지 않았어요.',
-    en: 'The {role, select, main {main} other {translation}} model is not configured.',
+    en: 'The {role, select, main {writing} other {translation}} model is not configured.',
     ja: '{role, select, main {本文} other {翻訳}}モデルが指定されていません。',
     zh: '尚未指定{role, select, main {正文} other {翻译}}模型。',
   },
   'errors.auxiliaryModelAction': {
     ko: '설정 > 역할별 모델에서 {role, select, main {본문} other {번역}} 모델을 선택하고 저장한 뒤 새 작업을 요청해 주세요.',
-    en: 'Select and save the {role, select, main {main} other {translation}} model in Settings > Models by role, then request a new task.',
+    en: 'Select and save the {role, select, main {writing} other {translation}} model in Settings > Models by role, then request a new task.',
     ja: '設定 > 役割別モデルで{role, select, main {本文} other {翻訳}}モデルを選択して保存し、新たに作業を依頼してください。',
     zh: '请在设置 > 按角色设置模型中选择并保存{role, select, main {正文} other {翻译}}模型，再发起新任务。',
   },
@@ -955,9 +955,9 @@ export const messages = {
   },
   'errors.auxiliary.JUDGMENT_CONNECTION_UNAVAILABLE.details': {
     ko: '저장한 판단 연결을 사용할 수 없어요. 역할별 모델에서 다른 연결을 선택해 주세요.',
-    en: 'The saved judgment connection is unavailable. Select another connection in role model settings.',
-    ja: '保存した判定接続を使用できません。役割別モデル設定で別の接続を選択してください。',
-    zh: '已保存的判断连接不可用。请在角色模型设置中选择其他连接。',
+    en: 'The saved judgment connection is unavailable. Select another connection in Models by role.',
+    ja: '保存した判定接続を使用できません。役割別モデルで別の接続を選択してください。',
+    zh: '已保存的判定连接不可用。请在按角色设置模型中选择其他连接。',
   },
   'errors.auxiliary.JEV_INPUT_BUDGET.details': {
     ko: '판단 입력이 허용된 토큰 한도를 초과했어요. 출력 길이 설정을 확인해 주세요.',
@@ -1131,13 +1131,13 @@ export const messages = {
     ko: '저장한 판단 연결을 사용할 수 없어요.',
     en: 'The saved judgment connection is unavailable.',
     ja: '保存した判定接続を使用できません。',
-    zh: '已保存的判断连接不可用。',
+    zh: '已保存的判定连接不可用。',
   },
   'errors.auxiliary.JUDGMENT_CONNECTION_UNAVAILABLE.action': {
     ko: '역할별 모델에서 다른 연결을 선택해 주세요.',
-    en: 'Select another connection in role model settings.',
-    ja: '役割別モデル設定で別の接続を選択してください。',
-    zh: '请在角色模型设置中选择其他连接。',
+    en: 'Select another connection in Models by role.',
+    ja: '役割別モデルで別の接続を選択してください。',
+    zh: '请在按角色设置模型中选择其他连接。',
   },
   'errors.auxiliary.JEV_INPUT_BUDGET.message': {
     ko: '판단 입력이 허용된 토큰 한도를 초과했어요.',
@@ -1429,7 +1429,7 @@ export const messages = {
   },
   'errors.auxiliaryModelDetails': {
     ko: '{role, select, main {본문} other {번역}} 모델이 지정되지 않았어요. 설정 > 역할별 모델을 확인해 주세요.',
-    en: 'The {role, select, main {main} other {translation}} model is not specified. Check Settings > Models by role.',
+    en: 'The {role, select, main {writing} other {translation}} model is not specified. Check Settings > Models by role.',
     ja: '{role, select, main {本文} other {翻訳}}モデルが指定されていません。設定 > 役割別モデルを確認してください。',
     zh: '尚未指定{role, select, main {正文} other {翻译}}模型。请检查设置 > 按角色设置模型。',
   },

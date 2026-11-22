@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useState } from 'react';
@@ -118,7 +118,7 @@ function StageRow({ stage }: { stage: HelperActivityStage }) {
           {toolCount > 1 && (
             <small>
               {t('helperConversation.executions', {
-                count: formatNumber(toolCount),
+                count: toolCount,
               })}
             </small>
           )}

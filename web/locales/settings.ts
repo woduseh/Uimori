@@ -32,7 +32,7 @@ export const messages = {
   'settings.helperConfirmPaidGenerationHint': {
     ko: '도우미가 다음 장면이나 번역을 요청하기 전에 확인을 받아요. 바꾼 값은 다음 도우미 요청부터 적용돼요.',
     en: 'The assistant asks before requesting the next scene or a translation. The change applies from the next assistant request.',
-    ja: 'アシスタントが次の場面や翻訳を依頼する前に確認を求めます。変更は次のアシスタントへの依頼から適用されます。',
+    ja: 'アシスタントが次のシーンや翻訳を依頼する前に確認を求めます。変更は次のアシスタントへの依頼から適用されます。',
     zh: '助手在请求下一场景或翻译前会先征求确认。更改从下一次助手请求开始生效。',
   },
   'settings.helperTaskTimeoutRange': {
@@ -127,15 +127,15 @@ export const messages = {
   },
   'settings.m0': {
     ko: '역할별 모델 설정을 불러오는 중이에요…',
-    en: 'Loading role model settings…',
+    en: 'Loading Models by role settings…',
     ja: '役割別モデル設定を読み込み中…',
-    zh: '正在加载角色模型设置…',
+    zh: '正在加载按角色设置模型…',
   },
   'settings.m1': {
     ko: '역할별 모델 설정을 저장했어요.',
-    en: 'Role model settings saved.',
+    en: 'Models by role settings saved.',
     ja: '役割別モデル設定を保存しました。',
-    zh: '角色模型设置已保存。',
+    zh: '按角色设置模型已保存。',
   },
   'settings.m2': {
     ko: '설정을 불러오지 못했어요.',
@@ -421,15 +421,15 @@ export const messages = {
   },
   'settings.m63': {
     ko: '역할별 모델 설정 저장',
-    en: 'Save role model settings',
+    en: 'Save Models by role settings',
     ja: '役割別モデル設定を保存',
-    zh: '保存角色模型设置',
+    zh: '保存按角色设置模型',
   },
   'settings.m64': {
     ko: '역할별 모델 설정 다시 불러오기',
-    en: 'Reload role model settings',
+    en: 'Reload Models by role settings',
     ja: '役割別モデル設定を再読み込み',
-    zh: '重新加载角色模型设置',
+    zh: '重新加载按角色设置模型',
   },
   'settings.m65': {
     ko: '저장된 설정을 불러오면 현재 초안이 사라져요.',
@@ -445,9 +445,9 @@ export const messages = {
   },
   'settings.m67': {
     ko: '역할별 모델 저장본 확인',
-    en: 'Review saved role model settings',
+    en: 'Review saved Models by role settings',
     ja: '役割別モデル設定の保存内容を確認',
-    zh: '检查角色模型保存内容',
+    zh: '检查按角色设置模型保存内容',
   },
   'settings.m68': {
     ko: '기본값',
@@ -644,7 +644,7 @@ export const messages = {
   'settings.m104': {
     ko: '마지막 장면의 로어',
     en: 'Last scene lore',
-    ja: '最後の場面のロア',
+    ja: '最後のシーンのロア',
     zh: '最后场景的设定',
   },
   'settings.m105': {
@@ -747,7 +747,7 @@ export const messages = {
     ko: '사용자 메모',
     en: 'User notes',
     ja: 'ユーザーメモ',
-    zh: '用户笔记',
+    zh: '用户备注',
   },
   'settings.m122': {
     ko: '이야기',
@@ -1370,7 +1370,7 @@ export const messages = {
   'settings.m239': {
     ko: '새 장면, 조회 로어 정리 포함',
     en: 'Includes the new scene and lore reset choice.',
-    ja: '新しい場面、参照ロア整理の選択を含みます。',
+    ja: '新しいシーン、参照ロア整理の選択を含みます。',
     zh: '包含新场景和清理查询设定的选择。',
   },
   'settings.m240': {
@@ -1430,7 +1430,7 @@ export const messages = {
   'settings.m249': {
     ko: '새 장면 요청으로 조회 로어 정리',
     en: 'Lore cleared for new scene request',
-    ja: '新しい場面のリクエストで参照ロアを整理',
+    ja: '新しいシーンのリクエストで参照ロアを整理',
     zh: '因新场景请求清理查询设定',
   },
   'settings.m250': {
@@ -1520,7 +1520,7 @@ export const messages = {
   'settings.m264': {
     ko: '이 요청에서 새 장면 정리를 선택했어요.',
     en: 'New scene cleanup was selected for this request.',
-    ja: 'このリクエストで新しい場面の整理を選択しました。',
+    ja: 'このリクエストで新しいシーンの整理を選択しました。',
     zh: '此请求已选择新场景清理。',
   },
   'settings.m265': {
@@ -1616,7 +1616,7 @@ export const messages = {
   'settings.m281': {
     ko: ', 요약한 장면',
     en: ', Summarized scene',
-    ja: '、要約した場面',
+    ja: '、要約したシーン',
     zh: '，已摘要场景',
   },
   'settings.m282': {
@@ -1628,7 +1628,7 @@ export const messages = {
   'settings.m283': {
     ko: '대상 장면의 최신 컨텍스트를 확인하고 있어요.',
     en: 'Checking the latest context for the target scene.',
-    ja: '対象の場面の最新コンテキストを確認しています。',
+    ja: '対象のシーンの最新コンテキストを確認しています。',
     zh: '正在检查目标场景的最新上下文。',
   },
   'settings.m284': {
@@ -1890,34 +1890,34 @@ export const messages = {
     zh: '提示词中的实际布局：{v0} 条消息',
   },
   'settings.flow14': {
-    ko: '{v0} / {v1}개',
-    en: '{v0} / {v1} items',
-    ja: '{v0} / {v1}個',
-    zh: '{v0} / {v1}项',
+    ko: '{v0, number} / {v1, number}개',
+    en: '{v0, number} / {v1, plural, one {# item} other {# items}}',
+    ja: '{v0, number} / {v1, number}個',
+    zh: '{v0, number} / {v1, number}项',
   },
   'settings.flow15': {
-    ko: '{v0} / {v1}토큰',
-    en: '{v0} / {v1} tokens',
-    ja: '{v0} / {v1}トークン',
-    zh: '{v0} / {v1}词元',
+    ko: '{v0, number} / {v1, number}토큰',
+    en: '{v0, number} / {v1, plural, one {# token} other {# tokens}}',
+    ja: '{v0, number} / {v1, number}トークン',
+    zh: '{v0, number} / {v1, number}词元',
   },
   'settings.flow16': {
-    ko: '{v0}자',
-    en: '{v0} characters',
-    ja: '{v0}文字',
-    zh: '{v0}字符',
+    ko: '{v0, number}자',
+    en: '{v0, plural, one {# character} other {# characters}}',
+    ja: '{v0, number}文字',
+    zh: '{v0, number}字符',
   },
   'settings.flow17': {
-    ko: '{v0}개',
-    en: '{v0} items',
-    ja: '{v0}個',
-    zh: '{v0}项',
+    ko: '{v0, number}개',
+    en: '{v0, plural, one {# item} other {# items}}',
+    ja: '{v0, number}個',
+    zh: '{v0, number}项',
   },
   'settings.flow18': {
-    ko: '{v0}토큰',
-    en: '{v0} tokens',
-    ja: '{v0}トークン',
-    zh: '{v0}词元',
+    ko: '{v0, number}토큰',
+    en: '{v0, plural, one {# token} other {# tokens}}',
+    ja: '{v0, number}トークン',
+    zh: '{v0, number}词元',
   },
   'settings.flow19': {
     ko: '유지한 로어와 읽은 출처: {v0}구간',
@@ -1926,14 +1926,14 @@ export const messages = {
     zh: '保留设定和读取来源，{v0}片段',
   },
   'settings.flow20': {
-    ko: 'v{v0}, UTF-16 {v1}~{v2}, {v3}자',
-    en: 'v{v0}, UTF-16 {v1}–{v2}, {v3} characters',
-    ja: 'v{v0}、UTF-16 {v1}–{v2}、{v3}文字',
-    zh: 'v{v0}，UTF-16 {v1}–{v2}，{v3}字符',
+    ko: 'v{v0}, UTF-16 {v1, number}~{v2, number}, {v3, number}자',
+    en: 'v{v0}, UTF-16 {v1, number}–{v2, number}, {v3, plural, one {# character} other {# characters}}',
+    ja: 'v{v0}、UTF-16 {v1, number}–{v2, number}、{v3, number}文字',
+    zh: 'v{v0}，UTF-16 {v1, number}–{v2, number}，{v3, number}字符',
   },
   'settings.flow21': {
     ko: '처음 읽은 원문 {v0}, Run {v1}',
-    en: 'First read source {v0}, Run {v1}',
+    en: 'First read original {v0}, Run {v1}',
     ja: '最初に読んだ原文{v0}、Run {v1}',
     zh: '首次读取原文{v0}，Run {v1}',
   },
@@ -1946,7 +1946,7 @@ export const messages = {
   'settings.flow23': {
     ko: '{v0}, 요약한 장면 {v1}개',
     en: '{v0}, {v1, plural, one {# summarized scene} other {# summarized scenes}}',
-    ja: '{v0}、要約した場面{v1}件',
+    ja: '{v0}、要約したシーン{v1}件',
     zh: '{v0}，已摘要{v1}个场景',
   },
   'settings.contextReady': {

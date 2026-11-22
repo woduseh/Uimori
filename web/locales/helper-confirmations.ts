@@ -20,7 +20,7 @@ export const messages = {
   'helperConfirm.sceneRequest': {
     ko: '다음 장면 요청',
     en: 'Request the next scene',
-    ja: '次の場面を依頼',
+    ja: '次のシーンを依頼',
     zh: '请求下一场景',
   },
   'helperConfirm.sceneTranslate': {
@@ -110,7 +110,7 @@ export const messages = {
   'helperConfirm.scene': {
     ko: '장면',
     en: 'Scene',
-    ja: '場面',
+    ja: 'シーン',
     zh: '场景',
   },
   'helperConfirm.chat': {

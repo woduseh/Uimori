@@ -6,10 +6,10 @@ export const messages = {
     zh: '至少 {count}',
   },
   'helperConversation.unmeasuredFiles': {
-    ko: '파일 {count}개 미측정',
-    en: '{count} unmeasured files',
-    ja: 'ファイル{count}件は未計測',
-    zh: '{count} 个文件未统计',
+    ko: '파일 {count, number}개 미측정',
+    en: '{count, plural, one {# unmeasured file} other {# unmeasured files}}',
+    ja: 'ファイル{count, number}件は未計測',
+    zh: '{count, number} 个文件未统计',
   },
   'helperConversation.inputEstimate': {
     ko: '추정 입력',
@@ -24,10 +24,10 @@ export const messages = {
     zh: '复制代码块 {index}',
   },
   'helperConversation.executions': {
-    ko: '{count}회',
-    en: '{count} calls',
-    ja: '{count}回',
-    zh: '{count}次',
+    ko: '{count, number}회',
+    en: '{count, plural, one {# call} other {# calls}}',
+    ja: '{count, number}回',
+    zh: '{count, number}次',
   },
   'helperConversation.activity': {
     ko: '진행 과정',

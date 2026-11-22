@@ -456,10 +456,10 @@ export const messages = {
     zh: '当前原文',
   },
   'reader.knownSubtotalValueIncludesValueUnpricedCalls': {
-    ko: '확인된 금액 합계 {v0}, 미확인 {v1}회 포함',
-    en: 'Known subtotal {v0}, includes {v1} unpriced calls',
-    ja: '確認済み小計 {v0}、不明な呼び出し {v1}回を含む',
-    zh: '已知小计 {v0}，含{v1}次费用未知的调用',
+    ko: '확인된 금액 합계 {v0}, 미확인 {v1, number}회 포함',
+    en: 'Known subtotal {v0}, includes {v1, plural, one {# unpriced call} other {# unpriced calls}}',
+    ja: '確認済み小計 {v0}、不明な呼び出し {v1, number}回を含む',
+    zh: '已知小计 {v0}，含{v1, number}次费用未知的调用',
   },
   'reader.unknown': {
     ko: '미확인',
@@ -536,7 +536,7 @@ export const messages = {
   'reader.couldNotFindTheCurrentSceneYourEditsAre': {
     ko: '현재 장면을 찾지 못했어요.',
     en: 'Could not find the current scene.',
-    ja: '現在の場面が見つかりませんでした。',
+    ja: '現在のシーンが見つかりませんでした。',
     zh: '未找到当前场景。',
   },
   'reader.noSavedTranslation': {
@@ -1113,13 +1113,13 @@ export const messages = {
     ko: '캐시와 로어 기록을 불러오지 못했어요.',
     en: 'Could not load cache and lore records.',
     ja: 'キャッシュ、ロア記録を読み込めませんでした。',
-    zh: '无法加载缓存与设定资料记录。',
+    zh: '无法加载缓存与设定记录。',
   },
   'reader.loadingCacheAndLoreRecords': {
     ko: '캐시와 로어 기록을 불러오는 중이에요…',
     en: 'Loading cache and lore records…',
     ja: 'キャッシュ、ロア記録を読み込み中…',
-    zh: '正在加载缓存与设定资料记录…',
+    zh: '正在加载缓存与设定记录…',
   },
   'reader.theSelectedTokenizerCouldNotBeLoadedAGeneral': {
     ko: '선택한 토크나이저를 불러오지 못해 일반 로컬 추정치를 사용했어요.',
@@ -1557,7 +1557,7 @@ export const messages = {
     ko: '책갈피 추가됨, 메모 편집',
     en: 'Bookmark added, edit note',
     ja: 'ブックマークを追加、メモを編集',
-    zh: '已添加书签，编辑笔记',
+    zh: '已添加书签，编辑备注',
   },
   'reader.bookmarkAdded': {
     ko: '책갈피를 추가했어요.',
@@ -1776,10 +1776,10 @@ export const messages = {
     zh: '无法复制请求。请检查浏览器的剪贴板权限。',
   },
   'reader.valueEntries': {
-    ko: '{v0}개',
-    en: '{v0} entries',
-    ja: '{v0}件',
-    zh: '{v0}项',
+    ko: '{v0, number}개',
+    en: '{v0, plural, one {# entry} other {# entries}}',
+    ja: '{v0, number}件',
+    zh: '{v0, number}项',
   },
   'reader.couldNotLoadThePreview': {
     ko: '미리보기를 불러오지 못했어요.',
@@ -1875,7 +1875,7 @@ export const messages = {
     ko: '로어 준비',
     en: 'Lore preparation',
     ja: 'ロアの準備',
-    zh: '设定资料准备',
+    zh: '设定准备',
   },
   'reader.pinned': {
     ko: '고정 ',
@@ -1887,13 +1887,13 @@ export const messages = {
     ko: '추가 로어 선별 예정',
     en: 'Additional lore selection pending',
     ja: '追加ロアの選別予定',
-    zh: '待筛选额外设定资料',
+    zh: '待筛选额外设定',
   },
   'reader.retrievedLoreExcludedFromThisRequest': {
     ko: '이번 요청에서 조회 로어 제외',
     en: 'Retrieved lore excluded from this request',
     ja: '今回のリクエストから検索ロアを除外',
-    zh: '本次请求排除查询到的设定资料',
+    zh: '本次请求排除查询到的设定',
   },
   'reader.contextSummary': {
     ko: '컨텍스트 요약',
@@ -1964,8 +1964,8 @@ export const messages = {
   'reader.openingTitle': {
     ko: '첫 메시지: {title}',
     en: 'Opening message: {title}',
-    ja: '最初のメッセージ、{title}',
-    zh: '首条消息，{title}',
+    ja: '最初のメッセージ：{title}',
+    zh: '首条消息：{title}',
   },
   'reader.imageCount': {
     ko: '{count}컷',
@@ -2031,7 +2031,7 @@ export const messages = {
     ko: '포함된 로어: {record}',
     en: 'Included lore: {record}',
     ja: '含まれるロア：{record}',
-    zh: '包含的设定资料：{record}',
+    zh: '包含的设定：{record}',
   },
   'reader.loreSelectionTotals': {
     ko: '자동 선별, 대상 {total}, 판단 {evaluated}, 선택 {selected}{failed, plural, =0 {} other {, 실패 #건}}',

@@ -158,7 +158,7 @@ export const messages = {
   'main.m007': {
     ko: '플롯',
     en: 'Outline',
-    ja: 'アウトライン',
+    ja: '構成',
     zh: '大纲',
   },
   'main.m008': {
@@ -236,7 +236,7 @@ export const messages = {
   'main.m020': {
     ko: '이전 요청이 접수됐는지 확인해 주세요.',
     en: 'Check whether the previous request was received.',
-    ja: '前回の要求が受け付けられたか確認してください。',
+    ja: '前回のリクエストが受け付けられたか確認してください。',
     zh: '请确认上次请求是否已接收。',
   },
   'main.m021': {
@@ -1064,8 +1064,8 @@ export const messages = {
   'main.addModule': {
     ko: '현재 채팅에 추가: {title}',
     en: 'Add to current chat: {title}',
-    ja: '現在のチャットに追加、{title}',
-    zh: '添加到当前聊天，{title}',
+    ja: '現在のチャットに追加：{title}',
+    zh: '添加到当前聊天：{title}',
   },
   'main.resumeOther': {
     ko: '다른 기기에서 이어 읽기',

@@ -764,7 +764,7 @@ export const messages = {
   'library.previousSelectionsThatNoLongerMatchAvailable': {
     ko: '현재 옵션과 맞지 않는 이전 선택값은 기본값으로 조정했어요.',
     en: 'Previous selections that no longer match available options were reset to defaults.',
-    ja: '現在の選択肢に合わない以前の値を初期値に調整しました。',
+    ja: '現在の選択肢に合わない以前の値を既定値に調整しました。',
     zh: '与当前选项不符的旧选择已调整为默认值。',
   },
   'library.loadingPackagesAndRequiredModules': {
@@ -885,7 +885,7 @@ export const messages = {
     ko: '기억과 메모',
     en: 'Memory and notes',
     ja: '記憶とメモ',
-    zh: '记忆与笔记',
+    zh: '记忆与备注',
   },
   'library.chatSettingsSaved': {
     ko: '채팅 설정을 저장했어요.',
@@ -1634,37 +1634,37 @@ export const messages = {
   'library.botDefaultPersona': {
     ko: '봇 기본 페르소나',
     en: 'Bot default persona',
-    ja: 'ボットの初期ペルソナ',
+    ja: 'ボットの既定のペルソナ',
     zh: '机器人默认角色',
   },
   'library.couldNotLoadTheDefaultPersona': {
     ko: '기본 페르소나를 불러오지 못했어요.',
     en: 'Could not load the default persona.',
-    ja: '初期ペルソナを読み込めませんでした。',
+    ja: '既定のペルソナを読み込めませんでした。',
     zh: '无法加载默认角色。',
   },
   'library.loadingDefaults': {
     ko: '기본 설정을 불러오는 중이에요…',
     en: 'Loading defaults…',
-    ja: '初期設定を読み込み中…',
+    ja: '既定の設定を読み込み中…',
     zh: '正在加载默认设置…',
   },
   'library.defaultPersona': {
     ko: '기본 페르소나',
     en: 'Default persona',
-    ja: '初期ペルソナ',
+    ja: '既定のペルソナ',
     zh: '默认角色',
   },
   'library.botDefaultPersonaMode': {
     ko: '봇 기본 페르소나 방식',
     en: 'Bot default persona mode',
-    ja: 'ボットの初期ペルソナ方式',
+    ja: 'ボットの既定のペルソナ方式',
     zh: '机器人默认角色方式',
   },
   'library.defaultPersonaNotSet': {
     ko: '기본 페르소나 미지정',
     en: 'Default persona not set',
-    ja: '初期ペルソナ未指定',
+    ja: '既定のペルソナ未指定',
     zh: '未指定默认角色',
   },
   'library.noPersona': {
@@ -1682,7 +1682,7 @@ export const messages = {
   'library.chooseBotSDefaultPersona': {
     ko: '봇의 기본 페르소나 선택',
     en: "Choose bot's default persona",
-    ja: 'ボットの初期ペルソナを選択',
+    ja: 'ボットの既定のペルソナを選択',
     zh: '选择机器人默认角色',
   },
   'library.theSavedPersonaWasDeletedChooseAnother': {
@@ -1694,7 +1694,7 @@ export const messages = {
   'library.newChatsUseYourExplicitChoiceIncluding': {
     ko: '새 채팅에서 직접 고른 값(페르소나 없음 포함), 폴더 기본값, 봇 기본값 순서로 사용해요. 폴더에서 지정하지 않으면 이 설정을 사용해요.',
     en: 'New chats use your explicit choice (including no persona), then folder defaults, then bot defaults. This setting applies when the folder has none.',
-    ja: '新規チャットで直接選んだ値（ペルソナなしを含む）、フォルダーの初期値、ボットの初期値の順で使います。フォルダーで指定しない場合はこの設定を使います。',
+    ja: '新規チャットで直接選んだ値（ペルソナなしを含む）、フォルダーの既定値、ボットの既定値の順で使います。フォルダーで指定しない場合はこの設定を使います。',
     zh: '新聊天依次采用直接选择的值（包括无角色）、文件夹默认值、机器人默认值。文件夹未指定时使用此设置。',
   },
   'library.saving2': {
@@ -1706,7 +1706,7 @@ export const messages = {
   'library.saveDefaultPersona': {
     ko: '기본 페르소나 저장',
     en: 'Save default persona',
-    ja: '初期ペルソナを保存',
+    ja: '既定のペルソナを保存',
     zh: '保存默认角色',
   },
   'library.couldNotRefreshNotesYourInputAnd': {
@@ -1778,7 +1778,7 @@ export const messages = {
   'library.theSavedNoteOrTargetSceneChanged': {
     ko: '저장된 메모나 대상 장면이 바뀌었어요. 위의 최신 메모를 확인해 주세요.',
     en: 'The saved note or target scene changed. Check the latest note above.',
-    ja: '保存されたメモまたは対象の場面が変更されました。上の最新メモを確認してください。',
+    ja: '保存されたメモまたは対象のシーンが変更されました。上の最新メモを確認してください。',
     zh: '保存的备注或目标场景已更改。请确认上方最新的备注。',
   },
   'library.reviewSaveConflict': {
@@ -2006,13 +2006,13 @@ export const messages = {
   'library.loreIncludedInTheLastScene': {
     ko: '마지막 장면에 포함된 로어',
     en: 'Lore included in the last scene',
-    ja: '最後の場面に含まれたロア',
+    ja: '最後のシーンに含まれたロア',
     zh: '最后场景包含的设定',
   },
   'library.recordsOfLoreActuallyAttachedToThe': {
     ko: '마지막 장면의 마지막 본문 요청에 실제로 첨부한 로어 기록이에요. 다음 요청에서 쓸 로어는 달라질 수 있어요.',
     en: 'Records of lore actually attached to the final story request of the last scene. The next request may use different lore.',
-    ja: '最後の場面の最後の本文リクエストに実際に添付したロアの記録です。次のリクエストで使うロアは変わる場合があります。',
+    ja: '最後のシーンの最後の本文リクエストに実際に添付したロアの記録です。次のリクエストで使うロアは変わる場合があります。',
     zh: '记录最后场景最后一次正文请求实际附带的设定，下次请求使用的设定可能不同。',
   },
   'library.inclusionRecords': {
@@ -2024,7 +2024,7 @@ export const messages = {
   'library.noCompletedScenesYet': {
     ko: '아직 완성된 장면이 없어요.',
     en: 'No completed scenes yet.',
-    ja: '完成した場面はまだありません。',
+    ja: '完成したシーンはまだありません。',
     zh: '尚无已完成的场景。',
   },
   'library.selectedCount': {
@@ -2174,7 +2174,7 @@ export const messages = {
   'library.botPersonaHint': {
     ko: '{title}의 새 채팅에서 페르소나를 직접 고르지 않고 폴더 기본값도 없을 때 사용해요. 기존 채팅은 바뀌지 않아요.',
     en: 'Used for new chats with {title} when no persona or folder default is chosen. Existing chats do not change.',
-    ja: '{title}の新規チャットで、直接選んだペルソナやフォルダーの初期値がない場合に使います。既存のチャットは変わりません。',
+    ja: '{title}の新規チャットで、直接選んだペルソナやフォルダーの既定値がない場合に使います。既存のチャットは変わりません。',
     zh: '在 {title} 的新聊天中未直接选择角色且无文件夹默认值时使用。现有聊天不会改变。',
   },
   'library.notesSummary': {
@@ -2186,7 +2186,7 @@ export const messages = {
   'library.noteAttribution': {
     ko: '{imported, select, yes {가져온 기억: {origin}{linked, select, yes {} other {, 첫 장면 전 메모}}} other {첫 장면 전 메모}}',
     en: '{imported, select, yes {Imported memory: {origin}{linked, select, yes {} other {, Note before first scene}}} other {Note before first scene}}',
-    ja: '{imported, select, yes {インポートした記憶：{origin}{linked, select, yes {} other {、最初の場面より前のメモ}}} other {最初の場面より前のメモ}}',
+    ja: '{imported, select, yes {インポートした記憶：{origin}{linked, select, yes {} other {、最初のシーンより前のメモ}}} other {最初のシーンより前のメモ}}',
     zh: '{imported, select, yes {导入的记忆：{origin}{linked, select, yes {} other {，首个场景前的备注}}} other {首个场景前的备注}}',
   },
   'library.termNumber': {

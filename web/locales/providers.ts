@@ -67,9 +67,9 @@ export const messages = {
   },
   'providers.m6': {
     ko: '삭제하면 역할별 모델에서 해제되고, 이 모델을 쓰던 보조 에이전트도 해제돼요. 과거 실행 기록의 모델 정보는 유지돼요.',
-    en: 'Deleting clears it from Models by role and disables writing assistants using this model. Model settings saved in previous runs will be retained.',
-    ja: '削除すると役割別モデルから解除され、このモデルを使う執筆アシスタントが無効になります。過去の実行に保存されたモデル設定は保持されます。',
-    zh: '删除后会从按角色设置模型中清除，并关闭使用此模型的写作助手。历史运行中保存的模型设置会保留。',
+    en: 'Deleting clears it from Models by role and disables supporting agents using this model. Model settings saved in previous runs will be retained.',
+    ja: '削除すると役割別モデルから解除され、このモデルを使う補助エージェントも解除されます。過去の実行に保存されたモデル設定は保持されます。',
+    zh: '删除后会从按角色设置模型中清除，并停用使用此模型的辅助智能体。历史运行中保存的模型设置会保留。',
   },
   'providers.m7': {
     ko: '목록 조회 실패',
@@ -961,13 +961,13 @@ export const messages = {
   },
   'providers.reasoningMode': {
     ko: '추론 모드',
-    en: 'Reasoning Mode',
+    en: 'Reasoning mode',
     ja: '推論モード',
     zh: '推理模式',
   },
   'providers.reasoningContext': {
     ko: '추론 컨텍스트',
-    en: 'Reasoning Context',
+    en: 'Reasoning context',
     ja: '推論コンテキスト',
     zh: '推理上下文',
   },
@@ -2780,7 +2780,7 @@ export const messages = {
   'providers.m563': {
     ko: '서버에서 서비스 등급을 {value0}로 제한해요. 모델 기본값도 {value1}로 실행돼요.',
     en: 'The server restricts the service tier to {value0}. Model defaults also run as {value1}.',
-    ja: 'サーバーはサービスティアを{value0}に制限しています。モデルの既定値も{value1}で実行されます。',
+    ja: 'サーバーはサービス階層を{value0}に制限しています。モデルの既定値も{value1}で実行されます。',
     zh: '服务器将服务等级限制为 {value0}，模型默认值也以 {value1} 运行。',
   },
   'providers.m564': {
@@ -2846,7 +2846,7 @@ export const messages = {
   'providers.m576': {
     ko: '서버에서 서비스 등급을 {value0}로 제한해요. 모델 기본값이나 서버와 같은 값을 선택해 주세요.',
     en: 'The server restricts the service tier to {value0}. Choose the model default or the same tier as the server.',
-    ja: 'サーバーはサービスティアを{value0}に制限しています。モデルの既定値かサーバーと同じ値を選択してください。',
+    ja: 'サーバーはサービス階層を{value0}に制限しています。モデルの既定値かサーバーと同じ値を選択してください。',
     zh: '服务器将服务等级限制为 {value0}。请选择模型默认值或与服务器相同的值。',
   },
   'providers.m577': {
@@ -2928,10 +2928,10 @@ export const messages = {
     zh: '已使用 {value0}%',
   },
   'providers.m590': {
-    ko: '{value0} 크레딧',
-    en: '{value0} credits',
-    ja: '{value0}クレジット',
-    zh: '{value0} 点额度',
+    ko: '{value0, number} 크레딧',
+    en: '{value0, plural, one {# credit} other {# credits}}',
+    ja: '{value0, number}クレジット',
+    zh: '{value0, number} 点额度',
   },
   'providers.m591': {
     ko: '기준일: {value0}',
@@ -3297,7 +3297,7 @@ export const messages = {
     ko: '로어 선별, 생성 거절 판정, 이미지 배치',
     en: 'Lore selection, refusal detection, image placement',
     ja: 'ロアの選別、生成拒否の判定、画像配置',
-    zh: '设定筛选，生成拒绝判定，图片布置',
+    zh: '设定筛选，生成拒绝判定，图片排布',
   },
   'providers.vertexLocation': {
     ko: '위치',

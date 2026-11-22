@@ -1057,10 +1057,8 @@ export function OutlinePanel({
                     {lower.length > 0 && (
                       <span>
                         {t('prompts.childSources', {
-                          total: formatNumber(lower.length),
-                          count: formatNumber(
-                            lower.filter((node) => currentWritings(node).length).length
-                          ),
+                          total: lower.length,
+                          count: lower.filter((node) => currentWritings(node).length).length,
                         })}
                       </span>
                     )}

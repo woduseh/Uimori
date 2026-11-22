@@ -11,7 +11,7 @@ import './request-preview.css';
 const amount = (value: number | null) =>
   value === null ? t('reader.unknown') : formatNumber(value);
 const entries = (value: number | null) =>
-  value === null ? t('reader.unknown') : t('reader.valueEntries', { v0: amount(value) });
+  value === null ? t('reader.unknown') : t('reader.valueEntries', { v0: value });
 const noImages: readonly RequestImagePreview[] = [];
 
 export function RequestPreviewDialog({

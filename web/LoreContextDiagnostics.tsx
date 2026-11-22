@@ -1,4 +1,4 @@
-import { t, useI18n, getLocale } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import type { LoreContextSnapshot } from '../core/lore-context.js';
 import './lore-context.css';
 
@@ -30,8 +30,8 @@ export function LoreContextDiagnostics({
           <dt>{t('settings.m257')}</dt>
           <dd>
             {t('settings.flow14', {
-              v0: snapshot.stats.retainedEntries.toLocaleString(getLocale()),
-              v1: snapshot.policy.maxRetainedEntries.toLocaleString(getLocale()),
+              v0: snapshot.stats.retainedEntries,
+              v1: snapshot.policy.maxRetainedEntries,
             })}
           </dd>
         </div>
@@ -39,22 +39,20 @@ export function LoreContextDiagnostics({
           <dt>{t('settings.m258')}</dt>
           <dd>
             {t('settings.flow15', {
-              v0: snapshot.stats.retainedTokens.toLocaleString(getLocale()),
-              v1: snapshot.policy.maxRetainedTokens.toLocaleString(getLocale()),
+              v0: snapshot.stats.retainedTokens,
+              v1: snapshot.policy.maxRetainedTokens,
             })}
           </dd>
         </div>
         <div>
           <dt>{t('settings.m260')}</dt>
-          <dd>
-            {t('settings.flow16', { v0: snapshot.stats.appendedChars.toLocaleString(getLocale()) })}
-          </dd>
+          <dd>{t('settings.flow16', { v0: snapshot.stats.appendedChars })}</dd>
         </div>
         <div>
           <dt>{t('settings.m262')}</dt>
           <dd>
             {t('settings.flow17', {
-              v0: snapshot.stats.droppedEntries.toLocaleString(getLocale()),
+              v0: snapshot.stats.droppedEntries,
             })}
           </dd>
         </div>
@@ -62,7 +60,7 @@ export function LoreContextDiagnostics({
           <dt>{t('settings.m263')}</dt>
           <dd>
             {t('settings.flow18', {
-              v0: snapshot.policy.maxPinnedTokens.toLocaleString(getLocale()),
+              v0: snapshot.policy.maxPinnedTokens,
             })}
           </dd>
         </div>
@@ -86,9 +84,9 @@ export function LoreContextDiagnostics({
                   <p>
                     {t('settings.flow20', {
                       v0: entry.revision,
-                      v1: entry.start.toLocaleString(getLocale()),
-                      v2: entry.end.toLocaleString(getLocale()),
-                      v3: entry.text.length.toLocaleString(getLocale()),
+                      v1: entry.start,
+                      v2: entry.end,
+                      v3: entry.text.length,
                     })}
                   </p>
                   <small>

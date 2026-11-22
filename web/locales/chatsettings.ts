@@ -21,7 +21,7 @@ export const messages = {
     ko: '기억 메모 로어 요약 장기 기억 컨텍스트 노트 이야기',
     en: 'memory notes lore summary long term memory context story',
     ja: '記憶 メモ ロア 要約 長期記憶 コンテキスト ノート 物語',
-    zh: '记忆 笔记 设定 摘要 长期记忆 上下文 故事',
+    zh: '记忆 备注 笔记 设定 摘要 长期记忆 上下文 故事',
   },
   'chatsettings.searchImages': {
     ko: '이미지 삽화 참조 참고 사진 업로드 관리 에셋 생성',
@@ -164,7 +164,7 @@ export const messages = {
   'chatsettings.m18': {
     ko: '생성 기본값',
     en: 'Generation defaults',
-    ja: '生成の初期設定',
+    ja: '生成の既定値',
     zh: '生成默认设置',
   },
   'chatsettings.m19': {
@@ -331,9 +331,9 @@ export const messages = {
   },
   'chatsettings.m46': {
     ko: '역할별 모델 설정을',
-    en: 'Role model settings',
+    en: 'Models by role settings',
     ja: '役割別モデル設定',
-    zh: '角色模型设置',
+    zh: '按角色设置模型',
   },
   'chatsettings.m47': {
     ko: '현재 프롬프트를',
@@ -824,7 +824,7 @@ export const messages = {
   'chatsettings.m141': {
     ko: '프롬프트 기본값 따르기',
     en: 'Use prompt default',
-    ja: 'プロンプトの初期値を使用',
+    ja: 'プロンプトの既定値を使用',
     zh: '使用提示词默认值',
   },
   'chatsettings.m143': {
@@ -883,9 +883,9 @@ export const messages = {
   },
   'chatsettings.m152': {
     ko: '기본 설정',
-    en: 'Default settings',
+    en: 'General settings',
     ja: '基本設定',
-    zh: '默认设置',
+    zh: '基本设置',
   },
   'chatsettings.m153': {
     ko: '창작 옵션 패널',
@@ -1016,7 +1016,7 @@ export const messages = {
   'chatsettings.m180': {
     ko: '기본값',
     en: 'Default',
-    ja: '初期値',
+    ja: '既定値',
     zh: '默认值',
   },
   'chatsettings.m181': {
@@ -1094,7 +1094,7 @@ export const messages = {
   'chatsettings.defaultsError': {
     ko: '자료 기본 변수를 적용하지 못했어요: {error}',
     en: 'Could not apply resource default variables: {error}',
-    ja: '資料の初期変数を適用できませんでした：{error}',
+    ja: '資料の既定変数を適用できませんでした：{error}',
     zh: '无法应用资料默认变量：{error}',
   },
   'chatsettings.effectiveCount': {
@@ -1106,7 +1106,7 @@ export const messages = {
   'chatsettings.defaultCount': {
     ko: '자료 기본값 {count, number}개',
     en: '{count, plural, one {# resource default} other {# resource defaults}}',
-    ja: '資料の初期値 {count, number} 件',
+    ja: '資料の既定値 {count, number} 件',
     zh: '资料默认值 {count, number} 个',
   },
   'chatsettings.variableValue': {
@@ -1165,15 +1165,15 @@ export const messages = {
   },
   'chatsettings.modelsLoading': {
     ko: '역할별 모델 설정을 불러오는 중이에요…',
-    en: 'Loading role model settings…',
+    en: 'Loading Models by role settings…',
     ja: '役割別モデル設定を読み込み中…',
-    zh: '正在加载角色模型设置…',
+    zh: '正在加载按角色设置模型…',
   },
   'chatsettings.modelsError': {
     ko: '역할별 모델 설정을 불러오지 못했어요.',
-    en: 'Could not load role model settings.',
+    en: 'Could not load Models by role settings.',
     ja: '役割別モデル設定を読み込めませんでした。',
-    zh: '无法加载角色模型设置。',
+    zh: '无法加载按角色设置模型。',
   },
   'chatsettings.promptsLoading': {
     ko: '현재 프롬프트를 불러오는 중이에요…',
@@ -1213,7 +1213,7 @@ export const messages = {
   },
   'chatsettings.peopleAndMaterials': {
     ko: '사용 자료',
-    en: 'Materials',
+    en: 'Resources',
     ja: '使用資料',
     zh: '使用资料',
   },
@@ -1227,7 +1227,7 @@ export const messages = {
     ko: '기억과 메모',
     en: 'Memory and notes',
     ja: '記憶とメモ',
-    zh: '记忆与笔记',
+    zh: '记忆与备注',
   },
   'chatsettings.imagesAndReferences': {
     ko: '이미지',

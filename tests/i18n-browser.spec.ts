@@ -556,7 +556,7 @@ test('I18N10 saved conflict reviews re-render field statuses and React content f
       await editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
       await switchFromAnotherTab(page, 'en');
       const dialog = page.getByRole('alertdialog');
-      await expect(dialog).toHaveAccessibleName('Review saved role model settings');
+      await expect(dialog).toHaveAccessibleName('Review saved Models by role settings');
       const review = dialog.locator('.saved-version-review');
       await expect(
         review.locator('.settings-row').filter({ hasText: 'Translation automatic retry count' })

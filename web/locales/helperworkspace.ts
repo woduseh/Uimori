@@ -29,6 +29,12 @@ export const messages = {
     ja: '出力 {count} トークン',
     zh: '输出 {count} 词元',
   },
+  'helperResults.outputUnknown': {
+    ko: '출력 미확인',
+    en: 'Output unknown',
+    ja: '出力未確認',
+    zh: '输出未知',
+  },
   'helperResults.toolSummary': {
     ko: '도구 {count}회',
     en: 'Tools {count}',
@@ -158,7 +164,7 @@ export const messages = {
   'helperChanges.excludedScene': {
     ko: '제외된 장면',
     en: 'Excluded scene',
-    ja: '除外した場面',
+    ja: '除外したシーン',
     zh: '已排除的场景',
   },
   'helperChanges.moreChanges': {
@@ -271,7 +277,7 @@ export const messages = {
   },
   'helperUsage.source': {
     ko: '원문과 자료',
-    en: 'Source and materials',
+    en: 'Original text and resources',
     ja: '原文と資料',
     zh: '原文与资料',
   },
@@ -390,10 +396,10 @@ export const messages = {
     zh: '无需更改。',
   },
   'helperResults.unrecorded': {
-    ko: '상세 결과가 없는 작업 {count}건',
-    en: '{count} operations without detailed results',
-    ja: '詳細結果のない操作 {count} 件',
-    zh: '{count} 项操作没有详细结果',
+    ko: '상세 결과가 없는 작업 {count, number}건',
+    en: '{count, plural, one {# operation without detailed results} other {# operations without detailed results}}',
+    ja: '詳細結果のない操作 {count, number} 件',
+    zh: '{count, number} 项操作没有详细结果',
   },
   'helperResults.usage': {
     ko: '사용량',

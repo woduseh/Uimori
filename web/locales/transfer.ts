@@ -86,7 +86,7 @@ export const messages = {
   'transfer.m012': {
     ko: '모듈을 가져왔어요. 서재를 다시 불러온 뒤 기존 채팅의 사용 자료에서 추가해 주세요.',
     en: 'The module was registered. Refresh the library, then attach it to an existing chat.',
-    ja: 'モジュールを登録しました。ライブラリを更新して既存のチャットに装着してください。',
+    ja: 'モジュールを登録しました。ライブラリを更新して既存チャットの使用資料から追加してください。',
     zh: '模块已添加，请刷新资料库后将其附加到现有聊天。',
   },
   'transfer.m013': {
@@ -265,7 +265,7 @@ export const messages = {
   },
   'transfer.m052': {
     ko: '모듈을 가져왔어요. 기존 채팅의 사용 자료 설정에서 추가해 주세요.',
-    en: 'The module was added to the library. Attach it in the Materials settings of an existing chat.',
+    en: 'The module was added to the library. Attach it under Resources in use in an existing chat.',
     ja: 'ライブラリにモジュールを登録しました。既存チャットの使用資料設定から追加してください。',
     zh: '模块已添加到资料库，请在现有聊天的使用资料设置中添加。',
   },
@@ -567,7 +567,7 @@ export const messages = {
     ko: '원문, 요청, 번역, 메모를 새 채팅으로 가져와요.',
     en: 'Import original text, requests, translations, and notes into a new chat.',
     ja: '原文、リクエスト、翻訳、メモを新しいチャットに取り込みます。',
-    zh: '将原文、请求、翻译和笔记导入为新聊天。',
+    zh: '将原文、请求、翻译和备注导入为新聊天。',
   },
   'transfer.m110': {
     ko: '본문 JSON 파일',
@@ -685,9 +685,9 @@ export const messages = {
   },
   'transfer.m137': {
     ko: '가져온 보조 에이전트의 모델은 본문 모델 따르기로 설정돼요.',
-    en: 'Imported advisors are set to follow the story model.',
-    ja: '取り込んだアドバイザーのモデルは本文モデルに従う設定になります。',
-    zh: '导入的顾问模型将设置为跟随正文模型。',
+    en: 'Imported supporting agents are set to follow the writing model.',
+    ja: '取り込んだ補助エージェントのモデルは本文モデルに従う設定になります。',
+    zh: '导入的辅助智能体模型将设置为跟随正文模型。',
   },
   'transfer.m141': {
     ko: '현재 프롬프트와 역할별 모델은 이 작업실의 설정을 그대로 쓰며 실행 기록과 도우미 내부 작업은 가져오지 않아요.',
@@ -1298,7 +1298,7 @@ export const messages = {
   'transfer.m251': {
     ko: '기본 페르소나',
     en: 'Default persona',
-    ja: '初期ペルソナ',
+    ja: '既定のペルソナ',
     zh: '默认角色',
   },
   'transfer.m252': {
@@ -1652,13 +1652,13 @@ export const messages = {
   'transfer.m312': {
     ko: '기본 페르소나가 삭제됐어요. 시작 페르소나를 직접 선택해 주세요.',
     en: 'The default persona was deleted. Select a starting persona yourself.',
-    ja: '初期ペルソナが削除されました。開始ペルソナを選んでください。',
+    ja: '既定のペルソナが削除されました。開始ペルソナを選んでください。',
     zh: '默认角色已删除，请手动选择起始角色。',
   },
   'transfer.m313': {
     ko: '기본 페르소나를 확인한 뒤 시작해 주세요.',
     en: 'Review the default persona before starting.',
-    ja: '初期ペルソナを確認してから開始してください。',
+    ja: '既定のペルソナを確認してから開始してください。',
     zh: '请先检查默认角色再开始。',
   },
   'transfer.m314': {
@@ -1742,7 +1742,7 @@ export const messages = {
   'transfer.m328': {
     ko: '기본 페르소나를 불러오는 중이에요…',
     en: 'Loading default persona…',
-    ja: '初期ペルソナを読み込み中…',
+    ja: '既定のペルソナを読み込み中…',
     zh: '正在加载默认角色…',
   },
   'transfer.m329': {
@@ -2042,7 +2042,7 @@ export const messages = {
   'transfer.d023': {
     ko: '{v0} 기본 페르소나',
     en: 'Default persona for {v0}',
-    ja: '{v0}の初期ペルソナ',
+    ja: '{v0}の既定のペルソナ',
     zh: '{v0} 默认角色',
   },
   'transfer.d024': {
@@ -2078,8 +2078,8 @@ export const messages = {
   'transfer.d029': {
     ko: '채팅 폴더: {v0}',
     en: 'Chat folder: {v0}',
-    ja: 'チャットフォルダー、{v0}',
-    zh: '聊天文件夹，{v0}',
+    ja: 'チャットフォルダー：{v0}',
+    zh: '聊天文件夹：{v0}',
   },
   'transfer.d030': {
     ko: '{v0} 선택 해제',
@@ -2133,7 +2133,7 @@ export const messages = {
     ko: '{name}, 본문 {entries, number}개, 메모 {notes, number}개',
     en: '{name}, {entries, plural, one {# text entry} other {# text entries}}, {notes, plural, one {# note} other {# notes}}',
     ja: '{name}、本文{entries, number}件、メモ{notes, number}件',
-    zh: '{name}，{entries, number} 条正文，{notes, number} 条笔记',
+    zh: '{name}，{entries, number} 条正文，{notes, number} 条备注',
   },
   'transfer.transcriptTarget': {
     ko: '“{title}” 봇의 새 채팅으로 가져와요.',
@@ -2187,13 +2187,13 @@ export const messages = {
     ko: '폴더 이름: {name}',
     en: 'Folder name: {name}',
     ja: 'フォルダー名：{name}',
-    zh: '文件夹名称，{name}',
+    zh: '文件夹名称：{name}',
   },
   'transfer.personaValue': {
     ko: '기본 페르소나: {name}',
     en: 'Default persona: {name}',
-    ja: '初期ペルソナ：{name}',
-    zh: '默认角色，{name}',
+    ja: '既定のペルソナ：{name}',
+    zh: '默认角色：{name}',
   },
   'transfer.runningCount': {
     ko: '진행 중 {count, number}건',

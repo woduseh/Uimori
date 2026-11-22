@@ -351,10 +351,7 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
   const inputEstimate = usage.latestInputEstimate;
   const lastInput = usage.latestInputTokens ?? null;
   const hasInputBudget = inputEstimate !== null && typeof inputLimit === 'number' && inputLimit > 0;
-  const summaryAmount = (amount: RecordedAmount) =>
-    amount.reported === 0 && amount.unknown > 0
-      ? t('helperResults.unknown')
-      : usageCompact(amount.value);
+  const outputUnknown = totals.outputTokens.reported === 0 && totals.outputTokens.unknown > 0;
   const partial = [totals.inputTokens, totals.outputTokens].some(
     (amount) => amount.reported > 0 && amount.unknown > 0
   );
@@ -379,7 +376,11 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
               </span>
             )}
             <span>
-              {t('helperResults.outputSummary', { count: summaryAmount(totals.outputTokens) })}
+              {outputUnknown
+                ? t('helperResults.outputUnknown')
+                : t('helperResults.outputSummary', {
+                    count: usageCompact(totals.outputTokens.value),
+                  })}
             </span>
             {usage.toolExecutions > 0 && (
               <span>
@@ -431,7 +432,7 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
                 )}
                 <span>
                   {t('helperConversation.unmeasuredFiles', {
-                    count: formatNumber(usage.unmeasuredFileCount!),
+                    count: usage.unmeasuredFileCount!,
                   })}
                 </span>
               </dd>
@@ -593,7 +594,7 @@ export function HelperTaskResults({
           {rollback.footer}
           {data.unrecordedOperations > 0 && (
             <p className="helper-result-note">
-              {t('helperResults.unrecorded', { count: formatNumber(data.unrecordedOperations) })}
+              {t('helperResults.unrecorded', { count: data.unrecordedOperations })}
             </p>
           )}
           <TaskUsage usage={data.usage} />

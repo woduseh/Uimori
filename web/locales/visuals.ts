@@ -21,7 +21,7 @@ export const messages = {
     ko: '자동 생성 컷 수',
     en: 'Automatic cut count',
     ja: '自動生成のカット数',
-    zh: '自动生成镜头数',
+    zh: '自动生成画面数',
   },
   'visuals.countFixed': {
     ko: '고정 상한',
@@ -39,7 +39,7 @@ export const messages = {
     ko: '최소 컷 수',
     en: 'Minimum cuts',
     ja: '最小カット数',
-    zh: '最少镜头数',
+    zh: '最少画面数',
   },
   'visuals.fallbackCount': {
     ko: '본문 밖 삽화 {count}컷{attention, select, true {, 확인할 작업 있음} other {}}',
@@ -69,7 +69,7 @@ export const messages = {
     ko: '레이아웃이나 팔레트와 별도로, 본문 상자 바깥에 표시해요. 저장하면 적용돼요.',
     en: 'Displayed outside the text panel, separately from the layout and palette. Save to apply.',
     ja: 'レイアウトやパレットとは別に本文枠の外に表示します。保存すると適用されます。',
-    zh: '显示在正文框外，独立于布局和配色。保存后生效。',
+    zh: '显示在正文框外，独立于布局和调色板。保存后生效。',
   },
   'visuals.m004': {
     ko: '배경 상위 설정 따르기',
@@ -188,7 +188,7 @@ export const messages = {
   'visuals.m026': {
     ko: '장면 본문',
     en: 'Scene body',
-    ja: '場面本文',
+    ja: 'シーン本文',
     zh: '场景正文',
   },
   'visuals.m028': {
@@ -454,7 +454,7 @@ export const messages = {
   'visuals.m058': {
     ko: '장면당 최대 삽화 수',
     en: 'Maximum illustrations per scene',
-    ja: '場面ごとの挿絵上限',
+    ja: 'シーンごとの挿絵上限',
     zh: '每个场景的插图上限',
   },
   'visuals.m060': {
@@ -508,7 +508,7 @@ export const messages = {
   'visuals.refineCodexPromptDescription': {
     ko: '새 삽화에서 Codex가 초안의 장면과 구도는 유지하고, 외형과 그림체 묘사를 참고 이미지와 그림 지침에 맞춰 다듬어요.',
     en: 'For new illustrations, Codex keeps the draft’s scene and composition and refines its appearance and art-style details to match reference images and illustration instructions.',
-    ja: '新しい挿絵では、Codexが下書きの場面と構図を保ったまま、外見や画風の描写を参照画像と絵の指示に合わせて整えます。',
+    ja: '新しい挿絵では、Codexが下書きのシーンと構図を保ったまま、外見や画風の描写を参照画像と絵の指示に合わせて整えます。',
     zh: '生成新插图时，Codex会保留草稿的场景和构图，并根据参考图片和绘图指引润色外貌与画风描述。',
   },
   'visuals.codexPreparedPrompt': {
@@ -592,7 +592,7 @@ export const messages = {
   'visuals.m083': {
     ko: '장면당 최대 삽화 수',
     en: 'Maximum illustrations per scene',
-    ja: '場面ごとの挿絵上限',
+    ja: 'シーンごとの挿絵上限',
     zh: '每个场景的插图上限',
   },
   'visuals.m084': {
@@ -639,7 +639,7 @@ export const messages = {
   },
   'visuals.m092': {
     ko: '원문이 수정되어 생성 당시 위치와 달라졌어요.',
-    en: 'The source was edited and its original position changed.',
+    en: 'The original text was edited and its position changed.',
     ja: '原文が編集され、生成時の位置と変わりました。',
     zh: '原文已修改，位置与生成时不同。',
   },
@@ -658,7 +658,7 @@ export const messages = {
   'visuals.m095': {
     ko: '번역문에서 이 장면의 위치를 찾지 못했어요. 위치만 다시 연결할 수 있어요.',
     en: 'Could not find this scene in the translation. You can retry placement only.',
-    ja: '翻訳文でこの場面が見つかりませんでした。位置だけ再対応できます。',
+    ja: '翻訳文でこのシーンが見つかりませんでした。位置だけ再対応できます。',
     zh: '无法在译文中找到此场景，可单独重试位置匹配。',
   },
   'visuals.m096': {
@@ -760,7 +760,7 @@ export const messages = {
   'visuals.m115': {
     ko: '그릴 장면을 고를 차례를 기다리고 있어요.',
     en: 'Waiting to select scenes to draw.',
-    ja: '描く場面の選択を待っています。',
+    ja: '描くシーンの選択を待っています。',
     zh: '正在等待选择绘制场景。',
   },
   'visuals.m116': {
@@ -772,7 +772,7 @@ export const messages = {
   'visuals.m117': {
     ko: '그릴 장면을 고르고 있어요.',
     en: 'Selecting scenes to draw.',
-    ja: '描く場面を選んでいます。',
+    ja: '描くシーンを選んでいます。',
     zh: '正在选择绘制场景。',
   },
   'visuals.m118': {
@@ -802,12 +802,12 @@ export const messages = {
   'visuals.m122': {
     ko: '장면 삽화',
     en: 'Scene illustration',
-    ja: '場面の挿絵',
+    ja: 'シーンの挿絵',
     zh: '场景插图',
   },
   'visuals.m123': {
     ko: '수정 전 원문의 삽화',
-    en: 'Illustration of the source before editing',
+    en: 'Illustration of the original text before editing',
     ja: '編集前の原文の挿絵',
     zh: '修改前原文的插图',
   },
@@ -875,7 +875,7 @@ export const messages = {
     ko: '이 컷의 그림과 생성 기록을 삭제해요.',
     en: 'Delete the image and generation history for this cut.',
     ja: 'このカットの画像と生成記録を削除します。',
-    zh: '删除此镜头的图片与生成记录。',
+    zh: '删除此画面的图片与生成记录。',
   },
   'visuals.m134': {
     ko: '그릴 차례를 기다리고 있어요.',
@@ -1059,7 +1059,7 @@ export const messages = {
   },
   'visuals.m182': {
     ko: '이 삽화의 원문 구간을 확인할 수 없어요.',
-    en: 'Could not identify the source section for this illustration.',
+    en: 'Could not identify the original text section for this illustration.',
     ja: 'この挿絵の原文区間を確認できません。',
     zh: '无法确认此插图的原文区间。',
   },
@@ -1078,7 +1078,7 @@ export const messages = {
   'visuals.m185': {
     ko: '이 장면의 삽화 개수 한도에 도달했어요. 삽화를 삭제하거나 설정 → 삽화에서 장면당 최대 개수를 늘려 주세요.',
     en: 'This scene reached its illustration limit. Delete illustrations or increase the per-scene limit in Settings → Illustrations.',
-    ja: 'この場面の挿絵上限に達しました。削除するか、設定 → 挿絵で上限を増やしてください。',
+    ja: 'このシーンの挿絵上限に達しました。削除するか、設定 → 挿絵で上限を増やしてください。',
     zh: '此场景已达到插图上限。请删除插图或在设置 → 插图中提高每场景上限。',
   },
   'visuals.m186': {
@@ -1107,13 +1107,13 @@ export const messages = {
   },
   'visuals.m190': {
     ko: '원문이 바뀌었어요. 새로고침한 뒤 다시 요청해 주세요.',
-    en: 'The source changed. Refresh and request again.',
+    en: 'The original text changed. Refresh and request again.',
     ja: '原文が変わりました。更新して再リクエストしてください。',
     zh: '原文已更改，请刷新后重新请求。',
   },
   'visuals.m191': {
     ko: '요청 당시의 원문을 더 읽을 수 없어요.',
-    en: 'The source at the time of the request is no longer readable.',
+    en: 'The original text from the time of the request is no longer readable.',
     ja: 'リクエスト時の原文を読み取れません。',
     zh: '无法继续读取请求时的原文。',
   },
@@ -1125,7 +1125,7 @@ export const messages = {
   },
   'visuals.m193': {
     ko: '원문의 구간 표시가 맞지 않아 삽화 생성을 멈췄어요. 원문을 확인해 주세요.',
-    en: 'Illustration generation stopped because source section markers are invalid. Check the source.',
+    en: 'Illustration generation stopped because original text section markers are invalid. Check the original text.',
     ja: '原文の区間表示が不正なため生成を止めました。原文を確認してください。',
     zh: '原文区间标记无效，已停止生成插图。请检查原文。',
   },
@@ -1174,7 +1174,7 @@ export const messages = {
   'visuals.m201': {
     ko: '프롬프트 모델이 장면 설명 작성을 거절했어요.',
     en: 'The prompt model refused to write the scene description.',
-    ja: 'プロンプトモデルが場面説明の作成を拒否しました。',
+    ja: 'プロンプトモデルがシーン説明の作成を拒否しました。',
     zh: '提示词模型拒绝撰写场景描述。',
   },
   'visuals.m202': {
@@ -1450,7 +1450,7 @@ export const messages = {
   'visuals.m247': {
     ko: '장면 선택',
     en: 'Scene selection',
-    ja: '場面選択',
+    ja: 'シーン選択',
     zh: '场景选择',
   },
   'visuals.m248': {
@@ -1472,16 +1472,16 @@ export const messages = {
     zh: '已跳过，{v0}',
   },
   'visuals.m252': {
-    ko: '{v0}컷 위치 미지정',
-    en: '{v0} cuts without positions',
-    ja: '{v0}カットの位置が未指定',
-    zh: '{v0}幅未指定位置',
+    ko: '{v0, number}컷 위치 미지정',
+    en: '{v0, plural, one {# cut without a position} other {# cuts without positions}}',
+    ja: '{v0, number}カットの位置が未指定',
+    zh: '{v0, number}幅未指定位置',
   },
   'visuals.m258': {
-    ko: '삽화 {v0}컷 번역 위치 미지정',
-    en: '{v0} illustrations without translation positions',
-    ja: '挿絵{v0}カットの翻訳位置が未指定',
-    zh: '{v0}幅插图未指定译文位置',
+    ko: '삽화 {v0, number}컷 번역 위치 미지정',
+    en: '{v0, plural, one {# illustration without a translation position} other {# illustrations without translation positions}}',
+    ja: '挿絵{v0, number}カットの翻訳位置が未指定',
+    zh: '{v0, number}幅插图未指定译文位置',
   },
   'visuals.m259': {
     ko: '삽화 완료',
@@ -1545,7 +1545,7 @@ export const messages = {
   },
   'visuals.m276': {
     ko: '원문 {v0}',
-    en: 'Source {v0}',
+    en: 'Original {v0}',
     ja: '原文 {v0}',
     zh: '原文 {v0}',
   },
@@ -1564,7 +1564,7 @@ export const messages = {
   'visuals.m279': {
     ko: '보관된 응답 (본문에 미반영)',
     en: 'Archived response (not applied to scene text)',
-    ja: '保管された応答（場面本文には未反映）',
+    ja: '保管された応答（シーン本文には未反映）',
     zh: '已保留回复（未应用到场景正文）',
   },
   'visuals.m280': {
@@ -1587,7 +1587,7 @@ export const messages = {
   },
   'visuals.m283': {
     ko: '원문 생성 취소',
-    en: 'Cancel source generation',
+    en: 'Cancel original generation',
     ja: '原文生成をキャンセル',
     zh: '取消原文生成',
   },
@@ -1676,16 +1676,16 @@ export const messages = {
     zh: '自动和手动重试{count}次',
   },
   'visuals.progressRender': {
-    ko: '{completed}/{total}컷 완료{failed, plural, =0 {} other {, #컷 실패}}',
-    en: '{completed}/{total} cuts completed{failed, plural, =0 {} one {, # cut failed} other {, # cuts failed}}',
-    ja: '{completed}/{total}カット完了{failed, plural, =0 {} other {、#カット失敗}}',
-    zh: '已完成{completed}/{total}幅{failed, plural, =0 {} other {，#幅失败}}',
+    ko: '{completed, number}/{total, number}컷 완료{failed, plural, =0 {} other {, #컷 실패}}',
+    en: '{total, plural, one {{completed, number}/# cut completed} other {{completed, number}/# cuts completed}}{failed, plural, =0 {} one {, # cut failed} other {, # cuts failed}}',
+    ja: '{completed, number}/{total, number}カット完了{failed, plural, =0 {} other {、#カット失敗}}',
+    zh: '已完成{completed, number}/{total, number}幅{failed, plural, =0 {} other {，#幅失败}}',
   },
   'visuals.activeRender': {
-    ko: '삽화 {status, select, queued {생성 대기} other {생성 중}}, {completed}/{total}컷 완료',
-    en: 'Illustrations {status, select, queued {queued} other {generating}}, {completed}/{total} cuts completed',
-    ja: '挿絵{status, select, queued {生成待ち} other {生成中}}、{completed}/{total}カット完了',
-    zh: '插图{status, select, queued {等待生成} other {生成中}}，已完成{completed}/{total}幅',
+    ko: '삽화 {status, select, queued {생성 대기} other {생성 중}}, {completed, number}/{total, number}컷 완료',
+    en: 'Illustrations {status, select, queued {queued} other {generating}}, {total, plural, one {{completed, number}/# cut completed} other {{completed, number}/# cuts completed}}',
+    ja: '挿絵{status, select, queued {生成待ち} other {生成中}}、{completed, number}/{total, number}カット完了',
+    zh: '插图{status, select, queued {等待生成} other {生成中}}，已完成{completed, number}/{total, number}幅',
   },
   'visuals.phaseStatus': {
     ko: '{task} {status, select, queued {대기} running {중} cancelled {취소됨} other {실패}}',
@@ -1838,7 +1838,7 @@ export const messages = {
     zh: 'NovelAI 要求生成由用户发起，因此不会自动重试。失败的画面请重新请求。',
   },
   'visuals.novelaiTest': {
-    ko: 'NovelAI 연결·잔여량 확인',
+    ko: 'NovelAI 연결과 잔여량 확인',
     en: 'Check NovelAI connection and balance',
     ja: 'NovelAI接続・残量を確認',
     zh: '检查 NovelAI 连接和余量',
@@ -1865,7 +1865,7 @@ export const messages = {
     ko: 'NovelAI 생성 환경에 Persistent API 토큰을 저장해 주세요.',
     en: 'Save a Persistent API token in the NovelAI generation environment.',
     ja: 'NovelAI生成環境にPersistent APIトークンを保存してください。',
-    zh: '请在 NovelAI生成环境中保存 Persistent API 令牌。',
+    zh: '请在 NovelAI 生成环境中保存 Persistent API 令牌。',
   },
   'visuals.novelaiUnauthorized': {
     ko: 'NovelAI가 토큰을 거부했어요. Persistent API 토큰을 확인해 주세요.',
@@ -1910,10 +1910,10 @@ export const messages = {
     zh: '无法读取 NovelAI 响应。',
   },
   'visuals.novelaiAnlasBalance': {
-    ko: 'Anlas {total, number} (구독 {subscription, number} · 구매 {purchased, number})',
-    en: '{total, number} Anlas ({subscription, number} subscription · {purchased, number} purchased)',
+    ko: 'Anlas {total, number} (구독 {subscription, number}, 구매 {purchased, number})',
+    en: '{total, number} Anlas ({subscription, number} subscription, {purchased, number} purchased)',
     ja: 'Anlas {total, number}（サブスク {subscription, number}・購入 {purchased, number}）',
-    zh: 'Anlas {total, number}（订阅 {subscription, number} · 购买 {purchased, number}）',
+    zh: 'Anlas {total, number}（订阅 {subscription, number}，购买 {purchased, number}）',
   },
   'visuals.novelaiUsageBar': {
     ko: 'V5 사용량 게이지 {percent}% 남음',

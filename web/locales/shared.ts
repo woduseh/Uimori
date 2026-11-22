@@ -374,14 +374,14 @@ export const messages = {
   'shared.writingTitle': {
     ko: '창작: {title}',
     en: 'Writing: {title}',
-    ja: '創作、{title}',
-    zh: '创作，{title}',
+    ja: '創作：{title}',
+    zh: '创作：{title}',
   },
   'shared.translationTitle': {
     ko: '번역: {title}',
     en: 'Translation: {title}',
-    ja: '翻訳、{title}',
-    zh: '翻译，{title}',
+    ja: '翻訳：{title}',
+    zh: '翻译：{title}',
   },
   'shared.emptySavedText': {
     ko: '저장된 본문이 없어요.',

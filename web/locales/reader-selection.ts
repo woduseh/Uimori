@@ -14,7 +14,7 @@ export const messages = {
   'readerSelection.bookmark': {
     ko: '책갈피',
     en: 'Bookmark',
-    ja: 'しおり',
+    ja: 'ブックマーク',
     zh: '书签',
   },
   'readerSelection.copy': {
