@@ -43,15 +43,34 @@ export function ActionMenu({
       node.open = false;
       if (focused) summary.focus({ preventScroll: true });
     };
-    const opened = summary.getBoundingClientRect();
+    const position = () => {
+      const rect = summary.getBoundingClientRect();
+      let scrollTop = 0;
+      let scrollLeft = 0;
+      for (let element = summary.parentElement; element; element = element.parentElement) {
+        scrollTop += element.scrollTop;
+        scrollLeft += element.scrollLeft;
+      }
+      return {
+        top: rect.top,
+        left: rect.left,
+        contentTop: rect.top + scrollTop,
+        contentLeft: rect.left + scrollLeft,
+      };
+    };
+    let baseline = position();
+    const moved = (from: number, to: number) => Math.abs(to - from) >= 1;
     const scroll = (event: Event) => {
-      const current = summary.getBoundingClientRect();
+      if (!(event.target instanceof Node) || !event.target.contains(node)) return;
+      const current = position();
       if (
-        event.target instanceof Node &&
-        event.target.contains(node) &&
-        (Math.abs(current.top - opened.top) >= 1 || Math.abs(current.left - opened.left) >= 1)
-      )
-        dismiss();
+        moved(baseline.contentTop, current.contentTop) ||
+        moved(baseline.contentLeft, current.contentLeft)
+      ) {
+        baseline = current;
+        return;
+      }
+      if (moved(baseline.top, current.top) || moved(baseline.left, current.left)) dismiss();
     };
     const hidden = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting) dismiss();
