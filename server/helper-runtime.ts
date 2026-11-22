@@ -71,7 +71,7 @@ import type {
 import { HELPER_BASE_INSTRUCTIONS, buildCodexNativeRequest } from '../core/codex-protocol.js';
 import { readResource } from './resource-service.js';
 import { editableResource } from '../core/resource-editing.js';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { HelperEditor, HelperMode, HelperTask, HelperSelection } from '../core/helper.js';
 import type { Job, Run, RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import { workspaceModelRef, type ModelSnapshot } from '../core/product.js';
@@ -168,6 +168,8 @@ import {
   HELPER_TOOL_CALL_LIMIT,
   HELPER_COMPACTION_INPUT_RATIO,
   type HelperCompactionResult,
+  type HelperQuestion,
+  type HelperQuestionOption,
   type HelperReferencePointer,
 } from '../core/helper.js';
 import { helperModelReferences, validateHelperReferences } from './helper-references.js';
@@ -246,7 +248,7 @@ const PLAN_MODE_GUIDANCE =
   'This request is in plan mode: produce a plan, not changes. Read whatever you need, but do not save, create, delete, select, request generation or change settings; the host refuses every operation that writes. Reply with a concrete, ordered plan that names each target and the change you would make, and the questions the owner must settle. Carrying out the plan is a separate request.';
 const FINAL_CALL_GUIDANCE =
   'The call budget allows only this response. Do not call tools. Reply to the user with what you completed, which changes were saved, any change whose outcome is uncertain, and what remains to do.';
-const CONTRACT = `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation. Apply, select, cancel or retry only when requested. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. A CONFIRMATION_REQUIRED result means the host held the call for the owner: do not repeat it in this task, and say in your reply what needs confirmation. A request whose source lists confirmedCalls carries the owner's confirmation; make each such call with exactly the listed arguments when the request still wants it. When source.referencedTargets is present, those are the exact scenes, outline nodes or library resources the user pointed to with @; inspect them directly with the matching read tool using their listed IDs. ${AUTHOR_NOTE_GUIDANCE}
+const CONTRACT = `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation. Apply, select, cancel or retry only when requested. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. When a short multiple-choice question resolves that ambiguity cleanly, you may call helper.ask with 2 to 5 options and then end this turn so the user can choose in the UI. A CONFIRMATION_REQUIRED result means the host held the call for the owner: do not repeat it in this task, and say in your reply what needs confirmation. A request whose source lists confirmedCalls carries the owner's confirmation; make each such call with exactly the listed arguments when the request still wants it. When source.referencedTargets is present, those are the exact scenes, outline nodes or library resources the user pointed to with @; inspect them directly with the matching read tool using their listed IDs. ${AUTHOR_NOTE_GUIDANCE}
 Choose and combine the tools suited to the task: app operations, data.exec for workspace search and transformation, or shell workspace files described in INDEX.md. Reuse known schemas and successful results; use app.tools only for unfamiliar operations or arguments. Group independent work when useful, and use returned revisions and receipts directly instead of rereading only to confirm success. Distinguish live saved resources, frozen chat history and unsaved editor input. Base visual claims on inspected pixels.
 Edit saved targets using their recorded revisions and preserve unrelated fields. For workspace-file edits, use uimori apply to save; for app operations, follow their own save contracts. Reconcile conflicts against the latest version and report changes from successful receipts. If the target has an unsaved editor draft, ask the user to save it first. For translation guides, preserve established terms and distinguish proposed choices from authored facts.
 For a bot’s Story UI appearance, use theme.guide and read the bot’s authored content. In a chat, writing.packages identifies the owning bot by role=bot. Saving a theme creates it; when the user requests application, use theme.select with dimension=storyUi for the bot or settings.update for an explicit chat choice.
@@ -2604,6 +2606,51 @@ export class HelperRuntime {
       `${task.id}:${operationId}`
     );
     if (confirmation) return { result: confirmation, denied: true };
+    if (name === 'helper.ask') {
+      fields(toolArgs, ['question', 'options', 'allowFreeform']);
+      const questionText = text(toolArgs.question, 'question', 500).trim();
+      if (!questionText) throw new HttpError(400, 'Question text required');
+      if (
+        !Array.isArray(toolArgs.options) ||
+        toolArgs.options.length < 2 ||
+        toolArgs.options.length > 5
+      )
+        throw new HttpError(400, 'Between 2 and 5 options are required');
+      const seen = new Set<string>();
+      const options: HelperQuestionOption[] = [];
+      for (const raw of toolArgs.options) {
+        const entry = record(raw);
+        fields(entry, ['label', 'description']);
+        const label = text(entry.label, 'option label', 120).trim();
+        if (!label) throw new HttpError(400, 'Option label required');
+        const normalized = label.toLocaleLowerCase();
+        if (seen.has(normalized)) continue;
+        seen.add(normalized);
+        const description =
+          entry.description === undefined
+            ? undefined
+            : text(entry.description, 'option description', 240, true).trim() || undefined;
+        options.push({ label, ...(description ? { description } : {}) });
+      }
+      if (options.length < 2) throw new HttpError(400, 'At least 2 distinct options are required');
+      if (toolArgs.allowFreeform !== undefined && typeof toolArgs.allowFreeform !== 'boolean')
+        throw new HttpError(400, 'allowFreeform must be a boolean');
+      const asked: HelperQuestion = {
+        id: randomUUID(),
+        question: questionText,
+        options,
+        allowFreeform: toolArgs.allowFreeform ?? true,
+      };
+      this.workspace.event(task.conversationId, task.id, 'question.asked', asked);
+      return {
+        result: {
+          status: 'asked',
+          questionId: asked.id,
+          guidance:
+            'The question card is now shown to the user. End this turn cleanly with a short note if helpful; do not call more tools until the user answers.',
+        },
+      };
+    }
     if (targeted.snapshot.writing && traits.writingRead) {
       const read = executeTool(
         targeted.snapshot.writing,

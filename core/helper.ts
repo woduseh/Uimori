@@ -329,12 +329,23 @@ export type HelperTaskAttemptUsage = {
   reasoningTokens: number | null;
   internalModelCalls: number | null;
 };
+export type HelperQuestionOption = {
+  label: string;
+  description?: string;
+};
+export type HelperQuestion = {
+  id: string;
+  question: string;
+  options: HelperQuestionOption[];
+  allowFreeform: boolean;
+};
 export type HelperTaskResultsView = {
   taskId: string;
   status: HelperStatus;
   results: HelperTaskResult[];
   changes: HelperChange[];
   confirmations: HelperConfirmation[];
+  question?: HelperQuestion | null;
   unrecordedOperations: number;
   usage: {
     attempts: HelperTaskAttemptUsage[];

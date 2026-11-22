@@ -1917,3 +1917,75 @@ test('helper registers a downloaded font before explicit selection and records b
     true
   );
 });
+
+test('helper.ask records a durable question card in both apply and plan modes and rejects invalid option sets', async () => {
+  const f = await fixture();
+  expect(helperToolTraits('helper.ask')).toMatchObject({
+    readOnly: true,
+    effect: 'read',
+    direct: true,
+  });
+  expect(describeHelperTools({ names: ['helper.ask'] }).tools.map((tool) => tool.name)).toEqual([
+    'helper.ask',
+  ]);
+
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('bad-ask', 'app.call', {
+          name: 'helper.ask',
+          arguments: {
+            question: '어느 방향으로 갈까요?',
+            options: [{ label: '하나뿐' }],
+          },
+        })
+      );
+    if (round === 1) {
+      expect(event(request, 'bad-ask')).toMatchObject({
+        denied: true,
+        result: { error: expect.stringContaining('2 and 5') },
+      });
+      return calls(
+        call('good-ask', 'app.call', {
+          name: 'helper.ask',
+          arguments: {
+            question: '어떤 어조로 고칠까요?',
+            options: [
+              { label: '담백하게', description: '수식을 줄이고 문장을 간결하게 정리해요.' },
+              { label: '서정적으로', description: '분위기와 감각 묘사를 살려요.' },
+              { label: '담백하게' },
+            ],
+            allowFreeform: true,
+          },
+        })
+      );
+    }
+    expect(result<{ status: string }>(request, 'good-ask').status).toBe('asked');
+    return { ...structuredClone(success), text: '아래 선택지 중에서 골라 주세요.' };
+  });
+
+  const posted = await f.app.inject({
+    method: 'POST',
+    url: `/api/helper/conversations/${f.conversation.id}/messages`,
+    payload: {
+      requestKey: randomUUID(),
+      text: '이 장면의 문체를 다듬어 줘',
+      mode: 'plan',
+    },
+  });
+  expect(posted.statusCode).toBe(200);
+  const taskId = posted.json().id as string;
+  await vi.waitFor(() => {
+    expect(f.workspace.task(taskId).status).toBe('completed');
+  });
+
+  const results = readHelperTaskResults(f.store, taskId);
+  expect(results.question).toMatchObject({
+    question: '어떤 어조로 고칠까요?',
+    allowFreeform: true,
+    options: [
+      { label: '담백하게', description: '수식을 줄이고 문장을 간결하게 정리해요.' },
+      { label: '서정적으로', description: '분위기와 감각 묘사를 살려요.' },
+    ],
+  });
+});

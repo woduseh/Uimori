@@ -3055,3 +3055,47 @@ test('HELPMENTION01 typing @ opens target suggestions, inserts a reference chip,
     { kind: 'content', id: 'bot-ref-1' },
   ]);
 });
+
+test('HELPASK01 question cards display selectable options, send the chosen reply, and settle after a later turn', async ({
+  page,
+  request,
+}, info) => {
+  const chat = await create(request);
+  const state = await harness(page);
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  const input = panel.getByLabel('도우미에게 요청');
+  await input.fill('이 장면의 문체를 고쳐 주세요');
+  await input.press('Control+Enter');
+  await expect(input).toHaveValue('');
+
+  const firstTask = state.current().tasks[0]!;
+  state.results.set(firstTask.id, {
+    question: {
+      id: 'q-1',
+      question: '어떤 어조로 고칠까요?',
+      allowFreeform: true,
+      options: [
+        { label: '담백하게', description: '문장을 간결하게 줄이고 사실을 또렷하게 써요.' },
+        { label: '서정적으로', description: '분위기와 여운을 살려 다듬어요.' },
+        { label: '대화 중심', description: '지문을 줄이고 대사의 리듬을 높여요.' },
+      ],
+    },
+  });
+  state.complete(firstTask);
+
+  const card = panel.getByTestId('helper-question-card');
+  await expect(card).toBeVisible();
+  await expect(card).toHaveAttribute('data-state', 'open');
+  await expect(card).toContainText('어떤 어조로 고칠까요?');
+  await expect(card).toContainText('선택지를 누르거나 아래 입력창에 직접 답을 보내세요.');
+  await page.screenshot({ path: info.outputPath('helper-question-card.png') });
+
+  await card.getByRole('button', { name: /서정적으로/ }).click();
+  await expect.poll(() => state.posts.length).toBe(2);
+  expect(state.posts[1]!.text).toBe('서정적으로');
+  await expect(card).toHaveAttribute('data-state', 'answered');
+  await expect(card).toContainText('이후 대화에서 응답했어요.');
+  await expect(card.getByRole('button', { name: /담백하게/ })).toBeDisabled();
+});

@@ -647,4 +647,22 @@ export const messages = {
     ja: 'カード変数',
     zh: '卡片变量',
   },
+  'helperQuestion.title': {
+    ko: '선택지 질문',
+    en: 'Choice question',
+    ja: '選択式の質問',
+    zh: '选项提问',
+  },
+  'helperQuestion.freeformHint': {
+    ko: '선택지를 누르거나 아래 입력창에 직접 답을 보내세요.',
+    en: 'Pick an option or write a custom reply below.',
+    ja: '選択肢を選ぶか、下の入力欄から直接返信してください。',
+    zh: '可直接点击选项，或在下方输入框中自行回复。',
+  },
+  'helperQuestion.answered': {
+    ko: '이후 대화에서 응답했어요.',
+    en: 'Answered in a later turn.',
+    ja: '後のやり取りで回答済みです。',
+    zh: '已在后续对话中回复。',
+  },
 };

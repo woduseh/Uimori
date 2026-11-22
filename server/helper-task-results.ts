@@ -1,4 +1,5 @@
 import type {
+  HelperQuestion,
   HelperStatus,
   HelperTask,
   HelperTaskResult,
@@ -113,12 +114,20 @@ export function readHelperTaskResults(store: Store, taskId: string): HelperTaskR
     ? (JSON.parse(String(measured.parts)) as Record<string, unknown>)
     : null;
   const execution = measured?.execution;
+  const questionRow = store.db
+    .prepare(
+      "SELECT data FROM helper_events WHERE task_id=? AND kind='question.asked' ORDER BY seq DESC LIMIT 1"
+    )
+    .get(taskId) as { data: unknown } | undefined;
+  const question =
+    typeof questionRow?.data === 'string' ? (JSON.parse(questionRow.data) as HelperQuestion) : null;
   return {
     taskId,
     status: task.status as HelperStatus,
     results,
     changes: readHelperChanges(store.db, taskId),
     confirmations: readHelperConfirmations(store, taskId),
+    ...(question ? { question } : {}),
     unrecordedOperations: Number(unknown?.n ?? 0),
     usage: {
       attempts,

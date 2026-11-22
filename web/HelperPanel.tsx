@@ -1379,6 +1379,16 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       targetConversationId: conversation.id,
     });
   }
+  async function answerQuestion(choice: string) {
+    if (!conversation || outbox || !hydrated[scopeKey]) return;
+    await send({
+      requestKey: crypto.randomUUID(),
+      text: choice,
+      scope: scopeKey,
+      targetConversationId: conversation.id,
+      ...(mode === 'plan' ? { mode: 'plan' as const } : {}),
+    });
+  }
   const taskStatus = (task: HelperTaskView) => (
     <div className="helper-task" data-task-id={task.id}>
       <TurnStatus
@@ -2035,6 +2045,11 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                           pending: grantList.map((grant) => grant.id),
                           latestTaskId,
                           onConfirm: task.id === latestTaskId ? confirmHeld : undefined,
+                        }}
+                        questionAnswer={{
+                          isLatest: task.id === latestTaskId,
+                          disabled: messageDisabled || !hydrated[scopeKey],
+                          onAnswer: (choice) => void answerQuestion(choice),
                         }}
                       />
                       {taskStatus(task)}

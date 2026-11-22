@@ -82,6 +82,49 @@ const TOOLS: ProviderTool[] = [
   ...HELPER_IMAGE_TOOLS,
   ...HELPER_ILLUSTRATION_TOOLS,
   {
+    name: 'helper.ask',
+    description:
+      'Show the user a short multiple-choice question card when a material ambiguity cannot be resolved from the workspace. Pass one concise question and 2 to 5 distinct options. Do not use this for routine choices you can decide yourself, or for confirmations handled by CONFIRMATION_REQUIRED. After calling helper.ask, end the turn so the user can pick an option in the UI.',
+    inputSchema: schema(
+      {
+        question: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 500,
+          description: 'One concise question for the user.',
+        },
+        options: {
+          type: 'array',
+          minItems: 2,
+          maxItems: 5,
+          description: '2 to 5 distinct answer choices.',
+          items: schema(
+            {
+              label: {
+                type: 'string',
+                minLength: 1,
+                maxLength: 120,
+                description: 'Short label shown on the option button.',
+              },
+              description: {
+                type: 'string',
+                maxLength: 240,
+                description: 'Optional brief explanation of this choice.',
+              },
+            },
+            ['label']
+          ),
+        },
+        allowFreeform: {
+          type: 'boolean',
+          description:
+            'Whether the user may also write a custom reply in the composer. Default true.',
+        },
+      },
+      ['question', 'options']
+    ),
+  },
+  {
     name: 'chat.list',
     description:
       'Find saved chats by title, to get the chatId that chat operations take. Returns the id, title, headRevision, titleRevision and last activity of each chat in pages; follow nextOffset. The settings of a chat are in settings.read and its scenes in chat.read.',
@@ -542,6 +585,7 @@ const readNames = new Set([
   'task.inspect',
   'task.list',
   'app.tools',
+  'helper.ask',
   'editor.read',
   'chat.list',
   'chat.read',
@@ -583,6 +627,7 @@ export function helperToolTraits(name: string, args: Record<string, unknown> = {
         : 'write') as 'read' | 'write' | 'mixed',
     reviewAllowed: data || name === 'app.tools' || name === 'outline.read' || writingRead,
     direct:
+      name === 'helper.ask' ||
       name === 'image.list' ||
       name === 'image.read' ||
       name === 'data.exec' ||
@@ -651,6 +696,7 @@ export const HELPER_OPERATION_AREAS: readonly (readonly [area: string, purpose: 
   ['theme', 'themes'],
   ['palette', 'color palettes'],
   ['font', 'fonts'],
+  ['helper', 'ask the user a short multiple-choice question card'],
 ];
 const operationArea = (name: string) => name.slice(0, name.indexOf('.'));
 const areaRank = new Map(HELPER_OPERATION_AREAS.map(([area], index) => [area, index]));
@@ -758,6 +804,7 @@ const discoveryTerms: Record<string, string> = {
     'temperature max output tokens reasoning effort thinking verbosity top p 온도 파라미터',
   'illustration.profiles.read': 'local override 채팅 외형 프로필',
   'illustration.profiles.save': 'local override 채팅 외형 프로필',
+  'helper.ask': 'ask clarify question choice options multiple choice 선택지 질문 확인',
 };
 const searchStopWords = new Set(
   'a an the this that these those my me i it its of for to in into on at by and or with from can could would please how did'.split(

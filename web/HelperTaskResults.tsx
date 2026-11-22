@@ -19,6 +19,7 @@ import type {
 } from '../core/helper.js';
 import { api } from './api.js';
 import { HelperChangeCard } from './HelperChangeCard.js';
+import { HelperQuestionCard } from './HelperQuestionCard.js';
 import { rollbackCovers, useHelperRollback } from './HelperTaskRollback.js';
 import {
   HelperConfirmations,
@@ -499,6 +500,7 @@ export function HelperTaskResults({
   onUsage,
   rollbackUnavailable = false,
   confirmation,
+  questionAnswer,
 }: {
   taskId: string;
   status: HelperStatus;
@@ -513,6 +515,11 @@ export function HelperTaskResults({
     pending: readonly string[];
     latestTaskId?: string;
     onConfirm?: (grant: HelperConfirmationGrant) => void;
+  };
+  questionAnswer?: {
+    isLatest: boolean;
+    disabled: boolean;
+    onAnswer: (choice: string) => void;
   };
 }) {
   useI18n();
@@ -549,6 +556,14 @@ export function HelperTaskResults({
         <>
           {confirmation && (data.confirmations ?? []).length > 0 && (
             <HelperConfirmations confirmations={data.confirmations} {...confirmation} />
+          )}
+          {data.question && (
+            <HelperQuestionCard
+              question={data.question}
+              open={Boolean(questionAnswer?.isLatest && !active(data.status))}
+              disabled={Boolean(questionAnswer?.disabled)}
+              onAnswer={questionAnswer?.onAnswer}
+            />
           )}
           <ul className="helper-result-list">
             {changes.map((change, index) => (

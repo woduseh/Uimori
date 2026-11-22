@@ -110,6 +110,7 @@ test('an operation joins the read classification only by updating this reviewed 
     'db.query',
     'editor.read',
     'font.list',
+    'helper.ask',
     'illustration-preset.guide',
     'illustration-preset.list',
     'illustration.continuity.read',
