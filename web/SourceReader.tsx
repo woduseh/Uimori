@@ -41,7 +41,7 @@ import { ProviderRejectionNotice } from './provider-rejection.js';
 import { Prose } from './Prose.js';
 import { parseStoryUi } from '../core/story-ui.js';
 import { StoryUi } from './LazyStoryUi.js';
-import { selectedReaderText } from './reader-dom.js';
+import { readerContains, selectedReaderText } from './reader-dom.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
 import type { RisuAction } from './risu-message-surface.js';
 import { retainReaderNavigation } from './reader-navigation-scroll.js';
@@ -481,7 +481,7 @@ function SourceReaderContent({
     };
     const selected = () => {
       const selection = getSelection();
-      if (selection && !selection.isCollapsed && node.contains(selection.anchorNode))
+      if (selection && !selection.isCollapsed && readerContains(node, selection.anchorNode))
         interacted.current = true;
     };
     scrollport.addEventListener('wheel', mark, { passive: true });

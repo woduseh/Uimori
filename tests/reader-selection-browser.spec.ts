@@ -532,3 +532,26 @@ test('RSEL11 global shortcuts wait while the refine popover is open', async ({ p
   await page.keyboard.press('Control+B');
   await expect(shell).toHaveClass(/sidebar-collapsed/);
 });
+
+for (const bot of [false, true]) {
+  const label = bot ? 'bot chat drawn by Risu' : 'plain display';
+  test(`RSEL12 ${label}: a selection in the scene keeps an arriving translation as a badge`, async ({
+    page,
+    request,
+  }) => {
+    const { chatId, source } = await seed(request);
+    const scene = await open(page, chatId, source.id, !bot);
+    await expect(scene.locator('.risu-message-surface')).toHaveCount(bot ? 1 : 0);
+    await expect(scene).toHaveAttribute('data-representation', 'original');
+    await select(scene, unique);
+    await expect(selectionBar(page)).toBeVisible();
+    const saved = await request.put(`/api/sources/${source.id}/translation`, {
+      data: { text: translated, expectedRevision: 0, expectedSourceHash: source.hash },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    await expect(
+      scene.getByRole('button', { name: '번역이 준비됐어요. 번역 보기', exact: true })
+    ).toBeVisible();
+    await expect(scene).toHaveAttribute('data-representation', 'original');
+  });
+}
