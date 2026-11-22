@@ -17,6 +17,7 @@ import {
 } from './package-context.js';
 import { DEFAULT_LORE_CONTEXT, measureLoreText, type LorePlacement } from './lore-context.js';
 import { countTextTokens, textTokenExcerpt } from './text-tokens.js';
+import type { RisuContentSource } from './risu-native.js';
 import { isTokenizerProfileId, type TokenizerProfileId } from './tokenizer-profiles.js';
 import { outlineContract, type OutlineSnapshot } from './outline.js';
 import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
@@ -213,12 +214,20 @@ export function buildMainInput(
           url: asset.url,
         }));
     if (assets.length) {
+      const nativeAssets = new Map<string, Map<string, RisuContentSource['assets'][number]>>();
+      for (const pkg of profile.packages ?? []) {
+        if (nativeAssets.has(pkg.id)) continue;
+        const byImage = new Map<string, RisuContentSource['assets'][number]>();
+        for (const entry of pkg.nativeRisu?.assets ?? [])
+          if (!byImage.has(entry.imageId)) byImage.set(entry.imageId, entry);
+        nativeAssets.set(pkg.id, byImage);
+      }
       input.imagePlacement = {
         owner: 'writer',
         catalog: assets.map((asset) => {
           const owner = /^package:([^:]+):(bot|persona|module):([^:]+)$/u.exec(asset.ref);
           const pkg = owner && profile.packages?.find((entry) => entry.id === owner[1]);
-          const native = pkg?.nativeRisu?.assets.find((entry) => entry.imageId === owner?.[3]);
+          const native = owner ? nativeAssets.get(owner[1])?.get(owner[3]) : undefined;
           return {
             ref: asset.ref,
             title: asset.alt,

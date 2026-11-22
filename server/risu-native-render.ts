@@ -1,6 +1,6 @@
 import { createReadingMarkdown } from '../core/reading-markdown.js';
 import {
-  nativeRisuAssetNames,
+  nativeRisuAssetNameResolver,
   nativeRisuBackground,
   nativeRisuRegex,
   type RisuContentSource,
@@ -111,8 +111,9 @@ function createAssetResolver(input: NativeRisuRenderInput): (name: string) => st
   const urls = input.context.assetUrls ?? {};
   const exact = new Map<string, string>();
   const candidates: { name: string; url: string }[] = [];
+  const aliasesOf = nativeRisuAssetNameResolver(input.native);
   for (const asset of input.native.assets) {
-    const aliases = nativeRisuAssetNames(input.native, asset);
+    const aliases = aliasesOf(asset);
     const url = aliases.map((name) => urls[name]).find(Boolean) ?? urls[asset.imageId];
     if (!url || !localAssetUrl.test(url)) continue;
     for (const alias of aliases) exact.set(alias.toLocaleLowerCase(), url);

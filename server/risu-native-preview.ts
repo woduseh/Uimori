@@ -1,4 +1,4 @@
-import { nativeRisuAssetNames } from '../core/risu-native.js';
+import { nativeRisuAssetNameResolver } from '../core/risu-native.js';
 import type { Content } from '../core/product.js';
 import type { Store } from './store.js';
 import { HttpError, number, text } from './request-validation.js';
@@ -23,6 +23,10 @@ export async function nativeRisuPreview(
   if (!pkg?.nativeRisu) throw new HttpError(400, 'Native Risu content required');
   const start = pkg.starts?.find((item) => item.id === text(query.startId, 'start ID', 64));
   if (!start || start.mode !== 'authored') throw new HttpError(404, 'Authored start not found');
+  const assetNames = nativeRisuAssetNameResolver(pkg.nativeRisu);
+  const blobHashes = new Map<string, string>();
+  for (const image of pkg.images ?? [])
+    if (!blobHashes.has(image.id)) blobHashes.set(image.id, image.blobHash);
   const context = {
     viewport: readDisplayViewport(query),
     native: structuredClone(pkg.nativeRisu),
@@ -32,9 +36,9 @@ export async function nativeRisuPreview(
     userName: query.userName ? text(query.userName, 'user name', 200) : '사용자',
     assetUrls: Object.fromEntries(
       pkg.nativeRisu.assets.flatMap((asset) => {
-        const image = pkg.images?.find((item) => item.id === asset.imageId);
-        const url = image && `/api/package-image-blobs/${image.blobHash}`;
-        return url ? nativeRisuAssetNames(pkg.nativeRisu!, asset).map((name) => [name, url]) : [];
+        const blobHash = blobHashes.get(asset.imageId);
+        const url = blobHash !== undefined && `/api/package-image-blobs/${blobHash}`;
+        return url ? assetNames(asset).map((name) => [name, url]) : [];
       })
     ),
   };
