@@ -10,8 +10,11 @@ import { modelRequestFields } from '../core/model-request-fields.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
 import {
+  REVISION_CONTEXTS,
   SELECTION_REVISION_CONTRACT,
+  surroundingDraft,
   validRevisionRange,
+  type RevisionContext,
   type SelectionRevisionResult,
 } from '../core/selection-revision.js';
 import {
@@ -47,9 +50,13 @@ export function selectionRevisionRoutes(app: FastifyInstance, store: Store, opti
         'expectedSourceHash',
         'expectedRevision',
         'expectedTextHash',
+        'context',
       ]);
       if (body.target !== undefined && body.target !== 'source' && body.target !== 'translation')
         throw new HttpError(400, 'Invalid revision target');
+      const context = (body.context ?? 'scene') as RevisionContext;
+      if (!REVISION_CONTEXTS.includes(context))
+        throw new HttpError(400, 'Invalid revision context');
       const translation = body.target === 'translation';
       const limit = translation ? TRANSLATION_TEXT_MAX_CHARS : SOURCE_TEXT_MAX_CHARS;
       const draft = text(body.draft, 'revision draft', limit);
@@ -100,7 +107,7 @@ export function selectionRevisionRoutes(app: FastifyInstance, store: Store, opti
           task: JSON.stringify({
             revisionInstruction: instruction,
             selectedPassage: draft.slice(start, end),
-            surroundingDraft: { before: draft.slice(0, start), after: draft.slice(end) },
+            surroundingDraft: surroundingDraft(draft, start, end, context),
           }),
           controls: {},
         },

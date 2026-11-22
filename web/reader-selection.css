@@ -58,6 +58,10 @@
   gap: 6px;
   font-weight: 600;
 }
+.reader-revision-popover label.check {
+  display: flex;
+  font-weight: 400;
+}
 .reader-revision-popover textarea {
   width: 100%;
   font-weight: 400;

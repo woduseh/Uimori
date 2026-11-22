@@ -12,6 +12,7 @@ import { BookmarkPlus } from 'lucide-react';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { diffText, TEXT_DIFF_LIMITS } from '../core/text-diff.js';
 import { ApiError } from './api.js';
+import { SelectionCheckbox } from './BooleanControls.js';
 import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
 import { t, translateMessage, useI18n, message as uiMessage } from './i18n.js';
 import { IconButton } from './IconButton.js';
@@ -481,6 +482,14 @@ function RevisionPopover({
             setConflicted(false);
           }}
         />
+      </label>
+      <label className="check">
+        <SelectionCheckbox
+          checked={revision.context === 'nearby'}
+          disabled={busy || saving}
+          onChange={(event) => revision.chooseContext(event.target.checked ? 'nearby' : 'scene')}
+        />
+        {t('readerSelection.nearbyContext')}
       </label>
       {proposal !== null && diff && (
         <div

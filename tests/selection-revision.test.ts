@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import * as transport from '../core/transport.js';
-import { validRevisionRange } from '../core/selection-revision.js';
+import {
+  NEARBY_CONTEXT_CHARS,
+  surroundingDraft,
+  validRevisionRange,
+} from '../core/selection-revision.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { createApp, type App } from '../server/app.js';
 import { latestTranslation, requestTranslation } from '../server/source-editing.js';
@@ -254,6 +258,44 @@ test('invalid selection and absent helper model never send a provider call', asy
   expect(validRevisionRange('A😀B', 1, 2)).toBe(false);
   expect(validRevisionRange('A😀B', 2, 3)).toBe(false);
   expect(validRevisionRange('A😀B', 1, 3)).toBe(true);
+});
+
+test('nearby context keeps whole paragraphs next to the selection and marks the excerpt', () => {
+  const paragraph = (n: number) => `문단 ${n} `.padEnd(400, '가');
+  const before = `${Array.from({ length: 20 }, (_, i) => paragraph(i)).join('\n\n')}\n\n`;
+  const after = `\n\n${Array.from({ length: 20 }, (_, i) => paragraph(100 + i)).join('\n\n')}`;
+  const selected = '선택한 문장.';
+  const draft = before + selected + after;
+  const range = [before.length, before.length + selected.length] as const;
+  expect(surroundingDraft(draft, ...range, 'scene')).toEqual({ before, after });
+  const near = surroundingDraft(draft, ...range, 'nearby');
+  expect(near.excerpt).toBe(true);
+  expect(before.endsWith(near.before)).toBe(true);
+  expect(after.startsWith(near.after)).toBe(true);
+  expect(near.before.startsWith('문단 ')).toBe(true);
+  expect(near.after.endsWith('가')).toBe(true);
+  for (const side of [near.before, near.after]) {
+    expect(side.length).toBeLessThanOrEqual(NEARBY_CONTEXT_CHARS);
+    expect(side.length).toBeGreaterThan(NEARBY_CONTEXT_CHARS / 2);
+  }
+  const pairs = '😀'.repeat(NEARBY_CONTEXT_CHARS);
+  const at = pairs.length + 1;
+  const cut = surroundingDraft(`${pairs}a끝a${pairs}`, at, at + 1, 'nearby');
+  expect(/\p{Cs}/u.test(cut.before + cut.after)).toBe(false);
+  expect(cut.before.length).toBe(NEARBY_CONTEXT_CHARS - 1);
+  expect(cut.after.length).toBe(NEARBY_CONTEXT_CHARS - 1);
+});
+
+test('a nearby request on a short draft sends the same context, and an unknown context never sends', async () => {
+  const f = await setup();
+  const send = mockSend();
+  expect((await f.post({ ...f.payload, context: 'nearby' })).statusCode).toBe(200);
+  expect(JSON.parse(send.mock.calls[0][1].input.task).surroundingDraft).toEqual({
+    before: '아침이었다.\n\n',
+    after: '\n\n그는 떠났다.\n이 줄은 저장하지 않은 문맥이다.',
+  });
+  expect((await f.post({ ...f.payload, context: 'chapter' })).statusCode).toBe(400);
+  expect(send).toHaveBeenCalledTimes(1);
 });
 
 test('shutdown cancels the single pending proposal and keeps the source', async () => {

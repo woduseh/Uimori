@@ -35,6 +35,12 @@ export const messages = {
     ja: '整える方向',
     zh: '润色方向',
   },
+  'readerSelection.nearbyContext': {
+    ko: '앞뒤 문단만 문맥으로 보내기',
+    en: 'Send only nearby paragraphs as context',
+    ja: '前後の段落だけを文脈として送る',
+    zh: '只发送前后段落作为上下文',
+  },
   'readerSelection.diff': {
     ko: '선택한 글과 제안 비교',
     en: 'Selected text compared with the suggestion',

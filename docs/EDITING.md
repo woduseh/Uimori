@@ -47,6 +47,7 @@ Uimori의 봇·페르소나·모듈·프리셋 자료와 원고를 편집기에�
   - 위쪽의 닫기 아이콘이나 패널 안의 `Esc`는 퇴고 패널만 닫고 기존 편집으로 돌아가요. 요청 중이면 요청도 취소하고, 장면 초안은 그대로 둬요.
 - **컨텍스트 전달과 비용**:
   - 모델에는 선택한 구절과 해당 장면의 편집 중인 원문 전체가 문맥으로 함께 전달돼요.
+  - **앞뒤 문단만 문맥으로 보내기**를 켜면 선택한 구절 앞뒤로 각각 3,000자 안쪽의 문단만 보내요. 긴 장면에서 요청이 작아지는 대신 모델은 장면의 나머지를 보지 못해요. 이 선택은 사용 중인 브라우저에 기억되고 읽기 화면의 다듬기에도 똑같이 적용돼요.
   - 퇴고 요청과 제안 내용은 서버 원고나 도우미 대화 기록에 영구 보존되지 않으며, 모델 호출 횟수와 토큰 사용량만 도우미 사용량으로 집계돼요.
   - 컨텍스트 크기를 벗어나는 긴 입력이나 불완전한 결과가 나오더라도 모델 출력을 임의로 자르거나 자동으로 재요청하지 않아요.
 - **상태 변경 보호**:
@@ -162,6 +163,7 @@ Uimori의 봇·페르소나·모듈·프리셋 자료와 원고를 편집기에�
 
 ### 선택 구절 퇴고와 읽는 중 다듬기
 - 제안 요청, 취소, 바뀐 제안 판정은 편집기의 `web/SelectionRevision.tsx`와 읽기 화면의 `web/ReaderSelectionTools.tsx`가 `web/useSelectionRevision.ts` 하나를 함께 써요. 서버 경로도 `POST /api/sources/:id/selection-revision`(`server/selection-revision.ts`) 하나이고, 번역 대상은 `target: 'translation'`과 보고 있는 번역 본문의 해시를 받아요. 그 확인은 `server/source-editing.ts`의 `shownTranslationChanged`가 번역 저장(`editTranslation`)과 같이 맡아요. 번역을 보여 주는 결과는 재번역이 도는 동안 직전 결과일 수 있어서 수정 번호만으로는 보고 있는 글을 정할 수 없어요.
+- 문맥 범위는 요청의 `context`로 받고 `core/selection-revision.ts`의 `surroundingDraft`가 잘라요. 화면은 범위를 골라도 초안 전체를 그대로 보내요. 서버가 번역 해시와 선택 범위를 전체 초안으로 확인하기 때문이에요.
 - 일치 판정은 `web/reader-selection.ts`의 `uniqueTextRange`이고, 저장 본문과의 비교만으로 정해요. 렌더러 종류로 막지 않는 이유는 봇이 있는 채팅이 모두 Risu 렌더러로 그려지기 때문이에요. 도우미의 `matchHelperText`와 달리 줄 끝 공백도 맞춰 주지 않아요. 화면에 보이는 선택과 저장본이 어긋난 채로 저장하지 않기 위해서예요.
 - 막대와 창은 앱 화면이라 `document.body`에 고정 위치로 그려요. 장면 테마 틀은 그림자 DOM이고 테마가 `transform`을 걸 수 있어서, 그 안에 두면 위치가 틀어져요. 위치는 리더 스크롤 영역과 테마의 내부 스크롤 본문(`data-uimori-body-scroll`)이 보여 주는 범위 안에서 정하고, 선택한 줄과 겹치지 않는 위나 아래에 둬요. 둘 다 자리가 없으면 막대를 숨겨요.
 - 확인: `tests/reader-selection.test.ts`(일치 규칙), `tests/selection-revision.test.ts`(번역 대상과 충돌 확인), `tests/reader-selection-browser.spec.ts`의 `RSEL01`부터 `RSEL06`, 편집기 쪽은 `tests/selection-revision-browser.spec.ts`.
