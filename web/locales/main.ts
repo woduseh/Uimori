@@ -1349,6 +1349,12 @@ export const messages = {
     ja: '創作オプションが変わったため、予約したリクエストは送信せず入力欄に戻しました。',
     zh: '创作选项已更改，预约的请求未发送，已放回输入框。',
   },
+  'main.queueReturned.workspace': {
+    ko: '모델이나 프롬프트 설정이 바뀌어 예약한 요청을 보내지 않고 입력창으로 되돌렸어요.',
+    en: 'The model or prompt settings changed, so the queued request was not sent and is back in the composer.',
+    ja: 'モデルまたはプロンプトの設定が変わったため、予約したリクエストは送信せず入力欄に戻しました。',
+    zh: '模型或提示词设置已更改，预约的请求未发送，已放回输入框。',
+  },
   'main.queueReturned.blocked': {
     ko: '지금은 요청을 보낼 수 없어 예약한 요청을 보내지 않고 입력창으로 되돌렸어요.',
     en: 'The request cannot be sent right now, so the queued request was not sent and is back in the composer.',
@@ -1368,9 +1374,9 @@ export const messages = {
     zh: '预约的请求未被接收，已放回输入框。',
   },
   'main.queueUnchecked': {
-    ko: '창작 옵션을 확인하지 못해 예약하지 않았어요. 다시 시도해 주세요.',
-    en: 'Could not check the writing options, so the request was not queued. Try again.',
-    ja: '創作オプションを確認できなかったため、予約しませんでした。もう一度お試しください。',
-    zh: '无法确认创作选项，因此未预约该请求。请重试。',
+    ko: '다음 요청에 쓸 설정을 확인하지 못해 예약하지 않았어요. 다시 시도해 주세요.',
+    en: 'Could not check the settings for the next request, so it was not queued. Try again.',
+    ja: '次のリクエストに使う設定を確認できなかったため、予約しませんでした。もう一度お試しください。',
+    zh: '无法确认下一次请求所用的设置，因此未预约该请求。请重试。',
   },
 };

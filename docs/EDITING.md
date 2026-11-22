@@ -63,7 +63,7 @@ Uimori의 봇·페르소나·모듈·프리셋 자료와 원고를 편집기에�
 - **저장 전 확인**: 원문은 원문 해시와 수정 번호로, 번역은 최신 번역의 수정 번호, 원문 해시, 보고 있는 번역 본문의 해시로 제안을 요청할 때와 저장할 때 확인해요. 그사이 무엇이 바뀌었으면 저장하지 않고 원문과 번역 중 무엇이 바뀌었는지 알려 주며, 제안은 창에 남아요. 바뀐 뒤에는 그 제안을 적용할 수 없으니 닫고 다시 선택해요.
 - **번역에 적용할 때**: 창에서 한 번 알려요. 번역을 저장하면 진행 중인 재번역이 취소되고 번역에 맞춘 삽화 배치가 무효가 돼요.
 - **적용 뒤**: 저장한 글을 바로 보여 주고, 읽던 위치를 지키며 포커스를 장면 본문으로 돌려요.
-- **키보드와 닫기**: 막대가 떠 있을 때 `Tab`을 누르면 막대의 첫 버튼으로 가고, 좌우 화살표로 버튼 사이를 옮겨요. `Esc`는 열린 다듬기 창을 먼저 닫고(요청 중이면 요청도 취소해요) 선택과 막대로 돌아가며, 한 번 더 누르면 막대를 닫아요. 선택이 풀리거나 선택한 글이 화면 밖으로 나가면 막대도 사라져요.
+- **키보드와 닫기**: 막대가 떠 있을 때 `Tab`을 누르면 막대의 첫 버튼으로 가고, 좌우 화살표로 버튼 사이를 옮겨요. `Esc`는 열린 다듬기 창을 먼저 닫고(요청 중이면 요청도 취소해요) 선택과 막대로 돌아가며, 한 번 더 누르면 막대를 닫아요. 적용한 내용을 저장하는 동안에는 `Esc`가 창을 닫지 않아서, 저장 결과나 충돌 안내가 창에 남아요. 다듬기 창이 열려 있는 동안에는 다른 대화상자처럼 전역 단축키가 동작하지 않아요. 선택이 풀리거나 선택한 글이 화면 밖으로 나가면 막대도 사라져요.
 - **막대가 없는 곳**: 편집기와 입력란, 이야기 UI 컨트롤, 도우미 안에서 고른 글에는 막대가 뜨지 않아요. 터치로 고른 글에도 띄우지 않아요. 브라우저의 선택 메뉴가 같은 자리에 뜨기 때문이에요.
 - 모델 호출은 요청마다 한 번이고, Codex 콘텐츠 경고 확인, 취소 시 요청 중단, 사용량만 남기고 요청과 제안은 저장하지 않는 점, 자동으로 다시 요청하지 않는 점은 편집기의 선택 구절 퇴고와 같아요.
 
@@ -166,7 +166,7 @@ Uimori의 봇·페르소나·모듈·프리셋 자료와 원고를 편집기에�
 - 문맥 범위는 요청의 `context`로 받고 `core/selection-revision.ts`의 `surroundingDraft`가 잘라요. 화면은 범위를 골라도 초안 전체를 그대로 보내요. 서버가 번역 해시와 선택 범위를 전체 초안으로 확인하기 때문이에요.
 - 일치 판정은 `web/reader-selection.ts`의 `uniqueTextRange`이고, 저장 본문과의 비교만으로 정해요. 렌더러 종류로 막지 않는 이유는 봇이 있는 채팅이 모두 Risu 렌더러로 그려지기 때문이에요. 도우미의 `matchHelperText`와 달리 줄 끝 공백도 맞춰 주지 않아요. 화면에 보이는 선택과 저장본이 어긋난 채로 저장하지 않기 위해서예요.
 - 막대와 창은 앱 화면이라 `document.body`에 고정 위치로 그려요. 장면 테마 틀은 그림자 DOM이고 테마가 `transform`을 걸 수 있어서, 그 안에 두면 위치가 틀어져요. 위치는 리더 스크롤 영역과 테마의 내부 스크롤 본문(`data-uimori-body-scroll`)이 보여 주는 범위 안에서 정하고, 선택한 줄과 겹치지 않는 위나 아래에 둬요. 둘 다 자리가 없으면 막대를 숨겨요.
-- 확인: `tests/reader-selection.test.ts`(일치 규칙), `tests/selection-revision.test.ts`(번역 대상과 충돌 확인), `tests/reader-selection-browser.spec.ts`의 `RSEL01`부터 `RSEL06`, 편집기 쪽은 `tests/selection-revision-browser.spec.ts`.
+- 확인: `tests/reader-selection.test.ts`(일치 규칙), `tests/selection-revision.test.ts`(번역 대상과 충돌 확인), `tests/reader-selection-browser.spec.ts`의 `RSEL01`부터 `RSEL06`과 `RSEL15`(문맥 범위), 편집기 쪽은 `tests/selection-revision-browser.spec.ts`.
 
 ### 도우미 변경 카드 (`HelperChangeCard`)
 - 카드는 `web/HelperChangeCard.tsx`, 목록과 읽기 시점은 `web/HelperTaskResults.tsx`가 맡고, 항목의 뜻은 [HELPER-TOOLS](HELPER-TOOLS.md#conversation-history-and-task-results)에 있어요. `tests/helper-task-results-browser.spec.ts`의 `HCHANGE01`과 `HCHANGE02`가 표시와 읽기 시점을, `HCHANGE04`가 화면 언어를 따르는 위치 표시를 확인해요.

@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import type {
   HelperChange,
   HelperChangeDomain,
@@ -7,9 +8,16 @@ import type {
   HelperRollbackUnit,
   HelperRollbackView,
 } from '../core/helper.js';
-import type { ResourceKind, ResourceModel } from '../core/resource-editing.js';
+import type { AuthorNote } from '../core/notes.js';
 import {
+  editableResource,
+  type ResourceKind,
+  type ResourceModel,
+} from '../core/resource-editing.js';
+import {
+  authoredView,
   captureHelperTarget,
+  contentPackageSettings,
   helperResourceHash,
   helperStateHash,
   helperTargetHash,
@@ -95,6 +103,16 @@ function currentHash(store: Store, row: Row) {
   return helperTargetHash(target(row)!, captureHelperTarget(store, target(row)!).value);
 }
 
+function leftAsRecorded(store: Store, row: Row) {
+  if (currentHash(store, row) === row.result) return true;
+  if (row.domain !== 'resource' || resourceKey(row).kind !== 'content') return false;
+  const current = editableResource('content', readResource(store, 'content', resourceKey(row).id));
+  return (
+    helperStateHash(authoredView('content', current)) === row.result &&
+    isDeepStrictEqual(contentPackageSettings(current), contentPackageSettings(parsed(row)))
+  );
+}
+
 function covered(unit: Unit) {
   return (
     unit.domain === 'resource' ||
@@ -120,7 +138,7 @@ function assess(store: Store, unit: Unit): Assessment {
     return { status: 'not-covered', reason: 'recorded-before-rollback' };
   if (unit.rows.some((row) => row.foreign_edit))
     return { status: 'changed-since', reason: 'changed-during-task' };
-  if (unit.rows.some((row) => currentHash(store, row) !== row.result))
+  if (unit.rows.some((row) => !leftAsRecorded(store, row)))
     return { status: 'changed-since', reason: 'changed-after-task' };
   if (unit.domain === 'scene') {
     const original = unit.rows.find((row) => field(row) === 'original');
@@ -255,70 +273,98 @@ function restoreResource(store: Store, row: Row) {
 function restoreOutline(store: Store, row: Row, key: string) {
   const chatId = row.chat_id!;
   const baseline = parsed(row) as OutlineState;
+  const wanted = new Map(baseline.map((node) => [node.id, node]));
+  const apply = (step: string, operations: (revision: (id: string) => number) => unknown[]) => {
+    const revisions = new Map(store.outline.nodes(chatId).map((node) => [node.id, node.revision]));
+    const list = operations((id) => {
+      const value = revisions.get(id)!;
+      revisions.set(id, value + 1);
+      return value;
+    });
+    return list.length
+      ? store.outline.applyReceipt(
+          chatId,
+          { idempotencyKey: `${key}:${step}`, operations: list },
+          'user'
+        ).created
+      : [];
+  };
   const current = store.outline.nodes(chatId);
   const live = new Map(current.map((node) => [node.id, node]));
-  const wanted = new Map(baseline.map((node) => [node.id, node]));
-  const recreated = baseline.filter((node) => !live.has(node.id));
-  const ids = new Map<string, string>(baseline.map((node) => [node.id, node.id]));
-  if (recreated.length) {
-    const result = store.outline.applyReceipt(
-      chatId,
-      {
-        idempotencyKey: `${key}:create`,
-        operations: recreated.map((node) => ({
-          op: 'create',
-          ref: node.id,
-          ...(node.parentId === null
-            ? {}
-            : live.has(node.parentId)
-              ? { parentId: node.parentId }
-              : { parentRef: node.parentId }),
-          level: node.level,
-          title: node.title,
-          intent: node.intent,
-          position: node.position,
-        })),
-      },
-      'user'
-    );
-    for (const created of result.created) ids.set(created.ref!, created.id);
-  }
-  const revisions = new Map(current.map((node) => [node.id, node.revision]));
-  for (const node of recreated) revisions.set(ids.get(node.id)!, 1);
-  const operations: Record<string, unknown>[] = [];
-  const revision = (id: string) => {
-    const value = revisions.get(id)!;
-    revisions.set(id, value + 1);
-    return value;
-  };
-  for (const node of baseline) {
-    const id = ids.get(node.id)!;
-    const now = live.get(node.id);
-    const parentId = node.parentId === null ? null : ids.get(node.parentId)!;
-    if (now && (now.parentId !== parentId || now.position !== node.position))
-      operations.push({
+  const reshaped = current.filter((node) => {
+    const old = wanted.get(node.id);
+    return old && (old.parentId !== node.parentId || old.level !== node.level);
+  });
+  apply('detach', (revision) => [
+    ...reshaped
+      .filter((node) => node.parentId !== null)
+      .map((node) => ({
         op: 'move',
-        id,
-        expectedRevision: revision(id),
-        parentId,
+        id: node.id,
+        expectedRevision: revision(node.id),
+        parentId: null,
         position: node.position,
-      });
-    const relatedIds = node.relatedIds?.map((related) => ids.get(related) ?? related);
-    const update: Record<string, unknown> = {};
-    if (now && now.level !== node.level) update.level = node.level;
-    if (now && now.title !== node.title) update.title = node.title;
-    if (now && now.intent !== node.intent) update.intent = node.intent;
-    if ((now?.fixed ?? false) !== node.fixed) update.fixed = node.fixed;
-    if (relatedIds && JSON.stringify(now?.relatedIds ?? []) !== JSON.stringify(relatedIds))
-      update.relatedIds = relatedIds;
-    if (Object.keys(update).length)
-      operations.push({ op: 'update', id, expectedRevision: revision(id), ...update });
-  }
-  for (const node of current)
-    if (!wanted.has(node.id) && (node.parentId === null || wanted.has(node.parentId)))
-      operations.push({ op: 'remove', id: node.id, expectedRevision: revision(node.id) });
-  if (operations.length)
-    store.outline.applyReceipt(chatId, { idempotencyKey: `${key}:edit`, operations }, 'user');
+      })),
+    ...current
+      .filter(
+        (node) => !wanted.has(node.id) && (node.parentId === null || wanted.has(node.parentId))
+      )
+      .map((node) => ({ op: 'remove', id: node.id, expectedRevision: revision(node.id) })),
+    ...reshaped
+      .filter((node) => node.level !== wanted.get(node.id)!.level)
+      .map((node) => ({
+        op: 'update',
+        id: node.id,
+        expectedRevision: revision(node.id),
+        level: wanted.get(node.id)!.level,
+      })),
+  ]);
+  const ids = new Map<string, string>(baseline.map((node) => [node.id, node.id]));
+  const created = apply('create', () =>
+    baseline
+      .filter((node) => !live.has(node.id))
+      .map((node) => ({
+        op: 'create',
+        ref: node.id,
+        ...(node.parentId === null
+          ? {}
+          : live.has(node.parentId)
+            ? { parentId: node.parentId }
+            : { parentRef: node.parentId }),
+        level: node.level,
+        title: node.title,
+        intent: node.intent,
+        position: node.position,
+      }))
+  );
+  for (const node of created) ids.set(node.ref!, node.id);
+  const restored = new Map(store.outline.nodes(chatId).map((node) => [node.id, node]));
+  apply('edit', (revision) =>
+    baseline.flatMap((node) => {
+      const id = ids.get(node.id)!;
+      const now = restored.get(id)!;
+      const parentId = node.parentId === null ? null : ids.get(node.parentId)!;
+      const operations: Record<string, unknown>[] = [];
+      if (now.parentId !== parentId || now.position !== node.position)
+        operations.push({
+          op: 'move',
+          id,
+          expectedRevision: revision(id),
+          parentId,
+          position: node.position,
+        });
+      const relatedIds = node.relatedIds?.map((related) => ids.get(related) ?? related);
+      const update: Record<string, unknown> = {};
+      if (now.title !== node.title) update.title = node.title;
+      if (now.intent !== node.intent) update.intent = node.intent;
+      if (now.fixed !== node.fixed) update.fixed = node.fixed;
+      if (relatedIds && !isDeepStrictEqual(now.relatedIds ?? [], relatedIds))
+        update.relatedIds = relatedIds;
+      if (Object.keys(update).length)
+        operations.push({ op: 'update', id, expectedRevision: revision(id), ...update });
+      return operations;
+    })
+  );
 }
 
 function restoreNotes(store: Store, row: Row, key: string) {
@@ -334,6 +380,12 @@ function restoreNotes(store: Store, row: Row, key: string) {
       .all(chatId)
       .map((item) => [String(item.id), String(item.replaces_id)])
   );
+  const stored = store.db.prepare('SELECT entry FROM author_notes WHERE id=? AND chat_id=?');
+  const restored = (note: NoteState[number]) => {
+    const row = note.kind === 'imported-memory' ? stored.get(note.id, chatId) : undefined;
+    const origin = row && (JSON.parse(String(row.entry)) as AuthorNote).origin;
+    return { text: note.text, kind: note.kind, ...(origin ? { origin } : {}) };
+  };
   let step = 0;
   const write = (body: Record<string, unknown>) =>
     store.story.notes.write(chatId, {
@@ -355,11 +407,10 @@ function restoreNotes(store: Store, row: Row, key: string) {
     if (old && !matched.has(old.id)) {
       matched.add(old.id);
       if (old.text !== note.text || old.kind !== note.kind)
-        write({ text: old.text, kind: old.kind, replacesId: note.id });
+        write({ ...restored(old), replacesId: note.id });
     } else write({ retired: true, replacesId: note.id });
   }
-  for (const note of baseline)
-    if (!matched.has(note.id)) write({ text: note.text, kind: note.kind });
+  for (const note of baseline) if (!matched.has(note.id)) write(restored(note));
 }
 
 export function rollBackHelperTask(

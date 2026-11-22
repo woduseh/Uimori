@@ -5,6 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { promptWorkspace, savePromptWorkspace } from './prompt-workspace.js';
 import { forgetHelperResourceChanges } from './helper-changes.js';
+import { forgetHelperConfirmationTargets } from './helper-argument-retention.js';
 
 export type LibraryKind =
   | 'content'
@@ -97,6 +98,7 @@ export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, v
     }
     if (kind === 'content' || kind === 'prompt-preset')
       forgetHelperResourceChanges(store.db, kind, id);
+    forgetHelperConfirmationTargets(store.db, [{ kind, id }]);
     store.libraryOrganization.remove(kind, id);
     pruneUnusedData(store.db);
     return { deleted: true, id };

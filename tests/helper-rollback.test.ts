@@ -4,14 +4,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { HelperRollbackUnit, HelperTask } from '../core/helper.js';
+import { OUTLINE_LEVELS, outlineParentAllowed, type OutlineLevel } from '../core/outline.js';
 import type { Content } from '../core/product.js';
 import { editableResource, type ResourceModel } from '../core/resource-editing.js';
 import * as transport from '../core/transport.js';
 import { createApp } from '../server/app.js';
 import {
   HELPER_CHANGE_RETENTION,
+  authoredView,
   captureHelperTarget,
   helperResourceHash,
+  helperStateHash,
   pruneHelperChanges,
   withHelperChange,
 } from '../server/helper-changes.js';
@@ -159,6 +162,7 @@ const description = (store: Store, id: string) =>
 
 function outlineShape(store: Store, chatId: string) {
   const nodes = store.outline.nodes(chatId);
+  const titles = new Map(nodes.map((node) => [node.id, node.title]));
   const tree = (parentId: string | null): unknown[] =>
     nodes
       .filter((node) => node.parentId === parentId)
@@ -169,6 +173,7 @@ function outlineShape(store: Store, chatId: string) {
         intent: node.intent,
         fixed: node.fixed,
         position: node.position,
+        related: (node.relatedIds ?? []).map((id) => titles.get(id)),
         children: tree(node.id),
       }));
   return tree(null);
@@ -459,6 +464,208 @@ test('an earlier task restores a note after a later task was rolled back, though
   expect(noteShape(f.store, f.chat.id)).toEqual(['author-note\n처음 메모']);
 });
 
+test('a task that rewrote or retired an imported memory rolls back to the memory with its origin', () => {
+  const f = fixture();
+  const origin = { fileHash: 'a'.repeat(64), entryId: 'entry-1', title: '가져온 기억' };
+  const memory = (text: string, key: string) =>
+    f.store.story.notes.write(f.chat.id, {
+      text,
+      kind: 'imported-memory',
+      origin,
+      author: 'Synthetic import',
+      expectedRevision: f.store.story.notes.revision(f.chat.id),
+      expectedHeadRevision: f.store.chat(f.chat.id).headRevision,
+      idempotencyKey: key,
+    }).note;
+  const rewritten = memory('다리를 건넌 기억', 'memory-rewritten');
+  const retired = memory('강을 본 기억', 'memory-retired');
+  const task = f.begin();
+  const write = (body: Record<string, unknown>) =>
+    f.tracked(task, { domain: 'notes', chatId: f.chat.id }, () =>
+      f.store.story.notes.write(f.chat.id, {
+        ...body,
+        author: '사용자 도우미 요청',
+        expectedRevision: f.store.story.notes.revision(f.chat.id),
+        expectedHeadRevision: f.store.chat(f.chat.id).headRevision,
+        idempotencyKey: randomUUID(),
+      })
+    );
+  write({ text: '고쳐 쓴 기억', replacesId: rewritten.id });
+  write({ retired: true, replacesId: retired.id });
+  f.finish(task);
+  expect(f.rollBack(task).units).toMatchObject([
+    { unit: `notes:${f.chat.id}`, status: 'restored' },
+  ]);
+  const notes = f.store.story.notes.entries(
+    f.store.story.notes.scope(f.chat.id, f.store.chat(f.chat.id).headRevision)
+  );
+  expect(notes.map(({ kind, text, origin: from }) => ({ kind, text, origin: from }))).toEqual(
+    expect.arrayContaining([
+      { kind: 'imported-memory', text: '다리를 건넌 기억', origin },
+      { kind: 'imported-memory', text: '강을 본 기억', origin },
+    ])
+  );
+  expect(notes).toHaveLength(2);
+});
+
+test('a later owner edit of a bot setting outside the card text blocks the rollback of that bot', () => {
+  const f = fixture();
+  const bot = f.store.product.content(fixtureBotInput('설정 봇', '처음 설명')) as Content;
+  const module = f.store.product.content({ ...fixtureBotInput('함께 쓰는 모듈'), kind: 'module' });
+  const task = f.begin();
+  f.resource(task, 'resource.patch', {
+    kind: 'content',
+    id: bot.id,
+    expectedRevision: bot.revision,
+    changes: [{ op: 'set', path: '/package/nativeRisu/card/description', value: '도우미 설명' }],
+  });
+  f.finish(task);
+  const saved = readResource(f.store, 'content', bot.id);
+  const model = structuredClone(editableResource('content', saved)) as any;
+  model.package.modules = [{ id: module.id, revision: module.revision }];
+  saveResource(f.store, {
+    kind: 'content',
+    id: bot.id,
+    expectedRevision: saved.revision,
+    model: model as ResourceModel,
+  });
+  expect(f.rollBack(task).units).toMatchObject([
+    { unit: `resource:content:${bot.id}`, status: 'changed-since', reason: 'changed-after-task' },
+  ]);
+  const after = readResource(f.store, 'content', bot.id) as Content;
+  expect(after.package.modules).toEqual([{ id: module.id, revision: module.revision }]);
+  expect(description(f.store, bot.id)).toBe('도우미 설명');
+});
+
+test('a bot change recorded with the card-only state hash still rolls back unless its settings changed', () => {
+  const f = fixture();
+  const module = f.store.product.content({ ...fixtureBotInput('함께 쓰는 모듈'), kind: 'module' });
+  const bots = ['가', '나'].map(
+    (name) => f.store.product.content(fixtureBotInput(`${name} 봇`, `${name} 처음`)) as Content
+  );
+  const task = f.begin();
+  for (const bot of bots)
+    f.resource(task, 'resource.patch', {
+      kind: 'content',
+      id: bot.id,
+      expectedRevision: bot.revision,
+      changes: [{ op: 'set', path: '/package/nativeRisu/card/description', value: '도우미 설명' }],
+    });
+  f.finish(task);
+  for (const bot of bots)
+    f.store.db
+      .prepare('UPDATE helper_changes SET result=? WHERE target_id=?')
+      .run(
+        helperStateHash(
+          authoredView(
+            'content',
+            editableResource('content', readResource(f.store, 'content', bot.id))
+          )
+        ),
+        `content:${bot.id}`
+      );
+  const saved = readResource(f.store, 'content', bots[1]!.id);
+  const model = structuredClone(editableResource('content', saved)) as any;
+  model.package.modules = [{ id: module.id, revision: module.revision }];
+  saveResource(f.store, {
+    kind: 'content',
+    id: bots[1]!.id,
+    expectedRevision: saved.revision,
+    model: model as ResourceModel,
+  });
+  expect(f.rollBack(task).units.map(({ status }) => status)).toEqual(['restored', 'changed-since']);
+  expect(bots.map((bot) => description(f.store, bot.id))).toEqual(['가 처음', '도우미 설명']);
+});
+
+test('a task that changed only a bot package setting rolls back', () => {
+  const f = fixture();
+  const module = f.store.product.content({ ...fixtureBotInput('함께 쓰는 모듈'), kind: 'module' });
+  const bot = f.store.product.content(fixtureBotInput('설정 봇', '처음 설명')) as Content;
+  const task = f.begin();
+  const model = structuredClone(
+    editableResource('content', readResource(f.store, 'content', bot.id))
+  ) as any;
+  model.package.modules = [{ id: module.id, revision: module.revision }];
+  f.resource(task, 'resource.save', {
+    kind: 'content',
+    id: bot.id,
+    expectedRevision: bot.revision,
+    model,
+  });
+  f.finish(task);
+  expect(f.rollBack(task).units).toMatchObject([
+    { unit: `resource:content:${bot.id}`, status: 'restored' },
+  ]);
+  expect((readResource(f.store, 'content', bot.id) as Content).package.modules).toBeUndefined();
+});
+
+test('an outline rollback cancels only the scheduled scenes whose plan it changes', () => {
+  const f = fixture();
+  const created = f.store.outline.applyReceipt(
+    f.chat.id,
+    {
+      idempotencyKey: 'outline-seed',
+      operations: [
+        { op: 'create', ref: 'a', level: 'arc', title: '1부', intent: '떠난다' },
+        { op: 'create', ref: 'b', parentRef: 'a', level: 'episode', title: '1화', intent: '출발' },
+        { op: 'create', ref: 'c', level: 'arc', title: '2부', intent: '돌아온다' },
+        { op: 'create', ref: 'd', parentRef: 'c', level: 'episode', title: '2화', intent: '귀향' },
+        { op: 'create', ref: 'e', parentRef: 'c', level: 'episode', title: '3화', intent: '재회' },
+      ],
+    },
+    'user'
+  ).created;
+  const id = (ref: string) => created.find((item) => item.ref === ref)!.id;
+  const node = (ref: string) =>
+    f.store.outline.nodes(f.chat.id).find((item) => item.id === id(ref))!;
+  f.store.outline.applyReceipt(
+    f.chat.id,
+    {
+      idempotencyKey: 'outline-related',
+      operations: [
+        { op: 'update', id: id('b'), expectedRevision: node('b').revision, relatedIds: [id('d')] },
+      ],
+    },
+    'user'
+  );
+  const task = f.begin();
+  f.tracked(task, { domain: 'outline', chatId: f.chat.id }, () =>
+    f.store.outline.applyReceipt(
+      f.chat.id,
+      {
+        idempotencyKey: 'outline-move',
+        operations: [
+          {
+            op: 'move',
+            id: id('d'),
+            expectedRevision: node('d').revision,
+            parentId: id('a'),
+            position: 1,
+          },
+        ],
+      },
+      'user'
+    )
+  );
+  f.finish(task);
+  const scheduled = Object.fromEntries(
+    ['b', 'd', 'e'].map((ref) => [
+      ref,
+      f.store.outline.sceneCommand(id(ref), { idempotencyKey: randomUUID() }).id,
+    ])
+  );
+  expect(f.rollBack(task).units).toMatchObject([{ status: 'restored' }]);
+  expect(node('d').parentId).toBe(id('c'));
+  expect(
+    Object.fromEntries(
+      Object.entries(scheduled).map(([ref, command]) => [
+        ref,
+        f.store.story.command(command).status,
+      ])
+    )
+  ).toEqual({ b: 'pending', d: 'cancelled', e: 'pending' });
+});
+
 test('a patch across three resources restores the two nobody touched and reports the edited one', () => {
   const f = fixture();
   const bots = ['가', '나', '다'].map(
@@ -593,6 +800,8 @@ function runSeed(seed: number) {
           left: w.state(target),
           interrupted: false,
         });
+      const net = touched.get(target)!;
+      if (!target.startsWith('scene:') && net.left === net.start) touched.delete(target);
       touches.set(writer, touched);
     }
   };
@@ -606,23 +815,60 @@ function runSeed(seed: number) {
     expectedHeadRevision: f.store.chat(f.chat.id).headRevision,
     idempotencyKey: randomUUID(),
   });
-  const outlineOperation = () => {
+  const outlineOperation = (): Record<string, unknown> => {
     const nodes = f.store.outline.nodes(f.chat.id);
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const levelOf = (id: string | null) => (id === null ? null : byId.get(id)!.level);
+    const within = (id: string, ancestor: string): boolean =>
+      id === ancestor ||
+      (byId.get(id)!.parentId !== null && within(byId.get(id)!.parentId!, ancestor));
+    const fits = (parentId: string | null, level: OutlineLevel, id?: string) =>
+      outlineParentAllowed(levelOf(parentId), level) &&
+      nodes.every((child) => child.parentId !== id || outlineParentAllowed(level, child.level));
     const choice = random();
-    if (choice < 0.4 && nodes.length)
-      return (() => {
-        const node = pick(nodes);
-        return {
-          op: 'update',
-          id: node.id,
-          expectedRevision: node.revision,
-          [random() < 0.5 ? 'title' : 'intent']: fresh('구성'),
-        };
-      })();
-    if (choice < 0.7 || nodes.length < 2)
-      return { op: 'create', level: 'arc', title: fresh('새 구성'), intent: fresh('의도') };
-    const node = pick(nodes.filter((item) => item.parentId === null));
-    return { op: 'remove', id: node.id, expectedRevision: node.revision };
+    const node = nodes.length ? pick(nodes) : undefined;
+    const guard = node && { id: node.id, expectedRevision: node.revision };
+    if (node && choice < 0.25)
+      return { op: 'update', ...guard, [random() < 0.5 ? 'title' : 'intent']: fresh('구성') };
+    if (node && choice < 0.4) {
+      const levels = OUTLINE_LEVELS.filter(
+        (level) => level !== node.level && fits(node.parentId, level, node.id)
+      );
+      if (levels.length) return { op: 'update', ...guard, level: pick(levels) };
+    }
+    if (node && choice < 0.55) {
+      const parents = [null, ...nodes.map((item) => item.id)].filter(
+        (id) => (id === null || !within(id, node.id)) && fits(id, node.level)
+      );
+      return {
+        op: 'move',
+        ...guard,
+        parentId: pick(parents),
+        position: Math.floor(random() * 4),
+      };
+    }
+    if (node && choice < 0.65)
+      return {
+        op: 'update',
+        ...guard,
+        relatedIds: nodes
+          .filter((item) => item.id !== node.id && random() < 0.4)
+          .map((item) => item.id),
+      };
+    if (choice < 0.85 || nodes.length < 2) {
+      const level = pick(OUTLINE_LEVELS);
+      const parents = [null, ...nodes.map((item) => item.id)].filter((id) => fits(id, level));
+      const parentId = pick(parents);
+      return {
+        op: 'create',
+        ...(parentId === null ? {} : { parentId }),
+        level,
+        title: fresh('새 구성'),
+        intent: fresh('의도'),
+      };
+    }
+    const root = pick(nodes.filter((item) => item.parentId === null));
+    return { op: 'remove', id: root.id, expectedRevision: root.revision };
   };
   const noteOperation = (): Record<string, unknown> => {
     const notes = visibleNotes();

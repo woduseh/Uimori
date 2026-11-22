@@ -1368,17 +1368,17 @@ export class HelperRuntime {
         const startedAt = new Date().toISOString();
         const gateway = wireCall.name === 'app.call' && typeof wireCall.arguments.name === 'string';
         const inner = wireCall.arguments.arguments;
-        const target = helperActivityTarget(
-          gateway
-            ? inner && typeof inner === 'object' && !Array.isArray(inner)
-              ? (inner as Record<string, unknown>)
-              : {}
-            : wireCall.arguments
-        );
+        const callArgs = gateway
+          ? inner && typeof inner === 'object' && !Array.isArray(inner)
+            ? (inner as Record<string, unknown>)
+            : {}
+          : wireCall.arguments;
+        const target = helperActivityTarget(callArgs);
         this.workspace.event(task.conversationId, id, 'tool.started', {
           callId: wireCall.id,
           name: gateway ? (wireCall.arguments.name as string) : wireCall.name,
           ...(target && { target }),
+          ...(typeof callArgs.chatId === 'string' && { chatId: callArgs.chatId }),
           startedAt,
           queueMs,
           ...args,
@@ -2035,11 +2035,17 @@ export class HelperRuntime {
             currentDateUtc: task.createdAt.slice(0, 10),
             ...(task.snapshot.confirmations?.length
               ? {
-                  confirmedCalls: task.snapshot.confirmations.map((call) => ({
-                    name: call.operation,
-                    arguments: call.arguments,
-                    ...(call.chatId ? { chatId: call.chatId } : {}),
-                  })),
+                  confirmedCalls: task.snapshot.confirmations.flatMap((call) =>
+                    call.arguments
+                      ? [
+                          {
+                            name: call.operation,
+                            arguments: call.arguments,
+                            ...(call.chatId ? { chatId: call.chatId } : {}),
+                          },
+                        ]
+                      : []
+                  ),
                 }
               : {}),
             summary: {

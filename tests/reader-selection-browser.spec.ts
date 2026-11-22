@@ -7,8 +7,9 @@ import {
   type Page,
   type TestInfo,
 } from '@playwright/test';
-import type { ChatDetail } from '../core/types.js';
-import { fixtureBotInput } from './fixtures/chat.js';
+import type { Chat, ChatDetail, Run } from '../core/types.js';
+import { fixtureBotInput, postFixtureChat } from './fixtures/chat.js';
+import { openSourceActions } from './ui-navigation.js';
 
 test.setTimeout(90000);
 
@@ -465,7 +466,190 @@ test('RSEL09 an explicit choice of the original is not overridden by an arriving
   await expect(scene.getByRole('button', { name: '번역이 준비됐어요. 번역 보기' })).toHaveCount(0);
 });
 
-test('RSEL10 the nearby-context choice is sent and kept for the next passage', async ({
+async function openProposal(page: Page, scene: Locator) {
+  await select(scene, unique);
+  await selectionBar(page).getByRole('button', { name: '다듬기', exact: true }).click();
+  const popover = page.getByRole('dialog', { name: '선택한 글 다듬기', exact: true });
+  await popover.getByLabel('다듬을 방향', { exact: true }).fill('호흡을 행동으로 보여줘.');
+  await popover.getByRole('button', { name: '제안 받기', exact: true }).click();
+  await expect(popover.getByTestId('reader-revision-proposal')).toBeVisible();
+  return popover;
+}
+
+test('RSEL10 Escape during a save keeps the popover so the conflict stays readable', async ({
+  page,
+  request,
+}) => {
+  const { chatId, source } = await seed(request);
+  await page.route(endpoint, (route) => route.fulfill({ json: { text: proposal } }));
+  const scene = await open(page, chatId, source.id);
+  const popover = await openProposal(page, scene);
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let saving!: () => void;
+  const reached = new Promise<void>((resolve) => {
+    saving = resolve;
+  });
+  await page.route(`**/api/sources/${source.id}/text`, async (route) => {
+    saving();
+    await released;
+    await route.fulfill({ status: 409, json: { error: 'Source revision conflict' } });
+  });
+  await popover.getByRole('button', { name: '적용', exact: true }).click();
+  await reached;
+  await expect(popover.getByRole('button', { name: '저장 중', exact: false })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(popover).toBeVisible();
+  release();
+  await expect(
+    popover.getByText('그사이 저장본이 바뀌어서 저장하지 않았어요', { exact: false })
+  ).toBeVisible();
+  await expect(popover.getByTestId('reader-revision-proposal')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(popover).toHaveCount(0);
+  expect((await detail(request, chatId)).sources[0].text).toBe(original);
+});
+
+test('RSEL11 global shortcuts wait while the refine popover is open', async ({ page, request }) => {
+  const { chatId, source } = await seed(request);
+  await page.route(endpoint, (route) => route.fulfill({ json: { text: proposal } }));
+  const scene = await open(page, chatId, source.id);
+  const popover = await openProposal(page, scene);
+  const shell = page.locator('.app-shell');
+  await expect(shell).not.toHaveClass(/sidebar-collapsed/);
+  for (const key of ['Control+K', 'Control+B', 'Control+Backslash', 'Control+Comma'])
+    await page.keyboard.press(key);
+  await expect(shell).not.toHaveClass(/sidebar-collapsed/);
+  await expect(page.locator('#helper-panel')).toBeHidden();
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  await expect(popover).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(popover).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => getSelection()!.removeAllRanges());
+  await page.keyboard.press('Control+B');
+  await expect(shell).toHaveClass(/sidebar-collapsed/);
+});
+
+for (const bot of [false, true]) {
+  const label = bot ? 'bot chat drawn by Risu' : 'plain display';
+  test(`RSEL12 ${label}: a selection in the scene keeps an arriving translation as a badge`, async ({
+    page,
+    request,
+  }) => {
+    const { chatId, source } = await seed(request);
+    const scene = await open(page, chatId, source.id, !bot);
+    await expect(scene.locator('.risu-message-surface')).toHaveCount(bot ? 1 : 0);
+    await expect(scene).toHaveAttribute('data-representation', 'original');
+    await select(scene, unique);
+    await expect(selectionBar(page)).toBeVisible();
+    const saved = await request.put(`/api/sources/${source.id}/translation`, {
+      data: { text: translated, expectedRevision: 0, expectedSourceHash: source.hash },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    await expect(
+      scene.getByRole('button', { name: '번역이 준비됐어요. 번역 보기', exact: true })
+    ).toBeVisible();
+    await expect(scene).toHaveAttribute('data-representation', 'original');
+  });
+}
+
+async function writtenScene(request: APIRequestContext) {
+  const created = await postFixtureChat(request, {
+    data: { title: `Reader translation ${randomUUID()}` },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const chat = (await created.json()) as Chat;
+  const before = await detail(request, chat.id);
+  const started = await request.post(`/api/chats/${chat.id}/runs`, {
+    data: {
+      request: '등대지기가 편지를 펼치는 장면이에요.',
+      expectedRevision: before.chat.headRevision,
+      expectedSettingsRevision: before.chat.settingsRevision,
+      expectedProfileRevision: before.profile!.revision,
+      idempotencyKey: randomUUID(),
+    },
+  });
+  expect(started.ok(), await started.text()).toBe(true);
+  const run = (await started.json()) as Run;
+  await expect
+    .poll(
+      async () => (await detail(request, chat.id)).runs.find((item) => item.id === run.id)?.status
+    )
+    .toBe('completed');
+  return { chatId: chat.id, source: (await detail(request, chat.id)).sources[0] };
+}
+
+async function control(request: APIRequestContext, action: string, barrier: string) {
+  const response = await request.post('/api/test/control', { data: { action, barrier } });
+  expect(response.ok(), await response.text()).toBe(true);
+}
+
+test('RSEL13 an editor opened before a translation starts keeps the original when it arrives', async ({
+  page,
+  request,
+}) => {
+  const { chatId, source } = await writtenScene(request);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/?chat=${chatId}`);
+  const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
+  await expect(scene).toHaveAttribute('data-representation', 'original');
+  await control(request, 'hold', 'translation');
+  try {
+    await openSourceActions(scene);
+    await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
+    const field = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
+    await expect(field).toBeFocused();
+    const started = await request.post(`/api/sources/${source.id}/translation`, { data: {} });
+    expect(started.ok(), await started.text()).toBe(true);
+    await expect(scene.getByRole('button', { name: '번역 보기', exact: true })).toBeVisible();
+  } finally {
+    await control(request, 'release', 'translation');
+  }
+  await expect
+    .poll(async () =>
+      (await detail(request, chatId)).jobs.some(
+        (job) => job.kind === 'translation' && job.status === 'completed'
+      )
+    )
+    .toBe(true);
+  await expect(
+    scene.getByRole('button', { name: '번역이 준비됐어요. 번역 보기', exact: true })
+  ).toBeVisible();
+  await expect(scene).toHaveAttribute('data-representation', 'original');
+  await expect(scene.getByRole('textbox', { name: '원문 수정 내용', exact: true })).toBeFocused();
+});
+
+test('RSEL14 a selection held from before a translation starts keeps the original when it arrives', async ({
+  page,
+  request,
+}) => {
+  const { chatId, source } = await writtenScene(request);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/?chat=${chatId}`);
+  const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
+  await expect(scene).toHaveAttribute('data-representation', 'original');
+  await control(request, 'hold', 'translation');
+  try {
+    await select(scene, 'the quiet pier');
+    await expect(selectionBar(page)).toBeVisible();
+    const started = await request.post(`/api/sources/${source.id}/translation`, { data: {} });
+    expect(started.ok(), await started.text()).toBe(true);
+    await expect(scene.getByRole('button', { name: '번역 보기', exact: true })).toBeVisible();
+  } finally {
+    await control(request, 'release', 'translation');
+  }
+  await expect(
+    scene.getByRole('button', { name: '번역이 준비됐어요. 번역 보기', exact: true })
+  ).toBeVisible();
+  await expect(scene).toHaveAttribute('data-representation', 'original');
+  await expect(selectionBar(page)).toBeVisible();
+});
+
+test('RSEL15 the nearby-context choice is sent and kept for the next passage', async ({
   page,
   request,
 }, info) => {
@@ -489,7 +673,7 @@ test('RSEL10 the nearby-context choice is sent and kept for the next passage', a
   expect(bodies[0]).not.toHaveProperty('context');
   await expect(nearby).not.toBeChecked();
   await nearby.check();
-  await shot(page, info, 'rsel10-nearby-context');
+  await shot(page, info, 'rsel15-nearby-context');
   await page.keyboard.press('Escape');
   await expect(popover).toHaveCount(0);
   const again = await ask();

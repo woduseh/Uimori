@@ -4,7 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import type { HelperChange, HelperTask } from '../core/helper.js';
+import type { OutlineNode } from '../core/outline.js';
 import type { Content } from '../core/product.js';
+import { editableResource } from '../core/resource-editing.js';
+import { readResource } from '../server/resource-service.js';
 import { applyTextDiff } from '../core/text-diff.js';
 import { chatOverrideHash } from '../core/chat-overrides.js';
 import { ChatOverridesStore } from '../server/chat-overrides.js';
@@ -27,7 +30,7 @@ import { HelperWorkspace } from '../server/helper-workspace.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 import { deleteScenes, sceneDeletionImpact } from '../server/scene-deletion.js';
 import { Store } from '../server/store.js';
-import { pruneUnusedData } from '../server/unused-data.js';
+import { flushPendingImageCleanup, pruneUnusedData } from '../server/unused-data.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { completedSource } from './fixtures/illustration.js';
 
@@ -248,6 +251,38 @@ test('lore entries, scene titles and created resources get their own entries', (
   });
   expect(changes[1]).toMatchObject({ targetId: created.id, title: '새 봇', diff: null });
   expect(inserted.revision).toBeGreaterThan(bot.revision);
+});
+
+test('a task that changes only bot package settings records a change for each setting', () => {
+  const f = fixture();
+  const module = f.store.product.content({ ...fixtureBotInput('함께 쓰는 모듈'), kind: 'module' });
+  const bot = f.store.product.content({
+    ...fixtureBotInput('설정 봇', '설명'),
+    package: nativeContent(
+      {
+        name: '설정 봇',
+        character_book: { entries: [{ comment: '마을', keys: ['마을'], content: '조용한 마을' }] },
+      },
+      { id: 'settings-bot' }
+    ),
+  }) as Content;
+  expect(bot.package.loreActivation?.mode).toBe('model');
+  const task = f.begin();
+  const model = structuredClone(
+    editableResource('content', readResource(f.store, 'content', bot.id))
+  ) as any;
+  model.package.modules = [{ id: module.id, revision: module.revision }];
+  model.package.loreActivation.mode = 'discoverable';
+  f.resource(task, 'resource.save', {
+    kind: 'content',
+    id: bot.id,
+    expectedRevision: bot.revision,
+    model,
+  });
+  expect(f.changes(task).map((change) => [change.action, change.location])).toEqual([
+    ['create', { kind: 'resource-field', path: ['package', 'modules'] }],
+    ['update', { kind: 'resource-field', path: ['package', 'loreActivation', 'mode'] }],
+  ]);
 });
 
 test('a translation, a lore entry field and a regex script have structured locations', () => {
@@ -500,6 +535,47 @@ test('unused image cleanup keeps images that a recorded baseline still reference
   expect(f.store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(hash)).toBeUndefined();
 });
 
+test('an outline task that changes only levels or related nodes records a change', () => {
+  const f = fixture();
+  f.store.outline.applyReceipt(
+    f.chat.id,
+    {
+      operations: [
+        { op: 'create', level: 'arc', title: '1부', intent: '떠난다' },
+        { op: 'create', level: 'arc', title: '2부', intent: '돌아온다' },
+      ],
+      idempotencyKey: 'outline-seed',
+    },
+    'user'
+  );
+  const [first, second] = f.store.outline.nodes(f.chat.id) as [OutlineNode, OutlineNode];
+  const task = f.begin();
+  f.workspace.operation(task.id, `${task.id}:${randomUUID()}`, { op: 'outline' }, () =>
+    withHelperChange(f.store, task, { domain: 'outline', chatId: f.chat.id }, () =>
+      f.store.outline.applyReceipt(
+        f.chat.id,
+        {
+          operations: [
+            { op: 'update', id: first.id, expectedRevision: first.revision, level: 'episode' },
+            {
+              op: 'update',
+              id: second.id,
+              expectedRevision: second.revision,
+              relatedIds: [first.id],
+            },
+          ],
+          idempotencyKey: 'outline-levels',
+        },
+        'user'
+      )
+    )
+  );
+  expect(f.changes(task).map((change) => [change.action, change.location])).toEqual([
+    ['update', { kind: 'outline', level: 'episode', title: '1부', field: null }],
+    ['update', { kind: 'outline', level: 'arc', title: '2부', field: null }],
+  ]);
+});
+
 test('outline and author notes record node and note changes, and a deleted target has no anchor', () => {
   const f = fixture();
   const bot = f.store.product.content(fixtureBotInput('지울 봇', '설명'));
@@ -576,6 +652,65 @@ test('outline and author notes record node and note changes, and a deleted targe
     f.store.db.prepare("SELECT baseline FROM helper_changes WHERE domain='resource'").get()
   ).toEqual({ baseline: 'null' });
 });
+
+test.each(['expired', 'chat deleted', 'conversation deleted'] as const)(
+  'a baseline removed because its record %s releases the images and theme assets only it held',
+  (removal) => {
+    const f = fixture();
+    const image = 'a'.repeat(64);
+    const font = 'b'.repeat(64);
+    f.store.db
+      .prepare('INSERT INTO image_blobs(hash,mime,bytes) VALUES(?,?,?)')
+      .run(image, 'image/png', Buffer.from([1]));
+    f.store.db
+      .prepare('INSERT INTO theme_assets(hash,kind,mime,bytes,created_at) VALUES(?,?,?,?,?)')
+      .run(font, 'font', 'font/woff2', Buffer.from([1]), new Date().toISOString());
+    const bot = f.store.product.content(
+      fixtureBotInput('이미지 봇', `![그림](/api/package-image-blobs/${image})`)
+    );
+    const task = f.begin();
+    f.resource(task, 'resource.patch', {
+      kind: 'content',
+      id: bot.id,
+      expectedRevision: bot.revision,
+      changes: [{ op: 'set', path: '/package/nativeRisu/card/description', value: '그림 없음' }],
+    });
+    f.resource(task, 'resource.patch', {
+      kind: 'content',
+      id: bot.id,
+      expectedRevision: f.store.product.get<Content>('content', bot.id).revision,
+      changes: [{ op: 'set', path: '/package/nativeRisu/card/creator_notes', value: '다른 메모' }],
+    });
+    f.store.db
+      .prepare(
+        "INSERT INTO helper_changes(task_id,domain,target_id,position,baseline,entries,updated_at) VALUES(?,'resource','theme:custom',9,?,'[]',?)"
+      )
+      .run(
+        task.id,
+        JSON.stringify({ assets: [{ hash: font, kind: 'font' }] }),
+        new Date().toISOString()
+      );
+    f.workspace.finish(task.id, 'changes-fixture', 1, 'completed', '', null);
+    pruneUnusedData(f.store.db, [image]);
+    pruneThemeAssets(f.store.db, [font]);
+    const kept = () => ({
+      image: !!f.store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(image),
+      font: !!f.store.db.prepare('SELECT 1 FROM theme_assets WHERE hash=?').get(font),
+    });
+    expect(kept()).toEqual({ image: true, font: true });
+    if (removal === 'expired')
+      pruneHelperChanges(
+        f.store.db,
+        undefined,
+        Date.now() + (HELPER_CHANGE_RETENTION.days + 1) * 86_400_000
+      );
+    else if (removal === 'chat deleted') deleteChat(f.store, f.chat.id, {});
+    else
+      f.workspace.delete(f.conversation.id, f.workspace.deletionImpact(f.conversation.id).request);
+    flushPendingImageCleanup(f.store.db);
+    expect(kept()).toEqual({ image: false, font: false });
+  }
+);
 
 test('theme asset cleanup keeps fonts and images a recorded theme baseline references', () => {
   const f = fixture();

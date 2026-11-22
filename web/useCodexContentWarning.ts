@@ -69,7 +69,7 @@ export function useCodexContentWarning() {
     try {
       return (await api<CodexContentPreflightResult>(path, body, 'POST')).warning;
     } catch {
-      return false;
+      return true;
     }
   }
 

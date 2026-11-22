@@ -30,7 +30,8 @@ import {
   pruneUnusedHelperFiles,
 } from './helper-attachments.js';
 import { imageDataHashes, pruneUnusedData } from './unused-data.js';
-import { pruneHelperChanges } from './helper-changes.js';
+import { forgetHelperConversationChanges, pruneHelperChanges } from './helper-changes.js';
+import { releaseHelperConfirmationArguments } from './helper-argument-retention.js';
 import { helperRequestContext } from './helper-context.js';
 import {
   forgetHelperConversationRead,
@@ -447,6 +448,7 @@ export class HelperWorkspace {
         .map((row) => String(row.attempt_id));
       detachAttemptUsage(this.store.db, attemptIds);
       forgetHelperConversationRead(this.store, id);
+      forgetHelperConversationChanges(this.store.db, id);
       this.store.db.prepare('DELETE FROM helper_conversations WHERE id=?').run(id);
       pruneUnusedData(this.store.db, attachmentImages);
       pruneUnusedHelperFiles(this.store.db);
@@ -822,6 +824,8 @@ export class HelperWorkspace {
           .get(conversationId, snapshot.requestGroupId);
         if (latest?.id !== previous.id)
           throw new HttpError(409, '이미 다시 시도한 요청이에요. 최신 결과를 확인해 주세요.');
+        if (snapshot.confirmations?.some((call) => !call.arguments))
+          throw new HttpError(409, 'CONFIRMATION_UNAVAILABLE');
         const retryContext = helperRequestContext(this.store, conversationId, previous.id);
         if (retryContext.invalidatesCheckpoint)
           this.store.db
@@ -870,6 +874,7 @@ export class HelperWorkspace {
           time
         );
       pruneHelperChanges(this.store.db, conversationId);
+      releaseHelperConfirmationArguments(this.store.db, conversationId);
       const message = snapshot.selection
         ? `${request}\n\nSelected passage ${snapshot.selection.sourceId} (SHA-256: ${snapshot.selection.sourceHash}):\n${snapshot.selection.text}`
         : request;
@@ -1059,6 +1064,7 @@ export class HelperWorkspace {
           .prepare('INSERT INTO helper_messages VALUES(?,?,?,?,?,?,?)')
           .run(randomUUID(), task.conversationId, id, 'assistant', text, '[]', now());
       if (status === 'completed') releaseCompletedHelperInputs(this.store.db, id);
+      releaseHelperConfirmationArguments(this.store.db, task.conversationId);
       this.event(task.conversationId, id, `task.${status}`, { error });
       return true;
     });

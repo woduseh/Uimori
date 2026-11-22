@@ -41,7 +41,7 @@ import { ProviderRejectionNotice } from './provider-rejection.js';
 import { Prose } from './Prose.js';
 import { parseStoryUi } from '../core/story-ui.js';
 import { StoryUi } from './LazyStoryUi.js';
-import { selectedReaderText } from './reader-dom.js';
+import { readerContains, selectedReaderText } from './reader-dom.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
 import type { RisuAction } from './risu-message-surface.js';
 import { retainReaderNavigation } from './reader-navigation-scroll.js';
@@ -220,6 +220,10 @@ function currentAnchor(container: HTMLElement | null): AnchorPosition | undefine
 }
 function translationEditRevision(source: Source, translation?: Job) {
   return translation?.revision ?? source.translationRevision ?? (translation ? 1 : 0);
+}
+function selectionInside(node: HTMLElement) {
+  const selection = getSelection();
+  return !!selection && !selection.isCollapsed && readerContains(node, selection.anchorNode);
 }
 const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
 const EDITABLE = 'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
@@ -434,6 +438,7 @@ function SourceReaderContent({
   const translationPreviouslyAvailable = useRef(targetTranslationAvailable);
   const [translationReady, setTranslationReady] = useState(false);
   const sceneVisible = useRef(false);
+  const [editor, setEditor] = useState<ReaderMode | null>(null);
   useEffect(() => {
     const justCompleted = !translationPreviouslyAvailable.current && targetTranslationAvailable;
     translationPreviouslyAvailable.current = targetTranslationAvailable;
@@ -444,13 +449,14 @@ function SourceReaderContent({
     } catch {
       return;
     }
-    if (sceneVisible.current && interacted.current) {
+    const node = container.current;
+    if (sceneVisible.current && (interacted.current || editor || (node && selectionInside(node)))) {
       setTranslationReady(true);
       return;
     }
     restoreAnchor.current = currentAnchor(container.current);
     setMode('translation');
-  }, [readerTarget?.sourceId, source.id, targetTranslationAvailable]);
+  }, [readerTarget?.sourceId, source.id, targetTranslationAvailable, editor]);
   const translationActive = !!translation && activeJob(translation);
   useEffect(() => {
     if (translationActive) interacted.current = false;
@@ -480,9 +486,7 @@ function SourceReaderContent({
       if (event.target === scrollport || event.target === themeBodyScroll(node)) mark();
     };
     const selected = () => {
-      const selection = getSelection();
-      if (selection && !selection.isCollapsed && node.contains(selection.anchorNode))
-        interacted.current = true;
+      if (selectionInside(node)) interacted.current = true;
     };
     scrollport.addEventListener('wheel', mark, { passive: true });
     scrollport.addEventListener('touchmove', mark, { passive: true });
@@ -508,7 +512,6 @@ function SourceReaderContent({
           : 'original'
       );
   }, [readerTarget, source.id, targetTranslationAvailable]);
-  const [editor, setEditor] = useState<ReaderMode | null>(null);
   useEffect(() => {
     if (editor) interacted.current = true;
   }, [editor]);

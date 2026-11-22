@@ -18,6 +18,8 @@ import {
 import { alignSequences, diffText, type TextDiff, type TextDiffMode } from '../core/text-diff.js';
 import { displayTranslationJob } from '../core/translation-display.js';
 import { sceneTitle } from './scene-titles.js';
+import { pruneThemeAssets, themeAssetHashes } from './theme-assets.js';
+import { imageDataHashes, queueImageCleanup } from './unused-data.js';
 import { latestTranslation } from './source-editing.js';
 import type { Store } from './store.js';
 
@@ -350,7 +352,7 @@ function resourceEntries(
       }
     }
   };
-  walk(authoredView(kind, before), authoredView(kind, after), '', null, '');
+  walk(...comparedViews(kind, before, after), '', null, '');
   if (entries.length <= TARGET_ENTRIES) return entries;
   const rest = entries.length - TARGET_ENTRIES + 1;
   return [
@@ -371,6 +373,52 @@ export function authoredView(kind: ResourceKind, model: unknown): unknown {
   const { kind: contentKind, loading, relatedIds } = model;
   const { nativeRisu, images } = model.package;
   return { kind: contentKind, loading, relatedIds, package: { nativeRisu, images } };
+}
+
+type HandoffRange = { field: string; text: string; id: string; enabled: boolean };
+function ownerSettings(own: Json, other: Json) {
+  const handoff = (value: unknown) =>
+    plain(value) && Array.isArray(value.ranges) ? (value.ranges as HandoffRange[]) : null;
+  const ranges = handoff(own.imageHandoff);
+  const otherRanges = handoff(other.imageHandoff);
+  return {
+    portraitImageId: own.portraitImageId,
+    modules: own.modules,
+    loreActivation:
+      plain(own.loreActivation) && plain(other.loreActivation)
+        ? { mode: own.loreActivation.mode }
+        : undefined,
+    imageHandoff:
+      ranges && otherRanges
+        ? {
+            enabled: ranges
+              .filter(
+                (range) =>
+                  range.enabled &&
+                  otherRanges.some((item) => item.field === range.field && item.text === range.text)
+              )
+              .map((range) => `${range.field}:${range.id}`),
+          }
+        : undefined,
+  };
+}
+
+function comparedViews(kind: ResourceKind, before: unknown, after: unknown): [unknown, unknown] {
+  const left = authoredView(kind, before);
+  const right = authoredView(kind, after);
+  if (kind !== 'content' || !plain(left) || !plain(right)) return [left, right];
+  const a = contentPackageSettings(before) as Json;
+  const b = contentPackageSettings(after) as Json;
+  return [
+    { ...left, package: { ...(left.package as Json), ...ownerSettings(a, b) } },
+    { ...right, package: { ...(right.package as Json), ...ownerSettings(b, a) } },
+  ];
+}
+
+export function contentPackageSettings(model: unknown) {
+  const pkg = plain(model) && plain(model.package) ? model.package : {};
+  const { portraitImageId, modules, loreActivation, imageHandoff } = pkg;
+  return { portraitImageId, modules, loreActivation, imageHandoff };
 }
 
 export function recordHelperResourceChange(
@@ -448,7 +496,12 @@ export function helperTargetHash(target: HelperChangeTarget, value: unknown) {
 }
 
 export function helperResourceHash(kind: ResourceKind, saved: SavedResource) {
-  return helperStateHash(authoredView(kind, editableResource(kind, saved)));
+  const model = editableResource(kind, saved);
+  return helperStateHash(
+    kind === 'content'
+      ? { view: authoredView(kind, model), settings: contentPackageSettings(model) }
+      : model
+  );
 }
 
 export function captureHelperTarget(store: Store, target: HelperChangeTarget): Capture {
@@ -541,6 +594,8 @@ function outlineEntries(
     });
   const order = (nodes: OutlineState) =>
     nodes.filter((node) => before.has(node.id) && current.has(node.id)).map((node) => node.id);
+  const related = (node: OutlineState[number], nodes: Map<string, OutlineState[number]>) =>
+    (node.relatedIds ?? []).map((id) => `${nodes.get(id)?.title ?? id}\n`).join('');
   const kept = new Set<string>();
   const script = alignSequences(order(baseline), order(after));
   if (script) {
@@ -567,7 +622,20 @@ function outlineEntries(
         null,
         diffText(`fixed: ${old.fixed}\n`, `fixed: ${node.fixed}\n`, 'code')
       );
-    if (old.parentId !== node.parentId || (script && !kept.has(node.id)))
+    if (old.level !== node.level)
+      push(
+        node,
+        'update',
+        null,
+        diffText(`level: ${old.level}\n`, `level: ${node.level}\n`, 'code')
+      );
+    if (!isDeepStrictEqual(old.relatedIds ?? [], node.relatedIds ?? []))
+      push(node, 'update', null, diffText(related(old, before), related(node, current), 'code'));
+    if (
+      old.parentId !== node.parentId ||
+      old.position !== node.position ||
+      (script && !kept.has(node.id))
+    )
       push(node, 'reorder', null, null);
   }
   for (const node of baseline)
@@ -761,10 +829,23 @@ export function recordHelperChatLoreChange(
   });
 }
 
+function releaseBaselineFiles(db: DatabaseSync, rows: Record<string, unknown>[]) {
+  queueImageCleanup(
+    db,
+    rows.flatMap((row) => imageDataHashes(row.baseline))
+  );
+  const themeAssets = rows.flatMap((row) =>
+    String(row.target_id).startsWith('theme:') && typeof row.baseline === 'string'
+      ? themeAssetHashes(JSON.parse(row.baseline))
+      : []
+  );
+  if (themeAssets.length) pruneThemeAssets(db, themeAssets);
+}
+
 function redact(db: DatabaseSync, where: string, values: string[], reason: 'deleted' | 'expired') {
   const rows = db
     .prepare(
-      `SELECT task_id,domain,target_id,entries FROM helper_changes WHERE text_removed IS NULL AND (${where})`
+      `SELECT task_id,domain,target_id,baseline,entries FROM helper_changes WHERE text_removed IS NULL AND (${where})`
     )
     .all(...values);
   const update = db.prepare(
@@ -785,6 +866,15 @@ function redact(db: DatabaseSync, where: string, values: string[], reason: 'dele
     );
     update.run(JSON.stringify(entries), reason, row.task_id, row.domain, row.target_id);
   }
+  releaseBaselineFiles(db, rows);
+}
+
+function forget(db: DatabaseSync, where: string, values: string[]) {
+  const rows = db
+    .prepare(`SELECT target_id,baseline FROM helper_changes WHERE ${where}`)
+    .all(...values);
+  db.prepare(`DELETE FROM helper_changes WHERE ${where}`).run(...values);
+  releaseBaselineFiles(db, rows);
 }
 
 export function pruneHelperChanges(db: DatabaseSync, conversationId?: string, now = Date.now()) {
@@ -813,7 +903,16 @@ export function forgetHelperSceneChanges(db: DatabaseSync, sourceIds: Iterable<s
 }
 
 export function forgetHelperChatChanges(db: DatabaseSync, chatId: string) {
-  db.prepare('DELETE FROM helper_changes WHERE chat_id=?').run(chatId);
+  forget(
+    db,
+    `chat_id=? OR task_id IN (SELECT t.id FROM helper_tasks t
+      JOIN helper_conversations c ON c.id=t.conversation_id WHERE c.chat_id=?)`,
+    [chatId, chatId]
+  );
+}
+
+export function forgetHelperConversationChanges(db: DatabaseSync, conversationId: string) {
+  forget(db, 'task_id IN (SELECT id FROM helper_tasks WHERE conversation_id=?)', [conversationId]);
 }
 
 function boundDiffs(entries: HelperChange[], characters: number): HelperChange[] {

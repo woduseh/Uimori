@@ -604,6 +604,7 @@ test('RACOM05 earlier scenes keep bookmark and menu visible while copy, editing 
     await page.screenshot({ path: info.outputPath(`past-scene-actions-${width}.png`) });
     await noHorizontalOverflow(page, scene);
     await page.reload();
+    await expect(scene.getByTestId('source-text')).toBeVisible();
     await expect(scene.getByTestId('scene-representation')).toHaveCount(0);
   }
   const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
@@ -649,6 +650,71 @@ test('RACOM05 earlier scenes keep bookmark and menu visible while copy, editing 
       .sort((a, b) => (b.revision ?? 0) - (a.revision ?? 0))[0]?.result?.text
   ).toBe(translatedText);
   expect(generationRequests).toEqual([]);
+});
+
+test('RACOM09 a scene menu stays open when its own toggle shortens the scene and clamps the reader scroll, and still closes when the reader scrolls', async ({
+  page,
+  request,
+}) => {
+  const before = await seed(request, '스크롤 고정 합성 채팅', [
+    '등대지기가 편지를 펼치는 첫 장면이에요.',
+    '최신 장면에서는 다음 항해를 준비해요.',
+  ]);
+  const source = before.sources[0];
+  const translated = await request.put(`/api/sources/${source.id}/translation`, {
+    data: {
+      text: '짧은 번역이에요.',
+      expectedRevision: source.translationRevision ?? 0,
+      expectedSourceHash: source.hash,
+    },
+  });
+  expect(translated.ok(), await translated.text()).toBe(true);
+  await page.addInitScript(() => {
+    if (window === window.top) localStorage.setItem('uimori:reading-language', 'original');
+  });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+  await page.goto(`/?chat=${before.chat.id}`);
+  const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
+  const reader = page.locator('[data-reader-scrollport]');
+  await expect(scene.getByTestId('source-text')).toBeVisible();
+  const bottomGap = 40;
+  const range = await reader.evaluate((node, gap) => {
+    node.scrollTop = node.scrollHeight - node.clientHeight - gap;
+    return { scrollTop: node.scrollTop, max: node.scrollHeight - node.clientHeight };
+  }, bottomGap);
+  expect(range.scrollTop).toBe(range.max - bottomGap);
+  const original = await scene
+    .getByTestId('source-text')
+    .evaluate((node) => node.getBoundingClientRect().height);
+  const opener = await openSourceActions(scene);
+  const menu = opener.locator('..');
+  await expect(menu).toHaveJSProperty('open', true);
+  await reader.evaluate((node) => {
+    node.addEventListener('scroll', () => node.setAttribute('data-test-clamped', 'yes'), {
+      once: true,
+    });
+  });
+  const translationChoice = scene.getByRole('button', { name: '번역 보기', exact: true });
+  await translationChoice.click();
+  await expect(scene.getByTestId('translation-text')).toContainText('짧은 번역이에요.');
+  const shortened = await scene
+    .getByTestId('translation-text')
+    .evaluate((node) => node.getBoundingClientRect().height);
+  expect(original - shortened).toBeGreaterThan(bottomGap);
+  await expect(reader).toHaveAttribute('data-test-clamped', 'yes');
+  const clamped = await reader.evaluate((node) => ({
+    scrollTop: node.scrollTop,
+    max: node.scrollHeight - node.clientHeight,
+  }));
+  expect(clamped.scrollTop).toBe(clamped.max);
+  expect(clamped.scrollTop).toBeLessThan(range.scrollTop);
+  await expect(menu).toHaveJSProperty('open', true);
+  await expect(translationChoice).toHaveAttribute('aria-pressed', 'true');
+
+  await reader.evaluate((node) => {
+    node.scrollTop = 0;
+  });
+  await expect(menu).toHaveJSProperty('open', false);
 });
 
 test('RACOM06 earlier-scene translation generation stays explicit and pending or failed work keeps visible recovery', async ({
