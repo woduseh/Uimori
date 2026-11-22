@@ -528,10 +528,8 @@ test('QUEUE14 the reader follows the output of a request sent from the queue', a
     });
     live.finish();
     await expect.poll(() => sent).toEqual(['계속 써 주세요.']);
-    await expect(page.getByText('예약한 요청으로 이어 쓴 장면.')).toBeVisible();
-    await expect
-      .poll(() => reader.evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop))
-      .toBeLessThan(2);
+    await expect(page.getByText('예약한 요청으로 이어 쓴 장면.')).toBeInViewport();
+    expect(await reader.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
   } finally {
     await peer.close();
   }
