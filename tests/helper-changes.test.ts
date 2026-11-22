@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import type { HelperChange, HelperTask } from '../core/helper.js';
+import type { OutlineNode } from '../core/outline.js';
 import type { Content } from '../core/product.js';
 import { applyTextDiff } from '../core/text-diff.js';
 import { chatOverrideHash } from '../core/chat-overrides.js';
@@ -498,6 +499,47 @@ test('unused image cleanup keeps images that a recorded baseline still reference
   f.store.db.prepare('UPDATE helper_changes SET baseline=NULL').run();
   pruneUnusedData(f.store.db, [hash]);
   expect(f.store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(hash)).toBeUndefined();
+});
+
+test('an outline task that changes only levels or related nodes records a change', () => {
+  const f = fixture();
+  f.store.outline.applyReceipt(
+    f.chat.id,
+    {
+      operations: [
+        { op: 'create', level: 'arc', title: '1부', intent: '떠난다' },
+        { op: 'create', level: 'arc', title: '2부', intent: '돌아온다' },
+      ],
+      idempotencyKey: 'outline-seed',
+    },
+    'user'
+  );
+  const [first, second] = f.store.outline.nodes(f.chat.id) as [OutlineNode, OutlineNode];
+  const task = f.begin();
+  f.workspace.operation(task.id, `${task.id}:${randomUUID()}`, { op: 'outline' }, () =>
+    withHelperChange(f.store, task, { domain: 'outline', chatId: f.chat.id }, () =>
+      f.store.outline.applyReceipt(
+        f.chat.id,
+        {
+          operations: [
+            { op: 'update', id: first.id, expectedRevision: first.revision, level: 'episode' },
+            {
+              op: 'update',
+              id: second.id,
+              expectedRevision: second.revision,
+              relatedIds: [first.id],
+            },
+          ],
+          idempotencyKey: 'outline-levels',
+        },
+        'user'
+      )
+    )
+  );
+  expect(f.changes(task).map((change) => [change.action, change.location])).toEqual([
+    ['update', { kind: 'outline', level: 'episode', title: '1부', field: null }],
+    ['update', { kind: 'outline', level: 'arc', title: '2부', field: null }],
+  ]);
 });
 
 test('outline and author notes record node and note changes, and a deleted target has no anchor', () => {

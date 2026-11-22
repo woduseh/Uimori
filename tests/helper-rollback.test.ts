@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { HelperRollbackUnit, HelperTask } from '../core/helper.js';
+import { OUTLINE_LEVELS, outlineParentAllowed, type OutlineLevel } from '../core/outline.js';
 import type { Content } from '../core/product.js';
 import { editableResource, type ResourceModel } from '../core/resource-editing.js';
 import * as transport from '../core/transport.js';
@@ -159,6 +160,7 @@ const description = (store: Store, id: string) =>
 
 function outlineShape(store: Store, chatId: string) {
   const nodes = store.outline.nodes(chatId);
+  const titles = new Map(nodes.map((node) => [node.id, node.title]));
   const tree = (parentId: string | null): unknown[] =>
     nodes
       .filter((node) => node.parentId === parentId)
@@ -169,6 +171,7 @@ function outlineShape(store: Store, chatId: string) {
         intent: node.intent,
         fixed: node.fixed,
         position: node.position,
+        related: (node.relatedIds ?? []).map((id) => titles.get(id)),
         children: tree(node.id),
       }));
   return tree(null);
@@ -488,7 +491,9 @@ test('a task that rewrote or retired an imported memory rolls back to the memory
   write({ text: '고쳐 쓴 기억', replacesId: rewritten.id });
   write({ retired: true, replacesId: retired.id });
   f.finish(task);
-  expect(f.rollBack(task).units).toMatchObject([{ unit: `notes:${f.chat.id}`, status: 'restored' }]);
+  expect(f.rollBack(task).units).toMatchObject([
+    { unit: `notes:${f.chat.id}`, status: 'restored' },
+  ]);
   const notes = f.store.story.notes.entries(
     f.store.story.notes.scope(f.chat.id, f.store.chat(f.chat.id).headRevision)
   );
@@ -635,6 +640,8 @@ function runSeed(seed: number) {
           left: w.state(target),
           interrupted: false,
         });
+      const net = touched.get(target)!;
+      if (!target.startsWith('scene:') && net.left === net.start) touched.delete(target);
       touches.set(writer, touched);
     }
   };
@@ -648,23 +655,60 @@ function runSeed(seed: number) {
     expectedHeadRevision: f.store.chat(f.chat.id).headRevision,
     idempotencyKey: randomUUID(),
   });
-  const outlineOperation = () => {
+  const outlineOperation = (): Record<string, unknown> => {
     const nodes = f.store.outline.nodes(f.chat.id);
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const levelOf = (id: string | null) => (id === null ? null : byId.get(id)!.level);
+    const within = (id: string, ancestor: string): boolean =>
+      id === ancestor ||
+      (byId.get(id)!.parentId !== null && within(byId.get(id)!.parentId!, ancestor));
+    const fits = (parentId: string | null, level: OutlineLevel, id?: string) =>
+      outlineParentAllowed(levelOf(parentId), level) &&
+      nodes.every((child) => child.parentId !== id || outlineParentAllowed(level, child.level));
     const choice = random();
-    if (choice < 0.4 && nodes.length)
-      return (() => {
-        const node = pick(nodes);
-        return {
-          op: 'update',
-          id: node.id,
-          expectedRevision: node.revision,
-          [random() < 0.5 ? 'title' : 'intent']: fresh('구성'),
-        };
-      })();
-    if (choice < 0.7 || nodes.length < 2)
-      return { op: 'create', level: 'arc', title: fresh('새 구성'), intent: fresh('의도') };
-    const node = pick(nodes.filter((item) => item.parentId === null));
-    return { op: 'remove', id: node.id, expectedRevision: node.revision };
+    const node = nodes.length ? pick(nodes) : undefined;
+    const guard = node && { id: node.id, expectedRevision: node.revision };
+    if (node && choice < 0.25)
+      return { op: 'update', ...guard, [random() < 0.5 ? 'title' : 'intent']: fresh('구성') };
+    if (node && choice < 0.4) {
+      const levels = OUTLINE_LEVELS.filter(
+        (level) => level !== node.level && fits(node.parentId, level, node.id)
+      );
+      if (levels.length) return { op: 'update', ...guard, level: pick(levels) };
+    }
+    if (node && choice < 0.55) {
+      const parents = [null, ...nodes.map((item) => item.id)].filter(
+        (id) => (id === null || !within(id, node.id)) && fits(id, node.level)
+      );
+      return {
+        op: 'move',
+        ...guard,
+        parentId: pick(parents),
+        position: Math.floor(random() * 4),
+      };
+    }
+    if (node && choice < 0.65)
+      return {
+        op: 'update',
+        ...guard,
+        relatedIds: nodes
+          .filter((item) => item.id !== node.id && random() < 0.4)
+          .map((item) => item.id),
+      };
+    if (choice < 0.85 || nodes.length < 2) {
+      const level = pick(OUTLINE_LEVELS);
+      const parents = [null, ...nodes.map((item) => item.id)].filter((id) => fits(id, level));
+      const parentId = pick(parents);
+      return {
+        op: 'create',
+        ...(parentId === null ? {} : { parentId }),
+        level,
+        title: fresh('새 구성'),
+        intent: fresh('의도'),
+      };
+    }
+    const root = pick(nodes.filter((item) => item.parentId === null));
+    return { op: 'remove', id: root.id, expectedRevision: root.revision };
   };
   const noteOperation = (): Record<string, unknown> => {
     const notes = visibleNotes();

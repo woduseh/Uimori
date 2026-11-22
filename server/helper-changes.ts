@@ -541,6 +541,8 @@ function outlineEntries(
     });
   const order = (nodes: OutlineState) =>
     nodes.filter((node) => before.has(node.id) && current.has(node.id)).map((node) => node.id);
+  const related = (node: OutlineState[number], nodes: Map<string, OutlineState[number]>) =>
+    (node.relatedIds ?? []).map((id) => `${nodes.get(id)?.title ?? id}\n`).join('');
   const kept = new Set<string>();
   const script = alignSequences(order(baseline), order(after));
   if (script) {
@@ -567,7 +569,20 @@ function outlineEntries(
         null,
         diffText(`fixed: ${old.fixed}\n`, `fixed: ${node.fixed}\n`, 'code')
       );
-    if (old.parentId !== node.parentId || (script && !kept.has(node.id)))
+    if (old.level !== node.level)
+      push(
+        node,
+        'update',
+        null,
+        diffText(`level: ${old.level}\n`, `level: ${node.level}\n`, 'code')
+      );
+    if (!isDeepStrictEqual(old.relatedIds ?? [], node.relatedIds ?? []))
+      push(node, 'update', null, diffText(related(old, before), related(node, current), 'code'));
+    if (
+      old.parentId !== node.parentId ||
+      old.position !== node.position ||
+      (script && !kept.has(node.id))
+    )
       push(node, 'reorder', null, null);
   }
   for (const node of baseline)
