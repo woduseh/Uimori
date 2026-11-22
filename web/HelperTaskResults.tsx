@@ -511,12 +511,21 @@ export function HelperTaskResults({
   confirmation?: {
     nameTarget: (target: HelperConfirmationTarget) => string;
     pending: readonly string[];
+    latestTaskId?: string;
     onConfirm?: (grant: HelperConfirmationGrant) => void;
   };
 }) {
   useI18n();
   const [sentinel, shown] = useSeen<HTMLSpanElement>(eager);
   const { data, reading, failed, retry } = useTaskResults(taskId, status, visible && shown);
+  const awaitingLaterTask = !!data?.confirmations?.some(
+    (held) => held.grantable && !held.grantedBy
+  );
+  const laterTaskId =
+    confirmation?.latestTaskId !== taskId ? confirmation?.latestTaskId : undefined;
+  useEffect(() => {
+    if (awaitingLaterTask && laterTaskId) retry();
+  }, [awaitingLaterTask, laterTaskId, retry]);
   useEffect(() => {
     if (data) onUsage?.(taskId, data.usage);
   }, [data, taskId, onUsage]);

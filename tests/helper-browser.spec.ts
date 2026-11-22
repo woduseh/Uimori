@@ -2705,6 +2705,55 @@ test('HCONFIRM02 declining a held call does not hide the same call held again in
   ).toBeVisible();
 });
 
+test('HCONFIRM03 confirming switches plan mode off and the held card shows the grant once the next task starts', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  const chat = await create(request),
+    state = await harness(page, 1);
+  await page.goto(`/?chat=${chat.id}`);
+  await open(page);
+  const earlier = state.current().tasks[0];
+  const held = (grantedBy: string | null) => ({
+    id: 'held-call',
+    taskId: earlier.id,
+    operation: 'scene.request',
+    reason: 'paid' as const,
+    chatId: chat.id,
+    targets: [{ kind: 'chat', id: chat.id }],
+    grantedBy,
+    grantable: grantedBy === null,
+  });
+  state.results.set(earlier.id, { confirmations: [held(null)] });
+  await page.reload();
+  const panel = await open(page);
+  const card = panel.locator('.helper-confirmation');
+  const modeChip = panel.locator('.helper-mode-chip');
+  await modeChip.click();
+  await expect(modeChip).toHaveAccessibleName('요청 방식: 계획만');
+  await card.getByRole('button', { name: '다음 장면 요청 확인', exact: true }).click();
+  await expect(modeChip).toHaveAccessibleName('요청 방식: 바로 적용');
+  await expect(panel.locator('.helper-confirmation-chip')).toHaveCount(1);
+  await modeChip.click();
+  await expect(modeChip).toHaveAccessibleName('요청 방식: 계획만');
+  await expect(panel.locator('.helper-confirmation-chip')).toHaveCount(0);
+  await expect(
+    card.getByRole('button', { name: '다음 장면 요청 확인', exact: true })
+  ).toBeVisible();
+  await card.getByRole('button', { name: '다음 장면 요청 확인', exact: true }).click();
+  await expect(modeChip).toHaveAccessibleName('요청 방식: 바로 적용');
+  await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await expect.poll(() => state.posts.length).toBe(1);
+  expect(state.posts[0].confirmations).toEqual(['held-call']);
+  expect(state.posts[0].mode).toBeUndefined();
+  const later = state.current().tasks[0];
+  expect(later.id).not.toBe(earlier.id);
+  state.results.set(earlier.id, { confirmations: [held(later.id)] });
+  await expect(card).toHaveAttribute('data-state', 'granted');
+  await expect(card).toContainText('확인해서 진행했어요.');
+});
+
 test('HELPACTIVITY observed stages retain tool errors and cancellation', async ({
   page,
   request,

@@ -968,6 +968,8 @@ export class HelperRuntime {
     const confirmations = [
       ...new Set(options.confirmations ?? inherited?.map((call) => call.id) ?? []),
     ].sort();
+    if (mode === 'plan' && confirmations.length)
+      throw new HttpError(400, 'HELPER_PLAN_CONFIRMATIONS');
     const requestFingerprint = createHash('sha256')
       .update(
         JSON.stringify({

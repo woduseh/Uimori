@@ -411,3 +411,35 @@ test('only a confirmation from the latest task can be granted, and declining nee
       )
     ).toThrow('CONFIRMATION_UNAVAILABLE');
 });
+
+test('a plan-mode request cannot carry a confirmation, which stays grantable', async () => {
+  const f = fixture();
+  const [one] = f.bots as [Content];
+  const first = await runScriptedChatHelper(f.store(), f.chat.id, [
+    helperCall('delete', 'resource.delete', {
+      kind: 'content',
+      id: one.id,
+      expectedRevision: one.revision,
+    }),
+    helperDone,
+  ]);
+  const [confirmation] = readHelperTaskResults(f.store(), first.task.id).confirmations;
+  const conversation = new HelperWorkspace(f.store()).open({ kind: 'chat', chatId: f.chat.id });
+  expect(() =>
+    first.runtime.enqueue(
+      conversation.id,
+      randomUUID(),
+      '지우는 계획만 세워 줘',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      { mode: 'plan', confirmations: [confirmation!.id] }
+    )
+  ).toThrow('HELPER_PLAN_CONFIRMATIONS');
+  expect(readHelperTaskResults(f.store(), first.task.id).confirmations).toMatchObject([
+    { id: confirmation!.id, grantedBy: null, grantable: true },
+  ]);
+});

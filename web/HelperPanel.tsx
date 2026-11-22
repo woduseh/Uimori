@@ -447,16 +447,15 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   });
   const [modes, setModes] = useState<Record<string, HelperMode>>({});
   const mode = modes[scopeKey] ?? 'apply';
-  const toggleMode = () => {
-    if (!scopeKey || document.activeElement?.closest('dialog')) return false;
-    setModes((old) => ({
-      ...old,
-      [scopeKey]: (old[scopeKey] ?? 'apply') === 'plan' ? 'apply' : 'plan',
-    }));
-  };
-  useShortcut('helper.mode', toggleMode, { scope: panel, active: props.open });
   const [grants, setGrants] = useState<Record<string, HelperConfirmationGrant[]>>({});
   const grantList = grants[scopeKey] ?? [];
+  const toggleMode = () => {
+    if (!scopeKey || document.activeElement?.closest('dialog')) return false;
+    const next = mode === 'plan' ? 'apply' : 'plan';
+    setModes((old) => ({ ...old, [scopeKey]: next }));
+    if (next === 'plan') setGrants((old) => ({ ...old, [scopeKey]: [] }));
+  };
+  useShortcut('helper.mode', toggleMode, { scope: panel, active: props.open });
   const answered = new Set(
     (data.current?.messages ?? [])
       .filter((message) => message.role === 'assistant')
@@ -1139,6 +1138,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   }
   function confirmHeld(grant: HelperConfirmationGrant) {
     if (!scopeKey) return;
+    setModes((old) => ({ ...old, [scopeKey]: 'apply' }));
     setGrants((old) => ({
       ...old,
       [scopeKey]: [...(old[scopeKey] ?? []).filter((item) => item.id !== grant.id), grant],
@@ -1794,6 +1794,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                         confirmation={{
                           nameTarget,
                           pending: grantList.map((grant) => grant.id),
+                          latestTaskId,
                           onConfirm: task.id === latestTaskId ? confirmHeld : undefined,
                         }}
                       />
