@@ -599,6 +599,73 @@ test('a task that changed only a bot package setting rolls back', () => {
   expect((readResource(f.store, 'content', bot.id) as Content).package.modules).toBeUndefined();
 });
 
+test('an outline rollback cancels only the scheduled scenes whose plan it changes', () => {
+  const f = fixture();
+  const created = f.store.outline.applyReceipt(
+    f.chat.id,
+    {
+      idempotencyKey: 'outline-seed',
+      operations: [
+        { op: 'create', ref: 'a', level: 'arc', title: '1부', intent: '떠난다' },
+        { op: 'create', ref: 'b', parentRef: 'a', level: 'episode', title: '1화', intent: '출발' },
+        { op: 'create', ref: 'c', level: 'arc', title: '2부', intent: '돌아온다' },
+        { op: 'create', ref: 'd', parentRef: 'c', level: 'episode', title: '2화', intent: '귀향' },
+        { op: 'create', ref: 'e', parentRef: 'c', level: 'episode', title: '3화', intent: '재회' },
+      ],
+    },
+    'user'
+  ).created;
+  const id = (ref: string) => created.find((item) => item.ref === ref)!.id;
+  const node = (ref: string) =>
+    f.store.outline.nodes(f.chat.id).find((item) => item.id === id(ref))!;
+  f.store.outline.applyReceipt(
+    f.chat.id,
+    {
+      idempotencyKey: 'outline-related',
+      operations: [
+        { op: 'update', id: id('b'), expectedRevision: node('b').revision, relatedIds: [id('d')] },
+      ],
+    },
+    'user'
+  );
+  const task = f.begin();
+  f.tracked(task, { domain: 'outline', chatId: f.chat.id }, () =>
+    f.store.outline.applyReceipt(
+      f.chat.id,
+      {
+        idempotencyKey: 'outline-move',
+        operations: [
+          {
+            op: 'move',
+            id: id('d'),
+            expectedRevision: node('d').revision,
+            parentId: id('a'),
+            position: 1,
+          },
+        ],
+      },
+      'user'
+    )
+  );
+  f.finish(task);
+  const scheduled = Object.fromEntries(
+    ['b', 'd', 'e'].map((ref) => [
+      ref,
+      f.store.outline.sceneCommand(id(ref), { idempotencyKey: randomUUID() }).id,
+    ])
+  );
+  expect(f.rollBack(task).units).toMatchObject([{ status: 'restored' }]);
+  expect(node('d').parentId).toBe(id('c'));
+  expect(
+    Object.fromEntries(
+      Object.entries(scheduled).map(([ref, command]) => [
+        ref,
+        f.store.story.command(command).status,
+      ])
+    )
+  ).toEqual({ b: 'pending', d: 'cancelled', e: 'pending' });
+});
+
 test('a patch across three resources restores the two nobody touched and reports the edited one', () => {
   const f = fixture();
   const bots = ['가', '나', '다'].map(
