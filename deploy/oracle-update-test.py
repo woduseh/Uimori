@@ -94,6 +94,9 @@ class Host(m.Runner):
             if self.fault == "backup": raise RuntimeError("backup failed")
             (self.private / "data" / "uimori.sqlite").write_text("synthetic stopped backup")
             return {"integrity": "ok"}
+        if action == "compact":
+            if self.fault == "compact": raise RuntimeError("compaction failed")
+            return {"compacted": True}
         if action == "maintenance": return {"status": "closed" if self.closed else "open", "reason": self.reason}
         if action == "close-maintenance": self.closed = True; self.reason = self.owner
         if action == "inspect" and self.fault == "active-work": raise RuntimeError("Active work")
@@ -216,9 +219,18 @@ class OracleTransitions(unittest.TestCase):
             self.assertEqual(host.summary["writes"], "OPEN")
             self.assertEqual(host.live_image, "sha256:new")
             self.assertLess(host.events.index(("control", "close")), host.events.index(("data", "backup")))
-            self.assertLess(host.events.index(("data", "backup")), host.events.index(("compose", "up")))
+            self.assertLess(host.events.index(("data", "backup")), host.events.index(("data", "compact")))
+            self.assertLess(host.events.index(("data", "compact")), host.events.index(("compose", "up")))
+            self.assertEqual(host.summary["compaction"], {"compacted": True})
             self.assertLess(host.events.index(("control", "smoke")), host.events.index(("control", "open")))
             self.assertEqual(host.events.count(("docker", "build")), 1)
+
+    def test_failed_compaction_is_recorded_without_stopping_the_update(self):
+        with self.host(fault="compact") as host:
+            host.execute()
+            self.assertEqual(host.summary["status"], "PASS")
+            self.assertEqual(host.summary["compaction"], {"status": "WARN", "error": "compaction failed"})
+            self.assertEqual(host.live_image, "sha256:new")
 
     def test_check_only_never_closes_stops_or_changes_application(self):
         with self.host(check_only=True, codex_version="1.0.0") as host:
@@ -233,7 +245,7 @@ class OracleTransitions(unittest.TestCase):
             self.assertEqual(host.events.count(("probe", True)), 1)
             self.assertIn(("data", "snapshot"), host.events)
             self.assertFalse(host.stopped or host.checked_out or host.candidate_started)
-            for event in [("control", "close"), ("data", "backup"), ("compose", "stop"),
+            for event in [("control", "close"), ("data", "backup"), ("data", "compact"), ("compose", "stop"),
                           ("compose", "up"), ("control", "smoke"), ("git", "checkout")]:
                 self.assertNotIn(event, host.events)
 
@@ -310,6 +322,7 @@ class OracleTransitions(unittest.TestCase):
             host.execute()
             self.assertEqual(host.live_volume, "isolated-data")
             self.assertIn(("data", "close-maintenance"), host.events)
+            self.assertNotIn(("data", "compact"), host.events)
             self.assertEqual(host.old_volume, "old")
         with self.host(fresh=True, fault="smoke") as host:
             self.fail_and_rollback(host)

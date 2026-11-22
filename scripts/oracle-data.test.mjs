@@ -1,10 +1,20 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+  existsSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import {
+  compactDatabase,
   dataMaintenance,
   copyCredentials,
   copyStoppedData,
@@ -78,6 +88,59 @@ test('stopped backup restores DB and companion assets, removing candidate-only f
     restored.close();
   }
   assert.throws(() => restoreData(source, join(source, 'nested')), /Overlapping/);
+});
+
+function sparseFixture(t) {
+  const { source, db } = fixture(t);
+  db.exec('CREATE TABLE images(id INTEGER PRIMARY KEY,bytes BLOB)');
+  const insert = db.prepare('INSERT INTO images(bytes) VALUES(zeroblob(65536))');
+  for (let index = 0; index < 200; index++) insert.run();
+  db.exec('DELETE FROM images WHERE id>4');
+  db.exec(
+    "INSERT INTO future_jobs VALUES('removed','completed',''),('later','completed',''); DELETE FROM future_jobs WHERE id='removed'"
+  );
+  db.close();
+  return { source, file: join(source, 'uimori.sqlite') };
+}
+
+test('compaction rewrites a database with many free pages and keeps its content', (t) => {
+  const { source, file } = sparseFixture(t);
+  const before = statSync(file).size;
+  const result = compactDatabase(source, { minFreeBytes: 1024 * 1024 });
+  assert.equal(result.compacted, true);
+  assert.equal(result.afterBytes, statSync(file).size);
+  assert.ok(result.afterBytes < before / 4);
+  assert.deepEqual(readdirSync(source), ['uimori.sqlite']);
+  assert.equal(inspectData(source, { integrity: true }).integrity, 'ok');
+  const compacted = new DatabaseSync(file, { readOnly: true });
+  try {
+    assert.equal(compacted.prepare('PRAGMA user_version').get().user_version, 15);
+    assert.equal(compacted.prepare('SELECT count(*) AS count FROM images').get().count, 4);
+    assert.deepEqual(
+      compacted
+        .prepare('SELECT rowid,id FROM future_jobs ORDER BY rowid')
+        .all()
+        .map((row) => [row.rowid, row.id]),
+      [
+        [1, 'job'],
+        [3, 'later'],
+      ]
+    );
+  } finally {
+    compacted.close();
+  }
+  const again = compactDatabase(source, { minFreeBytes: 1024 * 1024 });
+  assert.deepEqual([again.compacted, again.reason], [false, 'below-threshold']);
+});
+
+test('compaction leaves the database alone below the threshold or past its deadline', (t) => {
+  const { source, file } = sparseFixture(t);
+  const original = readFileSync(file);
+  assert.equal(compactDatabase(source).reason, 'below-threshold');
+  const late = compactDatabase(source, { minFreeBytes: 1024 * 1024, swapDeadlineMs: -1 });
+  assert.deepEqual([late.compacted, late.reason], [false, 'too-slow']);
+  assert.deepEqual(readFileSync(file), original);
+  assert.deepEqual(readdirSync(source), ['uimori.sqlite']);
 });
 
 for (const change of ['logout', 'login', 'authority']) {

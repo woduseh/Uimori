@@ -69,6 +69,7 @@ CI 확인 → Oracle preflight → pinned SHA 이미지 준비
 → 빈 DB maintenance boot → 운영 DB 복제본 maintenance boot
 → maintenance 닫기 → 이미 승인된 작업/HTTP 쓰기 종료 확인
 → 앱 정지 → DB·동반 파일·기존 환경 백업과 무결성 확인
+→ 빈 공간이 많으면 DB 압축
 → 후보 이미지 전환 (쓰기 계속 닫힘)
 → health·DB·외부 인증 파일·환경·라우팅 확인
 → Oracle 호스트의 실제 HTTPS/API smoke
@@ -76,6 +77,8 @@ CI 확인 → Oracle preflight → pinned SHA 이미지 준비
 ```
 
 복제본 probe는 `UIMORI_MAINTENANCE=1`로 외부 작업과 복구 worker를 시작하지 않아요. 실제 전환에는 재시작 후에도 보존되는 DB maintenance 상태를 사용해요. 이미 승인된 비동기 HTTP 쓰기도 active work로 집계해요. 종료가 늦으면 배포를 중단하고 기존 앱의 admission을 돌려놓으며 생성 작업을 강제로 취소하지 않아요.
+
+일반 업데이트는 백업을 확인한 뒤 DB 파일의 빈 페이지가 20% 이상이고 64MiB 이상일 때만 DB를 압축해요. 지운 자리는 이후 저장이 다시 쓰므로 평소 배포에서는 이 단계가 아무 일도 하지 않고, 채팅이나 이미지를 많이 지운 뒤의 배포에서만 실행돼요. 압축본을 따로 만들어 무결성·스키마·테이블별 행 수를 원본과 비교한 다음에 원본과 바꾸고, 여유 공간이 모자라거나 15분을 넘기면 원본을 그대로 둬요. 실패해도 배포를 멈추지 않고 요약의 `compaction`에 `WARN`과 원인을 남겨요. `--check-only`와 `--fresh`는 압축하지 않아요.
 
 호스트 control은 기존 운영 환경 파일을 read-only mount한 일회성 컨테이너에서 실행돼요. admission 제어는 정확한 Host/Origin을 가진 loopback HTTP를 사용하고, 최종 smoke는 host network에서 실제 HTTPS 주소와 인증서를 검증해요. 컨트롤러의 Tailscale 라우팅 유무는 배포 조건이 아니에요. smoke는 인증 세션과 읽기 API·HTML/JS만 확인하며 유료 모델 호출은 하지 않아요. 호스트에서의 성공이 외부 인터넷·모든 휴대폰 경로의 성공을 증명하지는 않아요.
 
