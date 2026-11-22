@@ -108,7 +108,7 @@ async function setup(request: APIRequestContext, options: { controls?: boolean }
   const chat = await body<Chat>(
     await postFixtureChat(request, { data: { title: `Queue chat ${randomUUID()}` } })
   );
-  return { peer, writer, chat };
+  return { peer, writer, chat, model };
 }
 
 async function startRun(request: APIRequestContext, chat: Chat) {
@@ -445,6 +445,153 @@ test('QUEUE11 a hidden tab sends the queued request when it is shown again', asy
     expect(sent).toEqual([]);
     await setHidden(page, false);
     await expect.poll(() => sent).toEqual(['계속 써 주세요.']);
+  } finally {
+    await peer.close();
+  }
+});
+
+test('QUEUE12 a chat model change while queued keeps the request as a draft', async ({
+  page,
+  request,
+}) => {
+  const { peer, writer, chat, model } = await setup(request);
+  try {
+    const run = await startRun(request, chat);
+    const sent = countSends(page, chat.id);
+    await openRunning(page, chat, run);
+    const live = await writer;
+    await queue(page, '계속 써 주세요.');
+    const current = await body<ChatDetail>(await request.get(`/api/chats/${chat.id}`));
+    await body(
+      await request.put(`/api/chats/${chat.id}/profile`, {
+        data: {
+          expectedRevision: current.profile!.revision,
+          image: current.profile!.image,
+          pinned: { ...current.profile!.pinned, mainModel: { id: model.id } },
+        },
+      })
+    );
+    live.finish();
+    await expectReturned(page, '계속 써 주세요.', '채팅 설정이 바뀌어', sent);
+  } finally {
+    await peer.close();
+  }
+});
+
+test('QUEUE13 a model or prompt settings change while queued keeps the request as a draft', async ({
+  page,
+  request,
+}) => {
+  const { peer, writer, chat } = await setup(request);
+  try {
+    const run = await startRun(request, chat);
+    const sent = countSends(page, chat.id);
+    await openRunning(page, chat, run);
+    const live = await writer;
+    await queue(page, '계속 써 주세요.');
+    const models = await body<ModelWorkspace>(await request.get('/api/model-workspace'));
+    await body(
+      await request.put('/api/model-workspace', {
+        data: {
+          expectedRevision: models.revision,
+          routes: { ...models.routes, translation: models.routes.main },
+          titleModel: null,
+          translationPolicy: models.translationPolicy,
+        },
+      })
+    );
+    live.finish();
+    await expectReturned(page, '계속 써 주세요.', '모델이나 프롬프트 설정이 바뀌어', sent);
+  } finally {
+    await peer.close();
+  }
+});
+
+test('QUEUE14 the reader follows the output of a request sent from the queue', async ({
+  page,
+  request,
+}) => {
+  const { peer, writer, chat } = await setup(request);
+  try {
+    const run = await startRun(request, chat);
+    const sent = countSends(page, chat.id);
+    await openRunning(page, chat, run, 1280);
+    await page.setViewportSize({ width: 1280, height: 420 });
+    const live = await writer;
+    await queue(page, '계속 써 주세요.');
+    const reader = page.locator('[data-reader-scrollport]');
+    await expect
+      .poll(() => reader.evaluate((node) => node.scrollHeight - node.clientHeight))
+      .toBeGreaterThan(40);
+    await reader.evaluate((node) => {
+      node.scrollTop = 0;
+    });
+    live.finish();
+    await expect.poll(() => sent).toEqual(['계속 써 주세요.']);
+    await expect(page.getByText('예약한 요청으로 이어 쓴 장면.')).toBeVisible();
+    await expect
+      .poll(() => reader.evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop))
+      .toBeLessThan(2);
+  } finally {
+    await peer.close();
+  }
+});
+
+test('QUEUE15 leaving for the library while the queued request is being checked does not send it, even after coming back', async ({
+  page,
+  request,
+}) => {
+  const { peer, writer, chat } = await setup(request);
+  try {
+    const run = await startRun(request, chat);
+    let release = () => {};
+    const checking = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let checked = () => {};
+    const reached = new Promise<void>((resolve) => {
+      checked = resolve;
+    });
+    await page.route(`**/api/chats/${chat.id}/codex-content-preflight`, async (route) => {
+      checked();
+      await checking;
+      await route.fulfill({ status: 200, json: { warning: false } });
+    });
+    const sent = countSends(page, chat.id);
+    await openRunning(page, chat, run);
+    const live = await writer;
+    await queue(page, '계속 써 주세요.');
+    live.finish();
+    await reached;
+    await page.evaluate(() => {
+      history.pushState(null, '', '?workspace=library');
+      dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await expect(page.locator('#request')).toHaveCount(0);
+    await switchChat(page, chat.id);
+    await expect(composer(page)).toBeVisible();
+    release();
+    await expectReturned(page, '계속 써 주세요.', '채팅을 떠나서', sent);
+    await expect(page.getByText('예약한 요청으로 이어 쓴 장면.')).toHaveCount(0);
+  } finally {
+    await peer.close();
+  }
+});
+
+test('QUEUE16 a content check that cannot be reached keeps the queued request as a draft', async ({
+  page,
+  request,
+}) => {
+  const { peer, writer, chat } = await setup(request);
+  try {
+    const run = await startRun(request, chat);
+    await page.route(`**/api/chats/${chat.id}/codex-content-preflight`, (route) => route.abort());
+    const sent = countSends(page, chat.id);
+    await openRunning(page, chat, run);
+    const live = await writer;
+    await queue(page, '계속 써 주세요.');
+    live.finish();
+    await expectReturned(page, '계속 써 주세요.', '보내기 전에 확인이 필요해', sent);
   } finally {
     await peer.close();
   }

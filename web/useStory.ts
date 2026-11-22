@@ -42,7 +42,14 @@ import {
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { subscribeAppHistory } from './app-history.js';
 import type { Chat, ReaderDetail, RunReceipt } from '../core/types.js';
-import type { Content, CurrentPrompt, Library, PromptPreset } from '../core/product.js';
+import type {
+  ChatProfile,
+  Content,
+  CurrentPrompt,
+  Library,
+  ModelWorkspace,
+  PromptPreset,
+} from '../core/product.js';
 import type { ChatOptionState } from '../core/chat-options.js';
 import type { SceneDeletionResult } from '../core/scene-deletion.js';
 import { api, apiBinary, ApiError, definiteRejection, libraryChangedKey } from './api.js';
@@ -171,8 +178,27 @@ export type QueuedRequest = {
   loreContextReset: boolean;
   runId: string;
   settingsRevision: number;
+  profileRevision: number;
   optionsRevision: number;
+  workspaceRevision: number;
 };
+type QueuedRevisions = Pick<
+  QueuedRequest,
+  'profileRevision' | 'optionsRevision' | 'workspaceRevision'
+>;
+async function readQueuedRevisions(chatId: string): Promise<QueuedRevisions> {
+  const chat = `/chats/${encodeURIComponent(chatId)}`;
+  const [profile, options, workspace] = await Promise.all([
+    api<ChatProfile>(`${chat}/profile`),
+    api<ChatOptionState>(`${chat}/options`),
+    api<ModelWorkspace>('/model-workspace'),
+  ]);
+  return {
+    profileRevision: profile.revision,
+    optionsRevision: options.revision,
+    workspaceRevision: workspace.revision,
+  };
+}
 export type QueuedReturnReason =
   | 'reload'
   | 'left'
@@ -180,12 +206,15 @@ export type QueuedReturnReason =
   | 'unknown'
   | 'settings'
   | 'options'
+  | 'workspace'
   | 'blocked'
   | 'confirmation'
   | 'rejected';
 type QueuedHandoff = {
+  chatId: string;
   text: string;
   loreContextReset: boolean;
+  left: boolean;
   state: 'waiting' | 'confirmation' | 'committed' | 'rejected';
 };
 type ParkedQueue = { text: string; loreContextReset: boolean; reason?: QueuedReturnReason };
@@ -1314,7 +1343,7 @@ export function useStory() {
           loreResetDraftRef.current !== (payload.loreContextReset === true));
       if (
         currentView.current !== sentView ||
-        (!queued && navigation.current.epoch !== sentEpoch) ||
+        (queued ? queued.left : navigation.current.epoch !== sentEpoch) ||
         draftChanged
       )
         return false;
@@ -1815,11 +1844,13 @@ export function useStory() {
   }
   queueActions.current = {
     restoreParked: (chatId) => {
-      if (queuedRef.current?.chatId === chatId) return;
+      if (queuedRef.current?.chatId === chatId || sendingQueue.current?.chatId === chatId) return;
       const parked = readParkedQueue(chatId);
       if (parked) returnQueueToDraft(chatId, parked, parked.reason ?? 'reload');
     },
     leave: (chatId, target) => {
+      const sending = sendingQueue.current;
+      if (sending && (sending.chatId !== chatId || target !== 'story')) sending.left = true;
       const queue = queuedRef.current;
       if (!queue || (queue.chatId === chatId && target === 'story')) return;
       takeQueue();
@@ -1830,6 +1861,7 @@ export function useStory() {
     queueActions.current.leave(selected, destination);
   }, [selected, destination]);
   const queueing = useRef(false);
+  const sendingQueue = useRef<QueuedHandoff | null>(null);
   async function queueRequest() {
     const run = activeRun();
     if (
@@ -1857,10 +1889,9 @@ export function useStory() {
     const token = requestDraft.current.token;
     const loreContextReset = loreResetDraft;
     queueing.current = true;
-    let optionsRevision: number;
+    let revisions: QueuedRevisions;
     try {
-      optionsRevision = (await api<ChatOptionState>(`/chats/${encodeURIComponent(chatId)}/options`))
-        .revision;
+      revisions = await readQueuedRevisions(chatId);
     } catch {
       setQueueNotice({ chatId, message: 'main.queueUnchecked' });
       return false;
@@ -1881,7 +1912,7 @@ export function useStory() {
       loreContextReset,
       runId: run.id,
       settingsRevision: detail.chat.settingsRevision,
-      optionsRevision,
+      ...revisions,
     };
     inputTranslation.accepted(draftKey, inputTranslation.beginSend());
     parkQueue(chatId, { text, loreContextReset });
@@ -1896,15 +1927,38 @@ export function useStory() {
     const queue = takeQueue();
     if (queue) returnQueueToDraft(queue.chatId, queue, null);
   }
-  const latestGenerate = useRef(generate);
-  latestGenerate.current = generate;
-  async function sendQueuedRequest(blocked: boolean) {
+  async function sendQueuedRequest(
+    blocked: boolean,
+    send: (queued: QueuedHandoff) => Promise<boolean>
+  ) {
     const queue = takeQueue();
     if (!queue) return;
+    const handoff: QueuedHandoff = {
+      chatId: queue.chatId,
+      text: queue.text,
+      loreContextReset: queue.loreContextReset,
+      left: false,
+      state: 'waiting',
+    };
+    sendingQueue.current = handoff;
+    try {
+      await sendQueue(queue, handoff, blocked, send);
+    } finally {
+      if (sendingQueue.current === handoff) sendingQueue.current = null;
+    }
+  }
+  async function sendQueue(
+    queue: QueuedRequest,
+    handoff: QueuedHandoff,
+    blocked: boolean,
+    send: (queued: QueuedHandoff) => Promise<boolean>
+  ) {
     const giveBack = (reason: QueuedReturnReason) =>
       returnQueueToDraft(queue.chatId, queue, reason);
     const here = () =>
-      navigation.current.chat === queue.chatId && navigation.current.destination === 'story';
+      !handoff.left &&
+      navigation.current.chat === queue.chatId &&
+      navigation.current.destination === 'story';
     if (!here()) return giveBack('left');
     let status: string;
     try {
@@ -1917,25 +1971,23 @@ export function useStory() {
     const chat = readerCache.current?.detail.chat;
     if (!here() || chat?.id !== queue.chatId) return giveBack('left');
     if (chat.settingsRevision !== queue.settingsRevision) return giveBack('settings');
-    let options: ChatOptionState;
+    let revisions: QueuedRevisions;
     try {
-      options = await api<ChatOptionState>(`/chats/${encodeURIComponent(queue.chatId)}/options`);
+      revisions = await readQueuedRevisions(queue.chatId);
     } catch {
-      return giveBack('unknown');
+      return giveBack('blocked');
     }
-    if (options.revision !== queue.optionsRevision) return giveBack('options');
     if (!here()) return giveBack('left');
-    const handoff: QueuedHandoff = {
-      text: queue.text,
-      loreContextReset: queue.loreContextReset,
-      state: 'waiting',
-    };
-    const accepted = await latestGenerate.current(undefined, undefined, false, undefined, handoff);
+    if (revisions.profileRevision !== queue.profileRevision) return giveBack('settings');
+    if (revisions.optionsRevision !== queue.optionsRevision) return giveBack('options');
+    if (revisions.workspaceRevision !== queue.workspaceRevision) return giveBack('workspace');
+    const accepted = await send(handoff);
     if (handoff.state === 'committed') {
       if (accepted && navigation.current.chat === queue.chatId)
         setNotice(uiMessage('main.queueSent'));
       return;
     }
+    if (!here()) return giveBack('left');
     giveBack(
       handoff.state === 'rejected'
         ? 'rejected'

@@ -259,6 +259,8 @@ function App() {
     readerFollow.follow();
     return s.generate(...args);
   };
+  const latestGenerate = useRef(generate);
+  latestGenerate.current = generate;
   const readerFollowing = readerFollow.following;
   // biome-ignore lint/correctness/useExhaustiveDependencies: Changing the chat ends following the previous chat.
   useEffect(() => {
@@ -770,7 +772,10 @@ function App() {
     !promptAvailable;
   const sendQueuedRequest = s.sendQueuedRequest;
   useEffect(() => {
-    if (queuedRunEnded && pageVisible) void sendQueuedRequest(queueBlocked);
+    if (queuedRunEnded && pageVisible)
+      void sendQueuedRequest(queueBlocked, (queued) =>
+        latestGenerate.current(undefined, undefined, false, undefined, queued)
+      );
   }, [queuedRunEnded, pageVisible, queueBlocked, sendQueuedRequest]);
   const composerStatus = [
     s.pendingRequest && !s.submitting.includes(s.viewKey) ? t('main.m020') : '',
