@@ -7,8 +7,9 @@ import {
   type Page,
   type TestInfo,
 } from '@playwright/test';
-import type { ChatDetail } from '../core/types.js';
-import { fixtureBotInput } from './fixtures/chat.js';
+import type { Chat, ChatDetail, Run } from '../core/types.js';
+import { fixtureBotInput, postFixtureChat } from './fixtures/chat.js';
+import { openSourceActions } from './ui-navigation.js';
 
 test.setTimeout(90000);
 
@@ -555,3 +556,95 @@ for (const bot of [false, true]) {
     await expect(scene).toHaveAttribute('data-representation', 'original');
   });
 }
+
+async function writtenScene(request: APIRequestContext) {
+  const created = await postFixtureChat(request, {
+    data: { title: `Reader translation ${randomUUID()}` },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const chat = (await created.json()) as Chat;
+  const before = await detail(request, chat.id);
+  const started = await request.post(`/api/chats/${chat.id}/runs`, {
+    data: {
+      request: '등대지기가 편지를 펼치는 장면이에요.',
+      expectedRevision: before.chat.headRevision,
+      expectedSettingsRevision: before.chat.settingsRevision,
+      expectedProfileRevision: before.profile!.revision,
+      idempotencyKey: randomUUID(),
+    },
+  });
+  expect(started.ok(), await started.text()).toBe(true);
+  const run = (await started.json()) as Run;
+  await expect
+    .poll(
+      async () => (await detail(request, chat.id)).runs.find((item) => item.id === run.id)?.status
+    )
+    .toBe('completed');
+  return { chatId: chat.id, source: (await detail(request, chat.id)).sources[0] };
+}
+
+async function control(request: APIRequestContext, action: string, barrier: string) {
+  const response = await request.post('/api/test/control', { data: { action, barrier } });
+  expect(response.ok(), await response.text()).toBe(true);
+}
+
+test('RSEL13 an editor opened before a translation starts keeps the original when it arrives', async ({
+  page,
+  request,
+}) => {
+  const { chatId, source } = await writtenScene(request);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/?chat=${chatId}`);
+  const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
+  await expect(scene).toHaveAttribute('data-representation', 'original');
+  await control(request, 'hold', 'translation');
+  try {
+    await openSourceActions(scene);
+    await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
+    const field = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
+    await expect(field).toBeFocused();
+    const started = await request.post(`/api/sources/${source.id}/translation`, { data: {} });
+    expect(started.ok(), await started.text()).toBe(true);
+    await expect(scene.getByRole('button', { name: '번역 보기', exact: true })).toBeVisible();
+  } finally {
+    await control(request, 'release', 'translation');
+  }
+  await expect
+    .poll(async () =>
+      (await detail(request, chatId)).jobs.some(
+        (job) => job.kind === 'translation' && job.status === 'completed'
+      )
+    )
+    .toBe(true);
+  await expect(
+    scene.getByRole('button', { name: '번역이 준비됐어요. 번역 보기', exact: true })
+  ).toBeVisible();
+  await expect(scene).toHaveAttribute('data-representation', 'original');
+  await expect(scene.getByRole('textbox', { name: '원문 수정 내용', exact: true })).toBeFocused();
+});
+
+test('RSEL14 a selection held from before a translation starts keeps the original when it arrives', async ({
+  page,
+  request,
+}) => {
+  const { chatId, source } = await writtenScene(request);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/?chat=${chatId}`);
+  const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
+  await expect(scene).toHaveAttribute('data-representation', 'original');
+  await control(request, 'hold', 'translation');
+  try {
+    await select(scene, 'the quiet pier');
+    await expect(selectionBar(page)).toBeVisible();
+    const started = await request.post(`/api/sources/${source.id}/translation`, { data: {} });
+    expect(started.ok(), await started.text()).toBe(true);
+    await expect(scene.getByRole('button', { name: '번역 보기', exact: true })).toBeVisible();
+  } finally {
+    await control(request, 'release', 'translation');
+  }
+  await expect(
+    scene.getByRole('button', { name: '번역이 준비됐어요. 번역 보기', exact: true })
+  ).toBeVisible();
+  await expect(scene).toHaveAttribute('data-representation', 'original');
+  await expect(selectionBar(page)).toBeVisible();
+});
