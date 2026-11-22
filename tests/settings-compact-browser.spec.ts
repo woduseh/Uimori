@@ -256,8 +256,10 @@ test('SCUISEARCH settings search opens real destinations without losing an unsav
       .getByRole('form', { name: '프로바이더 편집 양식' })
       .getByLabel('프로바이더 이름', { exact: true });
     await name.fill('검색해도 남는 연결 초안');
-    if (width <= 760)
+    if (width <= 760) {
+      await dialog.getByRole('button', { name: '목록으로', exact: true }).click();
       await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
+    }
 
     const search = dialog.getByRole('searchbox', { name: '설정 검색', exact: true });
     await search.fill('백업');
@@ -280,8 +282,13 @@ test('SCUISEARCH settings search opens real destinations without losing an unsav
     await expect(dialog.locator('.settings-page[data-settings-section="general"]')).toBeVisible();
     await expect(dialog.locator('[id$="-general-reading"]')).toBeFocused();
     await selectSettingsSection(page, '프로바이더와 모델');
+    if (width <= 760)
+      await dialog
+        .getByRole('button', { name: '프로바이더 편집 이어 하기: 검색해도 남는 연결 초안' })
+        .click();
     await expect(name).toHaveValue('검색해도 남는 연결 초안');
     if (width <= 760) {
+      await dialog.getByRole('button', { name: '목록으로', exact: true }).click();
       await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
       await expect(search).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -565,4 +572,35 @@ test('SCUILEAVE global illustration settings retain failed drafts and save befor
     });
     expect(restored.ok()).toBe(true);
   }
+});
+
+test('SCDETAIL a narrow settings drill-down shows one back control and the item name', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  const dialog = page.getByRole('dialog', { name: '설정', exact: true });
+  await selectSettingsSection(page, '프로바이더와 모델');
+  await startProviderConnection(page);
+  await page.getByRole('button', { name: /OpenAI Responses/ }).click();
+  const form = page.getByRole('form', { name: '프로바이더 편집 양식' });
+  await expect(form).toBeVisible();
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await page.screenshot({ path: info.outputPath(`provider-detail-412-${colorScheme}.png`) });
+  }
+  const backs = dialog
+    .getByRole('button', { name: /^(설정 목록으로|목록으로)$/u })
+    .filter({ visible: true });
+  await expect(backs).toHaveCount(1);
+  const location = dialog.locator('.settings-detail-location').filter({ visible: true });
+  await expect(location).not.toContainText('프로바이더와 모델', { useInnerText: true });
+  await expect(location).toHaveText('프로바이더 등록', { useInnerText: true });
+  await backs.click();
+  await expect(form).toBeHidden();
+  await expect(dialog.locator('.settings-navigation')).toBeHidden();
+  await expect(
+    dialog.getByRole('button', { name: '설정 목록으로', exact: true }).filter({ visible: true })
+  ).toHaveCount(1);
 });

@@ -157,6 +157,16 @@
     grid-column: 3;
     grid-row: 1;
   }
+  .settings-dialog .settings-detail-back,
+  .settings-dialog .settings-detail-location > span:not(:last-child) {
+    display: none;
+  }
+  .settings-dialog .settings-detail-location > span:last-child::before {
+    content: none;
+  }
+  .settings-dialog .settings-detail-bar {
+    min-height: var(--control-h);
+  }
 }
 .settings-detail {
   min-width: 0;

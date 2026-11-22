@@ -113,15 +113,21 @@ export function SettingsDetail({
   );
 }
 
-export function backFromSettingsDetail(root: Element | null | undefined) {
-  const back = [
-    ...(root?.querySelectorAll<HTMLButtonElement>(
-      '.settings-page:not([hidden]) [data-settings-detail]:not([hidden]) > .settings-detail-bar > .settings-detail-back'
+export function openSettingsDetail(root: Element | null | undefined) {
+  return [
+    ...(root?.querySelectorAll<HTMLElement>(
+      '.settings-page:not([hidden]) [data-settings-detail]:not([hidden])'
     ) ?? []),
   ]
-    .filter((button) => button.checkVisibility())
+    .filter((detail) => detail.checkVisibility())
     .at(-1);
-  if (!back) return false;
-  back.click();
+}
+
+export function backFromSettingsDetail(root: Element | null | undefined) {
+  const detail = openSettingsDetail(root);
+  if (!detail) return false;
+  detail
+    .querySelector<HTMLButtonElement>(':scope > .settings-detail-bar > .settings-detail-back')
+    ?.click();
   return true;
 }

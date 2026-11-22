@@ -43,7 +43,7 @@ import type { Job, ReaderRun } from '../core/types.js';
 import type { StoryState } from './useStory.js';
 import { api } from './api.js';
 import { ConnectionEditor, type ProviderDetailRequest } from './ProviderManagement.js';
-import { backFromSettingsDetail } from './SettingsDetail.js';
+import { backFromSettingsDetail, openSettingsDetail } from './SettingsDetail.js';
 import { ArchivePanel } from './ArchivePanel.js';
 import { AttemptInspector } from './AttemptInspector.js';
 import { RunTaskDetails } from './RunTaskDetails.js';
@@ -337,6 +337,19 @@ export function AppSettingsPanel({
     illustrationDirty ||
     themeDirty;
   const root = useRef<HTMLElement>(null);
+  const [drillDown, setDrillDown] = useState(false);
+  useEffect(() => {
+    const node = root.current;
+    if (!node || !compact) {
+      setDrillDown(false);
+      return;
+    }
+    const update = () => setDrillDown(!!openSettingsDetail(node));
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(node, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+    return () => observer.disconnect();
+  }, [compact]);
   const searchInput = useRef<HTMLInputElement>(null);
   const positions = useRef(
     new Map<
@@ -511,7 +524,13 @@ export function AppSettingsPanel({
       headerTitle={compact && detail ? title : undefined}
       headerLeading={
         compact && detail ? (
-          <IconButton label={t('chatsettings.m51')} icon={BackIcon} onClick={backToList} />
+          <IconButton
+            label={t(drillDown ? 'shared.backToList' : 'chatsettings.m51')}
+            icon={BackIcon}
+            onClick={() => {
+              if (!backFromSettingsDetail(root.current)) backToList();
+            }}
+          />
         ) : undefined
       }
       headerActions={
