@@ -22,12 +22,12 @@ type View = {
   hasOlderTasks: boolean;
 };
 const id = encodeURIComponent;
-const diagnosticEvent = (event: Pick<HelperEvent, 'kind' | 'taskId'>) =>
-  event.kind === 'tool.started' ||
-  event.kind === 'tool.finished' ||
-  event.kind === 'input.measured' ||
-  event.kind === 'progress' ||
-  (event.kind.startsWith('context.') && event.taskId !== null);
+const diagnosticEvent = (kind: string) =>
+  kind === 'tool.started' ||
+  kind === 'tool.finished' ||
+  kind === 'input.measured' ||
+  kind === 'progress' ||
+  kind.startsWith('context.');
 
 function applyMessageChange(view: View, change: HelperMessageMutation): View {
   if ((change.conversation.historyRevision ?? 0) <= (view.conversation.historyRevision ?? 0))
@@ -231,7 +231,7 @@ export function useHelperConversation(
           if (event.kind === 'font.updated')
             window.dispatchEvent(new Event('uimori-fonts-changed'));
           cursor = event.seq;
-          if (!diagnosticEvent(event)) changed = true;
+          if (!diagnosticEvent(event.kind)) changed = true;
           if (
             /^task\.(completed|failed|cancelled|interrupted)$/u.test(event.kind) ||
             event.kind === 'artifact.saved' ||
