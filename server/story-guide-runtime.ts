@@ -337,7 +337,7 @@ export async function prepareStoryGuide(
       )
         return finish('STORY_GUIDE_OUTPUT_TOO_LARGE');
       return finish(null, {
-        fingerprint: fingerprint(snapshot, request),
+        fingerprint: initialFingerprint,
         text: result.text.trim(),
         createdAt: new Date().toISOString(),
         parentRevision: snapshot.parentRevision,

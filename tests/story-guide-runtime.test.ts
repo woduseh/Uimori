@@ -371,6 +371,33 @@ test('guide consumes prepared logical history and one summary, ignores prior adv
   expect(log.wires).toHaveLength(2);
 });
 
+test('a guide that read once is reused for the same initial input', async () => {
+  const source = await snapshot();
+  vi.mocked(fetch)
+    .mockImplementationOnce(async () =>
+      sse(
+        {
+          type: 'tool_delta',
+          index: 0,
+          id: 'guide-read',
+          name: 'knowledge.search',
+          argumentsDelta: '{"query":"reunion"}',
+        },
+        { type: 'done', reason: 'tool_calls' }
+      )
+    )
+    .mockImplementationOnce(async () => completed());
+  const log = observed();
+  const first = await prepareStoryGuide(source, log.hooks, { reserveCalls: 1 });
+  expect(first).toMatchObject({ error: null, cached: false, usage: { modelCalls: 2 } });
+  const second = await prepareStoryGuide(source, log.hooks, {
+    cachedBrief: first.brief,
+    reserveCalls: 1,
+  });
+  expect(second).toMatchObject({ cached: true, usage: { modelCalls: 0 } });
+  expect(log.wires).toHaveLength(2);
+});
+
 test('guide serializes prepared character examples with their identities and source, plus current author direction and outline', async () => {
   const source = await snapshot();
   const bot = nativeContent(
