@@ -2405,6 +2405,56 @@ test('HROLLBACK02 one card rolls back alone and actions wait for a running task'
   expect(state.rollbackPosts).toHaveLength(2);
 });
 
+test('HROLLBACK04 a rollback refreshes other cards and each completion shows its notice', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  const chat = await create(request),
+    state = await harness(page, 2);
+  await page.goto(`/?chat=${chat.id}`);
+  await open(page);
+  const [later, earlier] = state.current().tasks;
+  const single = (task: HelperTaskView, ids: string[]) => {
+    state.results.set(task.id, {
+      changes: ids.map((id) => resourceChange(id, id === 'bot-a' ? '하린' : '서윤')),
+    });
+    state.rollbacks.set(task.id, {
+      taskId: task.id,
+      blocked: null,
+      units: ids.map((id) => resourceUnit(id, id === 'bot-a' ? '하린' : '서윤')),
+    });
+  };
+  single(earlier!, ['bot-a']);
+  single(later!, ['bot-a', 'bot-b']);
+  await page.reload();
+  const panel = await open(page);
+  const card = (task: HelperTaskView) =>
+    panel.locator(
+      `.helper-message.assistant[data-task-id="${task.id}"] [data-testid="helper-task-results"]`
+    );
+  await expect(card(earlier!).getByRole('button', { name: '하린 되돌리기' })).toBeEnabled();
+  const dialog = page.getByRole('alertdialog', { name: '도우미 변경 되돌리기', exact: true });
+  const notice = page.getByRole('status').filter({ hasText: '변경 1개를 되돌렸어요.' });
+  await card(later!).getByRole('button', { name: '하린 되돌리기', exact: true }).click();
+  state.rollbacks.set(earlier!.id, {
+    taskId: earlier!.id,
+    blocked: null,
+    units: [resourceUnit('bot-a', '하린', 'changed-since', 'changed-after-task')],
+  });
+  await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
+  await expect(notice).toBeVisible();
+  await expect(
+    card(earlier!).locator('.helper-change', { hasText: '하린' }).locator('.helper-rollback-status')
+  ).toHaveText('작업 뒤에 바뀌어서 되돌릴 수 없어요.');
+  await expect(card(earlier!).getByRole('button', { name: '하린 되돌리기' })).toHaveCount(0);
+  await expect(notice).toHaveCount(0, { timeout: 8000 });
+  await card(later!).getByRole('button', { name: '서윤 되돌리기', exact: true }).click();
+  await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(notice).toBeVisible();
+});
+
 test('HROLLBACK03 an unsaved editor draft blocks its unit and a clean editor shows the restored content', async ({
   page,
   request,

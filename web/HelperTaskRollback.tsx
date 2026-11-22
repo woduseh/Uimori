@@ -9,7 +9,7 @@ import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { OUTLINE_REFRESH_EVENT } from './outline-helper.js';
-import { TransientNotice } from './TransientNotice.js';
+import { useTransientNotice } from './TransientNotice.js';
 import { hasUnsavedInput, useUnsavedInputVersion } from './unsaved-input.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 
@@ -80,7 +80,7 @@ export function useHelperRollback({
   const [unknown, setUnknown] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const notify = useTransientNotice();
   const alive = useRef(true);
   const lock = useRef(false);
   const path = `/helper/tasks/${encodeURIComponent(taskId)}/rollback`;
@@ -104,6 +104,11 @@ export function useHelperRollback({
       });
     return () => controller.abort();
   }, [path, enabled]);
+  useEffect(() => {
+    if (!enabled) return;
+    addEventListener('uimori-helper-updated', retry);
+    return () => removeEventListener('uimori-helper-updated', retry);
+  }, [enabled, retry]);
   const wasUnavailable = useRef(unavailable);
   useEffect(() => {
     if (wasUnavailable.current && !unavailable) retry();
@@ -176,8 +181,7 @@ export function useHelperRollback({
     try {
       for (const body of bodies) results.push(...(await api<HelperRollbackView>(path, body)).units);
       const count = results.filter((unit) => unit.status === 'restored').length;
-      if (alive.current && count)
-        setNotice(t('helperRollback.done', { count: formatNumber(count) }));
+      if (alive.current && count) notify(t('helperRollback.done', { count: formatNumber(count) }));
     } catch (cause) {
       if (!alive.current) return;
       if (definiteRejection(cause)) {
@@ -304,7 +308,6 @@ export function useHelperRollback({
         </NoticeBanner>
       )}
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
-      <TransientNotice message={notice} />
       <ConfirmDialog
         open={!!plan}
         title={t('helperRollback.title')}
