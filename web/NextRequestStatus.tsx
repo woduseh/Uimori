@@ -98,7 +98,7 @@ export function NextRequestStatus({
           className="next-request-menu"
           placement="top"
           viewport
-          label={t('main.nextRequestMenu', { count: formatNumber(count) })}
+          label={t('main.nextRequestMenu', { count })}
           summary={
             <span className="next-request-summary">
               {t('main.nextRequestCount', { count: formatNumber(count) })}

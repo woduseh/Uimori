@@ -1272,10 +1272,10 @@ export const messages = {
     zh: '下一次请求 {count}',
   },
   'main.nextRequestMenu': {
-    ko: '다음 요청에 적용할 상태 {count}개',
-    en: '{count} settings apply to the next request',
-    ja: '次のリクエストに適用される状態 {count}件',
-    zh: '下一次请求将应用 {count} 项状态',
+    ko: '다음 요청에 적용할 상태 {count, number}개',
+    en: '{count, plural, one {# setting applies to the next request} other {# settings apply to the next request}}',
+    ja: '次のリクエストに適用される状態 {count, number}件',
+    zh: '下一次请求将应用 {count, number} 项状态',
   },
   'main.queueButton': {
     ko: '다음 요청으로 예약',

@@ -114,16 +114,16 @@ export const messages = {
     zh: '请分析此任务失败的原因。任务类型：{kind}，任务 ID：{id}。',
   },
   'helperChanges.wordStats': {
-    ko: '단어 {added}개 추가, {removed}개 삭제',
-    en: '{added, plural, one {# word} other {# words}} added, {removed} removed',
-    ja: '{added}語追加、{removed}語削除',
-    zh: '新增 {added} 个词，删除 {removed} 个词',
+    ko: '단어 {added, number}개 추가, {removed, number}개 삭제',
+    en: '{added, plural, one {# word} other {# words}} added, {removed, number} removed',
+    ja: '{added, number}語追加、{removed, number}語削除',
+    zh: '新增 {added, number} 个词，删除 {removed, number} 个词',
   },
   'helperChanges.lineStats': {
-    ko: '줄 {added}개 추가, {removed}개 삭제',
-    en: '{added, plural, one {# line} other {# lines}} added, {removed} removed',
-    ja: '{added}行追加、{removed}行削除',
-    zh: '新增 {added} 行，删除 {removed} 行',
+    ko: '줄 {added, number}개 추가, {removed, number}개 삭제',
+    en: '{added, plural, one {# line} other {# lines}} added, {removed, number} removed',
+    ja: '{added, number}行追加、{removed, number}行削除',
+    zh: '新增 {added, number} 行，删除 {removed, number} 行',
   },
   'helperChanges.diffRegion': {
     ko: '{title} 변경 내용',
@@ -158,7 +158,7 @@ export const messages = {
   'helperChanges.excludedScene': {
     ko: '제외된 장면',
     en: 'Excluded scene',
-    ja: '除外したシーン',
+    ja: '除外した場面',
     zh: '已排除的场景',
   },
   'helperChanges.moreChanges': {
@@ -249,7 +249,7 @@ export const messages = {
     ko: '추정 {input} / 예산 {limit} 토큰',
     en: 'Estimated {input} of {limit} tokens',
     ja: '推定 {input} / 予算 {limit} トークン',
-    zh: '估算 {input} / 预算 {limit} 个令牌',
+    zh: '估算 {input} / 预算 {limit} 词元',
   },
   'helperUsage.instructions': {
     ko: '지시문',

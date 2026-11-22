@@ -7,7 +7,7 @@ export const messages = {
   },
   'helperConfirm.resourceDelete': {
     ko: '자료 삭제',
-    en: 'Delete resources',
+    en: 'Delete a resource',
     ja: '資料の削除',
     zh: '删除资料',
   },

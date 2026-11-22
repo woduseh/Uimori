@@ -4,7 +4,7 @@ import type { HelperChange, HelperRollbackUnit, HelperRollbackView } from '../co
 import { api, definiteRejection } from './api.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { helperChangeLocationParts } from './helper-change-location.js';
-import { formatNumber, t, translateMessage } from './i18n.js';
+import { t, translateMessage } from './i18n.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -181,7 +181,7 @@ export function useHelperRollback({
     try {
       for (const body of bodies) results.push(...(await api<HelperRollbackView>(path, body)).units);
       const count = results.filter((unit) => unit.status === 'restored').length;
-      if (alive.current && count) notify(t('helperRollback.done', { count: formatNumber(count) }));
+      if (alive.current && count) notify(t('helperRollback.done', { count }));
     } catch (cause) {
       if (!alive.current) return;
       if (definiteRejection(cause)) {
@@ -315,7 +315,7 @@ export function useHelperRollback({
         action={
           plan?.unit || !chosen
             ? t('helperRollback.confirmUnit')
-            : t('helperRollback.confirmTask', { count: formatNumber(chosen.restore.length) })
+            : t('helperRollback.confirmTask', { count: chosen.restore.length })
         }
         busy={running}
         disabled={!chosen?.restore.length || unavailable}

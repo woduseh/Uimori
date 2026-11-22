@@ -65,7 +65,7 @@ export const messages = {
   'palette.openOutline': {
     ko: '플롯 열기',
     en: 'Open outline',
-    ja: 'アウトラインを開く',
+    ja: '構成を開く',
     zh: '打开大纲',
   },
 } as const;

@@ -30,10 +30,10 @@ export const messages = {
     zh: '将此对象恢复到任务之前的状态。',
   },
   'helperRollback.confirmTask': {
-    ko: '변경 {count}개 되돌리기',
-    en: 'Roll back {count} changes',
-    ja: '{count}件の変更を元に戻す',
-    zh: '撤销 {count} 项更改',
+    ko: '변경 {count, number}개 되돌리기',
+    en: '{count, plural, one {Roll back # change} other {Roll back # changes}}',
+    ja: '{count, number}件の変更を元に戻す',
+    zh: '撤销 {count, number} 项更改',
   },
   'helperRollback.confirmUnit': {
     ko: '되돌리기',
@@ -102,10 +102,10 @@ export const messages = {
     zh: '检查结果',
   },
   'helperRollback.done': {
-    ko: '변경 {count}개를 되돌렸어요.',
-    en: 'Rolled back {count} changes.',
-    ja: '{count}件の変更を元に戻しました。',
-    zh: '已撤销 {count} 项更改。',
+    ko: '변경 {count, number}개를 되돌렸어요.',
+    en: '{count, plural, one {Rolled back # change.} other {Rolled back # changes.}}',
+    ja: '{count, number}件の変更を元に戻しました。',
+    zh: '已撤销 {count, number} 项更改。',
   },
   'helperRollback.restored': {
     ko: '되돌렸어요',
@@ -188,7 +188,7 @@ export const messages = {
   'helperRollback.outline': {
     ko: '플롯',
     en: 'Outline',
-    ja: 'プロット',
+    ja: '構成',
     zh: '大纲',
   },
   'helperRollback.notes': {

@@ -57,7 +57,7 @@ export const messages = {
   'workspace.expandOutline': {
     ko: '플롯 크게 보기',
     en: 'Expand outline',
-    ja: 'アウトラインを広げる',
+    ja: '構成を広げる',
     zh: '展开大纲',
   },
   'helpers.settings': {
