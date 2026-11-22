@@ -1173,30 +1173,21 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       <TurnStatus
         key={`${task.id}:${active(task) ? 'active' : 'settled'}`}
         tone={tone(task)}
-        quiet={task.status === 'completed'}
+        quiet={task.status === 'completed' || task.id === summarized?.id}
         text={
           (task.id === summarized?.id ? activityLabel : undefined) ??
           t(statusLabel[task.status] ?? task.status)
         }
         elapsed={
-          active(task) ? (
+          task.id === summarized?.id ? undefined : active(task) ? (
             <HelperTaskElapsed task={task} visible={props.open} />
           ) : (
             taskElapsed(task, Date.now())
           )
         }
         badges={
-          task.mode === 'plan' || (task.id === summarized?.id && pending.length > 1) ? (
-            <>
-              {task.mode === 'plan' && (
-                <span className="activity-count helper-plan-badge">{t('helperPlan.title')}</span>
-              )}
-              {task.id === summarized?.id && pending.length > 1 && (
-                <span className="activity-count">
-                  {t('helpers.m329', { count: formatNumber(pending.length - 1) })}
-                </span>
-              )}
-            </>
+          task.mode === 'plan' ? (
+            <span className="activity-count helper-plan-badge">{t('helperPlan.title')}</span>
           ) : undefined
         }
         storageKey={activityKey(task)}

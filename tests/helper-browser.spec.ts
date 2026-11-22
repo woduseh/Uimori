@@ -1286,7 +1286,7 @@ test('HELPUI14 idle and hidden helper views pause reads and resume cursors, effe
   await expect(panel).toBeHidden();
   const closedReads = state.streamReads.get(task.id);
   const closedEvents = state.eventReads;
-  const clock = panel.getByTestId('helper-task-activity').locator('.activity-elapsed');
+  const clock = panel.getByTestId('helper-current-activity').locator('.activity-elapsed').first();
   const closedTime = await clock.textContent();
   state.progress(task, '과 두 번째 조각', 13);
   const closedFetches = await helperFetches.count();
@@ -1477,9 +1477,10 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
   expect(state.viewReads).toBe(viewsBeforeDiagnostics + 1);
   await input.fill('뒤이어 처리할 작업');
   await panel.getByRole('button', { name: '다음 요청', exact: true }).click();
-  const activity = firstTaskStatus.getByTestId('helper-task-activity');
-  await expect(activity.locator('.turn-activity-text')).toHaveText('처리 중이에요');
+  const activity = panel.getByTestId('helper-current-activity');
+  await expect(activity.locator('.activity-label')).toHaveText('처리 중이에요');
   await expect(activity.locator('.activity-count')).toHaveText('외 1개');
+  await expect(firstTaskStatus.getByTestId('helper-task-activity')).toContainText('처리 중이에요');
   state.loseNext();
   await input.fill('접수 응답을 잃은 작업');
   await panel.getByRole('button', { name: '다음 요청', exact: true }).click();
@@ -2835,9 +2836,10 @@ test('HELPACTIVITY observed stages retain tool errors and cancellation', async (
     { seq: 6, kind: 'attempt.started', attemptId: 'context', purpose: 'context' },
   ]);
   const row = panel.locator(`.helper-task[data-task-id="${task.id}"]`);
-  await expect(row.getByTestId('helper-task-activity').locator('.turn-activity-text')).toHaveText(
+  await expect(panel.getByTestId('helper-current-activity').locator('.activity-label')).toHaveText(
     '대화 내용 정리 중이에요'
   );
+  await expect(row.getByTestId('helper-task-activity')).toContainText('대화 내용 정리 중이에요');
   await row.getByTestId('helper-task-activity').locator(':scope > summary').click();
   const activity = row.getByTestId('helper-activity-details');
   await expect(activity.locator('.helper-activity-stages > li')).toHaveCount(4);
@@ -2933,5 +2935,11 @@ test('HELPACTIVITY-READS consecutive reads fold into one row that expands to eac
     await page.screenshot({
       path: info.outputPath(`grouped-reads-${width}-${colorScheme}.png`),
     });
+    const bar = panel.getByTestId('helper-current-activity');
+    await expect(bar.locator('.activity-label')).toHaveText('도우미가 요청을 처리하고 있어요');
+    await expect(bar.locator('.activity-elapsed').first()).toBeVisible();
+    const row = panel.getByTestId('helper-task-activity');
+    await expect(row.locator('.activity-elapsed')).toHaveCount(0);
+    await expect(row.locator('.turn-activity-text')).toHaveCount(0);
   }
 });
