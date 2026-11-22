@@ -6,6 +6,8 @@ import { afterEach, expect, test } from 'vitest';
 import type { HelperChange, HelperTask } from '../core/helper.js';
 import type { OutlineNode } from '../core/outline.js';
 import type { Content } from '../core/product.js';
+import { editableResource } from '../core/resource-editing.js';
+import { readResource } from '../server/resource-service.js';
 import { applyTextDiff } from '../core/text-diff.js';
 import { chatOverrideHash } from '../core/chat-overrides.js';
 import { ChatOverridesStore } from '../server/chat-overrides.js';
@@ -249,6 +251,38 @@ test('lore entries, scene titles and created resources get their own entries', (
   });
   expect(changes[1]).toMatchObject({ targetId: created.id, title: '새 봇', diff: null });
   expect(inserted.revision).toBeGreaterThan(bot.revision);
+});
+
+test('a task that changes only bot package settings records a change for each setting', () => {
+  const f = fixture();
+  const module = f.store.product.content({ ...fixtureBotInput('함께 쓰는 모듈'), kind: 'module' });
+  const bot = f.store.product.content({
+    ...fixtureBotInput('설정 봇', '설명'),
+    package: nativeContent(
+      {
+        name: '설정 봇',
+        character_book: { entries: [{ comment: '마을', keys: ['마을'], content: '조용한 마을' }] },
+      },
+      { id: 'settings-bot' }
+    ),
+  }) as Content;
+  expect(bot.package.loreActivation?.mode).toBe('model');
+  const task = f.begin();
+  const model = structuredClone(
+    editableResource('content', readResource(f.store, 'content', bot.id))
+  ) as any;
+  model.package.modules = [{ id: module.id, revision: module.revision }];
+  model.package.loreActivation.mode = 'discoverable';
+  f.resource(task, 'resource.save', {
+    kind: 'content',
+    id: bot.id,
+    expectedRevision: bot.revision,
+    model,
+  });
+  expect(f.changes(task).map((change) => [change.action, change.location])).toEqual([
+    ['create', { kind: 'resource-field', path: ['package', 'modules'] }],
+    ['update', { kind: 'resource-field', path: ['package', 'loreActivation', 'mode'] }],
+  ]);
 });
 
 test('a translation, a lore entry field and a regex script have structured locations', () => {

@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import type { HelperTaskAttemptUsage } from '../core/helper.js';
 import { helperTaskUsageTotals } from '../web/HelperTaskResults.js';
+import { helperChangeLocationParts } from '../web/helper-change-location.js';
 
 const attempt = (overrides: Partial<HelperTaskAttemptUsage>): HelperTaskAttemptUsage => ({
   id: 'execution',
@@ -48,4 +49,13 @@ test('missing provider usage is distinguishable from a reported zero and no requ
     unknown: 0,
   });
   expect(helperTaskUsageTotals([]).costUsd).toEqual({ value: 0, reported: 0, unknown: 0 });
+});
+
+test('package settings a helper change names read as the editor sections that hold them', () => {
+  const name = (path: string[]) =>
+    helperChangeLocationParts({ kind: 'resource-field', path }).map((part) => part.text);
+  expect(name(['package', 'portraitImageId'])).toEqual(['기본 정보']);
+  expect(name(['package', 'loreActivation', 'mode'])).toEqual(['로어북']);
+  expect(name(['package', 'modules'])).toEqual(['고급 설정', '함께 쓰는 모듈']);
+  expect(name(['package', 'imageHandoff', 'enabled'])).toEqual(['고급 설정', '배경 HTML과 CSS']);
 });

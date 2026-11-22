@@ -352,7 +352,7 @@ function resourceEntries(
       }
     }
   };
-  walk(authoredView(kind, before), authoredView(kind, after), '', null, '');
+  walk(...comparedViews(kind, before, after), '', null, '');
   if (entries.length <= TARGET_ENTRIES) return entries;
   const rest = entries.length - TARGET_ENTRIES + 1;
   return [
@@ -373,6 +373,46 @@ export function authoredView(kind: ResourceKind, model: unknown): unknown {
   const { kind: contentKind, loading, relatedIds } = model;
   const { nativeRisu, images } = model.package;
   return { kind: contentKind, loading, relatedIds, package: { nativeRisu, images } };
+}
+
+type HandoffRange = { field: string; text: string; id: string; enabled: boolean };
+function ownerSettings(own: Json, other: Json) {
+  const handoff = (value: unknown) =>
+    plain(value) && Array.isArray(value.ranges) ? (value.ranges as HandoffRange[]) : null;
+  const ranges = handoff(own.imageHandoff);
+  const otherRanges = handoff(other.imageHandoff);
+  return {
+    portraitImageId: own.portraitImageId,
+    modules: own.modules,
+    loreActivation:
+      plain(own.loreActivation) && plain(other.loreActivation)
+        ? { mode: own.loreActivation.mode }
+        : undefined,
+    imageHandoff:
+      ranges && otherRanges
+        ? {
+            enabled: ranges
+              .filter(
+                (range) =>
+                  range.enabled &&
+                  otherRanges.some((item) => item.field === range.field && item.text === range.text)
+              )
+              .map((range) => `${range.field}:${range.id}`),
+          }
+        : undefined,
+  };
+}
+
+function comparedViews(kind: ResourceKind, before: unknown, after: unknown): [unknown, unknown] {
+  const left = authoredView(kind, before);
+  const right = authoredView(kind, after);
+  if (kind !== 'content' || !plain(left) || !plain(right)) return [left, right];
+  const a = contentPackageSettings(before) as Json;
+  const b = contentPackageSettings(after) as Json;
+  return [
+    { ...left, package: { ...(left.package as Json), ...ownerSettings(a, b) } },
+    { ...right, package: { ...(right.package as Json), ...ownerSettings(b, a) } },
+  ];
 }
 
 export function contentPackageSettings(model: unknown) {

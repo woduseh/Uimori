@@ -22,7 +22,11 @@ export function contentSection(
   path: string
 ): { section: ContentSection; advanced?: ContentAdvancedTab } | null {
   const has = (pattern: RegExp) => pattern.test(path);
-  if (has(/\/(character_book|lorebook)(\/|$)/u)) return { section: 'lore' };
+  if (has(/^\/package\/portraitImageId$/u)) return { section: 'basic' };
+  if (has(/^\/package\/modules(\/|$)/u)) return { section: 'advanced', advanced: 'modules' };
+  if (has(/^\/package\/imageHandoff(\/|$)/u)) return { section: 'advanced', advanced: 'display' };
+  if (has(/^\/package\/loreActivation(\/|$)|\/(character_book|lorebook)(\/|$)/u))
+    return { section: 'lore' };
   if (has(/\/(first_mes|alternate_greetings)(\/|$)/u)) return { section: 'greetings' };
   if (has(/\/uimori\/translationGuide(\/|$)/u)) return { section: 'translation' };
   if (has(/\/uimori\/illustrationProfiles(\/|$)/u)) return { section: 'appearances' };

@@ -577,6 +577,28 @@ test('a bot change recorded with the card-only state hash still rolls back unles
   expect(bots.map((bot) => description(f.store, bot.id))).toEqual(['가 처음', '도우미 설명']);
 });
 
+test('a task that changed only a bot package setting rolls back', () => {
+  const f = fixture();
+  const module = f.store.product.content({ ...fixtureBotInput('함께 쓰는 모듈'), kind: 'module' });
+  const bot = f.store.product.content(fixtureBotInput('설정 봇', '처음 설명')) as Content;
+  const task = f.begin();
+  const model = structuredClone(
+    editableResource('content', readResource(f.store, 'content', bot.id))
+  ) as any;
+  model.package.modules = [{ id: module.id, revision: module.revision }];
+  f.resource(task, 'resource.save', {
+    kind: 'content',
+    id: bot.id,
+    expectedRevision: bot.revision,
+    model,
+  });
+  f.finish(task);
+  expect(f.rollBack(task).units).toMatchObject([
+    { unit: `resource:content:${bot.id}`, status: 'restored' },
+  ]);
+  expect((readResource(f.store, 'content', bot.id) as Content).package.modules).toBeUndefined();
+});
+
 test('a patch across three resources restores the two nobody touched and reports the edited one', () => {
   const f = fixture();
   const bots = ['가', '나', '다'].map(
