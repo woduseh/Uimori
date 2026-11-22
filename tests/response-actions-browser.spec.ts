@@ -683,7 +683,9 @@ test('RACOM09 a scene menu stays open when its own toggle shortens the scene and
     return { scrollTop: node.scrollTop, max: node.scrollHeight - node.clientHeight };
   }, bottomGap);
   expect(range.scrollTop).toBe(range.max - bottomGap);
-  const original = await scene.getByTestId('source-text').evaluate((node) => node.offsetHeight);
+  const original = await scene
+    .getByTestId('source-text')
+    .evaluate((node) => node.getBoundingClientRect().height);
   const opener = await openSourceActions(scene);
   const menu = opener.locator('..');
   await expect(menu).toHaveJSProperty('open', true);
@@ -697,7 +699,7 @@ test('RACOM09 a scene menu stays open when its own toggle shortens the scene and
   await expect(scene.getByTestId('translation-text')).toContainText('짧은 번역이에요.');
   const shortened = await scene
     .getByTestId('translation-text')
-    .evaluate((node) => node.offsetHeight);
+    .evaluate((node) => node.getBoundingClientRect().height);
   expect(original - shortened).toBeGreaterThan(bottomGap);
   await expect(reader).toHaveAttribute('data-test-clamped', 'yes');
   const clamped = await reader.evaluate((node) => ({
