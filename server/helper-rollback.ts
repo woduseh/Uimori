@@ -7,6 +7,7 @@ import type {
   HelperRollbackUnit,
   HelperRollbackView,
 } from '../core/helper.js';
+import type { AuthorNote } from '../core/notes.js';
 import type { ResourceKind, ResourceModel } from '../core/resource-editing.js';
 import {
   captureHelperTarget,
@@ -334,6 +335,12 @@ function restoreNotes(store: Store, row: Row, key: string) {
       .all(chatId)
       .map((item) => [String(item.id), String(item.replaces_id)])
   );
+  const stored = store.db.prepare('SELECT entry FROM author_notes WHERE id=? AND chat_id=?');
+  const restored = (note: NoteState[number]) => {
+    const row = note.kind === 'imported-memory' ? stored.get(note.id, chatId) : undefined;
+    const origin = row && (JSON.parse(String(row.entry)) as AuthorNote).origin;
+    return { text: note.text, kind: note.kind, ...(origin ? { origin } : {}) };
+  };
   let step = 0;
   const write = (body: Record<string, unknown>) =>
     store.story.notes.write(chatId, {
@@ -355,11 +362,10 @@ function restoreNotes(store: Store, row: Row, key: string) {
     if (old && !matched.has(old.id)) {
       matched.add(old.id);
       if (old.text !== note.text || old.kind !== note.kind)
-        write({ text: old.text, kind: old.kind, replacesId: note.id });
+        write({ ...restored(old), replacesId: note.id });
     } else write({ retired: true, replacesId: note.id });
   }
-  for (const note of baseline)
-    if (!matched.has(note.id)) write({ text: note.text, kind: note.kind });
+  for (const note of baseline) if (!matched.has(note.id)) write(restored(note));
 }
 
 export function rollBackHelperTask(

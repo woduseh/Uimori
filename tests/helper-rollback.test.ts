@@ -459,6 +459,48 @@ test('an earlier task restores a note after a later task was rolled back, though
   expect(noteShape(f.store, f.chat.id)).toEqual(['author-note\n처음 메모']);
 });
 
+test('a task that rewrote or retired an imported memory rolls back to the memory with its origin', () => {
+  const f = fixture();
+  const origin = { fileHash: 'a'.repeat(64), entryId: 'entry-1', title: '가져온 기억' };
+  const memory = (text: string, key: string) =>
+    f.store.story.notes.write(f.chat.id, {
+      text,
+      kind: 'imported-memory',
+      origin,
+      author: 'Synthetic import',
+      expectedRevision: f.store.story.notes.revision(f.chat.id),
+      expectedHeadRevision: f.store.chat(f.chat.id).headRevision,
+      idempotencyKey: key,
+    }).note;
+  const rewritten = memory('다리를 건넌 기억', 'memory-rewritten');
+  const retired = memory('강을 본 기억', 'memory-retired');
+  const task = f.begin();
+  const write = (body: Record<string, unknown>) =>
+    f.tracked(task, { domain: 'notes', chatId: f.chat.id }, () =>
+      f.store.story.notes.write(f.chat.id, {
+        ...body,
+        author: '사용자 도우미 요청',
+        expectedRevision: f.store.story.notes.revision(f.chat.id),
+        expectedHeadRevision: f.store.chat(f.chat.id).headRevision,
+        idempotencyKey: randomUUID(),
+      })
+    );
+  write({ text: '고쳐 쓴 기억', replacesId: rewritten.id });
+  write({ retired: true, replacesId: retired.id });
+  f.finish(task);
+  expect(f.rollBack(task).units).toMatchObject([{ unit: `notes:${f.chat.id}`, status: 'restored' }]);
+  const notes = f.store.story.notes.entries(
+    f.store.story.notes.scope(f.chat.id, f.store.chat(f.chat.id).headRevision)
+  );
+  expect(notes.map(({ kind, text, origin: from }) => ({ kind, text, origin: from }))).toEqual(
+    expect.arrayContaining([
+      { kind: 'imported-memory', text: '다리를 건넌 기억', origin },
+      { kind: 'imported-memory', text: '강을 본 기억', origin },
+    ])
+  );
+  expect(notes).toHaveLength(2);
+});
+
 test('a patch across three resources restores the two nobody touched and reports the edited one', () => {
   const f = fixture();
   const bots = ['가', '나', '다'].map(
