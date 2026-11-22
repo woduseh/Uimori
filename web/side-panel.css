@@ -7,7 +7,7 @@
 .panel-overlay > :is(.helper-panel, .chat-prompt-options, .outline-sidecar) {
   position: fixed;
   inset: 0 0 0 auto;
-  width: var(--panel-w);
+  width: min(var(--panel-w), 100vw);
   height: min(var(--app-height, 100dvh), 100dvh);
   z-index: 32;
   box-shadow: none;

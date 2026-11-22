@@ -414,3 +414,26 @@ test('SIDEPANEL07 Back with the docked helper open returns to the previous chat 
     await page.evaluate(() => (window as unknown as { focusTrail: string[] }).focusTrail)
   ).not.toContain('header');
 });
+
+test('SIDEPANEL08 a wide stored panel width stays inside a narrower window as an overlay', async ({
+  page,
+  request,
+}) => {
+  const { chat, source } = await fixture(request, '우측 패널 넓은 너비');
+  await page.addInitScript(() => localStorage.setItem('uimori:panel-width', '920'));
+  await openChat(page, chat.id, source.id, 2200);
+  await header(page).getByRole('button', { name: '도우미', exact: true }).click();
+  const helper = page.locator('#helper-panel');
+  await expect(helper).toBeVisible();
+  expect(await panelWidth(page, '#helper-panel')).toBe(920);
+  for (const width of [959, 800, 761]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.locator('.app-shell')).toHaveClass(/panel-overlay/u);
+    const box = await helper.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, viewport: innerWidth };
+    });
+    expect(box.left).toBeGreaterThanOrEqual(0);
+    expect(box.right).toBeLessThanOrEqual(box.viewport);
+  }
+});
