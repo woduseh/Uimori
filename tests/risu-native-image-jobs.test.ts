@@ -167,6 +167,7 @@ test('one owner controls authored tags and JEV display copies without rewriting 
   expect(writerInput.imagePlacement?.catalog).toEqual([
     expect.objectContaining({ name: 'Mira_happy' }),
   ]);
+  expect(writerInput.imagePlacement?.catalog?.[0]).not.toHaveProperty('ref');
   expect((requestInput(writer, writerInput).source as any).imagePlacement).toEqual(
     writerInput.imagePlacement
   );

@@ -134,7 +134,7 @@ function collectRoleResources(snapshot: RunSnapshot, packages: readonly Resolved
 export type MainInput = ModelInput & {
   imagePlacement?: {
     owner: 'writer' | 'jev';
-    catalog?: { ref: string; title: string; description: string; name?: string; tag?: string }[];
+    catalog?: { title?: string; description?: string; name?: string; tag?: string }[];
   };
   contextSummary?: NonNullable<ReturnType<typeof conversationSummary>>;
   pinnedSources?: {
@@ -229,9 +229,8 @@ export function buildMainInput(
           const pkg = owner && profile.packages?.find((entry) => entry.id === owner[1]);
           const native = owner ? nativeAssets.get(owner[1])?.get(owner[3]) : undefined;
           return {
-            ref: asset.ref,
-            title: asset.alt,
-            description: asset.caption,
+            ...(asset.alt !== native?.name ? { title: asset.alt } : {}),
+            ...(asset.caption ? { description: asset.caption } : {}),
             ...(native
               ? {
                   name: native.name,
