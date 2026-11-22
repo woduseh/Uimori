@@ -40,6 +40,7 @@ import {
 import { SettingsIcon, CloseIcon, LibraryIcon } from './ui-icons.js';
 import type { Library } from '../core/product.js';
 import type {
+  HelperCompactionResult,
   HelperConversation,
   HelperMessageMutation,
   HelperEditor,
@@ -102,7 +103,7 @@ import {
 } from './helper-attachment-draft.js';
 import { SaveButton } from './SaveButton.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
-import { TransientNotice } from './TransientNotice.js';
+import { TransientNotice, useTransientNotice } from './TransientNotice.js';
 import { modelLabel } from './storyLabels.js';
 import {
   cachedHelperRecovery,
@@ -438,7 +439,34 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     []
   );
   const shownUsage = latestUsage && latestUsage.taskId === latestTaskId ? latestUsage.usage : null;
+  const compactConversation = async () => {
+    if (!conversation || compactingConversations[conversation.id]) return;
+    const owner = conversation.id;
+    const target = conversation;
+    setCompactingConversations((old) => ({ ...old, [owner]: true }));
+    setCompactErrors((old) => ({ ...old, [owner]: '' }));
+    try {
+      const result = await api<HelperCompactionResult>(
+        `/helper/conversations/${encodeURIComponent(owner)}/compact`,
+        {}
+      );
+      await data.refresh(target);
+      if (result.compacted)
+        notify(uiMessage('helperUsage.compactedNotice', { count: result.compactedMessages }));
+      else if (result.noopReason === 'already-compacted')
+        notify(uiMessage('helperUsage.alreadyCompacted'));
+    } catch (cause) {
+      setCompactErrors((old) => ({
+        ...old,
+        [owner]:
+          cause instanceof Error ? cause.message : uiMessage('errors.HELPER_COMPACTION_FAILED'),
+      }));
+    } finally {
+      setCompactingConversations((old) => ({ ...old, [owner]: false }));
+    }
+  };
   const running = tasks.find((task) => task.status === 'running');
+  const activeTask = tasks.some((task) => task.status === 'running' || task.status === 'queued');
   const stopShortcutLabel = useShortcutLabel('run.stop');
   const helperModeShortcutLabel = useShortcutLabel('helper.mode');
   const panel = useRef<HTMLElement>(null);
@@ -497,6 +525,11 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     revision: number;
   } | null>(null);
   const [saveNotice, setSaveNotice] = useState('');
+  const notify = useTransientNotice();
+  const [compactingConversations, setCompactingConversations] = useState<Record<string, boolean>>(
+    {}
+  );
+  const [compactErrors, setCompactErrors] = useState<Record<string, string>>({});
   useEffect(() => {
     if (!props.open) setModelPicker(false);
   }, [props.open]);
@@ -2301,7 +2334,16 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               )}
               {mode === 'plan' && <span>{t('helperPlan.planShort')}</span>}
             </button>
-            {shownUsage && <HelperContextUsage usage={shownUsage} />}
+            {shownUsage && (
+              <HelperContextUsage
+                usage={shownUsage}
+                context={data.current?.context}
+                busy={busy || activeTask || data.loading}
+                compacting={Boolean(compactingConversations[scopeKey])}
+                compactError={compactErrors[scopeKey] ?? ''}
+                onCompact={() => void compactConversation()}
+              />
+            )}
             <IconButton
               label={t('helpers.m106')}
               icon={History}

@@ -485,6 +485,42 @@ export const messages = {
     ja: 'アシスタントの会話が変わりました。最新の会話を確認してから新たに依頼してください。',
     zh: '助手对话已发生变化。请查看最新对话后再发送新请求。',
   },
+  'errors.HELPER_COMPACTION_BUSY': {
+    ko: '진행 중인 도우미 작업이나 대화 정리가 끝난 뒤 다시 시도해 주세요.',
+    en: 'Wait for the current assistant task or compaction to finish, then try again.',
+    ja: '実行中のアシスタント作業または会話の整理が終わってからもう一度試してください。',
+    zh: '请等待当前助手任务或对话整理完成后再试。',
+  },
+  'errors.HELPER_COMPACTION_CODEX_NATIVE': {
+    ko: '네이티브 에이전트는 컨텍스트를 스스로 관리해서 수동 정리를 지원하지 않아요.',
+    en: 'Native agents manage their own context and do not support manual compaction.',
+    ja: 'ネイティブエージェントはコンテキストを自身で管理するため、手動整理には対応していません。',
+    zh: '原生智能体会自行管理上下文，不支持手动整理。',
+  },
+  'errors.HELPER_COMPACTION_FAILED': {
+    ko: '도우미 대화를 정리하지 못했어요. 잠시 뒤 다시 시도하거나 요약 모델을 확인해 주세요.',
+    en: 'Could not compact the assistant conversation. Try again later or check the summary model.',
+    ja: 'アシスタントの会話を整理できませんでした。しばらくしてからもう一度試すか、要約モデルを確認してください。',
+    zh: '无法整理助手对话。请稍后重试或检查摘要模型。',
+  },
+  'errors.HELPER_COMPACTION_EOF': {
+    ko: '도우미 대화 정리 응답이 중간에 끊겼어요. 잠시 뒤 다시 시도해 주세요.',
+    en: 'The compaction response ended early. Try again later.',
+    ja: '会話整理の応答が途中で切れました。しばらくしてからもう一度試してください。',
+    zh: '对话整理响应意外中断。请稍后重试。',
+  },
+  'errors.HELPER_COMPACTION_CANCELLED': {
+    ko: '도우미 대화 정리를 취소했어요.',
+    en: 'Cancelled assistant conversation compaction.',
+    ja: 'アシスタントの会話整理をキャンセルしました。',
+    zh: '已取消助手对话整理。',
+  },
+  'errors.HELPER_FIXED_CONTEXT_TOO_LARGE': {
+    ko: '요약할 고정 입력만으로 요약 모델의 컨텍스트 한도를 넘었어요. 입력 한도가 더 큰 요약 모델을 선택해 주세요.',
+    en: 'The fixed input alone exceeds the summary model context limit. Choose a summary model with a larger input limit.',
+    ja: '固定入力だけで要約モデルのコンテキスト上限を超えています。入力上限の大きい要約モデルを選んでください。',
+    zh: '仅固定输入就超出了摘要模型的上下文上限。请选择输入上限更大的摘要模型。',
+  },
   'errors.EDITOR_WORKSPACE_UNAVAILABLE': {
     ko: '선택한 편집 초안을 사용할 수 없어요. 편집기를 다시 열어 주세요.',
     en: 'The selected editing draft is unavailable. Reopen the editor.',

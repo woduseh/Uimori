@@ -2,11 +2,12 @@ import type { CSSProperties } from 'react';
 import { Gauge } from 'lucide-react';
 import {
   HELPER_COMPACTION_INPUT_RATIO,
+  type HelperContextCompactionSummary,
   type HelperInputParts,
   type HelperTaskResultsView,
 } from '../core/helper.js';
 import { ActionMenu } from './ActionMenu.js';
-import { formatNumber, t, useI18n } from './i18n.js';
+import { formatNumber, t, translateMessage, useI18n } from './i18n.js';
 import { usageCompact } from './usage-display.js';
 import './helper-context-usage.css';
 
@@ -18,7 +19,21 @@ const parts: (keyof HelperInputParts)[] = [
   'toolResults',
 ];
 
-export function HelperContextUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
+export function HelperContextUsage({
+  usage,
+  context,
+  busy = false,
+  compacting = false,
+  compactError = '',
+  onCompact,
+}: {
+  usage: HelperTaskResultsView['usage'];
+  context?: HelperContextCompactionSummary;
+  busy?: boolean;
+  compacting?: boolean;
+  compactError?: string;
+  onCompact?: () => void;
+}) {
   useI18n();
   const native = usage.latestInputExecution === 'codex-native';
   const reported = usage.latestInputTokens ?? null;
@@ -117,10 +132,40 @@ export function HelperContextUsage({ usage }: { usage: HelperTaskResultsView['us
                   <dd>{formatNumber(threshold)}</dd>
                 </div>
               )}
+              {context && context.compactedMessages > 0 && (
+                <div className="helper-context-usage-row">
+                  <dt>{t('helperUsage.compacted')}</dt>
+                  <dd>{t('helperUsage.compactedCount', { count: context.compactedMessages })}</dd>
+                </div>
+              )}
             </>
           )}
         </dl>
         <p>{t(native ? 'helperUsage.nativeNote' : 'helperUsage.estimateNote')}</p>
+        {!native && onCompact && (
+          <div className="helper-context-usage-actions">
+            <button
+              type="button"
+              className="secondary"
+              data-keep-open=""
+              disabled={compacting || busy || (context ? context.uncompactedMessages === 0 : false)}
+              onClick={onCompact}
+            >
+              {t(compacting ? 'helperUsage.compacting' : 'helperUsage.compactNow')}
+            </button>
+            {!compacting && busy && <p>{t('helperUsage.compactBusyHint')}</p>}
+            {!compacting &&
+              !busy &&
+              context &&
+              context.totalMessages > 0 &&
+              context.uncompactedMessages === 0 && <p>{t('helperUsage.alreadyCompacted')}</p>}
+            {compactError && (
+              <p className="helper-context-usage-error" role="alert">
+                {translateMessage(compactError)}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </ActionMenu>
   );

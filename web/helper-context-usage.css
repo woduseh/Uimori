@@ -95,3 +95,16 @@
   margin: 0;
   color: var(--muted);
 }
+.helper-context-usage-actions {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: var(--hairline) solid var(--line);
+}
+.helper-context-usage-actions > button {
+  width: 100%;
+  justify-content: center;
+}
+.helper-context-usage-body .helper-context-usage-error {
+  color: var(--error);
+}

@@ -122,6 +122,15 @@ const messages: Record<string, string> = {
   HELPER_TASK_NO_LONGER_ACTIVE: '도우미 작업이 이미 종료됐어요. 최신 결과를 확인해 주세요.',
   HELPER_CONTEXT_DEPENDENCY_CHANGED:
     '도우미 대화가 변경됐어요. 최신 대화를 확인한 뒤 새 요청을 보내 주세요.',
+  HELPER_COMPACTION_BUSY: '진행 중인 도우미 작업이나 대화 정리가 끝난 뒤 다시 시도해 주세요.',
+  HELPER_COMPACTION_CODEX_NATIVE:
+    '네이티브 에이전트는 컨텍스트를 스스로 관리해서 수동 정리를 지원하지 않아요.',
+  HELPER_COMPACTION_FAILED:
+    '도우미 대화를 정리하지 못했어요. 잠시 뒤 다시 시도하거나 요약 모델을 확인해 주세요.',
+  HELPER_COMPACTION_EOF: '도우미 대화 정리 응답이 중간에 끊겼어요. 잠시 뒤 다시 시도해 주세요.',
+  HELPER_COMPACTION_CANCELLED: '도우미 대화 정리를 취소했어요.',
+  HELPER_FIXED_CONTEXT_TOO_LARGE:
+    '요약할 고정 입력만으로 요약 모델의 컨텍스트 한도를 넘었어요. 입력 한도가 더 큰 요약 모델을 선택해 주세요.',
   EDITOR_WORKSPACE_UNAVAILABLE: '선택한 편집 초안을 사용할 수 없어요. 편집기를 다시 열어 주세요.',
   DRAFT_UNAPPLIED_FIELDS: '미적용 초안을 검증하고 적용한 뒤 저장해 주세요.',
   DRAFT_DISCARDED: '편집 초안을 버렸어요. 새 초안을 열어 주세요.',

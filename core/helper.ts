@@ -27,6 +27,21 @@ export type HelperConversationDeletion = {
   canDelete: boolean;
   description: string;
 };
+export type HelperContextCompactionSummary = {
+  compactedMessages: number;
+  uncompactedMessages: number;
+  totalMessages: number;
+  checkpointRevision: number;
+  summaryChars: number;
+};
+export type HelperCompactionResult = {
+  compacted: boolean;
+  noopReason?: 'empty' | 'already-compacted';
+  compactedMessages: number;
+  beforeTokens: number | null;
+  afterTokens: number | null;
+  checkpointRevision: number;
+};
 export type HelperProject = { id: string; title: string; revision: number };
 export type HelperConversationSummary = HelperConversation & {
   projectId: string | null;

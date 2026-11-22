@@ -317,6 +317,48 @@ export const messages = {
     ja: '直近の報告入力',
     zh: '最近报告的输入',
   },
+  'helperUsage.compacted': {
+    ko: '정리된 대화',
+    en: 'Compacted history',
+    ja: '整理済みの会話',
+    zh: '已整理对话',
+  },
+  'helperUsage.compactedCount': {
+    ko: '메시지 {count, number}개',
+    en: '{count, plural, one {# message} other {# messages}}',
+    ja: 'メッセージ {count, number}件',
+    zh: '{count, number} 条消息',
+  },
+  'helperUsage.compactNow': {
+    ko: '지금 대화 정리하기',
+    en: 'Compact conversation now',
+    ja: '今すぐ会話を整理',
+    zh: '立即整理对话',
+  },
+  'helperUsage.compacting': {
+    ko: '대화 정리 중…',
+    en: 'Compacting…',
+    ja: '会話を整理中…',
+    zh: '正在整理对话…',
+  },
+  'helperUsage.alreadyCompacted': {
+    ko: '지금까지의 대화가 이미 정리돼 있어요.',
+    en: 'The conversation so far is already compacted.',
+    ja: 'これまでの会話はすでに整理されています。',
+    zh: '截至目前的对话均已整理。',
+  },
+  'helperUsage.compactBusyHint': {
+    ko: '진행 중인 작업이 끝난 뒤 정리할 수 있어요.',
+    en: 'You can compact once the running task finishes.',
+    ja: '実行中の作業が終わってから整理できます。',
+    zh: '当前任务完成后即可整理。',
+  },
+  'helperUsage.compactedNotice': {
+    ko: '대화 메시지 {count, number}개를 정리했어요. 다음 요청부터 요약본을 이어 써요.',
+    en: 'Compacted {count, plural, one {# message} other {# messages}}. Future requests will continue from the summary.',
+    ja: '会話メッセージ {count, number}件を整理しました。次のリクエストから要約を引き継ぎます。',
+    zh: '已整理 {count, number} 条对话消息，后续请求将基于摘要继续。',
+  },
   'helperResults.title': {
     ko: '저장된 결과',
     en: 'Saved results',

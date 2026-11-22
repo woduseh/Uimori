@@ -1468,6 +1468,151 @@ test('HUSAGE01 the composer shows the latest context estimate, its parts and the
   await page.screenshot({ path: info.outputPath('context-usage-unknown-narrow-panel.png') });
 });
 
+test('HUSAGE02 the context usage popover manually compacts the helper conversation and updates state', async ({
+  page,
+  request,
+}, info) => {
+  const { chat, conversation, task } = await seed(request);
+  const provider = createServer(async (incoming, response) => {
+    for await (const _chunk of incoming) {
+    }
+    response.writeHead(200, { 'content-type': 'text/event-stream' });
+    const events = [
+      { type: 'text_delta', delta: '수동으로 정리한 도우미 대화 요약이에요.' },
+      { type: 'usage', inputTokens: 80, outputTokens: 24, costUsd: null },
+      { type: 'done', reason: 'stop' },
+    ];
+    response.end(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''));
+  });
+  await new Promise<void>((resolve, reject) => {
+    provider.once('error', reject);
+    provider.listen(0, '127.0.0.1', resolve);
+  });
+  const address = provider.address();
+  if (!address || typeof address === 'string') throw new Error('Fixture server did not start');
+  const baseline = (await (await request.get('/api/model-workspace')).json()) as ModelWorkspace;
+  try {
+    const connection = await (
+      await request.post('/api/connections', {
+        data: {
+          title: `수동 압축 연결 ${randomUUID()}`,
+          protocol: 'fixture-sse-v1',
+          endpoint: `http://127.0.0.1:${address.port}/`,
+          enabled: true,
+        },
+      })
+    ).json();
+    const model = await (
+      await request.post('/api/model-presets', {
+        data: {
+          title: '수동 압축 모델',
+          connectionId: connection.id,
+          modelId: 'synthetic-manual-compact',
+          inputTokenLimit: 200000,
+          maxOutputTokens: 1024,
+          temperature: null,
+        },
+      })
+    ).json();
+    const updated = await request.put('/api/model-workspace', {
+      data: {
+        expectedRevision: baseline.revision,
+        routes: baseline.routes,
+        translationPolicy: baseline.translationPolicy,
+        helperModel: { id: model.id },
+        contextModel: { id: model.id },
+      },
+    });
+    expect(updated.ok(), await updated.text()).toBe(true);
+
+    const usage: HelperTaskResultsView['usage'] = {
+      toolExecutions: 1,
+      attempts: [],
+      latestInputEstimate: 42_000,
+      latestInputLimit: 200_000,
+      latestInputExecution: 'provider-tool-loop',
+      latestInputParts: {
+        instructions: 4_000,
+        toolSchemas: 8_000,
+        history: 24_000,
+        source: 6_000,
+        toolResults: null,
+      },
+    };
+    await page.route(`**/api/helper/tasks/${task.id}/results`, (route) =>
+      route.fulfill({
+        json: {
+          taskId: task.id,
+          status: 'completed',
+          results: [],
+          changes: [],
+          confirmations: [],
+          unrecordedOperations: 0,
+          usage,
+        } satisfies HelperTaskResultsView,
+      })
+    );
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/?chat=${chat.id}`);
+    await openHelper(page);
+    const helper = page.locator('#helper-panel');
+    const meter = helper.locator('.helper-context-usage > summary');
+    await expect(meter).toBeVisible();
+    await meter.click();
+    const body = helper.locator('.helper-context-usage-body').filter({ visible: true });
+    const compactButton = body.getByRole('button', { name: '지금 대화 정리하기', exact: true });
+    await expect(compactButton).toBeEnabled();
+    await page.screenshot({ path: info.outputPath('manual-compact-before.png') });
+    await compactButton.click();
+
+    await expect(
+      page.locator('.transient-notice', {
+        hasText: '대화 메시지 2개를 정리했어요. 다음 요청부터 요약본을 이어 써요.',
+      })
+    ).toBeVisible();
+    await expect(
+      body.locator('.helper-context-usage-row', { hasText: '정리된 대화' }).locator('dd')
+    ).toHaveText('메시지 2개');
+    await expect(body).toContainText('지금까지의 대화가 이미 정리돼 있어요.');
+    await expect(compactButton).toBeDisabled();
+    await page.screenshot({ path: info.outputPath('manual-compact-after.png') });
+
+    const view = await (
+      await request.get(`/api/helper/conversations/${conversation.id}/view`)
+    ).json();
+    expect(view.context).toMatchObject({
+      compactedMessages: 2,
+      uncompactedMessages: 0,
+      totalMessages: 2,
+      checkpointRevision: 1,
+    });
+
+    usage.latestInputExecution = 'codex-native';
+    usage.latestInputTokens = 12_000;
+    await page.reload();
+    await openHelper(page);
+    await helper.locator('.helper-context-usage > summary').click();
+    await expect(
+      helper
+        .locator('.helper-context-usage-body')
+        .filter({ visible: true })
+        .getByRole('button', { name: '지금 대화 정리하기', exact: true })
+    ).toHaveCount(0);
+  } finally {
+    const current = (await (await request.get('/api/model-workspace')).json()) as ModelWorkspace;
+    await request.put('/api/model-workspace', {
+      data: {
+        expectedRevision: current.revision,
+        routes: baseline.routes,
+        translationPolicy: baseline.translationPolicy,
+        helperModel: baseline.helperModel ? { id: baseline.helperModel.id } : null,
+        contextModel: baseline.contextModel ? { id: baseline.contextModel.id } : null,
+      },
+    });
+    await new Promise<void>((resolve) => provider.close(() => resolve()));
+  }
+});
+
 async function expectOneToolRow(page: Page) {
   const row = await page.locator('#helper-panel .helper-composer').evaluate((composer) => {
     const box = composer.getBoundingClientRect();

@@ -187,7 +187,8 @@ export function ActionMenu({
             item.disabled ||
             insideNestedDialog(item) ||
             item.hasAttribute('aria-haspopup') ||
-            item.hasAttribute('aria-pressed')
+            item.hasAttribute('aria-pressed') ||
+            item.hasAttribute('data-keep-open')
           )
             return;
           closeAfterChoice();

@@ -1,9 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { ContextCheckpointRef, ContextPlan } from '../core/context-plan.js';
-import type { HelperTask, HelperTaskSnapshot } from '../core/helper.js';
+import type {
+  HelperContextCompactionSummary,
+  HelperScope,
+  HelperTask,
+  HelperTaskSnapshot,
+} from '../core/helper.js';
+import type { ModelSnapshot } from '../core/product.js';
 import type { Usage } from '../core/types.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
+import { pruneContextHistory } from './context-retention.js';
 import { checkpointHash } from './context-store.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
@@ -120,6 +127,40 @@ export function helperContext(
   return { activeRevision: Number(row?.revision ?? 0), checkpoint };
 }
 
+export function readHelperContextState(
+  store: Store,
+  conversationId: string
+): HelperContextCompactionSummary {
+  const history = helperHistory(store, conversationId);
+  const row = store.db
+    .prepare('SELECT revision,checkpoint_id FROM context_heads WHERE scope_key=?')
+    .get(`helper:${conversationId}`) as Row | undefined;
+  const revision = Number(row?.revision ?? 0);
+  if (row?.checkpoint_id) {
+    try {
+      const context = helperContext(store, conversationId, history);
+      if (context.checkpoint) {
+        const plan = store.context.checkpoint(context.checkpoint).plan;
+        const compactedMessages = Math.min(history.length, plan.compacted.length);
+        return {
+          compactedMessages,
+          uncompactedMessages: Math.max(0, history.length - compactedMessages),
+          totalMessages: history.length,
+          checkpointRevision: context.activeRevision,
+          summaryChars: plan.summary?.length ?? 0,
+        };
+      }
+    } catch {}
+  }
+  return {
+    compactedMessages: 0,
+    uncompactedMessages: history.length,
+    totalMessages: history.length,
+    checkpointRevision: revision,
+    summaryChars: 0,
+  };
+}
+
 export function helperRequestContext(store: Store, conversationId: string, retryOf?: string) {
   const history = helperHistory(store, conversationId);
   const context = helperContext(store, conversationId, history);
@@ -213,5 +254,76 @@ export function publishHelperContext(
         )
         .run(scopeKey, chatId, revision, checkpoint.id);
     return { activeRevision: activated ? revision : base.activeRevision, checkpoint, activated };
+  });
+}
+
+export function publishManualHelperContext(
+  store: Store,
+  conversationId: string,
+  scope: HelperScope,
+  helperModel: ModelSnapshot,
+  summary: string,
+  usage: Usage,
+  estimatedInputTokens: number,
+  base: NonNullable<HelperTaskSnapshot['context']>,
+  history: HelperTaskSnapshot['history']
+) {
+  return store.transaction(() => {
+    const busy = store.db
+      .prepare(
+        "SELECT 1 FROM helper_tasks WHERE conversation_id=? AND status IN ('queued','running') LIMIT 1"
+      )
+      .get(conversationId);
+    if (busy) throw new HttpError(409, 'HELPER_COMPACTION_BUSY');
+    const all = helperHistory(store, conversationId);
+    if (!isDeepStrictEqual(all, history))
+      throw new HttpError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
+    const current = helperContext(store, conversationId, all);
+    if (
+      current.activeRevision !== base.activeRevision ||
+      !isDeepStrictEqual(current.checkpoint, base.checkpoint)
+    )
+      throw new HttpError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
+    const scopeKey = `helper:${conversationId}`;
+    const revision = base.activeRevision + 1;
+    const plan: ContextPlan = {
+      version: 1,
+      status: 'ready',
+      budget: contextBudgetForModel(helperModel),
+      dependencyKey: scopeKey,
+      estimatedInputTokens,
+      compacted: refs(all),
+      recentSourceRevisions: [],
+      summary,
+      summaryCalls: usage.modelCalls,
+      usage,
+      error: null,
+    };
+    const checkpoint = {
+      id: randomUUID(),
+      revision,
+      hash: checkpointHash(scopeKey, revision, plan),
+    };
+    const chatId = scope.kind === 'chat' ? scope.chatId : null;
+    store.db
+      .prepare('INSERT INTO context_checkpoints VALUES(?,?,?,?,?,?,?,?,?)')
+      .run(
+        checkpoint.id,
+        scopeKey,
+        chatId,
+        revision,
+        checkpoint.hash,
+        'manual',
+        JSON.stringify(plan),
+        new Date().toISOString(),
+        1
+      );
+    store.db
+      .prepare(
+        'INSERT INTO context_heads VALUES(?,?,?,?) ON CONFLICT(scope_key) DO UPDATE SET revision=excluded.revision,checkpoint_id=excluded.checkpoint_id'
+      )
+      .run(scopeKey, chatId, revision, checkpoint.id);
+    pruneContextHistory(store.db);
+    return { activeRevision: revision, checkpoint };
   });
 }

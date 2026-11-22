@@ -9,7 +9,7 @@ import { Store } from '../server/store.js';
 import { HelperRuntime } from '../server/helper-runtime.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
-import { publishHelperContext } from '../server/helper-context.js';
+import { publishHelperContext, readHelperContextState } from '../server/helper-context.js';
 import { encodeMainPreview } from '../server/main-request.js';
 import { assertContextBudget, estimateContextTokens } from '../core/context-budget.js';
 import { countTextTokens } from '../core/text-tokens.js';
@@ -1456,4 +1456,152 @@ test('a concurrent helper checkpoint remains active when the current task adopts
       .get(`helper:${f.conversation.id}`)?.checkpoint_id
   ).toBe(replacementId);
   expect(task.snapshot.context).toEqual({ activeRevision: 0, checkpoint: null });
+});
+
+test('manual helper compaction publishes a manual checkpoint, records numeric-only summary usage, noops when repeated, and feeds the next turn', async () => {
+  const f = await fixture({ fixed: false });
+  const log = script(f, (request) => {
+    if (request.role === 'context') return summarized('수동 압축 요약: 초안 핵심 규칙을 정리했다.');
+    return structuredClone(success);
+  });
+  const empty = await f.runtime.compactConversation(f.conversation.id);
+  expect(empty).toMatchObject({ compacted: false, noopReason: 'empty', compactedMessages: 0 });
+  expect(log.requests).toHaveLength(0);
+
+  const first = await f.run();
+  expect(first.status).toBe('completed');
+  expect(readHelperContextState(f.store, f.conversation.id)).toMatchObject({
+    compactedMessages: 0,
+    uncompactedMessages: 2,
+    totalMessages: 2,
+  });
+
+  const compacted = await f.runtime.compactConversation(f.conversation.id);
+  expect(compacted).toMatchObject({
+    compacted: true,
+    compactedMessages: 2,
+    checkpointRevision: 1,
+  });
+  expect(compacted.beforeTokens).toBeGreaterThan(0);
+  expect(compacted.afterTokens).toBeGreaterThan(0);
+  expect(readHelperContextState(f.store, f.conversation.id)).toMatchObject({
+    compactedMessages: 2,
+    uncompactedMessages: 0,
+    totalMessages: 2,
+    checkpointRevision: 1,
+  });
+
+  const rows = checkpointRows(f);
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({ origin: 'manual', activated: 1 });
+
+  const attempt = f.store.db
+    .prepare(
+      "SELECT usage_kind, usage_detached, status, request FROM attempts WHERE role='context' ORDER BY rowid DESC LIMIT 1"
+    )
+    .get() as Record<string, unknown>;
+  expect(attempt).toMatchObject({ usage_kind: 'summary', usage_detached: 1, status: 'completed' });
+  expect(String(attempt.request)).not.toContain('현재 초안을 수정하고 저장해줘.');
+
+  const repeated = await f.runtime.compactConversation(f.conversation.id);
+  expect(repeated).toMatchObject({
+    compacted: false,
+    noopReason: 'already-compacted',
+    compactedMessages: 2,
+    checkpointRevision: 1,
+  });
+  expect(log.requests.filter((item) => item.role === 'context')).toHaveLength(1);
+
+  const nextTask = f.runtime.enqueue(f.conversation.id, randomUUID(), '요약 이어서 다음 작업');
+  await Promise.all(f.work);
+  expect(f.workspace.task(nextTask.id).status).toBe('completed');
+  const nextHelperRequest = log.requests.at(-1)!;
+  expect(nextHelperRequest.role).toBe('helper');
+  expect(nextHelperRequest.input.history).toEqual([]);
+  expect(JSON.stringify(nextHelperRequest.input.source)).toContain(
+    '수동 압축 요약: 초안 핵심 규칙을 정리했다.'
+  );
+  expect(readHelperContextState(f.store, f.conversation.id)).toMatchObject({
+    compactedMessages: 2,
+    uncompactedMessages: 2,
+    totalMessages: 4,
+  });
+});
+
+test('manual helper compaction enforces busy, codex-native, context-model and concurrent-edit guards', async () => {
+  const f = await fixture({ fixed: false });
+  let releaseCompaction!: () => void;
+  const compactionGate = new Promise<void>((resolve) => {
+    releaseCompaction = resolve;
+  });
+  let startedCompaction!: () => void;
+  const compactionStarted = new Promise<void>((resolve) => {
+    startedCompaction = resolve;
+  });
+  script(f, async (request) => {
+    if (request.role === 'context') {
+      startedCompaction();
+      await compactionGate;
+      return summarized('진행 중 정리 결과');
+    }
+    return structuredClone(success);
+  });
+
+  expect((await f.run()).status).toBe('completed');
+
+  const inFlight = f.runtime.compactConversation(f.conversation.id);
+  try {
+    await compactionStarted;
+    await expect(f.runtime.compactConversation(f.conversation.id)).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'HELPER_COMPACTION_BUSY',
+    });
+    expect(() => f.runtime.enqueue(f.conversation.id, randomUUID(), '겹치는 요청')).toThrow(
+      'HELPER_COMPACTION_BUSY'
+    );
+    expect(f.runtime.deletionImpact(f.conversation.id).canDelete).toBe(false);
+  } finally {
+    releaseCompaction();
+  }
+  expect((await inFlight).compacted).toBe(true);
+
+  const selected = modelWorkspace(f.store);
+  updateModelWorkspace(f.store, {
+    expectedRevision: selected.revision,
+    routes: selected.routes,
+    translationPolicy: selected.translationPolicy,
+    helperModel: { id: f.helperModel.id },
+    contextModel: null,
+  });
+  await expect(f.runtime.compactConversation(f.conversation.id)).rejects.toMatchObject({
+    statusCode: 409,
+    message: 'MODEL_REQUIRED:context',
+  });
+
+  const nativeConnection = f.store.product.connection({
+    title: 'Synthetic native codex',
+    protocol: 'codex-app-server-v1',
+    endpoint: 'codex://local',
+    enabled: true,
+  });
+  const nativeModel = f.store.product.model({
+    title: 'Synthetic native codex',
+    connectionId: nativeConnection.id,
+    modelId: 'codex-native',
+    temperature: null,
+    maxOutputTokens: 1024,
+    inputTokenLimit: 32768,
+  });
+  const updated = modelWorkspace(f.store);
+  updateModelWorkspace(f.store, {
+    expectedRevision: updated.revision,
+    routes: updated.routes,
+    translationPolicy: updated.translationPolicy,
+    helperModel: { id: nativeModel.id },
+    contextModel: { id: f.contextModel.id },
+  });
+  await expect(f.runtime.compactConversation(f.conversation.id)).rejects.toMatchObject({
+    statusCode: 409,
+    message: 'HELPER_COMPACTION_CODEX_NATIVE',
+  });
 });

@@ -1,6 +1,7 @@
 import { useI18n, message as uiMessage } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
+  HelperContextCompactionSummary,
   HelperConversation,
   HelperEvent,
   HelperMessage,
@@ -16,16 +17,17 @@ type View = {
   conversation: HelperConversation;
   messages: HelperMessage[];
   tasks: HelperTaskView[];
+  context?: HelperContextCompactionSummary;
   hasOlderMessages: boolean;
   hasOlderTasks: boolean;
 };
 const id = encodeURIComponent;
-const diagnosticEvent = (kind: string) =>
-  kind === 'tool.started' ||
-  kind === 'tool.finished' ||
-  kind === 'input.measured' ||
-  kind === 'progress' ||
-  kind.startsWith('context.');
+const diagnosticEvent = (event: Pick<HelperEvent, 'kind' | 'taskId'>) =>
+  event.kind === 'tool.started' ||
+  event.kind === 'tool.finished' ||
+  event.kind === 'input.measured' ||
+  event.kind === 'progress' ||
+  (event.kind.startsWith('context.') && event.taskId !== null);
 
 function applyMessageChange(view: View, change: HelperMessageMutation): View {
   if ((change.conversation.historyRevision ?? 0) <= (view.conversation.historyRevision ?? 0))
@@ -125,11 +127,13 @@ export function useHelperConversation(
           tasks,
           conversation: latestConversation,
           eventCursor,
+          context,
         } = await api<{
           messages: HelperMessage[];
           tasks: HelperTaskView[];
           conversation: HelperConversation;
           eventCursor: number;
+          context?: HelperContextCompactionSummary;
         }>(`/helper/conversations/${id(key)}/view`);
         if (!alive.current || versions.current.get(key) !== version) return;
         if (!cursors.current.has(key)) cursors.current.set(key, eventCursor);
@@ -182,6 +186,7 @@ export function useHelperConversation(
             ...messages,
           ],
           tasks: [...tasks, ...(previous?.tasks ?? []).filter((task) => !taskIds.has(task.id))],
+          context: context ?? previous?.context,
           hasOlderMessages: messages.length === 100 && (previous?.hasOlderMessages ?? true),
           hasOlderTasks: tasks.length === 50 && (previous?.hasOlderTasks ?? true),
         });
@@ -226,7 +231,7 @@ export function useHelperConversation(
           if (event.kind === 'font.updated')
             window.dispatchEvent(new Event('uimori-fonts-changed'));
           cursor = event.seq;
-          if (!diagnosticEvent(event.kind)) changed = true;
+          if (!diagnosticEvent(event)) changed = true;
           if (
             /^task\.(completed|failed|cancelled|interrupted)$/u.test(event.kind) ||
             event.kind === 'artifact.saved' ||
