@@ -6,6 +6,10 @@
   overflow-wrap: anywhere;
 }
 .helper-diff-prose ins,
+.helper-diff-prose del + ins,
+.helper-diff-prose ins + del {
+  margin-inline-start: 4px;
+}
 .helper-diff-prose del {
   border-radius: var(--radius-small);
   color: var(--text);

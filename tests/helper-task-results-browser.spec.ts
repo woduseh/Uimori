@@ -1028,6 +1028,15 @@ test('HCHANGE01 change cards show marked words, code lines and the states withou
           .evaluate((node) => getComputedStyle(node).textDecorationLine);
       expect(await decoration('del')).toContain('line-through');
       expect(await decoration('ins')).toContain('underline');
+      expect(
+        await paragraph
+          .locator('del + ins')
+          .first()
+          .evaluate((inserted) => {
+            const removed = inserted.previousElementSibling!.getClientRects();
+            return inserted.getClientRects()[0]!.left - removed[removed.length - 1]!.right;
+          })
+      ).toBeGreaterThanOrEqual(2);
       await results.locator('.helper-change-toggle', { hasText: '정규식 봇' }).click();
       const code = results.getByRole('region', { name: /정규식 봇/ });
       await expect(code.locator('.helper-diff-line')).toHaveCount(4);
