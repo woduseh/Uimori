@@ -30,7 +30,7 @@ import {
   pruneUnusedHelperFiles,
 } from './helper-attachments.js';
 import { imageDataHashes, pruneUnusedData } from './unused-data.js';
-import { pruneHelperChanges } from './helper-changes.js';
+import { forgetHelperConversationChanges, pruneHelperChanges } from './helper-changes.js';
 import { releaseHelperConfirmationArguments } from './helper-argument-retention.js';
 import { helperRequestContext } from './helper-context.js';
 import {
@@ -448,6 +448,7 @@ export class HelperWorkspace {
         .map((row) => String(row.attempt_id));
       detachAttemptUsage(this.store.db, attemptIds);
       forgetHelperConversationRead(this.store, id);
+      forgetHelperConversationChanges(this.store.db, id);
       this.store.db.prepare('DELETE FROM helper_conversations WHERE id=?').run(id);
       pruneUnusedData(this.store.db, attachmentImages);
       pruneUnusedHelperFiles(this.store.db);

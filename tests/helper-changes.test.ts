@@ -28,7 +28,7 @@ import { HelperWorkspace } from '../server/helper-workspace.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 import { deleteScenes, sceneDeletionImpact } from '../server/scene-deletion.js';
 import { Store } from '../server/store.js';
-import { pruneUnusedData } from '../server/unused-data.js';
+import { flushPendingImageCleanup, pruneUnusedData } from '../server/unused-data.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { completedSource } from './fixtures/illustration.js';
 
@@ -618,6 +618,65 @@ test('outline and author notes record node and note changes, and a deleted targe
     f.store.db.prepare("SELECT baseline FROM helper_changes WHERE domain='resource'").get()
   ).toEqual({ baseline: 'null' });
 });
+
+test.each(['expired', 'chat deleted', 'conversation deleted'] as const)(
+  'a baseline removed because its record %s releases the images and theme assets only it held',
+  (removal) => {
+    const f = fixture();
+    const image = 'a'.repeat(64);
+    const font = 'b'.repeat(64);
+    f.store.db
+      .prepare('INSERT INTO image_blobs(hash,mime,bytes) VALUES(?,?,?)')
+      .run(image, 'image/png', Buffer.from([1]));
+    f.store.db
+      .prepare('INSERT INTO theme_assets(hash,kind,mime,bytes,created_at) VALUES(?,?,?,?,?)')
+      .run(font, 'font', 'font/woff2', Buffer.from([1]), new Date().toISOString());
+    const bot = f.store.product.content(
+      fixtureBotInput('이미지 봇', `![그림](/api/package-image-blobs/${image})`)
+    );
+    const task = f.begin();
+    f.resource(task, 'resource.patch', {
+      kind: 'content',
+      id: bot.id,
+      expectedRevision: bot.revision,
+      changes: [{ op: 'set', path: '/package/nativeRisu/card/description', value: '그림 없음' }],
+    });
+    f.resource(task, 'resource.patch', {
+      kind: 'content',
+      id: bot.id,
+      expectedRevision: f.store.product.get<Content>('content', bot.id).revision,
+      changes: [{ op: 'set', path: '/package/nativeRisu/card/creator_notes', value: '다른 메모' }],
+    });
+    f.store.db
+      .prepare(
+        "INSERT INTO helper_changes(task_id,domain,target_id,position,baseline,entries,updated_at) VALUES(?,'resource','theme:custom',9,?,'[]',?)"
+      )
+      .run(
+        task.id,
+        JSON.stringify({ assets: [{ hash: font, kind: 'font' }] }),
+        new Date().toISOString()
+      );
+    f.workspace.finish(task.id, 'changes-fixture', 1, 'completed', '', null);
+    pruneUnusedData(f.store.db, [image]);
+    pruneThemeAssets(f.store.db, [font]);
+    const kept = () => ({
+      image: !!f.store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(image),
+      font: !!f.store.db.prepare('SELECT 1 FROM theme_assets WHERE hash=?').get(font),
+    });
+    expect(kept()).toEqual({ image: true, font: true });
+    if (removal === 'expired')
+      pruneHelperChanges(
+        f.store.db,
+        undefined,
+        Date.now() + (HELPER_CHANGE_RETENTION.days + 1) * 86_400_000
+      );
+    else if (removal === 'chat deleted') deleteChat(f.store, f.chat.id, {});
+    else
+      f.workspace.delete(f.conversation.id, f.workspace.deletionImpact(f.conversation.id).request);
+    flushPendingImageCleanup(f.store.db);
+    expect(kept()).toEqual({ image: false, font: false });
+  }
+);
 
 test('theme asset cleanup keeps fonts and images a recorded theme baseline references', () => {
   const f = fixture();

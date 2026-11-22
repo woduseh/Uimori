@@ -18,6 +18,8 @@ import {
 import { alignSequences, diffText, type TextDiff, type TextDiffMode } from '../core/text-diff.js';
 import { displayTranslationJob } from '../core/translation-display.js';
 import { sceneTitle } from './scene-titles.js';
+import { pruneThemeAssets, themeAssetHashes } from './theme-assets.js';
+import { imageDataHashes, queueImageCleanup } from './unused-data.js';
 import { latestTranslation } from './source-editing.js';
 import type { Store } from './store.js';
 
@@ -776,10 +778,23 @@ export function recordHelperChatLoreChange(
   });
 }
 
+function releaseBaselineFiles(db: DatabaseSync, rows: Record<string, unknown>[]) {
+  queueImageCleanup(
+    db,
+    rows.flatMap((row) => imageDataHashes(row.baseline))
+  );
+  const themeAssets = rows.flatMap((row) =>
+    String(row.target_id).startsWith('theme:') && typeof row.baseline === 'string'
+      ? themeAssetHashes(JSON.parse(row.baseline))
+      : []
+  );
+  if (themeAssets.length) pruneThemeAssets(db, themeAssets);
+}
+
 function redact(db: DatabaseSync, where: string, values: string[], reason: 'deleted' | 'expired') {
   const rows = db
     .prepare(
-      `SELECT task_id,domain,target_id,entries FROM helper_changes WHERE text_removed IS NULL AND (${where})`
+      `SELECT task_id,domain,target_id,baseline,entries FROM helper_changes WHERE text_removed IS NULL AND (${where})`
     )
     .all(...values);
   const update = db.prepare(
@@ -800,6 +815,15 @@ function redact(db: DatabaseSync, where: string, values: string[], reason: 'dele
     );
     update.run(JSON.stringify(entries), reason, row.task_id, row.domain, row.target_id);
   }
+  releaseBaselineFiles(db, rows);
+}
+
+function forget(db: DatabaseSync, where: string, values: string[]) {
+  const rows = db
+    .prepare(`SELECT target_id,baseline FROM helper_changes WHERE ${where}`)
+    .all(...values);
+  db.prepare(`DELETE FROM helper_changes WHERE ${where}`).run(...values);
+  releaseBaselineFiles(db, rows);
 }
 
 export function pruneHelperChanges(db: DatabaseSync, conversationId?: string, now = Date.now()) {
@@ -828,7 +852,16 @@ export function forgetHelperSceneChanges(db: DatabaseSync, sourceIds: Iterable<s
 }
 
 export function forgetHelperChatChanges(db: DatabaseSync, chatId: string) {
-  db.prepare('DELETE FROM helper_changes WHERE chat_id=?').run(chatId);
+  forget(
+    db,
+    `chat_id=? OR task_id IN (SELECT t.id FROM helper_tasks t
+      JOIN helper_conversations c ON c.id=t.conversation_id WHERE c.chat_id=?)`,
+    [chatId, chatId]
+  );
+}
+
+export function forgetHelperConversationChanges(db: DatabaseSync, conversationId: string) {
+  forget(db, 'task_id IN (SELECT id FROM helper_tasks WHERE conversation_id=?)', [conversationId]);
 }
 
 function boundDiffs(entries: HelperChange[], characters: number): HelperChange[] {
