@@ -38,7 +38,7 @@ export function enqueueTerminalNotification(
       COALESCE(r.source_revision,r.parent_revision) AS source_id,0 AS generation,
       EXISTS(SELECT 1 FROM jobs j WHERE j.source_revision=r.source_revision AND j.kind='translation'
         AND json_extract(j.input,'$.autoTranslateRunId')=r.id) AS auto_enabled,
-      EXISTS(SELECT 1 FROM attempts a WHERE a.run_id=r.id AND a.is_synthetic=0) AS eligible
+      EXISTS(SELECT 1 FROM attempts a INDEXED BY attempts_run WHERE a.run_id=r.id AND a.is_synthetic=0) AS eligible
       FROM runs r WHERE r.id=? AND r.chat_id=?`)
       .get(entityId, chatId) as Target | undefined;
     if (status === 'completed' && target?.auto_enabled) return;
