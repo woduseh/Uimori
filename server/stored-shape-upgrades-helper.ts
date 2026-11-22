@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { releaseHelperConfirmationArguments } from './helper-argument-retention.js';
 
 export function upgradeHelperStoredShapes(db: DatabaseSync): void {
   db.exec(`
@@ -12,4 +13,5 @@ export function upgradeHelperStoredShapes(db: DatabaseSync): void {
     UPDATE helper_tasks SET snapshot=json_remove(snapshot,'$.limits.artifacts')
     WHERE json_valid(snapshot) AND json_type(snapshot,'$.limits.artifacts') IS NOT NULL;
   `);
+  releaseHelperConfirmationArguments(db);
 }

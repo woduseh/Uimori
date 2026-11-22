@@ -184,6 +184,7 @@ A helper request sent with `mode: "plan"` (`POST /api/helper/conversations/:id/m
 - The same call identity can be held again in a later task, for example after a granted call failed. Each holding task is answered on its own: its `grantedBy` names only a task after it, so an earlier grant neither marks the new hold as granted nor hides it, and the client keys a decline by task and confirmation.
 - By default resource deletion and a `resource.patchMany` over three or more resources are held; the threshold is `HELPER_BULK_CONFIRMATION_RESOURCES`. The setting is copied into the task at admission, like the task timeout, and the helper's own `settings.update` cannot change it.
 - The results view does not expose the held call's arguments.
+- The stored arguments are a copy of what the helper sent, such as a whole patch body or a scene request, so they live only while the call can still be confirmed. `server/helper-argument-retention.ts` drops them from a `confirmation.required` event once a later task exists in the conversation, from a task's granted calls once the task completes or is retried, and from both when a chat, scene or resource the call names is deleted, including holds in a library conversation that acted on the chat through `chatId`. A confirmation without arguments shows as expired, and a grant or a retry that needs it fails with `CONFIRMATION_UNAVAILABLE` instead of running from partial data. `tests/helper-confirmation.test.ts` covers the release and the deletions.
 
 ## Linux data workspace
 

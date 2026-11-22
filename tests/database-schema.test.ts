@@ -120,6 +120,75 @@ test('a helper change record without the rollback columns keeps its rows and gai
   }
 });
 
+test('an existing database drops the arguments of confirmations that can no longer be granted', () => {
+  const path = file(),
+    first = new Store(path);
+  const chat = createFixtureChat(first, 'Existing chat');
+  const workspace = new HelperWorkspace(first);
+  const conversation = workspace.open({ kind: 'chat', chatId: chat.id });
+  const enqueue = (key: string) =>
+    workspace.enqueue(conversation.id, key, 'Edit', {
+      scope: conversation.scope,
+      model: {} as never,
+      history: [],
+      persona: '',
+      limits: { helperCalls: 1, totalCalls: 1 },
+    });
+  const held = (taskId: string) =>
+    workspace.event(conversation.id, taskId, 'confirmation.required', {
+      id: `call-${taskId}`,
+      taskId,
+      operation: 'scene.request',
+      reason: 'paid',
+      chatId: chat.id,
+      targets: [{ kind: 'chat', id: chat.id }],
+      arguments: { text: 'Held request text' },
+    });
+  const earlier = enqueue('earlier');
+  const latest = enqueue('latest');
+  held(earlier.id);
+  held(latest.id);
+  first.db
+    .prepare(
+      "UPDATE helper_tasks SET status='completed',snapshot=json_set(snapshot,'$.confirmations',json(?)) WHERE id=?"
+    )
+    .run(
+      JSON.stringify([
+        {
+          id: `call-${earlier.id}`,
+          operation: 'scene.request',
+          chatId: chat.id,
+          arguments: { text: 'Granted request text' },
+        },
+      ]),
+      latest.id
+    );
+  first.close();
+  const next = new Store(path);
+  try {
+    const events = next.db
+      .prepare("SELECT task_id,data FROM helper_events WHERE kind='confirmation.required'")
+      .all()
+      .map((row) => ({ taskId: row.task_id, data: JSON.parse(String(row.data)) }));
+    expect(events).toEqual([
+      {
+        taskId: earlier.id,
+        data: expect.not.objectContaining({ arguments: expect.anything() }),
+      },
+      {
+        taskId: latest.id,
+        data: expect.objectContaining({ arguments: { text: 'Held request text' } }),
+      },
+    ]);
+    expect(events[0]!.data).toMatchObject({ id: `call-${earlier.id}`, operation: 'scene.request' });
+    expect(new HelperWorkspace(next).task(latest.id).snapshot.confirmations).toEqual([
+      { id: `call-${earlier.id}`, operation: 'scene.request', chatId: chat.id },
+    ]);
+  } finally {
+    next.close();
+  }
+});
+
 test.each([DATABASE_SCHEMA_VERSION - 1, DATABASE_SCHEMA_VERSION + 1])(
   'unsupported schema %s is refused before changing source bytes',
   (version) => {

@@ -14,7 +14,7 @@ export const HELPER_BULK_CONFIRMATION_RESOURCES = 3;
 
 type Requirement = Pick<HelperConfirmation, 'operation' | 'reason' | 'chatId' | 'targets'>;
 type Recorded = Omit<HelperConfirmation, 'grantedBy' | 'grantable'> & {
-  arguments: Record<string, unknown>;
+  arguments?: Record<string, unknown>;
 };
 
 function requirement(
@@ -87,7 +87,7 @@ export function helperConfirmationGate(
   return store.transaction(() => {
     const receipts = uses(store, task.id, id);
     if (
-      task.snapshot.confirmations?.some((call) => call.id === id) &&
+      task.snapshot.confirmations?.some((call) => call.id === id && call.arguments) &&
       receipts.every((receipt) => receipt === receiptId)
     ) {
       if (!receipts.length)
@@ -131,8 +131,8 @@ export function resolveHelperConfirmations(
         `SELECT data FROM helper_events WHERE task_id=? AND kind='confirmation.required' AND json_extract(data,'$.id')=?`
       )
       .get(latest ?? '', id);
-    if (!row) throw new HttpError(409, 'CONFIRMATION_UNAVAILABLE');
-    const recorded = JSON.parse(String(row.data)) as Recorded;
+    const recorded = row && (JSON.parse(String(row.data)) as Recorded);
+    if (!recorded?.arguments) throw new HttpError(409, 'CONFIRMATION_UNAVAILABLE');
     return {
       id,
       operation: recorded.operation,
@@ -161,12 +161,12 @@ export function readHelperConfirmations(store: Store, taskId: string): HelperCon
     )
     .all(taskId)
     .map((row) => {
-      const { arguments: _arguments, ...recorded } = JSON.parse(String(row.data)) as Recorded;
+      const { arguments: args, ...recorded } = JSON.parse(String(row.data)) as Recorded;
       const grantedBy = granted.get(task.conversation_id, task.rowid, recorded.id)?.id;
       return {
         ...recorded,
         grantedBy: grantedBy === undefined ? null : String(grantedBy),
-        grantable: grantedBy === undefined && latest === taskId,
+        grantable: grantedBy === undefined && latest === taskId && args !== undefined,
       };
     });
 }

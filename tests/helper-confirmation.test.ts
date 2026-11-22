@@ -4,7 +4,10 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { Content } from '../core/product.js';
+import { deleteChat } from '../server/chat-deletion.js';
+import { helperConfirmationGate } from '../server/helper-confirmations.js';
 import { readHelperTaskResults } from '../server/helper-task-results.js';
+import { deleteLibraryItem } from '../server/library-deletion.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { Store } from '../server/store.js';
@@ -217,6 +220,107 @@ test('a call held again after an earlier grant can be confirmed again', async ()
   expect(readHelperTaskResults(f.store(), first.task.id).confirmations).toMatchObject([
     { grantedBy: granted.task.id },
   ]);
+});
+
+const storedArguments = (store: Store) => ({
+  held: store.db
+    .prepare(
+      "SELECT task_id AS taskId FROM helper_events WHERE kind='confirmation.required' AND json_type(data,'$.arguments') IS NOT NULL"
+    )
+    .all()
+    .map((row) => row.taskId),
+  granted: store.db
+    .prepare(
+      "SELECT t.id FROM helper_tasks t, json_each(t.snapshot,'$.confirmations') c WHERE json_type(c.value,'$.arguments') IS NOT NULL"
+    )
+    .all()
+    .map((row) => row.id),
+});
+
+test('held and granted call arguments are released once the call can no longer be confirmed', async () => {
+  const f = fixture();
+  const [one, two, three] = f.bots as [Content, Content, Content];
+  const call = () =>
+    helperCall('patch', 'resource.patchMany', {
+      items: [f.patch(one, '첫 문장'), f.patch(two, '둘'), f.patch(three, '셋')],
+    });
+  const first = await runScriptedChatHelper(f.store(), f.chat.id, [call(), helperDone]);
+  expect(storedArguments(f.store())).toEqual({ held: [first.task.id], granted: [] });
+  const [confirmation] = readHelperTaskResults(f.store(), first.task.id).confirmations;
+  const granted = await runScriptedChatHelper(
+    f.store(),
+    f.chat.id,
+    [call(), helperDone],
+    {},
+    { request: '바꿔 줘', confirmations: [confirmation!.id] }
+  );
+  expect(granted.finished('patch')).toMatchObject({ denied: false });
+  expect(storedArguments(f.store())).toEqual({ held: [], granted: [] });
+  expect(granted.task.snapshot.confirmations).toEqual([
+    { id: confirmation!.id, operation: 'resource.patchMany', chatId: f.chat.id },
+  ]);
+  expect(readHelperTaskResults(f.store(), first.task.id).confirmations).toMatchObject([
+    { grantedBy: granted.task.id, grantable: false },
+  ]);
+});
+
+test('deleting a target a held call names removes its arguments and the hold expires', async () => {
+  const f = fixture();
+  const [one, two, three] = f.bots as [Content, Content, Content];
+  const held = await runScriptedChatHelper(f.store(), f.chat.id, [
+    helperCall('patch', 'resource.patchMany', {
+      items: [f.patch(one, '첫 문장'), f.patch(two, '둘'), f.patch(three, '셋')],
+    }),
+    helperDone,
+  ]);
+  const [confirmation] = readHelperTaskResults(f.store(), held.task.id).confirmations;
+  deleteLibraryItem(f.store(), 'content', two.id, { expectedRevision: two.revision });
+  expect(storedArguments(f.store())).toEqual({ held: [], granted: [] });
+  expect(readHelperTaskResults(f.store(), held.task.id).confirmations).toMatchObject([
+    { id: confirmation!.id, grantedBy: null, grantable: false },
+  ]);
+  const conversation = held.runtime.workspace.open({ kind: 'chat', chatId: f.chat.id });
+  expect(() =>
+    held.runtime.enqueue(
+      conversation.id,
+      randomUUID(),
+      '바꿔 줘',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      { confirmations: [confirmation!.id] }
+    )
+  ).toThrow('CONFIRMATION_UNAVAILABLE');
+});
+
+test('deleting a chat removes the arguments of a call another conversation held for it', () => {
+  const f = fixture();
+  const workspace = new HelperWorkspace(f.store());
+  const library = workspace.open({ kind: 'library', workId: 'confirm-library' });
+  const task = workspace.enqueue(library.id, 'library', '이어서 써 줘', {
+    scope: library.scope,
+    model: {} as never,
+    history: [],
+    persona: '',
+    limits: { totalCalls: 3, helperCalls: 2 },
+    confirmPaidGeneration: true,
+  });
+  const result = helperConfirmationGate(
+    f.store(),
+    workspace,
+    { ...task, snapshot: { ...task.snapshot, scope: { kind: 'chat', chatId: f.chat.id } } },
+    'scene.request',
+    { text: '비밀 장면 요청' },
+    'receipt'
+  );
+  expect(result).toMatchObject({ code: 'CONFIRMATION_REQUIRED' });
+  expect(storedArguments(f.store())).toEqual({ held: [task.id], granted: [] });
+  deleteChat(f.store(), f.chat.id, {});
+  expect(storedArguments(f.store())).toEqual({ held: [], granted: [] });
+  expect(JSON.stringify(workspace.events(library.id))).not.toContain('비밀 장면 요청');
 });
 
 test('only a confirmation from the latest task can be granted, and declining needs no call', async () => {

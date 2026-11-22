@@ -8,6 +8,10 @@ import type { Store } from './store.js';
 import { pruneUnusedHelperFiles } from './helper-attachments.js';
 import { forgetChatHelperReads } from './helper-read-state.js';
 import { forgetHelperChatChanges } from './helper-changes.js';
+import {
+  forgetHelperConfirmationTargets,
+  redactHelperArgumentPreviews,
+} from './helper-argument-retention.js';
 
 type Row = Record<string, any>;
 const chatTables = [
@@ -123,6 +127,12 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
       store.db
         .prepare('DELETE FROM app_metadata WHERE key IN (?,?)')
         .run(`illustration-presentation:${sourceId}`, `source-title:${sourceId}`);
+    redactHelperArgumentPreviews(
+      store.db,
+      chatId,
+      ids('sources'),
+      '[arguments removed after chat deletion]'
+    );
     removeRunArtifacts(store, ids('runs'), ids('sources'), ids('jobs'));
     store.db
       .prepare(
@@ -150,6 +160,7 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
       .run(`${RUN_READER_DISMISSAL_PREFIX}${chatId}:%`);
     forgetChatHelperReads(store, chatId);
     forgetHelperChatChanges(store.db, chatId);
+    forgetHelperConfirmationTargets(store.db, [{ kind: 'chat', id: chatId }], chatId);
     store.db.prepare('DELETE FROM chats WHERE id=?').run(chatId);
     pruneUnusedData(store.db, imageCandidates);
     pruneUnusedHelperFiles(store.db);

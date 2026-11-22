@@ -16,6 +16,13 @@ import { helperArgumentDiagnostic } from '../server/helper-diagnostics.js';
 import { helperCallOperationId, HelperWorkspace } from '../server/helper-workspace.js';
 import { invokeTaskTool, type TaskControlActions } from '../server/helper-task-tools.js';
 import type { HelperConversation, HelperTask } from '../core/helper.js';
+import { deleteChat } from '../server/chat-deletion.js';
+import {
+  helperCall,
+  helperDone,
+  runScriptedChatHelper,
+  selectFixtureModels,
+} from './fixtures/scripted-helper.js';
 
 const owned: { store: Store; remove: () => void }[] = [];
 afterEach(() => {
@@ -240,6 +247,38 @@ test('scene deletion removes retained helper previews without changing outcomes 
   );
   expect(workspace.task(failed.id).snapshot.invalidatedBySceneDeletion).toBe(true);
   intact(f.store);
+});
+
+test('scene and chat deletion remove previews another conversation recorded for the deleted chat', async () => {
+  const f = manuscript();
+  selectFixtureModels(f.store);
+  const otherChat = createFixtureChat(f.store, 'Helper elsewhere');
+  const note = (text: string) => helperCall('notes', 'notes.write', { chatId: f.chatId, text });
+  const first = await runScriptedChatHelper(f.store, otherChat.id, [
+    helperCall('scene', 'scene.patch', {
+      chatId: f.chatId,
+      sourceId: f.b.id,
+      target: 'original',
+      text: 'Hidden scene replacement',
+    }),
+    note('Private note before scene deletion'),
+    helperDone,
+  ]);
+  const previews = () =>
+    first.runtime.workspace
+      .events(first.task.conversationId)
+      .filter((event) => event.kind === 'tool.started')
+      .map((event) => (event.data as { argsPreview: string }).argsPreview);
+  expect(previews().join()).toContain('Hidden scene replacement');
+  deleteScenes(f.store, f.chatId, f.b.id, request(f));
+  expect(previews()).toEqual(Array(2).fill('[arguments removed after scene deletion]'));
+  await runScriptedChatHelper(f.store, otherChat.id, [
+    note('Private note before chat deletion'),
+    helperDone,
+  ]);
+  expect(previews()[2]).toContain('Private note before chat deletion');
+  deleteChat(f.store, f.chatId, {});
+  expect(previews()[2]).toBe('[arguments removed after chat deletion]');
 });
 
 test('deleting B and following scenes restores A checkpoint and preserves the removed note as invisible orphan memory', () => {

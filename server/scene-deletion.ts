@@ -15,6 +15,10 @@ import { imageDataHashes, pruneUnusedData } from './unused-data.js';
 import { readChatVariables } from './chat-variables.js';
 import { disposeNativeRisuChatSessions } from './risu-native-lua-session.js';
 import { forgetHelperSceneChanges } from './helper-changes.js';
+import {
+  forgetHelperConfirmationTargets,
+  redactHelperArgumentPreviews,
+} from './helper-argument-retention.js';
 
 function target(store: Store, chatId: string, sourceId: string) {
   const chat = store.chat(chatId),
@@ -241,13 +245,12 @@ export function deleteScenes(
           attemptIds.add(String(attempt.id));
       }
     }
-    store.db
-      .prepare(`UPDATE helper_events SET data=json_set(data,
-        '$.argsPreview','[arguments removed after scene deletion]','$.argsRedacted',json('true'))
-        WHERE kind='tool.started' AND json_type(data,'$.argsPreview')='text'
-        AND conversation_id IN (SELECT id FROM helper_conversations WHERE chat_id=?)`)
-      .run(chatId);
+    redactHelperArgumentPreviews(store.db, chatId, ids, '[arguments removed after scene deletion]');
     forgetHelperSceneChanges(store.db, ids);
+    forgetHelperConfirmationTargets(
+      store.db,
+      [...ids].map((id) => ({ kind: 'scene', id }))
+    );
     for (const task of store.db
       .prepare(
         'SELECT t.id,t.snapshot FROM helper_tasks t JOIN helper_conversations c ON c.id=t.conversation_id WHERE c.chat_id=?'

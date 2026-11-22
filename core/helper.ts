@@ -82,7 +82,7 @@ export type HelperConfirmedCall = {
   id: string;
   operation: string;
   chatId: string | null;
-  arguments: Record<string, unknown>;
+  arguments?: Record<string, unknown>;
 };
 export type HelperTaskSnapshot = {
   mode?: 'plan';
