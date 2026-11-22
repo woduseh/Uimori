@@ -11,8 +11,10 @@ import * as transport from '../core/transport.js';
 import { createApp } from '../server/app.js';
 import {
   HELPER_CHANGE_RETENTION,
+  authoredView,
   captureHelperTarget,
   helperResourceHash,
+  helperStateHash,
   pruneHelperChanges,
   withHelperChange,
 } from '../server/helper-changes.js';
@@ -504,6 +506,75 @@ test('a task that rewrote or retired an imported memory rolls back to the memory
     ])
   );
   expect(notes).toHaveLength(2);
+});
+
+test('a later owner edit of a bot setting outside the card text blocks the rollback of that bot', () => {
+  const f = fixture();
+  const bot = f.store.product.content(fixtureBotInput('설정 봇', '처음 설명')) as Content;
+  const module = f.store.product.content({ ...fixtureBotInput('함께 쓰는 모듈'), kind: 'module' });
+  const task = f.begin();
+  f.resource(task, 'resource.patch', {
+    kind: 'content',
+    id: bot.id,
+    expectedRevision: bot.revision,
+    changes: [{ op: 'set', path: '/package/nativeRisu/card/description', value: '도우미 설명' }],
+  });
+  f.finish(task);
+  const saved = readResource(f.store, 'content', bot.id);
+  const model = structuredClone(editableResource('content', saved)) as any;
+  model.package.modules = [{ id: module.id, revision: module.revision }];
+  saveResource(f.store, {
+    kind: 'content',
+    id: bot.id,
+    expectedRevision: saved.revision,
+    model: model as ResourceModel,
+  });
+  expect(f.rollBack(task).units).toMatchObject([
+    { unit: `resource:content:${bot.id}`, status: 'changed-since', reason: 'changed-after-task' },
+  ]);
+  const after = readResource(f.store, 'content', bot.id) as Content;
+  expect(after.package.modules).toEqual([{ id: module.id, revision: module.revision }]);
+  expect(description(f.store, bot.id)).toBe('도우미 설명');
+});
+
+test('a bot change recorded with the card-only state hash still rolls back unless its settings changed', () => {
+  const f = fixture();
+  const module = f.store.product.content({ ...fixtureBotInput('함께 쓰는 모듈'), kind: 'module' });
+  const bots = ['가', '나'].map(
+    (name) => f.store.product.content(fixtureBotInput(`${name} 봇`, `${name} 처음`)) as Content
+  );
+  const task = f.begin();
+  for (const bot of bots)
+    f.resource(task, 'resource.patch', {
+      kind: 'content',
+      id: bot.id,
+      expectedRevision: bot.revision,
+      changes: [{ op: 'set', path: '/package/nativeRisu/card/description', value: '도우미 설명' }],
+    });
+  f.finish(task);
+  for (const bot of bots)
+    f.store.db
+      .prepare('UPDATE helper_changes SET result=? WHERE target_id=?')
+      .run(
+        helperStateHash(
+          authoredView(
+            'content',
+            editableResource('content', readResource(f.store, 'content', bot.id))
+          )
+        ),
+        `content:${bot.id}`
+      );
+  const saved = readResource(f.store, 'content', bots[1]!.id);
+  const model = structuredClone(editableResource('content', saved)) as any;
+  model.package.modules = [{ id: module.id, revision: module.revision }];
+  saveResource(f.store, {
+    kind: 'content',
+    id: bots[1]!.id,
+    expectedRevision: saved.revision,
+    model: model as ResourceModel,
+  });
+  expect(f.rollBack(task).units.map(({ status }) => status)).toEqual(['restored', 'changed-since']);
+  expect(bots.map((bot) => description(f.store, bot.id))).toEqual(['가 처음', '도우미 설명']);
 });
 
 test('a patch across three resources restores the two nobody touched and reports the edited one', () => {

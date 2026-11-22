@@ -9,9 +9,15 @@ import type {
   HelperRollbackView,
 } from '../core/helper.js';
 import type { AuthorNote } from '../core/notes.js';
-import type { ResourceKind, ResourceModel } from '../core/resource-editing.js';
 import {
+  editableResource,
+  type ResourceKind,
+  type ResourceModel,
+} from '../core/resource-editing.js';
+import {
+  authoredView,
   captureHelperTarget,
+  contentPackageSettings,
   helperResourceHash,
   helperStateHash,
   helperTargetHash,
@@ -97,6 +103,16 @@ function currentHash(store: Store, row: Row) {
   return helperTargetHash(target(row)!, captureHelperTarget(store, target(row)!).value);
 }
 
+function leftAsRecorded(store: Store, row: Row) {
+  if (currentHash(store, row) === row.result) return true;
+  if (row.domain !== 'resource' || resourceKey(row).kind !== 'content') return false;
+  const current = editableResource('content', readResource(store, 'content', resourceKey(row).id));
+  return (
+    helperStateHash(authoredView('content', current)) === row.result &&
+    isDeepStrictEqual(contentPackageSettings(current), contentPackageSettings(parsed(row)))
+  );
+}
+
 function covered(unit: Unit) {
   return (
     unit.domain === 'resource' ||
@@ -122,7 +138,7 @@ function assess(store: Store, unit: Unit): Assessment {
     return { status: 'not-covered', reason: 'recorded-before-rollback' };
   if (unit.rows.some((row) => row.foreign_edit))
     return { status: 'changed-since', reason: 'changed-during-task' };
-  if (unit.rows.some((row) => currentHash(store, row) !== row.result))
+  if (unit.rows.some((row) => !leftAsRecorded(store, row)))
     return { status: 'changed-since', reason: 'changed-after-task' };
   if (unit.domain === 'scene') {
     const original = unit.rows.find((row) => field(row) === 'original');

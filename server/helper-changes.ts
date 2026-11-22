@@ -375,6 +375,12 @@ export function authoredView(kind: ResourceKind, model: unknown): unknown {
   return { kind: contentKind, loading, relatedIds, package: { nativeRisu, images } };
 }
 
+export function contentPackageSettings(model: unknown) {
+  const pkg = plain(model) && plain(model.package) ? model.package : {};
+  const { portraitImageId, modules, loreActivation, imageHandoff } = pkg;
+  return { portraitImageId, modules, loreActivation, imageHandoff };
+}
+
 export function recordHelperResourceChange(
   store: Store,
   task: ChangeTask,
@@ -450,7 +456,12 @@ export function helperTargetHash(target: HelperChangeTarget, value: unknown) {
 }
 
 export function helperResourceHash(kind: ResourceKind, saved: SavedResource) {
-  return helperStateHash(authoredView(kind, editableResource(kind, saved)));
+  const model = editableResource(kind, saved);
+  return helperStateHash(
+    kind === 'content'
+      ? { view: authoredView(kind, model), settings: contentPackageSettings(model) }
+      : model
+  );
 }
 
 export function captureHelperTarget(store: Store, target: HelperChangeTarget): Capture {
