@@ -50,7 +50,7 @@ export function ProviderModelForm({
   deleteAction,
 }: Props) {
   useI18n();
-  const { value: model, editing: editingModel, copy: modelCopy, baseline: modelBaseline } = draft;
+  const { value: model, editing: editingModel, baseline: modelBaseline } = draft;
   const chosen = modelConnections.find((connection) => connection.id === model.connectionRef);
   const staleModel =
     !!editingModel &&
@@ -79,12 +79,14 @@ export function ProviderModelForm({
         void onSubmit();
       }}
     >
-      <h3 className="full">
-        {editingModel ? t('providers.m276') : modelCopy ? t('providers.m277') : t('providers.m278')}
-        {editingModel && JSON.stringify(model) !== modelBaseline && (
-          <small className="provider-heading-status">{t('settings.unsavedItem')}</small>
-        )}
-      </h3>
+      {editingModel && (
+        <h3 className="full">
+          {t('providers.m276')}
+          {JSON.stringify(model) !== modelBaseline && (
+            <small className="provider-heading-status">{t('settings.unsavedItem')}</small>
+          )}
+        </h3>
+      )}
       {conflict ? (
         <NoticeBanner tone="error" className="full" actions={reloadButton}>
           {t('providers.m282')}

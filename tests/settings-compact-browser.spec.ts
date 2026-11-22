@@ -576,7 +576,18 @@ test('SCUILEAVE global illustration settings retain failed drafts and save befor
 
 test('SCDETAIL a narrow settings drill-down shows one back control and the item name', async ({
   page,
+  request,
 }, info) => {
+  const saved = await (
+    await request.post('/api/connections', {
+      data: {
+        title: `좁은 화면 연결 ${crypto.randomUUID().slice(0, 8)}`,
+        protocol: 'fixture-sse-v1',
+        endpoint: 'http://127.0.0.1:9/',
+        enabled: true,
+      },
+    })
+  ).json();
   await page.setViewportSize({ width: 412, height: 915 });
   await page.goto('/');
   await navigationAction(page, '설정');
@@ -597,10 +608,48 @@ test('SCDETAIL a narrow settings drill-down shows one back control and the item 
   const location = dialog.locator('.settings-detail-location').filter({ visible: true });
   await expect(location).not.toContainText('프로바이더와 모델', { useInnerText: true });
   await expect(location).toHaveText('프로바이더 등록', { useInnerText: true });
+  await expect(
+    dialog.getByText('프로바이더 등록', { exact: true }).filter({ visible: true })
+  ).toHaveCount(1);
   await backs.click();
   await expect(form).toBeHidden();
   await expect(dialog.locator('.settings-navigation')).toBeHidden();
   await expect(
     dialog.getByRole('button', { name: '설정 목록으로', exact: true }).filter({ visible: true })
   ).toHaveCount(1);
+
+  await dialog.locator(`button[data-provider-id="${saved.id}"]`).click();
+  await expect(form).toBeVisible();
+  await expect(location).toHaveText(saved.title, { useInnerText: true });
+  await expect(
+    dialog.getByText(saved.title, { exact: true }).filter({ visible: true })
+  ).toHaveCount(1);
+  await expect(backs).toHaveCount(1);
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await page.screenshot({ path: info.outputPath(`provider-edit-412-${colorScheme}.png`) });
+  }
+  await backs.click();
+  await backs.click();
+
+  await selectSettingsSection(page, '현재 프롬프트');
+  const editor = page.getByRole('region', { name: '현재 프롬프트 설정' });
+  await editor.locator('summary').filter({ hasText: '창작 옵션' }).click();
+  await editor.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
+  await editor
+    .getByRole('button', { name: '현재 선택을 새 옵션 프리셋으로 저장', exact: true })
+    .click();
+  const combination = page.getByRole('region', {
+    name: '현재 프롬프트 / 옵션 프리셋 저장',
+    exact: true,
+  });
+  await expect(combination).toBeVisible();
+  await expect(backs).toHaveCount(1);
+  await expect(
+    combination.locator('.settings-detail-location').filter({ visible: true })
+  ).toHaveText('옵션 프리셋 저장', { useInnerText: true });
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await page.screenshot({ path: info.outputPath(`option-preset-save-412-${colorScheme}.png`) });
+  }
 });

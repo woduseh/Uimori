@@ -62,7 +62,7 @@ export function ProviderConnectionForm({
   const {
     value: connection,
     editing: editingConnection,
-    copy: connectionCopy,
+
     baseline: connectionBaseline,
   } = draft;
   const codex = connection.protocol === 'codex-app-server-v1';
@@ -103,16 +103,14 @@ export function ProviderConnectionForm({
         void onSubmit();
       }}
     >
-      <h3 className="full">
-        {editingConnection
-          ? t('providers.m131')
-          : connectionCopy
-            ? t('providers.m132')
-            : t('providers.m133')}
-        {editingConnection && JSON.stringify(connection) !== connectionBaseline && (
-          <small className="provider-heading-status">{t('settings.unsavedItem')}</small>
-        )}
-      </h3>
+      {editingConnection && (
+        <h3 className="full">
+          {t('providers.m131')}
+          {JSON.stringify(connection) !== connectionBaseline && (
+            <small className="provider-heading-status">{t('settings.unsavedItem')}</small>
+          )}
+        </h3>
+      )}
       {conflict ? (
         <NoticeBanner tone="error" className="full" actions={reloadButton}>
           {t('providers.m138')}
