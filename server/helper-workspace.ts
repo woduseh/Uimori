@@ -1,5 +1,6 @@
 import { detachAttemptUsage, helperUsageKind } from './usage-accounting.js';
 import { releaseCompletedHelperInputs } from './execution-retention.js';
+import { resolveHelperReferences } from './helper-references.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type {
   HelperArtifact,
@@ -568,7 +569,7 @@ export class HelperWorkspace {
     if (hidden) throw new HttpError(409, '삭제한 도우미 요청은 재시도할 수 없어요.');
   }
   messages(id: string, before?: string): HelperMessage[] {
-    this.conversation(id);
+    const conversation = this.conversation(id);
     const seedCursor = before
       ? (this.store.db
           .prepare('SELECT ordinal FROM helper_seed_messages WHERE conversation_id=? AND id=?')
@@ -578,7 +579,7 @@ export class HelperWorkspace {
       ? []
       : (this.store.db
           .prepare(
-            `SELECT m.*,COALESCE(c.text,CASE WHEN m.role='user' THEN t.request ELSE m.text END) AS display_text, t.status AS task_status, COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id) AS request_group_id, root.rowid AS request_order,
+            `SELECT m.*,COALESCE(c.text,CASE WHEN m.role='user' THEN t.request ELSE m.text END) AS display_text, t.status AS task_status, json_extract(t.snapshot,'$.references') AS task_references, COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id) AS request_group_id, root.rowid AS request_order,
         (SELECT latest.id FROM helper_tasks latest WHERE latest.conversation_id=m.conversation_id AND COALESCE(json_extract(latest.snapshot,'$.requestGroupId'),latest.id)=root.id ORDER BY latest.rowid DESC LIMIT 1) AS latest_task_id
         FROM helper_messages m JOIN helper_tasks t ON t.id=m.task_id JOIN helper_tasks root ON root.id=COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id)
         LEFT JOIN helper_message_changes c ON c.message_id=m.id
@@ -608,20 +609,31 @@ export class HelperWorkspace {
         artifacts: [],
         createdAt: row.created_at,
       })),
-      ...rows.reverse().map((row) => ({
-        requestGroupId: row.request_group_id,
-        latestTaskId: row.latest_task_id,
-        requestOrder: row.request_order,
-        id: row.id,
-        conversationId: id,
-        taskId: row.task_id,
-        taskStatus: row.task_status,
-        role: row.role,
-        text: row.display_text,
-        ...helperMessageAttachments(this.store.db, row.id),
-        artifacts: JSON.parse(row.artifacts),
-        createdAt: row.created_at,
-      })),
+      ...rows.reverse().map((row) => {
+        const refs =
+          row.role === 'user' && typeof row.task_references === 'string'
+            ? resolveHelperReferences(
+                this.store,
+                conversation.scope,
+                JSON.parse(row.task_references)
+              )
+            : [];
+        return {
+          requestGroupId: row.request_group_id,
+          latestTaskId: row.latest_task_id,
+          requestOrder: row.request_order,
+          id: row.id,
+          conversationId: id,
+          taskId: row.task_id,
+          taskStatus: row.task_status,
+          role: row.role,
+          text: row.display_text,
+          ...helperMessageAttachments(this.store.db, row.id),
+          ...(refs.length ? { references: refs } : {}),
+          artifacts: JSON.parse(row.artifacts),
+          createdAt: row.created_at,
+        };
+      }),
     ];
   }
   event(conversationId: string, taskId: string | null, kind: string, data: unknown = null) {

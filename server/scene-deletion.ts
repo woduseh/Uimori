@@ -258,7 +258,7 @@ export function deleteScenes(
       .all(chatId)) {
       const snapshot = JSON.parse(String(task.snapshot));
       if (!refersToDeleted(snapshot, ids)) continue;
-      for (const key of ['writing', 'selection', 'editor', 'outline', 'contextModel'])
+      for (const key of ['writing', 'selection', 'editor', 'outline', 'contextModel', 'references'])
         delete snapshot[key];
       snapshot.history = [];
       snapshot.invalidatedBySceneDeletion = true;

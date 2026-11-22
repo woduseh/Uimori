@@ -3006,3 +3006,52 @@ test('HELPACTIVITY-READS consecutive reads fold into one row that expands to eac
     await expect(row.locator('.turn-activity-text')).toHaveCount(0);
   }
 });
+
+test('HELPMENTION01 typing @ opens target suggestions, inserts a reference chip, and sends structured references', async ({
+  page,
+  request,
+}, info) => {
+  const chat = await create(request);
+  const state = await harness(page);
+  const referenceCandidates = [
+    { kind: 'scene', id: 'scene-ref-1', chatId: chat.id, sceneNumber: 1, title: '등대의 밤' },
+    { kind: 'outline', id: 'outline-ref-1', chatId: chat.id, title: '폭풍 전야' },
+    { kind: 'content', id: 'bot-ref-1', role: 'bot', title: '등대지기 미라' },
+  ];
+  await page.route('**/api/helper/conversations/*/references*', async (route) => {
+    const q = new URL(route.request().url()).searchParams.get('q')?.trim() ?? '';
+    const filtered = referenceCandidates.filter(
+      (item) =>
+        !q || item.title.includes(q) || (item.sceneNumber && `장면 ${item.sceneNumber}`.includes(q))
+    );
+    await route.fulfill({ json: filtered });
+  });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  const input = panel.getByLabel('도우미에게 요청');
+  await input.click();
+  await input.type('@등대');
+
+  const menu = panel.getByTestId('helper-mention-menu');
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('option')).toHaveCount(2);
+  await page.screenshot({ path: info.outputPath('helper-mention-menu.png') });
+
+  await input.press('ArrowDown');
+  await input.press('Enter');
+  await expect(menu).toHaveCount(0);
+  await expect(input).toHaveValue('@등대지기 미라 ');
+  const chip = panel.getByTestId('helper-mention-chip');
+  await expect(chip).toHaveCount(1);
+  await expect(chip).toContainText('등대지기 미라');
+
+  await input.type('성격을 검토해 주세요');
+  await input.press('Control+Enter');
+  await expect(input).toHaveValue('');
+  await expect(chip).toHaveCount(0);
+  expect(state.posts).toHaveLength(1);
+  expect((state.posts[0] as { references?: unknown }).references).toEqual([
+    { kind: 'content', id: 'bot-ref-1' },
+  ]);
+});

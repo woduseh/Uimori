@@ -65,6 +65,18 @@ export const HELPER_TASK_LIMITS: Readonly<HelperLimits> = { totalCalls: 128, hel
 export const HELPER_TOOL_CALL_LIMIT = 256;
 export const HELPER_COMPACTION_INPUT_RATIO = 0.85;
 export const HELPER_TOOL_CALL_GRACE = 16;
+export const MAX_HELPER_REFERENCES = 12;
+export type HelperReferenceKind = 'scene' | 'outline' | 'content' | 'prompt-preset';
+export type HelperReferencePointer = {
+  kind: HelperReferenceKind;
+  id: string;
+};
+export type HelperContextReference = HelperReferencePointer & {
+  title: string;
+  chatId?: string;
+  sceneNumber?: number;
+  role?: 'bot' | 'persona' | 'module';
+};
 export type HelperInstruction = {
   id: number;
   requestKey: string;
@@ -119,6 +131,7 @@ export type HelperTaskSnapshot = {
   editor?: HelperEditor;
   selection?: HelperSelection;
   outline?: import('./outline.js').OutlineHelperContext;
+  references?: HelperReferencePointer[];
   history: {
     id: string;
     role: 'user' | 'assistant';
@@ -149,6 +162,7 @@ export type HelperTask = {
 export type HelperMessage = {
   images?: import('./request-images.js').RequestImage[];
   files?: import('./request-files.js').RequestFile[];
+  references?: HelperContextReference[];
   taskStatus?: HelperStatus;
   requestOrder?: number;
   requestGroupId?: string;

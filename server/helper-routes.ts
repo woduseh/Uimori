@@ -4,6 +4,7 @@ import type { HelperScope, HelperEditor } from '../core/helper.js';
 import type { HelperRuntime } from './helper-runtime.js';
 import { readHelperActivity } from './helper-activity.js';
 import { readHelperContextState } from './helper-context.js';
+import { parseHelperReferencePointers, searchHelperReferences } from './helper-references.js';
 import { readHelperTaskResults } from './helper-task-results.js';
 import { markHelperConversationRead } from './helper-read-state.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
@@ -184,6 +185,14 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
       ),
     });
   });
+  app.get<{ Params: { id: string }; Querystring: { q?: string } }>(
+    '/api/helper/conversations/:id/references',
+    (request) => {
+      const conversation = store.conversation(request.params.id);
+      const query = typeof request.query.q === 'string' ? request.query.q.slice(0, 120) : '';
+      return searchHelperReferences(runtime.store, conversation.scope, query);
+    }
+  );
   app.get<{ Params: { id: string }; Querystring: { before?: string } }>(
     '/api/helper/conversations/:id/messages',
     (request) => store.messages(request.params.id, request.query.before)
@@ -233,11 +242,14 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
         'selection',
         'retryOf',
         'outline',
+        'references',
         'images',
         'files',
         'mode',
         'confirmations',
       ]);
+      const references =
+        body.references === undefined ? undefined : parseHelperReferencePointers(body.references);
       if (body.mode !== undefined && body.mode !== 'apply' && body.mode !== 'plan')
         throw new HttpError(400, 'Invalid helper mode');
       if (
@@ -310,7 +322,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
           outline,
           { images: requestImageUploads(body.images), files: requestFileUploads(body.files) },
           true,
-          { mode: body.mode, confirmations }
+          { mode: body.mode, confirmations, references }
         )
       );
     }

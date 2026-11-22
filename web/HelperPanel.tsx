@@ -39,15 +39,19 @@ import {
 } from 'lucide-react';
 import { SettingsIcon, CloseIcon, LibraryIcon } from './ui-icons.js';
 import type { Library } from '../core/product.js';
-import type {
-  HelperCompactionResult,
-  HelperConversation,
-  HelperMessageMutation,
-  HelperEditor,
-  HelperMode,
-  HelperResourceRef,
-  HelperScope,
-  HelperSelection,
+import {
+  MAX_HELPER_REFERENCES,
+  type HelperChangeAnchor,
+  type HelperCompactionResult,
+  type HelperContextReference,
+  type HelperConversation,
+  type HelperMessageMutation,
+  type HelperEditor,
+  type HelperMode,
+  type HelperReferencePointer,
+  type HelperResourceRef,
+  type HelperScope,
+  type HelperSelection,
 } from '../core/helper.js';
 import { HELPER_PERSONA_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { UI_HELPER_PERSONA } from './helper-persona.js';
@@ -75,6 +79,17 @@ import { HelperTaskResults } from './HelperTaskResults.js';
 import { HelperPlanCard } from './HelperPlanCard.js';
 import type { HelperConfirmationGrant, HelperConfirmationTarget } from './HelperConfirmations.js';
 import { HelperContextUsage } from './HelperContextUsage.js';
+import {
+  HelperMentionMenu,
+  helperReferenceKindLabel,
+  helperReferenceLabel,
+} from './HelperMentionMenu.js';
+import {
+  applyMentionReplacement,
+  findMentionTrigger,
+  referenceKey,
+  type MentionTrigger,
+} from './helper-mentions.js';
 import {
   HelperDeleteActions,
   HelperResponseEditor,
@@ -189,6 +204,7 @@ type Outbox = Partial<FrozenHelperAttachments> & {
   editor?: HelperEditor;
   selection?: HelperSelection;
   outline?: OutlineTarget;
+  references?: HelperReferencePointer[];
   mode?: 'plan';
   confirmations?: string[];
 };
@@ -492,6 +508,135 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   const mode = modes[scopeKey] ?? 'apply';
   const [grants, setGrants] = useState<Record<string, HelperConfirmationGrant[]>>({});
   const grantList = grants[scopeKey] ?? [];
+  const [mentionRefsByScope, setMentionRefsByScope] = useState<
+    Record<string, HelperContextReference[]>
+  >({});
+  const mentionRefs = mentionRefsByScope[scopeKey] ?? [];
+  const [mentionTrigger, setMentionTrigger] = useState<MentionTrigger | null>(null);
+  const [mentionItems, setMentionItems] = useState<HelperContextReference[]>([]);
+  const [mentionLoading, setMentionLoading] = useState(false);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const mentionDismissed = useRef<string | null>(null);
+  const mentionOpen = Boolean(mentionTrigger && conversation);
+  const mentionQuery = mentionTrigger ? mentionTrigger.query : null;
+  const mentionConversationId = props.open && conversation ? conversation.id : null;
+  useEffect(() => {
+    void scopeKey;
+    void props.open;
+    setMentionTrigger(null);
+    setMentionItems([]);
+    setMentionIndex(0);
+    mentionDismissed.current = null;
+  }, [scopeKey, props.open]);
+  useEffect(() => {
+    if (mentionQuery === null || !mentionConversationId) {
+      setMentionItems([]);
+      setMentionLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setMentionLoading(true);
+    setMentionIndex(0);
+    const timer = setTimeout(() => {
+      void api<HelperContextReference[]>(
+        `/helper/conversations/${encodeURIComponent(mentionConversationId)}/references?q=${encodeURIComponent(mentionQuery)}`,
+        undefined,
+        'GET',
+        controller.signal
+      )
+        .then((items) => {
+          if (controller.signal.aborted) return;
+          setMentionItems(items);
+          setMentionIndex(0);
+          setMentionLoading(false);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) {
+            setMentionItems([]);
+            setMentionLoading(false);
+          }
+        });
+    }, 80);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [mentionConversationId, mentionQuery]);
+  const syncMentionTrigger = (value: string, cursor: number | null | undefined) => {
+    if (cursor == null || !conversation) {
+      setMentionTrigger(null);
+      return;
+    }
+    const found = findMentionTrigger(value, cursor);
+    if (!found) {
+      mentionDismissed.current = null;
+      setMentionTrigger(null);
+      return;
+    }
+    const key = `${found.start}:${found.query}`;
+    if (mentionDismissed.current === key) {
+      setMentionTrigger(null);
+      return;
+    }
+    setMentionTrigger(found);
+  };
+  const chooseMention = (item: HelperContextReference) => {
+    if (!mentionTrigger || !scopeKey) return;
+    const label = helperReferenceLabel(item);
+    const { text: nextText, cursor: nextCursor } = applyMentionReplacement(
+      draft,
+      mentionTrigger,
+      label
+    );
+    editDraft(nextText);
+    setMentionRefsByScope((old) => {
+      const current = old[scopeKey] ?? [];
+      if (current.some((entry) => referenceKey(entry) === referenceKey(item))) return old;
+      if (current.length >= MAX_HELPER_REFERENCES) return old;
+      return { ...old, [scopeKey]: [...current, item] };
+    });
+    setMentionTrigger(null);
+    mentionDismissed.current = null;
+    requestAnimationFrame(() => {
+      const node = input.current;
+      if (!node) return;
+      node.focus();
+      node.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+  const openReference = (ref: HelperContextReference) => {
+    if (!props.onOpenChange) return;
+    let anchor: HelperChangeAnchor | null = null;
+    if (ref.kind === 'scene' && ref.chatId)
+      anchor = {
+        domain: 'scene',
+        chatId: ref.chatId,
+        sourceId: ref.id,
+        field: 'original',
+        paragraph: null,
+      };
+    else if (ref.kind === 'outline' && ref.chatId)
+      anchor = { domain: 'outline', chatId: ref.chatId, nodeId: ref.id, field: null };
+    else if (ref.kind === 'content' || ref.kind === 'prompt-preset')
+      anchor = {
+        domain: 'resource',
+        kind: ref.kind,
+        id: ref.id,
+        path: null,
+        section: null,
+        index: null,
+      };
+    if (anchor)
+      void props.onOpenChange({
+        domain: anchor.domain,
+        targetId: ref.id,
+        title: helperReferenceLabel(ref),
+        location: null,
+        action: 'update',
+        diff: null,
+        anchor,
+      });
+  };
   const toggleMode = () => {
     if (!scopeKey || document.activeElement?.closest('dialog')) return false;
     const next = mode === 'plan' ? 'apply' : 'plan';
@@ -999,6 +1144,14 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               : {}),
           ...(!steerTaskId && selection ? { selection } : {}),
           ...(!steerTaskId && selectedOutline ? { outline: selectedOutline.target } : {}),
+          ...(!steerTaskId && (mentionRefsByScope[owner]?.length ?? 0) > 0
+            ? {
+                references: (mentionRefsByScope[owner] ?? []).map(({ kind, id }) => ({
+                  kind,
+                  id,
+                })),
+              }
+            : {}),
           ...(!steerTaskId && modes[owner] === 'plan' ? { mode: 'plan' as const } : {}),
           ...(!steerTaskId && grants[owner]?.length
             ? { confirmations: grants[owner].map((grant) => grant.id) }
@@ -1027,6 +1180,9 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           ...(request.editor ? { editor: request.editor } : {}),
           ...(request.selection ? { selection: request.selection } : {}),
           ...(request.outline ? { outline: request.outline } : {}),
+          ...(request.references?.length && !request.steerTaskId
+            ? { references: request.references }
+            : {}),
           ...(request.images?.length ? { images: request.images } : {}),
           ...(request.files?.length ? { files: request.files } : {}),
           ...(request.mode && !request.steerTaskId ? { mode: request.mode } : {}),
@@ -1041,6 +1197,13 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         setGrants((old) => ({
           ...old,
           [owner]: (old[owner] ?? []).filter((grant) => !request.confirmations?.includes(grant.id)),
+        }));
+      if (request.references?.length)
+        setMentionRefsByScope((old) => ({
+          ...old,
+          [owner]: (old[owner] ?? []).filter(
+            (ref) => !request.references?.some((sent) => referenceKey(sent) === referenceKey(ref))
+          ),
         }));
       void clearHelperRecoveryIf(`helper-outbox:${owner}`, JSON.stringify(request)).catch(() => {});
       const sameDraft =
@@ -1816,6 +1979,38 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                   ) : (
                     response
                   )}
+                  {message.role === 'user' && (message.references?.length ?? 0) > 0 && (
+                    <div
+                      className="helper-message-references"
+                      aria-label={t('helpers.mentionReferencesLabel')}
+                    >
+                      {message.references!.map((ref) =>
+                        props.onOpenChange ? (
+                          <button
+                            key={referenceKey(ref)}
+                            type="button"
+                            className="helper-context-chip helper-mention-chip helper-mention-chip-link"
+                            onClick={() => openReference(ref)}
+                          >
+                            <span className="helper-chip-badge">
+                              {helperReferenceKindLabel(ref)}
+                            </span>
+                            <span className="helper-chip-label">{helperReferenceLabel(ref)}</span>
+                          </button>
+                        ) : (
+                          <span
+                            key={referenceKey(ref)}
+                            className="helper-context-chip helper-mention-chip"
+                          >
+                            <span className="helper-chip-badge">
+                              {helperReferenceKindLabel(ref)}
+                            </span>
+                            <span className="helper-chip-label">{helperReferenceLabel(ref)}</span>
+                          </span>
+                        )
+                      )}
+                    </div>
+                  )}
                   {message.role === 'user' && <HelperStoredFiles files={message.files} />}
                   {message.artifacts.map((artifact) => (
                     <HelperArtifactCard
@@ -2239,6 +2434,15 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
             </small>
           </div>
         )}
+        {mentionOpen && (
+          <HelperMentionMenu
+            items={mentionItems}
+            selectedIndex={mentionIndex}
+            loading={mentionLoading}
+            onSelect={chooseMention}
+            onHover={setMentionIndex}
+          />
+        )}
         <ChatComposer
           className="helper-request-composer"
           onDragOver={(event) => {
@@ -2266,7 +2470,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
             (displayEditor && !currentResource) ||
             selectedOutline ||
             selection ||
-            grantList.length > 0) && (
+            grantList.length > 0 ||
+            mentionRefs.length > 0) && (
             <div className="composer-request-chips helper-context-chips">
               {currentResource && JSON.stringify(scope) === JSON.stringify(props.scope) && (
                 <div className="helper-context-chip helper-editor">
@@ -2352,6 +2557,34 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                   </button>
                 </div>
               ))}
+              {mentionRefs.map((ref) => {
+                const label = helperReferenceLabel(ref);
+                return (
+                  <div
+                    key={referenceKey(ref)}
+                    className="helper-context-chip helper-mention-chip"
+                    data-testid="helper-mention-chip"
+                  >
+                    <span className="helper-chip-badge">{helperReferenceKindLabel(ref)}</span>
+                    <span className="helper-chip-label">{label}</span>
+                    <button
+                      type="button"
+                      className="helper-chip-dismiss"
+                      aria-label={t('helpers.mentionRemove', { label })}
+                      onClick={() =>
+                        setMentionRefsByScope((old) => ({
+                          ...old,
+                          [scopeKey]: (old[scopeKey] ?? []).filter(
+                            (item) => referenceKey(item) !== referenceKey(ref)
+                          ),
+                        }))
+                      }
+                    >
+                      <X size={14} aria-hidden="true" />
+                    </button>
+                  </div>
+                );
+              })}
               {selection && (
                 <div className="helper-context-chip helper-selection">
                   <details>
@@ -2391,7 +2624,50 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                 : t('helpers.requestPlaceholder', { key: sendKeyLabel(props.enterSend) })
             }
             maxLength={REQUEST_TEXT_MAX_CHARS}
-            onChange={(event) => editDraft(event.target.value)}
+            onChange={(event) => {
+              editDraft(event.target.value);
+              syncMentionTrigger(event.target.value, event.target.selectionStart);
+            }}
+            onClick={(event) =>
+              syncMentionTrigger(event.currentTarget.value, event.currentTarget.selectionStart)
+            }
+            onKeyUp={(event) => {
+              if (
+                ['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Backspace', 'Delete'].includes(
+                  event.key
+                )
+              )
+                syncMentionTrigger(event.currentTarget.value, event.currentTarget.selectionStart);
+            }}
+            onKeyDown={(event) => {
+              if (!mentionOpen || event.nativeEvent.isComposing || event.keyCode === 229) return;
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                if (mentionTrigger)
+                  mentionDismissed.current = `${mentionTrigger.start}:${mentionTrigger.query}`;
+                setMentionTrigger(null);
+                return;
+              }
+              if (!mentionItems.length) return;
+              if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                setMentionIndex((index) => (index + 1) % mentionItems.length);
+              } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                setMentionIndex((index) => (index - 1 + mentionItems.length) % mentionItems.length);
+              } else if (
+                (event.key === 'Enter' || event.key === 'Tab') &&
+                !event.ctrlKey &&
+                !event.metaKey &&
+                !event.altKey &&
+                !event.shiftKey
+              ) {
+                event.preventDefault();
+                const chosen = mentionItems[mentionIndex];
+                if (chosen) chooseMention(chosen);
+              }
+            }}
             onPaste={(event) => {
               const files = Array.from(event.clipboardData.files);
               if (!files.length) return;

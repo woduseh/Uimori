@@ -168,7 +168,9 @@ import {
   HELPER_TOOL_CALL_LIMIT,
   HELPER_COMPACTION_INPUT_RATIO,
   type HelperCompactionResult,
+  type HelperReferencePointer,
 } from '../core/helper.js';
+import { helperModelReferences, validateHelperReferences } from './helper-references.js';
 import { helperWebSearchCapability } from '../core/helper-web-search.js';
 import { ChatOverridesStore } from './chat-overrides.js';
 import { ChatOptionsStore, invokeHelperOptions } from './chat-options.js';
@@ -223,7 +225,11 @@ type HelperAttachmentAdmission = HelperAttachments & {
   preparedImages?: PreparedRequestImages;
   preparedFiles?: PreparedRequestFiles;
 };
-export type HelperRequestOptions = { mode?: HelperMode; confirmations?: string[] };
+export type HelperRequestOptions = {
+  mode?: HelperMode;
+  confirmations?: string[];
+  references?: HelperReferencePointer[];
+};
 
 function retryRequest(workspace: HelperWorkspace, request: string, retryOf?: string): string {
   if (!retryOf || request !== workspace.task(retryOf).request) return request;
@@ -240,7 +246,7 @@ const PLAN_MODE_GUIDANCE =
   'This request is in plan mode: produce a plan, not changes. Read whatever you need, but do not save, create, delete, select, request generation or change settings; the host refuses every operation that writes. Reply with a concrete, ordered plan that names each target and the change you would make, and the questions the owner must settle. Carrying out the plan is a separate request.';
 const FINAL_CALL_GUIDANCE =
   'The call budget allows only this response. Do not call tools. Reply to the user with what you completed, which changes were saved, any change whose outcome is uncertain, and what remains to do.';
-const CONTRACT = `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation. Apply, select, cancel or retry only when requested. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. A CONFIRMATION_REQUIRED result means the host held the call for the owner: do not repeat it in this task, and say in your reply what needs confirmation. A request whose source lists confirmedCalls carries the owner's confirmation; make each such call with exactly the listed arguments when the request still wants it. ${AUTHOR_NOTE_GUIDANCE}
+const CONTRACT = `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation. Apply, select, cancel or retry only when requested. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. A CONFIRMATION_REQUIRED result means the host held the call for the owner: do not repeat it in this task, and say in your reply what needs confirmation. A request whose source lists confirmedCalls carries the owner's confirmation; make each such call with exactly the listed arguments when the request still wants it. When source.referencedTargets is present, those are the exact scenes, outline nodes or library resources the user pointed to with @; inspect them directly with the matching read tool using their listed IDs. ${AUTHOR_NOTE_GUIDANCE}
 Choose and combine the tools suited to the task: app operations, data.exec for workspace search and transformation, or shell workspace files described in INDEX.md. Reuse known schemas and successful results; use app.tools only for unfamiliar operations or arguments. Group independent work when useful, and use returned revisions and receipts directly instead of rereading only to confirm success. Distinguish live saved resources, frozen chat history and unsaved editor input. Base visual claims on inspected pixels.
 Edit saved targets using their recorded revisions and preserve unrelated fields. For workspace-file edits, use uimori apply to save; for app operations, follow their own save contracts. Reconcile conflicts against the latest version and report changes from successful receipts. If the target has an unsaved editor draft, ask the user to save it first. For translation guides, preserve established terms and distinguish proposed choices from authored facts.
 For a bot’s Story UI appearance, use theme.guide and read the bot’s authored content. In a chat, writing.packages identifies the owning bot by role=bot. Saving a theme creates it; when the user requests application, use theme.select with dimension=storyUi for the bot or settings.update for an explicit chat choice.
@@ -971,6 +977,9 @@ export class HelperRuntime {
     const confirmations = [
       ...new Set(options.confirmations ?? inherited?.map((call) => call.id) ?? []),
     ].sort();
+    const references =
+      options.references ??
+      (retryOf ? this.workspace.task(retryOf).snapshot.references : undefined);
     if (mode === 'plan' && confirmations.length)
       throw new HttpError(400, 'HELPER_PLAN_CONFIRMATIONS');
     const requestFingerprint = createHash('sha256')
@@ -981,6 +990,7 @@ export class HelperRuntime {
           editor,
           selection,
           outlineTarget,
+          ...(references?.length ? { references } : {}),
           ...(mode === 'plan' ? { mode } : {}),
           ...(confirmations.length ? { confirmations } : {}),
           ...(admission?.receipt ? { attachments: admission.receipt } : {}),
@@ -1036,6 +1046,9 @@ export class HelperRuntime {
         throw new HttpError(409, '선택한 원문이 변경됐어요. 다시 선택해 주세요.');
     }
     if (outlineTarget && scope.kind !== 'chat') throw new HttpError(403, 'OUTLINE_OUTSIDE_SCOPE');
+    const validatedReferences = references?.length
+      ? validateHelperReferences(this.store, scope, references)
+      : undefined;
     const outline =
       outlineTarget && scope.kind === 'chat'
         ? this.store.outline.helperContext(
@@ -1111,6 +1124,7 @@ export class HelperRuntime {
         ...(editor ? { editor } : {}),
         ...(selection ? { selection } : {}),
         ...(outline ? { outline, outlineTarget: outline.target } : {}),
+        ...(validatedReferences?.length ? { references: validatedReferences } : {}),
         limits: { ...HELPER_TASK_LIMITS },
       });
       return queued;
@@ -2238,6 +2252,16 @@ export class HelperRuntime {
                 }
               : null,
             selection: task.snapshot.selection ?? null,
+            ...(task.snapshot.references?.length
+              ? (() => {
+                  const targets = helperModelReferences(
+                    this.store,
+                    task.snapshot.scope,
+                    task.snapshot.references
+                  );
+                  return targets.length ? { referencedTargets: targets } : {};
+                })()
+              : {}),
             outline: task.snapshot.outline
               ? {
                   target: task.snapshot.outline.target,
