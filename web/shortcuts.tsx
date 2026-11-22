@@ -85,7 +85,7 @@ function registrationFor(action: ShortcutAction, target: Element | null) {
 
 const keyboardOverlayOpen = () =>
   !!document.querySelector(
-    'dialog:modal, details.action-menu[open], [aria-modal="true"]:not([hidden])'
+    'dialog:modal, details.action-menu[open], [aria-modal="true"]:not([hidden]), [data-keyboard-overlay]'
   );
 
 export function ShortcutKeys() {

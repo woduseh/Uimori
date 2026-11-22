@@ -238,6 +238,7 @@ export function ReaderSelectionTools({
   }
   const closeRef = useRef(closePopover);
   closeRef.current = closePopover;
+  const applying = useRef(false);
   useEffect(() => {
     if (!barVisible && !opened) return;
     const keydown = (event: KeyboardEvent) => {
@@ -248,7 +249,7 @@ export function ReaderSelectionTools({
         event.preventDefault();
         event.stopPropagation();
         if (opened) {
-          closeRef.current(true);
+          if (!applying.current) closeRef.current(true);
           return;
         }
         const inBar = !!active && !!bar.current?.contains(active);
@@ -371,7 +372,12 @@ export function ReaderSelectionTools({
             current={target}
             onClose={() => closePopover(true)}
             onApply={async (text) => {
-              await onApply(revision.captured!, text);
+              applying.current = true;
+              try {
+                await onApply(revision.captured!, text);
+              } finally {
+                applying.current = false;
+              }
               closePopover(false);
               focusScene(body.current);
             }}
@@ -456,15 +462,9 @@ function RevisionPopover({
       role="dialog"
       aria-label={t('readerSelection.refineTitle')}
       className="reader-revision-popover"
+      data-keyboard-overlay
       data-placed={position ? 'true' : 'false'}
       style={position ?? undefined}
-      onKeyDown={(event) => {
-        if (event.key !== 'Escape' || composing(event)) return;
-        if (event.target instanceof Element && event.target.closest('dialog')) return;
-        event.preventDefault();
-        event.stopPropagation();
-        if (!saving) onClose();
-      }}
     >
       <label>
         {t('readerSelection.instruction')}

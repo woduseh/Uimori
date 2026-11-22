@@ -464,3 +464,71 @@ test('RSEL09 an explicit choice of the original is not overridden by an arriving
   await expect(scene).toHaveAttribute('data-representation', 'original');
   await expect(scene.getByRole('button', { name: '번역이 준비됐어요. 번역 보기' })).toHaveCount(0);
 });
+
+async function openProposal(page: Page, scene: Locator) {
+  await select(scene, unique);
+  await selectionBar(page).getByRole('button', { name: '다듬기', exact: true }).click();
+  const popover = page.getByRole('dialog', { name: '선택한 글 다듬기', exact: true });
+  await popover.getByLabel('다듬을 방향', { exact: true }).fill('호흡을 행동으로 보여줘.');
+  await popover.getByRole('button', { name: '제안 받기', exact: true }).click();
+  await expect(popover.getByTestId('reader-revision-proposal')).toBeVisible();
+  return popover;
+}
+
+test('RSEL10 Escape during a save keeps the popover so the conflict stays readable', async ({
+  page,
+  request,
+}) => {
+  const { chatId, source } = await seed(request);
+  await page.route(endpoint, (route) => route.fulfill({ json: { text: proposal } }));
+  const scene = await open(page, chatId, source.id);
+  const popover = await openProposal(page, scene);
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let saving!: () => void;
+  const reached = new Promise<void>((resolve) => {
+    saving = resolve;
+  });
+  await page.route(`**/api/sources/${source.id}/text`, async (route) => {
+    saving();
+    await released;
+    await route.fulfill({ status: 409, json: { error: 'Source revision conflict' } });
+  });
+  await popover.getByRole('button', { name: '적용', exact: true }).click();
+  await reached;
+  await expect(popover.getByRole('button', { name: '저장 중', exact: false })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(popover).toBeVisible();
+  release();
+  await expect(
+    popover.getByText('그사이 저장본이 바뀌어서 저장하지 않았어요', { exact: false })
+  ).toBeVisible();
+  await expect(popover.getByTestId('reader-revision-proposal')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(popover).toHaveCount(0);
+  expect((await detail(request, chatId)).sources[0].text).toBe(original);
+});
+
+test('RSEL11 global shortcuts wait while the refine popover is open', async ({ page, request }) => {
+  const { chatId, source } = await seed(request);
+  await page.route(endpoint, (route) => route.fulfill({ json: { text: proposal } }));
+  const scene = await open(page, chatId, source.id);
+  const popover = await openProposal(page, scene);
+  const shell = page.locator('.app-shell');
+  await expect(shell).not.toHaveClass(/sidebar-collapsed/);
+  for (const key of ['Control+K', 'Control+B', 'Control+Backslash', 'Control+Comma'])
+    await page.keyboard.press(key);
+  await expect(shell).not.toHaveClass(/sidebar-collapsed/);
+  await expect(page.locator('#helper-panel')).toBeHidden();
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  await expect(popover).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(popover).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => getSelection()!.removeAllRanges());
+  await page.keyboard.press('Control+B');
+  await expect(shell).toHaveClass(/sidebar-collapsed/);
+});
