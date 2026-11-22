@@ -241,7 +241,7 @@ export function buildMainInput(
         }),
       };
       input.contract +=
-        '\nYou select existing images while writing. Follow the authored image instructions and their tag syntax for the supplied catalog names; where an exact tag is supplied, use it at the intended position. Images are optional; use only supplied catalog images. No separate image model adds images afterward.';
+        '\nYou select existing images while writing. Follow the authored image instructions and their tag syntax; imagePlacement in host context says which image names exist and how they are listed. Where an exact tag is supplied, use it at the intended position. Images are optional; use only existing images. No separate image model adds images afterward.';
     }
   }
   if (packageData) {

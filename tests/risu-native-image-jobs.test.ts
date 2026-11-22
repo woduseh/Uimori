@@ -10,6 +10,7 @@ import { imageCatalog, latestImageJob, putImageBlob } from '../server/package-im
 import { renderNativeRisuMessage } from '../server/risu-native-render.js';
 import { nativeRisuContext } from '../server/risu-native-context.js';
 import { buildMainInput } from '../core/provider.js';
+import { CARD_NAMED_IMAGES_GUIDANCE } from '../core/image-names.js';
 import { requestInput } from '../server/main-host-context.js';
 import { imageOwnerDisplayText } from '../core/image-placement.js';
 import { normalizeStoryUiOutput } from '../server/story-ui.js';
@@ -168,9 +169,10 @@ test('one owner controls authored tags and JEV display copies without rewriting 
     expect.objectContaining({ name: 'Mira_happy' }),
   ]);
   expect(writerInput.imagePlacement?.catalog?.[0]).not.toHaveProperty('ref');
-  expect((requestInput(writer, writerInput).source as any).imagePlacement).toEqual(
-    writerInput.imagePlacement
-  );
+  expect((requestInput(writer, writerInput).source as any).imagePlacement).toEqual({
+    owner: 'writer',
+    cardNamedImages: { count: 1, guidance: CARD_NAMED_IMAGES_GUIDANCE },
+  });
   const jevInput = buildMainInput(snapshot);
   expect(jevInput.facts.join('\n')).not.toContain('Use <img="Mira_happy">');
   expect(jevInput.imagePlacement).toEqual({ owner: 'jev' });

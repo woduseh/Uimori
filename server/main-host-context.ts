@@ -9,8 +9,72 @@ import { modelAuthorNotes } from '../core/notes.js';
 import { parseStoryUi, projectStoryUiText } from '../core/story-ui.js';
 import { storyUiHistoryMode } from '../core/context-projection.js';
 import { STORY_UI_CATALOG_ID } from '../core/story-ui-catalog.js';
+import {
+  CARD_NAMED_IMAGES_GUIDANCE,
+  IMAGE_NAME_TREE_GUIDANCE,
+  IMAGE_NAME_TREE_MINIMUM,
+  cardDefinesImageNames,
+  imageNameTree,
+} from '../core/image-names.js';
 
 const json = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
+
+function cardText(snapshot: RunSnapshot, input: MainInput): string {
+  return [
+    ...(snapshot.promptCompilation?.messages ?? [])
+      .filter(
+        (message) =>
+          message.provenance.origin === 'prompt' &&
+          message.provenance.blockId !== NATIVE_HOST_CONTEXT_ID
+      )
+      .flatMap((message) => message.content.map((part) => (part.type === 'text' ? part.text : ''))),
+    ...(input.pinnedSources ?? []).map((item) => item.text),
+    ...(snapshot.profile?.packages ?? []).flatMap((pkg) => [
+      pkg.body ?? '',
+      ...pkg.lore.map((entry) => entry.text),
+    ]),
+  ].join('\n');
+}
+
+function writerImagePlacement(snapshot: RunSnapshot, input: MainInput) {
+  const placement = input.imagePlacement;
+  if (!placement?.catalog) return placement;
+  const bare = (entry: NonNullable<typeof placement.catalog>[number]) =>
+    entry.name !== undefined && entry.title === undefined && entry.description === undefined;
+  const cardSyntax = placement.catalog.filter((entry) => bare(entry) && entry.tag === undefined);
+  const appSyntax = placement.catalog.filter(
+    (entry) => bare(entry) && entry.tag === `{{img::${entry.name}}}`
+  );
+  const names = (entries: typeof cardSyntax) => entries.map((entry) => entry.name!);
+  const cardNamed =
+    cardSyntax.length > 0 && cardDefinesImageNames(names(cardSyntax), cardText(snapshot, input));
+  const cardTree = !cardNamed && cardSyntax.length > IMAGE_NAME_TREE_MINIMUM;
+  const appTree = appSyntax.length > IMAGE_NAME_TREE_MINIMUM;
+  if (!cardNamed && !cardTree && !appTree) return placement;
+  const folded = new Set([
+    ...(cardNamed || cardTree ? cardSyntax : []),
+    ...(appTree ? appSyntax : []),
+  ]);
+  const catalog = placement.catalog.filter((entry) => !folded.has(entry));
+  return {
+    owner: placement.owner,
+    ...(catalog.length ? { catalog } : {}),
+    ...(cardNamed
+      ? { cardNamedImages: { count: cardSyntax.length, guidance: CARD_NAMED_IMAGES_GUIDANCE } }
+      : {}),
+    ...(cardTree || appTree
+      ? {
+          nameTrees: {
+            guidance: IMAGE_NAME_TREE_GUIDANCE,
+            ...(cardTree ? { cardSyntax: imageNameTree(names(cardSyntax)) } : {}),
+            ...(appTree
+              ? { tag: '{{img::NAME}}', appSyntax: imageNameTree(names(appSyntax)) }
+              : {}),
+          },
+        }
+      : {}),
+  };
+}
 function writerHistory(snapshot: RunSnapshot, input: MainInput): MainInput['history'] {
   const mode = storyUiHistoryMode(snapshot);
   if (mode === 'text') return input.history;
@@ -65,7 +129,7 @@ export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderR
       facts: structured || input.pinnedSources?.length ? [] : input.facts,
       pinnedSources: structured ? [] : (input.pinnedSources ?? []),
       prefetch: input.prefetch,
-      ...(input.imagePlacement ? { imagePlacement: input.imagePlacement } : {}),
+      ...(input.imagePlacement ? { imagePlacement: writerImagePlacement(snapshot, input) } : {}),
       ...(collaboration?.enabled
         ? {
             collaboration: {
