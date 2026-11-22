@@ -21,7 +21,7 @@ import { api } from './api.js';
 import { ResourceEditorSession } from './resource-editor-session.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { ActionMenu } from './ActionMenu.js';
-import { PromptCombinationManager } from './PromptCombinationManager.js';
+import { CombinationLeaveDialog, PromptCombinationManager } from './PromptCombinationManager.js';
 import { SettingsDetail } from './SettingsDetail.js';
 import {
   ResourceEditorProvider,
@@ -61,6 +61,9 @@ export function PromptWorkspaceEditor({
   const [manageCombinations, setManageCombinations] = useState(false);
   const [comboError, setComboError] = useState('');
   const [selectedCombo, setSelectedCombo] = useState('');
+  const [combinationDirty, setCombinationDirty] = useState(false);
+  const [leaveCombo, setLeaveCombo] = useState<(() => void) | null>(null);
+  const comboDirty = comboOpen && !!comboName.trim();
   const combinationToolbar = useRef<HTMLDivElement>(null);
   const returnToCombinationMenu = () =>
     combinationToolbar.current?.querySelector<HTMLElement>('.action-menu > summary');
@@ -85,9 +88,10 @@ export function PromptWorkspaceEditor({
   const { dirty, conflict } = state;
   const busy = state.saving || applying;
   const saveError = state.error || applyError;
+  const draftDirty = comboDirty || combinationDirty;
   useEffect(() => {
-    onDirtyChange?.(dirty || busy);
-  }, [dirty, busy, onDirtyChange]);
+    onDirtyChange?.(dirty || busy || draftDirty);
+  }, [dirty, busy, draftDirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   const save = useCallback(async () => {
@@ -103,6 +107,7 @@ export function PromptWorkspaceEditor({
     }
   }, [session, applying]);
   useSettingsSaveHandler(onSaveHandlerChange, async () => {
+    if (draftDirty) return false;
     if (session.snapshot().conflict) {
       requestResourceConflictReview(session);
       return false;
@@ -370,13 +375,17 @@ export function PromptWorkspaceEditor({
         workspaceRevision={state.document.baseRevision ?? 0}
         combinations={library.promptCombinations ?? []}
         reload={reload}
+        onDirtyChange={setCombinationDirty}
       />
       <SettingsDetail
         open={comboOpen}
         location={[t('chatsettings.m29'), t('prompts.uiSaveOptionCombination')]}
         backDisabled={savingCombo}
         returnFocus={returnToCombinationMenu}
-        onBack={() => setComboOpen(false)}
+        onBack={() => {
+          if (comboDirty) setLeaveCombo(() => () => setComboOpen(false));
+          else setComboOpen(false);
+        }}
       >
         <label>
           {t('prompts.uiCombinationName')}
@@ -424,6 +433,7 @@ export function PromptWorkspaceEditor({
             }}
           />
         </div>
+        <CombinationLeaveDialog proceed={leaveCombo} onContinue={() => setLeaveCombo(null)} />
       </SettingsDetail>
     </ResourceEditorProvider>
   );

@@ -504,3 +504,90 @@ test('PWS04 shared workspace load failures recover in model and prompt settings'
 });
 
 preservePromptWorkspace();
+
+test('PWS09 unsaved option preset input asks before Escape, Back or closing settings discards it', async ({
+  page,
+  request,
+}) => {
+  const program = nativePrompt('조합 미저장 확인', {
+    customPromptTemplateToggle: 'tone=문체=text',
+  });
+  const preset = await (
+    await request.post('/api/prompt-presets', {
+      data: { title: `조합 미저장 ${crypto.randomUUID()}`, role: 'main', program },
+    })
+  ).json();
+  const workspace = await (await request.get('/api/prompt-workspace')).json();
+  const applied = await request.post('/api/prompt-workspace/apply', {
+    data: { expectedRevision: workspace.revision, role: 'main', presetId: preset.id },
+  });
+  expect(applied.ok(), await applied.text()).toBe(true);
+  const saved = await request.post('/api/prompt-combinations', {
+    data: {
+      title: '고칠 조합',
+      role: 'main',
+      owner: { kind: 'preset', id: preset.id },
+      expectedRevision: preset.revision,
+      values: { tone: '차분하게' },
+    },
+  });
+  expect(saved.ok(), await saved.text()).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '현재 프롬프트');
+  const settings = page.getByRole('dialog', { name: '설정', exact: true });
+  const editor = page.getByRole('region', { name: '현재 프롬프트 설정' });
+  await editor.locator('summary').filter({ hasText: '창작 옵션' }).click();
+  const leave = page.getByRole('alertdialog', { name: '옵션 프리셋 편집 닫기', exact: true });
+
+  await editor.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
+  await editor
+    .getByRole('button', { name: '현재 선택을 새 옵션 프리셋으로 저장', exact: true })
+    .click();
+  const create = page.getByRole('region', {
+    name: '현재 프롬프트 / 옵션 프리셋 저장',
+    exact: true,
+  });
+  const name = create.getByLabel('옵션 프리셋 이름', { exact: true });
+  await name.fill('아직 저장하지 않은 이름');
+  await name.press('Escape');
+  await expect(leave).toBeVisible();
+  await leave.getByRole('button', { name: '계속 편집', exact: true }).click();
+  await expect(name).toHaveValue('아직 저장하지 않은 이름');
+  await page.goBack();
+  await expect(leave).toBeVisible();
+  await leave.getByRole('button', { name: '계속 편집', exact: true }).click();
+  await expect(name).toHaveValue('아직 저장하지 않은 이름');
+  await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  const close = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
+  await expect(close).toBeVisible();
+  await close.getByRole('button', { name: '계속 편집', exact: true }).click();
+  await expect(name).toHaveValue('아직 저장하지 않은 이름');
+  await name.press('Escape');
+  await leave.getByRole('button', { name: '입력 버리고 닫기', exact: true }).click();
+  await expect(create).toBeHidden();
+
+  await editor.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
+  await page.getByRole('button', { name: '옵션 프리셋 관리', exact: true }).click();
+  const manager = page.getByRole('region', {
+    name: '현재 프롬프트 / 옵션 프리셋 관리',
+    exact: true,
+  });
+  await manager.getByRole('button', { name: '수정', exact: true }).click();
+  const title = manager.getByLabel('옵션 프리셋 이름', { exact: true });
+  await expect(title).toHaveValue('고칠 조합');
+  await title.press('Escape');
+  await expect(leave).toBeHidden();
+  await expect(title).toBeHidden();
+  await manager.getByRole('button', { name: '수정', exact: true }).click();
+  await title.fill('고친 이름');
+  await title.press('Escape');
+  await expect(leave).toBeVisible();
+  await leave.getByRole('button', { name: '계속 편집', exact: true }).click();
+  await expect(title).toHaveValue('고친 이름');
+  await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await expect(close).toBeVisible();
+  await close.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
+  await expect(settings).toBeHidden();
+});

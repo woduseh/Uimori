@@ -17,6 +17,24 @@ export const messages = {
     ja: 'オプションプリセット管理',
     zh: '管理选项预设',
   },
+  'prompts.combinationLeaveTitle': {
+    ko: '옵션 프리셋 편집 닫기',
+    en: 'Close option preset editing',
+    ja: 'オプションプリセットの編集を閉じる',
+    zh: '关闭选项预设编辑',
+  },
+  'prompts.combinationLeaveMessage': {
+    ko: '저장하지 않은 옵션 프리셋 입력이 사라져요.',
+    en: 'Your unsaved option preset input will be lost.',
+    ja: '保存していないオプションプリセットの入力は失われます。',
+    zh: '未保存的选项预设输入将会丢失。',
+  },
+  'prompts.combinationLeaveDiscard': {
+    ko: '입력 버리고 닫기',
+    en: 'Discard input and close',
+    ja: '入力を破棄して閉じる',
+    zh: '放弃输入并关闭',
+  },
   'prompts.uiCombinationName': {
     ko: '옵션 프리셋 이름',
     en: 'Option preset name',

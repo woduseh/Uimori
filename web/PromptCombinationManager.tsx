@@ -1,5 +1,5 @@
 import { useI18n, translateMessage } from './i18n.js';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CurrentPrompt, PromptRole, SavedPromptCombination } from '../core/product.js';
 import {
   combinationOwner,
@@ -14,6 +14,38 @@ import { SettingsDetail } from './SettingsDetail.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { SaveButton } from './SaveButton.js';
 import { PromptControlFields } from './PromptControlFields.js';
+import { Dialog } from './Dialog.js';
+import { DraftDiscardActions } from './DraftDiscardActions.js';
+
+export function CombinationLeaveDialog({
+  proceed,
+  onContinue,
+}: {
+  proceed: (() => void) | null;
+  onContinue: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <Dialog
+      open={!!proceed}
+      title={t('prompts.combinationLeaveTitle')}
+      variant="confirmation"
+      role="alertdialog"
+      onClose={onContinue}
+    >
+      <p>{t('prompts.combinationLeaveMessage')}</p>
+      <DraftDiscardActions
+        open={!!proceed}
+        onContinue={onContinue}
+        onDiscard={() => {
+          onContinue();
+          proceed?.();
+        }}
+        discardLabel={t('prompts.combinationLeaveDiscard')}
+      />
+    </Dialog>
+  );
+}
 
 export function PromptCombinationManager({
   open,
@@ -25,6 +57,7 @@ export function PromptCombinationManager({
   workspaceRevision,
   combinations,
   reload,
+  onDirtyChange,
 }: {
   open: boolean;
   sectionLabel: string;
@@ -35,6 +68,7 @@ export function PromptCombinationManager({
   workspaceRevision: number;
   combinations: SavedPromptCombination[];
   reload?: () => Promise<void>;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const { t } = useI18n();
   const [editing, setEditing] = useState<{
@@ -46,6 +80,21 @@ export function PromptCombinationManager({
   const [repaired, setRepaired] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [opened, setOpened] = useState({ title: '', values: '' });
+  const [leave, setLeave] = useState<(() => void) | null>(null);
+  const changed = !!editing && (title !== opened.title || JSON.stringify(values) !== opened.values);
+  useEffect(() => {
+    onDirtyChange?.(changed);
+  }, [changed, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  const closeEditor = () => {
+    setEditing(null);
+    setError('');
+  };
+  const guard = (proceed: () => void) => {
+    if (changed) setLeave(() => proceed);
+    else proceed();
+  };
   const list = useRef<HTMLDivElement>(null);
   const items = combinations.filter((item) =>
     ownsPromptCombination(item, combinationOwner(current, role), role)
@@ -56,20 +105,18 @@ export function PromptCombinationManager({
       location={[sectionLabel, t('prompts.uiManageCombinations')]}
       backDisabled={busy}
       returnFocus={returnFocus}
-      onBack={() => {
-        setEditing(null);
-        setError('');
-        onClose();
-      }}
+      onBack={() =>
+        guard(() => {
+          closeEditor();
+          onClose();
+        })
+      }
     >
       <SettingsDetail
         open={!!editing}
         location={[sectionLabel, t('prompts.uiManageCombinations'), editing?.item.title ?? '']}
         backDisabled={busy}
-        onBack={() => {
-          setEditing(null);
-          setError('');
-        }}
+        onBack={() => guard(closeEditor)}
       >
         {editing && (
           <>
@@ -96,15 +143,7 @@ export function PromptCombinationManager({
               />
             </fieldset>
             <div className="form-actions">
-              <button
-                type="button"
-                className="secondary"
-                disabled={busy}
-                onClick={() => {
-                  setEditing(null);
-                  setError('');
-                }}
-              >
+              <button type="button" className="secondary" disabled={busy} onClick={closeEditor}>
                 {t('prompts.uiCancel')}
               </button>
               <SaveButton
@@ -171,10 +210,12 @@ export function PromptCombinationManager({
                         ([id, value]) => repairedValues[id] !== value
                       )
                     );
-                    setValues({
+                    const initialValues = {
                       ...resolvePromptValues(current.program, current.defaultValues ?? {}),
                       ...repairedValues,
-                    });
+                    };
+                    setValues(initialValues);
+                    setOpened({ title: item.title, values: JSON.stringify(initialValues) });
                   }}
                 >
                   {compatible ? t('prompts.uiEdit') : t('prompts.uiEditOptions')}
@@ -196,6 +237,7 @@ export function PromptCombinationManager({
         )}
       </div>
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      <CombinationLeaveDialog proceed={leave} onContinue={() => setLeave(null)} />
     </SettingsDetail>
   );
 }
