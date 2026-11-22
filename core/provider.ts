@@ -17,6 +17,7 @@ import {
 } from './package-context.js';
 import { DEFAULT_LORE_CONTEXT, measureLoreText, type LorePlacement } from './lore-context.js';
 import { countTextTokens, textTokenExcerpt } from './text-tokens.js';
+import type { RisuContentSource } from './risu-native.js';
 import { isTokenizerProfileId, type TokenizerProfileId } from './tokenizer-profiles.js';
 import { outlineContract, type OutlineSnapshot } from './outline.js';
 import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
@@ -133,7 +134,7 @@ function collectRoleResources(snapshot: RunSnapshot, packages: readonly Resolved
 export type MainInput = ModelInput & {
   imagePlacement?: {
     owner: 'writer' | 'jev';
-    catalog?: { ref: string; title: string; description: string; name?: string; tag?: string }[];
+    catalog?: { title?: string; description?: string; name?: string; tag?: string }[];
   };
   contextSummary?: NonNullable<ReturnType<typeof conversationSummary>>;
   pinnedSources?: {
@@ -213,16 +214,23 @@ export function buildMainInput(
           url: asset.url,
         }));
     if (assets.length) {
+      const nativeAssets = new Map<string, Map<string, RisuContentSource['assets'][number]>>();
+      for (const pkg of profile.packages ?? []) {
+        if (nativeAssets.has(pkg.id)) continue;
+        const byImage = new Map<string, RisuContentSource['assets'][number]>();
+        for (const entry of pkg.nativeRisu?.assets ?? [])
+          if (!byImage.has(entry.imageId)) byImage.set(entry.imageId, entry);
+        nativeAssets.set(pkg.id, byImage);
+      }
       input.imagePlacement = {
         owner: 'writer',
         catalog: assets.map((asset) => {
           const owner = /^package:([^:]+):(bot|persona|module):([^:]+)$/u.exec(asset.ref);
           const pkg = owner && profile.packages?.find((entry) => entry.id === owner[1]);
-          const native = pkg?.nativeRisu?.assets.find((entry) => entry.imageId === owner?.[3]);
+          const native = owner ? nativeAssets.get(owner[1])?.get(owner[3]) : undefined;
           return {
-            ref: asset.ref,
-            title: asset.alt,
-            description: asset.caption,
+            ...(asset.alt !== native?.name ? { title: asset.alt } : {}),
+            ...(asset.caption ? { description: asset.caption } : {}),
             ...(native
               ? {
                   name: native.name,
@@ -233,7 +241,7 @@ export function buildMainInput(
         }),
       };
       input.contract +=
-        '\nYou select existing images while writing. Follow the authored image instructions and their tag syntax for the supplied catalog names; where an exact tag is supplied, use it at the intended position. Images are optional; use only supplied catalog images. No separate image model adds images afterward.';
+        '\nYou select existing images while writing. Follow the authored image instructions and their tag syntax; imagePlacement in host context says which image names exist and how they are listed. Where an exact tag is supplied, use it at the intended position. Images are optional; use only existing images. No separate image model adds images afterward.';
     }
   }
   if (packageData) {

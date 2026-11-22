@@ -1,8 +1,13 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import type { SelectionRevisionResult } from '../core/selection-revision.js';
+import type { RevisionContext, SelectionRevisionResult } from '../core/selection-revision.js';
 import { api } from './api.js';
 import { message as uiMessage } from './i18n.js';
+import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
 import { useCodexContentWarning } from './useCodexContentWarning.js';
+
+const CONTEXT_KEY = 'uimori:selection-revision-context';
+const storedContext = (): RevisionContext =>
+  readOptionalStorage('local', CONTEXT_KEY) === 'nearby' ? 'nearby' : 'scene';
 
 export type SelectionRevisionTarget = {
   target?: 'translation';
@@ -30,6 +35,7 @@ export function useSelectionRevision({
   const [proposal, setProposal] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [context, setContext] = useState(storedContext);
   const pending = useRef<AbortController | null>(null);
   const codexWarning = useCodexContentWarning();
   useLayoutEffect(
@@ -58,6 +64,11 @@ export function useSelectionRevision({
     setCaptured({ request, identity });
     setProposal(null);
     setError('');
+    setContext(storedContext());
+  }
+  function chooseContext(value: RevisionContext) {
+    writeOptionalStorage('local', CONTEXT_KEY, value);
+    setContext(value);
   }
   async function requestProposal(instruction: string) {
     if (!captured || !current(captured) || pending.current || !instruction.trim()) return;
@@ -87,7 +98,7 @@ export function useSelectionRevision({
         return;
       const result = await api<SelectionRevisionResult>(
         `/sources/${encodeURIComponent(sourceId)}/selection-revision`,
-        { ...request, instruction },
+        { ...request, instruction, ...(context === 'nearby' ? { context } : {}) },
         'POST',
         controller.signal
       );
@@ -113,6 +124,8 @@ export function useSelectionRevision({
     proposal,
     clearProposal: () => setProposal(null),
     busy,
+    context,
+    chooseContext,
     error,
     setError,
     open,

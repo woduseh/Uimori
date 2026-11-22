@@ -1,6 +1,6 @@
 import type { Asset, ProfileSnapshot } from './product.js';
 import { packageImages } from './package-images.js';
-import { nativeRisuAssetNames } from './risu-native.js';
+import { nativeRisuAssetNameResolver } from './risu-native.js';
 import { parseStoryUi } from './story-ui.js';
 
 export function imageOwnerDisplayText(
@@ -33,17 +33,15 @@ export function createImageOwnerDisplayText(
   const imageReferences = new Set<string>();
   for (const pkg of profile.packages ?? []) {
     if (!pkg.nativeRisu) continue;
+    const placeable = new Set(
+      (pkg.images ?? [])
+        .filter((image) => image.allowedUse !== 'profile' && image.id !== pkg.portraitImageId)
+        .map((image) => image.id)
+    );
+    const assetNames = nativeRisuAssetNameResolver(pkg.nativeRisu);
     for (const asset of pkg.nativeRisu.assets) {
-      if (
-        !pkg.images?.some(
-          (image) =>
-            image.id === asset.imageId &&
-            image.allowedUse !== 'profile' &&
-            image.id !== pkg.portraitImageId
-        )
-      )
-        continue;
-      for (const name of nativeRisuAssetNames(pkg.nativeRisu, asset)) {
+      if (!placeable.has(asset.imageId)) continue;
+      for (const name of assetNames(asset)) {
         for (const type of ['img', 'image', 'emotion', 'asset']) tags.add(`{{${type}::${name}}}`);
         for (const type of ['raw', 'path', 'source']) imageReferences.add(`{{${type}::${name}}}`);
         for (const template of pkg.imageHandoff?.tagTemplates ?? [])

@@ -206,7 +206,15 @@ class Runner:
         if action == "close-maintenance":
             mounts += ["-e", "UIMORI_MAINTENANCE_OWNER=" + self.owner]
         paths = ["/backup", "/data"] if action == "restore" else ["/data", "/backup"]
-        return json.loads(self.docker("run", "--rm", "--network", "none", "--read-only", "--user", "0", "--tmpfs", "/tmp", *mounts, image or self.old_image, "node", "/runner/oracle-data.mjs", action, *paths))
+        return json.loads(self.docker("run", "--rm", "--network", "none", "--read-only", "--user", "0", "--tmpfs", "/tmp", *mounts, image or self.old_image, "node", "/runner/oracle-data.mjs", action, *paths,
+            timeout=1800 if action == "compact" else 120))
+
+    def compact(self, volume):
+        try:
+            self.summary["compaction"] = self.data("compact", volume)
+        except Exception as error:
+            self.summary["compaction"] = {"status": "WARN", "error": str(error)}
+        self.persist()
 
     def new_volume(self, suffix, temporary=True):
         name = "uimori_" + self.release.name.replace(".", "_") + "_" + suffix
@@ -404,6 +412,7 @@ class Runner:
                 self.data("close-maintenance", self.volume_name, image=self.image)
             else:
                 self.volume_name = self.old_volume
+                self.compact(self.old_volume)
             self.summary["volume"] = self.volume_name
         with self.stage("switch"):
             self.checked_out = True

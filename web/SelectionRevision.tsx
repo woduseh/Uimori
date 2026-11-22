@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { validRevisionRange } from '../core/selection-revision.js';
 import { useSelectionRevision } from './useSelectionRevision.js';
+import { SelectionCheckbox } from './BooleanControls.js';
 import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
@@ -111,6 +112,16 @@ export function SelectionRevision(props: Props) {
                 revision.clearProposal();
               }}
             />
+          </label>
+          <label className="check">
+            <SelectionCheckbox
+              checked={revision.context === 'nearby'}
+              disabled={busy}
+              onChange={(event) =>
+                revision.chooseContext(event.target.checked ? 'nearby' : 'scene')
+              }
+            />
+            {t('readerSelection.nearbyContext')}
           </label>
           {stale && (
             <NoticeBanner>

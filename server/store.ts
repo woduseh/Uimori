@@ -451,6 +451,7 @@ export class Store {
     const id = randomUUID();
     const time = now();
     const captured = snapshot(chat);
+    const workspace = isSourceOnlyTranscript(captured) ? null : promptWorkspace(this);
     const base = {
       ...captured,
       settings: {
@@ -458,14 +459,12 @@ export class Store {
         autoTranslate:
           captured.settings.autoTranslate ?? autoTranslationDefaults(this.db).autoTranslate,
       },
-      ...(isSourceOnlyTranscript(captured)
-        ? {}
-        : {
-            mainJudgmentEnabled: promptWorkspace(this).mainJudgmentEnabled === true,
-            mainJudgmentThreshold: mainJudgmentThreshold(
-              promptWorkspace(this).mainJudgmentThreshold
-            ),
-          }),
+      ...(workspace
+        ? {
+            mainJudgmentEnabled: workspace.mainJudgmentEnabled === true,
+            mainJudgmentThreshold: mainJudgmentThreshold(workspace.mainJudgmentThreshold),
+          }
+        : {}),
       ...(command.loreContextReset ? { loreContextReset: true } : {}),
       executionClock: { iso: time, unix: Math.floor(Date.parse(time) / 1000) },
     };

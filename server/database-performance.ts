@@ -25,6 +25,7 @@ export function initDatabaseReadIndexes(db: DatabaseSync): void {
       'helper_request_group',
       "helper_tasks(conversation_id,COALESCE(json_extract(snapshot,'$.requestGroupId'),id))",
     ],
+    ['helper_tasks_retry', "helper_tasks(conversation_id,json_extract(snapshot,'$.retryOf'))"],
   ])
     db.exec(`CREATE INDEX IF NOT EXISTS ${name} ON ${columns}`);
 }

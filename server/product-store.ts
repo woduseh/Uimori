@@ -147,7 +147,28 @@ export class ProductStore {
     contents: Pick<Content, 'id' | 'revision' | 'title' | 'kind'>[];
     prompts: Pick<PromptPreset, 'id' | 'revision' | 'title' | 'role'>[];
   } {
-    const statement = this.db.prepare(`
+    return {
+      contents: this.metadataRows('content').map(({ id, revision, title, kind }) => ({
+        id,
+        revision,
+        title,
+        kind,
+      })),
+      prompts: this.promptMetadata(),
+    };
+  }
+  promptMetadata(): Pick<PromptPreset, 'id' | 'revision' | 'title' | 'role'>[] {
+    return this.metadataRows('prompt-preset').map(({ id, revision, title, role }) => ({
+      id,
+      revision,
+      title,
+      role,
+    }));
+  }
+  private metadataRows(kind: string): Row[] {
+    return this.db
+      .prepare(
+        `
       SELECT json_extract(v.body,'$.id') AS id,
         json_extract(v.body,'$.revision') AS revision,
         json_extract(v.body,'$.title') AS title,
@@ -156,21 +177,9 @@ export class ProductStore {
       FROM versions v WHERE v.kind=?
         AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id)
       ORDER BY v.id
-    `);
-    return {
-      contents: (statement.all('content') as Row[]).map(({ id, revision, title, kind }) => ({
-        id,
-        revision,
-        title,
-        kind,
-      })),
-      prompts: (statement.all('prompt-preset') as Row[]).map(({ id, revision, title, role }) => ({
-        id,
-        revision,
-        title,
-        role,
-      })),
-    };
+    `
+      )
+      .all(kind) as Row[];
   }
   isHidden(kind: string, id: string): boolean {
     return !!this.db.prepare('SELECT 1 FROM library_hidden WHERE kind=? AND id=?').get(kind, id);
@@ -1171,7 +1180,7 @@ export class ProductStore {
     return {
       ...(summary ? { contentBodiesOmitted: true, assetsOmitted: true } : {}),
       organization: this.store.libraryOrganization.snapshot(),
-      promptPresets: summary ? this.libraryMetadata().prompts : this.all('prompt-preset'),
+      promptPresets: summary ? this.promptMetadata() : this.all('prompt-preset'),
       promptCombinations: this.all('prompt-combination'),
       contents,
       connections,

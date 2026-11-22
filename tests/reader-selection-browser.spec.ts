@@ -648,3 +648,37 @@ test('RSEL14 a selection held from before a translation starts keeps the origina
   await expect(scene).toHaveAttribute('data-representation', 'original');
   await expect(selectionBar(page)).toBeVisible();
 });
+
+test('RSEL15 the nearby-context choice is sent and kept for the next passage', async ({
+  page,
+  request,
+}, info) => {
+  const { chatId, source } = await seed(request);
+  const bodies: Record<string, unknown>[] = [];
+  await page.route(endpoint, async (route) => {
+    bodies.push(route.request().postDataJSON());
+    await route.fulfill({ json: { text: proposal } });
+  });
+  const scene = await open(page, chatId, source.id, true);
+  const popover = page.getByRole('dialog', { name: '선택한 글 다듬기', exact: true });
+  const nearby = popover.getByLabel('앞뒤 문단만 문맥으로 보내기', { exact: true });
+  const ask = async () => {
+    await select(scene, unique);
+    await selectionBar(page).getByRole('button', { name: '다듬기', exact: true }).click();
+    await popover.getByLabel('다듬을 방향', { exact: true }).fill('호흡을 행동으로 보여줘.');
+    return popover.getByRole('button', { name: '제안 받기', exact: true });
+  };
+  await (await ask()).click();
+  await expect(popover.getByTestId('reader-revision-proposal')).toBeVisible();
+  expect(bodies[0]).not.toHaveProperty('context');
+  await expect(nearby).not.toBeChecked();
+  await nearby.check();
+  await shot(page, info, 'rsel15-nearby-context');
+  await page.keyboard.press('Escape');
+  await expect(popover).toHaveCount(0);
+  const again = await ask();
+  await expect(nearby).toBeChecked();
+  await again.click();
+  await expect(popover.getByTestId('reader-revision-proposal')).toBeVisible();
+  expect(bodies[1]).toMatchObject({ context: 'nearby', draft: original });
+});

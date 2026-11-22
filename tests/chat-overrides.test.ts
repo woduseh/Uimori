@@ -341,6 +341,21 @@ test('source scope, root/package revisions and text-only selectors reject forged
   expect(store.db.prepare('SELECT 1 FROM chat_override_operations').all()).toHaveLength(1);
 });
 
+test('override snapshots reject a head source from another chat', () => {
+  const store = database(),
+    bot = save(store, 'Foreign head bot'),
+    owner = store.createChat('Source owner', { botId: bot.id }),
+    other = store.createChat('Other chat', { botId: bot.id });
+  const source = complete(store, run(store, owner.id));
+  const service = new ChatOverridesStore(store);
+  expect(service.freeze(store.product.snapshot(owner.id), [], source.id).headRevision).toBe(
+    source.id
+  );
+  expect(() => service.freeze(store.product.snapshot(other.id), [], source.id)).toThrow(
+    'Override source outside chat'
+  );
+});
+
 test('an edited source anchor preserves the override record but excludes it from new request projections', () => {
   const store = database(),
     bot = save(store, 'Retcon bot'),

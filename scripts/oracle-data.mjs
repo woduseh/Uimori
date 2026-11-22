@@ -1,14 +1,21 @@
 import { DatabaseSync, backup } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 import {
+  chmodSync,
   chownSync,
+  closeSync,
   cpSync,
   existsSync,
+  fsyncSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
+  statfsSync,
+  statSync,
 } from 'node:fs';
 import { resolve, join, relative, isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -203,6 +210,93 @@ export async function snapshotDatabase(source, destination) {
   return inspectData(destination, { integrity: true });
 }
 
+function contentIdentity(db) {
+  const schema = db
+    .prepare('SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY type,name')
+    .all();
+  return JSON.stringify({
+    version: db.prepare('PRAGMA user_version').get().user_version,
+    schema,
+    rows: schema
+      .filter((entry) => entry.type === 'table')
+      .map((entry) => db.prepare(`SELECT count(*) AS count FROM ${quote(entry.name)}`).get().count),
+  });
+}
+
+export function compactDatabase(
+  directory,
+  { minFreeRatio = 0.2, minFreeBytes = 64 * 1024 * 1024, swapDeadlineMs = 15 * 60_000 } = {}
+) {
+  const file = join(directory, database);
+  const copy = `${file}.compact`;
+  const started = Date.now();
+  const db = new DatabaseSync(file);
+  let measured;
+  let identity;
+  try {
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    const pragma = (name) => Number(Object.values(db.prepare(`PRAGMA ${name}`).get())[0]);
+    const pageSize = pragma('page_size');
+    const pages = pragma('page_count');
+    const free = pragma('freelist_count');
+    measured = {
+      beforeBytes: pages * pageSize,
+      freeBytes: free * pageSize,
+      freeRatio: pages ? Math.round((free / pages) * 1000) / 1000 : 0,
+    };
+    if (measured.freeRatio < minFreeRatio || measured.freeBytes < minFreeBytes)
+      return { compacted: false, reason: 'below-threshold', ...measured };
+    const disk = statfsSync(directory);
+    if (
+      Number(disk.bavail) * Number(disk.bsize) <
+      (measured.beforeBytes - measured.freeBytes) * 1.1
+    )
+      return { compacted: false, reason: 'insufficient-disk', ...measured };
+    rmSync(copy, { force: true });
+    identity = contentIdentity(db);
+    db.prepare('VACUUM INTO ?').run(copy);
+  } finally {
+    db.close();
+  }
+  try {
+    const compacted = new DatabaseSync(copy, { readOnly: true });
+    try {
+      if (
+        compacted.prepare('PRAGMA quick_check').get().quick_check !== 'ok' ||
+        compacted.prepare('PRAGMA foreign_key_check').all().length ||
+        contentIdentity(compacted) !== identity
+      )
+        throw new Error('Compacted database differs from its source');
+    } finally {
+      compacted.close();
+    }
+    if (Date.now() - started > swapDeadlineMs) {
+      rmSync(copy, { force: true });
+      return { compacted: false, reason: 'too-slow', ...measured };
+    }
+    const original = lstatSync(file);
+    const descriptor = openSync(copy, 'r+');
+    try {
+      fsyncSync(descriptor);
+    } finally {
+      closeSync(descriptor);
+    }
+    if (process.getuid?.() === 0) chownSync(copy, original.uid, original.gid);
+    chmodSync(copy, original.mode & 0o7777);
+    for (const suffix of ['-wal', '-shm']) rmSync(file + suffix, { force: true });
+    renameSync(copy, file);
+  } catch (error) {
+    rmSync(copy, { force: true });
+    throw error;
+  }
+  return {
+    compacted: true,
+    ...measured,
+    afterBytes: statSync(file).size,
+    durationMs: Date.now() - started,
+  };
+}
+
 export function dataMaintenance(directory, closeOwner) {
   const db = new DatabaseSync(join(directory, database), { readOnly: !closeOwner });
   try {
@@ -230,6 +324,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     credentials: () => copyCredentials(source, destination),
     'credential-digest': () => credentialDigest(source),
     snapshot: () => snapshotDatabase(source, destination),
+    compact: () => compactDatabase(source),
     maintenance: () => dataMaintenance(source),
     'close-maintenance': () => {
       if (!process.env.UIMORI_MAINTENANCE_OWNER) throw new Error('Missing maintenance owner');
