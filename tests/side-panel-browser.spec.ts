@@ -407,7 +407,13 @@ test('SIDEPANEL07 Back with the docked helper open returns to the previous chat 
   });
   await helper.getByRole('tab', { name: '플롯', exact: true }).click();
   const outline = page.locator('#outline-panel');
-  await expect(outline.getByRole('tab', { name: '플롯', exact: true })).toBeFocused();
+  await expect(outline.getByRole('tab', { name: '플롯', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await expect
+    .poll(() => outline.evaluate((node) => node.contains(document.activeElement)))
+    .toBe(true);
   await outline.getByRole('tab', { name: '도우미', exact: true }).click();
   await expect(helper.getByRole('tab', { name: '도우미', exact: true })).toBeFocused();
   expect(
