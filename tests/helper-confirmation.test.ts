@@ -296,6 +296,50 @@ test('deleting a target a held call names removes its arguments and the hold exp
   ).toThrow('CONFIRMATION_UNAVAILABLE');
 });
 
+test('deleting a target also removes the arguments a failed granted task kept for its retry', async () => {
+  const f = fixture();
+  const [one, two, three] = f.bots as [Content, Content, Content];
+  const stale = (bot: Content, title: string) => ({ ...f.patch(bot, title), expectedRevision: 99 });
+  const call = () =>
+    helperCall('patch', 'resource.patchMany', {
+      items: [stale(one, '1'), stale(two, '2'), stale(three, '3')],
+    });
+  const held = await runScriptedChatHelper(f.store(), f.chat.id, [call(), helperDone]);
+  const [confirmation] = readHelperTaskResults(f.store(), held.task.id).confirmations;
+  const granted = await runScriptedChatHelper(
+    f.store(),
+    f.chat.id,
+    [call(), helperDone],
+    {},
+    { request: '바꿔 줘', confirmations: [confirmation!.id] }
+  );
+  f.store()
+    .db.prepare("UPDATE helper_tasks SET status='failed',snapshot=? WHERE id=?")
+    .run(
+      JSON.stringify({
+        ...granted.task.snapshot,
+        confirmations: [
+          { ...granted.task.snapshot.confirmations![0]!, arguments: { items: ['kept'] } },
+        ],
+      }),
+      granted.task.id
+    );
+  expect(storedArguments(f.store())).toEqual({ held: [], granted: [granted.task.id] });
+  deleteLibraryItem(f.store(), 'content', two.id, { expectedRevision: two.revision });
+  expect(storedArguments(f.store())).toEqual({ held: [], granted: [] });
+  const conversation = held.runtime.workspace.open({ kind: 'chat', chatId: f.chat.id });
+  expect(() =>
+    held.runtime.enqueue(
+      conversation.id,
+      randomUUID(),
+      '다시 해 줘',
+      undefined,
+      undefined,
+      granted.task.id
+    )
+  ).toThrow('CONFIRMATION_UNAVAILABLE');
+});
+
 test('deleting a chat removes the arguments of a call another conversation held for it', () => {
   const f = fixture();
   const workspace = new HelperWorkspace(f.store());

@@ -68,18 +68,17 @@ export function forgetHelperConfirmationTargets(
   chatId?: string
 ) {
   const keys = JSON.stringify(targets.map((target) => `${target.kind}:${target.id}`));
-  const where = `${HELD} AND (json_extract(data,'$.chatId')=? OR EXISTS (SELECT 1 FROM json_each(data,'$.targets') target
+  const named = `kind='confirmation.required' AND json_valid(data) AND (json_extract(data,'$.chatId')=? OR EXISTS (SELECT 1 FROM json_each(data,'$.targets') target
     WHERE json_extract(target.value,'$.kind')||':'||json_extract(target.value,'$.id') IN (SELECT value FROM json_each(?))))`;
   const held = db
     .prepare(
-      `SELECT conversation_id AS conversationId,json_extract(data,'$.id') AS id FROM helper_events WHERE ${where}`
+      `SELECT conversation_id AS conversationId,json_extract(data,'$.id') AS id FROM helper_events WHERE ${named}`
     )
     .all(chatId ?? null, keys);
   if (!held.length) return;
-  db.prepare(`UPDATE helper_events SET data=json_remove(data,'$.arguments') WHERE ${where}`).run(
-    chatId ?? null,
-    keys
-  );
+  db.prepare(
+    `UPDATE helper_events SET data=json_remove(data,'$.arguments') WHERE ${HELD} AND ${named}`
+  ).run(chatId ?? null, keys);
   const byConversation = new Map<string, Set<string>>();
   for (const row of held) {
     const ids = byConversation.get(String(row.conversationId)) ?? new Set<string>();
