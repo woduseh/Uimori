@@ -77,6 +77,7 @@ import {
 } from './HelperMessageActions.js';
 import { useHelperConversation, type HelperTaskView } from './useHelperConversation.js';
 import { interceptAppHistory } from './app-history.js';
+import { sidePanelTabsShown } from './SidePanelTabs.js';
 import {
   editorContextChanged,
   captureActiveEditorContext,
@@ -504,6 +505,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   const [personas, setPersonas] = useState<Record<string, { text: string; revision: number }>>({});
   const [savingPersona, setSavingPersona] = useState(false);
   const compact = (props.modal ?? false) && !props.expanded;
+  const docked = !props.modal && !props.expanded;
   const [frozenEditors, setFrozenEditors] = useState<
     Record<string, ReturnType<typeof captureActiveEditorContext>>
   >({});
@@ -817,6 +819,15 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     if (!props.open) return;
     const prior = document.activeElement as HTMLElement | null;
     closeButton.current?.focus();
+    return () => {
+      if (prior?.isConnected && prior.checkVisibility() && !sidePanelTabsShown()) prior.focus();
+    };
+  }, [props.open]);
+  useEffect(() => {
+    if (!props.open || docked) {
+      closePanel.current = () => close.current();
+      return;
+    }
     const token = crypto.randomUUID(),
       base = history.state,
       url = location.href;
@@ -838,9 +849,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     return () => {
       remove();
       if (owns()) history.replaceState(base, '', url);
-      if (prior?.isConnected && prior.checkVisibility()) prior.focus();
     };
-  }, [props.open]);
+  }, [props.open, docked]);
   useEffect(() => {
     if (!props.open || !compact) return;
     const background = [

@@ -16,6 +16,12 @@ export function focusSidePanelTab(tab: SidePanelTab) {
   target?.focus({ preventScroll: true });
 }
 
+export function sidePanelTabsShown() {
+  return [...document.querySelectorAll<HTMLElement>('[data-side-panel-tab]')].some((node) =>
+    node.checkVisibility()
+  );
+}
+
 export function SidePanelTabs({
   tabs,
   active,

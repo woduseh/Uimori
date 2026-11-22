@@ -373,3 +373,44 @@ for (const width of [1440, 2560])
       await page.screenshot({ path: info.outputPath(`outline-workspace-${scheme}-${width}.png`) });
     }
   });
+
+test('SIDEPANEL07 Back with the docked helper open returns to the previous chat and tab changes keep focus on the tabs', async ({
+  page,
+  request,
+}) => {
+  const first = await fixture(request, '우측 패널 뒤로');
+  const secondTitle = `${first.chat.title} 자료`;
+  await openChat(page, first.chat.id, first.source.id);
+  await header(page).getByRole('button', { name: '도우미', exact: true }).click();
+  const helper = page.locator('#helper-panel');
+  await expect(helper).toBeVisible();
+  await expect(helper).not.toHaveClass(/helper-expanded/u);
+  await page.locator('.sidebar').getByRole('button', { name: secondTitle, exact: true }).click();
+  await expect(page).not.toHaveURL(new RegExp(`chat=${first.chat.id}`, 'u'));
+  await expect(header(page)).toContainText(secondTitle);
+  await expect(helper).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`chat=${first.chat.id}`, 'u'));
+  await expect(header(page)).not.toContainText(secondTitle);
+  await expect(header(page)).toContainText(first.chat.title);
+  await expect(helper).toBeVisible();
+  await page.goForward();
+  await expect(header(page)).toContainText(secondTitle);
+
+  await page.evaluate(() => {
+    const trail: string[] = [];
+    Object.assign(window, { focusTrail: trail });
+    document.addEventListener('focusin', (event) => {
+      const target = event.target as HTMLElement;
+      trail.push(target.closest('.workspace-header') ? 'header' : 'panel');
+    });
+  });
+  await helper.getByRole('tab', { name: '플롯', exact: true }).click();
+  const outline = page.locator('#outline-panel');
+  await expect(outline.getByRole('tab', { name: '플롯', exact: true })).toBeFocused();
+  await outline.getByRole('tab', { name: '도우미', exact: true }).click();
+  await expect(helper.getByRole('tab', { name: '도우미', exact: true })).toBeFocused();
+  expect(
+    await page.evaluate(() => (window as unknown as { focusTrail: string[] }).focusTrail)
+  ).not.toContain('header');
+});
