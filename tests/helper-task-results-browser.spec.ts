@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
-import { expect, test, type APIRequestContext, type Locator } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type {
   HelperConversation,
   HelperConversationSummary,
@@ -1396,6 +1396,26 @@ test('HUSAGE01 the composer shows the latest context estimate, its parts and the
     await page.screenshot({ path: info.outputPath(`context-usage-${width}-${colorScheme}.png`) });
     await page.keyboard.press('Escape');
   }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => localStorage.setItem('uimori:panel-width', '360'));
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await page.goto(`/?chat=${chat.id}`);
+    await openHelper(page);
+    const modeChip = page.locator('#helper-panel .helper-mode-chip');
+    await modeChip.click();
+    await expect(modeChip).toHaveAccessibleName('요청 방식: 계획만');
+    const summary = page.locator('#helper-panel .helper-context-usage > summary');
+    await expect(summary).toHaveAccessibleName('컨텍스트 사용량: 추정 240,000 / 예산 272,000 토큰');
+    await expect(summary.locator('.helper-context-usage-short')).toHaveText('약 240K');
+    await expect(summary.locator('.helper-context-usage-short')).toBeVisible();
+    await expect(summary.locator('.helper-context-usage-text')).toBeHidden();
+    await expectOneToolRow(page);
+    await page.screenshot({
+      path: info.outputPath(`context-usage-plan-narrow-panel-${colorScheme}.png`),
+    });
+  }
+  await page.evaluate(() => localStorage.removeItem('uimori:panel-width'));
   usage.latestInputExecution = 'codex-native';
   usage.latestInputTokens = 90_040;
   await page.goto(`/?chat=${chat.id}`);
@@ -1419,16 +1439,34 @@ test('HUSAGE01 the composer shows the latest context estimate, its parts and the
   await expect(unknown).toHaveAccessibleName('컨텍스트 사용량: 컨텍스트 미확인');
   await expect(unknown.locator('.helper-context-usage-icon')).toBeVisible();
   await expect(unknown.locator('.helper-context-usage-text')).toBeHidden();
-  const centers = await page
-    .locator('#helper-panel .helper-composer :is(.quick-controls > *, .send-button)')
-    .evaluateAll((nodes) =>
-      nodes
-        .filter((node) => node.checkVisibility())
-        .map((node) => {
-          const rect = node.getBoundingClientRect();
-          return rect.top + rect.height / 2;
-        })
-    );
-  expect(Math.max(...centers) - Math.min(...centers)).toBeLessThanOrEqual(2);
+  await expectOneToolRow(page);
   await page.screenshot({ path: info.outputPath('context-usage-unknown-narrow-panel.png') });
 });
+
+async function expectOneToolRow(page: Page) {
+  const row = await page.locator('#helper-panel .helper-composer').evaluate((composer) => {
+    const box = composer.getBoundingClientRect();
+    const items = [
+      ...composer.querySelectorAll<HTMLElement>(':is(.quick-controls > *, .send-button)'),
+    ]
+      .filter((node) => node.checkVisibility())
+      .map((node) => ({
+        rect: node.getBoundingClientRect(),
+        clipped: node.scrollWidth > node.clientWidth + 1,
+        name: node.getAttribute('aria-label') ?? node.className,
+      }))
+      .sort((a, b) => a.rect.left - b.rect.left);
+    return {
+      centers: items.map(({ rect }) => rect.top + rect.height / 2),
+      overflow: Math.max(...items.map(({ rect }) => rect.right)) - box.right,
+      overlaps: items.flatMap((item, index) =>
+        index && items[index - 1]!.rect.right > item.rect.left + 0.5 ? [item.name] : []
+      ),
+      clipped: items.filter((item) => item.clipped).map((item) => item.name),
+    };
+  });
+  expect(Math.max(...row.centers) - Math.min(...row.centers)).toBeLessThanOrEqual(2);
+  expect(row.overflow).toBeLessThanOrEqual(0);
+  expect(row.overlaps).toEqual([]);
+  expect(row.clipped).toEqual([]);
+}

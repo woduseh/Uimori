@@ -41,6 +41,12 @@ export function HelperContextUsage({ usage }: { usage: HelperTaskResultsView['us
       : native && reported !== null
         ? t('helperUsage.summaryExact', { count: usageCompact(reported) })
         : t('helperUsage.unknown');
+  const shortText =
+    estimate !== null
+      ? t('helperUsage.summaryShort', { count: usageCompact(estimate) })
+      : native && reported !== null
+        ? usageCompact(reported)
+        : null;
   const label = `${t('helperUsage.label')}: ${
     estimate !== null && limit
       ? t('helperUsage.estimateValue', {
@@ -65,6 +71,7 @@ export function HelperContextUsage({ usage }: { usage: HelperTaskResultsView['us
         >
           {unknown && <Gauge size={16} aria-hidden="true" className="helper-context-usage-icon" />}
           <span className="helper-context-usage-text">{text}</span>
+          {shortText && <span className="helper-context-usage-short">{shortText}</span>}
           {share !== null && (
             <span
               className="helper-context-usage-bar"

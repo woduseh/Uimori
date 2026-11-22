@@ -221,6 +221,12 @@ export const messages = {
     ja: 'コンテキスト 約{count}',
     zh: '上下文 约 {count}',
   },
+  'helperUsage.summaryShort': {
+    ko: '약 {count}',
+    en: '~{count}',
+    ja: '約{count}',
+    zh: '约 {count}',
+  },
   'helperUsage.summaryExact': {
     ko: '컨텍스트 {count}',
     en: 'Context {count}',

@@ -11,14 +11,16 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.helper-context-usage-icon {
+.helper-context-usage-icon,
+.helper-context-usage-short {
   display: none;
 }
 @container helper-composer (max-width: 400px) {
-  .helper-context-usage-summary[data-unknown] .helper-context-usage-icon {
+  .helper-context-usage-summary[data-unknown] .helper-context-usage-icon,
+  .helper-context-usage-short {
     display: block;
   }
-  .helper-context-usage-summary[data-unknown] .helper-context-usage-text {
+  .helper-context-usage-text {
     display: none;
   }
 }
