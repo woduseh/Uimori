@@ -2779,7 +2779,13 @@ test('HCONFIRM03 confirming switches plan mode off and the held card shows the g
     grantedBy,
     grantable: grantedBy === null,
   });
-  state.results.set(earlier.id, { confirmations: [held(null)] });
+  state.results.set(earlier.id, {
+    get confirmations() {
+      const granted = state.posts.some((post) => post.confirmations?.includes('held-call'));
+      const later = state.current().tasks.find((task) => task.id !== earlier.id);
+      return [held(granted && later ? later.id : null)];
+    },
+  });
   await page.reload();
   const panel = await open(page);
   const card = panel.locator('.helper-confirmation');
@@ -2803,7 +2809,6 @@ test('HCONFIRM03 confirming switches plan mode off and the held card shows the g
   expect(state.posts[0].mode).toBeUndefined();
   const later = state.current().tasks[0];
   expect(later.id).not.toBe(earlier.id);
-  state.results.set(earlier.id, { confirmations: [held(later.id)] });
   await expect(card).toHaveAttribute('data-state', 'granted');
   await expect(card).toContainText('확인해서 진행했어요.');
 });
