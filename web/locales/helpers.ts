@@ -1829,4 +1829,58 @@ export const messages = {
     ja: 'まだメッセージはありません。',
     zh: '暂无消息。',
   },
+  'helpers.followUpTrayLabel': {
+    ko: '추가 지시와 대기 중인 요청',
+    en: 'Additional instructions and queued requests',
+    ja: '追加指示と待機中のリクエスト',
+    zh: '补充指令与排队请求',
+  },
+  'helpers.runningSendModeLabel': {
+    ko: '실행 중 전송 방식',
+    en: 'Sending mode while running',
+    ja: '実行中の送信方法',
+    zh: '运行中发送方式',
+  },
+  'helpers.followUpSteerBadge': {
+    ko: '추가 지시',
+    en: 'Steer',
+    ja: '追加指示',
+    zh: '补充指令',
+  },
+  'helpers.followUpQueueBadge': {
+    ko: '대기 요청',
+    en: 'Queued',
+    ja: '待機リクエスト',
+    zh: '排队请求',
+  },
+  'helpers.followUpSteerPending': {
+    ko: '다음 단계에 반영',
+    en: 'Applies on next step',
+    ja: '次の段階で反映',
+    zh: '下一步生效',
+  },
+  'helpers.followUpQueueOrder': {
+    ko: '대기 #{index}',
+    en: 'Queue #{index}',
+    ja: '待機 #{index}',
+    zh: '排队 #{index}',
+  },
+  'helpers.followUpHintQueue': {
+    ko: '{sendKey}로 대기 요청, {altKey}로 현재 작업에 추가',
+    en: '{sendKey} queues next, {altKey} adds to current task',
+    ja: '{sendKey}で待機リクエスト、{altKey}で現在の作業に追加',
+    zh: '按 {sendKey} 排队，按 {altKey} 追加到当前任务',
+  },
+  'helpers.followUpHintSteer': {
+    ko: '{sendKey}로 현재 작업에 추가, {altKey}로 대기 요청',
+    en: '{sendKey} adds to current task, {altKey} queues next',
+    ja: '{sendKey}で現在の作業に追加、{altKey}で待機リクエスト',
+    zh: '按 {sendKey} 追加到当前任务，按 {altKey} 排队',
+  },
+  'helpers.followUpSteerAttachmentsNote': {
+    ko: '첨부가 있으면 대기 요청으로만 보낼 수 있어요.',
+    en: 'Requests with attachments can only be queued.',
+    ja: '添付がある場合は待機リクエストとしてのみ送信できます。',
+    zh: '包含附件时只能作为排队请求发送。',
+  },
 } as const;

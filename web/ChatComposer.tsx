@@ -32,9 +32,19 @@ type InputProps = Omit<ComponentProps<'textarea'>, 'ref' | 'onKeyDown' | 'rows'>
   inputRef?: RefObject<HTMLTextAreaElement | null>;
   enterSend: boolean;
   onSend: () => void;
+  onAlternateSend?: () => void;
+  onKeyDown?: ComponentProps<'textarea'>['onKeyDown'];
 };
 
-export function ComposerInput({ inputRef, enterSend, onSend, value, ...props }: InputProps) {
+export function ComposerInput({
+  inputRef,
+  enterSend,
+  onSend,
+  onAlternateSend,
+  onKeyDown,
+  value,
+  ...props
+}: InputProps) {
   const ownRef = useRef<HTMLTextAreaElement>(null);
   const ref = inputRef ?? ownRef;
   const composing = useRef(false);
@@ -83,6 +93,8 @@ export function ComposerInput({ inputRef, enterSend, onSend, value, ...props }: 
         composing.current = false;
       }}
       onKeyDown={(event) => {
+        onKeyDown?.(event);
+        if (event.defaultPrevented) return;
         if (
           props.disabled ||
           props.readOnly ||
@@ -92,7 +104,18 @@ export function ComposerInput({ inputRef, enterSend, onSend, value, ...props }: 
           event.keyCode === 229
         )
           return;
-        if (event.ctrlKey || event.metaKey || (enterSend && !event.shiftKey)) {
+        if (
+          onAlternateSend &&
+          event.altKey &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.shiftKey
+        ) {
+          event.preventDefault();
+          onAlternateSend();
+          return;
+        }
+        if (!event.altKey && (event.ctrlKey || event.metaKey || (enterSend && !event.shiftKey))) {
           event.preventDefault();
           onSend();
         }

@@ -62,10 +62,14 @@ import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { elapsedLabel } from './ActivityStatus.js';
 import { TurnStatus, type StatusTone } from './TurnStatus.js';
 import { ActivityBar } from './ActivityBar.js';
-import { ChatComposer, ComposerInput, sendKeyLabel } from './ChatComposer.js';
+import { ChatComposer, ComposerInput, isApplePlatform, sendKeyLabel } from './ChatComposer.js';
 import { IconButton } from './IconButton.js';
 import { PartialResponse, ResponseDisplay } from './StreamingResponse.js';
-import type { ResponseDisplayMode } from './presentation-settings.js';
+import {
+  readPresentationChoice,
+  writePresentationSetting,
+  type ResponseDisplayMode,
+} from './presentation-settings.js';
 import { HelperArtifactCard } from './HelperArtifactCard.js';
 import { HelperTaskResults } from './HelperTaskResults.js';
 import { HelperPlanCard } from './HelperPlanCard.js';
@@ -466,7 +470,16 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     }
   };
   const running = tasks.find((task) => task.status === 'running');
-  const activeTask = tasks.some((task) => task.status === 'running' || task.status === 'queued');
+  const queuedTasks = tasks.filter((task) => task.status === 'queued');
+  const pendingSteers = (running?.instructions ?? []).filter((item) => item.status === 'pending');
+  const activeTask = Boolean(running || queuedTasks.length);
+  const [runningSendMode, setRunningSendMode] = useState<'queue' | 'steer'>(() =>
+    readPresentationChoice('uimori:helper-running-send', ['queue', 'steer'], 'queue')
+  );
+  const updateRunningSendMode = (next: 'queue' | 'steer') => {
+    setRunningSendMode(next);
+    writePresentationSetting('uimori:helper-running-send', next);
+  };
   const stopShortcutLabel = useShortcutLabel('run.stop');
   const helperModeShortcutLabel = useShortcutLabel('helper.mode');
   const panel = useRef<HTMLElement>(null);
@@ -1265,7 +1278,12 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         )}
       </TurnStatus>
       {task.instructions?.map((instruction) => (
-        <div className="helper-instruction" key={instruction.id} data-testid="helper-instruction">
+        <div
+          className="helper-instruction"
+          data-status={instruction.status}
+          key={instruction.id}
+          data-testid="helper-instruction"
+        >
           <small role="status">{t('helpers.m335', { status: instruction.status })}</small>
           <p>{instruction.text}</p>
           {(instruction.status === 'not-delivered' || instruction.status === 'unconfirmed') && (
@@ -2138,6 +2156,89 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
             {translateMessage(error)}
           </NoticeBanner>
         )}
+        {(pendingSteers.length > 0 || queuedTasks.length > 0) && (
+          <div
+            className="helper-followup-tray"
+            aria-label={t('helpers.followUpTrayLabel')}
+            data-testid="helper-followup-tray"
+          >
+            {pendingSteers.map((instruction) => (
+              <div
+                key={`steer-${instruction.id}`}
+                className="helper-followup-item"
+                data-kind="steer"
+              >
+                <span className="helper-followup-badge" data-kind="steer">
+                  {t('helpers.followUpSteerBadge')}
+                </span>
+                <span className="helper-followup-text">{instruction.text}</span>
+                <small className="helper-followup-meta">{t('helpers.followUpSteerPending')}</small>
+              </div>
+            ))}
+            {queuedTasks.map((queuedTask, index) => (
+              <div
+                key={`queue-${queuedTask.id}`}
+                className="helper-followup-item"
+                data-kind="queue"
+              >
+                <span className="helper-followup-badge" data-kind="queue">
+                  {t('helpers.followUpQueueBadge')}
+                </span>
+                <span className="helper-followup-text">{queuedTask.request}</span>
+                <small className="helper-followup-meta">
+                  {t('helpers.followUpQueueOrder', { index: index + 1 })}
+                </small>
+                <button
+                  type="button"
+                  className="helper-chip-dismiss"
+                  aria-label={t('helpers.m030')}
+                  onClick={() => void cancel(queuedTask)}
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {running && (
+          <div className="helper-running-mode" data-testid="helper-running-mode">
+            <div
+              className="helper-running-mode-toggle"
+              role="group"
+              aria-label={t('helpers.runningSendModeLabel')}
+            >
+              <button
+                type="button"
+                className="secondary"
+                aria-pressed={runningSendMode === 'steer'}
+                onClick={() => updateRunningSendMode('steer')}
+              >
+                {t('helpers.followUpSteerBadge')}
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                aria-pressed={runningSendMode === 'queue'}
+                onClick={() => updateRunningSendMode('queue')}
+              >
+                {t('helpers.followUpQueueBadge')}
+              </button>
+            </div>
+            <small className="helper-running-mode-hint">
+              {attachments.hasAttachments
+                ? t('helpers.followUpSteerAttachmentsNote')
+                : t(
+                    runningSendMode === 'steer'
+                      ? 'helpers.followUpHintSteer'
+                      : 'helpers.followUpHintQueue',
+                    {
+                      sendKey: sendKeyLabel(props.enterSend),
+                      altKey: isApplePlatform() ? 'Option+Enter' : 'Alt+Enter',
+                    }
+                  )}
+            </small>
+          </div>
+        )}
         <ChatComposer
           className="helper-request-composer"
           onDragOver={(event) => {
@@ -2299,8 +2400,24 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
             }}
             onSend={() => {
               if (outbox) setOutboxDecision(outbox);
+              else if (
+                running &&
+                runningSendMode === 'steer' &&
+                draft.trim() &&
+                !attachments.hasAttachments
+              )
+                void send(undefined, false, running.id);
               else void send();
             }}
+            onAlternateSend={
+              running && !outbox
+                ? () => {
+                    if (runningSendMode === 'steer') void send();
+                    else if (draft.trim() && !attachments.hasAttachments)
+                      void send(undefined, false, running.id);
+                  }
+                : undefined
+            }
           />
           <div className="quick-controls">
             <HelperAttachmentPicker
@@ -2353,6 +2470,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               <button
                 type="button"
                 className="secondary helper-steer"
+                data-active-mode={runningSendMode === 'steer' || undefined}
                 disabled={
                   props.ready === false ||
                   !hydrated[scopeKey] ||
@@ -2370,6 +2488,9 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               <button
                 type="submit"
                 className="secondary helper-queue"
+                data-active-mode={
+                  runningSendMode === 'queue' || attachments.hasAttachments || undefined
+                }
                 aria-label={outbox ? t('helpers.m109') : t('helpers.queueRequest')}
                 title={outbox ? t('helpers.m096') : t('helpers.queueRequest')}
                 disabled={submitDisabled}

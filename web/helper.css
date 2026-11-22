@@ -692,17 +692,98 @@
 .helper-instruction {
   margin-block: 12px;
   padding: 10px 12px;
-  border-inline-start: var(--hairline) solid var(--border);
+  border-inline-start: 2px solid var(--accent-line);
+  border-radius: var(--radius-small);
+  background: var(--surface);
 }
 .helper-instruction p {
   margin-block: 6px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.helper-followup-tray {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.helper-followup-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 10px;
+  border: var(--hairline) solid var(--line);
+  border-inline-start: 2px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  font-size: var(--font-small);
+}
+.helper-followup-item[data-kind="steer"] {
+  border-inline-start-color: var(--accent-line);
+}
+.helper-followup-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border-radius: var(--radius-small);
+  background: var(--surface-active);
+  color: var(--text);
+  font-size: var(--font-small);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.helper-followup-badge[data-kind="steer"] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.helper-followup-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.helper-followup-meta {
+  flex-shrink: 0;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.helper-running-mode {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.helper-running-mode-toggle {
+  display: inline-flex;
+  gap: 4px;
+}
+.helper-running-mode-toggle > button {
+  min-height: 28px;
+  padding: 2px 8px;
+  font-size: var(--font-small);
+}
+.helper-running-mode-toggle > button[aria-pressed="true"] {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.helper-running-mode-hint {
+  color: var(--muted);
+  font-size: var(--font-small);
+}
 .helper-steer,
 .helper-queue {
   font-size: var(--font-small);
   white-space: nowrap;
+}
+.helper-steer[data-active-mode],
+.helper-queue[data-active-mode] {
+  border-color: var(--accent-line);
+  color: var(--accent-text);
 }
 .helper-composer .helper-request-composer > .send-button {
   align-self: end;

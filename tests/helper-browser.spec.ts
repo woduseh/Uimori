@@ -866,6 +866,64 @@ test('HELPSTEER adds instructions to the active task once after a lost acknowled
   expect(task.status).toBe('running');
 });
 
+test('HELPFOLLOWUP01 distinguishes pending steers and queued requests with configurable default mode and Alt+Enter override', async ({
+  page,
+  request,
+}, info) => {
+  const chat = await create(request),
+    state = await harness(page);
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  const input = panel.getByLabel('도우미에게 요청');
+  await input.fill('긴 자료 분석을 시작해 주세요');
+  await input.press('Control+Enter');
+  await expect(input).toHaveValue('');
+
+  const modeBar = panel.getByTestId('helper-running-mode');
+  await expect(modeBar).toBeVisible();
+  const steerMode = modeBar.getByRole('button', { name: '추가 지시', exact: true });
+  const queueMode = modeBar.getByRole('button', { name: '대기 요청', exact: true });
+  await expect(queueMode).toHaveAttribute('aria-pressed', 'true');
+  await expect(steerMode).toHaveAttribute('aria-pressed', 'false');
+
+  await input.fill('중간에 어조만 차분하게 조정해 주세요');
+  await input.press('Alt+Enter');
+  await expect(input).toHaveValue('');
+  await expect.poll(() => state.steerPosts.length).toBe(1);
+  expect(state.posts).toHaveLength(1);
+
+  await steerMode.click();
+  await expect(steerMode).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() => localStorage.getItem('uimori:helper-running-send'))).toBe(
+    'steer'
+  );
+
+  await input.fill('다음 턴에서 목차도 정리해 주세요');
+  await input.press('Alt+Enter');
+  await expect(input).toHaveValue('');
+  await expect.poll(() => state.posts.length).toBe(2);
+
+  await input.fill('지금 진행 중인 작업에 예시를 한 줄 추가해 주세요');
+  await input.press('Control+Enter');
+  await expect(input).toHaveValue('');
+  await expect.poll(() => state.steerPosts.length).toBe(2);
+
+  const tray = panel.getByTestId('helper-followup-tray');
+  await expect(tray).toBeVisible();
+  await expect(tray.locator('[data-kind="steer"].helper-followup-item')).toHaveCount(2);
+  await expect(tray.locator('[data-kind="queue"].helper-followup-item')).toHaveCount(1);
+  await expect(tray).toContainText('다음 단계에 반영');
+  await expect(tray).toContainText('대기 #1');
+  await page.screenshot({ path: info.outputPath('helper-followup-tray.png') });
+
+  await tray
+    .locator('[data-kind="queue"].helper-followup-item')
+    .getByRole('button', { name: '이 대기 요청 취소', exact: true })
+    .click();
+  await expect(tray.locator('[data-kind="queue"].helper-followup-item')).toHaveCount(0);
+});
+
 test('HELPSENDKEY desktop helper composer follows the app send-key setting and never sends during composition', async ({
   page,
   request,
