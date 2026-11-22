@@ -11,7 +11,7 @@ Uimori is a personal creative-writing web app for reading long manuscripts and c
 
 > **Current version `v0.15.1` · DB schema 15**
 >
-> Fixes cases the helper's confirmation and rollback missed, removes deleted text from helper records, makes the queued next request hold back when its settings change, keeps the reader's view steady when a translation arrives, and speeds up the activity feed. See the [release notes](docs/releases/v0.15.1.md) and [update guide](docs/UPDATES.md).
+> Fixes cases the helper's confirmation and rollback missed, removes deleted text from helper records, makes the queued next request hold back when its settings change, keeps the reader's view steady when a translation arrives, and speeds up the activity feed. The helper gains `@` target references, choice question cards and manual conversation compaction, and keyboard shortcuts can be rebound. See the [release notes](docs/releases/v0.15.1.md) and [update guide](docs/UPDATES.md).
 
 > [!NOTE]
 > The detailed guides under `docs/` are written in Korean. The app interface itself supports English.
