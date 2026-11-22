@@ -3,7 +3,7 @@ import { ProviderContractError } from './provider-errors.js';
 import { localTokenizer, type TokenizerInfo } from './local-tokenizers.js';
 import { isTokenizerProfileId, type TokenizerProfileId } from './tokenizer-profiles.js';
 
-const TOKEN_PIECE_CACHE_LIMIT = 512;
+const TOKEN_PIECE_CACHE_LIMIT = 4096;
 const tokenPieces = new Map<string, number>();
 
 export function countTextTokens(text: string, profile?: TokenizerProfileId): number {
@@ -11,7 +11,8 @@ export function countTextTokens(text: string, profile?: TokenizerProfileId): num
   if (profile !== undefined && !isTokenizerProfileId(profile))
     throw new ProviderContractError('INVALID_CONTEXT_INPUT');
   if (!text.length) return 0;
-  const tokenizer = localTokenizer(profile ?? 'openai-o200k');
+  const requested = profile ?? 'openai-o200k';
+  const tokenizer = localTokenizer(requested);
   let tokens = 0;
   for (let start = 0; start < text.length; ) {
     let end = Math.min(text.length, start + 4096);
@@ -22,7 +23,7 @@ export function countTextTokens(text: string, profile?: TokenizerProfileId): num
     )
       end--;
     const piece = text.slice(start, end);
-    const key = `${profile ?? 'o200k_base-text-v1'}:${tokenizer.info.effective}:${tokenizer.info.fallback}:${createHash('sha256').update(piece, 'utf16le').digest('hex')}`;
+    const key = `${requested}:${tokenizer.info.effective}:${tokenizer.info.fallback}:${createHash('sha256').update(piece, 'utf16le').digest('hex')}`;
     let count = tokenPieces.get(key);
     if (count === undefined) {
       count = tokenizer.count(piece);
