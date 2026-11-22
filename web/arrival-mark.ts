@@ -1,14 +1,36 @@
 import './arrival-mark.css';
 
 const ARRIVAL_CLASS = 'arrival-mark';
+const INSET_ATTRIBUTE = 'data-arrival-inset';
+
+function ringClipped(element: Element) {
+  const style = getComputedStyle(element);
+  const extent = parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset);
+  const ring = element.getBoundingClientRect();
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    const clipping = getComputedStyle(parent);
+    if (clipping.overflowX === 'visible' && clipping.overflowY === 'visible') continue;
+    const box = parent.getBoundingClientRect();
+    return (
+      ring.left - extent < box.left ||
+      ring.top - extent < box.top ||
+      ring.right + extent > box.right ||
+      ring.bottom + extent > box.bottom
+    );
+  }
+  return false;
+}
 
 export function markArrival(element: Element, scroll = true) {
   if (scroll) element.scrollIntoView({ block: 'center', inline: 'nearest' });
   element.classList.remove(ARRIVAL_CLASS);
+  element.removeAttribute(INSET_ATTRIBUTE);
   void (element as HTMLElement).offsetWidth;
   element.classList.add(ARRIVAL_CLASS);
+  element.toggleAttribute(INSET_ATTRIBUTE, ringClipped(element));
   const clear = () => {
     element.classList.remove(ARRIVAL_CLASS);
+    element.removeAttribute(INSET_ATTRIBUTE);
     element.removeEventListener('animationend', ended);
     document.removeEventListener('pointerdown', clear, true);
     document.removeEventListener('keydown', clear, true);

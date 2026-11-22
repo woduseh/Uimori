@@ -3,6 +3,9 @@
   outline-offset: 2px;
   border-radius: var(--radius-small);
 }
+.arrival-mark[data-arrival-inset] {
+  outline-offset: calc(-1 * var(--focus-ring-width));
+}
 @media (prefers-reduced-motion: no-preference) {
   .arrival-mark {
     animation: arrival-mark var(--motion-mark) var(--motion-ease-out) forwards;

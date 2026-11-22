@@ -1301,6 +1301,22 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
   await expect(helper).toBeVisible();
   await expect(helper.getByRole('button', { name: '도우미 크게 보기', exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath('open-lore-from-expanded-workspace.png') });
+  expect(
+    await library.locator('.nl-detail.arrival-mark').evaluate((node) => {
+      const style = getComputedStyle(node);
+      const extent = parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset);
+      const ring = node.getBoundingClientRect();
+      let clip = node.parentElement;
+      while (clip && getComputedStyle(clip).overflowX === 'visible') clip = clip.parentElement;
+      const box = clip!.getBoundingClientRect();
+      return (
+        ring.left - extent >= box.left &&
+        ring.top - extent >= box.top &&
+        ring.right + extent <= box.right &&
+        ring.bottom + extent <= box.bottom
+      );
+    })
+  ).toBe(true);
 
   await library.getByRole('tab', { name: '기본 정보', exact: true }).click();
   const name = library.getByRole('textbox', { name: 'Risu 자료 이름', exact: true });
