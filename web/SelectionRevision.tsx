@@ -6,6 +6,7 @@ import { useSelectionRevision } from './useSelectionRevision.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
 import { IconButton } from './IconButton.js';
+import { useFocusFallback } from './useFocusFallback.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { CheckIcon, CloseIcon, EditIcon, RefreshIcon, StopIcon } from './ui-icons.js';
@@ -41,10 +42,18 @@ export function SelectionRevision(props: Props) {
     focusOpener.current = false;
     opener.current?.focus({ preventScroll: true });
   }, [captured]);
+  const cancelButton = useRef<HTMLButtonElement>(null);
+  const applyButton = useRef<HTMLButtonElement>(null);
+  const field = useRef<HTMLTextAreaElement>(null);
+  const rememberFocus = useFocusFallback(
+    () => (busy ? [cancelButton.current] : [applyButton.current, field.current]),
+    `${busy}:${proposal !== null}`
+  );
   return (
     <section
       className="selection-revision"
       aria-label={t('reader.reviseSelectedPassage')}
+      onFocus={rememberFocus}
       onKeyDown={(event) => {
         if (!captured || event.key !== 'Escape') return;
         if (event.target instanceof Element && event.target.closest('dialog')) return;
@@ -102,6 +111,7 @@ export function SelectionRevision(props: Props) {
           <label>
             {t('reader.revisionRequest')}
             <textarea
+              ref={field}
               rows={3}
               maxLength={REQUEST_TEXT_MAX_CHARS}
               value={instruction}
@@ -136,7 +146,12 @@ export function SelectionRevision(props: Props) {
           )}
           <div className="form-actions">
             {busy ? (
-              <button type="button" className="secondary" onClick={revision.cancel}>
+              <button
+                ref={cancelButton}
+                type="button"
+                className="secondary"
+                onClick={revision.cancel}
+              >
                 <StopIcon size={18} aria-hidden="true" />
                 {t('reader.cancelRevisionRequest')}
               </button>
@@ -161,6 +176,7 @@ export function SelectionRevision(props: Props) {
             )}
             {proposal !== null && (
               <button
+                ref={applyButton}
                 type="button"
                 className="primary"
                 disabled={busy || stale}

@@ -682,3 +682,53 @@ test('RSEL15 the nearby-context choice is sent and kept for the next passage', a
   await expect(popover.getByTestId('reader-revision-proposal')).toBeVisible();
   expect(bodies[1]).toMatchObject({ context: 'nearby', draft: original });
 });
+
+test('RSEL16 focus stays inside the refine popover while a proposal is requested, arrives and saves', async ({
+  page,
+  request,
+}) => {
+  const { chatId, source } = await seed(request);
+  let answer!: () => void;
+  const answered = new Promise<void>((resolve) => {
+    answer = resolve;
+  });
+  await page.route(endpoint, async (route) => {
+    await answered;
+    await route.fulfill({ json: { text: proposal } });
+  });
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**/api/sources/${source.id}/text`, async (route) => {
+    await released;
+    await route.fulfill({ status: 409, json: { error: 'Source revision conflict' } });
+  });
+  const scene = await open(page, chatId, source.id);
+  await select(scene, unique);
+  await selectionBar(page).getByRole('button', { name: '다듬기', exact: true }).click();
+  const popover = page.getByRole('dialog', { name: '선택한 글 다듬기', exact: true });
+  await popover.getByLabel('다듬을 방향', { exact: true }).fill('호흡을 행동으로 보여줘.');
+  const focusedInside = () =>
+    popover.evaluate((node) => {
+      const active = document.activeElement;
+      return active && node.contains(active) && !(active as HTMLButtonElement).disabled
+        ? (active.getAttribute('aria-label') ?? active.textContent ?? active.tagName)
+        : null;
+    });
+  await popover.getByRole('button', { name: '제안 받기', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(popover.getByRole('button', { name: '퇴고 요청 취소', exact: true })).toBeVisible();
+  await expect.poll(focusedInside).not.toBeNull();
+  answer();
+  await expect(popover.getByTestId('reader-revision-proposal')).toBeVisible();
+  await expect(popover.getByRole('button', { name: '적용', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(popover.getByRole('button', { name: '저장 중', exact: false })).toBeVisible();
+  await expect.poll(focusedInside).not.toBeNull();
+  release();
+  await expect(
+    popover.getByText('그사이 저장본이 바뀌어서 저장하지 않았어요', { exact: false })
+  ).toBeVisible();
+  await expect.poll(focusedInside).not.toBeNull();
+});

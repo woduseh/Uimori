@@ -346,3 +346,32 @@ test('SREV Escape closes only the revision panel, cancels its request and keeps 
     released.release();
   }
 });
+
+test('SREV focus moves to the proposal action when a requested proposal arrives', async ({
+  page,
+  request,
+}) => {
+  const before = await seed(request);
+  const source = before.sources[0];
+  let answer!: () => void;
+  const answered = new Promise<void>((resolve) => {
+    answer = resolve;
+  });
+  await page.route(endpoint, async (route) => {
+    await answered;
+    await route.fulfill({ json: { text: proposal } });
+  });
+  await page.goto(`/?chat=${before.chat.id}`);
+  const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
+  await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
+  await choose(scene.getByRole('textbox', { name: '원문 수정 내용', exact: true }));
+  await scene.getByRole('button', { name: '선택 구절 퇴고', exact: true }).click();
+  await scene.getByLabel('퇴고 요청', { exact: true }).fill('감정을 행동으로 보여줘.');
+  await scene.getByRole('button', { name: '퇴고 제안 받기', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  const stop = scene.getByRole('button', { name: '퇴고 요청 취소', exact: true });
+  await expect(stop).toBeFocused();
+  answer();
+  await expect(scene.getByTestId('selection-revision-proposal')).toHaveText(proposal);
+  await expect(scene.getByRole('button', { name: '초안에 반영', exact: true })).toBeFocused();
+});

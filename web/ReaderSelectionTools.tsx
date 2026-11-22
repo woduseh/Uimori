@@ -16,6 +16,7 @@ import { SelectionCheckbox } from './BooleanControls.js';
 import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
 import { t, translateMessage, useI18n, message as uiMessage } from './i18n.js';
 import { IconButton } from './IconButton.js';
+import { useFocusFallback } from './useFocusFallback.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { ProseHunk } from './ProseDiff.js';
@@ -414,10 +415,21 @@ function RevisionPopover({
   const [conflicted, setConflicted] = useState(false);
   const [saveError, setSaveError] = useState('');
   const field = useRef<HTMLTextAreaElement>(null);
+  const cancelButton = useRef<HTMLButtonElement>(null);
+  const applyButton = useRef<HTMLButtonElement>(null);
+  const diffRegion = useRef<HTMLDivElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
   const placed = !!position;
   useLayoutEffect(() => {
     if (placed) field.current?.focus({ preventScroll: true });
   }, [placed]);
+  const rememberFocus = useFocusFallback(
+    () =>
+      busy
+        ? [cancelButton.current]
+        : [applyButton.current, diffRegion.current, field.current, closeButton.current],
+    `${busy}:${proposal !== null}:${saving}:${conflicted}`
+  );
   const selectedText = captured.draft.slice(captured.start, captured.end);
   const diff = useMemo(
     () =>
@@ -466,6 +478,7 @@ function RevisionPopover({
       data-keyboard-overlay
       data-placed={position ? 'true' : 'false'}
       style={position ?? undefined}
+      onFocus={rememberFocus}
     >
       <label>
         {t('readerSelection.instruction')}
@@ -493,6 +506,7 @@ function RevisionPopover({
       </label>
       {proposal !== null && diff && (
         <div
+          ref={diffRegion}
           className="reader-revision-diff"
           role="region"
           aria-label={t('readerSelection.diff')}
@@ -519,11 +533,17 @@ function RevisionPopover({
         <LoadingState presentation="inline" label={t('reader.refiningTheSelectedPassage')} />
       )}
       <div className="reader-revision-actions">
-        <button type="button" className="secondary" disabled={saving} onClick={onClose}>
+        <button
+          ref={closeButton}
+          type="button"
+          className="secondary"
+          disabled={saving}
+          onClick={onClose}
+        >
           {t('readerSelection.close')}
         </button>
         {busy ? (
-          <button type="button" className="secondary" onClick={revision.cancel}>
+          <button ref={cancelButton} type="button" className="secondary" onClick={revision.cancel}>
             <StopIcon size={16} aria-hidden="true" />
             {t('reader.cancelRevisionRequest')}
           </button>
@@ -537,6 +557,7 @@ function RevisionPopover({
               onClick={() => void revision.requestProposal(instruction)}
             />
             <button
+              ref={applyButton}
               type="button"
               className="primary"
               disabled={saving || stale || conflicted}
