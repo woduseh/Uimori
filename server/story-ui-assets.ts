@@ -1,6 +1,9 @@
 import { nativeRisuAssetNameResolver } from '../core/risu-native.js';
 import type { RunSnapshot } from '../core/types.js';
 import { nativeRisuPackages } from './risu-native-context.js';
+import { readStoredRunSnapshot } from './run-projections.js';
+import type { Store } from './store.js';
+import { compileStoryUiBlocks } from './story-ui.js';
 
 function indexAssetUrls(snapshot: RunSnapshot) {
   const urls = new Map<string, string | null>();
@@ -28,4 +31,12 @@ export function storyUiAssetResolver(getSnapshot: () => RunSnapshot) {
     urls ??= indexAssetUrls(getSnapshot());
     return urls.get(name.trim().toLowerCase()) ?? undefined;
   };
+}
+
+export function compileEditedSourceText(store: Store, sourceId: string, text: string): string {
+  const source = store.source(sourceId);
+  return compileStoryUiBlocks(text, {
+    previousText: source.text,
+    resolveImage: storyUiAssetResolver(() => readStoredRunSnapshot(store, source.runId)),
+  }).text;
 }

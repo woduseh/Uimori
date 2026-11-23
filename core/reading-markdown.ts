@@ -324,7 +324,7 @@ export function compileReadingMarkdown(
   text: string,
   blocks: readonly ReadingBlock[] = [],
   imageUrls: readonly string[] = [],
-  storySlots: readonly { id: string; start: number }[] = []
+  storySlots: readonly { id: string; start: number; end?: number; kind?: string }[] = []
 ) {
   const environment = {
     images: new Set(
@@ -349,8 +349,34 @@ export function compileReadingMarkdown(
   const stack: Token[] = [];
   const chunks: string[] = [];
   let chunkStart = 0;
+  const placedSlots = new Set<string>();
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index];
+    const rawSlot =
+      !stack.length && token.map && token.type !== 'fence'
+        ? storySlots.find(
+            (slot) =>
+              slot.kind === 'invalid' &&
+              slot.end !== undefined &&
+              offsets[token.map![0]] >= slot.start &&
+              offsets[token.map![0]] < slot.end
+          )
+        : undefined;
+    if (rawSlot) {
+      chunks.push(
+        plain.renderer.render(tokens.slice(chunkStart, index), plain.options, environment)
+      );
+      let depth = 0;
+      do depth += tokens[index].nesting;
+      while (depth > 0 && ++index < tokens.length);
+      chunkStart = index + 1;
+      if (!placedSlots.has(rawSlot.id))
+        chunks.push(
+          `<div data-story-ui-slot="${escapeHtml(rawSlot.id)}" data-prose-start="${rawSlot.start}" data-prose-end="${rawSlot.end}"></div>`
+        );
+      placedSlots.add(rawSlot.id);
+      continue;
+    }
     if (token.type === 'fence' && token.map)
       token.meta = {
         storySlot: storySlots.find((slot) => slot.start === offsets[token.map![0]])?.id,

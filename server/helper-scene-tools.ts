@@ -8,6 +8,7 @@ import { HttpError, choice, fields, number, record, text } from './request-valid
 import type { Store } from './store.js';
 import { matchHelperText, type HelperTextNormalization } from './helper-resource-editing.js';
 import { withHelperChange } from './helper-changes.js';
+import { compileEditedSourceText } from './story-ui-assets.js';
 import type { HelperTask } from '../core/helper.js';
 
 const schema = (properties: Record<string, Json>, required: string[] = []): Json => ({
@@ -794,7 +795,7 @@ export function invokeHelperSceneTool(
     if (changed && current.target === 'original') {
       const saved = tracked('original', () =>
         store.editSource(source.id, {
-          text: content,
+          text: compileEditedSourceText(store, source.id, content),
           expectedRevision: editTarget.expectedRevision,
         })
       );

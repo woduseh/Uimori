@@ -163,6 +163,24 @@ export const messages = {
     ja: '物語画面を表示できません。',
     zh: '无法显示此故事界面。',
   },
+  'storyUi.failureReason': {
+    ko: '변환 오류',
+    en: 'Conversion error',
+    ja: '変換エラー',
+    zh: '转换错误',
+  },
+  'storyUi.checkingFailure': {
+    ko: '원인을 확인하는 중이에요…',
+    en: 'Checking the cause…',
+    ja: '原因を確認しています…',
+    zh: '正在确认原因…',
+  },
+  'storyUi.composing': {
+    ko: '이야기 화면을 구성하는 중이에요…',
+    en: 'Composing the story screen…',
+    ja: '物語画面を構成しています…',
+    zh: '正在构建故事界面…',
+  },
   'storyUi.errorStaleSource': {
     ko: '이야기 화면이 있는 장면이 바뀌었어요. 최신 장면을 확인해 주세요.',
     en: 'The scene containing this story screen changed. Check the latest scene.',

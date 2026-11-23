@@ -18,26 +18,31 @@ export {
 } from './story-ui-scan.js';
 
 export function validateStoryUiMessages(value: unknown): value is StoryUiMessage[] {
-  if (!Array.isArray(value) || value.length !== 1 || !record(value[0])) return false;
+  return storyUiMessagesProblem(value) === null;
+}
+
+export function storyUiMessagesProblem(value: unknown): string | null {
+  if (!Array.isArray(value) || value.length !== 1 || !record(value[0]))
+    return 'A block must define exactly one surface.';
   const message = value[0];
   if (
     Object.keys(message).some((key) => key !== 'version' && key !== 'createSurface') ||
     message.version !== '1.0' ||
     !record(message.createSurface)
   )
-    return false;
+    return 'A block may only create its surface.';
   const surface = message.createSurface;
   if (
     Object.keys(surface).some(
       (key) => !['surfaceId', 'catalogId', 'components', 'dataModel'].includes(key)
     ) ||
     surface.catalogId !== STORY_UI_CATALOG_ID ||
-    surface.surfaceId !== 'main' ||
-    !Array.isArray(surface.components) ||
-    !surface.components.length ||
-    surface.components.length > 200
+    surface.surfaceId !== 'main'
   )
-    return false;
+    return 'A block must use the default surface and the story catalog.';
+  if (!Array.isArray(surface.components) || !surface.components.length)
+    return 'A block needs at least one component.';
+  if (surface.components.length > 200) return 'A block may have at most 200 components.';
   const components = new Map<string, Record<string, unknown>>();
   for (const component of surface.components) {
     if (
@@ -45,17 +50,22 @@ export function validateStoryUiMessages(value: unknown): value is StoryUiMessage
       typeof component.id !== 'string' ||
       !component.id ||
       component.id.length > 200 ||
-      typeof component.component !== 'string' ||
-      components.has(component.id)
+      typeof component.component !== 'string'
     )
-      return false;
+      return 'Every component needs a name and a type.';
+    if (components.has(component.id)) return `Component '${component.id}' is defined twice.`;
     const api = storyUiCatalog.components.get(component.component);
-    if (!api) return false;
+    if (!api) return `Component '${component.id}' uses unknown type '${component.component}'.`;
     const { id: _id, component: _component, ...properties } = component;
-    if (!api.schema.safeParse(properties).success) return false;
+    const parsed = api.schema.safeParse(properties);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      const path = issue?.path.join('.');
+      return `${component.component} '${component.id}'${path ? ` property '${path}'` : ''}: ${issue?.message ?? 'invalid value'}`;
+    }
     components.set(component.id, component);
   }
-  if (!components.has('root')) return false;
+  if (!components.has('root')) return "A block needs a component named 'root'.";
   function safe(value: unknown, depth: number): boolean {
     if (depth > 30) return false;
     if (Array.isArray(value))
@@ -71,14 +81,21 @@ export function validateStoryUiMessages(value: unknown): value is StoryUiMessage
     !safe(surface.components, 0) ||
     (surface.dataModel !== undefined && (!record(surface.dataModel) || !safe(surface.dataModel, 0)))
   )
-    return false;
+    return 'A block exceeds the size limits for nesting, lists or text.';
   const visited = new Set<string>();
   const active = new Set<string>();
+  let broken = '';
   function walk(id: string): boolean {
-    if (active.has(id)) return false;
+    if (active.has(id)) {
+      broken = `Component '${id}' contains itself.`;
+      return false;
+    }
     if (visited.has(id)) return true;
     const component = components.get(id);
-    if (!component) return false;
+    if (!component) {
+      broken = `Component '${id}' is used but not defined.`;
+      return false;
+    }
     active.add(id);
     const refs: unknown[] = [];
     if (typeof component.child === 'string') refs.push(component.child);
@@ -87,15 +104,24 @@ export function validateStoryUiMessages(value: unknown): value is StoryUiMessage
     if (Array.isArray(component.children)) refs.push(...component.children);
     else if (record(component.children) && typeof component.children.componentId === 'string')
       refs.push(component.children.componentId);
-    else if (component.children !== undefined) return false;
+    else if (component.children !== undefined) {
+      broken = `Component '${id}' has invalid children.`;
+      return false;
+    }
     if (Array.isArray(component.tabs))
       for (const tab of component.tabs) if (record(tab)) refs.push(tab.child);
-    const valid = refs.every((ref) => typeof ref === 'string' && walk(ref));
+    const valid = refs.every((ref) => {
+      if (typeof ref === 'string') return walk(ref);
+      broken = `Component '${id}' refers to a child without a name.`;
+      return false;
+    });
     active.delete(id);
     visited.add(id);
     return valid;
   }
-  return walk('root') && visited.size === components.size;
+  if (!walk('root')) return broken;
+  const unused = [...components.keys()].find((id) => !visited.has(id));
+  return unused ? `Component '${unused}' is defined but not placed under root.` : null;
 }
 
 export function parseStoryUi(text: string): StoryUiSegment[] {

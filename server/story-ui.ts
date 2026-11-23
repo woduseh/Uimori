@@ -12,8 +12,9 @@ import {
   parseStoryUi,
   storyUiImageName,
   type StoryUiMessage,
-  validateStoryUiMessages,
+  storyUiMessagesProblem,
 } from '../core/story-ui.js';
+import { scanStoryUi } from '../core/story-ui-scan.js';
 
 const catalog = new CatalogConfig(storyUiCatalog);
 const generator = new A2uiGenerator(
@@ -102,7 +103,7 @@ Each block is an immutable snapshot. A Button needs an Event with a distinct act
 
 Set $/_uimori/style to one of ${storyUiStyles.join(', ')} or an exact theme: ID from storyUi.themeChoices. Prefer a consistent world style; the user's explicit selection and then the bot theme outrank yours.
 
-For custom block CSS use $/_uimori/css = r"""& { --story-paper: #141722; --story-ink: white; color-scheme: dark; } .look-seal { border-radius: 50%; }""". The CSS applies only to this block when the reader follows your style. Use & for its root, .story-ui-<lowercase component name> for descendants, .story-ui-frame-head, .story-ui-frame-body or .story-ui-bubble for their interiors. Any component's look="seal" adds .look-seal; use up to four space-separated lowercase style names. Theme tokens start with --story-: paper, surface, ink, muted, border, accent, accent-ink, accent-text, radius, font, display. Gradients, pseudo-elements, @media, @container and animation are available. Set paper and ink together; keep controls usable with either reader palette and with motion disabled. @import, @font-face and !important are ignored.
+For custom block CSS use $/_uimori/css = r"""& { --story-paper: #141722; --story-ink: white; color-scheme: dark; } .look-seal { border-radius: 50%; }""". The CSS applies only to this block when the reader follows your style. Use & for its root, .story-ui-<lowercase component name> for descendants, .story-ui-frame-head, .story-ui-frame-body or .story-ui-bubble for their interiors. Any component's look="seal" adds .look-seal; use up to four space-separated lowercase style names. CSS custom properties start with --story-: paper, surface, ink, muted, border, accent, accent-ink, accent-text, radius, font, display. They exist only inside CSS and are not values for tone or any other component property. Gradients, pseudo-elements, @media, @container and animation are available. Set paper and ink together; keep controls usable with either reader palette and with motion disabled. @import, @font-face and !important are ignored.
 
 In any image field or bound image value, use a known card asset such as "{{img::Mira_smile}}" or an existing /api/assets/, /api/package-image-blobs/ or /api/illustration-images/ path. Omit an unknown image. CSS url() accepts stored paths only. Audio and video are unavailable.`;
 
@@ -240,25 +241,48 @@ function pinnedImageUrls(messages: StoryUiMessage[], resolveImage: ResolveImage)
 }
 
 export function normalizeStoryUiOutput(text: string, resolveImage?: ResolveImage): string {
-  return parseStoryUi(text)
+  return compileStoryUiBlocks(text, { resolveImage }).text;
+}
+
+const storedFence = (value: unknown): value is StoryUiMessage[] => Array.isArray(value);
+
+export function compileStoryUiBlocks(
+  text: string,
+  options: { resolveImage?: ResolveImage; previousText?: string } = {}
+): { text: string; failures: string[] } {
+  const stored = new Map<string, string>();
+  if (options.previousText)
+    for (const segment of scanStoryUi(options.previousText, storedFence))
+      if (segment.kind === 'ui')
+        stored.set(segment.expression, options.previousText.slice(segment.start, segment.end));
+  const failures: string[] = [];
+  const compiled = parseStoryUi(text)
     .map((segment) => {
-      if (
-        segment.kind !== 'invalid' ||
-        !segment.text.startsWith('<a2ui>') ||
-        segment.text.length > 100_000
-      )
+      if (segment.kind !== 'invalid' || !segment.text.startsWith('<a2ui>'))
         return text.slice(segment.start, segment.end);
+      const before = segment.start > 0 && !/[\r\n]/.test(text[segment.start - 1]) ? '\n' : '';
+      const after = segment.end < text.length && !/[\r\n]/.test(text[segment.end]) ? '\n' : '';
+      const fence = stored.get(segment.text);
+      if (fence) return `${before}${fence}${after}`;
+      if (segment.text.length > 100_000) {
+        failures.push('The block is longer than 100,000 characters.');
+        return segment.text;
+      }
       try {
         const parts = processor().parseResponse(segment.text);
         const messages = parts.flatMap((part) => (part.type === 'a2ui' ? part.a2ui : []));
-        if (!validateStoryUiMessages(messages)) return segment.text;
-        const before = segment.start > 0 && !/[\r\n]/.test(text[segment.start - 1]) ? '\n' : '';
-        const after = segment.end < text.length && !/[\r\n]/.test(text[segment.end]) ? '\n' : '';
-        const imageUrls = resolveImage && pinnedImageUrls(messages, resolveImage);
+        const problem = storyUiMessagesProblem(messages);
+        if (problem) {
+          failures.push(problem);
+          return segment.text;
+        }
+        const imageUrls = options.resolveImage && pinnedImageUrls(messages, options.resolveImage);
         return `${before}${encodeStoryUi(segment.text, messages, imageUrls)}${after}`;
-      } catch {
+      } catch (error) {
+        failures.push(error instanceof Error ? error.message : String(error));
         return segment.text;
       }
     })
     .join('');
+  return { text: compiled, failures };
 }

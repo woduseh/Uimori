@@ -10,8 +10,8 @@ import { illustrationPresetRoutes } from './illustration-presets.js';
 import { normalizeChatSettings } from '../core/chat-settings.js';
 import { projectStoryUiText } from '../core/story-ui.js';
 import { storyUiRoutes } from './story-ui-routes.js';
-import { normalizeStoryUiOutput } from './story-ui.js';
-import { storyUiAssetResolver } from './story-ui-assets.js';
+import { compileStoryUiBlocks } from './story-ui.js';
+import { compileEditedSourceText, storyUiAssetResolver } from './story-ui-assets.js';
 import { autoTranslationDefaultRoutes } from './auto-translation-defaults.js';
 import { chatGenerationDefaultRoutes } from './chat-generation-defaults.js';
 import { REQUEST_TEXT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -1241,12 +1241,11 @@ export async function createApp(options: AppOptions): Promise<App> {
     fields(body, ['text', 'runId']);
     const block = text(body.text, 'UI preview', 1_000_000, true);
     const runId = body.runId === undefined ? undefined : text(body.runId, 'run ID', 200);
-    return {
-      text: normalizeStoryUiOutput(
-        block,
-        runId ? storyUiAssetResolver(() => readStoredRunSnapshot(store, runId)) : undefined
-      ),
-    };
+    return compileStoryUiBlocks(block, {
+      resolveImage: runId
+        ? storyUiAssetResolver(() => readStoredRunSnapshot(store, runId))
+        : undefined,
+    });
   });
   app.patch<{ Params: { id: string } }>('/api/chats/:id/settings', async (request) => {
     const body: RecordBody = record(request.body);
@@ -1473,7 +1472,11 @@ export async function createApp(options: AppOptions): Promise<App> {
       const body: RecordBody = record(request.body);
       fields(body, ['text', 'expectedRevision']);
       const source = store.editSource(request.params.id, {
-        text: text(body.text, 'source text', 2_000_000),
+        text: compileEditedSourceText(
+          store,
+          request.params.id,
+          text(body.text, 'source text', 2_000_000)
+        ),
         expectedRevision: number(
           body.expectedRevision,
           'source edit revision',

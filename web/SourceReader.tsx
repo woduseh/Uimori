@@ -39,7 +39,8 @@ import { api, ApiError, definiteRejection, labels } from './api.js';
 import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
 import { ProviderRejectionNotice } from './provider-rejection.js';
 import { Prose } from './Prose.js';
-import type { StoryUiSegment } from '../core/story-ui-scan.js';
+import { storyUiEditableText, type StoryUiSegment } from '../core/story-ui-scan.js';
+import { InvalidStoryUi } from './InvalidStoryUi.js';
 import { hasStoryUi, useStoryUiParser } from './story-ui-parser.js';
 import { StoryUi } from './LazyStoryUi.js';
 import { StreamingResponse } from './StreamingResponse.js';
@@ -743,13 +744,7 @@ function SourceReaderContent({
     index: number
   ) => {
     if (!part || part.kind === 'pending') return null;
-    if (part.kind !== 'ui')
-      return (
-        <details>
-          <summary>{t('storyUi.invalid')}</summary>
-          <pre>{part.text}</pre>
-        </details>
-      );
+    if (part.kind !== 'ui') return <InvalidStoryUi text={part.text} />;
     const canonical = canonicalStorySegments[index];
     const original = originalStorySegments[index];
     const displayed = canonical?.kind === 'ui' ? canonical : part;
@@ -1949,7 +1944,8 @@ function TextEditor({
   useI18n();
   const key = draftKey(source.id, role);
   const displayed = displayTranslationJob(source, translation);
-  const savedText = role === 'original' ? source.text : (displayed?.result?.text ?? '');
+  const savedText =
+    role === 'original' ? storyUiEditableText(source.text) : (displayed?.result?.text ?? '');
   const revision =
     role === 'original' ? (source.editRevision ?? 0) : translationEditRevision(source, translation);
   const [draft, setDraft] = useState(() =>

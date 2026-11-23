@@ -5,6 +5,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import { buildMainInput } from '../core/provider.js';
 import { parseStoryUi, projectStoryUiText } from '../core/story-ui.js';
+import { storyUiEditableText } from '../core/story-ui-scan.js';
 import type { Run } from '../core/types.js';
 import { createApp, type App } from '../server/app.js';
 import { forkChat } from '../server/chat-fork.js';
@@ -106,4 +107,68 @@ test('real run commit freezes UI and preserves it through copy, export/import an
   expect(input.history.at(-1)?.text).not.toContain('createSurface');
   expect(run.snapshot.history.at(-1)?.text).toBe(source.text);
   app.controls.release('run');
+});
+
+test('direct edits show blocks as written, keep untouched fences and compile repaired blocks', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-story-ui-life-'));
+  const app = await createApp({
+    dbPath: join(directory, 'app.sqlite'),
+    buildId: 'story-ui-edit',
+    testMode: true,
+    codex: { enabled: false },
+  });
+  owned.push({ directory, app });
+  const { store } = app;
+  const created = createFixtureChat(store, 'An editable interface');
+  const chat = store.settings(created.id, created.settingsRevision, {
+    ...created.settings,
+    storyUi: true,
+  });
+  const kept = '<a2ui>root = Column([Text("Kept board")])</a2ui>';
+  const admitted = await app.inject({
+    method: 'POST',
+    url: `/api/chats/${chat.id}/runs`,
+    payload: {
+      request: `Opening line.\n\n${kept}`,
+      expectedRevision: null,
+      expectedSettingsRevision: chat.settingsRevision,
+      idempotencyKey: randomUUID(),
+    },
+  });
+  expect(admitted.statusCode, admitted.body).toBe(200);
+  const runId = admitted.json<Run>().id;
+  await vi.waitFor(() => expect(store.run(runId).status).toBe('completed'), { timeout: 15000 });
+  const committed = store.source(store.chat(chat.id).headRevision!);
+  const stored = parseStoryUi(committed.text).find((part) => part.kind === 'ui');
+  if (stored?.kind !== 'ui') throw new Error('Missing committed UI');
+  const fence = committed.text.slice(stored.start, stored.end);
+  const editable = storyUiEditableText(committed.text);
+  expect(editable).toContain(kept);
+  expect(editable).not.toContain('uimori-ui');
+
+  const broken = '<a2ui>root = Text("Muted", tone="muted")</a2ui>';
+  const save = (text: string, expectedRevision: number) =>
+    app.inject({
+      method: 'PUT',
+      url: `/api/sources/${committed.id}/text`,
+      payload: { text, expectedRevision },
+    });
+  const first = await save(`Edited line.\n\n${editable}\n\n${broken}`, 0);
+  expect(first.statusCode, first.body).toBe(200);
+  const afterBroken = store.source(committed.id).text;
+  expect(afterBroken).toContain(fence);
+  expect(afterBroken.endsWith(broken)).toBe(true);
+
+  const preview = await app.inject({
+    method: 'POST',
+    url: '/api/story-ui/preview',
+    payload: { text: broken },
+  });
+  expect(preview.json<{ failures: string[] }>().failures[0]).toMatch(/muted/);
+
+  const repaired = await save(storyUiEditableText(afterBroken).replace(', tone="muted"', ''), 1);
+  expect(repaired.statusCode, repaired.body).toBe(200);
+  const blocks = parseStoryUi(store.source(committed.id).text).filter((part) => part.kind === 'ui');
+  expect(blocks).toHaveLength(2);
+  expect(store.source(committed.id).text).toContain(fence);
 });

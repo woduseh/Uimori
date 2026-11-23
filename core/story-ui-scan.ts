@@ -54,6 +54,13 @@ export function untaggedStoryUiSegments(text: string): StoryUiSegment[] | null {
   return text ? [{ kind: 'prose', id: 'story-ui-0', start: 0, end: text.length, text }] : [];
 }
 
+export function storyUiEditableText(text: string): string {
+  if (!storyUiOpening.test(text)) return text;
+  return scanStoryUi(text, (value): value is StoryUiMessage[] => Array.isArray(value))
+    .map((segment) => (segment.kind === 'ui' ? segment.expression : segment.text))
+    .join('');
+}
+
 export function encodeStoryUi(
   expression: string,
   messages: StoryUiMessage[],

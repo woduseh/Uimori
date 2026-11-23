@@ -21,16 +21,21 @@ type StoryStyle = import('../core/story-ui-style.js').StoryUiStyleSetting;
 type StreamingStoryProps = { text: string; style?: StoryStyle; runId?: string };
 
 function StreamingStoryBlock({ text, style, runId }: StreamingStoryProps) {
-  const [preview, setPreview] = useState('');
+  const [preview, setPreview] = useState<string>();
   useEffect(() => {
+    setPreview(undefined);
     if (!text.startsWith('<a2ui>') || !text.endsWith('</a2ui>')) return;
     const controller = new AbortController();
     void api<{ text: string }>('/story-ui/preview', { text, runId }, 'POST', controller.signal)
       .then((result) => setPreview(result.text))
-      .catch(() => {});
+      .catch(() => {
+        if (!controller.signal.aborted) setPreview('');
+      });
     return () => controller.abort();
   }, [text, runId]);
-  const part = useStoryUiSegments(preview)?.find((entry) => entry.kind === 'ui');
+  const part = useStoryUiSegments(preview ?? '')?.find((entry) => entry.kind === 'ui');
+  if (preview === undefined)
+    return <LoadingState presentation="placeholder" label={t('storyUi.composing')} />;
   return part?.kind === 'ui' ? <StoryUi segment={part} style={style} /> : null;
 }
 
@@ -88,7 +93,7 @@ export function StreamingStoryText({
           )
         ) : part.kind === 'ui' ? (
           <StoryUi key={part.id} segment={part} style={style} />
-        ) : part.kind === 'invalid' && part.text.startsWith('<a2ui>') ? (
+        ) : part.text.startsWith('<a2ui>') ? (
           <StreamingStoryBlock key={part.id} text={part.text} style={style} runId={runId} />
         ) : null
       )}

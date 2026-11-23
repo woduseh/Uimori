@@ -35,6 +35,7 @@ import { fields, HttpError, record } from './request-validation.js';
 import type { Store } from './store.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { shellRunnerRpc as rpc } from './shell-transport.js';
+import { compileEditedSourceText } from './story-ui-assets.js';
 import { SHELL_TIMEOUT_MAX_MS } from '../core/main-shell.js';
 
 type SceneMetadata = {
@@ -863,7 +864,10 @@ export class HelperShell {
             task.task,
             { domain: 'scene', chatId: target.chatId, sourceId: target.id, field: 'original' },
             () =>
-              this.store.editSource(target.id, { text: content, expectedRevision: target.revision })
+              this.store.editSource(target.id, {
+                text: compileEditedSourceText(this.store, target.id, content),
+                expectedRevision: target.revision,
+              })
           );
           savedResult = {
             changed: true,

@@ -224,6 +224,71 @@ test('completed streamed UI remains visible as subsequent prose arrives', async 
   expect(requests).toBe(1);
 });
 
+test('shows a placeholder while a block is written and the cause of a failed block', async ({
+  page,
+}) => {
+  const { compileStoryUiBlocks } = await import('../server/story-ui.js');
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/story-ui/preview', async (route) => {
+    const { text } = route.request().postDataJSON() as { text: string };
+    if (text.includes('상태 표시')) await held;
+    await route.fulfill({ json: compileStoryUiBlocks(text) });
+  });
+  await page.goto(origin);
+  await page.evaluate(
+    async (value) => {
+      const path = '/tests/fixtures/story-ui.tsx';
+      (window as any).showStream = await (await import(path)).mountStreaming(
+        document.getElementById('mount'),
+        value
+      );
+    },
+    `문이 열린다.
+
+<a2ui>
+root = Text("상태`
+  );
+  const composing = page.getByRole('status').filter({ hasText: '이야기 화면을 구성하는 중이에요' });
+  await expect(composing).toBeVisible();
+  await expect(page.locator('body')).not.toContainText('<a2ui>');
+  await page.evaluate(
+    (value) => (window as any).showStream(value),
+    `문이 열린다.
+
+<a2ui>
+root = Text("상태 표시")
+</a2ui>`
+  );
+  await expect(composing).toBeVisible();
+  release();
+  await expect(page.getByText('상태 표시', { exact: true })).toBeVisible();
+  await expect(composing).toHaveCount(0);
+
+  const broken = `<a2ui>
+root = Text("흐린 글씨", tone="muted")
+</a2ui>`;
+  await page.goto(origin);
+  await page.evaluate(async (text) => {
+    const path = '/tests/fixtures/story-ui.tsx';
+    await (await import(path)).mountReader(document.getElementById('mount'), {
+      id: 'broken-source',
+      chatId: 'chat',
+      parentRevision: null,
+      runId: 'run',
+      text: `문이 열린다.
+
+${text}`,
+      hash: 'hash',
+    });
+  }, broken);
+  await page.getByText('이야기 화면을 표시할 수 없어요.').click();
+  await expect(page.locator('.story-ui-failure')).toContainText('변환 오류');
+  await expect(page.locator('.story-ui-failure')).toContainText('muted');
+});
+
 test('switches original and translated UI when both start at the same offset', async ({ page }) => {
   const { normalizeStoryUiOutput } = await import('../server/story-ui.js');
   const { parseStoryUi, encodeStoryUi } = await import('../core/story-ui.js');

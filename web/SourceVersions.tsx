@@ -3,6 +3,7 @@ import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import type { SourceVersions as Versions } from '../core/source-versions.js';
 import { api } from './api.js';
+import { storyUiEditableText } from '../core/story-ui-scan.js';
 
 export function SourceVersions({
   sourceId,
@@ -40,6 +41,7 @@ export function SourceVersions({
     return () => controller.abort();
   }, [open, sourceId]);
   const version = versions?.versions.find((item) => item.revision === selected);
+  const versionText = version ? storyUiEditableText(version.text) : '';
   const label = (value: number) =>
     value === versions?.currentRevision
       ? t('reader.currentSavedVersion')
@@ -77,7 +79,7 @@ export function SourceVersions({
               <div className="source-versions-comparison">
                 <div>
                   <strong>{label(selected)}</strong>
-                  <pre>{version.text}</pre>
+                  <pre>{versionText}</pre>
                 </div>
                 <div>
                   <strong>{t('reader.draftBeingEdited')}</strong>
@@ -89,11 +91,11 @@ export function SourceVersions({
                   type="button"
                   className="secondary"
                   disabled={
-                    disabled || versions.currentRevision !== revision || draft === version.text
+                    disabled || versions.currentRevision !== revision || draft === versionText
                   }
                   onClick={() => {
                     setPriorDraft(draft);
-                    onApply(version.text);
+                    onApply(versionText);
                   }}
                 >
                   {t('reader.loadSelectedVersionIntoDraft')}
