@@ -161,7 +161,7 @@ export const HELPER_DATA_TOOLS: ProviderTool[] = [
   {
     name: 'db.query',
     description:
-      'Run one read-only SQL SELECT (CTEs, joins, aggregates and JSON functions are available) over the views agent_resources, agent_chats, agent_messages, agent_usage and agent_helper_inputs. Use it for counts, filters, joins and usage statistics; read resource bodies with data.read or resource.read instead of dumping them here. Call it without sql to get the view columns and example queries, and do that before querying an unfamiliar view or after an unknown-column error. The data is live and spans all chats, so filter by chat id when the question is about one chat. Long text cells come back as 2000-character previews, and truncated reports omitted rows. A query stops after 3 seconds; narrow it if that happens.',
+      'Run one read-only SQL SELECT (CTEs, joins, aggregates and JSON functions are available) over the views agent_resources, agent_chats, agent_messages, agent_usage and agent_helper_inputs. Use it for counts, filters, joins and usage statistics; read resource bodies with data.read or resource.read instead of dumping them here. Call it without sql to get the view columns and example queries before querying an unfamiliar view; a query of sqlite_master or a PRAGMA returns the same schema, and an unknown-column error lists the columns of every view. The data is live and spans all chats, so filter by chat id when the question is about one chat. Long text cells come back as 2000-character previews, and truncated reports omitted rows. A query stops after 3 seconds; narrow it if that happens.',
     inputSchema: {
       type: 'object',
       properties: {

@@ -519,16 +519,29 @@ test('invalid SQL column gives schema-discovery recovery without relaxing other 
       );
     if (round === 1) {
       expect(toolResult(wire, 'unknown-column')).toMatchObject({
-        error: 'no such column: position',
+        error: expect.stringMatching(
+          /^no such column: position\. Columns: .*agent_messages\([^)]*scene_number/u
+        ),
         code: 'DATA_SQL_UNKNOWN_COLUMN',
         recoverable: true,
         retryMode: 'correct_arguments',
         outcome: 'unchanged',
       });
-      expect(toolResult(wire, 'unknown-column').nextAction).toContain('without sql');
-      for (const id of ['syntax-error', 'forbidden'])
-        expect(toolResult(wire, id)).toMatchObject({ recoverable: false, retryMode: 'never' });
-      return answer('', [{ id: 'schema', name: 'db.query', args: {} }], wire);
+      expect(toolResult(wire, 'unknown-column').nextAction).toContain('listed in the error');
+      expect(toolResult(wire, 'syntax-error')).toMatchObject({
+        code: 'DATA_SQL_INVALID',
+        recoverable: true,
+        retryMode: 'correct_arguments',
+      });
+      expect(toolResult(wire, 'forbidden')).toMatchObject({
+        recoverable: false,
+        retryMode: 'never',
+      });
+      return answer(
+        '',
+        [{ id: 'schema', name: 'db.query', args: { sql: 'SELECT name FROM sqlite_master' } }],
+        wire
+      );
     }
     if (round === 2) {
       const columns = toolResult(wire, 'schema').views.find(

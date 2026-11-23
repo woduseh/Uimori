@@ -163,18 +163,29 @@ const VIEW_NAMES = [
   'agent_usage',
   'agent_helper_inputs',
 ];
+function viewColumns(db: DatabaseSync) {
+  return VIEW_NAMES.map((name) => ({
+    name,
+    columns: db
+      .prepare(`PRAGMA table_info(${name})`)
+      .all()
+      .map((r) => String(r.name)),
+  }));
+}
 function query(db: DatabaseSync, args: Record<string, unknown>) {
   only(args, ['sql', 'params', 'limit']);
-  if (args.sql === undefined)
+  const views = viewColumns(db);
+  const asksForSchema =
+    typeof args.sql === 'string' && /\b(sqlite_(temp_)?(master|schema)|pragma)\b/iu.test(args.sql);
+  if (args.sql === undefined || asksForSchema)
     return {
+      ...(asksForSchema
+        ? {
+            note: 'Schema tables and PRAGMA are not queryable here. These views and columns are everything db.query can read.',
+          }
+        : {}),
       scope: 'live database; all chats. Filter chat_id explicitly. No draft or inferred facts.',
-      views: VIEW_NAMES.map((name) => ({
-        name,
-        columns: db
-          .prepare(`PRAGMA table_info(${name})`)
-          .all()
-          .map((r) => r.name),
-      })),
+      views,
       examples: [
         "SELECT id,title,revision FROM agent_resources WHERE kind='bot' ORDER BY title LIMIT 20",
         "SELECT id,json_extract(document,'$.card.description') description FROM agent_resources WHERE kind='persona' AND id=?",
@@ -238,7 +249,16 @@ function query(db: DatabaseSync, args: Record<string, unknown>) {
     return constants.SQLITE_DENY;
   });
   const wrapped = `SELECT * FROM (${sql}\n) LIMIT ${limit + 1}`;
-  const statement = db.prepare(wrapped);
+  let statement: ReturnType<DatabaseSync['prepare']>;
+  try {
+    statement = db.prepare(wrapped);
+  } catch (error) {
+    if (error instanceof Error && /^no such column: [^\r\n]+$/u.test(error.message))
+      throw new Error(
+        `${error.message}. Columns: ${views.map((view) => `${view.name}(${view.columns.join(', ')})`).join('; ')}`
+      );
+    throw error;
+  }
   if (statement.sourceSQL !== wrapped) throw new Error('DATA_SINGLE_QUERY_REQUIRED');
   statement.setReadBigInts(true);
   const rows: unknown[] = [];

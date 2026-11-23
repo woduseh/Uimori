@@ -466,7 +466,8 @@ const TOOLS: ProviderTool[] = [
               },
               fixed: {
                 type: 'boolean',
-                description: 'Mark the item as one the author wants kept during elaboration.',
+                description:
+                  'create, update: mark the item as one the author wants kept during elaboration.',
               },
               relatedIds: {
                 type: 'array',
@@ -961,6 +962,10 @@ export function describeHelperTools(
   scope?: 'chat' | 'library'
 ) {
   const allowed = availableAppTools(review);
+  if (typeof args.name === 'string' && args.names === undefined) {
+    const { name, ...rest } = args;
+    args = { ...rest, names: [name] };
+  }
   if (Object.keys(args).some((key) => !['names', 'query', 'offset', 'limit'].includes(key)))
     throw new HttpError(400, 'INVALID_ARGUMENTS');
   if (args.names !== undefined) {

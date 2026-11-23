@@ -192,9 +192,10 @@ test('live literal search pages matches, preserves counts and provides patch gua
     nextOffset: null,
     matches: [{ patternIndex: 0 }, { patternIndex: 2, start: 0, end: 2 }],
   });
-  expect(() => call('scene.search', { ...args, offset: 2 })).toThrow(
-    /SCENE_SEARCH_GUARDS_REQUIRED/
-  );
+  expect(call('scene.search', { ...args, offset: 2 })).toMatchObject({
+    offset: 2,
+    nextOffset: null,
+  });
   const prior = first.nextSearch;
   call('scene.patch', {
     ...first.editTarget,
@@ -252,14 +253,9 @@ test('bounded reads require stable snapshots and reject sources outside the live
   const first = call('scene.read', { sourceId: source.id, target: 'original', limit: 4 });
   expect(first).toMatchObject({ text: 'abcd', totalLength: 10, nextOffset: 4 });
   expect(call('scene.read', first.nextRead)).toMatchObject({ text: 'efgh', nextOffset: 8 });
-  expect(() => call('scene.read', { sourceId: source.id, target: 'original', offset: 4 })).toThrow(
-    /SCENE_PAGE_GUARDS_REQUIRED/
-  );
-  for (const omitted of ['expectedRevision', 'expectedSourceHash', 'expectedTextHash']) {
-    const args = { ...first.editTarget, offset: 4 };
-    delete args[omitted as keyof typeof args];
-    expect(() => call('scene.read', args)).toThrow(/SCENE_PAGE_GUARDS_REQUIRED/);
-  }
+  expect(
+    call('scene.read', { sourceId: source.id, target: 'original', offset: 4, limit: 4 })
+  ).toMatchObject({ text: 'efgh', nextOffset: 8 });
   expect(call('scene.read', { ...first.editTarget, offset: 8, limit: 2 })).toMatchObject({
     text: 'ij',
     nextOffset: null,
@@ -307,9 +303,7 @@ test('retained original versions expose metadata and bounded text, restore as a 
   expect(first.textHash).not.toBe(first.editTarget.expectedTextHash);
   const historicalPage = { sourceId: source.id, versionRevision: 0, offset: 7 };
   const { target: _target, ...versionGuards } = first.editTarget;
-  expect(() => call('scene.versions', historicalPage)).toThrow(
-    /SCENE_PAGE_GUARDS_REQUIRED.*same text page.*textHash/
-  );
+  expect(call('scene.versions', historicalPage)).toMatchObject({ text: ' original' });
   expect(() => call('scene.versions', { ...historicalPage, ...versionGuards })).toThrow(
     /text changed/
   );

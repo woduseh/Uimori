@@ -249,6 +249,23 @@ describe('hierarchical composition', () => {
     expect(store.chat(chat.id).headRevision).toBe(before);
   });
 
+  test('creates an item already marked as kept', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, '고정 구성');
+    const { detail } = store.outline.apply(
+      chat.id,
+      {
+        idempotencyKey: randomUUID(),
+        operations: [
+          { op: 'create', level: 'theme', title: '고정한 주제', intent: '', fixed: true },
+          { op: 'create', level: 'theme', title: '보통 주제', intent: '' },
+        ],
+      },
+      'user'
+    );
+    expect(detail.nodes.map((node) => node.fixed)).toEqual([true, false]);
+  });
+
   test('allows skipped levels and standalone units but rejects inversions, cross-chat parents, and writing above episodes', async () => {
     const store = await database(),
       chat = createFixtureChat(store, '유연한 구성');

@@ -843,9 +843,14 @@ test('SQL rejects writes, multiple statements, application credential tables and
     'SELECT value FROM private_test_secret',
     'WITH agent_resources AS (SELECT value FROM private_test_secret) SELECT * FROM agent_resources',
     "SELECT load_extension('x')",
-    'PRAGMA user_version',
   ]) {
     await expect(f.invoke('db.query', { sql })).rejects.toThrow();
+  }
+  for (const sql of ['PRAGMA user_version', 'SELECT name, sql FROM sqlite_master']) {
+    const described = await f.invoke('db.query', { sql });
+    expect(described).not.toHaveProperty('rows');
+    expect(described.views.map((view: { name: string }) => view.name)).toContain('agent_usage');
+    expect(JSON.stringify(described)).not.toContain('private_test_secret');
   }
   expect(f.store.db.prepare('SELECT value FROM private_test_secret').get()).toEqual({
     value: 'must-not-return',

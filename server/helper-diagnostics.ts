@@ -80,7 +80,9 @@ export function helperResultDiagnostic(name: string, output: unknown) {
       : value.error;
   const code = typeof value.code === 'string' ? value.code : error;
   const errorCode =
-    typeof code === 'string' && /^[A-Z][A-Z0-9_]{1,95}$/u.test(code) ? code : undefined;
+    name !== 'task.inspect' && typeof code === 'string' && /^[A-Z][A-Z0-9_]{1,95}$/u.test(code)
+      ? code
+      : undefined;
   if (name !== 'data.exec') return { ...(errorCode ? { errorCode } : {}) };
   const shell = {
     ...(value.exitCode === null || Number.isSafeInteger(value.exitCode)

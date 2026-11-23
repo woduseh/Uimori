@@ -128,13 +128,13 @@ export const HELPER_SCENE_TOOLS: ProviderTool[] = [
   {
     name: 'scene.read',
     description:
-      'Read the saved text of one scene in a chat as it can be edited: the original, or the completed translation the reader currently shows. This is the live stored text, not rendered HTML and not the frozen history that story.read returns. Find the sourceId with chat.read, scene.search or data.search. The result includes editTarget with the guards (expectedRevision, expectedSourceHash, expectedTextHash) that scene.patch needs. Long scenes come in pages within about 9000 tokens: copy nextRead unchanged for the next page, and read every relevant page before replacing a whole scene. A scene that changed between pages must be read again from the start. While a new translation is being generated, displayedTranslation identifies the earlier completed translation that is still shown. Asking for a translation that does not exist is an error.',
+      'Read the saved text of one scene in a chat as it can be edited: the original, or the completed translation the reader currently shows. This is the live stored text, not rendered HTML and not the frozen history that story.read returns. Find the sourceId with chat.read, scene.search or data.search. The result includes editTarget with the guards (expectedRevision, expectedSourceHash, expectedTextHash) that scene.patch needs. Long scenes come in pages within about 9000 tokens: copy nextRead for the next page, or pass any offset directly, and read every relevant page before replacing a whole scene. The guards are optional on a read: when they are passed, a scene that changed between pages is reported so it can be read again from the start; without them compare textHash across pages. While a new translation is being generated, displayedTranslation identifies the earlier completed translation that is still shown. Asking for a translation that does not exist is an error.',
     inputSchema: schema({ sourceId, target, ...paging }, ['sourceId', 'target']),
   },
   {
     name: 'scene.search',
     description:
-      'Find exact text in the saved scenes of a chat and get what scene.patch needs to change it. Use it to locate a typo, a name or a repeated phrase before an edit; for text in the library or in other chats use data.search. Give sourceId to search one scene, or omit it to search every enabled scene the chat owns, in story order. Patterns are case-sensitive literals unless regex is set. Each match returns the matched text, its UTF-16 position, surrounding context and an editTarget with the save guards. Copy nextSearch unchanged for more matches; if a scene or the story changed in between, the search has to start again. Regex matches do not overlap, and a match longer than 1000 characters comes back truncated with its offsets, so read it with scene.read before patching it.',
+      'Find exact text in the saved scenes of a chat and get what scene.patch needs to change it. Use it to locate a typo, a name or a repeated phrase before an edit; for text in the library or in other chats use data.search. Give sourceId to search one scene, or omit it to search every enabled scene the chat owns, in story order. Patterns are case-sensitive literals unless regex is set. Each match returns the matched text, its UTF-16 position, surrounding context and an editTarget with the save guards. Copy nextSearch for more matches. A whole-chat search needs the searchHash that nextSearch carries, and has to start again if a scene or the story changed in between; a search of one scene accepts any offset directly. Regex matches do not overlap, and a match longer than 1000 characters comes back truncated with its offsets, so read it with scene.read before patching it.',
     inputSchema: schema(
       {
         sourceId: {
@@ -210,7 +210,7 @@ export const HELPER_SCENE_TOOLS: ProviderTool[] = [
   {
     name: 'scene.versions',
     description:
-      'List the earlier versions kept for the original text of one scene, and read one of them. Only the first original and up to two most recent edits are kept, so this is not a full history, and translations have no version history. Without versionRevision it returns the version list; with versionRevision it returns that version in text pages, where copying nextRead unchanged continues the read. The editTarget in the result guards the current original and is what scene.restore needs. To jump to a nonzero offset by hand, take expectedRevision and expectedSourceHash from editTarget but expectedTextHash from the textHash of the version page being read.',
+      'List the earlier versions kept for the original text of one scene, and read one of them. Only the first original and up to two most recent edits are kept, so this is not a full history, and translations have no version history. Without versionRevision it returns the version list; with versionRevision it returns that version in text pages, where copying nextRead continues the read and any offset can be passed directly. The editTarget in the result guards the current original and is what scene.restore needs. Guards are optional on a read; to pass them with an offset, take expectedRevision and expectedSourceHash from editTarget but expectedTextHash from the textHash of the version page being read.',
     inputSchema: schema(
       {
         sourceId,
@@ -299,7 +299,7 @@ function snapshot(
 function checkGuards(
   args: Record<string, unknown>,
   expected: { expectedRevision: number; expectedSourceHash: string },
-  required: boolean
+  required = false
 ) {
   if (!required && args.expectedRevision === undefined && args.expectedSourceHash === undefined)
     return;
@@ -331,19 +331,9 @@ function page(
     args.limit === undefined
       ? textTokenExcerpt(content.slice(offset), 3_000).text.length || 1
       : number(args.limit, 'text limit', 1, 10000);
-  if (
-    offset > 0 &&
-    (args.expectedRevision === undefined ||
-      args.expectedSourceHash === undefined ||
-      args.expectedTextHash === undefined)
-  )
-    throw new HttpError(
-      400,
-      'SCENE_PAGE_GUARDS_REQUIRED: Nonzero offset requires expectedRevision, expectedSourceHash and expectedTextHash from the same text page (use editTarget.expectedRevision, editTarget.expectedSourceHash and page.textHash). Copy nextRead or restart at offset=0.'
-    );
-  checkGuards(args, editTarget, offset > 0);
+  checkGuards(args, editTarget);
   const textHash = digest(content);
-  if ((offset > 0 || args.expectedTextHash !== undefined) && args.expectedTextHash !== textHash)
+  if (args.expectedTextHash !== undefined && args.expectedTextHash !== textHash)
     throw new HttpError(409, 'Scene text changed; restart paging');
   if (offset > content.length) throw new HttpError(400, 'Text offset exceeds scene length');
   if (splitsPair(content, offset))
@@ -388,17 +378,7 @@ function sceneSearch(current: ReturnType<typeof snapshot>, args: Record<string, 
   const context = args.context === undefined ? 80 : number(args.context, 'search context', 0, 120);
   const offset = args.offset === undefined ? 0 : number(args.offset, 'match offset', 0);
   const limit = args.limit === undefined ? 10 : number(args.limit, 'match limit', 1, 20);
-  if (
-    offset > 0 &&
-    (args.expectedRevision === undefined ||
-      args.expectedSourceHash === undefined ||
-      args.expectedTextHash === undefined)
-  )
-    throw new HttpError(
-      400,
-      'SCENE_SEARCH_GUARDS_REQUIRED: Copy nextSearch or search again from offset=0'
-    );
-  checkGuards(args, current.editTarget, offset > 0);
+  checkGuards(args, current.editTarget);
   if (
     args.expectedTextHash !== undefined &&
     args.expectedTextHash !== current.editTarget.expectedTextHash
@@ -732,7 +712,7 @@ export function invokeHelperSceneTool(
       };
     if (name === 'scene.search') return sceneSearch(current, args);
     if (name === 'scene.versions') {
-      checkGuards(args, editTarget, false);
+      checkGuards(args, editTarget);
       const retained = sourceVersions(store, source.id);
       if (args.versionRevision === undefined)
         return {

@@ -491,16 +491,24 @@ function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
   // SQLite uses ERR_SQLITE_ERROR for both user mistakes and authorization failures.
   const unknownSqlColumn =
     readOnly && toolName === 'db.query' && /^no such column: [^\r\n]+$/u.test(message);
+  const invalidSql =
+    readOnly &&
+    toolName === 'db.query' &&
+    /^(no such (table|function): [^\r\n]+|near "[^\r\n]*": syntax error|incomplete input)$/u.test(
+      message
+    );
   const code = unknownSqlColumn
     ? 'DATA_SQL_UNKNOWN_COLUMN'
-    : patch
-      ? `PATCH_${patch.details.reason.toUpperCase()}`
-      : (/^[A-Z][A-Z_]+/u.exec(message)?.[0] ??
-        (status === 409
-          ? 'SOURCE_CONFLICT'
-          : status === 400
-            ? 'INVALID_ARGUMENTS'
-            : 'HELPER_TOOL_FAILED'));
+    : invalidSql
+      ? 'DATA_SQL_INVALID'
+      : patch
+        ? `PATCH_${patch.details.reason.toUpperCase()}`
+        : (/^[A-Z][A-Z_]+/u.exec(message)?.[0] ??
+          (status === 409
+            ? 'SOURCE_CONFLICT'
+            : status === 400
+              ? 'INVALID_ARGUMENTS'
+              : 'HELPER_TOOL_FAILED'));
   const stopped =
     status === 401 ||
     status === 403 ||
@@ -559,7 +567,7 @@ function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
               'Find the shared bot/persona content ID, read its revision and source.appearanceProfilesPath, then use resource.patch with the full {id,name,appearance,referenceImageId?} array. Do not search for a chat.',
           }
         : unknownSqlColumn
-          ? 'Call db.query without sql to inspect available columns, then correct the SQL query. Do not repeat the unchanged query.'
+          ? 'Correct the SQL query using the columns listed in the error. Do not repeat the unchanged query.'
           : retryMode === 'refresh_then_retry'
             ? 'Read the affected source or task state again in the same scope before changing the request.'
             : retryMode === 'correct_arguments'
@@ -1661,7 +1669,8 @@ export class HelperRuntime {
             const envelope = record(call.arguments);
             if (
               Object.keys(envelope).some((key) => !['name', 'arguments'].includes(key)) ||
-              !HELPER_APP_TOOLS.some((tool) => tool.name === envelope.name)
+              (envelope.name !== 'app.tools' &&
+                !HELPER_APP_TOOLS.some((tool) => tool.name === envelope.name))
             )
               throw new HttpError(400, 'UNKNOWN_APP_TOOL');
             call = { ...call, name: envelope.name, arguments: record(envelope.arguments) };
@@ -3387,6 +3396,11 @@ export class HelperRuntime {
         end = boundary(start + Math.max(2, Math.floor((end - start) / 2)));
       return page();
     }
+    if (helperToolTraits(name).writingRead)
+      throw new HttpError(
+        400,
+        'CHAT_SCOPE_REQUIRED: This operation reads one chat and this conversation has none selected. Pass chatId in its arguments.'
+      );
     throw new HttpError(400, 'UNKNOWN_HELPER_TOOL');
   }
 }

@@ -189,6 +189,7 @@ export type OutlineOperation =
       intent: string;
       position?: number;
       relatedIds?: string[];
+      fixed?: boolean;
     }
   | {
       op: 'update';
@@ -248,6 +249,7 @@ export function parseOutlineOperations(value: unknown): OutlineOperation[] {
         'intent',
         'position',
         'relatedIds',
+        'fixed',
       ]);
       if (body.parentRef !== undefined && body.parentId !== undefined)
         throw new HttpError(400, '상위 항목은 parentRef 또는 parentId 하나만 지정해 주세요.');
@@ -272,6 +274,7 @@ export function parseOutlineOperations(value: unknown): OutlineOperation[] {
         ...(body.position === undefined
           ? {}
           : { position: number(body.position, 'outline position', 0, 1e6) }),
+        ...(body.fixed === undefined ? {} : { fixed: boolean(body.fixed, 'outline pin') }),
       };
     }
     if (body.op === 'update') {
@@ -714,7 +717,7 @@ export class OutlineStore {
           const id = randomUUID();
           this.db
             .prepare(
-              'INSERT INTO outline_nodes(id,chat_id,parent_id,level,position,title,intent,fixed,revision,command_id,request_key,created_at,updated_at) VALUES(?,?,?,?,?,?,?,0,1,NULL,?,?,?)'
+              'INSERT INTO outline_nodes(id,chat_id,parent_id,level,position,title,intent,fixed,revision,command_id,request_key,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,1,NULL,?,?,?)'
             )
             .run(
               id,
@@ -724,6 +727,7 @@ export class OutlineStore {
               operation.position ?? this.siblingPosition(chatId, parentId),
               operation.title,
               operation.intent,
+              operation.fixed ? 1 : 0,
               null,
               time,
               time

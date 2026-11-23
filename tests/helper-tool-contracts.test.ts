@@ -284,6 +284,9 @@ test('retired artifact writes are unavailable while historical revisions remain 
     f.store.db.prepare('SELECT status,snapshot FROM helper_artifact_jobs WHERE id=?').get(legacyJob)
   ).toEqual({ status: 'interrupted', snapshot: legacySnapshot });
   expect(() => describeHelperTools({ names: ['artifact.generate'] })).toThrow('UNKNOWN_APP_TOOL');
+  expect(describeHelperTools({ name: 'resource.read' }).tools.map((tool) => tool.name)).toEqual([
+    'resource.read',
+  ]);
   expect(describeHelperTools({ names: ['artifact.read'] }).tools[0].name).toBe('artifact.read');
   const patch = await f.app.inject({
     method: 'PATCH',
