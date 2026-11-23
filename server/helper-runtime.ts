@@ -186,6 +186,8 @@ import { ChatOverridesStore } from './chat-overrides.js';
 import { ChatOptionsStore, invokeHelperOptions } from './chat-options.js';
 import { helperArgumentDiagnostic, helperResultDiagnostic } from './helper-diagnostics.js';
 import { helperActivityTarget, type HelperProviderRetry } from '../core/helper-activity.js';
+import { autoRefusalRetryLimit } from '../core/chat-settings.js';
+import { chatGenerationDefaults } from './chat-generation-defaults.js';
 
 const asJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 const MAX_EXACT_HELPER_READ_TOKENS = 2_000;
@@ -1511,7 +1513,8 @@ export class HelperRuntime {
     });
     let segment = 0,
       helperCalls = 0,
-      providerRetries = 0;
+      providerRetries = 0,
+      refusalRetries = 0;
     let results: ToolEvent[] = [],
       opaqueState: Json | undefined;
     let segmentInput:
@@ -2167,6 +2170,22 @@ export class HelperRuntime {
           continue;
         }
         providerRetries = 0;
+        const refusalRetryLimit =
+          result.status === 'refused' &&
+          target.connection.protocol !== 'codex-app-server-v1' &&
+          this.workspace.taskState(id).usage.modelCalls < task.snapshot.limits.totalCalls
+            ? autoRefusalRetryLimit({}, chatGenerationDefaults(this.store.db))
+            : 0;
+        if (refusalRetries < refusalRetryLimit) {
+          this.workspace.event(task.conversationId, id, 'provider.retry', {
+            attempt: ++refusalRetries,
+            attempts: refusalRetryLimit,
+            delayMs: 0,
+            code: refusedTaskError(result.refusal),
+          } satisfies HelperProviderRetry);
+          continue;
+        }
+        refusalRetries = 0;
         helperCalls++;
         if (
           target.connection.protocol === 'anthropic-messages-v1' &&

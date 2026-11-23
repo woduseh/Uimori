@@ -31,7 +31,7 @@ export function isAutoRefusalRetryCount(value: unknown): value is number {
 }
 
 export function autoRefusalRetryLimit(
-  settings: Settings,
+  settings: Pick<Settings, 'autoRefusalRetryEnabled' | 'autoRefusalMaxRetries'>,
   defaults: Pick<ChatGenerationDefaults, 'autoRefusalRetryEnabled' | 'autoRefusalMaxRetries'>
 ): number {
   return (settings.autoRefusalRetryEnabled ?? defaults.autoRefusalRetryEnabled)

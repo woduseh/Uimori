@@ -78,10 +78,10 @@ export const messages = {
     zh: '被拒绝时自动重新生成',
   },
   'settings.autoRefusalRetryDefaultHint': {
-    ko: '거절 판정이나 프로바이더 안전 차단으로 끝나면 같은 요청을 새 실행으로 다시 보내요. 시도마다 생성 비용이 따로 들어요. 채팅에서 따로 정하지 않았다면 기존 채팅에도 적용돼요.',
-    en: 'When a response is judged a refusal or blocked by the provider’s safety filter, the same request is sent again as a new run. Each attempt is billed separately. Applies to existing chats too unless a chat sets its own value.',
-    ja: '拒否と判定されるかプロバイダーの安全フィルターで止まると、同じリクエストを新しい実行として再送します。試行ごとに生成費用がかかります。チャットで個別に設定していなければ既存のチャットにも適用されます。',
-    zh: '响应被判定为拒绝或被提供商安全过滤拦截时，会以新的执行重新发送同一请求。每次尝试单独计费。聊天未单独设置时，也适用于现有聊天。',
+    ko: '거절 판정이나 프로바이더 안전 차단으로 끝나면 같은 요청을 다시 보내요. 시도마다 비용이 들어요. 채팅에서 따로 정하지 않은 기존 채팅과 도우미의 모델 호출에도 적용돼요.',
+    en: 'When a response is judged a refusal or blocked by the provider’s safety filter, the same request is sent again. Each attempt is billed separately. Applies to existing chats that set no value of their own, and to the helper’s model calls.',
+    ja: '拒否と判定されるかプロバイダーの安全フィルターで止まると、同じリクエストを再送します。試行ごとに費用がかかります。個別に設定していない既存のチャットと、アシスタントのモデル呼び出しにも適用されます。',
+    zh: '响应被判定为拒绝或被提供商安全过滤拦截时，会重新发送同一请求。每次尝试单独计费。也适用于未单独设置的现有聊天和助手的模型调用。',
   },
   'settings.autoRefusalMaxRetries': {
     ko: '자동 재생성 최대 횟수',

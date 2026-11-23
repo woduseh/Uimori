@@ -1758,10 +1758,16 @@ export const messages = {
     zh: '正在等待模型响应（第 {call, number} 次调用）',
   },
   'helpers.activityRetrying': {
-    ko: '{reason, select, limit {프로바이더의 요청 한도에 걸려} other {프로바이더 서버 오류로}} {seconds, number}초 뒤에 다시 시도해요 ({attempt, number}/{attempts, number})',
-    en: '{reason, select, limit {The provider is limiting requests} other {The provider returned a server error}}. Trying again in {seconds, plural, one {# second} other {# seconds}} ({attempt, number}/{attempts, number})',
-    ja: '{reason, select, limit {プロバイダーのリクエスト上限に達したため} other {プロバイダーのサーバーエラーのため}}、{seconds, number}秒後に再試行します（{attempt, number}/{attempts, number}）',
-    zh: '{reason, select, limit {已达到提供方的请求上限} other {提供方服务器出错}}，{seconds, number} 秒后重试（{attempt, number}/{attempts, number}）',
+    ko: '{reason, select, refused {프로바이더가 응답을 거절해서 같은 호출을 다시 보내요} limit {프로바이더의 요청 한도에 걸려 {seconds, number}초 뒤에 다시 시도해요} other {프로바이더 서버 오류로 {seconds, number}초 뒤에 다시 시도해요}} ({attempt, number}/{attempts, number})',
+    en: '{reason, select, refused {The provider refused the response. Sending the same call again} limit {The provider is limiting requests. Trying again in {seconds, plural, one {# second} other {# seconds}}} other {The provider returned a server error. Trying again in {seconds, plural, one {# second} other {# seconds}}}} ({attempt, number}/{attempts, number})',
+    ja: '{reason, select, refused {プロバイダーが応答を拒否したため、同じ呼び出しを再送します} limit {プロバイダーのリクエスト上限に達したため、{seconds, number}秒後に再試行します} other {プロバイダーのサーバーエラーのため、{seconds, number}秒後に再試行します}}（{attempt, number}/{attempts, number}）',
+    zh: '{reason, select, refused {提供商拒绝了响应，正在重新发送同一次调用} limit {已达到提供商的请求上限，{seconds, number} 秒后重试} other {提供商服务器出错，{seconds, number} 秒后重试}}（{attempt, number}/{attempts, number}）',
+  },
+  'helpers.activityRetryRefused': {
+    ko: '거절 뒤 다시 요청',
+    en: 'Resent after a refusal',
+    ja: '拒否後の再送',
+    zh: '拒绝后重新请求',
   },
   'helpers.activityRetryWait': {
     ko: '다시 시도 대기',

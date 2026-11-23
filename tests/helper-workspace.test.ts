@@ -30,6 +30,10 @@ import { chatWithSource } from './fixtures/illustration.js';
 import { readHelperTaskResults } from '../server/helper-task-results.js';
 import { applyHelperResourceMutation } from '../server/helper-resource-mutation.js';
 import { helperResourceOperation } from '../server/helper-resource-tools.js';
+import {
+  chatGenerationDefaults,
+  saveChatGenerationDefaults,
+} from '../server/chat-generation-defaults.js';
 
 const owned: { store: Store; path: string }[] = [];
 afterEach(() => {
@@ -1740,6 +1744,7 @@ test('a refused task is retried from the start, and continued once it has saved 
     refusal: 'SAFETY',
   };
   const early = fixture();
+  setRefusalRetries(early.store, false, 0);
   const answers = [refused];
   mockSend(() => answers.shift() ?? structuredClone(success));
   const first = early.runtime.enqueue(early.conversation.id, 'first', '자료를 알려줘');
@@ -1762,6 +1767,7 @@ test('a refused task is retried from the start, and continued once it has saved 
 
   const late = fixture(),
     { chat, conversation, replies, resume } = stoppedAfterRename(late);
+  setRefusalRetries(late.store, false, 0);
   replies[1] = refused;
   const stopped = late.runtime.enqueue(conversation.id, 'first', '제목을 바꿔줘');
   await Promise.all(late.work);
@@ -2039,6 +2045,143 @@ test.each([
     expect(attemptCount(f)).toBe(attempts);
   }
 );
+
+const refusedCall = (): transport.ProviderResult => ({
+  ...structuredClone(success),
+  status: 'refused',
+  text: '',
+  refusal: 'SAFETY',
+});
+function setRefusalRetries(store: Store, enabled: boolean, max: number) {
+  const { revision, ...defaults } = chatGenerationDefaults(store.db);
+  saveChatGenerationDefaults(store, {
+    ...defaults,
+    expectedRevision: revision,
+    autoRefusalRetryEnabled: enabled,
+    autoRefusalMaxRetries: max,
+  });
+}
+
+test('a refused call is sent again at once with the task’s tool results intact', async () => {
+  const f = fixture();
+  const requests: transport.ProviderRequest[] = [];
+  mockSend((request, _options, index) => {
+    requests.push(structuredClone(request));
+    if (index === 0)
+      return {
+        ...structuredClone(success),
+        status: 'tool_calls',
+        text: '',
+        toolCalls: [{ id: 'catalog', name: 'app.tools', arguments: { query: 'resource' } }],
+      };
+    return index < 3 ? refusedCall() : structuredClone(success);
+  });
+  const task = f.runtime.enqueue(f.conversation.id, 'r', '자료 도구를 알려줘');
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id), f.workspace.task(task.id).error ?? '').toMatchObject({
+    status: 'completed',
+  });
+  expect(
+    f.store.db
+      .prepare(
+        "SELECT data FROM helper_events WHERE task_id=? AND kind='provider.retry' ORDER BY seq"
+      )
+      .all(task.id)
+      .map((row) => JSON.parse(String(row.data)))
+  ).toEqual([
+    { attempt: 1, attempts: 2, delayMs: 0, code: 'HELPER_RESPONSE_REFUSED:SAFETY' },
+    { attempt: 2, attempts: 2, delayMs: 0, code: 'HELPER_RESPONSE_REFUSED:SAFETY' },
+  ]);
+  expect(attemptCount(f)).toBe(4);
+  expect(requests[1].input.results).toHaveLength(1);
+  expect(requests[3].input.results).toEqual(requests[1].input.results);
+});
+
+test.each([
+  { enabled: true, max: 2, attempts: 3 },
+  { enabled: true, max: 5, attempts: 6 },
+  { enabled: true, max: 0, attempts: 1 },
+  { enabled: false, max: 2, attempts: 1 },
+])(
+  'a call that keeps being refused ends the task after $attempts attempts when automatic retry is $enabled with a limit of $max',
+  async ({ enabled, max, attempts }) => {
+    const f = fixture();
+    setRefusalRetries(f.store, enabled, max);
+    mockSend(() => refusedCall());
+    const task = f.runtime.enqueue(f.conversation.id, 'r', '설명해줘');
+    await Promise.all(f.work);
+    expect(f.workspace.task(task.id)).toMatchObject({
+      status: 'failed',
+      error: 'HELPER_RESPONSE_REFUSED:SAFETY',
+    });
+    expect(attemptCount(f)).toBe(attempts);
+  }
+);
+
+test('each refused call gets its own retries within one task', async () => {
+  const f = fixture();
+  setRefusalRetries(f.store, true, 1);
+  const replies = [
+    refusedCall(),
+    {
+      ...structuredClone(success),
+      status: 'tool_calls' as const,
+      text: '',
+      toolCalls: [{ id: 'catalog', name: 'app.tools', arguments: { query: 'resource' } }],
+    },
+    refusedCall(),
+  ];
+  mockSend(() => replies.shift() ?? structuredClone(success));
+  const task = f.runtime.enqueue(f.conversation.id, 'r', '자료 도구를 알려줘');
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id), f.workspace.task(task.id).error ?? '').toMatchObject({
+    status: 'completed',
+  });
+  expect(attemptCount(f)).toBe(4);
+});
+
+test('a refused native Codex turn is not sent again', async () => {
+  const f = fixture();
+  const connection = f.store.product.connection({
+    title: 'Native helper',
+    protocol: 'codex-app-server-v1',
+    endpoint: 'codex://local',
+    enabled: true,
+  });
+  const model = f.store.product.model({
+    title: 'Native helper',
+    connectionId: connection.id,
+    modelId: 'synthetic-helper',
+    temperature: null,
+    maxOutputTokens: 1024,
+  });
+  const selected = modelWorkspace(f.store);
+  updateModelWorkspace(f.store, {
+    expectedRevision: selected.revision,
+    routes: selected.routes,
+    translationPolicy: selected.translationPolicy,
+    helperModel: { id: model.id },
+  });
+  let turns = 0;
+  const runtime = new HelperRuntime(f.store, {
+    owner: 'native-refusal-test',
+    signal: f.controller.signal,
+    track: (work) => f.work.push(work),
+    streams: f.streams,
+    executeCodexAgent: async () => {
+      turns++;
+      return refusedCall();
+    },
+  });
+  const conversation = runtime.workspace.open({ kind: 'library', workId: 'native' });
+  const task = runtime.enqueue(conversation.id, 'native-refused', '설명해줘');
+  await Promise.all(f.work);
+  expect(runtime.workspace.task(task.id)).toMatchObject({
+    status: 'failed',
+    error: 'HELPER_RESPONSE_REFUSED:SAFETY',
+  });
+  expect(turns).toBe(1);
+});
 
 test('a wait before repeating a call ends at once when the user stops the task', async () => {
   const f = fixture();

@@ -315,6 +315,19 @@ test('the running summary names the tool, the model call or the retry wait in pr
   expect(helperActivitySummary(running([call, failed, wait('HTTP_503')]))).toBe(
     '프로바이더 서버 오류로 20초 뒤에 다시 시도해요 (2/3)'
   );
+  const resent = running([
+    call,
+    { seq: 2, kind: 'attempt.finished', attemptId: 'call', status: 'refused' },
+    {
+      seq: 3,
+      kind: 'provider.retry',
+      retry: { attempt: 1, attempts: 2, delayMs: 0, code: 'HELPER_RESPONSE_REFUSED:SAFETY' },
+    },
+  ]);
+  expect(helperActivitySummary(resent)).toBe(
+    '프로바이더가 응답을 거절해서 같은 호출을 다시 보내요 (1/2)'
+  );
+  expect(helperActivityStages(resent).at(-1)?.label).toBe('거절 뒤 다시 요청');
   const resumed = running(
     [
       call,

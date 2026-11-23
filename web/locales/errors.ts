@@ -477,7 +477,7 @@ export const messages = {
     ko: '프로바이더가 응답을 거절했어요. 요청이나 다루는 자료가 프로바이더의 안전 정책에 걸렸을 수 있어요.',
     en: 'The provider refused to respond. The request or the material it handles may have triggered the provider’s safety policy.',
     ja: 'プロバイダーが応答を拒否しました。リクエストや扱う資料がプロバイダーの安全ポリシーに抵触した可能性があります。',
-    zh: '提供方拒绝了回复。请求或所处理的资料可能触发了提供方的安全策略。',
+    zh: '提供商拒绝了回复。请求或所处理的资料可能触发了提供商的安全策略。',
   },
   'errors.HELPER_RESUME_UNAVAILABLE': {
     ko: '이 작업은 이어서 할 수 없어요. 남은 작업을 새로 요청해 주세요.',

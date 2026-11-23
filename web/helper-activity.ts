@@ -64,9 +64,12 @@ const finishedAttemptState = (status?: string): Stage['state'] =>
       ? 'stopped'
       : 'issue';
 
+const refusalRetry = (retry: HelperProviderRetry) =>
+  retry.code.startsWith('HELPER_RESPONSE_REFUSED');
+
 export function helperRetrySentence(retry: HelperProviderRetry) {
   return t('helpers.activityRetrying', {
-    reason: retry.code === 'HTTP_429' ? 'limit' : 'server',
+    reason: refusalRetry(retry) ? 'refused' : retry.code === 'HTTP_429' ? 'limit' : 'server',
     seconds: Math.round(retry.delayMs / 1000),
     attempt: retry.attempt,
     attempts: retry.attempts,
@@ -112,7 +115,9 @@ export function helperActivityStages(activity: HelperActivity): Stage[] {
             : event.kind === 'progress'
               ? 'helpers.m202'
               : event.retry
-                ? 'helpers.activityRetryWait'
+                ? refusalRetry(event.retry)
+                  ? 'helpers.activityRetryRefused'
+                  : 'helpers.activityRetryWait'
                 : 'helpers.m203';
     const state: Stage['state'] =
       event.kind === 'attempt.started' || event.kind === 'tool.started' || event.retry
