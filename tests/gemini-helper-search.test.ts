@@ -99,23 +99,22 @@ test.each(protocols)(
   }
 );
 
-test('Gemini 4 helper search is an explicitly read-only, public-query operation', () => {
+test('Gemini 4 web search leaves query content and length to the helper', () => {
   expect(helperToolTraits('web.search')).toMatchObject({
     readOnly: true,
     direct: true,
-    reviewAllowed: false,
+    reviewAllowed: true,
     effect: 'read',
   });
-  expect(GEMINI_HELPER_SEARCH_TOOL.inputSchema).toMatchObject({
+  expect(GEMINI_HELPER_SEARCH_TOOL.description).toBe('Search the web when needed.');
+  expect(GEMINI_HELPER_SEARCH_TOOL.inputSchema).toEqual({
     type: 'object',
+    properties: { query: { type: 'string', description: 'Search query.' } },
     required: ['query'],
     additionalProperties: false,
   });
-  expect(GEMINI_HELPER_SEARCH_TOOL.description).toContain('creative writing');
-  expect(GEMINI_HELPER_SEARCH_TOOL.description).toContain('user explicitly asks');
-  expect(GEMINI_HELPER_SEARCH_TOOL.description).toContain('Never include credentials');
-  expect(GEMINI_HELPER_SEARCH_TOOL.inputSchema).toMatchObject({
-    properties: { query: { maxLength: 2000 } },
-  });
-  expect(GEMINI_HELPER_SEARCH_TOOL.description).toContain('billed model request');
+  const query = '비공개 캐릭터 배경 설정과 원고에서 필요한 역사적 풍속 자료 '.repeat(100);
+  expect(
+    geminiHelperSearchRequest({ modelId: 'gemini-4-neon' } as ModelSnapshot, query).input.task
+  ).toBe(query);
 });

@@ -182,11 +182,7 @@ import {
 } from '../core/helper.js';
 import { helperModelReferences, validateHelperReferences } from './helper-references.js';
 import { boundedWebSearch, helperWebSearchCapability } from '../core/helper-web-search.js';
-import {
-  GEMINI_HELPER_SEARCH_QUERY_LIMIT,
-  GEMINI_HELPER_SEARCH_TOOL,
-  geminiHelperSearchRequest,
-} from './helper-web-search-tool.js';
+import { GEMINI_HELPER_SEARCH_TOOL, geminiHelperSearchRequest } from './helper-web-search-tool.js';
 import { ChatOverridesStore } from './chat-overrides.js';
 import { ChatOptionsStore, invokeHelperOptions } from './chat-options.js';
 import { helperArgumentDiagnostic, helperResultDiagnostic } from './helper-diagnostics.js';
@@ -2326,9 +2322,7 @@ export class HelperRuntime {
               ? [HELPER_SHELL_TOOL]
               : []),
             ...helperGatewayTools(task.snapshot.outline?.target.purpose === 'review'),
-            ...(webSearch.mode === 'separate' && task.snapshot.outline?.target.purpose !== 'review'
-              ? [GEMINI_HELPER_SEARCH_TOOL]
-              : []),
+            ...(webSearch.mode === 'separate' ? [GEMINI_HELPER_SEARCH_TOOL] : []),
           ],
         },
         input: {
@@ -2894,11 +2888,7 @@ export class HelperRuntime {
       if (helperWebSearchCapability(target.connection.protocol, target.modelId).mode !== 'separate')
         throw new HttpError(400, 'HELPER_WEB_SEARCH_UNAVAILABLE');
       fields(args, ['query']);
-      const query = text(
-        args.query,
-        'public web search query',
-        GEMINI_HELPER_SEARCH_QUERY_LIMIT
-      ).trim();
+      const query = text(args.query, 'web search query', Infinity).trim();
       if (!query) throw new HttpError(400, 'WEB_SEARCH_QUERY_REQUIRED');
       if (this.workspace.taskState(task.id).usage.modelCalls >= task.snapshot.limits.totalCalls)
         throw new HttpError(429, 'MODEL_CALL_BUDGET_EXHAUSTED');

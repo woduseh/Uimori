@@ -626,7 +626,12 @@ export function helperToolTraits(name: string, args: Record<string, unknown> = {
       : readOnly
         ? 'read'
         : 'write') as 'read' | 'write' | 'mixed',
-    reviewAllowed: data || name === 'app.tools' || name === 'outline.read' || writingRead,
+    reviewAllowed:
+      data ||
+      name === 'app.tools' ||
+      name === 'outline.read' ||
+      name === 'web.search' ||
+      writingRead,
     direct:
       name === 'helper.ask' ||
       name === 'web.search' ||
