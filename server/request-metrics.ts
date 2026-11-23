@@ -4,7 +4,7 @@ import { measureSql, type SqlUsage } from './sql-metrics.js';
 type RequestTiming = SqlUsage & {
   startedAt: number;
   authenticatedAt?: number;
-  sent?: { statements: number; sqlMs: number };
+  sent?: { statements: number; sqlMs: number; bytes?: number };
 };
 type RequestSample = {
   method: string;
@@ -27,6 +27,12 @@ function percentiles(values: number[]) {
   const at = (fraction: number) =>
     rounded(sorted[Math.min(sorted.length - 1, Math.ceil(fraction * sorted.length) - 1)]!);
   return { p50: at(0.5), p95: at(0.95), max: rounded(sorted.at(-1)!) };
+}
+
+function bufferedBodyBytes(payload: unknown) {
+  if (payload === null || payload === undefined) return 0;
+  if (typeof payload === 'string') return Buffer.byteLength(payload);
+  return Buffer.isBuffer(payload) ? payload.length : undefined;
 }
 
 function serverTiming(timing: RequestTiming, finishedAt: number) {
@@ -56,7 +62,11 @@ export function requestMetricsRoutes(app: FastifyInstance) {
   app.addHook('onSend', (request, reply, payload, done) => {
     const timing = timings.get(request);
     if (timing) {
-      timing.sent = { statements: timing.statements, sqlMs: timing.elapsedMs };
+      timing.sent = {
+        statements: timing.statements,
+        sqlMs: timing.elapsedMs,
+        bytes: bufferedBodyBytes(payload),
+      };
       reply.header('Server-Timing', serverTiming(timing, performance.now()));
     }
     done(null, payload);
@@ -64,7 +74,9 @@ export function requestMetricsRoutes(app: FastifyInstance) {
   app.addHook('onResponse', (request, reply, done) => {
     const timing = timings.get(request);
     if (timing?.sent) {
-      const length = Number(reply.getHeader('content-length'));
+      const length =
+        timing.sent.bytes ??
+        (reply.getHeader('content-encoding') ? NaN : Number(reply.getHeader('content-length')));
       samples[nextSample] = {
         method: request.method,
         route: request.routeOptions.url!,

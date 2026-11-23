@@ -1,5 +1,9 @@
 import { enqueueTerminalNotification } from './push-events.js';
 import { initializeActivityFeed } from './activity-feed.js';
+import {
+  latestPromptWorkspaceUpdate,
+  PROMPT_WORKSPACE_UPDATED,
+} from './prompt-workspace-events.js';
 
 import { normalizeChatSettings } from '../core/chat-settings.js';
 import { autoTranslationDefaults } from './auto-translation-defaults.js';
@@ -91,7 +95,14 @@ export type Job = BaseJob & {
   createdAt: string;
   updatedAt: string;
 };
+export type ChatEvent = { seq: number; chatId: string; kind: string; entityId: string; at: string };
 type Row = Record<string, any>;
+const CHAT_SELECT = `SELECT c.*,
+  COALESCE((SELECT MAX(seq) FROM events WHERE chat_id=c.id AND kind IN ('chat.title.manual','chat.title.generated')),0) AS title_revision,
+  MAX(c.created_at, COALESCE((SELECT MAX(r.created_at) FROM runs r WHERE r.chat_id=c.id), c.created_at)) AS last_activity_at,
+  o.bot_id AS organization_bot_id, o.folder_id AS organization_folder_id,
+  o.revision AS organization_revision, o.sort_position AS organization_sort_position
+  FROM chats c LEFT JOIN chat_organization o ON o.chat_id=c.id`;
 const json = (value: unknown) => JSON.stringify(value);
 const parse = (value: any) => (value === null ? null : JSON.parse(String(value)));
 const now = () => new Date().toISOString();
@@ -129,7 +140,7 @@ export class Store {
     try {
       databaseSchemaVersion(this.db);
       this.db.exec(
-        'PRAGMA journal_mode=WAL; PRAGMA journal_size_limit=67108864; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000;'
+        'PRAGMA journal_mode=WAL; PRAGMA journal_size_limit=67108864; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000; PRAGMA cache_size=-65536; PRAGMA temp_store=MEMORY;'
       );
       this.credentials = new CredentialStore(this.db);
       this.product = new ProductStore(this);
@@ -177,8 +188,12 @@ export class Store {
     }
   }
   close() {
-    this.db.close();
-    this.ownership.close();
+    try {
+      this.db.exec('PRAGMA analysis_limit=400; PRAGMA optimize;');
+    } finally {
+      this.db.close();
+      this.ownership.close();
+    }
   }
   transaction<T>(fn: () => SynchronousResult<T>): SynchronousResult<T> {
     if (this.db.isTransaction) {
@@ -215,21 +230,43 @@ export class Store {
     else this.transaction(write);
   }
   latestEventSequence(chatId: string): number {
-    return Number(
-      this.db.prepare('SELECT COALESCE(MAX(seq),0) AS seq FROM events WHERE chat_id=?').get(chatId)!
-        .seq
+    return Math.max(
+      Number(
+        this.db
+          .prepare('SELECT COALESCE(MAX(seq),0) AS seq FROM events WHERE chat_id=?')
+          .get(chatId)!.seq
+      ),
+      latestPromptWorkspaceUpdate(this.db)?.seq ?? 0
     );
   }
-  events(chatId: string, after: number) {
-    return this.db
+  events(chatId: string, after: number): ChatEvent[] {
+    const events = this.db
       .prepare(
         'SELECT seq,chat_id AS chatId,kind,entity_id AS entityId,at FROM events WHERE chat_id=? AND seq>? ORDER BY seq'
       )
-      .all(chatId, after);
+      .all(chatId, after) as ChatEvent[];
+    const workspace = latestPromptWorkspaceUpdate(this.db);
+    if (!workspace || workspace.seq <= after) return events;
+    const update = {
+      seq: workspace.seq,
+      chatId,
+      kind: PROMPT_WORKSPACE_UPDATED,
+      entityId: chatId,
+      at: workspace.at,
+    };
+    const position = events.findIndex((event) => event.seq > update.seq);
+    return position < 0
+      ? [...events, update]
+      : [...events.slice(0, position), update, ...events.slice(position)];
   }
   private mapChat(row: Row): Chat {
-    const organization = this.organization.metadata(row.id);
-    if (!organization) throw new HttpError(409, 'Chat organization missing');
+    if (row.organization_revision === null) throw new HttpError(409, 'Chat organization missing');
+    const organization = {
+      botId: row.organization_bot_id,
+      folderId: row.organization_folder_id,
+      organizationRevision: row.organization_revision,
+      sortPosition: row.organization_sort_position,
+    };
     return {
       id: row.id,
       title: row.title,
@@ -243,22 +280,14 @@ export class Store {
     };
   }
   chat(id: string): Chat {
-    const row = this.db
-      .prepare(
-        "SELECT c.*, COALESCE((SELECT MAX(seq) FROM events WHERE chat_id=c.id AND kind IN ('chat.title.manual','chat.title.generated')),0) AS title_revision, MAX(c.created_at, COALESCE((SELECT MAX(r.created_at) FROM runs r WHERE r.chat_id=c.id), c.created_at)) AS last_activity_at FROM chats c WHERE id=?"
-      )
-      .get(id) as Row | undefined;
+    const row = this.db.prepare(`${CHAT_SELECT} WHERE c.id=?`).get(id) as Row | undefined;
     if (!row) throw new HttpError(404, 'Chat not found');
     return this.mapChat(row);
   }
   chats(): Chat[] {
-    return (
-      this.db
-        .prepare(
-          "SELECT c.*, COALESCE((SELECT MAX(seq) FROM events WHERE chat_id=c.id AND kind IN ('chat.title.manual','chat.title.generated')),0) AS title_revision, MAX(c.created_at, COALESCE((SELECT MAX(r.created_at) FROM runs r WHERE r.chat_id=c.id), c.created_at)) AS last_activity_at FROM chats c ORDER BY c.created_at,c.id"
-        )
-        .all() as Row[]
-    ).map((row) => this.mapChat(row));
+    return (this.db.prepare(`${CHAT_SELECT} ORDER BY c.created_at,c.id`).all() as Row[]).map(
+      (row) => this.mapChat(row)
+    );
   }
   createChat(
     title: string,

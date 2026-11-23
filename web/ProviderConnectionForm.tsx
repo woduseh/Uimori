@@ -1,7 +1,7 @@
 import { t, useI18n, translateMessage } from './i18n.js';
 import type { ReactNode, RefObject, Dispatch, SetStateAction } from 'react';
 import { NoticeBanner } from './NoticeBanner.js';
-import type { Connection, ProviderProtocol } from '../core/product.js';
+import type { LibraryConnection, ProviderProtocol } from '../core/product.js';
 import { PROVIDER_DEFINITIONS, providerDefinition } from '../core/provider-definitions.js';
 import { ToggleRow } from './ToggleRow.js';
 import { SaveButton } from './SaveButton.js';
@@ -28,7 +28,7 @@ type Props = {
   hidden: boolean;
   testMode: boolean;
   draft: ProviderEditorState['connection'];
-  connections: Connection[];
+  connections: LibraryConnection[];
   conflict: boolean;
   busy: boolean;
   saving: boolean;

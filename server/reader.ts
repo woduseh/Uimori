@@ -4,7 +4,8 @@ import { validateTranslationArtifact } from './translation-artifacts.js';
 import type { Store } from './store.js';
 import { mergedReaderAssets } from './package-images.js';
 import { illustrationsForSources } from './illustrations.js';
-import type { ReaderActivity, ReaderRun } from '../core/types.js';
+import type { ReaderActivity, ReaderRun, TranslationLayout } from '../core/types.js';
+import type { ReaderBlockRange, SourceBlock } from '../core/auxiliary.js';
 import { changedReaderSources, readerJobIds, readerPresentationRevisions } from './reader-data.js';
 import { providerRejection } from '../core/provider-rejection.js';
 import { isReaderPendingRun, readerRequestOrder } from '../core/reader-conversation.js';
@@ -243,6 +244,13 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
   return runs;
 }
 
+function blockRanges(blocks: SourceBlock[]): ReaderBlockRange[] {
+  return blocks.map(({ anchor, index, start, end }) => ({ anchor, index, start, end }));
+}
+function layoutRanges(layout: TranslationLayout) {
+  return { ...layout, blocks: blockRanges(layout.blocks) };
+}
+
 export function readerDetail(store: Store, id: string, query: Record<string, string | undefined>) {
   fields(record(query), ['source', 'since', 'known', 'navigationCursor']);
   const chat = store.chat(id);
@@ -270,18 +278,11 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
   if (start < 0) throw new HttpError(404, 'Source is not in this chat');
   start = Math.floor(start / limit) * limit;
   const order = chain.slice(start, start + limit);
-  const cursor = Number(
-    (
-      store.db
-        .prepare('SELECT COALESCE(MAX(seq),0) AS seq FROM events WHERE chat_id=?')
-        .get(id) as { seq: number }
-    ).seq
-  );
+  const cursor = store.latestEventSequence(id);
   const since = query.since === undefined ? null : Number(query.since);
   if (since !== null && (!Number.isSafeInteger(since) || since < 0 || since > cursor))
     throw new HttpError(400, 'Invalid reader cursor');
-  const events =
-    since === null ? null : (store.events(id, since) as { kind: string; entityId: string }[]);
+  const events = since === null ? null : store.events(id, since);
   const navigationUnchanged =
     events !== null &&
     query.navigationCursor === String(since) &&
@@ -436,8 +437,23 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
   return {
     chat,
     runs,
-    sources,
-    jobs,
+    sources: sources.map((source) =>
+      source.blocks ? { ...source, blocks: blockRanges(source.blocks) } : source
+    ),
+    jobs: jobs.map(({ translationLayout, previousResult, ...job }) => ({
+      ...job,
+      ...(translationLayout ? { translationLayout: layoutRanges(translationLayout) } : {}),
+      ...(previousResult
+        ? {
+            previousResult: {
+              ...previousResult,
+              ...(previousResult.translationLayout
+                ? { translationLayout: layoutRanges(previousResult.translationLayout) }
+                : {}),
+            },
+          }
+        : {}),
+    })),
     illustrations: illustrationsForSources(
       store,
       sources.map((source) => source.id)

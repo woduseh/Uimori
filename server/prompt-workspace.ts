@@ -50,6 +50,7 @@ import { fields, HttpError, number, record, text } from './request-validation.js
 import { assertModelSelection } from './provider-selection.js';
 import type { Store } from './store.js';
 import { promptCombinationRoutes } from './prompt-combinations.js';
+import { recordPromptWorkspaceUpdate } from './prompt-workspace-events.js';
 
 const roles = ['main', 'translation'] as const;
 const roleValue = (value: unknown): PromptRole => {
@@ -548,7 +549,7 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
     }
 
     savePromptWorkspace(store, next);
-    for (const chat of store.chats()) store.event(chat.id, 'prompt-workspace.updated', chat.id);
+    recordPromptWorkspaceUpdate(store.db);
     return modelWorkspace(store);
   });
 }
@@ -647,7 +648,7 @@ export function updatePromptWorkspace(
         store.product.get('model', agent.model.id);
       }
     savePromptWorkspace(store, result);
-    for (const chat of store.chats()) store.event(chat.id, 'prompt-workspace.updated', chat.id);
+    recordPromptWorkspaceUpdate(store.db);
     return result;
   };
   return inTransaction ? apply() : store.transaction(apply);

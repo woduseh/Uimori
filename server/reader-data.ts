@@ -1,4 +1,5 @@
 import type { Store } from './store.js';
+import { latestPromptWorkspaceUpdate } from './prompt-workspace-events.js';
 
 type ReaderEvent = { kind: string; entityId: string };
 
@@ -53,8 +54,11 @@ export function readerPresentationRevisions(
       UNION ALL SELECT COALESCE(MAX(seq),0) FROM events WHERE chat_id=? AND kind GLOB 'asset.*'
       UNION ALL SELECT COALESCE(MAX(seq),0) FROM events WHERE chat_id=? AND kind IN ('profile.updated','prompt-workspace.updated')
       UNION ALL SELECT COALESCE(MAX(seq),0) FROM events WHERE chat_id=? AND kind='chat.variables.changed'
+      UNION ALL SELECT ?
     )`)
-    .get(chatId, chatId, chatId, chatId) as { revision: number };
+    .get(chatId, chatId, chatId, chatId, latestPromptWorkspaceUpdate(store.db)?.seq ?? 0) as {
+    revision: number;
+  };
   const images = store.db
     .prepare(`SELECT j.source_revision AS sourceId,MAX(e.seq) AS revision
     FROM events e JOIN jobs j ON j.id=e.entity_id

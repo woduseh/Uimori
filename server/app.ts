@@ -73,6 +73,8 @@ import { recordToolDiagnostic, startToolDiagnostic } from './execution-diagnosti
 import { auxiliaryBridge } from './auxiliary-bridge.js';
 import { productRoutes } from './product-routes.js';
 import { requestMetricsRoutes } from './request-metrics.js';
+import { registerResponseCompression } from './response-compression.js';
+import { revalidatePrivateJson } from './private-etag.js';
 import { connectionTestRoutes, createConnectionTestRunner } from './provider-connection-test.js';
 import { storyRoutes } from './story-routes.js';
 import { sceneDeletionRoutes } from './scene-deletion.js';
@@ -168,6 +170,8 @@ function requestFailureLabel(error: unknown): string {
 export async function createApp(options: AppOptions): Promise<App> {
   const network = networkPolicy(options);
   const app = Fastify({ logger: false, bodyLimit: 4 * 1024 * 1024 }) as unknown as App;
+  await registerResponseCompression(app);
+  revalidatePrivateJson(app);
   const requestMetrics = requestMetricsRoutes(app);
   const store = new Store(options.dbPath);
   const requireModel = (target: unknown, role: string) => {
@@ -1245,6 +1249,8 @@ export async function createApp(options: AppOptions): Promise<App> {
       'autoTranslate',
       'storyUi',
       'storyUiStyle',
+      'autoRefusalRetryEnabled',
+      'autoRefusalMaxRetries',
     ]);
     const chat = store.settings(
       request.params.id,
@@ -1304,7 +1310,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       const previous = store.findRunByCommand(request.params.id, command);
       if (previous) {
         releaseRequestImageUploads(store, uploads);
-        return previous;
+        return runResponse(request.headers.prefer, previous);
       }
       store.assertRunAdmission(request.params.id, command);
       const prepared = await prepareRequestImages(store, uploads);

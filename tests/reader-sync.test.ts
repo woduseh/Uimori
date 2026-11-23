@@ -113,3 +113,53 @@ test('a hidden reader retains event and reconnect targets without reads or retry
   expect(vi.getTimerCount()).toBe(0);
   sync.dispose();
 });
+
+test('the stream snapshot after a fresh full load reads only what the load missed', async () => {
+  vi.useFakeTimers();
+  let cursor = -1;
+  let finishLoad!: (applied: boolean) => void;
+  const refresh = vi.fn(async () => {
+    cursor = 9;
+    return true;
+  });
+  const sync = createReaderSync({ refresh, cursor: () => cursor, onError: () => {} });
+  sync.track(
+    new Promise<boolean>((resolve) => {
+      finishLoad = resolve;
+    })
+  );
+  sync.request(7, true);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(refresh).not.toHaveBeenCalled();
+  cursor = 7;
+  finishLoad(true);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(refresh).not.toHaveBeenCalled();
+
+  sync.track(Promise.resolve(true));
+  await vi.advanceTimersByTimeAsync(0);
+  sync.request(9, true);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(refresh.mock.calls).toEqual([[true]]);
+  expect(vi.getTimerCount()).toBe(0);
+  sync.dispose();
+});
+
+test('a snapshot after a disconnect or a failed full load still reloads in full', async () => {
+  vi.useFakeTimers();
+  const refresh = vi.fn().mockResolvedValue(true);
+  const sync = createReaderSync({ refresh, cursor: () => 5, onError: () => {} });
+  sync.track(Promise.resolve(true));
+  await vi.advanceTimersByTimeAsync(0);
+  sync.disconnected();
+  sync.request(5, true);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(refresh.mock.calls).toEqual([[false]]);
+
+  sync.track(Promise.reject(new Error('offline')));
+  sync.request(5, true);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(refresh.mock.calls).toEqual([[false], [false]]);
+  expect(vi.getTimerCount()).toBe(0);
+  sync.dispose();
+});

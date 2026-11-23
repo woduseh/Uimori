@@ -1,7 +1,7 @@
 import { readImportReceipt, saveImportReceipt } from '../server/import-operations.js';
 import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { readerConversation } from '../core/reader-conversation.js';
-import type { ReaderRun } from '../core/types.js';
+import type { ReaderRun, Source } from '../core/types.js';
 import { readerDetail, readerRuns } from '../server/reader.js';
 import { dismissReaderRun, readerRunDismissalKey } from '../server/run-reader-state.js';
 import { deleteChat } from '../server/chat-deletion.js';
@@ -146,7 +146,7 @@ test.each(['failed', 'cancelled'] as const)(
     );
     expect(detail.reader.pendingRunIds.includes(retry.id)).toBe(status !== 'cancelled');
     expect(
-      readerConversation(detail.sources, detail.runs as ReaderRun[]).some(
+      readerConversation(detail.sources as Source[], detail.runs as ReaderRun[]).some(
         (entry) => entry.kind === 'pending' && entry.run.id === retry.id
       )
     ).toBe(status !== 'cancelled');
@@ -586,7 +586,7 @@ test('pending turns follow five-source page boundaries without losing active wor
   expect(dismissed.reader.pendingRunIds).toContain(failed.id);
   expect(dismissed.reader.order).toEqual(last.reader.order);
   expect(dismissed.reader.navigation).toEqual(last.reader.navigation);
-  const timeline = readerConversation(last.sources, last.runs as ReaderRun[]);
+  const timeline = readerConversation(last.sources as Source[], last.runs as ReaderRun[]);
   expect(timeline[0]).toMatchObject({ kind: 'pending', run: { id: failed.id } });
   expect(timeline.filter((entry) => entry.kind === 'source').map((entry) => entry.index)).toEqual([
     0, 1,
@@ -636,7 +636,7 @@ test('reader dismissal survives reopening without modifying execution data, and 
   const detail = readerDetail(store, chat.id, {});
   expect(detail.reader.pendingRunIds).not.toContain(run.id);
   expect(
-    readerConversation(detail.sources, detail.runs as ReaderRun[]).some(
+    readerConversation(detail.sources as Source[], detail.runs as ReaderRun[]).some(
       (entry) => entry.kind === 'pending' && entry.run.id === run.id
     )
   ).toBe(false);
@@ -700,7 +700,7 @@ test('uncertain cancellation of a replacement stays visible and cannot be dismis
   const detail = readerDetail(store, chat.id, {});
   expect(detail.reader.pendingRunIds).toContain(run.id);
   expect(
-    readerConversation(detail.sources, detail.runs as ReaderRun[]).some(
+    readerConversation(detail.sources as Source[], detail.runs as ReaderRun[]).some(
       (entry) => entry.kind === 'pending' && entry.run.id === run.id
     )
   ).toBe(true);

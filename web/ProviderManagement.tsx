@@ -54,6 +54,7 @@ import {
 } from './ui-icons.js';
 import type {
   Connection,
+  LibraryConnection,
   Library,
   ModelPreset,
   ProviderProtocol,
@@ -83,7 +84,10 @@ import './settings-actions.css';
 import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
 
 const versionRef = (item: { id: string; revision: number }) => `${item.id}@${item.revision}`;
-function vertexLocationOf(connections: Connection[], connectionId: string): string | undefined {
+function vertexLocationOf(
+  connections: LibraryConnection[],
+  connectionId: string
+): string | undefined {
   const connection = connections.find((candidate) => candidate.id === connectionId);
   if (connection?.protocol !== 'vertex-gemini-v1') return undefined;
   return parseVertexEndpoint(connection.endpoint)?.location;
@@ -283,18 +287,19 @@ export function ConnectionEditor({
     )
   );
   const orderedModels = [...models].sort(compareModelDisplayOrder);
-  const modelGroups: { connection?: Connection; models: ModelPreset[] }[] = library.connections
-    .map((connection) => ({
-      connection,
-      models: orderedModels.filter((item) => item.connectionId === connection.id),
-    }))
-    .filter((group) => group.models.length > 0);
+  const modelGroups: { connection?: LibraryConnection; models: ModelPreset[] }[] =
+    library.connections
+      .map((connection) => ({
+        connection,
+        models: orderedModels.filter((item) => item.connectionId === connection.id),
+      }))
+      .filter((group) => group.models.length > 0);
   const orphanedModels = orderedModels.filter(
     (item) => !library.connections.some((connection) => connection.id === item.connectionId)
   );
   if (orphanedModels.length) modelGroups.push({ models: orphanedModels });
 
-  async function deletedConnection(item: Connection) {
+  async function deletedConnection(item: LibraryConnection) {
     if (editingConnection?.id === item.id && screen === 'connection') navigate('connections');
     dispatchDraft({ type: 'connection.deleted', id: item.id });
     setError('');
@@ -311,7 +316,7 @@ export function ConnectionEditor({
     setMessage(uiMessage('providers.m533', { value0: item.title }));
     await reload();
   }
-  const deleteConnection = (item: Connection) => (
+  const deleteConnection = (item: LibraryConnection) => (
     <DeleteButton
       path={`/connections/${encodeURIComponent(item.id)}`}
       revision={item.revision}
@@ -376,7 +381,7 @@ export function ConnectionEditor({
       setOperation(null);
     }
   }
-  function showConnection(item: Connection, copy = false, approved = false) {
+  function showConnection(item: LibraryConnection, copy = false, approved = false) {
     if (!approved) {
       replaceDraft('connection', () => showConnection(item, copy, true));
       return;
@@ -410,7 +415,7 @@ export function ConnectionEditor({
     returnItem.current = { screen: 'models', id: item.id };
     navigate('model');
   }
-  function startModelFor(item: Connection) {
+  function startModelFor(item: LibraryConnection) {
     const next = selectModelConnection(initialModel(), item);
     dispatchDraft({ type: 'model.open', value: next });
     setModelSection('basic');
@@ -457,12 +462,12 @@ export function ConnectionEditor({
       uiMessage('providers.m601', { name: saved.title, action: id ? 'updated' : 'created' })
     );
   }
-  async function catalog(item: Connection) {
+  async function catalog(item: LibraryConnection) {
     const result = await api<Connection>(`/connections/${item.id}/catalog`, {});
     if (result.catalogError) throw new Error(uiMessage('providers.m14'));
     setMessage(uiMessage('providers.m15'));
   }
-  function statusConnection(item: Connection) {
+  function statusConnection(item: LibraryConnection) {
     const body = {
       ...connectionPayload(connectionDraft(item)),
       enabled: !item.enabled,

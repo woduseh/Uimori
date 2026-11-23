@@ -262,6 +262,10 @@ export function productRoutes(
       );
     }
   );
+  app.get<{ Params: { id: string } }>('/api/connections/:id/catalog', (request) => {
+    assertLibraryVisible(store, 'connection', request.params.id);
+    return { catalog: product.get<Connection>('connection', request.params.id).catalog };
+  });
   app.post<{ Params: { id: string } }>('/api/connections/:id/catalog', async (request) => {
     const b = record(request.body ?? {});
     fields(b, []);

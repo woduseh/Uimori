@@ -287,9 +287,13 @@ export type Library = {
   promptPresets?: PromptPresetSummary[];
   promptCombinations?: SavedPromptCombination[];
   contents: Content[];
-  connections: Connection[];
+  connections: LibraryConnection[];
   models: ModelPreset[];
   assets: Asset[];
+};
+export type LibraryConnection = Omit<Connection, 'catalog'> & {
+  catalog?: Connection['catalog'];
+  catalogCount?: number;
 };
 export const defaultProfile = (chatId: string): ChatProfile => ({
   chatId,

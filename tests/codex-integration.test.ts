@@ -544,12 +544,10 @@ test('Codex helper calls app tools within one native turn and persists one setti
   expect(task.usage).toMatchObject({ modelCalls: 1, inputTokens: 20, outputTokens: 8 });
   expect(modelWorkspace(app.store).routes.main).toEqual({ id: model.id });
   expect(
-    app.store.db
-      .prepare(
-        "SELECT count(*) AS n FROM events WHERE chat_id=? AND seq>? AND kind='prompt-workspace.updated'"
-      )
-      .get(chat.id, priorEvents)
-  ).toEqual({ n: 1 });
+    app.store
+      .events(chat.id, priorEvents)
+      .filter((event) => event.kind === 'prompt-workspace.updated')
+  ).toHaveLength(1);
   expect(
     app.store.db.prepare('SELECT count(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
   ).toEqual({ n: 1 });

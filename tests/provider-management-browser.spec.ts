@@ -136,11 +136,13 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   expect(JSON.stringify(connection)).not.toContain('PM_SYNTHETIC_KEY');
   await expect(modelForm.getByLabel('프로바이더', { exact: true })).toHaveValue(`${connection.id}`);
   await page.route(`**/api/connections/${connection.id}/catalog`, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ ...connection, catalogError: 'CATALOG_UNAVAILABLE' }),
-    })
+    route.request().method() === 'POST'
+      ? route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ ...connection, catalogError: 'CATALOG_UNAVAILABLE' }),
+        })
+      : route.fallback()
   );
   await modelForm.getByLabel('모델 ID', { exact: true }).fill('synthetic/manual-id');
   await modelForm.getByText('모델 목록에서 선택', { exact: true }).click();
@@ -451,7 +453,10 @@ test('PMUI04 selecting a provider does not refresh its model catalog until reque
   const connection = await api<Connection>(request, '/connections', connectionInput(title));
   let catalogRequests = 0;
   page.on('request', (value) => {
-    if (new URL(value.url()).pathname.endsWith(`/connections/${connection.id}/catalog`))
+    if (
+      value.method() === 'POST' &&
+      new URL(value.url()).pathname.endsWith(`/connections/${connection.id}/catalog`)
+    )
       catalogRequests++;
   });
 
@@ -526,6 +531,7 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
     ];
     let catalogRequests = 0;
     await page.route(`**/api/connections/${connection.id}/catalog`, (route) => {
+      if (route.request().method() !== 'POST') return route.fallback();
       catalogRequests++;
       const snapshot = {
         catalog,

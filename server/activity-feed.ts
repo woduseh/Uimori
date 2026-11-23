@@ -66,7 +66,6 @@ export function initializeActivityFeed(store: Store): void {
 }
 
 export function activityFeed(store: Store): ActivityFeed {
-  initializeActivityFeed(store);
   const baseline = String(
     store.db.prepare('SELECT value FROM app_metadata WHERE key=?').get(baselineKey)!.value
   );

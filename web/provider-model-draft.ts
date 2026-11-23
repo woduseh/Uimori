@@ -7,7 +7,7 @@ function validationMessage(key: string, values?: MessageValues): string {
 }
 import type { GeminiSafetySettings } from '../core/gemini-safety.js';
 import type {
-  Connection,
+  LibraryConnection,
   ModelExecutionMode,
   ModelFamily,
   ModelPreset,
@@ -220,7 +220,7 @@ export function modelDraft(value: ModelPreset): ModelDraft {
     pricing: pricingDraft(value.pricing),
   };
 }
-function supportedDraft(draft: ModelDraft, connection: Connection): ModelDraft {
+function supportedDraft(draft: ModelDraft, connection: LibraryConnection): ModelDraft {
   const family = effectiveModelFamily(connection.protocol, draft.modelId, draft.modelFamily);
   const keys = modelFamilyOptionKeys(connection.protocol, family);
   const defaults = initialModel();
@@ -234,7 +234,10 @@ function supportedDraft(draft: ModelDraft, connection: Connection): ModelDraft {
   if (connection.protocol !== 'anthropic-messages-v1') next.executionMode = 'realtime';
   return next;
 }
-export function selectModelConnection(draft: ModelDraft, connection: Connection): ModelDraft {
+export function selectModelConnection(
+  draft: ModelDraft,
+  connection: LibraryConnection
+): ModelDraft {
   return supportedDraft(
     { ...draft, connectionRef: connection.id, modelId: '', modelFamily: '' },
     connection
@@ -243,11 +246,11 @@ export function selectModelConnection(draft: ModelDraft, connection: Connection)
 export function selectModelFamily(
   draft: ModelDraft,
   modelFamily: ModelFamily | '',
-  connection: Connection
+  connection: LibraryConnection
 ): ModelDraft {
   return supportedDraft({ ...draft, modelFamily }, connection);
 }
-export function modelPayload(draft: ModelDraft, connection: Connection) {
+export function modelPayload(draft: ModelDraft, connection: LibraryConnection) {
   const providerOptions =
     connection.protocol === 'vercel-chat-v1'
       ? parseProviderOptionsText(draft.providerOptions)
@@ -296,7 +299,10 @@ export function modelPayload(draft: ModelDraft, connection: Connection) {
   };
 }
 
-export function providerOptionsDraftError(draft: ModelDraft, connection: Connection): string {
+export function providerOptionsDraftError(
+  draft: ModelDraft,
+  connection: LibraryConnection
+): string {
   if (connection.protocol !== 'vercel-chat-v1') return '';
   try {
     parseProviderOptionsText(draft.providerOptions);
@@ -319,7 +325,7 @@ export function providerOptionsDraftError(draft: ModelDraft, connection: Connect
 }
 export function forcedServiceTierError(
   draft: ModelDraft,
-  connection: Connection | undefined,
+  connection: LibraryConnection | undefined,
   forcedVertexTier?: VertexRequestTier
 ): string {
   return connection?.protocol === 'vertex-gemini-v1' &&
@@ -333,7 +339,7 @@ export function forcedServiceTierError(
 }
 export function modelDraftError(
   draft: ModelDraft,
-  connection: Connection,
+  connection: LibraryConnection,
   forcedVertexTier?: VertexRequestTier
 ): string {
   const providerError = providerOptionsDraftError(draft, connection);

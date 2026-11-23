@@ -45,6 +45,7 @@ export type SourceBlock = {
   end: number;
   text: string;
 };
+export type ReaderBlockRange = Omit<SourceBlock, 'text'>;
 export function validateSourceIdentity(source: AuxiliarySource) {
   if (!source.id || !source.chatId || !source.text.trim() || digest(source.text) !== source.hash)
     throw new Error('SOURCE_IDENTITY_INVALID');

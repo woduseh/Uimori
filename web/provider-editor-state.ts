@@ -1,5 +1,5 @@
 import type { SetStateAction } from 'react';
-import type { Connection, ModelPreset, ProviderProtocol } from '../core/product.js';
+import type { LibraryConnection, ModelPreset, ProviderProtocol } from '../core/product.js';
 import { initialModel, type ModelDraft } from './provider-model-draft.js';
 
 export type VertexAccountDraft = {
@@ -23,7 +23,7 @@ export const initialConnection = (): ConnectionDraft => ({
   credentialRef: '',
   enabled: false,
 });
-export const connectionDraft = (item: Connection): ConnectionDraft => ({
+export const connectionDraft = (item: LibraryConnection): ConnectionDraft => ({
   title: item.title,
   protocol: item.protocol,
   endpoint: item.endpoint,
@@ -53,7 +53,7 @@ type Draft<Value, Saved> = {
   started: boolean;
 };
 export type ProviderEditorState = {
-  connection: Draft<ConnectionDraft, Connection>;
+  connection: Draft<ConnectionDraft, LibraryConnection>;
   model: Draft<ModelDraft, ModelPreset>;
   conflict: 'connection' | 'model' | null;
 };
@@ -72,12 +72,17 @@ function open<Value, Saved>(
   };
 }
 export const initialProviderEditorState = (): ProviderEditorState => ({
-  connection: open<ConnectionDraft, Connection>(initialConnection(), undefined, false, false),
+  connection: open<ConnectionDraft, LibraryConnection>(
+    initialConnection(),
+    undefined,
+    false,
+    false
+  ),
   model: open<ModelDraft, ModelPreset>(initialModel(), undefined, false, false),
   conflict: null,
 });
 type Action =
-  | { type: 'connection.open'; value: ConnectionDraft; editing?: Connection; copy?: boolean }
+  | { type: 'connection.open'; value: ConnectionDraft; editing?: LibraryConnection; copy?: boolean }
   | { type: 'model.open'; value: ModelDraft; editing?: ModelPreset; copy?: boolean }
   | { type: 'connection.change'; update: SetStateAction<ConnectionDraft> }
   | { type: 'model.change'; update: SetStateAction<ModelDraft> }
@@ -116,7 +121,7 @@ export function providerEditorReducer(
         conflict: null,
         connection:
           state.connection.editing?.id === action.id
-            ? open<ConnectionDraft, Connection>(initialConnection(), undefined, false, false)
+            ? open<ConnectionDraft, LibraryConnection>(initialConnection(), undefined, false, false)
             : state.connection,
         model:
           state.model.value.connectionRef === action.id

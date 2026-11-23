@@ -6,6 +6,7 @@ import type { Store } from './store.js';
 import { promptWorkspace, savePromptWorkspace } from './prompt-workspace.js';
 import { forgetHelperResourceChanges } from './helper-changes.js';
 import { forgetHelperConfirmationTargets } from './helper-argument-retention.js';
+import { recordPromptWorkspaceUpdate } from './prompt-workspace-events.js';
 
 export type LibraryKind =
   | 'content'
@@ -89,7 +90,7 @@ export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, v
         }
         workspace.revision++;
         savePromptWorkspace(store, workspace);
-        for (const chat of store.chats()) store.event(chat.id, 'prompt-workspace.updated', chat.id);
+        recordPromptWorkspaceUpdate(store.db);
       }
     }
     if (kind === 'content') {

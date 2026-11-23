@@ -26,6 +26,7 @@ import { displayTranslationJob, latestTranslation } from '../core/translation-di
 import { markArrivalWhenShown } from './arrival-mark.js';
 import { canDismissReaderRun, readerConversation } from '../core/reader-conversation.js';
 import { createReaderSync } from './reader-sync.js';
+import { type ReaderResponse, restoreReaderBlockText } from './reader-blocks.js';
 import {
   transitionReaderNavigation,
   type ReaderNavigation,
@@ -230,6 +231,7 @@ function parkQueue(chatId: string, value: ParkedQueue) {
 }
 
 type Position = ReadingPosition;
+const readReader = async (path: string) => restoreReaderBlockText(await api<ReaderResponse>(path));
 function changedParagraphPosition(detail: ReaderDetail, target: ReaderTarget, paragraph: number) {
   const source = detail.sources.find((item) => item.id === target.sourceId);
   if (!source) return null;
@@ -408,12 +410,12 @@ export function useStory() {
         let value: ReaderDetail;
         let replacementSource: string | undefined;
         try {
-          value = await api<ReaderDetail>(`/chats/${id}/reader?${params}`);
+          value = await readReader(`/chats/${id}/reader?${params}`);
         } catch (error) {
           if (!applicable()) return;
           if (!cached || !(error instanceof ApiError) || error.status !== 404) throw error;
           const rebasedParams = new URLSearchParams();
-          value = await api<ReaderDetail>(`/chats/${id}/reader?${rebasedParams}`);
+          value = await readReader(`/chats/${id}/reader?${rebasedParams}`);
           if (!applicable()) return;
           replacementSource =
             value.reader.navigation[
@@ -421,7 +423,7 @@ export function useStory() {
             ]?.id ?? '';
           if (replacementSource && !value.reader.order.includes(replacementSource)) {
             rebasedParams.set('source', replacementSource);
-            value = await api<ReaderDetail>(`/chats/${id}/reader?${rebasedParams}`);
+            value = await readReader(`/chats/${id}/reader?${rebasedParams}`);
           }
         }
         if (applicable()) {
@@ -612,6 +614,7 @@ export function useStory() {
         if (alive) setConnected(true);
       };
       stream.onerror = () => {
+        sync.disconnected();
         if (alive) setConnected(false);
       };
       stream.onmessage = (event) => {
@@ -648,6 +651,7 @@ export function useStory() {
     let stream = navigator.onLine ? openStream() : undefined;
     const offline = () => {
       stream?.close();
+      sync.disconnected();
       setConnected(false);
     };
     const online = () => {
@@ -682,7 +686,9 @@ export function useStory() {
         readerSync.current?.request(0, true);
         return;
       }
-      void refresh(selected).catch((e) => {
+      const load = refresh(selected);
+      readerSync.current?.track(load);
+      void load.catch((e) => {
         if (
           alive &&
           navigation.current.epoch === epoch &&

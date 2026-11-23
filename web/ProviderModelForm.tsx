@@ -1,9 +1,10 @@
 import { t, useI18n } from './i18n.js';
 import type { ReactNode, RefObject, Dispatch, SetStateAction } from 'react';
 import { NoticeBanner } from './NoticeBanner.js';
-import type { Connection, ModelPreset, VertexRequestTier } from '../core/product.js';
+import type { LibraryConnection, ModelPreset, VertexRequestTier } from '../core/product.js';
 import { modelHints } from '../core/model-hints.js';
 import { ProviderCatalogPicker } from './ProviderCatalogPicker.js';
+import { useConnectionCatalog } from './connection-catalog.js';
 import { ProviderModelFields } from './ProviderModelFields.js';
 import { selectModelConnection, type ModelDraft } from './provider-model-draft.js';
 import type { ProviderEditorState } from './provider-editor-state.js';
@@ -15,7 +16,7 @@ type Props = {
   hidden: boolean;
   draft: ProviderEditorState['model'];
   models: ModelPreset[];
-  modelConnections: Connection[];
+  modelConnections: LibraryConnection[];
   conflict: boolean;
   busy: boolean;
   saving: boolean;
@@ -27,7 +28,7 @@ type Props = {
   onSubmit: () => Promise<boolean>;
   onReload: () => void;
   onDone: () => void;
-  onCatalog: (connection: Connection) => void;
+  onCatalog: (connection: LibraryConnection) => void;
   deleteAction: ReactNode;
 };
 export function ProviderModelForm({
@@ -51,7 +52,10 @@ export function ProviderModelForm({
 }: Props) {
   useI18n();
   const { value: model, editing: editingModel, baseline: modelBaseline } = draft;
-  const chosen = modelConnections.find((connection) => connection.id === model.connectionRef);
+  const { connection: chosen, ...catalogState } = useConnectionCatalog(
+    modelConnections.find((connection) => connection.id === model.connectionRef),
+    !hidden
+  );
   const staleModel =
     !!editingModel &&
     models.find((item) => item.id === editingModel.id)?.revision !== editingModel.revision;
@@ -159,6 +163,7 @@ export function ProviderModelForm({
             connection={chosen}
             selectedId={model.modelId}
             busy={busy}
+            catalogState={catalogState}
             onRefresh={onCatalog}
             onChoose={(item) =>
               onChange((current) => {

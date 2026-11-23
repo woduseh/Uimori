@@ -1164,6 +1164,8 @@ export class ProductStore {
       .run(id, chatId, json(result), result.hash);
     return result;
   }
+  library(): Library & { connections: Connection[] };
+  library(summary: boolean): Library;
   library(summary = false): Library {
     const connections = (this.all('connection') as Connection[]).sort(
       compareConnectionDisplayOrder
@@ -1201,7 +1203,12 @@ export class ProductStore {
       promptPresets: summary ? this.promptMetadata() : this.all('prompt-preset'),
       promptCombinations: this.all('prompt-combination'),
       contents,
-      connections,
+      connections: summary
+        ? connections.map(({ catalog, ...connection }) => ({
+            ...connection,
+            catalogCount: catalog.length,
+          }))
+        : connections,
       models,
       assets: summary ? [] : this.assets(),
     };

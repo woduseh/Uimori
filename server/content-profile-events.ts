@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { recordPromptWorkspaceUpdate } from './prompt-workspace-events.js';
 
 export function recordContentProfileEvents(db: DatabaseSync, kind: string, id: string): void {
   const at = new Date().toISOString();
@@ -11,8 +12,7 @@ export function recordContentProfileEvents(db: DatabaseSync, kind: string, id: s
       db.prepare(
         `UPDATE prompt_workspace SET body=json_set(body,'$.revision',json_extract(body,'$.revision')+1) WHERE id=1`
       ).run();
-      db.prepare(`INSERT INTO events(chat_id,kind,entity_id,at)
-        SELECT id,'prompt-workspace.updated',id,? FROM chats ORDER BY id`).run(at);
+      recordPromptWorkspaceUpdate(db);
     }
     db.prepare(`INSERT INTO events(chat_id,kind,entity_id,at)
       SELECT chat_id,'profile.updated',chat_id,? FROM profiles

@@ -1,6 +1,8 @@
 import { t, useI18n } from './i18n.js';
 import { useState } from 'react';
+import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
+import type { ConnectionCatalogState } from './connection-catalog.js';
 import { CheckIcon, SearchIcon } from './ui-icons.js';
 import type { Connection } from '../core/product.js';
 import { supportedModels } from '../core/model-capabilities.js';
@@ -10,12 +12,14 @@ export function ProviderCatalogPicker({
   connection,
   selectedId,
   busy,
+  catalogState,
   onChoose,
   onRefresh,
 }: {
   connection: Connection | undefined;
   selectedId: string;
   busy: boolean;
+  catalogState: ConnectionCatalogState;
   onChoose: (model: CatalogModel) => void;
   onRefresh: (connection: Connection) => void;
 }) {
@@ -51,6 +55,14 @@ export function ProviderCatalogPicker({
             {t('providers.m110')}
           </button>
         </div>
+        {(catalogState.loading || catalogState.error) && (
+          <LoadingState
+            presentation="inline"
+            loading={catalogState.loading}
+            error={catalogState.error}
+            onRetry={catalogState.retry}
+          />
+        )}
         {catalog.length > 0 ? (
           <>
             <label className="provider-search">
@@ -98,7 +110,8 @@ export function ProviderCatalogPicker({
             )}
           </>
         ) : (
-          <p className="muted">{t('providers.m321')}</p>
+          !catalogState.loading &&
+          !catalogState.error && <p className="muted">{t('providers.m321')}</p>
         )}
       </details>
     </section>
