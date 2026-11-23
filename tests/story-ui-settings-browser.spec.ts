@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
-import { openChatSettings, selectChatSettingsSection } from './ui-navigation.js';
+import { openChatSettings, openHelper, selectChatSettingsSection } from './ui-navigation.js';
 import type { ChatDetail, Run } from '../core/types.js';
 import { parseStoryUi } from '../core/story-ui.js';
 
@@ -119,4 +119,66 @@ test('STORYUI generated source renders in the compiled app and submits a short c
     before.sources.find((source) => source.id === before.chat.headRevision)?.text
   );
   await page.screenshot({ path: 'output/story-ui-app.png', fullPage: true });
+});
+
+test('STORYUI the status tab shows the latest pinned block up to the scene being read', async ({
+  page,
+  request,
+}, info) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const created = await postFixtureChat(request, { data: { title: 'Story UI board' } });
+  const chat = await created.json();
+  const saved = await request.patch(`/api/chats/${chat.id}/settings`, {
+    data: {
+      ...chat.settings,
+      expectedSettingsRevision: chat.settingsRevision,
+      storyUi: true,
+      autoTranslate: false,
+    },
+  });
+  expect(saved.ok(), await saved.text()).toBe(true);
+  let settingsRevision = (await saved.json()).settingsRevision;
+  const read = async () =>
+    (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+  const scenes: string[] = [];
+  for (const [day, hp] of [
+    [1, 10],
+    [2, 4],
+  ]) {
+    const detail = await read();
+    const started = await request.post(`/api/chats/${chat.id}/runs`, {
+      data: {
+        request: `${'항구의 하루가 천천히 지나간다.\n\n'.repeat(30)}<a2ui>\n$/_uimori/pin = "status"\nroot = Frame(body, "${day}일차 상태", kind="system")\nbody = Column([Text("HP ${hp}")])\n</a2ui>`,
+        expectedRevision: detail.chat.headRevision,
+        expectedSettingsRevision: settingsRevision,
+        idempotencyKey: `story-ui-board-${chat.id}-${day}`,
+      },
+    });
+    expect(started.ok(), await started.text()).toBe(true);
+    const run = (await started.json()) as Run;
+    await expect
+      .poll(async () => (await read()).runs.find((item) => item.id === run.id)?.status)
+      .toBe('completed');
+    const after = await read();
+    scenes.push(after.chat.headRevision!);
+    settingsRevision = after.chat.settingsRevision;
+  }
+  await page.addInitScript(() => localStorage.setItem('uimori:reading-language', 'original'));
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  await page.getByRole('tab', { name: '현황', exact: true }).click();
+  const board = page.getByRole('region', { name: '이야기 현황', exact: true });
+  const scrollTo = (sourceId: string) =>
+    page
+      .locator(`[data-source-id="${sourceId}"]`)
+      .first()
+      .evaluate((node) => node.scrollIntoView({ block: 'start' }));
+  await expect(board.getByText('HP 10', { exact: true })).toBeVisible();
+  await scrollTo(scenes[1]);
+  await expect(board.getByText('HP 4', { exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath('story-board-second-scene.png') });
+  await scrollTo(scenes[0]);
+  await expect(board.getByText('HP 10', { exact: true })).toBeVisible();
+  await board.getByRole('button', { name: '이야기 현황 닫기', exact: true }).click();
+  await expect(board).toBeHidden();
 });

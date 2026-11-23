@@ -4,7 +4,7 @@
 .app-shell.focus-reading.panel-docked {
   grid-template-columns: minmax(0, 1fr) var(--panel-w);
 }
-.panel-overlay > :is(.helper-panel, .chat-prompt-options, .outline-sidecar) {
+.panel-overlay > :is(.helper-panel, .chat-prompt-options, .outline-sidecar, .story-board-panel) {
   position: fixed;
   inset: 0 0 0 auto;
   width: min(var(--panel-w), 100vw);
@@ -13,7 +13,7 @@
   box-shadow: none;
 }
 @media (max-width: 760px) {
-  .panel-overlay > :is(.helper-panel, .chat-prompt-options) {
+  .panel-overlay > :is(.helper-panel, .chat-prompt-options, .story-board-panel) {
     width: 100vw;
     border-left: 0;
   }

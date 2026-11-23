@@ -44,8 +44,10 @@ export function StoryUi({
   beginAdmission,
   style,
   customTheme,
+  actionNote,
 }: {
   segment: UiSegment;
+  actionNote?: string;
   style?: import('../core/story-ui-style.js').StoryUiStyleSetting;
   customTheme?: ThemeDefinition['storyUi'];
   chatId?: string;
@@ -232,7 +234,7 @@ export function StoryUi({
             </button>
           </div>
         ) : (
-          <p role="status">{t('storyUi.older')}</p>
+          <p role="status">{actionNote ?? t('storyUi.older')}</p>
         ))}
     </div>
   );

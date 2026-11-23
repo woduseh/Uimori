@@ -32,7 +32,7 @@ export function isStoryUiStyleSetting(value: unknown): value is StoryUiStyleSett
   return value === 'auto' || isStoryUiStyle(value) || isStoryUiThemeSetting(value);
 }
 
-function blockMetadata(messages: unknown, key: 'style' | 'css'): unknown {
+function blockMetadata(messages: unknown, key: 'style' | 'css' | 'pin'): unknown {
   const record = (value: unknown): value is Record<string, unknown> =>
     !!value && typeof value === 'object' && !Array.isArray(value);
   const message = Array.isArray(messages) ? messages[0] : undefined;
@@ -42,6 +42,11 @@ function blockMetadata(messages: unknown, key: 'style' | 'css'): unknown {
   return record(metadata) ? metadata[key] : undefined;
 }
 const modelStoryUiStyle = (messages: unknown) => blockMetadata(messages, 'style');
+
+export function storyUiPinSlot(messages: unknown): string | undefined {
+  const pin = blockMetadata(messages, 'pin');
+  return typeof pin === 'string' && /^[a-z][a-z0-9-]{0,23}$/u.test(pin) ? pin : undefined;
+}
 
 export function storyUiBlockCss(
   setting: StoryUiStyleSetting | undefined,

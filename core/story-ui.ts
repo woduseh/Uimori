@@ -7,6 +7,7 @@ import {
   storyUiTextLists,
 } from './story-ui-catalog.js';
 import { record, scanStoryUi, type StoryUiMessage, type StoryUiSegment } from './story-ui-scan.js';
+import { storyUiPinSlot } from './story-ui-style.js';
 
 export {
   encodeStoryUi,
@@ -145,7 +146,7 @@ export function projectStoryUiText(text: string, mode: 'text' | 'expression' = '
       const dataModel = (message.createSurface as { dataModel?: unknown }).dataModel;
       if (dataModel !== undefined) {
         if (record(dataModel) && record(dataModel._uimori)) {
-          const { style: _style, css: _css, ...metadata } = dataModel._uimori;
+          const { style: _style, css: _css, pin: _pin, ...metadata } = dataModel._uimori;
           const { _uimori: _original, ...rest } = dataModel;
           if (Object.keys(metadata).length) rest._uimori = metadata;
           if (Object.keys(rest).length) values.push(JSON.stringify(rest));
@@ -246,4 +247,28 @@ export function validateStoryUiAction(
     );
   });
   return matches ? { name: eventName, context } : null;
+}
+
+export type StoryUiPin = {
+  slot: string;
+  sourceId: string;
+  segment: Extract<StoryUiSegment, { kind: 'ui' }>;
+  index: number;
+};
+
+export function latestStoryUiPins(
+  scenes: readonly { id: string; text: string }[],
+  limit = 4
+): StoryUiPin[] {
+  const pins = new Map<string, StoryUiPin>();
+  for (let scene = scenes.length - 1; scene >= 0 && pins.size < limit; scene--) {
+    const blocks = parseStoryUi(scenes[scene].text).filter((part) => part.kind === 'ui');
+    for (let index = blocks.length - 1; index >= 0 && pins.size < limit; index--) {
+      const segment = blocks[index];
+      const slot = segment.kind === 'ui' ? storyUiPinSlot(segment.messages) : undefined;
+      if (slot && segment.kind === 'ui' && !pins.has(slot))
+        pins.set(slot, { slot, sourceId: scenes[scene].id, segment, index });
+    }
+  }
+  return [...pins.values()].sort((left, right) => left.slot.localeCompare(right.slot));
 }

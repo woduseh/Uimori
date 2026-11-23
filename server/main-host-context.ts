@@ -6,7 +6,7 @@ import { nativeHostContextText, NATIVE_HOST_CONTEXT_ID } from '../core/provider-
 import { ProviderContractError, type ProviderRequest, type Json } from '../core/transport.js';
 import { agentSharedOptions } from './agent-shared-options.js';
 import { modelAuthorNotes } from '../core/notes.js';
-import { parseStoryUi, projectStoryUiText } from '../core/story-ui.js';
+import { latestStoryUiPins, parseStoryUi, projectStoryUiText } from '../core/story-ui.js';
 import { storyUiHistoryMode } from '../core/context-projection.js';
 import { STORY_UI_CATALOG_ID } from '../core/story-ui-catalog.js';
 import {
@@ -95,6 +95,9 @@ export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderR
           ?.text ?? ''
       ).find((part) => part.kind === 'ui' && part.id === snapshot.storyUiAction!.blockId)
     : undefined;
+  const pinned = snapshot.settings.storyUi
+    ? latestStoryUiPins(snapshot.history.map((entry) => ({ id: entry.revision, text: entry.text })))
+    : [];
   return {
     task: input.task,
     controls,
@@ -106,6 +109,13 @@ export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderR
               catalogId: STORY_UI_CATALOG_ID,
               ...(snapshot.storyUiThemeChoices
                 ? { themeChoices: snapshot.storyUiThemeChoices }
+                : {}),
+              ...(pinned.length
+                ? {
+                    pinned: Object.fromEntries(
+                      pinned.map((pin) => [pin.slot, pin.segment.expression])
+                    ),
+                  }
                 : {}),
               ...(snapshot.storyUiAction
                 ? {

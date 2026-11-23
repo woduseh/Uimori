@@ -260,6 +260,7 @@ export function useStory() {
   const { chat: selected, source: readSource, destination } = view;
   const [loadedDetail, setDetail] = useState<ReaderDetail | null>(null);
   const [readerLoad, setReaderLoad] = useState({ key: '', epoch: -1, pending: false, error: '' });
+  const [readingSourceId, setReadingSourceId] = useState('');
   const [library, setLibrary] = useState<Library | null>(null);
   const [libraryError, setLibraryError] = useState('');
   const detail = loadedDetail?.chat.id === selected ? loadedDetail : null;
@@ -777,6 +778,7 @@ export function useStory() {
           top: node.scrollTop,
         };
         writeViewCache(`reading:${viewKey}`, position);
+        setReadingSourceId(location?.source.dataset.sourceId ?? '');
       }
       return targetAtReaderLocation(selected, location);
     },
@@ -1098,6 +1100,10 @@ export function useStory() {
         } else node.scrollTop = saved?.top || 0;
       }
       restoredView.current = viewKey;
+      requestAnimationFrame(() => {
+        if (currentView.current === viewKey && reader.current === node)
+          setReadingSourceId(readerLocation(node)?.source.dataset.sourceId ?? '');
+      });
     });
     return () => cancelAnimationFrame(frame);
   }, [detail, selected, viewKey, readSource, destination, holdNavigationPosition, readerTarget]);
@@ -2094,6 +2100,7 @@ export function useStory() {
     chats,
     selected,
     readSource,
+    readingSourceId,
     detail: readerCache.current?.key === readerQuery.current.key ? detail : null,
     readerLoading:
       readerLoad.key === readerQuery.current.key &&

@@ -7,6 +7,7 @@ export const sidePanelSurfaceIds: Record<SidePanelTab, string> = {
   helper: 'helper-panel',
   outline: 'outline-panel',
   options: 'chat-prompt-options',
+  board: 'story-board-panel',
 };
 
 export function focusSidePanelTab(tab: SidePanelTab) {
@@ -40,6 +41,7 @@ export function SidePanelTabs({
     helper: t('main.m062'),
     outline: t('main.m007'),
     options: t('main.m121'),
+    board: t('storyUi.board'),
   };
   return (
     <div className="side-panel-tabs">

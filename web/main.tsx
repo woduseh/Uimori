@@ -141,6 +141,7 @@ import { useTestMode } from './useTestMode.js';
 import { ActivityStatus } from './ActivityStatus.js';
 import { NextRequestStatus } from './NextRequestStatus.js';
 import { focusSidePanelTab, SidePanelTabs } from './SidePanelTabs.js';
+import { StoryBoardPanel, useStoryBoard } from './StoryBoardPanel.js';
 import { SidePanelResizer } from './SidePanelResizer.js';
 import {
   fitSidePanelWidth,
@@ -170,6 +171,7 @@ function workspaceFallback(title: string, navigation: ReactNode, content: ReactN
     </>
   );
 }
+const noSources: import('../core/types.js').Source[] = [];
 const LibraryPanel = deferredPanel(
   '서재',
   async () => ({
@@ -604,6 +606,15 @@ function App() {
   }, []);
   const storyPanels = s.destination === 'story' && !!s.selected;
   const optionsVisible = optionsOpen && storyPanels;
+  const storyBoard = useStoryBoard(
+    storyPanels ? s.selected : '',
+    s.detail?.sources.some((source) => source.id === s.readingSourceId)
+      ? s.readingSourceId
+      : undefined,
+    s.detail?.sources ?? noSources,
+    s.detail?.jobs
+  );
+  const boardVisible = workspacePanel === 'board' && storyPanels && storyBoard.available;
   const roomBesideRail = viewportWidth - RAIL_WIDTH - MIN_CENTER_WIDTH;
   const outlineSidecarAvailable = !compact && roomBesideRail >= sidePanelMinimumWidth('outline');
   const outlineSidecarVisible =
@@ -613,7 +624,7 @@ function App() {
     outlineSidecarAvailable &&
     panel !== 'outline';
   const workspacePanelOpen =
-    (helperOpen && !helperExpanded) || optionsVisible || outlineSidecarVisible;
+    (helperOpen && !helperExpanded) || optionsVisible || outlineSidecarVisible || boardVisible;
   const panelMinimum = sidePanelMinimumWidth(outlineSidecarVisible ? 'outline' : 'helper');
   const shownPanelWidth = fitSidePanelWidth(panelWidth, panelMinimum, roomBesideRail);
   const dockBesideSidebar = desktopSidebarWidth + shownPanelWidth + MIN_CENTER_WIDTH;
@@ -1234,6 +1245,7 @@ function App() {
           'helper',
           ...(s.detail && outlineSidecarAvailable ? (['outline'] as const) : []),
           ...(hasCreativeOptions || optionsOpen ? (['options'] as const) : []),
+          ...(storyBoard.available ? (['board'] as const) : []),
         ]
       : null;
   const sidePanelTabsShown = !!sidePanelTabs && sidePanelTabs.length > 1;
@@ -1269,7 +1281,7 @@ function App() {
   });
   useShortcut('rightPanel.toggle', () => {
     if (helperOpen) closeHelper();
-    else if (optionsVisible || outlineSidecarVisible) setWorkspacePanel(null);
+    else if (optionsVisible || outlineSidecarVisible || boardVisible) setWorkspacePanel(null);
     else showSidePanel(availableSidePanelTab(lastSidePanelTab.current));
   });
   useShortcut('settings.open', openAppSettings);
@@ -2970,6 +2982,15 @@ function App() {
         onDirtyChange={setOptionsDirty}
         onBusyChange={setOptionsBusy}
       />
+      <StoryBoardPanel
+        open={boardVisible}
+        modal={panelModal}
+        tabs={renderSidePanelTabs(t('shared.close', { title: t('storyUi.boardLabel') }))}
+        onClose={() => setWorkspacePanel(null)}
+        board={storyBoard}
+        style={s.detail?.chat.settings.storyUiStyle}
+        translated={readingLanguage === 'translation'}
+      />
       {helperMounted && (
         <HelperPanel
           navigationActions={helperNavigationActions}
@@ -3023,7 +3044,13 @@ function App() {
           minimum={panelMinimum}
           maximum={panelMaximum}
           controls={
-            helperOpen ? 'helper-panel' : optionsVisible ? 'chat-prompt-options' : 'outline-panel'
+            helperOpen
+              ? 'helper-panel'
+              : optionsVisible
+                ? 'chat-prompt-options'
+                : boardVisible
+                  ? 'story-board-panel'
+                  : 'outline-panel'
           }
           onResize={setPanelWidth}
         />

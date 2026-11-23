@@ -163,6 +163,36 @@ export const messages = {
     ja: '物語画面を表示できません。',
     zh: '无法显示此故事界面。',
   },
+  'storyUi.board': {
+    ko: '현황',
+    en: 'Status',
+    ja: '現況',
+    zh: '现况',
+  },
+  'storyUi.boardLabel': {
+    ko: '이야기 현황',
+    en: 'Story status',
+    ja: '物語の現況',
+    zh: '故事现况',
+  },
+  'storyUi.boardSlots': {
+    ko: '현황 종류',
+    en: 'Status kinds',
+    ja: '現況の種類',
+    zh: '现况类别',
+  },
+  'storyUi.boardAction': {
+    ko: '선택은 본문에 있는 화면에서 할 수 있어요.',
+    en: 'Make choices on the screen in the story.',
+    ja: '選択は本文中の画面で行えます。',
+    zh: '请在正文中的界面上进行选择。',
+  },
+  'storyUi.boardEmpty': {
+    ko: '이 장면까지 고정된 현황이 없어요.',
+    en: 'No pinned status up to this scene.',
+    ja: 'このシーンまでに固定された現況はありません。',
+    zh: '截至此场景没有固定的现况。',
+  },
   'storyUi.failureReason': {
     ko: '변환 오류',
     en: 'Conversion error',

@@ -21,6 +21,12 @@
 
 **보내기**를 누르면 현재 모델로 새 요청을 시작해요. 이야기 UI를 끄면 저장된 화면은 읽기 전용으로 남고, 이전 장면에서 다시 선택하려면 장면 메뉴의 **이 장면까지 새 채팅으로 분기**를 사용해요. [채팅 백업과 분기](CHAT-BACKUP.md)
 
+### 현황 탭
+
+상태창, 파티, 소지품, 관계도처럼 장면을 넘어 이어지는 정보는 모델이 블록에 고정 이름(`$/_uimori/pin = "status"`)을 붙여 써요. 고정된 블록이 있는 채팅에서는 데스크톱 오른쪽 사이드 패널에 **현황** 탭이 생기고, 지금 읽고 있는 장면까지 이름별로 가장 최근에 고정된 블록을 보여 줘요. 이전 장면으로 스크롤하거나 분기한 채팅을 열면 그 시점의 현황이 보이고, 장면을 고치거나 다시 생성하면 바로 반영돼요. 이름이 둘 이상이면 패널 위의 칩으로 바꿔 볼 수 있고(최대 4개), 읽기 언어가 번역이면 번역된 화면을 보여 줘요.
+
+고정된 블록도 본문의 제자리에 그대로 남고, 패널의 화면은 읽기 전용이에요. 버튼 선택은 본문의 화면에서 해요. 좁은 화면에는 사이드 패널이 없으므로 본문의 블록으로 확인해요. 모델은 다음 장면을 쓸 때 고정된 블록을 문맥(`storyUi.pinned`)으로 받아 이어 쓰고, 상태가 바뀐 장면에서만 같은 이름의 블록을 새로 써요.
+
 ## 화면 구성
 
 ### 봇을 위한 사용자 테마
@@ -103,4 +109,4 @@ CHARX 카드에서 본문용으로 사용할 수 있는 그림은 `{{img::이름
 
 액션 제출은 최신 장면의 원문 해시를 확인하므로 원문이 수정되면 이전 화면의 선택을 보낼 수 없어요. 채팅 복사본에서는 복사본의 최신 장면을 기준으로 선택을 보낼 수 있어요.
 
-`core/story-ui-scan.ts`는 zod와 A2UI 카탈로그 없이 태그 유무만 판별해요. `web/story-ui-parser.ts`를 쓰는 화면(`web/StreamingResponse.tsx`, `web/SourceReader.tsx`)은 태그가 없는 본문을 바로 문단으로 그리고, 태그가 있을 때만 검증기(`core/story-ui.ts`)를 불러오며 그동안 결과 자리 표시를 보여 줘요. 시작 번들이 검증기를 다시 끌어오지 않도록 웹 코드는 `core/story-ui.ts`를 정적으로 가져오지 않아요. 이미지 태그를 감추는 `core/image-placement.ts`처럼 블록의 범위만 필요한 코드는 `core/story-ui-scan.ts`의 `scanStoryUi`를 검증 없이 써요. 서버는 계속 `core/story-ui.ts`로 같은 검증을 동기로 해요. 직접 편집과 도우미 장면 편집은 `server/story-ui-assets.ts`의 `compileEditedSourceText`를 거쳐 저장해요. 도우미 되돌리기는 저장했던 원문을 정확히 복원해야 하므로 이 변환을 거치지 않아요. 편집 왕복은 `tests/story-ui-lifecycle.test.ts`가 확인해요.
+`core/story-ui-scan.ts`는 zod와 A2UI 카탈로그 없이 태그 유무만 판별해요. `web/story-ui-parser.ts`를 쓰는 화면(`web/StreamingResponse.tsx`, `web/SourceReader.tsx`)은 태그가 없는 본문을 바로 문단으로 그리고, 태그가 있을 때만 검증기(`core/story-ui.ts`)를 불러오며 그동안 결과 자리 표시를 보여 줘요. 시작 번들이 검증기를 다시 끌어오지 않도록 웹 코드는 `core/story-ui.ts`를 정적으로 가져오지 않아요. 이미지 태그를 감추는 `core/image-placement.ts`처럼 블록의 범위만 필요한 코드는 `core/story-ui-scan.ts`의 `scanStoryUi`를 검증 없이 써요. 서버는 계속 `core/story-ui.ts`로 같은 검증을 동기로 해요. 직접 편집과 도우미 장면 편집은 `server/story-ui-assets.ts`의 `compileEditedSourceText`를 거쳐 저장해요. 도우미 되돌리기는 저장했던 원문을 정확히 복원해야 하므로 이 변환을 거치지 않아요. 편집 왕복은 `tests/story-ui-lifecycle.test.ts`가 확인해요. 현황 탭은 `core/story-ui.ts`의 `latestStoryUiPins`가 장면 체인에서 고르고(`tests/story-ui-pins.test.ts`), `server/story-ui-routes.ts`의 `/api/chats/:id/story-ui/pins`와 `web/StoryBoardPanel.tsx`가 보여 줘요. 고정 블록을 따로 저장하지 않고 매번 장면에서 다시 고르므로 편집, 재생성, 분기, 백업에 별도 상태가 없어요. 현재 장면은 `web/useStory.ts`가 읽기 위치와 같은 기준(`readerLocation`)으로 정해요.

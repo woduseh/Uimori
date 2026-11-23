@@ -1,7 +1,13 @@
 import { randomInt } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { FastifyInstance } from 'fastify';
-import { parseStoryUi, type StoryUiAction, validateStoryUiAction } from '../core/story-ui.js';
+import {
+  latestStoryUiPins,
+  parseStoryUi,
+  type StoryUiAction,
+  validateStoryUiAction,
+} from '../core/story-ui.js';
+import { latestTranslation } from './source-editing.js';
 import type { RunSnapshot } from '../core/types.js';
 import {
   choice,
@@ -71,6 +77,36 @@ export function storyUiRoutes(
     requireRequestModel: (snapshot: RunSnapshot) => void;
   }
 ): void {
+  app.get<{ Params: { id: string }; Querystring: { at?: string } }>(
+    '/api/chats/:id/story-ui/pins',
+    async (request) => {
+      const chat = store.chat(request.params.id);
+      const scenes: { id: string; text: string; hash: string }[] = [];
+      let id: string | null = request.query.at ?? chat.headRevision;
+      while (id) {
+        const source = store.source(id);
+        if (source.chatId !== chat.id) throw new HttpError(404, 'Scene not found');
+        scenes.unshift(source);
+        id = source.parentRevision;
+      }
+      return {
+        pins: latestStoryUiPins(scenes).map((pin) => {
+          const source = scenes.find((scene) => scene.id === pin.sourceId)!;
+          const job = latestTranslation(store, source.id);
+          const translated =
+            job?.status === 'completed' && job.sourceHash === source.hash && job.result?.text
+              ? parseStoryUi(job.result.text).filter((part) => part.kind === 'ui')[pin.index]
+              : undefined;
+          return {
+            slot: pin.slot,
+            sourceId: pin.sourceId,
+            original: pin.segment,
+            ...(translated?.kind === 'ui' ? { translated } : {}),
+          };
+        }),
+      };
+    }
+  );
   app.post<{ Params: { id: string } }>(
     '/api/chats/:id/story-ui/actions',
     { bodyLimit: 16 * 1024 },
