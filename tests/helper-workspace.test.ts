@@ -1717,6 +1717,17 @@ test('a rate-limited or overloaded call is repeated after a wait with the taskâ€
     runtime.workspace.task(task.id).error ?? ''
   ).toMatchObject({ status: 'completed' });
   expect(waits).toEqual([5_000, 20_000]);
+  expect(
+    f.store.db
+      .prepare(
+        "SELECT data FROM helper_events WHERE task_id=? AND kind='provider.retry' ORDER BY seq"
+      )
+      .all(task.id)
+      .map((row) => JSON.parse(String(row.data)))
+  ).toEqual([
+    { attempt: 1, attempts: 3, delayMs: 5_000, code: 'HTTP_429' },
+    { attempt: 2, attempts: 3, delayMs: 20_000, code: 'HTTP_503' },
+  ]);
   expect(attemptCount(f)).toBe(4);
   expect(requests[1].input.results).toHaveLength(1);
   expect(requests[2].input.results).toEqual(requests[1].input.results);

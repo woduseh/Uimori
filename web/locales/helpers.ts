@@ -1062,10 +1062,10 @@ export const messages = {
     zh: '执行工具',
   },
   'helpers.m201': {
-    ko: '요청 처리',
-    en: 'Processing request',
-    ja: '依頼の処理',
-    zh: '处理请求',
+    ko: '모델 호출',
+    en: 'Calling the model',
+    ja: 'モデルの呼び出し',
+    zh: '调用模型',
   },
   'helpers.m202': {
     ko: '도우미 진행 메시지',
@@ -1739,11 +1739,47 @@ export const messages = {
     ja: '追加の指示: {status, select, pending {送信待ち} delivered {作業の入力に反映済み} unconfirmed {送信の成否が未確認} other {送信前に作業が終了}}',
     zh: '追加指令：{status, select, pending {等待传递} delivered {已纳入任务输入} unconfirmed {传递状态未确认} other {传递前任务已结束}}',
   },
-  'helpers.m336': {
-    ko: '{kind, select, summary {대화 내용 정리 중이에요} whatif {가정 장면 작성 중이에요} other {도우미가 요청을 처리하고 있어요}}',
-    en: '{kind, select, summary {Summarizing the conversation} whatif {Writing a hypothetical scene} other {The assistant is processing the request}}',
-    ja: '{kind, select, summary {会話内容を整理中} whatif {仮定のシーンを作成中} other {アシスタントが依頼を処理中}}',
-    zh: '{kind, select, summary {正在整理对话内容} whatif {正在编写假设场景} other {助手正在处理请求}}',
+  'helpers.activityRunning': {
+    ko: '{label} 중이에요',
+    en: '{label}',
+    ja: '{label}中',
+    zh: '正在{label}',
+  },
+  'helpers.activityRunningTarget': {
+    ko: '{label} 중이에요 ({target})',
+    en: '{label} ({target})',
+    ja: '{label}中（{target}）',
+    zh: '正在{label}（{target}）',
+  },
+  'helpers.activityModelWaiting': {
+    ko: '모델의 응답을 기다리고 있어요 ({call, number}번째 호출)',
+    en: 'Waiting for the model (call {call, number})',
+    ja: 'モデルの応答を待っています（{call, number}回目の呼び出し）',
+    zh: '正在等待模型响应（第 {call, number} 次调用）',
+  },
+  'helpers.activityRetrying': {
+    ko: '{reason, select, limit {프로바이더의 요청 한도에 걸려} other {프로바이더 서버 오류로}} {seconds, number}초 뒤에 다시 시도해요 ({attempt, number}/{attempts, number})',
+    en: '{reason, select, limit {The provider is limiting requests} other {The provider returned a server error}}. Trying again in {seconds, plural, one {# second} other {# seconds}} ({attempt, number}/{attempts, number})',
+    ja: '{reason, select, limit {プロバイダーのリクエスト上限に達したため} other {プロバイダーのサーバーエラーのため}}、{seconds, number}秒後に再試行します（{attempt, number}/{attempts, number}）',
+    zh: '{reason, select, limit {已达到提供方的请求上限} other {提供方服务器出错}}，{seconds, number} 秒后重试（{attempt, number}/{attempts, number}）',
+  },
+  'helpers.activityRetryWait': {
+    ko: '다시 시도 대기',
+    en: 'Waiting to retry',
+    ja: '再試行待ち',
+    zh: '等待重试',
+  },
+  'helpers.activityAttemptOutcome': {
+    ko: '{status, select, waiting {응답을 기다리고 있어요} completed {응답을 받았어요} tool_calls {도구 사용을 요청했어요} cancelled {중단됐어요} refused {응답이 거절됐어요} partial {응답이 중간에 끊겼어요} other {오류로 끝났어요}}',
+    en: '{status, select, waiting {Waiting for the response} completed {Response received} tool_calls {Asked to use tools} cancelled {Stopped} refused {The response was refused} partial {The response was cut off} other {Ended with an error}}',
+    ja: '{status, select, waiting {応答を待っています} completed {応答を受け取りました} tool_calls {ツールの使用を要求しました} cancelled {中断されました} refused {応答が拒否されました} partial {応答が途中で途切れました} other {エラーで終了しました}}',
+    zh: '{status, select, waiting {正在等待响应} completed {已收到响应} tool_calls {请求使用工具} cancelled {已中断} refused {响应被拒绝} partial {响应中途中断} other {因错误结束}}',
+  },
+  'helpers.activityEarlierOmitted': {
+    ko: '앞선 단계는 여기에 나오지 않아요.',
+    en: 'Earlier steps are not shown here.',
+    ja: '以前のステップはここには表示されません。',
+    zh: '此处不显示更早的步骤。',
   },
   'helpers.m337': {
     ko: '{mode, select, translation {번역 이미지 배치} other {원문 이미지 배치}}',

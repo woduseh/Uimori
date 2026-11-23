@@ -14,6 +14,14 @@ export type HelperActivityEvent = {
   applied?: boolean;
   callId?: string;
   target?: HelperActivityTarget;
+  retry?: HelperProviderRetry;
+};
+
+export type HelperProviderRetry = {
+  attempt: number;
+  attempts: number;
+  delayMs: number;
+  code: string;
 };
 
 export type HelperActivity = {
@@ -21,6 +29,7 @@ export type HelperActivity = {
   status: HelperStatus;
   events: HelperActivityEvent[];
   hasEarlier: boolean;
+  helperCalls: number;
 };
 
 export type HelperActivityTargetRef = { kind: string; id: string } | { count: number };

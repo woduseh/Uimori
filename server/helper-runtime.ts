@@ -183,7 +183,7 @@ import { helperWebSearchCapability } from '../core/helper-web-search.js';
 import { ChatOverridesStore } from './chat-overrides.js';
 import { ChatOptionsStore, invokeHelperOptions } from './chat-options.js';
 import { helperArgumentDiagnostic, helperResultDiagnostic } from './helper-diagnostics.js';
-import { helperActivityTarget } from '../core/helper-activity.js';
+import { helperActivityTarget, type HelperProviderRetry } from '../core/helper-activity.js';
 
 const asJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 const MAX_EXACT_HELPER_READ_TOKENS = 2_000;
@@ -2123,6 +2123,12 @@ export class HelperRuntime {
           providerRetries < HELPER_PROVIDER_RETRY_DELAYS_MS.length
         ) {
           const delay = HELPER_PROVIDER_RETRY_DELAYS_MS[providerRetries++];
+          this.workspace.event(task.conversationId, id, 'provider.retry', {
+            attempt: providerRetries,
+            attempts: HELPER_PROVIDER_RETRY_DELAYS_MS.length,
+            delayMs: delay,
+            code: result.error!.code,
+          } satisfies HelperProviderRetry);
           await (this.options.wait ?? ((ms, until) => sleep(ms, undefined, { signal: until })))(
             delay,
             signal

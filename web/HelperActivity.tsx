@@ -1,11 +1,11 @@
 import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { useState } from 'react';
-import type { HelperActivity as Activity } from '../core/helper-activity.js';
+import { useRef, useState } from 'react';
+import type { HelperActivity as Activity, HelperActivityEvent } from '../core/helper-activity.js';
 import type { HelperStatus } from '../core/helper.js';
 import { api, labels } from './api.js';
-import { helperActivityStages } from './helper-activity.js';
+import { helperActivityStages, helperRetrySentence } from './helper-activity.js';
 import {
   groupHelperActivity,
   type HelperActivityStage,
@@ -14,6 +14,7 @@ import {
 import { requestFileError } from './request-file-errors.js';
 import { statusGlyph } from './TurnStatus.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
+import { useBottomFollow } from './useBottomFollow.js';
 
 type ActivityView = {
   taskId?: string;
@@ -105,37 +106,65 @@ function StageGlyph({ state }: { state: HelperActivityState }) {
   );
 }
 
+function recordOutcome(stage: HelperActivityStage, event: HelperActivityEvent) {
+  if (event.kind === 'attempt.finished')
+    return t('helpers.activityAttemptOutcome', { status: event.status ?? 'error' });
+  if (event.kind === 'attempt.started')
+    return stage.state === 'running'
+      ? t('helpers.activityAttemptOutcome', { status: 'waiting' })
+      : undefined;
+  if (event.retry) return helperRetrySentence(event.retry);
+  return event.name && event.status ? labels[event.status] : undefined;
+}
+
+function stageRecords(stage: HelperActivityStage) {
+  return stage.events.flatMap((event) => {
+    const name = event.kind.startsWith('tool.') ? event.name : undefined;
+    const outcome = recordOutcome(stage, event);
+    const applied =
+      event.applied === undefined ? undefined : t(event.applied ? 'helpers.m124' : 'helpers.m125');
+    return name || outcome || applied ? [{ seq: event.seq, name, outcome, applied }] : [];
+  });
+}
+
 function StageRow({ stage }: { stage: HelperActivityStage }) {
   const toolCount = stage.events.filter((event) => event.kind === 'tool.finished').length;
+  const records = stageRecords(stage);
+  const head = (
+    <>
+      <StageGlyph state={stage.state} />
+      <span>{stage.label}</span>
+      {stage.target && <small>{stage.target}</small>}
+      <span className="sr-only">{t(stateLabels[stage.state])}</span>
+      {toolCount > 1 && (
+        <small>
+          {t('helperConversation.executions', {
+            count: toolCount,
+          })}
+        </small>
+      )}
+    </>
+  );
   return (
     <li data-state={stage.state}>
-      <details className="helper-activity-stage">
-        <summary className="helper-activity-stage-head">
-          <StageGlyph state={stage.state} />
-          <span>{stage.label}</span>
-          {stage.target && <small>{stage.target}</small>}
-          <span className="sr-only">{t(stateLabels[stage.state])}</span>
-          {toolCount > 1 && (
-            <small>
-              {t('helperConversation.executions', {
-                count: toolCount,
-              })}
-            </small>
-          )}
-        </summary>
-        <ul className="helper-activity-records">
-          {stage.events.map((event) => (
-            <li key={event.seq} className="ui-meta-row">
-              <code>{event.name ?? event.kind}</code>
-              {event.status && <span>{labels[event.status] ?? event.status}</span>}
-              {event.purpose && <span>{event.purpose}</span>}
-              {event.applied !== undefined && (
-                <span>{event.applied ? t('helpers.m124') : t('helpers.m125')}</span>
-              )}
-            </li>
-          ))}
-        </ul>
-      </details>
+      {records.length ? (
+        <details className="helper-activity-stage">
+          <summary className="helper-activity-stage-head">{head}</summary>
+          <ul className="helper-activity-records">
+            {records.map((record) => (
+              <li key={record.seq} className="ui-meta-row">
+                {record.name && <code>{record.name}</code>}
+                {record.outcome && <span>{record.outcome}</span>}
+                {record.applied && <span>{record.applied}</span>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : (
+        <div className="helper-activity-stage helper-activity-stage-head helper-activity-stage-plain">
+          {head}
+        </div>
+      )}
       {stage.events.map((event) =>
         event.error || event.denied ? (
           <NoticeBanner tone="error" key={event.seq}>
@@ -151,6 +180,24 @@ function StageRow({ stage }: { stage: HelperActivityStage }) {
         ) : null
       )}
     </li>
+  );
+}
+
+export function HelperLiveActivity(props: {
+  taskId: string;
+  status: HelperStatus;
+  visible: boolean;
+  source: ActivityView;
+}) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
+  const { onScroll } = useBottomFollow(scroller, content, props.visible, true);
+  return (
+    <div className="helper-current-activity-details" ref={scroller} onScroll={onScroll}>
+      <div ref={content}>
+        <HelperActivityDetails inline {...props} />
+      </div>
+    </div>
   );
 }
 
@@ -185,6 +232,7 @@ export function HelperActivityDetails({
         />
       )}
       {data && !data.events.length && <p className="muted">{t('helpers.m122')}</p>}
+      {data?.hasEarlier && <p className="muted">{t('helpers.activityEarlierOmitted')}</p>}
       {data && (
         <ol className="helper-activity-stages">
           {groupHelperActivity(helperActivityStages({ ...data, status })).map((row) =>

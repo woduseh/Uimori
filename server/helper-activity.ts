@@ -1,6 +1,7 @@
 import type {
   HelperActivity,
   HelperActivityEvent,
+  HelperProviderRetry,
   HelperActivityTarget,
   HelperActivityTargetRef,
 } from '../core/helper-activity.js';
@@ -53,9 +54,10 @@ export function readHelperActivity(store: Store, taskId: string): HelperActivity
         length(json_extract(data,'$.text'))>1000 AS text_truncated,
         json_extract(data,'$.applied') AS applied,
         json_extract(data,'$.callId') AS call_id,
-        CASE WHEN kind='tool.started' THEN json_extract(data,'$.target') END AS target
+        CASE WHEN kind='tool.started' THEN json_extract(data,'$.target') END AS target,
+        CASE WHEN kind='provider.retry' THEN data END AS retry
        FROM helper_events WHERE conversation_id=? AND task_id=?
-         AND kind IN ('attempt.started','attempt.finished','tool.started','tool.finished','progress','context.compaction')
+         AND kind IN ('attempt.started','attempt.finished','tool.started','tool.finished','progress','context.compaction','provider.retry')
        ORDER BY seq DESC LIMIT ?`
     )
     .all(task.conversation_id, taskId, activityLimit + 1);
@@ -64,6 +66,14 @@ export function readHelperActivity(store: Store, taskId: string): HelperActivity
     taskId,
     status: task.status as HelperStatus,
     hasEarlier: rows.length > activityLimit,
+    helperCalls: Number(
+      store.db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM helper_events WHERE conversation_id=? AND task_id=?
+           AND kind='attempt.started' AND json_extract(data,'$.purpose')='helper'`
+        )
+        .get(task.conversation_id, taskId)!.n
+    ),
     events: rows
       .slice(0, activityLimit)
       .reverse()
@@ -82,6 +92,10 @@ export function readHelperActivity(store: Store, taskId: string): HelperActivity
           applied: row.applied == null ? undefined : Boolean(row.applied),
           callId: string(row.call_id),
           target: resolveTarget(store, row.target),
+          retry:
+            typeof row.retry === 'string'
+              ? (JSON.parse(row.retry) as HelperProviderRetry)
+              : undefined,
         })
       ),
   };

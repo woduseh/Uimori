@@ -1,4 +1,6 @@
 import { join } from 'node:path';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test } from 'vitest';
 import type { HelperActivity } from '../core/helper-activity.js';
 import { readHelperActivity } from '../server/helper-activity.js';
@@ -6,36 +8,51 @@ import { HelperWorkspace } from '../server/helper-workspace.js';
 import { releaseCompletedHelperInputs } from '../server/execution-retention.js';
 import { Store } from '../server/store.js';
 import { helperActivityStages, helperActivitySummary } from '../web/helper-activity.js';
+import { HelperActivityDetails } from '../web/HelperActivity.js';
 import { createTestDirectory } from './fixtures/test-directory.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import type { Content } from '../core/product.js';
 
-test('helper activity projects bounded diagnostics and keeps denied tools visible after retention', () => {
+function activityTask(workId: string) {
   const directory = createTestDirectory('uimori-helper-activity-');
   const store = new Store(join(directory.directory, 'app.sqlite'));
+  const workspace = new HelperWorkspace(store);
+  const conversation = workspace.open({ kind: 'library', workId });
+  const connection = store.product.connection({
+    title: 'Synthetic activity',
+    protocol: 'fixture-sse-v1',
+    endpoint: 'http://127.0.0.1:9',
+    enabled: true,
+  });
+  const model = store.product.model({
+    title: 'Synthetic activity',
+    connectionId: connection.id,
+    modelId: 'fixture-helper',
+    temperature: null,
+    maxOutputTokens: 1024,
+  });
+  const task = workspace.enqueue(conversation.id, 'activity', '자료 확인', {
+    scope: conversation.scope,
+    model: store.product.modelSnapshot(model.id),
+    history: [],
+    persona: '',
+    limits: { totalCalls: 24, helperCalls: 12 },
+  });
+  return {
+    store,
+    workspace,
+    conversation,
+    task,
+    close() {
+      store.close();
+      directory.remove();
+    },
+  };
+}
+
+test('helper activity projects bounded diagnostics and keeps denied tools visible after retention', () => {
+  const { store, workspace, conversation, task, close } = activityTask('activity-test');
   try {
-    const workspace = new HelperWorkspace(store);
-    const conversation = workspace.open({ kind: 'library', workId: 'activity-test' });
-    const connection = store.product.connection({
-      title: 'Synthetic activity',
-      protocol: 'fixture-sse-v1',
-      endpoint: 'http://127.0.0.1:9',
-      enabled: true,
-    });
-    const model = store.product.model({
-      title: 'Synthetic activity',
-      connectionId: connection.id,
-      modelId: 'fixture-helper',
-      temperature: null,
-      maxOutputTokens: 1024,
-    });
-    const task = workspace.enqueue(conversation.id, 'activity', '자료 확인', {
-      scope: conversation.scope,
-      model: store.product.modelSnapshot(model.id),
-      history: [],
-      persona: '',
-      limits: { totalCalls: 24, helperCalls: 12 },
-    });
     workspace.event(conversation.id, task.id, 'attempt.started', {
       id: 'native',
       purpose: 'helper',
@@ -100,8 +117,7 @@ test('helper activity projects bounded diagnostics and keeps denied tools visibl
       events: [{ kind: 'attempt.finished', status: 'error' }],
     });
   } finally {
-    store.close();
-    directory.remove();
+    close();
   }
 });
 
@@ -116,6 +132,7 @@ test.each([
       taskId: 'task',
       status: 'running',
       hasEarlier: !hasStart,
+      helperCalls: 1,
       events: [
         ...(hasStart ? [{ seq: 1, kind: 'attempt.started', attemptId: 'attempt' }] : []),
         { seq: 2, kind: 'attempt.finished', attemptId: 'attempt', status },
@@ -131,6 +148,7 @@ test('helper stages keep each call apart and report observed progress', () => {
     taskId: 'task',
     status: 'running',
     hasEarlier: false,
+    helperCalls: 1,
     events: [
       { seq: 1, kind: 'attempt.started', attemptId: 'first', purpose: 'helper' },
       { seq: 2, kind: 'attempt.finished', attemptId: 'first', status: 'tool_calls' },
@@ -166,32 +184,9 @@ test('helper stages keep each call apart and report observed progress', () => {
 });
 
 test('live tool starts carry a resolved target and never the argument preview, before or after retention', () => {
-  const directory = createTestDirectory('uimori-helper-activity-');
-  const store = new Store(join(directory.directory, 'app.sqlite'));
+  const { store, workspace, conversation, task, close } = activityTask('activity-target');
   try {
-    const workspace = new HelperWorkspace(store);
-    const conversation = workspace.open({ kind: 'library', workId: 'activity-target' });
-    const connection = store.product.connection({
-      title: 'Synthetic activity',
-      protocol: 'fixture-sse-v1',
-      endpoint: 'http://127.0.0.1:9',
-      enabled: true,
-    });
-    const model = store.product.model({
-      title: 'Synthetic activity',
-      connectionId: connection.id,
-      modelId: 'fixture-helper',
-      temperature: null,
-      maxOutputTokens: 1024,
-    });
     const bot = store.product.content(fixtureBotInput('등대지기 미라')) as Content;
-    const task = workspace.enqueue(conversation.id, 'activity', '자료 확인', {
-      scope: conversation.scope,
-      model: store.product.modelSnapshot(model.id),
-      history: [],
-      persona: '',
-      limits: { totalCalls: 24, helperCalls: 12 },
-    });
     const started = (callId: string, name: string, target: unknown) =>
       workspace.event(conversation.id, task.id, 'tool.started', {
         callId,
@@ -239,7 +234,139 @@ test('live tool starts carry a resolved target and never the argument preview, b
       { state: 'stopped' },
     ]);
   } finally {
-    store.close();
-    directory.remove();
+    close();
   }
+});
+
+test('activity counts helper calls beyond the event window and projects a retry wait without an error', () => {
+  const { store, workspace, conversation, task, close } = activityTask('activity-retry');
+  try {
+    for (let index = 0; index < 45; index++) {
+      workspace.event(conversation.id, task.id, 'attempt.started', {
+        id: `call-${index}`,
+        purpose: 'helper',
+      });
+      workspace.event(conversation.id, task.id, 'attempt.finished', {
+        id: `call-${index}`,
+        status: 'tool_calls',
+      });
+    }
+    workspace.event(conversation.id, task.id, 'attempt.started', {
+      id: 'summary',
+      purpose: 'context',
+    });
+    workspace.event(conversation.id, task.id, 'provider.retry', {
+      attempt: 1,
+      attempts: 3,
+      delayMs: 5_000,
+      code: 'HTTP_429',
+    });
+    const activity = readHelperActivity(store, task.id);
+    expect(activity.hasEarlier).toBe(true);
+    expect(activity.helperCalls).toBe(45);
+    const wait = activity.events.at(-1)!;
+    expect(wait).toMatchObject({
+      kind: 'provider.retry',
+      retry: { attempt: 1, attempts: 3, delayMs: 5_000, code: 'HTTP_429' },
+    });
+    expect(wait.error).toBeUndefined();
+  } finally {
+    close();
+  }
+});
+
+test('the running summary names the tool, the model call or the retry wait in progress', () => {
+  const running = (events: HelperActivity['events'], helperCalls = 3): HelperActivity => ({
+    taskId: 'task',
+    status: 'running',
+    hasEarlier: false,
+    helperCalls,
+    events,
+  });
+  expect(
+    helperActivitySummary(
+      running([
+        {
+          seq: 1,
+          kind: 'tool.started',
+          callId: 'patch',
+          name: 'resource.patch',
+          target: { kind: 'content', title: '등대지기 미라' },
+        },
+      ])
+    )
+  ).toBe('자료 및 설정 변경 중이에요 (등대지기 미라)');
+  expect(
+    helperActivitySummary(
+      running([{ seq: 1, kind: 'tool.started', callId: 'shell', name: 'data.exec' }])
+    )
+  ).toBe('작업 공간 명령 실행 중이에요');
+  const call = { seq: 1, kind: 'attempt.started', attemptId: 'call', purpose: 'helper' };
+  expect(helperActivitySummary(running([call]))).toBe('모델의 응답을 기다리고 있어요 (3번째 호출)');
+  const failed = { seq: 2, kind: 'attempt.finished', attemptId: 'call', status: 'error' };
+  const wait = (code: string) => ({
+    seq: 3,
+    kind: 'provider.retry',
+    retry: { attempt: 2, attempts: 3, delayMs: 20_000, code },
+  });
+  expect(helperActivitySummary(running([call, failed, wait('HTTP_429')]))).toBe(
+    '프로바이더의 요청 한도에 걸려 20초 뒤에 다시 시도해요 (2/3)'
+  );
+  expect(helperActivitySummary(running([call, failed, wait('HTTP_503')]))).toBe(
+    '프로바이더 서버 오류로 20초 뒤에 다시 시도해요 (2/3)'
+  );
+  const resumed = running(
+    [
+      call,
+      failed,
+      wait('HTTP_429'),
+      { seq: 4, kind: 'attempt.started', attemptId: 'again', purpose: 'helper' },
+    ],
+    4
+  );
+  expect(helperActivitySummary(resumed)).toBe('모델의 응답을 기다리고 있어요 (4번째 호출)');
+  expect(helperActivityStages(resumed).map((stage) => stage.state)).toEqual([
+    'issue',
+    'recorded',
+    'running',
+  ]);
+});
+
+test('an opened activity list uses reader-facing words and says when earlier steps are left out', () => {
+  const markup = renderToStaticMarkup(
+    createElement(HelperActivityDetails, {
+      taskId: 'task',
+      status: 'running',
+      visible: true,
+      inline: true,
+      source: {
+        error: '',
+        data: {
+          taskId: 'task',
+          status: 'running',
+          hasEarlier: true,
+          helperCalls: 2,
+          events: [
+            { seq: 1, kind: 'attempt.started', attemptId: 'first', purpose: 'helper' },
+            { seq: 2, kind: 'attempt.finished', attemptId: 'first', status: 'tool_calls' },
+            { seq: 3, kind: 'tool.started', callId: 'read', name: 'resource.read' },
+            { seq: 4, kind: 'tool.finished', callId: 'read', name: 'resource.read' },
+            { seq: 5, kind: 'attempt.started', attemptId: 'second', purpose: 'helper' },
+            { seq: 6, kind: 'attempt.finished', attemptId: 'second', status: 'error' },
+            {
+              seq: 7,
+              kind: 'provider.retry',
+              retry: { attempt: 1, attempts: 3, delayMs: 5_000, code: 'HTTP_429' },
+            },
+          ],
+        },
+      },
+    })
+  );
+  expect(markup).not.toMatch(/attempt\.(started|finished)|provider\.retry|tool_calls|>helper</u);
+  expect(markup).toContain('모델 호출');
+  expect(markup).toContain('도구 사용을 요청했어요');
+  expect(markup).toContain('다시 시도 대기');
+  expect(markup).toContain('<code>resource.read</code>');
+  expect(markup).toContain('앞선 단계는 여기에 나오지 않아요');
 });

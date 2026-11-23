@@ -15,7 +15,9 @@ const call = (
     : []),
 ];
 const rows = (events: HelperActivityEvent[], status: HelperActivity['status'] = 'running') =>
-  groupHelperActivity(helperActivityStages({ taskId: 'task', status, hasEarlier: false, events }));
+  groupHelperActivity(
+    helperActivityStages({ taskId: 'task', status, hasEarlier: false, helperCalls: 0, events })
+  );
 
 test('read, list, search and inspect calls are reads; writes and the shell are not', () => {
   for (const name of [

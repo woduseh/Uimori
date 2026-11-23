@@ -59,7 +59,7 @@ import { api, ApiError } from './api.js';
 import { RetryFailure } from './RetryFailure.js';
 import { RequestMessage } from './RequestMessage.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { HelperActivityDetails, useHelperActivity } from './HelperActivity.js';
+import { HelperActivityDetails, HelperLiveActivity, useHelperActivity } from './HelperActivity.js';
 import { helperActivitySummary } from './helper-activity.js';
 import { Dialog } from './Dialog.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
@@ -2278,15 +2278,12 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               testId="helper-current-activity"
             />
             {currentActivityClosed !== summarized.id && (
-              <div className="helper-current-activity-details">
-                <HelperActivityDetails
-                  inline
-                  taskId={summarized.id}
-                  status={summarized.status}
-                  visible={props.open}
-                  source={liveActivity}
-                />
-              </div>
+              <HelperLiveActivity
+                taskId={summarized.id}
+                status={summarized.status}
+                visible={props.open}
+                source={liveActivity}
+              />
             )}
           </>
         )}

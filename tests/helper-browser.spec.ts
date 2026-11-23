@@ -433,6 +433,9 @@ async function harness(page: Page, seedCount = 0) {
             status: task.status,
             events: activities.get(task.id) ?? [],
             hasEarlier: false,
+            helperCalls: (activities.get(task.id) ?? []).filter(
+              (item) => item.kind === 'attempt.started' && item.purpose === 'helper'
+            ).length,
           },
         });
       if (taskMatch[2]) {
@@ -2999,12 +3002,75 @@ test('HELPACTIVITY-READS consecutive reads fold into one row that expands to eac
       path: info.outputPath(`grouped-reads-${width}-${colorScheme}.png`),
     });
     const bar = panel.getByTestId('helper-current-activity');
-    await expect(bar.locator('.activity-label')).toHaveText('도우미가 요청을 처리하고 있어요');
+    await expect(bar.locator('.activity-label')).toHaveText(
+      '자료 및 설정 변경 중이에요 (등대지기 미라)'
+    );
     await expect(bar.locator('.activity-elapsed').first()).toBeVisible();
     const row = panel.getByTestId('helper-task-activity');
     await expect(row.locator('.activity-elapsed')).toHaveCount(0);
     await expect(row.locator('.turn-activity-text')).toHaveCount(0);
   }
+});
+
+test('HELPACTIVITY-FOLLOW the live list keeps the newest step in view until the reader scrolls up', async ({
+  page,
+  request,
+}, info) => {
+  const chat = await create(request),
+    state = await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  await panel.getByLabel('도우미에게 요청').fill('자료를 차례로 고쳐 주세요');
+  await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await expect.poll(() => state.posts.length).toBe(1);
+  const task = state.current().tasks[0];
+  const rounds = (count: number): HelperActivityEvent[] =>
+    Array.from({ length: count }, (_, index) => [
+      { seq: index * 4 + 1, kind: 'attempt.started', attemptId: `a${index}`, purpose: 'helper' },
+      {
+        seq: index * 4 + 2,
+        kind: 'attempt.finished',
+        attemptId: `a${index}`,
+        status: 'tool_calls',
+      },
+      { seq: index * 4 + 3, kind: 'tool.started', callId: `c${index}`, name: 'resource.patch' },
+      { seq: index * 4 + 4, kind: 'tool.finished', callId: `c${index}`, name: 'resource.patch' },
+    ]).flat();
+  const waiting = (calls: number): HelperActivityEvent[] => [
+    ...rounds(calls - 1),
+    { seq: calls * 4, kind: 'attempt.started', attemptId: 'now', purpose: 'helper' },
+  ];
+  state.activity(task, waiting(9));
+  const bar = panel.getByTestId('helper-current-activity').locator('.activity-label');
+  await expect(bar).toHaveText('모델의 응답을 기다리고 있어요 (9번째 호출)');
+  const list = panel.locator('.helper-current-activity-details');
+  const running = list.locator('.helper-activity-stages > li[data-state="running"]');
+  await expect(running).toBeInViewport();
+  await expect(running).toContainText('모델 호출');
+  await page.screenshot({ path: info.outputPath('live-list-follows.png') });
+  await list.evaluate((node) => {
+    node.scrollTop = 0;
+  });
+  state.activity(task, [
+    ...waiting(9),
+    { seq: 37, kind: 'attempt.finished', attemptId: 'now', status: 'error' },
+    {
+      seq: 38,
+      kind: 'provider.retry',
+      retry: { attempt: 1, attempts: 3, delayMs: 5_000, code: 'HTTP_429' },
+    },
+  ]);
+  await expect(bar).toHaveText('프로바이더의 요청 한도에 걸려 5초 뒤에 다시 시도해요 (1/3)');
+  await expect(running).toContainText('다시 시도 대기');
+  expect(await list.evaluate((node) => node.scrollTop)).toBe(0);
+  await running.locator('summary').click();
+  await expect(running.locator('.helper-activity-records')).toHaveText(
+    '프로바이더의 요청 한도에 걸려 5초 뒤에 다시 시도해요 (1/3)'
+  );
+  const failed = list.locator('.helper-activity-stages > li[data-state="issue"]');
+  await failed.locator('summary').click();
+  await expect(failed.locator('.helper-activity-records')).toHaveText('오류로 끝났어요');
+  await page.screenshot({ path: info.outputPath('retry-wait-open.png') });
 });
 
 test('HELPMENTION01 typing @ opens target suggestions, inserts a reference chip, and sends structured references', async ({

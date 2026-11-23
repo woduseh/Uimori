@@ -140,15 +140,28 @@
 .helper-activity-stages summary small {
   color: var(--muted);
 }
-.helper-activity-stages > li[data-state="running"] > details > summary {
+.helper-activity-stages > li[data-state="running"] > details > summary,
+.helper-activity-stages > li[data-state="running"] > .helper-activity-stage-head {
   color: var(--accent-text);
 }
-.helper-activity-stages > li[data-state="issue"] > details > summary {
+.helper-activity-stages > li[data-state="issue"] > details > summary,
+.helper-activity-stages > li[data-state="issue"] > .helper-activity-stage-head {
   font-weight: 600;
   color: var(--error);
 }
 .helper-activity-stage-head > svg {
   flex-shrink: 0;
+}
+.helper-activity-stage-plain {
+  min-height: var(--control-h);
+  padding: 10px 0;
+}
+.helper-activity-stage-plain::before {
+  content: "";
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
 }
 .helper-activity-read-summary {
   display: flex;
