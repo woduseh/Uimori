@@ -241,6 +241,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
         'editor',
         'selection',
         'retryOf',
+        'resume',
         'outline',
         'references',
         'images',
@@ -252,6 +253,8 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
         body.references === undefined ? undefined : parseHelperReferencePointers(body.references);
       if (body.mode !== undefined && body.mode !== 'apply' && body.mode !== 'plan')
         throw new HttpError(400, 'Invalid helper mode');
+      if (body.resume !== undefined && body.resume !== true)
+        throw new HttpError(400, 'Invalid helper resume');
       if (
         body.confirmations !== undefined &&
         (!Array.isArray(body.confirmations) || body.confirmations.length > 16)
@@ -322,7 +325,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
           outline,
           { images: requestImageUploads(body.images), files: requestFileUploads(body.files) },
           true,
-          { mode: body.mode, confirmations, references }
+          { mode: body.mode, confirmations, references, resume: body.resume === true }
         )
       );
     }

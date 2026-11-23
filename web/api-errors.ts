@@ -118,6 +118,7 @@ const messages: Record<string, string> = {
     '이 채팅에 고정한 창작 프롬프트를 사용할 수 없어요. 채팅 설정에서 사용 가능한 프롬프트를 다시 선택하거나 고정을 해제해 주세요.',
   HELPER_EFFECTS_ALREADY_COMMITTED:
     '이 요청의 변경 사항은 이미 저장됐어요. 저장된 결과를 확인하고 남은 작업만 새 요청으로 알려 주세요.',
+  HELPER_RESUME_UNAVAILABLE: '이 작업은 이어서 할 수 없어요. 남은 작업을 새로 요청해 주세요.',
   HELPER_TASK_NO_LONGER_ACTIVE: '도우미 작업이 이미 종료됐어요. 최신 결과를 확인해 주세요.',
   HELPER_CONTEXT_DEPENDENCY_CHANGED:
     '도우미 대화가 변경됐어요. 최신 대화를 확인한 뒤 새 요청을 보내 주세요.',

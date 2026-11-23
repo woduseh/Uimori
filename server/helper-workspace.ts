@@ -34,6 +34,7 @@ import { imageDataHashes, pruneUnusedData } from './unused-data.js';
 import { forgetHelperConversationChanges, pruneHelperChanges } from './helper-changes.js';
 import { releaseHelperConfirmationArguments } from './helper-argument-retention.js';
 import { helperRequestContext } from './helper-context.js';
+import { stoppedHelperTasks } from './helper-resume.js';
 import {
   forgetHelperConversationRead,
   HELPER_ACTIVITY_EVENT_KINDS,
@@ -67,7 +68,7 @@ export function helperCallOperationId(taskId: string, callId: string): string {
 export const PLAN_MODE_READ_ONLY =
   'PLAN_MODE_READ_ONLY: This request asks for a plan, so operations that save or start work are refused. Finish the plan instead.';
 
-function taskData(row: Row, completedEffects = 0): Omit<HelperTask, 'snapshot'> {
+function taskData(row: Row): Omit<HelperTask, 'snapshot'> {
   return {
     id: row.id,
     conversationId: row.conversation_id,
@@ -80,9 +81,10 @@ function taskData(row: Row, completedEffects = 0): Omit<HelperTask, 'snapshot'> 
     createdAt: row.created_at,
     startedAt: row.started_at ?? null,
     updatedAt: row.updated_at,
-    ...(completedEffects
-      ? { completedEffects: { count: completedEffects, labels: ['완료된 도우미 작업'] } }
+    ...(row.completed_effects
+      ? { completedEffects: { count: row.completed_effects, labels: ['완료된 도우미 작업'] } }
       : {}),
+    ...(row.resumable ? { resumable: true as const } : {}),
   };
 }
 
@@ -673,20 +675,17 @@ export class HelperWorkspace {
     }));
   }
   task(id: string): HelperTask {
-    const row = this.store.db.prepare('SELECT * FROM helper_tasks WHERE id=?').get(id) as
-      | Row
-      | undefined;
+    const row = this.store.db
+      .prepare(
+        `WITH RECURSIVE one AS (SELECT * FROM helper_tasks WHERE id=?), ${stoppedHelperTasks('one')}
+        SELECT one.*,stopped.completed_effects,stopped.resumable
+        FROM one LEFT JOIN stopped ON stopped.task_id=one.id`
+      )
+      .get(id) as Row | undefined;
     if (!row) throw new HttpError(404, '도우미 작업을 찾을 수 없어요.');
-    const completedEffects = ['failed', 'cancelled', 'interrupted'].includes(row.status)
-      ? Number(
-          this.store.db
-            .prepare('SELECT count(*) AS n FROM helper_operations WHERE task_id=?')
-            .get(id)?.n ?? 0
-        )
-      : 0;
     const snapshot = JSON.parse(row.snapshot) as HelperTaskSnapshot;
     return {
-      ...taskData({ ...row, mode: snapshot.mode }, completedEffects),
+      ...taskData({ ...row, mode: snapshot.mode }),
       snapshot,
       instructions: this.instructions(id),
     };
@@ -709,24 +708,20 @@ export class HelperWorkspace {
   private readTaskSummaries(predicate: string, args: string[]) {
     const rows = this.store.db
       .prepare(
-        `WITH page AS (
+        `WITH RECURSIVE page AS (
           SELECT t.rowid AS task_order,t.id,t.conversation_id,t.request,t.status,t.generation,
             t.error,t.usage,t.created_at,t.started_at,t.updated_at,
             json_extract(t.snapshot,'$.model.title') AS model_title,
             json_extract(t.snapshot,'$.mode') AS mode
           FROM helper_tasks t WHERE ${predicate} ORDER BY t.rowid DESC LIMIT 50
-        ), effects AS (
-          SELECT task_id,COUNT(*) AS count FROM helper_operations
-          WHERE task_id IN (SELECT id FROM page WHERE status IN ('failed','cancelled','interrupted'))
-          GROUP BY task_id
-        )
-        SELECT page.*,COALESCE(effects.count,0) AS completed_effects
-        FROM page LEFT JOIN effects ON effects.task_id=page.id ORDER BY page.task_order DESC`
+        ), ${stoppedHelperTasks('page')}
+        SELECT page.*,stopped.completed_effects,stopped.resumable
+        FROM page LEFT JOIN stopped ON stopped.task_id=page.id ORDER BY page.task_order DESC`
       )
       .all(...args) as Row[];
     const instructions = this.readInstructions(rows.map((row) => String(row.id)));
     return rows.map((row) => ({
-      ...taskData(row, Number(row.completed_effects)),
+      ...taskData(row),
       modelTitle: row.model_title as string,
       instructions: instructions.get(String(row.id)) ?? [],
     }));
@@ -826,8 +821,11 @@ export class HelperWorkspace {
           throw new HttpError(409, 'SCENE_DELETED_RETRY_UNAVAILABLE');
         if (!['failed', 'cancelled', 'interrupted'].includes(previous.status))
           throw new HttpError(409, '종료된 실패 요청만 재시도할 수 있어요.');
-        if (previous.completedEffects?.count)
-          throw new HttpError(409, 'HELPER_EFFECTS_ALREADY_COMMITTED');
+        if (snapshot.resume ? !previous.resumable : previous.completedEffects?.count)
+          throw new HttpError(
+            409,
+            snapshot.resume ? 'HELPER_RESUME_UNAVAILABLE' : 'HELPER_EFFECTS_ALREADY_COMMITTED'
+          );
         snapshot.requestGroupId = previous.snapshot.requestGroupId ?? previous.id;
         const latest = this.store.db
           .prepare(

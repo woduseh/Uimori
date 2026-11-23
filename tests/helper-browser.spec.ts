@@ -1980,6 +1980,27 @@ test('HELPHISTORY long requests fold without hiding failures, saved changes or e
   expect(state.posts).toHaveLength(0);
 });
 
+test('HELPUI06B a stopped task with recorded work offers to continue and sends a resume of that task', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  await open(page);
+  const failed = state.addFailed(state.current());
+  failed.error = 'HTTP_429';
+  failed.completedEffects = { count: 1, labels: ['채팅 제목 변경'] };
+  failed.resumable = true;
+  await page.reload();
+  const panel = await open(page);
+  const actions = panel.getByRole('group', { name: '실패한 요청' });
+  await expect(actions.getByRole('button', { name: '다시 시도', exact: true })).toHaveCount(0);
+  await actions.getByRole('button', { name: '이어서 하기', exact: true }).click();
+  await expect.poll(() => state.posts.length).toBe(1);
+  expect(state.posts[0]).toMatchObject({ retryOf: failed.id, resume: true });
+});
+
 test('HELPUI06 saved effects survive response failure and cannot be replayed from retry controls', async ({
   page,
   request,

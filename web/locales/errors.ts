@@ -473,6 +473,12 @@ export const messages = {
     ja: 'このリクエストの変更はすでに保存されています。保存された結果を確認し、残りの作業だけを新たに依頼してください。',
     zh: '此请求的更改已保存。请查看已保存的结果，仅针对剩余工作发起新请求。',
   },
+  'errors.HELPER_RESUME_UNAVAILABLE': {
+    ko: '이 작업은 이어서 할 수 없어요. 남은 작업을 새로 요청해 주세요.',
+    en: 'This task cannot be continued. Request the remaining work again.',
+    ja: 'この作業は続きから実行できません。残りの作業を新たに依頼してください。',
+    zh: '此任务无法继续。请重新请求剩余的工作。',
+  },
   'errors.HELPER_TASK_NO_LONGER_ACTIVE': {
     ko: '도우미 작업이 이미 종료됐어요. 최신 결과를 확인해 주세요.',
     en: 'The assistant task has already ended. Check the latest result.',

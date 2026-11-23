@@ -1200,6 +1200,70 @@ test('a Vertex signature far larger than the input limit neither compacts the ta
   expect(compactions(f, task)).toEqual([]);
 });
 
+test('a resumed task summarizes the reads it carried once they no longer fit', async () => {
+  const f = await fixture();
+  const fitted = f.target('helper').inputTokenLimit!;
+  f.updateModel(f.helperModel.id, { inputTokenLimit: fitted * 4 });
+  let helperCalls = 0;
+  const log = script(f, (request) => {
+    if (request.role === 'context') return summarized();
+    if (++helperCalls === 1)
+      return tools(
+        tool('read', 'resource.read', { kind: 'content', id: 'read-evidence' }),
+        tool('save', 'resource.save', { expectedRevision: 1 })
+      );
+    if (helperCalls === 2)
+      return {
+        ...structuredClone(success),
+        status: 'error',
+        text: '',
+        error: { code: 'HTTP_400' },
+      };
+    return structuredClone(success);
+  });
+  const stopped = await f.run();
+  expect(stopped).toMatchObject({
+    status: 'failed',
+    resumable: true,
+    completedEffects: { count: 1 },
+  });
+  expect(compactions(f, stopped)).toEqual([]);
+
+  f.updateModel(f.helperModel.id, { inputTokenLimit: fitted });
+  const resumed = f.runtime.enqueue(
+    f.conversation.id,
+    randomUUID(),
+    f.request,
+    undefined,
+    undefined,
+    stopped.id,
+    undefined,
+    true,
+    undefined,
+    { resume: true }
+  );
+  await Promise.all(f.work);
+  const finished = f.runtime.workspace.task(resumed.id);
+  expect(finished, finished.error ?? '').toMatchObject({ status: 'completed' });
+  expect(log.requests.map((request) => request.role)).toEqual([
+    'helper',
+    'helper',
+    'context',
+    'helper',
+  ]);
+  expect(compactions(f, finished)).toMatchObject([{ applied: true }]);
+  const source = log.requests.at(-1)!.input.source as unknown as {
+    continuation: { reason: string; completedReads: { name: string }[] };
+    completedToolHistory: { events: ToolEvent[] };
+  };
+  expect(source.continuation).toMatchObject({
+    reason: 'host-compaction',
+    completedReads: [{ name: 'resource.read' }],
+  });
+  expect(source.completedToolHistory.events.map((event) => event.callId)).toEqual(['save']);
+  expect(f.mutations).toBe(1);
+});
+
 test('an oversized fixed receipt fails before another summary without losing the committed effect', async () => {
   const f = await fixture();
   let helperCalls = 0,

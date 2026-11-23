@@ -196,6 +196,7 @@ export type HelperHandoff =
     } & HelperSelection);
 type Outbox = Partial<FrozenHelperAttachments> & {
   retryOf?: string;
+  resume?: true;
   steerTaskId?: string;
   requestKey: string;
   text: string;
@@ -1177,6 +1178,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         {
           requestKey: request.requestKey,
           ...(request.retryOf ? { retryOf: request.retryOf } : {}),
+          ...(request.resume ? { resume: true } : {}),
           text: request.text,
           ...(request.editor ? { editor: request.editor } : {}),
           ...(request.selection ? { selection: request.selection } : {}),
@@ -1331,11 +1333,12 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   async function retry(
     task: HelperTaskView,
     text = messages.find((message) => message.taskId === task.id && message.role === 'user')
-      ?.text ?? task.request
+      ?.text ?? task.request,
+    resume = false
   ) {
     if (props.ready === false || !conversation || outbox || busy || locks.current.has(scopeKey))
       return false;
-    if (task.completedEffects?.count) {
+    if (!resume && task.completedEffects?.count) {
       setError(uiMessage('helpers.m022'));
       return false;
     }
@@ -1345,6 +1348,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       scope: scopeKey,
       targetConversationId: conversation.id,
       retryOf: task.id,
+      ...(resume ? { resume: true as const } : {}),
     };
     return send(request);
   }
@@ -1497,6 +1501,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
             status={task.status}
             error={task.error}
             disabled={busy || Boolean(outbox)}
+            onResume={task.resumable ? () => void retry(task, undefined, true) : undefined}
             onRetry={task.completedEffects ? undefined : () => void retry(task)}
             onSettings={props.onModelSettings}
             onDetails={() => setTaskHistory({ taskId: task.id })}

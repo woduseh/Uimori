@@ -15,6 +15,7 @@ import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { editableResource } from '../core/resource-editing.js';
 import { readResource, saveResource } from '../server/resource-service.js';
 import * as transport from '../core/transport.js';
+import type { ToolEvent } from '../core/types.js';
 import {
   HELPER_TOOL_CALL_GRACE,
   HELPER_TOOL_CALL_LIMIT,
@@ -1517,6 +1518,150 @@ test('a saved change survives an explanation EOF and prevents whole-request retr
     })
   ).toThrow('HELPER_EFFECTS_ALREADY_COMMITTED');
   expect(reopened.taskSummaries(conversation.id)).toHaveLength(1);
+});
+
+function stoppedAfterRename(f: ReturnType<typeof fixture>) {
+  const chat = createFixtureChat(f.store, '원 제목');
+  const conversation = f.workspace.open({ kind: 'chat', chatId: chat.id });
+  const requests: transport.ProviderRequest[] = [];
+  const replies: transport.ProviderResult[] = [
+    {
+      ...structuredClone(success),
+      status: 'tool_calls',
+      text: '',
+      toolCalls: [
+        { id: 'catalog', name: 'app.tools', arguments: { query: 'chat' } },
+        {
+          id: 'rename',
+          name: 'chat.rename',
+          arguments: { title: '저장 완료', expectedRevision: chat.titleRevision ?? 0 },
+        },
+      ],
+    },
+    { ...structuredClone(success), status: 'error', text: '', error: { code: 'UNEXPECTED_EOF' } },
+  ];
+  mockSend((request) => {
+    requests.push(structuredClone(request));
+    return replies.shift() ?? structuredClone(success);
+  });
+  const resume = (key: string, previous: string) =>
+    f.runtime.enqueue(
+      conversation.id,
+      key,
+      '제목을 바꿔줘',
+      undefined,
+      undefined,
+      previous,
+      undefined,
+      true,
+      undefined,
+      { resume: true }
+    );
+  const source = (request: transport.ProviderRequest) =>
+    request.input.source as unknown as {
+      continuation?: { reason: string };
+      completedToolHistory?: { events: ToolEvent[] };
+    };
+  return { chat, conversation, requests, replies, resume, source };
+}
+
+test('resuming a stopped task hands its recorded exchanges to the model and repeats no saved change', async () => {
+  const f = fixture(),
+    { chat, conversation, requests, resume, source } = stoppedAfterRename(f);
+  const stopped = f.runtime.enqueue(conversation.id, 'first', '제목을 바꿔줘');
+  await Promise.all(f.work);
+  expect(f.workspace.task(stopped.id)).toMatchObject({
+    status: 'failed',
+    resumable: true,
+    completedEffects: { count: 1 },
+  });
+  expect(f.workspace.taskSummaries(conversation.id)[0]).toMatchObject({ resumable: true });
+  expect(() =>
+    f.runtime.enqueue(conversation.id, 'again', '제목을 바꿔줘', undefined, undefined, stopped.id)
+  ).toThrow('HELPER_EFFECTS_ALREADY_COMMITTED');
+
+  const resumed = resume('resume', stopped.id);
+  await Promise.all(f.work);
+  expect(f.workspace.task(resumed.id), f.workspace.task(resumed.id).error ?? '').toMatchObject({
+    status: 'completed',
+  });
+  expect(requests).toHaveLength(3);
+  const first = requests[2];
+  expect(first.input.results).toEqual([]);
+  expect(first).not.toHaveProperty('opaqueState');
+  expect(first.input.task).toBe('제목을 바꿔줘');
+  expect(first.stable.contract).toContain('from an earlier task that stopped');
+  expect(source(first).continuation).toMatchObject({ reason: 'task-resumed' });
+  expect(source(first).completedToolHistory?.events).toMatchObject([
+    { callId: 'catalog', name: 'app.tools', args: { query: 'chat' }, denied: false },
+    { callId: 'rename', name: 'chat.rename', args: { title: '저장 완료' }, denied: false },
+  ]);
+  expect(source(first).completedToolHistory?.events[0].result).toEqual(
+    (requests[1].input.results as unknown as ToolEvent[])[0].result
+  );
+  expect(f.store.chat(chat.id).title).toBe('저장 완료');
+  expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations').get()).toEqual({ n: 1 });
+  expect(source(requests[0])).not.toHaveProperty('continuation');
+});
+
+test('a resumed task that stops again carries the whole chain and still refuses a retry from the start', async () => {
+  const f = fixture(),
+    { conversation, requests, replies, resume, source } = stoppedAfterRename(f);
+  const stopped = f.runtime.enqueue(conversation.id, 'first', '제목을 바꿔줘');
+  await Promise.all(f.work);
+  replies.push({
+    ...structuredClone(success),
+    status: 'error',
+    text: '',
+    error: { code: 'HTTP_400' },
+  });
+  const second = resume('resume-1', stopped.id);
+  await Promise.all(f.work);
+  expect(f.workspace.task(second.id)).toMatchObject({
+    status: 'failed',
+    error: 'HTTP_400',
+    resumable: true,
+    completedEffects: { count: 1 },
+  });
+  expect(() =>
+    f.runtime.enqueue(conversation.id, 'again', '제목을 바꿔줘', undefined, undefined, second.id)
+  ).toThrow('HELPER_EFFECTS_ALREADY_COMMITTED');
+  expect(() => resume('stale', stopped.id)).toThrow('이미 다시 시도한 요청이에요');
+
+  const third = resume('resume-2', second.id);
+  await Promise.all(f.work);
+  expect(f.workspace.task(third.id)).toMatchObject({ status: 'completed' });
+  expect(
+    source(requests.at(-1)!).completedToolHistory?.events.map((event) => event.callId)
+  ).toEqual(['catalog', 'rename']);
+});
+
+test('a task with no recorded exchange cannot be resumed', async () => {
+  const f = fixture();
+  mockSend(() => ({
+    ...structuredClone(success),
+    status: 'error',
+    text: '',
+    error: { code: 'HTTP_400' },
+  }));
+  const stopped = f.runtime.enqueue(f.conversation.id, 'first', '자료를 알려줘');
+  await Promise.all(f.work);
+  expect(f.workspace.task(stopped.id)).not.toHaveProperty('resumable');
+  const resume = (previous?: string) =>
+    f.runtime.enqueue(
+      f.conversation.id,
+      'resume',
+      '자료를 알려줘',
+      undefined,
+      undefined,
+      previous,
+      undefined,
+      true,
+      undefined,
+      { resume: true }
+    );
+  expect(() => resume(stopped.id)).toThrow('HELPER_RESUME_UNAVAILABLE');
+  expect(() => resume()).toThrow('HELPER_RESUME_UNAVAILABLE');
 });
 
 test('paged helper messages retain their task outcome outside the recent task window', () => {

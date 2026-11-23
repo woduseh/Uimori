@@ -122,6 +122,7 @@ export type HelperTaskSnapshot = {
   summaryLength?: import('./summary-length.js').SummaryLengthSettings;
   taskTimeoutMinutes?: number;
   retryOf?: string;
+  resume?: true;
   requestFingerprint?: string;
   outlineTarget?: import('./outline.js').OutlineTarget;
   requestGroupId?: string;
@@ -158,6 +159,7 @@ export type HelperTask = {
   updatedAt: string;
   snapshot: HelperTaskSnapshot;
   completedEffects?: { count: number; labels: string[] };
+  resumable?: true;
   instructions?: HelperInstruction[];
 };
 export type HelperMessage = {

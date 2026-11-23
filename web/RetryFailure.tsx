@@ -8,6 +8,7 @@ export function RetryFailure({
   status,
   error,
   disabled,
+  onResume,
   onRetry,
   onRejudge,
   onSettings,
@@ -17,6 +18,7 @@ export function RetryFailure({
   status: string;
   error?: string | null;
   disabled?: boolean;
+  onResume?: () => void;
   onRetry?: () => void;
   onRejudge?: () => void;
   onSettings?: () => void;
@@ -77,6 +79,17 @@ export function RetryFailure({
             onClick={onRejudge}
           >
             {t('shared.rejudge')}
+          </button>
+        )}
+        {onResume && (
+          <button
+            type="button"
+            className="secondary"
+            disabled={disabled}
+            title={t('shared.resumeHelp')}
+            onClick={onResume}
+          >
+            {t('shared.resume')}
           </button>
         )}
         {onRetry && (

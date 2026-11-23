@@ -317,6 +317,18 @@ export const messages = {
     ja: '同じリクエストを現在の設定で再実行します。',
     zh: '使用当前设置重新执行该请求。',
   },
+  'shared.resume': {
+    ko: '이어서 하기',
+    en: 'Continue',
+    ja: '続きから実行',
+    zh: '继续执行',
+  },
+  'shared.resumeHelp': {
+    ko: '멈춘 자리에서 이어 가요. 읽은 자료와 저장한 변경을 그대로 넘겨받아요.',
+    en: 'Pick up where the task stopped. It keeps what was read and the changes already saved.',
+    ja: '止まったところから続けます。読み込んだ資料と保存済みの変更を引き継ぎます。',
+    zh: '从停止的地方继续，沿用已读取的资料和已保存的更改。',
+  },
   'shared.retry': {
     ko: '다시 시도',
     en: 'Retry',

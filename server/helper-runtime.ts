@@ -166,6 +166,7 @@ import {
   publishHelperContext,
   publishManualHelperContext,
 } from './helper-context.js';
+import { recordedHelperExchanges } from './helper-resume.js';
 import {
   DEFAULT_HELPER_TASK_TIMEOUT_MINUTES,
   HELPER_TASK_LIMITS,
@@ -237,6 +238,7 @@ export type HelperRequestOptions = {
   mode?: HelperMode;
   confirmations?: string[];
   references?: HelperReferencePointer[];
+  resume?: boolean;
 };
 
 function retryRequest(workspace: HelperWorkspace, request: string, retryOf?: string): string {
@@ -252,6 +254,8 @@ function retryRequest(workspace: HelperWorkspace, request: string, retryOf?: str
 
 const PLAN_MODE_GUIDANCE =
   'This request is in plan mode: produce a plan, not changes. Read whatever you need, but do not save, create, delete, select, request generation or change settings; the host refuses every operation that writes. Reply with a concrete, ordered plan that names each target and the change you would make, and the questions the owner must settle. Carrying out the plan is a separate request.';
+const RESUMED_TASK_GUIDANCE =
+  'Continue this same request from an earlier task that stopped before it finished. Take the task and constraints from the actual request, configured instructions and explicit author notes. Resume from the host-recorded exchanges; exact successful receipts override stale next-step plans and completed mutations must not be replayed. Finish the remaining work and answer the user. Completion records do not prove the whole request is resolved.';
 const FINAL_CALL_GUIDANCE =
   'The call budget allows only this response. Do not call tools. Reply to the user with what you completed, which changes were saved, any change whose outcome is uncertain, and what remains to do.';
 const CONTRACT = `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation. Apply, select, cancel or retry only when requested. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. When a short multiple-choice question resolves that ambiguity cleanly, you may call helper.ask with 2 to 5 options and then end this turn so the user can choose in the UI. A CONFIRMATION_REQUIRED result means the host held the call for the owner: do not repeat it in this task, and say in your reply what needs confirmation. A request whose source lists confirmedCalls carries the owner's confirmation; make each such call with exactly the listed arguments when the request still wants it. When source.referencedTargets is present, those are the exact scenes, outline nodes or library resources the user pointed to with @; inspect them directly with the matching read tool using their listed IDs. ${AUTHOR_NOTE_GUIDANCE}
@@ -1017,11 +1021,14 @@ export class HelperRuntime {
       (retryOf ? this.workspace.task(retryOf).snapshot.references : undefined);
     if (mode === 'plan' && confirmations.length)
       throw new HttpError(400, 'HELPER_PLAN_CONFIRMATIONS');
+    const resume = options.resume === true;
+    if (resume && !retryOf) throw new HttpError(400, 'HELPER_RESUME_UNAVAILABLE');
     const requestFingerprint = createHash('sha256')
       .update(
         JSON.stringify({
           request,
           retryOf,
+          ...(resume ? { resume } : {}),
           editor,
           selection,
           outlineTarget,
@@ -1051,7 +1058,10 @@ export class HelperRuntime {
         throw new HttpError(403, '다른 대화의 요청은 재시도할 수 없어요.');
       if (previous.snapshot.invalidatedBySceneDeletion)
         throw new HttpError(409, 'SCENE_DELETED_RETRY_UNAVAILABLE');
-      if (previous.completedEffects?.count)
+      if (resume) {
+        if (!previous.resumable || !recordedHelperExchanges(this.store.db, retryOf))
+          throw new HttpError(409, 'HELPER_RESUME_UNAVAILABLE');
+      } else if (previous.completedEffects?.count)
         throw new HttpError(409, 'HELPER_EFFECTS_ALREADY_COMMITTED');
       editor ??= previous.snapshot.editor;
       selection ??= previous.snapshot.selection;
@@ -1141,6 +1151,7 @@ export class HelperRuntime {
         ...(admission?.images?.length ? { images: structuredClone(admission.images) } : {}),
         ...(admission?.files?.length ? { files: structuredClone(admission.files) } : {}),
         ...(retryOf ? { retryOf } : {}),
+        ...(resume ? { resume: true as const } : {}),
         scope,
         model,
         taskTimeoutMinutes: workspace.helperTaskTimeoutMinutes,
@@ -1464,6 +1475,11 @@ export class HelperRuntime {
     );
     task.snapshot.context = helperContext(this.store, task.conversationId, task.snapshot.history);
     const knownOperations = knownOperationsFor(this.store, task);
+    const resumed =
+      task.snapshot.resume && task.snapshot.retryOf
+        ? recordedHelperExchanges(this.store.db, task.snapshot.retryOf)
+        : undefined;
+    if (task.snapshot.resume && !resumed) throw new Error('HELPER_RESUME_UNAVAILABLE');
 
     this.store.db
       .prepare('UPDATE helper_tasks SET snapshot=? WHERE id=?')
@@ -1497,8 +1513,12 @@ export class HelperRuntime {
       | (Pick<ProviderRequest['input'], 'controls' | 'task'> & Pick<ProviderRequest, 'prompt'>)
       | undefined;
     let providerPaused = false;
-    let completedToolHistory: ToolEvent[] = [];
-    let completedReads: HelperReadReference[] = [];
+    let completedToolHistory: ToolEvent[] = resumed
+      ? [...resumed.compacted.filter((event) => !helperRead(event)), ...resumed.current]
+      : [];
+    let completedReads: HelperReadReference[] = resumed
+      ? completedReadReferences([], resumed.compacted)
+      : [];
     const imageReads = new Map<string, HelperImageRead[]>();
     const withToolImages = (request: ProviderRequest): ProviderRequest => {
       const events = [
@@ -1870,18 +1890,21 @@ export class HelperRuntime {
         let estimate = estimateRequest(request);
         const inputLimit = budget.inputTokenLimit;
         const pendingImageReads = results.flatMap((event) => imageReads.get(event.callId) ?? []);
+        const readable = [...completedToolHistory.filter(helperRead), ...results];
         const hasSummaryInput =
-          history.length || previousSummary || results.some(helperRead) || pendingImageReads.length;
+          history.length ||
+          previousSummary ||
+          readable.some(helperRead) ||
+          pendingImageReads.length;
         const shouldCompact =
           !providerPaused &&
           estimate > inputLimit * HELPER_COMPACTION_INPUT_RATIO &&
           (readRevision !== lastCompactedReadRevision || estimate > inputLimit);
         if (shouldCompact && (hasSummaryInput || estimate > inputLimit)) {
-          const preserved = [
-            ...completedToolHistory,
-            ...results.filter((event) => !helperRead(event)),
-          ];
-          const retainedReads = completedReadReferences(completedReads, results);
+          const preserved = [...completedToolHistory, ...results].filter(
+            (event) => !helperRead(event)
+          );
+          const retainedReads = completedReadReferences(completedReads, readable);
           const fixedRequest = withToolImages(
             this.request(
               task,
@@ -1911,7 +1934,10 @@ export class HelperRuntime {
           });
           lastCompactedReadRevision = readRevision;
           const needsSummary =
-            older.length || previousSummary || results.some(helperRead) || pendingImageReads.length;
+            older.length ||
+            previousSummary ||
+            readable.some(helperRead) ||
+            pendingImageReads.length;
           if (needsSummary || estimate > inputLimit) {
             let summary: { text: string; usage: Usage } | undefined;
             if (needsSummary) {
@@ -1928,7 +1954,7 @@ export class HelperRuntime {
                 context,
                 previousSummary,
                 older,
-                results,
+                readable,
                 hooks('context'),
                 retainedFixedTokens,
                 pendingImageReads
@@ -2244,7 +2270,11 @@ export class HelperRuntime {
         stable: {
           contract:
             CONTRACT +
-            (segment > 0 ? '\n' + CONTEXT_CONTINUATION_GUIDANCE : '') +
+            (segment > 0
+              ? '\n' + CONTEXT_CONTINUATION_GUIDANCE
+              : task.snapshot.resume
+                ? '\n' + RESUMED_TASK_GUIDANCE
+                : '') +
             (task.snapshot.outline ? '\n' + OUTLINE_PLANNING_GUIDANCE : '') +
             (task.snapshot.outline?.target.purpose === 'review'
               ? '\n' + OUTLINE_REVIEW_GUIDANCE
@@ -2286,7 +2316,7 @@ export class HelperRuntime {
               conversationId: task.conversationId,
               segment,
             },
-            ...(segment > 0
+            ...(segment > 0 || task.snapshot.resume
               ? {
                   continuation: {
                     kind: 'helper-task-continuation',
@@ -2294,10 +2324,12 @@ export class HelperRuntime {
                     conversationId: task.conversationId,
                     segment,
                     status: 'in-progress',
-                    reason: 'host-compaction',
+                    reason: segment > 0 ? 'host-compaction' : 'task-resumed',
                     completedReads,
                     guidance:
-                      'These reads returned successfully before host compaction in this task. Their bodies are represented by the summary, while the listed arguments and returned metadata stay exact. Read completion does not establish unread coverage or a verified final answer. Use the recorded progress to resume the remaining work.',
+                      segment > 0
+                        ? 'These reads returned successfully before host compaction in this task. Their bodies are represented by the summary, while the listed arguments and returned metadata stay exact. Read completion does not establish unread coverage or a verified final answer. Use the recorded progress to resume the remaining work.'
+                        : 'An earlier task for this request stopped before it finished. completedToolHistory holds its exchanges with what each read returned; reads listed here were summarized before it stopped, so only their arguments and returned metadata are exact. Read completion does not establish unread coverage or a verified final answer. Use the recorded progress to resume the remaining work.',
                   },
                 }
               : {}),
@@ -2306,8 +2338,7 @@ export class HelperRuntime {
                   completedToolHistory: {
                     kind: 'host-completed-tool-history',
                     events: completedToolHistory,
-                    guidance:
-                      'Exact recorded helper exchanges from this task, not pending tool calls. Preserve their operation IDs, revisions and results; never repeat a successfully completed mutation. Failed or denied exchanges do not establish completed changes.',
+                    guidance: `Exact recorded helper exchanges from ${task.snapshot.resume ? 'this task and the stopped task it resumes' : 'this task'}, not pending tool calls. Preserve their operation IDs, revisions and results; never repeat a successfully completed mutation. Failed or denied exchanges do not establish completed changes.`,
                   },
                 }
               : {}),
