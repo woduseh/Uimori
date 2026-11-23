@@ -96,6 +96,21 @@ For before/after native generation preparation, run `node --expose-gc scripts/be
 
 After a matching build, `node --expose-gc scripts/benchmark-presentation.mjs output/benchmarks/presentation-local baseline` measures the reader response plus the last five concurrent native presentation responses for 30 and 300 completed synthetic scenes (8,000 characters each). Rebuild after a change, then rerun with the same directory and label `after` to reuse the exact isolated SQLite fixtures. The directory must be new or carry this runner's fixture marker. Reports retain source/build hashes, Git status/diff, fixture hashes, the first process-local flow, two warmups and nine raw samples with median/min/max, process CPU, sampled RSS, prepared-statement counts and response hashes/bytes. Compare response and fixture hashes as well as timing. No OS cache reset, browser paint, remote network or paid provider is included; RSS sampling can miss synchronous peaks. Run measurements without concurrent builds, tests or other heavy agent work.
 
+### Request timing, bundle sizes and the operating ledger
+
+API responses carry a `Server-Timing` header with `auth`, `db` (SQLite time and `q=<statements>`) and `total` durations; hijacked streams and static files carry none. `GET /api/diagnostics/metrics` summarizes the last 4,096 API responses per route pattern since the process started, behind the usual API authentication. `server/request-metrics.ts` owns both. The SQL counter in `server/sql-metrics.ts` covers only the server's main `Store` connection; worker threads and child processes that open their own connection are not counted, and synchronous SQL that background work started by a request runs before the response is sent counts toward that request.
+
+`npm run build` writes `dist/bundle-sizes.json` with raw, gzip and brotli bytes for every served web file. Hashes in asset names are replaced by `[hash]` so two builds can be diffed; compressed sizes are those of the precompressed `.gz`/`.br` files where they exist.
+
+`scripts/perf-ledger.mjs` prints one JSON document of aggregates from a database opened read-only: table and page sizes, run timelines and phase spans, refusals, retries, tokens and cache reuse, streaming diagnostics, tools, helper, translation and storage. It selects only identifiers, enumerations, numbers and byte lengths, and replaces any other string in its output with `(redacted)`. `--since <date>` sets the window start (default 30 days ago). It imports only `node:` modules, so it can be piped into a running container without copying files:
+
+```powershell
+node scripts/perf-ledger.mjs .local/uimori.sqlite --since 2026-10-24
+Get-Content scripts/perf-ledger.mjs | ssh <host> "docker exec -i <container> node --input-type=module - --since 2026-10-24"
+```
+
+The second form reads the container's `UIMORI_DB`. `node --test scripts/perf-ledger.test.mjs` checks the output against a synthetic database after a build.
+
 ### Translation reference preparation
 
 After a matching build, run `node --expose-gc scripts/benchmark-translation-references.mjs output/benchmarks/translation-references-local baseline`. Rebuild after the change and rerun with the same directory and label `after`. The directory must be new or carry the runner's fixture marker. It reuses isolated SQLite fixtures with 30/300 completed translations, 16,000-character originals and 8,000-character translations. Job inputs are empty, so this conservative case does not claim savings from large retained settings. The optional final argument selects reference capture without a tool read (`none`), a single captured translation (`one`), or every captured translation (`all`, the default). Use a distinct report label per mode. The timed boundary includes identity capture and the requested access. It excludes current job/snapshot preparation, provider/model work and browser/network latency. Reports retain source/build identity, runner copies, input/output/database hashes, the first call, two warmups and nine raw samples, elapsed time, CPU, entry/return memory, SQL statement counts and returned text bytes. Each sample checks exact reference output, and the run checks unchanged DB rows. Memory samples are not peaks, and OS caches are not reset. Run without concurrent builds or tests.
