@@ -117,10 +117,6 @@ export function setShortcutCapturing(active: boolean) {
   capturingCount = Math.max(0, capturingCount + (active ? 1 : -1));
 }
 
-export function shortcutLabel(action: ShortcutAction) {
-  return shortcutKeyLabel(currentBindings[action], isApplePlatform());
-}
-
 export function useShortcutLabel(action: ShortcutAction) {
   const bindings = useShortcutBindings();
   return shortcutKeyLabel(bindings[action], isApplePlatform());

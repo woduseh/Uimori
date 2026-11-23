@@ -6,4 +6,3 @@ export type {
   JudgmentRequest as JevRequest,
 } from './judgment.js';
 export type { JudgmentQuestion as JevQuestion } from '../core/judgment.js';
-export type JevImage = NonNullable<import('../core/judgment.js').JudgmentRequest['assets']>[string];

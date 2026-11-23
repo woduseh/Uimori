@@ -240,13 +240,6 @@ export async function downloadFont(
     request.on('error', reject);
   });
 }
-export async function importFontFromUrl(
-  store: Store,
-  input: { title: string; url: string }
-): Promise<FontAsset> {
-  const bytes = await downloadFont(input.url, AbortSignal.timeout(15000));
-  return registerFont(store, { title: input.title, bytes });
-}
 export function fontRoutes(app: FastifyInstance, store: Store) {
   initFonts(store);
   app.get('/api/fonts', () => fontCatalog(store));

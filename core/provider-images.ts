@@ -15,11 +15,6 @@ export const PROVIDER_REQUEST_MAX_BYTES = 64 * 1024 * 1024;
 const object = (value: Json): value is Record<string, Json> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
-export function assertProviderRequestBytes(body: Json): void {
-  if (Buffer.byteLength(JSON.stringify(body), 'utf8') > PROVIDER_REQUEST_MAX_BYTES)
-    throw new ProviderContractError('IMAGE_REQUEST_TOO_LARGE');
-}
-
 export async function materializeProviderImages(
   body: Json,
   request: Pick<ProviderRequest, 'prompt' | 'toolImages'>,

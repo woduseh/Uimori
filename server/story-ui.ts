@@ -262,7 +262,3 @@ export function normalizeStoryUiOutput(text: string, resolveImage?: ResolveImage
     })
     .join('');
 }
-
-export function compileStoryUiPreview(text: string, resolveImage?: ResolveImage) {
-  return parseStoryUi(normalizeStoryUiOutput(text, resolveImage));
-}

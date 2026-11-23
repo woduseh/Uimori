@@ -182,9 +182,3 @@ export function validateRequestFile(value: unknown): RequestFile {
     ...(file.tokenEstimate === undefined ? {} : { tokenEstimate: Number(file.tokenEstimate) }),
   };
 }
-export function validateRequestFiles(value: unknown): RequestFile[] {
-  if (!Array.isArray(value) || value.length > REQUEST_FILE_MAX_COUNT) return invalid();
-  const files = value.map(validateRequestFile);
-  if (files.reduce((sum, file) => sum + file.bytes, 0) > REQUEST_FILES_MAX_BYTES) return invalid();
-  return files;
-}
