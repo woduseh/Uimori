@@ -35,11 +35,7 @@ function guides(): AppGuide[] {
     .concat({
       name: 'STORY-UI-REFERENCE',
       title: 'Story UI block reference',
-      text: [
-        '# Story UI block reference',
-        'The story writer receives this reference when Story UI is on. Read it before writing, repairing or previewing an <a2ui> block.',
-        storyUiPrompt(),
-      ].join('\n\n'),
+      text: ['# Story UI block reference', storyUiPrompt()].join('\n\n'),
     });
   return loaded;
 }

@@ -15,6 +15,9 @@ import { LoadingState } from './LoadingState.js';
 import { useStoryUiSegments } from './story-ui-parser.js';
 import { StoryUi } from './LazyStoryUi.js';
 import { StoryUiPreviewBlock } from './StoryUiPreviewBlock.js';
+import { scanStoryUi, type StoryUiMessage } from '../core/story-ui-scan.js';
+
+const neverCompiled = (_value: unknown): _value is StoryUiMessage[] => false;
 import './streaming-response.css';
 
 type StoryStyle = import('../core/story-ui-style.js').StoryUiStyleSetting;
@@ -45,11 +48,11 @@ function StreamingProse({ text, finished }: { text: string; finished: boolean })
 
 function StreamingHelperText({ text, finished }: { text: string; finished: boolean }) {
   const { complete, pending } = streamingParagraphs(text, finished);
-  const opened = pending.lastIndexOf('<a2ui>');
-  const composing = opened >= 0 && !pending.includes('</a2ui>', opened);
+  const last = pending.includes('<a2ui>') ? scanStoryUi(pending, neverCompiled).at(-1) : undefined;
+  const composing = last?.kind === 'pending' && last.text.startsWith('<a2ui>');
   return (
     <HelperMessageProse text={complete}>
-      <PendingParagraph text={composing ? pending.slice(0, opened) : pending} />
+      <PendingParagraph text={composing ? pending.slice(0, last.start) : pending} />
       {composing && <LoadingState presentation="placeholder" label={t('storyUi.composing')} />}
     </HelperMessageProse>
   );
@@ -78,6 +81,8 @@ export function StreamingStoryText({
           )
         ) : part.kind === 'ui' ? (
           <StoryUi key={part.id} segment={part} style={style} />
+        ) : part.kind === 'pending' && finished ? (
+          <Prose key={part.id} text={part.text} />
         ) : part.text.startsWith('<a2ui>') ? (
           <StoryUiPreviewBlock key={part.id} text={part.text} style={style} runId={runId} />
         ) : null

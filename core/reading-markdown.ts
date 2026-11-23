@@ -320,27 +320,23 @@ export function projectReadingText(
 }
 
 const plain = createReadingMarkdown('plain');
-export function compileReadingMarkdown(
+type StorySlot = { id: string; start: number; end?: number; kind?: string };
+
+function compileSection(
   text: string,
-  blocks: readonly ReadingBlock[] = [],
-  imageUrls: readonly string[] = [],
-  storySlots: readonly { id: string; start: number; end?: number; kind?: string }[] = []
+  base: number,
+  blocks: readonly ReadingBlock[],
+  environment: { images: Set<string> },
+  storySlots: readonly StorySlot[]
 ) {
-  const environment = {
-    images: new Set(
-      imageUrls.filter((url) =>
-        /^\/api\/(?:package-image-blobs\/[a-f0-9]{64}|assets\/[A-Za-z0-9_-]+)$/u.test(url)
-      )
-    ),
-  };
   const tokens = plain.parse(text, environment);
   const lines = text.match(/.*(?:\r\n|\n|\r|$)/g)?.filter(Boolean) ?? [];
-  const offsets = [0];
+  const offsets = [base];
   for (const line of lines) offsets.push(offsets.at(-1)! + line.length);
   const endOffset = (endLine: number, startLine: number) => {
     while (endLine > startLine && !lines[endLine - 1]?.trim()) endLine--;
     return (
-      (offsets[endLine] ?? text.length) -
+      (offsets[endLine] ?? base + text.length) -
       (lines[endLine - 1]?.match(/(?:\r\n|\n|\r)$/u)?.[0].length ?? 0)
     );
   };
@@ -349,34 +345,8 @@ export function compileReadingMarkdown(
   const stack: Token[] = [];
   const chunks: string[] = [];
   let chunkStart = 0;
-  const placedSlots = new Set<string>();
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index];
-    const rawSlot =
-      !stack.length && token.map && token.type !== 'fence'
-        ? storySlots.find(
-            (slot) =>
-              slot.kind === 'invalid' &&
-              slot.end !== undefined &&
-              offsets[token.map![0]] >= slot.start &&
-              offsets[token.map![0]] < slot.end
-          )
-        : undefined;
-    if (rawSlot) {
-      chunks.push(
-        plain.renderer.render(tokens.slice(chunkStart, index), plain.options, environment)
-      );
-      let depth = 0;
-      do depth += tokens[index].nesting;
-      while (depth > 0 && ++index < tokens.length);
-      chunkStart = index + 1;
-      if (!placedSlots.has(rawSlot.id))
-        chunks.push(
-          `<div data-story-ui-slot="${escapeHtml(rawSlot.id)}" data-prose-start="${rawSlot.start}" data-prose-end="${rawSlot.end}"></div>`
-        );
-      placedSlots.add(rawSlot.id);
-      continue;
-    }
     if (token.type === 'fence' && token.map)
       token.meta = {
         storySlot: storySlots.find((slot) => slot.start === offsets[token.map![0]])?.id,
@@ -428,6 +398,51 @@ export function compileReadingMarkdown(
   if (chunkStart < tokens.length)
     chunks.push(plain.renderer.render(tokens.slice(chunkStart), plain.options, environment));
   return { html: chunks.join(''), inlineAnchors };
+}
+export function compileReadingMarkdown(
+  text: string,
+  blocks: readonly ReadingBlock[] = [],
+  imageUrls: readonly string[] = [],
+  storySlots: readonly StorySlot[] = []
+) {
+  const environment = {
+    images: new Set(
+      imageUrls.filter((url) =>
+        /^\/api\/(?:package-image-blobs\/[a-f0-9]{64}|assets\/[A-Za-z0-9_-]+)$/u.test(url)
+      )
+    ),
+  };
+  const failed = storySlots
+    .filter(
+      (slot): slot is StorySlot & { end: number } =>
+        slot.kind === 'invalid' && slot.end !== undefined
+    )
+    .sort((left, right) => left.start - right.start);
+  const html: string[] = [];
+  const inlineAnchors: string[] = [];
+  let cursor = 0;
+  const prose = (end: number) => {
+    if (end <= cursor) return;
+    const section = compileSection(
+      text.slice(cursor, end),
+      cursor,
+      blocks,
+      environment,
+      storySlots
+    );
+    html.push(section.html);
+    inlineAnchors.push(...section.inlineAnchors);
+  };
+  for (const slot of failed) {
+    if (slot.start < cursor) continue;
+    prose(slot.start);
+    html.push(
+      `<div data-story-ui-slot="${escapeHtml(slot.id)}" data-prose-start="${slot.start}" data-prose-end="${slot.end}"></div>`
+    );
+    cursor = slot.end;
+  }
+  prose(text.length);
+  return { html: html.join(''), inlineAnchors };
 }
 
 const fenceOpening = /^ {0,3}(`{3,}|~{3,})(.*)$/u;

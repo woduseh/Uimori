@@ -1476,7 +1476,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           store,
           request.params.id,
           text(body.text, 'source text', 2_000_000)
-        ),
+        ).text,
         expectedRevision: number(
           body.expectedRevision,
           'source edit revision',

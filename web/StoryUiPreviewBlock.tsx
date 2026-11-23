@@ -6,6 +6,8 @@ import { StoryUi } from './LazyStoryUi.js';
 import { LoadingState } from './LoadingState.js';
 import { useStoryUiSegments } from './story-ui-parser.js';
 
+const previews = new Map<string, string>();
+
 export function StoryUiPreviewBlock({
   text,
   style,
@@ -19,18 +21,24 @@ export function StoryUiPreviewBlock({
   failed?: ReactNode;
   actionNote?: string;
 }) {
-  const [preview, setPreview] = useState<string>();
+  const key = JSON.stringify([runId ?? '', text]);
+  const [preview, setPreview] = useState(() => previews.get(key));
   useEffect(() => {
-    setPreview(undefined);
-    if (!text.startsWith('<a2ui>') || !text.endsWith('</a2ui>')) return;
+    const cached = previews.get(key);
+    setPreview(cached);
+    if (cached !== undefined || !text.startsWith('<a2ui>') || !text.endsWith('</a2ui>')) return;
     const controller = new AbortController();
     void api<{ text: string }>('/story-ui/preview', { text, runId }, 'POST', controller.signal)
-      .then((result) => setPreview(result.text))
+      .then((result) => {
+        if (previews.size >= 100) previews.delete(previews.keys().next().value!);
+        previews.set(key, result.text);
+        setPreview(result.text);
+      })
       .catch(() => {
         if (!controller.signal.aborted) setPreview('');
       });
     return () => controller.abort();
-  }, [text, runId]);
+  }, [key, text, runId]);
   const part = useStoryUiSegments(preview ?? '')?.find((entry) => entry.kind === 'ui');
   if (preview === undefined)
     return <LoadingState presentation="placeholder" label={t('storyUi.composing')} />;

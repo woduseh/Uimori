@@ -859,13 +859,14 @@ export class HelperShell {
       this.workspace.operation(taskId, operationId, input, () => {
         let savedResult: { id: string; revision: number } & Record<string, unknown>;
         if (target.kind === 'scene') {
+          const compiled = compileEditedSourceText(this.store, target.id, content);
           const saved = withHelperChange(
             this.store,
             task.task,
             { domain: 'scene', chatId: target.chatId, sourceId: target.id, field: 'original' },
             () =>
               this.store.editSource(target.id, {
-                text: compileEditedSourceText(this.store, target.id, content),
+                text: compiled.text,
                 expectedRevision: target.revision,
               })
           );
@@ -876,6 +877,7 @@ export class HelperShell {
             contentHash: sha(saved.text),
             changedPaths: ['/text'],
             textLength: saved.text.length,
+            ...(compiled.failures.length ? { storyUiFailures: compiled.failures } : {}),
           };
         } else {
           applyHelperResourceMutation(

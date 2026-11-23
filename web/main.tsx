@@ -611,11 +611,11 @@ function App() {
     s.detail?.sources.some((source) => source.id === s.readingSourceId)
       ? s.readingSourceId
       : undefined,
+    !!s.detail?.chat.settings.storyUi,
     s.detail?.sources ?? noSources,
     s.detail?.jobs
   );
-  const boardOffered =
-    storyBoard.available && (storyBoard.pins.length > 0 || workspacePanel === 'board');
+  const boardOffered = storyBoard.available || (storyBoard.enabled && workspacePanel === 'board');
   const boardVisible = workspacePanel === 'board' && storyPanels && boardOffered;
   const roomBesideRail = viewportWidth - RAIL_WIDTH - MIN_CENTER_WIDTH;
   const outlineSidecarAvailable = !compact && roomBesideRail >= sidePanelMinimumWidth('outline');

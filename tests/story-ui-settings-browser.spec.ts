@@ -197,3 +197,53 @@ test('STORYUI the status tab shows the latest pinned block up to the scene being
   await board.getByRole('button', { name: '이야기 현황 닫기', exact: true }).click();
   await expect(board).toBeHidden();
 });
+
+test('STORYUI the status tab finds a pinned block outside the loaded page of scenes', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const created = await postFixtureChat(request, { data: { title: 'Story UI long board' } });
+  const chat = await created.json();
+  const saved = await request.patch(`/api/chats/${chat.id}/settings`, {
+    data: {
+      ...chat.settings,
+      expectedSettingsRevision: chat.settingsRevision,
+      storyUi: true,
+      autoTranslate: false,
+    },
+  });
+  expect(saved.ok(), await saved.text()).toBe(true);
+  let settingsRevision = (await saved.json()).settingsRevision;
+  const read = async () =>
+    (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+  for (let scene = 0; scene < 7; scene++) {
+    const detail = await read();
+    const started = await request.post(`/api/chats/${chat.id}/runs`, {
+      data: {
+        request:
+          scene === 0
+            ? '<a2ui>\n$/_uimori/pin = "status"\nroot = Frame(body, "첫날 상태", kind="system")\nbody = Column([Text("HP 9")])\n</a2ui>'
+            : `${scene}번째 평범한 하루.`,
+        expectedRevision: detail.chat.headRevision,
+        expectedSettingsRevision: settingsRevision,
+        idempotencyKey: `story-ui-long-board-${chat.id}-${scene}`,
+      },
+    });
+    expect(started.ok(), await started.text()).toBe(true);
+    const run = (await started.json()) as Run;
+    await expect
+      .poll(async () => (await read()).runs.find((item) => item.id === run.id)?.status)
+      .toBe('completed');
+    settingsRevision = (await read()).chat.settingsRevision;
+  }
+  await page.addInitScript(() => localStorage.setItem('uimori:reading-language', 'original'));
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  await page.getByRole('tab', { name: '현황', exact: true }).click();
+  await expect(
+    page
+      .getByRole('region', { name: '이야기 현황', exact: true })
+      .getByText('HP 9', { exact: true })
+  ).toBeVisible();
+});

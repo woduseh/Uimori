@@ -262,6 +262,7 @@ export function latestStoryUiPins(
 ): StoryUiPin[] {
   const pins = new Map<string, StoryUiPin>();
   for (let scene = scenes.length - 1; scene >= 0 && pins.size < limit; scene--) {
+    if (!scenes[scene].text.includes('"pin":"')) continue;
     const blocks = parseStoryUi(scenes[scene].text).filter((part) => part.kind === 'ui');
     for (let index = blocks.length - 1; index >= 0 && pins.size < limit; index--) {
       const segment = blocks[index];

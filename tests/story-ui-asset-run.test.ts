@@ -74,6 +74,22 @@ test('a native card portrait resolves to the same stored image during streaming 
     const saved = parseStoryUi(source.text).find((part) => part.kind === 'ui');
     expect(saved?.expression).toBe(expression);
     expect(saved?.imageUrls).toEqual(preview?.imageUrls);
+    const edited = await app.inject({
+      method: 'PUT',
+      url: `/api/sources/${source.id}/text`,
+      payload: {
+        text: `수정한 첫 줄.
+
+${expression.replace('도착했어.', '이제 도착했어.')}`,
+        expectedRevision: 0,
+      },
+    });
+    expect(edited.statusCode, edited.body).toBe(200);
+    const recompiled = parseStoryUi(store.source(source.id).text).find(
+      (part) => part.kind === 'ui'
+    );
+    expect(recompiled?.expression).toContain('이제 도착했어.');
+    expect(recompiled?.imageUrls).toEqual(preview?.imageUrls);
   } finally {
     app.controls.release('run');
     await app.close();

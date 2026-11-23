@@ -792,15 +792,20 @@ export function invokeHelperSceneTool(
     let sourceHash = source.hash;
     const tracked = <T>(field: 'original' | 'translation', save: () => T) =>
       withHelperChange(store, task, { domain: 'scene', chatId, sourceId: source.id, field }, save);
+    let savedText = content;
+    let storyUiFailures: string[] = [];
     if (changed && current.target === 'original') {
+      const compiled = compileEditedSourceText(store, source.id, content);
+      storyUiFailures = compiled.failures;
       const saved = tracked('original', () =>
         store.editSource(source.id, {
-          text: compileEditedSourceText(store, source.id, content),
+          text: compiled.text,
           expectedRevision: editTarget.expectedRevision,
         })
       );
       savedRevision = saved.editRevision ?? 0;
       sourceHash = saved.hash;
+      savedText = saved.text;
     } else if (changed && !translationEdit) {
       savedRevision =
         tracked('translation', () =>
@@ -832,12 +837,13 @@ export function invokeHelperSceneTool(
       translationInvalidated: changed && current.target === 'original' && !translationEdit,
       ...(translationRevision !== undefined ? { translationRevision } : {}),
       ...(matches.length ? { matches } : {}),
+      ...(storyUiFailures.length ? { storyUiFailures } : {}),
       ...(translationEdit?.matches.length ? { translationMatches: translationEdit.matches } : {}),
       editTarget: {
         ...editTarget,
         expectedRevision: savedRevision,
         expectedSourceHash: sourceHash,
-        expectedTextHash: digest(content),
+        expectedTextHash: digest(savedText),
       },
       ...(translationEdit
         ? {

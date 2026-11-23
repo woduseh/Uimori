@@ -8,6 +8,7 @@ import {
   validateStoryUiAction,
 } from '../core/story-ui.js';
 import { latestTranslation } from './source-editing.js';
+import { storyUiPinSlot } from '../core/story-ui-style.js';
 import type { RunSnapshot } from '../core/types.js';
 import {
   choice,
@@ -81,17 +82,13 @@ export function storyUiRoutes(
     '/api/chats/:id/story-ui/pins',
     async (request) => {
       const chat = store.chat(request.params.id);
-      const scenes: { id: string; text: string; hash: string }[] = [];
-      let id: string | null = request.query.at ?? chat.headRevision;
-      while (id) {
-        const source = store.source(id);
-        if (source.chatId !== chat.id) throw new HttpError(404, 'Scene not found');
-        scenes.unshift(source);
-        id = source.parentRevision;
-      }
+      const at = request.query.at ?? chat.headRevision;
+      if (!at) return { pins: [] };
+      if (store.source(at).chatId !== chat.id) throw new HttpError(404, 'Scene not found');
+      const scenes = store.history(at).map((entry) => ({ id: entry.revision, text: entry.text }));
       return {
         pins: latestStoryUiPins(scenes).map((pin) => {
-          const source = scenes.find((scene) => scene.id === pin.sourceId)!;
+          const source = store.source(pin.sourceId);
           const job = latestTranslation(store, source.id);
           const translated =
             job?.status === 'completed' && job.sourceHash === source.hash && job.result?.text
@@ -101,7 +98,9 @@ export function storyUiRoutes(
             slot: pin.slot,
             sourceId: pin.sourceId,
             original: pin.segment,
-            ...(translated?.kind === 'ui' ? { translated } : {}),
+            ...(translated?.kind === 'ui' && storyUiPinSlot(translated.messages) === pin.slot
+              ? { translated }
+              : {}),
           };
         }),
       };

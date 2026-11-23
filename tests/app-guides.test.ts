@@ -83,3 +83,12 @@ test('guide.read is a read-only app operation available in a review', () => {
   expect(describeHelperTools({ names: ['guide.read'] }, true).tools[0]?.name).toBe('guide.read');
   expect(helperToolTraits('guide.read')).toMatchObject({ readOnly: true, direct: true });
 });
+
+test('the Story UI writer reference reads in the single call the helper contract asks for', () => {
+  const page = call({ name: 'STORY-UI-REFERENCE', limit: 20_000 }) as {
+    nextOffset: number | null;
+    text: string;
+  };
+  expect(page.nextOffset).toBeNull();
+  expect(page.text).toContain('## Rules');
+});

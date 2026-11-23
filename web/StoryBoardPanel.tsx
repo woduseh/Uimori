@@ -29,13 +29,17 @@ export function hasStoryBoardPins(sources: readonly Source[]) {
 export function useStoryBoard(
   chatId: string,
   at: string | undefined,
+  storyUi: boolean,
   sources: readonly Source[],
   jobs: readonly Job[] = []
 ) {
-  const [pins, setPins] = useState<StoryBoardPin[]>([]);
+  const [result, setResult] = useState<{ chatId: string; pins: StoryBoardPin[] }>({
+    chatId: '',
+    pins: [],
+  });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const pinned = !!chatId && hasStoryBoardPins(sources);
+  const enabled = !!chatId && (storyUi || hasStoryBoardPins(sources));
   const revision = [
     ...sources.map((source) => source.hash),
     ...jobs
@@ -44,8 +48,8 @@ export function useStoryBoard(
   ].join(',');
   // biome-ignore lint/correctness/useExhaustiveDependencies: revision changes when a scene or its translation does, which changes the pinned blocks.
   useEffect(() => {
-    if (!pinned) {
-      setPins([]);
+    if (!enabled) {
+      setResult({ chatId, pins: [] });
       return;
     }
     const controller = new AbortController();
@@ -57,7 +61,7 @@ export function useStoryBoard(
       'GET',
       controller.signal
     )
-      .then((result) => setPins(result.pins))
+      .then((response) => setResult({ chatId, pins: response.pins }))
       .catch((cause) => {
         if (!controller.signal.aborted) setError((cause as Error).message);
       })
@@ -65,8 +69,9 @@ export function useStoryBoard(
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [pinned, chatId, at, revision]);
-  return { available: pinned, pins, loading, error };
+  }, [enabled, chatId, at, revision]);
+  const pins = result.chatId === chatId ? result.pins : [];
+  return { enabled, available: pins.length > 0, pins, loading, error };
 }
 
 function boardTitle(pin: StoryBoardPin) {
@@ -162,7 +167,7 @@ export function StoryBoardPanel({
         )}
         {segment ? (
           <StoryUi
-            key={`${pin.sourceId}:${segment.id}:${translated && pin.translated ? 't' : 'o'}`}
+            key={`${pin.sourceId}:${segment.id}:${JSON.stringify(segment.messages)}`}
             segment={segment}
             style={style}
             actionNote={t('storyUi.boardAction')}

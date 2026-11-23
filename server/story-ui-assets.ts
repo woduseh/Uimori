@@ -1,7 +1,8 @@
 import { nativeRisuAssetNameResolver } from '../core/risu-native.js';
 import type { RunSnapshot } from '../core/types.js';
 import { nativeRisuPackages } from './risu-native-context.js';
-import { readStoredRunSnapshot } from './run-projections.js';
+import { readRunSnapshot } from './run-projections.js';
+import { scanStoryUi, type StoryUiMessage } from '../core/story-ui-scan.js';
 import type { Store } from './store.js';
 import { compileStoryUiBlocks } from './story-ui.js';
 
@@ -33,10 +34,18 @@ export function storyUiAssetResolver(getSnapshot: () => RunSnapshot) {
   };
 }
 
-export function compileEditedSourceText(store: Store, sourceId: string, text: string): string {
+export function compileEditedSourceText(store: Store, sourceId: string, text: string) {
   const source = store.source(sourceId);
+  const pinned = new Map<string, string>();
+  for (const segment of scanStoryUi(source.text, (value): value is StoryUiMessage[] =>
+    Array.isArray(value)
+  ))
+    if (segment.kind === 'ui')
+      for (const [name, url] of Object.entries(segment.imageUrls ?? {}))
+        pinned.set(name.trim().toLowerCase(), url);
+  const resolve = storyUiAssetResolver(() => readRunSnapshot(store, source.runId));
   return compileStoryUiBlocks(text, {
     previousText: source.text,
-    resolveImage: storyUiAssetResolver(() => readStoredRunSnapshot(store, source.runId)),
-  }).text;
+    resolveImage: (name) => pinned.get(name.trim().toLowerCase()) ?? resolve(name),
+  });
 }

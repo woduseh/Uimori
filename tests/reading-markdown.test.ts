@@ -103,3 +103,29 @@ test('table code uses whole matching backtick runs inside Markdown containers an
   const raw = '<div>\n| A | B |\n|---|---|\n| `a|b` | c |\n</div>';
   expect(createReadingMarkdown('native').render(raw)).toBe(raw);
 });
+
+test('a failed story block becomes its own slot and keeps the prose that touches it', () => {
+  for (const text of [
+    'Before.\n<a2ui>\nroot = Text("x", tone="muted")\n</a2ui>\nRight after.',
+    'Before.\n\n<a2ui>\nroot = Text("x", tone="muted")\n</a2ui> Same line.\n\nLater.',
+  ]) {
+    const start = text.indexOf('<a2ui>');
+    const end = text.indexOf('</a2ui>') + '</a2ui>'.length;
+    const { html } = compileReadingMarkdown(
+      text,
+      [],
+      [],
+      [{ id: 'failed', start, end, kind: 'invalid' }]
+    );
+    expect(html).toContain('data-story-ui-slot="failed"');
+    expect(html).not.toContain('root = Text');
+    expect(html).toContain('Before.');
+    const after = text.slice(end).trim().split('\n')[0];
+    expect(html).toContain(after);
+    const paragraph = html.match(/<p data-prose-start="(\d+)"[^>]*>([^<]*)/g)?.at(-1);
+    const offset = Number(paragraph?.match(/data-prose-start="(\d+)"/)?.[1]);
+    expect(
+      text.slice(offset).trimStart().startsWith(text.slice(end).trim().split('\n').at(-1)!)
+    ).toBe(true);
+  }
+});
