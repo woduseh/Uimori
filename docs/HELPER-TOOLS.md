@@ -384,6 +384,7 @@ Constraints on changing this behavior:
 `guide.read` is defined in `server/helper-guide-tools.ts` and reads through `server/app-guides.ts`; `tests/app-guides.test.ts` enforces the listing, the search and the paging.
 
 - The guides are the Markdown files directly under `docs/`, read from `dist/docs` in a build and from `docs/` when the server runs from source. They are not copied into a task's shell workspace; the shell reaches them with `uimori call guide.read`.
+- The guides are Korean prose with English identifiers, and the helper may think in either language. Search therefore matches by section, not by line, falls back to the sections that hold only some of the words, and attaches guidance that an empty or partial result is no evidence that a feature is absent. There is no translation or synonym table: the description tells the model to query with the Korean wording of the user or the interface, and the guide list carries the Korean titles to choose from.
 - `server/app-guides.ts` owns the list of developer documents that are left out. A new document under `docs/` is a guide unless it is added there.
 - The helper contract tells the model to check the guides before it says the app lacks a feature. It exists because a production helper answered that thought summaries were not a feature: its tools and settings showed none, and the display is interface behavior that no tool controls.
 

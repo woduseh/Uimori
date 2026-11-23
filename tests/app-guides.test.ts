@@ -13,15 +13,50 @@ test('the helper lists the user guides without developer documents', () => {
   expect(guides.every((guide) => guide.title && guide.chars > 0)).toBe(true);
 });
 
-test('a query finds the guide and section that describe an app behavior', () => {
+test('a Korean query finds the section that describes an app behavior and where to read it', () => {
   const found = call({ query: '도우미 생각 요약' }) as {
-    matches: { name: string; section: string; text: string }[];
+    matches: { name: string; section: string; offset: number; text: string }[];
     totalMatches: number;
   };
   expect(found.totalMatches).toBeGreaterThan(0);
-  expect(found.matches[0]).toMatchObject({ name: expect.any(String), section: expect.any(String) });
-  expect(found.matches.every((match) => match.text.includes('생각 요약'))).toBe(true);
-  expect(call({ query: 'no-such-term-zzz' })).toMatchObject({ matches: [], totalMatches: 0 });
+  expect(found).not.toHaveProperty('guidance');
+  const [first] = found.matches;
+  expect(first).toMatchObject({ name: 'EXECUTION', section: '생각 요약' });
+  const page = call({ name: first!.name, offset: first!.offset, limit: 2000 }) as { text: string };
+  expect(page.text.startsWith('### 생각 요약')).toBe(true);
+});
+
+test('a section that holds the query as a phrase ranks ahead of one that only holds its words', () => {
+  const found = call({ query: '번역 결과 언어' }) as { matches: { name: string }[] };
+  expect(found.matches[0]!.name).toBe('PWA');
+});
+
+test('words spread over the lines of one section still match it', () => {
+  const found = call({ query: '터치 막대 손잡이' }) as {
+    matches: { name: string }[];
+    totalMatches: number;
+  };
+  expect(found.totalMatches).toBeGreaterThan(0);
+  expect(found.matches.map((match) => match.name)).toContain('EDITING');
+});
+
+test('a query without a complete match returns the closest sections and says it proves nothing', () => {
+  const partial = call({ query: '가격 미정' }) as {
+    matches: { name: string; matchedTerms: string[] }[];
+    totalMatches: number;
+    partialMatches: number;
+    guidance: string;
+  };
+  expect(partial.totalMatches).toBe(0);
+  expect(partial.partialMatches).toBeGreaterThan(0);
+  expect(partial.matches[0]!.matchedTerms).toEqual(['가격']);
+  expect(partial.guidance).toContain('does not show that a feature is absent');
+  expect(call({ query: 'no-such-term-zzz' })).toMatchObject({
+    matches: [],
+    totalMatches: 0,
+    partialMatches: 0,
+    guidance: expect.stringContaining('Korean'),
+  });
 });
 
 test('a guide is read in pages that join back into the whole text', () => {

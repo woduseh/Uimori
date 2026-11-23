@@ -15,6 +15,7 @@ const DEVELOPER_DOCUMENTS = new Set([
 const PAGE_CHARS = 8000;
 const MAX_PAGE_CHARS = 20_000;
 const MAX_MATCHES = 30;
+const PARTIAL_MATCHES = 10;
 const MATCH_CHARS = 400;
 
 type AppGuide = { name: string; title: string; text: string };
@@ -37,24 +38,74 @@ export function listAppGuides() {
   return guides().map(({ name, title, text }) => ({ name, title, chars: text.length }));
 }
 
-export function searchAppGuides(query: string) {
-  const terms = query.toLowerCase().split(/\s+/u).filter(Boolean);
-  if (!terms.length) throw new HttpError(400, 'GUIDE_QUERY_REQUIRED');
-  const matches: { name: string; section: string; text: string }[] = [];
-  let total = 0;
-  for (const guide of guides()) {
-    let section = guide.title;
-    for (const line of guide.text.split('\n')) {
-      const heading = /^#{1,6}\s+(.+)$/u.exec(line);
-      if (heading) section = heading[1]!.trim();
-      const lower = line.toLowerCase();
-      if (!terms.every((term) => lower.includes(term))) continue;
-      total++;
-      if (matches.length < MAX_MATCHES)
-        matches.push({ name: guide.name, section, text: line.trim().slice(0, MATCH_CHARS) });
+type GuideSection = { name: string; section: string; offset: number; lines: string[] };
+
+function sections(guide: AppGuide): GuideSection[] {
+  const found: GuideSection[] = [];
+  let current: GuideSection = { name: guide.name, section: guide.title, offset: 0, lines: [] };
+  let offset = 0;
+  for (const line of guide.text.split('\n')) {
+    const heading = /^#{1,6}\s+(.+)$/u.exec(line);
+    if (heading) {
+      if (current.lines.length) found.push(current);
+      current = { name: guide.name, section: heading[1]!.trim(), offset, lines: [] };
     }
+    current.lines.push(line);
+    offset += line.length + 1;
   }
-  return { query, matches, totalMatches: total };
+  if (current.lines.length) found.push(current);
+  return found;
+}
+
+const SEARCH_GUIDANCE =
+  'The guides are written mostly in Korean, with English only for identifiers and file names. No match or a partial match does not show that a feature is absent: search again with the Korean wording the user or the interface uses, or a synonym, or list the guides and read the likely one.';
+
+export function searchAppGuides(query: string) {
+  const terms = [...new Set(query.toLowerCase().split(/\s+/u).filter(Boolean))];
+  if (!terms.length) throw new HttpError(400, 'GUIDE_QUERY_REQUIRED');
+  const phrase = query.toLowerCase().trim().split(/ +/u).join(' ');
+  const scored = guides()
+    .flatMap(sections)
+    .map((section) => {
+      const lines = section.lines.map((line) => line.toLowerCase());
+      const matched = terms.filter((term) => lines.some((line) => line.includes(term)));
+      const heading = section.section.toLowerCase();
+      return {
+        section,
+        matched,
+        lines,
+        inHeading: terms.filter((term) => heading.includes(term)).length,
+        phrase: lines.some((line) => line.includes(phrase)),
+      };
+    })
+    .filter((item) => item.matched.length > 0)
+    .sort(
+      (a, b) =>
+        b.matched.length - a.matched.length ||
+        Number(b.phrase) - Number(a.phrase) ||
+        b.inHeading - a.inHeading ||
+        a.lines.length - b.lines.length
+    );
+  const complete = scored.filter((item) => item.matched.length === terms.length);
+  const ranked = complete.length ? complete : scored;
+  const partial = !complete.length;
+  return {
+    query,
+    matches: ranked.slice(0, partial ? PARTIAL_MATCHES : MAX_MATCHES).map((item) => {
+      const index = item.lines.findIndex(
+        (line, at) => at > 0 && item.matched.some((term) => line.includes(term))
+      );
+      return {
+        name: item.section.name,
+        section: item.section.section,
+        offset: item.section.offset,
+        text: item.section.lines[index < 0 ? 0 : index]!.trim().slice(0, MATCH_CHARS),
+        ...(partial ? { matchedTerms: item.matched } : {}),
+      };
+    }),
+    totalMatches: complete.length,
+    ...(partial ? { partialMatches: scored.length, guidance: SEARCH_GUIDANCE } : {}),
+  };
 }
 
 export function readAppGuide(name: string, offset = 0, limit = PAGE_CHARS) {
