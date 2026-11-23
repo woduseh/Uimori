@@ -57,7 +57,7 @@ export function FontProvider({ children }: { children: ReactNode }) {
       try {
         const next = await api<FontCatalog>('/fonts');
         if (current === epoch.current) {
-          setCatalog(next);
+          setCatalog((old) => (old && JSON.stringify(old) === JSON.stringify(next) ? old : next));
           setError('');
         }
       } catch (cause) {

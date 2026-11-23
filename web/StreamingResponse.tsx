@@ -11,7 +11,7 @@ import { PlainProse, Prose } from './Prose.js';
 import { HelperMessageProse } from './HelperMessageProse.js';
 import { splitCompletedParagraphs } from '../core/reading-markdown.js';
 import { LoadingState } from './LoadingState.js';
-import { parseStoryUi } from '../core/story-ui.js';
+import { useStoryUiSegments } from './story-ui-parser.js';
 import { StoryUi } from './LazyStoryUi.js';
 
 type StoryStyle = import('../core/story-ui-style.js').StoryUiStyleSetting;
@@ -28,7 +28,7 @@ function StreamingStoryBlock({ text, style, runId }: StreamingStoryProps) {
       .catch(() => {});
     return () => controller.abort();
   }, [text, runId]);
-  const part = parseStoryUi(preview).find((entry) => entry.kind === 'ui');
+  const part = useStoryUiSegments(preview)?.find((entry) => entry.kind === 'ui');
   return part?.kind === 'ui' ? <StoryUi segment={part} style={style} /> : null;
 }
 
@@ -69,7 +69,8 @@ export function StreamingStoryText({
   runId,
   finished = false,
 }: StreamingStoryProps & { finished?: boolean }) {
-  const parts = parseStoryUi(text);
+  const parts = useStoryUiSegments(text);
+  if (!parts) return <LoadingState presentation="placeholder" label={t('reader.loadingResult')} />;
   return (
     <>
       {parts.map((part, index) =>

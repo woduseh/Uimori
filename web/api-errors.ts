@@ -1,6 +1,5 @@
 import { t, registerMessage, formatMessage, getLocale } from './i18n.js';
-import { messages as localizedErrors } from './locales/errors.js';
-import { messages as storyUiMessages } from './locales/story-ui.js';
+import ko from './locales/ko.js';
 import { illustrationErrorMessage } from './illustration-labels.js';
 import { requestImageErrors } from './request-image-errors.js';
 import { requestFileErrors } from './request-file-errors.js';
@@ -12,7 +11,7 @@ import {
 
 type ApiErrorDiagnostic = { code: string | null; message: string };
 
-const storyUiErrors: Record<string, keyof typeof storyUiMessages> = {
+const storyUiErrors: Record<string, string> = {
   STORY_UI_STALE_SOURCE: 'storyUi.errorStaleSource',
   STORY_UI_DISABLED: 'storyUi.errorDisabled',
   STORY_UI_INVALID_ACTION: 'storyUi.errorInvalidAction',
@@ -250,8 +249,7 @@ export function apiErrorDiagnostic(
               ].includes(error)
             ? 'DRAFT_DISCARDED'
             : error;
-    if (Object.hasOwn(storyUiErrors, code))
-      return { code, message: storyUiMessages[storyUiErrors[code]].ko };
+    if (Object.hasOwn(storyUiErrors, code)) return { code, message: ko[storyUiErrors[code]] };
     if (Object.hasOwn(messages, code)) return { code, message: messages[code] };
     if (status === 409 && nativeActionConflict.test(code))
       return {
@@ -312,7 +310,7 @@ export function apiErrorDisplay(error: unknown, status: number, method: string):
     UPLOAD_TOO_LARGE: RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024,
     RISU_IMPORT_IMAGES_TOO_LARGE: RISU_IMPORT_MAX_PREPARED_BYTES / 1024 / 1024,
   };
-  if (code && Object.hasOwn(localizedErrors, 'errors.' + code))
+  if (code && Object.hasOwn(ko, 'errors.' + code))
     return display(
       'errors.' + code,
       Object.hasOwn(limits, code) ? { limit: limits[code] } : undefined

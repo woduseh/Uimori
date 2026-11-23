@@ -24,7 +24,7 @@ export function NextRequestStatus({
   onOpenStoryGuide,
 }: {
   chatId: string;
-  refreshKey: string;
+  refreshKey: string | null;
   compact: boolean;
   onOpenOutline: (nodeId: string) => void;
   onOpenOptions: () => void;
@@ -65,8 +65,10 @@ export function NextRequestStatus({
         removeEventListener(event, refresh);
     };
   }, [load]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: The key names the server changes that can alter what applies to the next request.
+  const loadedKey = useRef<string | null>(null);
   useEffect(() => {
+    if (refreshKey === null || refreshKey === loadedKey.current) return;
+    loadedKey.current = refreshKey;
     void load();
   }, [load, refreshKey]);
   const { focus, pendingOptions, storyGuide } = state;

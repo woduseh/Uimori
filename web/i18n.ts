@@ -76,6 +76,7 @@ if (typeof window !== 'undefined') {
 export function formatMessage(key: string, locale: UiLocale, values?: MessageValues): string {
   if (!Object.hasOwn(ko, key)) return key;
   const pattern = catalogs[locale]?.[key] ?? ko[key];
+  if (!/[{}']/u.test(pattern)) return pattern;
   const identity = `${locale}:${key}:${pattern}`;
   let formatter = cache.get(identity);
   if (!formatter) {

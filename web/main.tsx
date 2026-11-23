@@ -41,7 +41,7 @@ import { ActionMenu } from './ActionMenu.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { subscribeAppHistory } from './app-history.js';
 import { ChatPromptOptions } from './ChatPromptOptions.js';
-import { HelperPanel, type HelperHandoff } from './HelperPanel.js';
+import type { HelperHandoff } from './HelperPanel.js';
 import { api } from './api.js';
 import { selectedHelperSession } from './useHelperSessions.js';
 import type { HelperRecentTask } from '../core/activity-feed.js';
@@ -210,6 +210,13 @@ const AppSettingsPanel = deferredPanel(
   )
 );
 
+const HelperPanel = deferredPanel(
+  '도우미',
+  async () => ({
+    default: (await import('./HelperPanel.js')).HelperPanel,
+  }),
+  (content, props) => (props.open ? <aside className="helper-panel">{content}</aside> : null)
+);
 const TasksPanel = deferredPanel('작업 현황', async () => ({
   default: (await import('./WorkspacePanels.js')).TasksPanel,
 }));
@@ -2356,7 +2363,11 @@ function App() {
                   <NextRequestStatus
                     key={`next-request:${s.selected}`}
                     chatId={s.selected}
-                    refreshKey={`${s.detail?.chat.headRevision}:${s.detail?.chat.settingsRevision}:${s.detail?.reader.cursor}`}
+                    refreshKey={
+                      s.detail
+                        ? `${s.detail.chat.headRevision}:${s.detail.chat.settingsRevision}:${s.detail.reader.cursor}`
+                        : null
+                    }
                     compact={compact}
                     onOpenOutline={(nodeId) => openOutlineWorkspace(nodeId)}
                     onOpenOptions={() => showSidePanel('options')}
@@ -2821,30 +2832,32 @@ function App() {
       </main>
       {s.detail && s.destination === 'story' && (
         <>
-          <DraftRequestPreviewDialog
-            key={`request-preview:${s.selected}`}
-            open={currentChatTool === 'preview'}
-            chatId={s.detail.chat.id}
-            draft={s.composerDraft}
-            requestImages={s.requestImagePreviews}
-            loreContextReset={s.loreContextReset}
-            refreshKey={`${s.detail.chat.headRevision}:${s.detail.chat.settingsRevision}:${s.detail.profile?.revision}:${s.detail.reader.cursor}:${s.promptWorkspace?.revision}:${s.pinnedPromptRevision}:${s.nativeInteractionRevision}`}
-            unavailable={
-              !!s.active ||
-              !!s.pendingRequest ||
-              s.pendingProfile ||
-              optionsBusy ||
-              optionsDirty ||
-              s.profileDirty ||
-              s.quickBusy
-            }
-            onClose={() => {
-              setChatTool(null);
-              requestAnimationFrame(() =>
-                document.querySelector<HTMLButtonElement>('button[data-composer-more]')?.focus()
-              );
-            }}
-          />
+          {currentChatTool === 'preview' && (
+            <DraftRequestPreviewDialog
+              key={`request-preview:${s.selected}`}
+              open
+              chatId={s.detail.chat.id}
+              draft={s.composerDraft}
+              requestImages={s.requestImagePreviews}
+              loreContextReset={s.loreContextReset}
+              refreshKey={`${s.detail.chat.headRevision}:${s.detail.chat.settingsRevision}:${s.detail.profile?.revision}:${s.detail.reader.cursor}:${s.promptWorkspace?.revision}:${s.pinnedPromptRevision}:${s.nativeInteractionRevision}`}
+              unavailable={
+                !!s.active ||
+                !!s.pendingRequest ||
+                s.pendingProfile ||
+                optionsBusy ||
+                optionsDirty ||
+                s.profileDirty ||
+                s.quickBusy
+              }
+              onClose={() => {
+                setChatTool(null);
+                requestAnimationFrame(() =>
+                  document.querySelector<HTMLButtonElement>('button[data-composer-more]')?.focus()
+                );
+              }}
+            />
+          )}
           <ChatContextDialog
             key={`context-tools:${s.selected}`}
             mode={
