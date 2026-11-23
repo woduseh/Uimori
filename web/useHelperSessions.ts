@@ -13,6 +13,7 @@ import {
   removeOptionalStorage,
   writeOptionalStorage,
 } from './optional-storage.js';
+import { listedHelperSessions } from './helper-navigation-model.js';
 
 export type HelperSession = HelperConversation & {
   title?: string;
@@ -25,6 +26,7 @@ export type HelperSession = HelperConversation & {
   lastActivityAt?: string;
   chatTitle?: string;
   projectId?: string | null;
+  unused?: true;
 };
 const helperGroupKey = (scope: HelperScope) =>
   scope.kind === 'chat' ? `chat:${scope.chatId}` : 'library';
@@ -35,6 +37,7 @@ function remember(key: string, value: string | null) {
   if (value === null) removeOptionalStorage('local', key);
   else writeOptionalStorage('local', key, value);
 }
+const openedSessions = new Set<string>();
 const localReadKey = (id: string) => `uimori:helper-seen:${id}`;
 const localRead = (id: string) => Number(read(localReadKey(id)) ?? 0);
 type HelperCreationRequest = { scope: HelperScope; requestKey: string; projectId?: string | null };
@@ -46,6 +49,7 @@ export function forgetHelperSession(conversation: HelperConversation) {
   ])
     if (read(key) === conversation.id) remember(key, null);
   remember(localReadKey(conversation.id), null);
+  openedSessions.delete(conversation.id);
 }
 export function selectedHelperSession(scope: HelperScope) {
   return read(`uimori:helper-session-scope:${JSON.stringify(scope)}`);
@@ -83,11 +87,14 @@ export function useHelperSessions(
   }
   const carriedSession =
     scopeChanged && carried && JSON.stringify(carried.scope) !== scopeKey ? null : carried;
-  const sessions =
+  const currentId = carriedSession?.id ?? selected[group] ?? null;
+  const sessions = listedHelperSessions(
     carriedSession && !(lists[group] ?? []).some((item) => item.id === carriedSession.id)
       ? [carriedSession, ...(lists[group] ?? [])]
-      : (lists[group] ?? []);
-  const currentId = carriedSession?.id ?? selected[group] ?? null;
+      : (lists[group] ?? []),
+    scope,
+    openedSessions
+  );
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
   const confirmedReads = useRef(new Map<string, number>());
@@ -157,6 +164,7 @@ export function useHelperSessions(
   const select = useCallback(
     (conversation: HelperConversation, markRead = true) => {
       if (markRead) acknowledge([conversation.id]);
+      openedSessions.add(conversation.id);
       const key = helperGroupKey(conversation.scope);
       setCarried(conversation);
       selectionVersions.current.set(key, (selectionVersions.current.get(key) ?? 0) + 1);

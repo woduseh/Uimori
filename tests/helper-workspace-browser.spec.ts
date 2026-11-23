@@ -298,7 +298,20 @@ test('HSPACE12 activity tabs keep unread counts until acknowledgement and includ
   await unread.getByRole('button', { name: `${completed.title} 활동 확인`, exact: true }).click();
   await expect(history.getByRole('button', { name: '미확인 활동 0개', exact: true })).toBeVisible();
   await expect(recent.locator('[data-conversation-id]')).toHaveCount(4);
+  await expect(recent.locator(`[data-conversation-id="${failed.id}"]`)).toContainText('실패');
   await page.screenshot({ path: info.outputPath('helper-activity-acknowledged.png') });
+  await history.getByRole('button', { name: '탐색', exact: true }).click();
+  await expect(
+    history
+      .locator(`[data-conversation-id="${failed.id}"]`)
+      .getByRole('img', { name: '실패', exact: true })
+  ).toBeVisible();
+  await expect(
+    history
+      .locator(`[data-conversation-id="${running.id}"]`)
+      .getByRole('img', { name: '진행 중', exact: true })
+  ).toBeVisible();
+  await page.screenshot({ path: info.outputPath('helper-tree-ended.png') });
 });
 
 test('HSPACE03 failed-task diagnosis prepares a precise helper draft without starting work', async ({
@@ -466,7 +479,7 @@ test('HSPACE06 shared sidebar preserves drafts and project history across search
   const existingSessions = (await (
     await request.get('/api/helper/conversations?kind=all')
   ).json()) as HelperConversationSummary[];
-  const totalSessions = existingSessions.length;
+  const totalSessions = existingSessions.filter((item) => !item.unused).length;
   await recent
     .getByRole('button', { name: `${Math.min(20, totalSessions - 5)}개 더 보기`, exact: true })
     .click();

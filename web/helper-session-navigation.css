@@ -27,6 +27,12 @@
 .helper-nav-row[draggable="true"] {
   cursor: grab;
 }
+.helper-nav-ended svg {
+  animation: none;
+}
+.helper-nav-issue {
+  color: var(--error);
+}
 .helper-nav-project-contents {
   display: grid;
   gap: 1px;

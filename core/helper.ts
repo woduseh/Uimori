@@ -52,6 +52,7 @@ export type HelperConversationSummary = HelperConversation & {
   readActivityEventSeq: number;
   lastTaskStatus?: HelperStatus;
   lastActivityAt: string;
+  unused?: true;
 };
 export type HelperStatus =
   | 'queued'

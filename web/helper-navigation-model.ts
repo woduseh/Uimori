@@ -1,4 +1,4 @@
-import type { HelperProject } from '../core/helper.js';
+import type { HelperProject, HelperScope } from '../core/helper.js';
 import type { HelperSession } from './useHelperSessions.js';
 import { readOptionalJson } from './optional-storage.js';
 
@@ -29,6 +29,17 @@ export function readHelperNavigationView(): HelperNavigationView {
         : {},
   };
 }
+export const listedHelperSessions = (
+  sessions: HelperSession[],
+  scope: HelperScope,
+  opened: ReadonlySet<string>
+) =>
+  sessions.filter(
+    (session) =>
+      !session.unused ||
+      opened.has(session.id) ||
+      JSON.stringify(session.scope) === JSON.stringify(scope)
+  );
 export const helperSessionActivityAt = (session: HelperSession) =>
   session.lastActivityAt ?? session.updatedAt ?? session.createdAt;
 

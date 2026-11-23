@@ -208,9 +208,18 @@ export function HelperNavigation(props: Props) {
       ? t('helpers.m113')
       : t('helpers.queuedCount', { count: formatNumber(count) });
   };
+  const endedLabel = (session: HelperSession) => {
+    const label =
+      session.lastTaskStatus !== 'completed' && resultLabels[session.lastTaskStatus ?? ''];
+    return label && !runningLabel(session) ? t(label) : undefined;
+  };
+  const endedIcon = (session: HelperSession) =>
+    session.lastTaskStatus === 'cancelled' ? StopIcon : IssueIcon;
   const treeRow = (session: HelperSession) => {
     const selected = session.id === props.currentId;
     const status = runningLabel(session);
+    const ended = endedLabel(session);
+    const Ended = endedIcon(session);
     const siblings = (source: typeof lists) =>
       (session.projectId && props.projects.some((project) => project.id === session.projectId)
         ? source.inProject(session.projectId)
@@ -249,6 +258,17 @@ export function HelperNavigation(props: Props) {
             <RunningIcon size={14} aria-hidden="true" />
           </span>
         )}
+        {ended && (
+          <span
+            className={`bot-chat-status helper-nav-ended${session.lastTaskStatus === 'cancelled' ? '' : ' helper-nav-issue'}`}
+            tabIndex={0}
+            role="img"
+            aria-label={ended}
+            title={ended}
+          >
+            <Ended size={14} aria-hidden="true" />
+          </span>
+        )}
         <div className="bot-row-actions">
           {props.sessionMenu(
             session,
@@ -261,6 +281,7 @@ export function HelperNavigation(props: Props) {
   const activityRow = (session: HelperSession, section: 'unread' | 'running' | 'recent') => {
     const at = helperSessionActivityAt(session);
     const selected = session.id === props.currentId;
+    const ended = section === 'recent' ? endedLabel(session) : undefined;
     const Icon =
       section === 'unread'
         ? session.lastTaskStatus === 'completed'
@@ -270,13 +291,15 @@ export function HelperNavigation(props: Props) {
             : IssueIcon
         : section === 'running'
           ? RunningIcon
-          : MessageCircle;
+          : ended
+            ? endedIcon(session)
+            : MessageCircle;
     const detail =
       section === 'unread' && session.lastTaskStatus
         ? t(resultLabels[session.lastTaskStatus] ?? 'helpers.m263')
         : section === 'running'
           ? runningLabel(session)
-          : undefined;
+          : ended;
     const context = projectName(session) ?? session.chatTitle;
     const link = (
       <button
@@ -297,7 +320,9 @@ export function HelperNavigation(props: Props) {
                   : session.lastTaskStatus === 'completed'
                     ? 'activity-nav-success'
                     : undefined
-                : undefined
+                : ended && session.lastTaskStatus !== 'cancelled'
+                  ? 'activity-nav-warning'
+                  : undefined
           }
         />
         <span className="activity-nav-copy">

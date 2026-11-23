@@ -8,6 +8,7 @@ import {
   helperNavigationLists,
   helperNavigationOrder,
   helperNavigationStorageKey,
+  listedHelperSessions,
   readHelperNavigationView,
 } from '../web/helper-navigation-model.js';
 
@@ -104,6 +105,22 @@ describe('helper navigation ownership and order', () => {
       'conversation:b',
     ]);
   });
+  it('lists an unused conversation of another scope only once it was opened in this tab', () => {
+    const elsewhere = { kind: 'chat', chatId: 'other' } as const;
+    const values = [
+      sessions[0],
+      { ...session('here', '새 도우미 대화', null, '2026-10-29T01:00:00Z'), unused: true as const },
+      {
+        ...session('there', '새 도우미 대화', null, '2026-10-29T01:00:00Z'),
+        scope: elsewhere,
+        unused: true as const,
+      },
+    ];
+    const listed = (opened: string[]) =>
+      listedHelperSessions(values, sessions[0].scope, new Set(opened)).map((item) => item.id);
+    expect(listed([])).toEqual(['one', 'here']);
+    expect(listed(['there'])).toEqual(['one', 'here', 'there']);
+  });
   it('keeps navigation usable when preference storage fails', () => {
     vi.stubGlobal('localStorage', {
       getItem: () => {
@@ -143,10 +160,10 @@ describe('helper navigation ownership and order', () => {
   });
 });
 
-const render = () =>
+const render = (listed = sessions) =>
   renderToStaticMarkup(
     createElement(HelperNavigation, {
-      sessions,
+      sessions: listed,
       projects,
       currentId: 'one',
       unread: ['two'],
@@ -193,5 +210,34 @@ describe('helper navigation presentation', () => {
       recent.indexOf('data-conversation-id="one"')
     );
     expect(html).toContain('나 대화 활동 확인');
+  });
+  it('marks a conversation whose last task failed or was stopped, in the tree and in recent activity', () => {
+    const ended = [
+      { ...sessions[0], lastTaskStatus: 'completed' as const },
+      { ...sessions[2], lastTaskStatus: 'failed' as const },
+      { ...sessions[3], lastTaskStatus: 'cancelled' as const },
+      {
+        ...session('five', '마 대화', null, '2026-10-24T01:00:00Z'),
+        lastTaskStatus: 'failed' as const,
+        activity: { running: 1, queued: 0 },
+      },
+    ];
+    const row = (html: string, id: string) =>
+      html.slice(html.indexOf(`data-conversation-id="${id}"`)).split('data-conversation-id=')[1];
+    const tree = render(ended);
+    expect(row(tree, 'one')).not.toMatch(/aria-label="(완료|실패|취소됨)"/u);
+    expect(row(tree, 'three')).toContain('aria-label="실패"');
+    expect(row(tree, 'four')).toContain('aria-label="취소됨"');
+    expect(row(tree, 'five')).toContain('aria-label="진행 중"');
+    expect(row(tree, 'five')).not.toContain('aria-label="실패"');
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) =>
+        key === helperNavigationStorageKey ? JSON.stringify({ mode: 'activity' }) : null,
+    });
+    const activity = render(ended);
+    const recent = activity.slice(activity.indexOf('data-activity-section="recent"'));
+    expect(row(recent, 'three')).toContain('<span>실패</span>');
+    expect(row(recent, 'four')).toContain('<span>취소됨</span>');
+    expect(row(recent, 'one')).not.toContain('<span>완료</span>');
   });
 });

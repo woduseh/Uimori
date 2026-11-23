@@ -347,7 +347,9 @@ export class HelperWorkspace {
             WHERE e.conversation_id=c.id AND e.kind IN ${HELPER_ACTIVITY_EVENT_KINDS}
             ORDER BY e.seq DESC LIMIT 1) AS last_task_status,
           COALESCE((SELECT MAX(updated_at) FROM helper_tasks WHERE conversation_id=c.id),c.created_at) AS last_activity_at,
-          (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id AND kind='messages.changed') AS history_revision
+          (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id AND kind='messages.changed') AS history_revision,
+          (c.creation_key='default' AND c.auto_title=1 AND c.revision=1
+            AND NOT EXISTS(SELECT 1 FROM helper_tasks WHERE conversation_id=c.id)) AS unused
         FROM helper_conversations c LEFT JOIN chats chat ON chat.id=c.chat_id
         LEFT JOIN helper_conversation_memberships member ON member.conversation_id=c.id
         WHERE ${scope.kind === 'all' ? '1' : scope.kind === 'library' ? 'c.chat_id IS NULL' : 'c.chat_id=?'}
@@ -366,6 +368,7 @@ export class HelperWorkspace {
       readActivityEventSeq: Number(row.read_activity_seq),
       ...(row.last_task_status ? { lastTaskStatus: row.last_task_status as HelperStatus } : {}),
       lastActivityAt: String(row.last_activity_at),
+      ...(row.unused ? { unused: true as const } : {}),
     }));
   }
   persona(id: string, revision: number, persona: string) {

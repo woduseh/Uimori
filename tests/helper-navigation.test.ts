@@ -59,6 +59,24 @@ function finishTask(f: ReturnType<typeof fixture>, conversationId: string, scope
     .latestActivityEventSeq;
 }
 
+test('the conversation made by opening the helper is listed as unused until it gets a request or a name', () => {
+  const f = fixture();
+  const unused = (id: string) =>
+    f.workspace.list({ kind: 'all' }).find((item) => item.id === id)?.unused;
+  const opened = f.workspace.open(f.scope);
+  const named = f.workspace.open({ kind: 'library', workId: 'other' });
+  const requested = f.workspace.create(f.scope, 'request:new');
+  expect([unused(opened.id), unused(named.id), unused(requested.id)]).toEqual([
+    true,
+    true,
+    undefined,
+  ]);
+  f.workspace.update(named.id, named.revision, { title: '내 대화' });
+  expect(unused(named.id)).toBeUndefined();
+  finishTask(f, opened.id, f.scope);
+  expect(unused(opened.id)).toBeUndefined();
+});
+
 test('new conversation creation atomically assigns its project and retries its exact receipt', async () => {
   const f = fixture();
   const project = f.workspace.createGroup('작품', 'project');
