@@ -2163,6 +2163,78 @@ test('each refused call gets its own retries within one task', async () => {
   expect(attemptCount(f)).toBe(4);
 });
 
+function useGeminiHelper(f: ReturnType<typeof fixture>) {
+  const connection = f.store.product.connection({
+    title: 'Synthetic Gemini',
+    protocol: 'vertex-gemini-v1',
+    endpoint:
+      'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models',
+    apiKey: 'SYNTHETIC_VERTEX_TOKEN',
+    enabled: true,
+  });
+  const model = f.store.product.model({
+    title: 'Synthetic Gemini',
+    connectionId: connection.id,
+    modelId: 'gemini-3.8-flash',
+    temperature: null,
+    maxOutputTokens: 1024,
+  });
+  const selected = modelWorkspace(f.store);
+  updateModelWorkspace(f.store, {
+    expectedRevision: selected.revision,
+    routes: selected.routes,
+    translationPolicy: selected.translationPolicy,
+    helperModel: { id: model.id },
+  });
+}
+
+test('a Gemini helper call asks for thought summaries, shows them while it runs and drops them when it ends', async () => {
+  const f = fixture();
+  useGeminiHelper(f);
+  let taskId = '';
+  const seen: (string | undefined)[] = [];
+  mockSend(async (request, options, index) => {
+    expect(request.thoughtSummary).toBe(true);
+    seen.push(f.streams.read('helper', taskId).thought);
+    await options.onThought?.(index === 0 ? '자료를 확인하는 중' : '답변을 정리하는 중');
+    seen.push(f.streams.read('helper', taskId).thought);
+    return index === 0 ? refusedCall() : structuredClone(success);
+  });
+  taskId = f.runtime.enqueue(f.conversation.id, 'r', '자료 도구를 알려줘').id;
+  await Promise.all(f.work);
+  expect(f.workspace.task(taskId), f.workspace.task(taskId).error ?? '').toMatchObject({
+    status: 'completed',
+  });
+  expect(seen).toEqual([undefined, '자료를 확인하는 중', undefined, '답변을 정리하는 중']);
+  expect(
+    f.store.db
+      .prepare("SELECT COUNT(*) AS n FROM helper_events WHERE task_id=? AND data LIKE '%정리하는%'")
+      .get(taskId)
+  ).toEqual({ n: 0 });
+});
+
+test.each([{ later: 'completed' }, { later: 'HTTP_400' }] as const)(
+  'a Gemini call rejected with HTTP 400 is sent once more without thought summaries, then ends $later',
+  async ({ later }) => {
+    const f = fixture();
+    useGeminiHelper(f);
+    const asked: (true | undefined)[] = [];
+    mockSend((request, _options, index) => {
+      asked.push(request.thoughtSummary);
+      return index === 0 || later === 'HTTP_400'
+        ? providerError('HTTP_400')
+        : structuredClone(success);
+    });
+    const task = f.runtime.enqueue(f.conversation.id, 'r', '자료 도구를 알려줘');
+    await Promise.all(f.work);
+    expect(f.workspace.task(task.id)).toMatchObject(
+      later === 'completed' ? { status: 'completed' } : { status: 'failed', error: 'HTTP_400' }
+    );
+    expect(asked).toEqual([true, undefined]);
+    expect(attemptCount(f)).toBe(2);
+  }
+);
+
 test('a refused native Codex turn is not sent again', async () => {
   const f = fixture();
   const connection = f.store.product.connection({

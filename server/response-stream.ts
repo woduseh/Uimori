@@ -56,6 +56,7 @@ type ActiveStream = {
   tail: ResponseChunk[];
   durableSeq: number;
   revoked: boolean;
+  thought: string;
 };
 type ChatListener = (identity: ResponseTaskIdentity) => void;
 const keyOf = (identity: ResponseTaskIdentity) =>
@@ -66,6 +67,7 @@ const PERSIST_INTERVAL_MS = 750;
 const PERSIST_CHARS = 4096;
 const SEQUENCE_BLOCK = 1024;
 const PAGE_CHUNKS = 256;
+const THOUGHT_CHARS = 4000;
 
 export class ResponseStreamStore {
   private readonly listeners = new Map<string, Set<() => void>>();
@@ -147,6 +149,7 @@ export class ResponseStreamStore {
       chunks,
       cursor: chunks.at(-1)?.seq ?? after,
       hasMore: rows.length > PAGE_CHUNKS,
+      ...(stream?.thought && row.status === 'running' ? { thought: stream.thought } : {}),
     };
   }
 
@@ -252,11 +255,13 @@ export class ResponseStreamStore {
       tail: [],
       durableSeq: this.sequence().next,
       revoked: false,
+      thought: '',
     };
     this.active.set(key, stream);
     let buffer: ResponseProgress | undefined;
     let deliveryTimer: ReturnType<typeof setTimeout> | undefined;
     let persistTimer: ReturnType<typeof setTimeout> | undefined;
+    let thoughtTimer: ReturnType<typeof setTimeout> | undefined;
     let tailChars = 0;
     let closed = false;
     let fault: unknown;
@@ -265,8 +270,10 @@ export class ResponseStreamStore {
     const clearTimers = () => {
       if (deliveryTimer) clearTimeout(deliveryTimer);
       if (persistTimer) clearTimeout(persistTimer);
+      if (thoughtTimer) clearTimeout(thoughtTimer);
       deliveryTimer = undefined;
       persistTimer = undefined;
+      thoughtTimer = undefined;
     };
     const guarded = (action: () => void) => () => {
       try {
@@ -421,6 +428,24 @@ export class ResponseStreamStore {
           deliveryTimer = setTimeout(guarded(deliver), DELIVERY_INTERVAL_MS);
           deliveryTimer.unref();
         }
+      },
+      thought: (text: string | null) => {
+        if (closed || stream.revoked || options.signal.aborted) return;
+        if (text === null) {
+          if (!stream.thought) return;
+          stream.thought = '';
+          if (thoughtTimer) clearTimeout(thoughtTimer);
+          thoughtTimer = undefined;
+          this.publish(options);
+          return;
+        }
+        stream.thought = (stream.thought + text).slice(-THOUGHT_CHARS);
+        if (thoughtTimer) return;
+        thoughtTimer = setTimeout(() => {
+          thoughtTimer = undefined;
+          this.publish(options);
+        }, DELIVERY_INTERVAL_MS);
+        thoughtTimer.unref();
       },
       flush,
       finish,

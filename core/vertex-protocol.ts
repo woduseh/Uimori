@@ -324,8 +324,15 @@ export function encodeVertex(
     ...(request.webSearch ? { tools: [{ googleSearch: {} }] } : {}),
     generationConfig: {
       maxOutputTokens,
-      ...(generation?.thinkingLevel !== undefined
-        ? { thinkingConfig: { thinkingLevel: generation.thinkingLevel } }
+      ...(generation?.thinkingLevel !== undefined || request.thoughtSummary
+        ? {
+            thinkingConfig: {
+              ...(generation?.thinkingLevel !== undefined
+                ? { thinkingLevel: generation.thinkingLevel }
+                : {}),
+              ...(request.thoughtSummary ? { includeThoughts: true } : {}),
+            },
+          }
         : {}),
       ...(!gemini4 && generation?.temperature !== undefined && generation.temperature !== null
         ? { temperature: generation.temperature }
@@ -413,6 +420,21 @@ function usage(raw: Json): ProviderUsage {
   };
 }
 
+export function vertexThoughtText(event: unknown): string {
+  const candidates = (event as { candidates?: unknown } | null)?.candidates;
+  const parts = Array.isArray(candidates)
+    ? (candidates[0] as { content?: { parts?: unknown } } | null)?.content?.parts
+    : undefined;
+  return Array.isArray(parts)
+    ? parts
+        .map((part) => {
+          const value = part as { thought?: unknown; text?: unknown } | null;
+          return value?.thought === true && typeof value.text === 'string' ? value.text : '';
+        })
+        .join('')
+    : '';
+}
+
 export class VertexDecoder {
   private readonly context: VertexTurn;
   private readonly parts: Json[] = [];
@@ -436,7 +458,9 @@ export class VertexDecoder {
     raw: null,
     priceRevision: null,
   };
-  constructor(context: VertexTurn) {
+  private readonly thoughtSummary: boolean;
+  constructor(context: VertexTurn, options: { thoughtSummary?: boolean } = {}) {
+    this.thoughtSummary = options.thoughtSummary === true;
     this.context = readTurn(context as unknown as Json);
     if (this.context.phase !== 'request') reject('INVALID_VERTEX_CONTINUATION');
     this.ids = new Set(this.context.usedIds);
@@ -583,6 +607,7 @@ export class VertexDecoder {
       ].filter((key) => Object.hasOwn(part, key)).length > 1
     )
       reject('INVALID_VERTEX_PART');
+    if (this.thoughtSummary && part.thought === true && part.thoughtSignature === undefined) return;
     const partIndex = this.parts.length;
     this.parts.push(structuredClone(part));
     if (typeof part.text === 'string' && part.thought !== true) {

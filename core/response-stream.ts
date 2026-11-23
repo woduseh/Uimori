@@ -20,4 +20,5 @@ export type ResponseStreamPage = {
   cursor: number;
   hasMore: boolean;
   chunks: ResponseChunk[];
+  thought?: string;
 };

@@ -8,7 +8,11 @@ import {
 } from '../core/response-stream.js';
 import { HttpError } from './request-validation.js';
 
-type TaskCursor = ResponseTaskIdentity & { after: number; status?: ResponseStreamStatus };
+type TaskCursor = ResponseTaskIdentity & {
+  after: number;
+  status?: ResponseStreamStatus;
+  thought?: string;
+};
 
 export type ChatEventResume = { cursor?: number; streams: TaskCursor[] };
 export type ChatEventStreamPage = ResponseStreamPage & { after: number };
@@ -123,9 +127,11 @@ export function createChatEventStreams(sources: ChatEventSources) {
           break;
         }
         const frame: ChatEventStreamPage = { ...page, after: task.after };
-        const changed = page.chunks.length > 0 || page.status !== task.status;
+        const changed =
+          page.chunks.length > 0 || page.status !== task.status || page.thought !== task.thought;
         task.after = page.cursor;
         task.status = page.status;
+        task.thought = page.thought;
         if (!page.hasMore) {
           connection.dirty.delete(key);
           if (page.status !== 'running') connection.tasks.delete(key);

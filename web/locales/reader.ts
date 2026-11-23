@@ -1241,6 +1241,12 @@ export const messages = {
     ja: '部分的な応答を見る',
     zh: '查看部分回复',
   },
+  'reader.thoughtSummary': {
+    ko: '생각 요약',
+    en: 'Thinking summary',
+    ja: '思考の要約',
+    zh: '思考摘要',
+  },
   'reader.waitingForAResponse': {
     ko: '응답을 기다리고 있어요…',
     en: 'Waiting for a response…',

@@ -16,6 +16,7 @@ import {
   diagnosticVertexBody,
   VertexDecoder,
   VertexProtocolError,
+  vertexThoughtText,
 } from './vertex-protocol.js';
 import { ProviderContractError } from './provider-errors.js';
 import { validateConnection, validateRequest } from './provider-request.js';
@@ -238,7 +239,7 @@ export async function executeGeminiProvider(
       throw new ProviderContractError(
         vertex ? 'INVALID_VERTEX_REQUEST_TIER' : 'INVALID_GEMINI_REQUEST_TIER'
       );
-    decoder = new VertexDecoder(prepared.context);
+    decoder = new VertexDecoder(prepared.context, { thoughtSummary: request.thoughtSummary });
     if (signal.aborted) return failure('CANCELLED');
     const withheldBody = diagnosticVertexBody(prepared.body);
     assertContextBudget(withheldBody, request.contextBudget);
@@ -344,6 +345,8 @@ export async function executeGeminiProvider(
         if (vertexThoughtEvent(value)) callTiming.thought();
         const update = decoder!.accept(value);
         callTiming.text(update);
+        const thought = options.onThought ? vertexThoughtText(value) : '';
+        if (thought && !signal.aborted) await options.onThought!(thought);
         await progress?.(update);
         return false;
       },

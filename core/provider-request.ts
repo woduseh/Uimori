@@ -125,7 +125,10 @@ export function validateRequest(value: unknown): ProviderRequest {
     'bootstrap',
     'toolImages',
     'toolChoice',
+    'thoughtSummary',
   ]);
+  if (value.thoughtSummary !== undefined && value.thoughtSummary !== true)
+    reject('INVALID_THOUGHT_SUMMARY');
   if (value.pricingSnapshot !== undefined) validatePricingSnapshot(value.pricingSnapshot);
   continuationInputText(value as ProviderRequest);
   if (value.prompt !== undefined) {

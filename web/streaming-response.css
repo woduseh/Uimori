@@ -12,6 +12,16 @@
   font-size: var(--font-small);
   color: var(--muted);
 }
+.streaming-thought {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: var(--font-small);
+}
+.streaming-thought > p {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .streaming-text + .streaming-text {
   border-top: var(--hairline) solid var(--line);
   padding-top: 12px;

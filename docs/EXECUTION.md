@@ -70,6 +70,14 @@ Lua의 전체 대화 전달은 개별 스크립트 JSON 값과 예산을 구분�
 
 번역 작업도 작업 ID로 `translation` 스트림을 가져요(`server/app.ts`의 작업 훅, `server/product-auxiliary.ts`). 스트림은 진행 표시일 뿐이고 `job_results`에는 기존과 같이 판정 단계에서만 써요. 거절 뒤 재시도는 구간 번호와 시도 ID가 달라 따로 구분돼요. 번역 스트림은 완료·실패·취소·재시작 어느 쪽으로 끝나도 청크를 지우고 상태만 남기며, 같은 작업 ID가 다시 실행되면 스트림을 새로 시작해요.
 
+### 생각 요약
+
+Gemini 모델로 도우미 호출을 보낼 때는 생각 요약을 함께 요청하고(`thinkingConfig.includeThoughts`), 모델이 응답을 만드는 동안 도착하는 요약을 응답 자리에 보여줘요. 한 호출이 길게 이어질 때 화면이 멈춘 것처럼 보이지 않게 하려는 표시예요. 요약은 응답 스트림의 메모리에만 두고 DB, 이벤트, 호출 기록 어디에도 저장하지 않아요. 호출이 끝나면 지우고, 서버를 다시 시작하면 사라져요. 프로바이더가 계산하는 요금은 요약을 받든 안 받든 생각 토큰 전체 기준이라 달라지지 않아요.
+
+서명이 없는 요약 부분은 다음 호출에 다시 보내는 모델 응답에서 빼요. 요약은 표시용 글이고 모델의 추론 맥락은 서명이 들고 있어서, 요약을 되돌려 보내면 입력만 늘어나요. 서명이 붙은 부분은 받은 그대로 돌려보내야 해서, 그 부분의 글은 다른 모델 응답 부분처럼 연속 상태에 남아요. 프로바이더가 요약 요청이 든 호출을 HTTP 400으로 거절하면 그 작업은 요약 없이 한 번 다시 보내고, 남은 호출에서도 요청하지 않아요. 400의 원인이 요약 요청이 아니면 다시 보낸 호출도 같은 오류로 끝나요.
+
+본편 실행과 Gemini가 아닌 프로바이더는 요약을 요청하지 않아요. 요청 플래그는 `ProviderRequest.thoughtSummary`, 전달은 `ProviderExecutionOptions.onThought`와 응답 스트림 작성기의 `thought`, 표시는 `web/StreamingResponse.tsx`예요. `tests/vertex-protocol.test.ts`, `tests/vertex-transport.test.ts`, `tests/response-stream.test.ts`, `tests/chat-event-stream.test.ts`, `tests/helper-workspace.test.ts`와 `tests/helper-browser.spec.ts`의 `HELPUI08`이 확인해요.
+
 성공해 source가 commit되면 복구에 필요했던 원본 Batch 결과 본문은 제거하고 Batch/attempt 식별 메타데이터만 남겨요.
 
 ## 이어 쓰기에 필요한 결과

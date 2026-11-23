@@ -130,6 +130,32 @@ describe('durable public response batches', () => {
     });
   });
 
+  test('a thought summary is delivered from memory only, bounded, and gone once cleared or finished', () => {
+    vi.useFakeTimers();
+    const state = fixture();
+    const writer = state.create();
+    let notices = 0;
+    state.streams.subscribe({ taskKind: 'helper', taskId: 'task-1' }, () => notices++);
+    writer.thought('자료를 ');
+    writer.thought('확인하는 중');
+    expect(state.streams.read('helper', 'task-1')).toMatchObject({
+      thought: '자료를 확인하는 중',
+      chunks: [],
+    });
+    vi.advanceTimersByTime(50);
+    expect(notices).toBe(1);
+    writer.thought(null);
+    expect(notices).toBe(2);
+    expect(state.streams.read('helper', 'task-1')).not.toHaveProperty('thought');
+    writer.thought('가'.repeat(5000));
+    expect(state.streams.read('helper', 'task-1').thought).toHaveLength(4000);
+    writer.finish('failed');
+    expect(state.streams.read('helper', 'task-1')).not.toHaveProperty('thought');
+    expect(state.db.prepare('SELECT COUNT(*) AS n FROM response_stream_chunks').get()).toEqual({
+      n: 0,
+    });
+  });
+
   test('cancel flushes admitted partial text and ignores late deltas and final results', () => {
     const state = fixture();
     const writer = state.create();

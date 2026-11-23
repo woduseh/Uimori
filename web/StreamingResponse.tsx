@@ -96,6 +96,15 @@ export function StreamingStoryText({
   );
 }
 
+const THOUGHT_TAIL_CHARS = 600;
+export function thoughtTail(thought: string) {
+  const plain = thought.replaceAll('**', '').trim();
+  if (plain.length <= THOUGHT_TAIL_CHARS) return plain;
+  const tail = plain.slice(-THOUGHT_TAIL_CHARS);
+  const start = tail.search(/\s/u);
+  return '…' + tail.slice(start < 0 ? 0 : start).trimStart();
+}
+
 const STREAMING_POLL_MS = 120;
 const WAITING_POLL_MS = 300;
 const PUSHED_POLL_MS = 2000;
@@ -157,6 +166,7 @@ export function StreamingResponse({
   useI18n();
   const [parts, setParts] = useState<[string, string][]>([]);
   const [status, setStatus] = useState('running');
+  const [thought, setThought] = useState('');
   const [disconnected, setDisconnected] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const currentTaskStatus = useRef(taskStatus);
@@ -166,6 +176,7 @@ export function StreamingResponse({
   const wake = useRef<() => void>(() => {});
   useEffect(() => {
     setParts([]);
+    setThought('');
     setStatus('running');
     setDisconnected(false);
     setLoaded(false);
@@ -208,6 +219,7 @@ export function StreamingResponse({
         added = true;
       }
       setStatus(page.status);
+      setThought(page.thought ?? '');
       setDisconnected(false);
       failures = 0;
       if (page.status !== 'running' && !page.hasMore) {
@@ -358,8 +370,16 @@ export function StreamingResponse({
   useEffect(() => {
     reportText.current?.(hasText);
   }, [hasText]);
+  const thinking =
+    !settled && status === 'running' && thought ? (
+      <div className="streaming-thought" role="status" aria-label={t('reader.thoughtSummary')}>
+        <small>{t('reader.thoughtSummary')}</small>
+        <p>{thoughtTail(thought)}</p>
+      </div>
+    ) : null;
   if (!hasText) {
     if (quietUntilText) return null;
+    if (thinking) return thinking;
     if (disconnected)
       return (
         <small role="status">
@@ -420,6 +440,7 @@ export function StreamingResponse({
           </div>
         );
       })}
+      {thinking}
     </div>
   );
 }

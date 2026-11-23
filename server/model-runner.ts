@@ -80,6 +80,7 @@ export type MainHooks = {
   onResponseProgress?: (
     progress: ProviderProgress & { attemptId: string; segment: number }
   ) => void | Promise<void>;
+  onResponseThought?: (text: string | null) => void;
 };
 
 export class ModelRunError extends Error {

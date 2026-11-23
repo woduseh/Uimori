@@ -22,7 +22,12 @@ afterEach(async () => {
 });
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-type Task = { chatId: string; status: ResponseStreamStatus; chunks: ResponseChunk[] };
+type Task = {
+  chatId: string;
+  status: ResponseStreamStatus;
+  chunks: ResponseChunk[];
+  thought?: string;
+};
 
 function fixture(pageSize = 256) {
   const events: { seq: number; chatId: string; kind: string }[] = [];
@@ -53,6 +58,7 @@ function fixture(pageSize = 256) {
           chunks,
           cursor: chunks.at(-1)?.seq ?? after,
           hasMore: rest.length > pageSize,
+          ...(task.thought ? { thought: task.thought } : {}),
         };
       },
       runningTasks: (chatId) =>
@@ -87,6 +93,10 @@ function fixture(pageSize = 256) {
       const offset = (task.chunks.at(-1)?.offset ?? 0) + text.length;
       task.chunks.push({ seq: ++seq, attemptId: 'attempt', segment: 0, offset, text });
       if (announce) notify(taskKind, taskId);
+    },
+    think(taskKind: ResponseTaskKind, taskId: string, thought?: string) {
+      tasks.get(keyOf(taskKind, taskId))!.thought = thought;
+      notify(taskKind, taskId);
     },
     finish(taskKind: ResponseTaskKind, taskId: string, status: ResponseStreamStatus) {
       const task = tasks.get(keyOf(taskKind, taskId))!;
@@ -177,6 +187,22 @@ test('chat events keep their frames while response pages ride the same connectio
     '2;main:run-1:1',
     '2;main:run-1:2',
     '2',
+  ]);
+});
+
+test('a thought summary that changes without new text is pushed, and an unchanged page is not', async () => {
+  const story = fixture();
+  const reader = client();
+  story.hub.connect('chat', chatEventResume(undefined, undefined), reader.response, () => true);
+  story.start('helper', 'task-1', 'chat');
+  story.think('helper', 'task-1', '자료를 확인하는 중');
+  story.think('helper', 'task-1', '자료를 확인하는 중');
+  story.think('helper', 'task-1');
+  await tick();
+  expect(reader.streamed('task-1').map((page) => page.thought)).toEqual([
+    undefined,
+    '자료를 확인하는 중',
+    undefined,
   ]);
 });
 

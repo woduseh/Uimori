@@ -90,6 +90,7 @@ export type ProviderRequest = {
   };
   opaqueState?: Json;
   continuationInput?: string;
+  thoughtSummary?: true;
 };
 export type ProviderUsage = {
   inputTokens: number | null;
@@ -234,6 +235,7 @@ export type ProviderExecutionOptions = {
   beforeTurn?: () => unknown;
   onWire?: (record: WireRecord, resumeAttemptId?: string) => unknown | Promise<unknown>;
   onProgress?: (progress: ProviderProgress) => void | Promise<void>;
+  onThought?: (text: string) => void | Promise<void>;
 };
 export async function executeProvider(
   connectionValue: ProviderConnection,

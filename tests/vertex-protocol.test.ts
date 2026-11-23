@@ -5,6 +5,7 @@ import {
   encodeVertex,
   VertexDecoder,
   VertexProtocolError,
+  vertexThoughtText,
 } from '../core/vertex-protocol.js';
 import type { Json, ProviderRequest, ProviderResult } from '../core/transport.js';
 import { validateModelOptions } from '../core/model-capabilities.js';
@@ -656,6 +657,36 @@ describe('Vertex 3.8 request and continuation protocol', () => {
 });
 
 describe('Vertex streamed response decoder', () => {
+  test('asks for thought summaries only on request and keeps unsigned summaries out of the continuation', () => {
+    const plain = request();
+    plain.generation!.thinkingLevel = 'LOW';
+    expect(bodyObject(encodeVertex(plain).body).generationConfig.thinkingConfig).toEqual({
+      thinkingLevel: 'LOW',
+    });
+    const input: ProviderRequest = { ...plain, thoughtSummary: true };
+    const encoded = encodeVertex(input);
+    expect(bodyObject(encoded.body).generationConfig.thinkingConfig).toEqual({
+      thinkingLevel: 'LOW',
+      includeThoughts: true,
+    });
+    const decoder = new VertexDecoder(encoded.context, { thoughtSummary: true });
+    const signed = { thought: true, text: 'SIGNED_SUMMARY', thoughtSignature: 'THOUGHT_SIGNATURE' };
+    const tool = { ...bodyObject(call('Call-A', 'lore-1')), thoughtSignature: 'CALL_SIGNATURE' };
+    decoder.accept(event([{ thought: true, text: '자료를 ' }]));
+    decoder.accept(event([{ thought: true, text: '확인하는 중' }, signed]));
+    decoder.accept(event([tool], 'STOP'));
+    const output = decoder.finish();
+    expect(output).toMatchObject({ status: 'tool_calls', text: '', toolCalls: [{ id: 'Call-A' }] });
+    expect(bodyObject(encodeVertex(continued(input, output)).body).contents[1]).toEqual({
+      role: 'model',
+      parts: [signed, tool],
+    });
+    expect(vertexThoughtText(event([{ thought: true, text: '자료를 ' }, { text: '본문' }]))).toBe(
+      '자료를 '
+    );
+    expect(vertexThoughtText(event([{ text: '본문' }]))).toBe('');
+  });
+
   test('appends visible text only, preserves trailing usage verbatim and counts response plus thoughts', () => {
     const { decoder } = start();
     decoder.accept(event([{ thought: true, text: 'hidden' }, { text: '등대 🌊' }]));

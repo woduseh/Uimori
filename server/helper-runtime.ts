@@ -77,7 +77,7 @@ import { editableResource } from '../core/resource-editing.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { HelperEditor, HelperMode, HelperTask, HelperSelection } from '../core/helper.js';
 import type { Job, Run, RunSnapshot, ToolEvent, Usage } from '../core/types.js';
-import { workspaceModelRef, type ModelSnapshot } from '../core/product.js';
+import { isGeminiProtocol, workspaceModelRef, type ModelSnapshot } from '../core/product.js';
 import {
   contextBudgetForModel,
   estimateContextTokens,
@@ -1515,6 +1515,7 @@ export class HelperRuntime {
       helperCalls = 0,
       providerRetries = 0,
       refusalRetries = 0;
+    let thoughtSummaries = isGeminiProtocol(task.snapshot.model.connection.protocol);
     let results: ToolEvent[] = [],
       opaqueState: Json | undefined;
     let segmentInput:
@@ -1571,6 +1572,7 @@ export class HelperRuntime {
         this.workspace.startAttempt(id, owner, generation, purpose, segment, wire),
       onAttemptFinish: (attempt, result) => this.workspace.finishAttempt(id, attempt, result),
       onResponseProgress: (progress) => writer.progress({ ...progress, segment }),
+      onResponseThought: (text) => writer.thought(text),
     });
     const executeCalls = async (
       calls: ProviderResult['toolCalls'],
@@ -2134,7 +2136,7 @@ export class HelperRuntime {
         const result = await this.execute(
           task,
           target,
-          request,
+          thoughtSummaries ? { ...request, thoughtSummary: true } : request,
           helperHooks,
           nativeTool,
           (send) => {
@@ -2149,7 +2151,12 @@ export class HelperRuntime {
           }
         );
         await nativeState?.pending;
+        writer.thought(null);
         signal.throwIfAborted();
+        if (thoughtSummaries && result.status === 'error' && result.error?.code === 'HTTP_400') {
+          thoughtSummaries = false;
+          continue;
+        }
         if (
           result.status === 'error' &&
           target.connection.protocol !== 'codex-app-server-v1' &&
@@ -2478,6 +2485,7 @@ export class HelperRuntime {
                 await hooks.onResponseProgress?.({ ...progress, attemptId: attempt, segment: 0 });
             }
           : undefined,
+      onThought: request.role === 'helper' ? (text) => hooks.onResponseThought?.(text) : undefined,
     };
     const native = !!task && onToolCall && target.connection.protocol === 'codex-app-server-v1';
     if (native && !this.options.executeCodexAgent) throw new Error('CODEX_NATIVE_UNAVAILABLE');

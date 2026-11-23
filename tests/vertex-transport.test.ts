@@ -154,6 +154,39 @@ describe('Vertex native wire through real local HTTP streams (no live calls)', (
     expect(resolveCredential).not.toHaveBeenCalled();
   });
 
+  test('thought summaries reach the listener as they arrive and stay out of the result text', async () => {
+    const thought = (text: string) =>
+      sse({ candidates: [{ content: { role: 'model', parts: [{ thought: true, text }] } }] });
+    const local = await redirectedFixture((_captured, response) => {
+      response.writeHead(200, { 'content-type': 'text/event-stream' });
+      response.end(
+        thought('자료를 ') +
+          thought('확인하는 중') +
+          sse({
+            candidates: [
+              {
+                content: { role: 'model', parts: [{ text: '완료했어요.' }] },
+                finishReason: 'STOP',
+              },
+            ],
+            usageMetadata: usage,
+          })
+      );
+    });
+    const thoughts: string[] = [];
+    const result = await executeProvider(
+      connection,
+      { ...request(), thoughtSummary: true },
+      options({ onThought: (text: string) => void thoughts.push(text) })
+    );
+    expect(result).toMatchObject({ status: 'completed', text: '완료했어요.' });
+    expect(thoughts).toEqual(['자료를 ', '확인하는 중']);
+    expect(JSON.parse(local.requests[0].body).generationConfig.thinkingConfig).toMatchObject({
+      includeThoughts: true,
+    });
+    expect(JSON.stringify(result.opaqueState)).not.toContain('확인하는 중');
+  });
+
   test('L01 P04 P05 authenticates after validation, journals before fetch, preserves signed tool parts and late usage', async () => {
     const wires: WireRecord[] = [];
     let calls = 0;

@@ -531,6 +531,11 @@ async function harness(page: Page, seedCount = 0) {
       });
       value.cursor = nextSeq;
     },
+    think(task: HelperTaskView, thought?: string) {
+      const value = streams.get(task.id)!;
+      if (thought) value.thought = thought;
+      else delete value.thought;
+    },
     complete(task: HelperTaskView) {
       const view = views.get(task.conversationId)!;
       task.status = 'completed';
@@ -2072,6 +2077,34 @@ test('HELPUI07 switching sessions isolates late responses and retains the backgr
   } finally {
     release();
   }
+});
+
+test('HELPUI08 a thought summary shows while the model works and leaves when the call ends', async ({
+  page,
+  request,
+}, info) => {
+  const chat = await create(request),
+    state = await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  await panel.getByLabel('도우미에게 요청').fill('생각 요약 표시 검사');
+  await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await expect.poll(() => state.current().tasks.length).toBe(1);
+  const task = state.current().tasks[0];
+  const thought = panel.getByRole('status', { name: '생각 요약', exact: true });
+  await expect(thought).toHaveCount(0);
+  state.think(task, '**자료 확인**\n\n등장인물 설정을 읽고 있어요.');
+  await expect(thought).toContainText('등장인물 설정을 읽고 있어요.');
+  await expect(thought).not.toContainText('**');
+  await page.screenshot({ path: info.outputPath('helper-thought-summary.png') });
+  state.think(task);
+  await expect(thought).toHaveCount(0);
+  const text = '설정을 확인했어요.';
+  state.progress(task, text, text.length);
+  await expect(panel.locator('.streaming-text')).toHaveText(text);
+  state.think(task, '다음 단계를 정리하고 있어요.');
+  await expect(thought).toContainText('다음 단계를 정리하고 있어요.');
+  await expect(panel.locator('.streaming-text')).toHaveText(text);
 });
 
 test('HELPUI07 keeps the displayed response until the delayed final message arrives', async ({
