@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { ProviderTool } from '../core/transport.js';
-import type { HelperTask } from '../core/helper.js';
+import { HELPER_SHELL_OUTPUT_DEFAULT_BYTES, type HelperTask } from '../core/helper.js';
 import type { Store } from './store.js';
 import type { DataOperation } from './helper-data-worker.js';
 
@@ -28,7 +28,13 @@ export const HELPER_SHELL_TOOL: ProviderTool = {
     'Run Bash with rg, jq, Python or Node in the Linux data workspace of this task. Use it when the work needs searching, combining or transforming data across many files or several app operations in one step; one targeted read or edit is shorter through app.call. Start with INDEX.md and GUIDE.md for paths. The library and chat catalogs list every item, but bodies are prepared on demand: uimori export with JSON {"scope":"library","id":"..."} prepares one resource, scope "chats" prepares one chat, and "all":true prepares everything. Repeated exports keep local edits. A file that has not been exported is not evidence that an item or passage is absent; data.search searches live data without exporting. App operations are available inside the shell as uimori tools and uimori call <operation>. Editing an exported file changes only the working copy. Save it with uimori apply <path> on the canonical library/<id>/resource.json or chats/<id>/scenes/<source-id>.txt; no other file can be applied, and the manifest.json of a resource names its editable file and, for a bot, persona or module, the derived fields to leave alone. When a file is stale, uimori refresh <path> keeps your edits and returns latestPath to reconcile against. Each call is synchronous and cannot leave background jobs running. The result shows a head/tail preview of the output and the path of the complete log in outputFile; apply reports the saved paths, revision and hash. There is no database file here: query with uimori call db.query.',
   inputSchema: {
     type: 'object',
-    properties: SHELL_EXEC_PROPERTIES,
+    properties: {
+      ...SHELL_EXEC_PROPERTIES,
+      maxOutputBytes: {
+        ...SHELL_EXEC_PROPERTIES.maxOutputBytes,
+        description: `Size of the UTF-8 head/tail output preview in bytes. Default ${HELPER_SHELL_OUTPUT_DEFAULT_BYTES}, which is also the largest. The complete log is always kept in outputFile.`,
+      },
+    },
     required: ['command'],
     additionalProperties: false,
   },

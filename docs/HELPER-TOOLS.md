@@ -215,6 +215,7 @@ Constraints on changing these operations:
 - After an apply has committed, a projection or reader-notification failure is a warning on the saved result, never a failed save.
 - Exported translation copies come from the Reader's completed-result projection (`core/translation-display.ts`), the one that scene translation reads use.
 - The 24-hour maximum of `timeoutMs` is a sanity cap for the timer. The task deadline and cancellation are what bound a shell call.
+- A helper shell call previews 64 KB of output by default (`HELPER_SHELL_OUTPUT_DEFAULT_BYTES`), the largest preview the runner gives. With the earlier 16 KB default, 73 of 256 production shell calls came back cut in the middle and the model spent further rounds fetching the rest; 54 of those 73 outputs were 64 KB or smaller. A round costs far more than the extra text, because every round resends the whole context. The main writing shell keeps the 16 KB default: no measurement exists for it and a writing run has a tighter input budget.
 
 Outside these operations:
 

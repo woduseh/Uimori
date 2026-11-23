@@ -174,6 +174,7 @@ import {
   HELPER_TOOL_CALL_LIMIT,
   HELPER_COMPACTION_INPUT_RATIO,
   HELPER_PROVIDER_RETRY_DELAYS_MS,
+  HELPER_SHELL_OUTPUT_DEFAULT_BYTES,
   type HelperCompactionResult,
   type HelperQuestion,
   type HelperQuestionOption,
@@ -3003,7 +3004,7 @@ export class HelperRuntime {
     if (name === 'data.exec') {
       let options: ReturnType<typeof shellExecutionOptions>;
       try {
-        options = shellExecutionOptions(args);
+        options = shellExecutionOptions(args, HELPER_SHELL_OUTPUT_DEFAULT_BYTES);
       } catch {
         throw new HttpError(400, 'INVALID_SHELL_ARGUMENTS');
       }

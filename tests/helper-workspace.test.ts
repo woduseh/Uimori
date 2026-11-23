@@ -16,6 +16,7 @@ import { editableResource } from '../core/resource-editing.js';
 import { readResource, saveResource } from '../server/resource-service.js';
 import * as transport from '../core/transport.js';
 import type { ToolEvent } from '../core/types.js';
+import type { Content } from '../core/product.js';
 import {
   HELPER_TOOL_CALL_GRACE,
   HELPER_TOOL_CALL_LIMIT,
@@ -1518,6 +1519,43 @@ test('a saved change survives an explanation EOF and prevents whole-request retr
     })
   ).toThrow('HELPER_EFFECTS_ALREADY_COMMITTED');
   expect(reopened.taskSummaries(conversation.id)).toHaveLength(1);
+});
+
+test('a helper shell call previews 64 KB of output unless the model asks for less', async () => {
+  vi.stubEnv('UIMORI_SHELL_ROOT', join(tmpdir(), 'uimori-no-shell-root'));
+  const f = fixture();
+  const exec = vi
+    .spyOn(f.runtime.shell, 'exec')
+    .mockResolvedValue({ exitCode: 0, output: 'ok', truncated: false });
+  const requests: transport.ProviderRequest[] = [];
+  mockSend((request, _options, index) => {
+    requests.push(structuredClone(request));
+    return index === 0
+      ? {
+          ...structuredClone(success),
+          status: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { id: 'default', name: 'data.exec', arguments: { command: 'true' } },
+            {
+              id: 'small',
+              name: 'data.exec',
+              arguments: { command: 'true', maxOutputBytes: 1024 },
+            },
+          ],
+        }
+      : structuredClone(success);
+  });
+  const task = f.runtime.enqueue(f.conversation.id, 'shell', '자료를 확인해줘');
+  await Promise.all(f.work);
+  vi.unstubAllEnvs();
+  expect(f.workspace.task(task.id)).toMatchObject({ status: 'completed' });
+  expect(exec.mock.calls.map((call) => call[6])).toEqual([65_536, 1024]);
+  const shell = requests[0].stable.tools.find((tool) => tool.name === 'data.exec')!;
+  expect(
+    (shell.inputSchema as { properties: { maxOutputBytes: { description: string } } }).properties
+      .maxOutputBytes.description
+  ).toContain('Default 65536');
 });
 
 function stoppedAfterRename(f: ReturnType<typeof fixture>) {

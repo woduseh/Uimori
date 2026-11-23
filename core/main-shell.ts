@@ -26,7 +26,10 @@ export const SHELL_EXEC_PROPERTIES = {
   },
 };
 
-export function shellExecutionOptions(args: Record<string, unknown>) {
+export function shellExecutionOptions(
+  args: Record<string, unknown>,
+  defaultOutputBytes = SHELL_OUTPUT_DEFAULT_BYTES
+) {
   if (typeof args.command !== 'string' || !args.command.trim() || args.command.length > 50_000)
     throw new Error('SHELL_COMMAND_INVALID');
   const bounded = (name: string, fallback: number, min: number, max: number) => {
@@ -38,12 +41,7 @@ export function shellExecutionOptions(args: Record<string, unknown>) {
   return {
     command: args.command,
     timeoutMs: bounded('timeoutMs', 10_000, 1000, SHELL_TIMEOUT_MAX_MS),
-    maxOutputBytes: bounded(
-      'maxOutputBytes',
-      SHELL_OUTPUT_DEFAULT_BYTES,
-      256,
-      SHELL_OUTPUT_MAX_BYTES
-    ),
+    maxOutputBytes: bounded('maxOutputBytes', defaultOutputBytes, 256, SHELL_OUTPUT_MAX_BYTES),
   };
 }
 
