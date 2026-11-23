@@ -24,7 +24,12 @@ export function contextSummaryPolicy(options: {
 }): { targetSummaryTokens: number; generation: ModelGeneration } {
   const generation = structuredClone(options.generation);
   const goalLimit = summaryLengthLimit(options.purpose, options.summaryLength);
-  generation.maxOutputTokens = Math.min(generation.maxOutputTokens, goalLimit * 2);
+  const summaryOutputLimit = Math.min(generation.maxOutputTokens, goalLimit * 2);
+  const thinks =
+    generation.thinkingLevel !== undefined ||
+    (generation.reasoningEffort !== undefined && generation.reasoningEffort !== 'none') ||
+    generation.thinkingMode === 'adaptive';
+  if (!thinks) generation.maxOutputTokens = summaryOutputLimit;
   const headroomRatio = options.purpose === 'conversation' ? 0.85 : 1;
   const targetSummaryTokens = Math.max(
     1,
@@ -32,7 +37,7 @@ export function contextSummaryPolicy(options: {
       Math.min(
         goalLimit,
         options.consumerInputTokenLimit / 8,
-        generation.maxOutputTokens / 2,
+        summaryOutputLimit / 2,
         options.consumerInputTokenLimit * headroomRatio - (options.fixedInputTokens ?? 0)
       )
     )

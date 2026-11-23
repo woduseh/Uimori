@@ -88,8 +88,38 @@ describe('summary goals and provider output headroom', () => {
         generation,
       });
       expect(policy.targetSummaryTokens).toBe(purpose === 'conversation' ? 1 : 100);
-      expect(policy.generation).toEqual({ ...original, maxOutputTokens: 4096 });
+      expect(policy.generation).toEqual(original);
       expect(generation).toEqual(original);
+    }
+  );
+
+  const helperPolicy = (thinking: Partial<ModelGeneration>) =>
+    contextSummaryPolicy({
+      purpose: 'helper',
+      summaryLength: 'auto',
+      consumerInputTokenLimit: 262144,
+      generation: { maxOutputTokens: 65536, temperature: null, ...thinking },
+    });
+  test.each([
+    { thinkingLevel: 'HIGH' },
+    { reasoningEffort: 'high' },
+    { thinkingMode: 'adaptive' },
+  ] as const)(
+    'a summary call that thinks (%o) keeps the model output limit and the same goal',
+    (thinking) => {
+      expect(helperPolicy(thinking)).toMatchObject({
+        targetSummaryTokens: 4096,
+        generation: { maxOutputTokens: 65536 },
+      });
+    }
+  );
+  test.each([{}, { reasoningEffort: 'none' }, { thinkingMode: 'disabled' }] as const)(
+    'a summary call without thinking (%o) is limited to twice its goal',
+    (thinking) => {
+      expect(helperPolicy(thinking)).toMatchObject({
+        targetSummaryTokens: 4096,
+        generation: { maxOutputTokens: 8192 },
+      });
     }
   );
 });
