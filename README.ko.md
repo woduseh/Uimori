@@ -9,19 +9,19 @@
 - 원문·번역을 직접 편집하고, 채팅을 독립 사본으로 복사해요.
 - 이야기 기억과 백업 기능을 제공해요.
 
-> **현재 버전 `v0.15.2` · DB 스키마 15**
+> **현재 버전 `v0.15.3` · DB 스키마 15**
 >
-> 번역이 쓰이는 대로 보이고, 거절된 본문은 자동으로 다시 생성해요. 도우미는 프로바이더의 일시 오류에 다시 시도하고, 필요 없는 컨텍스트 정리와 제한 시간 초과를 "취소됨"으로 보여 주던 표시를 고쳤어요. 채팅을 열 때 받는 양과 검색 색인의 저장 공간도 줄였어요. [릴리스 노트](docs/releases/v0.15.2.md) · [업데이트 안내](docs/UPDATES.md)
+> 도우미가 멈춘 작업을 멈춘 자리에서 이어 가고, 지금 무엇을 기다리는지 말하고, 거절된 호출을 다시 보내요. Gemini 모델을 쓰면 응답을 기다리는 동안 생각 요약이 보여요. 도우미 대화 목록에서 열어 보기만 한 빈 대화를 숨기고, 실패한 대화를 표시해요. [릴리스 노트](docs/releases/v0.15.3.md) · [업데이트 안내](docs/UPDATES.md)
 
 ## 빠른 시작 (Windows)
 
 **준비물**: Node **26.13.0 이상 26.x**, npm, Chrome 또는 Edge. SQLite는 Node에 포함된 기능을 사용하므로 따로 설치하지 않아요.
 
-1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.15.2` 릴리스가 공개됐는지 확인해요.
+1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.15.3` 릴리스가 공개됐는지 확인해요.
 2. 소스를 받아 실행해요.
 
    ```powershell
-   git clone --branch v0.15.2 --single-branch https://github.com/woduseh/Uimori.git
+   git clone --branch v0.15.3 --single-branch https://github.com/woduseh/Uimori.git
    cd Uimori
    npm ci
    npm run dev
