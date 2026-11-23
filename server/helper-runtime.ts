@@ -12,6 +12,7 @@ import { modelRequestFields } from '../core/model-request-fields.js';
 import { uncertainAttemptResult } from './usage-accounting.js';
 import { performance } from 'node:perf_hooks';
 import { availableParallelism } from 'node:os';
+import { setTimeout as sleep } from 'node:timers/promises';
 import {
   HELPER_APP_TOOLS,
   helperToolTraits,
@@ -171,6 +172,7 @@ import {
   HELPER_TOOL_CALL_GRACE,
   HELPER_TOOL_CALL_LIMIT,
   HELPER_COMPACTION_INPUT_RATIO,
+  HELPER_PROVIDER_RETRY_DELAYS_MS,
   type HelperCompactionResult,
   type HelperQuestion,
   type HelperQuestionOption,
@@ -844,7 +846,9 @@ type Options = Pick<
   services?: HelperServices;
   testMode?: boolean;
   owner: string;
+  wait?: (ms: number, signal: AbortSignal) => Promise<unknown>;
 };
+const providerOverloaded = (code: string | undefined) => /^HTTP_(429|5\d\d)$/u.test(code ?? '');
 
 export function helperWritingSnapshot(store: Store, chatId: string): RunSnapshot {
   const chat = store.chat(chatId),
@@ -1485,7 +1489,8 @@ export class HelperRuntime {
       isActive: () => this.workspace.active(id, owner, generation),
     });
     let segment = 0,
-      helperCalls = 0;
+      helperCalls = 0,
+      providerRetries = 0;
     let results: ToolEvent[] = [],
       opaqueState: Json | undefined;
     let segmentInput:
@@ -2111,6 +2116,20 @@ export class HelperRuntime {
         );
         await nativeState?.pending;
         signal.throwIfAborted();
+        if (
+          result.status === 'error' &&
+          target.connection.protocol !== 'codex-app-server-v1' &&
+          providerOverloaded(result.error?.code) &&
+          providerRetries < HELPER_PROVIDER_RETRY_DELAYS_MS.length
+        ) {
+          const delay = HELPER_PROVIDER_RETRY_DELAYS_MS[providerRetries++];
+          await (this.options.wait ?? ((ms, until) => sleep(ms, undefined, { signal: until })))(
+            delay,
+            signal
+          );
+          continue;
+        }
+        providerRetries = 0;
         helperCalls++;
         if (
           target.connection.protocol === 'anthropic-messages-v1' &&

@@ -65,6 +65,7 @@ export const HELPER_TASK_LIMITS: Readonly<HelperLimits> = { totalCalls: 128, hel
 export const HELPER_TOOL_CALL_LIMIT = 256;
 export const HELPER_COMPACTION_INPUT_RATIO = 0.85;
 export const HELPER_TOOL_CALL_GRACE = 16;
+export const HELPER_PROVIDER_RETRY_DELAYS_MS: readonly number[] = [5_000, 20_000, 60_000];
 export const MAX_HELPER_REFERENCES = 12;
 export type HelperReferenceKind = 'scene' | 'outline' | 'content' | 'prompt-preset';
 export type HelperReferencePointer = {

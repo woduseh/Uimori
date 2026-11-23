@@ -1671,12 +1671,96 @@ test('follow-up requests queue durably and start with the completed preceding ex
   expect(f.workspace.task(second.id).usage.modelCalls).toBe(1);
 });
 
+const providerError = (code: string): transport.ProviderResult => ({
+  ...structuredClone(success),
+  status: 'error',
+  text: '',
+  error: { code },
+});
+function waitingRuntime(f: ReturnType<typeof fixture>) {
+  const waits: number[] = [];
+  const runtime = new HelperRuntime(f.store, {
+    owner: 'provider-retry-test',
+    signal: f.controller.signal,
+    track: (work) => f.work.push(work),
+    streams: f.streams,
+    wait: async (ms) => {
+      waits.push(ms);
+    },
+  });
+  return { runtime, waits };
+}
+const attemptCount = (f: ReturnType<typeof fixture>) =>
+  (f.store.db.prepare('SELECT COUNT(*) AS n FROM attempts').get() as { n: number }).n;
+
+test('a rate-limited or overloaded call is repeated after a wait with the task’s tool results intact', async () => {
+  const f = fixture(),
+    { runtime, waits } = waitingRuntime(f);
+  const requests: transport.ProviderRequest[] = [];
+  mockSend((request, _options, index) => {
+    requests.push(structuredClone(request));
+    if (index === 0)
+      return {
+        ...structuredClone(success),
+        status: 'tool_calls',
+        text: '',
+        toolCalls: [{ id: 'catalog', name: 'app.tools', arguments: { query: 'resource' } }],
+      };
+    if (index === 1) return providerError('HTTP_429');
+    if (index === 2) return providerError('HTTP_503');
+    return structuredClone(success);
+  });
+  const task = runtime.enqueue(f.conversation.id, 'r', '자료 도구를 알려줘');
+  await Promise.all(f.work);
+  expect(
+    runtime.workspace.task(task.id),
+    runtime.workspace.task(task.id).error ?? ''
+  ).toMatchObject({ status: 'completed' });
+  expect(waits).toEqual([5_000, 20_000]);
+  expect(attemptCount(f)).toBe(4);
+  expect(requests[1].input.results).toHaveLength(1);
+  expect(requests[2].input.results).toEqual(requests[1].input.results);
+  expect(requests[3].input.results).toEqual(requests[1].input.results);
+});
+
+test.each([
+  { code: 'HTTP_429', waits: [5_000, 20_000, 60_000], attempts: 4 },
+  { code: 'HTTP_400', waits: [], attempts: 1 },
+])(
+  'a call that keeps failing with $code ends the task after $attempts attempts',
+  async ({ code, waits: expected, attempts }) => {
+    const f = fixture(),
+      { runtime, waits } = waitingRuntime(f);
+    mockSend(() => providerError(code));
+    const task = runtime.enqueue(f.conversation.id, 'r', '설명해줘');
+    await Promise.all(f.work);
+    expect(runtime.workspace.task(task.id)).toMatchObject({ status: 'failed', error: code });
+    expect(waits).toEqual(expected);
+    expect(attemptCount(f)).toBe(attempts);
+  }
+);
+
+test('a wait before repeating a call ends at once when the user stops the task', async () => {
+  const f = fixture();
+  mockSend(() => providerError('HTTP_429'));
+  const task = f.runtime.enqueue(f.conversation.id, 'r', '설명해줘');
+  await vi.waitFor(() =>
+    expect(
+      f.store.db.prepare("SELECT COUNT(*) AS n FROM attempts WHERE status='error'").get()
+    ).toEqual({ n: 1 })
+  );
+  f.runtime.cancel(task.id);
+  await vi.waitFor(() => expect(f.workspace.task(task.id).status).toBe('cancelled'), {
+    timeout: 2000,
+  });
+  await Promise.all(f.work);
+  expect(attemptCount(f)).toBe(1);
+});
+
 test('helper retries retain attempts but project the latest response at the original request position', async () => {
   const f = fixture();
   mockSend((_request, _options, index) =>
-    index < 2
-      ? { ...structuredClone(success), status: 'error', text: '', error: { code: 'HTTP_429' } }
-      : structuredClone(success)
+    index < 2 ? providerError('HTTP_400') : structuredClone(success)
   );
   const first = f.runtime.enqueue(f.conversation.id, 'attempt-1', '원래 요청');
   await Promise.all(f.work);
@@ -1740,7 +1824,7 @@ test('copy preserves the visible retry order across message pages without restor
     );
   mockSend((_request, _options, index) =>
     index === 0
-      ? { ...structuredClone(success), status: 'error', text: '', error: { code: 'HTTP_429' } }
+      ? providerError('HTTP_400')
       : { ...structuredClone(success), text: index === 1 ? '둘째 답변' : '재시도 답변' }
   );
   const first = f.runtime.enqueue(f.conversation.id, 'retry-source', '이전 요청');
