@@ -49,6 +49,45 @@ test('build promotes only complete outputs and keeps a matching manifest and log
   await cleaned(cwd);
 });
 
+test('build records comparable web asset sizes with served compressed variants', async (t) => {
+  const { cwd } = await fixture(t);
+  const source = 'export const chunk = "synthetic";\n'.repeat(64);
+  const result = await build({
+    cwd,
+    progress() {},
+    async run(args, options) {
+      const record = await compiler(args, options);
+      if (!args[0].includes('vite')) return record;
+      const assets = path.join(args[args.indexOf('--outDir') + 1], 'assets');
+      await mkdir(assets, { recursive: true });
+      await writeFile(path.join(assets, 'index-Ab_9-xYz.js'), source);
+      await writeFile(path.join(assets, 'index-Ab_9-xYz.js.gz'), 'g'.repeat(7));
+      await writeFile(path.join(assets, 'index-Ab_9-xYz.js.br'), 'b'.repeat(5));
+      return record;
+    },
+  });
+  assert.equal(result.status, 'PASS', JSON.stringify(result));
+  const sizes = JSON.parse(await readFile(path.join(cwd, 'dist/bundle-sizes.json'), 'utf8'));
+  const html = 'synthetic compiler output'.length;
+  assert.deepEqual(
+    sizes.files.map(({ name, raw }) => [name, raw]),
+    [
+      ['assets/index-[hash].js', source.length],
+      ['index.html', html],
+    ]
+  );
+  assert.deepEqual(sizes.files[0], {
+    name: 'assets/index-[hash].js',
+    raw: source.length,
+    gzip: 7,
+    brotli: 5,
+  });
+  assert.ok(sizes.files[1].gzip > 0 && sizes.files[1].brotli > 0);
+  assert.equal(sizes.totals.files, 2);
+  assert.equal(sizes.totals.raw, source.length + html);
+  assert.deepEqual(sizes.byExtension.js, { files: 1, raw: source.length, gzip: 7, brotli: 5 });
+});
+
 test('test edits change evidence identity without invalidating compiled inputs; product edits change both', async (t) => {
   const { cwd } = await fixture(t);
   await mkdir(path.join(cwd, 'tests'));

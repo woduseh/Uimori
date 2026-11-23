@@ -1,8 +1,11 @@
 import path from 'node:path';
 import { existsSync } from 'node:fs';
-import { lstat, mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, open, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { promisify } from 'node:util';
+import { brotliCompress, gzip } from 'node:zlib';
 import {
   root,
+  filesBelow,
   newId,
   command,
   requireCommand,
@@ -12,6 +15,52 @@ import {
   ownedPath,
   removeOwned,
 } from './lib.mjs';
+
+const brotli = promisify(brotliCompress);
+const gzipped = promisify(gzip);
+const PRECOMPRESSED = /\.(?:br|gz)$/u;
+
+async function compressedSize(file, extension, compress) {
+  if (existsSync(`${file}.${extension}`)) return (await stat(`${file}.${extension}`)).size;
+  return (await compress(await readFile(file))).length;
+}
+
+function comparableAssetName(name) {
+  return name.startsWith('assets/') ? name.replace(/-[\w-]{8}(\.\w+)$/u, '-[hash]$1') : name;
+}
+
+async function bundleSizes(webDirectory) {
+  const files = await Promise.all(
+    (await filesBelow(webDirectory))
+      .filter((file) => !PRECOMPRESSED.test(file))
+      .map(async (file) => ({
+        name: comparableAssetName(path.relative(webDirectory, file).replaceAll('\\', '/')),
+        raw: (await stat(file)).size,
+        gzip: await compressedSize(file, 'gz', (source) => gzipped(source, { level: 9 })),
+        brotli: await compressedSize(file, 'br', brotli),
+      }))
+  );
+  files.sort((left, right) =>
+    left.name === right.name ? left.raw - right.raw : left.name < right.name ? -1 : 1
+  );
+  const total = (entries) => ({
+    files: entries.length,
+    raw: entries.reduce((sum, entry) => sum + entry.raw, 0),
+    gzip: entries.reduce((sum, entry) => sum + entry.gzip, 0),
+    brotli: entries.reduce((sum, entry) => sum + entry.brotli, 0),
+  });
+  const extensions = [...new Set(files.map((entry) => path.extname(entry.name).slice(1)))].sort();
+  return {
+    totals: total(files),
+    byExtension: Object.fromEntries(
+      extensions.map((extension) => [
+        extension,
+        total(files.filter((entry) => path.extname(entry.name).slice(1) === extension)),
+      ])
+    ),
+    files,
+  };
+}
 
 export async function build({
   cwd = root,
@@ -93,6 +142,10 @@ export async function build({
       throw new Error('Source changed while building; rerun after edits finish.');
     for (const file of ['server/index.js', 'web/index.html'])
       if (!existsSync(path.join(candidate, file))) throw new Error(`Build output missing: ${file}`);
+    await json(
+      path.join(candidate, 'bundle-sizes.json'),
+      await bundleSizes(path.join(candidate, 'web'))
+    );
     const manifest = {
       buildId: after.hash,
       sourceHash: after.hash,
