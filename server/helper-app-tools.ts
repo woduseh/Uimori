@@ -586,6 +586,7 @@ const readNames = new Set([
   'task.list',
   'app.tools',
   'helper.ask',
+  'web.search',
   'editor.read',
   'chat.list',
   'chat.read',
@@ -628,6 +629,7 @@ export function helperToolTraits(name: string, args: Record<string, unknown> = {
     reviewAllowed: data || name === 'app.tools' || name === 'outline.read' || writingRead,
     direct:
       name === 'helper.ask' ||
+      name === 'web.search' ||
       name === 'image.list' ||
       name === 'image.read' ||
       name === 'data.exec' ||

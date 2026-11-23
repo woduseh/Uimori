@@ -28,6 +28,7 @@ import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { completedSource, fixtureSettings, PNG_BASE64 } from './fixtures/illustration.js';
 import { chatOverrideHash } from '../core/chat-overrides.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
+import { encodeVertex, VertexDecoder } from '../core/vertex-protocol.js';
 import type { Content } from '../core/product.js';
 import type { HelperConversation, HelperTask } from '../core/helper.js';
 import type { ToolEvent } from '../core/types.js';
@@ -2042,3 +2043,97 @@ test('helper.ask records a durable question card in both apply and plan modes an
     ],
   });
 });
+
+test.each(['google-gemini-v1', 'vertex-gemini-v1'] as const)(
+  'Gemini 4 %s helper searches without leaking workspace data and records the extra model call',
+  async (protocol) => {
+    const f = await fixture();
+    const connection = f.store.product.connection({
+      title: 'Gemini 4 synthetic helper',
+      protocol,
+      endpoint:
+        protocol === 'google-gemini-v1'
+          ? 'https://generativelanguage.googleapis.com/v1beta'
+          : 'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models',
+      enabled: true,
+    });
+    const model = f.store.product.model({
+      title: 'Gemini 4 synthetic helper',
+      connectionId: connection.id,
+      modelId: 'gemini-4-neon',
+      temperature: null,
+      maxOutputTokens: 8192,
+    });
+    const selected = modelWorkspace(f.store);
+    updateModelWorkspace(f.store, {
+      expectedRevision: selected.revision,
+      routes: selected.routes,
+      translationPolicy: selected.translationPolicy,
+      helperModel: { id: model.id },
+    });
+
+    const query = 'What are the latest public Gemini grounding API constraints?';
+    mockSend((request, round) => {
+      if (round === 0) {
+        expect(request.webSearch).toBeUndefined();
+        expect(request.stable.tools.map((tool) => tool.name)).toContain('web.search');
+        const encoded = encodeVertex(request, protocol);
+        const decoder = new VertexDecoder(encoded.context);
+        decoder.accept({
+          candidates: [
+            {
+              index: 0,
+              content: {
+                role: 'model',
+                parts: [
+                  {
+                    functionCall: { id: 'search-1', name: 'web.search', args: { query } },
+                    thoughtSignature: 'synthetic-thought-signature',
+                  },
+                ],
+              },
+              finishReason: 'STOP',
+            },
+          ],
+        });
+        const decoded = decoder.finish();
+        return decoded;
+      }
+      if (round === 1) {
+        expect(request.webSearch).toBe(true);
+        expect(request.stable.tools).toEqual([]);
+        expect(request.input.task).toBe(query);
+        expect(request.input.history).toBeUndefined();
+        expect(request.input.source).toBeUndefined();
+        expect(JSON.stringify(request)).not.toContain('Original shared lore');
+        return {
+          ...structuredClone(success),
+          text: 'Google Search returned the official documentation.',
+          webSearch: {
+            performed: true,
+            searchEntryPoint: '<a href="https://google.com/search?q=gemini">Google Search</a>',
+            sources: [
+              {
+                url: 'https://ai.google.dev/gemini-api/docs/google-search',
+                title: 'Official Gemini docs',
+              },
+            ],
+          },
+        };
+      }
+      expect(round).toBe(2);
+      expect(request.webSearch).toBeUndefined();
+      expect(result(request, 'search-1')).toMatchObject({
+        performed: true,
+        sources: [{ title: 'Official Gemini docs' }],
+        answer: 'Google Search returned the official documentation.',
+      });
+      return structuredClone(success);
+    });
+    const completed = await submit(f, 'Search for the latest public Gemini docs');
+    expect(completed.usage.modelCalls).toBe(3);
+    expect(readHelperTaskResults(f.store, completed.id).webSearchSuggestions).toEqual([
+      '<a href="https://google.com/search?q=gemini">Google Search</a>',
+    ]);
+  }
+);

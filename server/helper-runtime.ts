@@ -181,7 +181,12 @@ import {
   type HelperReferencePointer,
 } from '../core/helper.js';
 import { helperModelReferences, validateHelperReferences } from './helper-references.js';
-import { helperWebSearchCapability } from '../core/helper-web-search.js';
+import { boundedWebSearch, helperWebSearchCapability } from '../core/helper-web-search.js';
+import {
+  GEMINI_HELPER_SEARCH_QUERY_LIMIT,
+  GEMINI_HELPER_SEARCH_TOOL,
+  geminiHelperSearchRequest,
+} from './helper-web-search-tool.js';
 import { ChatOverridesStore } from './chat-overrides.js';
 import { ChatOptionsStore, invokeHelperOptions } from './chat-options.js';
 import { helperArgumentDiagnostic, helperResultDiagnostic } from './helper-diagnostics.js';
@@ -2292,15 +2297,14 @@ export class HelperRuntime {
   ): ProviderRequest {
     const target = task.snapshot.model;
     const writing = task.snapshot.writing;
+    const webSearch = helperWebSearchCapability(target.connection.protocol, target.modelId);
     return helperAttachmentPrompt(
       {
         role: 'helper',
         ...modelRequestFields(target),
         generation: helperGenerationFromModel(target, target.connection.protocol),
         contextBudget: contextBudgetForModel(target),
-        ...(helperWebSearchCapability(target.connection.protocol).supported
-          ? { webSearch: true }
-          : {}),
+        ...(webSearch.supported && webSearch.mode !== 'separate' ? { webSearch: true } : {}),
         stable: {
           contract:
             CONTRACT +
@@ -2322,12 +2326,15 @@ export class HelperRuntime {
               ? [HELPER_SHELL_TOOL]
               : []),
             ...helperGatewayTools(task.snapshot.outline?.target.purpose === 'review'),
+            ...(webSearch.mode === 'separate' && task.snapshot.outline?.target.purpose !== 'review'
+              ? [GEMINI_HELPER_SEARCH_TOOL]
+              : []),
           ],
         },
         input: {
           history: asJson(history),
           source: asJson({
-            webSearch: helperWebSearchCapability(target.connection.protocol),
+            webSearch,
             currentDateUtc: task.createdAt.slice(0, 10),
             ...(task.snapshot.confirmations?.length
               ? {
@@ -2882,6 +2889,47 @@ export class HelperRuntime {
         task.snapshot.outline?.target.purpose === 'review',
         task.snapshot.scope.kind
       );
+    if (name === 'web.search') {
+      const target = task.snapshot.model;
+      if (helperWebSearchCapability(target.connection.protocol, target.modelId).mode !== 'separate')
+        throw new HttpError(400, 'HELPER_WEB_SEARCH_UNAVAILABLE');
+      fields(args, ['query']);
+      const query = text(
+        args.query,
+        'public web search query',
+        GEMINI_HELPER_SEARCH_QUERY_LIMIT
+      ).trim();
+      if (!query) throw new HttpError(400, 'WEB_SEARCH_QUERY_REQUIRED');
+      if (this.workspace.taskState(task.id).usage.modelCalls >= task.snapshot.limits.totalCalls)
+        throw new HttpError(429, 'MODEL_CALL_BUDGET_EXHAUSTED');
+      const result = await this.execute(task, target, geminiHelperSearchRequest(target, query), {
+        ...hooks,
+        onResponseProgress: undefined,
+        onResponseThought: undefined,
+      });
+      hooks.signal.throwIfAborted();
+      this.workspace.assertRunning(task.id);
+      if (result.status !== 'completed')
+        return { performed: false, sources: [], error: result.error?.code ?? result.status };
+      const searched = result.webSearch ? boundedWebSearch(result.webSearch) : undefined;
+      if (searched?.searchEntryPoint)
+        this.workspace.event(task.conversationId, task.id, 'web.search.suggestions', {
+          html: searched.searchEntryPoint,
+        });
+      if (!searched?.performed || !searched.sources.length)
+        return {
+          performed: searched?.performed === true,
+          sources: searched?.sources ?? [],
+          guidance:
+            'No verifiable grounded sources were returned. Do not claim the search verified anything.',
+        };
+      return {
+        performed: true,
+        sources: searched.sources,
+        ...(searched.queries?.length ? { queries: searched.queries } : {}),
+        answer: textTokenExcerpt(result.text, 2500).text,
+      };
+    }
     if (name === 'image.list') return listHelperImages(this.store, args);
     const chatId = task.snapshot.scope.kind === 'chat' ? task.snapshot.scope.chatId : null;
     if (

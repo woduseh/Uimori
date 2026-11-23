@@ -66,7 +66,13 @@ export function boundedWebSearch(value: ProviderWebSearch): ProviderWebSearch {
   };
 }
 
-export function helperWebSearchCapability(protocol: ProviderProtocol) {
+export function helperWebSearchCapability(protocol: ProviderProtocol, modelId = '') {
+  // https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/grounding/grounding-with-google-search (2026-11-23): generateContent cannot combine Google Search and function declarations.
+  if (
+    (protocol === 'google-gemini-v1' || protocol === 'vertex-gemini-v1') &&
+    /^gemini-4-[a-z0-9-]+$/u.test(modelId)
+  )
+    return { supported: true, mode: 'separate' as const };
   if (protocol === 'codex-app-server-v1') return { supported: true, mode: 'live' as const };
   if (protocol === 'openai-responses-v1' || protocol === 'anthropic-messages-v1')
     return { supported: true, mode: 'provider' as const };

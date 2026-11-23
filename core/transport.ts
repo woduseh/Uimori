@@ -247,7 +247,7 @@ export async function executeProvider(
       reject('INVALID_WEB_SEARCH');
     const capability =
       requestValue.role === 'helper'
-        ? helperWebSearchCapability(connectionValue.protocol)
+        ? helperWebSearchCapability(connectionValue.protocol, requestValue.modelId)
         : storyGuideWebSearchCapability(connectionValue.protocol);
     if (!capability.supported) reject('WEB_SEARCH_UNSUPPORTED');
   }

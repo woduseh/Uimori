@@ -592,6 +592,16 @@ export function HelperTaskResults({
             )}
           </ul>
           {rollback.footer}
+          {data.webSearchSuggestions?.map((html, index) => (
+            <iframe
+              key={index}
+              title={t('prompts.uiStoryGuideSearchSuggestions')}
+              srcDoc={html}
+              sandbox="allow-popups allow-popups-to-escape-sandbox"
+              referrerPolicy="no-referrer"
+              style={{ width: '100%', height: 160, border: 0 }}
+            />
+          ))}
           {data.unrecordedOperations > 0 && (
             <p className="helper-result-note">
               {t('helperResults.unrecorded', { count: data.unrecordedOperations })}

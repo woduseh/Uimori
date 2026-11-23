@@ -1,7 +1,12 @@
 import { toolImageParts } from './provider-image-reference.js';
 import { canonicalJson as canonical } from './canonical-json.js';
 import { GEMINI_SAFETY_CATEGORIES } from './gemini-safety.js';
-import { webCitationLinks, webSearchSources, type ProviderWebSearch } from './helper-web-search.js';
+import {
+  helperWebSearchCapability,
+  webCitationLinks,
+  webSearchSources,
+  type ProviderWebSearch,
+} from './helper-web-search.js';
 import type { ProviderTextUpdate } from './provider-progress.js';
 import { createHash } from 'node:crypto';
 import { TRANSLATION_FORMAT_INSTRUCTION } from './provider-format.js';
@@ -105,13 +110,17 @@ export function encodeVertex(
   if (
     request.webSearch !== undefined &&
     (request.webSearch !== true ||
-      request.role !== 'main' ||
-      request.input.controls.purpose !== 'story-guide')
+      !(
+        (request.role === 'main' && request.input.controls.purpose === 'story-guide') ||
+        (request.role === 'helper' &&
+          helperWebSearchCapability(protocol, request.modelId).mode === 'separate')
+      ))
   )
     reject('INVALID_WEB_SEARCH');
   // https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/grounding/grounding-with-google-search#considerations
-  // (2026-11-20): search tools such as googleSearch cannot be combined with non-search tools such
-  // as function calling in the same generateContent request.
+  // (2026-11-23): generateContent cannot combine googleSearch with function declarations.
+  // The helper uses an independent search-only request; Interactions API combinations are
+  // a different protocol and are not encoded here.
   if (request.webSearch && (request.stable.tools.length || request.toolChoice))
     reject('GEMINI_SEARCH_TOOL_COMBINATION_UNSUPPORTED');
   const continuationInput = continuationInputText(request);
