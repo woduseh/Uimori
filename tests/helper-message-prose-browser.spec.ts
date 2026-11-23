@@ -4,7 +4,11 @@ import { startFixtureVite, type FixtureVite } from './fixtures/fixture-vite.js';
 let vite: FixtureVite;
 let origin: string;
 test.beforeAll(async () => {
-  vite = await startFixtureVite(['react', 'react-dom/client', 'markdown-it']);
+  test.setTimeout(120_000);
+  vite = await startFixtureVite(
+    ['react', 'react-dom/client', 'markdown-it'],
+    ['/tests/fixtures/helper-message-prose.tsx']
+  );
   origin = vite.origin;
 });
 test.afterAll(async () => {

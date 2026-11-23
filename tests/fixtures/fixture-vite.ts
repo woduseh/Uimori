@@ -2,11 +2,26 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import react from '@vitejs/plugin-react';
-import { createServer } from 'vite';
+import { createServer, type ViteDevServer } from 'vite';
 
 export type FixtureVite = { origin: string; close: () => Promise<void> };
 
-export async function startFixtureVite(include: string[]): Promise<FixtureVite> {
+async function transformGraph(server: ViteDevServer, url: string, seen: Set<string>) {
+  if (seen.has(url)) return;
+  seen.add(url);
+  await server.transformRequest(url);
+  const module = await server.moduleGraph.getModuleByUrl(url);
+  await Promise.all(
+    [...(module?.importedModules ?? [])].map((imported) =>
+      transformGraph(server, imported.url, seen)
+    )
+  );
+}
+
+export async function startFixtureVite(
+  include: string[],
+  entries: string[] = []
+): Promise<FixtureVite> {
   const cacheDir = await mkdtemp(path.join(tmpdir(), 'uimori-fixture-vite-'));
   const server = await createServer({
     configFile: false,
@@ -28,6 +43,8 @@ export async function startFixtureVite(include: string[]): Promise<FixtureVite> 
     );
   });
   await server.listen();
+  const seen = new Set<string>();
+  for (const entry of entries) await transformGraph(server, entry, seen);
   return {
     origin: server.resolvedUrls!.local[0]!,
     close: async () => {

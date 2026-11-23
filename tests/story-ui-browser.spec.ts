@@ -7,17 +7,21 @@ test.use({ reducedMotion: 'no-preference' });
 let vite: FixtureVite;
 let origin: string;
 test.beforeAll(async () => {
-  vite = await startFixtureVite([
-    'react',
-    'react-dom/client',
-    'dompurify',
-    'markdown-it',
-    '@a2ui/react',
-    '@a2ui/web_core',
-    '@a2ui/web_core/catalogs/basic/v1',
-    'zod',
-    'intl-messageformat',
-  ]);
+  test.setTimeout(120_000);
+  vite = await startFixtureVite(
+    [
+      'react',
+      'react-dom/client',
+      'dompurify',
+      'markdown-it',
+      '@a2ui/react',
+      '@a2ui/web_core',
+      '@a2ui/web_core/catalogs/basic/v1',
+      'zod',
+      'intl-messageformat',
+    ],
+    ['/tests/fixtures/story-ui.tsx']
+  );
   origin = vite.origin;
 });
 test.afterAll(async () => {

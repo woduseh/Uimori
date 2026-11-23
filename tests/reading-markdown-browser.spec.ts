@@ -8,14 +8,11 @@ import type { Job } from '../core/types.js';
 let vite: FixtureVite;
 let origin: string;
 test.beforeAll(async () => {
-  vite = await startFixtureVite([
-    'react',
-    'react-dom/client',
-    'dompurify',
-    'markdown-it',
-    '@a2ui/react',
-    '@a2ui/web_core',
-  ]);
+  test.setTimeout(120_000);
+  vite = await startFixtureVite(
+    ['react', 'react-dom/client', 'dompurify', 'markdown-it', '@a2ui/react', '@a2ui/web_core'],
+    ['/tests/fixtures/reading-markdown.tsx']
+  );
   origin = vite.origin;
 });
 test.afterAll(async () => {

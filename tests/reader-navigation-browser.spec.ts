@@ -5,7 +5,11 @@ import { postFixtureChat } from './fixtures/chat.js';
 let vite: FixtureVite;
 let origin: string;
 test.beforeAll(async () => {
-  vite = await startFixtureVite(['react', 'react-dom/client', 'dompurify']);
+  test.setTimeout(120_000);
+  vite = await startFixtureVite(
+    ['react', 'react-dom/client', 'dompurify'],
+    ['/tests/fixtures/reader-navigation.tsx']
+  );
   origin = vite.origin;
 });
 test.afterAll(async () => {
