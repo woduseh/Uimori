@@ -4,7 +4,13 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
-import { queueAutomaticRefusalRetry, retryRun } from '../server/run-retry.js';
+import {
+  finishRefusalWithAutomaticRetry,
+  queueAutomaticRefusalRetry,
+  retryRun,
+} from '../server/run-retry.js';
+import { HttpError } from '../server/request-validation.js';
+import { DEFAULT_PUSH_PREFERENCES } from '../core/push.js';
 import { saveChatGenerationDefaults } from '../server/chat-generation-defaults.js';
 import { createFixtureChat } from './fixtures/chat.js';
 
@@ -59,6 +65,106 @@ function refuse(store: Store, runId: string) {
 }
 const runCount = (store: Store, chatId: string) =>
   store.db.prepare('SELECT count(*) AS total FROM runs WHERE chat_id=?').get(chatId)!.total;
+function subscribe(store: Store) {
+  const at = new Date().toISOString();
+  store.db
+    .prepare('INSERT INTO access_sessions(token_hash,authority_hash) VALUES(?,?)')
+    .run('synthetic-session', 'synthetic-authority');
+  store.db
+    .prepare(`INSERT INTO push_subscriptions(id,client_id,session_hash,endpoint,keys,preferences,origin,revision,created_at,updated_at)
+      VALUES('synthetic-device','synthetic-client','synthetic-session','https://push.example.test/device','{}',?,'https://story.example.test',1,?,?)`)
+    .run(JSON.stringify(DEFAULT_PUSH_PREFERENCES), at, at);
+}
+const failurePushes = (store: Store) =>
+  (
+    store.db
+      .prepare("SELECT event_key AS eventKey FROM push_outbox WHERE kind='task-failed'")
+      .all() as { eventKey: string }[]
+  ).map((row) => row.eventKey);
+const refusal = {
+  status: 'refused' as const,
+  error: 'MAIN_RESPONSE_REFUSED',
+  partialText: 'Refused text',
+  usage,
+};
+function finishRefusal(
+  store: Store,
+  runId: string,
+  options: { retryAllowed?: boolean; requireModel?: () => void } = {}
+) {
+  store.startRun(runId);
+  return finishRefusalWithAutomaticRetry(store, runId, refusal, {
+    retryAllowed: options.retryAllowed ?? true,
+    requireModel: options.requireModel ?? anyModel,
+  });
+}
+
+test('a refusal that queues its automatic retry sends no failure push until the last refusal', () => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Push');
+  subscribe(store);
+  const root = queued(store, chat.id);
+  const first = finishRefusal(store, root.id)!;
+  expect(first.status).toBe('queued');
+  expect(store.run(root.id)).toMatchObject({
+    status: 'refused',
+    partialText: 'Refused text',
+    usage,
+  });
+  expect(failurePushes(store)).toEqual([]);
+  const second = finishRefusal(store, first.id)!;
+  expect(failurePushes(store)).toEqual([]);
+  expect(finishRefusal(store, second.id)).toBeUndefined();
+  expect(failurePushes(store)).toEqual([`run:${second.id}:refused`]);
+  expect(runCount(store, chat.id)).toBe(3);
+});
+
+test('a refusal that cannot retry is the final outcome and sends the failure push', () => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Final');
+  subscribe(store);
+  const stopping = queued(store, chat.id);
+  expect(finishRefusal(store, stopping.id, { retryAllowed: false })).toBeUndefined();
+  const rejected = queued(store, chat.id);
+  expect(
+    finishRefusal(store, rejected.id, {
+      requireModel: () => {
+        throw new HttpError(400, 'MODEL_REQUIRED:main');
+      },
+    })
+  ).toBeUndefined();
+  const disabled = queued(store, chat.id);
+  const current = store.chat(chat.id);
+  store.settings(chat.id, current.settingsRevision, {
+    ...current.settings,
+    autoRefusalRetryEnabled: false,
+  });
+  expect(finishRefusal(store, disabled.id)).toBeUndefined();
+  expect(failurePushes(store).sort()).toEqual(
+    [stopping.id, rejected.id, disabled.id].map((id) => `run:${id}:refused`).sort()
+  );
+  expect(runCount(store, chat.id)).toBe(3);
+});
+
+test('the refusal and its retry commit together or not at all', () => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Atomic');
+  subscribe(store);
+  const run = queued(store, chat.id);
+  expect(() =>
+    finishRefusal(store, run.id, {
+      requireModel: () => {
+        throw new Error('synthetic crash');
+      },
+    })
+  ).toThrow('synthetic crash');
+  expect(store.run(run.id).status).toBe('running');
+  expect(runCount(store, chat.id)).toBe(1);
+  expect(failurePushes(store)).toEqual([]);
+  store.recover();
+  expect(store.run(run.id).status).toBe('interrupted');
+  expect(runCount(store, chat.id)).toBe(1);
+});
 
 test('the automatic count follows its own chain and a manual retry starts a new count', () => {
   const store = database(),

@@ -218,13 +218,14 @@ export class Store {
       throw error;
     }
   }
-  event(chatId: string, kind: string, entityId: string) {
+  event(chatId: string, kind: string, entityId: string, options: { notify?: boolean } = {}) {
     const write = () => {
       const at = now();
       this.db
         .prepare('INSERT INTO events(chat_id,kind,entity_id,at) VALUES(?,?,?,?)')
         .run(chatId, kind, entityId, at);
-      enqueueTerminalNotification(this.db, chatId, kind, entityId, at);
+      if (options.notify !== false)
+        enqueueTerminalNotification(this.db, chatId, kind, entityId, at);
     };
     if (this.db.isTransaction) write();
     else this.transaction(write);
@@ -645,7 +646,8 @@ export class Store {
     status: 'failed' | 'cancelled' | 'interrupted' | 'refused' | 'partial',
     error: string,
     partialText?: string,
-    usage?: Usage
+    usage?: Usage,
+    options: { notify?: boolean } = {}
   ) {
     return this.transaction(() => {
       const run = readRunState(this, id);
@@ -663,7 +665,7 @@ export class Store {
           id
         );
       this.story.finishCommandInTransaction(id, status === 'cancelled' ? 'cancelled' : 'failed');
-      this.event(run.chatId, `run.${status}`, id);
+      this.event(run.chatId, `run.${status}`, id, options);
       return this.releaseEndedRunInTransaction(id);
     });
   }

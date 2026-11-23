@@ -233,6 +233,7 @@ export function risuExportRoutes(app: FastifyInstance, store: Store): void {
     const path = kind === 'content' ? 'content' : 'prompt-presets';
     app.get<{ Params: { id: string }; Querystring: { expectedRevision?: string } }>(
       `/api/${path}/:id/risu-export`,
+      { compress: false },
       async (request, reply) => {
         assertLibraryVisible(store, kind, request.params.id);
         const item = store.product.get<Content | PromptPreset>(kind, request.params.id);

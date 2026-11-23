@@ -1,7 +1,9 @@
 import { readImportReceipt, saveImportReceipt } from './import-operations.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
-import type { RunSnapshot } from '../core/types.js';
+import type { RunSnapshot, Usage } from '../core/types.js';
+import { enqueueTerminalNotification } from './push-events.js';
+import { readRunStatus } from './run-projections.js';
 import { canRecoverMainJudgment } from '../core/main-judgment-recovery.js';
 import { HttpError, text } from './request-validation.js';
 import { forkChat } from './chat-fork.js';
@@ -65,6 +67,38 @@ export function queueAutomaticRefusalRetry(
     if (error instanceof HttpError) return undefined;
     throw error;
   }
+}
+
+export function finishRefusalWithAutomaticRetry(
+  store: Store,
+  runId: string,
+  refusal: { status: 'refused' | 'failed'; error: string; partialText: string; usage: Usage },
+  options: { retryAllowed: boolean; requireModel: (target: unknown, role: string) => void }
+): Run | undefined {
+  return store.transaction(() => {
+    const ended = !['queued', 'running'].includes(readRunStatus(store, runId));
+    const run = store.finishRun(
+      runId,
+      refusal.status,
+      refusal.error,
+      refusal.partialText,
+      refusal.usage,
+      { notify: false }
+    );
+    if (ended) return undefined;
+    const retry = options.retryAllowed
+      ? queueAutomaticRefusalRetry(store, runId, options.requireModel)
+      : undefined;
+    if (!retry)
+      enqueueTerminalNotification(
+        store.db,
+        run.chatId,
+        `run.${refusal.status}`,
+        runId,
+        new Date().toISOString()
+      );
+    return retry;
+  });
 }
 
 export function retryRun(

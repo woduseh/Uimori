@@ -149,6 +149,50 @@ test('JSON responses compress with brotli while event streams stay unencoded and
   controller.abort();
 });
 
+test('a compressible reader response revalidates to an empty 304', async () => {
+  const app = await application();
+  const chat = createFixtureChat(app.store, 'Revalidated reader');
+  scene(app.store, chat.id, 'A long synthetic paragraph. '.repeat(200));
+  const url = `/api/chats/${chat.id}/reader`;
+  const first = await app.inject({ url, headers: { ...local, 'accept-encoding': 'br' } });
+  expect(first.headers['content-encoding']).toBe('br');
+  expect(first.rawPayload.length).toBeGreaterThan(0);
+  const revalidated = await app.inject({
+    url,
+    headers: { ...local, 'accept-encoding': 'br', 'if-none-match': String(first.headers.etag) },
+  });
+  expect(revalidated.statusCode).toBe(304);
+  expect(revalidated.rawPayload.length).toBe(0);
+  expect(revalidated.headers['content-encoding']).toBeUndefined();
+});
+
+test('a Risu export download is sent as stored', async () => {
+  const app = await application();
+  const preset = app.store.product.promptPreset({
+    title: 'Exported preset',
+    role: 'main',
+    program: {
+      version: 1,
+      nativeRisuPreset: {
+        version: 1,
+        preset: {
+          promptTemplate: [
+            { type: 'plain', role: 'system', text: 'A long synthetic rule. '.repeat(200) },
+          ],
+        },
+      },
+    },
+  }) as { id: string };
+  const exported = await app.inject({
+    url: `/api/prompt-presets/${preset.id}/risu-export`,
+    headers: { ...local, 'accept-encoding': 'br, gzip' },
+  });
+  expect(exported.statusCode).toBe(200);
+  expect(exported.headers['content-type']).toBe('application/octet-stream');
+  expect(exported.rawPayload.length).toBeGreaterThan(1024);
+  expect(exported.headers['content-encoding']).toBeUndefined();
+});
+
 test('images, archives and event-stream bodies are never re-encoded', async () => {
   const app = Fastify();
   await registerResponseCompression(app);

@@ -362,6 +362,9 @@ export async function createApp(options: AppOptions): Promise<App> {
       }
     }
   };
+  const publishAll = () => {
+    for (const chatId of subscribers.keys()) publish(chatId);
+  };
   const track = (promise: Promise<void>) => {
     work.add(promise);
     const settled = () => {
@@ -963,7 +966,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     },
     onAuthChanged: () => {
       pushService?.revokeInactive();
-      for (const chatId of subscribers.keys()) publish(chatId);
+      publishAll();
     },
   });
   requestMetrics.addAuthenticationMark();
@@ -1335,7 +1338,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.get<{ Params: { id: string } }>('/api/runs/:id', async (request) =>
     store.run(request.params.id)
   );
-  promptWorkspaceRoutes(app, store, publish);
+  promptWorkspaceRoutes(app, store, publishAll);
   loreContextDefaultRoutes(app, store);
   app.post<{ Params: { id: string } }>(
     '/api/runs/:id/retry',

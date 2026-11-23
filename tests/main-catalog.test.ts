@@ -97,11 +97,21 @@ test('a catalog past the token budget lists a prefix and points at the read tool
   expect(page.total).toBe(many.length);
   expect(page.listed).toBeGreaterThan(0);
   expect(page.listed).toBeLessThan(many.length);
-  expect(page.remaining).toContain('knowledge.search');
+  expect(page.remaining).toBe(
+    'Use knowledge.search with pagination to discover the full approved scope.'
+  );
   expect(input.catalog.map((item) => item.id)).toEqual(
     many.slice(0, page.listed).map((item) => item.id)
   );
   expect(countTextTokens(JSON.stringify(input.catalog))).toBeLessThanOrEqual(CATALOG_TOKENS);
+  const withSkill = buildMainProviderRequest(
+    snapshot([...many, lore(400, { id: 'skill-400', kind: 'skill' })])
+  ).input;
+  expect(withSkill.catalogPage!.remaining).toBe(
+    'Use knowledge.search or skills.list with pagination to discover the full approved scope.'
+  );
+  expect(withSkill.tools).toContain('skills.list');
+  expect(buildMainProviderRequest(snapshot(many)).input.tools).not.toContain('skills.list');
   const small = buildMainInput(snapshot(many.slice(0, 3)));
   expect(small.catalogPage).toBeUndefined();
   expect(small.catalog).toHaveLength(3);

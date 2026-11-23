@@ -97,8 +97,9 @@ export function resourceCatalog(
           catalogPage: {
             total: resources.length,
             listed,
-            remaining:
-              'Use knowledge.search or skills.list with pagination to discover the full approved scope.',
+            remaining: resources.some((item) => item.kind === 'skill')
+              ? 'Use knowledge.search or skills.list with pagination to discover the full approved scope.'
+              : 'Use knowledge.search with pagination to discover the full approved scope.',
           },
         }
       : {}),

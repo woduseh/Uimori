@@ -699,14 +699,10 @@ export function freezeCurrentPrompts(
   };
 }
 
-export function promptWorkspaceRoutes(
-  app: FastifyInstance,
-  store: Store,
-  publish: (chatId: string) => void
-) {
+export function promptWorkspaceRoutes(app: FastifyInstance, store: Store, publishAll: () => void) {
   promptCombinationRoutes(app, store, () => promptWorkspace(store));
   const publishResult = <T>(result: T): T => {
-    for (const chat of store.chats()) publish(chat.id);
+    publishAll();
     return result;
   };
   app.get('/api/model-workspace', async () => modelWorkspace(store));

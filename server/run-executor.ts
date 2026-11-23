@@ -36,7 +36,7 @@ import { AnthropicBatchRun } from './anthropic-batch.js';
 import { readRequestImage } from './request-images.js';
 import { MainShell } from './main-shell.js';
 import { maintenanceState } from './maintenance.js';
-import { queueAutomaticRefusalRetry } from './run-retry.js';
+import { finishRefusalWithAutomaticRetry } from './run-retry.js';
 import { recordToolDiagnostic, startToolDiagnostic } from './execution-diagnostics.js';
 import type { RunPhaseSpan, Usage } from '../core/types.js';
 import {
@@ -112,15 +112,15 @@ export function createRunExecutor({
           phaseSpans[phase] = (phaseSpans[phase] ?? 0) + elapsedMs;
         };
         let refusalRetryId: string | undefined;
-        const queueRefusalRetry = () => {
-          if (
-            signal.aborted ||
-            controller.signal.aborted ||
-            run.snapshot.judgmentRecovery ||
-            maintenanceState(store).status !== 'open'
-          )
-            return;
-          refusalRetryId = queueAutomaticRefusalRetry(store, id, requireModel)?.id;
+        const finishRefusal = (refusal: Parameters<typeof finishRefusalWithAutomaticRetry>[2]) => {
+          refusalRetryId = finishRefusalWithAutomaticRetry(store, id, refusal, {
+            retryAllowed:
+              !signal.aborted &&
+              !controller.signal.aborted &&
+              !run.snapshot.judgmentRecovery &&
+              maintenanceState(store).status === 'open',
+            requireModel,
+          })?.id;
         };
         let openPhase: { phase: RunPhaseSpan; started: number } | undefined;
         const beginPhase = (phase: RunPhaseSpan) => {
@@ -587,18 +587,24 @@ export function createRunExecutor({
             return;
           }
           if (result.status !== 'completed') {
-            store.finishRun(
-              id,
-              result.status === 'error' ? 'failed' : result.status,
-              result.error ?? 'Provider execution ended',
-              result.status === 'partial' ? result.text : '',
-              result.usage
-            );
             if (
               result.status === 'refused' ||
               (result.status === 'error' && result.error === 'EMPTY_COMPLETION')
             )
-              queueRefusalRetry();
+              finishRefusal({
+                status: result.status === 'error' ? 'failed' : 'refused',
+                error: result.error ?? 'Provider execution ended',
+                partialText: '',
+                usage: result.usage,
+              });
+            else
+              store.finishRun(
+                id,
+                result.status === 'error' ? 'failed' : result.status,
+                result.error ?? 'Provider execution ended',
+                result.status === 'partial' ? result.text : '',
+                result.usage
+              );
             publish(run.chatId);
             return;
           }
@@ -645,8 +651,12 @@ export function createRunExecutor({
               .run(id);
             endPhase();
             if (verdict.verdict !== 'accepted') {
-              store.finishRun(id, 'refused', 'MAIN_RESPONSE_REFUSED', result.text, priorUsage);
-              queueRefusalRetry();
+              finishRefusal({
+                status: 'refused',
+                error: 'MAIN_RESPONSE_REFUSED',
+                partialText: result.text,
+                usage: priorUsage,
+              });
               publish(run.chatId);
               return;
             }
@@ -753,21 +763,25 @@ export function createRunExecutor({
         } finally {
           endPhase();
           if (started && (Object.keys(phaseSpans).length || run.snapshot.phaseSpans))
-            store.db
-              .prepare(
-                "UPDATE runs SET snapshot=json_set(snapshot,'$.phaseSpans',json(?)) WHERE id=?"
-              )
-              .run(
-                JSON.stringify(
-                  Object.fromEntries(
-                    Object.entries(phaseSpans).map(([phase, ms]) => [
-                      phase,
-                      Math.round(ms * 10) / 10,
-                    ])
-                  )
-                ),
-                id
-              );
+            try {
+              store.db
+                .prepare(
+                  "UPDATE runs SET snapshot=json_set(snapshot,'$.phaseSpans',json(?)) WHERE id=?"
+                )
+                .run(
+                  JSON.stringify(
+                    Object.fromEntries(
+                      Object.entries(phaseSpans).map(([phase, ms]) => [
+                        phase,
+                        Math.round(ms * 10) / 10,
+                      ])
+                    )
+                  ),
+                  id
+                );
+            } catch {
+              process.stderr.write('RUN_PHASE_SPANS_WRITE_FAILED\n');
+            }
           const status = readRunStatus(store, id);
           if (status === 'queued' || status === 'running' || status === 'interrupted')
             shell?.close();
