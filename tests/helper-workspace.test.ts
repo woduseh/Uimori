@@ -1721,6 +1721,65 @@ test('a stopped task counts the targets one batch call changed, not the call', a
   });
 });
 
+test.each([
+  ['SAFETY', 'HELPER_RESPONSE_REFUSED:SAFETY'],
+  ['I cannot help with that request.', 'HELPER_RESPONSE_REFUSED'],
+])('a provider refusal %s ends the task as %s', async (refusal, error) => {
+  const f = fixture();
+  mockSend(() => ({ ...structuredClone(success), status: 'refused', text: '', refusal }));
+  const task = f.runtime.enqueue(f.conversation.id, 'refused', '자료를 알려줘');
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id)).toMatchObject({ status: 'failed', error });
+});
+
+test('a refused task is retried from the start, and continued once it has saved a change', async () => {
+  const refused: transport.ProviderResult = {
+    ...structuredClone(success),
+    status: 'refused',
+    text: '',
+    refusal: 'SAFETY',
+  };
+  const early = fixture();
+  const answers = [refused];
+  mockSend(() => answers.shift() ?? structuredClone(success));
+  const first = early.runtime.enqueue(early.conversation.id, 'first', '자료를 알려줘');
+  await Promise.all(early.work);
+  expect(early.workspace.task(first.id)).toMatchObject({
+    status: 'failed',
+    error: 'HELPER_RESPONSE_REFUSED:SAFETY',
+  });
+  const retried = early.runtime.enqueue(
+    early.conversation.id,
+    'again',
+    '자료를 알려줘',
+    undefined,
+    undefined,
+    first.id
+  );
+  await Promise.all(early.work);
+  expect(early.workspace.task(retried.id)).toMatchObject({ status: 'completed' });
+  vi.restoreAllMocks();
+
+  const late = fixture(),
+    { chat, conversation, replies, resume } = stoppedAfterRename(late);
+  replies[1] = refused;
+  const stopped = late.runtime.enqueue(conversation.id, 'first', '제목을 바꿔줘');
+  await Promise.all(late.work);
+  expect(late.workspace.task(stopped.id)).toMatchObject({
+    status: 'failed',
+    error: 'HELPER_RESPONSE_REFUSED:SAFETY',
+    resumable: true,
+    completedEffects: { count: 1 },
+  });
+  const continued = resume('resume', stopped.id);
+  await Promise.all(late.work);
+  expect(late.workspace.task(continued.id)).toMatchObject({ status: 'completed' });
+  expect(late.store.chat(chat.id).title).toBe('저장 완료');
+  expect(late.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations').get()).toEqual({
+    n: 1,
+  });
+});
+
 test('a task with no recorded exchange cannot be resumed', async () => {
   const f = fixture();
   mockSend(() => ({

@@ -56,7 +56,7 @@ import {
 import { HELPER_PERSONA_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { UI_HELPER_PERSONA } from './helper-persona.js';
 import { api, ApiError } from './api.js';
-import { RetryFailure } from './RetryFailure.js';
+import { RetryFailure, helperResponseRefused } from './RetryFailure.js';
 import { RequestMessage } from './RequestMessage.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { HelperActivityDetails, HelperLiveActivity, useHelperActivity } from './HelperActivity.js';
@@ -222,6 +222,7 @@ function helperTaskError(error: string | null | undefined): string {
   if (error === 'HELPER_CONTEXT_DEPENDENCY_CHANGED')
     return t('errors.HELPER_CONTEXT_DEPENDENCY_CHANGED');
   if (error === 'HELPER_TASK_TIMEOUT') return t('errors.HELPER_TASK_TIMEOUT');
+  if (helperResponseRefused(error)) return t('errors.HELPER_RESPONSE_REFUSED');
   return requestFileError(error) ?? translateMessage(error ?? '');
 }
 const attention = (task: HelperTaskView) => ['failed', 'interrupted'].includes(task.status);

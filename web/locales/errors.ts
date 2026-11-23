@@ -473,6 +473,12 @@ export const messages = {
     ja: 'このリクエストの変更はすでに保存されています。保存された結果を確認し、残りの作業だけを新たに依頼してください。',
     zh: '此请求的更改已保存。请查看已保存的结果，仅针对剩余工作发起新请求。',
   },
+  'errors.HELPER_RESPONSE_REFUSED': {
+    ko: '프로바이더가 응답을 거절했어요. 요청이나 다루는 자료가 프로바이더의 안전 정책에 걸렸을 수 있어요.',
+    en: 'The provider refused to respond. The request or the material it handles may have triggered the provider’s safety policy.',
+    ja: 'プロバイダーが応答を拒否しました。リクエストや扱う資料がプロバイダーの安全ポリシーに抵触した可能性があります。',
+    zh: '提供方拒绝了回复。请求或所处理的资料可能触发了提供方的安全策略。',
+  },
   'errors.HELPER_RESUME_UNAVAILABLE': {
     ko: '이 작업은 이어서 할 수 없어요. 남은 작업을 새로 요청해 주세요.',
     en: 'This task cannot be continued. Request the remaining work again.',

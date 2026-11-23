@@ -853,6 +853,10 @@ type Options = Pick<
   owner: string;
   wait?: (ms: number, signal: AbortSignal) => Promise<unknown>;
 };
+const refusedTaskError = (reason: string | null) =>
+  /^[A-Z][A-Z0-9_]{1,40}$/u.test(reason ?? '')
+    ? `HELPER_RESPONSE_REFUSED:${reason}`
+    : 'HELPER_RESPONSE_REFUSED';
 const providerOverloaded = (code: string | undefined) => /^HTTP_(429|5\d\d)$/u.test(code ?? '');
 
 export function helperWritingSnapshot(store: Store, chatId: string): RunSnapshot {
@@ -2193,7 +2197,10 @@ export class HelperRuntime {
             generation,
             status,
             result.text,
-            timedOut ? 'HELPER_TASK_TIMEOUT' : (result.error?.code ?? result.refusal)
+            timedOut
+              ? 'HELPER_TASK_TIMEOUT'
+              : (result.error?.code ??
+                  (result.status === 'refused' ? refusedTaskError(result.refusal) : result.refusal))
           );
           writer.finish(status);
           return;
