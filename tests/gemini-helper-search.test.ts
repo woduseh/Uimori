@@ -111,6 +111,11 @@ test('Gemini 4 helper search is an explicitly read-only, public-query operation'
     required: ['query'],
     additionalProperties: false,
   });
-  expect(GEMINI_HELPER_SEARCH_TOOL.description).toContain('never include private manuscripts');
+  expect(GEMINI_HELPER_SEARCH_TOOL.description).toContain('creative writing');
+  expect(GEMINI_HELPER_SEARCH_TOOL.description).toContain('user explicitly asks');
+  expect(GEMINI_HELPER_SEARCH_TOOL.description).toContain('Never include credentials');
+  expect(GEMINI_HELPER_SEARCH_TOOL.inputSchema).toMatchObject({
+    properties: { query: { maxLength: 2000 } },
+  });
   expect(GEMINI_HELPER_SEARCH_TOOL.description).toContain('billed model request');
 });
