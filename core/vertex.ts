@@ -235,7 +235,8 @@ export async function executeGeminiProvider(
       );
     decoder = new VertexDecoder(prepared.context);
     if (signal.aborted) return failure('CANCELLED');
-    assertContextBudget(prepared.body, request.contextBudget);
+    const withheldBody = diagnosticVertexBody(prepared.body);
+    assertContextBudget(withheldBody, request.contextBudget);
     const imageBody = await materializeProviderImages(prepared.body, request, options, signal);
     const wireBody = await materializeProviderFiles(
       imageBody,
@@ -279,7 +280,7 @@ export async function executeGeminiProvider(
     const diagnosticAuth: Record<string, string> = vertex
       ? { authorization: '[REDACTED]' }
       : { 'x-goog-api-key': '[REDACTED]' };
-    const diagnostic = redactDiagnosticJson(diagnosticVertexBody(prepared.body), token);
+    const diagnostic = redactDiagnosticJson(withheldBody, token);
     await options.onWire?.({
       connectionId: connection.id,
       protocol: connection.protocol,

@@ -40,7 +40,7 @@ import {
 import { encodeResponses } from '../core/openai-protocol.js';
 import { encodeChat } from '../core/openai-chat-protocol.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
-import { encodeVertex } from '../core/vertex-protocol.js';
+import { diagnosticVertexBody, encodeVertex } from '../core/vertex-protocol.js';
 import {
   buildCodexDescriptor,
   buildCodexNativeRequest,
@@ -335,8 +335,11 @@ export function measureProviderRequest(
   target: ModelPreset & { connection: Connection },
   options: { codexNative?: boolean } = {}
 ) {
-  const body = encodeMainPreview(request, target, options).body;
-  const estimate = estimateContextInput(body, request.contextBudget);
+  const { body, protocol } = encodeMainPreview(request, target, options);
+  const estimate = estimateContextInput(
+    isGeminiProtocol(protocol) ? diagnosticVertexBody(body) : body,
+    request.contextBudget
+  );
   return {
     body,
     modelId: target.modelId,

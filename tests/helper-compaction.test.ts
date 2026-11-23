@@ -4,7 +4,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { HelperRuntime } from '../server/helper-runtime.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
@@ -76,6 +76,15 @@ const summarized = (text = summaryText): transport.ProviderResult => ({
   ...structuredClone(success),
   text,
 });
+const eventStream = (...parts: unknown[]) =>
+  new Response(parts.map((part) => `data: ${JSON.stringify(part)}\n\n`).join(''), {
+    headers: { 'content-type': 'text/event-stream' },
+  });
+const vertexReply = (parts: unknown[]) =>
+  eventStream({
+    candidates: [{ index: 0, content: { role: 'model', parts }, finishReason: 'STOP' }],
+    usageMetadata: { promptTokenCount: 11, candidatesTokenCount: 7, totalTokenCount: 18 },
+  });
 async function fixture(options: { vertex?: boolean; fixed?: boolean; reviewOnly?: boolean } = {}) {
   const path = mkdtempSync(join(tmpdir(), 'uimori-helper-compact-')),
     store = new Store(join(path, 'story.sqlite')),
@@ -1080,15 +1089,8 @@ test('unhelpful helper compaction preserves actual Vertex signatures, results an
   const f = await fixture({ vertex: true });
   const nativeBodies: any[] = [],
     roles: string[] = [];
-  const sse = (...parts: unknown[]) =>
-    new Response(parts.map((part) => `data: ${JSON.stringify(part)}\n\n`).join(''), {
-      headers: { 'content-type': 'text/event-stream' },
-    });
-  const reply = (parts: unknown[]) =>
-    sse({
-      candidates: [{ index: 0, content: { role: 'model', parts }, finishReason: 'STOP' }],
-      usageMetadata: { promptTokenCount: 11, candidatesTokenCount: 7, totalTokenCount: 18 },
-    });
+  const sse = eventStream,
+    reply = vertexReply;
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url, options) => {
@@ -1163,6 +1165,39 @@ test('unhelpful helper compaction preserves actual Vertex signatures, results an
   expect(compactions(f, task).map((decision) => decision.applied)).toEqual([false, false]);
   expect(checkpointRows(f)).toEqual([]);
   expect(f.mutations).toBe(1);
+});
+
+test('a Vertex signature far larger than the input limit neither compacts the task nor fails admission', async () => {
+  const f = await fixture({ vertex: true });
+  const limit = f.target('helper').inputTokenLimit! * 2;
+  f.updateModel(f.helperModel.id, { inputTokenLimit: limit });
+  f.readValue = { revision: 1, text: 'Short evidence.' };
+  const signature = randomBytes(limit * 12).toString('base64');
+  expect(countTextTokens(signature)).toBeGreaterThan(limit);
+  const bodies: any[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url, options) => {
+      expect(String(url)).toMatch(/^https:\/\/aiplatform\.googleapis\.com\//u);
+      bodies.push(JSON.parse(String(options?.body)));
+      return bodies.length === 1
+        ? vertexReply([
+            {
+              functionCall: {
+                id: 'signed-read',
+                name: 'resource.read',
+                args: { kind: 'content', id: 'read-evidence' },
+              },
+              thoughtSignature: signature,
+            },
+          ])
+        : vertexReply([{ text: success.text }]);
+    })
+  );
+  const task = await f.run();
+  expect(task).toMatchObject({ status: 'completed', usage: { modelCalls: 2 } });
+  expect(JSON.stringify(bodies[1])).toContain(signature);
+  expect(compactions(f, task)).toEqual([]);
 });
 
 test('an oversized fixed receipt fails before another summary without losing the committed effect', async () => {

@@ -1,7 +1,9 @@
+import { randomBytes } from 'node:crypto';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   executeProvider,
   ProviderContractError,
+  type Json,
   type ProviderConnection,
   type ProviderRequest,
   type ProviderResult,
@@ -97,6 +99,47 @@ describe('Vertex native wire through real local HTTP streams (no live calls)', (
     expect(resolveCredential).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
     expect(onWire).not.toHaveBeenCalled();
+  });
+
+  test('input admission measures a continuation without the text of a returned signature', async () => {
+    const signature = randomBytes(8192 * 12).toString('base64');
+    let calls = 0;
+    const model = (parts: Json[]): Json[] => [
+      { candidates: [{ index: 0, content: { role: 'model', parts }, finishReason: 'STOP' }] },
+      { usageMetadata: usage },
+    ];
+    await redirectedFixture(async (_captured, response) => {
+      await writeSse(
+        response,
+        ++calls === 1
+          ? model([
+              {
+                functionCall: { id: 'call-lore-1', name: 'knowledge.read', args: { id: 'lore-1' } },
+                thoughtSignature: signature,
+              },
+            ])
+          : model([{ text: '등대의 불빛이 바다를 비췄다.' }]),
+        true
+      );
+    });
+    const initial = request();
+    initial.contextBudget = { inputTokenLimit: 8192, estimator: CONTEXT_ESTIMATOR };
+    const first = await executeProvider(connection, initial, options());
+    const next = structuredClone(initial);
+    next.opaqueState = first.opaqueState;
+    next.input.results = [
+      {
+        callId: 'call-lore-1',
+        name: 'knowledge.read',
+        args: { id: 'lore-1' },
+        denied: false,
+        result: { id: 'lore-1', revision: 2, text: 'Copper flame' },
+      },
+    ];
+    expect(await executeProvider(connection, next, options())).toMatchObject({
+      status: 'completed',
+      text: '등대의 불빛이 바다를 비췄다.',
+    });
   });
 
   test('the well-known Google credential variable remains an ADC file reference', async () => {

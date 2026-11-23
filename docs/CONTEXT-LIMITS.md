@@ -171,6 +171,8 @@ EOF는 프로바이더 스트림이 정상 완료 신호 없이 끝났다는 뜻
 
 로컬 텍스트 분절이 맞더라도 JSON 계수는 프로바이더의 실제 입력 포맷이나 청구 토큰과 같지 않아요. 토크나이저 세대·프로바이더 내부 포맷·조각 경계 차이 때문에 이 수치는 여전히 추정이며 상한 보장도 아니에요. 같은 내용의 body라도 실행마다 새로 만드는 Run·메시지 ID와 해시 때문에 추정값이 조금씩 달라져요. 기존 `o200k_base-v1`에서 관측한 예로 직렬화 길이가 15,887 UTF-16 단위로 동일한 body가 6,943–7,011 토큰(약 1%) 범위로 움직였어요. 85%·75% 판정은 이 편차보다 큰 여유가 있을 때만 결정적이므로, 합성 검사도 픽스처를 경계 1% 안쪽에 두지 않아요.
 
+Gemini 계열 요청이 이어 보내는 프로바이더 서명(`thoughtSignature`)과 추론 본문은 입력 추정에서 빼요. 프로바이더는 이 불투명 값을 글자 수대로 세지 않아서, 그대로 토큰화하면 도구 호출이 쌓일수록 추정이 실제 입력의 몇 배로 커지고 필요 없는 정리가 일어나요. 운영 기록에서 서명을 포함한 추정이 258,852였던 시점에 프로바이더가 보고한 입력은 92,495였고, 서명을 뺀 추정은 Vertex 도우미 호출 1,146건에서 실제 입력의 0.88–1.22배(호출 순서 구간별 중앙값)였어요. 정리 판정(`measureProviderRequest`), 전송 전 한도 검사(`core/vertex.ts`), attempt에 남는 추정치가 모두 같은 기준을 써요. 회귀는 `tests/helper-compaction.test.ts`와 `tests/vertex-transport.test.ts`에 있어요.
+
 구현은 `core/context-budget.ts`, `core/context-plan.ts`, `core/context-projection.ts`, `core/notes.ts`, `core/story-context.ts`, `server/context-planning.ts`, `server/context-compaction.ts`, `server/context-tool-compaction.ts`, `server/model-runner.ts`, `server/context-store.ts`, `server/story-notes.ts`에 있어요. `tests/context-integration.test.ts`와 관련 context/story 검사는 실제 앱 경로와 fresh SQLite, 합성 provider body로 경합·취소·입력 귀속·보관을 확인해요. 기존 모델 작성 checkpoint 보존과 실행 중 조회 결과 정리는 해당 context 저장·도구 검사로 확인해요. 단계별 EOF는 `tests/context-compaction.test.ts`와 `tests/helper-compaction.test.ts`에 회귀가 있어요.
 
 ### 파생 컨텍스트 검증

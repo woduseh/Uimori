@@ -466,7 +466,7 @@ describe('final wire body budget before credentials and transmission', () => {
       expect(onWire).toHaveBeenCalledTimes(1);
     }
   );
-  test.each(nativeVariants)(
+  test.each(nativeVariants.filter((variant) => variant.protocol !== 'vertex-gemini-v1'))(
     '$protocol includes unredacted opaque continuation content in the budget before any wire work',
     async (variant) => {
       const input = continued(request(variant), variant, large),
