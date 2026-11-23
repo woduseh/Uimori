@@ -9,6 +9,7 @@ import {
 import type { Json } from '../core/transport.js';
 import type { AuxiliaryBundle } from '../server/product-auxiliary.js';
 import { runAuxiliaryJob } from '../server/product-auxiliary.js';
+import { normalizeStoryUiOutput } from '../server/story-ui.js';
 import {
   translationPolicy,
   translationMaxRetries,
@@ -203,6 +204,28 @@ describe('shared Jev translation refusal judgment', () => {
       });
       expect(result).toMatchObject({ status, error, result: { text: candidate } });
       expect(server.requests).toHaveLength(1);
+      expect(send).toHaveBeenCalledTimes(1);
+    }
+  );
+  test.each([
+    [0.95, 'TRANSLATION_REFUSAL_RETRIES_EXHAUSTED'],
+    [0.05, 'OUTPUT_STORY_UI_INVALID'],
+  ] as const)(
+    'a reply without the Story UI blocks is judged for refusal before it fails as malformed: %s',
+    async (refusal, error) => {
+      const server = await fixture((_request, response) => chat(response, 'Cannot translate.'));
+      const seed = bundle(
+        normalizeStoryUiOutput('Mira waited.\n\n<a2ui>root = Text("Harbor")</a2ui>')
+      );
+      native(seed, server.endpoint);
+      seed.translationPolicy = { judgment: { threshold: 0.9 }, maxRetries: 0, maxCalls: 4 };
+      const observed = hooks(server.origin);
+      const send = vi.fn(async () => answer(refusal));
+      const outcome = await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', {
+        ...observed.options,
+        jev: { credential: () => 'test-key', fetch: send },
+      });
+      expect(outcome).toMatchObject({ status: 'failed', error });
       expect(send).toHaveBeenCalledTimes(1);
     }
   );

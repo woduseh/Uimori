@@ -801,6 +801,42 @@ export async function runAuxiliaryJob(
     if (job.kind === 'translation') {
       if (!bundle.judgmentRecovery)
         executionSnapshot = await prepareNativeRisuTranslationPrompt(snapshot);
+      const judgeRefusal = async (text: string) => {
+        if (calls >= maxCalls)
+          throw Object.assign(new Error('Auxiliary call budget exhausted'), {
+            name: 'BudgetError',
+          });
+        try {
+          const judgment = await judgeTranslationRefusal(
+            projectStoryUiText(text),
+            source.hash,
+            policy.judgment,
+            {
+              signal: hooks.signal,
+              ...hooks.jev,
+              onAttemptStart: async (wire) => {
+                const id = await hooks.onAttemptStart(wire);
+                lastAttemptId = id;
+                return id;
+              },
+              onStarted: () => {
+                calls++;
+              },
+              onAttemptFinish: hooks.onAttemptFinish,
+            }
+          );
+          return judgment.verdict;
+        } catch (error) {
+          throw new AuxiliaryExecutionError(
+            hooks.signal.aborted
+              ? 'AUXILIARY_CANCELLED'
+              : error instanceof JudgmentError &&
+                  (error.code === 'JEV_INPUT_BUDGET' || error.code === 'JUDGMENT_INPUT_BUDGET')
+                ? error.code
+                : 'TRANSLATION_REFUSAL_CHECK_FAILED'
+          );
+        }
+      };
       for (let retry = 0; ; retry++) {
         translationRound = retry;
         if (hooks.signal.aborted) throw new AuxiliaryExecutionError('AUXILIARY_CANCELLED');
@@ -808,9 +844,19 @@ export async function runAuxiliaryJob(
           const output = bundle.judgmentRecovery ?? (await runInput(input)).output;
           if (typeof output !== 'string' || !output.trim())
             throw new AuxiliaryExecutionError('AUXILIARY_PROVIDER_EMPTY');
-          candidateText = bundle.judgmentRecovery
-            ? output
-            : (protectedTranslation?.restore(output) ?? output);
+          try {
+            candidateText = bundle.judgmentRecovery
+              ? output
+              : (protectedTranslation?.restore(output) ?? output);
+          } catch (restoreError) {
+            if (mock || policy.judgment.enabled === false) throw restoreError;
+            stage = 'translation-refusal';
+            lastAttemptId = undefined;
+            if ((await judgeRefusal(output)) === 'accepted') throw restoreError;
+            if (hooks.signal.aborted) throw new AuxiliaryExecutionError('AUXILIARY_CANCELLED');
+            if (retry < policy.maxRetries) continue;
+            throw new AuxiliaryExecutionError('TRANSLATION_REFUSAL_RETRIES_EXHAUSTED');
+          }
         } catch (error) {
           if (
             error instanceof AuxiliaryExecutionError &&
@@ -830,42 +876,7 @@ export async function runAuxiliaryJob(
           lastAttemptId = undefined;
           await store.stageTranslationJudgment(jobId, generation, owner, candidateText, true);
           judgmentPending = true;
-          {
-            if (calls >= maxCalls)
-              throw Object.assign(new Error('Auxiliary call budget exhausted'), {
-                name: 'BudgetError',
-              });
-            try {
-              const judgment = await judgeTranslationRefusal(
-                projectStoryUiText(candidateText),
-                source.hash,
-                policy.judgment,
-                {
-                  signal: hooks.signal,
-                  ...hooks.jev,
-                  onAttemptStart: async (wire) => {
-                    const id = await hooks.onAttemptStart(wire);
-                    lastAttemptId = id;
-                    return id;
-                  },
-                  onStarted: () => {
-                    calls++;
-                  },
-                  onAttemptFinish: hooks.onAttemptFinish,
-                }
-              );
-              verdict = judgment.verdict;
-            } catch (error) {
-              throw new AuxiliaryExecutionError(
-                hooks.signal.aborted
-                  ? 'AUXILIARY_CANCELLED'
-                  : error instanceof JudgmentError &&
-                      (error.code === 'JEV_INPUT_BUDGET' || error.code === 'JUDGMENT_INPUT_BUDGET')
-                    ? error.code
-                    : 'TRANSLATION_REFUSAL_CHECK_FAILED'
-              );
-            }
-          }
+          verdict = await judgeRefusal(candidateText);
         }
         if (hooks.signal.aborted) throw new AuxiliaryExecutionError('AUXILIARY_CANCELLED');
         if (verdict === 'refused') {
