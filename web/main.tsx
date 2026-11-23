@@ -614,7 +614,9 @@ function App() {
     s.detail?.sources ?? noSources,
     s.detail?.jobs
   );
-  const boardVisible = workspacePanel === 'board' && storyPanels && storyBoard.available;
+  const boardOffered =
+    storyBoard.available && (storyBoard.pins.length > 0 || workspacePanel === 'board');
+  const boardVisible = workspacePanel === 'board' && storyPanels && boardOffered;
   const roomBesideRail = viewportWidth - RAIL_WIDTH - MIN_CENTER_WIDTH;
   const outlineSidecarAvailable = !compact && roomBesideRail >= sidePanelMinimumWidth('outline');
   const outlineSidecarVisible =
@@ -1245,7 +1247,7 @@ function App() {
           'helper',
           ...(s.detail && outlineSidecarAvailable ? (['outline'] as const) : []),
           ...(hasCreativeOptions || optionsOpen ? (['options'] as const) : []),
-          ...(storyBoard.available ? (['board'] as const) : []),
+          ...(boardOffered ? (['board'] as const) : []),
         ]
       : null;
   const sidePanelTabsShown = !!sidePanelTabs && sidePanelTabs.length > 1;
