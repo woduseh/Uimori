@@ -167,7 +167,10 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
   await panel.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '현재 프롬프트');
-  await settings.getByLabel('현재 프롬프트', { exact: true }).selectOption(workspace.main.presetId);
+  const currentPrompt = settings.getByLabel('현재 프롬프트', { exact: true });
+  await currentPrompt.selectOption(workspace.main.presetId);
+  await expect(currentPrompt).toHaveValue(workspace.main.presetId);
+  await expect(currentPrompt).toBeEnabled();
   await expect
     .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.presetId)
     .toBe(workspace.main.presetId);

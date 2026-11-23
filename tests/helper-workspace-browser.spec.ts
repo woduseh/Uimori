@@ -755,6 +755,7 @@ test('HSPACE07 project and copy retries recover the same saved result through se
   });
   expect(changed.ok(), await changed.text()).toBe(true);
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(history.locator('[data-conversation-id]')).toHaveCount(2);
   await openRowMenu(row, `${title} 대화 메뉴`);
   await page.getByRole('button', { name: '대화 복사', exact: true }).click();
   await expect.poll(() => copyPayloads.length).toBe(2);
