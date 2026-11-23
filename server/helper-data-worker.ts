@@ -564,6 +564,50 @@ function excerpt(
     nextOffset: end < text.length ? end : null,
   };
 }
+type Excerpt = ReturnType<typeof excerpt>;
+const FOLLOWING_ITEMS = 2,
+  FOLLOWING_MAX_CHARS = 1_200,
+  FOLLOWING_MIN_CHARS = 80;
+function withFollowingText(
+  items: unknown[],
+  fieldTexts: Map<unknown, string>,
+  size: (page: unknown[]) => number
+) {
+  const page = [...items];
+  for (let index = 0; index < Math.min(FOLLOWING_ITEMS, page.length); index++) {
+    const text = fieldTexts.get(items[index]);
+    const item = page[index] as Excerpt;
+    if (text === undefined || item.nextOffset === null) continue;
+    const start = item.range.end;
+    const nextExcerpt = (page.slice(index + 1) as Excerpt[]).find(
+      (other) => other.ref === item.ref
+    );
+    let end = Math.min(
+      text.length,
+      start + FOLLOWING_MAX_CHARS,
+      nextExcerpt?.range.start ?? text.length
+    );
+    while (end - start >= FOLLOWING_MIN_CHARS) {
+      end = boundary(text, end);
+      const candidate = [...page];
+      candidate[index] = {
+        ...item,
+        following: {
+          text: text.slice(start, end),
+          range: { start, end, unit: 'utf16-code-unit' },
+          nextOffset: end < text.length ? end : null,
+        },
+      };
+      const overflow = size(candidate) - MAX_SEARCH_CHARS;
+      if (overflow <= 0) {
+        page[index] = candidate[index];
+        break;
+      }
+      end -= overflow;
+    }
+  }
+  return page;
+}
 const fieldPriority = (path: string) =>
   /^\/package\/nativeRisu\/(?:card|module)\/(?:description|personality|scenario)(?:\/|$)/u.test(
     path
@@ -584,7 +628,8 @@ function* matchingExcerpts(
   mode: string,
   context: number,
   paths: string[],
-  documentsOnly: boolean
+  documentsOnly: boolean,
+  fieldTexts?: Map<unknown, string>
 ) {
   if (!expressions.length) {
     if (paths.length && ![...fields(doc.fields)].some(([field]) => selectedPath(field, paths)))
@@ -637,10 +682,12 @@ function* matchingExcerpts(
         start + 2000
       );
       ref ??= reference(doc, field, text);
-      yield {
+      const item = {
         ...excerpt(doc, field, text, start, end, ref, stringValue),
         matchRange: { start: hit.index, end: hit.index + hit[0].length },
       };
+      fieldTexts?.set(item, text);
+      yield item;
       const next =
         hit.index + Math.max(hit[0].length, (text.codePointAt(hit.index) ?? 0) > 0xffff ? 2 : 1);
       position = Math.max(end, next);
@@ -698,6 +745,7 @@ function search(db: DatabaseSync, snapshot: DataSnapshot, args: Record<string, u
     context = cap('context', args.context, 160, 1200);
   const queryTerms = fold(string('query', args.query)).trim().split(/\s+/u).filter(Boolean);
   const items: unknown[] = [];
+  const fieldTexts = new Map<unknown, string>();
   let matches = 0,
     inspected = 0,
     more = false;
@@ -735,7 +783,8 @@ function search(db: DatabaseSync, snapshot: DataSnapshot, args: Record<string, u
       mode,
       context,
       paths,
-      output === 'documents'
+      output === 'documents',
+      fieldTexts
     );
     const entries =
       output === 'documents'
@@ -755,6 +804,7 @@ function search(db: DatabaseSync, snapshot: DataSnapshot, args: Record<string, u
             ]
         : excerpts;
     for (const item of entries) {
+      if (matches < offset || items.length >= FOLLOWING_ITEMS) fieldTexts.delete(item);
       if (matches++ < offset) continue;
       if (items.length >= limit) {
         more = true;
@@ -768,7 +818,10 @@ function search(db: DatabaseSync, snapshot: DataSnapshot, args: Record<string, u
       items.push(item);
     }
   }
-  return response(items, more);
+  return response(
+    withFollowingText(items, fieldTexts, (page) => JSON.stringify(response(page, more)).length),
+    more
+  );
 }
 function read(
   db: DatabaseSync,

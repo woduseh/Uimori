@@ -94,7 +94,7 @@ Helper mutations stay behind `app.tools` and `app.call`; see [Helper tools](HELP
 - Revision and source-hash checks remain explicit arguments where they protect stale-write correctness.
 - Idempotency identity is different: the model does not invent `operationId` values. The helper derives mutation identity from the helper task ID and the provider tool-call ID and passes it separately from model arguments. Only adapters for services that use receipts add the identity to their internal commands. There is no second mutation-tool registry to maintain.
 - Reusing a completed tool-call ID is rejected by the helper loop. A new call ID is a new operation, not a semantic replay of a prior request: existing-resource saves still rely on revision checks, and identical new-resource creations with different call IDs are not deduplicated.
-- `app.tools -> app.call` is intentional. It keeps the helper's native tool list and per-request schema tokens small and exposes an operation's exact schema only when needed.
+- `app.tools -> app.call` is intentional. It keeps the helper's native tool list and per-request schema tokens small and exposes an operation's exact schema only when needed. A later task of the same conversation also receives, outside the tool list, the bounded set of schemas that the conversation has already called ([Discovering and executing app operations](HELPER-TOOLS.md#discovering-and-executing-app-operations)).
 
 ## Execution boundaries
 

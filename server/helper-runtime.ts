@@ -17,6 +17,8 @@ import {
   helperToolTraits,
   helperGatewayTools,
   describeHelperTools,
+  knownHelperOperations,
+  HELPER_KNOWN_OPERATION_MAX_CHARS,
 } from './helper-app-tools.js';
 import {
   HELPER_DATA_TOOLS,
@@ -102,6 +104,7 @@ import {
   type ProviderExecutionOptions,
   type ProviderRequest,
   type ProviderResult,
+  type ProviderTool,
   transportConnection,
 } from '../core/transport.js';
 import { promptWorkspace } from './prompt-workspace.js';
@@ -249,7 +252,7 @@ const PLAN_MODE_GUIDANCE =
 const FINAL_CALL_GUIDANCE =
   'The call budget allows only this response. Do not call tools. Reply to the user with what you completed, which changes were saved, any change whose outcome is uncertain, and what remains to do.';
 const CONTRACT = `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation. Apply, select, cancel or retry only when requested. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. When a short multiple-choice question resolves that ambiguity cleanly, you may call helper.ask with 2 to 5 options and then end this turn so the user can choose in the UI. A CONFIRMATION_REQUIRED result means the host held the call for the owner: do not repeat it in this task, and say in your reply what needs confirmation. A request whose source lists confirmedCalls carries the owner's confirmation; make each such call with exactly the listed arguments when the request still wants it. When source.referencedTargets is present, those are the exact scenes, outline nodes or library resources the user pointed to with @; inspect them directly with the matching read tool using their listed IDs. ${AUTHOR_NOTE_GUIDANCE}
-Choose and combine the tools suited to the task: app operations, data.exec for workspace search and transformation, or shell workspace files described in INDEX.md. Reuse known schemas and successful results; use app.tools only for unfamiliar operations or arguments. Group independent work when useful, and use returned revisions and receipts directly instead of rereading only to confirm success. Distinguish live saved resources, frozen chat history and unsaved editor input. Base visual claims on inspected pixels.
+Choose and combine the tools suited to the task: app operations, data.exec for workspace search and transformation, or shell workspace files described in INDEX.md. Reuse known schemas and successful results; use app.tools only for unfamiliar operations or arguments. Group independent work when useful, such as several independent reads as calls in one response, and use returned revisions and receipts directly instead of rereading only to confirm success. Distinguish live saved resources, frozen chat history and unsaved editor input. Base visual claims on inspected pixels.
 Edit saved targets using their recorded revisions and preserve unrelated fields. For workspace-file edits, use uimori apply to save; for app operations, follow their own save contracts. Reconcile conflicts against the latest version and report changes from successful receipts. If the target has an unsaved editor draft, ask the user to save it first. For translation guides, preserve established terms and distinguish proposed choices from authored facts.
 For a bot’s Story UI appearance, use theme.guide and read the bot’s authored content. In a chat, writing.packages identifies the owning bot by role=bot. Saving a theme creates it; when the user requests application, use theme.select with dimension=storyUi for the bot or settings.update for an explicit chat choice.
 For questions about an original work, use the configured edition, references and spoiler position, and distinguish source evidence from model knowledge. Cite web evidence only after a search returns it.
@@ -749,6 +752,27 @@ function retainedSchema(event: ToolEvent) {
     Array.isArray(tools) &&
     tools.some((tool) => tool.inputSchema) &&
     countTextTokens(JSON.stringify(event.result)) <= MAX_EXACT_HELPER_READ_TOKENS
+  );
+}
+function earlierCalledOperations(store: Store, task: HelperTask): string[] {
+  return store.db
+    .prepare(
+      `SELECT json_extract(data,'$.name') AS name FROM helper_events
+      WHERE conversation_id=? AND kind='tool.started' AND task_id IS NOT NULL AND task_id<>?
+        AND seq<COALESCE((SELECT MIN(seq) FROM helper_events WHERE task_id=?),9223372036854775807)
+      GROUP BY name ORDER BY MAX(seq) DESC`
+    )
+    .all(task.conversationId, task.id, task.id)
+    .flatMap((row) => (typeof row.name === 'string' ? [row.name] : []));
+}
+function knownOperationsFor(store: Store, task: HelperTask) {
+  return knownHelperOperations(
+    earlierCalledOperations(store, task),
+    task.snapshot.outline?.target.purpose === 'review',
+    Math.min(
+      HELPER_KNOWN_OPERATION_MAX_CHARS,
+      Math.floor(contextBudgetForModel(task.snapshot.model).inputTokenLimit / 4)
+    )
   );
 }
 function completedReadReferences(previous: HelperReadReference[], events: ToolEvent[]) {
@@ -1430,6 +1454,7 @@ export class HelperRuntime {
       currentHistory.findIndex((message) => message.id === ownMessage?.id)
     );
     task.snapshot.context = helperContext(this.store, task.conversationId, task.snapshot.history);
+    const knownOperations = knownOperationsFor(this.store, task);
 
     this.store.db
       .prepare('UPDATE helper_tasks SET snapshot=? WHERE id=?')
@@ -1812,8 +1837,8 @@ export class HelperRuntime {
             completedReads,
             segment,
             helperCalls,
-
-            requestText
+            requestText,
+            knownOperations
           )
         );
         let finalCall = false;
@@ -1856,8 +1881,8 @@ export class HelperRuntime {
               retainedReads,
               segment + 1,
               helperCalls,
-
-              requestText
+              requestText,
+              knownOperations
             )
           );
           const fixedTokens = estimateRequest(fixedRequest);
@@ -1909,8 +1934,8 @@ export class HelperRuntime {
                 retainedReads,
                 segment + 1,
                 helperCalls,
-
-                requestText
+                requestText,
+                knownOperations
               )
             );
             const nextEstimate = estimateRequest(nextRequest);
@@ -2159,7 +2184,8 @@ export class HelperRuntime {
     completedReads: HelperReadReference[] = [],
     segment = 0,
     helperCalls = 0,
-    requestText = task.request
+    requestText = task.request,
+    knownOperations: ProviderTool[] = []
   ): ProviderRequest {
     const target = task.snapshot.model;
     const writing = task.snapshot.writing;
@@ -2289,6 +2315,15 @@ export class HelperRuntime {
                   ...(writing.story?.notes ? { notes: modelAuthorNotes(writing.story.notes) } : {}),
                 }
               : null,
+            ...(knownOperations.length
+              ? {
+                  knownOperations: {
+                    guidance:
+                      'Current descriptions and schemas of app operations that earlier tasks of this conversation called. Call them through app.call without looking them up again with app.tools.',
+                    tools: knownOperations,
+                  },
+                }
+              : {}),
           }),
           controls: this.remainingBudget(task, helperCalls),
           task: requestText,

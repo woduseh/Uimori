@@ -712,10 +712,35 @@ function operationIndex(tools: readonly ProviderTool[]): string {
   }).join('; ');
 }
 
+const REVIEW_APP_TOOLS = HELPER_APP_TOOLS.filter(
+  (tool) => helperToolTraits(tool.name).reviewAllowed
+);
+const availableAppTools = (review: boolean) => (review ? REVIEW_APP_TOOLS : HELPER_APP_TOOLS);
+
+export const HELPER_KNOWN_OPERATION_LIMIT = 6;
+export const HELPER_KNOWN_OPERATION_MAX_CHARS = 16_000;
+export function knownHelperOperations(
+  names: readonly string[],
+  review: boolean,
+  maxChars: number
+): ProviderTool[] {
+  const allowed = availableAppTools(review);
+  const known: ProviderTool[] = [];
+  let chars = 0;
+  for (const name of names) {
+    if (known.length >= HELPER_KNOWN_OPERATION_LIMIT) break;
+    const tool = allowed.find((item) => item.name === name);
+    if (!tool || known.includes(tool)) continue;
+    const size = JSON.stringify(tool).length;
+    if (chars + size > maxChars) continue;
+    known.push(tool);
+    chars += size;
+  }
+  return known;
+}
+
 const gatewayTools = (review: boolean): ProviderTool[] => {
-  const allowed = review
-    ? HELPER_APP_TOOLS.filter((tool) => helperToolTraits(tool.name).reviewAllowed)
-    : HELPER_APP_TOOLS;
+  const allowed = availableAppTools(review);
   return [
     {
       name: 'app.tools',
@@ -928,9 +953,7 @@ export function describeHelperTools(
   review = false,
   scope?: 'chat' | 'library'
 ) {
-  const allowed = review
-    ? HELPER_APP_TOOLS.filter((tool) => helperToolTraits(tool.name).reviewAllowed)
-    : HELPER_APP_TOOLS;
+  const allowed = availableAppTools(review);
   if (Object.keys(args).some((key) => !['names', 'query', 'offset', 'limit'].includes(key)))
     throw new HttpError(400, 'INVALID_ARGUMENTS');
   if (args.names !== undefined) {
