@@ -362,6 +362,7 @@ Constraints on changing this behavior:
 - On HTTP providers an addition does not interrupt a tool that is already running; only calls that have not started are skipped.
 - Pending and unconfirmed additions are never replayed, neither automatically nor by a retry. A retry of the unchanged request carries the delivered additions.
 - Call limits are an internal policy, not a conversation setting. A task runs under the limits and the timeout captured in its snapshot at admission, and its deadline is timed from the start of execution.
+- A task stopped by its deadline ends as `failed` with `HELPER_TASK_TIMEOUT`. `cancelled` is reserved for a stop the user asked for, so the interface never tells the user they cancelled work the host cut off. `tests/helper-workspace.test.ts` holds both cases.
 
 ## Original-work reference and authored notes
 

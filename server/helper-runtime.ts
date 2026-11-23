@@ -1466,14 +1466,16 @@ export class HelperRuntime {
       .run(JSON.stringify(task.snapshot), id);
     const toolBudgetController = new AbortController();
     let toolBudgetError: Error | undefined;
+    const timeLimit = AbortSignal.timeout(
+      (task.snapshot.taskTimeoutMinutes ?? DEFAULT_HELPER_TASK_TIMEOUT_MINUTES) * 60_000
+    );
     const signal = AbortSignal.any([
       controller.signal,
       this.options.signal,
       toolBudgetController.signal,
-      AbortSignal.timeout(
-        (task.snapshot.taskTimeoutMinutes ?? DEFAULT_HELPER_TASK_TIMEOUT_MINUTES) * 60_000
-      ),
+      timeLimit,
     ]);
+    const timeLimitReached = () => timeLimit.aborted && signal.reason === timeLimit.reason;
     const scope = task.snapshot.scope;
     const writer = this.options.streams.createWriter({
       taskKind: 'helper',
@@ -2126,15 +2128,20 @@ export class HelperRuntime {
         providerPaused = false;
         if (result.status !== 'tool_calls') {
           writer.flush();
+          const timedOut = result.status !== 'completed' && timeLimitReached();
           const status =
-            result.status === 'completed' ? 'completed' : signal.aborted ? 'cancelled' : 'failed';
+            result.status === 'completed'
+              ? 'completed'
+              : signal.aborted && !timedOut
+                ? 'cancelled'
+                : 'failed';
           this.workspace.finish(
             id,
             owner,
             generation,
             status,
             result.text,
-            result.error?.code ?? result.refusal
+            timedOut ? 'HELPER_TASK_TIMEOUT' : (result.error?.code ?? result.refusal)
           );
           writer.finish(status);
           return;
@@ -2161,11 +2168,12 @@ export class HelperRuntime {
       }
     } catch (error) {
       writer.flush();
+      const timedOut = !toolBudgetError && !this.options.signal.aborted && timeLimitReached();
       const status = toolBudgetError
         ? 'failed'
         : this.options.signal.aborted
           ? 'interrupted'
-          : signal.aborted
+          : signal.aborted && !timedOut
             ? 'cancelled'
             : 'failed';
       this.workspace.finish(
@@ -2174,7 +2182,12 @@ export class HelperRuntime {
         generation,
         status,
         '',
-        toolBudgetError?.message ?? (error instanceof Error ? error.message : 'HELPER_FAILED')
+        toolBudgetError?.message ??
+          (timedOut
+            ? 'HELPER_TASK_TIMEOUT'
+            : error instanceof Error
+              ? error.message
+              : 'HELPER_FAILED')
       );
       writer.finish(status);
     }

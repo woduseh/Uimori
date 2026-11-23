@@ -220,6 +220,7 @@ const starterKeys: Record<HelperScope['kind'], string[]> = {
 function helperTaskError(error: string | null | undefined): string {
   if (error === 'HELPER_CONTEXT_DEPENDENCY_CHANGED')
     return t('errors.HELPER_CONTEXT_DEPENDENCY_CHANGED');
+  if (error === 'HELPER_TASK_TIMEOUT') return t('errors.HELPER_TASK_TIMEOUT');
   return requestFileError(error) ?? translateMessage(error ?? '');
 }
 const attention = (task: HelperTaskView) => ['failed', 'interrupted'].includes(task.status);

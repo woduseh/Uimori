@@ -25,7 +25,7 @@ export function RetryFailure({
 }) {
   useI18n();
   const settings =
-    /PROMPT_|UNSUPPORTED_OPTIONS|HTTP_40[0134]|JEV_|JUDGMENT_|MAIN_RESPONSE_REFUSED|MAIN_JUDGMENT_CALL_BUDGET|EVALUATION_SUBMISSION_REQUIRED|IMAGE_INPUT_UNSUPPORTED/u.test(
+    /PROMPT_|UNSUPPORTED_OPTIONS|HTTP_40[0134]|JEV_|JUDGMENT_|MAIN_RESPONSE_REFUSED|MAIN_JUDGMENT_CALL_BUDGET|EVALUATION_SUBMISSION_REQUIRED|IMAGE_INPUT_UNSUPPORTED|HELPER_TASK_TIMEOUT/u.test(
       error ?? ''
     );
   const storyUiError =
@@ -45,15 +45,17 @@ export function RetryFailure({
                 ? t('shared.unsupportedOptions')
                 : error?.includes('429')
                   ? t('shared.rateLimit')
-                  : error?.includes('TIMEOUT')
-                    ? t('shared.timeoutFailure')
-                    : error?.includes('TRANSPORT_ERROR')
-                      ? t('shared.connectionFailure')
-                      : /HTTP_40[13]/u.test(error ?? '')
-                        ? t('shared.authFailure')
-                        : /HTTP_5\d\d/u.test(error ?? '')
-                          ? t('shared.providerFailure')
-                          : t('shared.responseFailure');
+                  : error === 'HELPER_TASK_TIMEOUT'
+                    ? t('errors.HELPER_TASK_TIMEOUT')
+                    : error?.includes('TIMEOUT')
+                      ? t('shared.timeoutFailure')
+                      : error?.includes('TRANSPORT_ERROR')
+                        ? t('shared.connectionFailure')
+                        : /HTTP_40[13]/u.test(error ?? '')
+                          ? t('shared.authFailure')
+                          : /HTTP_5\d\d/u.test(error ?? '')
+                            ? t('shared.providerFailure')
+                            : t('shared.responseFailure');
   return (
     <div
       className="turn-failure chat-retry-failure"

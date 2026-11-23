@@ -479,6 +479,12 @@ export const messages = {
     ja: 'アシスタントの作業は終了しています。最新の結果を確認してください。',
     zh: '助手任务已结束。请检查最新结果。',
   },
+  'errors.HELPER_TASK_TIMEOUT': {
+    ko: '도우미 작업 제한 시간이 지나 작업을 멈췄어요. 제한 시간은 역할별 모델 설정에서 바꿀 수 있어요.',
+    en: 'The assistant task timeout was reached, so the task stopped. You can change the timeout in the Models by role settings.',
+    ja: 'アシスタントの作業制限時間を超えたため、作業を停止しました。制限時間は役割別モデルの設定で変更できます。',
+    zh: '已超过助手任务超时时间，任务已停止。可在“按角色设置模型”中更改超时时间。',
+  },
   'errors.HELPER_CONTEXT_DEPENDENCY_CHANGED': {
     ko: '도우미 대화가 바뀌었어요. 최신 대화를 확인한 뒤 새로 요청해 주세요.',
     en: 'The assistant conversation changed. Check the latest conversation before sending a new request.',

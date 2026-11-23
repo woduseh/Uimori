@@ -1593,6 +1593,46 @@ test('cancellation rejects late text/final result while preserving provider acco
   expect(stream.status).toBe('cancelled');
   expect(stream.chunks.map((chunk) => chunk.text).join('')).not.toContain('늦은 부분');
 });
+test('a task that outlives its time limit fails with HELPER_TASK_TIMEOUT rather than as cancelled', async () => {
+  const f = fixture();
+  let release: () => void = () => {};
+  const barrier = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  mockSend(async (_request, options, index) => {
+    if (index === 0) {
+      await barrier;
+      return structuredClone(success);
+    }
+    await new Promise<void>((resolve) => {
+      if (options.signal.aborted) resolve();
+      else options.signal.addEventListener('abort', () => resolve(), { once: true });
+    });
+    return {
+      ...structuredClone(success),
+      status: 'cancelled',
+      text: '',
+      error: { code: 'CANCELLED' },
+    };
+  });
+  f.runtime.enqueue(f.conversation.id, 'first', '첫 요청');
+  const limited = f.runtime.enqueue(f.conversation.id, 'limited', '오래 걸리는 요청');
+  f.store.db
+    .prepare(
+      "UPDATE helper_tasks SET snapshot=json_set(snapshot,'$.taskTimeoutMinutes',0.0005) WHERE id=?"
+    )
+    .run(limited.id);
+  release();
+  await vi.waitFor(
+    () => expect(['queued', 'running']).not.toContain(f.workspace.task(limited.id).status),
+    { timeout: 6000 }
+  );
+  await Promise.all(f.work);
+  expect(f.workspace.task(limited.id)).toMatchObject({
+    status: 'failed',
+    error: 'HELPER_TASK_TIMEOUT',
+  });
+});
 test('server recovery interrupts queued work and never calls a provider', () => {
   const f = fixture(),
     send = mockSend();
