@@ -17,8 +17,9 @@ export const stoppedHelperTasks = (tasks: string) => `${resumeChain(
       MAX(
         (SELECT COUNT(*) FROM helper_operations o JOIN chain m ON m.member=o.task_id
           WHERE m.task_id=t.id),
-        (SELECT COUNT(*) FROM helper_changes c JOIN chain m ON m.member=c.task_id
-          WHERE m.task_id=t.id AND c.rolled_back_at IS NULL)
+        (SELECT COALESCE(SUM(json_extract(e.data,'$.changedTargets')),0)
+          FROM helper_events e JOIN chain m ON m.member=e.task_id
+          WHERE m.task_id=t.id AND e.kind='operation.result')
       ) AS completed_effects,
       (json_extract(t.snapshot,'$.invalidatedBySceneDeletion') IS NULL
         AND json_extract(t.snapshot,'$.model.connection.protocol')!='codex-app-server-v1'
