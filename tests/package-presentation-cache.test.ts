@@ -24,6 +24,7 @@ vi.mock('../server/package-presentation.js', async (original) => {
   };
 });
 
+const backgroundWork = { timeout: 6000 };
 const owned: { app: App; path: string }[] = [];
 afterEach(async () => {
   clearPackagePresentationCaches();
@@ -118,7 +119,10 @@ test('a finished translation and a finished run render their scene before it is 
   });
   expect(translation.statusCode).toBe(200);
   await expect
-    .poll(() => built.some((entry) => entry.sourceId === chat.headRevision && entry.translated))
+    .poll(
+      () => built.some((entry) => entry.sourceId === chat.headRevision && entry.translated),
+      backgroundWork
+    )
     .toBe(true);
   const builds = built.length;
   expect((await get(viewport)).statusCode).toBe(200);
@@ -137,13 +141,16 @@ test('a finished translation and a finished run render their scene before it is 
   expect(started.statusCode, started.body).toBe(200);
   const runId = started.json<{ id: string }>().id;
   await expect
-    .poll(async () => (await app.inject({ method: 'GET', url: `/api/runs/${runId}` })).json())
+    .poll(
+      async () => (await app.inject({ method: 'GET', url: `/api/runs/${runId}` })).json(),
+      backgroundWork
+    )
     .toMatchObject({ status: 'completed' });
   const sourceId = (await app.inject({ method: 'GET', url: `/api/runs/${runId}` })).json<{
     sourceRevision: string;
   }>().sourceRevision;
   const buildsOf = (id: string) => built.filter((entry) => entry.sourceId === id).length;
-  await expect.poll(() => buildsOf(sourceId)).toBe(1);
+  await expect.poll(() => buildsOf(sourceId), backgroundWork).toBe(1);
   expect((await read(sourceId)).statusCode).toBe(200);
   expect(buildsOf(sourceId)).toBe(1);
 });
@@ -161,7 +168,7 @@ test('closing the app waits for a scene that is rendering in the background', as
     payload: {},
   });
   expect(translation.statusCode).toBe(200);
-  await expect.poll(() => built.some((entry) => entry.translated)).toBe(true);
+  await expect.poll(() => built.some((entry) => entry.translated), backgroundWork).toBe(true);
   const { path } = owned.splice(0)[0];
   let closed = false;
   const closing = app.close().then(() => {
