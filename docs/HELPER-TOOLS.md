@@ -13,6 +13,7 @@ Uimori의 도우미는 대화와 서재에서 창작과 설정을 보조하는 �
 - **다음 장면 요청과 번역 요청**: 사용자가 장면을 써 달라고 하면 입력창에서 보낸 것과 같은 방식으로 다음 장면을 요청하고(`scene.request`), 번역이나 재번역을 요청해요(`scene.translate`). 둘 다 유료 모델 호출이라 명시적으로 요청했을 때만 실행해요. 작업을 예약만 하고 끝날 때까지 기다리지 않으며, 결과는 채팅과 읽기 화면에 나타나요. 이미 진행 중인 요청이 있으면 새로 보내지 않아요.
 - **카드 변수 확인·수정**: `{{getvar::이름}}`이나 스크립트가 쓰는 Risu 변수의 현재 값, 봇·페르소나·모듈·프롬프트 프리셋의 기본값, 이 채팅에서 바꾼 값인지를 보여주고(`chat.variables.read`), 요청한 변수만 바꾸거나 기본값으로 되돌려요(`chat.variables.update`). 채팅의 요청이 대기 중이거나 실행 중일 때는 바꾸지 않아요.
 - **채팅 설정 정리**: 창작 옵션을 이 채팅의 고정값으로 저장하고(`options.fix`), 장면에 이름을 붙이고(`scene.title`), 원작 참고 설정 중 요청한 항목만 바꾸고(`chat.guide.update`), 저장된 모델의 온도·최대 출력·추론 수준 같은 생성 설정을 바꿔요(`model.parameters.read/update`). 모델 생성 설정은 그 모델을 쓰는 모든 채팅에 적용되고, 연결 정보·자격 증명·단가는 그대로 둬요.
+- **앱 사용 설명서 읽기**: 도우미는 Uimori의 사용 설명서를 찾아 읽을 수 있어요(`guide.read`). 기능이 있는지, 어디에 있는지, 앱이 스스로 하는 동작이 무엇인지 물으면 설명서를 확인하고 답해요.
 - **실시간 웹 검색과 모델 단가 갱신**: Responses, Anthropic, Codex와 Gemini 4(AIS, Vertex) 환경에서 실시간 웹 검색으로 최신 정보를 찾고 출처 링크를 제공해요. 공식 출처(HTTPS URL 및 확인일)가 확인된 모델의 토큰 단가도 갱신해요(`model.pricing.update`). 가격이 없을 때 실행돼 비용이 미확인으로 남은 지난 호출에는 지금 가격을 적용해 추정 비용을 채울 수 있어요(`model.pricing.backfill`).
 - **Vertex 위치 관리**: Google Vertex 연결의 현재 위치를 확인하고(`vertex.location.read`), 모델 하나를 여러 위치에 짧게 시험해 응답 시간을 비교하고(`vertex.location.compare`), 사용자가 요청하면 연결의 위치를 바꿔요(`vertex.location.update`).
 - **콘텐츠 이미지와 삽화 도구**: 서재에 저장된 콘텐츠 이미지와 CHARX 에셋을 조회하고(`image.read`), 외형 프로필(`illustration.profiles.*`)과 삽화 컷 생성·재렌더링·배치(`illustration.cut.*`, `illustration.generate`)를 제어해요.
@@ -377,6 +378,14 @@ Constraints on changing this behavior:
 - `context.read` returns the settings, not a generated brief. A previously generated brief is not a source of story facts.
 - Neither a helper answer nor an automatic brief creates a branch ledger.
 - **Risu 작가 노트** is not an event log or proof of what a character knows. [이야기 기억과 컨텍스트·메모](USAGE.md#이야기-기억과-컨텍스트메모) separates it from **메모·정정**.
+
+## App guides
+
+`guide.read` is defined in `server/helper-guide-tools.ts` and reads through `server/app-guides.ts`; `tests/app-guides.test.ts` enforces the listing, the search and the paging.
+
+- The guides are the Markdown files directly under `docs/`, read from `dist/docs` in a build and from `docs/` when the server runs from source. They are not copied into a task's shell workspace; the shell reaches them with `uimori call guide.read`.
+- `server/app-guides.ts` owns the list of developer documents that are left out. A new document under `docs/` is a guide unless it is added there.
+- The helper contract tells the model to check the guides before it says the app lacks a feature. It exists because a production helper answered that thought summaries were not a feature: its tools and settings showed none, and the display is interface behavior that no tool controls.
 
 ## Web search and model pricing
 

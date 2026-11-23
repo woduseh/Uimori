@@ -13,6 +13,9 @@ async function fixture(t) {
   t.after(() => removeOwned(parent, cwd));
   await mkdir(path.join(cwd, 'server'));
   await mkdir(path.join(cwd, 'dist'));
+  await mkdir(path.join(cwd, 'docs', 'plans'), { recursive: true });
+  await writeFile(path.join(cwd, 'docs', 'READING.md'), '# Reading\n');
+  await writeFile(path.join(cwd, 'docs', 'plans', 'draft.md'), '# Draft\n');
   await writeFile(path.join(cwd, 'server', 'index.ts'), 'export const version = 1;\n');
   await writeFile(path.join(cwd, 'dist', 'old.js'), 'previous complete build');
   return { cwd, before: await distHash(path.join(cwd, 'dist')) };
@@ -96,8 +99,13 @@ test('test edits change evidence identity without invalidating compiled inputs; 
   await writeFile(path.join(cwd, 'tests/example.test.ts'), 'test correction');
   assert.equal((await buildFingerprint(cwd)).hash, compiled.hash);
   assert.notEqual((await fingerprint(cwd)).hash, evidence.hash);
+  await writeFile(path.join(cwd, 'docs/plans/draft.md'), '# Draft, revised\n');
+  assert.equal((await buildFingerprint(cwd)).hash, compiled.hash);
+  await writeFile(path.join(cwd, 'docs/READING.md'), '# Reading, revised\n');
+  const guide = await buildFingerprint(cwd);
+  assert.notEqual(guide.hash, compiled.hash);
   await writeFile(path.join(cwd, 'server/index.ts'), 'export const version = 2;');
-  assert.notEqual((await buildFingerprint(cwd)).hash, compiled.hash);
+  assert.notEqual((await buildFingerprint(cwd)).hash, guide.hash);
 });
 
 test('vendor edits invalidate build and release evidence', async (t) => {

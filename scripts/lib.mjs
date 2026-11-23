@@ -73,6 +73,14 @@ export async function removeOwned(parent, target) {
   }
   await rm(target, { recursive: true, force: true });
 }
+export async function guideFiles(sourceRoot = root) {
+  const directory = path.join(sourceRoot, 'docs');
+  if (!existsSync(directory)) return [];
+  return (await readdir(directory, { withFileTypes: true }))
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+    .map((entry) => path.join(directory, entry.name))
+    .sort();
+}
 export async function fingerprint(sourceRoot = root, { buildOnly = false } = {}) {
   const root = sourceRoot;
   const dirs = buildOnly
@@ -86,6 +94,7 @@ export async function fingerprint(sourceRoot = root, { buildOnly = false } = {})
   );
   const files = [
     ...(await Promise.all(dirs.map((dir) => filesBelow(path.join(root, dir))))).flat(),
+    ...(await guideFiles(root)),
     ...config.map((name) => path.join(root, name)),
     ...(buildOnly
       ? [

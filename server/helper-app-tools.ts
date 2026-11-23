@@ -3,6 +3,7 @@ import type { Json, ProviderTool } from '../core/transport.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { RESOURCE_TOOLS, helperResourceOperation } from './helper-resource-tools.js';
 import { HELPER_SETTINGS_TOOLS } from './helper-settings-tools.js';
+import { HELPER_GUIDE_TOOLS } from './helper-guide-tools.js';
 import {
   HELPER_VERTEX_LOCATION_TOOLS,
   isVertexLocationTool,
@@ -71,6 +72,7 @@ const loreSelector = described(
   'One lore field of one entry. Build it from a listed item: id, role and modulePath from item.scope, item.id as loreId, and the field to address.'
 );
 const TOOLS: ProviderTool[] = [
+  ...HELPER_GUIDE_TOOLS,
   ...RESOURCE_TOOLS,
   ...HELPER_PRESENTATION_TOOLS,
   ...HELPER_SETTINGS_TOOLS,
@@ -586,6 +588,7 @@ const readNames = new Set([
   'task.inspect',
   'task.list',
   'app.tools',
+  'guide.read',
   'helper.ask',
   'web.search',
   'editor.read',
@@ -632,10 +635,12 @@ export function helperToolTraits(name: string, args: Record<string, unknown> = {
       name === 'app.tools' ||
       name === 'outline.read' ||
       name === 'web.search' ||
+      name === 'guide.read' ||
       writingRead,
     direct:
       name === 'helper.ask' ||
       name === 'web.search' ||
+      name === 'guide.read' ||
       name === 'image.list' ||
       name === 'image.read' ||
       name === 'data.exec' ||
@@ -705,6 +710,7 @@ export const HELPER_OPERATION_AREAS: readonly (readonly [area: string, purpose: 
   ['palette', 'color palettes'],
   ['font', 'fonts'],
   ['helper', 'ask the user a short multiple-choice question card'],
+  ['guide', "Uimori's user guides: how the app and its features behave"],
 ];
 const operationArea = (name: string) => name.slice(0, name.indexOf('.'));
 const areaRank = new Map(HELPER_OPERATION_AREAS.map(([area], index) => [area, index]));

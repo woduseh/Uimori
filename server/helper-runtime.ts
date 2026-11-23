@@ -183,6 +183,7 @@ import {
 import { helperModelReferences, validateHelperReferences } from './helper-references.js';
 import { boundedWebSearch, helperWebSearchCapability } from '../core/helper-web-search.js';
 import { GEMINI_HELPER_SEARCH_TOOL, geminiHelperSearchRequest } from './helper-web-search-tool.js';
+import { invokeHelperGuideTool } from './helper-guide-tools.js';
 import { ChatOverridesStore } from './chat-overrides.js';
 import { ChatOptionsStore, invokeHelperOptions } from './chat-options.js';
 import { helperArgumentDiagnostic, helperResultDiagnostic } from './helper-diagnostics.js';
@@ -267,6 +268,7 @@ Choose and combine the tools suited to the task: app operations, data.exec for w
 Edit saved targets using their recorded revisions and preserve unrelated fields. For workspace-file edits, use uimori apply to save; for app operations, follow their own save contracts. Reconcile conflicts against the latest version and report changes from successful receipts. If the target has an unsaved editor draft, ask the user to save it first. For translation guides, preserve established terms and distinguish proposed choices from authored facts.
 For a bot’s Story UI appearance, use theme.guide and read the bot’s authored content. In a chat, writing.packages identifies the owning bot by role=bot. Saving a theme creates it; when the user requests application, use theme.select with dimension=storyUi for the bot or settings.update for an explicit chat choice.
 For questions about an original work, use the configured edition, references and spoiler position, and distinguish source evidence from model knowledge. Cite web evidence only after a search returns it.
+Your tools are not the whole app: the interface does things by itself that no tool controls. Before saying that Uimori lacks a feature, cannot do something or behaves in a certain way, check guide.read.
 Finish within the remaining host calls given in controls.
 ${CONTEXT_DERIVED_GUIDANCE}
 ${CONTEXT_RETRIEVAL_GUIDANCE}
@@ -2929,6 +2931,7 @@ export class HelperRuntime {
         answer: textTokenExcerpt(result.text, 2500).text,
       };
     }
+    if (name === 'guide.read') return invokeHelperGuideTool(args);
     if (name === 'image.list') return listHelperImages(this.store, args);
     const chatId = task.snapshot.scope.kind === 'chat' ? task.snapshot.scope.chatId : null;
     if (

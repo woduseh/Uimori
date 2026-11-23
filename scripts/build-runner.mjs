@@ -1,11 +1,22 @@
 import path from 'node:path';
 import { existsSync } from 'node:fs';
-import { lstat, mkdir, open, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import {
+  copyFile,
+  lstat,
+  mkdir,
+  open,
+  readFile,
+  rename,
+  stat,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { brotliCompress, gzip } from 'node:zlib';
 import {
   root,
   filesBelow,
+  guideFiles,
   newId,
   command,
   requireCommand,
@@ -142,6 +153,11 @@ export async function build({
       throw new Error('Source changed while building; rerun after edits finish.');
     for (const file of ['server/index.js', 'web/index.html'])
       if (!existsSync(path.join(candidate, file))) throw new Error(`Build output missing: ${file}`);
+    const guides = await guideFiles(cwd);
+    if (!guides.length) throw new Error('Build input missing: docs/*.md user guides');
+    await mkdir(path.join(candidate, 'docs'));
+    for (const guide of guides)
+      await copyFile(guide, path.join(candidate, 'docs', path.basename(guide)));
     await json(
       path.join(candidate, 'bundle-sizes.json'),
       await bundleSizes(path.join(candidate, 'web'))

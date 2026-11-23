@@ -25,6 +25,9 @@ scripts/**
 !scripts/build-runner.mjs
 !scripts/lib.mjs
 !scripts/browser-path.mjs
+!docs/
+docs/**
+!docs/*.md
 **/.env*
 **/*.sqlite*
 **/*.pem
