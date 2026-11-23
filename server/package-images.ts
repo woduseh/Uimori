@@ -16,6 +16,7 @@ import type { ImageTarget, RunSnapshot } from '../core/types.js';
 import { splitSource, type AssetEntry } from '../core/auxiliary.js';
 import type { ProductStore } from './product-store.js';
 import type { Store, Job, Source } from './store.js';
+import { ByteBoundedCache } from './byte-bounded-cache.js';
 import { successfulTranslation, validateTranslationArtifact } from './translation-artifacts.js';
 import { validateRisuContent, type RisuContent } from '../core/risu-content.js';
 import { RISU_AGGREGATE_IMAGES_MAX } from '../core/risu-limits.js';
@@ -423,6 +424,24 @@ export function requestImages(store: Store, sourceId: string, value: unknown) {
     );
   });
 }
+const thumbnails = new ByteBoundedCache<Promise<Buffer>>({
+  maxBytes: 16 * 1024 * 1024,
+  maxEntries: 512,
+});
+
+function packageImageThumbnail(store: Store, hash: string): Promise<Buffer> {
+  const cached = thumbnails.get(hash);
+  if (cached && store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(hash)) return cached;
+  const blob = readImage(store.db, hash);
+  const thumbnail = imageThumbnail(blob.bytes, PACKAGE_IMAGE_THUMBNAIL_WIDTH);
+  thumbnails.set(hash, thumbnail, PACKAGE_IMAGE_THUMBNAIL_WIDTH * PACKAGE_IMAGE_THUMBNAIL_WIDTH);
+  void thumbnail.then(
+    (bytes) => thumbnails.set(hash, thumbnail, bytes.length),
+    () => thumbnails.delete(hash)
+  );
+  return thumbnail;
+}
+
 export function packageImageRoutes(
   app: FastifyInstance,
   store: Store,
@@ -441,14 +460,10 @@ export function packageImageRoutes(
       const width = request.query.w;
       if (width !== undefined && width !== String(PACKAGE_IMAGE_THUMBNAIL_WIDTH))
         throw new HttpError(400, 'Unsupported image width');
-      const blob = readImage(store.db, request.params.hash);
       const image =
         width === undefined
-          ? blob
-          : {
-              mime: 'image/webp',
-              bytes: await imageThumbnail(blob.bytes, PACKAGE_IMAGE_THUMBNAIL_WIDTH),
-            };
+          ? readImage(store.db, request.params.hash)
+          : { mime: 'image/webp', bytes: await packageImageThumbnail(store, request.params.hash) };
       return reply
         .header('X-Content-Type-Options', 'nosniff')
         .header('Cache-Control', 'private, max-age=31536000, immutable')

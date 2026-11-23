@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { afterEach, test, vi } from 'vitest';
 import type { RunSnapshot } from '../core/types.js';
-import { buildPackagePresentation } from '../server/package-presentation.js';
+import {
+  buildPackagePresentation,
+  clearPackagePresentationRenderCache,
+} from '../server/package-presentation.js';
+import { recordNativeRisuEntropy } from '../server/risu-native-entropy.js';
 
 const state = vi.hoisted(() => ({
   log: [] as string[],
@@ -11,14 +15,16 @@ const state = vi.hoisted(() => ({
   native: true,
   failHook: '',
   failRender: '',
+  context: { native: {}, messages: [], variables: {} } as Record<string, unknown>,
 }));
 vi.mock('../server/risu-native-context.js', () => ({
-  nativeRisuContext: () => (state.native ? { native: {}, messages: [], variables: {} } : undefined),
+  nativeRisuContext: () => (state.native ? structuredClone(state.context) : undefined),
 }));
 vi.mock('../server/risu-native-runtime.js', () => ({
   executeRisuNative: async ({ text }: { text: string }) => {
     state.log.push(`hook:${text}`);
     if (state.failHook === text) throw new Error('hook failed');
+    if (text.includes('random')) recordNativeRisuEntropy();
     return { text, variables: {}, warnings: [] };
   },
 }));
@@ -38,6 +44,7 @@ vi.mock('../server/risu-native-worker.js', () => ({
   },
 }));
 afterEach(() => {
+  clearPackagePresentationRenderCache();
   Object.assign(state, {
     log: [],
     created: 0,
@@ -45,6 +52,7 @@ afterEach(() => {
     native: true,
     failHook: '',
     failRender: '',
+    context: { native: {}, messages: [], variables: {} },
   });
 });
 function fixture() {
@@ -132,4 +140,67 @@ test('native display replaces only primary story blocks while preserving the sou
   assert.doesNotMatch(state.log[1]!, /```uimori-ui/u);
   assert.match(state.log[1]!, /<style>\.panel\{color:red\}<\/style>/u);
   assert.match(state.log[1]!, /<div class="panel">상태<\/div>/u);
+});
+
+test('a deterministic display is served from cache with identical output and no worker', async () => {
+  const { snapshot, source, options } = fixture();
+  const first = await buildPackagePresentation(snapshot, source, options);
+  state.log = [];
+  const second = await buildPackagePresentation(snapshot, source, options);
+  assert.deepEqual(state.log, []);
+  assert.equal(state.created, 1);
+  assert.equal(JSON.stringify(second), JSON.stringify(first));
+});
+
+test('a display that drew random numbers is recomputed every time', async () => {
+  const { snapshot } = fixture();
+  const text = 'random scene';
+  const source = {
+    id: 'source',
+    chatId: 'chat',
+    text,
+    hash: createHash('sha256').update(text).digest('hex'),
+  };
+  await buildPackagePresentation(snapshot, source);
+  await buildPackagePresentation(snapshot, source);
+  assert.deepEqual(state.log, [`hook:${text}`, `render:${text}`, `hook:${text}`, `render:${text}`]);
+});
+
+test('translation, variables, card revision and viewport each miss the cache', async () => {
+  const { snapshot, source, options } = fixture();
+  await buildPackagePresentation(snapshot, source, options);
+  const hooks = () => state.log.filter((entry) => entry.startsWith('hook:'));
+  const misses = async (change: () => Promise<unknown>, expected: string[]) => {
+    state.log = [];
+    await change();
+    assert.deepEqual(hooks(), expected);
+  };
+  await misses(
+    () =>
+      buildPackagePresentation(
+        snapshot,
+        { ...source, translation: { ...source.translation, text: 'retranslated' } },
+        options
+      ),
+    ['hook:retranslated']
+  );
+  state.context = { native: {}, messages: [], variables: { mood: 'tense' } };
+  await misses(
+    () => buildPackagePresentation(snapshot, source, options),
+    ['hook:original', 'hook:extra', 'hook:translated']
+  );
+  state.context = { native: { sourceHash: 'card-2' }, messages: [], variables: { mood: 'tense' } };
+  await misses(
+    () => buildPackagePresentation(snapshot, source, options),
+    ['hook:original', 'hook:extra', 'hook:translated']
+  );
+  await misses(
+    () =>
+      buildPackagePresentation(snapshot, source, {
+        ...options,
+        viewport: { width: 390, height: 844 },
+      }),
+    ['hook:original', 'hook:extra', 'hook:translated']
+  );
+  await misses(() => buildPackagePresentation(snapshot, source, options), []);
 });

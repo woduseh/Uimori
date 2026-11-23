@@ -9,6 +9,7 @@ import {
   type RisuContentSource,
 } from '../core/risu-native.js';
 import { createNativeRisuWorkerSession, runNativeRisuWorker } from './risu-native-worker.js';
+import { recordNativeRisuEntropy } from './risu-native-entropy.js';
 
 export type NativeRisuCbsContext = {
   native: RisuContentSource;
@@ -132,7 +133,10 @@ function initializeNativeRisuCbs(context: NativeRisuCbsContext, issues: string[]
     callInternalFunction: () => '',
     getTriggerId: () => context.triggerId ?? 'null',
     now: () => context.now ?? 0,
-    random: context.random ?? Math.random,
+    random: () => {
+      recordNativeRisuEntropy();
+      return (context.random ?? Math.random)();
+    },
     getViewport: () => context.viewport,
     findCharacterbyId: (id) => (id === native.sourceHash ? chara : null),
     unsupportedNames: new Set(),

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, test } from 'vitest';
-import { changedReaderSources, readerJobIds } from '../server/reader-data.js';
+import {
+  changedReaderSources,
+  readerJobIds,
+  readerPresentationRevisions,
+} from '../server/reader-data.js';
 
 const databases = new Set<DatabaseSync>();
 afterEach(() => {
@@ -80,4 +84,45 @@ test('the latest translation uses all revisions before source-hash filtering, no
   state.insert('old-matching', 'hash', 'translation', 1);
   state.insert('latest-nonmatching', 'different', 'translation', 2);
   assert.deepEqual(readerJobIds(state, 'source', 'hash'), []);
+});
+
+test('presentation revisions follow each scene unless the chat renders through a native card', () => {
+  const db = new DatabaseSync(':memory:');
+  databases.add(db);
+  db.exec(`CREATE TABLE events(seq INTEGER PRIMARY KEY AUTOINCREMENT,chat_id TEXT,kind TEXT,entity_id TEXT);
+    CREATE TABLE jobs(id TEXT PRIMARY KEY,chat_id TEXT,source_revision TEXT,kind TEXT);
+    CREATE TABLE sources(id TEXT PRIMARY KEY,run_id TEXT);
+    CREATE TABLE runs(id TEXT PRIMARY KEY,snapshot TEXT);
+    CREATE TABLE app_metadata(key TEXT PRIMARY KEY,value TEXT);
+    INSERT INTO sources VALUES('a','run-a'),('b','run-b');
+    INSERT INTO runs VALUES('run-a','{"settled":true}'),('run-b','{"settled":true}');`);
+  const event = (kind: string, entity: string) =>
+    db
+      .prepare('INSERT INTO events(chat_id,kind,entity_id) VALUES(?,?,?)')
+      .run('chat', kind, entity);
+  let packages: { nativeRisu?: object }[] = [];
+  const store = {
+    db,
+    product: { snapshot: () => ({ packages, promptPresets: {} }) },
+  } as unknown as Parameters<typeof readerPresentationRevisions>[0];
+  const revisions = () => readerPresentationRevisions(store, 'chat', ['a', 'b']);
+  event('source.ready', 'a');
+  event('source.ready', 'b');
+  const before = revisions();
+  event('source.ready', 'c');
+  assert.deepEqual(revisions(), before);
+  event('source.edited', 'a');
+  const edited = revisions();
+  assert.notEqual(edited.a, before.a);
+  assert.equal(edited.b, before.b);
+  event('asset.created', 'asset');
+  const assets = revisions();
+  assert.notEqual(assets.a, edited.a);
+  assert.notEqual(assets.b, edited.b);
+  packages = [{ nativeRisu: {} }];
+  const native = revisions();
+  event('source.ready', 'd');
+  const next = revisions();
+  assert.notEqual(next.a, native.a);
+  assert.notEqual(next.b, native.b);
 });

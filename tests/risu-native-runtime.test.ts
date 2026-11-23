@@ -13,6 +13,7 @@ import {
   type NativeRisuExecutionInput,
 } from '../server/risu-native-runtime.js';
 import { readNativeRisuSample } from './fixtures/native-risu.js';
+import { trackNativeRisuEntropy } from '../server/risu-native-entropy.js';
 import { nativeContent } from './fixtures/native-content.js';
 
 const effectiveFixtures = new WeakMap<RisuContentSource, Record<string, unknown>[]>();
@@ -957,5 +958,18 @@ describe('native Risu execution', () => {
     expect(result.variables).toEqual({ input: '55', random: '3' });
     expect(result.effects.notifications).toEqual([{ kind: 'normal', message: 'Done' }]);
     await expect(executeRisuNative(input(content))).rejects.toThrow('RISU_NATIVE_HOST_UNAVAILABLE');
+  });
+  it.each([
+    ['a Lua random draw', 'setChatVar(id, "n", math.random(1, 6))', true],
+    ['a CBS random draw', 'setChatVar(id, "n", cbs("{{random::a,b,c}}"))', true],
+    ['a fixed CBS value', 'setChatVar(id, "n", cbs("{{char}}"))', false],
+  ])('reports %s to the enclosing entropy scope', async (_label, body, expected) => {
+    const content = native([
+      lua(`function choose(id)
+${body}
+end`),
+    ]);
+    const { entropyUsed } = await trackNativeRisuEntropy(() => executeRisuNative(input(content)));
+    expect(entropyUsed).toBe(expected);
   });
 });

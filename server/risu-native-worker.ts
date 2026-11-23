@@ -1,4 +1,5 @@
 import { Worker } from 'node:worker_threads';
+import { nativeRisuEntropyMarker } from './risu-native-entropy.js';
 
 const bootstrap = String.raw`
 const { parentPort, workerData } = require('node:worker_threads');
@@ -12,11 +13,13 @@ registerHooks({ resolve(specifier, context, nextResolve) {
   }
   return nextResolve(specifier, context);
 }});
+const entropy = Symbol.for('uimori.native-risu.entropy');
 import(workerData.module).then(module => {
   const run = async input => {
     try {
+      globalThis[entropy] = false;
       const result = await module[workerData.method](input);
-      parentPort.postMessage({ ok: true, result });
+      parentPort.postMessage({ ok: true, result, entropyUsed: globalThis[entropy] === true });
     } catch (error) {
       parentPort.postMessage({ ok: false, code: String(error.message || error) });
     }
@@ -47,6 +50,7 @@ export function runNativeRisuWorker<T>(
     throw new Error('RISU_NATIVE_TIMEOUT_INVALID');
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new Error('CANCELLED'));
+    const markEntropy = nativeRisuEntropyMarker();
     const worker = startWorker(module, method, input);
     let settled = false;
     const finish = (error?: Error, result?: T) => {
@@ -59,9 +63,11 @@ export function runNativeRisuWorker<T>(
     const timer = setTimeout(() => finish(new Error('RISU_NATIVE_TIMEOUT')), timeoutMs);
     const abort = () => finish(new Error('CANCELLED'));
     signal?.addEventListener('abort', abort, { once: true });
-    worker.once('message', (message) =>
-      message.ok ? finish(undefined, message.result) : finish(new Error(message.code))
-    );
+    worker.once('message', (message) => {
+      if (message.entropyUsed) markEntropy();
+      if (message.ok) finish(undefined, message.result);
+      else finish(new Error(message.code));
+    });
     worker.once('error', (error) =>
       finish(error instanceof Error ? error : new Error('RISU_NATIVE_WORKER_FAILED'))
     );
@@ -86,6 +92,7 @@ export function createNativeRisuWorkerSession<Input, Result>(
     | {
         resolve: (result: Result) => void;
         reject: (error: Error) => void;
+        markEntropy: () => void;
         timer: ReturnType<typeof setTimeout>;
       }
     | undefined;
@@ -109,10 +116,12 @@ export function createNativeRisuWorkerSession<Input, Result>(
     run(input: Input): Promise<Result> {
       if (stopped) return Promise.reject(stopped);
       if (pending) return Promise.reject(new Error('RISU_NATIVE_WORKER_BUSY'));
+      const markEntropy = nativeRisuEntropyMarker();
       return new Promise<Result>((resolve, reject) => {
         pending = {
           resolve,
           reject,
+          markEntropy,
           timer: setTimeout(() => fail(new Error('RISU_NATIVE_TIMEOUT')), timeoutMs),
         };
         try {
@@ -121,6 +130,7 @@ export function createNativeRisuWorkerSession<Input, Result>(
             worker.on('message', (message) => {
               const current = pending;
               if (!current || stopped) return;
+              if (message.entropyUsed) current.markEntropy();
               if (!message.ok) return fail(new Error(message.code));
               pending = undefined;
               clearTimeout(current.timer);

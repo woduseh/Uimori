@@ -15,6 +15,7 @@ import { nativeRisuReadableLore } from './risu-native-lore.js';
 
 import { RISU_NATIVE_LUA_DISPATCH, RISU_NATIVE_LUA_PRELUDE } from './risu-native-lua.js';
 import { createNativeRisuCbsSession, type NativeRisuCbsContext } from './risu-native-cbs.js';
+import { nativeRisuEntropyMarker } from './risu-native-entropy.js';
 
 export interface NativeRisuMessage {
   id?: string;
@@ -348,6 +349,7 @@ async function executeNativeRisuInvocation(
   const card = record(input.native.card.data ?? input.native.card);
   const risu = record(record(card.extensions).risuai);
   let readableLore: Record<string, unknown>[] | undefined;
+  const markEntropy = nativeRisuEntropyMarker();
   const source = `${RISU_NATIVE_LUA_PRELUDE}\nlocal function __initialize()\n${sources.map(({ code, lowLevelAccess }, index) => `__runScript(${luaSourceLiteral(code)}, ${index + 1}, ${lowLevelAccess})`).join('\n')}\nend\n${RISU_NATIVE_LUA_DISPATCH}`;
   const value = record(
     await runNativeRisuLua(
@@ -383,6 +385,7 @@ async function executeNativeRisuInvocation(
           return countTextTokens(value as string, input.tokenizerProfile);
         }
         if (method === 'random') {
+          markEntropy();
           const payload = record(args);
           if (payload.first === null) return Math.random();
           const first = payload.last === null ? 1 : Number(payload.first);

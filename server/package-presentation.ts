@@ -8,6 +8,8 @@ import { executeRisuNative } from './risu-native-runtime.js';
 import type { NativeRisuRenderInput, NativeRisuRenderResult } from './risu-native-render.js';
 import { createNativeRisuWorkerSession } from './risu-native-worker.js';
 import type { NativeRisuCbsContext } from './risu-native-cbs.js';
+import { ByteBoundedCache } from './byte-bounded-cache.js';
+import { trackNativeRisuEntropy } from './risu-native-entropy.js';
 
 export type PackagePresentationSource = {
   id: string;
@@ -17,12 +19,24 @@ export type PackagePresentationSource = {
   translation?: { text: string; sourceRevision: string; sourceHash: string };
 };
 const PRESENTATION_RENDER_TIMEOUT_MS = 10_000;
+export const PACKAGE_PRESENTATION_RENDERER_VERSION = 1;
+type DisplayPart = NativeRisuRenderResult & { text: string; changed: true; applied: string[] };
+const displayParts = new ByteBoundedCache<DisplayPart>({
+  maxBytes: 48 * 1024 * 1024,
+  maxEntries: 4000,
+});
+const digest = (value: string) => createHash('sha256').update(value).digest('hex');
+
+export function clearPackagePresentationRenderCache() {
+  displayParts.clear();
+}
 
 export async function buildPackagePresentation(
   snapshot: RunSnapshot,
   source: PackagePresentationSource,
   options: {
     viewport?: NativeRisuCbsContext['viewport'];
+    snapshotDigest?: string;
     nativeMessageIndex?: number;
     nativeDisplayText?: string;
     nativeTranslationText?: string;
@@ -47,10 +61,19 @@ export async function buildPackagePresentation(
     throw new RisuContentError('PACKAGE_PRESENTATION_TRANSLATION_MISMATCH');
   const native = nativeRisuContext(snapshot);
   if (native) {
-    const renderer = createNativeRisuWorkerSession<NativeRisuRenderInput, NativeRisuRenderResult>(
-      new URL('./risu-native-render.js', import.meta.url),
-      'renderNativeRisuMessageInWorker',
-      PRESENTATION_RENDER_TIMEOUT_MS
+    let renderer:
+      | ReturnType<
+          typeof createNativeRisuWorkerSession<NativeRisuRenderInput, NativeRisuRenderResult>
+        >
+      | undefined;
+    const contextDigest = digest(
+      JSON.stringify([
+        PACKAGE_PRESENTATION_RENDERER_VERSION,
+        source.chatId,
+        source.id,
+        options.viewport ?? null,
+        options.snapshotDigest ?? native,
+      ])
     );
     try {
       const index =
@@ -58,7 +81,7 @@ export async function buildPackagePresentation(
         (snapshot.packageStart?.mode === 'authored' || snapshot.nativeRisuAuthored?.greeting
           ? -1
           : native.messages.length);
-      const display = async (value: string, index: number, canonical?: string) => {
+      const render = async (value: string, index: number, canonical?: string) => {
         const edited = await executeRisuNative({
           ...native,
           viewport: options.viewport,
@@ -100,6 +123,11 @@ export async function buildPackagePresentation(
             displayText.slice(0, replacement.start) +
             replacement.replacement +
             displayText.slice(replacement.end);
+        renderer ??= createNativeRisuWorkerSession<NativeRisuRenderInput, NativeRisuRenderResult>(
+          new URL('./risu-native-render.js', import.meta.url),
+          'renderNativeRisuMessageInWorker',
+          PRESENTATION_RENDER_TIMEOUT_MS
+        );
         const result = await renderer.run({
           native: native.native,
           text: displayText,
@@ -129,11 +157,29 @@ export async function buildPackagePresentation(
         });
         return {
           text: value,
-          changed: true,
+          changed: true as const,
           applied: [] as string[],
           ...result,
           issues: [...new Set([...result.issues, ...edited.warnings])],
         };
+      };
+      const display = async (value: string, index: number, canonical?: string) => {
+        const key = digest(
+          JSON.stringify([
+            contextDigest,
+            value,
+            index,
+            canonical === undefined ? 0 : canonical === value ? 1 : 2,
+          ])
+        );
+        const cached = displayParts.get(key);
+        if (cached) return cached;
+        const { value: part, entropyUsed } = await trackNativeRisuEntropy(() =>
+          render(value, index, canonical)
+        );
+        if (!entropyUsed)
+          displayParts.set(key, part, (part.text.length + part.html.length + part.css.length) * 2);
+        return part;
       };
       const messages = options.nativeMessages ?? [
         {
@@ -186,7 +232,7 @@ export async function buildPackagePresentation(
         request: { text: snapshot.request, changed: false, applied: [] as string[] },
       };
     } finally {
-      await renderer.close();
+      await renderer?.close();
     }
   }
   return {

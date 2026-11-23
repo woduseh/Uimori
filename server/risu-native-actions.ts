@@ -19,6 +19,7 @@ import { readChatVariables, writeChatVariablesInTransaction } from './chat-varia
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import { readRunSnapshot, readRunStatus, readStoredRunSnapshot } from './run-projections.js';
+import { ByteBoundedCache } from './byte-bounded-cache.js';
 
 const zeroUsage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -84,14 +85,54 @@ function groupMessages(messages: NativeRisuMessage[]): NativeRisuMessage[][] {
   if (pending.length) groups.push(pending);
   return groups;
 }
+type ChatHistory = {
+  history: RunSnapshot['history'];
+  logicalHistory: NonNullable<RunSnapshot['logicalHistory']>;
+  digest?: string;
+};
+const sharedHistories = new WeakMap<Store, ByteBoundedCache<ChatHistory>>();
+
+function readChatHistory(store: Store, head: string | null): ChatHistory {
+  const history = store.history(head);
+  const logicalHistory = captureLogicalHistory(store, { history } as RunSnapshot);
+  return { history, logicalHistory };
+}
+
+function sharedChatHistory(store: Store, chatId: string, head: string | null): ChatHistory {
+  let cache = sharedHistories.get(store);
+  if (!cache) {
+    cache = new ByteBoundedCache({ maxBytes: 64 * 1024 * 1024, maxEntries: 8, ttlMs: 5000 });
+    sharedHistories.set(store, cache);
+  }
+  const key = JSON.stringify([chatId, head, store.latestEventSequence(chatId)]);
+  const cached = cache.get(key);
+  if (cached) return cached;
+  const read = readChatHistory(store, head);
+  read.digest = digest(read);
+  cache.set(
+    key,
+    read,
+    read.history.reduce((sum, entry) => sum + entry.text.length * 2, 0) +
+      read.logicalHistory.reduce((sum, entry) => sum + entry.text.length * 2, 0)
+  );
+  return read;
+}
+
 export function nativeSourceSnapshot(
   store: Store,
   chatId: string,
   sourceId: string,
-  own?: RunSnapshot
+  own?: RunSnapshot,
+  options: { sharedHistory?: boolean } = {}
 ) {
   const chat = store.chat(chatId);
-  const history = store.history(chat.headRevision);
+  const {
+    history,
+    logicalHistory,
+    digest: historyDigest,
+  } = options.sharedHistory
+    ? sharedChatHistory(store, chatId, chat.headRevision)
+    : readChatHistory(store, chat.headRevision);
   if (!history.some((entry) => entry.revision === sourceId))
     throw new HttpError(409, 'RISU_NATIVE_SOURCE_OUTSIDE_CHAT');
   const source = store.source(sourceId);
@@ -108,8 +149,8 @@ export function nativeSourceSnapshot(
     parentRevision: chat.headRevision,
   };
   delete snapshot.nativeRisuExecution;
-  snapshot.logicalHistory = captureLogicalHistory(store, snapshot);
-  return { source, snapshot, variables: readChatVariables(store, chatId) };
+  snapshot.logicalHistory = logicalHistory;
+  return { source, snapshot, historyDigest, variables: readChatVariables(store, chatId) };
 }
 
 export async function applyNativeRisuAction(
