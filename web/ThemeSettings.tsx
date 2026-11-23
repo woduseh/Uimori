@@ -49,10 +49,9 @@ import { SaveConflictDialog } from './SaveConflictDialog.js';
 import './themes.css';
 import './deletion.css';
 import { readingSample, readingSampleCredit } from './reading-sample.js';
-import { StoryUi } from './LazyStoryUi.js';
+import { StoryUiThemePreview } from './StoryBoardPanel.js';
 import { Switch } from './BooleanControls.js';
 import { storyUiStyles, type StoryUiStyle } from '../core/story-ui-style.js';
-import { storyUiPreview } from './story-ui-preview.js';
 import { ThemeAssetEditor } from './ThemeAssetEditor.js';
 import { adoptThemeFile, exportThemeFile } from './theme-assets.js';
 
@@ -951,9 +950,26 @@ export function ThemeSettings({
                           }
                         />
                       </label>
+                      <label>
+                        {t('storyUi.boardCss')}
+                        <textarea
+                          aria-label={t('storyUi.boardCss')}
+                          rows={5}
+                          placeholder={
+                            '& { --board-paper: linear-gradient(#2a2d35, #202228); --board-ink: #ececec; }'
+                          }
+                          spellCheck={false}
+                          value={draft.model.storyUi.boardCss ?? ''}
+                          onChange={(event) =>
+                            patch({
+                              storyUi: { ...draft.model.storyUi!, boardCss: event.target.value },
+                            })
+                          }
+                        />
+                      </label>
                       <div className="theme-story-ui-preview">
                         <strong>{t('storyUi.preview')}</strong>
-                        <StoryUi segment={storyUiPreview} customTheme={draft.model.storyUi} />
+                        <StoryUiThemePreview storyUi={draft.model.storyUi} />
                       </div>
                     </>
                   )}

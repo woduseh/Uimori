@@ -163,6 +163,18 @@ export const messages = {
     ja: '物語画面を表示できません。',
     zh: '无法显示此故事界面。',
   },
+  'storyUi.boardCss': {
+    ko: '현황 패널 CSS',
+    en: 'Status panel CSS',
+    ja: '現況パネル CSS',
+    zh: '现况面板 CSS',
+  },
+  'storyUi.boardPreviewSlot': {
+    ko: '관계도',
+    en: 'Relations',
+    ja: '相関図',
+    zh: '关系图',
+  },
   'storyUi.board': {
     ko: '현황',
     en: 'Status',

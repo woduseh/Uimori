@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import type { StoryUiSegment } from '../core/story-ui-scan.js';
 import type { StoryUiStyleSetting } from '../core/story-ui-style.js';
 import type { Job, Source } from '../core/types.js';
@@ -9,6 +9,9 @@ import { LoadingState } from './LoadingState.js';
 import { StoryUi } from './LazyStoryUi.js';
 import { ScrollStrip } from './ScrollStrip.js';
 import { CloseIcon } from './ui-icons.js';
+import { scopedStoryBoardCss, useStoryUiPresentation } from './story-ui-theme.js';
+import { storyUiPreview } from './story-ui-preview.js';
+import type { ThemeDefinition } from '../core/themes.js';
 import './story-board.css';
 
 type UiSegment = Extract<StoryUiSegment, { kind: 'ui' }>;
@@ -95,6 +98,15 @@ export function StoryBoardPanel({
   const [selected, setSelected] = useState('');
   const pin = board.pins.find((item) => item.slot === selected) ?? board.pins[0];
   const segment = (translated && pin?.translated) || pin?.original;
+  const boardId = useId();
+  const presentation = useStoryUiPresentation(style, segment?.messages);
+  const theme = presentation.theme?.storyUi;
+  const boardCss = useMemo(
+    () => scopedStoryBoardCss(theme?.boardCss ?? '', boardId),
+    [theme?.boardCss, boardId]
+  );
+  const matched =
+    segment && !theme && presentation.style !== 'default' ? presentation.style : undefined;
   return (
     <aside
       id="story-board-panel"
@@ -121,7 +133,12 @@ export function StoryBoardPanel({
           />
         </header>
       )}
-      <div className="story-board-body">
+      <div
+        className={matched ? 'story-board-body story-ui-tokens' : 'story-board-body'}
+        data-story-ui-style={matched}
+        data-story-board-custom={boardCss ? boardId : undefined}
+      >
+        {boardCss && <style>{boardCss}</style>}
         {board.pins.length > 1 && (
           <ScrollStrip
             className="story-board-slots"
@@ -157,5 +174,40 @@ export function StoryBoardPanel({
         )}
       </div>
     </aside>
+  );
+}
+
+export function StoryUiThemePreview({ storyUi }: { storyUi: ThemeDefinition['storyUi'] }) {
+  useI18n();
+  const boardId = useId();
+  const boardCss = useMemo(
+    () => scopedStoryBoardCss(storyUi?.boardCss ?? '', boardId),
+    [storyUi?.boardCss, boardId]
+  );
+  const block = <StoryUi segment={storyUiPreview} customTheme={storyUi} />;
+  if (!boardCss) return block;
+  return (
+    <div className="story-board-body story-board-preview" data-story-board-custom={boardId}>
+      <style>{boardCss}</style>
+      <ScrollStrip
+        className="story-board-slots"
+        role="tablist"
+        aria-label={t('storyUi.boardSlots')}
+      >
+        {[t('storyUi.board'), t('storyUi.boardPreviewSlot')].map((label, index) => (
+          <button
+            key={label}
+            type="button"
+            role="tab"
+            className="secondary"
+            aria-selected={index === 0}
+            tabIndex={index === 0 ? 0 : -1}
+          >
+            {label}
+          </button>
+        ))}
+      </ScrollStrip>
+      {block}
+    </div>
   );
 }

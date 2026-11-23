@@ -148,7 +148,7 @@ test('STORYUI the status tab shows the latest pinned block up to the scene being
     const detail = await read();
     const started = await request.post(`/api/chats/${chat.id}/runs`, {
       data: {
-        request: `${'항구의 하루가 천천히 지나간다.\n\n'.repeat(30)}<a2ui>\n$/_uimori/pin = "status"\nroot = Frame(body, "${day}일차 상태", kind="system")\nbody = Column([Text("HP ${hp}")])\n</a2ui>`,
+        request: `${'항구의 하루가 천천히 지나간다.\n\n'.repeat(30)}<a2ui>\n$/_uimori/pin = "status"\n${day === 2 ? '$/_uimori/style = "fantasy"\n' : ''}root = Frame(body, "${day}일차 상태", kind="system")\nbody = Column([Text("HP ${hp}")])\n</a2ui>`,
         expectedRevision: detail.chat.headRevision,
         expectedSettingsRevision: settingsRevision,
         idempotencyKey: `story-ui-board-${chat.id}-${day}`,
@@ -174,8 +174,15 @@ test('STORYUI the status tab shows the latest pinned block up to the scene being
       .first()
       .evaluate((node) => node.scrollIntoView({ block: 'start' }));
   await expect(board.getByText('HP 10', { exact: true })).toBeVisible();
+  const body = board.locator('.story-board-body');
+  await expect(body).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await scrollTo(scenes[1]);
   await expect(board.getByText('HP 4', { exact: true })).toBeVisible();
+  await expect(body).toHaveAttribute('data-story-ui-style', 'fantasy');
+  const blockPaper = await board
+    .locator('.story-ui')
+    .evaluate((node) => getComputedStyle(node).backgroundColor);
+  await expect(body).toHaveCSS('background-color', blockPaper);
   await page.screenshot({ path: info.outputPath('story-board-second-scene.png') });
   await scrollTo(scenes[0]);
   await expect(board.getByText('HP 10', { exact: true })).toBeVisible();

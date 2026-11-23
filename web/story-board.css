@@ -31,6 +31,17 @@
   margin: 0;
 }
 .story-board-body {
+  --board-paper: transparent;
+  --board-ink: var(--text);
+  --board-muted: var(--muted);
+  --board-line: var(--border);
+  --board-selected: var(--accent-soft);
+  --board-font: inherit;
+  contain: paint;
+  isolation: isolate;
+  color: var(--board-ink);
+  background: var(--board-paper);
+  font-family: var(--board-font);
   display: grid;
   align-content: start;
   gap: 12px;
@@ -48,17 +59,37 @@
   white-space: nowrap;
   border: var(--hairline) solid transparent;
   background: transparent;
-  color: var(--muted);
+  color: var(--board-muted);
+  font-family: var(--board-font);
   padding: 8px 12px;
   font-size: var(--font-body);
   min-height: var(--control-h);
 }
 .story-board-slots > button[aria-selected="true"] {
-  background: var(--accent-soft);
-  color: var(--text);
-  border-color: var(--border);
+  background: var(--board-selected);
+  color: var(--board-ink);
+  border-color: var(--board-line);
 }
 .story-board-empty {
   margin: 0;
-  color: var(--muted);
+  color: var(--board-muted);
+}
+.story-board-body.story-ui-tokens:not([data-story-ui-style="default"]) {
+  --board-paper: var(--story-paper);
+  --board-ink: var(--story-ink);
+  --board-muted: var(--story-muted);
+  --board-line: var(--story-hair);
+  --board-selected: var(--story-soft);
+  --board-font: var(--story-font);
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-board-body[data-story-board-custom],
+  .story-board-body[data-story-board-custom]::before,
+  .story-board-body[data-story-board-custom]::after,
+  .story-board-body[data-story-board-custom] :not(.story-ui-block, .story-ui-block *),
+  .story-board-body[data-story-board-custom] :not(.story-ui-block, .story-ui-block *)::before,
+  .story-board-body[data-story-board-custom] :not(.story-ui-block, .story-ui-block *)::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }

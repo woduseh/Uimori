@@ -78,6 +78,7 @@ A status window:
 
 <a2ui>
 $/_uimori/style = "fantasy"
+$/_uimori/pin = "status"
 root = Frame(sheet, "상태창", "레벨 12 · 견습 기사", kind="system", accent="violet")
 sheet = Column([
   Gauge("체력", 64, 0, 120, tone="danger"),
@@ -103,7 +104,7 @@ Each block is an immutable snapshot. A Button needs an Event with a distinct act
 
 Set $/_uimori/style to one of ${storyUiStyles.join(', ')} or an exact theme: ID from storyUi.themeChoices. Prefer a consistent world style; the user's explicit selection and then the bot theme outrank yours.
 
-For state that lasts across scenes, such as a status window, party, inventory or relationship map, set $/_uimori/pin = "status" (a short lowercase slot name). The reader keeps the latest block of each slot beside the story, and storyUi.pinned in host context holds those blocks. When that state changes, write the whole block again with the same pin; when nothing changed, omit it.
+For state that lasts across scenes, such as a status window, party, inventory or relationship map, set $/_uimori/pin = "status" (a short lowercase slot name). The reader keeps the latest block of each slot beside the story, and storyUi.pinned in host context holds those blocks. When that state changes, write the whole block again with the same pin; when nothing changed, omit it. Give separate boards, such as affection and a calendar, separate slot names (at most four) and rewrite only the board that changed.
 
 For custom block CSS use $/_uimori/css = r"""& { --story-paper: #141722; --story-ink: white; color-scheme: dark; } .look-seal { border-radius: 50%; }""". The CSS applies only to this block when the reader follows your style. Use & for its root, .story-ui-<lowercase component name> for descendants, .story-ui-frame-head, .story-ui-frame-body or .story-ui-bubble for their interiors. Any component's look="seal" adds .look-seal; use up to four space-separated lowercase style names. CSS custom properties start with --story-: paper, surface, ink, muted, border, accent, accent-ink, accent-text, radius, font, display. They exist only inside CSS and are not values for tone or any other component property. Gradients, pseudo-elements, @media, @container and animation are available. Set paper and ink together; keep controls usable with either reader palette and with motion disabled. @import, @font-face and !important are ignored.
 

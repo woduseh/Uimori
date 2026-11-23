@@ -1,10 +1,9 @@
 import { A2uiSurface, MarkdownContext, type ReactCatalogComponent } from '@a2ui/react';
 import { MessageProcessor, type ActionPayload } from '@a2ui/web_core';
-import { useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { resolveStoryUiPresentation, storyUiBlockCss } from '../core/story-ui-style.js';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { storyUiBlockCss } from '../core/story-ui-style.js';
 import type { ThemeDefinition } from '../core/themes.js';
-import { ThemeContext } from './ThemeContext.js';
-import { modelStoryUiCss, scopedStoryUiCss } from './story-ui-theme.js';
+import { modelStoryUiCss, scopedStoryUiCss, useStoryUiPresentation } from './story-ui-theme.js';
 import type { StoryUiSegment } from '../core/story-ui.js';
 import type { RunReceipt } from '../core/types.js';
 import { compileReadingMarkdown } from '../core/reading-markdown.js';
@@ -58,15 +57,9 @@ export function StoryUi({
   actionBlockId?: string;
   beginAdmission?: () => (run: RunReceipt) => void;
 }) {
-  const themeState = useContext(ThemeContext);
   useI18n();
   const themeId = useId();
-  const presentation = resolveStoryUiPresentation(
-    style,
-    segment.messages,
-    themeState?.disabled ? undefined : themeState?.catalog,
-    themeState?.scope.botId
-  );
+  const presentation = useStoryUiPresentation(style, segment.messages);
   const theme = customTheme ?? presentation.theme?.storyUi;
   const root = (
     segment.messages[0] as unknown as {

@@ -1,7 +1,35 @@
+import { useContext } from 'react';
+import { resolveStoryUiPresentation, type StoryUiStyleSetting } from '../core/story-ui-style.js';
+import { ThemeContext } from './ThemeContext.js';
+
+export function useStoryUiPresentation(style: StoryUiStyleSetting | undefined, messages: unknown) {
+  const themeState = useContext(ThemeContext);
+  return resolveStoryUiPresentation(
+    style,
+    messages,
+    themeState?.disabled ? undefined : themeState?.catalog,
+    themeState?.scope.botId
+  );
+}
+
 const scoped = (rules: string, attribute: string, id: string) =>
   `@scope ([${attribute}=${JSON.stringify(id)}]) {
     :scope[${attribute}][data-story-ui-style] { ${rules} }
   }`;
+
+export function scopedStoryBoardCss(css: string, id: string): string {
+  if (!css.trim() || typeof CSSStyleSheet === 'undefined') return '';
+  const sheet = new CSSStyleSheet();
+  try {
+    sheet.replaceSync(css);
+  } catch {
+    return '';
+  }
+  const rules = [...sheet.cssRules].map((rule) => rule.cssText).join('\n');
+  return `@scope ([data-story-board-custom=${JSON.stringify(id)}]) to (.story-ui-block) {
+    :scope[data-story-board-custom] { ${rules} }
+  }`;
+}
 
 export function scopedStoryUiCss(css: string, id: string): string {
   if (!css.trim() || typeof CSSStyleSheet === 'undefined') return '';

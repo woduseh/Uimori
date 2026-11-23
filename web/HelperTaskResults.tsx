@@ -33,8 +33,7 @@ import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { usageCompact, usageUsd } from './usage-display.js';
 import { SearchSuggestionsFrame } from './SearchSuggestionsFrame.js';
-import { StoryUi } from './LazyStoryUi.js';
-import { storyUiPreview } from './story-ui-preview.js';
+import { StoryUiThemePreview } from './StoryBoardPanel.js';
 import { ThemeContext } from './ThemeContext.js';
 import './helper-task-results.css';
 import './scene-usage.css';
@@ -584,7 +583,7 @@ export function HelperTaskResults({
                     .slice(index + 1)
                     .some(
                       (later) => later.domain === 'resource' && later.targetId === change.targetId
-                    ) && <StoryUiThemePreview themeId={change.targetId} />}
+                    ) && <ChangedStoryUiTheme themeId={change.targetId} />}
               </li>
             ))}
             {data.results.flatMap((result) =>
@@ -625,7 +624,7 @@ export function HelperTaskResults({
   );
 }
 
-function StoryUiThemePreview({ themeId }: { themeId: string }) {
+function ChangedStoryUiTheme({ themeId }: { themeId: string }) {
   const storyUi = useContext(ThemeContext)?.catalog.themes.find(
     (theme) => theme.id === themeId
   )?.storyUi;
@@ -633,7 +632,7 @@ function StoryUiThemePreview({ themeId }: { themeId: string }) {
   return (
     <div className="helper-story-ui-preview">
       <strong>{t('storyUi.preview')}</strong>
-      <StoryUi segment={storyUiPreview} customTheme={storyUi} />
+      <StoryUiThemePreview storyUi={storyUi} />
     </div>
   );
 }

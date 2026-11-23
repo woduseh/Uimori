@@ -53,6 +53,22 @@ test('creator previews, saves and applies a bot Story UI theme without changing 
       '& { --story-paper: #efe5fb; --story-ink: #35234b; } button { --a2ui-text-color-text: #46206b; color: #46206b; background: #d6b7ed; } body { background: red; }'
     );
   await expect(editor.locator('.story-ui')).toHaveCSS('background-color', 'rgb(239, 229, 251)');
+  await editor
+    .getByLabel('현황 패널 CSS', { exact: true })
+    .fill(
+      '& { --board-paper: #202228; } .story-ui { outline: 5px solid rgb(255, 0, 0); } & > .story-board-slots::after { content: ""; position: fixed; inset: 0; background: rgb(255, 0, 0); }'
+    );
+  const boardPreview = editor.locator('.story-board-preview');
+  await expect(boardPreview).toHaveCSS('background-color', 'rgb(32, 34, 40)');
+  await expect(boardPreview.locator('.story-board-slots > button')).toHaveCount(2);
+  await expect(boardPreview.locator('.story-ui')).toHaveCSS('outline-style', 'none');
+  const heading = await page.getByRole('heading', { name: '테마와 색상' }).boundingBox();
+  expect(
+    await page.evaluate(
+      ([x, y]) => !document.elementFromPoint(x, y)?.closest('.story-board-preview'),
+      [heading!.x + heading!.width / 2, heading!.y + heading!.height / 2]
+    )
+  ).toBe(true);
   await editor.getByRole('button', { name: '테마 저장', exact: true }).click();
   const catalog = async () => (await (await request.get('/api/themes')).json()) as ThemeCatalog;
   await expect

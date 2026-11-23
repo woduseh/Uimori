@@ -107,6 +107,7 @@ const topLevelFields: Record<string, string> = {
 const storyUiFields: Record<string, string> = {
   baseStyle: 'storyUi.baseStyle',
   css: 'storyUi.customCss',
+  boardCss: 'storyUi.boardCss',
 };
 const NATIVE_PREFIX =
   /^\/(?:package\/nativeRisu\/(?:card|module)|program\/nativeRisuPreset\/preset)(?=\/|$)/u;

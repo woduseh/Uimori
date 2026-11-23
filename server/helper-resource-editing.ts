@@ -695,7 +695,12 @@ export function patchHelperResource(
       const presetPath = pathPolicy.presetPaths.some((rule) =>
         rule.endsWith('/') ? change.path.startsWith(rule) : change.path === rule
       );
-      const storyUiPath = ['/storyUi', '/storyUi/baseStyle', '/storyUi/css'].includes(change.path);
+      const storyUiPath = [
+        '/storyUi',
+        '/storyUi/baseStyle',
+        '/storyUi/css',
+        '/storyUi/boardCss',
+      ].includes(change.path);
       const allowedPath =
         kind === 'content' ? nativePath : kind === 'prompt-preset' ? presetPath : storyUiPath;
       if (!allowedPath || segments.some((part) => FORBIDDEN.has(part)))

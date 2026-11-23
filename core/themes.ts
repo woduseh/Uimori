@@ -65,7 +65,7 @@ export type ThemeDefinition = {
   messageCss: string;
   templateHtml: string;
   templateCss: string;
-  storyUi?: { baseStyle: StoryUiStyle; css: string };
+  storyUi?: { baseStyle: StoryUiStyle; css: string; boardCss?: string };
   assets?: ThemeAsset[];
 };
 export type ThemeAssetKind = 'font' | 'image';
@@ -247,9 +247,14 @@ export function validateTheme(value: unknown): ThemeDefinition {
     const definition = object(v.storyUi, '이야기 UI 테마');
     if (!isStoryUiStyle(definition.baseStyle))
       throw new Error('이야기 UI 테마의 기본 스타일을 선택해 주세요.');
+    const boardCss =
+      definition.boardCss === undefined
+        ? ''
+        : string(definition.boardCss, '현황 패널 CSS', 1_000_000);
     storyUi = {
       baseStyle: definition.baseStyle,
       css: string(definition.css, '이야기 UI CSS', 1_000_000),
+      ...(boardCss && { boardCss }),
     };
   }
   const assets = validateThemeAssets(v.assets);

@@ -358,6 +358,16 @@ test('portable story UI themes use their own bot selection and the shared revisi
   expect(updated.statusCode, updated.body).toBe(200);
   expect(updated.json().saved.storyUi).toEqual(model.storyUi);
   expect((await save(portable, theme.id, theme.revision)).statusCode).toBe(409);
+  const boarded = {
+    ...model,
+    storyUi: { ...model.storyUi, boardCss: '& { --board-paper: #202228; }' },
+  };
+  const withBoard = (await save(boarded)).json().saved;
+  expect(withBoard.storyUi).toEqual(boarded.storyUi);
+  const boardFile = parseThemeFile(
+    (await app.inject(`/api/themes/${withBoard.id}/export`)).json()
+  ).theme;
+  expect(boardFile.storyUi).toEqual(boarded.storyUi);
 
   selectTheme(app.store, {
     scope: 'bot',
