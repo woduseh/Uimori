@@ -195,6 +195,14 @@ test('missing usage has no estimate; partial output absence retains only known s
   });
 });
 
+test.each(['vertex-gemini-v1', 'openai-responses-v1', 'anthropic-messages-v1'] as const)(
+  'a %s call that used no input and no output costs nothing without any reported detail',
+  (protocol) => {
+    const priced = estimateCost(snapshot(protocol), { inputTokens: 0, outputTokens: 0, raw: null });
+    expect(priced).toMatchObject({ status: 'estimated', usd: 0 });
+  }
+);
+
 test('unknown rate remains unknown; only an explicit zero price is free', () => {
   const pricing = snapshot();
   pricing.rates.output = null;

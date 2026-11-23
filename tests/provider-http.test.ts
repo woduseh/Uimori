@@ -621,11 +621,12 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
   );
 
   test.each([
-    { variant: variants[0], status: 401 },
-    { variant: variants[1], status: 429 },
+    { variant: variants[0], status: 401, used: null },
+    { variant: variants[1], status: 429, used: 0 },
+    { variant: variants[1], status: 503, used: null },
   ])(
-    '$variant.protocol HTTP $status never retries or exposes provider error bodies',
-    async ({ variant, status }) => {
+    '$variant.protocol HTTP $status never retries or exposes provider error bodies and reports $used tokens used',
+    async ({ variant, status, used }) => {
       const fetch = vi.fn(
         async () =>
           new Response(JSON.stringify({ error: { message: secret } }), {
@@ -646,7 +647,7 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
         error: { code: `HTTP_${status}` },
         toolCalls: [],
         opaqueState: null,
-        usage: { inputTokens: null, outputTokens: null, costUsd: null },
+        usage: { inputTokens: used, outputTokens: used, costUsd: null },
       });
       expect(fetch).toHaveBeenCalledTimes(1);
       expect(JSON.stringify({ result, wires })).not.toContain(secret);

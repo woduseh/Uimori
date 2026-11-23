@@ -1,5 +1,9 @@
 import { redactDiagnosticJson } from './provider-diagnostic-json.js';
-import { readProviderHttpDiagnostic, type ProviderHttpDiagnostic } from './provider-http-error.js';
+import {
+  rateLimitedCallUsage,
+  readProviderHttpDiagnostic,
+  type ProviderHttpDiagnostic,
+} from './provider-http-error.js';
 import { createHash } from 'node:crypto';
 import { providerFetchOptions, readProviderBody, transportFailureCode } from './provider-fetch.js';
 import { validateProviderEndpoint } from './product.js';
@@ -116,6 +120,7 @@ export async function executeNativeProvider(
       ...(diagnostic ? { diagnostic } : {}),
       ...(toolArgumentDiagnostic ? { toolArgumentDiagnostic } : {}),
     };
+    result.usage = rateLimitedCallUsage(result);
     result.toolCalls = [];
     result.opaqueState = null;
     return result;

@@ -73,21 +73,26 @@ export function readHelperTaskResults(store: Store, taskId: string): HelperTaskR
     const raw = row.raw_usage ? JSON.parse(String(row.raw_usage)) : null;
     const details = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
     const nativeUsage = details.tokenUsage?.[details.tokenUsageBasis === 'last' ? 'last' : 'total'];
+    const inputTokens = tokens(row.input_tokens),
+      outputTokens = tokens(row.output_tokens);
     return {
       id: String(row.id),
       purpose: String(row.purpose),
       status: String(row.status),
-      inputTokens: tokens(row.input_tokens),
-      outputTokens: tokens(row.output_tokens),
+      inputTokens,
+      outputTokens,
       costUsd: numeric(row.cost_usd),
       cachedInputTokens:
-        providerCacheUsage(row.protocol, raw)?.readTokens ?? tokens(nativeUsage?.cachedInputTokens),
-      reasoningTokens: tokens(
-        details.output_tokens_details?.reasoning_tokens ??
-          details.completion_tokens_details?.reasoning_tokens ??
-          details.thoughtsTokenCount ??
-          nativeUsage?.reasoningOutputTokens
-      ),
+        providerCacheUsage(row.protocol, raw)?.readTokens ??
+        tokens(nativeUsage?.cachedInputTokens) ??
+        (inputTokens === 0 ? 0 : null),
+      reasoningTokens:
+        tokens(
+          details.output_tokens_details?.reasoning_tokens ??
+            details.completion_tokens_details?.reasoning_tokens ??
+            details.thoughtsTokenCount ??
+            nativeUsage?.reasoningOutputTokens
+        ) ?? (outputTokens === 0 ? 0 : null),
       internalModelCalls: tokens(details.modelCalls),
     };
   });

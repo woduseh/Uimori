@@ -1,5 +1,5 @@
 import { redactDiagnosticJson } from './provider-diagnostic-json.js';
-import type { ProviderHttpDiagnostic } from './provider-http-error.js';
+import { rateLimitedCallUsage, type ProviderHttpDiagnostic } from './provider-http-error.js';
 import { validateModelOptions } from './model-capabilities.js';
 import type {
   ModelExecutionMode,
@@ -367,6 +367,7 @@ export async function executeProvider(
     result.error = {
       code: options.signal.aborted ? 'CANCELLED' : timeout.aborted ? 'TIMEOUT' : code,
     };
+    result.usage = rateLimitedCallUsage(result);
     return result;
   };
   try {

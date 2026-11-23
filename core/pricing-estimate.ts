@@ -73,7 +73,9 @@ export function estimateCost(
     (pricing.rates.cacheWrite !== null ||
       pricing.longContext?.rates.cacheWrite != null ||
       write !== null);
-  if (anthropic) {
+  if (totalInput === 0) {
+    baseInput = read = write = 0;
+  } else if (anthropic) {
     baseInput = count(raw.input_tokens);
     const calculatedTotal = add(baseInput, read, write);
     if (calculatedTotal !== null && totalInput !== null && calculatedTotal !== totalInput) {

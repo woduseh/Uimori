@@ -384,7 +384,7 @@ describe('Vertex native wire through real local HTTP streams (no live calls)', (
     expect(result).toMatchObject({
       status: 'error',
       error: { code: 'HTTP_429' },
-      usage: { inputTokens: null, outputTokens: null, costUsd: null },
+      usage: { inputTokens: 0, outputTokens: 0, costUsd: null },
     });
     expect(JSON.stringify(result)).not.toContain(token);
     const denied = await executeProvider(

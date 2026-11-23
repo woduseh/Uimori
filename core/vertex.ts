@@ -1,5 +1,9 @@
 import { redactDiagnosticJson } from './provider-diagnostic-json.js';
-import { readProviderHttpDiagnostic, type ProviderHttpDiagnostic } from './provider-http-error.js';
+import {
+  rateLimitedCallUsage,
+  readProviderHttpDiagnostic,
+  type ProviderHttpDiagnostic,
+} from './provider-http-error.js';
 import { createHash } from 'node:crypto';
 import { isVertexAdcReference } from './credential-reference.js';
 import { providerFetchOptions, transportFailureCode } from './provider-fetch.js';
@@ -212,6 +216,7 @@ export async function executeGeminiProvider(
       code: options.signal.aborted ? 'CANCELLED' : timeout.aborted ? 'TIMEOUT' : code,
       ...(diagnostic ? { diagnostic } : {}),
     };
+    result.usage = rateLimitedCallUsage(result);
     return result;
   };
   try {

@@ -1,4 +1,5 @@
 import { ProviderBodyLimitError, readProviderBody } from './provider-fetch.js';
+import type { ProviderResult } from './transport.js';
 
 export type ProviderHttpDiagnostic = {
   httpStatus: number;
@@ -9,6 +10,14 @@ export type ProviderHttpDiagnostic = {
   message?: string;
   bodyState: 'parsed' | 'invalid' | 'too-large' | 'empty' | 'unavailable';
 };
+
+export function rateLimitedCallUsage(
+  result: Pick<ProviderResult, 'error' | 'usage'>
+): ProviderResult['usage'] {
+  return result.error?.code === 'HTTP_429'
+    ? { ...result.usage, inputTokens: 0, outputTokens: 0 }
+    : result.usage;
+}
 
 export const PROVIDER_ERROR_BODY_LIMIT = 16_384;
 export const PROVIDER_ERROR_MESSAGE_LIMIT = 4000;

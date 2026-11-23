@@ -2046,6 +2046,29 @@ test.each([
   }
 );
 
+test('a rate-limited attempt leaves nothing unknown in the task usage', async () => {
+  const f = fixture(),
+    { runtime } = waitingRuntime(f);
+  mockSend((_request, _options, index) =>
+    index === 0
+      ? {
+          ...providerError('HTTP_429'),
+          usage: { inputTokens: 0, outputTokens: 0, costUsd: null, raw: null, priceRevision: null },
+        }
+      : structuredClone(success)
+  );
+  const task = runtime.enqueue(f.conversation.id, 'r', '설명해줘');
+  await Promise.all(f.work);
+  expect(runtime.workspace.task(task.id).usage).toMatchObject({ inputTokens: 10, outputTokens: 4 });
+  expect(readHelperTaskResults(f.store, task.id).usage.attempts[0]).toMatchObject({
+    status: 'error',
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedInputTokens: 0,
+    reasoningTokens: 0,
+  });
+});
+
 const refusedCall = (): transport.ProviderResult => ({
   ...structuredClone(success),
   status: 'refused',
