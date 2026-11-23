@@ -72,6 +72,7 @@ import { runAuxiliaryJob } from './product-auxiliary.js';
 import { recordToolDiagnostic, startToolDiagnostic } from './execution-diagnostics.js';
 import { auxiliaryBridge } from './auxiliary-bridge.js';
 import { productRoutes } from './product-routes.js';
+import { requestMetricsRoutes } from './request-metrics.js';
 import { connectionTestRoutes, createConnectionTestRunner } from './provider-connection-test.js';
 import { storyRoutes } from './story-routes.js';
 import { sceneDeletionRoutes } from './scene-deletion.js';
@@ -167,6 +168,7 @@ function requestFailureLabel(error: unknown): string {
 export async function createApp(options: AppOptions): Promise<App> {
   const network = networkPolicy(options);
   const app = Fastify({ logger: false, bodyLimit: 4 * 1024 * 1024 }) as unknown as App;
+  const requestMetrics = requestMetricsRoutes(app);
   const store = new Store(options.dbPath);
   const requireModel = (target: unknown, role: string) => {
     if (!options.testMode && !target) throw new HttpError(409, `MODEL_REQUIRED:${role}`);
@@ -960,6 +962,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       for (const chatId of subscribers.keys()) publish(chatId);
     },
   });
+  requestMetrics.addAuthenticationMark();
   pushService = new PushService(store, {
     origin: network.publicOrigin,
     sessionHash: session.sessionHash,

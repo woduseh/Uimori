@@ -17,6 +17,7 @@ import { readRunSnapshot, readRunState } from './run-projections.js';
 import { canRecoverMainJudgment } from '../core/main-judgment-recovery.js';
 import { CredentialStore, initCredentials } from './credentials.js';
 import { DatabaseSync } from 'node:sqlite';
+import { instrumentDatabase } from './sql-metrics.js';
 import { initHelperWorkspace } from './helper-workspace.js';
 import { databaseSchemaVersion, initializeDatabaseSchema } from './database-schema.js';
 import { initChatOverrides } from './chat-overrides.js';
@@ -120,7 +121,7 @@ export class Store {
       throw new Error('Database already has a running server owner');
     }
     try {
-      this.db = new DatabaseSync(this.path);
+      this.db = instrumentDatabase(new DatabaseSync(this.path));
     } catch (error) {
       this.ownership.close();
       throw error;
