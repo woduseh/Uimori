@@ -7,7 +7,11 @@ import type {
   SearchKind,
 } from '../core/manuscript-search.js';
 import { HttpError, fields, record, text } from './request-validation.js';
-import { foldSearchText, moveLegacySearchIndex } from './search-schema.js';
+import {
+  foldSearchText,
+  legacySearchIndexRemains,
+  moveLegacySearchIndex,
+} from './search-schema.js';
 import type { Store } from './store.js';
 
 export class ManuscriptSearch {
@@ -151,7 +155,7 @@ export class ManuscriptSearch {
     return this.indexing;
   }
   moveLegacyIndexBatch(): boolean {
-    if (this.closed || !this.writable()) return false;
+    if (this.closed || !this.writable() || !legacySearchIndexRemains(this.store.db)) return false;
     return this.store.transaction(() => moveLegacySearchIndex(this.store.db, 128 * 1024));
   }
   listen() {

@@ -4,10 +4,14 @@ export const foldSearchText = (text: string) => text.normalize('NFC').toLowerCas
 
 // https://sqlite.org/fts5.html#the_columnsize_option (2026-11-23): search_fts keeps one
 // search_fts_docsize row per indexed document, so it lists the rows still in the legacy index.
+export const legacySearchIndexRemains = (db: DatabaseSync) =>
+  !!db.prepare('SELECT 1 FROM search_fts_docsize LIMIT 1').get() ||
+  !!db.prepare('SELECT 1 FROM search_fts_idx LIMIT 1').get();
+
 export function moveLegacySearchIndex(db: DatabaseSync, byteBudget: number): boolean {
   const legacy = db
     .prepare(
-      'SELECT z.id FROM search_fts_docsize z JOIN search_documents d ON d.id=z.id ORDER BY z.id LIMIT 64'
+      "SELECT z.id FROM search_fts_docsize z JOIN search_documents d ON d.id=z.id WHERE d.search_text<>'' ORDER BY z.id LIMIT 64"
     )
     .all()
     .map((row) => Number(row.id));
@@ -23,7 +27,7 @@ export function moveLegacySearchIndex(db: DatabaseSync, byteBudget: number): boo
     if (bytes >= byteBudget) return true;
   }
   if (legacy.length === 64) return true;
-  if (db.prepare('SELECT 1 FROM search_fts_idx LIMIT 1').get())
+  if (legacySearchIndexRemains(db))
     db.exec("INSERT INTO search_fts(search_fts) VALUES('delete-all')");
   return false;
 }

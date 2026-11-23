@@ -108,6 +108,7 @@ Uimori 개인 작업실 데이터베이스의 현재 스키마 버전, 보관 �
   - `image_cleanup_candidates`: 활성 작업으로 인해 즉시 삭제할 수 없는 고아 이미지 해시를 보관하는 지연 정리 큐 테이블이에요.
   - `helper_changes`: 도우미 작업과 대상마다 하나인 변경 기록이에요. 작업이 처음 손대기 전 상태(`baseline`)와 화면에 보낼 변경 항목(`entries`)을 담고, `helper_tasks` 삭제를 따라 지워져요. 턴 되돌리기가 이 `baseline`으로 복원하므로 대상 전체 상태를 보관해요. `result`는 작업이 마지막으로 남긴 상태의 해시, `foreign_edit`은 작업 도중 다른 쪽이 같은 대상을 저장했는지, `rolled_back_at`은 되돌린 시각이에요. 이 열이 생기기 전의 행은 `result`가 비어 있어 되돌리기 대상이 아니에요.
   - `theme_assets`: 테마가 담은 글꼴과 이미지 원본을 해시로 보관해요. 저장된 테마와 그 되돌리기 사본, 보관 중인 도우미 변경 기록이 참조하는 동안 유지하고, 저장에 쓰이지 않은 업로드는 하루가 지난 뒤 서버 시작 시 정리해요. 사용자 글꼴(`font_assets`)이나 본문 이미지(`image_blobs`)와는 섞지 않아요.
+  - `search_trigrams`: 원고 검색의 trigram 색인이에요. 원고에서 다시 만들 수 있는 파생 데이터라 스키마 버전을 올리지 않고 서버 시작 시 필요에 따라 생성해요. 이전 색인(`search_fts`)에 남은 행은 색인 대기 작업이 없을 때 유휴 주기마다 조금씩 옮기고, 다 옮기면 `search_fts`를 비워요. 옮기는 도중과 이후의 검색 동작은 [MANUSCRIPT-SEARCH](MANUSCRIPT-SEARCH.md)가 소유해요.
 - **메타데이터 키 규약 (`app_metadata`)**:
   - `source-title:<sourceId>`: 선택적인 장면 이름 저장
   - `illustration-presentation:<sourceId>`: 문단 삽화의 대표/표시 선택 및 번역 위치 보관

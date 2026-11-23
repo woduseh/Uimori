@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -176,7 +176,7 @@ test('common location URLs preserve IDs and mode, and POST search stays read-onl
   expect(app.store.db.prepare('SELECT count(*) AS n FROM search_documents').get()!.n).toBe(before);
 });
 
-test('an index written by the previous release keeps answering while it moves to the compact index', async () => {
+async function legacyIndexFixture(emptyDocuments = 0) {
   const { directory, store, search } = fixture();
   const chat = createFixtureChat(store, 'Legacy index');
   const sources = [
@@ -209,14 +209,24 @@ test('an index written by the previous release keeps answering while it moves to
         String(row.text),
         String(row.text).normalize('NFC').toLowerCase()
       );
+  for (let index = 0; index < emptyDocuments; index++)
+    legacyInsert(store, { ...documents[0], kind: `empty-${index}`, text: '' });
   for (const row of documents) legacyInsert(store, row);
   await search.close();
   store.close();
   owned.pop();
+  const reopen = () => {
+    const reopened = new Store(join(directory, 'app.sqlite'));
+    const upgraded = new ManuscriptSearch(reopened);
+    owned.push({ directory, store: reopened, search: upgraded });
+    return { reopened, upgraded };
+  };
+  return { chat, sources, documents, legacyInsert, reopen };
+}
 
-  const reopened = new Store(join(directory, 'app.sqlite'));
-  const upgraded = new ManuscriptSearch(reopened);
-  owned.push({ directory, store: reopened, search: upgraded });
+test('an index written by the previous release keeps answering while it moves to the compact index', async () => {
+  const { chat, sources, documents, legacyInsert, reopen } = await legacyIndexFixture();
+  const { reopened, upgraded } = reopen();
   const found = async (text: string) =>
     (await upgraded.search(query(text))).items.map((item) => item.target.sourceId);
   const legacyRows = () =>
@@ -255,6 +265,78 @@ test('an index written by the previous release keeps answering while it moves to
   for (const table of ['search_fts', 'search_trigrams'])
     reopened.db.exec(`INSERT INTO ${table}(${table}) VALUES('integrity-check')`);
   expect(reopened.db.prepare('PRAGMA integrity_check').get()!.integrity_check).toBe('ok');
+});
+
+test('a legacy index with many empty documents finishes moving across a restart and then stops writing', async () => {
+  const { sources, reopen } = await legacyIndexFixture(70);
+  let { reopened, upgraded } = reopen();
+  const queries = [
+    'golden lantern',
+    'LANTERN 아래',
+    '보라색우산',
+    '붉은 우산',
+    '우산',
+    '없는 문장',
+  ];
+  const results = async () => {
+    const found: string[][] = [];
+    for (const text of queries)
+      found.push((await upgraded.search(query(text))).items.map((item) => item.target.sourceId));
+    return found;
+  };
+  const [first, second] = sources.map((source) => source.id);
+  const expected = [[first], [first], [second], [first], [first, second], []];
+  expect(await results()).toEqual(expected);
+  reopened.db.prepare("DELETE FROM search_documents WHERE kind='empty-0'").run();
+
+  expect(upgraded.moveLegacyIndexBatch()).toBe(true);
+  expect(await results()).toEqual(expected);
+  await upgraded.close();
+  reopened.close();
+  owned.pop();
+  ({ reopened, upgraded } = reopen());
+  expect(await results()).toEqual(expected);
+  let steps = 0;
+  while (steps < 20 && upgraded.moveLegacyIndexBatch()) steps++;
+  expect(steps).toBeLessThan(20);
+  const count = (table: string) =>
+    Number(reopened.db.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n);
+  expect(count('search_fts_docsize')).toBe(0);
+  expect(count('search_fts_idx')).toBe(0);
+  expect(
+    reopened.db.prepare("SELECT 1 FROM search_documents WHERE search_text<>''").get()
+  ).toBeUndefined();
+  expect(await results()).toEqual(expected);
+
+  const exec = vi.spyOn(reopened.db, 'exec');
+  const changes = () => Number(reopened.db.prepare('SELECT total_changes() AS n').get()!.n);
+  const before = changes();
+  for (let tick = 0; tick < 3; tick++) expect(upgraded.moveLegacyIndexBatch()).toBe(false);
+  expect(exec).not.toHaveBeenCalled();
+  expect(changes()).toBe(before);
+  exec.mockRestore();
+  for (const table of ['search_fts', 'search_trigrams'])
+    reopened.db.exec(`INSERT INTO ${table}(${table}) VALUES('integrity-check')`);
+});
+
+test('a database created by this version opens no write transaction for the legacy index', () => {
+  const { store, search } = fixture();
+  const exec = vi.spyOn(store.db, 'exec');
+  expect(search.moveLegacyIndexBatch()).toBe(false);
+  expect(exec).not.toHaveBeenCalled();
+  exec.mockRestore();
+});
+
+test('a legacy index holding only entries without text is cleared in one step', () => {
+  const { store, search } = fixture();
+  store.db.exec("INSERT INTO search_fts(rowid,search_text) VALUES(999,'')");
+  expect(store.db.prepare('SELECT 1 FROM search_fts_idx LIMIT 1').get()).toBeUndefined();
+  expect(search.moveLegacyIndexBatch()).toBe(false);
+  expect(store.db.prepare('SELECT 1 FROM search_fts_docsize LIMIT 1').get()).toBeUndefined();
+  const exec = vi.spyOn(store.db, 'exec');
+  expect(search.moveLegacyIndexBatch()).toBe(false);
+  expect(exec).not.toHaveBeenCalled();
+  exec.mockRestore();
 });
 
 test('large index updates make bounded progress rather than grouping eight oversized scenes', async () => {
