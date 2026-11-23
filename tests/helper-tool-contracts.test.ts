@@ -651,6 +651,59 @@ test('helper read events retain recoverable argument and missing-scene errors', 
   expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM runs').get()).toEqual({ n: 0 });
 });
 
+test('a prompt validation error from a save returns to the model as a correctable argument error', async () => {
+  const f = await fixture('library');
+  const preset = f.store.product.promptPreset({
+    title: 'Library V1',
+    role: 'main',
+    program: {
+      version: 1,
+      nativeRisuPreset: {
+        version: 1,
+        preset: {
+          name: 'Native V1',
+          promptTemplate: [],
+          customPromptTemplateToggle: 'tone=Tone=text',
+          templateDefaultVariables: 'tone=quiet',
+        },
+      },
+    },
+    values: { tone: 'warm' },
+  });
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('unknown-control', 'app.call', {
+          name: 'resource.save',
+          arguments: {
+            kind: 'prompt-preset',
+            id: preset.id,
+            expectedRevision: preset.revision,
+            model: {
+              title: preset.title,
+              role: preset.role,
+              program: preset.program,
+              values: { unknown: 'new' },
+            },
+          },
+        })
+      );
+    expect(event(request, 'unknown-control')).toMatchObject({
+      denied: true,
+      errorKind: 'recoverable',
+      result: {
+        code: 'PROMPT_UNKNOWN_CONTROL',
+        recoverable: true,
+        retryMode: 'correct_arguments',
+        outcome: 'unchanged',
+      },
+    });
+    return structuredClone(success);
+  });
+  await submit(f, 'Set a prompt control that the preset does not define.');
+  expect(f.store.product.get('prompt-preset', preset.id)).toEqual(preset);
+});
+
 type HelperLoreRead = {
   revision: number;
   headRevision: string | null;
