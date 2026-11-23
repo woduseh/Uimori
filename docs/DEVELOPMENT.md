@@ -111,6 +111,15 @@ Get-Content scripts/perf-ledger.mjs | ssh <host> "docker exec -i <container> nod
 
 The second form reads the container's `UIMORI_DB`. `node --test scripts/perf-ledger.test.mjs` checks the output against a synthetic database after a build.
 
+`scripts/eval-early-refusal.mjs` measures whether the main-refusal judgment would recognize a refusal from the start of a response. It reads refused candidates (`MAIN_RESPONSE_REFUSED` runs' stored `mainJudgment`) and completed runs' sources from a database opened read-only, replays `judgeMainRefusal` from the compiled build with the server's judgment selection and saved credential on each prefix and on the full text, and prints aggregates only: detection and false-positive rates per prefix and threshold, score percentiles and the share of generation an early stop would skip. Attempts are not recorded. The judgment calls cost provider usage, so start with `--dry-run`, which prints the sample sizes and planned call count; a real run stops before the first call when the plan exceeds `--max-calls` (default 500). It imports the build from `--dist` (default `./dist`), so inside the container it is piped like the ledger:
+
+```powershell
+node scripts/eval-early-refusal.mjs .local/uimori.sqlite --dry-run
+Get-Content scripts/eval-early-refusal.mjs | ssh <host> "docker exec -i <container> node --input-type=module - --dist /app/dist --dry-run"
+```
+
+`node --test scripts/eval-early-refusal.test.mjs` replays it against a synthetic database with a stub judgment endpoint after a build.
+
 ### Translation reference preparation
 
 After a matching build, run `node --expose-gc scripts/benchmark-translation-references.mjs output/benchmarks/translation-references-local baseline`. Rebuild after the change and rerun with the same directory and label `after`. The directory must be new or carry the runner's fixture marker. It reuses isolated SQLite fixtures with 30/300 completed translations, 16,000-character originals and 8,000-character translations. Job inputs are empty, so this conservative case does not claim savings from large retained settings. The optional final argument selects reference capture without a tool read (`none`), a single captured translation (`one`), or every captured translation (`all`, the default). Use a distinct report label per mode. The timed boundary includes identity capture and the requested access. It excludes current job/snapshot preparation, provider/model work and browser/network latency. Reports retain source/build identity, runner copies, input/output/database hashes, the first call, two warmups and nine raw samples, elapsed time, CPU, entry/return memory, SQL statement counts and returned text bytes. Each sample checks exact reference output, and the run checks unchanged DB rows. Memory samples are not peaks, and OS caches are not reset. Run without concurrent builds or tests.
