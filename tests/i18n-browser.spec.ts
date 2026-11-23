@@ -313,6 +313,7 @@ test('I18N02 reader loading failure retry changes presentation and preserves ide
     localStorage.setItem('uimori:reading-language', 'original');
     Object.defineProperty(window, 'EventSource', {
       value: class {
+        addEventListener() {}
         close() {}
       },
     });

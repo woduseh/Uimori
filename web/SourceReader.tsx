@@ -39,8 +39,10 @@ import { api, ApiError, definiteRejection, labels } from './api.js';
 import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
 import { ProviderRejectionNotice } from './provider-rejection.js';
 import { Prose } from './Prose.js';
-import { parseStoryUi } from '../core/story-ui.js';
+import type { StoryUiSegment } from '../core/story-ui-scan.js';
+import { hasStoryUi, useStoryUiParser } from './story-ui-parser.js';
 import { StoryUi } from './LazyStoryUi.js';
+import { StreamingResponse } from './StreamingResponse.js';
 import { readerContains, selectedReaderText } from './reader-dom.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
 import type { RisuAction } from './risu-message-surface.js';
@@ -252,10 +254,6 @@ export function SourceReader(props: ReaderProps) {
   useI18n();
   return <SourceReaderContent key={props.source.id} {...props} />;
 }
-function storyUiBlocks(text: string) {
-  return parseStoryUi(text).filter((part) => part.kind !== 'prose');
-}
-
 function SourceReaderContent({
   portrait,
   requestPersona,
@@ -609,6 +607,9 @@ function SourceReaderContent({
     setActionError(message);
   };
   const translationLoading = pending === 'translation' || !!(translation && activeJob(translation));
+  const [streamingTranslationJob, setStreamingTranslationJob] = useState('');
+  const translationStreaming =
+    translation?.status === 'running' && streamingTranslationJob === translation.id;
   const validTranslation =
     displayTranslation?.result?.sourceRevision === source.id &&
     displayTranslation.result.sourceHash === source.hash
@@ -700,21 +701,35 @@ function SourceReaderContent({
       ? projectReadingText(canonicalText, canonicalBlocks, displayText)
       : { text: canonicalText, blocks: canonicalBlocks };
   }, [plainBlockDisplay, imageOwner, canonicalText, canonicalBlocks, displayText]);
-  const originalStorySegments = useMemo(() => storyUiBlocks(source.text), [source.text]);
+  const storyUiTagged =
+    hasStoryUi(source.text) || hasStoryUi(canonicalText) || hasStoryUi(plainProjection.text);
+  const storyUiParser = useStoryUiParser(storyUiTagged);
+  const storyUiLoading = storyUiTagged && !storyUiParser;
+  const storyUiBlocks = useCallback(
+    (text: string): StoryUiSegment[] =>
+      storyUiParser && hasStoryUi(text)
+        ? storyUiParser(text).filter((part) => part.kind !== 'prose')
+        : [],
+    [storyUiParser]
+  );
+  const originalStorySegments = useMemo(
+    () => storyUiBlocks(source.text),
+    [source.text, storyUiBlocks]
+  );
   const canonicalStorySegments = useMemo(
     () => (canonicalText === source.text ? originalStorySegments : storyUiBlocks(canonicalText)),
-    [canonicalText, source.text, originalStorySegments]
+    [canonicalText, source.text, originalStorySegments, storyUiBlocks]
   );
   const storySegments = useMemo(
     () =>
       plainProjection.text === canonicalText
         ? canonicalStorySegments
         : storyUiBlocks(plainProjection.text),
-    [plainProjection.text, canonicalText, canonicalStorySegments]
+    [plainProjection.text, canonicalText, canonicalStorySegments, storyUiBlocks]
   );
   const plainDocument = useMemo(
     () =>
-      !plainBlockDisplay
+      !plainBlockDisplay || storyUiLoading
         ? { html: '', inlineAnchors: [] }
         : compileReadingMarkdown(
             plainProjection.text,
@@ -722,7 +737,7 @@ function SourceReaderContent({
             allowedImageUrls,
             storySegments
           ),
-    [plainBlockDisplay, plainProjection, allowedImageUrls, storySegments]
+    [plainBlockDisplay, storyUiLoading, plainProjection, allowedImageUrls, storySegments]
   );
   const renderStoryPart = (
     part: (typeof canonicalStorySegments)[number] | undefined,
@@ -1144,6 +1159,8 @@ function SourceReaderContent({
             )}
             {hasPackages && !presentation ? (
               <LoadingState presentation="placeholder" label={t('reader.preparingTheBotView')} />
+            ) : storyUiLoading ? (
+              <LoadingState presentation="placeholder" label={t('reader.loadingResult')} />
             ) : nativeDisplay ? (
               <div
                 data-testid={mode === 'original' ? 'source-text' : 'translation-text'}
@@ -1243,35 +1260,47 @@ function SourceReaderContent({
                   ))}
               </div>
             ) : (
-              <div
-                className={`translation-placeholder${translationLoading ? ' is-loading' : ''}`}
-                role={translationLoading ? undefined : 'status'}
-              >
-                {translationLoading ? (
-                  <LoadingState
-                    presentation="placeholder"
-                    label={t('reader.preparingTheKoreanTranslationTheOriginalIsSaved')}
+              <>
+                {translation?.status === 'running' && (
+                  <StreamingResponse
+                    key={translation.id}
+                    taskKind="translation"
+                    taskId={translation.id}
+                    taskStatus="running"
+                    quietUntilText
+                    onText={(arrived) => setStreamingTranslationJob(arrived ? translation.id : '')}
                   />
-                ) : (
-                  <p>
-                    {translation
-                      ? t(
-                          translationPlaceholderMessages[translation.status] ??
-                            'reader.theKoreanTranslationIsNotReadyYetTheOriginal'
-                        )
-                      : t('reader.thisSceneHasNoKoreanTranslationYet')}
-                  </p>
                 )}
-                <div className="form-actions">
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => switchMode('original')}
-                  >
-                    {t('reader.readTheOriginalFirst')}
-                  </button>
+                <div
+                  className={`translation-placeholder${translationLoading ? ' is-loading' : ''}`}
+                  role={translationLoading ? undefined : 'status'}
+                >
+                  {translationStreaming ? null : translationLoading ? (
+                    <LoadingState
+                      presentation="placeholder"
+                      label={t('reader.preparingTheKoreanTranslationTheOriginalIsSaved')}
+                    />
+                  ) : (
+                    <p>
+                      {translation
+                        ? t(
+                            translationPlaceholderMessages[translation.status] ??
+                              'reader.theKoreanTranslationIsNotReadyYetTheOriginal'
+                          )
+                        : t('reader.thisSceneHasNoKoreanTranslationYet')}
+                    </p>
+                  )}
+                  <div className="form-actions">
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => switchMode('original')}
+                    >
+                      {t('reader.readTheOriginalFirst')}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              </>
             )}
             {illustrationLayout.footer}
           </div>

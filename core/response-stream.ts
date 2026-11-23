@@ -1,6 +1,8 @@
 import type { ProviderProgress } from './provider-progress.js';
 
-export type ResponseTaskKind = 'main' | 'helper';
+export const RESPONSE_TASK_KINDS = ['main', 'helper', 'translation'] as const;
+export type ResponseTaskKind = (typeof RESPONSE_TASK_KINDS)[number];
+export type ResponseTaskIdentity = { taskKind: ResponseTaskKind; taskId: string };
 export type ResponseStreamStatus =
   | 'running'
   | 'completed'

@@ -184,6 +184,77 @@ test('STREAMLIVE hiding the tab pauses main stream reads and resuming continues 
   }
 });
 
+test('STREAMPUSH text rides the open chat event stream, and cursor reads take over while that stream is cut', async ({
+  page,
+  request,
+}) => {
+  const { peer, writer, chat } = await streamingWriter(request);
+  try {
+    const run = await startRun(request, chat, '등대 장면을 길게 써 주세요.');
+    const streams = trackStreamReads(page, run.id);
+    const eventStreams: string[] = [];
+    page.on('request', (item) => {
+      if (item.url().includes(`/api/chats/${chat.id}/events`)) eventStreams.push(item.url());
+    });
+    await page.goto(`/?chat=${chat.id}`);
+    const text = page
+      .locator(`[data-testid="pending-run"][data-run-id="${run.id}"]`)
+      .locator('.streaming-text');
+    const live = await writer;
+    let written = '첫 문장이에요.';
+    live.write(written);
+    await expect(text).toHaveText(written);
+    await page.waitForTimeout(500);
+
+    const pushedFrom = streams.cursors.length;
+    for (let index = 0; index < 8; index++) {
+      const part = ` ${index}번째 파도가 밀려왔다.`;
+      written += part;
+      live.write(part);
+      await expect(text).toHaveText(written);
+      await page.waitForTimeout(150);
+    }
+    expect(streams.cursors.length - pushedFrom).toBeLessThanOrEqual(2);
+    expect(eventStreams).toHaveLength(1);
+
+    await page.route(`**/api/chats/${chat.id}/events**`, (route) => route.abort());
+    await page.evaluate(() => {
+      dispatchEvent(new Event('offline'));
+      dispatchEvent(new Event('online'));
+    });
+    const polledFrom = streams.cursors.length;
+    for (let index = 0; index < 3; index++) {
+      const part = ` 끊긴 동안의 ${index}번째 문장.`;
+      written += part;
+      live.write(part);
+      await expect(text).toHaveText(written);
+    }
+    expect(streams.cursors.length).toBeGreaterThan(polledFrom);
+
+    await page.unroute(`**/api/chats/${chat.id}/events**`);
+    await page.evaluate(() => dispatchEvent(new Event('online')));
+    await expect
+      .poll(() => new URL(eventStreams.at(-1)!).searchParams.get('streamAfter') ?? '')
+      .toMatch(new RegExp(`^main:${run.id}:[1-9]\\d*$`, 'u'));
+    await page.waitForTimeout(500);
+    const resumedFrom = streams.cursors.length;
+    for (let index = 0; index < 6; index++) {
+      const part = ` 다시 이어진 ${index}번째 문장.`;
+      written += part;
+      live.write(part);
+      await expect(text).toHaveText(written);
+      await page.waitForTimeout(150);
+    }
+    expect(streams.cursors.length - resumedFrom).toBeLessThanOrEqual(2);
+    live.finish();
+    await expect(page.getByTestId('pending-run')).toHaveCount(0);
+    const detail = await body<ChatDetail>(await request.get(`/api/chats/${chat.id}`));
+    expect(detail.sources.at(-1)?.text).toBe(written);
+  } finally {
+    await peer.close();
+  }
+});
+
 const paragraphGeometry = (page: Page, selector: string) =>
   page
     .locator(selector)
@@ -277,6 +348,108 @@ test('STREAMFOLLOW the reader follows a sent request, stops when scrolled up and
     await expect.poll(distance).toBeLessThan(2);
     live.finish();
     await expect(page.getByTestId('pending-run')).toHaveCount(0);
+  } finally {
+    await peer.close();
+  }
+});
+
+test('STREAMTRANSLATION a running translation streams into the translation view until the finished translation replaces it', async ({
+  page,
+  request,
+}) => {
+  const delta = (content: string, finish: string | null = null) =>
+    `data: ${JSON.stringify({ id: 'local', choices: [{ index: 0, delta: { content }, finish_reason: finish }], ...(finish ? { usage: { prompt_tokens: 2, completion_tokens: 3, total_tokens: 5 } } : {}) })}\n\n`;
+  let connected = (_writer: Writer) => {};
+  const writer = new Promise<Writer>((resolve) => {
+    connected = resolve;
+  });
+  const peer = await loopbackProvider(
+    (_wire, response: ServerResponse) =>
+      new Promise<void>((done) => {
+        response.writeHead(200, { 'content-type': 'text/event-stream' });
+        connected({
+          write: (text) => response.write(delta(text)),
+          finish: () => {
+            response.write(delta('', 'stop'));
+            response.end('data: [DONE]\n\n');
+            done();
+          },
+        });
+      })
+  );
+  try {
+    const connection = await body<{ id: string }>(
+      await request.post('/api/connections', {
+        data: {
+          title: `Streaming translator ${randomUUID()}`,
+          protocol: 'openai-chat-v1',
+          endpoint: peer.endpoint,
+          enabled: true,
+        },
+      })
+    );
+    const model = await body<{ id: string }>(
+      await request.post('/api/model-presets', {
+        data: {
+          title: 'Streaming translator',
+          connectionId: connection.id,
+          modelId: 'streaming-translator',
+          tokenizer: 'gemini-gemma4',
+          inputTokenLimit: 65536,
+          maxOutputTokens: 4096,
+          temperature: null,
+        },
+      })
+    );
+    const models = await body<ModelWorkspace>(await request.get('/api/model-workspace'));
+    await body(
+      await request.put('/api/model-workspace', {
+        data: {
+          expectedRevision: models.revision,
+          routes: { ...models.routes, translation: { id: model.id } },
+          titleModel: null,
+          translationPolicy: {
+            ...models.translationPolicy,
+            judgment: { ...models.translationPolicy.judgment, enabled: false },
+          },
+        },
+      })
+    );
+    const owner = await body<Chat>(
+      await postFixtureChat(request, { data: { title: `Streaming translation ${randomUUID()}` } })
+    );
+    const transcript = await body<{ entries: unknown[] }>(
+      await request.get(`/api/chats/${owner.id}/transcript`)
+    );
+    transcript.entries = [
+      {
+        request: 'Streaming translation fixture',
+        text: 'Mira climbed the lighthouse stairs.\n\nThe wind knocked on the window.',
+        translation: null,
+      },
+    ];
+    const { chat } = await body<{ chat: Chat }>(
+      await request.post('/api/chats/import-transcript', {
+        data: { transcript, idempotencyKey: `streaming-translation-${owner.id}` },
+      })
+    );
+    await page.goto(`/?chat=${chat.id}`);
+    const scene = page.getByTestId('source');
+    await scene.getByRole('button', { name: '번역 생성', exact: true }).click();
+    const live = await writer;
+    live.write('미라는 **등대** 계단을 올랐다.\n\n바람이 창을');
+    const streamed = scene.locator('.streaming-response .streaming-text.prose');
+    await expect(streamed.locator('p').first().locator('strong')).toHaveText('등대');
+    await expect(streamed.locator('.streaming-pending')).toHaveText('바람이 창을');
+    await expect(scene.locator('.translation-placeholder .loading-state')).toHaveCount(0);
+    await expect(scene.getByTestId('translation-text')).toHaveCount(0);
+    live.write(' 두드렸다.');
+    live.finish();
+    await expect(scene.getByTestId('translation-text').locator('p')).toHaveText([
+      '미라는 등대 계단을 올랐다.',
+      '바람이 창을 두드렸다.',
+    ]);
+    await expect(scene.locator('.streaming-response')).toHaveCount(0);
   } finally {
     await peer.close();
   }

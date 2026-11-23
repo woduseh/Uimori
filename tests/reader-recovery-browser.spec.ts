@@ -30,6 +30,7 @@ test('READERREC initial reader loading becomes a recoverable error without losin
     sessionStorage.setItem(`draft:${id}`, '본문 재조회 중에도 남을 초안');
     Object.defineProperty(window, 'EventSource', {
       value: class {
+        addEventListener() {}
         close() {}
       },
     });
@@ -757,6 +758,7 @@ test('NOTICELOAD response waits are centered and keep streamed text until the sa
         addEventListener('test-reader-event', this.listener);
         queueMicrotask(() => this.onopen?.(new Event('open')));
       }
+      addEventListener() {}
       close() {
         removeEventListener('test-reader-event', this.listener);
       }
@@ -862,7 +864,10 @@ test('NOTICELOAD response waits are centered and keep streamed text until the sa
         await page.screenshot({ path: info.outputPath('reader-response-waiting.png') });
         publicText = true;
         await page.clock.runFor(350);
-        await expect(pending.locator('.streaming-text')).toHaveText(text);
+        await expect(async () => {
+          await page.clock.runFor(20);
+          await expect(pending.locator('.streaming-text')).toHaveText(text, { timeout: 200 });
+        }).toPass();
         await expect(waiting).toHaveCount(0);
         completed = true;
         await page.clock.runFor(350);
@@ -930,6 +935,7 @@ test('NOTICELOAD translation admission and active jobs wait centrally while fail
         addEventListener('test-reader-event', this.listener);
         queueMicrotask(() => this.onopen?.(new Event('open')));
       }
+      addEventListener() {}
       close() {
         removeEventListener('test-reader-event', this.listener);
       }

@@ -1,11 +1,12 @@
 import { t, useI18n } from './i18n.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ResponseDisplayMode } from './presentation-settings.js';
-import type {
-  ResponseChunk,
-  ResponseStreamPage,
-  ResponseTaskKind,
-} from '../core/response-stream.js';
+import type { ResponseStreamPage, ResponseTaskKind } from '../core/response-stream.js';
+import {
+  responseStreamIsPushed,
+  watchResponseStream,
+  type PushedResponsePage,
+} from './response-stream-bridge.js';
 import { api, ApiError } from './api.js';
 import { PlainProse, Prose } from './Prose.js';
 import { HelperMessageProse } from './HelperMessageProse.js';
@@ -13,6 +14,7 @@ import { splitCompletedParagraphs } from '../core/reading-markdown.js';
 import { LoadingState } from './LoadingState.js';
 import { useStoryUiSegments } from './story-ui-parser.js';
 import { StoryUi } from './LazyStoryUi.js';
+import './streaming-response.css';
 
 type StoryStyle = import('../core/story-ui-style.js').StoryUiStyleSetting;
 
@@ -96,7 +98,14 @@ export function StreamingStoryText({
 
 const STREAMING_POLL_MS = 120;
 const WAITING_POLL_MS = 300;
+const PUSHED_POLL_MS = 2000;
+const PUSHED_PAGE_LIMIT = 16;
 const active = (status?: string) => status === undefined || ['queued', 'running'].includes(status);
+const taskStatusPath: Record<ResponseTaskKind, string> = {
+  main: '/runs/',
+  helper: '/helper/tasks/',
+  translation: '/jobs/',
+};
 
 export function PartialResponse({ children }: { children: ReactNode }) {
   useI18n();
@@ -138,9 +147,15 @@ export function StreamingResponse({
   visible = true,
   settled = false,
   storyUiStyle,
-}: ResponseProps & { settled?: boolean }) {
+  quietUntilText = false,
+  onText,
+}: ResponseProps & {
+  settled?: boolean;
+  quietUntilText?: boolean;
+  onText?: (arrived: boolean) => void;
+}) {
   useI18n();
-  const [chunks, setChunks] = useState<ResponseChunk[]>([]);
+  const [parts, setParts] = useState<[string, string][]>([]);
   const [status, setStatus] = useState('running');
   const [disconnected, setDisconnected] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -150,29 +165,36 @@ export function StreamingResponse({
   shown.current = visible;
   const wake = useRef<() => void>(() => {});
   useEffect(() => {
-    setChunks([]);
+    setParts([]);
     setStatus('running');
     setDisconnected(false);
     setLoaded(false);
-    const buffered: ResponseChunk[] = [];
+    const texts = new Map<string, string>();
+    const offsets = new Map<string, number>();
+    const pushed: PushedResponsePage[] = [];
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined,
+      frame = 0,
       closed = false,
       terminal = false,
       polling = false,
-      textArrived = false,
       cursor = 0,
       failures = 0;
-    const offsets = new Map<string, number>();
     const base = `/response-streams/${taskKind}/${encodeURIComponent(taskId)}`;
+    const reading = () => !closed && !terminal && shown.current && !document.hidden;
+    const commit = () => {
+      cancelAnimationFrame(frame);
+      frame = 0;
+      setParts([...texts]);
+    };
     const receive = (page: ResponseStreamPage) => {
       if (closed || terminal) return;
       if (page.taskKind !== taskKind || page.taskId !== taskId || !Array.isArray(page.chunks))
         throw new Error('RESPONSE_STREAM_IDENTITY_MISMATCH');
-      const added: ResponseChunk[] = [];
+      let added = false;
       for (const chunk of page.chunks) {
         if (chunk.seq <= cursor) continue;
-        const key = JSON.stringify([chunk.segment, chunk.attemptId]);
+        const key = `${chunk.segment}:${chunk.attemptId}`;
         if (
           !Number.isSafeInteger(chunk.seq) ||
           typeof chunk.text !== 'string' ||
@@ -182,53 +204,71 @@ export function StreamingResponse({
           throw new Error('RESPONSE_STREAM_OFFSET_MISMATCH');
         offsets.set(key, chunk.offset);
         cursor = chunk.seq;
-        added.push(chunk);
+        texts.set(key, (texts.get(key) ?? '') + chunk.text);
+        added = true;
       }
-      textArrived = added.length > 0;
-      if (settled) buffered.push(...added);
-      else if (added.length) setChunks((old) => [...old, ...added]);
       setStatus(page.status);
       setDisconnected(false);
       failures = 0;
       if (page.status !== 'running' && !page.hasMore) {
         terminal = true;
-        if (settled) setChunks([...buffered]);
+        pushed.length = 0;
+        commit();
         setLoaded(true);
         clearTimeout(timer);
-      }
+      } else if (added && !settled && !frame) frame = requestAnimationFrame(commit);
+    };
+    const receivePushed = () => {
+      while (!terminal && pushed.length && pushed[0].after <= cursor) receive(pushed.shift()!);
+    };
+    const stop = () => {
+      terminal = true;
+      pushed.length = 0;
+      clearTimeout(timer);
+      setDisconnected(true);
+    };
+    const schedule = (delay: number) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void poll(), delay);
     };
     const retry = () => {
-      if (closed || terminal || !shown.current || document.hidden) return;
+      if (!reading()) return;
       setDisconnected(true);
-      clearTimeout(timer);
-      timer = setTimeout(() => void poll(), Math.min(10000, 1200 * 2 ** Math.min(failures++, 3)));
+      schedule(Math.min(10000, 1200 * 2 ** Math.min(failures++, 3)));
     };
     const poll = async () => {
-      if (closed || terminal || polling || !shown.current || document.hidden) return;
+      if (polling || !reading()) return;
       clearTimeout(timer);
       polling = true;
       try {
         let page: ResponseStreamPage;
+        let textArrived = false;
         do {
+          const requested = cursor;
           page = await api<ResponseStreamPage>(
-            `${base}?after=${cursor}`,
+            `${base}?after=${requested}`,
             undefined,
             'GET',
             controller.signal
           );
           if (closed) return;
-          const previousCursor = cursor;
           receive(page);
-          if (page.hasMore && cursor === previousCursor)
-            throw new Error('RESPONSE_STREAM_CURSOR_STALLED');
+          textArrived = cursor > requested;
+          if (page.hasMore && !textArrived) throw new Error('RESPONSE_STREAM_CURSOR_STALLED');
+          receivePushed();
         } while (!terminal && page.hasMore && shown.current && !document.hidden);
-        if (closed || terminal || !shown.current || document.hidden) return;
-        timer = setTimeout(() => void poll(), textArrived ? STREAMING_POLL_MS : WAITING_POLL_MS);
+        if (!reading()) return;
+        schedule(
+          textArrived || pushed.length
+            ? STREAMING_POLL_MS
+            : !settled && responseStreamIsPushed(taskKind, taskId)
+              ? PUSHED_POLL_MS
+              : WAITING_POLL_MS
+        );
       } catch (error) {
         if (closed) return;
         if (error instanceof ApiError && [401, 403].includes(error.status)) {
-          terminal = true;
-          setDisconnected(true);
+          stop();
           return;
         }
         if (error instanceof ApiError && error.status === 404) {
@@ -237,9 +277,7 @@ export function StreamingResponse({
             try {
               task = (
                 await api<{ status: string }>(
-                  taskKind === 'main'
-                    ? `/runs/${encodeURIComponent(taskId)}`
-                    : `/helper/tasks/${encodeURIComponent(taskId)}`,
+                  `${taskStatusPath[taskKind]}${encodeURIComponent(taskId)}`,
                   undefined,
                   'GET',
                   controller.signal
@@ -250,7 +288,7 @@ export function StreamingResponse({
                 task = 'missing';
             }
           }
-          if (closed) return;
+          if (closed || terminal) return;
           if (!active(task)) {
             terminal = true;
             setStatus(task!);
@@ -258,8 +296,7 @@ export function StreamingResponse({
             return;
           }
         } else if (error instanceof Error && error.message.startsWith('RESPONSE_STREAM_')) {
-          terminal = true;
-          setDisconnected(true);
+          stop();
           return;
         }
         retry();
@@ -267,6 +304,32 @@ export function StreamingResponse({
         polling = false;
       }
     };
+    const unwatch = settled
+      ? () => {}
+      : watchResponseStream(taskKind, taskId, {
+          cursor: () => cursor,
+          receive: (page) => {
+            if (!reading()) {
+              pushed.length = 0;
+              return;
+            }
+            if (pushed.push(page) > PUSHED_PAGE_LIMIT) pushed.shift();
+            const before = cursor;
+            try {
+              receivePushed();
+            } catch {
+              stop();
+              return;
+            }
+            if (terminal || polling) return;
+            if (pushed.length) void poll();
+            else if (cursor > before) schedule(PUSHED_POLL_MS);
+          },
+          disconnected: () => {
+            pushed.length = 0;
+            if (reading() && !polling) void poll();
+          },
+        });
     const resume = () => {
       clearTimeout(timer);
       void poll();
@@ -279,6 +342,8 @@ export function StreamingResponse({
       closed = true;
       controller.abort();
       clearTimeout(timer);
+      cancelAnimationFrame(frame);
+      unwatch();
       document.removeEventListener('visibilitychange', resume);
       window.removeEventListener('focus', resume);
     };
@@ -287,7 +352,14 @@ export function StreamingResponse({
     shown.current = visible;
     wake.current();
   }, [visible]);
-  if (!chunks.length) {
+  const hasText = parts.length > 0;
+  const reportText = useRef(onText);
+  reportText.current = onText;
+  useEffect(() => {
+    reportText.current?.(hasText);
+  }, [hasText]);
+  if (!hasText) {
+    if (quietUntilText) return null;
     if (disconnected)
       return (
         <small role="status">
@@ -313,11 +385,7 @@ export function StreamingResponse({
       return <LoadingState presentation="placeholder" label={t('reader.loadingResult')} />;
     return settled ? <small role="status">{t('reader.noPartialResponseToShow')}</small> : null;
   }
-  const parts = new Map<string, string>();
-  for (const chunk of chunks) {
-    const key = `${chunk.segment}:${chunk.attemptId}`;
-    parts.set(key, (parts.get(key) ?? '') + chunk.text);
-  }
+  const shownParts = taskKind === 'translation' ? parts.slice(-1) : parts;
   return (
     <div
       className="streaming-response"
@@ -331,9 +399,13 @@ export function StreamingResponse({
           <small>{t('reader.partialResponseReceived')}</small>
         )
       )}
-      {[...parts].map(([key, value], index) => {
-        const finished = status !== 'running' || index < parts.size - 1;
-        return taskKind === 'main' ? (
+      {shownParts.map(([key, value], index) => {
+        const finished = status !== 'running' || index < shownParts.length - 1;
+        return taskKind === 'translation' ? (
+          <div className="streaming-text prose translated" key={key}>
+            <StreamingProse text={value} finished={finished} />
+          </div>
+        ) : taskKind === 'main' ? (
           <div className="streaming-text prose" key={key}>
             <StreamingStoryText
               text={value}

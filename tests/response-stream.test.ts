@@ -73,30 +73,35 @@ function fixture() {
 }
 
 describe('durable public response batches', () => {
-  test('batches tokens before publishing, supports cursor recovery, and separates attempt/segment text', () => {
+  test('batches tokens, delivers them from memory before persisting, supports cursor recovery, and separates attempt/segment text', () => {
     vi.useFakeTimers();
     const state = fixture();
     const reader = new DatabaseSync(state.path, { readOnly: true });
     databases.add(reader);
+    const persisted = () =>
+      Number(
+        (
+          reader.prepare('SELECT COUNT(*) AS total FROM response_stream_chunks').get() as {
+            total: number;
+          }
+        ).total
+      );
+    const writer = state.create();
     const notices: number[] = [];
     state.streams.subscribe({ taskKind: 'helper', taskId: 'task-1' }, () => {
-      notices.push(
-        Number(
-          (
-            reader.prepare('SELECT COUNT(*) AS total FROM response_stream_chunks').get() as {
-              total: number;
-            }
-          ).total
-        )
-      );
+      notices.push(persisted());
     });
-    const writer = state.create();
     for (let offset = 1; offset <= 1000; offset++)
       writer.progress({ attemptId: 'attempt-1', segment: 0, offset, text: 'a' });
     expect(state.streams.read('helper', 'task-1').chunks).toEqual([]);
-    vi.advanceTimersByTime(100);
-    expect(notices).toEqual([1]);
+    vi.advanceTimersByTime(50);
+    expect(notices).toEqual([0]);
+    const delivered = state.streams.read('helper', 'task-1');
+    vi.advanceTimersByTime(750);
+    expect(persisted()).toBe(1);
+    expect(notices).toEqual([0]);
     const first = state.streams.read('helper', 'task-1');
+    expect(first).toEqual(delivered);
     expect(first.chunks).toEqual([
       {
         seq: first.cursor,
@@ -191,10 +196,16 @@ describe('durable public response batches', () => {
       isActive: () => active,
     });
     writer.progress({ attemptId: 'attempt-1', segment: 0, text: '부분', offset: 2 });
+    writer.flush();
     active = false;
-    writer.progress({ attemptId: 'attempt-1', segment: 0, text: '늦음', offset: 4 });
+    writer.progress({ attemptId: 'attempt-1', segment: 0, text: '확인 전', offset: 6 });
+    writer.flush();
+    writer.progress({ attemptId: 'attempt-1', segment: 0, text: '늦음', offset: 8 });
     writer.finish('partial');
-    expect(state.streams.read('main', 'run-1').chunks.map((chunk) => chunk.text)).toEqual(['부분']);
+    expect(state.streams.read('main', 'run-1').chunks.map((chunk) => chunk.text)).toEqual([
+      '부분',
+      '확인 전',
+    ]);
     state.db.prepare('DELETE FROM runs WHERE id=?').run('run-1');
     expect(() => state.streams.read('main', 'run-1')).toThrow('not found');
     expect(state.db.prepare('SELECT COUNT(*) AS count FROM response_stream_chunks').get()).toEqual({
@@ -205,6 +216,167 @@ describe('durable public response batches', () => {
     helper.finish('completed');
     state.db.prepare('DELETE FROM helper_tasks WHERE id=?').run('task-1');
     expect(() => state.streams.read('helper', 'task-1')).toThrow('not found');
+  });
+
+  test('a cursor sees one gapless sequence across memory delivery, a second reader and persistence', () => {
+    vi.useFakeTimers();
+    const state = fixture();
+    const reader = new DatabaseSync(state.path, { readOnly: true });
+    databases.add(reader);
+    const stored = () =>
+      reader
+        .prepare(
+          'SELECT seq,attempt_id AS attemptId,segment,offset,text FROM response_stream_chunks ORDER BY seq'
+        )
+        .all()
+        .map((row) => ({ ...row }));
+    const writer = state.create();
+    const texts = ['하나', '둘', '셋'];
+    for (const [index, text] of texts.entries()) {
+      writer.progress({
+        attemptId: 'attempt-1',
+        segment: 0,
+        offset: texts.slice(0, index + 1).join('').length,
+        text,
+      });
+      vi.advanceTimersByTime(50);
+    }
+    const live = state.streams.read('helper', 'task-1');
+    expect(live.chunks.map((chunk) => chunk.text)).toEqual(texts);
+    expect(live.chunks.map((chunk) => chunk.seq)).toEqual([
+      live.chunks[0].seq,
+      live.chunks[0].seq + 1,
+      live.chunks[0].seq + 2,
+    ]);
+    expect(stored()).toEqual([]);
+    expect(state.streams.read('helper', 'task-1', live.chunks[0].seq).chunks).toEqual(
+      live.chunks.slice(1)
+    );
+    vi.advanceTimersByTime(750);
+    expect(stored()).toEqual(live.chunks);
+    expect(state.streams.read('helper', 'task-1')).toEqual(live);
+    expect(state.streams.read('helper', 'task-1', live.chunks[1].seq).chunks).toEqual(
+      live.chunks.slice(2)
+    );
+    writer.progress({ attemptId: 'attempt-1', segment: 0, offset: 5, text: '넷' });
+    vi.advanceTimersByTime(50);
+    const merged = state.streams.read('helper', 'task-1');
+    expect(merged.chunks.map((chunk) => chunk.text)).toEqual([...texts, '넷']);
+    expect(merged.chunks[3].seq).toBe(live.cursor + 1);
+    expect(state.streams.read('helper', 'task-1', live.cursor).chunks).toEqual([merged.chunks[3]]);
+    writer.finish('partial');
+    expect(state.streams.read('helper', 'task-1')).toEqual({ ...merged, status: 'partial' });
+    expect(stored()).toEqual(merged.chunks);
+  });
+
+  test('a restart drops only the unpersisted tail and never reuses a delivered sequence number', () => {
+    vi.useFakeTimers();
+    const state = fixture();
+    state.db.prepare('INSERT INTO runs(id) VALUES(?)').run('run-1');
+    const writer = state.streams.createWriter({
+      taskKind: 'main',
+      taskId: 'run-1',
+      chatId: 'chat-1',
+      signal: state.signal.signal,
+      isActive: () => true,
+    });
+    writer.progress({ attemptId: 'attempt-1', segment: 0, offset: 2, text: '저장' });
+    writer.flush();
+    writer.progress({ attemptId: 'attempt-1', segment: 0, offset: 4, text: '유실' });
+    vi.advanceTimersByTime(50);
+    const before = state.streams.read('main', 'run-1');
+    expect(before.chunks.map((chunk) => chunk.text)).toEqual(['저장', '유실']);
+    vi.clearAllTimers();
+    state.db.close();
+    databases.delete(state.db);
+    const reopened = new ResponseStreamStore(connection(state.path));
+    reopened.recover();
+    expect(reopened.read('main', 'run-1')).toMatchObject({
+      status: 'interrupted',
+      chunks: [{ text: '저장' }],
+    });
+    const resumed = reopened.createWriter({
+      taskKind: 'main',
+      taskId: 'run-1',
+      chatId: 'chat-1',
+      signal: new AbortController().signal,
+      isActive: () => true,
+      resume: true,
+    });
+    resumed.progress({ attemptId: 'attempt-2', segment: 0, offset: 2, text: '재개' });
+    vi.advanceTimersByTime(50);
+    const after = reopened.read('main', 'run-1', before.cursor);
+    expect(after.chunks).toMatchObject([{ attemptId: 'attempt-2', text: '재개' }]);
+    expect(after.chunks[0].seq).toBeGreaterThan(before.cursor);
+    resumed.finish('partial');
+    expect(reopened.read('main', 'run-1').chunks.map((chunk) => chunk.text)).toEqual([
+      '저장',
+      '재개',
+    ]);
+  });
+
+  test('a translation task restarts under the same id, wakes chat subscribers and keeps no text after it ends', async () => {
+    vi.useFakeTimers();
+    const state = fixture();
+    const woken: string[] = [];
+    const unsubscribe = state.streams.subscribeChat('chat-1', (identity) =>
+      woken.push(`${identity.taskKind}:${identity.taskId}`)
+    );
+    const translation = () =>
+      state.streams.createWriter({
+        taskKind: 'translation',
+        taskId: 'job-1',
+        chatId: 'chat-1',
+        signal: state.signal.signal,
+      });
+    const first = translation();
+    expect(state.streams.runningTasks('chat-1')).toEqual([
+      { taskKind: 'translation', taskId: 'job-1' },
+    ]);
+    expect(state.streams.runningTasks('chat-2')).toEqual([]);
+    first.progress({ attemptId: 'attempt-1', segment: 0, offset: 2, text: '거절' });
+    vi.advanceTimersByTime(50);
+    expect(woken).toEqual(['translation:job-1', 'translation:job-1']);
+    expect(state.streams.read('translation', 'job-1').chunks).toMatchObject([{ text: '거절' }]);
+    first.finish('failed');
+    expect(woken).toHaveLength(3);
+    expect(state.streams.read('translation', 'job-1')).toMatchObject({
+      status: 'failed',
+      chunks: [],
+    });
+    expect(state.streams.runningTasks('chat-1')).toEqual([]);
+    const stale = translation();
+    const second = translation();
+    stale.progress({ attemptId: 'attempt-2', segment: 0, offset: 2, text: '밀림' });
+    second.progress({ attemptId: 'attempt-3', segment: 0, offset: 2, text: '번역' });
+    vi.advanceTimersByTime(50);
+    expect(state.streams.read('translation', 'job-1').chunks).toMatchObject([
+      { attemptId: 'attempt-3', text: '번역' },
+    ]);
+    stale.finish('completed');
+    expect(state.streams.read('translation', 'job-1').status).toBe('running');
+    expect(state.streams.runningTasks('chat-1')).toHaveLength(1);
+    vi.advanceTimersByTime(750);
+    vi.useRealTimers();
+    const app = Fastify();
+    responseStreamRoutes(app, state.streams, { authenticated: () => true });
+    expect((await app.inject('/api/response-streams/translation/job-1')).json()).toMatchObject({
+      taskKind: 'translation',
+      status: 'running',
+      chunks: [{ text: '번역' }],
+    });
+    expect((await app.inject('/api/response-streams/unknown/job-1')).statusCode).toBe(404);
+    await app.close();
+    unsubscribe();
+    state.db.close();
+    databases.delete(state.db);
+    const reopened = new ResponseStreamStore(connection(state.path));
+    reopened.recover();
+    expect(reopened.read('translation', 'job-1')).toMatchObject({
+      status: 'interrupted',
+      chunks: [],
+    });
+    expect(reopened.runningTasks('chat-1')).toEqual([]);
   });
 
   test('loopback provider reaches durable public chunks before EOF and reconnect route returns only missing batches', async () => {

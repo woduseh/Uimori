@@ -26,6 +26,7 @@ import { displayTranslationJob, latestTranslation } from '../core/translation-di
 import { markArrivalWhenShown } from './arrival-mark.js';
 import { canDismissReaderRun, readerConversation } from '../core/reader-conversation.js';
 import { createReaderSync } from './reader-sync.js';
+import { openResponseStreamChannel, responseStreamCursors } from './response-stream-bridge.js';
 import { type ReaderResponse, restoreReaderBlockText } from './reader-blocks.js';
 import {
   transitionReaderNavigation,
@@ -608,15 +609,28 @@ export function useStory() {
     const visibility = () =>
       sync.setActive(navigation.current.destination === 'story' && !document.hidden);
     document.addEventListener('visibilitychange', visibility);
+    let responses: ReturnType<typeof openResponseStreamChannel> | undefined;
+    const closeStream = () => {
+      stream?.close();
+      responses?.close();
+    };
     const openStream = () => {
-      const stream = new EventSource(`/api/chats/${selected}/events`);
+      const cursors = responseStreamCursors();
+      const stream = new EventSource(
+        `/api/chats/${selected}/events${cursors ? `?streamAfter=${encodeURIComponent(cursors)}` : ''}`
+      );
+      const pushed = openResponseStreamChannel();
+      responses = pushed;
       stream.onopen = () => {
+        pushed.connected();
         if (alive) setConnected(true);
       };
       stream.onerror = () => {
+        pushed.disconnected();
         sync.disconnected();
         if (alive) setConnected(false);
       };
+      stream.addEventListener('stream', (event) => pushed.deliver(event.data));
       stream.onmessage = (event) => {
         if (!alive || navigation.current.chat !== selected) return;
         const message = JSON.parse(event.data) as { kind: string; seq?: number; entityId?: string };
@@ -633,6 +647,7 @@ export function useStory() {
           setNativeInteractionRevision((revision) => revision + 1);
         if (message.kind === 'chat.deleted') {
           stream.close();
+          pushed.close();
           void loadChats().catch((e) => {
             if (alive) setError(e);
           });
@@ -650,13 +665,13 @@ export function useStory() {
     };
     let stream = navigator.onLine ? openStream() : undefined;
     const offline = () => {
-      stream?.close();
+      closeStream();
       sync.disconnected();
       setConnected(false);
     };
     const online = () => {
       if (alive) {
-        stream?.close();
+        closeStream();
         stream = openStream();
       }
     };
@@ -667,7 +682,7 @@ export function useStory() {
       sync.dispose();
       if (readerSync.current === sync) readerSync.current = null;
       document.removeEventListener('visibilitychange', visibility);
-      stream?.close();
+      closeStream();
       removeEventListener('offline', offline);
       removeEventListener('online', online);
     };

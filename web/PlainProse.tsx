@@ -2,23 +2,8 @@ import { Fragment, memo, useContext, type ReactNode } from 'react';
 import { ReadingPreferencesContext } from './ReadingPreferencesContext.js';
 import type { ReadabilitySettings } from './reading-preferences.js';
 import { hasReadingQuotes, scanReadingQuotes, type ReadingQuote } from './reading-quotes.js';
+import { literalTextSpans } from './literal-text.js';
 import './prose.css';
-
-function backtickSpans(text: string) {
-  const runs = [...text.matchAll(/`+/gu)];
-  const next = new Map<number, number>();
-  const spans = new Map<number, number>();
-  for (let index = runs.length - 1; index >= 0; index--) {
-    const run = runs[index];
-    const start = run.index;
-    const length = run[0].length;
-    const contentStart = start + length;
-    const contentEnd = next.get(length) ?? contentStart;
-    spans.set(start, contentEnd === contentStart ? contentStart : contentEnd + length);
-    next.set(length, start);
-  }
-  return spans;
-}
 
 type IndexedInline = {
   start: number;
@@ -102,69 +87,10 @@ function applyReading(nodes: ReactNode[], settings: ReadabilitySettings): ReactN
   return renderRange(0, indexed.text.length, quotes);
 }
 
-const fencePattern = /^ {0,3}(`{3,}|~{3,})([\s\S]*)$/u;
-function literalFence(text: string, offset: number): string | undefined {
-  if (offset && text[offset - 1] !== '\n') return;
-  let lineEnd = text.indexOf('\n', offset);
-  if (lineEnd === -1) lineEnd = text.length;
-  const fence = text.slice(offset, lineEnd).match(fencePattern);
-  if (!fence) return;
-  let lineStart = lineEnd + 1;
-  while (lineStart < text.length) {
-    lineEnd = text.indexOf('\n', lineStart);
-    if (lineEnd === -1) lineEnd = text.length;
-    const closing = text.slice(lineStart, lineEnd).match(/^ {0,3}(`{3,}|~{3,})\s*$/u);
-    if (closing && closing[1][0] === fence[1][0] && closing[1].length >= fence[1].length)
-      return text.slice(offset, lineEnd);
-    lineStart = lineEnd + 1;
-  }
-  return text.slice(offset);
-}
-
 function literalNodes(text: string): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  const lastRubyClose = text.lastIndexOf('</ruby>');
-  const lastTemplateClose = text.lastIndexOf('}}');
-  const lastTagClose = text.lastIndexOf('>');
-  const lastLinkClose = text.lastIndexOf('](');
-  const codeSpans = backtickSpans(text);
-  let plain = '';
-  let offset = 0;
-  while (offset < text.length) {
-    const rest = text.slice(offset);
-    const codeEnd = codeSpans.get(offset);
-    const ruby =
-      offset < lastRubyClose && rest.startsWith('<ruby>')
-        ? text.slice(offset, text.indexOf('</ruby>', offset + 6) + 7)
-        : undefined;
-    const template =
-      offset < lastTemplateClose && rest.startsWith('{{')
-        ? text.slice(offset, text.indexOf('}}', offset + 2) + 2)
-        : undefined;
-    const tag =
-      offset < lastTagClose && /^<\/?[A-Za-z]/u.test(rest)
-        ? text.slice(offset, text.indexOf('>', offset + 1) + 1)
-        : undefined;
-    const protectedText =
-      literalFence(text, offset) ??
-      (codeEnd === undefined ? undefined : text.slice(offset, codeEnd)) ??
-      ruby ??
-      template ??
-      rest.match(/^\[\[p_[a-f0-9]+_\d+\]\]/u)?.[0] ??
-      (offset < lastLinkClose
-        ? rest.match(/^!?\[[^\]\n]{1,1000}\]\([^\s)]{1,2000}\)/u)?.[0]
-        : undefined) ??
-      tag ??
-      rest.match(/^(?:https?:\/\/|mailto:|www\.)[^\s<>“”‘’「」『』"]+/u)?.[0];
-    if (protectedText) {
-      if (plain) nodes.push(plain);
-      plain = '';
-      nodes.push(<Fragment key={offset}>{protectedText}</Fragment>);
-      offset += protectedText.length;
-    } else plain += text[offset++];
-  }
-  if (plain) nodes.push(plain);
-  return nodes;
+  return literalTextSpans(text).map(({ start, end, literal }) =>
+    literal ? <Fragment key={start}>{text.slice(start, end)}</Fragment> : text.slice(start, end)
+  );
 }
 
 export const PlainProse = memo(function PlainProse({

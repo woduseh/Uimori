@@ -67,7 +67,7 @@ type RunExecutorDependencies = {
   vertexRequestTier: MainHooks['vertexRequestTier'];
   jevCredential: JevCredentialStore['resolve'];
   publish: (chatId: string) => void;
-  afterSource: (runId: string) => void;
+  afterSource: (runId: string, sourceId: string) => void;
 };
 
 export function createRunExecutor({
@@ -683,7 +683,7 @@ export function createRunExecutor({
               )
             : authoredText;
           beginPhase('txCommit');
-          store.transaction(() => {
+          const committed = store.transaction(() => {
             assertCurrent();
             if (nativeOutput.nativeRisuExecution)
               store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(
@@ -693,12 +693,12 @@ export function createRunExecutor({
                 }),
                 id
               );
-            store.completeRunInTransaction(id, committedText, priorUsage, controls);
+            return store.completeRunInTransaction(id, committedText, priorUsage, controls);
           });
           endPhase();
           if (controls.crashAfterSourceCommit) process.exit(86);
           publish(run.chatId);
-          afterSource(id);
+          afterSource(id, committed.id);
         } catch (error) {
           if (error instanceof StoryGuideCancelledError)
             priorUsage = mergeUsage(priorUsage, error.usage);

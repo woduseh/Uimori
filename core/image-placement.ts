@@ -1,7 +1,9 @@
 import type { Asset, ProfileSnapshot } from './product.js';
 import { packageImages } from './package-images.js';
 import { nativeRisuAssetNameResolver } from './risu-native.js';
-import { parseStoryUi } from './story-ui.js';
+import { scanStoryUi, type StoryUiMessage } from './story-ui-scan.js';
+
+const unvalidated = (_messages: unknown): _messages is StoryUiMessage[] => false;
 
 export function imageOwnerDisplayText(
   text: string,
@@ -64,7 +66,7 @@ export function createImageOwnerDisplayText(
   };
   return (text) => {
     if (!text.includes('```uimori-ui') && !text.includes('<a2ui>')) return projectProse(text);
-    return parseStoryUi(text)
+    return scanStoryUi(text, unvalidated)
       .map((part) =>
         part.kind === 'prose' ? projectProse(part.text) : text.slice(part.start, part.end)
       )

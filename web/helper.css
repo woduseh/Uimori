@@ -99,13 +99,6 @@
   padding-inline-start: 12px;
 }
 
-.streaming-text {
-  overflow-wrap: anywhere;
-  color: var(--text);
-}
-.streaming-pending {
-  white-space: pre-wrap;
-}
 .helper-task {
   font-size: var(--font-body);
 }
@@ -398,18 +391,6 @@
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-}
-.streaming-response {
-  margin-top: 10px;
-}
-.streaming-response > small {
-  font-size: var(--font-small);
-  color: var(--muted);
-}
-.streaming-text + .streaming-text {
-  border-top: var(--hairline) solid var(--line);
-  padding-top: 12px;
-  margin-top: 12px;
 }
 .helper-thread-content {
   display: flex;

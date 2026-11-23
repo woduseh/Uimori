@@ -17,7 +17,7 @@ import {
 } from 'react';
 import { compileReadingMarkdown } from '../core/reading-markdown.js';
 import { storyUiCatalog, storyUiImageKeys } from '../core/story-ui-catalog.js';
-import { isStoryUiImageUrl, storyUiImageName } from '../core/story-ui.js';
+import { isStoryUiImageUrl, storyUiImageName } from '../core/story-ui-scan.js';
 import { storyUiIcons } from './story-ui-icons.js';
 import { getIntlLocale, t } from './i18n.js';
 

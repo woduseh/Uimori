@@ -40,7 +40,6 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import type { ServerResponse } from 'node:http';
 import { Store } from './store.js';
 import { readTranslationSelection, readStoredRunSnapshot, runResponse } from './run-projections.js';
 import { composerRunSnapshot } from './composer-run.js';
@@ -54,6 +53,8 @@ import { ChatOverridesStore, chatOverrideRoutes } from './chat-overrides.js';
 import { chatOptionRoutes } from './chat-options.js';
 import { chatVariableRoutes } from './chat-variable-routes.js';
 import { ResponseStreamStore, responseStreamRoutes } from './response-stream.js';
+import { precomputePackagePresentation } from './package-presentation-routes.js';
+import { chatEventResume, createChatEventStreams } from './chat-event-stream.js';
 import { readerActivities, readerDetail, readerRuns } from './reader.js';
 import { dismissReaderRun } from './run-reader-state.js';
 import { chatActivities } from './chat-activity.js';
@@ -335,8 +336,12 @@ export async function createApp(options: AppOptions): Promise<App> {
   const instanceId = options.instanceId ?? randomUUID();
   app.decorate('store', store);
   app.decorate('controls', controls);
-  const subscribers = new Map<string, Map<ServerResponse, number>>();
-  const streamAuthority = new Map<ServerResponse, () => boolean>();
+  const streams = new ResponseStreamStore(store);
+  const chatEvents = createChatEventStreams({
+    events: (chatId, after) => store.events(chatId, after),
+    latestEventSequence: (chatId) => store.latestEventSequence(chatId),
+    streams,
+  });
   const work = new Set<Promise<void>>();
   const runs = new Map<string, AbortController>();
   const jobControllers = new Map<string, AbortController>();
@@ -348,23 +353,11 @@ export async function createApp(options: AppOptions): Promise<App> {
   const stopping = new AbortController();
   const forcedClosed = options.maintenance === true;
   const admitted = () => admissionOpen(store, forcedClosed);
+  const precomputeAdmittedPresentation = (sourceId: string) =>
+    precomputePackagePresentation(store, sourceId, () => !stopping.signal.aborted && admitted());
   let recoveredRuns: string[] = [];
   const deferredRuns = new Map<string, boolean>();
-  const publish = (chatId: string) => {
-    for (const [response, cursor] of subscribers.get(chatId) ?? []) {
-      if (streamAuthority.get(response)?.() === false) {
-        response.end();
-        continue;
-      }
-      for (const event of store.events(chatId, cursor) as { seq: number }[]) {
-        response.write(`id: ${event.seq}\ndata: ${JSON.stringify(event)}\n\n`);
-        subscribers.get(chatId)?.set(response, event.seq);
-      }
-    }
-  };
-  const publishAll = () => {
-    for (const chatId of subscribers.keys()) publish(chatId);
-  };
+  const { publish, publishAll } = chatEvents;
   const track = (promise: Promise<void>) => {
     work.add(promise);
     const settled = () => {
@@ -382,7 +375,6 @@ export async function createApp(options: AppOptions): Promise<App> {
       process.stderr.write('BACKGROUND_TASK_FAILED\n');
     });
   };
-  const streams = new ResponseStreamStore(store);
   const sceneUpdated = (sourceId: string) => {
     const source = store.source(sourceId);
     for (const [jobId, controller] of jobControllers) {
@@ -647,6 +639,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       track(
         (async () => {
           let chatId = '';
+          let translationStream: ReturnType<ResponseStreamStore['createWriter']> | undefined;
           try {
             const queued = store.job(id);
             const judgment = judgmentRuntime(store, jevCredentials.resolve);
@@ -683,7 +676,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             const bridge = auxiliaryBridge(store, controls, signal, (target, recovery) => {
               if (!recovery) requireModel(target, 'translation');
             });
-            await runAuxiliaryJob(bridge, id, instanceId, {
+            const outcome = await runAuxiliaryJob(bridge, id, instanceId, {
               jev: {
                 ...judgment,
                 readImage: (hash) => readJevImage(store.db, hash).bytes,
@@ -748,8 +741,18 @@ export async function createApp(options: AppOptions): Promise<App> {
                   timing
                 ),
               onProgress: () => publish(chatId),
+              openResponseStream: () =>
+                (translationStream = streams.createWriter({
+                  taskKind: 'translation',
+                  taskId: id,
+                  chatId,
+                  signal,
+                  abortStatus: () => (stopping.signal.aborted ? 'interrupted' : 'cancelled'),
+                })),
               cancellationStatus: 'interrupted',
             });
+            if (queued.kind === 'translation' && outcome?.status === 'completed')
+              precomputeAdmittedPresentation(queued.sourceRevision);
           } catch (error) {
             if (!stopping.signal.aborted) {
               const current = store.job(id);
@@ -764,6 +767,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                 store.failJob(id, current.generation, instanceId, message);
             }
           } finally {
+            translationStream?.finish('failed');
             jobControllers.delete(id);
             if (chatId && !stopping.signal.aborted) {
               publish(chatId);
@@ -888,10 +892,11 @@ export async function createApp(options: AppOptions): Promise<App> {
     vertexRequestTier: options.vertexRequestTier,
     jevCredential: jevCredentials.resolve,
     publish,
-    afterSource: (id) => {
+    afterSource: (id, sourceId) => {
       pumpJobs();
       pumpIllustrations();
       titles.afterSource(id, !admitted());
+      precomputeAdmittedPresentation(sourceId);
     },
   });
   const execute = (id: string, resume = false) => {
@@ -957,12 +962,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     publish,
     onChatDeleted: (chatId) => {
       titles.cancel(chatId);
-      for (const response of subscribers.get(chatId)?.keys() ?? []) {
-        if (streamAuthority.get(response)?.() !== false)
-          response.write(`data: ${JSON.stringify({ kind: 'chat.deleted', chatId })}\n\n`);
-        response.end();
-      }
-      subscribers.delete(chatId);
+      chatEvents.closeChat(chatId, { kind: 'chat.deleted', chatId });
     },
     onAuthChanged: () => {
       pushService?.revokeInactive();
@@ -1504,41 +1504,24 @@ export async function createApp(options: AppOptions): Promise<App> {
       return job;
     }
   );
-  app.get<{ Params: { id: string } }>('/api/chats/:id/events', async (request, reply) => {
-    store.chat(request.params.id);
-    const rawCursor = request.headers['last-event-id'];
-    const cursor =
-      rawCursor === undefined ? store.latestEventSequence(request.params.id) : Number(rawCursor);
-    if (!Number.isSafeInteger(cursor) || cursor < 0)
-      throw new HttpError(400, 'Invalid event cursor');
-    reply.hijack();
-    reply.raw.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-      'X-Content-Type-Options': 'nosniff',
-      'X-Accel-Buffering': 'no',
-    });
-    const listeners = subscribers.get(request.params.id) ?? new Map<ServerResponse, number>();
-    subscribers.set(request.params.id, listeners);
-    listeners.set(reply.raw, cursor);
-    streamAuthority.set(reply.raw, () => session.authenticated(request.headers.cookie));
-    reply.raw.write(
-      `id: ${cursor}\ndata: ${JSON.stringify({ kind: 'snapshot', chatId: request.params.id, seq: cursor })}\n\n`
-    );
-    publish(request.params.id);
-    const heartbeat = setInterval(() => {
-      if (!session.authenticated(request.headers.cookie)) reply.raw.end();
-      else reply.raw.write(': keepalive\n\n');
-    }, 15000);
-    heartbeat.unref();
-    reply.raw.on('close', () => {
-      clearInterval(heartbeat);
-      streamAuthority.delete(reply.raw);
-      listeners.delete(reply.raw);
-      if (!listeners.size) subscribers.delete(request.params.id);
-    });
-  });
+  app.get<{ Params: { id: string }; Querystring: { streamAfter?: string } }>(
+    '/api/chats/:id/events',
+    async (request, reply) => {
+      store.chat(request.params.id);
+      const resume = chatEventResume(request.headers['last-event-id'], request.query.streamAfter);
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Accel-Buffering': 'no',
+      });
+      chatEvents.connect(request.params.id, resume, reply.raw, () =>
+        session.authenticated(request.headers.cookie)
+      );
+    }
+  );
   if (options.testMode) {
     app.get('/api/test/control', async () => controls.snapshot());
     app.post('/api/test/control', async (request) => {
@@ -1615,8 +1598,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     await manuscriptSearch.close();
     await closeIllustrationSession();
     await codex.close();
-    for (const listeners of subscribers.values())
-      for (const response of listeners.keys()) response.end();
+    chatEvents.closeAll();
     await Promise.allSettled([...work]);
   });
   app.addHook('onClose', async () => {

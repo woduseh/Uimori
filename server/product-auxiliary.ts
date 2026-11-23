@@ -65,6 +65,7 @@ import { projectStoryUiText } from '../core/story-ui.js';
 import { prepareStoryUiTranslation } from '../core/story-ui-translation.js';
 import { JudgmentError, type JudgmentHooks } from './judgment.js';
 import { uncertainAttemptResult } from './usage-accounting.js';
+import type { ResponseProgress, ResponseStreamStatus } from '../core/response-stream.js';
 
 type MaybePromise<T> = T | Promise<T>;
 type JobKind = Exclude<TaskRole, 'main'>;
@@ -154,9 +155,14 @@ export type AuxiliaryJobHooks = {
     generation: number
   ) => MaybePromise<void>;
   onProgress?: () => MaybePromise<void>;
+  openResponseStream?: () => AuxiliaryResponseStream;
   timeoutMs?: number;
   vertexRequestTier?: 'standard' | 'flex';
   cancellationStatus?: 'cancelled' | 'interrupted';
+};
+export type AuxiliaryResponseStream = {
+  progress: (progress: ResponseProgress) => void;
+  finish: (status: Exclude<ResponseStreamStatus, 'running'>) => void;
 };
 const json = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 class AuxiliaryExecutionError extends Error {
@@ -468,6 +474,9 @@ export async function runAuxiliaryJob(
   }
   const generation = await store.claim(jobId, owner, { input });
   if (generation === null) return null;
+  const responseStream = job.kind === 'translation' ? hooks.openResponseStream?.() : undefined;
+  const publicTextStream = protectedTranslation?.protected ? undefined : responseStream;
+  let translationRound = 0;
   await hooks.onProgress?.();
   const target = job.kind === 'image' ? undefined : snapshot.profile?.models[job.kind];
   let calls = 0;
@@ -537,6 +546,12 @@ export async function runAuxiliaryJob(
           );
           lastAttemptId = attemptId;
         },
+        onProgress:
+          publicTextStream &&
+          ((progress) => {
+            if (attemptId !== undefined && !hooks.signal.aborted)
+              publicTextStream.progress({ ...progress, attemptId, segment: translationRound });
+          }),
       });
     } catch (error) {
       if (attemptId !== undefined) {
@@ -787,6 +802,7 @@ export async function runAuxiliaryJob(
       if (!bundle.judgmentRecovery)
         executionSnapshot = await prepareNativeRisuTranslationPrompt(snapshot);
       for (let retry = 0; ; retry++) {
+        translationRound = retry;
         if (hooks.signal.aborted) throw new AuxiliaryExecutionError('AUXILIARY_CANCELLED');
         try {
           const output = bundle.judgmentRecovery ?? (await runInput(input)).output;
@@ -864,6 +880,7 @@ export async function runAuxiliaryJob(
           error: null,
         };
         await store.finish(jobId, generation, owner, outcome);
+        responseStream?.finish('completed');
         await hooks.onProgress?.();
         return outcome;
       }
@@ -896,6 +913,7 @@ export async function runAuxiliaryJob(
       },
     };
     await store.finish(jobId, generation, owner, outcome);
+    responseStream?.finish('failed');
     await hooks.onProgress?.();
     return outcome;
   }

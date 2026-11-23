@@ -27,12 +27,18 @@ function subscribe(listener: () => void) {
 }
 const currentParser = () => parse;
 
-export function useStoryUiSegments(text: string): StoryUiSegment[] | null {
+export const hasStoryUi = (text: string) => untaggedStoryUiSegments(text) === null;
+
+export function useStoryUiParser(needed: boolean): Parse | undefined {
   const parser = useSyncExternalStore(subscribe, currentParser, currentParser);
-  const untagged = untaggedStoryUiSegments(text);
-  const tagged = !untagged;
   useEffect(() => {
-    if (tagged && !parser) loadParser();
-  }, [tagged, parser]);
+    if (needed && !parser) loadParser();
+  }, [needed, parser]);
+  return parser;
+}
+
+export function useStoryUiSegments(text: string): StoryUiSegment[] | null {
+  const untagged = untaggedStoryUiSegments(text);
+  const parser = useStoryUiParser(!untagged);
   return untagged ?? (parser ? parser(text) : null);
 }

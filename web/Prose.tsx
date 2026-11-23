@@ -54,18 +54,14 @@ export const Prose = memo(function Prose({
   useLayoutEffect(() => {
     if (!content.current) return;
     mounted.current = createReadingDecorator(content.current);
-    setSlots(
-      [...content.current.querySelectorAll<HTMLElement>('[data-prose-slot]')].map((element) => ({
-        anchor: element.dataset.proseSlot!,
-        element,
-      }))
+    const found = [...content.current.querySelectorAll<HTMLElement>('[data-prose-slot]')].map(
+      (element) => ({ anchor: element.dataset.proseSlot!, element })
     );
-    setUiSlots(
-      [...content.current.querySelectorAll<HTMLElement>('[data-story-ui-slot]')].map((element) => ({
-        id: element.dataset.storyUiSlot!,
-        element,
-      }))
+    const foundUi = [...content.current.querySelectorAll<HTMLElement>('[data-story-ui-slot]')].map(
+      (element) => ({ id: element.dataset.storyUiSlot!, element })
     );
+    setSlots((current) => (found.length || current.length ? found : current));
+    setUiSlots((current) => (foundUi.length || current.length ? foundUi : current));
     return () => {
       mounted.current?.clear();
       mounted.current = null;

@@ -1,0 +1,19 @@
+.streaming-text {
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+.streaming-pending {
+  white-space: pre-wrap;
+}
+.streaming-response {
+  margin-top: 10px;
+}
+.streaming-response > small {
+  font-size: var(--font-small);
+  color: var(--muted);
+}
+.streaming-text + .streaming-text {
+  border-top: var(--hairline) solid var(--line);
+  padding-top: 12px;
+  margin-top: 12px;
+}

@@ -7,8 +7,10 @@ import type {
   ResponseProgress,
   ResponseStreamPage,
   ResponseStreamStatus,
+  ResponseTaskIdentity,
   ResponseTaskKind,
 } from '../core/response-stream.js';
+import { RESPONSE_TASK_KINDS } from '../core/response-stream.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -33,12 +35,30 @@ export function initResponseStreams(db: DatabaseSync) {
   `);
 }
 
-type StreamIdentity = { taskKind: ResponseTaskKind; taskId: string; chatId?: string | null };
+type StreamIdentity = ResponseTaskIdentity & { chatId?: string | null };
 type StreamRow = { owner: string; status: ResponseStreamStatus };
-const keyOf = (identity: StreamIdentity) => JSON.stringify([identity.taskKind, identity.taskId]);
+type ActiveStream = {
+  identity: ResponseTaskIdentity;
+  chatId: string | null;
+  tail: ResponseChunk[];
+  durableSeq: number;
+  revoked: boolean;
+};
+type ChatListener = (identity: ResponseTaskIdentity) => void;
+const keyOf = (identity: ResponseTaskIdentity) =>
+  JSON.stringify([identity.taskKind, identity.taskId]);
+const DELIVERY_INTERVAL_MS = 50;
+const DELIVERY_CHARS = 1024;
+const PERSIST_INTERVAL_MS = 750;
+const PERSIST_CHARS = 4096;
+const SEQUENCE_BLOCK = 1024;
+const PAGE_CHUNKS = 256;
 
 export class ResponseStreamStore {
   private readonly listeners = new Map<string, Set<() => void>>();
+  private readonly chatListeners = new Map<string, Set<ChatListener>>();
+  private readonly active = new Map<string, ActiveStream>();
+  private sequenceState: { next: number; reserved: number } | undefined;
   private readonly store: Pick<Store, 'db' | 'transaction'>;
   constructor(store: Pick<Store, 'db' | 'transaction'>) {
     this.store = store;
@@ -50,12 +70,40 @@ export class ResponseStreamStore {
         "UPDATE response_stream_tasks SET status='interrupted',updated_at=? WHERE status='running'"
       )
       .run(new Date().toISOString());
+    this.store.db.prepare("DELETE FROM response_stream_chunks WHERE task_kind='translation'").run();
   }
 
-  private row(identity: StreamIdentity): StreamRow | undefined {
+  private row(identity: ResponseTaskIdentity): StreamRow | undefined {
     return this.store.db
       .prepare('SELECT owner,status FROM response_stream_tasks WHERE task_kind=? AND task_id=?')
       .get(identity.taskKind, identity.taskId) as StreamRow | undefined;
+  }
+
+  private sequence() {
+    if (!this.sequenceState) {
+      const row = this.store.db
+        .prepare("SELECT seq FROM sqlite_sequence WHERE name='response_stream_chunks'")
+        .get() as { seq: number } | undefined;
+      const seq = Number(row?.seq ?? 0);
+      this.sequenceState = { next: seq, reserved: seq };
+    }
+    return this.sequenceState;
+  }
+
+  private allocateSeq() {
+    const state = this.sequence();
+    if (state.next >= state.reserved) {
+      const reserved = state.next + SEQUENCE_BLOCK;
+      const updated = this.store.db
+        .prepare("UPDATE sqlite_sequence SET seq=? WHERE name='response_stream_chunks'")
+        .run(reserved);
+      if (!updated.changes)
+        this.store.db
+          .prepare("INSERT INTO sqlite_sequence(name,seq) VALUES('response_stream_chunks',?)")
+          .run(reserved);
+      state.reserved = reserved;
+    }
+    return ++state.next;
   }
 
   read(taskKind: ResponseTaskKind, taskId: string, after = 0): ResponseStreamPage {
@@ -64,41 +112,75 @@ export class ResponseStreamStore {
     const identity = { taskKind, taskId };
     const row = this.row(identity);
     if (!row) throw new HttpError(404, 'Response stream not found');
-    const rows = this.store.db
-      .prepare(
-        `SELECT seq,attempt_id AS attemptId,segment,offset,text FROM response_stream_chunks
-       WHERE task_kind=? AND task_id=? AND seq>? ORDER BY seq LIMIT 257`
-      )
-      .all(taskKind, taskId, after) as ResponseChunk[];
-    const chunks = rows.slice(0, 256);
+    const stream = this.active.get(keyOf(identity));
+    const rows =
+      stream && after >= stream.durableSeq
+        ? []
+        : (this.store.db
+            .prepare(
+              `SELECT seq,attempt_id AS attemptId,segment,offset,text FROM response_stream_chunks
+       WHERE task_kind=? AND task_id=? AND seq>? ORDER BY seq LIMIT ?`
+            )
+            .all(taskKind, taskId, after, PAGE_CHUNKS + 1) as ResponseChunk[]);
+    for (const chunk of stream?.tail ?? []) {
+      if (rows.length > PAGE_CHUNKS) break;
+      if (chunk.seq > after) rows.push({ ...chunk });
+    }
+    const chunks = rows.slice(0, PAGE_CHUNKS);
     return {
       taskKind,
       taskId,
       status: row.status,
       chunks,
       cursor: chunks.at(-1)?.seq ?? after,
-      hasMore: rows.length > 256,
+      hasMore: rows.length > PAGE_CHUNKS,
     };
   }
 
-  subscribe(identity: StreamIdentity, listener: () => void) {
+  runningTasks(chatId: string): ResponseTaskIdentity[] {
+    return [...this.active.values()]
+      .filter((stream) => stream.chatId === chatId)
+      .map((stream) => ({ ...stream.identity }));
+  }
+
+  subscribe(identity: ResponseTaskIdentity, listener: () => void) {
     const key = keyOf(identity);
     const listeners = this.listeners.get(key) ?? new Set<() => void>();
     this.listeners.set(key, listeners);
     listeners.add(listener);
     return () => {
       listeners.delete(listener);
-      if (!listeners.size) this.listeners.delete(key);
+      if (!listeners.size && this.listeners.get(key) === listeners) this.listeners.delete(key);
+    };
+  }
+
+  subscribeChat(chatId: string, listener: ChatListener) {
+    const listeners = this.chatListeners.get(chatId) ?? new Set<ChatListener>();
+    this.chatListeners.set(chatId, listeners);
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+      if (!listeners.size && this.chatListeners.get(chatId) === listeners)
+        this.chatListeners.delete(chatId);
     };
   }
 
   private publish(identity: StreamIdentity) {
-    const listeners = this.listeners.get(keyOf(identity));
-    for (const listener of listeners ?? []) {
+    const target = { taskKind: identity.taskKind, taskId: identity.taskId };
+    const listeners = this.listeners.get(keyOf(target));
+    for (const listener of [...(listeners ?? [])]) {
       try {
         listener();
       } catch {
         listeners?.delete(listener);
+      }
+    }
+    const chatListeners = identity.chatId ? this.chatListeners.get(identity.chatId) : undefined;
+    for (const listener of [...(chatListeners ?? [])]) {
+      try {
+        listener({ ...target });
+      } catch {
+        chatListeners?.delete(listener);
       }
     }
   }
@@ -106,87 +188,159 @@ export class ResponseStreamStore {
   createWriter(
     options: StreamIdentity & {
       signal: AbortSignal;
-      isActive: () => boolean;
+      isActive?: () => boolean;
       resume?: boolean;
       abortStatus?: () => 'cancelled' | 'interrupted';
     }
   ) {
     const owner = randomUUID();
     const timestamp = new Date().toISOString();
+    const key = keyOf(options);
+    const restartable = options.taskKind === 'translation';
     const resumed =
-      options.resume && options.taskKind === 'main' && options.isActive()
+      options.resume && options.taskKind === 'main' && options.isActive?.() !== false
         ? this.store.db
             .prepare(`UPDATE response_stream_tasks SET owner=?,status='running',updated_at=?
           WHERE task_kind='main' AND task_id=? AND status IN ('interrupted','cancelled')`)
             .run(owner, timestamp, options.taskId).changes
         : 0;
     if (!resumed)
-      this.store.db
-        .prepare(
-          `INSERT INTO response_stream_tasks(task_kind,task_id,chat_id,run_id,helper_task_id,owner,status,created_at,updated_at)
-       VALUES(?,?,?,?,?,?,'running',?,?)`
-        )
-        .run(
-          options.taskKind,
-          options.taskId,
-          options.chatId ?? null,
-          options.taskKind === 'main' ? options.taskId : null,
-          options.taskKind === 'helper' ? options.taskId : null,
-          owner,
-          timestamp,
-          timestamp
-        );
-    let buffer: ResponseProgress | undefined;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let closed = false;
-    let fault: unknown;
-    let latestSegment = -1;
-    const offsets = new Map<string, { offset: number; lastText: string }>();
-    const clearTimer = () => {
-      if (timer) clearTimeout(timer);
-      timer = undefined;
-    };
-    const flush = () => {
-      clearTimer();
-      if (fault) throw fault;
-      const pending = buffer;
-      if (!pending) return;
-      buffer = undefined;
-      const inserted = this.store.transaction(() => {
-        const row = this.row(options);
-        if (!row || row.owner !== owner || row.status !== 'running') return false;
-        const previous = this.store.db
-          .prepare(
-            `SELECT offset FROM response_stream_chunks WHERE task_kind=? AND task_id=?
-           AND attempt_id=? AND segment=? ORDER BY seq DESC LIMIT 1`
-          )
-          .get(options.taskKind, options.taskId, pending.attemptId, pending.segment) as
-          | { offset: number }
-          | undefined;
-        if ((previous?.offset ?? 0) + pending.text.length !== pending.offset)
-          throw new Error('RESPONSE_STREAM_OFFSET_MISMATCH');
+      this.store.transaction(() => {
+        if (restartable)
+          this.store.db
+            .prepare(
+              "DELETE FROM response_stream_tasks WHERE task_kind='translation' AND task_id=?"
+            )
+            .run(options.taskId);
         this.store.db
           .prepare(
-            `INSERT INTO response_stream_chunks(task_kind,task_id,attempt_id,segment,offset,text)
-           VALUES(?,?,?,?,?,?)`
+            `INSERT INTO response_stream_tasks(task_kind,task_id,chat_id,run_id,helper_task_id,owner,status,created_at,updated_at)
+       VALUES(?,?,?,?,?,?,'running',?,?)`
           )
           .run(
             options.taskKind,
             options.taskId,
-            pending.attemptId,
-            pending.segment,
-            pending.offset,
-            pending.text
+            options.chatId ?? null,
+            options.taskKind === 'main' ? options.taskId : null,
+            options.taskKind === 'helper' ? options.taskId : null,
+            owner,
+            timestamp,
+            timestamp
           );
+      });
+    const replaced = this.active.get(key);
+    if (replaced) {
+      replaced.revoked = true;
+      replaced.tail = [];
+    }
+    const stream: ActiveStream = {
+      identity: { taskKind: options.taskKind, taskId: options.taskId },
+      chatId: options.chatId ?? null,
+      tail: [],
+      durableSeq: this.sequence().next,
+      revoked: false,
+    };
+    this.active.set(key, stream);
+    let buffer: ResponseProgress | undefined;
+    let deliveryTimer: ReturnType<typeof setTimeout> | undefined;
+    let persistTimer: ReturnType<typeof setTimeout> | undefined;
+    let tailChars = 0;
+    let closed = false;
+    let fault: unknown;
+    let latestSegment = -1;
+    const offsets = new Map<string, { offset: number; lastText: string }>();
+    const clearTimers = () => {
+      if (deliveryTimer) clearTimeout(deliveryTimer);
+      if (persistTimer) clearTimeout(persistTimer);
+      deliveryTimer = undefined;
+      persistTimer = undefined;
+    };
+    const guarded = (action: () => void) => () => {
+      try {
+        action();
+      } catch (error) {
+        fault = error;
+        clearTimers();
+      }
+    };
+    const persist = () => {
+      if (persistTimer) clearTimeout(persistTimer);
+      persistTimer = undefined;
+      const pending = stream.tail;
+      if (!pending.length) return;
+      if (!stream.revoked && options.isActive?.() === false) stream.revoked = true;
+      const inserted = this.store.transaction(() => {
+        const row = this.row(options);
+        if (!row || row.owner !== owner || row.status !== 'running') return false;
+        for (const chunk of pending) {
+          const previous = this.store.db
+            .prepare(
+              `SELECT offset FROM response_stream_chunks WHERE task_kind=? AND task_id=?
+             AND attempt_id=? AND segment=? ORDER BY seq DESC LIMIT 1`
+            )
+            .get(options.taskKind, options.taskId, chunk.attemptId, chunk.segment) as
+            | { offset: number }
+            | undefined;
+          if ((previous?.offset ?? 0) + chunk.text.length !== chunk.offset)
+            throw new Error('RESPONSE_STREAM_OFFSET_MISMATCH');
+          this.store.db
+            .prepare(
+              `INSERT INTO response_stream_chunks(seq,task_kind,task_id,attempt_id,segment,offset,text)
+             VALUES(?,?,?,?,?,?,?)`
+            )
+            .run(
+              chunk.seq,
+              options.taskKind,
+              options.taskId,
+              chunk.attemptId,
+              chunk.segment,
+              chunk.offset,
+              chunk.text
+            );
+        }
         return true;
       });
-      if (inserted) this.publish(options);
+      if (stream.tail === pending) stream.tail = [];
+      tailChars = 0;
+      if (inserted) stream.durableSeq = pending[pending.length - 1].seq;
+      else stream.revoked = true;
+    };
+    const deliver = () => {
+      if (deliveryTimer) clearTimeout(deliveryTimer);
+      deliveryTimer = undefined;
+      const pending = buffer;
+      buffer = undefined;
+      if (!pending || stream.revoked) return;
+      stream.tail.push({
+        seq: this.allocateSeq(),
+        attemptId: pending.attemptId,
+        segment: pending.segment,
+        offset: pending.offset,
+        text: pending.text,
+      });
+      tailChars += pending.text.length;
+      this.publish(options);
+      if (tailChars >= PERSIST_CHARS) persist();
+      else if (!persistTimer) {
+        persistTimer = setTimeout(guarded(persist), PERSIST_INTERVAL_MS);
+        persistTimer.unref();
+      }
+    };
+    const flush = () => {
+      if (fault) throw fault;
+      deliver();
+      persist();
     };
     const finish = (status: Exclude<ResponseStreamStatus, 'running'>) => {
       if (closed) return;
-      flush();
+      if (restartable) {
+        buffer = undefined;
+        stream.tail = [];
+      } else flush();
       closed = true;
+      clearTimers();
       options.signal.removeEventListener('abort', onAbort);
+      if (this.active.get(key) === stream) this.active.delete(key);
       const changed = this.store.db
         .prepare(
           `UPDATE response_stream_tasks SET status=?,updated_at=?
@@ -199,7 +353,7 @@ export class ResponseStreamStore {
           options.taskId,
           owner
         );
-      if (changed.changes && status === 'completed' && !options.signal.aborted) {
+      if (changed.changes && (restartable || (status === 'completed' && !options.signal.aborted))) {
         this.store.db
           .prepare('DELETE FROM response_stream_chunks WHERE task_kind=? AND task_id=?')
           .run(options.taskKind, options.taskId);
@@ -211,15 +365,16 @@ export class ResponseStreamStore {
         finish('cancelled');
       } catch (error) {
         fault = error;
-        clearTimer();
+        clearTimers();
       }
     };
     options.signal.addEventListener('abort', onAbort, { once: true });
+    this.publish(options);
     if (options.signal.aborted) onAbort();
     return {
       progress: (progress: ResponseProgress) => {
         if (fault) throw fault;
-        if (closed || options.signal.aborted || !options.isActive()) return;
+        if (closed || stream.revoked || options.signal.aborted) return;
         if (!progress.text) return;
         if (
           !progress.attemptId ||
@@ -230,8 +385,8 @@ export class ResponseStreamStore {
           progress.offset < progress.text.length
         )
           throw new Error('INVALID_RESPONSE_PROGRESS');
-        const key = JSON.stringify([progress.attemptId, progress.segment]);
-        const previous = offsets.get(key);
+        const progressKey = JSON.stringify([progress.attemptId, progress.segment]);
+        const previous = offsets.get(progressKey);
         if (previous?.offset === progress.offset && previous.lastText === progress.text) return;
         if ((previous?.offset ?? 0) + progress.text.length !== progress.offset)
           throw new Error('RESPONSE_STREAM_OFFSET_MISMATCH');
@@ -241,18 +396,12 @@ export class ResponseStreamStore {
         )
           flush();
         latestSegment = progress.segment;
-        offsets.set(key, { offset: progress.offset, lastText: progress.text });
+        offsets.set(progressKey, { offset: progress.offset, lastText: progress.text });
         buffer = { ...progress, text: (buffer?.text ?? '') + progress.text };
-        if (buffer.text.length >= 1024) flush();
-        else if (!timer) {
-          timer = setTimeout(() => {
-            try {
-              flush();
-            } catch (error) {
-              fault = error;
-            }
-          }, 100);
-          timer.unref();
+        if (buffer.text.length >= DELIVERY_CHARS) deliver();
+        else if (!deliveryTimer) {
+          deliveryTimer = setTimeout(guarded(deliver), DELIVERY_INTERVAL_MS);
+          deliveryTimer.unref();
         }
       },
       flush,
@@ -272,9 +421,9 @@ export function responseStreamRoutes(
     connections.clear();
   });
   const identity = (params: { taskKind: string; taskId: string }): StreamIdentity => {
-    if (!['main', 'helper'].includes(params.taskKind))
-      throw new HttpError(404, 'Unknown response stream kind');
-    return { taskKind: params.taskKind as ResponseTaskKind, taskId: params.taskId };
+    const taskKind = RESPONSE_TASK_KINDS.find((kind) => kind === params.taskKind);
+    if (!taskKind) throw new HttpError(404, 'Unknown response stream kind');
+    return { taskKind, taskId: params.taskId };
   };
   const cursor = (value: unknown) => {
     if (value === undefined || value === '') return 0;

@@ -99,4 +99,4 @@ CHARX 카드에서 본문용으로 사용할 수 있는 그림은 `{{img::이름
 
 액션 제출은 최신 장면의 원문 해시를 확인하므로 원문이 수정되면 이전 화면의 선택을 보낼 수 없어요. 채팅 복사본에서는 복사본의 최신 장면을 기준으로 선택을 보낼 수 있어요.
 
-`core/story-ui-scan.ts`는 zod와 A2UI 카탈로그 없이 태그 유무만 판별해요. `web/story-ui-parser.ts`를 쓰는 화면(현재 `web/StreamingResponse.tsx`)은 태그가 없는 본문을 바로 문단으로 그리고, 태그가 있을 때만 검증기(`core/story-ui.ts`)를 불러오며 그동안 결과 자리 표시를 보여 줘요. 서버는 계속 `core/story-ui.ts`로 같은 검증을 동기로 해요.
+`core/story-ui-scan.ts`는 zod와 A2UI 카탈로그 없이 태그 유무만 판별해요. `web/story-ui-parser.ts`를 쓰는 화면(`web/StreamingResponse.tsx`, `web/SourceReader.tsx`)은 태그가 없는 본문을 바로 문단으로 그리고, 태그가 있을 때만 검증기(`core/story-ui.ts`)를 불러오며 그동안 결과 자리 표시를 보여 줘요. 시작 번들이 검증기를 다시 끌어오지 않도록 웹 코드는 `core/story-ui.ts`를 정적으로 가져오지 않아요. 이미지 태그를 감추는 `core/image-placement.ts`처럼 블록의 범위만 필요한 코드는 `core/story-ui-scan.ts`의 `scanStoryUi`를 검증 없이 써요. 서버는 계속 `core/story-ui.ts`로 같은 검증을 동기로 해요.

@@ -397,6 +397,9 @@ function App() {
     s.submitting.includes(s.viewKey);
   const helperHandoffEpoch = useRef(0);
   const [helperHandoff, setHelperHandoff] = useState<HelperHandoff>();
+  const [helperMounted, setHelperMounted] = useState(false);
+  if (!helperMounted && (helperOpen || !!helperHandoff || !!helperNavigation))
+    setHelperMounted(true);
   const [editingSources, setEditingSources] = useState<string[]>([]);
   const onSourceEditing = useCallback((sourceId: string, editing: boolean) => {
     setEditingSources((current) =>
@@ -2914,51 +2917,53 @@ function App() {
         onDirtyChange={setOptionsDirty}
         onBusyChange={setOptionsBusy}
       />
-      <HelperPanel
-        navigationActions={helperNavigationActions}
-        searchRequest={helperSearchRequest}
-        onSelectConversation={closeNavigationDrawer}
-        navigationHost={
-          helperWorkspaceOpen && (panel === 'navigation' || !sidebarHidden)
-            ? helperNavigationHost
-            : null
-        }
-        ready={helperWorkspaceOpen || s.destination !== 'story' || !s.selected || !!s.detail}
-        expanded={helperWorkspaceOpen}
-        returnToSidecar={helperReturnToSidecar.current}
-        onToggleExpanded={toggleHelperExpanded}
-        navigationLeading={navigationControls}
-        onScopeChange={rememberHelperScope}
-        returnLabel={
-          s.destination === 'story'
-            ? s.detail?.chat.title
-            : t(libraryTab === 'prompts' ? 'transfer.m286' : 'transfer.m285')
-        }
-        onOpenTarget={openHelperTarget}
-        onOpenChange={openHelperChangeTarget}
-        modal={panelModal}
-        enterSend={enterSend}
-        responseDisplay={responseDisplay}
-        modelDescription={helperDescription}
-        modelTitle={
-          helperModel?.title ??
-          (s.promptWorkspace?.helperModel ? helperDescription : t('main.m015'))
-        }
-        modelRevision={s.promptWorkspace?.revision ?? 0}
-        library={s.library}
-        currentChat={s.detail?.chat}
-        open={helperOpen}
-        navigation={helperNavigation}
-        handoff={helperHandoff}
-        handoffEpoch={helperHandoffEpoch}
-        resource={s.destination === 'library' && libraryTab === 'prompts' ? helperResource : null}
-        onClearResource={clearHelperResource}
-        outlineWorkspace={panel === 'outline'}
-        tabs={helperExpanded ? undefined : renderSidePanelTabs(t('helpers.m045'))}
-        scope={helperPanelScope}
-        onClose={closeHelper}
-        onModelSettings={openModelSettings}
-      />
+      {helperMounted && (
+        <HelperPanel
+          navigationActions={helperNavigationActions}
+          searchRequest={helperSearchRequest}
+          onSelectConversation={closeNavigationDrawer}
+          navigationHost={
+            helperWorkspaceOpen && (panel === 'navigation' || !sidebarHidden)
+              ? helperNavigationHost
+              : null
+          }
+          ready={helperWorkspaceOpen || s.destination !== 'story' || !s.selected || !!s.detail}
+          expanded={helperWorkspaceOpen}
+          returnToSidecar={helperReturnToSidecar.current}
+          onToggleExpanded={toggleHelperExpanded}
+          navigationLeading={navigationControls}
+          onScopeChange={rememberHelperScope}
+          returnLabel={
+            s.destination === 'story'
+              ? s.detail?.chat.title
+              : t(libraryTab === 'prompts' ? 'transfer.m286' : 'transfer.m285')
+          }
+          onOpenTarget={openHelperTarget}
+          onOpenChange={openHelperChangeTarget}
+          modal={panelModal}
+          enterSend={enterSend}
+          responseDisplay={responseDisplay}
+          modelDescription={helperDescription}
+          modelTitle={
+            helperModel?.title ??
+            (s.promptWorkspace?.helperModel ? helperDescription : t('main.m015'))
+          }
+          modelRevision={s.promptWorkspace?.revision ?? 0}
+          library={s.library}
+          currentChat={s.detail?.chat}
+          open={helperOpen}
+          navigation={helperNavigation}
+          handoff={helperHandoff}
+          handoffEpoch={helperHandoffEpoch}
+          resource={s.destination === 'library' && libraryTab === 'prompts' ? helperResource : null}
+          onClearResource={clearHelperResource}
+          outlineWorkspace={panel === 'outline'}
+          tabs={helperExpanded ? undefined : renderSidePanelTabs(t('helpers.m045'))}
+          scope={helperPanelScope}
+          onClose={closeHelper}
+          onModelSettings={openModelSettings}
+        />
+      )}
       {workspacePanelOpen && !panelModal && (
         <SidePanelResizer
           width={shownPanelWidth}
