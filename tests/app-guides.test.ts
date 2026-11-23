@@ -28,7 +28,13 @@ test('a Korean query finds the section that describes an app behavior and where 
 
 test('a section that holds the query as a phrase ranks ahead of one that only holds its words', () => {
   const found = call({ query: '번역 결과 언어' }) as { matches: { name: string }[] };
-  expect(found.matches[0]!.name).toBe('PWA');
+  const phraseHolders = ['PWA', 'UPDATES'];
+  expect(
+    found.matches
+      .slice(0, phraseHolders.length)
+      .map((match) => match.name)
+      .sort()
+  ).toEqual(phraseHolders);
 });
 
 test('words spread over the lines of one section still match it', () => {
