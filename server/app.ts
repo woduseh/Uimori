@@ -353,8 +353,6 @@ export async function createApp(options: AppOptions): Promise<App> {
   const stopping = new AbortController();
   const forcedClosed = options.maintenance === true;
   const admitted = () => admissionOpen(store, forcedClosed);
-  const precomputeAdmittedPresentation = (sourceId: string) =>
-    precomputePackagePresentation(store, sourceId, () => !stopping.signal.aborted && admitted());
   let recoveredRuns: string[] = [];
   const deferredRuns = new Map<string, boolean>();
   const { publish, publishAll } = chatEvents;
@@ -375,6 +373,13 @@ export async function createApp(options: AppOptions): Promise<App> {
       process.stderr.write('BACKGROUND_TASK_FAILED\n');
     });
   };
+  const precomputeAdmittedPresentation = (sourceId: string) =>
+    precomputePackagePresentation(
+      store,
+      sourceId,
+      () => !stopping.signal.aborted && admitted(),
+      track
+    );
   const sceneUpdated = (sourceId: string) => {
     const source = store.source(sourceId);
     for (const [jobId, controller] of jobControllers) {

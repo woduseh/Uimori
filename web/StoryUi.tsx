@@ -19,6 +19,20 @@ type Command = { body: Record<string, unknown>; uncertain: boolean };
 const commands = new Map<string, Command>();
 const renderMarkdown = async (markdown: string) => compileReadingMarkdown(markdown).html;
 
+export function createStoryUiProcessor(
+  messages: UiSegment['messages'],
+  onAction: (payload: ActionPayload) => void
+) {
+  const processor = new MessageProcessor<ReactCatalogComponent>([storyUiRenderCatalog], onAction);
+  try {
+    processor.processMessages(structuredClone(messages));
+    return processor;
+  } catch {
+    processor.dispose();
+    return null;
+  }
+}
+
 export function StoryUi({
   segment,
   chatId,
@@ -75,18 +89,9 @@ export function StoryUi({
   callback.current = (next) => {
     if (!uncertain && !pending) setAction(next);
   };
-  const [processor] = useState(() => {
-    const result = new MessageProcessor<ReactCatalogComponent>([storyUiRenderCatalog], (payload) =>
-      callback.current(payload)
-    );
-    try {
-      result.processMessages(structuredClone(segment.messages));
-      return result;
-    } catch {
-      result.dispose();
-      return null;
-    }
-  });
+  const [processor] = useState(() =>
+    createStoryUiProcessor(segment.messages, (payload) => callback.current(payload))
+  );
   useEffect(() => () => processor?.dispose(), [processor]);
   const surface = processor?.getSurface(segment.surfaceId);
   useEffect(() => {

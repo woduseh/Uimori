@@ -163,3 +163,32 @@ test('a snapshot after a disconnect or a failed full load still reloads in full'
   expect(vi.getTimerCount()).toBe(0);
   sync.dispose();
 });
+
+test('a new event during the first load refreshes at once while its snapshot waits for the load', async () => {
+  vi.useFakeTimers();
+  let cursor = -1;
+  let finishLoad!: (applied: boolean | undefined) => void;
+  const refresh = vi.fn(async () => {
+    cursor = 8;
+    return true;
+  });
+  const sync = createReaderSync({ refresh, cursor: () => cursor, onError: () => {} });
+  sync.track(
+    new Promise<boolean | undefined>((resolve) => {
+      finishLoad = resolve;
+    })
+  );
+  sync.request(7, true);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(refresh).not.toHaveBeenCalled();
+
+  sync.request(8);
+  await vi.advanceTimersByTimeAsync(100);
+  expect(refresh.mock.calls).toEqual([[true]]);
+
+  finishLoad(undefined);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(refresh.mock.calls).toEqual([[true], [false]]);
+  expect(vi.getTimerCount()).toBe(0);
+  sync.dispose();
+});

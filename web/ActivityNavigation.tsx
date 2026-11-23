@@ -12,6 +12,7 @@ import type { ReaderTarget } from '../core/reader-target.js';
 import { ChatActionMenu, ChatTitleDialog } from './ChatActionMenu.js';
 import { groupRecentDates, recentDateGroupLabel } from './recent-date-groups.js';
 import './activity-navigation.css';
+import './activity-status.css';
 
 type Props = {
   chats: Chat[];
@@ -168,7 +169,7 @@ export function ActivityNavigation({
                 className="activity-nav-link"
                 onClick={() => onSelect(chatId)}
               >
-                <RunningIcon size={16} aria-hidden="true" />
+                <RunningIcon size={16} aria-hidden="true" className="activity-spinner" />
                 <span className="activity-nav-copy">
                   <strong>{title(chat)}</strong>
                   <small>

@@ -10,7 +10,8 @@ export function createReaderSync(options: {
     full = 0,
     acknowledged = 0,
     failures = 0,
-    load = 0;
+    load = 0,
+    snapshotTarget = -1;
   let disposed = false,
     inFlight = false,
     loading = false,
@@ -19,14 +20,13 @@ export function createReaderSync(options: {
     disconnectedDuringLoad = false;
   let active = options.active ?? true;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const needed = () => full > acknowledged || target > options.cursor();
+  const needed = () => (!loading && full > acknowledged) || target > options.cursor();
   const schedule = (delay: number) => {
-    if (active && !disposed && !inFlight && !loading && !timer && needed())
-      timer = setTimeout(flush, delay);
+    if (active && !disposed && !inFlight && !timer && needed()) timer = setTimeout(flush, delay);
   };
   const flush = async () => {
     timer = undefined;
-    if (!active || disposed || loading || !needed()) return;
+    if (!active || disposed || !needed()) return;
     inFlight = true;
     const requestedFull = full;
     try {
@@ -47,6 +47,8 @@ export function createReaderSync(options: {
     if (applied) acknowledged = Math.max(acknowledged, coveredFull);
     fresh = applied && !disconnectedDuringLoad && !snapshotDuringLoad;
     if (snapshotDuringLoad && (!applied || disconnectedDuringLoad)) full++;
+    target = Math.max(target, snapshotTarget);
+    snapshotTarget = -1;
     snapshotDuringLoad = disconnectedDuringLoad = false;
     schedule(readerRefreshDelay);
   };
@@ -58,10 +60,14 @@ export function createReaderSync(options: {
       if (active) schedule(0);
     },
     request(cursor = 0, reconnect = false) {
+      if (reconnect && loading) {
+        snapshotDuringLoad = true;
+        snapshotTarget = Math.max(snapshotTarget, cursor);
+        return;
+      }
       target = Math.max(target, cursor);
       if (reconnect) {
-        if (loading) snapshotDuringLoad = true;
-        else if (fresh) fresh = false;
+        if (fresh) fresh = false;
         else full++;
       }
       schedule(readerRefreshDelay);

@@ -26,6 +26,7 @@ import {
 import './bot-navigation.css';
 import './bot-tree-navigation.css';
 import './helper-session-navigation.css';
+import './activity-status.css';
 import { writeOptionalStorage } from './optional-storage.js';
 
 type Props = {
@@ -288,13 +289,15 @@ export function HelperNavigation(props: Props) {
           size={16}
           aria-hidden="true"
           className={
-            section === 'unread'
-              ? session.lastTaskStatus === 'failed' || session.lastTaskStatus === 'interrupted'
-                ? 'activity-nav-warning'
-                : session.lastTaskStatus === 'completed'
-                  ? 'activity-nav-success'
-                  : undefined
-              : undefined
+            section === 'running'
+              ? 'activity-spinner'
+              : section === 'unread'
+                ? session.lastTaskStatus === 'failed' || session.lastTaskStatus === 'interrupted'
+                  ? 'activity-nav-warning'
+                  : session.lastTaskStatus === 'completed'
+                    ? 'activity-nav-success'
+                    : undefined
+                : undefined
           }
         />
         <span className="activity-nav-copy">

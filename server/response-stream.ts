@@ -269,6 +269,11 @@ export class ResponseStreamStore {
       const pending = stream.tail;
       if (!pending.length) return;
       if (!stream.revoked && options.isActive?.() === false) stream.revoked = true;
+      if (stream.revoked) {
+        if (stream.tail === pending) stream.tail = [];
+        tailChars = 0;
+        return;
+      }
       const inserted = this.store.transaction(() => {
         const row = this.row(options);
         if (!row || row.owner !== owner || row.status !== 'running') return false;

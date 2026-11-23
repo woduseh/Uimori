@@ -209,6 +209,7 @@ const RECENT_SOURCES_PER_CHAT = 6;
 const REMEMBERED_CHATS = 32;
 let precomputing = false;
 let canPrecompute: () => boolean = () => false;
+let trackPrecompute: (work: Promise<void>) => void = () => {};
 
 function remember<Value>(map: Map<string, Value>, key: string, value: Value) {
   map.delete(key);
@@ -230,27 +231,31 @@ function pumpPrecompute() {
     return;
   }
   precomputing = true;
-  void (async () => {
-    try {
-      const chatId = store.source(sourceId).chatId;
-      const viewport = lastViewports.get(chatId);
-      if (viewport)
-        await renderPresentation(preparePresentation(store, chatId, sourceId, viewport));
-    } catch {
-      return;
-    } finally {
-      precomputing = false;
-      pumpPrecompute();
-    }
-  })();
+  trackPrecompute(
+    (async () => {
+      try {
+        const chatId = store.source(sourceId).chatId;
+        const viewport = lastViewports.get(chatId);
+        if (viewport)
+          await renderPresentation(preparePresentation(store, chatId, sourceId, viewport));
+      } catch {
+        return;
+      } finally {
+        precomputing = false;
+        pumpPrecompute();
+      }
+    })()
+  );
 }
 
 export function precomputePackagePresentation(
   store: Store,
   sourceId: string,
-  canStart: () => boolean
+  canStart: () => boolean,
+  track: (work: Promise<void>) => void
 ): void {
   canPrecompute = canStart;
+  trackPrecompute = track;
   let chatId: string;
   try {
     chatId = store.source(sourceId).chatId;

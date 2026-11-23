@@ -9,12 +9,16 @@ import { clearPackagePresentationCaches } from '../server/package-presentation-r
 import { fixtureBotInput } from './fixtures/chat.js';
 
 const built = vi.hoisted(() => [] as { sourceId: string; translated: boolean }[]);
+const held = vi.hoisted(() => ({ build: undefined as Promise<void> | undefined }));
 vi.mock('../server/package-presentation.js', async (original) => {
   const actual = await original<typeof import('../server/package-presentation.js')>();
   return {
     ...actual,
-    buildPackagePresentation: (...args: Parameters<typeof actual.buildPackagePresentation>) => {
+    buildPackagePresentation: async (
+      ...args: Parameters<typeof actual.buildPackagePresentation>
+    ) => {
       built.push({ sourceId: args[1].id, translated: !!args[1].translation });
+      await held.build;
       return actual.buildPackagePresentation(...args);
     },
   };
@@ -24,6 +28,7 @@ const owned: { app: App; path: string }[] = [];
 afterEach(async () => {
   clearPackagePresentationCaches();
   built.length = 0;
+  held.build = undefined;
   for (const { app, path } of owned.splice(0)) {
     await app.close();
     rmSync(path, { recursive: true, force: true });
@@ -141,4 +146,30 @@ test('a finished translation and a finished run render their scene before it is 
   await expect.poll(() => buildsOf(sourceId)).toBe(1);
   expect((await read(sourceId)).statusCode).toBe(200);
   expect(buildsOf(sourceId)).toBe(1);
+});
+
+test('closing the app waits for a scene that is rendering in the background', async () => {
+  const { app, chat, get } = await scene('미라는 문턱에서 멈췄다.');
+  expect((await get('?viewportWidth=1280&viewportHeight=800')).statusCode).toBe(200);
+  let release!: () => void;
+  held.build = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const translation = await app.inject({
+    method: 'POST',
+    url: `/api/sources/${chat.headRevision}/translation`,
+    payload: {},
+  });
+  expect(translation.statusCode).toBe(200);
+  await expect.poll(() => built.some((entry) => entry.translated)).toBe(true);
+  const { path } = owned.splice(0)[0];
+  let closed = false;
+  const closing = app.close().then(() => {
+    closed = true;
+  });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(closed).toBe(false);
+  release();
+  await closing;
+  rmSync(path, { recursive: true, force: true });
 });

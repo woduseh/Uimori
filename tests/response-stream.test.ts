@@ -202,9 +202,9 @@ describe('durable public response batches', () => {
     writer.flush();
     writer.progress({ attemptId: 'attempt-1', segment: 0, text: '늦음', offset: 8 });
     writer.finish('partial');
-    expect(state.streams.read('main', 'run-1').chunks.map((chunk) => chunk.text)).toEqual([
-      '부분',
-      '확인 전',
+    expect(state.streams.read('main', 'run-1').chunks.map((chunk) => chunk.text)).toEqual(['부분']);
+    expect(state.db.prepare('SELECT text FROM response_stream_chunks ORDER BY seq').all()).toEqual([
+      { text: '부분' },
     ]);
     state.db.prepare('DELETE FROM runs WHERE id=?').run('run-1');
     expect(() => state.streams.read('main', 'run-1')).toThrow('not found');
