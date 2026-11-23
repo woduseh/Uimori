@@ -38,6 +38,17 @@ test('only active settings survive old DB and backup projections', () => {
     expect(() => normalizeChatSettings({ maxCalls: 8, storyUiStyle: invalid })).toThrow(
       'Invalid story UI style'
     );
+  expect(
+    normalizeChatSettings({ maxCalls: 8, autoRefusalRetryEnabled: true, autoRefusalMaxRetries: 0 })
+  ).toEqual({ maxCalls: 8, autoRefusalRetryEnabled: true, autoRefusalMaxRetries: 0 });
+  for (const invalid of [
+    { autoRefusalRetryEnabled: 'on' },
+    { autoRefusalMaxRetries: 6 },
+    { autoRefusalMaxRetries: 1.5 },
+  ])
+    expect(() => normalizeChatSettings({ maxCalls: 8, ...invalid })).toThrow(
+      /automatic refusal retry/
+    );
   for (const maxCalls of [0, 129, '8'])
     expect(() => normalizeChatSettings({ status: false, maxCalls })).toThrow('Invalid settings');
 });
@@ -54,10 +65,12 @@ test('generation defaults persist and apply only when creating a new chat', asyn
   owned.push({ app, path });
   const url = '/api/chat-generation-defaults';
   const initial = { maxCalls: 8, storyUi: false, storyUiStyle: 'auto' };
-  expect((await app.inject(url)).json()).toEqual({ revision: 0, ...initial });
+  const initialRetry = { autoRefusalRetryEnabled: true, autoRefusalMaxRetries: 2 };
+  expect((await app.inject(url)).json()).toEqual({ revision: 0, ...initial, ...initialRetry });
   const before = createFixtureChat(app.store, 'Chat before saving defaults');
   expect(before.settings).toEqual(initial);
   const chosen = { maxCalls: 128, storyUi: true, storyUiStyle: 'theme:custom-theme' };
+  const chosenRetry = { autoRefusalRetryEnabled: false, autoRefusalMaxRetries: 5 };
   const put = (expectedRevision: number, settings: Record<string, unknown>) =>
     app.inject({ method: 'PUT', url, payload: { expectedRevision, ...settings } });
   for (const invalid of [
@@ -66,6 +79,8 @@ test('generation defaults persist and apply only when creating a new chat', asyn
     { ...chosen, storyUi: 'true' },
     { ...chosen, storyUiStyle: undefined },
     { ...chosen, autoTranslate: true },
+    { ...chosen, autoRefusalMaxRetries: 6 },
+    { ...chosen, autoRefusalRetryEnabled: 'yes' },
   ])
     expect((await put(0, invalid)).statusCode).toBe(400);
   expect((await app.inject(url)).json().revision).toBe(0);
@@ -75,11 +90,11 @@ test('generation defaults persist and apply only when creating a new chat', asyn
     payload: { expectedSettingsRevision: before.settingsRevision, maxCalls: 129 },
   });
   expect(overLimit.statusCode).toBe(400);
-  const saved = await put(0, chosen);
+  const saved = await put(0, { ...chosen, ...chosenRetry });
   expect(saved.statusCode).toBe(200);
-  expect(saved.json()).toEqual({ revision: 1, ...chosen });
+  expect(saved.json()).toEqual({ revision: 1, ...chosen, ...chosenRetry });
   expect((await put(0, initial)).statusCode).toBe(409);
-  expect((await app.inject(url)).json()).toEqual({ revision: 1, ...chosen });
+  expect((await app.inject(url)).json()).toEqual({ revision: 1, ...chosen, ...chosenRetry });
   expect(app.store.chat(before.id).settings).toEqual(initial);
   expect(app.store.chat(before.id).settingsRevision).toBe(before.settingsRevision);
   expect((await app.inject('/api/auto-translation-defaults')).json()).toEqual({
@@ -91,7 +106,7 @@ test('generation defaults persist and apply only when creating a new chat', asyn
   owned.pop();
   const reopened = await createApp(options);
   owned.push({ app: reopened, path });
-  expect((await reopened.inject(url)).json()).toEqual({ revision: 1, ...chosen });
+  expect((await reopened.inject(url)).json()).toEqual({ revision: 1, ...chosen, ...chosenRetry });
   const created = await reopened.inject({
     method: 'POST',
     url: '/api/chats',

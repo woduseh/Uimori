@@ -18,7 +18,9 @@
 
 새 채팅을 만들거나 설정 없는 원고를 가져올 때 복사하며, 기존 채팅·복사·분기·백업 복원은 원래 설정을 유지해요.
 
-`GET/PUT /api/chat-generation-defaults`는 `{revision,maxCalls,storyUi,storyUiStyle}`를 읽고 저장해요. PUT은 `expectedRevision`으로 동시 수정을 검사해 충돌 시 409를 반환해요. 기본값은 `app_metadata`에 저장해요.
+같은 화면의 [거절 뒤 자동 다시 생성](GENERATION.md#거절-뒤-자동-다시-생성) 설정은 복사하지 않고, 채팅에서 따로 정하지 않은 모든 채팅이 따라요.
+
+`GET/PUT /api/chat-generation-defaults`는 `{revision,maxCalls,storyUi,storyUiStyle,autoRefusalRetryEnabled,autoRefusalMaxRetries}`를 읽고 저장해요. PUT에서 뒤의 두 값은 생략하면 기존 값을 유지해요. PUT은 `expectedRevision`으로 동시 수정을 검사해 충돌 시 409를 반환해요. 기본값은 `app_metadata`에 저장해요.
 
 1. 예약할 때 전체 원문과 실제 user/assistant 쌍, 모델·프로바이더·자료·메모·원문 구간 정책, 활성 checkpoint의 정확한 ID/revision/hash를 고정해요.
 2. 최종 요청 body의 system·메시지·도구·카탈로그·출력 스키마를 모두 세어요. 캐시 읽기 토큰도 입력 컨텍스트에 포함해요.

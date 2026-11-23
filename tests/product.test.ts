@@ -696,6 +696,16 @@ describe('M1 real HTTP application boundaries', () => {
     const configured = profile(app.store.product, chat, [], {
       routes: { main: { id: model.id }, translation: null },
     });
+    const { revision, ...defaults } = await api<Record<string, unknown>>(
+      url,
+      '/api/chat-generation-defaults'
+    );
+    await api(
+      url,
+      '/api/chat-generation-defaults',
+      { ...defaults, expectedRevision: revision, autoRefusalRetryEnabled: false },
+      { method: 'PUT' }
+    );
     async function create(request: string) {
       const current = app.store.chat(chat.id);
       return api<Run>(url, `/api/chats/${chat.id}/runs`, {

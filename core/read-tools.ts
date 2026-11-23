@@ -124,4 +124,6 @@ export const KNOWLEDGE_SKILL_TOOLS: ProviderTool[] = [
   },
 ];
 
+export const SKILL_TOOL_NAMES: readonly string[] = ['skills.list', 'skills.load'];
+
 export const MAIN_READ_TOOLS: ProviderTool[] = [...KNOWLEDGE_SKILL_TOOLS, ...STORY_READ_TOOLS];

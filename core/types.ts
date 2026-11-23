@@ -3,6 +3,8 @@ export type Settings = {
   autoTranslate?: boolean;
   storyUi?: boolean;
   storyUiStyle?: import('./story-ui-style.js').StoryUiStyleSetting;
+  autoRefusalRetryEnabled?: boolean;
+  autoRefusalMaxRetries?: number;
 };
 export type Chat = {
   id: string;

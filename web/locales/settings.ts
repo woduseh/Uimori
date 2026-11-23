@@ -71,6 +71,42 @@ export const messages = {
     ja: '新しいチャットの既定値を読み込めませんでした。',
     zh: '无法加载新聊天默认值。',
   },
+  'settings.autoRefusalRetry': {
+    ko: '거절되면 자동으로 다시 생성',
+    en: 'Regenerate automatically after a refusal',
+    ja: '拒否されたら自動で再生成',
+    zh: '被拒绝时自动重新生成',
+  },
+  'settings.autoRefusalRetryDefaultHint': {
+    ko: '거절 판정이나 프로바이더 안전 차단으로 끝나면 같은 요청을 새 실행으로 다시 보내요. 시도마다 생성 비용이 따로 들어요. 채팅에서 따로 정하지 않았다면 기존 채팅에도 적용돼요.',
+    en: 'When a response is judged a refusal or blocked by the provider’s safety filter, the same request is sent again as a new run. Each attempt is billed separately. Applies to existing chats too unless a chat sets its own value.',
+    ja: '拒否と判定されるかプロバイダーの安全フィルターで止まると、同じリクエストを新しい実行として再送します。試行ごとに生成費用がかかります。チャットで個別に設定していなければ既存のチャットにも適用されます。',
+    zh: '响应被判定为拒绝或被提供商安全过滤拦截时，会以新的执行重新发送同一请求。每次尝试单独计费。聊天未单独设置时，也适用于现有聊天。',
+  },
+  'settings.autoRefusalMaxRetries': {
+    ko: '자동 재생성 최대 횟수',
+    en: 'Maximum automatic regenerations',
+    ja: '自動再生成の最大回数',
+    zh: '自动重新生成最多次数',
+  },
+  'settings.autoRefusalMaxRetriesHint': {
+    ko: '0~{max}회',
+    en: '0–{max} times',
+    ja: '0～{max}回',
+    zh: '0–{max}次',
+  },
+  'settings.autoRefusalRetryRange': {
+    ko: '자동 재생성 횟수는 0~{max} 사이의 정수로 입력해 주세요.',
+    en: 'Enter a whole number from 0 to {max} for automatic regenerations.',
+    ja: '自動再生成の回数は 0〜{max} の整数で入力してください。',
+    zh: '自动重新生成次数请输入 0 到 {max} 之间的整数。',
+  },
+  'settings.autoRefusalRetryUpTo': {
+    ko: '켜짐, 최대 {count}회',
+    en: 'On, up to {count}',
+    ja: 'オン、最大{count}回',
+    zh: '开，最多{count}次',
+  },
   'settings.judgmentProvider': {
     ko: '판단 프로바이더',
     en: 'Judgment provider',

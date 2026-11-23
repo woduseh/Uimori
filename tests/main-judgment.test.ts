@@ -95,15 +95,19 @@ async function api(
 }
 async function fixture(
   candidate: string,
-  scores: number | 'failure' | 'invalid' | 'budget',
+  scores: number | readonly number[] | 'failure' | 'invalid' | 'budget',
   maxCalls = 8,
   key = true,
   scriptStage?: 'input' | 'editRequest' | 'recovery',
   judgmentEnabled = true,
-  generationStatus: 'completed' | 'partial' = 'completed',
+  generationStatus:
+    | 'completed'
+    | 'partial'
+    | readonly ('completed' | 'refused' | 'empty')[] = 'completed',
   mainThreshold = 0.9,
   createShellWorkspace = false,
-  selectedProvider?: ExternalJudgmentProvider
+  selectedProvider?: ExternalJudgmentProvider,
+  autoRefusalRetry?: { autoRefusalRetryEnabled?: boolean; autoRefusalMaxRetries?: number }
 ) {
   vi.stubEnv('TYPESAFE_API_KEY', key ? 'synthetic-jev-key' : '');
   const selected = selectedProvider && judgmentEndpoints[selectedProvider];
@@ -137,7 +141,12 @@ async function fixture(
       return new Response(JSON.stringify({ detail: { error_type: 'max_tokens_exceeded' } }), {
         status: 400,
       });
-    const probability = scores === 'invalid' ? 2 : scores;
+    const probability =
+      scores === 'invalid'
+        ? 2
+        : typeof scores === 'number'
+          ? scores
+          : scores[Math.min(judged.length, scores.length) - 1]!;
     return Response.json({
       ...(!gemini && { model: selected ? selected.modelId : 'jev-latest' }),
       answers:
@@ -199,12 +208,16 @@ async function fixture(
         bodySha256: digest(body),
         stablePrefixSha256: digest(request.stable),
       });
+      const scripted =
+        typeof generationStatus === 'string'
+          ? generationStatus
+          : generationStatus[Math.min(calls.length, generationStatus.length) - 1]!;
       return {
-        status: generationStatus,
-        text: output.text,
+        status: scripted === 'empty' ? ('error' as const) : scripted,
+        text: scripted === 'refused' || scripted === 'empty' ? '' : output.text,
         toolCalls: [],
-        refusal: null,
-        error: null,
+        refusal: scripted === 'refused' ? 'SAFETY' : null,
+        error: scripted === 'empty' ? { code: 'EMPTY_COMPLETION' } : null,
         opaqueState: null,
         usage: { inputTokens: 11, outputTokens: 5, costUsd: null, raw: null, priceRevision: null },
       };
@@ -356,6 +369,20 @@ ${
     },
     'PUT'
   );
+  if (autoRefusalRetry) {
+    const defaults = await api(app, '/api/chat-generation-defaults');
+    await api(
+      app,
+      '/api/chat-generation-defaults',
+      {
+        ...defaults,
+        revision: undefined,
+        expectedRevision: defaults.revision,
+        ...autoRefusalRetry,
+      },
+      'PUT'
+    );
+  }
   const run = await api(app, `/api/chats/${chat.id}/runs`, {
     request: 'Respond to the selected task.',
     expectedRevision: null,
@@ -363,8 +390,14 @@ ${
     idempotencyKey: randomUUID(),
   });
   await expect
-    .poll(() => app.store.run(run.id).status, { timeout: 6000 })
-    .not.toMatch(/^(queued|running)$/u);
+    .poll(
+      () =>
+        app.store.db
+          .prepare("SELECT count(*) AS active FROM runs WHERE status IN ('queued','running')")
+          .get()!.active,
+      { timeout: 12000 }
+    )
+    .toBe(0);
   return {
     app,
     chat,
@@ -426,7 +459,19 @@ test.each([
   ['Invalid judgment keeps output.', 'invalid', 'failed', 'JEV_RESPONSE_INVALID'],
   ['Oversized judgment keeps output.', 'budget', 'failed', 'JEV_INPUT_BUDGET'],
 ] as const)('keeps %s out of canon without retrying', async (text, scores, status, error) => {
-  const f = await fixture(text, scores);
+  const f = await fixture(
+    text,
+    scores,
+    8,
+    true,
+    undefined,
+    true,
+    'completed',
+    0.9,
+    false,
+    undefined,
+    { autoRefusalRetryEnabled: false }
+  );
   expect(f.run).toMatchObject({
     status,
     error,
@@ -719,4 +764,111 @@ test('interrupted judgment recovery preserves the candidate and explicitly resum
     inputCount: '1',
     outputCount: '1',
   });
+});
+
+const chatRuns = (app: App, chatId: string) =>
+  (
+    app.store.db.prepare('SELECT id FROM runs WHERE chat_id=? ORDER BY rowid').all(chatId) as {
+      id: string;
+    }[]
+  ).map(({ id }) => app.store.run(id));
+const retryOf = (app: App, runId: string) =>
+  app.store.db
+    .prepare("SELECT json_extract(command,'$.retryOf') AS retryOf FROM runs WHERE id=?")
+    .get(runId)!.retryOf;
+
+test('a refused main response retries automatically up to the default limit and keeps every refusal', async () => {
+  const f = await fixture('I cannot write this.', 0.99);
+  const runs = chatRuns(f.app, f.chat.id);
+  expect(runs.map((run) => run.status)).toEqual(['refused', 'refused', 'refused']);
+  expect(runs.map((run) => retryOf(f.app, run.id))).toEqual([null, runs[0]!.id, runs[1]!.id]);
+  for (const run of runs)
+    expect(run).toMatchObject({
+      error: 'MAIN_RESPONSE_REFUSED',
+      partialText: 'I cannot write this.',
+      sourceRevision: null,
+      usage: { modelCalls: 2, inputTokens: 18 },
+    });
+  expect(f.calls).toHaveLength(3);
+  expect(f.judged).toHaveLength(3);
+  expect(f.app.store.product.attempts(f.chat.id)).toHaveLength(6);
+  const readerRuns = await api(f.app, `/api/chats/${f.chat.id}/reader-runs`);
+  expect(readerRuns.find((run: { id: string }) => run.id === runs[2]!.id).supersededBy).toBeNull();
+});
+
+test('an automatic retry that passes judgment commits the scene', async () => {
+  const f = await fixture('The boat waited.', [0.99, 0.05]);
+  const runs = chatRuns(f.app, f.chat.id);
+  expect(runs.map((run) => run.status)).toEqual(['refused', 'completed']);
+  expect(f.app.store.chat(f.chat.id).headRevision).toBe(runs[1]!.sourceRevision);
+  expect(runs[0]).toMatchObject({ partialText: 'The boat waited.', usage: { modelCalls: 2 } });
+});
+
+test.each([
+  ['provider refusal', ['refused', 'completed'], 'SAFETY'],
+  ['silent empty completion', ['empty', 'completed'], 'EMPTY_COMPLETION'],
+] as const)('%s retries automatically', async (_name, statuses, error) => {
+  const f = await fixture('Second attempt text.', 0.05, 8, true, undefined, true, statuses);
+  const runs = chatRuns(f.app, f.chat.id);
+  expect(runs.map((run) => run.status)).toEqual([
+    error === 'SAFETY' ? 'refused' : 'failed',
+    'completed',
+  ]);
+  expect(runs[0]).toMatchObject({ error, sourceRevision: null, usage: { modelCalls: 1 } });
+  expect(retryOf(f.app, runs[1]!.id)).toBe(runs[0]!.id);
+  expect(f.calls).toHaveLength(2);
+});
+
+test.each([
+  ['disabled', { autoRefusalRetryEnabled: false }],
+  ['limit 0', { autoRefusalMaxRetries: 0 }],
+] as const)('automatic refusal retry %s leaves a single refused run', async (_name, setting) => {
+  const f = await fixture(
+    'I cannot write this.',
+    0.99,
+    8,
+    true,
+    undefined,
+    true,
+    'completed',
+    0.9,
+    false,
+    undefined,
+    setting
+  );
+  expect(chatRuns(f.app, f.chat.id).map((run) => run.status)).toEqual(['refused']);
+  expect(f.calls).toHaveLength(1);
+});
+
+test.each([
+  ['judgment failure', 'failure', 8, 'JEV_EXECUTION_FAILED'],
+  ['call budget', 0.99, 1, 'MAIN_JUDGMENT_CALL_BUDGET'],
+] as const)('%s does not retry automatically', async (_name, scores, maxCalls, error) => {
+  const f = await fixture('Kept candidate.', scores, maxCalls);
+  expect(chatRuns(f.app, f.chat.id).map((run) => [run.status, run.error])).toEqual([
+    ['failed', error],
+  ]);
+});
+
+test('a cancelled run does not retry automatically', async () => {
+  const f = await fixture('First scene.', 0.05);
+  let started = false;
+  vi.stubGlobal('fetch', (_url: unknown, init?: RequestInit) => {
+    started = true;
+    return new Promise<Response>((_resolve, reject) => {
+      init!.signal!.addEventListener('abort', () => reject(new Error('Fixture aborted')), {
+        once: true,
+      });
+    });
+  });
+  const run = await api(f.app, `/api/chats/${f.chat.id}/runs`, {
+    request: 'Continue.',
+    expectedRevision: f.app.store.chat(f.chat.id).headRevision,
+    expectedSettingsRevision: f.app.store.chat(f.chat.id).settingsRevision,
+    idempotencyKey: randomUUID(),
+  });
+  await expect.poll(() => started, { timeout: 6000 }).toBe(true);
+  await api(f.app, `/api/runs/${run.id}/cancel`, {});
+  await expect.poll(() => f.app.store.run(run.id).status, { timeout: 6000 }).toBe('cancelled');
+  expect(chatRuns(f.app, f.chat.id).map((item) => item.status)).toEqual(['completed', 'cancelled']);
 });

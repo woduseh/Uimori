@@ -5,7 +5,67 @@ import type { RunSnapshot } from '../core/types.js';
 import { canRecoverMainJudgment } from '../core/main-judgment-recovery.js';
 import { HttpError, text } from './request-validation.js';
 import { forkChat } from './chat-fork.js';
+import { chatGenerationDefaults } from './chat-generation-defaults.js';
+import { autoRefusalRetryLimit } from '../core/chat-settings.js';
+import { imageInputSupported } from '../core/provider-images.js';
 import type { Store, Run } from './store.js';
+
+const AUTOMATIC_REFUSAL_RETRY_KEY = 'auto-refusal-retry:';
+
+export function automaticRefusalRetryDepth(store: Store, runId: string): number {
+  const read = store.db.prepare(
+    "SELECT request_key AS requestKey,json_extract(command,'$.retryOf') AS retryOf FROM runs WHERE id=?"
+  );
+  const seen = new Set<string>();
+  let depth = 0;
+  for (let id: string | null = runId; id && !seen.has(id); ) {
+    seen.add(id);
+    const row = read.get(id) as { requestKey: string | null; retryOf: string | null } | undefined;
+    if (!row?.requestKey?.startsWith(AUTOMATIC_REFUSAL_RETRY_KEY)) break;
+    depth++;
+    id = row.retryOf;
+  }
+  return depth;
+}
+
+export function requireRequestModel(
+  snapshot: RunSnapshot,
+  requireModel: (target: unknown, role: string) => void
+) {
+  const target = snapshot.profile?.models.main;
+  requireModel(target, 'main');
+  if (
+    snapshot.requestImages?.length &&
+    target &&
+    imageInputSupported(target.connection.protocol, target.modelId) === false
+  )
+    throw new HttpError(400, 'IMAGE_INPUT_UNSUPPORTED_MODEL');
+}
+
+export function queueAutomaticRefusalRetry(
+  store: Store,
+  runId: string,
+  requireModel: (target: unknown, role: string) => void
+): Run | undefined {
+  const refused = store.run(runId);
+  const chat = store.chat(refused.chatId);
+  if (
+    (refused.status !== 'refused' && refused.status !== 'failed') ||
+    automaticRefusalRetryDepth(store, runId) >=
+      autoRefusalRetryLimit(chat.settings, chatGenerationDefaults(store.db)) ||
+    chat.headRevision !== (refused.snapshot.replacement?.sourceRevision ?? refused.parentRevision)
+  )
+    return undefined;
+  try {
+    const result = retryRun(store, runId, `${AUTOMATIC_REFUSAL_RETRY_KEY}${runId}`, {
+      validate: (snapshot) => requireRequestModel(snapshot, requireModel),
+    });
+    return result.created ? result.run : undefined;
+  } catch (error) {
+    if (error instanceof HttpError) return undefined;
+    throw error;
+  }
+}
 
 export function retryRun(
   store: Store,

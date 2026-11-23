@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import type { Connection, ModelPreset } from '../core/product.js';
 import { titleRequest } from '../server/title-request.js';
+import { encodeVertex } from '../core/vertex-protocol.js';
 
 function fixture(protocol: Connection['protocol'] = 'openai-responses-v1') {
   const connection: Connection = {
@@ -72,4 +73,40 @@ test('title provider options are copied instead of sharing editable nested data'
   expect(request.providerOptions).not.toBe(model.providerOptions);
   expect(request.providerOptions?.gateway).not.toBe(model.providerOptions.gateway);
   expect(model.providerOptions).toEqual(original);
+});
+
+test.each([
+  ['gemini-4-argon', 'LOW'],
+  ['gemini-3.5-flash-lite', 'MINIMAL'],
+] as const)('Vertex %s title requests its lowest thinking level', (modelId, level) => {
+  const { connection, model } = fixture('vertex-gemini-v1');
+  model.modelId = modelId;
+  model.maxOutputTokens = 256;
+  model.thinkingLevel = 'HIGH';
+  const request = titleRequest(model, connection, input);
+  expect(request.generation?.thinkingLevel).toBe(level);
+  expect(
+    (encodeVertex(request).body as { generationConfig: Record<string, unknown> }).generationConfig
+      .thinkingConfig
+  ).toEqual({ thinkingLevel: level });
+  expect(model.thinkingLevel).toBe('HIGH');
+});
+
+test('title requests the lowest declared effort for reviewed Responses and Claude models', () => {
+  const responses = fixture('openai-responses-v1');
+  responses.model.modelId = 'gpt-6.2-astra';
+  expect(titleRequest(responses.model, responses.connection, input).generation).toMatchObject({
+    reasoningEffort: 'low',
+  });
+  const claude = fixture('anthropic-messages-v1');
+  claude.model.modelId = 'claude-opus-5-5';
+  expect(titleRequest(claude.model, claude.connection, input).generation).toMatchObject({
+    outputEffort: 'low',
+  });
+});
+
+test('title keeps saved thinking options for a model without reviewed capabilities', () => {
+  const { connection, model } = fixture('vertex-gemini-v1');
+  model.thinkingLevel = 'HIGH';
+  expect(titleRequest(model, connection, input).generation?.thinkingLevel).toBe('HIGH');
 });

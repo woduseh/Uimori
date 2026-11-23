@@ -10,7 +10,13 @@ import { Switch } from './BooleanControls.js';
 import './settings-actions.css';
 import { useEffect, useRef, useState } from 'react';
 import type { Chat, Settings } from '../core/types.js';
-import { MAX_MAIN_MODEL_CALLS, type AutoTranslationDefaults } from '../core/chat-settings.js';
+import {
+  isAutoRefusalRetryCount,
+  MAX_AUTO_REFUSAL_RETRIES,
+  MAX_MAIN_MODEL_CALLS,
+  type AutoTranslationDefaults,
+  type ChatGenerationDefaults,
+} from '../core/chat-settings.js';
 import { api } from './api.js';
 import { StoryUiStyleSelect } from './StoryUiStyleSelect.js';
 export function SettingsEditor({
@@ -46,11 +52,17 @@ export function SettingsEditor({
   const [localError, setLocalError] = useState('');
   const [confirmReload, setConfirmReload] = useState(false);
   const [globalAutoTranslate, setGlobalAutoTranslate] = useState<boolean | null>(null);
+  const [generationDefaults, setGenerationDefaults] = useState<ChatGenerationDefaults | null>(null);
   useEffect(() => {
     let active = true;
     void api<AutoTranslationDefaults>('/auto-translation-defaults')
       .then((value) => {
         if (active) setGlobalAutoTranslate(value.autoTranslate);
+      })
+      .catch(() => {});
+    void api<ChatGenerationDefaults>('/chat-generation-defaults')
+      .then((value) => {
+        if (active) setGenerationDefaults(value);
       })
       .catch(() => {});
     return () => {
@@ -95,6 +107,13 @@ export function SettingsEditor({
       value.maxCalls > MAX_MAIN_MODEL_CALLS
     ) {
       setLocalError(uiMessage('settings.m78'));
+      return false;
+    }
+    if (
+      value.autoRefusalMaxRetries !== undefined &&
+      !isAutoRefusalRetryCount(value.autoRefusalMaxRetries)
+    ) {
+      setLocalError(uiMessage('settings.autoRefusalRetryRange', { max: MAX_AUTO_REFUSAL_RETRIES }));
       return false;
     }
     setSaving(true);
@@ -212,6 +231,83 @@ export function SettingsEditor({
                   onChange={(event) => update('maxCalls', event.target.valueAsNumber)}
                 />
               </label>
+              <label className="settings-row">
+                <span className="settings-row-copy">
+                  <strong>{t('settings.autoRefusalRetry')}</strong>
+                </span>
+                <select
+                  aria-label={t('settings.autoRefusalRetry')}
+                  value={
+                    value.autoRefusalRetryEnabled === undefined
+                      ? 'inherit'
+                      : value.autoRefusalRetryEnabled
+                        ? 'on'
+                        : 'off'
+                  }
+                  onChange={(event) => {
+                    const choice = event.target.value;
+                    setDirty(true);
+                    setMessage('');
+                    setValue(
+                      ({
+                        autoRefusalRetryEnabled: _enabled,
+                        autoRefusalMaxRetries: _max,
+                        ...rest
+                      }) =>
+                        choice === 'inherit'
+                          ? rest
+                          : choice === 'on'
+                            ? {
+                                ...rest,
+                                autoRefusalRetryEnabled: true,
+                                autoRefusalMaxRetries:
+                                  generationDefaults?.autoRefusalMaxRetries ?? 2,
+                              }
+                            : { ...rest, autoRefusalRetryEnabled: false }
+                    );
+                  }}
+                >
+                  <option value="inherit">
+                    {generationDefaults === null
+                      ? t('settings.m88')
+                      : t('library.globalValue', {
+                          value: generationDefaults.autoRefusalRetryEnabled
+                            ? t('settings.autoRefusalRetryUpTo', {
+                                count: generationDefaults.autoRefusalMaxRetries,
+                              })
+                            : t('settings.m74'),
+                        })}
+                  </option>
+                  <option value="on">{t('settings.m89')}</option>
+                  <option value="off">{t('settings.m90')}</option>
+                </select>
+              </label>
+              {value.autoRefusalRetryEnabled === true && (
+                <label className="settings-row">
+                  <span className="settings-row-copy">
+                    <strong>{t('settings.autoRefusalMaxRetries')}</strong>
+                    <small>
+                      {t('settings.autoRefusalMaxRetriesHint', { max: MAX_AUTO_REFUSAL_RETRIES })}
+                    </small>
+                  </span>
+                  <input
+                    type="number"
+                    aria-label={t('settings.autoRefusalMaxRetries')}
+                    min={0}
+                    max={MAX_AUTO_REFUSAL_RETRIES}
+                    step={1}
+                    required
+                    value={
+                      Number.isFinite(value.autoRefusalMaxRetries)
+                        ? value.autoRefusalMaxRetries
+                        : ''
+                    }
+                    onChange={(event) =>
+                      update('autoRefusalMaxRetries', event.target.valueAsNumber)
+                    }
+                  />
+                </label>
+              )}
             </div>
           </details>
           {!hideSaveActions && (

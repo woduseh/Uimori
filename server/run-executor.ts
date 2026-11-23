@@ -35,6 +35,8 @@ import { JevCredentialStore } from './jev-credentials.js';
 import { AnthropicBatchRun } from './anthropic-batch.js';
 import { readRequestImage } from './request-images.js';
 import { MainShell } from './main-shell.js';
+import { maintenanceState } from './maintenance.js';
+import { queueAutomaticRefusalRetry } from './run-retry.js';
 import { recordToolDiagnostic, startToolDiagnostic } from './execution-diagnostics.js';
 import type { RunPhaseSpan, Usage } from '../core/types.js';
 import {
@@ -108,6 +110,17 @@ export function createRunExecutor({
         const phaseSpans: Partial<Record<RunPhaseSpan, number>> = {};
         const addPhaseSpan = (phase: RunPhaseSpan, elapsedMs: number) => {
           phaseSpans[phase] = (phaseSpans[phase] ?? 0) + elapsedMs;
+        };
+        let refusalRetryId: string | undefined;
+        const queueRefusalRetry = () => {
+          if (
+            signal.aborted ||
+            controller.signal.aborted ||
+            run.snapshot.judgmentRecovery ||
+            maintenanceState(store).status !== 'open'
+          )
+            return;
+          refusalRetryId = queueAutomaticRefusalRetry(store, id, requireModel)?.id;
         };
         let openPhase: { phase: RunPhaseSpan; started: number } | undefined;
         const beginPhase = (phase: RunPhaseSpan) => {
@@ -581,6 +594,11 @@ export function createRunExecutor({
               result.status === 'partial' ? result.text : '',
               result.usage
             );
+            if (
+              result.status === 'refused' ||
+              (result.status === 'error' && result.error === 'EMPTY_COMPLETION')
+            )
+              queueRefusalRetry();
             publish(run.chatId);
             return;
           }
@@ -628,6 +646,7 @@ export function createRunExecutor({
             endPhase();
             if (verdict.verdict !== 'accepted') {
               store.finishRun(id, 'refused', 'MAIN_RESPONSE_REFUSED', result.text, priorUsage);
+              queueRefusalRetry();
               publish(run.chatId);
               return;
             }
@@ -758,6 +777,7 @@ export function createRunExecutor({
           response?.finish(status === 'queued' || status === 'running' ? 'interrupted' : status);
           runs.delete(id);
           signal.removeEventListener('abort', onStop);
+          if (refusalRetryId && !signal.aborted) execute(refusalRetryId);
         }
       })()
     );

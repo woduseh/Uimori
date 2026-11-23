@@ -126,6 +126,36 @@ test('Story UI guidance is an opted-in execution contract, not reference-data in
   expect(JSON.stringify(wire.body)).toContain('User-enabled story interface capability');
 });
 
+test('skill tools are offered only when the approved scope contains a skill', async () => {
+  const resource = (kind: 'lore' | 'skill') => ({
+    id: `synthetic-${kind}`,
+    chatId: 'synthetic-chat',
+    kind,
+    revision: 1,
+    title: `Synthetic ${kind}`,
+    description: `A ${kind} entry`,
+    text: `The ${kind} text.`,
+  });
+  const build = async (kinds: ('lore' | 'skill')[]) => {
+    const current = await snapshot();
+    current.resources = kinds.map(resource);
+    delete current.promptCompilation;
+    return buildMainProviderRequest(current);
+  };
+  const names = (request: { stable: { tools: { name: string }[] } }) =>
+    request.stable.tools.map((tool) => tool.name);
+  const withSkill = await build(['lore', 'skill']);
+  const withoutSkill = await build(['lore']);
+  expect(names(withSkill.request)).toEqual(
+    expect.arrayContaining(['knowledge.search', 'skills.list', 'skills.load'])
+  );
+  expect(names(withoutSkill.request)).toEqual(
+    names(withSkill.request).filter((name) => !name.startsWith('skills.'))
+  );
+  expect(withoutSkill.input.tools).not.toContain('skills.list');
+  expect(JSON.stringify(withoutSkill.request)).not.toContain('skills.');
+});
+
 function hooks(_origin: string) {
   const events: ToolEvent[] = [],
     attempts: WireRecord[] = [],

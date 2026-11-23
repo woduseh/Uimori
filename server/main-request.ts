@@ -10,13 +10,18 @@ import {
   CONTEXT_DERIVED_GUIDANCE,
   CONTEXT_RETRIEVAL_GUIDANCE,
 } from '../core/context-summary-policy.js';
-import { MAIN_READ_TOOLS } from '../core/read-tools.js';
+import { MAIN_READ_TOOLS, SKILL_TOOL_NAMES } from '../core/read-tools.js';
 import { MAIN_SHELL_TOOL } from '../core/main-shell.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { nativeRisuPresetPending } from './risu-native-preset.js';
 import { nativeRisuPending } from './risu-native-run.js';
 import { attachMainHostContext, requestInput } from './main-host-context.js';
-import { buildMainInput, CATALOG_READ_GUIDANCE, type MainInput } from '../core/provider.js';
+import {
+  buildMainInput,
+  CATALOG_READ_GUIDANCE,
+  roleResources,
+  type MainInput,
+} from '../core/provider.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import { isGeminiProtocol, type Connection, type ModelPreset } from '../core/product.js';
 import {
@@ -99,6 +104,12 @@ export function buildMainProviderRequest(
       : undefined);
   const input = buildMainInput(fixed, options.results ?? []),
     terminal = storySubmissionEnabled(fixed);
+  if (
+    !(input.catalogPage ? roleResources(fixed) : input.catalog).some(
+      (item) => item.kind === 'skill'
+    )
+  )
+    input.tools = input.tools.filter((name) => !SKILL_TOOL_NAMES.includes(name));
 
   const collaboration = fixed.profile?.promptPresets?.main?.program.collaboration;
   const agentTools: ProviderTool[] = collaboration?.enabled

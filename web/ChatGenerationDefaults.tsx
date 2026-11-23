@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
 import {
+  isAutoRefusalRetryCount,
+  MAX_AUTO_REFUSAL_RETRIES,
   MAX_MAIN_MODEL_CALLS,
   type ChatGenerationDefaults as Defaults,
 } from '../core/chat-settings.js';
@@ -11,12 +13,13 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { StoryUiStyleSelect } from './StoryUiStyleSelect.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 
-type Values = Pick<Defaults, 'maxCalls' | 'storyUi' | 'storyUiStyle'>;
+type Values = Omit<Defaults, 'revision'>;
 
 export function ChatGenerationDefaults() {
   useI18n();
   const [defaults, setDefaults] = useState<Defaults | null>(null);
   const [maxCallsDraft, setMaxCallsDraft] = useState('');
+  const [retriesDraft, setRetriesDraft] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const confirmed = useRef<Defaults | null>(null);
@@ -30,6 +33,7 @@ export function ChatGenerationDefaults() {
         confirmed.current = requested.current = next;
         setDefaults(next);
         setMaxCallsDraft(String(next.maxCalls));
+        setRetriesDraft(String(next.autoRefusalMaxRetries));
         setError('');
       })
       .catch((cause) => {
@@ -61,6 +65,8 @@ export function ChatGenerationDefaults() {
           maxCalls: target.maxCalls,
           storyUi: target.storyUi,
           storyUiStyle: target.storyUiStyle,
+          autoRefusalRetryEnabled: target.autoRefusalRetryEnabled,
+          autoRefusalMaxRetries: target.autoRefusalMaxRetries,
         },
         'PUT'
       );
@@ -73,6 +79,7 @@ export function ChatGenerationDefaults() {
       requested.current = confirmed.current;
       setDefaults(confirmed.current);
       setMaxCallsDraft(String(base.maxCalls));
+      setRetriesDraft(String(base.autoRefusalMaxRetries));
       setError((cause as Error).message);
     }
   }
@@ -86,6 +93,17 @@ export function ChatGenerationDefaults() {
       return;
     }
     change({ maxCalls });
+  }
+  function commitRetries() {
+    if (!requested.current) return;
+    const autoRefusalMaxRetries = Number(retriesDraft);
+    if (autoRefusalMaxRetries === requested.current.autoRefusalMaxRetries) return;
+    if (!retriesDraft.trim() || !isAutoRefusalRetryCount(autoRefusalMaxRetries)) {
+      setRetriesDraft(String(requested.current.autoRefusalMaxRetries));
+      setError(uiMessage('settings.autoRefusalRetryRange', { max: MAX_AUTO_REFUSAL_RETRIES }));
+      return;
+    }
+    change({ autoRefusalMaxRetries });
   }
   function retry() {
     setLoading(true);
@@ -146,6 +164,43 @@ export function ChatGenerationDefaults() {
                   aria-label={t('storyUi.style')}
                   value={defaults.storyUiStyle}
                   onChange={(storyUiStyle) => change({ storyUiStyle })}
+                />
+              </label>
+            )}
+            <label className="settings-row settings-row-toggle">
+              <span className="settings-row-copy">
+                <strong>{t('settings.autoRefusalRetry')}</strong>
+                <small>{t('settings.autoRefusalRetryDefaultHint')}</small>
+              </span>
+              <span className="settings-row-control">
+                <Switch
+                  aria-label={t('settings.autoRefusalRetry')}
+                  checked={defaults.autoRefusalRetryEnabled}
+                  onChange={(event) => change({ autoRefusalRetryEnabled: event.target.checked })}
+                />
+              </span>
+            </label>
+            {defaults.autoRefusalRetryEnabled && (
+              <label className="settings-row">
+                <span className="settings-row-copy">
+                  <strong>{t('settings.autoRefusalMaxRetries')}</strong>
+                  <small>
+                    {t('settings.autoRefusalMaxRetriesHint', { max: MAX_AUTO_REFUSAL_RETRIES })}
+                  </small>
+                </span>
+                <input
+                  aria-label={t('settings.autoRefusalMaxRetries')}
+                  type="number"
+                  min={0}
+                  max={MAX_AUTO_REFUSAL_RETRIES}
+                  step={1}
+                  required
+                  value={retriesDraft}
+                  onChange={(event) => setRetriesDraft(event.target.value)}
+                  onBlur={commitRetries}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') commitRetries();
+                  }}
                 />
               </label>
             )}

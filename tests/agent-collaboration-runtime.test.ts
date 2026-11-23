@@ -36,8 +36,9 @@ test('disabled collaboration preserves one writing call plus JEV judgment and ex
       expect(
         (body.tools ?? []).some((tool) => /agents_consult|behavior_|state[._]/u.test(tool.name))
       ).toBe(false);
-      for (const name of ['knowledge.search', 'knowledge.read', 'skills.list', 'skills.load'])
+      for (const name of ['knowledge.search', 'knowledge.read'])
         expect(toolName(body, name)).toBeTruthy();
+      expect((body.tools ?? []).some((tool) => tool.name.startsWith('skills_'))).toBe(false);
       expect(JSON.stringify(body)).toContain(MAIN_ONLY);
       expect(JSON.stringify(body)).not.toContain(SHARED);
       expect(body.input.some((item) => item.type === 'function_call_output')).toBe(false);

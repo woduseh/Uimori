@@ -6,7 +6,7 @@ A tool's contract is its description and input schema: arguments, defaults, limi
 
 ## Read tools
 
-The main writer and the translation role use the definitions in `core/read-tools.ts` (`knowledge.search`, `knowledge.read`, `skills.list`, `skills.load`) and `core/story-read-tools.ts` (`story.search`, `story.read`). Advisors receive the subset enabled for them, and role-specific source scope still applies. `tests/context-tools.test.ts`, `tests/story-context.test.ts`, `tests/translation-context.test.ts` and `tests/main-catalog.test.ts` enforce them.
+The main writer and the translation role use the definitions in `core/read-tools.ts` (`knowledge.search`, `knowledge.read`, `skills.list`, `skills.load`) and `core/story-read-tools.ts` (`story.search`, `story.read`). The main writer's request leaves out the two `skills.*` tools when its approved scope holds no skill resource (`server/main-request.ts`, `tests/main-request.test.ts`). Advisors receive the subset enabled for them, and role-specific source scope still applies. `tests/context-tools.test.ts`, `tests/story-context.test.ts`, `tests/translation-context.test.ts` and `tests/main-catalog.test.ts` enforce them.
 
 - Explicit user notes are already pinned to the Run and delivered through host context. There is no separate `notes.list/read` model API.
 - `story.read` selects by `sceneNumber` within its returned `sceneScope`. Internal revision IDs are returned provenance, not a second selector.
