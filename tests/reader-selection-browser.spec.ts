@@ -151,6 +151,40 @@ async function select(scene: Locator, needle: string, occurrence = 0) {
   );
 }
 
+async function dragRisuText(page: Page, scene: Locator, fragment: string) {
+  const coordinates = await scene.evaluate((element, selected) => {
+    const root = element.querySelector('.risu-message-surface')?.shadowRoot;
+    if (!root) throw new Error('Risu surface not found');
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node: Text | null = null;
+    while ((node = walker.nextNode() as Text | null)) {
+      if (node.data.includes(selected)) break;
+    }
+    if (!node) throw new Error('passage not found');
+    node.parentElement?.scrollIntoView({ block: 'center' });
+    const offset = node.data.indexOf(selected);
+    const first = document.createRange();
+    first.setStart(node, offset);
+    first.setEnd(node, offset + 1);
+    const last = document.createRange();
+    last.setStart(node, offset + selected.length - 1);
+    last.setEnd(node, offset + selected.length);
+    const start = first.getBoundingClientRect();
+    const end = last.getBoundingClientRect();
+    return {
+      start: { x: start.left + 1, y: (start.top + start.bottom) / 2 },
+      end: { x: end.right - 1, y: (end.top + end.bottom) / 2 },
+    };
+  }, fragment);
+  await page.mouse.move(coordinates.start.x, coordinates.start.y);
+  await page.mouse.down();
+  await page.mouse.move(coordinates.end.x, coordinates.end.y, { steps: 15 });
+  await page.mouse.up();
+  await expect
+    .poll(() => page.evaluate(() => getSelection()?.toString()))
+    .toContain(fragment.slice(1, -1));
+}
+
 async function shot(page: Page, info: TestInfo, name: string) {
   await page.screenshot({ path: info.outputPath(`${name}.png`) });
 }
@@ -744,38 +778,30 @@ test('RSEL17 dragging a Risu translation with a real mouse opens the refine menu
   const scene = await open(page, chatId, source.id);
   await expect(scene).toHaveAttribute('data-representation', 'translation');
   await expect(scene.locator('.risu-message-surface')).toHaveCount(1);
-  const coordinates = await scene.evaluate((element) => {
-    const root = element.querySelector('.risu-message-surface')!.shadowRoot!;
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    let node: Text | null = null;
-    while ((node = walker.nextNode() as Text | null)) {
-      if (node.data.includes('미라는 창가에서')) break;
-    }
-    if (!node) throw new Error('translated passage not found');
-    node.parentElement?.scrollIntoView({ block: 'center' });
-    const first = document.createRange();
-    first.setStart(node, 0);
-    first.setEnd(node, 1);
-    const last = document.createRange();
-    last.setStart(node, 15);
-    last.setEnd(node, 16);
-    const start = first.getBoundingClientRect();
-    const end = last.getBoundingClientRect();
-    return {
-      start: { x: start.left + 1, y: (start.top + start.bottom) / 2 },
-      end: { x: end.right - 1, y: (end.top + end.bottom) / 2 },
-    };
-  });
-  await page.mouse.move(coordinates.start.x, coordinates.start.y);
-  await page.mouse.down();
-  await page.mouse.move(coordinates.end.x, coordinates.end.y, { steps: 15 });
-  await page.mouse.up();
-
-  await expect.poll(() => page.evaluate(() => getSelection()?.toString())).toContain('미라는');
+  await dragRisuText(page, scene, '미라는 창가에서');
   const bar = selectionBar(page);
   await expect(bar).toBeVisible();
   await expect(bar).toHaveAttribute('data-placed', 'true');
   await expect(bar.getByRole('button', { name: '다듬기', exact: true })).toBeVisible();
   await bar.getByRole('button', { name: '다듬기', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '선택한 글 다듬기' })).toBeVisible();
+});
+
+test('RSEL18 actual mouse selection in Risu original prevents automatic translation takeover', async ({
+  page,
+  request,
+}) => {
+  const { chatId, source } = await seed(request);
+  const scene = await open(page, chatId, source.id);
+  await expect(scene).toHaveAttribute('data-representation', 'original');
+  await dragRisuText(page, scene, '미라는 창가에');
+  await expect(selectionBar(page)).toBeVisible();
+  const saved = await request.put(`/api/sources/${source.id}/translation`, {
+    data: { text: translated, expectedRevision: 0, expectedSourceHash: source.hash },
+  });
+  expect(saved.ok(), await saved.text()).toBe(true);
+  await expect(
+    scene.getByRole('button', { name: '번역이 준비됐어요. 번역 보기', exact: true })
+  ).toBeVisible();
+  await expect(scene).toHaveAttribute('data-representation', 'original');
 });

@@ -9,9 +9,9 @@ Uimori is a personal creative-writing web app for reading long manuscripts and c
 - Edit source text and translations directly, and copy a chat into an independent copy.
 - Keep story memory and backups.
 
-> **Current version `v0.15.4` · DB schema 15**
+> **Current version `v0.15.5` · DB schema 15**
 >
-> The Gemini 4 helper can now search the web with Google Search on both Google AI Studio and Vertex AI while keeping Uimori editing tools available. The helper decides when a search is useful; other provider behavior remains unchanged. See the [release notes](docs/releases/v0.15.4.md) and [update guide](docs/UPDATES.md).
+> Text selection now works for original and translated passages in Risu-rendered scenes. Dragging opens the refine menu, and an arriving translation no longer interrupts an active original-text selection. See the [release notes](docs/releases/v0.15.5.md) and [update guide](docs/UPDATES.md).
 
 > [!NOTE]
 > The detailed guides under `docs/` are written in Korean. The app interface itself supports English.
@@ -20,11 +20,11 @@ Uimori is a personal creative-writing web app for reading long manuscripts and c
 
 **Requirements**: Node **26.13.0 or later 26.x**, npm, and Chrome or Edge. SQLite comes built into Node, so no separate install is needed.
 
-1. Check that the `v0.15.4` release is published on [GitHub Releases](https://github.com/woduseh/Uimori/releases).
+1. Check that the `v0.15.5` release is published on [GitHub Releases](https://github.com/woduseh/Uimori/releases).
 2. Get the source and start the app.
 
    ```powershell
-   git clone --branch v0.15.4 --single-branch https://github.com/woduseh/Uimori.git
+   git clone --branch v0.15.5 --single-branch https://github.com/woduseh/Uimori.git
    cd Uimori
    npm ci
    npm run dev

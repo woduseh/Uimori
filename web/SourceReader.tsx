@@ -43,7 +43,7 @@ import type { StoryUiSegment } from '../core/story-ui-scan.js';
 import { hasStoryUi, useStoryUiParser } from './story-ui-parser.js';
 import { StoryUi } from './LazyStoryUi.js';
 import { StreamingResponse } from './StreamingResponse.js';
-import { readerContains, selectedReaderText } from './reader-dom.js';
+import { selectedReaderText } from './reader-dom.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
 import type { RisuAction } from './risu-message-surface.js';
 import { retainReaderNavigation } from './reader-navigation-scroll.js';
@@ -224,8 +224,7 @@ function translationEditRevision(source: Source, translation?: Job) {
   return translation?.revision ?? source.translationRevision ?? (translation ? 1 : 0);
 }
 function selectionInside(node: HTMLElement) {
-  const selection = getSelection();
-  return !!selection && !selection.isCollapsed && readerContains(node, selection.anchorNode);
+  return !!selectedReaderText(node);
 }
 const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
 const EDITABLE = 'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
