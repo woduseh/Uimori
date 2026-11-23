@@ -49,7 +49,7 @@ export type SceneSelection = { range: Range; text: string };
 
 export function sceneSelection(body: HTMLElement): SceneSelection | null {
   const selection = window.getSelection();
-  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
+  if (!selection || selection.rangeCount === 0) return null;
   if (!readerContains(body, selection.anchorNode)) return null;
   const shadowRoots = [...body.querySelectorAll('.risu-message-surface')]
     .map((host) => host.shadowRoot)

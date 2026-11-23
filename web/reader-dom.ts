@@ -11,12 +11,13 @@ export function readerContains(container: HTMLElement, node: Node | null): boole
 
 export function selectedReaderText(container: HTMLElement | null): string {
   const selection = window.getSelection();
-  if (!container || !selection || selection.isCollapsed) return '';
+  if (!container || !selection || selection.rangeCount === 0) return '';
   const shadowRoots = [...container.querySelectorAll('.risu-message-surface')]
     .map((host) => host.shadowRoot)
     .filter((root): root is ShadowRoot => root !== null);
   const [range] = selection.getComposedRanges({ shadowRoots });
   return range &&
+    !range.collapsed &&
     readerContains(container, range.startContainer) &&
     readerContains(container, range.endContainer)
     ? selection.toString().trim()
