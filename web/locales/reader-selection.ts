@@ -23,6 +23,12 @@ export const messages = {
     ja: 'コピー',
     zh: '复制',
   },
+  'readerSelection.copyFailed': {
+    ko: '선택한 글을 복사하지 못했어요. 브라우저의 클립보드 권한을 확인해 주세요.',
+    en: 'Could not copy the selected text. Check your browser’s clipboard permissions.',
+    ja: '選択したテキストをコピーできませんでした。ブラウザーのクリップボード権限を確認してください。',
+    zh: '无法复制所选文本。请检查浏览器的剪贴板权限。',
+  },
   'readerSelection.refineTitle': {
     ko: '선택한 글 다듬기',
     en: 'Refine selected text',

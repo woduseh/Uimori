@@ -120,5 +120,10 @@ export function placeBeside(
     last.bottom + size.height + GAP <= area.bottom
       ? { top: Math.round(last.bottom + GAP), left: left(last) }
       : null;
-  return prefer === 'above' ? (above ?? below) : (below ?? above);
+  if (above || below) return prefer === 'above' ? (above ?? below) : (below ?? above);
+  if (area.height < size.height + GAP * 2 || area.width < size.width + GAP * 2) return null;
+  return {
+    top: Math.round(prefer === 'above' ? area.top + GAP : area.bottom - size.height - GAP),
+    left: left(prefer === 'above' ? first : last),
+  };
 }

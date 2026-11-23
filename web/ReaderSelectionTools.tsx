@@ -128,6 +128,7 @@ export function ReaderSelectionTools({
   const [dismissed, setDismissed] = useState(false);
   const [opened, setOpened] = useState<Opened | null>(null);
   const [copied, setCopied] = useState(0);
+  const [copyFailed, setCopyFailed] = useState(false);
   const identity = target
     ? `${target.representation}:${target.parts.source}:${target.parts.translation}`
     : null;
@@ -152,6 +153,7 @@ export function ReaderSelectionTools({
         current.current = next;
         setSelected(next);
         setDismissed(false);
+        setCopyFailed(false);
       });
     };
     document.addEventListener('selectionchange', evaluate);
@@ -168,6 +170,30 @@ export function ReaderSelectionTools({
     [selected, targetText]
   );
   const barVisible = !!selected && !dismissed && !opened && enabled;
+  useEffect(() => {
+    if (!barVisible || !selected || !body.current) return;
+    const node = body.current;
+    let frame = 0;
+    const check = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const next = sceneSelection(node);
+        if (sameSelection(current.current, next)) return;
+        current.current = next;
+        setSelected(next);
+        setCopyFailed(false);
+      });
+    };
+    const observer = new MutationObserver(check);
+    observer.observe(node, { childList: true, subtree: true, characterData: true });
+    const root = selected.range.startContainer.getRootNode();
+    if (root instanceof ShadowRoot)
+      observer.observe(root, { childList: true, subtree: true, characterData: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [barVisible, selected, body]);
   const bar = useRef<HTMLDivElement>(null);
   const [barPosition, setBarPosition] = useState<{ top: number; left: number } | null>(null);
   const popover = useRef<HTMLDivElement>(null);
@@ -280,8 +306,15 @@ export function ReaderSelectionTools({
   useEffect(() => {
     if (!enabled && opened) closeRef.current(false);
   }, [enabled, opened]);
+  function liveSelection() {
+    const next = body.current ? sceneSelection(body.current) : null;
+    if (sameSelection(selected, next)) return next;
+    current.current = next;
+    setSelected(next);
+    return null;
+  }
   function openRevision() {
-    if (!selected || !target || !match) return;
+    if (!selected || !target || !match || !liveSelection()) return;
     revision.open({
       ...target.request,
       draft: target.text,
@@ -331,7 +364,9 @@ export function ReaderSelectionTools({
               <button
                 type="button"
                 onClick={() => {
-                  onAskHelper(selected.text.trim());
+                  const live = liveSelection();
+                  if (!live) return;
+                  onAskHelper(live.text.trim());
                   setDismissed(true);
                 }}
               >
@@ -342,6 +377,7 @@ export function ReaderSelectionTools({
             <button
               type="button"
               onClick={() => {
+                if (!liveSelection()) return;
                 onBookmark();
                 setDismissed(true);
               }}
@@ -352,14 +388,29 @@ export function ReaderSelectionTools({
             <button
               type="button"
               onClick={() => {
-                const text = selected.text;
-                void navigator.clipboard?.writeText(text).then(() => setCopied((n) => n + 1));
-                setDismissed(true);
+                const live = liveSelection();
+                if (!live) return;
+                void (async () => {
+                  try {
+                    if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+                    await navigator.clipboard.writeText(live.text);
+                    setCopyFailed(false);
+                    setCopied((n) => n + 1);
+                    setDismissed(true);
+                  } catch {
+                    setCopyFailed(true);
+                  }
+                })();
               }}
             >
               <CopyIcon size={16} aria-hidden="true" />
               {t('readerSelection.copy')}
             </button>
+            {copyFailed && (
+              <span className="reader-selection-copy-error" role="alert">
+                {t('readerSelection.copyFailed')}
+              </span>
+            )}
           </div>,
           document.body
         )}

@@ -9,19 +9,19 @@
 - 원문·번역을 직접 편집하고, 채팅을 독립 사본으로 복사해요.
 - 이야기 기억과 백업 기능을 제공해요.
 
-> **현재 버전 `v0.15.5` · DB 스키마 15**
+> **현재 버전 `v0.15.6` · DB 스키마 15**
 >
-> 원문과 번역문을 드래그해 선택해도 일부 봇 화면에서 다듬기 메뉴가 열리지 않던 문제를 고쳤어요. 읽던 글을 선택한 상태에서 번역이 완료되면 원문 읽기 위치도 지켜요. [릴리스 노트](docs/releases/v0.15.5.md) · [업데이트 안내](docs/UPDATES.md)
+> 여러 문단을 길게 선택해도 도구 막대가 보이고, 복사에 실패해도 선택을 유지해 다시 시도할 수 있어요. Risu 본문이 갱신되면 예전 선택 도구가 남지 않아요. [릴리스 노트](docs/releases/v0.15.6.md) · [업데이트 안내](docs/UPDATES.md)
 
 ## 빠른 시작 (Windows)
 
 **준비물**: Node **26.13.0 이상 26.x**, npm, Chrome 또는 Edge. SQLite는 Node에 포함된 기능을 사용하므로 따로 설치하지 않아요.
 
-1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.15.5` 릴리스가 공개됐는지 확인해요.
+1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.15.6` 릴리스가 공개됐는지 확인해요.
 2. 소스를 받아 실행해요.
 
    ```powershell
-   git clone --branch v0.15.5 --single-branch https://github.com/woduseh/Uimori.git
+   git clone --branch v0.15.6 --single-branch https://github.com/woduseh/Uimori.git
    cd Uimori
    npm ci
    npm run dev

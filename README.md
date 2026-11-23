@@ -9,9 +9,9 @@ Uimori is a personal creative-writing web app for reading long manuscripts and c
 - Edit source text and translations directly, and copy a chat into an independent copy.
 - Keep story memory and backups.
 
-> **Current version `v0.15.5` · DB schema 15**
+> **Current version `v0.15.6` · DB schema 15**
 >
-> Text selection now works for original and translated passages in Risu-rendered scenes. Dragging opens the refine menu, and an arriving translation no longer interrupts an active original-text selection. See the [release notes](docs/releases/v0.15.5.md) and [update guide](docs/UPDATES.md).
+> Long passage selections now keep their action toolbar visible. Clipboard failures preserve the selection and allow retry, while a refreshed Risu scene clears outdated selection actions. See the [release notes](docs/releases/v0.15.6.md) and [update guide](docs/UPDATES.md).
 
 > [!NOTE]
 > The detailed guides under `docs/` are written in Korean. The app interface itself supports English.
@@ -20,11 +20,11 @@ Uimori is a personal creative-writing web app for reading long manuscripts and c
 
 **Requirements**: Node **26.13.0 or later 26.x**, npm, and Chrome or Edge. SQLite comes built into Node, so no separate install is needed.
 
-1. Check that the `v0.15.5` release is published on [GitHub Releases](https://github.com/woduseh/Uimori/releases).
+1. Check that the `v0.15.6` release is published on [GitHub Releases](https://github.com/woduseh/Uimori/releases).
 2. Get the source and start the app.
 
    ```powershell
-   git clone --branch v0.15.5 --single-branch https://github.com/woduseh/Uimori.git
+   git clone --branch v0.15.6 --single-branch https://github.com/woduseh/Uimori.git
    cd Uimori
    npm ci
    npm run dev

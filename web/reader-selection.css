@@ -35,6 +35,12 @@
   font-size: var(--font-body);
   white-space: nowrap;
 }
+.reader-selection-copy-error {
+  flex-basis: 100%;
+  padding: 4px 6px;
+  color: var(--error);
+  font-size: var(--font-small);
+}
 .reader-selection-bar > button:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: calc(var(--focus-ring-width) * -1);

@@ -805,3 +805,70 @@ test('RSEL18 actual mouse selection in Risu original prevents automatic translat
   ).toBeVisible();
   await expect(scene).toHaveAttribute('data-representation', 'original');
 });
+
+test('RSEL19 a selection taller than the reader still has a usable toolbar', async ({
+  page,
+  request,
+}) => {
+  const { chatId, source } = await seed(request);
+  const scene = await open(page, chatId, source.id);
+  const joined = await scene.evaluate((node) => readable(node));
+  await select(scene, joined);
+  const bar = selectionBar(page);
+  await expect(bar).toBeVisible();
+  await expect(bar).toHaveAttribute('data-placed', 'true');
+  const bounds = await bar.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.y).toBeGreaterThanOrEqual(0);
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(1000);
+});
+
+test('RSEL20 clipboard denial keeps the selected text and offers a retry', async ({
+  page,
+  request,
+}) => {
+  const { chatId, source } = await seed(request);
+  const scene = await open(page, chatId, source.id);
+  await select(scene, unique);
+  const bar = selectionBar(page);
+  await expect(bar).toBeVisible();
+  const browserErrors: string[] = [];
+  page.on('pageerror', (error) => browserErrors.push(error.message));
+  await page.evaluate(() => {
+    let attempts = 0;
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: async () => {
+          if (++attempts === 1) throw new Error('Synthetic clipboard denial');
+        },
+      },
+    });
+  });
+  const copy = bar.getByRole('button', { name: '복사', exact: true });
+  await copy.click();
+  await expect(bar.getByRole('alert')).toContainText('선택한 글을 복사하지 못했어요');
+  await expect(bar).toBeVisible();
+  expect(browserErrors).toEqual([]);
+  await copy.click();
+  await expect(bar).toHaveCount(0);
+  await expect(page.getByText('복사했어요.', { exact: true })).toBeVisible();
+});
+
+test('RSEL21 replacing selected Risu content removes the stale toolbar', async ({
+  page,
+  request,
+}) => {
+  const { chatId, source } = await seed(request);
+  const scene = await open(page, chatId, source.id);
+  await select(scene, unique);
+  await expect(selectionBar(page)).toBeVisible();
+  await scene.evaluate((node) => {
+    const content = node
+      .querySelector('.risu-message-surface')
+      ?.shadowRoot?.querySelector('.risu-message-content');
+    if (!content) throw new Error('No Risu content');
+    content.innerHTML = '<p>새로운 본문이 도착했어요.</p>';
+  });
+  await expect(selectionBar(page)).toHaveCount(0);
+});
