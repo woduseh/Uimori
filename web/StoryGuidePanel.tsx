@@ -14,6 +14,7 @@ import { SaveButton } from './SaveButton.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
+import { SearchSuggestionsFrame } from './SearchSuggestionsFrame.js';
 import './story-guide.css';
 
 type Props = {
@@ -312,13 +313,7 @@ function StoryGuideEditor({
                   </ul>
                 )}
                 {loaded.brief.webSearch.searchEntryPoint && (
-                  <iframe
-                    title={t('prompts.uiStoryGuideSearchSuggestions')}
-                    srcDoc={loaded.brief.webSearch.searchEntryPoint}
-                    sandbox="allow-popups allow-popups-to-escape-sandbox"
-                    referrerPolicy="no-referrer"
-                    style={{ width: '100%', height: 160, border: 0 }}
-                  />
+                  <SearchSuggestionsFrame html={loaded.brief.webSearch.searchEntryPoint} />
                 )}
               </section>
             )}
