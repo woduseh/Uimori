@@ -587,6 +587,24 @@ export const messages = {
     ja: '本文生成後に自動翻訳',
     zh: '生成正文后自动翻译',
   },
+  'settings.autoTranslationLanguage': {
+    ko: '번역 결과 언어',
+    en: 'Translation language',
+    ja: '翻訳結果の言語',
+    zh: '译文语言',
+  },
+  'settings.autoTranslationLanguageHint': {
+    ko: '본문이 이미 이 언어로 쓰였으면 자동 번역을 건너뛰어요. 직접 요청한 번역은 그대로 실행돼요.',
+    en: 'Automatic translation is skipped when the writing is already in this language. A translation you request yourself still runs.',
+    ja: '本文がすでにこの言語で書かれている場合、自動翻訳を省略します。自分で依頼した翻訳はそのまま実行されます。',
+    zh: '正文已经用这种语言写成时，会跳过自动翻译。你手动请求的翻译仍会执行。',
+  },
+  'settings.autoTranslationLanguageNone': {
+    ko: '항상 번역',
+    en: 'Always translate',
+    ja: '常に翻訳',
+    zh: '始终翻译',
+  },
   'settings.m88': {
     ko: '기본값 따르기',
     en: 'Follow default',

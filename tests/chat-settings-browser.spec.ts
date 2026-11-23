@@ -7,7 +7,12 @@ import type { StoryGuideDetail } from '../core/story-guide.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { navigationAction, openChatMenu, selectChatSettingsSection } from './ui-navigation.js';
+import {
+  navigationAction,
+  openChatMenu,
+  selectChatSettingsSection,
+  selectSettingsSection,
+} from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 
 const sections = ['사용 자료', '생성 설정', '작품 및 원작 참고', '기억과 메모', '이미지'];
@@ -699,4 +704,34 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
     await page.screenshot({ path: info.outputPath('story-guide-desktop.png') });
   }
   expect(errors).toEqual([]);
+});
+
+test('CSUI11 the translation result language saves from general settings at phone and desktop widths', async ({
+  page,
+  request,
+}, info) => {
+  const stored = async () =>
+    (
+      (await (await request.get('/api/auto-translation-defaults')).json()) as {
+        translationLanguage: string | null;
+      }
+    ).translationLanguage;
+  for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/');
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '일반');
+    const language = page.getByRole('combobox', { name: '번역 결과 언어', exact: true });
+    await expect(language).toHaveValue('ko');
+    await language.selectOption('zh');
+    await expect.poll(stored).toBe('zh');
+    await language.selectOption({ label: '항상 번역' });
+    await expect.poll(stored).toBeNull();
+    await expect(language).toBeEnabled();
+    await language.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`translation-language-${width}.png`) });
+    await language.selectOption('ko');
+    await expect.poll(stored).toBe('ko');
+    await expect(language).toBeEnabled();
+  }
 });

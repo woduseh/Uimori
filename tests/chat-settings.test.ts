@@ -7,6 +7,7 @@ import { normalizeChatSettings } from '../core/chat-settings.js';
 import type { Chat } from '../core/types.js';
 import { createApp, type App } from '../server/app.js';
 import { createFixtureChat } from './fixtures/chat.js';
+import { requestTranslation } from '../server/source-editing.js';
 const owned: { app: App; path: string }[] = [];
 afterEach(async () => {
   for (const { app, path } of owned.splice(0)) {
@@ -100,6 +101,7 @@ test('generation defaults persist and apply only when creating a new chat', asyn
   expect((await app.inject('/api/auto-translation-defaults')).json()).toEqual({
     revision: 0,
     autoTranslate: false,
+    translationLanguage: 'ko',
   });
 
   await app.close();
@@ -193,7 +195,11 @@ test('global auto translation defaults inherit without rewriting chats and freez
         autoTranslate,
       },
     });
-  expect((await get()).json()).toEqual({ revision: 0, autoTranslate: false });
+  expect((await get()).json()).toEqual({
+    revision: 0,
+    autoTranslate: false,
+    translationLanguage: 'ko',
+  });
   const inherit = createFixtureChat(app.store, 'Inherits global default');
   const explicitOff = createFixtureChat(app.store, 'Always off');
   const explicitOn = createFixtureChat(app.store, 'Always on');
@@ -230,7 +236,11 @@ test('global auto translation defaults inherit without rewriting chats and freez
   };
   const before = reserve(inherit.id);
   expect(before.snapshot.settings.autoTranslate).toBe(false);
-  expect((await put(0, true)).json()).toEqual({ revision: 1, autoTranslate: true });
+  expect((await put(0, true)).json()).toEqual({
+    revision: 1,
+    autoTranslate: true,
+    translationLanguage: 'ko',
+  });
   expect((await put(0, false)).statusCode).toBe(409);
   expect((await put(1, 'yes')).statusCode).toBe(400);
   expect(app.store.chat(inherit.id).settings.autoTranslate).toBeUndefined();
@@ -239,7 +249,11 @@ test('global auto translation defaults inherit without rewriting chats and freez
   const inheritNext = createFixtureChat(app.store, 'New inherited chat');
   const after = reserve(inheritNext.id);
   expect(after.snapshot.settings.autoTranslate).toBe(true);
-  expect((await put(1, false)).json()).toEqual({ revision: 2, autoTranslate: false });
+  expect((await put(1, false)).json()).toEqual({
+    revision: 2,
+    autoTranslate: false,
+    translationLanguage: 'ko',
+  });
   expect(app.store.run(after.id).snapshot.settings.autoTranslate).toBe(true);
   expect(app.store.run(before.id).snapshot.settings.autoTranslate).toBe(false);
   await app.close();
@@ -248,6 +262,83 @@ test('global auto translation defaults inherit without rewriting chats and freez
   owned.push({ app: restarted, path });
   expect(
     (await restarted.inject({ method: 'GET', url: '/api/auto-translation-defaults' })).json()
-  ).toEqual({ revision: 2, autoTranslate: false });
+  ).toEqual({ revision: 2, autoTranslate: false, translationLanguage: 'ko' });
   expect(restarted.store.chat(inherit.id).settings.autoTranslate).toBeUndefined();
+});
+
+test('automatic translation skips writing already in the translation language and leaves manual translation available', async () => {
+  const path = mkdtempSync(join(tmpdir(), 'uimori-auto-translation-language-'));
+  const app = await createApp({
+    dbPath: join(path, 'app.sqlite'),
+    buildId: 'auto-translation-language-test',
+    testMode: true,
+    codex: { enabled: false },
+  });
+  owned.push({ app, path });
+  const korean =
+    '비가 그친 골목에는 아직 물웅덩이가 남아 있었다. 서연은 우산을 접으며 가게 문을 밀었다. "늦었네." 카운터 뒤에서 민호가 고개도 들지 않고 말했다.';
+  const english =
+    'The rain had stopped, but the alley still held its puddles. Seoyeon folded her umbrella and pushed the shop door open without a word.';
+  const write = (text: string) => {
+    const created = createFixtureChat(app.store, 'Automatic translation language');
+    app.store.settings(created.id, created.settingsRevision, {
+      ...created.settings,
+      autoTranslate: true,
+    });
+    const chat = app.store.chat(created.id);
+    const profile = app.store.product.snapshot(chat.id);
+    const run = app.store.createRun(
+      chat.id,
+      {
+        request: 'Synthetic request',
+        expectedRevision: chat.headRevision,
+        expectedSettingsRevision: chat.settingsRevision,
+        idempotencyKey: randomUUID(),
+      },
+      (selected) => ({
+        chatId: chat.id,
+        parentRevision: selected.headRevision,
+        settingsRevision: selected.settingsRevision,
+        settings: selected.settings,
+        request: 'Synthetic request',
+        history: app.store.history(selected.headRevision),
+        resources: app.store.product.resources(chat.id, profile),
+        profile,
+      })
+    ).run;
+    app.store.startRun(run.id);
+    const source = app.store.completeRun(run.id, text, {
+      modelCalls: 1,
+      inputTokens: 1,
+      outputTokens: 1,
+      costUsd: null,
+    });
+    return {
+      source,
+      jobs: () => app.store.detail(chat.id).jobs.filter((job) => job.kind === 'translation'),
+    };
+  };
+  const put = (payload: Record<string, unknown>) =>
+    app.inject({ method: 'PUT', url: '/api/auto-translation-defaults', payload });
+
+  const skipped = write(korean);
+  expect(skipped.jobs()).toEqual([]);
+  expect(requestTranslation(app.store, skipped.source.id).status).toBe('queued');
+  expect(skipped.jobs()).toHaveLength(1);
+  expect(write(english).jobs()).toMatchObject([{ status: 'queued' }]);
+
+  expect(
+    (await put({ expectedRevision: 0, autoTranslate: false, translationLanguage: 'fr' })).statusCode
+  ).toBe(400);
+  expect(
+    (await put({ expectedRevision: 0, autoTranslate: false, translationLanguage: 'en' })).json()
+  ).toEqual({ revision: 1, autoTranslate: false, translationLanguage: 'en' });
+  expect(write(english).jobs()).toEqual([]);
+  expect(write(korean).jobs()).toHaveLength(1);
+
+  expect(
+    (await put({ expectedRevision: 1, autoTranslate: false, translationLanguage: null })).json()
+  ).toEqual({ revision: 2, autoTranslate: false, translationLanguage: null });
+  expect(write(english).jobs()).toHaveLength(1);
+  expect(write(korean).jobs()).toHaveLength(1);
 });

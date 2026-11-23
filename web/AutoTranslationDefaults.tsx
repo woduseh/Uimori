@@ -1,11 +1,23 @@
 import { t, translateMessage, useI18n } from './i18n.js';
 import { useState } from 'react';
 import type { AutoTranslationDefaults as Defaults } from '../core/chat-settings.js';
+import {
+  isWrittenLanguage,
+  WRITTEN_LANGUAGES,
+  type WrittenLanguage,
+} from '../core/written-language.js';
 import { api } from './api.js';
 import { Switch } from './BooleanControls.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
+
+const LANGUAGE_NAMES: Record<WrittenLanguage, string> = {
+  ko: '한국어',
+  en: 'English',
+  ja: '日本語',
+  zh: '中文',
+};
 
 export function AutoTranslationDefaults() {
   useI18n();
@@ -32,16 +44,16 @@ export function AutoTranslationDefaults() {
       alive = false;
     };
   }, []);
-  async function change(autoTranslate: boolean) {
+  async function change(next: Pick<Defaults, 'autoTranslate' | 'translationLanguage'>) {
     if (!defaults || saving) return;
     setSaving(true);
     setError('');
-    setDefaults({ ...defaults, autoTranslate });
+    setDefaults({ ...defaults, ...next });
     try {
       setDefaults(
         await api<Defaults>(
           '/auto-translation-defaults',
-          { expectedRevision: defaults.revision, autoTranslate },
+          { expectedRevision: defaults.revision, ...next },
           'PUT'
         )
       );
@@ -75,9 +87,42 @@ export function AutoTranslationDefaults() {
               aria-label={t('settings.m102')}
               checked={defaults.autoTranslate}
               disabled={saving || loading || !!error}
-              onChange={(event) => void change(event.target.checked)}
+              onChange={(event) =>
+                void change({
+                  autoTranslate: event.target.checked,
+                  translationLanguage: defaults.translationLanguage,
+                })
+              }
             />
           </span>
+        </label>
+      )}
+      {defaults && (
+        <label className="settings-row">
+          <span className="settings-row-copy">
+            <strong>{t('settings.autoTranslationLanguage')}</strong>
+            <small>{t('settings.autoTranslationLanguageHint')}</small>
+          </span>
+          <select
+            aria-label={t('settings.autoTranslationLanguage')}
+            value={defaults.translationLanguage ?? ''}
+            disabled={saving || loading || !!error}
+            onChange={(event) =>
+              void change({
+                autoTranslate: defaults.autoTranslate,
+                translationLanguage: isWrittenLanguage(event.target.value)
+                  ? event.target.value
+                  : null,
+              })
+            }
+          >
+            {WRITTEN_LANGUAGES.map((language) => (
+              <option key={language} value={language} lang={language}>
+                {LANGUAGE_NAMES[language]}
+              </option>
+            ))}
+            <option value="">{t('settings.autoTranslationLanguageNone')}</option>
+          </select>
         </label>
       )}
       {defaults && error && (

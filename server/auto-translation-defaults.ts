@@ -3,23 +3,31 @@ import type { AutoTranslationDefaults } from '../core/chat-settings.js';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Store } from './store.js';
 import { fields, HttpError, number, record } from './request-validation.js';
+import { isWrittenLanguage } from '../core/written-language.js';
 
 const KEY = 'auto-translation-defaults';
 
 export function autoTranslationDefaults(db: DatabaseSync): AutoTranslationDefaults {
   const row = db.prepare('SELECT value FROM app_metadata WHERE key=?').get(KEY);
-  return row
-    ? (JSON.parse(String(row.value)) as AutoTranslationDefaults)
-    : { revision: 0, autoTranslate: false };
+  const stored = row ? (JSON.parse(String(row.value)) as Partial<AutoTranslationDefaults>) : {};
+  return {
+    revision: stored.revision ?? 0,
+    autoTranslate: stored.autoTranslate ?? false,
+    translationLanguage:
+      stored.translationLanguage === undefined ? 'ko' : stored.translationLanguage,
+  };
 }
 
 export function autoTranslationDefaultRoutes(app: FastifyInstance, store: Store) {
   app.get('/api/auto-translation-defaults', () => autoTranslationDefaults(store.db));
   app.put('/api/auto-translation-defaults', (request) => {
     const body = record(request.body);
-    fields(body, ['expectedRevision', 'autoTranslate']);
+    fields(body, ['expectedRevision', 'autoTranslate', 'translationLanguage']);
     const expected = number(body.expectedRevision, 'revision', 0);
     if (typeof body.autoTranslate !== 'boolean')
+      throw new HttpError(400, '자동 번역 기본값을 확인해 주세요.');
+    const language = body.translationLanguage;
+    if (language !== undefined && language !== null && !isWrittenLanguage(language))
       throw new HttpError(400, '자동 번역 기본값을 확인해 주세요.');
     return store.transaction(() => {
       const previous = autoTranslationDefaults(store.db);
@@ -28,6 +36,7 @@ export function autoTranslationDefaultRoutes(app: FastifyInstance, store: Store)
       const next: AutoTranslationDefaults = {
         revision: previous.revision + 1,
         autoTranslate: body.autoTranslate as boolean,
+        translationLanguage: language === undefined ? previous.translationLanguage : language,
       };
       store.db
         .prepare(

@@ -7,6 +7,7 @@ import {
 
 import { normalizeChatSettings } from '../core/chat-settings.js';
 import { autoTranslationDefaults } from './auto-translation-defaults.js';
+import { isWrittenIn } from '../core/written-language.js';
 import { chatGenerationDefaults } from './chat-generation-defaults.js';
 import { pruneSourceEdits, pruneTranslationHistory } from './text-retention.js';
 import { retainCompletedLore } from './lore-retention-state.js';
@@ -801,12 +802,14 @@ export class Store {
       verifiedRunLoreReads(this, { ...run, status: 'completed', sourceRevision: source.id })
     );
     let translationPlacesImages = false;
+    const { translationLanguage } = autoTranslationDefaults(this.db);
     if (
       run.snapshot.settings.autoTranslate === true &&
       !run.snapshot.packageStart &&
       !run.snapshot.transcriptImport &&
       !run.snapshot.nativeRisuAuthored &&
-      !run.snapshot.executionPurpose
+      !run.snapshot.executionPurpose &&
+      !(translationLanguage && isWrittenIn(source.text, translationLanguage))
     ) {
       try {
         translationPlacesImages = !!translationImageSelection(

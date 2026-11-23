@@ -1,7 +1,12 @@
 import { isStoryUiStyleSetting, type StoryUiStyleSetting } from './story-ui-style.js';
 import type { Settings } from './types.js';
+import type { WrittenLanguage } from './written-language.js';
 
-export type AutoTranslationDefaults = { revision: number; autoTranslate: boolean };
+export type AutoTranslationDefaults = {
+  revision: number;
+  autoTranslate: boolean;
+  translationLanguage: WrittenLanguage | null;
+};
 
 export const MAX_MAIN_MODEL_CALLS = 128;
 export const MAX_AUTO_REFUSAL_RETRIES = 5;
