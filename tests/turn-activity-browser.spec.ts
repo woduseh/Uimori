@@ -92,11 +92,12 @@ async function harness(
       runReads.push(request.url());
   });
   await page.addInitScript(() => {
-    class SyntheticStream {
+    class SyntheticStream extends EventTarget {
       onopen: (() => void) | null = null;
       onmessage: ((event: { data: string }) => void) | null = null;
       closed = false;
       constructor() {
+        super();
         setTimeout(() => this.onopen?.(), 0);
         window.addEventListener('test-turn-refresh', (event) => {
           if (!this.closed)

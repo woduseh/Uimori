@@ -23,8 +23,11 @@ test('new chat defaults save immediately in general settings and do not update e
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '일반');
     const section = page.getByRole('region', { name: '새 채팅 기본값', exact: true });
-    const limit = section.getByRole('spinbutton');
+    const limit = section.getByRole('spinbutton', { name: '작업당 모델 호출 한도', exact: true });
     await expect(limit).toHaveAttribute('max', '128');
+    await expect(
+      section.getByRole('spinbutton', { name: '자동 재생성 최대 횟수', exact: true })
+    ).toHaveValue(String(baseline.autoRefusalMaxRetries));
     await expect(section.getByRole('button')).toHaveCount(0);
     await limit.fill('0');
     await limit.press('Enter');
@@ -70,8 +73,12 @@ test('new chat defaults save immediately in general settings and do not update e
     const runtime = page.getByRole('dialog', { name: '채팅 설정', exact: true });
     const advanced = runtime.getByText('고급 실행 설정', { exact: true });
     if (await advanced.isVisible()) await advanced.click();
-    await expect(runtime.getByRole('spinbutton')).toHaveValue('128');
-    await expect(runtime.getByRole('spinbutton')).toHaveAttribute('max', '128');
+    const runtimeLimit = runtime.getByRole('spinbutton', {
+      name: '작업당 모델 호출 한도',
+      exact: true,
+    });
+    await expect(runtimeLimit).toHaveValue('128');
+    await expect(runtimeLimit).toHaveAttribute('max', '128');
     await expect(runtime.getByRole('switch', { name: '이야기 UI', exact: true })).toBeChecked();
   } finally {
     const current = await read();

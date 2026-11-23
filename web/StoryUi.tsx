@@ -80,7 +80,7 @@ export function StoryUi({
       callback.current(payload)
     );
     try {
-      result.processMessages(segment.messages);
+      result.processMessages(structuredClone(segment.messages));
       return result;
     } catch {
       result.dispose();

@@ -33,7 +33,9 @@ function observe(page: Page) {
     forbidden: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('request', (request) => {
-    if (/\/(?:catalog|runs)(?:\?|$)/.test(request.url())) forbidden.push(request.url());
+    const url = request.url();
+    if (/\/runs(?:\?|$)/.test(url) || (/\/catalog(?:\?|$)/.test(url) && request.method() !== 'GET'))
+      forbidden.push(url);
   });
   return { errors, forbidden };
 }

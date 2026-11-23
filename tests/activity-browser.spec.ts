@@ -76,12 +76,13 @@ async function harness(
   });
   await page.clock.install({ time: baseTime });
   await page.addInitScript(() => {
-    class SyntheticStream {
+    class SyntheticStream extends EventTarget {
       onopen: (() => void) | null = null;
       onerror: (() => void) | null = null;
       onmessage: ((event: { data: string }) => void) | null = null;
       closed = false;
       constructor() {
+        super();
         setTimeout(() => this.onopen?.(), 0);
         window.addEventListener('test-activity-refresh', (event) => {
           if (!this.closed)

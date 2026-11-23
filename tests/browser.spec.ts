@@ -404,6 +404,10 @@ test('F03 F05 an older real HTTP response cannot hide a newly committed source',
       },
     });
     expect(response.ok()).toBeTruthy();
+    await expect.poll(() => pending.size).toBe(1);
+    const delivered = page.waitForResponse((r) => r.headers()['x-m0-delayed'] === 'true');
+    release();
+    await (await delivered).finished();
     await expect(page.getByTestId('source')).toHaveCount(1);
     await page.getByRole('button', { name: '번역 생성', exact: true }).click();
     await expect
@@ -416,10 +420,6 @@ test('F03 F05 an older real HTTP response cannot hide a newly committed source',
     const source = (await detail(request, chat.id)).sources[0];
     await sourceDetails(page);
     await expect(page.getByTestId('source').getByTestId('job-translation')).toContainText('완료');
-    await expect.poll(() => pending.size).toBe(1);
-    const delivered = page.waitForResponse((r) => r.headers()['x-m0-delayed'] === 'true');
-    release();
-    await (await delivered).finished();
     await expect.poll(() => pending.size).toBe(0);
     await page.evaluate(
       () =>

@@ -632,6 +632,9 @@ test('RSEL14 a selection held from before a translation starts keeps the origina
   await page.goto(`/?chat=${chatId}`);
   const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
   await expect(scene).toHaveAttribute('data-representation', 'original');
+  await expect
+    .poll(() => scene.evaluate((node) => readable(node).includes('the quiet pier')))
+    .toBe(true);
   await control(request, 'hold', 'translation');
   try {
     await select(scene, 'the quiet pier');
