@@ -2415,6 +2415,15 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               className="helper-running-mode-toggle"
               role="group"
               aria-label={t('helpers.runningSendModeLabel')}
+              title={t(
+                runningSendMode === 'steer'
+                  ? 'helpers.followUpHintSteer'
+                  : 'helpers.followUpHintQueue',
+                {
+                  sendKey: sendKeyLabel(props.enterSend),
+                  altKey: isApplePlatform() ? 'Option+Enter' : 'Alt+Enter',
+                }
+              )}
             >
               <button
                 type="button"
@@ -2433,19 +2442,11 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                 {t('helpers.followUpQueueBadge')}
               </button>
             </div>
-            <small className="helper-running-mode-hint">
-              {attachments.hasAttachments
-                ? t('helpers.followUpSteerAttachmentsNote')
-                : t(
-                    runningSendMode === 'steer'
-                      ? 'helpers.followUpHintSteer'
-                      : 'helpers.followUpHintQueue',
-                    {
-                      sendKey: sendKeyLabel(props.enterSend),
-                      altKey: isApplePlatform() ? 'Option+Enter' : 'Alt+Enter',
-                    }
-                  )}
-            </small>
+            {attachments.hasAttachments && (
+              <small className="helper-running-mode-hint">
+                {t('helpers.followUpSteerAttachmentsNote')}
+              </small>
+            )}
           </div>
         )}
         {mentionOpen && (
