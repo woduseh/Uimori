@@ -35,6 +35,9 @@ const estimateNotes: Record<string, string> = {
   get PRICING_PROTOCOL_UNSUPPORTED() {
     return t('providers.m519');
   },
+  get PRICED_AFTER_CALL() {
+    return t('providers.pricedAfterCall');
+  },
   get SERVICE_TIER_MISMATCH() {
     return t('providers.m520');
   },

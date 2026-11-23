@@ -51,6 +51,7 @@ const settings = [
 export const HELPER_SETTINGS_MUTATIONS = new Set([
   'settings.update',
   'model.pricing.update',
+  'model.pricing.backfill',
   'model.parameters.update',
 ]);
 
@@ -196,6 +197,32 @@ export function applyHelperSettingsMutation(
               setting: 'model.pricing',
             },
           ],
+    });
+    return result;
+  }
+  if (name === 'model.pricing.backfill') {
+    const result = invokeHelperSettingsTool(store, name, args, chatId) as {
+      modelId: string;
+      estimatedCalls: number;
+      partialCalls: number;
+    };
+    const model = store.product.get<ModelPreset>('model', result.modelId);
+    recordHelperTaskResult(workspace, task, {
+      receiptId,
+      operation: name,
+      requestedTargets: 1,
+      targets:
+        result.estimatedCalls + result.partialCalls > 0
+          ? [
+              {
+                kind: 'settings',
+                id: model.id,
+                title: model.title,
+                revision: model.revision,
+                setting: 'model.pricing',
+              },
+            ]
+          : [],
     });
     return result;
   }

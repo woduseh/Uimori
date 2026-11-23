@@ -2525,6 +2525,12 @@ export const messages = {
     ja: '1時間キャッシュ書き込み',
     zh: '1 小时缓存写入',
   },
+  'providers.pricedAfterCall': {
+    ko: '호출할 때는 가격이 없었고, 나중에 저장된 가격으로 계산한 추정이에요.',
+    en: 'No price was saved when this call ran. This estimate uses a price saved later.',
+    ja: '呼び出し時には価格がなく、後で保存された価格で計算した推定です。',
+    zh: '调用时没有价格，这是按之后保存的价格计算的估算。',
+  },
   'providers.m517': {
     ko: '이 호출에 사용할 요금을 확인하지 못했어요.',
     en: 'Could not determine the rates for this call.',

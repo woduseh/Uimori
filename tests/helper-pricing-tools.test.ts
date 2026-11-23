@@ -6,6 +6,7 @@ import { Store } from '../server/store.js';
 import type { ModelPreset } from '../core/product.js';
 import { invokeHelperSettingsTool as call } from '../server/helper-settings-tools.js';
 import { describeHelperTools } from '../server/helper-app-tools.js';
+import { createFixtureChat } from './fixtures/chat.js';
 
 const owned: { path: string; store: Store }[] = [];
 afterEach(() => {
@@ -105,4 +106,86 @@ test('helper rejects missing source, unsafe metadata and unrelated writable mode
       })
     ).toThrow();
   expect(store.product.get<ModelPreset>('model', model.id)).toEqual(model);
+});
+
+test('backfill prices only the calls recorded without a price and marks them as priced afterwards', () => {
+  const { store, model, connection } = fixture();
+  const chat = createFixtureChat(store, 'Backfill');
+  const record = (inputTokens: number, outputTokens: number) => {
+    const snapshot = store.product.modelSnapshot(model.id);
+    const id = store.product.startAttempt(chat.id, null, null, {
+      connectionId: connection.id,
+      modelId: model.modelId,
+      role: 'main',
+      protocol: 'openai-chat-v1',
+      method: 'POST',
+      url: 'https://provider.invalid',
+      headers: {},
+      body: {},
+      bodySha256: 'synthetic',
+      stablePrefixSha256: 'synthetic',
+      ...(snapshot.pricingSnapshot ? { pricingSnapshot: snapshot.pricingSnapshot } : {}),
+    });
+    store.product.finishAttempt(id, {
+      status: 'completed',
+      text: 'done',
+      toolCalls: [],
+      refusal: null,
+      error: null,
+      opaqueState: null,
+      usage: {
+        inputTokens,
+        outputTokens,
+        costUsd: null,
+        priceRevision: null,
+        raw: {
+          prompt_tokens: inputTokens,
+          completion_tokens: outputTokens,
+          prompt_tokens_details: { cached_tokens: 0 },
+        },
+      },
+    });
+    return id;
+  };
+  const estimate = (id: string) =>
+    store.db
+      .prepare(
+        "SELECT estimate_status AS status,estimated_usd AS usd,json_extract(response,'$.estimatedCost.notes') AS notes FROM attempts WHERE id=?"
+      )
+      .get(id);
+  const unpriced = record(1_000_000, 500_000);
+  expect(estimate(unpriced)).toMatchObject({ status: 'unavailable', usd: null });
+  expect(() => call(store, 'model.pricing.backfill', { modelId: model.id })).toThrow(
+    'PRICING_UNAVAILABLE'
+  );
+  call(store, 'model.pricing.update', {
+    modelId: model.id,
+    expectedRevision: model.revision,
+    pricing,
+  });
+  const priced = record(1_000_000, 0);
+  expect(estimate(priced)).toMatchObject({ status: 'estimated', usd: 2 });
+  call(store, 'model.pricing.update', {
+    modelId: model.id,
+    expectedRevision: model.revision + 1,
+    pricing: { ...pricing, rates: { ...pricing.rates, input: 4 } },
+  });
+  expect(call(store, 'model.pricing.backfill', { modelId: model.id })).toEqual({
+    modelId: model.id,
+    unpricedCalls: 1,
+    estimatedCalls: 1,
+    partialCalls: 0,
+    stillUnknownCalls: 0,
+    addedUsd: 8,
+  });
+  expect(estimate(unpriced)).toEqual({
+    status: 'estimated',
+    usd: 8,
+    notes: '["PRICED_AFTER_CALL"]',
+  });
+  expect(estimate(priced)).toMatchObject({ status: 'estimated', usd: 2 });
+  expect(call(store, 'model.pricing.backfill', { modelId: model.id })).toMatchObject({
+    unpricedCalls: 0,
+    addedUsd: 0,
+  });
 });
