@@ -17,9 +17,69 @@ import { ProviderContractError } from './provider-errors.js';
 import { validateConnection, validateRequest } from './provider-request.js';
 import { materializeProviderImages } from './provider-images.js';
 import { materializeProviderFiles } from './provider-files.js';
-import type { ProviderConnection, ProviderExecutionOptions, ProviderResult } from './transport.js';
+import type {
+  ProviderCallTiming,
+  ProviderConnection,
+  ProviderExecutionOptions,
+  ProviderResult,
+} from './transport.js';
+import type { ProviderTextUpdate } from './provider-progress.js';
 
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
+const roundMs = (value: number) => Math.round(value * 10) / 10;
+
+export function startProviderCallTiming(body: string) {
+  const started = performance.now();
+  const elapsed = () => performance.now() - started;
+  let firstByte: number | undefined;
+  let firstText: number | undefined;
+  let firstThought: number | undefined;
+  let responseBytes: number | undefined;
+  return {
+    headers() {
+      firstByte ??= elapsed();
+    },
+    received(bytes: number) {
+      responseBytes = (responseBytes ?? 0) + bytes;
+    },
+    text(update: ProviderTextUpdate) {
+      if (
+        firstText === undefined &&
+        update !== undefined &&
+        /\S/u.test(typeof update === 'string' ? update : update.text)
+      )
+        firstText = elapsed();
+    },
+    thought() {
+      firstThought ??= elapsed();
+    },
+    finish(): ProviderCallTiming {
+      return {
+        requestBytes: Buffer.byteLength(body, 'utf8'),
+        ...(firstByte !== undefined
+          ? { firstByteMs: roundMs(firstByte), streamMs: roundMs(elapsed() - firstByte) }
+          : {}),
+        ...(firstText !== undefined ? { firstTextMs: roundMs(firstText) } : {}),
+        ...(firstThought !== undefined ? { firstThoughtMs: roundMs(firstThought) } : {}),
+        ...(responseBytes !== undefined ? { responseBytes } : {}),
+      };
+    },
+  };
+}
+
+function vertexThoughtEvent(value: unknown): boolean {
+  const candidates = (value as { candidates?: unknown } | null)?.candidates;
+  return (
+    Array.isArray(candidates) &&
+    candidates.some((candidate) => {
+      const parts = (candidate as { content?: { parts?: unknown } } | null)?.content?.parts;
+      return (
+        Array.isArray(parts) &&
+        parts.some((part) => (part as { thought?: unknown } | null)?.thought === true)
+      );
+    })
+  );
+}
 const emptyResult = (): ProviderResult => ({
   status: 'error',
   text: '',
@@ -34,7 +94,8 @@ export async function consumeSse(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   onData: (value: unknown) => boolean | Promise<boolean>,
   signal: AbortSignal,
-  allowDone = false
+  allowDone = false,
+  onBytes?: (bytes: number) => void
 ): Promise<void> {
   const decoder = new TextDecoder('utf-8', { fatal: true });
   let lineBuffer = '';
@@ -106,6 +167,7 @@ export async function consumeSse(
         return;
       }
       totalBytes += next.value.byteLength;
+      onBytes?.(next.value.byteLength);
       if (totalBytes > 8_000_000) throw new ProviderContractError('RESPONSE_TOO_LARGE');
       let decoded: string;
       try {
@@ -135,8 +197,10 @@ export async function executeGeminiProvider(
   const signal = AbortSignal.any([options.signal, timeout]);
   let decoder: VertexDecoder | undefined;
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let timing: ReturnType<typeof startProviderCallTiming> | undefined;
   const failure = (code: string, diagnostic?: ProviderHttpDiagnostic) => {
     const result = decoder?.snapshot() ?? emptyResult();
+    if (timing) result.timing = timing.finish();
     result.status = options.signal.aborted
       ? 'cancelled'
       : result.refusal
@@ -234,6 +298,8 @@ export async function executeGeminiProvider(
       stablePrefixSha256: sha(JSON.stringify(request.stable)),
     });
     if (signal.aborted) return failure('CANCELLED');
+    const callTiming = startProviderCallTiming(body);
+    timing = callTiming;
     const response = await fetch(
       endpoint,
       providerFetchOptions({
@@ -249,6 +315,7 @@ export async function executeGeminiProvider(
         redirect: 'error',
       })
     );
+    callTiming.headers();
     if (!response.ok) {
       const diagnostic = await readProviderHttpDiagnostic(response, signal, token);
       return failure(`HTTP_${response.status}`, diagnostic);
@@ -268,14 +335,18 @@ export async function executeGeminiProvider(
     await consumeSse(
       reader,
       async (value) => {
+        if (vertexThoughtEvent(value)) callTiming.thought();
         const update = decoder!.accept(value);
+        callTiming.text(update);
         await progress?.(update);
         return false;
       },
-      signal
+      signal,
+      false,
+      callTiming.received
     );
     if (signal.aborted) return failure('CANCELLED');
-    const result = decoder.finish();
+    const result: ProviderResult = { ...decoder.finish(), timing: callTiming.finish() };
     if (request.webSearch) await progress?.(result.text);
     progress?.finish(result.text);
     const raw = result.usage.raw;

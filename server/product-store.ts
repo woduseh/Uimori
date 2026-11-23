@@ -977,12 +977,30 @@ export class ProductStore {
       };
     const finishedAt = new Date().toISOString();
     const elapsedMs = Date.parse(finishedAt) - Date.parse(String(row?.started_at));
+    const { timing, ...reported } = result;
     const executionDiagnostic = {
       finishedAt,
       elapsedMs: Number.isFinite(elapsedMs) && elapsedMs >= 0 ? elapsedMs : null,
       ...(request?.judgment?.kind === 'codex-content-preflight'
         ? { purpose: 'codex-content-preflight' }
         : {}),
+      ...Object.fromEntries(
+        (
+          [
+            'firstByteMs',
+            'firstTextMs',
+            'firstThoughtMs',
+            'streamMs',
+            'requestBytes',
+            'responseBytes',
+          ] as const
+        ).flatMap((key) => {
+          const value = timing?.[key];
+          return typeof value === 'number' && Number.isFinite(value) && value >= 0
+            ? [[key, value]]
+            : [];
+        })
+      ),
     };
     const safeDetachedError =
       request?.diagnosticRetention === 'safe-code-v1' &&
@@ -991,7 +1009,7 @@ export class ProductStore {
         ? result.error.code
         : null;
     const safe = {
-      ...structuredClone(result),
+      ...structuredClone(reported),
       estimatedCost,
       opaqueState: result.opaqueState === null ? null : '[provider continuation withheld]',
       executionDiagnostic,

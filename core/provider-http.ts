@@ -9,7 +9,7 @@ import {
   publicProgressAllowed,
   type ProviderTextUpdate,
 } from './provider-progress.js';
-import { consumeSse } from './vertex.js';
+import { consumeSse, startProviderCallTiming } from './vertex.js';
 import {
   encodeResponses,
   ResponsesDecoder,
@@ -52,6 +52,37 @@ const empty = (): ProviderResult => ({
   usage: { inputTokens: null, outputTokens: null, costUsd: null, raw: null, priceRevision: null },
   opaqueState: null,
 });
+const field = (value: unknown, key: string): unknown =>
+  value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined;
+
+function thoughtEvent(protocol: ProviderConnection['protocol'], value: unknown): boolean {
+  const type = field(value, 'type');
+  if (protocol === 'anthropic-messages-v1')
+    return (
+      (type === 'content_block_delta' &&
+        field(field(value, 'delta'), 'type') === 'thinking_delta') ||
+      (type === 'content_block_start' &&
+        ['thinking', 'redacted_thinking'].includes(
+          String(field(field(value, 'content_block'), 'type'))
+        ))
+    );
+  if (protocol === 'openai-responses-v1')
+    return (
+      (typeof type === 'string' && type.startsWith('response.reasoning_')) ||
+      (type === 'response.output_item.added' && field(field(value, 'item'), 'type') === 'reasoning')
+    );
+  const choices = field(value, 'choices');
+  return (
+    Array.isArray(choices) &&
+    choices.some((choice) => {
+      const delta = field(choice, 'delta');
+      return ['reasoning_content', 'reasoning'].some((key) => {
+        const text = field(delta, key);
+        return typeof text === 'string' && text.length > 0;
+      });
+    })
+  );
+}
 
 export async function executeNativeProvider(
   connectionValue: ProviderConnection,
@@ -65,12 +96,14 @@ export async function executeNativeProvider(
   const signal = AbortSignal.any([options.signal, timeout]);
   let decoder: Decoder | undefined;
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let timing: ReturnType<typeof startProviderCallTiming> | undefined;
   const failure = (
     code: string,
     diagnostic?: ProviderHttpDiagnostic,
     toolArgumentDiagnostic?: ProviderToolArgumentDiagnostic
   ) => {
     const result = decoder?.snapshot() ?? empty();
+    if (timing) result.timing = timing.finish();
     result.status = options.signal.aborted
       ? 'cancelled'
       : result.refusal
@@ -174,10 +207,13 @@ export async function executeNativeProvider(
       ...(cacheBoundaries.length ? { cacheBoundaries } : {}),
     });
     if (signal.aborted) return failure('CANCELLED');
+    const callTiming = startProviderCallTiming(body);
+    timing = callTiming;
     const response = await fetch(
       url,
       providerFetchOptions({ method: 'POST', headers, body, signal, redirect: 'error' })
     );
+    callTiming.headers();
     if (!response.ok) {
       const diagnostic = await readProviderHttpDiagnostic(response, signal, secret);
       return failure(`HTTP_${response.status}`, diagnostic);
@@ -189,20 +225,23 @@ export async function executeNativeProvider(
       await consumeSse(
         reader,
         async (value) => {
+          if (thoughtEvent(connection.protocol, value)) callTiming.thought();
           const update = decoder!.accept(value);
+          callTiming.text(update);
           await progress?.(update);
           return decoder!.isTerminal();
         },
         signal,
-        allowDone
+        allowDone,
+        callTiming.received
       );
     } else if (
       connection.protocol === 'openai-responses-v1' &&
       contentType.startsWith('application/json')
     ) {
-      const value: unknown = JSON.parse(
-        new TextDecoder().decode(await readProviderBody(response, signal))
-      );
+      const responseBody = await readProviderBody(response, signal);
+      callTiming.received(responseBody.byteLength);
+      const value: unknown = JSON.parse(new TextDecoder().decode(responseBody));
       if (
         !value ||
         typeof value !== 'object' ||
@@ -222,7 +261,7 @@ export async function executeNativeProvider(
       return failure('INVALID_CONTENT_TYPE');
     }
     if (signal.aborted) return failure('CANCELLED');
-    const result = decoder.finish();
+    const result: ProviderResult = { ...decoder.finish(), timing: callTiming.finish() };
     progress?.finish(result.text);
     return result;
   } catch (error) {

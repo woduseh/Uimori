@@ -75,6 +75,19 @@ export type Usage = {
   outputTokens: number | null;
   costUsd: number | null;
 };
+export type RunPhaseSpan =
+  | 'risuPrepare'
+  | 'contextPlan'
+  | 'compaction'
+  | 'loreSelect'
+  | 'storyGuide'
+  | 'advisorPrep'
+  | 'promptCompile'
+  | 'preflightTokenize'
+  | 'mainModel'
+  | 'refusalJudge'
+  | 'risuOutput'
+  | 'txCommit';
 export type RunSnapshot = {
   storyUiAction?: import('./story-ui.js').StoryUiAction;
   storyUiThemeChoices?: {
@@ -120,6 +133,7 @@ export type RunSnapshot = {
   nativeRisuHistoryRevision?: string;
   promptCompilation?: import('./risu-prompt.js').PromptCompilation;
   loreSelection?: import('./lore-selection.js').LoreSelectionReceipt;
+  phaseSpans?: Partial<Record<RunPhaseSpan, number>>;
   chatId: string;
   parentRevision: string | null;
   settingsRevision: number;

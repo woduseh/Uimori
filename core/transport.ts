@@ -113,6 +113,14 @@ export type ProviderToolArgumentDiagnostic = {
   hasJsonDelta: boolean;
   parseOffset: number | null;
 };
+export type ProviderCallTiming = {
+  firstByteMs?: number;
+  firstTextMs?: number;
+  firstThoughtMs?: number;
+  streamMs?: number;
+  requestBytes?: number;
+  responseBytes?: number;
+};
 export type ProviderResult = {
   webSearch?: ProviderWebSearch;
   continuation?: 'web-search-pause';
@@ -127,6 +135,7 @@ export type ProviderResult = {
   } | null;
   usage: ProviderUsage;
   opaqueState: Json;
+  timing?: ProviderCallTiming;
   delivery?: {
     kind: 'evaluation-artifact';
     noticeProvided: boolean;

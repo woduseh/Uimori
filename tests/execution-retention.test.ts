@@ -18,6 +18,7 @@ import { readerRoutes } from '../server/reader-routes.js';
 import { describe } from 'vitest';
 import { recordToolDiagnostic, startToolDiagnostic } from '../server/execution-diagnostics.js';
 import { deleteChat } from '../server/chat-deletion.js';
+import { providerCacheUsage } from '../core/provider-cache-usage.js';
 
 describe('Completed execution payload retention', () => {
   const owned: { store: Store; path: string }[] = [];
@@ -193,6 +194,69 @@ describe('Completed execution payload retention', () => {
         String(store.db.prepare('SELECT response FROM attempts WHERE id=?').get(attempt)!.response)
       )
     ).toEqual(response);
+  });
+
+  test('provider call timing and the cache and thought usage summary survive body release', () => {
+    const { store, chat, sources } = fixture();
+    const runId = sources[0]!.runId;
+    store.db.prepare("UPDATE runs SET status='running' WHERE id=?").run(runId);
+    const attempt = store.product.startAttempt(chat.id, runId, null, {
+      connectionId: 'vertex',
+      protocol: 'vertex-gemini-v1',
+      role: 'main',
+      modelId: 'gemini-3.8-flash',
+      method: 'POST',
+      url: 'https://aiplatform.googleapis.com/v1',
+      headers: {},
+      body: { text: 'PRIVATE_PROMPT' },
+      bodySha256: 'x',
+      stablePrefixSha256: 'y',
+    });
+    const timing = {
+      firstByteMs: 812.4,
+      firstThoughtMs: 1300.1,
+      firstTextMs: 2950.6,
+      streamMs: 9400.2,
+      requestBytes: 120_000,
+      responseBytes: 18_000,
+    };
+    const raw = {
+      promptTokenCount: 30_000,
+      cachedContentTokenCount: 24_000,
+      candidatesTokenCount: 900,
+      thoughtsTokenCount: 400,
+    };
+    store.product.finishAttempt(attempt, {
+      status: 'completed',
+      text: 'PRIVATE_PROVIDER_OUTPUT',
+      toolCalls: [],
+      refusal: null,
+      error: null,
+      opaqueState: null,
+      usage: { inputTokens: 30_000, outputTokens: 1300, costUsd: null, raw, priceRevision: null },
+      timing,
+    });
+    store.db.prepare("UPDATE runs SET status='completed' WHERE id=?").run(runId);
+    releaseCompletedRunInputs(store.db, runId);
+    const row = store.db
+      .prepare('SELECT request,response,raw_usage FROM attempts WHERE id=?')
+      .get(attempt)!;
+    const response = JSON.parse(String(row.response));
+    expect(response).toMatchObject({ detailsOmitted: true, usage: { raw } });
+    expect(response).not.toHaveProperty('timing');
+    expect(response.executionDiagnostic).toEqual({
+      finishedAt: expect.any(String),
+      elapsedMs: expect.any(Number),
+      ...timing,
+    });
+    expect(JSON.parse(String(row.raw_usage))).toEqual(raw);
+    expect(
+      providerCacheUsage(
+        JSON.parse(String(row.request)).protocol,
+        JSON.parse(String(row.raw_usage))
+      )
+    ).toEqual({ readTokens: 24_000, writeTokens: null });
+    expect(JSON.stringify(row)).not.toContain('PRIVATE_');
   });
 
   test('job and illustration diagnostics respect active ownership and cascade with chat deletion', () => {

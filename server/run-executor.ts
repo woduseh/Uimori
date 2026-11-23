@@ -36,7 +36,7 @@ import { AnthropicBatchRun } from './anthropic-batch.js';
 import { readRequestImage } from './request-images.js';
 import { MainShell } from './main-shell.js';
 import { recordToolDiagnostic, startToolDiagnostic } from './execution-diagnostics.js';
-import type { Usage } from '../core/types.js';
+import type { RunPhaseSpan, Usage } from '../core/types.js';
 import {
   applyStoryGuide,
   prepareStoryGuide,
@@ -104,8 +104,23 @@ export function createRunExecutor({
           run.snapshot.profile.models.main.connection.protocol !== 'fixture-sse-v1';
         let response: ReturnType<ResponseStreamStore['createWriter']> | undefined;
         let priorUsage: Usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+        let started = false;
+        const phaseSpans: Partial<Record<RunPhaseSpan, number>> = {};
+        const addPhaseSpan = (phase: RunPhaseSpan, elapsedMs: number) => {
+          phaseSpans[phase] = (phaseSpans[phase] ?? 0) + elapsedMs;
+        };
+        let openPhase: { phase: RunPhaseSpan; started: number } | undefined;
+        const beginPhase = (phase: RunPhaseSpan) => {
+          endPhase();
+          openPhase = { phase, started: performance.now() };
+        };
+        const endPhase = () => {
+          if (openPhase) addPhaseSpan(openPhase.phase, performance.now() - openPhase.started);
+          openPhase = undefined;
+        };
         try {
           if (!store.startRun(id)) return;
+          started = true;
           if (run.snapshot.judgmentRecovery)
             store.stageRunOutput(id, run.snapshot.mainJudgment!.response);
           response = streams.createWriter({
@@ -220,6 +235,7 @@ export function createRunExecutor({
             authorize: (connection) => store.product.authorize(connection),
             vertexRequestTier,
             cancelRemoteOnAbort: () => controller.signal.aborted && !signal.aborted,
+            onPhaseSpan: addPhaseSpan,
             onAttemptStart: (wire, resumeAttemptId) => {
               if (controller.signal.aborted || readRunStatus(store, id) !== 'running')
                 throw new Error('Run cancelled');
@@ -329,6 +345,7 @@ export function createRunExecutor({
               error: null,
             };
           } else {
+            beginPhase('risuPrepare');
             executionSnapshot = await prepareNativeRisuRun(executionSnapshot, {
               signal: controller.signal,
               sessionOwner: nativeSessionOwner,
@@ -357,19 +374,23 @@ export function createRunExecutor({
                   );
               });
             }
+            endPhase();
             if (
               (executionSnapshot.nativeRisuExecution !== undefined ||
                 loreSelectionPending(executionSnapshot)) &&
               (!executionSnapshot.contextPlan || executionSnapshot.contextPlan.status === 'pending')
             ) {
+              beginPhase('contextPlan');
               assertCurrent();
               executionSnapshot = freezeLoreContext(store, executionSnapshot);
               const contextBase = run.snapshot.contextBase;
               if (!executionSnapshot.contextPlan)
                 executionSnapshot = store.context.prepareRun(executionSnapshot);
               executionSnapshot.contextBase = contextBase;
+              endPhase();
             }
             if (executionSnapshot.contextPlan) {
+              beginPhase('compaction');
               assertCurrent();
               const prepared = await prepareInputContext(
                 executionSnapshot,
@@ -426,8 +447,10 @@ export function createRunExecutor({
                 store.event(run.chatId, 'run.context.updated', id);
               });
               executionSnapshot = prepared.snapshot;
+              endPhase();
             }
             if (loreSelectionPending(executionSnapshot)) {
+              beginPhase('loreSelect');
               assertCurrent();
               const selection = await prepareLoreSelection(executionSnapshot, hooks, {
                 jev: judgment,
@@ -477,8 +500,10 @@ export function createRunExecutor({
                 store.event(run.chatId, 'run.context.updated', id);
               });
               publish(run.chatId);
+              endPhase();
             }
             if (executionSnapshot.storyGuide?.config.enabled) {
+              beginPhase('storyGuide');
               const guide = await prepareStoryGuide(
                 executionSnapshot,
                 {
@@ -517,8 +542,10 @@ export function createRunExecutor({
                 store.event(run.chatId, 'run.context.updated', id);
               });
               publish(run.chatId);
+              endPhase();
             }
             if (!executionSnapshot.promptCompilation) {
+              beginPhase('promptCompile');
               executionSnapshot = {
                 ...executionSnapshot,
                 promptCompilation: compileSnapshotPrompt(executionSnapshot).promptCompilation,
@@ -534,8 +561,11 @@ export function createRunExecutor({
                     id
                   );
               });
+              endPhase();
             }
+            beginPhase('mainModel');
             result = await runMain(executionSnapshot, hooks);
+            endPhase();
           }
           response.flush();
           if (controller.signal.aborted) {
@@ -557,6 +587,7 @@ export function createRunExecutor({
           priorUsage = structuredClone(result.usage);
           store.stageRunOutput(id, result.text);
           if (judgeResponse) {
+            beginPhase('refusalJudge');
             if (priorUsage.modelCalls >= run.snapshot.settings.maxCalls)
               throw new JudgmentError('MAIN_JUDGMENT_CALL_BUDGET');
             const input = mainJudgmentInput(result.text, run.snapshot.mainJudgmentThreshold);
@@ -594,12 +625,14 @@ export function createRunExecutor({
                 "UPDATE runs SET snapshot=json_remove(snapshot,'$.mainJudgmentPending') WHERE id=?"
               )
               .run(id);
+            endPhase();
             if (verdict.verdict !== 'accepted') {
               store.finishRun(id, 'refused', 'MAIN_RESPONSE_REFUSED', result.text, priorUsage);
               publish(run.chatId);
               return;
             }
           }
+          beginPhase('risuOutput');
           const nativeOutput = await prepareNativeRisuOutput(executionSnapshot, result.text, {
             signal: controller.signal,
             sessionOwner: nativeSessionOwner,
@@ -612,6 +645,7 @@ export function createRunExecutor({
               'after-turn'
             ),
           });
+          endPhase();
           const authoredText = nativeOutput.nativeRisuExecution?.output?.text ?? result.text;
           const committedText = executionSnapshot.settings.storyUi
             ? normalizeStoryUiOutput(
@@ -619,6 +653,7 @@ export function createRunExecutor({
                 storyUiAssetResolver(() => executionSnapshot)
               )
             : authoredText;
+          beginPhase('txCommit');
           store.transaction(() => {
             assertCurrent();
             if (nativeOutput.nativeRisuExecution)
@@ -631,6 +666,7 @@ export function createRunExecutor({
               );
             store.completeRunInTransaction(id, committedText, priorUsage, controls);
           });
+          endPhase();
           if (controls.crashAfterSourceCommit) process.exit(86);
           publish(run.chatId);
           afterSource(id);
@@ -696,6 +732,23 @@ export function createRunExecutor({
             publish(run.chatId);
           }
         } finally {
+          endPhase();
+          if (started && (Object.keys(phaseSpans).length || run.snapshot.phaseSpans))
+            store.db
+              .prepare(
+                "UPDATE runs SET snapshot=json_set(snapshot,'$.phaseSpans',json(?)) WHERE id=?"
+              )
+              .run(
+                JSON.stringify(
+                  Object.fromEntries(
+                    Object.entries(phaseSpans).map(([phase, ms]) => [
+                      phase,
+                      Math.round(ms * 10) / 10,
+                    ])
+                  )
+                ),
+                id
+              );
           const status = readRunStatus(store, id);
           if (status === 'queued' || status === 'running' || status === 'interrupted')
             shell?.close();

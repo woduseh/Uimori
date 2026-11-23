@@ -578,6 +578,26 @@ test('removes the writer workspace after a terminal refused result', async () =>
   expect(existsSync(f.shellWorkspace!)).toBe(false);
 });
 
+test('records run phase spans and replaces them in the judgment-only recovery run', async () => {
+  const f = await fixture('Measured candidate', 'failure');
+  expect(f.run.status).toBe('failed');
+  const original = f.app.store.run(f.run.id).snapshot.phaseSpans!;
+  expect(Object.keys(original)).toEqual(expect.arrayContaining(['mainModel', 'refusalJudge']));
+  expect(original).not.toHaveProperty('txCommit');
+  vi.stubGlobal('fetch', async () =>
+    Response.json({
+      model: 'jev-latest',
+      answers: { explicitRefusal: { type: 'noul', noul: 0.1 } },
+    })
+  );
+  const next = await api(f.app, `/api/runs/${f.run.id}/rejudge`, { idempotencyKey: randomUUID() });
+  await expect.poll(() => f.app.store.run(next.id).status, { timeout: 6000 }).toBe('completed');
+  const recovered = f.app.store.run(next.id).snapshot.phaseSpans!;
+  expect(Object.keys(recovered).sort()).toEqual(['refusalJudge', 'risuOutput', 'txCommit']);
+  for (const elapsedMs of Object.values(recovered)) expect(elapsedMs).toBeGreaterThanOrEqual(0);
+  expect(f.calls).toHaveLength(1);
+});
+
 test('rejudgment credential failure preserves its response and does not recharge the writer', async () => {
   const f = await fixture('Still available', 'failure');
   f.app.store.credentials.set('jev', null);

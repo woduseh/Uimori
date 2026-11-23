@@ -76,6 +76,7 @@ export type MainHooks = {
   onAttemptStart: (request: WireRecord, resumeAttemptId?: string) => string | Promise<string>;
   onAttemptFinish: (id: string, result: ProviderResult) => void | Promise<void>;
   cancelRemoteOnAbort?: () => boolean;
+  onPhaseSpan?: (phase: 'advisorPrep' | 'preflightTokenize', elapsedMs: number) => void;
   onResponseProgress?: (
     progress: ProviderProgress & { attemptId: string; segment: number }
   ) => void | Promise<void>;
@@ -203,10 +204,15 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   if (replayInvalid) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
   if (!Number.isSafeInteger(maxCalls) || maxCalls < 1) return fail('MODEL_CALL_BUDGET_EXHAUSTED');
   const collaboration = createAgentCollaboration(fixed, hooks, usage);
-  try {
-    await collaboration?.prepare();
-  } catch (error) {
-    throw new ModelRunError(error, structuredClone(usage));
+  if (collaboration) {
+    const started = performance.now();
+    try {
+      await collaboration.prepare();
+    } catch (error) {
+      throw new ModelRunError(error, structuredClone(usage));
+    } finally {
+      hooks.onPhaseSpan?.('advisorPrep', performance.now() - started);
+    }
   }
   const advisorContext = new Map(
     (collaboration?.bootstrap ?? []).map((event) => [event.callId, structuredClone(event)])
@@ -555,6 +561,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         target.timeoutMs ??
         (isGeminiProtocol(target.connection.protocol) ? 300_000 : undefined),
       onWire: async (wire, resumeAttemptId) => {
+        const tokenizeStarted = performance.now();
         const requestContext =
           wire.requestContext ??
           (request.contextBudget && {
@@ -566,6 +573,8 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
               tokenizerFallback: tokenizerInfo(request.contextBudget.tokenizer).fallback,
             }),
           });
+        if (requestContext && !wire.requestContext)
+          hooks.onPhaseSpan?.('preflightTokenize', performance.now() - tokenizeStarted);
         readHeadroomTokens =
           !native && !evaluation && request.contextBudget && requestContext
             ? Math.max(

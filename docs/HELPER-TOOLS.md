@@ -478,7 +478,7 @@ What those documents and tests leave out:
 - Host compaction starts only under context pressure. Model size, cost and repeated reads of the same data do not start it earlier, because the aim is to keep exact evidence in the request for as long as it fits. The rule makes no claim about provider cost or cache reuse.
 - The component estimates in `input.measured` are serialized separately for diagnosis. They do not necessarily sum to the estimate of the encoded request.
 - `originalResultChars` and `providedResultChars` count the serialized JSON at the helper boundary. They are not the size of the source resource or of a shell's full output.
-- `elapsedMs` on `attempt.finished` spans the host's provider request. It is neither first-token latency nor the time of one internal model call inside a native Codex turn.
+- `elapsedMs` on `attempt.finished` spans the host's provider request. It is neither first-token latency nor the time of one internal model call inside a native Codex turn. Streaming provider calls record first-byte and first-text latency separately as `firstByteMs` and `firstTextMs` on the attempt's execution diagnostic.
 - The local input estimate covers what Uimori sends. A native Codex turn adds its own tool descriptions and runtime context, so the provider-reported input can be higher.
 
 Constraints on changing this code:
