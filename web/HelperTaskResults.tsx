@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import {
   BookOpen,
   Check,
@@ -33,6 +33,9 @@ import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { usageCompact, usageUsd } from './usage-display.js';
 import { SearchSuggestionsFrame } from './SearchSuggestionsFrame.js';
+import { StoryUi } from './LazyStoryUi.js';
+import { storyUiPreview } from './story-ui-preview.js';
+import { ThemeContext } from './ThemeContext.js';
 import './helper-task-results.css';
 import './scene-usage.css';
 import './run-task-details.css';
@@ -576,6 +579,12 @@ export function HelperTaskResults({
                   rollback={rollback.action(change)}
                   outcome={rollback.status(change)}
                 />
+                {change.domain === 'resource' &&
+                  !changes
+                    .slice(index + 1)
+                    .some(
+                      (later) => later.domain === 'resource' && later.targetId === change.targetId
+                    ) && <StoryUiThemePreview themeId={change.targetId} />}
               </li>
             ))}
             {data.results.flatMap((result) =>
@@ -613,5 +622,18 @@ export function HelperTaskResults({
         onRetry={retry}
       />
     </section>
+  );
+}
+
+function StoryUiThemePreview({ themeId }: { themeId: string }) {
+  const storyUi = useContext(ThemeContext)?.catalog.themes.find(
+    (theme) => theme.id === themeId
+  )?.storyUi;
+  if (!storyUi) return null;
+  return (
+    <div className="helper-story-ui-preview">
+      <strong>{t('storyUi.preview')}</strong>
+      <StoryUi segment={storyUiPreview} customTheme={storyUi} />
+    </div>
   );
 }

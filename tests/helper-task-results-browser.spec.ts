@@ -259,6 +259,60 @@ test('HRESULT-STORYUI setting results identify changes and open generation setti
   await expect(settings.getByText('관측소 봇', { exact: true })).toBeVisible();
 });
 
+test('HRESULT-THEME a changed Story UI theme shows its preview under the last change', async ({
+  page,
+  request,
+}, info) => {
+  const { chat, task } = await seed(request);
+  const catalogResponse = await request.get('/api/themes');
+  expect(catalogResponse.ok()).toBe(true);
+  const catalog = (await catalogResponse.json()) as { themes: Record<string, unknown>[] };
+  const storyTheme = {
+    ...catalog.themes[0],
+    id: 'story-theme',
+    name: '등대 테마',
+    storyUi: { baseStyle: 'neon', css: '& { --story-accent: #1d3a8a; }' },
+  };
+  await page.route('**/api/themes', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const response = await route.fetch();
+    const body = (await response.json()) as { themes: unknown[] };
+    await route.fulfill({ response, json: { ...body, themes: [...body.themes, storyTheme] } });
+  });
+  const change = (action: 'create' | 'update') => ({
+    domain: 'resource' as const,
+    targetId: 'story-theme',
+    title: '등대 테마',
+    location: { kind: 'resource-field' as const, path: ['storyUi', 'css'] },
+    action,
+    diff: null,
+    anchor: null,
+  });
+  const projection: HelperTaskResultsView = {
+    taskId: task.id,
+    status: 'completed',
+    results: [],
+    changes: [change('create'), change('update')],
+    confirmations: [],
+    unrecordedOperations: 0,
+    usage: { toolExecutions: 2, attempts: [], latestInputEstimate: null },
+  };
+  await page.route(`**/api/helper/tasks/${task.id}/results`, (route) =>
+    route.fulfill({ json: projection })
+  );
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  const results = page
+    .locator(`.helper-message.assistant[data-task-id="${task.id}"]`)
+    .getByTestId('helper-task-results');
+  const previews = results.locator('.helper-story-ui-preview');
+  await expect(previews).toHaveCount(1);
+  await expect(results.locator('.helper-result-list > li').last()).toContainText('오래된 정원');
+  await expect(previews.locator('[data-story-ui-style="neon"]')).toBeVisible();
+  await previews.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath('helper-story-ui-theme-preview.png') });
+});
+
 test('HRESULT-ILLUSTRATION queued and placed results open their scene and references without losing a draft', async ({
   page,
   request,
