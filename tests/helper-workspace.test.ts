@@ -1674,6 +1674,53 @@ test('a resumed task that stops again carries the whole chain and still refuses 
   ).toEqual(['catalog', 'rename']);
 });
 
+test('a stopped task counts the targets one batch call changed, not the call', async () => {
+  const f = fixture();
+  const bots = ['하나', '둘'].map(
+    (name) => f.store.product.content(fixtureBotInput(`${name} 봇`, '설명')) as Content
+  );
+  mockSend((_request, _options, index) =>
+    index === 0
+      ? {
+          ...structuredClone(success),
+          status: 'tool_calls',
+          text: '',
+          toolCalls: [
+            {
+              id: 'batch',
+              name: 'app.call',
+              arguments: {
+                name: 'resource.patchMany',
+                arguments: {
+                  items: bots.map((bot) => ({
+                    kind: 'content',
+                    id: bot.id,
+                    expectedRevision: bot.revision,
+                    changes: [
+                      { op: 'set', path: '/package/nativeRisu/card/description', value: '새 설명' },
+                    ],
+                  })),
+                },
+              },
+            },
+          ],
+        }
+      : { ...structuredClone(success), status: 'error', text: '', error: { code: 'HTTP_400' } }
+  );
+  const task = f.runtime.enqueue(f.conversation.id, 'batch', '두 봇의 설명을 바꿔줘');
+  await Promise.all(f.work);
+  expect(
+    f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
+  ).toEqual({ n: 1 });
+  expect(f.workspace.task(task.id)).toMatchObject({
+    status: 'failed',
+    completedEffects: { count: 2 },
+  });
+  expect(f.workspace.taskSummaries(f.conversation.id)[0]).toMatchObject({
+    completedEffects: { count: 2 },
+  });
+});
+
 test('a task with no recorded exchange cannot be resumed', async () => {
   const f = fixture();
   mockSend(() => ({

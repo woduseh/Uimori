@@ -14,8 +14,12 @@ export const stoppedHelperTasks = (tasks: string) => `${resumeChain(
   `SELECT id,id,0 FROM ${tasks} WHERE status IN ('failed','cancelled','interrupted')`
 )}, stopped AS (
     SELECT t.id AS task_id,
-      (SELECT COUNT(*) FROM helper_operations o JOIN chain m ON m.member=o.task_id
-        WHERE m.task_id=t.id) AS completed_effects,
+      MAX(
+        (SELECT COUNT(*) FROM helper_operations o JOIN chain m ON m.member=o.task_id
+          WHERE m.task_id=t.id),
+        (SELECT COUNT(*) FROM helper_changes c JOIN chain m ON m.member=c.task_id
+          WHERE m.task_id=t.id AND c.rolled_back_at IS NULL)
+      ) AS completed_effects,
       (json_extract(t.snapshot,'$.invalidatedBySceneDeletion') IS NULL
         AND json_extract(t.snapshot,'$.model.connection.protocol')!='codex-app-server-v1'
         AND EXISTS(SELECT 1 FROM helper_events e JOIN chain m ON m.member=e.task_id
