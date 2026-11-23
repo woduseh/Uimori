@@ -1,7 +1,7 @@
 import { initPushSchema } from './push-schema.js';
 import { initSceneContext } from './scene-context.js';
 import { initReadingState } from './reading-state.js';
-import { initManuscriptSearch } from './search-schema.js';
+import { initManuscriptSearch, initSearchTrigrams } from './search-schema.js';
 import type { DatabaseSync } from 'node:sqlite';
 import { initDatabaseReadIndexes } from './database-performance.js';
 import { initIllustrations } from './illustrations.js';
@@ -76,6 +76,7 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
     initHelperSeeds(db);
     initRequestFilesSchema(db);
     initSceneContext(db);
+    initSearchTrigrams(db);
     initDatabaseReadIndexes(db);
     initExecutionDiagnostics(db);
     initThemeAssets(db);

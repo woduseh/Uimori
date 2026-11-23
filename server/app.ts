@@ -19,7 +19,7 @@ import { createRunExecutor } from './run-executor.js';
 import { imageInputSupported } from '../core/provider-images.js';
 import { sameVertexProject } from '../core/vertex-location.js';
 import { APP_VERSION } from './app-version.js';
-import { flushPendingImageCleanup } from './unused-data.js';
+import { PendingImageCleanup, flushPendingImageCleanup } from './unused-data.js';
 import { themeRoutes } from './themes.js';
 import { themeAssetRoutes } from './theme-assets.js';
 import { fontRoutes } from './fonts.js';
@@ -52,7 +52,11 @@ import { contextRoutes } from './context-routes.js';
 import { ChatOverridesStore, chatOverrideRoutes } from './chat-overrides.js';
 import { chatOptionRoutes } from './chat-options.js';
 import { chatVariableRoutes } from './chat-variable-routes.js';
-import { ResponseStreamStore, responseStreamRoutes } from './response-stream.js';
+import {
+  ResponseStreamStore,
+  pruneUnreachableResponseChunks,
+  responseStreamRoutes,
+} from './response-stream.js';
 import { precomputePackagePresentation } from './package-presentation-routes.js';
 import { chatEventResume, createChatEventStreams } from './chat-event-stream.js';
 import { readerActivities, readerDetail, readerRuns } from './reader.js';
@@ -343,6 +347,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     streams,
   });
   const work = new Set<Promise<void>>();
+  const imageCleanup = new PendingImageCleanup(store);
   const runs = new Map<string, AbortController>();
   const jobControllers = new Map<string, AbortController>();
   const illustrationControllers = new Map<
@@ -360,13 +365,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     work.add(promise);
     const settled = () => {
       work.delete(promise);
-      if (!work.size) {
-        try {
-          flushPendingImageCleanup(store.db);
-        } catch {
-          process.stderr.write('IMAGE_CLEANUP_DEFERRED\n');
-        }
-      }
+      if (!work.size) void imageCleanup.flush();
     };
     void promise.then(settled, () => {
       settled();
@@ -1605,6 +1604,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     await codex.close();
     chatEvents.closeAll();
     await Promise.allSettled([...work]);
+    await imageCleanup.close();
   });
   app.addHook('onClose', async () => {
     disposeAllNativeRisuSessions();
@@ -1640,6 +1640,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     recoveredRuns = store.recover();
     helper.workspace.interrupt();
     streams.recover();
+    pruneUnreachableResponseChunks(store.db);
     flushPendingImageCleanup(store.db);
   }
   app.addHook('onListen', async () => {

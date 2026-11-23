@@ -35,6 +35,19 @@ export function initResponseStreams(db: DatabaseSync) {
   `);
 }
 
+export function pruneUnreachableResponseChunks(db: DatabaseSync): number {
+  return Number(
+    db
+      .prepare(`DELETE FROM response_stream_chunks WHERE task_kind='main' AND task_id IN (
+      SELECT r.id FROM runs r WHERE r.status NOT IN ('queued','running')
+        AND r.id IN (SELECT DISTINCT task_id FROM response_stream_chunks WHERE task_kind='main')
+        AND (r.source_revision IS NOT NULL OR (
+          EXISTS(SELECT 1 FROM runs newer WHERE newer.chat_id=r.chat_id AND json_extract(newer.command,'$.retryOf')=r.id)
+          AND NOT (r.status='cancelled' AND COALESCE(r.partial_text,'')=''))))`)
+      .run().changes
+  );
+}
+
 type StreamIdentity = ResponseTaskIdentity & { chatId?: string | null };
 type StreamRow = { owner: string; status: ResponseStreamStatus };
 type ActiveStream = {

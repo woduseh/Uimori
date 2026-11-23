@@ -6,6 +6,7 @@ import Fastify from 'fastify';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   initResponseStreams,
+  pruneUnreachableResponseChunks,
   ResponseStreamStore,
   responseStreamRoutes,
 } from '../server/response-stream.js';
@@ -445,4 +446,51 @@ describe('durable public response batches', () => {
       await app.close();
     }
   });
+});
+
+test('startup cleanup drops main-run chunks that no screen can show any more', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-stream-'));
+  directories.push(directory);
+  const { db } = connection(join(directory, 'synthetic.sqlite'));
+  db.exec(`CREATE TABLE chats(id TEXT PRIMARY KEY); INSERT INTO chats VALUES('chat-1'),('chat-2');
+    CREATE TABLE runs(id TEXT PRIMARY KEY, chat_id TEXT, status TEXT, command TEXT, partial_text TEXT, source_revision TEXT);
+    CREATE TABLE helper_tasks(id TEXT PRIMARY KEY); INSERT INTO helper_tasks VALUES('task-1');`);
+  initResponseStreams(db);
+  const run = db.prepare('INSERT INTO runs VALUES(?,?,?,?,?,?)');
+  const retry = (of: string) => JSON.stringify({ retryOf: of });
+  run.run('refused-retried', 'chat-1', 'refused', '{}', null, null);
+  run.run('retry', 'chat-1', 'completed', retry('refused-retried'), null, 'source-1');
+  run.run('cancelled-retried', 'chat-1', 'cancelled', '{}', '', null);
+  run.run('retry-2', 'chat-1', 'running', retry('cancelled-retried'), null, null);
+  run.run('failed-pending', 'chat-1', 'failed', '{}', '부분', null);
+  run.run('refused-copied', 'chat-1', 'refused', '{}', null, null);
+  run.run('copy', 'chat-2', 'completed', retry('refused-copied'), null, 'source-2');
+  run.run('partial-saved', 'chat-1', 'partial', '{}', '부분', 'source-3');
+  run.run('running', 'chat-1', 'running', '{}', null, null);
+  const task = db.prepare("INSERT INTO response_stream_tasks VALUES(?,?,?,?,?,'owner',?,'t','t')");
+  const chunk = db.prepare(
+    "INSERT INTO response_stream_chunks(task_kind,task_id,attempt_id,segment,offset,text) VALUES(?,?,'a',0,2,'부분')"
+  );
+  const ids = [
+    'refused-retried',
+    'cancelled-retried',
+    'failed-pending',
+    'refused-copied',
+    'partial-saved',
+    'running',
+  ];
+  for (const id of ids) {
+    task.run('main', id, 'chat-1', id, null, id === 'running' ? 'running' : 'failed');
+    chunk.run('main', id);
+  }
+  task.run('helper', 'task-1', 'chat-1', null, 'task-1', 'failed');
+  chunk.run('helper', 'task-1');
+  expect(pruneUnreachableResponseChunks(db)).toBe(2);
+  expect(
+    db
+      .prepare('SELECT task_id FROM response_stream_chunks ORDER BY task_id')
+      .all()
+      .map((row) => row.task_id)
+  ).toEqual(['cancelled-retried', 'failed-pending', 'refused-copied', 'running', 'task-1']);
+  expect(db.prepare('SELECT count(*) AS n FROM response_stream_tasks').get()!.n).toBe(7);
 });

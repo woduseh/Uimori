@@ -7,6 +7,7 @@ import type {
   SearchKind,
 } from '../core/manuscript-search.js';
 import { HttpError, fields, record, text } from './request-validation.js';
+import { foldSearchText, moveLegacySearchIndex } from './search-schema.js';
 import type { Store } from './store.js';
 
 export class ManuscriptSearch {
@@ -120,7 +121,10 @@ export class ManuscriptSearch {
       if (this.closed || !this.writable()) return;
       this.store.transaction(() => {
         const insert = this.store.db.prepare(
-          'INSERT INTO search_documents(source_id,chat_id,kind,content_hash,text,search_text) VALUES(?,?,?,?,?,?)'
+          "INSERT INTO search_documents(source_id,chat_id,kind,content_hash,text,search_text) VALUES(?,?,?,?,?,'')"
+        );
+        const indexTrigrams = this.store.db.prepare(
+          'INSERT INTO search_trigrams(rowid,text) VALUES(?,?)'
         );
         for (const item of batch) {
           const pending = this.store.db
@@ -131,13 +135,10 @@ export class ManuscriptSearch {
             .prepare('DELETE FROM search_documents WHERE source_id=?')
             .run(item.sourceId);
           for (const doc of item.documents)
-            insert.run(
-              doc.sourceId,
-              doc.chatId,
-              doc.kind,
-              doc.contentHash,
-              doc.text,
-              doc.text.normalize('NFC').toLowerCase()
+            indexTrigrams.run(
+              insert.run(doc.sourceId, doc.chatId, doc.kind, doc.contentHash, doc.text)
+                .lastInsertRowid,
+              foldSearchText(doc.text)
             );
           this.store.db
             .prepare('DELETE FROM search_dirty_sources WHERE source_id=?')
@@ -149,10 +150,16 @@ export class ManuscriptSearch {
     });
     return this.indexing;
   }
+  moveLegacyIndexBatch(): boolean {
+    if (this.closed || !this.writable()) return false;
+    return this.store.transaction(() => moveLegacySearchIndex(this.store.db, 128 * 1024));
+  }
   listen() {
     const tick = async () => {
       try {
         await this.refreshBatch();
+        if (!this.store.db.prepare('SELECT 1 FROM search_dirty_sources LIMIT 1').get())
+          this.moveLegacyIndexBatch();
       } catch {}
       if (!this.closed) {
         this.timer = setTimeout(() => void tick(), 1000);

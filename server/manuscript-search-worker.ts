@@ -21,6 +21,15 @@ db.exec('PRAGMA query_only=ON; PRAGMA busy_timeout=1000; BEGIN');
 const md = new MarkdownIt({ html: true });
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const fold = (text: string) => text.normalize('NFC').toLowerCase();
+function trigramQuery(terms: string[]): string {
+  const trigrams = new Set<string>();
+  for (const term of terms) {
+    const characters = [...term];
+    for (let index = 0; index + 3 <= characters.length; index++)
+      trigrams.add(characters.slice(index, index + 3).join(''));
+  }
+  return [...trigrams].map((trigram) => `"${trigram.replaceAll('"', '""')}"`).join(' AND ');
+}
 function plain(text: string): string {
   const withoutPrograms = text.replace(/<(script|style)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/giu, ' ');
   const htmlText = (value: string) =>
@@ -153,14 +162,17 @@ function search(query: ManuscriptSearchQuery): ManuscriptSearchResult {
   const params: (string | number)[] =
     query.scope === 'chat' ? [query.chatId!] : query.scope === 'bot' ? [query.botId!] : [];
   const long = terms.filter((term) => [...term].length >= 3);
+  const legacy = long.length > 0 && !!db.prepare('SELECT 1 FROM search_fts_docsize LIMIT 1').get();
   // https://sqlite.org/fts5.html#the_trigram_tokenizer (2026-11-20): trigram matching is case
   // insensitive unless the case_sensitive option is set to 1.
   const fts = long.length
     ? `AND (EXISTS(SELECT 1 FROM search_dirty_sources d WHERE d.source_id=v.source_id)
-    OR v.source_id IN (SELECT d.source_id FROM search_fts f JOIN search_documents d ON d.id=f.rowid WHERE search_fts MATCH ?))`
+    OR v.source_id IN (SELECT d.source_id FROM search_trigrams f JOIN search_documents d ON d.id=f.rowid WHERE search_trigrams MATCH ?)
+    ${legacy ? 'OR v.source_id IN (SELECT d.source_id FROM search_fts f JOIN search_documents d ON d.id=f.rowid WHERE search_fts MATCH ?)' : ''})`
     : '';
   params.push(after);
-  if (long.length) params.push(long.map((term) => `"${term.replaceAll('"', '""')}"`).join(' AND '));
+  if (long.length) params.push(trigramQuery(long));
+  if (legacy) params.push(long.map((term) => `"${term.replaceAll('"', '""')}"`).join(' AND '));
   const rows = db
     .prepare(`WITH RECURSIVE visible(chat_id,source_id) AS (
     SELECT c.id,c.head_revision FROM chats c JOIN chat_organization o ON o.chat_id=c.id
@@ -239,7 +251,7 @@ try {
       const oldBytes = Number(
         db
           .prepare(
-            'SELECT COALESCE(SUM(length(CAST(search_text AS BLOB))),0) AS n FROM search_documents WHERE source_id=?'
+            'SELECT COALESCE(SUM(length(CAST(text AS BLOB))),0) AS n FROM search_documents WHERE source_id=?'
           )
           .get(sourceId)!.n
       );

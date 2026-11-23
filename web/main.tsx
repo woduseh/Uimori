@@ -12,7 +12,7 @@ import { FontProvider, useFonts } from './FontContext.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
-import { BotChatImportDialog } from './BotChatImportDialog.js';
+import type { BotChatImportDialog as BotChatImportDialogPanel } from './BotChatImportDialog.js';
 import { ReadingSettingsSearch } from './ReadingSettingsSearch.js';
 import { ReadabilitySettings } from './ReadabilitySettings.js';
 import { Switch } from './BooleanControls.js';
@@ -30,10 +30,10 @@ import { ReaderLoadingState } from './ReaderLoadingState.js';
 import { ChatComposer, ComposerInput, sendKeyLabel } from './ChatComposer.js';
 import { InputTranslationControls, InputTranslationFeedback } from './InputTranslation.js';
 import { ComposerMore, LoreResetChip } from './ComposerMore.js';
-import { ChatContextDialog } from './ChatContextDialog.js';
+import type { ChatContextDialog as ChatContextDialogPanel } from './ChatContextDialog.js';
 import { ChatModelPicker } from './ChatModelPicker.js';
-import { RequestPreviewDialog } from './RequestPreviewDialog.js';
-import { ManuscriptExportDialog } from './ManuscriptExportDialog.js';
+import type { RequestPreviewDialog as RequestPreviewDialogPanel } from './RequestPreviewDialog.js';
+import type { ManuscriptExportDialog as ManuscriptExportDialogPanel } from './ManuscriptExportDialog.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
 import { IconButton } from './IconButton.js';
 import { PinIcon, CloseIcon, DownIcon, HelperIcon } from './ui-icons.js';
@@ -223,6 +223,51 @@ const TasksPanel = deferredPanel('작업 현황', async () => ({
 const OutlinePanel = deferredPanel('플롯', async () => ({
   default: (await import('./OutlinePanel.js')).OutlinePanel,
 }));
+const BotChatImportDialog = deferredPanel<ComponentProps<typeof BotChatImportDialogPanel>>(
+  uiMessage('transfer.m106'),
+  async () => ({ default: (await import('./BotChatImportDialog.js')).BotChatImportDialog }),
+  (content, props) => (
+    <Dialog open title={t('transfer.m106')} onClose={props.onClose}>
+      {content}
+    </Dialog>
+  )
+);
+const RequestPreviewDialog = deferredPanel<ComponentProps<typeof RequestPreviewDialogPanel>>(
+  uiMessage('reader.nextRequestPreview'),
+  async () => ({ default: (await import('./RequestPreviewDialog.js')).RequestPreviewDialog }),
+  (content, props) => (
+    <Dialog open={props.open} title={t('reader.nextRequestPreview')} onClose={props.onClose}>
+      {content}
+    </Dialog>
+  )
+);
+const ManuscriptExportDialog = deferredPanel<ComponentProps<typeof ManuscriptExportDialogPanel>>(
+  uiMessage('transfer.m192'),
+  async () => ({ default: (await import('./ManuscriptExportDialog.js')).ManuscriptExportDialog }),
+  (content, props) => (
+    <Dialog open={props.open} title={t('transfer.m192')} onClose={props.onClose}>
+      {content}
+    </Dialog>
+  )
+);
+const ChatContextDialog = deferredPanel<ComponentProps<typeof ChatContextDialogPanel>>(
+  uiMessage('settings.m104'),
+  async () => ({ default: (await import('./ChatContextDialog.js')).ChatContextDialog }),
+  (content, props) => (
+    <Dialog
+      open={!!props.mode}
+      title={t(props.mode === 'compact' ? 'settings.m105' : 'settings.m104')}
+      onClose={props.onClose}
+    >
+      {content}
+    </Dialog>
+  )
+);
+function useOpenedOnce(open: boolean) {
+  const [opened, setOpened] = useState(open);
+  if (open && !opened) setOpened(true);
+  return opened || open;
+}
 
 type Panel =
   | ''
@@ -249,7 +294,7 @@ function DraftComposerInput({
 function DraftRequestPreviewDialog({
   draft,
   ...props
-}: Omit<ComponentProps<typeof RequestPreviewDialog>, 'request'> & { draft: ComposerDraft }) {
+}: Omit<ComponentProps<typeof RequestPreviewDialogPanel>, 'request'> & { draft: ComposerDraft }) {
   return <RequestPreviewDialog {...props} request={useComposerDraftText(draft)} />;
 }
 function App() {
@@ -1231,6 +1276,10 @@ function App() {
   useShortcut('search.open', () => searchFromKeyboard());
   useShortcut('editor.save', () => true);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const contextToolsMounted = useOpenedOnce(
+    currentChatTool === 'lore' || currentChatTool === 'compact'
+  );
+  const exportMounted = useOpenedOnce(currentChatTool === 'export');
   const composerFocusChat = useRef<string | null>(null);
   const openedChat = s.destination === 'story' ? s.detail?.chat.id : undefined;
   useEffect(() => {
@@ -2861,34 +2910,38 @@ function App() {
               }}
             />
           )}
-          <ChatContextDialog
-            key={`context-tools:${s.selected}`}
-            mode={
-              currentChatTool === 'lore' || currentChatTool === 'compact' ? currentChatTool : null
-            }
-            chatId={s.detail.chat.id}
-            headRevision={s.detail.chat.headRevision}
-            refreshKey={s.detail.reader.cursor}
-            onClose={() => {
-              setChatTool(null);
-              requestAnimationFrame(() =>
-                document.querySelector<HTMLButtonElement>('button[data-composer-more]')?.focus()
-              );
-            }}
-            onRefresh={() => s.refresh(s.selected)}
-            onError={s.setError}
-          />
-          <ManuscriptExportDialog
-            key={`manuscript-export:${s.selected}`}
-            open={currentChatTool === 'export'}
-            chatId={s.detail.chat.id}
-            onClose={() => {
-              setChatTool(null);
-              requestAnimationFrame(() =>
-                document.querySelector<HTMLElement>('.chat-menu summary')?.focus()
-              );
-            }}
-          />
+          {contextToolsMounted && (
+            <ChatContextDialog
+              key={`context-tools:${s.selected}`}
+              mode={
+                currentChatTool === 'lore' || currentChatTool === 'compact' ? currentChatTool : null
+              }
+              chatId={s.detail.chat.id}
+              headRevision={s.detail.chat.headRevision}
+              refreshKey={s.detail.reader.cursor}
+              onClose={() => {
+                setChatTool(null);
+                requestAnimationFrame(() =>
+                  document.querySelector<HTMLButtonElement>('button[data-composer-more]')?.focus()
+                );
+              }}
+              onRefresh={() => s.refresh(s.selected)}
+              onError={s.setError}
+            />
+          )}
+          {exportMounted && (
+            <ManuscriptExportDialog
+              key={`manuscript-export:${s.selected}`}
+              open={currentChatTool === 'export'}
+              chatId={s.detail.chat.id}
+              onClose={() => {
+                setChatTool(null);
+                requestAnimationFrame(() =>
+                  document.querySelector<HTMLElement>('.chat-menu summary')?.focus()
+                );
+              }}
+            />
+          )}
         </>
       )}
       <ChatPromptOptions

@@ -176,6 +176,87 @@ test('common location URLs preserve IDs and mode, and POST search stays read-onl
   expect(app.store.db.prepare('SELECT count(*) AS n FROM search_documents').get()!.n).toBe(before);
 });
 
+test('an index written by the previous release keeps answering while it moves to the compact index', async () => {
+  const { directory, store, search } = fixture();
+  const chat = createFixtureChat(store, 'Legacy index');
+  const sources = [
+    completedSource(store, chat.id, 'Golden LANTERN 아래 붉은 우산'),
+    completedSource(store, chat.id, `${'긴 원고. '.repeat(40000)}보라색우산`),
+  ];
+  await index(search, store);
+  const documents = store.db
+    .prepare('SELECT source_id,chat_id,kind,content_hash,text FROM search_documents ORDER BY id')
+    .all();
+  store.db.exec(`DROP TRIGGER search_document_insert; DROP TRIGGER search_document_delete;
+    DROP TRIGGER search_document_update; DROP TABLE search_trigrams; DELETE FROM search_documents;
+    CREATE TRIGGER search_document_insert AFTER INSERT ON search_documents BEGIN
+      INSERT INTO search_fts(rowid,search_text) VALUES(new.id,new.search_text); END;
+    CREATE TRIGGER search_document_delete AFTER DELETE ON search_documents BEGIN
+      INSERT INTO search_fts(search_fts,rowid,search_text) VALUES('delete',old.id,old.search_text); END;
+    CREATE TRIGGER search_document_update AFTER UPDATE OF search_text ON search_documents BEGIN
+      INSERT INTO search_fts(search_fts,rowid,search_text) VALUES('delete',old.id,old.search_text);
+      INSERT INTO search_fts(rowid,search_text) VALUES(new.id,new.search_text); END;`);
+  const legacyInsert = (target: Store, row: Record<string, unknown>) =>
+    target.db
+      .prepare(
+        'INSERT INTO search_documents(source_id,chat_id,kind,content_hash,text,search_text) VALUES(?,?,?,?,?,?)'
+      )
+      .run(
+        String(row.source_id),
+        String(row.chat_id),
+        String(row.kind),
+        String(row.content_hash),
+        String(row.text),
+        String(row.text).normalize('NFC').toLowerCase()
+      );
+  for (const row of documents) legacyInsert(store, row);
+  await search.close();
+  store.close();
+  owned.pop();
+
+  const reopened = new Store(join(directory, 'app.sqlite'));
+  const upgraded = new ManuscriptSearch(reopened);
+  owned.push({ directory, store: reopened, search: upgraded });
+  const found = async (text: string) =>
+    (await upgraded.search(query(text))).items.map((item) => item.target.sourceId);
+  const legacyRows = () =>
+    Number(
+      reopened.db.prepare("SELECT count(*) AS n FROM search_documents WHERE search_text<>''").get()!
+        .n
+    );
+  expect(legacyRows()).toBe(documents.length);
+  expect(await found('golden lantern')).toEqual([sources[0].id]);
+  expect(upgraded.moveLegacyIndexBatch()).toBe(true);
+  expect(legacyRows()).toBeGreaterThan(0);
+  expect(legacyRows()).toBeLessThan(documents.length);
+  expect(await found('보라색우산')).toEqual([sources[1].id]);
+  expect(await found('golden lantern')).toEqual([sources[0].id]);
+  for (let step = 0; step < 20 && upgraded.moveLegacyIndexBatch(); step++);
+  expect(legacyRows()).toBe(0);
+  expect(upgraded.moveLegacyIndexBatch()).toBe(false);
+  expect(reopened.db.prepare('SELECT count(*) AS n FROM search_fts_idx').get()!.n).toBe(0);
+  expect(await found('LANTERN 아래')).toEqual([sources[0].id]);
+  expect(await found('보라색우산')).toEqual([sources[1].id]);
+  expect(await found('없는 문장')).toEqual([]);
+
+  reopened.db.prepare('DELETE FROM search_documents WHERE source_id=?').run(sources[0].id);
+  legacyInsert(reopened, { ...documents[0], text: 'Written by the earlier release: cobalt' });
+  expect(await found('cobalt')).toEqual([sources[0].id]);
+  for (const table of ['search_fts', 'search_trigrams'])
+    reopened.db.exec(`INSERT INTO ${table}(${table}) VALUES('integrity-check')`);
+  deleteChat(reopened, chat.id, {});
+  expect(reopened.db.prepare('SELECT count(*) AS n FROM search_documents').get()!.n).toBe(0);
+  expect(reopened.db.prepare('SELECT count(*) AS n FROM search_fts_docsize').get()!.n).toBe(0);
+  expect(
+    reopened.db
+      .prepare("SELECT count(*) AS n FROM search_trigrams WHERE search_trigrams MATCH 'ant'")
+      .get()!.n
+  ).toBe(0);
+  for (const table of ['search_fts', 'search_trigrams'])
+    reopened.db.exec(`INSERT INTO ${table}(${table}) VALUES('integrity-check')`);
+  expect(reopened.db.prepare('PRAGMA integrity_check').get()!.integrity_check).toBe('ok');
+});
+
 test('large index updates make bounded progress rather than grouping eight oversized scenes', async () => {
   const { store, search } = fixture();
   const chat = createFixtureChat(store, 'Bounded indexing');
