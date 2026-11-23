@@ -22,6 +22,7 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { ProseHunk } from './ProseDiff.js';
 import {
   placeBeside,
+  placeDocked,
   sceneSelection,
   uniqueTextRange,
   visibleArea,
@@ -40,6 +41,8 @@ export type ReaderRevisionTarget = {
   parts: { source: string; translation: string };
 };
 
+const TOUCH_SETTLE_MS = 250;
+const BAR_PRESS_RELEASE_MS = 500;
 const pointer = { down: false, type: '' };
 let pointerTracked = false;
 function trackPointer() {
@@ -135,6 +138,8 @@ export function ReaderSelectionTools({
   const revision = useSelectionRevision({ chatId, sourceId, identity });
   const focusBar = useRef(false);
   const current = useRef<SceneSelection | null>(null);
+  const [touch, setTouch] = useState(false);
+  const barPress = useRef(false);
   useEffect(() => {
     if (!enabled) {
       current.current = null;
@@ -143,25 +148,33 @@ export function ReaderSelectionTools({
     }
     trackPointer();
     let frame = 0;
+    let settle = 0;
+    const read = () => {
+      if (barPress.current) return;
+      const node = body.current;
+      const next = node && !pointer.down ? sceneSelection(node) : null;
+      if (sameSelection(current.current, next)) return;
+      current.current = next;
+      setTouch(pointer.type === 'touch');
+      setSelected(next);
+      setDismissed(false);
+      setCopyFailed(false);
+    };
     const evaluate = () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const node = body.current;
-        const next =
-          node && !pointer.down && pointer.type !== 'touch' ? sceneSelection(node) : null;
-        if (sameSelection(current.current, next)) return;
-        current.current = next;
-        setSelected(next);
-        setDismissed(false);
-        setCopyFailed(false);
-      });
+      clearTimeout(settle);
+      if (pointer.type === 'touch') settle = window.setTimeout(read, TOUCH_SETTLE_MS);
+      else frame = requestAnimationFrame(read);
     };
     document.addEventListener('selectionchange', evaluate);
     document.addEventListener('pointerup', evaluate);
+    document.addEventListener('pointercancel', evaluate);
     return () => {
       cancelAnimationFrame(frame);
+      clearTimeout(settle);
       document.removeEventListener('selectionchange', evaluate);
       document.removeEventListener('pointerup', evaluate);
+      document.removeEventListener('pointercancel', evaluate);
     };
   }, [enabled, body]);
   const targetText = target?.text ?? null;
@@ -225,12 +238,10 @@ export function ReaderSelectionTools({
             : clamped;
         });
       } else if (selected && bar.current) {
-        const next = placeBeside(
-          selected.range,
-          area,
-          bar.current.getBoundingClientRect(),
-          'above'
-        );
+        const size = bar.current.getBoundingClientRect();
+        const next = touch
+          ? placeDocked(selected.range, area, size)
+          : placeBeside(selected.range, area, size, 'above');
         setBarPosition((previous) =>
           previous?.top === next?.top && previous?.left === next?.left ? previous : next
         );
@@ -251,7 +262,7 @@ export function ReaderSelectionTools({
       window.removeEventListener('resize', schedule);
       observer.disconnect();
     };
-  }, [barVisible, opened, selected, body]);
+  }, [barVisible, opened, selected, body, touch]);
   useLayoutEffect(() => {
     if (!barVisible || !barPosition || !focusBar.current) return;
     focusBar.current = false;
@@ -309,6 +320,7 @@ export function ReaderSelectionTools({
   function liveSelection() {
     const next = body.current ? sceneSelection(body.current) : null;
     if (sameSelection(selected, next)) return next;
+    if (!next && selected && barPress.current && restoreSelection(selected.range)) return selected;
     current.current = next;
     setSelected(next);
     return null;
@@ -350,7 +362,21 @@ export function ReaderSelectionTools({
             data-placed={barPosition ? 'true' : 'false'}
             inert={!barPosition}
             style={barPosition ?? undefined}
-            onPointerDown={(event) => event.preventDefault()}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              barPress.current = event.pointerType === 'touch';
+            }}
+            onPointerUp={() => {
+              window.setTimeout(() => {
+                barPress.current = false;
+              }, BAR_PRESS_RELEASE_MS);
+            }}
+            onPointerCancel={() => {
+              barPress.current = false;
+            }}
+            onClick={() => {
+              barPress.current = false;
+            }}
             onMouseDown={(event) => event.preventDefault()}
             onKeyDown={toolbarKeys}
           >

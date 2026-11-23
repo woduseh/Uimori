@@ -127,3 +127,25 @@ export function placeBeside(
     left: left(prefer === 'above' ? first : last),
   };
 }
+
+const TOUCH_HANDLE = 32;
+
+export function placeDocked(
+  range: Range,
+  area: DOMRect,
+  size: { width: number; height: number }
+): { top: number; left: number } | null {
+  const rects = [...range.getClientRects()].filter(
+    (rect) => rect.width > 0 && rect.bottom > area.top && rect.top < area.bottom
+  );
+  if (!rects.length) return null;
+  if (area.height < size.height + GAP * 2 || area.width < size.width + GAP * 2) return null;
+  const bottom = area.bottom - size.height - GAP;
+  const top = area.top + GAP;
+  const clearBelow = rects[rects.length - 1].bottom + TOUCH_HANDLE <= bottom;
+  const clearAbove = rects[0].top >= top + size.height + GAP;
+  return {
+    top: Math.round(clearBelow || !clearAbove ? bottom : top),
+    left: Math.round(area.left + (area.width - size.width) / 2),
+  };
+}

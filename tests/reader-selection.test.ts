@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { placeBeside, uniqueTextRange } from '../web/reader-selection.js';
+import { placeBeside, placeDocked, uniqueTextRange } from '../web/reader-selection.js';
 
 test('a selection matches only when it occurs verbatim exactly once', () => {
   const stored = '바람이 불었다.\n\n미라는 **멈췄다**.\n\n둘째로 바람이 불었다.';
@@ -39,4 +39,16 @@ test('a selection occupying the whole viewport retains an accessible toolbar pos
   expect(
     placeBeside(range, { ...area, height: 45, bottom: 45 }, { width: 300, height: 40 }, 'above')
   ).toBeNull();
+});
+
+test('a touch selection docks its toolbar at the edge that clears the selection handles', () => {
+  const area = { top: 100, bottom: 700, left: 0, right: 400, width: 400, height: 600 } as DOMRect;
+  const size = { width: 300, height: 40 };
+  const at = (top: number, bottom: number) =>
+    ({ getClientRects: () => [{ top, bottom, left: 30, width: 250 }] }) as unknown as Range;
+  expect(placeDocked(at(300, 320), area, size)).toEqual({ top: 652, left: 50 });
+  expect(placeDocked(at(600, 640), area, size)).toEqual({ top: 108, left: 50 });
+  expect(placeDocked(at(110, 690), area, size)).toEqual({ top: 652, left: 50 });
+  expect(placeDocked(at(800, 820), area, size)).toBeNull();
+  expect(placeDocked(at(300, 320), { ...area, height: 45, bottom: 145 }, size)).toBeNull();
 });

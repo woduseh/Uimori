@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { randomUUID } from 'node:crypto';
 import {
   expect,
@@ -871,4 +872,55 @@ test('RSEL21 replacing selected Risu content removes the stale toolbar', async (
     content.innerHTML = '<p>새로운 본문이 도착했어요.</p>';
   });
   await expect(selectionBar(page)).toHaveCount(0);
+});
+
+test.describe('touch selection', () => {
+  test.use({ hasTouch: true });
+
+  test('RSEL22 a touch selection docks the toolbar away from the selection and a tap that clears the selection still copies', async ({
+    page,
+    request,
+  }, info) => {
+    const { chatId, source } = await seed(request);
+    const scene = await open(page, chatId, source.id);
+    await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          writeText: async (text: string) => {
+            (window as unknown as { copiedText: string }).copiedText = text;
+          },
+        },
+      });
+      document.addEventListener(
+        'pointerup',
+        (event) => {
+          if (event.pointerType === 'touch') getSelection()?.removeAllRanges();
+        },
+        true
+      );
+    });
+    await scene.evaluate((node) => {
+      for (const type of ['pointerdown', 'pointercancel'])
+        node.dispatchEvent(new PointerEvent(type, { pointerType: 'touch', bubbles: true }));
+    });
+    await select(scene, unique);
+    const bar = selectionBar(page);
+    await expect(bar).toBeVisible();
+    const selection = await page.evaluate(() => {
+      const rect = getSelection()!.getRangeAt(0).getBoundingClientRect();
+      return { top: rect.top, bottom: rect.bottom };
+    });
+    const box = (await bar.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(MOBILE_WIDTH);
+    expect(box.y >= selection.bottom + 32 || box.y + box.height <= selection.top).toBe(true);
+    await shot(page, info, 'touch-selection-bar');
+    await bar.getByRole('button', { name: '복사', exact: true }).tap();
+    await expect(page.getByText('복사했어요.', { exact: true })).toBeVisible();
+    expect(
+      await page.evaluate(() => (window as unknown as { copiedText: string }).copiedText)
+    ).toBe(unique);
+  });
 });
