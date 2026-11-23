@@ -1,9 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Copy } from 'lucide-react';
 import { IconButton } from './IconButton.js';
 import { Prose } from './Prose.js';
 import { t, useI18n } from './i18n.js';
+import { scanStoryUi, type StoryUiMessage } from '../core/story-ui-scan.js';
+import { InvalidStoryUi } from './InvalidStoryUi.js';
+import { StoryUiPreviewBlock } from './StoryUiPreviewBlock.js';
+
+const compiledElsewhere = (_value: unknown): _value is StoryUiMessage[] => false;
 
 function CodeCopy({ text, index }: { text: string; index: number }) {
   useI18n();
@@ -45,6 +50,15 @@ function CodeCopy({ text, index }: { text: string; index: number }) {
 
 export function HelperMessageProse({ text, children }: { text: string; children?: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
+  const storyBlocks = useMemo(
+    () =>
+      text.includes('<a2ui>')
+        ? scanStoryUi(text, compiledElsewhere).flatMap((part) =>
+            part.kind === 'invalid' && part.text.startsWith('<a2ui>') ? [part] : []
+          )
+        : undefined,
+    [text]
+  );
   const [slots, setSlots] = useState<{ host: HTMLElement; text: string; language: string }[]>([]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: A new answer replaces Prose's compiled DOM.
   useLayoutEffect(() => {
@@ -66,7 +80,20 @@ export function HelperMessageProse({ text, children }: { text: string; children?
   }, [text]);
   return (
     <div ref={root} className="helper-prose">
-      <Prose text={text} />
+      <Prose
+        text={text}
+        storySlots={storyBlocks}
+        renderStorySlot={(id) => {
+          const block = storyBlocks?.find((part) => part.id === id);
+          return block ? (
+            <StoryUiPreviewBlock
+              text={block.text}
+              actionNote={t('storyUi.previewAction')}
+              failed={<InvalidStoryUi text={block.text} />}
+            />
+          ) : null;
+        }}
+      />
       {children}
       {slots.map((slot, index) =>
         createPortal(

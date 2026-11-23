@@ -193,6 +193,12 @@ export const messages = {
     ja: 'このシーンまでに固定された現況はありません。',
     zh: '截至此场景没有固定的现况。',
   },
+  'storyUi.previewAction': {
+    ko: '미리보기 화면이라 선택을 보낼 수 없어요.',
+    en: 'This is a preview, so choices cannot be sent.',
+    ja: 'プレビュー画面なので選択を送信できません。',
+    zh: '这是预览界面，无法发送选择。',
+  },
   'storyUi.failureReason': {
     ko: '변환 오류',
     en: 'Conversion error',

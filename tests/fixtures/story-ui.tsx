@@ -182,3 +182,8 @@ export async function mountGallery(
     </div>
   );
 }
+
+export async function mountHelperAnswer(element: HTMLElement, text: string) {
+  const { HelperMessageProse } = await import('../../web/HelperMessageProse.js');
+  createRoot(element).render(<HelperMessageProse text={text} />);
+}

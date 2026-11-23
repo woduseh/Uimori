@@ -289,6 +289,37 @@ ${text}`,
   await expect(page.locator('.story-ui-failure')).toContainText('muted');
 });
 
+test('helper answers render story blocks read-only and explain a failed one', async ({
+  page,
+}, info) => {
+  const { compileStoryUiBlocks } = await import('../server/story-ui.js');
+  await page.route('**/api/story-ui/preview', async (route) => {
+    const { text } = route.request().postDataJSON() as { text: string };
+    await route.fulfill({ json: compileStoryUiBlocks(text) });
+  });
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto(origin);
+  await page.evaluate(async (value) => {
+    const path = '/tests/fixtures/story-ui.tsx';
+    await (await import(path)).mountHelperAnswer(document.getElementById('mount'), value);
+  }, [
+    '로어북의 인물 관계를 정리했어요.',
+    '<a2ui>',
+    'root = Graph([{id: "mira", label: "미라", state: "current"}, {id: "sol", label: "솔"}, {id: "han", label: "한서윤"}], [{from: "mira", to: "sol", label: "소꿉친구", arrow: "none"}, {from: "han", to: "mira", label: "의심", line: "dashed"}], title="항구 마을 관계도", center="mira")',
+    '</a2ui>',
+    '| 인물 | 역할 |\n| --- | --- |\n| 미라 | 주인공 |',
+    '<a2ui>',
+    'root = Text("흐린 글씨", tone="muted")',
+    '</a2ui>',
+  ].join('\n\n'));
+  await expect(page.locator('.story-ui').getByText('항구 마을 관계도')).toBeVisible();
+  await expect(page.getByRole('cell', { name: '주인공' })).toBeVisible();
+  await page.getByText('이야기 화면을 표시할 수 없어요.').click();
+  await expect(page.locator('.story-ui-failure')).toContainText('muted');
+  await expect(page.getByText('root = Graph', { exact: false })).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath('helper-answer-story-ui.png'), fullPage: true });
+});
+
 test('switches original and translated UI when both start at the same offset', async ({ page }) => {
   const { normalizeStoryUiOutput } = await import('../server/story-ui.js');
   const { parseStoryUi, encodeStoryUi } = await import('../core/story-ui.js');

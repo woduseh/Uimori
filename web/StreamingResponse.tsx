@@ -14,30 +14,12 @@ import { splitCompletedParagraphs } from '../core/reading-markdown.js';
 import { LoadingState } from './LoadingState.js';
 import { useStoryUiSegments } from './story-ui-parser.js';
 import { StoryUi } from './LazyStoryUi.js';
+import { StoryUiPreviewBlock } from './StoryUiPreviewBlock.js';
 import './streaming-response.css';
 
 type StoryStyle = import('../core/story-ui-style.js').StoryUiStyleSetting;
 
 type StreamingStoryProps = { text: string; style?: StoryStyle; runId?: string };
-
-function StreamingStoryBlock({ text, style, runId }: StreamingStoryProps) {
-  const [preview, setPreview] = useState<string>();
-  useEffect(() => {
-    setPreview(undefined);
-    if (!text.startsWith('<a2ui>') || !text.endsWith('</a2ui>')) return;
-    const controller = new AbortController();
-    void api<{ text: string }>('/story-ui/preview', { text, runId }, 'POST', controller.signal)
-      .then((result) => setPreview(result.text))
-      .catch(() => {
-        if (!controller.signal.aborted) setPreview('');
-      });
-    return () => controller.abort();
-  }, [text, runId]);
-  const part = useStoryUiSegments(preview ?? '')?.find((entry) => entry.kind === 'ui');
-  if (preview === undefined)
-    return <LoadingState presentation="placeholder" label={t('storyUi.composing')} />;
-  return part?.kind === 'ui' ? <StoryUi segment={part} style={style} /> : null;
-}
 
 function streamingParagraphs(text: string, finished: boolean) {
   return finished ? { complete: text, pending: '' } : splitCompletedParagraphs(text);
@@ -63,9 +45,12 @@ function StreamingProse({ text, finished }: { text: string; finished: boolean })
 
 function StreamingHelperText({ text, finished }: { text: string; finished: boolean }) {
   const { complete, pending } = streamingParagraphs(text, finished);
+  const opened = pending.lastIndexOf('<a2ui>');
+  const composing = opened >= 0 && !pending.includes('</a2ui>', opened);
   return (
     <HelperMessageProse text={complete}>
-      <PendingParagraph text={pending} />
+      <PendingParagraph text={composing ? pending.slice(0, opened) : pending} />
+      {composing && <LoadingState presentation="placeholder" label={t('storyUi.composing')} />}
     </HelperMessageProse>
   );
 }
@@ -94,7 +79,7 @@ export function StreamingStoryText({
         ) : part.kind === 'ui' ? (
           <StoryUi key={part.id} segment={part} style={style} />
         ) : part.text.startsWith('<a2ui>') ? (
-          <StreamingStoryBlock key={part.id} text={part.text} style={style} runId={runId} />
+          <StoryUiPreviewBlock key={part.id} text={part.text} style={style} runId={runId} />
         ) : null
       )}
     </>

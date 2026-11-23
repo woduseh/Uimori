@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { HttpError } from './request-validation.js';
+import { storyUiPrompt } from './story-ui.js';
 
 const DIRECTORY = fileURLToPath(new URL('../docs/', import.meta.url));
 const DEVELOPER_DOCUMENTS = new Set([
@@ -30,6 +31,15 @@ function guides(): AppGuide[] {
     .map((name) => {
       const text = readFileSync(`${DIRECTORY}${name}.md`, 'utf8').replaceAll('\r\n', '\n');
       return { name, title: /^#\s+(.+)$/mu.exec(text)?.[1]?.trim() ?? name, text };
+    })
+    .concat({
+      name: 'STORY-UI-REFERENCE',
+      title: 'Story UI block reference',
+      text: [
+        '# Story UI block reference',
+        'The story writer receives this reference when Story UI is on. Read it before writing, repairing or previewing an <a2ui> block.',
+        storyUiPrompt(),
+      ].join('\n\n'),
     });
   return loaded;
 }
