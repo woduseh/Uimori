@@ -194,7 +194,9 @@ test('STREAMPUSH text rides the open chat event stream, and cursor reads take ov
     const streams = trackStreamReads(page, run.id);
     const eventStreams: string[] = [];
     page.on('request', (item) => {
-      if (item.url().includes(`/api/chats/${chat.id}/events`)) eventStreams.push(item.url());
+      const url = new URL(item.url());
+      if (url.pathname === '/api/events' && url.searchParams.get('chat') === chat.id)
+        eventStreams.push(item.url());
     });
     await page.goto(`/?chat=${chat.id}`);
     const text = page
@@ -217,7 +219,9 @@ test('STREAMPUSH text rides the open chat event stream, and cursor reads take ov
     expect(streams.cursors.length - pushedFrom).toBeLessThanOrEqual(2);
     expect(eventStreams).toHaveLength(1);
 
-    await page.route(`**/api/chats/${chat.id}/events**`, (route) => route.abort());
+    const chatStream = (url: URL) =>
+      url.pathname === '/api/events' && url.searchParams.get('chat') === chat.id;
+    await page.route(chatStream, (route) => route.abort());
     await page.evaluate(() => {
       dispatchEvent(new Event('offline'));
       dispatchEvent(new Event('online'));
@@ -231,7 +235,7 @@ test('STREAMPUSH text rides the open chat event stream, and cursor reads take ov
     }
     expect(streams.cursors.length).toBeGreaterThan(polledFrom);
 
-    await page.unroute(`**/api/chats/${chat.id}/events**`);
+    await page.unroute(chatStream);
     await page.evaluate(() => dispatchEvent(new Event('online')));
     await expect
       .poll(() => new URL(eventStreams.at(-1)!).searchParams.get('streamAfter') ?? '')

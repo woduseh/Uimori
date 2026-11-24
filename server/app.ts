@@ -36,7 +36,7 @@ import { updateSceneContext } from './scene-context.js';
 import { chatTitle, HttpError, fields, number, record, text } from './request-validation.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
 import { loreContextDefaultRoutes } from './lore-context-defaults.js';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
@@ -59,6 +59,7 @@ import {
 } from './response-stream.js';
 import { precomputePackagePresentation } from './package-presentation-routes.js';
 import { chatEventResume, createChatEventStreams } from './chat-event-stream.js';
+import { createLiveHub, LIVE_FRAME_EVENTS, type LiveFrameEvent } from './live-events.js';
 import { readerActivities, readerDetail, readerRuns } from './reader.js';
 import { dismissReaderRun } from './run-reader-state.js';
 import { chatActivities } from './chat-activity.js';
@@ -360,7 +361,16 @@ export async function createApp(options: AppOptions): Promise<App> {
   const admitted = () => admissionOpen(store, forcedClosed);
   let recoveredRuns: string[] = [];
   const deferredRuns = new Map<string, boolean>();
-  const { publish, publishAll } = chatEvents;
+  const live = createLiveHub(store, { instanceId, publishChat: chatEvents.publish });
+  store.observeChanges((chatId) => live.notify(chatId));
+  const publish = (chatId: string) => {
+    chatEvents.publish(chatId);
+    live.notify();
+  };
+  const publishAll = () => {
+    chatEvents.publishAll();
+    live.notify();
+  };
   const track = (promise: Promise<void>) => {
     work.add(promise);
     const settled = () => {
@@ -1511,25 +1521,51 @@ export async function createApp(options: AppOptions): Promise<App> {
       return job;
     }
   );
+  const openEventStream = (request: FastifyRequest, reply: FastifyReply) => {
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Accel-Buffering': 'no',
+    });
+    return () => session.authenticated(request.headers.cookie);
+  };
   app.get<{ Params: { id: string }; Querystring: { streamAfter?: string } }>(
     '/api/chats/:id/events',
     async (request, reply) => {
       store.chat(request.params.id);
       const resume = chatEventResume(request.headers['last-event-id'], request.query.streamAfter);
-      reply.hijack();
-      reply.raw.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache, no-transform',
-        Connection: 'keep-alive',
-        'X-Content-Type-Options': 'nosniff',
-        'X-Accel-Buffering': 'no',
-      });
-      chatEvents.connect(request.params.id, resume, reply.raw, () =>
-        session.authenticated(request.headers.cookie)
-      );
+      chatEvents.connect(request.params.id, resume, reply.raw, openEventStream(request, reply));
+    }
+  );
+  app.get<{ Querystring: { chat?: string; streamAfter?: string } }>(
+    '/api/events',
+    async (request, reply) => {
+      const { chat: chatId, streamAfter } = request.query;
+      if (chatId !== undefined) {
+        if (typeof chatId !== 'string') throw new HttpError(400, 'Invalid chat');
+        store.chat(chatId);
+      }
+      const resume =
+        chatId === undefined
+          ? undefined
+          : chatEventResume(request.headers['last-event-id'], streamAfter);
+      const authorized = openEventStream(request, reply);
+      live.connect(reply.raw, authorized);
+      if (chatId !== undefined && resume)
+        chatEvents.connect(chatId, resume, reply.raw, authorized, { keepalive: false });
     }
   );
   if (options.testMode) {
+    app.post('/api/test/live-frame', async (request) => {
+      const body: RecordBody = record(request.body);
+      fields(body, ['event', 'data']);
+      if (!LIVE_FRAME_EVENTS.includes(body.event as LiveFrameEvent))
+        throw new HttpError(400, 'Invalid live frame event');
+      live.inject(body.event as LiveFrameEvent, record(body.data));
+      return { ok: true };
+    });
     app.get('/api/test/control', async () => controls.snapshot());
     app.post('/api/test/control', async (request) => {
       const body: RecordBody = record(request.body);
@@ -1606,6 +1642,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     await closeIllustrationSession();
     await codex.close();
     chatEvents.closeAll();
+    live.closeAll();
     await Promise.allSettled([...work]);
     await imageCleanup.close();
   });

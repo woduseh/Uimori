@@ -289,8 +289,10 @@ test('LOADUI09 newer chat list wins over a late empty response without clearing 
     await held;
     await route.fulfill({ json: [] });
   });
-  await page.route(`**/api/chats/${seeded.chat.id}/events`, (route) =>
-    route.fulfill({ contentType: 'text/event-stream', body: 'data: {"kind":"chat.deleted"}\n\n' })
+  await page.route(
+    (url) => url.pathname === '/api/events' && url.searchParams.get('chat') === seeded.chat.id,
+    (route) =>
+      route.fulfill({ contentType: 'text/event-stream', body: 'data: {"kind":"chat.deleted"}\n\n' })
   );
   try {
     await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });

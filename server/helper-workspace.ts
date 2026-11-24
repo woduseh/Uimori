@@ -648,6 +648,7 @@ export class HelperWorkspace {
     this.store.db
       .prepare('INSERT INTO helper_events(conversation_id,task_id,kind,data) VALUES(?,?,?,?)')
       .run(conversationId, taskId, kind, json(data));
+    this.store.changed(null);
     if (kind.startsWith('task.') || kind === 'artifact.saved') {
       const scope = this.conversation(conversationId).scope;
       if (scope.kind === 'chat')

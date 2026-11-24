@@ -26,7 +26,7 @@ import { displayTranslationJob, latestTranslation } from '../core/translation-di
 import { markArrivalWhenShown } from './arrival-mark.js';
 import { canDismissReaderRun, readerConversation } from '../core/reader-conversation.js';
 import { createReaderSync } from './reader-sync.js';
-import { openResponseStreamChannel, responseStreamCursors } from './response-stream-bridge.js';
+import { liveStream } from './live-stream.js';
 import { type ReaderResponse, restoreReaderBlockText } from './reader-blocks.js';
 import {
   transitionReaderNavigation,
@@ -597,6 +597,7 @@ export function useStory() {
     setConnected(false);
     setProfileDirty(false);
     setArchivedContents([]);
+    const live = liveStream();
     if (!selected) return;
     let alive = true;
     const sync = createReaderSync({
@@ -612,31 +613,17 @@ export function useStory() {
     const visibility = () =>
       sync.setActive(navigation.current.destination === 'story' && !document.hidden);
     document.addEventListener('visibilitychange', visibility);
-    let responses: ReturnType<typeof openResponseStreamChannel> | undefined;
-    const closeStream = () => {
-      stream?.close();
-      responses?.close();
-    };
-    const openStream = () => {
-      const cursors = responseStreamCursors();
-      const stream = new EventSource(
-        `/api/chats/${selected}/events${cursors ? `?streamAfter=${encodeURIComponent(cursors)}` : ''}`
-      );
-      const pushed = openResponseStreamChannel();
-      responses = pushed;
-      stream.onopen = () => {
-        pushed.connected();
+    const detach = live.attachChat(selected, {
+      open() {
         if (alive) setConnected(true);
-      };
-      stream.onerror = () => {
-        pushed.disconnected();
+      },
+      error() {
         sync.disconnected();
         if (alive) setConnected(false);
-      };
-      stream.addEventListener('stream', (event) => pushed.deliver(event.data));
-      stream.onmessage = (event) => {
+      },
+      message(data) {
         if (!alive || navigation.current.chat !== selected) return;
-        const message = JSON.parse(event.data) as { kind: string; seq?: number; entityId?: string };
+        const message = JSON.parse(data) as { kind: string; seq?: number; entityId?: string };
         if (message.kind === 'illustration-references.updated' || message.kind === 'snapshot')
           dispatchEvent(
             new CustomEvent('uimori-illustration-references-changed', { detail: selected })
@@ -649,8 +636,7 @@ export function useStory() {
         )
           setNativeInteractionRevision((revision) => revision + 1);
         if (message.kind === 'chat.deleted') {
-          stream.close();
-          pushed.close();
+          detach();
           void loadChats().catch((e) => {
             if (alive) setError(e);
           });
@@ -663,31 +649,14 @@ export function useStory() {
             if (alive) setError(e);
           });
         sync.request(message.seq ?? 0, message.kind === 'snapshot');
-      };
-      return stream;
-    };
-    let stream = navigator.onLine ? openStream() : undefined;
-    const offline = () => {
-      closeStream();
-      sync.disconnected();
-      setConnected(false);
-    };
-    const online = () => {
-      if (alive) {
-        closeStream();
-        stream = openStream();
-      }
-    };
-    addEventListener('offline', offline);
-    addEventListener('online', online);
+      },
+    });
     return () => {
       alive = false;
       sync.dispose();
       if (readerSync.current === sync) readerSync.current = null;
       document.removeEventListener('visibilitychange', visibility);
-      closeStream();
-      removeEventListener('offline', offline);
-      removeEventListener('online', online);
+      detach();
     };
   }, [selected, refresh, loadChats, loadLibrary, setError]);
   useEffect(() => {

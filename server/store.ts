@@ -119,6 +119,7 @@ export class Store {
   readonly organization: ChatOrganizationStore;
   readonly libraryOrganization: LibraryOrganizationStore;
   private readonly ownership: DatabaseSync;
+  private changeListener?: (chatId: string | null) => void;
   readonly path: string;
   constructor(path: string) {
     this.path = path;
@@ -220,6 +221,12 @@ export class Store {
       throw error;
     }
   }
+  observeChanges(listener: (chatId: string | null) => void) {
+    this.changeListener = listener;
+  }
+  changed(chatId: string | null) {
+    this.changeListener?.(chatId);
+  }
   event(chatId: string, kind: string, entityId: string, options: { notify?: boolean } = {}) {
     const write = () => {
       const at = now();
@@ -231,6 +238,7 @@ export class Store {
     };
     if (this.db.isTransaction) write();
     else this.transaction(write);
+    this.changed(chatId);
   }
   latestEventSequence(chatId: string): number {
     return Math.max(

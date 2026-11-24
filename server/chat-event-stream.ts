@@ -108,7 +108,13 @@ export function createChatEventStreams(sources: ChatEventSources) {
   };
   const pump = (connection: Connection) => {
     const { response } = connection;
-    if (connection.blocked || response.destroyed || response.writableEnded) return;
+    if (
+      connection.blocked ||
+      response.writableNeedDrain ||
+      response.destroyed ||
+      response.writableEnded
+    )
+      return;
     if (!connection.authorized()) {
       response.end();
       return;
@@ -165,7 +171,8 @@ export function createChatEventStreams(sources: ChatEventSources) {
       chatId: string,
       resume: ChatEventResume,
       response: ServerResponse,
-      authorized: () => boolean
+      authorized: () => boolean,
+      options: { keepalive?: boolean } = {}
     ) {
       const connection: Connection = {
         chatId,
@@ -200,12 +207,15 @@ export function createChatEventStreams(sources: ChatEventSources) {
         connection.blocked = false;
         pump(connection);
       };
-      const heartbeat = setInterval(() => {
-        if (!authorized()) response.end();
-        else if (!connection.blocked && !response.destroyed && !response.writableEnded)
-          connection.blocked = !response.write(': keepalive\n\n');
-      }, KEEPALIVE_MS);
-      heartbeat.unref();
+      const heartbeat =
+        options.keepalive === false
+          ? undefined
+          : setInterval(() => {
+              if (!authorized()) response.end();
+              else if (!connection.blocked && !response.destroyed && !response.writableEnded)
+                connection.blocked = !response.write(': keepalive\n\n');
+            }, KEEPALIVE_MS);
+      heartbeat?.unref();
       response.on('drain', drain);
       response.on('close', () => {
         clearInterval(heartbeat);

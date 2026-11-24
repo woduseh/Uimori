@@ -113,7 +113,7 @@ if (process.env.UIMORI_SELF_HOST_BROWSER === '1')
         (id) =>
           new Promise<{ kind: string; opened: boolean }>((resolve, reject) => {
             let opened = false;
-            const stream = new EventSource(`/api/chats/${id}/events`);
+            const stream = new EventSource(`/api/events?chat=${encodeURIComponent(id)}`);
             const timer = setTimeout(() => {
               stream.close();
               reject(new Error('HTTPS SSE snapshot timeout'));
