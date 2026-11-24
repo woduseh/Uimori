@@ -1716,6 +1716,176 @@ test('manual helper compaction enforces busy, codex-native, context-model and co
   );
 });
 
+test('an edited helper summary becomes a new edit checkpoint that the next task sends, and carries the compaction estimate across edits', async () => {
+  const f = await fixture({ fixed: false });
+  const log = script(f, (request) =>
+    request.role === 'context' ? summarized('정리한 요약: 초안 규칙') : structuredClone(success)
+  );
+  const app = Fastify();
+  helperRoutes(app, f.runtime);
+  expect((await f.run()).status).toBe('completed');
+  const { last: compacted } = await compactNow(f);
+  if (compacted?.status !== 'completed') throw new Error('compaction did not complete');
+  const manualRow = checkpointRows(f)[0] as Record<string, unknown>;
+
+  const url = `/api/helper/conversations/${f.conversation.id}/context`;
+  expect((await app.inject({ url })).json()).toMatchObject({
+    checkpointRevision: 1,
+    summary: '정리한 요약: 초안 규칙',
+    origin: 'manual',
+    compactedMessages: 2,
+    totalMessages: 2,
+    summaryTokens: expect.any(Number),
+    budgetTokens: expect.any(Number),
+    editable: true,
+    blockedReason: null,
+  });
+  const empty = await app.inject({
+    method: 'PUT',
+    url: `${url}/summary`,
+    payload: { expectedRevision: 1, summary: '  ' },
+  });
+  expect([empty.statusCode, empty.json().message]).toEqual([400, 'HELPER_SUMMARY_EMPTY']);
+
+  const edited = f.runtime.editContextSummary(f.conversation.id, 1, '사용자가 고친 요약');
+  expect(edited).toMatchObject({
+    checkpointRevision: 2,
+    summary: '사용자가 고친 요약',
+    origin: 'edit',
+  });
+  const rows = checkpointRows(f) as Record<string, unknown>[];
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({ origin: 'edit', revision: 2, activated: 1 });
+  expect(JSON.parse(String(rows[0].plan)).compacted).toEqual(
+    JSON.parse(String(manualRow.plan)).compacted
+  );
+  const afterFirst = compactionState(f).last;
+  expect(afterFirst).toMatchObject({
+    status: 'completed',
+    origin: 'edit',
+    beforeTokens: compacted.beforeTokens,
+    compactedMessages: 2,
+  });
+  f.runtime.editContextSummary(f.conversation.id, 2, '사용자가 다시 고친 요약, 조금 더 길게');
+  const afterSecond = compactionState(f).last;
+  expect(afterSecond).toMatchObject({ origin: 'edit', beforeTokens: compacted.beforeTokens });
+  if (afterFirst?.status !== 'completed' || afterSecond?.status !== 'completed')
+    throw new Error('edit outcome missing');
+  expect(afterSecond.afterTokens).toBeGreaterThan(afterFirst.afterTokens);
+  expect(
+    f.runtime.editContextSummary(f.conversation.id, 3, '사용자가 다시 고친 요약, 조금 더 길게')
+  ).toMatchObject({ checkpointRevision: 3 });
+
+  expect(() => f.runtime.editContextSummary(f.conversation.id, 2, '늦게 도착한 편집')).toThrow(
+    expect.objectContaining({ statusCode: 409, message: 'HELPER_CONTEXT_DEPENDENCY_CHANGED' })
+  );
+  expect(() =>
+    f.runtime.editContextSummary(f.conversation.id, 3, 'too long summary '.repeat(4000))
+  ).toThrow(expect.objectContaining({ statusCode: 400, message: 'HELPER_SUMMARY_TOO_LARGE' }));
+  expect(checkpointRows(f)).toHaveLength(1);
+
+  const next = f.runtime.enqueue(f.conversation.id, randomUUID(), '고친 요약으로 이어서');
+  await Promise.all(f.work);
+  expect(f.workspace.task(next.id).status).toBe('completed');
+  const request = log.requests.at(-1)!;
+  expect(request.input.history).toEqual([]);
+  expect(JSON.stringify(request.input.source)).toContain('사용자가 다시 고친 요약, 조금 더 길게');
+  expect(compactionState(f).last).toBeNull();
+  await app.close();
+});
+
+test('the helper summary cannot change while a task or a compaction runs', async () => {
+  const f = await fixture({ fixed: false });
+  let release!: () => void;
+  let reached!: () => void;
+  let gate: Promise<void> | null = null;
+  const hold = () =>
+    new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+  script(f, async (request) => {
+    if (gate) {
+      reached();
+      await gate;
+    }
+    return request.role === 'context' ? summarized('막힌 요약') : structuredClone(success);
+  });
+  expect((await f.run()).status).toBe('completed');
+  await compactNow(f);
+  const blocked = (attempt: () => unknown) =>
+    expect(attempt).toThrow(
+      expect.objectContaining({ statusCode: 409, message: 'HELPER_COMPACTION_BUSY' })
+    );
+
+  gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let started = hold();
+  f.runtime.enqueue(f.conversation.id, randomUUID(), '오래 걸리는 작업');
+  await started;
+  expect(f.runtime.contextSummary(f.conversation.id)).toMatchObject({
+    editable: false,
+    blockedReason: 'HELPER_COMPACTION_BUSY',
+  });
+  blocked(() => f.runtime.editContextSummary(f.conversation.id, 1, '작업 중 편집'));
+  blocked(() => f.runtime.resetContextSummary(f.conversation.id, 1));
+  release();
+  gate = null;
+  await Promise.all(f.work);
+
+  const revision = f.runtime.contextSummary(f.conversation.id).checkpointRevision;
+  gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  started = hold();
+  expect(f.runtime.compactConversation(f.conversation.id)).toMatchObject({ started: true });
+  await started;
+  blocked(() => f.runtime.editContextSummary(f.conversation.id, revision, '정리 중 편집'));
+  blocked(() => f.runtime.resetContextSummary(f.conversation.id, revision));
+  release();
+  gate = null;
+  await Promise.all(f.work);
+  expect(f.runtime.contextSummary(f.conversation.id).summary).toBe('막힌 요약');
+});
+
+test('resetting the helper summary sends the full history next and reports nothing compacted', async () => {
+  const f = await fixture({ fixed: false });
+  const log = script(f, (request) =>
+    request.role === 'context' ? summarized('지울 요약') : structuredClone(success)
+  );
+  expect((await f.run()).status).toBe('completed');
+  await compactNow(f);
+  expect(() => f.runtime.resetContextSummary(f.conversation.id, 0)).toThrow(
+    expect.objectContaining({ statusCode: 409, message: 'HELPER_CONTEXT_DEPENDENCY_CHANGED' })
+  );
+  expect(f.runtime.resetContextSummary(f.conversation.id, 1)).toMatchObject({
+    checkpointRevision: 2,
+    summary: null,
+    compactedMessages: 0,
+    editable: false,
+  });
+  expect(readHelperContextState(f.store, f.conversation.id)).toMatchObject({
+    compactedMessages: 0,
+    uncompactedMessages: 2,
+    summaryChars: 0,
+    compaction: { last: { status: 'completed', origin: 'reset', compactedMessages: 0 } },
+  });
+  expect(checkpointRows(f)).toEqual([]);
+  expect(f.runtime.resetContextSummary(f.conversation.id, 0)).toMatchObject({
+    checkpointRevision: 2,
+  });
+  expect(() => f.runtime.editContextSummary(f.conversation.id, 2, '없는 요약 편집')).toThrow(
+    expect.objectContaining({ statusCode: 409, message: 'HELPER_CONTEXT_DEPENDENCY_CHANGED' })
+  );
+
+  const next = f.runtime.enqueue(f.conversation.id, randomUUID(), '전체 대화로 이어서');
+  await Promise.all(f.work);
+  expect(f.workspace.task(next.id).status).toBe('completed');
+  const request = log.requests.at(-1)!;
+  expect(request.input.history).toHaveLength(2);
+  expect(JSON.stringify(request.input.source)).not.toContain('지울 요약');
+});
+
 function compactionState(f: Fixture) {
   return readHelperContextState(
     f.store,

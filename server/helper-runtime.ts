@@ -168,8 +168,11 @@ import {
   helperHistory,
   helperHistoryForContext,
   helperRequestContext,
+  publishEditedHelperContext,
   publishHelperContext,
   publishManualHelperContext,
+  readHelperContextSummary,
+  resetHelperContext,
 } from './helper-context.js';
 import { recordedHelperExchanges } from './helper-resume.js';
 import {
@@ -1293,6 +1296,47 @@ export class HelperRuntime {
     const running = this.compacting.get(conversationId);
     running?.controller.abort();
     return { cancelled: Boolean(running) };
+  }
+  private summaryModel() {
+    const ref = workspaceModelRef(promptWorkspace(this.store), 'helper');
+    return ref ? this.store.product.modelSnapshot(ref.id, undefined, false) : null;
+  }
+  contextSummary(conversationId: string) {
+    const busy = !this.deletionImpact(conversationId).canDelete;
+    return readHelperContextSummary(this.store, conversationId, this.summaryModel(), busy);
+  }
+  editContextSummary(conversationId: string, expectedRevision: number, summary: string) {
+    const { scope } = this.workspace.conversation(conversationId);
+    if (!this.deletionImpact(conversationId).canDelete)
+      throw new HttpError(409, 'HELPER_COMPACTION_BUSY');
+    const model = this.summaryModel();
+    if (!model) throw new HttpError(409, 'MODEL_REQUIRED:helper');
+    this.store.transaction(() => {
+      const change = publishEditedHelperContext(
+        this.store,
+        conversationId,
+        scope,
+        model,
+        expectedRevision,
+        summary
+      );
+      if (change) this.workspace.event(conversationId, null, 'context.compaction.edited', change);
+    });
+    return this.contextSummary(conversationId);
+  }
+  resetContextSummary(conversationId: string, expectedRevision: number) {
+    if (!this.deletionImpact(conversationId).canDelete)
+      throw new HttpError(409, 'HELPER_COMPACTION_BUSY');
+    this.store.transaction(() => {
+      const change = resetHelperContext(
+        this.store,
+        conversationId,
+        this.summaryModel(),
+        expectedRevision
+      );
+      if (change) this.workspace.event(conversationId, null, 'context.compaction.edited', change);
+    });
+    return this.contextSummary(conversationId);
   }
   compactConversation(conversationId: string): HelperCompactionStart {
     const conversation = this.workspace.conversation(conversationId);

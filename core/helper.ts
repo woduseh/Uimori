@@ -1,7 +1,7 @@
 import type { EditorContext } from './resource-editing.js';
 import type { ModelSnapshot } from './product.js';
 import type { RunSnapshot, Usage } from './types.js';
-import type { ContextCheckpointRef } from './context-plan.js';
+import type { ContextCheckpoint, ContextCheckpointRef } from './context-plan.js';
 
 export const DEFAULT_HELPER_TASK_TIMEOUT_MINUTES = 60;
 export const MAX_HELPER_TASK_TIMEOUT_MINUTES = Math.floor(2_147_483_647 / 60_000);
@@ -49,8 +49,22 @@ export type HelperCompactionOutcome =
       compactedMessages: number;
       beforeTokens: number;
       afterTokens: number;
+      origin?: HelperSummaryChange;
     }
   | { status: 'failed'; finishedAt: string; code: HelperCompactionFailure };
+export type HelperSummaryChange = 'edit' | 'reset';
+export type HelperContextSummaryView = {
+  checkpointRevision: number;
+  summary: string | null;
+  origin: ContextCheckpoint['origin'] | null;
+  createdAt: string | null;
+  compactedMessages: number;
+  totalMessages: number;
+  summaryTokens: number | null;
+  budgetTokens: number | null;
+  editable: boolean;
+  blockedReason: 'HELPER_COMPACTION_BUSY' | 'MODEL_REQUIRED:helper' | null;
+};
 export type HelperCompactionState = {
   running: { startedAt: string } | null;
   last: HelperCompactionOutcome | null;

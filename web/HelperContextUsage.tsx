@@ -58,6 +58,7 @@ export function HelperContextUsage({
   compactError = '',
   onCompact,
   onCancel,
+  onShowSummary,
 }: {
   usage: HelperTaskResultsView['usage'];
   context?: HelperContextCompactionSummary;
@@ -66,6 +67,7 @@ export function HelperContextUsage({
   compactError?: string;
   onCompact?: () => void;
   onCancel?: () => void;
+  onShowSummary?: () => void;
 }) {
   useI18n();
   const running = Boolean(context?.compaction.running);
@@ -136,6 +138,8 @@ export function HelperContextUsage({
     amount === null || !limit
       ? ''
       : formatNumber(amount / limit, { style: 'percent', maximumFractionDigits: 1 });
+  const compactable = !native && Boolean(onCompact);
+  const showSummary = Boolean(onShowSummary) && (context?.summaryChars ?? 0) > 0;
   const failureText = compactError
     ? translateMessage(compactError)
     : failure
@@ -253,8 +257,10 @@ export function HelperContextUsage({
                     percent(threshold)
                   )}
                 {compacted &&
+                  !compacted.origin &&
                   row(t('helperUsage.beforeCompaction'), formatNumber(compacted.beforeTokens))}
                 {compacted &&
+                  !compacted.origin &&
                   row(t('helperUsage.afterCompaction'), formatNumber(compacted.afterTokens))}
                 {context &&
                   context.compactedMessages > 0 &&
@@ -267,41 +273,71 @@ export function HelperContextUsage({
           )}
         </table>
         {(native || compacted) && (
-          <p>{t(native ? 'helperUsage.nativeNote' : 'helperUsage.compactedNote')}</p>
+          <p>
+            {t(
+              native
+                ? 'helperUsage.nativeNote'
+                : compacted?.origin
+                  ? 'helperUsage.summaryChangedNote'
+                  : 'helperUsage.compactedNote'
+            )}
+          </p>
         )}
-        {!native && onCompact && (
+        {(compactable || showSummary) && (
           <div className="helper-context-usage-actions">
-            <button
-              type="button"
-              className="secondary"
-              data-keep-open=""
-              disabled={compacting || busy || (context ? context.uncompactedMessages === 0 : false)}
-              onClick={onCompact}
-            >
-              {compacting && (
-                <RunningIcon size={16} aria-hidden="true" className="activity-spinner" />
-              )}
-              {t(compacting ? 'helperUsage.compacting' : 'helperUsage.compactNow')}
-            </button>
-            {running && onCancel && (
-              <button type="button" className="secondary" data-keep-open="" onClick={onCancel}>
-                {t('helperUsage.cancelCompaction')}
+            {compactable && (
+              <>
+                <button
+                  type="button"
+                  className="secondary"
+                  data-keep-open=""
+                  disabled={
+                    compacting || busy || (context ? context.uncompactedMessages === 0 : false)
+                  }
+                  onClick={onCompact}
+                >
+                  {compacting && (
+                    <RunningIcon size={16} aria-hidden="true" className="activity-spinner" />
+                  )}
+                  {t(compacting ? 'helperUsage.compacting' : 'helperUsage.compactNow')}
+                </button>
+                {running && onCancel && (
+                  <button type="button" className="secondary" data-keep-open="" onClick={onCancel}>
+                    {t('helperUsage.cancelCompaction')}
+                  </button>
+                )}
+                {!compacting && busy && <p>{t('helperUsage.compactBusyHint')}</p>}
+                {!compacting &&
+                  !busy &&
+                  context &&
+                  context.totalMessages > 0 &&
+                  context.uncompactedMessages === 0 && <p>{t('helperUsage.alreadyCompacted')}</p>}
+                {failureText &&
+                  (failure === 'HELPER_COMPACTION_CANCELLED' && !compactError ? (
+                    <p>{failureText}</p>
+                  ) : (
+                    <p className="helper-context-usage-error" role="alert">
+                      {failureText}
+                    </p>
+                  ))}
+              </>
+            )}
+            {showSummary && (
+              <button
+                type="button"
+                className="secondary"
+                onClick={(event) => {
+                  const menu = event.currentTarget.closest('details');
+                  if (menu) {
+                    menu.open = false;
+                    menu.querySelector<HTMLElement>(':scope > summary')?.focus();
+                  }
+                  onShowSummary?.();
+                }}
+              >
+                {t('helperUsage.showSummary')}
               </button>
             )}
-            {!compacting && busy && <p>{t('helperUsage.compactBusyHint')}</p>}
-            {!compacting &&
-              !busy &&
-              context &&
-              context.totalMessages > 0 &&
-              context.uncompactedMessages === 0 && <p>{t('helperUsage.alreadyCompacted')}</p>}
-            {failureText &&
-              (failure === 'HELPER_COMPACTION_CANCELLED' && !compactError ? (
-                <p>{failureText}</p>
-              ) : (
-                <p className="helper-context-usage-error" role="alert">
-                  {failureText}
-                </p>
-              ))}
           </div>
         )}
       </div>

@@ -4,8 +4,7 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
 import { SOURCE_TEXT_MAX_CHARS as CONTEXT_SUMMARY_MAX_CHARS } from '../core/content-limits.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
-import { CloseIcon } from './ui-icons.js';
-import { SaveButton } from './SaveButton.js';
+import { SummaryEditor } from './SummaryEditor.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ContextDetail, ContextJob as StoredContextJob } from '../core/context-plan.js';
 import type { AuthorNote } from '../core/notes.js';
@@ -298,68 +297,29 @@ export function ContextPanel({
               <p className="muted">{t('settings.m282')}</p>
             )}
             {mode === 'full' && draft && (
-              <form
-                className="context-summary-editor"
-                onSubmit={(event) => {
-                  event.preventDefault();
+              <SummaryEditor
+                value={draft.text}
+                busy={busy}
+                conflict={conflict}
+                conflictMessage={t('settings.m305')}
+                saveDisabled={busy || conflict || !current || !draft.text.trim()}
+                rebaseDisabled={busy || !current}
+                inputRef={editorInput}
+                onChange={(text) => setDraft({ ...draft, text })}
+                onRebase={() => {
+                  setDraft({ ...draft, revision: detail.activeRevision, headRevision });
+                  setError('');
+                }}
+                onCancel={() => {
+                  returnFocus.current = true;
+                  setDraft(null);
+                  setError('');
+                }}
+                onSave={() => {
                   returnFocus.current = true;
                   void saveSummary();
                 }}
-              >
-                {conflict && (
-                  <NoticeBanner
-                    tone="error"
-                    actions={
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={busy || !current}
-                        onClick={() => {
-                          setDraft({ ...draft, revision: detail.activeRevision, headRevision });
-                          setError('');
-                        }}
-                      >
-                        {t('settings.m304')}
-                      </button>
-                    }
-                  >
-                    {t('settings.m305')}
-                  </NoticeBanner>
-                )}
-                <label>
-                  {t('settings.m306')}
-                  <textarea
-                    ref={editorInput}
-                    rows={8}
-                    required
-                    maxLength={CONTEXT_SUMMARY_MAX_CHARS}
-                    value={draft.text}
-                    disabled={busy}
-                    onChange={(event) => setDraft({ ...draft, text: event.target.value })}
-                  />
-                </label>
-                <div className="form-actions">
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy}
-                    onClick={() => {
-                      returnFocus.current = true;
-                      setDraft(null);
-                      setError('');
-                    }}
-                  >
-                    <CloseIcon size={18} aria-hidden="true" />
-                    {t('settings.m308')}
-                  </button>
-                  <SaveButton
-                    className="primary"
-                    label={t('settings.m307')}
-                    aria-busy={busy}
-                    disabled={busy || conflict || !current || !draft.text.trim()}
-                  />
-                </div>
-              </form>
+              />
             )}
             {!current && <LoadingState presentation="inline" label={t('settings.m283')} />}
             <details className="context-priorities">

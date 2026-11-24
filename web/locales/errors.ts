@@ -509,6 +509,18 @@ export const messages = {
     ja: '実行中のアシスタント作業または会話の整理が終わってからもう一度試してください。',
     zh: '请等待当前助手任务或对话整理完成后再试。',
   },
+  'errors.HELPER_SUMMARY_TOO_LARGE': {
+    ko: '요약이 도우미 모델의 자동 정리 기준보다 길어요. 요약을 줄이거나 초기화해 주세요.',
+    en: 'The summary is longer than the assistant model’s automatic compaction threshold. Shorten it or reset it.',
+    ja: '要約がアシスタントモデルの自動整理の基準より長いです。要約を短くするか、リセットしてください。',
+    zh: '摘要超过了助手模型的自动整理阈值。请缩短摘要或将其重置。',
+  },
+  'errors.HELPER_SUMMARY_EMPTY': {
+    ko: '요약이 비어 있어요. 요약을 지우려면 요약 초기화를 사용해 주세요.',
+    en: 'The summary is empty. To remove it, use Reset summary.',
+    ja: '要約が空です。要約を消すには「要約をリセット」を使ってください。',
+    zh: '摘要为空。如需删除摘要，请使用“重置摘要”。',
+  },
   'errors.HELPER_COMPACTION_CODEX_NATIVE': {
     ko: '네이티브 에이전트는 컨텍스트를 스스로 관리해서 수동 정리를 지원하지 않아요.',
     en: 'Native agents manage their own context and do not support manual compaction.',

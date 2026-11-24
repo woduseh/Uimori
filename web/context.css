@@ -47,7 +47,8 @@
   display: grid;
   gap: 8px;
 }
-.context-panel textarea {
+.context-panel textarea,
+.context-summary-editor textarea {
   width: 100%;
   min-width: 0;
   resize: vertical;
@@ -79,7 +80,8 @@
 }
 @media (max-width: 620px) {
   .context-panel input,
-  .context-panel textarea {
+  .context-panel textarea,
+  .context-summary-editor textarea {
     font-size: var(--font-heading);
   }
 }

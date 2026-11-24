@@ -81,6 +81,7 @@ import { HelperTaskResults } from './HelperTaskResults.js';
 import { HelperPlanCard } from './HelperPlanCard.js';
 import type { HelperConfirmationGrant, HelperConfirmationTarget } from './HelperConfirmations.js';
 import { HelperContextUsage } from './HelperContextUsage.js';
+import { HelperSummaryDialog, type HelperSummaryDraft } from './HelperSummaryDialog.js';
 import {
   HelperMentionMenu,
   helperReferenceKindLabel,
@@ -704,6 +705,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       notify(uiMessage('helperUsage.compactedNotice', { count: last.compactedMessages }));
   }, [compactionOwner, compaction, notify]);
   const [compactErrors, setCompactErrors] = useState<Record<string, string>>({});
+  const [summaryDialog, setSummaryDialog] = useState<string | null>(null);
+  const [summaryDrafts, setSummaryDrafts] = useState<Record<string, HelperSummaryDraft>>({});
   useEffect(() => {
     if (!props.open) setModelPicker(false);
   }, [props.open]);
@@ -2154,6 +2157,32 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           });
         }}
       />
+      {conversation && (
+        <HelperSummaryDialog
+          key={conversation.id}
+          open={props.open && summaryDialog === conversation.id}
+          conversationId={conversation.id}
+          checkpointRevision={data.current?.context?.checkpointRevision}
+          busy={
+            activeTask ||
+            Boolean(data.current?.context?.compaction.running) ||
+            Boolean(compactStarting[conversation.id])
+          }
+          draft={summaryDrafts[conversation.id] ?? null}
+          onDraftChange={(draft) => {
+            const owner = conversation.id;
+            setSummaryDrafts((old) => {
+              const { [owner]: _previous, ...rest } = old;
+              return draft ? { ...rest, [owner]: draft } : rest;
+            });
+          }}
+          onChanged={async (message) => {
+            notify(message);
+            await data.refresh(conversation);
+          }}
+          onClose={() => setSummaryDialog(null)}
+        />
+      )}
       <Dialog
         open={!!taskHistory}
         title={t('helpers.m064')}
@@ -2712,6 +2741,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                 compactError={compactErrors[scopeKey] ?? ''}
                 onCompact={() => void compactionRequest('POST')}
                 onCancel={() => void compactionRequest('DELETE')}
+                onShowSummary={() => setSummaryDialog(scopeKey)}
               />
             )}
           </div>

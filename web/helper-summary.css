@@ -1,0 +1,30 @@
+.helper-summary {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.helper-summary > p {
+  margin: 0;
+}
+.helper-summary-current {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.helper-summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: var(--font-small);
+  font-variant-numeric: tabular-nums;
+}
+.helper-summary-current .context-text {
+  margin: 0;
+}
+.helper-summary > .form-actions {
+  margin: 0;
+}

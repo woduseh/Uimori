@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type {
+  HelperContextSummaryView,
   HelperConversation,
   HelperConversationSummary,
   HelperTaskResultsView,
@@ -1698,6 +1699,267 @@ test('HUSAGE02 the context usage popover manually compacts the helper conversati
         contextModel: baseline.contextModel ? { id: baseline.contextModel.id } : null,
       },
     });
+    await new Promise<void>((resolve) => provider.close(() => resolve()));
+  }
+});
+
+test('HUSAGE03 the helper summary dialog views, edits, keeps a draft through a conflict, resets, and locks while a task runs', async ({
+  page,
+  request,
+}, info) => {
+  const { chat, conversation, task } = await seed(request);
+  let reply = '정리한 도우미 요약: 주인공은 아직 약속을 지키지 않았다.';
+  let hold: Promise<void> | null = null;
+  let release = () => {};
+  const provider = createServer(async (incoming, response) => {
+    for await (const _chunk of incoming) {
+    }
+    if (hold) await hold;
+    response.writeHead(200, { 'content-type': 'text/event-stream' });
+    const events = [
+      { type: 'text_delta', delta: reply },
+      { type: 'usage', inputTokens: 80, outputTokens: 24, costUsd: null },
+      { type: 'done', reason: 'stop' },
+    ];
+    response.end(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''));
+  });
+  await new Promise<void>((resolve, reject) => {
+    provider.once('error', reject);
+    provider.listen(0, '127.0.0.1', resolve);
+  });
+  const address = provider.address();
+  if (!address || typeof address === 'string') throw new Error('Fixture server did not start');
+  const baseline = (await (await request.get('/api/model-workspace')).json()) as ModelWorkspace;
+  const contextUrl = `/api/helper/conversations/${conversation.id}/context`;
+  const summaryOf = async () =>
+    (await (await request.get(contextUrl)).json()) as HelperContextSummaryView;
+  const compact = async () => {
+    const started = await request.post(`/api/helper/conversations/${conversation.id}/compact`, {
+      data: {},
+    });
+    expect(started.ok(), await started.text()).toBe(true);
+    await expect.poll(async () => (await summaryOf()).summary).toBe(reply);
+  };
+  try {
+    const connection = await (
+      await request.post('/api/connections', {
+        data: {
+          title: `요약 편집 연결 ${randomUUID()}`,
+          protocol: 'fixture-sse-v1',
+          endpoint: `http://127.0.0.1:${address.port}/`,
+          enabled: true,
+        },
+      })
+    ).json();
+    const model = await (
+      await request.post('/api/model-presets', {
+        data: {
+          title: '요약 편집 모델',
+          connectionId: connection.id,
+          modelId: 'synthetic-summary-edit',
+          inputTokenLimit: 200000,
+          maxOutputTokens: 1024,
+          temperature: null,
+        },
+      })
+    ).json();
+    const updated = await request.put('/api/model-workspace', {
+      data: {
+        expectedRevision: baseline.revision,
+        routes: baseline.routes,
+        translationPolicy: baseline.translationPolicy,
+        helperModel: { id: model.id },
+        contextModel: { id: model.id },
+      },
+    });
+    expect(updated.ok(), await updated.text()).toBe(true);
+    await compact();
+
+    const usage: HelperTaskResultsView['usage'] = {
+      toolExecutions: 1,
+      attempts: [],
+      latestInputEstimate: 42_000,
+      latestInputLimit: 200_000,
+      latestInputExecution: 'provider-tool-loop',
+      latestInputParts: {
+        instructions: 4_000,
+        toolSchemas: 8_000,
+        history: 24_000,
+        source: 6_000,
+        toolResults: null,
+      },
+    };
+    await page.route(`**/api/helper/tasks/${task.id}/results`, (route) =>
+      route.fulfill({
+        json: {
+          taskId: task.id,
+          status: 'completed',
+          results: [],
+          changes: [],
+          confirmations: [],
+          unrecordedOperations: 0,
+          usage,
+        } satisfies HelperTaskResultsView,
+      })
+    );
+    const helper = page.locator('#helper-panel');
+    const dialog = page.getByRole('dialog', { name: '대화 요약', exact: true });
+    const openSummary = async (screenshot?: string) => {
+      await helper.locator('.helper-context-usage > summary').click();
+      const show = page
+        .locator('.helper-context-usage-body')
+        .filter({ visible: true })
+        .getByRole('button', { name: '요약 보기', exact: true });
+      await expect(show).toBeVisible();
+      if (screenshot) await page.screenshot({ path: info.outputPath(screenshot) });
+      await show.click();
+      await expect(dialog).toBeVisible();
+    };
+    const text = dialog.getByTestId('helper-summary-text');
+    for (const [width, height, colorScheme] of [
+      [1440, 900, 'light'],
+      [1440, 900, 'dark'],
+      [412, 915, 'light'],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+      await page.goto(`/?chat=${chat.id}`);
+      await openHelper(page);
+      await openSummary(`summary-menu-${width}-${colorScheme}.png`);
+      await expect(text).toHaveText(reply);
+      await expect(dialog.getByRole('list', { name: '요약 정보' })).toContainText('수동 정리');
+      await expect(dialog.getByRole('list', { name: '요약 정보' })).toContainText(
+        '메시지 2개 요약'
+      );
+      await page.screenshot({ path: info.outputPath(`summary-view-${width}-${colorScheme}.png`) });
+      await dialog.getByRole('button', { name: '요약 편집', exact: true }).click();
+      await expect(dialog.getByRole('textbox', { name: '편집할 컨텍스트 요약' })).toBeFocused();
+      await page.screenshot({ path: info.outputPath(`summary-edit-${width}-${colorScheme}.png`) });
+      await dialog.getByRole('button', { name: '편집 취소', exact: true }).click();
+      await expect(dialog.getByRole('button', { name: '요약 편집', exact: true })).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+    }
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await page.goto(`/?chat=${chat.id}`);
+    await openHelper(page);
+    await openSummary();
+    const editor = dialog.getByRole('textbox', { name: '편집할 컨텍스트 요약' });
+    const save = dialog.getByRole('button', { name: '요약 저장', exact: true });
+    await dialog.getByRole('button', { name: '요약 편집', exact: true }).click();
+    await editor.fill('직접 고친 요약: 주인공은 약속을 아직 지키지 않았다.');
+    await save.click();
+    await expect(
+      page.locator('.transient-notice', { hasText: '요약을 저장했어요.' })
+    ).toBeVisible();
+    await expect(text).toHaveText('직접 고친 요약: 주인공은 약속을 아직 지키지 않았다.');
+    await expect(dialog.getByRole('list', { name: '요약 정보' })).toContainText('직접 편집');
+    expect(await summaryOf()).toMatchObject({ checkpointRevision: 2, origin: 'edit' });
+
+    await dialog.getByRole('button', { name: '요약 편집', exact: true }).click();
+    await editor.fill('브라우저에서 쓰던 초안');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await openSummary();
+    await expect(editor).toHaveValue('브라우저에서 쓰던 초안');
+    const changed = await request.put(`${contextUrl}/summary`, {
+      data: { expectedRevision: 2, summary: '다른 탭에서 바꾼 요약' },
+    });
+    expect(changed.ok(), await changed.text()).toBe(true);
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(dialog.getByText('저장된 요약이 바뀌었어요.')).toBeVisible({ timeout: 15_000 });
+    await expect(text).toHaveText('다른 탭에서 바꾼 요약');
+    await expect(editor).toHaveValue('브라우저에서 쓰던 초안');
+    await expect(save).toBeDisabled();
+    await page.screenshot({ path: info.outputPath('summary-conflict.png') });
+    await dialog
+      .getByRole('button', { name: '최신 요약을 확인하고 내 초안 유지', exact: true })
+      .click();
+    await expect(save).toBeEnabled();
+    await save.click();
+    await expect(text).toHaveText('브라우저에서 쓰던 초안');
+    expect(await summaryOf()).toMatchObject({
+      checkpointRevision: 4,
+      summary: '브라우저에서 쓰던 초안',
+    });
+
+    await dialog.getByRole('button', { name: '요약 초기화', exact: true }).click();
+    const confirm = page.getByRole('alertdialog', { name: '요약을 초기화할까요?' });
+    await expect(confirm).toContainText('다음 요청부터 전체 대화를 보내요.');
+    await expect(confirm).toContainText('자동 정리 요청이 다시 실행될 수 있어요.');
+    await page.screenshot({ path: info.outputPath('summary-reset-confirm.png') });
+    await confirm.getByRole('button', { name: '초기화', exact: true }).click();
+    await expect(
+      page.locator('.transient-notice', { hasText: '요약을 초기화했어요.' })
+    ).toBeVisible();
+    await expect(dialog).toContainText('저장된 요약이 없어요.');
+    await expect(dialog.getByRole('button', { name: '요약 편집', exact: true })).toHaveCount(0);
+    expect(
+      (await (await request.get(`/api/helper/conversations/${conversation.id}/view`)).json())
+        .context
+    ).toMatchObject({ compactedMessages: 0, summaryChars: 0 });
+    await page.keyboard.press('Escape');
+    await helper.locator('.helper-context-usage > summary').click();
+    await expect(
+      page
+        .locator('.helper-context-usage-body')
+        .filter({ visible: true })
+        .getByRole('button', { name: '요약 보기', exact: true })
+    ).toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    await compact();
+    await page.reload();
+    await openHelper(page);
+    await openSummary();
+    hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const running = await request.post(`/api/helper/conversations/${conversation.id}/messages`, {
+      data: { requestKey: randomUUID(), text: '요약을 바꾸기 전에 오래 걸리는 작업' },
+    });
+    expect(running.ok(), await running.text()).toBe(true);
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(dialog.getByText('진행 중인 작업이나 정리가 끝난 뒤 바꿀 수 있어요.')).toBeVisible(
+      {
+        timeout: 15_000,
+      }
+    );
+    await expect(dialog.getByRole('button', { name: '요약 편집', exact: true })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: '요약 초기화', exact: true })).toBeDisabled();
+    await page.screenshot({ path: info.outputPath('summary-busy.png') });
+    hold = null;
+    release();
+    const runningTask = (await running.json()) as HelperTaskView;
+    await expect
+      .poll(
+        async () =>
+          (
+            (await (
+              await request.get(`/api/helper/tasks/${runningTask.id}`)
+            ).json()) as HelperTaskView
+          ).status
+      )
+      .toBe('completed');
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(dialog.getByRole('button', { name: '요약 편집', exact: true })).toBeEnabled({
+      timeout: 15_000,
+    });
+  } finally {
+    release();
+    const current = (await (await request.get('/api/model-workspace')).json()) as ModelWorkspace;
+    await request.put('/api/model-workspace', {
+      data: {
+        expectedRevision: current.revision,
+        routes: baseline.routes,
+        translationPolicy: baseline.translationPolicy,
+        helperModel: baseline.helperModel ? { id: baseline.helperModel.id } : null,
+        contextModel: baseline.contextModel ? { id: baseline.contextModel.id } : null,
+      },
+    });
+    provider.closeAllConnections();
     await new Promise<void>((resolve) => provider.close(() => resolve()));
   }
 });

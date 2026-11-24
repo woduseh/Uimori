@@ -122,6 +122,9 @@ const messages: Record<string, string> = {
   HELPER_CONTEXT_DEPENDENCY_CHANGED:
     '도우미 대화가 변경됐어요. 최신 대화를 확인한 뒤 새 요청을 보내 주세요.',
   HELPER_COMPACTION_BUSY: '진행 중인 도우미 작업이나 대화 정리가 끝난 뒤 다시 시도해 주세요.',
+  HELPER_SUMMARY_TOO_LARGE:
+    '요약이 도우미 모델의 자동 정리 기준보다 길어요. 요약을 줄이거나 초기화해 주세요.',
+  HELPER_SUMMARY_EMPTY: '요약이 비어 있어요. 요약을 지우려면 요약 초기화를 사용해 주세요.',
   HELPER_COMPACTION_CODEX_NATIVE:
     '네이티브 에이전트는 컨텍스트를 스스로 관리해서 수동 정리를 지원하지 않아요.',
   HELPER_COMPACTION_FAILED:

@@ -8,7 +8,11 @@ import { parseHelperReferencePointers, searchHelperReferences } from './helper-r
 import { readHelperTaskResults } from './helper-task-results.js';
 import { markHelperConversationRead } from './helper-read-state.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
-import { HELPER_PERSONA_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import {
+  HELPER_PERSONA_MAX_CHARS,
+  REQUEST_TEXT_MAX_CHARS,
+  SOURCE_TEXT_MAX_CHARS,
+} from '../core/content-limits.js';
 import { requestImageUploads } from './request-images.js';
 import { requestFileUploads } from './request-files.js';
 
@@ -135,6 +139,35 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     if (request.body !== undefined && request.body !== null) fields(record(request.body), []);
     return runtime.cancelCompaction(request.params.id);
   });
+  app.get<{ Params: { id: string } }>('/api/helper/conversations/:id/context', (request) =>
+    runtime.contextSummary(request.params.id)
+  );
+  app.put<{ Params: { id: string } }>(
+    '/api/helper/conversations/:id/context/summary',
+    { bodyLimit: 16 * 1024 * 1024 },
+    (request) => {
+      const body = record(request.body);
+      fields(body, ['expectedRevision', 'summary']);
+      const summary = text(body.summary, 'summary', SOURCE_TEXT_MAX_CHARS, true);
+      if (!summary.trim()) throw new HttpError(400, 'HELPER_SUMMARY_EMPTY');
+      return runtime.editContextSummary(
+        request.params.id,
+        number(body.expectedRevision, 'context revision'),
+        summary
+      );
+    }
+  );
+  app.delete<{ Params: { id: string } }>(
+    '/api/helper/conversations/:id/context/summary',
+    (request) => {
+      const body = record(request.body);
+      fields(body, ['expectedRevision']);
+      return runtime.resetContextSummary(
+        request.params.id,
+        number(body.expectedRevision, 'context revision')
+      );
+    }
+  );
   app.patch<{ Params: { id: string } }>('/api/helper/conversations/:id', (request) => {
     const body = record(request.body);
     fields(body, ['expectedRevision', 'title', 'persona']);

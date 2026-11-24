@@ -3,17 +3,20 @@ import { isDeepStrictEqual } from 'node:util';
 import type { ContextCheckpointRef, ContextPlan } from '../core/context-plan.js';
 import {
   HELPER_COMPACTION_FAILURES,
+  HELPER_COMPACTION_INPUT_RATIO,
   type HelperCompactionFailure,
   type HelperCompactionOutcome,
   type HelperCompactionState,
   type HelperContextCompactionSummary,
+  type HelperContextSummaryView,
   type HelperScope,
+  type HelperSummaryChange,
   type HelperTask,
   type HelperTaskSnapshot,
 } from '../core/helper.js';
 import type { ModelSnapshot } from '../core/product.js';
 import type { Usage } from '../core/types.js';
-import { contextBudgetForModel } from '../core/context-budget.js';
+import { contextBudgetForModel, estimateContextTokens } from '../core/context-budget.js';
 import { pruneContextHistory } from './context-retention.js';
 import { checkpointHash } from './context-store.js';
 import { HttpError } from './request-validation.js';
@@ -139,7 +142,7 @@ function lastManualCompaction(
     .prepare(
       `SELECT e.kind,e.data FROM helper_events e
        WHERE e.conversation_id=? AND e.task_id IS NULL
-         AND e.kind IN ('context.compaction','context.compaction.failed')
+         AND e.kind IN ('context.compaction','context.compaction.edited','context.compaction.failed')
          AND NOT EXISTS (SELECT 1 FROM helper_events later WHERE later.conversation_id=e.conversation_id
            AND later.seq>e.seq AND (later.task_id IS NOT NULL OR later.kind='messages.changed'))
        ORDER BY e.seq DESC LIMIT 1`
@@ -148,13 +151,16 @@ function lastManualCompaction(
   if (!row) return null;
   const data = JSON.parse(String(row.data)) as Record<string, unknown>;
   if (typeof data.finishedAt !== 'string') return null;
-  return row.kind === 'context.compaction'
+  return row.kind !== 'context.compaction.failed'
     ? {
         status: 'completed',
         finishedAt: data.finishedAt,
         compactedMessages: Number(data.compactedMessages),
         beforeTokens: Number(data.beforeTokens),
         afterTokens: Number(data.afterTokens),
+        ...(row.kind === 'context.compaction.edited'
+          ? { origin: data.origin === 'reset' ? ('reset' as const) : ('edit' as const) }
+          : {}),
       }
     : {
         status: 'failed',
@@ -171,34 +177,16 @@ export function readHelperContextState(
   running: HelperCompactionState['running'] = null
 ): HelperContextCompactionSummary {
   const compaction = { running, last: lastManualCompaction(store, conversationId) };
-  const history = helperHistory(store, conversationId);
-  const row = store.db
-    .prepare('SELECT revision,checkpoint_id FROM context_heads WHERE scope_key=?')
-    .get(`helper:${conversationId}`) as Row | undefined;
-  const revision = Number(row?.revision ?? 0);
-  if (row?.checkpoint_id) {
-    try {
-      const context = helperContext(store, conversationId, history);
-      if (context.checkpoint) {
-        const plan = store.context.checkpoint(context.checkpoint).plan;
-        const compactedMessages = Math.min(history.length, plan.compacted.length);
-        return {
-          compactedMessages,
-          uncompactedMessages: Math.max(0, history.length - compactedMessages),
-          totalMessages: history.length,
-          checkpointRevision: context.activeRevision,
-          summaryChars: plan.summary?.length ?? 0,
-          compaction,
-        };
-      }
-    } catch {}
-  }
+  const { history, revision, checkpoint } = activeHelperCheckpoint(store, conversationId);
+  const compactedMessages = checkpoint
+    ? Math.min(history.length, checkpoint.plan.compacted.length)
+    : 0;
   return {
-    compactedMessages: 0,
-    uncompactedMessages: history.length,
+    compactedMessages,
+    uncompactedMessages: Math.max(0, history.length - compactedMessages),
     totalMessages: history.length,
     checkpointRevision: revision,
-    summaryChars: 0,
+    summaryChars: checkpoint?.plan.summary?.length ?? 0,
     compaction,
   };
 }
@@ -266,36 +254,222 @@ export function publishHelperContext(
       usage,
       error: null,
     };
-    const checkpoint = {
-      id: randomUUID(),
-      revision,
-      hash: checkpointHash(scopeKey, revision, plan),
-    };
     const current = helperContext(store, task.conversationId, all);
     const activated =
       current.activeRevision === base.activeRevision &&
       isDeepStrictEqual(current.checkpoint, base.checkpoint);
-    const chatId = task.snapshot.scope.kind === 'chat' ? task.snapshot.scope.chatId : null;
-    store.db
-      .prepare('INSERT INTO context_checkpoints VALUES(?,?,?,?,?,?,?,?,?)')
-      .run(
-        checkpoint.id,
-        scopeKey,
-        chatId,
-        revision,
-        checkpoint.hash,
-        'automatic',
-        JSON.stringify(plan),
-        new Date().toISOString(),
-        Number(activated)
-      );
-    if (activated)
-      store.db
-        .prepare(
-          'INSERT INTO context_heads VALUES(?,?,?,?) ON CONFLICT(scope_key) DO UPDATE SET revision=excluded.revision,checkpoint_id=excluded.checkpoint_id'
-        )
-        .run(scopeKey, chatId, revision, checkpoint.id);
+    const checkpoint = storeHelperCheckpoint(
+      store,
+      task.conversationId,
+      task.snapshot.scope,
+      revision,
+      'automatic',
+      plan,
+      activated
+    );
     return { activeRevision: activated ? revision : base.activeRevision, checkpoint, activated };
+  });
+}
+
+function storeHelperCheckpoint(
+  store: Store,
+  conversationId: string,
+  scope: HelperScope,
+  revision: number,
+  origin: 'automatic' | 'manual' | 'edit',
+  plan: ContextPlan,
+  activated: boolean
+): ContextCheckpointRef {
+  const scopeKey = `helper:${conversationId}`;
+  const checkpoint = { id: randomUUID(), revision, hash: checkpointHash(scopeKey, revision, plan) };
+  const chatId = scope.kind === 'chat' ? scope.chatId : null;
+  store.db
+    .prepare('INSERT INTO context_checkpoints VALUES(?,?,?,?,?,?,?,?,?)')
+    .run(
+      checkpoint.id,
+      scopeKey,
+      chatId,
+      revision,
+      checkpoint.hash,
+      origin,
+      JSON.stringify(plan),
+      new Date().toISOString(),
+      Number(activated)
+    );
+  if (activated)
+    store.db
+      .prepare(
+        'INSERT INTO context_heads VALUES(?,?,?,?) ON CONFLICT(scope_key) DO UPDATE SET revision=excluded.revision,checkpoint_id=excluded.checkpoint_id'
+      )
+      .run(scopeKey, chatId, revision, checkpoint.id);
+  return checkpoint;
+}
+
+function assertHelperContextIdle(store: Store, conversationId: string) {
+  const busy = store.db
+    .prepare(
+      "SELECT 1 FROM helper_tasks WHERE conversation_id=? AND status IN ('queued','running') LIMIT 1"
+    )
+    .get(conversationId);
+  if (busy) throw new HttpError(409, 'HELPER_COMPACTION_BUSY');
+}
+
+const summaryTokenLimit = (model: ModelSnapshot) =>
+  Math.floor(contextBudgetForModel(model).inputTokenLimit * HELPER_COMPACTION_INPUT_RATIO);
+
+function activeHelperCheckpoint(store: Store, conversationId: string) {
+  const history = helperHistory(store, conversationId);
+  const row = store.db
+    .prepare('SELECT revision,checkpoint_id FROM context_heads WHERE scope_key=?')
+    .get(`helper:${conversationId}`) as Row | undefined;
+  let checkpoint = null;
+  if (row?.checkpoint_id)
+    try {
+      const current = helperContext(store, conversationId, history);
+      if (current.checkpoint) checkpoint = store.context.checkpoint(current.checkpoint);
+    } catch {}
+  return {
+    history,
+    revision: Number(row?.revision ?? 0),
+    checkpoint,
+    headCheckpointId: row?.checkpoint_id ? String(row.checkpoint_id) : null,
+  };
+}
+
+export function readHelperContextSummary(
+  store: Store,
+  conversationId: string,
+  helperModel: ModelSnapshot | null,
+  busy: boolean
+): HelperContextSummaryView {
+  const { history, revision, checkpoint } = activeHelperCheckpoint(store, conversationId);
+  const summary = checkpoint?.plan.summary ?? null;
+  const blockedReason = busy
+    ? ('HELPER_COMPACTION_BUSY' as const)
+    : helperModel
+      ? null
+      : ('MODEL_REQUIRED:helper' as const);
+  return {
+    checkpointRevision: revision,
+    summary,
+    origin: checkpoint?.origin ?? null,
+    createdAt: checkpoint?.createdAt ?? null,
+    compactedMessages: checkpoint ? Math.min(history.length, checkpoint.plan.compacted.length) : 0,
+    totalMessages: history.length,
+    summaryTokens:
+      summary === null
+        ? null
+        : estimateContextTokens(
+            summary,
+            helperModel ? contextBudgetForModel(helperModel) : undefined
+          ),
+    budgetTokens: helperModel ? summaryTokenLimit(helperModel) : null,
+    editable: summary !== null && blockedReason === null,
+    blockedReason,
+  };
+}
+
+export type HelperSummaryChangeEvent = {
+  origin: HelperSummaryChange;
+  beforeTokens: number;
+  afterTokens: number;
+  compactedMessages: number;
+  checkpointRevision: number;
+  finishedAt: string;
+};
+
+function summaryChange(
+  store: Store,
+  conversationId: string,
+  origin: HelperSummaryChange,
+  previousTokens: number,
+  afterTokens: number,
+  compactedMessages: number,
+  checkpointRevision: number
+): HelperSummaryChangeEvent {
+  const visible = lastManualCompaction(store, conversationId);
+  return {
+    origin,
+    beforeTokens: visible?.status === 'completed' ? visible.beforeTokens : previousTokens,
+    afterTokens,
+    compactedMessages,
+    checkpointRevision,
+    finishedAt: new Date().toISOString(),
+  };
+}
+
+export function publishEditedHelperContext(
+  store: Store,
+  conversationId: string,
+  scope: HelperScope,
+  helperModel: ModelSnapshot,
+  expectedRevision: number,
+  summary: string
+): HelperSummaryChangeEvent | null {
+  return store.transaction(() => {
+    assertHelperContextIdle(store, conversationId);
+    const history = helperHistory(store, conversationId);
+    const current = helperContext(store, conversationId, history);
+    if (current.activeRevision !== expectedRevision || !current.checkpoint)
+      throw new HttpError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
+    const previous = store.context.checkpoint(current.checkpoint);
+    if (previous.plan.summary === summary) return null;
+    const budget = contextBudgetForModel(helperModel);
+    const afterTokens = estimateContextTokens(summary, budget);
+    if (afterTokens > summaryTokenLimit(helperModel))
+      throw new HttpError(400, 'HELPER_SUMMARY_TOO_LARGE');
+    const revision = current.activeRevision + 1;
+    storeHelperCheckpoint(
+      store,
+      conversationId,
+      scope,
+      revision,
+      'edit',
+      { ...previous.plan, summary, estimatedInputTokens: afterTokens },
+      true
+    );
+    pruneContextHistory(store.db);
+    return summaryChange(
+      store,
+      conversationId,
+      'edit',
+      estimateContextTokens(previous.plan.summary ?? '', budget),
+      afterTokens,
+      previous.plan.compacted.length,
+      revision
+    );
+  });
+}
+
+export function resetHelperContext(
+  store: Store,
+  conversationId: string,
+  helperModel: ModelSnapshot | null,
+  expectedRevision: number
+): HelperSummaryChangeEvent | null {
+  return store.transaction(() => {
+    assertHelperContextIdle(store, conversationId);
+    const { history, revision, checkpoint, headCheckpointId } = activeHelperCheckpoint(
+      store,
+      conversationId
+    );
+    if (!headCheckpointId) return null;
+    if (revision !== expectedRevision)
+      throw new HttpError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
+    store.db
+      .prepare('UPDATE context_heads SET revision=revision+1,checkpoint_id=NULL WHERE scope_key=?')
+      .run(`helper:${conversationId}`);
+    pruneContextHistory(store.db);
+    const budget = helperModel ? contextBudgetForModel(helperModel) : undefined;
+    return summaryChange(
+      store,
+      conversationId,
+      'reset',
+      estimateContextTokens(checkpoint?.plan.summary ?? '', budget),
+      estimateContextTokens(history.slice(0, checkpoint?.plan.compacted.length ?? 0), budget),
+      0,
+      revision + 1
+    );
   });
 }
 
@@ -311,12 +485,7 @@ export function publishManualHelperContext(
   history: HelperTaskSnapshot['history']
 ) {
   return store.transaction(() => {
-    const busy = store.db
-      .prepare(
-        "SELECT 1 FROM helper_tasks WHERE conversation_id=? AND status IN ('queued','running') LIMIT 1"
-      )
-      .get(conversationId);
-    if (busy) throw new HttpError(409, 'HELPER_COMPACTION_BUSY');
+    assertHelperContextIdle(store, conversationId);
     const all = helperHistory(store, conversationId);
     if (!isDeepStrictEqual(all, history))
       throw new HttpError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
@@ -341,30 +510,15 @@ export function publishManualHelperContext(
       usage,
       error: null,
     };
-    const checkpoint = {
-      id: randomUUID(),
+    const checkpoint = storeHelperCheckpoint(
+      store,
+      conversationId,
+      scope,
       revision,
-      hash: checkpointHash(scopeKey, revision, plan),
-    };
-    const chatId = scope.kind === 'chat' ? scope.chatId : null;
-    store.db
-      .prepare('INSERT INTO context_checkpoints VALUES(?,?,?,?,?,?,?,?,?)')
-      .run(
-        checkpoint.id,
-        scopeKey,
-        chatId,
-        revision,
-        checkpoint.hash,
-        'manual',
-        JSON.stringify(plan),
-        new Date().toISOString(),
-        1
-      );
-    store.db
-      .prepare(
-        'INSERT INTO context_heads VALUES(?,?,?,?) ON CONFLICT(scope_key) DO UPDATE SET revision=excluded.revision,checkpoint_id=excluded.checkpoint_id'
-      )
-      .run(scopeKey, chatId, revision, checkpoint.id);
+      'manual',
+      plan,
+      true
+    );
     pruneContextHistory(store.db);
     return { activeRevision: revision, checkpoint };
   });
