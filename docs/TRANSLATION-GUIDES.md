@@ -75,7 +75,7 @@ content.package.nativeRisu.module.extensions.uimori.translationGuide
 - 서버의 네이티브 자료 검증 경계에서 이 형식과 한도를 엄격히 검사하며, 한도를 초과한 내용을 조용히 자르거나 누락하지 않아요. 실제 요청의 전체 컨텍스트 제한은 기존 번역 실행 경로를 따라요.
 - **자료 교환과 보존**: 카드 전체 JSON 편집과 GUI 편집은 같은 필드를 수정해요. 다른 Risu·Uimori 확장은 보존해요. 자료 복제, Uimori 개별 자료 백업, 채팅 백업 및 CHARX 내보내기/재가져오기 시 이 확장이 함께 옮겨져요. Uimori 전용 확장이므로 외부 편집기나 원본 RisuAI는 지침을 해석하지 않거나 확장을 보존하지 않을 수 있어요. Risu의 `translatorNote`를 별도의 2차 원본으로 생성하거나 자동으로 덧붙이지 않아요.
 
-## 에이전트 및 구현 참고
+## 도우미로 번역 지침 편집하기
 
 ### 도우미와 외부 에이전트 작업 계약
 - **요청 처리**: 사용자로부터 '이 봇의 설명과 로어를 참고해 번역 지침 초안을 만들어줘' 또는 'Rose의 표기를 로즈로 지정해서 저장해줘' 같은 요청을 받으면 도우미가 직접 작업을 수행해요. 별도의 번역 에이전트·승인 모드·자동 작성 작업은 없어요.
@@ -85,20 +85,3 @@ content.package.nativeRisu.module.extensions.uimori.translationGuide
   2. 반환된 경로로 기존 지침을 읽고 관련 로어를 필요한 만큼 검토한 뒤, 명시된 설정과 제안한 번역 선택을 명확히 구분해 설명해요.
   3. 기존 용어를 보존한 `{instructions, terms}` 객체를 생성하고, 해당 경로에 대한 `set` 변경으로 만들어요.
   4. `resource.patch`의 최신 `expectedRevision`과 함께 저장해요. 다른 확장은 유지하고 카드 전체를 다시 구성하지 않아요. 번역 규칙을 일반 이야기 메모로 저장하거나 테마 등 다른 자료형과 결합할 필요도 없어요.
-
-### 서버 실행 파이프라인
-- **지침 로드와 캡슐화**: `server/translation-guide.ts`가 채팅의 고정 소속 봇에서 현재 지침을 읽어요. `server/source-editing.ts`의 번역 접수 시 `job.input.translationGuide`에 봇 ID·자료 수정 번호·이름과 지침을 담고, `resolveJobPrompt`는 이 작은 메타데이터를 해당 번역용 snapshot에만 연결해요. 실행 도중 DB를 재조회해서 지침을 바꾸지 않아요. 모든 과거 자료 저장본이나 전체 프롬프트를 재현하는 새 이력 시스템은 없어요.
-- **컨텍스트 주입**: `translationInput`은 `context.translationGuide`에 지침을 넣어요. 기존 context 슬롯과 누락 시의 호스트 보충 전달을 재사용하므로 기본 프롬프트, Hermēneía와 context 슬롯을 생략한 사용자 프리셋에서도 지침을 전달해요. 별도 glossary 슬롯에 같은 표기를 다시 넣지 않아요. 번역 원칙 설명은 기존 번역 역할의 참조 정책에 연결해요.
-- **참고 범위 분리 (`contextMode`)**: 참고 범위는 기본 번역 정책의 `contextMode`로 저장하고 새 작업에 고정해요 (값이 없는 과거 정책·작업은 `full`로 해석). `source-only`에서는 CBS 평가 전에 배경 자료·카드 변수·이전 대화·메모를 제외한 번역용 입력을 만들므로, 배경 슬롯을 쓰는 프리셋도 제외한 자료를 다시 가져오지 않아요. 원문 ID·해시 등 결과 연결에 필요한 메타데이터는 유지해요. 선택한 프리셋 내용 자체나 저장된 원문·자료는 수정하지 않아요.
-
-### 테스트 및 검증 명령어
-```sh
-npm run quality
-npm test -- tests/translation-guides.test.ts tests/translation-prompt-delivery.test.ts tests/translation-continuity.test.ts tests/source-translation.test.ts
-npm run build
-npm run verify:translation-guides
-```
-
-- `tests/translation-guides.test.ts`: 저장·검증·되돌리기·자료 교환·요청 시점 고정·판정 복구·미리보기/작문 분리를 확인해요.
-- `tests/translation-prompt-delivery.test.ts`: 일곱 프로바이더 프로토콜의 실제 직렬화 결과에서 기본/Hermēneía/context 생략 프리셋과 두 참고 범위(각각 최소 한 번)의 지침·표기·원문이 누락되거나 중복되지 않고 CBS 문자도 그대로 남는지 확인해요. 별도 네이티브 CBS 사례는 배경 자료 제외와 프리셋 자체 기본값·조작값 유지를 확인해요. 로컬 프로바이더 대역을 사용해요.
-- `verify:translation-guides`: 데스크톱·모바일 너비의 실제 앱에서 편집·저장·JSON 편집·미저장 입력 복구·취소·표기 삭제·잘못된 입력 보존과 모든 자료의 편집 노출과 원본 종류 보존을 확인해요.

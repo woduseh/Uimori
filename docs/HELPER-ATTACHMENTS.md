@@ -28,15 +28,8 @@
 
 텍스트 파일은 추출한 텍스트로 토큰을 추정해요. PDF와 미디어처럼 로컬에서 전체 입력량을 알 수 없는 파일은 사용량을 0으로 계산하거나 완전한 컨텍스트 비율로 표시하지 않아요. 실제 공급자가 보고한 입력, 출력, 캐시와 비용은 실행 기록에 별도로 남아요.
 
-## 구현 경계
+## 서재 이미지 조회와 보안
 
 도우미는 사용자가 새로 첨부하지 않아도 저장된 CHARX·콘텐츠 이미지를 `image.list`로 찾고 `image.read`로 볼 수 있어요. 필요한 이미지만 전송하며, 원본은 변경하지 않아요. 전송용 사본은 최대 2048px·2MiB이고 애니메이션은 첫 프레임만 제공해요. 이 조회는 저장된 라이브러리 자료를 기준으로 하며, 미저장 편집기 입력이나 과거 채팅의 고정된 이미지 버전을 대신하지 않아요. 조회 이미지의 수명과 연결별 전달 방식은 [도우미 이미지 도구](HELPER-TOOLS.md#stored-content-images)를 참고하세요.
-
-- `core/request-files.ts`: 형식, 한도, 연결별 입력 정책
-- `core/provider-file-reference.ts`, `core/provider-files.ts`: 명시적으로 첨부한 참조만 실제 전송 바이트로 변환
-- `server/request-files.ts`, `server/request-file-storage.ts`: 업로드 확인, 형식 검사, 원본 보관과 다운로드
-- `server/helper-attachments.ts`, `server/helper-attachment-prompt.ts`: 메시지 소유권, 정리와 모델 입력 구성
-- `web/helper-attachment-draft.ts`: 대화별 첨부 초안과 전송 확인
-- `web/attachment-draft-storage.ts`: 본문·도우미 초안의 첨부 파일을 IndexedDB에 한 번씩 저장하고 초안 세대와 함께 복구
 
 일반 문자열이나 도구 출력에 파일 참조처럼 보이는 문자열이 있어도 저장 파일을 읽을 권한이 생기지 않아요. 이미지 도구는 서버가 소유 자료를 확인한 이미지 참조만 별도로 등록해요. 다운로드는 인증된 앱 경로에서 attachment 응답으로 제공해요.

@@ -31,32 +31,7 @@
 
 선택한 원본 영수증과 초안의 내용 해시를 상담 캐시에 포함해요. 같은 질문이라도 새 근거·다른 초안을 명시하면 다시 검토할 수 있고, 동일한 컨텍스트의 성공·실패는 재사용해요. 자기 상담 이력이 하나 더 쌓였다는 이유만으로 동일 요청의 캐시를 무효화하지 않아요. 모든 추가 상담은 기존 개별·전체 호출 예산을 계속 나눠 써요.
 
-## 호출과 저장 계약
-
-`RisuPrompt.collaboration`은 아래 데이터를 보관해요. `validateRisuPrompt`과 `validateAgentCollaboration`이 알 수 없는 필드·ID 중복·공유 옵션 참조·수치 한도를 검사해요.
-
-```ts
-type AgentCollaboration = {
-  enabled: boolean;
-  sharedInstructions: string;
-  sharedControls: string[];
-  maxCalls: number; // 모든 보조가 나눠 쓰는 1~12회
-  agents: {
-    id: string;
-    title: string;
-    description: string;
-    instructions: string;
-    model: { id: string } | null; // null이면 메인 모델 상속
-    trigger: 'before' | 'on-demand';
-    tools: ('knowledge' | 'skills' | 'notes' | 'story')[];
-    maxCalls: number; // 한 에이전트의 호스트 요청/native 실행 한도 1~6회
-  }[]; // 최대 6명
-};
-```
-
-API는 기존 `POST/PUT /api/prompt-presets`의 `program`을 사용하며 수정은 `expectedRevision` CAS로 보호해요. 협업을 끈 상태에서는 빈 이름·지침·미입력 호출값과 삭제된 공유 옵션 참조도 보관하므로 다른 프롬프트 편집을 저장할 수 있어요. 다시 켤 때 필수값·공유 옵션과 실행 한도를 검증해요. 데이터 형식과 중복 ID 검사는 저장할 때도 유지해요. 별도 협업 편집 후 오래된 본문 undo가 협업 설정을 지우지 않아요.
-
-현재 프롬프트와 모델을 Run 예약 시 고정해요. `ProfileSnapshot.collaborationModels`에 에이전트 ID별 모델·프로바이더·파라미터를 보관하므로 진행 중 설정 수정은 다음 Run부터 적용돼요. 각 보조 실행을 시작할 때 현재 프로바이더 연결을 확인하고 전송 전에 attempt를 기록해요. 기존 `role: main` 전송을 사용하되 attempt의 host 전용 `agentId`로 보조 호출을 구분해요. 이 ID는 프로바이더에게 보내거나 모델 출력에서 받지 않아요.
+## 호출 한도와 실패 처리
 
 모든 보조 호출은 요약·메인과 같은 `settings.maxCalls`에 포함돼요. 보조 전체 한도와 각 에이전트 한도는 작성 전 상담·후속 질문·조회 왕복의 호스트 요청을 합산하며 메인의 다음 호출 1회분을 남겨요. 단, 실제 본문의 Codex native 작가 안에서 하는 자문은 이미 진행 중인 turn으로 복귀하므로 다음 작가 요청을 예약하지 않아요. 새 질문으로 한도가 초기화되지 않아요. 수정 가능한 조회 오류는 같은 예산과 timeout 안에서 교정할 수 있어요. 기본 전체 추가 호출 한도는 3회, 템플릿별 한도는 2회예요. 최종 작문이 더 많은 도구 왕복을 요구하면 기존 전체 한도에서 끝날 수 있어요. 켜진 협업은 호출 여부와 별개로 도구 설명·공유 지침만큼 메인 입력이 늘어나요.
 
@@ -64,20 +39,12 @@ API는 기존 `POST/PUT /api/prompt-presets`의 `program`을 사용하며 수정
 
 보조 실패·거절·부분 응답·불확실 연결 종료는 사용 불가 결과로 전달하고 자동 재호출하지 않아요. 이미 소비한 호출과 usage는 유지하며 실제 비용 미제공 값 `null`을 0으로 바꾸지 않아요. 취소하면 보조와 메인을 함께 멈추고 늦은 결과를 원문으로 저장하지 않아요. 서버 재시작·보관 복원도 불확실 실행을 자동 재생하지 않아요.
 
-작성 전 상담은 등록 순서를 유지해요. 보조들이 공유 호출 예산을 사용하고 전송 직전에 attempt와 사용량을 기록하므로, 병렬 실행은 별도의 예산 예약 계약 없이 추가하지 않아요.
-
 ## Codex 조언자
 
-실제 본문 Run에서 조언자 모델이 Codex이면 별도 native thread/turn 안에서 자료를 읽고 최종 조언을 반환해요. 메인이 다른 프로바이더여도 적용되며 기존 캐시·모델·지침·명시적 컨텍스트·읽기 근거 형식은 유지해요. 한 자문 실행에 여러 내부 추론과 읽기가 포함될 수 있으므로 `maxCalls`는 이 경로에서 호스트 실행 건수이지 내부 추론 상한이 아니에요. timeout은 실행과 도구 대기에 적용되고 부모 취소도 전파해요. 진행 중인 Codex 부모가 기다리는 경우 기존 자식 슬롯 하나를 쓰고, 사전 자문은 일반 슬롯을 사용해요. 재귀 자문이나 별도 병렬 스케줄러·영구 thread는 추가하지 않아요. 자세한 경계는 [Codex](CODEX.md#본문과-조언의-native-실행)를 참고해요.
+실제 본문 Run에서 조언자 모델이 Codex이면 별도 native thread/turn 안에서 자료를 읽고 최종 조언을 반환해요. 메인이 다른 프로바이더여도 적용되며 기존 캐시·모델·지침·명시적 컨텍스트·읽기 근거 형식은 유지해요. 한 자문 실행에 여러 내부 추론과 읽기가 포함될 수 있으므로 `maxCalls`는 이 경로에서 호스트 실행 건수이지 내부 추론 상한이 아니에요. timeout은 실행과 도구 대기에 적용되고 부모 취소도 전파해요. 진행 중인 Codex 부모가 기다리는 경우 기존 자식 슬롯 하나를 쓰고, 사전 자문은 일반 슬롯을 사용해요. 재귀 자문이나 별도 병렬 스케줄러·영구 thread는 추가하지 않아요. 자세한 경계는 [Codex](CODEX.md#실행-한도와-주요-정책-요약)를 참고해요.
 
 ## 진단과 보관
 
 Run의 `agents.consult` tool event에 의견·상태·호출량·질문·출처·명시 컨텍스트 해시를 남겨요. `agents.read`에는 실제 읽기 결과를 남기고, 모델 입력은 `agentId`로 구분하며 `consultationContext`에 실제 전달한 의견·근거·초안을 기록해요. 이 정보는 실행 중 상담에 사용하고 완료 후 영구 아카이브로 보존하지 않아요. 독립 채팅 백업에는 최종 원문과 이어쓰기 자료만 담아요. 원문에는 메인의 최종 응답만 저장해요. 보조가 읽은 본문을 다음 Run의 유지 로어로 자동 승격하지 않아요.
 
 협업 설정은 기존 JSON 필드에 보관하고 협업 전용 DB 테이블은 없어요. DB 버전·지원 이관은 [데이터 형식](DATA-MIGRATIONS.md)을 따라요. 복원은 에이전트 모델 귀속을 검사하고 메인·보조 snapshot의 인증 참조를 제거하며 프로바이더를 비활성화해요. 모델·프로바이더 삭제는 새 선택과 전송 권한에 적용하며 과거 실행 snapshot은 보존해요. 현재 작업본의 전용 보조 모델이 삭제되면 협업을 끄고 모델 선택을 해제해요. 자세한 처리는 [항목 삭제](DELETION.md)를 참고해요.
-
-## 검증 범위
-
-설정·보관 검사는 `tests/agent-collaboration-config.test.ts`, `tests/agent-collaboration-store.test.ts`예요. `tests/agent-collaboration-runtime.test.ts`는 실제 loopback Responses 서버와 새 SQLite DB로 순서·추가 조회·권한·호출량·중복·취소·설정 변경을 검사해요. `tests/agent-collaboration-context.test.ts`는 선택 컨텍스트·초안·구성·컨텍스트별 캐시와 호출 예산, 새 컨텍스트 창 뒤 참조, 수정 가능한 오류를 확인하고 실행 입력은 테스트에서 실행 시점에 관찰하며, 실제 DB의 완료 후 정리도 별도로 검사해요. 브라우저는 `tests/agent-collaboration-browser.spec.ts`의 AGENTUI02에서 데스크톱 편집과 실제 저장/미리보기 API를 확인해요.
-
-합성 검사로 구현 계약을 확인해요.

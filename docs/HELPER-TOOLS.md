@@ -43,29 +43,11 @@ Uimori의 도우미는 대화와 서재에서 창작과 설정을 보조하는 �
 - [도구 상세 계약](dev/TOOL-CONTRACTS.md)
 
 ---
+## 도구 동작 세부 안내 (English)
 
-## 기술 명세 (English)
+아래는 도우미가 도구를 부르거나 사용자 질문에 답할 때 참고하는 동작 세부 사항과 적용 범위예요.
 
-아래 내용은 에이전트와 기여자를 위한 기록이에요. 도구의 인자·한도·결과 같은 계약은 모델이 받는 도구 설명과 입력 스키마, 그리고 테스트에 있어요. 여기에는 그 코드가 말해 주지 않는 것만 적어요.
-
-The helper's provider-facing tools are `app.tools` and `app.call`, plus `data.exec` when `UIMORI_SHELL_ROOT` configures the Linux runner; `server/helper-runtime.ts` assembles them for each request. Everything else, including `data.search`, `data.read` and `db.query`, is an app operation registered in `server/helper-app-tools.ts` and reached through those gateways or the `uimori call` CLI. [CODE-MAP](dev/CODE-MAP.md) lists the entry points per feature, and each section below names the files that define and test its operations.
-
-Constraints on changing the helper's tools:
-
-- A new capability is an app operation, not another provider tool. [Model tool contracts](dev/TOOL-CONTRACTS.md#mutations) gives the reason for the `app.tools` and `app.call` indirection.
-- An explicit outline review is read-only. `data.exec` is not offered, and both discovery and `app.call` use the `reviewAllowed` allowlist in `helperToolTraits`, which is narrower than the set of read-only operations.
-- Safety does not depend on the order of calls. Discovery and confirmation rereads are optional steps; revision checks, unsaved-draft protection and uncertain-write handling are enforced where a save happens.
-- For non-Codex helper and advisor requests without an authored prompt, `core/provider-messages.ts` sends unchanged `history` and `catalog` in a first user-content block so that follow-up requests share a prefix (`tests/provider-reference-context.test.ts`). No context is dropped or promoted to system instructions. A shared prefix is not a measured cache hit; anchors and actual reuse are covered in [model cache settings](MODEL-PARAMETERS.md#캐시-위치자동-배치유지-시간).
-- A Codex helper registers the same tools as native dynamic tools and runs one task in one thread and turn; see [App Server 통신 및 턴 라이프사이클](CODEX.md#app-server-통신-및-턴-라이프사이클).
-
-Outside the helper's tools:
-
-- The writer, advisors and translation jobs have their own source-scoped tools, described in [Model tool contracts](dev/TOOL-CONTRACTS.md#read-tools). They do not inherit the helper's live cross-chat SQL access.
-- Conversation summarization reads its complete selected source prefix, not keyword search hits.
-
-## General tool discovery, CLI and results
-
-`app.tools`, `app.call`, `chat.list` and `chat.read` are defined in `server/helper-app-tools.ts`, together with the search behind `app.tools`. The `uimori` CLI is `runner/uimori.mjs`, and `server/helper-shell.ts` types its flags. The descriptions, the input schemas and the CLI's `--help` text are the contract the model receives. `tests/helper-discovery.test.ts`, `tests/helper-tool-contracts.test.ts` and `tests/tool-contract-portability.test.ts` enforce discovery: representative queries, paging, review filtering, the area index and the error that sends a library helper to `chat.list`. `tests/helper-cli.test.ts` and `tests/helper-shell.test.ts` enforce the CLI flags, and `tests/helper-shell-runtime.test.ts` and `tests/helper-activity.test.ts` how a failed shell command is reported. This section records only what those files do not state.
+### General tool discovery, CLI and results
 
 Behavior the descriptions leave out:
 
@@ -73,14 +55,7 @@ Behavior the descriptions leave out:
 - A candidate that covers every query word ranks ahead of partial matches, and partial matches stay in the list instead of emptying it.
 - BM25 length normalization is deliberately mild, so a long description of a complex operation is not ranked below a short one for its length alone.
 
-Constraints on changing these operations:
-
-- Operation names, descriptions and schema field text, including parameter descriptions, are the text discovery ranks on, with a few per-operation synonyms in the same file. Rewording them changes ranking; [Model tool contracts](dev/TOOL-CONTRACTS.md#names-descriptions-and-parameters) says how to write them.
-- The CLI carries no copy of any schema. Its flags are typed against the operation's own input schema when the call reaches the app.
-
-## Stored content images
-
-`image.list`, `image.read`, `illustration.image.list` and `illustration.image.read` are defined in `server/helper-image-tools.ts`, which also prepares the picture that `illustration.cut.read` sends. The descriptions and input schemas there are the contract the model receives, and `tests/helper-image-tools.test.ts` and `tests/helper-image-runtime.test.ts` enforce it, including the 2 MiB limit, reads made inside `data.exec` and compaction. This section records only what those files do not state.
+### Stored content images
 
 Behavior the descriptions leave out:
 
@@ -89,17 +64,11 @@ Behavior the descriptions leave out:
 - Viewed pixels live only in the running task's memory; stored events, attempts and continuation state hold references and metadata. A context compaction shows the pending pictures to the summarizing model once and then releases them.
 - `providerImagePart` in `core/provider-image-reference.ts` decides how each connection type receives the picture. Only a model that `imageInputSupported` knows to be text-only is refused before the read.
 
-Constraints on changing these operations:
-
-- `prepareHelperImage` is the single place that decodes, resizes and hashes a picture for these reads. The transport sends the prepared bytes as they are.
-
 Outside these operations:
 
 - Images in an unsaved editor draft, the image versions an older chat still pins, and attachments on a helper message ([도우미 첨부](HELPER-ATTACHMENTS.md)). `image.list` and `image.read` use the current saved library content.
 
-## Illustration appearance profiles
-
-`illustration.profiles.read` and `illustration.profiles.save` are defined in `server/helper-illustration-profiles.ts`, and the image discovery they rely on (`illustration.image.list`, `illustration.image.read`) in `server/helper-image-tools.ts`. The descriptions and input schemas there are the contract the model receives. `tests/helper-tool-contracts.test.ts`, `tests/helper-illustration-references.test.ts` and `tests/illustration-profiles.test.ts` enforce it, including chat targeting from the library, all-or-nothing batches and the wrong-scope error that points to the library resource. Those files leave out only the boundary below.
+### Illustration appearance profiles
 
 Outside these operations:
 
@@ -107,19 +76,11 @@ Outside these operations:
 
 ### Work with generated illustrations
 
-`illustration.scene.read`, `illustration.cuts.list`, `illustration.cut.read`, `illustration.cut.redraw`, `illustration.cut.revise` and `illustration.cut.delete` are defined in `server/helper-illustration-cuts.ts`, `illustration.generate` in `server/helper-illustration-generation.ts`, `illustration.cuts.place` in `server/helper-illustration-placement.ts`, `illustration.references.save` in `server/helper-illustration-references.ts`, and `illustration.continuity.read` and `illustration.continuity.save` in `server/illustration-continuity.ts`. `server/helper-illustration-workflow.ts` dispatches the ones that save. Renders are followed with `task.list` and `task.inspect` from `server/helper-task-tools.ts`. The descriptions and input schemas in those files are the contract the model receives. `tests/illustration-storyboard.test.ts`, `tests/helper-illustration-cuts.test.ts`, `tests/helper-illustration-references.test.ts`, `tests/illustration-continuity.test.ts`, `tests/helper-task-tools.test.ts` and `tests/helper-tool-contracts.test.ts` enforce it, including the guards, all-or-nothing reservation and what an illustration task inspection withholds. This section records only what those files do not state.
-
-Constraints on changing these operations:
-
-- These operations add no generation, deletion or layout path of their own. `illustration.generate`, `illustration.cut.redraw` and `illustration.cut.revise` reserve render jobs in the normal illustration queue, where the ordinary prompt preparation and content check apply. `illustration.cut.delete` uses the existing illustration deletion, and placement saves the scene's existing illustration layout.
-
 Outside these operations:
 
-- Generators, queueing, limits and how the Reader shows illustrations. See [장면 삽화 생성](ILLUSTRATIONS.md#구현-참고).
+- Generators, queueing, limits and how the Reader shows illustrations. See [장면 삽화 생성](ILLUSTRATIONS.md).
 
-## Conversation history and task results
-
-`GET /api/helper/conversations` and `GET /api/helper/tasks/:id/results` are registered in `server/helper-routes.ts`; the results view is built in `server/helper-task-results.ts` with the shape `HelperTaskResultsView` in `core/helper.ts`. Its `changes` come from the change record in `server/helper-changes.ts`, diffed by `core/text-diff.ts`. `tests/helper-workspace.test.ts` enforces the list's scope filters and deletion ownership and, for results, the recorded targets, no-op outcomes, rollback, survival of payload cleanup, usage fields and withheld private data. `tests/helper-changes.test.ts` enforces the net change per task, retried and failed operations, the deletion and retention paths and asset cleanup, `tests/helper-shell.test.ts` the scene saved by `uimori apply`, and `tests/text-diff.test.ts` the diff and its limits. This section records only what those files do not state.
+### Conversation history and task results
 
 Behavior the response types leave out:
 
@@ -135,21 +96,11 @@ Behavior the response types leave out:
 - An entry whose text was removed has `textRemoved` and no `location`, `diff` or `anchor`: `deleted` after the scene or resource was deleted, `expired` outside the retention in [도우미 변경 기록](DELETION.md#도우미-변경-기록). A target the task deleted is listed without an anchor.
 - One response carries at most 200,000 characters of diff text; later diffs come back as omitted for size.
 
-Constraints on changing these routes:
-
-- Record an outcome inside the `operation` callback of `server/helper-workspace.ts` so that it commits or rolls back with its mutation and receipt. The same holds for a change entry, which also makes a replayed operation record nothing twice.
-- Every helper save of a recorded domain goes through `server/helper-changes.ts`: `withHelperChange` around scene, scene title, outline and note saves, `recordHelperResourceChange` from `applyHelperResourceMutation`, and `recordHelperAction` for action-only entries, which `recordHelperTaskResult` calls for settings targets. The `uimori apply` scene save wraps its direct `store.editSource` in `withHelperChange` as well. A new save path for these domains uses them instead of writing `helper_changes`.
-- The stored baseline is the full pre-change state (the editable resource model, scene text, outline nodes, note list), which [turn rollback](#rolling-back-a-helper-task) restores. A deletion path that removes a target must also call the matching `forgetHelper*Changes`.
-- The results view exposes no resource bodies, pricing notes or source URLs, connection data, request bodies, arbitrary tool arguments, endpoint credentials or raw provider usage payloads.
-- `kind=all` only lists: it creates and migrates nothing.
-
 Outside these routes:
 
 - A second undo history. Turn rollback reads the same records; the editor's resource undo and draft protection keep their own contracts.
 
-## Rolling back a helper task
-
-`GET` and `POST /api/helper/tasks/:id/rollback` are registered in `server/helper-routes.ts` and implemented in `server/helper-rollback.ts`; the shapes are `HelperRollbackView` and `HelperRollbackUnit` in `core/helper.ts`. The state a rollback checks against is recorded by `server/helper-changes.ts` next to each change entry. `tests/helper-rollback.test.ts` enforces the restore order of a scene, the translation a source-only edit made stale, the refusal while a task runs, the statuses and reasons, single-target rollback and asset cleanup, and checks with a seeded random sequence of helper tasks (including multi-resource patches and outline level changes, moves across parents and levels, and related-node changes) and user edits, followed by whole-task and single-unit rollbacks in random or reverse order, that a rollback restores a target exactly when it still holds what the task left, never writes a target it does not restore or has already restored, and changes nothing when repeated. This section records only what those files do not state.
+### Rolling back a helper task
 
 Behavior the types leave out:
 
@@ -162,23 +113,13 @@ Behavior the types leave out:
 - An outline node or a note the task deleted is created again with a new ID, and a restored note carries the author `도우미 변경 되돌리기`. A restored imported memory takes its origin from the stored note it replaces. A restore through the outline save is refused when a node the task created has been written since.
 - The outline save checks every operation against the tree as it stands, and a parent must be a larger level than its children. An outline restore therefore runs in three saves: it moves each node whose parent or level changed to the top, removes the nodes the task added and sets the earlier levels; then it creates the deleted nodes again; then it moves each node back under its parent and position and restores titles, intents, pins and related nodes. The intermediate saves only change the plan of nodes whose final plan also differs, so a scheduled scene is cancelled exactly when its final path, children or related nodes differ from the current ones, as with any outline save.
 
-Constraints on changing this behavior:
-
-- Restores go through the existing save paths (`saveResource`, `editSource`, `editTranslation`, `outline.applyReceipt`, `notes.write`) so that revision checks, job invalidation and events stay the same as for a normal save. Do not write the target tables directly.
-- All selected units are restored in one transaction, each in its own savepoint: a failed unit is reported `failed` and leaves nothing behind, and the other units still commit. A rollback is refused with `HELPER_TASK_ACTIVE` while a task of the conversation is queued or running.
-- A rollback cannot be cancelled once it runs; it is synchronous and short. A client that lost the response sends the same request again and reads the statuses.
-
-## Plan mode
-
-A helper request sent with `mode: "plan"` (`POST /api/helper/conversations/:id/messages` in `server/helper-routes.ts`) is stored in the task snapshot, and every task view carries `mode`. The plan instruction is `PLAN_MODE_GUIDANCE` in `server/helper-runtime.ts`; `invokeOperation` refuses an operation that `helperToolTraits` does not classify as read-only with `PLAN_MODE_READ_ONLY`, and `operation` in `server/helper-workspace.ts` refuses to write a receipt for a plan task. `tests/helper-plan-mode.test.ts` enforces both refusals, the reviewed list of read operations, and the mode in the task list and under a reused request key. This section records only what those files do not state.
+### Plan mode
 
 - The refusal uses the classification that decides whether the dispatcher records a receipt and a change, so there is one list. The receipt refusal is the backstop for a save that does not pass the tool gate, such as `uimori apply` inside `data.exec`; a plan task therefore records no change and has nothing to roll back.
 - Discovery still lists the operations that write, so a plan can name the operation and arguments it would use.
 - Carrying out a plan is an ordinary request that refers to it. The server keeps no link between the plan and the request that runs it, and a retry keeps the mode of the task it retries.
 
-## Confirmation before destructive or bulk operations
-
-`server/helper-confirmations.ts` decides which calls need the owner's confirmation, holds them, and resolves the confirmations a later request grants; `invokeOperation` in `server/helper-runtime.ts` asks it before dispatch. A held call returns `CONFIRMATION_REQUIRED` with the `confirmation` it needs and is recorded as a `confirmation.required` event; the results view lists them as `confirmations` (`HelperConfirmation` in `core/helper.ts`), and a message grants them with `confirmations: [id]`. `helperConfirmPaidGeneration` in the model workspace (`server/prompt-workspace.ts`) turns on confirmation for `scene.request` and `scene.translate`. `tests/helper-confirmation.test.ts` enforces the defaults, the setting, that a grant runs only the call with the same arguments, only once, and after a restart, and that only the latest task's confirmations can be granted. This section records only what those files do not state.
+### Confirmation before destructive or bulk operations
 
 - The runtime cannot pause a tool call for an answer: an HTTP provider loop and a native Codex turn both expect the result. So a held call is refused without effect, the task finishes its turn, and the owner's next request carries the grant. Everything is in the database (the event, the task snapshot and a `confirmation.used` event), so a reload or a restart loses nothing, and declining is just a request without the grant.
 - A confirmation is bound to the conversation, the chat the call acts on, the operation and its exact arguments, revision guards included. A grant is consumed when the confirmed call is dispatched, even if the save then fails, and a replay of the same call identity does not consume it twice.
@@ -188,16 +129,13 @@ A helper request sent with `mode: "plan"` (`POST /api/helper/conversations/:id/m
 - The same call identity can be held again in a later task, for example after a granted call failed. Each holding task is answered on its own: its `grantedBy` names only a task after it, so an earlier grant neither marks the new hold as granted nor hides it, and the client keys a decline by task and confirmation.
 - By default resource deletion and a `resource.patchMany` over three or more resources are held; the threshold is `HELPER_BULK_CONFIRMATION_RESOURCES`. The setting is copied into the task at admission, like the task timeout, and the helper's own `settings.update` cannot change it.
 - The results view does not expose the held call's arguments.
-- The stored arguments are a copy of what the helper sent, such as a whole patch body or a scene request, so they live only while the call can still be confirmed. `server/helper-argument-retention.ts` drops them from a `confirmation.required` event once a later task exists in the conversation, from a task's granted calls once the task completes or is retried, and from both when a chat, scene or resource the call names is deleted, including holds in a library conversation that acted on the chat through `chatId`. A confirmation without arguments shows as expired, and a grant or a retry that needs it fails with `CONFIRMATION_UNAVAILABLE` instead of running from partial data. `tests/helper-confirmation.test.ts` covers the release and the deletions.
 
-## Choice question cards and `@` target references
+### Choice question cards and `@` target references
 
 - `helper.ask` (`server/helper-app-tools.ts`, `server/helper-runtime.ts`) is a read-only tool available in both `apply` and `plan` modes. Like confirmations, it never blocks an open provider loop: it records a durable `question.asked` event returned as `question` on `GET /api/helper/tasks/:id/results` (`server/helper-task-results.ts`) and ends the turn cleanly. `web/HelperQuestionCard.tsx` renders clickable options on the latest task and submits the chosen label as the next ordinary user message (`tests/helper-tool-contracts.test.ts`, `HELPASK01`).
 - `@` target references (`GET /api/helper/conversations/:id/references` and `references` on `POST /api/helper/conversations/:id/messages`, implemented in `server/helper-references.ts` and `web/HelperMentionMenu.tsx`) store only `{ kind, id }` pointers in the task snapshot—never mutable titles or prose—and resolve live metadata on read and in `source.referencedTargets`, so deleted scenes and resources drop cleanly (`tests/helper-references.test.ts`, `HELPMENTION01`).
 
-## Linux data workspace
-
-`data.exec` is defined in `server/helper-data-tools.ts`, with its input schema in `core/main-shell.ts`. The contract the model receives is that description and schema together with the text the workspace gives it: `INDEX.md` (written by `server/helper-shell.ts`), `GUIDE.md` (`server/helper-shell-guide.ts`), the `uimori --help` usage (`runner/uimori.mjs`) and the help of the bundled `tools/repetition.py` (`server/helper-shell-scripts.ts`). They state the workspace layout, on-demand export, apply and refresh, CLI syntax, limits and results. `tests/helper-shell.test.ts`, `tests/helper-shell-runtime.test.ts`, `tests/helper-runner.test.ts` and `tests/helper-cli.test.ts` enforce that contract, including receipts, revision conflicts, unknown outcomes and the termination of child processes. This section records only what those files do not state.
+### Linux data workspace
 
 Behavior the descriptions leave out:
 
@@ -208,26 +146,13 @@ Behavior the descriptions leave out:
 - Before any export, the workspace already holds `usage/recent.jsonl`: the 500 most recent model attempts across all chats, with role, model id, status, token counts and cost. Like the rest of the workspace, a script can send it out through the runner's network.
 - A task's directory is removed when the task ends, so working copies and `outputFile` logs do not outlive it.
 
-Constraints on changing these operations:
-
-- The runner's only path to the app is the Unix sockets in the shared workspace volume. Its `runner-egress` network holds neither the app nor the proxy, and the two services share nothing but that volume. [저장과 운영](SELF-HOST.md#저장과-운영) describes the deployment.
-- The `uimori` CLI is an adapter to the dispatcher behind `app.call` and has no storage code of its own. A call made through it keeps the task scope, editor-draft protection, revision checks, save effects and operation identity of the same call through `app.call`.
-- `uimori apply` adds no save path. A resource file is saved as a helper `resource.save`, with the existing helper undo provenance and receipt attribution. A scene file goes through the existing source save and the post-commit handling described in [Editing saved scenes](#editing-saved-scenes).
-- Scene apply and refresh use the current-chat ancestry check of the app scene operations.
-- After an apply has committed, a projection or reader-notification failure is a warning on the saved result, never a failed save.
-- Exported translation copies come from the Reader's completed-result projection (`core/translation-display.ts`), the one that scene translation reads use.
-- The 24-hour maximum of `timeoutMs` is a sanity cap for the timer. The task deadline and cancellation are what bound a shell call.
-- A helper shell call previews 64 KB of output by default (`HELPER_SHELL_OUTPUT_DEFAULT_BYTES`), the largest preview the runner gives. With the earlier 16 KB default, 73 of 256 production shell calls came back cut in the middle and the model spent further rounds fetching the rest; 54 of those 73 outputs were 64 KB or smaller. A round costs far more than the extra text, because every round resends the whole context. The main writing shell keeps the 16 KB default: no measurement exists for it and a writing run has a tighter input budget.
-
 Outside these operations:
 
 - Background work. A command's children are stopped through its process group; a process that deliberately leaves the group is not a supported way to keep work running.
 - Merging. `uimori refresh` does not merge a draft with the latest saved data and writes nothing to the database.
 - Cleanup after a crash. A process crash can leave task directories behind for manual cleanup.
 
-## Search and partial reads
-
-`data.search` and `data.read` are defined in `server/helper-data-tools.ts` and executed by `server/helper-data-worker.ts`; `editor.read` is defined in `server/helper-app-tools.ts`. The descriptions and input schemas there are the contract the model receives: scopes and their default, filters, pattern matching, output modes, limits, references, paging and the `editTarget` a result can carry. `tests/helper-data-tools.test.ts` enforces that contract against the real data process, `tests/helper-data-runtime.test.ts` enforces it through the helper loop, and `tests/helper-resource-editing.test.ts` covers `editor.read`. [Model tool contracts](dev/TOOL-CONTRACTS.md#pagination-and-results) owns the two `data.read` continuations (`nextIndex` and `nextOffset`), the rule that a failed ref stays local to its batch entry, and the absence of an exact total in search results. This section records only what those files do not state.
+### Search and partial reads
 
 Behavior the descriptions leave out:
 
@@ -238,20 +163,12 @@ Behavior the descriptions leave out:
 - In `scope:"chats"`, a scene inherited through a fork appears under every chat whose ancestry contains it, numbered within that chat. The source ID and `chatId` together identify a result, which is why `chatId` travels in the ref and into a narrowing search.
 - An excerpt is at most 2,000 UTF-16 units. The `following` text of the first two excerpts uses only the page budget left after the page is filled, so it never changes which items a page holds or its `nextOffset`, and it stops before the next excerpt of the same field. An answer often sits just past the matched phrase, and this saves the `data.read` round that would continue the excerpt. A `data.read` batch and a field directory page each stop at about 16,000 serialized characters; `nextIndex` and the directory's `nextOffset` report what was left out.
 
-Constraints on changing these operations:
-
-- Both operations run in the isolated read-only data process described under [Read-only SQL](#read-only-sql).
-- The `conversation` scope reads the saved helper messages. Do not keep a second transcript for it.
-- Search does not reproduce effective context. The discovered `knowledge.read` and `chat.lore` operations own that contract.
-
 Outside these operations:
 
-- The editor target. [로컬 복구 저장소](EDITING.md#로컬-복구-저장소-indexeddb) describes how a saved reference or an unsaved draft is captured at admission, and the target is context, not a permission boundary ([도우미와 과거 가정 장면](USAGE.md#도우미와-과거-가정-장면)). The prompt library card action **도우미에게 묻기** sets a saved reference for the next request without changing the scope of the library conversation; opening a prompt editor, leaving the prompt library or clearing the target removes it.
+- The editor target. [자료 편집과 저장 흐름](EDITING.md#자료-편집과-저장-흐름) describes how a saved reference or an unsaved draft is captured at admission, and the target is context, not a permission boundary ([도우미와 과거 가정 장면](USAGE.md#도우미와-과거-가정-장면)). The prompt library card action **도우미에게 묻기** sets a saved reference for the next request without changing the scope of the library conversation; opening a prompt editor, leaving the prompt library or clearing the target removes it.
 - Reader selections. **도우미에게 물어보기** sends the whole selected passage as the task's `selection`, not as a search result. `tests/helper-workspace.test.ts` and `tests/helper-browser.spec.ts` enforce how it is kept whole and reused in later turns.
 
-## Editing saved scenes
-
-`scene.read`, `scene.search`, `scene.patch`, `scene.patchMany`, `scene.versions` and `scene.restore` are defined in `server/helper-scene-tools.ts`, and the `chat.read` scene index in `server/helper-app-tools.ts`. The descriptions and input schemas there are the contract the model receives: arguments, limits, guards, paging and what each result is for. `tests/helper-scene-tools.test.ts` and `tests/helper-scene-runtime.test.ts` enforce that contract, including its error codes and all-or-nothing saves. The helper discovers these operations through `app.tools` and runs them through `app.call`; discovery adds no provider-facing tools. This section records only what those files do not state.
+### Editing saved scenes
 
 Behavior the descriptions leave out:
 
@@ -261,14 +178,6 @@ Behavior the descriptions leave out:
 - A whole-chat `scene.search` reads only scenes the selected chat owns. `excludedScenes` counts the rest of its ancestry: scenes inherited from a fork parent, and disabled scenes unless `includeDisabled` is set.
 - Translation reads use the same completed-result projection as the Reader (`core/translation-display.ts`), so an earlier completed translation stays readable while a new attempt is pending. The identity of that displayed result is distinct from the latest revision, which is what a save conflict checks.
 
-Constraints on changing these operations:
-
-- A search result never authorizes a save. Regex search runs in the isolated read-only data process and its result is advisory; `scene.patch` checks the live guarded text before saving.
-- Scene tools add no save path of their own. The existing source and translation save paths own revision checks, preservation, job invalidation and illustration placement, and HTTP and helper edits share post-commit cancellation of superseded jobs and reader notification. Translation images and in-flight translation attempts follow the same invalidation rules.
-- A source edit makes old translation jobs stale and leaves saved execution inputs unchanged.
-- The existing summary source-hash checks decide whether an earlier summary is still usable; scene editing does not author a replacement summary.
-- A search sends the model neither a search index nor full scene bodies.
-
 Outside these operations:
 
 - Saving a `translation` together with an original edit keeps that reviewed translation current. It does not make arbitrary original edits semantically safe for translation reuse.
@@ -276,9 +185,7 @@ Outside these operations:
 - Automatic retranslation, scene titles and persistent writing options.
 - Unsaved Reader drafts. Scene tools neither read them nor track them across tabs, and when a helper edit changes the saved base of a draft, the existing conflict UI keeps the draft and asks for reconciliation. See [도우미 본문 편집](EDITING.md#도우미-본문-편집).
 
-## Read-only SQL
-
-`db.query` is defined in `server/helper-data-tools.ts` and executed by `server/helper-data-worker.ts`. Its description and input schema are the contract the model receives. Called without `sql`, it returns the view names, their columns, example queries and path guidance from the running database, so this document lists no views, columns or examples. `tests/helper-data-tools.test.ts` enforces the views, the rejection of writes and of tables outside the views, the row and cell bounds, the timeout and cancellation; `tests/helper-data-runtime.test.ts` enforces recovery from an unknown column or invalid SQL and the concurrent read group. This section records only what those files do not state.
+### Read-only SQL
 
 Behavior the descriptions leave out:
 
@@ -287,21 +194,11 @@ Behavior the descriptions leave out:
 - A row set also stops at about 16,000 serialized characters, so `truncated` can be true below the row limit.
 - An integer outside JavaScript's safe range is returned as a decimal string, and a binary value as its byte count without the bytes.
 
-Constraints on changing these operations:
-
-- `data.search`, `data.read`, `db.query` and a regex `scene.search` each run in a short-lived child process with a read-only connection, bounded memory and a three-second deadline; cancellation kills it. This keeps a pathological query or regular expression from blocking the server's event loop, so do not move this work into the server process.
-- That process keeps nothing between calls: no file mirror, polling service, persistent pool or background scheduler, and it adds no migration, setting or package dependency. Task-local files belong to the [Linux data workspace](#linux-data-workspace).
-- The server supplies the database path. Neither a path nor credentials are tool arguments.
-- `db.query` never writes. Saves go through app operations so that revision checks and save effects apply.
-- When one HTTP provider response contains adjacent `data.search`, `data.read` or `db.query` calls, they run concurrently, at most `Math.min(4, availableParallelism())` at a time. Only these three operations, which each run in their own data process, form a concurrent group; every other call is a sequential boundary, so no read passes an app mutation ([Execution boundaries](dev/TOOL-CONTRACTS.md#execution-boundaries)). The cap is a small heuristic, not tuned to workload or container memory.
-
 Outside these operations:
 
 - Native Codex tool callbacks stay serialized; the concurrent group applies only to the HTTP provider tool loop.
 
-## Discovering and executing app operations
-
-The gateways `app.tools` and `app.call`, the operation index and the discovery ranking are defined in `server/helper-app-tools.ts`, together with the chat, chat-lore, library-folder, context, outline, notes and artifact operations. The `resource.*`, `theme.list`, `theme.guide`, `illustration-preset.*`, `preset.validate` and `image.update-metadata` operations are defined in `server/helper-resource-tools.ts`. The descriptions and input schemas in those two files are the contract the model receives: arguments, limits, paging, guards and what each result is for. `server/helper-runtime.ts` dispatches the operations and classifies their errors. `tests/helper-discovery.test.ts`, `tests/helper-tool-contracts.test.ts`, `tests/helper-resource-editing.test.ts`, `tests/helper-resource-inspection.test.ts`, `tests/helper-resource-mutation.test.ts`, `tests/resource-clone.test.ts`, `tests/helper-lore-read.test.ts`, `tests/risu-preset-diagnostics.test.ts` and `tests/helper-compaction.test.ts` enforce that contract, including patch failure details, all-or-nothing saves, receipts, error recovery modes and what compaction keeps exact. This section records only what those files do not state. The outline operations are covered in [도우미 도구 계약](OUTLINE.md#도우미-도구-계약-outlineread-outlinewrite) and the theme operations in [도우미 도구 호출 계약](THEME-AUTHORING.md#도우미-도구-호출-계약).
+### Discovering and executing app operations
 
 Behavior the descriptions leave out:
 
@@ -315,45 +212,20 @@ Behavior the descriptions leave out:
 - A task's request data carries `source.knownOperations`: the definitions of the operations that earlier tasks of the conversation called, so a follow-up task can call them without another `app.tools` round. The names come from the conversation's `tool.started` events, which outlive the released inputs of a completed task, and the definitions come from the running build, never from a stored result, so a schema of an earlier build is never presented as current. A review task receives only the operations its review allows. Schemas that were looked up but never called are not carried. The selection is fixed when the task starts and sits in the request data, not in the tool list or the contract, so it neither changes between the rounds of a task nor touches the stable prefix; `knownHelperOperations` in `server/helper-app-tools.ts` caps it by count and size, and `tests/helper-round-trips.test.ts` checks the reuse, the prefix and the round counts it logs as `HELPER_ROUND_TRIPS`.
 - The `nextRead` of a `HELPER_READ_TOO_LARGE` result names a provider tool, so the model can invoke it unchanged in the next round: `app.call` with nested `name` and `arguments` for every app operation, including `data.search` and `data.read`, and `data.exec` for shell output.
 
-Constraints on changing these operations:
-
-- `helperToolTraits` in `server/helper-app-tools.ts` is the one policy for read or write classification, outline-review availability, [plan mode](#plan-mode) refusal and writing-snapshot needs. Metadata reads, renames, lore operations and outline navigation stay out of its `writing` set, so an explicit `chatId` does not prepare a snapshot they would not use.
-- Each definition in `server/helper-resource-tools.ts` declares whether the operation reads or mutates and which resources a mutation targets. Draft protection, operation receipts, undo tracking and resource update events all use that declaration; a new resource mutation declares its targets there instead of in a second list. The declaration is stripped from the schema the model receives.
-- Resource operations add no save path. Revision checks, final validation, regenerated projections and the single retained undo belong to `saveResource` in `server/resource-service.ts`, which the editor also uses, and `resource.clone` shares `cloneResource` with `POST /api/resources/clone` and library list copies. See [동시성 제어와 멱등성 보장](EDITING.md#동시성-제어와-멱등성-보장).
-- The `editTarget` hints of `data.search` and `data.read` and the validation of `resource.patch` read the same `server/helper-native-protected-fields.json` and `server/helper-resource-path-policy.json`: protected field names, preset paths and JSON Pointer limits. Change them together. The limits apply to the full editing path, including the native-content prefix.
-- Model arguments never carry mutation identity. The host derives it from the task and the provider call ID and passes it separately; a new call ID is a new operation. Authorization and the shape of the final reply are stated once in the helper contract (`CONTRACT` in `server/helper-runtime.ts`), not per operation. See [Mutations](dev/TOOL-CONTRACTS.md#mutations) and [Names, descriptions and parameters](dev/TOOL-CONTRACTS.md#names-descriptions-and-parameters).
-- The provider tool list stays fixed throughout a continuation; see [Provider continuation state](dev/TOOL-CONTRACTS.md#provider-continuation-state).
-- Native tool history keeps the `app.call` envelope, `name` and `arguments`, as the provider sent it. Read or write classification, compaction and the activity view use the inner operation.
-- `HELPER_READ_TOO_LARGE` replaces only a read result that cannot fit the selected model's input budget; the result is withheld, not truncated. The dispatcher adds no fixed per-read or per-round token cap: accumulated reads go through context compaction. A result that carries a confirmed write is never replaced.
-- Composer recovery lives in `web/helper-recovery.ts`, enforced by `tests/helper-recovery.test.ts`, `tests/helper-recovery-browser.spec.ts` and `tests/helper-browser.spec.ts`. A read failure is not an empty store and must not overwrite the saved draft, selection, outline selection or unacknowledged request. An accepted request is cleared only while the stored value is still that request, and a cleanup or view-refresh failure after acceptance is not a failed send. See [로컬 복구 저장소](EDITING.md#로컬-복구-저장소-indexeddb).
-- Conversation creation, conversation copy and project creation share `web/helper-pending-request.ts` for request identity, storage precedence and matched cleanup; see [새 도우미 세션 생성](#새-도우미-세션-생성).
-
 Outside these operations:
 
 - Complete models. Bounded pages and compact receipts apply to helper reads and results only; UI, backup and export APIs keep returning complete models, and stored chat-lore undo and conflict data stay complete.
 - Replacing arbitrary objects or a root with `resource.patch`. `set` takes a scalar or an array of scalars, apart from the three whole values its description names.
-- A history of library resources. One previous save is retained per resource, and cloned presets are not kept synchronized; see [도우미 부분 수정 및 문자열 치환 알고리즘](EDITING.md#도우미-부분-수정-및-문자열-치환-알고리즘).
+- A history of library resources. One previous save is retained per resource, and cloned presets are not kept synchronized; see [도우미를 통한 본문과 자료 편집](EDITING.md#도우미를-통한-본문과-자료-편집).
 - Independent-scene generation and editing. There is no `artifact.generate` operation and no `PATCH /api/helper/artifacts/:id` route; `artifact.read` and `GET /api/helper/artifacts/:id?revision=N` only read saved revisions. A different story direction uses `chat.fork` and then normal chat writing, which `scene.request` can send. Forking does not start generation.
 - New device-local artifact edit drafts. Drafts saved earlier stay readable and copyable in the artifact card, and they are removed only together with their conversation's local recovery data.
 - Sending a recovered request automatically after a reload.
 
-## 새 도우미 세션 생성
-
-생성 요청의 임시 보관은 `web/helper-pending-request.ts`가 맡고, 대화 복사와 프로젝트 생성도 같은 함수를 써요. 저장소 순서, 재시도 키 재사용, 다른 탭 요청과의 분리, 새로고침이나 보관 실패 때 보내지 않는 동작은 `tests/helper-pending-request.test.ts`, `tests/helper-sessions-browser.spec.ts`, `tests/helper-workspace-browser.spec.ts`가 확인해요. 여기에는 그 밖의 것만 적어요.
-
-- 처음 보낸 요청이 확정 거절(408·429를 뺀 4xx)되면 보관한 요청을 지워요. 복원해서 다시 보낸 요청은 거절되어도 남기고 성공했을 때만 지워요.
-- 보관할 자리를 만들려고 다른 초안이나 설정을 삭제하지 않아요.
-- `sessionStorage`에만 보관된 요청은 탭을 닫으면 복구되지 않을 수 있어요.
-
-## 도우미 대화와 과거 분기
-
-사용자에게 보이는 동작은 [도우미와 과거 가정 장면](USAGE.md#도우미와-과거-가정-장면)이 안내해요. `helper_seed_messages`는 과거 분기 대화와 **대화 복사**(`server/helper-workspace.ts`의 `copy`)가 함께 쓰는 대화문 저장소이고, 읽기·이력·수정·삭제는 `tests/helper-workspace.test.ts`가 확인해요.
+### 도우미 대화와 과거 분기
 
 seed 대화문은 역할·본문·첨부만 담아요. 이전 모델 시도·사용량·도구 실행·변경 영수증은 옮기지 않으므로 다시 실행하지 않고, 이어지는 작업은 필요한 자료의 현재 저장 상태를 새로 읽어요.
 
-## Activity and additions to a running task
-
-An addition to a running task (**현재 작업에 추가**) is `steer` in `server/helper-runtime.ts`, the call limits are the constants in `core/helper.ts` and the activity view is `server/helper-activity.ts`. `tests/helper-workspace.test.ts`, `tests/helper-activity.test.ts` and `tests/helper-browser.spec.ts` enforce how an addition is delivered, the limits and the bounded activity projection. The limit values are listed in [실행 한도와 주요 정책 요약](CODEX.md#실행-한도와-주요-정책-요약). Undoing what a task changed is [turn rollback](#rolling-back-a-helper-task). This section records only what those files do not state.
+### Activity and additions to a running task
 
 What the recorded states mean:
 
@@ -361,67 +233,39 @@ What the recorded states mean:
 - The call limits are observable host boundaries on model requests and tool callbacks. They are not a money cap and do not measure native Codex internal sampling.
 - Activity records explain execution, not model reasoning or the quality of an answer.
 
-Constraints on changing this behavior:
-
 - An addition is text only. The task keeps its model, captured materials and read-only review mode.
 - On HTTP providers an addition does not interrupt a tool that is already running; only calls that have not started are skipped.
 - Pending and unconfirmed additions are never replayed, neither automatically nor by a retry. A retry of the unchanged request carries the delivered additions.
-- Call limits are an internal policy, not a conversation setting. A task runs under the limits and the timeout captured in its snapshot at admission, and its deadline is timed from the start of execution.
-- The run loop in `server/helper-runtime.ts` repeats a provider call that failed with HTTP 429 or 5xx, waiting `HELPER_PROVIDER_RETRY_DELAYS_MS` between attempts. A task makes many calls, so one transient failure would otherwise discard everything it had read; in production one 429 ended a task on its sixteenth call. The repeat lives in the loop, not in `core/transport.ts`, so main and translation runs keep failing on the first error. It is limited to failures that arrive as an HTTP status, before any output exists to duplicate. A native Codex turn is not repeated because its tools already ran inside the turn, and a summary call is not repeated because [context summaries are never resent](CONTEXT-LIMITS.md). A repeated call does not use up the helper-call limit, but every attempt counts toward the total call limit.
-- A stopped task is continued by a retry that carries `resume` (`server/helper-resume.ts`). Nothing new is stored for it: the tool exchanges are rebuilt from the records a stopped task already keeps, the `tool.finished` events for results and the attempt responses for the exact arguments. A deletion or retention step that clears those records therefore ends the ability to continue, and no second copy of manuscript text exists to clean up. Exchanges recorded before the stopped task's last compaction keep only their non-read events and read references, because the conversation summary already covers what they read. The rest reach the model as `completedToolHistory` reference data in a fresh request, not as provider continuation state, so the continuing task can use another model; a later compaction summarizes the carried reads like any others. A continuing task links to its predecessor through `retryOf`, and saved-change counts and the refusal of a retry from the start apply to the whole chain, so a continuing task that stops cannot be restarted in a way that repeats an earlier task's changes. `tests/helper-workspace.test.ts` and `tests/helper-compaction.test.ts` hold these cases.
-- The same loop sends a refused call again at once, up to the app-wide automatic refusal retry count ([GENERATION](GENERATION.md#거절-뒤-자동-다시-생성)). The count is read when the refusal arrives and starts over for each refused call. A chat's own override does not apply, because chat generation settings do not govern a helper task, and no refusal judgment runs on helper output. A native Codex turn is not repeated, for the reason given above.
-- A provider refusal that outlasts those repeats ends the task as `failed` with `HELPER_RESPONSE_REFUSED`, followed by the provider's reason when that reason is a code such as `SAFETY`. A refusal written as prose is not stored as the task error, because that text comes from the model and the error is shown as a host message.
-- A task stopped by its deadline ends as `failed` with `HELPER_TASK_TIMEOUT`. `cancelled` is reserved for a stop the user asked for, so the interface never tells the user they cancelled work the host cut off. `tests/helper-workspace.test.ts` holds both cases.
 
-## Original-work reference and authored notes
-
-[Original-work reference](STORY-GUIDE.md) owns the **원작 참고** settings, the automatic pre-writing step and the absence of dedicated question or preview endpoints. The helper reads the settings as `storyGuide:{revision,config}` in `context.read` (`server/helper-context.ts`, checked by `tests/story-guide-routes.test.ts`), and its contract in `server/helper-runtime.ts` says how to answer original-work questions.
+### Original-work reference and authored notes
 
 - `context.read` returns the settings, not a generated brief. A previously generated brief is not a source of story facts.
 - Neither a helper answer nor an automatic brief creates a branch ledger.
 - **Risu 작가 노트** is not an event log or proof of what a character knows. [이야기 기억과 컨텍스트·메모](USAGE.md#이야기-기억과-컨텍스트메모) separates it from **메모·정정**.
 
-## App guides
+### App guides
 
-`guide.read` is defined in `server/helper-guide-tools.ts` and reads through `server/app-guides.ts`; `tests/app-guides.test.ts` enforces the listing, the search and the paging.
-
-- The guides are the Markdown files directly under `docs/`, read from `dist/docs` in a build and from `docs/` when the server runs from source. They are not copied into a task's shell workspace; the shell reaches them with `uimori call guide.read`.
 - The guides are Korean prose with English identifiers, and the helper may think in either language. Search therefore matches by section, not by line, falls back to the sections that hold only some of the words, and attaches guidance that an empty or partial result is no evidence that a feature is absent. There is no translation or synonym table: the description tells the model to query with the Korean wording of the user or the interface, and the guide list carries the Korean titles to choose from.
-- Developer documents live under `docs/dev/`, so they are neither copied into `dist/docs` nor exposed by `guide.read`. Any Markdown file placed directly under `docs/` is treated as a user guide.
-- One guide has no file: `STORY-UI-REFERENCE` is the story writer's Story UI reference (`storyUiPrompt()` in `server/story-ui.ts`). It is a guide rather than part of the helper contract because it is several times the contract's length and only block work needs it. The contract tells the helper to read it in one `guide.read` call, so the writer reference has to fit the largest page; `tests/app-guides.test.ts` fails when it outgrows that.
 - The helper contract tells the model to check the guides before it says the app lacks a feature. It exists because a production helper answered that thought summaries were not a feature: its tools and settings showed none, and the display is interface behavior that no tool controls.
 
-## Web search and model pricing
-
-Helper web search is decided per adapter protocol by `helperWebSearchCapability` in `core/helper-web-search.ts`. The Responses, Anthropic and Codex encoders (`core/openai-protocol.ts`, `core/anthropic-protocol.ts`, `core/codex-protocol.ts`) turn it into provider search, and `tests/helper-web-search.test.ts` enforces which requests may search, how search continuations are preserved and how citations become links. `model.pricing.read/update/backfill` are defined in `server/helper-pricing-tools.ts` and `vertex.location.read/compare/update` in `server/helper-vertex-location-tools.ts`. The descriptions and input schemas there are the contract the model receives, enforced by `tests/helper-pricing-tools.test.ts` and `tests/helper-vertex-location-tools.test.ts`. Pricing rules (units, unknown versus free, catalog pricing, frozen prices) are in [비용 계산과 단가 관리](USAGE-REPORT.md#비용-계산과-단가-관리) and [모델 요금과 추정 비용](MODEL-PRICING.md), and the Codex search modes in [실행 한도와 주요 정책 요약](CODEX.md#실행-한도와-주요-정책-요약). This section records only what those files do not state.
+### Web search and model pricing
 
 Behavior the descriptions leave out:
 
 - `source.currentDateUtc` in the helper request is the UTC date on which the task was created, not the date of each model request.
 
-Constraints on changing these operations:
-
-- An adapter without search support reports search as unavailable. It does not fall back to another search service.
 - Gemini 4 helpers on Google AI Studio and Vertex use `web.search` (`server/helper-web-search-tool.ts`) as a read-only provider-facing tool. Each invocation makes a separately recorded and billed search-only `generateContent` request to the **same configured Gemini model and connection**, then returns grounded text and verified source URLs to the helper. The normal helper call keeps its app function tools and does **not** set `webSearch`. This avoids the `generateContent` limitation on combining `googleSearch` with function declarations; unlike the Gemini Interactions API, Uimori's adapter uses `generateContent` (Google Cloud grounding docs, checked 2026-11-23: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/grounding/grounding-with-google-search). Non-Gemini-4 models retain their earlier behavior. `server/helper-runtime.ts` checks the task's existing model-call budget before the search and records the provider attempt through the normal task accounting. The separate request receives only the search query, not the full private conversation or library content. The helper decides when to search, including during read-only review; the tool schema does not impose topic- or length-specific limits.
 - Grounded responses can include Google Search Suggestions. The helper records the provider's exact `searchEntryPoint` separately from the model-visible tool result, and the task results view displays the returned HTML/CSS in a sandboxed iframe, following the existing Story Guide pattern (`web/HelperTaskResults.tsx`). The response's source links are supplied to the helper, while the suggestion markup is retained with the task for the user, not given back to the model.
 - A separate search costs an additional Gemini invocation and any Google Search grounding fee. Lack of a performed search or verified source must not be presented as grounded evidence. Adapter tests do not establish live model/account availability, and Search Suggestion display obligations should be checked for the user's deployment before relying on the feature in production.
 
-- `vertex.location.compare` sends each location through the connection test runner in `server/provider-connection-test.ts`. That is why a comparison is recorded like a response test and a replayed operation sends nothing new. Keep it on that runner.
-
 Outside these operations:
 
 - Adapter support does not establish that a particular model or account searched successfully or that a result is current. The adapter tests are synthetic; they are not live-search, provider-account or billing evidence.
-- Search-tool fees can be absent from token-rate estimates. See [구현 참고](USAGE-REPORT.md#구현-참고).
+- Search-tool fees can be absent from token-rate estimates. See [추가 집계 규칙과 단가 소급 적용](USAGE-REPORT.md#추가-집계-규칙과-단가-소급-적용).
 - The original-work reference step has its own search capability, `storyGuideWebSearchCapability`, which also covers Gemini and Vertex. See [Original-work reference](STORY-GUIDE.md).
 
-## Requesting the next scene or a translation
+### Requesting the next scene or a translation
 
-`scene.request` and `scene.translate` are defined in `server/helper-story-tools.ts`. The descriptions and input schemas there are the contract the model receives, and `tests/helper-story-tools.test.ts` enforces it. This section records only what those files do not state.
-
-Constraints on changing these operations:
-
-- `scene.request` builds its run from `composerRunSnapshot` in `server/composer-run.ts` and reserves it through `store.createRunInTransaction`, so it shares the composer's snapshot and its head, settings, busy-chat and main-model checks. `scene.translate` calls the reader's `requestTranslation`. Neither adds a path of its own.
-- The reservation, the helper receipt and the result target commit in one transaction, and the run's idempotency key is derived from that receipt. Work starts only after the commit and only when this call created it, so a replayed receipt never executes it again.
 - A chat whose run is already queued or running returns `SCENE_REQUEST_BUSY` before the conflict checks, so the helper reports it instead of sending the request again.
 - With `helperConfirmPaidGeneration` on, both operations first wait for the owner's [confirmation](#confirmation-before-destructive-or-bulk-operations).
 
@@ -429,9 +273,7 @@ Outside these operations:
 
 - Reference images and lore-selection reset are composer-only.
 
-## Next request preview, scene lore and card variables
-
-`chat.preview`, `scene.lore`, `chat.variables.read` and `chat.variables.update` are defined in `server/helper-chat-state-tools.ts`. The descriptions and input schemas there are the contract the model receives, and `tests/helper-chat-state-tools.test.ts` enforces it, including that a preview writes nothing. The composer's own preview is documented in [다음 요청 미리보기](CONTEXT-LIMITS.md#다음-요청-미리보기). This section records only what those files do not state.
+### Next request preview, scene lore and card variables
 
 Behavior the descriptions leave out:
 
@@ -440,30 +282,13 @@ Behavior the descriptions leave out:
 - Without a main model, or when preparation fails, `chat.preview` returns only the preview metadata and its error.
 - A `chat.variables.update` that changes nothing writes nothing and still checks both guards.
 
-Constraints on changing these operations:
-
-- Each read reuses a projection the app already has and computes nothing a second way. `chat.preview` runs `inspectNextRequest` in `server/request-preview.ts`, the preparation behind the composer's request preview. `scene.lore` shares `sceneRequestLore` with the reader's last-scene lore endpoint. `chat.variables.read` reads `chatVariableView`, the projection behind `GET /api/chats/:id/variables`.
-- `chat.variables.update` writes through `writeChatVariables` inside the helper operation transaction, which keeps the existing revision, source-hash, busy-chat and journal checks. Its journal key is derived from the helper receipt.
-- Preparation errors stay bounded to `PREVIEW_UNAVAILABLE`, because author-controlled compilation errors can contain source text.
-
-## Fixed options, scene names, original-work reference and model parameters
-
-`options.fix` is defined in `server/chat-options.ts`, `scene.title` and `chat.guide.update` in `server/helper-chat-state-tools.ts`, and `model.parameters.read/update` in `server/helper-model-parameter-tools.ts`. The descriptions and input schemas there are the contract the model receives, and `tests/helper-chat-settings-tools.test.ts` enforces it. Scene names are documented in [장면 이름과 목차 관리](READING-STATE.md#장면-이름과-목차-관리), the original-work reference in [Original-work reference](STORY-GUIDE.md), and how saved model settings reach reserved work in [저장과 실행](MODEL-PARAMETERS.md#저장과-실행). This section records only what those files do not state.
-
-Constraints on changing these operations:
-
-- Each operation saves through the function the settings UI uses and adds no checks or save path of its own: `options.fix` through `ChatOptionsStore.fixed`, `scene.title` through `setSceneTitle`, `chat.guide.update` through `storyGuide.update`, and `model.parameters.update` through `prepareModel`.
-- `chat.guide.update` validates the merged configuration before the save, so an invalid value returns `STORY_GUIDE_INVALID` instead of an unknown write outcome.
-- `model.parameters.update` saves a complete model. It rebuilds the saved model input from `SAVED_MODEL_KEYS`, applies the changes and hands the result to `prepareModel`, so a saved model field missing from that list is dropped by an update.
-- The `setting` value recorded with a change (`chat.options`, `chat.storyGuide`, `model.parameters`) selects the settings view that the result opens in `web/main.tsx`.
+### Fixed options, scene names, original-work reference and model parameters
 
 Outside these operations:
 
 - Connections, credentials, execution mode, service tier and cache options stay outside `model.parameters.update`.
 
-## Settings, diagnostics and task control
-
-`theme.list` is defined in `server/helper-resource-tools.ts`; `model.list`, `settings.read`, `settings.update` and `usage.read` in `server/helper-settings-tools.ts`; `task.list`, `task.inspect`, `task.cancel` and `task.retry` in `server/helper-task-tools.ts`. The descriptions and input schemas there are the contract the model receives: what each result contains and omits, which revision each setting group needs, value ranges, paging, and what a committed-effect receipt does and does not prove. `tests/themes.test.ts`, `tests/helper-settings-tools.test.ts`, `tests/usage-report.test.ts` and `tests/helper-task-tools.test.ts` enforce that contract. This section records only what those files do not state.
+### Settings, diagnostics and task control
 
 Behavior the descriptions leave out:
 
@@ -471,48 +296,10 @@ Behavior the descriptions leave out:
 - In a helper task's tool diagnostics, `elapsedMs` covers one call's dispatch and result preparation, including the time it waited on its worker or provider, and excludes the time it waited for a sibling read to finish. `queueMs` is the time a native Codex tool call waited behind the previous call before dispatch. Calls can overlap, so summed times are not wall time.
 - A save that changes nothing can still write a receipt, so it can appear in `committedEffects`.
 
-Constraints on changing these operations:
-
-- `settings.update` saves through the services the settings screens use (model workspace, chat profile, chat settings and new-chat defaults) and adds no save path of its own. Those services own the revision checks, the preservation of unrelated values and their events.
-- `usage.read` returns the report that the usage page and CSV are built from (`server/usage-report.ts`), limited to the requested breakdowns, and adds no accounting rule of its own. Date ranges, cost statuses and which calls count are defined in [작업실 사용량](USAGE-REPORT.md).
-- `helper_operations` is the only evidence that a helper save committed, and a receipt is attributed to a tool call by the host call identity alone. Neither is inferred from a `tool.finished` success, a tool name or a result body. Inspection reads these existing records and adds no store of its own.
-- A `receiptId` identifies an existing operation record. It is not an instruction or an idempotency key for submitting another write.
-- `task.cancel` and `task.retry` call the transitions that the app's own task controls use, wired in `server/app.ts`. The services behind them keep their eligibility checks, including the refusal to retry a helper task that has committed effects; `canCancel`, `canRetry` and `retryBlock` report eligibility and do not replace those checks.
-- A task state change and the calling helper's receipt commit in one transaction. Aborting a controller, publishing and starting a worker happen only after it commits.
-
 Outside these operations:
 
 - Unsaved settings and editor drafts keep their existing conflict behavior.
-- What the recorded attempt and tool diagnostics cover, how long they are kept and what stays unknown for older tasks is documented in [문제 확인과 실행 상세](DIAGNOSTICS.md#구현-참고).
-
-## Accounting and summary preparation
-
-This section has no model-facing operations. It covers how the host compacts a helper conversation and how a helper task's usage and timing are recorded. The compaction decision and the `input.measured`, `tool.started` and `tool.finished` events are in `server/helper-runtime.ts`, checkpoints in `server/helper-context.ts`, attempt accounting in `server/helper-workspace.ts`, the argument preview in `server/helper-diagnostics.ts`, and the usage shown for a task in `server/helper-task-results.ts`. `tests/helper-compaction.test.ts`, `tests/helper-workspace.test.ts`, `tests/helper-diagnostics.test.ts`, `tests/helper-data-runtime.test.ts` and `tests/helper-browser.spec.ts` enforce the behavior, including the exact recent turns kept through compaction, checkpoint invalidation on retry, task views that do not load the reserved snapshot, single counting of a repeated attempt completion, and paused reads in closed or hidden helper views.
-
-Other documents own the rules:
-
-- Compaction threshold, adoption, segments, completed-read references and failure codes: [재사용·실패·복원](CONTEXT-LIMITS.md#재사용실패복원).
-- Manual conversation compaction: [수동 정리와 요약 편집](CONTEXT-LIMITS.md#수동-정리와-요약-편집).
-- What a finished helper task keeps and what the browser refresh reads: [도우미 기록과 화면 전환](EXECUTION.md#도우미-기록과-화면-전환).
-- Attempt and tool diagnostics, their retention and the helper usage summary: [문제 확인과 실행 상세](DIAGNOSTICS.md).
-- The native Codex turn, its instructions, call limits and token usage: [App Server 통신 및 턴 라이프사이클](CODEX.md#app-server-통신-및-턴-라이프사이클).
-- Reading local estimates, provider usage and preparation and compaction timings: [Evidence and metrics](dev/HELPER-EVALUATION.md#evidence-and-metrics).
-
-What those documents and tests leave out:
-
-- Host compaction starts only under context pressure. Model size, cost and repeated reads of the same data do not start it earlier, because the aim is to keep exact evidence in the request for as long as it fits. The rule makes no claim about provider cost or cache reuse.
-- The component estimates in `input.measured` are serialized separately for diagnosis. They do not necessarily sum to the estimate of the encoded request.
-- `originalResultChars` and `providedResultChars` count the serialized JSON at the helper boundary. They are not the size of the source resource or of a shell's full output.
-- `elapsedMs` on `attempt.finished` spans the host's provider request. It is neither first-token latency nor the time of one internal model call inside a native Codex turn. Streaming provider calls record first-byte and first-text latency separately as `firstByteMs` and `firstTextMs` on the attempt's execution diagnostic.
-- The local input estimate covers what Uimori sends. A native Codex turn adds its own tool descriptions and runtime context, so the provider-reported input can be higher.
-
-Constraints on changing this code:
-
-- A native Codex tool call goes through the same dispatcher as every other provider's tool call, with the same result limits, revision checks and receipts. Codex has no tool path of its own.
-
-## Goal evaluation
-
-[Helper goal evaluation](dev/HELPER-EVALUATION.md) owns the evaluation cases, the oracles fixed before execution, and what scripted provider checks do and do not establish about a real model.
+- What the recorded attempt and tool diagnostics cover, how long they are kept and what stays unknown for older tasks is documented in [문제 확인과 실행 상세](DIAGNOSTICS.md#진단-기록과-해석).
 
 ### Illustration presets
 
@@ -520,17 +307,10 @@ Constraints on changing this code:
 
 ### Bounded composition reads
 
-`outline.read` and `outline.write` are defined in `server/helper-app-tools.ts`, and `server/outline-read.ts` assembles the read pages. The descriptions and input schemas are the contract the model receives: modes, sections, units, page defaults, versioned continuation and what `coverage.wholeField` means. `tests/helper-outline.test.ts` enforces that contract, including the page budget, change detection limited to the view being read, writings references and the compact write receipt. `tests/helper-compaction.test.ts` checks that coverage, version, source references and continuations stay in completed-read metadata after host compaction. [도우미 도구 계약](OUTLINE.md#도우미-도구-계약-outlineread-outlinewrite) lists the modes, limits and result fields. This section records only what those do not state.
-
 Behavior the descriptions leave out:
 
 - A writing whose scene is not in the chat's current history is returned as unavailable, without a reference. It is never matched to another scene.
 - When an `outline.read` result does not fit the model's input budget, the refusal carries a `nextRead` for the same range with a smaller `limit`, not a library search.
-
-Constraints on changing these operations:
-
-- These pages are the helper's view of the outline. The browser's outline API keeps its full tree response.
-- `coverage.wholeField` belongs to intent reads. `complete` on the search tools keeps its own meaning and is not replaced by it.
 
 Outside these operations:
 
@@ -538,8 +318,6 @@ Outside these operations:
 - `knowledge.search` with `mode: browse` is reachable through the same `app.tools` and `app.call` gateways, including in a read-only review. Its contract is in [Folder navigation](dev/TOOL-CONTRACTS.md#folder-navigation).
 
 ### Token budgets and isolated read processes
-
-Each host read states its page defaults in its input schema, and [Units and model-facing budgets](dev/TOOL-CONTRACTS.md#units-and-model-facing-budgets) owns the unit rules. Not stated there:
 
 - The continuation of a page read without a limit carries no limit, so one page's measured length does not become a fixed character default.
 - The isolated data, SQL and regex worker keeps its character pages, memory and time limits and IPC size guards, and does not tokenize. The host applies the token budgets to what it returns.

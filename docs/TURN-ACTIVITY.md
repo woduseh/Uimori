@@ -17,11 +17,3 @@ Reader 작업 현황에는 본문·번역·이미지 배치·삽화를 표시해
 앱 전체 작업 알림에서 삽화 등의 상세를 읽어도 작업을 다시 실행하지 않아요. 이미 새 실행으로 바뀐 작업은 이전 알림의 결과로 표시하거나 자동으로 확인 처리하지 않아요.
 
 삽화는 내부 작업마다 같은 이름을 나열하지 않고 **장면 선택 / 그림 생성 n/m컷 완료 / 번역 위치 연결**로 묶어요. 재생성은 같은 컷으로 세고, 실패 컷과 번역 위치 미지정 개수는 따로 보여줘요. 작업 정보는 현재 원문 hash에 연결된 삽화만 사용해요. **삽화 호출과 토큰**을 펼칠 때 단계별 누적 사용량을 조회하고, 위치만 다시 연결하는 버튼은 명시적으로 누를 때만 모델 작업을 예약해요. 진행 아이콘은 공통 회전 스타일을 사용하며 운영체제의 동작 줄이기 설정에서는 회전하지 않아요.
-
-구현은 `web/TurnActivity.tsx`(작업 현황 내용), `web/TurnStatus.tsx`(헤더 줄과 펼침 상태 보관), `web/SourceReader.tsx`(장면 번호·배지·보기 전환 슬롯), 공통 실행 상세는 `web/RunTaskDetails.tsx`, 조회 범위는 `server/reader.ts`예요. 원문 연결 정보는 장면 하단 도구 줄의 접기 항목에서 확인해요.
-
-## 검증
-
-[검증 선택](dev/DEVELOPMENT.md#verification)에 따라 `npm run verify:turn-activity`로 응답별 펼침과 재접속 시 선택 유지·진단 조회·생성 완료 전환을 검사해요. 화면 크기는 공통 [브라우저 설정](../fixtures/browser-viewports.json)을 사용하고 결과는 `output/playwright/turn-activity-ui-*/summary.json`에 남아요.
-
-기존 앱 전체 알림과 요청 재시도 회귀는 `node scripts/verify-activity.mjs`, `node scripts/verify-run-retry.mjs`로 검사해요.

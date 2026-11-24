@@ -39,20 +39,4 @@ RISUP 가져오기는 프롬프트 관련 필드만 선택해요. API 키·연�
 
 카드·모듈·프리셋은 Risu CBS와 Lua로 변수를 읽고 써요. 사용자 변수 편집기는 현재 채팅의 문자열 override를 revision과 원문 해시로 보호해요. 기본 변수는 원본 Risu 선언에서 읽고 빈 문자열과 미설정을 구분해요. 이야기에서 일어난 일의 요약·장기 기억은 Uimori 컨텍스트 기능이 맡으며 카드의 변수 규칙을 별도 AI 상태 체계로 복제하지 않아요.
 
-## 검증
-
-`tests/risu-native-prompt-composition.test.ts`, `tests/risu-native-preset.test.ts`, `tests/risu-native-semantics.test.ts`는 실제 vendor CBS, 평가 순서, 글로벌노트 교체, 예시 역할, 토글, 슬롯, 대화 범위, 캐시, 폐기 옵션의 실행·부작용 차단과 영수증 일치를 확인해요. `tests/risu-retired-execution.test.ts`는 과거 원본에서 시작하는 새 작업의 재투영을 확인해요. `tests/chat-options.test.ts`는 합산 토글의 채팅 선택·예약·백업 경계를 확인해요. `tests/risu-preset-import.test.ts`는 프롬프트만 가져오는 경계와 저장을 확인해요. 이 검사는 실제 프로바이더의 창작·번역 품질을 판정하지 않아요.
-
-실제 로컬 자료를 명시적으로 검증할 때는 `UIMORI_RISU_LOCAL_CARDS`에 CHARX 경로 JSON 배열, `UIMORI_RISU_SAMPLE_PRESET`에 프리셋 경로를 지정하고 `tests/risu-native-local-compatibility.test.ts`를 실행해요. 이 검사는 원문을 로그에 남기지 않고 첫 메시지·대체 메시지 렌더, 알려진 원본 버튼, 현재 요청·출력 처리와 원본 파일 해시 불변을 확인해요. 브라우저는 기존 `UIMORI_RISU_SAMPLE_ROOT`와 선택적 프리셋 경로를 사용해 `scripts/verify-risu-native-samples.mjs`로 실행하며 `--grep`은 검증 범위를 명시적으로 좁혀요. 데스크톱·모바일에서 선택, 재열기, 독립적으로 복사한 채팅의 변수 격리와 다음 턴을 로컬 모의 프로바이더로 확인해요. `--visual`일 때만 개인 자료가 렌더된 스크린샷을 git 제외 검증 폴더에 저장하며, HTTP 본문이 담기는 trace는 저장하지 않아요.
-
-## 출처를 보존하는 요청 컨텍스트
-
-모델 요청의 봇·페르소나 설명은 `uimori_source`로, 일반 로어는 `uimori_lore_sources` 아래 자료별 `source`와 항목별 `entry`로 구분해요. 연결 역할·자료 이름·자료 ID와 로어 ID·제목만 표시해요. 호스트 참고 메시지에 출처 표지가 자료의 기원과 항목 경계를 나타낸다는 한 문장만 안내해요. 권한·지식 범위·우선순위 표지는 추가하지 않아요. 특정 프리셋이나 토글에 의존하지 않으며 기존 `innerFormat` 적용 범위는 유지해요.
-
-출처 메타데이터는 요청 투영에만 추가해요. XML 속성은 이스케이프하지만 CBS 등 기존 실행을 거친 본문은 직렬화 단계에서 수정하지 않아요. 빈 내용은 래퍼를 만들지 않고, 인접한 동일 자료 항목만 묶어 선택·연결·항목 순서를 유지해요. 위치 지정 로어는 원래 역할과 깊이에 출처를 붙여 한 번 삽입해요. 슬롯에서 소비되지 않은 참고 자료도 JSON의 `risuSource`로 같은 정보를 전달해요. 표지는 모델이 읽는 경계이며 본문을 XML로 파싱하거나 권한 경계로 사용하지 않아요. 저장 원본과 원본 해시는 바꾸지 않아요. 같은 자료가 연결 경로별 수정으로 서로 다른 본문을 갖는 경우에는 `source_scope="connection-1"`처럼 해당 자료의 연결 순서에 따른 짧은 구분자를 붙여 출처 그룹을 구분해요. 이 번호는 고정된 요청 안에서 연결을 구별하기 위한 것이며 우선순위가 아니에요. 내부 경로 JSON은 모델에게 전달하지 않아요.
-
-`tests/risu-context-source.test.ts`와 `tests/risu-native-lore.test.ts`가 출처 전달, 본문 보존, 속성 이스케이프, 위치와 중복 방지를 검증해요. 모델의 실제 이해도 개선은 별도 응답 평가가 필요해요.
-
-내부 prompt compiler는 `risu-native-prompt-2` 한 가지 의미만 사용해요. 이전 Uimori 실행 snapshot의 compiler 호환 분기는 유지하지 않으며, 외부 Risu 원문의 현재 지원 범위와는 별개예요.
-
 다음 요청에만 적용할 옵션은 원문 수정 번호와 무관한 현재 설정값이에요. 원문을 수정해도 예약은 유지하고, 실제 생성 예약 트랜잭션에서 한 번 적용한 뒤 삭제해요. 옵션 정의 변경은 잘못된 값 적용을 막기 위해 확인하며, 취소·대체 기록이나 전체 프롬프트 사본을 누적 보관하지 않아요.

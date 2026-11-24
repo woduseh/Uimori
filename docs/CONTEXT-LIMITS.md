@@ -173,14 +173,6 @@ EOF는 프로바이더 스트림이 정상 완료 신호 없이 끝났다는 뜻
 
 Gemini 계열 요청이 이어 보내는 프로바이더 서명(`thoughtSignature`)과 추론 본문은 입력 추정에서 빼요. 프로바이더는 이 불투명 값을 글자 수대로 세지 않아서, 그대로 토큰화하면 도구 호출이 쌓일수록 추정이 실제 입력의 몇 배로 커지고 필요 없는 정리가 일어나요. 운영 기록에서 서명을 포함한 추정이 258,852였던 시점에 프로바이더가 보고한 입력은 92,495였고, 서명을 뺀 추정은 Vertex 도우미 호출 1,146건에서 실제 입력의 0.88–1.22배(호출 순서 구간별 중앙값)였어요. 정리 판정(`measureProviderRequest`), 전송 전 한도 검사(`core/vertex.ts`), attempt에 남는 추정치가 모두 같은 기준을 써요. 회귀는 `tests/helper-compaction.test.ts`와 `tests/vertex-transport.test.ts`에 있어요.
 
-구현은 `core/context-budget.ts`, `core/context-plan.ts`, `core/context-projection.ts`, `core/notes.ts`, `core/story-context.ts`, `server/context-planning.ts`, `server/context-compaction.ts`, `server/context-tool-compaction.ts`, `server/model-runner.ts`, `server/context-store.ts`, `server/story-notes.ts`에 있어요. `tests/context-integration.test.ts`와 관련 context/story 검사는 실제 앱 경로와 fresh SQLite, 합성 provider body로 경합·취소·입력 귀속·보관을 확인해요. 기존 모델 작성 checkpoint 보존과 실행 중 조회 결과 정리는 해당 context 저장·도구 검사로 확인해요. 단계별 EOF는 `tests/context-compaction.test.ts`와 `tests/helper-compaction.test.ts`에 회귀가 있어요.
-
-### 파생 컨텍스트 검증
-
-`tests/context-provenance.test.ts`는 조건부 약속, 인물의 전언, 보조의 해석, 작가 정정, 미채택 전개를 여러 번 투영해도 호스트가 본문이나 출처를 바꾸지 않는지 검사해요. 이는 모델이 여러 번 요약해도 의미를 보존한다는 증거는 아니에요. `tests/context-tools.test.ts`는 실제 요청 빌더를 통해 다섯 전송 경로의 지침 영역과 참고 자료를 구분하고, `tests/agent-collaboration-context.test.ts`는 실제 도구 루프에서 캐시·전달·원문 범위를 확인해요.
-
-실제 모델을 평가할 때는 같은 사례를 1회·3회·5회 요약한 뒤 조건·주체·불확실성·정정·제안 구분이 남는지 비교해요. 정보가 이미 충분한 경우의 불필요한 재조회도 함께 세요. 자동 감독 모델, 문장별 확신 점수, 매번 원문 재검증하는 단계는 추가하지 않아요.
-
 ## 전체 원문 번역
 
 번역은 현재 장면 원문 전체와 선택한 번역 참고 범위에 따른 예약 시점의 컨텍스트를 사용해요. 구간 분할·자동 재분할은 없으며 입력·출력·시간·전체 호출 한도를 적용해요. 입력 구성·거절 판정·재번역의 보존 계약은 [본문 생성과 번역](GENERATION.md#번역)을 봐요.

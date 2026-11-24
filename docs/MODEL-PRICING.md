@@ -14,18 +14,13 @@
 
 Vercel 목록은 단가·두 단계 컨텍스트 구간·명시된 서비스 등급을 보존하며 중복 할인하지 않아요. 자동 라우팅의 실제 프로바이더에 따라 비용이 달라질 수 있어요. 잘못되거나 복잡한 가격 구조는 가격만 미확인으로 남기고 모델 목록은 유지해요. Codex 구독은 API 토큰 가격으로 추정하지 않아요.
 
-## 실행·저장 계약
+## 추정 비용 기록과 보존 규칙
 
 - 모델의 `pricing` 설정은 일반 revision CAS로 저장해요. 새 작업을 예약할 때 `ModelSnapshot.pricingSnapshot`에 단가·출처·확인일·컨텍스트 구간 등을 고정해요. 이후 현재 모델의 가격을 수정해도 과거 실행을 재가격하지 않아요.
 - 요청의 가격 정보는 host metadata예요. 프로바이더 HTTP/RPC 본문에 전송하지 않아요. 전송 직전 attempt에 가격과 시작 시각을 기록하며 서버가 강제한 Vertex Flex도 예약 당시 보존한 Flex 단가를 사용해요.
-- 완료 시 `response.estimatedCost`에 계산 결과·항목별 토큰/단가/금액을 기록해요. 기존 `cost_usd`는 프로바이더가 보고한 실제 비용 전용이고 `null`을 추정 금액이나 0으로 바꾸지 않아요. schema·운영 DB 이관은 필요 없어요.
-- 프로바이더별 입력/캐시 합산 의미를 구분해 중복 계산하지 않아요. Anthropic normalized 입력은 이미 캐시를 포함하며 원 usage의 입력·캐시 분할을 사용해요. 출력에 포함된 reasoning/thinking을 다시 더하지 않아요.
-- Vercel 캐시 쓰기는 최상위 `cache_creation_input_tokens`를 우선 사용하고, 그 필드가 없을 때만 기존 `prompt_tokens_details.cache_write_tokens`를 사용해요. 쓰기 토큰이 있어도 해당 단가를 모르면 부분합으로 남겨요. 원 usage의 `cost`를 프로바이더 보고 비용으로 자동 해석하지 않아요.
 - 사용량이나 단가가 없으면 전체 추정 금액은 미확인이에요. 확인된 항목은 부분합으로 보여요. 사용량이 명시적으로 0이면 단가가 미확인이어도 그 항목의 금액은 0이에요. Vertex는 유효한 `promptTokenCount`가 있는 usage에서 생략된 캐시 읽기 필드만 proto3 기본값 0으로 해석해요. 누락된 usage 전체나 명시적인 `null`은 미확인으로 남겨요.
 - 프로바이더가 요청 한도 초과(HTTP 429)로 돌려보낸 호출은 입력·출력 토큰을 0으로 기록해요. 이 상태 코드는 응답 본문이 시작되기 전에 오므로 모델이 실행되지 않았어요. 전체 입력이 0이면 캐시 읽기·쓰기 항목도 0으로 계산해서 추정 금액이 0이 돼요. 그 밖의 HTTP 오류와 끊긴 연결은 프로바이더가 요청을 처리했는지 알 수 없어서 미확인으로 남겨요. 도우미가 한도 초과로 다시 보낸 호출이 작업의 사용량 합계를 미확인으로 만들지 않게 하려는 규칙이에요. `core/provider-http-error.ts`의 `rateLimitedCallUsage`가 정하고 `tests/provider-http.test.ts`, `tests/vertex-transport.test.ts`, `tests/pricing-estimate.test.ts`가 확인해요.
 - 실제 서비스 tier가 고정 가격과 다르면 금액을 추정하지 않아요. Anthropic의 `standard_only`는 응답의 `standard`와 같은 기준이에요. 새 Anthropic Batch 예약은 명시적으로 입력한 Batch 단가를 고정하고 추가 할인하지 않아요. 업데이트 전에 예약된 Batch의 기존 가격 snapshot에는 당시의 50% 할인 계산을 유지해요. 기존 미확인 호출은 최신 요금으로 소급 계산하지 않아요.
 - 본문에는 작문과 작문 보조의 추정 비용을 표시해요. 번역·제목 등 후속 작업은 작업 현황에서 별도로 확인해요. 상세에는 프로바이더 보고 비용과 추정 비용을 분리해 표시해요.
 - 과거 도우미 가정 장면 생성의 사용량은 `helper-artifact`, 당시 컨텍스트 요약 호출은 `summary`로 보존해요. 가정 장면 생성 기능이 종료돼도 이 기록은 유지해요.
 - 전체 SQLite 백업은 저장된 가격 snapshot과 추정 결과를 보존해요. 개별 자료·채팅의 휴대용 백업은 프로바이더와 모델 설정과 호출 기록을 옮기지 않아요. 가격은 실행 허가나 누적 금액 차단 조건이 아니에요. 취소·중복·불확실 실행·원문 귀속 계약은 유지해요.
-
-검증은 `tests/model-pricing.test.ts`, `tests/pricing-estimate.test.ts`, `tests/pricing-store.test.ts`, `tests/pricing-transport.test.ts`, `tests/model-pricing-browser.spec.ts`에서 수행해요.

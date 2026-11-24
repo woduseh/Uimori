@@ -26,16 +26,8 @@ Phēmē RP와 소설은 배포본과 같이 영어 응답으로 시작해요. �
 
 기본 협업 정의의 지침 문구는 프리셋 이름이나 옵션 ID에 기대지 않아요. 어떤 옵션을 보조와 공유할지는 `sharedControls` 목록으로만 정하고, 각 옵션의 뜻은 호스트가 함께 전달하는 라벨·선택 라벨·값으로 읽어요. 최종 선택과 서술이 메인의 몫이라는 점, 출처와 추론의 구분처럼 호스트 계약이 이미 전달하는 내용은 정의에 다시 적지 않아요.
 
-## 제공과 출처
-
-`server/builtin-prompts.ts`가 목록과 독립 사본 생성을 담당해요. `GET /api/prompt-templates`는 제목·역할·설명만, `GET /api/prompt-templates/:id`는 선택한 프로그램과 기본 옵션을 반환해요. 두 API는 읽기 전용이에요. 추가·편집·선택에는 기존 프리셋 및 현재 프롬프트 API의 검증·수정 번호·초안 보호를 사용해요.
+## 출처와 캐시 지원
 
 Phēmē는 RisuToki의 Phēmē v5.6.0 배포본(리비전 `921a84e`)인 `risu/prompts/phēmē/dist/uimori/pheme-roleplay.uimori.json`과 `pheme-novel.uimori.json`의 V5.6.0 r2 프로그램·기본 선택값을 사용해요. 이 프로그램은 같은 버전의 `.risup`을 직접 가져온 결과와 같아요. 원본의 CBS·토글 선언·정규식·캐시 지점을 보존하고, 선택형 협업 설정만 별도로 붙여요.
 
-Hermēneía는 v1.2.0의 `dist/hermeneia-preset.risup`을 번역 역할로 가져온 프로그램과 기본 선택값을 사용해요. `server/builtin-prompts/`에 세 프리셋의 본문과 기본 선택값, 작문용 협업 정의 두 개를 보관해요.
-
 Phēmē의 캐시 지점 네 개는 Responses·Anthropic 연결의 **명시적 캐시**와 **자동 캐시** 모두에서 유지돼요. 자동 모드도 네 지점이 모두 사용되면 추가 자동 지점만 생략하고 미리보기 진단에 남겨요. 프리셋 선택은 모델의 캐시·출력 토큰 설정을 바꾸지 않아요.
-
-## 검증 범위
-
-`tests/builtin-prompts.test.ts`는 새 환경의 초기 선택, 기존 DB 재시작 시 저장본 보존, 목록 조회의 비변경성, 독립 사본, 고정 RP·소설 모드와 협업 설정을 확인해요. `tests/risu-native-prompt-composition.test.ts`는 두 프리셋의 CBS 조립을 검사해요. 기본 목록의 추가·편집 흐름은 `npm run verify:browser -- --grep BPTUI`로 확인해요.
