@@ -153,7 +153,7 @@ type ResultsRead = {
   failed: boolean;
 };
 
-function useTaskResults(taskId: string, status: HelperStatus, visible: boolean) {
+export function useHelperTaskResults(taskId: string, status: HelperStatus, visible: boolean) {
   const [view, setView] = useState<ResultsRead | null>(null);
   const retry = useRetryableEffect(() => {
     if (!visible) return;
@@ -350,18 +350,12 @@ function UsageAmount({ amount, cost = false }: { amount: RecordedAmount; cost?: 
 
 function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
   const totals = helperTaskUsageTotals(usage.attempts);
-  const inputLimit = usage.latestInputLimit;
   const inputEstimate = usage.latestInputEstimate;
   const lastInput = usage.latestInputTokens ?? null;
-  const hasInputBudget = inputEstimate !== null && typeof inputLimit === 'number' && inputLimit > 0;
   const outputUnknown = totals.outputTokens.reported === 0 && totals.outputTokens.unknown > 0;
   const partial = [totals.inputTokens, totals.outputTokens].some(
     (amount) => amount.reported > 0 && amount.unknown > 0
   );
-  const repeatedInput =
-    usage.attempts.length > 1 ||
-    totals.internalModelCalls.value > 1 ||
-    totals.cachedInputTokens.value > 0;
   return (
     <div className="helper-result-usage">
       <details className="execution-record scene-usage">
@@ -393,104 +387,185 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
             {partial && <span>{t('helperResults.partialUsage')}</span>}
           </span>
         </summary>
-        <dl className="scene-receipt">
-          {lastInput !== null && (
-            <>
-              <dt>{t('helperResults.latestInput')}</dt>
-              <dd>{formatNumber(lastInput)}</dd>
-            </>
-          )}
-          {inputEstimate !== null && (
-            <>
-              <dt>{t('helperResults.latestEstimate')}</dt>
-              <dd>
-                {formatNumber(inputEstimate)}
-                {hasInputBudget && ` / ${formatNumber(inputLimit)}`}
-                {hasInputBudget && (
-                  <meter
-                    className="helper-input-budget"
-                    min={0}
-                    max={inputLimit}
-                    value={Math.min(inputEstimate, inputLimit)}
-                    aria-label={t('helperResults.inputBudgetMeter')}
-                    aria-valuetext={t('helperResults.inputBudgetValue', {
-                      input: formatNumber(inputEstimate),
-                      limit: formatNumber(inputLimit),
-                    })}
-                  />
-                )}
-              </dd>
-            </>
-          )}
-          {(usage.unmeasuredFileCount ?? 0) > 0 && (
-            <>
-              <dt>{t('helperResults.latestEstimate')}</dt>
-              <dd>
-                {usage.knownInputEstimate != null && (
-                  <span>
-                    {t('helperConversation.measuredInput', {
-                      count: formatNumber(usage.knownInputEstimate),
-                    })}
-                  </span>
-                )}
-                <span>
-                  {t('helperConversation.unmeasuredFiles', {
-                    count: usage.unmeasuredFileCount!,
-                  })}
-                </span>
-              </dd>
-            </>
-          )}
-          <dt>{t('helperResults.executions')}</dt>
-          <dd>{formatNumber(usage.attempts.length)}</dd>
-          {usage.toolExecutions > 0 && (
-            <>
-              <dt>{t('helperResults.tools')}</dt>
-              <dd>{formatNumber(usage.toolExecutions)}</dd>
-            </>
-          )}
-          {totals.internalModelCalls.reported > 0 && (
-            <>
-              <dt>{t('helperResults.internalCalls')}</dt>
-              <dd>
-                <UsageAmount amount={totals.internalModelCalls} />
-              </dd>
-            </>
-          )}
-          <dt>{t('helperResults.input')}</dt>
-          <dd>
-            <UsageAmount amount={totals.inputTokens} />
-          </dd>
-          {totals.cachedInputTokens.reported > 0 && (
-            <>
-              <dt>{t('helperResults.cached')}</dt>
-              <dd>
-                <UsageAmount amount={totals.cachedInputTokens} />
-              </dd>
-            </>
-          )}
-          <dt>{t('helperResults.output')}</dt>
-          <dd>
-            <UsageAmount amount={totals.outputTokens} />
-          </dd>
-          {totals.reasoningTokens.reported > 0 && (
-            <>
-              <dt>{t('helperResults.reasoning')}</dt>
-              <dd>
-                <UsageAmount amount={totals.reasoningTokens} />
-              </dd>
-            </>
-          )}
-          <dt>{t('helperResults.cost')}</dt>
-          <dd>
-            <UsageAmount amount={totals.costUsd} cost />
-          </dd>
-        </dl>
-        {repeatedInput && (
-          <p className="helper-usage-note">{t('helperResults.cumulativeExplanation')}</p>
-        )}
+        <HelperTaskUsageRecord usage={usage} />
       </details>
     </div>
+  );
+}
+
+export function HelperTaskUsageRecord({ usage }: { usage: HelperTaskResultsView['usage'] }) {
+  useI18n();
+  const totals = helperTaskUsageTotals(usage.attempts);
+  const inputLimit = usage.latestInputLimit;
+  const inputEstimate = usage.latestInputEstimate;
+  const lastInput = usage.latestInputTokens ?? null;
+  const hasInputBudget = inputEstimate !== null && typeof inputLimit === 'number' && inputLimit > 0;
+  const repeatedInput =
+    usage.attempts.length > 1 ||
+    totals.internalModelCalls.value > 1 ||
+    totals.cachedInputTokens.value > 0;
+  return (
+    <>
+      <dl className="scene-receipt">
+        {lastInput !== null && (
+          <>
+            <dt>{t('helperResults.latestInput')}</dt>
+            <dd>{formatNumber(lastInput)}</dd>
+          </>
+        )}
+        {inputEstimate !== null && (
+          <>
+            <dt>{t('helperResults.latestEstimate')}</dt>
+            <dd>
+              {formatNumber(inputEstimate)}
+              {hasInputBudget && ` / ${formatNumber(inputLimit)}`}
+              {hasInputBudget && (
+                <meter
+                  className="helper-input-budget"
+                  min={0}
+                  max={inputLimit}
+                  value={Math.min(inputEstimate, inputLimit)}
+                  aria-label={t('helperResults.inputBudgetMeter')}
+                  aria-valuetext={t('helperResults.inputBudgetValue', {
+                    input: formatNumber(inputEstimate),
+                    limit: formatNumber(inputLimit),
+                  })}
+                />
+              )}
+            </dd>
+          </>
+        )}
+        {(usage.unmeasuredFileCount ?? 0) > 0 && (
+          <>
+            <dt>{t('helperResults.latestEstimate')}</dt>
+            <dd>
+              {usage.knownInputEstimate != null && (
+                <span>
+                  {t('helperConversation.measuredInput', {
+                    count: formatNumber(usage.knownInputEstimate),
+                  })}
+                </span>
+              )}
+              <span>
+                {t('helperConversation.unmeasuredFiles', {
+                  count: usage.unmeasuredFileCount!,
+                })}
+              </span>
+            </dd>
+          </>
+        )}
+        <dt>{t('helperResults.executions')}</dt>
+        <dd>{formatNumber(usage.attempts.length)}</dd>
+        {usage.toolExecutions > 0 && (
+          <>
+            <dt>{t('helperResults.tools')}</dt>
+            <dd>{formatNumber(usage.toolExecutions)}</dd>
+          </>
+        )}
+        {totals.internalModelCalls.reported > 0 && (
+          <>
+            <dt>{t('helperResults.internalCalls')}</dt>
+            <dd>
+              <UsageAmount amount={totals.internalModelCalls} />
+            </dd>
+          </>
+        )}
+        <dt>{t('helperResults.input')}</dt>
+        <dd>
+          <UsageAmount amount={totals.inputTokens} />
+        </dd>
+        {totals.cachedInputTokens.reported > 0 && (
+          <>
+            <dt>{t('helperResults.cached')}</dt>
+            <dd>
+              <UsageAmount amount={totals.cachedInputTokens} />
+            </dd>
+          </>
+        )}
+        <dt>{t('helperResults.output')}</dt>
+        <dd>
+          <UsageAmount amount={totals.outputTokens} />
+        </dd>
+        {totals.reasoningTokens.reported > 0 && (
+          <>
+            <dt>{t('helperResults.reasoning')}</dt>
+            <dd>
+              <UsageAmount amount={totals.reasoningTokens} />
+            </dd>
+          </>
+        )}
+        <dt>{t('helperResults.cost')}</dt>
+        <dd>
+          <UsageAmount amount={totals.costUsd} cost />
+        </dd>
+      </dl>
+      {repeatedInput && (
+        <p className="helper-usage-note">{t('helperResults.cumulativeExplanation')}</p>
+      )}
+    </>
+  );
+}
+
+export function helperTaskHasResults(data: HelperTaskResultsView) {
+  return data.changes.length > 0 || data.results.some((result) => result.targets.length > 0);
+}
+
+export function HelperTaskResultItems({
+  taskId,
+  status,
+  data,
+  onOpenTarget,
+  onOpenChange,
+  rollbackUnavailable,
+}: {
+  taskId: string;
+  status: HelperStatus;
+  data: HelperTaskResultsView;
+  onOpenTarget?: (target: HelperTaskResultTarget) => Promise<void> | void;
+  onOpenChange?: (change: HelperChange) => Promise<void> | void;
+  rollbackUnavailable: boolean;
+}) {
+  useI18n();
+  const changes = data.changes.filter(
+    (change) => change.domain !== 'settings' || !settingRecorded(change, data.results)
+  );
+  const rollback = useHelperRollback({
+    taskId,
+    changes: data.changes,
+    enabled: !active(data.status) && rollbackCovers(data.changes),
+    unavailable: rollbackUnavailable || active(status),
+  });
+  return (
+    <>
+      <ul className="helper-result-list">
+        {changes.map((change, index) => (
+          <li key={`change:${change.domain}:${change.targetId}:${index}`}>
+            <HelperChangeCard
+              change={change}
+              onOpen={onOpenChange}
+              rollback={rollback.action(change)}
+              outcome={rollback.status(change)}
+            />
+            {change.domain === 'resource' &&
+              !changes
+                .slice(index + 1)
+                .some(
+                  (later) => later.domain === 'resource' && later.targetId === change.targetId
+                ) && <ChangedStoryUiTheme themeId={change.targetId} />}
+          </li>
+        ))}
+        {data.results.flatMap((result) =>
+          result.targets
+            .filter((target) => !recordedByChange(target, result.operation, data.changes))
+            .map((target, index) => (
+              <li key={`${result.eventSeq}:${target.kind}:${target.id}:${index}`}>
+                <ResultTarget target={target} operation={result.operation} onOpen={onOpenTarget} />
+              </li>
+            ))
+        )}
+      </ul>
+      {rollback.footer}
+    </>
   );
 }
 
@@ -528,7 +603,7 @@ export function HelperTaskResults({
 }) {
   useI18n();
   const [sentinel, shown] = useSeen<HTMLSpanElement>(eager);
-  const { data, reading, failed, retry } = useTaskResults(taskId, status, visible && shown);
+  const { data, reading, failed, retry } = useHelperTaskResults(taskId, status, visible && shown);
   const awaitingLaterTask = !!data?.confirmations?.some(
     (held) => held.grantable && !held.grantedBy
   );
@@ -540,15 +615,6 @@ export function HelperTaskResults({
   useEffect(() => {
     if (data) onUsage?.(taskId, data.usage);
   }, [data, taskId, onUsage]);
-  const changes = data?.changes.filter(
-    (change) => change.domain !== 'settings' || !settingRecorded(change, data.results)
-  );
-  const rollback = useHelperRollback({
-    taskId,
-    changes: data?.changes ?? [],
-    enabled: !!data && !active(data.status) && rollbackCovers(data.changes),
-    unavailable: rollbackUnavailable || active(status),
-  });
   return (
     <section
       className="helper-task-results"
@@ -556,7 +622,7 @@ export function HelperTaskResults({
       data-testid="helper-task-results"
     >
       {!shown && <span ref={sentinel} className="helper-results-sentinel" aria-hidden="true" />}
-      {data && changes && (
+      {data && (
         <>
           {confirmation && (data.confirmations ?? []).length > 0 && (
             <HelperConfirmations confirmations={data.confirmations} {...confirmation} />
@@ -569,38 +635,14 @@ export function HelperTaskResults({
               onAnswer={questionAnswer?.onAnswer}
             />
           )}
-          <ul className="helper-result-list">
-            {changes.map((change, index) => (
-              <li key={`change:${change.domain}:${change.targetId}:${index}`}>
-                <HelperChangeCard
-                  change={change}
-                  onOpen={onOpenChange}
-                  rollback={rollback.action(change)}
-                  outcome={rollback.status(change)}
-                />
-                {change.domain === 'resource' &&
-                  !changes
-                    .slice(index + 1)
-                    .some(
-                      (later) => later.domain === 'resource' && later.targetId === change.targetId
-                    ) && <ChangedStoryUiTheme themeId={change.targetId} />}
-              </li>
-            ))}
-            {data.results.flatMap((result) =>
-              result.targets
-                .filter((target) => !recordedByChange(target, result.operation, data.changes))
-                .map((target, index) => (
-                  <li key={`${result.eventSeq}:${target.kind}:${target.id}:${index}`}>
-                    <ResultTarget
-                      target={target}
-                      operation={result.operation}
-                      onOpen={onOpenTarget}
-                    />
-                  </li>
-                ))
-            )}
-          </ul>
-          {rollback.footer}
+          <HelperTaskResultItems
+            taskId={taskId}
+            status={status}
+            data={data}
+            onOpenTarget={onOpenTarget}
+            onOpenChange={onOpenChange}
+            rollbackUnavailable={rollbackUnavailable}
+          />
           {data.webSearchSuggestions?.map((html, index) => (
             <SearchSuggestionsFrame key={index} html={html} />
           ))}

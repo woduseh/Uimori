@@ -8,15 +8,17 @@ import { api, labels } from './api.js';
 import { helperActivityStages, helperRetrySentence } from './helper-activity.js';
 import {
   groupHelperActivity,
+  type HelperActivityRow,
   type HelperActivityStage,
   type HelperActivityState,
 } from './helper-activity-groups.js';
 import { requestFileError } from './request-file-errors.js';
-import { statusGlyph } from './TurnStatus.js';
+import { TaskHistoryTimeline, type TaskHistoryStep } from './TaskHistory.js';
+import { statusGlyph, type StatusTone } from './TurnStatus.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 import { useBottomFollow } from './useBottomFollow.js';
 
-type ActivityView = {
+export type HelperActivityView = {
   taskId?: string;
   data: Activity | null;
   error: string;
@@ -28,9 +30,9 @@ export function useHelperActivity(
   taskId: string | undefined,
   status: HelperStatus | undefined,
   visible: boolean
-): ActivityView {
+): HelperActivityView {
   useI18n();
-  const [view, setView] = useState<ActivityView>({ data: null, error: '' });
+  const [view, setView] = useState<HelperActivityView>({ data: null, error: '' });
   const retry = useRetryableEffect(() => {
     if (!taskId || !visible) return;
     let disposed = false;
@@ -187,7 +189,7 @@ export function HelperLiveActivity(props: {
   taskId: string;
   status: HelperStatus;
   visible: boolean;
-  source: ActivityView;
+  source: HelperActivityView;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
@@ -211,7 +213,7 @@ export function HelperActivityDetails({
   taskId: string;
   status: HelperStatus;
   visible: boolean;
-  source?: ActivityView;
+  source?: HelperActivityView;
   inline?: boolean;
 }) {
   useI18n();
@@ -302,5 +304,111 @@ export function HelperActivityDetails({
       <summary>{t('helpers.m118')}</summary>
       {open && body}
     </details>
+  );
+}
+
+const stateTones: Record<HelperActivityState, StatusTone> = {
+  running: 'running',
+  completed: 'done',
+  issue: 'issue',
+  stopped: 'cancelled',
+  recorded: 'done',
+};
+
+function stageNotes(stage: HelperActivityStage) {
+  return stage.events.flatMap((event) => {
+    const outcome = event.kind.startsWith('tool.') ? undefined : recordOutcome(stage, event);
+    const applied =
+      event.applied === undefined ? undefined : t(event.applied ? 'helpers.m124' : 'helpers.m125');
+    return [outcome, applied].filter((note): note is string => !!note);
+  });
+}
+
+function stageStep(stage: HelperActivityStage): TaskHistoryStep {
+  const toolCount = stage.events.filter((event) => event.kind === 'tool.finished').length;
+  return {
+    key: stage.id,
+    tone: stateTones[stage.state],
+    stateLabel: t(stateLabels[stage.state]),
+    label: stage.label,
+    meta: [
+      stage.target,
+      toolCount > 1 ? t('helperConversation.executions', { count: toolCount }) : undefined,
+      ...stageNotes(stage),
+    ],
+    children: stage.events.map((event) =>
+      event.error || event.denied ? (
+        <NoticeBanner tone="error" key={event.seq}>
+          {requestFileError(event.error) ??
+            (event.error ? translateMessage(event.error) : t('helpers.m126'))}
+        </NoticeBanner>
+      ) : event.text ? (
+        <p key={event.seq} className="task-history-step-text">
+          {event.text}
+          {event.textTruncated ? t('helpers.m127') : ''}
+        </p>
+      ) : null
+    ),
+  };
+}
+
+function readsStep(row: Extract<HelperActivityRow, { kind: 'reads' }>): TaskHistoryStep {
+  const targets = [...new Set(row.stages.flatMap((stage) => (stage.target ? [stage.target] : [])))];
+  return {
+    key: `reads:${row.id}`,
+    tone: stateTones[row.state],
+    stateLabel: t(stateLabels[row.state]),
+    label: t('helpers.m199'),
+    meta: [
+      row.summary.scenes > 0
+        ? t('helpers.activityReadScenes', { count: row.summary.scenes })
+        : undefined,
+      row.summary.resources > 0
+        ? t('helpers.activityReadResources', { count: row.summary.resources })
+        : undefined,
+      row.summary.lookups > 0
+        ? t('helpers.activityReadLookups', { count: row.summary.lookups })
+        : undefined,
+    ],
+    children: targets.length > 0 && (
+      <p className="ui-meta-row task-history-step-text">
+        {targets.map((target) => (
+          <span key={target}>{target}</span>
+        ))}
+      </p>
+    ),
+  };
+}
+
+export function HelperActivityTimeline({
+  status,
+  source,
+}: {
+  status: HelperStatus;
+  source: HelperActivityView;
+}) {
+  useI18n();
+  const { data, error, reading, retry } = source;
+  const steps = data
+    ? groupHelperActivity(helperActivityStages({ ...data, status })).map((row) =>
+        row.kind === 'stage' ? stageStep(row.stage) : readsStep(row)
+      )
+    : [];
+  return (
+    <>
+      {(!data || error) && (
+        <LoadingState
+          presentation="inline"
+          loading={reading || (!data && !error)}
+          error={translateMessage(error)}
+          errorLabel={t('helpers.m119')}
+          label={t('helpers.m120')}
+          onRetry={retry}
+        />
+      )}
+      {data && !data.events.length && <p>{t('helpers.m122')}</p>}
+      {data?.hasEarlier && <p>{t('helpers.activityEarlierOmitted')}</p>}
+      {steps.length > 0 && <TaskHistoryTimeline steps={steps} />}
+    </>
   );
 }

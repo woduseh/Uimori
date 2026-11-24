@@ -215,6 +215,55 @@
 .task-history-section .job {
   margin: 0;
 }
+.task-history-timeline {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 0 12px;
+  list-style: none;
+  border-left: var(--hairline) solid var(--line);
+}
+.task-history-timeline > li {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.task-history-step-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+}
+.task-history-step-head > svg {
+  flex-shrink: 0;
+}
+.task-history-step-label {
+  color: var(--text);
+  font-weight: 500;
+}
+.task-history-timeline > li[data-tone="running"] .task-history-step-label {
+  color: var(--accent-text);
+}
+.task-history-timeline > li[data-tone="issue"] .task-history-step-head {
+  color: var(--error);
+}
+.task-history-timeline > li[data-tone="issue"] .task-history-step-label {
+  color: var(--error);
+  font-weight: 600;
+}
+.task-history-step-meta {
+  font-variant-numeric: tabular-nums;
+}
+.task-history-timeline .task-history-step-text {
+  margin: 0;
+  padding-inline-start: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.task-history-timeline > li > .notice-banner {
+  margin: 0;
+}
 .task-history-empty {
   display: grid;
   justify-items: start;

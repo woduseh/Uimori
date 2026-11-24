@@ -437,12 +437,16 @@ function AttemptList({ attempts, revision }: { attempts: AttemptSummary[]; revis
               return (
                 <tr key={summary.id} data-attempt-id={summary.id}>
                   <th>{translateMessage(roleLabels[summary.role] ?? summary.role)}</th>
-                  <td>{summary.modelId}</td>
-                  <td>{labels[summary.status] ?? summary.status}</td>
-                  <td>{tokens(summary.inputTokens)}</td>
-                  <td>{tokens(summary.outputTokens)}</td>
-                  <td>{estimatedTotal([summary])}</td>
-                  <td>
+                  <td data-label={t('visualpanels.attemptModel')}>{summary.modelId}</td>
+                  <td data-label={t('visualpanels.attemptStatus')}>
+                    {labels[summary.status] ?? summary.status}
+                  </td>
+                  <td data-label={t('visualpanels.inputTokens')}>{tokens(summary.inputTokens)}</td>
+                  <td data-label={t('visualpanels.outputTokens')}>
+                    {tokens(summary.outputTokens)}
+                  </td>
+                  <td data-label={t('visualpanels.estimatedCost2')}>{estimatedTotal([summary])}</td>
+                  <td className="attempt-list-action">
                     <button
                       type="button"
                       className="secondary"

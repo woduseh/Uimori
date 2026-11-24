@@ -61,13 +61,16 @@ import { AttemptInspector } from './AttemptInspector.js';
 import { RunCancelButton, RunNotices, RunTaskDetails } from './RunTaskDetails.js';
 import {
   matchesTaskHistoryFilter,
+  sumTaskHistoryValues,
   TaskHistoryDuration,
   TaskHistoryFilters,
   TaskHistoryRow,
   TaskHistorySummary,
   TaskHistoryTime,
+  taskHistoryTotalLabel,
   taskStatusTone,
   type TaskHistoryFilter,
+  type TaskHistoryTotal,
 } from './TaskHistory.js';
 import { formatUsd } from './pricing-display.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
@@ -337,25 +340,9 @@ export function TasksPanel({
   );
 }
 
-type RunTotal = { amount: number; partial: boolean; empty: boolean };
-
 function runTotals(runs: ReaderRun[]) {
-  const sum = (values: (number | null | undefined)[]): RunTotal => {
-    const known = values.filter((value): value is number => value != null);
-    return {
-      amount: known.reduce((total, value) => total + value, 0),
-      partial: known.length < values.length,
-      empty: !known.length,
-    };
-  };
-  const shown = (value: RunTotal, format: (amount: number) => string) =>
-    value.empty
-      ? t('visualpanels.unknown')
-      : value.partial
-        ? t('chatsettings.taskHistoryAtLeast', { value: format(value.amount) })
-        : format(value.amount);
   const estimates = runs.flatMap((run) => (run.estimatedCost ? [run.estimatedCost] : []));
-  const cost: RunTotal = {
+  const cost: TaskHistoryTotal = {
     amount: estimates.reduce((total, item) => total + (item.usd ?? item.subtotalUsd), 0),
     partial: estimates.some((item) => item.usd === null),
     empty: !estimates.length || estimates.every((item) => item.usd === null && !item.subtotalUsd),
@@ -365,11 +352,17 @@ function runTotals(runs: ReaderRun[]) {
     {
       label: t('chatsettings.taskHistoryTokens'),
       value: t('chatsettings.taskHistoryTokenValue', {
-        input: shown(sum(runs.map((run) => run.usage.inputTokens)), formatNumber),
-        output: shown(sum(runs.map((run) => run.usage.outputTokens)), formatNumber),
+        input: taskHistoryTotalLabel(
+          sumTaskHistoryValues(runs.map((run) => run.usage.inputTokens)),
+          formatNumber
+        ),
+        output: taskHistoryTotalLabel(
+          sumTaskHistoryValues(runs.map((run) => run.usage.outputTokens)),
+          formatNumber
+        ),
       }),
     },
-    { label: t('chatsettings.taskHistoryCost'), value: shown(cost, formatUsd) },
+    { label: t('chatsettings.taskHistoryCost'), value: taskHistoryTotalLabel(cost, formatUsd) },
   ];
 }
 

@@ -2,7 +2,6 @@ import {
   t,
   useI18n,
   translateMessage,
-  formatDate,
   formatNumber,
   messageRef,
   message as uiMessage,
@@ -31,7 +30,6 @@ import {
   X,
   Maximize2,
   Minimize2,
-  ChevronDown,
   ListChecks,
   MessageCircle,
   PenLine,
@@ -56,10 +54,12 @@ import {
 import { HELPER_PERSONA_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { UI_HELPER_PERSONA } from './helper-persona.js';
 import { api, ApiError } from './api.js';
-import { RetryFailure, helperResponseRefused } from './RetryFailure.js';
+import { RetryFailure } from './RetryFailure.js';
 import { RequestMessage } from './RequestMessage.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { HelperActivityDetails, HelperLiveActivity, useHelperActivity } from './HelperActivity.js';
+import { helperTaskError } from './helper-task-error.js';
+import { HelperTaskHistory } from './HelperTaskHistory.js';
 import { helperActivitySummary } from './helper-activity.js';
 import { Dialog } from './Dialog.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
@@ -106,7 +106,6 @@ import {
 } from './resource-editor.js';
 import { useHelperSessions } from './useHelperSessions.js';
 import { HelperSessionBar, type HelperNavigationActions } from './HelperSessionBar.js';
-import { requestFileError } from './request-file-errors.js';
 import { HelperModelPicker } from './HelperModelPicker.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import {
@@ -218,13 +217,6 @@ const starterKeys: Record<HelperScope['kind'], string[]> = {
     'helpers.starterLibraryDraft',
   ],
 };
-function helperTaskError(error: string | null | undefined): string {
-  if (error === 'HELPER_CONTEXT_DEPENDENCY_CHANGED')
-    return t('errors.HELPER_CONTEXT_DEPENDENCY_CHANGED');
-  if (error === 'HELPER_TASK_TIMEOUT') return t('errors.HELPER_TASK_TIMEOUT');
-  if (helperResponseRefused(error)) return t('errors.HELPER_RESPONSE_REFUSED');
-  return requestFileError(error) ?? translateMessage(error ?? '');
-}
 const attention = (task: HelperTaskView) => ['failed', 'interrupted'].includes(task.status);
 const tone = (task: HelperTaskView): StatusTone =>
   attention(task) ? 'issue' : active(task) ? 'running' : 'done';
@@ -873,9 +865,6 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     (conversation
       ? { text: conversation.persona, revision: conversation.revision }
       : { text: '', revision: 0 });
-  const recorded = taskHistory?.taskId
-    ? tasks.filter((task) => task.id === taskHistory.taskId)
-    : tasks;
   const pending = tasks.filter(active);
   const summarized = pending.find((task) => task.status === 'running') ?? pending[0];
   const liveActivity = useHelperActivity(summarized?.id, summarized?.status, props.open);
@@ -2129,107 +2118,48 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         open={!!taskHistory}
         title={t('helpers.m064')}
         className="helper-task-history"
+        wide
         scopeKey={taskHistory?.taskId ?? 'all'}
         onClose={() => setTaskHistory(null)}
       >
-        {taskHistory?.taskId && (
-          <div className="activity-notification-toolbar">
-            <button type="button" className="secondary" onClick={() => setTaskHistory({})}>
-              {t('helpers.m066')}
-            </button>
-          </div>
-        )}
-        <ul className="activity-notification-items">
-          {recorded.map((task) => (
-            <li key={task.id} data-testid="helper-task-record" data-task-id={task.id}>
-              <div className="activity-notification-heading">
-                <div>
-                  <strong>{t(statusLabel[task.status] ?? task.status)}</strong>
-                  <small className="ui-meta-row">
-                    <time dateTime={task.createdAt}>
-                      {formatDate(new Date(task.createdAt), {
-                        dateStyle: 'medium',
-                        timeStyle: 'medium',
-                      })}
-                    </time>
-                    <span>
-                      {t('helpers.m310', { model: task.modelTitle ?? t('helpers.m026') })}
-                    </span>
-                    <span>{t('helpers.m314', { count: formatNumber(task.usage.modelCalls) })}</span>
-                    <HelperTaskElapsed task={task} visible={props.open && !!taskHistory} />
-                  </small>
-                </div>
-              </div>
-              {task.request.length > 240 || task.request.split(/\r\n|\r|\n/u).length > 4 ? (
-                <details className="task-request-disclosure">
-                  <summary aria-label={t('helpers.historyFullRequest')}>
-                    <span className="task-request-preview">
-                      {task.request
-                        .slice(0, 180)
-                        .split(/\r\n|\r|\n/u)
-                        .slice(0, 3)
-                        .join('\n')}
-                      …
-                    </span>
-                    <span className="task-request-toggle">
-                      <ChevronDown size={14} aria-hidden="true" />
-                      {t('helpers.historyFullRequest')}
-                    </span>
-                  </summary>
-                  <p className="task-request">{task.request}</p>
-                </details>
-              ) : (
-                <p className="task-request">{task.request}</p>
-              )}
-              {messages.some((message) => message.taskId === task.id) && (
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => {
-                    setTaskHistory(null);
-                    requestAnimationFrame(() => {
-                      const node = [
-                        ...(content.current?.querySelectorAll<HTMLElement>('[data-task-id]') ?? []),
-                      ].find((item) => item.dataset.taskId === task.id);
-                      if (node) {
-                        following.current = false;
-                        node.scrollIntoView({ block: 'center' });
-                      }
-                    });
-                  }}
-                >
-                  {t('helpers.showInConversation')}
-                </button>
-              )}
-              {task.error && <p className="error">{helperTaskError(task.error)}</p>}
-              {task.completedEffects && (
-                <p>
-                  {t('helpers.m315', {
-                    count: formatNumber(task.completedEffects.count),
-                    labels: task.completedEffects.labels.map(translateMessage).join(', '),
-                  })}
-                </p>
-              )}
-              <HelperActivityDetails
-                taskId={task.id}
-                status={task.status}
-                visible={props.open && !!taskHistory}
-                source={task.id === summarized?.id ? liveActivity : undefined}
-              />
-            </li>
-          ))}
-        </ul>
-        {!recorded.length && <p role="status">{t('helpers.m071')}</p>}
-        {!taskHistory?.taskId && data.current?.hasOlderTasks && (
-          <button
-            type="button"
-            className="secondary"
-            disabled={data.loadingEarlier}
-            onClick={() => void data.earlier('tasks')}
-          >
-            {t('helpers.m072')}
-          </button>
-        )}
+        <HelperTaskHistory
+          tasks={tasks}
+          focusedTaskId={taskHistory?.taskId}
+          visible={props.open && !!taskHistory}
+          hasOlder={!!data.current?.hasOlderTasks}
+          loadingOlder={data.loadingEarlier}
+          onLoadOlder={() => void data.earlier('tasks')}
+          onShowAll={() => setTaskHistory({})}
+          inConversation={(taskId) => messages.some((message) => message.taskId === taskId)}
+          onShowInConversation={(taskId) => {
+            setTaskHistory(null);
+            requestAnimationFrame(() => {
+              const node = [
+                ...(content.current?.querySelectorAll<HTMLElement>('[data-task-id]') ?? []),
+              ].find((item) => item.dataset.taskId === taskId);
+              if (node) {
+                following.current = false;
+                node.scrollIntoView({ block: 'center' });
+              }
+            });
+          }}
+          liveActivity={summarized ? { taskId: summarized.id, view: liveActivity } : undefined}
+          onOpenTarget={
+            props.onOpenTarget &&
+            (async (target) => {
+              await props.onOpenTarget!(target);
+              setTaskHistory(null);
+            })
+          }
+          onOpenChange={
+            props.onOpenChange &&
+            (async (change) => {
+              await props.onOpenChange!(change);
+              setTaskHistory(null);
+            })
+          }
+          rollbackUnavailable={pending.length > 0}
+        />
       </Dialog>
       <Dialog
         open={

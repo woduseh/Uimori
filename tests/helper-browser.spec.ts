@@ -1,4 +1,5 @@
-import { DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
+import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
+import { visualReview } from './fixtures/visual-review.js';
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
@@ -1912,70 +1913,185 @@ test('HELPUI05 explicitly retries a saved edited request, preserves composer and
   await expect(panel.locator('[data-testid="helper-task-record"]')).toHaveCount(2);
   await expect(
     panel.locator(`[data-testid="helper-task-record"][data-task-id="${failed.id}"]`)
-  ).toContainText('모델: 이전 시도의 도우미 모델');
+  ).toContainText('이전 시도의 도우미 모델');
   await expect(
     panel.locator(`[data-testid="helper-task-record"][data-task-id="${retried.id}"]`)
-  ).toContainText('모델: 재시도에 선택한 도우미 모델');
+  ).toContainText('재시도에 선택한 도우미 모델');
   await expect(panel.locator('.helper-task-history').getByText('SYNTHETIC_FAILURE')).toBeVisible();
 });
 
-test('HELPHISTORY long requests fold without hiding failures, saved changes or exact text', async ({
+test('HELPHISTORY task history rows show status, usage and one level of sections without hiding failures or exact text', async ({
   page,
   request,
   context,
-}) => {
+}, info) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const chat = await create(request),
     state = await harness(page, 1);
   await page.goto(`/?chat=${chat.id}`);
   await open(page);
+  const compaction = state.addFailed(state.current());
+  compaction.error = 'HELPER_COMPACTION_REFUSED';
   const failed = state.addFailed(state.current());
   const fullRequest = `  첫 문장의 공백도 유지해 주세요.\n\n${'긴 한국어 요청을 접어 두고 필요한 부분을 확인해요. '.repeat(30)}\n마지막 줄의 공백도 유지해 주세요.  `;
   failed.request = fullRequest;
   failed.completedEffects = { count: 1, labels: ['다음 요청 옵션'] };
-  await page.reload();
-  const panel = await open(page);
-  await panel.getByLabel('도우미에게 요청').fill('별도로 유지할 요청 초안');
-  await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
-  const history = panel.locator('.helper-task-history');
-  const record = history.locator(`[data-task-id="${failed.id}"]`).first();
-  const disclosure = record.locator('.task-request-disclosure');
-  const summary = disclosure.locator(':scope > summary');
-  const fullText = disclosure.locator('.task-request');
-  await expect(disclosure).not.toHaveAttribute('open');
-  await expect(record.locator('.task-request-preview')).toBeVisible();
-  expect(
-    await record
-      .locator('.task-request-preview')
-      .evaluate(
-        (node) => node.clientHeight <= Number.parseFloat(getComputedStyle(node).lineHeight) * 3 + 1
-      )
-  ).toBe(true);
-  await expect(fullText).toBeHidden();
-  await expect(record.getByText('실패', { exact: true })).toBeVisible();
-  await expect(record.getByText('SYNTHETIC_FAILURE', { exact: true })).toBeVisible();
-  await expect(record.getByText('저장한 변경 1건, 다음 요청 옵션', { exact: true })).toBeVisible();
-  const shortRecord = history.getByTestId('helper-task-record').filter({ hasText: '합성 요청 1' });
-  await expect(shortRecord.locator('.task-request-disclosure')).toHaveCount(0);
-  await expect(shortRecord.locator('.task-request')).toHaveText('합성 요청 1');
-  await summary.focus();
-  await page.keyboard.press('Enter');
-  await expect(fullText).toBeVisible();
-  expect(await fullText.textContent()).toBe(fullRequest);
-  await fullText.evaluate((node) => {
-    const range = document.createRange();
-    range.selectNodeContents(node);
-    window.getSelection()?.removeAllRanges();
-    window.getSelection()?.addRange(range);
+  failed.usage = { modelCalls: 2, inputTokens: 1200, outputTokens: 300, costUsd: 0.012 };
+  state.results.set(failed.id, {
+    results: [
+      {
+        eventSeq: 4,
+        receiptId: 'history-receipt',
+        operation: 'resource.patch',
+        requestedTargets: 1,
+        changedTargets: 1,
+        targets: [{ kind: 'content', id: 'history-content', title: '등대지기 미라', revision: 2 }],
+      },
+    ],
+    usage: {
+      attempts: [
+        {
+          id: 'history-attempt',
+          purpose: 'helper',
+          status: 'completed',
+          inputTokens: 1200,
+          outputTokens: 300,
+          costUsd: 0.012,
+          cachedInputTokens: null,
+          reasoningTokens: null,
+          internalModelCalls: null,
+        },
+      ],
+      toolExecutions: 3,
+      latestInputEstimate: null,
+    },
   });
-  await page.keyboard.press('Control+c');
-  expect((await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/gu, '\n')).toBe(
-    fullRequest
-  );
-  await summary.click();
-  await expect(fullText).toBeHidden();
-  await panel.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
-  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');
+  const read = (seq: number, name: string, target?: HelperActivityEvent['target']) => [
+    { seq, kind: 'tool.started', callId: `c${seq}`, name, ...(target ? { target } : {}) },
+    { seq: seq + 1, kind: 'tool.finished', callId: `c${seq}`, name, denied: false },
+  ];
+  state.activity(failed, [
+    { seq: 1, kind: 'attempt.started', attemptId: 'helper', purpose: 'helper' },
+    { seq: 2, kind: 'attempt.finished', attemptId: 'helper', status: 'tool_calls' },
+    ...read(3, 'scene.read', { kind: 'scene', title: '등대의 밤' }),
+    ...read(5, 'resource.read', { kind: 'content', title: '등대지기 미라' }),
+    {
+      seq: 7,
+      kind: 'tool.finished',
+      name: 'resource.patch',
+      denied: true,
+      error: 'SYNTHETIC_TOOL_FAILURE',
+    },
+  ]);
+  for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.reload();
+    const panel = await open(page);
+    await panel.getByLabel('도우미에게 요청').fill('별도로 유지할 요청 초안');
+    await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
+    const history = panel.locator('.helper-task-history');
+    await expect(history).toHaveClass(/\bwide\b/u);
+    await expect(history.locator('.activity-notification-items')).toHaveCount(0);
+    const filters = history.getByRole('group', { name: '작업 상태로 거르기', exact: true });
+    await expect(filters.getByRole('button')).toHaveText(['전체 3', '진행 중 0', '오류 2']);
+    await expect(history.locator('.task-history-summary dt')).toHaveText([
+      '작업',
+      '토큰',
+      '확인된 비용',
+    ]);
+    const record = history.locator(`[data-task-id="${failed.id}"]`);
+    const requestText = record.locator('.task-request');
+    await expect(record.locator('.task-status-badge')).toHaveText('실패');
+    await expect(record.locator('.task-status-badge')).toHaveAttribute('data-tone', 'issue');
+    await expect(requestText).toHaveAttribute('data-clamped', '');
+    expect(await requestText.textContent()).toBe(fullRequest);
+    expect(
+      await requestText.evaluate(
+        (node) => node.clientHeight <= Number.parseFloat(getComputedStyle(node).lineHeight) * 2 + 1
+      )
+    ).toBe(true);
+    const meta = record.locator('.task-history-meta');
+    await expect(meta).toContainText('예약 당시 도우미 모델');
+    await expect(meta).toContainText('실행 요청 2회');
+    await expect(meta).toContainText('1,500 토큰');
+    await expect(meta).toContainText('US$0.01');
+    await expect(record.getByText('SYNTHETIC_FAILURE', { exact: true })).toBeVisible();
+    await expect(
+      record.getByText('저장한 변경 1건, 다음 요청 옵션', { exact: true })
+    ).toBeVisible();
+    await expect(
+      record
+        .locator('.task-history-row-actions')
+        .getByRole('button', { name: '대화에서 보기', exact: true })
+    ).toBeVisible();
+    const compactionRecord = history.locator(`[data-task-id="${compaction.id}"]`);
+    await expect(compactionRecord).toContainText(messages['errors.HELPER_COMPACTION_REFUSED'].ko);
+    await expect(compactionRecord).not.toContainText('HELPER_COMPACTION_REFUSED');
+    const shortRecord = history
+      .getByTestId('helper-task-record')
+      .filter({ hasText: '합성 요청 1' });
+    await expect(shortRecord.locator('.task-request')).toHaveText('합성 요청 1');
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`helper-task-history-${width}.png`) });
+
+    await record.getByRole('button', { name: '자세히 보기', exact: true }).click();
+    const collapse = record.getByRole('button', { name: '접기', exact: true });
+    await expect(collapse).toHaveAttribute('aria-expanded', 'true');
+    await expect(requestText).not.toHaveAttribute('data-clamped');
+    const sections = record.locator('.task-history-detail');
+    await expect(sections.locator('.task-history-section-head > h3')).toHaveText([
+      '결과와 변경',
+      '단계',
+      '호출과 비용',
+      '원본 기록',
+    ]);
+    await expect(sections.locator('details')).toHaveCount(0);
+    await expect(sections.getByText('등대지기 미라').first()).toBeVisible();
+    const steps = sections.locator('.task-history-timeline > li');
+    await expect(steps).toHaveCount(3);
+    await expect(steps.nth(0)).toContainText('도구 사용을 요청했어요');
+    await expect(steps.nth(1)).toContainText('자료 확인');
+    await expect(steps.nth(1)).toContainText('장면 1개');
+    await expect(steps.nth(1)).toContainText('등대의 밤');
+    await expect(steps.nth(2)).toHaveAttribute('data-tone', 'issue');
+    await expect(steps.nth(2)).toContainText('SYNTHETIC_TOOL_FAILURE');
+    await expect(sections.locator('.task-history-timeline code')).toHaveCount(0);
+    await expect(sections.locator('.task-history-timeline')).not.toContainText('resource.read');
+    await expect(sections.locator('.scene-receipt')).toContainText('확인된 비용');
+    await expect(sections.locator('.task-history-raw')).toHaveCount(0);
+    await sections.getByRole('button', { name: '원본 보기', exact: true }).click();
+    await expect(sections.locator('.task-history-raw')).toContainText('"activity"');
+    await expect(sections.locator('.task-history-raw')).toContainText('resource.patch');
+    await sections.getByRole('button', { name: '복사', exact: true }).click();
+    await expect
+      .poll(
+        async () => JSON.parse(await page.evaluate(() => navigator.clipboard.readText())).task.id
+      )
+      .toBe(failed.id);
+    expect(
+      await history.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
+    ).toBe(true);
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`helper-task-history-detail-${width}.png`) });
+
+    await requestText.evaluate((node) => {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.addRange(range);
+    });
+    await page.keyboard.press('Control+c');
+    expect(
+      (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/gu, '\n')
+    ).toBe(fullRequest);
+    await collapse.click();
+    await expect(sections).toBeHidden();
+    await expect(requestText).toHaveAttribute('data-clamped', '');
+    await filters.getByRole('button', { name: /^오류/u }).click();
+    await expect(history.getByTestId('helper-task-record')).toHaveCount(2);
+    await panel.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
+    await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');
+  }
   expect(state.posts).toHaveLength(0);
 });
 
@@ -2394,9 +2510,7 @@ test('HROLLBACK01 a whole-task rollback restores what it can and names what it l
         results.locator('.helper-change', { hasText: '서윤' }).locator('.helper-rollback-status')
       ).toHaveText('작업 뒤에 바뀌어서 되돌릴 수 없어요.');
       await expect(
-        results.getByText(
-          '설정, 채팅 전용 로어, 장면 이름 변경은 되돌리기 대상이 아니에요. 필요하면 직접 바꿔 주세요.'
-        )
+        results.getByText('설정, 채팅 전용 로어, 장면 이름 변경은 되돌리기 대상이 아니에요.')
       ).toHaveCount(1);
       await expect(results.locator('.helper-rollback-unit')).toHaveCount(2);
       await results.getByRole('button', { name: '이 작업의 변경 되돌리기', exact: true }).click();
@@ -2796,7 +2910,7 @@ test('HCONFIRM01 held operations are confirmed with an editable request, decline
   const panel = await open(page);
   const deletion = cards().filter({ hasText: '자료 삭제' });
   await expect(deletion).toContainText(title);
-  await expect(deletion).toContainText('지운 것은 되돌릴 수 없어서 먼저 확인해요.');
+  await expect(deletion).toContainText('삭제하면 되돌릴 수 없어요.');
   const expired = cards().filter({ hasText: '여러 자료 한꺼번에 수정' });
   await expect(expired).toContainText('더 이상 확인할 수 없어요.');
   await expect(expired.getByRole('button')).toHaveCount(0);

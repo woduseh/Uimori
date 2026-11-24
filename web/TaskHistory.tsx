@@ -126,6 +126,27 @@ export function TaskHistoryFilters({
   );
 }
 
+export type TaskHistoryTotal = { amount: number; partial: boolean; empty: boolean };
+
+export function sumTaskHistoryValues(
+  values: (number | null | undefined)[],
+  partial = false
+): TaskHistoryTotal {
+  const known = values.filter((value): value is number => value != null);
+  return {
+    amount: known.reduce((total, value) => total + value, 0),
+    partial: partial || known.length < values.length,
+    empty: !known.length,
+  };
+}
+
+export function taskHistoryTotalLabel(value: TaskHistoryTotal, format: (amount: number) => string) {
+  if (value.empty) return t('visualpanels.unknown');
+  return value.partial
+    ? t('chatsettings.taskHistoryAtLeast', { value: format(value.amount) })
+    : format(value.amount);
+}
+
 export function TaskHistorySummary({ items }: { items: { label: string; value: ReactNode }[] }) {
   useI18n();
   return (
@@ -222,6 +243,47 @@ export function TaskHistorySection({
       </div>
       {children}
     </section>
+  );
+}
+
+export type TaskHistoryStep = {
+  key: string | number;
+  tone: StatusTone;
+  stateLabel: string;
+  label: string;
+  meta?: ReactNode[];
+  children?: ReactNode;
+};
+
+export function TaskHistoryTimeline({ steps }: { steps: TaskHistoryStep[] }) {
+  return (
+    <ol className="task-history-timeline">
+      {steps.map((step) => {
+        const Glyph = statusGlyph[step.tone];
+        const meta = (step.meta ?? []).filter(Boolean);
+        return (
+          <li key={step.key} data-tone={step.tone}>
+            <div className="task-history-step-head">
+              <Glyph
+                size={14}
+                aria-hidden="true"
+                className={step.tone === 'running' ? 'activity-spinner' : undefined}
+              />
+              <span className="task-history-step-label">{step.label}</span>
+              <span className="sr-only">{step.stateLabel}</span>
+              {meta.length > 0 && (
+                <span className="ui-meta-row task-history-step-meta">
+                  {meta.map((item, index) => (
+                    <span key={index}>{item}</span>
+                  ))}
+                </span>
+              )}
+            </div>
+            {step.children}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

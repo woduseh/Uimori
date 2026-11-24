@@ -299,6 +299,35 @@ for (const width of [MOBILE_WIDTH]) {
     await expect(sections.locator('.task-history-raw')).toContainText('snapshot');
     await expect(sections.getByRole('button', { name: '복사', exact: true })).toBeVisible();
     expect(state.runReads).toHaveLength(1);
+    const attempts = sections.getByRole('table', { name: '호출 목록', exact: true });
+    const attemptRow = attempts.locator('tbody > tr').first();
+    await expect(attempts.getByRole('rowheader').first()).toHaveText('본문');
+    await expect(attemptRow.getByRole('cell').first()).toBeVisible();
+    expect(
+      await attempts.locator('thead').evaluate((node) => node.getBoundingClientRect().width <= 1)
+    ).toBe(true);
+    expect(
+      await attemptRow
+        .locator('td[data-label]')
+        .first()
+        .evaluate((node) => getComputedStyle(node, '::before').content)
+    ).toContain('모델');
+    expect(
+      await attemptRow
+        .getByRole('rowheader')
+        .evaluate(
+          (node) =>
+            node.getBoundingClientRect().height <=
+            Number.parseFloat(getComputedStyle(node).lineHeight) * 1.5
+        )
+    ).toBe(true);
+    expect(
+      await sections
+        .locator('.attempt-list .table-scroll')
+        .evaluate((node) => node.scrollWidth <= node.clientWidth + 1)
+    ).toBe(true);
+    if (visualReview)
+      await attempts.screenshot({ path: info.outputPath(`attempt-list-${width}.png`) });
     await page.screenshot({ path: info.outputPath(`task-history-expanded-${width}.png`) });
     await collapse.click();
     await expect(sections).toBeHidden();

@@ -23,11 +23,17 @@ export const messages = {
     ja: '入力を保って編集を続ける',
     zh: '保留输入并继续编辑',
   },
-  'helpers.historyFullRequest': {
-    ko: '요청 전체 보기',
-    en: 'View full request',
-    ja: '依頼全文を表示',
-    zh: '查看完整请求',
+  'helpers.historyChanges': {
+    ko: '결과와 변경',
+    en: 'Results and changes',
+    ja: '結果と変更',
+    zh: '结果与更改',
+  },
+  'helpers.historyNoChanges': {
+    ko: '저장한 변경이 없어요.',
+    en: 'No saved changes.',
+    ja: '保存した変更はありません。',
+    zh: '没有保存的更改。',
   },
   'helpers.modelPickerTitle': {
     ko: '도우미 모델 선택',
