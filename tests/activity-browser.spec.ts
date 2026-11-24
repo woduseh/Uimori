@@ -894,10 +894,84 @@ test('ACTUI11 an already visible source is confirmed only after its inbox entry 
   expect(legacyReads).toEqual([]);
   await activity.locator('.activity-nav-entry .activity-nav-link').click();
   await expect.poll(() => confirmations).toBe(1);
+  await expect(activity.locator('[data-activity-section="unread"]')).toHaveCount(0);
+  await expect(activity.locator('[data-activity-section="running"]')).toHaveCount(0);
+  await expect(activity.locator('[data-activity-section="recent"]')).toBeVisible();
+});
+
+test('ACTUI19 sidebar activity hides empty sections, acknowledges a row or everything and reveals row menus on hover', async ({
+  page,
+  request,
+}, info) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  const seeded = await seed(request);
+  const second = (await (
+    await request.post('/api/chats', {
+      data: { title: '두 번째 확인 채팅', botId: seeded.chat.botId },
+    })
+  ).json()) as Chat;
+  const at = new Date().toISOString();
+  const item = (chatId: string, key: string, status: 'completed' | 'failed') => ({
+    chatId,
+    acknowledgementKey: JSON.stringify(['main', key, 0, at]),
+    kind: 'main',
+    status,
+    label: status === 'completed' ? '본문 완료' : '본문 실패',
+    at,
+    actionable: status === 'failed',
+    canAcknowledge: true,
+  });
+  let items = [
+    item(seeded.chat.id, 'first-chat', 'completed'),
+    item(second.id, 'second-chat', 'failed'),
+    item(second.id, 'second-chat-older', 'completed'),
+  ];
+  const acknowledged: string[][] = [];
+  await page.route('**/api/activity-feed', (route) =>
+    route.fulfill({ json: { items, running: [] } })
+  );
+  await page.route('**/api/chats/*/activity-acknowledgements', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const keys = (route.request().postDataJSON() as { keys: string[] }).keys;
+    acknowledged.push(keys);
+    items = items.filter((entry) => !keys.includes(entry.acknowledgementKey));
+    await route.fulfill({ json: { ok: true } });
+  });
+  await page.goto(`/?chat=${seeded.chat.id}`);
+  const nav = page.getByTestId('bot-navigation').filter({ visible: true });
+  await nav.getByRole('tab', { name: '활동, 미확인 채팅 2개', exact: true }).click();
+  const activity = nav.getByRole('navigation', { name: '채팅 활동' });
+  const unread = activity.locator('[data-activity-section="unread"]');
+  await expect(unread.locator('.activity-nav-entry')).toHaveCount(2);
+  await expect(activity.locator('[data-activity-section="running"]')).toHaveCount(0);
+  const recentRow = activity.locator(`.activity-nav-chat-row[data-chat-id="${second.id}"]`);
+  const recentMenu = recentRow.locator('.action-menu');
+  await page.mouse.move(1200, 600);
+  await expect(recentMenu).toHaveCSS('opacity', '0');
+  await recentRow.hover();
+  await expect(recentMenu).toHaveCSS('opacity', '1');
+  await page.screenshot({ path: info.outputPath('sidebar-activity-unread.png') });
+  const confirm = unread.getByRole('button', {
+    name: '두 번째 확인 채팅 활동 2건 확인',
+    exact: true,
+  });
+  const row = confirm.locator('..');
+  const rowBox = (await row.boundingBox())!;
+  const confirmBox = (await confirm.boundingBox())!;
+  expect(Math.abs(confirmBox.x + confirmBox.width - rowBox.x - rowBox.width)).toBeLessThanOrEqual(
+    1
+  );
+  expect(confirmBox.y).toBeGreaterThanOrEqual(rowBox.y);
+  expect(confirmBox.y + confirmBox.height).toBeLessThanOrEqual(rowBox.y + rowBox.height);
+  await confirm.click();
+  await expect(unread.locator('.activity-nav-entry')).toHaveCount(1);
+  expect(acknowledged).toHaveLength(1);
+  expect(acknowledged[0]).toHaveLength(2);
+  await unread.getByRole('button', { name: '모두 확인', exact: true }).click();
+  await expect(unread).toHaveCount(0);
+  expect(acknowledged).toHaveLength(2);
+  await expect(activity.locator('[data-activity-section="recent"]')).toBeVisible();
   await expect(
-    activity.locator('[data-activity-section="unread"] .activity-nav-heading')
-  ).toContainText('0');
-  await expect(
-    activity.locator('[data-activity-section="unread"] .activity-nav-entry')
-  ).toHaveCount(0);
+    nav.getByRole('tab', { name: '활동, 미확인 채팅 0개', exact: true })
+  ).toHaveAttribute('aria-selected', 'true');
 });

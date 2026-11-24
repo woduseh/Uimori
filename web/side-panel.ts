@@ -1,6 +1,11 @@
-import { readPresentationSetting, writePresentationSetting } from './presentation-settings.js';
+import {
+  readPresentationChoice,
+  readPresentationSetting,
+  writePresentationSetting,
+} from './presentation-settings.js';
 
 export type SidePanelTab = 'helper' | 'outline' | 'options' | 'board';
+export type WorkspacePanelState = SidePanelTab | 'helper-workspace' | 'closed';
 
 export const MIN_CENTER_WIDTH = 768;
 export const SIDE_PANEL_MAX_WIDTH = 960;
@@ -33,4 +38,32 @@ export function writeSidePanelWidth(width: number) {
 export function fitSidePanelWidth(preferred: number, minimum: number, room: number) {
   const width = Math.min(SIDE_PANEL_MAX_WIDTH, Math.max(minimum, preferred));
   return room >= minimum ? Math.min(width, room) : width;
+}
+
+const WORKSPACE_PANEL_KEY = 'uimori:workspace-panel';
+const workspacePanelStates: WorkspacePanelState[] = [
+  'closed',
+  'helper',
+  'outline',
+  'options',
+  'board',
+  'helper-workspace',
+];
+
+export function readWorkspacePanelState() {
+  const navigation = performance.getEntriesByType('navigation')[0] as
+    | PerformanceNavigationTiming
+    | undefined;
+  const ownSession = (!location.search && !location.hash) || navigation?.type === 'reload';
+  return ownSession
+    ? readPresentationChoice<WorkspacePanelState>(
+        WORKSPACE_PANEL_KEY,
+        workspacePanelStates,
+        'closed'
+      )
+    : 'closed';
+}
+
+export function writeWorkspacePanelState(state: WorkspacePanelState) {
+  writePresentationSetting(WORKSPACE_PANEL_KEY, state);
 }

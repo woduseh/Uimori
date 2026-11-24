@@ -10,9 +10,14 @@
 }
 .helper-navigation-search {
   flex: none;
-  width: 100%;
-  min-width: 0;
   margin-bottom: 8px;
+}
+.helper-navigation-search > input {
+  background: var(--surface);
+  border-color: var(--line);
+}
+.helper-navigation-search > input:focus {
+  border-color: var(--accent);
 }
 .helper-navigation-scroll {
   flex: 1;

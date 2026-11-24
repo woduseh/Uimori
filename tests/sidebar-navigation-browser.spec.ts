@@ -18,21 +18,33 @@ for (const width of DEFAULT_WIDTHS) {
     await page.goto('/');
     const navigation = await visibleNavigation(page);
     const workspaces = navigation.locator('.sidebar-workspaces');
-    const destinations = navigation.locator('.sidebar-destinations');
     const footer = navigation.getByRole('navigation', { name: '앱 탐색', exact: true });
     const settings = footer.getByRole('button', { name: '설정', exact: true });
     const helper = workspaces.getByRole('button', { name: '도우미', exact: true });
     const chat = workspaces.getByRole('button', { name: '채팅', exact: true });
-    const library = destinations.getByRole('button', { name: '서재', exact: true });
-    const prompts = destinations.getByRole('button', { name: '프롬프트', exact: true });
+    const library = footer.getByRole('button', { name: '서재', exact: true });
+    const prompts = footer.getByRole('button', { name: '프롬프트', exact: true });
     await expect(workspaces.getByRole('button')).toHaveText(['채팅', '도우미']);
-    await expect(destinations.getByRole('button')).toHaveText(['서재', '프롬프트']);
+    await expect(footer.getByRole('button')).toHaveCount(3);
+    const modes = navigation.getByRole('tablist', { name: '사이드바 보기 방식', exact: true });
+    await expect(modes.getByRole('tab')).toHaveText(['봇', /^활동/u]);
+    await expect(modes.getByRole('tab', { name: '봇', exact: true })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
     const footerBox = await footer.boundingBox();
     const settingsBox = await settings.boundingBox();
-    expect(footerBox).not.toBeNull();
-    expect(settingsBox).not.toBeNull();
-    if (!footerBox || !settingsBox) throw new Error('Sidebar footer has no visible bounds');
-    expect(Math.abs(settingsBox.width - footerBox.width)).toBeLessThanOrEqual(1);
+    const libraryBox = await library.boundingBox();
+    const modesBox = await modes.boundingBox();
+    if (!footerBox || !settingsBox || !libraryBox || !modesBox)
+      throw new Error('Sidebar footer has no visible bounds');
+    expect(
+      Math.abs(settingsBox.x + settingsBox.width - footerBox.x - footerBox.width)
+    ).toBeLessThanOrEqual(1);
+    expect(Math.abs(libraryBox.x - footerBox.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(libraryBox.y - settingsBox.y)).toBeLessThanOrEqual(1);
+    expect(modesBox.y).toBeLessThan(footerBox.y);
+    expect(footerBox.y + footerBox.height).toBeGreaterThan(page.viewportSize()!.height - 80);
     for (const action of [chat, helper, library, prompts, settings]) {
       await expect(action).toBeVisible();
       await expect(action).toBeInViewport();
@@ -51,6 +63,8 @@ for (const width of DEFAULT_WIDTHS) {
     await library.focus();
     await page.keyboard.press('Tab');
     await expect(prompts).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(settings).toBeFocused();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)
     ).toBeLessThanOrEqual(1);
@@ -281,4 +295,110 @@ test('SIDENAV05 closing navigation restores the current opener after lazy librar
   await expect(page.getByRole('dialog', { name: '탐색', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '탐색 닫기', exact: true }).click();
   await expect(opener).toBeFocused();
+});
+
+test('SIDENAV07 footer, mode tabs and the collapsed rail keep their places at every sidebar width and theme', async ({
+  page,
+  request,
+}, info) => {
+  const fixture = await sidebarFixture(request);
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto(`/?chat=${fixture.chat.id}`);
+  const sidebar = page.locator('.sidebar');
+  const footer = sidebar.getByRole('navigation', { name: '앱 탐색', exact: true });
+  const modes = sidebar.getByRole('tablist', { name: '사이드바 보기 방식', exact: true });
+  const bots = modes.getByRole('tab', { name: '봇', exact: true });
+  await bots.focus();
+  await page.keyboard.press('ArrowRight');
+  const activity = modes.getByRole('tab', { name: /^활동/u });
+  await expect(activity).toBeFocused();
+  await expect(activity).toHaveAttribute('aria-selected', 'true');
+  await expect(sidebar.getByRole('tabpanel')).toHaveAttribute(
+    'aria-labelledby',
+    (await activity.getAttribute('id'))!
+  );
+  await page.keyboard.press('Home');
+  await expect(bots).toHaveAttribute('aria-selected', 'true');
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    for (const width of ['248', '400']) {
+      await page.evaluate((value) => localStorage.setItem('uimori:sidebar-width', value), width);
+      await page.reload();
+      await expect(sidebar).toHaveCSS('width', `${width}px`);
+      const footerBox = (await footer.boundingBox())!;
+      const tabsBox = (await modes.boundingBox())!;
+      expect(footerBox.y + footerBox.height).toBeGreaterThan(900 - 80);
+      expect(tabsBox.width).toBeGreaterThan(Number(width) - 80);
+      await page.screenshot({ path: info.outputPath(`sidebar-${width}-${scheme}.png`) });
+    }
+    await sidebar.getByRole('button', { name: '좌측 패널 접기', exact: true }).click();
+    await expect(sidebar).toHaveCSS('width', '56px');
+    const rail = sidebar.getByRole('navigation', { name: '앱 탐색', exact: true });
+    await expect(rail.getByRole('button')).toHaveCount(3);
+    const settings = (await rail.getByRole('button', { name: '설정', exact: true }).boundingBox())!;
+    const library = (await rail.getByRole('button', { name: '서재', exact: true }).boundingBox())!;
+    expect(library.y).toBeLessThan(settings.y);
+    expect(settings.y + settings.height).toBeGreaterThan(900 - 80);
+    await page.screenshot({ path: info.outputPath(`sidebar-rail-${scheme}.png`) });
+    await sidebar.getByRole('button', { name: '좌측 패널 펼치기', exact: true }).click();
+    await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+    const sheet = await visibleNavigation(page);
+    await expect(sheet.getByRole('navigation', { name: '앱 탐색', exact: true })).toBeVisible();
+    await page.mouse.move(380, 800);
+    await page.screenshot({ path: info.outputPath(`sidebar-sheet-${MOBILE_WIDTH}-${scheme}.png`) });
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 1600, height: 900 });
+  }
+});
+
+test('SIDENAV08 reloads restore the helper workspace, the docked panel and the request mode, while links and narrow screens start plain', async ({
+  page,
+  request,
+}, info) => {
+  const fixture = await sidebarFixture(request);
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto(`/?chat=${fixture.chat.id}`);
+  const helper = page.locator('#helper-panel');
+  const shell = page.locator('.app-shell');
+  await openHelper(page);
+  await expect(shell).toHaveClass(/panel-docked/u);
+  await page.reload();
+  await expect(helper).toBeVisible();
+  await expect(shell).toHaveClass(/panel-docked/u);
+  await page.getByRole('button', { name: '도우미 닫기', exact: true }).click();
+  await expect(helper).toBeHidden();
+  await page.reload();
+  await expect(page.getByTestId('bot-navigation').filter({ visible: true })).toBeVisible();
+  await expect(helper).toBeHidden();
+
+  await navigationAction(page, '도우미');
+  await expect(shell).toHaveClass(/helper-expanded/u);
+  await page.reload();
+  await expect(shell).toHaveClass(/helper-expanded/u);
+  await expect(
+    page.locator('.sidebar').getByRole('navigation', { name: '도우미 대화', exact: true })
+  ).toBeVisible();
+  await page.screenshot({ path: info.outputPath('helper-workspace-restored.png') });
+  await page.goBack();
+  await expect(shell).not.toHaveClass(/helper-expanded/u);
+  expect(new URL(page.url()).searchParams.get('chat')).toBe(fixture.chat.id);
+
+  await navigationAction(page, '도우미');
+  await expect(shell).toHaveClass(/helper-expanded/u);
+  await page.goto(`/?chat=${fixture.other.id}`);
+  await expect(page.locator('.workspace-header')).toContainText(fixture.other.title);
+  await expect(shell).not.toHaveClass(/helper-expanded/u);
+  await expect(helper).toBeHidden();
+
+  await page.evaluate(() => {
+    localStorage.setItem('uimori:workspace-panel', 'helper');
+    localStorage.setItem('uimori:helper-mode', 'plan');
+  });
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await page.reload();
+  await expect(page.locator('.workspace-header')).toContainText(fixture.other.title);
+  await expect(helper).toBeHidden();
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await openHelper(page);
+  await expect(helper.locator('.helper-mode-chip')).toHaveAccessibleName('요청 방식: 계획만');
 });

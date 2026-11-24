@@ -29,11 +29,6 @@
   flex: none;
   display: block;
 }
-.sidebar-destinations {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-}
 .bot-navigation .nav-button[aria-current="page"],
 .bot-navigation .nav-button[aria-current="page"]:hover:not(:disabled) {
   background: var(--nav-item-selected);

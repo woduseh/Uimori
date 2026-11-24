@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent, type RefObject } from 'react';
+import { useEffect, useId, useRef, useState, type DragEvent, type RefObject } from 'react';
 import { ArrowDown, ArrowUp, Check, Folder, MessageCircle, Pencil, Trash2 } from 'lucide-react';
 import {
   AddIcon,
@@ -7,13 +7,16 @@ import {
   FolderAddIcon,
   IssueIcon,
   RunningIcon,
+  SearchIcon,
   StopIcon,
 } from './ui-icons.js';
 import type { HelperProject } from '../core/helper.js';
 import type { HelperSession } from './useHelperSessions.js';
 import { t, useI18n, formatDate, formatNumber } from './i18n.js';
 import { ActionMenu } from './ActionMenu.js';
+import { IconButton } from './IconButton.js';
 import { ActivitySection } from './ActivitySection.js';
+import { NavigationModeTabs } from './NavigationModeTabs.js';
 import { navigationTimeLabel } from './navigation-time.js';
 import { groupRecentDates, recentDateGroupLabel } from './recent-date-groups.js';
 import {
@@ -26,6 +29,7 @@ import {
 import './bot-navigation.css';
 import './bot-tree-navigation.css';
 import './helper-session-navigation.css';
+import './content-picker.css';
 import './activity-status.css';
 import { writeOptionalStorage } from './optional-storage.js';
 
@@ -62,6 +66,7 @@ const resultLabels: Record<string, string> = {
 export function HelperNavigation(props: Props) {
   useI18n();
   const [view, setView] = useState(readHelperNavigationView);
+  const modePanelId = useId();
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
   const [drop, setDrop] = useState<{ key: string; after: boolean } | null>(null);
@@ -352,15 +357,14 @@ export function HelperNavigation(props: Props) {
       <div key={session.id} data-conversation-id={session.id} className="activity-nav-entry">
         {link}
         {section === 'unread' && props.onAcknowledge && (
-          <button
-            type="button"
+          <IconButton
             className="activity-nav-confirm"
-            aria-label={t('helperNavigation.acknowledge', { title: sessionTitle(session) })}
+            label={t('helperNavigation.acknowledge', { title: sessionTitle(session) })}
+            title={t('helpers.m267')}
+            icon={Check}
+            size={16}
             onClick={() => props.onAcknowledge?.([session.id])}
-          >
-            <Check size={14} aria-hidden="true" />
-            {t('helpers.m267')}
-          </button>
+          />
         )}
       </div>
     );
@@ -378,75 +382,83 @@ export function HelperNavigation(props: Props) {
         if (event.key === 'Escape') clearDrag();
       }}
     >
-      <div className="bot-navigation-header bot-tree-section-heading">
-        <nav className="bot-navigation-modes" aria-label={t('helperNavigation.views')}>
-          <button
-            type="button"
-            aria-pressed={view.mode === 'projects'}
-            onClick={() => setView((old) => ({ ...old, mode: 'projects' }))}
-          >
-            {t('helperNavigation.explore')}
-          </button>
-          <button
-            type="button"
-            aria-pressed={view.mode === 'activity'}
-            aria-label={t('helperNavigation.activityCount', { count: props.unread.length })}
-            onClick={() => setView((old) => ({ ...old, mode: 'activity' }))}
-          >
-            {t('transfer.m292')}
-            {props.unread.length > 0 && (
-              <span className="activity-mode-count">{formatNumber(props.unread.length)}</span>
-            )}
-          </button>
-        </nav>
-        {view.mode === 'projects' && (
+      <NavigationModeTabs
+        label={t('helperNavigation.views')}
+        panelId={modePanelId}
+        active={view.mode}
+        onSelect={(mode) => setView((old) => ({ ...old, mode }))}
+        tabs={[
+          { value: 'projects', label: t('helperNavigation.explore') },
+          {
+            value: 'activity',
+            accessibleName: t('helperNavigation.activityCount', { count: props.unread.length }),
+            label: (
+              <>
+                {t('transfer.m292')}
+                {props.unread.length > 0 && (
+                  <span className="activity-mode-count">{formatNumber(props.unread.length)}</span>
+                )}
+              </>
+            ),
+          },
+        ]}
+        actions={
           <div className="bot-row-actions">
-            <ActionMenu label={t('helperNavigation.listActions')} viewport>
-              <div className="action-menu-group">
-                <label>
-                  {t('helperNavigation.sort')}
-                  <select
-                    aria-label={t('helperNavigation.sort')}
-                    value={view.sort}
-                    onChange={(event) =>
-                      setView((old) => ({
-                        ...old,
-                        sort:
-                          event.target.value === 'manual'
-                            ? 'manual'
-                            : event.target.value === 'name'
-                              ? 'name'
-                              : 'recent',
-                      }))
-                    }
-                  >
-                    <option value="manual">{t('transfer.m296')}</option>
-                    <option value="recent">{t('helperNavigation.sortRecent')}</option>
-                    <option value="name">{t('helperNavigation.sortName')}</option>
-                  </select>
-                </label>
-              </div>
-              <div className="action-menu-group">
-                <button type="button" onClick={props.onNewProject}>
-                  <FolderAddIcon size={16} aria-hidden="true" />
-                  {t('helperNavigation.newProject')}
-                </button>
-              </div>
-            </ActionMenu>
+            {view.mode === 'projects' && (
+              <ActionMenu label={t('helperNavigation.listActions')} viewport>
+                <div className="action-menu-group">
+                  <label>
+                    {t('helperNavigation.sort')}
+                    <select
+                      aria-label={t('helperNavigation.sort')}
+                      value={view.sort}
+                      onChange={(event) =>
+                        setView((old) => ({
+                          ...old,
+                          sort:
+                            event.target.value === 'manual'
+                              ? 'manual'
+                              : event.target.value === 'name'
+                                ? 'name'
+                                : 'recent',
+                        }))
+                      }
+                    >
+                      <option value="manual">{t('transfer.m296')}</option>
+                      <option value="recent">{t('helperNavigation.sortRecent')}</option>
+                      <option value="name">{t('helperNavigation.sortName')}</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="action-menu-group">
+                  <button type="button" onClick={props.onNewProject}>
+                    <FolderAddIcon size={16} aria-hidden="true" />
+                    {t('helperNavigation.newProject')}
+                  </button>
+                </div>
+              </ActionMenu>
+            )}
           </div>
-        )}
-      </div>
-      <input
-        ref={props.searchInput}
-        className="helper-navigation-search"
-        type="search"
-        aria-label={t('helpers.searchSessions')}
-        placeholder={t('helpers.searchSessions')}
-        value={props.search}
-        onChange={(event) => props.onSearch(event.target.value)}
+        }
       />
+      <span className="content-picker-search-field helper-navigation-search">
+        <SearchIcon size={16} aria-hidden="true" />
+        <input
+          ref={props.searchInput}
+          type="search"
+          aria-label={t('helpers.searchSessions')}
+          placeholder={t('helpers.searchSessions')}
+          value={props.search}
+          onChange={(event) => props.onSearch(event.target.value)}
+        />
+      </span>
       {props.children}
-      <div className="helper-navigation-scroll">
+      <div
+        className="helper-navigation-scroll"
+        id={modePanelId}
+        role="tabpanel"
+        aria-labelledby={`${modePanelId}-${view.mode}`}
+      >
         {view.mode === 'projects' ? (
           <div className="helper-navigation-tree">
             {lists.projects.map((project) => (
@@ -574,6 +586,18 @@ export function HelperNavigation(props: Props) {
               storageKey={sectionStorage}
               label={t('helpers.m263')}
               total={unread.length}
+              action={
+                props.onAcknowledge &&
+                unread.length > 0 && (
+                  <button
+                    type="button"
+                    className="activity-nav-acknowledge-all"
+                    onClick={() => props.onAcknowledge?.(unread.map((session) => session.id))}
+                  >
+                    {t('helpers.m286')}
+                  </button>
+                )
+              }
             >
               {(limit) => unread.slice(0, limit).map((session) => activityRow(session, 'unread'))}
             </ActivitySection>

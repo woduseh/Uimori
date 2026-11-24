@@ -318,6 +318,8 @@ export async function openHelper(page: Page) {
         (await page.locator('.workspace-header .chat-menu').count()) + (await opener.count())
     )
     .toBeGreaterThan(0);
+  if ((await opener.count()) && (await opener.first().getAttribute('aria-pressed')) === 'true')
+    return;
   if (compactLayout(page) && (await page.locator('.workspace-header .chat-menu').count())) {
     const menu = await openChatMenu(page);
     await menu.getByRole('button', { name: '도우미 열기', exact: true }).click();

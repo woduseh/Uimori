@@ -1,6 +1,6 @@
-import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
+import { t, useI18n, translateMessage, formatNumber, message as retainedMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
-import { memo, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { memo, useEffect, useId, useMemo, useRef, useState, type DragEvent } from 'react';
 import { Inbox, MessageCircle, PanelLeftClose, PanelLeftOpen, Sparkles } from 'lucide-react';
 import type { Content } from '../core/product.js';
 import {
@@ -29,6 +29,7 @@ import { api } from './api.js';
 import { chatActivitySummaries } from './chat-activity-summaries.js';
 import { useActivityFeed } from './useActivityFeed.js';
 import { ActivityNavigation } from './ActivityNavigation.js';
+import { NavigationModeTabs } from './NavigationModeTabs.js';
 import { LibraryFolderCover, LibraryFolderCoverDialog } from './LibraryFolderCover.js';
 import { contentPortraitUrl } from './content-portrait.js';
 import './bot-tree-navigation.css';
@@ -109,6 +110,7 @@ export const BotNavigation = memo(function BotNavigation(
     quickActions = true,
   } = props;
   const [view, setView] = useState(readView);
+  const modePanelId = useId();
   const activityFeed = useActivityFeed();
   const activities = chatActivitySummaries(activityFeed.feed.running);
   const unreadChats = new Set(activityFeed.feed.items.map((item) => item.chatId)).size;
@@ -397,6 +399,8 @@ export const BotNavigation = memo(function BotNavigation(
   const onLibraryTab = props.libraryTab;
   const inLibrary = destination === 'library' && !props.helperExpanded;
   const inChat = destination === 'story' && !props.helperExpanded;
+  const libraryCurrent = inLibrary && onLibraryTab !== 'prompts';
+  const promptsCurrent = inLibrary && onLibraryTab === 'prompts';
   const helperRunning = activityFeed.feed.helpers?.some(
     (task) => task.status === 'running' || task.status === 'queued'
   );
@@ -473,22 +477,6 @@ export const BotNavigation = memo(function BotNavigation(
           helperWorkspace={props.helperExpanded}
           onNewHelper={props.onNewHelper}
         />
-        <nav className="sidebar-rail-destinations" aria-label={t('transfer.m284')}>
-          <IconButton
-            label={t('transfer.m285')}
-            icon={LibraryIcon}
-            aria-current={inLibrary && onLibraryTab !== 'prompts' ? 'page' : undefined}
-            className={inLibrary && onLibraryTab !== 'prompts' ? 'selected' : ''}
-            onClick={() => onLibrary('bot')}
-          />
-          <IconButton
-            label={t('transfer.m286')}
-            icon={PromptIcon}
-            aria-current={inLibrary && onLibraryTab === 'prompts' ? 'page' : undefined}
-            className={inLibrary && onLibraryTab === 'prompts' ? 'selected' : ''}
-            onClick={() => onLibrary('prompts')}
-          />
-        </nav>
         <IconButton
           label={
             props.helperExpanded
@@ -516,6 +504,18 @@ export const BotNavigation = memo(function BotNavigation(
               onClick={openRunning}
             />
           )}
+          <IconButton
+            label={t('transfer.m285')}
+            icon={LibraryIcon}
+            aria-current={libraryCurrent ? 'page' : undefined}
+            onClick={() => onLibrary('bot')}
+          />
+          <IconButton
+            label={t('transfer.m286')}
+            icon={PromptIcon}
+            aria-current={promptsCurrent ? 'page' : undefined}
+            onClick={() => onLibrary('prompts')}
+          />
           <IconButton label={t('transfer.m289')} icon={SettingsIcon} onClick={onSettings} />
         </nav>
         {runningDialog}
@@ -553,94 +553,83 @@ export const BotNavigation = memo(function BotNavigation(
         {chatDestination}
         {helperDestination}
       </nav>
-      <nav className="sidebar-destinations" aria-label={t('transfer.m284')}>
-        <button
-          type="button"
-          className={`nav-button${inLibrary && props.libraryTab !== 'prompts' ? ' selected' : ''}`}
-          aria-current={inLibrary && props.libraryTab !== 'prompts' ? 'page' : undefined}
-          onClick={() => onLibrary('bot')}
-        >
-          <LibraryIcon size={20} aria-hidden="true" />
-          {t('transfer.m285')}
-        </button>
-        <button
-          type="button"
-          className={`nav-button${inLibrary && props.libraryTab === 'prompts' ? ' selected' : ''}`}
-          aria-current={inLibrary && props.libraryTab === 'prompts' ? 'page' : undefined}
-          onClick={() => onLibrary('prompts')}
-        >
-          <PromptIcon size={20} aria-hidden="true" />
-          {t('transfer.m286')}
-        </button>
-      </nav>
       {props.helperExpanded ? (
         <div ref={props.helperNavigationRef} className="helper-navigation-host" />
       ) : (
         <>
-          <div
-            className={`bot-navigation-header bot-tree-section-heading ${dropKey === 'unfiled' ? 'tree-drop-target' : ''}`}
-            onDragOver={(event) => overEntry(event, 'unfiled')}
-            onDrop={(event) => void dropEntry(event, null)}
-          >
-            <nav className="bot-navigation-modes" aria-label={t('transfer.m291')}>
-              <button
-                type="button"
-                aria-pressed={view.mode === 'bots'}
-                onClick={() => setMode('bots')}
-              >
-                {t('transfer.m005')}
-              </button>
-              <button
-                type="button"
-                aria-label={t('transfer.d024', { v0: unreadChats })}
-                aria-pressed={view.mode === 'activity'}
-                onClick={() => setMode('activity')}
-              >
-                {t('transfer.m292')}
-                {unreadChats > 0 && <span className="activity-mode-count">{unreadChats}</span>}
-              </button>
-            </nav>
-            {view.mode === 'bots' && (
+          <NavigationModeTabs
+            label={t('transfer.m291')}
+            panelId={modePanelId}
+            active={view.mode}
+            onSelect={setMode}
+            headerProps={{
+              className: dropKey === 'unfiled' ? 'tree-drop-target' : '',
+              onDragOver: (event) => overEntry(event, 'unfiled'),
+              onDrop: (event) => void dropEntry(event, null),
+            }}
+            tabs={[
+              { value: 'bots', label: t('transfer.m005') },
+              {
+                value: 'activity',
+                accessibleName: t('transfer.d024', { v0: unreadChats }),
+                label: (
+                  <>
+                    {t('transfer.m292')}
+                    {unreadChats > 0 && (
+                      <span className="activity-mode-count">{formatNumber(unreadChats)}</span>
+                    )}
+                  </>
+                ),
+              },
+            ]}
+            actions={
               <div className="bot-row-actions">
-                <ActionMenu label={t('transfer.m293')} viewport>
-                  <div className="action-menu-group">
-                    <label>
-                      {t('transfer.m294')}
-                      <select
-                        aria-label={t('transfer.m294')}
-                        value={view.sort}
-                        onChange={(event) =>
-                          setView((current) => ({
-                            ...current,
-                            sort: event.target.value === 'manual' ? 'manual' : 'recent',
-                          }))
-                        }
+                {view.mode === 'bots' && (
+                  <ActionMenu label={t('transfer.m293')} viewport>
+                    <div className="action-menu-group">
+                      <label>
+                        {t('transfer.m294')}
+                        <select
+                          aria-label={t('transfer.m294')}
+                          value={view.sort}
+                          onChange={(event) =>
+                            setView((current) => ({
+                              ...current,
+                              sort: event.target.value === 'manual' ? 'manual' : 'recent',
+                            }))
+                          }
+                        >
+                          <option value="recent">{t('transfer.m295')}</option>
+                          <option value="manual">{t('transfer.m296')}</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div className="action-menu-group">
+                      <button
+                        onClick={() => {
+                          setTitle('');
+                          setEditing('new');
+                        }}
                       >
-                        <option value="recent">{t('transfer.m295')}</option>
-                        <option value="manual">{t('transfer.m296')}</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div className="action-menu-group">
-                    <button
-                      onClick={() => {
-                        setTitle('');
-                        setEditing('new');
-                      }}
-                    >
-                      <FolderAddIcon size={16} />
-                      {t('transfer.m297')}
-                    </button>
-                    <button onClick={() => onLibrary('bot')}>
-                      <LibraryIcon size={16} />
-                      {t('transfer.m250')}
-                    </button>
-                  </div>
-                </ActionMenu>
+                        <FolderAddIcon size={16} />
+                        {t('transfer.m297')}
+                      </button>
+                      <button onClick={() => onLibrary('bot')}>
+                        <LibraryIcon size={16} />
+                        {t('transfer.m250')}
+                      </button>
+                    </div>
+                  </ActionMenu>
+                )}
               </div>
-            )}
-          </div>
-          <div className="bot-navigation-scroll">
+            }
+          />
+          <div
+            className="bot-navigation-scroll"
+            id={modePanelId}
+            role="tabpanel"
+            aria-labelledby={`${modePanelId}-${view.mode}`}
+          >
             {view.mode === 'activity' && (
               <ActivityNavigation
                 chats={chats}
@@ -844,11 +833,31 @@ export const BotNavigation = memo(function BotNavigation(
             {t('transfer.runningCount', { count: runningTotal })}
           </button>
         )}
-        <nav className="sidebar-app-actions" aria-label={t('transfer.m288')}>
-          <button type="button" className="nav-button" onClick={onSettings}>
-            <SettingsIcon size={18} />
-            {t('transfer.m289')}
+        <nav className="sidebar-footer" aria-label={t('transfer.m288')}>
+          <button
+            type="button"
+            className={`nav-button${libraryCurrent ? ' selected' : ''}`}
+            aria-current={libraryCurrent ? 'page' : undefined}
+            onClick={() => onLibrary('bot')}
+          >
+            <LibraryIcon size={20} aria-hidden="true" />
+            <span>{t('transfer.m285')}</span>
           </button>
+          <button
+            type="button"
+            className={`nav-button${promptsCurrent ? ' selected' : ''}`}
+            aria-current={promptsCurrent ? 'page' : undefined}
+            onClick={() => onLibrary('prompts')}
+          >
+            <PromptIcon size={20} aria-hidden="true" />
+            <span>{t('transfer.m286')}</span>
+          </button>
+          <IconButton
+            className="sidebar-settings"
+            label={t('transfer.m289')}
+            icon={SettingsIcon}
+            onClick={onSettings}
+          />
         </nav>
       </div>
     </div>

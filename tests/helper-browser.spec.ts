@@ -2700,6 +2700,8 @@ test('HROLLBACK03 an unsaved editor draft blocks its unit and a clean editor sho
   const saved = await changed.json();
   const state = await harness(page, 1);
   const openEditor = async () => {
+    if (page.url().startsWith('http'))
+      await page.evaluate(() => localStorage.removeItem('uimori:workspace-panel'));
     await page.goto('/');
     await navigationAction(page, '서재');
     await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(changedTitle);

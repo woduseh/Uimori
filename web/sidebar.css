@@ -33,7 +33,6 @@
   flex-shrink: 0;
 }
 .sidebar-rail > .navigation-quick-actions,
-.sidebar-rail > .sidebar-rail-destinations,
 .sidebar-rail > .sidebar-app-actions {
   display: flex;
   flex-direction: column;
@@ -41,8 +40,7 @@
   gap: 4px;
   width: 100%;
 }
-.sidebar-rail > .navigation-quick-actions,
-.sidebar-rail > .sidebar-rail-destinations {
+.sidebar-rail > .navigation-quick-actions {
   margin-bottom: 12px;
 }
 .sidebar-rail > .sidebar-app-actions {

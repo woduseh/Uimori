@@ -4,6 +4,7 @@ import { Check, MessageCircle } from 'lucide-react';
 import { DoneIcon, IssueIcon, RunningIcon, StopIcon } from './ui-icons.js';
 import { useState } from 'react';
 import { ActivitySection } from './ActivitySection.js';
+import { IconButton } from './IconButton.js';
 import { navigationTimeLabel } from './navigation-time.js';
 import type { ActivityFeed, ActivityFeedItem } from '../core/activity-feed.js';
 import type { Chat } from '../core/types.js';
@@ -60,6 +61,9 @@ export function ActivityNavigation({
       Number(b[1].some((item) => item.actionable)) - Number(a[1].some((item) => item.actionable)) ||
       b[1][0].at.localeCompare(a[1][0].at)
   );
+  const acknowledgeable = unread.flatMap(([, items]) =>
+    items.filter((item) => item.canAcknowledge)
+  );
   const running = new Map<string, { count: number; kinds: Set<string> }>();
   const labels: Record<string, string> = {
     main: t('helpers.m216'),
@@ -95,7 +99,22 @@ export function ActivityNavigation({
   };
   return (
     <nav className="activity-navigation" aria-label={t('helpers.m262')}>
-      <ActivitySection id="unread" label={t('helpers.m263')} total={unread.length}>
+      <ActivitySection
+        id="unread"
+        label={t('helpers.m263')}
+        total={unread.length}
+        action={
+          acknowledgeable.length > 0 && (
+            <button
+              type="button"
+              className="activity-nav-acknowledge-all"
+              onClick={() => onAcknowledge(acknowledgeable)}
+            >
+              {t('helpers.m286')}
+            </button>
+          )
+        }
+      >
         {(limit) =>
           unread.slice(0, limit).map(([chatId, items]) => {
             const chat = chatById.get(chatId)!;
@@ -127,31 +146,32 @@ export function ActivityNavigation({
                   />
                   <span className="activity-nav-copy">
                     <strong>{title(chat)}</strong>
-                    <small className="ui-meta-row">
-                      <span>{botName(chat)}</span>
-                      <span>
-                        {activityStatusLabel(relevant)}
-                        {items.length > 1
-                          ? t('helpers.m265', { v0: formatNumber(items.length - 1) })
-                          : ''}
+                    <small className="activity-nav-detail">
+                      <span className="ui-meta-row">
+                        <span>{botName(chat)}</span>
+                        <span>
+                          {activityStatusLabel(relevant)}
+                          {items.length > 1
+                            ? t('helpers.m265', { v0: formatNumber(items.length - 1) })
+                            : ''}
+                        </span>
                       </span>
+                      <time dateTime={relevant.at}>{navigationTimeLabel(relevant.at)}</time>
                     </small>
                   </span>
-                  <time dateTime={relevant.at}>{navigationTimeLabel(relevant.at)}</time>
                 </button>
                 {available.length > 0 && (
-                  <button
-                    type="button"
+                  <IconButton
                     className="activity-nav-confirm"
-                    aria-label={t('helpers.m266', {
+                    label={t('helpers.m266', {
                       v0: title(chat),
                       v1: formatNumber(available.length),
                     })}
+                    title={t('helpers.m267')}
+                    icon={Check}
+                    size={16}
                     onClick={() => onAcknowledge(available)}
-                  >
-                    <Check size={14} aria-hidden="true" />
-                    {t('helpers.m267')}
-                  </button>
+                  />
                 )}
               </div>
             );

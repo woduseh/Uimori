@@ -239,8 +239,11 @@ test('SIDEPANEL02 the panel edge resizes by pointer and keyboard and persists on
   expect(await page.evaluate(() => localStorage.getItem('uimori:panel-width'))).toBe('376');
 
   await page.reload();
-  await header(page).getByRole('button', { name: '도우미', exact: true }).click();
   await expect(helper).toBeVisible();
+  await expect(header(page).getByRole('button', { name: '도우미', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
   expect(await panelWidth(page, '#helper-panel')).toBe(376);
   await header(page).getByRole('button', { name: '플롯', exact: true }).click();
   expect(await panelWidth(page, '#outline-panel')).toBe(400);

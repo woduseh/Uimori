@@ -86,6 +86,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -161,9 +162,11 @@ import {
   fitSidePanelWidth,
   MIN_CENTER_WIDTH,
   readSidePanelWidth,
+  readWorkspacePanelState,
   SIDE_PANEL_MAX_WIDTH,
   sidePanelMinimumWidth,
   writeSidePanelWidth,
+  writeWorkspacePanelState,
   type SidePanelTab,
 } from './side-panel.js';
 import { modelLabel } from './storyLabels.js';
@@ -407,12 +410,24 @@ function App() {
   const [promptToEdit, setPromptToEdit] = useState<string | null>(null);
   const [helperResource, setHelperResource] = useState<HelperResourceRef | null>(null);
   const clearHelperResource = useCallback(() => setHelperResource(null), []);
-  const [workspacePanel, setWorkspacePanel] = useState<SidePanelTab | null>(null);
+  const [restoredPanel] = useState(() => {
+    const state = readWorkspacePanelState();
+    if (compact) return 'closed';
+    if (
+      state !== 'helper-workspace' &&
+      innerWidth - RAIL_WIDTH - MIN_CENTER_WIDTH < sidePanelMinimumWidth('helper')
+    )
+      return 'closed';
+    return state;
+  });
+  const [workspacePanel, setWorkspacePanel] = useState<SidePanelTab | null>(
+    restoredPanel === 'helper' || restoredPanel === 'helper-workspace' ? 'helper' : null
+  );
   const lastSidePanelTab = useRef<SidePanelTab>('helper');
   useEffect(() => {
     if (workspacePanel) lastSidePanelTab.current = workspacePanel;
   }, [workspacePanel]);
-  const [helperExpanded, setHelperExpanded] = useState(false);
+  const [helperExpanded, setHelperExpanded] = useState(restoredPanel === 'helper-workspace');
   const [helperScope, setHelperScope] = useState<HelperScope | null>(null);
   const rememberHelperScope = useCallback((next: HelperScope) => {
     setHelperScope((previous) =>
@@ -663,6 +678,45 @@ function App() {
   useEffect(() => {
     if (!workspacePanelOpen) setPanelSidebarExpanded(false);
   }, [workspacePanelOpen]);
+  const panelRestorePending = useRef(
+    restoredPanel === 'outline' || restoredPanel === 'options' || restoredPanel === 'board'
+  );
+  useLayoutEffect(() => {
+    if (!panelRestorePending.current) return;
+    if (workspacePanel || panel || s.destination !== 'story') {
+      panelRestorePending.current = false;
+      return;
+    }
+    if (s.selected && s.detail?.chat.id !== s.selected) return;
+    panelRestorePending.current = false;
+    if (
+      viewportWidth >= dockBesideRail &&
+      storyPanels &&
+      !!s.detail &&
+      (restoredPanel === 'options' ||
+        (restoredPanel === 'outline' && outlineSidecarAvailable) ||
+        (restoredPanel === 'board' && storyBoard.enabled))
+    )
+      setWorkspacePanel(restoredPanel);
+  }, [
+    restoredPanel,
+    workspacePanel,
+    panel,
+    s.destination,
+    s.selected,
+    s.detail,
+    viewportWidth,
+    dockBesideRail,
+    storyPanels,
+    outlineSidecarAvailable,
+    storyBoard.enabled,
+  ]);
+  useEffect(() => {
+    if (!panelRestorePending.current)
+      writeWorkspacePanelState(
+        helperWorkspaceOpen ? 'helper-workspace' : (workspacePanel ?? 'closed')
+      );
+  }, [workspacePanel, helperWorkspaceOpen]);
   useEffect(() => {
     writePresentationSetting('uimori:sidebar-collapsed', String(sidebarCollapsed));
   }, [sidebarCollapsed]);

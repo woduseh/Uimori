@@ -69,7 +69,7 @@ for (const width of [412]) {
         await expect(error).toHaveCount(0);
         await expect(
           destination === '서재'
-            ? page.getByRole('tabpanel', { name: '봇', exact: true })
+            ? page.getByTestId('library-panel').getByRole('tabpanel', { name: '봇', exact: true })
             : page.getByTestId('prompt-library')
         ).toBeVisible();
         await expect(

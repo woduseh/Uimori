@@ -203,7 +203,8 @@ describe('helper navigation presentation', () => {
     });
     const html = render();
     expect(html).toContain('data-activity-section="unread"');
-    expect(html).toContain('data-activity-section="running"');
+    expect(html).not.toContain('data-activity-section="running"');
+    expect(html).toContain('>모두 확인</button>');
     const recent = html.slice(html.indexOf('data-activity-section="recent"'));
     for (const item of sessions) expect(recent).toContain(`data-conversation-id="${item.id}"`);
     expect(recent.indexOf('data-conversation-id="two"')).toBeLessThan(

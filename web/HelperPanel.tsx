@@ -503,7 +503,15 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     confirmNotice: uiMessage('shortcuts.cancelHelperAgain', { key: stopShortcutLabel }),
   });
   const [modes, setModes] = useState<Record<string, HelperMode>>({});
-  const mode = modes[scopeKey] ?? 'apply';
+  const [chosenMode, setChosenMode] = useState<HelperMode>(() =>
+    readPresentationChoice<HelperMode>('uimori:helper-mode', ['apply', 'plan'], 'apply')
+  );
+  const mode = modes[scopeKey] ?? chosenMode;
+  const chooseMode = (next: HelperMode) => {
+    setModes((old) => ({ ...old, [scopeKey]: next }));
+    setChosenMode(next);
+    writePresentationSetting('uimori:helper-mode', next);
+  };
   const [grants, setGrants] = useState<Record<string, HelperConfirmationGrant[]>>({});
   const grantList = grants[scopeKey] ?? [];
   const [mentionRefsByScope, setMentionRefsByScope] = useState<
@@ -638,7 +646,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   const toggleMode = () => {
     if (!scopeKey || document.activeElement?.closest('dialog')) return false;
     const next = mode === 'plan' ? 'apply' : 'plan';
-    setModes((old) => ({ ...old, [scopeKey]: next }));
+    chooseMode(next);
     if (next === 'plan') setGrants((old) => ({ ...old, [scopeKey]: [] }));
   };
   useShortcut('helper.mode', toggleMode, { scope: panel, active: props.open });
@@ -1168,7 +1176,9 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                 })),
               }
             : {}),
-          ...(!steerTaskId && modes[owner] === 'plan' ? { mode: 'plan' as const } : {}),
+          ...(!steerTaskId && (modes[owner] ?? chosenMode) === 'plan'
+            ? { mode: 'plan' as const }
+            : {}),
           ...(!steerTaskId && grants[owner]?.length
             ? { confirmations: grants[owner].map((grant) => grant.id) }
             : {}),
@@ -1368,7 +1378,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   }
   function confirmHeld(grant: HelperConfirmationGrant) {
     if (!scopeKey) return;
-    setModes((old) => ({ ...old, [scopeKey]: 'apply' }));
+    chooseMode('apply');
     setGrants((old) => ({
       ...old,
       [scopeKey]: [...(old[scopeKey] ?? []).filter((item) => item.id !== grant.id), grant],
@@ -1390,7 +1400,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   };
   async function carryOutPlan() {
     if (!conversation || outbox) return;
-    setModes((old) => ({ ...old, [scopeKey]: 'apply' }));
+    chooseMode('apply');
     await send({
       requestKey: crypto.randomUUID(),
       text: t('helperPlan.carryOutRequest'),

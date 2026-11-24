@@ -804,7 +804,7 @@ test('HREAD01 a helper result read in one browser, or read earlier on this brows
     const unreadIn = async (target: typeof page) => {
       await navigationAction(target, '도우미');
       const history = target.getByRole('navigation', { name: '도우미 대화', exact: true });
-      await history.getByRole('button', { name: /^미확인 활동/ }).click();
+      await history.getByRole('tab', { name: /^미확인 활동/ }).click();
       return history.locator('[data-activity-section="unread"]');
     };
     await second.goto('/');
@@ -1501,7 +1501,7 @@ test('HUSAGE01 the composer shows the latest context estimate, its parts and the
     await page.goto(`/?chat=${chat.id}`);
     await openHelper(page);
     const modeChip = page.locator('#helper-panel .helper-mode-chip');
-    await modeChip.click();
+    if (colorScheme === 'light') await modeChip.click();
     await expect(modeChip).toHaveAccessibleName('요청 방식: 계획만');
     const summary = page.locator('#helper-panel .helper-context-usage > summary');
     await expect(summary).toHaveAccessibleName('컨텍스트 사용량: 추정 240,000 / 예산 272,000 토큰');

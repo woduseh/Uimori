@@ -28,6 +28,7 @@ export function ActivitySection({
   total,
   children,
   empty,
+  action,
 }: {
   id: ActivitySectionId;
   storageKey?: string;
@@ -35,6 +36,7 @@ export function ActivitySection({
   total: number;
   children: (limit: number) => ReactNode;
   empty?: string;
+  action?: ReactNode;
 }) {
   useI18n();
   const [expanded, setExpanded] = useState(() => readExpanded(id, storageKey));
@@ -49,26 +51,30 @@ export function ActivitySection({
       JSON.stringify({ ...storedSections(storageKey), [id]: next })
     );
   };
+  if (!total && !empty) return null;
   return (
     <section className="activity-nav-section" data-activity-section={id}>
-      <button
-        type="button"
-        className="activity-nav-heading"
-        aria-expanded={expanded}
-        aria-controls={contentsId}
-        onClick={toggle}
-      >
-        <span className="activity-nav-heading-label">
-          {expanded ? (
-            <ChevronDown size={14} aria-hidden="true" />
-          ) : (
-            <ChevronRight size={14} aria-hidden="true" />
-          )}
-          <strong>{label}</strong>
-        </span>
-        <span>{formatNumber(total)}</span>
-      </button>
-      <div id={contentsId} hidden={!expanded}>
+      <div className="activity-nav-heading-row">
+        <button
+          type="button"
+          className="activity-nav-heading"
+          aria-expanded={expanded}
+          aria-controls={contentsId}
+          onClick={toggle}
+        >
+          <span className="activity-nav-heading-label">
+            {expanded ? (
+              <ChevronDown size={14} aria-hidden="true" />
+            ) : (
+              <ChevronRight size={14} aria-hidden="true" />
+            )}
+            <strong>{label}</strong>
+          </span>
+          <span>{formatNumber(total)}</span>
+        </button>
+        {action}
+      </div>
+      <div id={contentsId} className="activity-nav-contents" hidden={!expanded}>
         {expanded &&
           (total ? children(limit) : empty && <p className="activity-nav-empty">{empty}</p>)}
         {expanded && limit < total && (
