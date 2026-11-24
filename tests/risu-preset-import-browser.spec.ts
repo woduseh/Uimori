@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { promptControls } from '../core/risu-prompt.js';
 import type { RisuPresetImportApply } from '../core/risu-preset.js';
-import { navigationAction } from './ui-navigation.js';
+import { navigationAction, editorTab } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import type { ChatDetail } from '../core/types.js';
 import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
@@ -162,10 +162,7 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   await expect(dialog).not.toBeVisible();
   const composer = page.getByRole('region', { name: 'Risu 프롬프트 원본 편집', exact: true });
   await expect(composer).toBeVisible();
-  await expect(page.getByRole('tab', { name: '구성', exact: true })).toHaveAttribute(
-    'aria-selected',
-    'true'
-  );
+  await expect(editorTab(page, '구성')).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('tab', { name: '기본 옵션', exact: true }).click();
   const options = composer.locator('.prompt-option-group').first();
   await expect(options).not.toHaveAttribute('open');
@@ -185,7 +182,7 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
       fullPage: true,
     });
   await composer.getByLabel('Imported Mood', { exact: true }).selectOption('"1"');
-  await page.getByRole('tab', { name: '구성', exact: true }).click();
+  await editorTab(page, '구성').click();
   await expect(composer.getByLabel('1번 프롬프트 본문')).toHaveValue(
     source.promptTemplate[0]!.text!
   );

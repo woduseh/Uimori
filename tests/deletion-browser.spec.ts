@@ -138,13 +138,13 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
   ).toBe(true);
   await page.goto('/');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '현재 프롬프트');
-  const settings = page.getByRole('region', { name: '현재 프롬프트 설정' });
+  await selectSettingsSection(page, '기본 프롬프트');
+  const settings = page.getByRole('region', { name: '기본 프롬프트 설정' });
   await settings.locator('summary').filter({ hasText: '창작 옵션' }).click();
   await settings.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
   await settings.getByRole('button', { name: '옵션 프리셋 관리', exact: true }).click();
   const combinations = page.getByRole('region', {
-    name: '현재 프롬프트 / 옵션 프리셋 관리',
+    name: '기본 프롬프트 / 옵션 프리셋 관리',
     exact: true,
   });
   await combinations.getByRole('button', { name: '삭제 전역 조합 삭제', exact: true }).click();
@@ -166,8 +166,8 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
   await selectedPrompt.getByRole('button', { name: '취소', exact: true }).click();
   await panel.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '현재 프롬프트');
-  const currentPrompt = settings.getByLabel('현재 프롬프트', { exact: true });
+  await selectSettingsSection(page, '기본 프롬프트');
+  const currentPrompt = settings.getByLabel('기본 프롬프트', { exact: true });
   await currentPrompt.selectOption(workspace.main.presetId);
   await expect(currentPrompt).toHaveValue(workspace.main.presetId);
   await expect(currentPrompt).toBeEnabled();

@@ -58,4 +58,8 @@ test('package settings a helper change names read as the editor sections that ho
   expect(name(['package', 'loreActivation', 'mode'])).toEqual(['로어북']);
   expect(name(['package', 'modules'])).toEqual(['고급 설정', '함께 쓰는 모듈']);
   expect(name(['package', 'imageHandoff', 'enabled'])).toEqual(['고급 설정', '배경 HTML과 CSS']);
+  expect(name(['package', 'nativeRisu', 'card', 'creator_notes'])).toEqual([
+    '기본 정보',
+    '제작 정보',
+  ]);
 });

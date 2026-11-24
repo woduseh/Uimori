@@ -1309,13 +1309,13 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   });
   expect(latest.ok()).toBeTruthy();
   await page.goto(`/?chat=${chat.id}`);
-  await selectCurrentSettingsSection(page, '현재 프롬프트');
+  await selectCurrentSettingsSection(page, '기본 프롬프트');
   const dialog = page.getByRole('dialog', { name: '설정', exact: true });
-  const editor = dialog.getByRole('region', { name: '현재 프롬프트 설정' });
+  const editor = dialog.getByRole('region', { name: '기본 프롬프트 설정' });
   await expect
     .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.program)
     .toEqual(createDefaultRisuPrompt('Latest library writing prompt.', 'main'));
-  await expect(editor.getByLabel('현재 프롬프트', { exact: true })).toHaveValue(first.id);
+  await expect(editor.getByLabel('기본 프롬프트', { exact: true })).toHaveValue(first.id);
   await expect(editor.getByRole('button', { name: '최신 저장본 적용', exact: true })).toHaveCount(
     0
   );

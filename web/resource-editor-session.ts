@@ -297,7 +297,7 @@ export class ResourceEditorSession {
           ? model.title
           : 'title' in state.local.model
             ? state.local.model.title
-            : '현재 프롬프트',
+            : '기본 프롬프트',
       source: model ? ('unsaved' as const) : ('saved' as const),
       ...(model ? { model } : {}),
     };

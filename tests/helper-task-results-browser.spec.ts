@@ -11,7 +11,7 @@ import type { Chat, ChatDetail } from '../core/types.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
 import { postFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { nativeContent } from './fixtures/native-content.js';
-import { navigationAction, openHelper } from './ui-navigation.js';
+import { navigationAction, openHelper, editorTab } from './ui-navigation.js';
 import { DESKTOP_HEIGHT, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 
 test.setTimeout(60000);
@@ -1352,10 +1352,7 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
     .getByRole('button', { name: `${content.title}, 로어북, 폭풍, 로어 본문 열기`, exact: true })
     .click();
   const library = page.getByTestId('library-panel');
-  await expect(library.getByRole('tab', { name: '로어북', exact: true })).toHaveAttribute(
-    'aria-selected',
-    'true'
-  );
+  await expect(editorTab(library, '로어북')).toHaveAttribute('aria-selected', 'true');
   await expect(library.getByRole('button', { name: '폭풍', exact: true })).toHaveAttribute(
     'aria-current',
     'true'

@@ -1,9 +1,15 @@
 export const messages = {
-  'library.listPortrait': {
-    ko: '목록 대표 이미지',
-    en: 'Library portrait',
-    ja: '一覧の代表画像',
-    zh: '列表封面',
+  'library.changePortrait': {
+    ko: '대표 이미지 변경',
+    en: 'Change portrait',
+    ja: '代表画像を変更',
+    zh: '更换封面',
+  },
+  'library.resourceName': {
+    ko: '{v0} 이름',
+    en: '{v0} name',
+    ja: '{v0}の名前',
+    zh: '{v0}名称',
   },
   'library.cloneWarnings': {
     ko: '{first}\n{second}',
@@ -1038,10 +1044,10 @@ export const messages = {
     zh: '默认值使用的提示词',
   },
   'library.globalPromptSettings': {
-    ko: '현재 프롬프트',
-    en: 'Current prompt',
-    ja: '現在のプロンプト',
-    zh: '当前提示词',
+    ko: '기본 프롬프트',
+    en: 'Default prompt',
+    ja: '既定のプロンプト',
+    zh: '默认提示词',
   },
   'library.chatSettingsChangedInAnotherRequestYour': {
     ko: '채팅 설정이 바뀌었어요. 최신 설정을 확인한 뒤 다시 저장해 주세요.',

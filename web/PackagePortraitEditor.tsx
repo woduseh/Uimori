@@ -1,13 +1,15 @@
 import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { RisuContent } from '../core/risu-content.js';
 import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
+import { ActionMenu } from './ActionMenu.js';
 import { ContentAvatar } from './ContentAvatar.js';
+import { withPortraitImage } from './content-portrait.js';
 import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { maxPackageImages, uploadPackageImage } from './package-image-upload.js';
-import { CheckIcon, SearchIcon } from './ui-icons.js';
+import { CheckIcon, CloseIcon, EditIcon, ImagesIcon, SearchIcon, UploadIcon } from './ui-icons.js';
 import './content-picker.css';
 
 export function PackagePortraitEditor({
@@ -15,18 +17,21 @@ export function PackagePortraitEditor({
   onChange,
   onDirtyChange,
   disabled = false,
+  children,
 }: {
   value: RisuContent;
   onChange: (value: RisuContent) => void;
   onDirtyChange?: (dirty: boolean) => void;
   disabled?: boolean;
+  children?: ReactNode;
 }) {
   useI18n();
   const scope = `${value.id}@${value.revision}`;
   const latest = useRef({ value, onChange, onDirtyChange, scope });
   latest.current = { value, onChange, onDirtyChange, scope };
   const generation = useRef(0),
-    upload = useRef<AbortController | null>(null);
+    upload = useRef<AbortController | null>(null),
+    fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false),
     [open, setOpen] = useState(false),
     [query, setQuery] = useState(''),
@@ -56,23 +61,12 @@ export function PackagePortraitEditor({
   };
   function selectImage(imageId: string) {
     if (disabled || busy) return;
-    const current = latest.current.value,
-      selected = current.images?.find((image) => image.id === imageId);
-    if (!selected) return;
-    update({
-      ...current,
-      portraitImageId: selected.id,
-      images: current.images?.map((image) =>
-        image.id === selected.id && image.allowedUse === 'inline'
-          ? { ...image, allowedUse: 'both' }
-          : image
-      ),
-    });
+    const chosen = withPortraitImage(latest.current.value, imageId);
+    if (!chosen) return;
+    update(chosen.value);
     setOpen(false);
     setError('');
-    setNotice(
-      selected.allowedUse === 'inline' ? uiMessage('library.changedTheStoryImageToPortraitAnd') : ''
-    );
+    setNotice(chosen.widenedUse ? uiMessage('library.changedTheStoryImageToPortraitAnd') : '');
   }
   async function addFile(file: File) {
     if (disabled || upload.current) return;
@@ -119,96 +113,109 @@ export function PackagePortraitEditor({
   const found = images.filter((image) =>
     `${image.title} ${image.description}`.toLocaleLowerCase().includes(needle)
   );
-  const portrait = images.find((image) => image.id === value.portraitImageId);
   return (
     <section className="package-portrait-editor" aria-label={t('library.portraitSettings')}>
-      <ContentAvatar
-        className="package-portrait-avatar"
-        content={{
-          id: value.id,
-          revision: value.revision,
-          title: value.title,
-          description: '',
-          kind: 'module',
-          text: '',
-          loading: 'pinned',
-          relatedIds: [],
-          package: value,
+      <div className="package-portrait-media">
+        <ContentAvatar
+          className="package-portrait-avatar"
+          content={{
+            id: value.id,
+            revision: value.revision,
+            title: value.title,
+            description: '',
+            kind: 'module',
+            text: '',
+            loading: 'pinned',
+            relatedIds: [],
+            package: value,
+          }}
+        />
+        <ActionMenu
+          label={t('library.changePortrait')}
+          icon={EditIcon}
+          className="package-portrait-menu"
+        >
+          <div className="action-menu-group">
+            <button
+              type="button"
+              disabled={disabled || busy}
+              onClick={() => fileInput.current?.click()}
+            >
+              <UploadIcon size={18} aria-hidden="true" />
+              {t('library.uploadImage')}
+            </button>
+            {images.length > 0 && (
+              <button
+                type="button"
+                disabled={disabled || busy}
+                onClick={() => {
+                  setQuery('');
+                  setVisibleCount(50);
+                  setOpen(true);
+                }}
+              >
+                <ImagesIcon size={18} aria-hidden="true" />
+                {t('library.chooseAnExistingImage')}
+              </button>
+            )}
+            {value.portraitImageId && (
+              <button
+                type="button"
+                disabled={disabled || busy}
+                onClick={() => {
+                  const next = { ...latest.current.value };
+                  delete next.portraitImageId;
+                  update(next);
+                  setError('');
+                  setNotice(uiMessage('library.portraitDesignationRemovedTheImageRemainsIn'));
+                }}
+              >
+                <CloseIcon size={18} aria-hidden="true" />
+                {t('library.removePortraitDesignation')}
+              </button>
+            )}
+          </div>
+        </ActionMenu>
+      </div>
+      <div className="package-portrait-identity">{children}</div>
+      <input
+        ref={fileInput}
+        type="file"
+        hidden
+        accept={PACKAGE_IMAGE_MIMES.join(',')}
+        aria-label={t('library.uploadPortrait')}
+        disabled={disabled || busy}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file) void addFile(file);
         }}
       />
-      <div className="package-portrait-controls">
-        <strong>{t('library.listPortrait')}</strong>
-        {portrait && <small>{portrait.title}</small>}
-        <div className="package-portrait-actions">
-          <label
-            className={`secondary file-picker-button${disabled || busy ? ' is-disabled' : ''}`}
-          >
-            {t('library.uploadImage')}
-            <input
-              type="file"
-              accept={PACKAGE_IMAGE_MIMES.join(',')}
-              aria-label={t('library.uploadPortrait')}
-              disabled={disabled || busy}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = '';
-                if (file) void addFile(file);
-              }}
-            />
-          </label>
-          {images.length > 0 && (
-            <button
-              type="button"
-              className="secondary"
-              disabled={disabled || busy || !images.length}
-              onClick={() => {
-                setQuery('');
-                setVisibleCount(50);
-                setOpen(true);
-              }}
-            >
-              {t('library.chooseAnExistingImage')}
-            </button>
+      {(busy || notice || error) && (
+        <div className="package-portrait-status">
+          {busy && (
+            <div className="package-portrait-actions">
+              <LoadingState presentation="inline" label={t('library.uploadingPortrait')} />
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  generation.current++;
+                  upload.current?.abort();
+                  upload.current = null;
+                  setBusy(false);
+                  latest.current.onDirtyChange?.(false);
+                  setNotice(uiMessage('library.imageUploadCanceled'));
+                }}
+              >
+                {t('library.cancelUpload')}
+              </button>
+            </div>
           )}
-          {value.portraitImageId && (
-            <button
-              type="button"
-              className="ghost"
-              disabled={disabled || busy || !value.portraitImageId}
-              onClick={() => {
-                const next = { ...latest.current.value };
-                delete next.portraitImageId;
-                update(next);
-                setError('');
-                setNotice(uiMessage('library.portraitDesignationRemovedTheImageRemainsIn'));
-              }}
-            >
-              {t('library.removePortraitDesignation')}
-            </button>
-          )}
+          {notice && <NoticeBanner>{translateMessage(notice)}</NoticeBanner>}
+          {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
         </div>
-        {busy && (
-          <div className="package-portrait-actions">
-            <LoadingState presentation="inline" label={t('library.uploadingPortrait')} />
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => {
-                generation.current++;
-                upload.current?.abort();
-                upload.current = null;
-                setBusy(false);
-                latest.current.onDirtyChange?.(false);
-                setNotice(uiMessage('library.imageUploadCanceled'));
-              }}
-            >
-              {t('library.cancelUpload')}
-            </button>
-          </div>
-        )}
-        {notice && <NoticeBanner>{translateMessage(notice)}</NoticeBanner>}
-        {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
-      </div>
+      )}
       <Dialog
         open={open}
         title={t('library.choosePortrait')}

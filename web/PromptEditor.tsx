@@ -425,7 +425,7 @@ export function PromptEditor({
           header={
             <div className="prompt-editor-heading">
               {heading}
-              <h2 ref={headingRef} tabIndex={-1} className="prompt-title-field">
+              <h2 ref={headingRef} tabIndex={-1} className="editor-title-field">
                 <input
                   aria-label={t('prompts.uiPromptName')}
                   placeholder={t('prompts.uiPromptName')}

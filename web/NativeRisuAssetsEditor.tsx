@@ -1,6 +1,8 @@
-import { useI18n, translateMessage } from './i18n.js';
+import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { ImageMetadataFields } from './ImageMetadataFields.js';
 import { useLayoutEffect, useRef, useState } from 'react';
+import { ActionMenu } from './ActionMenu.js';
+import { withPortraitImage } from './content-portrait.js';
 import type { RisuContent } from '../core/risu-content.js';
 import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
 import {
@@ -18,9 +20,11 @@ import { IconButton } from './IconButton.js';
 import {
   CheckIcon,
   CloseIcon,
+  CopyIcon,
   DeleteIcon,
   ImageAddIcon,
   ImagesIcon,
+  PersonaIcon,
   SearchIcon,
 } from './ui-icons.js';
 import './content-picker.css';
@@ -33,13 +37,15 @@ type Props = {
   onBusyChange?: (busy: boolean) => void;
 };
 const pageSize = 30;
+const NARROW_WIDTH = 600;
 
 export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props) {
   const { t } = useI18n();
 
   const scope = `${value.id}@${value.revision}`;
-  const latest = useRef({ value, onChange, onBusyChange, scope });
-  latest.current = { value, onChange, onBusyChange, scope };
+  const [narrow, setNarrow] = useState(false);
+  const latest = useRef({ value, onChange, onBusyChange, scope, narrow });
+  latest.current = { value, onChange, onBusyChange, scope, narrow };
   const upload = useRef<AbortController | null>(null),
     generation = useRef(0);
   const [query, setQuery] = useState(''),
@@ -50,7 +56,16 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
     [notice, setNotice] = useState<{ key: string; count?: number } | null>(null),
     [error, setError] = useState(''),
     [removing, setRemoving] = useState(''),
-    [dropActive, setDropActive] = useState(false);
+    [dropActive, setDropActive] = useState(false),
+    [area, setArea] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (!area) return;
+    const observer = new ResizeObserver(([entry]) =>
+      setNarrow(entry!.contentRect.width < NARROW_WIDTH)
+    );
+    observer.observe(area);
+    return () => observer.disconnect();
+  }, [area]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Revision changes invalidate the ownership of uploads and local selection.
   useLayoutEffect(() => {
     generation.current++;
@@ -102,7 +117,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
             ? replaceNativeRisuImage(latest.current.value, replacing, image)
             : addNativeRisuImage(latest.current.value, image);
           change(next);
-          setSelected(replacing ?? image.id);
+          if (replacing || !latest.current.narrow) setSelected(replacing ?? image.id);
           completed++;
         } catch (cause) {
           if (!current()) return;
@@ -128,6 +143,32 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
       }
     }
   }
+  function setPortrait(imageId: string) {
+    if (busy) return;
+    const chosen = withPortraitImage(latest.current.value, imageId);
+    if (!chosen) return;
+    change(chosen.value);
+    setError('');
+    setNotice({
+      key: chosen.widenedUse ? 'library.changedTheStoryImageToPortraitAnd' : 'native.portraitSet',
+    });
+  }
+  async function copyReference(imageId: string) {
+    const current = latest.current.value;
+    const name =
+      nativeImageNames(current, imageId)[0] ??
+      current.images?.find((image) => image.id === imageId)?.title ??
+      '';
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(name);
+      setError('');
+      setNotice({ key: 'native.referenceNameCopied' });
+    } catch {
+      setNotice(null);
+      setError(uiMessage('helpers.m130'));
+    }
+  }
   const images = value.images ?? [],
     needle = query.trim().toLocaleLowerCase();
   const found = images.filter((image) =>
@@ -138,10 +179,66 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
   const currentPage = Math.min(page, Math.max(0, Math.ceil(found.length / pageSize) - 1));
   const active = images.find((image) => image.id === selected),
     pending = images.find((image) => image.id === removing);
-  const names = active ? nativeImageNames(value, active.id) : [],
-    missing = unmappedNativeAssetCount(value);
+  const missing = unmappedNativeAssetCount(value);
+  const detail = (active: NonNullable<RisuContent['images']>[number]) => {
+    const names = nativeImageNames(value, active.id);
+    return (
+      <>
+        <img
+          className="native-assets-preview"
+          src={`/api/package-image-blobs/${active.blobHash}`}
+          alt={active.title}
+        />
+        <ImageMetadataFields
+          image={active}
+          portrait={active.id === value.portraitImageId}
+          onChange={(next) =>
+            change({
+              ...value,
+              images: images.map((image) => (image.id === next.id ? next : image)),
+            })
+          }
+        />
+        <details>
+          <summary>{t('native.text_24016d85c7')}</summary>
+          <code>{names.join(', ') || active.id}</code>
+        </details>
+        <div className="native-assets-actions">
+          <label className={`secondary file-picker-button${busy ? ' is-disabled' : ''}`}>
+            {t('native.text_597b8746b1')}
+            <input
+              type="file"
+              accept={PACKAGE_IMAGE_MIMES.join(',')}
+              disabled={busy}
+              aria-label={t('native.text_bf32707568')}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (file) void filesChosen([file], active.id);
+              }}
+            />
+          </label>
+          <IconButton
+            label={t('native.text_8a2c3b9aec')}
+            icon={DeleteIcon}
+            disabled={busy}
+            onClick={() => setRemoving(active.id)}
+          />
+          {!narrow && (
+            <IconButton
+              label={t('shared.close', { title: active.title })}
+              icon={CloseIcon}
+              className="secondary"
+              onClick={() => setSelected('')}
+            />
+          )}
+        </div>
+      </>
+    );
+  };
   return (
     <section
+      ref={setArea}
       className="native-risu-assets"
       aria-label={t('native.text_6b1779397e')}
       data-drop-active={dropActive || undefined}
@@ -221,29 +318,65 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
           ))}
         </NoticeBanner>
       )}
-      <div className={`native-assets-layout${active ? ' has-selection' : ''}`}>
+      <div className="native-assets-layout" data-narrow={narrow || undefined}>
         <div>
           <div className="native-assets-grid" aria-label={t('native.text_3a05fee3d8')}>
             {found.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map((image) => (
-              <button
-                type="button"
+              <div
                 key={image.id}
-                className={`secondary native-assets-tile${image.id === selected ? ' is-selected' : ''}`}
-                aria-pressed={image.id === selected}
-                onClick={() => setSelected(image.id === selected ? '' : image.id)}
+                className={`native-assets-tile${image.id === selected ? ' is-selected' : ''}`}
               >
-                <img
-                  src={`/api/package-image-blobs/${image.blobHash}`}
-                  alt=""
-                  loading="lazy"
-                  draggable={false}
-                />
-                <span>{image.title}</span>
-                {image.id === selected && (
-                  <CheckIcon className="native-assets-selected" size={16} aria-hidden="true" />
-                )}
-                {image.id === value.portraitImageId && <small>{t('native.text_384374b51a')}</small>}
-              </button>
+                <button
+                  type="button"
+                  className="secondary native-assets-tile-select"
+                  aria-pressed={image.id === selected}
+                  onClick={() => setSelected(image.id === selected ? '' : image.id)}
+                >
+                  <img
+                    src={`/api/package-image-blobs/${image.blobHash}`}
+                    alt=""
+                    loading="lazy"
+                    draggable={false}
+                  />
+                  <span>{image.title}</span>
+                  {image.id === selected && (
+                    <CheckIcon className="native-assets-selected" size={16} aria-hidden="true" />
+                  )}
+                  {image.id === value.portraitImageId && (
+                    <small>{t('native.text_384374b51a')}</small>
+                  )}
+                </button>
+                <ActionMenu
+                  label={t('native.assetActions', { name: image.title })}
+                  className="native-assets-tile-menu"
+                >
+                  <div className="action-menu-group">
+                    <button
+                      type="button"
+                      disabled={busy || image.id === value.portraitImageId}
+                      onClick={() => setPortrait(image.id)}
+                    >
+                      <PersonaIcon size={18} aria-hidden="true" />
+                      {t('native.setAsPortrait')}
+                    </button>
+                    <button type="button" onClick={() => void copyReference(image.id)}>
+                      <CopyIcon size={18} aria-hidden="true" />
+                      {t('native.copyReferenceName')}
+                    </button>
+                  </div>
+                  <div className="action-menu-group">
+                    <button
+                      type="button"
+                      className="danger"
+                      disabled={busy}
+                      onClick={() => setRemoving(image.id)}
+                    >
+                      <DeleteIcon size={18} aria-hidden="true" />
+                      {t('native.removeAsset')}
+                    </button>
+                  </div>
+                </ActionMenu>
+              </div>
             ))}
           </div>
           {!found.length && (
@@ -282,58 +415,25 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
             </div>
           )}
         </div>
-        {active && (
+        {!narrow && (
           <aside className="native-assets-detail" aria-label={t('native.text_9c9dbdd18c')}>
-            <img
-              className="native-assets-preview"
-              src={`/api/package-image-blobs/${active.blobHash}`}
-              alt={active.title}
-            />
-            <ImageMetadataFields
-              image={active}
-              portrait={active.id === value.portraitImageId}
-              onChange={(next) =>
-                change({
-                  ...value,
-                  images: images.map((image) => (image.id === next.id ? next : image)),
-                })
-              }
-            />
-            <details>
-              <summary>{t('native.text_24016d85c7')}</summary>
-              <code>{names.join(', ') || active.id}</code>
-            </details>
-            <div className="native-assets-actions">
-              <label className={`secondary file-picker-button${busy ? ' is-disabled' : ''}`}>
-                {t('native.text_597b8746b1')}
-                <input
-                  type="file"
-                  accept={PACKAGE_IMAGE_MIMES.join(',')}
-                  disabled={busy}
-                  aria-label={t('native.text_bf32707568')}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    event.target.value = '';
-                    if (file) void filesChosen([file], active.id);
-                  }}
-                />
-              </label>
-              <IconButton
-                label={t('native.text_8a2c3b9aec')}
-                icon={DeleteIcon}
-                disabled={busy}
-                onClick={() => setRemoving(active.id)}
-              />
-              <IconButton
-                label={t('shared.close', { title: active.title })}
-                icon={CloseIcon}
-                className="secondary"
-                onClick={() => setSelected('')}
-              />
-            </div>
+            {active ? (
+              detail(active)
+            ) : (
+              <p className="native-assets-detail-empty">{t('native.assetInspectorEmpty')}</p>
+            )}
           </aside>
         )}
       </div>
+      <Dialog
+        open={narrow && !!active}
+        title={active?.title ?? t('native.text_9c9dbdd18c')}
+        onClose={() => setSelected('')}
+        scopeKey={scope}
+        className="native-assets-detail-dialog"
+      >
+        {active && <div className="native-assets-detail">{detail(active)}</div>}
+      </Dialog>
       <Dialog
         open={!!pending}
         title={t('native.text_7900d467e4')}

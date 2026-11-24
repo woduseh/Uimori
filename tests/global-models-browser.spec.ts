@@ -224,13 +224,13 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
     );
-    await selectSettingsSection(page, '현재 프롬프트');
+    await selectSettingsSection(page, '기본 프롬프트');
     await expect(
-      page.getByRole('region', { name: '현재 프롬프트 설정', exact: true })
+      page.getByRole('region', { name: '기본 프롬프트 설정', exact: true })
     ).toBeVisible();
     await expect(
       page
-        .getByRole('region', { name: '현재 프롬프트 설정', exact: true })
+        .getByRole('region', { name: '기본 프롬프트 설정', exact: true })
         .getByLabel('번역 거절 판정 모델', { exact: true })
     ).toHaveCount(0);
     await page.keyboard.press('Escape');

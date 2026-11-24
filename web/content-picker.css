@@ -185,27 +185,43 @@
   padding-top: 2px;
 }
 .package-portrait-editor {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
-  gap: 16px;
+  gap: 12px 20px;
   min-width: 0;
-  padding: 16px;
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-panel);
+}
+.package-portrait-media {
+  position: relative;
 }
 .package-portrait-avatar {
-  --content-avatar-size: 88px;
+  --content-avatar-size: 96px;
   border-radius: var(--radius-panel);
 }
-.package-portrait-controls {
+.package-portrait-menu {
+  position: absolute;
+  right: -8px;
+  bottom: -8px;
+}
+.package-portrait-menu > summary {
+  border: var(--hairline) solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow-float);
+}
+.package-portrait-menu > .action-menu-body {
+  left: 0;
+  right: auto;
+}
+.package-portrait-identity {
   display: grid;
   gap: 8px;
   min-width: 0;
-  flex: 1;
 }
-.package-portrait-controls small {
-  color: var(--muted);
-  overflow-wrap: anywhere;
+.package-portrait-status {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
 }
 .package-portrait-actions {
   display: flex;
@@ -230,11 +246,7 @@
   .content-picker-footer > button {
     flex: 1 1 100%;
   }
-  .package-portrait-editor {
-    flex-direction: column;
-    padding: 12px;
-  }
-  .package-portrait-controls {
-    width: 100%;
+  .package-portrait-avatar {
+    --content-avatar-size: 72px;
   }
 }

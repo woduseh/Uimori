@@ -234,6 +234,11 @@ async function openPrompt(page: Page, preset: PromptPreset) {
     const images = library.getByLabel('Risu 이미지 목록', { exact: true });
     await images.getByRole('button', { name: '유지할 이미지', exact: true }).click();
     await library.getByLabel('이미지 설명', { exact: true }).fill('취소와 제거 후에도 유지할 설명');
+    const sheet = page.getByRole('dialog', { name: '유지할 이미지', exact: true });
+    if (await sheet.isVisible()) {
+      await page.keyboard.press('Escape');
+      await expect(sheet).toBeHidden();
+    }
     await images.getByRole('button', { name: removedTitle, exact: true }).click();
     const removeButton = library.getByRole('button', { name: '선택한 에셋 삭제', exact: true });
     const dialog = page.getByRole('alertdialog', {
@@ -247,16 +252,16 @@ async function openPrompt(page: Page, preset: PromptPreset) {
     await dialog.getByRole('button', { name: '취소', exact: true }).click();
     await expect(dialog).toBeHidden();
     await expect(removeButton).toBeFocused();
-    await expect(images.getByRole('button')).toHaveCount(2);
+    await expect(images.locator('.native-assets-tile-select')).toHaveCount(2);
     await expect(library.getByLabel('이미지 이름', { exact: true })).toHaveValue(removedTitle);
     await removeButton.click();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
-    await expect(images.getByRole('button')).toHaveCount(2);
+    await expect(images.locator('.native-assets-tile-select')).toHaveCount(2);
     await removeButton.click();
     await dialog.getByRole('button', { name: '에셋 삭제', exact: true }).click();
     await expect(dialog).toBeHidden();
-    await expect(images.getByRole('button')).toHaveCount(1);
+    await expect(images.locator('.native-assets-tile-select')).toHaveCount(1);
     await expect(
       library.getByRole('status').filter({ hasText: '자료에서 제거했어요.' })
     ).toBeVisible();
@@ -266,6 +271,10 @@ async function openPrompt(page: Page, preset: PromptPreset) {
     );
     const stored = (await (await request.get(`/api/content/${content.id}`)).json()) as Content;
     expect(stored.package!.images).toEqual(content.package!.images);
+    if (await sheet.isVisible()) {
+      await page.keyboard.press('Escape');
+      await expect(sheet).toBeHidden();
+    }
     const savedResponse = waitForContentSave(page, content.id);
     await save.click();
     const saved = await savedResponse;

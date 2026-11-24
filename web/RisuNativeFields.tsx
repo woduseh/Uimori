@@ -43,6 +43,7 @@ import { EditorFrameTabs } from './EditorFrame.js';
 import { IconButton } from './IconButton.js';
 import { CodeIcon } from './ui-icons.js';
 import { readPresentationChoice, writePresentationSetting } from './presentation-settings.js';
+import { markupPreview } from './markup-preview.js';
 import {
   contentSection,
   type ContentAdvancedTab,
@@ -61,7 +62,11 @@ type SourcePart = 'greetings' | 'lore' | 'regex' | 'triggers' | 'card' | 'module
 type Section = ContentSection;
 type Advanced = ContentAdvancedTab;
 
-function anchorSection(anchor: ResourceAnchor): { section: Section; advanced?: Advanced } {
+function anchorSection(anchor: ResourceAnchor): {
+  section: Section;
+  advanced?: Advanced;
+  authoring?: true;
+} {
   if (anchor.section === 'lore') return { section: 'lore' };
   return contentSection(anchor.path ?? '') ?? { section: 'basic' };
 }
@@ -104,6 +109,7 @@ export function RisuNativeFields({
     readPresentationChoice(GREETING_FONT_KEY, GREETING_FONTS, 'body')
   );
   const [advanced, setAdvanced] = useState<Advanced>('instructions');
+  const [authoringOpen, setAuthoringOpen] = useState(false);
   const requested = anchor?.anchor ?? null;
   const loreFocus =
     requested && anchorSection(requested).section === 'lore' && requested.index !== null
@@ -118,14 +124,17 @@ export function RisuNativeFields({
     (target) => {
       const section = anchoredSection(target);
       const panel = document.getElementById(`${id}-${section}-panel`);
+      if (section === 'basic' && anchorSection(target).authoring)
+        return panel?.querySelector('.native-authoring') ?? null;
       return section === 'lore' && target.index !== null
         ? (panel?.querySelector('.nl-detail') ?? null)
         : panel;
     },
     (target) => {
       setSection(anchoredSection(target));
-      const advanced = anchorSection(target).advanced;
+      const { advanced, authoring } = anchorSection(target);
       if (advanced) setAdvanced(advanced);
+      if (authoring) setAuthoringOpen(true);
     }
   );
   const activeAdvanced = advancedTabs.some((tab) => tab.id === advanced)
@@ -275,16 +284,26 @@ export function RisuNativeFields({
       setError((caught as Error).message);
     }
   }
-  const sections: { id: Section; title: string }[] = [
+  const sections: { id: Section; title: string; count?: number }[] = [
     { id: 'basic', title: t('native.text_eb7f501b0e') },
-    ...(!standalone ? [{ id: 'greetings' as const, title: t('native.text_be7723bd53') }] : []),
-    { id: 'lore', title: t('native.text_5ce4911d95') },
-    { id: 'assets', title: t('native.text_b1a821ee46') },
+    ...(!standalone
+      ? [
+          {
+            id: 'greetings' as const,
+            title: t('native.text_be7723bd53'),
+            count: greetings.length === 1 && !greetings[0] ? 0 : greetings.length,
+          },
+        ]
+      : []),
+    { id: 'lore', title: t('native.text_5ce4911d95'), count: lore.length },
+    { id: 'assets', title: t('native.text_b1a821ee46'), count: value.images?.length ?? 0 },
     { id: 'translation', title: t('native.text_ecc580fe68') },
     { id: 'appearances', title: t('visuals.defaultAppearances') },
     { id: 'advanced', title: t('native.text_772fa878ec') },
-    ...(!standalone ? [{ id: 'creator' as const, title: t('native.text_78def74816') }] : []),
   ];
+  const description = string(standalone ? native.module?.description : native.card.description);
+  const creator = string(native.card.creator);
+  const version = string(native.card.character_version);
   const panel = (key: Section) => ({
     id: id + '-' + key + '-panel',
     role: 'tabpanel' as const,
@@ -407,31 +426,73 @@ export function RisuNativeFields({
             }
           />
         </div>
-        <div {...panel('basic')} className="native-section-body">
-          <PackagePortraitEditor
-            value={value}
-            onChange={onChange}
-            onDirtyChange={setPortraitBusy}
-          />
-          <label>
-            {t('native.text_9aa18e5071')}
-            <input
-              aria-label={t('native.text_d63d79b1e2')}
-              value={string(standalone ? native.module?.name : native.card.name)}
-              maxLength={200}
-              onChange={(e) => field('name', e.target.value)}
-            />
-          </label>
-          <label>
-            {standalone ? t('native.text_9e7348ca61') : t('native.text_08117feaa5')}
-            <textarea
-              className="native-main-text native-description"
-              aria-label={standalone ? t('native.text_9e7348ca61') : t('native.text_08117feaa5')}
-              rows={12}
-              value={string(standalone ? native.module?.description : native.card.description)}
-              onChange={(e) => field('description', e.target.value)}
-            />
-          </label>
+        <div {...panel('basic')} className="native-section-body native-basic-body">
+          <PackagePortraitEditor value={value} onChange={onChange} onDirtyChange={setPortraitBusy}>
+            <label>
+              {t('native.text_9aa18e5071')}
+              <input
+                aria-label={t('native.text_d63d79b1e2')}
+                value={string(standalone ? native.module?.name : native.card.name)}
+                maxLength={200}
+                onChange={(e) => field('name', e.target.value)}
+              />
+            </label>
+            {!standalone && (creator || version) && (
+              <p className="native-identity-meta ui-meta-row">
+                {creator && <span>{t('native.creatorSummary', { creator })}</span>}
+                {version && <span>{t('native.versionSummary', { version })}</span>}
+              </p>
+            )}
+          </PackagePortraitEditor>
+          <div className="native-description-field">
+            <label>
+              {standalone ? t('native.text_9e7348ca61') : t('native.text_08117feaa5')}
+              <textarea
+                className="native-description"
+                aria-label={standalone ? t('native.text_9e7348ca61') : t('native.text_08117feaa5')}
+                aria-describedby={`${id}-description-count`}
+                rows={12}
+                value={description}
+                onChange={(e) => field('description', e.target.value)}
+              />
+            </label>
+            <small id={`${id}-description-count`} className="native-field-count">
+              {t('native.characterCount', { count: description.length })}
+            </small>
+          </div>
+          {!standalone && (
+            <details
+              className="native-advanced native-authoring"
+              open={authoringOpen}
+              onToggle={(event) => setAuthoringOpen(event.currentTarget.open)}
+            >
+              <summary>{t('native.text_78def74816')}</summary>
+              <div className="native-form-stack">
+                <label>
+                  {t('native.text_d9f63fc805')}
+                  <textarea
+                    aria-label={t('native.text_d9f63fc805')}
+                    rows={4}
+                    value={string(native.card.creator_notes)}
+                    onChange={(e) => field('creator_notes', e.target.value)}
+                  />
+                </label>
+                <div className="native-field-row">
+                  <label>
+                    {t('native.text_59a4b7210d')}
+                    <input value={creator} onChange={(e) => field('creator', e.target.value)} />
+                  </label>
+                  <label>
+                    {t('native.text_f0da897630')}
+                    <input
+                      value={version}
+                      onChange={(e) => field('character_version', e.target.value)}
+                    />
+                  </label>
+                </div>
+              </div>
+            </details>
+          )}
         </div>
         {!standalone && (
           <div {...panel('greetings')} className="native-panes">
@@ -442,7 +503,9 @@ export function RisuNativeFields({
                   i === 0
                     ? t('native.text_104a1f537a')
                     : t('native.alternateMessage', { number: i }),
-                subtitle: message.replace(/<[^>]*>/g, '').slice(0, 55),
+                subtitle: message
+                  ? markupPreview(message, 55) || t('native.markupOnlyPreview')
+                  : undefined,
               }))}
               onAdd={() => writeGreetings([...greetings, ''])}
               onMove={(i, delta) => {
@@ -521,35 +584,6 @@ export function RisuNativeFields({
         <div {...panel('assets')} className="native-section-body">
           <NativeRisuAssetsEditor value={value} onChange={onChange} onBusyChange={setAssetsBusy} />
         </div>
-        {!standalone && (
-          <div {...panel('creator')} className="native-section-body">
-            <label>
-              {t('native.text_d9f63fc805')}
-              <textarea
-                aria-label={t('native.text_d9f63fc805')}
-                rows={4}
-                value={string(native.card.creator_notes)}
-                onChange={(e) => field('creator_notes', e.target.value)}
-              />
-            </label>
-            <div className="native-field-row">
-              <label>
-                {t('native.text_59a4b7210d')}
-                <input
-                  value={string(native.card.creator)}
-                  onChange={(e) => field('creator', e.target.value)}
-                />
-              </label>
-              <label>
-                {t('native.text_f0da897630')}
-                <input
-                  value={string(native.card.character_version)}
-                  onChange={(e) => field('character_version', e.target.value)}
-                />
-              </label>
-            </div>
-          </div>
-        )}
       </fieldset>
       <div {...panel('advanced')} className="native-advanced-workspace native-panes">
         <div className="native-advanced-tabs" role="group" aria-label={t('native.text_2c737ca1dd')}>

@@ -3,7 +3,7 @@ import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { Content, PromptPreset } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
-import { navigationAction } from './ui-navigation.js';
+import { navigationAction, editorTab } from './ui-navigation.js';
 import { isResourceSaveRequest, waitForResourceSave } from './fixtures/resource-save.js';
 
 async function seed(request: APIRequestContext, kind: Content['kind'], title: string) {
@@ -125,10 +125,7 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
     const saveState = editor.locator('.resource-editor-status').getByRole('status');
     const name = editor.getByLabel('프롬프트 이름', { exact: true });
     await expect(saveState).toHaveText('등록 전');
-    await expect(editor.getByRole('tab', { name: '구성', exact: true })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
+    await expect(editorTab(editor, '구성')).toHaveAttribute('aria-selected', 'true');
     await expect(name).toHaveCount(1);
     await expect(name).toBeInViewport({ ratio: 1 });
     await expect(name).toHaveAttribute('required', '');
@@ -139,7 +136,7 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
     if (role === 'translation') {
       await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
       await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption(role);
-      await editor.getByRole('tab', { name: '구성', exact: true }).click();
+      await editorTab(editor, '구성').click();
     }
     await expect(native.getByLabel('1번 프롬프트 본문', { exact: true })).toHaveValue(text);
     const title = `PLR 기본 ${role} ${crypto.randomUUID()}`;

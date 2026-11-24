@@ -1,4 +1,70 @@
 export const messages = {
+  'native.creatorSummary': {
+    ko: '제작자 {creator}',
+    en: 'By {creator}',
+    ja: '制作者 {creator}',
+    zh: '作者 {creator}',
+  },
+  'native.versionSummary': {
+    ko: '버전 {version}',
+    en: 'Version {version}',
+    ja: 'バージョン {version}',
+    zh: '版本 {version}',
+  },
+  'native.characterCount': {
+    ko: '{count, number}자',
+    en: '{count, plural, one {# character} other {# characters}}',
+    ja: '{count, number}文字',
+    zh: '{count, number}字',
+  },
+  'native.markupOnlyPreview': {
+    ko: '코드만 있는 메시지',
+    en: 'Markup only',
+    ja: 'コードのみのメッセージ',
+    zh: '仅含代码的消息',
+  },
+  'native.assetActions': {
+    ko: '{name} 작업',
+    en: 'Actions for {name}',
+    ja: '{name}の操作',
+    zh: '{name}的操作',
+  },
+  'native.setAsPortrait': {
+    ko: '대표 이미지로 지정',
+    en: 'Set as portrait',
+    ja: '代表画像に設定',
+    zh: '设为封面',
+  },
+  'native.copyReferenceName': {
+    ko: '참조 이름 복사',
+    en: 'Copy reference name',
+    ja: '参照名をコピー',
+    zh: '复制引用名称',
+  },
+  'native.removeAsset': {
+    ko: '에셋 삭제',
+    en: 'Remove asset',
+    ja: 'アセットを取り除く',
+    zh: '移除资产',
+  },
+  'native.portraitSet': {
+    ko: '대표 이미지로 지정했어요. 자료를 저장하면 반영돼요.',
+    en: 'Set as portrait. Save the resource to apply it.',
+    ja: '代表画像に設定しました。資料を保存すると反映されます。',
+    zh: '已设为封面，保存资料后生效。',
+  },
+  'native.referenceNameCopied': {
+    ko: '참조 이름을 복사했어요.',
+    en: 'Copied the reference name.',
+    ja: '参照名をコピーしました。',
+    zh: '已复制引用名称。',
+  },
+  'native.assetInspectorEmpty': {
+    ko: '에셋을 선택하면 이름과 설명을 편집할 수 있어요.',
+    en: 'Select an asset to edit its name and description.',
+    ja: 'アセットを選択すると名前と説明を編集できます。',
+    zh: '选择资产后即可编辑名称和说明。',
+  },
   'native.searchResultCount': {
     ko: '항목 {count, number}개',
     en: '{count, plural, one {# item} other {# items}}',

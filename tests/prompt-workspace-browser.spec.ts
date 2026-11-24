@@ -97,7 +97,7 @@ test(
           (await (await request.get('/api/model-workspace')).json()).translationPolicy.maxCalls
       )
       .toBe(12);
-    const editor = page.getByRole('region', { name: '현재 프롬프트 설정' });
+    const editor = page.getByRole('region', { name: '기본 프롬프트 설정' });
     const workspace = await (await request.get('/api/prompt-workspace')).json();
     expect(workspace.translationPolicy).toMatchObject({ maxRetries: 2, maxCalls: 12 });
     const program = nativePrompt(
@@ -117,9 +117,9 @@ test(
     const preset = await created.json();
     await page.reload();
     await navigationAction(page, '설정');
-    await selectSettingsSection(page, '현재 프롬프트');
-    await editor.getByLabel('현재 프롬프트 역할').selectOption('translation');
-    await editor.getByLabel('현재 프롬프트', { exact: true }).selectOption(preset.id);
+    await selectSettingsSection(page, '기본 프롬프트');
+    await editor.getByLabel('기본 프롬프트 역할').selectOption('translation');
+    await editor.getByLabel('기본 프롬프트', { exact: true }).selectOption(preset.id);
     await expect
       .poll(
         async () => (await (await request.get('/api/prompt-workspace')).json()).translation.presetId
@@ -138,7 +138,7 @@ test(
       .toBe('직접 수정');
     for (const width of [1440, MOBILE_WIDTH]) {
       await page.setViewportSize({ width, height: 900 });
-      const presetChoice = editor.getByLabel('현재 프롬프트', { exact: true });
+      const presetChoice = editor.getByLabel('기본 프롬프트', { exact: true });
       const editPrompt = editor.getByRole('button', { name: '프롬프트 편집', exact: true });
       const choiceBox = (await presetChoice.boundingBox())!;
       const editBox = (await editPrompt.boundingBox())!;
@@ -154,7 +154,7 @@ test(
       };
       await openCombination();
       const combo = page.getByRole('region', {
-        name: '현재 프롬프트 / 옵션 프리셋 저장',
+        name: '기본 프롬프트 / 옵션 프리셋 저장',
         exact: true,
       });
       await combo.getByLabel('옵션 프리셋 이름', { exact: true }).fill('취소할 조합');
@@ -191,8 +191,8 @@ test(
     expect(modified.ok(), await modified.text()).toBe(true);
     await page.reload();
     await navigationAction(page, '설정');
-    await selectSettingsSection(page, '현재 프롬프트');
-    await editor.getByLabel('현재 프롬프트 역할').selectOption('translation');
+    await selectSettingsSection(page, '기본 프롬프트');
+    await editor.getByLabel('기본 프롬프트 역할').selectOption('translation');
     expect(
       (await (await request.get('/api/prompt-workspace')).json()).translation.values.tone
     ).toBe('직접 수정');
@@ -277,8 +277,8 @@ test(
     expect(saved.ok()).toBe(true);
     await page.reload();
     await navigationAction(page, '설정');
-    await selectSettingsSection(page, '현재 프롬프트');
-    const editor = page.getByRole('region', { name: '현재 프롬프트 설정' });
+    await selectSettingsSection(page, '기본 프롬프트');
+    const editor = page.getByRole('region', { name: '기본 프롬프트 설정' });
     await editor.locator('summary').filter({ hasText: '창작 옵션' }).click();
     await expect(
       editor.getByLabel('옵션 프리셋', { exact: true }).locator('option')
@@ -286,7 +286,7 @@ test(
     await editor.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
     await page.getByRole('button', { name: '옵션 프리셋 관리', exact: true }).click();
     const manager = page.getByRole('region', {
-      name: '현재 프롬프트 / 옵션 프리셋 관리',
+      name: '기본 프롬프트 / 옵션 프리셋 관리',
       exact: true,
     });
     await expect(manager).toContainText('보존할 조합');
@@ -338,8 +338,8 @@ test('PWS03 failed autosaves preserve consecutive local changes and protect exte
   expect(seeded.ok()).toBe(true);
   await page.goto('/');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '현재 프롬프트');
-  const editor = page.getByRole('region', { name: '현재 프롬프트 설정' });
+  await selectSettingsSection(page, '기본 프롬프트');
+  const editor = page.getByRole('region', { name: '기본 프롬프트 설정' });
   await editor.locator('summary').filter({ hasText: '창작 옵션' }).click();
   await editor.locator('.prompt-option-group > summary').first().click();
   const tone = editor.getByLabel('PWS 자동 문체', { exact: true });
@@ -488,14 +488,14 @@ test('PWS04 shared workspace load failures recover in model and prompt settings'
   ready = false;
   await page.reload();
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '현재 프롬프트');
+  await selectSettingsSection(page, '기본 프롬프트');
   await expect(reload).toBeVisible();
   await expect(settings.getByRole('alert')).toContainText('불러오지 못했어요.');
   await expect(settings.getByRole('status').filter({ hasText: '불러오는 중' })).toHaveCount(0);
   ready = true;
   await reload.click();
-  const prompts = settings.getByRole('region', { name: '현재 프롬프트 설정' });
-  await expect(prompts.getByLabel('현재 프롬프트', { exact: true })).toBeVisible();
+  const prompts = settings.getByRole('region', { name: '기본 프롬프트 설정' });
+  await expect(prompts.getByLabel('기본 프롬프트', { exact: true })).toBeVisible();
   await expect(prompts.getByTestId('prompt-composer')).toHaveCount(0);
   await expect(prompts.getByRole('button', { name: '현재 설정 저장', exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
@@ -535,9 +535,9 @@ test('PWS09 unsaved option preset input asks before Escape, Back or closing sett
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '현재 프롬프트');
+  await selectSettingsSection(page, '기본 프롬프트');
   const settings = page.getByRole('dialog', { name: '설정', exact: true });
-  const editor = page.getByRole('region', { name: '현재 프롬프트 설정' });
+  const editor = page.getByRole('region', { name: '기본 프롬프트 설정' });
   await editor.locator('summary').filter({ hasText: '창작 옵션' }).click();
   const leave = page.getByRole('alertdialog', { name: '옵션 프리셋 편집 닫기', exact: true });
 
@@ -546,7 +546,7 @@ test('PWS09 unsaved option preset input asks before Escape, Back or closing sett
     .getByRole('button', { name: '현재 선택을 새 옵션 프리셋으로 저장', exact: true })
     .click();
   const create = page.getByRole('region', {
-    name: '현재 프롬프트 / 옵션 프리셋 저장',
+    name: '기본 프롬프트 / 옵션 프리셋 저장',
     exact: true,
   });
   const name = create.getByLabel('옵션 프리셋 이름', { exact: true });
@@ -571,7 +571,7 @@ test('PWS09 unsaved option preset input asks before Escape, Back or closing sett
   await editor.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
   await page.getByRole('button', { name: '옵션 프리셋 관리', exact: true }).click();
   const manager = page.getByRole('region', {
-    name: '현재 프롬프트 / 옵션 프리셋 관리',
+    name: '기본 프롬프트 / 옵션 프리셋 관리',
     exact: true,
   });
   await manager.getByRole('button', { name: '수정', exact: true }).click();

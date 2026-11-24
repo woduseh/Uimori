@@ -100,7 +100,6 @@ const contentSections: Record<ContentSection, string> = {
   translation: 'native.text_ecc580fe68',
   appearances: 'visuals.defaultAppearances',
   advanced: 'native.text_772fa878ec',
-  creator: 'native.text_78def74816',
 };
 const contentAdvancedTabs: Record<ContentAdvancedTab, string> = {
   instructions: 'native.text_22a2af3f54',
@@ -165,6 +164,7 @@ function resourceField(path: string[]): LocationPart[] {
   return [
     label(contentSections[found.section]),
     ...(found.advanced ? [label(contentAdvancedTabs[found.advanced])] : []),
+    ...(found.authoring ? [label('native.text_78def74816')] : []),
   ];
 }
 

@@ -1438,8 +1438,22 @@ function ContentEditor({
                 disabled={editorUnavailable}
                 onClick={onClose}
               />
-              <h2>
-                {selected ? selected.title : t('library.new', { v0: t(contentLabelKeys[kind]) })}
+              <h2 className="editor-title-field">
+                <input
+                  aria-label={t('library.resourceName', { v0: t(contentLabelKeys[value.kind]) })}
+                  placeholder={t('library.new', { v0: t(contentLabelKeys[kind]) })}
+                  maxLength={200}
+                  disabled={editorUnavailable}
+                  value={value.title}
+                  onChange={(event) => {
+                    const title = event.target.value;
+                    setValue((current) => ({
+                      ...current,
+                      title,
+                      package: withNativeContentTitle(current.package, title),
+                    }));
+                  }}
+                />
               </h2>
               <div className="library-detail-actions">
                 <ResourceEditorActions value={shared} hideSyncError />

@@ -75,12 +75,16 @@ export async function selectChatSettingsSection(page: Page, name: string) {
   if (await tab.isVisible()) await tab.click();
   else await navigation.getByRole('button', { name, exact: true }).click();
 }
+export function editorTab(scope: Page | Locator, name: string) {
+  return scope.getByRole('tab', {
+    name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}( \\d+개)?$`, 'u'),
+  });
+}
+
 export async function selectPackageSection(page: Page, name: string) {
   const navigation = page.getByLabel('자료 편집 영역', { exact: true });
   await expect(navigation).toBeVisible();
-  const tab = navigation.getByRole('tab', { name, exact: true });
-  if (await tab.isVisible()) await tab.click();
-  else await navigation.getByRole('button', { name, exact: true }).click();
+  await editorTab(navigation, name).click();
 }
 
 export async function openChatMenu(page: Page) {
@@ -278,7 +282,7 @@ export async function setCurrentModels(
 
 export async function selectCurrentSettingsSection(
   page: Page,
-  name: '역할별 모델' | '현재 프롬프트'
+  name: '역할별 모델' | '기본 프롬프트'
 ) {
   await navigationAction(page, '설정');
   await selectSettingsSection(page, name);

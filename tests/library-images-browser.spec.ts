@@ -10,6 +10,11 @@ import type { ChatDetail } from '../core/types.js';
 import { packageImageThumbnailUrl } from '../core/package-images.js';
 import { revealLibraryEditor, selectPackageSection } from './ui-navigation.js';
 
+async function choosePortraitAction(portrait: Locator, name: string) {
+  await portrait.getByLabel('대표 이미지 변경', { exact: true }).click();
+  await portrait.getByRole('button', { name, exact: true }).click();
+}
+
 const thumbnail = (hash: string) => packageImageThumbnailUrl(`/api/package-image-blobs/${hash}`);
 
 const png = Buffer.from(
@@ -128,7 +133,7 @@ const portraitPart = (image: UploadedImage, id = 'portrait'): Partial<RisuConten
     const first = picker.getByRole('button').filter({ hasText: '합성 대표 이미지' });
     const second = picker.getByRole('button').filter({ hasText: '다른 본문 그림' });
     const checkCandidates = async () => {
-      await portrait.getByRole('button', { name: '기존 이미지에서 선택', exact: true }).click();
+      await choosePortraitAction(portrait, '기존 이미지에서 선택');
       await expect(first.locator('img')).toHaveAttribute(
         'src',
         `/api/package-image-blobs/${firstHash.hash}`
@@ -203,12 +208,12 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
     .getByRole('button', { name: '편집', exact: true })
     .click();
   await revealLibraryEditor(page);
-  await portrait.getByRole('button', { name: '대표 이미지 해제', exact: true }).click();
+  await choosePortraitAction(portrait, '대표 이미지 해제');
   const unset = await save(page, library, uploaded);
   expect(unset.package!.portraitImageId).toBeUndefined();
   expect(unset.package!.images).toEqual(uploaded.package!.images);
   await expect(portrait.locator('img')).toHaveCount(0);
-  await portrait.getByRole('button', { name: '기존 이미지에서 선택', exact: true }).click();
+  await choosePortraitAction(portrait, '기존 이미지에서 선택');
   const picker = page.getByRole('dialog', { name: '대표 이미지 선택', exact: true });
   await picker
     .getByRole('button')

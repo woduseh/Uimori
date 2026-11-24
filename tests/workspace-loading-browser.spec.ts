@@ -100,7 +100,7 @@ test('WORKLOAD every library-dependent settings page shows the same read failure
   const settings = page.getByRole('dialog', { name: '설정', exact: true });
   for (const [section, errorLabel] of [
     ['역할별 모델', '역할별 모델 설정을 불러오지 못했어요.'],
-    ['현재 프롬프트', '현재 프롬프트를 불러오지 못했어요.'],
+    ['기본 프롬프트', '기본 프롬프트를 불러오지 못했어요.'],
     ['삽화', '삽화 설정을 불러오지 못했어요.'],
     ['프로바이더와 모델', '프로바이더 목록을 불러오지 못했어요.'],
   ]) {
@@ -113,16 +113,16 @@ test('WORKLOAD every library-dependent settings page shows the same read failure
   failing = false;
   await settings.getByRole('button', { name: '다시 불러오기', exact: true }).click();
   await expect(settings.getByTestId('connection-editor')).toBeVisible();
-  for (const section of ['역할별 모델', '현재 프롬프트', '삽화']) {
+  for (const section of ['역할별 모델', '기본 프롬프트', '삽화']) {
     await selectSettingsSection(page, section);
     await expect(settings.locator('.loading-state [role="alert"]')).toHaveCount(0);
     if (section === '역할별 모델')
       await expect(
         settings.getByRole('region', { name: '역할별 모델 설정', exact: true })
       ).toBeVisible();
-    if (section === '현재 프롬프트')
+    if (section === '기본 프롬프트')
       await expect(
-        settings.getByRole('region', { name: '현재 프롬프트 설정', exact: true })
+        settings.getByRole('region', { name: '기본 프롬프트 설정', exact: true })
       ).toBeVisible();
     if (section === '삽화')
       await expect(

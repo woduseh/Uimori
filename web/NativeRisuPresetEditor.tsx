@@ -30,6 +30,9 @@ import { AddIcon, UpIcon, DownIcon, DeleteIcon, DragHandleIcon } from './ui-icon
 import './native-editor.css';
 
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
+const ROLE_TYPES = ['plain', 'cache', 'persona', 'description', 'authornote'];
+const blockBody = (block: Record<string, unknown>) =>
+  ['plain', 'chatML'].includes(text(block.type)) ? text(block.text) : text(block.innerFormat);
 const roleField = (block: Record<string, unknown>) =>
   ['plain', 'cache'].includes(text(block.type)) ? 'role' : 'role2';
 const blockRole = (block: Record<string, unknown>) => {
@@ -104,8 +107,8 @@ export function NativeRisuPresetEditor({
   const items = source.promptTemplate as Record<string, unknown>[];
   const index = Math.min(selected, Math.max(0, items.length - 1));
   const entry = items[index];
-  const sections: { id: Section; title: string }[] = [
-    { id: 'blocks', title: t('native.text_a0a7b7b4e4') },
+  const sections: { id: Section; title: string; count?: number }[] = [
+    { id: 'blocks', title: t('native.text_a0a7b7b4e4'), count: items.length },
     { id: 'options', title: t('native.text_a1c1f8f5fe') },
     { id: 'variables', title: t('native.text_0a13d19d88') },
     { id: 'regex', title: t('native.text_fc7e4f6228') },
@@ -293,9 +296,16 @@ export function NativeRisuPresetEditor({
                   {i + 1}. {blockTitle(block)}
                 </strong>
                 <small className="ui-meta-row">
-                  <span>{blockRole(block)}</span>
-                  {text(block.name) && (
+                  <span className="native-block-chip">
+                    {ROLE_TYPES.includes(text(block.type))
+                      ? blockRole(block)
+                      : (blockTypes[text(block.type)] ?? text(block.type))}
+                  </span>
+                  {text(block.name) && ROLE_TYPES.includes(text(block.type)) && (
                     <span>{blockTypes[text(block.type)] ?? text(block.type)}</span>
+                  )}
+                  {!!blockBody(block).length && (
+                    <span>{t('native.characterCount', { count: blockBody(block).length })}</span>
                   )}
                 </small>
                 <span className="native-row-drag-handle" aria-hidden="true">
@@ -356,9 +366,7 @@ export function NativeRisuPresetEditor({
                     onChange={(e) => item({ name: e.target.value })}
                   />
                 </label>
-                {['plain', 'cache', 'persona', 'description', 'authornote'].includes(
-                  text(entry.type)
-                ) && (
+                {ROLE_TYPES.includes(text(entry.type)) && (
                   <label>
                     {t('native.text_32ae236cf2')}
                     <select

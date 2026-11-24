@@ -1,5 +1,6 @@
 import { Fragment, type KeyboardEvent } from 'react';
 import type { LucideIcon } from 'lucide-react';
+import { formatNumber, t } from './i18n.js';
 import { ScrollStrip } from './ScrollStrip.js';
 import './section-navigation.css';
 
@@ -10,6 +11,7 @@ type SectionNavigationItem<K extends string> = {
   description?: string;
   panelId?: string;
   group?: string;
+  count?: number;
 };
 
 export function SectionNavigation<K extends string>({
@@ -56,7 +58,7 @@ export function SectionNavigation<K extends string>({
   };
   const content = (
     <>
-      {items.map(({ id, title, icon: Icon, description, panelId, group }, index) => (
+      {items.map(({ id, title, icon: Icon, description, panelId, group, count }, index) => (
         <Fragment key={id}>
           {group && items[index - 1]?.group !== group && (
             <span className="section-navigation-group" aria-hidden="true">
@@ -68,7 +70,7 @@ export function SectionNavigation<K extends string>({
             role={compact ? undefined : 'tab'}
             id={`${idPrefix}-${id}-tab`}
             aria-controls={panelId ?? `${idPrefix}-${id}-panel`}
-            aria-label={title}
+            aria-label={count ? t('shared.sectionCount', { label: title, count }) : title}
             aria-describedby={description ? `${idPrefix}-${id}-description` : undefined}
             aria-selected={compact ? undefined : value === id}
             aria-current={compact && value === id ? 'page' : undefined}
@@ -77,7 +79,14 @@ export function SectionNavigation<K extends string>({
           >
             {Icon && <Icon size={20} aria-hidden="true" />}
             <span>
-              <span className="section-navigation-title">{title}</span>
+              <span className="section-navigation-title">
+                {title}
+                {!!count && (
+                  <span className="section-navigation-count" aria-hidden="true">
+                    {formatNumber(count)}
+                  </span>
+                )}
+              </span>
               {description && <small id={`${idPrefix}-${id}-description`}>{description}</small>}
             </span>
           </button>

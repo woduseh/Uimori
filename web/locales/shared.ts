@@ -41,6 +41,12 @@ export const messages = {
     ja: '一覧に戻る',
     zh: '返回列表',
   },
+  'shared.sectionCount': {
+    ko: '{label} {count, number}개',
+    en: '{label}, {count, number}',
+    ja: '{label} {count, number}件',
+    zh: '{label} {count, number}项',
+  },
   'shared.close': {
     ko: '{title} 닫기',
     en: 'Close {title}',

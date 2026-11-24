@@ -690,10 +690,10 @@ export const messages = {
     zh: '导入的辅助智能体模型将设置为跟随正文模型。',
   },
   'transfer.m141': {
-    ko: '현재 프롬프트와 역할별 모델은 이 작업실의 설정을 그대로 쓰며 실행 기록과 도우미 내부 작업은 가져오지 않아요.',
-    en: 'The current prompt and models by role keep this workspace’s settings. Execution history and internal assistant tasks are excluded.',
-    ja: '現在のプロンプトと役割別モデルはこのワークスペースの設定をそのまま使い、実行記録とアシスタント内部の作業は取り込みません。',
-    zh: '当前提示词和按角色设置模型沿用此工作室的设置，不导入执行记录和助手内部任务。',
+    ko: '기본 프롬프트와 역할별 모델은 이 작업실의 설정을 그대로 쓰며 실행 기록과 도우미 내부 작업은 가져오지 않아요.',
+    en: 'The default prompt and models by role keep this workspace’s settings. Execution history and internal assistant tasks are excluded.',
+    ja: '既定のプロンプトと役割別モデルはこのワークスペースの設定をそのまま使い、実行記録とアシスタント内部の作業は取り込みません。',
+    zh: '默认提示词和按角色设置模型沿用此工作室的设置，不导入执行记录和助手内部任务。',
   },
   'transfer.m142': {
     ko: '처리 중…',

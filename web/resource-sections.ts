@@ -7,8 +7,7 @@ export type ContentSection =
   | 'assets'
   | 'translation'
   | 'appearances'
-  | 'advanced'
-  | 'creator';
+  | 'advanced';
 export type ContentAdvancedTab =
   | 'instructions'
   | 'variables'
@@ -20,7 +19,7 @@ export type PresetSection = 'blocks' | 'options' | 'variables' | 'regex' | 'coll
 
 export function contentSection(
   path: string
-): { section: ContentSection; advanced?: ContentAdvancedTab } | null {
+): { section: ContentSection; advanced?: ContentAdvancedTab; authoring?: true } | null {
   const has = (pattern: RegExp) => pattern.test(path);
   if (has(/^\/package\/portraitImageId$/u)) return { section: 'basic' };
   if (has(/^\/package\/modules(\/|$)/u)) return { section: 'advanced', advanced: 'modules' };
@@ -31,7 +30,8 @@ export function contentSection(
   if (has(/\/uimori\/translationGuide(\/|$)/u)) return { section: 'translation' };
   if (has(/\/uimori\/illustrationProfiles(\/|$)/u)) return { section: 'appearances' };
   if (has(/^\/package\/images(\/|$)|\/(assets|emotions)(\/|$)/u)) return { section: 'assets' };
-  if (has(/\/(creator_notes|creator|character_version)(\/|$)/u)) return { section: 'creator' };
+  if (has(/\/(creator_notes|creator|character_version)(\/|$)/u))
+    return { section: 'basic', authoring: true };
   if (has(/\/(customScripts|triggerscript|regex|trigger|lua)(\/|$)/u))
     return { section: 'advanced', advanced: 'scripts' };
   if (has(/\/(backgroundHTML|css)(\/|$)/u)) return { section: 'advanced', advanced: 'display' };

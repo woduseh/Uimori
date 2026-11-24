@@ -71,8 +71,8 @@ async function profileInfo(page: Page) {
   return page.getByTestId('profile-editor');
 }
 async function promptTab(page: Page) {
-  await selectCurrentSettingsSection(page, '현재 프롬프트');
-  return page.getByRole('region', { name: '현재 프롬프트 설정' });
+  await selectCurrentSettingsSection(page, '기본 프롬프트');
+  return page.getByRole('region', { name: '기본 프롬프트 설정' });
 }
 async function send(page: Page, text: string): Promise<Run> {
   await closeDialog(page);
@@ -191,7 +191,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
       .filter({ has: page.getByRole('heading', { name: added.title, exact: true }) })
   ).not.toContainText('v1');
   const editor = await promptTab(page);
-  await editor.getByLabel('현재 프롬프트', { exact: true }).selectOption(choice.prompt.id);
+  await editor.getByLabel('기본 프롬프트', { exact: true }).selectOption(choice.prompt.id);
   await editor.getByText('창작 옵션', { exact: true }).click();
   await editor.locator('.prompt-option-group > summary').first().click();
   const composer = editor;
@@ -208,7 +208,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     JSON.stringify('0')
   );
   await expect(composer.getByLabel('합성 상세도', { exact: true })).toHaveValue('1');
-  await expect(editor.getByLabel('현재 프롬프트', { exact: true })).toBeEnabled();
+  await expect(editor.getByLabel('기본 프롬프트', { exact: true })).toBeEnabled();
   const run = await send(page, '(OOC: Continue the harbor scene.) SYNTHETIC_P01');
   await expect
     .poll(

@@ -145,6 +145,12 @@
     background: var(--accent-soft);
   }
 }
+.native-block-chip {
+  padding: 0 6px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-small);
+  line-height: 1.6;
+}
 .native-row-drag-handle {
   position: absolute;
   inset-inline-end: 8px;
@@ -247,11 +253,6 @@
   padding: 0;
   min-width: 0;
   margin: 0;
-}
-.native-editor .package-portrait-editor {
-  border: 0;
-  background: transparent;
-  padding: 0 0 6px;
 }
 .native-editor .native-section-body > h3 {
   margin: 0;
@@ -446,8 +447,42 @@
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 .native-editor .native-description {
+  flex: 1 0 auto;
   min-height: 270px;
   height: 270px;
+}
+.native-description-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.native-editor .native-description-field > label {
+  display: flex;
+  flex-direction: column;
+}
+.native-field-count,
+.native-identity-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-small);
+  font-variant-numeric: tabular-nums;
+}
+.native-field-count {
+  align-self: flex-end;
+}
+.native-authoring > .native-form-stack {
+  padding-top: 16px;
+}
+.library-page-editing .native-panel-fields:has(> .native-basic-body:not([hidden])) {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+.library-page-editing .native-basic-body:not([hidden]),
+.library-page-editing .native-basic-body .native-description-field,
+.library-page-editing .native-basic-body .native-description-field > label {
+  flex: 1 0 auto;
 }
 .native-detail-heading > .icon-button[aria-pressed="true"] {
   background: var(--accent-soft);
@@ -517,18 +552,6 @@
   padding: 12px 0;
   border-bottom: var(--hairline) solid var(--line);
 }
-.editor-frame-top > .library-detail-heading > h2 {
-  order: initial;
-  width: auto;
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  font-size: var(--font-heading);
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  white-space: nowrap;
-}
 .editor-frame-top .library-detail-actions,
 .editor-frame-top .resource-editor-actions {
   flex-wrap: nowrap;
@@ -541,15 +564,18 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.prompt-editor-heading > .prompt-title-field {
+.editor-frame-top .editor-title-field {
+  order: initial;
+  width: auto;
   flex: 1;
   min-width: 0;
   margin: 0;
   font-size: var(--font-heading);
   font-weight: inherit;
 }
-.prompt-title-field > input {
+.editor-title-field > input {
   width: 100%;
+  height: var(--control-h);
   font-weight: 600;
 }
 @media (min-width: 601px) {

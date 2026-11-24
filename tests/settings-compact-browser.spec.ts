@@ -63,7 +63,7 @@ for (const colorScheme of ['dark'] as const) {
         '일반',
         '테마와 색상',
         '역할별 모델',
-        '현재 프롬프트',
+        '기본 프롬프트',
         '프로바이더와 모델',
         '로어 컨텍스트',
         'Codex 연결',
@@ -124,8 +124,8 @@ for (const colorScheme of ['dark'] as const) {
           await expect(pane.locator('.provider-actions')).toBeHidden();
         } else if (section === '역할별 모델') {
           await expect(pane.getByLabel('본문 모델', { exact: true })).toBeVisible();
-        } else if (section === '현재 프롬프트') {
-          await expect(pane.getByLabel('현재 프롬프트 역할', { exact: true })).toBeVisible();
+        } else if (section === '기본 프롬프트') {
+          await expect(pane.getByLabel('기본 프롬프트 역할', { exact: true })).toBeVisible();
         } else if (section === '프로바이더와 모델') {
           await expect(pane.getByLabel('프로바이더와 모델 검색', { exact: true })).toBeVisible();
         } else if (section === '삽화') {
@@ -270,6 +270,10 @@ test('SCUISEARCH settings search opens real destinations without losing an unsav
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true
     );
+    await search.fill('현재 프롬프트');
+    await expect(
+      dialog.locator('.settings-search-results').getByRole('button', { name: /기본 프롬프트/ })
+    ).toBeVisible();
     await search.fill('없는 설정 이름');
     await expect(dialog.locator('.settings-search-results').getByRole('status')).toHaveText(
       '검색 결과가 없어요.'
@@ -632,15 +636,15 @@ test('SCDETAIL a narrow settings drill-down shows one back control and the item 
   await backs.click();
   await backs.click();
 
-  await selectSettingsSection(page, '현재 프롬프트');
-  const editor = page.getByRole('region', { name: '현재 프롬프트 설정' });
+  await selectSettingsSection(page, '기본 프롬프트');
+  const editor = page.getByRole('region', { name: '기본 프롬프트 설정' });
   await editor.locator('summary').filter({ hasText: '창작 옵션' }).click();
   await editor.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
   await editor
     .getByRole('button', { name: '현재 선택을 새 옵션 프리셋으로 저장', exact: true })
     .click();
   const combination = page.getByRole('region', {
-    name: '현재 프롬프트 / 옵션 프리셋 저장',
+    name: '기본 프롬프트 / 옵션 프리셋 저장',
     exact: true,
   });
   await expect(combination).toBeVisible();

@@ -12,7 +12,7 @@ import {
 } from './fixtures/browser-viewports.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
-import { editLibraryContent, navigationAction } from './ui-navigation.js';
+import { editLibraryContent, navigationAction, editorTab } from './ui-navigation.js';
 
 async function post<T>(request: APIRequestContext, path: string, data: unknown): Promise<T> {
   const response = await request.post(path, { data });
@@ -238,7 +238,7 @@ for (const viewport of viewports) {
           .getByRole('alert')
           .filter({ hasText: '잘못 입력된 토글 또는 변수 값을 확인해 주세요.' })
       ).toBeVisible();
-      await editor.getByRole('tab', { name: '구성', exact: true }).click();
+      await editorTab(editor, '구성').click();
       await editor.getByRole('tab', { name: '변수와 토글', exact: true }).click();
       variableKey = definitions.getByLabel('변수 키', { exact: true });
       await expect(variableKey).toHaveValue('');
@@ -289,7 +289,7 @@ for (const viewport of viewports) {
       const withPendingSource = `${editedSource}\nsecond unknown line`;
       await raw.fill(withPendingSource);
       await expect(save).toBeEnabled();
-      await editor.getByRole('tab', { name: '구성', exact: true }).click();
+      await editorTab(editor, '구성').click();
       await editor.getByRole('tab', { name: '변수와 토글', exact: true }).click();
       await rawView.click();
       raw = definitions.getByLabel('토글 정의 소스', { exact: true });
@@ -390,11 +390,11 @@ for (const viewport of viewports) {
       await editorFits(page, editor, save);
       await page.screenshot({ path: info.outputPath(`bot-basic-${viewport.name}.png`) });
 
-      await editor.getByRole('tab', { name: '첫 메시지', exact: true }).click();
+      await editorTab(editor, '첫 메시지').click();
       await editor.getByLabel('기본 첫 메시지', { exact: true }).fill(opening);
       await editor.getByRole('tab', { name: '기본 정보', exact: true }).click();
       await expect(editor.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(editedName);
-      await editor.getByRole('tab', { name: '첫 메시지', exact: true }).click();
+      await editorTab(editor, '첫 메시지').click();
       await expect(editor.getByLabel('기본 첫 메시지', { exact: true })).toHaveValue(opening);
       await editorFits(page, editor, save);
       await page.screenshot({ path: info.outputPath(`bot-opening-${viewport.name}.png`) });
@@ -522,7 +522,7 @@ for (const viewport of viewports) {
       await advancedNav.getByRole('button', { name: 'JSON 소스', exact: true }).click();
       await expect(raw).toHaveValue(pendingRaw);
       await editor.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
-      await editor.getByRole('tab', { name: '첫 메시지', exact: true }).click();
+      await editorTab(editor, '첫 메시지').click();
 
       const responsePromise = nextSave(page);
       await save.click();
@@ -622,7 +622,7 @@ for (const viewport of viewports) {
       await page.keyboard.press('Escape');
       await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
       await expect(editor.getByLabel('분위기', { exact: true })).toHaveValue('"1"');
-      await editor.getByRole('tab', { name: '구성', exact: true }).click();
+      await editorTab(editor, '구성').click();
       await expect(editor.getByLabel('1번 프롬프트 본문', { exact: true })).toHaveValue(body);
       await editorFits(page, editor, save);
       await page.screenshot({ path: info.outputPath(`preset-body-${viewport.name}.png`) });
@@ -630,7 +630,7 @@ for (const viewport of viewports) {
       await editor.getByRole('tab', { name: '정규식', exact: true }).click();
       await editor.getByLabel('정규식 바꿀 내용', { exact: true }).fill('Edited regex {{user}}');
       await page.screenshot({ path: info.outputPath(`preset-regex-${viewport.name}.png`) });
-      await editor.getByRole('tab', { name: '구성', exact: true }).click();
+      await editorTab(editor, '구성').click();
 
       const responsePromise = nextSave(page);
       await save.click();

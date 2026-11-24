@@ -37,6 +37,13 @@
   font-weight: 550;
   word-break: keep-all;
 }
+.section-navigation-count {
+  margin-inline-start: 6px;
+  color: var(--faint);
+  font-size: var(--font-small);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
 .section-navigation-group {
   padding: 20px 12px 4px;
   font-size: var(--font-small);
