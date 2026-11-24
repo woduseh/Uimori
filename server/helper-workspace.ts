@@ -128,7 +128,8 @@ export class HelperWorkspace {
     title?: string,
     projectId?: string | null
   ): HelperConversation {
-    return this.store.transaction(() => {
+    let created = false;
+    const conversation = this.store.transaction(() => {
       if (scope.kind === 'chat') this.store.chat(scope.chatId);
       const key = json(scope),
         creationHash = createHash('sha256')
@@ -169,8 +170,11 @@ export class HelperWorkspace {
         this.store.db
           .prepare('INSERT INTO helper_conversation_memberships VALUES(?,?)')
           .run(id, projectId);
+      created = true;
       return this.conversation(id);
     });
+    if (created) this.store.invalidated('helper-list');
+    return conversation;
   }
   groups(): HelperProject[] {
     return this.store.db
@@ -185,7 +189,8 @@ export class HelperWorkspace {
     return row;
   }
   createGroup(title: string, key: string): HelperProject {
-    return this.store.transaction(() => {
+    let created = false;
+    const group = this.store.transaction(() => {
       const previous = this.store.db
         .prepare('SELECT id,creation_title FROM helper_conversation_groups WHERE creation_key=?')
         .get(key);
@@ -198,8 +203,11 @@ export class HelperWorkspace {
       this.store.db
         .prepare('INSERT INTO helper_conversation_groups VALUES(?,?,1,?,?)')
         .run(id, title, key, title);
+      created = true;
       return this.group(id);
     });
+    if (created) this.store.invalidated('helper-list');
+    return group;
   }
   renameGroup(id: string, revision: number, title: string): HelperProject {
     this.group(id);
@@ -209,10 +217,11 @@ export class HelperWorkspace {
       )
       .run(title, id, revision);
     if (!result.changes) throw new HttpError(409, '도우미 프로젝트가 다른 곳에서 변경됐어요.');
+    this.store.invalidated('helper-list');
     return this.group(id);
   }
   deleteGroup(id: string, revision: number) {
-    return this.store.transaction(() => {
+    const deleted = this.store.transaction(() => {
       const group = this.group(id);
       if (group.revision !== revision)
         throw new HttpError(409, '도우미 프로젝트가 다른 곳에서 변경됐어요.');
@@ -223,6 +232,8 @@ export class HelperWorkspace {
       for (const member of members) this.groupChanged(String(member.conversation_id));
       return { deleted: true as const };
     });
+    this.store.invalidated('helper-list');
+    return deleted;
   }
   private groupChanged(id: string) {
     this.store.db
@@ -255,7 +266,8 @@ export class HelperWorkspace {
     });
   }
   copy(id: string, requestKey: string, expected: HelperConversationDeletion['request']) {
-    return this.store.transaction(() => {
+    let created = false;
+    const copied = this.store.transaction(() => {
       const source = this.conversation(id);
       const scopeKey = json(source.scope);
       const creationKey = `copy:${id}:${requestKey}`;
@@ -325,8 +337,11 @@ export class HelperWorkspace {
         add.run(messageId, newId, ordinal, message.role, message.text, message.createdAt);
         saveHelperMessageAttachments(this.store.db, newId, messageId, message);
       });
+      created = true;
       return this.conversation(newId);
     });
+    if (created) this.store.invalidated('helper-list');
+    return copied;
   }
   list(
     scope: { kind: 'chat'; chatId: string } | { kind: 'library' | 'all' }
@@ -421,7 +436,7 @@ export class HelperWorkspace {
     };
   }
   delete(id: string, expected: HelperConversationDeletion['request']) {
-    return this.store.transaction(() => {
+    const deleted = this.store.transaction(() => {
       const impact = this.deletionImpact(id);
       if (
         impact.request.expectedRevision !== expected.expectedRevision ||
@@ -460,6 +475,8 @@ export class HelperWorkspace {
       pruneUnusedHelperFiles(this.store.db);
       return { deleted: true as const };
     });
+    this.store.invalidated('helper-list');
+    return deleted;
   }
   private transcriptEntries(id: string) {
     return this.store.db

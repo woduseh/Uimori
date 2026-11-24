@@ -18,6 +18,8 @@ import type {
   HelperTaskResultsView,
 } from '../core/helper.js';
 import { api } from './api.js';
+import { watchLive } from './live-stream.js';
+import { helperPollDelay, helperRefreshSpacing } from './poll-delays.js';
 import { HelperChangeCard } from './HelperChangeCard.js';
 import { HelperQuestionCard } from './HelperQuestionCard.js';
 import { rollbackCovers, useHelperRollback } from './HelperTaskRollback.js';
@@ -158,13 +160,8 @@ export function useHelperTaskResults(taskId: string, status: HelperStatus, visib
   const retry = useRetryableEffect(() => {
     if (!visible) return;
     const controller = new AbortController();
-    let pending = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
     let currentStatus = status;
     const read = async () => {
-      if (pending || controller.signal.aborted || document.hidden) return;
-      pending = true;
-      clearTimeout(timer);
       setView((old) => ({
         taskId,
         data: old?.taskId === taskId ? old.data : null,
@@ -188,22 +185,18 @@ export function useHelperTaskResults(taskId: string, status: HelperStatus, visib
             reading: false,
             failed: true,
           }));
-      } finally {
-        pending = false;
-        if (!controller.signal.aborted && active(currentStatus) && !document.hidden)
-          timer = setTimeout(() => void read(), 1200);
       }
     };
-    const visibilityChanged = () => {
-      clearTimeout(timer);
-      if (!document.hidden) void read();
-    };
-    void read();
-    document.addEventListener('visibilitychange', visibilityChanged);
+    const live = watchLive({
+      match: (frame) => frame.event === 'helper' && frame.taskId === taskId,
+      refresh: read,
+      fallbackMs: () => (active(currentStatus) ? helperPollDelay.task : undefined),
+      minIntervalMs: helperRefreshSpacing,
+    });
+    live.request();
     return () => {
       controller.abort();
-      clearTimeout(timer);
-      document.removeEventListener('visibilitychange', visibilityChanged);
+      live.dispose();
     };
   }, [taskId, status, visible]);
   return {

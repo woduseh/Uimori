@@ -97,6 +97,7 @@ export type Job = BaseJob & {
   updatedAt: string;
 };
 export type ChatEvent = { seq: number; chatId: string; kind: string; entityId: string; at: string };
+export type VolatileChange = 'helper-list';
 type Row = Record<string, any>;
 const CHAT_SELECT = `SELECT c.*,
   COALESCE((SELECT MAX(seq) FROM events WHERE chat_id=c.id AND kind IN ('chat.title.manual','chat.title.generated')),0) AS title_revision,
@@ -120,6 +121,7 @@ export class Store {
   readonly libraryOrganization: LibraryOrganizationStore;
   private readonly ownership: DatabaseSync;
   private changeListener?: (chatId: string | null) => void;
+  private invalidationListener?: (name: VolatileChange) => void;
   readonly path: string;
   constructor(path: string) {
     this.path = path;
@@ -226,6 +228,12 @@ export class Store {
   }
   changed(chatId: string | null) {
     this.changeListener?.(chatId);
+  }
+  observeInvalidations(listener: (name: VolatileChange) => void) {
+    this.invalidationListener = listener;
+  }
+  invalidated(name: VolatileChange) {
+    this.invalidationListener?.(name);
   }
   event(chatId: string, kind: string, entityId: string, options: { notify?: boolean } = {}) {
     const write = () => {

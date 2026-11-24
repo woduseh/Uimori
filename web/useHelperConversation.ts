@@ -10,6 +10,7 @@ import type {
 } from '../core/helper.js';
 import { api } from './api.js';
 import { evictHelperViews } from './helper-conversation-cache.js';
+import { watchLive } from './live-stream.js';
 import { helperPollDelay } from './poll-delays.js';
 
 export type HelperTaskView = Omit<HelperTask, 'snapshot'> & { modelTitle: string };
@@ -22,7 +23,7 @@ type View = {
   hasOlderTasks: boolean;
 };
 const id = encodeURIComponent;
-const diagnosticEvent = ({ kind, taskId }: HelperEvent) =>
+export const diagnosticHelperEvent = ({ kind, taskId }: Pick<HelperEvent, 'kind' | 'taskId'>) =>
   kind === 'tool.started' ||
   kind === 'tool.finished' ||
   kind === 'input.measured' ||
@@ -68,11 +69,7 @@ function messageChange(view: View, event: HelperEvent): HelperMessageMutation {
   };
 }
 
-export function useHelperConversation(
-  open: boolean,
-  conversationId: string | null,
-  latestEventSeq?: number
-) {
+export function useHelperConversation(open: boolean, conversationId: string | null) {
   useI18n();
   const scopeKey = conversationId ?? '';
   const selectedScope = useRef(scopeKey);
@@ -88,10 +85,6 @@ export function useHelperConversation(
   const alive = useRef(true);
   const earlierLock = useRef(false);
   const current = views[scopeKey];
-  const latestSequence = useRef(latestEventSeq);
-  latestSequence.current = latestEventSeq;
-  const wake = useRef<() => void>(() => {});
-  const running = viewActive(current);
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -203,16 +196,21 @@ export function useHelperConversation(
   useEffect(() => {
     if (!open || !conversationId) return;
     let disposed = false,
-      polling = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let initialized = false,
-      needsRefresh = true,
-      forceEvents = false,
-      requested = false;
+      initialized = false,
+      needsRefresh = false;
     const report = (cause: unknown) => {
       if (!disposed && selectedScope.current === scopeKey)
         setError(cause instanceof Error ? cause.message : uiMessage('helpers.m207'));
     };
+    const queuedTask = (taskId: string | null) =>
+      taskId !== null &&
+      Boolean(
+        cache.current
+          .get(conversationId)
+          ?.tasks.some((task) => task.id === taskId && task.status === 'queued')
+      );
+    const changesView = (event: Pick<HelperEvent, 'kind' | 'taskId'>) =>
+      !diagnosticHelperEvent(event) || queuedTask(event.taskId);
     const events = async () => {
       let cursor = cursors.current.get(conversationId) ?? 0;
       let changed = false,
@@ -235,7 +233,7 @@ export function useHelperConversation(
           if (event.kind === 'font.updated')
             window.dispatchEvent(new Event('uimori-fonts-changed'));
           cursor = event.seq;
-          if (!diagnosticEvent(event)) changed = true;
+          if (changesView(event)) changed = true;
           if (
             /^task\.(completed|failed|cancelled|interrupted)$/u.test(event.kind) ||
             event.kind === 'artifact.saved' ||
@@ -252,17 +250,7 @@ export function useHelperConversation(
       if (notify) window.dispatchEvent(new Event('uimori-helper-updated'));
       return changed;
     };
-    const poll = async () => {
-      if (disposed || document.hidden) return;
-      if (polling) {
-        requested = true;
-        return;
-      }
-      clearTimeout(timer);
-      polling = true;
-      const checkEvents = forceEvents;
-      forceEvents = false;
-      const active = () => viewActive(cache.current.get(scopeKey));
+    const sync = async () => {
       try {
         if (!initialized) {
           if (cursors.current.has(conversationId)) await events();
@@ -270,13 +258,7 @@ export function useHelperConversation(
           await refresh({ id: conversationId });
           initialized = true;
           needsRefresh = false;
-        } else if (
-          needsRefresh ||
-          checkEvents ||
-          active() ||
-          latestSequence.current === undefined ||
-          latestSequence.current > (cursors.current.get(conversationId) ?? 0)
-        ) {
+        } else {
           needsRefresh = (await events()) || needsRefresh;
           if (needsRefresh && !disposed && !document.hidden) {
             await refresh({ id: conversationId });
@@ -286,29 +268,20 @@ export function useHelperConversation(
         if (!disposed && selectedScope.current === scopeKey) setError('');
       } catch (cause) {
         report(cause);
+        throw cause;
       } finally {
-        polling = false;
         if (!disposed) setLoading(false);
-        if (!disposed && !document.hidden)
-          timer = setTimeout(
-            () => void poll(),
-            requested
-              ? 0
-              : active()
-                ? helperPollDelay.conversation.active
-                : helperPollDelay.conversation.idle
-          );
-        requested = false;
       }
     };
-    const visible = () => {
-      clearTimeout(timer);
-      if (!document.hidden) {
-        forceEvents = true;
-        void poll();
-      }
-    };
-    wake.current = () => void poll();
+    const live = watchLive({
+      match: (frame) =>
+        frame.event === 'helper' && frame.conversationId === conversationId && changesView(frame),
+      refresh: sync,
+      fallbackMs: () =>
+        viewActive(cache.current.get(scopeKey))
+          ? helperPollDelay.conversation.active
+          : helperPollDelay.conversation.idle,
+    });
     const cached = cache.current.get(scopeKey);
     if (cached) {
       cache.current.delete(scopeKey);
@@ -316,20 +289,12 @@ export function useHelperConversation(
     }
     setLoading(!cached);
     setError('');
-    void poll();
-    document.addEventListener('visibilitychange', visible);
-    window.addEventListener('focus', visible);
+    live.request();
     return () => {
       disposed = true;
-      clearTimeout(timer);
-      document.removeEventListener('visibilitychange', visible);
-      window.removeEventListener('focus', visible);
+      live.dispose();
     };
   }, [open, scopeKey, conversationId, refresh, applyMessageMutation]);
-  useEffect(() => {
-    if (open && (running || (latestEventSeq ?? 0) > (cursors.current.get(scopeKey) ?? 0)))
-      wake.current();
-  }, [open, scopeKey, running, latestEventSeq]);
   const earlier = async (kind: 'messages' | 'tasks') => {
     const view = cache.current.get(scopeKey);
     if (!view || earlierLock.current) return;

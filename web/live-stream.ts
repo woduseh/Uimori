@@ -223,10 +223,12 @@ export function createLiveRefresh(options: {
   stream: Pick<LiveStream, 'subscribe' | 'state' | 'watchState'>;
   match: (frame: LiveFrame) => boolean;
   refresh: () => Promise<unknown>;
-  fallbackMs: number;
+  fallbackMs: number | (() => number | undefined);
   minIntervalMs?: number;
   hidden: () => boolean;
 }) {
+  const fallbackDelay = () =>
+    typeof options.fallbackMs === 'function' ? options.fallbackMs() : options.fallbackMs;
   let disposed = false,
     inFlight = false,
     trailing = false,
@@ -270,12 +272,13 @@ export function createLiveRefresh(options: {
   const poll = () => {
     clearTimeout(fallback);
     fallback = undefined;
-    if (disposed || options.stream.state() !== 'down') return;
+    const delay = fallbackDelay();
+    if (disposed || delay === undefined || options.stream.state() !== 'down') return;
     fallback = setTimeout(() => {
       fallback = undefined;
       if (!options.hidden()) request();
       poll();
-    }, options.fallbackMs);
+    }, delay);
   };
   const unsubscribe = options.stream.subscribe(options.match, request);
   const unwatch = options.stream.watchState(poll);
@@ -292,6 +295,12 @@ export function createLiveRefresh(options: {
   };
 }
 
+export function watchLive(
+  options: Omit<Parameters<typeof createLiveRefresh>[0], 'stream' | 'hidden'>
+) {
+  return createLiveRefresh({ ...options, stream: liveStream(), hidden: () => document.hidden });
+}
+
 export function useLiveRefresh(options: {
   enabled: boolean;
   match: (frame: LiveFrame) => boolean;
@@ -304,14 +313,6 @@ export function useLiveRefresh(options: {
   const { enabled, fallbackMs, minIntervalMs } = options;
   useEffect(() => {
     if (!enabled) return;
-    const controller = createLiveRefresh({
-      stream: liveStream(),
-      match,
-      refresh,
-      fallbackMs,
-      minIntervalMs,
-      hidden: () => document.hidden,
-    });
-    return controller.dispose;
+    return watchLive({ match, refresh, fallbackMs, minIntervalMs }).dispose;
   }, [enabled, fallbackMs, minIntervalMs, match, refresh]);
 }

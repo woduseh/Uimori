@@ -2,7 +2,9 @@ import { useI18n, message as uiMessage } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { HelperConversation, HelperScope, HelperStatus } from '../core/helper.js';
 import { activityChangedEvent, api, ApiError } from './api.js';
-import { helperPollDelay } from './poll-delays.js';
+import { watchLive } from './live-stream.js';
+import { helperPollDelay, helperRefreshSpacing } from './poll-delays.js';
+import { diagnosticHelperEvent } from './useHelperConversation.js';
 import {
   clearPendingHelperRequest,
   pendingHelperRequest,
@@ -234,52 +236,35 @@ export function useHelperSessions(
   useEffect(() => {
     if (!open) return;
     let disposed = false;
-    let polling = false;
-    let requested = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const poll = async () => {
-      if (disposed || document.hidden) return;
-      if (polling) {
-        requested = true;
-        return;
-      }
-      clearTimeout(timer);
-      polling = true;
-      let active = false;
-      try {
-        active = (await reload()) ?? false;
-      } catch (cause) {
-        if (!disposed)
-          setErrors((old) => ({
-            ...old,
-            [group]: cause instanceof Error ? cause.message : uiMessage('helpers.m210'),
-          }));
-      } finally {
-        polling = false;
-        if (!disposed && !document.hidden)
-          timer = setTimeout(
-            () => void poll(),
-            requested ? 0 : active ? helperPollDelay.sessions.active : helperPollDelay.sessions.idle
-          );
-        requested = false;
-      }
-    };
-    const visible = () => {
-      clearTimeout(timer);
-      void poll();
-    };
+    let active = false;
+    const live = watchLive({
+      match: (frame) =>
+        frame.event === 'invalidate'
+          ? frame.name === 'helper-list'
+          : frame.event === 'helper' && !diagnosticHelperEvent(frame),
+      refresh: async () => {
+        try {
+          active = (await reload()) ?? false;
+        } catch (cause) {
+          if (!disposed)
+            setErrors((old) => ({
+              ...old,
+              [group]: cause instanceof Error ? cause.message : uiMessage('helpers.m210'),
+            }));
+          throw cause;
+        }
+      },
+      fallbackMs: () => (active ? helperPollDelay.sessions.active : helperPollDelay.sessions.idle),
+      minIntervalMs: helperRefreshSpacing,
+    });
     const submitted = (event: Event) => {
-      if ((event as CustomEvent<string>).detail.startsWith('/helper/')) visible();
+      if ((event as CustomEvent<string>).detail.startsWith('/helper/')) live.request();
     };
-    void poll();
-    document.addEventListener('visibilitychange', visible);
-    window.addEventListener('focus', visible);
+    live.request();
     window.addEventListener(activityChangedEvent, submitted);
     return () => {
       disposed = true;
-      clearTimeout(timer);
-      document.removeEventListener('visibilitychange', visible);
-      window.removeEventListener('focus', visible);
+      live.dispose();
       window.removeEventListener(activityChangedEvent, submitted);
       versions.current.set(group, (versions.current.get(group) ?? 0) + 1);
     };

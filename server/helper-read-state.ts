@@ -10,7 +10,8 @@ export function markHelperConversationRead(
   conversationId: string,
   activityEventSeq: number
 ) {
-  return store.transaction(() => {
+  let raised = false;
+  const result = store.transaction(() => {
     if (!store.db.prepare('SELECT 1 FROM helper_conversations WHERE id=?').get(conversationId))
       throw new HttpError(404, '도우미 대화를 찾을 수 없어요.');
     const latest = Number(
@@ -23,15 +24,17 @@ export function markHelperConversationRead(
     const key = HELPER_READ_PREFIX + conversationId;
     const sequence = Math.min(activityEventSeq, latest);
     if (sequence > 0)
-      store.db
+      raised = !!store.db
         .prepare(
           `INSERT INTO app_metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value
           WHERE CAST(excluded.value AS INTEGER) > CAST(app_metadata.value AS INTEGER)`
         )
-        .run(key, String(sequence));
+        .run(key, String(sequence)).changes;
     const row = store.db.prepare('SELECT value FROM app_metadata WHERE key=?').get(key);
     return { readActivityEventSeq: row ? Number(row.value) : 0 };
   });
+  if (raised) store.invalidated('helper-list');
+  return result;
 }
 
 export function forgetHelperConversationRead(store: Store, conversationId: string) {

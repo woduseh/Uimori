@@ -398,11 +398,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   const scopeKey = sessions.currentId ?? '';
   const currentScope = useRef(scopeKey);
   currentScope.current = scopeKey;
-  const data = useHelperConversation(
-    props.open && props.ready !== false,
-    sessions.currentId,
-    sessions.sessions.find((session) => session.id === sessions.currentId)?.latestEventSeq
-  );
+  const data = useHelperConversation(props.open && props.ready !== false, sessions.currentId);
   const conversation = data.current?.conversation ?? null;
   const currentActivitySequence = sessions.sessions.find(
     (session) => session.id === sessions.currentId

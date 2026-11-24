@@ -17,6 +17,8 @@ import { TaskHistoryTimeline, type TaskHistoryStep } from './TaskHistory.js';
 import { statusGlyph, type StatusTone } from './TurnStatus.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 import { useBottomFollow } from './useBottomFollow.js';
+import { watchLive } from './live-stream.js';
+import { helperPollDelay, helperRefreshSpacing } from './poll-delays.js';
 
 export type HelperActivityView = {
   taskId?: string;
@@ -36,18 +38,13 @@ export function useHelperActivity(
   const retry = useRetryableEffect(() => {
     if (!taskId || !visible) return;
     let disposed = false;
-    let pending = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
     const read = async () => {
-      if (disposed || pending || document.hidden) return;
-      pending = true;
       setView((old) => ({
         taskId,
         data: old.taskId === taskId ? old.data : null,
         error: old.taskId === taskId ? old.error : '',
         reading: true,
       }));
-      clearTimeout(timer);
       try {
         const data = await api<Activity>(`/helper/tasks/${encodeURIComponent(taskId)}/activity`);
         if (!disposed) setView({ taskId, data, error: '' });
@@ -59,22 +56,19 @@ export function useHelperActivity(
             error: cause instanceof Error ? cause.message : uiMessage('helpers.m112'),
           }));
       } finally {
-        pending = false;
         if (!disposed) setView((old) => ({ ...old, reading: false }));
-        if (!disposed && status === 'running' && !document.hidden)
-          timer = setTimeout(() => void read(), 1200);
       }
     };
-    const visibility = () => {
-      clearTimeout(timer);
-      if (!document.hidden) void read();
-    };
-    void read();
-    document.addEventListener('visibilitychange', visibility);
+    const live = watchLive({
+      match: (frame) => frame.event === 'helper' && frame.taskId === taskId,
+      refresh: read,
+      fallbackMs: () => (status === 'running' ? helperPollDelay.task : undefined),
+      minIntervalMs: helperRefreshSpacing,
+    });
+    live.request();
     return () => {
       disposed = true;
-      clearTimeout(timer);
-      document.removeEventListener('visibilitychange', visibility);
+      live.dispose();
     };
   }, [taskId, status, visible]);
   return { ...(view.taskId === taskId ? view : { data: null, error: '' }), retry };

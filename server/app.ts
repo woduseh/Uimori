@@ -363,6 +363,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   const deferredRuns = new Map<string, boolean>();
   const live = createLiveHub(store, { instanceId, publishChat: chatEvents.publish });
   store.observeChanges((chatId) => live.notify(chatId));
+  store.observeInvalidations((name) => live.invalidate(name));
   const publish = (chatId: string) => {
     chatEvents.publish(chatId);
     live.notify();

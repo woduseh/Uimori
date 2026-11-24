@@ -5,6 +5,7 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Writable } from 'node:stream';
 import { afterEach, expect, test } from 'vitest';
 import { chatEventResume, createChatEventStreams } from '../server/chat-event-stream.js';
+import { markHelperConversationRead } from '../server/helper-read-state.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { createLiveHub } from '../server/live-events.js';
 import { Store } from '../server/store.js';
@@ -54,6 +55,7 @@ async function fixture() {
     },
   });
   store.observeChanges((chatId) => hub.notify(chatId));
+  store.observeInvalidations((name) => hub.invalidate(name));
   const client = (options: { stalled?: boolean; highWaterMark?: number } = {}) => {
     const written: string[] = [];
     const queued: (() => void)[] = [];
@@ -192,4 +194,41 @@ test('a blocked client skips frames while full and gets a fresh live frame after
   const frames = slow.frames();
   expect(frames.map((frame) => frame.event)).toEqual(['live', 'live']);
   expect(frames[1].data.chatsSeq).toBe(fast.frames()[2].data.seq);
+});
+
+test('helper list changes that write no helper event send one helper-list invalidation each, and replays send none', async () => {
+  const live = await fixture();
+  const reader = live.client();
+  live.hub.connect(reader.response, () => true);
+  const invalidations = () =>
+    reader
+      .frames()
+      .filter((frame) => frame.event === 'invalidate' && frame.data.name === 'helper-list').length;
+  const library = { kind: 'library' as const, workId: 'workspace' };
+
+  live.workspace.open({ kind: 'chat', chatId: live.chat.id });
+  const created = live.workspace.create(library, 'request:first');
+  live.workspace.create(library, 'request:first');
+  expect(invalidations()).toBe(1);
+
+  const group = live.workspace.createGroup('Drafts', 'group:first');
+  live.workspace.createGroup('Drafts', 'group:first');
+  const renamed = live.workspace.renameGroup(group.id, group.revision, 'Renamed');
+  expect(() => live.workspace.renameGroup(group.id, group.revision, 'Stale')).toThrow();
+  live.workspace.deleteGroup(group.id, renamed.revision);
+  expect(invalidations()).toBe(4);
+
+  const copy = live.workspace.copy(
+    created.id,
+    'copy:first',
+    live.workspace.deletionImpact(created.id).request
+  );
+  live.workspace.delete(copy.id, live.workspace.deletionImpact(copy.id).request);
+  expect(invalidations()).toBe(6);
+
+  live.workspace.event(created.id, null, 'task.completed');
+  const sequence = live.workspace.latestEventSequence(created.id);
+  markHelperConversationRead(live.store, created.id, sequence);
+  markHelperConversationRead(live.store, created.id, sequence);
+  expect(invalidations()).toBe(7);
 });

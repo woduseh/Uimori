@@ -20,7 +20,7 @@ import type { HelperArtifactView } from '../web/HelperArtifactCard.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
 import type { ModelPreset, ModelWorkspace } from '../core/product.js';
 import { messages } from '../web/locales/index.js';
-import { helperPollDelay, longestHelperPollDelay } from '../web/poll-delays.js';
+import { longestHelperPollDelay } from '../web/poll-delays.js';
 import { postFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { trackPageFetches } from './fixtures/page-fetches.js';
 import { navigationAction, openSourceActions, openChatMenu } from './ui-navigation.js';
@@ -76,8 +76,18 @@ async function harness(page: Page, seedCount = 0) {
     viewReads = 0,
     sessionReads = 0,
     eventStreamReads = 0;
+  const record = (view: View, entry: HelperEvent) => {
+    view.events.push(entry);
+    const { seq, conversationId, taskId, kind } = entry;
+    void page.request
+      .post('/api/test/live-frame', {
+        data: { event: 'helper', data: { seq, conversationId, taskId, kind } },
+      })
+      .catch(() => undefined);
+    return seq;
+  };
   const event = (view: View, task: HelperTaskView, kind: string) =>
-    view.events.push({
+    record(view, {
       seq: ++nextSeq,
       conversationId: view.conversation.id,
       taskId: task.id,
@@ -121,10 +131,21 @@ async function harness(page: Page, seedCount = 0) {
     return task;
   };
   await page.addInitScript(() => {
-    (window as unknown as { helperUpdates: number }).helperUpdates = 0;
+    const observed = window as unknown as { helperUpdates: number; helperFrames: string[] };
+    observed.helperUpdates = 0;
+    observed.helperFrames = [];
     window.addEventListener('uimori-helper-updated', () => {
-      (window as unknown as { helperUpdates: number }).helperUpdates++;
+      observed.helperUpdates++;
     });
+    const Original = window.EventSource;
+    window.EventSource = class extends Original {
+      constructor(url: string | URL, options?: EventSourceInit) {
+        super(url, options);
+        this.addEventListener('helper', (message) =>
+          observed.helperFrames.push(JSON.parse((message as MessageEvent).data).kind)
+        );
+      }
+    };
   });
   await page.route('**/api/response-streams/helper/**', async (route) => {
     const url = new URL(route.request().url()),
@@ -265,7 +286,7 @@ async function harness(page: Page, seedCount = 0) {
         historyRevision: seq,
       };
       mutation.conversation = view.conversation;
-      view.events.push({
+      record(view, {
         seq,
         conversationId: view.conversation.id,
         taskId: null,
@@ -510,16 +531,25 @@ async function harness(page: Page, seedCount = 0) {
       loseNext = true;
     },
     current: () => [...views.values()].at(-1)!,
+    record,
+    framesReceived: () =>
+      page.evaluate(() => (window as unknown as { helperFrames: string[] }).helperFrames),
+    async pulse(times = 2) {
+      for (let index = 0; index < times; index++) {
+        const before = eventReads;
+        this.emit('conversation.updated');
+        await expect.poll(() => eventReads).toBeGreaterThan(before);
+      }
+    },
     emit(kind: string, data: unknown = null) {
       const view = [...views.values()].at(-1)!;
-      view.events.push({
+      return record(view, {
         seq: ++nextSeq,
         conversationId: view.conversation.id,
         taskId: null,
         kind,
         data,
       });
-      return nextSeq;
     },
     progress(task: HelperTaskView, text: string, offset: number) {
       const value = streams.get(task.id)!;
@@ -1339,7 +1369,7 @@ test('HELPUI14 idle and hidden helper views pause reads and resume cursors, effe
   const idleSessions = state.sessionReads;
   const idleEvents = state.eventReads;
   const idleFetches = await helperFetches.count();
-  await page.clock.runFor(helperPollDelay.sessions.active);
+  await page.clock.runFor(longestHelperPollDelay * 2);
   expect(await helperFetches.count()).toBe(idleFetches);
   expect(state.sessionReads).toBe(idleSessions);
   expect(state.eventReads).toBe(idleEvents);
@@ -1513,7 +1543,8 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
     await expect.poll(() => state.heldStreams.has(first.id)).toBe(true);
     const streamReads = state.streamReads.get(first.id),
       eventReads = state.eventReads;
-    await expect.poll(() => state.eventReads).toBeGreaterThanOrEqual(eventReads + 2);
+    await state.pulse(2);
+    expect(state.eventReads).toBe(eventReads + 2);
     expect(state.streamReads.get(first.id)).toBe(streamReads);
     expect(state.maxPendingStreams.get(first.id)).toBe(1);
   } finally {
@@ -1524,20 +1555,23 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
   await expect(panel.locator('.streaming-text')).toHaveText(`실제 공개 조각${continuation}`);
   expect(state.streamCursors.get(first.id)?.some((cursor) => cursor > 0)).toBe(true);
   expect(state.eventStreamReads).toBe(0);
-  const viewsBeforeDiagnostics = state.viewReads,
-    eventsBeforeDiagnostics = state.eventReads;
-  for (const kind of ['tool.finished', 'input.measured', 'progress', 'context.segment'])
-    state.emit(kind);
-  await expect.poll(() => state.eventReads).toBeGreaterThanOrEqual(eventsBeforeDiagnostics + 2);
-  expect(state.viewReads).toBe(viewsBeforeDiagnostics);
-  await expect(panel.locator('.streaming-text')).toHaveText(`실제 공개 조각${continuation}`);
   const firstTaskStatus = panel.locator(`.helper-task[data-task-id="${first.id}"]`);
   await firstTaskStatus.locator(':scope > details > summary').click();
+  const viewsBeforeDiagnostics = state.viewReads,
+    eventsBeforeDiagnostics = state.eventReads,
+    framesBeforeDiagnostics = (await state.framesReceived()).length;
+  const diagnostics = ['tool.finished', 'input.measured', 'progress', 'context.segment'];
+  for (const kind of diagnostics) state.emit(kind);
+  await expect
+    .poll(async () => (await state.framesReceived()).slice(framesBeforeDiagnostics))
+    .toEqual(diagnostics);
+  await expect(panel.locator('.streaming-text')).toHaveText(`실제 공개 조각${continuation}`);
   first.usage = { ...first.usage, modelCalls: 2, inputTokens: 25 };
   state.emit('attempt.finished');
   state.emit('tool.finished');
   await expect(firstTaskStatus).toContainText('실행 요청 2회, 출력 10 토큰');
   expect(state.viewReads).toBe(viewsBeforeDiagnostics + 1);
+  expect(state.eventReads).toBe(eventsBeforeDiagnostics + 1);
   await input.fill('뒤이어 처리할 작업');
   await panel.getByRole('button', { name: '다음 요청', exact: true }).click();
   const activity = panel.getByTestId('helper-current-activity');
@@ -1573,9 +1607,8 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
   await expect(input).toHaveValue('접수 확인 중에도 보존할 새 입력');
   await state.complete(first);
   await expect(panel.getByText('합성 완료 응답', { exact: true })).toBeVisible();
-  const reads = state.eventReads,
-    completedStreamReads = state.streamReads.get(first.id);
-  await expect.poll(() => state.eventReads).toBeGreaterThanOrEqual(reads + 2);
+  const completedStreamReads = state.streamReads.get(first.id);
+  await state.pulse(2);
   expect(state.streamReads.get(first.id)).toBe(completedStreamReads);
   expect(state.eventStreamReads).toBe(0);
   expect(
@@ -1654,7 +1687,7 @@ test('HELPUI03 archived artifact revisions and device drafts remain readable wit
     }
   }, recovery);
   view.messages.at(-1)!.artifacts = [{ id: artifact.id, revision: 1 }];
-  view.events.push({
+  state.record(view, {
     seq: 1,
     conversationId: view.conversation.id,
     taskId: task.id,
@@ -1840,7 +1873,7 @@ test('HELPUI04 selected source is frozen in the request and a terminal missing s
   });
   expect(state.posts[0].text).toBe(customRequest);
   const failed = state.addFailed(state.current());
-  state.current().events.push({
+  state.record(state.current(), {
     seq: 100,
     conversationId: failed.conversationId,
     taskId: failed.id,
@@ -1849,8 +1882,7 @@ test('HELPUI04 selected source is frozen in the request and a terminal missing s
   });
   await expect(panel.getByText('공개 응답이 없는 실패', { exact: true }).first()).toBeVisible();
   await expect.poll(() => state.streamReads.get(failed.id) ?? 0).toBe(1);
-  const reads = state.eventReads;
-  await expect.poll(() => state.eventReads).toBeGreaterThanOrEqual(reads + 2);
+  await state.pulse(2);
   expect(state.streamReads.get(failed.id)).toBe(1);
   expect(
     ((await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail).sources
@@ -2321,8 +2353,7 @@ test('DISPLAY helper complete mode skips public reads across tools, toggles and 
   const task = state.current().tasks[0];
   state.progress(task, '도구 실행 전 설명', '도구 실행 전 설명'.length);
   state.emit('tool.finished');
-  const events = state.eventReads;
-  await expect.poll(() => state.eventReads).toBeGreaterThanOrEqual(events + 2);
+  await state.pulse(2);
   expect(state.streamReads.get(task.id) ?? 0).toBe(0);
   await expect(panel.locator('.streaming-response')).toHaveCount(0);
   await expect(panel.getByTestId('helper-task-activity')).toContainText('처리 중');
@@ -2333,8 +2364,7 @@ test('DISPLAY helper complete mode skips public reads across tools, toggles and 
   await expect(panel.locator('.streaming-response')).toHaveCount(0);
   await page.reload();
   await open(page);
-  const reloadedEvents = state.eventReads;
-  await expect.poll(() => state.eventReads).toBeGreaterThanOrEqual(reloadedEvents + 2);
+  await state.pulse(2);
   expect(state.streamReads.get(task.id)).toBe(reads);
   expect(state.posts).toHaveLength(1);
   state.streams.get(task.id)!.status = 'completed';

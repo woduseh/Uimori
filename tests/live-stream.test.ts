@@ -190,3 +190,39 @@ test('a refresh runs once per burst of matching signals, polls only while the st
   helper('mine', 4);
   expect(refreshes).toHaveLength(5);
 });
+
+test('a degraded poll reads its delay on every tick, and an undefined delay stops polling', async () => {
+  const live = environment();
+  await flush();
+  vi.advanceTimersByTime(liveDelay.downAfterClosed);
+  expect(live.stream.state()).toBe('down');
+  let delay: number | undefined = 1000;
+  let refreshes = 0;
+  const controller = createLiveRefresh({
+    stream: live.stream,
+    match: () => false,
+    refresh: async () => {
+      refreshes++;
+    },
+    fallbackMs: () => delay,
+    hidden: () => false,
+  });
+  vi.advanceTimersByTime(1000);
+  await flush();
+  expect(refreshes).toBe(1);
+  delay = 3000;
+  vi.advanceTimersByTime(1000);
+  await flush();
+  expect(refreshes).toBe(2);
+  delay = undefined;
+  vi.advanceTimersByTime(2999);
+  await flush();
+  expect(refreshes).toBe(2);
+  vi.advanceTimersByTime(1);
+  await flush();
+  expect(refreshes).toBe(3);
+  vi.advanceTimersByTime(30_000);
+  await flush();
+  expect(refreshes).toBe(3);
+  controller.dispose();
+});
