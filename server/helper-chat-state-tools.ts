@@ -282,7 +282,7 @@ export const HELPER_CHAT_STATE_TOOLS: ProviderTool[] = [
   {
     name: 'scene.context.update',
     description:
-      'Hide or show a saved scene for the writer, turn the request that produced it off or on, or replace that request text. A hidden scene stays in the chat but is left out of later requests and of scene numbers; a request that is off is left out while the scene text stays. requestText null removes the stored request. The earlier request text stays in the change record; read the current text through db.query (agent_messages.request). Refused while the chat has a queued or running request. Take expectedRevision from contextRevision in chat.read.',
+      'Hide or show a saved scene for the writer, turn the request that produced it off or on, or replace that request text. A hidden scene stays in the chat but is left out of later requests and of scene numbers; a request that is off is left out while the scene text stays. requestText replaces the request the writer sees for this scene, and null drops that replacement so the request originally sent applies again. The earlier text stays in the change record; read the current text through db.query (agent_messages.request). Refused while the chat has a queued or running request. Take expectedRevision from contextRevision in chat.read.',
     inputSchema: schema(
       {
         sourceId: {
@@ -304,7 +304,7 @@ export const HELPER_CHAT_STATE_TOOLS: ProviderTool[] = [
         requestText: {
           type: ['string', 'null'],
           maxLength: REQUEST_TEXT_MAX_CHARS,
-          description: 'The complete new request text, or null to remove it.',
+          description: 'The complete new request text, or null to go back to the original.',
         },
       },
       ['sourceId', 'expectedRevision']
@@ -313,7 +313,7 @@ export const HELPER_CHAT_STATE_TOOLS: ProviderTool[] = [
   {
     name: 'chat.bookmark',
     description:
-      'Read, add, rename or delete the bookmarks of a chat: named places in the story with an optional note, shown in the reader. action=read lists them with their ids and revisions. add takes sourceId and title, and optionally note and representation (original by default), and marks the start of that scene. update takes id, expectedRevision, title and note, and replaces both. delete takes id and expectedRevision; deleting a bookmark changes no scene text.',
+      'Read, add, rename or delete the bookmarks of a chat: named places in the story with an optional note, shown in the reader. action=read lists them with their ids and revisions. add takes sourceId and title, and optionally note and representation (original by default), and marks the start of that scene. update takes id, expectedRevision, and a new title, note or both; an omitted one stays. delete takes id and expectedRevision. The earlier title and note of an updated or deleted bookmark stay in the change record; no scene text changes.',
     inputSchema: schema(
       {
         action: {
@@ -866,6 +866,23 @@ function updateChatProfile(
         : (args.modules as unknown[]).map((id) => attachable(store, id, 'module'))),
     ];
   }
+  const keys = (refs: ContentAttachment[] | undefined) =>
+    (refs ?? []).map((ref) => `${ref.role}:${ref.id}`);
+  const unchanged =
+    (packageAttachments === undefined ||
+      isDeepStrictEqual(keys(packageAttachments), keys(prior.packageAttachments))) &&
+    (args.loreContext === undefined ||
+      isDeepStrictEqual(args.loreContext, prior.loreContext ?? null)) &&
+    (args.authorNote === undefined || args.authorNote === (prior.authorNote ?? ''));
+  if (unchanged && prior.revision === expectedRevision) {
+    recordHelperTaskResult(workspace, task, {
+      receiptId,
+      operation: 'chat.profile.update',
+      requestedTargets: requested.length,
+      targets: [],
+    });
+    return { changed: false, ...readChatProfile(store, chatId) };
+  }
   const saved = store.product.updateProfile(chatId, {
     expectedRevision,
     image: prior.image,
@@ -874,8 +891,6 @@ function updateChatProfile(
     ...(args.authorNote !== undefined ? { authorNote: args.authorNote } : {}),
   });
   const chat = store.chat(chatId);
-  const keys = (refs: ContentAttachment[] | undefined) =>
-    (refs ?? []).map((ref) => `${ref.role}:${ref.id}`);
   const attachmentsChanged = !isDeepStrictEqual(
     keys(prior.packageAttachments),
     keys(saved.packageAttachments)
@@ -903,7 +918,7 @@ function updateChatProfile(
       action: 'update',
       anchor: { domain: 'settings', id: chatId, chatId, setting: 'chat.authorNote' },
       value: { before: noteBefore, after: noteAfter },
-      diff: diffText(noteBefore, noteAfter, 'prose'),
+      diff: (baseline) => diffText(String(baseline ?? ''), noteAfter, 'prose'),
     });
     targets.push({ kind: 'chat', id: chatId, title: chat.title, revision: saved.revision });
   }
@@ -946,10 +961,13 @@ function updateHelperSceneContext(
       action: 'update',
       anchor: { domain: 'scene', chatId, sourceId, field: 'original', paragraph: null },
       value: { before: beforeValue, after: afterValue },
-      diff:
-        before.requestText === after.requestText
+      sourceId,
+      diff: (baseline) => {
+        const earlier = (baseline as { requestText?: string | null } | undefined)?.requestText;
+        return (earlier ?? null) === after.requestText
           ? null
-          : diffText(before.requestText ?? '', after.requestText ?? '', 'prose'),
+          : diffText(earlier ?? '', after.requestText ?? '', 'prose');
+      },
     });
   }
   recordHelperTaskResult(workspace, task, {
@@ -966,7 +984,7 @@ function updateHelperSceneContext(
     contextRevision: after.revision,
     sceneEnabled: after.sceneEnabled,
     requestEnabled: after.requestEnabled,
-    hasRequest: after.requestText !== null,
+    requestEdited: after.requestText !== null,
   };
 }
 
@@ -1030,8 +1048,26 @@ function changeBookmark(
       404,
       'BOOKMARK_NOT_FOUND: List the bookmarks of this chat with action=read.'
     );
+  const keep = (after: { title: string; note: string } | null) =>
+    recordHelperAction(store, task, {
+      domain: 'settings',
+      targetId: `chat.bookmark:${id}`,
+      chatId,
+      title: current.title,
+      location: { kind: 'setting', setting: 'chat.bookmark' },
+      action: after ? 'update' : 'delete',
+      anchor: { domain: 'settings', id: chatId, chatId, setting: 'chat.bookmark' },
+      value: { before: { title: current.title, note: current.note }, after },
+      diff: (baseline) => {
+        const earlier = baseline as { title: string; note: string } | undefined;
+        const text = (value: { title: string; note: string } | null | undefined) =>
+          value ? `${value.title}\n\n${value.note}` : '';
+        return diffText(text(earlier), text(after), 'prose');
+      },
+    });
   if (args.action === 'delete') {
     updateBookmark(store, id, { expectedRevision: args.expectedRevision }, true);
+    keep(null);
     report({ kind: 'chat', id: chatId, title: chat.title, revision: current.revision });
     return { changed: true, deleted: id };
   }
@@ -1040,6 +1076,7 @@ function changeBookmark(
     title: args.title ?? current.title,
     note: args.note ?? current.note,
   }) as Bookmark;
+  keep({ title: saved.title, note: saved.note });
   report({
     kind: 'scene',
     id: current.target.sourceId,

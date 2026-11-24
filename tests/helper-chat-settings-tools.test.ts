@@ -11,7 +11,7 @@ import { sceneTitle } from '../server/scene-titles.js';
 import { Store } from '../server/store.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { nativeContent } from './fixtures/native-content.js';
-import { readHelperChanges } from '../server/helper-changes.js';
+import { forgetHelperSceneChanges, readHelperChanges } from '../server/helper-changes.js';
 import { listBookmarks } from '../server/reading-state.js';
 import { readSceneContext } from '../server/scene-context.js';
 import {
@@ -213,6 +213,12 @@ test('chat.profile.update attaches a persona and modules, keeps the bot and reco
   const { store, chat } = fixture();
   const persona = libraryContent(store, 'persona', 'Reader');
   const weather = libraryContent(store, 'module', 'Weather');
+  const initial = store.product.profile(chat.id);
+  store.product.updateProfile(chat.id, {
+    expectedRevision: initial.revision,
+    image: initial.image,
+    authorNote: 'Owner wrote this first.',
+  });
   const before = store.product.profile(chat.id);
   const botId = before.packageAttachments!.find((ref) => ref.role === 'bot')!.id;
   const run = await runScriptedChatHelper(store, chat.id, [
@@ -235,9 +241,14 @@ test('chat.profile.update attaches a persona and modules, keeps the bot and reco
       persona: null,
     }),
     helperCall('read', 'chat.profile.read', {}),
+    helperCall('same', 'chat.profile.update', {
+      expectedRevision: before.revision + 2,
+      authorNote: 'Keep the harbor loud.',
+    }),
     helperDone,
   ]);
   const profile = store.product.profile(chat.id);
+  expect(profile.revision).toBe(before.revision + 2);
   expect(profile.packageAttachments?.map((ref) => `${ref.role}:${ref.id}`)).toEqual([
     `bot:${botId}`,
     `persona:${persona.id}`,
@@ -261,8 +272,13 @@ test('chat.profile.update attaches a persona and modules, keeps the bot and reco
     ],
   });
   const note = settingChange(store, run.task.id, 'chat.authorNote');
-  expect(note?.diff).not.toBeNull();
-  expect(JSON.stringify(note?.diff)).toContain('quiet');
+  const removed = (note!.diff as { hunks: { segments: { op: string; text: string }[] }[] }).hunks
+    .flatMap((hunk) => hunk.segments)
+    .filter((segment) => segment.op === 'delete')
+    .map((segment) => segment.text)
+    .join(' ');
+  expect(removed).toBe('Owner wrote this first.');
+  expect(JSON.stringify(note?.diff)).toContain('loud');
 });
 
 test('scene.context.update hides a scene, replaces its request and reports the new context revision', async () => {
@@ -307,6 +323,8 @@ test('scene.context.update hides a scene, replaces its request and reports the n
   ]);
   const change = settingChange(store, run.task.id, 'scene.context');
   expect(JSON.stringify(change?.diff)).toContain('Arrive quietly.');
+  forgetHelperSceneChanges(store.db, [sourceId]);
+  expect(JSON.stringify(readHelperChanges(store.db, run.task.id))).not.toContain('Arrive quietly.');
 });
 
 test('chat.bookmark adds, renames and deletes bookmarks of the selected chat only', async () => {
@@ -346,6 +364,9 @@ test('chat.bookmark adds, renames and deletes bookmarks of the selected chat onl
     helperDone,
   ]);
   expect(second.finished('rename')).toMatchObject({ denied: false });
+  expect(JSON.stringify(settingChange(store, second.task.id, 'chat.bookmark')?.diff)).toContain(
+    'Once.'
+  );
   expect(second.finished('missing')).toMatchObject({
     denied: true,
     errorCode: 'BOOKMARK_NOT_FOUND',

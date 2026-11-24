@@ -9,6 +9,7 @@ import { helperStateHash } from './helper-changes.js';
 import { helperResourceOperation } from './helper-resource-tools.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { fontCatalog } from './fonts.js';
+import { modelInUse } from './helper-model-usage.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 import { readPalette } from './themes.js';
@@ -104,6 +105,12 @@ function requirement(
   }
   const confirmation = helperConfirmationTrait(name, args);
   if (!confirmation) return null;
+  if (
+    name === 'model.delete' &&
+    typeof args.modelId === 'string' &&
+    modelInUse(store, args.modelId)
+  )
+    return null;
   if (confirmation === 'paid' && !task.snapshot.confirmPaidGeneration) return null;
   return needs(
     confirmation,

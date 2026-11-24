@@ -190,7 +190,19 @@ export function applyHelperChatOrganization(
         ...(args.beforeChatId === undefined ? {} : { beforeChatId: args.beforeChatId }),
       });
       const moved = organization.metadata(chatId)!;
-      report(moved.organizationRevision);
+      recordHelperTaskResult(workspace, task, {
+        receiptId,
+        operation: 'chat.organize',
+        requestedTargets: 1,
+        targets: [
+          {
+            kind: 'chat',
+            id: chatId,
+            title: store.chat(chatId).title,
+            revision: moved.organizationRevision,
+          },
+        ],
+      });
       return {
         changedChatIds: [chatId],
         chatId,

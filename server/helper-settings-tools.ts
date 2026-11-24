@@ -27,7 +27,7 @@ import {
 } from './auto-translation-defaults.js';
 import { loreContextDefaults, updateLoreContextDefaults } from './lore-context-defaults.js';
 import { deleteLibraryItem } from './library-deletion.js';
-import { managementImpact } from './provider-management.js';
+import { modelInUse } from './helper-model-usage.js';
 import { WRITTEN_LANGUAGES } from '../core/written-language.js';
 import {
   illustrationPresetPreferences,
@@ -127,7 +127,7 @@ export const HELPER_SETTINGS_TOOLS: ProviderTool[] = [
   {
     name: 'model.delete',
     description:
-      'Delete a saved model. A model that is still chosen for a global role or an advisor, or pinned to a chat, is refused with the places that use it: choose another model there with settings.update first. The helper cannot restore a deleted model. Take expectedRevision from model.list.',
+      'Delete a saved model. A model that is still chosen for a global role or an advisor, pinned to a chat, or used by the illustration settings is refused with the places that use it: choose another model there first. The helper cannot restore a deleted model. Take expectedRevision from model.list.',
     inputSchema: schema(
       {
         modelId: {
@@ -551,17 +551,8 @@ export function invokeHelperSettingsTool(
     const modelId = text(args.modelId, 'saved model ID', 100);
     store.product.assertAvailable('model', modelId);
     const model = store.product.get<ModelPreset>('model', modelId);
-    const impact = managementImpact(store.product, 'model', modelId);
-    if (impact.globalRoles.length || impact.profileCount)
-      throw new HttpError(
-        409,
-        `MODEL_IN_USE: Choose another model first. Roles: ${impact.globalRoles.join(', ') || 'none'}. Chats: ${
-          impact.profiles
-            .slice(0, 5)
-            .map((profile) => `${profile.title} (${profile.chatId})`)
-            .join(', ') || 'none'
-        }${impact.profileCount > 5 ? ` and ${impact.profileCount - 5} more` : ''}.`
-      );
+    const use = modelInUse(store, modelId);
+    if (use) throw new HttpError(409, `MODEL_IN_USE: ${use}`);
     deleteLibraryItem(store, 'model', modelId, {
       expectedRevision: number(args.expectedRevision, 'model revision'),
     });

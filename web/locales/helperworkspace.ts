@@ -713,6 +713,12 @@ export const messages = {
     ja: 'Risu 作者ノート',
     zh: 'Risu 作者笔记',
   },
+  'helperResults.chatBookmark': {
+    ko: '책갈피',
+    en: 'Bookmark',
+    ja: 'ブックマーク',
+    zh: '书签',
+  },
   'helperResults.sceneContext': {
     ko: '장면 숨김과 요청문',
     en: 'Scene visibility and request',

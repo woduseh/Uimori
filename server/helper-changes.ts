@@ -778,14 +778,15 @@ export function recordHelperAction(
     action: HelperChange['action'];
     anchor: HelperChangeAnchor;
     value?: { before: unknown; after: unknown };
-    diff?: TextDiff | null;
+    diff?: (baseline: unknown) => TextDiff | null;
+    sourceId?: string;
   }
 ) {
   storeChange(
     store,
     task,
     { domain: change.domain, targetId: change.targetId, chatId: change.chatId },
-    null,
+    change.sourceId ?? null,
     {
       before: change.value ? { value: change.value.before } : null,
       beforeHash: null,
@@ -801,7 +802,7 @@ export function recordHelperAction(
               title: change.title,
               location: change.location,
               action: change.action,
-              diff: change.diff ?? null,
+              diff: change.diff?.((baseline as { value?: unknown } | null)?.value) ?? null,
               anchor: change.anchor,
             },
           ]

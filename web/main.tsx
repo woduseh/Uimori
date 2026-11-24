@@ -1041,7 +1041,7 @@ function App() {
               ? 'guide'
               : target.setting === 'chat.attachments'
                 ? 'characters'
-                : target.setting === 'chat.loreContext' || target.setting === 'chat.authorNote'
+                : target.setting === 'chat.loreContext'
                   ? 'story'
                   : target.setting === 'chat.maxCalls' ||
                       target.setting === 'chat.storyUi' ||

@@ -454,7 +454,8 @@ test('a plan-mode request cannot carry a confirmation, which stays grantable', a
 });
 
 const UNCONFIRMED_DELETIONS: Record<string, string> = {
-  'chat.bookmark:delete': 'a bookmark only marks a place in the reader; no story text changes',
+  'chat.bookmark:delete':
+    'a bookmark marks a place in the reader, and its earlier title and note stay in the change record',
   'chat.organize:delete-folder':
     'the chats of the folder move to the top level; no chat is deleted',
 };
@@ -558,7 +559,14 @@ test('paid illustration and retry calls wait only when paid confirmation is on, 
 
 test('an irreversible deletion waits even without paid confirmation and names its target', () => {
   const f = fixture();
-  const model = f.store().product.all('model')[0] as { id: string; title: string };
+  const connection = f.store().product.all('connection')[0] as { id: string };
+  const model = f.store().product.model({
+    title: 'Retired',
+    connectionId: connection.id,
+    modelId: 'retired',
+    maxOutputTokens: 512,
+    temperature: null,
+  }) as unknown as { id: string; title: string };
   const { workspace, task } = heldTask(f, false);
   expect(
     helperConfirmationGate(
@@ -622,4 +630,30 @@ test('the confirmation card shows titles the server attached and the number of p
   expect(html).toContain('named:s1');
   expect(html).toContain(t('helperConfirm.pictures', { count: 3 }));
   expect(html).toContain(t('helperConfirm.modelDelete'));
+});
+
+test('a model still in use is refused without a confirmation card, and an unused one waits', async () => {
+  const f = fixture();
+  const used = f.store().product.all('model')[0] as { id: string; revision: number };
+  const connection = f.store().product.all('connection')[0] as { id: string };
+  const spare = f.store().product.model({
+    title: 'Spare',
+    connectionId: connection.id,
+    modelId: 'spare',
+    maxOutputTokens: 512,
+    temperature: null,
+  });
+  const run = await runScriptedChatHelper(f.store(), f.chat.id, [
+    helperCall('used', 'model.delete', { modelId: used.id, expectedRevision: used.revision }),
+    helperCall('spare', 'model.delete', { modelId: spare.id, expectedRevision: spare.revision }),
+    helperDone,
+  ]);
+  expect(run.finished('used')).toMatchObject({ denied: true, errorCode: 'MODEL_IN_USE' });
+  expect(run.finished('spare')).toMatchObject({ denied: true, errorCode: 'CONFIRMATION_REQUIRED' });
+  expect(readHelperTaskResults(f.store(), run.task.id).confirmations).toEqual([
+    expect.objectContaining({
+      operation: 'model.delete',
+      targets: [{ kind: 'model', id: spare.id, title: 'Spare' }],
+    }),
+  ]);
 });

@@ -52,6 +52,7 @@ export const settingsLabels: Record<string, string> = {
   'chat.loreContext': 'helperResults.chatLoreContext',
   'chat.authorNote': 'helperResults.chatAuthorNote',
   'scene.context': 'helperResults.sceneContext',
+  'chat.bookmark': 'helperResults.chatBookmark',
 };
 
 const sceneFields = {

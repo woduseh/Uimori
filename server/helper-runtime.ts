@@ -3077,6 +3077,8 @@ export class HelperRuntime {
         { name, args, chatId },
         invoke
       );
+      if (name === 'illustration-preset.select')
+        this.workspace.event(task.conversationId, task.id, 'illustration-preset.updated');
       this.workspace.event(
         task.conversationId,
         task.id,
