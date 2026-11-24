@@ -180,10 +180,10 @@ export const messages = {
     zh: '已经撤销。',
   },
   'helperRollback.uncovered': {
-    ko: '설정, 채팅 전용 로어, 장면 이름 변경은 되돌리기 대상이 아니에요. 필요하면 직접 바꿔 주세요.',
-    en: 'Changes to settings, chat-only lore and scene names are not rolled back. Change them directly if needed.',
-    ja: '設定、チャット専用ロア、シーン名の変更は元に戻す対象ではありません。必要なら直接変更してください。',
-    zh: '设置、聊天专用设定和场景名称的更改不在撤销范围内。如有需要请直接修改。',
+    ko: '설정, 채팅 전용 로어, 장면 이름 변경은 되돌리기 대상이 아니에요.',
+    en: 'Changes to settings, chat-only lore and scene names are not rolled back.',
+    ja: '設定、チャット専用ロア、シーン名の変更は元に戻す対象ではありません。',
+    zh: '设置、聊天专用设定和场景名称的更改不在撤销范围内。',
   },
   'helperRollback.outline': {
     ko: '플롯',

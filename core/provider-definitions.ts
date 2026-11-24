@@ -79,7 +79,6 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     limitations: [
       '이 컴퓨터의 127.0.0.1 또는 [::1] 주소에서만 사용하는 검사용 연결이에요.',
       '모델 목록은 로컬 검사 서버에서 가져와요.',
-      '인증이 필요한 검사 서버에는 API 키를 입력해 주세요.',
     ],
   }),
   definition({
@@ -102,7 +101,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     reference: 'core/vertex.ts#executeGeminiProvider',
     limitations: [
       'Gemini 모델에 연결해요. 위치를 global로 두면 Google이 처리 위치를 정해요.',
-      '등록한 Vertex 인증으로 Google Model Garden의 Gemini 목록을 조회할 수 있어요. 목록과 실제 모델 사용 권한은 Google Cloud 설정을 따라요.',
+      '등록한 Vertex 인증으로 Google Model Garden의 Gemini 목록을 조회할 수 있어요.',
       'ADC는 서버의 GOOGLE_APPLICATION_CREDENTIALS에 지정한 파일을 사용해요. Flex는 모델의 Service Tier에서 선택해요.',
     ],
   }),
@@ -127,7 +126,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     reference: 'core/vertex.ts#executeGeminiProvider',
     limitations: [
       'Google AI Studio에서 발급한 Gemini API 키를 등록해요. Google Cloud 서비스 계정은 필요하지 않아요.',
-      '공식 Gemini API에서 생성과 모델 목록 조회에 같은 API 키를 사용해요. 모델 사용 권한과 요청 한도는 Google 계정 설정을 따라요.',
+      '공식 Gemini API에서 생성과 모델 목록 조회에 같은 API 키를 사용해요.',
       '요금은 모델 프리셋에서 직접 설정해요.',
     ],
   }),
@@ -148,10 +147,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
       'cacheTtl',
     ],
     reference: 'core/openai-protocol.ts#encodeResponses',
-    limitations: [
-      '서버에서 허용한 HTTPS 주소나 이 컴퓨터의 로컬 HTTP 주소를 사용할 수 있어요.',
-      '모델별 옵션과 도구 지원은 프로바이더에 따라 달라요.',
-    ],
+    limitations: ['서버에서 허용한 HTTPS 주소나 이 컴퓨터의 로컬 HTTP 주소를 사용할 수 있어요.'],
   }),
   definition({
     id: 'anthropic-messages-v1',
@@ -175,7 +171,6 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     limitations: [
       '공식 API 기본 주소와 API 키 인증을 사용해요.',
       'Claude Opus 5의 추론 강도와 사고 모드를 모델이 지원하는 조합으로 사용해요.',
-      '모델 기본값을 선택하면 해당 설정을 보내지 않아요.',
     ],
   }),
   definition({
@@ -225,11 +220,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     catalog: 'remote',
     optionKeys: [...responsesOptions, 'serviceTier'],
     reference: 'core/openai-chat-protocol.ts#encodeChat',
-    limitations: [
-      '서버에서 허용한 HTTPS 주소나 이 컴퓨터의 로컬 HTTP 주소를 사용할 수 있어요.',
-      '인증이 필요한 프로바이더에는 API 키를 입력해 주세요.',
-      'Chat Completions 지원 여부는 프로바이더에서 확인해 주세요.',
-    ],
+    limitations: ['서버에서 허용한 HTTPS 주소나 이 컴퓨터의 로컬 HTTP 주소를 사용할 수 있어요.'],
   }),
 ]);
 

@@ -3059,12 +3059,6 @@ export const messages = {
     ja: 'モデル一覧はローカル検査サーバーから取得します。',
     zh: '模型列表从本地检查服务器获取。',
   },
-  'providers.m611': {
-    ko: '인증이 필요한 검사 서버에는 API 키를 입력해 주세요.',
-    en: 'Enter an API key if the test server requires authentication.',
-    ja: '認証が必要な検査サーバーにはAPIキーを入力してください。',
-    zh: '需要认证的测试服务器请输入 API 密钥。',
-  },
   'providers.m612': {
     ko: 'Gemini 모델에 연결해요. 위치를 global로 두면 Google이 처리 위치를 정해요.',
     en: 'Connects Gemini models. With the global location, Google chooses where requests run.',
@@ -3072,10 +3066,10 @@ export const messages = {
     zh: '连接 Gemini 模型。位置设为 global 时，由 Google 决定处理位置。',
   },
   'providers.m613': {
-    ko: '등록한 Vertex 인증으로 Google Model Garden의 Gemini 목록을 조회할 수 있어요. 목록과 실제 모델 사용 권한은 Google Cloud 설정을 따라요.',
-    en: 'Registered Vertex credentials can load Gemini models from Google Model Garden. Catalog and model access follow Google Cloud settings.',
-    ja: '登録したVertex認証でGoogle Model GardenのGemini一覧を取得できます。一覧と実際のモデル利用権限はGoogle Cloudの設定に従います。',
-    zh: '可使用已注册的 Vertex 凭据查询 Google Model Garden 中的 Gemini 列表。列表及实际模型访问权限取决于 Google Cloud 设置。',
+    ko: '등록한 Vertex 인증으로 Google Model Garden의 Gemini 목록을 조회할 수 있어요.',
+    en: 'Registered Vertex credentials can load Gemini models from Google Model Garden.',
+    ja: '登録したVertex認証でGoogle Model GardenのGemini一覧を取得できます。',
+    zh: '可使用已注册的 Vertex 凭据查询 Google Model Garden 中的 Gemini 列表。',
   },
   'providers.m614': {
     ko: 'ADC는 서버의 GOOGLE_APPLICATION_CREDENTIALS에 지정한 파일을 사용해요. Flex는 모델의 Service Tier에서 선택해요.',
@@ -3090,10 +3084,10 @@ export const messages = {
     zh: '注册 Google AI Studio 签发的 Gemini API 密钥，无需 Google Cloud 服务账号。',
   },
   'providers.m616': {
-    ko: '공식 Gemini API에서 생성과 모델 목록 조회에 같은 API 키를 사용해요. 모델 사용 권한과 요청 한도는 Google 계정 설정을 따라요.',
-    en: 'The official Gemini API uses the same API key for generation and model lists. Model access and request limits follow Google account settings.',
-    ja: '公式Gemini APIでは生成とモデル一覧の取得に同じAPIキーを使用します。モデルの利用権限とリクエスト制限はGoogleアカウントの設定に従います。',
-    zh: '官方 Gemini API 的生成及模型列表查询使用相同 API 密钥。模型权限和请求限额取决于 Google 账号设置。',
+    ko: '공식 Gemini API에서 생성과 모델 목록 조회에 같은 API 키를 사용해요.',
+    en: 'The official Gemini API uses the same API key for generation and model lists.',
+    ja: '公式Gemini APIでは生成とモデル一覧の取得に同じAPIキーを使用します。',
+    zh: '官方 Gemini API 的生成及模型列表查询使用相同 API 密钥。',
   },
   'providers.m617': {
     ko: '요금은 모델 프리셋에서 직접 설정해요.',
@@ -3106,12 +3100,6 @@ export const messages = {
     en: 'You can use server-approved HTTPS addresses or local HTTP addresses on this computer.',
     ja: 'サーバーで許可したHTTPSアドレスか、このコンピューターのローカルHTTPアドレスを使用できます。',
     zh: '可使用服务器允许的 HTTPS 地址或本机的本地 HTTP 地址。',
-  },
-  'providers.m619': {
-    ko: '모델별 옵션과 도구 지원은 프로바이더에 따라 달라요.',
-    en: 'Model options and tool support vary by provider.',
-    ja: 'モデルごとのオプションとツール対応はプロバイダーによって異なります。',
-    zh: '各模型的选项和工具支持情况因提供商而异。',
   },
   'providers.m620': {
     ko: '번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 JSON 형식으로 요청해요. 기본값은 일반 텍스트예요.',
@@ -3130,12 +3118,6 @@ export const messages = {
     en: 'Uses Claude Opus 5 reasoning strength and thinking mode in combinations each model supports.',
     ja: 'Claude Opus 5の推論強度と思考モードを、モデルが対応する組み合わせで使います。',
     zh: '按模型支持的组合使用 Claude Opus 5 的推理强度和思考模式。',
-  },
-  'providers.m624': {
-    ko: '모델 기본값을 선택하면 해당 설정을 보내지 않아요.',
-    en: 'Selecting the model default will not send that setting.',
-    ja: 'モデルの既定値を選択すると、該当する設定は送信されません。',
-    zh: '选择模型默认值时将不会发送该设置。',
   },
   'providers.m625': {
     ko: 'Vercel의 공식 API 기본 주소에서 Chat Completions 형식을 사용해요.',
@@ -3178,18 +3160,6 @@ export const messages = {
     en: 'OpenAI compatible, other provider',
     ja: 'OpenAI互換、その他のプロバイダー',
     zh: 'OpenAI 兼容，其他提供商',
-  },
-  'providers.m633': {
-    ko: '인증이 필요한 프로바이더에는 API 키를 입력해 주세요.',
-    en: 'Enter an API key if the provider requires authentication.',
-    ja: '認証が必要なプロバイダーにはAPIキーを入力してください。',
-    zh: '需要认证的提供商请输入 API 密钥。',
-  },
-  'providers.m634': {
-    ko: 'Chat Completions 지원 여부는 프로바이더에서 확인해 주세요.',
-    en: 'Verify Chat Completions support with the provider.',
-    ja: 'Chat Completionsへの対応はプロバイダーで確認してください。',
-    zh: '请向提供商确认是否支持 Chat Completions。',
   },
   'providers.m635': {
     ko: 'GPT-4o, 4.1, 5 및 o 계열의 공개 인코딩',

@@ -117,7 +117,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   await expect(form.getByLabel('API 기본 주소')).toHaveValue('https://api.openai.com/v1');
   await form.getByText('연결 안내', { exact: true }).click();
   await expect(form.locator('.provider-definition')).toContainText(
-    '모델별 옵션과 도구 지원은 프로바이더에 따라 달라요.'
+    '서버에서 허용한 HTTPS 주소나 이 컴퓨터의 로컬 HTTP 주소를 사용할 수 있어요.'
   );
   await expect(form.locator('.provider-definition')).not.toContainText('로컬 어댑터');
   await expect(form.locator('.provider-definition')).not.toContainText('bearer');

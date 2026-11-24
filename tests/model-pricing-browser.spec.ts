@@ -273,7 +273,6 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
   await expect(sourceCost.locator('.source-cost-value')).toHaveText(
     '확인된 금액 합계 $0.004995, 미확인 1회 포함'
   );
-  await expect(sourceCost).toContainText('미확인 호출이 있어 전체 추정 비용은 확정할 수 없어요.');
   await sourceCost.getByRole('button', { name: '본문 추정 비용 닫기' }).click();
   await navigationAction(page, '작업 현황');
   const dialog = page.getByRole('dialog', { name: '작업 현황', exact: true });

@@ -1892,9 +1892,6 @@ function SourceReaderContent({
                     v1: estimatedCost.unknownCount,
                   })}
             </p>
-            {estimatedCost.unknownCount > 0 && (
-              <p>{t('reader.theSubtotalAddsOnlyKnownAmountsTheTotalEstimate')}</p>
-            )}
           </Dialog>
         )}
         {actionError && (

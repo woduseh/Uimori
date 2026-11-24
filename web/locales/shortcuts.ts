@@ -42,10 +42,10 @@ export const messages = {
     zh: '已更改 {count} 项',
   },
   'shortcuts.localNote': {
-    ko: '바꾼 단축키는 이 브라우저에만 저장돼요. 변경을 누른 뒤 원하는 키 조합을 누르고, 취소하려면 Esc를 누르세요.',
-    en: 'Custom shortcuts are saved only in this browser. Click Change, press the key combination you want, or press Esc to cancel.',
-    ja: '変更したショートカットはこのブラウザーにのみ保存されます。「変更」を押してから希望のキーを押し、取り消すには Esc を押してください。',
-    zh: '更改后的快捷键仅保存在此浏览器中。点击“更改”后按下目标组合键，按 Esc 可取消。',
+    ko: '바꾼 단축키는 이 브라우저에만 저장돼요.',
+    en: 'Custom shortcuts are saved only in this browser.',
+    ja: '変更したショートカットはこのブラウザーにのみ保存されます。',
+    zh: '更改后的快捷键仅保存在此浏览器中。',
   },
   'shortcuts.disabledNotice': {
     ko: '지금은 키보드 단축키가 꺼져 있어요. 여기서 바꾼 키는 단축키를 다시 켤 때 적용돼요.',

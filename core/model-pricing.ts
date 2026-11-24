@@ -231,7 +231,7 @@ export function resolveModelPricing(
             ...(config.flexLongContext ? { flexLongContext: config.flexLongContext } : {}),
           }
         : {}),
-      notes: ['사용자가 입력한 참고 단가예요. 실제 청구액과 다를 수 있어요.'],
+      notes: [],
     });
   }
 
@@ -263,9 +263,7 @@ export function resolveModelPricing(
             ...(flex.longContext ? { flexLongContext: flex.longContext } : {}),
           }
         : {}),
-      notes: [
-        '프로바이더 모델 목록의 참고 단가예요. 자동 라우팅과 프로바이더별 요금에 따라 달라질 수 있어요.',
-      ],
+      notes: [],
     });
   }
   return undefined;

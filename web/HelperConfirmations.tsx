@@ -22,9 +22,8 @@ export const HELPER_CONFIRMATION_OPERATION_LABELS: Record<string, string> = {
   'illustration.cut.revise': 'helperConfirm.illustrationRevise',
   'task.retry': 'helperConfirm.taskRetry',
 };
-const reasons: Record<HelperConfirmation['reason'], string> = {
+const reasons: Partial<Record<HelperConfirmation['reason'], string>> = {
   delete: 'helperConfirm.reasonDelete',
-  bulk: 'helperConfirm.reasonBulk',
   paid: 'helperConfirm.reasonPaid',
 };
 const declinedKey = ({ taskId, id }: Pick<HelperConfirmation, 'taskId' | 'id'>) =>
@@ -65,6 +64,14 @@ export function HelperConfirmations({
         ];
         const waiting = pending.includes(confirmation.id);
         const open = confirmation.grantable && !confirmation.grantedBy && !waiting;
+        const reason = reasons[confirmation.reason];
+        const note = confirmation.grantedBy
+          ? t('helperConfirm.granted')
+          : waiting
+            ? t('helperConfirm.pending')
+            : confirmation.grantable
+              ? reason && t(reason)
+              : t('helperConfirm.expired');
         return (
           <li
             key={confirmation.id}
@@ -93,15 +100,7 @@ export function HelperConfirmations({
                 })}
               </ul>
             )}
-            <p className="helper-result-note">
-              {confirmation.grantedBy
-                ? t('helperConfirm.granted')
-                : waiting
-                  ? t('helperConfirm.pending')
-                  : confirmation.grantable
-                    ? t(reasons[confirmation.reason])
-                    : t('helperConfirm.expired')}
-            </p>
+            {note && <p className="helper-result-note">{note}</p>}
             {open && onConfirm && (
               <div className="helper-confirmation-actions">
                 <button

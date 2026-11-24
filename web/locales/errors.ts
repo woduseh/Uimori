@@ -228,10 +228,10 @@ export const messages = {
     zh: '已保存的译文已更改。请重新选择段落。',
   },
   'errors.SELECTION_REVISION_TIMEOUT': {
-    ko: '퇴고 제안이 제한 시간 안에 끝나지 않았어요. 다시 요청하면 새 모델 호출이 발생해요.',
-    en: 'Revision suggestions timed out. Requesting again will make a new model call.',
-    ja: '推敲案の作成が制限時間内に完了しませんでした。再度依頼すると新しいモデル呼び出しが発生します。',
-    zh: '润色建议未在时限内完成。重新请求会产生新的模型调用。',
+    ko: '퇴고 제안이 제한 시간 안에 끝나지 않았어요.',
+    en: 'Revision suggestions timed out.',
+    ja: '推敲案の作成が制限時間内に完了しませんでした。',
+    zh: '润色建议未在时限内完成。',
   },
   'errors.SELECTION_REVISION_CANCELLED': {
     ko: '퇴고 제안 요청이 중단됐어요.',
@@ -858,10 +858,10 @@ export const messages = {
     zh: '提供商拒绝了请求设置。请在错误详情中查看原因。',
   },
   'errors.rejectionUnspecified': {
-    ko: '프로바이더가 요청 설정을 받아들이지 않았어요. 어떤 설정인지는 알려주지 않았어요.',
-    en: 'The provider rejected the request settings without specifying which ones.',
-    ja: 'プロバイダーがリクエスト設定を受け付けませんでした。対象の設定は示されませんでした。',
-    zh: '提供商拒绝了请求设置，但未说明具体设置。',
+    ko: '프로바이더가 요청 설정을 받아들이지 않았어요.',
+    en: 'The provider rejected the request settings.',
+    ja: 'プロバイダーがリクエスト設定を受け付けませんでした。',
+    zh: '提供商拒绝了请求设置。',
   },
   'errors.rejectionAction': {
     ko: '모델 프리셋에서 해당 설정을 다른 값이나 모델 기본값으로 바꾼 뒤 다시 시도해 주세요.',
@@ -1050,13 +1050,13 @@ export const messages = {
     zh: '已达到提供商的请求或配额限制。请检查提供商使用量和配额，稍后重试。',
   },
   'errors.auxiliary.AUXILIARY_PROVIDER_HTTP_500.details': {
-    ko: '프로바이더 서버에서 요청을 처리하지 못했어요. 프로바이더 상태를 확인해 주세요. 요청이 실행되었을 수 있으므로 확인 후 재시도해 주세요.',
+    ko: '프로바이더 서버에서 요청을 처리하지 못했어요. 프로바이더 상태를 확인해 주세요. 요청이 이미 실행됐을 수 있으니 확인한 뒤 다시 시도해 주세요.',
     en: 'The provider server could not process the request. Check the provider status. The request may have run, so verify before retrying.',
     ja: 'プロバイダーのサーバーでリクエストを処理できませんでした。プロバイダーの状態を確認してください。実行済みの可能性があるため、確認後に再試行してください。',
     zh: '提供商服务器未能处理请求。请检查提供商状态。请求可能已执行，请确认后再重试。',
   },
   'errors.auxiliary.AUXILIARY_PROVIDER_TIMEOUT.details': {
-    ko: '제한 시간 안에 모델 응답을 완료하지 못했어요. 연결 상태와 작업 제한 시간을 확인해 주세요. 요청이 실행되었을 수 있으므로 확인 후 재시도해 주세요.',
+    ko: '제한 시간 안에 모델 응답을 완료하지 못했어요. 연결 상태와 작업 제한 시간을 확인해 주세요. 요청이 이미 실행됐을 수 있으니 확인한 뒤 다시 시도해 주세요.',
     en: 'The model response did not finish before the time limit. Check the connection and task time limit. The request may have run, so verify before retrying.',
     ja: '制限時間内にモデルの応答が完了しませんでした。接続状態と作業の制限時間を確認してください。実行済みの可能性があるため、確認後に再試行してください。',
     zh: '模型响应未在时限内完成。请检查连接和任务时限。请求可能已执行，请确认后再重试。',
@@ -1074,7 +1074,7 @@ export const messages = {
     zh: '未能完整接收模型响应。请在任务调用记录中检查中断原因。可能超出了响应时限或输出上限。',
   },
   'errors.auxiliary.AUXILIARY_PROVIDER_TRANSPORT_ERROR.details': {
-    ko: '모델 응답이 중간에 끝났거나 연결이 끊겼어요. 연결 상태와 출력 토큰 한도를 확인해 주세요. 요청이 실행되었을 수 있으므로 확인 후 재시도해 주세요.',
+    ko: '모델 응답이 중간에 끝났거나 연결이 끊겼어요. 연결 상태와 출력 토큰 한도를 확인해 주세요. 요청이 이미 실행됐을 수 있으니 확인한 뒤 다시 시도해 주세요.',
     en: 'The model response ended early or the connection was lost. Check the connection and output token limit. The request may have run, so verify before retrying.',
     ja: 'モデルの応答が途中で終了したか、接続が切れました。接続状態と出力トークン上限を確認してください。実行済みの可能性があるため、確認後に再試行してください。',
     zh: '模型响应提前结束或连接已断开。请检查连接和输出 token 上限。请求可能已执行，请确认后再重试。',
@@ -1272,7 +1272,7 @@ export const messages = {
     zh: '提供商服务器未能处理请求。',
   },
   'errors.auxiliary.AUXILIARY_PROVIDER_HTTP_500.action': {
-    ko: '프로바이더 상태를 확인해 주세요. 요청이 실행되었을 수 있으므로 확인 후 재시도해 주세요.',
+    ko: '프로바이더 상태를 확인해 주세요. 요청이 이미 실행됐을 수 있으니 확인한 뒤 다시 시도해 주세요.',
     en: 'Check the provider status. The request may have run, so verify before retrying.',
     ja: 'プロバイダーの状態を確認してください。実行済みの可能性があるため、確認後に再試行してください。',
     zh: '请检查提供商状态。请求可能已执行，请确认后再重试。',
@@ -1284,7 +1284,7 @@ export const messages = {
     zh: '模型响应未在时限内完成。',
   },
   'errors.auxiliary.AUXILIARY_PROVIDER_TIMEOUT.action': {
-    ko: '연결 상태와 작업 제한 시간을 확인해 주세요. 요청이 실행되었을 수 있으므로 확인 후 재시도해 주세요.',
+    ko: '연결 상태와 작업 제한 시간을 확인해 주세요. 요청이 이미 실행됐을 수 있으니 확인한 뒤 다시 시도해 주세요.',
     en: 'Check the connection and task time limit. The request may have run, so verify before retrying.',
     ja: '接続状態と作業の制限時間を確認してください。実行済みの可能性があるため、確認後に再試行してください。',
     zh: '请检查连接和任务时限。请求可能已执行，请确认后再重试。',
@@ -1320,7 +1320,7 @@ export const messages = {
     zh: '模型响应提前结束或连接已断开。',
   },
   'errors.auxiliary.AUXILIARY_PROVIDER_TRANSPORT_ERROR.action': {
-    ko: '연결 상태와 출력 토큰 한도를 확인해 주세요. 요청이 실행되었을 수 있으므로 확인 후 재시도해 주세요.',
+    ko: '연결 상태와 출력 토큰 한도를 확인해 주세요. 요청이 이미 실행됐을 수 있으니 확인한 뒤 다시 시도해 주세요.',
     en: 'Check the connection and output token limit. The request may have run, so verify before retrying.',
     ja: '接続状態と出力トークン上限を確認してください。実行済みの可能性があるため、確認後に再試行してください。',
     zh: '请检查连接和输出 token 上限。请求可能已执行，请确认后再重试。',

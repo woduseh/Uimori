@@ -30,7 +30,7 @@ describe('safe auxiliary error diagnostics', () => {
       'AUXILIARY_PROVIDER_UNEXPECTED_EOF',
       'AUXILIARY_PROVIDER_HTTP_503',
     ]) {
-      expect(auxiliaryErrorDiagnostic(code).action).toContain('실행되었을 수');
+      expect(auxiliaryErrorDiagnostic(code).action).toContain('이미 실행됐을 수');
     }
   });
 

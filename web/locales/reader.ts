@@ -467,12 +467,6 @@ export const messages = {
     ja: '不明',
     zh: '未知',
   },
-  'reader.theSubtotalAddsOnlyKnownAmountsTheTotalEstimate': {
-    ko: '확인된 금액만 합산한 값이며, 미확인 호출이 있어 전체 추정 비용은 확정할 수 없어요.',
-    en: 'The subtotal adds only known amounts. The total estimate is still unknown.',
-    ja: '小計は確認できた金額のみの合計で、全体の推定費用はまだ不明です。',
-    zh: '小计仅累加已知费用，总估算费用仍未知。',
-  },
   'reader.globalModelSettings': {
     ko: '역할별 모델',
     en: 'Models by role',
@@ -1020,10 +1014,10 @@ export const messages = {
     zh: '相对于上下文上限的输入',
   },
   'reader.contextUsageCannotBeShownBecauseThisCallHas': {
-    ko: '이 호출의 컨텍스트 기록이 없어 사용 비율을 확인할 수 없어요.',
-    en: 'Context usage cannot be shown because this call has no context record.',
-    ja: 'この呼び出しのコンテキスト記録がないため、使用率を確認できません。',
-    zh: '本次调用没有上下文记录，无法显示使用比例。',
+    ko: '이 호출의 컨텍스트 기록이 없어요.',
+    en: 'This call has no context record.',
+    ja: 'この呼び出しのコンテキスト記録はありません。',
+    zh: '本次调用没有上下文记录。',
   },
   'reader.cacheReadValueWriteValueTokens': {
     ko: '캐시 읽기 {v0} / 쓰기 {v1} 토큰',
@@ -1128,10 +1122,10 @@ export const messages = {
     zh: '无法加载所选分词器，已使用通用本地估算。',
   },
   'reader.noCallRecordUsageIsNotEstimatedForImported': {
-    ko: '호출 기록이 없어요. 가져온 원고나 기록 보존 이전 장면은 사용량을 추정하지 않아요.',
-    en: 'No call record. Usage is not estimated for imported manuscripts or scenes from before records were kept.',
-    ja: '呼び出し記録がありません。取り込んだ原稿や記録開始前のシーンの使用量は推定しません。',
-    zh: '没有调用记录。导入的稿件或启用记录前的场景不会估算使用量。',
+    ko: '이 장면의 호출 기록이 없어요.',
+    en: 'This scene has no call record.',
+    ja: 'このシーンの呼び出し記録はありません。',
+    zh: '此场景没有调用记录。',
   },
   'reader.couldNotGetARevisionSuggestion': {
     ko: '퇴고 제안을 받지 못했어요.',
@@ -1950,10 +1944,10 @@ export const messages = {
     zh: '相对于下次请求输入上限的估算上下文',
   },
   'reader.contextCleanupIsNeededSoTheActualInputSize': {
-    ko: '컨텍스트 정리가 필요해 실제 전송량은 달라질 수 있어요.',
-    en: 'Context cleanup is needed, so the actual input size may differ.',
-    ja: 'コンテキストの整理が必要なため、実際の送信量は変わる場合があります。',
-    zh: '需要整理上下文，实际发送量可能不同。',
+    ko: '컨텍스트를 정리하기 전 기준의 추정치예요.',
+    en: 'Estimated before context cleanup.',
+    ja: 'コンテキスト整理前の推定です。',
+    zh: '此估算基于整理上下文之前的内容。',
   },
   'reader.theSelectedTokenizerCouldNotBeLoadedAGeneral2': {
     ko: '선택한 토크나이저를 불러오지 못해 일반 추정치를 사용했어요.',

@@ -1556,10 +1556,10 @@ export const messages = {
     zh: 'Scripted mock（模拟生成）',
   },
   'visuals.m278': {
-    ko: '요청한 생성이 거절됐어요. 대체 원고를 자동 생성하지 않았어요.',
-    en: 'Generation was refused. No replacement manuscript was automatically generated.',
-    ja: '生成が拒否されました。代替原稿は自動生成していません。',
-    zh: '生成被拒绝，未自动生成替代原稿。',
+    ko: '모델이 생성을 거절했어요.',
+    en: 'The model refused to generate.',
+    ja: 'モデルが生成を拒否しました。',
+    zh: '模型拒绝了生成。',
   },
   'visuals.m279': {
     ko: '보관된 응답 (본문에 미반영)',
