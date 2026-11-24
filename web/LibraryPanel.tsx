@@ -17,7 +17,7 @@ import { RisuNativeFields } from './RisuNativeFields.js';
 import { useResourceAnchor } from './resource-anchor.js';
 import { RisuExportButton } from './RisuExportButton.js';
 import { IconButton } from './IconButton.js';
-import { useEditorHeadingHeight } from './useEditorHeadingHeight.js';
+import { EditorFrame } from './EditorFrame.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { RisuImport } from './RisuImport.js';
@@ -1397,7 +1397,6 @@ function ContentEditor({
     []
   );
   const editorUnavailable = busy || !state.ready;
-  const editorHeading = useEditorHeadingHeight(state.ready);
   useEffect(() => {
     onDirtyChange(dirty || busy || portraitBusy || state.creationPending);
   }, [dirty, busy, portraitBusy, state.creationPending, onDirtyChange]);
@@ -1477,147 +1476,157 @@ function ContentEditor({
         aria-label={t('library.resourceDetails')}
         aria-busy={editorUnavailable}
       >
-        <div ref={editorHeading} className="library-detail-heading">
-          {headerLeading}
-          <IconButton
-            className="secondary"
-            label={t('library.libraryList')}
-            icon={BackIcon}
-            disabled={editorUnavailable}
-            onClick={onClose}
-          />
-          <h2>{selected ? selected.title : t('library.new', { v0: t(contentLabelKeys[kind]) })}</h2>
-          <div className="library-detail-actions">
-            <ResourceEditorActions value={shared} hideSyncError />
-            <SaveButton
-              ref={saveButton}
-              type={state.creationPending ? 'button' : 'submit'}
-              form={formId}
-              className="primary native-editor-save"
-              disabled={
-                editorUnavailable || portraitBusy || (!state.creationPending && !value.title.trim())
-              }
-              aria-busy={busy}
-              label={
-                state.creationPending
-                  ? t('main.m130')
-                  : selected
-                    ? t('library.saveChanges')
-                    : t('library.registerResource')
-              }
-              text={
-                state.creationPending
-                  ? t('main.m130')
-                  : selected
-                    ? t('shared.save')
-                    : t('library.register')
-              }
-              onClick={state.creationPending ? () => void saveContent() : undefined}
-            />
-            <LibraryItemMenu title={t('library.resourceMenu')}>
-              <div className="action-menu-group">
-                {(['bot', 'persona', 'module'] as const)
-                  .filter((role) => role !== value.kind)
-                  .map((role) => (
-                    <button
-                      type="button"
-                      key={role}
-                      disabled={
-                        editorUnavailable ||
-                        state.creationPending ||
-                        !value.title.trim() ||
-                        nativeDraftDirty ||
-                        portraitBusy
-                      }
-                      onClick={() => void saveContent(role)}
-                    >
-                      <CopyIcon size={18} aria-hidden="true" />
-                      {t('library.copyAs', { kind: role, role: t(contentLabelKeys[role]) })}
-                    </button>
-                  ))}
-                {selected && (
-                  <RisuExportButton
-                    kind="content"
-                    linkedModules={!!selected.package?.modules?.length}
-                    format={
-                      selected.kind === 'module' &&
-                      !Object.keys(selected.package?.nativeRisu.card ?? {}).length
-                        ? 'RISUM'
-                        : 'CHARX'
-                    }
-                    id={selected.id}
-                    revision={selected.revision}
-                    title={selected.title}
+        <EditorFrame
+          header={
+            <div className="library-detail-heading">
+              {headerLeading}
+              <IconButton
+                className="secondary"
+                label={t('library.libraryList')}
+                icon={BackIcon}
+                disabled={editorUnavailable}
+                onClick={onClose}
+              />
+              <h2>
+                {selected ? selected.title : t('library.new', { v0: t(contentLabelKeys[kind]) })}
+              </h2>
+              <div className="library-detail-actions">
+                <ResourceEditorActions value={shared} hideSyncError />
+                {selected?.kind === 'bot' && onStartStory && (
+                  <button
+                    type="button"
+                    className="secondary editor-start-chat"
                     disabled={editorUnavailable || dirty || nativeDraftDirty || portraitBusy}
-                    onError={setExportError}
-                  />
+                    onClick={() => onStartStory(selected)}
+                  >
+                    <NewChatIcon size={18} aria-hidden="true" />
+                    <span>{t('library.startChat')}</span>
+                  </button>
                 )}
+                <SaveButton
+                  ref={saveButton}
+                  type={state.creationPending ? 'button' : 'submit'}
+                  form={formId}
+                  className="primary native-editor-save"
+                  disabled={
+                    editorUnavailable ||
+                    portraitBusy ||
+                    (!state.creationPending &&
+                      (!value.title.trim() || (!!selected && !dirty && !nativeDraftDirty)))
+                  }
+                  aria-busy={busy}
+                  label={
+                    state.creationPending
+                      ? t('main.m130')
+                      : selected
+                        ? t('library.saveChanges')
+                        : t('library.registerResource')
+                  }
+                  text={
+                    state.creationPending
+                      ? t('main.m130')
+                      : selected
+                        ? t('shared.save')
+                        : t('library.register')
+                  }
+                  onClick={state.creationPending ? () => void saveContent() : undefined}
+                />
+                <LibraryItemMenu title={t('library.resourceMenu')}>
+                  <div className="action-menu-group">
+                    {(['bot', 'persona', 'module'] as const)
+                      .filter((role) => role !== value.kind)
+                      .map((role) => (
+                        <button
+                          type="button"
+                          key={role}
+                          disabled={
+                            editorUnavailable ||
+                            state.creationPending ||
+                            !value.title.trim() ||
+                            nativeDraftDirty ||
+                            portraitBusy
+                          }
+                          onClick={() => void saveContent(role)}
+                        >
+                          <CopyIcon size={18} aria-hidden="true" />
+                          {t('library.copyAs', { kind: role, role: t(contentLabelKeys[role]) })}
+                        </button>
+                      ))}
+                    {selected && (
+                      <RisuExportButton
+                        kind="content"
+                        linkedModules={!!selected.package?.modules?.length}
+                        format={
+                          selected.kind === 'module' &&
+                          !Object.keys(selected.package?.nativeRisu.card ?? {}).length
+                            ? 'RISUM'
+                            : 'CHARX'
+                        }
+                        id={selected.id}
+                        revision={selected.revision}
+                        title={selected.title}
+                        disabled={editorUnavailable || dirty || nativeDraftDirty || portraitBusy}
+                        onError={setExportError}
+                      />
+                    )}
+                  </div>
+                  {selected && (
+                    <div className="action-menu-group">
+                      <DeleteButton
+                        path={`/content/${encodeURIComponent(selected.id)}`}
+                        revision={selected.revision}
+                        title={selected.title}
+                        label={t('library.deleteResource')}
+                        disabled={editorUnavailable}
+                        description={t('library.removeThisResourceFromTheListAnd')}
+                        onError={onError}
+                        onDeleted={async () => {
+                          onDeleted();
+                          await reload();
+                        }}
+                      />
+                    </div>
+                  )}
+                </LibraryItemMenu>
               </div>
-              {selected && (
-                <div className="action-menu-group">
-                  <DeleteButton
-                    path={`/content/${encodeURIComponent(selected.id)}`}
-                    revision={selected.revision}
-                    title={selected.title}
-                    label={t('library.deleteResource')}
-                    disabled={editorUnavailable}
-                    description={t('library.removeThisResourceFromTheListAnd')}
-                    onError={onError}
-                    onDeleted={async () => {
-                      onDeleted();
-                      await reload();
-                    }}
-                  />
-                </div>
-              )}
-            </LibraryItemMenu>
-          </div>
-          {headerTrailing}
-          <DismissibleError message={exportError} onDismiss={() => setExportError('')} />
-        </div>
-        <form
-          id={formId}
-          className="editor-grid"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            await saveContent();
-          }}
-        >
-          <fieldset className="editor-fields full" disabled={editorUnavailable}>
-            <RisuNativeFields
-              anchor={anchor}
-              value={value.package}
-              onChange={(pkg) =>
-                setValue((current) => ({ ...current, title: pkg.title, package: pkg }))
-              }
-              onPortraitBusy={setPortraitBusy}
-            />
-          </fieldset>
-          {error && (
-            <p className="error full" role="alert">
-              {translateMessage(error)}
-            </p>
-          )}
-          {selected?.kind === 'bot' && onStartStory && (
-            <div className="library-savebar form-actions full">
-              <button
-                type="button"
-                disabled={editorUnavailable || dirty || nativeDraftDirty || portraitBusy}
-                onClick={() => onStartStory(selected)}
-              >
-                {t('library.startChat')}
-              </button>
+              {headerTrailing}
             </div>
-          )}
-          <TransientNotice message={saved} />
-          {!!saveWarnings.length && (
-            <NoticeBanner className="full" label={t('library.reviewAfterSaving')}>
-              {saveWarnings.map((warning) => (
-                <p key={translateMessage(warning)}>{translateMessage(warning)}</p>
-              ))}
-            </NoticeBanner>
-          )}
-        </form>
+          }
+          notice={<DismissibleError message={exportError} onDismiss={() => setExportError('')} />}
+        >
+          <form
+            id={formId}
+            className="editor-grid"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              await saveContent();
+            }}
+          >
+            <fieldset className="editor-fields full" disabled={editorUnavailable}>
+              <RisuNativeFields
+                anchor={anchor}
+                value={value.package}
+                onChange={(pkg) =>
+                  setValue((current) => ({ ...current, title: pkg.title, package: pkg }))
+                }
+                onPortraitBusy={setPortraitBusy}
+              />
+            </fieldset>
+            {error && (
+              <p className="error full" role="alert">
+                {translateMessage(error)}
+              </p>
+            )}
+            <TransientNotice message={saved} />
+            {!!saveWarnings.length && (
+              <NoticeBanner className="full" label={t('library.reviewAfterSaving')}>
+                {saveWarnings.map((warning) => (
+                  <p key={translateMessage(warning)}>{translateMessage(warning)}</p>
+                ))}
+              </NoticeBanner>
+            )}
+          </form>
+        </EditorFrame>
       </section>
     </ResourceEditorProvider>
   );

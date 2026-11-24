@@ -213,34 +213,6 @@
   align-items: center;
   gap: 8px;
 }
-.package-portrait-actions .package-portrait-upload {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  min-height: 40px;
-  padding: 8px 12px;
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-control);
-  font-size: var(--font-body);
-  overflow: hidden;
-  cursor: pointer;
-}
-.package-portrait-upload input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
-}
-.package-portrait-upload:focus-within {
-  outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: 2px;
-}
-.package-portrait-upload.is-disabled {
-  opacity: 0.5;
-  cursor: default;
-}
 .package-portrait-choices {
   margin-top: 14px;
 }

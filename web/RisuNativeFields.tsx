@@ -39,6 +39,10 @@ import { NativeRisuAssetsEditor } from './NativeRisuAssetsEditor.js';
 import { NativeRisuRegexEditor } from './NativeRisuRegexEditor.js';
 import { NativeRisuTriggerEditor } from './NativeRisuTriggerEditor.js';
 import { SectionNavigation } from './SectionNavigation.js';
+import { EditorFrameTabs } from './EditorFrame.js';
+import { IconButton } from './IconButton.js';
+import { CodeIcon } from './ui-icons.js';
+import { readPresentationChoice, writePresentationSetting } from './presentation-settings.js';
 import {
   contentSection,
   type ContentAdvancedTab,
@@ -51,6 +55,8 @@ const object = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 const string = (value: unknown) => (typeof value === 'string' ? value : '');
+const GREETING_FONT_KEY = 'uimori:first-message-font';
+const GREETING_FONTS = ['body', 'mono'] as const;
 type SourcePart = 'greetings' | 'lore' | 'regex' | 'triggers' | 'card' | 'module';
 type Section = ContentSection;
 type Advanced = ContentAdvancedTab;
@@ -94,6 +100,9 @@ export function RisuNativeFields({
   ];
   const id = useId();
   const [section, setSection] = useState<Section>('basic');
+  const [greetingFont, setGreetingFont] = useState(() =>
+    readPresentationChoice(GREETING_FONT_KEY, GREETING_FONTS, 'body')
+  );
   const [advanced, setAdvanced] = useState<Advanced>('instructions');
   const requested = anchor?.anchor ?? null;
   const loreFocus =
@@ -338,15 +347,17 @@ export function RisuNativeFields({
   );
   return (
     <div className="native-editor native-content-editor full">
-      <SectionNavigation
-        label={t('native.text_b891876a9a')}
-        items={sections}
-        value={section}
-        onSelect={setSection}
-        compact={false}
-        orientation="horizontal"
-        idPrefix={id}
-      />
+      <EditorFrameTabs>
+        <SectionNavigation
+          label={t('native.text_b891876a9a')}
+          items={sections}
+          value={section}
+          onSelect={setSection}
+          compact={false}
+          orientation="horizontal"
+          idPrefix={id}
+        />
+      </EditorFrameTabs>
       {draft && (
         <p className="native-editor-notice" role="status">
           {t('native.text_0b4d698c5c')}{' '}
@@ -423,7 +434,7 @@ export function RisuNativeFields({
           </label>
         </div>
         {!standalone && (
-          <div {...panel('greetings')}>
+          <div {...panel('greetings')} className="native-panes">
             <NativeCollectionEditor
               label={t('native.text_be7723bd53')}
               items={greetings.map((message, i) => ({
@@ -449,27 +460,37 @@ export function RisuNativeFields({
                 writeGreetings(greetings.length === 1 ? [''] : greetings.filter((_, n) => n !== i))
               }
               isEmpty={(i) => !greetings[i]?.trim()}
+              actions={
+                <IconButton
+                  label={t('native.monospaceText')}
+                  icon={CodeIcon}
+                  aria-pressed={greetingFont === 'mono'}
+                  onClick={() => {
+                    const next = greetingFont === 'mono' ? 'body' : 'mono';
+                    setGreetingFont(next);
+                    writePresentationSetting(GREETING_FONT_KEY, next);
+                  }}
+                />
+              }
             >
               {(i) => (
-                <label>
-                  {i === 0 ? t('native.text_3a91359cae') : t('native.text_1c7e81d795')}
-                  <textarea
-                    className="native-main-text"
-                    aria-label={i === 0 ? t('native.text_3a91359cae') : t('native.text_1c7e81d795')}
-                    rows={18}
-                    value={greetings[i]}
-                    onChange={(e) =>
-                      writeGreetings(
-                        greetings.map((message, n) => (n === i ? e.target.value : message))
-                      )
-                    }
-                  />
-                </label>
+                <textarea
+                  className="native-main-text"
+                  data-font={greetingFont}
+                  aria-label={i === 0 ? t('native.text_3a91359cae') : t('native.text_1c7e81d795')}
+                  rows={18}
+                  value={greetings[i]}
+                  onChange={(e) =>
+                    writeGreetings(
+                      greetings.map((message, n) => (n === i ? e.target.value : message))
+                    )
+                  }
+                />
               )}
             </NativeCollectionEditor>
           </div>
         )}
-        <div {...panel('lore')}>
+        <div {...panel('lore')} className="native-panes">
           <NativeRisuLoreEditor
             focus={loreFocus}
             entries={lore}
@@ -530,7 +551,7 @@ export function RisuNativeFields({
           </div>
         )}
       </fieldset>
-      <div {...panel('advanced')} className="native-section-body native-advanced-workspace">
+      <div {...panel('advanced')} className="native-advanced-workspace native-panes">
         <div className="native-advanced-tabs" role="group" aria-label={t('native.text_2c737ca1dd')}>
           {advancedTabs.map(({ id: key, title }) => (
             <button

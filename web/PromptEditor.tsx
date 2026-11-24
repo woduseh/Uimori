@@ -12,10 +12,10 @@ import { promptControls } from '../core/risu-prompt.js';
 import { DismissibleError } from './DismissibleError.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
-import { useEditorHeadingHeight } from './useEditorHeadingHeight.js';
+import { EditorFrame } from './EditorFrame.js';
 import { CopyIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { NativeRisuPresetEditor } from './NativeRisuPresetEditor.js';
 import { useResourceAnchor } from './resource-anchor.js';
 import { RisuExportButton } from './RisuExportButton.js';
@@ -50,6 +50,7 @@ const roles = ['main', 'translation'] as const;
 const keyOf = (value: ContentRef) => `${value.id}@${value.revision}`;
 type Props = {
   heading?: ReactNode;
+  headingRef?: Ref<HTMLHeadingElement>;
   headingTrailing?: ReactNode;
   initialRole?: PromptRole;
   initialPreset?: PromptPreset | null;
@@ -84,6 +85,7 @@ function createSession(role: PromptRole, preset?: PromptPreset | PromptPresetSum
 
 export function PromptEditor({
   heading,
+  headingRef,
   headingTrailing,
   initialRole = 'main',
   initialPreset,
@@ -114,7 +116,6 @@ export function PromptEditor({
   const shared = useResourceEditor<PromptEditModel>(session);
   const { model, state, setModel } = shared;
   const anchor = useResourceAnchor('prompt-preset', state.document.targetId);
-  const editorHeading = useEditorHeadingHeight(state.ready);
   const base: PromptPreset | null = state.document.targetId
     ? {
         ...(state.document.baseModel as PromptEditModel),
@@ -420,68 +421,76 @@ export function PromptEditor({
         data-testid="prompt-editor"
         aria-label={t('prompts.uiFullPromptEditor')}
       >
-        <div ref={editorHeading} className="prompt-editor-heading">
-          {heading ?? <h2>{draft.title || t('prompts.uiEditPrompt')}</h2>}
-          <ResourceEditorActions value={shared} hideSyncError />
-          {saveActions}
-          {headingTrailing}
-          <DismissibleError
-            message={translateMessage(exportError)}
-            onDismiss={() => setExportError('')}
-          />
-        </div>
-        <fieldset className="prompt-editor-fields" disabled={busy}>
-          <label className="prompt-title-field">
-            {t('prompts.uiPromptName')}
-            <input
-              aria-label={t('prompts.uiPromptName')}
-              required
-              maxLength={160}
-              value={draft.title}
-              onChange={(event) => edit({ title: event.target.value })}
+        <EditorFrame
+          header={
+            <div className="prompt-editor-heading">
+              {heading}
+              <h2 ref={headingRef} tabIndex={-1} className="prompt-title-field">
+                <input
+                  aria-label={t('prompts.uiPromptName')}
+                  placeholder={t('prompts.uiPromptName')}
+                  required
+                  maxLength={160}
+                  disabled={busy}
+                  value={draft.title}
+                  onChange={(event) => edit({ title: event.target.value })}
+                />
+              </h2>
+              <ResourceEditorActions value={shared} hideSyncError />
+              {saveActions}
+              {headingTrailing}
+            </div>
+          }
+          notice={
+            <DismissibleError
+              message={translateMessage(exportError)}
+              onDismiss={() => setExportError('')}
             />
-          </label>
-          {initialPreset === undefined && metadata}
-          <fieldset className="prompt-composer-frame">
-            <NativeRisuPresetEditor
-              key={`${role}:${session.options.editorKey}`}
-              anchor={anchor}
-              program={draft.program}
-              metadata={initialPreset !== undefined ? metadata : undefined}
-              values={model.values}
-              onValuesChange={(values) => edit({ values })}
-              onChange={(program) =>
-                edit((current) => ({
-                  ...current,
-                  program,
-                  values: reconcilePromptValues(program, current.values).values,
-                }))
-              }
-              collaboration={
-                role === 'main' ? (
-                  <AgentCollaborationEditor
-                    expanded={collaborationExpanded}
-                    onExpandedChange={setCollaborationExpanded}
-                    value={draft.program.collaboration}
-                    controls={promptControls(draft.program)}
-                    models={library.models}
-                    onChange={(collaboration) =>
-                      edit((current) => ({
-                        ...current,
-                        program: { ...current.program, collaboration },
-                      }))
-                    }
-                  />
-                ) : undefined
-              }
-            />
+          }
+        >
+          <fieldset className="prompt-editor-fields" disabled={busy}>
+            {initialPreset === undefined && metadata}
+            <fieldset className="prompt-composer-frame">
+              <NativeRisuPresetEditor
+                key={`${role}:${session.options.editorKey}`}
+                anchor={anchor}
+                program={draft.program}
+                metadata={initialPreset !== undefined ? metadata : undefined}
+                values={model.values}
+                onValuesChange={(values) => edit({ values })}
+                onChange={(program) =>
+                  edit((current) => ({
+                    ...current,
+                    program,
+                    values: reconcilePromptValues(program, current.values).values,
+                  }))
+                }
+                collaboration={
+                  role === 'main' ? (
+                    <AgentCollaborationEditor
+                      expanded={collaborationExpanded}
+                      onExpandedChange={setCollaborationExpanded}
+                      value={draft.program.collaboration}
+                      controls={promptControls(draft.program)}
+                      models={library.models}
+                      onChange={(collaboration) =>
+                        edit((current) => ({
+                          ...current,
+                          program: { ...current.program, collaboration },
+                        }))
+                      }
+                    />
+                  ) : undefined
+                }
+              />
+            </fieldset>
           </fieldset>
-        </fieldset>
-        <TransientNotice message={busy ? '' : status} />
-        <DismissibleError
-          message={error ? translateMessage(error) : ''}
-          onDismiss={() => setError('')}
-        />
+          <TransientNotice message={busy ? '' : status} />
+          <DismissibleError
+            message={error ? translateMessage(error) : ''}
+            onDismiss={() => setError('')}
+          />
+        </EditorFrame>
       </section>
     </ResourceEditorProvider>
   );

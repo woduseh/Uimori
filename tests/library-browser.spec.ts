@@ -1026,7 +1026,8 @@ test('SAVEPERF saved bot unlocks before library refresh and retains success on r
     await editor.getByRole('button', { name: '변경사항 저장', exact: true }).click();
     expect((await savedResponse).ok()).toBe(true);
     await refreshRequested;
-    await expect(editor.getByRole('button', { name: '변경사항 저장', exact: true })).toBeEnabled();
+    await expect(editor.getByLabel('Risu 자료 이름', { exact: true })).toBeEnabled();
+    await expect(editor.getByRole('button', { name: '변경사항 저장', exact: true })).toBeDisabled();
     const saved = await (await request.get(`/api/content/${content.id}`)).json();
     expect(saved.title).toBe(updated);
     expect(saved.revision).toBe(content.revision + 1);
@@ -1040,7 +1041,7 @@ test('SAVEPERF saved bot unlocks before library refresh and retains success on r
     await page.clock.fastForward(4500);
     await expect(completion).toHaveCount(0);
     await expect(warning).toBeVisible();
-    await expect(editor.getByRole('button', { name: '변경사항 저장', exact: true })).toBeEnabled();
+    await expect(editor.getByLabel('Risu 자료 이름', { exact: true })).toBeEnabled();
     expect((await (await request.get(`/api/content/${content.id}`)).json()).revision).toBe(
       saved.revision
     );

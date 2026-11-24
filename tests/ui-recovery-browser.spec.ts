@@ -58,9 +58,7 @@ async function editorFits(page: Page, editor: Locator, save: Locator, formMaxWid
       const body = await form.boundingBox();
       const outer = await workspace.boundingBox();
       expect(body!.width).toBeLessThanOrEqual(formMaxWidth);
-      expect(Math.abs(body!.x + body!.width / 2 - outer!.x - outer!.width / 2)).toBeLessThanOrEqual(
-        2
-      );
+      expect(Math.abs(body!.x - outer!.x)).toBeLessThanOrEqual(1);
     }
   }
 }
@@ -280,7 +278,7 @@ for (const viewport of viewports) {
           expect(target.height).toBeGreaterThanOrEqual(44);
         }
       }
-      await editorFits(page, editor, save, 1200);
+      await editorFits(page, editor, save, 1280);
       await page.screenshot({
         path: info.outputPath(`native-toggle-editor-${viewport.name}.png`),
       });

@@ -2111,6 +2111,18 @@ export const messages = {
     ja: '画像を{count, number}枚追加しました。',
     zh: '已添加{count, number}张图片。',
   },
+  'native.assetsDropHint': {
+    ko: '이미지 파일을 이 영역에 끌어 놓아도 추가돼요.',
+    en: 'You can also drop image files here.',
+    ja: '画像ファイルをここにドロップしても追加できます。',
+    zh: '也可以将图片文件拖放到此处。',
+  },
+  'native.monospaceText': {
+    ko: '고정폭 글꼴',
+    en: 'Monospace font',
+    ja: '等幅フォント',
+    zh: '等宽字体',
+  },
   'native.imagesMissing': {
     ko: '이미지로 읽지 못한 원문 에셋 {count, number}개는 보존하고 있어요. 이 화면에서는 편집할 수 없으며, 내장 파일이 누락된 자료는 CHARX 내보내기가 제한될 수 있어요.',
     en: '{count, plural, one {# unreadable source asset is preserved.} other {# unreadable source assets are preserved.}} These cannot be edited here. Missing embedded files may limit CHARX exports.',

@@ -363,6 +363,8 @@ test('LIMG03 cancelled and failed portrait uploads cannot change a saved draft o
   const library = await edit(page, original),
     portrait = library.getByRole('region', { name: '대표 이미지 설정', exact: true }),
     saveButton = library.getByRole('button', { name: '변경사항 저장', exact: true });
+  await library.getByLabel('카드 설명', { exact: true }).fill('업로드 취소 뒤에도 저장할 설명');
+  await expect(saveButton).toBeEnabled();
   let release!: () => void;
   const waiting = new Promise<void>((resolve) => {
     release = resolve;

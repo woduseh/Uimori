@@ -125,7 +125,7 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
     const saveState = editor.locator('.resource-editor-status').getByRole('status');
     const name = editor.getByLabel('프롬프트 이름', { exact: true });
     await expect(saveState).toHaveText('등록 전');
-    await expect(native.getByRole('tab', { name: '구성', exact: true })).toHaveAttribute(
+    await expect(editor.getByRole('tab', { name: '구성', exact: true })).toHaveAttribute(
       'aria-selected',
       'true'
     );
@@ -137,9 +137,9 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
       await page.screenshot({ path: info.outputPath('prompt-create-name-mobile.png') });
     await expect(selection.locator('option[value="builtin"], option[value="new"]')).toHaveCount(0);
     if (role === 'translation') {
-      await native.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+      await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
       await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption(role);
-      await native.getByRole('tab', { name: '구성', exact: true }).click();
+      await editor.getByRole('tab', { name: '구성', exact: true }).click();
     }
     await expect(native.getByLabel('1번 프롬프트 본문', { exact: true })).toHaveValue(text);
     const title = `PLR 기본 ${role} ${crypto.randomUUID()}`;
@@ -164,7 +164,7 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
     if (role === 'main')
       await editor.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   }
-  await native.getByRole('tab', { name: '정규식', exact: true }).click();
+  await editor.getByRole('tab', { name: '정규식', exact: true }).click();
   await native.getByText('고급 JSON 편집', { exact: true }).click();
   const regex = native.getByLabel('Risu 정규식 JSON', { exact: true });
   const savedPreset = presets.at(-1)!;
@@ -199,7 +199,7 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
   await page.getByRole('button', { name: `${restoredTitle} 프롬프트 편집`, exact: true }).click();
   await expect(editor.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(restoredTitle);
   await expect(editor.locator('.resource-editor-status').getByRole('status')).toBeEmpty();
-  await native.getByRole('tab', { name: '정규식', exact: true }).click();
+  await editor.getByRole('tab', { name: '정규식', exact: true }).click();
   await native.getByText('고급 JSON 편집', { exact: true }).click();
   await expect(regex).toHaveValue('[]');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(

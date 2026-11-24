@@ -120,7 +120,7 @@
 }
 .library-page .scroll-strip:has(> .library-tabs) {
   width: 100%;
-  max-width: var(--collection-w);
+  max-width: var(--page-w);
   margin-inline: auto;
 }
 .library-page .library-tabs {
@@ -203,7 +203,7 @@
   margin: 12px 0 24px;
 }
 .library-detail {
-  max-width: var(--detail-w);
+  max-width: var(--page-w);
   margin-inline: auto;
   min-width: 0;
 }
@@ -386,53 +386,13 @@
   margin-top: 4px;
   gap: 10px;
 }
-.library-savebar {
-  border-top: var(--hairline) solid var(--line);
-  padding-top: 16px;
-  gap: 12px;
-}
-.library-savebar > span:empty {
-  display: none;
-}
-.library-content-editor {
-  width: 100%;
-}
-.library-content-editor > .library-detail-heading {
-  min-height: 56px;
-  position: sticky;
-  top: 56px;
-  z-index: 7;
-  margin: 0;
-  padding: 8px 0;
-  background: var(--bg);
-  border-bottom: var(--hairline) solid var(--line);
-}
-.library-content-editor > .library-detail-heading h2 {
-  font-size: var(--font-heading);
-}
-.library-content-editor .library-detail-actions {
-  flex-wrap: wrap;
-}
-.library-content-editor > .editor-grid {
-  padding-top: 8px;
-}
 .library-content-editor > .editor-grid > p.error.full:lang(ko) {
   word-break: keep-all;
 }
 @media (max-width: 760px) {
-  .library-content-editor > .library-detail-heading {
-    position: static;
-    margin-inline: -16px;
-    padding-inline: 16px;
-  }
   .library-content-editor .library-detail-actions {
     order: initial;
     flex-basis: auto;
-  }
-}
-@media (max-width: 600px) {
-  .library-savebar > button {
-    width: 100%;
   }
 }
 
@@ -832,7 +792,7 @@
 
 .library-page .library-workspace {
   margin-top: 20px;
-  max-width: var(--collection-w);
+  max-width: var(--page-w);
   margin-inline: auto;
 }
 .library-list-options {
@@ -865,14 +825,6 @@
 .library-list-options-body button {
   font-size: var(--font-body);
   min-height: var(--control-h);
-}
-.library-savebar {
-  align-items: center;
-}
-.library-savebar > span {
-  flex-basis: 100%;
-  overflow-wrap: anywhere;
-  font-size: var(--font-body);
 }
 @media (max-width: 760px) {
   .library-page {
@@ -949,11 +901,6 @@
   .library-page .library-detail textarea,
   .library-page .library-detail select {
     font-size: var(--font-heading);
-  }
-  .library-page .library-savebar > button {
-    flex: 1 1 130px;
-    width: auto;
-    min-height: var(--control-h);
   }
 }
 .library-page .library-bulk-toolbar {

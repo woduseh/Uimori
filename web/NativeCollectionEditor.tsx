@@ -12,6 +12,7 @@ export function NativeCollectionEditor({
   onReorder,
   onRemove,
   isEmpty,
+  actions,
   children,
 }: {
   label: string;
@@ -21,6 +22,7 @@ export function NativeCollectionEditor({
   onReorder?: (from: number, to: number) => void;
   onRemove?: (index: number) => void;
   isEmpty?: (index: number) => boolean;
+  actions?: ReactNode;
   children: (index: number) => ReactNode;
 }) {
   const { t } = useI18n();
@@ -168,7 +170,8 @@ export function NativeCollectionEditor({
           <>
             <div className="native-detail-heading">
               <h3>{items[index].title}</h3>
-              {onMove && (
+              {actions}
+              {onMove && items.length > 1 && (
                 <>
                   <IconButton
                     label={t('native.collectionUp', { label })}

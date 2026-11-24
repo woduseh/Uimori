@@ -22,6 +22,7 @@ import {
   useEditorSavePreparation,
 } from './resource-editor.js';
 import { SectionNavigation } from './SectionNavigation.js';
+import { EditorFrameTabs } from './EditorFrame.js';
 import { presetSection, promptBlockTypeLabels, type PresetSection } from './resource-sections.js';
 import { IconButton } from './IconButton.js';
 import { NativeDeleteDialog } from './NativeDeleteDialog.js';
@@ -229,15 +230,17 @@ export function NativeRisuPresetEditor({
       aria-label={t('native.text_f1ab612224')}
       className="native-editor native-risu-preset-editor"
     >
-      <SectionNavigation
-        label={t('native.text_a8a8b42c1a')}
-        items={sections}
-        value={section}
-        onSelect={setSection}
-        compact={false}
-        orientation="horizontal"
-        idPrefix={id}
-      />
+      <EditorFrameTabs>
+        <SectionNavigation
+          label={t('native.text_a8a8b42c1a')}
+          items={sections}
+          value={section}
+          onSelect={setSection}
+          compact={false}
+          orientation="horizontal"
+          idPrefix={id}
+        />
+      </EditorFrameTabs>
       {error && (
         <NoticeBanner className="native-editor-notice" tone="error">
           {translateMessage(error)}
@@ -246,7 +249,7 @@ export function NativeRisuPresetEditor({
       {pending && (
         <NoticeBanner className="native-editor-notice">{t('native.text_9cceef2250')}</NoticeBanner>
       )}
-      <div {...panel('blocks')} className="native-editor-split">
+      <div {...panel('blocks')} className="native-editor-split native-panes">
         <aside className="native-item-list" aria-label={t('native.text_944b1569af')}>
           <input
             type="search"

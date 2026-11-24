@@ -141,7 +141,7 @@ export function PackagePortraitEditor({
         {portrait && <small>{portrait.title}</small>}
         <div className="package-portrait-actions">
           <label
-            className={`secondary package-portrait-upload${disabled || busy ? ' is-disabled' : ''}`}
+            className={`secondary file-picker-button${disabled || busy ? ' is-disabled' : ''}`}
           >
             {t('library.uploadImage')}
             <input

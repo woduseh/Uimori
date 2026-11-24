@@ -15,7 +15,14 @@ import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { IconButton } from './IconButton.js';
-import { CheckIcon, CloseIcon, DeleteIcon, ImagesIcon, SearchIcon } from './ui-icons.js';
+import {
+  CheckIcon,
+  CloseIcon,
+  DeleteIcon,
+  ImageAddIcon,
+  ImagesIcon,
+  SearchIcon,
+} from './ui-icons.js';
 import './content-picker.css';
 import './native-risu-assets.css';
 import './deletion.css';
@@ -42,7 +49,8 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
   const [busy, setBusy] = useState(false),
     [notice, setNotice] = useState<{ key: string; count?: number } | null>(null),
     [error, setError] = useState(''),
-    [removing, setRemoving] = useState('');
+    [removing, setRemoving] = useState(''),
+    [dropActive, setDropActive] = useState(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Revision changes invalidate the ownership of uploads and local selection.
   useLayoutEffect(() => {
     generation.current++;
@@ -133,7 +141,26 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
   const names = active ? nativeImageNames(value, active.id) : [],
     missing = unmappedNativeAssetCount(value);
   return (
-    <section className="native-risu-assets" aria-label={t('native.text_6b1779397e')}>
+    <section
+      className="native-risu-assets"
+      aria-label={t('native.text_6b1779397e')}
+      data-drop-active={dropActive || undefined}
+      onDragOver={(event) => {
+        if (busy || !event.dataTransfer.types.includes('Files')) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        setDropActive(true);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropActive(false);
+      }}
+      onDrop={(event) => {
+        if (!event.dataTransfer.types.includes('Files')) return;
+        event.preventDefault();
+        setDropActive(false);
+        if (!busy) void filesChosen(Array.from(event.dataTransfer.files));
+      }}
+    >
       <div className="native-assets-toolbar">
         <label className="native-assets-search">
           <span className="sr-only">{t('native.text_a887a65c92')}</span>
@@ -153,7 +180,8 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
             />
           </span>
         </label>
-        <label className="native-assets-upload">
+        <label className={`secondary file-picker-button${busy ? ' is-disabled' : ''}`}>
+          <ImageAddIcon size={18} aria-hidden="true" />
           {t('native.text_d4d4ce5c0e')}
           <input
             type="file"
@@ -204,7 +232,12 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
                 aria-pressed={image.id === selected}
                 onClick={() => setSelected(image.id === selected ? '' : image.id)}
               >
-                <img src={`/api/package-image-blobs/${image.blobHash}`} alt="" loading="lazy" />
+                <img
+                  src={`/api/package-image-blobs/${image.blobHash}`}
+                  alt=""
+                  loading="lazy"
+                  draggable={false}
+                />
                 <span>{image.title}</span>
                 {image.id === selected && (
                   <CheckIcon className="native-assets-selected" size={16} aria-hidden="true" />
@@ -217,6 +250,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
             <div className="native-assets-empty">
               <ImagesIcon size={28} aria-hidden="true" />
               <p>{images.length ? t('native.text_a9a4407910') : t('native.text_06183c3690')}</p>
+              {!images.length && <p>{t('native.assetsDropHint')}</p>}
               {query && (
                 <button type="button" className="ghost" onClick={() => setQuery('')}>
                   {t('library.clearSearch')}
@@ -270,7 +304,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
               <code>{names.join(', ') || active.id}</code>
             </details>
             <div className="native-assets-actions">
-              <label>
+              <label className={`secondary file-picker-button${busy ? ' is-disabled' : ''}`}>
                 {t('native.text_597b8746b1')}
                 <input
                   type="file"

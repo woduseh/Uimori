@@ -562,11 +562,9 @@ export function PromptLibrary({
                   icon={BackIcon}
                   onClick={close}
                 />
-                <h2 ref={editorHeading} tabIndex={-1}>
-                  {editing.preset?.title ?? t('prompts.uiNewPrompt')}
-                </h2>
               </>
             }
+            headingRef={editorHeading}
             headingTrailing={headerTrailing}
             key={
               editing.preset

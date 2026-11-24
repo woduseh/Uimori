@@ -125,7 +125,7 @@ export function LibraryFolderCoverDialog({
             ))}
           </div>
           <div className="package-portrait-actions">
-            <label className={`secondary package-portrait-upload${disabled ? ' is-disabled' : ''}`}>
+            <label className={`secondary file-picker-button${disabled ? ' is-disabled' : ''}`}>
               {t('library.uploadImage')}
               <input
                 type="file"
