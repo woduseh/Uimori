@@ -1,6 +1,9 @@
 import type { ChatVariableState } from '../core/chat-variables.js';
 import type { ProfileSnapshot } from '../core/product.js';
-import { resolveTemplateVariableContext } from '../core/template-variables.js';
+import {
+  resolveTemplateVariableContext,
+  templateVariableOrigins,
+} from '../core/template-variables.js';
 import { chatVariablesPending, readChatVariables } from './chat-variables.js';
 import type { Store } from './store.js';
 
@@ -30,6 +33,7 @@ export function chatVariableView(store: Store, chatId: string, saved?: ChatVaria
     ...state,
     defaults: defaults.variables ?? {},
     resolved: resolved.variables ?? {},
+    origins: templateVariableOrigins(profile),
     sourceHash: chat.headRevision ? store.source(chat.headRevision).hash : null,
     pending: chatVariablesPending(store, chatId),
     ...(resolved.variableDefaultsError || defaults.variableDefaultsError

@@ -5,6 +5,7 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { SaveButton } from './SaveButton.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatVariableState } from '../core/chat-variables.js';
+import type { TemplateVariableOrigin } from '../core/template-variables.js';
 import { api, ApiError, definiteRejection } from './api.js';
 import { SearchIcon, ResetIcon } from './ui-icons.js';
 import './chat-variables.css';
@@ -13,6 +14,7 @@ import { readOptionalJson } from './optional-storage.js';
 type VariableView = ChatVariableState & {
   defaults: Record<string, string>;
   resolved: Record<string, string>;
+  origins?: Record<string, TemplateVariableOrigin>;
   sourceHash: string | null;
   pending: boolean;
   variableDefaultsError?: string;
@@ -232,6 +234,23 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
   const visibleKeys = keys.filter((key) =>
     key.toLocaleLowerCase().includes(query.toLocaleLowerCase())
   );
+  const groups: { id: string; title: string; keys: string[] }[] = [];
+  for (const key of visibleKeys) {
+    const origin = view?.origins?.[key];
+    const id = origin
+      ? origin.kind === 'preset'
+        ? `preset:${origin.title}`
+        : `package:${origin.role}:${origin.title}`
+      : 'chat';
+    const title = !origin
+      ? t('chatsettings.variablesAddedHere')
+      : origin.kind === 'preset'
+        ? t('chatsettings.variablesFromPreset', { title: origin.title })
+        : t('chatsettings.variablesFromPackage', { title: origin.title });
+    const group = groups.find((item) => item.id === id);
+    if (group) group.keys.push(key);
+    else groups.push({ id, title, keys: [key] });
+  }
   const changeValue = (key: string, value: string) => {
     if (locked || !overrides) return;
     updateDraft(encodeValues({ ...overrides, [key]: value }));
@@ -324,39 +343,47 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
           </button>
         </div>
         <div hidden={showJson}>
-          <div className="chat-variable-rows settings-group-body">
-            {visibleKeys.map((key) => {
-              const overridden = Object.hasOwn(overrides ?? {}, key);
-              return (
-                <div className="chat-variable-row" key={key}>
-                  <label>
-                    <span className="chat-variable-identity">
-                      <span className="chat-variable-key">{key}</span>
-                      <span className="chat-variable-origin">
-                        {overridden ? t('chatsettings.m179') : t('chatsettings.m180')}
-                      </span>
-                    </span>
-                    <input
-                      aria-label={t('chatsettings.variableValue', { key })}
-                      value={overridden ? overrides![key] : (view?.defaults[key] ?? '')}
-                      disabled={locked}
-                      onChange={(event) => changeValue(key, event.target.value)}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="ghost chat-variable-reset"
-                    title={t('chatsettings.resetVariable', { key })}
-                    disabled={locked || !overridden}
-                    aria-label={t('chatsettings.resetVariable', { key })}
-                    onClick={() => removeOverride(key)}
-                  >
-                    <ResetIcon size={18} aria-hidden="true" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+          {groups.map((group) => (
+            <section className="chat-variable-group" key={group.id} aria-label={group.title}>
+              <h3 className="chat-variable-group-title">
+                {group.title}
+                <span className="chat-variable-group-count">{group.keys.length}</span>
+              </h3>
+              <div className="chat-variable-rows settings-group-body">
+                {group.keys.map((key) => {
+                  const overridden = Object.hasOwn(overrides ?? {}, key);
+                  return (
+                    <div className="chat-variable-row" key={key}>
+                      <label>
+                        <span className="chat-variable-identity">
+                          <span className="chat-variable-key">{key}</span>
+                          <span className="chat-variable-origin">
+                            {overridden ? t('chatsettings.m179') : t('chatsettings.m180')}
+                          </span>
+                        </span>
+                        <input
+                          aria-label={t('chatsettings.variableValue', { key })}
+                          value={overridden ? overrides![key] : (view?.defaults[key] ?? '')}
+                          disabled={locked}
+                          onChange={(event) => changeValue(key, event.target.value)}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="ghost chat-variable-reset"
+                        title={t('chatsettings.resetVariable', { key })}
+                        disabled={locked || !overridden}
+                        aria-label={t('chatsettings.resetVariable', { key })}
+                        onClick={() => removeOverride(key)}
+                      >
+                        <ResetIcon size={18} aria-hidden="true" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
           {!loading && view && !visibleKeys.length && (
             <p className="muted">{query ? t('chatsettings.m181') : t('chatsettings.m182')}</p>
           )}

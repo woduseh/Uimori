@@ -557,10 +557,10 @@ test('HRESULT-STORY scene, translation, scene name and card variable results ope
   await page.goto(`/?chat=${chat.id}`);
   await openHelper(page);
   await results
-    .getByRole('button', { name: `${destination.title} 카드 변수 열기`, exact: true })
+    .getByRole('button', { name: `${destination.title} 채팅 변수 열기`, exact: true })
     .click();
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-  await expect(dialog.getByRole('region', { name: '카드 변수 편집', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('region', { name: '채팅 변수 편집', exact: true })).toBeVisible();
 });
 
 test('an appearance result opens both saved characters in the chat image settings', async ({

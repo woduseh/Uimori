@@ -111,7 +111,7 @@ test('CHATREC02 variable rows preserve empty strings, raw drafts, conflicts and 
   const chat = await fixture(request);
   const endpoint = `/api/chats/${chat.id}/variables`;
   let dialog = await open(page, chat.id);
-  await selectChatSettingsSection(page, '카드 변수');
+  await selectChatSettingsSection(page, '채팅 변수');
   const value = (key: string) => dialog.getByLabel(`${key} 문자열 값`, { exact: true });
   await expect(value('trust')).toHaveValue('40');
   await value('trust').fill('');
@@ -119,18 +119,18 @@ test('CHATREC02 variable rows preserve empty strings, raw drafts, conflicts and 
   await dialog.getByLabel('location 재정의 해제', { exact: true }).click();
   await expect(value('location')).toHaveValue('reading_room');
   await dialog.getByRole('button', { name: 'JSON 편집', exact: true }).click();
-  const raw = dialog.getByLabel('카드 변수 재정의 (JSON)', { exact: true });
+  const raw = dialog.getByLabel('채팅 변수 재정의 (JSON)', { exact: true });
   expect(JSON.parse(await raw.inputValue())).toEqual({ trust: '' });
   await raw.fill('{"trust":');
   await selectChatSettingsSection(page, '기억과 메모');
-  await selectChatSettingsSection(page, '카드 변수');
+  await selectChatSettingsSection(page, '채팅 변수');
   await expect(raw).toHaveValue('{"trust":');
   await expect(dialog.getByRole('button', { name: '행 편집', exact: true })).toBeDisabled();
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   await page.reload();
   await openChatSettings(page);
   dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-  await selectChatSettingsSection(page, '카드 변수');
+  await selectChatSettingsSection(page, '채팅 변수');
   await expect(raw).toHaveValue('{"trust":');
   await raw.fill('{"trust":""}');
   await dialog.getByRole('button', { name: '행 편집', exact: true }).click();
@@ -146,7 +146,7 @@ test('CHATREC02 variable rows preserve empty strings, raw drafts, conflicts and 
   });
   expect(concurrent.ok(), await concurrent.text()).toBe(true);
   await selectChatSettingsSection(page, '사용 자료');
-  await selectChatSettingsSection(page, '카드 변수');
+  await selectChatSettingsSection(page, '채팅 변수');
   await expect(
     dialog.getByText('변수 저장본이나 현재 원문이 바뀌었어요.', { exact: true })
   ).toBeVisible();
@@ -179,7 +179,7 @@ test('CHATREC02 variable rows preserve empty strings, raw drafts, conflicts and 
         json: { error: 'Synthetic lost response after commit' },
       });
     });
-    const save = dialog.getByRole('button', { name: '카드 변수 저장', exact: true });
+    const save = dialog.getByRole('button', { name: '채팅 변수 저장', exact: true });
     const saveElement = await save.elementHandle();
     expect(saveElement).not.toBeNull();
     await save.click();
@@ -198,14 +198,14 @@ test('CHATREC02 variable rows preserve empty strings, raw drafts, conflicts and 
     );
     holdReads = true;
     await selectChatSettingsSection(page, '사용 자료');
-    await selectChatSettingsSection(page, '카드 변수');
+    await selectChatSettingsSection(page, '채팅 변수');
     await expect.poll(() => readStarted).toBe(true);
     await expect(confirm).toBeEnabled();
     await confirm.click();
     await expect(
       page
         .getByRole('status')
-        .filter({ hasText: '카드 변수를 저장했어요. 다음 생성부터 적용해요.' })
+        .filter({ hasText: '채팅 변수를 저장했어요. 다음 생성부터 적용해요.' })
     ).toBeVisible();
     expect(bodies).toHaveLength(2);
     expect(bodies[1]).toEqual(bodies[0]);
@@ -221,7 +221,7 @@ test('CHATREC02 variable rows preserve empty strings, raw drafts, conflicts and 
     releaseRead();
     await (await lateRead).finished();
     await expect(value('trust')).toHaveValue('확인 뒤 새 초안');
-    await expect(dialog.getByRole('button', { name: '카드 변수 저장', exact: true })).toBeEnabled();
+    await expect(dialog.getByRole('button', { name: '채팅 변수 저장', exact: true })).toBeEnabled();
     expect((await (await request.get(endpoint)).json()).values).toEqual({ trust: '' });
   } finally {
     releaseRead();

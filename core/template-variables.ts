@@ -1,5 +1,6 @@
 import { nativeRisuPresetVariableDefaults, type NativeRisuPreset } from './risu-native-preset.js';
 import type { ProfileSnapshot } from './product.js';
+import type { ContentRole } from './risu-content.js';
 import { PromptEvaluationError } from './prompt-values.js';
 import { validateChatVariableValues, validateChatVariableState } from './chat-variables.js';
 
@@ -7,8 +8,48 @@ export type TemplateVariableProfile = Pick<
   ProfileSnapshot,
   'packageAttachments' | 'packages' | 'variableState'
 > & {
-  promptPresets?: { main?: { program: { nativeRisuPreset: NativeRisuPreset } } };
+  promptPresets?: {
+    main?: { title?: string; program: { nativeRisuPreset: NativeRisuPreset } };
+  };
 };
+
+export type TemplateVariableOrigin =
+  | { kind: 'package'; role: ContentRole; title: string }
+  | { kind: 'preset'; title: string };
+
+function templateVariableSources(profile: TemplateVariableProfile | undefined) {
+  const sources: { origin: TemplateVariableOrigin; values: Record<string, string> }[] = [];
+  for (const ref of profile?.packageAttachments ?? []) {
+    const content = profile?.packages?.find(
+      (pkg) => pkg.id === ref.id && pkg.revision === ref.revision
+    );
+    const declaration = content?.variableDefaults;
+    if (!content || !declaration) continue;
+    if (declaration.attachmentRoles && !declaration.attachmentRoles.includes(ref.role)) continue;
+    sources.push({
+      origin: { kind: 'package', role: ref.role, title: content.title },
+      values: declaration.values,
+    });
+  }
+  const preset = profile?.promptPresets?.main;
+  const presetDefaults =
+    preset && nativeRisuPresetVariableDefaults(preset.program.nativeRisuPreset);
+  if (preset && presetDefaults)
+    sources.push({
+      origin: { kind: 'preset', title: preset.title ?? '' },
+      values: presetDefaults,
+    });
+  return sources;
+}
+
+export function templateVariableOrigins(
+  profile: TemplateVariableProfile | undefined
+): Record<string, TemplateVariableOrigin> {
+  const origins: Record<string, TemplateVariableOrigin> = {};
+  for (const { origin, values } of templateVariableSources(profile))
+    for (const key of Object.keys(values)) if (!Object.hasOwn(origins, key)) origins[key] = origin;
+  return origins;
+}
 
 export const validateTemplateVariableDefaults = validateChatVariableValues;
 
@@ -43,15 +84,7 @@ export function resolveTemplateVariableContext(
     }
   };
   if (state) append(state.values);
-  for (const ref of profile?.packageAttachments ?? []) {
-    const declaration = profile?.packages?.find(
-      (pkg) => pkg.id === ref.id && pkg.revision === ref.revision
-    )?.variableDefaults;
-    if (declaration?.attachmentRoles && !declaration.attachmentRoles.includes(ref.role)) continue;
-    append(declaration?.values);
-  }
-  const preset = profile?.promptPresets?.main?.program.nativeRisuPreset;
-  if (preset) append(nativeRisuPresetVariableDefaults(preset));
+  for (const { values } of templateVariableSources(profile)) append(values);
   return overflow
     ? { ...revision, variableDefaultsError: 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT' }
     : result === undefined

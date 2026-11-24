@@ -798,10 +798,10 @@ export const messages = {
     zh: '模型生成设置',
   },
   'helperResults.chatVariables': {
-    ko: '카드 변수',
-    en: 'Card variables',
-    ja: 'カード変数',
-    zh: '卡片变量',
+    ko: '채팅 변수',
+    en: 'Chat variables',
+    ja: 'チャット変数',
+    zh: '聊天变量',
   },
   'helperQuestion.title': {
     ko: '선택지 질문',

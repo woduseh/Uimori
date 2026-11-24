@@ -70,7 +70,7 @@ for (const width of [412]) {
     await expect(search).toHaveValue('');
     await search.fill('없는 설정 이름');
     await expect(results.getByRole('status')).toHaveText('검색 결과가 없어요.');
-    await search.fill('카드 변수');
+    await search.fill('채팅 변수');
     await expect(results.getByRole('button')).toHaveCount(0);
     await search.fill('번역');
     await results.getByRole('button', { name: '생성 설정', exact: true }).click();

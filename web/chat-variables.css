@@ -33,6 +33,26 @@
   min-width: 0;
   width: 100%;
 }
+.chat-variable-group + .chat-variable-group {
+  margin-top: 24px;
+}
+.chat-variable-group-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  padding-bottom: 8px;
+  border-bottom: var(--hairline) solid var(--line);
+  font-size: var(--font-body);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.chat-variable-group-count {
+  color: var(--muted);
+  font-size: var(--font-small);
+  font-weight: normal;
+  font-variant-numeric: tabular-nums;
+}
 .chat-variable-row {
   display: grid;
   grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.5fr) 44px;

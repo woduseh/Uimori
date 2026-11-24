@@ -302,7 +302,7 @@ Protocol search selection is owned by `helperWebSearchCapability`, pricing rules
 
 ## Next request preview, scene lore and card variables
 
-Caller-visible paging, placeholders, and guard behavior live in [Next request preview, scene lore and card variables](../HELPER-TOOLS.md#next-request-preview-scene-lore-and-card-variables) and [다음 요청 미리보기](../CONTEXT-LIMITS.md#다음-요청-미리보기).
+Caller-visible paging, placeholders, and guard behavior live in [Next request preview, scene lore and card variables](../HELPER-TOOLS.md#next-request-preview-scene-lore-and-chat-variables) and [다음 요청 미리보기](../CONTEXT-LIMITS.md#다음-요청-미리보기).
 
 - Zero duplicate computation: `chat.preview` calls `inspectNextRequest`, `scene.lore` calls `sceneRequestLore`, and `chat.variables.read` calls `chatVariableView`.
 - `chat.variables.update` writes via `writeChatVariables` inside the helper operation transaction (keeping revision, source-hash, busy-chat, and journal checks with a receipt-derived journal key).

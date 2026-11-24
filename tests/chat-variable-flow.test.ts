@@ -67,6 +67,16 @@ function fixture() {
 }
 const noUsage = { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null };
 
+test('the variable view names the card that declares each default', async () => {
+  const f = fixture();
+  const view = (await f.app.inject({ method: 'GET', url: f.url })).json();
+  expect(view.defaults.mood).toBe('calm');
+  expect(Object.keys(view.origins).sort()).toEqual(Object.keys(view.defaults).sort());
+  expect(view.origins.mood).toMatchObject({ kind: 'package', title: 'Synthetic shared state' });
+  const presetKey = Object.keys(view.defaults).find((key) => key !== 'mood');
+  expect(view.origins[presetKey!].kind).toBe('preset');
+});
+
 test('independent rewrites start from the copied checkpoint rather than later variables', async () => {
   const f = fixture();
   const old = await f.reserve();

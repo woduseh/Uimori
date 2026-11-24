@@ -11,7 +11,7 @@ Uimori의 도우미는 대화와 서재에서 창작과 설정을 보조하는 �
 - **설정·진단과 작업 제어**: 역할별 모델과 프롬프트, 자동 번역과 번역 결과 언어, 새 채팅 기본값(거절 뒤 자동 다시 생성, 로어 컨텍스트 포함), 채팅별 모델·프롬프트 고정, 호출 한도와 이야기 UI 설정을 확인·변경하고(`settings.read/update`), 테마 목록을 확인해요(`theme.list`). 실행 중이거나 완료된 작업의 상태를 진단하고(`task.inspect`), 취소(`task.cancel`)하거나 재시도(`task.retry`)하며, 날짜별 사용량을 집계해요(`usage.read`).
 - **다음 요청 미리보기와 장면별 로어 확인**: 실제로 보내지 않고 다음 집필 요청을 조립해서, 쓰일 모델·프롬프트·페르소나, 예상 입력 토큰과 한도, 들어갈 로어, 빠진 프롬프트 블록과 이유, 조립된 메시지 본문을 보여줘요(`chat.preview`). 이미 저장된 장면을 쓸 때 작가 모델이 실제로 받은 로어 항목도 확인해요(`scene.lore`). "왜 이 설정을 무시했지?" 같은 질문에 추측 대신 근거로 답할 수 있어요.
 - **다음 장면 요청과 번역 요청**: 사용자가 장면을 써 달라고 하면 입력창에서 보낸 것과 같은 방식으로 다음 장면을 요청하고(`scene.request`), 번역이나 재번역을 요청해요(`scene.translate`). 둘 다 유료 모델 호출이라 명시적으로 요청했을 때만 실행해요. 작업을 예약만 하고 끝날 때까지 기다리지 않으며, 결과는 채팅과 읽기 화면에 나타나요. 이미 진행 중인 요청이 있으면 새로 보내지 않아요.
-- **카드 변수 확인·수정**: `{{getvar::이름}}`이나 스크립트가 쓰는 Risu 변수의 현재 값, 봇·페르소나·모듈·프롬프트 프리셋의 기본값, 이 채팅에서 바꾼 값인지를 보여주고(`chat.variables.read`), 요청한 변수만 바꾸거나 기본값으로 되돌려요(`chat.variables.update`). 채팅의 요청이 대기 중이거나 실행 중일 때는 바꾸지 않아요.
+- **채팅 변수 확인·수정**: `{{getvar::이름}}`이나 스크립트가 쓰는 Risu 변수의 현재 값, 봇·페르소나·모듈·프롬프트 프리셋의 기본값, 이 채팅에서 바꾼 값인지를 보여주고(`chat.variables.read`), 요청한 변수만 바꾸거나 기본값으로 되돌려요(`chat.variables.update`). 채팅의 요청이 대기 중이거나 실행 중일 때는 바꾸지 않아요.
 - **채팅 설정 정리**: 창작 옵션을 이 채팅의 고정값으로 저장하고(`options.fix`), 장면에 이름을 붙이고(`scene.title`), 원작 참고 설정 중 요청한 항목만 바꾸고(`chat.guide.update`), 저장된 모델의 온도·최대 출력·추론 수준 같은 생성 설정을 바꿔요(`model.parameters.read/update`). 모델 생성 설정은 그 모델을 쓰는 모든 채팅에 적용되고, 연결 정보·자격 증명·단가는 그대로 둬요.
 - **모델 등록과 삭제**: 이미 있는 연결에 새 모델을 등록하고(`model.register`), 쓰지 않는 모델을 지워요(`model.delete`). 역할이나 조언자로 지정됐거나 채팅에 고정된 모델은 지우지 않고 어디서 쓰는지 알려 줘요. 연결, 자격 증명, 엔드포인트는 설정 화면에서만 바꿀 수 있어요.
 - **채팅 구성과 정리**: 채팅에 첨부한 페르소나와 모듈, 로어 컨텍스트, Risu 작가 노트를 확인하고 바꿔요(`chat.profile.read/update`). 장면을 작가 모델에게서 숨기거나 그 장면의 요청문을 끄고 고치고(`scene.context.update`), 책갈피를 추가·수정·삭제하고(`chat.bookmark`), 봇별 채팅 폴더와 새 채팅의 기본 페르소나를 정리해요(`chat.organize`). 작가 노트, 요청문, 책갈피를 고치거나 지우면 변경 카드에서 작업 전 글과의 차이를 확인할 수 있어요. 아주 긴 글을 통째로 바꾸면 차이는 생략돼요.
@@ -107,7 +107,7 @@ Outside these routes:
 Behavior the types leave out:
 
 - A unit is one target: one resource, one scene (its original and translation together), the outline of a chat or the author notes of a chat. A scene's translation is not rolled back apart from its original, because an earlier translation belongs to the earlier original. `changeTargetIds` names the change entries a unit covers; a scene unit can also cover a hidden translation record with no entry, kept so that a source-only edit can give back the translation it made stale.
-- Covered are library resources, scene originals and translations, the outline and author notes. Scene titles, settings, chat-only lore, card variables, the original-work reference, illustrations and requested scenes or translations come back as `not-covered` with `other-domain`. A resource the task created or deleted is `not-covered` with `created` or `deleted`; deletion also removes the baseline, so a deleted resource cannot come back through rollback.
+- Covered are library resources, scene originals and translations, the outline and author notes. Scene titles, settings, chat-only lore, chat variables, the original-work reference, illustrations and requested scenes or translations come back as `not-covered` with `other-domain`. A resource the task created or deleted is `not-covered` with `created` or `deleted`; deletion also removes the baseline, so a deleted resource cannot come back through rollback.
 - `changed-since` means the target differs from the state the task left (`changed-after-task`) or someone else saved it between two writes of the task (`changed-during-task`). The comparison covers the whole target, so any later edit of a chat's outline or notes blocks the rollback of that chat's outline or notes. For library content it covers the card source and the package settings (`contentPackageSettings`: portrait image, modules, lore activation, image handoff) in full, because a restore writes the whole saved model back; the change entries show only the owner-set part of those settings (the lore selection mode and the enabled image-handoff ranges that exist on both sides), so lore activation or handoff ranges that appear or vanish with a card edit do not add entries; a record whose result hash covers only the card state is compared by that hash and by those settings being the same as in its baseline. Outline and notes are compared by content and tree position, not by IDs, because a rollback writes them back as new nodes and notes; an earlier task can therefore still be rolled back after a later one.
 - A rolled-back unit stays `restored`: repeating the request, also after a lost response, writes nothing again, even if the target was edited after the rollback.
 - `touches` names what a restore would write so the client can stop or warn before an unsaved draft is overwritten. The server cannot see unsaved editor input.
@@ -275,7 +275,7 @@ Outside these operations:
 
 - Reference images and lore-selection reset are composer-only.
 
-### Next request preview, scene lore and card variables
+### Next request preview, scene lore and chat variables
 
 Behavior the descriptions leave out:
 
