@@ -347,6 +347,36 @@ export const messages = {
     ja: '会話を整理中…',
     zh: '正在整理对话…',
   },
+  'helperUsage.compactingShort': {
+    ko: '정리 중…',
+    en: 'Compacting…',
+    ja: '整理中…',
+    zh: '整理中…',
+  },
+  'helperUsage.cancelCompaction': {
+    ko: '정리 취소',
+    en: 'Cancel compaction',
+    ja: '整理をキャンセル',
+    zh: '取消整理',
+  },
+  'helperUsage.beforeCompaction': {
+    ko: '정리 전 대화',
+    en: 'Conversation before',
+    ja: '整理前の会話',
+    zh: '整理前的对话',
+  },
+  'helperUsage.afterCompaction': {
+    ko: '정리 후 요약',
+    en: 'Summary after',
+    ja: '整理後の要約',
+    zh: '整理后的摘要',
+  },
+  'helperUsage.compactedNote': {
+    ko: '정리 결과를 반영한 추정치예요. 다음 요청을 보내면 다시 측정해요.',
+    en: 'An estimate that reflects the compaction. The next request is measured again.',
+    ja: '整理結果を反映した推定値です。次のリクエストで改めて計測します。',
+    zh: '这是反映整理结果的估算值，下次请求时会重新测量。',
+  },
   'helperUsage.alreadyCompacted': {
     ko: '지금까지의 대화가 이미 정리돼 있어요.',
     en: 'The conversation so far is already compacted.',

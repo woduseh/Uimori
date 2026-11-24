@@ -11,6 +11,11 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.helper-context-usage-compacting {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .helper-context-usage-icon,
 .helper-context-usage-short {
   display: none;
@@ -104,6 +109,7 @@
 .helper-context-usage-actions > button {
   width: 100%;
   justify-content: center;
+  gap: 6px;
 }
 .helper-context-usage-body .helper-context-usage-error {
   color: var(--error);

@@ -533,6 +533,42 @@ export const messages = {
     ja: 'アシスタントの会話整理をキャンセルしました。',
     zh: '已取消助手对话整理。',
   },
+  'errors.HELPER_COMPACTION_AUTH': {
+    ko: '요약 모델의 프로바이더가 인증을 거부했어요. 설정 > 프로바이더와 모델에서 키와 연결 상태를 확인해 주세요.',
+    en: "The summary model's provider rejected the credentials. Check the key and connection in Settings > Providers and models.",
+    ja: '要約モデルのプロバイダーが認証を拒否しました。設定 > プロバイダーとモデルでキーと接続状態を確認してください。',
+    zh: '摘要模型的提供方拒绝了认证。请在“设置 > 提供方与模型”中检查密钥和连接状态。',
+  },
+  'errors.HELPER_COMPACTION_OVERLOADED': {
+    ko: '요약 모델의 프로바이더가 계속 바쁘거나 호출 한도에 걸렸어요. 몇 분 뒤 다시 정리해 주세요.',
+    en: "The summary model's provider stayed busy or hit a rate limit. Try compacting again in a few minutes.",
+    ja: '要約モデルのプロバイダーが混雑しているか、呼び出し上限に達しました。数分後にもう一度整理してください。',
+    zh: '摘要模型的提供方持续繁忙或达到调用上限。请几分钟后再整理。',
+  },
+  'errors.HELPER_COMPACTION_REFUSED': {
+    ko: '요약 모델이 이 대화의 요약을 거절했어요. 다른 요약 모델을 선택해 다시 정리해 주세요.',
+    en: 'The summary model refused to summarize this conversation. Choose another summary model and try again.',
+    ja: '要約モデルがこの会話の要約を拒否しました。別の要約モデルを選んでもう一度整理してください。',
+    zh: '摘要模型拒绝总结此对话。请选择其他摘要模型后重试。',
+  },
+  'errors.HELPER_COMPACTION_EMPTY': {
+    ko: '요약 응답이 비었거나 출력 한도에서 끊겼어요. 요약 모델의 사고 수준이나 추론 강도를 직접 지정한 뒤 다시 정리해 주세요.',
+    en: "The summary came back empty or stopped at the output limit. Set the summary model's thinking level or reasoning effort explicitly, then try again.",
+    ja: '要約の応答が空だったか、出力上限で途切れました。要約モデルの思考レベルや推論の強さを明示的に指定してから、もう一度整理してください。',
+    zh: '摘要响应为空或在输出上限处中断。请为摘要模型明确指定思考级别或推理强度后重试。',
+  },
+  'errors.HELPER_COMPACTION_TIMEOUT': {
+    ko: '대화 정리가 제한 시간 안에 끝나지 않았어요. 제한 시간은 역할별 모델 설정에서 바꿀 수 있어요.',
+    en: 'Compaction did not finish within the time limit. You can change the limit in the Models by role settings.',
+    ja: '会話の整理が制限時間内に終わりませんでした。制限時間は役割別モデルの設定で変更できます。',
+    zh: '对话整理未在时限内完成。可在“按角色设置模型”中更改时限。',
+  },
+  'errors.HELPER_COMPACTION_CALL_BUDGET': {
+    ko: '대화가 길어 정해진 요약 호출 횟수 안에 정리를 마치지 못했어요. 입력 한도가 더 큰 요약 모델을 선택해 주세요.',
+    en: 'The conversation is too long to finish within the summary call limit. Choose a summary model with a larger input limit.',
+    ja: '会話が長いため、決められた要約呼び出し回数内に整理を終えられませんでした。入力上限の大きい要約モデルを選んでください。',
+    zh: '对话过长，无法在摘要调用次数上限内完成整理。请选择输入上限更大的摘要模型。',
+  },
   'errors.HELPER_FIXED_CONTEXT_TOO_LARGE': {
     ko: '요약할 고정 입력만으로 요약 모델의 컨텍스트 한도를 넘었어요. 입력 한도가 더 큰 요약 모델을 선택해 주세요.',
     en: 'The fixed input alone exceeds the summary model context limit. Choose a summary model with a larger input limit.',

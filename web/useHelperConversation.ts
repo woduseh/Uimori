@@ -22,12 +22,17 @@ type View = {
   hasOlderTasks: boolean;
 };
 const id = encodeURIComponent;
-const diagnosticEvent = (kind: string) =>
+const diagnosticEvent = ({ kind, taskId }: HelperEvent) =>
   kind === 'tool.started' ||
   kind === 'tool.finished' ||
   kind === 'input.measured' ||
   kind === 'progress' ||
-  kind.startsWith('context.');
+  (kind.startsWith('context.') && !(taskId === null && kind.startsWith('context.compaction')));
+const viewActive = (view: View | undefined) =>
+  Boolean(
+    view?.context?.compaction.running ||
+      view?.tasks.some((task) => ['queued', 'running'].includes(task.status))
+  );
 
 function applyMessageChange(view: View, change: HelperMessageMutation): View {
   if ((change.conversation.historyRevision ?? 0) <= (view.conversation.historyRevision ?? 0))
@@ -86,8 +91,7 @@ export function useHelperConversation(
   const latestSequence = useRef(latestEventSeq);
   latestSequence.current = latestEventSeq;
   const wake = useRef<() => void>(() => {});
-  const running =
-    current?.tasks.some((task) => ['queued', 'running'].includes(task.status)) ?? false;
+  const running = viewActive(current);
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -231,7 +235,7 @@ export function useHelperConversation(
           if (event.kind === 'font.updated')
             window.dispatchEvent(new Event('uimori-fonts-changed'));
           cursor = event.seq;
-          if (!diagnosticEvent(event.kind)) changed = true;
+          if (!diagnosticEvent(event)) changed = true;
           if (
             /^task\.(completed|failed|cancelled|interrupted)$/u.test(event.kind) ||
             event.kind === 'artifact.saved' ||
@@ -258,10 +262,7 @@ export function useHelperConversation(
       polling = true;
       const checkEvents = forceEvents;
       forceEvents = false;
-      const active = () =>
-        cache.current
-          .get(scopeKey)
-          ?.tasks.some((task) => ['queued', 'running'].includes(task.status));
+      const active = () => viewActive(cache.current.get(scopeKey));
       try {
         if (!initialized) {
           if (cursors.current.has(conversationId)) await events();

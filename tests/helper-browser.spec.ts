@@ -1523,13 +1523,7 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
   expect(state.eventStreamReads).toBe(0);
   const viewsBeforeDiagnostics = state.viewReads,
     eventsBeforeDiagnostics = state.eventReads;
-  for (const kind of [
-    'tool.finished',
-    'input.measured',
-    'progress',
-    'context.compaction',
-    'context.segment',
-  ])
+  for (const kind of ['tool.finished', 'input.measured', 'progress', 'context.segment'])
     state.emit(kind);
   await expect.poll(() => state.eventReads).toBeGreaterThanOrEqual(eventsBeforeDiagnostics + 2);
   expect(state.viewReads).toBe(viewsBeforeDiagnostics);

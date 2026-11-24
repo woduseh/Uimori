@@ -42,7 +42,7 @@ import type { Library } from '../core/product.js';
 import {
   MAX_HELPER_REFERENCES,
   type HelperChangeAnchor,
-  type HelperCompactionResult,
+  type HelperCompactionStart,
   type HelperContextReference,
   type HelperConversation,
   type HelperMessageMutation,
@@ -462,21 +462,22 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     []
   );
   const shownUsage = latestUsage && latestUsage.taskId === latestTaskId ? latestUsage.usage : null;
-  const compactConversation = async () => {
-    if (!conversation || compactingConversations[conversation.id]) return;
+  const compactionRequest = async (method: 'POST' | 'DELETE') => {
+    if (!conversation || compactStarting[conversation.id]) return;
     const owner = conversation.id;
     const target = conversation;
-    setCompactingConversations((old) => ({ ...old, [owner]: true }));
+    setCompactStarting((old) => ({ ...old, [owner]: true }));
     setCompactErrors((old) => ({ ...old, [owner]: '' }));
     try {
-      const result = await api<HelperCompactionResult>(
+      const result = await api<HelperCompactionStart | { cancelled: boolean }>(
         `/helper/conversations/${encodeURIComponent(owner)}/compact`,
-        {}
+        {},
+        method
       );
+      if ('started' in result && result.started)
+        requestedCompactions.current.set(owner, result.startedAt);
       await data.refresh(target);
-      if (result.compacted)
-        notify(uiMessage('helperUsage.compactedNotice', { count: result.compactedMessages }));
-      else if (result.noopReason === 'already-compacted')
+      if ('noopReason' in result && result.noopReason === 'already-compacted')
         notify(uiMessage('helperUsage.alreadyCompacted'));
     } catch (cause) {
       setCompactErrors((old) => ({
@@ -485,7 +486,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           cause instanceof Error ? cause.message : uiMessage('errors.HELPER_COMPACTION_FAILED'),
       }));
     } finally {
-      setCompactingConversations((old) => ({ ...old, [owner]: false }));
+      setCompactStarting((old) => ({ ...old, [owner]: false }));
     }
   };
   const running = tasks.find((task) => task.status === 'running');
@@ -687,9 +688,18 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   } | null>(null);
   const [saveNotice, setSaveNotice] = useState('');
   const notify = useTransientNotice();
-  const [compactingConversations, setCompactingConversations] = useState<Record<string, boolean>>(
-    {}
-  );
+  const [compactStarting, setCompactStarting] = useState<Record<string, boolean>>({});
+  const requestedCompactions = useRef(new Map<string, string>());
+  const compaction = data.current?.context?.compaction;
+  const compactionOwner = data.current?.conversation.id;
+  useEffect(() => {
+    const startedAt = compactionOwner && requestedCompactions.current.get(compactionOwner);
+    const last = compaction?.last;
+    if (!startedAt || compaction?.running || !last || last.finishedAt < startedAt) return;
+    requestedCompactions.current.delete(compactionOwner);
+    if (last.status === 'completed')
+      notify(uiMessage('helperUsage.compactedNotice', { count: last.compactedMessages }));
+  }, [compactionOwner, compaction, notify]);
   const [compactErrors, setCompactErrors] = useState<Record<string, string>>({});
   useEffect(() => {
     if (!props.open) setModelPicker(false);
@@ -2751,9 +2761,10 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                 usage={shownUsage}
                 context={data.current?.context}
                 busy={busy || activeTask || data.loading}
-                compacting={Boolean(compactingConversations[scopeKey])}
+                starting={Boolean(compactStarting[scopeKey])}
                 compactError={compactErrors[scopeKey] ?? ''}
-                onCompact={() => void compactConversation()}
+                onCompact={() => void compactionRequest('POST')}
+                onCancel={() => void compactionRequest('DELETE')}
               />
             )}
             <IconButton

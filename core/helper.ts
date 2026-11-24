@@ -27,21 +27,50 @@ export type HelperConversationDeletion = {
   canDelete: boolean;
   description: string;
 };
+export const HELPER_COMPACTION_FAILURES = [
+  'HELPER_COMPACTION_AUTH',
+  'HELPER_COMPACTION_OVERLOADED',
+  'HELPER_COMPACTION_REFUSED',
+  'HELPER_COMPACTION_EMPTY',
+  'HELPER_COMPACTION_EOF',
+  'HELPER_COMPACTION_TIMEOUT',
+  'HELPER_COMPACTION_CANCELLED',
+  'HELPER_COMPACTION_CALL_BUDGET',
+  'HELPER_FIXED_CONTEXT_TOO_LARGE',
+  'HELPER_COMPACTION_BUSY',
+  'HELPER_CONTEXT_DEPENDENCY_CHANGED',
+  'HELPER_COMPACTION_FAILED',
+] as const;
+export type HelperCompactionFailure = (typeof HELPER_COMPACTION_FAILURES)[number];
+export type HelperCompactionOutcome =
+  | {
+      status: 'completed';
+      finishedAt: string;
+      compactedMessages: number;
+      beforeTokens: number;
+      afterTokens: number;
+    }
+  | { status: 'failed'; finishedAt: string; code: HelperCompactionFailure };
+export type HelperCompactionState = {
+  running: { startedAt: string } | null;
+  last: HelperCompactionOutcome | null;
+};
 export type HelperContextCompactionSummary = {
   compactedMessages: number;
   uncompactedMessages: number;
   totalMessages: number;
   checkpointRevision: number;
   summaryChars: number;
+  compaction: HelperCompactionState;
 };
-export type HelperCompactionResult = {
-  compacted: boolean;
-  noopReason?: 'empty' | 'already-compacted';
-  compactedMessages: number;
-  beforeTokens: number | null;
-  afterTokens: number | null;
-  checkpointRevision: number;
-};
+export type HelperCompactionStart =
+  | {
+      started: false;
+      noopReason: 'empty' | 'already-compacted';
+      compactedMessages: number;
+      checkpointRevision: number;
+    }
+  | { started: true; startedAt: string };
 export type HelperProject = { id: string; title: string; revision: number };
 export type HelperConversationSummary = HelperConversation & {
   projectId: string | null;

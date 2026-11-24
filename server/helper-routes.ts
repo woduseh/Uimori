@@ -124,26 +124,17 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
       conversation: store.conversation(id),
       messages: store.messages(id),
       tasks: store.taskSummaries(id),
-      context: readHelperContextState(runtime.store, id),
+      context: readHelperContextState(runtime.store, id, runtime.compactionRunning(id)),
     };
   });
-  app.post<{ Params: { id: string } }>(
-    '/api/helper/conversations/:id/compact',
-    async (request, reply) => {
-      if (request.body !== undefined && request.body !== null) fields(record(request.body), []);
-      const controller = new AbortController();
-      const onClose = () => {
-        if (!reply.raw.writableEnded) controller.abort();
-      };
-      reply.raw.on('close', onClose);
-      try {
-        reply.header('Cache-Control', 'no-store');
-        return await runtime.compactConversation(request.params.id, controller.signal);
-      } finally {
-        reply.raw.off('close', onClose);
-      }
-    }
-  );
+  app.post<{ Params: { id: string } }>('/api/helper/conversations/:id/compact', (request) => {
+    if (request.body !== undefined && request.body !== null) fields(record(request.body), []);
+    return runtime.compactConversation(request.params.id);
+  });
+  app.delete<{ Params: { id: string } }>('/api/helper/conversations/:id/compact', (request) => {
+    if (request.body !== undefined && request.body !== null) fields(record(request.body), []);
+    return runtime.cancelCompaction(request.params.id);
+  });
   app.patch<{ Params: { id: string } }>('/api/helper/conversations/:id', (request) => {
     const body = record(request.body);
     fields(body, ['expectedRevision', 'title', 'persona']);

@@ -1,11 +1,15 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { ContextCheckpointRef, ContextPlan } from '../core/context-plan.js';
-import type {
-  HelperContextCompactionSummary,
-  HelperScope,
-  HelperTask,
-  HelperTaskSnapshot,
+import {
+  HELPER_COMPACTION_FAILURES,
+  type HelperCompactionFailure,
+  type HelperCompactionOutcome,
+  type HelperCompactionState,
+  type HelperContextCompactionSummary,
+  type HelperScope,
+  type HelperTask,
+  type HelperTaskSnapshot,
 } from '../core/helper.js';
 import type { ModelSnapshot } from '../core/product.js';
 import type { Usage } from '../core/types.js';
@@ -127,10 +131,46 @@ export function helperContext(
   return { activeRevision: Number(row?.revision ?? 0), checkpoint };
 }
 
-export function readHelperContextState(
+function lastManualCompaction(
   store: Store,
   conversationId: string
+): HelperCompactionOutcome | null {
+  const row = store.db
+    .prepare(
+      `SELECT e.kind,e.data FROM helper_events e
+       WHERE e.conversation_id=? AND e.task_id IS NULL
+         AND e.kind IN ('context.compaction','context.compaction.failed')
+         AND NOT EXISTS (SELECT 1 FROM helper_events later WHERE later.conversation_id=e.conversation_id
+           AND later.seq>e.seq AND (later.task_id IS NOT NULL OR later.kind='messages.changed'))
+       ORDER BY e.seq DESC LIMIT 1`
+    )
+    .get(conversationId) as Row | undefined;
+  if (!row) return null;
+  const data = JSON.parse(String(row.data)) as Record<string, unknown>;
+  if (typeof data.finishedAt !== 'string') return null;
+  return row.kind === 'context.compaction'
+    ? {
+        status: 'completed',
+        finishedAt: data.finishedAt,
+        compactedMessages: Number(data.compactedMessages),
+        beforeTokens: Number(data.beforeTokens),
+        afterTokens: Number(data.afterTokens),
+      }
+    : {
+        status: 'failed',
+        finishedAt: data.finishedAt,
+        code: HELPER_COMPACTION_FAILURES.includes(data.code as HelperCompactionFailure)
+          ? (data.code as HelperCompactionFailure)
+          : 'HELPER_COMPACTION_FAILED',
+      };
+}
+
+export function readHelperContextState(
+  store: Store,
+  conversationId: string,
+  running: HelperCompactionState['running'] = null
 ): HelperContextCompactionSummary {
+  const compaction = { running, last: lastManualCompaction(store, conversationId) };
   const history = helperHistory(store, conversationId);
   const row = store.db
     .prepare('SELECT revision,checkpoint_id FROM context_heads WHERE scope_key=?')
@@ -148,6 +188,7 @@ export function readHelperContextState(
           totalMessages: history.length,
           checkpointRevision: context.activeRevision,
           summaryChars: plan.summary?.length ?? 0,
+          compaction,
         };
       }
     } catch {}
@@ -158,6 +199,7 @@ export function readHelperContextState(
     totalMessages: history.length,
     checkpointRevision: revision,
     summaryChars: 0,
+    compaction,
   };
 }
 

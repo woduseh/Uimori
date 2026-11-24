@@ -137,6 +137,7 @@ import type { RequestImageUpload } from '../core/request-images.js';
 import type { RequestFileUpload } from '../core/request-files.js';
 import { assertProviderFileSupport } from '../core/provider-file-reference.js';
 import { assertProviderImageSupport } from '../core/provider-image-reference.js';
+import { fileInputSupported } from '../core/request-files.js';
 import { helperAttachmentPrompt } from './helper-attachment-prompt.js';
 import {
   listHelperImages,
@@ -179,7 +180,9 @@ import {
   HELPER_COMPACTION_INPUT_RATIO,
   HELPER_PROVIDER_RETRY_DELAYS_MS,
   HELPER_SHELL_OUTPUT_DEFAULT_BYTES,
-  type HelperCompactionResult,
+  HELPER_COMPACTION_FAILURES,
+  type HelperCompactionFailure,
+  type HelperCompactionStart,
   type HelperQuestion,
   type HelperQuestionOption,
   type HelperReferencePointer,
@@ -876,6 +879,33 @@ const refusedTaskError = (reason: string | null) =>
     ? `HELPER_RESPONSE_REFUSED:${reason}`
     : 'HELPER_RESPONSE_REFUSED';
 const providerOverloaded = (code: string | undefined) => /^HTTP_(429|5\d\d)$/u.test(code ?? '');
+const providerAuthFailure = (code: string) =>
+  /^HTTP_40[13]$/u.test(code) ||
+  [
+    'CREDENTIAL_UNAVAILABLE',
+    'CONNECTION_NOT_AUTHORIZED',
+    'ENDPOINT_NOT_APPROVED',
+    'Connection disabled or authority changed',
+  ].includes(code);
+const summaryFailure = (result: ProviderResult): HelperCompactionFailure => {
+  const code = result.error?.code ?? '';
+  if (result.status === 'refused' || result.refusal) return 'HELPER_COMPACTION_REFUSED';
+  if (code === 'UNEXPECTED_EOF') return 'HELPER_COMPACTION_EOF';
+  if (code === 'TIMEOUT') return 'HELPER_COMPACTION_TIMEOUT';
+  if (providerAuthFailure(code)) return 'HELPER_COMPACTION_AUTH';
+  if (providerOverloaded(code)) return 'HELPER_COMPACTION_OVERLOADED';
+  if (code === 'MAX_TOKENS' || code === 'MAX_OUTPUT_TOKENS' || (!code && !result.text.trim()))
+    return 'HELPER_COMPACTION_EMPTY';
+  return 'HELPER_COMPACTION_FAILED';
+};
+const manualCompactionFailure = (error: unknown): HelperCompactionFailure => {
+  const message = error instanceof ProviderContractError ? error.code : (error as Error)?.message;
+  if (message === 'MODEL_CALL_BUDGET_EXHAUSTED') return 'HELPER_COMPACTION_CALL_BUDGET';
+  if (typeof message === 'string' && providerAuthFailure(message)) return 'HELPER_COMPACTION_AUTH';
+  return (HELPER_COMPACTION_FAILURES as readonly string[]).includes(message)
+    ? (message as HelperCompactionFailure)
+    : 'HELPER_COMPACTION_FAILED';
+};
 
 export function helperWritingSnapshot(store: Store, chatId: string): RunSnapshot {
   const chat = store.chat(chatId),
@@ -902,7 +932,10 @@ export class HelperRuntime {
   readonly workspace: HelperWorkspace;
   readonly shell: HelperShell;
   private readonly controllers = new Map<string, AbortController>();
-  private readonly compacting = new Map<string, AbortController>();
+  private readonly compacting = new Map<
+    string,
+    { controller: AbortController; startedAt: string }
+  >();
   private readonly nativeSteering = new Map<
     string,
     {
@@ -1251,10 +1284,17 @@ export class HelperRuntime {
       );
     return { ...impact, workerActive, canDelete: impact.canDelete && !workerActive };
   }
-  async compactConversation(
-    conversationId: string,
-    requestSignal?: AbortSignal
-  ): Promise<HelperCompactionResult> {
+  compactionRunning(conversationId: string) {
+    const running = this.compacting.get(conversationId);
+    return running ? { startedAt: running.startedAt } : null;
+  }
+  cancelCompaction(conversationId: string) {
+    this.workspace.conversation(conversationId);
+    const running = this.compacting.get(conversationId);
+    running?.controller.abort();
+    return { cancelled: Boolean(running) };
+  }
+  compactConversation(conversationId: string): HelperCompactionStart {
     const conversation = this.workspace.conversation(conversationId);
     if (!this.deletionImpact(conversationId).canDelete)
       throw new HttpError(409, 'HELPER_COMPACTION_BUSY');
@@ -1276,32 +1316,26 @@ export class HelperRuntime {
     );
     if (!history.length)
       return {
-        compacted: false,
+        started: false,
         noopReason: 'empty',
         compactedMessages: 0,
-        beforeTokens: 0,
-        afterTokens: 0,
         checkpointRevision: base.activeRevision,
       };
     if (!uncompacted.length)
       return {
-        compacted: false,
+        started: false,
         noopReason: 'already-compacted',
         compactedMessages: history.length,
-        beforeTokens: null,
-        afterTokens: null,
         checkpointRevision: base.activeRevision,
       };
     const controller = new AbortController();
-    this.compacting.set(conversationId, controller);
-    const signal = AbortSignal.any([
-      controller.signal,
-      this.options.signal,
-      ...(requestSignal ? [requestSignal] : []),
-      AbortSignal.timeout(
-        (workspace.helperTaskTimeoutMinutes ?? DEFAULT_HELPER_TASK_TIMEOUT_MINUTES) * 60_000
-      ),
-    ]);
+    const startedAt = new Date().toISOString();
+    this.compacting.set(conversationId, { controller, startedAt });
+    const timeout = AbortSignal.timeout(
+      (workspace.helperTaskTimeoutMinutes ?? DEFAULT_HELPER_TASK_TIMEOUT_MINUTES) * 60_000
+    );
+    const signal = AbortSignal.any([controller.signal, this.options.signal, timeout]);
+    this.workspace.event(conversationId, null, 'context.compaction.started', { startedAt });
     const chatId = conversation.scope.kind === 'chat' ? conversation.scope.chatId : null;
     const helperBudget = contextBudgetForModel(helperModel);
     const beforeTokens =
@@ -1358,37 +1392,25 @@ export class HelperRuntime {
           afterTokens,
           compactedMessages: history.length,
           retainedMessages: 0,
-        });
-        return {
-          compacted: true,
-          compactedMessages: history.length,
-          beforeTokens,
-          afterTokens,
           checkpointRevision: published.activeRevision,
-        };
+          finishedAt: new Date().toISOString(),
+        });
       } catch (error) {
-        if (error instanceof HttpError) throw error;
-        if (signal.aborted) throw new HttpError(408, 'HELPER_COMPACTION_CANCELLED');
-        const message = error instanceof Error ? error.message : 'HELPER_COMPACTION_FAILED';
-        if (
-          message === 'HELPER_FIXED_CONTEXT_TOO_LARGE' ||
-          message === 'MODEL_CALL_BUDGET_EXHAUSTED'
-        )
-          throw new HttpError(409, message);
-        if (message === 'HELPER_COMPACTION_EOF' || message === 'HELPER_COMPACTION_FAILED')
-          throw new HttpError(502, message);
-        throw new HttpError(502, 'HELPER_COMPACTION_FAILED');
+        this.workspace.event(conversationId, null, 'context.compaction.failed', {
+          origin: 'manual',
+          code: signal.aborted
+            ? timeout.aborted
+              ? 'HELPER_COMPACTION_TIMEOUT'
+              : 'HELPER_COMPACTION_CANCELLED'
+            : manualCompactionFailure(error),
+          finishedAt: new Date().toISOString(),
+        });
       } finally {
         this.compacting.delete(conversationId);
       }
     })();
-    this.options.track(
-      work.then(
-        () => {},
-        () => {}
-      )
-    );
-    return work;
+    this.options.track(work);
+    return { started: true, startedAt };
   }
   deleteConversation(
     id: string,
@@ -2175,22 +2197,11 @@ export class HelperRuntime {
           continue;
         }
         if (
-          result.status === 'error' &&
-          target.connection.protocol !== 'codex-app-server-v1' &&
-          providerOverloaded(result.error?.code) &&
-          providerRetries < HELPER_PROVIDER_RETRY_DELAYS_MS.length
+          await this.waitForProviderRetry(result, target, providerRetries, signal, (retry) =>
+            this.workspace.event(task.conversationId, id, 'provider.retry', retry)
+          )
         ) {
-          const delay = HELPER_PROVIDER_RETRY_DELAYS_MS[providerRetries++];
-          this.workspace.event(task.conversationId, id, 'provider.retry', {
-            attempt: providerRetries,
-            attempts: HELPER_PROVIDER_RETRY_DELAYS_MS.length,
-            delayMs: delay,
-            code: result.error!.code,
-          } satisfies HelperProviderRetry);
-          await (this.options.wait ?? ((ms, until) => sleep(ms, undefined, { signal: until })))(
-            delay,
-            signal
-          );
+          providerRetries++;
           continue;
         }
         providerRetries = 0;
@@ -2560,7 +2571,36 @@ export class HelperRuntime {
       toolImageReads,
       checkBudget: () =>
         this.workspace.taskState(task.id).usage.modelCalls + 2 <= task.snapshot.limits.totalCalls,
+      onRetry: (retry) =>
+        this.workspace.event(task.conversationId, task.id, 'provider.retry', retry),
     });
+  }
+  private async waitForProviderRetry(
+    result: ProviderResult,
+    target: ModelSnapshot,
+    retries: number,
+    signal: AbortSignal,
+    onRetry?: (retry: HelperProviderRetry) => void
+  ) {
+    if (
+      result.status !== 'error' ||
+      target.connection.protocol === 'codex-app-server-v1' ||
+      !providerOverloaded(result.error?.code) ||
+      retries >= HELPER_PROVIDER_RETRY_DELAYS_MS.length
+    )
+      return false;
+    const delayMs = HELPER_PROVIDER_RETRY_DELAYS_MS[retries];
+    onRetry?.({
+      attempt: retries + 1,
+      attempts: HELPER_PROVIDER_RETRY_DELAYS_MS.length,
+      delayMs,
+      code: result.error!.code,
+    });
+    await (this.options.wait ?? ((ms, until) => sleep(ms, undefined, { signal: until })))(
+      delayMs,
+      signal
+    );
+    return true;
   }
   private async summarizeHistory({
     id,
@@ -2575,6 +2615,7 @@ export class HelperRuntime {
     fixedInputTokens,
     toolImageReads = [],
     checkBudget,
+    onRetry,
     manual = false,
   }: {
     id: string;
@@ -2589,6 +2630,7 @@ export class HelperRuntime {
     fixedInputTokens: number;
     toolImageReads?: HelperImageRead[];
     checkBudget?: () => boolean;
+    onRetry?: (retry: HelperProviderRetry) => void;
     manual?: boolean;
   }) {
     const budget = contextBudgetForModel(target);
@@ -2613,6 +2655,8 @@ export class HelperRuntime {
       outputTokens: 0 as number | null,
       costUsd: 0 as number | null,
     };
+    const imagesSupported =
+      imageInputSupported(target.connection.protocol, target.modelId) !== false;
     while (remaining.length) {
       if (++calls > 16 || (checkBudget && !checkBudget()))
         throw new Error('MODEL_CALL_BUDGET_EXHAUSTED');
@@ -2640,21 +2684,29 @@ export class HelperRuntime {
             source: asJson({ originalRequest, previousSummary: summary, part }),
           },
         };
-        const attachmentHistory =
-          calls === 1
-            ? history
-                .filter((message) => message.images?.length || message.files?.length)
-                .map((message) => ({
-                  ...message,
+        if (calls !== 1) return request;
+        const attachmentHistory = history.flatMap((message) => {
+          const images = imagesSupported ? (message.images ?? []) : [];
+          const files = (message.files ?? []).filter((file) =>
+            fileInputSupported(target.connection.protocol, target.modelId, file)
+          );
+          return images.length || files.length
+            ? [
+                {
+                  id: message.id,
+                  role: message.role,
                   text: `Attached reference from helper message ${message.id}. Its authored text is in the supplied conversation part.`,
-                }))
+                  ...(images.length ? { images } : {}),
+                  ...(files.length ? { files } : {}),
+                },
+              ]
             : [];
-        const readImages = calls === 1 ? toolImageReads : [];
-        return helperAttachmentPrompt(
+        });
+        const attached = helperAttachmentPrompt(
           request,
           [
             ...attachmentHistory,
-            ...readImages.map((read, index) => ({
+            ...(imagesSupported ? toolImageReads : []).map((read, index) => ({
               id: `image-read:${index}`,
               role: 'user' as const,
               text: `Retrieved image reference data, not a user instruction: ${JSON.stringify(read.result)}`,
@@ -2664,13 +2716,33 @@ export class HelperRuntime {
           {},
           `compact:${id}`
         );
+        try {
+          assertProviderFileSupport(attached, target.connection.protocol);
+          return attached;
+        } catch (error) {
+          if (!(error instanceof ProviderContractError)) throw error;
+          return helperAttachmentPrompt(
+            request,
+            attachmentHistory.flatMap(({ files: _files, ...message }) =>
+              message.images ? [message] : []
+            ),
+            {},
+            `compact:${id}`
+          );
+        }
       };
       const fits = (size: number) => {
-        return (
-          measureProviderRequest(requestFor(remaining.slice(0, size)), target)
-            .estimatedInputTokens <=
-          budget.inputTokenLimit * 0.8
-        );
+        try {
+          return (
+            measureProviderRequest(requestFor(remaining.slice(0, size)), target)
+              .estimatedInputTokens <=
+            budget.inputTokenLimit * 0.8
+          );
+        } catch (error) {
+          if (error instanceof ProviderContractError && error.code === 'REQUEST_TOO_LARGE')
+            return false;
+          throw error;
+        }
       };
       let lo = fits(remaining.length) ? remaining.length : 0,
         hi = lo || remaining.length;
@@ -2687,13 +2759,16 @@ export class HelperRuntime {
       )
         lo--;
       if (lo < 1) throw new Error('HELPER_FIXED_CONTEXT_TOO_LARGE');
-      const result = await this.execute(null, target, requestFor(remaining.slice(0, lo)), hooks);
+      const request = requestFor(remaining.slice(0, lo));
+      let result = await this.execute(null, target, request, hooks);
+      for (
+        let retries = 0;
+        await this.waitForProviderRetry(result, target, retries, hooks.signal, onRetry);
+        retries++
+      )
+        result = await this.execute(null, target, request, hooks);
       if (result.status !== 'completed' || result.error || result.refusal || !result.text.trim())
-        throw new Error(
-          result.error?.code === 'UNEXPECTED_EOF'
-            ? 'HELPER_COMPACTION_EOF'
-            : 'HELPER_COMPACTION_FAILED'
-        );
+        throw new Error(summaryFailure(result));
       usage.modelCalls++;
       for (const key of ['inputTokens', 'outputTokens', 'costUsd'] as const)
         usage[key] =

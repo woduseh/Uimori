@@ -11,6 +11,11 @@ import { ResponseStreamStore } from '../server/response-stream.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { publishHelperContext, readHelperContextState } from '../server/helper-context.js';
 import { encodeMainPreview } from '../server/main-request.js';
+import * as mainRequest from '../server/main-request.js';
+import * as helperAttachments from '../server/helper-attachments.js';
+import { helperRoutes } from '../server/helper-routes.js';
+import Fastify from 'fastify';
+import { HELPER_PROVIDER_RETRY_DELAYS_MS } from '../core/helper.js';
 import { assertContextBudget, estimateContextTokens } from '../core/context-budget.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import { decodeAnthropicMessage, encodeAnthropic } from '../core/anthropic-protocol.js';
@@ -85,7 +90,14 @@ const vertexReply = (parts: unknown[]) =>
     candidates: [{ index: 0, content: { role: 'model', parts }, finishReason: 'STOP' }],
     usageMetadata: { promptTokenCount: 11, candidatesTokenCount: 7, totalTokenCount: 18 },
   });
-async function fixture(options: { vertex?: boolean; fixed?: boolean; reviewOnly?: boolean } = {}) {
+async function fixture(
+  options: {
+    vertex?: boolean;
+    fixed?: boolean;
+    reviewOnly?: boolean;
+    wait?: (ms: number, signal: AbortSignal) => Promise<unknown>;
+  } = {}
+) {
   const path = mkdtempSync(join(tmpdir(), 'uimori-helper-compact-')),
     store = new Store(join(path, 'story.sqlite')),
     controller = new AbortController(),
@@ -136,6 +148,7 @@ async function fixture(options: { vertex?: boolean; fixed?: boolean; reviewOnly?
     signal: controller.signal,
     track: (promise) => work.push(promise),
     streams: new ResponseStreamStore(store),
+    ...(options.wait ? { wait: options.wait } : {}),
   });
   const workspace = runtime.workspace;
   const saved = store.product.content(fixtureBotInput('Original synthetic content')) as Content;
@@ -1563,8 +1576,8 @@ test('manual helper compaction publishes a manual checkpoint, records numeric-on
     if (request.role === 'context') return summarized('수동 압축 요약: 초안 핵심 규칙을 정리했다.');
     return structuredClone(success);
   });
-  const empty = await f.runtime.compactConversation(f.conversation.id);
-  expect(empty).toMatchObject({ compacted: false, noopReason: 'empty', compactedMessages: 0 });
+  const empty = f.runtime.compactConversation(f.conversation.id);
+  expect(empty).toMatchObject({ started: false, noopReason: 'empty', compactedMessages: 0 });
   expect(log.requests).toHaveLength(0);
 
   const first = await f.run();
@@ -1573,16 +1586,15 @@ test('manual helper compaction publishes a manual checkpoint, records numeric-on
     compactedMessages: 0,
     uncompactedMessages: 2,
     totalMessages: 2,
+    compaction: { running: null, last: null },
   });
 
-  const compacted = await f.runtime.compactConversation(f.conversation.id);
-  expect(compacted).toMatchObject({
-    compacted: true,
-    compactedMessages: 2,
-    checkpointRevision: 1,
-  });
-  expect(compacted.beforeTokens).toBeGreaterThan(0);
-  expect(compacted.afterTokens).toBeGreaterThan(0);
+  const { started, last } = await compactNow(f);
+  expect(started).toMatchObject({ started: true });
+  expect(last).toMatchObject({ status: 'completed', compactedMessages: 2 });
+  if (last?.status !== 'completed') throw new Error('compaction did not complete');
+  expect(last.beforeTokens).toBeGreaterThan(0);
+  expect(last.afterTokens).toBeGreaterThan(0);
   expect(readHelperContextState(f.store, f.conversation.id)).toMatchObject({
     compactedMessages: 2,
     uncompactedMessages: 0,
@@ -1602,9 +1614,9 @@ test('manual helper compaction publishes a manual checkpoint, records numeric-on
   expect(attempt).toMatchObject({ usage_kind: 'summary', usage_detached: 1, status: 'completed' });
   expect(String(attempt.request)).not.toContain('현재 초안을 수정하고 저장해줘.');
 
-  const repeated = await f.runtime.compactConversation(f.conversation.id);
+  const repeated = f.runtime.compactConversation(f.conversation.id);
   expect(repeated).toMatchObject({
-    compacted: false,
+    started: false,
     noopReason: 'already-compacted',
     compactedMessages: 2,
     checkpointRevision: 1,
@@ -1624,6 +1636,7 @@ test('manual helper compaction publishes a manual checkpoint, records numeric-on
     compactedMessages: 2,
     uncompactedMessages: 2,
     totalMessages: 4,
+    compaction: { last: null },
   });
 });
 
@@ -1648,13 +1661,12 @@ test('manual helper compaction enforces busy, codex-native, context-model and co
 
   expect((await f.run()).status).toBe('completed');
 
-  const inFlight = f.runtime.compactConversation(f.conversation.id);
+  expect(f.runtime.compactConversation(f.conversation.id)).toMatchObject({ started: true });
   try {
     await compactionStarted;
-    await expect(f.runtime.compactConversation(f.conversation.id)).rejects.toMatchObject({
-      statusCode: 409,
-      message: 'HELPER_COMPACTION_BUSY',
-    });
+    expect(() => f.runtime.compactConversation(f.conversation.id)).toThrow(
+      expect.objectContaining({ statusCode: 409, message: 'HELPER_COMPACTION_BUSY' })
+    );
     expect(() => f.runtime.enqueue(f.conversation.id, randomUUID(), '겹치는 요청')).toThrow(
       'HELPER_COMPACTION_BUSY'
     );
@@ -1662,7 +1674,8 @@ test('manual helper compaction enforces busy, codex-native, context-model and co
   } finally {
     releaseCompaction();
   }
-  expect((await inFlight).compacted).toBe(true);
+  await Promise.all(f.work);
+  expect(compactionState(f).last?.status).toBe('completed');
 
   const selected = modelWorkspace(f.store);
   updateModelWorkspace(f.store, {
@@ -1672,10 +1685,9 @@ test('manual helper compaction enforces busy, codex-native, context-model and co
     helperModel: { id: f.helperModel.id },
     contextModel: null,
   });
-  await expect(f.runtime.compactConversation(f.conversation.id)).rejects.toMatchObject({
-    statusCode: 409,
-    message: 'MODEL_REQUIRED:context',
-  });
+  expect(() => f.runtime.compactConversation(f.conversation.id)).toThrow(
+    expect.objectContaining({ statusCode: 409, message: 'MODEL_REQUIRED:context' })
+  );
 
   const nativeConnection = f.store.product.connection({
     title: 'Synthetic native codex',
@@ -1699,8 +1711,220 @@ test('manual helper compaction enforces busy, codex-native, context-model and co
     helperModel: { id: nativeModel.id },
     contextModel: { id: f.contextModel.id },
   });
-  await expect(f.runtime.compactConversation(f.conversation.id)).rejects.toMatchObject({
-    statusCode: 409,
-    message: 'HELPER_COMPACTION_CODEX_NATIVE',
+  expect(() => f.runtime.compactConversation(f.conversation.id)).toThrow(
+    expect.objectContaining({ statusCode: 409, message: 'HELPER_COMPACTION_CODEX_NATIVE' })
+  );
+});
+
+function compactionState(f: Fixture) {
+  return readHelperContextState(
+    f.store,
+    f.conversation.id,
+    f.runtime.compactionRunning(f.conversation.id)
+  ).compaction;
+}
+function seed(f: Fixture, id: string, text: string) {
+  f.store.db
+    .prepare('INSERT INTO helper_seed_messages VALUES(?,?,?,?,?,?)')
+    .run(id, f.conversation.id, 0, 'user', text, new Date().toISOString());
+}
+async function compactNow(f: Fixture) {
+  const started = f.runtime.compactConversation(f.conversation.id);
+  await Promise.all(f.work);
+  return { started, last: compactionState(f).last };
+}
+const failedWith = (code: string): transport.ProviderResult => ({
+  ...structuredClone(success),
+  status: 'error',
+  text: '',
+  error: { code },
+});
+
+test.each<[string, transport.ProviderResult, string]>([
+  ['auth', failedWith('HTTP_401'), 'HELPER_COMPACTION_AUTH'],
+  [
+    'refusal',
+    { ...structuredClone(success), status: 'refused', text: '', refusal: 'policy' },
+    'HELPER_COMPACTION_REFUSED',
+  ],
+  ['empty output', summarized('  '), 'HELPER_COMPACTION_EMPTY'],
+  [
+    'output limit',
+    { ...failedWith('MAX_TOKENS'), status: 'partial', text: '잘린 요약' },
+    'HELPER_COMPACTION_EMPTY',
+  ],
+  ['eof', failedWith('UNEXPECTED_EOF'), 'HELPER_COMPACTION_EOF'],
+  ['provider timeout', failedWith('TIMEOUT'), 'HELPER_COMPACTION_TIMEOUT'],
+  ['other provider error', failedWith('INVALID_EVENT'), 'HELPER_COMPACTION_FAILED'],
+])(
+  'a manual compaction %s failure is recorded with a specific code',
+  async (_name, reply, code) => {
+    const f = await fixture({ fixed: false });
+    script(f, (request) =>
+      request.role === 'context' ? structuredClone(reply) : structuredClone(success)
+    );
+    expect((await f.run()).status).toBe('completed');
+    const { last } = await compactNow(f);
+    expect(last).toMatchObject({ status: 'failed', code });
+    expect(checkpointRows(f)).toEqual([]);
+    expect(readHelperContextState(f.store, f.conversation.id).uncompactedMessages).toBe(2);
+  }
+);
+
+test('manual compaction retries an overloaded summary provider, then reports what remains', async () => {
+  const delays: number[] = [];
+  const f = await fixture({
+    fixed: false,
+    wait: async (ms) => {
+      delays.push(ms);
+    },
   });
+  let contextCalls = 0;
+  script(f, (request) => {
+    if (request.role !== 'context') return structuredClone(success);
+    return ++contextCalls <= 2 ? failedWith('HTTP_529') : summarized('재시도 후 정리한 요약');
+  });
+  expect((await f.run()).status).toBe('completed');
+  expect((await compactNow(f)).last).toMatchObject({ status: 'completed' });
+  expect(contextCalls).toBe(3);
+  expect(delays).toEqual(HELPER_PROVIDER_RETRY_DELAYS_MS.slice(0, 2));
+
+  f.conversation = f.workspace.open({ kind: 'library', workId: 'overloaded' });
+  contextCalls = -10;
+  expect((await f.run()).status).toBe('completed');
+  expect((await compactNow(f)).last).toMatchObject({
+    status: 'failed',
+    code: 'HELPER_COMPACTION_OVERLOADED',
+  });
+  expect(contextCalls).toBe(-10 + HELPER_PROVIDER_RETRY_DELAYS_MS.length + 1);
+});
+
+test('manual compaction splits a request that exceeds the provider request size instead of failing', async () => {
+  const f = await fixture({ fixed: false });
+  seed(f, 'seed-long', 'Long helper conversation record. '.repeat(1_500));
+  const parts: number[] = [];
+  script(f, (request) => {
+    parts.push(Number(request.input.controls.part));
+    return summarized(`part ${parts.length}`);
+  });
+  const measure = mainRequest.measureProviderRequest;
+  vi.spyOn(mainRequest, 'measureProviderRequest').mockImplementation((request, target) => {
+    if (JSON.stringify(request.input.source).length > 30_000)
+      throw new transport.ProviderContractError('REQUEST_TOO_LARGE');
+    return measure(request, target);
+  });
+  const { last } = await compactNow(f);
+  expect(last).toMatchObject({ status: 'completed', compactedMessages: 1 });
+  expect(parts).toEqual([1, 2]);
+});
+
+test('manual compaction keeps running after the request returns, shows progress, and can be cancelled', async () => {
+  const f = await fixture({ fixed: false });
+  const app = Fastify();
+  helperRoutes(app, f.runtime);
+  let release!: () => void;
+  let started!: () => void;
+  const reached = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  script(f, async (request, _index) => {
+    if (request.role !== 'context') return structuredClone(success);
+    started();
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return summarized('요청이 끝난 뒤 완료한 요약');
+  });
+  expect((await f.run()).status).toBe('completed');
+  const view = async () =>
+    (await app.inject({ url: `/api/helper/conversations/${f.conversation.id}/view` })).json()
+      .context.compaction;
+
+  const response = await app.inject({
+    method: 'POST',
+    url: `/api/helper/conversations/${f.conversation.id}/compact`,
+    payload: {},
+  });
+  expect(response.json()).toMatchObject({ started: true, startedAt: expect.any(String) });
+  await reached;
+  expect(await view()).toMatchObject({ running: { startedAt: expect.any(String) }, last: null });
+  release();
+  await Promise.all(f.work);
+  expect(await view()).toMatchObject({ running: null, last: { status: 'completed' } });
+
+  f.conversation = f.workspace.open({ kind: 'library', workId: 'cancel' });
+  expect((await f.run()).status).toBe('completed');
+  const cancelled = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  await app.inject({
+    method: 'POST',
+    url: `/api/helper/conversations/${f.conversation.id}/compact`,
+    payload: {},
+  });
+  await cancelled;
+  const cancel = await app.inject({
+    method: 'DELETE',
+    url: `/api/helper/conversations/${f.conversation.id}/compact`,
+    payload: {},
+  });
+  expect(cancel.json()).toEqual({ cancelled: true });
+  release();
+  await Promise.all(f.work);
+  expect(await view()).toMatchObject({
+    running: null,
+    last: { status: 'failed', code: 'HELPER_COMPACTION_CANCELLED' },
+  });
+  expect(checkpointRows(f)).toEqual([]);
+  await app.close();
+});
+
+test('manual compaction sends only attachments the summary model accepts', async () => {
+  const f = await fixture({ fixed: false });
+  seed(f, 'seed-image', '첨부 이미지를 참고해 줘.');
+  const image = {
+    hash: 'a'.repeat(64),
+    mime: 'image/webp' as const,
+    name: 'reference.webp',
+    width: 1,
+    height: 1,
+    input: { hash: 'b'.repeat(64), width: 1, height: 1 },
+  };
+  vi.spyOn(helperAttachments, 'helperMessageAttachments').mockImplementation((_db, id) =>
+    id === 'seed-image' ? { images: [image] } : {}
+  );
+  const deepseek = f.store.product.connection({
+    title: 'Synthetic text-only context',
+    protocol: 'deepseek-chat-v1',
+    endpoint: 'https://api.deepseek.com',
+    apiKey: 'SYNTHETIC',
+    enabled: true,
+  });
+  const textOnly = f.store.product.model({
+    title: 'Synthetic text-only context',
+    connectionId: deepseek.id,
+    modelId: 'deepseek-v4-flash',
+    temperature: null,
+    maxOutputTokens: 8192,
+    inputTokenLimit: 65536,
+  });
+  const selected = modelWorkspace(f.store);
+  updateModelWorkspace(f.store, {
+    expectedRevision: selected.revision,
+    routes: selected.routes,
+    translationPolicy: selected.translationPolicy,
+    helperModel: { id: f.helperModel.id },
+    contextModel: { id: textOnly.id },
+  });
+  const sent: transport.ProviderRequest[] = [];
+  vi.spyOn(transport, 'executeProvider').mockImplementation(async (_connection, request) => {
+    encodeMainPreview(request, f.store.product.modelSnapshot(textOnly.id));
+    sent.push(structuredClone(request));
+    return summarized('첨부 없이 정리한 요약');
+  });
+  const { last } = await compactNow(f);
+  expect(last).toMatchObject({ status: 'completed' });
+  expect(sent).toHaveLength(1);
+  expect(sent[0].prompt).toBeUndefined();
+  expect(JSON.stringify(sent[0].input.source)).toContain('reference.webp');
 });
