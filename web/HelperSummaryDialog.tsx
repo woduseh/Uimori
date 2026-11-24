@@ -78,6 +78,7 @@ export function HelperSummaryDialog({
   }, [editing]);
 
   const blocked = busy || saving || !current?.editable;
+  const resetBlocked = busy || saving || current?.blockedReason === 'HELPER_COMPACTION_BUSY';
   const conflict = Boolean(
     draft && current && (draft.revision !== current.checkpointRevision || current.summary === null)
   );
@@ -211,6 +212,7 @@ export function HelperSummaryDialog({
             {draft && (
               <SummaryEditor
                 value={draft.text}
+                saved={current.summary ?? ''}
                 busy={saving}
                 conflict={conflict}
                 conflictMessage={t('helperSummary.conflict')}
@@ -251,7 +253,7 @@ export function HelperSummaryDialog({
                 <button
                   type="button"
                   className="secondary"
-                  disabled={blocked}
+                  disabled={resetBlocked}
                   onClick={() => setConfirmReset(true)}
                 >
                   {t('helperSummary.reset')}
@@ -273,7 +275,7 @@ export function HelperSummaryDialog({
         message={t('helperSummary.resetMessage')}
         action={t('helperSummary.resetAction')}
         busy={saving}
-        disabled={blocked}
+        disabled={resetBlocked}
         onCancel={() => setConfirmReset(false)}
         onConfirm={() => void reset()}
       />

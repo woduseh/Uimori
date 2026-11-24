@@ -341,6 +341,7 @@ for (const width of [412]) {
     const summaryCancel = summaryForm.getByRole('button', { name: '편집 취소', exact: true });
     await expectPrimary(summarySave, summaryCancel);
     await summaryCancel.click();
+    await page.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
     expect((await read<ContextDetail>(request, `/chats/${chat.id}/context`)).checkpoint).toBeNull();
     await panel.getByRole('button', { name: '직접 요약 작성', exact: true }).click();
     await expect(summary).toHaveValue('');

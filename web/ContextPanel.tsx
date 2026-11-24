@@ -299,6 +299,7 @@ export function ContextPanel({
             {mode === 'full' && draft && (
               <SummaryEditor
                 value={draft.text}
+                saved={summary ?? ''}
                 busy={busy}
                 conflict={conflict}
                 conflictMessage={t('settings.m305')}

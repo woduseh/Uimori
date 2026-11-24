@@ -552,9 +552,7 @@ export function useStory() {
           if (libraryRequest.current === request) {
             setLibrary(value);
             setLibraryError('');
-            forgetMissingBots(
-              new Set(value.contents.filter((item) => item.kind === 'bot').map((item) => item.id))
-            );
+            forgetMissingBots(new Set(value.contents.map((item) => item.id)));
           }
         } catch (caught) {
           if (libraryRequest.current === request) setLibraryError((caught as Error).message);
