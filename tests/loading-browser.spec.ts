@@ -118,6 +118,7 @@ test('LOADUI08 task history loads on demand and preserves off-page reading, insp
       response.url().endsWith(`/api/chats/${seeded.chat.id}/fork`) &&
       response.request().method() === 'POST'
   );
+  await task.getByRole('button', { name: '자세히 보기', exact: true }).click();
   await task.getByRole('button', { name: '새 채팅으로 분기', exact: true }).click();
   const forkedResponse = await forkResponse;
   expect(forkedResponse.ok()).toBeTruthy();

@@ -3,7 +3,7 @@ import {
   matchesSettingsSearch as matchesSearch,
 } from './SettingsSearch.js';
 import { LanguageSelect } from './LanguageSelect.js';
-import { t, useI18n, translateMessage } from './i18n.js';
+import { t, useI18n, translateMessage, formatNumber } from './i18n.js';
 import { PushSettings } from './PushSettings.js';
 import { AutoTranslationDefaults } from './AutoTranslationDefaults.js';
 import { ChatGenerationDefaults } from './ChatGenerationDefaults.js';
@@ -53,12 +53,23 @@ import {
 import { HelperIcon, BackIcon, LibraryIcon } from './ui-icons.js';
 import type { Job, ReaderRun } from '../core/types.js';
 import type { StoryState } from './useStory.js';
-import { api } from './api.js';
+import { api, labels } from './api.js';
 import { ConnectionEditor, type ProviderDetailRequest } from './ProviderManagement.js';
 import { backFromSettingsDetail, openSettingsDetail, SettingsDetail } from './SettingsDetail.js';
 import { ArchivePanel } from './ArchivePanel.js';
 import { AttemptInspector } from './AttemptInspector.js';
-import { RunTaskDetails } from './RunTaskDetails.js';
+import { RunCancelButton, RunNotices, RunTaskDetails } from './RunTaskDetails.js';
+import {
+  matchesTaskHistoryFilter,
+  TaskHistoryDuration,
+  TaskHistoryFilters,
+  TaskHistoryRow,
+  TaskHistorySummary,
+  TaskHistoryTime,
+  taskStatusTone,
+  type TaskHistoryFilter,
+} from './TaskHistory.js';
+import { formatUsd } from './pricing-display.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 
 export function TasksPanel({
@@ -81,6 +92,7 @@ export function TasksPanel({
     Pick<Job, 'id' | 'sourceRevision' | 'kind' | 'status' | 'error' | 'attempt'>[] | null
   >(null);
   const [jobsError, setJobsError] = useState('');
+  const [filter, setFilter] = useState<TaskHistoryFilter>('all');
   const [runList, setRunList] = useState<{
     chatId: string;
     runs: ReaderRun[] | null;
@@ -137,9 +149,23 @@ export function TasksPanel({
   if (!detail) return <p className="muted">{t('chatsettings.m0')}</p>;
   const listed = runList?.chatId === detail.chat.id ? runList : null;
   const allRuns = listed?.runs ?? null;
-  const runs = inspectedRun
+  const tone = (run: ReaderRun) => taskStatusTone(run.status);
+  const scoped = inspectedRun
     ? (allRuns?.filter((run) => run.id === inspectedRun) ?? [])
-    : (allRuns ?? []);
+    : [...(allRuns ?? [])].reverse();
+  const runs = inspectedRun
+    ? scoped
+    : scoped.filter((run) => matchesTaskHistoryFilter(tone(run), filter));
+  const counts = {
+    all: allRuns?.length ?? 0,
+    running: allRuns?.filter((run) => matchesTaskHistoryFilter(tone(run), 'running')).length ?? 0,
+    issue: allRuns?.filter((run) => matchesTaskHistoryFilter(tone(run), 'issue')).length ?? 0,
+  };
+  const times = new Map(
+    (detail.reader.activity ?? [])
+      .filter((item) => item.kind === 'main')
+      .map((item) => [item.id, item])
+  );
   const refresh = () => state.refresh(detail.chat.id);
   async function perform(key: string, operation: () => Promise<unknown>) {
     if (pending.includes(key)) return;
@@ -169,6 +195,12 @@ export function TasksPanel({
         </p>
       )}
       <ActivityDetails activities={detail.reader.activity ?? []} />
+      {allRuns && !inspectedRun && allRuns.length > 0 && (
+        <div className="task-history-toolbar">
+          <TaskHistoryFilters value={filter} counts={counts} onChange={setFilter} />
+          <TaskHistorySummary items={runTotals(allRuns)} />
+        </div>
+      )}
       <LoadingState
         presentation={allRuns ? 'inline' : 'placeholder'}
         loading={!listed || listed.loading}
@@ -178,66 +210,114 @@ export function TasksPanel({
         onRetry={retryRuns}
         retryLabel={t('chatsettings.m7')}
       />
-      {allRuns && !listed?.loading && !listed?.error && !runs.length && (
+      {allRuns && !listed?.loading && !listed?.error && !scoped.length && (
         <p className="muted">{inspectedRun ? t('chatsettings.m8') : t('chatsettings.m9')}</p>
       )}
-      <div className="runs">
-        {runs.map((run) => (
-          <article key={run.id} data-testid="run" data-run-id={run.id} className="run">
-            <p className="task-request">{run.request}</p>
-            <RunTaskDetails
-              run={run}
-              jobs={jobs ?? []}
-              revision={detail.reader.cursor}
-              refresh={refresh}
-              onError={state.setError}
-              initiallyInspect={!!inspectedRun}
-              presentation="list"
-            >
-              <div className="form-actions">
-                {onAskHelper &&
-                  (run.error || ['failed', 'interrupted', 'partial'].includes(run.status)) && (
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() => onAskHelper('run', run.id)}
-                    >
-                      <HelperIcon size={18} aria-hidden="true" />
-                      {t('helpers.analyzeTask')}
-                    </button>
+      {scoped.length > 0 && !runs.length && (
+        <div className="task-history-empty" role="status">
+          <p className="muted">{t('chatsettings.taskHistoryNoMatch')}</p>
+          <button type="button" className="secondary" onClick={() => setFilter('all')}>
+            {t('chatsettings.taskHistoryShowAll')}
+          </button>
+        </div>
+      )}
+      {runs.length > 0 && (
+        <div className="task-history-list">
+          {runs.map((run) => {
+            const time = times.get(run.id);
+            const tokens =
+              run.usage.inputTokens != null && run.usage.outputTokens != null
+                ? t('visualpanels.vPluralOneOther', {
+                    v0: run.usage.inputTokens + run.usage.outputTokens,
+                  })
+                : null;
+            const cost = run.estimatedCost?.usd != null ? formatUsd(run.estimatedCost.usd) : null;
+            const failed = !!run.error || ['failed', 'interrupted', 'partial'].includes(run.status);
+            return (
+              <TaskHistoryRow
+                key={run.id}
+                tone={tone(run)}
+                statusLabel={labels[run.status] ?? run.status}
+                request={run.request}
+                initiallyExpanded={run.id === inspectedRun}
+                dataProps={{ 'data-testid': 'run', 'data-run-id': run.id }}
+                meta={[
+                  { key: 'model', value: run.modelTitle },
+                  {
+                    key: 'duration',
+                    value: (
+                      <TaskHistoryDuration
+                        startedAt={time?.startedAt || run.createdAt}
+                        finishedAt={
+                          time ? time.finishedAt : tone(run) === 'running' ? null : run.updatedAt
+                        }
+                      />
+                    ),
+                  },
+                  { key: 'tokens', value: tokens },
+                  { key: 'cost', value: cost },
+                  { key: 'time', value: <TaskHistoryTime at={run.createdAt} /> },
+                ]}
+                notice={<RunNotices run={run} readyContext={false} />}
+                actions={
+                  <>
+                    <RunCancelButton run={run} refresh={refresh} onError={state.setError} />
+                    {onAskHelper && failed && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => onAskHelper('run', run.id)}
+                      >
+                        <HelperIcon size={18} aria-hidden="true" />
+                        {t('helpers.analyzeTask')}
+                      </button>
+                    )}
+                    {run.sourceRevision && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => {
+                          state.chooseSource(run.sourceRevision!);
+                          onClose();
+                        }}
+                      >
+                        <LibraryIcon size={18} aria-hidden="true" />
+                        {t('chatsettings.m11')}
+                      </button>
+                    )}
+                  </>
+                }
+              >
+                <RunTaskDetails
+                  run={run}
+                  jobs={jobs ?? []}
+                  revision={detail.reader.cursor}
+                  refresh={refresh}
+                  onError={state.setError}
+                  presentation="sections"
+                >
+                  {run.sourceRevision && (
+                    <div className="form-actions">
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={pending.includes(run.id)}
+                        onClick={() => {
+                          void perform(run.id, async () => {
+                            await state.fork(run.sourceRevision!);
+                          });
+                        }}
+                      >
+                        {t('chatsettings.m12')}
+                      </button>
+                    </div>
                   )}
-                {run.sourceRevision && (
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => {
-                      state.chooseSource(run.sourceRevision!);
-                      onClose();
-                    }}
-                  >
-                    <LibraryIcon size={18} aria-hidden="true" />
-                    {t('chatsettings.m11')}
-                  </button>
-                )}
-                {run.sourceRevision && (
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={pending.includes(run.id)}
-                    onClick={() => {
-                      void perform(run.id, async () => {
-                        await state.fork(run.sourceRevision!);
-                      });
-                    }}
-                  >
-                    {t('chatsettings.m12')}
-                  </button>
-                )}
-              </div>
-            </RunTaskDetails>
-          </article>
-        ))}
-      </div>
+                </RunTaskDetails>
+              </TaskHistoryRow>
+            );
+          })}
+        </div>
+      )}
       <LoadingState
         presentation="inline"
         loading={!jobs && !jobsError}
@@ -255,6 +335,42 @@ export function TasksPanel({
       )}
     </section>
   );
+}
+
+type RunTotal = { amount: number; partial: boolean; empty: boolean };
+
+function runTotals(runs: ReaderRun[]) {
+  const sum = (values: (number | null | undefined)[]): RunTotal => {
+    const known = values.filter((value): value is number => value != null);
+    return {
+      amount: known.reduce((total, value) => total + value, 0),
+      partial: known.length < values.length,
+      empty: !known.length,
+    };
+  };
+  const shown = (value: RunTotal, format: (amount: number) => string) =>
+    value.empty
+      ? t('visualpanels.unknown')
+      : value.partial
+        ? t('chatsettings.taskHistoryAtLeast', { value: format(value.amount) })
+        : format(value.amount);
+  const estimates = runs.flatMap((run) => (run.estimatedCost ? [run.estimatedCost] : []));
+  const cost: RunTotal = {
+    amount: estimates.reduce((total, item) => total + (item.usd ?? item.subtotalUsd), 0),
+    partial: estimates.some((item) => item.usd === null),
+    empty: !estimates.length || estimates.every((item) => item.usd === null && !item.subtotalUsd),
+  };
+  return [
+    { label: t('chatsettings.taskHistoryCount'), value: formatNumber(runs.length) },
+    {
+      label: t('chatsettings.taskHistoryTokens'),
+      value: t('chatsettings.taskHistoryTokenValue', {
+        input: shown(sum(runs.map((run) => run.usage.inputTokens)), formatNumber),
+        output: shown(sum(runs.map((run) => run.usage.outputTokens)), formatNumber),
+      }),
+    },
+    { label: t('chatsettings.taskHistoryCost'), value: shown(cost, formatUsd) },
+  ];
 }
 
 const appSaveSections = [

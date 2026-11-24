@@ -73,23 +73,3 @@
     margin-inline: 12px;
   }
 }
-
-.run-diagnostics-compact {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 8px;
-  margin-top: 8px;
-}
-.run-diagnostics-compact > .scene-usage,
-.run-diagnostics-compact > .inspector {
-  margin-top: 0;
-  min-width: 0;
-}
-.run-diagnostics-compact > .scene-usage[open],
-.run-diagnostics-compact > .inspector[open] {
-  grid-column: 1 / -1;
-}
-.run-diagnostics-compact > .scene-usage > summary,
-.run-diagnostics-compact > .inspector > summary {
-  padding: 10px 12px;
-}

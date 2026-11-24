@@ -2087,4 +2087,58 @@ export const messages = {
     ja: 'NovelAI除外プロンプトの指示',
     zh: 'NovelAI排除提示词指引',
   },
+  'visualpanels.hideRawRequestAndResponse': {
+    ko: '요청과 응답 원문 숨기기',
+    en: 'Hide raw request and response',
+    ja: 'リクエストと応答の原文を隠す',
+    zh: '隐藏请求和响应原文',
+  },
+  'visualpanels.attemptList': {
+    ko: '호출 목록',
+    en: 'Calls',
+    ja: '呼び出し一覧',
+    zh: '调用列表',
+  },
+  'visualpanels.attemptModel': {
+    ko: '모델',
+    en: 'Model',
+    ja: 'モデル',
+    zh: '模型',
+  },
+  'visualpanels.attemptStatus': {
+    ko: '상태',
+    en: 'Status',
+    ja: '状態',
+    zh: '状态',
+  },
+  'visualpanels.attemptDetail': {
+    ko: '호출 상세',
+    en: 'Call details',
+    ja: '呼び出しの詳細',
+    zh: '调用详情',
+  },
+  'visualpanels.attemptDetailFor': {
+    ko: '{role} {model} 호출 상세',
+    en: '{role} {model} call details',
+    ja: '{role} {model} の呼び出し詳細',
+    zh: '{role} {model} 调用详情',
+  },
+  'visualpanels.attemptDetailShow': {
+    ko: '자세히',
+    en: 'Details',
+    ja: '詳細',
+    zh: '详情',
+  },
+  'visualpanels.attemptDetailHide': {
+    ko: '접기',
+    en: 'Hide',
+    ja: '閉じる',
+    zh: '收起',
+  },
+  'visualpanels.noAttemptsForTask': {
+    ko: '이 작업의 호출 기록이 없어요.',
+    en: 'No calls recorded for this task.',
+    ja: 'このタスクの呼び出し記録はありません。',
+    zh: '此任务没有调用记录。',
+  },
 };

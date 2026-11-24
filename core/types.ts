@@ -261,6 +261,8 @@ export type ChatDetail = {
 
 export type RunPhase = 'context' | 'lore' | 'story-guide' | 'writing';
 export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
+  createdAt: string;
+  updatedAt: string;
   phase?: RunPhase;
   sceneUsage?: import('./scene-usage.js').SceneUsageReceipt;
   canRejudge?: boolean;

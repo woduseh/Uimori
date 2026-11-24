@@ -330,7 +330,9 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await page.route(`**/api/chats/${existing.id}/reader?*`, async (route) => {
       const response = await route.fetch();
       const body = (await response.json()) as ReaderDetail;
-      body.runs = [{ ...reserved[0], status: 'refused', error: 'MAIN_RESPONSE_REFUSED' }];
+      body.runs = [
+        { ...body.runs[0], ...reserved[0], status: 'refused', error: 'MAIN_RESPONSE_REFUSED' },
+      ];
       await route.fulfill({ response, json: body });
     });
     await page.goto(`/?chat=${existing.id}`);

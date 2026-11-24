@@ -85,12 +85,6 @@
 .attempt-pricing p {
   margin: 0;
 }
-.attempt-token-summary {
-  display: block;
-  margin-top: 4px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
 .attempt-usage {
   padding-block: 12px;
   border-bottom: var(--hairline) solid var(--line);
@@ -106,8 +100,32 @@
   margin: 0;
   color: var(--text);
 }
-.attempt-raw > summary {
-  padding-block: 8px;
+.attempt-list td,
+.attempt-list th {
+  font-variant-numeric: tabular-nums;
+}
+.attempt-list td:last-child {
+  text-align: end;
+}
+.attempt-list button {
+  font-size: var(--font-small);
+}
+.attempt-detail {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: var(--hairline) solid var(--line);
+}
+.attempt-detail[hidden] {
+  display: none;
+}
+.attempt-raw {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.attempt-raw > p,
+.attempt-raw > .form-actions {
+  margin: 0;
 }
 @media (max-width: 480px) {
   .model-pricing-input-grid {

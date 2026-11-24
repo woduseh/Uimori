@@ -185,7 +185,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
   );
   const runs = (
     store.db
-      .prepare(`SELECT id,chat_id AS chatId,parent_revision AS parentRevision,status,request,source_revision AS sourceRevision,error,usage,
+      .prepare(`SELECT id,chat_id AS chatId,parent_revision AS parentRevision,status,request,source_revision AS sourceRevision,error,usage,created_at AS createdAt,updated_at AS updatedAt,
     CASE WHEN status IN ('queued','running') THEN '' ELSE partial_text END AS partialText,
     (((status='failed' AND substr(error,1,4)='JEV_')
       OR (status='interrupted' AND json_extract(snapshot,'$.mainJudgmentPending')=1)) AND source_revision IS NULL

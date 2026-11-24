@@ -181,7 +181,7 @@ test('TURNUI01 independent response panels, lazy inspector and reload persistenc
 });
 
 for (const width of [MOBILE_WIDTH]) {
-  test(`TURNUI05 completed task history keeps adjacent lazy diagnostics and visible recovery states at ${width}px`, async ({
+  test(`TURNUI05 task history rows stay compact, open one level of sections and filter by status at ${width}px`, async ({
     page,
     request,
   }, info) => {
@@ -249,34 +249,44 @@ for (const width of [MOBILE_WIDTH]) {
     await navigationAction(page, '작업 현황');
     const panel = page.getByRole('dialog', { name: '작업 현황', exact: true });
     const task = panel.locator(`[data-testid="run"][data-run-id="${run.id}"]`);
-    const diagnostics = task.locator('.run-input-details');
-    const usage = task.getByTestId('scene-usage');
-    const execution = diagnostics.locator(':scope > .inspector');
-    const usageSummary = usage.locator(':scope > summary');
-    const executionSummary = execution.locator(':scope > summary');
+    const toggle = task.getByRole('button', { name: '자세히 보기', exact: true });
+    const sections = task.locator('.task-history-detail');
     await expect(task.locator('.task-request')).toHaveText(run.request);
-    await expect(task.locator('.task-heading')).toContainText('원문 완료');
-    await expect(task.locator('.task-heading')).toContainText('호출 당시 작가 모델');
+    await expect(task.locator('.task-request')).toHaveAttribute('data-clamped', '');
+    await expect(task.locator('.task-status-badge')).toHaveText('완료');
+    await expect(task.locator('.task-status-badge')).toHaveAttribute('data-tone', 'done');
+    await expect(task.locator('.task-history-meta')).toContainText('호출 당시 작가 모델');
     await expect(task.getByRole('button', { name: '원고 읽기', exact: true })).toBeVisible();
-    await expect(task.getByRole('button', { name: '새 채팅으로 분기', exact: true })).toBeVisible();
-    await expect(diagnostics.locator(':scope > details')).toHaveCount(2);
-    await expect(usageSummary).toHaveText('이번 생성');
-    await expect(executionSummary).toHaveText('실행 확인');
-    await expect(usage).not.toHaveAttribute('open');
-    await expect(execution).not.toHaveAttribute('open');
-    await expect(task.getByText(/요청 1,234, 응답 87 토큰/)).not.toBeVisible();
-    await expect(task.getByTestId('context-summary')).not.toBeVisible();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(sections).toBeHidden();
+    await expect(task.getByRole('button', { name: '새 채팅으로 분기', exact: true })).toHaveCount(
+      0
+    );
+    await expect(task.getByTestId('scene-usage')).toHaveCount(0);
+    await expect(task.getByTestId('context-summary')).toHaveCount(0);
     expect(sceneReads).toEqual([]);
     expect(state.runReads).toEqual([]);
-    const left = await usageSummary.boundingBox();
-    const right = await executionSummary.boundingBox();
-    expect(left).not.toBeNull();
-    expect(right).not.toBeNull();
-    expect(Math.abs(left!.y - right!.y)).toBeLessThanOrEqual(2);
-    expect(left!.x + left!.width).toBeLessThanOrEqual(right!.x + 1);
     await page.screenshot({ path: info.outputPath(`task-history-compact-${width}.png`) });
 
-    await usageSummary.click();
+    await toggle.click();
+    const collapse = task.getByRole('button', { name: '접기', exact: true });
+    await expect(collapse).toHaveAttribute('aria-expanded', 'true');
+    await expect(task.locator('.task-request')).not.toHaveAttribute('data-clamped');
+    await expect(sections.locator('.task-history-section-head > h3')).toHaveText([
+      '결과',
+      '단계',
+      '호출과 비용',
+      '원본 기록',
+    ]);
+    await expect(sections.locator('details details')).toHaveCount(0);
+    await expect(task.getByRole('button', { name: '새 채팅으로 분기', exact: true })).toBeVisible();
+    await expect(sections.getByTestId('context-summary')).toHaveText(
+      '앞선 원문 3개 요약, 입력 약 1,200 / 65,536 토큰, 요약 1회'
+    );
+    const usage = sections.getByTestId('scene-usage');
+    await expect(usage).not.toHaveAttribute('open');
+    expect(sceneReads).toEqual([]);
+    await usage.locator(':scope > summary').click();
     await expect(usage.getByText(/요청 1,234, 응답 87 토큰/)).toBeVisible();
     await expect(usage.getByText(/컨텍스트 사용량 1.9%/)).toBeVisible();
     await expect(
@@ -284,36 +294,35 @@ for (const width of [MOBILE_WIDTH]) {
     ).toBeVisible();
     await expect(usage.getByText('캐시 읽기 123 / 쓰기 45 토큰', { exact: true })).toBeVisible();
     expect(sceneReads).toHaveLength(1);
-    expect(state.runReads).toEqual([]);
-    const groupBounds = await diagnostics.boundingBox();
-    const usageBounds = await usage.boundingBox();
-    expect(usageBounds!.width).toBeCloseTo(groupBounds!.width, 0);
-    await usageSummary.click();
-    await executionSummary.click();
-    await expect(execution.locator('pre').last()).toContainText('snapshot');
-    await expect(execution.getByTestId('context-summary')).toHaveText(
-      '앞선 원문 3개 요약, 입력 약 1,200 / 65,536 토큰, 요약 1회'
-    );
+    await expect(sections.locator('.task-history-raw')).toHaveCount(0);
+    await sections.getByRole('button', { name: '원본 보기', exact: true }).click();
+    await expect(sections.locator('.task-history-raw')).toContainText('snapshot');
+    await expect(sections.getByRole('button', { name: '복사', exact: true })).toBeVisible();
     expect(state.runReads).toHaveLength(1);
-    const executionBounds = await execution.boundingBox();
-    expect(executionBounds!.width).toBeCloseTo(groupBounds!.width, 0);
-    await expect(task.locator('.task-request')).toHaveText(run.request);
-    await expect(task.getByRole('button', { name: '원고 읽기', exact: true })).toBeVisible();
-    await expect(task.getByRole('button', { name: '새 채팅으로 분기', exact: true })).toBeVisible();
-    await executionSummary.click();
+    await page.screenshot({ path: info.outputPath(`task-history-expanded-${width}.png`) });
+    await collapse.click();
+    await expect(sections).toBeHidden();
 
-    for (const status of ['failed', 'partial', 'cancelled', 'refused', 'running']) {
-      const other = panel.locator(`[data-testid="run"][data-run-id="${run.id}-${status}"]`);
-      await expect(other.getByTestId('scene-usage').locator(':scope > summary')).toContainText(
-        /이번 생성\s*요청 1,234, 응답 87 토큰/
-      );
-      await expect(other.locator('.run-diagnostics-compact')).toHaveCount(0);
+    const tones = {
+      failed: ['실패', 'issue'],
+      partial: ['부분 결과', 'issue'],
+      cancelled: ['취소됨', 'cancelled'],
+      refused: ['프로바이더 거절', 'issue'],
+      running: ['진행 중', 'running'],
+    } as const;
+    for (const [status, [label, tone]] of Object.entries(tones)) {
+      const badge = panel
+        .locator(`[data-testid="run"][data-run-id="${run.id}-${status}"]`)
+        .locator('.task-status-badge');
+      await expect(badge).toHaveText(label);
+      await expect(badge).toHaveAttribute('data-tone', tone);
     }
     await expect(panel.getByText('SYNTHETIC_TASK_HISTORY_FAILURE', { exact: true })).toBeVisible();
-    const partial = panel.locator(`[data-run-id="${run.id}-partial"] .partial-result`);
-    await partial.locator(':scope > summary').click();
+    const partialRow = panel.locator(`[data-run-id="${run.id}-partial"]`);
+    await partialRow.getByRole('button', { name: '자세히 보기', exact: true }).click();
+    const partial = partialRow.locator('.partial-result');
     await expect(partial.getByText('보존한 미완성 원문', { exact: true })).toBeVisible();
-    await expect(partial.getByRole('button', { name: '출력 복사', exact: true })).toBeVisible();
+    await expect(partialRow.getByRole('button', { name: '출력 복사', exact: true })).toBeVisible();
     await expect(panel.getByRole('button', { name: '원문 생성 취소', exact: true })).toBeVisible();
     const pending = panel.locator(`[data-run-id="${run.id}-context-pending"]`);
     await expect(pending.getByTestId('context-summary')).toHaveText('컨텍스트 확인 중');
@@ -323,6 +332,24 @@ for (const width of [MOBILE_WIDTH]) {
       'SYNTHETIC_CONTEXT_HISTORY_FAILURE'
     );
     await expect(failed.getByTestId('context-summary')).toBeVisible();
+
+    const filters = panel.getByRole('group', { name: '작업 상태로 거르기', exact: true });
+    await expect(filters.getByRole('button')).toHaveText(['전체 8', '진행 중 1', '오류 3']);
+    await filters.getByRole('button', { name: /^오류/ }).click();
+    await expect(filters.getByRole('button', { name: /^오류/ })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await expect(panel.getByTestId('run')).toHaveCount(3);
+    await filters.getByRole('button', { name: /^진행 중/ }).click();
+    await expect(panel.getByTestId('run')).toHaveCount(1);
+    await filters.getByRole('button', { name: /^전체/ }).click();
+    await expect(panel.getByTestId('run')).toHaveCount(8);
+    await expect(panel.locator('.task-history-summary dt')).toHaveText([
+      '작업',
+      '토큰',
+      '추정 비용',
+    ]);
     expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
       true
     );
@@ -330,7 +357,7 @@ for (const width of [MOBILE_WIDTH]) {
       true
     );
     expect(sceneReads).toHaveLength(1);
-    expect(state.runReads).toHaveLength(1);
+    expect(state.runReads).toHaveLength(2);
     expect(state.writes).toEqual([]);
     expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
   });

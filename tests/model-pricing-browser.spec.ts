@@ -283,12 +283,16 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
   await expect(usage).toContainText('확인된 금액 합계 $0.004995, 미확인 항목 1회 포함');
   await expect(
     usage
+      .getByRole('table')
+      .first()
       .getByRole('row')
       .filter({ has: page.getByRole('rowheader', { name: '본문', exact: true }) })
   ).toContainText('미확인');
-  await usage
-    .locator('summary')
-    .filter({ hasText: /본문\s*priced-fixture\s*완료/ })
+  const attemptRow = (model: RegExp) =>
+    usage.getByRole('table', { name: '호출 목록' }).getByRole('row').filter({ hasText: model });
+  await expect(usage.locator('details details')).toHaveCount(0);
+  await attemptRow(/본문\s*priced-fixture/)
+    .getByRole('button', { name: '자세히', exact: true })
     .click();
   const tokenUsage = usage.getByRole('definition');
   await expect(tokenUsage.filter({ hasText: /^1,500 토큰$/ })).toBeVisible();
@@ -314,16 +318,12 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
   await expect(lore.getByText('프롬프트에서 가공한 로어', { exact: true })).toBeHidden();
   await lore.getByText('포함 여부 미확인: 1건', { exact: true }).click();
   await expect(lore.getByText('프롬프트에서 가공한 로어', { exact: true })).toBeVisible();
-  const raw = usage
-    .locator('details')
-    .filter({ has: page.getByText('요청과 응답 원문 보기', { exact: true }) })
-    .last();
-  await expect(raw).not.toHaveAttribute('open');
+  const raw = usage.locator('.attempt-raw');
   await expect(raw.locator('pre')).toHaveCount(0);
-  await raw.getByText('요청과 응답 원문 보기', { exact: true }).click();
+  await raw.getByRole('button', { name: '요청과 응답 원문 보기', exact: true }).click();
   await expect(raw.locator('pre')).toContainText('"inputTokens": 1500');
   await expect(raw.locator('pre')).toContainText('"id": "pricecost-known"');
-  await raw.getByText('요청과 응답 원문 보기', { exact: true }).click();
+  await raw.getByRole('button', { name: '요청과 응답 원문 숨기기', exact: true }).click();
   await expect(raw.locator('pre')).toHaveCount(0);
   const pricing = usage.getByRole('region', { name: '호출 추정 비용' });
   await expect(pricing).toContainText('프로바이더 보고 비용: $0.125');
@@ -335,9 +335,8 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
   await expect(usage).toContainText('프로바이더 보고 캐시 토큰, 읽기 400 / 쓰기 100');
   await expect(pricing).toContainText('호출에 고정된 등급: standard');
   await expect(pricing).toContainText('직접 입력 요금');
-  await usage
-    .locator('summary')
-    .filter({ hasText: /본문\s*unpriced-fixture\s*완료/ })
+  await attemptRow(/본문\s*unpriced-fixture/)
+    .getByRole('button', { name: '자세히', exact: true })
     .click();
   const unavailable = usage.getByRole('region', { name: '호출 추정 비용' }).last();
   const unknownTokens = usage.getByLabel('호출 토큰 사용량').last();

@@ -354,8 +354,11 @@ test('RACOM08 cancelled request opens its specific task record and lazily recove
   await expect(dialog.getByTestId('run')).toHaveCount(1);
   const card = dialog.locator(`[data-testid="run"][data-run-id="${run.id}"]`);
   await expect(card.locator('.task-request')).toHaveText(run.request);
-  await expect(card.locator('.run-task-details > .error')).toHaveCount(0);
-  await expect(card.getByText('실행 확인', { exact: true }).locator('..')).toHaveAttribute('open');
+  await expect(card.locator('.task-history-notice .error')).toHaveCount(0);
+  await expect(card.getByRole('button', { name: '접기', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'true'
+  );
   const partial = card.locator('.partial-response');
   await expect(partial).not.toHaveAttribute('open');
   expect(streamReads).toBe(0);
@@ -564,11 +567,12 @@ test('RACOM05 earlier scenes keep bookmark and menu visible while copy, editing 
     await expect(original).toBeFocused();
     await expect(original).toHaveValue(source.text);
     await original.fill('취소할 원문 수정');
+    const discard = page.getByRole('alertdialog', { name: '편집 취소', exact: true });
     await page.keyboard.press('Escape');
-    await page
-      .getByRole('alertdialog', { name: '편집 취소', exact: true })
-      .getByRole('button', { name: '초안 버리고 닫기', exact: true })
-      .click();
+    await discard.getByRole('button', { name: '취소', exact: true }).click();
+    await expect(original).toHaveValue('취소할 원문 수정');
+    await scene.getByRole('button', { name: '편집 취소', exact: true }).click();
+    await discard.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
     await expect(original).toHaveCount(0);
     await expect(opener).toBeFocused();
     await openSourceActions(scene);

@@ -238,22 +238,6 @@
   margin: 12px 0;
   color: var(--muted);
 }
-.runs {
-  display: grid;
-  gap: 20px;
-}
-.run {
-  border-top: var(--hairline) solid var(--line);
-  padding-top: 20px;
-  min-width: 0;
-  font-size: var(--font-body);
-}
-.run .form-actions {
-  margin-bottom: 12px;
-}
-.run button {
-  font-size: var(--font-small);
-}
 .derived {
   display: grid;
   gap: 14px;

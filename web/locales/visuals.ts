@@ -1957,4 +1957,58 @@ export const messages = {
     ja: 'NovelAIの応答に使用できる画像がありません。',
     zh: 'NovelAI 响应中没有可用的图像。',
   },
+  'visuals.historyResult': {
+    ko: '결과',
+    en: 'Result',
+    ja: '結果',
+    zh: '结果',
+  },
+  'visuals.historySteps': {
+    ko: '단계',
+    en: 'Steps',
+    ja: 'ステップ',
+    zh: '步骤',
+  },
+  'visuals.historyCalls': {
+    ko: '호출과 비용',
+    en: 'Calls and cost',
+    ja: '呼び出しとコスト',
+    zh: '调用与费用',
+  },
+  'visuals.historyRaw': {
+    ko: '원본 기록',
+    en: 'Raw record',
+    ja: '元の記録',
+    zh: '原始记录',
+  },
+  'visuals.historyRawShow': {
+    ko: '원본 보기',
+    en: 'Show raw record',
+    ja: '元の記録を表示',
+    zh: '显示原始记录',
+  },
+  'visuals.historyRawHide': {
+    ko: '원본 숨기기',
+    en: 'Hide raw record',
+    ja: '元の記録を隠す',
+    zh: '隐藏原始记录',
+  },
+  'visuals.historyCopy': {
+    ko: '복사',
+    en: 'Copy',
+    ja: 'コピー',
+    zh: '复制',
+  },
+  'visuals.historyCopied': {
+    ko: '복사됨',
+    en: 'Copied',
+    ja: 'コピー済み',
+    zh: '已复制',
+  },
+  'visuals.historyCopyFailed': {
+    ko: '복사하지 못했어요.',
+    en: 'Could not copy.',
+    ja: 'コピーできませんでした。',
+    zh: '无法复制。',
+  },
 };

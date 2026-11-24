@@ -1,13 +1,14 @@
 import { t, useI18n, translateMessage, formatNumber, formatDate } from './i18n.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { labels } from './api.js';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { Attempt } from '../core/product.js';
 import type { Run } from '../core/types.js';
 import type { RequestLore } from '../core/request-lore.js';
 import { providerCacheUsage } from '../core/provider-cache-usage.js';
 import { formatUsd, pricingRateLabels, pricingNote } from './pricing-display.js';
 import { RequestLoreEntries } from './RequestLoreEntries.js';
+import { CopyTextButton } from './TaskHistory.js';
 import './model-pricing.css';
 import './lore-context.css';
 
@@ -25,34 +26,52 @@ const roleLabels: Record<string, string> = {
 type AttemptSummary = Omit<Attempt, 'request' | 'response' | 'rawUsage'>;
 const tokens = (value: number | null) =>
   value === null ? t('visualpanels.unknown') : t('visualpanels.vPluralOneOther', { v0: value });
+function attemptRawText(attempt: Attempt) {
+  return JSON.stringify(
+    {
+      id: attempt.id,
+      role: attempt.role,
+      request: attempt.request,
+      response: attempt.response,
+      usage: {
+        inputTokens: attempt.inputTokens,
+        outputTokens: attempt.outputTokens,
+        costUsd: attempt.costUsd,
+        raw: attempt.rawUsage,
+      },
+      error: attempt.error,
+    },
+    null,
+    2
+  );
+}
 function AttemptRaw({ attempt }: { attempt: Attempt }) {
   useI18n();
   const [open, setOpen] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   return (
-    <details className="attempt-raw" onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary>{t('visualpanels.viewRawRequestAndResponse')}</summary>
-      {open && (
-        <pre>
-          {JSON.stringify(
-            {
-              id: attempt.id,
-              role: attempt.role,
-              request: attempt.request,
-              response: attempt.response,
-              usage: {
-                inputTokens: attempt.inputTokens,
-                outputTokens: attempt.outputTokens,
-                costUsd: attempt.costUsd,
-                raw: attempt.rawUsage,
-              },
-              error: attempt.error,
-            },
-            null,
-            2
-          )}
-        </pre>
-      )}
-    </details>
+    <div className="attempt-raw">
+      <div className="form-actions">
+        <button
+          type="button"
+          className="secondary"
+          aria-expanded={open}
+          onClick={() => setOpen((old) => !old)}
+        >
+          {open
+            ? t('visualpanels.hideRawRequestAndResponse')
+            : t('visualpanels.viewRawRequestAndResponse')}
+        </button>
+        <CopyTextButton
+          text={() => attemptRawText(attempt)}
+          label={t('visuals.historyCopy')}
+          copiedLabel={t('visuals.historyCopied')}
+          onFailure={() => setCopyFailed(true)}
+        />
+      </div>
+      {copyFailed && <p className="error">{t('visuals.historyCopyFailed')}</p>}
+      {open && <pre>{attemptRawText(attempt)}</pre>}
+    </div>
   );
 }
 const total = (attempts: AttemptSummary[], field: 'inputTokens' | 'outputTokens' | 'costUsd') =>
@@ -356,60 +375,144 @@ function AttemptTable({
           v3: runs.filter((run) => run.status === 'partial').length,
         })}
       </p>
-      {attempts.map((summary) => (
-        <LazyDiagnostics<Attempt>
-          key={summary.id}
-          path={`/attempts/${summary.id}`}
-          revision={revision}
-          title={
-            <>
-              <span className="ui-meta-row">
-                <span>{translateMessage(roleLabels[summary.role])}</span>
-                <span>{summary.modelId}</span>
-                <span>{labels[summary.status] ?? summary.status}</span>
-              </span>
-              <small className="attempt-token-summary">
-                {t('visualpanels.inputOutput', {
-                  v0: tokens(summary.inputTokens),
-                  v1: tokens(summary.outputTokens),
-                })}
-              </small>
-            </>
-          }
-        >
-          {(attempt) => (
-            <>
-              <dl
-                className="model-pricing-rates attempt-usage"
-                aria-label={t('visualpanels.callTokenUsage')}
-              >
-                <div>
-                  <dt>{t('visualpanels.inputTokens')}</dt>
-                  <dd>{tokens(attempt.inputTokens)}</dd>
-                </div>
-                <div>
-                  <dt>{t('visualpanels.outputTokens')}</dt>
-                  <dd>{tokens(attempt.outputTokens)}</dd>
-                </div>
-              </dl>
-              <p>
-                {t('visualpanels.priceRevision', {
-                  v0: attempt.runId
-                    ? `Run ${attempt.runId}`
-                    : `Job ${attempt.storyJobId ?? attempt.jobId}`,
-                  v1: attempt.priceRevision ?? t('visualpanels.unknown'),
-                })}
-              </p>
-              <CacheUsage attempt={attempt} />
-              <RequestLoreView
-                lore={(attempt.request as { requestLore?: RequestLore } | null)?.requestLore}
-              />
-              <AttemptPricing attempt={attempt} />
-              <AttemptRaw attempt={attempt} />
-            </>
-          )}
-        </LazyDiagnostics>
-      ))}
+      <AttemptList attempts={attempts} revision={revision} />
     </div>
+  );
+}
+
+export function RunAttempts({
+  chatId,
+  runId,
+  revision,
+}: {
+  chatId: string;
+  runId: string;
+  revision: number;
+}) {
+  useI18n();
+  return (
+    <LazyDiagnostics<AttemptSummary[]>
+      path={`/chats/${chatId}/attempts`}
+      revision={revision}
+      disclosure={false}
+      title={t('visualpanels.attemptList')}
+    >
+      {(attempts) => {
+        const owned = attempts.filter((attempt) => attempt.runId === runId);
+        return owned.length ? (
+          <AttemptList attempts={owned} revision={revision} />
+        ) : (
+          <p className="muted">{t('visualpanels.noAttemptsForTask')}</p>
+        );
+      }}
+    </LazyDiagnostics>
+  );
+}
+
+function AttemptList({ attempts, revision }: { attempts: AttemptSummary[]; revision: number }) {
+  useI18n();
+  const id = useId();
+  const [selected, setSelected] = useState<string | null>(null);
+  const current = attempts.find((attempt) => attempt.id === selected) ?? null;
+  return (
+    <div className="attempt-list">
+      <div className="table-scroll">
+        <table aria-label={t('visualpanels.attemptList')}>
+          <thead>
+            <tr>
+              <th>{t('visualpanels.role')}</th>
+              <th>{t('visualpanels.attemptModel')}</th>
+              <th>{t('visualpanels.attemptStatus')}</th>
+              <th>{t('visualpanels.inputTokens')}</th>
+              <th>{t('visualpanels.outputTokens')}</th>
+              <th>{t('visualpanels.estimatedCost2')}</th>
+              <th>
+                <span className="sr-only">{t('visualpanels.attemptDetail')}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {attempts.map((summary) => {
+              const open = summary.id === current?.id;
+              return (
+                <tr key={summary.id} data-attempt-id={summary.id}>
+                  <th>{translateMessage(roleLabels[summary.role] ?? summary.role)}</th>
+                  <td>{summary.modelId}</td>
+                  <td>{labels[summary.status] ?? summary.status}</td>
+                  <td>{tokens(summary.inputTokens)}</td>
+                  <td>{tokens(summary.outputTokens)}</td>
+                  <td>{estimatedTotal([summary])}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="secondary"
+                      aria-expanded={open}
+                      aria-controls={`${id}-detail`}
+                      onClick={() => setSelected(open ? null : summary.id)}
+                    >
+                      {open
+                        ? t('visualpanels.attemptDetailHide')
+                        : t('visualpanels.attemptDetailShow')}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div id={`${id}-detail`} className="attempt-detail" hidden={!current}>
+        {current && (
+          <LazyDiagnostics<Attempt>
+            key={current.id}
+            path={`/attempts/${current.id}`}
+            revision={revision}
+            disclosure={false}
+            title={t('visualpanels.attemptDetail')}
+          >
+            {(attempt) => <AttemptDetail attempt={attempt} />}
+          </LazyDiagnostics>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AttemptDetail({ attempt }: { attempt: Attempt }) {
+  useI18n();
+  return (
+    <section
+      className="attempt-detail-body"
+      aria-label={t('visualpanels.attemptDetailFor', {
+        role: translateMessage(roleLabels[attempt.role] ?? attempt.role),
+        model: attempt.modelId,
+      })}
+    >
+      <dl
+        className="model-pricing-rates attempt-usage"
+        aria-label={t('visualpanels.callTokenUsage')}
+      >
+        <div>
+          <dt>{t('visualpanels.inputTokens')}</dt>
+          <dd>{tokens(attempt.inputTokens)}</dd>
+        </div>
+        <div>
+          <dt>{t('visualpanels.outputTokens')}</dt>
+          <dd>{tokens(attempt.outputTokens)}</dd>
+        </div>
+      </dl>
+      <p>
+        {t('visualpanels.priceRevision', {
+          v0: attempt.runId ? `Run ${attempt.runId}` : `Job ${attempt.storyJobId ?? attempt.jobId}`,
+          v1: attempt.priceRevision ?? t('visualpanels.unknown'),
+        })}
+      </p>
+      <CacheUsage attempt={attempt} />
+      <RequestLoreView
+        lore={(attempt.request as { requestLore?: RequestLore } | null)?.requestLore}
+      />
+      <AttemptPricing attempt={attempt} />
+      <AttemptRaw attempt={attempt} />
+    </section>
   );
 }
