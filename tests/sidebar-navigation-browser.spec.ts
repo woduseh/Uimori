@@ -149,7 +149,7 @@ test('SIDENAV04 desktop width choices persist and preserve the rail, mobile draw
   await expect(sidebar).toHaveCSS('width', '248px');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '일반');
-  const width = page.getByRole('combobox', { name: '채팅 사이드바 폭', exact: true });
+  const width = page.getByRole('combobox', { name: '사이드바 폭', exact: true });
   await expect(width).toHaveValue('248');
   await width.selectOption('400');
   await expect(sidebar).toHaveCSS('width', '400px');
@@ -206,50 +206,52 @@ test('SIDENAV04 desktop width choices persist and preserve the rail, mobile draw
   await expect(sidebar).toHaveCSS('width', '248px');
 });
 
-test('SIDENAV06 helper history width persists independently of the chat sidebar width', async ({
+test('SIDENAV06 one sidebar width serves chat and helper lists, survives a reload and drops retired storage', async ({
   page,
   request,
 }) => {
   const fixture = await sidebarFixture(request);
   await page.setViewportSize({ width: 1600, height: 900 });
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('sidenav06-seeded')) return;
+    sessionStorage.setItem('sidenav06-seeded', '1');
+    localStorage.setItem('uimori:editor-buffer:content:retired', 'x'.repeat(2048));
+    localStorage.setItem('uimori:helper-sidebar-width', '320');
+  });
   await page.goto(`/?chat=${fixture.chat.id}`);
   const sidebar = page.locator('.sidebar');
+  await expect(sidebar).toHaveCSS('width', '248px');
+  expect(
+    await page.evaluate(() =>
+      Object.keys(localStorage).filter(
+        (key) => key.startsWith('uimori:editor-buffer:') || key === 'uimori:helper-sidebar-width'
+      )
+    )
+  ).toEqual([]);
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '일반');
-  const chatWidth = page.getByRole('combobox', { name: '채팅 사이드바 폭', exact: true });
-  const helperWidth = page.getByRole('combobox', { name: '도우미 사이드바 폭', exact: true });
-  await expect(helperWidth).toHaveValue('320');
-  await chatWidth.selectOption('400');
-  await helperWidth.selectOption('248');
+  const width = page.getByRole('combobox', { name: '사이드바 폭', exact: true });
+  await expect(page.getByRole('combobox', { name: '도우미 사이드바 폭', exact: true })).toHaveCount(
+    0
+  );
+  await width.selectOption('400');
   await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await expect(sidebar).toHaveCSS('width', '400px');
   await navigationAction(page, '도우미');
-  await expect(sidebar).toHaveCSS('width', '248px');
   await expect(sidebar.getByRole('navigation', { name: '도우미 대화', exact: true })).toBeVisible();
-  await navigationAction(page, '설정');
-  await selectSettingsSection(page, '일반');
-  await helperWidth.selectOption('320');
-  await expect(chatWidth).toHaveValue('400');
-  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
-  await expect(sidebar).toHaveCSS('width', '320px');
+  await expect(sidebar).toHaveCSS('width', '400px');
   await sidebar.getByRole('button', { name: '좌측 패널 접기', exact: true }).click();
   await expect(sidebar).toHaveCSS('width', '56px');
-  await sidebar.getByRole('button', { name: '채팅', exact: true }).click();
-  await expect(sidebar).toHaveCSS('width', '56px');
-  await sidebar.getByRole('button', { name: '도우미', exact: true }).click();
-  await expect(sidebar).toHaveCSS('width', '56px');
   await sidebar.getByRole('button', { name: '좌측 패널 펼치기', exact: true }).click();
-  await expect(sidebar).toHaveCSS('width', '320px');
-  await sidebar.getByRole('button', { name: '채팅', exact: true }).click();
   await expect(sidebar).toHaveCSS('width', '400px');
   await page.reload();
   await expect(sidebar).toHaveCSS('width', '400px');
   await navigationAction(page, '도우미');
-  await expect(sidebar).toHaveCSS('width', '320px');
+  await expect(sidebar).toHaveCSS('width', '400px');
+  expect(await page.evaluate(() => localStorage.getItem('uimori:sidebar-width'))).toBe('400');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '일반');
-  await expect(chatWidth).toHaveValue('400');
-  await expect(helperWidth).toHaveValue('320');
+  await expect(width).toHaveValue('400');
   await expect(page.getByRole('combobox', { name: '우측 패널 폭', exact: true })).toHaveCount(0);
 });
 

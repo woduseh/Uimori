@@ -450,10 +450,10 @@ export const messages = {
     zh: 'Enter 换行，Ctrl/Cmd+Enter 发送。',
   },
   'chatsettings.m67': {
-    ko: '채팅 사이드바 폭',
-    en: 'Chat sidebar width',
-    ja: 'チャットサイドバーの幅',
-    zh: '聊天侧边栏宽度',
+    ko: '사이드바 폭',
+    en: 'Sidebar width',
+    ja: 'サイドバーの幅',
+    zh: '侧边栏宽度',
   },
   'chatsettings.m68': {
     ko: '데스크톱에서 펼친 사이드바에 적용돼요.',

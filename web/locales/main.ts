@@ -1379,4 +1379,10 @@ export const messages = {
     ja: '次のリクエストに使う設定を確認できなかったため、予約しませんでした。もう一度お試しください。',
     zh: '无法确认下一次请求所用的设置，因此未预约该请求。请重试。',
   },
+  'main.settingNotStored': {
+    ko: '이 브라우저에 설정을 저장하지 못했어요. 새로고침하면 이전 값으로 돌아가요. 브라우저의 사이트 저장 공간을 확인해 주세요.',
+    en: 'This browser could not store the setting, so it reverts after a reload. Check the site storage in your browser.',
+    ja: 'このブラウザーに設定を保存できませんでした。再読み込みすると前の値に戻ります。ブラウザーのサイト保存領域を確認してください。',
+    zh: '此浏览器未能保存设置，刷新后会恢复为之前的值。请检查浏览器的网站存储空间。',
+  },
 };

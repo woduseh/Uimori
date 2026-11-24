@@ -8,8 +8,27 @@ export function readPresentationSetting(key: string): string | null {
   return readOptionalStorage('local', key);
 }
 
+let reportWriteFailure: (() => void) | undefined;
+
+export function watchPresentationWriteFailure(listener: () => void) {
+  reportWriteFailure = listener;
+  return () => {
+    if (reportWriteFailure === listener) reportWriteFailure = undefined;
+  };
+}
+
 export function writePresentationSetting(key: string, value: string) {
-  writeOptionalStorage('local', key, value);
+  if (!writeOptionalStorage('local', key, value)) reportWriteFailure?.();
+}
+
+const RETIRED_STORAGE_PREFIXES = ['uimori:editor-buffer:', 'uimori:helper-sidebar-width'];
+
+export function removeRetiredStorage() {
+  try {
+    for (const key of Object.keys(localStorage))
+      if (RETIRED_STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix)))
+        localStorage.removeItem(key);
+  } catch {}
 }
 
 export function removePresentationSetting(key: string) {
@@ -22,6 +41,7 @@ export function readPresentationChoice<T extends string | number>(
   fallback: T
 ): T {
   const stored = readPresentationSetting(key);
+  if (!stored?.trim()) return fallback;
   const value = typeof fallback === 'number' ? Number(stored) : stored;
   return choices.includes(value as T) ? (value as T) : fallback;
 }

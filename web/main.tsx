@@ -69,6 +69,8 @@ import {
   readPresentationChoice,
   readFontSize,
   writePresentationSetting,
+  watchPresentationWriteFailure,
+  removeRetiredStorage,
   type ResponseDisplayMode,
 } from './presentation-settings.js';
 import {
@@ -567,6 +569,10 @@ function App() {
       s.setError('');
     }
   }, [errorScope, s.setError]);
+  useEffect(
+    () => watchPresentationWriteFailure(() => s.setError(uiMessage('main.settingNotStored'))),
+    [s.setError]
+  );
   const [newKey, setNewKey] = useState(0);
   const newStoryView = useRef({ key: newKey, active: panel === 'new' });
   newStoryView.current = { key: newKey, active: panel === 'new' };
@@ -604,11 +610,8 @@ function App() {
   const [sidebarWidth, setSidebarWidth] = useState(() =>
     readPresentationChoice('uimori:sidebar-width', SIDEBAR_WIDTHS, SIDEBAR_WIDTH)
   );
-  const [helperSidebarWidth, setHelperSidebarWidth] = useState(() =>
-    readPresentationChoice('uimori:helper-sidebar-width', SIDEBAR_WIDTHS, 320)
-  );
   const desktopSidebarWidth = Math.min(
-    helperWorkspaceOpen ? helperSidebarWidth : sidebarWidth,
+    sidebarWidth,
     Math.max(SIDEBAR_WIDTH, viewportWidth - MIN_CENTER_WIDTH)
   );
   useEffect(() => {
@@ -892,9 +895,6 @@ function App() {
   useEffect(() => {
     writePresentationSetting('uimori:sidebar-width', String(sidebarWidth));
   }, [sidebarWidth]);
-  useEffect(() => {
-    writePresentationSetting('uimori:helper-sidebar-width', String(helperSidebarWidth));
-  }, [helperSidebarWidth]);
   useEffect(() => writeSidePanelWidth(panelWidth), [panelWidth]);
   useEffect(() => {
     const viewport = visualViewport;
@@ -3561,8 +3561,6 @@ function App() {
           setEnterSend={setEnterSend}
           sidebarWidth={sidebarWidth}
           setSidebarWidth={setSidebarWidth}
-          helperSidebarWidth={helperSidebarWidth}
-          setHelperSidebarWidth={setHelperSidebarWidth}
           readingSettings={renderReadingSettings()}
         />
       )}
@@ -3605,6 +3603,7 @@ function App() {
     </ReadingPreferencesContext>
   );
 }
+removeRetiredStorage();
 startPwa();
 void loadInitialLocale().then(() =>
   createRoot(document.getElementById('root')!).render(

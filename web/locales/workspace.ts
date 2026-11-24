@@ -42,12 +42,6 @@ export const messages = {
     zh: '请在当前任务完成后复制。',
   },
   'workspace.chat': { ko: '채팅', en: 'Chat', ja: 'チャット', zh: '聊天' },
-  'workspace.helperWidth': {
-    ko: '도우미 사이드바 폭',
-    en: 'Assistant sidebar width',
-    ja: 'アシスタントサイドバーの幅',
-    zh: '助手侧边栏宽度',
-  },
   'workspace.sidePanel': {
     ko: '우측 패널',
     en: 'Right panel',
