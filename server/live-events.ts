@@ -44,7 +44,9 @@ export function createLiveHub(
     );
   let chatsSeq = latestChatSequence();
   let helperSeq = latestHelperSequence();
-  const liveFrame = () => frame('live', { chatsSeq, helperSeq, instanceId: options.instanceId });
+  let invalidations = 0;
+  const liveFrame = () =>
+    frame('live', { chatsSeq, helperSeq, invalidations, instanceId: options.instanceId });
 
   const open = (connection: Connection) =>
     !connection.response.destroyed && !connection.response.writableEnded;
@@ -135,7 +137,7 @@ export function createLiveHub(
       scheduled ??= setImmediate(flush);
     },
     invalidate(name: string) {
-      broadcast(frame('invalidate', { name }));
+      broadcast(frame('invalidate', { name, seq: ++invalidations }));
     },
     inject(event: LiveFrameEvent, data: Record<string, unknown>) {
       broadcast(frame(event, data));

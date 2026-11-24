@@ -10,6 +10,7 @@ import type {
 } from '../core/helper.js';
 import { api } from './api.js';
 import { evictHelperViews } from './helper-conversation-cache.js';
+import { diagnosticHelperEvent } from './live-frames.js';
 import { watchLive } from './live-stream.js';
 import { helperPollDelay } from './poll-delays.js';
 
@@ -23,12 +24,6 @@ type View = {
   hasOlderTasks: boolean;
 };
 const id = encodeURIComponent;
-export const diagnosticHelperEvent = ({ kind, taskId }: Pick<HelperEvent, 'kind' | 'taskId'>) =>
-  kind === 'tool.started' ||
-  kind === 'tool.finished' ||
-  kind === 'input.measured' ||
-  kind === 'progress' ||
-  (kind.startsWith('context.') && !(taskId === null && kind.startsWith('context.compaction')));
 const viewActive = (view: View | undefined) =>
   Boolean(
     view?.context?.compaction.running ||
@@ -213,8 +208,7 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
       !diagnosticHelperEvent(event) || queuedTask(event.taskId);
     const events = async () => {
       let cursor = cursors.current.get(conversationId) ?? 0;
-      let changed = false,
-        notify = false;
+      let changed = false;
       for (;;) {
         const page = await api<HelperEvent[]>(
           `/helper/conversations/${id(conversationId)}/events?after=${cursor}`
@@ -226,20 +220,8 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
             const view = cache.current.get(conversationId);
             if (view) applyMessageMutation(messageChange(view, event), true);
           }
-          if (event.kind === 'illustration-preset.updated')
-            window.dispatchEvent(new Event('uimori-illustration-presets-changed'));
-          if (event.kind === 'theme.updated')
-            window.dispatchEvent(new Event('uimori-themes-changed'));
-          if (event.kind === 'font.updated')
-            window.dispatchEvent(new Event('uimori-fonts-changed'));
           cursor = event.seq;
           if (changesView(event)) changed = true;
-          if (
-            /^task\.(completed|failed|cancelled|interrupted)$/u.test(event.kind) ||
-            event.kind === 'artifact.saved' ||
-            event.kind === 'settings.updated'
-          )
-            notify = true;
         }
         cursors.current.set(
           conversationId,
@@ -247,7 +229,6 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
         );
         if (page.length < 500 || document.hidden) break;
       }
-      if (notify) window.dispatchEvent(new Event('uimori-helper-updated'));
       return changed;
     };
     const sync = async () => {

@@ -27,6 +27,9 @@ import {
 } from './chat-option-draft.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
+import { helperDataFrame } from './live-frames.js';
+import { watchLive } from './live-stream.js';
+import { helperRefreshSpacing } from './poll-delays.js';
 
 type Values = Record<string, PromptValue>;
 type Props = {
@@ -108,12 +111,16 @@ export function ChatOptionSettings(props: Props) {
     if (!props.active || props.disabled) return;
     void refresh();
     const update = () => void refresh();
+    const live = watchLive({
+      match: helperDataFrame,
+      refresh,
+      minIntervalMs: helperRefreshSpacing,
+    });
     addEventListener('focus', update);
-    addEventListener('uimori-helper-updated', update);
     addEventListener('chat-options-changed', update);
     return () => {
+      live.dispose();
       removeEventListener('focus', update);
-      removeEventListener('uimori-helper-updated', update);
       removeEventListener('chat-options-changed', update);
     };
   }, [props.active, props.disabled, refresh]);

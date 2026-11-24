@@ -26,9 +26,12 @@ export function acknowledgeActivities(store: Store, chatId: string, keys: unknow
   )
     throw new HttpError(400, '확인할 작업 목록이 올바르지 않아요.');
   const save = store.db.prepare('INSERT OR IGNORE INTO app_metadata(key,value) VALUES(?,?)');
+  let saved = 0;
   store.transaction(() => {
-    for (const key of new Set(keys as string[])) save.run(identityKey(chatId, key), key);
+    for (const key of new Set(keys as string[]))
+      saved += Number(save.run(identityKey(chatId, key), key).changes);
   });
+  if (saved) store.invalidated('activity');
 }
 
 type OutcomeRow = {

@@ -36,6 +36,8 @@ import './illustration-presets.css';
 import './settings-layout.css';
 import { writeOptionalStorage } from './optional-storage.js';
 import { storageKeys } from './storage-keys.js';
+import { helperResourceFrame } from './live-frames.js';
+import { watchLive } from './live-stream.js';
 
 type Draft = {
   id: string | null;
@@ -112,14 +114,14 @@ export function IllustrationPresetSettings({
     const storage = (event: StorageEvent) => {
       if (event.key === changedKey) focus();
     };
+    const live = watchLive({ match: helperResourceFrame('illustration-preset'), refresh });
     window.addEventListener('focus', focus);
-    window.addEventListener('uimori-illustration-presets-changed', focus);
     window.addEventListener('storage', storage);
     return () => {
       alive.current = false;
       epoch.current++;
+      live.dispose();
       window.removeEventListener('focus', focus);
-      window.removeEventListener('uimori-illustration-presets-changed', focus);
       window.removeEventListener('storage', storage);
     };
   }, [refresh]);

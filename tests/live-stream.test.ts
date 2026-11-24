@@ -226,3 +226,59 @@ test('a degraded poll reads its delay on every tick, and an undefined delay stop
   expect(refreshes).toBe(3);
   controller.dispose();
 });
+
+test('a reconnect resyncs only when the server tail moved, and a visible tab reads only what it skipped while hidden', async () => {
+  const live = environment();
+  await flush();
+  live.latest().open();
+  let refreshes = 0;
+  const tab = { hidden: false };
+  createLiveRefresh({
+    stream: live.stream,
+    match: (frame) => frame.event === 'invalidate' && frame.name === 'activity',
+    refresh: async () => {
+      refreshes++;
+    },
+    hidden: () => tab.hidden,
+  });
+  const tail = { chatsSeq: 4, helperSeq: 7, invalidations: 1, instanceId: 'a' };
+  live.latest().emit('live', tail);
+  await flush();
+  expect(refreshes).toBe(1);
+
+  live.stream.attachChat('chat', { open() {}, error() {}, message() {} });
+  await flush();
+  live.latest().open();
+  live.latest().emit('live', tail);
+  await flush();
+  expect(refreshes).toBe(1);
+
+  live.latest().emit('chats', { seq: 5, chatId: 'chat', kind: 'scene.updated', entityId: null });
+  live.latest().emit('invalidate', { name: 'helper-list', seq: 2 });
+  live.latest().fail(true);
+  vi.advanceTimersByTime(liveDelay.reopen.first);
+  live.latest().open();
+  live.latest().emit('live', { ...tail, chatsSeq: 5, invalidations: 2 });
+  await flush();
+  expect(refreshes).toBe(1);
+  live.latest().emit('live', { ...tail, chatsSeq: 5, invalidations: 3 });
+  await flush();
+  expect(refreshes).toBe(2);
+  live.latest().emit('live', { ...tail, chatsSeq: 5, invalidations: 3, instanceId: 'b' });
+  await flush();
+  expect(refreshes).toBe(3);
+
+  live.setHidden(true);
+  live.setHidden(false);
+  await flush();
+  expect(refreshes).toBe(3);
+  tab.hidden = true;
+  live.setHidden(true);
+  live.latest().emit('invalidate', { name: 'activity', seq: 4 });
+  await flush();
+  expect(refreshes).toBe(3);
+  tab.hidden = false;
+  live.setHidden(false);
+  await flush();
+  expect(refreshes).toBe(4);
+});

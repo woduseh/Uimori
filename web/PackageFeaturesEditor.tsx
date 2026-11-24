@@ -11,6 +11,9 @@ import { IconButton } from './IconButton.js';
 import { api, libraryChangedKey } from './api.js';
 import { CloseIcon, RefreshIcon } from './ui-icons.js';
 import './package-authoring.css';
+import { helperDataFrame } from './live-frames.js';
+import { watchLive } from './live-stream.js';
+import { helperRefreshSpacing } from './poll-delays.js';
 
 const referenceKey = (ref: PackageModuleRef | null | undefined) =>
   ref ? `${ref.id}@${ref.revision}` : '';
@@ -59,13 +62,17 @@ export function PackageFeaturesEditor({
     const storage = (event: StorageEvent) => {
       if (event.key === libraryChangedKey) refresh();
     };
+    const live = watchLive({
+      match: helperDataFrame,
+      refresh: async () => refresh(),
+      minIntervalMs: helperRefreshSpacing,
+    });
     window.addEventListener('focus', refresh);
-    window.addEventListener('uimori-helper-updated', refresh);
     window.addEventListener('uimori-resource-saved', refresh);
     window.addEventListener('storage', storage);
     return () => {
+      live.dispose();
       window.removeEventListener('focus', refresh);
-      window.removeEventListener('uimori-helper-updated', refresh);
       window.removeEventListener('uimori-resource-saved', refresh);
       window.removeEventListener('storage', storage);
     };

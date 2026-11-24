@@ -736,11 +736,14 @@ test('NSQ05 an uncertain chat admission stops automatic and manual resubmission'
     const reading = new Promise<void>((resolve) => {
       readStarted = resolve;
     });
+    let held = false;
     await page.route('**/api/prompt-workspace', async (route) => {
       if (route.request().method() !== 'GET' || !failRead) return route.continue();
-      failRead = false;
-      readStarted();
-      await heldRead;
+      if (!held) {
+        held = true;
+        readStarted();
+        await heldRead;
+      }
       await route.fulfill({ status: 503, json: { error: 'AUDIT2_WORKSPACE_READ_FAILED' } });
     });
     try {
@@ -772,6 +775,7 @@ test('NSQ05 an uncertain chat admission stops automatic and manual resubmission'
       await expect(settings.getByRole('alert')).toContainText('503');
       await expect(settings).not.toContainText('확인 중…');
       await expect(settings).not.toContainText('본문 생성 전에 사용 가능한');
+      failRead = false;
       await settings.getByRole('button', { name: '다시 불러오기', exact: true }).click();
       await expect(settings.locator('.new-story-settings-summary')).toBeVisible();
       await expect(settings.getByRole('alert')).toHaveCount(0);

@@ -1,13 +1,16 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import {
   api,
-  activityChangedEvent,
   apiBinary,
   ApiError,
   libraryChangedKey,
   maintenanceChangedEvent,
   sessionRequiredEvent,
 } from '../web/api.js';
+import { promptWorkspaceChange } from '../web/live-frames.js';
+
+const announced = vi.hoisted(() => vi.fn());
+vi.mock('../web/live-stream.js', () => ({ announceLocalChange: announced }));
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -18,11 +21,11 @@ function browser() {
   const window = new EventTarget();
   const session = vi.fn();
   const maintenance = vi.fn();
-  const workspace = vi.fn();
+  const workspace = announced;
+  workspace.mockClear();
   const setItem = vi.fn();
   window.addEventListener(sessionRequiredEvent, session);
   window.addEventListener(maintenanceChangedEvent, maintenance);
-  window.addEventListener('prompt-workspace-changed', workspace);
   vi.stubGlobal('window', window);
   vi.stubGlobal('dispatchEvent', window.dispatchEvent.bind(window));
   vi.stubGlobal('localStorage', { setItem });
@@ -123,13 +126,14 @@ test('binary uploads preserve the Blob and do not announce JSON mutations', asyn
 
 test('successful JSON provider edits retain cross-tab and workspace invalidation', async () => {
   const b = browser();
-  const activity = vi.fn();
-  window.addEventListener(activityChangedEvent, activity);
   respond(200, { saved: true });
   await expect(api('/connections/synthetic', {}, 'PUT')).resolves.toEqual({ saved: true });
   expect(b.setItem).toHaveBeenCalledWith(libraryChangedKey, expect.any(String));
-  expect(b.workspace).toHaveBeenCalledTimes(1);
-  expect(activity).not.toHaveBeenCalled();
+  expect(b.workspace).toHaveBeenCalledExactlyOnceWith(promptWorkspaceChange, { echoed: false });
+  b.workspace.mockClear();
+  respond(200, { saved: true });
+  await api('/prompt-workspace', {}, 'PUT');
+  expect(b.workspace).toHaveBeenCalledExactlyOnceWith(promptWorkspaceChange, { echoed: true });
 });
 
 test('failed JSON edits do not announce a saved library change', async () => {
@@ -138,31 +142,4 @@ test('failed JSON edits do not announce a saved library change', async () => {
   await expect(api('/connections/synthetic', {}, 'PUT')).rejects.toBeInstanceOf(ApiError);
   expect(b.setItem).not.toHaveBeenCalled();
   expect(b.workspace).not.toHaveBeenCalled();
-});
-
-test('accepted task mutations wake activity views while reads and rejected requests stay quiet', async () => {
-  browser();
-  const changed = vi.fn();
-  window.addEventListener(activityChangedEvent, changed);
-  respond(200, { status: 'queued' });
-  await api('/chats/synthetic/runs', { request: 'write' });
-  expect(changed).toHaveBeenCalledTimes(1);
-  expect(changed.mock.calls[0][0].detail).toBe('/chats/synthetic/runs');
-  changed.mockClear();
-  respond(200, { status: 'running' });
-  await api('/runs/synthetic');
-  respond(409, { error: 'Revision conflict' });
-  await expect(api('/runs/synthetic/retry', {})).rejects.toBeInstanceOf(ApiError);
-  expect(changed).not.toHaveBeenCalled();
-});
-
-test('accepted active mutations wake activity views', async () => {
-  browser();
-  const changed = vi.fn();
-  window.addEventListener(activityChangedEvent, changed);
-  for (const path of ['/sources/synthetic/translation', '/helper/tasks/synthetic/cancel']) {
-    respond(200, { ok: true });
-    await api(path, {});
-  }
-  expect(changed).toHaveBeenCalledTimes(2);
 });

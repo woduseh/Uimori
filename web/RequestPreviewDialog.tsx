@@ -7,6 +7,9 @@ import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import './request-preview.css';
+import { helperDataFrame, promptWorkspaceFrame } from './live-frames.js';
+import { watchLive } from './live-stream.js';
+import { helperRefreshSpacing } from './poll-delays.js';
 
 const amount = (value: number | null) =>
   value === null ? t('reader.unknown') : formatNumber(value);
@@ -60,14 +63,16 @@ export function RequestPreviewDialog({
     const storage = (event: StorageEvent) => {
       if (event.key === libraryChangedKey) changed();
     };
-    addEventListener('prompt-workspace-changed', changed);
-    addEventListener('uimori-helper-updated', changed);
+    const live = watchLive({
+      match: (frame) => promptWorkspaceFrame(frame) || helperDataFrame(frame),
+      refresh: async () => changed(),
+      minIntervalMs: helperRefreshSpacing,
+    });
     addEventListener('uimori-resource-saved', changed);
     addEventListener('focus', changed);
     addEventListener('storage', storage);
     return () => {
-      removeEventListener('prompt-workspace-changed', changed);
-      removeEventListener('uimori-helper-updated', changed);
+      live.dispose();
       removeEventListener('uimori-resource-saved', changed);
       removeEventListener('focus', changed);
       removeEventListener('storage', storage);

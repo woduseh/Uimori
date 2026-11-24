@@ -1,6 +1,9 @@
 import { useSyncExternalStore } from 'react';
 import type { PromptWorkspace } from '../core/product.js';
 import { api, libraryChangedKey } from './api.js';
+import { helperDataFrame, promptWorkspaceFrame } from './live-frames.js';
+import { watchLive } from './live-stream.js';
+import { helperRefreshSpacing } from './poll-delays.js';
 import { createPromptWorkspaceStore } from './prompt-workspace-store.js';
 
 const store = createPromptWorkspaceStore({
@@ -9,13 +12,15 @@ const store = createPromptWorkspaceStore({
     const storage = (event: StorageEvent) => {
       if (event.key === libraryChangedKey) reload();
     };
-    addEventListener('prompt-workspace-changed', reload);
-    addEventListener('uimori-helper-updated', reload);
+    const live = watchLive({
+      match: (frame) => promptWorkspaceFrame(frame) || helperDataFrame(frame),
+      refresh: async () => reload(),
+      minIntervalMs: helperRefreshSpacing,
+    });
     addEventListener('focus', reload);
     addEventListener('storage', storage);
     return () => {
-      removeEventListener('prompt-workspace-changed', reload);
-      removeEventListener('uimori-helper-updated', reload);
+      live.dispose();
       removeEventListener('focus', reload);
       removeEventListener('storage', storage);
     };

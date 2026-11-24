@@ -19,6 +19,8 @@ export {
   type FontCatalog,
 } from '../core/fonts.js';
 import { storageKeys } from './storage-keys.js';
+import { helperResourceFrame } from './live-frames.js';
+import { watchLive } from './live-stream.js';
 export const fontsChangedKey = storageKeys.fontsChanged;
 export const fontsChangedEvent = 'uimori-fonts-changed';
 type FontState = {
@@ -88,11 +90,13 @@ export function FontProvider({ children }: { children: ReactNode }) {
     const changed = (event: Event) => {
       if (!(event instanceof CustomEvent) || event.detail !== sender.current) void refresh();
     };
+    const live = watchLive({ match: helperResourceFrame('font'), refresh: () => refresh() });
     window.addEventListener('storage', receive);
     window.addEventListener('focus', focus);
     window.addEventListener(fontsChangedEvent, changed);
     return () => {
       ++epoch.current;
+      live.dispose();
       window.removeEventListener('storage', receive);
       window.removeEventListener('focus', focus);
       window.removeEventListener(fontsChangedEvent, changed);

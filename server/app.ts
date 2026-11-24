@@ -1548,14 +1548,10 @@ export async function createApp(options: AppOptions): Promise<App> {
         if (typeof chatId !== 'string') throw new HttpError(400, 'Invalid chat');
         store.chat(chatId);
       }
-      const resume =
-        chatId === undefined
-          ? undefined
-          : chatEventResume(request.headers['last-event-id'], streamAfter);
+      const resume = chatEventResume(request.headers['last-event-id'], streamAfter);
       const authorized = openEventStream(request, reply);
       live.connect(reply.raw, authorized);
-      if (chatId !== undefined && resume)
-        chatEvents.connect(chatId, resume, reply.raw, authorized, { keepalive: false });
+      chatEvents.connect(chatId ?? null, resume, reply.raw, authorized, { keepalive: false });
     }
   );
   if (options.testMode) {

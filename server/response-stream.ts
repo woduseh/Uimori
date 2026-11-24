@@ -71,7 +71,7 @@ const THOUGHT_CHARS = 4000;
 
 export class ResponseStreamStore {
   private readonly listeners = new Map<string, Set<() => void>>();
-  private readonly chatListeners = new Map<string, Set<ChatListener>>();
+  private readonly chatListeners = new Map<string | null, Set<ChatListener>>();
   private readonly active = new Map<string, ActiveStream>();
   private sequenceState: { next: number; reserved: number } | undefined;
   private readonly store: Pick<Store, 'db' | 'transaction'>;
@@ -153,7 +153,7 @@ export class ResponseStreamStore {
     };
   }
 
-  runningTasks(chatId: string): ResponseTaskIdentity[] {
+  runningTasks(chatId: string | null): ResponseTaskIdentity[] {
     return [...this.active.values()]
       .filter((stream) => stream.chatId === chatId)
       .map((stream) => ({ ...stream.identity }));
@@ -170,7 +170,7 @@ export class ResponseStreamStore {
     };
   }
 
-  subscribeChat(chatId: string, listener: ChatListener) {
+  subscribeChat(chatId: string | null, listener: ChatListener) {
     const listeners = this.chatListeners.get(chatId) ?? new Set<ChatListener>();
     this.chatListeners.set(chatId, listeners);
     listeners.add(listener);
@@ -191,7 +191,7 @@ export class ResponseStreamStore {
         listeners?.delete(listener);
       }
     }
-    const chatListeners = identity.chatId ? this.chatListeners.get(identity.chatId) : undefined;
+    const chatListeners = this.chatListeners.get(identity.chatId ?? null);
     for (const listener of [...(chatListeners ?? [])]) {
       try {
         listener({ ...target });

@@ -23,7 +23,7 @@ afterEach(async () => {
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 type Task = {
-  chatId: string;
+  chatId: string | null;
   status: ResponseStreamStatus;
   chunks: ResponseChunk[];
   thought?: string;
@@ -32,7 +32,7 @@ type Task = {
 function fixture(pageSize = 256) {
   const events: { seq: number; chatId: string; kind: string }[] = [];
   const tasks = new Map<string, Task>();
-  const listeners = new Map<string, Set<(identity: ResponseTaskIdentity) => void>>();
+  const listeners = new Map<string | null, Set<(identity: ResponseTaskIdentity) => void>>();
   const reads: string[] = [];
   let seq = 0;
   const keyOf = (taskKind: string, taskId: string) => `${taskKind}:${taskId}`;
@@ -84,7 +84,7 @@ function fixture(pageSize = 256) {
       events.push({ seq: events.length + 1, chatId, kind });
       hub.publish(chatId);
     },
-    start(taskKind: ResponseTaskKind, taskId: string, chatId: string) {
+    start(taskKind: ResponseTaskKind, taskId: string, chatId: string | null) {
       tasks.set(keyOf(taskKind, taskId), { chatId, status: 'running', chunks: [] });
       notify(taskKind, taskId);
     },
@@ -188,6 +188,36 @@ test('chat events keep their frames while response pages ride the same connectio
     '2;main:run-1:2',
     '2',
   ]);
+});
+
+test('library helper text rides every connection, with or without a chat, and another chat stays out', async () => {
+  const story = fixture();
+  story.start('helper', 'library-task', null);
+  story.append('helper', 'library-task', '서재 ');
+  const library = client();
+  story.hub.connect(null, chatEventResume(undefined, undefined), library.response, () => true);
+  const reader = client();
+  story.hub.connect('chat', chatEventResume(undefined, undefined), reader.response, () => true);
+  story.start('main', 'other-run', 'other');
+  story.append('main', 'other-run', '다른 채팅');
+  story.append('helper', 'library-task', '도우미');
+  story.event('chat', 'run.queued');
+  await tick();
+
+  for (const connection of [library, reader])
+    expect(text(connection.streamed('library-task'))).toBe('서재 도우미');
+  expect(library.streamed('other-run')).toEqual([]);
+  expect(reader.streamed('other-run')).toEqual([]);
+  expect(library.frames().filter((frame) => frame.event === 'message')).toEqual([]);
+  expect(library.frames().map((frame) => frame.id)).toEqual([
+    '0;helper:library-task:1',
+    '0;helper:library-task:3',
+  ]);
+  expect(reader.frames().filter((frame) => frame.event === 'message')).toHaveLength(2);
+  library.raw.destroy();
+  reader.raw.destroy();
+  await tick();
+  expect(story.listeners.get(null)?.size).toBe(0);
 });
 
 test('a thought summary that changes without new text is pushed, and an unchanged page is not', async () => {

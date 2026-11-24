@@ -26,7 +26,9 @@ import { displayTranslationJob, latestTranslation } from '../core/translation-di
 import { markArrivalWhenShown } from './arrival-mark.js';
 import { canDismissReaderRun, readerConversation } from '../core/reader-conversation.js';
 import { createReaderSync } from './reader-sync.js';
-import { liveStream } from './live-stream.js';
+import { liveStream, watchLive } from './live-stream.js';
+import { helperDataFrame, promptWorkspaceFrame } from './live-frames.js';
+import { helperRefreshSpacing } from './poll-delays.js';
 import { type ReaderResponse, restoreReaderBlockText } from './reader-blocks.js';
 import {
   transitionReaderNavigation,
@@ -578,11 +580,15 @@ export function useStory() {
     };
     addEventListener('storage', onStorage);
     addEventListener('focus', refreshLibrary);
-    addEventListener('uimori-helper-updated', refreshLibrary);
+    const live = watchLive({
+      match: (frame) => helperDataFrame(frame) || promptWorkspaceFrame(frame),
+      refresh: () => loadLibrary().catch((caught) => setError(caught)),
+      minIntervalMs: helperRefreshSpacing,
+    });
     return () => {
       removeEventListener('storage', onStorage);
       removeEventListener('focus', refreshLibrary);
-      removeEventListener('uimori-helper-updated', refreshLibrary);
+      live.dispose();
       libraryRequest.current++;
     };
   }, [loadLibrary, setError]);
@@ -642,9 +648,7 @@ export function useStory() {
           });
           return;
         }
-        if (message.kind === 'prompt-workspace.updated')
-          dispatchEvent(new Event('prompt-workspace-changed'));
-        if (message.kind === 'profile.updated' || message.kind === 'prompt-workspace.updated')
+        if (message.kind === 'profile.updated')
           void loadLibrary().catch((e) => {
             if (alive) setError(e);
           });

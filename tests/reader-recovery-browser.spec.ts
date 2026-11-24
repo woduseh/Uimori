@@ -153,9 +153,9 @@ test('READERREC a failed model-settings read offers retry instead of a missing-m
   request,
 }) => {
   const { chat } = await createReadingChat(request, 'Model lookup recovery', 1);
-  let failures = 1;
+  let failing = true;
   await page.route('**/api/prompt-workspace', (route) => {
-    if (failures-- > 0) return route.fulfill({ status: 503, json: { error: 'Unavailable' } });
+    if (failing) return route.fulfill({ status: 503, json: { error: 'Unavailable' } });
     return route.continue();
   });
   try {
@@ -164,6 +164,7 @@ test('READERREC a failed model-settings read offers retry instead of a missing-m
     const error = page.getByRole('alert').filter({ hasText: '모델 설정을 확인하지 못했어요.' });
     await expect(error).toBeVisible();
     await expect(page.getByText('사용 가능한 기본 본문 모델을 선택해 주세요.')).toHaveCount(0);
+    failing = false;
     await error.getByRole('button', { name: '다시 불러오기' }).click();
     await expect(error).toHaveCount(0);
   } finally {

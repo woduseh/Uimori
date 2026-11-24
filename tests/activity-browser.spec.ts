@@ -980,3 +980,56 @@ test('ACTUI19 sidebar activity hides empty sections, acknowledges a row or every
     nav.getByRole('tab', { name: '활동, 미확인 채팅 0개', exact: true })
   ).toHaveAttribute('aria-selected', 'true');
 });
+
+test('ACTLIVE01 another browser acknowledging activity clears it here without waiting for a poll', async ({
+  page,
+  request,
+  browser,
+}) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  const seeded = await seed(request);
+  const failNext = await request.post('/api/test/control', {
+    data: { action: 'fail-next', point: 'translation' },
+  });
+  expect(failNext.ok()).toBe(true);
+  const started = await request.post(`/api/sources/${seeded.sources[0].id}/translation`, {
+    data: {},
+  });
+  expect(started.ok(), await started.text()).toBe(true);
+  await expect
+    .poll(async () => (await detail(request, seeded.chat.id)).jobs[0]?.status)
+    .toBe('failed');
+  const feedReads: string[] = [];
+  page.on('request', (entry) => {
+    if (new URL(entry.url()).pathname === '/api/activity-feed') feedReads.push(entry.url());
+  });
+  await page.goto('/');
+  const nav = page.getByTestId('bot-navigation').filter({ visible: true });
+  await nav.getByRole('tab', { name: /^활동, 미확인 채팅/u }).click();
+  const entry = nav
+    .getByRole('navigation', { name: '채팅 활동' })
+    .locator('[data-activity-section="unread"] .activity-nav-entry', {
+      hasText: seeded.chat.title,
+    });
+  await expect(entry).toHaveCount(1);
+  const other = await browser.newContext();
+  try {
+    const feed = (await (await other.request.get('/api/activity-feed')).json()) as {
+      items: { chatId: string; acknowledgementKey: string }[];
+    };
+    const keys = feed.items
+      .filter((item) => item.chatId === seeded.chat.id)
+      .map((item) => item.acknowledgementKey);
+    expect(keys.length).toBeGreaterThan(0);
+    const before = feedReads.length;
+    const acknowledged = await other.request.post(
+      `/api/chats/${seeded.chat.id}/activity-acknowledgements`,
+      { data: { keys } }
+    );
+    expect(acknowledged.ok(), await acknowledged.text()).toBe(true);
+    await expect(entry).toHaveCount(0, { timeout: 3000 });
+    expect(feedReads.length).toBeGreaterThan(before);
+  } finally {
+    await other.close();
+  }
+});

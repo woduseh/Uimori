@@ -4,7 +4,9 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Writable } from 'node:stream';
 import { afterEach, expect, test } from 'vitest';
+import { acknowledgeActivities } from '../server/activity-feed.js';
 import { chatEventResume, createChatEventStreams } from '../server/chat-event-stream.js';
+import { deleteChat } from '../server/chat-deletion.js';
 import { markHelperConversationRead } from '../server/helper-read-state.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { createLiveHub } from '../server/live-events.js';
@@ -231,4 +233,30 @@ test('helper list changes that write no helper event send one helper-list invali
   markHelperConversationRead(live.store, created.id, sequence);
   markHelperConversationRead(live.store, created.id, sequence);
   expect(invalidations()).toBe(7);
+});
+
+test('activity acknowledgements and chat deletion invalidate once per real change, and the live frame counts invalidations', async () => {
+  const live = await fixture();
+  const reader = live.client();
+  live.hub.connect(reader.response, () => true);
+  const invalidations = () =>
+    reader
+      .frames()
+      .filter((frame) => frame.event === 'invalidate')
+      .map((frame) => [frame.data.name, frame.data.seq]);
+  const key = JSON.stringify(['main', 'run-1', 0, '2026-01-01T00:00:00.000Z']);
+
+  acknowledgeActivities(live.store, live.chat.id, [key]);
+  acknowledgeActivities(live.store, live.chat.id, [key]);
+  expect(invalidations()).toEqual([['activity', 1]]);
+
+  deleteChat(live.store, live.chat.id, {});
+  expect(invalidations()).toEqual([
+    ['activity', 1],
+    ['activity', 2],
+    ['helper-list', 3],
+  ]);
+  const late = live.client();
+  live.hub.connect(late.response, () => true);
+  expect(late.frames()[0].data).toMatchObject({ invalidations: 3 });
 });

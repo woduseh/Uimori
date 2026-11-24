@@ -624,7 +624,16 @@ test('HRESULT02 actual results retain partial usage and recover from refresh/ope
   page,
   request,
 }) => {
-  const { chat, task } = await seed(request);
+  const { chat, task, conversation } = await seed(request);
+  const taskFrame = async () => {
+    const injected = await request.post('/api/test/live-frame', {
+      data: {
+        event: 'helper',
+        data: { seq: 0, conversationId: conversation.id, taskId: task.id, kind: 'artifact.saved' },
+      },
+    });
+    expect(injected.ok()).toBe(true);
+  };
   const created = await request.post('/api/content', {
     data: fixtureBotInput('다시 열어 볼 저장 자료'),
   });
@@ -747,7 +756,7 @@ test('HRESULT02 actual results retain partial usage and recover from refresh/ope
   await expect(results).not.toContainText('%');
   await expect(results.getByRole('meter')).toHaveCount(0);
   projection.usage.latestInputLimit = 1000;
-  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await taskFrame();
   const inputMeter = results.getByRole('meter', {
     name: '입력 예산 대비 마지막 전송 입력 추정치',
   });
@@ -756,7 +765,7 @@ test('HRESULT02 actual results retain partial usage and recover from refresh/ope
   await expect(usageValue(results, '마지막 전송 입력 (추정)')).toHaveText('850 / 1,000');
   await expect(inputMeter).toHaveAttribute('aria-valuetext', '입력 예산 1,000 토큰 중 약 850 토큰');
   refreshFails = true;
-  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await taskFrame();
   await expect(results.getByRole('alert')).toContainText('결과를 새로 확인하지 못했어요.');
   await expect(saved).toBeVisible();
   await expect(usageValue(results, '누적 입력 토큰')).toHaveText('1,000미확인 1회');

@@ -10,6 +10,8 @@ import type { ContextDetail, ContextJob as StoredContextJob } from '../core/cont
 import type { AuthorNote } from '../core/notes.js';
 import { AuthorNotesEditor } from './AuthorNotesEditor.js';
 import { api, ApiError } from './api.js';
+import { useLiveRefresh } from './live-stream.js';
+import { contextJobPollDelay } from './poll-delays.js';
 import { useUnsavedInput } from './unsaved-input.js';
 import './context.css';
 
@@ -148,12 +150,18 @@ export function ContextPanel({
   useEffect(() => {
     if (active) void load();
   }, [active, chatId, headRevision, refreshKey]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Only a running compact job needs periodic refresh; editing and hidden panels do not restart its timer.
+  useLiveRefresh({
+    enabled: active,
+    match: (frame) =>
+      frame.event === 'chats' && frame.chatId === chatId && frame.kind.startsWith('context.'),
+    refresh: load,
+  });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Only a pending compact job needs periodic refresh; editing and hidden panels do not restart its timer.
   useEffect(() => {
     if (!active || !working) return;
     const timer = setInterval(() => {
       void load();
-    }, 1000);
+    }, contextJobPollDelay);
     return () => clearInterval(timer);
   }, [active, working?.id, chatId, headRevision]);
   function keyed(command: Record<string, unknown>) {

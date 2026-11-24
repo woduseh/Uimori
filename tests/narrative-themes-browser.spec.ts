@@ -557,7 +557,7 @@ for (const [layout, width, mode] of readerCases) {
     }, Object.keys(readingPreferences));
     for (const palette of BUILTIN_PALETTES) {
       await select(request, { paletteId: palette.id });
-      await page.evaluate(() => window.dispatchEvent(new Event('uimori-themes-changed')));
+      await page.evaluate(() => window.dispatchEvent(new Event('focus')));
       await expect
         .poll(() =>
           page
@@ -592,7 +592,7 @@ for (const [layout, width, mode] of readerCases) {
     }
     await page.screenshot({ path: info.outputPath(`${layout}-sage-square-portrait.png`) });
     await select(request, { paletteId: 'theme' });
-    await page.evaluate(() => window.dispatchEvent(new Event('uimori-themes-changed')));
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
     await expect(source).toHaveAttribute('data-stable-body', 'preserved');
     expect((await detail(request, data.chatId)).sources).toEqual(data.before.sources);
   });

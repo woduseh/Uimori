@@ -12,6 +12,9 @@ import { OUTLINE_REFRESH_EVENT } from './outline-helper.js';
 import { useTransientNotice } from './TransientNotice.js';
 import { hasUnsavedInput, useUnsavedInputVersion } from './unsaved-input.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
+import { helperChange, helperDataFrame } from './live-frames.js';
+import { announceLocalChange, useLiveRefresh } from './live-stream.js';
+import { helperRefreshSpacing } from './poll-delays.js';
 
 type Plan = { unit: string | null };
 
@@ -43,12 +46,11 @@ function reasonText(unit: HelperRollbackUnit) {
 function refreshRestored(units: readonly HelperRollbackUnit[]) {
   const restored = units.filter((unit) => unit.status === 'restored');
   if (!restored.length) return;
-  window.dispatchEvent(new Event('uimori-helper-updated'));
+  announceLocalChange(helperChange('task.rolled-back'), { echoed: true });
   const touches = restored.flatMap((unit) => (unit.touches ? [unit.touches] : []));
-  if (touches.some((touch) => touch.domain === 'resource' && touch.kind === 'theme'))
-    window.dispatchEvent(new Event('uimori-themes-changed'));
-  if (touches.some((touch) => touch.domain === 'resource' && touch.kind === 'illustration-preset'))
-    window.dispatchEvent(new Event('uimori-illustration-presets-changed'));
+  for (const kind of ['theme', 'illustration-preset'] as const)
+    if (touches.some((touch) => touch.domain === 'resource' && touch.kind === kind))
+      announceLocalChange(helperChange(`${kind}.updated`), { echoed: true });
   if (touches.some((touch) => touch.domain === 'outline'))
     window.dispatchEvent(new Event(OUTLINE_REFRESH_EVENT));
 }
@@ -104,11 +106,12 @@ export function useHelperRollback({
       });
     return () => controller.abort();
   }, [path, enabled]);
-  useEffect(() => {
-    if (!enabled) return;
-    addEventListener('uimori-helper-updated', retry);
-    return () => removeEventListener('uimori-helper-updated', retry);
-  }, [enabled]);
+  useLiveRefresh({
+    enabled,
+    match: helperDataFrame,
+    refresh: async () => retry(),
+    minIntervalMs: helperRefreshSpacing,
+  });
   const wasUnavailable = useRef(unavailable);
   useEffect(() => {
     if (wasUnavailable.current && !unavailable) retry();

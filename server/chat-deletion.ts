@@ -100,7 +100,7 @@ function removeRunArtifacts(store: Store, runIds: string[], sourceIds: string[],
 export function deleteChat(store: Store, chatId: string, value: unknown) {
   const body = record(value);
   fields(body, []);
-  return store.transaction(() => {
+  const result = store.transaction(() => {
     store.chat(chatId);
     assertChatIdleForDeletion(store, chatId);
     const imageCandidates = new Set<string>();
@@ -167,6 +167,9 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
     pruneUnusedHelperFiles(store.db);
     return { deleted: true };
   });
+  store.invalidated('activity');
+  store.invalidated('helper-list');
+  return result;
 }
 
 export function deleteSceneCommand(store: Store, id: string, value: unknown) {

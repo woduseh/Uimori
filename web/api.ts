@@ -2,6 +2,8 @@ import { apiErrorDiagnostic, apiErrorDisplay } from './api-errors.js';
 import { t } from './i18n.js';
 import { writeOptionalStorage } from './optional-storage.js';
 import { forgetBotStorage, forgetChatStorage, storageKeys } from './storage-keys.js';
+import { promptWorkspaceChange } from './live-frames.js';
+import { announceLocalChange } from './live-stream.js';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -51,7 +53,6 @@ function forgetDeletedStorage(path: string) {
   if (collection === 'chats') forgetChatStorage(decodeURIComponent(id));
   else forgetBotStorage(decodeURIComponent(id));
 }
-export const activityChangedEvent = 'uimori-activity-changed';
 
 async function readApiResponse<T>(
   response: Response,
@@ -100,14 +101,6 @@ export async function api<T>(
   );
   const result = await readApiResponse<T>(response, method, path.split('?')[0] !== '/session');
   if (method === 'DELETE' && body !== undefined) forgetDeletedStorage(path);
-  if (
-    body !== undefined &&
-    typeof window !== 'undefined' &&
-    /^(?:\/(?:runs|jobs|scene-commands|illustrations)\/|\/sources\/[^/]+\/(?:translation|retranslate|images|illustrations)|\/chats\/[^/]+\/(?:runs|context)|\/helper\/(?:conversations\/[^/]+\/messages|tasks\/))/u.test(
-      path
-    )
-  )
-    window.dispatchEvent(new CustomEvent(activityChangedEvent, { detail: path }));
   const providerSettingsChanged =
     body !== undefined && /^(?:\/model-presets|\/connections)(?:\/[^/]+)?$/.test(path);
   if (
@@ -128,7 +121,7 @@ export async function api<T>(
       path.startsWith('/model-workspace') ||
       providerSettingsChanged)
   )
-    dispatchEvent(new Event('prompt-workspace-changed'));
+    announceLocalChange(promptWorkspaceChange, { echoed: !providerSettingsChanged });
   return result;
 }
 

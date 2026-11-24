@@ -1,10 +1,10 @@
 import { useI18n, message as uiMessage } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { HelperConversation, HelperScope, HelperStatus } from '../core/helper.js';
-import { activityChangedEvent, api, ApiError } from './api.js';
+import { api, ApiError } from './api.js';
 import { watchLive } from './live-stream.js';
 import { helperPollDelay, helperRefreshSpacing } from './poll-delays.js';
-import { diagnosticHelperEvent } from './useHelperConversation.js';
+import { helperSessionsFrame } from './live-frames.js';
 import {
   clearPendingHelperRequest,
   pendingHelperRequest,
@@ -186,9 +186,6 @@ export function useHelperSessions(
         ...old,
         [key]: [conversation, ...(old[key] ?? []).filter((item) => item.id !== conversation.id)],
       }));
-      window.dispatchEvent(
-        new CustomEvent('uimori-helper-session-selected', { detail: conversation })
-      );
     },
     [acknowledge]
   );
@@ -239,9 +236,13 @@ export function useHelperSessions(
     let active = false;
     const live = watchLive({
       match: (frame) =>
-        frame.event === 'invalidate'
-          ? frame.name === 'helper-list'
-          : frame.event === 'helper' && !diagnosticHelperEvent(frame),
+        helperSessionsFrame(frame, {
+          chatTitles: expanded,
+          chatIds: () =>
+            sessionsRef.current.flatMap((item) =>
+              item.scope.kind === 'chat' ? [item.scope.chatId] : []
+            ),
+        }),
       refresh: async () => {
         try {
           active = (await reload()) ?? false;
@@ -257,18 +258,13 @@ export function useHelperSessions(
       fallbackMs: () => (active ? helperPollDelay.sessions.active : helperPollDelay.sessions.idle),
       minIntervalMs: helperRefreshSpacing,
     });
-    const submitted = (event: Event) => {
-      if ((event as CustomEvent<string>).detail.startsWith('/helper/')) live.request();
-    };
     live.request();
-    window.addEventListener(activityChangedEvent, submitted);
     return () => {
       disposed = true;
       live.dispose();
-      window.removeEventListener(activityChangedEvent, submitted);
       versions.current.set(group, (versions.current.get(group) ?? 0) + 1);
     };
-  }, [open, group, reload]);
+  }, [open, group, reload, expanded]);
   const unread = sessions
     .filter(
       (item) =>

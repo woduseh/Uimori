@@ -435,7 +435,13 @@ test('ORG04 unselected chat and collapsed folder display compact pending activit
   if (visualReview)
     await page.screenshot({ path: info.outputPath('navigation-pending-folder.png') });
   active = false;
-  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  const frame = await request.post('/api/test/live-frame', {
+    data: {
+      event: 'chats',
+      data: { seq: 0, chatId: background.id, kind: 'job.completed', entityId: null },
+    },
+  });
+  expect(frame.ok()).toBe(true);
   await expect(nav.locator('.bot-chat-status')).toHaveCount(0);
 });
 

@@ -131,12 +131,8 @@ async function harness(page: Page, seedCount = 0) {
     return task;
   };
   await page.addInitScript(() => {
-    const observed = window as unknown as { helperUpdates: number; helperFrames: string[] };
-    observed.helperUpdates = 0;
+    const observed = window as unknown as { helperFrames: string[] };
     observed.helperFrames = [];
-    window.addEventListener('uimori-helper-updated', () => {
-      observed.helperUpdates++;
-    });
     const Original = window.EventSource;
     window.EventSource = class extends Original {
       constructor(url: string | URL, options?: EventSourceInit) {
@@ -411,6 +407,17 @@ async function harness(page: Page, seedCount = 0) {
           (unit) => restored.find((item) => item.unit === unit.unit) ?? unit
         );
         rollbacks.set(task.id, current);
+        const kinds = restored.some((unit) => unit.domain === 'resource')
+          ? ['resource.updated', 'task.rolled-back']
+          : ['task.rolled-back'];
+        for (const kind of kinds)
+          record(view, {
+            seq: ++nextSeq,
+            conversationId: view.conversation.id,
+            taskId: task.id,
+            kind,
+            data: null,
+          });
         if (loseRollback) {
           loseRollback = false;
           return route.abort('failed');
@@ -587,6 +594,13 @@ async function harness(page: Page, seedCount = 0) {
       return task;
     },
   };
+}
+function trackLibraryReads(page: Page) {
+  const reads: string[] = [];
+  page.on('request', (entry) => {
+    if (new URL(entry.url()).pathname === '/api/library') reads.push(entry.url());
+  });
+  return reads;
 }
 async function create(request: APIRequestContext) {
   const response = await postFixtureChat(request, {
@@ -1160,7 +1174,6 @@ test('HELPMODEL delayed acknowledgement preserves a newer confirmed model and th
     },
   });
   expect(newer.ok()).toBe(true);
-  await page.evaluate(() => dispatchEvent(new Event('prompt-workspace-changed')));
   await trigger.click();
   const current = picker.getByRole('button', { name: new RegExp(models[1].title) });
   await expect(current).toHaveAttribute('aria-pressed', 'true');
@@ -1416,37 +1429,28 @@ test('HELPUI14 idle and hidden helper views pause reads and resume cursors, effe
   expect(state.eventReads).toBe(hiddenEvents);
   expect(await clock.textContent()).toBe(hiddenTime);
 
-  await page.evaluate(() => {
-    (window as unknown as { receivedHelperEffects: string[] }).receivedHelperEffects = [];
-    for (const type of [
-      'uimori-helper-updated',
-      'uimori-themes-changed',
-      'uimori-illustration-presets-changed',
-    ])
-      window.addEventListener(type, () =>
-        (window as unknown as { receivedHelperEffects: string[] }).receivedHelperEffects.push(type)
-      );
+  const effectReads: string[] = [];
+  page.on('request', (entry) => {
+    const path = new URL(entry.url()).pathname;
+    if (['/api/library', '/api/prompt-workspace', '/api/themes'].includes(path))
+      effectReads.push(path);
   });
   state.complete(task);
   for (const kind of ['settings.updated', 'theme.updated', 'illustration-preset.updated'])
     state.emit(kind);
+  await expect
+    .poll(() => state.framesReceived())
+    .toEqual(expect.arrayContaining(['task.completed', 'settings.updated', 'theme.updated']));
+  expect(effectReads).toEqual([]);
   await page.evaluate(() => {
     delete (document as unknown as { hidden?: boolean }).hidden;
     document.dispatchEvent(new Event('visibilitychange'));
   });
   await expect(panel.getByText('합성 완료 응답', { exact: true })).toBeVisible();
   await expect(input).toHaveValue('다시 열어도 남길 초안');
-  expect(
-    await page.evaluate(
-      () => (window as unknown as { receivedHelperEffects: string[] }).receivedHelperEffects
-    )
-  ).toEqual(
-    expect.arrayContaining([
-      'uimori-helper-updated',
-      'uimori-themes-changed',
-      'uimori-illustration-presets-changed',
-    ])
-  );
+  await expect
+    .poll(() => [...new Set(effectReads)].sort())
+    .toEqual(['/api/library', '/api/prompt-workspace', '/api/themes']);
   expect(state.posts).toHaveLength(1);
 });
 
@@ -1605,15 +1609,16 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
   expect(state.posts.at(-1)!.requestKey).toBe(key);
   expect(state.current().tasks).toHaveLength(3);
   await expect(input).toHaveValue('접수 확인 중에도 보존할 새 입력');
+  const libraryReads = trackLibraryReads(page);
   await state.complete(first);
   await expect(panel.getByText('합성 완료 응답', { exact: true })).toBeVisible();
   const completedStreamReads = state.streamReads.get(first.id);
   await state.pulse(2);
   expect(state.streamReads.get(first.id)).toBe(completedStreamReads);
   expect(state.eventStreamReads).toBe(0);
-  expect(
-    await page.evaluate(() => (window as unknown as { helperUpdates: number }).helperUpdates)
-  ).toBe(1);
+  await expect.poll(() => libraryReads.length).toBe(1);
+  await state.pulse(1);
+  expect(libraryReads).toHaveLength(1);
 });
 
 test('HELPUI03 archived artifact revisions and device drafts remain readable without writes', async ({

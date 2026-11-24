@@ -16,6 +16,8 @@ import {
 import { sameEditorValue } from './editor-values.js';
 import { writeOptionalStorage } from './optional-storage.js';
 import { storageKeys } from './storage-keys.js';
+import { promptWorkspaceChange } from './live-frames.js';
+import { announceLocalChange } from './live-stream.js';
 
 export type EditorBuffer = {
   model: ResourceModel;
@@ -484,7 +486,7 @@ export class ResourceEditorSession {
   private notifySaved() {
     window.dispatchEvent(new Event('uimori-resource-saved'));
     if (this.options.kind !== 'content')
-      window.dispatchEvent(new Event('prompt-workspace-changed'));
+      announceLocalChange(promptWorkspaceChange, { echoed: false });
     writeOptionalStorage('local', libraryChangedKey, String(Date.now()));
   }
 }

@@ -21,13 +21,16 @@ export type ChatEventSources = {
   latestEventSequence(chatId: string): number;
   streams: {
     read(taskKind: ResponseTaskKind, taskId: string, after?: number): ResponseStreamPage;
-    runningTasks(chatId: string): ResponseTaskIdentity[];
-    subscribeChat(chatId: string, listener: (identity: ResponseTaskIdentity) => void): () => void;
+    runningTasks(chatId: string | null): ResponseTaskIdentity[];
+    subscribeChat(
+      chatId: string | null,
+      listener: (identity: ResponseTaskIdentity) => void
+    ): () => void;
   };
 };
 
 type Connection = {
-  chatId: string;
+  chatId: string | null;
   response: ServerResponse;
   authorized: () => boolean;
   cursor: number;
@@ -86,7 +89,7 @@ export function chatEventResume(lastEventId: unknown, streamAfter: unknown): Cha
 }
 
 export function createChatEventStreams(sources: ChatEventSources) {
-  const connections = new Map<string, Set<Connection>>();
+  const connections = new Map<string | null, Set<Connection>>();
 
   const eventId = (connection: Connection) => {
     const streams = formatStreamCursors(connection.tasks.values());
@@ -119,10 +122,11 @@ export function createChatEventStreams(sources: ChatEventSources) {
       response.end();
       return;
     }
-    for (const event of sources.events(connection.chatId, connection.cursor)) {
-      connection.cursor = event.seq;
-      if (!send(connection, JSON.stringify(event))) return;
-    }
+    if (connection.chatId !== null)
+      for (const event of sources.events(connection.chatId, connection.cursor)) {
+        connection.cursor = event.seq;
+        if (!send(connection, JSON.stringify(event))) return;
+      }
     for (const key of connection.dirty) {
       const task = connection.tasks.get(key);
       for (;;) {
@@ -168,7 +172,7 @@ export function createChatEventStreams(sources: ChatEventSources) {
         for (const { response } of listeners) response.end();
     },
     connect(
-      chatId: string,
+      chatId: string | null,
       resume: ChatEventResume,
       response: ServerResponse,
       authorized: () => boolean,
@@ -178,7 +182,7 @@ export function createChatEventStreams(sources: ChatEventSources) {
         chatId,
         response,
         authorized,
-        cursor: resume.cursor ?? sources.latestEventSequence(chatId),
+        cursor: chatId === null ? 0 : (resume.cursor ?? sources.latestEventSequence(chatId)),
         tasks: new Map(),
         dirty: new Set(),
         blocked: false,
@@ -191,11 +195,14 @@ export function createChatEventStreams(sources: ChatEventSources) {
         if (!connection.tasks.has(key)) connection.tasks.set(key, task);
         connection.dirty.add(key);
       };
-      const unsubscribe = sources.streams.subscribeChat(chatId, ({ taskKind, taskId }) => {
-        track({ taskKind, taskId, after: 0 });
-        pump(connection);
-      });
-      const running = sources.streams.runningTasks(chatId);
+      const scopes = chatId === null ? [null] : [chatId, null];
+      const unsubscribes = scopes.map((scope) =>
+        sources.streams.subscribeChat(scope, ({ taskKind, taskId }) => {
+          track({ taskKind, taskId, after: 0 });
+          pump(connection);
+        })
+      );
+      const running = scopes.flatMap((scope) => sources.streams.runningTasks(scope));
       const runningKeys = new Set(running.map(keyOf));
       for (const { taskKind, taskId, after } of resume.streams) {
         const listed = { taskKind, taskId, after };
@@ -219,12 +226,15 @@ export function createChatEventStreams(sources: ChatEventSources) {
       response.on('drain', drain);
       response.on('close', () => {
         clearInterval(heartbeat);
-        unsubscribe();
+        for (const unsubscribe of unsubscribes) unsubscribe();
         response.off('drain', drain);
         listeners.delete(connection);
         if (!listeners.size && connections.get(chatId) === listeners) connections.delete(chatId);
       });
-      if (send(connection, JSON.stringify({ kind: 'snapshot', chatId, seq: connection.cursor })))
+      if (
+        chatId === null ||
+        send(connection, JSON.stringify({ kind: 'snapshot', chatId, seq: connection.cursor }))
+      )
         pump(connection);
     },
   };

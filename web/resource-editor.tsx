@@ -23,6 +23,9 @@ import type { ResourceEditorSession, EditorState } from './resource-editor-sessi
 import { libraryChangedKey } from './api.js';
 import { useShortcut } from './shortcuts.js';
 import './resource-editor.css';
+import { helperDataFrame, promptWorkspaceFrame } from './live-frames.js';
+import { watchLive } from './live-stream.js';
+import { helperRefreshSpacing } from './poll-delays.js';
 
 const sessions = new Map<symbol, ResourceEditorSession>();
 const saveCommands = new Map<ResourceEditorSession, () => Promise<boolean>>();
@@ -131,18 +134,20 @@ export function useResourceEditor<Model extends ResourceModel>(session: Resource
     const storage = (event: StorageEvent) => {
       if (event.key === libraryChangedKey) refresh();
     };
+    const workspace = session.options.kind === 'prompt-workspace';
+    const live = watchLive({
+      match: (frame) => helperDataFrame(frame) || (workspace && promptWorkspaceFrame(frame)),
+      refresh: async () => refresh(),
+      minIntervalMs: helperRefreshSpacing,
+    });
     window.addEventListener('focus', refresh);
-    window.addEventListener('uimori-helper-updated', refresh);
     window.addEventListener('uimori-resource-saved', refresh);
     window.addEventListener('storage', storage);
-    if (session.options.kind === 'prompt-workspace')
-      window.addEventListener('prompt-workspace-changed', refresh);
     return () => {
+      live.dispose();
       window.removeEventListener('focus', refresh);
-      window.removeEventListener('uimori-helper-updated', refresh);
       window.removeEventListener('uimori-resource-saved', refresh);
       window.removeEventListener('storage', storage);
-      window.removeEventListener('prompt-workspace-changed', refresh);
       sessions.delete(token);
       unsubscribe();
       if (focused === token) focused = null;

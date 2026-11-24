@@ -14,7 +14,9 @@ import type {
   HelperConversationDeletion,
   HelperProject,
 } from '../core/helper.js';
-import { activityChangedEvent, api, ApiError } from './api.js';
+import { api, ApiError } from './api.js';
+import { helperListChange, helperListFrame } from './live-frames.js';
+import { announceLocalChange, watchLive } from './live-stream.js';
 import { ActionMenu } from './ActionMenu.js';
 import { Dialog } from './Dialog.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -110,6 +112,7 @@ export function HelperSessionBar(props: Props) {
   const [error, setError] = useState('');
   const [readError, setReadError] = useState('');
   const [cleanupFailure, setCleanupFailure] = useState('');
+  const projectReadError = useRef('');
   const reloadProjects = useCallback(async () => {
     const version = ++projectReadVersion.current;
     try {
@@ -117,34 +120,24 @@ export function HelperSessionBar(props: Props) {
       if (version !== projectReadVersion.current) return;
       setProjects(values);
       setProjectsLoaded(true);
-      setProjectError('');
+      const stale = projectReadError.current;
+      projectReadError.current = '';
+      if (stale) setProjectError((current) => (current === stale ? '' : current));
     } catch (cause) {
       if (version !== projectReadVersion.current) return;
       setProjectsLoaded(false);
-      setProjectError(
-        cause instanceof Error ? cause.message : uiMessage('helperNavigation.loadFailed')
-      );
+      projectReadError.current =
+        cause instanceof Error ? cause.message : uiMessage('helperNavigation.loadFailed');
+      setProjectError(projectReadError.current);
     }
   }, []);
-  const projectChanged = () =>
-    window.dispatchEvent(new CustomEvent(activityChangedEvent, { detail: '/helper/projects' }));
+  const projectChanged = () => announceLocalChange(helperListChange, { echoed: true });
   useEffect(() => {
     if (props.open === false) return;
-    const refresh = () => {
-      if (!document.hidden) void reloadProjects();
-    };
-    const submitted = (event: Event) => {
-      const path = (event as CustomEvent<string>).detail;
-      if (typeof path === 'string' && path.startsWith('/helper/projects')) refresh();
-    };
-    refresh();
-    window.addEventListener('focus', refresh);
-    document.addEventListener('visibilitychange', refresh);
-    window.addEventListener(activityChangedEvent, submitted);
+    const live = watchLive({ match: helperListFrame, refresh: reloadProjects });
+    live.request();
     return () => {
-      window.removeEventListener('focus', refresh);
-      document.removeEventListener('visibilitychange', refresh);
-      window.removeEventListener(activityChangedEvent, submitted);
+      live.dispose();
       projectReadVersion.current++;
     };
   }, [props.open, reloadProjects]);

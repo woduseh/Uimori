@@ -5,8 +5,8 @@ import { useStableHandler } from './useStableHandler.js';
 export type LiveFrame =
   | { event: 'chats'; seq: number; chatId: string | null; kind: string; entityId: string | null }
   | { event: 'helper'; seq: number; conversationId: string; taskId: string | null; kind: string }
-  | { event: 'invalidate'; name: string };
-export type LiveSignal = LiveFrame | 'resync';
+  | { event: 'invalidate'; name: string; seq?: number };
+export type LiveSignal = LiveFrame | 'resync' | 'visible';
 export type LiveState = 'open' | 'connecting' | 'down';
 
 export type LiveSource = {
@@ -40,6 +40,9 @@ export function createLiveStream(environment: LiveEnvironment) {
   let current: LiveState = 'connecting';
   let queued = false,
     reopenFailures = 0;
+  let seen:
+    | { instanceId: string; chatsSeq: number; helperSeq: number; invalidations: number }
+    | undefined;
   let downTimer: ReturnType<typeof setTimeout> | undefined,
     silenceTimer: ReturnType<typeof setTimeout> | undefined,
     reopenTimer: ReturnType<typeof setTimeout> | undefined;
@@ -56,7 +59,7 @@ export function createLiveStream(environment: LiveEnvironment) {
   };
   const signal = (value: LiveSignal) => {
     for (const subscriber of [...subscribers])
-      if (value === 'resync' || subscriber.match(value)) subscriber.onSignal(value);
+      if (typeof value === 'string' || subscriber.match(value)) subscriber.onSignal(value);
   };
   const heard = () => {
     clearTimeout(downTimer);
@@ -99,25 +102,24 @@ export function createLiveStream(environment: LiveEnvironment) {
     }
     const attached = chat;
     const query = new URLSearchParams();
-    if (attached) {
-      query.set('chat', attached.chatId);
-      const cursors = responseStreamCursors();
-      if (cursors) query.set('streamAfter', cursors);
-    }
-    const own = environment.connect(`/api/events${attached ? `?${query}` : ''}`);
-    const pushed = attached ? openResponseStreamChannel() : undefined;
+    if (attached) query.set('chat', attached.chatId);
+    const cursors = responseStreamCursors();
+    if (cursors) query.set('streamAfter', cursors);
+    const search = query.toString();
+    const own = environment.connect(`/api/events${search ? `?${search}` : ''}`);
+    const pushed = openResponseStreamChannel();
     source = own;
     responses = pushed;
     waiting();
     own.onopen = () => {
       if (source !== own) return;
       heard();
-      pushed?.connected();
+      pushed.connected();
       attached?.handler.open();
     };
     own.onerror = () => {
       if (source !== own) return;
-      pushed?.disconnected();
+      pushed.disconnected();
       attached?.handler.error();
       waiting();
       if (own.readyState === CLOSED) scheduleReopen();
@@ -130,21 +132,35 @@ export function createLiveStream(environment: LiveEnvironment) {
     own.addEventListener('stream', (event) => {
       if (source !== own) return;
       heard();
-      pushed?.deliver(event.data);
+      pushed.deliver(event.data);
     });
     own.addEventListener('keepalive', () => {
       if (source === own) heard();
     });
-    own.addEventListener('live', () => {
+    own.addEventListener('live', (event) => {
       if (source !== own) return;
       heard();
-      signal('resync');
+      const tail = JSON.parse(event.data) as NonNullable<typeof seen>;
+      const caughtUp =
+        seen?.instanceId === tail.instanceId &&
+        seen.chatsSeq === tail.chatsSeq &&
+        seen.helperSeq === tail.helperSeq &&
+        seen.invalidations === tail.invalidations;
+      seen = tail;
+      if (!caughtUp) signal('resync');
     });
     for (const name of globalFrames)
       own.addEventListener(name, (event) => {
         if (source !== own) return;
         heard();
-        signal({ ...JSON.parse(event.data), event: name } as LiveFrame);
+        const frame = { ...JSON.parse(event.data), event: name } as LiveFrame;
+        if (seen && Number.isSafeInteger(frame.seq)) {
+          const position = frame.seq!;
+          if (frame.event === 'chats') seen.chatsSeq = Math.max(seen.chatsSeq, position);
+          else if (frame.event === 'helper') seen.helperSeq = Math.max(seen.helperSeq, position);
+          else seen.invalidations = Math.max(seen.invalidations, position);
+        }
+        signal(frame);
       });
   };
   const reconnect = () => {
@@ -171,7 +187,7 @@ export function createLiveStream(environment: LiveEnvironment) {
   environment.listen('visibilitychange', () => {
     if (environment.hidden()) return;
     if (reopenTimer) open();
-    signal('resync');
+    signal('visible');
   });
   reconnect();
 
@@ -192,6 +208,9 @@ export function createLiveStream(environment: LiveEnvironment) {
       return () => {
         subscribers.delete(subscriber);
       };
+    },
+    announce(frame: LiveFrame) {
+      signal(frame);
     },
     state: () => current,
     watchState(listener: (state: LiveState) => void) {
@@ -217,19 +236,25 @@ export function liveStream() {
   return shared;
 }
 
+export function announceLocalChange(frame: LiveFrame, options: { echoed: boolean }) {
+  if (!shared || (options.echoed && shared.state() === 'open')) return;
+  shared.announce(frame);
+}
+
 export const liveRefreshRetry = { first: 100, longest: 5000 };
 
 export function createLiveRefresh(options: {
   stream: Pick<LiveStream, 'subscribe' | 'state' | 'watchState'>;
   match: (frame: LiveFrame) => boolean;
   refresh: () => Promise<unknown>;
-  fallbackMs: number | (() => number | undefined);
+  fallbackMs?: number | (() => number | undefined);
   minIntervalMs?: number;
   hidden: () => boolean;
 }) {
   const fallbackDelay = () =>
     typeof options.fallbackMs === 'function' ? options.fallbackMs() : options.fallbackMs;
   let disposed = false,
+    deferred = false,
     inFlight = false,
     trailing = false,
     failures = 0,
@@ -238,7 +263,12 @@ export function createLiveRefresh(options: {
     fallback: ReturnType<typeof setTimeout> | undefined;
   const start = async () => {
     timer = undefined;
-    if (disposed || options.hidden()) return;
+    if (disposed) return;
+    if (options.hidden()) {
+      deferred = true;
+      return;
+    }
+    deferred = false;
     inFlight = true;
     trailing = false;
     lastStart = Date.now();
@@ -276,11 +306,13 @@ export function createLiveRefresh(options: {
     if (disposed || delay === undefined || options.stream.state() !== 'down') return;
     fallback = setTimeout(() => {
       fallback = undefined;
-      if (!options.hidden()) request();
+      request();
       poll();
     }, delay);
   };
-  const unsubscribe = options.stream.subscribe(options.match, request);
+  const unsubscribe = options.stream.subscribe(options.match, (signal) => {
+    if (signal !== 'visible' || deferred || options.stream.state() !== 'open') request();
+  });
   const unwatch = options.stream.watchState(poll);
   poll();
   return {
@@ -305,7 +337,7 @@ export function useLiveRefresh(options: {
   enabled: boolean;
   match: (frame: LiveFrame) => boolean;
   refresh: () => Promise<unknown>;
-  fallbackMs: number;
+  fallbackMs?: number;
   minIntervalMs?: number;
 }) {
   const match = useStableHandler(options.match);

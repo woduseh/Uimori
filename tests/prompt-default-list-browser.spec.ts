@@ -53,6 +53,11 @@ test('PDEF01 the prompt list marks the global defaults and changes one through t
   await expect(row(second).getByRole('button', { name: '기본으로 사용' })).toHaveCount(0);
   await page.keyboard.press('Escape');
 
+  await page.route('**/api/events**', (route) => route.abort());
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('offline'));
+    window.dispatchEvent(new Event('online'));
+  });
   const stale = await workspace(request);
   const external = await request.post('/api/prompt-workspace/apply', {
     data: { expectedRevision: stale.revision, role: 'translation', presetId: translation.id },

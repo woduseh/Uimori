@@ -81,7 +81,7 @@ test('COLOR selected input language and avatar text stay readable in default and
         },
       });
       expect(changed.ok()).toBe(true);
-      await page.evaluate(() => dispatchEvent(new Event('uimori-themes-changed')));
+      await page.evaluate(() => dispatchEvent(new Event('focus')));
       await expect(page.locator('html')).toHaveAttribute('data-theme', mode);
       await expect
         .poll(() =>

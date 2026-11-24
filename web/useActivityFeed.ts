@@ -1,8 +1,11 @@
 import { useI18n, message as uiMessage } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ActivityFeed, ActivityFeedItem } from '../core/activity-feed.js';
-import { activityChangedEvent, api } from './api.js';
+import { api } from './api.js';
 import { readAcknowledgements, saveAcknowledgements } from './activity-acknowledgements.js';
+import { activityFrame } from './live-frames.js';
+import { watchLive } from './live-stream.js';
+import { activityPollDelay, activityRefreshSpacing } from './poll-delays.js';
 
 function groupByChat(items: ActivityFeedItem[]) {
   const result = new Map<string, ActivityFeedItem[]>();
@@ -89,41 +92,18 @@ export function useActivityFeed() {
     }
   }, []);
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let stopped = false;
-    const poll = async () => {
-      if (stopped) return;
-      if (!document.hidden) await refresh();
-      if (!stopped)
-        timer = setTimeout(
-          () => void poll(),
-          latest.current.running.length ||
-            latest.current.helpers?.some((task) => ['queued', 'running'].includes(task.status))
-            ? 2500
-            : 10000
-        );
-    };
-    const active = () => {
-      if (!document.hidden) void refresh();
-    };
-    let resuming: Promise<void> | null = null;
-    const resume = () => {
-      if (document.hidden || resuming) return;
-      resuming = refresh().finally(() => {
-        resuming = null;
-      });
-    };
-    void poll();
-    document.addEventListener('visibilitychange', resume);
-    window.addEventListener('focus', resume);
-    window.addEventListener(activityChangedEvent, active);
-    return () => {
-      stopped = true;
-      clearTimeout(timer);
-      document.removeEventListener('visibilitychange', resume);
-      window.removeEventListener('focus', resume);
-      window.removeEventListener(activityChangedEvent, active);
-    };
+    const live = watchLive({
+      match: activityFrame,
+      refresh,
+      fallbackMs: () =>
+        latest.current.running.length ||
+        latest.current.helpers?.some((task) => ['queued', 'running'].includes(task.status))
+          ? activityPollDelay.active
+          : activityPollDelay.idle,
+      minIntervalMs: activityRefreshSpacing,
+    });
+    live.request();
+    return live.dispose;
   }, [refresh]);
   useEffect(() => {
     const visible = (event: Event) => {

@@ -25,6 +25,8 @@ import { applyThemeAssets } from './theme-assets.js';
 import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
 import { useShortcut } from './shortcuts.js';
 import { storageKeys } from './storage-keys.js';
+import { helperResourceFrame } from './live-frames.js';
+import { watchLive } from './live-stream.js';
 
 export const themesChangedKey = storageKeys.themesChanged;
 const initial: ThemeCatalog = { themes: BUILTIN_THEMES, preferences: defaultThemePreferences() };
@@ -104,15 +106,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const storage = (event: StorageEvent) => {
       if (event.key === themesChangedKey) focus();
     };
+    const live = watchLive({ match: helperResourceFrame('theme'), refresh });
     window.addEventListener('focus', focus);
     window.addEventListener('storage', storage);
-    window.addEventListener('uimori-themes-changed', focus);
     return () => {
       alive.current = false;
       epoch.current++;
+      live.dispose();
       window.removeEventListener('focus', focus);
       window.removeEventListener('storage', storage);
-      window.removeEventListener('uimori-themes-changed', focus);
     };
   }, [refresh]);
   const setDisabled = useCallback((value: boolean) => {

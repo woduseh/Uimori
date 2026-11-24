@@ -227,6 +227,26 @@ test('CTXUI03 manual no-op preserves a summary and exposes cancellable running-j
   );
 });
 
+test('CTXUI05 a summary saved elsewhere reaches the open panel through the live stream while the reader stands still', async ({
+  page,
+  request,
+}) => {
+  const { chat, panel } = await create(page, 'CTXUI05 합성 실시간 요약');
+  await page.route(`**/api/chats/${chat.id}/reader?*`, (route) => route.abort());
+  const contextReads: string[] = [];
+  page.on('request', (entry) => {
+    if (new URL(entry.url()).pathname === `/api/chats/${chat.id}/context`)
+      contextReads.push(entry.url());
+  });
+  await page.waitForTimeout(1000);
+  expect(contextReads).toEqual([]);
+  await saveSummary(request, chat.id, '다른 기기에서 저장한 요약');
+  await expect(panel.getByTestId('context-summary-text')).toHaveText('다른 기기에서 저장한 요약', {
+    timeout: 3000,
+  });
+  expect(contextReads.length).toBeGreaterThan(0);
+});
+
 const width = 412;
 test(`CTXUI04 composer compaction keeps the draft and sends one-time priorities ${width}`, async ({
   page,

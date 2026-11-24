@@ -8,6 +8,7 @@ import {
   type PushedResponsePage,
 } from './response-stream-bridge.js';
 import { api, ApiError } from './api.js';
+import { responseStreamPollDelay } from './poll-delays.js';
 import { PlainProse, Prose } from './Prose.js';
 import { HelperMessageProse } from './HelperMessageProse.js';
 import { splitCompletedParagraphs } from '../core/reading-markdown.js';
@@ -100,9 +101,6 @@ export function thoughtTail(thought: string) {
   return '…' + tail.slice(start < 0 ? 0 : start).trimStart();
 }
 
-const STREAMING_POLL_MS = 120;
-const WAITING_POLL_MS = 300;
-const PUSHED_POLL_MS = 2000;
 const PUSHED_PAGE_LIMIT = 16;
 const active = (status?: string) => status === undefined || ['queued', 'running'].includes(status);
 const taskStatusPath: Record<ResponseTaskKind, string> = {
@@ -267,10 +265,10 @@ export function StreamingResponse({
         if (!reading()) return;
         schedule(
           textArrived || pushed.length
-            ? STREAMING_POLL_MS
+            ? responseStreamPollDelay.streaming
             : !settled && responseStreamIsPushed(taskKind, taskId)
-              ? PUSHED_POLL_MS
-              : WAITING_POLL_MS
+              ? responseStreamPollDelay.pushed
+              : responseStreamPollDelay.waiting
         );
       } catch (error) {
         if (closed) return;
@@ -330,7 +328,7 @@ export function StreamingResponse({
             }
             if (terminal || polling) return;
             if (pushed.length) void poll();
-            else if (cursor > before) schedule(PUSHED_POLL_MS);
+            else if (cursor > before) schedule(responseStreamPollDelay.pushed);
           },
           disconnected: () => {
             pushed.length = 0;

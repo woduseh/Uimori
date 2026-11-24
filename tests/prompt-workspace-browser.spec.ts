@@ -406,10 +406,12 @@ test('PWS03 failed autosaves preserve consecutive local changes and protect exte
   });
   expect(external.ok()).toBe(true);
   fail = false;
-  await editor.getByRole('button', { name: '다시 저장', exact: true }).click();
-  await expect(tone).toHaveValue('충돌 초안');
-  const conflict = editor.getByRole('alert').filter({ hasText: '프롬프트가 바뀌었어요.' });
+  const conflict = editor
+    .getByRole('alert')
+    .filter({ hasText: '저장된 자료가 변경됐어요. 현재 입력은 유지돼요.' });
   await expect(conflict).toBeVisible();
+  await expect(editor.getByRole('button', { name: '다시 저장', exact: true })).toBeDisabled();
+  await expect(tone).toHaveValue('충돌 초안');
   expect((await (await request.get('/api/prompt-workspace')).json()).main.values.tone).toBe(
     '다른 창 변경'
   );
