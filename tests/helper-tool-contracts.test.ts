@@ -167,12 +167,13 @@ async function submit(
   f: Awaited<ReturnType<typeof fixture>>,
   request: string,
   expectedStatus: HelperTask['status'] = 'completed',
-  requestKey = randomUUID()
+  requestKey = randomUUID(),
+  confirmations?: string[]
 ) {
   const response = await f.app.inject({
     method: 'POST',
     url: '/api/helper/conversations/' + f.conversation.id + '/messages',
-    payload: { requestKey, text: request },
+    payload: { requestKey, text: request, ...(confirmations ? { confirmations } : {}) },
   });
   expect(response.statusCode).toBe(200);
   const task = response.json<HelperTask>();
@@ -884,7 +885,7 @@ test('long chat lore stays paged through helper reads and saves with original fi
   );
 });
 
-test('helper discovers and retires an override after its shared lore was removed', async () => {
+test('helper discovers an override after its shared lore was removed and retires it once confirmed', async () => {
   const f = await fixture();
   const service = new ChatOverridesStore(f.store);
   const initial = service.get(f.chat.id);
@@ -917,6 +918,8 @@ test('helper discovers and retires an override after its shared lore was removed
   expect(service.get(f.chat.id).conflicts).toMatchObject([{ kind: 'entry-missing' }]);
   const appCall = (id: string, args: Record<string, unknown>) =>
     call(id, 'app.call', { name: 'chat.lore', arguments: args });
+  let removal: Record<string, unknown> = {};
+  let held = '';
   mockSend((request, round) => {
     if (round === 0) return calls(appCall('list', { action: 'read', limit: 1 }));
     if (round === 1) {
@@ -952,17 +955,29 @@ test('helper discovers and retires an override after its shared lore was removed
       expect(read).not.toHaveProperty('expectedProfileRevision');
       expect(read).not.toHaveProperty('expectedPackageRevision');
       expect(read).not.toHaveProperty('expectedFieldHash');
-      return calls(
-        appCall('remove', {
-          action: 'remove',
-          body: {
-            selector: read.selector,
-            expectedRevision: read.expectedRevision,
-            expectedHeadRevision: read.expectedHeadRevision,
-          },
-        })
-      );
+      removal = {
+        action: 'remove',
+        body: {
+          selector: read.selector,
+          expectedRevision: read.expectedRevision,
+          expectedHeadRevision: read.expectedHeadRevision,
+        },
+      };
+      return calls(appCall('remove', removal));
     }
+    if (round === 3) {
+      const refused = event(request, 'remove');
+      expect(refused).toMatchObject({
+        denied: true,
+        result: {
+          code: 'CONFIRMATION_REQUIRED',
+          confirmation: { operation: 'chat.lore', reason: 'delete' },
+        },
+      });
+      held = (refused.result as { confirmation: { id: string } }).confirmation.id;
+      return structuredClone(success);
+    }
+    if (round === 4) return calls(appCall('remove', removal));
     expect(result(request, 'remove')).toMatchObject({
       revision: saved.revision + 1,
       selector,
@@ -971,6 +986,8 @@ test('helper discovers and retires an override after its shared lore was removed
     return structuredClone(success);
   });
   await submit(f, '원본 로어가 없어진 채팅 전용 변경을 찾아 제거해줘');
+  expect(service.get(f.chat.id).overrides).toHaveLength(1);
+  await submit(f, '확인했어요. 제거해 주세요.', 'completed', randomUUID(), [held]);
   expect(service.get(f.chat.id).overrides).toEqual([]);
   expect(f.store.product.get('content', f.bot.id)).toEqual(shared);
 });

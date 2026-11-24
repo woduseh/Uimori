@@ -20,30 +20,33 @@ export function autoTranslationDefaults(db: DatabaseSync): AutoTranslationDefaul
 
 export function autoTranslationDefaultRoutes(app: FastifyInstance, store: Store) {
   app.get('/api/auto-translation-defaults', () => autoTranslationDefaults(store.db));
-  app.put('/api/auto-translation-defaults', (request) => {
-    const body = record(request.body);
-    fields(body, ['expectedRevision', 'autoTranslate', 'translationLanguage']);
-    const expected = number(body.expectedRevision, 'revision', 0);
-    if (typeof body.autoTranslate !== 'boolean')
-      throw new HttpError(400, '자동 번역 기본값을 확인해 주세요.');
-    const language = body.translationLanguage;
-    if (language !== undefined && language !== null && !isWrittenLanguage(language))
-      throw new HttpError(400, '자동 번역 기본값을 확인해 주세요.');
-    return store.transaction(() => {
-      const previous = autoTranslationDefaults(store.db);
-      if (previous.revision !== expected)
-        throw new HttpError(409, '다른 창에서 자동 번역 기본값이 변경됐어요. 다시 불러와 주세요.');
-      const next: AutoTranslationDefaults = {
-        revision: previous.revision + 1,
-        autoTranslate: body.autoTranslate as boolean,
-        translationLanguage: language === undefined ? previous.translationLanguage : language,
-      };
-      store.db
-        .prepare(
-          'INSERT INTO app_metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value'
-        )
-        .run(KEY, JSON.stringify(next));
-      return next;
-    });
+  app.put('/api/auto-translation-defaults', (request) =>
+    saveAutoTranslationDefaults(store, request.body)
+  );
+}
+export function saveAutoTranslationDefaults(store: Store, value: unknown): AutoTranslationDefaults {
+  const body = record(value);
+  fields(body, ['expectedRevision', 'autoTranslate', 'translationLanguage']);
+  const expected = number(body.expectedRevision, 'revision', 0);
+  if (typeof body.autoTranslate !== 'boolean')
+    throw new HttpError(400, '자동 번역 기본값을 확인해 주세요.');
+  const language = body.translationLanguage;
+  if (language !== undefined && language !== null && !isWrittenLanguage(language))
+    throw new HttpError(400, '자동 번역 기본값을 확인해 주세요.');
+  return store.transaction(() => {
+    const previous = autoTranslationDefaults(store.db);
+    if (previous.revision !== expected)
+      throw new HttpError(409, '다른 창에서 자동 번역 기본값이 변경됐어요. 다시 불러와 주세요.');
+    const next: AutoTranslationDefaults = {
+      revision: previous.revision + 1,
+      autoTranslate: body.autoTranslate as boolean,
+      translationLanguage: language === undefined ? previous.translationLanguage : language,
+    };
+    store.db
+      .prepare(
+        'INSERT INTO app_metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value'
+      )
+      .run(KEY, JSON.stringify(next));
+    return next;
   });
 }

@@ -2802,7 +2802,7 @@ test('HCONFIRM01 held operations are confirmed with an editable request, decline
   const panel = await open(page);
   const deletion = cards().filter({ hasText: '자료 삭제' });
   await expect(deletion).toContainText(title);
-  await expect(deletion).toContainText('지운 자료는 되돌릴 수 없어서 먼저 확인해요.');
+  await expect(deletion).toContainText('지운 것은 되돌릴 수 없어서 먼저 확인해요.');
   const expired = cards().filter({ hasText: '여러 자료 한꺼번에 수정' });
   await expect(expired).toContainText('더 이상 확인할 수 없어요.');
   await expect(expired.getByRole('button')).toHaveCount(0);

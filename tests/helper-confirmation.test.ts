@@ -6,6 +6,15 @@ import { afterEach, expect, test, vi } from 'vitest';
 import type { Content } from '../core/product.js';
 import { deleteChat } from '../server/chat-deletion.js';
 import { helperConfirmationGate } from '../server/helper-confirmations.js';
+import { HELPER_APP_TOOLS, helperToolTraits } from '../server/helper-app-tools.js';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import type { HelperConfirmation } from '../core/helper.js';
+import {
+  HELPER_CONFIRMATION_OPERATION_LABELS,
+  HelperConfirmations,
+} from '../web/HelperConfirmations.js';
+import { t } from '../web/i18n.js';
 import { readHelperTaskResults } from '../server/helper-task-results.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
@@ -442,4 +451,175 @@ test('a plan-mode request cannot carry a confirmation, which stays grantable', a
   expect(readHelperTaskResults(f.store(), first.task.id).confirmations).toMatchObject([
     { id: confirmation!.id, grantedBy: null, grantable: true },
   ]);
+});
+
+const UNCONFIRMED_DELETIONS: Record<string, string> = {
+  'chat.bookmark:delete': 'a bookmark only marks a place in the reader; no story text changes',
+  'chat.organize:delete-folder':
+    'the chats of the folder move to the top level; no chat is deleted',
+};
+
+function operationCases(tool: (typeof HELPER_APP_TOOLS)[number]) {
+  const actions = (
+    (tool.inputSchema as { properties?: { action?: { enum?: unknown[] } } }).properties?.action
+      ?.enum ?? []
+  ).filter((value): value is string => typeof value === 'string');
+  return [
+    { key: tool.name, args: {} as Record<string, unknown> },
+    ...actions.map((action) => ({ key: `${tool.name}:${action}`, args: { action } })),
+  ];
+}
+
+test('every deleting operation waits for confirmation or names why it does not, and every held operation has a card label', () => {
+  const deleting = HELPER_APP_TOOLS.flatMap((tool) =>
+    operationCases(tool).filter(({ key }) => /(^|[.:])(delete|remove)[^.:]*$/.test(key))
+  );
+  expect(deleting.length).toBeGreaterThan(5);
+  const unexplained = deleting
+    .filter(
+      ({ key, args }) =>
+        helperToolTraits(key.split(':')[0]!, args).confirmation !== 'delete' &&
+        !UNCONFIRMED_DELETIONS[key]
+    )
+    .map(({ key }) => key);
+  expect(unexplained).toEqual([]);
+  const held = new Set([
+    'resource.patchMany',
+    ...HELPER_APP_TOOLS.flatMap((tool) =>
+      operationCases(tool)
+        .filter(({ args }) => helperToolTraits(tool.name, args).confirmation)
+        .map(() => tool.name)
+    ),
+  ]);
+  expect([...held].filter((name) => !HELPER_CONFIRMATION_OPERATION_LABELS[name])).toEqual([]);
+});
+
+function heldTask(f: ReturnType<typeof fixture>, confirmPaidGeneration: boolean) {
+  const workspace = new HelperWorkspace(f.store());
+  const conversation = workspace.open({ kind: 'chat', chatId: f.chat.id });
+  const task = workspace.enqueue(conversation.id, randomUUID(), '삽화 그려 줘', {
+    scope: conversation.scope,
+    model: {} as never,
+    history: [],
+    persona: '',
+    limits: { totalCalls: 3, helperCalls: 2 },
+    ...(confirmPaidGeneration ? { confirmPaidGeneration: true as const } : {}),
+  });
+  return { workspace, task };
+}
+
+test('paid illustration and retry calls wait only when paid confirmation is on, and the card counts the pictures', () => {
+  const f = fixture();
+  const moment = (sourceId: string, focus: string) => ({
+    sourceId,
+    expectedSourceHash: 'a'.repeat(64),
+    startAnchor: 'p1',
+    endAnchor: 'p1',
+    focus,
+  });
+  const second = completedSource(f.store(), f.chat.id, '두 번째 장면이에요.\n');
+  const sceneIds = f
+    .store()
+    .history(f.store().chat(f.chat.id).headRevision)
+    .map((item) => item.revision);
+  const args = {
+    moments: [moment(sceneIds[0]!, '종'), moment(second.id, '안개'), moment(second.id, '등대')],
+  };
+  const off = heldTask(f, false);
+  expect(
+    helperConfirmationGate(f.store(), off.workspace, off.task, 'illustration.generate', args, 'r1')
+  ).toBeNull();
+  const on = heldTask(f, true);
+  expect(
+    helperConfirmationGate(f.store(), on.workspace, on.task, 'illustration.generate', args, 'r2')
+  ).toMatchObject({
+    code: 'CONFIRMATION_REQUIRED',
+    confirmation: {
+      operation: 'illustration.generate',
+      reason: 'paid',
+      count: 3,
+      targets: [
+        { kind: 'scene', id: sceneIds[0] },
+        { kind: 'scene', id: second.id },
+      ],
+    },
+  });
+  expect(
+    helperConfirmationGate(
+      f.store(),
+      on.workspace,
+      on.task,
+      'task.retry',
+      { kind: 'run', id: 'run-1' },
+      'r3'
+    )
+  ).toMatchObject({ confirmation: { operation: 'task.retry', reason: 'paid', targets: [] } });
+});
+
+test('an irreversible deletion waits even without paid confirmation and names its target', () => {
+  const f = fixture();
+  const model = f.store().product.all('model')[0] as { id: string; title: string };
+  const { workspace, task } = heldTask(f, false);
+  expect(
+    helperConfirmationGate(
+      f.store(),
+      workspace,
+      task,
+      'model.delete',
+      { modelId: model.id, expectedRevision: 1 },
+      'r1'
+    )
+  ).toMatchObject({
+    confirmation: {
+      reason: 'delete',
+      targets: [{ kind: 'model', id: model.id, title: model.title }],
+    },
+  });
+  expect(
+    helperConfirmationGate(
+      f.store(),
+      workspace,
+      task,
+      'chat.lore',
+      { action: 'patch', body: {} },
+      'r2'
+    )
+  ).toBeNull();
+});
+
+test('the confirmation card shows titles the server attached and the number of pictures', () => {
+  const held = (overrides: Partial<HelperConfirmation>): HelperConfirmation => ({
+    id: 'held',
+    taskId: 'task',
+    operation: 'model.delete',
+    reason: 'delete',
+    chatId: null,
+    targets: [],
+    grantedBy: null,
+    grantable: true,
+    ...overrides,
+  });
+  const html = renderToStaticMarkup(
+    createElement(HelperConfirmations, {
+      confirmations: [
+        held({ id: 'model', targets: [{ kind: 'model', id: 'm1', title: 'Old model' }] }),
+        held({
+          id: 'draw',
+          operation: 'illustration.generate',
+          reason: 'paid',
+          chatId: 'c1',
+          targets: [{ kind: 'scene', id: 's1' }],
+          count: 3,
+        }),
+      ],
+      nameTarget: (target) => `named:${target.id}`,
+      pending: [],
+      onConfirm: () => {},
+    })
+  );
+  expect(html).toContain('Old model');
+  expect(html).not.toContain('named:m1');
+  expect(html).toContain('named:s1');
+  expect(html).toContain(t('helperConfirm.pictures', { count: 3 }));
+  expect(html).toContain(t('helperConfirm.modelDelete'));
 });

@@ -1016,8 +1016,13 @@ function App() {
     } else if (target.kind === 'chat') {
       if (s.selected !== target.id || s.destination !== 'story') s.select(target.id);
       setPanel('');
-    } else if (target.kind === 'settings' && target.setting?.startsWith('newChat.')) {
-      setSettingsTab('general');
+    } else if (
+      target.kind === 'settings' &&
+      (target.setting?.startsWith('newChat.') ||
+        target.setting === 'global.autoTranslate' ||
+        target.setting === 'global.translationLanguage')
+    ) {
+      setSettingsTab(target.setting === 'newChat.loreContext' ? 'lore' : 'general');
       setPanel('settings');
     } else if (target.kind === 'settings' && target.setting === 'bot.storyUiTheme') {
       setStoryUiThemeTarget({ botId: target.id, title: target.title });
@@ -1027,26 +1032,35 @@ function App() {
       if (s.selected !== target.id || s.destination !== 'story') s.select(target.id);
       setSettingsSection(
         target.setting === 'chat.illustrationProfiles' ||
-          target.setting === 'chat.illustrationReferences'
+          target.setting === 'chat.illustrationReferences' ||
+          target.setting === 'chat.illustrationPreset'
           ? 'images'
           : target.setting === 'chat.variables'
             ? 'packages'
             : target.setting === 'chat.storyGuide'
               ? 'guide'
-              : target.setting === 'chat.maxCalls' ||
-                  target.setting === 'chat.storyUi' ||
-                  target.setting === 'chat.storyUiStyle'
-                ? 'runtime'
-                : 'prompts'
+              : target.setting === 'chat.attachments'
+                ? 'characters'
+                : target.setting === 'chat.loreContext' || target.setting === 'chat.authorNote'
+                  ? 'story'
+                  : target.setting === 'chat.maxCalls' ||
+                      target.setting === 'chat.storyUi' ||
+                      target.setting === 'chat.storyUiStyle'
+                    ? 'runtime'
+                    : 'prompts'
       );
       setPanel('story');
     } else {
       setSettingsTab(
         target.kind === 'theme'
           ? 'themes'
-          : target.kind === 'illustration-preset'
+          : target.kind === 'illustration-preset' ||
+              target.setting === 'illustrationPreset.global' ||
+              target.setting === 'bot.illustrationPreset'
             ? 'illustrations'
-            : target.kind === 'prompt-workspace'
+            : target.kind === 'prompt-workspace' ||
+                target.setting === 'global.mainPromptPreset' ||
+                target.setting === 'global.translationPromptPreset'
               ? 'prompts'
               : target.setting === 'model.pricing' ||
                   target.setting === 'model.parameters' ||

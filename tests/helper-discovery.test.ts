@@ -21,6 +21,14 @@ test.each([
   ['which region is fastest for this vertex model', 'vertex.location.compare', 'library'],
   ['move the vertex connection to another region', 'vertex.location.update', 'library'],
   ['기본 외형', 'resource.patch', 'library'],
+  ['register a new model from the provider catalog', 'model.register', 'library'],
+  ['delete an unused model', 'model.delete', 'library'],
+  ['attach a different persona to this chat', 'chat.profile.update', 'chat'],
+  ['hide this scene from the writer', 'scene.context.update', 'chat'],
+  ['bookmark this scene', 'chat.bookmark', 'chat'],
+  ['put these chats into a folder', 'chat.organize', 'library'],
+  ['use another illustration preset for this chat', 'illustration-preset.select', 'chat'],
+  ['turn on automatic translation', 'settings.update', 'library'],
 ] as const)(
   'discovery returns %s candidates with the needed %s schema',
   (query, expected, scope) => {

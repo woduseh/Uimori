@@ -6,6 +6,12 @@ import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { invokeHelperSettingsTool as call } from '../server/helper-settings-tools.js';
 import { modelWorkspace, promptWorkspace } from '../server/prompt-workspace.js';
+import {
+  illustrationPresetCatalog,
+  saveIllustrationPreset,
+} from '../server/illustration-presets.js';
+import { emptyIllustrationPreset } from '../core/illustration-presets.js';
+import type { ModelPreset } from '../core/product.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { saveTheme } from '../server/themes.js';
 
@@ -49,8 +55,14 @@ test('settings read shows selected references without prompt bodies or provider 
   const store = database(),
     chat = createFixtureChat(store, 'A'),
     selected = model(store, 'Selected');
-  const listed = call(store, 'model.list', {}) as { id: string; selectable: boolean }[];
-  expect(listed).toContainEqual(expect.objectContaining({ id: selected.id, selectable: true }));
+  const listed = call(store, 'model.list', {}) as {
+    models: { id: string; selectable: boolean }[];
+    connections: { id: string }[];
+  };
+  expect(listed.models).toContainEqual(
+    expect.objectContaining({ id: selected.id, selectable: true })
+  );
+  expect(listed.connections).toContainEqual(expect.objectContaining({ id: selected.connectionId }));
   expect(JSON.stringify(listed)).not.toContain('127.0.0.1');
   call(store, 'settings.update', {
     setting: 'global.mainModel',
@@ -284,4 +296,141 @@ test('chat prompt pin reports the effective prompt and preserves the model pin',
     revision: preset.revision,
   });
   expect(promptWorkspace(store)).toEqual(before);
+});
+
+test('model.register saves a model on a connection and model.delete refuses while a role still uses it', () => {
+  const store = database();
+  const existing = model(store, 'Existing');
+  const registered = call(store, 'model.register', {
+    connectionId: existing.connectionId,
+    providerModelId: 'fixture-next',
+    title: 'Next',
+  }) as { modelId: string; revision: number };
+  expect(store.product.get<ModelPreset>('model', registered.modelId)).toMatchObject({
+    title: 'Next',
+    connectionId: existing.connectionId,
+    modelId: 'fixture-next',
+    maxOutputTokens: 8192,
+  });
+  expect(() =>
+    call(store, 'model.register', {
+      connectionId: existing.connectionId,
+      providerModelId: 'fixture-next',
+      title: 'Next',
+      endpoint: 'http://attacker.invalid',
+    })
+  ).toThrow();
+  call(store, 'settings.update', {
+    setting: 'global.helperModel',
+    expectedRevision: modelWorkspace(store).revision,
+    value: registered.modelId,
+  });
+  expect(() =>
+    call(store, 'model.delete', {
+      modelId: registered.modelId,
+      expectedRevision: registered.revision,
+    })
+  ).toThrow(/MODEL_IN_USE: .*helper/);
+  call(store, 'settings.update', {
+    setting: 'global.helperModel',
+    expectedRevision: modelWorkspace(store).revision,
+    value: existing.id,
+  });
+  expect(
+    call(store, 'model.delete', {
+      modelId: registered.modelId,
+      expectedRevision: registered.revision,
+    })
+  ).toMatchObject({ deleted: true, modelId: registered.modelId });
+  expect((store.product.all('model') as ModelPreset[]).map((item) => item.id)).not.toContain(
+    registered.modelId
+  );
+});
+
+test('settings.update applies global prompt presets, automatic translation and new chat defaults', () => {
+  const store = database();
+  const preset = store.product.save('prompt-preset', {
+    title: 'House writing prompt',
+    role: 'main',
+    program: createDefaultRisuPrompt('House writing prompt'),
+    values: {},
+  });
+  const read = () =>
+    call(store, 'settings.read', {}) as {
+      global: { revision: number; prompts: { main: { presetId: string | null } } };
+      autoTranslation: { revision: number; autoTranslate: boolean; translationLanguage: string };
+      newChat: { revision: number; autoRefusalRetryEnabled: boolean };
+      loreContextDefaults: { revision: number; maxRetainedEntries: number } & Record<
+        string,
+        unknown
+      >;
+    };
+  call(store, 'settings.update', {
+    setting: 'global.mainPromptPreset',
+    expectedRevision: read().global.revision,
+    value: preset.id,
+  });
+  expect(read().global.prompts.main.presetId).toBe(preset.id);
+  expect(() =>
+    call(store, 'settings.update', {
+      setting: 'global.translationPromptPreset',
+      expectedRevision: read().global.revision,
+      value: preset.id,
+    })
+  ).toThrow('Prompt role mismatch');
+  call(store, 'settings.update', {
+    setting: 'global.autoTranslate',
+    expectedRevision: read().autoTranslation.revision,
+    value: true,
+  });
+  call(store, 'settings.update', {
+    setting: 'global.translationLanguage',
+    expectedRevision: read().autoTranslation.revision,
+    value: 'en',
+  });
+  expect(read().autoTranslation).toMatchObject({ autoTranslate: true, translationLanguage: 'en' });
+  call(store, 'settings.update', {
+    setting: 'newChat.autoRefusalRetryEnabled',
+    expectedRevision: read().newChat.revision,
+    value: false,
+  });
+  expect(read().newChat.autoRefusalRetryEnabled).toBe(false);
+  const { revision, ...policy } = read().loreContextDefaults;
+  call(store, 'settings.update', {
+    setting: 'newChat.loreContext',
+    expectedRevision: revision,
+    value: { ...policy, maxRetainedEntries: 12 },
+  });
+  expect(read().loreContextDefaults.maxRetainedEntries).toBe(12);
+  expect(() =>
+    call(store, 'settings.update', {
+      setting: 'newChat.loreContext',
+      expectedRevision: revision + 1,
+      value: { maxRetainedEntries: 3 },
+    })
+  ).toThrow('Invalid lore context defaults');
+});
+
+test('illustration-preset.select chooses a preset for one chat without touching the global default', () => {
+  const store = database();
+  const chat = createFixtureChat(store, 'Painted');
+  const other = saveIllustrationPreset(store, emptyIllustrationPreset('Ink wash'));
+  const catalog = illustrationPresetCatalog(store);
+  call(store, 'illustration-preset.select', {
+    scope: 'chat',
+    targetId: chat.id,
+    presetId: other.id,
+    expectedRevision: catalog.preferences.revision,
+  });
+  const preferences = illustrationPresetCatalog(store).preferences;
+  expect(preferences.chatPresets[chat.id]).toBe(other.id);
+  expect(preferences.defaultPresetId).toBe(catalog.preferences.defaultPresetId);
+  expect(() =>
+    call(store, 'illustration-preset.select', {
+      scope: 'chat',
+      targetId: chat.id,
+      presetId: null,
+      expectedRevision: catalog.preferences.revision,
+    })
+  ).toThrow();
 });

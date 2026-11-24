@@ -5,6 +5,8 @@ import { reserveSelectedIllustrations } from './illustrations.js';
 import { fields, HttpError, record, text } from './request-validation.js';
 import type { Source, Store } from './store.js';
 
+export const HELPER_ILLUSTRATION_MOMENTS_MAX = 10;
+
 export const HELPER_ILLUSTRATION_GENERATION_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.generate',
@@ -16,7 +18,8 @@ export const HELPER_ILLUSTRATION_GENERATION_TOOLS: ProviderTool[] = [
         moments: {
           type: 'array',
           minItems: 1,
-          description: 'One entry per picture.',
+          maxItems: HELPER_ILLUSTRATION_MOMENTS_MAX,
+          description: 'One entry per picture. Queue more pictures with a later call.',
           items: {
             type: 'object',
             properties: {
@@ -63,6 +66,11 @@ export function generateHelperIllustrations(
   fields(args, ['moments']);
   if (!Array.isArray(args.moments) || !args.moments.length)
     throw new HttpError(400, 'Select at least one illustration moment.');
+  if (args.moments.length > HELPER_ILLUSTRATION_MOMENTS_MAX)
+    throw new HttpError(
+      400,
+      `ILLUSTRATION_MOMENTS_LIMIT: Queue at most ${HELPER_ILLUSTRATION_MOMENTS_MAX} pictures per call.`
+    );
   const moments = args.moments;
   return store.transaction(() => {
     const ancestry = new Set(

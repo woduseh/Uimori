@@ -699,6 +699,29 @@ export function freezeCurrentPrompts(
   };
 }
 
+export function applyWorkspacePromptPreset(store: Store, value: unknown) {
+  const b = record(value);
+  fields(b, ['expectedRevision', 'role', 'presetId']);
+  const role = roleValue(b.role);
+  const presetId = text(b.presetId, 'preset', 100);
+  store.product.assertAvailable('prompt-preset', presetId);
+  const preset = store.product.get<PromptPreset>('prompt-preset', presetId);
+  if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
+  return updatePromptWorkspace(
+    store,
+    {
+      expectedRevision: b.expectedRevision,
+      [role]: {
+        title: preset.title,
+        program: preset.program,
+        values: preset.values ?? {},
+        defaultValues: resolvePromptValues(preset.program, preset.values ?? {}),
+      },
+    },
+    { role, id: preset.id }
+  );
+}
+
 export function promptWorkspaceRoutes(app: FastifyInstance, store: Store, publishAll: () => void) {
   promptCombinationRoutes(app, store, () => promptWorkspace(store));
   const publishResult = <T>(result: T): T => {
@@ -713,32 +736,9 @@ export function promptWorkspaceRoutes(app: FastifyInstance, store: Store, publis
   app.put('/api/prompt-workspace', { bodyLimit: PROMPT_HTTP_BODY_MAX_BYTES }, async (request) =>
     publishResult(updatePromptWorkspace(store, request.body))
   );
-  app.post('/api/prompt-workspace/apply', async (request) => {
-    const b = record(request.body);
-    fields(b, ['expectedRevision', 'role', 'presetId']);
-    const role = roleValue(b.role);
-    store.product.assertAvailable('prompt-preset', text(b.presetId, 'preset', 100));
-    const preset = store.product.get<PromptPreset>(
-      'prompt-preset',
-      text(b.presetId, 'preset', 100)
-    );
-    if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
-    return publishResult(
-      updatePromptWorkspace(
-        store,
-        {
-          expectedRevision: b.expectedRevision,
-          [role]: {
-            title: preset.title,
-            program: preset.program,
-            values: preset.values ?? {},
-            defaultValues: resolvePromptValues(preset.program, preset.values ?? {}),
-          },
-        },
-        { role, id: preset.id }
-      )
-    );
-  });
+  app.post('/api/prompt-workspace/apply', async (request) =>
+    publishResult(applyWorkspacePromptPreset(store, request.body))
+  );
   app.post('/api/prompt-workspace/apply-options', async (request) => {
     const b = record(request.body);
     fields(b, ['expectedRevision', 'role', 'combinationId']);

@@ -7,11 +7,20 @@ import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js
 export type HelperConfirmationTarget = HelperConfirmation['targets'][number];
 export type HelperConfirmationGrant = { id: string; operation: string; text: string };
 
-const operations: Record<string, string> = {
+export const HELPER_CONFIRMATION_OPERATION_LABELS: Record<string, string> = {
   'resource.delete': 'helperConfirm.resourceDelete',
   'resource.patchMany': 'helperConfirm.resourcePatchMany',
   'scene.request': 'helperConfirm.sceneRequest',
   'scene.translate': 'helperConfirm.sceneTranslate',
+  'illustration.cut.delete': 'helperConfirm.illustrationCutDelete',
+  'font.delete': 'helperConfirm.fontDelete',
+  'palette.delete': 'helperConfirm.paletteDelete',
+  'model.delete': 'helperConfirm.modelDelete',
+  'chat.lore': 'helperConfirm.chatLoreRemove',
+  'illustration.generate': 'helperConfirm.illustrationGenerate',
+  'illustration.cut.redraw': 'helperConfirm.illustrationRedraw',
+  'illustration.cut.revise': 'helperConfirm.illustrationRevise',
+  'task.retry': 'helperConfirm.taskRetry',
 };
 const reasons: Record<HelperConfirmation['reason'], string> = {
   delete: 'helperConfirm.reasonDelete',
@@ -22,8 +31,8 @@ const declinedKey = ({ taskId, id }: Pick<HelperConfirmation, 'taskId' | 'id'>) 
   `uimori:helper-confirmation-declined:${taskId}:${id}`;
 
 export const confirmationOperation = (confirmation: Pick<HelperConfirmation, 'operation'>) =>
-  operations[confirmation.operation]
-    ? t(operations[confirmation.operation]!)
+  HELPER_CONFIRMATION_OPERATION_LABELS[confirmation.operation]
+    ? t(HELPER_CONFIRMATION_OPERATION_LABELS[confirmation.operation]!)
     : confirmation.operation;
 
 export function HelperConfirmations({
@@ -48,7 +57,12 @@ export function HelperConfirmations({
     <ul className="helper-confirmations" aria-label={t('helperConfirm.title')}>
       {shown.map((confirmation) => {
         const operation = confirmationOperation(confirmation);
-        const targets = confirmation.targets.map(nameTarget);
+        const targets = [
+          ...confirmation.targets.map((target) => target.title ?? nameTarget(target)),
+          ...(confirmation.count === undefined
+            ? []
+            : [t('helperConfirm.pictures', { count: confirmation.count })]),
+        ];
         const waiting = pending.includes(confirmation.id);
         const open = confirmation.grantable && !confirmation.grantedBy && !waiting;
         return (
@@ -71,13 +85,12 @@ export function HelperConfirmations({
             </p>
             {targets.length > 0 && (
               <ul className="helper-confirmation-targets">
-                {targets.map((name, index) => (
-                  <li
-                    key={`${confirmation.targets[index]!.kind}:${confirmation.targets[index]!.id}`}
-                  >
-                    {name}
-                  </li>
-                ))}
+                {targets.map((name, index) => {
+                  const target = confirmation.targets[index];
+                  return (
+                    <li key={target ? `${target.kind}:${target.id}` : `count:${index}`}>{name}</li>
+                  );
+                })}
               </ul>
             )}
             <p className="helper-result-note">

@@ -778,6 +778,7 @@ export function recordHelperAction(
     action: HelperChange['action'];
     anchor: HelperChangeAnchor;
     value?: { before: unknown; after: unknown };
+    diff?: TextDiff | null;
   }
 ) {
   storeChange(
@@ -800,7 +801,7 @@ export function recordHelperAction(
               title: change.title,
               location: change.location,
               action: change.action,
-              diff: null,
+              diff: change.diff ?? null,
               anchor: change.anchor,
             },
           ]

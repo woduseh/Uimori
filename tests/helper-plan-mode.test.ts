@@ -102,6 +102,7 @@ test('an operation joins the read classification only by updating this reviewed 
     'artifact.read',
     'chat.list',
     'chat.preview',
+    'chat.profile.read',
     'chat.read',
     'chat.variables.read',
     'context.read',

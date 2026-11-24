@@ -39,6 +39,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { validateEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import type { Store } from './store.js';
 import {
+  CHAT_AUTHOR_NOTE_MAX_CHARS,
   defaultProfile,
   workspaceModelRef,
   VERTEX_GEMINI_DEFAULT_TIMEOUT_MS,
@@ -637,7 +638,7 @@ export class ProductStore {
       const authorNote =
         b.authorNote === undefined
           ? (prior.authorNote ?? '')
-          : text(b.authorNote, 'author note', 32_000, true);
+          : text(b.authorNote, 'author note', CHAT_AUTHOR_NOTE_MAX_CHARS, true);
       if (
         pinned?.mainPromptPresetId &&
         pinned.mainPromptPresetId !== prior.pinned?.mainPromptPresetId

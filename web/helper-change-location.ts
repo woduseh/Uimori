@@ -36,6 +36,22 @@ export const settingsLabels: Record<string, string> = {
   'chat.options': 'helperResults.chatOptions',
   'chat.storyGuide': 'helperResults.storyGuide',
   'model.parameters': 'helperResults.modelParameters',
+  'global.mainPromptPreset': 'helperResults.globalMainPromptPreset',
+  'global.translationPromptPreset': 'helperResults.globalTranslationPromptPreset',
+  'global.autoTranslate': 'helperResults.globalAutoTranslate',
+  'global.translationLanguage': 'settings.autoTranslationLanguage',
+  'newChat.autoRefusalRetryEnabled': 'helperResults.newChatAutoRefusalRetry',
+  'newChat.autoRefusalMaxRetries': 'helperResults.newChatAutoRefusalMaxRetries',
+  'newChat.loreContext': 'helperResults.newChatLoreContext',
+  'model.register': 'helperResults.modelRegistered',
+  'model.delete': 'helperResults.modelDeleted',
+  'illustrationPreset.global': 'helperResults.illustrationPreset',
+  'bot.illustrationPreset': 'helperResults.illustrationPreset',
+  'chat.illustrationPreset': 'helperResults.illustrationPreset',
+  'chat.attachments': 'helperResults.chatAttachments',
+  'chat.loreContext': 'helperResults.chatLoreContext',
+  'chat.authorNote': 'helperResults.chatAuthorNote',
+  'scene.context': 'helperResults.sceneContext',
 };
 
 const sceneFields = {

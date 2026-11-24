@@ -125,7 +125,11 @@ Defaults, `helperConfirmPaidGeneration`, exact-argument single-use grants across
 - A confirmation binds to the conversation, target chat, operation, and exact arguments (revision guards included); a grant is consumed at dispatch even if the save fails, a replayed call identity never consumes it twice, and the granted request carries `source.confirmedCalls` so the next task can repeat arguments verbatim.
 - Only confirmations from the conversation's latest task can be granted (`CONFIRMATION_UNAVAILABLE` otherwise), retries keep their task's grants, and plan mode refuses grants (`HELPER_PLAN_CONFIRMATIONS`, with the composer toggling apply/plan cleanly per `HCONFIRM03`).
 - The same call identity may be held again in a later task; each hold's `grantedBy` names only a subsequent task, and declines are keyed per task and confirmation.
-- By default resource deletion and `resource.patchMany` targeting `HELPER_BULK_CONFIRMATION_RESOURCES` or more resources are held; `helperConfirmPaidGeneration` extends holding to `scene.request` and `scene.translate`, is snapshotted at task admission like the timeout, and cannot be changed by the helper's own `settings.update`.
+- `helperConfirmationTrait`, exposed as `helperToolTraits(...).confirmation`, is the one classification of held calls: `delete` marks a deletion that turn rollback cannot undo and is always held; `paid` marks a call that starts paid generation and is held only with `helperConfirmPaidGeneration`, which is snapshotted at task admission like the timeout and cannot be changed by the helper's own `settings.update` or by the settings keys it adds. The argument-dependent bulk rule (`resource.patchMany` over `HELPER_BULK_CONFIRMATION_RESOURCES` or more resources) stays in `requirement`.
+- The trait lives in its own module because `helper-task-results` reads confirmations and `helper-app-tools` reaches `helper-task-results` through the settings tools; importing the trait from `helper-app-tools` made that cycle fail at module initialization.
+- `tests/helper-confirmation.test.ts` requires every operation, or top-level `action` value, named `delete` or `remove` to carry the `delete` trait or an exemption with its reason, and every held operation to have a card label in `HELPER_CONFIRMATION_OPERATION_LABELS`. It exists because `illustration.cut.delete`, `font.delete` and `palette.delete` once shipped without confirmation.
+- `task.retry` is `paid` for every task kind, because each kind it can retry calls a model.
+- A hold records `count` for `illustration.generate` and, for targets the client cannot name (models, fonts, palettes), the title at hold time; titles are display text only and play no part in the grant identity.
 - The results view never exposes held-call arguments. `releaseHelperConfirmationArguments` drops stored arguments from `confirmation.required` once a later task exists and from granted calls once completed or retried, while `forgetHelperConfirmationTargets` clears both on chat, scene, or resource deletion (including library holds targeting via `chatId`); argument-stripped holds show as expired and fail grant or retry with `CONFIRMATION_UNAVAILABLE`.
 
 ## Choice question cards and `@` target references
@@ -311,6 +315,17 @@ Contracts for `options.fix`, `scene.title`, `chat.guide.update`, and `model.para
 - `model.parameters.update` rebuilds the full saved model input from `SAVED_MODEL_KEYS` before calling `prepareModel`; any saved model field omitted from `SAVED_MODEL_KEYS` is dropped on update.
 - Recorded `setting` keys (`chat.options`, `chat.storyGuide`, `model.parameters`) determine which settings view opens from the result card (`openHelperChange`).
 - Connections, credentials, execution mode, service tier, and cache options stay outside `model.parameters.update`.
+
+## Model registration, chat profile, scene context, bookmarks and chat folders
+
+Contracts are enforced by `tests/helper-settings-tools.test.ts` and `tests/helper-chat-settings-tools.test.ts`.
+
+- Each operation delegates to the save function the UI uses: `product.model` (`model.register`), `deleteLibraryItem` (`model.delete`), `product.updateProfile` (`chat.profile.update`), `updateSceneContext` (`scene.context.update`), `addBookmark`/`updateBookmark` (`chat.bookmark`), the `ChatOrganizationStore` methods (`chat.organize`), `selectIllustrationPreset` (`illustration-preset.select`), and `applyWorkspacePromptPreset`, `saveAutoTranslationDefaults`, `saveChatGenerationDefaults` and `updateLoreContextDefaults` for the added `settings.update` keys.
+- `model.register` takes only connection, provider model id, title and maximum output. Execution mode, provider options, enablement and pricing stay in the model editor and in `model.parameters.update`/`model.pricing.update`.
+- `model.delete` refuses while `managementImpact` reports a global role, an advisor or a pinned chat. `deleteLibraryItem` clears the main, translation and title choices, turns collaboration off, and deliberately leaves the helper, context and script choices pointing at the unavailable model so those calls fail instead of falling back to the main model (`tests/risu-native-model-selection.test.ts`); the helper must not cause any of that as a side effect of a delete request.
+- The Risu author note and a scene request text are owner-written prose outside turn rollback. Their changes go through `recordHelperAction` with the previous value and a prose diff so the change card shows the earlier text; the result target uses kind `chat` or `scene` so `recordHelperTaskResult` does not record a second, value-less entry for the same target.
+- `chat.organize` is `direct`: its `chatId` names the chat to move, not a scope to retarget the call to.
+- Workspace settings are built host-side from an enumerated key, never from a model-supplied object, so the helper cannot reach `helperConfirmPaidGeneration` or the task timeout stored in the same workspace.
 
 ## Settings, diagnostics and task control
 

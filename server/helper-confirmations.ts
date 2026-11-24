@@ -4,30 +4,93 @@ import type {
   HelperConfirmedCall,
   HelperTask,
 } from '../core/helper.js';
+import { helperConfirmationTrait } from './helper-confirmation-traits.js';
 import { helperStateHash } from './helper-changes.js';
 import { helperResourceOperation } from './helper-resource-tools.js';
 import type { HelperWorkspace } from './helper-workspace.js';
+import { fontCatalog } from './fonts.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
+import { readPalette } from './themes.js';
 
 export const HELPER_BULK_CONFIRMATION_RESOURCES = 3;
 
-type Requirement = Pick<HelperConfirmation, 'operation' | 'reason' | 'chatId' | 'targets'>;
+type Requirement = Pick<
+  HelperConfirmation,
+  'operation' | 'reason' | 'chatId' | 'targets' | 'count'
+>;
+type Target = HelperConfirmation['targets'][number];
 type Recorded = Omit<HelperConfirmation, 'grantedBy' | 'grantable'> & {
   arguments?: Record<string, unknown>;
 };
 
+function titled(kind: string, id: unknown, title: () => string | undefined): Target[] {
+  if (typeof id !== 'string') return [];
+  try {
+    const name = title();
+    return [{ kind, id, ...(name ? { title: name } : {}) }];
+  } catch (error) {
+    if (error instanceof HttpError) return [{ kind, id }];
+    throw error;
+  }
+}
+
+function confirmationTargets(
+  store: Store,
+  name: string,
+  args: Record<string, unknown>,
+  chatId: string | null
+): Target[] {
+  const chat: Target[] = chatId ? [{ kind: 'chat', id: chatId }] : [];
+  if (name === 'scene.translate' && typeof args.sourceId === 'string')
+    return [{ kind: 'scene', id: args.sourceId }];
+  if (name === 'illustration.generate' && Array.isArray(args.moments)) {
+    const scenes = [
+      ...new Set(
+        args.moments.flatMap((moment) =>
+          moment && typeof moment === 'object' && typeof moment.sourceId === 'string'
+            ? [moment.sourceId as string]
+            : []
+        )
+      ),
+    ];
+    return scenes.length ? scenes.map((id) => ({ kind: 'scene', id })) : chat;
+  }
+  if (name === 'model.delete')
+    return titled(
+      'model',
+      args.modelId,
+      () => store.product.get<{ title: string }>('model', String(args.modelId)).title
+    );
+  if (name === 'font.delete')
+    return titled(
+      'font',
+      args.id,
+      () => fontCatalog(store).fonts.find((font) => font.id === args.id)?.title
+    );
+  if (name === 'palette.delete')
+    return titled('palette', args.id, () => readPalette(store, String(args.id)).title);
+  if (name === 'task.retry') return [];
+  return chat;
+}
+
 function requirement(
+  store: Store,
   task: Pick<HelperTask, 'snapshot'>,
   name: string,
   args: Record<string, unknown>
 ): Requirement | null {
   const chatId = task.snapshot.scope.kind === 'chat' ? task.snapshot.scope.chatId : null;
-  const needs = (reason: HelperConfirmationReason, targets: Requirement['targets']) => ({
+  const needs = (
+    reason: HelperConfirmationReason,
+    targets: Requirement['targets'],
+    count?: number
+  ): Requirement => ({
     operation: name,
     reason,
     chatId,
     targets,
+    ...(count === undefined ? {} : { count }),
   });
   if (name === 'resource.delete' || name === 'resource.patchMany') {
     const operation = helperResourceOperation(name, args);
@@ -39,19 +102,16 @@ function requirement(
     const distinct = new Set(targets.map((target) => `${target.kind}:${target.id}`));
     return distinct.size >= HELPER_BULK_CONFIRMATION_RESOURCES ? needs('bulk', targets) : null;
   }
-  if (
-    (name === 'scene.request' || name === 'scene.translate') &&
-    task.snapshot.confirmPaidGeneration
-  )
-    return needs(
-      'paid',
-      name === 'scene.translate' && typeof args.sourceId === 'string'
-        ? [{ kind: 'scene', id: args.sourceId }]
-        : chatId
-          ? [{ kind: 'chat', id: chatId }]
-          : []
-    );
-  return null;
+  const confirmation = helperConfirmationTrait(name, args);
+  if (!confirmation) return null;
+  if (confirmation === 'paid' && !task.snapshot.confirmPaidGeneration) return null;
+  return needs(
+    confirmation,
+    confirmationTargets(store, name, args, chatId),
+    name === 'illustration.generate' && Array.isArray(args.moments)
+      ? args.moments.length
+      : undefined
+  );
 }
 
 function confirmationId(
@@ -81,7 +141,7 @@ export function helperConfirmationGate(
   args: Record<string, unknown>,
   receiptId: string
 ): Record<string, unknown> | null {
-  const required = requirement(task, name, args);
+  const required = requirement(store, task, name, args);
   if (!required) return null;
   const id = confirmationId(task.conversationId, required.chatId, name, args);
   return store.transaction(() => {
@@ -104,7 +164,7 @@ export function helperConfirmationGate(
     )
       workspace.event(task.conversationId, task.id, 'confirmation.required', recorded);
     return {
-      error: `CONFIRMATION_REQUIRED: ${required.reason === 'paid' ? 'Paid generation' : required.reason === 'delete' ? 'Deleting a resource' : 'Changing this many resources at once'} needs the owner's confirmation. Nothing was changed.`,
+      error: `CONFIRMATION_REQUIRED: ${required.reason === 'paid' ? 'Paid generation' : required.reason === 'delete' ? 'A deletion that cannot be undone' : 'Changing this many resources at once'} needs the owner's confirmation. Nothing was changed.`,
       code: 'CONFIRMATION_REQUIRED',
       recoverable: false,
       retryMode: 'never',

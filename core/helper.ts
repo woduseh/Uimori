@@ -104,7 +104,8 @@ export type HelperConfirmation = {
   operation: string;
   reason: HelperConfirmationReason;
   chatId: string | null;
-  targets: { kind: string; id: string }[];
+  targets: { kind: string; id: string; title?: string }[];
+  count?: number;
   grantedBy: string | null;
   grantable: boolean;
 };

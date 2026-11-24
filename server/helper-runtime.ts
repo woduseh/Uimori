@@ -54,6 +54,10 @@ import {
   applyHelperChatState,
 } from './helper-chat-state-tools.js';
 import {
+  applyHelperChatOrganization,
+  readHelperChatOrganization,
+} from './helper-chat-organization-tools.js';
+import {
   HELPER_STORY_TOOLS,
   requestHelperStory,
   type HelperStoryEffects,
@@ -3196,7 +3200,7 @@ export class HelperRuntime {
     }
     if (HELPER_CHAT_STATE_TOOLS.some((tool) => tool.name === name)) {
       if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
-      if (helperToolTraits(name).readOnly)
+      if (helperToolTraits(name, args).readOnly)
         return readHelperChatState(this.store, scope.chatId, name, args);
       this.workspace.assertRunning(task.id);
       const receiptId = `${task.id}:${operationId}`;
@@ -3215,7 +3219,21 @@ export class HelperRuntime {
             args
           )
       );
-      if (result.changed) this.options.services?.chatChanged?.(scope.chatId);
+      if (result.changed) {
+        this.options.services?.chatChanged?.(scope.chatId);
+        if (name === 'scene.context.update' && typeof result.sourceId === 'string')
+          this.options.services?.sceneUpdated?.(result.sourceId);
+      }
+      return result;
+    }
+    if (name === 'chat.organize') {
+      if (args.action === 'read') return readHelperChatOrganization(this.store, args);
+      this.workspace.assertRunning(task.id);
+      const receiptId = `${task.id}:${operationId}`;
+      const result = this.workspace.operation(task.id, receiptId, { name, args }, () =>
+        applyHelperChatOrganization(this.store, this.workspace, task, receiptId, args)
+      );
+      for (const chatId of result.changedChatIds) this.options.services?.chatChanged?.(chatId);
       return result;
     }
     if (HELPER_STORY_TOOLS.some((tool) => tool.name === name)) {
@@ -3267,6 +3285,8 @@ export class HelperRuntime {
           hash: item.contentHash,
           sceneNumber: sceneEnabled ? sceneNumber : null,
           sceneEnabled,
+          requestEnabled: item.sceneContext?.requestEnabled !== false,
+          contextRevision: item.sceneContext?.revision ?? 0,
           originalLength: item.text.length,
           ...(sceneTitle(this.store, item.revision)
             ? { title: sceneTitle(this.store, item.revision) }

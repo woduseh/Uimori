@@ -7,6 +7,7 @@ import type {
   ReadingPositions,
   PortableBookmark,
 } from '../core/reading-state.js';
+import { BOOKMARK_NOTE_MAX_CHARS, BOOKMARK_TITLE_MAX_CHARS } from '../core/reading-state.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { fields, record, text, HttpError } from './request-validation.js';
 import type { Store } from './store.js';
@@ -157,8 +158,8 @@ export function addBookmark(store: Store, chatId: string, value: unknown): Bookm
   const body = record(value);
   fields(body, ['id', 'target', 'title', 'note', 'quote']);
   const id = client(body.id);
-  const title = bounded(body.title, 200, '책갈피 이름');
-  const note = bounded(body.note ?? '', 4000, '메모', true);
+  const title = bounded(body.title, BOOKMARK_TITLE_MAX_CHARS, '책갈피 이름');
+  const note = bounded(body.note ?? '', BOOKMARK_NOTE_MAX_CHARS, '메모', true);
   const quote = bounded(body.quote ?? '', 300, '인용', true);
   return store.transaction(() => {
     const target = validateReaderTarget(store, chatId, body.target);
@@ -203,8 +204,8 @@ export function updateBookmark(
     store.db
       .prepare('UPDATE bookmarks SET title=?,note=?,revision=revision+1,updated_at=? WHERE id=?')
       .run(
-        bounded(body.title, 200, '책갈피 이름'),
-        bounded(body.note, 4000, '메모', true),
+        bounded(body.title, BOOKMARK_TITLE_MAX_CHARS, '책갈피 이름'),
+        bounded(body.note, BOOKMARK_NOTE_MAX_CHARS, '메모', true),
         new Date().toISOString(),
         id
       );

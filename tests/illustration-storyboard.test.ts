@@ -39,7 +39,10 @@ import {
   reviseFailedIllustrationCut,
   deleteIllustrationCut,
 } from '../server/helper-illustration-cuts.js';
-import { generateHelperIllustrations } from '../server/helper-illustration-generation.js';
+import {
+  generateHelperIllustrations,
+  HELPER_ILLUSTRATION_MOMENTS_MAX,
+} from '../server/helper-illustration-generation.js';
 import {
   fixtureSettings,
   chatWithSource,
@@ -173,6 +176,9 @@ test('a chapter request reserves all exact moments atomically and renders them f
   expect(() =>
     generate([moments[0], { ...moments[3], expectedSourceHash: '0'.repeat(64) }])
   ).toThrow('ILLUSTRATION_SOURCE_CHANGED');
+  expect(() =>
+    generate(Array.from({ length: HELPER_ILLUSTRATION_MOMENTS_MAX + 1 }, () => moments[0]!))
+  ).toThrow('ILLUSTRATION_MOMENTS_LIMIT');
   expect(queuedIllustrations(store)).toEqual([]);
   const reserved = generate(moments);
   expect(reserved.plans.map((plan) => plan.count)).toEqual([2, 2]);

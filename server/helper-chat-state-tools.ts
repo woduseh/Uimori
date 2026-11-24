@@ -14,7 +14,18 @@ import type { Json, ProviderTool } from '../core/transport.js';
 import { chatVariableView } from './chat-variable-context.js';
 import { readChatVariables, writeChatVariables } from './chat-variables.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
-import { withHelperChange } from './helper-changes.js';
+import { recordHelperAction, withHelperChange } from './helper-changes.js';
+import { diffText } from '../core/text-diff.js';
+import type { HelperTaskResultTarget } from '../core/helper.js';
+import { CHAT_AUTHOR_NOTE_MAX_CHARS, type Content } from '../core/product.js';
+import type { ContentAttachment } from '../core/risu-content.js';
+import {
+  BOOKMARK_NOTE_MAX_CHARS,
+  BOOKMARK_TITLE_MAX_CHARS,
+  type Bookmark,
+} from '../core/reading-state.js';
+import { addBookmark, listBookmarks, updateBookmark } from './reading-state.js';
+import { readSceneContext, updateSceneContext } from './scene-context.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { sceneRequestLore } from './request-lore.js';
 import { sceneTitle, setSceneTitle } from './scene-titles.js';
@@ -225,6 +236,121 @@ export const HELPER_CHAT_STATE_TOOLS: ProviderTool[] = [
         },
       },
       ['expectedRevision', 'changes']
+    ),
+  },
+  {
+    name: 'chat.profile.read',
+    description:
+      'Read what a chat is assembled from: its owning bot, the persona and modules attached to it, its lore context policy and its Risu author note, with the profileRevision that chat.profile.update needs. The pinned model and prompt preset of the chat are in settings.read.',
+    inputSchema: schema({}),
+  },
+  {
+    name: 'chat.profile.update',
+    description:
+      'Change what a chat is assembled from: the attached persona, the attached modules, the lore context policy or the Risu author note. Give only the fields to change. persona takes a saved persona id, or null to detach it; modules replaces the whole list of attached module ids; the owning bot cannot be changed. loreContext takes the complete policy object as chat.profile.read returns it. authorNote replaces the whole note, and an empty string clears it; the earlier note stays in the change record. Changes apply to later requests; scenes already written keep what they used. Take expectedRevision from chat.profile.read.',
+    inputSchema: schema(
+      {
+        expectedRevision: {
+          type: 'integer',
+          minimum: 0,
+          description: 'profileRevision from chat.profile.read.',
+        },
+        persona: {
+          type: ['string', 'null'],
+          maxLength: 100,
+          description: 'Saved persona id to attach, or null to detach the persona.',
+        },
+        modules: {
+          type: 'array',
+          maxItems: 98,
+          items: { type: 'string', minLength: 1, maxLength: 100 },
+          description: 'The complete list of saved module ids to attach, in order.',
+        },
+        loreContext: {
+          type: 'object',
+          description: 'The complete lore context policy, as chat.profile.read returns it.',
+        },
+        authorNote: {
+          type: 'string',
+          maxLength: CHAT_AUTHOR_NOTE_MAX_CHARS,
+          description: 'The complete new Risu author note.',
+        },
+      },
+      ['expectedRevision']
+    ),
+  },
+  {
+    name: 'scene.context.update',
+    description:
+      'Hide or show a saved scene for the writer, turn the request that produced it off or on, or replace that request text. A hidden scene stays in the chat but is left out of later requests and of scene numbers; a request that is off is left out while the scene text stays. requestText null removes the stored request. The earlier request text stays in the change record; read the current text through db.query (agent_messages.request). Refused while the chat has a queued or running request. Take expectedRevision from contextRevision in chat.read.',
+    inputSchema: schema(
+      {
+        sourceId: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 100,
+          description: 'Scene id from chat.read.',
+        },
+        expectedRevision: {
+          type: 'integer',
+          minimum: 0,
+          description: 'contextRevision of the scene from chat.read.',
+        },
+        sceneEnabled: { type: 'boolean', description: 'false hides the scene from the writer.' },
+        requestEnabled: {
+          type: 'boolean',
+          description: 'false leaves the request of this scene out of later requests.',
+        },
+        requestText: {
+          type: ['string', 'null'],
+          maxLength: REQUEST_TEXT_MAX_CHARS,
+          description: 'The complete new request text, or null to remove it.',
+        },
+      },
+      ['sourceId', 'expectedRevision']
+    ),
+  },
+  {
+    name: 'chat.bookmark',
+    description:
+      'Read, add, rename or delete the bookmarks of a chat: named places in the story with an optional note, shown in the reader. action=read lists them with their ids and revisions. add takes sourceId and title, and optionally note and representation (original by default), and marks the start of that scene. update takes id, expectedRevision, title and note, and replaces both. delete takes id and expectedRevision; deleting a bookmark changes no scene text.',
+    inputSchema: schema(
+      {
+        action: {
+          type: 'string',
+          enum: ['read', 'add', 'update', 'delete'],
+          description: 'What to do.',
+        },
+        id: { type: 'string', minLength: 1, maxLength: 100, description: 'Bookmark id.' },
+        expectedRevision: {
+          type: 'integer',
+          minimum: 1,
+          description: 'update, delete: revision of the bookmark from action=read.',
+        },
+        sourceId: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 100,
+          description: 'add: scene id from chat.read.',
+        },
+        representation: {
+          type: 'string',
+          enum: ['original', 'translation'],
+          description: 'add: whether the bookmark opens the original or the translation.',
+        },
+        title: {
+          type: 'string',
+          minLength: 1,
+          maxLength: BOOKMARK_TITLE_MAX_CHARS,
+          description: 'add, update: bookmark name.',
+        },
+        note: {
+          type: 'string',
+          maxLength: BOOKMARK_NOTE_MAX_CHARS,
+          description: 'add, update: optional note.',
+        },
+      },
+      ['action']
     ),
   },
 ];
@@ -488,6 +614,14 @@ export async function readHelperChatState(
   if (name === 'chat.preview') return readChatPreview(store, chatId, args);
   if (name === 'scene.lore') return readSceneLore(store, chatId, args);
   if (name === 'chat.variables.read') return readHelperChatVariables(store, chatId, args);
+  if (name === 'chat.profile.read') {
+    fields(args, []);
+    return readChatProfile(store, chatId);
+  }
+  if (name === 'chat.bookmark' && args.action === 'read') {
+    fields(args, ['action']);
+    return { chatId, bookmarks: listBookmarks(store, chatId).map(bookmarkView) };
+  }
   throw new HttpError(400, 'UNKNOWN_CHAT_STATE_TOOL');
 }
 
@@ -508,6 +642,12 @@ export function applyHelperChatState(
   if (name === 'scene.title') return nameScene(store, workspace, task, receiptId, chatId, args);
   if (name === 'chat.guide.update')
     return updateStoryGuide(store, workspace, task, receiptId, chatId, args);
+  if (name === 'chat.profile.update')
+    return updateChatProfile(store, workspace, task, receiptId, chatId, args);
+  if (name === 'scene.context.update')
+    return updateHelperSceneContext(store, workspace, task, receiptId, chatId, args);
+  if (name === 'chat.bookmark')
+    return changeBookmark(store, workspace, task, receiptId, chatId, args);
   throw new HttpError(400, 'UNKNOWN_CHAT_STATE_TOOL');
 }
 
@@ -655,4 +795,257 @@ function updateChatVariables(
       : [],
   });
   return { changed, revision, sourceHash, set: Object.keys(set), unset };
+}
+
+function attachmentView(store: Store, ref: ContentAttachment) {
+  let title: string | null = null;
+  try {
+    title = store.product.get<Content>('content', ref.id).title;
+  } catch (error) {
+    if (!(error instanceof HttpError)) throw error;
+  }
+  return { id: ref.id, title, revision: ref.revision };
+}
+
+function readChatProfile(store: Store, chatId: string) {
+  const profile = store.product.profile(chatId);
+  const attached = profile.packageAttachments ?? [];
+  const persona = attached.find((ref) => ref.role === 'persona');
+  const bot = attached.find((ref) => ref.role === 'bot');
+  return {
+    chatId,
+    profileRevision: profile.revision,
+    bot: bot ? attachmentView(store, bot) : null,
+    persona: persona ? attachmentView(store, persona) : null,
+    modules: attached
+      .filter((ref) => ref.role === 'module')
+      .map((ref) => attachmentView(store, ref)),
+    loreContext: profile.loreContext ?? null,
+    authorNote: profile.authorNote ?? '',
+  };
+}
+
+function attachable(store: Store, value: unknown, role: 'persona' | 'module'): ContentAttachment {
+  const id = text(value, `${role} ID`, 100);
+  store.product.assertAvailable('content', id);
+  const content = store.product.get<Content>('content', id);
+  if (content.kind !== role)
+    throw new HttpError(400, `NOT_A_${role.toUpperCase()}: ${id} is a ${content.kind}.`);
+  return { id: content.id, revision: content.revision, role };
+}
+
+function updateChatProfile(
+  store: Store,
+  workspace: HelperWorkspace,
+  task: ResultTask,
+  receiptId: string,
+  chatId: string,
+  args: Record<string, unknown>
+) {
+  fields(args, ['expectedRevision', 'persona', 'modules', 'loreContext', 'authorNote']);
+  const expectedRevision = number(args.expectedRevision, 'profile revision', 0);
+  const requested = ['persona', 'modules', 'loreContext', 'authorNote'].filter(
+    (key) => args[key] !== undefined
+  );
+  if (!requested.length) throw new HttpError(400, 'Pass at least one change');
+  const prior = store.product.profile(chatId);
+  const current = prior.packageAttachments ?? [];
+  let packageAttachments: ContentAttachment[] | undefined;
+  if (args.persona !== undefined || args.modules !== undefined) {
+    if (args.modules !== undefined && !Array.isArray(args.modules))
+      throw new HttpError(400, 'modules must be a list of module ids');
+    packageAttachments = [
+      ...current.filter((ref) => ref.role === 'bot'),
+      ...(args.persona === undefined
+        ? current.filter((ref) => ref.role === 'persona')
+        : args.persona === null
+          ? []
+          : [attachable(store, args.persona, 'persona')]),
+      ...(args.modules === undefined
+        ? current.filter((ref) => ref.role === 'module')
+        : (args.modules as unknown[]).map((id) => attachable(store, id, 'module'))),
+    ];
+  }
+  const saved = store.product.updateProfile(chatId, {
+    expectedRevision,
+    image: prior.image,
+    ...(packageAttachments ? { packageAttachments } : {}),
+    ...(args.loreContext !== undefined ? { loreContext: args.loreContext } : {}),
+    ...(args.authorNote !== undefined ? { authorNote: args.authorNote } : {}),
+  });
+  const chat = store.chat(chatId);
+  const keys = (refs: ContentAttachment[] | undefined) =>
+    (refs ?? []).map((ref) => `${ref.role}:${ref.id}`);
+  const attachmentsChanged = !isDeepStrictEqual(
+    keys(prior.packageAttachments),
+    keys(saved.packageAttachments)
+  );
+  const loreChanged = !isDeepStrictEqual(prior.loreContext ?? null, saved.loreContext ?? null);
+  const noteBefore = prior.authorNote ?? '';
+  const noteAfter = saved.authorNote ?? '';
+  const targets: HelperTaskResultTarget[] = [
+    ...(attachmentsChanged ? ['chat.attachments'] : []),
+    ...(loreChanged ? ['chat.loreContext'] : []),
+  ].map((setting) => ({
+    kind: 'settings' as const,
+    id: chatId,
+    title: chat.title,
+    revision: saved.revision,
+    setting,
+  }));
+  if (noteBefore !== noteAfter) {
+    recordHelperAction(store, task, {
+      domain: 'settings',
+      targetId: `chat.authorNote:${chatId}`,
+      chatId,
+      title: chat.title,
+      location: { kind: 'setting', setting: 'chat.authorNote' },
+      action: 'update',
+      anchor: { domain: 'settings', id: chatId, chatId, setting: 'chat.authorNote' },
+      value: { before: noteBefore, after: noteAfter },
+      diff: diffText(noteBefore, noteAfter, 'prose'),
+    });
+    targets.push({ kind: 'chat', id: chatId, title: chat.title, revision: saved.revision });
+  }
+  recordHelperTaskResult(workspace, task, {
+    receiptId,
+    operation: 'chat.profile.update',
+    requestedTargets: requested.length,
+    targets,
+  });
+  return { changed: targets.length > 0, ...readChatProfile(store, chatId) };
+}
+
+function updateHelperSceneContext(
+  store: Store,
+  workspace: HelperWorkspace,
+  task: ResultTask,
+  receiptId: string,
+  chatId: string,
+  args: Record<string, unknown>
+) {
+  fields(args, ['sourceId', 'expectedRevision', 'sceneEnabled', 'requestEnabled', 'requestText']);
+  const sourceId = text(args.sourceId, 'source ID', 100);
+  const chat = store.chat(chatId);
+  if (!store.history(chat.headRevision).some((item) => item.revision === sourceId))
+    throw new HttpError(404, 'SCENE_NOT_IN_CHAT: Find the scene id with chat.read.');
+  const before = readSceneContext(store.db, sourceId);
+  const { sourceId: _sourceId, ...change } = args;
+  const after = updateSceneContext(store, sourceId, change);
+  const changed = after.revision !== before.revision;
+  const title = sceneTitle(store, sourceId) || chat.title;
+  if (changed) {
+    const { revision: _before, ...beforeValue } = before;
+    const { revision: _after, ...afterValue } = after;
+    recordHelperAction(store, task, {
+      domain: 'settings',
+      targetId: `scene.context:${sourceId}`,
+      chatId,
+      title,
+      location: { kind: 'setting', setting: 'scene.context' },
+      action: 'update',
+      anchor: { domain: 'scene', chatId, sourceId, field: 'original', paragraph: null },
+      value: { before: beforeValue, after: afterValue },
+      diff:
+        before.requestText === after.requestText
+          ? null
+          : diffText(before.requestText ?? '', after.requestText ?? '', 'prose'),
+    });
+  }
+  recordHelperTaskResult(workspace, task, {
+    receiptId,
+    operation: 'scene.context.update',
+    requestedTargets: 1,
+    targets: changed
+      ? [{ kind: 'scene', id: sourceId, chatId, title, revision: after.revision }]
+      : [],
+  });
+  return {
+    changed,
+    sourceId,
+    contextRevision: after.revision,
+    sceneEnabled: after.sceneEnabled,
+    requestEnabled: after.requestEnabled,
+    hasRequest: after.requestText !== null,
+  };
+}
+
+function bookmarkView(bookmark: Bookmark) {
+  return {
+    id: bookmark.id,
+    revision: bookmark.revision,
+    title: bookmark.title,
+    note: bookmark.note,
+    sourceId: bookmark.target.sourceId,
+    representation: bookmark.target.representation,
+    createdAt: bookmark.createdAt,
+  };
+}
+
+function receiptUuid(receiptId: string) {
+  const hex = createHash('sha256').update(`bookmark:${receiptId}`).digest('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+function changeBookmark(
+  store: Store,
+  workspace: HelperWorkspace,
+  task: ResultTask,
+  receiptId: string,
+  chatId: string,
+  args: Record<string, unknown>
+) {
+  const chat = store.chat(chatId);
+  const report = (target: HelperTaskResultTarget) =>
+    recordHelperTaskResult(workspace, task, {
+      receiptId,
+      operation: 'chat.bookmark',
+      requestedTargets: 1,
+      targets: [target],
+    });
+  if (args.action === 'add') {
+    fields(args, ['action', 'sourceId', 'representation', 'title', 'note']);
+    const sourceId = text(args.sourceId, 'source ID', 100);
+    const saved = addBookmark(store, chatId, {
+      id: receiptUuid(receiptId),
+      target: { chatId, sourceId, representation: args.representation ?? 'original' },
+      title: args.title,
+      note: args.note ?? '',
+    });
+    report({ kind: 'scene', id: sourceId, chatId, title: saved.title, revision: saved.revision });
+    return { changed: true, bookmark: bookmarkView(saved) };
+  }
+  if (args.action !== 'update' && args.action !== 'delete')
+    throw new HttpError(400, 'INVALID_BOOKMARK_ACTION');
+  fields(
+    args,
+    args.action === 'update'
+      ? ['action', 'id', 'expectedRevision', 'title', 'note']
+      : ['action', 'id', 'expectedRevision']
+  );
+  const id = text(args.id, 'bookmark ID', 100);
+  const current = listBookmarks(store, chatId).find((bookmark) => bookmark.id === id);
+  if (!current)
+    throw new HttpError(
+      404,
+      'BOOKMARK_NOT_FOUND: List the bookmarks of this chat with action=read.'
+    );
+  if (args.action === 'delete') {
+    updateBookmark(store, id, { expectedRevision: args.expectedRevision }, true);
+    report({ kind: 'chat', id: chatId, title: chat.title, revision: current.revision });
+    return { changed: true, deleted: id };
+  }
+  const saved = updateBookmark(store, id, {
+    expectedRevision: args.expectedRevision,
+    title: args.title ?? current.title,
+    note: args.note ?? current.note,
+  }) as Bookmark;
+  report({
+    kind: 'scene',
+    id: current.target.sourceId,
+    chatId,
+    title: saved.title,
+    revision: saved.revision,
+  });
+  return { changed: true, bookmark: bookmarkView(saved) };
 }

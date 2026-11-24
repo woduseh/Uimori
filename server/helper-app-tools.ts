@@ -12,6 +12,8 @@ import { HELPER_TASK_TOOLS } from './helper-task-tools.js';
 import { HELPER_DATA_TOOLS } from './helper-data-tools.js';
 import { HELPER_SCENE_TOOLS } from './helper-scene-tools.js';
 import { HELPER_CHAT_STATE_TOOLS } from './helper-chat-state-tools.js';
+import { HELPER_CHAT_ORGANIZATION_TOOLS } from './helper-chat-organization-tools.js';
+import { helperConfirmationTrait } from './helper-confirmation-traits.js';
 import { HELPER_STORY_TOOLS } from './helper-story-tools.js';
 import { HELPER_IMAGE_TOOLS } from './helper-image-tools.js';
 import { HELPER_ILLUSTRATION_TOOLS } from './helper-illustration-workflow.js';
@@ -80,6 +82,7 @@ const TOOLS: ProviderTool[] = [
   ...HELPER_TASK_TOOLS,
   ...HELPER_SCENE_TOOLS,
   ...HELPER_CHAT_STATE_TOOLS,
+  ...HELPER_CHAT_ORGANIZATION_TOOLS,
   ...HELPER_STORY_TOOLS,
   ...HELPER_IMAGE_TOOLS,
   ...HELPER_ILLUSTRATION_TOOLS,
@@ -148,7 +151,7 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'chat.read',
     description:
-      'Read the scene index of a chat: its current head and, in story order, the id (sourceId), visible sceneNumber, original length, enabled state and saved name (title, when it has one) of each scene. Use it to find the sourceId of a scene before reading or editing it. Scene numbers count the enabled scenes from 1, starting with any introduction, and a hidden scene has sceneNumber null. includePreview adds the opening of each original, about 60 tokens. Follow nextOffset for more scenes. The text of a scene comes from scene.read.',
+      'Read the scene index of a chat: its current head and, in story order, the id (sourceId), visible sceneNumber, original length, whether the scene and its request are enabled, the contextRevision that scene.context.update needs, and the saved name (title, when it has one) of each scene. Use it to find the sourceId of a scene before reading or editing it. Scene numbers count the enabled scenes from 1, starting with any introduction, and a hidden scene has sceneNumber null. includePreview adds the opening of each original, about 60 tokens. Follow nextOffset for more scenes. The text of a scene comes from scene.read.',
     inputSchema: schema({
       chatId: itemId,
       includePreview: {
@@ -604,8 +607,14 @@ const readNames = new Set([
   'scene.lore',
   'chat.preview',
   'chat.variables.read',
+  'chat.profile.read',
 ]);
-const conditionalNames = new Set(['chat.lore', 'library.organize']);
+const conditionalNames = new Set([
+  'chat.lore',
+  'library.organize',
+  'chat.bookmark',
+  'chat.organize',
+]);
 const writingNames = new Set([
   ...writingReadNames,
   'chat.fork',
@@ -613,7 +622,6 @@ const writingNames = new Set([
   'context.compact',
   'notes.write',
 ]);
-
 export function helperToolTraits(name: string, args: Record<string, unknown> = {}) {
   const data = dataToolNames.has(name);
   const writingRead = writingReadNames.has(name);
@@ -625,6 +633,7 @@ export function helperToolTraits(name: string, args: Record<string, unknown> = {
   );
   return {
     readOnly,
+    confirmation: helperConfirmationTrait(name, args),
     effect: (conditionalNames.has(name) && args.action === undefined
       ? 'mixed'
       : readOnly
@@ -647,6 +656,7 @@ export function helperToolTraits(name: string, args: Record<string, unknown> = {
       HELPER_PRESENTATION_TOOLS.some((tool) => tool.name === name) ||
       data ||
       HELPER_SETTINGS_TOOLS.some((tool) => tool.name === name) ||
+      name === 'chat.organize' ||
       isVertexLocationTool(name) ||
       name.startsWith('task.'),
     writingRead,
@@ -680,11 +690,11 @@ export const HELPER_OPERATION_AREAS: readonly (readonly [area: string, purpose: 
   ['resource', 'saved bots, personas, modules, prompt presets and themes'],
   [
     'chat',
-    'chat list, scene index, title, fork, chat-only lore, next request preview, Risu variables and original-work reference settings',
+    'chat list, scene index, title, fork, chat-only lore, next request preview, Risu variables, original-work reference settings, attached persona and modules, author note, bookmarks and chat folders of a bot',
   ],
   [
     'scene',
-    'saved story scenes, their names and translations, the lore used to write them, and requests for the next scene or a translation',
+    'saved story scenes, their names and translations, hiding a scene or its request, the lore used to write them, and requests for the next scene or a translation',
   ],
   ['story', 'frozen story history of this task'],
   ['knowledge', 'frozen writing references of this task'],
@@ -696,14 +706,14 @@ export const HELPER_OPERATION_AREAS: readonly (readonly [area: string, purpose: 
   ['editor', 'captured editor input'],
   ['artifact', 'hypothetical scenes'],
   ['db', 'read-only SQL'],
-  ['settings', 'models, prompts and chat settings'],
-  ['model', 'saved models, their generation parameters and pricing'],
+  ['settings', 'models, prompts, automatic translation, chat settings and new chat defaults'],
+  ['model', 'saved models: register, delete, generation parameters and pricing'],
   ['vertex', 'Google Vertex AI request locations'],
   ['usage', 'cost and tokens'],
   ['task', 'runs and background jobs'],
   ['image', 'saved content images'],
   ['illustration', 'illustrations, cuts, appearance profiles and references'],
-  ['illustration-preset', 'illustration presets'],
+  ['illustration-preset', 'illustration presets and which one is selected'],
   ['preset', 'prompt preset checks'],
   ['library', 'folders'],
   ['theme', 'themes'],
@@ -844,6 +854,18 @@ const discoveryTerms: Record<string, string> = {
   'illustration.profiles.read': 'local override 채팅 외형 프로필',
   'illustration.profiles.save': 'local override 채팅 외형 프로필',
   'helper.ask': 'ask clarify question choice options multiple choice 선택지 질문 확인',
+  'model.register': 'add new model create save provider catalog 모델 추가 등록',
+  'model.delete': 'remove model delete unused 모델 삭제',
+  'chat.profile.read':
+    'persona module attached attachment author note lore context 페르소나 모듈 작가 노트',
+  'chat.profile.update':
+    'attach detach persona module change switch author note lore context 페르소나 모듈 바꾸기 작가 노트',
+  'scene.context.update':
+    'hide show disable enable exclude scene request skip 장면 숨기기 끄기 켜기 요청 제외',
+  'chat.bookmark': 'bookmark mark place reading position 책갈피 북마크',
+  'chat.organize': 'folder organize chats sort move default persona 채팅 폴더 정리 기본 페르소나',
+  'illustration-preset.select':
+    'choose use apply switch illustration preset style 삽화 프리셋 선택',
 };
 const searchStopWords = new Set(
   'a an the this that these those my me i it its of for to in into on at by and or with from can could would please how did'.split(
