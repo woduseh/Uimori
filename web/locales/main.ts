@@ -209,24 +209,6 @@ export const messages = {
     ja: 'モデル選択',
     zh: '选择模型',
   },
-  'main.m016': {
-    ko: '이 채팅 고정',
-    en: 'Pinned to this chat',
-    ja: 'このチャットに固定',
-    zh: '已固定到此聊天',
-  },
-  'main.m017': {
-    ko: '사용 불가',
-    en: 'Unavailable',
-    ja: '利用不可',
-    zh: '不可用',
-  },
-  'main.m018': {
-    ko: '본문 모델',
-    en: 'Writing model',
-    ja: '本文モデル',
-    zh: '正文模型',
-  },
   'main.m019': {
     ko: '이 채팅의 본문 모델 선택',
     en: 'Select the writing model for this chat',
@@ -341,23 +323,11 @@ export const messages = {
     ja: 'シーンナビゲーター',
     zh: '场景导航',
   },
-  'main.m038': {
-    ko: '장면 눈금과 맨 아래 이동 버튼을 표시해요.',
-    en: 'Show scene markers and the jump-to-bottom button.',
-    ja: 'シーンの目盛りと最下部への移動ボタンを表示します。',
-    zh: '显示场景标记和跳到底部按钮。',
-  },
   'main.m039': {
     ko: '장면 내비게이터 표시',
     en: 'Show scene navigator',
     ja: 'シーンナビゲーターを表示',
     zh: '显示场景导航',
-  },
-  'main.m040': {
-    ko: '표시',
-    en: 'Show',
-    ja: '表示',
-    zh: '显示',
   },
   'main.m041': {
     ko: '응답 표시',
@@ -370,12 +340,6 @@ export const messages = {
     en: 'Response display mode',
     ja: '応答の表示方法',
     zh: '回复显示方式',
-  },
-  'main.m043': {
-    ko: '본문과 도우미 응답에 적용해요.',
-    en: 'Applies to writing and assistant responses.',
-    ja: '本文とアシスタントの応答に適用します。',
-    zh: '应用于正文和助手回复。',
   },
   'main.m044': {
     ko: '실시간 표시',
@@ -401,12 +365,6 @@ export const messages = {
     ja: '新しい原稿の標準表示',
     zh: '新稿件的默认视图',
   },
-  'main.m048': {
-    ko: '번역이 없으면 원문을 먼저 보여 줘요.',
-    en: 'Show the original when no translation is available.',
-    ja: '翻訳がない場合は原文を表示します。',
-    zh: '没有译文时显示原文。',
-  },
   'main.m049': {
     ko: '한국어 번역',
     en: 'Korean translation',
@@ -430,12 +388,6 @@ export const messages = {
     en: 'Default illustration view',
     ja: '挿絵の標準表示',
     zh: '插图默认视图',
-  },
-  'main.m053': {
-    ko: '직접 접거나 펼친 컷 상태는 유지되며, 삽화 생성과 저장에는 영향을 주지 않아요.',
-    en: 'Individual expand and collapse choices are preserved. Image generation and storage are unchanged.',
-    ja: '個別に折りたたみや展開した選択は保持します。画像の生成や保存には影響しません。',
-    zh: '保留每张插图的展开或折叠选择。不影响图片生成和保存。',
   },
   'main.m054': {
     ko: '펼쳐서 읽기',
@@ -622,12 +574,6 @@ export const messages = {
     en: 'What would you like to start?',
     ja: 'どんなチャットを始めますか？',
     zh: '想开始什么聊天？',
-  },
-  'main.m087': {
-    ko: '서재에서 봇을 고르거나, 원하는 장면으로 시작해요.',
-    en: 'Choose a bot from the library or start with a scene of your own.',
-    ja: 'ライブラリでボットを選ぶか、好きなシーンから始めましょう。',
-    zh: '从资料库选择机器人，或从想要的场景开始。',
   },
   'main.m088': {
     ko: '서재 둘러보기',
@@ -1079,18 +1025,6 @@ export const messages = {
     ja: '保存した位置から読む',
     zh: '从保存的位置继续阅读',
   },
-  'main.story0': {
-    ko: '요청 초안을 복구하지 못했어요. 브라우저 저장 공간을 확인해 주세요.',
-    en: 'Could not restore the draft. Check browser storage.',
-    ja: '下書きを復元できませんでした。ブラウザーの保存領域を確認してください。',
-    zh: '无法恢复草稿。请检查浏览器存储空间。',
-  },
-  'main.story1': {
-    ko: '요청 초안을 기기에 저장하지 못했어요. 화면을 닫기 전에 전송하거나 파일을 보관해 주세요.',
-    en: 'Could not save the draft on this device. Submit it or keep a file before closing this page.',
-    ja: '下書きを端末に保存できませんでした。画面を閉じる前に送信するかファイルで保管してください。',
-    zh: '无法在此设备上保存草稿。关闭页面前请提交或保存为文件。',
-  },
   'main.story2': {
     ko: '참고 이미지는 파일당 64MB 이내로 첨부해 주세요.',
     en: 'Reference images must be no larger than 64 MB each.',
@@ -1240,12 +1174,6 @@ export const messages = {
     en: 'Original chat',
     ja: '元のチャット',
     zh: '原聊天',
-  },
-  'main.firstSceneRequestIdeas': {
-    ko: '예: 배경, 등장인물, 일어나길 바라는 사건',
-    en: 'For example: the setting, characters, and what you want to happen',
-    ja: '例：舞台、登場人物、起こってほしい出来事',
-    zh: '例如：背景、人物，以及希望发生的事件',
   },
   'main.nextRequestLabel': {
     ko: '다음 요청에 적용',

@@ -35,77 +35,17 @@ export const messages = {
     ja: '項目ID',
     zh: '条目 ID',
   },
-  'visualpanels.background': {
-    ko: '바탕',
-    en: 'Background',
-    ja: '背景',
-    zh: '背景',
-  },
-  'visualpanels.sidebar': {
-    ko: '사이드바',
-    en: 'Sidebar',
-    ja: 'サイドバー',
-    zh: '侧边栏',
-  },
-  'visualpanels.panel': {
-    ko: '패널',
-    en: 'Panel',
-    ja: 'パネル',
-    zh: '面板',
-  },
-  'visualpanels.surface': {
-    ko: '표면',
-    en: 'Surface',
-    ja: 'サーフェス',
-    zh: '表面',
-  },
   'visualpanels.bodyText': {
     ko: '본문',
     en: 'Body text',
     ja: '本文',
     zh: '正文',
   },
-  'visualpanels.secondaryText': {
-    ko: '보조 글자',
-    en: 'Secondary text',
-    ja: '補助文字',
-    zh: '辅助文字',
-  },
-  'visualpanels.accent': {
-    ko: '강조',
-    en: 'Accent',
-    ja: 'アクセント',
-    zh: '强调色',
-  },
-  'visualpanels.textOnAccent': {
-    ko: '강조 위 글자',
-    en: 'Text on accent',
-    ja: 'アクセント上の文字',
-    zh: '强调色上的文字',
-  },
-  'visualpanels.divider': {
-    ko: '구분선',
-    en: 'Divider',
-    ja: '区切り線',
-    zh: '分隔线',
-  },
-  'visualpanels.requestBackground': {
-    ko: '요청 배경',
-    en: 'Request background',
-    ja: 'リクエスト背景',
-    zh: '请求背景',
-  },
   'visualpanels.originalLayoutColors': {
     ko: '레이아웃 원래 색상',
     en: 'Original layout colors',
     ja: 'レイアウト本来の色',
     zh: '布局原有颜色',
-  },
-  'visualpanels.useTheColorsSavedInTheSelected': {
-    ko: '선택한 레이아웃에 저장된 색상을 사용해요.',
-    en: 'Use the colors saved in the selected layout.',
-    ja: '選択したレイアウトに保存された色を使います。',
-    zh: '使用所选布局中保存的颜色。',
   },
   'visualpanels.saveOrCancelYourCurrentEditsBefore': {
     ko: '현재 편집을 저장하거나 취소한 뒤 다른 테마를 열어 주세요.',
@@ -149,12 +89,6 @@ export const messages = {
     ja: '編集中のテーマを保存またはキャンセルしてから読み込んでください。',
     zh: '请保存或取消正在编辑的主题后再导入。',
   },
-  'visualpanels.importAThemeFileNoLargerThan': {
-    ko: '테마 파일은 4MiB 이하로 가져와 주세요.',
-    en: 'Import a theme file no larger than 4 MiB.',
-    ja: 'テーマファイルは4 MiB以下にしてください。',
-    zh: '请导入不超过4 MiB的主题文件。',
-  },
   'visualpanels.importedAsANewThemeReviewAnd': {
     ko: '새 테마로 가져왔어요.',
     en: 'Imported as a new theme.',
@@ -191,42 +125,6 @@ export const messages = {
     ja: '説明',
     zh: '说明',
   },
-  'visualpanels.defaultAppearance': {
-    ko: '기본 외관',
-    en: 'Default appearance',
-    ja: '既定の外観',
-    zh: '默认外观',
-  },
-  'visualpanels.displayMode': {
-    ko: '화면 모드',
-    en: 'Display mode',
-    ja: '画面モード',
-    zh: '显示模式',
-  },
-  'visualpanels.themeDisplayMode': {
-    ko: '테마 화면 모드',
-    en: 'Theme display mode',
-    ja: 'テーマの画面モード',
-    zh: '主题显示模式',
-  },
-  'visualpanels.followDeviceSettings': {
-    ko: '기기 설정 따르기',
-    en: 'Follow device settings',
-    ja: '端末の設定に従う',
-    zh: '跟随设备设置',
-  },
-  'visualpanels.light': {
-    ko: '밝게',
-    en: 'Light',
-    ja: 'ライト',
-    zh: '浅色',
-  },
-  'visualpanels.dark': {
-    ko: '어둡게',
-    en: 'Dark',
-    ja: 'ダーク',
-    zh: '深色',
-  },
   'visualpanels.previewColors': {
     ko: '미리보기 색상',
     en: 'Preview colors',
@@ -256,18 +154,6 @@ export const messages = {
     en: 'Reload',
     ja: '再読み込み',
     zh: '重新加载',
-  },
-  'visualpanels.advancedAppearanceAndThemeCreation': {
-    ko: '고급 테마 설정',
-    en: 'Advanced theme settings',
-    ja: '高度なテーマ設定',
-    zh: '高级主题设置',
-  },
-  'visualpanels.combineLayoutsPalettesAndBackgroundsByScope': {
-    ko: '레이아웃, 팔레트, 배경을 조합하거나 테마 파일을 가져와 편집해요.',
-    en: 'Combine layouts, palettes, and backgrounds, or import and edit theme files.',
-    ja: 'レイアウト、パレット、背景を組み合わせるか、テーマファイルを読み込んで編集します。',
-    zh: '组合布局、调色板与背景，或导入并编辑主题文件。',
   },
   'visualpanels.scope': {
     ko: '적용 범위',
@@ -359,12 +245,6 @@ export const messages = {
     ja: '上位のレイアウト設定に従う',
     zh: '继承上级布局设置',
   },
-  'visualpanels.thisScopeInheritsItsLayout': {
-    ko: '이 범위의 레이아웃은 상위 설정을 따라요.',
-    en: 'This scope inherits its layout.',
-    ja: 'この範囲のレイアウトは上位設定に従います。',
-    zh: '此范围的布局继承上级设置。',
-  },
   'visualpanels.savedLayouts': {
     ko: '저장된 레이아웃',
     en: 'Saved layouts',
@@ -376,12 +256,6 @@ export const messages = {
     en: 'Apply {v0} theme',
     ja: '{v0}テーマを適用',
     zh: '应用{v0}主题',
-  },
-  'visualpanels.customTheme': {
-    ko: '사용자 테마',
-    en: 'Custom theme',
-    ja: 'カスタムテーマ',
-    zh: '自定义主题',
   },
   'visualpanels.duplicateAndCustomize': {
     ko: '복제해서 꾸미기',
@@ -455,12 +329,6 @@ export const messages = {
     ja: '上位のパレット設定に従う',
     zh: '继承上级调色板设置',
   },
-  'visualpanels.thisScopeInheritsItsPalette': {
-    ko: '이 범위의 팔레트는 상위 설정을 따라요.',
-    en: 'This scope inherits its palette.',
-    ja: 'この範囲のパレットは上位設定に従います。',
-    zh: '此范围的调色板继承上级设置。',
-  },
   'visualpanels.selectColorPalette': {
     ko: '색상 팔레트 선택',
     en: 'Select color palette',
@@ -478,12 +346,6 @@ export const messages = {
     en: 'Manage themes',
     ja: 'テーマ管理',
     zh: '管理主题',
-  },
-  'visualpanels.createACustomThemeOrImportOne': {
-    ko: '커스텀 테마를 만들거나 파일에서 가져와요. 내보낸 파일에는 레이아웃 자체의 색상과 코드가 담겨요.',
-    en: 'Create a custom theme or import one from a file. Exports contain the layout colors and code.',
-    ja: 'カスタムテーマを作成するか、ファイルから読み込めます。書き出すファイルにはレイアウト本体の色とコードが含まれます。',
-    zh: '创建自定义主题或从文件导入。导出的文件包含布局自身的颜色和代码。',
   },
   'visualpanels.newCustomTheme': {
     ko: '새 커스텀 테마',
@@ -562,12 +424,6 @@ export const messages = {
     en: 'Reset {v0} {v1} to default color',
     ja: '{v0} {v1}を既定の色に戻す',
     zh: '将{v0} {v1}恢复为默认颜色',
-  },
-  'visualpanels.editLightAndDarkColorsSeparatelyUsing': {
-    ko: '밝은 색과 어두운 색을 각각 편집해요. 지정하지 않은 색은 기본값을 따라요.',
-    en: 'Edit light and dark colors. Unspecified colors use default values.',
-    ja: '明るい色と暗い色を編集します。未指定の色は既定値に従います。',
-    zh: '分别编辑浅色和深色，未指定的颜色使用默认值。',
   },
   'visualpanels.editCssAndHtmlDirectly': {
     ko: 'CSS와 HTML 직접 편집',
@@ -767,12 +623,6 @@ export const messages = {
     ja: 'プリセット',
     zh: '预设',
   },
-  'visualpanels.chooseAGeneratorAndIllustrationInstructionsTogether': {
-    ko: '생성기와 그림 지침을 함께 선택해요. 연결과 모델은 아래 공용 환경을 사용해요.',
-    en: 'Choose a generator and illustration instructions together. Connections and models use the shared environment below.',
-    ja: '生成器と絵の指示を一緒に選びます。接続とモデルは下の共通環境を使います。',
-    zh: '同时选择生成器和绘图指引，连接与模型使用下方的共享环境。',
-  },
   'visualpanels.newIllustrationPreset': {
     ko: '새 삽화 프리셋',
     en: 'New illustration preset',
@@ -827,12 +677,6 @@ export const messages = {
     ja: '選択中',
     zh: '已选择',
   },
-  'visualpanels.customIllustrationPreset': {
-    ko: '사용자 삽화 프리셋',
-    en: 'Custom illustration preset',
-    ja: 'カスタム挿絵プリセット',
-    zh: '自定义插图预设',
-  },
   'visualpanels.codexSharedIllustrationModel': {
     ko: 'Codex, 공용 삽화 모델',
     en: 'Codex, Shared illustration model',
@@ -862,12 +706,6 @@ export const messages = {
     en: 'Duplicate and edit {v0} illustration preset',
     ja: '{v0}挿絵プリセットを複製して編集',
     zh: '复制并编辑{v0}插图预设',
-  },
-  'visualpanels.duplicateAndEdit2': {
-    ko: '복제 후 편집',
-    en: 'Duplicate and edit',
-    ja: '複製して編集',
-    zh: '复制并编辑',
   },
   'visualpanels.presetMenu': {
     ko: '{v0} 프리셋 메뉴',
@@ -995,12 +833,6 @@ export const messages = {
     ja: 'ComfyUI、リモートPCのAPI',
     zh: 'ComfyUI，远程电脑API',
   },
-  'visualpanels.applyingAPresetUsesTheSharedConnection': {
-    ko: '프리셋을 적용하면 해당 생성기의 공용 연결과 모델을 사용해요.',
-    en: 'Applying a preset uses the shared connection and model for its generator.',
-    ja: 'プリセットを適用すると、その生成器の共通接続とモデルを使います。',
-    zh: '应用预设后将使用对应生成器的共享连接和模型。',
-  },
   'visualpanels.illustrationInstructions': {
     ko: '그림 지침',
     en: 'Illustration instructions',
@@ -1049,12 +881,6 @@ export const messages = {
     ja: 'ComfyUI設定',
     zh: 'ComfyUI设置',
   },
-  'visualpanels.workflowPresent': {
-    ko: '워크플로 있음',
-    en: 'Workflow present',
-    ja: 'ワークフローあり',
-    zh: '有工作流',
-  },
   'visualpanels.additionalNegativeGuidance': {
     ko: '추가 제외 지침',
     en: 'Additional negative guidance',
@@ -1102,12 +928,6 @@ export const messages = {
     en: 'The receiving ComfyUI needs the same models, LoRAs and custom nodes. Workflows are exported unchanged, so check for embedded secrets or personal paths.',
     ja: '相手のComfyUIにも同じモデル、LoRA、カスタムノードが必要です。ワークフローはそのまま書き出すため、直接記入した秘密情報や個人のパスがないか確認してください。',
     zh: '接收方的ComfyUI也需要相同的模型、LoRA和自定义节点。工作流会原样导出，请检查是否包含密钥或私人路径。',
-  },
-  'visualpanels.savedChangesApplyFromTheNextGeneration': {
-    ko: '저장하면 이 프리셋을 사용하는 채팅의 다음 생성부터 반영돼요. 진행 중인 작업과 기존 삽화는 바뀌지 않아요.',
-    en: 'Saved changes apply from the next generation in chats using this preset. Ongoing work and existing illustrations are preserved.',
-    ja: '保存すると、このプリセットを使うチャットの次の生成から反映されます。進行中の作業と既存の挿絵は変わりません。',
-    zh: '保存后将从使用此预设的聊天的下次生成开始生效。进行中的任务和现有插图会保留。',
   },
   'visualpanels.savePreset': {
     ko: '프리셋 저장',
@@ -1277,12 +1097,6 @@ export const messages = {
     ja: '推定費用：{v0}',
     zh: '估算费用：{v0}',
   },
-  'visualpanels.calculatedFromProviderReportedTokensAndThe': {
-    ko: '호출 후 프로바이더가 보고한 토큰과 호출에 고정된 요금으로 계산해요. 참고용 추정 금액이며 실제 청구액과 다를 수 있어요.',
-    en: 'Calculated from provider-reported tokens and the price fixed for this call. This estimate is for reference and may differ from actual charges.',
-    ja: '呼び出し後にプロバイダーが報告したトークンと、この呼び出しに固定された料金で計算します。参考用の推定額で、実際の請求額とは異なる場合があります。',
-    zh: '根据调用后提供商报告的 token 数及该调用固定的费率计算。此估算仅供参考，可能与实际账单不同。',
-  },
   'visualpanels.fixedServiceTierPriceChecked': {
     ko: '호출에 고정된 등급: {v0}, 요금 기준일: {v1}',
     en: 'Fixed service tier: {v0}, Price checked: {v1}',
@@ -1355,12 +1169,6 @@ export const messages = {
     ja: '推定費用',
     zh: '估算费用',
   },
-  'visualpanels.cacheReuseIsConfirmedByProviderReported': {
-    ko: '캐시 재사용은 프로바이더가 보고한 읽기 토큰으로 확인해요.',
-    en: 'Cache reuse is confirmed by provider-reported read tokens.',
-    ja: 'キャッシュの再利用はプロバイダーが報告する読み取りトークンで確認します。',
-    zh: '缓存复用由提供商报告的读取 token 确认。',
-  },
   'visualpanels.pinnedMaterial': {
     ko: '고정 자료',
     en: 'Pinned resource',
@@ -1403,12 +1211,6 @@ export const messages = {
     ja: '含まれたか未確認',
     zh: '是否包含尚未确认',
   },
-  'visualpanels.source': {
-    ko: '출처: {v0}',
-    en: 'Source: {v0}',
-    ja: '出典：{v0}',
-    zh: '来源：{v0}',
-  },
   'visualpanels.loreIncludedInRequest': {
     ko: '요청에 포함된 로어',
     en: 'Lore included in request',
@@ -1420,12 +1222,6 @@ export const messages = {
     en: 'There is no lore inclusion record for this request.',
     ja: 'このリクエストにはロアの同梱記録がありません。',
     zh: '此请求没有设定包含记录。',
-  },
-  'visualpanels.loreListVPluralOneOther': {
-    ko: '로어 목록: {v0, number}건',
-    en: 'Lore list: {v0, plural, one {# entry} other {# entries}}',
-    ja: 'ロア一覧、{v0, number}件',
-    zh: '设定列表，{v0, number}条',
   },
   'visualpanels.noAdditionalLoreWasAttachedToThis': {
     ko: '이 요청에 추가로 첨부한 로어가 없어요.',
@@ -1451,12 +1247,6 @@ export const messages = {
     ja: '含まれたか未確認、{v0, number}件',
     zh: '是否包含尚未确认，{v0, number}条',
   },
-  'visualpanels.basedOnMaterialsAttachedByTheApp': {
-    ko: '앱이 첨부한 자료 기준이에요. 목록에 이름만 있는 로어는 제외해요.',
-    en: 'Based on resources attached by the app. Lore listed only by name is excluded.',
-    ja: 'アプリが添付した資料が対象です。名前だけ一覧にあるロアは除きます。',
-    zh: '以应用附加的资料为准，不包含仅列出名称的设定。',
-  },
   'visualpanels.callsAndCostsAcrossAllRoles': {
     ko: '전체 역할의 호출과 비용',
     en: 'Calls and costs across all roles',
@@ -1474,18 +1264,6 @@ export const messages = {
     en: '{v0, plural, one {# send attempt} other {# send attempts}}, Input {v1} / Output {v2} tokens, Provider-reported cost {v3}',
     ja: '送信試行 {v0, number}回、入力 {v1} / 出力 {v2}トークン、プロバイダー報告費用 {v3}',
     zh: '发送尝试{v0, number}次，输入{v1} / 输出{v2} token，提供商报告费用{v3}',
-  },
-  'visualpanels.calculatedFromTokensReportedByTheProvider': {
-    ko: '호출 후 프로바이더가 보고한 토큰으로 계산해요. 참고용 추정 금액이며 실제 청구액과 다를 수 있어요.',
-    en: 'Calculated from tokens reported by the provider after the call. This estimate is for reference and may differ from actual charges.',
-    ja: '呼び出し後にプロバイダーが報告したトークンで計算します。参考用の推定額で、実際の請求額とは異なる場合があります。',
-    zh: '根据调用后提供商报告的 token 数计算。此估算仅供参考，可能与实际账单不同。',
-  },
-  'visualpanels.callsWithMissingCostOrTokenRecords': {
-    ko: '비용이나 토큰 기록이 없는 호출은 0으로 계산하지 않아요. 외부로 요청을 보내지 않은 모의 생성은 아래 본문 생성 기록에서 확인할 수 있어요.',
-    en: 'Calls with missing cost or token records are not counted as zero. Mock generations that sent no external request appear in the generation records below.',
-    ja: '費用やトークンの記録がない呼び出しを0とは扱いません。外部にリクエストを送らない模擬生成は、以下の本文生成記録で確認できます。',
-    zh: '缺少费用或 token 记录的调用不会按零计算。未发送外部请求的模拟生成可在下方正文生成记录中查看。',
   },
   'visualpanels.role': {
     ko: '역할',
@@ -1709,47 +1487,17 @@ export const messages = {
     ja: '使用費用',
     zh: '使用费用',
   },
-  'visualpanels.reportedEstimated': {
-    ko: '보고액 + 추정액',
-    en: 'Reported + estimated',
-    ja: '報告額 + 推定額',
-    zh: '报告金额 + 估算金额',
-  },
-  'visualpanels.noRecords': {
-    ko: '기록 없음',
-    en: 'No records',
-    ja: '記録なし',
-    zh: '无记录',
-  },
   'visualpanels.unknownPartialEstimateInCalls': {
     ko: '{v0, plural, =0 {} other {미확인 #회}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {, }}}}{v1, plural, =0 {} other {부분 추정 #회}}',
     en: '{v0, plural, =0 {} one {Unknown in # call} other {Unknown in # calls}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {, }}}}{v1, plural, =0 {} one {partial estimate in # call} other {partial estimate in # calls}}',
     ja: '{v0, plural, =0 {} other {未確認 #回}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {、}}}}{v1, plural, =0 {} other {部分推定 #回}}',
     zh: '{v0, plural, =0 {} other {未知#次}}{v0, plural, =0 {} other {{v1, plural, =0 {} other {，}}}}{v1, plural, =0 {} other {部分估算#次}}',
   },
-  'visualpanels.usageCalls': {
-    ko: '사용량 호출',
-    en: 'Usage calls',
-    ja: '使用量の呼び出し',
-    zh: '用量调用',
-  },
   'visualpanels.includesVPluralOneOtherInProgress': {
     ko: '진행 중 {v0, number}회 포함',
     en: 'Includes {v0, plural, one {# call} other {# calls}} in progress',
     ja: '進行中の{v0, number}回を含む',
     zh: '含{v0, number}次进行中的调用',
-  },
-  'visualpanels.basedOnActualSends': {
-    ko: '실제 전송 기준',
-    en: 'Based on actual sends',
-    ja: '実際の送信が基準',
-    zh: '以实际发送为准',
-  },
-  'visualpanels.usedTokens': {
-    ko: '사용 토큰',
-    en: 'Used tokens',
-    ja: '使用トークン',
-    zh: '已用 token',
   },
   'visualpanels.knownTokens': {
     ko: '확인된 토큰',
@@ -1762,12 +1510,6 @@ export const messages = {
     en: 'Cost by model',
     ja: 'モデル別費用',
     zh: '按模型统计费用',
-  },
-  'visualpanels.topBasedOnKnownAmounts': {
-    ko: '상위 5개 (확인된 금액 기준)',
-    en: 'Top 5 (known amounts)',
-    ja: '上位5件（確認済み金額が基準）',
-    zh: '前5项（基于已知金额）',
   },
   'visualpanels.calls2': {
     ko: '{v0}, {v1, number}회',

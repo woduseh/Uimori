@@ -155,12 +155,6 @@ export const messages = {
     ja: '保存済みの内容を確認できませんでした。',
     zh: '无法查看已保存版本。',
   },
-  'shared.reviewContinue': {
-    ko: '저장본을 확인한 뒤 계속 편집할 수 있어요.',
-    en: 'Review the saved version, then continue editing.',
-    ja: '保存済み内容を確認してから編集を続けられます。',
-    zh: '查看已保存版本后可继续编辑。',
-  },
   'shared.currentSaved': {
     ko: '현재 저장본',
     en: 'Current saved version',

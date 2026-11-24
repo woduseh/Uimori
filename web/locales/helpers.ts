@@ -269,18 +269,6 @@ export const messages = {
     ja: 'アシスタント',
     zh: '助手',
   },
-  'helpers.m042': {
-    ko: '이 채팅의 작품과 설정',
-    en: "This chat's work and settings",
-    ja: 'このチャットの作品と設定',
-    zh: '此聊天的作品与设置',
-  },
-  'helpers.m043': {
-    ko: '서재 작업',
-    en: 'Library tasks',
-    ja: 'ライブラリの作業',
-    zh: '资料库任务',
-  },
   'helpers.m044': {
     ko: '도우미 말투 설정',
     en: 'Assistant tone settings',
@@ -299,23 +287,11 @@ export const messages = {
     ja: '構成に戻る',
     zh: '返回大纲',
   },
-  'helpers.m048': {
-    ko: '도우미 모델',
-    en: 'Assistant model',
-    ja: 'アシスタントモデル',
-    zh: '助手模型',
-  },
   'helpers.m049': {
     ko: '현재 도우미 모델: {v0}',
     en: 'Current assistant model: {v0}',
     ja: '現在のアシスタントモデル：{v0}',
     zh: '当前助手模型：{v0}',
-  },
-  'helpers.m050': {
-    ko: '도우미 모델 설정',
-    en: 'Assistant model settings',
-    ja: 'アシスタントのモデル設定',
-    zh: '助手模型设置',
   },
   'helpers.reviewSelection': {
     ko: '선택한 원문을 검토해 주세요.',
@@ -328,12 +304,6 @@ export const messages = {
     en: 'Assistant tone',
     ja: 'アシスタントの口調',
     zh: '助手语气',
-  },
-  'helpers.m052': {
-    ko: '이 도우미 대화에만 적용해요.',
-    en: 'Applies only to this assistant conversation.',
-    ja: 'このアシスタントの会話だけに適用します。',
-    zh: '仅适用于此助手对话。',
   },
   'helpers.m053': {
     ko: '비워 두면 담백한 도우미로 응답해요.',
@@ -383,12 +353,6 @@ export const messages = {
     ja: '会話を読み込み中…',
     zh: '正在加载对话…',
   },
-  'helpers.m063': {
-    ko: '수정한 요청으로 같은 자리에서 다시 시도해요.',
-    en: 'Retry in the same place with an edited request.',
-    ja: '修正した依頼で同じ位置から再試行します。',
-    zh: '使用修改后的请求在原位置重试。',
-  },
   'helpers.m064': {
     ko: '도우미 작업 기록',
     en: 'Assistant task history',
@@ -436,12 +400,6 @@ export const messages = {
     en: 'Could not confirm whether the previous request was received.',
     ja: '前のリクエストが受け付けられたか確認できませんでした。',
     zh: '无法确认之前的请求是否已接收。',
-  },
-  'helpers.m077': {
-    ko: '새로 작성한 입력은 유지돼요.',
-    en: 'Your newly written input will be preserved.',
-    ja: '新しく入力した内容は保持されます。',
-    zh: '新输入的内容会保留。',
   },
   'helpers.m078': {
     ko: '닫기',
@@ -605,12 +563,6 @@ export const messages = {
     ja: '新しいボットの下書きを一緒に作って',
     zh: '帮我起草一个新机器人',
   },
-  'helpers.m105': {
-    ko: '도우미 대화 더 보기',
-    en: 'More assistant conversation options',
-    ja: 'アシスタントの会話のその他の操作',
-    zh: '助手对话更多选项',
-  },
   'helpers.m106': {
     ko: '작업 기록',
     en: 'Task history',
@@ -695,23 +647,11 @@ export const messages = {
     ja: '活動履歴を読み込み中…',
     zh: '正在加载活动记录…',
   },
-  'helpers.m121': {
-    ko: '최근 활동 80건을 표시해요. 이전 활동은 생략됐어요.',
-    en: 'Showing the 80 most recent activities. Earlier activity has been omitted.',
-    ja: '最近の活動80件を表示しています。それ以前の活動は省略しています。',
-    zh: '显示最近80条活动，更早的活动已省略。',
-  },
   'helpers.m122': {
     ko: '아직 기록된 활동이 없어요.',
     en: 'No activity has been recorded yet.',
     ja: 'まだ活動は記録されていません。',
     zh: '尚无活动记录。',
-  },
-  'helpers.m123': {
-    ko: ', {v0}건',
-    en: ', Items: {v0}',
-    ja: '、{v0}件',
-    zh: '，{v0}条',
   },
   'helpers.m124': {
     ko: '정리 결과 적용',
@@ -910,12 +850,6 @@ export const messages = {
     en: 'Delete conversation',
     ja: '会話を削除',
     zh: '删除对话',
-  },
-  'helpers.m180': {
-    ko: '이 채팅',
-    en: 'This chat',
-    ja: 'このチャット',
-    zh: '此聊天',
   },
   'helpers.m183': {
     ko: '도우미 대화 이름 변경',
@@ -1379,12 +1313,6 @@ export const messages = {
     ja: '接続を再確認しています。',
     zh: '正在重新检查连接。',
   },
-  'helpers.m255': {
-    ko: '본문 생성 기록은 생성 당시 원문을 기준으로 남고, 후속 작업에는 현재 본문에 연결된 항목이 표시돼요.',
-    en: 'Main text generation history is based on the source text at the time of generation, and follow-up tasks display items linked to the current text.',
-    ja: '本文の生成履歴は生成当時の原文を基準として残り、後続作業には現在の本文にリンクされた項目が表示されます。',
-    zh: '正文生成记录基于生成时的原文保留，后续任务中则显示与当前正文关联的项目。',
-  },
   'helpers.m257': {
     ko: '방금',
     en: 'Just now',
@@ -1679,18 +1607,6 @@ export const messages = {
     ja: '下書き{index}、{revision}',
     zh: '草稿{index}，{revision}',
   },
-  'helpers.m324': {
-    ko: '{scope}, 대화 {count}개',
-    en: '{scope}, Conversations: {count}',
-    ja: '{scope}、会話{count}件',
-    zh: '{scope}，对话{count}个',
-  },
-  'helpers.m325': {
-    ko: '새 소식 {count}',
-    en: 'Updates: {count}',
-    ja: '新着情報{count}件',
-    zh: '新动态{count}条',
-  },
   'helpers.m326': {
     ko: '‘{title}’ 대화를 삭제해요.',
     en: 'Delete the “{title}” conversation.',
@@ -1805,36 +1721,6 @@ export const messages = {
     ja: '{name} {status}',
     zh: '{name} {status}',
   },
-  'helpers.m339': {
-    ko: '저장 기록을 확인할 수 없어 되돌릴 수 없어요.',
-    en: 'Cannot restore because the save history could not be verified.',
-    ja: '保存履歴を確認できないため、元に戻せません。',
-    zh: '无法确认保存记录，因此无法恢复。',
-  },
-  'helpers.m340': {
-    ko: '도우미 작업이 끝나면 되돌릴 수 있어요.',
-    en: 'You can restore after the assistant task ends.',
-    ja: 'アシスタントの作業が終了したら元に戻せます。',
-    zh: '助手任务结束后即可恢复。',
-  },
-  'helpers.m341': {
-    ko: '최근 수정 이후 자료가 변경되어 되돌릴 수 없어요.',
-    en: 'Cannot restore because the resource has changed since the latest edit.',
-    ja: '最近の編集以降に資料が変更されたため、元に戻せません。',
-    zh: '资料在最近一次修改后发生了更改，无法恢复。',
-  },
-  'helpers.m342': {
-    ko: '자료를 찾을 수 없어 되돌릴 수 없어요.',
-    en: 'Cannot restore because the resource could not be found.',
-    ja: '資料が見つからないため、元に戻せません。',
-    zh: '找不到资料，无法恢复。',
-  },
-  'helpers.m343': {
-    ko: '이미 되돌린 수정이에요.',
-    en: 'This edit has already been restored.',
-    ja: 'すでに元に戻した編集です。',
-    zh: '此修改已恢复。',
-  },
   'helpers.m344': {
     ko: '완료된 도우미 작업',
     en: 'Completed assistant task',
@@ -1876,12 +1762,6 @@ export const messages = {
     en: 'Changes already made by tools are not undone.',
     ja: 'ツールがすでに行った変更は元に戻りません。',
     zh: '工具已经进行的更改不会撤销。',
-  },
-  'helpers.noMessages': {
-    ko: '아직 메시지가 없어요.',
-    en: 'No messages yet.',
-    ja: 'まだメッセージはありません。',
-    zh: '暂无消息。',
   },
   'helpers.followUpTrayLabel': {
     ko: '추가 지시와 대기 중인 요청',

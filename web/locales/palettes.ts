@@ -59,12 +59,6 @@ export const messages = {
     ja: 'ダーク',
     zh: '深色',
   },
-  'palettes.saveScope': {
-    ko: '저장은 현재 선택을 바꾸지 않아요.',
-    en: 'Saving keeps the current selection.',
-    ja: '保存しても現在の選択は変わりません。',
-    zh: '保存不会改变当前选择。',
-  },
   'palettes.preview': {
     ko: '미리보기',
     en: 'Preview',

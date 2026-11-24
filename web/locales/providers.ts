@@ -347,12 +347,6 @@ export const messages = {
     ja: 'TypeSafe AIの登録状態を再読み込み',
     zh: '重新加载 TypeSafe AI 注册状态',
   },
-  'providers.m65': {
-    ko: '목록을 새로 읽었어요. 편집 초안은 유지돼요.',
-    en: 'List refreshed. Your editing draft was retained.',
-    ja: '一覧を再読み込みしました。編集中の下書きは保持されています。',
-    zh: '列表已刷新。编辑草稿已保留。',
-  },
   'providers.m66': {
     ko: 'TypeSafe AI 등록 상태를 확인하지 못했어요.',
     en: 'Could not check TypeSafe AI registration.',
@@ -425,47 +419,11 @@ export const messages = {
     ja: '使用するモデルを登録しましょう',
     zh: '添加要使用的模型',
   },
-  'providers.m83': {
-    ko: '빠른 프로바이더 설정 진행',
-    en: 'Quick provider setup progress',
-    ja: 'プロバイダー簡単設定の進行状況',
-    zh: '提供商快速设置进度',
-  },
-  'providers.m84': {
-    ko: '1. 프로바이더 종류',
-    en: '1. Provider type',
-    ja: '1. プロバイダーの種類',
-    zh: '1. 提供商类型',
-  },
-  'providers.m85': {
-    ko: '2. 접속 정보',
-    en: '2. Connection details',
-    ja: '2. 接続情報',
-    zh: '2. 连接信息',
-  },
-  'providers.m86': {
-    ko: '3. 모델',
-    en: '3. Model',
-    ja: '3. モデル',
-    zh: '3. 模型',
-  },
   'providers.m87': {
     ko: '프로바이더 선택',
     en: 'Select provider',
     ja: 'プロバイダーを選択',
     zh: '选择提供商',
-  },
-  'providers.m88': {
-    ko: '프로바이더를 선택해 주세요.',
-    en: 'Select a provider.',
-    ja: 'プロバイダーを選択してください。',
-    zh: '请选择提供商。',
-  },
-  'providers.m89': {
-    ko: '프로바이더를 고르면 기본 접속 정보를 채워요.',
-    en: 'Choosing a provider fills in its default connection details.',
-    ja: 'プロバイダーを選ぶと、標準の接続情報が入力されます。',
-    zh: '选择提供商后会填入默认连接信息。',
   },
   'providers.m90': {
     ko: '서버 API 키 인증',
@@ -514,12 +472,6 @@ export const messages = {
     en: 'Saved providers',
     ja: '保存済みプロバイダー',
     zh: '已保存的提供商',
-  },
-  'providers.m98': {
-    ko: '끌어서 순서를 바꿔요. 키보드에서는 Alt + ↑ / ↓를 사용해요.',
-    en: 'Drag to reorder. With a keyboard, use Alt + ↑ / ↓.',
-    ja: 'ドラッグして並べ替えます。キーボードではAlt + ↑ / ↓を使います。',
-    zh: '拖动以调整顺序。使用键盘时请按 Alt + ↑ / ↓。',
   },
   'providers.m101': {
     ko: '비활성',
@@ -580,12 +532,6 @@ export const messages = {
     en: 'Saved model presets',
     ja: '保存済みモデルプリセット',
     zh: '已保存的模型预设',
-  },
-  'providers.m115': {
-    ko: '끌어서 순서를 바꾸면 모델 선택 목록에도 반영돼요. 키보드에서는 Alt + ↑ / ↓를 사용해요.',
-    en: 'Dragging to reorder also updates model selection lists. With a keyboard, use Alt + ↑ / ↓.',
-    ja: 'ドラッグで並べ替えると、モデル選択一覧にも反映されます。キーボードではAlt + ↑ / ↓を使います。',
-    zh: '拖动调整顺序也会同步到模型选择列表。使用键盘时请按 Alt + ↑ / ↓。',
   },
   'providers.m116': {
     ko: '프로바이더 확인 필요',
@@ -659,12 +605,6 @@ export const messages = {
     ja: 'プロバイダーを登録',
     zh: '添加提供商',
   },
-  'providers.m134': {
-    ko: '저장한 변경은 다음 신규 생성부터 적용돼요. 진행 중이거나 완료된 실행의 설정은 유지돼요.',
-    en: 'Saved changes apply to new generations. Settings for ongoing and completed runs will be retained.',
-    ja: '保存した変更は次の新規生成から適用されます。進行中、完了済みの実行設定は保持されます。',
-    zh: '保存的更改从下一次新生成开始生效。进行中和已完成运行的设置会保留。',
-  },
   'providers.m135': {
     ko: '프로바이더가 변경됐어요.',
     en: 'The provider changed.',
@@ -676,12 +616,6 @@ export const messages = {
     en: 'Load latest provider settings',
     ja: '最新のプロバイダー設定を読み込む',
     zh: '加载最新提供商设置',
-  },
-  'providers.m137': {
-    ko: '새 프로바이더로 복사해요. 주소와 키를 확인하고 저장해 주세요.',
-    en: 'Copying as a new provider. Check the address and key before saving.',
-    ja: '新しいプロバイダーとしてコピーします。アドレスとキーを確認して保存してください。',
-    zh: '将复制为新提供商。请检查地址和密钥后保存。',
   },
   'providers.m138': {
     ko: '프로바이더가 변경됐어요. 최신 설정을 불러와 주세요.',
@@ -706,12 +640,6 @@ export const messages = {
     en: 'Google Cloud project ID',
     ja: 'Google CloudプロジェクトID',
     zh: 'Google Cloud 项目 ID',
-  },
-  'providers.m142': {
-    ko: '프로젝트 ID를 입력하면 요청 주소를 자동으로 채워요.',
-    en: 'Entering a project ID automatically fills in the request URL.',
-    ja: 'プロジェクトIDを入力すると、リクエスト先が自動入力されます。',
-    zh: '输入项目 ID 后会自动填入请求地址。',
   },
   'providers.m143': {
     ko: 'http://127.0.0.1:포트',
@@ -760,48 +688,6 @@ export const messages = {
     en: 'Connection guide',
     ja: '接続案内',
     zh: '连接说明',
-  },
-  'providers.m154': {
-    ko: '인증 방식',
-    en: 'Authentication method',
-    ja: '認証方式',
-    zh: '认证方式',
-  },
-  'providers.m155': {
-    ko: '목록 방식',
-    en: 'List source',
-    ja: '一覧取得方式',
-    zh: '列表获取方式',
-  },
-  'providers.m156': {
-    ko: '모델 목록 새로고침을 누르면 프로바이더에서 조회',
-    en: 'Fetched from the provider when you refresh the model list',
-    ja: 'モデル一覧を更新するとプロバイダーから取得',
-    zh: '刷新模型列表时从提供商获取',
-  },
-  'providers.m157': {
-    ko: '로그인한 에이전트 모델 목록',
-    en: 'Model list of the signed-in agent',
-    ja: 'ログイン中のエージェントのモデル一覧',
-    zh: '已登录代理的模型列表',
-  },
-  'providers.m159': {
-    ko: '저장한 프로바이더예요.',
-    en: 'This provider is saved.',
-    ja: '保存済みのプロバイダーです。',
-    zh: '此提供商已保存。',
-  },
-  'providers.m160': {
-    ko: '아직 저장하지 않은 변경이 있어요.',
-    en: 'You have unsaved changes.',
-    ja: '未保存の変更があります。',
-    zh: '有尚未保存的更改。',
-  },
-  'providers.m161': {
-    ko: '아직 저장하지 않은 프로바이더예요.',
-    en: 'This provider has not been saved yet.',
-    ja: 'まだ保存されていないプロバイダーです。',
-    zh: '此提供商尚未保存。',
   },
   'providers.m162': {
     ko: '프로바이더 편집 끝내기',
@@ -1295,12 +1181,6 @@ export const messages = {
     ja: '出力と推論の設定を下げる',
     zh: '降低输出和推理设置',
   },
-  'providers.m274': {
-    ko: '요금',
-    en: 'Pricing',
-    ja: '料金',
-    zh: '费用',
-  },
   'providers.m275': {
     ko: '모델 편집 양식',
     en: 'Model editing form',
@@ -1372,18 +1252,6 @@ export const messages = {
     en: 'Models using disabled providers cannot start new runs.',
     ja: '無効なプロバイダーを使うモデルは新規実行できません。',
     zh: '使用已停用提供商的模型无法开始新运行。',
-  },
-  'providers.m288': {
-    ko: '저장한 모델 프리셋이에요.',
-    en: 'This model preset is saved.',
-    ja: '保存済みのモデルプリセットです。',
-    zh: '此模型预设已保存。',
-  },
-  'providers.m289': {
-    ko: '아직 저장하지 않은 모델 프리셋이에요.',
-    en: 'This model preset has not been saved yet.',
-    ja: 'まだ保存されていないモデルプリセットです。',
-    zh: '此模型预设尚未保存。',
   },
   'providers.m290': {
     ko: '모델 편집 끝내기',
@@ -1486,12 +1354,6 @@ export const messages = {
     en: 'Check the request URL in the provider editor.',
     ja: 'プロバイダー編集でリクエスト先を確認してください。',
     zh: '请在提供商编辑页面中检查请求地址。',
-  },
-  'providers.m309': {
-    ko: '프로바이더를 먼저 선택해 주세요.',
-    en: 'Select a provider first.',
-    ja: '先にプロバイダーを選択してください。',
-    zh: '请先选择提供商。',
   },
   'providers.m310': {
     ko: '저장된 모델 목록에서 선택',
@@ -1715,12 +1577,6 @@ export const messages = {
     ja: '接続状態を読み込み中…',
     zh: '正在加载连接状态…',
   },
-  'providers.m352': {
-    ko: '접속 정보',
-    en: 'Connection details',
-    ja: '接続情報',
-    zh: '连接信息',
-  },
   'providers.m353': {
     ko: 'JEV API 키',
     en: 'JEV API key',
@@ -1781,12 +1637,6 @@ export const messages = {
     ja: 'JEV APIキーを保存',
     zh: '保存 JEV API 密钥',
   },
-  'providers.m368': {
-    ko: '모델 정보',
-    en: 'Model information',
-    ja: 'モデル情報',
-    zh: '模型信息',
-  },
   'providers.m369': {
     ko: '프로바이더 설정',
     en: 'Provider settings',
@@ -1822,12 +1672,6 @@ export const messages = {
     en: 'Check test status',
     ja: 'テスト状態を確認',
     zh: '检查测试状态',
-  },
-  'providers.m375': {
-    ko: '짧은 예제의 관련성을 판단해요.',
-    en: 'Judge the relevance of a short example.',
-    ja: '短い例の関連性を判定します。',
-    zh: '判断简短示例的相关性。',
   },
   'providers.m376': {
     ko: '입력한 키를 저장하거나 지운 뒤 테스트해 주세요.',
@@ -2098,66 +1942,6 @@ export const messages = {
     en: 'Check the Codex runtime environment.',
     ja: 'Codexの実行環境を確認してください。',
     zh: '请检查 Codex 运行环境。',
-  },
-  'providers.m432': {
-    ko: '연결 절차',
-    en: 'Connection procedure',
-    ja: '接続手順',
-    zh: '连接步骤',
-  },
-  'providers.m433': {
-    ko: 'Codex 연결 단계',
-    en: 'Codex connection steps',
-    ja: 'Codex接続の手順',
-    zh: 'Codex 连接步骤',
-  },
-  'providers.m434': {
-    ko: '서버 준비',
-    en: 'Server preparation',
-    ja: 'サーバーの準備',
-    zh: '服务器准备',
-  },
-  'providers.m435': {
-    ko: '서버 실행 환경이 준비됐어요.',
-    en: 'The server runtime is ready.',
-    ja: 'サーバーの実行環境が準備できました。',
-    zh: '服务器运行环境已就绪。',
-  },
-  'providers.m436': {
-    ko: '서버 관리자의 실행 환경 설정이 필요해요.',
-    en: 'The server administrator must configure the runtime.',
-    ja: 'サーバー管理者による実行環境の設定が必要です。',
-    zh: '需要服务器管理员配置运行环境。',
-  },
-  'providers.m437': {
-    ko: '로그인',
-    en: 'Sign in',
-    ja: 'ログイン',
-    zh: '登录',
-  },
-  'providers.m439': {
-    ko: '이 서버에서 사용할 ChatGPT 계정으로 로그인해요.',
-    en: 'Sign in with the ChatGPT account to use on this server.',
-    ja: 'このサーバーで使用するChatGPTアカウントでログインします。',
-    zh: '使用将在此服务器上使用的 ChatGPT 账号登录。',
-  },
-  'providers.m440': {
-    ko: '서버가 준비되면 로그인할 수 있어요.',
-    en: 'You can sign in once the server is ready.',
-    ja: 'サーバーの準備ができるとログインできます。',
-    zh: '服务器就绪后即可登录。',
-  },
-  'providers.m441': {
-    ko: '연결 확인',
-    en: 'Verify connection',
-    ja: '接続を確認',
-    zh: '确认连接',
-  },
-  'providers.m442': {
-    ko: '로그인 완료 후 연결 상태와 사용량을 확인해요.',
-    en: 'After sign-in, check the connection status and usage.',
-    ja: 'ログイン完了後、接続状態と使用量を確認します。',
-    zh: '登录完成后检查连接状态和用量。',
   },
   'providers.m443': {
     ko: 'Codex 로그인 코드',
@@ -2470,12 +2254,6 @@ export const messages = {
     en: 'Enter Batch rates manually',
     ja: 'Batch料金を手入力',
     zh: '手动输入 Batch 费率',
-  },
-  'providers.m508': {
-    ko: 'Batch 요금은 별도로 확인해 입력해요.',
-    en: 'Verify and enter Batch rates separately.',
-    ja: 'Batch料金は別途確認して入力します。',
-    zh: '请单独确认并输入 Batch 费率。',
   },
   'providers.m509': {
     ko: '요금 출처 URL',
@@ -2867,12 +2645,6 @@ export const messages = {
     ja: '{configured, select, true {JEV APIキーを変更} other {JEV APIキー}}',
     zh: '{configured, select, true {更换 JEV API 密钥} other {JEV API 密钥}}',
   },
-  'providers.m579': {
-    ko: '{value0} 키는 서버에 저장하며 다시 표시하지 않아요.',
-    en: '{value0} keys are stored on the server and are never displayed again.',
-    ja: '{value0}キーはサーバーに保存され、再表示されません。',
-    zh: '{value0}密钥保存在服务器上，不会再次显示。',
-  },
   'providers.m580': {
     ko: '예제 관련성: {value0}%',
     en: 'Example relevance: {value0}%',
@@ -2926,12 +2698,6 @@ export const messages = {
     en: 'Resets {value0}',
     ja: '{value0}にリセット',
     zh: '{value0}重置',
-  },
-  'providers.m589': {
-    ko: '{value0}% 사용',
-    en: '{value0}% used',
-    ja: '{value0}%使用済み',
-    zh: '已使用 {value0}%',
   },
   'providers.m590': {
     ko: '{value0, number} 크레딧',

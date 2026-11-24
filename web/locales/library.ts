@@ -173,12 +173,6 @@ export const messages = {
     ja: 'ライブラリ一覧',
     zh: '资料库列表',
   },
-  'library.noIntroductionYet': {
-    ko: '아직 소개가 없어요.',
-    en: 'No introduction yet.',
-    ja: '紹介はまだありません。',
-    zh: '暂无简介。',
-  },
   'library.newChat': {
     ko: '새 채팅',
     en: 'New chat',
@@ -365,18 +359,6 @@ export const messages = {
     ja: 'このフォルダーは空です',
     zh: '此文件夹为空',
   },
-  'library.tryAnotherNameOrDescription': {
-    ko: '다른 이름이나 설명으로 찾아보세요.',
-    en: 'Try another name or description.',
-    ja: '別の名前や説明で探してください。',
-    zh: '请尝试其他名称或描述。',
-  },
-  'library.createAResourceOrMoveOneFrom': {
-    ko: '자료를 만들거나 다른 폴더의 자료를 옮겨 보세요.',
-    en: 'Create a resource or move one from another folder.',
-    ja: '資料を作成するか、別のフォルダーから移動してください。',
-    zh: '请创建资料或从其他文件夹移入。',
-  },
   'library.clearSearch': {
     ko: '검색 지우기',
     en: 'Clear search',
@@ -430,12 +412,6 @@ export const messages = {
     en: 'Remove this resource from the list and close its draft. Content used by past chats and runs is retained.',
     ja: '資料を一覧から削除して編集中の下書きを閉じます。過去のチャットや実行で使った内容は保持します。',
     zh: '从列表删除此资料并关闭编辑草稿，保留过去聊天与运行所用的内容。',
-  },
-  'library.editingTheOriginalChangesWillBeChecked': {
-    ko: '원문 편집 중이에요. 저장할 때 함께 확인하고 반영해요.',
-    en: 'Editing source. Changes are checked and applied when you save.',
-    ja: 'ソースを編集中です。保存時に確認して反映します。',
-    zh: '正在编辑源码，保存时会一并检查并应用。',
   },
   'library.startChat': {
     ko: '채팅 시작',
@@ -707,18 +683,6 @@ export const messages = {
     ja: 'すべてのフォルダー',
     zh: '所有文件夹',
   },
-  'library.searchOtherCategoriesToo': {
-    ko: '다른 분류의 자료도 찾기',
-    en: 'Search other categories too',
-    ja: 'ほかの分類も検索',
-    zh: '同时搜索其他分类',
-  },
-  'library.searchAllFolders': {
-    ko: '전체 폴더에서 찾기',
-    en: 'Search all folders',
-    ja: 'すべてのフォルダーで検索',
-    zh: '在所有文件夹搜索',
-  },
   'library.couldNotVerifyRequiredModulesCheckFor': {
     ko: '필수 모듈을 확인할 수 없어요. 자료가 누락됐거나 의존 관계가 충돌하는지 확인해 주세요. ({v0})',
     en: 'Could not verify required modules. Check for missing resources or conflicting dependencies. ({v0})',
@@ -779,29 +743,11 @@ export const messages = {
     ja: '必須モジュール（自動接続）',
     zh: '必需模块，自动关联',
   },
-  'library.myPersona': {
-    ko: '내 페르소나',
-    en: 'My persona',
-    ja: '自分のペルソナ',
-    zh: '我的角色',
-  },
   'library.additionalModule': {
     ko: '추가 모듈',
     en: 'Additional module',
     ja: '追加モジュール',
     zh: '附加模块',
-  },
-  'library.detach': {
-    ko: '해제',
-    en: 'Detach',
-    ja: '解除',
-    zh: '解除关联',
-  },
-  'library.thisModuleIsRequiredByAnAttached': {
-    ko: '이 모듈을 요구하는 자료를 해제하거나, 그 자료의 모듈 참조를 수정하면 제외할 수 있어요.',
-    en: 'To remove this module, detach the resource that requires it or edit that resource’s module references.',
-    ja: 'このモジュールを必要とする資料を外すか、その資料のモジュール参照を編集すると除外できます。',
-    zh: '解除需要此模块的资料，或修改该资料的模块引用，即可移除此模块。',
   },
   'library.reviewLoreAndInstructions': {
     ko: '사용할 로어와 지침 확인',
@@ -826,24 +772,6 @@ export const messages = {
     en: 'Shared modules',
     ja: '併用するモジュール',
     zh: '共用模块',
-  },
-  'library.addResource': {
-    ko: '자료 추가',
-    en: 'Add resource',
-    ja: '資料を追加',
-    zh: '添加资料',
-  },
-  'library.packageToAdd': {
-    ko: '추가할 패키지',
-    en: 'Package to add',
-    ja: '追加するパッケージ',
-    zh: '要添加的包',
-  },
-  'library.resourcesCanServeDifferentRolesRequiredModules': {
-    ko: '같은 자료를 다른 역할로 사용할 수 있어요. 요구하는 모듈도 함께 연결하며 공유 모듈은 한 번만 포함해요.',
-    en: 'Resources can serve different roles. Required modules are attached too, with shared modules included only once.',
-    ja: '同じ資料を別の役割で使えます。必要なモジュールも接続し、共通のモジュールは一度だけ含めます。',
-    zh: '同一资料可以承担不同角色，也会关联所需模块，共用模块仅包含一次。',
   },
   'library.conversationSetup': {
     ko: '대화 구성',
@@ -881,23 +809,11 @@ export const messages = {
     ja: 'チャット設定',
     zh: '聊天设置',
   },
-  'library.chooseTheCharactersAndWritingApproachFor': {
-    ko: '이 채팅에서 사용할 인물과 창작 방식을 정해요.',
-    en: 'Choose the characters and writing approach for this chat.',
-    ja: 'このチャットで使う人物と創作方法を設定します。',
-    zh: '设置此聊天所用的人物与创作方式。',
-  },
   'library.chatSettingsCategories': {
     ko: '채팅 설정 분류',
     en: 'Chat settings categories',
     ja: 'チャット設定の分類',
     zh: '聊天设置分类',
-  },
-  'library.appliesOnlyToThisChat': {
-    ko: '이 채팅에만 적용돼요.',
-    en: 'Applies only to this chat.',
-    ja: 'このチャットだけに適用します。',
-    zh: '仅应用于此聊天。',
   },
   'library.conversationResources': {
     ko: '대화 자료',
@@ -1073,12 +989,6 @@ export const messages = {
     ja: '未保存の変更があります。',
     zh: '有未保存的更改。',
   },
-  'library.saveChangesToConversationSetupPromptsModels': {
-    ko: '대화 구성, 생성 설정, 로어 정책, 자동 배치의 변경을 함께 저장해요.',
-    en: 'Save changes to conversation setup, generation settings, lore policies, and automatic placement together.',
-    ja: '会話構成、生成設定、ロア方針、自動配置の変更をまとめて保存します。',
-    zh: '一并保存对话配置、生成设置、设定策略与自动排布的更改。',
-  },
   'library.saveChatSettings': {
     ko: '채팅 설정 저장',
     en: 'Save chat settings',
@@ -1241,12 +1151,6 @@ export const messages = {
     ja: 'この物語の画像',
     zh: '此故事的图片',
   },
-  'library.editStoryImagesAttachedToBotsPersonas': {
-    ko: '봇, 페르소나, 모듈에 등록한 본문용 이미지는 각 자료에서 편집해요. 자동 이미지 배치에 이 이미지들도 사용할 수 있어요.',
-    en: 'Edit story images attached to bots, personas, and modules in their resources. Automatic placement can use them too.',
-    ja: 'ボット、ペルソナ、モジュールの本文用画像は各資料で編集します。自動配置ではこれらの画像も使えます。',
-    zh: '机器人、角色、模块中的正文图片在各自资料中编辑，自动排布也可以使用这些图片。',
-  },
   'library.editNameAndDescription': {
     ko: '이름과 설명 편집',
     en: 'Edit name and description',
@@ -1276,12 +1180,6 @@ export const messages = {
     en: 'Save image information',
     ja: '画像情報を保存',
     zh: '保存图片信息',
-  },
-  'library.savingImageInformation': {
-    ko: '이미지 정보를 저장하는 중이에요…',
-    en: 'Saving image information…',
-    ja: '画像情報を保存中…',
-    zh: '正在保存图片信息…',
   },
   'library.featuresNeededToSelectImagesCharacterOutfit': {
     ko: '인물, 복장, 장소, 표정 등 이미지 선택에 필요한 특징',
@@ -1337,18 +1235,6 @@ export const messages = {
     ja: '代表画像の設定',
     zh: '封面设置',
   },
-  'library.portrait': {
-    ko: '대표 이미지',
-    en: 'Portrait',
-    ja: '代表画像',
-    zh: '封面',
-  },
-  'library.chooseAnImageForListsAndResource': {
-    ko: '목록과 자료 선택 화면에 표시할 이미지를 골라요.',
-    en: 'Choose an image for lists and resource pickers.',
-    ja: '一覧や資料選択画面に表示する画像を選んでください。',
-    zh: '选择显示在列表与资料选择器中的图片。',
-  },
   'library.uploadImage': {
     ko: '이미지 업로드',
     en: 'Upload image',
@@ -1378,12 +1264,6 @@ export const messages = {
     en: 'Remove portrait designation',
     ja: '代表指定を解除',
     zh: '取消封面指定',
-  },
-  'library.pngJpegWebpAvifGifUpTo': {
-    ko: 'PNG, JPEG, WebP, AVIF, GIF, 최대 64MiB, 자동 WebP 변환',
-    en: 'PNG, JPEG, WebP, AVIF, GIF, up to 64 MiB, automatic WebP conversion',
-    ja: 'PNG、JPEG、WebP、AVIF、GIF、最大64MiB、WebPに自動変換',
-    zh: 'PNG，JPEG，WebP，AVIF，GIF，最大64MiB，自动转为WebP',
   },
   'library.uploadingPortrait': {
     ko: '대표 이미지를 업로드하고 있어요…',
@@ -1468,18 +1348,6 @@ export const messages = {
     en: 'Edit package modules and features',
     ja: 'パッケージのモジュールと機能を編集',
     zh: '编辑包模块与功能',
-  },
-  'library.sharedModules': {
-    ko: '함께 사용하는 모듈',
-    en: 'Shared modules',
-    ja: '併用するモジュール',
-    zh: '共用模块',
-  },
-  'library.detachModule': {
-    ko: '모듈 연결 해제',
-    en: 'Detach module',
-    ja: 'モジュールの接続を解除',
-    zh: '解除模块关联',
   },
   'library.commonModuleToAttach': {
     ko: '연결할 공통 모듈',
@@ -1583,12 +1451,6 @@ export const messages = {
     ja: '最初のメッセージの全文プレビュー',
     zh: '首条消息完整预览',
   },
-  'library.changesThisChatSFirstMessageYour': {
-    ko: '작성 중인 요청은 그대로 유지해요.',
-    en: 'Your current draft is preserved.',
-    ja: '入力中の下書きはそのまま保持されます。',
-    zh: '正在编辑的输入会保留。',
-  },
   'library.checkOpeningChangeResult': {
     ko: '첫 메시지 변경 결과 확인',
     en: 'Check first message change result',
@@ -1667,18 +1529,6 @@ export const messages = {
     ja: '保存済みペルソナは削除されました。別のペルソナを選んでください。',
     zh: '保存的角色已删除，请选择其他角色。',
   },
-  'library.newChatsUseYourExplicitChoiceIncluding': {
-    ko: '새 채팅에서 직접 고른 값(페르소나 없음 포함), 폴더 기본값, 봇 기본값 순서로 사용해요. 폴더에서 지정하지 않으면 이 설정을 사용해요.',
-    en: 'New chats use your explicit choice (including no persona), then folder defaults, then bot defaults. This setting applies when the folder has none.',
-    ja: '新規チャットで直接選んだ値（ペルソナなしを含む）、フォルダーの既定値、ボットの既定値の順で使います。フォルダーで指定しない場合はこの設定を使います。',
-    zh: '新聊天依次采用直接选择的值（包括无角色）、文件夹默认值、机器人默认值。文件夹未指定时使用此设置。',
-  },
-  'library.saving2': {
-    ko: '저장하는 중…',
-    en: 'Saving…',
-    ja: '保存中…',
-    zh: '正在保存…',
-  },
   'library.saveDefaultPersona': {
     ko: '기본 페르소나 저장',
     en: 'Save default persona',
@@ -1738,12 +1588,6 @@ export const messages = {
     en: 'Retire',
     ja: '使用を中止',
     zh: '停用',
-  },
-  'library.noPersonalNotesYet': {
-    ko: '아직 직접 남긴 메모가 없어요.',
-    en: 'No personal notes yet.',
-    ja: '自分で残したメモはまだありません。',
-    zh: '尚无手动添加的备注。',
   },
   'library.addNote': {
     ko: '메모 추가',
@@ -1829,18 +1673,6 @@ export const messages = {
     ja: 'ボットの翻訳指示エディター',
     zh: '机器人翻译指引编辑器',
   },
-  'library.translationGuideWhenUsedAsABot': {
-    ko: '봇 번역 지침',
-    en: 'Bot translation guide',
-    ja: 'ボットの翻訳指示',
-    zh: '机器人翻译指引',
-  },
-  'library.addThisWorkSTerminologyAndVoice': {
-    ko: '이 봇과 대화하는 채팅의 다음 번역부터 적용돼요. 페르소나나 모듈로 쓸 때는 적용되지 않아요.',
-    en: 'Applies from the next translation or retranslation when this resource is the bot. Persona and module roles are excluded.',
-    ja: 'この資料をボットとして使うチャットの次の翻訳、再翻訳から適用します。ペルソナやモジュールには適用しません。',
-    zh: '从以此资料为机器人的聊天的下次翻译或重新翻译起生效，用作用户角色或模块时不适用。',
-  },
   'library.voiceAddressAndStyleInstructions': {
     ko: '말투와 문체 지침',
     en: 'Voice and style instructions',
@@ -1865,23 +1697,11 @@ export const messages = {
     ja: '名前、用語の表記',
     zh: '姓名与术语用词',
   },
-  'library.theTranslationModelUsesTerminologyAndConditions': {
-    ko: '번역 모델이 문맥에 맞춰 참고하며, 단어를 기계적으로 일괄 치환하지는 않아요.',
-    en: 'Used in context, without replacing words in bulk.',
-    ja: '文脈に合わせて参照し、単語の一括置換はしません。',
-    zh: '结合上下文参考，不会批量替换词语。',
-  },
   'library.addTerm': {
     ko: '표기 추가',
     en: 'Add term',
     ja: '表記を追加',
     zh: '添加用词',
-  },
-  'library.noTermsYetAddNamesOrOrganizations': {
-    ko: '지정한 표기가 없어요.',
-    en: 'No terms yet.',
-    ja: '指定した表記はありません。',
-    zh: '尚无指定用词。',
   },
   'library.originalTerm': {
     ko: '원문 표기',
@@ -1943,24 +1763,6 @@ export const messages = {
     ja: '削除',
     zh: '删除',
   },
-  'library.thisPreviewsCurrentEditsSaveChangesTo': {
-    ko: '현재 편집 내용이에요. ‘변경사항 저장’ 후 다음 번역 요청에 전달하며, 미리보기는 모델을 호출하지 않아요. 기존 봇, 페르소나, 로어는 별도 참고 자료로 계속 사용해요.',
-    en: 'This previews current edits. Save changes to send them with the next translation request. Preview does not call the model. Existing bots, personas, and lore remain separate references.',
-    ja: '現在の編集内容です。変更を保存すると次の翻訳リクエストから渡します。プレビューではモデルを呼び出しません。既存のボット、ペルソナ、ロアは別の参考資料として引き続き使います。',
-    zh: '这是当前编辑内容，保存后将随下次翻译请求发送。预览不会调用模型，现有机器人、角色与设定继续作为独立参考资料使用。',
-  },
-  'library.writingTips': {
-    ko: '작성 도움말',
-    en: 'Writing tips',
-    ja: '作成のヒント',
-    zh: '编写帮助',
-  },
-  'library.askTheAssistantToDraftTranslationInstructions': {
-    ko: '도우미에게 ‘이 봇의 설명과 로어를 참고해 번역 지침 초안을 만들어줘’라고 요청할 수 있어요. 지침은 요청했을 때만 작성하고 저장하며, 새 용어를 자동으로 누적하지 않아요.',
-    en: "Ask the assistant to draft translation instructions using this bot's description and lore. Instructions are written and saved only on request; new terms are not collected automatically.",
-    ja: 'アシスタントに、このボットの説明とロアを参考に翻訳指示の下書きを頼めます。指示は依頼したときだけ作成して保存し、新しい用語を自動で蓄積しません。',
-    zh: '可以请助手参考此机器人的描述与设定起草翻译指引。指引仅在请求时编写和保存，不会自动累积新术语。',
-  },
   'library.aPngJpegWebpAvifOrGif': {
     ko: '64MiB 이하 PNG, JPEG, WebP, AVIF 또는 GIF가 필요해요.',
     en: 'A PNG, JPEG, WebP, AVIF, or GIF up to 64 MiB is required.',
@@ -1984,12 +1786,6 @@ export const messages = {
     en: 'Lore included in the last scene',
     ja: '最後のシーンに含まれたロア',
     zh: '最后场景包含的设定',
-  },
-  'library.recordsOfLoreActuallyAttachedToThe': {
-    ko: '마지막 장면의 마지막 본문 요청에 실제로 첨부한 로어 기록이에요. 다음 요청에서 쓸 로어는 달라질 수 있어요.',
-    en: 'Records of lore actually attached to the final story request of the last scene. The next request may use different lore.',
-    ja: '最後のシーンの最後の本文リクエストに実際に添付したロアの記録です。次のリクエストで使うロアは変わる場合があります。',
-    zh: '记录最后场景最后一次正文请求实际附带的设定，下次请求使用的设定可能不同。',
   },
   'library.inclusionRecords': {
     ko: '포함 기록',
@@ -2075,12 +1871,6 @@ export const messages = {
     ja: '{count, number}件の資料を移動します。',
     zh: '移动 {count, number} 项资料。',
   },
-  'library.useAs': {
-    ko: '{role}로 사용',
-    en: 'Use as {role}',
-    ja: '{role}として使用',
-    zh: '用作{role}',
-  },
   'library.candidateCount': {
     ko: '자료 {count, number}개',
     en: '{count, plural, one {# resource} other {# resources}}',
@@ -2117,12 +1907,6 @@ export const messages = {
     ja: '画像{title}を削除しました。',
     zh: '已删除图片{title}。',
   },
-  'library.chatImageCount': {
-    ko: '이 채팅의 이미지: {count, number}개',
-    en: 'Images in this chat, {count, number}',
-    ja: 'このチャットの画像、{count, number}件',
-    zh: '此聊天的图片，{count, number}张',
-  },
   'library.imageMetadataHint': {
     ko: '현재 대표 이미지는 ‘본문 전용’으로 바꿀 수 없어요.',
     en: 'The current portrait cannot be set to story only.',
@@ -2147,12 +1931,6 @@ export const messages = {
     ja: '最初のメッセージは変更しましたが、画面を更新できませんでした。{error}',
     zh: '首条消息已更改，但无法刷新页面。{error}',
   },
-  'library.botPersonaHint': {
-    ko: '{title}의 새 채팅에서 페르소나를 직접 고르지 않고 폴더 기본값도 없을 때 사용해요. 기존 채팅은 바뀌지 않아요.',
-    en: 'Used for new chats with {title} when no persona or folder default is chosen. Existing chats do not change.',
-    ja: '{title}の新規チャットで、直接選んだペルソナやフォルダーの既定値がない場合に使います。既存のチャットは変わりません。',
-    zh: '在 {title} 的新聊天中未直接选择角色且无文件夹默认值时使用。现有聊天不会改变。',
-  },
   'library.notesSummary': {
     ko: '사용자 메모와 정정{imported, select, yes {, 가져온 기억} other {}} {count, number}개',
     en: 'User notes and corrections{imported, select, yes {, Imported memories} other {}} ({count, number})',
@@ -2170,12 +1948,6 @@ export const messages = {
     en: 'Term {number, number}',
     ja: '表記{number, number}',
     zh: '用词{number, number}',
-  },
-  'library.optional': {
-    ko: '선택',
-    en: 'Optional',
-    ja: '任意',
-    zh: '可选',
   },
   'library.imagePositionUnavailable': {
     ko: '표시 변환 후 이미지 위치를 확인할 수 없어 이 보기에서는 이미지를 생략했어요.',

@@ -71,12 +71,6 @@ export const messages = {
     ja: '資料の確認をキャンセルしました。',
     zh: '已取消检查资料。',
   },
-  'transfer.m010': {
-    ko: '앞서 확인한 파일은 유지했어요.',
-    en: 'The previously reviewed file was kept.',
-    ja: '確認済みのファイルは保持しました。',
-    zh: '已保留之前检查的文件。',
-  },
   'transfer.m011': {
     ko: '봇과 새 채팅을 만들었어요. 채팅 목록에서 이어갈 수 있어요.',
     en: 'Created a bot and a new chat. Continue from the chat list.',
@@ -119,12 +113,6 @@ export const messages = {
     ja: 'Risuファイルの確認',
     zh: '检查 Risu 文件',
   },
-  'transfer.m018': {
-    ko: '파일을 선택하면 내용을 미리 확인할 수 있어요. 원본은 변경하지 않아요.',
-    en: 'Select a file to preview its contents. The original stays unchanged.',
-    ja: 'ファイルを選ぶと内容を確認できます。原本は変更しません。',
-    zh: '选择文件以预览内容，原始文件保持不变。',
-  },
   'transfer.m019': {
     ko: 'Risu 파일 선택',
     en: 'Choose Risu file',
@@ -148,24 +136,6 @@ export const messages = {
     en: 'Resource type to import',
     ja: '取り込む資料の種類',
     zh: '要导入的资料类型',
-  },
-  'transfer.m025': {
-    ko: '자동은 카드를 봇으로, 모듈 파일을 모듈로 가져와요. 카드를 페르소나로 쓰거나 CharX를 모듈로 쓰려면 종류를 바꿔 주세요.',
-    en: 'Automatic imports cards as bots and module files as modules. Change the type to use a card as a persona or CharX as a module.',
-    ja: '自動ではカードをボット、モジュールファイルをモジュールとして取り込みます。カードをペルソナに、CharXをモジュールにする場合は種類を変更してください。',
-    zh: '自动模式将卡片导入为机器人，将模块文件导入为模块。若要将卡片用作角色或将 CharX 用作模块，请更改类型。',
-  },
-  'transfer.m026': {
-    ko: '사용 중인 로어도 함께 가져와요.',
-    en: 'Active lore is imported too.',
-    ja: '使用中のロアも取り込みます。',
-    zh: '也会导入启用的设定。',
-  },
-  'transfer.m027': {
-    ko: '원본 파일은 변경하지 않으며, 파일의 코드나 외부 URL을 자동으로 실행하지 않아요.',
-    en: 'The original file stays unchanged. File code and external URLs never run automatically.',
-    ja: '原本は変更せず、ファイルのコードや外部URLを自動実行しません。',
-    zh: '原始文件保持不变，文件代码或外部网址不会自动执行。',
   },
   'transfer.m028': {
     ko: '로어',
@@ -371,12 +341,6 @@ export const messages = {
     ja: 'Risuプリセットの確認',
     zh: '检查 Risu 预设',
   },
-  'transfer.m071': {
-    ko: '모델 연결과 기본 프롬프트는 바뀌지 않아요.',
-    en: 'Model connections and the default prompt stay unchanged.',
-    ja: 'モデル接続と既定のプロンプトは変わりません。',
-    zh: '模型连接和默认提示词保持不变。',
-  },
   'transfer.m072': {
     ko: '.risup, .risupreset, 프리셋 JSON, 프로젝트 ZIP, 최대 24 MiB',
     en: '.risup, .risupreset, preset JSON, project ZIP, up to 24 MiB',
@@ -503,12 +467,6 @@ export const messages = {
     ja: '書き出し中…',
     zh: '正在导出…',
   },
-  'transfer.m099': {
-    ko: 'Risu 파일에는 이 자료만 담아요. 연결한 모듈은 각각 내보내 주세요.',
-    en: 'Risu files contain only this resource. Export linked modules separately.',
-    ja: 'Risuファイルにはこの資料のみを含めます。関連するモジュールは個別に書き出してください。',
-    zh: 'Risu 文件仅包含此资料，请分别导出关联模块。',
-  },
   'transfer.m100': {
     ko: '자료 백업',
     en: 'Back up resource',
@@ -551,23 +509,11 @@ export const messages = {
     ja: 'このボットで本文を取り込む',
     zh: '使用此机器人导入正文',
   },
-  'transfer.m107': {
-    ko: '본문을 가져올 봇',
-    en: 'Bot for imported transcript',
-    ja: '本文を取り込むボット',
-    zh: '导入正文所用的机器人',
-  },
   'transfer.m108': {
     ko: '본문 가져오기',
     en: 'Import transcript',
     ja: '本文を取り込む',
     zh: '导入正文',
-  },
-  'transfer.m109': {
-    ko: '원문, 요청, 번역, 메모를 새 채팅으로 가져와요.',
-    en: 'Import original text, requests, translations, and notes into a new chat.',
-    ja: '原文、リクエスト、翻訳、メモを新しいチャットに取り込みます。',
-    zh: '将原文、请求、翻译和备注导入为新聊天。',
   },
   'transfer.m110': {
     ko: '본문 JSON 파일',
@@ -659,12 +605,6 @@ export const messages = {
     ja: 'バックアップファイルを取り込む',
     zh: '导入备份文件',
   },
-  'transfer.m129': {
-    ko: '파일을 먼저 확인한 뒤 자료 추가나 새 채팅 복원을 진행해요. 기존 자료와 채팅은 그대로 유지돼요.',
-    en: 'After reviewing the file, add resources or restore a new chat. Existing resources and chats are preserved.',
-    ja: 'ファイルを確認して、資料の追加または新しいチャットへの復元に進みます。既存の資料とチャットは保持します。',
-    zh: '检查文件后可添加资料或恢复为新聊天，现有资料和聊天将保留。',
-  },
   'transfer.m130': {
     ko: '백업 파일 선택',
     en: 'Choose backup file',
@@ -688,12 +628,6 @@ export const messages = {
     en: 'Imported supporting agents are set to follow the writing model.',
     ja: '取り込んだ補助エージェントのモデルは本文モデルに従う設定になります。',
     zh: '导入的辅助智能体模型将设置为跟随正文模型。',
-  },
-  'transfer.m141': {
-    ko: '기본 프롬프트와 역할별 모델은 이 작업실의 설정을 그대로 쓰며 실행 기록과 도우미 내부 작업은 가져오지 않아요.',
-    en: 'The default prompt and models by role keep this workspace’s settings. Execution history and internal assistant tasks are excluded.',
-    ja: '既定のプロンプトと役割別モデルはこのワークスペースの設定をそのまま使い、実行記録とアシスタント内部の作業は取り込みません。',
-    zh: '默认提示词和按角色设置模型沿用此工作室的设置，不导入执行记录和助手内部任务。',
   },
   'transfer.m142': {
     ko: '처리 중…',
@@ -748,36 +682,6 @@ export const messages = {
     en: 'Backup settings saved.',
     ja: 'バックアップ設定を保存しました。',
     zh: '备份设置已保存。',
-  },
-  'transfer.m152': {
-    ko: '매일 자동 백업',
-    en: 'Daily automatic backup',
-    ja: '毎日の自動バックアップ',
-    zh: '每日自动备份',
-  },
-  'transfer.m153': {
-    ko: '매일 서버에 복구용 사본을 보관해요.',
-    en: 'Keep a recovery copy on the server each day.',
-    ja: '毎日サーバーに復元用のコピーを保管します。',
-    zh: '每天在服务器保留一份恢复副本。',
-  },
-  'transfer.m154': {
-    ko: '백업 시간',
-    en: 'Backup time',
-    ja: 'バックアップ時刻',
-    zh: '备份时间',
-  },
-  'transfer.m155': {
-    ko: '한국 시간',
-    en: 'Korea time',
-    ja: '韓国時間',
-    zh: '韩国时间',
-  },
-  'transfer.m156': {
-    ko: '보관 개수',
-    en: 'Copies to keep',
-    ja: '保管数',
-    zh: '保留数量',
   },
   'transfer.m157': {
     ko: '1~30개',
@@ -857,12 +761,6 @@ export const messages = {
     ja: 'ダウンロード',
     zh: '下载',
   },
-  'transfer.m171': {
-    ko: '0개',
-    en: '0 copies',
-    ja: '0件',
-    zh: '0 份',
-  },
   'transfer.m173': {
     ko: '백업 설정을 불러오는 중이에요…',
     en: 'Loading backup settings…',
@@ -906,12 +804,6 @@ export const messages = {
     zh: '备份与恢复',
   },
   'transfer.m180': {
-    ko: '백업과 복원',
-    en: 'Backup and restore',
-    ja: 'バックアップと復元',
-    zh: '备份与恢复',
-  },
-  'transfer.m181': {
     ko: '백업과 복원',
     en: 'Backup and restore',
     ja: 'バックアップと復元',
@@ -1139,12 +1031,6 @@ export const messages = {
     ja: '検索対象',
     zh: '搜索内容',
   },
-  'transfer.m220': {
-    ko: '제목 일치',
-    en: 'Matching titles',
-    ja: '一致するタイトル',
-    zh: '匹配标题',
-  },
   'transfer.m221': {
     ko: '채팅 제목',
     en: 'Chat title',
@@ -1174,18 +1060,6 @@ export const messages = {
     en: 'Select at least one content type to search.',
     ja: '検索対象を1つ以上選んでください。',
     zh: '请选择至少一种搜索内容。',
-  },
-  'transfer.m228': {
-    ko: '저장된 현재 원고를 찾아요. 따옴표로 감싸면 연속 문구를 찾아요.',
-    en: 'Search the current saved manuscript. Use quotation marks for an exact phrase.',
-    ja: '現在保存されている原稿を検索します。引用符で囲むと連続する語句を検索できます。',
-    zh: '搜索当前保存的原稿，使用引号可查找完整短语。',
-  },
-  'transfer.m229': {
-    ko: '짧은 이름도 검색할 수 있어요. Enter 또는 검색을 눌러 주세요.',
-    en: 'Short names can be searched too. Press Enter or Search.',
-    ja: '短い名前も検索できます。Enterまたは検索を押してください。',
-    zh: '也可以搜索较短的名称，请按 Enter 或搜索。',
   },
   'transfer.m230': {
     ko: '원고를 찾고 있어요…',
@@ -1343,12 +1217,6 @@ export const messages = {
     ja: 'チャットのタイトルを保存できませんでした。',
     zh: '无法保存聊天标题。',
   },
-  'transfer.m259': {
-    ko: '저장 중…',
-    en: 'Saving…',
-    ja: '保存中…',
-    zh: '正在保存…',
-  },
   'transfer.m260': {
     ko: '제목 저장',
     en: 'Save title',
@@ -1397,12 +1265,6 @@ export const messages = {
     ja: '最新の設定を読み込む',
     zh: '加载最新设置',
   },
-  'transfer.m270': {
-    ko: '앞으로 이 폴더에서 시작하는 채팅에 적용돼요.',
-    en: 'Applies to chats started in this folder from now on.',
-    ja: '今後このフォルダーから開始するチャットに適用します。',
-    zh: '适用于今后在此文件夹中创建的聊天。',
-  },
   'transfer.m271': {
     ko: '설정 저장',
     en: 'Save settings',
@@ -1444,12 +1306,6 @@ export const messages = {
     en: 'Untitled chat',
     ja: '無題のチャット',
     zh: '未命名聊天',
-  },
-  'transfer.m278': {
-    ko: '진행 중인 작업',
-    en: 'Running tasks',
-    ja: '実行中の作業',
-    zh: '正在运行的任务',
   },
   'transfer.m280': {
     ko: '진행 중인 채팅',
@@ -1625,12 +1481,6 @@ export const messages = {
     ja: 'ボットフォルダー名',
     zh: '机器人文件夹名称',
   },
-  'transfer.m307': {
-    ko: '서재에도 반영돼요. 채팅이 있는 봇을 넣으면 사이드바에 표시돼요.',
-    en: 'Also updates the library. Folders containing bots with chats appear in the sidebar.',
-    ja: 'ライブラリにも反映します。チャットのあるボットを入れるとサイドバーに表示されます。',
-    zh: '也会同步到资料库，放入已有聊天的机器人后会显示在侧边栏。',
-  },
   'transfer.m308': {
     ko: '저장',
     en: 'Save',
@@ -1709,18 +1559,6 @@ export const messages = {
     ja: 'チャットのボット',
     zh: '聊天机器人',
   },
-  'transfer.m323': {
-    ko: '이 봇과 새 채팅을 시작해요.',
-    en: 'Start a new chat with this bot.',
-    ja: 'このボットと新しいチャットを始めます。',
-    zh: '与此机器人开始新聊天。',
-  },
-  'transfer.m324': {
-    ko: '함께할 봇을 고르면 현재 기본 모델과 프롬프트로 시작해요.',
-    en: 'Choose a bot to start with the current default model and prompt.',
-    ja: 'ボットを選ぶと現在の既定のモデルとプロンプトで開始します。',
-    zh: '选择机器人后，将使用当前默认模型和提示词开始。',
-  },
   'transfer.m325': {
     ko: '시작할 봇',
     en: 'Starting bot',
@@ -1774,12 +1612,6 @@ export const messages = {
     en: 'Unassigned',
     ja: '未指定',
     zh: '未指定',
-  },
-  'transfer.m334': {
-    ko: ', 기본값 따름',
-    en: ', Follow default',
-    ja: '、既定値に従う',
-    zh: '，使用默认值',
   },
   'transfer.m335': {
     ko: '역할별 모델',
@@ -1846,12 +1678,6 @@ export const messages = {
     en: 'Reviewing module…',
     ja: 'モジュールを確認中…',
     zh: '正在检查模块…',
-  },
-  'transfer.m348': {
-    ko: '해제',
-    en: 'Remove',
-    ja: '解除',
-    zh: '移除',
   },
   'transfer.m349': {
     ko: '추가할 시작 모듈',

@@ -35,7 +35,7 @@ Choose checks that can expose failures caused by the change. Completing a featur
 
 Use the smallest existing tests that exercise the affected behavior and plausible failures. Add tests for gaps that matter, rather than mirroring implementation. Once the relevant checks pass, finish. Rerun or expand only for a subsequent change, failure, or unresolved risk.
 
-`quality` runs Biome and TypeScript without starting the app or a browser; `check` runs TypeScript alone. `test:tooling` creates a fresh build before running build, verification and release-tooling tests, so it also works from a clean checkout. `quality:full` runs `quality`, that build-backed tooling suite, then the complete Vitest suite. The build precedes Vitest because some tests restart the compiled server. Vitest uses a 30-second per-test emergency cap for hosted runner variance; operation-specific polls and network deadlines remain explicit and shorter.
+`quality` runs Biome, TypeScript, the comment check and `check:i18n` without starting the app or a browser; the CI static job runs it; `check` runs TypeScript alone. `test:tooling` creates a fresh build before running build, verification and release-tooling tests, so it also works from a clean checkout. `quality:full` runs `quality`, that build-backed tooling suite, then the complete Vitest suite. The build precedes Vitest because some tests restart the compiled server. Vitest uses a 30-second per-test emergency cap for hosted runner variance; operation-specific polls and network deadlines remain explicit and shorter.
 
 Linux shell changes also run `npm test -- tests/main-shell.test.ts tests/helper-shell.test.ts tests/helper-shell-runtime.test.ts tests/helper-runner.test.ts` on Linux: these exercise writer reference exports, real Unix sockets, Bash, Python, temporary SQLite saves, transport failures, and process cancellation. The Linux Vitest shards in CI run them. Windows runs portable shell checks but skips the Unix socket and runner cases.
 
@@ -65,7 +65,7 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 | `npm run verify:visual` | Full browser suite with extra viewport and layout checks; use `--grep` to focus it. |
 | `npm run verify:gallery` | Screen and journey captures against a matching build; accepts no arguments. See [UI-GALLERY](UI-GALLERY.md). |
 | `npm run verify:copy` | Warning-only scan and JSON review inventory of literal i18n and JSX explanations; see [UI-GALLERY](UI-GALLERY.md#copy-review-warnings). No browser, provider calls, or build required. |
-| `npm run check:i18n` | ICU syntax, locale keys/arguments and missing translations; `-- --candidates` also lists static Korean and dynamic-call review candidates. See [UI language](../I18N.md). |
+| `npm run check:i18n` | ICU syntax, locale keys/arguments, missing translations and unused keys ([rule](APP-INVARIANTS.md#ui-language-i18n)); part of `quality`. `-- --candidates` also lists static Korean and dynamic-call review candidates. See [UI language](../I18N.md). |
 | `npm run verify:i18n` | Four UI languages, re-entry, reader recovery, retained editor state and model inputs, mobile/pseudo text, accessible names, manifest and restarted-worker synthetic push. Requires a matching build. |
 | `npm run benchmark:story` | Repeated long-story performance measurements. |
 | `npm run eval:helper` | Lists the small helper behavior cases. After building, `-- --synthetic` checks the runner; explicit live configuration is described in [Helper evaluation](HELPER-EVALUATION.md). |

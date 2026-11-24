@@ -1,6 +1,6 @@
 import { parse } from '@babel/parser';
 import { IntlMessageFormat } from 'intl-messageformat';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -107,6 +107,75 @@ export function scanI18nSource(source, file = 'input.tsx') {
   return { candidates, calls, dynamicCalls };
 }
 
+const keyLikeStart = /^[A-Za-z][\w-]*\./u;
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+const normalizedText = (text) => text.replace(/\s+/gu, ' ').trim();
+
+export function scanMessageReferences(source, file = 'input.ts') {
+  const literals = new Set(),
+    patterns = new Set(),
+    texts = new Set();
+  const tree = parse(source, {
+    sourceType: 'unambiguous',
+    errorRecovery: true,
+    plugins: /\.[jt]sx$|\.m?js$/u.test(file) ? ['typescript', 'jsx'] : ['typescript'],
+  });
+  const keep = (text) => {
+    literals.add(text);
+    if (/[가-힣]/u.test(text)) texts.add(normalizedText(text));
+  };
+  walk(tree, (node) => {
+    if (node.type === 'StringLiteral') keep(node.value);
+    else if (node.type === 'JSXText') keep(node.value);
+    else if (node.type === 'TemplateLiteral') {
+      const parts = node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw);
+      if (parts.length === 1) keep(parts[0]);
+      else if (keyLikeStart.test(parts[0])) patterns.add(`^${parts.map(escapeRegExp).join('.+')}$`);
+    } else if (
+      node.type === 'BinaryExpression' &&
+      node.operator === '+' &&
+      node.left.type === 'StringLiteral' &&
+      keyLikeStart.test(node.left.value)
+    )
+      patterns.add(`^${escapeRegExp(node.left.value)}.+$`);
+  });
+  return { literals, patterns, texts };
+}
+
+export const retainedMessagePrefixes = [
+  {
+    prefix: 'errors.auxiliary.',
+    reason: 'web/auxiliary-error.ts derives each .details key from its .message key',
+  },
+];
+
+export function findUnusedMessages(catalog, sources) {
+  const literals = new Set(),
+    patterns = new Set(),
+    texts = new Set();
+  for (const { file, source } of sources) {
+    const scanned = scanMessageReferences(source, file);
+    for (const item of scanned.literals) literals.add(item);
+    for (const item of scanned.patterns) patterns.add(item);
+    if (/^(web|core|server)\//u.test(file.replaceAll('\\', '/')))
+      for (const item of scanned.texts) texts.add(item);
+  }
+  const expressions = [...patterns].map((pattern) => new RegExp(pattern, 'u'));
+  return [...catalog.entries()]
+    .filter(
+      ([key, values]) =>
+        !literals.has(key) &&
+        !retainedMessagePrefixes.some(({ prefix }) => key.startsWith(prefix)) &&
+        !expressions.some((expression) => expression.test(key)) &&
+        !(
+          typeof values.ko === 'string' &&
+          !values.ko.includes('{') &&
+          texts.has(normalizedText(values.ko))
+        )
+    )
+    .map(([key]) => key);
+}
+
 function files(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) =>
     entry.isDirectory() ? files(resolve(directory, entry.name)) : [resolve(directory, entry.name)]
@@ -114,6 +183,7 @@ function files(directory) {
 }
 export function checkI18n(root = resolve(fileURLToPath(new URL('..', import.meta.url)))) {
   const catalog = new Map(),
+    catalogFiles = new Map(),
     errors = [],
     candidates = [],
     calls = [],
@@ -151,6 +221,7 @@ export function checkI18n(root = resolve(fileURLToPath(new URL('..', import.meta
         }
         if (new Set(signatures).size > 1) errors.push(`${key}: locale argument mismatch`);
         catalog.set(key, values);
+        catalogFiles.set(key, relative(root, file));
       }
     });
   }
@@ -176,10 +247,25 @@ export function checkI18n(root = resolve(fileURLToPath(new URL('..', import.meta
         errors.push(`${location}: ${call.key} requires [${required}], received [${call.args}]`);
     } catch {}
   }
+  const localeDirectory = resolve(root, 'web/locales');
+  const sources = ['web', 'core', 'server', 'scripts', 'tests']
+    .filter((directory) => existsSync(resolve(root, directory)))
+    .flatMap((directory) => files(resolve(root, directory)))
+    .filter((path) => /\.[cm]?[jt]sx?$|\.mts$/u.test(path) && !path.startsWith(localeDirectory))
+    .map((path) => ({
+      file: relative(root, path).replaceAll('\\', '/'),
+      source: readFileSync(path, 'utf8'),
+    }));
+  const unused = findUnusedMessages(catalog, sources);
+  for (const key of unused)
+    errors.push(
+      `${key}: unused message (${catalogFiles.get(key)}); remove it from all four languages, or register its dynamic prefix in scripts/check-i18n.mjs`
+    );
   const koreanMessages = new Set([...catalog.values()].map((entry) => entry.ko));
   const unregisteredCandidates = candidates.filter((entry) => !koreanMessages.has(entry.text));
   return {
     messages: catalog.size,
+    unused,
     calls: calls.length,
     errors,
     candidates,

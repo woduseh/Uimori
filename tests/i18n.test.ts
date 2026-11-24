@@ -379,6 +379,41 @@ test('catalog checker rejects duplicate and missing keys, malformed ICU and wron
   }
 });
 
+test('catalog checker reports only messages that no source can reach', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-i18n-unused-'));
+  const entry = (ko: string) => `{ko:'${ko}',en:'x',ja:'x',zh:'x'}`;
+  try {
+    for (const path of ['web/locales', 'server', 'tests'])
+      mkdirSync(join(directory, path), { recursive: true });
+    writeFileSync(
+      join(directory, 'web/locales/all.ts'),
+      `export const messages = {
+      'view.literal': ${entry('직접')},
+      'view.state.ready': ${entry('준비')},
+      'view.suffixLoading': ${entry('불러오는 중')},
+      'view.testOnly': ${entry('시험')},
+      'view.wire': ${entry('서버가 남긴 문구예요.')},
+      'errors.auxiliary.CODE.details': ${entry('파생')},
+      'view.dead': ${entry('아무도 안 써요.')},
+      'view.deadWithPlaceholder': ${entry('{name}')},
+    };`
+    );
+    writeFileSync(
+      join(directory, 'web/view.tsx'),
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Source fixture must retain interpolation syntax for the parser.
+      'const a = t("view.literal"); const b = t(`view.state.${state}`); const c = t(`view.${name}Loading`); t(`deadWithPlaceholder`);'
+    );
+    writeFileSync(join(directory, 'tests/view.test.ts'), "expect(t('view.testOnly')).toBe('x');");
+    writeFileSync(
+      join(directory, 'server/route.ts'),
+      "throw new HttpError(409, '서버가 남긴 문구예요.');"
+    );
+    expect(checkI18n(directory).unused).toEqual(['view.dead', 'view.deadWithPlaceholder']);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('inherited settings are called defaults in every locale, not global or whole-app values', () => {
   const offenders = Object.entries(messages).flatMap(([key, values]) => [
     ...(/전역|전체 기본값|작업실 기본/u.test(values.ko) ? [`${key}/ko: ${values.ko}`] : []),

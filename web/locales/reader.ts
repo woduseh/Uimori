@@ -131,18 +131,6 @@ export const messages = {
     ja: '翻訳を生成',
     zh: '生成翻译',
   },
-  'reader.openingMessage': {
-    ko: '첫 메시지: ',
-    en: 'Opening message: ',
-    ja: '最初のメッセージ、',
-    zh: '首条消息，',
-  },
-  'reader.scene': {
-    ko: '장면 ',
-    en: 'Scene ',
-    ja: 'シーン ',
-    zh: '场景 ',
-  },
   'reader.excludedFromContext': {
     ko: '컨텍스트에서 제외됨',
     en: 'Excluded from context',
@@ -220,12 +208,6 @@ export const messages = {
     en: 'Follow-up tasks for this scene',
     ja: 'このシーンの後続タスク',
     zh: '此场景的后续任务',
-  },
-  'reader.originalPreserved': {
-    ko: ', 원문 보존됨',
-    en: ', Original preserved',
-    ja: '、原文を保持',
-    zh: '，原文已保留',
   },
   'reader.copyText': {
     ko: '본문 복사',
@@ -383,18 +365,6 @@ export const messages = {
     ja: '書き直すリクエスト',
     zh: '要重写的请求',
   },
-  'reader.sendThisTextWithTheCurrentSettingsThisIs': {
-    ko: '위 문구를 현재 설정으로 보내요. 문맥용 요청 저장과는 별개예요.',
-    en: 'Send this text with the current settings. This is separate from saving the context request.',
-    ja: '上の文を現在の設定で送信します。文脈用リクエストの保存とは別の操作です。',
-    zh: '使用当前设置发送上方内容，与保存上下文请求互不影响。',
-  },
-  'reader.replaceTheExistingResponseOnlyWhenGenerationSucceedsFailure': {
-    ko: '기존 응답 교체는 새 생성이 성공했을 때만 적용해요. 실패하거나 취소하면 기존 응답을 유지해요.',
-    en: 'Replace the existing response only when generation succeeds. Failure or cancellation preserves the existing response.',
-    ja: '新しい生成が成功した場合だけ既存の応答を置き換えます。失敗やキャンセル時は既存の応答を保持します。',
-    zh: '仅在新生成成功时替换现有回复。失败或取消时会保留现有回复。',
-  },
   'reader.close': {
     ko: '닫기',
     en: 'Close',
@@ -419,12 +389,6 @@ export const messages = {
     ja: '書き直す',
     zh: '重写',
   },
-  'reader.chooseDifferentMomentsFromTheResponseTheMainImage': {
-    ko: '응답에서 서로 다른 순간을 골라요. 대표 컷은 맨 위에, 나머지는 해당 문단 뒤에 넣어요.',
-    en: 'Choose different moments from the response. The main image goes at the top; others follow their paragraphs.',
-    ja: '応答から異なる場面を選びます。メイン画像は先頭に、ほかは対応する段落の後に配置します。',
-    zh: '从回复中选择不同的时刻。主图放在顶部，其余图片放在对应段落后。',
-  },
   'reader.maximumImages': {
     ko: '최대 컷 수',
     en: 'Maximum images',
@@ -436,18 +400,6 @@ export const messages = {
     en: 'Direction for these illustrations (optional)',
     ja: '今回の挿絵の演出（任意）',
     zh: '本次插图构思（可选）',
-  },
-  'reader.images': {
-    ko: '컷',
-    en: ' images',
-    ja: '枚',
-    zh: '张',
-  },
-  'reader.fewerImagesAreMadeIfFewerMomentsSuitIllustration': {
-    ko: '그릴 만한 순간이 적으면 더 적게 만들어요. 응답당 남은 한도 안에서 예약하며, 생성 중에도 다음 채팅을 이어갈 수 있어요.',
-    en: 'Fewer images are made if fewer moments suit illustration. Reservations stay within the response limit, and you can continue chatting during generation.',
-    ja: '挿絵に適した場面が少ないときは枚数を減らします。応答ごとの残り上限内で予約し、生成中もチャットを続けられます。',
-    zh: '适合绘制的时刻较少时会减少图片数。任务在每次回复的剩余额度内预约，生成期间可继续聊天。',
   },
   'reader.reserving': {
     ko: '예약 중…',
@@ -496,12 +448,6 @@ export const messages = {
     en: 'Could not save.',
     ja: '保存できませんでした。',
     zh: '未能保存。',
-  },
-  'reader.edit': {
-    ko: '수정',
-    en: 'edit',
-    ja: 'の編集',
-    zh: '编辑',
   },
   'reader.editValueText': {
     ko: '{v0} 수정 내용',
@@ -587,12 +533,6 @@ export const messages = {
     ja: 'このタスクのみ再試行',
     zh: '仅重试此任务',
   },
-  'reader.cancel': {
-    ko: '취소',
-    en: 'cancel',
-    ja: 'をキャンセル',
-    zh: '取消',
-  },
   'reader.valueImagesDisplayed': {
     ko: '이미지 {v0}개 표시',
     en: '{v0, plural, one {# image displayed} other {# images displayed}}',
@@ -658,12 +598,6 @@ export const messages = {
     en: 'Return to draft before loading',
     ja: '読み込み前の下書きに戻る',
     zh: '返回载入前的草稿',
-  },
-  'reader.saveTheOriginalToApplyItToTheText': {
-    ko: '원문 저장을 눌러야 본문에 반영돼요.',
-    en: 'Save the original to apply it to the text.',
-    ja: '原文を保存すると本文に反映されます。',
-    zh: '点击保存原文才会应用到正文。',
   },
   'reader.theSavedVersionChangedReopenTheEditorToReview': {
     ko: '저장본이 바뀌었어요. 편집기를 다시 열어 확인해 주세요.',
@@ -911,35 +845,11 @@ export const messages = {
     ja: 'シーン名',
     zh: '场景名称',
   },
-  'reader.leaveBlankToShowTheLinkedConfigurationTitleOr': {
-    ko: '비워 두면 연결된 플롯 제목이나 요청을 표시해요.',
-    en: 'Leave blank to show the linked plot title or request.',
-    ja: '空欄にすると、関連するプロットのタイトルやリクエストを表示します。',
-    zh: '留空时显示关联大纲的标题或请求。',
-  },
   'reader.saveName': {
     ko: '이름 저장',
     en: 'Save name',
     ja: '名前を保存',
     zh: '保存名称',
-  },
-  'reader.request': {
-    ko: '요청 ',
-    en: 'Request ',
-    ja: '入力 ',
-    zh: '请求 ',
-  },
-  'reader.response': {
-    ko: ', 응답 ',
-    en: ', Response ',
-    ja: '、出力 ',
-    zh: '，回复 ',
-  },
-  'reader.about': {
-    ko: '약 ',
-    en: 'about ',
-    ja: '約 ',
-    zh: '约 ',
   },
   'reader.thisGeneration': {
     ko: '이번 생성',
@@ -952,18 +862,6 @@ export const messages = {
     en: 'Model',
     ja: 'モデル',
     zh: '模型',
-  },
-  'reader.promptSelection': {
-    ko: '프롬프트 선택',
-    en: 'Prompt selection',
-    ja: 'プロンプト選択',
-    zh: '提示词选择',
-  },
-  'reader.personaSelection': {
-    ko: '페르소나 선택',
-    en: 'Persona selection',
-    ja: 'ペルソナ選択',
-    zh: '角色选择',
   },
   'reader.noneSelected': {
     ko: '선택 없음',
@@ -994,60 +892,6 @@ export const messages = {
     en: 'Inclusion in the request is unknown',
     ja: '送信に含まれたか不明',
     zh: '是否包含在请求中未知',
-  },
-  'reader.input': {
-    ko: '입력 ',
-    en: 'Input ',
-    ja: '入力 ',
-    zh: '输入 ',
-  },
-  'reader.sentLore': {
-    ko: '포함된 로어:',
-    en: 'Included lore,',
-    ja: '含まれるロア：',
-    zh: '包含的设定资料，',
-  },
-  'reader.selected': {
-    ko: ', 선택',
-    en: ', Selected',
-    ja: '、選択',
-    zh: '，选中',
-  },
-  'reader.pinnedMaterial': {
-    ko: '고정 자료',
-    en: 'Pinned resource',
-    ja: '固定資料',
-    zh: '固定资料',
-  },
-  'reader.automaticallySelected': {
-    ko: '자동 선택',
-    en: 'Automatically selected',
-    ja: '自動選択',
-    zh: '自动选择',
-  },
-  'reader.includedInPreviousRequest': {
-    ko: '이전 요청 포함',
-    en: 'Included in previous request',
-    ja: '前回のリクエストに含む',
-    zh: '包含在上次请求中',
-  },
-  'reader.toolLookup': {
-    ko: '도구 조회',
-    en: 'Tool lookup',
-    ja: 'ツール検索',
-    zh: '工具查询',
-  },
-  'reader.readPassage': {
-    ko: '읽은 구간',
-    en: 'Read passage',
-    ja: '読んだ区間',
-    zh: '读取片段',
-  },
-  'reader.summaryOnly': {
-    ko: '요약만',
-    en: 'Summary only',
-    ja: '要約のみ',
-    zh: '仅摘要',
   },
   'reader.inclusionUnknown': {
     ko: '포함 여부 미확인',
@@ -1097,12 +941,6 @@ export const messages = {
     ja: '選択した文章を推敲',
     zh: '润色所选片段',
   },
-  'reader.selectAPassageInTheOriginalToAskThe': {
-    ko: '원문에서 구절을 선택하면 도우미 모델에 퇴고를 부탁할 수 있어요.',
-    en: 'Select a passage in the original to ask the assistant model to revise it.',
-    ja: '原文で文章を選択すると、アシスタントモデルに推敲を依頼できます。',
-    zh: '选择原文中的片段，即可请助手模型润色。',
-  },
   'reader.closeRevision': {
     ko: '퇴고 닫기',
     en: 'Close revision',
@@ -1132,12 +970,6 @@ export const messages = {
     en: 'Keep the meaning, but reduce sentences that directly explain emotions.',
     ja: '意味は保ち、感情を直接説明する文だけ減らして。',
     zh: '保留原意，只减少直接描述情绪的句子。',
-  },
-  'reader.callsTheHelperModelOnceChargesMayApplyDepending': {
-    ko: '도우미 모델을 한 번 호출해요. 이용 중인 모델에 따라 비용이 발생할 수 있어요. 제안은 초안에만 반영되며, 원문 저장으로 확정해요.',
-    en: 'Calls the assistant model once. Charges may apply depending on your model. Suggestions affect only the draft; save the original to confirm.',
-    ja: 'アシスタントモデルを1回呼び出します。モデルにより費用が発生する場合があります。提案は下書きにのみ反映し、原文の保存で確定します。',
-    zh: '会调用助手模型一次，可能因模型而产生费用。建议仅应用于草稿，保存原文后才会确定。',
   },
   'reader.theDraftOrSelectionChangedYourInputIsPreserved': {
     ko: '초안이나 선택 구간이 바뀌었어요. 닫고 구절을 다시 선택해 주세요.',
@@ -1456,12 +1288,6 @@ export const messages = {
     en: 'Memory and context',
     ja: '記憶とコンテキスト',
     zh: '记忆与上下文',
-  },
-  'reader.manageStoryEventsWithSummariesAndConditionsForFuture': {
-    ko: '이야기에서 일어난 일은 요약으로, 이후 요청에서도 지킬 조건은 메모와 정정으로 관리해요. 채팅 변수는 봇의 원본 스크립트가 관리해요.',
-    en: 'Manage story events with summaries, and conditions for future requests with notes and corrections. Chat variables are managed by the bot’s original scripts.',
-    ja: '物語で起きた出来事は要約で、今後のリクエストでも守る条件はメモと訂正で管理します。チャット変数はボットの元スクリプトが管理します。',
-    zh: '用摘要管理故事事件，用备注与修正管理后续请求仍需遵守的条件。聊天变量由机器人的原始脚本管理。',
   },
   'reader.enterABookmarkName': {
     ko: '책갈피 이름을 입력해 주세요.',
@@ -1829,12 +1655,6 @@ export const messages = {
     ja: 'ロアの準備',
     zh: '设定准备',
   },
-  'reader.pinned': {
-    ko: '고정 ',
-    en: 'Pinned ',
-    ja: '固定 ',
-    zh: '固定 ',
-  },
   'reader.additionalLoreSelectionPending': {
     ko: '추가 로어 선별 예정',
     en: 'Additional lore selection pending',
@@ -1948,12 +1768,6 @@ export const messages = {
     en: 'Error code: {code}',
     ja: 'エラーコード: {code}',
     zh: '错误代码：{code}',
-  },
-  'reader.sceneCount': {
-    ko: '현재 채팅, 장면 {count}개',
-    en: 'Current chat, {count, plural, one {# scene} other {# scenes}}',
-    ja: '現在のチャット、{count}シーン',
-    zh: '当前聊天，{count}个场景',
   },
   'reader.sceneNameAction': {
     ko: '{opening, select, true {첫 메시지 이름 편집} other {{number}번째 장면 이름 편집}}',

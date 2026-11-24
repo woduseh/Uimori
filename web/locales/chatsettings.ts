@@ -113,12 +113,6 @@ export const messages = {
     ja: 'まだタスクはありません。',
     zh: '尚无任务。',
   },
-  'chatsettings.m10': {
-    ko: '‘새 채팅으로 분기’는 해당 장면까지의 독립 사본을 만들어요. 모델을 호출하지 않아요.',
-    en: '“Branch to new chat” creates an independent copy through that scene without calling a model.',
-    ja: '「新しいチャットに分岐」はそのシーンまでの独立したコピーを作ります。モデルは呼び出しません。',
-    zh: '“分支到新聊天”会创建截至该场景的独立副本，不调用模型。',
-  },
   'chatsettings.m11': {
     ko: '원고 읽기',
     en: 'Read manuscript',
@@ -431,35 +425,11 @@ export const messages = {
     ja: 'ライト',
     zh: '浅色',
   },
-  'chatsettings.m64': {
-    ko: 'Enter로 보내기',
-    en: 'Send with Enter',
-    ja: 'Enter で送信',
-    zh: '按 Enter 发送',
-  },
-  'chatsettings.m65': {
-    ko: 'Enter로 보내고 Shift+Enter로 줄을 바꿔요.',
-    en: 'Enter sends; Shift+Enter inserts a line break.',
-    ja: 'Enter で送信、Shift+Enter で改行します。',
-    zh: 'Enter 发送，Shift+Enter 换行。',
-  },
-  'chatsettings.m66': {
-    ko: 'Enter는 줄바꿈, Ctrl/Cmd+Enter는 보내기예요.',
-    en: 'Enter inserts a line break; Ctrl/Cmd+Enter sends.',
-    ja: 'Enter で改行、Ctrl/Cmd+Enter で送信します。',
-    zh: 'Enter 换行，Ctrl/Cmd+Enter 发送。',
-  },
   'chatsettings.m67': {
     ko: '사이드바 폭',
     en: 'Sidebar width',
     ja: 'サイドバーの幅',
     zh: '侧边栏宽度',
-  },
-  'chatsettings.m68': {
-    ko: '데스크톱에서 펼친 사이드바에 적용돼요.',
-    en: 'Applies to the expanded desktop sidebar.',
-    ja: 'デスクトップで展開したサイドバーに適用します。',
-    zh: '适用于桌面端展开的侧栏。',
   },
   'chatsettings.m69': {
     ko: '보통',
@@ -533,12 +503,6 @@ export const messages = {
     ja: '作品・原作参照',
     zh: '作品与原作参考',
   },
-  'chatsettings.m89': {
-    ko: '집필 전 원작 설정과 인물 참고',
-    en: 'Canon settings and character references before writing',
-    ja: '執筆前の原作設定と人物参考',
-    zh: '写作前的原作设定与人物参考',
-  },
   'chatsettings.m92': {
     ko: '고급',
     en: 'Advanced',
@@ -556,12 +520,6 @@ export const messages = {
     en: 'Chat variables',
     ja: 'チャット変数',
     zh: '聊天变量',
-  },
-  'chatsettings.m96': {
-    ko: '이 채팅의 채팅 변수',
-    en: 'Chat variables for this chat',
-    ja: 'このチャットのチャット変数',
-    zh: '此聊天的聊天变量',
   },
   'chatsettings.m97': {
     ko: '채팅 설정',
@@ -707,18 +665,6 @@ export const messages = {
     ja: '入力を保持して編集を続ける',
     zh: '保留输入并继续编辑',
   },
-  'chatsettings.m124': {
-    ko: '이 채팅 고정 옵션',
-    en: 'Fixed options for this chat',
-    ja: 'このチャットの固定オプション',
-    zh: '此聊天的固定选项',
-  },
-  'chatsettings.m125': {
-    ko: '따로 지정한 옵션만 이 채팅에 고정하고, 나머지는 창작 프롬프트의 기본값을 따라요.',
-    en: 'Only overridden options apply to this chat. Others follow its writing prompt defaults.',
-    ja: '個別指定したオプションだけをこのチャットに適用します。残りは使用中の創作プロンプトの初期設定に従います。',
-    zh: '仅覆盖的选项应用于此聊天，其余沿用所用创作提示词的默认设置。',
-  },
   'chatsettings.clearFixedOptionsTitle': {
     ko: '고정 옵션을 모두 해제할까요?',
     en: 'Clear all fixed options?',
@@ -742,12 +688,6 @@ export const messages = {
     en: 'Apply to next generation only',
     ja: '次の生成のみに適用',
     zh: '仅应用于下次生成',
-  },
-  'chatsettings.m128': {
-    ko: '다음 생성에 한 번만 적용돼요.',
-    en: 'Applies once to the next generation, then clears.',
-    ja: '次の生成に一度だけ適用されます。',
-    zh: '仅应用于下一次生成，随后清除。',
   },
   'chatsettings.m129': {
     ko: '1회 옵션 예약',
@@ -797,18 +737,6 @@ export const messages = {
     ja: '未保存のオプションの下書きがあります。',
     zh: '有未保存的选项草稿。',
   },
-  'chatsettings.m137': {
-    ko: '고정 옵션은 이 채팅에 적용해요.',
-    en: 'Fixed options apply to this chat.',
-    ja: '固定オプションはこのチャットに適用します。',
-    zh: '固定选项应用于此聊天。',
-  },
-  'chatsettings.m138': {
-    ko: '적용 중…',
-    en: 'Applying…',
-    ja: '適用中…',
-    zh: '正在应用…',
-  },
   'chatsettings.m139': {
     ko: '채팅 고정 옵션 저장',
     en: 'Save fixed chat options',
@@ -844,12 +772,6 @@ export const messages = {
     en: 'Clear override',
     ja: '指定を解除',
     zh: '清除指定',
-  },
-  'chatsettings.m146': {
-    ko: '현재 설정 따름',
-    en: 'Following current settings',
-    ja: '現在の設定を使用',
-    zh: '使用当前设置',
   },
   'chatsettings.m147': {
     ko: '다음 생성에만 적용',
@@ -952,12 +874,6 @@ export const messages = {
     en: 'Edit chat variables',
     ja: 'チャット変数を編集',
     zh: '编辑聊天变量',
-  },
-  'chatsettings.m165': {
-    ko: '현재 채팅',
-    en: 'Current chat',
-    ja: '現在のチャット',
-    zh: '当前聊天',
   },
   'chatsettings.m170': {
     ko: '채팅 변수를 불러오는 중이에요…',
@@ -1102,12 +1018,6 @@ export const messages = {
     en: 'Save chat variables',
     ja: 'チャット変数を保存',
     zh: '保存聊天变量',
-  },
-  'chatsettings.overrides': {
-    ko: '이 채팅에서 지정한 값 {count, number}개',
-    en: '{count, plural, one {# chat override} other {# chat overrides}}',
-    ja: 'このチャットで指定した値 {count, number} 件',
-    zh: '此聊天指定的值 {count, number} 个',
   },
   'chatsettings.defaultsError': {
     ko: '자료 기본 변수를 적용하지 못했어요: {error}',

@@ -125,24 +125,6 @@ export const messages = {
     ja: '保存値 / 選択肢',
     zh: '存储值 / 选项',
   },
-  'native.text_b6071ac7eb': {
-    ko: '목록',
-    en: 'List',
-    ja: '一覧',
-    zh: '列表',
-  },
-  'native.text_68819ee99a': {
-    ko: '찾기',
-    en: 'Find',
-    ja: '検索',
-    zh: '查找',
-  },
-  'native.text_5794299536': {
-    ko: '추가',
-    en: 'Add',
-    ja: '追加',
-    zh: '添加',
-  },
   'native.text_52df394c6c': {
     ko: '끌어서 순서 변경',
     en: 'Drag to reorder',
@@ -154,12 +136,6 @@ export const messages = {
     en: 'Previous',
     ja: '前へ',
     zh: '上一项',
-  },
-  'native.text_001e4be24e': {
-    ko: '현재',
-    en: 'Current',
-    ja: '現在',
-    zh: '当前',
   },
   'native.text_854c76f3bc': {
     ko: '다음',
@@ -178,12 +154,6 @@ export const messages = {
     en: 'Down',
     ja: '下へ',
     zh: '下移',
-  },
-  'native.text_ec6174465c': {
-    ko: '선택한',
-    en: 'Selected',
-    ja: '選択中',
-    zh: '所选',
   },
   'native.text_fc81e222b9': {
     ko: '삭제',
@@ -238,12 +208,6 @@ export const messages = {
     en: 'Add Risu images',
     ja: 'Risu画像を追加',
     zh: '添加Risu图片',
-  },
-  'native.text_38094bc6f1': {
-    ko: 'PNG, JPEG, WebP, AVIF, GIF, 최대 64MiB, 자동 WebP 변환',
-    en: 'PNG, JPEG, WebP, AVIF, GIF, up to 64MiB, automatic WebP conversion',
-    ja: 'PNG、JPEG、WebP、AVIF、GIF、最大64MiB、WebPに自動変換',
-    zh: 'PNG，JPEG，WebP，AVIF，GIF，最大64MiB，自动转换为WebP',
   },
   'native.text_d504143bb7': {
     ko: '이미지를 업로드하고 있어요. 업로드가 끝난 뒤 저장해 주세요.',
@@ -352,12 +316,6 @@ export const messages = {
     en: 'Top level',
     ja: '最上位',
     zh: '顶层',
-  },
-  'native.text_5eec88277d': {
-    ko: '펼치기',
-    en: 'Expand',
-    ja: '展開',
-    zh: '展开',
   },
   'native.text_0d2c2495e1': {
     ko: '접기',
@@ -491,12 +449,6 @@ export const messages = {
     ja: 'フォルダー名',
     zh: '文件夹名称',
   },
-  'native.text_178782beac': {
-    ko: '항목 이름',
-    en: 'Item name',
-    ja: '項目名',
-    zh: '项目名称',
-  },
   'native.text_3df0f8d368': {
     ko: '로어 이름',
     en: 'Lore name',
@@ -544,12 +496,6 @@ export const messages = {
     en: 'Original folder (not found)',
     ja: '元フォルダー（見つかりません）',
     zh: '原始文件夹（未找到）',
-  },
-  'native.text_fe6df44913': {
-    ko: '폴더로 로어를 묶어 관리해요. 포함 방식은 각 로어에서 설정해요.',
-    en: 'Organize lore in folders. Set inclusion for each entry.',
-    ja: 'フォルダーでロアを整理できます。含める方法は各ロアで設定します。',
-    zh: '可用文件夹整理设定，包含方式在各条设定中设置。',
   },
   'native.text_caedf4822e': {
     ko: '이 폴더에 로어 추가',
@@ -610,12 +556,6 @@ export const messages = {
     en: 'Lore insertion order',
     ja: 'ロアの挿入順序',
     zh: '设定插入顺序',
-  },
-  'native.text_c4a928ce23': {
-    ko: '첫 로어를 추가하거나 폴더부터 만들어 정리해 주세요.',
-    en: 'Add your first lore entry or create a folder.',
-    ja: '最初のロアを追加するか、フォルダーを作成してください。',
-    zh: '添加第一条设定，或先创建文件夹。',
   },
   'native.text_12a6ec34b8': {
     ko: '로어 삭제',
@@ -773,12 +713,6 @@ export const messages = {
     ja: 'プロンプトブロックを追加',
     zh: '添加提示词块',
   },
-  'native.text_df1793f88e': {
-    ko: '첫 프롬프트 블록을 추가해 주세요.',
-    en: 'Add your first prompt block.',
-    ja: '最初のプロンプトブロックを追加してください。',
-    zh: '请添加第一个提示词块。',
-  },
   'native.text_429c4628a8': {
     ko: '현재 프롬프트 블록',
     en: 'Current prompt block',
@@ -917,23 +851,11 @@ export const messages = {
     ja: 'グローバルノート',
     zh: '全局笔记',
   },
-  'native.text_f470124b0d': {
-    ko: '목록에서 블록을 추가해 구성을 시작해 주세요.',
-    en: 'Add blocks from the list to start.',
-    ja: '一覧からブロックを追加して構成を始めてください。',
-    zh: '从列表添加块以开始构建。',
-  },
   'native.text_90e595ef29': {
     ko: '프리셋 기본 옵션',
     en: 'Preset default options',
     ja: 'プリセットの既定オプション',
     zh: '预设默认选项',
-  },
-  'native.text_b5607fffbc': {
-    ko: '정의된 토글이 없어요. 변수와 토글에서 추가할 수 있어요.',
-    en: 'No toggles defined. Add them in Variables and toggles.',
-    ja: 'トグルがありません。変数とトグルで追加できます。',
-    zh: '尚未定义开关，可在变量与开关中添加。',
   },
   'native.text_0ae9cde486': {
     ko: '입력문 수정',
@@ -1283,24 +1205,6 @@ export const messages = {
     ja: 'チャットの入力形式',
     zh: '聊天输入类型',
   },
-  'native.text_d2e4ee054a': {
-    ko: '채팅에 표시할 컨트롤',
-    en: 'Control shown in chat',
-    ja: 'チャットに表示するコントロール',
-    zh: '聊天中显示的控件',
-  },
-  'native.text_2c3f2eb17b': {
-    ko: '선택지',
-    en: 'Option',
-    ja: '選択肢',
-    zh: '选项',
-  },
-  'native.text_40873a17cd': {
-    ko: '숫자는 실제 저장값이에요',
-    en: 'Numbers are stored values',
-    ja: '番号は実際の保存値です',
-    zh: '数字为实际保存值',
-  },
   'native.text_b349ed5327': {
     ko: '선택지 하나에는 쉼표를 넣을 수 없어요.',
     en: 'An option cannot contain commas.',
@@ -1445,12 +1349,6 @@ export const messages = {
     ja: '既定の変数',
     zh: '默认变量',
   },
-  'native.text_37c7f984ba': {
-    ko: '새 채팅에서 사용할 변수의 기본값이에요.',
-    en: 'Default variable values for new chats.',
-    ja: '新しいチャットで使う変数の既定値です。',
-    zh: '用于新聊天的变量默认值。',
-  },
   'native.text_109713c45b': {
     ko: '변수 추가',
     en: 'Add variable',
@@ -1498,12 +1396,6 @@ export const messages = {
     en: 'Search results across all groups',
     ja: '全グループの検索結果',
     zh: '所有分组的搜索结果',
-  },
-  'native.text_03517ebd55': {
-    ko: '전체 그룹에서 찾아요.',
-    en: 'Searching all groups.',
-    ja: 'すべてのグループを検索します。',
-    zh: '搜索所有分组。',
   },
   'native.text_6d5ba8d015': {
     ko: '항목 추가',
@@ -1937,48 +1829,6 @@ export const messages = {
     ja: '詳細設定領域',
     zh: '高级设置区域',
   },
-  'native.text_af10d9b29e': {
-    ko: '지침',
-    en: 'Instructions',
-    ja: '指示',
-    zh: '指令',
-  },
-  'native.text_83fca869e0': {
-    ko: '글로벌 노트와 예시 대화',
-    en: 'Global note, example dialogue',
-    ja: 'グローバルノート、会話例',
-    zh: '全局笔记，示例对话',
-  },
-  'native.text_dc0ebb4fd3': {
-    ko: '기본 변수와 토글',
-    en: 'Default variables and toggles',
-    ja: '既定の変数とトグル',
-    zh: '默认变量与开关',
-  },
-  'native.text_bdf1722abc': {
-    ko: '초기값과 토글 정의',
-    en: 'Initial values, toggle definitions',
-    ja: '初期値、トグル定義',
-    zh: '初始值，开关定义',
-  },
-  'native.text_a61d568e9d': {
-    ko: '표시',
-    en: 'Display',
-    ja: '表示',
-    zh: '显示',
-  },
-  'native.text_ea790c9853': {
-    ko: '백그라운드 HTML / CSS',
-    en: 'Background HTML / CSS',
-    ja: '背景HTML / CSS',
-    zh: '背景HTML / CSS',
-  },
-  'native.text_8b330f374f': {
-    ko: '스크립트',
-    en: 'Scripts',
-    ja: 'スクリプト',
-    zh: '脚本',
-  },
   'native.text_f31813202f': {
     ko: 'Lua, 트리거, 정규식',
     en: 'Lua, triggers and regex',
@@ -1990,12 +1840,6 @@ export const messages = {
     en: 'Linked modules',
     ja: '連携モジュール',
     zh: '关联模块',
-  },
-  'native.text_c8d1c0b8c0': {
-    ko: '함께 사용하는 자료',
-    en: 'Resources used together',
-    ja: '一緒に使う資料',
-    zh: '共同使用的资料',
   },
   'native.text_22a2af3f54': {
     ko: '추가 지침',
@@ -2009,35 +1853,17 @@ export const messages = {
     ja: '会話例',
     zh: '示例对话',
   },
-  'native.text_078e60fbef': {
-    ko: '카드의 글로벌 노트와 대화 예시는 봇 편집에서 설정해요.',
-    en: 'Set card global notes and examples in the bot editor.',
-    ja: 'カードのグローバルノートと会話例はボット編集で設定します。',
-    zh: '卡片的全局笔记和示例对话请在机器人编辑器中设置。',
-  },
   'native.text_4c6723bcdd': {
     ko: '토글 정의',
     en: 'Toggle definitions',
     ja: 'トグル定義',
     zh: '开关定义',
   },
-  'native.text_98a6884c74': {
-    ko: '배경 HTML, CSS, 이미지 설정',
-    en: 'Background HTML, CSS and image settings',
-    ja: '背景HTML、CSS、画像の設定',
-    zh: '背景HTML、CSS与图片设置',
-  },
   'native.text_50262c6215': {
     ko: '배경 HTML / CSS',
     en: 'Background HTML / CSS',
     ja: '背景HTML / CSS',
     zh: '背景HTML / CSS',
-  },
-  'native.text_a2c215763f': {
-    ko: '배경 HTML / CSS는 봇 카드의 표시 설정에서 편집해요.',
-    en: 'Edit background HTML / CSS in bot card display settings.',
-    ja: '背景HTML / CSSはボットカードの表示設定で編集します。',
-    zh: '背景HTML / CSS请在机器人卡片的显示设置中编辑。',
   },
   'native.text_aa2a73abcc': {
     ko: '정규식 스크립트',
@@ -2098,12 +1924,6 @@ export const messages = {
     en: 'Loading the start screen…',
     ja: '開始画面を読み込み中…',
     zh: '正在加载开始画面…',
-  },
-  'native.text_9947febe83': {
-    ko: '미리보기에서는 화면 안의 선택 버튼이 동작하지 않아요.',
-    en: 'Selection buttons do not work in preview.',
-    ja: 'プレビュー内の選択ボタンは動作しません。',
-    zh: '预览中的选择按钮不生效。',
   },
   'native.collectionList': {
     ko: '{label} 목록',
@@ -2194,12 +2014,6 @@ export const messages = {
     en: '{count, plural, one {# unreadable source asset is preserved.} other {# unreadable source assets are preserved.}} These cannot be edited here. Missing embedded files may limit CHARX exports.',
     ja: '画像として読み込めなかったソースアセット{count, number}件を保持しています。この画面では編集できません。内蔵ファイルが欠けた資料はCHARXの書き出しが制限される場合があります。',
     zh: '已保留{count, number}个无法作为图片读取的源码资产，无法在此编辑。缺少内嵌文件的资料可能无法完整导出CHARX。',
-  },
-  'native.imageCount': {
-    ko: '이미지 {count, number}개',
-    en: '{count, plural, one {# image} other {# images}}',
-    ja: '画像{count, number}枚',
-    zh: '{count, number}张图片',
   },
   'native.removeImageDescription': {
     ko: '{name} 이미지와 이 자료의 에셋 연결을 제거해요. 원본 파일은 삭제하지 않아요.',

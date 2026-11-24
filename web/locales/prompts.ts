@@ -5,12 +5,6 @@ export const messages = {
     ja: '検索をクリア',
     zh: '清除搜索',
   },
-  'prompts.addToMyPrompts': {
-    ko: '내 프롬프트로 추가',
-    en: 'Add to my prompts',
-    ja: '自分のプロンプトに追加',
-    zh: '添加到我的提示词',
-  },
   'prompts.uiManageCombinations': {
     ko: '옵션 프리셋 관리',
     en: 'Manage option presets',
@@ -179,12 +173,6 @@ export const messages = {
     ja: '保存済みプロンプトを選択',
     zh: '选择已保存的提示词',
   },
-  'prompts.uiEditing': {
-    ko: ', 편집 중',
-    en: ', Editing',
-    ja: '、編集中',
-    zh: '，编辑中',
-  },
   'prompts.uiCreatePrompt': {
     ko: '새 프롬프트 생성',
     en: 'Create prompt',
@@ -203,29 +191,11 @@ export const messages = {
     ja: 'プロンプトを編集',
     zh: '编辑提示词',
   },
-  'prompts.uiSaveTextMessageStructureAndOptionsAsASeparate': {
-    ko: '본문, 메시지 구성, 옵션을 독립된 프리셋으로 저장해요.',
-    en: 'Save text, message structure, and options as a separate preset.',
-    ja: '本文、メッセージ構成、オプションを独立したプリセットとして保存します。',
-    zh: '将正文、消息结构和选项保存为独立预设。',
-  },
-  'prompts.uiPromptNameRequired': {
-    ko: '프롬프트 이름 (필수)',
-    en: 'Prompt name (required)',
-    ja: 'プロンプト名（必須）',
-    zh: '提示词名称（必填）',
-  },
   'prompts.uiPromptName': {
     ko: '프롬프트 이름',
     en: 'Prompt name',
     ja: 'プロンプト名',
     zh: '提示词名称',
-  },
-  'prompts.uiProcessing': {
-    ko: '처리 중…',
-    en: 'Processing…',
-    ja: '処理中…',
-    zh: '处理中…',
   },
   'prompts.uiSelectedPromptNotFound': {
     ko: '선택한 프롬프트를 찾을 수 없어요.',
@@ -443,12 +413,6 @@ export const messages = {
     ja: '既定のプロンプト設定',
     zh: '默认提示词设置',
   },
-  'prompts.uiAllPrompts': {
-    ko: '전체 프롬프트',
-    en: 'All prompts',
-    ja: 'すべてのプロンプト',
-    zh: '所有提示词',
-  },
   'prompts.uiEdit2': {
     ko: '편집',
     en: 'Edit',
@@ -497,23 +461,11 @@ export const messages = {
     ja: 'プロンプトはまだありません',
     zh: '还没有提示词',
   },
-  'prompts.uiCreateInstructionsForWritingAndTranslation': {
-    ko: '창작과 번역에 사용할 지침을 작성해요.',
-    en: 'Define instructions for writing and translation.',
-    ja: '創作や翻訳に使う指示を作成します。',
-    zh: '编写用于创作与翻译的指令。',
-  },
   'prompts.uiSearchAll': {
     ko: '전체에서 찾기',
     en: 'Search all',
     ja: '全体から検索',
     zh: '搜索全部',
-  },
-  'prompts.uiAddAsAPresetToEditFreelyThenLoad': {
-    ko: '프리셋으로 추가해 편집하고, 프롬프트 설정에서 불러와 적용해요.',
-    en: 'Add as a preset to edit, then load and apply it in prompt settings.',
-    ja: 'プリセットに追加して編集し、プロンプト設定で読み込んで適用します。',
-    zh: '添加为预设进行编辑，并在提示词设置中加载应用。',
   },
   'prompts.uiUnableToLoadBuiltInPrompts': {
     ko: '기본 프롬프트를 불러오지 못했어요.',
@@ -545,12 +497,6 @@ export const messages = {
     ja: '再試行',
     zh: '重试',
   },
-  'prompts.uiUnableToAddThePrompt': {
-    ko: '프롬프트를 추가하지 못했어요.',
-    en: 'Unable to add the prompt.',
-    ja: 'プロンプトを追加できませんでした。',
-    zh: '无法添加提示词。',
-  },
   'prompts.uiChangesSavedAutomatically': {
     ko: '변경사항을 자동 저장했어요.',
     en: 'Changes saved automatically.',
@@ -568,18 +514,6 @@ export const messages = {
     en: 'Loading default prompts…',
     ja: '既定のプロンプトを読み込み中…',
     zh: '正在加载默认提示词…',
-  },
-  'prompts.uiUsesTheLatestSavedPresetDefaultOptionChangesApply': {
-    ko: '프리셋의 최신 저장본을 사용하며, 변경한 기본 옵션은 모든 채팅의 다음 요청부터 적용돼요.',
-    en: 'Uses the latest saved preset. Changed default options apply to every chat from its next request.',
-    ja: 'プリセットの最新保存版を使います。変更した既定オプションは全チャットの次のリクエストから適用します。',
-    zh: '使用预设的最新保存版本。更改的默认选项从所有聊天的下次请求起生效。',
-  },
-  'prompts.uiSelectPrompt': {
-    ko: '프롬프트 선택',
-    en: 'Select prompt',
-    ja: 'プロンプトを選択',
-    zh: '选择提示词',
   },
   'prompts.uiCurrentPromptRole': {
     ko: '기본 프롬프트 역할',
@@ -677,18 +611,6 @@ export const messages = {
     ja: '下書きはこの画面に保持しています。ブラウザーの保存容量を確認してください。',
     zh: '草稿保留在此界面。请检查浏览器存储空间。',
   },
-  'prompts.uiExpand': {
-    ko: '펼치기',
-    en: 'Expand',
-    ja: '展開',
-    zh: '展开',
-  },
-  'prompts.uiCollapse': {
-    ko: '접기',
-    en: 'Collapse',
-    ja: '折りたたむ',
-    zh: '收起',
-  },
   'prompts.uiKeepCondition': {
     ko: '유지할 조건',
     en: 'Keep condition',
@@ -749,18 +671,6 @@ export const messages = {
     ja: '構成はまだありません。',
     zh: '还没有大纲。',
   },
-  'prompts.uiPlanTheWholeStoryOrSketchJustThisEpisode': {
-    ko: '작품 전체를 설계하거나, 이번 회차만 가볍게 정해요.',
-    en: 'Plan the whole story or sketch just this episode.',
-    ja: '作品全体を設計しても、今回の一話だけを軽く決めても構いません。',
-    zh: '可以规划整部作品，也可以只简要安排本章。',
-  },
-  'prompts.uiTheOutlineRemainsAPlanOnlyTheSelectedUnit': {
-    ko: '플롯은 계획으로 남고, 선택한 단위만 집필해요.',
-    en: 'The outline remains a plan. Only the selected unit is written.',
-    ja: '構成は計画として残り、選択した単位だけを執筆します。',
-    zh: '大纲保留为计划，只撰写所选单元。',
-  },
   'prompts.uiStartOutliningWithHelper': {
     ko: '도우미와 플롯 시작',
     en: 'Start outlining with assistant',
@@ -772,18 +682,6 @@ export const messages = {
     en: 'Add manually',
     ja: '自分で追加',
     zh: '手动添加',
-  },
-  'prompts.uiForExample': {
-    ko: '예를 들면',
-    en: 'For example',
-    ja: '例',
-    zh: '例如',
-  },
-  'prompts.uiPlanTheRoleOfAll12EpisodesAndOutline': {
-    ko: '“전체 12화의 역할을 정하고, 1화만 작은 사건까지 상세하게 플롯을 짜줘.”',
-    en: '“Plan the role of all 12 episodes and outline only episode 1 down to individual beats.”',
-    ja: '「全12話の役割を決め、第1話だけ小さな出来事まで詳しく構成して。」',
-    zh: '“规划全部12章的作用，仅将第1章细化到小事件。”',
   },
   'prompts.uiOutlineList': {
     ko: '플롯 목록',
@@ -803,12 +701,6 @@ export const messages = {
     ja: '構成を追加',
     zh: '添加大纲',
   },
-  'prompts.uiUseOnlyTheLevelsYouNeed': {
-    ko: '단계는 필요한 만큼만 사용해요.',
-    en: 'Use only the levels you need.',
-    ja: '段階は必要な分だけ使いましょう。',
-    zh: '只使用需要的层级。',
-  },
   'prompts.uiCurrentOutline': {
     ko: '현재 플롯',
     en: 'Current outline',
@@ -826,12 +718,6 @@ export const messages = {
     en: 'New outline',
     ja: '新しい構成',
     zh: '新大纲',
-  },
-  'prompts.uiEditOutline': {
-    ko: '플롯 편집',
-    en: 'Edit outline',
-    ja: '構成を編集',
-    zh: '编辑大纲',
   },
   'prompts.uiLevel': {
     ko: '수준',
@@ -862,12 +748,6 @@ export const messages = {
     en: 'Related outlines',
     ja: '一緒に参照する構成',
     zh: '参考大纲',
-  },
-  'prompts.uiTheHelperIsAskedToPreserveThisConditionWhile': {
-    ko: '플롯을 자세히 만들 때 이 조건을 지키도록 도우미에게 요청해요.',
-    en: 'The assistant is asked to preserve this condition while elaborating the outline.',
-    ja: '構成を詳細化する際にこの条件を守るようアシスタントに依頼します。',
-    zh: '细化大纲时会要求助手保留此条件。',
   },
   'prompts.uiTheOutlineChangedElsewhereYourDraftIsPreserved': {
     ko: '플롯이 바뀌었어요.',
@@ -965,12 +845,6 @@ export const messages = {
     ja: '原文と照合',
     zh: '对照原文检查',
   },
-  'prompts.uiNothingHereYetAskTheHelperToElaborateOr': {
-    ko: '아직 비어 있어요. 도우미에게 상세화를 요청하거나 직접 적어 보세요.',
-    en: 'Nothing here yet. Ask the assistant to elaborate or write it yourself.',
-    ja: 'まだ空です。アシスタントに詳細化を頼むか、自分で書いてみましょう。',
-    zh: '这里还是空的。可请助手细化，或自行填写。',
-  },
   'prompts.uiThisWritingRequest': {
     ko: '이번 집필',
     en: 'This writing request',
@@ -1031,12 +905,6 @@ export const messages = {
     ja: '今回の執筆に含まれる構成',
     zh: '本次写作包含的大纲',
   },
-  'prompts.uiShowsSavedOutlinesForThisWritingRequestNoModel': {
-    ko: '이번 집필에 사용할 저장된 플롯을 보여줘요.',
-    en: 'Shows saved outlines for this writing request.',
-    ja: '今回の執筆で使う保存済み構成を表示します。',
-    zh: '显示本次写作所用的已保存大纲。',
-  },
   'prompts.uiParentOutlinesAndCurrentItem': {
     ko: '상위 플롯과 현재 항목',
     en: 'Parent outlines and current item',
@@ -1073,12 +941,6 @@ export const messages = {
     ja: '関連づけた原文',
     zh: '关联原文',
   },
-  'prompts.uiRefresh': {
-    ko: '새로고침',
-    en: 'Refresh',
-    ja: '更新',
-    zh: '刷新',
-  },
   'prompts.uiUnableToLoadCanonAndCharacterReferences': {
     ko: '원작 참고를 불러오지 못했어요.',
     en: 'Unable to load canon reference.',
@@ -1103,12 +965,6 @@ export const messages = {
     ja: '原作参照の内容',
     zh: '原作参考内容',
   },
-  'prompts.uiTheModelCreatesAWritingBriefFromCanonSettings': {
-    ko: '모델이 원작 설정과 인물 성격을 참고해 집필 참고문을 만들어요. 현재 이야기의 선택과 관계도 함께 고려하도록 요청해요.',
-    en: 'The model creates a writing brief from canon settings and character traits, while considering choices and relationships in this story.',
-    ja: 'モデルが原作設定や人物の性格を参考に執筆参考文を作ります。現在の物語の選択や関係も考慮するよう依頼します。',
-    zh: '模型参考原作设定与角色性格生成写作参考文，并考虑当前故事中的选择和关系。',
-  },
   'prompts.uiConsultCanonAndCharactersBeforeWriting': {
     ko: '집필 전에 원작 참고',
     en: 'Consult canon reference before writing',
@@ -1121,23 +977,11 @@ export const messages = {
     ja: '参考設定',
     zh: '参考设置',
   },
-  'prompts.uiWorkAndReferenceScope': {
-    ko: '참고 범위',
-    en: 'Reference scope',
-    ja: '参照範囲',
-    zh: '参考范围',
-  },
   'prompts.uiWorkEditionOrSetting': {
     ko: '작품, 판본, 세계관',
     en: 'Work, edition or setting',
     ja: '作品、版、世界観',
     zh: '作品、版本与世界观',
-  },
-  'prompts.uiWorkTitleEditionOrSettingToReference': {
-    ko: '작품 이름, 판본 또는 참고할 세계관',
-    en: 'Work title, edition, or setting to reference',
-    ja: '作品名、版、または参考にする世界観',
-    zh: '作品名称、版本或要参考的世界观',
   },
   'prompts.uiReferencePointAndSpoilerLimits': {
     ko: '기준 시점과 스포일러 범위',
@@ -1211,12 +1055,6 @@ export const messages = {
     ja: '原作参照を保存',
     zh: '保存原作参考',
   },
-  'prompts.uiSavedChangesApplyFromTheNextRequest': {
-    ko: '저장하면 다음 요청부터 반영해요.',
-    en: 'Saved changes apply from the next request.',
-    ja: '保存すると次のリクエストから反映します。',
-    zh: '保存后从下次请求开始生效。',
-  },
   'prompts.uiLastWritingBrief': {
     ko: '마지막 집필 참고문',
     en: 'Last writing brief',
@@ -1246,12 +1084,6 @@ export const messages = {
     en: 'The latest writing proceeded without a brief. Check the model connection and call limits.',
     ja: '直近の執筆は参考文なしで進めました。モデル接続と呼び出し上限を確認してください。',
     zh: '最近一次写作未使用参考文。请检查模型连接与调用限额。',
-  },
-  'prompts.uiAskMoreAboutCanonOrCharactersInThisChat': {
-    ko: '원작이나 인물에 관한 질문은 이 채팅의 도우미에서 이어가요.',
-    en: "Ask more about the canon or characters in this chat's assistant.",
-    ja: '原作や人物に関する質問はこのチャットのアシスタントで続けられます。',
-    zh: '有关原作或角色的问题可继续询问此聊天的助手。',
   },
   'prompts.uiAskHelper2': {
     ko: '도우미에게 질문',
@@ -1312,12 +1144,6 @@ export const messages = {
     en: 'Translate input',
     ja: '入力を翻訳',
     zh: '翻译输入',
-  },
-  'prompts.uiInputTranslationLanguage': {
-    ko: '입력 번역 언어',
-    en: 'Input translation language',
-    ja: '入力の翻訳先言語',
-    zh: '输入翻译目标语言',
   },
   'prompts.uiSelectInputTranslationLanguage': {
     ko: '입력 번역 언어 선택',
@@ -1463,12 +1289,6 @@ export const messages = {
     ja: '{name}のメニュー',
     zh: '{name}菜单',
   },
-  'prompts.rolePrompt': {
-    ko: '{role, select, main {창작 프롬프트} other {번역 프롬프트}}',
-    en: '{role, select, main {Writing prompt} other {Translation prompt}}',
-    ja: '{role, select, main {創作プロンプト} other {翻訳プロンプト}}',
-    zh: '{role, select, main {创作提示词} other {翻译提示词}}',
-  },
   'prompts.editingNamed': {
     ko: '{name}, 편집 중',
     en: '{name}, Editing',
@@ -1600,36 +1420,6 @@ export const messages = {
   'prompts.level.arc': { ko: '큰 사건', en: 'Arc', ja: '大きな出来事', zh: '大事件' },
   'prompts.level.episode': { ko: '회차', en: 'Episode', ja: '話', zh: '章节' },
   'prompts.level.beat': { ko: '작은 사건', en: 'Beat', ja: '小さな出来事', zh: '小事件' },
-  'prompts.guidance.theme': {
-    ko: '원하는 정서, 관계의 속도, 중심 질문이나 결말 방향을 자유롭게 적어요. 모두 채울 필요는 없어요.',
-    en: 'Describe desired tone, relationship pacing, central questions, or the ending direction. You do not need every detail.',
-    ja: '望む情緒、関係の進む速さ、中心の問いや結末の方向を自由に書きましょう。すべて埋める必要はありません。',
-    zh: '自由填写期望的情绪、关系进度、核心问题或结局方向，无需全部填写。',
-  },
-  'prompts.guidance.mainStory': {
-    ko: '누구의 이야기인지, 어떤 과정을 거쳐 무엇이 달라질지 적어요. 모두 채울 필요는 없어요.',
-    en: 'Describe whose story this is, the journey, and what changes. You do not need every detail.',
-    ja: '誰の物語で、どんな過程を経て何が変わるかを書きましょう。すべて埋める必要はありません。',
-    zh: '填写这是谁的故事、经历什么过程以及有何变化，无需全部填写。',
-  },
-  'prompts.guidance.arc': {
-    ko: '중요한 전환과 그 전환이 남길 결과를 적어요. 회차 수는 정하지 않아도 돼요. 모두 채울 필요는 없어요.',
-    en: 'Describe major turns and their consequences. Episode counts and full details are optional.',
-    ja: '重要な転換とその結果を書きましょう。話数やすべての詳細を決める必要はありません。',
-    zh: '填写重要转折及其结果，无需确定章数或所有细节。',
-  },
-  'prompts.guidance.episode': {
-    ko: '이번 화의 역할, 인물의 목적, 준비할 요소와 멈출 지점을 적어요. 모두 채울 필요는 없어요.',
-    en: 'Describe this episode’s role, character goals, setup, and stopping point. You do not need every detail.',
-    ja: '今回の話の役割、人物の目的、準備する要素や停止位置を書きましょう。すべて埋める必要はありません。',
-    zh: '填写本章作用、人物目标、铺垫与停止点，无需全部填写。',
-  },
-  'prompts.guidance.beat': {
-    ko: '시도, 반응, 발견, 선택을 적어요. 조용한 대화나 변화 없는 일상도 괜찮아요. 모두 채울 필요는 없어요.',
-    en: 'Describe attempts, reactions, discoveries, or choices. Quiet conversations and everyday moments are welcome. You do not need every detail.',
-    ja: '試み、反応、発見、選択を書きましょう。静かな会話や変化のない日常でも構いません。すべて埋める必要はありません。',
-    zh: '填写尝试、反应、发现或选择，也可以是安静的对话与平常日常，无需全部填写。',
-  },
   'prompts.template.rp': {
     ko: 'v5.6.0. 인물과 대화하며 이야기를 이어 가요.',
     en: 'v5.6.0. Continue the story through conversations with characters.',

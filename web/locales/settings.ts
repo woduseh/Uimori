@@ -293,35 +293,11 @@ export const messages = {
     ja: '{v0}トークン',
     zh: '{v0}词元',
   },
-  'settings.m29': {
-    ko: '자동 작업',
-    en: 'Automatic tasks',
-    ja: '自動タスク',
-    zh: '自动任务',
-  },
   'settings.m30': {
     ko: '채팅 제목 모델',
     en: 'Chat title model',
     ja: 'チャットタイトルモデル',
     zh: '聊天标题模型',
-  },
-  'settings.m31': {
-    ko: '확장 기능',
-    en: 'Extensions',
-    ja: '拡張機能',
-    zh: '扩展功能',
-  },
-  'settings.m32': {
-    ko: '설정됨',
-    en: 'Configured',
-    ja: '設定済み',
-    zh: '已设置',
-  },
-  'settings.m33': {
-    ko: '미지정',
-    en: 'Unassigned',
-    ja: '未設定',
-    zh: '未指定',
   },
   'settings.m34': {
     ko: '확장 호출 모델',
@@ -346,12 +322,6 @@ export const messages = {
     en: 'Review needed',
     ja: '要確認',
     zh: '需要检查',
-  },
-  'settings.m39': {
-    ko: '회',
-    en: 'calls',
-    ja: '回',
-    zh: '次',
   },
   'settings.m40': {
     ko: '거절 감지',
@@ -533,18 +503,6 @@ export const messages = {
     ja: '役割別モデルの設定が変更されました。',
     zh: '按角色设置模型已更改。',
   },
-  'settings.m76': {
-    ko: '초안은 유지했어요.',
-    en: 'Your draft is preserved.',
-    ja: '下書きは保持しました。',
-    zh: '草稿已保留。',
-  },
-  'settings.m77': {
-    ko: '모델과 프로바이더 관리',
-    en: 'Manage model presets and providers',
-    ja: 'モデルとプロバイダーの管理',
-    zh: '管理模型预设和提供商',
-  },
   'settings.m78': {
     ko: '작업당 모델 호출 한도는 1~128 사이의 정수로 입력해 주세요.',
     en: 'Enter an integer from 1 to 128 for model calls per task.',
@@ -574,12 +532,6 @@ export const messages = {
     en: 'Automatic translation and call limits',
     ja: '自動翻訳と呼び出し上限',
     zh: '自动翻译和调用上限',
-  },
-  'settings.m84': {
-    ko: '본문 번역',
-    en: 'Writing translation',
-    ja: '本文翻訳',
-    zh: '正文翻译',
   },
   'settings.m85': {
     ko: '본문 생성 후 자동 번역',
@@ -743,12 +695,6 @@ export const messages = {
     ja: 'プロンプトまたは入力形式が変わったため、このオプションの解除は適用しません。',
     zh: '提示词或输入格式已更改，不应用此选项的取消设置。',
   },
-  'settings.m112': {
-    ko: '프롬프트나 입력 형식이 바뀌어 이 옵션의 초기화 선택을 적용하지 않아요.',
-    en: 'The prompt or input format changed; this option will not be reset.',
-    ja: 'プロンプトまたは入力形式が変わったため、このオプションの初期化は適用しません。',
-    zh: '提示词或输入格式已更改，不应用此选项的重置。',
-  },
   'settings.m113': {
     ko: '인물',
     en: 'Character',
@@ -887,18 +833,6 @@ export const messages = {
     ja: '協業を使用',
     zh: '启用协作',
   },
-  'settings.m136': {
-    ko: '협업 상세를 펼쳐 확인해 주세요.',
-    en: 'Expand collaboration details to review.',
-    ja: '協業の詳細を開いて確認してください。',
-    zh: '请展开协作详情进行检查。',
-  },
-  'settings.m139': {
-    ko: '기본은 꺼져 있어요. 켠 뒤 함께할 에이전트를 골라 주세요.',
-    en: 'Off by default. Enable it and choose agents.',
-    ja: '既定では無効です。有効にしてエージェントを選んでください。',
-    zh: '默认关闭。启用后请选择协作智能体。',
-  },
   'settings.m140': {
     ko: '작성 전',
     en: 'Before writing',
@@ -983,12 +917,6 @@ export const messages = {
     ja: '、無効',
     zh: '，已禁用',
   },
-  'settings.m155': {
-    ko: '의 추가 조회',
-    en: 'additional resource access',
-    ja: '追加参照',
-    zh: '额外查询',
-  },
   'settings.m157': {
     ko: '{v0} {v1} 읽기',
     en: '{v0}: read {v1}',
@@ -1024,12 +952,6 @@ export const messages = {
     en: 'Collaborating agents',
     ja: '参加エージェント',
     zh: '协作智能体',
-  },
-  'settings.m163': {
-    ko: '/ 6명',
-    en: '/ 6 agents',
-    ja: '/ 6人',
-    zh: '/ 6个',
   },
   'settings.m164': {
     ko: '에이전트 추가',
@@ -1079,29 +1001,11 @@ export const messages = {
     ja: '選択したオプションなし',
     zh: '未选择选项',
   },
-  'settings.m174': {
-    ko: '프롬프트 전체나 옵션 수정 권한은 전달하지 않아요.',
-    en: 'Does not share the full prompt or permission to edit options.',
-    ja: 'プロンプト全体やオプションの編集権限は共有しません。',
-    zh: '不传递完整提示词或选项修改权限。',
-  },
-  'settings.m176': {
-    ko: '전체 추가 호출',
-    en: 'Total extra calls',
-    ja: '追加呼び出し合計',
-    zh: '额外调用总数',
-  },
   'settings.m177': {
     ko: '전체 추가 호출 한도',
     en: 'Total extra call limit',
     ja: '追加呼び出し合計の上限',
     zh: '额外调用总上限',
-  },
-  'settings.m178': {
-    ko: '모든 에이전트가 공유하며, 채팅의 전체 호출 한도에도 포함돼요.',
-    en: 'Shared by all agents and included in the chat call limit.',
-    ja: '全エージェントで共有し、チャット全体の呼び出し上限にも含みます。',
-    zh: '所有智能体共用，也计入聊天总调用上限。',
   },
   'settings.m179': {
     ko: '옵션 이름으로 찾기',
@@ -1121,12 +1025,6 @@ export const messages = {
     ja: '選択したオプション',
     zh: '所选选项',
   },
-  'settings.m182': {
-    ko: '개',
-    en: 'items',
-    ja: '個',
-    zh: '项',
-  },
   'settings.m183': {
     ko: '모든 옵션',
     en: 'All options',
@@ -1139,47 +1037,11 @@ export const messages = {
     ja: '創作オプション一覧',
     zh: '创作选项列表',
   },
-  'settings.m185': {
-    ko: '체크한 옵션의 현재값을 보조 에이전트가 참고해요.',
-    en: "Supporting agents refer to the selected options' current values.",
-    ja: '補助エージェントは選択したオプションの現在値を参照します。',
-    zh: '辅助智能体参考所选选项的当前值。',
-  },
-  'settings.m186': {
-    ko: '/ 64개 선택',
-    en: '/ 64 selected',
-    ja: '/ 64個選択',
-    zh: '/ 64项已选择',
-  },
-  'settings.m187': {
-    ko: '삭제된 옵션',
-    en: 'Removed option',
-    ja: '削除済みオプション',
-    zh: '已删除选项',
-  },
-  'settings.m188': {
-    ko: '선택을 해제해 주세요.',
-    en: 'Deselect this option.',
-    ja: '選択を解除してください。',
-    zh: '请取消选择。',
-  },
-  'settings.m189': {
-    ko: '실행 시점 값',
-    en: 'Value at execution',
-    ja: '実行時点の値',
-    zh: '执行时的值',
-  },
   'settings.m190': {
     ko: '조건에 맞는 옵션이 없어요.',
     en: 'No options match.',
     ja: '条件に合うオプションがありません。',
     zh: '没有符合条件的选项。',
-  },
-  'settings.m191': {
-    ko: '옵션 선택은 이 프리셋의 초안에 바로 반영돼요. 새 보조 호출에 쓰일 실제 값은 실행 준비 시점에 확정돼요.',
-    en: 'Selection updates this preset draft immediately. Values for new supporting calls are finalized during execution preparation.',
-    ja: '選択はこのプリセットの下書きに直ちに反映します。補助呼び出しで使う値は実行準備時に確定します。',
-    zh: '选项选择立即反映到此预设草稿。新辅助调用的实际值在执行准备时确定。',
   },
   'settings.m192': {
     ko: '에이전트 삭제',
@@ -1325,29 +1187,11 @@ export const messages = {
     ja: 'ロアコンテキスト方針',
     zh: '设定上下文策略',
   },
-  'settings.m218': {
-    ko: '로어 사용',
-    en: 'Lore usage',
-    ja: 'ロアの使用',
-    zh: '设定使用',
-  },
   'settings.m219': {
     ko: '조회 로어를 다음 생성에도 유지',
     en: 'Retain retrieved lore for the next generation',
     ja: '参照ロアを次の生成でも維持',
     zh: '在下次生成中保留已查询设定',
-  },
-  'settings.m220': {
-    ko: '조회한 로어를 다음 생성에서도 유지해요.',
-    en: 'Retain retrieved lore for the next generation.',
-    ja: '参照したロアを次の生成でも維持します。',
-    zh: '在下次生成中继续保留已查询的设定。',
-  },
-  'settings.m221': {
-    ko: '조회한 로어를 다음 생성에 유지',
-    en: 'Retain retrieved lore in the next generation',
-    ja: '参照したロアを次の生成で維持',
-    zh: '在下次生成中保留已查询的设定',
   },
   'settings.m222': {
     ko: '선별 기준과 용량',
@@ -1397,18 +1241,6 @@ export const messages = {
     ja: '判定入力のトークン上限',
     zh: '判定输入词元上限',
   },
-  'settings.m231': {
-    ko: '로어를 유지할 최대 크기를 정해요.',
-    en: 'Set the maximum size of retained lore.',
-    ja: '保持するロアの最大サイズを設定します。',
-    zh: '设置保留设定的最大容量。',
-  },
-  'settings.m235': {
-    ko: '선별 기준과 용량의 입력을 확인해 주세요.',
-    en: 'Check selection and capacity inputs.',
-    ja: '選別基準と容量の入力を確認してください。',
-    zh: '请检查筛选标准与容量输入。',
-  },
   'settings.m236': {
     ko: '마지막 유효값으로 되돌리기',
     en: 'Restore last valid values',
@@ -1420,24 +1252,6 @@ export const messages = {
     en: 'Preview lore for next generation',
     ja: '次の生成のロアをプレビュー',
     zh: '预览下次生成的设定',
-  },
-  'settings.m239': {
-    ko: '새 장면, 조회 로어 정리 포함',
-    en: 'Includes the new scene and lore reset choice.',
-    ja: '新しいシーン、参照ロア整理の選択を含みます。',
-    zh: '包含新场景和清理查询设定的选择。',
-  },
-  'settings.m240': {
-    ko: '현재 조회 로어를 이어 사용하는 요청이에요.',
-    en: 'Continues with the currently retrieved lore.',
-    ja: '現在の参照ロアを引き継ぐリクエストです。',
-    zh: '此请求继续使用当前查询设定。',
-  },
-  'settings.m241': {
-    ko: '입력이 비어 있어 확인용 요청을 사용해요.',
-    en: 'Input is empty; a preview request is used.',
-    ja: '入力が空のため確認用リクエストを使用します。',
-    zh: '输入为空，使用预览用请求。',
   },
   'settings.m242': {
     ko: '로어 미리보기 구성 중…',
@@ -1462,18 +1276,6 @@ export const messages = {
     en: 'Retrieved lore in preview',
     ja: 'プレビューの参照ロア',
     zh: '预览中的查询设定',
-  },
-  'settings.m246': {
-    ko: '프롬프트 안의 실제 배치:',
-    en: 'Actual placement in prompt,',
-    ja: 'プロンプト内の実際の配置、',
-    zh: '提示词中的实际布局，',
-  },
-  'settings.m247': {
-    ko: '메시지',
-    en: 'messages',
-    ja: 'メッセージ',
-    zh: '条消息',
   },
   'settings.m248': {
     ko: '조회 로어 유지 끔',
@@ -1523,12 +1325,6 @@ export const messages = {
     ja: 'この実行には参照ロア維持の記録がありません。',
     zh: '本次运行没有设定保留记录。',
   },
-  'settings.m256': {
-    ko: '로컬 o200k 토크나이저로 추정한 로어 토큰 수예요. 전체 요청 크기나 실제 청구 토큰 수와는 다를 수 있어요.',
-    en: 'Local o200k token estimates for this run; not the full request or actual billed usage.',
-    ja: 'この実行のローカルo200kトークン推定値です。全リクエストや実際の課金トークン数ではありません。',
-    zh: '本次运行的本地o200k词元估算，不是完整请求或实际计费词元数。',
-  },
   'settings.m257': {
     ko: '유지한 구간',
     en: 'Retained segments',
@@ -1541,23 +1337,11 @@ export const messages = {
     ja: '維持した推定トークン',
     zh: '保留估算词元',
   },
-  'settings.m259': {
-    ko: '토큰',
-    en: ' tokens',
-    ja: 'トークン',
-    zh: '词元',
-  },
   'settings.m260': {
     ko: '새로 더한 문자',
     en: 'New characters added',
     ja: '新たに追加した文字',
     zh: '新添加字符',
-  },
-  'settings.m261': {
-    ko: '자',
-    en: ' characters',
-    ja: '文字',
-    zh: '字符',
   },
   'settings.m262': {
     ko: '정리한 구간',
@@ -1576,30 +1360,6 @@ export const messages = {
     en: 'New scene cleanup was selected for this request.',
     ja: 'このリクエストで新しいシーンの整理を選択しました。',
     zh: '此请求已选择新场景清理。',
-  },
-  'settings.m265': {
-    ko: '유지한 로어와 읽은 출처:',
-    en: 'Retained lore and read sources,',
-    ja: '維持したロアと参照元、',
-    zh: '保留设定和读取来源，',
-  },
-  'settings.m266': {
-    ko: '처음 읽은 원문',
-    en: 'First read original',
-    ja: '最初に読んだ原文',
-    zh: '首次读取的原文',
-  },
-  'settings.m267': {
-    ko: '읽은 범위의 본문',
-    en: 'Read text range',
-    ja: '読んだ範囲の本文',
-    zh: '读取范围的正文',
-  },
-  'settings.m268': {
-    ko: '이전에 성공한 본문 생성에서 읽은 자료만 이어서 사용하며, 과거 도구 호출을 다시 실행하지는 않아요.',
-    en: 'Only resource reads from successful writing are carried forward. Earlier tool calls and responses are not replayed.',
-    ja: '成功した本文執筆の資料参照のみ引き継ぎます。過去のツール呼び出しや応答は再実行しません。',
-    zh: '仅延续成功正文创作的资料读取，不重放过去的工具调用或响应。',
   },
   'settings.m269': {
     ko: '자동 압축',
@@ -1655,23 +1415,11 @@ export const messages = {
     ja: 'コンテキストを読み込み中…',
     zh: '正在加载上下文…',
   },
-  'settings.m279': {
-    ko: '이전 요약을 보존하고 있어요.',
-    en: 'The previous summary is preserved.',
-    ja: '以前の要約を保持しています。',
-    zh: '先前摘要已保留。',
-  },
   'settings.m280': {
     ko: '현재 요청에는 원문을 사용해요.',
     en: 'The current request uses the original text.',
     ja: '現在のリクエストでは原文を使用します。',
     zh: '当前请求使用原文。',
-  },
-  'settings.m281': {
-    ko: ', 요약한 장면',
-    en: ', Summarized scene',
-    ja: '、要約したシーン',
-    zh: '，已摘要场景',
   },
   'settings.m282': {
     ko: '아직 저장된 요약이 없어요.',
@@ -1702,12 +1450,6 @@ export const messages = {
     en: 'Example: retain details about what each character knows and unresolved promises.',
     ja: '例：人物ごとの既知の事実と未解決の約束を詳しく残してください。',
     zh: '例如：详细保留各人物已知的事实和尚未解决的约定。',
-  },
-  'settings.m288': {
-    ko: '정리할 구간이 있으면 컨텍스트 모델을 호출해요.',
-    en: 'Calls the context model if there are segments to compress.',
-    ja: '整理する区間があればコンテキストモデルを呼び出します。',
-    zh: '存在可整理片段时调用上下文模型。',
   },
   'settings.m289': {
     ko: '요약 편집',
@@ -1829,18 +1571,6 @@ export const messages = {
     ja: '編集をキャンセル',
     zh: '取消编辑',
   },
-  'settings.m313': {
-    ko: '입력 추정치 미확인',
-    en: 'Input estimate unknown',
-    ja: '入力推定値は不明',
-    zh: '输入估算未知',
-  },
-  'settings.m314': {
-    ko: '입력 약 {v0}',
-    en: 'Input ≈ {v0}',
-    ja: '入力 約{v0}',
-    zh: '输入约{v0}',
-  },
   'settings.m315': {
     ko: '입력 컨텍스트 상태',
     en: 'Input context status',
@@ -1864,18 +1594,6 @@ export const messages = {
     en: 'Check the input context limit and model connection.',
     ja: '入力コンテキスト上限とモデル接続を確認してください。',
     zh: '请检查输入上下文上限和模型连接。',
-  },
-  'settings.m319': {
-    ko: '앞선 원문 {v0}개 요약,',
-    en: 'Summarized {v0} earlier originals,',
-    ja: '前の原文{v0}件を要約、',
-    zh: '已摘要先前{v0}份原文，',
-  },
-  'settings.m320': {
-    ko: ', 요약 {v0}회',
-    en: ', {v0} summary calls',
-    ja: '、要約{v0}回',
-    zh: '，摘要{v0}次',
   },
   'settings.flow0': {
     ko: '번역 호출 한도 {v0}회, 거절 감지 {v1}/2',
@@ -1930,12 +1648,6 @@ export const messages = {
     en: 'Removed option {v0}',
     ja: '削除済みオプション{v0}',
     zh: '已删除选项{v0}',
-  },
-  'settings.flow12': {
-    ko: '선별 기준과 용량 입력을 확인해 주세요. {v0}',
-    en: 'Please check the selection criteria and capacity inputs. {v0}',
-    ja: '選別基準と容量の入力を確認してください。{v0}',
-    zh: '请检查筛选标准与容量输入。{v0}',
   },
   'settings.flow13': {
     ko: '프롬프트 안의 실제 배치: 메시지 {v0}개',
@@ -2053,12 +1765,6 @@ export const messages = {
     ja: 'USD / 100万トークン',
     zh: 'USD / 百万 token',
   },
-  'settings.newItem': {
-    ko: '미저장',
-    en: 'Unsaved',
-    ja: '未保存',
-    zh: '未保存',
-  },
   'settings.unsavedItem': {
     ko: '미저장 변경',
     en: 'Unsaved changes',
@@ -2070,12 +1776,6 @@ export const messages = {
     en: 'Colors to edit',
     ja: '編集する配色',
     zh: '要编辑的配色',
-  },
-  'settings.themeSelection': {
-    ko: '{title}, {source}',
-    en: '{title}, {source}',
-    ja: '{title}、{source}',
-    zh: '{title}，{source}',
   },
   'settings.inheritedThemeSelection': {
     ko: '{title}, {source} 따름',

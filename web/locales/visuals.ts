@@ -59,18 +59,6 @@ export const messages = {
     ja: '背景設定を保存しました。',
     zh: '已保存背景设置。',
   },
-  'visuals.m002': {
-    ko: '배경 이미지',
-    en: 'Background image',
-    ja: '背景画像',
-    zh: '背景图片',
-  },
-  'visuals.m003': {
-    ko: '레이아웃이나 팔레트와 별도로, 본문 상자 바깥에 표시해요. 저장하면 적용돼요.',
-    en: 'Displayed outside the text panel, separately from the layout and palette. Save to apply.',
-    ja: 'レイアウトやパレットとは別に本文枠の外に表示します。保存すると適用されます。',
-    zh: '显示在正文框外，独立于布局和调色板。保存后生效。',
-  },
   'visuals.m004': {
     ko: '배경 상위 설정 따르기',
     en: 'Inherit background',
@@ -94,12 +82,6 @@ export const messages = {
     en: 'Choose background image',
     ja: '背景画像を選択',
     zh: '选择背景图片',
-  },
-  'visuals.m008': {
-    ko: '선택한 배경 이미지가 없어요.',
-    en: 'No background image selected.',
-    ja: '背景画像が選択されていません。',
-    zh: '未选择背景图片。',
   },
   'visuals.m009': {
     ko: '배경 효과',
@@ -215,12 +197,6 @@ export const messages = {
     ja: '挿絵の参照を保存しました。次の挿絵リクエストから使用します。',
     zh: '已保存插图参考，将用于下次插图请求。',
   },
-  'visuals.m032': {
-    ko: 'Codex 삽화에는 참고 이미지를 8장까지 사용할 수 있어요. ComfyUI에는 적용되지 않아요.',
-    en: 'You can use up to 8 reference images for Codex illustrations. This does not apply to ComfyUI.',
-    ja: 'Codexの挿絵には参照画像を8枚まで使用できます。ComfyUIには適用されません。',
-    zh: 'Codex插图最多可使用8张参考图片。不适用于ComfyUI。',
-  },
   'visuals.m033': {
     ko: '다시 불러오기',
     en: 'Reload',
@@ -262,12 +238,6 @@ export const messages = {
     en: 'Character appearances',
     ja: '人物の外見',
     zh: '人物外貌',
-  },
-  'visuals.characterProfileNumber': {
-    ko: '인물 {count}',
-    en: 'Character {count}',
-    ja: '人物 {count}',
-    zh: '人物 {count}',
   },
   'visuals.characterName': { ko: '이름', en: 'Name', ja: '名前', zh: '姓名' },
   'visuals.characterAppearance': { ko: '외형', en: 'Appearance', ja: '外見', zh: '外貌' },
@@ -408,12 +378,6 @@ export const messages = {
     en: 'Illustration settings',
     ja: '挿絵設定',
     zh: '插图设置',
-  },
-  'visuals.m050': {
-    ko: '선택한 프리셋이 생성기를 정해요. 같은 생성기를 쓰는 프리셋은 연결과 모델 설정을 공유하며, 새 삽화 요청부터 적용돼요.',
-    en: 'The selected preset determines the generator. Presets sharing a generator share connections and models; changes apply to new illustration requests.',
-    ja: '選択したプリセットが生成器を決定します。同じ生成器を使うプリセットは接続とモデルを共有し、新しい挿絵リクエストから適用されます。',
-    zh: '所选预设决定生成器。相同生成器的预设共用连接和模型设置，自新插图请求起生效。',
   },
   'visuals.m051': {
     ko: '테스트 생성기',

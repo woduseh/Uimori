@@ -47,12 +47,6 @@ export const messages = {
     ja: 'ワークスペースに接続',
     zh: '连接工作室',
   },
-  'outside.tokenPrivacy': {
-    ko: '토큰은 이 입력창에서만 사용하고 브라우저 저장소에 보관하지 않아요.',
-    en: 'The token is used only in this form and is not saved in browser storage.',
-    ja: 'トークンはこの入力欄でのみ使用し、ブラウザーのストレージには保存しません。',
-    zh: '令牌仅用于此输入框，不会保存在浏览器存储中。',
-  },
   'outside.reconnect': {
     ko: '다시 연결',
     en: 'Reconnect',
@@ -155,12 +149,6 @@ export const messages = {
     ja: 'Uimoriについて',
     zh: '关于 Uimori',
   },
-  'outside.about': {
-    ko: '앱 정보',
-    en: 'About',
-    ja: 'アプリ情報',
-    zh: '应用信息',
-  },
   'outside.version': {
     ko: '서버 실행 버전',
     en: 'Server version',
@@ -184,12 +172,6 @@ export const messages = {
     en: 'Build identifier',
     ja: 'ビルド識別子',
     zh: '构建标识符',
-  },
-  'outside.buildDescription': {
-    ko: '같은 버전 안의 소스 변경을 구분해요.',
-    en: 'Identifies source changes within the same version.',
-    ja: '同じバージョン内のソース変更を区別します。',
-    zh: '用于区分同一版本内的源代码变更。',
   },
   'outside.recheck': {
     ko: '다시 확인',
@@ -311,12 +293,6 @@ export const messages = {
     ja: '作業完了通知',
     zh: '任务完成通知',
   },
-  'outside.pushDescription': {
-    ko: '작업이 끝나면 이 기기로 알림을 보내요.',
-    en: 'Get notified on this device when work finishes.',
-    ja: '作業が終わるとこの端末に通知します。',
-    zh: '任务完成后会在此设备上通知你。',
-  },
   'outside.checkPermission': {
     ko: '권한 다시 확인',
     en: 'Check permission again',
@@ -346,12 +322,6 @@ export const messages = {
     en: 'Notification options',
     ja: '通知オプション',
     zh: '通知选项',
-  },
-  'outside.pushPrivacy': {
-    ko: '원고 내용은 보내지 않으며, 로그아웃하면 알림이 해제돼요.',
-    en: 'Manuscript text is not sent. Signing out disables notifications.',
-    ja: '原稿の内容は送信しません。ログアウトすると通知は解除されます。',
-    zh: '不会发送原稿内容。退出登录后通知会被关闭。',
   },
   'outside.reconnectPush': {
     ko: '알림 다시 연결',

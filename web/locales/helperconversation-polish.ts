@@ -11,12 +11,6 @@ export const messages = {
     ja: 'ファイル{count, number}件は未計測',
     zh: '{count, number} 个文件未统计',
   },
-  'helperConversation.inputEstimate': {
-    ko: '추정 입력',
-    en: 'Estimated input',
-    ja: '推定入力',
-    zh: '估算输入',
-  },
   'helperConversation.copyCode': {
     ko: '코드 블록 {index} 복사',
     en: 'Copy code block {index}',
