@@ -23,11 +23,10 @@ export type StorageFamily = {
   readonly areas: readonly BrowserStorageArea[];
   readonly owner: StorageOwner;
   readonly work?: true;
-  readonly legacy?: true;
   readonly cap?: number;
 };
 
-type Options = { work?: true; legacy?: true; cap?: number };
+type Options = { work?: true; cap?: number };
 const families: StorageFamily[] = [];
 const local = ['local'] as const;
 const session = ['session'] as const;
@@ -185,15 +184,6 @@ export const storageKeys = {
   editorTabScope: exact('uimori:editor-tab-scope', session, 'transient'),
   themeDisabled: exact('uimori:theme-disabled', session, 'setting'),
 };
-
-for (const prefix of [
-  'uimori:helper-input:',
-  'uimori:helper-outbox:',
-  'uimori:helper-selection:',
-  'uimori:helper-outline:',
-  'uimori:helper-artifact-draft:',
-])
-  keyed(prefix, local, 'helper-conversation', one, { work: true, legacy: true });
 
 export const storageFamilies: readonly StorageFamily[] = families;
 

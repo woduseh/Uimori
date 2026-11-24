@@ -247,7 +247,7 @@ test('HSESSION04 current helper input survives reload and navigation without rea
   await expect(input).toHaveValue('');
   expect(
     await page.evaluate((id) => localStorage.getItem(`uimori:helper-input:${id}`), first)
-  ).toBe('이전 저장소의 초안');
+  ).toBeNull();
   await input.fill('새로 입력한 원고');
   await page.reload();
   await openHelper(page);

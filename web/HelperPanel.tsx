@@ -321,14 +321,14 @@ function HelperResponseActions({ text }: { text: string }) {
 }
 
 function local(key: string): string | null {
-  return cachedHelperRecovery(key.replace(/^uimori:/u, '')) ?? null;
+  return cachedHelperRecovery(key) ?? null;
 }
 function saveLocal(key: string, value: string | null) {
-  void writeHelperRecovery(key.replace(/^uimori:/u, ''), value).catch(() => {});
+  void writeHelperRecovery(key, value).catch(() => {});
 }
 function storedOutbox(scope: string): Outbox | null {
   try {
-    const value = JSON.parse(local(`uimori:helper-outbox:${scope}`) ?? 'null') as Outbox | null;
+    const value = JSON.parse(local(`helper-outbox:${scope}`) ?? 'null') as Outbox | null;
     return value &&
       value.scope === scope &&
       typeof value.requestKey === 'string' &&
@@ -343,7 +343,7 @@ function storedOutbox(scope: string): Outbox | null {
 function storedSelection(scope: string): HelperSelection | null {
   try {
     const value = JSON.parse(
-      local(`uimori:helper-selection:${scope}`) ?? 'null'
+      local(`helper-selection:${scope}`) ?? 'null'
     ) as HelperSelection | null;
     return value &&
       typeof value.sourceId === 'string' &&
@@ -358,9 +358,7 @@ function storedSelection(scope: string): HelperSelection | null {
 type SelectedOutline = { target: OutlineTarget; title: string; request: string };
 function storedOutline(scope: string): SelectedOutline | null {
   try {
-    const value = JSON.parse(
-      local(`uimori:helper-outline:${scope}`) ?? 'null'
-    ) as SelectedOutline | null;
+    const value = JSON.parse(local(`helper-outline:${scope}`) ?? 'null') as SelectedOutline | null;
     return value &&
       ['compose', 'review'].includes(value.target?.purpose) &&
       typeof value.title === 'string'
@@ -852,7 +850,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     attachedResourceRequest.current = props.resource;
     setFrozenResources((old) => ({ ...old, [scopeKey]: props.resource ?? null }));
   }, [props.resource, scopeKey]);
-  const draft = drafts[scopeKey] ?? local(`uimori:helper-input:${scopeKey}`) ?? '';
+  const draft = drafts[scopeKey] ?? local(`helper-input:${scopeKey}`) ?? '';
   const helperWorkspace = usePromptWorkspace();
   const modelRef =
     savedModel && savedModel.revision > (helperWorkspace.workspace?.revision ?? -1)
@@ -913,7 +911,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       if (disposed) return;
       setDrafts((old) =>
         old[scopeKey] === undefined
-          ? { ...old, [scopeKey]: local(`uimori:helper-input:${scopeKey}`) ?? '' }
+          ? { ...old, [scopeKey]: local(`helper-input:${scopeKey}`) ?? '' }
           : old
       );
       setOutboxes((old) =>
@@ -937,7 +935,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     (text: string) => {
       if (!scopeKey || !hydrated[scopeKey]) return;
       attachments.touch();
-      saveLocal(`uimori:helper-input:${scopeKey}`, text);
+      saveLocal(`helper-input:${scopeKey}`, text);
       setDrafts((old) => ({ ...old, [scopeKey]: text }));
     },
     [scopeKey, hydrated, attachments.touch]
@@ -982,32 +980,32 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       appliedHandoff.current = selected.key;
       if (selected.kind === 'outline' && selected.target) {
         setSelections((old) => ({ ...old, [owner.id]: null }));
-        saveLocal(`uimori:helper-selection:${owner.id}`, null);
+        saveLocal(`helper-selection:${owner.id}`, null);
         const value = { target: selected.target, title: selected.title, request: selected.text };
         setOutlineSelections((old) => ({ ...old, [owner.id]: value }));
-        saveLocal(`uimori:helper-outline:${owner.id}`, JSON.stringify(value));
+        saveLocal(`helper-outline:${owner.id}`, JSON.stringify(value));
       } else if (selected.kind === 'selection') {
         setOutlineSelections((old) => ({ ...old, [owner.id]: null }));
-        saveLocal(`uimori:helper-outline:${owner.id}`, null);
+        saveLocal(`helper-outline:${owner.id}`, null);
         const value: HelperSelection = {
           sourceId: selected.sourceId,
           sourceHash: selected.sourceHash,
           text: selected.text,
         };
         setSelections((old) => ({ ...old, [owner.id]: value }));
-        saveLocal(`uimori:helper-selection:${owner.id}`, JSON.stringify(value));
+        saveLocal(`helper-selection:${owner.id}`, JSON.stringify(value));
       }
       if (selected.kind !== 'outline' || selected.target)
         setDrafts((old) => {
           if (!current()) return old;
-          const previous = old[owner.id] ?? local(`uimori:helper-input:${owner.id}`) ?? '';
+          const previous = old[owner.id] ?? local(`helper-input:${owner.id}`) ?? '';
           const text = selected.kind === 'selection' ? selectionRequest() : selected.text;
           const next = previous.trim()
             ? selected.kind === 'draft'
               ? `${previous}\n\n${text}`
               : previous
             : text;
-          saveLocal(`uimori:helper-input:${owner.id}`, next);
+          saveLocal(`helper-input:${owner.id}`, next);
           return { ...old, [owner.id]: next };
         });
       selectSession(owner);
@@ -1249,7 +1247,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         });
       if (!request.retryOf && sameDraft)
         setDrafts((old) => {
-          const existing = old[owner] ?? local(`uimori:helper-input:${owner}`) ?? '';
+          const existing = old[owner] ?? local(`helper-input:${owner}`) ?? '';
           if (existing !== text) return old;
           void clearHelperRecoveryIf(`helper-input:${owner}`, text).catch(() => {});
           return { ...old, [owner]: '' };
@@ -2516,7 +2514,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                     disabled={!hydrated[scopeKey]}
                     onClick={() => {
                       setOutlineSelections((old) => ({ ...old, [scopeKey]: null }));
-                      saveLocal(`uimori:helper-outline:${scopeKey}`, null);
+                      saveLocal(`helper-outline:${scopeKey}`, null);
                       if (draft === selectedOutline.request) editDraft('');
                     }}
                   >
@@ -2586,7 +2584,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                     onClick={() => {
                       if (draft === selectionRequest()) editDraft('');
                       setSelections((old) => ({ ...old, [scopeKey]: null }));
-                      saveLocal(`uimori:helper-selection:${scopeKey}`, null);
+                      saveLocal(`helper-selection:${scopeKey}`, null);
                     }}
                   >
                     <X size={14} aria-hidden="true" />

@@ -18,8 +18,6 @@ test('STORE01 startup removes unknown app keys but keeps unsent work, registered
   const chat = await createChat(request, `저장소 정리 ${Date.now()}`);
   const kept = {
     [`reading:${chat.id}`]: JSON.stringify({ source: 's', anchor: 'a', offset: 0, top: 0 }),
-    'uimori:helper-outbox:legacy-conversation': JSON.stringify({ text: '보내지 못한 요청' }),
-    'uimori:helper-input:legacy-conversation': '보내지 못한 초안',
     'uimori:helper-create:{"kind":"library","workId":"workspace"}': JSON.stringify({
       scope: { kind: 'library', workId: 'workspace' },
       requestKey: 'pending',
@@ -33,6 +31,7 @@ test('STORE01 startup removes unknown app keys but keeps unsent work, registered
       for (const [key, value] of Object.entries(kept)) localStorage.setItem(key, value);
       localStorage.setItem('uimori:retired-probe', 'x'.repeat(1024));
       localStorage.setItem('uimori-retired-view', '{}');
+      localStorage.setItem('uimori:helper-input:retired-conversation', '예전 초안');
       localStorage.setItem('reading:deleted-elsewhere', '{}');
       sessionStorage.setItem(`draft:${chatId}`, '세션에 남은 요청 초안');
     },
@@ -45,6 +44,7 @@ test('STORE01 startup removes unknown app keys but keeps unsent work, registered
   const keys = await localKeys(page);
   expect(keys).not.toContain('uimori:retired-probe');
   expect(keys).not.toContain('uimori-retired-view');
+  expect(keys).not.toContain('uimori:helper-input:retired-conversation');
   const stored = await page.evaluate(
     (names) => Object.fromEntries(names.map((key) => [key, localStorage.getItem(key)])),
     Object.keys(kept).filter((key) => !key.startsWith('reading:'))

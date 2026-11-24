@@ -139,15 +139,15 @@ test('the startup sweep removes only unregistered keys in the app namespaces of 
     [storageKeys.chatFolders('b1')]: '{"b1:":true}',
     [storageKeys.helperCreate('{"kind":"library"}')]: '{"requestKey":"k"}',
     [storageKeys.helperCopy('h1')]: '{"requestKey":"k"}',
-    'uimori:helper-outbox:legacy': '{"text":"unsent"}',
-    'uimori:helper-input:legacy': 'unsent text',
-    'uimori:helper-artifact-draft:a:1': '{}',
     'other-app:setting': '1',
     'test-helper-read-fails': '1',
   };
   for (const [key, value] of Object.entries(kept)) local.setItem(key, value);
   for (const key of [
     'uimori:editor-buffer:content:a',
+    'uimori:helper-outbox:retired',
+    'uimori:helper-input:retired',
+    'uimori:helper-artifact-draft:a:1',
     'uimori:helper-sidebar-width',
     'uimori:unknown-setting',
     'uimori.provider-registration.request-key',
@@ -167,7 +167,6 @@ test('unsent work and recovery receipts are registered and therefore never swept
       'uimori:helper-create:',
       'uimori:helper-copy:',
       'uimori:helper-project-create:',
-      'uimori:helper-outbox:',
       'command:',
       'draft:',
       'queued-request:',
