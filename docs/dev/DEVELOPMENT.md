@@ -138,7 +138,12 @@ Browser reports record the build identity checked before launch; tooling reports
 
 The Docker build context contains the compiler inputs, runtime vendor files, licenses, the Markdown files directly under `docs/` and the four scripts used by the build runner. The build fails when no guide is present, so a context that drops them cannot produce an image without `guide.read` content. Tests, fixtures and unrelated verification scripts are excluded, so edits to them do not invalidate the Docker compile layer. Check image startup and cache behavior on a Docker host when changing this boundary; a local Node build alone does not verify Docker packaging.
 
-Actual local Risu materials are excluded from ordinary browser discovery. Set `UIMORI_RISU_SAMPLE_ROOT` for `node scripts/verify-risu-native-samples.mjs`, optionally `UIMORI_RISU_SAMPLE_PRESET` for an external `.risup`, and use `--grep` to focus cases. Source materials remain read-only; private rendered artifacts stay in ignored output directories. These loopback fixture checks do not establish live-provider quality or universal script compatibility.
+Actual local Risu materials are excluded from ordinary browser discovery. Set `UIMORI_RISU_SAMPLE_ROOT` for `node scripts/verify-risu-native-samples.mjs`, optionally `UIMORI_RISU_SAMPLE_PRESET` for an external `.risup`, and use `--grep` to focus cases; `--visual` writes private rendered screenshots under the git-ignored output folder without storing HTTP-body traces. For Vitest local compatibility checks without logging prose, pass a JSON array of CHARX paths in `UIMORI_RISU_LOCAL_CARDS` (with optional `UIMORI_RISU_SAMPLE_PRESET`) and run `tests/risu-native-local-compatibility.test.ts`. Source materials remain read-only; these loopback fixture checks do not establish live-provider quality or universal script compatibility.
+
+Other opt-in local verification variables:
+
+- `UIMORI_CODEX_PREFLIGHT=1` with `npx vitest run tests/codex-installed.test.ts`: checks the installed Codex CLI version, empty auth state, and `generate-json-schema --experimental` (`dynamicTools` function shape, `item/tool/call`, text tool responses) in a fresh empty auth directory with no login or model calls, writing `output/codex-preflight/summary.json`.
+- `UIMORI_NARRATIVE_DEMO_DIR` with `npm run verify:narrative-themes`: points to a local directory holding `bot.webp` (2:3) and `persona.webp` (1:1) for personal visual inspection against an isolated synthetic server (output stays in git-ignored `output/`; omit it to use deterministic synthetic images).
 
 ### Risu Lua upstream changes
 
