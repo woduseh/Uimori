@@ -1,10 +1,10 @@
 # Helper tools and runtime invariants
 
-Developer-only technical specifications extracted verbatim from `docs/HELPER-TOOLS.md`, `docs/HELPER-ATTACHMENTS.md`, and `docs/DIAGNOSTICS.md`.
+Developer-only technical specifications for the helper tools, attachments, and execution diagnostics.
 
-## 기술 명세 (English)
+## Overview
 
-아래 내용은 에이전트와 기여자를 위한 기록이에요. 도구의 인자·한도·결과 같은 계약은 모델이 받는 도구 설명과 입력 스키마, 그리고 테스트에 있어요. 여기에는 그 코드가 말해 주지 않는 것만 적어요.
+The text below is for agents and contributors. Tool arguments, limits, and result contracts live in the model-facing tool descriptions, input schemas, and tests; this document records only what that code does not state.
 
 The helper's provider-facing tools are `app.tools` and `app.call`, plus `data.exec` when `UIMORI_SHELL_ROOT` configures the Linux runner; `server/helper-runtime.ts` assembles them for each request. Everything else, including `data.search`, `data.read` and `db.query`, is an app operation registered in `server/helper-app-tools.ts` and reached through those gateways or the `uimori call` CLI. [CODE-MAP](CODE-MAP.md) lists the entry points per feature, and each section below names the files that define and test its operations.
 
@@ -14,7 +14,7 @@ Constraints on changing the helper's tools:
 - An explicit outline review is read-only. `data.exec` is not offered, and both discovery and `app.call` use the `reviewAllowed` allowlist in `helperToolTraits`, which is narrower than the set of read-only operations.
 - Safety does not depend on the order of calls. Discovery and confirmation rereads are optional steps; revision checks, unsaved-draft protection and uncertain-write handling are enforced where a save happens.
 - For non-Codex helper and advisor requests without an authored prompt, `core/provider-messages.ts` sends unchanged `history` and `catalog` in a first user-content block so that follow-up requests share a prefix (`tests/provider-reference-context.test.ts`). No context is dropped or promoted to system instructions. A shared prefix is not a measured cache hit; anchors and actual reuse are covered in [model cache settings](../MODEL-PARAMETERS.md#캐시-위치자동-배치유지-시간).
-- A Codex helper registers the same tools as native dynamic tools and runs one task in one thread and turn; see [App Server 통신 및 턴 라이프사이클](PROVIDERS-AND-CODEX.md#app-server-통신-및-턴-라이프사이클).
+- A Codex helper registers the same tools as native dynamic tools and runs one task in one thread and turn; see [App Server communication and turn lifecycle](PROVIDERS-AND-CODEX.md#app-server-communication-and-turn-lifecycle).
 
 Outside the helper's tools:
 
@@ -204,7 +204,7 @@ Constraints on changing these operations:
 
 Outside these operations:
 
-- The editor target. [로컬 복구 저장소](APP-INVARIANTS.md#로컬-복구-저장소-indexeddb) describes how a saved reference or an unsaved draft is captured at admission, and the target is context, not a permission boundary ([도우미와 과거 가정 장면](../USAGE.md#도우미와-과거-가정-장면)). The prompt library card action **도우미에게 묻기** sets a saved reference for the next request without changing the scope of the library conversation; opening a prompt editor, leaving the prompt library or clearing the target removes it.
+- The editor target. [Local recovery storage (IndexedDB)](APP-INVARIANTS.md#local-recovery-storage-indexeddb) describes how a saved reference or an unsaved draft is captured at admission, and the target is context, not a permission boundary ([도우미와 과거 가정 장면](../USAGE.md#도우미와-과거-가정-장면)). The prompt library card action **도우미에게 묻기** sets a saved reference for the next request without changing the scope of the library conversation; opening a prompt editor, leaving the prompt library or clearing the target removes it.
 - Reader selections. **도우미에게 물어보기** sends the whole selected passage as the task's `selection`, not as a search result. `tests/helper-workspace.test.ts` and `tests/helper-browser.spec.ts` enforce how it is kept whole and reused in later turns.
 
 ## Editing saved scenes
@@ -277,37 +277,37 @@ Constraints on changing these operations:
 
 - `helperToolTraits` in `server/helper-app-tools.ts` is the one policy for read or write classification, outline-review availability, [plan mode](#plan-mode) refusal and writing-snapshot needs. Metadata reads, renames, lore operations and outline navigation stay out of its `writing` set, so an explicit `chatId` does not prepare a snapshot they would not use.
 - Each definition in `server/helper-resource-tools.ts` declares whether the operation reads or mutates and which resources a mutation targets. Draft protection, operation receipts, undo tracking and resource update events all use that declaration; a new resource mutation declares its targets there instead of in a second list. The declaration is stripped from the schema the model receives.
-- Resource operations add no save path. Revision checks, final validation, regenerated projections and the single retained undo belong to `saveResource` in `server/resource-service.ts`, which the editor also uses, and `resource.clone` shares `cloneResource` with `POST /api/resources/clone` and library list copies. See [동시성 제어와 멱등성 보장](APP-INVARIANTS.md#동시성-제어와-멱등성-보장).
+- Resource operations add no save path. Revision checks, final validation, regenerated projections and the single retained undo belong to `saveResource` in `server/resource-service.ts`, which the editor also uses, and `resource.clone` shares `cloneResource` with `POST /api/resources/clone` and library list copies. See [Concurrency control and idempotency guarantees](APP-INVARIANTS.md#concurrency-control-and-idempotency-guarantees).
 - The `editTarget` hints of `data.search` and `data.read` and the validation of `resource.patch` read the same `server/helper-native-protected-fields.json` and `server/helper-resource-path-policy.json`: protected field names, preset paths and JSON Pointer limits. Change them together. The limits apply to the full editing path, including the native-content prefix.
 - Model arguments never carry mutation identity. The host derives it from the task and the provider call ID and passes it separately; a new call ID is a new operation. Authorization and the shape of the final reply are stated once in the helper contract (`CONTRACT` in `server/helper-runtime.ts`), not per operation. See [Mutations](TOOL-CONTRACTS.md#mutations) and [Names, descriptions and parameters](TOOL-CONTRACTS.md#names-descriptions-and-parameters).
 - The provider tool list stays fixed throughout a continuation; see [Provider continuation state](TOOL-CONTRACTS.md#provider-continuation-state).
 - Native tool history keeps the `app.call` envelope, `name` and `arguments`, as the provider sent it. Read or write classification, compaction and the activity view use the inner operation.
 - `HELPER_READ_TOO_LARGE` replaces only a read result that cannot fit the selected model's input budget; the result is withheld, not truncated. The dispatcher adds no fixed per-read or per-round token cap: accumulated reads go through context compaction. A result that carries a confirmed write is never replaced.
-- Composer recovery lives in `web/helper-recovery.ts`, enforced by `tests/helper-recovery.test.ts`, `tests/helper-recovery-browser.spec.ts` and `tests/helper-browser.spec.ts`. A read failure is not an empty store and must not overwrite the saved draft, selection, outline selection or unacknowledged request. An accepted request is cleared only while the stored value is still that request, and a cleanup or view-refresh failure after acceptance is not a failed send. See [로컬 복구 저장소](APP-INVARIANTS.md#로컬-복구-저장소-indexeddb).
-- Conversation creation, conversation copy and project creation share `web/helper-pending-request.ts` for request identity, storage precedence and matched cleanup; see [새 도우미 세션 생성](#새-도우미-세션-생성).
+- Composer recovery lives in `web/helper-recovery.ts`, enforced by `tests/helper-recovery.test.ts`, `tests/helper-recovery-browser.spec.ts` and `tests/helper-browser.spec.ts`. A read failure is not an empty store and must not overwrite the saved draft, selection, outline selection or unacknowledged request. An accepted request is cleared only while the stored value is still that request, and a cleanup or view-refresh failure after acceptance is not a failed send. See [Local recovery storage (IndexedDB)](APP-INVARIANTS.md#local-recovery-storage-indexeddb).
+- Conversation creation, conversation copy and project creation share `web/helper-pending-request.ts` for request identity, storage precedence and matched cleanup; see [Creating a new helper session](#creating-a-new-helper-session).
 
 Outside these operations:
 
 - Complete models. Bounded pages and compact receipts apply to helper reads and results only; UI, backup and export APIs keep returning complete models, and stored chat-lore undo and conflict data stay complete.
 - Replacing arbitrary objects or a root with `resource.patch`. `set` takes a scalar or an array of scalars, apart from the three whole values its description names.
-- A history of library resources. One previous save is retained per resource, and cloned presets are not kept synchronized; see [도우미 부분 수정 및 문자열 치환 알고리즘](APP-INVARIANTS.md#도우미-부분-수정-및-문자열-치환-알고리즘).
+- A history of library resources. One previous save is retained per resource, and cloned presets are not kept synchronized; see [Helper partial edits and string replacement algorithm](APP-INVARIANTS.md#helper-partial-edits-and-string-replacement-algorithm).
 - Independent-scene generation and editing. There is no `artifact.generate` operation and no `PATCH /api/helper/artifacts/:id` route; `artifact.read` and `GET /api/helper/artifacts/:id?revision=N` only read saved revisions. A different story direction uses `chat.fork` and then normal chat writing, which `scene.request` can send. Forking does not start generation.
 - New device-local artifact edit drafts. Drafts saved earlier stay readable and copyable in the artifact card, and they are removed only together with their conversation's local recovery data.
 - Sending a recovered request automatically after a reload.
 
-## 새 도우미 세션 생성
+## Creating a new helper session
 
-생성 요청의 임시 보관은 `web/helper-pending-request.ts`가 맡고, 대화 복사와 프로젝트 생성도 같은 함수를 써요. 저장소 순서, 재시도 키 재사용, 다른 탭 요청과의 분리, 새로고침이나 보관 실패 때 보내지 않는 동작은 `tests/helper-pending-request.test.ts`, `tests/helper-sessions-browser.spec.ts`, `tests/helper-workspace-browser.spec.ts`가 확인해요. 여기에는 그 밖의 것만 적어요.
+Temporary storage for creation requests is owned by `web/helper-pending-request.ts`, and conversation copy and project creation share the same function. Storage precedence, retry-key reuse, isolation from other tabs' requests, and not sending after a reload or storage failure are enforced by `tests/helper-pending-request.test.ts`, `tests/helper-sessions-browser.spec.ts`, and `tests/helper-workspace-browser.spec.ts`. This section records only what those files do not state.
 
-- 처음 보낸 요청이 확정 거절(408·429를 뺀 4xx)되면 보관한 요청을 지워요. 복원해서 다시 보낸 요청은 거절되어도 남기고 성공했을 때만 지워요.
-- 보관할 자리를 만들려고 다른 초안이나 설정을 삭제하지 않아요.
-- `sessionStorage`에만 보관된 요청은 탭을 닫으면 복구되지 않을 수 있어요.
+- When a first-sent request receives a definite rejection (4xx other than 408 or 429), the stored pending request is removed. A request re-sent after recovery is kept even on rejection and is removed only after it succeeds.
+- Other drafts or settings are never deleted to make room for a stored request.
+- A request stored only in `sessionStorage` may not be recoverable after the tab is closed.
 
-## 도우미 대화와 과거 분기
+## Helper conversations and past forks
 
-사용자에게 보이는 동작은 [도우미와 과거 가정 장면](../USAGE.md#도우미와-과거-가정-장면)이 안내해요. `helper_seed_messages`는 과거 분기 대화와 **대화 복사**(`server/helper-workspace.ts`의 `copy`)가 함께 쓰는 대화문 저장소이고, 읽기·이력·수정·삭제는 `tests/helper-workspace.test.ts`가 확인해요.
+User-facing behavior is covered in [Helper and past what-if scenes](../USAGE.md#도우미와-과거-가정-장면). `helper_seed_messages` is the shared message store used by past-forked conversations and **대화 복사** (conversation copy, `copy` in `server/helper-workspace.ts`); reading, history, editing, and deletion are enforced by `tests/helper-workspace.test.ts`.
 
-seed 대화문은 역할·본문·첨부만 담아요. 이전 모델 시도·사용량·도구 실행·변경 영수증은 옮기지 않으므로 다시 실행하지 않고, 이어지는 작업은 필요한 자료의 현재 저장 상태를 새로 읽어요.
+Seed messages store only role, text, and attachments. Earlier model attempts, usage, tool executions, and change receipts are not copied and are never re-executed; follow-up tasks read the current saved state of needed resources freshly.
 
 ## Activity and additions to a running task
 
@@ -453,7 +453,7 @@ Other documents own the rules:
 - Manual conversation compaction: [수동 정리와 요약 편집](../CONTEXT-LIMITS.md#수동-정리와-요약-편집).
 - What a finished helper task keeps and what the browser refresh reads: [도우미 기록과 화면 전환](../EXECUTION.md#도우미-기록과-화면-전환).
 - Attempt and tool diagnostics, their retention and the helper usage summary: [문제 확인과 실행 상세](../DIAGNOSTICS.md).
-- The native Codex turn, its instructions, call limits and token usage: [App Server 통신 및 턴 라이프사이클](PROVIDERS-AND-CODEX.md#app-server-통신-및-턴-라이프사이클).
+- The native Codex turn, its instructions, call limits and token usage: [App Server communication and turn lifecycle](PROVIDERS-AND-CODEX.md#app-server-communication-and-turn-lifecycle).
 - Reading local estimates, provider usage and preparation and compaction timings: [Evidence and metrics](HELPER-EVALUATION.md#evidence-and-metrics).
 
 What those documents and tests leave out:
@@ -505,52 +505,52 @@ Each host read states its page defaults in its input schema, and [Units and mode
 
 ## Helper attachments
 
-도우미는 사용자가 새로 첨부하지 않아도 저장된 CHARX·콘텐츠 이미지를 `image.list`로 찾고 `image.read`로 볼 수 있어요. 필요한 이미지만 전송하며, 원본은 변경하지 않아요. 전송용 사본은 최대 2048px·2MiB이고 애니메이션은 첫 프레임만 제공해요. 이 조회는 저장된 라이브러리 자료를 기준으로 하며, 미저장 편집기 입력이나 과거 채팅의 고정된 이미지 버전을 대신하지 않아요. 조회 이미지의 수명과 연결별 전달 방식은 [도우미 이미지 도구](../HELPER-TOOLS.md#stored-content-images)를 참고하세요.
+The helper can locate stored CHARX and content images with `image.list` and inspect them with `image.read` without the user re-attaching them. Only needed images are sent, and originals are never modified. The sent copy is capped at 2048px and 2MiB, and animations send only the first frame. This lookup uses current saved library data and does not substitute for unsaved editor input or pinned image versions of older chats. Image lifetime and per-connection delivery are covered in [Stored content images](../HELPER-TOOLS.md#stored-content-images).
 
-- `core/request-files.ts`: 형식, 한도, 연결별 입력 정책
-- `core/provider-file-reference.ts`, `core/provider-files.ts`: 명시적으로 첨부한 참조만 실제 전송 바이트로 변환
-- `server/request-files.ts`, `server/request-file-storage.ts`: 업로드 확인, 형식 검사, 원본 보관과 다운로드
-- `server/helper-attachments.ts`, `server/helper-attachment-prompt.ts`: 메시지 소유권, 정리와 모델 입력 구성
-- `web/helper-attachment-draft.ts`: 대화별 첨부 초안과 전송 확인
-- `web/attachment-draft-storage.ts`: 본문·도우미 초안의 첨부 파일을 IndexedDB에 한 번씩 저장하고 초안 세대와 함께 복구
+- `core/request-files.ts`: formats, size limits, and per-connection input policies.
+- `core/provider-file-reference.ts`, `core/provider-files.ts`: convert only explicitly attached references into actual transmitted bytes.
+- `server/request-files.ts`, `server/request-file-storage.ts`: upload verification, format validation, original storage, and download.
+- `server/helper-attachments.ts`, `server/helper-attachment-prompt.ts`: message ownership, cleanup, and model input assembly.
+- `web/helper-attachment-draft.ts`: per-conversation attachment drafts and send confirmation.
+- `web/attachment-draft-storage.ts`: stores composer and helper attachment drafts once in IndexedDB and recovers them with the draft generation.
 
-일반 문자열이나 도구 출력에 파일 참조처럼 보이는 문자열이 있어도 저장 파일을 읽을 권한이 생기지 않아요. 이미지 도구는 서버가 소유 자료를 확인한 이미지 참조만 별도로 등록해요. 다운로드는 인증된 앱 경로에서 attachment 응답으로 제공해요.
+Strings that resemble file references inside ordinary text or tool output never grant permission to read stored files. Image tools register only image references whose ownership the server has verified. Downloads are served as attachment responses from authenticated app routes.
 
 ## Execution diagnostics and retention
 
-- **실행 데이터 수명 주기**:
-  - 실행 중에는 요청 입력과 도구 결과 전문이 필요해요.
-  - 본문·보조·도우미 작업이 성공하면 해당 경로의 큰 모델 입력과 누적 기록을 정리하고 상태, 역할, 모델, 사용량 등의 요약만 남겨요.
-  - 원문, 메모, 변수, Lua 메시지 변경사항과 현재 로어 상태는 다음 이어쓰기에 필요한 자료이므로 별도로 보관해요. [실행 데이터 수명](../EXECUTION.md)
-- **`attempts` 모델 호출 기록**:
-  - 모델 호출은 공통 attempt 기록에 시작·종료 시각, 관측한 경과 시간, 역할, 모델, 사용량, 오류를 남겨요.
-  - 본문, 조언자(협업), 번역, 컨텍스트 요약, 원작 참고, 삽화의 계획·이미지·배치, 입력 번역·선택 수정, 제목과 네이티브 Risu 모델 호출이 이 공통 경계를 사용해요.
-  - Codex 사전 내용 판정도 `codex-content-preflight`로 구분한 실제 판단 호출로 집계하며, 입력 번역이나 선택 수정과 마찬가지로 원문이나 미저장 초안은 보관하지 않아요.
-  - 호출 시작 후 예외로 끝난 시도는 확인 불가 결과로 마감하고 임의로 재호출하지 않아요.
-  - 스트리밍 호출은 요청 시작부터 응답 헤더(`firstByteMs`), 첫 공개 글자(`firstTextMs`), 첫 생각 이벤트(`firstThoughtMs`)까지의 시간과 스트림 길이, 요청·응답 바이트를 같은 진단에 더해요. 값을 알 수 없는 경로(Codex, Anthropic Batch, 스트리밍이 아닌 응답, 검색을 쓰는 Vertex 호출의 첫 글자)는 해당 필드를 비워 두고 추정값을 넣지 않아요. 호출 사이 간격은 저장하지 않고 `scripts/perf-ledger.mjs`가 시각으로 계산해요.
-- **본편 실행 단계 시간 (`runs.snapshot.phaseSpans`)**:
-  - 본편 실행이 끝날 때 단계별 경과 시간(ms)을 한 번 기록해요. 실패하거나 취소된 실행도 지나온 단계까지 남겨요.
-  - `advisorPrep`과 `preflightTokenize`는 `mainModel` 안에서 잰 값이라 단계 합계가 전체 시간과 같지 않아요. `preflightTokenize`는 본편 호출의 요청 크기 추정만 세고, 전송 계층의 예산 확인은 `mainModel`에 들어 있어요.
-  - 판정만 다시 수행하는 복구 실행은 원래 실행에서 복사된 값을 자기가 수행한 단계로 바꿔요.
-- **호스트 도구 진단 (`execution_tool_diagnostics`)**:
-  - 도구 실행 전: 호출 식별자, 종류, 제한된 인자 미리보기(가림 처리됨)와 해시를 기록해요.
-  - 도구 실행 후: 관측한 상태, 시간, 오류, 결과 크기로 레코드를 갱신해요.
-  - 셸 도구: 프로세스 종료 코드, 타임아웃 여부, 출력 바이트 수와 잘림 여부를 구별해서 기록해요.
-  - 저장 위치: 본문, 조언자, 원작 참고, 번역, 삽화의 기록은 `execution_tool_diagnostics` 테이블에 남고, 도우미는 기존 `helper_events` 테이블에 남아요.
-  - 완료 후 정리: 성공 후 큰 재실행용 입력과 도구 결과를 정리해도 작은 진단 메타데이터는 유지돼요. 호출 시작 기록만 있으면 관측이 중단된 것으로 읽고, 변경이 없었다고 자의적으로 판단하지 않아요. 완료 영수증과 진단 기록은 별개예요.
-- **네이티브 Codex 내부 활동 기록**:
-  - 네이티브 Codex의 검색, 계획, 대기, 이미지 활동은 종류·ID·상태·시각을 최대 64개까지 기록해요. 문맥 압축은 별도로 최대 16개까지 기록하고 초과 개수를 남겨요.
-  - 비공개 추론, 검색 내용, 결과 본문과 앱에서 이미 기록한 동적 도구는 중복 보관하지 않아요. 내부 모델 호출 수가 보고되지 않으면 미확인으로 유지돼요. 프로세스가 기록을 전달하기 전에 종료되면 그 내부 활동은 복원할 수 없어요.
-- **도우미 진단 조회 계약 (`task.inspect`)**:
-  - `task.inspect`에 `includeDiagnostics: true`를 지정하면 본문·보조 작업·삽화·도우미의 호출과 도구 진단을 각각 최대 20개씩 조회해요.
-  - 다음 페이지는 `attemptsOffset`과 `toolsOffset`으로 열어요.
-  - 캐시 및 추론 토큰과 Codex 내부 활동의 종류별·상태별 개수도 보고된 범위에서 보여줘요. Codex의 개별 내부 활동 세부사항은 DB의 attempt raw usage에 보존돼요.
-  - 수동 컨텍스트 요약의 attempt는 `context_job_attempts` 테이블로 연결되며, 기존 `task.inspect`의 작업 종류에는 별도 수동 요약이 포함되지 않아요. 파라미터 없는 기본 조회는 계속 작은 요약을 반환해요.
-- **진단 데이터 보관 및 정리 경계**:
-  - 진단 데이터를 모델 입력 프롬프트에 자동으로 추가하지 않아요.
-  - 인자 미리보기는 길이 제한 및 가림 처리가 되어 있어 원본을 재구성할 수 없어요. (자격증명 패턴을 가렸더라도 개인 자료의 일부가 포함될 수 있어요.)
-  - 진단 데이터는 부모 작업 및 채팅 삭제와 자료 삭제 정리를 따르며, 전체 작업실 SQLite DB 백업에 포함돼요.
-  - 특정 장면을 삭제하면 해당 채팅의 도우미 인자 미리보기도 함께 정리해요. 완료된 작업의 입력은 이미 비워져 어느 장면을 참조했는지 확정할 수 없으므로 채팅 단위로 정리하되 호출 식별자·해시·시간·결과·사용량 숫자는 보존해요. 이전 실행에 없던 시각, 인자, 도구 기록을 사후에 임의로 만들어 넣지 않아요.
-- **관련 테스트**:
-  - `tests/provider-http-error.test.ts` 및 `tests/provider-rejection.test.ts`: 합성 환경에서 제한된 HTTP 오류 읽기, 인증 문자열 가림, 오류 전달 검증.
-  - 환경 실행 문제 확인 절차는 [개발과 검증](DEVELOPMENT.md) 문서를 참고해요.
+- **Execution data lifecycle**:
+  - Full request inputs and tool results are needed while execution is running.
+  - Once a main, auxiliary, or helper task succeeds, large model inputs and accumulated payloads on that path are pruned, leaving compact summaries such as status, role, model, and usage.
+  - Originals, notes, variables, Lua message changes, and current lore state are retained separately because subsequent turns depend on them; see [Execution input lifetime](../EXECUTION.md).
+- **`attempts` model call records**:
+  - Every model call records start/end timestamps, observed elapsed time, role, model, usage, and error in the shared attempt ledger.
+  - Main writing, advisors (collaboration), translation, context summary, original-work reference, illustration planning/imaging/placement, input translation, selection revision, title generation, and native Risu model calls all share this boundary.
+  - Codex pre-generation content checks are recorded as real judgment calls under `codex-content-preflight` and, like input translation and selection revision, do not retain originals or unsaved drafts.
+  - An attempt that terminates with an exception after starting is closed with an unknown outcome and is never re-sent automatically.
+  - Streaming calls add elapsed times from request start to response headers (`firstByteMs`), first public character (`firstTextMs`), and first thought event (`firstThoughtMs`), plus stream length and request/response bytes, to the same diagnostic record. Paths where a value cannot be observed (Codex, Anthropic Batch, non-streaming responses, and first text on Vertex calls using search) leave those fields empty rather than inserting estimates. Inter-call gaps are not stored; `scripts/perf-ledger.mjs` computes them from timestamps.
+- **Main run phase timings (`runs.snapshot.phaseSpans`)**:
+  - Per-phase elapsed milliseconds are written once when a main run finishes; failed or cancelled runs retain phases reached so far.
+  - `advisorPrep` and `preflightTokenize` are measured inside `mainModel`, so phase spans do not sum to total elapsed time. `preflightTokenize` measures only the main-call request size estimate; transport-layer budget checks belong inside `mainModel`.
+  - A recovery run that replays only judgment replaces only the phases it executed over the values copied from the original run.
+- **Host tool diagnostics (`execution_tool_diagnostics`)**:
+  - Before tool execution: records call identifier, kind, bounded redacted argument preview, and hash.
+  - After tool execution: updates the record with observed status, timing, error, and result size.
+  - Shell tool: distinguishes process exit code, timeout flag, output byte count, and truncation flag.
+  - Storage split: main, advisor, original-work reference, translation, and illustration tool records live in `execution_tool_diagnostics`; helper tool records live in `helper_events`.
+  - Post-completion retention: pruning large replay inputs and tool outputs after success keeps compact diagnostic metadata. A start-only record means observation stopped and must not be interpreted as proof that no change happened; completion receipts and diagnostic records are separate.
+- **Native Codex internal activity records**:
+  - Records up to 64 native Codex search, planning, waiting, and image activities with kind, ID, status, and timestamp. Context compactions are recorded separately up to 16 entries with an overflow count.
+  - Private reasoning, search queries, result bodies, and dynamic tools already recorded by the app are not duplicated. Unreported internal model call counts remain unknown. If the process terminates before delivering records, internal activity cannot be reconstructed.
+- **Helper diagnostic lookup contract (`task.inspect`)**:
+  - Passing `includeDiagnostics: true` to `task.inspect` returns up to 20 attempts and 20 tool diagnostics each for main, auxiliary, illustration, and helper tasks.
+  - Subsequent pages use `attemptsOffset` and `toolsOffset`.
+  - Cache and reasoning tokens and native Codex internal activity counts by kind/status are shown when reported; individual Codex internal activity details remain in the attempt's DB raw usage.
+  - Manual context summary attempts link through `context_job_attempts` and are not listed as a separate task kind in `task.inspect`. Default calls without parameters continue to return a compact summary.
+- **Diagnostic retention and cleanup boundaries**:
+  - Diagnostic data is never injected automatically into model input prompts.
+  - Argument previews are bounded and redacted so originals cannot be reconstructed (even after credential redaction, snippets of personal data may remain).
+  - Diagnostic data follows parent task, chat, and resource deletion cleanup, and is included in full workspace SQLite DB backups.
+  - Deleting a specific scene also redacts helper argument previews for that chat: because completed task inputs are already pruned and cannot prove which scene a call referenced, previews are cleared at chat scope while keeping call identifiers, hashes, timestamps, outcomes, and usage numbers. Missing timestamps, arguments, or tool records are never fabricated retroactively for earlier runs.
+- **Related tests**:
+  - `tests/provider-http-error.test.ts` and `tests/provider-rejection.test.ts`: verify bounded HTTP error reading, credential redaction, and error forwarding under synthetic conditions.
+  - Environment troubleshooting procedures live in [DEVELOPMENT](DEVELOPMENT.md).

@@ -1,583 +1,605 @@
 # App storage, editing, outline, search, reading, PWA, I18N, themes and usage
 
-Developer-only technical sections extracted verbatim from `docs/DATA-MIGRATIONS.md`, `docs/DELETION.md`, `docs/AUTOMATIC-BACKUPS.md`, `docs/CHAT-BACKUP.md`, `docs/CHAT-TRANSCRIPT.md`, `docs/NATIVE-TRANSFER.md`, `docs/EDITING.md`, `docs/OUTLINE.md`, `docs/STORY-GUIDE.md`, `docs/STORY-UI.md`, `docs/MANUSCRIPT-SEARCH.md`, `docs/READING.md`, `docs/READING-STATE.md`, `docs/TURN-ACTIVITY.md`, `docs/PWA.md`, `docs/I18N.md`, `docs/THEME-AUTHORING.md`, `docs/USAGE-REPORT.md`, `docs/SELF-HOST.md`, and `docs/UPDATES.md`.
+Developer-only technical sections extracted from `docs/DATA-MIGRATIONS.md`, `docs/DELETION.md`, `docs/AUTOMATIC-BACKUPS.md`, `docs/CHAT-BACKUP.md`, `docs/CHAT-TRANSCRIPT.md`, `docs/NATIVE-TRANSFER.md`, `docs/EDITING.md`, `docs/OUTLINE.md`, `docs/STORY-GUIDE.md`, `docs/STORY-UI.md`, `docs/MANUSCRIPT-SEARCH.md`, `docs/READING.md`, `docs/READING-STATE.md`, `docs/TURN-ACTIVITY.md`, `docs/PWA.md`, `docs/I18N.md`, `docs/THEME-AUTHORING.md`, `docs/USAGE-REPORT.md`, `docs/SELF-HOST.md`, and `docs/UPDATES.md`.
 
 ## Personal workspace schema 15 and startup upgrades
 
-서버는 DB를 열 때마다 한 트랜잭션에서 이전 모양으로 남은 행만 현재 모양으로 바꿔요(`server/stored-shape-upgrades.ts`). 수정 번호는 바꾸지 않고, 이미 현재 모양인 행은 다시 쓰지 않아요. 전체 백업에서 복원한 DB도 처음 열 때 같은 정리를 거쳐요.
+Every time the server opens the DB, it upgrades only rows still in a legacy shape to the current shape in a single transaction (`server/stored-shape-upgrades.ts`). It does not change revision numbers, and it does not rewrite rows that are already in the current shape. A DB restored from a full backup goes through the same normalization the first time it is opened.
 
-- **자동 제목 등록 언어**: 언어 대신 채팅 ID가 저장된 `chat.title.eligible` 기록은 한국어(`ko`)로 바꿔요.
-- **도우미 확인 인자**: 더 이상 확인할 수 없는 보류 호출과, 끝났거나 다시 시도한 작업이 받은 확인 호출에서 호출 인자를 지워요([도우미 도구](../HELPER-TOOLS.md#confirmation-before-destructive-or-bulk-operations)).
-- **도우미 한도와 입력 측정**: 대화 한도와 작업 스냅샷 한도의 `artifacts`를 지우고, `inputTokenLimit`가 없는 입력 측정 기록에는 작업 스냅샷의 모델 한도가 있으면 복사해요.
-- **삽화 설정·프리셋·참고 이미지·작업 입력**: [삽화 프리셋](../DATA-MIGRATIONS.md#삽화-프리셋)과 [문단 삽화](../DATA-MIGRATIONS.md#문단-삽화)에 적은 대로 채워요.
-- **평가 도구 폐지 설정**: 모델 프리셋의 `evaluationTools`에서 `maximumToolRounds`·`terminalLateCorrections`·`outputRecovery`를 지워요. 이후 이 필드가 있는 평가 설정은 저장과 검증 모두에서 거부돼요.
-- **이전 채팅 복사 기록**: 복사 명령이 기록되지 않은 이전 복사 기록은 고치지 않고 더 이상 복구에 쓰지 않아요. 그 기록의 요청 키로 다시 복사하면 `CHAT_COPY_RECEIPT_UNVERIFIED`(409)를 안내하고 브라우저에 남은 요청 키를 지워서, 다음 시도는 새 사본을 만들어요.
+- **Auto-title registration language**: `chat.title.eligible` records that stored a chat ID instead of a language are converted to Korean (`ko`).
+- **Helper confirmation arguments**: Call arguments are cleared from pending calls that can no longer be confirmed and from confirmation calls received by finished or retried tasks ([Helper tools](HELPER-TOOLS.md#confirmation-before-destructive-or-bulk-operations)).
+- **Helper limits and input measurements**: Removes `artifacts` from conversation limits and task-snapshot limits, and copies the model limit from the task snapshot into input measurement records that lack `inputTokenLimit` when available.
+- **Illustration settings, presets, reference images and task inputs**: Backfilled as described in [Illustration presets](../DATA-MIGRATIONS.md#삽화-프리셋) and [Paragraph illustrations](../DATA-MIGRATIONS.md#문단-삽화).
+- **Removed evaluation tool settings**: Strips `maximumToolRounds`, `terminalLateCorrections`, and `outputRecovery` from model preset `evaluationTools`. Thereafter, evaluation configs containing these fields are rejected on both save and validation.
+- **Legacy chat copy records**: Older copy records without a recorded copy command are left unmodified and are no longer used for recovery. Retrying a copy with that record's request key returns `CHAT_COPY_RECEIPT_UNVERIFIED` (409) and clears the leftover request key in the browser so the next attempt creates a new copy.
 
-- **단일 헤드 및 분기 테이블 제거**:
-  - 채팅이 원문 머리와 실행 상태의 유일한 소유자이며, `branches` 테이블, `branch_id` 열, API의 `branchId`는 완전히 제거되었어요.
-  - 현재 머리 수정 번호는 `chats.head_revision` 한 곳에만 저장돼요.
-- **동시성 및 멱등성 보장**:
-  - 작업의 owner/generation 추적, 수정 번호 충돌(CAS) 방지, 취소 후 늦게 도착한 저장 차단, 요청 키에 따른 중복 실행 방지 메커니즘을 엄격히 유지해요.
-- **스키마 15 온디맨드 테이블**:
-  - `helper_seed_messages`: 과거 도우미 세션 분기로 복제된 대화문을 보존하기 위해 서버 시작 시 필요에 따라 자동 생성해요.
-  - `execution_tool_diagnostics`: 본문, 번역, 삽화 작업에 소유권을 연결한 경량 진단 메타데이터를 저장하기 위해 필요에 따라 생성해요. (기존 `tool_events`의 재실행 영수증을 대체하지 않아요.)
-  - `image_cleanup_candidates`: 활성 작업으로 인해 즉시 삭제할 수 없는 고아 이미지 해시를 보관하는 지연 정리 큐 테이블이에요.
-  - `helper_changes`: 도우미 작업과 대상마다 하나인 변경 기록이에요. 작업이 처음 손대기 전 상태(`baseline`)와 화면에 보낼 변경 항목(`entries`)을 담고, `helper_tasks` 삭제를 따라 지워져요. 턴 되돌리기가 이 `baseline`으로 복원하므로 대상 전체 상태를 보관해요. `result`는 작업이 마지막으로 남긴 상태의 해시, `foreign_edit`은 작업 도중 다른 쪽이 같은 대상을 저장했는지, `rolled_back_at`은 되돌린 시각이에요. 이 열이 생기기 전의 행은 `result`가 비어 있어 되돌리기 대상이 아니에요.
-  - `theme_assets`: 테마가 담은 글꼴과 이미지 원본을 해시로 보관해요. 저장된 테마와 그 되돌리기 사본, 보관 중인 도우미 변경 기록이 참조하는 동안 유지하고, 저장에 쓰이지 않은 업로드는 하루가 지난 뒤 서버 시작 시 정리해요. 사용자 글꼴(`font_assets`)이나 본문 이미지(`image_blobs`)와는 섞지 않아요.
-  - `search_trigrams`: 원고 검색의 trigram 색인이에요. 원고에서 다시 만들 수 있는 파생 데이터라 스키마 버전을 올리지 않고 서버 시작 시 필요에 따라 생성해요. 이전 색인(`search_fts`)에 남은 행은 색인 대기 작업이 없을 때 유휴 주기마다 조금씩 옮기고, 다 옮기면 `search_fts`를 비워요. 옮기는 도중과 이후의 검색 동작은 [MANUSCRIPT-SEARCH](../MANUSCRIPT-SEARCH.md)가 소유해요.
-- **메타데이터 키 규약 (`app_metadata`)**:
-  - `source-title:<sourceId>`: 선택적인 장면 이름 저장
-  - `illustration-presentation:<sourceId>`: 문단 삽화의 대표/표시 선택 및 번역 위치 보관
-  - `helper-read:v1:<conversationId>`: 도우미 대화에서 확인한 마지막 작업 결과 이벤트 순번. 새 키라서 기존 DB를 바꾸지 않아요.
-- **도우미 호출 한도 인터페이스**: `HelperLimits`는 `totalCalls`와 `helperCalls` 두 필드만 사용하며, 폐기된 `artifacts` 필드는 제외돼요.
+- **Single head and removal of branch tables**:
+  - Each chat is the sole owner of its manuscript head and execution state; the `branches` table, `branch_id` column, and API `branchId` have been completely removed.
+  - The current head revision number is stored in a single place: `chats.head_revision`.
+- **Concurrency and idempotency guarantees**:
+  - Strictly maintains task owner/generation tracking, revision-number CAS conflict prevention, blocking of late saves after cancellation, and request-key deduplication.
+- **Schema 15 on-demand tables**:
+  - `helper_seed_messages`: Created automatically on demand at server startup to preserve dialogue cloned from past helper session forks.
+  - `execution_tool_diagnostics`: Created on demand to store lightweight diagnostic metadata linked by ownership to main writing, translation, and illustration tasks (does not replace replay receipts in `tool_events`).
+  - `image_cleanup_candidates`: Deferred cleanup queue table holding hashes of orphan images that cannot be deleted immediately due to active tasks.
+  - `helper_changes`: One change record per helper task and target, storing the pre-edit state (`baseline`) and UI change items (`entries`), deleted alongside `helper_tasks`. Because turn rollback restores from `baseline`, it stores the full target state. `result` is the hash of the final state left by the task, `foreign_edit` records whether another party saved the same target during the task, and `rolled_back_at` is the rollback timestamp. Rows created before these columns existed have an empty `result` and are not eligible for rollback.
+  - `theme_assets`: Stores theme font and image originals by hash. Retained while referenced by a saved theme, its undo copy, or a retained helper change record; uploads unused by any save are cleaned up on server startup after one day. Kept separate from user fonts (`font_assets`) and body images (`image_blobs`).
+  - `search_trigrams`: Trigram index for manuscript search. Because it is derived data rebuildable from manuscripts, it is created on demand on server startup without bumping the schema version. Remaining rows in the legacy index (`search_fts`) are migrated in small chunks on idle ticks when no indexing work is pending, and `search_fts` is emptied once all rows are migrated. Search behavior during and after migration is owned by [MANUSCRIPT-SEARCH](../MANUSCRIPT-SEARCH.md).
+- **Metadata key conventions (`app_metadata`)**:
+  - `source-title:<sourceId>`: Stores optional scene names.
+  - `illustration-presentation:<sourceId>`: Stores representative/display selection and translation placement for paragraph illustrations.
+  - `helper-read:v1:<conversationId>`: Last seen task-result event sequence number for a helper conversation. Because it is a new key, it requires no existing DB migration.
+- **Helper call-limit interface**: `HelperLimits` uses only `totalCalls` and `helperCalls`; the deprecated `artifacts` field is excluded.
 
 ## Deletion, unused-data reclamation and helper cleanup
 
-- **고아 이미지 회수 큐**: 삭제 및 저장 트랜잭션에서 `server/unused-data.ts`가 실제 자료 참조를 따라가며 회수 후보인 고아 이미지 BLOB과 사용하지 않는 숨김 항목을 정리해요. Reader 조회나 모델의 매 출력 조각마다 전체 자료를 스캔하지 않아요.
-- **지연 물리 회수 및 DB 후보 해시**: 진행 중인 모델/이미지 작업이 있으면 물리적 회수는 미루되 회수 후보 해시를 DB(`image_cleanup_candidates`)에 남겨요. 작업 종료와 서버 재시작 때 후보를 다시 처리하며, 후보와 숨김 자료가 없으면 원고 전문을 훑지 않아요. 작업 종료 때의 처리(`PendingImageCleanup`)는 참조 검사를 읽기 전용 Worker(`server/unused-data-scan.ts`)에서 하고, 검사하는 동안 메인 연결에 쓰기가 한 번이라도 있었으면 결과를 버리고 다음 작업 종료 때 다시 검사해요. 삭제 트랜잭션 안의 정리와 서버 시작 때의 정리는 같은 검사를 동기로 실행해요.
-- **초안 보호와 이미지 회수 예외**: 일반 삭제는 제거되는 자료가 참조하던 이미지에만 회수 후보를 추가해요. 도우미 대화 텍스트에만 있던 이미지나 개별 삽화 삭제는 별도 이미지 회수 후보를 추가하지 않는데, 다른 편집창의 미저장 초안이 같은 이미지를 참조할 수 있기 때문이에요. 단, 도우미가 직접 첨부한 이미지와 다른 자료의 기존 삭제 정리는 유지하며, 다른 작업에서 회수 후보로 지정된 이미지는 참조 검사 후 정리될 수 있어요.
-- **스냅샷 참조 처리**: 과거 진단 snapshot만의 참조는 영구 보관 이유가 아니며, 마지막 참조를 없앤 후 회수 대상으로 지정된 자료는 삭제·저장 정리에서 회수해요.
-- **도우미 변경 기록**: `server/helper-changes.ts`의 `forgetHelperSceneChanges`, `forgetHelperResourceChanges`, `forgetHelperChatChanges`를 장면·자료·채팅 삭제가, `forgetHelperConversationChanges`를 도우미 대화 삭제가 연쇄 삭제 전에 불러요. 보관 범위는 작업을 접수할 때, 기록을 쓸 때, 서버가 DB를 열 때 적용해요. 직전 상태를 지우는 모든 경로(보관 범위, 장면·자료·채팅·도우미 대화 삭제)는 그 직전 상태가 가리키던 이미지를 `image_cleanup_candidates`에 넣고 테마 자료를 `pruneThemeAssets`로 정리해요. 글을 지운 기록을 행째 지우지 않는 것은 작업 결과 목록에 무엇이 바뀌었는지는 남기기 위해서예요.
-- **도우미 호출 인자**: `server/helper-argument-retention.ts`의 `forgetHelperConfirmationTargets`를 장면·채팅·서재 자료·테마·삽화 프리셋 삭제가, `redactHelperArgumentPreviews`를 장면·채팅 삭제가 불러요. 다른 대화의 기록은 도구 호출 기록에 남은 대상 장면과 `chatId`, 확인 기록의 `chatId`와 `targets`로 찾아요. `uimori apply`처럼 셸 명령으로 채팅을 건드린 호출은 명령문만 남아서 이 방법으로 찾지 않아요.
-- **관련 파일**: `server/scene-deletion.ts`, `server/orphan-memory.ts`, `server/unused-data.ts`
+- **Orphan image reclamation queue**: Inside deletion and save transactions, `server/unused-data.ts` follows real resource references to clean up reclaim-candidate orphan image BLOBs and unused hidden entries. Neither Reader queries nor per-chunk model output scans all stored resources.
+- **Deferred physical reclamation and DB candidate hashes**: While a model or image task is in flight, physical reclamation is deferred while candidate hashes are persisted in `image_cleanup_candidates`. Candidates are reprocessed on task completion and server restart; when there are no candidates and no hidden entries, full manuscripts are not scanned. Task-completion cleanup (`PendingImageCleanup`) runs the reference scan in a read-only Worker (`server/unused-data-scan.ts`); if even one write occurred on the main connection during the scan, the result is discarded and re-scanned on the next task completion. Cleanup inside deletion transactions and on server startup runs the same check synchronously.
+- **Draft protection and image-reclamation exceptions**: Normal deletion adds cleanup candidates only for images referenced by the deleted resource. Images that appeared only in helper conversation text and individual illustration deletions do not add separate image cleanup candidates, because an unsaved draft in another editor window may still reference the same image. Cleanup for images directly attached by the helper and existing deletion cleanup for other resources remain in place, and images marked as cleanup candidates by another operation can still be reclaimed after the reference scan.
+- **Snapshot reference handling**: References held only by historical diagnostic snapshots are not grounds for permanent retention; once the last live reference is removed and a resource is marked for reclamation, deletion/save cleanup reclaims it.
+- **Helper change records**: In `server/helper-changes.ts`, scene deletion calls `forgetHelperSceneChanges`, resource deletion calls `forgetHelperResourceChanges`, chat deletion calls `forgetHelperChatChanges`, and helper conversation deletion calls `forgetHelperConversationChanges` before cascading deletion. Retention bounds are enforced on task admission, on record write, and when the server opens the DB. Every path that discards a prior state (retention pruning, and scene, resource, chat, or helper conversation deletion) inserts images referenced by that prior state into `image_cleanup_candidates` and prunes theme assets via `pruneThemeAssets`. Records whose text was cleared are not deleted as whole rows so the task result list still shows what changed.
+- **Helper call arguments**: In `server/helper-argument-retention.ts`, scene, chat, library resource, theme, and illustration preset deletion call `forgetHelperConfirmationTargets`, and scene and chat deletion call `redactHelperArgumentPreviews`. Records in other conversations are located via the target scene and `chatId` stored on tool-call records and via `chatId` and `targets` on confirmation records. Calls that touched a chat via a shell command such as `uimori apply` leave only the command string and are not matched by this method.
+- **Related files**: `server/scene-deletion.ts`, `server/orphan-memory.ts`, `server/unused-data.ts`.
 
 ## Automatic backups
 
-- **저장 경로 및 Docker 볼륨 구성**:
-  - `UIMORI_BACKUP_DIR` 환경 변수로 서버의 저장 디렉터리를 지정해요. 미지정한 로컬 설치 환경에서는 DB 디렉터리 하위의 `backups` 폴더를 사용해요.
-  - 제공되는 두 Docker Compose 예시에서는 `/backups` 경로에 `UIMORI_BACKUP_VOLUME`(기본값 `uimori_backups`)을 별도로 마운트해요. 데이터 볼륨을 전환하더라도 백업 볼륨은 동일하게 유지해야 해요.
-  - 새 컨테이너 이미지는 초기 백업 디렉터리의 UID 1000 소유권을 자동으로 준비해요. 이미 생성된 호스트 디렉터리를 직접 마운트할 때는 운영자가 컨테이너 쓰기 권한을 준비해야 해요.
-  - 배포 파이프라인 전용 백업은 이 기능의 보관 정책과 별개로 관리돼요.
-- **SQLite 온라인 스냅샷 및 검증 워커**:
-  - SQLite 온라인 스냅샷을 생성한 후, 별도 Worker 스레드에서 `quick_check`, 외래 키(Foreign Key), DB 형식 및 버전을 검사해요.
-  - 파일 크기, SHA-256 해시, 앱/빌드 버전을 manifest에 기록하고, 작업 디렉터리를 완료 디렉터리로 원자적으로 전환한 뒤 성공으로 확정해요.
-  - 새 백업이 성공하기 전에는 오래된 성공본을 정리하지 않아요. 디스크 공간이나 권한 문제가 발생하면 기존 성공본을 남기고 실패를 표시해요.
-  - 불완전하게 남은 `.partial-*` 임시 디렉터리와 다른 운영 파일은 정상 백업 목록이나 자동 삭제 대상에서 제외돼요.
-- **백업 API 엔드포인트**:
-  - `GET /api/backups`: 백업 목록 조회
-  - `PUT /api/backups/settings`: 백업 설정 저장 (`expectedRevision` 필요)
-  - `POST /api/backups`: 백업 즉시 생성 요청 (202 Accepted 반환)
-  - `GET /api/backups/:id/download`: 특정 백업 파일 다운로드
-  - 기존의 일회성 다운로드인 `GET /api/backup`도 유지돼요. 모든 엔드포인트는 파일 시스템 경로를 요청 인자로 받지 않으며, 기존 작업실 인증 및 유지보수 게이트를 재사용해요.
-- **테스트 스위트**:
+- **Storage path and Docker volume setup**:
+  - The `UIMORI_BACKUP_DIR` environment variable sets the server backup directory. When unset in a local install, it defaults to the `backups` subdirectory under the DB directory.
+  - Both provided Docker Compose examples mount `UIMORI_BACKUP_VOLUME` (default `uimori_backups`) separately at `/backups`. Keep the same backup volume even if switching the data volume.
+  - New container images automatically prepare UID 1000 ownership on the initial backup directory. When directly bind-mounting a pre-existing host directory, the operator must provide container write permissions.
+  - Deployment-pipeline-specific backups are managed independently of this feature's retention policy.
+- **SQLite online snapshot and verification worker**:
+  - After creating a SQLite online snapshot, a separate Worker thread verifies `quick_check`, foreign keys, DB format, and schema version.
+  - File size, SHA-256 hash, and app/build version are recorded in the manifest, and the working directory is atomically switched to the completed directory before marking success.
+  - Older successful backups are never pruned before a new backup succeeds. On disk-space or permission failures, existing successful backups are preserved and the failure is surfaced.
+  - Incomplete `.partial-*` temporary directories and unrelated operational files are excluded from the valid backup list and automatic pruning.
+- **Backup API endpoints**:
+  - `GET /api/backups`: List backups.
+  - `PUT /api/backups/settings`: Save backup settings (requires `expectedRevision`).
+  - `POST /api/backups`: Trigger an immediate backup (returns 202 Accepted).
+  - `GET /api/backups/:id/download`: Download a specific backup file.
+  - The existing one-off download endpoint `GET /api/backup` is preserved. None of the endpoints accept filesystem paths as request arguments, and all reuse existing workspace auth and maintenance gates.
+- **Test suite**:
   - `npm test -- tests/backup-service.test.ts tests/database-schema.test.ts tests/personal-workspace-flow.test.ts`
-  - 임시 SQLite 사본의 재열기, 이미지·원문·설정 보존, 백업 실패 후 기존 보관 파일 유지(retention), 일정 동작, 수정 번호 CAS, 중복 요청 방지, API 인증 및 유지보수 게이트를 검사해요. (실제 Docker 볼륨 전환과 물리 디스크 고장은 별도의 운영 검증 항목이에요.)
+  - Verifies reopening temporary SQLite copies, preservation of images/manuscripts/settings, retention of existing backups after a backup failure, scheduling, revision CAS, duplicate-request prevention, API auth, and maintenance gates (actual Docker volume switches and physical disk failures are separate operational verification items).
 
 ## Independent chat backups and copies
 
-### `.chat.uimori` 아카이브 구조와 BLOB 중복 제거
-- **파일 포맷**: `uimori-archive` 버전 1의 무압축 ZIP 컨테이너를 사용해요.
-- **내부 구조**:
-  - 루트의 `uimori-personal-chat` v1 메타데이터 JSON
-  - 이미지 바이너리 파일: `images/<SHA-256>.bin`
-- **BLOB 중복 제거**: 자료 대표 이미지, 본문 첨부 이미지, 장면에 표시된 삽화는 바이트 해시(SHA-256)로 관리되며, 동일한 바이트는 ZIP 파일 안에 단 한 번만 저장해요.
-- **원자적 등록**: 서버에 파일을 업로드하고 이미지 검증과 WebP 변환을 마친 뒤 검토 결과를 보여주며, 확인 시 원자적으로 등록해요. 대용량 이미지를 base64 JSON 문자열로 직렬화하지 않아요.
-- **API 계약**: 새 채팅 백업은 archive 형식으로만 생성돼요. 레거시 JSON 신규 출력 API인 `GET /api/chats/:id/backup`는 제거되어 404를 반환해요 (단, 기존 JSON 백업 파일의 복원은 계속 지원해요). 본문 교환용 transcript JSON 내보내기는 별도 기능으로 유지돼요.
-- **다중 채팅 호환**: 백업 내보내기는 선택한 1개 채팅만 담지만, 메타데이터의 `chats` 배열 구조를 유지하므로 과거 다중 독립 채팅 백업 파일도 정상적으로 복원할 수 있어요.
+### `.chat.uimori` archive structure and BLOB deduplication
+- **File format**: Uncompressed ZIP container using `uimori-archive` version 1.
+- **Internal layout**:
+  - Root `uimori-personal-chat` v1 metadata JSON.
+  - Image binaries at `images/<SHA-256>.bin`.
+- **BLOB deduplication**: Resource avatars/representative images, body-attached images, and scene-displayed illustrations are keyed by byte hash (SHA-256), storing identical bytes only once inside the ZIP.
+- **Atomic registration**: After uploading the file to the server, validating images, and converting to WebP, a review summary is returned and confirmed imports are registered atomically. Large images are never serialized as base64 JSON strings.
+- **API contract**: New chat backups are generated only in archive format. The legacy JSON export API `GET /api/chats/:id/backup` has been removed and returns 404 (restoring existing JSON backup files remains supported). Transcript JSON export for manuscript exchange remains a separate feature.
+- **Multi-chat compatibility**: Exports contain only the single selected chat, while preserving the metadata `chats` array structure so legacy multi-chat independent backup files still restore cleanly.
 
-### 준비(Staging) 파일 라이프사이클과 동시성 보호
-- **준비 파일 정리**: 복원이 성공하면 준비 단계에서 생성된 임시 파일은 즉시 정리돼요.
-- **만료 정책**: 완료되지 않은 준비 결과는 24시간 후 만료되며, 쓰기가 열린 서버 시작 시점과 실행 중 매시간 자동으로 정리돼요 (완료한 같은 요청은 임시 파일이 없어도 영수증으로 확인할 수 있어요).
-- **동시성 잠금**: 백업 준비 작업은 다른 Risu 파일이나 자료 백업 준비 작업과 동시에 실행되지 않고 프로세스당 1건씩 순차 실행돼요. 클라이언트 연결이 끊기면 진행 중이던 준비 산출물을 즉시 정리해요.
-- **이미지 참조 카운팅**: 독립 사본과 복원은 불변 BLOB을 재사용하되 원본 채팅의 이미지 행에 직접 의존하지 않아요. 원본 채팅을 삭제하더라도 사본이 참조하는 이미지는 보존되며, 마지막 소유 참조가 제거될 때 기존 이미지 정리 경로를 통해 회수돼요.
+### Staging file lifecycle and concurrency protection
+- **Staging cleanup**: Temporary files created during staging are cleaned up immediately upon successful restore.
+- **Expiration policy**: Incomplete staged results expire after 24 hours and are cleaned up automatically at write-enabled server startup and hourly while running (a completed identical request remains verifiable via its receipt even after temporary files are gone).
+- **Concurrency lock**: Backup staging does not run concurrently with Risu file imports or resource-bundle backup staging; staging runs sequentially, 1 job at a time per process. If the client disconnects, in-progress staging artifacts are cleaned up immediately.
+- **Image reference counting**: Independent copies and restores reuse immutable BLOBs without depending directly on the source chat's image rows. Deleting the source chat preserves images referenced by copies, and BLOBs are reclaimed through the existing image-cleanup path once the last owning reference is removed.
 
-### 재시도 및 복사 API (`/api/runs/:id/retry`)
-- **API 엔드포인트**: `POST /api/runs/:id/retry`
-- **파라미터**: `mode`는 `'replace'` 또는 `'copy'` (생략 시 기존 사본 생성 규칙 적용). 실패한 교체 요청을 다시 시도하면 교체 대상으로 예약했던 마지막 응답을 그대로 사용해요.
-- **멱등성 보장**: 복사 결과를 확인하는 도중 오류가 발생하더라도 이전 요청 키를 유지해 중복 사본 생성을 방지해요. 대상 사본이 이미 삭제되었거나 복사 명령이 기록되지 않은 이전 복사 기록이면 안내 후 남은 요청 키를 지우고, 다음 시도는 새 복사를 시작해요.
-- **외부 부수효과 방지**: 복원 과정에서 외부 모델 호출이나 Risu 카드 콜백을 재실행하지 않아요.
-- **관련 구현**: `server/chat-backup.ts`, `server/chat-copy.ts`, `server/chat-fork.ts`, `server/run-retry.ts`, `server/chat-media.ts`.
-- **전체 작업실 복원**: API 키와 프로바이더를 포함한 전체 작업실 복구는 [DB 스냅샷](../DATA-MIGRATIONS.md)을 사용하고, 기기별 읽기 위치와 책갈피 연동은 [읽기 위치와 책갈피](../READING-STATE.md)를 참고하세요.
+### Retry and copy API (`/api/runs/:id/retry`)
+- **API endpoint**: `POST /api/runs/:id/retry`.
+- **Parameters**: `mode` is `'replace'` or `'copy'` (omitting it applies the existing copy-creation rule). Retrying a failed replace request reuses the last response already reserved as the replacement target.
+- **Idempotency guarantees**: If an error occurs while checking a copy result, the previous request key is preserved to prevent duplicate copies. If the target copy has already been deleted or the record is a legacy copy record without a recorded copy command, the client notifies the user and clears the leftover request key so the next attempt starts a fresh copy.
+- **No external side effects**: Restoring never re-executes external model calls or Risu card callbacks.
+- **Related implementation**: `server/chat-backup.ts`, `server/chat-copy.ts`, `server/chat-fork.ts`, `server/run-retry.ts`, `server/chat-media.ts`.
+- **Full workspace restore**: Use [DB snapshots](../DATA-MIGRATIONS.md) for full workspace recovery including API keys and providers, and see [Reading position and bookmarks](../READING-STATE.md) for per-device reading position and bookmark integration.
 
 ## Chat transcript import/export
 
-### 내부 모듈과 트랜잭션 보장
-- **구현 파일**: 형식 정의와 검증은 `core/chat-transcript.ts`, 데이터베이스 저장과 영속화 처리는 `server/chat-transcript.ts`에 분리되어 있어요.
-- **원자적 실패 처리**: 파일 포맷, 메모가 가리키는 대상 장면, 텍스트 크기 한도, 연결 봇 존재 여부를 사전에 철저히 검증해요. 검증에 실패하면 불완전한 중간 채팅이나 레코드를 남기지 않고 즉시 롤백해요.
-- **전체 작업실 복원**: 작업실 전체 복원은 이 형식이 아니라 [SQLite 백업](../DATA-MIGRATIONS.md)을 사용해요.
+### Internal modules and transaction guarantees
+- **Implementation files**: Format definition and validation live in `core/chat-transcript.ts`; database storage and persistence live in `server/chat-transcript.ts`.
+- **Atomic failure handling**: File format, target scenes referenced by memos, text size limits, and existence of the linked bot are validated upfront. On validation failure, the transaction rolls back immediately without leaving partial chats or records behind.
+- **Full workspace restore**: Use [SQLite backups](../DATA-MIGRATIONS.md) rather than this format to restore an entire workspace.
 
-### 테스트 및 검증 명령어
+### Transcript test and verification commands
 ```sh
 npm test -- tests/chat-transcript.test.ts tests/personal-workspace-flow.test.ts
 ```
 
-- `tests/chat-transcript.test.ts`: 원문, 번역, 메모, 중복 재전송 요청 및 잘못된 파일 형식에 대한 거절 동작을 검증해요.
-- `tests/personal-workspace-flow.test.ts`: 독립 백업과 연계된 대화 이어쓰기 및 전반적인 작업실 대화 흐름을 검증해요.
+- `tests/chat-transcript.test.ts`: Verifies originals, translations, memos, duplicate resend requests, and rejection of malformed files.
+- `tests/personal-workspace-flow.test.ts`: Verifies continuing conversations linked with independent backups and overall workspace chat flows.
 
 ## Portable resource transfers
 
-- **신규 출력 API 종료**: 새 백업은 `.uimori` 아카이브로만 생성되며, 레거시 JSON 출력 API인 `POST /api/native-transfers/export`는 제거되어 404를 반환해요.
+- **Retirement of legacy export API**: New backups are generated only as `.uimori` archives; the legacy JSON export API `POST /api/native-transfers/export` has been removed and returns 404.
 
-### 내부 모듈과 책임 분리
-- **자료 묶음 처리**: `server/resource-bundle.ts`가 사용자 자료 묶음의 직렬화 생성과 작업실 적용을 총괄해요.
-- **이미지 변환**: `server/transfer-images.ts`는 묶음 내부 이미지의 WebP 변환 및 SHA-256 참조 치환만을 전담해요.
-- **영수증 및 이력**: 전체 실행 이력의 임의 재현이나 신뢰 증명을 위한 별도의 영수증(receipt) 체계는 두지 않으며, 현재 저장된 자료의 상태만을 내보내요.
+### Internal modules and separation of responsibilities
+- **Resource bundle handling**: `server/resource-bundle.ts` owns serialization and workspace application of user resource bundles.
+- **Image conversion**: `server/transfer-images.ts` is solely responsible for WebP conversion and SHA-256 reference substitution for images inside bundles.
+- **Receipts and history**: No separate receipt system is maintained for arbitrary replay or attestation of full execution history; exports contain only the currently saved resource state.
 
-### 2단계 원자적 적용 파이프라인
-1. **사전 검증 및 스테이징**: 업로드된 `.uimori` 파일의 목차, CRC, 이미지 SHA-256 무결성을 검사하고 이미지를 하나씩 변환·준비한 뒤 사용자에게 검토 요약을 반환해요.
-2. **원자적 등록**: 사용자가 승인하면 준비된 바이너리 파일을 순차 등록해요. 검토 단계의 검증 결과와 요약을 그대로 재사용하므로 적용 시점에 동일 파일을 다시 검증하거나 이미지를 재변환하지 않아요.
-3. **트랜잭션 저장**: 새 자료 레코드와 중복 요청 방지 영수증은 하나의 단일 트랜잭션으로 원자적으로 저장돼요.
-4. **스트리밍 내보내기**: 내보내기 시에는 읽기 전용 DB 스냅샷에서 이미지를 하나씩 직접 스트리밍하므로, 다운로드 도중 다른 세션의 자료 변경이나 이미지 정리가 진행되어도 전송 바이트가 손상되지 않아요.
+### Two-stage atomic apply pipeline
+1. **Pre-validation and staging**: Checks the uploaded `.uimori` file's table of contents, CRCs, and image SHA-256 integrity, converts and stages images one by one, and returns a review summary to the user.
+2. **Atomic registration**: Upon user approval, registers the staged binary files sequentially. Validation results and summaries from the review step are reused directly without re-validating the archive or re-converting images at apply time.
+3. **Transactional save**: New resource records and duplicate-request prevention receipts are saved atomically in a single transaction.
+4. **Streaming export**: Export streams images directly one by one from a read-only DB snapshot, so concurrent resource edits or image cleanup in other sessions cannot corrupt the downloaded bytes.
 
-### 동시성 잠금과 준비(Staging) 파일 수명주기
-- **순차 처리 잠금**: Risu 파일 가져오기와 `.uimori` 백업 준비 작업은 서버 프로세스 전체에서 1건씩 순차 실행돼요. 다른 준비 작업이 진행 중이면 큐를 늘리지 않고 완료 후 다시 시도하도록 안내해요.
-- **연결 단절 처리**: 클라이언트 네트워크 연결이 끊기면 즉시 준비 작업을 취소하고 임시 산출물을 정리해요 (이미 시작된 이미지 변환은 완료 즉시 결과를 폐기하고 다음 이미지로 진행하지 않아요).
-- **만료 및 정기 정리**:
-  - 가져오기가 성공하면 준비 파일은 즉시 정리돼요.
-  - 미완료 준비 결과는 24시간 후 자동 만료돼요.
-  - 만료된 준비 파일은 쓰기가 활성화된 서버 시작 시점과 실행 중 매시간 정기 작업에서 정리돼요 (정리 실패 시 다음 주기에 재시도해요).
-- **안전한 디렉터리 격리**: 업로드 및 준비 결과를 정리할 때는 SQLite DB 파일이 실제로 위치한 디렉터리 하위만을 대상으로 한정해요. 정리 대상이나 경로가 심볼릭 링크 또는 junction인 경우 건드리지 않으며, 진행 중인 준비 결과도 보존해요.
+### Concurrency lock and staging file lifecycle
+- **Sequential lock**: Risu file imports and `.uimori` backup staging run sequentially, 1 job at a time across the server process. If another staging job is in progress, no queue is built up and the caller is instructed to retry once it finishes.
+- **Client disconnect handling**: If the client network connection drops, staging cancels immediately and cleans up temporary artifacts (any image conversion already started discards its result upon completion and does not proceed to the next image).
+- **Expiration and periodic cleanup**:
+  - Staging files are cleaned up immediately upon successful import.
+  - Incomplete staged results expire automatically after 24 hours.
+  - Expired staging files are cleaned up at write-enabled server startup and in an hourly periodic job (cleanup failures retry on the next cycle).
+- **Safe directory isolation**: Cleanup of uploads and staging outputs is restricted strictly to subdirectories of the directory where the SQLite DB file actually resides. Symlinks and junctions are never touched, and active in-progress staging outputs are preserved.
 
-### 멱등성 영수증 보관 정책
-- **일반 자료 영수증**: 일반 자료 가져오기 영수증은 최근 256개를 보관하여 중복 처리를 방지해요.
-- **장기 보존 대상**: 채팅 백업, transcript, Risu 가져오기 완료 영수증과 재시도 영수증은 이 256개 순환 정리 대상에서 제외하여, 이후 일반 자료를 많이 가져오더라도 이전 가져오기 요청이 새 채팅이나 생성을 중복으로 만들어내지 않도록 완벽히 차단해요.
+### Idempotency receipt retention policy
+- **General resource receipts**: Retains the most recent 256 general resource import receipts to prevent duplicate processing.
+- **Long-term retention**: Chat backup, transcript, and Risu import completion receipts as well as retry receipts are excluded from this 256-entry rotating prune, preventing prior import requests from creating duplicate chats or generations even after many subsequent general resource imports.
 
 ## Resource editing, recovery, selection revision and helper changes
 
-- **터치로 고른 글**: 휴대폰에서 길게 눌러 고른 글에도 막대가 떠요. 브라우저의 선택 메뉴와 선택 손잡이가 선택한 글 바로 위아래에 뜨기 때문에, 막대는 선택 옆이 아니라 읽기 영역의 아래쪽 가장자리에 붙고, 선택이 그 자리를 가리면 위쪽 가장자리로 옮겨요(`web/reader-selection.ts`의 `placeDocked`). 손잡이를 끄는 동안에는 기다렸다가 선택이 멈추면 보여 줘요. 버튼을 누르는 순간 브라우저가 선택을 풀어도 누르기 직전의 선택으로 동작해요. `tests/reader-selection-browser.spec.ts`의 `RSEL22`가 합성 터치 입력으로 확인해요.
+- **Touch-selected text**: The action bar also appears for text selected via long-press on mobile. Because the browser's selection menu and handles appear directly above and below the selection, the bar docks to the bottom edge of the reading area rather than beside the selection, moving to the top edge if the selection covers that area (`placeDocked` in `web/reader-selection.ts`). While handles are being dragged, the bar waits until the selection settles. Even if the browser clears the selection the moment a button is tapped, the action runs against the selection captured immediately before the press. `RSEL22` in `tests/reader-selection-browser.spec.ts` verifies this with synthetic touch input.
 
-### 입력 상태와 세션 소유권 (`ResourceEditorSession`)
-- **단일 소유자**: 각 자료 편집기는 `web/resource-editor-session.ts`의 `ResourceEditorSession` 인스턴스 하나가 폼 모델, 원문 텍스트 입력, 저장 기준본, 변경 여부, 저장 진행 상태를 단독 소유해요. 화면 UI는 세션 모델을 직접 참조하며 함수형 갱신으로 상태를 바꿔요. 복원된 모델을 부모 상태로 옮겼다가 다시 세션에 전달하는 동기화 과정은 없어요.
-- **역할 및 프리셋 전환**: 프롬프트의 역할·프리셋 전환은 세션을 보관하고 선택할 뿐, 모델이나 변경 여부를 따로 복제하지 않아요.
-- **조회 수명주기 보호**: 프롬프트를 불러오는 동안 새 프롬프트 작성을 시작하거나 목록으로 돌아가면 이전 조회를 취소해요. 늦게 도착한 응답이 새 초안이나 현재 화면을 덮지 않으며, 목록에서 열기와 외부에서 지정한 프리셋 열기는 같은 조회 수명주기를 사용해요.
-- **자동 저장 예약**: 현재 프롬프트 옵션의 자동 저장은 새 입력에만 예약해요. 복구한 입력과 실패한 저장은 명시적으로 다시 저장하며, 저장 응답은 전송 이후의 입력을 지우지 않아요. 새 자료·사본을 저장하면 복구 입력의 키도 실제 자료 ID로 옮겨요. 복구 저장의 순서, 수정 번호 비교, 이전 조회 응답 무시, 도우미 요청 시점의 입력 확보는 데이터 보존을 위해 유지해요. 다른 창의 저장 알림은 깨끗한 편집기를 갱신하고, 미저장 입력이 있으면 보존한 채 충돌을 알려줘요.
-- **원문·번역 편집기의 `Esc`**: 저장본과 다른 초안이 있으면 버릴지 먼저 물어요. 취소를 고르면 초안과 이 탭의 보관본을 그대로 두고 편집기로 돌아가요. 바뀐 내용이 없으면 바로 닫아요. **편집 취소** 버튼은 묻지 않고 초안을 버려요.
-- **스크롤 및 포커스 복원**:
-  - 원문·번역 편집을 열 때는 Reader와 명시된 테마 본문만 스크롤해요. 저장·취소 뒤에는 읽던 대목과 시작 버튼의 포커스를 복원하며, 앱의 헤더나 입력창을 스크롤하지 않아요.
-  - 좁은 화면의 맨 아래 이동 버튼은 입력창 도구 영역에 있어요. 원문·번역·요청을 편집하는 동안에는 숨기고, 편집을 마치면 탐색기 표시 설정과 현재 읽기 위치에 따라 다시 나타나요. 상단 제목의 장면 목록과 책갈피 편집은 계속 사용할 수 있어요.
+### Input state and session ownership (`ResourceEditorSession`)
+- **Single owner**: Each resource editor has a single `ResourceEditorSession` instance (`web/resource-editor-session.ts`) that exclusively owns the form model, raw text input, saved baseline, dirty state, and save progress. The UI reads the session model directly and updates state via functional updates, with no sync loop copying a restored model into parent state and back into the session.
+- **Role and preset switching**: Switching prompt roles or presets only holds and selects sessions without duplicating the model or dirty flags separately.
+- **Load lifecycle protection**: Starting a new prompt draft or returning to the list while a prompt is loading cancels the prior fetch. Late responses cannot overwrite a new draft or the current screen; opening from the list and opening an externally specified preset share the same fetch lifecycle.
+- **Auto-save scheduling**: Auto-save for current prompt options is scheduled only on fresh edits. Recovered input and failed saves must be saved explicitly again, and a save response never overwrites edits typed after submission. Saving a new resource or copy migrates the recovery entry key to the actual resource ID. Recovery save ordering, revision checks, ignoring stale load responses, and capturing input at helper request time are preserved for data safety. Save notifications from another window refresh a clean editor, while preserving unsaved input and reporting a conflict if dirty.
+- **`Esc` in original/translation editors**: If the draft differs from the saved copy, prompts before discarding; choosing Cancel keeps the draft and this tab's stored recovery copy and returns to the editor. Closes immediately if unchanged. The **편집 취소** (Cancel edit) button discards the draft without prompting.
+- **Scroll and focus restoration**:
+  - Opening original/translation editing scrolls only the Reader and the designated theme body. After saving or canceling, it restores the reading position and focus on the trigger button without scrolling the app header or composer.
+  - On narrow viewports, the scroll-to-bottom button lives in the composer toolbar. It hides while editing an original, translation, or request, and reappears when editing ends according to navigator visibility settings and current reading position. The scene list in the top title and bookmark editing remain usable throughout.
 
-### 로컬 복구 저장소 (IndexedDB)
-- **비동기 격리 저장**: 타이핑마다 전체 자료를 `localStorage`에 동기 저장하지 않아요. 이 기기의 최신 미저장 입력만 IndexedDB에 비동기로 덮어써요. 성공적으로 보관된 경우에만 복구 보관 상태를 표시하며 실패를 성공처럼 표시하지 않아요.
-- **트랜잭션 충돌 방지**: 저장·취소·원래 값으로 되돌리기는 이 편집 세션이 읽었거나 성공적으로 쓴 복구 입력만 정리해요. 각 저장의 식별자를 IndexedDB의 한 트랜잭션에서 비교해, 다른 탭이 나중에 남긴 미저장 입력을 지우지 않아요.
-- **부분 경로 갱신**: 일반 폼 입력은 바뀐 필드의 경로만 새로 만들고, 변경 여부 비교에서 그대로인 자료 부분은 건너뛰어요. 큰 카드·프리셋 전체를 타이핑마다 복제하거나 JSON으로 만들지 않아요. 카드 입력을 저장본과 같게 되돌리면 목록 이동을 막지 않으며, 원문 JSON 표시·적용과 실제 저장 경계의 검증은 유지해요.
-- **도우미 및 생성 대기 큐**: 도우미에게 요청할 때 저장된 자료는 ID와 수정 번호만 보내고, 서버가 접수 시점의 해당 저장본을 확보해요. 미저장 자료는 전송 시점의 편집 입력을 분석용으로 보내요. 같은 자료를 도우미가 수정하려면 먼저 편집기에서 저장해야 하며, 다른 자료의 작업까지 막지는 않아요. 도우미 입력과 전송 대기 요청도 기존 IndexedDB 복구 저장소를 사용해요. 복구 보관에 실패하면 입력을 남기고 재시도 또는 보관 없이 보내기를 선택할 수 있어요. 보관 없이 보낸 요청은 새로고침 뒤 복구되지 않을 수 있어요.
+### Local recovery storage (IndexedDB)
+- **Async isolated persistence**: Typing does not synchronously write the entire resource to `localStorage`. Only the latest unsaved input on this device is asynchronously overwritten in IndexedDB. Recovery-saved status is shown only when persistence actually succeeded; failures are never displayed as success.
+- **Transactional conflict avoidance**: Saving, canceling, and reverting to the saved baseline clear only recovery entries that this editing session read or successfully wrote. Comparing each save's identifier inside a single IndexedDB transaction prevents wiping unsaved input written later by another tab.
+- **Partial path updates**: Regular form edits allocate new objects only along the changed field's path and skip unchanged subtrees during dirty checks, avoiding cloning or JSON-serializing large cards or presets on every keystroke. Reverting card edits back to match the saved copy does not block navigating back to the list, while raw JSON display/apply and save-boundary validation remain intact.
+- **Helper and generation pending queue**: On a helper request, a saved resource sends only its ID and revision number so the server captures that saved version at admission time; an unsaved resource sends the editor input at send time for analysis. For the helper to edit that same resource, it must first be saved in the editor (without blocking operations on other resources). Helper input and pending requests share the existing IndexedDB recovery store. If recovery persistence fails, the input is preserved and the user can retry or send without recovery storage (requests sent without recovery storage may not be recoverable after a reload).
 
-### 동시성 제어와 멱등성 보장
-- **CAS 수정 번호 (`expectedRevision`)**: 사용자와 보조 에이전트는 같은 `saveResource`를 사용해요. 현재 자료 수정 번호 하나를 비교해 다른 변경을 덮어쓰지 않도록 하고, 충돌 시 재조회·재적용해요. 저장이 실패하더라도 기존 수정 번호 충돌 경고는 유지하며, 실제 사본 저장 성공이나 명시적 재조회 뒤에만 해제해요. 에이전트의 권한 승인 절차는 아니에요.
-- **멱등성 키와 영수증**:
-  - 브라우저의 새 자료 저장과 목록 복제는 요청별 멱등성 키를 기록하며, 결과가 불분명한 요청을 다시 실행할 때 원래 입력과 키를 재사용해 중복 사본을 만들지 않아요.
-  - 서버는 작은 생성 ID 영수증만 영구 보존하며 별도의 DB 형식 변경은 없어요. 새 자료 편집기의 미확정 요청은 일반 미저장 입력과 구분된 탭별 IndexedDB 기록에 보관해요. 새 입력에 오류가 생겨도 원래 생성 요청은 이미 고정된 입력만으로 재확인하며, 확인 이후에 새 입력을 그대로 남겨요.
-  - 서버가 명확히 거절한 요청은 새 요청으로 수정할 수 있어요. 구형 API 클라이언트나 수동 생성 요청에서 키를 생략하면 기존 비멱등 동작을 유지해요. 원본 수정 번호를 확인하고 저장된 전체 내용을 새 ID로 복사해요. 편집 중인 미저장 입력은 포함하지 않으며 원본과 현재 적용 상태는 유지해요. 도우미는 반환된 사본 ID에 표시 이름·본문·블록 추가·삭제·이동을 한 번에 적용할 수 있어요. 프롬프트의 서재 표시 이름과 native 내부 이름은 독립적이에요. 구조 편집도 수정 번호 확인과 직전본 되돌리기를 사용해요.
-  - 생성 또는 복제 결과가 불분명해진 뒤에는 재확인 요청이 인증 만료 같은 오류를 받아도 원래 요청 키를 유지해요. 편집기에서 새 입력이 미완성이어도 **이전 요청 확인**으로 고정된 생성 요청을 확인할 수 있으며 새 입력은 그대로 남아요. 확인 전 다른 창에서 생성된 자료를 수정했다면 이후 입력을 충돌 상태로 보존하고, 저장본 확인이나 명시적인 다시 불러오기를 기다려요. 생성 영수증의 대상이 이미 삭제됐다고 서버가 확인하면 입력을 유지하고 새 저장을 선택할 수 있어요.
-- **폴더 배치 및 후속 작업 분리**:
-  - 생성한 자료의 폴더 배치는 생성 직후의 서재 정리 수정 번호를 확인해요. 확인 전 다른 창에서 정리가 바뀌었거나 구형 영수증에 수정 번호가 없으면 자동 이동을 건너뛰고 알려요. 이렇게 하면 다른 창에서 지정한 폴더나 미분류를 덮어쓰지 않아요.
-  - 목록 갱신과 저장 후 폴더 배치는 저장 완료와 분리해요. 프리셋·프로바이더와 모델이 저장된 뒤 이 후속 작업이 실패해도 저장본은 유지하고, 별도 경고와 함께 저장 후 이동을 마쳐요. 실제 저장 실패나 수정 번호 충돌은 입력을 남긴 채 이동을 막으며, 후속 작업 실패로 쓰기를 자동 반복하지 않아요. 자료 변경 이벤트는 해당 자료 또는 그 연결 모듈에 의존하는 채팅만 갱신해요. 실제 입력 소유자는 `web/resource-editor-session.ts`, API와 에이전트의 공통 저장 기능은 `server/resource-service.ts`에 있어요.
+### Concurrency control and idempotency guarantees
+- **CAS revision number (`expectedRevision`)**: Both the user and the helper agent go through the same `saveResource`. Comparing a single current resource revision prevents overwriting concurrent changes, forcing re-fetch and re-apply on conflict. Even if a subsequent save fails, an existing revision-conflict warning stays active and clears only after an actual copy-save succeeds or an explicit reload occurs. This is not an agent permission-approval mechanism.
+- **Idempotency keys and receipts**:
+  - Browser new-resource saves and list clones record per-request idempotency keys and reuse the original payload and key when re-running an uncertain request so duplicate copies are not created.
+  - The server permanently retains only small created-ID receipts with no DB schema change. Unconfirmed requests from a new-resource editor live in a per-tab IndexedDB record separate from general unsaved input. Even if new edits contain errors, the original creation request is re-verified using only its already-frozen payload, leaving the new edits intact afterward.
+  - Requests explicitly rejected by the server can be edited and sent as new requests. Legacy API clients or manual creation requests that omit the key keep the existing non-idempotent behavior. Cloning checks the source revision number and copies the entire saved content to a new ID without including unsaved edits, leaving the original and its active bindings unchanged. The helper can apply display name, body, and block additions, deletions, and moves to the returned copy ID in one call. A prompt's library display name and native internal name are independent. Structural edits also use revision checks and single-previous-version undo.
+  - After a creation or clone outcome becomes uncertain, the original request key is kept even if a verification retry hits an error such as expired auth. Even while new edits in the editor are incomplete, **이전 요청 확인** (Check previous request) checks the frozen creation request while keeping the new edits intact. If another window edited the created resource before verification, subsequent edits stay in a conflict state awaiting inspection of the saved copy or an explicit reload. If the server confirms the creation receipt's target has already been deleted, the edits are kept and the user can save as a new resource.
+- **Folder placement and decoupling follow-up work**:
+  - Folder placement for a newly created resource checks the library-organization revision from right after creation. If another window changed organization before verification, or if a legacy receipt lacks a revision, automatic moving is skipped with a notice so it never overwrites a folder or uncategorized placement made in another window.
+  - List refresh and post-save folder placement are decoupled from save completion. If follow-up work fails after a preset, provider, or model is saved, the saved copy is preserved and post-save navigation finishes with a separate warning. Actual save failures or revision conflicts retain the input and block navigation, and follow-up failures never auto-retry the write. Resource change events refresh only chats depending on that resource or its linked modules. Input state is owned by `web/resource-editor-session.ts`; the shared save path for API and agent lives in `server/resource-service.ts`.
 
-### 문맥 제어의 내부 데이터 구조 (`scene_context`)
-- **독립 테이블 저장**: 변경 사항은 원본 Run/Source와 별도의 `scene_context`에 수정 번호를 두고 저장해요. 이후 모델의 일반 문맥·압축 요약·검색 및 도우미의 현재 채팅 조회는 그 상태를 반영해요.
-- **컨텍스트 유효성 판정**: 입력 수정만으로 원문 해시가 달라지지 않으므로 문맥 압축 유효성에는 장면 문맥 수정 번호도 반영해요.
-- **사본 및 백업 연동**: 채팅 사본/백업과 transcript v2의 선택적 `sceneContext` 필드에서도 이 상태를 보존해요. 기존 transcript v2에는 해당 필드가 없어도 모두 활성 상태로 읽어요. 원본 실행 기록이나 명시적으로 요청한 보존 장면의 편집/조회는 별개의 기능이에요.
+### Internal data structure for context control (`scene_context`)
+- **Separate table storage**: Context toggles are stored with a revision number in `scene_context`, separate from the original Run/Source rows. Subsequent general model context, compaction summaries, search, and helper reads of the current chat reflect this state.
+- **Context validity checks**: Because editing input visibility does not alter the original text hash, context-compaction validity also incorporates the scene-context revision number.
+- **Copies and backups**: Chat copies, chat backups, and the optional `sceneContext` field in transcript v2 preserve this state. Legacy transcript v2 files without the field are read with all scenes active. Editing or inspecting original execution records or explicitly requested preserved scenes is a separate concern.
 
-### 선택 구절 퇴고와 읽는 중 다듬기
-- 제안 요청, 취소, 바뀐 제안 판정은 편집기의 `web/SelectionRevision.tsx`와 읽기 화면의 `web/ReaderSelectionTools.tsx`가 `web/useSelectionRevision.ts` 하나를 함께 써요. 서버 경로도 `POST /api/sources/:id/selection-revision`(`server/selection-revision.ts`) 하나이고, 번역 대상은 `target: 'translation'`과 보고 있는 번역 본문의 해시를 받아요. 그 확인은 `server/source-editing.ts`의 `shownTranslationChanged`가 번역 저장(`editTranslation`)과 같이 맡아요. 번역을 보여 주는 결과는 재번역이 도는 동안 직전 결과일 수 있어서 수정 번호만으로는 보고 있는 글을 정할 수 없어요.
-- 문맥 범위는 요청의 `context`로 받고 `core/selection-revision.ts`의 `surroundingDraft`가 잘라요. 화면은 범위를 골라도 초안 전체를 그대로 보내요. 서버가 번역 해시와 선택 범위를 전체 초안으로 확인하기 때문이에요.
-- 일치 판정은 `web/reader-selection.ts`의 `uniqueTextRange`이고, 저장 본문과의 비교만으로 정해요. 렌더러 종류로 막지 않는 이유는 봇이 있는 채팅이 모두 Risu 렌더러로 그려지기 때문이에요. 도우미의 `matchHelperText`와 달리 줄 끝 공백도 맞춰 주지 않아요. 화면에 보이는 선택과 저장본이 어긋난 채로 저장하지 않기 위해서예요.
-- 막대와 창은 앱 화면이라 `document.body`에 고정 위치로 그려요. 장면 테마 틀은 그림자 DOM이고 테마가 `transform`을 걸 수 있어서, 그 안에 두면 위치가 틀어져요. 위치는 리더 스크롤 영역과 테마의 내부 스크롤 본문(`data-uimori-body-scroll`)이 보여 주는 범위 안에서 정하고, 선택한 줄과 겹치지 않는 위나 아래에 둬요. 둘 다 자리가 없으면 막대를 숨겨요.
-- 확인: `tests/reader-selection.test.ts`(일치 규칙), `tests/selection-revision.test.ts`(번역 대상과 충돌 확인), `tests/reader-selection-browser.spec.ts`의 `RSEL01`부터 `RSEL06`과 `RSEL15`(문맥 범위), 편집기 쪽은 `tests/selection-revision-browser.spec.ts`.
+### Selection revision and in-reader refinement
+- Proposal requests, cancellation, and changed-proposal detection are shared between editor `web/SelectionRevision.tsx` and reader `web/ReaderSelectionTools.tsx` through a single hook, `web/useSelectionRevision.ts`. Both use the same server route `POST /api/sources/:id/selection-revision` (`server/selection-revision.ts`); translation targets send `target: 'translation'` and the hash of the displayed translation text. That check is shared with translation saving (`editTranslation`) via `shownTranslationChanged` in `server/source-editing.ts`, because the shown translation may still be the prior result while re-translation is in progress, making revision number alone insufficient to identify the displayed text.
+- Context scope is passed in the request's `context` field and sliced by `surroundingDraft` in `core/selection-revision.ts`. The client still sends the entire draft regardless of chosen scope because the server verifies both the translation hash and the selection range against the full draft.
+- Match detection uses `uniqueTextRange` in `web/reader-selection.ts` and decides solely by comparing against the saved body. It does not gate on renderer type because every chat with a bot renders through the Risu renderer. Unlike the helper's `matchHelperText`, it does not normalize trailing line whitespace, preventing saves when the visible selection diverges from the saved body.
+- The bar and popover are app UI rendered at a fixed position on `document.body`. Because scene theme frames use Shadow DOM and themes may apply `transform`, placing them inside would break positioning. Coordinates are computed within the visible region of the reader scroll area and the theme's internal scroll body (`data-uimori-body-scroll`), placed above or below without overlapping the selected line; the bar hides if neither has room.
+- Verification: `tests/reader-selection.test.ts` (matching rules), `tests/selection-revision.test.ts` (translation targets and conflict checks), `RSEL01`–`RSEL06` and `RSEL15` (context scope) in `tests/reader-selection-browser.spec.ts`, and `tests/selection-revision-browser.spec.ts` for the editor side.
 
-### 도우미 변경 카드 (`HelperChangeCard`)
-- 카드는 `web/HelperChangeCard.tsx`, 목록과 읽기 시점은 `web/HelperTaskResults.tsx`가 맡고, 항목의 뜻은 [HELPER-TOOLS](../HELPER-TOOLS.md#conversation-history-and-task-results)에 있어요. `tests/helper-task-results-browser.spec.ts`의 `HCHANGE01`과 `HCHANGE02`가 표시와 읽기 시점을, `HCHANGE04`가 화면 언어를 따르는 위치 표시를 확인해요.
-- 결과 줄(`results`)과 변경 카드(`changes`)는 한 목록이에요. 변경 기록이 있는 자료와 장면 이름의 결과 줄은 숨기고, 설정은 이전 값과 새 값을 담은 결과 줄을 남기고 같은 대상의 변경 카드를 숨겨요. 변경 기록이 생기기 전의 작업은 결과 줄만 가지므로 그대로 보여요.
-- 열기는 `web/main.tsx`의 `openHelperChange`가 영역별로 나눠요. 자료는 `web/resource-anchor.ts`의 컨텍스트로 열린 편집기(`RisuNativeFields`, `NativeRisuPresetEditor`)에 영역과 항목을 넘기고, 편집기가 받으면 지워요. 장면은 `ReaderTarget.changedParagraph`를 `web/useStory.ts`가 블록 앵커와 비율로 바꿔 기존 읽기 위치 복원 경로로 이동해요. 표시는 `web/arrival-mark.ts`가 맡고, 본문 글자 대신 블록 앵커 요소나 편집기 영역에 테두리를 그려요. `HCHANGE03`이 확인해요.
-- 비교 화면의 추가·삭제 색은 의미 색 토큰(`--success-bg`, `--error-bg`)을 쓰고, 색만으로 구분하지 않도록 밑줄과 취소선, 줄 앞의 `+`와 `−`, 화면 낭독기용 문구를 함께 둬요. 높이 상한은 `--diff-max-h`예요.
+### Helper change card (`HelperChangeCard`)
+- Cards are rendered by `web/HelperChangeCard.tsx`, the list and read timestamp are managed by `web/HelperTaskResults.tsx`, and entry semantics are documented in [HELPER-TOOLS](HELPER-TOOLS.md#conversation-history-and-task-results). `HCHANGE01` and `HCHANGE02` in `tests/helper-task-results-browser.spec.ts` verify rendering and read timing, and `HCHANGE04` verifies location labels following the UI language.
+- Result lines (`results`) and change cards (`changes`) form a single list. Result lines are hidden for resources and scene names that have a change record; settings keep their result line showing old and new values and hide the matching change card. Tasks predating change records have only result lines and continue displaying as before.
+- Navigation is dispatched by domain in `openHelperChange` (`web/main.tsx`). Resources pass section and item via the context in `web/resource-anchor.ts` to the opened editor (`RisuNativeFields`, `NativeRisuPresetEditor`), which clears it once consumed. Scenes translate `ReaderTarget.changedParagraph` in `web/useStory.ts` into a block anchor and offset ratio and jump through the existing reading-position restoration path. Highlighting is owned by `web/arrival-mark.ts`, outlining the block anchor element or editor section rather than body text characters. Verified by `HCHANGE03`.
+- Diff additions and deletions use semantic color tokens (`--success-bg`, `--error-bg`), paired with underline, strikethrough, leading `+` and `−`, and screen-reader labels so color is never the sole indicator. Maximum height is `--diff-max-h`.
 
-### 도우미 턴 되돌리기
-- 도우미 작업 하나가 바꾼 서재 자료, 장면 원문과 번역, 플롯, 작가 노트를 작업 전 상태로 되돌리는 경로는 `server/helper-rollback.ts` 하나예요. 계약과 사유는 [HELPER-TOOLS](../HELPER-TOOLS.md#rolling-back-a-helper-task)에 있어요.
-- 되돌리기도 일반 저장과 같은 저장 함수를 지나요. 그래서 수정 번호 검사, 번역 작업 무효화, 다른 창의 갱신 알림이 사용자 저장과 같고, 되돌린 자료는 편집기의 직전 저장 되돌리기(`resource_undo`)로 다시 되돌릴 수 있어요.
-- 작업 뒤 사용자나 다른 작업이 고친 대상은 건너뛰고 사유를 돌려줘요. 열린 편집기의 미저장 입력은 서버가 모르므로, 화면이 `touches`를 보고 그 단위를 막아요. 자료 편집기는 `web/resource-editor.tsx`의 `hasUnsavedResourceEditor`로, 원문과 번역 편집기, 플롯 항목 편집, 작가 노트 편집은 `web/unsaved-input.ts`에 미저장 입력을 등록해서 확인해요. 새 편집 화면이 롤백 대상 도메인의 입력을 가지면 여기에 등록해야 해요.
-- 화면은 `web/HelperTaskRollback.tsx`예요. 막힌 단위가 있으면 작업 전체 요청 대신 남은 단위를 하나씩 보내요. 되돌린 뒤 자료는 `uimori-helper-updated`, 플롯은 `OUTLINE_REFRESH_EVENT`로, 장면과 작가 노트는 서버가 보내는 채팅 이벤트로 열린 화면을 갱신해요. `tests/helper-browser.spec.ts`의 `HROLLBACK01`부터 `HROLLBACK03`이 확인해요.
+### Helper turn rollback
+- `server/helper-rollback.ts` is the single path for reverting library resources, scene originals and translations, outline items, and author notes changed by a single helper task back to their pre-task state. Contract and skip reasons are in [HELPER-TOOLS](HELPER-TOOLS.md#rolling-back-a-helper-task).
+- Rollback passes through the same save functions as normal saves, so revision checks, translation-job invalidation, and cross-window refresh notifications match user saves, and a reverted resource can be undone again via the editor's single-step undo (`resource_undo`).
+- Targets edited afterward by the user or another task are skipped with a reason returned. Because the server cannot see unsaved edits in open editors, the client inspects `touches` and blocks those units. Resource editors check via `hasUnsavedResourceEditor` in `web/resource-editor.tsx`; original/translation editors, outline item editors, and author-note editors register unsaved edits in `web/unsaved-input.ts`. Any new editor holding input for a rollback-eligible domain must register there.
+- UI lives in `web/HelperTaskRollback.tsx`. When any unit is blocked, it sends remaining units individually instead of a whole-task rollback request. After rollback, open views refresh via `uimori-helper-updated` for resources, `OUTLINE_REFRESH_EVENT` for outlines, and server-emitted chat events for scenes and author notes. Verified by `HROLLBACK01`–`HROLLBACK03` in `tests/helper-browser.spec.ts`.
 
-### 도우미 부분 수정 및 문자열 치환 알고리즘
-- **블록 참조 추적**: 도우미의 부분 수정은 읽었던 블록을 참조해 앞 항목 삭제·이동 뒤에도 같은 대상을 수정할 수 있어요.
-- **줄바꿈과 줄 끝 공백 허용 검색**: 자료(`resource.patch`)와 장면(`scene.patch`)의 문구 치환은 정확한 일치를 먼저 찾고, 없을 때만 CRLF/LF 줄바꿈 차이를, 그래도 없으면 줄 끝 공백과 탭 차이를 허용해요. 허용 단계는 한 곳만 맞을 때만 적용하고, 여러 곳이 맞거나 없으면 변경 위치와 원인을 반환하며 아무것도 저장하지 않아요. 따옴표와 대시 같은 문장 부호는 바꿔 맞추지 않아요. 맞춰 주면 문체가 조용히 바뀌기 때문이에요. 두 도구의 매칭은 `server/helper-resource-editing.ts`의 `matchHelperText` 하나이고, `tests/helper-resource-editing.test.ts`와 `tests/helper-scene-tools.test.ts`가 확인해요.
-- **토글 정의 정합성**: 토글 정의 변경 시 더 이상 유효하지 않은 기존 선택값을 정리하고 제거·초기화된 키를 알려줘요. 새로 지정한 잘못된 값은 자동으로 고치지 않고 저장을 거절해요.
-- **직전본 비교**: 직전 저장본은 저장하지 않고 읽어 비교할 수도 있어요. 여러 단계의 자료 이력이나 복제한 프리셋 사이의 지속적인 동기화는 제공하지 않아요.
+### Helper partial edits and string replacement algorithm
+- **Block reference tracking**: Helper partial edits reference previously read blocks so they still target the same block even after earlier items are deleted or moved.
+- **Line-ending and trailing-whitespace tolerant matching**: String replacement in resources (`resource.patch`) and scenes (`scene.patch`) tries exact match first; only when none is found does it tolerate CRLF/LF differences, and only if still unmatched does it tolerate trailing spaces and tabs. Relaxed tiers apply only when matching a single unique location; on zero or multiple matches, it returns the mismatch location and reason without saving anything. Punctuation such as quotes and dashes is never normalized because doing so would silently alter prose style. Both tools share a single matcher, `matchHelperText` in `server/helper-resource-editing.ts`, verified by `tests/helper-resource-editing.test.ts` and `tests/helper-scene-tools.test.ts`.
+- **Toggle definition integrity**: When toggle definitions change, newly invalid existing selections are cleaned up and the removed or reset keys are reported. Newly supplied invalid values are rejected rather than silently coerced.
+- **Previous-save comparison**: The single retained previous save can also be read for comparison without saving. Multi-step resource history and continuous synchronization between cloned presets are not provided.
 
 ## Outline workspace and writing pipeline
 
-다섯 가지 플롯 수준은 `core/outline.ts`의 `OUTLINE_LEVELS`를 사용해요.
+The five outline levels use `OUTLINE_LEVELS` in `core/outline.ts`.
 
-### 집필 컨텍스트 조립과 파이프라인
+### Writing context assembly and pipeline
 
-- **브리핑 조립 API**: `GET /api/outline-nodes/:id/brief`에서 프로그램이 영속 데이터를 직접 조립해요 (별도 모델 호출 없음).
-  - `path`: 존재하는 루트부터 현재 단위까지의 상위 경로
-  - `children`: 현재 단위의 직계 하위 플롯 목록
-  - `related`: 명시적으로 연결된 관련 플롯 (중복 배제)
-  - `neighbors`: 같은 상위 아래 같은 수준의 직전·직후 항목
-  - `sources`: 현재 단위 및 그 하위에 연결된 현재 분기 원문의 ID·현재 hash·귀속 항목·연결 종류(`planned`/`focus`), 최근 40개
-  - 실제 Run 실행 시에는 Run 계보에 원문이 있는 다른 항목도 `written`으로 최대 40개까지 포함해요.
-- **컨텍스트 주입 경로**: `RunSnapshot.outline → MainInput.outline → main-host-context`. 기존 본문 입력 경로를 재사용하며, 이 컨텍스트는 현재 사용자 요청, 실제 원문, 메모, 로어를 대체하지 않고 최종 입력 토큰 예산 검사를 통과해야 해요. 전체 계획을 무조건 삽입하거나 예산을 초과하는 중요 조건을 조용히 누락하지 않아요.
-- **장면 예약과 접수**:
-  1. `POST /api/outline-nodes/:id/scene-command`로 플롯에 연결된 장면 요청을 생성해요. 별도의 `additionalInstruction`, 대상 수정 번호, 계획 hash를 전달해 변경된 계획에 옛 요청이 잘못 연결되는 것을 막아요.
-  2. 기존 `POST /api/scene-commands/:id/run`으로 본문을 예약해요. 별도의 작문 전용 실행기를 두거나 도우미 산출물을 본편으로 자동 승격하지 않아요.
-  3. 현재 플롯과 추가 지시는 실제 Run 접수 시 함께 고정되며, 단일 writer, 취소 처리, 원문 저장 경계를 유지해요.
-  - 플롯과 별개인 독립 장면 예약의 생성·취소·삭제 API 및 별도 대기열 화면은 제공하지 않아요.
+- **Brief assembly API**: `GET /api/outline-nodes/:id/brief` assembles context programmatically directly from persisted data (no model call).
+  - `path`: Ancestor path from the existing root down to the current node.
+  - `children`: Direct child outline items of the current node.
+  - `related`: Explicitly linked related outline items (deduplicated).
+  - `neighbors`: Immediate previous and next siblings under the same parent at the same level.
+  - `sources`: Up to the 40 most recent current-branch manuscript entries linked to this node or its descendants, with ID, current hash, owning node, and link kind (`planned`/`focus`).
+  - During an actual Run execution, up to 40 other nodes that have manuscripts in the Run lineage are also included as `written`.
+- **Context injection path**: `RunSnapshot.outline → MainInput.outline → main-host-context`. Reuses the existing main-writing input path; this context does not replace the current user request, actual manuscript, memos, or lore, and must pass the final input token budget check. It neither dumps the entire outline unconditionally nor silently drops critical constraints that exceed the budget.
+- **Scene reservation and admission**:
+  1. `POST /api/outline-nodes/:id/scene-command` creates an outline-linked scene request, passing separate `additionalInstruction`, target revision number, and plan hash so stale requests cannot bind to a modified plan.
+  2. `POST /api/scene-commands/:id/run` schedules the actual prose generation. There is no separate outline-only writer executor, and helper outputs are never auto-promoted into the main story.
+  3. The current outline and additional instructions are frozen together at Run admission, preserving the single writer, cancellation handling, and manuscript save boundaries.
+  - No API or separate queue UI is provided for creating, canceling, or deleting standalone scene reservations detached from an outline.
 
-### 예약 취소, 멱등성, 변경 감지
+### Reservation cancellation, idempotency and change detection
 
-- **미실행 예약 취소**: 아직 실행되지 않은 예약에 포함된 상위 경로, 직계 하위, 명시적 관련 계획이 실질적으로 변경되면 동일 저장 트랜잭션에서 해당 예약을 즉시 취소해요. (단순 형제 노드 변경, 수정 번호만 바뀐 경우, 롤백된 변경은 취소하지 않아요. 이미 접수된 Run은 당시 입력을 유지해요.)
-- **진행 중 API**: `GET /api/chats/:id/outline/focus`는 진행 중 항목을 돌려주고, `PUT`에 `{ "nodeId": "..." }` 또는 `{ "nodeId": null }`을 보내 지정하거나 해제해요. 값을 그대로 덮어쓰므로 같은 요청을 반복해도 결과가 같아요. 일반 Run 접수(`run`, `preview-main`)에서 장면 예약이 아닐 때 `freezeOutlineFocus`가 진행 중 항목을 고정하고, 원문 커밋 트랜잭션에서 `linkFocusSource`가 `focus` 연결을 남겨요.
-- **멱등키와 복구**: 브라우저는 플롯 저장과 집필의 요청 본문 및 키를 전송 전에 로컬에 보존해요. 통신 응답이 유실되면 **요청 결과 확인**을 통해 동일한 요청의 처리 상태를 조회하며 중복 실행으로 대체하지 않아요. 원래 키는 원래 플롯 및 장면 요청에만 유효하며 다른 대상이나 내용으로 키를 재사용하면 충돌로 처리해요.
+- **Canceling unexecuted reservations**: If an unexecuted reservation's ancestor path, direct children, or explicitly related plans change substantively, that reservation is immediately canceled in the same save transaction (sibling-only edits, revision-only bumps, and rolled-back changes do not cancel it; already-admitted Runs retain the input captured at admission).
+- **In-progress focus API**: `GET /api/chats/:id/outline/focus` returns the active focus node, and `PUT` with `{ "nodeId": "..." }` or `{ "nodeId": null }` sets or clears it. Because it overwrites the value directly, repeating the same request is idempotent. On normal Run admission (`run`, `preview-main`) outside a scene reservation, `freezeOutlineFocus` freezes the active focus node, and `linkFocusSource` records a `focus` link inside the manuscript commit transaction.
+- **Idempotency keys and recovery**: The browser persists outline-save and writing request bodies and keys locally before sending. If the response is lost in transit, **요청 결과 확인** (Check request result) checks the processing status of that exact request rather than issuing a duplicate execution. An original key is valid only for its original outline or scene request; reusing a key with a different target or payload is treated as a conflict.
 
-### 도우미 도구 계약 (`outline.read`, `outline.write`)
+### Helper tool contracts (`outline.read`, `outline.write`)
 
 - **`outline.read`**:
-  - **모드**: 기본 `overview`, 특정 `nodeId`의 `subtree`, 단일 항목의 `detail`. `overview`는 진행 중 항목의 `focusId`도 알려 줘요.
-  - **하위 트리 깊이**: `depth` (0=선택 항목, 1=직계 자식, 생략=전체 자손).
-  - **상세 섹션**: `detail`의 `section`은 `intent`, `related`, `writings` (선택 단위와 자손의 실제 본문 참조 목록).
-  - **단위와 한도**: 모든 모드는 `offset/limit`을 사용해요. `intent` 조회 시 `limit` 생략 시 로컬 추정 3,000토큰을 반환하고, 명시된 `limit`은 최대 10,000 UTF-16 단위 수로 해석해요. 본문 offset과 반환 좌표는 항상 UTF-16 단위예요. 개요의 `intentCodePoints`는 SQLite Unicode 코드 포인트 수예요.
-  - **일관성 검증**: 모든 페이지는 조회 범위의 `version`, 정확한 반환 범위, 재호출용 `nextRead`를 제공해요. 이어 읽기는 `expectedVersion`을 전달하며 플롯이 변경되면 `OUTLINE_CHANGED`와 재조회 경로를 돌려줘요.
-  - **적용 범위 지표**: `coverage.wholeField`는 이번 한 응답이 필드 전체를 포함하는지 여부만 나타내요 (예: 전체 841자 중 마지막 600–841 구간은 `wholeField: false`, `nextOffset: null`). `coverage.excludedByDepth`로 깊이 제한에 따라 제외된 항목을 표시해요.
-  - **응답 크기 상한**: JSON 메타데이터를 포함해 로컬 추정 12,000토큰 이내로 조립해요.
+  - **Modes**: Default `overview`, `subtree` for a specific `nodeId`, and `detail` for a single item. `overview` also returns `focusId` for the active in-progress item.
+  - **Subtree depth**: `depth` (`0` = selected item, `1` = direct children, omitted = all descendants).
+  - **Detail sections**: `detail` `section` is `intent`, `related`, or `writings` (actual manuscript references for the selected node and its descendants).
+  - **Units and limits**: All modes use `offset/limit`. For `intent` reads, omitting `limit` returns an estimated 3,000 local tokens, while an explicit `limit` is interpreted as up to 10,000 UTF-16 code units. Body offsets and returned coordinates are always in UTF-16 units; `intentCodePoints` in overview counts SQLite Unicode code points.
+  - **Consistency validation**: Every page returns the `version` of the queried scope, exact returned range, and `nextRead` for continuation. Continuation reads pass `expectedVersion`; if the outline changed, the tool returns `OUTLINE_CHANGED` along with a re-read path.
+  - **Coverage indicators**: `coverage.wholeField` indicates only whether this single response contains the entire field (e.g., the final 600–841 slice of an 841-character field returns `wholeField: false`, `nextOffset: null`). `coverage.excludedByDepth` indicates items omitted by the depth cap.
+  - **Response size ceiling**: Assembled within a local estimate of 12,000 tokens including JSON metadata.
 - **`outline.write`**:
-  - 단일 호출에서 `create`, `update`, `move`, `remove`를 최대 200개까지 원자적으로 적용해요. `update`는 `level`도 바꿀 수 있어요. 새 항목의 `ref`/`parentRef`로 계층 구조를 한 번에 생성할 수 있어요.
-  - 모델 반환값: 전체 detail 대신 `operationId`, `applied`, `atomic`, `created`, `changes`, `revisionAfterOperation`을 반환해요.
-  - 확정 확인: 기존 `task.inspect(kind:"helper")`의 `committedEffects`에서 확정 영수증 ID·시각·도구/호출 ID를 확인할 수 있어요.
+  - Atomically applies up to 200 `create`, `update`, `move`, and `remove` operations in a single call. `update` can also change `level`. New items can build a hierarchy in one call using `ref`/`parentRef`.
+  - Model return payload: Returns `operationId`, `applied`, `atomic`, `created`, `changes`, and `revisionAfterOperation` rather than full detail objects.
+  - Commit verification: Confirmed receipt ID, timestamp, and tool/call ID can be verified in `committedEffects` of `task.inspect(kind:"helper")`.
 
-### 점검 기술 계약
+### Review technical contract
 
-- **읽기 전용 제한**: **원문과 점검** 요청 시 앱 도구는 `outline.read` 및 기존 본문·로어 읽기로 제한되며 쓰기 도구 실행은 엄격히 거절돼요. 별도의 승인 체계나 전용 점검 에이전트는 두지 않아요.
-- **초기 컨텍스트 예산**: 선택한 플롯의 작은 개요, 이어 읽기 경로, 현재 분기에서 가장 최근에 연결된 최대 3개 원문의 짧은 발췌문으로 구성돼요. 현재 분기에 연결된 원문이 없으면 점검을 시작하지 않아요. 초기 원문 발췌에는 입력 예산의 1/8 이내이면서 최대 1,500 추정 토큰을 사용해요. 불완전 제공 시 `partial` 플래그를 표기해요.
-- **데이터 보존**: 별도의 영구 점검 테이블을 유지하지 않으며, 점검 결과와 근거는 도우미 대화 이력과 작업 기록에 남아요.
+- **Read-only restriction**: On **원문과 점검** (Review against manuscript) requests, app tools are restricted to `outline.read` and existing manuscript/lore reads; write tool calls are strictly rejected. No separate approval system or dedicated review agent is introduced.
+- **Initial context budget**: Consists of a compact overview of the selected outline, continuation read paths, and short excerpts from up to the 3 most recently linked manuscripts in the current branch. Review does not start if the current branch has no linked manuscripts. Initial manuscript excerpts use at most 1/8 of the input budget and no more than 1,500 estimated tokens, setting the `partial` flag when truncated.
+- **Data retention**: No separate persistent review table is maintained; review outputs and evidence remain in helper conversation history and task records.
 
-### 데이터베이스 스키마와 데이터 보존
+### Database schema and data preservation
 
-- **테이블 구조**: 플롯과 편집 영수증은 `outline_nodes`와 `outline_batches`에, 관련 플롯 및 원문 연결은 `outline_links`와 `outline_writings`에, 채팅별 진행 중 항목은 `outline_focus`에 저장해요. `outline_writings.origin`은 계획 집필(`planned`)과 진행 중 일반 요청(`focus`)을 구분해요. 기존 `outline_reviews`와 내부 장면 명령 데이터는 보존해요. [데이터 정책](../DATA-MIGRATIONS.md)
-- **단일 원본 유지**: 플롯과 원문 자체는 단 한 벌만 유지해요. 성공한 실행의 큰 입력 데이터는 수명 정책에 따라 정리하고 필수 메타데이터(수정 번호, hash, source 참조)만 남겨요.
-- **복사와 백업**: 독립 사본 및 휴대용 채팅 백업은 플롯 내용, 계층, 순서, 유지 조건, 관련 참조와 진행 중 항목을 새 ID로 재생성해요. 복사 시점 이전의 실제 원문 연결만 연결 종류와 순서를 유지한 채 새 source ID로 매핑하며, 완료된 Run/예약/영수증 및 도우미 점검 작업은 복제하지 않아요.
+- **Table layout**: Outline nodes and edit receipts live in `outline_nodes` and `outline_batches`; related outline links and manuscript links live in `outline_links` and `outline_writings`; per-chat active focus lives in `outline_focus`. `outline_writings.origin` distinguishes planned writing (`planned`) from normal requests under active focus (`focus`). Existing `outline_reviews` and internal scene-command data are preserved ([Data policy](../DATA-MIGRATIONS.md)).
+- **Single source of truth**: Only a single copy of each outline and manuscript is stored. Large input payloads from succeeded executions are pruned per retention policy, leaving only essential metadata (revision number, hash, source references).
+- **Copies and backups**: Independent copies and portable chat backups recreate outline content, hierarchy, order, invariants, related links, and active focus under new IDs. Only actual manuscript links created prior to the copy are remapped to new source IDs while preserving link kind and order; completed Runs, reservations, receipts, and helper review tasks are not cloned.
 
-### 검증과 범위
+### Outline verification and scope
 
-- **검증 파일**: `tests/outline.test.ts`, `tests/helper-outline.test.ts`, `tests/helper-workspace.test.ts`, `tests/database-schema.test.ts`, 우측 패널의 플롯 탭은 `tests/side-panel-browser.spec.ts`
-- **한 컴포넌트, 두 배치**: 플롯 탭과 전체 화면은 같은 `OutlinePanel` 인스턴스예요(`layout`이 `sidecar` 또는 `workspace`). 탭을 바꾸거나 크게 보기로 넓혀도 선택과 편집 중인 항목이 그대로 남도록, `web/main.tsx`가 한 자리에서 렌더하고 숨김만 바꿔요. 두 번째 좁은 구현을 만들지 않아요.
-- **검증 명령어**: `npm run verify:outline` (390px, 1440px 해상도에서 플롯 편집, 집필, 도우미 전달, 점검 흐름을 합성 프로바이더로 확인).
-- **회귀 방지**: 브라우저 목록/상세 조회 시 플롯 규모 증가에도 고정된 SQL 호출 수를 유지하는지, 원문·순서·진행 상태의 일관성과 보존된 점검 데이터 불변성을 확인해요.
-- **범위 외 사항**: 자동 재계획, 다중 회차 자동 집필, 공유 플롯 템플릿, 그래프 편집기, 신규 기억 추출 시스템은 본 작업실 범위에 포함되지 않아요.
+- **Test files**: `tests/outline.test.ts`, `tests/helper-outline.test.ts`, `tests/helper-workspace.test.ts`, `tests/database-schema.test.ts`, and `tests/side-panel-browser.spec.ts` for the right-panel outline tab.
+- **One component, two layouts**: The outline tab and full-screen view are the same `OutlinePanel` instance (`layout` is `sidecar` or `workspace`). `web/main.tsx` renders it in one place and toggles visibility only so selection and in-progress edits survive tab switches or expanding to full view; no second narrow implementation is built.
+- **Verification command**: `npm run verify:outline` (checks outline editing, writing, helper handoff, and review flows at 390px and 1440px viewports against a synthetic provider).
+- **Regression checks**: Verifies constant SQL query count for browser list/detail queries as outline size grows, consistency of manuscript/order/progress state, and immutability of preserved review data.
+- **Out of scope**: Automatic replanning, multi-chapter automatic writing, shared outline templates, graph editors, and new memory-extraction systems are outside the scope of this workspace.
 
 ## Original-work reference (Story Guide)
 
-### 실행 파이프라인과 캐시 정책
+### Execution pipeline and cache policy
 
-- **컨텍스트 구성**: 자동 참고문 생성에는 사용자·모델 대화, 현재 요약, 캐릭터 카드·페르소나·로어북, 카드의 예시 대화, 작가 메모와 작가 노트, 해당 집필의 계층형 플롯 및 요청문이 전달돼요. 카드의 예시 대화는 어조 참고 자료로만 사용하며 실제 발생한 사실로 취급하지 않아요. 재생성 시에는 교체 대상 응답을 제외한 입력을 전달해요.
-- **호출 구조**: 일반적으로 1회의 모델 호출로 참고문을 완성해요. 추가 원문 확인이 필요한 경우에 한해 기존 읽기 도구를 1회 묶어 실행한 뒤 최종 답변을 받아요. 본문 집필과 거절 감지에 필요한 실행 호출 한도를 보장해요. 참고문 생성 호출은 사용량 화면의 원작 참고 항목에 기록돼요.
-- **캐시 재사용 조건**: 입력 컨텍스트, 설정값, 모델, 참고 프롬프트가 완전히 일치할 때만 저장된 참고문 결과를 재사용해요. 추가 원문을 읽어서 작성된 결과는 재사용하지 않고 매번 새로 검토해요.
-- **입력 예산과 요약**: 대화 이력에 컨텍스트 요약이 필요한 경우, 참고문이 차지할 토큰 예산까지 고려해 한 번에 묶어 요약을 진행해요. 원래 입력 공간이 충분하다면 참고문만을 위해 불필요한 추가 요약을 하지 않아요. 참고문 생성에 실패하거나 입력 한도가 부족하면 참고문 없이 본문 생성을 이어가며, 이전 참고문을 임의로 끼워 넣지 않아요. 취소 요청은 모델 호출까지 즉시 전달돼요.
-- **기록 소유권**: **마지막 집필 참고문**은 단순 생성 캐시가 아니라 실제 본문 모델 호출의 최종 입력에 포함된 기록을 기준으로 표시해요. 참고문 생성 후 본문 호출 전에 취소하거나 요청 수정에서 참고문을 제외하면 직전 집필의 참고문 기록을 유지해요.
+- **Context composition**: Automatic reference generation receives the user/model conversation, current summary, character card, persona, lorebook, card example dialogue, author memos and author notes, the hierarchical outline for this turn, and the user request. Card example dialogue is used strictly as tone reference and never treated as events that actually happened. On regeneration, the response being replaced is excluded from the input.
+- **Call structure**: Normally completes in 1 model call. Only when additional manuscript verification is required does it execute 1 batch of existing read tools before producing the final answer. Execution call budgets required for main writing and refusal detection are guaranteed. Reference-generation calls are logged under original-work reference in the usage screen.
+- **Cache reuse conditions**: A stored reference is reused only when the input context, settings, model, and reference prompt match identically. Results written after reading additional manuscripts are never reused and are re-evaluated fresh each time.
+- **Input budget and summarization**: If conversation history requires context summarization, summarization runs once while accounting for the token budget needed by the reference. If sufficient input headroom already exists, no unnecessary extra summary is triggered just for the reference. If reference generation fails or input budget is insufficient, main writing proceeds without a reference rather than injecting a stale one. Cancellation propagates immediately to the model call.
+- **Record ownership**: **마지막 집필 참고문** (Last writing reference) reflects the record actually included in the final input to the main writing model call, not merely the generation cache. Canceling after reference generation before the main call, or excluding the reference when editing a request, preserves the prior turn's reference record.
 
-### 코드 구조와 DB 스키마
+### Code structure and DB schema
 
-- **코드 매핑**:
-  - `core/story-guide.ts`: 데이터 인터페이스 및 유효성 검증
-  - `server/story-guide-store.ts`: 채팅별 설정 및 마지막 참고문 영속화
-  - `server/story-guide-runtime.ts`: 프롬프트 구성, 실행, 캐시, 사용량 기록
-  - `server/story-guide-routes.ts`: 설정 조회·저장 및 마지막 참고문 조회 API
-  - `web/StoryGuidePanel.tsx`: 원작 참고 설정, 당시 참고문, 메모·정정 UI
-  - `server/helper-context.ts`: 채팅 도우미에 원작 참고 설정 제공
-- **데이터베이스 계약**:
-  - SQLite 스키마 버전 15의 테이블을 사용해요.
-  - 별도의 작업 큐 테이블, 장기 기억 저장소, 전문 검색 인덱스는 두지 않으며 채팅 레코드에 종속된 가벼운 메타데이터로 관리해요.
-- **복사와 백업**:
-  - 독립 채팅 복사와 휴대용 채팅 백업은 원작 참고 **설정만** 복제해요. 복사된 새 채팅은 자체 컨텍스트로 새로 참고문을 작성해요.
-  - 전체 SQLite 데이터베이스 백업에는 기존에 생성된 참고문과 이력이 모두 포함돼요.
+- **Code mapping**:
+  - `core/story-guide.ts`: Data interfaces and validation.
+  - `server/story-guide-store.ts`: Per-chat settings and last-reference persistence.
+  - `server/story-guide-runtime.ts`: Prompt assembly, execution, caching, and usage recording.
+  - `server/story-guide-routes.ts`: APIs for reading/saving settings and fetching the last reference.
+  - `web/StoryGuidePanel.tsx`: Original-work reference settings, historical reference display, and memo/correction UI.
+  - `server/helper-context.ts`: Exposes original-work reference settings to the chat helper.
+- **Database contract**:
+  - Uses tables in SQLite schema version 15.
+  - Introduces no separate task-queue table, long-term memory store, or full-text search index; managed as lightweight metadata attached to the chat record.
+- **Copies and backups**:
+  - Independent chat copies and portable chat backups copy **only** the original-work reference settings; the copied chat generates its own fresh references from its own context.
+  - Full SQLite database backups include all previously generated references and history.
 
-### 검증 테스트
+### Story Guide verification tests
 
-- `tests/story-guide-*.test.ts`: 설정 저장 및 복사, 동시 저장 충돌, 지원 종료된 수동 API의 모델 호출 방지, 도우미의 동일 설정 읽기, 입력 토큰 예산 및 캐시, 합성 HTTP 집필 전달·실패·취소 계약을 검증해요.
-- `tests/chat-settings-browser.spec.ts` (`CSUI10`): 설정 변경, 당시 참고문 렌더링, 메모·정정 연동 화면 흐름을 브라우저 환경에서 검증해요.
-- 합성 테스트로 시스템 파이프라인의 동작을 확인해요.
+- `tests/story-guide-*.test.ts`: Verifies saving and copying settings, concurrent-save conflicts, prevention of model calls on retired manual APIs, helper reading of identical settings, input token budgets and caching, and synthetic HTTP writing delivery/failure/cancellation contracts.
+- `tests/chat-settings-browser.spec.ts` (`CSUI10`): Verifies settings changes, historical reference rendering, and memo/correction UI flows in the browser.
+- Synthetic tests verify overall pipeline behavior.
 
 ## Story UI scanning, compilation and pins
 
-`core/story-ui-scan.ts`는 zod와 A2UI 카탈로그 없이 태그 유무만 판별해요. `web/story-ui-parser.ts`를 쓰는 화면(`web/StreamingResponse.tsx`, `web/SourceReader.tsx`)은 태그가 없는 본문을 바로 문단으로 그리고, 태그가 있을 때만 검증기(`core/story-ui.ts`)를 불러오며 그동안 결과 자리 표시를 보여 줘요. 시작 번들이 검증기를 다시 끌어오지 않도록 웹 코드는 `core/story-ui.ts`를 정적으로 가져오지 않아요. 이미지 태그를 감추는 `core/image-placement.ts`처럼 블록의 범위만 필요한 코드는 `core/story-ui-scan.ts`의 `scanStoryUi`를 검증 없이 써요. 서버는 계속 `core/story-ui.ts`로 같은 검증을 동기로 해요. 직접 편집과 도우미 장면 편집은 `server/story-ui-assets.ts`의 `compileEditedSourceText`를 거쳐 저장해요. 도우미 되돌리기는 저장했던 원문을 정확히 복원해야 하므로 이 변환을 거치지 않아요. 편집 왕복은 `tests/story-ui-lifecycle.test.ts`가 확인해요. 현황 탭은 `core/story-ui.ts`의 `latestStoryUiPins`가 장면 체인에서 고르고(`tests/story-ui-pins.test.ts`), `server/story-ui-routes.ts`의 `/api/chats/:id/story-ui/pins`와 `web/StoryBoardPanel.tsx`가 보여 줘요. 고정 블록을 따로 저장하지 않고 매번 장면에서 다시 고르므로 편집, 재생성, 분기, 백업에 별도 상태가 없어요. 탭을 보일지는 이 응답으로 정해요. 리더가 불러온 장면은 체인의 일부라서 기준이 될 수 없어요. 현재 장면은 `web/useStory.ts`가 읽기 위치와 같은 기준(`readerLocation`)으로 정해요. 실패한 블록의 자리는 `core/reading-markdown.ts`의 `compileReadingMarkdown`이 블록 앞뒤 본문을 따로 컴파일해 정해요(`tests/reading-markdown.test.ts`). 편집한 블록의 그림 연결은 `tests/story-ui-asset-run.test.ts`가 확인해요.
+- `core/story-ui-scan.ts` checks tag presence without zod or the A2UI catalog.
+- Views using `web/story-ui-parser.ts` (`web/StreamingResponse.tsx`, `web/SourceReader.tsx`) render tag-free prose directly as paragraphs, loading the validator (`core/story-ui.ts`) dynamically only when tags are present while showing a result placeholder in the interim.
+- Web code must not statically import `core/story-ui.ts`, preventing the startup bundle from pulling the validator back in.
+- Code needing only block ranges—such as `core/image-placement.ts` hiding image tags—calls `scanStoryUi` from `core/story-ui-scan.ts` without validation.
+- The server continues running the same validation synchronously via `core/story-ui.ts`.
+- Direct edits and helper scene edits run through `compileEditedSourceText` in `server/story-ui-assets.ts` before saving. Helper rollback skips this compilation because it must restore the previously saved source verbatim. Edit round-trips are verified by `tests/story-ui-lifecycle.test.ts`.
+- The status-board tab selects pins from the scene chain via `latestStoryUiPins` in `core/story-ui.ts` (`tests/story-ui-pins.test.ts`), served by `/api/chats/:id/story-ui/pins` in `server/story-ui-routes.ts` and displayed by `web/StoryBoardPanel.tsx`. Because pinned blocks are recomputed from scenes rather than stored separately, edits, regenerations, forks, and backups carry no separate pin state. Tab visibility is decided from this response, as scenes loaded in the reader are only a slice of the chain and cannot serve as the source of truth. The current scene is chosen by `web/useStory.ts` using the same basis (`readerLocation`) as reading position.
+- Placement of failed blocks is determined by `compileReadingMarkdown` in `core/reading-markdown.ts`, which compiles prose before and after the block separately (`tests/reading-markdown.test.ts`).
+- Image bindings for edited blocks are verified by `tests/story-ui-asset-run.test.ts`.
 
 ## Manuscript search (FTS5 trigram)
 
-### 색인 구조와 변경 추적 (FTS5 trigram)
-- **파생 데이터**: `search_documents` 테이블과 SQLite FTS5 trigram 가상 테이블(`search_trigrams`, 옮기는 중인 이전 색인 `search_fts`)은 원본 데이터에서 파생된 데이터예요. 앱 재시작 때 전량을 재구축하지 않아요.
-- **변경 추적과 정규화**: 원문·번역 수정 트랜잭션은 `search_dirty_sources` 테이블에 변경 사항(장면 ID 및 revision)만 함께 기록해요.
-- **Worker 배치 처리**: 읽기 Worker가 작은 묶음을 정규화하고, 메인 서버가 수정 번호를 비교한 뒤 색인에 반영해요.
-- **쓰기 제한**: 한 번의 색인 쓰기는 기존·새 텍스트 합계 약 256KiB 또는 최대 8장면으로 제한해요. 한 장면 자체가 큰 경우 그 한 장면은 단독으로 처리하되 다른 큰 장면과 합치지 않아요. 전체 색인 완료 시간보다 다른 작업의 응답성을 우선하는 경계예요.
-- **색인 저장 형식**: `search_documents.text`에 검색 결과 문맥에 보여 줄 평문 한 벌만 저장하고, 정규화·소문자 사본은 저장하지 않은 채 위치 정보 없는 trigram 색인(`search_trigrams`, `detail=none`, `contentless_delete=1`)에만 넣어요. 색인은 후보를 넓게 고르고 실제 일치는 저장된 평문으로 다시 확인하므로, 연속 문구 검색도 trigram AND 조건으로 후보를 찾아요.
-- **이전 색인 옮기기**: 이전 형식 행(`search_text`가 비어 있지 않고 `search_fts`에 들어 있는 행)은 색인 대기 작업이 없을 때 1초마다 약 128KiB씩 새 색인으로 옮기고 `search_text`를 빈 문자열로 바꿔요(`moveLegacySearchIndex`). 옮기는 동안 검색은 두 색인을 함께 봐요. 옮길 본문이 남지 않으면 빈 문서나 이미 지워진 문서의 잔여 항목까지 `search_fts`를 통째로 비우고, 그 뒤로는 1초 주기에서 읽기 확인만 하고 쓰기 트랜잭션을 열지 않아요. 중간에 서버가 멈추면 다음 시작 뒤 남은 행부터 이어서 옮겨요. 열과 표는 지우지 않아 스키마 15를 유지해요. `tests/manuscript-search.test.ts`가 옮기는 도중과 이후의 검색, 삭제, 색인 무결성을 확인해요.
-- **최신 본문 대체 (Overlay)**: **검색은 변경 대기 중인 문서를 같은 SQLite 읽기 트랜잭션의 최신 본문으로 대체**해요. 색인이 늦어져도 방금 저장된 수정과 삭제가 즉시 검색에 반영돼요.
+### Index structure and change tracking (FTS5 trigram)
+- **Derived data**: The `search_documents` table and SQLite FTS5 trigram virtual table (`search_trigrams`, plus the legacy index `search_fts` while migrating) are derived from source data and are not rebuilt in full on app restart.
+- **Change tracking and normalization**: Original/translation edit transactions record only dirty entries (scene ID and revision) in `search_dirty_sources`.
+- **Worker batching**: A read Worker normalizes small batches, and the main server compares revision numbers before applying updates to the index.
+- **Write bounds**: Each index write is capped at roughly 256KiB of combined old and new text or up to 8 scenes. A single very large scene is indexed alone without batching it with other large scenes, prioritizing responsiveness of other operations over total index completion time.
+- **Index storage format**: `search_documents.text` stores a single copy of plain text for result snippets; no normalized/lowercased copy is persisted, feeding only the positionless trigram index (`search_trigrams`, `detail=none`, `contentless_delete=1`). Because the index casts a wide candidate net and actual matches are verified against the stored plain text, contiguous phrase queries also find candidates via trigram AND conditions.
+- **Legacy index migration**: Legacy rows (non-empty `search_text` present in `search_fts`) are migrated into the new index at roughly 128KiB per second during idle ticks when no indexing work is pending, clearing `search_text` to an empty string (`moveLegacySearchIndex`). During migration, search consults both indexes. Once no text remains to migrate, `search_fts` is emptied completely—including empty or already-deleted residuals—after which the 1-second tick performs only a read check without opening a write transaction. If the server stops mid-migration, the next startup resumes from remaining rows. Columns and tables are kept intact to preserve schema 15. `tests/manuscript-search.test.ts` verifies search, deletion, and index integrity during and after migration.
+- **Latest-body overlay**: **Search overlays dirty documents with their latest text inside the same SQLite read transaction**, so newly saved edits and deletions appear immediately even if indexing lags.
 
-### 검색 쿼리와 구간 탐색
-- **후보 추출과 검사**: 3글자 이상 용어는 색인으로 후보를 좁혀 문자열을 다시 검사하고, 짧은 용어만 있으면 200장면 이하의 구간을 순차적으로 읽어요. 자동 조회가 한글, 한자, 가나 검색어를 2글자부터 시작하는 것은 이 순차 경로를 타요. trigram 색인은 3글자 미만 용어를 좁히지 못하기 때문이에요.
-- **남은 원고 검색**: 한 구간에서 완료되지 않은 검색은 결과 하단의 **남은 원고 검색**으로 다음 구간을 검사해요.
-- **상태 안내**: 미완료 검색을 결과 없음으로 표시하지 않으며, 백그라운드 색인 구축 중에는 안내 문구(`coverage: 'building'`)를 보여줘요.
-- **커서(Cursor) 안정성**: 커서는 검색 조건과 마지막 장면의 순서 번호만 보관해요. 다른 채팅이나 이미 지난 결과의 수정으로 다음 페이지 조회를 무효화하지 않아요.
-- **스냅샷 범위**: 현재 읽는 페이지는 최신 원고를 검색해요. 이미 지난 범위의 새 일치는 처음부터 다시 검색해 확인해야 해요. 작업실 전체의 단일 시점 스냅샷을 여러 페이지 동안 유지하는 검색은 아니에요.
+### Search queries and segment scanning
+- **Candidate extraction and verification**: Terms of 3+ characters narrow candidates via the index before re-checking the text, while queries containing only shorter terms scan sequentially in segments of up to 200 scenes. Auto-querying Hangul, Hanja, and Kana terms starting at 2 characters takes this sequential path because a trigram index cannot narrow terms shorter than 3 characters.
+- **Search remaining manuscript**: Searches that do not finish within one segment continue into the next segment via **남은 원고 검색** (Search remaining manuscript) at the bottom of the results.
+- **Status reporting**: Incomplete searches are never shown as "no results", and background indexing displays a status notice (`coverage: 'building'`).
+- **Cursor stability**: Cursors store only the search criteria and the sequence number of the last scanned scene, so edits in other chats or already-passed results do not invalidate next-page fetches.
+- **Snapshot scope**: The current page searches the latest manuscript; new matches in already-passed ranges require restarting the search from the beginning. Search does not maintain a single point-in-time workspace snapshot across multiple pages.
 
-### API 규약과 ReaderTarget 계약
-- **API 규약**:
+### API contract and ReaderTarget contract
+- **API contract**:
   - `POST /api/search`
-  - 요청 페이로드: `{ query, scope, chatId?, botId?, kinds, cursor?, limit? }`
-    - 기본 20개, 최대 50개 결과.
-  - 응답 페이로드: `{ items, nextCursor, coverage }`
-  - 요청은 읽기 전용(`PRAGMA query_only=ON`)이며 유지보수 중에도 동작해요. 서버가 정한 DB만 Worker에서 읽고 API는 SQL이나 파일 경로를 받지 않아요.
-  - Worker의 전체 실행 제한(8초 타임아웃)과 동시 실행 한도(최대 4개)가 있어요. 시간 제한을 넘으면 원고 쓰기는 막지 않고 검색 범위를 줄이도록 안내해요.
-- **위치 이동 계약 (`ReaderTarget`)**:
-  - `ReaderTarget`은 채팅·장면·원문/번역·hash·선택 문단을 함께 이동시키는 공통 계약이에요.
-  - 본문 hash가 바뀌면 잘못된 문단 대신 해당 장면 시작으로 이동해요.
-  - 검색문이나 원문 인용은 URL에 넣지 않아요.
-- **검증 테스트**:
-  - `tests/manuscript-search.test.ts`: 한국어·일본어 짧은 문자열, FTS, 문구·기호, 수정·번역·삭제 즉시 반영, 범위 격리, 페이지네이션, 검색 취소, 유지보수 모드.
-  - `tests/personal-features-browser.spec.ts`: 실제 검색과 장면 이동, 작은 화면 레이아웃.
-  - 동적 스크립트 표시와 형태소·의미 검색은 지원 범위가 아니에요.
+  - Request payload: `{ query, scope, chatId?, botId?, kinds, cursor?, limit? }` (default 20, max 50 results).
+  - Response payload: `{ items, nextCursor, coverage }`.
+  - Requests run read-only (`PRAGMA query_only=ON`) and work even in maintenance mode. The Worker reads only the server-chosen DB; the API never accepts raw SQL or file paths.
+  - Enforces an overall Worker timeout (8 seconds) and concurrency limit (max 4). Exceeding the timeout advises narrowing the search scope without blocking manuscript writes.
+- **Navigation target contract (`ReaderTarget`)**:
+  - `ReaderTarget` is the shared contract for navigating with chat, scene, original/translation, hash, and target paragraph together.
+  - If the body hash has changed, navigation falls back to the start of the scene rather than an inaccurate paragraph.
+  - Search queries and manuscript excerpts are never placed in URLs.
+- **Verification tests**:
+  - `tests/manuscript-search.test.ts`: Short Korean/Japanese queries, FTS, phrases/punctuation, immediate reflection of edits/translations/deletions, scope isolation, pagination, search cancellation, and maintenance mode.
+  - `tests/personal-features-browser.spec.ts`: Live search, scene navigation, and small-viewport layout.
+  - Dynamic script output and morphological/semantic search are out of scope.
 
 ## Reader navigation, streaming, renderer and helper sessions
 
-  - 도우미를 열기만 해도 그 채팅의 기본 대화가 만들어져요. 요청을 한 번도 보내지 않았고 이름이나 말투, 프로젝트도 바꾸지 않은 기본 대화는 다른 채팅의 목록과 전체 목록에 나오지 않아요. 열어 보기만 한 채팅의 빈 대화가 목록을 채우지 않게 하려는 거예요. 그 채팅 자체의 목록에는 늘 보이고, 이 탭에서 한 번 연 대화는 탭을 새로 고칠 때까지 계속 보여요. 입력창 초안은 브라우저에만 있어서 서버가 알 수 없으므로, 초안을 쓰던 대화로 돌아갈 길을 이 두 조건으로 남겨요. 대화는 지우지 않아요. **새 대화**로 직접 만든 대화는 비어 있어도 늘 보여요. 서버 목록(`HelperWorkspace.list`)은 모든 대화를 돌려주면서 `unused`로 표시하고, 숨기는 일은 `web/helper-navigation-model.ts`의 `listedHelperSessions`가 맡아요.
+- Simply opening the helper creates that chat's default conversation. A default conversation that has never sent a request and has not changed its name, tone, or project is hidden from other chats' lists and the global list so merely opening a chat does not fill lists with empty conversations. It always appears in its own chat's list, and any conversation opened once in the current tab remains visible until the tab reloads—because composer drafts exist only in the browser and are unknown to the server, these two rules keep a path back to an active draft without deleting the conversation. Conversations explicitly created via **새 대화** (New conversation) always appear even when empty. The server list (`HelperWorkspace.list`) returns all conversations flagged with `unused`, and `listedHelperSessions` in `web/helper-navigation-model.ts` owns the filtering.
 
-### Reader 이동 상태와 SSE 동기화
+### Reader navigation state and SSE synchronization
 
-- **단일 이동 상태 머신**: 채팅, 원문, 화면 표시는 `web/reader-navigation.ts`의 단일 상태 머신으로 제어해요. 주소가 동일한 반복 이동(A→B→A)이나 동일 원문 재선택도 새로운 사용자 의도로 취급하여, 이전 조회나 지연된 재시도 완료가 새 화면을 덮어쓰거나 다른 채팅으로 튕기지 않도록 방어해요.
-- **SSE 커서와 백오프**: Reader는 SSE의 목표 cursor까지 조회를 이어가며, 네트워크 일시 실패 시 새 이벤트 없이도 최대 5초 간격의 지수 백오프로 재시도해요. 전체 재동기화는 응답이 화면에 완전히 적용된 후에만 완료 처리되며, 채팅을 벗어나면 재시도 타이머를 즉시 취소해요. 채팅을 열 때의 전체 조회가 적용된 뒤 끊김 없이 도착한 첫 SSE `snapshot`은 다시 전체 조회하지 않고, 그 조회의 cursor가 snapshot의 순번보다 뒤처졌을 때만 증분 조회해요. 첫 조회를 기다리는 것은 그 snapshot뿐이에요. 첫 조회 중에 도착한 새 이벤트는 바로 조회해서, 느린 첫 응답이 그사이 커밋된 장면을 가리지 않게 해요. 연결이 끊긴 뒤의 snapshot이나 첫 조회가 실패·무효화된 경우는 전과 같이 전체 재동기화해요(`web/reader-sync.ts`, `tests/reader-sync.test.ts`).
-- **전역 프롬프트 설정 변경 이벤트**: 프롬프트·모델 작업 공간 저장은 채팅마다 이벤트 행을 쓰지 않고 `app_metadata`에 마지막 변경 하나만 남겨요. 그 순번은 `events`의 AUTOINCREMENT 순번에서 예약하므로 채팅 이벤트와 같은 순서 안에 놓이고, `Store.events()`·`latestEventSequence()`가 모든 채팅의 SSE와 Reader cursor, 표시 revision에 `prompt-workspace.updated`로 합쳐 보여줘요. 이전에 채팅별로 쌓인 행도 그대로 전달돼요(`server/prompt-workspace-events.ts`, `tests/response-transport.test.ts`).
-- **`/reader` 블록 텍스트**: 서버가 `sources[].blocks[]`와 번역 레이아웃 블록을 `text` 없이 범위만 보내도 `web/reader-blocks.ts`가 응답을 받는 즉시 원문이나 번역 결과에서 잘라 `text`를 채워서, 아래 컴포넌트는 같은 블록 계약을 받아요. `text`가 있는 이전 응답도 그대로 받아요.
-- **유휴 탭 절전**: 서재를 보거나 브라우저 탭이 백그라운드로 숨겨지면 Reader 조회와 재시도 타이머를 일시 정지하고 최신 cursor와 필수 알림만 유지해요. 원고 화면으로 복귀할 때 누적된 변경 사항을 한 번에 읽어와요. 카드 입력창도 유휴 조회를 반복하지 않고 기존 SSE의 입력 요청·응답/취소·작업 종료 알림, 재접속, 화면 복귀 때 확인해요. 다른 기기에서 응답한 입력은 작업이 끝나기 전에도 닫히며, 이전 응답의 접수 확인이 늦게 도착해도 다음 질문에 쓰던 초안은 유지해요. 겹친 확인 요청은 순서대로 합치고 실패한 조회만 재시도하므로 카드의 대기 작업을 재실행하지 않아요.
-- **생성 중 응답 스트림**: 열려 있는 채팅의 응답 글은 이미 열린 채팅 이벤트 연결(`/api/chats/:id/events`)에 `event: stream` 프레임으로 실려 와요. 응답마다 연결을 따로 열지 않는 이유는 일반 HTTP/1.1의 출처당 연결 수 제한(6개)이에요. 채팅 이벤트와 본편, 도우미 응답을 각각 열린 연결로 받으면 바쁜 탭 둘만으로 다른 요청이 멈춰요. 프레임 구성과 역압 처리는 `server/chat-event-stream.ts`가, 브라우저 쪽 전달은 `web/response-stream-bridge.ts`가 맡고, `web/StreamingResponse.tsx`는 밀려온 페이지와 커서 조회(`/api/response-streams/:taskKind/:taskId?after=`) 결과를 작업마다 하나인 순번 커서로 받아 같은 글 조각을 두 번 붙이지 않아요. 서버의 `ResponseStreamStore`(`server/response-stream.ts`)는 받은 글을 메모리에서 50ms마다 또는 1,024자가 모이면 내보내고, DB에는 750ms마다, 아직 적지 않은 글이 4,096자가 되거나 시도나 구간이 바뀌거나 작업이 끝날 때 적어요. 커서 조회도 아직 적지 않은 메모리의 글까지 함께 돌려주므로 두 경로가 같은 순번을 봐요. 채팅 이벤트 순번과 작업별 글 순번은 서로 독립이라, 모든 프레임의 `id`는 `<채팅 순번>;<종류>:<작업 ID>:<글 순번>,...` 꼴로 둘을 함께 실어요. 브라우저가 스스로 다시 연결할 때 보내는 `Last-Event-ID`만으로 양쪽을 이어 받기 위해서예요. 앱이 연결을 새로 열 때는 화면이 가진 커서를 `streamAfter` 쿼리로 보내요. 서버는 각 프레임에 읽기 시작한 순번(`after`)을 넣고, 화면은 그 값이 자기 커서보다 앞서면 건너뛴 구간이 있다고 보고 커서 조회로 메워요. 커서 조회는 그대로 남은 대체 경로예요. 채팅 밖의 도우미 작업, 실패나 취소 뒤의 부분 응답 보기, 다른 채팅의 작업, 이벤트 연결이 끊긴 동안, 화면에 처음 붙을 때와 탭이나 응답이 다시 보일 때 써요. 그때는 직전 조회가 글을 가져왔으면 120ms 뒤에, 빈 페이지였으면(첫 토큰 대기, 도구 단계) 300ms 뒤에 다시 읽어요. 글이 밀려오는 동안에는 2초 동안 새 글이 없을 때만 한 번 조회해서, 중간 프록시가 이벤트 연결을 묶어 보내는 환경에서도 글이 멈추지 않아요. 작업별 SSE 경로(`/api/response-streams/:taskKind/:taskId/events`)는 서버에 남아 있지만 앱은 쓰지 않아요. 탭이 숨겨지거나 응답이 화면에 보이지 않으면 밀려온 페이지를 버리고 조회도 멈추며, 돌아오면 받은 마지막 순번부터 이어 읽어요. `tests/chat-event-stream.test.ts`가 복합 커서 재개와 역압, 세션 폐기 시 종료를, `tests/response-stream-browser.spec.ts`가 실제 서버로 밀어 주는 전달, 연결이 끊긴 동안의 조회 전환, 조회 중단과 이어 읽기를 확인해요.
-- **번역 중 스트림**: 번역 작업이 실행 중이고 장면이 번역 표시일 때 `web/SourceReader.tsx`가 같은 `StreamingResponse`로 작업 ID의 `translation` 스트림을 보여 줘요. 글이 도착하기 전과 스트림을 읽지 못하는 동안에는 `quietUntilText`로 아무것도 그리지 않고 기존 번역 준비 표시를 그대로 두며, 첫 글이 도착했다는 사실은 `onText`로 받아 그때 준비 표시를 내려요. 거절된 시도와 재시도의 글이 겹쳐 보이지 않도록 마지막 시도의 글만 보이고, 글은 Story UI 처리 없이 본편 스트림과 같은 리더 본문 경로로 그려요. 이미 번역이 있는 장면의 재번역은 기존 번역을 계속 보여 줘요. 스트림의 글은 판정 전 시도의 원문 그대로이고 화면 표시용일 뿐이라 완료 뒤에는 저장된 번역 결과로 바뀌어요. 구조화 출력, 제출 도구, Codex 연결, Story UI 자리 표시 태그가 들어가는 번역은 원문이 깨져 보이므로 스트림에 글을 싣지 않아요(`core/provider-progress.ts`의 `publicProgressAllowed`, `server/product-auxiliary.ts`). `tests/translation-stream.test.ts`가 판정 전 저장 금지와 시도 구분을, `tests/response-stream-browser.spec.ts`의 `STREAMTRANSLATION`이 번역 화면의 스트림 표시와 완료 뒤 교체를 확인해요.
-- **패널 폭과 읽기 위치**: 우측 패널을 열고 닫거나 폭을 바꾸면 원고가 다시 줄바꿈돼요. 읽던 단락은 리더 스크롤 영역의 브라우저 스크롤 고정(`overflow-anchor: auto`, `web/style.css`)이 지켜요. 끄는 동안에는 React를 거치지 않고 `.app-shell`의 `--panel-w`만 바뀌므로, 읽기 설정 변경용 복원(`useReadingPreferences`의 `changeLayout`)은 이 경로에 쓰지 않아요. 폭의 소유자는 `web/main.tsx`의 상태 하나이고, 범위와 저장은 `web/side-panel.ts`, 끌기와 키보드는 `web/SidePanelResizer.tsx`, 탭은 `web/SidePanelTabs.tsx`가 맡아요. `tests/side-panel-browser.spec.ts`가 탭 전환 보존, 폭 조절과 저장, 읽기 위치를 확인해요.
-- **하단 따라가기**: 메인 리더와 도우미 대화는 `web/useBottomFollow.ts` 하나로 새 글을 따라가요. 리더는 요청을 보낸 순간부터 그 채팅의 실행이 끝날 때까지만 따라가고, 채팅을 바꾸거나 페이지를 새로 열면 따라가지 않아 읽기 위치 복원과 겹치지 않아요. 사용자가 위로 스크롤하면 바로 멈추고, 바닥 근처(80px)로 돌아오면 다시 따라가요. 내용이 줄어 브라우저가 스크롤을 당긴 경우는 위로 올린 것으로 치지 않아요. 생성 중인 응답은 장면 테마 틀 밖에 있으므로 내부 스크롤 본문(`data-uimori-body-scroll`)이 아니라 리더 스크롤 영역을 움직여요.
-- **자동 번역 전환과 사용자 조작**: `web/SourceReader.tsx`가 장면마다 조작 여부를 기억해요. 장면이 리더 화면에 보이는 동안의 휠, 터치 이동, 스크롤 키, 스크롤바 누르기와 장면 안의 글 선택, 원문, 번역, 요청 편집기 열기가 조작이에요. 번역 작업이 대기나 실행 상태가 되면 기록을 지우므로 요청 뒤의 조작만 세요. 다만 번역이 끝난 순간 장면 안에 선택이 남아 있거나 편집기가 열려 있으면, 요청 전에 시작한 것이어도 조작으로 봐요. 선택은 서버의 Risu 렌더러가 Shadow DOM 안에 그린 장면에서도 `web/reader-dom.ts`의 `readerContains`로 세요. 장면이 화면 밖에 있으면 조작과 상관없이 전환해요. 직접 고른 표시는 탭 세션의 `reader-mode:<장면 ID>`에 남고 이후 자동 전환보다 앞서요. 원문과 번역을 바꿀 때는 보던 블록의 앵커로 위치를 맞추고, 앵커가 달라도 두 표시의 블록 수가 같으면 같은 순서의 블록으로 맞춰요. `tests/reader-selection-browser.spec.ts`의 `RSEL07`부터 `RSEL09`, `RSEL12`부터 `RSEL14`가 확인해요.
-- **요청 복구 키와 멱등성**: 수락 여부가 불확실한 생성 요청은 로컬 요청 키로 상태를 확인하며, 확인 도중에는 전송 버튼이 '이전 요청 확인'으로 유지되어 의도치 않은 취소 동작으로 전환되는 것을 막아요. 404나 충돌이 발생해도 확인 기록을 보존하며 사용자가 위험을 인지하고 명시적으로 삭제할 수 있어요.
+- **Single navigation state machine**: Chat, manuscript, and view state are controlled by a single state machine in `web/reader-navigation.ts`. Repeated navigation to the same URL (`A→B→A`) or re-selecting the same scene counts as a new user intent, preventing prior fetches or delayed retry completions from overwriting the new view or bouncing to another chat.
+- **SSE cursor and backoff**: The Reader keeps fetching up to the SSE target cursor and retries transient network errors with exponential backoff up to 5 seconds even without new events. Full resync is marked complete only after its response has been applied to the screen, and leaving the chat immediately cancels retry timers. A first SSE `snapshot` arriving without a disconnect after the initial chat load has applied does not trigger a second full fetch; it fetches incrementally only if the initial load's cursor lags behind the snapshot sequence. Only that snapshot waits for the initial fetch; new events arriving during the initial fetch trigger fetches immediately so a slow first response cannot hide newly committed scenes. Snapshots after a disconnect or after a failed/invalidated initial fetch perform a full resync as before (`web/reader-sync.ts`, `tests/reader-sync.test.ts`).
+- **Global prompt-setting change events**: Saving the prompt/model workspace writes a single latest-change record in `app_metadata` instead of one event row per chat. Its sequence number is reserved from `events`'s AUTOINCREMENT sequence so it sits in the same ordering as chat events, and `Store.events()` and `latestEventSequence()` merge it as `prompt-workspace.updated` into every chat's SSE stream, Reader cursor, and display revision. Legacy per-chat rows remain delivered as-is (`server/prompt-workspace-events.ts`, `tests/response-transport.test.ts`).
+- **`/reader` block text**: Even when the server sends `sources[].blocks[]` and translation layout blocks as ranges without `text`, `web/reader-blocks.ts` slices `text` from the original or translation immediately upon receipt so downstream components see the same block contract. Legacy responses containing `text` are also accepted unchanged.
+- **Idle-tab power saving**: When viewing the library or when the browser tab is hidden in the background, Reader polling and retry timers pause while retaining only the latest cursor and essential notifications; returning to the manuscript reads accumulated changes in one pass. Card input prompts likewise avoid idle polling, checking only on existing SSE input-request, response/cancel, and task-end events, reconnects, and view return. Inputs answered on another device close even before the task finishes, and a late acknowledgement of a previous answer preserves any draft being written for the next prompt. Overlapping checks coalesce sequentially and only failed fetches retry, never re-executing a card's waiting operation.
+- **Live response streaming**:
+  - Active chat response text rides on the already-open chat event connection (`/api/chats/:id/events`) as `event: stream` frames rather than opening per-response connections, avoiding standard HTTP/1.1's 6-connection-per-origin limit (separate connections for chat events, main writing, and helper responses would stall other requests with just two busy tabs).
+  - Frame formatting and backpressure live in `server/chat-event-stream.ts`, browser routing in `web/response-stream-bridge.ts`, and `web/StreamingResponse.tsx` merges pushed pages and cursor-poll responses (`/api/response-streams/:taskKind/:taskId?after=`) through a single per-task sequence cursor so chunks are never duplicated.
+  - `ResponseStreamStore` (`server/response-stream.ts`) flushes received text from memory every 50ms or every 1,024 characters, and persists to the DB every 750ms, when unwritten text reaches 4,096 characters, on attempt or segment change, or on task completion. Cursor polling includes unwritten in-memory text so both paths observe identical sequence numbers.
+  - Because chat event sequences and per-task text sequences are independent, every frame `id` carries both as `<채팅 순번>;<종류>:<작업 ID>:<글 순번>,...` (`<chatSeq>;<kind>:<taskId>:<textSeq>,...`), allowing browser auto-reconnects to resume both via `Last-Event-ID` alone. When opening a fresh connection, the app passes its cursors in the `streamAfter` query parameter. The server attaches the starting read sequence (`after`) to each frame; if `after` is ahead of the client's cursor, the client detects a gap and fills it via cursor polling.
+  - Cursor polling remains as the fallback path for out-of-chat helper tasks, partial response views after failure or cancellation, tasks in other chats, event-stream disconnects, initial mount, and tab/response re-visibility. It polls again after 120ms when the previous poll returned text, or after 300ms on an empty page (awaiting first token or tool phases). While push frames arrive, it polls once only if 2 seconds pass with no new text, preventing stalls behind buffering proxies.
+  - The per-task SSE route (`/api/response-streams/:taskKind/:taskId/events`) remains on the server but is unused by the app. When a tab is hidden or a response is not visible, pushed pages are discarded and polling stops, resuming from the last received sequence number on return.
+  - `tests/chat-event-stream.test.ts` verifies composite cursor resume, backpressure, and termination on session revocation; `tests/response-stream-browser.spec.ts` verifies live server push delivery, disconnect fallback to polling, and poll pause/resume.
+- **Streaming during translation**: While a translation task is running and the scene is set to translation view, `web/SourceReader.tsx` displays the task ID's `translation` stream via the same `StreamingResponse`. Before text arrives and while the stream is unavailable, `quietUntilText` renders nothing and preserves the existing translation-preparing indicator, clearing it once `onText` signals the first text. Only the latest attempt's text is shown so refused attempts and retries never overlap, rendered through the same reader prose path as main streams without Story UI processing. Re-translating an already-translated scene continues showing the existing translation. Streamed text is raw pre-judgment attempt output for display only and swaps to the saved translation upon completion. Translations using structured output, submit tools, Codex connections, or Story UI placeholder tags do not stream raw output because it would look garbled (`publicProgressAllowed` in `core/provider-progress.ts`, `server/product-auxiliary.ts`). `tests/translation-stream.test.ts` verifies no pre-judgment persistence and attempt isolation, and `STREAMTRANSLATION` in `tests/response-stream-browser.spec.ts` verifies translation-view streaming and post-completion replacement.
+- **Side-panel width and reading position**: Opening, closing, or resizing the right panel reflows manuscript lines; the paragraph being read is held steady by browser scroll anchoring (`overflow-anchor: auto`, `web/style.css`). Dragging updates only `--panel-w` on `.app-shell` without going through React, so reading-preference layout restoration (`changeLayout` in `useReadingPreferences`) is not used on this path. Width is owned by a single state in `web/main.tsx`, bounds and persistence by `web/side-panel.ts`, drag and keyboard handling by `web/SidePanelResizer.tsx`, and tabs by `web/SidePanelTabs.tsx`. `tests/side-panel-browser.spec.ts` verifies tab-switch preservation, width adjustment/persistence, and reading position.
+- **Bottom follow**: Both the main reader and helper conversation follow new output through one hook, `web/useBottomFollow.ts`. The reader follows only from the moment a request is sent until that chat's execution finishes, never on chat switch or fresh page load so it does not fight reading-position restoration. Scrolling up stops following immediately, and returning near the bottom (80px) resumes it; scroll retraction caused by shrinking content does not count as scrolling up. Because an in-progress response sits outside the scene theme frame, it scrolls the reader scroll container rather than the internal scroll body (`data-uimori-body-scroll`).
+- **Auto-translation switching and user interaction**: `web/SourceReader.tsx` tracks per-scene interaction. Wheel, touch move, scroll keys, or scrollbar clicks while the scene is visible, selecting text inside the scene, and opening original/translation/request editors count as interaction. Entering a queued or running translation state clears the flag so only post-request interactions count—except when a selection or editor is still open inside the scene at completion time, which still counts even if started before the request. Selections inside Risu-rendered Shadow DOM scenes are detected via `readerContains` in `web/reader-dom.ts`. Off-screen scenes switch regardless of interaction. A manually chosen representation persists in tab session storage under `reader-mode:<장면 ID>` (`reader-mode:<sceneId>`) and overrides subsequent auto-switching. Switching between original and translation aligns on the visible block's anchor, falling back to the matching positional block when anchors differ but both representations have the same block count. Verified by `RSEL07`–`RSEL09` and `RSEL12`–`RSEL14` in `tests/reader-selection-browser.spec.ts`.
+- **Request recovery keys and idempotency**: Generation requests with uncertain acceptance are verified via local request keys; during verification, the submit button stays `'이전 요청 확인'` (Check previous request) so it cannot accidentally flip into a cancel action. Verification records persist even across 404 or conflict responses and can be explicitly cleared once the user acknowledges the risk.
 
-### 렌더러 아키텍처와 DOM 계약
+### Renderer architecture and DOM contract
 
-- **코드 구조**:
-  - `web/reading-preferences.ts`: 기본값 및 localStorage 저장 검증
-  - `web/useReadingPreferences.ts`: 설정 영속화, 탭 간 동기화, 스크롤 위치 복원
-  - `web/ReadabilitySettings.tsx`: 읽기 설정 대화상자 UI
-  - `web/Prose.tsx`: 도우미 본문, 안전한 일반 Markdown, 설정 예문 렌더러
-  - `web/RisuMessageSurface.tsx`: Risu 메시지 전용 렌더러 (열린 Shadow DOM 사용)
-  - `core/reading-markdown.ts`: 공통 markdown-it 파서
-  - `web/reading-quotes.ts`: 문장 부호 짝맞춤 및 역할 분석
-  - `web/reading-dom.ts`: 완료 본문 DOM 장식 및 인용 스타일링
-  - `web/reading-prose.css`: 공통 인용 및 타이포그래피 스타일
-  - `web/PlainProse.tsx`: 스트리밍 중 아직 쓰는 마지막 문단의 보호 토큰 및 문자 그대로 표시 처리
-- **생성 중 문단 표시**: 생성 중인 글은 빈 줄로 끝난 앞부분을 완성 본문과 같은 컴파일러로 렌더하고(본편은 `Prose`, 도우미는 완성 답변과 같은 `HelperMessageProse`), 쓰는 중인 마지막 문단만 같은 글꼴의 일반 글로 둬요. 닫히지 않은 코드 펜스나 `<a2ui>` 블록 안의 빈 줄은 문단 끝으로 치지 않아요(`splitCompletedParagraphs`, `tests/prose.test.ts`). 봇 채팅의 완성 본문은 서버의 Risu 렌더러가 장면 테마 틀 안에 그리므로 글꼴과 줄 폭은 같지만(`tests/response-stream-browser.spec.ts`), 완료 순간 장면 틀과 Risu 문단 여백 차이만큼 세로 위치가 바뀔 수 있어요.
-  - `web/reader-dom.ts`: Shadow DOM 내 선택 영역 및 읽기 좌표 연결
-- **안전한 Markdown 규격**: 속성 없는 HTML 중 루비 문자(`ruby`, `rb`, `rt`, `rp`), 밑줄(`u`), 위/아래 첨자(`sup`, `sub`), 형광펜 강조(`mark`), 작은 글씨(`small`), 단순 서식(`b`, `i`, `s`), 줄바꿈(`br`)만 제한적으로 렌더링해요. 그 외의 모든 임의 HTML 태그나 속성이 포함된 태그는 문자 그대로 이스케이프하여 노출해요. 삽화는 완결된 Markdown 컨테이너 뒤에만 넣고, 목록·표 중간처럼 안전한 경계가 없는 기존 이미지와 삽화는 본문 아래에 표시해요.
-- **Geometry Marker와 스크롤 복원**: 표시 변환을 거친 본문과 실제 렌더링된 DOM 엘리먼트 사이의 좌표를 임시 geometry marker로 연결해요. 이 마커는 사용자 텍스트 선택, 클릭, 접근성 트리, 레이아웃에 일절 참여하지 않으며 창 크기나 폰트가 변경될 때 재계산돼요.
-- **보호 토큰 최적화**: `{{…}}` 문법은 닫는 괄호의 위치를 먼저 확인해 닫히지 않은 토큰이 긴 문단에서 반복되더라도 성능 저하 없이 빠르게 건너뛰어요.
-- **원문 불변성 원칙**: 읽기 설정은 표시 레이어의 CSS 및 React 컴포넌트에만 적용되며, 저장된 원문 텍스트, 번역문, SHA hash, 문자 offset, block anchor를 절대 수정하지 않아요. 모델 입력 프롬프트나 백업 데이터에도 읽기 스타일은 포함되지 않아요. 드래그 선택 복사는 브라우저의 시각적 개행 처리를 따를 수 있어요.
+- **Code layout**:
+  - `web/reading-preferences.ts`: Defaults and localStorage validation.
+  - `web/useReadingPreferences.ts`: Setting persistence, cross-tab sync, and scroll-position restoration.
+  - `web/ReadabilitySettings.tsx`: Reading-settings dialog UI.
+  - `web/Prose.tsx`: Helper prose, safe general Markdown, and settings-sample renderer.
+  - `web/RisuMessageSurface.tsx`: Dedicated Risu message renderer (open Shadow DOM).
+  - `core/reading-markdown.ts`: Shared markdown-it parser.
+  - `web/reading-quotes.ts`: Punctuation pairing and role analysis.
+  - `web/reading-dom.ts`: Completed-prose DOM decoration and quotation styling.
+  - `web/reading-prose.css`: Shared quotation and typography styles.
+  - `web/PlainProse.tsx`: Protected-token and literal-text handling for the final paragraph still streaming.
+  - `web/reader-dom.ts`: Selection ranges inside Shadow DOM and reading-coordinate mapping.
+- **Streaming paragraph rendering**: Streaming prose renders completed leading paragraphs ending in a blank line with the same compiler as finished prose (`Prose` for main writing, `HelperMessageProse` for helper replies) while keeping only the in-progress last paragraph as plain text in the same font. Blank lines inside unclosed code fences or `<a2ui>` blocks are not treated as paragraph breaks (`splitCompletedParagraphs`, `tests/prose.test.ts`). Finished prose in bot chats is rendered by the server's Risu renderer inside a scene theme frame; font and line width match (`tests/response-stream-browser.spec.ts`), though vertical position can shift slightly on completion by the difference in frame and Risu paragraph margins.
+- **Safe Markdown subset**: Among attributeless HTML tags, only ruby annotations (`ruby`, `rb`, `rt`, `rp`), underline (`u`), superscript/subscript (`sup`, `sub`), highlight (`mark`), small text (`small`), basic styling (`b`, `i`, `s`), and line break (`br`) are rendered. All other arbitrary HTML tags or tags with attributes are escaped and displayed literally. Illustrations are inserted only after closed Markdown containers; legacy images and illustrations without a safe boundary (such as inside lists or tables) render below the body.
+- **Geometry markers and scroll restoration**: Temporary geometry markers map coordinates between display-transformed prose and rendered DOM elements. Markers never participate in user text selection, clicks, the accessibility tree, or layout, and are recomputed when window size or fonts change.
+- **Protected-token optimization**: `{{…}}` syntax checks for the closing delimiter position first so repeated unclosed tokens in long paragraphs skip quickly without performance degradation.
+- **Original-text immutability**: Reading preferences apply solely to presentation-layer CSS and React components and never modify stored originals, translations, SHA hashes, character offsets, or block anchors. Reading styles are excluded from model prompts and backups. Drag-select copy may follow the browser's visual line-break behavior.
 
 ### Helper sessions
 
-- **세션 소유권과 독립성**: 각 독립 채팅은 여러 개의 도우미 세션을 소유할 수 있어요. 각 세션은 고유한 대화 이력, 입력 초안, 활성 컨텍스트를 소유하며, 도우미 패널을 닫거나 다른 세션으로 전환하더라도 백그라운드에서 진행 중인 작업은 취소되지 않아요. 도구는 사용자가 명시적으로 요청할 때 다른 채팅을 대상으로 실행될 수 있어요. 채팅 복사는 독립된 새 채팅을 생성하며 변경 가능한 기본 설정을 공유하지 않아요.
-- **트랜스크립트 수정과 컨텍스트 격리**:
-  - 도우미 메시지를 편집하거나 삭제하면 원본 실행 증거는 분리하여 보존해요.
-  - 수정 및 삭제된 내용은 대화 조회와 향후 도우미 문맥(복사된 시드 메시지 및 재시도 그룹 포함)에 즉시 반영돼요.
-  - 메시지가 변경되면 활성화되어 있던 도우미 요약(summary)을 즉시 분리(detach)하여, 오래된 텍스트가 컨텍스트 압축을 통해 다음 요청에 다시 유입되는 것을 방지해요.
-  - 기존 작업 스냅샷이나 이미 커밋된 리소스 수정 내용은 과거로 되돌아가서 재작성되거나 취소되지 않아요.
-- **헤더, 모델 선택, CAS 수정 번호**:
-  - 도우미 헤더가 세션 전환, 생성, 관리를 주관하며 말투 설정은 관리 메뉴에 위치해요.
-  - 입력창 툴바에서 검색 가능한 모델 선택기를 바로 열 수 있어요.
-  - 모델을 변경하면 다음 요청을 위한 역할별 모델의 도우미 역할이 갱신되며, 현재 채팅의 본편 작문 모델이나 다른 역할은 변경하지 않아요.
-  - 지연 도착한 응답보다 최신 확정된 리비전이 우선권을 가져요.
-- **동시 실행 및 호출 한도**:
-  - 대화별 호출 한도는 수동 편집하지 않아요.
-  - 새로 접수되는 도우미 작업은 내부 정책에 따라 **도우미 판단 64회**, **전체 모델 호출 128회**, **호스트 도구 호출 256회**와 설정의 **도우미 작업 제한 시간**(기본 60분)을 적용해요.
-  - 이미 접수된 작업은 접수 당시 저장된 호출 한도를 보존해요.
-  - 프로바이더가 요청 한도 초과(429)나 일시적인 서버 오류(5xx)로 답하면, 도우미는 5초, 20초, 60초를 차례로 기다리며 같은 호출을 최대 세 번 다시 보내요. 그때까지 읽은 자료와 저장한 변경은 그대로 이어 써요. 세 번 뒤에도 같은 오류면 작업을 실패로 끝내요. 기다리는 동안에도 작업을 멈출 수 있고, 다시 보낸 호출도 전체 모델 호출 한도에 들어가요.
-  - 프로바이더가 응답을 거절하면 도우미는 기다리지 않고 같은 호출을 바로 다시 보내요. 횟수는 **앱 설정 → 새 채팅 기본값**의 **거절되면 자동으로 다시 생성**을 따르고(기본 켜짐, 최대 2회), 채팅마다 따로 정한 값은 도우미에 적용하지 않아요. 거절된 호출마다 횟수를 새로 세고, 다시 보낸 호출도 전체 모델 호출 한도에 들어가요. 횟수를 다 쓰고도 거절되면 작업을 실패로 끝내고 **다시 시도**나 **이어서 하기**를 기다려요.
-  - 실패했거나 멈춘 작업이 그 전에 자료를 읽었거나 변경을 저장했으면 **이어서 하기**가 보여요. 누르면 같은 요청을 새 작업으로 시작하면서, 앞 작업이 읽은 내용과 저장한 변경의 기록을 그대로 넘겨줘요. 그래서 이미 저장한 변경을 다시 하지 않고 남은 일만 이어 가요. 변경을 저장한 뒤 실패한 작업은 **다시 시도**(처음부터)를 할 수 없고 이어서 하기만 할 수 있어요. 이어 가는 작업은 자기 호출 한도와 제한 시간을 새로 받고, 현재 설정의 도우미 모델을 써요. 요청 한도 초과가 몇 분씩 이어져서 다시 시도가 소진된 경우에도 잠시 뒤에 이어서 하기로 이어 가면 돼요. 앞 작업의 기록이 정리되었거나, 삭제한 장면을 포함한 작업이거나, 네이티브 Codex 실행기로 돌린 작업은 이어서 할 수 없어요.
-- **읽음 상태**: 서버는 대화마다 확인한 마지막 작업 결과 이벤트 순번을 `app_metadata`의 `helper-read:v1:<대화 ID>`에 둬요(`server/helper-read-state.ts`). 값은 앞으로만 움직이고 그 대화의 최신 결과 순번을 넘지 않으므로, 다른 기기의 늦은 쓰기나 중복 쓰기가 확인한 대화를 다시 미확인으로 만들지 않아요. 대화 목록 응답이 이 값을 함께 실어 오므로 따로 조회하지 않아요. 브라우저는 서버에 반영하지 못한 값만 `uimori:helper-seen:<대화 ID>`에 남기고(`web/useHelperSessions.ts`), 페이지를 연 뒤 목록을 처음 받을 때 서버보다 앞선 값을 한 번 올려요. 쓰기가 실패하면 그 값을 두고 다음 확인 때 다시 보내며, 실패를 되풀이해 재시도하지 않아요. 대화나 채팅을 삭제하면 기록도 지워요. `tests/helper-navigation.test.ts`와 `tests/helper-task-results-browser.spec.ts`의 `HREAD01`이 확인해요.
-- **라이브 디스플레이 컨텍스트와 이벤트 커서**:
-  - Reader나 도우미를 열 때는 현재 뷰와 이벤트 커서를 가져온 뒤 그 이후의 최신 변경 사항만 추적해요. 화면을 다시 빌드하기 위해 과거의 알림들을 처음부터 재생하지 않아요.
-  - 메시지 내용이 갱신되어도 읽기 스크롤 위치를 유지하며, Risu 네이티브 HTML과 일반 Prose는 동일한 외부 블록 앵커를 공유해요.
-- **완료된 Risu 메시지 표현**: 현재 패키지/프로필 프로젝션을 복원하고 실시간 메시지 이력을 한 번만 조립해요. 버려진 생성 이력이나 이야기 컨텍스트를 불필요하게 재구성하지 않아요. 원문/번역 렌더링, CBS/Lua 메시지 순서, 현재 변수 상태와 액션 리비전 검사는 이 라이브 디스플레이 컨텍스트를 사용해요.
-- **표현 캐시와 재검증**: 같은 입력이면 같은 HTML이 나오므로 서버가 결과를 메모리에 둬요. 경로 단위 키(`server/package-presentation-routes.ts`)는 장면 원문 해시, 번역 텍스트 해시, 실제로 쓰는 스냅샷 전체(카드·변수·논리 이력 포함, 완료 직후에 덧붙는 실행 구간 시간 `phaseSpans`는 표시에 쓰지 않으므로 제외), 이미지 작업과 자산, 정확한 뷰포트, 렌더러 버전의 요약이고, 메시지 단위 키(`server/package-presentation.ts`)는 언어별 표시 한 번의 입력이라 번역이 바뀌어도 원문 쪽은 다시 그리지 않아요. 키가 리비전 번호가 아니라 내용 요약인 이유는 모델 설정처럼 채팅 이벤트를 남기지 않는 변경도 표시에 들어가기 때문이에요. `ETag`는 이 키와 프로세스 시작 ID로 만들어서 본문을 계산하지 않고 `304`로 답하고(인증 훅 뒤, `Cache-Control: private, no-cache`), 재시작하면 모두 다시 계산해요. CBS의 `{{random}}`·`{{roll}}` 류와 Lua `math.random`이 난수를 꺼낸 실행은 `server/risu-native-entropy.ts`가 워커 경계를 넘어 표시하고, 그 결과는 저장하지 않으며 `ETag`도 붙이지 않아요. 시각은 실행 시각(`executionClock`)으로 고정되고 Lua에는 `os`가 없어서 캐시를 막지 않아요. 한 페이지의 여러 장면 요청은 같은 `(채팅, head, 이벤트 순번)`의 이력과 논리 이력을 5초 동안 공유해요. 장면이나 번역이 끝나면 `precomputePackagePresentation`이 그 채팅에서 최근 본 장면을 마지막 뷰포트로 하나씩 미리 계산하며, 화면 요청이 진행 중이면 기다려요. Reader의 `presentationRevisions`는 장면 단위이고, 네이티브 Risu 카드처럼 현재 head와 변수를 읽는 채팅에서만 다른 장면의 추가가 모든 장면의 리비전을 바꿔요(`server/reader-data.ts`, `tests/reader-data.test.ts`, `tests/package-presentation-cache.test.ts`).
-- **원문 및 번역 이력 보존**: 직접 원문 편집 시 불변의 최초 작성 원문, 최신 2개의 편집 버전, 그리고 아직 완료되지 않은 작업이 참조 중인 버전들을 보존해요. 번역 이력은 현재 및 직전의 성공한 번역 텍스트와 활성 이미지 타깃을 보존해요.
+- **Session ownership and independence**: Each independent chat can own multiple helper sessions. Each session owns its own conversation history, composer draft, and active context; closing the helper panel or switching sessions never cancels running background tasks. Tools may target another chat when explicitly requested by the user. Copying a chat creates an independent new chat that does not share mutable defaults.
+- **Transcript edits and context isolation**:
+  - Editing or deleting helper messages preserves original execution evidence separately.
+  - Edits and deletions take effect immediately in conversation views and future helper context (including copied seed messages and retry groups).
+  - Any message edit immediately detaches an active helper summary so stale text cannot re-enter subsequent requests through context compaction.
+  - Existing task snapshots and already-committed resource edits are never retroactively rewritten or undone.
+- **Header, model selection and CAS revisions**:
+  - The helper header owns session switching, creation, and management; tone settings live in the management menu.
+  - A searchable model picker opens directly from the composer toolbar.
+  - Changing the model updates the helper role in per-role models for subsequent requests without changing the current chat's main writing model or other roles.
+  - The latest committed revision takes precedence over late-arriving responses.
+- **Concurrency and call limits**:
+  - Per-conversation call limits are not manually editable.
+  - Newly admitted helper tasks apply internal policy limits of **64 helper reasoning calls**, **128 total model calls**, **256 host tool calls**, and the configured **도우미 작업 제한 시간** (Helper task time limit, default 60 minutes).
+  - Already-admitted tasks keep the call limits saved at admission time.
+  - On provider rate limits (429) or transient server errors (5xx), the helper waits 5s, 20s, then 60s in sequence and retries the same call up to three times, continuing with everything read and saved so far. If the same error persists after three retries, the task ends in failure. Tasks can still be stopped while waiting, and retried calls count toward the total model call limit.
+  - On provider response refusal, the helper immediately retries the same call without waiting, following **앱 설정 → 새 채팅 기본값** (App Settings → New chat defaults) → **거절되면 자동으로 다시 생성** (Auto-regenerate on refusal, default on, max 2 retries); per-chat overrides do not apply to the helper. The counter resets per refused call, and retried calls count toward the total model call limit. Exhausting retries fails the task and waits for **다시 시도** (Retry) or **이어서 하기** (Continue).
+  - If a failed or stopped task had already read resources or saved changes, **이어서 하기** (Continue) is offered. Clicking it starts a new task for the same request while passing along the record of prior reads and saved changes so completed changes are not redone and only remaining work continues. A task that failed after saving changes cannot use **다시 시도** (Retry from scratch) and offers only **이어서 하기** (Continue). Continuation tasks receive fresh call limits and timeout and use the currently configured helper model. Even when multi-minute rate limiting exhausts automatic retries, work can resume shortly afterward via **이어서 하기** (Continue). Continuation is unavailable if prior task records were pruned, if the task touched a deleted scene, or if it ran on the native Codex runner.
+- **Read state**: The server stores the last seen task-result event sequence per conversation under `helper-read:v1:<대화 ID>` (`helper-read:v1:<conversationId>`) in `app_metadata` (`server/helper-read-state.ts`). Because values move strictly forward and never exceed that conversation's latest result sequence, late or duplicate writes from another device cannot mark a seen conversation unread again. Conversation list responses carry this value directly with no separate fetch. The browser keeps only values not yet persisted to the server in `uimori:helper-seen:<대화 ID>` (`uimori:helper-seen:<conversationId>`) (`web/useHelperSessions.ts`) and uploads any value ahead of the server once on the first list load after page open. On write failure it retains the value to retry on the next acknowledgement rather than looping retries. Deleting a conversation or chat removes the record. Verified by `tests/helper-navigation.test.ts` and `HREAD01` in `tests/helper-task-results-browser.spec.ts`.
+- **Live display context and event cursors**:
+  - Opening the Reader or helper fetches the current view and event cursor and tracks only subsequent changes, never replaying historical notifications from the beginning to rebuild the screen.
+  - Message updates preserve reading scroll position, and Risu native HTML and general Prose share the same outer block anchors.
+- **Completed Risu message presentation**: Restores the current package/profile projection and assembles live message history once without reconstructing discarded generation histories or story context. Original/translation rendering, CBS/Lua message ordering, current variable state, and action-revision checks all use this live display context.
+- **Presentation cache and revalidation**:
+  - Because identical inputs produce identical HTML, the server caches results in memory.
+  - The route-level key (`server/package-presentation-routes.ts`) hashes the scene source hash, translation text hash, the full actually-used snapshot (including card, variables, and logical history, excluding post-completion `phaseSpans` timings unused by rendering), image tasks and assets, exact viewport, and renderer version.
+  - The message-level key (`server/package-presentation.ts`) covers a single per-language render so updating a translation does not re-render the original. Keys hash content rather than revision numbers because changes emitting no chat events (such as model settings) still affect rendering.
+  - `ETag` combines this key with the process startup ID to reply `304` without recomputing the body (after the auth hook, with `Cache-Control: private, no-cache`); everything recomputes after a restart.
+  - Runs where CBS `{{random}}`/`{{roll}}`-style macros or Lua `math.random` draw randomness are flagged across the worker boundary by `server/risu-native-entropy.ts`, and their outputs are neither cached nor given an `ETag`. Clocks are pinned to execution time (`executionClock`) and Lua has no `os`, so time does not prevent caching.
+  - Multiple scene requests on a page share history and logical history for the same `(채팅, head, 이벤트 순번)` (`(chat, head, eventSequence)`) for 5 seconds.
+  - When a scene or translation finishes, `precomputePackagePresentation` precomputes recently viewed scenes in that chat one by one at the last viewport, waiting whenever a live screen request is in flight.
+  - Reader `presentationRevisions` are per-scene; only in chats reading current head and variables (such as native Risu cards) does adding another scene bump every scene's revision (`server/reader-data.ts`, `tests/reader-data.test.ts`, `tests/package-presentation-cache.test.ts`).
+- **Original and translation history retention**: Direct original editing preserves the immutable initial original, the latest 2 edited versions, and any versions still referenced by unfinished tasks. Translation history preserves the current and immediately previous successful translation texts plus active image targets.
 
-### 검증 테스트
+### Reader and renderer verification tests
 
-- **네비게이션 및 세션 테스트**:
-  - `tests/reader-navigation.test.ts`, `tests/reader-navigation-browser.spec.ts`: 화면 이동 상태 머신, A→B→A 복귀, 캐시 일관성 검증
-- **렌더링 및 읽기 서식 테스트**:
-  - `tests/prose.test.ts`: 공통 Prose 렌더러 및 인용 스타일 파싱 검증
-  - `tests/reading-markdown.test.ts`: markdown-it 안전 HTML 필터링 및 구문 검증
-  - `tests/reading-quotes.test.ts`: 부호별 역할 분기, 인용 줄바꿈, 예외 패턴 검증
-  - `tests/reading-preferences.test.ts`: 읽기 설정 기본값, 영속화, 프리셋 전환 검증
-  - `tests/reading-browser.spec.ts`, `tests/reading-markdown-browser.spec.ts`: 브라우저 실제 읽기 흐름, 루비 문자, 삽화 슬롯, 스크롤 위치 보존 검증
-- **Risu 네이티브 Shadow DOM 검증**:
-  - `tests/risu-message-surface-browser.spec.ts`, `tests/risu-native-frame-browser.spec.ts` (`RSURFACE`): Shadow DOM 내부 읽기 스타일 적용, 입력 상태 보존, `Selection.getComposedRanges` 선택 범위 확인, 액션 리비전 잠금 검증
-  - `tests/risu-reading-markdown.test.ts`: 메시지 마커 출처 및 렌더링 일관성 검증
-- **통합 화면 검증**: `npm run verify:ui`
+- **Navigation and session tests**:
+  - `tests/reader-navigation.test.ts`, `tests/reader-navigation-browser.spec.ts`: View navigation state machine, `A→B→A` return, cache consistency.
+- **Rendering and reading typography tests**:
+  - `tests/prose.test.ts`: Shared Prose renderer and quotation-style parsing.
+  - `tests/reading-markdown.test.ts`: markdown-it safe HTML filtering and syntax handling.
+  - `tests/reading-quotes.test.ts`: Per-punctuation role dispatch, quotation line breaks, exception patterns.
+  - `tests/reading-preferences.test.ts`: Reading-preference defaults, persistence, preset switching.
+  - `tests/reading-browser.spec.ts`, `tests/reading-markdown-browser.spec.ts`: Live browser reading flow, ruby annotations, illustration slots, scroll-position preservation.
+- **Risu native Shadow DOM verification**:
+  - `tests/risu-message-surface-browser.spec.ts`, `tests/risu-native-frame-browser.spec.ts` (`RSURFACE`): Reading styles inside Shadow DOM, input state preservation, `Selection.getComposedRanges` selection bounds, action-revision locking.
+  - `tests/risu-reading-markdown.test.ts`: Message marker provenance and rendering consistency.
+- **Integrated UI verification**: `npm run verify:ui`.
 
 ## Reading state and bookmarks
 
-이 섹션은 읽기 위치 및 책갈피의 저장 계층, CAS 동시성 제어, API 사양 및 검증 규약을 설명하는 개발자/에이전트 계약이에요.
+Developer and agent contract covering the storage layers, CAS concurrency control, API specification, and verification rules for reading positions and bookmarks.
 
-### 읽기 위치 데이터 스키마 및 저장소 계층
-- **서버 저장 단위**: 브라우저·채팅별로 최근 위치 **단 1건**을 보관해요 (전용 `reading_positions` 테이블).
-  - 저장 필드: `chatId`, `sourceId`(장면), `representation`(`original | translation`), `contentHash`(본문 해시), `blockAnchor`(문단 앵커), `offsetRatio`(문단 내 상대 위치).
-  - 화면 픽셀 좌표나 전체 스크롤 이력 로그는 서버로 전송하지 않아요.
-- **클라이언트 스토리지 분담**:
-  - `localStorage`: 현재 기기의 정밀한 스크롤 읽기 위치 캐시를 보관해요.
-  - `sessionStorage`: 입력창 커서 위치 및 탭별 임시 상태를 보관해요 (조회 시 기존 세션스토리지 위치를 로컬스토리지로 마이그레이션).
-  - 브라우저의 무작위 클라이언트 식별자(`clientId`)는 인증 수단이 아니며 기존 세션 로그인을 반드시 거쳐요.
+### Reading position data schema and storage layers
+- **Server storage unit**: Keeps **exactly 1** latest position per browser and chat in the dedicated `reading_positions` table.
+  - Stored fields: `chatId`, `sourceId` (scene), `representation` (`original | translation`), `contentHash` (body hash), `blockAnchor` (paragraph anchor), `offsetRatio` (relative offset within the paragraph).
+  - Screen pixel coordinates and full scroll-history logs are never sent to the server.
+- **Client storage split**:
+  - `localStorage`: Stores this device's high-precision scroll reading-position cache.
+  - `sessionStorage`: Stores composer cursor positions and per-tab transient state (legacy sessionStorage reading positions migrate to localStorage on read).
+  - The browser's random client identifier (`clientId`) is not an auth credential; existing session login is always required.
 
-### 동시성 및 CAS(`expectedRevision`) 충돌 제어
-- 동일 기기 내 다중 탭이나 다중 창 간의 경합은 `expectedRevision`을 활용한 CAS(Compare-And-Swap) 방식으로 제어해요.
-- 서버 수정 번호가 일치하지 않는 예전 위치는 무리하게 재전송하지 않으며, 다음 채팅 진입이나 화면 복귀 시 최신 서버 수정 번호를 다시 확인해요.
-- 저장 요청이 전송 중인 상태에서 새로운 스크롤 위치가 발생한 채 사용자가 탭을 닫거나 이동하면, 앞선 저장이 완료된 후 새 위치를 연속해서 저장해요.
+### Concurrency and CAS (`expectedRevision`) conflict control
+- Races across multiple tabs or windows on the same device are controlled via CAS (Compare-And-Swap) using `expectedRevision`.
+- Stale positions whose revision no longer matches the server are not force-retried; the latest server revision is re-checked on the next chat entry or view return.
+- If a new scroll position occurs while a save request is already in flight and the user closes or leaves the tab, the new position is saved sequentially right after the in-flight save completes.
 
-### 책갈피 데이터 모델 및 원자적 관리
-- 책갈피는 사용자 창작 자산으로 분류되며 임의의 자동 만료나 만료일자가 없어요.
-- 원고 본문 텍스트가 수정되어 문단 위치가 어긋나더라도 사용자가 작성한 이름, 메모, 인용구는 임의로 삭제되지 않고 보존돼요.
-- 채팅을 완전히 삭제할 때만 해당 채팅에 종속된 읽기 위치와 책갈피 레코드가 함께 정리돼요.
+### Bookmark data model and atomic management
+- Bookmarks are classified as user-authored creative assets and have no automatic expiration or TTL.
+- Even if edits to manuscript text cause a paragraph anchor to drift, user-authored names, memos, and excerpts are never automatically deleted.
+- Reading positions and bookmarks belonging to a chat are cleaned up only when that chat is permanently deleted.
 
-### 관련 API 엔드포인트
-- `GET /api/chats/:id/reading-position`: 현재 브라우저의 최근 읽기 위치 및 서버 수정 번호를 조회해요.
-- `PUT /api/chats/:id/reading-position`: `clientId`, `expectedRevision`, `ReaderTarget` 객체를 전달하여 읽기 위치를 원자적으로 갱신해요. 긴 본문 토큰화나 본문 재파싱을 유발하지 않아요.
-- `GET /api/chats/:id/bookmarks`: 해당 채팅의 책갈피 목록을 조회해요.
-- `POST /api/chats/:id/bookmarks`: 현재 장면에 새 책갈피를 생성해요.
-- `PATCH /api/bookmarks/:id`: 책갈피의 이름 및 메모를 수정해요 (CAS 적용).
-- `DELETE /api/bookmarks/:id`: 확인된 수정 번호의 책갈피를 삭제해요.
-- 서버는 요청된 장면이 현재 채팅 경로에 실제로 속하는지 ID 소유권을 반드시 검증해요.
+### Related API endpoints
+- `GET /api/chats/:id/reading-position`: Reads the current browser's latest reading position and server revision.
+- `PUT /api/chats/:id/reading-position`: Atomically updates reading position using `clientId`, `expectedRevision`, and a `ReaderTarget` object; never triggers long-text tokenization or body reparsing.
+- `GET /api/chats/:id/bookmarks`: Lists bookmarks for the chat.
+- `POST /api/chats/:id/bookmarks`: Creates a new bookmark on the current scene.
+- `PATCH /api/bookmarks/:id`: Updates a bookmark's name and memo (with CAS).
+- `DELETE /api/bookmarks/:id`: Deletes a bookmark matching the verified revision.
+- The server always verifies ID ownership to ensure the requested scene actually belongs to the current chat path.
 
-### 검증 도구와 테스트 명령어
+### Reading state verification tools and test commands
 
 ```sh
-# 읽기 위치, 책갈피 생성/수정/삭제, CAS 충돌 및 백업 복원 단위 테스트
+# Unit tests for reading position, bookmark CRUD, CAS conflicts, and backup restore
 npx vitest run tests/reading-state.test.ts
 
-# 개인 기능 브라우저 종합 검증 (기기 간 이어 읽기 흐름, 확인 대화상자, 초안 보호)
+# End-to-end browser verification for personal features (cross-device resume, confirmation dialogs, draft protection)
 npm run verify:personal-features
 ```
 
-- `tests/reading-state.test.ts`: 기기별 독립 상태, 뒤로 읽기 정상 저장, 동시 탭 충돌 방지, 책갈피 중복 생성 방지, 복사 시 문단 앵커 재연결, 과거 백업 호환성 등을 검증해요.
-- `npm run verify:personal-features`: 실제 브라우저 환경에서 장면 목록 이동 후 별도 브라우저에서 이어 읽기 제안이 표시되는 흐름, 지연된 네트워크 환경에서도 원고가 즉시 로딩되는 동작, 모바일/데스크톱 확인창의 취소·삭제·충돌 보호 동작을 종합적으로 검증해요 (물리적인 모바일 OS가 전원 종료 순간의 소켓 전송을 보장한다는 의미는 아님).
+- `tests/reading-state.test.ts`: Verifies per-device state isolation, saving backward reading positions, concurrent-tab conflict handling, duplicate-bookmark prevention, paragraph-anchor relinking on copy, and legacy backup compatibility.
+- `npm run verify:personal-features`: End-to-end browser verification of navigating the scene list and receiving a resume prompt in another browser, instant manuscript loading under delayed networks, and cancel/delete/conflict protection in mobile and desktop confirmation dialogs (does not imply that mobile OSes guarantee socket delivery at power-off).
 
 ## Turn activity
 
-- 본문 생성이 실행 중이면 상태 문구가 지금 단계를 보여 줘요: 컨텍스트 정리, 로어 선별, 원작 참고, 본문 작성 순이에요. 단계는 `server/run-phase.ts`가 저장된 실행 스냅샷에서 실행기(`server/run-executor.ts`)와 같은 조건으로 판단해 `reader.runs[].phase`로 내보내고, 새 이벤트 없이 각 준비 단계가 끝날 때 나오는 기존 `run.context.updated`로 갱신돼요. 그래서 다음 단계는 앞 단계가 끝난 순간 표시돼요. 원작 참고 결과가 이미 저장된 재시도는 원작을 다시 참고하는 동안에도 본문 작성으로 보일 수 있어요.
-- 사이드바의 작업 현황과 앱 전체 진행 알림은 유지해요. `reader.activity`의 기존 활성/최근 30개 계약은 바꾸지 않고, 현재 페이지에 속한 과거 작업은 별도 `reader.responseActivity`에 메타데이터만 제공해요. 이전 응답을 조회해도 오래된 실패 알림을 다시 만들지 않아요.
-구현은 `web/TurnActivity.tsx`(작업 현황 내용), `web/TurnStatus.tsx`(헤더 줄과 펼침 상태 보관), `web/SourceReader.tsx`(장면 번호·배지·보기 전환 슬롯), 공통 실행 상세는 `web/RunTaskDetails.tsx`, 조회 범위는 `server/reader.ts`예요. 원문 연결 정보는 장면 하단 도구 줄의 접기 항목에서 확인해요.
+- While main prose generation is running, the status label shows the current phase in order: **컨텍스트 정리** (Context preparation), **로어 선별** (Lore selection), **원작 참고** (Original-work reference), and **본문 작성** (Writing). Phases are derived by `server/run-phase.ts` from the saved execution snapshot using the same conditions as the executor (`server/run-executor.ts`), exposed on `reader.runs[].phase`, and updated via the existing `run.context.updated` event emitted as each preparation stage finishes (with no new event type). Thus the next phase appears the moment the prior phase finishes. On retries where an original-work reference result is already saved, the phase may show **본문 작성** (Writing) even while re-checking the reference.
+- Sidebar task activity and app-wide progress notifications remain unchanged. The existing active/last-30 contract on `reader.activity` is untouched, while historical tasks belonging to the current page provide metadata only under a separate `reader.responseActivity` field. Viewing older responses never re-creates stale failure notifications.
+- Implementation spans `web/TurnActivity.tsx` (activity panel content), `web/TurnStatus.tsx` (header row and expanded-state storage), `web/SourceReader.tsx` (scene number, badge, and view-toggle slots), `web/RunTaskDetails.tsx` (shared execution details), and `server/reader.ts` (query scope). Source-link metadata is inspected in the collapsible entry on the scene's bottom toolbar.
 
-## 검증
+### Turn activity verification
 
-[검증 선택](DEVELOPMENT.md#verification)에 따라 `npm run verify:turn-activity`로 응답별 펼침과 재접속 시 선택 유지·진단 조회·생성 완료 전환을 검사해요. 화면 크기는 공통 [브라우저 설정](../../fixtures/browser-viewports.json)을 사용하고 결과는 `output/playwright/turn-activity-ui-*/summary.json`에 남아요.
+Per [verification selection](DEVELOPMENT.md#verification), `npm run verify:turn-activity` checks per-response expand/collapse, preserving selection across reconnects, diagnostic fetches, and completion transitions. Viewports come from the shared [browser viewport config](../../fixtures/browser-viewports.json), writing summaries to `output/playwright/turn-activity-ui-*/summary.json`.
 
-기존 앱 전체 알림과 요청 재시도 회귀는 `node scripts/verify-activity.mjs`, `node scripts/verify-run-retry.mjs`로 검사해요.
+Existing app-wide notification and request-retry regressions are verified with `node scripts/verify-activity.mjs` and `node scripts/verify-run-retry.mjs`.
 
 ## PWA, activity feed, Web Push and auto-translation language detection
 
-  - 언어는 판단 모델 없이 본문의 문자 구성으로 가려요(`core/written-language.ts`). 마크업, 코드 블록, 템플릿 식은 빼고 세며, 두 언어가 섞였거나 아주 짧아서 확실하지 않으면 번역해요. 한국어, 영어, 일본어, 중국어만 가릴 수 있고, 번역 결과 언어는 화면 언어와 따로 서버에 저장돼요. `tests/written-language.test.ts`와 `tests/chat-settings.test.ts`가 확인해요.
+- Language detection uses character composition in `core/written-language.ts` without invoking a judgment model. Markup, code blocks, and template expressions are stripped before counting; mixed-language or very short ambiguous text still triggers translation. Only Korean, English, Japanese, and Chinese are detected, and the translation output language (**번역 결과 언어**) is stored on the server separately from the UI language. Verified by `tests/written-language.test.ts` and `tests/chat-settings.test.ts`.
 
-이 섹션은 PWA Manifest 자원, 활동 피드 스키마, Web Push 큐 및 VAPID 암호화 규약을 설명하는 개발자/에이전트 계약이에요.
+Developer and agent contract covering PWA manifest assets, the activity-feed schema, the Web Push queue, and VAPID encryption rules.
 
-### PWA Manifest, 아이콘 생성 및 서비스 워커 사양
-- **Manifest 규격**: 앱 ID, 시작 주소, scope는 `/`로 고정되며 개인 채팅 경로나 세션 토큰을 포함하지 않아요. [화면 언어](../I18N.md)에 대응하는 정적 manifest 파일을 제공해요.
-- **아이콘 자산 구조**:
-  - 사이드바 로고: 배경을 제거한 [투명 SVG](../../web/public/icons/halo-mark.svg).
-  - 탭 아이콘 및 앱 정보 로고: 남청색 바탕에 크림색 원형 문양의 반응형 SVG.
-  - [초소형 SVG 원본](../../web/public/icons/halo-tiny.svg): 16px 뷰포트 (2개 원).
-  - [소형 SVG 원본](../../web/public/icons/halo-small.svg): 32px 뷰포트 (3개 원).
-  - [정교한 SVG 원본](../../web/public/icons/halo.svg): 48/64px 및 180/192/512px (정교한 동심원과 구획선).
-  - [반응형 SVG](../../web/public/favicon.svg): 16px과 32px에서 간결한 문양으로 전환.
-  - 파생 SVG/PNG 재생성 스크립트: `node scripts/generate-app-icons.mjs`.
-  - Maskable 아이콘은 안전 영역을 고려해 여백을 배치하고, 설치 배경색은 다크 네이비 테마 색상을 적용해요.
-- **서비스 워커 캐시 비개입**: `sw.js`는 HTTP 캐시를 우회해 갱신되며, 원고 데이터나 API 응답에 대한 CacheStorage 복제를 수행하지 않아요. UI 언어는 `uimori-presentation` IndexedDB의 `settings/ui-language`에 보관해요.
+### PWA manifest, icon generation and service worker specification
+- **Manifest contract**: App ID, start URL, and scope are fixed to `/` and never include private chat paths or session tokens. Static manifest files are served per [UI language](../I18N.md).
+- **Icon asset layout**:
+  - Sidebar logo: Background-free [transparent SVG](../../web/public/icons/halo-mark.svg).
+  - Tab icon and app-info logo: Responsive SVG with cream circular motif on an indigo background.
+  - [Tiny SVG source](../../web/public/icons/halo-tiny.svg): 16px viewport (2 circles).
+  - [Small SVG source](../../web/public/icons/halo-small.svg): 32px viewport (3 circles).
+  - [Detailed SVG source](../../web/public/icons/halo.svg): 48/64px and 180/192/512px (detailed concentric circles and dividers).
+  - [Responsive SVG](../../web/public/favicon.svg): Switches to simplified motifs at 16px and 32px.
+  - Derived SVG/PNG regeneration script: `node scripts/generate-app-icons.mjs`.
+  - Maskable icons include safe-zone padding and use the dark-navy theme color for the install background.
+- **No service-worker caching**: `sw.js` updates bypassing HTTP cache and never mirrors manuscript data or API responses into CacheStorage. UI language is persisted under `settings/ui-language` in the `uimori-presentation` IndexedDB database.
 
-### 활동 피드 및 확인 기록 API
-- **활동 피드 조회**: `GET /api/activity-feed`는 최근 작업 500개를 대상으로 조회하며 원고 본문과 이미지 파일은 제외해요. 첫 업데이트 서버 시작 전에 끝난 작업을 새 미확인으로 재생하지 않아요.
-- **확인 기록 저장**: `GET/POST /api/chats/:id/activity-acknowledgements`는 스키마 15의 `app_metadata` 테이블에 개별 실행별 확인 상태를 영속화하고 브라우저 로컬 기록을 병합해요. 채팅 삭제 시 해당 채팅의 확인 기록도 함께 정리돼요.
-- **도우미 읽음 상태**: 도우미 대화의 확인 상태도 같은 `app_metadata` 테이블에 대화별로 저장해요. 저장 방식과 경계는 [도우미 세션](#helper-sessions)에 있어요.
+### Activity feed and acknowledgement API
+- **Activity feed query**: `GET /api/activity-feed` queries the latest 500 tasks, excluding manuscript text and image files. Tasks completed before the first updated server startup are not replayed as newly unread.
+- **Acknowledgement persistence**: `GET/POST /api/chats/:id/activity-acknowledgements` persists per-run acknowledgement state in the schema 15 `app_metadata` table and merges browser-local records. Deleting a chat cleans up its acknowledgement records.
+- **Helper read state**: Helper conversation read state is also stored per conversation in `app_metadata`; see [Helper sessions](#helper-sessions) for storage details and boundaries.
 
-### Web Push 발송 대기열 및 VAPID 아키텍처
-- **원자적 발송 큐**: 작업 완료 이벤트를 기록하는 트랜잭션에서 각 구독별 발송 대기열 레코드를 함께 기록해요.
-- **처리 한도 및 타임아웃**: 프로세스당 한 번에 최대 4건씩 순서대로 처리하며 발송 요청 타임아웃은 10초예요. 일시적 네트워크 오류나 429/5xx 응답이면 첫 시도를 포함해 최대 3회까지 보내요.
-- **만료 및 정리**: 일반 대기 알림은 2시간, 테스트 알림은 2분 후 만료돼요. 중계 서버가 404/410을 반환하면 만료된 구독을 DB에서 제거하며, 발송이 끝난 기록(성공·실패·만료·취소)은 7일 후 자동 정리해요.
-- **세션 결합 및 보안**: 구독은 개별 access session에 종속돼요. 사용자가 로그아웃하거나 접속 토큰을 변경하면 연결된 푸시 구독과 대기열이 즉시 해제돼요. DB 백업에는 VAPID 비밀 키와 구독 capability가 포함되므로 비공개로 보관해야 해요. 다른 HTTPS origin으로 복원하면 기존 origin의 구독은 정상 서버 시작 시 제거해요.
-- **안드로이드 Chrome 주의사항**: 안드로이드 Chrome이 알림 카드에 자체적으로 표시하는 ‘구독 취소’ 메뉴는 브라우저 고유 UI이며 앱에서 임의로 제거할 수 없어요.
-- **Codex 자동 번역 사전 검증**: Codex를 통한 자동 번역은 판단 모델 사전 콘텐츠 검사를 통과한 경우에만 진행돼요. 검증 실패 시 자동 번역을 보류하고 사용자가 수동 요청하도록 유도해요.
-- **전송 계층 및 엔드포인트**: 암호화와 서명은 Web Push 라이브러리에, DNS·TLS·소켓·취소는 표준 fetch에 맡겨요. 중계 HTTPS 주소 제한과 리다이렉트 금지를 유지해요. `GET /api/push?clientId=...`, `POST /api/push/prepare`, `POST/PUT/DELETE /api/push/subscription`, `POST /api/push/test`. 구독 수정 시 기존 수정 번호를 검증하며, GET과 구독 응답은 공개 VAPID 키와 기기 상태만 반환하고 비밀 키나 암호화 capability는 반환하지 않아요.
+### Web Push delivery queue and VAPID architecture
+- **Atomic delivery queue**: Enqueues one delivery record per subscription inside the same transaction that records the task-completion event.
+- **Concurrency and timeout**: Processes up to 4 deliveries sequentially at a time per process with a 10-second send timeout. Transient network errors or 429/5xx responses retry up to 3 total attempts (including the initial attempt).
+- **Expiration and pruning**: Normal queued notifications expire after 2 hours and test notifications after 2 minutes. Relay responses of 404/410 delete the expired subscription from the DB, and finalized delivery records (succeeded, failed, expired, canceled) are pruned automatically after 7 days.
+- **Session binding and security**: Subscriptions are bound to individual access sessions; logging out or rotating the access token immediately revokes linked push subscriptions and queues. Because DB backups contain the VAPID private key and subscription capabilities, keep backups private. Restoring to a different HTTPS origin removes subscriptions belonging to the old origin on normal server startup.
+- **Android Chrome caveat**: The `'구독 취소'` (Unsubscribe) menu item rendered by Android Chrome on notification cards is native browser UI and cannot be removed by the app.
+- **Codex auto-translation pre-check**: Auto-translation via Codex proceeds only after passing the judgment model's pre-content check; on failure, auto-translation is deferred so the user can request it manually.
+- **Transport layer and endpoints**: Encryption and signing are delegated to the Web Push library; DNS, TLS, sockets, and cancellation use standard fetch while enforcing HTTPS-only relay URLs and disallowing redirects. Endpoints: `GET /api/push?clientId=...`, `POST /api/push/prepare`, `POST/PUT/DELETE /api/push/subscription`, `POST /api/push/test`. Subscription mutations verify the existing revision, and GET/subscription responses return only the public VAPID key and device status—never private keys or encryption capabilities.
 
-### 검증 도구와 테스트 명령어
+### PWA and push verification tools and test commands
 
 ```sh
-# PWA 매니페스트, 서비스 워커 캐시 비개입 및 정적 자원 검증
+# Verify PWA manifest, service-worker cache non-intervention, and static assets
 npx vitest run tests/pwa.test.ts
 
-# 푸시 서비스 DB 큐, 중복 방지, 세션 해제 및 복원 검증
+# Verify push-service DB queue, deduplication, session revocation, and restore
 npx vitest run tests/push-service.test.ts
 
-# Web Push VAPID 암호화, HTTPS 중계 주소 및 워커 포커스 검증
+# Verify Web Push VAPID encryption, HTTPS relay URL checks, and worker focus
 npx vitest run tests/push-transport.test.ts
 
-# 개인 기능 브라우저 종합 검증 (SW 등록, 명시적 설치 UI, CacheStorage 비사용)
+# End-to-end browser verification for personal features (SW registration, explicit install UI, no CacheStorage)
 npm run verify:personal-features
 
-# Web Push 브라우저 알림 UI 시나리오 검증
+# Browser verification for Web Push notification UI scenarios
 npm run verify:push
 ```
 
-- **공식 참조 링크**: [MDN PWA 설치 조건](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable), [명시적 설치 UI 가이드](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/How_to/Trigger_install_prompt), [Web Push 암호화 라이브러리](https://github.com/web-push-libs/web-push), [Mozilla Push 서비스 사양](https://mozilla-push-service.readthedocs.io/en/latest/http.html).
+- **Official references**: [MDN PWA installability criteria](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable), [Explicit install UI guide](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/How_to/Trigger_install_prompt), [Web Push encryption library](https://github.com/web-push-libs/web-push), [Mozilla Push Service specification](https://mozilla-push-service.readthedocs.io/en/latest/http.html).
 
 ## UI language (I18N)
 
-이 섹션은 다국어 메시지 포맷팅, API 에러 변환, 서비스 워커 연동 및 테스트 자동화 규약을 다루는 개발자/에이전트 계약이에요.
+Developer and agent contract covering multilingual message formatting, API error translation, service-worker integration, and test automation.
 
-### 메시지 표현 및 ICU 포맷 규약
-- `web/i18n.ts`와 `web/locales/`가 메시지 표현을 소유해요.
-- **언어별 카탈로그 로딩**: 원본은 `web/locales/*.ts`에 키마다 네 언어를 함께 두고, `web/locales/{ko,en,ja,zh}.ts`가 언어 하나만 뽑은 카탈로그를 내보내요. 빌드에서는 `vite.config.ts`의 `uimori-locale-catalogs` 플러그인이 이 네 모듈을 언어 하나짜리 JSON 객체로 바꿔서, 한국어만 시작 번들에 들어가고 영어·일본어·중국어는 별도 청크로 필요할 때 받아요. 한국어는 fallback과 `legacyMessage()` 역매핑 때문에 항상 동기로 있어야 해요. `web/main.tsx`는 `loadInitialLocale()`을 기다린 뒤 첫 렌더링을 해서 다른 언어나 키가 잠깐 보이지 않게 하고, 그 청크를 받지 못하면 이번 접속만 한국어로 열어요. 언어를 바꾸면 해당 청크를 받은 뒤 적용되고, 기다리는 동안 더 나중에 고른 언어가 이겨요. 테스트처럼 동기 전환이 필요한 코드는 `loadLocale()`로 먼저 불러와요. 시작 번들에 들어가는 모듈(`web/api-errors.ts`, `web/request-file-errors.ts`)은 한국어 원문이 필요할 때 `web/locales/errors.ts` 같은 네 언어 원본 대신 `web/locales/ko.ts`를 읽어요. 원본을 직접 가져오면 네 언어가 모두 시작 번들에 들어가요.
-- 단일 런타임 의존성으로 `intl-messageformat`을 사용하여 ICU 변수, `plural`, `select`, 숫자, 날짜 문법을 지원해요 (별도의 복수형 파서를 구현하지 않으며 HTML 보간은 지원하지 않음). 상세 문법은 [공식 ICU 문법](https://formatjs.github.io/docs/core-concepts/icu-syntax/)을 따라요.
-- **렌더링 구독**: 컴포넌트는 `useI18n()` 훅을 구독하고 `t(key, values)`를 통해 문장 전체를 표현해요. 모듈 초기화 시 번역 결과를 전역 상수로 캐싱하지 않아요.
-- **오래 보관되는 메시지 descriptor**: 알림창이나 상태 토스트 등 오래 유지되는 안내에는 `message(key, values)` descriptor를 사용하고, 실제 렌더링 시점에 `translateMessage()`로 변환해요 (번역문 문자열 자체를 식별자로 사용하지 않음). 이 descriptor는 UI 상태 전용이며 서버나 모델 요청으로 전달되지 않아요.
-- **오류 전달과 번역 시점**: `onError`로 상위 상태에 전달되는 오류도 원문이나 descriptor를 보존하고 실제 화면에 렌더링되는 시점에 번역해요. 오류 발생 후 언어를 변경해도 요청을 재전송하지 않고 번역 문구만 전환돼요.
-- **중첩 참조**: 중첩된 앱 안내만 `messageRef()`로 명시해요. 사용자 제목이나 원고 텍스트는 원본 그대로 출력하며 재귀 번역을 수행하지 않아요.
-- **레거시 호환**: 기존 검증 헬퍼는 `legacyMessage()`로 한국어 `Error.message`를 유지하고 표현 계약만 등록해요. `registerMessage()`는 기존 API 에러 원문과 다국어 표시를 연결해요.
-- **대체 정책**: 번역이 누락된 항목은 한국어 메시지로 fallback돼요. 완전히 정의되지 않은 키는 키 이름을 그대로 표시하고 정적 검사에서 오류로 검출돼요.
-- **숫자 및 날짜 포맷**: `formatNumber`와 `formatDate`는 선택된 UI locale을 따르고, `Intl` 포맷터를 locale과 옵션별로 재사용해요. 통화는 USD 기준을 유지하며 KST 사용량 집계, 백업 시간대, ISO 조회 범위 및 원본 수치는 변경하지 않아요. 한국어 사용량의 K/M 축약 표기는 유지돼요. 구버전 대기 요청처럼 유효한 시각이 없는 데이터는 날짜 표시를 생략하고 나머지 화면은 계속 사용할 수 있어요.
+### Message representation and ICU formatting contract
+- `web/i18n.ts` and `web/locales/` own message representation.
+- **Per-language catalog loading**: Source files in `web/locales/*.ts` colocate all four languages per key, and `web/locales/{ko,en,ja,zh}.ts` export single-language catalogs. At build time, the `uimori-locale-catalogs` plugin in `vite.config.ts` compiles these four modules into single-language JSON objects so only Korean ships in the startup bundle while English, Japanese, and Chinese load on demand as separate chunks. Korean must remain synchronous for fallback and `legacyMessage()` reverse mapping. `web/main.tsx` awaits `loadInitialLocale()` before first render so wrong-language strings or raw keys never flash, falling back to Korean for the current session only if the chunk fails to load. Switching languages applies after the chunk loads, with the latest selection winning if multiple switches overlap. Callers needing synchronous switching (such as tests) preload via `loadLocale()`. Startup-bundle modules (`web/api-errors.ts`, `web/request-file-errors.ts`) read `web/locales/ko.ts` instead of four-language sources like `web/locales/errors.ts`, because importing the multi-language source directly would pull all four languages into the startup bundle.
+- Uses `intl-messageformat` as the sole runtime dependency for ICU variables, `plural`, `select`, numbers, and dates (no custom plural parser, and no HTML interpolation). Syntax follows the [official ICU Message Syntax](https://formatjs.github.io/docs/core-concepts/icu-syntax/).
+- **Render subscriptions**: Components subscribe via `useI18n()` and render complete sentences with `t(key, values)`. Translated strings are never cached in module-level global constants at initialization.
+- **Long-lived message descriptors**: Persistent notices such as alerts or status toasts store a `message(key, values)` descriptor and resolve it at render time via `translateMessage()` (translated strings themselves are never used as identifiers). Descriptors are UI-state-only and are never sent to the server or model requests.
+- **Error propagation and translation timing**: Errors passed upward via `onError` preserve the raw message or descriptor and translate only when rendered. Switching UI language after an error updates the displayed copy without re-sending requests.
+- **Nested references**: Only nested app messages are wrapped with `messageRef()`. User titles and manuscript text render verbatim with no recursive translation.
+- **Legacy compatibility**: Existing validation helpers preserve Korean `Error.message` via `legacyMessage()` and register only the display contract. `registerMessage()` maps legacy wire API error strings to localized display strings.
+- **Fallback policy**: Missing translations fall back to the Korean message. Undefined keys render the key name literally and fail static checks.
+- **Number and date formatting**: `formatNumber` and `formatDate` follow the selected UI locale and reuse `Intl` formatters per locale and option set. Currency remains USD, and KST usage rollups, backup time zones, ISO query ranges, and raw numeric values remain unchanged. Korean usage K/M abbreviations are preserved. Records lacking a valid timestamp (such as legacy pending requests) omit the date display while keeping the rest of the UI usable.
 
-### API 오류 및 외부 경계 처리
-- `ApiError.message`와 `code`는 고정 계약을 유지해요. 한국어 wire 오류의 호환 비교는 원문에서 먼저 수행하고, `displayMessage`와 등록된 표현을 통해 UI 레이어에서만 다국어로 번역해요.
-- 모델 설정 바로가기, 읽기 위치 출처, 도우미 단계, 0초 판단은 표시 문구가 아닌 코드·상태·수치를 사용해요.
-- 외부 프로바이더 진단 로그, 사용자 이름을 포함할 수 있는 서버 DELETE 충돌 사유, 알 수 없는 신규 가져오기 finding 등은 원문을 그대로 보존해요. 가져오기 finding의 기존 코드나 전체 문장 형식이 바뀌면 표시 매핑과 검증도 함께 갱신해야 해요.
-- **서비스 워커 및 푸시 알림**: 서비스 워커는 UI locale을 `uimori-presentation` IndexedDB의 `settings/ui-language`에 저장하고 푸시 수신 시마다 읽어와요. 워커가 종료된 후에도 언어 선택을 복구하며, 저장소가 없거나 사용할 수 없으면 한국어를 기본으로 사용해요. 알림 대상, 사용자 채팅 제목, 태그, 서버 payload는 유지하며 원고 캐시, 자동 재전송, 강제 새로고침을 추가하지 않아요.
-- **웹 앱 Manifest**: 언어별 정적 manifest 파일을 선택해 제공해요. 앱 ID, 이름, 시작 주소, scope(`/`)는 고정 유지돼요. OS 알림 권한창·설치 메뉴 언어, 이미 설치된 manifest 갱신 시점, 기존 워커의 새 버전 활성화 시점은 브라우저와 OS가 결정하며 기존 창을 강제로 다시 열지 않아요.
+### API errors and external boundary handling
+- `ApiError.message` and `code` keep a fixed contract. Compatibility matching against Korean wire errors runs on the raw string first, and localization happens strictly in the UI layer via `displayMessage` and registered expressions.
+- Model-settings shortcuts, reading-position sources, helper phases, and 0-second checks inspect codes, statuses, and numbers rather than localized display strings.
+- External provider diagnostic logs, server DELETE conflict reasons that may include user names, and unknown new import findings are preserved verbatim. If an existing import finding's code or full-sentence format changes, its display mapping and tests must be updated together.
+- **Service worker and push notifications**: The service worker persists the UI locale at `settings/ui-language` in the `uimori-presentation` IndexedDB database and reads it on each push event, recovering the selected language even after worker termination and defaulting to Korean if storage is missing or unavailable. Notification targets, user chat titles, tags, and server payloads remain unchanged, without adding manuscript caching, automatic resends, or forced reloads.
+- **Web App Manifest**: Selects and serves a per-language static manifest while keeping app ID, name, start URL, and scope (`/`) fixed. OS notification permission prompts, install menu language, refresh timing for already-installed manifests, and activation timing for updated service workers are controlled by the browser and OS; existing windows are never force-reloaded.
 
-### 자동 채팅 제목 생성 규약
-- 새 채팅 생성 시의 자동 제목은 생성 예약 시점의 앱 화면 표시 언어로 작성돼요.
-- 모델에 전달되는 생성 프롬프트 지시문은 영어로 전송되며, 이전 버전에서 언어 정보 없이 예약된 기존 작업은 한국어로 제목을 작성해요.
+### Automatic chat title generation contract
+- Automatic titles for new chats are generated in the app's UI language at the time title generation is scheduled.
+- The generation prompt instruction sent to the model is in English; legacy tasks scheduled in older versions without a language field generate titles in Korean.
 
-### 검증 도구와 테스트 명령어
+### I18N verification tools and test commands
 
 ```sh
-# 메시지 키, 인자, ICU 문법 및 4개 언어 누락 검사
+# Check message keys, arguments, ICU syntax, and missing entries across all 4 languages
 npm run check:i18n
 
-# JSX 텍스트 및 접근성 속성의 한국어 후보 검토
+# Review Korean string candidates in JSX text and accessibility attributes
 npm run check:i18n -- --candidates
 
-# 단위 테스트 실행
+# Run unit tests
 npm test -- tests/i18n.test.ts tests/api-errors.test.ts
 
-# 빌드 후 합성 fixture를 활용한 종합 검증
+# Build and run end-to-end verification with synthetic fixtures
 npm run verify:i18n
 ```
 
-- `npm run check:i18n`: 빈 번역, 중복 키, ICU 문법 오류, 언어 간 변수 인자 불일치 등을 검사해요. `-- --candidates`로 JSX 텍스트, 접근성 속성, 템플릿, 모듈 상수의 한국어 후보와 동적 호출을 검토해요 (후보에는 모델 입력, 저장 기본값, 레거시 오류도 포함되므로 자동 일괄 치환은 금지돼요).
-- `npm test -- tests/i18n.test.ts tests/api-errors.test.ts`: 언어 선택 우선순위, 저장 실패 대처, 누락 키 fallback, 보관 메시지의 언어 전환, 사용자 입력 보존 및 레거시 에러 호환성을 검증해요.
-- `npm run verify:i18n`: 실제 선택/재접속, 본문 로딩 실패 및 재시도 시 초안·읽기 위치·저장 자료 보존, 4개 언어 모바일 뷰포트 레이아웃, 완료 알림 타이머 지속 여부, 서비스 워커 재시작 후 푸시 언어 복구 등을 브라우저 fixture와 스크린샷으로 검증해요 ([개발 검증](DEVELOPMENT.md) 참고). 번역은 문맥과 의미를 함께 검토해요.
+- `npm run check:i18n`: Detects empty translations, duplicate keys, ICU syntax errors, and argument mismatches across languages. `-- --candidates` lists Korean candidates in JSX text, accessibility attributes, templates, and module constants along with dynamic calls (candidates include model inputs, persisted defaults, and legacy errors, so blind bulk replacement is prohibited).
+- `npm test -- tests/i18n.test.ts tests/api-errors.test.ts`: Verifies language-selection precedence, storage-failure handling, missing-key fallback, re-rendering stored messages on language switch, user-input preservation, and legacy error compatibility.
+- `npm run verify:i18n`: Uses browser fixtures and screenshots to verify live selection/reconnect, preservation of drafts/reading position/saved resources across body-load failure and retry, mobile viewport layouts in all 4 languages, persistence of completion-notification timers, and push-language recovery after service-worker restart (see [development verification](DEVELOPMENT.md)). Review translations for both context and meaning.
 
 ## Themes, built-in assets and verification
 
-- **내장 테마의 자료**: 내장 테마의 자료 파일은 `third_party/theme-assets`에 있고 `core/builtin-theme-assets.ts`가 파일 해시를 고정해요. 내장 테마를 복제해 저장하면 그 파일을 사용자 테마 안으로 복사해서, 사용자 테마는 앱 파일 없이도 내보내고 가져올 수 있어요. 직접 그린 장식 그림은 `scripts/theme-art/<레이아웃>.mjs`가 SVG에서 다시 만들어요. 그림을 고쳐 다시 만들면 해시가 바뀌므로 `core/builtin-theme-assets.ts`의 해시도 함께 갱신하세요.
-색상 이름에는 앞의 `--`를 붙이지 않아요. 기준 키 목록(`core/themes.ts`의 `THEME_COLOR_KEYS`)은 다음과 같아요.
+- **Built-in theme assets**: Built-in theme asset files live in `third_party/theme-assets`, with hashes pinned in `core/builtin-theme-assets.ts`. Cloning and saving a built-in theme copies those files into the user theme so user themes can be exported and imported without app files. Custom-drawn decorative art is regenerated from SVG by `scripts/theme-art/<레이아웃>.mjs` (`scripts/theme-art/<layout>.mjs`). Whenever art is edited and regenerated, update its hash in `core/builtin-theme-assets.ts` as well.
+- Color names omit the leading `--`; the canonical key list is `THEME_COLOR_KEYS` in `core/themes.ts`.
 
-### 내장 레이아웃과 팔레트 내부 원본
-- 레이아웃 원본: `core/narrative-themes.ts`가 레이아웃의 단일 원본이에요.
-- 팔레트 원본: `core/theme-palettes.ts`가 팔레트 목록이에요.
-- 사용자 테마 보존 및 호환성:
-  - 복제·가져오기한 사용자 테마와 그 색상은 삭제하거나 덮어쓰지 않아요.
-  - `verify:liquid-gallery`는 기본 목록 대신 **사용자 테마 사본**을 통해 공통 갤러리 호환성을 확인해요. 이 호환성 자료는 [테스트 fixture](../../tests/fixtures/liquid-gallery.ts)에 보관해요.
-- 데이터 백업: 테마 JSON에는 레이아웃에 저장된 원래 색상이 포함되고, 별도로 선택한 팔레트·적용 범위는 포함하지 않아요. 별도 팔레트 자료와 선택은 작업실 SQLite 백업에 보존돼요. 테마 삭제/편집은 원문이나 모델 입력을 변경하지 않아요. 표정 패널·BGM·TTS·입력 번역은 이번 기능의 범위가 아니에요.
+### Built-in layouts and palette sources of truth
+- Layout source of truth: `core/narrative-themes.ts` is the single source of truth for layouts.
+- Palette source of truth: `core/theme-palettes.ts` defines the palette list.
+- User theme preservation and compatibility:
+  - Cloned or imported user themes and their colors are never deleted or overwritten.
+  - `verify:liquid-gallery` verifies shared gallery compatibility through a **user theme copy** rather than the built-in list; this compatibility fixture lives in [test fixture](../../tests/fixtures/liquid-gallery.ts).
+- Data backup: Theme JSON includes the original colors stored in the layout and excludes separately chosen palettes and scope bindings. Separate palette resources and selections are preserved in workspace SQLite backups. Deleting or editing themes never alters manuscripts or model inputs. Expression panels, BGM, TTS, and input translation are out of scope for this feature.
 
-### 테스트 및 검증 명령어
+### Theme test and verification commands
 ```sh
 npm run check
 npm test -- tests/themes.test.ts
@@ -586,36 +608,36 @@ npm run verify:themes
 npm run verify:narrative-themes
 ```
 
-- `verify:themes`: 테마 화면과 기존 Risu 메시지 표면 회귀 검사를 격리된 합성 서버에서 수행해요. 결과와 화면은 `output/playwright/themes-*/`에 남아요. 테스트에서 캡처한 이미지를 실제로 열어 확인하세요.
-- `verify:narrative-themes`: 새 레이아웃 검사는 합성 이미지와 긴 한국어 원고로 레이아웃마다 1440/412px·밝게/어둡게 중 한 조합을 순환하며 팔레트 독립성·확대·편집·복사·번역·읽기 설정·복구를 검증해요.
-- 시각 데모 폴더: 개인 시각 검토에는 `UIMORI_NARRATIVE_DEMO_DIR`에 `bot.webp`(2:3)와 `persona.webp`(1:1)가 있는 폴더를 지정할 수 있어요. 이 입력은 격리된 합성 서버에만 저장하며 결과는 무시되는 `output/`에 남겨요. 지정하지 않은 일반 검사는 결정적인 합성 이미지를 사용해요. 이미지 파일은 저장소에 넣지 않아요.
+- `verify:themes`: Runs theme UI and existing Risu message-surface regression checks against an isolated synthetic server, writing results and screenshots to `output/playwright/themes-*/`. Open and visually inspect captured images.
+- `verify:narrative-themes`: Tests each layout with synthetic images and long Korean manuscripts, cycling across 1440/412px and light/dark combinations to verify palette independence, zoom, editing, copying, translation, reading preferences, and recovery.
+- Visual demo folder: For personal visual review, set `UIMORI_NARRATIVE_DEMO_DIR` to a directory containing `bot.webp` (2:3) and `persona.webp` (1:1). These inputs are stored only in the isolated synthetic server with outputs written to the gitignored `output/` directory; default runs use deterministic synthetic images, and demo image files are never committed to the repository.
 
 ## Usage report and backfill
 
-- **`attempts` 테이블과 경량 집계**: `attempts` 테이블에는 호출 시각, 용도, 테스트 여부와 작은 숫자형 추정 결과만 저장해요. 사용량 집계는 원문이나 프롬프트 JSON을 전량 읽지 않으며, 삭제 정리 시에도 완료된 요청·응답 전문을 JS로 읽거나 파싱하지 않고 숫자 컬럼만 남겨요.
-- **지연 정산 및 분류 주체**: 진행 중인 호출이 늦게 정산되는 경우에만 동결된 최소 요금 정보를 유지해요. 협업 `agentId`와 도우미 `purpose`는 호스트가 분류하며 모델 출력으로 요금 분류를 바꾸지 않아요.
-- **입력 번역 및 연결 테스트**: 입력 번역과 연결 테스트도 실제 전송 경계에서 기록하지만 요청 및 응답 본문은 이 장부에 저장하지 않아요.
-- **시각 미확인 기록**: 과거 기록에 실제 호출 시각이 없으면 `시각 미확인`으로 별도 집계하고 선택 기간에 임의 배치하지 않아요. 기존에 지워진 실행, 남아 있지 않은 협업 구분이나 호출 시각은 복구할 수 없으며, 상세 집계 도입 시점을 화면에 표시해요.
-- **도우미 단가 도구 계약 (`model.pricing.read/update`)**:
-  - 도우미는 `model.pricing.read/update` 도구로 저장된 모델의 단가만 수정할 수 있어요.
-  - 가격 없이 기록된 지난 호출은 `model.pricing.backfill`로 지금 저장된 단가를 적용해 추정 비용을 채울 수 있어요(`server/usage-backfill.ts`). 호출 때 가격이 있었거나 프로바이더가 비용을 보고한 호출은 바꾸지 않아요. 기록된 가격을 뒤늦게 고쳐 쓰지 않기 위해서예요. 채운 추정에는 나중에 계산했다는 표시가 남고, 서비스 등급이 지금 가격과 다른 호출은 미확인으로 남아요. 사용량 화면의 합계는 호출 기록에서 다시 계산되므로 바로 반영되지만, 작업에 이미 저장된 비용 합계는 바뀌지 않아요. `tests/helper-pricing-tools.test.ts`가 확인해요.
-  - 최신 수정 번호 `expectedRevision`을 확인하며, 인증 정보가 없는 HTTPS `sourceUrl`과 확인 날짜 `checkedAt`이 필수예요.
-  - 단가 단위는 USD / 100만 토큰(`USD/100만 토큰`)이에요.
-  - `null`은 미확인, `0`은 무료임을 확인한 요금이에요. Flex, Batch, 캐시 유지 시간, 긴 컨텍스트 단가는 해당 출처에 따라 따로 지정하며 임의 할인을 추측하지 않아요.
-  - 도우미 웹 검색 지원 여부는 선택한 프로바이더 어댑터와 모델, 계정에 따라 달라져요. 검색 도구의 별도 사용료는 토큰 단가 기반 추정에 포함되지 않을 수 있어요.
-- **조회 API 엔드포인트**:
+- **`attempts` table and lightweight aggregation**: The `attempts` table stores only call timestamps, purposes, test flags, and compact numeric estimate columns. Usage aggregation never reads full manuscripts or prompt JSON, and deletion cleanup leaves numeric columns intact without loading or parsing completed request/response bodies in JS.
+- **Deferred settlement and classification ownership**: Minimal frozen pricing metadata is retained only while an in-flight call awaits late settlement. Collaborative `agentId` and helper `purpose` are classified by the host; model output never alters billing classification.
+- **Input translation and connection tests**: Input translations and connection tests are also logged at the actual transmission boundary, without storing request or response bodies in this ledger.
+- **Unknown-time records**: Historical records lacking an actual call timestamp are aggregated separately under `시각 미확인` (Unknown time) rather than arbitrarily placed into a selected date range. Previously deleted runs, unrecorded collaboration categories, and missing timestamps cannot be recovered, and the UI displays the cutoff date when detailed tracking began.
+- **Helper pricing tool contract (`model.pricing.read/update`)**:
+  - The helper can modify pricing only for saved models via `model.pricing.read/update`.
+  - Historical calls logged without pricing can be backfilled with estimated costs from current saved rates via `model.pricing.backfill` (`server/usage-backfill.ts`). Calls that already had pricing at call time or a provider-reported cost are never overwritten so recorded prices are not rewritten retroactively. Backfilled estimates carry a marker noting late calculation, and calls whose service tier differs from current pricing remain unknown. Usage-screen totals recompute from call records and reflect backfills immediately, while cost totals already saved on tasks do not change. Verified by `tests/helper-pricing-tools.test.ts`.
+  - Validates the latest `expectedRevision` and requires an unauthenticated HTTPS `sourceUrl` plus verification date `checkedAt`.
+  - Rate units are USD per million tokens (`USD/100만 토큰`).
+  - `null` means unknown; `0` means confirmed free. Flex, Batch, cache TTL, and long-context rates are specified separately according to the source and are never guessed with arbitrary discounts.
+  - Helper web-search availability depends on the selected provider adapter, model, and account; separate search-tool fees may not be included in token-rate estimates.
+- **Query API endpoints**:
   - `GET /api/usage?from=YYYY-MM-DD&to=YYYY-MM-DD`
   - `GET /api/usage/export?...&group=day|model|kind`
-  - 읽기 전용이며 기존 작업실 인증을 요구해요. 단순 조회가 모델 호출, 요금 재조회, 예약 작업을 시작하지 않아요.
-- **테스트 스위트**:
-  - 단위 및 기능 검사: `tests/usage-report.test.ts`, `tests/usage-display.test.ts`, `tests/pricing-store.test.ts` (보고/추정/부분/미확인 구분, KST 경계, 동일 호출 중복 방지, 삭제 후 개인정보 제거, 시각 미확인 기록, CSV 생성 검증. 입력 번역 테스트는 사용량 숫자 외 모든 DB 내용 불변과 초안 미보관 확인).
-  - 종단 간 검증: `npm run verify:personal-features` (실제 루프백 합성 프로바이더로 두 번 전송한 영수증을 HTTP/API/데스크톱·모바일 화면/CSV까지 확인, 외부 유료 모델 미호출).
-  - 브라우저 검증: `npm run verify:browser -- --grep SPUI` (다크/라이트 테마, 데스크톱/모바일 배치, 차트의 미확인 금액, 잘못된 기간 입력, 오류 후 재조회 및 설정의 저장 전 상태를 합성 데이터로 검사).
+  - Read-only and gated by existing workspace authentication. Queries never trigger model calls, price re-fetches, or scheduled jobs.
+- **Test suite**:
+  - Unit and functional tests: `tests/usage-report.test.ts`, `tests/usage-display.test.ts`, `tests/pricing-store.test.ts` (reported/estimated/partial/unknown distinction, KST date boundaries, duplicate-call prevention, PII removal after deletion, unknown-time records, and CSV export; input-translation tests confirm all DB tables other than usage numbers stay unchanged and drafts are not stored).
+  - End-to-end verification: `npm run verify:personal-features` (verifies two receipts sent to a loopback synthetic provider across HTTP/API, desktop/mobile UI, and CSV without calling external paid models).
+  - Browser verification: `npm run verify:browser -- --grep SPUI` (checks dark/light themes, desktop/mobile layouts, unknown amounts in charts, invalid date ranges, post-error refetch, and unsaved settings state with synthetic data).
 
 ## HTTP compression, private ETag and maintenance mode
 
-앱 서버는 이름에 해시가 붙은 `/assets/*` 파일을 1년 `immutable` 캐시로 보내고, 빌드할 때 만든 Brotli·gzip 사본을 브라우저가 지원하는 경우 그대로 보내요. `index.html`, 서비스 워커, 매니페스트는 압축 사본 없이 기존 헤더를 유지해요. 1 KiB 이상인 JSON·텍스트 API 응답은 앱 서버가 Brotli(품질 4)나 gzip으로 압축하고, SSE와 이미지·글꼴·압축 파일은 압축하지 않아요(`server/response-compression.ts`). 보관함, 채팅 목록, 활동, 프롬프트 설정, 글꼴 목록, Reader 응답과 연결의 모델 목록은 로그인이 확인된 요청에만 `ETag`와 `Cache-Control: private, no-cache`를 붙여 바뀌지 않았으면 `304`로 답해요(`server/private-etag.ts`).
+The app server serves hashed `/assets/*` files with a 1-year `immutable` cache header, sending prebuilt Brotli or gzip copies when supported by the browser. `index.html`, the service worker, and manifests retain their existing headers without precompressed copies. JSON and text API responses of 1 KiB or larger are compressed by the app server with Brotli (quality 4) or gzip, while SSE, images, fonts, and archive files are left uncompressed (`server/response-compression.ts`). Library, chat list, activity, prompt settings, font list, Reader responses, and connection model lists attach `ETag` and `Cache-Control: private, no-cache` only on authenticated requests, replying `304` when unchanged (`server/private-etag.ts`).
 
-`UIMORI_MAINTENANCE=1`로 시작하면 DB 진입과 읽기만 허용하고 작업 복구나 worker는 시작하지 않아요. 이것은 읽기 전용 SQLite 열기가 아니므로 원본 DB 하나만으로 검증하지 말고 반드시 복사본으로 검증하세요. 이 부팅 모드는 API를 통해 열 수 없어요. 구현 코드는 [maintenance.ts](../../server/maintenance.ts)와 [app.ts](../../server/app.ts)에 있어요.
+Starting with `UIMORI_MAINTENANCE=1` allows only DB entry and reads without starting task recovery or workers. Because this is not a read-only SQLite open, never verify directly against the sole production DB—always verify against a copy. This boot mode cannot be enabled via the API. Implementation lives in [maintenance.ts](../../server/maintenance.ts) and [app.ts](../../server/app.ts).
 
-Oracle 실행기는 이러한 진입 제어와 부팅 경계를 사용해 진행 중인 작업을 기다리고, 후보 데이터베이스 복사본을 검증한 뒤 배포 후 쓰기를 다시 열어요. 앱 진입 관리는 [유지보수 모드 테스트](../../tests/maintenance.test.ts)에서 다루며, 별도의 이미지·백업·복구 점검은 [Oracle 배포 안내](ORACLE-RELEASE.md)에 설명되어 있어요.
+The Oracle runner uses these entry controls and boot boundaries to wait for in-flight tasks, verify a candidate database copy, and reopen writes after deployment. App entry control is covered in [maintenance mode tests](../../tests/maintenance.test.ts), and separate image, backup, and recovery checks are documented in [Oracle release guide](ORACLE-RELEASE.md).

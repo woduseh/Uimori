@@ -4,319 +4,411 @@ Developer-only technical sections extracted verbatim from `docs/PROVIDERS.md`, `
 
 ## Providers and transport encoding
 
-이 섹션은 프로바이더 연동과 관련된 내부 아키텍처, 전송 인코딩, 동시성 및 진단 규약을 설명하는 개발자/에이전트 계약이에요.
+This section defines the developer/agent contract covering provider integration internals, transport encoding, concurrency, and diagnostics.
 
-### 요청 변환 및 소유권 경계
-- `core/model-request-fields.ts`: 실행 스냅샷에서 모델 ID, 프로바이더 옵션, 확정된 가격 스냅샷만 추출해 요청 객체로 변환해요. 생성 옵션, 컨텍스트 예산, 도구 정의, 저장 및 실행 정책은 각 호출 주체가 독자적으로 결정해요.
-- `server/provider-connections.ts` 및 `server/credentials.ts`: 연결 입력값 검증과 키 저장(DB 읽기/쓰기)을 담당해요. 연결 저장 시 최종 URL 검증과 새로 선택하거나 기존에 저장한 Vertex 서비스 계정 프로젝트 검증은 동일 트랜잭션에서 원자적으로 수행돼요. 자료 편집과 과거 백업 검증이 프로바이더 전송 경로에 개입하지 않아요.
-- `server/main-request.ts`: 공통 컨텍스트 측정 경로로, 프로바이더별 요청과 모델별 토크나이저 예산을 통합 처리해요. 컨텍스트 계획, 자동 압축, 다음 요청 분량 미리보기가 이 경로를 사용하며, 실제 전송할 요청을 기준으로 측정하고 요약 포함 여부를 확인해요. Gemini 대화는 역할과 순서를 유지한 네이티브 텍스트로 전송하며, Codex의 두 실행 형식 측정과 도우미 전용 입력 형식도 유지해요.
-- 프롬프트 형상 검증은 원본 데이터를 복사하거나 수정하지 않으며, 수정이 필요한 입력과 프로바이더 연속 상태는 소유 경계에서 복사해요. 공개 스트림을 소비하지 않는 호출에서는 중간 표시용 본문을 조립하지 않으며 최종 결과·사용량·취소 처리는 유지해요.
+### Request conversion and ownership boundaries
 
-### 프로토콜별 이미지 및 메시지 인코딩
-- **본문 참고 이미지 전달 규격**:
+- `core/model-request-fields.ts`: Extracts only the model ID, provider options, and frozen pricing snapshot from an execution snapshot to build the request object. Each caller independently decides generation options, context budgets, tool definitions, and storage and execution policies.
+- `server/provider-connections.ts` and `server/credentials.ts`: Own connection input validation and credential storage (DB reads/writes). Saving a connection runs final URL validation and project validation for a newly selected or previously stored Vertex service account atomically in the same transaction; resource editing and legacy backup verification do not intervene in the provider transport path.
+- `server/main-request.ts`: Shared context measurement path unifying per-provider requests and per-model tokenizer budgets across context planning, automatic compaction, and next-request size previews.
+  - Measures against the actual outgoing request and checks whether a summary is included.
+  - Sends Gemini conversations as native text preserving roles and ordering, and retains measurement for both Codex execution formats and helper-only input formats.
+- Prompt-shape validation neither copies nor mutates original data; inputs needing mutation and provider continuation state are copied at ownership boundaries.
+- Calls that do not consume a public stream skip assembling intermediate display prose while preserving final results, usage, and cancellation handling.
+
+### Per-protocol image and message encoding
+
+- **Main-story reference image transport formats**:
   - OpenAI Responses: `input_image`
   - OpenAI Chat / Vercel: `image_url`
   - Anthropic Messages: `image`
   - Google Gemini / Vertex AI: `inlineData`
-  - Codex: 전용 이미지 입력 객체 (Codex의 이미지 생성 도구는 켜지 않음)
-- **이미지 제약**: DeepSeek 직접 연결 및 명시적으로 확인된 텍스트 전용 모델은 이미지 입력을 거절해요. 지원 여부가 확인되지 않은 사용자 지정 모델은 지원 미확인 상태로 전송을 허용해요. 사용자 이미지 첨부 UI는 본문 요청에 표시돼요. 이미지 배치 판단의 후보 전송은 판단 프로바이더 옵션에서 따로 설정해요.
-- **Vercel Chat 변환**: 이전 assistant 메시지의 텍스트 조각들을 순서대로 합쳐 하나의 문자열로 전송해요.
-- **OpenAI Responses 변환**: 수동 대화 이력을 assistant를 포함하여 `input_text` 조각들로 구성하고 조각별 캐시 기준점을 유지해요. 도구 후속 요청에서는 프로바이더가 실제로 반환한 메시지·사고·도구 호출 항목을 원래 형식과 식별자로 이어 보내요.
-- **Gemini 대화 및 도구 처리**: 도구 호출 후 이어지는 요청은 모델의 원본 응답과 사고 서명을 보존하고, 동일한 사용자 턴 안의 추가 제어 텍스트를 도구 결과(`functionResponse`) 앞에 배치해 Vertex 엔드포인트 거절 문제를 방지해요 (Claude·OpenAI·Codex 요청 형식은 변경하지 않음).
-- **Gemini 중간 system 변환**: Gemini 모델 ID(`gemini-…`와 `google/gemini-…` 같은 게이트웨이 ID)로 보내는 요청에서 선두가 아닌 system 메시지는 전송할 때만 user로 바꾸고 `GEMINI_MID_SYSTEM_TO_USER` 진단을 남겨요. 원래 프롬프트는 바꾸지 않아요. 직접 연결은 Gemini API·Vertex AI 레퍼런스가 `contents`에 user와 model 역할만 허용해서 적용하고, 게이트웨이 연결은 확인된 지원 사례가 없어 같은 규칙을 보수적으로 적용해요. 판단 기준은 [모델별 capability](../../core/model-capabilities.ts)의 `acceptsMidConversationSystem`이에요.
-- **Anthropic 메시지 보정**: `user → 연속 system → user` 형태의 프롬프트 전송 시, system 블록 끝에 짧은 가상 completed assistant 응답을 전송용으로 한 번 추가해요. 원래 프롬프트 및 실행 스냅샷의 역할·순서·본문·캐시 기준점은 옮기지 않으며 요청 미리보기 진단에만 기록돼요. 도구 후속 요청은 저장된 메시지를 그대로 재생하므로 보조 응답을 중복 추가하지 않아요.
-- **DeepSeek 오류 처리**: `insufficient_system_resource` 또는 `aborted`로 응답이 종료된 경우 수신된 본문과 최종 사용량을 보존하고 미완료로 기록해요. 불완전한 도구 호출은 실행하지 않으며 자동 재요청하지 않아요. 원격 중단 사유는 지원하지 않는 응답 형식과 구분해 실행 기록에 남겨요.
+  - Codex: dedicated image input object (Codex's image generation tool is not enabled)
+- **Image restrictions**:
+  - Direct DeepSeek connections and explicitly confirmed text-only models reject image inputs; custom models with unconfirmed image support are allowed to send in an unconfirmed-support state.
+  - The user image attachment UI appears on main-story requests; sending candidates for image placement judgment is configured separately under judgment provider options.
+- **Vercel Chat conversion**: Concatenates text parts from prior assistant messages in order into a single string before sending.
+- **OpenAI Responses conversion**:
+  - Builds manual conversation history (including assistant turns) out of `input_text` parts while preserving per-part cache breakpoints.
+  - Follow-up tool requests replay the message, reasoning, and tool-call items actually returned by the provider using their original format and IDs.
+- **Gemini conversation and tool handling**: Follow-up requests after tool calls preserve the model's original response and thought signature, placing additional control text within the same user turn before tool results (`functionResponse`) to avoid Vertex endpoint rejections (Claude, OpenAI, and Codex request formats remain unchanged).
+- **Gemini mid-conversation system conversion**:
+  - On requests targeting Gemini model IDs (including gateway IDs like `gemini-…` and `google/gemini-…`), non-leading system messages are converted to `user` at send time only and emit a `GEMINI_MID_SYSTEM_TO_USER` diagnostic without modifying the original prompt.
+  - Direct connections apply this because Gemini API and Vertex AI references allow only `user` and `model` roles in `contents`, and gateway connections apply it conservatively due to unconfirmed support.
+  - Governed by `acceptsMidConversationSystem` in [per-model capabilities](../../core/model-capabilities.ts).
+- **Anthropic message normalization**:
+  - When sending a prompt structured as `user → 연속 system → user` (`user` → consecutive `system` → `user`), appends one short synthetic completed assistant reply at the end of the system block for transmission only.
+  - The original prompt and execution snapshot's roles, ordering, prose, and cache breakpoints are not moved, and the insertion is recorded only in request-preview diagnostics.
+  - Follow-up tool requests replay stored messages verbatim without duplicating the synthetic reply.
+- **DeepSeek error handling**:
+  - When a response ends with `insufficient_system_resource` or `aborted`, preserves received prose and final usage and records the run as incomplete.
+  - Incomplete tool calls are neither executed nor automatically retried, and remote abort reasons are distinguished from unsupported response formats in execution records.
 
-### Anthropic Batch 아키텍처
-- 자체 배치 스케줄러를 두지 않고, 단일 모델 호출마다 Anthropic Batch API에 요청 하나를 넣고 기존 `runMain` 도구 루프를 그대로 사용해요.
-- Claude가 도구를 요청하면 로컬에서 도구를 실행한 후 다음 턴을 새 Batch로 전송해요. `story.submit` 도구가 호출되면 추가 호출 없이 작업을 종료해요.
-- SQLite에 `runId`, `attemptId`, `batchId`, `customId`와 요청 해시를 저장해 서버 재기동 시에도 동일 Run과 Batch를 다시 조회해 복구해요. 저장된 Batch 결과와 도구 영수증도 재사용해 중복 실행을 방지해요.
-- `batchId` 저장이 누락된 모호한 생성 실패 상태에서는 중복 과금을 막기 위해 자동 재전송하지 않고 실패로 확정해요.
-- JEV와 Responses를 포함한 프로바이더 응답 본문 읽기는 작업 취소와 시간 제한에 따라 중단돼요. 완료나 오류가 확정된 뒤에는 응답 스트림 정리를 요청하되 원격 정리 확인을 기다리지 않아 지연에 막히지 않아요.
+### Anthropic Batch architecture
 
-### 캐시 기준점 진단과 도구 규약 (`cacheBoundaries`)
-- OpenAI Responses 및 Anthropic 실행 요청 기록에는 명시적 캐시 기준점 진단 정보인 `cacheBoundaries`가 포함돼요.
-- 각 항목은 기준점 위치, 직전 입력과 도구·생성 설정을 포함한 해시, 진단 JSON 바이트 수를 담아요. 로어 뒤 내용이 바뀌어도 앞 기준점 해시는 유지되지만 도구 schema·순서·기준점 앞 사전 도구 이력이 바뀌면 달라져요.
-- 기존 `stablePrefixSha256`은 공통 계약·도구만의 해시로 유지하며 전체 프롬프트의 캐시 재사용 근거로 쓰지 않아요. 암묵적 캐시만 있는 요청에는 기준점을 추정해서 추가하지 않아요. 이 진단은 실시간·Batch 모두 로컬 요청 기록에만 추가되고 프로바이더 본문에는 들어가지 않아요.
-- Anthropic Messages는 `anthropic-version: 2023-06-01` 헤더를 사용해요. Uimori 도구 이름은 프로바이더 호환용 별칭으로 전송되며, 저장된 도구 이름·인수·결과와 호출 ID는 유지해요. 현재 도구 목록에서 제외한 사전 평가 이력은 원래의 유효한 이름으로 남겨요. 도구 정의 규격은 [공식 도구 정의 계약](https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools)을 따라요.
+- Does not run a custom batch scheduler; submits a single request to the Anthropic Batch API per model call and reuses the existing `runMain` tool loop as-is.
+- When Claude requests a tool, executes it locally and submits the next turn as a new Batch; once `story.submit` is called, terminates the task with no further calls.
+- Persists `runId`, `attemptId`, `batchId`, `customId`, and the request hash in SQLite so the same Run and Batch can be re-queried and recovered across server restarts, reusing stored Batch results and tool receipts to prevent duplicate execution.
+- In an ambiguous creation failure where `batchId` was never persisted, finalizes the run as failed instead of auto-resubmitting to prevent double billing.
+- Provider response body reads—including JEV and Responses—abort on task cancellation and timeouts; once completion or error is finalized, response stream cleanup is requested without awaiting remote cleanup confirmation so latency cannot block finalization.
 
-### 로어 포함 기록 메타데이터
-- 본문·번역 요청을 전송할 때 호스트가 기존 요청 JSON에 작은 메타데이터로 로어 포함 기록을 저장해요.
-- 자료 목록에 이름만 있거나 판단 모델에서 선별됐다는 사실만으로 실제 본문 포함을 확정하지 않으며, 프롬프트 가공 등으로 확인하지 못한 후보는 별도로 표시하고 기록이 없는 과거 요청은 미포함으로 추정하지 않아요.
-- 로어 본문을 중복 저장하거나 이 기록을 모델에 전송하지 않으며, 기존 요청 기록 보관 범위를 그대로 따라요.
+### Cache-breakpoint diagnostics and tool contracts (`cacheBoundaries`)
 
-### 동시 수정 및 스트리밍 본문 조립
-- 프로바이더와 모델 활성/비활성 상태는 자료를 삭제하지 않고 저장 즉시 다음 호출부터 적용돼요.
-- 편집 화면 전환 시 미저장 입력은 보호되며, 다른 곳에서 먼저 저장된 경우 현재 초안을 유지한 채 최신 설정을 불러오도록 안내해요. 설정 조회 API는 편집 가능한 설정만 반환하고 API 키 원문은 일체 반환하지 않아요. 미저장 초안의 키 입력은 브라우저 메모리에만 존재하며 로컬 복구 저장소에 기록되지 않아요.
-- 실시간 스트리밍은 디코더가 검증한 추가 청크와 UTF-16 끝 인덱스를 전달해 매 청크마다 전체 문자열을 재비교하지 않아요. 전체 본문 스냅샷이나 앞선 내용 변경 경계에서는 접두사 검증을 유지하고, 종료 시 누적 청크의 합과 최종 본문의 일치 여부를 검증해요. 사고 과정, 도구 인수, 최종 제출 envelope, 구조화 번역은 공개 조각에 포함되지 않아요.
+- Execution request records for OpenAI Responses and Anthropic include `cacheBoundaries`, an explicit cache-breakpoint diagnostic record.
+- Each entry stores the breakpoint position, a hash covering preceding input plus tool and generation settings, and the diagnostic JSON byte count. Changes after lore keep earlier breakpoint hashes intact, whereas changes to tool schemas, tool ordering, or prior tool history before a breakpoint alter the hash.
+- Existing `stablePrefixSha256` remains a hash of shared contracts and tools only and is not used as proof of whole-prompt cache reuse; breakpoints are never inferred or fabricated for requests with only implicit caching.
+- These diagnostics are appended only to local request records (for both live and Batch runs) and are excluded from provider payloads.
+- Anthropic Messages sends the `anthropic-version: 2023-06-01` header. Uimori tool names are transmitted via provider-compatible aliases while preserving stored tool names, arguments, results, and call IDs.
+- Prior evaluation history excluded from the current tool list retains its original valid names, and tool definitions follow the [official tool definition contract](https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools).
+
+### Lore-inclusion record metadata
+
+- When dispatching main-story or translation requests, the host attaches compact lore-inclusion metadata inside the existing request JSON.
+- Merely appearing by name in a resource list or being picked by the judgment model does not confirm actual prose inclusion; candidates whose inclusion could not be verified (such as after prompt transformations) are marked separately, and legacy requests without this record are not assumed to have excluded lore.
+- Lore bodies are not duplicated into this record, the metadata is never sent to the model, and it follows the existing retention scope of request records.
+
+### Concurrent edits and streaming prose assembly
+
+- Enabling or disabling providers and models does not delete data and takes effect immediately starting with the next call.
+- Unsaved input is protected across editor view switches; if changes were saved elsewhere first, the UI preserves the current draft and prompts to reload the latest settings.
+- Settings read APIs return only editable settings and never return raw API keys; key inputs in unsaved drafts reside solely in browser memory and are never written to local recovery storage.
+- Live streaming delivers decoder-validated append chunks alongside their UTF-16 end index rather than re-comparing the full string on every chunk.
+- Prefix validation is kept across full-text snapshots or boundaries where earlier text changed, and completion verifies that the concatenation of accumulated chunks matches the final text; reasoning traces, tool arguments, final submission envelopes, and structured translations are excluded from public chunks.
 
 ## Codex App Server protocol and isolation
 
-이 섹션은 Codex App Server의 프로세스 라이프사이클, 프로토콜 사양, 격리 환경 및 검증 계약을 설명하는 개발자/에이전트 규약이에요.
+This section defines the developer/agent contract for Codex App Server process lifecycle, protocol specifications, isolation environment, and verification.
 
-### App Server 통신 및 턴 라이프사이클
-- Uimori는 공식 CLI의 App Server 프로토콜인 `initialize`, `account/*`, `model/list`, `thread/start`, `turn/start`를 호출해요.
-- 본문 Run의 작가, 조언자, 도우미는 각각 **작업 하나를 하나의 thread/turn**에서 끝까지 실행하고 호스트 도구 결과를 동일 턴 안에서 처리해요.
-- 번역 및 컨텍스트 정리는 기존의 요청별 ephemeral 실행을 유지하며, 도우미의 별도 가정 장면 실행은 제공하지 않아요.
-- 본문 평가 시 `preloaded + economized` 첫 단계만 기존 저비용 요청으로 처리한 후 원래 추론 수준의 native 작문으로 전환돼요. 작업 간 native thread 재개 정보나 불투명한 continuation 상태는 DB에 저장하지 않아요.
-- 텍스트 역할은 `thread/start.baseInstructions`로 간결한 Uimori 작문·번역·요약 지침을 전달해 모델 기본 코딩 지침을 대체해요. 도우미(`helper`)는 자료 조회·편집과 저장 결과 확인에 맞는 전용 지침을 사용해요.
-- 초기 요청에 작업·이전 대화·자료 범위와 등록된 도구를 전달해요. 도우미의 초기 이력이 입력 예산을 넘으면 Uimori가 시작 전에 컨텍스트 정리를 수행할 수 있어요. native 턴이 시작된 뒤 도구 결과를 받을 때마다 이력을 다시 묶거나 새 턴을 만들지 않으며, 턴 내부 진행·컨텍스트 정리는 Codex가 담당해요.
-- RisuPrompt의 논리적 역할·순서·빈 메시지를 JSON으로 전달해요. 메시지 ID·출처 종류·원문 revision/hash는 유지하며 호스트 내부 block/run ID와 항상 완료된 메시지의 중복 상태는 모델 입력에서 제외해요. 현재 user 메시지 하나가 요청 본문과 정확히 같을 때만 별도 `input.task` 중복을 생략해요. Codex 자체 지침이 추가되므로 native API와 메시지 역할 해석이 다를 수 있으며, assistant prefill과 필수 cache는 실행 전에 거절해요.
-- `reasoningEffort`와 timeout을 전달해요. 일반 역할의 `maxOutputTokens`는 프로바이더 강제 상한이 아닌 `outputTokenBudget` 소프트 예산으로 전달되며, 이 값을 채우려고 출력을 억지로 늘리지 않아요. 프롬프트에 단어 수 같은 명시적 분량 지시가 있으면 그 지시를 우선해요. temperature 설정은 허용되지 않아요.
-- 일반 역할의 구조화 출력과 내부 역할별 결과 검증은 유지하며, native 도우미에는 최종 JSON envelope나 `outputSchema`를 강제하지 않아요.
-- 전송 전에 RPC attempt를 기록해요. 동시 실행은 2개, 대기는 최대 32개이며 취소할 수 있어요. Uimori는 재시작·전송 실패·불확실한 실행을 자동 재생하지 않아요. 공식 CLI 0.153은 retry 설정 덮어쓰기를 거절하므로 CLI 내부 재시도나 중복 호출이 발생할 수 있어요. 기존 하네스의 명시적 재요청 및 정상 종료된 결과에 대한 제한된 재시도는 별도 판단 요청으로 기록돼요.
-- 한 attempt는 호스트가 시작한 Codex 턴 하나이며 내부 모델 호출 수와 같지 않아요. native 도우미는 여러 도구·모델 판단을 수행해도 한 attempt로 기록하고, 시작 전 컨텍스트 정리 호출은 별도예요. 실제 비용과 내부 모델 호출 수는 `null`로 남기고 턴 전체 timeout·취소와 호스트 도구 권한을 적용해요. Vertex의 USD 예산을 Codex 구독 예산으로 해석하지 않아요.
-- 프로바이더가 보고한 `tokenUsage.total`과 `last`의 입력·캐시·출력·추론 토큰은 숫자만 raw usage에 보존해요. 입력·출력 합계는 가장 최근 total 스냅샷으로 갱신하며, 중복 업데이트나 캐시 토큰을 다시 더하지 않아요. 프로바이더가 주지 않은 수치는 0으로 채우지 않아요. 삽화 raw usage에는 완료 항목 종류별 횟수(`itemCounts`)와 사용량 이벤트 횟수(`tokenUsageUpdates`)도 보존해요 (이미지 바이트나 도구 내용은 미포함).
+### App Server communication and turn lifecycle
 
-### 본문과 조언의 native 실행
+- Uimori calls the official CLI's App Server protocol methods: `initialize`, `account/*`, `model/list`, `thread/start`, and `turn/start`.
+- For main-story Runs, the writer, advisor, and helper each execute **one task in one thread/turn** to completion and handle host tool results within the same turn.
+- Translation and context compaction retain existing per-request ephemeral execution; separate hypothetical-scene execution for the helper is not provided.
+- During main-story evaluation, only the first `preloaded + economized` step uses the existing low-cost request path before switching to native writing at the configured reasoning effort. Cross-task native thread resume metadata and opaque continuation state are not persisted in the DB.
+- Text roles send concise Uimori writing, translation, or summary instructions via `thread/start.baseInstructions` to replace the model's default coding instructions. The helper (`helper`) uses dedicated instructions tailored to resource lookup, editing, and verifying saved results.
+- The initial request delivers the task, prior conversation, resource scope, and registered tools; if the helper's initial history exceeds the input budget, Uimori may run context compaction before starting. Once a native turn starts, Uimori does not re-bundle history or start a new turn per tool result; in-turn progression and context compaction are owned by Codex.
+- RisuPrompt's logical roles, ordering, and empty messages are sent as JSON, preserving message IDs, provenance kinds, and source revisions/hashes while excluding internal host block/run IDs and redundant completion status on always-completed messages.
+  - Separate `input.task` duplication is omitted only when a single current user message matches the request body verbatim.
+  - Because Codex adds its own instructions, message role interpretation may differ from native APIs; assistant prefill and required cache directives are rejected before execution.
+- `reasoningEffort` and timeout are forwarded; temperature settings are not permitted. For general roles, `maxOutputTokens` is passed as a soft `outputTokenBudget` rather than a provider-enforced cap—output is not padded to fill it, and explicit prompt length directives (such as word counts) take precedence.
+- Structured output for general roles and internal per-role result validation are retained; the native helper does not enforce a final JSON envelope or `outputSchema`.
+- An RPC attempt is recorded before sending, with concurrency capped at 2 active executions and up to 32 queued items (all cancellable).
+  - Uimori does not auto-replay after restarts, send failures, or uncertain outcomes.
+  - Official CLI 0.153 rejects overriding retry settings, so internal CLI retries or duplicate calls may occur; explicit harness retries and bounded retries on cleanly completed results are recorded as separate judgment requests.
+- One attempt represents one host-initiated Codex turn and does not equal internal model-call count; multiple tool and model decisions by the native helper log as one attempt, whereas pre-start context compaction calls log separately.
+  - Actual cost and internal model-call counts remain `null`, while turn-wide timeout, cancellation, and host tool permissions apply; Vertex USD budgets are never interpreted as Codex subscription budgets.
+- Raw usage preserves only numeric input, cached, output, and reasoning tokens from provider-reported `tokenUsage.total` and `last`, updating input/output totals from the latest `total` snapshot without double-counting repeated updates, re-adding cached tokens, or zero-filling omitted fields.
+  - Illustration raw usage also retains per-kind completed item counts (`itemCounts`) and usage event counts (`tokenUsageUpdates`), excluding image bytes and tool contents.
 
-새 프로바이더를 추가하거나 사용자가 스위치를 조작할 필요 없이, 실제 본문 Run에서 Codex 작가나 조언자를 선택하면 자동으로 적용돼요.
+### Native execution for main writing and advice
 
-- **독립 실행 지원**: 메인 모델이 다른 외부 프로바이더여도 조언자 모델이 Codex라면 native 실행 방식을 사용해요.
-- **컨텍스트 및 도구 전달**: 메인 작가는 `buildMainProviderRequest` 및 `editRequest` 결과의 역할·순서·원문·로어·플롯·사전 결과를 그대로 유지하고 도구 스키마만 native 도구 등록으로 전달해요. 조언자는 전용 요청·모델·지침·명시적 초안/근거를 사용하며 작가의 전체 프롬프트를 무단 복사하지 않아요. 기존 `agents.consult` 계약을 유지하며 조언자가 다시 하위 조언자를 호출하거나 본문을 저장하지 못해요. 사전 조언은 기존 순서대로 실행해요.
-- **제출 감지와 조기 종료**: 작가의 `story.submit` 또는 유효한 `eval_submit_artifact` 도구 호출이 확인되면 일반 도구 응답을 보내지 않고 즉시 `turn/interrupt`를 호출하고 프로세스를 정리해요. 호스트가 확정한 해당 제출만 성공으로 처리하며, 사용자 취소·timeout·접속 변경·기록 실패는 성공으로 바꾸지 않아요. 새 확인 문장을 요청하지 않고 원문 저장은 기존 판단 모델 판정·응답 후처리·원자적 완료 경로에서 수행해요. 평가 도구가 꺼진 본문은 일반 최종 텍스트도 지원하고, 평가가 켜진 `model-selected`·`preloaded`는 모두 유효한 `eval_submit_artifact`가 필요해요. 본문·조언자 스트리밍은 추가하지 않아요. 호스트 제출 종료의 usage는 `completion: host-submission`, `usageComplete: false`를 남겨 최종 청구량으로 오해하지 않게 해요.
-- **컨텍스트 계획 및 근거 기록**: native 실행 중에는 Uimori가 도구마다 프롬프트를 다시 만들거나 별도 컨텍스트 압축을 중복 실행하지 않아요. `editRequest`는 실제 호스트 요청 시작 때만 실행하므로 내부 추론마다 실행되는 훅이 아니에요. 초기 컨텍스트 계획은 기존/네이티브 입력 중 큰 추정치를 사용해 절약형 첫 단계에서도 재사용하고 전송 직전에 실제 native descriptor로 다시 확인해요. 초기 입력의 `requestLore`와 이후 `tool_events` 및 조언자의 `agents.read`는 별도 근거이며 뒤에 읽은 자료를 초기 입력에 포함됐다고 소급 기록하지 않아요.
-- **호스트 콜백 및 호출 한도**:
-  - 호출 한도는 호스트가 시작한 요청 및 native 실행 건수를 기준으로 계산돼요 (내부 추론 횟수와 일치하지 않으며 읽기 도구마다 모델 호출 1회를 추가하지 않음).
-  - 조언 캐시는 재청구하지 않으며 판단 모델·별도 조언 실행은 각각 집계해요. 진행 중인 native 작가는 조언 뒤 같은 turn에서 계속 쓰므로 다음 작가 호출을 예약하지 않지만, 사전 조언과 기존 프로바이더 루프는 작가 호출 1회를 남겨요 (후처리용 예약 유지).
-  - 평가의 수동 라운드 설정은 없으며, native 본문은 실패한 제출을 포함한 비최종 호스트 도구 콜백을 고정 10회까지 처리하고 유효한 최종 제출은 별도로 받아요.
-  - HTTP 본문 및 번역은 최대 11회의 프로바이더 요청 한도와 기존 전체 호출·시간 한도를 함께 적용해요.
-- **합성 stdio 통합 검증**: `tests/codex-writing.test.ts`에서 작성, 조언, 캐시 재사용, 자식 슬롯 할당, 취소 전파, 제출 감지 및 절약형 전환 로직을 검증해요.
+Automatically applies whenever a Codex writer or advisor is selected in a real main-story Run—no new provider setup or user toggle is required.
 
-### 내장 도구 및 격리 환경 경계
-- **비활성화 도구**: 터미널 셸, 파일 시스템 읽기/쓰기, Node REPL, 로컬 이미지 보기, 브라우저/컴퓨터 직접 제어, 외부 앱/MCP, 외부 스킬, 지속 메모리, 내장 하위 에이전트 및 추가 권한 승인 요청은 모두 제공하지 않아요. 호스트 파일·인증·외부 변경 권한을 보호하고 Uimori의 저장·협업·컨텍스트 관리 경계를 유지하기 위함이에요.
-- **Code Mode 격리 사양**: `code_mode`는 Node REPL과 다른 격리된 V8 JavaScript 실행기예요. 등록된 도구만 호출하고 Node·파일·네트워크 API 및 모듈 import를 일체 제공하지 않는 계약을 사용해요 (`core/codex-protocol.ts`, `server/codex-runtime.ts`).
-- **네임스페이스 격리**: 기본 `functions` 네임스페이스를 제외해 셸·파일 계열 도구가 중첩 실행 경로로 다시 노출되지 않게 해요. Uimori 호스트 도구는 experimental `dynamicTools`의 `uimori` 네임스페이스(`type: "function"`) 아래에만 등록되며, API 제약에 맞춰 `uimori_...` 접두사로 전달되고 호스트에서 원래 이름으로 복원돼요. 호스트는 현재 thread/turn과 `uimori` 네임스페이스가 일치하는 호출만 수락하고 중복 call ID는 거절해요.
-- **도구 결과 반환과 응답 스트리밍**: 번역 등 기존 역할은 JSON envelope로 최종 응답을 반환하지만, 본문·조언자·도우미의 native 실행은 `item/tool/call` 요청에 `contentItems`/`success`로 응답해요. 도우미 최종 응답은 일반 텍스트이며 `final_answer`의 공개 텍스트를 스트리밍하고 commentary는 별도 진행 이벤트로 기록해 최종 답변과 섞지 않아요. 내장 검색·계산의 중간 결과와 계획은 본문으로 저장하지 않으며 phase가 없는 구형 응답은 후속 작업이 없을 때 마지막 메시지를 최종 후보로 사용해요.
+- **Independent execution support**: Even when the main model uses another external provider, an advisor configured with a Codex model uses native execution.
+- **Context and tool delivery**:
+  - The main writer preserves exact roles, ordering, source text, lore, plot/outline, and prior results from `buildMainProviderRequest` and `editRequest`, passing only tool schemas as native tool registrations.
+  - Advisors use dedicated requests, models, instructions, and explicit drafts/evidence without blindly copying the writer's full prompt; the existing `agents.consult` contract holds (advisors cannot call sub-advisors or save prose), and pre-writing consultations run in their existing order.
+- **Submission detection and early termination**:
+  - Once a writer's `story.submit` or valid `eval_submit_artifact` tool call is observed, the host skips sending a normal tool response, immediately invokes `turn/interrupt`, and cleans up the process.
+  - Only that host-confirmed submission succeeds—user cancellation, timeout, connection changes, or write failures are never promoted to success.
+  - No follow-up confirmation prose is requested; source persistence goes through the existing judgment model verdict, response post-processing, and atomic completion pipeline.
+  - Main runs with evaluation tools off still support normal final text, whereas evaluation-enabled `model-selected` and `preloaded` runs both require a valid `eval_submit_artifact`; streaming is not added for main-writer or advisor turns.
+  - Usage on host-submission termination records `completion: host-submission` and `usageComplete: false` so it is not mistaken for final billed usage.
+- **Context planning and evidence tracking**:
+  - During native execution, Uimori neither rebuilds prompts per tool call nor runs duplicate context compaction; `editRequest` runs only when the real host request begins, not on each internal reasoning step.
+  - Initial context planning uses the larger estimate between legacy and native inputs for reuse across an economized first step, then re-checks against the actual native descriptor right before sending.
+  - Initial `requestLore`, subsequent `tool_events`, and advisor `agents.read` calls are separate evidence records; resources read later are never retroactively attributed to initial input.
+- **Host callbacks and call limits**:
+  - Call limits count host-initiated requests and native executions (not internal reasoning steps, and read tools do not add 1 model call each).
+  - Advice cache hits are not re-billed; judgment-model calls and separate advisor executions count individually. An active native writer continues in the same turn after consultation and does not reserve a next writer call, whereas pre-writing consultation and the legacy provider loop reserve 1 writer call (keeping post-processing reservation intact).
+  - Evaluation has no manual round setting: native main runs handle up to a fixed cap of 10 non-terminal host tool callbacks (including failed submissions) and accept a valid final submission separately.
+  - HTTP main and translation runs apply both a maximum of 11 provider requests and the existing overall call and time limits.
+- **Synthetic stdio integration tests**: `tests/codex-writing.test.ts` verifies writing, consultation, cache reuse, child-slot allocation, cancellation propagation, submission detection, and economized-mode transition logic.
 
-### 서버 내부의 명시적 다중 턴 세션
-- `CodexRuntime.createSession(connection)`은 호출자가 소유하고 `finally`에서 `close()`하는 메모리 내 세션 객체예요.
-- `execute`, `executeAgent`, `generateImage`를 순서대로 호출하면 첫 턴의 격리 프로세스와 ephemeral thread를 재사용해요 (기존 단일 턴 메서드는 요청마다 프로세스를 닫음).
-- 세션은 연결·모델·기본/개발자 지침·도구 권한을 고정하며 동시 턴 실행을 거절해요. 다른 사용자나 독립 작업에 세션을 공유하거나 DB에 재개 정보를 저장하지 않아요.
-- 각 턴의 취소·시간 제한·접속 검사를 유지하고, 실패하거나 결과가 불확실한 턴 뒤에는 세션을 닫아 재사용하지 않아요.
-- **연속 삽화 컷 재사용**: 동일 원문 hash와 storyboard 계획의 연속된 Codex 삽화 컷은 이 세션을 사용하되 **컷마다 별도 턴·작업·attempt·결과**를 유지해요. 성공한 컷은 즉시 저장하고 실패한 컷만 기존 정책에 따라 재시도해요. 다른 계획·채팅·연결, 다시 그리기, 세션 입력 예산이나 고정 설정에 맞지 않는 요청은 독립 실행해요. 한 컷의 변형 여러 장을 서로 다른 컷으로 배정하지 않아요.
-- **세션 누적 토큰 검사**: 세션의 로컬 이력에는 호스트 도구의 인수·텍스트 응답도 포함해요. Codex가 보고한 누적 입력·출력 토큰이 있으면 다음 턴은 그 값에 새 요청 추정을 더한 값도 모델 입력 예산 안에 들어야 해요. 도구·이미지·추론 항목이 있었는데 사용 가능한 토큰 보고가 없으면 그 세션의 다음 턴은 거절하고 삽화는 독립 실행해요. 누적 사용량은 실제 활성 문맥보다 크게 잡힐 수 있어요.
+### Built-in tools and isolation boundaries
 
-### 로컬 검증 및 공식 계약
+- **Disabled tools**: Terminal shells, filesystem read/write, Node REPL, local image viewing, direct browser/computer control, external apps/MCP, external skills, persistent memory, built-in subagents, and extra permission approval prompts are all disabled. This protects host files, credentials, and external mutation rights while preserving Uimori's storage, collaboration, and context-management boundaries.
+- **Code Mode isolation spec**: `code_mode` is an isolated V8 JavaScript executor distinct from Node REPL. Its contract allows calling only registered tools and exposes no Node, filesystem, or network APIs and no module imports (`core/codex-protocol.ts`, `server/codex-runtime.ts`).
+- **Namespace isolation**: Excludes the default `functions` namespace so shell/file tools cannot resurface through nested execution paths. Uimori host tools register solely under the `uimori` namespace (`type: "function"`) of experimental `dynamicTools`, transmit with an `uimori_...` prefix to satisfy API constraints, and restore original names on the host; calls are accepted only when both the active thread/turn and `uimori` namespace match, and duplicate call IDs are rejected.
+- **Tool results and response streaming**:
+  - Legacy roles like translation return final responses in a JSON envelope, whereas native main/advisor/helper turns answer `item/tool/call` requests with `contentItems`/`success`.
+  - Helper final replies are plain text: public text under `final_answer` streams live, while commentary logs as separate progress events and never mixes into the final answer.
+  - Intermediate results and plans from built-in search/compute are not saved as prose; legacy responses lacking a phase fall back to the last message as the final candidate when no follow-up work remains.
+
+### Explicit server-internal multi-turn sessions
+
+- `CodexRuntime.createSession(connection)` is an in-memory session object owned by the caller and closed via `close()` in a `finally` block.
+- Sequential calls to `execute`, `executeAgent`, and `generateImage` reuse the first turn's isolated process and ephemeral thread (existing single-turn methods close the process after each request).
+- Sessions pin connection, model, base/developer instructions, and tool permissions, and reject concurrent turn execution. Sessions are never shared across users or independent tasks, and resume metadata is never persisted in the DB.
+- Per-turn cancellation, timeout, and connection checks remain enforced; after any failed or uncertain turn, the session closes and is not reused.
+- **Consecutive illustration cut reuse**:
+  - Consecutive Codex illustration cuts sharing the same source hash and storyboard plan reuse this session while maintaining **a separate turn, job, attempt, and result per cut**.
+  - Successful cuts save immediately and only failed cuts retry under existing policy; different plans, chats, connections, regenerations, or requests incompatible with session input budgets or pinned settings run independently, and multiple variants of one cut are never assigned to different cuts.
+- **Session cumulative token checks**:
+  - A session's local history includes host tool arguments and text responses; when Codex reports cumulative input/output tokens, the next turn must fit that cumulative total plus the new request estimate within the model's input budget.
+  - If tool, image, or reasoning items occurred without usable token reporting, the session rejects the next turn and illustrations execute independently; cumulative usage may exceed actual active context.
+
+### Local verification and official contracts
 
 ```powershell
 npx vitest run tests/codex-process.test.ts tests/codex-runtime.test.ts tests/codex-protocol.test.ts tests/codex-image.test.ts tests/codex-integration.test.ts
 
-# 설치된 CLI 초기화와 experimental 도구 schema 확인: 새 빈 인증 폴더, 로그인/모델 호출 없음
+# Verify installed CLI initialization and experimental tool schemas: fresh empty auth directory, no login or model calls
 $env:UIMORI_CODEX_PREFLIGHT='1'
 npx vitest run tests/codex-installed.test.ts
 Remove-Item Env:UIMORI_CODEX_PREFLIGHT
 ```
 
-- **사전 검사 결과**: 설치 사전 검사 결과는 `output/codex-preflight/summary.json`에 기록되며, 실제 바이너리 버전과 빈 인증 상태를 확인하고 `generate-json-schema --experimental`에서 `dynamicTools`의 function 형식, `item/tool/call` 요청, 텍스트 도구 응답 계약을 검증해요.
-- **단위 및 통합 검사**: 합성 stdio 검사는 인증 취소, 오류 은닉 방지, 정상 이벤트 처리, 시간 초과, 종료 경합, 내장 도구 진행과 최종 응답 분리, 환경/승인 경계, 대기 취소, attempt 선기록, 한 턴 내 연속 도구 호출, 중복 호출 차단, 취소 후 늦은 응답을 확인해요. 앱 통합 검사는 일반 역할과 native 도우미, 등록 제안, export/import, 비활성 프로바이더 및 인증/Origin 경계를 확인해요.
-- **프로바이더 검증**: `npm run verify:providers`를 통해 390px 뷰포트의 Codex 설정, 모의 로그인, 취소 및 연결 해제 검사를 수행해요.
-- **공식 참조 문서**: [App Server 사양](https://learn.chatgpt.com/docs/app-server), [인증 가이드](https://learn.chatgpt.com/docs/auth), [설정 Schema](https://learn.chatgpt.com/config-schema.json).
+- **Preflight results**: Installed preflight results are written to `output/codex-preflight/summary.json`, verifying the real binary version, empty auth state, and `generate-json-schema --experimental` contracts for `dynamicTools` function format, `item/tool/call` requests, and text tool responses.
+- **Unit and integration tests**:
+  - Synthetic stdio tests verify auth cancellation, non-suppression of errors, normal event handling, timeouts, exit races, separation of built-in tool progress from final responses, environment/approval boundaries, queue cancellation, pre-send attempt logging, consecutive tool calls in one turn, duplicate-call blocking, and late responses after cancellation.
+  - App integration tests cover general roles, native helper, registration suggestions, export/import, disabled providers, and auth/Origin boundaries.
+- **Provider verification**: `npm run verify:providers` verifies Codex settings at a 390px viewport, mocked login, cancellation, and disconnect flows.
+- **Official references**: [App Server specification](https://learn.chatgpt.com/docs/app-server), [Authentication guide](https://learn.chatgpt.com/docs/auth), [Configuration schema](https://learn.chatgpt.com/config-schema.json).
 
 ## Model parameters, cache quirks and connection tests
 
-현재 옵션 정의는 [모델 계열](../../core/model-family.ts), [프로토콜 정의](../../core/provider-definitions.ts), [모델별 힌트와 값 검증](../../core/model-capabilities.ts)이 기준이에요. 모델 ID·한도·옵션 목록을 문서에 별도로 복제하지 않아요. 계열의 옵션 목록을 보여주는 것과 특정 모델이 모든 옵션을 지원한다고 확인하는 것은 달라요. 프로바이더 목록이나 검토 표에서 확인한 값만 확인된 힌트로 표시해요.
+Authoritative option definitions live in [model families](../../core/model-family.ts), [protocol definitions](../../core/provider-definitions.ts), and [per-model hints and value validation](../../core/model-capabilities.ts). Model IDs, limits, and option lists are not duplicated in documentation; showing a family's option list differs from confirming that a specific model supports every option, and only values verified against provider catalogs or review tables appear as confirmed hints.
 
-- **Claude Opus 5.5**: 정확한 모델 ID `claude-opus-5-5`의 캐시 지원을 확인했어요. 캐시 설정을 미지정해도 작성한 기준점을 보내요. Adaptive thinking은 항상 켜지고 기본 effort는 `medium`이며 강제 도구 호출은 지원하지 않아요. 저장된 생성 설정을 자동으로 바꾸지는 않아요.
-- **Claude Fable 5.2 · Mythos 5.2**: 정확한 모델 ID `claude-fable-5-2`와 `claude-mythos-5-2`의 캐시 지원을 확인했어요. Mythos 5.2는 Anthropic 검증을 받은 조직만 쓸 수 있는 같은 사양의 모델이에요. Adaptive thinking은 항상 켜지고 기본 effort는 `high`이며 강제 도구 호출은 지원하지 않아요. 이 모델은 thinking 블록보다 앞선 `system`·`tools`·이전 메시지가 달라진 요청을 400으로 거절해요. 한 실행의 도구 왕복에서는 처음 보낸 `system`·`tools`·메시지와 응답 블록을 그대로 다시 보내고 뒤에만 덧붙이며, 지침·도구·입력이 달라진 후속 요청은 전송 전에 거절해요.
-- **GPT-5.6 이후 Responses**: 현재 확인한 TTL은 30분(`30m`)뿐이에요. 선택한 mode는 `prompt_cache_options.mode`, 기준점은 `prompt_cache_breakpoint`로 전달해요.
-- **GPT-6.2 Responses**: `gpt-6.2-astra`와 `gpt-6.2-sol`은 최상위 `instructions`를 `input` 뒤에 붙여요. 그래서 모델 ID가 `gpt-6.2` 또는 `gpt-6.2-…` 형태이면(`provider/` 접두사가 붙은 ID 포함) 공통 지침을 `input`의 첫 `developer` 메시지로 보내고 최상위 `instructions`는 생략해요. 캐시 기준점과 `prompt_cache_options`의 위치는 그대로이고, 이전 모델의 요청 형식도 바뀌지 않아요. 두 모델은 사고 강도 `none`을 거절해요.
-- TTL을 명시하려면 명시/자동 모드를 선택해요. 캐시 OFF 또는 모드 미지정에 TTL만 남은 조합은 수정 전 저장하지 않아요.
-- **Gemini**: 기존 암묵적 캐시는 프로바이더가 처리해요. Gemini 4 Argon과 Carbon은 `cachedContents` 명시적 캐시를 지원하지 않아요. 암묵적 캐시는 Argon의 경우 Vertex 약 6,144토큰·Google AI Studio 약 4,096토큰, Carbon의 경우 두 경로 모두 약 4,096토큰 이상의 공통 접두부에서 적용될 수 있어요(적중 보장 아님). 두 모델의 사고 강도는 `LOW`/`MEDIUM`/`HIGH`만 지원하고, 모델이 무시하는 temperature·top_p는 보내지 않으며, 직접 REST 스트리밍 요청의 출력은 65,536토큰 이내로 제한해요. Gemini 4 Neon은 `LOW`/`MEDIUM`/`HIGH`/`XHIGH`를 지원하고 기본값이 `HIGH`예요. temperature·top_p 생략과 65,536토큰 제한은 Argon·Carbon과 같아요. 긴 출력의 `continuation_token` 자동 재호출은 아직 지원하지 않아요.  이번 앱에는 `cachedContents` 생성·갱신·삭제 기능이나 프로젝트 전체 암묵적 캐시 제어가 없으므로 OFF·TTL 선택을 제공하지 않아요. Chat/Vercel/호환 프로바이더에도 캐시 지원을 추정하지 않아요.
+- **Claude Opus 5.5**: Cache support is confirmed for exact model ID `claude-opus-5-5`, and authored breakpoints are sent even when cache settings are unspecified. Adaptive thinking is always enabled with default effort `medium`, forced tool calling is unsupported, and saved generation settings are not rewritten automatically.
+- **Claude Fable 5.2 · Mythos 5.2**:
+  - Cache support is confirmed for exact model IDs `claude-fable-5-2` and `claude-mythos-5-2`; Mythos 5.2 has identical specifications and is available only to Anthropic-verified organizations.
+  - Adaptive thinking is always enabled with default effort `high`, and forced tool calling is unsupported.
+  - These models reject with HTTP 400 any request whose `system`, `tools`, or prior messages preceding a thinking block changed; within one execution's tool round-trips, initial `system`, `tools`, messages, and response blocks replay verbatim with new turns appended only at the end, and follow-up requests whose instructions, tools, or inputs changed are rejected before transmission.
+- **GPT-5.6 and later Responses**: Currently confirmed TTL is 30 minutes (`30m`) only. Selected mode passes via `prompt_cache_options.mode` and breakpoints via `prompt_cache_breakpoint`.
+- **GPT-6.2 Responses**: `gpt-6.2-astra` and `gpt-6.2-sol` append top-level `instructions` after `input`. For model IDs matching `gpt-6.2` or `gpt-6.2-…` (including IDs with a `provider/` prefix), shared instructions are sent as the first `developer` message in `input` and top-level `instructions` is omitted; cache breakpoint and `prompt_cache_options` positions stay unchanged, earlier models are unaffected, and both models reject reasoning effort `none`.
+- Specifying a TTL requires choosing explicit or automatic cache mode; combinations with cache OFF or unspecified mode while a TTL remains set are rejected from saving until corrected.
+- **Gemini**:
+  - Existing implicit caching is handled by the provider; Gemini 4 Argon and Carbon do not support explicit `cachedContents` caching.
+  - Implicit caching may apply on shared prefixes starting around 6,144 tokens on Vertex and 4,096 tokens on Google AI Studio for Argon, and around 4,096 tokens on both paths for Carbon (hits are not guaranteed).
+  - Argon and Carbon support only `LOW`/`MEDIUM`/`HIGH` reasoning effort, omit temperature and `top_p` (ignored by the models), and cap direct REST streaming output at 65,536 tokens.
+  - Gemini 4 Neon supports `LOW`/`MEDIUM`/`HIGH`/`XHIGH` with default `HIGH`, sharing Argon and Carbon's temperature/`top_p` omission and 65,536-token cap; automatic `continuation_token` re-invocation for long outputs is not yet supported.
+  - Because this app has neither `cachedContents` create/update/delete operations nor project-wide implicit cache controls, it does not offer cache OFF or TTL controls for Gemini; cache support is also not inferred for Chat, Vercel, or OpenAI-compatible providers.
+- **Connection tests**: The server logs a separate local diagnostic before sending, never re-sends identical idempotency keys, and caps concurrent tests for the same model at one. Tests interrupted by a restart finish as interrupted without automatic replay; `provider_connection_tests` is excluded from portable per-resource/chat backups and included in full SQLite backups.
 
-서버는 전송 전에 별도 로컬 진단을 기록해요. 같은 idempotency key는 재전송하지 않고, 같은 모델의 동시 테스트는 하나로 제한해요. 재시작으로 미완료된 테스트는 interrupted로 끝내며 자동 재생하지 않아요. `provider_connection_tests`는 개별 자료·채팅의 휴대용 백업에서 제외하고 전체 SQLite 백업에는 포함해요.
+### Storage and execution boundary
 
-## 저장·실행 경계
-
-모델 revision은 생성 옵션을 보관해요. Run/job snapshot은 이를 고정하며, 본문·번역·컨텍스트 정리·도우미·카드 스크립트 보조 등의 모델 호출은 공통 추출기로 같은 필드를 전달해요. 호출 시 현재 프로바이더의 활성 상태와 인증을 확인해요. 평가 절약 모드는 명시 opt-in일 때만 출력 한도·effort를 줄이고 나머지 binding을 바꾸지 않아요.
+- Model revisions store generation options, and Run/job snapshots freeze them so main prose, translation, context compaction, helper, and card-script assistance pass the same fields via the shared extractor.
+- At call time, the current provider's enabled state and credentials are verified. Evaluation economized mode lowers output caps and effort only on explicit opt-in without altering other bindings.
 
 ## Model pricing and cost estimation
 
-## 실행·저장 계약
+### Execution and storage contract
 
-- 모델의 `pricing` 설정은 일반 revision CAS로 저장해요. 새 작업을 예약할 때 `ModelSnapshot.pricingSnapshot`에 단가·출처·확인일·컨텍스트 구간 등을 고정해요. 이후 현재 모델의 가격을 수정해도 과거 실행을 재가격하지 않아요.
-- 요청의 가격 정보는 host metadata예요. 프로바이더 HTTP/RPC 본문에 전송하지 않아요. 전송 직전 attempt에 가격과 시작 시각을 기록하며 서버가 강제한 Vertex Flex도 예약 당시 보존한 Flex 단가를 사용해요.
-- 완료 시 `response.estimatedCost`에 계산 결과·항목별 토큰/단가/금액을 기록해요. 기존 `cost_usd`는 프로바이더가 보고한 실제 비용 전용이고 `null`을 추정 금액이나 0으로 바꾸지 않아요. schema·운영 DB 이관은 필요 없어요.
-- 프로바이더별 입력/캐시 합산 의미를 구분해 중복 계산하지 않아요. Anthropic normalized 입력은 이미 캐시를 포함하며 원 usage의 입력·캐시 분할을 사용해요. 출력에 포함된 reasoning/thinking을 다시 더하지 않아요.
-- Vercel 캐시 쓰기는 최상위 `cache_creation_input_tokens`를 우선 사용하고, 그 필드가 없을 때만 기존 `prompt_tokens_details.cache_write_tokens`를 사용해요. 쓰기 토큰이 있어도 해당 단가를 모르면 부분합으로 남겨요. 원 usage의 `cost`를 프로바이더 보고 비용으로 자동 해석하지 않아요.
-- 사용량이나 단가가 없으면 전체 추정 금액은 미확인이에요. 확인된 항목은 부분합으로 보여요. 사용량이 명시적으로 0이면 단가가 미확인이어도 그 항목의 금액은 0이에요. Vertex는 유효한 `promptTokenCount`가 있는 usage에서 생략된 캐시 읽기 필드만 proto3 기본값 0으로 해석해요. 누락된 usage 전체나 명시적인 `null`은 미확인으로 남겨요.
-- 프로바이더가 요청 한도 초과(HTTP 429)로 돌려보낸 호출은 입력·출력 토큰을 0으로 기록해요. 이 상태 코드는 응답 본문이 시작되기 전에 오므로 모델이 실행되지 않았어요. 전체 입력이 0이면 캐시 읽기·쓰기 항목도 0으로 계산해서 추정 금액이 0이 돼요. 그 밖의 HTTP 오류와 끊긴 연결은 프로바이더가 요청을 처리했는지 알 수 없어서 미확인으로 남겨요. 도우미가 한도 초과로 다시 보낸 호출이 작업의 사용량 합계를 미확인으로 만들지 않게 하려는 규칙이에요. `core/provider-http-error.ts`의 `rateLimitedCallUsage`가 정하고 `tests/provider-http.test.ts`, `tests/vertex-transport.test.ts`, `tests/pricing-estimate.test.ts`가 확인해요.
-- 실제 서비스 tier가 고정 가격과 다르면 금액을 추정하지 않아요. Anthropic의 `standard_only`는 응답의 `standard`와 같은 기준이에요. 새 Anthropic Batch 예약은 명시적으로 입력한 Batch 단가를 고정하고 추가 할인하지 않아요. 업데이트 전에 예약된 Batch의 기존 가격 snapshot에는 당시의 50% 할인 계산을 유지해요. 기존 미확인 호출은 최신 요금으로 소급 계산하지 않아요.
-- 본문에는 작문과 작문 보조의 추정 비용을 표시해요. 번역·제목 등 후속 작업은 작업 현황에서 별도로 확인해요. 상세에는 프로바이더 보고 비용과 추정 비용을 분리해 표시해요.
-- 과거 도우미 가정 장면 생성의 사용량은 `helper-artifact`, 당시 컨텍스트 요약 호출은 `summary`로 보존해요. 가정 장면 생성 기능이 종료돼도 이 기록은 유지해요.
-- 전체 SQLite 백업은 저장된 가격 snapshot과 추정 결과를 보존해요. 개별 자료·채팅의 휴대용 백업은 프로바이더와 모델 설정과 호출 기록을 옮기지 않아요. 가격은 실행 허가나 누적 금액 차단 조건이 아니에요. 취소·중복·불확실 실행·원문 귀속 계약은 유지해요.
+- Model `pricing` settings save via normal revision CAS; queuing a new job freezes unit rates, source, verification date, and context tiers in `ModelSnapshot.pricingSnapshot`, so later pricing edits never reprice past runs.
+- Request pricing information is host metadata and is never sent in provider HTTP/RPC payloads. Pricing and start time are recorded on the attempt right before sending; server-forced Vertex Flex also uses the Flex rates frozen at queue time.
+- On completion, `response.estimatedCost` stores the calculation result plus per-item tokens, rates, and amounts. Existing `cost_usd` is reserved solely for provider-reported actual cost and never turns `null` into an estimate or `0`; no schema or production DB migration is needed.
+- Per-provider input/cache summation semantics are distinguished to avoid double counting: Anthropic normalized input already includes cache tokens and uses raw usage's input/cache split, and reasoning/thinking tokens already included in output are not added again.
+- Vercel cache writes prefer top-level `cache_creation_input_tokens` and fall back to legacy `prompt_tokens_details.cache_write_tokens` only when absent. Write tokens without a known rate stay as a partial sum, and raw usage `cost` is not automatically treated as provider-reported cost.
+- Missing usage or unit rates leave overall estimated cost unknown while showing confirmed items as a partial sum; an item with explicitly `0` usage costs `0` even if its rate is unknown. For Vertex, omitted cache-read fields in usage containing a valid `promptTokenCount` are interpreted as proto3 default `0`, while missing usage overall or explicit `null` remains unknown.
+- Calls rejected by the provider for rate limiting (HTTP 429) record `0` input and `0` output tokens because the status arrives before any response body starts and the model never ran.
+  - With zero total input, cache-read and cache-write items also compute as `0`, yielding an estimated cost of `0`; other HTTP errors and dropped connections remain unknown because provider execution is uncertain.
+  - This prevents helper retries after rate limits from turning a task's usage total unknown; defined by `rateLimitedCallUsage` in `core/provider-http-error.ts` and verified in `tests/provider-http.test.ts`, `tests/vertex-transport.test.ts`, and `tests/pricing-estimate.test.ts`.
+- Cost is not estimated when the actual service tier differs from the frozen pricing tier; Anthropic `standard_only` matches the `standard` response tier. New Anthropic Batch reservations freeze explicitly entered Batch rates without extra discounting, while legacy Batch snapshots queued before the update keep their 50% discount calculation, and existing unknown calls are not retroactively calculated at newer rates.
+- The main view shows estimated costs for writing and writing assistance, whereas follow-up tasks like translation and title generation appear separately in task activity; detail views separate provider-reported cost from estimated cost.
+- Usage from retired helper hypothetical-scene generation persists under `helper-artifact` and its context summary calls under `summary`, even after hypothetical-scene generation is retired.
+- Full SQLite backups preserve stored pricing snapshots and estimates, while portable per-resource/chat backups omit provider/model settings and call records. Pricing never acts as an execution gate or cumulative spend limit, and cancellation, deduplication, uncertain-execution, and source-attribution contracts remain intact.
 
-검증은 `tests/model-pricing.test.ts`, `tests/pricing-estimate.test.ts`, `tests/pricing-store.test.ts`, `tests/pricing-transport.test.ts`, `tests/model-pricing-browser.spec.ts`에서 수행해요.
+Verification lives in `tests/model-pricing.test.ts`, `tests/pricing-estimate.test.ts`, `tests/pricing-store.test.ts`, `tests/pricing-transport.test.ts`, and `tests/model-pricing-browser.spec.ts`.
 
 ## Global models and prompt workspace
 
-`GET /api/model-workspace`는 `{revision, routes, translationPolicy, summaryLength, mainJudgmentEnabled, mainJudgmentThreshold, judgment, titleModel, helperModel, helperTaskTimeoutMinutes, helperConfirmPaidGeneration, contextModel, scriptModel}`을 반환하고, `PUT`은 `expectedRevision`으로 동시 편집을 보호해요. 선택 기능 모델과 `scriptModel`은 `{id}` 참조 또는 `null`이며 PUT에서 생략하면 기존 값을 유지해요. `helperTaskTimeoutMinutes`와 `helperConfirmPaidGeneration`(도우미의 유료 생성 요청 전 확인, 기본 `false`, [도우미 도구](../HELPER-TOOLS.md#confirmation-before-destructive-or-bulk-operations))도 생략하면 기존 값을 유지해요. `judgment`는 `{provider:'typesafe'}` 또는 `{provider, connectionId, modelId, images}`예요. 이전 DB는 JEV 기본값으로 읽으며, PUT에서 생략하면 저장된 판단 프로바이더를 유지해요. `summaryLength`는 본문·도우미의 [요약 길이](../CONTEXT-LIMITS.md#공통-요약-지침과-출력-여유)를 정해요. 프롬프트 선택과 같은 `prompt_workspace` JSON 행에 저장하므로 모델·프롬프트의 동시 저장 충돌도 CAS로 처리해요. 작문·번역 프롬프트는 프리셋 ID와 명시적인 기본 옵션만 저장하고, 본문과 기본 옵션은 원본의 최신 저장본에서 읽어요. 과거 실행은 접수 당시 스냅샷을 유지해요.
+- `GET /api/model-workspace` returns `{revision, routes, translationPolicy, summaryLength, mainJudgmentEnabled, mainJudgmentThreshold, judgment, titleModel, helperModel, helperTaskTimeoutMinutes, helperConfirmPaidGeneration, contextModel, scriptModel}`, and `PUT` guards concurrent edits with `expectedRevision`.
+- Optional feature models and `scriptModel` are `{id}` references or `null` and keep existing values when omitted from `PUT`. `helperTaskTimeoutMinutes` and `helperConfirmPaidGeneration` (confirmation before paid generation requests from the helper, default `false`; see [Helper tools](../HELPER-TOOLS.md#confirmation-before-destructive-or-bulk-operations)) likewise preserve existing values when omitted.
+- `judgment` is `{provider:'typesafe'}` or `{provider, connectionId, modelId, images}`; legacy DBs read JEV as default, and omitting `judgment` in `PUT` keeps the stored judgment provider.
+- `summaryLength` controls the [summary length](../CONTEXT-LIMITS.md#공통-요약-지침과-출력-여유) for main writing and helper tasks. Because these settings share the `prompt_workspace` JSON row with prompt selection, concurrent model and prompt save conflicts share CAS handling.
+- Writing and translation prompts store only preset IDs and explicit default options, reading prompt bodies and default options from the latest saved source while historical runs keep their intake snapshots.
+- For DB/archive versions and supported upgrades, see [data migrations](../DATA-MIGRATIONS.md). New DBs start with unassigned role models and do not adopt model values from chat bodies as defaults; unsupported legacy DBs/archives are not arbitrarily converted.
+- A chat's API `profile.routes` is a read-only projection of currently effective settings including any pinned main model, while per-chat overrides store IDs in `profile.pinned.mainPromptPresetId` and `profile.pinned.mainModel`. In profile updates, omitting `pinned` keeps pins, `{}` clears all pins, and `expectedRevision` guards conflicts; archived Runs' `snapshot.profile.routes/models` hold historical frozen settings.
 
-DB·archive의 버전과 지원 이관은 [migration](../DATA-MIGRATIONS.md)을 봐요. 새 DB의 역할 모델은 미지정으로 시작하고 채팅 body의 모델 값을 기본값으로 채택하지 않아요. API의 채팅 `profile.routes`는 고정 본문 모델을 포함한 현재 적용 설정의 읽기 전용 projection이에요. 채팅별 선택은 `profile.pinned.mainPromptPresetId`와 `profile.pinned.mainModel`에 ID로 저장해요. 프로필 수정에서 `pinned` 생략은 유지, `{}`는 전체 고정 해제이며 `expectedRevision`으로 충돌을 보호해요. 보관된 Run의 `snapshot.profile.routes/models`는 과거 실행의 고정 정보예요. 지원하지 않는 과거 DB/archive를 임의로 변환하지 않아요.
+### Reading defaults in the UI
 
-## 화면의 기본값 읽기
-
-같은 탭에서 `usePromptWorkspace()`를 사용하는 화면은 하나의 읽기 상태와 변경 알림 구독을 공유해요. 읽는 도중 저장·다른 탭의 변경·포커스 복귀 알림이 오면, 오래된 응답을 반영하지 않고 이어서 다시 읽어요. 마지막 화면 구독이 끝나면 진행 중 읽기를 취소하고 캐시를 비워요. 편집 초안과 예약된 실행 스냅샷은 이 읽기 캐시와 별개이며 변경하지 않아요. 구현은 `web/prompt-workspace-store.ts`, 경합·취소 검증은 `tests/prompt-workspace-store.test.ts`에 있어요.
-
-`CurrentPrompt.defaultValues`는 프리셋의 최신 저장값이며 `optionValues`는 명시적인 기본 사용자 옵션이에요. `values`는 두 값을 합친 현재 실효값이에요. 설정에서 기본값을 선택하면 기본 사용자 옵션을 해제하고 최신 프리셋 저장값을 사용해요. `defaultValues`와 `optionValues`는 Run snapshot에 넣지 않고 실효값만 고정해요. 이전 독립·무명 현재 본문은 부팅 시 별도 프리셋으로 보존하며, 구형 기본값과 다른 옵션은 사용자 지정값으로 유지해요.
-
-- 채팅 제목 모델은 설정 → 역할별 모델의 선택 항목 `titleModel`이에요. 기본은 미지정이며 자동 제목 생성을 끄고, 본문 모델로 대체하지 않아요. 지정하면 새 채팅의 첫 성공 응답 뒤 제목을 한 번 생성하며 사용자가 직접 바꾼 제목은 덮어쓰지 않아요. 본문·번역·이미지의 `TaskRole`이나 채팅 `profile.routes`에는 추가하지 않아요.
-  - 새 채팅에서 제목을 직접 입력한 경우와 기존 채팅·포크는 자동 생성 대상이 아니에요. 생성 시작 시 모델·프로바이더와 첫 응답을 고정하고 새 채팅을 만들 때의 화면 언어로, 장면의 이미지·긴장·분위기를 살린 작품명을 짓도록 요청해요. 제목 전용 길이 제한 없이 선택 모델의 출력 예산으로 최대 1회, 제목 모델의 timeout(미지정 시 300초) 안에서 실행해요. 검토 표(`core/model-capabilities.ts`)에 사고 강도·effort 목록이 있는 모델은 제목 요청에만 그중 가장 낮은 값을 보내고, 목록이 없는 모델은 프리셋 값을 그대로 보내요. 전송 전 attempt를 기록하며 실패·재시작 후 자동 재호출하지 않아요. 수동 제목 저장·원문 변경·채팅 삭제가 발생하면 늦은 결과를 적용하지 않아요.
-  - 채팅 메뉴에서 제목을 직접 수정할 수 있어요. `PATCH /api/chats/:id/title`의 `expectedTitleRevision`은 제목 이벤트 revision을 사용해 같은 문자열로 저장한 수동 의사와 ABA 충돌도 보호해요. 제목 변경은 원문·설정·폴더 revision을 바꾸지 않아요.
+- Views sharing `usePromptWorkspace()` in the same tab share one read state and change-notification subscription. If a save, cross-tab change, or focus-return notification arrives mid-read, the stale response is discarded and a fresh read follows immediately.
+- Once the last view unsubscribes, any in-progress read is aborted and the cache is cleared; editor drafts and queued execution snapshots stay separate from this read cache and are never mutated by it (`web/prompt-workspace-store.ts`, `tests/prompt-workspace-store.test.ts`).
+- `CurrentPrompt.defaultValues` holds the preset's latest saved defaults, `optionValues` holds explicit default user overrides, and `values` is their merged effective result. Selecting the default in settings clears the user override to use the latest saved preset value; Run snapshots freeze only effective values, omitting `defaultValues` and `optionValues`.
+- Legacy standalone or unnamed current prompts are preserved as separate presets on boot, keeping options that differed from legacy defaults as user-specified values.
+- The chat title model is the optional `titleModel` entry under **설정 → 역할별 모델** (Settings → Role models), defaulting to unassigned (disabling auto-title generation) and never falling back to the main model. When configured, it generates a title once after a new chat's first successful response without overwriting manual titles, and is excluded from `TaskRole` (main/translation/image) and chat `profile.routes`.
+  - New chats with a manually entered title, existing chats, and forks are excluded from auto-generation. At generation start, the model, provider, and first response are frozen, requesting a work title capturing scene imagery, tension, and atmosphere in the UI language active when the chat was created.
+  - Runs at most once under the selected model's output budget (no separate title length cap) within the title model's timeout (default 300 seconds). Models listing reasoning/effort options in `core/model-capabilities.ts` send the lowest option for title requests only; models without a list send their preset value unchanged.
+  - Logs an attempt before sending with no auto-retry after failure or restart, and discards late results if a manual title save, source edit, or chat deletion occurs.
+  - Titles can be edited manually from the chat menu: `PATCH /api/chats/:id/title` uses `expectedTitleRevision` backed by title event revisions to protect manual intent and guard against ABA conflicts even on identical strings, without bumping source, settings, or folder revisions.
 
 ## Execution input lifetime, Batch recovery and response streams
 
-참고 이미지는 `RunSnapshot.requestImages`의 사용자 요청 첨부로 보존하고, 이미지 바이트는 `image_blobs`에 해시별 한 번만 저장해요. 보존본은 정지 이미지의 픽셀을 손실 없이 WebP로 정규화하며, 전송본은 긴 변 2048px·2MiB 이내로 따로 고정해요. 입력 파일과 보존본은 각각 64MiB 이내예요. 변환은 DB 트랜잭션 밖에서 기존 이미지 처리 동시 실행 제한을 공유하고, 최종 바이트와 요청의 귀속은 같은 수락 트랜잭션에 저장해요. 접수 재확인은 소비되거나 만료된 업로드 파일을 읽기 전에 기존 영수증을 확인해요.
+- **Reference image storage and normalization**:
+  - Reference images persist as user request attachments in `RunSnapshot.requestImages`, deduplicating image bytes by hash in `image_blobs`. Preserved originals normalize still-image pixels losslessly to WebP, while transmission copies freeze separately within 2048px on the long edge and 2MiB (both input files and preserved originals cap at 64MiB each).
+  - Conversion runs outside DB transactions while sharing existing image-processing concurrency limits, and final bytes plus request attribution commit in the same intake transaction; intake re-verification checks existing receipts before reading consumed or expired uploaded files.
+- **Unsent draft persistence and tab isolation**:
+  - Unsent draft prose writes to `sessionStorage` immediately on input; IndexedDB persists prose and the attachment list in one transaction, modifying stored image files only when attachments are added or removed.
+  - `sessionStorage` generation counters and acceptance tokens prevent stale recovery copies from overwriting newer prose or accepted requests. Web Locks own the active tab's draft namespace and cloned tabs copy into a separate namespace; on browsers without Web Locks, normal new tabs remain isolated, though concurrent edits in tabs duplicating `sessionStorage` may not be isolated.
+- **Image attachment identity through prompts and re-saves**:
+  - Original message identifiers for request images persist through prompt processing; only user messages in the selected `chat` range forward attachments, and images are never guessed onto ChatML strings copied via CBS.
+  - Lua `editRequest` must preserve message `id` to support reordering images; losing an ID, duplicating an ID, or changing role on an image-bearing message aborts with a clear error. Empty-text image turns are distinguished from deleted turns (deleted image turns are never recreated), and text contracts for non-image scripts stay intact.
+  - Native buttons and manual triggers preserve per-user-message attachment bindings on scene re-save; merging messages into a single scene exceeding 8 attachments aborts before saving while preserving prose, attachments, and variable state, whereas separate scenes with up to 8 attachments each continue normally.
+- **Deferred image resolution and token allowances**:
+  - Model requests, follow-up tool state, and diagnostics hold only immutable image references, resolving bytes right before transmission after checking pinned attachments and SHA-256 hashes (Anthropic Batch recovery computes the same request hash from frozen transmission copies).
+  - Image base64 data is not counted as text tokens; a resolution-based allowance from `conservative-dimensions-v1` (an estimate, not a model-specific formula or billed count) is added separately, and transmission byte limits are checked independently of token budgets.
+- **History reuse and hash caching**:
+  - Main-story conversation history uses the fresh items returned by source validation without copying full history that will immediately be overwritten or cloning again after selecting recent scenes, keeping request items separated from original snapshots.
+  - Computed hashes reuse via an object-lifetime WeakMap when the same source object's text is unchanged and recompute on text changes (still verifying provided hashes against current source), requiring no expiry settings, invalidation service, or source clones.
+- **Lore selection and local candidate search**:
+  - Main runs load valid prior lore, run required conversation compaction, and select lore when needed; small lists fitting the input budget are judged in full.
+  - Large lists locally search selectable lore across all attached resources pinned to the run and pack full bodies into the judgment model's input budget ordered by relevance to the current request and recent conversation, never restricting by folder or attachment order and continuing to inspect subsequent entries when one exceeds remaining budget.
+  - `core/candidate-search.ts` uses term rarity and frequency across titles and bodies plus two-character cues for Korean and Japanese, without extra APIs, embedding models, or persistent index settings.
+- **Pruning unfinished runs and minimal receipts**:
+  - Unfinished main runs (failed, cancelled, interrupted, refused, or partial) prune frozen conversation history, resource, and prompt copies upon termination, retaining only the request, attached images, model display name, context plan, and read scene IDs needed for display and retry (retries rebuild context from current source text). Only runs eligible to re-run judgment-model verdict on preserved prose keep the full frozen input.
+  - Sending `Prefer: return=minimal` on intake, retry, candidate, re-judgment, or cancel requests returns only a compact receipt (run ID, status, etc.) so the web UI avoids downloading full frozen inputs; omitting the header returns full runs as before, and full frozen inputs and diagnostics remain available via `GET /api/runs/:id`.
+- **Compact snapshots and lore inheritance**:
+  - `server/execution-snapshot.ts` compacts completed state so normal Run queries return lightweight metadata directly, while `readRunSnapshot` reconstructs context from current resources and messages only when a new task requires it.
+  - Lore inheritance validates source, ancestor, and note provenance on the chat's latest `chat_lore_state` without reviving completed parent Runs; neither auto-expanding `DatabaseSync` subclasses nor text-sharing triggers are used.
+- **Streaming chunk retention and startup pruning**:
+  - Completed streaming chunks are not kept redundantly alongside final source text or helper messages; chunks remain for in-progress reconnects and partial outputs on failure/interruption, while completed reads switch to terminal status and stored final messages.
+  - On server startup, `pruneUnreachableResponseChunks` (`tests/response-stream.test.ts`) removes chunks for main runs the UI can no longer show (runs that committed a scene or finished runs retried in the same chat), while keeping chunks for cancelled runs without partial results even if retried because the activity list renders partial output from them.
+- **Lightweight projections and reader loading**:
+  - Status checks use lightweight queries in `server/run-projections.ts`; Reader loads the current page, latest failure, and active jobs rather than all past failures (fetching full job history separately) and renders the manuscript only after the saved reading position's page resolves.
+  - Logical conversation assembly checks integrity of originals and selected edits without constructing Reader paragraph blocks or translation storage records, display transforms react to changes in source text, variables, resources, and image results rather than a global event cursor, and full source text loads only when required.
+  - Rewriting from a mid-story scene creates an [independent chat copy](../CHAT-BACKUP.md); the last completed response can retry in a new chat or replace the existing response (applying only after new prose commits), both using current settings plus the conversation and variable checkpoint right before that response without deterministic replay of past executions.
+- **Live interruption vs. Anthropic Batch recovery**:
+  - Standard live provider requests still transition active Runs to `interrupted` on disconnect without auto-resubmitting because outcomes are unconfirmed.
+  - Main-model Anthropic Batch runs requeue to `queued` for worker resumption only when durable state exists in `anthropic_batches` and every external call maps to a Batch record; mixing in live summary, judgment, or script-model calls prevents auto-reentry even with completion records because a crash between remote completion and local replay receipt persistence cannot be distinguished (leaving safely persisted live preparation calls for manual review is an intentional conservative boundary).
+- **Batch replay mechanics and reservation states**:
+  - The recovery worker re-enters `runMain` matching Batch round order and request hashes: rounds with an existing `batchId` start with status polling instead of calling create again, and rounds with already-fetched result JSONL re-decode stored results.
+  - Stored `tool_events` act as replay receipts so read, helper, evaluation tools, and terminal submissions never re-execute (rejected tool records never replay as state mutations). Lua `editRequest` reuses saved results by matching request index, input hash, and modified prompt while running normally on later rounds; follow-up size estimation uses the actually sent modified prompt without extra Lua invocations, and actual dispatch re-verifies that round's edited output and provider connection.
+  - New Batches first persist locally as `reserved`; because `reserved` means no remote creation attempt has started, it can safely create after a restart. Right before attempting remote creation it flips to `creating`, and `creating` without a `batchId` does not auto-resubmit because preventing duplicate billing takes priority over automatic recovery.
+  - Once a run succeeds and its source commits, raw Batch result bodies retained for recovery are removed, keeping only Batch/attempt identification metadata.
+- **Deterministic evaluation replay and upgrade boundary**:
+  - Evaluation tool sessions derive from the Run ID and queued timestamp, and case/receipt IDs derive deterministically from the session and tool-call ID so restarts under the same contract reconstruct preloaded requests and evaluation receipts identically without merging evaluation/submission semantics or model judgment stages.
+  - Alongside Batches started with random sessions or removed context tools, all queued or in-progress evaluation Batches reserved/submitted under the pre-simplification contract must finish on the older version before upgrading.
+  - Mandatory final submission for `model-selected`/`preloaded`, the fixed 10 non-terminal tool exchange cap, and removal of `source-bound` and find-and-replace do not reinterpret old requests/receipts; raw historical snapshots and receipts remain readable without a legacy evaluation engine, versioned execution paths, or recovery that ignores cross-contract hashes or auto-resubmits (see [Evaluation tools](../EVALUATION-TOOLS.md)).
+- **Response stream batching, sequencing, and handoff**:
+  - Approved resumed Batch Runs hand off their existing response stream to the new writer; normal runs cannot create duplicate streams for the same ID, previous writers cannot write or close, and main-story streams distinguish user cancellation (`cancelled`) from server shutdown (`interrupted`).
+  - `server/response-stream.ts` batches incoming text into 50ms or 1,024-character chunks for immediate in-memory subscriber delivery, flushing to SQLite in one transaction on whichever comes first: 750ms, 4,096 characters, an attempt/segment transition, or termination (decoupling persistence reduces generation commits and subscriber SQLite re-reads).
+  - Because the store assigns sequence numbers before delivery and persists with identical sequence numbers and boundaries, `read()` returns stored rows plus the unflushed tail in one order and other tabs or reconnects receive identical chunks.
+  - Sequence numbers pre-reserve in `sqlite_sequence` in blocks of 1,024 so crashes before flushing never reuse delivered sequence numbers (losing only the interrupted attempt's final tail while resumed execution uses a new attempt); run validity checks on flush rather than per token, with `AbortSignal` guarding cancellation and shutdown (`tests/response-stream.test.ts`).
+- **Translation streams**:
+  - Translation jobs own a `translation` stream keyed by job ID (job hooks in `server/app.ts`, `server/product-auxiliary.ts`) strictly for progress display while `job_results` still writes only during the verdict phase, using distinct segment numbers and attempt IDs on post-refusal retries.
+  - Translation streams purge chunks and leave only terminal status on completion, failure, cancellation, or restart, and re-running the same job ID opens a fresh stream.
+- **Thought summaries and HTTP 400 fallback**:
+  - Unsigned thought-summary parts are stripped from model responses re-sent on subsequent calls (summaries are display text while signatures hold reasoning context, so resending summaries only bloats input); signed parts remain verbatim in continuation state like other model parts.
+  - If a provider rejects a call requesting thought summaries with HTTP 400, that task retries once without summaries and stops requesting them for remaining calls; if the 400 was unrelated to summaries, the retry ends with the same error.
+  - Main-story runs and non-Gemini providers never request thought summaries. Controlled by `ProviderRequest.thoughtSummary`, delivered via `ProviderExecutionOptions.onThought` and response stream writer `thought`, and rendered in `web/StreamingResponse.tsx` (`tests/vertex-protocol.test.ts`, `tests/vertex-transport.test.ts`, `tests/response-stream.test.ts`, `tests/chat-event-stream.test.ts`, `tests/helper-workspace.test.ts`, and `HELPUI08` in `tests/helper-browser.spec.ts`).
+- **Helper activity tracking and retention**:
+  - `server/helper-activity.ts` shows in-flight tools via `tool.started` before completion, resolving target names at query time to current titles from start-time structured metadata (`helperActivityTarget` kind and ID, or batch count). Argument previews are never shown (preventing deleted-scene previews or pruned tool details from reappearing), and deleted scenes or hidden resources show only tool kind without a target name (`tests/helper-activity.test.ts`).
+  - The UI pairs starts and ends by call ID and folds consecutive read, list, search, and check calls into one line showing viewed scenes, viewed resources, and other lookups (expanding shows each call's target and tool name), while mutating calls and failed reads stay on separate lines (`web/helper-activity-groups.ts` without React; `tests/helper-activity-groups.test.ts`).
+  - Running status-line copy comes from the last running step via `helperActivitySummary` in `web/helper-activity.ts`. Call counts (`helperCalls`) span the entire task separately from the recent 80-record query window; retry backoff waits come from `provider.retry` records emitted before waiting (omitting error fields because waiting is not a failure and failed calls keep their own error rows) and turn historical on the next record, while expanded records describe outcomes in prose keeping only technical tool names literal (`tests/helper-activity.test.ts`, `tests/helper-workspace.test.ts`).
+  - Large tool results and normal receipt bodies from successful helper tasks compact; past hypothetical scenes retain source text, requests, and edit history for read/copy only (no new generation, rewriting, or editing), while failed tasks keep results needed for retry decisions.
+  - The helper refresh API queries only event kinds and sequence numbers without tool result bodies; summary checkpoints preserve provenance of actually stored conversation messages without retaining unused hash lists of cleared tool payloads, while in-flight summaries and context transitions pass real tool results and completed changes without re-executing them.
+- **Stream vs. final-message ordering**: Server stream completion and final message fetches may arrive out of order; the browser keeps displayed streamed output until the final message is ready rather than permanently retaining server chunks.
 
-미전송 초안의 본문은 입력 즉시 sessionStorage에 보관해요. IndexedDB에는 본문과 첨부 목록을 한 트랜잭션으로 저장하며, 이미지 파일은 추가하거나 제거할 때만 기록을 변경해요. sessionStorage의 세대와 수락 토큰으로 오래된 복구본이 최신 글이나 수락된 요청을 되살리지 않게 해요. Web Locks로 활성 탭의 초안 이름 공간을 소유하고 복제된 탭은 별도 공간에 복사해요. Web Locks 미지원 브라우저에서도 일반 새 탭은 분리하지만 sessionStorage를 복제하는 탭의 동시 편집은 분리되지 않을 수 있어요.
+### Execution and browser boundaries
 
-요청 이미지의 원본 메시지 식별자를 프롬프트 가공까지 유지해요. 선택된 `chat` 범위의 사용자 메시지만 첨부를 전달하며 CBS로 복사한 ChatML 문자열에는 이미지를 추정해 붙이지 않아요. Lua `editRequest`는 메시지 `id`를 보존해야 이미지의 재정렬을 지원해요. 이미지가 있는 메시지의 식별자가 유실·중복되거나 역할이 바뀌면 명확한 오류로 중단해요. 빈 텍스트의 이미지 턴과 삭제된 턴을 구분하고, 삭제된 이미지 턴을 다시 생성하지 않아요. 이미지를 쓰지 않는 기존 스크립트의 텍스트 계약은 유지해요.
-
-네이티브 버튼·수동 트리거가 장면을 다시 저장할 때도 사용자 메시지별 첨부 연결을 보존해요. 여러 메시지를 한 장면으로 합쳐 첨부가 8장을 넘으면 저장 전에 중단하고 기존 본문·첨부·변수 상태를 유지해요. 서로 다른 장면에 각각 8장이 있는 대화는 그대로 이어갈 수 있어요.
-
-모델 요청·후속 도구 상태·진단에는 이미지의 불변 참조만 보관하고, 실제 전송 직전에 고정된 첨부와 SHA-256을 확인해 바이트를 해결해요. Anthropic Batch 복구도 고정된 전송본으로 같은 요청 해시를 사용해요. 이미지 base64를 텍스트 토큰으로 계산하지 않으며 `conservative-dimensions-v1`의 해상도 기반 여유량을 별도로 더해요. 이는 모델별 공식 계산식이나 실제 청구값이 아닌 추정치예요. 전송 바이트 제한은 토큰 예산과 별도로 검사해요.
-
-본문 입력의 대화 이력은 원문 검증이 반환한 새 항목을 사용해요. 곧 덮어쓸 전체 이력 사본이나 최근 장면을 선택한 뒤의 추가 복제는 만들지 않아요. 요청용 항목과 원본 snapshot의 분리는 유지해요. 같은 원문 객체의 텍스트가 그대로면 계산한 hash를 재사용하고, 텍스트가 달라지면 다시 계산해요. 제공된 hash와 현재 원문의 일치 여부는 계속 확인해요. 캐시는 객체 수명에 따르는 WeakMap이라 별도 만료 설정·무효화 서비스·원문 복제본을 만들지 않아요.
-
-본문은 유효한 이전 로어를 불러오고 필요한 대화 정리를 마친 뒤 필요하면 로어를 선별해요. 작은 목록이 입력 예산에 들어가면 전체를 판단해요. 큰 목록은 실행에 고정된 모든 첨부 자료의 선택 가능한 로어를 먼저 로컬 검색하고, 현재 요청·최근 대화와 관련된 순서로 본문 전체를 판단 모델의 입력 예산에 넣어요. 폴더나 앞쪽 첨부 위치로 검색 대상을 제한하지 않으며, 한 항목이 남은 예산보다 크면 다음 항목도 검토해요. `core/candidate-search.ts`는 제목·본문의 단어 희소성과 반복 빈도, 한국어·일본어의 두 글자 단서를 사용해요. 추가 API·임베딩 모델·영구 색인 설정은 없어요.
-
-완료되지 않고 끝난 본문 실행(실패·취소·중단·거절·부분 결과)도 끝나는 시점에 고정했던 대화 기록·자료·프롬프트 사본을 정리해요. 표시와 재시도에 쓰는 요청, 첨부 이미지, 모델 표시 이름, 컨텍스트 계획, 읽었던 장면의 ID 목록은 남겨요. 재시도는 현재 원문에서 컨텍스트를 다시 만들어요. 보존한 본문의 판단 모델 판정을 다시 받을 수 있는 실행만 고정 입력 전체를 유지해요. 요청 접수·재시도·후보·재판정·취소 요청에 `Prefer: return=minimal` 헤더를 보내면 실행 ID와 상태 같은 영수증만 돌려줘요. 웹 화면은 이 헤더를 보내서 고정 입력 전체를 내려받지 않아요. 헤더가 없으면 기존처럼 실행 전체를 돌려주고, 고정 입력과 진단 기록은 `GET /api/runs/:id`로도 조회할 수 있어요.
-
-`server/execution-snapshot.ts`가 완료 상태를 작은 표현으로 바꿔요. 일반 Run 조회는 저장된 작은 메타데이터를 그대로 반환하고, 새 작업이 실제 컨텍스트를 요구할 때만 `readRunSnapshot`으로 현재 자료와 메시지에서 다시 구성해요. 로어 승계는 완료된 부모 Run을 되살리지 않고 채팅별 최신 `chat_lore_state`의 원문·조상·메모 출처를 검증해요. SQL 컬럼 이름에 따라 JSON이 자동으로 펼쳐지는 DatabaseSync 하위 클래스나 텍스트 공유 트리거는 사용하지 않아요.
-
-완료된 스트리밍 청크는 최종 원문·도우미 메시지와 중복 보관하지 않아요. 진행 중 재접속과 실패·중단 시 부분 출력용 청크는 유지하고, 완료 조회는 종료 상태와 저장된 최종 메시지로 전환해요. 서버를 시작할 때 화면이 더 이상 보여 줄 수 없는 본문 실행의 청크를 지워요(`pruneUnreachableResponseChunks`, `tests/response-stream.test.ts`). 장면을 남긴 실행, 같은 채팅에서 다시 시도한 끝난 실행이 대상이에요. 다시 시도했더라도 부분 결과 없이 취소된 실행은 작업 목록이 청크로 부분 응답을 보여 주므로 남겨요.
-
-상태 확인은 `server/run-projections.ts`의 경량 조회를 사용해요. Reader는 과거 실패 전체 대신 현재 페이지·최신 실패·활성 작업을 조회하고, 전체 작업 이력은 별도로 불러와요. 저장된 읽기 위치의 페이지가 확정된 뒤 원고를 표시해요. 일반 원고의 논리 대화 구성은 원본·선택한 편집본의 무결성을 검증하되 Reader 문단 블록이나 번역 저장본을 만들지 않아요. 표시 변환은 전역 이벤트 커서가 아니라 원문·변수·자료·이미지 결과 변경에 반응해요. 원문 전체를 읽어야 하는 요청에서만 본문을 가져와요. 중간 장면에서 다시 쓰기는 [독립 채팅 사본](../CHAT-BACKUP.md)으로 만들어요. 마지막 완료 응답은 새 채팅에서 다시 요청하거나 기존 응답을 교체할 수 있으며, 교체는 새 본문 저장이 성공한 뒤에만 적용해요. 두 방식 모두 현재 설정과 해당 응답 직전의 대화·변수 체크포인트를 사용하고 과거 전체 실행의 결정적 재생을 제공하지 않아요.
-
-일반 실시간 provider 요청은 서버가 끊기면 결과를 확정할 수 없으므로 기존처럼 active Run을 `interrupted`로 바꿔 자동 재전송하지 않아요. 반면 main 모델의 Anthropic Batch 실행은 `anthropic_batches`의 durable 상태가 있고 모든 외부 호출이 Batch 기록에 연결된 Run만 다시 `queued`로 되돌려 worker가 이어 받아요. 실시간 요약·판정·스크립트 모델 호출 등이 섞였으면 완료 기록이 있어도 자동 재진입하지 않아요. 원격 호출 완료와 로컬 재생 영수증 저장 사이의 중단을 구분할 수 없기 때문이에요. 안전하게 저장된 실시간 준비 호출이 있는 경우도 수동 확인 대상으로 남기는 보수적인 경계예요.
-
-복구 worker는 Run을 처음부터 임의 재실행하는 대신 같은 `runMain`을 재진입해 Batch 라운드 순서와 요청 해시를 대조해요. 이미 `batchId`가 있는 라운드는 생성 API를 다시 호출하지 않고 조회부터 시작하고, 이미 결과 JSONL을 회수한 라운드는 저장된 결과를 다시 decode해요. provider tool call 뒤에 저장된 `tool_events`도 replay receipt로 사용하므로 읽기·도우미·평가 도구나 terminal 제출을 중복 실행하지 않아요. 거절된 도구 기록은 상태 변경으로 재생하지 않아요. Lua `editRequest`는 저장된 요청 순번·입력 hash·수정 prompt를 대조해 재사용하며, 같은 입력이라도 정상 후속 라운드는 별도로 실행해요. 도구 후속 요청의 크기 추정에는 실제 전송된 수정 prompt를 사용하고, 추정을 위해 Lua를 추가 실행하지 않아요. 실제 전송은 해당 라운드의 수정 결과와 프로바이더 연결 조건을 다시 확인해요.
-
-새 Batch를 만들기 전에는 로컬 row를 `reserved`로 먼저 기록해요. `reserved` 상태는 아직 원격 생성 시도를 시작하지 않았으므로 재시작 후 안전하게 생성할 수 있어요. 원격 생성 시도 직전에 `creating`으로 바꾸며, `creating`인데 `batchId`가 없으면 응답 수신 전 서버가 끊긴 것인지 알 수 없으므로 자동 재전송하지 않아요. 중복 과금 방지가 자동 복구보다 우선이에요.
-
-평가 도구의 세션은 같은 Run ID와 예약된 실행 시각을 사용하고, case·receipt ID는 세션과 도구 호출 ID에서 정해져요. 같은 실행 계약에서는 재시작 때 새로운 임의 값을 만들지 않으므로 preloaded 초기 요청과 후속 평가 영수증도 동일하게 재구성돼요. 평가·제출의 의미나 모델의 판단 단계를 합치지는 않아요. 임의 세션으로 시작한 Batch, 제거된 컨텍스트 도구를 사용 중인 Batch와 함께, 평가 도구 단순화 전 계약으로 예약·제출된 모든 대기·진행 중 평가 Batch는 구버전에서 완료한 뒤 업데이트해야 해요. `model-selected`·`preloaded`의 최종 제출 필수화, 고정 10회 비최종 도구 교환 한도, `source-bound`·찾아바꾸기 제거는 기존 요청·영수증을 새 계약으로 재해석하지 않아요. 과거 snapshot·receipt 원본은 읽을 수 있게 보존하지만 구형 평가 실행 엔진이나 버전별 실행 경로는 제공하지 않아요. 서로 다른 계약의 요청 해시를 무시하는 복구나 자동 재전송도 제공하지 않아요. 자세한 현재 계약은 [평가 도구](../EVALUATION-TOOLS.md)를 봐요.
-
-재개가 승인된 Batch Run은 기존 응답 스트림을 새 writer에게 인계해요. 일반 실행은 같은 스트림을 중복 생성할 수 없고, 이전 writer는 더 이상 기록하거나 종료할 수 없어요. 본문 스트림은 사용자 취소를 `cancelled`, 서버 종료를 `interrupted`로 구분해요.
-
-응답 스트림(`server/response-stream.ts`)은 받은 글을 50ms 또는 1,024자 단위의 청크로 묶어 메모리에서 바로 구독자에게 알리고, SQLite에는 750ms, 4,096자, 시도·구간 전환, 종료 가운데 먼저 오는 때에 한 트랜잭션으로 써요. 저장을 전달과 분리한 이유는 생성 중 커밋 횟수와 구독자의 SQLite 재조회를 줄이는 데 있어요. 청크의 순번은 저장소가 전달 전에 직접 배정하고 저장할 때 같은 순번과 같은 경계로 넣으므로, `read()`는 저장된 행과 아직 저장하지 않은 꼬리를 한 순서로 돌려주고 다른 탭이나 재접속한 화면도 같은 청크를 받아요. 순번은 `sqlite_sequence`에 1,024개씩 미리 예약해서, 서버가 꼬리를 저장하기 전에 죽어도 다음 실행이 이미 전달한 순번을 다시 쓰지 않아요. 이때 잃는 것은 중단된 시도의 마지막 꼬리뿐이고 재개된 실행은 새 시도로 이어져요. 실행이 아직 유효한지는 토큰마다 묻지 않고 저장할 때 확인하며, 그 사이 취소와 종료는 `AbortSignal`이 막아요. `tests/response-stream.test.ts`가 이 순서와 재시작을 확인해요.
-
-번역 작업도 작업 ID로 `translation` 스트림을 가져요(`server/app.ts`의 작업 훅, `server/product-auxiliary.ts`). 스트림은 진행 표시일 뿐이고 `job_results`에는 기존과 같이 판정 단계에서만 써요. 거절 뒤 재시도는 구간 번호와 시도 ID가 달라 따로 구분돼요. 번역 스트림은 완료·실패·취소·재시작 어느 쪽으로 끝나도 청크를 지우고 상태만 남기며, 같은 작업 ID가 다시 실행되면 스트림을 새로 시작해요.
-
-서명이 없는 요약 부분은 다음 호출에 다시 보내는 모델 응답에서 빼요. 요약은 표시용 글이고 모델의 추론 맥락은 서명이 들고 있어서, 요약을 되돌려 보내면 입력만 늘어나요. 서명이 붙은 부분은 받은 그대로 돌려보내야 해서, 그 부분의 글은 다른 모델 응답 부분처럼 연속 상태에 남아요. 프로바이더가 요약 요청이 든 호출을 HTTP 400으로 거절하면 그 작업은 요약 없이 한 번 다시 보내고, 남은 호출에서도 요청하지 않아요. 400의 원인이 요약 요청이 아니면 다시 보낸 호출도 같은 오류로 끝나요.
-
-본편 실행과 Gemini가 아닌 프로바이더는 요약을 요청하지 않아요. 요청 플래그는 `ProviderRequest.thoughtSummary`, 전달은 `ProviderExecutionOptions.onThought`와 응답 스트림 작성기의 `thought`, 표시는 `web/StreamingResponse.tsx`예요. `tests/vertex-protocol.test.ts`, `tests/vertex-transport.test.ts`, `tests/response-stream.test.ts`, `tests/chat-event-stream.test.ts`, `tests/helper-workspace.test.ts`와 `tests/helper-browser.spec.ts`의 `HELPUI08`이 확인해요.
-
-성공해 source가 commit되면 복구에 필요했던 원본 Batch 결과 본문은 제거하고 Batch/attempt 식별 메타데이터만 남겨요.
-
-도우미 활동 조회(`server/helper-activity.ts`)는 도구가 끝나기 전에도 `tool.started`로 지금 실행 중인 도구를 보여 줘요. 대상 이름은 시작 기록에 남긴 구조화된 대상(`helperActivityTarget`의 종류와 ID, 또는 일괄 작업의 개수)에서 조회 시점의 현재 제목으로 만들어요. 인자 미리보기 문자열은 보여 주지 않으므로, 장면 삭제가 지운 미리보기나 작업 완료 뒤 보존 정리가 비운 도구 세부가 활동 표시로 돌아오지 않아요. 지워진 장면과 숨긴 자료는 대상 이름 없이 도구 종류만 남아요. `tests/helper-activity.test.ts`가 완료 전후의 표시를 확인해요.
-
-화면은 시작과 끝을 호출 ID로 짝지은 뒤, 이어지는 읽기·목록·검색·확인 호출을 한 줄로 접어 본 장면과 자료 수, 그 밖의 조회 횟수를 보여 줘요. 펼치면 호출마다 대상과 도구 이름이 보여요. 저장하는 호출과 실패한 읽기는 따로 한 줄씩 남아요. 분류와 묶기는 `web/helper-activity-groups.ts`가 React 없이 맡고 `tests/helper-activity-groups.test.ts`가 확인해요.
-
-실행 중 상태 줄의 문구는 `web/helper-activity.ts`의 `helperActivitySummary`가 마지막 실행 중 단계에서 만들어요. 호출 순번(`helperCalls`)은 조회가 돌려주는 최근 80개 기록과 따로 작업 전체에서 세요. 도구를 많이 쓴 긴 작업일수록 앞쪽 기록이 창에서 밀려나기 때문이에요. 프로바이더 오류 뒤의 대기는 실행기가 기다리기 직전에 남기는 `provider.retry` 기록에서 오고, 다음 기록이 생기면 지난 일로 봐요. 이 기록은 오류 필드를 쓰지 않아요. 실패한 호출은 이미 자기 줄에 오류로 남고, 대기 자체는 실패가 아니기 때문이에요. 펼친 기록은 호출의 결과를 말로 보여 주고 도구의 기술 이름만 그대로 둬요. `tests/helper-activity.test.ts`가 문구와 펼친 기록을, `tests/helper-workspace.test.ts`가 대기 기록을 확인해요.
-
-성공한 도우미 작업의 큰 도구 결과와 일반 작업 영수증 본문은 축약해요. 과거 가정 장면의 원문·요청·수정 이력은 읽기와 복사용으로 보존하며 새 생성·재작성·편집은 제공하지 않아요. 실패 작업은 재시도 판단에 필요한 결과를 유지해요.
-
-도우미 화면 갱신 API는 이벤트 종류·순번만 조회하며 도구 결과 본문을 보내지 않아요. 요약 체크포인트는 실제 저장된 대화 메시지의 출처를 유지하고, 완료 후 제거되는 도구 payload의 사용하지 않는 해시 목록은 보관하지 않아요. 실행 중의 요약·컨텍스트 전환에서는 실제 도구 결과와 완료된 변경을 전달하되 반복 실행하지 않는 기존 동작을 유지해요.
-
-서버의 스트리밍 완료와 최종 메시지 조회는 도착 순서가 다를 수 있어요. 이미 표시한 응답은 브라우저에서 유지하고, 최종 메시지가 준비될 때 교체해요. 서버 청크 영구 보관으로 이 화면 문제를 해결하지 않아요.
-
-## 실행과 브라우저의 경계
-
-`server/run-executor.ts`는 본문 준비·모델 호출·판정·원자적 저장·종료 처리를 맡고, `server/app.ts`는 HTTP 경로와 후속 작업을 연결해요. 삽화와 보조 작업 큐는 서로 분리해 유지해요. 예약된 입력과 준비 중인 실행 입력을 구분하고, 네이티브 준비·로어 선택·컨텍스트 준비·프롬프트 컴파일은 같은 실행 입력을 순서대로 갱신해요.
-
-전송 버퍼가 차면 해당 구독자만 다음 페이지 읽기를 쉬고 `drain`에서 이어 보내요. 이미 수락한 페이지의 cursor는 전진하므로 같은 청크를 다시 보내지 않으며 다른 구독자나 모델 실행을 기다리게 하지 않아요.
-
-도우미 화면은 현재 대화와 최근 네 대화를 메모리에 유지해요. 현재 대화에서 펼친 과거 메시지는 자르지 않고 캐시에서 비운 대화는 다시 조회해요. 관련 cursor와 요청 식별자도 함께 정리하며 이전 조회가 늦게 끝나 새 조회를 덮어쓰지 않아요.
+- `server/run-executor.ts` owns prose preparation, model invocation, judgment, atomic persistence, and termination, while `server/app.ts` wires HTTP routes and follow-up jobs; illustration and auxiliary job queues remain separate.
+- Queued inputs and in-flight execution inputs are separated, and native preparation, lore selection, context preparation, and prompt compilation sequentially update the same execution input.
+- When a subscriber's send buffer fills, only that subscriber pauses reading the next page and resumes on `drain`; cursors advance for already-accepted pages so chunks never resend without blocking other subscribers or model execution.
+- The helper UI keeps the current conversation and the four most recent conversations in memory without truncating expanded historical messages in the current conversation, re-fetching evicted conversations on demand, cleaning up cursors and request IDs together, and ensuring late responses never overwrite newer queries.
 
 ## Generation, queued next request and automatic refusal retry
 
-채팅당 실행 중인 생성은 하나(`one_active_run_per_chat`)라서, 집필 중에 보낸 다음 요청은 서버 대기열이 아니라 그 탭에만 있는 한 건으로 예약해요. 예약은 서버의 실행과 1회 옵션 예약(`chat_option_pending`)을 미리 차지하거나 순서를 바꾸지 않아요. 보낼 때는 일반 전송과 같은 경로와 멱등 키를 지나가므로, 접수가 불확실한 요청은 기존의 **이전 요청 확인**이 이어받고 새로고침이나 다른 탭에서도 두 번 나가지 않아요.
-
-자동 전송은 앞선 실행이 `completed`로 끝났고, 이 탭이 같은 채팅을 보고 있고, 요청이 함께 보낼 설정의 수정 번호가 예약 때와 같고, 확인 대화상자(Codex 내용 경고 등)나 다른 전송 조건이 막고 있지 않을 때만 해요. 비교하는 수정 번호는 채팅 설정, 채팅 프로필(입력창의 모델, 페르소나, 모듈과 작가 노트, 로어 정책, 고정 프롬프트), 창작 옵션, 전역 모델과 프롬프트 설정 네 가지예요. 서재 자료, 로어 항목, 플롯의 진행 중 항목, 이야기 가이드는 비교하지 않고 직접 보낼 때처럼 보내는 순간의 내용을 써요. 조건은 실행이 끝난 것을 탭이 본 순간에 확인해요. 숨은 탭은 화면을 갱신하지 않으므로, 다시 보일 때 확인하고 보내요. 하나라도 어긋나면 보내지 않고 예약 내용을 입력창 초안으로 되돌린 뒤 이유를 알려요. Codex 내용 확인 요청 자체가 실패해도 확인이 필요한 것으로 보고 되돌려요. 직접 보낼 때는 같은 실패에서 그대로 보내지만, 자동 전송에는 결과를 지켜보는 사람이 없기 때문이에요. 채팅을 떠나면 그 자리에서 예약을 끝내요. 보내기 직전의 확인 중에 떠났다가 돌아와도 그 예약은 보내지 않아요. 새로고침 뒤에는 예약을 보내지 않고 초안으로 되돌려요. 실행이 끝났는지 확인할 수 없는 상태에서 자동으로 보내지 않기 위해서예요. 자동으로 보낸 요청도 직접 보낸 요청과 같은 전송 함수(`web/main.tsx`의 `generate`)를 거치므로, 리더가 새 글을 따라 내려가요.
-
-로어 초기화 표시는 예약에 함께 담겨 그 요청에만 적용되고, 입력 번역의 원문 되돌리기는 예약하는 순간 전송할 때처럼 끝나요. 예약은 새로고침에 대비해 텍스트만 세션 저장소에 두므로, 참고 이미지가 있는 요청은 예약하지 않아요. 동작은 `web/useStory.ts`의 `queueRequest`, `sendQueuedRequest`가 맡고 `tests/composer-next-request-browser.spec.ts`가 확인해요.
-
-다시 생성은 수동 **다시 시도**와 같은 `retryRun` 경로로 `retryOf`가 앞 실행을 가리키는 일반 실행을 만들어요. 그래서 채팅당 실행 하나, 멱등 키, 수정 번호 확인이 그대로 적용되고, 각 시도는 자기 호출 한도(`maxCalls`)와 사용량을 따로 가져요. 거절된 실행의 글·오류·사용량·attempt는 바뀌지 않아요. 횟수는 `retryOf` 사슬에서 자동 재시도 키(`auto-refusal-retry:<거절된 실행 ID>`)를 가진 실행을 거슬러 세므로, 사용자가 직접 다시 시도하면 새로 0부터 세요. 한도에 닿으면 마지막 거절 실행이 그대로 남아 수동 다시 시도를 기다려요.
-
-사용자 취소, 서버 종료·점검, 인증·연결 실패, 결과를 알 수 없는 오류, 호출 한도·컨텍스트 한도 초과, 판정 실패, 판정만 다시 시도한 실행의 거절, 실행 뒤 이야기가 진행됐거나 장면이 삭제된 경우는 다시 보내지 않아요. 거절 기록과 다음 실행 접수는 한 트랜잭션이라 둘 다 남거나 둘 다 남지 않아요. 접수 뒤 시작 전에 서버가 멈추면 다음 실행은 다른 실행처럼 `interrupted`로 끝나요. 같은 거절 실행의 키는 하나뿐이라 두 번 접수되지 않아요. 다음 실행이 접수된 거절에는 실패 푸시 알림을 보내지 않고, 다시 보내지 않아 거절이 최종 결과가 될 때만 보내요. 구현은 `server/run-retry.ts`의 `finishRefusalWithAutomaticRetry`, `server/run-executor.ts`이고 `tests/run-auto-refusal-retry.test.ts`, `tests/main-judgment.test.ts`가 확인해요.
-
-구현 진입점은 `server/model-runner.ts`, `server/run-retry.ts`, `server/main-judgment.ts`, `server/product-auxiliary.ts`, `server/source-editing.ts`예요. 합성 테스트로 데이터 흐름과 저장 동작을 확인해요.
+- **Tab-local next-request queueing**:
+  - Because only one active generation runs per chat (`one_active_run_per_chat`), a next request submitted while writing queues as a single tab-local reservation rather than a server queue, never pre-claiming or reordering server runs or one-shot option reservations (`chat_option_pending`).
+  - On dispatch, it traverses the normal send path and idempotency key so uncertain intakes hand off to existing **이전 요청 확인** (Check previous request) and never double-send across refreshes or other tabs.
+- **Auto-dispatch preconditions and fallback**:
+  - Auto-dispatch fires only when the prior run ended `completed`, this tab still views the same chat, accompanying settings revisions match queue time, and no confirmation dialog (such as a Codex content warning) or other send precondition blocks it.
+  - Four revisions are compared: chat settings, chat profile (composer model, persona, modules and author's note, lore policy, pinned prompt), creative options, and global model/prompt settings; library resources, lore entries, active outline/plot items, and Story Guide are not compared and load at send time like manual sends.
+  - Conditions check when the tab observes run completion (hidden tabs check and dispatch upon becoming visible); any mismatch cancels auto-dispatch, restores the queued content to the composer draft, and explains why.
+  - If the Codex content-check request itself fails, auto-dispatch treats it as needing confirmation and restores the draft (unlike manual sends, where a human is watching). Leaving the chat cancels the queue immediately (even leaving and returning mid-check skips sending), and page reloads revert queued text to the draft so nothing sends without confirming completion.
+  - Auto-sent requests use the same `generate` function in `web/main.tsx` as manual sends so the Reader follows new prose.
+  - A lore-reset flag travels with the queued request for that request only, reverting an input translation finishes at queue time like a normal send, and requests with reference images cannot be queued because session storage persists text only (`queueRequest`, `sendQueuedRequest` in `web/useStory.ts`; `tests/composer-next-request-browser.spec.ts`).
+- **Automatic refusal retry**:
+  - Creates a normal run whose `retryOf` points to the prior run via the same `retryRun` path as manual **다시 시도** (Retry), preserving one-active-run-per-chat, idempotency keys, revision checks, and independent `maxCalls`/usage per attempt without mutating the refused run's prose, error, usage, or attempts.
+  - Retry count walks backward along `retryOf` counting runs keyed with `auto-refusal-retry:<거절된 실행 ID>` (rejected run ID), so a manual user retry resets the count to `0`; at the limit, the last refused run remains awaiting manual retry.
+  - Never triggers on user cancellation, server shutdown/maintenance, auth/connection failures, unknown-outcome errors, call-limit or context-limit exhaustion, judgment failures, refusal of a judgment-only retry, or when the story progressed or scenes were deleted after the run.
+  - Recording the refusal and queuing the follow-up run commit in one transaction (all-or-nothing) with one unique key per refused run preventing duplicate intake; a server stop before start ends the follow-up as `interrupted`. Failure push notifications are suppressed when a retry queues and sent only when refusal is terminal (`finishRefusalWithAutomaticRetry` in `server/run-retry.ts`, `server/run-executor.ts`; `tests/run-auto-refusal-retry.test.ts`, `tests/main-judgment.test.ts`).
+- **Entry points**: `server/model-runner.ts`, `server/run-retry.ts`, `server/main-judgment.ts`, `server/product-auxiliary.ts`, and `server/source-editing.ts`; data flow and persistence are verified via synthetic tests.
 
 ## Context limits, compaction and request measurement
 
-**채팅 설정 → 생성 설정 → 고급 실행 설정 → 작업당 모델 호출 한도**는 정수 1~128회예요. `PATCH /api/chats/:id/settings`도 같은 범위를 허용해요. 본문 요청의 조회 후속 호출·컨텍스트 요약은 이 한도를 함께 사용하고, 설정 변경은 이후 예약에 반영돼요. 번역은 별도 정책의 2~64회를 사용해요. 새 도우미 작업은 내부 정책인 도우미 판단 64회·전체 모델 호출 128회, 호스트 도구 호출 256회와 설정의 도우미 작업 제한 시간(기본 60분)을 사용하며 대화별 한도를 편집하지 않아요. 한도가 허용하는 마지막 호출에는 도구 없이 완료한 일·저장한 변경·결과가 불확실한 변경·남은 일을 정리해 답하라는 표시(`finalCall`)를 붙여요. 그 호출에서도 도구를 요청하면 도구를 실행하지 않고 한도 소진으로 실패 처리해요. 이미 접수한 작업은 저장된 호출 한도를 유지해요. 네이티브 Codex 내부 모델 요청은 관측할 수 없으므로 이 한도는 비용 상한을 뜻하지 않아요. 호출 횟수는 입력 토큰 한도·출력 한도와 다른 제한이에요.
-`GET/PUT /api/chat-generation-defaults`는 `{revision,maxCalls,storyUi,storyUiStyle,autoRefusalRetryEnabled,autoRefusalMaxRetries}`를 읽고 저장해요. PUT에서 뒤의 두 값은 생략하면 기존 값을 유지해요. PUT은 `expectedRevision`으로 동시 수정을 검사해 충돌 시 409를 반환해요. 기본값은 `app_metadata`에 저장해요.
+- **Call limits and defaults**:
+  - **채팅 설정 → 생성 설정 → 고급 실행 설정 → 작업당 모델 호출 한도** (Chat settings → Generation settings → Advanced execution settings → Model call limit per task) and `PATCH /api/chats/:id/settings` accept integers 1–128; follow-up lookup calls and context summaries share this limit, and changes apply to subsequent reservations.
+  - Translation uses a separate 2–64 call policy; new helper tasks use fixed internal policies (64 helper judgments, 128 total model calls, 256 host tool calls, and configured helper task timeout defaulting to 60 minutes) without per-conversation editing.
+  - On the last allowed call, a `finalCall` marker instructs the model to reply without tools summarizing completed work, saved changes, uncertain changes, and remaining work; requesting a tool on that call skips execution and fails the task for budget exhaustion.
+  - Already-queued tasks keep their frozen call limit; because native Codex internal model requests are unobservable, call limits are not cost caps and are distinct from input/output token limits.
+  - `GET/PUT /api/chat-generation-defaults` reads/writes `{revision,maxCalls,storyUi,storyUiStyle,autoRefusalRetryEnabled,autoRefusalMaxRetries}` in `app_metadata` (omitting the last two fields in `PUT` keeps existing values; `expectedRevision` returns 409 on conflict).
+- **In-run tool compaction and reference placement**:
+  - Even after pre-run compaction, repeated `story.read` or similar lookups can fill the window; right before each next model call, `server/model-runner.ts` re-estimates the actual outgoing body including returned results, and when input exceeds 85% with compactable successful reads, `server/context-tool-compaction.ts` summarizes them with the queue-time context-compaction model (automatic for main execution except evaluation-tool runs).
+  - Structured requests assemble completed tool records first and finalize reference messages via `withNativeHostContext`; dynamic references for main writing and translation go in separate user-role reference messages rather than `system`/`instructions`, preserving authored preset roles and order without encoder patching into instructions. Because Codex already sends the same material in JSON `input`, only identical host reference messages are omitted while keeping the current request, original prompt, and completion receipts.
+  - `core/context-summary-policy.ts` supplies shared preservation rules across automatic conversation summaries, in-run read summaries, and helper summaries—distinguishing actor, target, action, and conditions; observations, plans, beliefs, and hearsay; unconfirmed fulfillment; explicit user corrections; and exact identifiers/known sources, and instructing models never to turn lack of confirmation into confirmed failure or non-fulfillment—without merging executors or storage scopes.
+- **Context API, storage, and dependency tracking**:
+  - `GET /api/chats/:id/context`, `PUT /context/summary`, `POST /context/compact`, and `/context/jobs/:jobId` read/cancel routes (each short path prefixed with `/api/chats/:id`) store automatic/manual results in `context_checkpoints`, active pointers in `context_heads`, and manual executions/receipts in `context_jobs/context_job_attempts`.
+  - Helper `context.read` and UI details share the same current summary, source provenance, valid notes, and usability status (`usable: false` with a reason when mismatched); only the UI adds compact status for the 10 most recent compaction jobs, and no path fetches and discards full completed inputs or historical checkpoint bodies.
+  - `server/context-dependency.ts` decides reuse from the actual writing program, effective values, resources, corrections, and native history—changes solely to defaults revisions or helper/translation models never invalidate main summaries (`tests/context-checkpoint-storage.test.ts`, `tests/helper-context-read.test.ts`).
+- **Next request preview**:
+  - The composer's **다음 요청 미리보기** (Next request preview) (`POST /api/chats/:id/request-preview`) projects the next initial main request from the current draft plus saved source head, settings, writing model, prompt, and persona, accepting `request` plus optional `loreContextReset` and `requestImages` (using only image `name`, `width`, and `height` without uploading/storing bytes).
+  - Applies the same draft length validation as real requests (allowing empty text when images are attached) and returns selections, revisions, local tokenizer, effective input budget, estimated request size, image count and conservative image token estimate, retained/pinned lore counts, and summary reusability—never returning source text, prompt bodies, connection URLs, or credentials.
+  - `tests/request-preview.test.ts` checks against real API routes, temporary SQLite, and native previews: zero DB mutations, zero provider/callback calls, draft and settings reflection, valid summary reuse, and mid-read revision changes.
+- **Estimation variance and Gemini signature exclusion**:
+  - Local JSON token counts remain estimates (not upper-bound guarantees) due to tokenizer generations, internal provider formats, chunk-boundary differences, and fresh per-run IDs/hashes. In an observed `o200k_base-v1` case, identical 15,887 UTF-16 code-unit bodies varied across 6,943–7,011 tokens (~1%); because 85% and 75% thresholds are deterministic only beyond this variance, synthetic tests keep fixtures outside 1% of boundaries.
+  - Gemini-family echoed `thoughtSignature` values and reasoning bodies are excluded from input estimation because providers do not tokenize opaque signatures character-by-character and tokenizing them inflates estimates across tool calls, causing unnecessary compaction. In production logs, an estimate including signatures reached 258,852 when provider-reported input was 92,495, whereas excluding signatures yielded 0.88–1.22x of actual input (medians by call-order bucket) across 1,146 Vertex helper calls.
+  - Compaction checks (`measureProviderRequest`), pre-send limit checks (`core/vertex.ts`), and attempt-recorded estimates all share this rule (`tests/helper-compaction.test.ts`, `tests/vertex-transport.test.ts`).
+- **Implementation and core test suite**:
+  - Implementation spans `core/context-budget.ts`, `core/context-plan.ts`, `core/context-projection.ts`, `core/notes.ts`, `core/story-context.ts`, `server/context-planning.ts`, `server/context-compaction.ts`, `server/context-tool-compaction.ts`, `server/model-runner.ts`, `server/context-store.ts`, and `server/story-notes.ts`.
+  - `tests/context-integration.test.ts` and related context/story suites verify races, cancellation, input attribution, and retention on real routes, fresh SQLite, and synthetic provider bodies; checkpoint preservation and in-run compaction have dedicated storage/tool tests, and staged EOF has regressions in `tests/context-compaction.test.ts` and `tests/helper-compaction.test.ts`.
 
-사전 정리가 끝난 뒤에도 같은 요청 안에서 `story.read` 등을 반복하면 조회 결과가 입력을 채울 수 있어요. `server/model-runner.ts`는 다음 모델 호출 직전에 반환된 결과를 포함한 실제 전송 body를 다시 추정해요. 입력이 85%를 넘고 정리할 성공한 읽기 결과가 있으면 `server/context-tool-compaction.ts`가 예약 당시 컨텍스트 정리 모델로 그 결과를 요약해요. 이 경로는 평가 도구 실행을 제외한 본문 실행기에 자동으로 적용해요.
-구조화 요청은 완료된 도구 기록까지 구성한 뒤 `withNativeHostContext`로 참고 메시지를 확정해요. 본문·번역의 동적 참고 자료는 `system`/`instructions`가 아닌 별도 사용자 역할의 참고 메시지에 두며, 사용자가 작성한 프리셋의 역할과 순서는 보존해요. 인코더는 참고 컨텍스트 불일치를 지침 문자열에 덧붙여 보정하지 않아요. Codex는 같은 자료를 JSON `input`으로 이미 전달하므로 내용이 동일한 호스트 참고 메시지만 생략해 중복을 피하고, 현재 요청·원래 프롬프트·완료 영수증은 유지해요.
-`core/context-summary-policy.ts`는 자동 대화 요약, 실행 중 읽기 요약, 도우미 요약에 공통 정보 보존 지침을 제공해요. 주체·상대·행동·해당 행동의 조건, 관찰·계획·믿음·전언, 이행 여부 미확인, 명시적 사용자 정정과 정확한 식별자·알려진 출처를 구분해요. 이행 확인이 없다는 사실을 실패나 미이행 확정으로 바꾸지 않도록 지시해요. 지침 공유가 실행기나 저장 범위를 합치는 것은 아니에요.
+### Derived context verification
 
-`GET /api/chats/:id/context`, `PUT /context/summary`, `POST /context/compact`와 `/context/jobs/:jobId`의 조회·취소가 이 계약을 사용해요. 각 짧은 경로 앞에는 `/api/chats/:id`가 붙어요. 자동·수동 결과는 `context_checkpoints`, 활성 포인터는 `context_heads`, 수동 실행과 전송 영수증은 `context_jobs/context_job_attempts`에 보존해요.
-
-도우미의 `context.read`와 화면 상세는 같은 현재 요약·원문 출처·유효한 메모·사용 가능 여부를 읽어요. 화면만 최근 10개 정리 작업의 작은 상태를 더 제공해요. 완료 작업의 전체 입력이나 과거 checkpoint 본문을 조회해서 버리는 경로는 없어요. 요약이 현재 자료와 맞지 않으면 `usable: false`와 이유를 반환해요.
-
-`server/context-dependency.ts`는 실제 작문 program과 적용값·자료·정정·네이티브 이력에 따라 재사용을 판단해요. 기본값 수정 번호나 도우미/번역 모델만 바뀐 것은 본문 요약 무효화 사유가 아니에요. `tests/context-checkpoint-storage.test.ts`와 `tests/helper-context-read.test.ts`가 저장 수명과 조회 경계를 검사해요.
-
-채팅 입력창의 **다음 요청 미리보기**는 현재 초안과 저장된 원문 head·설정·작문 모델·프롬프트·페르소나로 다음 첫 본문 요청을 투영해요. `POST /api/chats/:id/request-preview`는 `request`, 선택적인 `loreContextReset`과 `requestImages`를 받아요. 이미지 항목은 `name`·`width`·`height`만 사용하며 바이트를 올리거나 저장하지 않아요. 실제 요청과 같은 초안 길이 검사를 적용하고 이미지가 있으면 빈 텍스트도 허용해요. 응답에는 선택 항목과 revision, 로컬 토크나이저·실효 입력 예산·요청 추정량, 이미지 개수와 보수적 이미지 토큰 추정치, 로어 보존·고정 항목 수, 기존 요약의 재사용 여부가 포함돼요. 원문·프롬프트 본문·연결 주소·인증 정보는 돌려주지 않아요.
-`tests/request-preview.test.ts`는 실제 API와 임시 SQLite, 네이티브 미리보기 경로에서 조회 전후 DB 변경 수·프로바이더/콜백 미실행·초안 및 현재 설정 반영·유효 요약 재사용·조회 중 revision 변경을 확인해요.
-로컬 텍스트 분절이 맞더라도 JSON 계수는 프로바이더의 실제 입력 포맷이나 청구 토큰과 같지 않아요. 토크나이저 세대·프로바이더 내부 포맷·조각 경계 차이 때문에 이 수치는 여전히 추정이며 상한 보장도 아니에요. 같은 내용의 body라도 실행마다 새로 만드는 Run·메시지 ID와 해시 때문에 추정값이 조금씩 달라져요. 기존 `o200k_base-v1`에서 관측한 예로 직렬화 길이가 15,887 UTF-16 단위로 동일한 body가 6,943–7,011 토큰(약 1%) 범위로 움직였어요. 85%·75% 판정은 이 편차보다 큰 여유가 있을 때만 결정적이므로, 합성 검사도 픽스처를 경계 1% 안쪽에 두지 않아요.
-
-Gemini 계열 요청이 이어 보내는 프로바이더 서명(`thoughtSignature`)과 추론 본문은 입력 추정에서 빼요. 프로바이더는 이 불투명 값을 글자 수대로 세지 않아서, 그대로 토큰화하면 도구 호출이 쌓일수록 추정이 실제 입력의 몇 배로 커지고 필요 없는 정리가 일어나요. 운영 기록에서 서명을 포함한 추정이 258,852였던 시점에 프로바이더가 보고한 입력은 92,495였고, 서명을 뺀 추정은 Vertex 도우미 호출 1,146건에서 실제 입력의 0.88–1.22배(호출 순서 구간별 중앙값)였어요. 정리 판정(`measureProviderRequest`), 전송 전 한도 검사(`core/vertex.ts`), attempt에 남는 추정치가 모두 같은 기준을 써요. 회귀는 `tests/helper-compaction.test.ts`와 `tests/vertex-transport.test.ts`에 있어요.
-
-구현은 `core/context-budget.ts`, `core/context-plan.ts`, `core/context-projection.ts`, `core/notes.ts`, `core/story-context.ts`, `server/context-planning.ts`, `server/context-compaction.ts`, `server/context-tool-compaction.ts`, `server/model-runner.ts`, `server/context-store.ts`, `server/story-notes.ts`에 있어요. `tests/context-integration.test.ts`와 관련 context/story 검사는 실제 앱 경로와 fresh SQLite, 합성 provider body로 경합·취소·입력 귀속·보관을 확인해요. 기존 모델 작성 checkpoint 보존과 실행 중 조회 결과 정리는 해당 context 저장·도구 검사로 확인해요. 단계별 EOF는 `tests/context-compaction.test.ts`와 `tests/helper-compaction.test.ts`에 회귀가 있어요.
-
-### 파생 컨텍스트 검증
-
-`tests/context-provenance.test.ts`는 조건부 약속, 인물의 전언, 보조의 해석, 작가 정정, 미채택 전개를 여러 번 투영해도 호스트가 본문이나 출처를 바꾸지 않는지 검사해요. 이는 모델이 여러 번 요약해도 의미를 보존한다는 증거는 아니에요. `tests/context-tools.test.ts`는 실제 요청 빌더를 통해 다섯 전송 경로의 지침 영역과 참고 자료를 구분하고, `tests/agent-collaboration-context.test.ts`는 실제 도구 루프에서 캐시·전달·원문 범위를 확인해요.
-
-실제 모델을 평가할 때는 같은 사례를 1회·3회·5회 요약한 뒤 조건·주체·불확실성·정정·제안 구분이 남는지 비교해요. 정보가 이미 충분한 경우의 불필요한 재조회도 함께 세요. 자동 감독 모델, 문장별 확신 점수, 매번 원문 재검증하는 단계는 추가하지 않아요.
+- `tests/context-provenance.test.ts` verifies that repeatedly projecting conditional promises, character hearsay, helper interpretations, author corrections, and unchosen developments does not alter text or provenance on the host (this does not prove models preserve meaning across repeated summaries).
+- `tests/context-tools.test.ts` verifies separation of instruction regions and reference material across all five transport paths via real request builders, and `tests/agent-collaboration-context.test.ts` verifies caching, delivery, and source ranges inside a real tool loop.
+- When evaluating real models, summarize the same case 1, 3, and 5 times to check whether conditions, actors, uncertainty, corrections, and proposal distinctions survive while counting unnecessary re-reads when information is already sufficient; automatic supervisor models, per-sentence confidence scores, and mandatory per-turn source re-verification stages are not added.
 
 ## Custom agent collaboration
 
-## 호출과 저장 계약
+### Call and storage contract
 
-`RisuPrompt.collaboration`은 아래 데이터를 보관해요. `validateRisuPrompt`과 `validateAgentCollaboration`이 알 수 없는 필드·ID 중복·공유 옵션 참조·수치 한도를 검사해요.
+`RisuPrompt.collaboration` stores the structure below. `validateRisuPrompt` and `validateAgentCollaboration` check unknown fields, duplicate IDs, shared-control references, and numeric limits.
 
 ```ts
 type AgentCollaboration = {
   enabled: boolean;
   sharedInstructions: string;
   sharedControls: string[];
-  maxCalls: number; // 모든 보조가 나눠 쓰는 1~12회
+  maxCalls: number; // 1–12 shared across all collaborator agents
   agents: {
     id: string;
     title: string;
     description: string;
     instructions: string;
-    model: { id: string } | null; // null이면 메인 모델 상속
+    model: { id: string } | null; // null inherits the main model
     trigger: 'before' | 'on-demand';
     tools: ('knowledge' | 'skills' | 'notes' | 'story')[];
-    maxCalls: number; // 한 에이전트의 호스트 요청/native 실행 한도 1~6회
-  }[]; // 최대 6명
+    maxCalls: number; // 1–6 host request / native execution limit per agent
+  }[]; // up to 6 agents
 };
 ```
 
-API는 기존 `POST/PUT /api/prompt-presets`의 `program`을 사용하며 수정은 `expectedRevision` CAS로 보호해요. 협업을 끈 상태에서는 빈 이름·지침·미입력 호출값과 삭제된 공유 옵션 참조도 보관하므로 다른 프롬프트 편집을 저장할 수 있어요. 다시 켤 때 필수값·공유 옵션과 실행 한도를 검증해요. 데이터 형식과 중복 ID 검사는 저장할 때도 유지해요. 별도 협업 편집 후 오래된 본문 undo가 협업 설정을 지우지 않아요.
+- **Preset storage and validation**: Uses `program` on existing `POST/PUT /api/prompt-presets` with `expectedRevision` CAS. While disabled, empty names, instructions, unset call limits, and deleted shared-control references remain saved so other prompt edits succeed; re-enabling validates required fields, shared controls, and limits, while schema shape and duplicate-ID checks always run and stale prose undo never erases separate collaboration edits.
+- **Snapshotting and attempt attribution**: Prompt and models freeze at Run queue time in `ProfileSnapshot.collaborationModels` so mid-run edits apply on the next Run. Each collaborator invocation checks the live provider connection at start, logs an attempt before sending, and reuses `role: main` transport tagged with host-only `agentId` (never sent to providers or read from model output).
+- **Shared call budgets**:
+  - All collaborator calls count toward `settings.maxCalls` alongside summaries and main calls; overall and per-agent caps sum host requests across pre-writing consultations, follow-up questions, and lookup round-trips while reserving 1 call for the main writer's next call—except consultations from an active Codex native writer, which return into the ongoing turn without reserving a next call.
+  - New questions never reset limits, recoverable lookup errors may be corrected within the same budget and timeout, and defaults are 3 total additional calls and 2 per template; final writing needing more tool round-trips may hit the existing overall call limit, and enabling collaboration always adds tool descriptions and shared instructions to main input.
+- **Output, timeout, and legacy fields**:
+  - Per-model `maxOutputTokens`, input token limits, and timeouts apply (a collaborator's timeout is shared across calls in one consultation), and completed opinions pass to main without a separate character limit.
+  - Legacy `maxOutputChars` in old presets or backups is ignored regardless of value and stripped on save, while historical `truncated` flags on past consultation receipts remain; names, role descriptions, and instructions follow common prompt file/API storage size bounds rather than collaboration-specific character limits.
+- **Failure, cancellation, and ordering**:
+  - Failures, refusals, partial responses, and uncertain disconnects return as unavailable results without auto-retry; spent calls and usage stay recorded, unreported actual cost `null` never becomes `0`, cancellation stops collaborators and main together preventing late saves, and restarts or archive restores never auto-replay uncertain executions.
+  - Pre-writing consultations keep registration order; because collaborators share a call budget and log attempts/usage right before sending, parallel execution is not added without a separate budget-reservation contract.
+- **Trace records and boundaries**:
+  - `agents.consult` tool events log opinion, status, call count, question, provenance, and explicit context hash, `agents.read` logs actual reads, model inputs tag `agentId`, and `consultationContext` logs actual delivered opinions, evidence, and drafts—all used in-run and not permanently archived.
+  - Independent chat backups include only final source text and continuation resources, only the main model's final response commits to source text, and content read by collaborators never auto-promotes to retained lore for the next Run.
+- **Persistence, restore, and deletion**:
+  - Stored in existing JSON fields with no dedicated collaboration DB table (see [data formats](../DATA-MIGRATIONS.md)). Restore checks agent model attribution, strips credential references from main and collaborator snapshots, and disables providers.
+  - Deleting a model or provider affects new selections and send permissions while preserving historical run snapshots; deleting a dedicated collaborator model in the active workspace disables collaboration and clears its model binding (see [item deletion](../DELETION.md)).
 
-현재 프롬프트와 모델을 Run 예약 시 고정해요. `ProfileSnapshot.collaborationModels`에 에이전트 ID별 모델·프로바이더·파라미터를 보관하므로 진행 중 설정 수정은 다음 Run부터 적용돼요. 각 보조 실행을 시작할 때 현재 프로바이더 연결을 확인하고 전송 전에 attempt를 기록해요. 기존 `role: main` 전송을 사용하되 attempt의 host 전용 `agentId`로 보조 호출을 구분해요. 이 ID는 프로바이더에게 보내거나 모델 출력에서 받지 않아요.
+### Verification scope
 
-모든 보조 호출은 요약·메인과 같은 `settings.maxCalls`에 포함돼요. 보조 전체 한도와 각 에이전트 한도는 작성 전 상담·후속 질문·조회 왕복의 호스트 요청을 합산하며 메인의 다음 호출 1회분을 남겨요. 단, 실제 본문의 Codex native 작가 안에서 하는 자문은 이미 진행 중인 turn으로 복귀하므로 다음 작가 요청을 예약하지 않아요. 새 질문으로 한도가 초기화되지 않아요. 수정 가능한 조회 오류는 같은 예산과 timeout 안에서 교정할 수 있어요. 기본 전체 추가 호출 한도는 3회, 템플릿별 한도는 2회예요. 최종 작문이 더 많은 도구 왕복을 요구하면 기존 전체 한도에서 끝날 수 있어요. 켜진 협업은 호출 여부와 별개로 도구 설명·공유 지침만큼 메인 입력이 늘어나요.
-
-모델별 `maxOutputTokens`·입력 토큰 한도와 timeout을 사용해요. 보조의 timeout은 한 상담의 여러 호출이 나눠 써요. 완료된 의견은 별도 글자 수로 자르지 않고 메인에게 전달해요. 과거 프리셋·백업의 `maxOutputChars`는 값과 관계없이 무시하고 새 저장 시 제거해요. 과거 상담 영수증의 `truncated` 표시는 보존해요. 이름·역할 설명·지침에도 협업 전용 글자 수 제한을 두지 않으며 프롬프트 파일·API의 공통 저장 크기 경계를 따라요.
-
-보조 실패·거절·부분 응답·불확실 연결 종료는 사용 불가 결과로 전달하고 자동 재호출하지 않아요. 이미 소비한 호출과 usage는 유지하며 실제 비용 미제공 값 `null`을 0으로 바꾸지 않아요. 취소하면 보조와 메인을 함께 멈추고 늦은 결과를 원문으로 저장하지 않아요. 서버 재시작·보관 복원도 불확실 실행을 자동 재생하지 않아요.
-
-작성 전 상담은 등록 순서를 유지해요. 보조들이 공유 호출 예산을 사용하고 전송 직전에 attempt와 사용량을 기록하므로, 병렬 실행은 별도의 예산 예약 계약 없이 추가하지 않아요.
-
-Run의 `agents.consult` tool event에 의견·상태·호출량·질문·출처·명시 컨텍스트 해시를 남겨요. `agents.read`에는 실제 읽기 결과를 남기고, 모델 입력은 `agentId`로 구분하며 `consultationContext`에 실제 전달한 의견·근거·초안을 기록해요. 이 정보는 실행 중 상담에 사용하고 완료 후 영구 아카이브로 보존하지 않아요. 독립 채팅 백업에는 최종 원문과 이어쓰기 자료만 담아요. 원문에는 메인의 최종 응답만 저장해요. 보조가 읽은 본문을 다음 Run의 유지 로어로 자동 승격하지 않아요.
-
-협업 설정은 기존 JSON 필드에 보관하고 협업 전용 DB 테이블은 없어요. DB 버전·지원 이관은 [데이터 형식](../DATA-MIGRATIONS.md)을 따라요. 복원은 에이전트 모델 귀속을 검사하고 메인·보조 snapshot의 인증 참조를 제거하며 프로바이더를 비활성화해요. 모델·프로바이더 삭제는 새 선택과 전송 권한에 적용하며 과거 실행 snapshot은 보존해요. 현재 작업본의 전용 보조 모델이 삭제되면 협업을 끄고 모델 선택을 해제해요. 자세한 처리는 [항목 삭제](../DELETION.md)를 참고해요.
-
-## 검증 범위
-
-설정·보관 검사는 `tests/agent-collaboration-config.test.ts`, `tests/agent-collaboration-store.test.ts`예요. `tests/agent-collaboration-runtime.test.ts`는 실제 loopback Responses 서버와 새 SQLite DB로 순서·추가 조회·권한·호출량·중복·취소·설정 변경을 검사해요. `tests/agent-collaboration-context.test.ts`는 선택 컨텍스트·초안·구성·컨텍스트별 캐시와 호출 예산, 새 컨텍스트 창 뒤 참조, 수정 가능한 오류를 확인하고 실행 입력은 테스트에서 실행 시점에 관찰하며, 실제 DB의 완료 후 정리도 별도로 검사해요. 브라우저는 `tests/agent-collaboration-browser.spec.ts`의 AGENTUI02에서 데스크톱 편집과 실제 저장/미리보기 API를 확인해요.
-
-합성 검사로 구현 계약을 확인해요.
+- Config and storage tests: `tests/agent-collaboration-config.test.ts` and `tests/agent-collaboration-store.test.ts`.
+- Runtime tests: `tests/agent-collaboration-runtime.test.ts` uses a real loopback Responses server and fresh SQLite DB to check ordering, follow-up reads, permissions, call counts, deduplication, cancellation, and mid-run config edits.
+- Context and browser tests: `tests/agent-collaboration-context.test.ts` checks selected context, drafts, composition, per-context caching and call budgets, post-context-window references, recoverable errors, runtime execution inputs, and post-completion DB cleanup; `AGENTUI02` in `tests/agent-collaboration-browser.spec.ts` checks desktop editing and real save/preview APIs.
+- Implementation contracts are verified via synthetic tests.
 
 ## Optional evaluation tools
 
@@ -326,151 +418,159 @@ Settings and runtime coverage are in `tests/evaluation-settings.test.ts`, `tests
 
 ## Codex main native turns
 
-Real main Codex Runs keep evaluation definitions, bootstrap and artifact processing in native tool callbacks. Both modes require terminal artifact submission. `preloaded` with `economized` keeps its first low-effort request in the old transport, then starts the native writer with the configured effort and completed results. The session and prior effects are not recreated. The fixed ten-exchange limit counts nonterminal Uimori host tool callbacks, including unsuccessful submissions; valid terminal submission is accepted separately. It does not count hidden model samples. HTTP main and translation runs retain request-based accounting, with at most eleven provider requests and the existing overall execution limits. See [Codex](#본문과-조언의-native-실행) for final submission, usage and cancellation boundaries.
+Real main Codex Runs keep evaluation definitions, bootstrap and artifact processing in native tool callbacks. Both modes require terminal artifact submission. `preloaded` with `economized` keeps its first low-effort request in the old transport, then starts the native writer with the configured effort and completed results. The session and prior effects are not recreated. The fixed ten-exchange limit counts nonterminal Uimori host tool callbacks, including unsuccessful submissions; valid terminal submission is accepted separately. It does not count hidden model samples. HTTP main and translation runs retain request-based accounting, with at most eleven provider requests and the existing overall execution limits. See [Codex](#native-execution-for-main-writing-and-advice) for final submission, usage and cancellation boundaries.
 
 ## Scene illustrations
 
-### 작업 큐와 동시성 제어
+### Job queue and concurrency control
 
-- **작업 펌프 구조**: 하나의 삽화 펌프 안에서 텍스트 작업 1개와 렌더 작업 1개를 독립적으로 병행 실행해요. 같은 계획의 대표 컷부터 순서대로 렌더를 진행하며, 본문 작성 슬롯이나 사용자 입력 상태를 잠그지 않아요.
-- **중복 방지 잠금**: 한 응답 내에서 장면 전체의 컷을 고르는 계획 작업은 1개만 진행돼요 (`ILLUSTRATION_PLAN_ACTIVE`). 다른 컷의 렌더는 독립 예약할 수 있지만 동일한 컷의 중복 실행은 방지돼요 (`ILLUSTRATION_ACTIVE`).
-- **상태 머신**: `queued → running → completed | failed | cancelled | interrupted`. 사용자가 작업을 취소하면 `generation` 카운터를 증가시켜 지연 도착한 결과를 폐기해요. 서버가 재시작되면 실행 중이던 작업은 `interrupted`로 변경되며 자동 재실행하지 않아요 (`queued` 작업은 재개).
-- **작업 단위**: `illustration_jobs.input.task`는 `plan`, `render`, `placement`로 나뉘어요.
+- **Job pump structure**: A single illustration pump executes 1 text job and 1 render job concurrently and independently. Renders proceed sequentially starting with a plan's representative cut, without locking main-writing slots or user input state.
+- **Deduplication locks**: Only 1 planning job selecting scene-wide cuts may run per response (`ILLUSTRATION_PLAN_ACTIVE`). Renders for distinct cuts can queue independently, while duplicate runs for the same cut are blocked (`ILLUSTRATION_ACTIVE`).
+- **State machine**: `queued → running → completed | failed | cancelled | interrupted`. User cancellation increments the `generation` counter so late-arriving results are discarded; on server restart, running jobs transition to `interrupted` without auto-retrying (`queued` jobs resume).
+- **Task units**: `illustration_jobs.input.task` is partitioned into `plan`, `render`, and `placement`.
 
-### 데이터베이스 스키마와 메타데이터
+### Database schema and metadata
 
-- **테이블 구성**:
-  - `illustration_settings`: 앱 전체 실행 환경과 정책
-  - `illustration_references`: 채팅별 참조 이미지 및 인물 외형 설정
-  - `illustration_jobs`: 비동기 작업 큐 및 실행 상태
-  - `illustration_images`: 생성된 이미지 BLOB 참조 및 메타데이터
-- **프리셋 영속화**: 프리셋 엔티티는 공통 `versions` 테이블의 `illustration-preset` 리소스로 저장되고, 사용자 선택 상태는 `app_metadata`의 `illustration-preset-preferences`에 저장돼요. [데이터 형식](../DATA-MIGRATIONS.md)
-- **표시 소유권**: `app_metadata`의 `illustration-presentation:<sourceId>`가 대표 타깃, 컷별 최신 요청/표시 작업 ID, 번역문 hash와 위치 매핑을 소유해요. 작업 실행 입력과 화면 표시 선택을 엄격히 분리해 늦게 완료된 이전 요청이 새 선택을 덮어쓰지 못하게 방어해요.
-- **원문 리비전 귀속**: 작업은 `source_revision`과 예약 당시의 `source_hash`에 귀속돼요. 사용자가 나중에 원문을 수정하더라도 완료된 삽화는 요청 당시 원문에 귀속되어 남으며 **수정 전 원문의 삽화**로 표시돼요. 실행 시점에는 예약 hash의 원문을 다시 조회해요 (`sourceAtHash`).
-- **Reader 통신**: `GET /api/chats/:id/reader`는 현재 장면의 `illustrations` 목록을 반환하고, SSE 이벤트 `illustration.*` 및 `illustration-layout.updated`를 통해 해당 장면의 변경만 실시간 갱신해요. 작업 현황(`reader.activity`)에는 `kind: 'illustration'`으로 표시되며 본문 생성 진행 표시(`activeJobs`)를 방해하지 않아요.
+- **Tables**:
+  - `illustration_settings`: app-wide runtime environment and policies
+  - `illustration_references`: per-chat reference images and character appearance profiles
+  - `illustration_jobs`: asynchronous job queue and execution state
+  - `illustration_images`: generated image BLOB references and metadata
+- **Preset persistence**: Preset entities are stored as `illustration-preset` resources in the shared `versions` table, and user selection state is stored in `app_metadata` under `illustration-preset-preferences`. See [Data formats](../DATA-MIGRATIONS.md).
+- **Presentation ownership**: `illustration-presentation:<sourceId>` in `app_metadata` owns the representative target, per-cut latest requested/displayed job IDs, translation text hash, and placement mapping. Job execution inputs are strictly separated from UI display selections so a late-completing older request cannot overwrite a newer selection.
+- **Source revision attribution**: Jobs bind to `source_revision` and queue-time `source_hash`. Even if the user later edits the source text, completed illustrations stay bound to the source at request time and display as **수정 전 원문의 삽화** (Illustration for pre-edit source); at execution time, the source text is re-fetched at the reserved hash (`sourceAtHash`).
+- **Reader communication**: `GET /api/chats/:id/reader` returns the current scene's `illustrations` list, and SSE events `illustration.*` and `illustration-layout.updated` push real-time updates scoped to that scene only. Activity status (`reader.activity`) tags them as `kind: 'illustration'` without interfering with main-story generation progress (`activeJobs`).
 
-### 도구 및 컨텍스트 계약
+### Tool and context contracts
 
-- **프롬프트 모델 읽기 도구**:
-  - `illustration.sources.search`와 `illustration.sources.read`를 제공해요.
-  - 예약 시점에 고정된 캐릭터 카드, 페르소나, 모듈의 native CHARX 설명과 로어북, 기존 성공 삽화의 캡션과 프롬프트를 검색하거나 페이지 단위로 읽을 수 있어요.
-  - 별도의 쓰기 도구는 제공되지 않으며, 번역 위치 연결 작업에는 이 도구를 제공하지 않아요.
-- **일관성 가이드 (`visualCanon`)**: 계획 수립 시 선택적으로 `visualCanon: [{name, appearance}]`를 구성해 같은 응답의 모든 컷이 인물 정체성을 공유하도록 프롬프트에 결정적으로 포함해요.
-- **입력 토큰 예산**: 계획 단계에서는 응답 전체를 검토하며 모델의 전체 컨텍스트 예산을 초과하면 즉시 실패해요. 컷별 렌더와 번역 위치 연결에는 고정된 focus·visualBrief 및 관련 원문의 끝부분 최대 2,000 추정 토큰을 발췌해 전달해요.
+- **Prompt-model read tools**:
+  - Provides `illustration.sources.search` and `illustration.sources.read`.
+  - Searches or reads page-by-page across pinned character cards, personas, native CHARX descriptions and lorebooks in modules, and captions and prompts of existing successful illustrations.
+  - No separate write tools are provided, and these tools are not exposed to translation placement jobs.
+- **Consistency guide (`visualCanon`)**: Planning optionally builds `visualCanon: [{name, appearance}]` and deterministically injects it into prompts so all cuts for the same response share character identity.
+- **Input token budgets**: Planning inspects the entire response and fails immediately if it exceeds the model's total context budget. Per-cut rendering and translation placement receive the pinned focus and visualBrief plus an excerpt of up to 2,000 estimated tokens from the tail of the relevant source text.
 
-### 이미지 처리와 저장소
+### Image processing and storage
 
-- **이미지 파이프라인**: 모든 생성 결과는 64MiB 입력 한도 내에서 실제 이미지 디코더를 거쳐 고품질 WebP로 변환된 후 공통 `image_blobs` 저장소에 영속화돼요. `/api/illustration-images/:id`로 서빙돼요.
-- **참조 이미지 처리**: 참조 이미지는 긴 변을 최대 1536px로 축소하여 Codex에 전달하며 확대나 자르기는 하지 않아요. 원본 bytes와 hash는 저장소에서 불변으로 보존돼요.
-- **채팅 복사와 백업**: 독립 채팅 복사 및 개별 백업은 현재 화면에 표시된 성공 결과, 동일 컷의 변형 그룹, 대표 지정, 검증 가능한 원문/번역 위치만 복원해요. 문단 index와 텍스트 hash를 검증해 새 anchor를 부여하고, 불일치 시 보조 영역으로 이동해요. 미완료 작업이나 실패 기록은 복제하지 않아요.
+- **Image pipeline**: All generated outputs pass through a real image decoder within the 64MiB input cap, convert to high-quality WebP, persist in the shared `image_blobs` store, and serve from `/api/illustration-images/:id`.
+- **Reference image processing**: Reference images are downscaled to at most 1536px on the long edge before sending to Codex, without upscaling or cropping. Original bytes and hashes remain immutable in storage.
+- **Chat copies and backups**: Independent chat copies and individual backups restore only currently displayed successful results, same-cut variant groups, representative designations, and verifiable source/translation placements. Paragraph indices and text hashes are verified to assign new anchors (mismatches move to the auxiliary area), and unfinished jobs or failure logs are not copied.
 
-### Codex 경로 기술 계약
+### Codex path technical contract
 
-- **턴 분리**: 계획 수립(프롬프트 모델)과 이미지 생성(Codex)은 완전히 다른 턴으로 실행돼요. 계획, 번역 위치 연결, ComfyUI 프롬프트 작성 턴에서는 웹 검색, code mode, 이미지 생성을 모두 끄고 `features.image_generation=false`를 명시해요.
-- **프롬프트 다듬기**: 컷을 예약할 때 설정을 고정해 재시도에 사용해요. 켜면 기존 이미지 턴에서 초안과 선택된 순간, 스타일 지침 원문, 참고 이미지를 바탕으로 Codex가 지시를 다듬고 캡션을 작성해요. 캡션을 받지 못하면 초안의 캡션을 사용해요.
-- **프로세스 및 세션 재사용**: 동일한 계획의 연속 컷들은 단일 Codex 프로세스와 임시 ephemeral thread를 재사용해 컷마다 `turn/start`를 호출해요. 이미지 턴에서는 웹 검색과 JS 계산을 끄고 `features.image_generation=true`를 사용해요. [Codex 실행 경계](../CODEX.md)
-- **동시성 슬롯**: 텍스트 턴과 분리된 별도 슬롯(동시 실행 1개, 대기 8개)을 사용하며 `role: 'illustration'`으로 기록해요.
-- **결과 수신**: `item/completed`의 `imageGeneration` 항목에서 base64 `result`를 우선 읽고, 비어 있다면 전용 디렉터리의 `savedPath` 파일을 읽은 뒤 삭제해요.
-- **실패 코드**:
-  - `CODEX_IMAGE_USAGE_LIMIT`: 유료 한도 초과 (자동 재요청 안 함)
-  - `CODEX_IMAGE_UNAVAILABLE`: 명시적 생성 거부 (자동 재요청 안 함)
-  - `CODEX_IMAGE_NOT_GENERATED`: 일반 생성 실패 (재요청 가능)
+- **Turn separation**: Planning (prompt model) and image generation (Codex) execute in completely separate turns. Planning, translation placement, and ComfyUI prompt-authoring turns disable web search, code mode, and image generation, explicitly setting `features.image_generation=false`.
+- **Prompt refinement**: Setting is frozen when queuing a cut and reused on retries. When enabled, Codex refines the instructions and writes a caption inside the existing image turn from the draft, selected moment, raw style instructions, and reference images; if no caption is returned, the draft's caption is used.
+- **Process and session reuse**: Consecutive cuts from the same plan reuse a single Codex process and ephemeral thread, calling `turn/start` per cut. Image turns disable web search and JS compute and enable `features.image_generation=true` (see [Codex execution boundaries](../CODEX.md)).
+- **Concurrency slot**: Uses a separate slot isolated from text turns (1 concurrent, 8 queued) and logs under `role: 'illustration'`.
+- **Result ingestion**: Reads base64 `result` from `item/completed`'s `imageGeneration` item first; if empty, reads and deletes the file at `savedPath` in the dedicated directory.
+- **Failure codes**:
+  - `CODEX_IMAGE_USAGE_LIMIT`: Paid usage limit exceeded (no automatic retry)
+  - `CODEX_IMAGE_UNAVAILABLE`: Explicit generation refusal (no automatic retry)
+  - `CODEX_IMAGE_NOT_GENERATED`: General generation failure (retryable)
 
-### 번역 위치 연결의 판단 모델 사용
+### Using the judgment model for translation placement
 
-번역 위치 연결은 [판단 프로바이더](../PROVIDERS.md#판단-프로바이더)를 먼저 사용해요. 번역 문단 전체를 공통 입력에 한 번 넣고 컷마다 "이 순간의 서술이 끝나는 번역 문단"을 묻는 선택 질문을 하나씩 만들어 한 번의 호출로 보내요. 판단 모델이 `none`을 고른 컷은 위치 없음으로 저장해요.
+Translation placement tries the [judgment provider](../PROVIDERS.md#판단-프로바이더) first. All translated paragraphs are supplied once in shared input, and one multiple-choice question per cut asking for "the translated paragraph where the narration of this moment ends" is dispatched in a single call; cuts where the judgment model picks `none` are stored without a placement.
 
-- **기존 경로를 쓰는 경우**: 판단 키가 없거나 선택한 판단 연결을 쓸 수 없을 때, 요청이 판단 API의 토큰 한도를 넘을 때, 번역 문단이 선택지 한도(`none` 포함 255개)를 넘을 때는 요청을 보내지 않고 기존처럼 프롬프트 모델이나 Codex 텍스트 턴이 위치를 정해요.
-- **전송 후 실패**: 판단 요청을 보낸 뒤의 HTTP 오류·시간 초과·응답 형식 오류는 작업 실패로 기록하고 프롬프트 모델로 대신 처리하지 않아요. **번역 위치 다시 연결**로 다시 요청할 수 있어요.
-- **기록**: 판정 호출은 `illustration-placement` 사용량으로 귀속돼요. 실제 판단 모델의 문단 선택 정확도는 합성 테스트로 확인한 범위가 아니에요.
+- **Fallback to legacy path**: When no judgment key exists or the selected judgment connection is unavailable, when the request exceeds the judgment API token limit, or when translated paragraphs exceed the option cap (255 options including `none`), no judgment request is sent and the prompt model or Codex text turn decides placement as before.
+- **Post-dispatch failures**: HTTP errors, timeouts, or response format errors after sending a judgment request record as job failures without falling back to the prompt model. Users can retry via **번역 위치 다시 연결** (Reconnect translation placement).
+- **Usage attribution**: Judgment calls attribute to `illustration-placement` usage. Real judgment-model paragraph-selection accuracy is outside the scope verified by synthetic tests.
 
-### Codex 이미지 요청의 사전 판정
+### Pre-judgment for Codex image requests
 
-이미지 생성 직전에 Codex로 보낼 텍스트(프롬프트 모델이 작성한 프롬프트와 참조 이미지 라벨)를 판단 프로바이더(기본 TypeSafe AI / JEV)로 사전 검사해요. 다듬기를 켠 경우에도 사전 판정의 범위는 이미지 턴에 보내는 텍스트까지예요.
+Immediately before image generation, text to be sent to Codex (the prompt-model prompt and reference image labels) is pre-checked by the judgment provider (default TypeSafe AI / JEV). Even when prompt refinement is enabled, pre-judgment covers only the text sent to the image turn.
 
-- **판정 기준**: 컷을 묘사한 텍스트에 노골적인 성적 묘사가 필요한지 여부를 `noul` 지표로 판정하며, 점수가 0.9 이상이면 해당 컷의 이미지 요청을 보내지 않고 차단해요. (일반적인 로맨스나 키스, 비노골적인 연출은 일괄 차단 대상이 아니에요.)
-- **차단 처리**: `ILLUSTRATION_CODEX_CONTENT_BLOCKED` 오류로 기록되며 자동 재시도 및 동일 입력 수동 재시도를 차단해요. 다른 컷의 작업이나 본문·번역 작업, 기존 성공 이미지는 정상적으로 유지돼요.
-- **예외 처리**: 판단 프로바이더 키 미설정, 응답 오류, 8초 시간 초과, 입력 토큰 예산 초과는 `unavailable`로 기록하고 프로바이더의 자체 판단에 맡겨 생성을 계속 진행해요. 판정 호출은 `illustration-content` 사용량으로 귀속돼요.
+- **Criteria**: Evaluates whether the text describing the cut requires explicit sexual depiction using the `noul` metric; a score of 0.9 or higher blocks that cut's image request from being sent. (General romance, kissing, and non-explicit staging are not blanket-blocked.)
+- **Blocking behavior**: Recorded as `ILLUSTRATION_CODEX_CONTENT_BLOCKED`, blocking both automatic retry and manual retry with identical input. Other cuts' jobs, main-story/translation jobs, and existing successful images remain unaffected.
+- **Exception handling**: Missing judgment provider key, response errors, 8-second timeout, or input token budget overflow record as `unavailable`, leaving moderation to the provider itself and continuing generation. Judgment calls attribute to `illustration-content` usage.
 
-### ComfyUI 경로 기술 계약
+### ComfyUI path technical contract
 
-- **실행 순서**: 계획 모델 호출 → 컷별 워크플로의 `{{prompt}}`, `{{negative}}`, `{{seed}}` 치환 → `POST /prompt` → `GET /history/{prompt_id}` 폴링 → `GET /view` 이미지 다운로드.
-- **워크플로 검증**: API 형식(`노드 ID → {class_type, inputs}`)만 지원하며 UI 형식(`nodes`/`links`)은 `COMFYUI_WORKFLOW_UI_FORMAT` 오류로 거절해요. 노드 구조는 변경하지 않고 `inputs` 문자열 내의 자리표시자만 1회 치환해요.
-- **네트워크와 프록시**: `http://`와 `https://`만 허용하며 주소에 인증 정보나 쿼리를 포함할 수 없어요. 프록시 인증이 필요한 경우 **인증 헤더 환경변수**에 지정된 환경변수 값을 읽어 `Authorization` 헤더로 전달해요. 브라우저는 원격 서버에 직접 접근하지 않아요.
-- **타임아웃과 결과 회수**: 요청 시간 초과(`COMFYUI_TIMEOUT`)가 발생해도 원격 서버의 렌더를 강제 중단하지 않아요. 작업은 `prompt_id`를 보존한 채 실패 상태로 남으며, 사용자가 **결과 확인**(`POST /api/illustrations/:id/reconcile`)을 누르면 원격 히스토리를 다시 조회해 완료된 이미지를 가져와요.
-- **취소**: 사용자의 명시적 취소 시에만 `POST /api/jobs/{prompt_id}/cancel`을 호출해요. 해당 API가 없으면 `POST /queue` `{delete: [id]}`로 대기열에서만 제거해요. (전역 `/interrupt`는 호출하지 않아요.)
-- **실패 진단 코드**: `COMFYUI_PROMPT_REJECTED` (노드 설정 오류), `COMFYUI_EXECUTION_FAILED` (실행 도중 오류), `COMFYUI_SUBMISSION_UNCERTAIN` (접수 불확실, 자동 재제출 금지), `COMFYUI_RESULT_UNAVAILABLE` (접수 후 조회 실패).
+- **Execution order**: Call planning model → substitute `{{prompt}}`, `{{negative}}`, and `{{seed}}` in the per-cut workflow → `POST /prompt` → poll `GET /history/{prompt_id}` → download image via `GET /view`.
+- **Workflow validation**: Supports only API format (`노드 ID → {class_type, inputs}` — node ID → `{class_type, inputs}`); UI format (`nodes`/`links`) is rejected with `COMFYUI_WORKFLOW_UI_FORMAT`. Node structure is untouched, and placeholders inside `inputs` strings are substituted once.
+- **Network and proxy**: Allows only `http://` and `https://` URLs with no credentials or query strings. When proxy authentication is needed, reads the environment variable specified in **인증 헤더 환경변수** (Auth header environment variable) and passes it as the `Authorization` header; browsers never access the remote server directly.
+- **Timeout and result recovery**: Request timeouts (`COMFYUI_TIMEOUT`) do not force-abort remote rendering. The job stays failed while preserving `prompt_id`, and clicking **결과 확인** (Check result) (`POST /api/illustrations/:id/reconcile`) re-queries remote history to fetch the completed image.
+- **Cancellation**: Calls `POST /api/jobs/{prompt_id}/cancel` only on explicit user cancellation. If unavailable, falls back to removing from the queue only via `POST /queue` with `{delete: [id]}` (global `/interrupt` is never called).
+- **Failure diagnostic codes**: `COMFYUI_PROMPT_REJECTED` (node configuration error), `COMFYUI_EXECUTION_FAILED` (mid-execution error), `COMFYUI_SUBMISSION_UNCERTAIN` (uncertain intake; no auto-resubmission), `COMFYUI_RESULT_UNAVAILABLE` (post-intake fetch failure).
 
-### NovelAI 경로 기술 계약
+### NovelAI path technical contract
 
-- **요청**: 계획 모델 호출 → 컷마다 `POST https://image.novelai.net/ai/generate-image` 한 번. 본문은 `input`, `model`, `action: "generate"`, `parameters`이고, 장면 프롬프트는 `v4_prompt.caption.base_caption`, 제외 프롬프트는 `negative_prompt`와 `v4_negative_prompt.caption.base_caption`에 넣어요.
-- **캐릭터 참조**: 고른 참조마다 이미지를 1024×1536, 1536×1024, 1472×1472 중 비율이 가장 가까운 캔버스에 검은 여백으로 맞춘 PNG로 `director_reference_images`에 넣어요. 설명은 `character`, 정보 추출은 1, 강도는 0.6, 보조 강도는 0이에요. 강도 값은 에셋 메이드의 기본값을 따랐고 화면에서 바꿀 수는 없어요. 프롬프트 모델이 고르지 않았거나 고정 목록에 없는 번호는 보내지 않고, 보낸 장수는 진단의 `novelai.references`에 남아요.
-- **인물별 캡션**: `characters`를 같은 순서로 `v4_prompt`와 `v4_negative_prompt`의 `char_captions`에 넣어요. 인물은 최대 6명(V4/V4.5 한도)이고, 넘는 항목은 뒤에서부터 버려요. 모든 인물에 위치가 있을 때만 `use_coords`를 켜고, 일부만 있으면 위치를 모두 비워 NovelAI가 배치하게 해요. 위치는 0.1~0.9로 제한하고, V4/V4.5 모델은 5×5 격자(0.1, 0.3, 0.5, 0.7, 0.9)에, V5는 0.01 단위로 맞춰요. 계획 단계의 공유 인물 외형(`visualCanon`)은 프롬프트 모델 입력으로만 쓰고, 다른 생성기와 달리 장면 프롬프트 뒤에 붙이지 않아요. 붙이면 인물별로 나눈 특징이 다른 인물에게 번지기 때문이에요. 생성 상세에서 인물별 캡션과 위치를 볼 수 있어요. 인증은 `Authorization: Bearer <Persistent API 토큰>`이고 리다이렉트는 따라가지 않아요.
-- **응답**: ZIP 안의 첫 이미지(또는 이미지 본문 자체)를 실제 이미지 서명으로 검증해 공통 WebP 저장 경로로 보내요. 사용한 시드는 진단의 `novelai.seed`에 남아요.
-- **실패 코드**: `NOVELAI_TOKEN_MISSING`(토큰 없음, 요청 안 보냄), `NOVELAI_UNAUTHORIZED`(401/403), `NOVELAI_ANLAS_INSUFFICIENT`(402), `NOVELAI_BUSY`(429, 같은 계정의 다른 생성), `NOVELAI_REQUEST_REJECTED`(그 밖의 4xx, 모델 ID·크기 확인), `NOVELAI_UNREACHABLE`(연결 전 실패), `NOVELAI_RESULT_UNCERTAIN`(전송 후 시간 초과·연결 끊김·5xx), `NOVELAI_RESPONSE_INVALID`, `NOVELAI_IMAGE_INVALID`. 진단에는 HTTP 상태와 최대 300자의 NovelAI 메시지만 남겨요.
-- **불확실한 결과**: NovelAI는 작업 ID를 돌려주지 않아 결과를 다시 조회할 수 없어요. 불확실한 실패도 **다시 요청**은 허용하며, 이때 저장된 프롬프트를 재사용해 이미지 요청만 다시 보내요. 취소하면 연결은 끊지만 NovelAI 쪽 생성은 끝까지 진행될 수 있어요.
-- **사전 판정**: Codex 전용 노골성 사전 판정은 적용하지 않아요.
+- **Request**: Call planning model → one `POST https://image.novelai.net/ai/generate-image` per cut. Body contains `input`, `model`, `action: "generate"`, and `parameters`; scene prompt goes into `v4_prompt.caption.base_caption`, and negative prompt goes into both `negative_prompt` and `v4_negative_prompt.caption.base_caption`.
+- **Character references**:
+  - Each selected reference image is letterboxed with black padding onto whichever canvas of 1024×1536, 1536×1024, or 1472×1472 best matches its aspect ratio as a PNG in `director_reference_images`.
+  - Caption is `character`, information extraction is 1, strength is 0.6, and secondary strength is 0 (strength follows Asset Made's defaults and cannot be changed in the UI).
+  - Indices not chosen by the prompt model or outside the pinned list are omitted, and the sent count logs in diagnostics under `novelai.references`.
+- **Per-character captions**:
+  - `characters` go in the same order into `char_captions` of `v4_prompt` and `v4_negative_prompt`, supporting up to 6 characters (V4/V4.5 limit) and dropping excess entries from the end.
+  - `use_coords` enables only when all characters have positions; if only some have positions, all positions clear so NovelAI places them automatically. Positions clamp to 0.1–0.9, snapping to the 5×5 grid (0.1, 0.3, 0.5, 0.7, 0.9) on V4/V4.5 models and 0.01 increments on V5.
+  - Shared planning-stage character appearance (`visualCanon`) is used only as prompt-model input and—unlike other generators—never appended to the scene prompt, preventing per-character traits from bleeding onto other characters.
+  - Per-character captions and positions are viewable in generation details; authentication uses `Authorization: Bearer <Persistent API 토큰>` (Persistent API token) and never follows redirects.
+- **Response**: Validates the first image inside the ZIP (or raw image body itself) by real image signature and routes it through the shared WebP storage path. The seed used logs in diagnostics under `novelai.seed`.
+- **Failure codes**:
+  - `NOVELAI_TOKEN_MISSING` (missing token; request not sent), `NOVELAI_UNAUTHORIZED` (401/403), `NOVELAI_ANLAS_INSUFFICIENT` (402), `NOVELAI_BUSY` (429, another generation on the same account), `NOVELAI_REQUEST_REJECTED` (other 4xx; check model ID/dimensions), `NOVELAI_UNREACHABLE` (pre-connect failure), `NOVELAI_RESULT_UNCERTAIN` (post-send timeout, disconnect, or 5xx), `NOVELAI_RESPONSE_INVALID`, `NOVELAI_IMAGE_INVALID`.
+  - Diagnostics store only the HTTP status and up to 300 characters of NovelAI's message.
+- **Uncertain results**: NovelAI returns no job ID, so results cannot be re-queried. Manual **다시 요청** (Request again) is permitted even after uncertain failures and resends only the image request reusing the saved prompt; cancelling drops the connection, though generation on NovelAI's side may still run to completion.
+- **Pre-judgment**: Codex-only explicit-content pre-judgment is not applied.
 
-### API 명세
+### API specification
 
-| 경로 | 메서드 | 설명 |
+| Path | Method | Description |
 | --- | --- | --- |
-| `/api/illustration-settings` | `GET` / `PUT` | 앱 전체 실행 환경과 정책. `PUT`은 `expectedRevision` CAS를 사용해요. 응답의 `novelaiTokenConfigured`는 토큰 저장 여부만 알려 주고, `PUT`의 쓰기 전용 `novelaiToken`은 문자열이면 교체, `null`이면 삭제, 생략하면 유지해요. |
-| `/api/illustration-presets` | `GET` | 내장 및 저장된 프리셋 목록과 범위별 선택 상태를 반환해요. |
-| `/api/resources/save` | `POST` | 프리셋 저장 (`kind: 'illustration-preset'`). `expectedRevision` 지원. |
-| `/api/resources/illustration-preset/:id` | `GET` | 프리셋 단일 항목을 조회해요. |
-| `/api/resources/illustration-preset/:id/undo` | `POST` | 직전 저장본으로 되돌려요. |
-| `/api/illustration-presets/selection` | `POST` | 범위별 프리셋 선택 (`scope: 'global'/'bot'/'chat'`, `targetId`, `presetId`, `expectedRevision`). |
-| `/api/illustration-presets/:id/export` | `GET` | 프리셋을 JSON 파일로 내보내요. |
-| `/api/illustration-presets/:id` | `DELETE` | 프리셋을 삭제해요 (`expectedRevision` 필요). |
-| `/api/illustration-settings/comfyui/test` | `POST` | ComfyUI 연결을 점검해요 (`GET /system_stats`). |
-| `/api/illustration-settings/novelai/test` | `POST` | 저장된 토큰(또는 본문의 `token`)으로 NovelAI 구독 등급을 조회해요. |
-| `/api/chats/:id/illustration-references` | `GET` / `PUT` | 채팅별 참조 역할 및 인물 외형 설정. |
-| `/api/sources/:id/illustrations` | `POST` | 수동 삽화 계획을 예약해요 (`maxTargets`, `direction` 등 전달). `task: plan` 반환. |
-| `/api/sources/:id/illustration-presentation` | `PATCH` | 대표 삽화 타깃 선택을 변경해요. |
-| `/api/sources/:id/illustration-usage` | `GET` | 현재 원문의 단계별 삽화 누적 호출 수와 토큰 사용량을 조회해요. |
-| `/api/sources/:id/illustration-placement` | `POST` | 기존 컷의 번역 문단 위치 재연결을 요청해요. |
-| `/api/illustrations/:id/regenerate` | `POST` | 동일 타깃을 최신 설정으로 다시 그리는 새 작업을 예약해요 (`changeRequest` 지원). |
-| `/api/chats/:id/illustrations`, `/api/illustrations/:id` | `GET` | 삽화 목록 및 단일 작업의 고정 입력을 포함한 상세를 조회해요. |
-| `/api/illustrations/:id/retry` | `POST` | 실패한 작업의 고정 입력을 그대로 재시도해요. |
-| `/api/illustrations/:id/cancel` | `POST` | 진행 중인 삽화 작업을 취소해요. |
-| `/api/illustrations/:id` | `DELETE` | 해당 삽화 컷 및 생성 기록을 삭제해요. |
-| `/api/illustrations/:id/reconcile` | `POST` | 기록된 ComfyUI `prompt_id`의 원격 결과를 회수해 저장해요. |
-| `/api/illustration-images/:id` | `GET` | 영속화된 이미지 바이너리(WebP)를 스트리밍해요. |
+| `/api/illustration-settings` | `GET` / `PUT` | App-wide runtime environment and policies. `PUT` uses `expectedRevision` CAS. Response `novelaiTokenConfigured` reports only whether a token is saved; write-only `novelaiToken` in `PUT` replaces on string, clears on `null`, and preserves when omitted. |
+| `/api/illustration-presets` | `GET` | Returns built-in and saved preset lists along with per-scope selection state. |
+| `/api/resources/save` | `POST` | Saves a preset (`kind: 'illustration-preset'`). Supports `expectedRevision`. |
+| `/api/resources/illustration-preset/:id` | `GET` | Fetches a single preset item. |
+| `/api/resources/illustration-preset/:id/undo` | `POST` | Reverts to the immediately preceding saved version. |
+| `/api/illustration-presets/selection` | `POST` | Sets per-scope preset selection (`scope: 'global'/'bot'/'chat'`, `targetId`, `presetId`, `expectedRevision`). |
+| `/api/illustration-presets/:id/export` | `GET` | Exports a preset as a JSON file. |
+| `/api/illustration-presets/:id` | `DELETE` | Deletes a preset (requires `expectedRevision`). |
+| `/api/illustration-settings/comfyui/test` | `POST` | Tests ComfyUI connectivity (`GET /system_stats`). |
+| `/api/illustration-settings/novelai/test` | `POST` | Queries NovelAI subscription tier using the stored token (or body `token`). |
+| `/api/chats/:id/illustration-references` | `GET` / `PUT` | Per-chat reference roles and character appearance profiles. |
+| `/api/sources/:id/illustrations` | `POST` | Queues a manual illustration plan (accepts `maxTargets`, `direction`, etc.). Returns `task: plan`. |
+| `/api/sources/:id/illustration-presentation` | `PATCH` | Updates the representative illustration target selection. |
+| `/api/sources/:id/illustration-usage` | `GET` | Queries cumulative per-stage illustration call counts and token usage for the current source. |
+| `/api/sources/:id/illustration-placement` | `POST` | Requests re-mapping existing cuts to translated paragraph positions. |
+| `/api/illustrations/:id/regenerate` | `POST` | Queues a new job redrawing the same target with the latest settings (supports `changeRequest`). |
+| `/api/chats/:id/illustrations`, `/api/illustrations/:id` | `GET` | Fetches the illustration list or single-job details including frozen inputs. |
+| `/api/illustrations/:id/retry` | `POST` | Retries a failed job using its frozen inputs verbatim. |
+| `/api/illustrations/:id/cancel` | `POST` | Cancels an in-progress illustration job. |
+| `/api/illustrations/:id` | `DELETE` | Deletes that illustration cut and its generation record. |
+| `/api/illustrations/:id/reconcile` | `POST` | Fetches and stores remote results for a recorded ComfyUI `prompt_id`. |
+| `/api/illustration-images/:id` | `GET` | Streams persisted image binary (WebP). |
 
-테스트 모드(`UIMORI_TEST_MODE=1`)에서는 `/api/test/control`의 barrier·failure point `illustration`과 가상 생성기 `fixture`가 활성화돼요.
+In test mode (`UIMORI_TEST_MODE=1`), `/api/test/control` enables the `illustration` barrier/failure point and the synthetic `fixture` generator.
 
-### 검증과 테스트
+### Verification and testing
 
-- **단위 및 계약 테스트**:
-  - `tests/illustration-research.test.ts`: 고정 native 자료 읽기와 공통 cast 검증
-  - `tests/illustration-profiles.test.ts`: 인물 기본 외형 상속 및 CHARX 왕복 보존 검증
-  - `tests/illustration-presets.test.ts`: 범위별 선택, 직전 저장 되돌리기, v1 파일 생성기 인식, 고정 작업 입력 검증
-  - `tests/illustration-storyboard.test.ts`: 컷 계획 원자성, 중복 실행 방지, 재생성 중 기존본 유지, 번역 위치 연결 검증
-  - `tests/illustration-runner.test.ts`: 번역 위치 연결의 판단 모델 선택, `none`, 키 미설정 시 기존 경로, 전송 후 실패
-  - `tests/comfyui-client.test.ts`, `tests/codex-image.test.ts`: 각 생성기 클라이언트 및 가상 응답 계약 검증
-  - `tests/novelai-illustration.test.ts`: NovelAI 요청 본문·인물별 캡션과 좌표 맞춤·캐릭터 참조 선택과 캔버스 맞춤·잔여 Anlas와 V5 게이지 해석·상태 코드 분류, 토큰 저장 경계, 자동 재시도 0회와 수동 재요청의 프롬프트 재사용 검증 (`fetch` 가로채기, 실제 NovelAI 호출 없음)
-  - `tests/illustration-*.test.ts`: 저장, 실행 큐, API 엔드포인트 계약 검증
-- **통합 검증 명령어**: `npm run verify:illustration`
-  - 대표/문단 배치, 접기 상태 보존, 생성 중 다음 채팅 전송, 재요청, 삭제, 충돌 처리, 새로고침 후 표시 복원을 검증해요.
-  - 프리셋 생성·복제·JSON 지침 파일 왕복, 동시 수정 충돌 시 사본 저장, 미저장 편집 보호를 확인해요.
-  - ComfyUI 워크플로 오류 포커스 및 모바일/데스크톱 입력 레이아웃을 점검해요.
-  - `--visual` 옵션 사용 시 화면 캡처 결과가 보고서에 포함돼요. 검사 기준은 [DEVELOPMENT](DEVELOPMENT.md#verification)를 따라요.
+- **Unit and contract tests**:
+  - `tests/illustration-research.test.ts`: Pinned native resource reads and shared cast verification
+  - `tests/illustration-profiles.test.ts`: Default character appearance inheritance and CHARX round-trip preservation
+  - `tests/illustration-presets.test.ts`: Scoped selection, undo to previous save, v1 file generator recognition, and frozen job input verification
+  - `tests/illustration-storyboard.test.ts`: Cut-plan atomicity, duplicate execution prevention, retaining existing images during regeneration, and translation placement verification
+  - `tests/illustration-runner.test.ts`: Judgment-model selection for translation placement, `none`, legacy-path fallback when key is unset, and post-dispatch failures
+  - `tests/comfyui-client.test.ts`, `tests/codex-image.test.ts`: Generator client and synthetic response contract verification
+  - `tests/novelai-illustration.test.ts`: NovelAI request payloads, per-character captions and coordinate snapping, character reference selection and canvas fitting, remaining Anlas and V5 gauge parsing, status code classification, token storage boundaries, zero automatic retries, and prompt reuse on manual retry (`fetch` interception; no real NovelAI calls)
+  - `tests/illustration-*.test.ts`: Storage, execution queue, and API endpoint contract verification
+- **Integration verification command**: `npm run verify:illustration`
+  - Verifies representative/paragraph placement, collapse-state preservation, sending the next chat message during generation, retries, deletion, conflict handling, and display restoration after reload.
+  - Verifies preset creation, duplication, JSON instruction file round-trips, saving a copy on concurrent edit conflict, and unsaved edit protection.
+  - Verifies ComfyUI workflow error focus and mobile/desktop input layouts.
+  - Passing `--visual` includes screenshots in the report; verification criteria follow [DEVELOPMENT](DEVELOPMENT.md#verification).
 
 ## Input translation
 
-## 구현 경계
+### Implementation boundaries
 
-- `core/input-translation.ts`: 지원 언어, 입력/컨텍스트 한도, 독립 번역 지침과 표기 선택.
-- `server/input-translation.ts`: `POST /api/chats/:id/input-translation`의 읽기·단일 프로바이더 호출. 본문/source/job를 생성하지 않으며 앱 DB에 초안이나 입력 번역 호출 본문을 기록하지 않아요. 공유 프로바이더 어댑터와 인증 경로를 사용해요.
-- `web/useInputTranslation.ts`: 작성 화면/초안 수정 번호 식별, 취소, 임시 원문·오래된 결과의 처리.
-- `web/useStory.ts`: 기존 초안과 전송 수락 시점 연결. 요청 기록 형식은 변경하지 않아요.
-- `web/InputTranslation.tsx`: 입력창 도구와 원문/이전 초안 결과 표시.
-- `web/RequestMessage.tsx`: 저장된 요청의 정확한 클립보드 복사. 표시 문자열과 분리해요.
+- `core/input-translation.ts`: Supported languages, input/context limits, standalone translation instructions, and notation choices.
+- `server/input-translation.ts`: Read path and single provider call for `POST /api/chats/:id/input-translation`. Creates no prose/source/job and writes neither drafts nor input-translation call payloads into the app DB; uses shared provider adapters and authentication paths.
+- `web/useInputTranslation.ts`: Composer view/draft revision identification, cancellation, temporary original text, and stale-result handling.
+- `web/useStory.ts`: Links existing drafts with send-acceptance boundaries without changing request record schemas.
+- `web/InputTranslation.tsx`: Composer controls and display of original/previous draft results.
+- `web/RequestMessage.tsx`: Exact clipboard copying of saved requests, decoupled from display strings.
+- Temporary original text is stored in `sessionStorage` under `input-translation:<기존 draft 키>` (existing draft key), and the target language is stored in `localStorage` under `uimori:input-translation-language`. When browser storage is restricted, original text may exist only in active editor memory; provider-side retention policies are independent of the app's temporary storage.
 
-임시 원문은 `sessionStorage`의 `input-translation:<기존 draft 키>`에 보관하며, 목표 언어는 `localStorage`의 `uimori:input-translation-language`에 저장해요. 브라우저 저장소가 제한되면 원문은 활성 편집기 메모리에만 남을 수 있어요. 프로바이더 자체의 기록 정책과 앱의 임시 저장은 별개예요.
-
-## 검증
+### Verification
 
 ```sh
 npm run quality
@@ -479,4 +579,6 @@ npm run build
 npm run verify:input-translation
 ```
 
-서버 검증은 모델/프리셋 분리, 표기와 현재 채팅 컨텍스트, 성공/실패의 DB 비변경, 잘린 결과 거부와 서버 종료 취소를 확인해요. 브라우저 검증은 입력 번역·원문 복구·수정·새로고침·취소·오래된 응답·전송 실패/불확실성·최종 전송문만 남기기·복사 성공/실패를 확인해요. 기존 요청 수정과 Reader 전송 복구 검사도 함께 실행해요. 테스트는 임시 DB, 합성 응답과 로컬 브라우저를 사용해요.
+- Server tests verify model/preset isolation, notation and current chat context, zero DB mutation on success/failure, truncated-output rejection, and cancellation on server shutdown.
+- Browser tests verify input translation, original-text recovery, editing, page reload, cancellation, stale responses, send failure/uncertainty, retaining only the final sent text, and clipboard copy success/failure.
+- Existing request-editing and Reader send-recovery suites also run alongside; tests use a temporary DB, synthetic responses, and a local browser.

@@ -1,231 +1,392 @@
 # Risu compatibility, prompts, lore and translation guides
 
-Developer-only technical sections extracted verbatim from `docs/RISU-IMPORT.md`, `docs/RISU-EXPORT.md`, `docs/PROMPT-RUNTIME.md`, `docs/LORE-CONTEXT.md`, `docs/TRANSLATION-GUIDES.md`, and `docs/BUILTIN-PROMPTS.md`.
+Developer-only technical sections extracted from `docs/RISU-IMPORT.md`, `docs/RISU-EXPORT.md`, `docs/PROMPT-RUNTIME.md`, `docs/LORE-CONTEXT.md`, `docs/TRANSLATION-GUIDES.md`, and `docs/BUILTIN-PROMPTS.md`.
 
 ## Risu native import and execution
 
-이 경로는 [네이티브 importer](../../server/risu-native-import.ts), [원문 계약](../../core/risu-native.ts), [카드 파일 읽기](../../server/character-card-file.ts)에 구현되어 있어요.
+This path is implemented in [native importer](../../server/risu-native-import.ts), [source contract](../../core/risu-native.ts), and [character card file reader](../../server/character-card-file.ts).
 
-### 원문 보존과 투영 정책
+### Source preservation and projection policy
 
-- **원래 자료**: `nativeRisu.card`는 카드 `data` 객체, `nativeRisu.module`은 내장 또는 독립 모듈 객체예요. 폐기 필드 정책을 적용한 뒤 알려지지 않은 활성 확장 필드, 비활성 로어, 원래 에셋 역할은 보존해요. `sourceHash`는 입력 파일의 SHA-256이고, `assets`는 자료 이름·URI를 저장한 이미지 ID에 연결해요.
-- **저장용 표시**: 기존 서재와 채팅 저장소가 읽는 본문·첫 메시지·로어는 원문에서 읽어 낸 투영 필드예요. 원문 CBS를 그대로 두며 새 `bodyTemplate`, `compat.risuCbs`, `transforms`, `behavior` 프로그램을 함께 만들지 않아요. 본문은 카드 설명이며 대화 예시와 글로벌 노트는 네이티브 프리셋이 정한 대화·블록 위치에서 소비해요. 가져오기는 앱의 현재 프롬프트나 모델 연결을 바꾸지 않아요.
-- **원문과 첫 메시지 크기 예산**: 카드·모듈 원문은 합계 8 MiB의 JSON 예산을 사용해요. HTML/CSS 선택 화면을 포함한 개별 첫 메시지·본문·로어는 저장 메시지와 같은 2,000,000자까지 받아요. 첫 메시지 개수나 목록 합계에 별도 상한을 두거나 표시용 복사본을 다시 합산해 원문을 거절하지 않아요. 원문을 임의로 잘라 가져오지 않으며 저장 메시지 한도를 넘으면 화면에 알려줘요.
-- **로어 처리**: 항상 활성인 항목은 고정 자료로, 나머지 활성 항목은 기본적으로 Uimori 판단 모델(기본값 JEV)의 선별을 사용해요. 원래 키·보조 키·정규식·로어북 설정은 원본에 보존하지만 관련성 판단은 판단 모델이 담당해요. 현재 모델 컨텍스트에 반영하지 않는 위치·삽입 지시문은 가져오기 검토에서 알려요. 비활성 항목도 원문에 남지만 모델 입력 표시에서는 제외해요. 보존 자체가 모든 Risu 로어 지시문의 실행 지원을 뜻하지 않아요.
-- **진행 기억**: 로어 항목을 채팅 메모로 옮기거나 가져오기 때문에 비활성화하지 않아요. `memoryIds` 선택 API와 분리 화면은 제공하지 않아요. 과거에 저장한 `imported-memory` 메모·출처·백업은 계속 읽으며 기존 자료나 채팅을 자동 삭제하거나 재분류하지 않아요.
-- **이미지 변환**: PNG·JPEG·WebP·AVIF·GIF를 실제로 판독해 공통 이미지 처리 경계에서 고품질 WebP로 저장해요. 원해상도·투명도·지원 애니메이션을 유지하며 이미 WebP인 파일은 재압축하지 않아요. 원본 그대로 보관하는 WebP는 모든 프레임을 디코드하지 않고 RIFF 컨테이너 구조만 검사해요. 잘린 파일은 거부하지만, 구조가 멀쩡한 프레임 안의 픽셀 손상은 받은 그대로 저장돼요. 파일당 64 MiB와 픽셀·프레임 처리 한도를 사용하고, 원본을 이중 보관하지 않아요. 이름·설명은 화면과 판단 모델의 이미지 선택에, 기존 에셋 참조 이름은 Risu 스크립트에 사용해요. 외부 URL의 파일을 자동 다운로드하지 않아요.
-- **원본 파일 보관 정책**: 카드·모듈·프리셋의 현재 원문과 변환된 이미지를 보관해요. 입력 컨테이너 전체를 별도 `sourceFiles` 영수증으로 영구 저장하지 않아요. 바이트 단위의 원본 파일이 필요하면 가져오기 전 파일을 직접 보관해야 해요. 내보내기는 현재 자료로 새 파일을 만드는 기능이에요.
-- **재시도와 멱등성**: 검토 digest가 바뀌면 다시 검토해야 해요. 저장 결과가 불확실하면 같은 파일·선택·요청 키로 확인해요. 이미 성공한 최근 요청은 임시 업로드가 삭제된 뒤에도 작은 처리 결과를 먼저 확인해 봇·채팅·첫 메시지를 중복 생성하지 않아요. 원본 파일이나 전체 변환본을 재시도용으로 영구 보관하지는 않아요. 기존 자료와 운영 데이터는 이 가져오기로 덮어쓰지 않아요.
-- **API와 편집 수명**: 가져오기와 저장 API는 원문에서 본문·첫 메시지·로어·지침·기본 변수를 다시 만들어요. 자료 편집은 일반 저장/취소 방식이고 원문 JSON도 저장할 때 함께 파싱해요. 미완성 입력은 이 기기의 복구 버퍼에 남기되 서버 초안이나 이력으로 동기화하지 않아요. 잘못된 문법은 입력을 지우지 않고 알려줘요. 저장하지 않은 내용은 먼저 저장한 뒤 내보내요. [자료 편집](../EDITING.md)
+- **Source data**:
+  - `nativeRisu.card` is the card `data` object, and `nativeRisu.module` is the embedded or standalone module object.
+  - After applying the deprecated-field policy, unknown active extension fields, disabled lore entries, and original asset roles are preserved.
+  - `sourceHash` is the SHA-256 of the input file, and `assets` maps asset names and URIs to stored image IDs.
+- **Stored projections**:
+  - The body text, first messages, and lore read by the existing library and chat storage are projected fields derived from the source document.
+  - Original CBS is kept verbatim without also creating new `bodyTemplate`, `compat.risuCbs`, `transforms`, or `behavior` programs.
+  - The body is the card description, while dialogue examples and global notes are consumed at the conversation and block positions defined by the native preset.
+  - Importing does not change the app's current prompt or model connections.
+- **Source and first-message size budgets**:
+  - Card and module source documents share a combined 8 MiB JSON budget.
+  - Individual first messages, body text, and lore entries (including HTML/CSS selection screens) are accepted up to 2,000,000 characters, matching the stored-message limit.
+  - No separate cap is placed on first-message count or combined list size, and display copies are not double-counted to reject source documents.
+  - Source documents are never arbitrarily truncated on import; if a stored-message limit is exceeded, the UI reports it.
+- **Lore handling**:
+  - Always-active entries are handled as pinned context, while the remaining active entries default to selection by the Uimori judgment model (default: JEV).
+  - Original keys, secondary keys, regexes, and lorebook settings are preserved in the source document, while relevance judgment is handled by the judgment model.
+  - Position and insertion directives that are not reflected in the current model context are surfaced during import review.
+  - Disabled entries remain in the source document but are excluded from model-input projections. Preservation itself does not imply execution support for every Risu lore directive.
+- **Progress memory**:
+  - Lore entries are neither moved into chat notes nor disabled because of import. No `memoryIds` selection API or separate screen is provided.
+  - Previously stored `imported-memory` notes, provenance records, and backups remain readable, and existing content or chats are never automatically deleted or reclassified.
+- **Image conversion**:
+  - PNG, JPEG, WebP, AVIF, and GIF files are decoded/inspected from actual bytes and stored as high-quality WebP through the shared image-processing boundary.
+  - Original resolution, transparency, and supported animation are preserved, and files that are already WebP are not recompressed.
+  - WebP files kept verbatim only validate RIFF container structure without decoding every frame; truncated files are rejected, whereas pixel corruption inside a structurally intact frame is stored as received.
+  - A 64 MiB per-file limit and pixel/frame processing limits apply, and original files are not stored twice.
+  - Names and descriptions are used in the UI and for judgment-model image selection, while original asset reference names are used by Risu scripts. Files at external URLs are not downloaded automatically.
+- **Original file retention policy**:
+  - The current card, module, and preset source documents and converted images are stored. Full input containers are not permanently stored as separate `sourceFiles` receipts.
+  - If byte-exact original files are needed, retain the pre-import files separately; export creates a new file from the current stored content.
+- **Retries and idempotency**:
+  - If the review digest changes, the import must be reviewed again. When a save outcome is uncertain, verification checks with the same file, selections, and request key.
+  - Even after temporary uploads are deleted, recently succeeded requests check a small processing receipt first so bots, chats, and first messages are not created in duplicate.
+  - Original files and full converted payloads are not permanently stored for retries, and existing content and operational data are not overwritten by this import.
+- **API and editing lifecycle**:
+  - Import and save APIs rebuild body text, first messages, lore, instructions, and default variables from the source document.
+  - Content editing uses standard save/cancel semantics, and source JSON is parsed together on save.
+  - Unfinished input remains in this device's recovery buffer and is not synced as server drafts or history.
+  - Invalid syntax is reported without clearing the input. Unsaved changes must be saved first before exporting. See [Content editing](../EDITING.md).
 
-### CharX 내부 자료의 우선순위
+### Precedence of embedded CharX data
 
-`module.risum`은 별도 장착 모듈이 아니라 같은 카드의 직렬화된 자료로 읽어요. 카드와 모듈 원문은 둘 다 남기고 실행 시 다음 우선순위를 적용해요:
+`module.risum` is read as serialized data belonging to the same card rather than as a separately attached module. Both the card and module source documents are retained, and the following precedence rules apply at runtime:
 
-- 내장 모듈이 있으면 `regex ?? []`와 `trigger ?? []`가 카드의 인라인 스크립트를 대체해요.
-- 내장 `lorebook`은 빈 배열이어도 카드의 로어를 대체해요. 누락되었거나 `null`일 때만 카드 로어를 사용하고 두 목록을 합치지 않아요.
-- 이름·설명·첫 메시지는 카드 소유예요. 내부 모듈의 이미지 바이트도 메타데이터 순서대로 읽어 카드 이미지와 함께 저장하되 원문 문서를 덮어쓰지 않아요.
-- 손상된 내부 모듈을 조용히 무시하고 인라인 자료로 대체하지 않아요. RPack·컨테이너 버전·UTF-8·CRC·에셋 수·ZIP 경로와 확장 크기 한도를 계속 검사해요. 파일 시스템으로 압축을 풀지 않아요.
+- If an embedded module is present, its `regex ?? []` and `trigger ?? []` replace the card's inline scripts.
+- An embedded `lorebook` replaces the card's lore even when it is an empty array. The card's lore is used only when `lorebook` is missing or `null`; the two lists are never merged.
+- The card owns the name, description, and first messages. Image bytes from the embedded module are also read in metadata order and stored alongside the card's images without overwriting the source document.
+- A corrupted embedded module is never silently ignored or replaced with inline data. Validation continues to enforce RPack, container version, UTF-8, CRC, asset count, ZIP paths, and expanded-size limits, without extracting to the filesystem.
 
-### 네이티브 자료 편집과 새 채팅
+### Native content editing and new chats
 
-- **원문 필드 편집**: 서재의 Risu 편집기는 이름·설정·기본 첫 메시지·대화 예시·제작자 코멘트를 원문 필드에 저장해요. 글로벌 노트·배경 HTML/CSS·기본 변수를 직접 수정하고, 대체 첫 메시지·로어·정규식·트리거/Lua는 JSON 편집에서 적용해요. 카드 또는 모듈 전체 JSON도 편집할 수 있어요. 알 수 없는 활성 확장 필드는 그대로 남아요. 콘텐츠 편집과 실행의 기준은 이 원문 하나예요.
-- **수정과 리비전**: 저장과 가져오기는 같은 원문 투영 함수를 사용해요. 현재 자료 수정에는 새 revision을 붙이지만 모든 과거 저장본과 폐기 필드를 영구 보관하지 않아요. 진행 중인 요청은 시작한 입력을 유지하며, 새 실행에는 현재 원문과 정책을 적용해요.
-- **번역과 다시 쓰기**: 새 번역·보조 작업은 현재 설정과 필요한 원문·기억을 읽어 입력을 구성해요. 실행 중 작업을 나중 설정으로 바꾸지는 않아요. 다시 쓰기는 현재 설정으로 새로 실행하며 중간 장면은 독립 채팅 사본을 사용하고 마지막 응답은 성공 후 교체할 수도 있어요. 예전 실행 환경을 그대로 복제하는 후보 replay는 제공하지 않아요.
-- **로어 선별 일관성**: 로어 선택은 판단 모델의 사전 선별 또는 필요할 때 읽기를 사용해요. 봇으로 새 채팅을 시작해도 같은 활성 로어를 사용할 수 있으며, 가져오기 시 최초 채팅만 갖는 별도 기억을 만들지 않아요.
-- **새 채팅과 미리보기**: 새 채팅은 네이티브 기본 `first_mes`가 있으면 기본 첫 메시지를 선택해요. 선택 화면의 미리보기는 저장된 정확한 자료 수정 번호로 일회성 Lua `editDisplay`, CBS, 정규식을 적용한 뒤 읽기 화면과 같은 Shadow DOM 메시지 표면에 표시해요. 미리보기는 채팅이나 변수를 저장하지 않고 모델을 호출하지 않으며 선택 버튼도 비활성화해요. 페르소나 이름은 반영하지만 별도로 붙인 모듈과 채팅 중 변수는 이 미리보기에 포함하지 않아요.
-- **첫 메시지 바꾸기**: 첫 메시지의 더보기에서 **첫 메시지 바꾸기**를 열면 같은 채팅에서 다른 첫 메시지를 고를 수 있어요. 대체 첫 메시지가 있는 원래 봇 판본을 아직 사용할 수 있고, 생성 요청이나 카드 버튼 동작을 실행하지 않은 채팅에서 제공해요. 원문을 직접 편집하거나 번역한 경우에도 바꿀 수 있으며, 이전 원문·수정본·완료된 번역은 저장소에 보존해요. 변경된 첫 메시지만 현재 대화에 포함하고, 이전 첫 메시지의 진행 중 번역·이미지 작업은 취소해요. 직접 설정한 채팅 변수는 유지하며 모델을 호출하지 않아요. 작성된 첫 메시지는 장면을 눌러도 생성 정보 패널을 열지 않아요.
-- **채팅 백업과 독립 사본**: 채팅 백업과 독립 사본은 작성된 메시지·카드 변수 및 Lua가 남긴 메시지 변경분을 보존해요. 식별자를 새 채팅에 연결하지만 전체 모델 전송 입력이나 호출 영수증을 복제하지 않아요. 가져오기 중 스크립트나 모델을 다시 실행하지 않아요. 카드 버튼이 직접 작성한 응답은 작문 모델 재요청 대상으로 삼지 않아요.
+- **Source field editing**:
+  - The library's Risu editor saves name, settings/description, default first message, dialogue examples, and creator's notes directly to source fields.
+  - Global notes, background HTML/CSS, and default variables are edited directly, while alternate greetings, lore, regexes, and triggers/Lua are applied via JSON editing.
+  - Full card or module JSON can also be edited, and unknown active extension fields remain untouched. This single source document is the source of truth for content editing and execution.
+- **Edits and revisions**:
+  - Saving and importing use the same source projection function. Edits to current content increment the revision without permanently archiving every past save or deprecated field.
+  - In-flight requests retain the inputs they started with, while new runs apply the current source document and policies.
+- **Translation and rewrite**:
+  - New translation and auxiliary jobs construct their inputs from current settings and the required source data and memory; running jobs are not mutated for later setting changes.
+  - Rewrites run fresh with current settings: intermediate scenes use an independent chat copy, and the final response may optionally be replaced after success. Candidate replay that replicates an old execution environment verbatim is not provided.
+- **Lore selection consistency**:
+  - Lore selection uses pre-selection by the judgment model or on-demand reading.
+  - Starting a new chat from the bot can use the same active lore, and import does not create separate memories exclusive to the initial chat.
+- **New chats and preview**:
+  - A new chat selects the default first message when a native default `first_mes` is present.
+  - The selector preview applies one-shot Lua `editDisplay`, CBS, and regexes at the exact stored content revision and renders into the same Shadow DOM message surface as the reader.
+  - Previews do not persist chats or variables, do not call models, and disable selection buttons. The persona name is reflected, whereas separately attached modules and in-chat variables are excluded from this preview.
+- **Replacing the first message**:
+  - Opening **첫 메시지 바꾸기** (Replace first message) from the first message's overflow menu lets you select a different first message in the same chat.
+  - It is offered when the original bot revision with alternate greetings is still available and no generation request or card button action has been executed in the chat.
+  - Switching is allowed even after manually editing or translating the source text; previous source text, edits, and completed translations remain preserved in storage.
+  - Only the newly selected first message is included in the current conversation, and any in-flight translation or image jobs for the previous first message are cancelled.
+  - Manually set chat variables are preserved, no model is called, and clicking a card-authored first message does not open the generation info panel.
+- **Chat backups and independent copies**:
+  - Chat backups and independent copies preserve authored messages, card variables, and message mutations left by Lua.
+  - Identifiers are rebound to the new chat without duplicating full model request payloads or call receipts, and neither scripts nor models are re-executed during import.
+  - Responses written directly by card buttons are not treated as targets for writing-model re-requests.
 
-### Lua 조회와 모델 옵션
+### Lua lookup APIs and model options
 
-- **격리 worker와 상태 수명**: 네이티브 Lua는 채팅·자료 수정 번호별 격리 worker에서 초기 코드를 한 번 실행하고, 이후 콜백에서도 같은 local/global 값을 유지해요. 저장 변수와 대화는 매 호출 최신 고정값으로 갱신해요. 대화 기록은 스크립트가 채팅 조회·수정 API를 처음 호출할 때 VM 안에서 풀고, 채팅을 수정한 호출만 변경된 대화를 돌려줘요. 채팅을 읽지 않는 콜백의 실행 시간은 대화 길이와 무관해요. worker 재시작·시간 초과·실행 실패·자료 변경은 그 VM을 폐기하며 영속 상태는 `getState`·채팅 변수로 보존해요. 각 authored script는 내부 RPC와 다른 스크립트의 권한을 볼 수 없는 실행 환경을 사용해요. 함수·`listenEdit` 콜백·동적 `load`는 원래 스크립트 권한을 유지하고, 서로 호출할 때 권한을 합치지 않아요. `LLM`·`axLLM`·`simpleLLM`은 허용된 원본 호출만 Uimori 호스트에 전달하며 화면 표시 콜백에서는 모델 호출을 허용하지 않아요. 미지원 API는 명시적 오류로 남아요.
-- **업스트림 API 변경 추적**: Risu의 새 Lua API나 이벤트는 자동으로 지원되지 않아요. 이미 지원하는 API를 조합한 카드 코드는 기존 실행 경로를 사용하지만, 새 화면 동작·저장·모델 기능은 Uimori에 연결하고 검증해야 해요. 개발용 [Lua 변경 비교 도구](DEVELOPMENT.md#risu-lua-upstream-changes)는 원본 API·래퍼·콜백 변경과 현재 브리지의 이름 노출 여부를 보고해요. 이름이 노출돼 있어도 Risu와 동일하게 동작한다는 보장은 아니며 도구가 런타임을 갱신하지 않아요.
-- **메시지 역할과 생성 제어**: `LLM`·`axLLM`의 메시지 역할은 Risu의 `sys`를 `system`, `bot`·`char`를 `assistant`로 전달하며 내용과 순서는 유지해요. 트리거의 `v2StopPromptSending`을 기존 생성 중지 효과로 인식해요. 기존 자료의 `v2StopPrompt`·`stop`도 같은 중지 동작으로 읽어요.
-- **`editDisplay` 콜백 체인**: `editDisplay` 콜백은 순서대로 실행하며 문자열 반환값만 다음 콜백에 전달해요. `nil`·숫자·불리언 등은 직전 문자열을 유지해요. 다른 편집 콜백의 반환값 검증은 그대로 적용해요.
-- **조회 API 상세**:
-  - `hash(id, text):await()`는 UTF-8 문자열의 SHA-256 소문자 hex를 반환해요.
-  - `getTokens(id, text):await()`는 실행 시작 때 고정한 작문 모델의 토크나이저를 사용하고, 모델이 없으면 기존 기본 토크나이저를 사용해요. Risu처럼 표시 콜백이나 유효하지 않은 ID에서는 토큰 수 대신 `nil`을 반환해요.
-  - `getAuthorsNote(id)`는 프리셋 기본값을 섞지 않은 채팅의 작가 노트 원문을 반환해요. CBS의 유효 작가 노트는 계속 프리셋 기본값을 사용할 수 있어요.
-  - `getPersonaDescription(id)`는 실행에 고정된 페르소나 설명을 CBS 평가해 반환해요.
-  - `getLoreBooks(id, search)`는 로어의 `comment`가 정확히 일치하는 항목을 봇·장착 자료 순서로 읽고 각 본문에 CBS를 적용해요. 카드 로어는 Risu DB 형식으로 읽어 반환하며 원문을 저장하거나 로어 선택 상태를 바꾸지 않아요. Uimori 메모를 Risu의 채팅 로컬 로어로 간주하지 않아요. 활성 로어 조합인 `loadLoreBooks`와 로어 수정은 미지원이에요.
-- **`axLLM` 옵션과 모드**: `options.mode`는 `otherAx`(기본값: 스크립트 모델을 선택하지 않았으면 작문 모델), `memory`(컨텍스트 정리 모델), `translate`(번역 모델)를 실행에 고정된 설정으로 선택해요. 선택된 스크립트·컨텍스트 정리 모델이나 연결이 삭제되면 해당 호출은 명시적으로 실패하고, 다른 작문이나 로컬 카드 동작의 예약은 유지해요. `emotion`·`submodel`은 대응 역할이 없어 실패를 반환하고, 설정이 없는 역할도 다른 모델로 조용히 대체하지 않아요. 유효하지 않은 모드는 Risu처럼 실패를 반환해요. 사용한 모드는 호출 기록의 모델 검증에도 반영해요.
-- **스트리밍 호출**: `LLM`·`axLLM`은 기본 전송 경로나 `options.streaming=true`에서 스트림을 끝까지 모은 `{success, result}`를 반환해요. 실패하면 `result`는 `Error:`와 오류 코드·상태를 반환하며, 중간에 받은 부분 응답과 사용량은 호출 기록에 남겨요. 현재 전송은 스트리밍 방식이므로 명시적인 `streaming=false`는 지원 불가 실패를 반환해요. 생성 파라미터·연결·인증은 계속 Uimori 모델 설정이 소유해요.
-- **멀티모달 인레이 (`useMultimodal=true`)**: 사용자 메시지의 `{{inlay::이름}}`·`{{inlayed::이름}}`·`{{inlayeddata::이름}}`을 현재 실행에 장착된 카드 이미지의 이름·URI 또는 `request-image:<sha256>` 형식의 실행에 포함된 요청 이미지 참조로 해석해요. 로컬 이미지 바이트만 전송하며 Risu의 별도 UUID 인레이 저장소나 외부 URL은 조회하지 않아요. 원래 Risu처럼 assistant의 `inlay`·`inlayed` 표기는 제거해요. system·assistant의 이미지 전송과 해결할 수 없는 참조는 실패를 반환해요. 모델의 이미지 입력 지원 여부와 기존 입력 이미지 제한도 적용해요.
-- **조회 및 안전 경계**: 이 조회 API는 네트워크·모델 호출·원본 자료 수정을 추가하지 않아요. 표시 경로의 CBS와 변수 변경은 계속 표시 사본에만 적용돼요. 캐릭터 setter·이미지 생성·외부 요청·임베딩·로어 수정·임의 JavaScript 실행은 이번 호환 경로에 포함하지 않아요.
-- **CBS 격리와 지속 VM**: 트리거와 Lua가 호출하는 CBS는 한 번의 네이티브 실행 안에서만 격리 worker를 재사용해요. 각 CBS 호출은 새 평가기와 최신 변수·대화 입력으로 순서대로 실행하며 결과를 캐시하지 않아요. 평가 오류나 시간 초과로 실패한 입력은 재시도하지 않고 worker를 폐기해요. Lua가 오류를 처리하고 별도의 CBS 호출을 이어가면 새 worker에서 실행하며, 실패한 평가의 변수 변경은 반영하지 않아요. 실행 종료·취소 후에는 다시 시작하지 않고 호출별 시간·메모리 제한을 유지해요.
-- **지속 VM 수명**: 지속 VM은 채팅 실행과 버튼 동작에 사용해요. 취소된 실행의 VM 상태는 다음 실행에 이어지지 않고, 이전 실행의 정리가 늦게 끝나도 같은 채팅에서 새로 시작한 실행의 VM은 종료하지 않아요. Reader의 `editDisplay`와 첫 메시지 미리보기는 저장 상태를 복사한 일회성 VM으로 실행하므로 화면을 열거나 새로고침하는 행위가 카드 상태를 저장하거나 모델을 호출하지 않아요. 표시 콜백이 이전 실행의 Lua local/global 값 자체에 의존하는 카드는 이 차이를 확인해야 해요. Reader 표시 변환의 HTML 렌더는 호출마다 10초 안에 끝나야 하며, 이 시간에는 요청의 첫 렌더 worker 시작이 포함돼요. 표시 변환이 실패하면 저장된 본문을 그대로 보여주고, Risu 단계 실패는 그 오류 코드를 알려요. 프롬프트 미리보기·도우미·수동 컨텍스트 정리도 상태를 변경하는 입력 콜백을 재실행하지 않고 고정된 자료의 CBS와 정규식 사본을 사용해요.
-- **Shadow DOM 메시지 표면**: 메시지는 하나의 열린 Shadow Root 안에 HTML 구조와 ID 관계를 보존해 표시해요. 메시지 내부 CSS 선택자는 다른 메시지나 앱의 서재·설정 화면에 일반 선택자로 적용되지 않아요. `html`, `body` 선택자는 Shadow Root의 별도 문서 요소로 재해석하지 않으며, `rem`, 뷰포트 단위와 미디어 쿼리는 앱 문서 기준이에요. 별도 iframe이나 메시지 간 통신 브리지는 사용하지 않아요.
-- **콘텐츠 높이와 배치**: 콘텐츠 높이는 문서 흐름으로 정해져요. 카드의 `position: fixed` 버튼·패널은 RisuAI처럼 화면을 기준으로 배치하며 본문에 별도 높이를 예약하지 않아요. `position: absolute` 배경은 메시지 영역을 기준으로 유지해요. 별도 고정 요소 관찰자나 높이 보정은 사용하지 않아요. 봇 자체의 고정 폭·위치 화면을 모바일용으로 자동 재설계하지 않으므로 실제 카드 확인이 필요해요.
-- **화면 크기 감지와 재표시**: Reader와 첫 메시지 미리보기는 실제 브라우저 화면 폭·높이를 표시 요청에 전달해요. 표시용 CBS와 표시 Lua의 `cbs()`에서 `{{screenwidth}}`·`{{screen_width}}`, `{{screenheight}}`·`{{screen_height}}`를 지원하며 CSS·정규식도 같은 값을 사용해요. 활성 표시 화면들이 하나의 크기 변경 리스너를 공유하고, 폭이 바뀐 뒤 변경이 잠시 멈추면 그때의 폭·높이로 다시 표시해요. 화면 키보드나 브라우저 주소창이 나타나고 사라질 때처럼 높이만 바뀌는 경우에는 다시 표시하지 않고, 마지막으로 표시한 높이를 유지해요. 다시 표시하는 동안 기존 본문을 유지하며 새 결과가 확인될 때까지 카드 액션을 막아요. 같은 원문·카드 변수 수정 번호의 재표시에서는 CSS만 바뀌면 메시지 DOM을 유지하고, HTML도 바뀌면 고유한 `id`·`risu-id`·`name`으로 식별되는 입력·선택·펼침 상태와 입력 포커스를 보존해요. 카드가 기본값을 바꾸거나 원문·카드 변수 수정 번호가 바뀌면 새 내용을 우선해요. 화면 크기는 원문·채팅 변수·실행 기록에 저장하지 않고, 브라우저 값이 없는 서버 평가에서는 해당 CBS를 미지원으로 보고해요. 기존 카드도 재임포트 없이 표시 경로에서 반영돼요.
-- **보안 전제**: 이 표면은 사용자가 신뢰하는 개인용 카드 자료를 전제로 해요. DOMPurify로 작성자 script·이벤트 속성·iframe 등은 계속 제거하고, 앱 문서의 CSP(`script-src 'self'`)가 앱 번들이 아닌 인라인·외부 스크립트 실행을 한 번 더 막아요. 스타일·이미지·글꼴 출처는 제한하지 않으며 CSS 네트워크 차단기도 없어요. 외부 자원 요청에는 `Referrer-Policy: no-referrer`로 앱 주소를 보내지 않아요. 외부 자원 참조는 문서와 브라우저 정책을 따르며 Risu 에셋 태그의 로컬 가져오기 규칙은 그대로예요. 임의 JavaScript 실행 지원을 새로 추가하지 않아요. 기존 트리거·Lua와 서버의 수정 번호/실행 검증도 유지해요.
-- **트리거 및 버튼 액션**: 읽기 설정은 앱이 표시용 Markdown에서 식별한 일반 서술문에 적용하고, 작성자 UI와 DOM 관계를 재구성하지 않아요. `risu-trigger`와 `risu-btn`은 앱의 액션 함수에 직접 연결하며, 실행 성공 뒤에는 다음 서버 수정 번호까지 중복 실행을 막아요. `risu-trigger` 요소의 비어 있지 않은 `risu-id`는 해당 수동 실행의 CBS `{{trigger_id}}`에 전달해요. 별도의 표시 요청에서는 `null`이며 Risu의 전역 식별자가 잠시 후속 표시까지 남는 수명을 재현하지 않아요. 실패 시 재시도할 수 있고 오래된 실패가 새 메시지의 실행 상태를 변경하지 않아요.
-- **인라인 폼 (`risu-form`)**: `<form risu-form="이름">`은 화면 안에서 제출을 처리하며 `onFormSubmit(id, 이름, JSON문자열)`을 호출해요. JSON은 `{data: {...}}` 형태이고 같은 이름의 여러 필드는 문자열 배열, 제출 버튼의 이름·값도 폼 자료에 포함해요. 필수 입력 등 브라우저의 기본 폼 검증과 키보드 제출을 유지해요. 선택된 파일은 전송하지 않고 안내하며 외부 주소로 폼을 보내지 않아요. 명시적인 `risu-trigger`·`risu-btn` 클릭은 주변 폼 제출보다 우선해요. 미리보기에서는 제출을 실행하지 않아요. 폼 자료와 트리거 ID는 재시도 요청의 동일성 검증에 포함하고, 이전 요청 형식의 영수증도 계속 읽어요.
-- **액션 재확인과 멱등성**: 선택 응답을 받지 못한 경우에는 앱을 새로고침하기 전까지 같은 장면·프로그램·내용의 재시도에 원래 요청 키·자료·수정 번호를 재사용해요. 액션으로 교체된 장면은 원래 장면의 식별을 이어받고, 본문이 같아도 독립 장면의 선택은 합치지 않아요. 여러 표시 화면이 같은 요청을 확인할 때는 진행 중 전송을 공유하며 각 화면의 읽기가 끝난 뒤 잠금을 풀어요. 이미 성공한 선택의 재확인은 새 수정 번호 없이 잠금을 풀며, 성공 응답 후 화면 읽기만 실패한 경우에는 화면 조회만 다시 해요. 서버가 실패·취소·중단을 확정하면 해당 확인은 실패로 끝나고, 다음 수동 클릭은 새 시도가 돼요. 자동 재실행은 하지 않아요. 이 임시 재확인 정보는 영구 초안이나 백업으로 저장하지 않아요.
-- **출력 스크립트 메시지 추가**: 출력 스크립트가 한 응답에 메시지를 추가하면 각 메시지의 대화 순번으로 표시 콜백과 정규식을 적용해 함께 보여줘요. 이미 표시한 사용자 요청은 반복하지 않아요. 번역과 자동 이미지의 원문 위치는 저장된 본문에 연결하며, 스크립트가 추가한 메시지는 번역 보기에서도 원문으로 유지해요.
-- **표시 에셋 매칭**: 표시 에셋은 정확한 이름·URI·확장자 별칭을 먼저 찾아요. 없으면 Risu 기본 규칙처럼 소문자화, 알려진 미디어 확장자와 구분자 제거 후 Levenshtein 거리 4 이내에서 가장 가까운 이름을 선택하며, 동률이면 원래 에셋 순서를 유지해요. 저장된 로컬 에셋만 후보가 되고 외부 URL은 사용하지 않아요. 자동 이미지 배치도 이 표시 규칙을 적용한 결과가 선택한 이미지와 정확히 같은지 확인해요. 자동 이미지 배치는 카드에 전용 이미지 태그 규칙이 있으면 그 문법을 복원하고, 전용 규칙이 없는 Risu 에셋은 원래 `{{img::...}}` 에셋 삽입 문법을 사용해요. 기존 가져오기에 따옴표 없는 `src={asset}` 템플릿이 저장돼 있어도 실제 `editdisplay` 규칙이 따옴표를 요구하면 호환 가능한 표기를 함께 확인해요.
-- **수동 컨텍스트 작업**: 수동 컨텍스트 작업은 고정 입력의 사본에서 CBS·정규식·RISUP 필드를 평가해요. 본편의 지속 Lua VM, 입력·요청·출력 콜백, 추가 모델 호출을 사용하지 않고 채팅 변수나 본편 응답을 바꾸지 않아요. 생략한 콜백은 실행 영수증에 표시해요. 컨텍스트 압축에 필요한 모델 호출은 기존 작업 예산과 전송 영수증을 사용해요.
-- **트리거 권한**: 카드와 내장 모듈의 트리거 권한은 카드 `extensions.risuai.lowLevelAccess`를 따르며 누락하면 꺼져요. 독립 `.risum`은 모듈의 `lowLevelAccess`를 따르고, 장착한 자료들을 모아 실행해도 각 원본의 권한을 유지해요. 원문 트리거의 개별 필드는 보존하지만 이 상위 권한을 우회하지 않아요.
+- **Isolated workers and state lifecycle**:
+  - Native Lua executes its initial script once per chat and content revision inside an isolated worker and keeps the same local/global values across subsequent callbacks.
+  - Stored variables and conversation state are refreshed to the latest pinned snapshot on every call.
+  - Chat history is hydrated inside the VM only when a script first calls a chat read/write API, and only calls that modify the chat return the updated conversation; callbacks that do not read the chat have execution time independent of conversation length.
+  - Worker restarts, timeouts, runtime failures, or content changes discard that VM; persistent state must be kept via `getState` or chat variables.
+  - Each authored script runs in an environment that cannot access internal RPCs or other scripts' permissions. Functions, `listenEdit` callbacks, and dynamic `load` retain their originating script's permissions and never merge permissions across calls.
+  - `LLM`, `axLLM`, and `simpleLLM` forward only permitted originating calls to the Uimori host, and display callbacks disallow model calls. Unsupported APIs fail with explicit errors.
+- **Tracking upstream API changes**:
+  - New Risu Lua APIs or events are not supported automatically. Card code composed of already-supported APIs uses the existing execution path, whereas new UI behaviors, storage, or model capabilities must be wired and verified in Uimori.
+  - The developer [Lua change comparison tool](DEVELOPMENT.md#risu-lua-upstream-changes) reports upstream API, wrapper, and callback changes along with whether each name is exposed by the current bridge. Name exposure does not guarantee identical behavior to Risu, and the tool does not update the runtime.
+- **Message roles and generation control**:
+  - For `LLM` and `axLLM` message roles, Risu's `sys` is mapped to `system` and `bot`/`char` to `assistant`, preserving content and ordering.
+  - Trigger `v2StopPromptSending` is recognized as the generation-stop effect; legacy `v2StopPrompt` and `stop` in existing content are read as the same stop behavior.
+- **`editDisplay` callback chain**:
+  - `editDisplay` callbacks run in sequence and forward only string return values to the next callback.
+  - `nil`, numbers, booleans, and other non-string values retain the previous string. Return-value validation for other edit callbacks remains unchanged.
+- **Lookup API details**:
+  - `hash(id, text):await()` returns the lowercase hex SHA-256 of a UTF-8 string.
+  - `getTokens(id, text):await()` uses the tokenizer of the writing model pinned at run start, falling back to the existing default tokenizer if no model is present. As in Risu, it returns `nil` instead of a token count inside display callbacks or for an invalid ID.
+  - `getAuthorsNote(id)` returns the raw chat author's note without mixing in preset defaults; CBS's effective author's note may still use the preset default.
+  - `getPersonaDescription(id)` evaluates CBS on the persona description pinned for the run and returns the result.
+  - `getLoreBooks(id, search)` reads lore entries whose `comment` matches `search` exactly, in bot-then-attached-content order, and applies CBS to each body. Card lore is read and returned in Risu DB format without saving source edits or changing lore selection state. Uimori notes are not treated as Risu chat-local lore. Active-lore assembly (`loadLoreBooks`) and lore mutations are unsupported.
+- **`axLLM` options and modes**:
+  - `options.mode` selects from the settings pinned for the run: `otherAx` (default: writing model if no script model is selected), `memory` (context compaction model), or `translate` (translation model).
+  - If the selected script or context-compaction model or connection has been deleted, that call fails explicitly while keeping reservations for other writing or local card actions intact.
+  - `emotion` and `submodel` return a failure because they have no corresponding roles, and an unconfigured role is never silently substituted with another model.
+  - Invalid modes return a failure as in Risu, and the chosen mode is also reflected in model validation for call logs.
+- **Streaming calls**:
+  - `LLM` and `axLLM` collect the stream to completion on either the default transport path or `options.streaming=true` and return `{success, result}`.
+  - On failure, `result` returns `Error:` with the error code and status, while any partial response and usage received before failure are recorded in the call log.
+  - Because the current transport is streaming-based, an explicit `streaming=false` returns an unsupported failure. Generation parameters, connections, and authentication remain owned by Uimori model settings.
+- **Multimodal inlays (`useMultimodal=true`)**:
+  - In user messages, `{{inlay::이름}}`, `{{inlayed::이름}}`, and `{{inlayeddata::이름}}` resolve against the name/URI of card images attached to the current run or `request-image:<sha256>` references included in the run.
+  - Only local image bytes are sent; Risu's separate UUID inlay store and external URLs are not queried.
+  - As in original Risu, `inlay` and `inlayed` markers in assistant messages are stripped.
+  - Image transmission on system or assistant roles and unresolvable references return a failure. Model image-input capability checks and existing input image limits also apply.
+- **Lookup and safety boundaries**:
+  - These lookup APIs add no network access, model calls, or mutations to source content, and display-path CBS and variable mutations continue applying only to display copies.
+  - Character setters, image generation, external requests, embeddings, lore mutations, and arbitrary JavaScript execution are not included in this compatibility path.
+- **CBS isolation and persistent VMs**:
+  - CBS invoked by triggers and Lua reuses an isolated worker only within a single native run. Each CBS call executes sequentially with a fresh evaluator and the latest variables and conversation input, without caching results.
+  - Inputs failing due to evaluation errors or timeouts are not retried, and the worker is discarded. If Lua catches the error and continues with another CBS call, it runs in a fresh worker without committing variable mutations from the failed evaluation.
+  - After a run ends or is cancelled, the worker is not restarted, and per-call time and memory limits remain enforced.
+- **Persistent VM lifecycle**:
+  - Persistent VMs are used for chat runs and button actions. VM state from a cancelled run never carries into the next run, and delayed cleanup of a prior run never terminates the VM of a newly started run in the same chat.
+  - Reader `editDisplay` and first-message previews run in a one-shot VM copied from saved state, so opening or refreshing a view never persists card state or invokes models; cards whose display callbacks depend on prior-run Lua local/global values must be checked for this difference.
+  - HTML rendering in reader display transformation must finish within 10 seconds per call, including starting the request's first render worker. On failure, the stored body is displayed as-is, and Risu stage failures report their error code.
+  - Prompt previews, helpers, and manual context compaction likewise do not re-run state-mutating input callbacks and instead use pinned CBS and regex copies.
+- **Shadow DOM message surface**:
+  - Each message renders inside a single open Shadow Root, preserving HTML structure and ID relationships.
+  - CSS selectors inside a message do not apply as ordinary selectors to other messages or the app's library/settings views.
+  - `html` and `body` selectors are not reinterpreted as separate document elements inside the Shadow Root; `rem`, viewport units, and media queries resolve against the app document. No separate iframe or cross-message communication bridge is used.
+- **Content height and positioning**:
+  - Content height is determined by document flow. Card `position: fixed` buttons and panels are positioned relative to the viewport as in RisuAI without reserving extra body height, while `position: absolute` backgrounds stay relative to the message area.
+  - No dedicated fixed-element observer or height compensation is used. Fixed-width or fixed-position bot layouts are not automatically redesigned for mobile, so verification on actual cards is required.
+- **Viewport size detection and re-rendering**:
+  - Reader and first-message previews pass the actual browser viewport width and height to display requests. Display CBS and `cbs()` inside display Lua support `{{screenwidth}}`, `{{screen_width}}`, `{{screenheight}}`, and `{{screen_height}}`, and CSS and regexes receive the same values.
+  - Active display views share a single resize listener and re-render with the current width and height once width changes settle briefly. Height-only changes (such as an on-screen keyboard or browser address bar toggling) do not trigger re-rendering and retain the last rendered height.
+  - During re-rendering, the existing body stays visible and card actions are blocked until the new result is confirmed.
+  - On re-renders with the same source and card-variable revision: if only CSS changes, the message DOM is kept; if HTML also changes, input/selection/disclosure states and input focus are preserved for elements uniquely identified by `id`, `risu-id`, or `name`. If the card changes its defaults or the source/card-variable revision changes, the new output takes precedence.
+  - Viewport dimensions are not stored in source documents, chat variables, or run records; server-side evaluations lacking browser dimensions report those CBS macros as unsupported. Existing cards pick this up on the display path without re-importing.
+- **Security assumptions**:
+  - This surface assumes personal card content trusted by the user. DOMPurify continues stripping authored script elements, event handler attributes, iframes, and similar constructs, and the app document's CSP (`script-src 'self'`) further blocks inline and external scripts outside the app bundle.
+  - Style, image, and font origins are not restricted, and there is no CSS network blocker. External resource requests send `Referrer-Policy: no-referrer` so the app URL is not exposed.
+  - External resource references follow document and browser policies, while local import/resolution rules for Risu asset tags remain unchanged. Arbitrary JavaScript execution is not newly added, and existing trigger/Lua checks and server revision/run validations remain in place.
+- **Trigger and button actions**:
+  - Reading preferences apply to ordinary prose identified from display Markdown without restructuring authored UI or DOM relationships.
+  - `risu-trigger` and `risu-btn` bind directly to the app's action handler and prevent duplicate execution after success until the next server revision.
+  - A non-empty `risu-id` on a `risu-trigger` element is passed to CBS `{{trigger_id}}` for that manual run. On separate display requests it is `null`; Risu's lifecycle where the global identifier briefly lingers into subsequent displays is not replicated.
+  - Failures can be retried, and stale failures never mutate the execution state of newer messages.
+- **Inline forms (`risu-form`)**:
+  - `<form risu-form="이름">` handles submission in-app and calls `onFormSubmit(id, 이름, JSON문자열)`.
+  - The JSON payload has the shape `{data: {...}}`, representing multiple fields with the same name as a string array and including the submit button's name and value in the form data.
+  - Native browser form validation (such as required inputs) and keyboard submission are preserved. Selected files are not transmitted (the UI notifies the user instead), and forms are never sent to external URLs.
+  - Explicit `risu-trigger` and `risu-btn` clicks take precedence over surrounding form submission, and previews do not execute submissions. Form data and trigger IDs are included in retry request equivalence checks, while receipts in the prior request format remain readable.
+- **Action reconfirmation and idempotency**:
+  - When a choice response is not received, retries for the same scene, program, and payload reuse the original request key, data, and revision until the app is refreshed.
+  - A scene replaced by an action inherits the original scene's identity, while choices on independent scenes are never merged even when their bodies match.
+  - When multiple display views confirm the same request, they share the in-flight transport and release the lock only after all views finish reading.
+  - Reconfirming an already-succeeded choice releases the lock without requiring a new revision; if only the post-success view read failed, only the view fetch is retried.
+  - Once the server confirms failure, cancellation, or abort, that confirmation ends in failure and the next manual click starts a new attempt. Automatic retries are never performed, and this temporary reconfirmation state is never saved to durable drafts or backups.
+- **Messages appended by output scripts**:
+  - When an output script appends messages to a single response, display callbacks and regexes run on each message using its conversation index and render them together without repeating an already-displayed user request.
+  - Source anchors for translation and auto-image placement remain linked to the stored body, and script-appended messages stay in original text even in translation view.
+- **Display asset matching**:
+  - Display asset matching checks exact name, URI, and extension aliases first. If none matches, it applies Risu's default rule: lowercase, strip known media extensions and separators, and pick the closest match within Levenshtein distance 4, preserving original asset order on ties.
+  - Only stored local assets are eligible candidates; external URLs are not used. Automatic image placement also verifies that applying these display rules resolves to the exact chosen image.
+  - Automatic image placement reconstructs a card's dedicated image-tag rule when present, and falls back to native `{{img::...}}` asset-insertion syntax for Risu assets without a dedicated rule. Even when an older import stored an unquoted `src={asset}` template, compatible quoted forms are also checked if the actual `editdisplay` rule requires quotes.
+- **Manual context operations**:
+  - Manual context operations evaluate CBS, regexes, and RISUP fields on a copy of the pinned input without using the main run's persistent Lua VM, input/request/output callbacks, or extra model calls, and without mutating chat variables or main responses.
+  - Omitted callbacks are recorded in the run receipt, and model calls required for context compaction use existing job budgets and transport receipts.
+- **Trigger permissions**:
+  - Trigger permissions for a card and its embedded module follow the card's `extensions.risuai.lowLevelAccess`, defaulting to off when omitted.
+  - Standalone `.risum` modules follow the module's own `lowLevelAccess`, and attached items retain their respective source's permission level when executed together. Individual fields on source triggers are preserved but cannot bypass this top-level permission gate.
 
-### 네이티브 로어 위치
+### Native lore positioning
 
-새 네이티브 카드의 `@@depth`, `@@end`, `@@reverse_depth`, `@@role`은 활성화된 로어의 역할·위치로 보존해요.
+For new native cards, `@@depth`, `@@end`, `@@reverse_depth`, and `@@role` are preserved as the role and position of active lore entries:
 
-- `@@depth 0`과 `@@end`는 최종 지시에 넣어요.
-- 양수 `@@depth`는 실제 전송 대화의 앞쪽 인덱스에 넣어요.
-- `@@reverse_depth`는 전송 대화의 뒤쪽을 기준으로 넣어요.
-- 일반적인 다른 앱의 depth 이름만 보고 방향을 바꾸지 않고 Risu의 삽입 계산을 따라요. 원래 삽입 순서를 유지하고 조건부 항목은 이번 실행의 고정된 로어 선택 결과에 있을 때만 배치해요.
+- `@@depth 0` and `@@end` are placed in final instructions.
+- Positive `@@depth` inserts at a forward index of the actual transmitted conversation.
+- `@@reverse_depth` inserts relative to the end of the transmitted conversation.
+- Insertion follows Risu's calculation rather than flipping direction based on depth conventions from other apps. Original insertion order is preserved, and conditional entries are placed only when present in the pinned lore selection for the run.
 
-`@@depth 0`·`@@end`는 프리셋에서 `postEverything` 슬롯을 중간으로 옮겨 놓았어도 최종 지시 위치를 사용해요. 그 특수한 슬롯 이동이나 슬롯의 래퍼를 로어 메시지 전체에 적용하는 동작까지 동일하게 재현하지는 않아요.
+`@@depth 0` and `@@end` still use the final-instruction position even if the preset relocated the `postEverything` slot to the middle; reproducing that special slot relocation or applying the slot's wrapper across all lore messages is not replicated identically.
 
-위치를 지정한 항목은 일반 로어·참고 자료 슬롯과 자동 배경 참고 메시지에서 빠져 중복 전달되지 않아요. 고정 로어 토큰 예산과 검색·읽기 도구의 원문·참조 범위는 그대로 유지해요. 앱의 기억이나 사용자 메모를 가짜 대화로 바꾸지 않아요. `@@position`·`@@inject_*`와 음수/한도 밖 depth 등 지원하지 않는 지시는 계속 가져오기 안내로 남겨요. 이 계약은 서재의 원래 카드 문서를 바꾸지 않으며 `nativeRisuPosition`은 저장·실행용 투영 정보예요.
+Positioned entries are excluded from generic lore/reference slots and automatic background reference messages to avoid duplicate delivery. Pinned lore token budgets and the source/reference scope of search and read tools remain unchanged, and app memories or user notes are never turned into synthetic chat turns. Unsupported directives such as `@@position`, `@@inject_*`, and negative or out-of-range depths continue to be surfaced as import notices. This contract does not mutate the original card document in the library; `nativeRisuPosition` is a storage and runtime projection field.
 
-### 이미지 선택 지시 옮기기
+### Moving image-selection instructions
 
-가져오기 검토와 네이티브 편집기의 **이미지 선택과 삽입을 Uimori에 맡기기**에서 원문 필드·로어 항목과 이동 범위를 확인해요. `<img...>`를 소비하는 표시 정규식이 있고 이미지 태그 규칙임이 명시된 로어 또는 제목 구간만 자동 후보로 찾아요. CBS 블록 경계가 맞지 않는 구간은 기본 선택하지 않으므로 미리보기를 보고 직접 선택해야 해요. 원문이 바뀌면 이전의 선택을 다른 내용에 자동으로 이어 붙이지 않아요.
+In import review and the native editor's **이미지 선택과 삽입을 Uimori에 맡기기** (Delegate image selection and insertion to Uimori) section, inspect source fields, lore entries, and handoff ranges. Only lore entries or titled sections that explicitly declare image-tag rules—and only when a display regex consumes `<img...>`—are proposed as automatic candidates. Ranges whose CBS block boundaries do not match are not selected by default and must be selected manually after checking the preview. When the source text changes, prior selections are never automatically reattached to different content.
 
-채팅 설정 **이미지** 탭의 **이미지 배치 담당**은 **본문 모델**과 **판단 모델**(기본값은 JEV) 중 하나만 선택해요:
-- **본문 모델**: 원래 이미지 지침과 사용할 이미지 목록을 작문 입력에 제공하고, 모델이 본문에 이미지 태그를 넣도록 요청해요. 이미지 이름을 이루는 단어의 95% 이상이 카드의 설명·로어나 이번 요청에 들어간 카드 지침에 나오면, 카드가 이름 규칙을 스스로 알려 주는 것으로 보고 그 이름들은 목록에 넣지 않아요. 그렇지 않은 이름이 100개를 넘으면 겹치는 앞부분을 한 번만 적는 이름 트리로 보내요. 설명이 붙은 이미지와 100개 이하의 목록은 하나씩 그대로 보내요.
-- **판단 모델**: 선택한 지침 범위를 작문·번역 입력에서 제외하고, 본문과 번역이 완성된 뒤 각각 판단 모델이 이미지를 골라요. 번역에 별도 이미지 담당을 두지 않아요. 자동 번역이 켜진 장면은 번역본에만 자동으로 배치하고, 원문 배치는 원문 보기의 장면 메뉴에서 **이미지 자동 배치**를 누를 때 실행해요. 자동 번역을 예약하지 못한 장면은 원문에 바로 배치해요.
+Under chat settings' **이미지** (Images) tab, **이미지 배치 담당** (Image placement owner) chooses exclusively between **본문 모델** (Body model) and **판단 모델** (Judgment model; default: JEV):
 
-판단 모델을 선택한 화면에서는 현재 이미지 목록과 연결된 네이티브 별칭·태그와 정확히 일치하는 본문 이미지 표기를 표시용 사본에서 제외한 뒤 판단 모델의 결과만 배치해요. 임의의 외부 이미지나 일반 HTML은 지우지 않아요. 본문 모델을 선택하면 본문 태그를 표시하고 기존 판단 모델 배치는 표시하지 않아요. 설정을 바꿔도 저장된 응답과 이전 배치 기록, 카드·모듈 원문은 그대로 보존해요. `imageHandoff`에는 태그 문법·복장·감정·위치 조건이 포함된 범위 원문, 원래 필드, 시작·끝 위치, 선택 여부를 기록해요. 새 삽화를 만드는 기능은 이 선택과 별개예요.
+- **본문 모델** (Body model): Provides the original image instructions and usable image list in the writing input and asks the model to insert image tags into the body. If 95% or more of the words making up image names appear in the card description, lore, or card instructions included in this request, the card is treated as explaining its own naming convention and those names are omitted from the list. If the remaining names exceed 100, they are sent as a name tree writing shared prefixes once; images with descriptions and lists of 100 or fewer items are sent individually verbatim.
+- **판단 모델** (Judgment model): Excludes the selected instruction ranges from writing and translation inputs, and runs the judgment model separately after the body and translation finish. Translation does not have a separate image owner setting. For scenes with automatic translation enabled, images are auto-placed only on the translation; placement on the original text runs when **이미지 자동 배치** (Auto-place images) is clicked in the original-text view's scene menu. Scenes where automatic translation could not be scheduled receive placement directly on the original text.
 
-이미지 지시를 감싼 바깥 CBS 조건도 원래 필드에서 평가한 뒤 해당 범위만 추출해요. 예를 들어 서로 다른 연령·복장 분기 안의 이미지 지침을 조건 없이 함께 넘기지 않아요. 평가는 복사한 변수에만 적용하고 주변의 작문 지침은 이미지 모델로 옮기지 않아요. 비활성 로어와 폴더는 이미지 지시로 옮기지 않아요.
+When **판단 모델** is selected, display copies strip body image markup matching native aliases or tags bound to the current image list and render only the judgment model's placements, without removing arbitrary external images or ordinary HTML. When **본문 모델** is selected, body tags are displayed and prior judgment-model placements are hidden. Switching this setting preserves stored responses, previous placement records, and card/module source documents. `imageHandoff` stores the range's source text—including tag syntax, outfit, emotion, and position conditions—along with its originating field, start/end offsets, and selection state. Generating new illustrations is independent of this setting.
 
-선택 모델이 반환한 에셋과 문단 참조는 기존 hash·수정 번호 검증을 거쳐 표시 사본에만 적용해요. 원래 정규식으로 정확히 같은 로컬 에셋이 나오는 태그만 역으로 찾아 삽입하므로 카드의 이미지 상자를 사용할 수 있어요. 현재 `<img="이름">`와 `<img src=이름>` 계열을 검사하고 복장 변수에 따라 다른 이미지가 나오거나 대응 에셋이 없으면 삽입하지 않아요. 외부 모듈의 이미지를 다운로드하거나 없는 이미지를 다른 이미지로 대체하지 않아요. 이는 임의의 태그·정규식·Lua 이미지 생성 규칙 전체를 재현하는 기능이 아니에요.
+Enclosing CBS conditions around image instructions are also evaluated in their originating field before extracting the target range—for example, image instructions inside different age or outfit branches are not forwarded unconditionally together. Evaluation applies only to copied variables, surrounding writing instructions are not moved to the image model, and disabled lore entries and folders are never moved as image instructions.
 
-새 삽화 생성은 기존 Uimori 삽화 설정과 독립 큐를 사용해요. 일반 네이티브 작문 응답도 자동 생성 예약과 Reader 삽화 표시 대상이며, 카드 첫 화면이나 버튼이 직접 작성한 문장은 자동 예약하지 않아요. 별도 Lightboard 모듈을 내장하지 않아요. 테스트에서는 로컬 표본의 태그·정규식·에셋 연결과 합성 생성 완료를 검증해요.
+Asset and paragraph references returned by the selection model pass existing hash and revision checks and apply only to display copies. Only tags whose original regex resolves to the exact same local asset are reverse-matched and inserted, allowing use of the card's image frame. Currently `<img="이름">` and `<img src=이름>` families are inspected; if an outfit variable resolves to a different image or no matching asset exists, nothing is inserted. Images from external modules are not downloaded, and missing images are never substituted with another image. This is not a general reimplementation of arbitrary tag, regex, or Lua image-generation rules.
 
-### 대용량 자료
+New illustration generation uses existing Uimori illustration settings and an independent queue. Ordinary native writing responses are eligible for automatic generation scheduling and reader illustration display, whereas card first screens and button-authored text are not auto-scheduled. No separate Lightboard module is built in. Tests verify tag, regex, and asset bindings on local fixtures along with synthetic generation completion.
 
-- **PNG 표지 및 첨부 연결**: PNG의 `assets`가 생략되면 CCv3 기본 `icon/main`을 표지 이미지에 연결하고, 명시적인 빈 배열은 그대로 유지해요. 대표 이미지는 `icon/main`을 먼저 사용하며, 뒤에 같은 이름의 배경·일반 이미지가 있어도 바꾸지 않아요. 아이콘이 없는 카드는 기존 이미지 선택 규칙을 사용해요.
-- **첨부 경로 정규화**: PNG 첨부의 `__asset:{path}` 참조는 숫자와 이름이 있는 경로를 모두 읽어요. 원래 경로는 첨부를 찾는 키로만 사용하고, 임시 파일과 내보내기 경로는 앱이 정한 순번으로 정규화해요. 같은 첨부 키가 중복되면 가져오기를 거절해요.
-- **서버 업로드 및 준비**: 24 MiB가 넘는 카드·모듈 파일은 요청 본문 대신 **먼저 서버에 올린 뒤** 검토해요. 입력 파일은 최대 512 MiB까지 받아요. 서버는 파일 위치를 읽어 카드 정보와 첨부를 분석하고, 이미지 검증·변환을 마친 준비 결과를 임시 파일로 보관해요. 검토 화면은 실제 등록 가능한 결과를 보여주며 저장할 때 이미지를 다시 분석하거나 변환하지 않아요.
-- **자료 종류 변경과 취소**: 자료 종류를 바꿀 때는 같은 준비 이미지와 폴더를 재사용하고 메타데이터만 교체해요. 실패하거나 취소하면 이전 검토를 유지하고, 변경된 종류와 맞지 않는 digest로 저장하면 다시 검토하도록 안내해요. 준비 중에는 **자료 확인 취소**로 중단할 수 있어요.
-- **임시 파일 수명**: 임시 결과는 영구 자료나 백업에 포함하지 않으며 등록 후 또는 만료 정리 때 지워요. 저장 성공 후 임시 파일 정리에 실패해도 성공 응답을 유지하며 만료 정리에서 다시 삭제해요. 만료된 검토는 파일을 다시 선택해야 해요.
-- **저장 범위**: 파일 크기와 무관하게 원래 카드·모듈 JSON과 지원 이미지를 앱 자료로 저장하고, 입력 컨테이너 전체의 별도 사본은 보관하지 않아요. 최초 파일이 필요하면 직접 보관해요. 현재 자료를 새 CHARX로 만드는 기능은 [Risu 내보내기](../RISU-EXPORT.md)를 참고해요.
-- **ZIP 및 RISUM 처리 한도**: ZIP은 내부 항목 32,768개, 카드·모듈의 논리 에셋은 12,288개까지 받아요. 같은 이미지 바이트도 이름·역할이 다르면 별도 에셋으로 세며 바이트 저장은 중복 제거해요. ZIP의 개별 항목은 64 MiB, 압축을 푼 전체 크기는 64 MiB와 입력 파일의 4배 중 큰 값까지 받되 최대 1 GiB예요. 변환된 이미지 전체는 448 MiB까지 받아요. 자료 백업의 카드 정보와 ZIP 목차를 위한 공간을 남겨요. 독립 RISUM도 입력 512 MiB와 각 이미지·JSON 처리 예산을 사용해요. 이미지는 별도의 픽셀·프레임 작업량 한도로 처리하고, 오디오·영상 등 현재 이미지 저장소가 지원하지 않는 에셋은 안내로 남겨요.
-- **청크 분리와 URI 정규화**: PNG는 `ccv3` 카드 청크와 Risu 첨부 청크를 분리하며 표지 이미지를 `ccdefault:` 참조에 연결해요. JSON의 내장 data URI 이미지도 파일을 읽는 중에 분리해요. 새 PNG·JSON의 첨부 운반 표현은 작은 `embeded://` URI로 정규화하되 이미지 이름·역할·확장자·순서와 입력 파일의 SHA-256은 보존해요. 로어·HTML·Lua 본문을 일괄 치환하지 않아요. 원문 JSON의 8 MiB 예산에는 분리된 이미지 바이트를 넣지 않아요.
+### Large files and assets
 
-### 구조화된 Risu 모듈 JSON
+- **PNG cover and attachment linking**:
+  - When PNG `assets` is omitted, the CCv3 default `icon/main` is linked to the cover image; an explicit empty array is preserved as-is.
+  - The representative image prefers `icon/main` first and is not replaced by a later background or general image of the same name. Cards without an icon fall back to existing image selection rules.
+- **Attachment path normalization**:
+  - PNG attachment `__asset:{path}` references read both numeric and named paths.
+  - Original paths are used solely as lookup keys to find attachments, while temporary files and export paths are normalized to app-assigned sequence numbers. Duplicate attachment keys reject the import.
+- **Server upload and staging**:
+  - Card and module files larger than 24 MiB are **uploaded to the server first** before review instead of sent in the request body; input files are accepted up to 512 MiB.
+  - The server reads the file on disk to analyze card metadata and attachments, validates and converts images, and stages the prepared result in temporary files.
+  - The review screen shows the actual registrable result, and saving does not re-analyze or re-convert images.
+- **Changing content kind and cancellation**:
+  - Changing the content kind reuses the same staged images and folder, replacing only metadata.
+  - Failure or cancellation preserves the previous review, and saving with a digest that does not match the changed kind prompts a re-review. Preparation in progress can be stopped with **자료 확인 취소** (Cancel content verification).
+- **Temporary file lifecycle**:
+  - Staged temporary results are excluded from durable storage and backups and deleted after registration or during expiration cleanup.
+  - If temporary file cleanup fails after a successful save, the success response is still preserved and expiration cleanup removes them later. Expired reviews require re-selecting the file.
+- **Storage scope**:
+  - Regardless of file size, the original card/module JSON and supported images are saved as app content without storing a separate copy of the entire input container; keep the original file yourself if needed.
+  - For generating a new CHARX from current content, see [Risu export](../RISU-EXPORT.md).
+- **ZIP and RISUM processing limits**:
+  - ZIP archives accept up to 32,768 internal entries, and cards/modules accept up to 12,288 logical assets; identical image bytes with different names or roles count as distinct assets while byte storage is deduplicated.
+  - Individual ZIP entries are limited to 64 MiB, and total uncompressed size is limited to the greater of 64 MiB or 4× the input file size, capped at 1 GiB.
+  - Total converted images are accepted up to 448 MiB, leaving room for card metadata and the ZIP central directory in content backups.
+  - Standalone RISUM files share the 512 MiB input limit and per-image/JSON processing budgets. Images are processed under separate pixel and frame workload limits, and assets unsupported by the current image store (such as audio or video) are reported in notices.
+- **Chunk splitting and URI normalization**:
+  - PNG parsing separates `ccv3` card chunks from Risu attachment chunks and links the cover image to the `ccdefault:` reference; embedded data-URI images in JSON are also separated during file reading.
+  - Attachment transport representations in new PNG and JSON imports are normalized to compact `embeded://` URIs while preserving image names, roles, extensions, ordering, and the input file's SHA-256.
+  - Lore, HTML, and Lua bodies are not bulk-rewritten, and separated image bytes are excluded from the 8 MiB source JSON budget.
 
-- **RisuToki 프로젝트 폴더 추출**: RisuToki의 **파일 → 파일을 프로젝트 폴더로 추출…**에서 `.risum`을 새 폴더로 내보내면 `{ "type": "risuModule", "module": {...} }` 형식의 `module.json`이 생성돼요. 서재 모듈 탭의 **자료 가져오기**에서 이 파일을 선택하고 **모듈 가져오기**를 눌러요. 모듈로 등록하며 봇·채팅·진행 기억을 자동 생성하지 않아요. 등록 후 기존 채팅의 봇·페르소나·모듈 설정에서 장착할 수 있어요.
-- **독립 RISUM 가져오기**: 독립 `.risum`도 같은 화면에서 직접 읽을 수 있어요. 모듈 객체 전체를 `nativeRisu.module`로 보존하고 활성 로어·이름·설명은 서재 표시용으로 읽어요. 모듈 설명은 작문 본문에 복사하지 않아요. 바이너리 에셋과 JSON의 PNG/JPEG/WebP/AVIF/GIF data URL 이미지는 같은 이미지 저장 경로를 사용해요. 정규식·Lua·트리거·CSS·토글·namespace/MCP 등은 원문으로 남으며 실행 지원 범위와는 구분해요.
-- **에셋 포함 ZIP 패키징**: 추출 폴더의 이미지도 옮기려면 **`module.json`과 `.risutoki` 폴더를 함께 ZIP으로 압축**하고 그 ZIP을 선택해요. 하나의 상위 폴더로 감싸져 있어도 읽어요. `.risutoki/workspace.json`의 `risumAssetFiles` 순서로 원래 모듈 에셋과 연결하며, 목록이 없는 경우 `.risutoki/risum-assets/*.bin`의 파일명 순서를 사용해요. 실제 이미지 바이트로 형식을 확인하며 누락된 파일은 미지원으로 표시해요. ZIP 안에서만 읽고 외부 경로나 로컬 파일 시스템으로 추출하지 않아요. 여러 모듈 정의나 카드·모듈 정의가 함께 있는 모호한 프로젝트 ZIP은 거절해요.
-- **원문 충실도**: RisuToki에서 추출한 JSON/ZIP과 원래 RISUM을 모두 가져올 수 있어요. 추출 도구가 적용한 정규화·폐기 필드 제거 때문에 두 파일이 동일하다고 간주하지 않아요. 앱은 실제 읽은 현재 원문과 지원 이미지를 저장해요.
+### Structured Risu module JSON
 
-### Risu 프리셋 런타임
+- **RisuToki project folder extraction**:
+  - Exporting a `.risum` to a new folder via RisuToki's **파일 → 파일을 프로젝트 폴더로 추출…** (File → Extract file to project folder…) generates a `module.json` with the shape `{ "type": "risuModule", "module": {...} }`.
+  - Select this file in the library Modules tab under **자료 가져오기** (Import content) and click **모듈 가져오기** (Import module). It registers as a module without auto-creating bots, chats, or progress memory, and can then be attached via an existing chat's bot/persona/module settings.
+- **Standalone RISUM import**:
+  - Standalone `.risum` files can also be read directly from the same screen. The entire module object is preserved in `nativeRisu.module`, while active lore, name, and description are projected for library display; module descriptions are not copied into writing bodies.
+  - Binary assets and JSON PNG/JPEG/WebP/AVIF/GIF data-URL images use the same image storage path. Regexes, Lua, triggers, CSS, toggles, namespaces/MCP, and similar fields remain in source form, separate from runtime execution support.
+- **ZIP packaging with assets**:
+  - To bring over extracted folder images as well, **zip `module.json` together with the `.risutoki` folder** and select that ZIP; a single top-level wrapper folder is also supported.
+  - Assets are bound to original module assets in the `risumAssetFiles` order from `.risutoki/workspace.json`, falling back to filename order of `.risutoki/risum-assets/*.bin` when that list is absent.
+  - Formats are verified from actual image bytes, and missing files are marked unsupported. Archives are read strictly inside the ZIP without extracting to external paths or the local filesystem, and ambiguous project ZIPs containing multiple module definitions or mixed card and module definitions are rejected.
+- **Source fidelity**:
+  - Both RisuToki-extracted JSON/ZIP files and original RISUM files can be imported. Because the extraction tool applies normalization and strips deprecated fields, the two files are not treated as identical; the app saves the actual current source read and its supported images.
 
-- **프리셋 가져오기와 저장**: 프롬프트 관리의 **프롬프트 가져오기**에서 `.risup`·구형 `.risupreset` 바이너리, 프리셋 JSON 또는 RisuToki 프로젝트 ZIP을 선택해요. **창작 프롬프트로 저장**하면 `RisuPrompt.nativeRisuPreset`에 프롬프트 관련 원본을 보존해요. **가져온 프롬프트 편집**에서는 Risu의 메시지 구성·CBS 원문·토글·기본 변수·정규식을 직접 편집해요. 실행용 블록은 원본에서 만들며 별도의 수동 이식본으로 관리하지 않아요. `.risup`의 RPack·압축·MessagePack 해독과 가져오기 검토는 코드를 실행하지 않으며 현재 프리셋 원문을 독립 자료 백업에 담아요.
-- **용량 및 토큰 예산**: 프리셋의 블록 수나 원문 750,000자에 별도 상한을 두지 않아요. 파일 처리와 프롬프트 실행의 메모리 예산, 실제 모델에 보내는 토큰 예산은 각 경계에서 확인해요.
-- **메모리 슬롯과 참고 정보**: Risu의 `memory` 슬롯은 사용자 메모로 치환하지 않아요. Uimori는 과거 요약을 전송 대화 컨텍스트에 포함하고 사용자 메모·정정을 별도 참고 정보로 전달해요. 실제 전달은 선택한 프롬프트와 컨텍스트 구성에 따르며, 가져오기 안내에 Risu 슬롯의 위치·래퍼는 직접 적용하지 않는 차이를 설명해요. 슬롯을 추가해 같은 요약을 중복 삽입하지 않아요. 모델·파라미터·도구는 Uimori가 별도로 관리하므로 가져오기 대상이나 미지원 손실로 계산하지 않아요.
-- **CBS 평가와 정규식 파이프라인**: 실행 시 CBS는 시간·출력 제한이 있는 worker에서 원본 그대로 평가하고, 필드 간 변수 변경도 같은 평가 컨텍스트를 사용해요. 평가 결과는 해당 실행 동안 고정해요. 완료 후에는 이어쓰기 결과만 남기고, 재접속이나 백업 복원으로 실행을 반복하지 않아요. 프리셋 정규식은 네이티브 `editinput`·`editoutput`·`editprocess`·`editdisplay` 단계에 연결하며 캡처 치환 뒤 CBS를 평가해요. CBS의 `{{role}}`은 처리 중인 메시지 역할을 사용해요. 아직 대화에 추가되기 전의 입력은 `user`, 출력과 첫 메시지는 `char`이며, 이전 장면과 표시 단계는 해당 메시지의 역할로 평가해요. 본문과 정규식 패턴·치환 결과에도 같은 역할을 적용해요. 예전 32개 규칙 변환 제한을 적용하지 않지만 worker 실행·메모리·출력 한도는 유지해요. `@@inject`·`@@repeat_back`·`@@emo` 같은 host 특수 명령과 일부 Risu 확장 동작은 아직 실행하지 않고 문제로 보고해요. 구형 Uimori AST와 공통 텍스트 변환 형식은 지원하지 않아요.
-- **모델 및 권한 소유권**: 모델·프로바이더·인증·생성 파라미터·도구 권한은 Uimori가 소유해요. RISUP를 가져오거나 적용해도 이를 덮어쓰지 않으며 네이티브 프롬프트 편집기에도 노출하지 않아요. 가져오지 않는 연결 정보가 필요하면 원본 파일을 별도로 보관해야 해요. 실제 봇과 개인 프리셋 조합의 창작 품질은 별도 확인이 필요해요.
+### Risu preset runtime
 
-### 프롬프트 편집
+- **Preset import and storage**:
+  - In prompt management's **프롬프트 가져오기** (Import prompt), select a `.risup` or legacy `.risupreset` binary, preset JSON, or RisuToki project ZIP.
+  - **창작 프롬프트로 저장** (Save as writing prompt) preserves prompt-related source fields in `RisuPrompt.nativeRisuPreset`, and **가져온 프롬프트 편집** (Edit imported prompt) directly edits Risu message layout, CBS source, toggles, default variables, and regexes.
+  - Runtime blocks are generated from the source rather than maintained as a separate manually ported copy. RPack, decompression, MessagePack decoding, and import review for `.risup` execute no code, and the current preset source is stored in standalone content backups.
+- **Size and token budgets**:
+  - No separate cap is placed on preset block count or the 750,000-character source size. Memory budgets for file processing and prompt execution, as well as token budgets sent to the actual model, are enforced at each boundary.
+- **Memory slots and reference context**:
+  - Risu's `memory` slot is not substituted with user notes. Uimori includes past summaries in the transmitted conversation context and delivers user notes and corrections as separate reference context.
+  - Actual delivery follows the selected prompt and context assembly, and import notices explain that Risu slot positions and wrappers are not applied directly; extra slots are not added to duplicate the same summary.
+  - Models, parameters, and tools are managed separately by Uimori and are neither import targets nor counted as unsupported loss.
+- **CBS evaluation and regex pipeline**:
+  - At runtime, CBS is evaluated verbatim inside a worker with time and output limits, and cross-field variable mutations share the same evaluation context. Evaluation results are pinned for the duration of the run; after completion only the continuation output remains, and reconnects or backup restores never re-run evaluation.
+  - Preset regexes connect to native `editinput`, `editoutput`, `editprocess`, and `editdisplay` stages and evaluate CBS after capture substitution.
+  - CBS `{{role}}` uses the role of the message being processed: `user` for input not yet appended to the conversation, `char` for output and first messages, and each message's own role for prior scenes and display stages. The same role applies to body text as well as regex patterns and replacement outputs.
+  - The legacy 32-rule transform limit is not applied, while worker execution, memory, and output limits remain enforced. Host-special commands such as `@@inject`, `@@repeat_back`, and `@@emo`, along with certain Risu extension behaviors, are not yet executed and are reported as issues. Legacy Uimori ASTs and the shared text-transform format are unsupported.
+- **Model and permission ownership**:
+  - Uimori owns models, providers, authentication, generation parameters, and tool permissions. Importing or applying a RISUP never overwrites them and never exposes them in the native prompt editor.
+  - Keep original files separately if non-imported connection details are needed. Creative quality of real bot and personal preset combinations requires separate evaluation.
 
-현재 프롬프트와 저장 프리셋 모두 RISUP의 메시지 구성·CBS·토글·기본 변수·정규식 원문을 편집해요. 모델과 연결 설정은 별도로 관리해요. 형식과 저장 계약은 [프롬프트 실행](../PROMPT-RUNTIME.md), 원문 및 이미지의 이동은 [Risu 내보내기](../RISU-EXPORT.md)를 확인해요.
+### Prompt editing
 
-### 저장 정보의 책임
+Both the current prompt and saved presets edit the RISUP source for message layout, CBS, toggles, default variables, and regexes; model and connection settings are managed separately. See [Prompt execution](../PROMPT-RUNTIME.md) for format and storage contracts, and [Risu export](../RISU-EXPORT.md) for moving source documents and images.
 
-Risu 원문은 편집·실행 기준이며 본문·로어·첫 메시지 투영은 이를 읽기 위한 표현이에요. 요청 컨텍스트에는 자료 ID·역할·이름과 로어 항목 ID를 함께 전달해 같은 이름을 가진 자료를 구분해요. 이 출처 메타데이터를 카드의 원래 문자열에 덧붙이지 않아요. 공통 모듈은 현재 저장본을 따라가고, 별도로 보관할 판본은 명시적인 사본이나 백업으로 관리해요. [입력 수명](../EXECUTION.md)과 [독립 채팅 복원](../CHAT-BACKUP.md)을 참고해요.
+### Ownership of stored data
+
+The Risu source document is the editing and execution source of truth, and body, lore, and first-message projections are read representations derived from it. Request context carries content ID, role, name, and lore entry ID alongside text to distinguish items with identical names without appending provenance metadata to the card's original strings. Shared modules follow the current stored revision, while versions to keep separately are managed via explicit copies or backups. See [Input lifecycle](../EXECUTION.md) and [Standalone chat restore](../CHAT-BACKUP.md).
 
 ## Risu export
 
-- **RISUP 인코딩 규약**: MessagePack → Risu 고정 키 AES-GCM → gzip → RPack 형식으로 기록해요. 이때 사용하는 고정 키는 개인정보 보호용 암호화가 아니에요.
-- **필드 폐기 정책**: RisuToki와 동일한 폐기 정책(`core/risu-deprecated-fields.ts`)을 적용해요. 카드 성격·상황·시스템 프롬프트 등 폐기 필드, 모듈 `cjs`, 프리셋의 구형 최상위 프롬프트 필드는 출력하지 않아요.
-- **내보내기 API 엔드포인트**:
+- **RISUP encoding format**: Encoded as MessagePack → Risu fixed-key AES-GCM → gzip → RPack. The fixed key used here is not privacy encryption.
+- **Deprecated field policy**: Applies the same deprecation policy as RisuToki (`core/risu-deprecated-fields.ts`). Deprecated card fields (such as personality, scenario, system prompt), module `cjs`, and legacy top-level preset prompt fields are omitted from output.
+- **Export API endpoints**:
   - `GET /api/content/:id/risu-export?expectedRevision=N`
   - `GET /api/prompt-presets/:id/risu-export?expectedRevision=N`
-  - attachment 응답을 반환하며, UTF-8 파일명, `Cache-Control: no-store`, `X-Uimori-Revision` 헤더를 제공해요.
-  - `expectedRevision`이 최신 수정 번호와 다르면 409로 거절하며 숨긴 자료는 404를 반환해요. 예상 수정 번호를 생략한 API 호출은 최신 저장본을 읽어요.
-- **용량 및 압축 예산**:
-  - CHARX·RISUM 최대 출력: 512 MiB (가져오기와 동일)
-  - 카드 및 모듈 JSON 크기: 최대 8 MiB
-  - 에셋 개수 한도: 최대 12,288개
-  - ZIP 개별 항목 크기: 64 MiB (전체 확장 크기도 가져오기 예산을 준수)
-  - 이미지 무압축 로직: 파일 한도에 여유가 있는 자료는 PNG, JPEG, WebP, AVIF, GIF 확장자의 이미지를 재압축하지 않고 원래 바이트 그대로 넣고, JSON과 텍스트는 압축해요. 더 큰 자료는 이미지도 압축해 파일 한도에 맞출 수 있는지 확인해요. 압축률이 너무 높으면 일부 항목만 무압축으로 기록해 다시 가져올 수 있는 크기를 맞춰요. 최종 파일과 확장 예산을 함께 지킬 수 없으면 내보내기를 거절해요.
-  - RISUP 처리 예산: 프리셋 가져오기와 동일한 24 MiB 파일 및 원문 처리 예산을 사용해요.
-  - 안전성 검사: ZIP 경로 탈출(path traversal), 중복 경로에 다른 데이터가 존재하는 경우, 누락된 이미지 연결이 있는 파일은 내보내기를 거절해요. 내보내기 도중 저장 상태나 가져오기 원본 사본은 수정하지 않아요.
-- **관련 코드 및 테스트**:
-  - 구현 코드: `server/risu-export.ts`, `server/risu-export-codec.ts`, `core/risu-deprecated-fields.ts`, `core/risu-native-assets.ts`, `web/NativeRisuAssetsEditor.tsx`
-  - 테스트 스위트:
-    - `tests/risu-export.test.ts`: 저장 후 수정한 자료를 실제 카드·프리셋 importer에 다시 넣어 첫 메시지, 내장 모듈, 이미지, CBS·Lua 원문, 폐기 정책 및 수정 번호 충돌을 검증해요.
-    - `tests/risu-native-assets.test.ts`: 에셋 추가·교체·제거 시 식별자와 원문 보존을 검증해요.
-    - (이 검증이 실제 RisuAI 앱에서 모든 스크립트를 실행했다는 의미는 아니에요.)
+  - Returns an attachment response with a UTF-8 filename, `Cache-Control: no-store`, and an `X-Uimori-Revision` header.
+  - Rejects with 409 if `expectedRevision` does not match the latest revision and returns 404 for hidden content. API calls omitting the expected revision read the latest stored revision.
+- **Size and compression budgets**:
+  - Maximum CHARX/RISUM output: 512 MiB (same as import).
+  - Card and module JSON size: up to 8 MiB.
+  - Asset count limit: up to 12,288.
+  - Individual ZIP entry size: 64 MiB (total expanded size also adheres to import budgets).
+  - Uncompressed-image logic: When comfortably within the file limit, PNG, JPEG, WebP, AVIF, and GIF images are stored uncompressed with their original bytes while JSON and text are compressed. For larger payloads, image compression is checked to see whether it fits within the file limit. If the compression ratio is too high, only a subset of entries is stored uncompressed to stay within re-importable size limits. Export is rejected if both final file size and expanded-size budgets cannot be satisfied together.
+  - RISUP processing budget: Uses the same 24 MiB file and source processing budget as preset import.
+  - Safety checks: Rejects files with ZIP path traversal, conflicting data under duplicate paths, or missing image bindings. Export never modifies stored state or original imported copies.
+- **Related code and tests**:
+  - Implementation: `server/risu-export.ts`, `server/risu-export-codec.ts`, `core/risu-deprecated-fields.ts`, `core/risu-native-assets.ts`, `web/NativeRisuAssetsEditor.tsx`
+  - Test suites:
+    - `tests/risu-export.test.ts`: Feeds saved and edited content back through the real card and preset importers to verify first messages, embedded modules, images, CBS/Lua sources, deprecation policy, and revision conflicts.
+    - `tests/risu-native-assets.test.ts`: Verifies identifier and source preservation across asset addition, replacement, and removal.
+    - (This verification does not mean every script was executed in the actual RisuAI app.)
 
 ## Risu native prompt runtime
 
-RISUP 가져오기는 프롬프트 관련 필드만 선택해요. API 키·연결 주소·모델 선택·샘플링 설정은 활성 프롬프트에 넣지 않으며 Uimori 모델 설정이 관리해요. `web/NativeRisuPresetEditor.tsx`에서 원본 블록, 역할, 순서, CBS, 토글, 기본 변수, 정규식을 편집해요. 검증하지 않은 JSON 초안은 저장을 막고 편집기에 유지해요.
+RISUP import selects only prompt-related fields. API keys, endpoint URLs, model selection, and sampling settings are excluded from the active prompt and managed by Uimori model settings. `web/NativeRisuPresetEditor.tsx` edits source blocks, roles, ordering, CBS, toggles, default variables, and regexes; unvalidated JSON drafts are blocked from saving and retained in the editor.
 
-레거시 옵션 `jailbreakToggle`, `chainOfThought`, `promptSettings`의 `sendName`, `sendChatAsSystem`, `postEndInnerFormat`, `assistantPrefill`은 UI와 실행에서 제거했어요. 가져오기·새 저장·내보내기에서는 별도 안내 없이 제외하고, `jailbreak`·`cot` 블록도 일반 텍스트로 바꾸지 않고 제외해요. 대화 블록의 종속 옵션 `chatAsOriginalOnSystem`과 `type2: jailbreak` 분류도 제거해요. 해당 기능의 과거 실행 결과를 재현하는 호환 분기는 두지 않아요.
+Legacy options `jailbreakToggle`, `chainOfThought`, and `promptSettings` fields `sendName`, `sendChatAsSystem`, `postEndInnerFormat`, and `assistantPrefill` are removed from UI and execution. They are omitted without separate notices during import, new saves, and export, and `jailbreak` and `cot` blocks are dropped rather than converted to plain text. The conversation block's dependent option `chatAsOriginalOnSystem` and the `type2: jailbreak` classification are also removed. No compatibility branch is maintained to reproduce historical execution results of those features.
 
-`promptControls()`는 `customPromptTemplateToggle`에서 입력 UI를 계산해요. 선택 토글 값은 Risu의 문자열 인덱스이고 기본은 `"0"`(첫 항목), 켜기/끄기 기본은 `"0"`(끔), 텍스트 기본은 빈 문자열이에요. 별도의 미설정 선택지는 없어요. 값이 없거나 null이면 해당 기본값으로 해석하며, 이미 선택한 값과 프리셋의 명시적 기본 선택값은 유지해요. UI 옵션 정의는 별도 작성 원본이 아니에요. 현재 선택값과 저장 조합은 workspace revision CAS로 저장하며, 정의가 다른 조합은 적용하지 않아요.
+`promptControls()` computes the input UI from `customPromptTemplateToggle`. Select-toggle values are Risu string indices defaulting to `"0"` (first item), on/off toggles default to `"0"` (off), and text toggles default to the empty string, with no separate unset choice. Missing or null values resolve to those defaults while preserving already-selected values and explicit preset defaults. UI option definitions are not a separate authored source of truth. Current selections and saved combinations are persisted via workspace revision CAS, and combinations with mismatched definitions are not applied.
 
-채팅 옵션은 프리셋에 더해 연결 모듈의 `customModuleToggle`과 카드의 `extensions.risuai.toggles`를 합쳐 계산해요. 이 합산은 원본 프리셋을 수정하지 않아요. 같은 키의 호환되는 정의는 한 값을 공유하고, 타입이나 선택값 구성이 다르면 충돌을 알려요. 한글·점 등 원래 키를 CBS의 `toggle_<원래 키>`로 전달하며 객체 예약키는 충돌 없는 호스트 ID로 표시해요. 카드·모듈 값도 채팅 고정·다음 요청의 정의 해시와 예약 트랜잭션으로 보호해요. 모델·연결·샘플링 선택은 토글 원본으로 덮어쓰지 않아요.
+Chat options combine the preset with `customModuleToggle` from attached modules and `extensions.risuai.toggles` from the card without mutating the source preset. Compatible definitions sharing the same key share one value, while differing types or option sets report a conflict. Original keys—including Korean characters, dots, and other characters—are passed to CBS as `toggle_<원래 키>`, and object reserved keys are represented with collision-free host IDs. Card and module values are also protected by chat pinning, next-request definition hashes, and reservation transactions. Model, connection, and sampling choices are never overwritten by toggle sources.
 
-## 실행과 보존
+### Execution and preservation
 
-1. 서버가 해당 Run의 대화·요청·변수·시각을 고정해요.
-2. 네이티브 CBS worker가 활성 블록에서 사용하는 필드를 순서대로 평가하고 `nativeRisuPresetProgram`에 원본·평가 입력 해시, 평가문, 변수, 진단을 기록해요. 제거된 jailbreak·cot와 후문·응답 시작 문구, 호스트가 실행하지 않는 memory 블록, 비어 있는 슬롯의 사용하지 않는 형식은 변수 부작용도 실행하지 않아요. `{{jbtoggled}}`는 항상 `0`이에요.
-3. `compileRisuPrompt()`은 이 평가문이 적용된 Risu 블록과 호스트의 슬롯·대화·예시·토글 선택값으로 모델 메시지를 구성해요. 인물·시각·변수의 CBS 실행 컨텍스트는 앞 단계의 네이티브 worker가 사용하며 컴파일러에 별도 사본으로 전달하지 않아요. `{{slot}}`은 이 단계의 원문 삽입 표시예요.
-4. 프로바이더 인코더가 논리 메시지의 역할·완료 상태·캐시 지원을 검사하고 해당 프로토콜에 맞춰 직렬화해요.
+1. The server pins the run's conversation, request, variables, and timestamp.
+2. The native CBS worker evaluates fields used by active blocks in order and records source/evaluation input hashes, evaluated text, variables, and diagnostics in `nativeRisuPresetProgram`. Removed jailbreak/cot items, post-end/response-start text, host-unexecuted memory blocks, and unused formats on empty slots do not even execute variable side effects. `{{jbtoggled}}` is always `0`.
+3. `compileRisuPrompt()` assembles model messages from the evaluated Risu blocks plus host slots, conversation, dialogue examples, and toggle selections. The CBS execution context for characters, timestamps, and variables is used by the preceding native worker and is not passed as a separate copy to the compiler. `{{slot}}` is the raw-text insertion marker at this stage.
+4. The provider encoder checks each logical message's role, completion state, and cache support, then serializes it for the target protocol.
 
-새 컴파일러 표시는 `risu-native-prompt-2`예요. 히스토리 식별자와 원문 해시를 유지하고 같은 히스토리를 중복 삽입하는 구성은 거절해요. Risu의 `memory` 블록은 별도 기억을 주입하지 않으며 Uimori가 준비한 기억·컨텍스트를 사용해요. 모델 요청 전 준비가 필요한 네이티브 프롬프트는 CBS 평가가 끝나기 전 전송하지 않아요.
+The new compiler tag is `risu-native-prompt-2`. It preserves history identifiers and source hashes and rejects configurations that insert the same history twice. Risu's `memory` block does not inject separate memory; Uimori's prepared memory and context are used instead. Native prompts requiring pre-request preparation are never transmitted before CBS evaluation completes.
 
-카드의 `post_history_instructions`는 `type2: globalNote` 블록의 원문을 교체하고 `{{original}}`을 그 블록 본문으로 치환한 뒤 CBS를 평가해요. 별도의 전역 지침으로 중복 삽입하지 않아요. `mes_example`은 원문의 화자와 `<START>` 경계를 먼저 읽고 각 메시지 본문을 CBS로 평가하며, `chat` 범위의 앞부분에 역할을 유지해 배치해요. 실제 채팅 원문 기록에는 예시를 저장하지 않아요. `chatML`과 대화 기록은 원래 역할과 본문을 유지해요. `innerFormat`과 `role2`는 persona·description·authornote에만 적용해요. 컴파일러는 모든 메시지를 완료 상태로 만들고 제거된 `assistantPrefill` 설정으로 메시지를 추가하지 않아요. 현재 프로바이더 전송 경로도 prefill을 거절해요. 제거된 항목은 가져오기 경고를 만들지 않으며 다른 미지원 블록·호스트 설정의 검토는 유지해요.
+A card's `post_history_instructions` replaces the source text of the `type2: globalNote` block, substituting `{{original}}` with that block's body before evaluating CBS; it is not duplicated as a separate global instruction. `mes_example` parses speakers and `<START>` boundaries from the raw source first, evaluates CBS on each message body, and places them at the front of the `chat` range while preserving roles; examples are not persisted into actual chat history. `chatML` and conversation history preserve original roles and bodies. `innerFormat` and `role2` apply only to persona, description, and authornote. The compiler marks all messages complete and does not append a message for the removed `assistantPrefill` setting; current provider transports also reject prefill. Removed items do not produce import warnings, while review checks for other unsupported blocks and host settings remain active.
 
-재컴파일은 고정 CBS 결과를 투영하며 평가를 반복하지 않아요. 해시나 필드 목록이 원본과 다르면 영수증을 거절해요. 번역은 번역 작업 예약 시 고정한 현재 프롬프트를 별도로 평가하되 카드 상태나 저장된 프리셋을 바꾸지 않아요. 호스트는 번역할 원문과 새 번역을 예약할 때의 참고 자료·사용자 메모를 현재 user 메시지에 담고, 네이티브 `chat` 블록이 이를 배치해요. 원문은 CBS로 평가하지 않으며 프리셋이 현재 메시지를 제외한 경우에만 모델 입력의 고정 자료로 별도 전달해요.
+Recompilation projects pinned CBS results without repeating evaluation, rejecting receipts whose hash or field list differs from the source. Translations separately evaluate the current prompt pinned when scheduling the translation job without modifying card state or saved presets. The host places the source text to translate along with reference material and user notes captured when scheduling the new translation into the current user message, which the native `chat` block positions. Source text is not CBS-evaluated, and is forwarded separately as pinned model-input context only when the preset omits the current message.
 
-선택적 `collaboration`은 호스트의 읽기 전용 보조 에이전트를 구성하고, `execution.storySubmission`은 본문 제출 계약을 지정해요. 둘 다 콘텐츠 문법을 추가하지 않아요. [협업](../AGENT-COLLABORATION.md)의 호출 한도·취소·고정 입력 계약을 따라요.
+Optional `collaboration` configures host read-only helper agents, and `execution.storySubmission` specifies the body submission contract; neither adds content syntax. Both follow the call-limit, cancellation, and pinned-input contracts in [Collaboration](../AGENT-COLLABORATION.md).
 
-## 검증
+### Verification
 
-`tests/risu-native-prompt-composition.test.ts`, `tests/risu-native-preset.test.ts`, `tests/risu-native-semantics.test.ts`는 실제 vendor CBS, 평가 순서, 글로벌노트 교체, 예시 역할, 토글, 슬롯, 대화 범위, 캐시, 폐기 옵션의 실행·부작용 차단과 영수증 일치를 확인해요. `tests/risu-retired-execution.test.ts`는 과거 원본에서 시작하는 새 작업의 재투영을 확인해요. `tests/chat-options.test.ts`는 합산 토글의 채팅 선택·예약·백업 경계를 확인해요. `tests/risu-preset-import.test.ts`는 프롬프트만 가져오는 경계와 저장을 확인해요. 이 검사는 실제 프로바이더의 창작·번역 품질을 판정하지 않아요.
+`tests/risu-native-prompt-composition.test.ts`, `tests/risu-native-preset.test.ts`, and `tests/risu-native-semantics.test.ts` verify real vendored CBS, evaluation ordering, global-note replacement, example roles, toggles, slots, chat ranges, caching, blocking execution and side effects of deprecated options, and receipt consistency. `tests/risu-retired-execution.test.ts` verifies re-projection for new jobs started from historical source snapshots. `tests/chat-options.test.ts` verifies chat selection, scheduling, and backup boundaries for combined toggles. `tests/risu-preset-import.test.ts` verifies prompt-only import boundaries and storage. These tests do not judge creative or translation quality on real providers.
 
-실제 로컬 자료를 명시적으로 검증할 때는 `UIMORI_RISU_LOCAL_CARDS`에 CHARX 경로 JSON 배열, `UIMORI_RISU_SAMPLE_PRESET`에 프리셋 경로를 지정하고 `tests/risu-native-local-compatibility.test.ts`를 실행해요. 이 검사는 원문을 로그에 남기지 않고 첫 메시지·대체 메시지 렌더, 알려진 원본 버튼, 현재 요청·출력 처리와 원본 파일 해시 불변을 확인해요. 브라우저는 기존 `UIMORI_RISU_SAMPLE_ROOT`와 선택적 프리셋 경로를 사용해 `scripts/verify-risu-native-samples.mjs`로 실행하며 `--grep`은 검증 범위를 명시적으로 좁혀요. 데스크톱·모바일에서 선택, 재열기, 독립적으로 복사한 채팅의 변수 격리와 다음 턴을 로컬 모의 프로바이더로 확인해요. `--visual`일 때만 개인 자료가 렌더된 스크린샷을 git 제외 검증 폴더에 저장하며, HTTP 본문이 담기는 trace는 저장하지 않아요.
+To explicitly verify real local content, set `UIMORI_RISU_LOCAL_CARDS` to a JSON array of CHARX paths and `UIMORI_RISU_SAMPLE_PRESET` to a preset path, then run `tests/risu-native-local-compatibility.test.ts`. This test avoids logging source text while verifying first/alternate message rendering, known source buttons, current request/output processing, and original file-hash immutability. Browser verification runs `scripts/verify-risu-native-samples.mjs` using the existing `UIMORI_RISU_SAMPLE_ROOT` and an optional preset path, with `--grep` explicitly narrowing scope. It checks selection, reopening, variable isolation in independently copied chats, and next-turn execution on desktop and mobile against a local mock provider. Screenshots rendering personal content are saved to the git-ignored verification folder only with `--visual`, and traces containing HTTP bodies are never saved.
 
-## 출처를 보존하는 요청 컨텍스트
+### Source-preserving request context
 
-모델 요청의 봇·페르소나 설명은 `uimori_source`로, 일반 로어는 `uimori_lore_sources` 아래 자료별 `source`와 항목별 `entry`로 구분해요. 연결 역할·자료 이름·자료 ID와 로어 ID·제목만 표시해요. 호스트 참고 메시지에 출처 표지가 자료의 기원과 항목 경계를 나타낸다는 한 문장만 안내해요. 권한·지식 범위·우선순위 표지는 추가하지 않아요. 특정 프리셋이나 토글에 의존하지 않으며 기존 `innerFormat` 적용 범위는 유지해요.
+In model requests, bot and persona descriptions are wrapped in `uimori_source`, and general lore is structured under `uimori_lore_sources` with per-source `source` and per-entry `entry` elements. Only attachment role, content name, content ID, lore ID, and title are exposed. The host reference message includes only a single sentence stating that source markers indicate content provenance and entry boundaries. No permission, knowledge-scope, or priority markers are added. This does not depend on any specific preset or toggle, and existing `innerFormat` applicability is preserved.
 
-출처 메타데이터는 요청 투영에만 추가해요. XML 속성은 이스케이프하지만 CBS 등 기존 실행을 거친 본문은 직렬화 단계에서 수정하지 않아요. 빈 내용은 래퍼를 만들지 않고, 인접한 동일 자료 항목만 묶어 선택·연결·항목 순서를 유지해요. 위치 지정 로어는 원래 역할과 깊이에 출처를 붙여 한 번 삽입해요. 슬롯에서 소비되지 않은 참고 자료도 JSON의 `risuSource`로 같은 정보를 전달해요. 표지는 모델이 읽는 경계이며 본문을 XML로 파싱하거나 권한 경계로 사용하지 않아요. 저장 원본과 원본 해시는 바꾸지 않아요. 같은 자료가 연결 경로별 수정으로 서로 다른 본문을 갖는 경우에는 `source_scope="connection-1"`처럼 해당 자료의 연결 순서에 따른 짧은 구분자를 붙여 출처 그룹을 구분해요. 이 번호는 고정된 요청 안에서 연결을 구별하기 위한 것이며 우선순위가 아니에요. 내부 경로 JSON은 모델에게 전달하지 않아요.
+Provenance metadata is added solely to the request projection. XML attributes are escaped, while bodies that already ran through CBS or other execution stages are not modified during serialization. Empty content creates no wrapper, and only adjacent entries from the same source are grouped so selection, attachment, and entry ordering are preserved. Positioned lore is inserted once with provenance attached at its original role and depth. Reference entries not consumed by a slot carry the same metadata under JSON `risuSource`. These markers are reading boundaries for the model—neither XML-parsed bodies nor permission boundaries—and stored sources and source hashes are unchanged. When the same source has different bodies via per-connection edits, a short connection-order discriminator such as `source_scope="connection-1"` distinguishes source groups; this number only disambiguates connections within a pinned request and does not signify priority. Internal path JSON is not sent to the model.
 
-`tests/risu-context-source.test.ts`와 `tests/risu-native-lore.test.ts`가 출처 전달, 본문 보존, 속성 이스케이프, 위치와 중복 방지를 검증해요. 모델의 실제 이해도 개선은 별도 응답 평가가 필요해요.
+`tests/risu-context-source.test.ts` and `tests/risu-native-lore.test.ts` verify provenance delivery, body preservation, attribute escaping, positioning, and duplicate prevention. Actual improvements in model comprehension require separate response evaluation.
 
-내부 prompt compiler는 `risu-native-prompt-2` 한 가지 의미만 사용해요. 이전 Uimori 실행 snapshot의 compiler 호환 분기는 유지하지 않으며, 외부 Risu 원문의 현재 지원 범위와는 별개예요.
+The internal prompt compiler supports only the single `risu-native-prompt-2` semantics. Compatibility branches for older Uimori run-snapshot compilers are not maintained and are separate from the current support scope for external Risu source documents.
 
-다음 요청에만 적용할 옵션은 원문 수정 번호와 무관한 현재 설정값이에요. 원문을 수정해도 예약은 유지하고, 실제 생성 예약 트랜잭션에서 한 번 적용한 뒤 삭제해요. 옵션 정의 변경은 잘못된 값 적용을 막기 위해 확인하며, 취소·대체 기록이나 전체 프롬프트 사본을 누적 보관하지 않아요.
+Options scoped to the next request only are current settings independent of the source revision. Reservations persist across source edits and are applied once in the actual generation-reservation transaction and then cleared. Option-definition changes are validated to prevent applying invalid values, and neither cancellation/replacement records nor full prompt copies are accumulated.
 
 ## Lore context and retention
 
-모델용 메모는 본문을 한 번만 보내고 종류·작성자·원문 앵커·가져온 출처를 유지해요. 저장된 메모와 선언문, 편집·백업 형식은 바꾸지 않아요.
-호스트의 참고 컨텍스트에는 이 모델용 표현을 제공하며, 저장된 `snapshot.story.notes`의 원래 선언문 본문은 유지해요.
+Model-facing notes send their body once while retaining kind, author, source anchor, and imported provenance; stored notes, declarations, and editing/backup formats are unchanged. Host reference context provides this model-facing representation while preserving the original declaration text in stored `snapshot.story.notes`.
 
-상태는 **채팅별 최신 `chat_lore_state` 한 개**로 보관해요. 다음 요청에 필요한 컨텍스트와 읽은 구간은 남기되 전체 모델 입력·tool event를 영구 이력으로 쌓지 않아요. 기존 구간은 유지하고 겹치지 않는 새 구간을 더해요. 읽은 텍스트를 매 턴 다시 요약하는 모델 호출은 없어요.
+State is stored as **one latest `chat_lore_state` row per chat**. Context and read ranges needed for the next request are kept without accumulating full model inputs or tool events as permanent history. Existing ranges are preserved and non-overlapping new ranges are added; no model call re-summarizes read text on every turn.
 
-참고 자료는 처음 읽은 원문 근처에 별도 사용자 역할 메시지로 배치해요. 원래 위치가 요약으로 정리됐으면 요약 뒤·최근 대화 앞에 둬요. 실제 대화 메시지나 새 도구 호출을 조작하는 방식은 아니에요.
+Reference entries are placed as a separate user-role message near the source text where they were first read—or after the summary and before recent conversation if the original location has been compacted into a summary. This does not fabricate actual conversation messages or new tool calls.
 
-로컬 `o200k_base` 기반 계산을 사용해요. 텍스트 조각의 계산 결과는 제한된 캐시에 재사용하고 원격 토큰 계산을 호출하지 않아요. 다른 모델의 실제 과금 토큰과 정확히 같다는 보장은 없어요. 토큰 계산을 위해 원문을 수정하거나 CBS·Lua를 별도로 실행하지 않아요.
+Token counting runs locally using `o200k_base`. Per-snippet results are reused from a bounded cache without making remote token-counting calls, with no guarantee of exact match against another model's billed tokens. Source text is never mutated and CBS/Lua are never run separately for token counting.
 
-조회 예산을 넘으면 오래 사용하지 않은 구간을 제외해요. 제외한 구간은 과거 모든 실행 기록을 재탐색해 복원하지 않으며 모델이 다시 읽으면 새 읽기로 포함돼요. 고정 입력 자체가 너무 크면 `LORE_PINNED_BUDGET_EXCEEDED`로 알려요. 전체 입력 planner와의 순서는 [입력 한도](../CONTEXT-LIMITS.md)를 참고해요.
+When the lookup budget is exceeded, least-recently-used ranges are evicted. Evicted ranges are not restored by rescanning all past run logs; if the model reads them again, they enter as fresh reads. If pinned inputs alone exceed the budget, `LORE_PINNED_BUDGET_EXCEEDED` is reported. For ordering with the overall input planner, see [Context limits](../CONTEXT-LIMITS.md).
 
-새 요청은 현재 자료 ID·revision·본문 hash와 실제 원문·메모를 확인해요. 자료 수정·첨부 해제는 영향을 받는 구간을 제외하고, 읽기 당시의 원문 또는 선행 원문·메모가 바뀌면 그 컨텍스트에서 얻은 조회 결과를 무효화해요. 조회 자료가 고정 자료로 바뀌면 이중 제공하지 않아요.
+Each new request validates current content IDs, revisions, body hashes, and actual source text and notes. Content edits or detachment drop affected ranges, and changes to the read-time source or preceding source/notes invalidate lookup results derived from that context. When a looked-up item becomes pinned, it is not delivered twice.
 
-개별 채팅 백업은 사용자 원문·메모·현재 변수·채팅 전용 로어를 보존해 이어 쓸 수 있게 해요. 과거 모든 선별/조회 기록을 보존하는 아카이브는 아니며 새 사본에서는 필요한 컨텍스트를 다시 구성해요. 전체 DB 스냅샷은 현재 DB 상태를 함께 보관해요. [실행 입력 수명](../EXECUTION.md)
+Individual chat backups preserve user source text, notes, current variables, and chat-local lore so writing can continue. They are not archives of every historical selection or lookup record, and new copies rebuild the required context. Full DB snapshots preserve the current DB state alongside them. See [Execution input lifecycle](../EXECUTION.md).
 
-구현은 [선택·유지](../../server/lore-context.ts), [현재 상태 저장](../../server/lore-retention-state.ts), [범위·배치](../../core/lore-context.ts), [요청 조립](../../server/prompt-snapshot.ts)에 있어요. `tests/lore-context.test.ts`는 읽은 구간·무효화·예산·실제 다음 요청을 검사하고, `tests/lore-token-selection.test.ts`는 토큰 계산과 JEV 선별을 검사해요.
+Implemented in [selection & retention](../../server/lore-context.ts), [current state storage](../../server/lore-retention-state.ts), [ranges & placement](../../core/lore-context.ts), and [request assembly](../../server/prompt-snapshot.ts). `tests/lore-context.test.ts` checks read ranges, invalidation, budgets, and actual next-turn requests; `tests/lore-token-selection.test.ts` checks token counting and JEV selection.
 
 ## Bot translation guides
 
-- **프롬프트 미리보기 API**: `POST /api/chats/:id/prompt-preview`의 translation 모드는 **현재 서버에 저장된 봇 지침과 번역 참고 범위**를 반영하며, 응답의 `translationGuide` 필드로도 지침 내용을 반환해요. 프리셋이 context 슬롯을 생략하면 그 지침은 실제 요청에서 호스트의 보충 컨텍스트로 전달되므로, compilation만 보고 누락으로 판단하지 않아요. 기존 provider 미리보기의 `mapping-only` 의미는 유지하며 전체 실행 도구 호출을 재현한다고 주장하지 않아요. main 모드에는 이 필드를 전달하지 않아요.
+- **Prompt preview API**: In `POST /api/chats/:id/prompt-preview`, translation mode reflects the **bot guide and translation reference scope currently stored on the server** and also returns the guide content in the response's `translationGuide` field. When a preset omits the context slot, the guide is delivered via host supplemental context on the real request, so compilation output alone should not be treated as a missing guide. The existing `mapping-only` semantics of provider preview are preserved without claiming to reproduce full runtime tool calls. Main mode does not include this field.
 
-### 서버 실행 파이프라인
-- **지침 로드와 캡슐화**: `server/translation-guide.ts`가 채팅의 고정 소속 봇에서 현재 지침을 읽어요. `server/source-editing.ts`의 번역 접수 시 `job.input.translationGuide`에 봇 ID·자료 수정 번호·이름과 지침을 담고, `resolveJobPrompt`는 이 작은 메타데이터를 해당 번역용 snapshot에만 연결해요. 실행 도중 DB를 재조회해서 지침을 바꾸지 않아요. 모든 과거 자료 저장본이나 전체 프롬프트를 재현하는 새 이력 시스템은 없어요.
-- **컨텍스트 주입**: `translationInput`은 `context.translationGuide`에 지침을 넣어요. 기존 context 슬롯과 누락 시의 호스트 보충 전달을 재사용하므로 기본 프롬프트, Hermēneía와 context 슬롯을 생략한 사용자 프리셋에서도 지침을 전달해요. 별도 glossary 슬롯에 같은 표기를 다시 넣지 않아요. 번역 원칙 설명은 기존 번역 역할의 참조 정책에 연결해요.
-- **참고 범위 분리 (`contextMode`)**: 참고 범위는 기본 번역 정책의 `contextMode`로 저장하고 새 작업에 고정해요 (값이 없는 과거 정책·작업은 `full`로 해석). `source-only`에서는 CBS 평가 전에 배경 자료·카드 변수·이전 대화·메모를 제외한 번역용 입력을 만들므로, 배경 슬롯을 쓰는 프리셋도 제외한 자료를 다시 가져오지 않아요. 원문 ID·해시 등 결과 연결에 필요한 메타데이터는 유지해요. 선택한 프리셋 내용 자체나 저장된 원문·자료는 수정하지 않아요.
+### Server execution pipeline
 
-### 테스트 및 검증 명령어
+- **Guide loading and encapsulation**: `server/translation-guide.ts` reads the current guide from the chat's pinned owning bot. When `server/source-editing.ts` accepts a translation job, it stores the bot ID, content revision, name, and guide in `job.input.translationGuide`, and `resolveJobPrompt` binds only this compact metadata to that translation snapshot. The DB is not re-queried mid-run to alter the guide, and there is no new history system reproducing every past content save or full prompt.
+- **Context injection**: `translationInput` places the guide into `context.translationGuide`. Because it reuses the existing context slot and host supplemental delivery when the slot is omitted, the guide is delivered for default prompts, Hermēneía, and user presets that omit the context slot. Terms are not duplicated into a separate glossary slot, and translation-principle guidance hooks into the existing translation role's reference policy.
+- **Reference scope separation (`contextMode`)**: The reference scope is stored as `contextMode` on the default translation policy and pinned onto new jobs (historical policies and jobs lacking a value resolve as `full`). Under `source-only`, translation input is constructed without background content, card variables, prior conversation, or notes before CBS evaluation, so even presets using background slots cannot pull back excluded content. Metadata needed to bind results—such as source ID and hash—is preserved, and neither the selected preset content nor stored source/content documents are modified.
+
+### Tests and verification commands
+
 ```sh
 npm run quality
 npm test -- tests/translation-guides.test.ts tests/translation-prompt-delivery.test.ts tests/translation-continuity.test.ts tests/source-translation.test.ts
@@ -233,22 +394,22 @@ npm run build
 npm run verify:translation-guides
 ```
 
-- `tests/translation-guides.test.ts`: 저장·검증·되돌리기·자료 교환·요청 시점 고정·판정 복구·미리보기/작문 분리를 확인해요.
-- `tests/translation-prompt-delivery.test.ts`: 일곱 프로바이더 프로토콜의 실제 직렬화 결과에서 기본/Hermēneía/context 생략 프리셋과 두 참고 범위(각각 최소 한 번)의 지침·표기·원문이 누락되거나 중복되지 않고 CBS 문자도 그대로 남는지 확인해요. 별도 네이티브 CBS 사례는 배경 자료 제외와 프리셋 자체 기본값·조작값 유지를 확인해요. 로컬 프로바이더 대역을 사용해요.
-- `verify:translation-guides`: 데스크톱·모바일 너비의 실제 앱에서 편집·저장·JSON 편집·미저장 입력 복구·취소·표기 삭제·잘못된 입력 보존과 모든 자료의 편집 노출과 원본 종류 보존을 확인해요.
+- `tests/translation-guides.test.ts`: Verifies saving, validation, revert, content import/export, request-time pinning, judgment recovery, and preview/writing separation.
+- `tests/translation-prompt-delivery.test.ts`: Verifies actual serialized outputs across all seven provider protocols for default, Hermēneía, and context-omitted presets across both reference scopes (each at least once), ensuring guides, terms, and source text are neither dropped nor duplicated and CBS literals remain intact. Separate native CBS cases verify exclusion of background data while preserving the preset's own defaults and toggle values. Uses local provider stubs.
+- `verify:translation-guides`: Verifies in the real app at desktop and mobile widths: editing, saving, JSON editing, unsaved-input recovery, cancellation, term deletion, preserving invalid input, edit exposure across all content types, and preservation of source kinds.
 
 ## Built-in prompts
 
-## 제공과 출처
+### Delivery and provenance
 
-`server/builtin-prompts.ts`가 목록과 독립 사본 생성을 담당해요. `GET /api/prompt-templates`는 제목·역할·설명만, `GET /api/prompt-templates/:id`는 선택한 프로그램과 기본 옵션을 반환해요. 두 API는 읽기 전용이에요. 추가·편집·선택에는 기존 프리셋 및 현재 프롬프트 API의 검증·수정 번호·초안 보호를 사용해요.
+`server/builtin-prompts.ts` handles listing and creating independent copies. `GET /api/prompt-templates` returns only title, role, and description, while `GET /api/prompt-templates/:id` returns the selected program and default options; both APIs are read-only. Adding, editing, and selecting prompts use the existing preset and active-prompt APIs' validation, revision checks, and draft protection.
 
-Phēmē는 RisuToki의 Phēmē v5.6.0 배포본(리비전 `921a84e`)인 `risu/prompts/phēmē/dist/uimori/pheme-roleplay.uimori.json`과 `pheme-novel.uimori.json`의 V5.6.0 r2 프로그램·기본 선택값을 사용해요. 이 프로그램은 같은 버전의 `.risup`을 직접 가져온 결과와 같아요. 원본의 CBS·토글 선언·정규식·캐시 지점을 보존하고, 선택형 협업 설정만 별도로 붙여요.
+Phēmē uses the V5.6.0 r2 programs and default selections from `risu/prompts/phēmē/dist/uimori/pheme-roleplay.uimori.json` and `pheme-novel.uimori.json` in RisuToki's Phēmē v5.6.0 distribution (revision `921a84e`). These programs match directly importing the `.risup` of the same version. Original CBS, toggle declarations, regexes, and cache breakpoints are preserved, with only optional collaboration settings attached separately.
 
-Hermēneía는 v1.2.0의 `dist/hermeneia-preset.risup`을 번역 역할로 가져온 프로그램과 기본 선택값을 사용해요. `server/builtin-prompts/`에 세 프리셋의 본문과 기본 선택값, 작문용 협업 정의 두 개를 보관해요.
+Hermēneía uses the program and default selections imported for the translation role from `dist/hermeneia-preset.risup` (v1.2.0). `server/builtin-prompts/` stores the bodies and default selections for all three presets along with two writing collaboration definitions.
 
-Phēmē의 캐시 지점 네 개는 Responses·Anthropic 연결의 **명시적 캐시**와 **자동 캐시** 모두에서 유지돼요. 자동 모드도 네 지점이 모두 사용되면 추가 자동 지점만 생략하고 미리보기 진단에 남겨요. 프리셋 선택은 모델의 캐시·출력 토큰 설정을 바꾸지 않아요.
+Phēmē's four cache breakpoints are preserved in both **explicit caching** and **automatic caching** on Responses and Anthropic connections. In automatic mode, once all four breakpoints are used, only additional automatic breakpoints are omitted and recorded in preview diagnostics. Selecting a preset does not change the model's caching or output-token settings.
 
-## 검증 범위
+### Verification scope
 
-`tests/builtin-prompts.test.ts`는 새 환경의 초기 선택, 기존 DB 재시작 시 저장본 보존, 목록 조회의 비변경성, 독립 사본, 고정 RP·소설 모드와 협업 설정을 확인해요. `tests/risu-native-prompt-composition.test.ts`는 두 프리셋의 CBS 조립을 검사해요. 기본 목록의 추가·편집 흐름은 `npm run verify:browser -- --grep BPTUI`로 확인해요.
+`tests/builtin-prompts.test.ts` verifies initial selection on fresh setups, preservation of stored presets across existing-DB restarts, read-only listing, independent copies, pinned RP/novel modes, and collaboration settings. `tests/risu-native-prompt-composition.test.ts` checks CBS composition for both presets. Adding and editing flows from the built-in catalog are verified with `npm run verify:browser -- --grep BPTUI`.
