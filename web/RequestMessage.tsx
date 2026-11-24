@@ -124,6 +124,11 @@ export function RequestMessage({
     setEditing(false);
     requestAnimationFrame(() => trigger.current?.focus({ preventScroll: true }));
   };
+  const requestClose = () => {
+    if (lock.current) return;
+    if (!onConfirm && draft !== request) setDiscardOpen(true);
+    else close();
+  };
   const openEditor = () => {
     setDraft(readOptionalStorage('session', key) ?? request);
     setEditing(true);
@@ -161,9 +166,7 @@ export function RequestMessage({
             if (event.key === 'Escape' && !event.nativeEvent.isComposing && event.keyCode !== 229) {
               event.preventDefault();
               event.stopPropagation();
-              if (lock.current) return;
-              if (!onConfirm && draft !== request) setDiscardOpen(true);
-              else close();
+              requestClose();
             }
           }}
         >
@@ -197,7 +200,7 @@ export function RequestMessage({
                 }
                 className="secondary"
                 disabled={busy}
-                onClick={close}
+                onClick={requestClose}
               />
               {onSave && onSubmit && !onConfirm && (
                 <button

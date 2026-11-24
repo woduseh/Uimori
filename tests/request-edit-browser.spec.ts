@@ -99,6 +99,10 @@ for (const width of [MOBILE_WIDTH]) {
     expect(
       await page.evaluate((id) => sessionStorage.getItem(`request-context-edit:${id}`), run.id)
     ).toBe('Esc 뒤에도 남을 입력');
+    await source.getByRole('button', { name: '요청 편집 취소', exact: true }).click();
+    await discard.getByRole('button', { name: '취소', exact: true }).click();
+    await expect(discard).toBeHidden();
+    await expect(field).toHaveValue('Esc 뒤에도 남을 입력');
     await field.fill('저장된 수정 입력');
     await page.getByRole('button', { name: '입력 저장' }).click();
     await expect(message).toContainText('저장된 수정 입력');

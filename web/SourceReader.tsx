@@ -2002,6 +2002,11 @@ function TextEditor({
     clear();
     onCancel();
   };
+  const requestCancel = () => {
+    if (busy.current) return;
+    if (draft.text === savedText) cancel();
+    else setDiscardOpen(true);
+  };
   return (
     <form
       ref={form}
@@ -2012,9 +2017,7 @@ function TextEditor({
           return;
         event.preventDefault();
         event.stopPropagation();
-        if (busy.current) return;
-        if (draft.text === savedText) cancel();
-        else setDiscardOpen(true);
+        requestCancel();
       }}
       onSubmit={async (event) => {
         event.preventDefault();
@@ -2113,7 +2116,7 @@ function TextEditor({
           label={t('reader.cancelEditing')}
           className="secondary"
           disabled={saving}
-          onClick={cancel}
+          onClick={requestCancel}
         />
         <IconButton
           ref={saveButton}
