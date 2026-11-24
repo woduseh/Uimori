@@ -1,6 +1,7 @@
 import { apiErrorDiagnostic, apiErrorDisplay } from './api-errors.js';
 import { t } from './i18n.js';
 import { writeOptionalStorage } from './optional-storage.js';
+import { forgetBotStorage, forgetChatStorage, storageKeys } from './storage-keys.js';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -42,7 +43,14 @@ export function rememberMaintenance(next: MaintenanceStatus | undefined): void {
   if (changed && typeof window !== 'undefined')
     window.dispatchEvent(new Event(maintenanceChangedEvent));
 }
-export const libraryChangedKey = 'uimori:library-change';
+export const libraryChangedKey = storageKeys.libraryChanged;
+
+function forgetDeletedStorage(path: string) {
+  const [, collection, id] = /^\/(chats|content)\/([^/?]+)$/u.exec(path) ?? [];
+  if (!id) return;
+  if (collection === 'chats') forgetChatStorage(decodeURIComponent(id));
+  else forgetBotStorage(decodeURIComponent(id));
+}
 export const activityChangedEvent = 'uimori-activity-changed';
 
 async function readApiResponse<T>(
@@ -91,6 +99,7 @@ export async function api<T>(
         }
   );
   const result = await readApiResponse<T>(response, method, path.split('?')[0] !== '/session');
+  if (method === 'DELETE' && body !== undefined) forgetDeletedStorage(path);
   if (
     body !== undefined &&
     typeof window !== 'undefined' &&

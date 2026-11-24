@@ -141,6 +141,7 @@ import { readOptionalStorage } from './optional-storage.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 import { useBottomFollow } from './useBottomFollow.js';
 import { useShortcut, useShortcutLabel } from './shortcuts.js';
+import { storageKeys } from './storage-keys.js';
 
 type Props = {
   enterSend: boolean;
@@ -270,7 +271,7 @@ const statusLabel: Record<string, string> = {
   interrupted: 'helpers.m007',
 };
 const activityKey = (task: HelperTaskView) =>
-  `helper-task-activity:${task.conversationId}:${task.id}${active(task) ? '' : ':settled'}`;
+  storageKeys.helperTaskActivity(task.conversationId, task.id, !active(task));
 function savedActivityOpen(task: HelperTaskView) {
   return readOptionalStorage('session', activityKey(task)) === 'open';
 }
@@ -488,11 +489,11 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   const pendingSteers = (running?.instructions ?? []).filter((item) => item.status === 'pending');
   const activeTask = Boolean(running || queuedTasks.length);
   const [runningSendMode, setRunningSendMode] = useState<'queue' | 'steer'>(() =>
-    readPresentationChoice('uimori:helper-running-send', ['queue', 'steer'], 'queue')
+    readPresentationChoice(storageKeys.helperRunningSend, ['queue', 'steer'], 'queue')
   );
   const updateRunningSendMode = (next: 'queue' | 'steer') => {
     setRunningSendMode(next);
-    writePresentationSetting('uimori:helper-running-send', next);
+    writePresentationSetting(storageKeys.helperRunningSend, next);
   };
   const stopShortcutLabel = useShortcutLabel('run.stop');
   const helperModeShortcutLabel = useShortcutLabel('helper.mode');
@@ -504,13 +505,13 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   });
   const [modes, setModes] = useState<Record<string, HelperMode>>({});
   const [chosenMode, setChosenMode] = useState<HelperMode>(() =>
-    readPresentationChoice<HelperMode>('uimori:helper-mode', ['apply', 'plan'], 'apply')
+    readPresentationChoice<HelperMode>(storageKeys.helperMode, ['apply', 'plan'], 'apply')
   );
   const mode = modes[scopeKey] ?? chosenMode;
   const chooseMode = (next: HelperMode) => {
     setModes((old) => ({ ...old, [scopeKey]: next }));
     setChosenMode(next);
-    writePresentationSetting('uimori:helper-mode', next);
+    writePresentationSetting(storageKeys.helperMode, next);
   };
   const [grants, setGrants] = useState<Record<string, HelperConfirmationGrant[]>>({});
   const grantList = grants[scopeKey] ?? [];
@@ -710,12 +711,13 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   const [openTaskActivities, setOpenTaskActivities] = useState<Record<string, boolean>>({});
   const [liveActivityOpen, setLiveActivityOpen] = useState(
     () =>
-      readPresentationChoice('uimori:helper-live-activity', ['closed', 'open'], 'closed') === 'open'
+      readPresentationChoice(storageKeys.helperLiveActivity, ['closed', 'open'], 'closed') ===
+      'open'
   );
   const toggleLiveActivity = () => {
     const next = !liveActivityOpen;
     setLiveActivityOpen(next);
-    writePresentationSetting('uimori:helper-live-activity', next ? 'open' : 'closed');
+    writePresentationSetting(storageKeys.helperLiveActivity, next ? 'open' : 'closed');
   };
   const [personas, setPersonas] = useState<Record<string, { text: string; revision: number }>>({});
   const [savingPersona, setSavingPersona] = useState(false);

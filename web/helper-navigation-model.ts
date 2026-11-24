@@ -1,6 +1,7 @@
 import type { HelperProject, HelperScope } from '../core/helper.js';
 import type { HelperSession } from './useHelperSessions.js';
 import { readOptionalJson } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 export type HelperNavigationView = {
   mode: 'projects' | 'activity';
@@ -8,7 +9,7 @@ export type HelperNavigationView = {
   order: string[];
   collapsed: Record<string, boolean>;
 };
-export const helperNavigationStorageKey = 'uimori:helper-navigation:v1';
+export const helperNavigationStorageKey = storageKeys.helperNavigation;
 export function readHelperNavigationView(): HelperNavigationView {
   const value = readOptionalJson(
     'local',

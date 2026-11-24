@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Check, ShieldAlert, X } from 'lucide-react';
 import type { HelperConfirmation } from '../core/helper.js';
 import { t } from './i18n.js';
-import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
+import { readOptionalStorage } from './optional-storage.js';
+import { storageKeys, writeRecentStorage } from './storage-keys.js';
 
 export type HelperConfirmationTarget = HelperConfirmation['targets'][number];
 export type HelperConfirmationGrant = { id: string; operation: string; text: string };
@@ -27,7 +28,7 @@ const reasons: Partial<Record<HelperConfirmation['reason'], string>> = {
   paid: 'helperConfirm.reasonPaid',
 };
 const declinedKey = ({ taskId, id }: Pick<HelperConfirmation, 'taskId' | 'id'>) =>
-  `uimori:helper-confirmation-declined:${taskId}:${id}`;
+  storageKeys.helperConfirmationDeclined(taskId, id);
 
 export const confirmationOperation = (confirmation: Pick<HelperConfirmation, 'operation'>) =>
   HELPER_CONFIRMATION_OPERATION_LABELS[confirmation.operation]
@@ -108,7 +109,7 @@ export function HelperConfirmations({
                   className="secondary"
                   aria-label={t('helperConfirm.declineLabel', { operation })}
                   onClick={() => {
-                    writeOptionalStorage('local', declinedKey(confirmation), '1');
+                    writeRecentStorage(declinedKey(confirmation), '1');
                     setDeclined((old) => [...old, declinedKey(confirmation)]);
                   }}
                 >

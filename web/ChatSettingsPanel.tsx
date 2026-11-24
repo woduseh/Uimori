@@ -36,6 +36,7 @@ import {
 import './chat-settings.css';
 import './settings-layout.css';
 import { readOptionalStorage } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 const saveSections = ['story', 'guide', 'profile', 'image', 'reference', 'runtime'] as const;
 const generationSections = ['profile', 'runtime'] as const;
@@ -111,7 +112,7 @@ export function ChatSettingsPanel({
   const requestedSection =
     initialSection ??
     (readSettingsLocation(
-      'uimori:chat-settings-section',
+      storageKeys.chatSettingsSection,
       categories.map((item) => item.id),
       'characters'
     ) as Section);
@@ -263,7 +264,7 @@ export function ChatSettingsPanel({
     }
   }
   useEffect(() => {
-    rememberSettingsLocation('uimori:chat-settings-section', active);
+    rememberSettingsLocation(storageKeys.chatSettingsSection, active);
   }, [active]);
   useEffect(() => {
     state.setProfileDirty(dirty);
@@ -303,7 +304,7 @@ export function ChatSettingsPanel({
     }
     void packageAvailabilityKey;
     const hasDraft =
-      readOptionalStorage('session', `uimori:chat-variable-draft:${state.selected}`) !== null;
+      readOptionalStorage('session', storageKeys.chatVariableDraft(state.selected)) !== null;
     void Promise.allSettled([
       api<{
         values: Record<string, string>;

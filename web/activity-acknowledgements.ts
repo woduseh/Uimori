@@ -1,12 +1,10 @@
-const prefix = 'uimori:activity-acknowledged:v1:';
+import { storageKeys } from './storage-keys.js';
+
 const maximumIdentityLength = 1024;
-const scopePrefix = (scope: string) => `${prefix}${JSON.stringify(scope)}:`;
+const retainedConfirmedIdentities = 100;
+const scopePrefix = (scope: string) => storageKeys.activityAcknowledgement(scope, '');
 const validIdentity = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= maximumIdentityLength;
-
-export function acknowledgementStorageKey(scope: string, identity: string) {
-  return `${scopePrefix(scope)}${identity}`;
-}
 
 export function isAcknowledgementStorageKey(scope: string, key: string | null) {
   return key === null || key.startsWith(scopePrefix(scope));
@@ -33,7 +31,7 @@ export function saveAcknowledgements(scope: string, identities: string[]): boole
     const storage = localStorage;
     for (const identity of new Set(identities)) {
       if (!validIdentity(identity)) return false;
-      const key = acknowledgementStorageKey(scope, identity);
+      const key = storageKeys.activityAcknowledgement(scope, identity);
       if (storage.getItem(key) === '1') continue;
       storage.setItem(key, '1');
     }
@@ -41,4 +39,24 @@ export function saveAcknowledgements(scope: string, identities: string[]): boole
   } catch {
     return false;
   }
+}
+
+function startedAt(identity: string): number {
+  try {
+    const value: unknown = JSON.parse(identity);
+    const started = Array.isArray(value) ? Date.parse(String(value.at(-1))) : Number.NaN;
+    return Number.isFinite(started) ? started : Number.POSITIVE_INFINITY;
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+export function forgetConfirmedAcknowledgements(scope: string, confirmed: readonly string[]) {
+  const onServer = new Set(confirmed);
+  const local = readAcknowledgements(scope).toSorted((a, b) => startedAt(b) - startedAt(a));
+  try {
+    for (const identity of local.slice(retainedConfirmedIdentities))
+      if (onServer.has(identity))
+        localStorage.removeItem(storageKeys.activityAcknowledgement(scope, identity));
+  } catch {}
 }

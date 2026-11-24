@@ -90,6 +90,7 @@ import {
   removeOptionalStorage,
   writeOptionalStorage,
 } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 type NativeActionReceipt = {
   created: boolean;
@@ -165,14 +166,14 @@ type EditorOrigin = {
 
 function preferredMode(hasTranslation: boolean): ReaderMode {
   if (!hasTranslation) return 'original';
-  return readOptionalStorage('local', 'uimori:reading-language') === 'original'
+  return readOptionalStorage('local', storageKeys.readingLanguage) === 'original'
     ? 'original'
     : 'translation';
 }
 function initialMode(sourceId: string, hasTranslation: boolean): ReaderMode {
   if (!hasTranslation) return 'original';
   try {
-    const saved = sessionStorage.getItem(`reader-mode:${sourceId}`);
+    const saved = sessionStorage.getItem(storageKeys.readerMode(sourceId));
     if (saved === 'original' || saved === 'translation') return saved;
   } catch {
     return 'translation';
@@ -432,8 +433,8 @@ function SourceReaderContent({
     translationPreviouslyAvailable.current = targetTranslationAvailable;
     if (!justCompleted || readerTarget?.sourceId === source.id) return;
     try {
-      if (sessionStorage.getItem(`reader-mode:${source.id}`)) return;
-      if (localStorage.getItem('uimori:reading-language') === 'original') return;
+      if (sessionStorage.getItem(storageKeys.readerMode(source.id))) return;
+      if (localStorage.getItem(storageKeys.readingLanguage) === 'original') return;
     } catch {
       return;
     }
@@ -799,11 +800,12 @@ function SourceReaderContent({
   const [illustrationDialog, setIllustrationDialog] = useState(false);
   const [retryDialog, setRetryDialog] = useState(false);
   const [rewriteText, setRewriteText] = useState('');
+  const [rewriteNotKept, setRewriteNotKept] = useState(false);
   const rewriteInput = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (retryDialog) rewriteInput.current?.focus({ preventScroll: true });
   }, [retryDialog]);
-  const rewriteKey = `request-edit:${source.runId}`;
+  const rewriteKey = storageKeys.requestEdit(source.runId);
   const openRewrite = () => {
     setRewriteText(readOptionalStorage('session', rewriteKey) ?? effectiveRequest);
     setRetryDialog(true);
@@ -859,7 +861,7 @@ function SourceReaderContent({
     if (next === mode) return;
     restoreAnchor.current = currentAnchor(container.current);
     setMode(next);
-    writeOptionalStorage('session', `reader-mode:${source.id}`, next);
+    writeOptionalStorage('session', storageKeys.readerMode(source.id), next);
   };
   const action = async (name: string, operation: () => Promise<unknown>) => {
     if (requestPending.current) return;
@@ -1729,7 +1731,9 @@ function SourceReaderContent({
                 disabled={!!pending || !!onCheckRequest}
                 onChange={(event) => {
                   setRewriteText(event.target.value);
-                  writeOptionalStorage('session', rewriteKey, event.target.value);
+                  setRewriteNotKept(
+                    !writeOptionalStorage('session', rewriteKey, event.target.value)
+                  );
                 }}
               />
             </label>
@@ -1781,6 +1785,11 @@ function SourceReaderContent({
                 </>
               )}
             </div>
+            {rewriteNotKept && (
+              <p className="error" role="alert">
+                {t('chatsettings.m159')}
+              </p>
+            )}
             {actionError && (
               <p className="error" role="alert">
                 {translateMessage(actionError)}
@@ -1919,9 +1928,6 @@ function SourceReaderContent({
 }
 
 type Draft = { text: string; expectedRevision: number; expectedSourceHash: string };
-function draftKey(sourceId: string, role: ReaderMode) {
-  return `uimori:text-draft:${sourceId}:${role}`;
-}
 function readDraft(key: string, fallback: Draft): Draft {
   const value = readOptionalJson('session', key, null) as Partial<Draft> | null;
   if (
@@ -1947,7 +1953,7 @@ function TextEditor({
   onSaved: () => Promise<void>;
 }) {
   useI18n();
-  const key = draftKey(source.id, role);
+  const key = storageKeys.textDraft(source.id, role);
   const displayed = displayTranslationJob(source, translation);
   const savedText =
     role === 'original' ? storyUiEditableText(source.text) : (displayed?.result?.text ?? '');
@@ -1967,6 +1973,7 @@ function TextEditor({
   const draftVersion = useRef(0);
   const [selection, setSelection] = useState({ start: 0, end: 0, version: 0 });
   const [error, setError] = useState('');
+  const [draftNotKept, setDraftNotKept] = useState(false);
   const busy = useRef(false);
   const input = useRef<HTMLTextAreaElement>(null);
   const form = useRef<HTMLFormElement>(null);
@@ -1999,7 +2006,7 @@ function TextEditor({
   const persist = (next: Draft) => {
     draftVersion.current++;
     setDraft(next);
-    writeOptionalStorage('session', key, JSON.stringify(next));
+    setDraftNotKept(!writeOptionalStorage('session', key, JSON.stringify(next)));
   };
   const clear = () => removeOptionalStorage('session', key);
   const cancel = () => {
@@ -2176,6 +2183,11 @@ function TextEditor({
           };
         }}
       />
+      {draftNotKept && (
+        <p className="error" role="alert">
+          {t('chatsettings.m159')}
+        </p>
+      )}
       {error && (
         <p className="error" role="alert">
           {translateMessage(error)}

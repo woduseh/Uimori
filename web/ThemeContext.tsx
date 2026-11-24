@@ -24,8 +24,9 @@ import { updateMessageTheme } from './theme-message-style.js';
 import { applyThemeAssets } from './theme-assets.js';
 import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
 import { useShortcut } from './shortcuts.js';
+import { storageKeys } from './storage-keys.js';
 
-export const themesChangedKey = 'uimori:themes-changed';
+export const themesChangedKey = storageKeys.themesChanged;
 const initial: ThemeCatalog = { themes: BUILTIN_THEMES, preferences: defaultThemePreferences() };
 type ThemeState = {
   catalog: ThemeCatalog;
@@ -54,10 +55,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState('');
   const [disabled, setDisabledState] = useState(() => {
     if (new URLSearchParams(location.search).get('theme-safe') === '1') {
-      writeOptionalStorage('session', 'uimori:theme-disabled', '1');
+      writeOptionalStorage('session', storageKeys.themeDisabled, '1');
       return true;
     }
-    return readOptionalStorage('session', 'uimori:theme-disabled') === '1';
+    return readOptionalStorage('session', storageKeys.themeDisabled) === '1';
   });
   const alive = useRef(true);
   const epoch = useRef(0);
@@ -117,7 +118,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setDisabled = useCallback((value: boolean) => {
     setDisabledState(value);
     setPreview(null);
-    writeOptionalStorage('session', 'uimori:theme-disabled', value ? '1' : '0');
+    writeOptionalStorage('session', storageKeys.themeDisabled, value ? '1' : '0');
   }, []);
   useShortcut('theme.safeMode', () => setDisabled(!disabled));
   const active = useMemo(

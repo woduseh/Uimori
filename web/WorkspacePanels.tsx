@@ -74,6 +74,7 @@ import {
 } from './TaskHistory.js';
 import { formatUsd } from './pricing-display.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
+import { storageKeys } from './storage-keys.js';
 
 export function TasksPanel({
   state,
@@ -429,7 +430,7 @@ export function AppSettingsPanel({
     initialTab && settingsCategories.some((item) => item.key === initialTab)
       ? initialTab
       : readSettingsLocation(
-          'uimori:app-settings-section',
+          storageKeys.appSettingsSection,
           settingsCategories.map((item) => item.key),
           'general'
         );
@@ -512,7 +513,7 @@ export function AppSettingsPanel({
     settingsCategories.find((item) => item.key === active)?.label ?? t('chatsettings.m15');
   const showingDetail = !compact || detail;
   useEffect(() => {
-    rememberSettingsLocation('uimori:app-settings-section', active);
+    rememberSettingsLocation(storageKeys.appSettingsSection, active);
   }, [active]);
   function backToList() {
     rememberPosition();

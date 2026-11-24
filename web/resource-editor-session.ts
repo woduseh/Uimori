@@ -15,6 +15,7 @@ import {
 } from './editor-recovery.js';
 import { sameEditorValue } from './editor-values.js';
 import { writeOptionalStorage } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 export type EditorBuffer = {
   model: ResourceModel;
@@ -43,7 +44,7 @@ export type EditorState = {
 type PendingCreation = { key: string; copy: boolean; model: ResourceModel };
 function editorTabScope(): string {
   try {
-    const key = 'uimori:editor-tab-scope';
+    const key = storageKeys.editorTabScope;
     const stored = sessionStorage.getItem(key);
     if (stored) return stored;
     const next = crypto.randomUUID();

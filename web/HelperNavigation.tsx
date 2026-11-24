@@ -32,6 +32,7 @@ import './helper-session-navigation.css';
 import './content-picker.css';
 import './activity-status.css';
 import { writeOptionalStorage } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 type Props = {
   sessions: HelperSession[];
@@ -373,7 +374,7 @@ export function HelperNavigation(props: Props) {
   const running = lists.recent.filter(
     (session) => session.activity?.running || session.activity?.queued
   );
-  const sectionStorage = 'uimori:helper-activity-sections:v1';
+  const sectionStorage = storageKeys.helperActivitySections;
   return (
     <nav
       className="helper-navigation"

@@ -16,11 +16,13 @@ import {
   readAcknowledgements,
   saveAcknowledgements,
   isAcknowledgementStorageKey,
+  forgetConfirmedAcknowledgements,
 } from './activity-acknowledgements.js';
 import { api } from './api.js';
 import { activityReceiptEvent } from './useActivityFeed.js';
 import './activity-status.css';
 import { readOptionalJson, writeOptionalStorage } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 type Notice = { item: Item; expiresAt: number | null };
 
@@ -112,7 +114,7 @@ export function ActivityStatus({
   useI18n();
   const [now, setNow] = useState(Date.now);
   const [hidden, setHidden] = useState<string[]>(() => {
-    const stored = readOptionalJson('session', `activity-hidden:${scope}`, null);
+    const stored = readOptionalJson('session', storageKeys.activityHidden(scope), null);
     return Array.isArray(stored) ? stored.filter((key) => typeof key === 'string') : [];
   });
   const [notices, setNotices] = useState<Notice[]>([]);
@@ -133,6 +135,7 @@ export function ActivityStatus({
       .then(async ({ keys }) => {
         if (!alive) return;
         setAcknowledged((old) => [...new Set([...old, ...keys])]);
+        forgetConfirmedAcknowledgements(chatId, keys);
         const missing = local.filter((key) => !keys.includes(key));
         for (let i = 0; i < missing.length; i += 100) {
           await api(`/chats/${encodeURIComponent(chatId)}/activity-acknowledgements`, {
@@ -279,7 +282,11 @@ export function ActivityStatus({
     return () => clearInterval(timer);
   }, [ticking]);
   useEffect(() => {
-    writeOptionalStorage('session', `activity-hidden:${scope}`, JSON.stringify(hidden.slice(-200)));
+    writeOptionalStorage(
+      'session',
+      storageKeys.activityHidden(scope),
+      JSON.stringify(hidden.slice(-200))
+    );
   }, [hidden, scope]);
   const candidates = [...running, ...visibleNotices.map((notice) => notice.item)];
   const expanded = candidates.filter((item) => !hidden.includes(item.key));

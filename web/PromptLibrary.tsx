@@ -72,18 +72,19 @@ import {
   type LibrarySort,
 } from './library-list-preferences.js';
 import { readOptionalJson } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 type PromptSort = LibrarySort;
 function savedPromptPreference(key: string) {
   return (readOptionalJson('local', key, null) as { prompts?: unknown } | null)?.prompts;
 }
 function savedPromptSort(): PromptSort {
-  const value = savedPromptPreference('uimori-library-sorts');
+  const value = savedPromptPreference(storageKeys.librarySorts);
   if (value === 'name' || value === 'name-desc' || value === 'manual') return value;
   return 'name';
 }
 function savedPromptOrder(): string[] {
-  const value = savedPromptPreference('uimori-library-manual-orders');
+  const value = savedPromptPreference(storageKeys.libraryManualOrders);
   if (Array.isArray(value)) return value.filter((id): id is string => typeof id === 'string');
   return [];
 }
@@ -385,7 +386,7 @@ export function PromptLibrary({
     setMutating(true);
     try {
       const result = await cloneWithReceipt<ResourceSaveResult>(
-        `resource-clone:prompt-preset:${item.id}`,
+        storageKeys.resourceClone('prompt-preset', item.id),
         {
           kind: 'prompt-preset',
           sourceId: item.id,

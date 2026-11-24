@@ -20,10 +20,11 @@ import {
 } from './illustration-labels.js';
 import './illustrations.css';
 import './activity-status.css';
-import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
+import { readOptionalStorage } from './optional-storage.js';
+import { removeRecentStorage, storageKeys, writeRecentStorage } from './storage-keys.js';
 
 type Actions = { refresh: () => Promise<void>; onError: (message: string) => void };
-const collapseKey = (id: string) => `uimori:illustration-collapsed:${id}`;
+const collapseKey = storageKeys.illustrationCollapsed;
 function savedCollapse(id: string): boolean | undefined {
   const value = readOptionalStorage('local', collapseKey(id));
   return value === null ? undefined : value === 'true';
@@ -57,9 +58,13 @@ export function useIllustrationLayout({
   useI18n();
   const cuts = cutsFor(items, sourceHash);
   const collapsed = (id: string) => choices[id] ?? savedCollapse(id) ?? defaultCollapsed;
+  const persistCollapse = (id: string, value: boolean) => {
+    if (value === defaultCollapsed) removeRecentStorage(collapseKey(id));
+    else writeRecentStorage(collapseKey(id), String(value));
+  };
   const setCollapsed = (id: string, value: boolean, persist = true) => {
     setChoices((old) => ({ ...old, [id]: value }));
-    if (persist) writeOptionalStorage('local', collapseKey(id), String(value));
+    if (persist) persistCollapse(id, value);
   };
   const hero = cuts.find((cut) => !cut.stale && cut.job.display?.hero);
   const after = (cut: Cut) => {
@@ -129,8 +134,7 @@ export function useIllustrationLayout({
                   ...old,
                   ...Object.fromEntries(cuts.map((cut) => [cut.key, value])),
                 }));
-                for (const cut of cuts)
-                  writeOptionalStorage('local', collapseKey(cut.key), String(value));
+                for (const cut of cuts) persistCollapse(cut.key, value);
               }}
             >
               {allCollapsed ? t('visuals.m100') : t('visuals.m101')}

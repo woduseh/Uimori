@@ -34,7 +34,6 @@ import {
   type ReaderNavigationAction,
 } from './reader-navigation.js';
 import {
-  commandStorageKey,
   clearReadingPosition,
   readReadingPosition,
   readDraftCursor,
@@ -71,8 +70,9 @@ import {
   removeOptionalStorage,
   writeOptionalStorage,
 } from './optional-storage.js';
+import { forgetMissingBots, forgetMissingChats, storageKeys } from './storage-keys.js';
 
-const lastWorkspaceKey = 'uimori:last-workspace';
+const lastWorkspaceKey = storageKeys.lastWorkspace;
 function semanticReaderTarget(search: string): ReaderTarget | null {
   const params = new URLSearchParams(search);
   return ['mode', 'anchor', 'contentHash', 'position'].some((key) => params.has(key))
@@ -220,15 +220,15 @@ type QueuedHandoff = {
   state: 'waiting' | 'confirmation' | 'committed' | 'rejected';
 };
 type ParkedQueue = { text: string; loreContextReset: boolean; reason?: QueuedReturnReason };
-const queuedRequestKey = (chatId: string) => `queued-request:${chatId}`;
+const queuedRequestKey = storageKeys.queuedRequest;
 function readParkedQueue(chatId: string): ParkedQueue | null {
   const value = readOptionalJson('session', queuedRequestKey(chatId), null) as ParkedQueue | null;
   return value && typeof value.text === 'string' && typeof value.loreContextReset === 'boolean'
     ? value
     : null;
 }
-function parkQueue(chatId: string, value: ParkedQueue) {
-  writeOptionalStorage('session', queuedRequestKey(chatId), JSON.stringify(value));
+function parkQueue(chatId: string, value: ParkedQueue): boolean {
+  return writeOptionalStorage('session', queuedRequestKey(chatId), JSON.stringify(value));
 }
 
 type Position = ReadingPosition;
@@ -352,7 +352,7 @@ export function useStory() {
     }
     setView(next);
   }, []);
-  const savedPosition = readReadingPosition(`reading:${selected}`);
+  const savedPosition = readReadingPosition(storageKeys.readingPosition(selected));
   readerQuery.current = {
     chat: selected,
     epoch: view.epoch,
@@ -461,7 +461,7 @@ export function useStory() {
           let cacheKey = query.key;
           if (replacementSource !== undefined) {
             restoredView.current = '';
-            clearReadingPosition(`reading:${id}`);
+            clearReadingPosition(storageKeys.readingPosition(id));
             cacheKey = `${id}:${replacementSource}`;
             readerQuery.current = { ...query, source: replacementSource, key: cacheKey };
             navigate({ kind: 'rebase-source', source: replacementSource });
@@ -520,6 +520,7 @@ export function useStory() {
     const chats = await api<Chat[]>('/chats');
     if (chatsRequest.current !== request) return;
     setChats(chats);
+    forgetMissingChats(new Set(chats.map((chat) => chat.id)));
     if (
       selectedAtRequest &&
       navigation.current.chat === selectedAtRequest &&
@@ -551,6 +552,9 @@ export function useStory() {
           if (libraryRequest.current === request) {
             setLibrary(value);
             setLibraryError('');
+            forgetMissingBots(
+              new Set(value.contents.filter((item) => item.kind === 'bot').map((item) => item.id))
+            );
           }
         } catch (caught) {
           if (libraryRequest.current === request) setLibraryError((caught as Error).message);
@@ -737,7 +741,7 @@ export function useStory() {
     };
   }, [attachmentKey, library, selected]);
   const viewKey = selected;
-  const draftKey = `draft:${selected}`;
+  const draftKey = storageKeys.draft(selected);
   currentDraftKey.current = draftKey;
   currentView.current = viewKey;
   // biome-ignore lint/correctness/useExhaustiveDependencies: Leaving this navigation scope releases its resize observer, even before new content mounts.
@@ -777,7 +781,7 @@ export function useStory() {
             : 0,
           top: node.scrollTop,
         };
-        writeViewCache(`reading:${viewKey}`, position);
+        writeViewCache(storageKeys.readingPosition(viewKey), position);
         setReadingSourceId(location?.source.dataset.sourceId ?? '');
       }
       return targetAtReaderLocation(selected, location);
@@ -788,7 +792,7 @@ export function useStory() {
     chatId: destination === 'story' ? selected : '',
     reader,
     capture: capturePosition,
-    storageKey: `reading:${selected}`,
+    storageKey: storageKeys.readingPosition(selected),
     onResume: (target) => openTarget(target),
   });
   const savePosition = useCallback(() => {
@@ -863,8 +867,8 @@ export function useStory() {
         setDraftReady(true);
         queueActions.current.restoreParked(draftKey.slice('draft:'.length));
       });
-    setLoreResetDraft(sessionStorage.getItem(`lore-reset:${draftKey}`) === 'true');
-    const cursor = readDraftCursor(`cursor:${draftKey}`);
+    setLoreResetDraft(sessionStorage.getItem(storageKeys.loreReset(draftKey)) === 'true');
+    const cursor = readDraftCursor(storageKeys.draftCursor(draftKey));
     const frame = requestAnimationFrame(() => {
       if (cursor && currentDraftKey.current === draftKey)
         input.current?.setSelectionRange(cursor.start, cursor.end);
@@ -877,7 +881,10 @@ export function useStory() {
   const rememberCursor = useCallback(() => {
     const node = input.current;
     if (node)
-      writeViewCache(`cursor:${draftKey}`, { start: node.selectionStart, end: node.selectionEnd });
+      writeViewCache(storageKeys.draftCursor(draftKey), {
+        start: node.selectionStart,
+        end: node.selectionEnd,
+      });
   }, [draftKey]);
   function persistDraft(value: RequestDraft) {
     const key = draftKey;
@@ -976,10 +983,10 @@ export function useStory() {
     composerDraft.write(value);
   }
   function editLoreContextReset(value: boolean) {
-    if (readCommand(commandStorageKey(selected))) return;
+    if (readCommand(storageKeys.command(selected))) return;
     setLoreResetDraft(value);
-    if (value) sessionStorage.setItem(`lore-reset:${draftKey}`, 'true');
-    else sessionStorage.removeItem(`lore-reset:${draftKey}`);
+    if (value) sessionStorage.setItem(storageKeys.loreReset(draftKey), 'true');
+    else sessionStorage.removeItem(storageKeys.loreReset(draftKey));
   }
   const inputTranslation = useInputTranslation({
     draftKey,
@@ -997,8 +1004,8 @@ export function useStory() {
       navigation.current.destination === 'story' &&
       navigation.current.chat === selected &&
       !submitLocks.current.has(viewKey) &&
-      !readCommand(commandStorageKey(selected)) &&
-      !sessionStorage.getItem(`pending-profile:${selected}`),
+      !readCommand(storageKeys.command(selected)) &&
+      !sessionStorage.getItem(storageKeys.pendingProfile(selected)),
   });
   const sources = useMemo(() => detail?.sources ?? [], [detail]);
   const visibleRuns = detail?.runs.filter((run) => !run.supersededBy) ?? [];
@@ -1021,7 +1028,7 @@ export function useStory() {
     )
       return;
     const node = reader.current;
-    const saved = readReadingPosition(`reading:${viewKey}`);
+    const saved = readReadingPosition(storageKeys.readingPosition(viewKey));
     const epoch = navigation.current.epoch;
     const frame = requestAnimationFrame(() => {
       if (
@@ -1219,7 +1226,7 @@ export function useStory() {
     savePosition();
     rememberCursor();
     setReaderTarget({ ...target });
-    writeOptionalStorage('session', `reader-mode:${target.sourceId}`, target.representation);
+    writeOptionalStorage('session', storageKeys.readerMode(target.sourceId), target.representation);
     if (replace) history.replaceState(null, '', readerTargetUrl(target));
     else history.pushState(null, '', readerTargetUrl(target));
     navigate({
@@ -1267,8 +1274,8 @@ export function useStory() {
     quickBusy ||
     profileDirty ||
     !detail ||
-    !!sessionStorage.getItem(`pending-profile:${selected}`) ||
-    !!readCommand(commandStorageKey(selected));
+    !!sessionStorage.getItem(storageKeys.pendingProfile(selected)) ||
+    !!readCommand(storageKeys.command(selected));
   async function generate(
     retryRunId?: string,
     editedRequest?: string,
@@ -1280,7 +1287,7 @@ export function useStory() {
       !detail ||
       detail.chat.id !== selected ||
       submitLocks.current.has(viewKey) ||
-      sessionStorage.getItem(`pending-profile:${selected}`)
+      sessionStorage.getItem(storageKeys.pendingProfile(selected))
     )
       return false;
     if (editedRequest !== undefined && !retryRunId) return false;
@@ -1289,7 +1296,7 @@ export function useStory() {
     const sentKey = draftKey;
     const sentView = viewKey;
     const sentEpoch = navigation.current.epoch;
-    const commandKey = commandStorageKey(chat.id);
+    const commandKey = storageKeys.command(chat.id);
     const previous = readCommand(commandKey);
     if (queued && previous) return false;
     if ((!previous && activeRun()) || (retryRunId && (reuseBlocked || !canReuseRun(retryRunId))))
@@ -1475,9 +1482,9 @@ export function useStory() {
       clearCommand(commandKey, idempotencyKey);
       if (!preserveDraft) inputTranslation.accepted(sentKey, sentTranslationId);
       if (payload.editedRequest && payload.retryOf)
-        sessionStorage.removeItem(`request-edit:${payload.retryOf}`);
+        sessionStorage.removeItem(storageKeys.requestEdit(payload.retryOf));
       if (!preserveDraft && payload.loreContextReset) {
-        sessionStorage.removeItem(`lore-reset:${sentKey}`);
+        sessionStorage.removeItem(storageKeys.loreReset(sentKey));
         if (currentDraftKey.current === sentKey) setLoreResetDraft(false);
       }
       if (!preserveDraft) {
@@ -1849,12 +1856,13 @@ export function useStory() {
     queue: Pick<ParkedQueue, 'text' | 'loreContextReset'>,
     reason: QueuedReturnReason | null
   ) {
-    if (currentDraftKey.current !== `draft:${chatId}`) {
-      parkQueue(chatId, {
+    if (currentDraftKey.current !== storageKeys.draft(chatId)) {
+      const parked = parkQueue(chatId, {
         text: queue.text,
         loreContextReset: queue.loreContextReset,
         ...(reason ? { reason } : {}),
       });
+      if (!parked) setQueueNotice({ chatId, message: 'chatsettings.m159' });
       return;
     }
     const current = composerDraft.read();
@@ -1899,7 +1907,7 @@ export function useStory() {
       decoding.current ||
       queueing.current ||
       submitLocks.current.has(viewKey) ||
-      readCommand(commandStorageKey(selected))
+      readCommand(storageKeys.command(selected))
     )
       return false;
     if (queuedRef.current) {
@@ -1942,12 +1950,12 @@ export function useStory() {
       ...revisions,
     };
     inputTranslation.accepted(draftKey, inputTranslation.beginSend());
-    parkQueue(chatId, { text, loreContextReset });
+    const parked = parkQueue(chatId, { text, loreContextReset });
     editDraft('');
     if (loreContextReset) editLoreContextReset(false);
     queuedRef.current = queue;
     setQueuedRequest(queue);
-    setQueueNotice(null);
+    setQueueNotice(parked ? null : { chatId, message: 'chatsettings.m159' });
     return true;
   }
   function cancelQueuedRequest() {
@@ -2030,10 +2038,10 @@ export function useStory() {
     (detail.profile.packageAttachments ?? []).every((ref) =>
       allContents.some((item) => refValue(item) === refValue(ref))
     );
-  const pendingCommand = selected ? readCommand(commandStorageKey(selected)) : null;
+  const pendingCommand = selected ? readCommand(storageKeys.command(selected)) : null;
   function forgetPendingRequest(expectedId: string) {
     if (!selected || submitLocks.current.has(selected)) return false;
-    const key = commandStorageKey(selected);
+    const key = storageKeys.command(selected);
     try {
       if (readCommand(key)?.record.id !== expectedId) return false;
       clearCommand(key, expectedId);
@@ -2072,7 +2080,8 @@ export function useStory() {
       detail.runs.filter((run) => ['running', 'queued'].includes(run.status)).length +
         detail.reader.activeJobs)
     : 0;
-  const pendingProfile = !!selected && !!sessionStorage.getItem(`pending-profile:${selected}`);
+  const pendingProfile =
+    !!selected && !!sessionStorage.getItem(storageKeys.pendingProfile(selected));
   const trackedRequest = requestActivities[viewKey];
   const settledOutsideActivity =
     trackedRequest?.status === 'accepted' &&

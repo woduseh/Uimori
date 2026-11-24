@@ -23,6 +23,7 @@ import {
   type ShortcutValidation,
 } from './shortcut-bindings.js';
 import { useTransientNotice } from './TransientNotice.js';
+import { storageKeys } from './storage-keys.js';
 
 type Registration = {
   run: () => unknown;
@@ -35,8 +36,8 @@ type Entry = { current: Registration };
 const registrations = new Map<ShortcutAction, Set<Entry>>();
 const repeatWindowMs = 2000;
 
-const enabledKey = 'uimori:shortcuts';
-const bindingsKey = 'uimori:shortcut-bindings';
+const enabledKey = storageKeys.shortcuts;
+const bindingsKey = storageKeys.shortcutBindings;
 const enabledListeners = new Set<() => void>();
 const bindingListeners = new Set<() => void>();
 let enabled = readPresentationChoice(enabledKey, ['true', 'false'], 'true') === 'true';

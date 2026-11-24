@@ -35,6 +35,7 @@ import { LibraryFolderCover, LibraryFolderCoverDialog } from './LibraryFolderCov
 import { contentPortraitUrl } from './content-portrait.js';
 import './bot-tree-navigation.css';
 import { readOptionalJson, writeOptionalStorage } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 export type { ChatFolder } from '../core/product.js';
 type View = {
@@ -43,7 +44,7 @@ type View = {
   order: string[];
   mode: 'bots' | 'activity';
 };
-const storageKey = 'uimori.bot-tree.v1';
+const storageKey = storageKeys.botTree;
 function readView(): View {
   const value = readOptionalJson('local', storageKey, null) as Partial<View> | null;
   return {

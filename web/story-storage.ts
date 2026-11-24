@@ -3,10 +3,7 @@ import {
   removeOptionalStorage,
   writeOptionalStorage,
 } from './optional-storage.js';
-
-export function commandStorageKey(chatId: string) {
-  return `command:${chatId}`;
-}
+import { storageKeys } from './storage-keys.js';
 
 export type ReadingPosition = {
   target?: string;
@@ -23,16 +20,19 @@ function optionalCache(key: string, persistent = false): Record<string, unknown>
     : null;
 }
 
-export function writeViewCache(key: `reading:${string}` | `cursor:${string}`, value: object) {
+export function writeViewCache(key: string, value: object) {
   const serialized = JSON.stringify(value);
-  if (key.startsWith('reading:') && writeOptionalStorage('local', key, serialized)) {
+  if (
+    key.startsWith(storageKeys.readingPosition.prefix) &&
+    writeOptionalStorage('local', key, serialized)
+  ) {
     removeOptionalStorage('session', key);
     return;
   }
   writeOptionalStorage('session', key, serialized);
 }
 
-export function clearReadingPosition(key: `reading:${string}`) {
+export function clearReadingPosition(key: string) {
   removeOptionalStorage('local', key);
   removeOptionalStorage('session', key);
 }

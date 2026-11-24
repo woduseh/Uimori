@@ -70,7 +70,6 @@ import {
   readFontSize,
   writePresentationSetting,
   watchPresentationWriteFailure,
-  removeRetiredStorage,
   type ResponseDisplayMode,
 } from './presentation-settings.js';
 import {
@@ -170,6 +169,7 @@ import {
   type SidePanelTab,
 } from './side-panel.js';
 import { modelLabel } from './storyLabels.js';
+import { storageKeys, sweepUnregisteredStorage } from './storage-keys.js';
 import './style.css';
 import './product.css';
 import './sidebar.css';
@@ -596,14 +596,14 @@ function App() {
   const settingsReturnToNew = useRef(false);
   const [focus, setFocus] = useState(false);
   const [sceneNavigatorEnabled, setSceneNavigatorEnabled] = useState(
-    () => readPresentationChoice('uimori:scene-navigator', ['true', 'false'], 'true') === 'true'
+    () => readPresentationChoice(storageKeys.sceneNavigator, ['true', 'false'], 'true') === 'true'
   );
   const showSceneNavigator = sceneNavigatorEnabled && !focus;
   useEffect(() => {
     if (focus) setSceneList(false);
   }, [focus]);
   useEffect(() => {
-    writePresentationSetting('uimori:scene-navigator', String(sceneNavigatorEnabled));
+    writePresentationSetting(storageKeys.sceneNavigator, String(sceneNavigatorEnabled));
   }, [sceneNavigatorEnabled]);
   const [inspectedRun, setInspectedRun] = useState('');
   const [chatTool, setChatTool] = useState<{
@@ -614,16 +614,17 @@ function App() {
   const navigationOpener = useRef<HTMLButtonElement>(null);
   const navigationReturnFocus = useRef<HTMLButtonElement>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    () => readPresentationChoice('uimori:sidebar-collapsed', ['true', 'false'], 'false') === 'true'
+    () =>
+      readPresentationChoice(storageKeys.sidebarCollapsed, ['true', 'false'], 'false') === 'true'
   );
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [panelSidebarExpanded, setPanelSidebarExpanded] = useState(false);
   const [readingWidth, setReadingWidth] = useState(() =>
-    readPresentationChoice('uimori:reading-width', READING_WIDTHS, 880)
+    readPresentationChoice(storageKeys.readingWidth, READING_WIDTHS, 880)
   );
   const [panelWidth, setPanelWidth] = useState(readSidePanelWidth);
   const [sidebarWidth, setSidebarWidth] = useState(() =>
-    readPresentationChoice('uimori:sidebar-width', SIDEBAR_WIDTHS, SIDEBAR_WIDTH)
+    readPresentationChoice(storageKeys.sidebarWidth, SIDEBAR_WIDTHS, SIDEBAR_WIDTH)
   );
   const desktopSidebarWidth = Math.min(
     sidebarWidth,
@@ -718,31 +719,31 @@ function App() {
       );
   }, [workspacePanel, helperWorkspaceOpen]);
   useEffect(() => {
-    writePresentationSetting('uimori:sidebar-collapsed', String(sidebarCollapsed));
+    writePresentationSetting(storageKeys.sidebarCollapsed, String(sidebarCollapsed));
   }, [sidebarCollapsed]);
   const [theme, setTheme] = useState(() =>
-    readPresentationChoice('uimori:theme', ['system', 'dark', 'light'] as const, 'system')
+    readPresentationChoice(storageKeys.theme, ['system', 'dark', 'light'] as const, 'system')
   );
   const [font, setFont] = useState<string>(() =>
-    readPresentationChoice('uimori:font', ['sans', 'serif'], 'sans')
+    readPresentationChoice(storageKeys.font, ['sans', 'serif'], 'sans')
   );
   const [fontSize, setFontSize] = useState(readFontSize);
   const [enterSend, setEnterSend] = useState(
-    () => readPresentationChoice('uimori:enter-send', ['true', 'false'], 'false') === 'true'
+    () => readPresentationChoice(storageKeys.enterSend, ['true', 'false'], 'false') === 'true'
   );
   const [readingLanguage, setReadingLanguage] = useState<string>(() =>
-    readPresentationChoice('uimori:reading-language', ['translation', 'original'], 'translation')
+    readPresentationChoice(storageKeys.readingLanguage, ['translation', 'original'], 'translation')
   );
   const [illustrationsCollapsed, setIllustrationsCollapsed] = useState(
     () =>
-      readPresentationChoice('uimori:illustrations-collapsed', ['true', 'false'], 'false') ===
+      readPresentationChoice(storageKeys.illustrationsCollapsed, ['true', 'false'], 'false') ===
       'true'
   );
   useEffect(() => {
-    writePresentationSetting('uimori:illustrations-collapsed', String(illustrationsCollapsed));
+    writePresentationSetting(storageKeys.illustrationsCollapsed, String(illustrationsCollapsed));
   }, [illustrationsCollapsed]);
   const [responseDisplay, setResponseDisplay] = useState<ResponseDisplayMode>(() =>
-    readPresentationChoice('uimori:response-display', ['stream', 'complete'] as const, 'stream')
+    readPresentationChoice(storageKeys.responseDisplay, ['stream', 'complete'] as const, 'stream')
   );
   const fonts = useFonts();
   const reading = useReadingPreferences(font, fontSize, readingWidth, fonts);
@@ -931,23 +932,23 @@ function App() {
     };
     apply();
     media.addEventListener('change', apply);
-    writePresentationSetting('uimori:theme', theme);
+    writePresentationSetting(storageKeys.theme, theme);
     return () => media.removeEventListener('change', apply);
   }, [theme]);
   useEffect(() => {
-    writePresentationSetting('uimori:enter-send', String(enterSend));
+    writePresentationSetting(storageKeys.enterSend, String(enterSend));
   }, [enterSend]);
   useEffect(() => {
-    writePresentationSetting('uimori:reading-language', readingLanguage);
+    writePresentationSetting(storageKeys.readingLanguage, readingLanguage);
   }, [readingLanguage]);
   useEffect(() => {
-    writePresentationSetting('uimori:response-display', responseDisplay);
+    writePresentationSetting(storageKeys.responseDisplay, responseDisplay);
   }, [responseDisplay]);
   useEffect(() => {
     document.documentElement.style.setProperty('--sidebar-w', `${desktopSidebarWidth}px`);
   }, [desktopSidebarWidth]);
   useEffect(() => {
-    writePresentationSetting('uimori:sidebar-width', String(sidebarWidth));
+    writePresentationSetting(storageKeys.sidebarWidth, String(sidebarWidth));
   }, [sidebarWidth]);
   useEffect(() => writeSidePanelWidth(panelWidth), [panelWidth]);
   useEffect(() => {
@@ -3657,7 +3658,7 @@ function App() {
     </ReadingPreferencesContext>
   );
 }
-removeRetiredStorage();
+sweepUnregisteredStorage();
 startPwa();
 void loadInitialLocale().then(() =>
   createRoot(document.getElementById('root')!).render(

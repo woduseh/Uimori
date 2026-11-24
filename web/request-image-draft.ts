@@ -4,6 +4,7 @@ import {
   readAttachmentDraft,
   writeAttachmentDraft,
 } from './attachment-draft-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 export type DraftImage = { id: string; name: string; blob: Blob; width: number; height: number };
 export type RequestDraft = { token: string; text: string; images: DraftImage[] };
@@ -22,10 +23,10 @@ function claimTab(tab: string): Promise<boolean> {
 }
 
 async function ownTab() {
-  let tab = sessionStorage.getItem('uimori:request-draft-tab');
+  let tab = sessionStorage.getItem(storageKeys.requestDraftTab);
   if (!tab) {
     tab = crypto.randomUUID();
-    sessionStorage.setItem('uimori:request-draft-tab', tab);
+    sessionStorage.setItem(storageKeys.requestDraftTab, tab);
   }
   if (!navigator.locks || (await claimTab(tab))) return tab;
   const inherited = tab;
@@ -33,7 +34,7 @@ async function ownTab() {
     tab = crypto.randomUUID();
   } while (!(await claimTab(tab)));
   await copyRecoveryPrefix(`request:${inherited}:`, `request:${tab}:`);
-  sessionStorage.setItem('uimori:request-draft-tab', tab);
+  sessionStorage.setItem(storageKeys.requestDraftTab, tab);
   return tab;
 }
 
@@ -43,9 +44,7 @@ export async function requestDraftKey(key: string) {
 }
 
 type DraftState = { token: string; accepted: string[] };
-function stateKey(key: string) {
-  return `request-state:${key}`;
-}
+const stateKey = storageKeys.requestState;
 function readState(key: string): DraftState | undefined {
   const value = sessionStorage.getItem(stateKey(key));
   return value ? (JSON.parse(value) as DraftState) : undefined;

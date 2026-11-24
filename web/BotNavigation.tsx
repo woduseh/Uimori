@@ -33,7 +33,12 @@ import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
 import { BotDefaultPersona } from './BotDefaultPersona.js';
 import './bot-navigation.css';
-import { readOptionalJson, writeOptionalStorage } from './optional-storage.js';
+import {
+  readOptionalJson,
+  removeOptionalStorage,
+  writeOptionalStorage,
+} from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 export type { ChatFolder } from '../core/product.js';
 type LibraryDestination = 'bot' | 'persona' | 'module' | 'prompts';
@@ -105,13 +110,16 @@ export function BotBranch(
   const [menuId, setMenuId] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState<Record<string, number>>({});
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
-    const value = readOptionalJson('local', `uimori.chat-folders.${botId}`, {});
+    const value = readOptionalJson('local', storageKeys.chatFolders(botId), {});
     return value && typeof value === 'object' && !Array.isArray(value)
       ? Object.fromEntries(Object.entries(value).filter(([, flag]) => typeof flag === 'boolean'))
       : {};
   });
   useEffect(() => {
-    writeOptionalStorage('local', `uimori.chat-folders.${botId}`, JSON.stringify(collapsed));
+    const folded = Object.fromEntries(Object.entries(collapsed).filter(([, flag]) => flag));
+    if (Object.keys(folded).length)
+      writeOptionalStorage('local', storageKeys.chatFolders(botId), JSON.stringify(folded));
+    else removeOptionalStorage('local', storageKeys.chatFolders(botId));
   }, [botId, collapsed]);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{

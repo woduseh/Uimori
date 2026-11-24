@@ -3,6 +3,7 @@ import {
   removeOptionalStorage,
   writeOptionalStorage,
 } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 export function readPresentationSetting(key: string): string | null {
   return readOptionalStorage('local', key);
@@ -21,16 +22,6 @@ export function writePresentationSetting(key: string, value: string) {
   if (!writeOptionalStorage('local', key, value)) reportWriteFailure?.();
 }
 
-const RETIRED_STORAGE_PREFIXES = ['uimori:editor-buffer:', 'uimori:helper-sidebar-width'];
-
-export function removeRetiredStorage() {
-  try {
-    for (const key of Object.keys(localStorage))
-      if (RETIRED_STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix)))
-        localStorage.removeItem(key);
-  } catch {}
-}
-
 export function removePresentationSetting(key: string) {
   removeOptionalStorage('local', key);
 }
@@ -47,7 +38,7 @@ export function readPresentationChoice<T extends string | number>(
 }
 
 export function readFontSize() {
-  const stored = readPresentationSetting('uimori:font-size');
+  const stored = readPresentationSetting(storageKeys.fontSize);
   const value = stored?.trim() ? Number(stored) : 18;
   return Number.isFinite(value) ? Math.max(9, Math.min(28, value)) : 18;
 }

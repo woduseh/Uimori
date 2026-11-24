@@ -14,6 +14,7 @@ import {
   writeOptionalStorage,
 } from './optional-storage.js';
 import { listedHelperSessions } from './helper-navigation-model.js';
+import { storageKeys } from './storage-keys.js';
 
 export type HelperSession = HelperConversation & {
   title?: string;
@@ -38,21 +39,21 @@ function remember(key: string, value: string | null) {
   else writeOptionalStorage('local', key, value);
 }
 const openedSessions = new Set<string>();
-const localReadKey = (id: string) => `uimori:helper-seen:${id}`;
+const localReadKey = storageKeys.helperSeen;
 const localRead = (id: string) => Number(read(localReadKey(id)) ?? 0);
 type HelperCreationRequest = { scope: HelperScope; requestKey: string; projectId?: string | null };
 export function forgetHelperSession(conversation: HelperConversation) {
   for (const key of [
-    'uimori:helper-session:all',
-    `uimori:helper-session:${helperGroupKey(conversation.scope)}`,
-    `uimori:helper-session-scope:${JSON.stringify(conversation.scope)}`,
+    storageKeys.helperSession('all'),
+    storageKeys.helperSession(helperGroupKey(conversation.scope)),
+    storageKeys.helperSessionScope(JSON.stringify(conversation.scope)),
   ])
     if (read(key) === conversation.id) remember(key, null);
   remember(localReadKey(conversation.id), null);
   openedSessions.delete(conversation.id);
 }
 export function selectedHelperSession(scope: HelperScope) {
-  return read(`uimori:helper-session-scope:${JSON.stringify(scope)}`);
+  return read(storageKeys.helperSessionScope(JSON.stringify(scope)));
 }
 
 export function useHelperSessions(
@@ -170,12 +171,9 @@ export function useHelperSessions(
       selectionVersions.current.set(key, (selectionVersions.current.get(key) ?? 0) + 1);
       selectionVersions.current.set('all', (selectionVersions.current.get('all') ?? 0) + 1);
       selectionScopes.current.set(key, viewedScope.current);
-      remember(`uimori:helper-session:${key}`, conversation.id);
-      remember('uimori:helper-session:all', conversation.id);
-      remember(
-        `uimori:helper-session-scope:${JSON.stringify(conversation.scope)}`,
-        conversation.id
-      );
+      remember(storageKeys.helperSession(key), conversation.id);
+      remember(storageKeys.helperSession('all'), conversation.id);
+      remember(storageKeys.helperSessionScope(JSON.stringify(conversation.scope)), conversation.id);
       selectedRef.current = {
         ...selectedRef.current,
         [key]: conversation.id,
@@ -210,8 +208,8 @@ export function useHelperSessions(
     const moved =
       selectionScopes.current.has(group) && selectionScopes.current.get(group) !== scopeKey;
     const saved = moved
-      ? read(`uimori:helper-session-scope:${scopeKey}`)
-      : (selectedRef.current[group] ?? read(`uimori:helper-session:${group}`));
+      ? read(storageKeys.helperSessionScope(scopeKey))
+      : (selectedRef.current[group] ?? read(storageKeys.helperSession(group)));
     const chosen =
       values.find((item) => item.id === saved) ??
       values.find((item) => JSON.stringify(item.scope) === scopeKey);
@@ -299,7 +297,9 @@ export function useHelperSessions(
     setCreating(true);
     setErrors((old) => ({ ...old, [group]: '' }));
     const creationScope: HelperScope = expanded ? { kind: 'library', workId: 'workspace' } : scope;
-    const key = `uimori:helper-create:${JSON.stringify(creationScope)}${projectId ? `:project:${projectId}` : ''}`;
+    const key = storageKeys.helperCreate(
+      `${JSON.stringify(creationScope)}${projectId ? `:project:${projectId}` : ''}`
+    );
     const selectionVersion = selectionVersions.current.get(group) ?? 0;
     const epoch = selectionEpoch?.current;
     let pending: PendingHelperRequest<HelperCreationRequest> | undefined;

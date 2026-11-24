@@ -35,13 +35,14 @@ import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSett
 import './illustration-presets.css';
 import './settings-layout.css';
 import { writeOptionalStorage } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 type Draft = {
   id: string | null;
   revision?: number;
   model: IllustrationPresetDefinition;
 };
-const changedKey = 'uimori:illustration-presets-changed';
+const changedKey = storageKeys.illustrationPresetsChanged;
 const messageOf = (error: unknown) => {
   const message = (error as Error).message;
   return /^COMFYUI_/u.test(message) ? illustrationErrorMessage(message) : message;

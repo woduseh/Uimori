@@ -5,27 +5,32 @@ import {
   removePresentationSetting,
   writePresentationSetting,
 } from './presentation-settings.js';
+import { storageKeys } from './storage-keys.js';
 
-const collapsedFoldersKey = 'uimori:library-collapsed-folders';
+const collapsedFoldersKey = storageKeys.libraryCollapsedFolders;
 
 export type LibrarySort = 'name' | 'name-desc' | 'manual';
 
-function saveCategoryPreference(
-  key: string,
-  category: LibraryCategory,
-  value: LibrarySort | string[]
-) {
+function saveCategoryPreference(key: string, category: LibraryCategory, value: string | string[]) {
   const stored = readOptionalJson('local', key, null);
   const current = stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
   writeOptionalStorage('local', key, JSON.stringify({ ...current, [category]: value }));
 }
 
 export function saveLibrarySort(category: LibraryCategory, sort: LibrarySort) {
-  saveCategoryPreference('uimori-library-sorts', category, sort);
+  saveCategoryPreference(storageKeys.librarySorts, category, sort);
+}
+
+export function saveLibraryView(category: LibraryCategory, view: string) {
+  saveCategoryPreference(storageKeys.libraryViews, category, view);
+}
+
+export function saveLibraryCardRatio(category: LibraryCategory, ratio: string) {
+  saveCategoryPreference(storageKeys.libraryCardRatios, category, ratio);
 }
 
 export function saveLibraryManualOrder(category: LibraryCategory, ids: string[]) {
-  saveCategoryPreference('uimori-library-manual-orders', category, ids);
+  saveCategoryPreference(storageKeys.libraryManualOrders, category, ids);
 }
 
 export function readCollapsedFolders(): string[] {

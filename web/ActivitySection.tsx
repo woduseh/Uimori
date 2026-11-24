@@ -3,9 +3,10 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { t, useI18n, formatNumber } from './i18n.js';
 import './activity-navigation.css';
 import { readOptionalJson, writeOptionalStorage } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 type ActivitySectionId = 'pinned' | 'unread' | 'running' | 'recent';
-const sectionStorageKey = 'uimori:activity-sections:v1';
+const sectionStorageKey = storageKeys.activitySections;
 const initialExpanded: Record<ActivitySectionId, boolean> = {
   pinned: true,
   unread: true,

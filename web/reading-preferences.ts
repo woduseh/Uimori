@@ -1,3 +1,4 @@
+import { storageKeys } from './storage-keys.js';
 export const QUOTE_PAIRS = [
   { id: 'double', open: '"', close: '"', label: '"큰따옴표"' },
   { id: 'curlyDouble', open: '“', close: '”', label: '“큰따옴표”' },
@@ -34,7 +35,7 @@ export const DEFAULT_READABILITY: ReadabilitySettings = {
   },
 };
 
-export const READABILITY_STORAGE_KEY = 'uimori:readability';
+export const READABILITY_STORAGE_KEY = storageKeys.readability;
 
 export function normalizeReadability(value: unknown): ReadabilitySettings {
   const input = value && typeof value === 'object' ? (value as Partial<ReadabilitySettings>) : {};

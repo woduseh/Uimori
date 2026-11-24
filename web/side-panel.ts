@@ -3,6 +3,7 @@ import {
   readPresentationSetting,
   writePresentationSetting,
 } from './presentation-settings.js';
+import { storageKeys } from './storage-keys.js';
 
 export type SidePanelTab = 'helper' | 'outline' | 'options' | 'board';
 export type WorkspacePanelState = SidePanelTab | 'helper-workspace' | 'closed';
@@ -11,7 +12,7 @@ export const MIN_CENTER_WIDTH = 768;
 export const SIDE_PANEL_MAX_WIDTH = 960;
 export const SIDE_PANEL_KEY_STEP = 16;
 const SIDE_PANEL_DEFAULT_WIDTH = 384;
-const SIDE_PANEL_WIDTH_KEY = 'uimori:panel-width';
+const SIDE_PANEL_WIDTH_KEY = storageKeys.panelWidth;
 const minimumWidths: Record<SidePanelTab, number> = {
   helper: 360,
   options: 360,
@@ -40,7 +41,7 @@ export function fitSidePanelWidth(preferred: number, minimum: number, room: numb
   return room >= minimum ? Math.min(width, room) : width;
 }
 
-const WORKSPACE_PANEL_KEY = 'uimori:workspace-panel';
+const WORKSPACE_PANEL_KEY = storageKeys.workspacePanel;
 const workspacePanelStates: WorkspacePanelState[] = [
   'closed',
   'helper',

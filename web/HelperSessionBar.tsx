@@ -32,6 +32,7 @@ import {
   clearPendingHelperRequest,
   type PendingHelperRequest,
 } from './helper-pending-request.js';
+import { storageKeys } from './storage-keys.js';
 import './deletion.css';
 import './helper-session-navigation.css';
 
@@ -189,7 +190,7 @@ export function HelperSessionBar(props: Props) {
     const selectionEpoch = props.onCloneStart();
     setCopying(session.id);
     setCopyError('');
-    const storageKey = `uimori:helper-copy:${session.id}`;
+    const storageKey = storageKeys.helperCopy(session.id);
     const input = {
       expectedRevision: session.revision,
       expectedEventSequence: session.latestEventSeq ?? 0,
@@ -505,7 +506,7 @@ export function HelperSessionBar(props: Props) {
             const title = projectTitle.trim();
             void (async () => {
               if (projectEditor === 'new') {
-                const key = `uimori:helper-project-create:${title}`;
+                const key = storageKeys.helperProjectCreate(title);
                 type ProjectRequest = { title: string; requestKey: string };
                 const pending = pendingHelperRequest(
                   key,

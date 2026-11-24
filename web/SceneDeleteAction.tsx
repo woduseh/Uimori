@@ -4,12 +4,13 @@ import { Dialog } from './Dialog.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { t, useI18n, translateMessage } from './i18n.js';
 import type { SceneDeletionImpact, SceneDeletionResult } from '../core/scene-deletion.js';
+import { storageKeys } from './storage-keys.js';
 
 type Pending = { impact: SceneDeletionImpact; scope: 'only' | 'following'; idempotencyKey: string };
 
 export function pendingSceneDeletions(chatId: string): string[] {
   if (!chatId) return [];
-  const prefix = `scene-delete:${chatId}:`;
+  const prefix = storageKeys.sceneDeletion(chatId, '');
   try {
     const sources: string[] = [];
     for (let index = 0; index < sessionStorage.length; index++) {
@@ -51,7 +52,7 @@ export function SceneDeleteDialog({
   const callbacks = useRef({ onClose, onError, onPendingChange });
   callbacks.current = { onClose, onError, onPendingChange };
   const path = `/chats/${encodeURIComponent(chatId)}/sources/${encodeURIComponent(sourceId)}`;
-  const storageKey = `scene-delete:${chatId}:${sourceId}`;
+  const storageKey = storageKeys.sceneDeletion(chatId, sourceId);
 
   useEffect(() => {
     let active = true;

@@ -11,6 +11,7 @@ import {
   removeOptionalStorage,
   writeOptionalStorage,
 } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 export type HelperDeleteScope = 'pair' | 'following';
 
@@ -130,10 +131,11 @@ export function HelperResponseEditor({
       article?.querySelector<HTMLElement>('.action-menu > summary')?.focus({ preventScroll: true })
     );
   };
-  const key = `helper-response-edit:${id}`;
+  const key = storageKeys.helperResponseEdit(id);
+  const [draftNotKept, setDraftNotKept] = useState(false);
   const persist = (value?: string) => {
     if (value === undefined) removeOptionalStorage('session', key);
-    else writeOptionalStorage('session', key, value);
+    setDraftNotKept(value !== undefined && !writeOptionalStorage('session', key, value));
   };
   const open = () => {
     setDraft(readOptionalStorage('session', key) ?? text);
@@ -181,6 +183,11 @@ export function HelperResponseEditor({
             persist(event.target.value);
           }}
         />
+        {draftNotKept && (
+          <p className="error" role="alert">
+            {t('chatsettings.m159')}
+          </p>
+        )}
         <div className="request-edit-footer">
           <span />
           <div className="request-edit-buttons">

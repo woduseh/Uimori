@@ -12,6 +12,8 @@ import {
   removeOptionalStorage,
   writeOptionalStorage,
 } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
+import { message as uiMessage } from './i18n.js';
 
 type DraftIdentity = { key: string; epoch: number; revision: number; text: string };
 type Original = { id: string; text: string };
@@ -24,17 +26,18 @@ type Options = {
   writeDraft: (text: string) => void;
   available: () => boolean;
 };
-const languageKey = 'uimori:input-translation-language';
-const originalKey = (key: string) => `input-translation:${key}`;
+const languageKey = storageKeys.inputTranslationLanguage;
+const originalKey = storageKeys.inputTranslationOriginal;
 function readOriginal(key: string): Original | null {
   const value = readOptionalJson('session', originalKey(key), null) as Partial<Original> | null;
   if (value && typeof value.id === 'string' && typeof value.text === 'string')
     return value as Original;
   return null;
 }
-function saveOriginal(key: string, value: Original | null) {
-  if (value) writeOptionalStorage('session', originalKey(key), JSON.stringify(value));
-  else removeOptionalStorage('session', originalKey(key));
+function saveOriginal(key: string, value: Original | null): boolean {
+  if (value) return writeOptionalStorage('session', originalKey(key), JSON.stringify(value));
+  removeOptionalStorage('session', originalKey(key));
+  return true;
 }
 function initialLanguage(): InputTranslationLanguage {
   return inputTranslationLanguage(readOptionalStorage('local', languageKey))?.code ?? 'en';
@@ -79,7 +82,7 @@ export function useInputTranslation(options: Options) {
       originalRef.current.key === key ? originalRef.current.value : readOriginal(key);
     const value = previous ?? { id: crypto.randomUUID(), text };
     originalRef.current = { key, value };
-    saveOriginal(key, value);
+    if (!saveOriginal(key, value)) setError(uiMessage('chatsettings.m159'));
     setOriginal(value);
   }
   async function translate() {

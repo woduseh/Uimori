@@ -14,6 +14,7 @@ import {
   removeOptionalStorage,
   writeOptionalStorage,
 } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 export function RequestMessage({
   runId,
@@ -61,7 +62,7 @@ export function RequestMessage({
   onEditingChange?: (editing: boolean) => void;
 }) {
   useI18n();
-  const key = `${onSave ? 'request-context-edit' : 'request-edit'}:${runId}`;
+  const key = (onSave ? storageKeys.requestContextEdit : storageKeys.requestEdit)(runId);
   const shownRequest = displayText ?? request;
   const [editing, setEditing] = useState(false);
   const [revealed, setRevealed] = useState(false);
@@ -103,9 +104,10 @@ export function RequestMessage({
     scope: editor,
     active: editing && !!onSave && !onConfirm,
   });
+  const [draftNotKept, setDraftNotKept] = useState(false);
   const saveDraft = (value?: string) => {
     if (value === undefined) removeOptionalStorage('session', key);
-    else writeOptionalStorage('session', key, value);
+    setDraftNotKept(value !== undefined && !writeOptionalStorage('session', key, value));
   };
   const editingCallback = useRef(onEditingChange);
   useLayoutEffect(() => {
@@ -183,6 +185,11 @@ export function RequestMessage({
               saveDraft(event.target.value);
             }}
           />
+          {draftNotKept && (
+            <p className="error" role="alert">
+              {t('chatsettings.m159')}
+            </p>
+          )}
           <div className="request-edit-footer">
             <small>
               {onConfirm

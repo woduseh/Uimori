@@ -12,6 +12,7 @@ import {
   READABILITY_STORAGE_KEY,
   type ReadabilitySettings,
 } from './reading-preferences.js';
+import { storageKeys } from './storage-keys.js';
 
 function readPreferences() {
   try {
@@ -105,9 +106,9 @@ export function useReadingPreferences(
   useEffect(() => {
     writePresentationSetting(READABILITY_STORAGE_KEY, JSON.stringify(settings));
   }, [settings]);
-  useEffect(() => writePresentationSetting('uimori:font', font), [font]);
-  useEffect(() => writePresentationSetting('uimori:font-size', String(fontSize)), [fontSize]);
-  useEffect(() => writePresentationSetting('uimori:reading-width', String(width)), [width]);
+  useEffect(() => writePresentationSetting(storageKeys.font, font), [font]);
+  useEffect(() => writePresentationSetting(storageKeys.fontSize, String(fontSize)), [fontSize]);
+  useEffect(() => writePresentationSetting(storageKeys.readingWidth, String(width)), [width]);
   useEffect(() => {
     const receive = (event: StorageEvent) => {
       if (event.key !== READABILITY_STORAGE_KEY && event.key !== null) return;

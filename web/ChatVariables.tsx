@@ -10,6 +10,7 @@ import { api, ApiError, definiteRejection } from './api.js';
 import { SearchIcon, ResetIcon } from './ui-icons.js';
 import './chat-variables.css';
 import { readOptionalJson } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 type VariableView = ChatVariableState & {
   defaults: Record<string, string>;
@@ -89,7 +90,7 @@ function rememberDraft(key: string, value: Draft | null) {
 
 export function ChatVariables({ chatId, active = true, refreshKey, onChange }: Props) {
   useI18n();
-  const storageKey = `uimori:chat-variable-draft:${chatId}`;
+  const storageKey = storageKeys.chatVariableDraft(chatId);
   const [view, setView] = useState<VariableView | null>(null);
   const [draft, setDraft] = useState<Draft | null>(() => readDraft(storageKey));
   const [loading, setLoading] = useState(true);

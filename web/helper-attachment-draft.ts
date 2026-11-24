@@ -23,6 +23,7 @@ import {
 import { message } from './i18n.js';
 import { requestDraftKey, type DraftImage } from './request-image-draft.js';
 import { writeOptionalStorage } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 export type DraftFile = {
   id: string;
@@ -54,8 +55,8 @@ const emptyDraft = (): HelperAttachmentDraft => ({
   files: [],
 });
 const logicalKey = (id: string) => `helper-attachments:${id}`;
-const acceptedKey = (id: string) => `uimori:helper-attachments-accepted:${id}`;
-const tokenKey = (id: string) => `uimori:helper-attachments-token:${id}`;
+const acceptedKey = storageKeys.helperAttachmentsAccepted;
+const tokenKey = storageKeys.helperAttachmentsToken;
 function entry(id: string): Entry {
   let found = entries.get(id);
   if (!found) {

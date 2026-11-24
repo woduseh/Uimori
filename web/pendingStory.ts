@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { validateContentAttachment } from '../core/risu-content.js';
 import { validatePackageStartRef, type PackageStartRef } from '../core/package-start.js';
 import { message as uiMessage } from './i18n.js';
+import { storageKeys } from './storage-keys.js';
 export type NewStoryProfileIntent = {
   packageAttachments?: ChatProfile['packageAttachments'];
   profileBaseRevision?: number;
@@ -13,7 +14,7 @@ export type NewStoryProfileIntent = {
   };
 };
 type PendingStoryProfile = NewStoryProfileIntent & { version: 2; kind: 'new-story-profile' };
-const pendingKey = (chatId: string) => `pending-profile:${chatId}`;
+const pendingKey = storageKeys.pendingProfile;
 const saving = new Map<string, Promise<void>>();
 
 export class PendingStoryProfileConflict extends Error {

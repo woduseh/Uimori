@@ -12,6 +12,7 @@ import { t, useI18n } from './i18n.js';
 import { StoryUiImageUrls, storyUiRenderCatalog } from './story-ui-catalog.js';
 import './story-ui.css';
 import { readStoryUiDraft, storyUiDraftChanges, writeStoryUiDraft } from './story-ui-draft.js';
+import { storageKeys } from './storage-keys.js';
 
 type UiSegment = Extract<StoryUiSegment, { kind: 'ui' }>;
 type Command = { body: Record<string, unknown>; uncertain: boolean };
@@ -76,10 +77,16 @@ export function StoryUi({
   const [failed, setFailed] = useState(false);
   const [failure, setFailure] = useState<ApiError>();
   const [uncertain, setUncertain] = useState(false);
+  const [draftNotKept, setDraftNotKept] = useState(false);
   const callback = useRef(setAction);
   const draftKey =
     sourceId && sourceHash
-      ? `uimori:story-ui-draft:${chatId}:${sourceId}:${sourceHash}:${actionBlockId ?? segment.id}`
+      ? storageKeys.storyUiDraft(
+          String(chatId),
+          sourceId,
+          sourceHash,
+          String(actionBlockId ?? segment.id)
+        )
       : undefined;
   callback.current = (next) => {
     if (!uncertain && !pending) setAction(next);
@@ -98,7 +105,7 @@ export function StoryUi({
       } catch {}
     }
     const subscription = surface.dataModel.subscribe('/', (value) => {
-      writeStoryUiDraft(draftKey, storyUiDraftChanges(initial, value));
+      setDraftNotKept(!writeStoryUiDraft(draftKey, storyUiDraftChanges(initial, value)));
     });
     return () => subscription.unsubscribe();
   }, [surface, draftKey]);
@@ -185,6 +192,11 @@ export function StoryUi({
         )}
         {!surface && <p role="status">{t('storyUi.invalid')}</p>}
       </section>
+      {draftNotKept && (
+        <p className="error" role="alert">
+          {t('chatsettings.m159')}
+        </p>
+      )}
       {action &&
         ((latest || uncertain) && chatId ? (
           <div className="story-ui-action">

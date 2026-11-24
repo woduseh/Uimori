@@ -7,6 +7,7 @@ import { browserClientId } from './browser-client.js';
 import { api } from './api.js';
 import { readReadingPosition } from './story-storage.js';
 import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 function positionIdentity(position: ReadingPosition): string {
   const target = position.target;
@@ -263,7 +264,7 @@ export function useReadingSync(options: {
   const candidate =
     other ??
     (state.key === key && !readReadingPosition(options.storageKey)?.source ? state.own : null);
-  const acknowledgmentKey = `uimori:reading-suggestion:${key}`;
+  const acknowledgmentKey = storageKeys.readingSuggestion(key);
   let acknowledgedIdentity = acknowledged.current.get(key);
   if (acknowledgedIdentity === undefined)
     acknowledgedIdentity = readOptionalStorage('session', acknowledgmentKey) ?? undefined;

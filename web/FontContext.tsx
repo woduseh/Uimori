@@ -18,7 +18,8 @@ export {
   type FontPreferences,
   type FontCatalog,
 } from '../core/fonts.js';
-export const fontsChangedKey = 'uimori:fonts-changed';
+import { storageKeys } from './storage-keys.js';
+export const fontsChangedKey = storageKeys.fontsChanged;
 export const fontsChangedEvent = 'uimori-fonts-changed';
 type FontState = {
   catalog: FontCatalog | null;

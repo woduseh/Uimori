@@ -93,9 +93,12 @@ import './library.css';
 import {
   saveLibrarySort,
   saveLibraryManualOrder,
+  saveLibraryView,
+  saveLibraryCardRatio,
   type LibrarySort,
 } from './library-list-preferences.js';
-import { readOptionalJson, writeOptionalStorage } from './optional-storage.js';
+import { readOptionalJson } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 const contentLabelKeys: Record<ContentKind, string> = {
   bot: 'library.bot',
@@ -147,7 +150,7 @@ function savedViews(): Record<PrimaryLibraryTab, ViewMode> {
     persona: 'cards',
     module: 'list',
   };
-  const stored = storedByTab('uimori-library-views');
+  const stored = storedByTab(storageKeys.libraryViews);
   for (const { id } of libraryTabs)
     if (stored[id] === 'cards' || stored[id] === 'list') defaults[id] = stored[id];
   return defaults;
@@ -158,7 +161,7 @@ function savedCardRatios(): Record<PrimaryLibraryTab, CardRatio> {
     persona: '1:1',
     module: '1:1',
   };
-  const stored = storedByTab('uimori-library-card-ratios');
+  const stored = storedByTab(storageKeys.libraryCardRatios);
   for (const { id } of libraryTabs)
     if (cardRatios.includes(stored[id] as CardRatio)) defaults[id] = stored[id] as CardRatio;
   return defaults;
@@ -169,7 +172,7 @@ function savedSorts(): Record<PrimaryLibraryTab, SortMode> {
     persona: 'name',
     module: 'name',
   };
-  const stored = storedByTab('uimori-library-sorts');
+  const stored = storedByTab(storageKeys.librarySorts);
   for (const { id } of libraryTabs)
     if (stored[id] === 'name' || stored[id] === 'name-desc' || stored[id] === 'manual')
       defaults[id] = stored[id];
@@ -177,7 +180,7 @@ function savedSorts(): Record<PrimaryLibraryTab, SortMode> {
 }
 function savedManualOrders(): Record<PrimaryLibraryTab, string[]> {
   const defaults: Record<PrimaryLibraryTab, string[]> = { bot: [], persona: [], module: [] };
-  const stored = storedByTab('uimori-library-manual-orders');
+  const stored = storedByTab(storageKeys.libraryManualOrders);
   for (const { id } of libraryTabs)
     if (Array.isArray(stored[id]))
       defaults[id] = stored[id].filter((value): value is string => typeof value === 'string');
@@ -463,7 +466,7 @@ export function LibraryPanel({
         setEditing({ kind: full.kind, item: full });
       } else if (action === 'clone') {
         const result = await cloneWithReceipt<ResourceSaveResult>(
-          `resource-clone:content:${full.id}`,
+          storageKeys.resourceClone('content', full.id),
           {
             kind: 'content',
             sourceId: full.id,
@@ -534,7 +537,7 @@ export function LibraryPanel({
   function setView(mode: ViewMode) {
     const next = { ...views, [tab]: mode };
     setViews(next);
-    writeOptionalStorage('local', 'uimori-library-views', JSON.stringify(next));
+    saveLibraryView(tab, mode);
   }
   function setSort(mode: SortMode) {
     const next = { ...sortByTab, [tab]: mode };
@@ -553,7 +556,7 @@ export function LibraryPanel({
   function setCardRatio(ratio: CardRatio) {
     const next = { ...cardRatioByTab, [tab]: ratio };
     setCardRatioByTab(next);
-    writeOptionalStorage('local', 'uimori-library-card-ratios', JSON.stringify(next));
+    saveLibraryCardRatio(tab, ratio);
   }
   function itemMenu(item: Content) {
     const list = listOf(item.id);

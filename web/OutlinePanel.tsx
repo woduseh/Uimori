@@ -52,6 +52,7 @@ import type { SceneCommand } from '../core/story.js';
 import './outline.css';
 import { readOptionalJson } from './optional-storage.js';
 import { useUnsavedInput } from './unsaved-input.js';
+import { storageKeys } from './storage-keys.js';
 
 type Draft = {
   title: string;
@@ -135,8 +136,8 @@ export function OutlinePanel({
 }) {
   const { t } = useI18n();
   const chatId = state.detail?.chat.id ?? '';
-  const prefix = `outline-workspace:${chatId}`;
-  const pendingKey = `outline-pending:${chatId}`;
+  const prefix = storageKeys.outlineWorkspace(chatId);
+  const pendingKey = storageKeys.outlinePending(chatId);
   const [outline, setOutline] = useState<OutlineDetail | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     stored(`${prefix}:selected`, null)

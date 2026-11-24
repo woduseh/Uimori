@@ -49,6 +49,7 @@ import {
   type ContentAdvancedTab,
   type ContentSection,
 } from './resource-sections.js';
+import { storageKeys } from './storage-keys.js';
 import './native-editor.css';
 
 const object = (value: unknown): Record<string, unknown> =>
@@ -56,7 +57,7 @@ const object = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 const string = (value: unknown) => (typeof value === 'string' ? value : '');
-const GREETING_FONT_KEY = 'uimori:first-message-font';
+const GREETING_FONT_KEY = storageKeys.firstMessageFont;
 const GREETING_FONTS = ['body', 'mono'] as const;
 type SourcePart = 'greetings' | 'lore' | 'regex' | 'triggers' | 'card' | 'module';
 type Section = ContentSection;

@@ -39,7 +39,8 @@ export function readStoryUiDraft(key: string): Change[] {
     : [];
 }
 
-export function writeStoryUiDraft(key: string, changes: Change[]) {
-  if (changes.length) writeOptionalStorage('session', key, JSON.stringify(changes));
-  else removeOptionalStorage('session', key);
+export function writeStoryUiDraft(key: string, changes: Change[]): boolean {
+  if (changes.length) return writeOptionalStorage('session', key, JSON.stringify(changes));
+  removeOptionalStorage('session', key);
+  return true;
 }

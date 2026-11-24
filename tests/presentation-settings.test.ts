@@ -3,7 +3,6 @@ import {
   readFontSize,
   readPresentationChoice,
   readPresentationSetting,
-  removeRetiredStorage,
   watchPresentationWriteFailure,
   writePresentationSetting,
 } from '../web/presentation-settings.js';
@@ -91,37 +90,22 @@ test('the right panel width keeps a stored preset, clamps other values and survi
   expect(() => writeSidePanelWidth(400)).not.toThrow();
 });
 
-test('a refused write is reported, an unset numeric choice keeps its fallback and retired keys are removed', () => {
-  const values = new Map<string, string>([
-    ['uimori:editor-buffer:content:a', 'x'],
-    ['uimori:editor-buffer:prompt-preset:b', 'y'],
-    ['uimori:helper-sidebar-width', '320'],
-    ['uimori:sidebar-width', '400'],
-  ]);
+test('a refused write is reported once storage refuses it and an unset numeric choice keeps its fallback', () => {
+  const values = new Map<string, string>([['uimori:sidebar-width', '400']]);
   let full = true;
-  const storage = {
+  vi.stubGlobal('localStorage', {
     getItem: (key: string) => values.get(key) ?? null,
     setItem: (key: string, value: string) => {
       if (full && !values.has(key)) throw new Error('Quota exceeded');
       values.set(key, value);
     },
-    removeItem: (key: string) => values.delete(key),
-  };
-  vi.stubGlobal(
-    'localStorage',
-    new Proxy(storage, {
-      ownKeys: () => [...values.keys()],
-      getOwnPropertyDescriptor: () => ({ enumerable: true, configurable: true }),
-    })
-  );
+  });
   const failures = vi.fn();
   const stop = watchPresentationWriteFailure(failures);
   writePresentationSetting('uimori:sidebar-width', '320');
   expect(failures).not.toHaveBeenCalled();
   writePresentationSetting('uimori:new-setting', '1');
   expect(failures).toHaveBeenCalledTimes(1);
-  removeRetiredStorage();
-  expect([...values.keys()]).toEqual(['uimori:sidebar-width']);
   full = false;
   writePresentationSetting('uimori:new-setting', '1');
   expect(failures).toHaveBeenCalledTimes(1);

@@ -82,6 +82,7 @@ import { useTestMode } from './useTestMode.js';
 import './ProviderManagement.css';
 import './settings-actions.css';
 import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
+import { storageKeys } from './storage-keys.js';
 
 const versionRef = (item: { id: string; revision: number }) => `${item.id}@${item.revision}`;
 function vertexLocationOf(
@@ -133,7 +134,7 @@ export function ConnectionEditor({
   }, []);
   const [query, setQuery] = useState('');
   const [jevPosition, setJevPosition] = useState(() =>
-    Math.max(0, Number(readOptionalStorage('local', 'uimori-jev-display-position')) || 0)
+    Math.max(0, Number(readOptionalStorage('local', storageKeys.jevDisplayPosition)) || 0)
   );
   const dragged = useRef<{ kind: 'connection' | 'model'; id: string } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -529,7 +530,7 @@ export function ConnectionEditor({
         if (hasJev) {
           const index = next.indexOf(JEV_PROVIDER_DEFINITION.id);
           setJevPosition(index);
-          writeOptionalStorage('local', 'uimori-jev-display-position', String(index));
+          writeOptionalStorage('local', storageKeys.jevDisplayPosition, String(index));
         }
       } else {
         const model = library.models.find((item) => item.id === id);

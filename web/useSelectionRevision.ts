@@ -4,8 +4,9 @@ import { api } from './api.js';
 import { message as uiMessage } from './i18n.js';
 import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
 import { useCodexContentWarning } from './useCodexContentWarning.js';
+import { storageKeys } from './storage-keys.js';
 
-const CONTEXT_KEY = 'uimori:selection-revision-context';
+const CONTEXT_KEY = storageKeys.selectionRevisionContext;
 const storedContext = (): RevisionContext =>
   readOptionalStorage('local', CONTEXT_KEY) === 'nearby' ? 'nearby' : 'scene';
 

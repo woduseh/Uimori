@@ -1,8 +1,9 @@
 import type { Chat } from '../core/types.js';
 import { api, ApiError, definiteRejection } from './api.js';
+import { storageKeys } from './storage-keys.js';
 
 export async function requestChatFork(chatId: string, sourceId: string | null): Promise<Chat> {
-  const key = `fork-command:${chatId}:${sourceId}`;
+  const key = storageKeys.forkCommand(chatId, sourceId);
   const storage = sessionStorage;
   const previous = storage.getItem(key);
   const idempotencyKey = previous || crypto.randomUUID();
