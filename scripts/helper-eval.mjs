@@ -62,7 +62,7 @@ if (values.list || values['dry-run'] || (!values.synthetic && !values.live)) {
         mode: 'dry-run',
         cases: selected,
         liveProtocols: protocols,
-        next: 'npm run build; then --synthetic, or --live --config <file>. See docs/HELPER-EVALUATION.md.',
+        next: 'npm run build; then --synthetic, or --live --config <file>. See docs/dev/HELPER-EVALUATION.md.',
       },
       null,
       2

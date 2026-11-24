@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 
 const DESKTOP_WIDTH = viewportWidths.desktop;
 
-export const metricSource = 'docs/UI-GALLERY.md#metrics';
+export const metricSource = 'docs/dev/UI-GALLERY.md#metrics';
 
 export const metricNames = [
   'header-controls',

@@ -8,7 +8,7 @@ Polish the controls around the manuscript, not the manuscript itself. Work withi
 
 ## Read only the relevant owner
 
-Paths below are relative to the repository root. The motion tokens (`--motion-fast`, `--motion-panel`, `--motion-overlay`, `--motion-ease-out`) live in `web/style.css`, and their roles are listed in `docs/UI-PRINCIPLES.md`; read them there rather than copying values into instructions. A duration or easing the tokens do not cover enters as a new token, not as a literal value or a range.
+Paths below are relative to the repository root. The motion tokens (`--motion-fast`, `--motion-panel`, `--motion-overlay`, `--motion-ease-out`) live in `web/style.css`, and their roles are listed in `docs/dev/UI-PRINCIPLES.md`; read them there rather than copying values into instructions. A duration or easing the tokens do not cover enters as a new token, not as a literal value or a range.
 
 | Surface | Component / CSS | Pattern |
 | --- | --- | --- |
@@ -33,7 +33,7 @@ animation.
 
 When motion on a surface in the table changes, update the table, the browser
 assertions in `tests/motion-browser.spec.ts` and the motion paragraph in
-`docs/DEVELOPMENT.md` in the same change.
+`docs/dev/DEVELOPMENT.md` in the same change.
 
 - Keep modal geometry and anchored menu placement stable, including
   viewport-positioned descendants and small screens. A dialog ends its entrance
@@ -50,7 +50,7 @@ assertions in `tests/motion-browser.spec.ts` and the motion paragraph in
 
 ## Verification
 
-Choose checks for the affected behavior using `docs/DEVELOPMENT.md`. Reuse
+Choose checks for the affected behavior using `docs/dev/DEVELOPMENT.md`. Reuse
 existing browser coverage and add only meaningful missing cases. Relevant risks
 include focus and Escape handling, repeated open/close, nested confirmations,
 menu placement, small viewports and reduced-motion preferences. Inspect rendered

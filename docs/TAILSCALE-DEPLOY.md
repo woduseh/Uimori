@@ -1,6 +1,6 @@
 # Tailscale로 개인 서버 접속하기
 
-이미 구성된 Oracle 인스턴스의 주소는 [https://uimori.taila7874d.ts.net/](https://uimori.taila7874d.ts.net/)예요. 기본 HTTPS 포트 443을 사용하므로 주소에 포트 번호를 붙이지 않아요. 앱 업데이트는 [커밋·푸시·Oracle 업데이트](ORACLE-RELEASE.md)를 봐요. 아래는 최초 구성과 일반 운영 안내예요.
+이미 구성된 Oracle 인스턴스의 주소는 [https://uimori.taila7874d.ts.net/](https://uimori.taila7874d.ts.net/)예요. 기본 HTTPS 포트 443을 사용하므로 주소에 포트 번호를 붙이지 않아요. 앱 업데이트는 [커밋·푸시·Oracle 업데이트](dev/ORACLE-RELEASE.md)를 봐요. 아래는 최초 구성과 일반 운영 안내예요.
 
 [개인 서버 안내](SELF-HOST.md)의 인증·프로바이더·저장 조건을 유지하고, 호스트의 Tailscale이 HTTPS를 처리하는 배포 방법이에요. Docker와 Tailscale이 설치되고 같은 tailnet에 연결된 Linux 서버를 전제로 해요.
 

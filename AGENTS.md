@@ -12,7 +12,7 @@ Optimize for correct behavior, local reasoning, and low maintenance and operatin
 
 Keep business rules and state ownership clear. Keep provider and storage details out of unrelated application policies and UI code. For asynchronous provider and storage operations, account for cancellation, late responses, duplicate effects, and unknown outcomes; preserve user data, credentials, and necessary access boundaries.
 
-Use [DEVELOPMENT](docs/DEVELOPMENT.md) to choose verification rather than duplicating its procedures here. In the report, explain material design decisions and tradeoffs, name any change beyond the request, and distinguish verified behavior from remaining uncertainty.
+Use [DEVELOPMENT](docs/dev/DEVELOPMENT.md) to choose verification rather than duplicating its procedures here. In the report, explain material design decisions and tradeoffs, name any change beyond the request, and distinguish verified behavior from remaining uncertainty.
 
 ## Delegation
 
@@ -26,13 +26,13 @@ Work directly by default. Delegate when the work splits into substantial pieces 
 Read only the references needed for the task:
 
 - [README](README.md) and [README.ko](README.ko.md): product overview and usage in English and Korean. When changing one, update the other to match.
-- [CODE-MAP](docs/CODE-MAP.md): feature contracts and entry points.
-- [UI-PRINCIPLES](docs/UI-PRINCIPLES.md): read before changing app-owned UI, layout, visible copy, or loading/error/empty states. Start with its working checklist.
+- [CODE-MAP](docs/dev/CODE-MAP.md): feature contracts and entry points.
+- [UI-PRINCIPLES](docs/dev/UI-PRINCIPLES.md): read before changing app-owned UI, layout, visible copy, or loading/error/empty states. Start with its working checklist.
 - [THEME-AUTHORING](docs/THEME-AUTHORING.md): read when creating or changing themes and their public styling contract.
-- [DEVELOPMENT](docs/DEVELOPMENT.md): setup, check selection, commands, and troubleshooting.
-- [ORACLE-RELEASE](docs/ORACLE-RELEASE.md): read when preparing or performing an authorized Oracle deployment.
+- [DEVELOPMENT](docs/dev/DEVELOPMENT.md): setup, check selection, commands, and troubleshooting.
+- [ORACLE-RELEASE](docs/dev/ORACLE-RELEASE.md): read when preparing or performing an authorized Oracle deployment.
 - [UIMORI-MOTION](.agents/skills/uimori-motion/SKILL.md): read when implementing or reviewing motion in app-owned UI controls.
 
 Update the owning document when behavior changes. Keep plans and execution history out of standing instructions.
 
-Documents record what the code cannot state. A user guide describes behavior for a reader who does not read the code. Agent-facing text, such as a `구현 참고` section, the technical part of [HELPER-TOOLS](docs/HELPER-TOOLS.md) or [TOOL-CONTRACTS](docs/TOOL-CONTRACTS.md), names the files that define and test a contract and keeps only what those files do not carry: reasons, ownership constraints, boundaries between features and deliberate omissions. It does not restate tool descriptions, schemas, limits or tested behavior. Remove a statement as duplicated only after finding the description, schema field or test that carries it, and correct a document that contradicts the code.
+Documents record what the code cannot state. A user guide describes behavior for a reader who does not read the code. Agent-facing text, such as a `구현 참고` section, the technical part of [HELPER-TOOLS](docs/HELPER-TOOLS.md) or [TOOL-CONTRACTS](docs/dev/TOOL-CONTRACTS.md), names the files that define and test a contract and keeps only what those files do not carry: reasons, ownership constraints, boundaries between features and deliberate omissions. It does not restate tool descriptions, schemas, limits or tested behavior. Remove a statement as duplicated only after finding the description, schema field or test that carries it, and correct a document that contradicts the code.

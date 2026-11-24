@@ -4,15 +4,6 @@ import { HttpError } from './request-validation.js';
 import { storyUiPrompt } from './story-ui.js';
 
 const DIRECTORY = fileURLToPath(new URL('../docs/', import.meta.url));
-const DEVELOPER_DOCUMENTS = new Set([
-  'CODE-MAP',
-  'DEVELOPMENT',
-  'HELPER-EVALUATION',
-  'ORACLE-RELEASE',
-  'TOOL-CONTRACTS',
-  'UI-GALLERY',
-  'UI-PRINCIPLES',
-]);
 const PAGE_CHARS = 8000;
 const MAX_PAGE_CHARS = 20_000;
 const MAX_MATCHES = 30;
@@ -26,7 +17,6 @@ function guides(): AppGuide[] {
   loaded ??= readdirSync(DIRECTORY, { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
     .map((entry) => entry.name.slice(0, -'.md'.length))
-    .filter((name) => !DEVELOPER_DOCUMENTS.has(name))
     .sort()
     .map((name) => {
       const text = readFileSync(`${DIRECTORY}${name}.md`, 'utf8').replaceAll('\r\n', '\n');

@@ -40,7 +40,7 @@ Uimori의 도우미는 대화와 서재에서 창작과 설정을 보조하는 �
 - [도우미 첨부 파일](HELPER-ATTACHMENTS.md)
 - [삽화와 외형 프로필](ILLUSTRATIONS.md)
 - [원작 참고와 메모](STORY-GUIDE.md)
-- [도구 상세 계약](TOOL-CONTRACTS.md)
+- [도구 상세 계약](dev/TOOL-CONTRACTS.md)
 
 ---
 
@@ -48,11 +48,11 @@ Uimori의 도우미는 대화와 서재에서 창작과 설정을 보조하는 �
 
 아래 내용은 에이전트와 기여자를 위한 기록이에요. 도구의 인자·한도·결과 같은 계약은 모델이 받는 도구 설명과 입력 스키마, 그리고 테스트에 있어요. 여기에는 그 코드가 말해 주지 않는 것만 적어요.
 
-The helper's provider-facing tools are `app.tools` and `app.call`, plus `data.exec` when `UIMORI_SHELL_ROOT` configures the Linux runner; `server/helper-runtime.ts` assembles them for each request. Everything else, including `data.search`, `data.read` and `db.query`, is an app operation registered in `server/helper-app-tools.ts` and reached through those gateways or the `uimori call` CLI. [CODE-MAP](CODE-MAP.md) lists the entry points per feature, and each section below names the files that define and test its operations.
+The helper's provider-facing tools are `app.tools` and `app.call`, plus `data.exec` when `UIMORI_SHELL_ROOT` configures the Linux runner; `server/helper-runtime.ts` assembles them for each request. Everything else, including `data.search`, `data.read` and `db.query`, is an app operation registered in `server/helper-app-tools.ts` and reached through those gateways or the `uimori call` CLI. [CODE-MAP](dev/CODE-MAP.md) lists the entry points per feature, and each section below names the files that define and test its operations.
 
 Constraints on changing the helper's tools:
 
-- A new capability is an app operation, not another provider tool. [Model tool contracts](TOOL-CONTRACTS.md#mutations) gives the reason for the `app.tools` and `app.call` indirection.
+- A new capability is an app operation, not another provider tool. [Model tool contracts](dev/TOOL-CONTRACTS.md#mutations) gives the reason for the `app.tools` and `app.call` indirection.
 - An explicit outline review is read-only. `data.exec` is not offered, and both discovery and `app.call` use the `reviewAllowed` allowlist in `helperToolTraits`, which is narrower than the set of read-only operations.
 - Safety does not depend on the order of calls. Discovery and confirmation rereads are optional steps; revision checks, unsaved-draft protection and uncertain-write handling are enforced where a save happens.
 - For non-Codex helper and advisor requests without an authored prompt, `core/provider-messages.ts` sends unchanged `history` and `catalog` in a first user-content block so that follow-up requests share a prefix (`tests/provider-reference-context.test.ts`). No context is dropped or promoted to system instructions. A shared prefix is not a measured cache hit; anchors and actual reuse are covered in [model cache settings](MODEL-PARAMETERS.md#캐시-위치자동-배치유지-시간).
@@ -60,7 +60,7 @@ Constraints on changing the helper's tools:
 
 Outside the helper's tools:
 
-- The writer, advisors and translation jobs have their own source-scoped tools, described in [Model tool contracts](TOOL-CONTRACTS.md#read-tools). They do not inherit the helper's live cross-chat SQL access.
+- The writer, advisors and translation jobs have their own source-scoped tools, described in [Model tool contracts](dev/TOOL-CONTRACTS.md#read-tools). They do not inherit the helper's live cross-chat SQL access.
 - Conversation summarization reads its complete selected source prefix, not keyword search hits.
 
 ## General tool discovery, CLI and results
@@ -75,7 +75,7 @@ Behavior the descriptions leave out:
 
 Constraints on changing these operations:
 
-- Operation names, descriptions and schema field text, including parameter descriptions, are the text discovery ranks on, with a few per-operation synonyms in the same file. Rewording them changes ranking; [Model tool contracts](TOOL-CONTRACTS.md#names-descriptions-and-parameters) says how to write them.
+- Operation names, descriptions and schema field text, including parameter descriptions, are the text discovery ranks on, with a few per-operation synonyms in the same file. Rewording them changes ranking; [Model tool contracts](dev/TOOL-CONTRACTS.md#names-descriptions-and-parameters) says how to write them.
 - The CLI carries no copy of any schema. Its flags are typed against the operation's own input schema when the call reaches the app.
 
 ## Stored content images
@@ -227,7 +227,7 @@ Outside these operations:
 
 ## Search and partial reads
 
-`data.search` and `data.read` are defined in `server/helper-data-tools.ts` and executed by `server/helper-data-worker.ts`; `editor.read` is defined in `server/helper-app-tools.ts`. The descriptions and input schemas there are the contract the model receives: scopes and their default, filters, pattern matching, output modes, limits, references, paging and the `editTarget` a result can carry. `tests/helper-data-tools.test.ts` enforces that contract against the real data process, `tests/helper-data-runtime.test.ts` enforces it through the helper loop, and `tests/helper-resource-editing.test.ts` covers `editor.read`. [Model tool contracts](TOOL-CONTRACTS.md#pagination-and-results) owns the two `data.read` continuations (`nextIndex` and `nextOffset`), the rule that a failed ref stays local to its batch entry, and the absence of an exact total in search results. This section records only what those files do not state.
+`data.search` and `data.read` are defined in `server/helper-data-tools.ts` and executed by `server/helper-data-worker.ts`; `editor.read` is defined in `server/helper-app-tools.ts`. The descriptions and input schemas there are the contract the model receives: scopes and their default, filters, pattern matching, output modes, limits, references, paging and the `editTarget` a result can carry. `tests/helper-data-tools.test.ts` enforces that contract against the real data process, `tests/helper-data-runtime.test.ts` enforces it through the helper loop, and `tests/helper-resource-editing.test.ts` covers `editor.read`. [Model tool contracts](dev/TOOL-CONTRACTS.md#pagination-and-results) owns the two `data.read` continuations (`nextIndex` and `nextOffset`), the rule that a failed ref stays local to its batch entry, and the absence of an exact total in search results. This section records only what those files do not state.
 
 Behavior the descriptions leave out:
 
@@ -293,7 +293,7 @@ Constraints on changing these operations:
 - That process keeps nothing between calls: no file mirror, polling service, persistent pool or background scheduler, and it adds no migration, setting or package dependency. Task-local files belong to the [Linux data workspace](#linux-data-workspace).
 - The server supplies the database path. Neither a path nor credentials are tool arguments.
 - `db.query` never writes. Saves go through app operations so that revision checks and save effects apply.
-- When one HTTP provider response contains adjacent `data.search`, `data.read` or `db.query` calls, they run concurrently, at most `Math.min(4, availableParallelism())` at a time. Only these three operations, which each run in their own data process, form a concurrent group; every other call is a sequential boundary, so no read passes an app mutation ([Execution boundaries](TOOL-CONTRACTS.md#execution-boundaries)). The cap is a small heuristic, not tuned to workload or container memory.
+- When one HTTP provider response contains adjacent `data.search`, `data.read` or `db.query` calls, they run concurrently, at most `Math.min(4, availableParallelism())` at a time. Only these three operations, which each run in their own data process, form a concurrent group; every other call is a sequential boundary, so no read passes an app mutation ([Execution boundaries](dev/TOOL-CONTRACTS.md#execution-boundaries)). The cap is a small heuristic, not tuned to workload or container memory.
 
 Outside these operations:
 
@@ -321,8 +321,8 @@ Constraints on changing these operations:
 - Each definition in `server/helper-resource-tools.ts` declares whether the operation reads or mutates and which resources a mutation targets. Draft protection, operation receipts, undo tracking and resource update events all use that declaration; a new resource mutation declares its targets there instead of in a second list. The declaration is stripped from the schema the model receives.
 - Resource operations add no save path. Revision checks, final validation, regenerated projections and the single retained undo belong to `saveResource` in `server/resource-service.ts`, which the editor also uses, and `resource.clone` shares `cloneResource` with `POST /api/resources/clone` and library list copies. See [동시성 제어와 멱등성 보장](EDITING.md#동시성-제어와-멱등성-보장).
 - The `editTarget` hints of `data.search` and `data.read` and the validation of `resource.patch` read the same `server/helper-native-protected-fields.json` and `server/helper-resource-path-policy.json`: protected field names, preset paths and JSON Pointer limits. Change them together. The limits apply to the full editing path, including the native-content prefix.
-- Model arguments never carry mutation identity. The host derives it from the task and the provider call ID and passes it separately; a new call ID is a new operation. Authorization and the shape of the final reply are stated once in the helper contract (`CONTRACT` in `server/helper-runtime.ts`), not per operation. See [Mutations](TOOL-CONTRACTS.md#mutations) and [Names, descriptions and parameters](TOOL-CONTRACTS.md#names-descriptions-and-parameters).
-- The provider tool list stays fixed throughout a continuation; see [Provider continuation state](TOOL-CONTRACTS.md#provider-continuation-state).
+- Model arguments never carry mutation identity. The host derives it from the task and the provider call ID and passes it separately; a new call ID is a new operation. Authorization and the shape of the final reply are stated once in the helper contract (`CONTRACT` in `server/helper-runtime.ts`), not per operation. See [Mutations](dev/TOOL-CONTRACTS.md#mutations) and [Names, descriptions and parameters](dev/TOOL-CONTRACTS.md#names-descriptions-and-parameters).
+- The provider tool list stays fixed throughout a continuation; see [Provider continuation state](dev/TOOL-CONTRACTS.md#provider-continuation-state).
 - Native tool history keeps the `app.call` envelope, `name` and `arguments`, as the provider sent it. Read or write classification, compaction and the activity view use the inner operation.
 - `HELPER_READ_TOO_LARGE` replaces only a read result that cannot fit the selected model's input budget; the result is withheld, not truncated. The dispatcher adds no fixed per-read or per-round token cap: accumulated reads go through context compaction. A result that carries a confirmed write is never replaced.
 - Composer recovery lives in `web/helper-recovery.ts`, enforced by `tests/helper-recovery.test.ts`, `tests/helper-recovery-browser.spec.ts` and `tests/helper-browser.spec.ts`. A read failure is not an empty store and must not overwrite the saved draft, selection, outline selection or unacknowledged request. An accepted request is cleared only while the stored value is still that request, and a cleanup or view-refresh failure after acceptance is not a failed send. See [로컬 복구 저장소](EDITING.md#로컬-복구-저장소-indexeddb).
@@ -387,7 +387,7 @@ Constraints on changing this behavior:
 
 - The guides are the Markdown files directly under `docs/`, read from `dist/docs` in a build and from `docs/` when the server runs from source. They are not copied into a task's shell workspace; the shell reaches them with `uimori call guide.read`.
 - The guides are Korean prose with English identifiers, and the helper may think in either language. Search therefore matches by section, not by line, falls back to the sections that hold only some of the words, and attaches guidance that an empty or partial result is no evidence that a feature is absent. There is no translation or synonym table: the description tells the model to query with the Korean wording of the user or the interface, and the guide list carries the Korean titles to choose from.
-- `server/app-guides.ts` owns the list of developer documents that are left out. A new document under `docs/` is a guide unless it is added there.
+- Developer documents live under `docs/dev/`, so they are neither copied into `dist/docs` nor exposed by `guide.read`. Any Markdown file placed directly under `docs/` is treated as a user guide.
 - One guide has no file: `STORY-UI-REFERENCE` is the story writer's Story UI reference (`storyUiPrompt()` in `server/story-ui.ts`). It is a guide rather than part of the helper contract because it is several times the contract's length and only block work needs it. The contract tells the helper to read it in one `guide.read` call, so the writer reference has to fit the largest page; `tests/app-guides.test.ts` fails when it outgrows that.
 - The helper contract tells the model to check the guides before it says the app lacks a feature. It exists because a production helper answered that thought summaries were not a feature: its tools and settings showed none, and the display is interface behavior that no tool controls.
 
@@ -496,7 +496,7 @@ Other documents own the rules:
 - What a finished helper task keeps and what the browser refresh reads: [도우미 기록과 화면 전환](EXECUTION.md#도우미-기록과-화면-전환).
 - Attempt and tool diagnostics, their retention and the helper usage summary: [문제 확인과 실행 상세](DIAGNOSTICS.md).
 - The native Codex turn, its instructions, call limits and token usage: [App Server 통신 및 턴 라이프사이클](CODEX.md#app-server-통신-및-턴-라이프사이클).
-- Reading local estimates, provider usage and preparation and compaction timings: [Evidence and metrics](HELPER-EVALUATION.md#evidence-and-metrics).
+- Reading local estimates, provider usage and preparation and compaction timings: [Evidence and metrics](dev/HELPER-EVALUATION.md#evidence-and-metrics).
 
 What those documents and tests leave out:
 
@@ -512,7 +512,7 @@ Constraints on changing this code:
 
 ## Goal evaluation
 
-[Helper goal evaluation](HELPER-EVALUATION.md) owns the evaluation cases, the oracles fixed before execution, and what scripted provider checks do and do not establish about a real model.
+[Helper goal evaluation](dev/HELPER-EVALUATION.md) owns the evaluation cases, the oracles fixed before execution, and what scripted provider checks do and do not establish about a real model.
 
 ### Illustration presets
 
@@ -535,11 +535,11 @@ Constraints on changing these operations:
 Outside these operations:
 
 - `coverage` reports what one response returned. It never certifies that a review was complete.
-- `knowledge.search` with `mode: browse` is reachable through the same `app.tools` and `app.call` gateways, including in a read-only review. Its contract is in [Folder navigation](TOOL-CONTRACTS.md#folder-navigation).
+- `knowledge.search` with `mode: browse` is reachable through the same `app.tools` and `app.call` gateways, including in a read-only review. Its contract is in [Folder navigation](dev/TOOL-CONTRACTS.md#folder-navigation).
 
 ### Token budgets and isolated read processes
 
-Each host read states its page defaults in its input schema, and [Units and model-facing budgets](TOOL-CONTRACTS.md#units-and-model-facing-budgets) owns the unit rules. Not stated there:
+Each host read states its page defaults in its input schema, and [Units and model-facing budgets](dev/TOOL-CONTRACTS.md#units-and-model-facing-budgets) owns the unit rules. Not stated there:
 
 - The continuation of a page read without a limit carries no limit, so one page's measured length does not become a fixed character default.
 - The isolated data, SQL and regex worker keeps its character pages, memory and time limits and IPC size guards, and does not tokenize. The host applies the token budgets to what it returns.

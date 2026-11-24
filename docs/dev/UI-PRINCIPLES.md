@@ -8,7 +8,7 @@ Uimori is a writing and reading workspace. Keep the manuscript and composer prom
 2. Inspect the current screen and a relevant existing example. Put occasional actions in contextual menus and internal diagnostics in disclosures.
 3. Build from the shared controls, Lucide icons and style tokens. A value the tokens do not cover enters as a new token in `web/style.css`, not as an ad hoc number. Review an external UI kit only against a concrete missing behavior.
 4. Distinguish the states listed under [states](#states-and-feedback) and place feedback in the region it describes.
-5. Preserve drafts, selections, reading position and focus across menus, panels, responsive changes and failures. Respect [reading preferences](READING.md).
+5. Preserve drafts, selections, reading position and focus across menus, panels, responsive changes and failures. Respect [reading preferences](../READING.md).
 6. Check the changed flow with realistic Korean text and relevant data and state variations at the affected widths and themes. Inspect actual screenshots as well as interaction results. Use [DEVELOPMENT](DEVELOPMENT.md#verification) to select checks.
 7. Update the owning component, style or feature document for adopted conventions, and this document only for app-wide ones. Keep investigation history and temporary proposals out of standing instructions.
 
@@ -16,7 +16,7 @@ Uimori is a writing and reading workspace. Keep the manuscript and composer prom
 
 ### Tokens
 
-`web/style.css` defines the tokens on `:root`; themes override them through the public contract in [THEME-AUTHORING](THEME-AUTHORING.md).
+`web/style.css` defines the tokens on `:root`; themes override them through the public contract in [THEME-AUTHORING](../THEME-AUTHORING.md).
 
 - **Type**: app chrome uses `--font-small` (12px) for metadata, `--font-body` (14px) for controls and body copy, `--font-heading` (16px) for section and dialog headings, and `--font-title` (18px) for page titles, dialog titles and the titles of empty states that fill a whole screen or collection. Use weight and spacing for further hierarchy. Reading preferences and authored Markdown and Risu content keep their independent typography.
 - **Spacing**: gaps, padding and margins up to 32px use 0, 1, 2, 4, 6, 8, 10, 12, 14, 16, 20, 24, 28 or 32px; `tests/style-spacing.test.ts` enforces the scale. Controls in one column share a left edge, and side-by-side switches share the columns of the row above them.
@@ -91,16 +91,16 @@ Screen notes that no feature document or test states:
 ### Composers and helper results
 
 - The main and helper composers follow one app send-key setting: by default `Enter` inserts a newline and `Ctrl/Cmd+Enter` sends. Korean composition never sends. Outside compact layouts, both placeholders name the current send key, with `Cmd` on Apple platforms.
-- Helper results identify confirmed changed targets and open their current destination; deleted targets remain recorded without an open action. A locally measured input is labelled as an estimate, and its budget meter may appear in the usage disclosure or near the composer. Missing values remain unknown. Review and undo of helper changes follow [EDITING](EDITING.md).
+- Helper results identify confirmed changed targets and open their current destination; deleted targets remain recorded without an open action. A locally measured input is labelled as an estimate, and its budget meter may appear in the usage disclosure or near the composer. Missing values remain unknown. Review and undo of helper changes follow [EDITING](../EDITING.md).
 
 ### Theme and authored content
 
-- Preserve the public theme markers (`data-uimori-part` and the rest of [THEME-AUTHORING](THEME-AUTHORING.md)) and user-authored theme colors.
+- Preserve the public theme markers (`data-uimori-part` and the rest of [THEME-AUTHORING](../THEME-AUTHORING.md)) and user-authored theme colors.
 - Authored manuscript, card HTML, Risu and Shadow DOM content are content boundaries: app styles and copy conventions do not rewrite them, and authored selection and typography take precedence.
 
 ## Korean terminology
 
-Use the same terms in visible copy, accessible names and user documentation. App-owned labels follow the independent [UI language](I18N.md); translated labels may wrap and must not depend on a width reserved for Korean text.
+Use the same terms in visible copy, accessible names and user documentation. App-owned labels follow the independent [UI language](../I18N.md); translated labels may wrap and must not depend on a width reserved for Korean text.
 
 Write guidance in plain Korean 해요체 and use short action labels for controls. Name the affected object, observable result and next action; remove decorative encouragement, standing introductions and explanations that repeat a nearby label or button. Explain a non-obvious scope or irreversible effect once, at its choice or confirmation. Keep familiar domain terms such as 봇, 페르소나 and 로어, but explain internal execution terms in ordinary controls. Technical identifiers can remain in diagnostics where they help interpretation.
 

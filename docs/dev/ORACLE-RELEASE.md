@@ -8,7 +8,7 @@ Oracle 운영 진입점은 `npm run release:oracle` 하나예요. 소스 검증�
 
 Oracle에는 기존 Uimori 앱, Docker/Compose, Python 3, Git, Tailscale 경로가 있어야 해요. SSH 사용자는 `sudo -n docker`와 `sudo -n tailscale`을 비대화식으로 실행할 수 있어야 해요. 운영 앱은 healthy이고 checkout은 clean이어야 해요. 진행 중인 생성이나 기존 maintenance가 있으면 먼저 정상 종료·해제하고 배포해요. 배포 도구는 사용자 작업을 강제로 취소하지 않아요.
 
-[예시 설정](../deploy/oracle-release.example.json)을 ignored `.local/oracle-release.json`에 복사해요.
+[예시 설정](../../deploy/oracle-release.example.json)을 ignored `.local/oracle-release.json`에 복사해요.
 
 ```json
 {
@@ -118,6 +118,6 @@ Sisters Workspace도 별도 보존 규칙을 적용해요. 실행 중인 `tia-wo
 
 ## 데이터 호환성과 초기화
 
-일반 업데이트는 운영 데이터 볼륨을 유지해요. 앱은 [현재 데이터 형식](DATA-MIGRATIONS.md#현재-버전)만 열고 구형 DB는 변경 없이 거절해요. 완료된 일회성 변환 도구는 제공하지 않으며 구형 DB를 자동 초기화하지 않아요.
+일반 업데이트는 운영 데이터 볼륨을 유지해요. 앱은 [현재 데이터 형식](../DATA-MIGRATIONS.md#현재-버전)만 열고 구형 DB는 변경 없이 거절해요. 완료된 일회성 변환 도구는 제공하지 않으며 구형 DB를 자동 초기화하지 않아요.
 
 `--fresh`는 새 볼륨에 기존 `<database>.vertex-credentials`와 `<database>.codex/auth.json`만 복사해요. 새 DB를 격리 부팅한 뒤 persisted maintenance를 닫고 전환하므로 검증 중 쓰기가 열리지 않아요. 이전 볼륨과 배포 전 백업은 보존하고, fresh 롤백은 이전 볼륨으로 돌아가며 새 사용자 자료를 이전 DB에 섞지 않아요.

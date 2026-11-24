@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { docsOnly } from './ci-changes.mjs';
 
 test('only inert documentation changes skip the expensive quality steps', () => {
-  assert.equal(docsOnly(['README.md', 'docs/DEVELOPMENT.md']), true);
+  assert.equal(docsOnly(['README.md', 'docs/dev/DEVELOPMENT.md', 'docs/READING.md']), true);
   assert.equal(docsOnly(['README.ko.md']), true);
   for (const files of [
     [],

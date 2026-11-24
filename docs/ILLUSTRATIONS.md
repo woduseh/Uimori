@@ -274,4 +274,4 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
   - 대표/문단 배치, 접기 상태 보존, 생성 중 다음 채팅 전송, 재요청, 삭제, 충돌 처리, 새로고침 후 표시 복원을 검증해요.
   - 프리셋 생성·복제·JSON 지침 파일 왕복, 동시 수정 충돌 시 사본 저장, 미저장 편집 보호를 확인해요.
   - ComfyUI 워크플로 오류 포커스 및 모바일/데스크톱 입력 레이아웃을 점검해요.
-  - `--visual` 옵션 사용 시 화면 캡처 결과가 보고서에 포함돼요. 검사 기준은 [DEVELOPMENT](DEVELOPMENT.md#verification)를 따라요.
+  - `--visual` 옵션 사용 시 화면 캡처 결과가 보고서에 포함돼요. 검사 기준은 [DEVELOPMENT](dev/DEVELOPMENT.md#verification)를 따라요.

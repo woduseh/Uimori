@@ -62,7 +62,7 @@
 
 - **설정 → 앱 정보**에서 현재 서버의 앱 버전과 빌드 식별자를 확인해요. 앱 버전은 릴리스 번호이며 DB 스키마 번호와는 별개예요.
 - 업데이트 알림, 앱 내 설치, 무인 자동 업데이트는 제공하지 않아요.
-- 기존 설치는 [수동 업데이트](docs/UPDATES.md#수동-릴리스-업데이트) 절차를 따라요. 운영 중인 Oracle 설치는 [전용 배포 안내](docs/ORACLE-RELEASE.md)를 사용해요.
+- 기존 설치는 [수동 업데이트](docs/UPDATES.md#수동-릴리스-업데이트) 절차를 따라요. 운영 중인 Oracle 설치는 [전용 배포 안내](docs/dev/ORACLE-RELEASE.md)를 사용해요.
 - 태그나 GitHub Release를 만드는 것만으로는 서버가 업데이트되지 않아요.
 
 ## 문서
@@ -92,14 +92,14 @@
 | [개인 서버 배포](docs/SELF-HOST.md) | Docker Compose, HTTPS, 로그인, 영구 데이터, 모델 API 키와 업데이트 |
 | [자동 백업](docs/AUTOMATIC-BACKUPS.md) | 한국 시간 일일 스냅샷, 검증·보관·다운로드 |
 | [문제 확인과 실행 상세](docs/DIAGNOSTICS.md) | 작업 상태·오류·남아 있는 실행 입력과 복구 동작 확인 |
-| [Oracle 릴리스](docs/ORACLE-RELEASE.md) | 검증·배포 명령, 데이터 보존과 실패 복구 |
+| [Oracle 릴리스](docs/dev/ORACLE-RELEASE.md) | 검증·배포 명령, 데이터 보존과 실패 복구 |
 
 ### 개발
 
 | 문서 | 내용 |
 | --- | --- |
-| [개발과 검증](docs/DEVELOPMENT.md) | 검사·정리 명령, 격리 실행, 코드 구조와 증거 보관 |
-| [코드 지도](docs/CODE-MAP.md) | 기능별 현행 문서와 구현 진입점 |
+| [개발과 검증](docs/dev/DEVELOPMENT.md) | 검사·정리 명령, 격리 실행, 코드 구조와 증거 보관 |
+| [코드 지도](docs/dev/CODE-MAP.md) | 기능별 현행 문서와 구현 진입점 |
 
 ## 데이터와 접속
 

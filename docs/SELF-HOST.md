@@ -74,7 +74,7 @@ docker compose --env-file .env.self-host exec proxy nginx -t
 docker compose --env-file .env.self-host restart proxy
 ```
 
-데이터를 유지하려면 `down`에 `-v`를 붙이지 마세요. Compose 프로젝트 이름은 기본 `uimori`로 고정돼요. 이미지 태그와 호환되는 `UIMORI_DATA_VOLUME`을 함께 지정해요. 현재 앱은 **빈 DB와 스키마 15만 열며 구형 DB는 변경 없이 거절**해요. 이전 릴리스에서 업데이트하기 전 [데이터 형식](DATA-MIGRATIONS.md#현재-버전)을 확인해요. 스키마 15의 기존 자료는 같은 volume에서 유지하고, 의도적으로 처음부터 시작할 때만 별도의 빈 volume을 지정해요. 업데이트 전 백업과 실행 이미지 정보를 함께 보관해요. 앱 안의 Update 버튼과 무인 자동 업데이트는 제공하지 않아요. [수동 업데이트와 복구](UPDATES.md#수동-릴리스-업데이트)에서 앱과 DB를 함께 되돌리는 절차를 확인해요. Oracle 운영에는 [전용 배포 절차](ORACLE-RELEASE.md)를 사용해요.
+데이터를 유지하려면 `down`에 `-v`를 붙이지 마세요. Compose 프로젝트 이름은 기본 `uimori`로 고정돼요. 이미지 태그와 호환되는 `UIMORI_DATA_VOLUME`을 함께 지정해요. 현재 앱은 **빈 DB와 스키마 15만 열며 구형 DB는 변경 없이 거절**해요. 이전 릴리스에서 업데이트하기 전 [데이터 형식](DATA-MIGRATIONS.md#현재-버전)을 확인해요. 스키마 15의 기존 자료는 같은 volume에서 유지하고, 의도적으로 처음부터 시작할 때만 별도의 빈 volume을 지정해요. 업데이트 전 백업과 실행 이미지 정보를 함께 보관해요. 앱 안의 Update 버튼과 무인 자동 업데이트는 제공하지 않아요. [수동 업데이트와 복구](UPDATES.md#수동-릴리스-업데이트)에서 앱과 DB를 함께 되돌리는 절차를 확인해요. Oracle 운영에는 [전용 배포 절차](dev/ORACLE-RELEASE.md)를 사용해요.
 
 프로그램과 Docker 서비스가 정상적으로 재시작되면 `restart: unless-stopped`가 앱·프록시·shell runner를 다시 시작해요. 서버 중지로 끊긴 모델 작업은 자동 재호출하지 않아요. 브라우저만 닫았다면 서버의 생성 작업은 계속 진행되고, 다시 로그인해 저장된 진행 상태와 결과를 볼 수 있어요.
 

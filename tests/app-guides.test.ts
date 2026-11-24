@@ -3,13 +3,16 @@ import { readdirSync } from 'node:fs';
 import { describeHelperTools, helperToolTraits } from '../server/helper-app-tools.js';
 import { invokeHelperGuideTool as call } from '../server/helper-guide-tools.js';
 
-test('the helper lists the user guides without developer documents', () => {
+test('the helper lists the user guides under docs/ without docs/dev documents', () => {
   const { guides } = call({}) as { guides: { name: string; title: string; chars: number }[] };
   const names = guides.map((guide) => guide.name);
+  const directGuideCount = readdirSync('docs', { withFileTypes: true }).filter(
+    (entry) => entry.isFile() && entry.name.endsWith('.md')
+  ).length;
   expect(names).toEqual(expect.arrayContaining(['READING', 'MODEL-PRICING', 'USAGE']));
   for (const developer of ['CODE-MAP', 'DEVELOPMENT', 'UI-PRINCIPLES', 'ORACLE-RELEASE'])
     expect(names).not.toContain(developer);
-  expect(names.length).toBeLessThan(readdirSync('docs').length);
+  expect(names.length).toBe(directGuideCount + 1);
   expect(guides.every((guide) => guide.title && guide.chars > 0)).toBe(true);
 });
 

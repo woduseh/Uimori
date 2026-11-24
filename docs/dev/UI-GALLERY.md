@@ -1,6 +1,6 @@
 # UI gallery
 
-`npm run verify:gallery` captures the built app with synthetic data on an isolated test server. It covers the configured screens in light and dark themes, then follows the first-chat journey in light mode. Viewport widths come from [`fixtures/browser-viewports.json`](../fixtures/browser-viewports.json).
+`npm run verify:gallery` captures the built app with synthetic data on an isolated test server. It covers the configured screens in light and dark themes, then follows the first-chat journey in light mode. Viewport widths come from [`fixtures/browser-viewports.json`](../../fixtures/browser-viewports.json).
 
 Build the current app with `npm run build` before capturing. The gallery accepts no CLI arguments; change the screen/journey definitions below to adjust its selection. Use a feature's shared browser runner when you need `--grep` or `--visual`.
 
@@ -12,13 +12,13 @@ The screen list includes all global settings categories, the chat settings categ
 
 Results are under `output/playwright/gallery-<timestamp>-<id>/`: screenshots, the `index.html` contact sheet, `metrics.json`, `journey.json`, `captures.json`, and `summary.json`. The summary records execution status, build identity, and metric results. After stopping its server, the runner also preserves the seeded SQLite under `evidence-db`, including on success. It does not run automatic retention itself. `npm run cleanup` lists owned runs; `npm run cleanup -- --run <run-id>` removes a selected inactive run and its evidence.
 
-- [Screens](../scripts/gallery/screens.mjs) define routes, visible navigation steps, readiness, actions, themes, viewports, and measurements.
-- [Journeys](../scripts/gallery/journey.mjs) define interaction sequences and count clicks, fills, menu opens, and key presses.
-- [Steps](../scripts/gallery/steps.mjs) define locator and action syntax; [seed data](../scripts/gallery/seed.mjs) supplies route placeholders.
+- [Screens](../../scripts/gallery/screens.mjs) define routes, visible navigation steps, readiness, actions, themes, viewports, and measurements.
+- [Journeys](../../scripts/gallery/journey.mjs) define interaction sequences and count clicks, fills, menu opens, and key presses.
+- [Steps](../../scripts/gallery/steps.mjs) define locator and action syntax; [seed data](../../scripts/gallery/seed.mjs) supplies route placeholders.
 
 ## Metrics
 
-[`tests/fixtures/ui-metrics.ts`](../tests/fixtures/ui-metrics.ts) owns the calculations and targets shared by browser tests and the gallery. These are diagnostic measurements of selected elements, not universal UI design requirements. Update that implementation when intentionally changing a measurement; keep this reference consistent.
+[`tests/fixtures/ui-metrics.ts`](../../tests/fixtures/ui-metrics.ts) owns the calculations and targets shared by browser tests and the gallery. These are diagnostic measurements of selected elements, not universal UI design requirements. Update that implementation when intentionally changing a measurement; keep this reference consistent.
 
 | Metric | Interpretation |
 | --- | --- |

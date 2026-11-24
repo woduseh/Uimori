@@ -1,6 +1,6 @@
 # Linux/Docker 업데이트
 
-소스 설치와 Docker Compose 설치 환경의 수동 업데이트 안내예요. 기존 Oracle 설치 환경은 유지보수, 백업, 후보 검증, 복구를 전담하는 [전용 배포 실행기](ORACLE-RELEASE.md)를 사용해요. 새로 설치하는 방법은 [개인 서버 설치 안내](SELF-HOST.md)를 참고하세요.
+소스 설치와 Docker Compose 설치 환경의 수동 업데이트 안내예요. 기존 Oracle 설치 환경은 유지보수, 백업, 후보 검증, 복구를 전담하는 [전용 배포 실행기](dev/ORACLE-RELEASE.md)를 사용해요. 새로 설치하는 방법은 [개인 서버 설치 안내](SELF-HOST.md)를 참고하세요.
 
 ## 수동 릴리스 업데이트
 
@@ -79,4 +79,4 @@ Oracle 배포 실행기의 `--source-ref`는 현재 릴리스 태그가 아니�
 
 `UIMORI_MAINTENANCE=1`로 시작하면 DB 진입과 읽기만 허용하고 작업 복구나 worker는 시작하지 않아요. 이것은 읽기 전용 SQLite 열기가 아니므로 원본 DB 하나만으로 검증하지 말고 반드시 복사본으로 검증하세요. 이 부팅 모드는 API를 통해 열 수 없어요. 구현 코드는 [maintenance.ts](../server/maintenance.ts)와 [app.ts](../server/app.ts)에 있어요.
 
-Oracle 실행기는 이러한 진입 제어와 부팅 경계를 사용해 진행 중인 작업을 기다리고, 후보 데이터베이스 복사본을 검증한 뒤 배포 후 쓰기를 다시 열어요. 앱 진입 관리는 [유지보수 모드 테스트](../tests/maintenance.test.ts)에서 다루며, 별도의 이미지·백업·복구 점검은 [Oracle 배포 안내](ORACLE-RELEASE.md)에 설명되어 있어요.
+Oracle 실행기는 이러한 진입 제어와 부팅 경계를 사용해 진행 중인 작업을 기다리고, 후보 데이터베이스 복사본을 검증한 뒤 배포 후 쓰기를 다시 열어요. 앱 진입 관리는 [유지보수 모드 테스트](../tests/maintenance.test.ts)에서 다루며, 별도의 이미지·백업·복구 점검은 [Oracle 배포 안내](dev/ORACLE-RELEASE.md)에 설명되어 있어요.

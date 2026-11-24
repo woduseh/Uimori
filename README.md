@@ -65,7 +65,7 @@ The [self-hosting guide](docs/SELF-HOST.md) covers Docker Compose and an Nginx H
 
 - **Settings → About** shows the server's app version and build identifier. The app version is the release number and is separate from the DB schema number.
 - There are no update notifications, in-app installs or unattended automatic updates.
-- Update an existing installation with the [manual update](docs/UPDATES.md#수동-릴리스-업데이트) procedure. The running Oracle installation uses its [dedicated deployment guide](docs/ORACLE-RELEASE.md).
+- Update an existing installation with the [manual update](docs/UPDATES.md#수동-릴리스-업데이트) procedure. The running Oracle installation uses its [dedicated deployment guide](docs/dev/ORACLE-RELEASE.md).
 - Creating a tag or GitHub Release does not update any server by itself.
 
 ## Documentation (Korean)
@@ -95,14 +95,14 @@ The [self-hosting guide](docs/SELF-HOST.md) covers Docker Compose and an Nginx H
 | [Self-hosting](docs/SELF-HOST.md) | Docker Compose, HTTPS, sign-in, persistent data, model API keys and updates |
 | [Automatic backups](docs/AUTOMATIC-BACKUPS.md) | Daily snapshots on Korea time, verification, retention and download |
 | [Diagnostics and run details](docs/DIAGNOSTICS.md) | Checking task status, errors, retained run inputs and recovery behavior |
-| [Oracle release](docs/ORACLE-RELEASE.md) | Verification and deployment commands, data preservation and failure recovery |
+| [Oracle release](docs/dev/ORACLE-RELEASE.md) | Verification and deployment commands, data preservation and failure recovery |
 
 ### Development
 
 | Guide | Covers |
 | --- | --- |
-| [Development and verification](docs/DEVELOPMENT.md) | Check and cleanup commands, isolated runs, code structure and evidence retention |
-| [Code map](docs/CODE-MAP.md) | Current documents and implementation entry points by feature |
+| [Development and verification](docs/dev/DEVELOPMENT.md) | Check and cleanup commands, isolated runs, code structure and evidence retention |
+| [Code map](docs/dev/CODE-MAP.md) | Current documents and implementation entry points by feature |
 
 ## Data and access
 

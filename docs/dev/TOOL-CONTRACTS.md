@@ -10,7 +10,7 @@ The main writer and the translation role use the definitions in `core/read-tools
 
 - Explicit user notes are already pinned to the Run and delivered through host context. There is no separate `notes.list/read` model API.
 - `story.read` selects by `sceneNumber` within its returned `sceneScope`. Internal revision IDs are returned provenance, not a second selector.
-- The helper's tools are covered in [Helper tools](HELPER-TOOLS.md#기술-명세-english).
+- The helper's tools are covered in [Helper tools](../HELPER-TOOLS.md#기술-명세-english).
 
 ## Schema portability
 
@@ -37,7 +37,7 @@ Write a description for a reader who has only that text:
 - Keep the limits and caveats a model can act on, and leave out how the host implements them.
 - Put the meaning, unit, default and source of each argument in that property's `description`. A size argument always names its unit, because `limit` counts entries in some operations and UTF-16 code units in others.
 
-Natively registered definitions are sent with every request and count toward the input estimate. This matters most for the writer's read tools: at the minimum 8,192-token input limit, longer definitions leave room for fewer recent exchanges before compaction (see [Context limits](CONTEXT-LIMITS.md#입력-한도와-자동-정리)). Helper app operations are loaded on demand through `app.tools` and do not carry that fixed cost.
+Natively registered definitions are sent with every request and count toward the input estimate. This matters most for the writer's read tools: at the minimum 8,192-token input limit, longer definitions leave room for fewer recent exchanges before compaction (see [Context limits](../CONTEXT-LIMITS.md#입력-한도와-자동-정리)). Helper app operations are loaded on demand through `app.tools` and do not carry that fixed cost.
 
 Whether the user asked for a save, selection, cancellation or deletion is decided once in the helper contract, not repeated per operation. A description still states facts about the operation itself, such as a deletion that cannot be undone.
 
@@ -81,7 +81,7 @@ Constraints on the writer's catalog and reads:
 
 ### Writer Linux workspace
 
-With `UIMORI_SHELL_ROOT` configured, the main writer also receives `data.exec`, defined in `core/main-shell.ts`, on the Linux runner the helper uses ([Linux data workspace](HELPER-TOOLS.md#linux-data-workspace)). Its description states the workspace layout, exports, limits and results, and `tests/main-shell.test.ts` enforces them.
+With `UIMORI_SHELL_ROOT` configured, the main writer also receives `data.exec`, defined in `core/main-shell.ts`, on the Linux runner the helper uses ([Linux data workspace](../HELPER-TOOLS.md#linux-data-workspace)). Its description states the workspace layout, exports, limits and results, and `tests/main-shell.test.ts` enforces them.
 
 - Without runner configuration the writer keeps its read tools. A configured but unavailable runner returns a recoverable tool error.
 - The workspace is prepared only when used. It survives interrupted execution for recovery and is removed on terminal completion, including partial or refused results.
@@ -89,13 +89,13 @@ With `UIMORI_SHELL_ROOT` configured, the main writer also receives `data.exec`, 
 
 ## Mutations
 
-Helper mutations stay behind `app.tools` and `app.call`; see [Helper tools](HELPER-TOOLS.md#discovering-and-executing-app-operations) and [Editing saved scenes](HELPER-TOOLS.md#editing-saved-scenes).
+Helper mutations stay behind `app.tools` and `app.call`; see [Helper tools](../HELPER-TOOLS.md#discovering-and-executing-app-operations) and [Editing saved scenes](../HELPER-TOOLS.md#editing-saved-scenes).
 
 - Revision and source-hash checks remain explicit arguments where they protect stale-write correctness.
 - Idempotency identity is different: the model does not invent `operationId` values. The helper derives mutation identity from the helper task ID and the provider tool-call ID and passes it separately from model arguments. Only adapters for services that use receipts add the identity to their internal commands. There is no second mutation-tool registry to maintain.
 - Reusing a completed tool-call ID is rejected by the helper loop. A new call ID is a new operation, not a semantic replay of a prior request: existing-resource saves still rely on revision checks, and identical new-resource creations with different call IDs are not deduplicated.
 - For Gemini 4 helper models on AIS or Vertex, `web.search` is one additional provider-facing read-only tool. It delegates to an independent Google Search Grounding-only request via the existing Gemini adapter. This is not an additional mutation registry and does not change the existing gateway for app operations.
-- `app.tools -> app.call` is intentional. It keeps the helper's native tool list and per-request schema tokens small and exposes an operation's exact schema only when needed. A later task of the same conversation also receives, outside the tool list, the bounded set of schemas that the conversation has already called ([Discovering and executing app operations](HELPER-TOOLS.md#discovering-and-executing-app-operations)).
+- `app.tools -> app.call` is intentional. It keeps the helper's native tool list and per-request schema tokens small and exposes an operation's exact schema only when needed. A later task of the same conversation also receives, outside the tool list, the bounded set of schemas that the conversation has already called ([Discovering and executing app operations](../HELPER-TOOLS.md#discovering-and-executing-app-operations)).
 
 ## Execution boundaries
 
